@@ -1,0 +1,289 @@
+﻿/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgb(var(--scrollbar-track));
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--scrollbar-thumb));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--tj-accent-primary));
+}
+
+/* Base */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+}
+
+body {
+  background-color: rgb(var(--tj-bg-primary));
+  color: rgb(var(--tj-text-primary));
+}
+
+/* Noise overlay */
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* Prevent body scroll when modal open */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* Thin scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 行动选项 / 紧凑横向滚动条：金色细条，匹配开拓轶事主题 */
+.kaituo-options-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 217, 122, 0.45) rgba(20, 16, 14, 0.4);
+}
+.kaituo-options-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.kaituo-options-scroll::-webkit-scrollbar-track {
+  background: rgba(20, 16, 14, 0.4);
+  border-radius: 3px;
+}
+.kaituo-options-scroll::-webkit-scrollbar-thumb {
+  background: rgba(245, 217, 122, 0.45);
+  border-radius: 3px;
+}
+.kaituo-options-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 217, 122, 0.75);
+}
+
+/* Smooth scroll for chat */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* ── Star Animations ── */
+
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.1; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes star-glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+
+/* ── 开拓轶事 · 崩铁风按钮 ── */
+.kaituo-btn {
+  position: relative;
+  overflow: hidden;
+  font-family: 'Noto Serif SC', SimSun, serif;
+  letter-spacing: 0.32em;
+  transition: all 0.25s ease;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+.kaituo-btn-primary {
+  background: linear-gradient(135deg, #f5d97a 0%, #d4b15a 100%);
+  color: #1a1325;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 245, 200, 0.6),
+    0 0 24px rgba(245, 217, 122, 0.25);
+}
+.kaituo-btn-primary:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 245, 200, 0.95),
+    0 0 36px rgba(245, 217, 122, 0.45);
+  transform: translateY(-1px);
+}
+.kaituo-btn-secondary {
+  background: rgba(16, 14, 16, 0.55);
+  color: #e6d4a0;
+  backdrop-filter: blur(4px);
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.4);
+}
+.kaituo-btn-secondary:hover {
+  background: rgba(40, 32, 22, 0.7);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 217, 122, 0.75),
+    0 0 22px rgba(245, 217, 122, 0.18);
+}
+.kaituo-btn-quiet {
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  background: rgba(16, 14, 16, 0.35);
+  color: rgba(180, 168, 145, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(110, 100, 80, 0.4);
+  letter-spacing: 0.22em;
+}
+.kaituo-btn-quiet:hover {
+  color: rgba(220, 205, 170, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(160, 145, 110, 0.65);
+}
+
+/* ── 开拓轶事 · 通用容器/输入/弹窗工具类 ── */
+
+/* 卡片：面板、列表项的容器 */
+.kaituo-card {
+  position: relative;
+  background: rgba(16, 14, 16, 0.55);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.2);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: box-shadow 0.2s;
+}
+.kaituo-card-hover:hover {
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.45);
+}
+
+/* 输入框：input/textarea 通用 */
+.kaituo-input {
+  background: rgba(8, 7, 9, 0.55);
+  color: rgb(var(--tj-text-primary));
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.25);
+  border: none;
+  outline: none;
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.kaituo-input::placeholder {
+  color: rgba(160, 148, 120, 0.5);
+}
+.kaituo-input:focus {
+  background: rgba(8, 7, 9, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.65), 0 0 14px rgba(245, 217, 122, 0.18);
+}
+
+/* 弹窗遮罩 */
+.kaituo-modal-overlay {
+  background: radial-gradient(ellipse at center, rgba(0, 0, 10, 0.55), rgba(0, 0, 0, 0.78));
+  backdrop-filter: blur(3px);
+}
+
+/* 弹窗外壳：带切角 + 金边 + 暗紫渐变底 */
+.kaituo-modal-shell {
+  background: linear-gradient(180deg, rgba(18, 16, 18, 0.97), rgba(10, 9, 10, 0.97));
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 217, 122, 0.3),
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(245, 217, 122, 0.08);
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+}
+
+/* 分隔线：横向金色渐变 */
+.kaituo-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.35), transparent);
+}
+
+/* 标签 / 小徽章 */
+.kaituo-tag {
+  background: rgba(245, 217, 122, 0.12);
+  color: rgba(245, 217, 122, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.3);
+  font-family: 'Noto Serif SC', SimSun, serif;
+  letter-spacing: 0.1em;
+}
+
+/* 关闭按钮（弹窗右上角等） */
+.kaituo-close-btn {
+  color: rgba(245, 217, 122, 0.6);
+  transition: color 0.2s, transform 0.25s;
+}
+.kaituo-close-btn:hover {
+  color: rgba(255, 240, 180, 1);
+  transform: rotate(90deg);
+}
+
+/* 右侧菜单按钮 hover：流光 + 金边亮起 + 标签上挑 */
+.kaituo-menu-item {
+  position: relative;
+  overflow: hidden;
+}
+.kaituo-menu-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(245, 217, 122, 0.12),
+    transparent
+  );
+  transform: translateX(-110%);
+  transition: transform 0.55s ease;
+  pointer-events: none;
+}
+.kaituo-menu-item:hover::before {
+  transform: translateX(110%);
+}
+.kaituo-menu-item:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(245, 217, 122, 0.1),
+    rgba(245, 217, 122, 0.02)
+  ) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 217, 122, 0.5),
+    inset 2px 0 0 rgba(245, 217, 122, 0.7),
+    0 0 14px rgba(245, 217, 122, 0.08) !important;
+}
+.kaituo-menu-item:hover .kaituo-menu-glyph {
+  color: rgb(245, 217, 122) !important;
+  background: rgba(245, 217, 122, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.55) !important;
+}
+.kaituo-menu-item:hover .kaituo-menu-label {
+  color: rgb(255, 244, 212) !important;
+  letter-spacing: 0.26em;
+}
+
+/* 底部按钮 hover */
+.kaituo-menu-footer:hover {
+  color: rgb(255, 244, 212) !important;
+  background: rgba(245, 217, 122, 0.12) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 217, 122, 0.55),
+    0 0 12px rgba(245, 217, 122, 0.1) !important;
+  letter-spacing: 0.32em;
+}
+
+.panel-btn {
+  padding: 0.45rem 0.7rem;
+  font-family: 'Noto Serif SC', SimSun, serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: rgba(245, 217, 122, 0.88);
+  background: rgba(245, 217, 122, 0.055);
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.28);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.panel-btn:hover:not(:disabled) {
+  color: rgb(255, 244, 212);
+  background: rgba(245, 217, 122, 0.11);
+  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.5), 0 0 14px rgba(245, 217, 122, 0.12);
+}
+
+.panel-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.panel-btn.strong {
+  background: linear-gradient(90deg, rgba(245, 217, 122, 0.2), rgba(245, 217, 122, 0.08));
+}
+
+.panel-btn.danger {
+  color: rgba(230, 145, 145, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(230, 145, 145, 0.28);
+}

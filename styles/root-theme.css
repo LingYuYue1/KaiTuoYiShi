@@ -1,0 +1,14 @@
+﻿:root {
+  /* Deep Space Star Trails (default) - cyan on deep blue-black */
+  --tj-bg-primary: 8, 7, 9;
+  --tj-bg-secondary: 15, 15, 30;
+  --tj-text-primary: 200, 220, 240;
+  --tj-text-secondary: 120, 150, 180;
+  --tj-accent-primary: 0, 220, 200;
+  --tj-accent-secondary: 180, 0, 180;
+  --tj-border: 40, 40, 60;
+  --tj-danger: 255, 60, 100;
+
+  --scrollbar-thumb: var(--tj-accent-primary);
+  --scrollbar-track: var(--tj-bg-secondary);
+}
