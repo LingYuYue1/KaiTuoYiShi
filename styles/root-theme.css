@@ -37,6 +37,8 @@
   --tj-ui-panel-strong: 8, 7, 9;
   --tj-ui-nsfw: 241, 183, 206;
   --tj-ui-success: 165, 230, 170;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
 
   --scrollbar-thumb: var(--tj-accent-primary);
   --scrollbar-track: var(--tj-bg-secondary);

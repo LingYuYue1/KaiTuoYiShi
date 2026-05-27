@@ -248,9 +248,9 @@ export function VariableManagerTab(props: Props) {
   const stats = buildQuickStats(activeSystem, originalValue);
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: '230px minmax(0, 1fr)' }}>
+    <div className="grid min-w-0 gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
       <aside
-        className="space-y-2 p-3"
+        className="max-h-[34dvh] space-y-2 overflow-y-auto p-3 md:max-h-none"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.42)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
@@ -310,10 +310,10 @@ export function VariableManagerTab(props: Props) {
           }}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="h-2 w-2" style={{ background: activeSystem.accent, boxShadow: `0 0 12px ${activeSystem.accent}` }} />
-                <h3 className="font-serif text-lg font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+                <h3 className="min-w-0 font-serif text-lg font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                   {activeSystem.label}
                 </h3>
                 <span
@@ -351,7 +351,7 @@ export function VariableManagerTab(props: Props) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col items-stretch justify-between gap-2 sm:flex-row sm:items-center">
           <div className="flex gap-1">
             <button
               onClick={() => setMode('fields')}
@@ -378,7 +378,7 @@ export function VariableManagerTab(props: Props) {
               整体 JSON
             </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             {error && <span className="text-xs" style={{ color: 'rgba(255,135,135,0.95)' }}>✕ {error}</span>}
             {savedFlash && <span className="text-xs" style={{ color: 'rgba(165,230,170,0.95)' }}>✓ 已保存</span>}
             <button
@@ -407,7 +407,7 @@ export function VariableManagerTab(props: Props) {
           }}
         >
           {mode === 'fields' ? (
-            <div style={{ maxHeight: '58vh', overflowY: 'auto' }}>
+            <div className="max-h-[52dvh] overflow-y-auto md:max-h-[58vh]">
               <TreeNode label={activeSystem.rootLabel} value={draft} depth={0} onChange={updateDraft} />
             </div>
           ) : (
@@ -461,14 +461,14 @@ function TreeNode({
         borderLeft: depth === 0 ? 'none' : '1px solid rgba(var(--tj-accent-primary),0.10)',
       }}
     >
-      <summary className="flex cursor-pointer select-none items-center gap-2 py-1">
-        <span className="font-serif text-[13px] font-bold" style={{ color: depth === 0 ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-ui-body),0.94)' }}>
+      <summary className="flex min-w-0 cursor-pointer select-none flex-wrap items-center gap-2 py-1">
+        <span className="min-w-0 max-w-full truncate font-serif text-[13px] font-bold" style={{ color: depth === 0 ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-ui-body),0.94)' }}>
           {label}
         </span>
         <span className="font-mono text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
           {isArray ? `[${value.length}]` : `{${Object.keys(value).length}}`}
         </span>
-        <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
+        <span className="min-w-0 max-w-full truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
           {summarizeValue(value)}
         </span>
         <button
@@ -563,14 +563,14 @@ function LeafRow({
 
   return (
     <div
-      className="flex items-start gap-2 py-1"
+      className="flex flex-col gap-1 py-1 sm:flex-row sm:items-start sm:gap-2"
       style={{
         marginLeft: depth === 0 ? 0 : 12,
         paddingLeft: depth === 0 ? 0 : 8,
         borderLeft: depth === 0 ? 'none' : '1px solid rgba(var(--tj-accent-primary),0.08)',
       }}
     >
-      <span className="min-w-[128px] flex-shrink-0 pt-1 font-serif text-xs" style={{ color: 'rgba(var(--tj-ui-body),0.92)' }}>
+      <span className="min-w-0 flex-shrink-0 pt-1 font-serif text-xs sm:min-w-[128px]" style={{ color: 'rgba(var(--tj-ui-body),0.92)' }}>
         {label}
       </span>
 
@@ -600,7 +600,7 @@ function LeafRow({
           type="number"
           value={Number.isFinite(value as number) ? (value as number) : 0}
           onChange={(event) => onChange(event.target.value === '' ? 0 : Number(event.target.value))}
-          className="kaituo-input min-w-[120px] flex-1 px-2 py-1 font-mono text-[11px]"
+          className="kaituo-input w-full min-w-0 flex-1 px-2 py-1 font-mono text-[11px]"
           style={{ clipPath: smallClip }}
         />
       ) : typeof value === 'string' && (value.length > 58 || value.includes('\n')) ? (
@@ -608,7 +608,7 @@ function LeafRow({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={Math.min(7, Math.max(2, Math.ceil(value.length / 58)))}
-          className="kaituo-input flex-1 resize-none px-2 py-1 font-mono text-[11px]"
+          className="kaituo-input w-full min-w-0 flex-1 resize-none px-2 py-1 font-mono text-[11px]"
           style={{ clipPath: smallClip }}
           spellCheck={false}
         />
@@ -616,7 +616,7 @@ function LeafRow({
         <input
           value={typeof value === 'string' ? value : ''}
           onChange={(event) => onChange(event.target.value)}
-          className="kaituo-input min-w-[120px] flex-1 px-2 py-1 font-mono text-[11px]"
+          className="kaituo-input w-full min-w-0 flex-1 px-2 py-1 font-mono text-[11px]"
           style={{ clipPath: smallClip }}
           spellCheck={false}
         />

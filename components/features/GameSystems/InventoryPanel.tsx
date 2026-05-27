@@ -176,9 +176,9 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
   ];
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <aside className="flex w-[260px] min-h-0 shrink-0 flex-col gap-3">
-        <div className="px-4 py-4" style={panelStyle}>
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
+      <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:w-[260px]">
+        <div className="px-3 py-3 md:px-4 md:py-4" style={panelStyle}>
           <SectionHeader title="背包总览" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MetricTile label="物品总数" value={`${inventory.length}`} />
@@ -192,9 +192,9 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
           <EquipmentDots traveler={traveler} />
         </div>
 
-        <div className="px-4 py-3" style={panelStyle}>
+        <div className="px-3 py-3 md:px-4 md:py-3" style={panelStyle}>
           <SectionHeader title="分类切换" />
-          <div className="mt-3 grid gap-2">
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1 md:block md:space-y-2 md:overflow-visible md:pb-0">
             {(['全部', ...ITEM_CATEGORY_ORDER] as 标签[]).map((cat) => {
               const label = cat === '全部' ? '全部' : ITEM_CATEGORY_LABELS[cat];
               const count = cat === '全部' ? inventory.length : counts[cat];
@@ -207,7 +207,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                     setTab(cat);
                     setSelectedId(null);
                   }}
-                  className="w-full px-3 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
+                  className="min-w-[112px] flex-none px-3 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)] md:w-full md:min-w-0 md:flex-auto"
                   style={{
                     background: active
                       ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
@@ -242,14 +242,14 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-hidden">
+      <main className="min-h-0 min-w-0 flex-1 overflow-visible md:overflow-hidden">
         <div className="flex h-full min-h-0 flex-col gap-3">
-          <div className="px-4 py-4" style={panelStyle}>
+          <div className="px-3 py-3 md:px-4 md:py-4" style={panelStyle}>
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <SectionHeader title="物品陈列" />
                 <div
-                  className="mt-2 font-serif text-[14px] tracking-[0.18em]"
+                  className="mt-2 font-serif text-[13px] leading-relaxed tracking-[0.14em] md:text-[14px] md:tracking-[0.18em]"
                   style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}
                 >
                   {tab === '全部' ? '全部物品' : ITEM_CATEGORY_LABELS[tab]} · 共 {visible.length} 件
@@ -278,11 +278,11 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
             )}
           </div>
 
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[1fr_330px]">
-            <div className="min-h-0 overflow-y-auto pr-1">
+          <div className="flex flex-col gap-4 xl:grid xl:min-h-0 xl:flex-1 xl:grid-cols-[1fr_330px]">
+            <div className="min-h-fit overflow-visible xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               <div
                 className="grid gap-2"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(4.75rem, 1fr))' }}
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(4.25rem, 1fr))' }}
               >
                 {cells.map((item, i) =>
                   item ? (
@@ -299,8 +299,8 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
               </div>
             </div>
 
-            <div className="min-h-0 overflow-y-auto pr-1">
-              <div className="sticky top-0">
+            <div className="relative z-10 min-h-fit overflow-visible xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+              <div className="xl:sticky xl:top-0">
                 <ItemDetailOverlay
                   item={selectedItem}
                   onClose={() => setSelectedId(null)}
@@ -448,7 +448,7 @@ function ItemDetailOverlay({
   if (!item) {
     return (
       <div
-        className="px-4 py-5"
+        className="px-3 py-4 md:px-4 md:py-5"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
@@ -456,7 +456,7 @@ function ItemDetailOverlay({
         }}
       >
         <SectionHeader title="物品详情" />
-        <EmptyNotice title="未选择物品" text="点击左侧方格中的任意物品，右侧会显示更完整的详情。" />
+        <EmptyNotice title="未选择物品" text="点击物品格子后，这里会显示更完整的详情。" />
       </div>
     );
   }
@@ -478,7 +478,7 @@ function ItemDetailOverlay({
 
   return (
     <div
-      className="relative overflow-hidden px-4 py-4"
+      className="relative z-10 mt-1 overflow-hidden px-3 py-4 md:mt-0 md:px-4 md:py-4"
       style={{
         background: `radial-gradient(circle at 12% 0%, ${qualityColor.replace(/0\.\d+\)/, '0.16)')}, transparent 38%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94))`,
         boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 14px 32px rgba(var(--tj-shadow), 0.08)`,
@@ -488,7 +488,7 @@ function ItemDetailOverlay({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           <div
-            className="flex h-[68px] w-[68px] shrink-0 items-center justify-center font-serif text-[30px]"
+            className="flex h-[58px] w-[58px] shrink-0 items-center justify-center font-serif text-[26px] md:h-[68px] md:w-[68px] md:text-[30px]"
             style={{
               color: qualityColor,
               background: 'rgba(var(--tj-bg-primary), 0.56)',
@@ -499,18 +499,18 @@ function ItemDetailOverlay({
             {CATEGORY_GLYPHS[item.类别]}
           </div>
           <div className="min-w-0">
-          <SectionHeader title="物品详情" />
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <MetaChip text={`${item.品质}品`} color={qualityColor} />
-            <MetaChip text={`×${item.数量}`} color="rgba(245,235,210,0.92)" />
-            <MetaChip text={ITEM_CATEGORY_LABELS[item.类别]} color="rgba(117,214,216,0.9)" />
-          </div>
-          <h3
-            className="mt-2 break-words font-serif text-[24px] font-semibold tracking-[0.12em]"
-            style={{ color: qualityColor }}
-          >
-            {item.名称}
-          </h3>
+            <SectionHeader title="物品详情" />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <MetaChip text={`${item.品质}品`} color={qualityColor} />
+              <MetaChip text={`×${item.数量}`} color="rgba(245,235,210,0.92)" />
+              <MetaChip text={ITEM_CATEGORY_LABELS[item.类别]} color="rgba(117,214,216,0.9)" />
+            </div>
+            <h3
+              className="mt-2 break-words font-serif text-[19px] font-semibold leading-tight tracking-[0.08em] md:text-[24px] md:tracking-[0.12em]"
+              style={{ color: qualityColor }}
+            >
+              {item.名称}
+            </h3>
           </div>
         </div>
         <button
@@ -530,7 +530,7 @@ function ItemDetailOverlay({
 
       {equipped && (
         <div
-          className="mt-3 inline-block px-2 py-0.5 font-serif text-[12px] tracking-[0.15em]"
+          className="mt-3 inline-block px-2 py-0.5 font-serif text-[11px] tracking-[0.14em] md:text-[12px] md:tracking-[0.15em]"
           style={{
             color: 'rgb(var(--tj-text-primary))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
@@ -543,7 +543,7 @@ function ItemDetailOverlay({
 
       {item.描述 && (
         <p
-          className="mt-3 font-serif text-[13px] leading-relaxed"
+          className="mt-3 font-serif text-[12px] leading-relaxed md:text-[13px]"
           style={{ color: 'rgba(var(--tj-text-secondary), 0.95)' }}
         >
           {item.描述}
@@ -678,7 +678,7 @@ function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
       <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
-      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+      <span className="font-serif text-[12px] font-semibold tracking-[0.18em] md:text-[13px] md:tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </span>
       <span
@@ -717,10 +717,10 @@ function MetricTile({ label, value }: { label: string; value: string }) {
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
+      <div className="font-serif text-[11px] leading-tight tracking-[0.12em] md:text-[12px] md:tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
         {label}
       </div>
-      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+      <div className="mt-1 truncate font-serif text-[14px] font-semibold md:text-[15px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {value}
       </div>
     </div>
@@ -779,8 +779,8 @@ function EffectChip({ text }: { text: string }) {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-3 font-serif text-[13px] leading-relaxed">
-      <span className="shrink-0 tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
+    <div className="flex flex-col gap-1 font-serif text-[12px] leading-relaxed md:flex-row md:gap-3 md:text-[13px]">
+      <span className="shrink-0 tracking-[0.12em] md:tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
         {label}
       </span>
       <span className="min-w-0 break-words" style={{ color: 'rgba(245, 235, 210, 0.95)' }}>

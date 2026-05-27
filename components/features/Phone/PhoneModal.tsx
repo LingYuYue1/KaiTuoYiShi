@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
+import type { 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
 import type { 手机联系人, 手机会话, 手机系统, 主动来信种子 } from '@/models/phone';
 import type { NPC记录, NPC同行记忆条目 } from '@/models/npc';
@@ -27,6 +28,7 @@ interface Props {
   apiSettings: API设置;
   gameSettings: 游戏设置;
   turnCount: number;
+  mainChatHistory: 聊天消息[];
   npcRecords: NPC记录[];
   onPhoneChange: React.Dispatch<React.SetStateAction<手机系统>>;
   onMemoryChange: React.Dispatch<React.SetStateAction<记忆系统>>;
@@ -62,6 +64,7 @@ export function PhoneModal({
   apiSettings,
   gameSettings,
   turnCount,
+  mainChatHistory,
   npcRecords,
   onPhoneChange,
   onMemoryChange,
@@ -554,6 +557,7 @@ export function PhoneModal({
         chat: chatAfterPlayer,
         contact,
         userText: text,
+        mainChatHistory,
       }, phoneApiConfig.retryCount ?? 2);
       await appendMessagesToChatSequentially(
         activeChat.id,
@@ -672,6 +676,7 @@ export function PhoneModal({
         chat,
         contact: seed.targetType === 'private' ? contact : undefined,
         seed,
+        mainChatHistory,
       }, phoneApiConfig.retryCount ?? 2);
       onPhoneChange((prev) => {
         const hasContact = prev.contacts.some((item) => item.id === contact.id);

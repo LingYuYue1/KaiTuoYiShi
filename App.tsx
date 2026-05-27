@@ -405,14 +405,17 @@ export default function App() {
       />
 
       {/* Mobile bottom menu */}
-      <MobileQuickMenu
-        onHome={actions.handleGoHome}
-        onCharacter={() => setShowCharacter(true)}
-        onPhone={() => setShowPhone(true)}
-        onSettings={() => setShowSettings(true)}
-        onSave={actions.handleSave}
-        phoneUnread={state.手机.unreadTotal}
-      />
+      {!activeSystem && !showSettings && !showWorldbookManager && !showZhikuManager && !showSaveLoad && !showCharacter && !showPhone && (
+        <MobileQuickMenu
+          onHome={actions.handleGoHome}
+          onCharacter={() => setShowCharacter(true)}
+          onPhone={() => setShowPhone(true)}
+          onSettings={() => setShowSettings(true)}
+          onSave={() => setShowSaveLoad(true)}
+          onSystemSelect={handleMenuSelect}
+          phoneUnread={state.手机.unreadTotal}
+        />
+      )}
 
       {/* Modals */}
       {showSettings && (
@@ -475,6 +478,7 @@ export default function App() {
           apiSettings={state.apiSettings}
           gameSettings={state.gameSettings}
           turnCount={state.turnCount}
+          mainChatHistory={state.chatHistory}
           npcRecords={state.NPC}
           onPhoneChange={setPhonePersistently}
           onMemoryChange={state.set记忆}

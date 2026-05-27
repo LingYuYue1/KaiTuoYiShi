@@ -14,7 +14,7 @@ interface Props {
 export function ZhikuManagerModal({ zhikuSystem, onZhikuSystemChange, settings, onClose }: Props) {
   return (
     <Modal title="智库" onClose={onClose} className="max-w-6xl">
-      <div className="h-[78vh] min-h-0">
+      <div className="h-full min-h-0 min-w-0 overflow-hidden md:h-[78vh]">
         <ZhikuPanel
           zhikuSystem={zhikuSystem}
           onZhikuSystemChange={onZhikuSystemChange}

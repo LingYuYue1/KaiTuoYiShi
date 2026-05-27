@@ -93,9 +93,9 @@ export function PromptModulesTab({ settings, onChange }: Props) {
   };
 
   return (
-    <div className="flex h-full gap-4" style={{ minHeight: 0 }}>
+    <div className="flex h-full min-w-0 flex-col gap-4 md:flex-row" style={{ minHeight: 0 }}>
       {/* Left: module list */}
-      <div className="flex w-[260px] flex-shrink-0 flex-col gap-2">
+      <div className="flex max-h-[34dvh] min-w-0 flex-shrink-0 flex-col gap-2 md:max-h-none md:w-[260px]">
         <div className="flex items-center justify-between px-1">
           <span
             className="text-xs font-serif tracking-[0.2em]"
@@ -107,7 +107,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
             {sorted.length} 条
           </span>
         </div>
-        <div className="flex-1 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           {sorted.map((m) => {
             const active = m.id === selected?.id;
             return (
@@ -193,7 +193,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
       </div>
 
       {/* Right: editor */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1">
         {selected ? (
           <EditorPanel
             module={selected}
@@ -225,10 +225,10 @@ function EditorPanel({
   const readonly = m.builtin && m.id !== 'builtin_writing_style_custom';
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       {/* 启用开关 */}
       <div
-        className="flex items-center justify-between px-3 py-2"
+        className="flex flex-col items-stretch gap-3 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.45)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
@@ -236,7 +236,7 @@ function EditorPanel({
             'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
         }}
       >
-        <div className="min-w-0 mr-3">
+        <div className="min-w-0 sm:mr-3">
           <div
             className="font-serif font-bold text-sm tracking-wider"
             style={{ color: 'rgb(var(--tj-text-primary))' }}
@@ -279,7 +279,7 @@ function EditorPanel({
           value={m.title}
           readOnly={readonly}
           onChange={(e) => onPatch({ title: e.target.value })}
-          className="kaituo-input w-full px-3 py-2 text-sm"
+          className="kaituo-input w-full min-w-0 px-3 py-2 text-sm"
           style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
         />
       </Field>
@@ -291,13 +291,13 @@ function EditorPanel({
           value={m.description}
           readOnly={readonly}
           onChange={(e) => onPatch({ description: e.target.value })}
-          className="kaituo-input w-full px-3 py-2 text-sm"
+          className="kaituo-input w-full min-w-0 px-3 py-2 text-sm"
           style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
         />
       </Field>
 
       {/* 分类 + order */}
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <Field label="◆ 分类">
           <select
             value={m.category}
@@ -305,7 +305,7 @@ function EditorPanel({
             onChange={(e) =>
               onPatch({ category: e.target.value as 提示词模块类目 })
             }
-            className="kaituo-input px-3 py-2 text-sm"
+            className="kaituo-input w-full min-w-0 px-3 py-2 text-sm"
             style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
           >
             {(Object.keys(PROMPT_MODULE_CATEGORY_LABELS) as 提示词模块类目[]).map((c) => (
@@ -321,7 +321,7 @@ function EditorPanel({
             value={m.order}
             disabled={readonly}
             onChange={(e) => onPatch({ order: Number(e.target.value) })}
-            className="kaituo-input px-3 py-2 text-sm w-24"
+            className="kaituo-input w-full min-w-0 px-3 py-2 text-sm sm:w-24"
             style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
           />
         </Field>
@@ -349,7 +349,7 @@ function EditorPanel({
           readOnly={readonly}
           onChange={(e) => onPatch({ content: e.target.value })}
           rows={16}
-          className="kaituo-input w-full px-3 py-2 text-xs resize-none font-mono"
+          className="kaituo-input w-full min-w-0 resize-none px-3 py-2 font-mono text-xs"
           style={{ clipPath: smallClip, opacity: readonly ? 0.8 : 1 }}
         />
       </Field>

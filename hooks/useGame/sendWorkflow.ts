@@ -373,6 +373,7 @@ export async function executeSendWorkflow(
   pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true });
   let pendingVariableStarted = false;
   let keepWorkflowHint = false;
+  let rollbackHistoryOnAbort = state.chatHistory;
 
   const startTime = Date.now();
 
@@ -405,6 +406,7 @@ export async function executeSendWorkflow(
         ? { ...m, preTurnSnapshot: undefined }
         : m,
     );
+    rollbackHistoryOnAbort = purgedHistory;
     const updatedHistory = [...purgedHistory, userMsg];
     state.setChatHistory(updatedHistory);
 
@@ -1037,15 +1039,10 @@ export async function executeSendWorkflow(
     await saveSetting('worldbooks', state.worldbooks);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
-      // User aborted — keep partial content
-      const partialText = state.streamingMessage;
-      if (partialText) {
-        const aiMsg = 创建聊天消息('assistant', partialText, {
-          gameTime: `${state.turnCount}`,
-        });
-        state.setChatHistory((prev) => [...prev, aiMsg]);
-        state.setTurnCount((prev) => prev + 1);
-      }
+      state.setChatHistory(rollbackHistoryOnAbort);
+      state.setWorkflowHint('已停止生成，本次输入已回到输入框，可修改后重新发送。');
+      state.setWorkflowStatus('');
+      keepWorkflowHint = true;
     } else {
       console.error('Send workflow error:', err);
       keepWorkflowHint = true;

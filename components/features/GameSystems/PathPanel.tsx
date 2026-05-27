@@ -60,9 +60,9 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
   };
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <aside className="flex w-[246px] min-h-0 shrink-0 flex-col gap-3">
-        <div className="px-4 py-3" style={panelStyle}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
+      <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[246px]">
+        <div className="hidden px-4 py-3 md:block" style={panelStyle}>
           <SectionHeader title="命途总览" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MetricTile label="已承载" value={`${awakenedCount}`} />
@@ -70,7 +70,7 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+        <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden pb-1 md:min-h-0 md:flex-1 md:block md:space-y-2 md:overflow-y-auto md:overflow-x-hidden md:pb-0 md:pr-1">
           {cards.map((def) => {
             const record = active.find((a) => a.id === def.id);
             return (
@@ -86,7 +86,7 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-visible md:overflow-y-auto md:pr-1">
         {selectedDef && (
           <PathDetails
             def={selectedDef}
@@ -119,7 +119,7 @@ function PathListItem({
     <button
       type="button"
       onClick={onClick}
-      className="group w-full px-3 py-3 text-left transition-all"
+      className="group w-[108px] shrink-0 px-2 py-2 text-center transition-all md:w-full md:px-3 md:py-3 md:text-left"
       style={{
         background: selected
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.045))'
@@ -134,12 +134,12 @@ function PathListItem({
         clipPath: cardClip,
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col items-center gap-2 md:flex-row md:gap-3">
         <PathEmblem def={def} active={walked} selected={selected} size="sm" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center justify-center gap-2 md:justify-start">
             <span
-              className="truncate font-serif text-[15px] font-semibold tracking-[0.18em]"
+              className="max-w-full truncate font-serif text-[12px] font-semibold tracking-[0.06em] md:text-[15px] md:tracking-[0.18em]"
               style={{ color: walked ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.9)' }}
             >
               {def.name}
@@ -147,7 +147,7 @@ function PathListItem({
             {record?.是否主命途 && <Badge tone="gold">主</Badge>}
           </div>
           <div
-            className="mt-1 truncate font-serif text-[12px] tracking-[0.12em]"
+            className="mt-0.5 truncate font-serif text-[10px] tracking-[0.04em] md:mt-1 md:text-[12px] md:tracking-[0.12em]"
             style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}
           >
             星神 {def.aeon}
@@ -155,9 +155,9 @@ function PathListItem({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-1.5 flex items-center justify-between gap-1.5 md:mt-3 md:gap-3">
         <span
-          className="min-w-0 flex-1 truncate font-serif text-[12px] tracking-[0.16em]"
+          className="min-w-0 flex-1 truncate font-serif text-[10px] tracking-0 md:text-[12px] md:tracking-[0.16em]"
           style={{ color: walked ? 'rgba(var(--tj-accent-primary), 0.9)' : 'rgba(170, 160, 135, 0.78)' }}
         >
           {walked ? `${PATH_STAGE_DEFS[stage].name}${originLabel ? ` · ${originLabel}` : ''}` : '未觉醒'}
@@ -191,7 +191,7 @@ function PathDetails({
     : '尚未承载';
 
   return (
-    <div className="min-h-full space-y-4 px-5 py-5" style={panelStyle}>
+    <div className="min-h-full space-y-3 px-2.5 py-3 md:space-y-4 md:px-5 md:py-5" style={panelStyle}>
       <PathArchiveHero
         def={def}
         walked={walked}
@@ -208,7 +208,7 @@ function PathDetails({
               {def.lines.map((line, index) => (
                 <p
                   key={index}
-                  className="font-serif text-[13px] leading-[1.8] tracking-wider"
+                  className="font-serif text-[12px] leading-relaxed tracking-0 md:text-[13px] md:leading-[1.8] md:tracking-wider"
                     style={{ color: index === 0 ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.86)' }}
                 >
                   {index === 0 ? `「${line}」` : line}
@@ -217,7 +217,7 @@ function PathDetails({
             </div>
           )}
           <p
-            className="font-serif text-[14px] leading-[1.85] tracking-wider"
+            className="font-serif text-[12.5px] leading-relaxed tracking-0 md:text-[14px] md:leading-[1.85] md:tracking-wider"
             style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}
           >
             {def.description}
@@ -250,17 +250,17 @@ function PathDetails({
           <>
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <div className="font-serif text-[18px] font-semibold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+                <div className="font-serif text-[15px] font-semibold tracking-[0.08em] md:text-[18px] md:tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                   {stageDef.name}
-                  <span className="ml-2 text-[13px] font-normal italic" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
+                  <span className="ml-2 text-[11px] font-normal italic md:text-[13px]" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
                     {stageDef.title}
                   </span>
                 </div>
-                <p className="mt-2 font-serif text-[14px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.94)' }}>
+                <p className="mt-2 font-serif text-[12.5px] leading-relaxed tracking-0 md:text-[14px] md:tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.94)' }}>
                   {stageDef.blurb}
                 </p>
               </div>
-              <div className="font-serif text-[22px] font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+              <div className="font-serif text-[18px] font-bold md:text-[22px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                 {progress}
                 <span className="text-[13px] font-normal" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
                   /{STAGE_PROGRESS_MAX}
@@ -284,7 +284,7 @@ function PathDetails({
           <button
             type="button"
             onClick={onSetPrimary}
-            className="font-serif text-[13px] tracking-[0.22em] transition-all hover:bg-[rgba(var(--tj-accent-primary),0.18)]"
+            className="font-serif text-[11px] tracking-[0.12em] transition-all hover:bg-[rgba(var(--tj-accent-primary),0.18)] md:text-[13px] md:tracking-[0.22em]"
             style={{
               color: 'rgb(var(--tj-text-primary))',
               background: 'rgba(var(--tj-accent-primary), 0.1)',
@@ -330,7 +330,7 @@ function PathArchiveHero({
 }) {
   return (
     <section
-      className="relative overflow-hidden px-5 py-5"
+      className="relative overflow-hidden px-3 py-3 md:px-5 md:py-5"
       style={{
         background: walked
           ? 'radial-gradient(circle at 8% 12%, rgba(var(--tj-accent-primary), 0.12), transparent 30%), radial-gradient(circle at 92% 8%, rgba(117,214,216,0.08), transparent 24%), linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)) 54%, rgb(var(--tj-bubble)))'
@@ -346,19 +346,19 @@ function PathArchiveHero({
         style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.85), transparent 72%)' }}
       />
       <div
-        className="pointer-events-none absolute right-5 top-4 font-serif text-[10px] tracking-[0.42em]"
+        className="pointer-events-none absolute right-3 top-3 font-serif text-[9px] tracking-[0.22em] md:right-5 md:top-4 md:text-[10px] md:tracking-[0.42em]"
         style={{ color: 'rgba(var(--tj-accent-primary), 0.38)' }}
       >
         PATH ARCHIVE
       </div>
 
-      <div className="relative flex flex-col gap-5 xl:flex-row xl:items-stretch">
-        <div className="flex min-w-0 flex-1 gap-4">
+      <div className="relative flex flex-col gap-3 md:gap-5 xl:flex-row xl:items-stretch">
+        <div className="flex min-w-0 flex-1 gap-3 md:gap-4">
           <PathEmblem def={def} active={walked} selected={Boolean(record?.是否主命途)} size="lg" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3
-                className="font-serif text-[28px] font-semibold tracking-[0.28em]"
+                className="font-serif text-[20px] font-semibold tracking-[0.08em] md:text-[28px] md:tracking-[0.28em]"
                 style={{ color: walked ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
               >
                 {def.name}
@@ -373,7 +373,7 @@ function PathArchiveHero({
             </div>
             {def.blurb && (
               <p
-                className="mt-4 max-w-[780px] font-serif text-[16px] font-semibold leading-relaxed tracking-wider"
+                className="mt-2 max-w-[780px] font-serif text-[12px] font-semibold leading-relaxed tracking-0 md:mt-4 md:text-[16px] md:tracking-wider"
                 style={{ color: 'rgb(var(--tj-text-primary))' }}
               >
                 {def.blurb}
@@ -381,7 +381,7 @@ function PathArchiveHero({
             )}
             {def.intro && (
               <p
-                className="mt-2 max-w-[860px] font-serif text-[13px] leading-relaxed tracking-wider"
+                className="mt-1.5 max-w-[860px] font-serif text-[11px] leading-relaxed tracking-0 md:mt-2 md:text-[13px] md:tracking-wider"
                 style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}
               >
                 {def.intro}
@@ -391,7 +391,7 @@ function PathArchiveHero({
         </div>
 
         <div
-          className="flex w-full shrink-0 flex-col justify-between px-4 py-3 xl:w-[210px]"
+          className="flex w-full shrink-0 flex-col justify-between px-3 py-2.5 md:px-4 md:py-3 xl:w-[210px]"
           style={{
             background: 'linear-gradient(135deg, rgb(var(--tj-surface-strong)), rgb(var(--tj-bubble)))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.76), inset 3px 0 0 rgba(var(--tj-accent-primary),0.38)',
@@ -399,19 +399,19 @@ function PathArchiveHero({
           }}
         >
           <div>
-            <div className="font-serif text-[11px] tracking-[0.3em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
+            <div className="font-serif text-[9px] tracking-[0.16em] md:text-[11px] md:tracking-[0.3em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
               CURRENT STAGE
             </div>
-            <div className="mt-2 font-serif text-[22px] font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+            <div className="mt-1.5 font-serif text-[17px] font-bold tracking-[0.08em] md:mt-2 md:text-[22px] md:tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
               {walked ? stageDef.name : '未觉醒'}
             </div>
-            <div className="mt-1 font-serif text-[12px] italic tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}>
+            <div className="mt-1 font-serif text-[10px] italic tracking-0 md:text-[12px] md:tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}>
               {walked ? stageDef.title : '等待剧情触发'}
             </div>
           </div>
-          <div className="mt-4">
+          <div className="mt-3 md:mt-4">
             <MiniProgress value={progress} active={walked} />
-            <div className="mt-2 text-right font-serif text-[13px]" style={{ color: 'rgba(var(--tj-text-primary), 0.9)' }}>
+            <div className="mt-2 text-right font-serif text-[11px] md:text-[13px]" style={{ color: 'rgba(var(--tj-text-primary), 0.9)' }}>
               {walked ? `${progress}/${STAGE_PROGRESS_MAX}` : '--/--'}
             </div>
           </div>
@@ -424,7 +424,7 @@ function PathArchiveHero({
 function PanelSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
-      className="px-4 py-4"
+      className="px-3 py-3 md:px-4 md:py-4"
       style={{
         background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
@@ -432,7 +432,7 @@ function PanelSection({ title, children }: { title: string; children: ReactNode 
       }}
     >
       <SectionHeader title={title} />
-      <div className="mt-3">{children}</div>
+      <div className="mt-2 md:mt-3">{children}</div>
     </section>
   );
 }
@@ -468,7 +468,9 @@ function PathEmblem({
   selected: boolean;
   size: 'sm' | 'lg';
 }) {
-  const dimension = size === 'lg' ? 'h-[76px] w-[76px] text-[38px]' : 'h-12 w-12 text-[23px]';
+  const dimension = size === 'lg'
+    ? 'h-12 w-12 text-[24px] md:h-[76px] md:w-[76px] md:text-[38px]'
+    : 'h-8 w-8 text-[15px] md:h-12 md:w-12 md:text-[23px]';
   return (
     <div
       className={`relative flex shrink-0 items-center justify-center font-serif ${dimension}`}
@@ -491,7 +493,7 @@ function PathEmblem({
 function Badge({ children, tone }: { children: ReactNode; tone: 'gold' | 'muted' }) {
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 font-serif text-[12px] tracking-[0.16em]"
+      className="inline-flex items-center px-1.5 py-0.5 font-serif text-[10px] tracking-[0.08em] md:px-2 md:text-[12px] md:tracking-[0.16em]"
       style={{
         color: tone === 'gold' ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.78)',
         background: tone === 'gold' ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgb(var(--tj-surface-strong))',
@@ -511,7 +513,7 @@ function InfoPill({ label, value, tone = 'gold' }: { label: string; value: strin
   const cyan = tone === 'cyan';
   return (
     <span
-      className="inline-flex items-center gap-2 px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 font-serif text-[10px] tracking-[0.04em] md:gap-2 md:px-3 md:py-1 md:text-[12px] md:tracking-[0.14em]"
       style={{
         color: cyan ? 'rgba(38, 105, 116, 0.96)' : 'rgba(var(--tj-text-primary), 0.94)',
         background: cyan ? 'rgba(117, 214, 216, 0.12)' : 'rgba(var(--tj-accent-primary), 0.09)',
@@ -530,7 +532,7 @@ function InfoPill({ label, value, tone = 'gold' }: { label: string; value: strin
 function TraitChip({ trait }: { trait: { 名称: string; 说明: string } }) {
   return (
     <div
-      className="px-3 py-2"
+      className="px-2.5 py-2 md:px-3"
       style={{
         background:
           'linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-tech-wash),0.82))',
@@ -540,10 +542,10 @@ function TraitChip({ trait }: { trait: { 名称: string; 说明: string } }) {
       }}
       title={trait.说明}
     >
-      <div className="font-serif text-[13px] tracking-[0.2em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+      <div className="font-serif text-[12px] tracking-[0.1em] md:text-[13px] md:tracking-[0.2em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {trait.名称}
       </div>
-      <div className="mt-1 max-w-[220px] font-serif text-[12px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
+      <div className="mt-1 max-w-[220px] font-serif text-[11px] leading-relaxed tracking-0 md:text-[12px] md:tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
         {trait.说明}
       </div>
     </div>
@@ -553,17 +555,17 @@ function TraitChip({ trait }: { trait: { 名称: string; 说明: string } }) {
 function EmptyNotice({ title, text }: { title: string; text: string }) {
   return (
     <div
-      className="px-4 py-5 text-center"
+      className="px-3 py-3 text-center md:px-4 md:py-5"
       style={{
         background: 'rgb(var(--tj-bubble))',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.68)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+      <div className="font-serif text-[12px] font-semibold tracking-[0.1em] md:text-[15px] md:tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
         {title}
       </div>
-      <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
+      <div className="mt-1.5 font-serif text-[11px] leading-relaxed tracking-0 md:mt-2 md:text-[13px] md:tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
         {text}
       </div>
     </div>
@@ -587,7 +589,7 @@ function MiniProgress({ value, active }: { value: number; active: boolean }) {
 
 function StageTimeline({ stage, progress }: { stage: 命途阶段; progress: number }) {
   return (
-    <div className="mt-4 grid grid-cols-5 gap-2">
+    <div className="mt-3 grid grid-cols-5 gap-1.5 md:mt-4 md:gap-2">
       {([0, 1, 2, 3, 4] as 命途阶段[]).map((s) => {
         const isPast = s < stage;
         const isCurrent = s === stage;
@@ -612,7 +614,7 @@ function StageTimeline({ stage, progress }: { stage: 命途阶段; progress: num
                 }}
               />
             </div>
-            <div className="mt-2 truncate font-serif text-[12px]" style={{ color: isCurrent ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.74)' }}>
+            <div className="mt-1.5 truncate font-serif text-[10px] md:mt-2 md:text-[12px]" style={{ color: isCurrent ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.74)' }}>
               {PATH_STAGE_DEFS[s].name}
             </div>
           </div>

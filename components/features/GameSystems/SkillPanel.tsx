@@ -204,9 +204,9 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
   };
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <aside className="flex w-[270px] min-h-0 shrink-0 flex-col gap-3">
-        <section className="px-4 py-4" style={panelStyle()}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
+      <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[270px]">
+        <section className="hidden px-4 py-4 md:block" style={panelStyle()}>
           <div className="flex items-center gap-2">
             <span className="h-2 w-2" style={{ background: '#75d6d8', boxShadow: '0 0 12px rgba(117,214,216,0.8)' }} />
             <span className="font-serif text-[12px] tracking-[0.3em]" style={{ color: 'rgba(117,214,216,0.86)' }}>
@@ -234,11 +234,11 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
           </div>
         </section>
 
-        <section className="min-h-0 flex-1 overflow-hidden" style={panelStyle('rgba(var(--tj-bg-primary),0.76)')}>
-          <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary),0.14)' }}>
+        <section className="min-w-0 overflow-hidden md:min-h-0 md:flex-1" style={panelStyle('rgba(var(--tj-bg-primary),0.76)')}>
+          <div className="hidden px-4 py-3 md:block" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary),0.14)' }}>
             <SectionTitle title="槽位" />
           </div>
-          <div className="kaituo-options-scroll max-h-full space-y-3 overflow-y-auto px-3 py-3 pr-2 pb-10">
+          <div className="kaituo-options-scroll max-h-full min-w-0 space-y-3 overflow-visible px-3 py-3 md:block md:space-y-3 md:overflow-y-auto md:overflow-x-hidden md:pr-2 md:pb-10">
             <SlotGroup
               title="普通战技"
               slots={normalSlots}
@@ -246,20 +246,20 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
               onSelect={(slot) => setSelectedSlotKey(`normal:${slot.slotIndex}`)}
             />
 
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+            <div className="min-w-0 md:min-w-0">
+              <div className="mb-1.5 flex items-center justify-between gap-2 md:mb-2">
+                <span className="font-serif text-[11px] tracking-[0.12em] md:text-[12px] md:tracking-[0.22em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
                   命途战技
                 </span>
                 {selectedPath && (
-                  <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.75)' }}>
+                  <span className="max-w-[52vw] truncate text-[10px] md:max-w-none md:text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.75)' }}>
                     {getPath(selectedPath.id)?.name ?? selectedPath.id} · {计算命途战技槽位数(selectedPath.阶段)} 槽
                   </span>
                 )}
               </div>
               {pathRecords.length > 0 ? (
                 <>
-                  <div className="mb-2 grid grid-cols-2 gap-1.5">
+                  <div className="mb-2 flex gap-1.5 overflow-x-auto overflow-y-hidden pb-1 md:grid md:grid-cols-2 md:overflow-visible md:pb-0">
                     {pathRecords.map((path) => {
                       const def = getPath(path.id);
                       const stage = PATH_STAGE_DEFS.find((item) => item.stage === path.阶段);
@@ -268,7 +268,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                         <button
                           key={path.id}
                           type="button"
-                          className="truncate px-2 py-1.5 text-left text-[12px]"
+                          className="w-[92px] shrink-0 truncate px-2 py-1.5 text-left text-[11px] md:w-auto md:text-[12px]"
                           onClick={() => {
                             setSelectedPathId(path.id);
                             setSelectedSlotKey(`path:${path.id}:1`);
@@ -281,14 +281,14 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                           }}
                         >
                           <span className="block truncate">{def?.name ?? path.id}</span>
-                          <span className="mt-0.5 block truncate text-[10px]" style={{ color: 'rgba(117,214,216,0.72)' }}>
+                          <span className="mt-0.5 block truncate text-[9px] md:text-[10px]" style={{ color: 'rgba(117,214,216,0.72)' }}>
                             {stage?.name ?? '未知'} · {计算命途战技槽位数(path.阶段)} 槽
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                  <div className="pb-6">
+                  <div className="pb-1 md:pb-6">
                     <SlotGroup
                       title=""
                       slots={selectedPath ? pathSlots.filter((slot) => slot.pathId === selectedPath.id) : []}
@@ -305,9 +305,9 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
         </section>
       </aside>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <section className="px-4 py-4" style={panelStyle('linear-gradient(135deg, rgba(var(--tj-bubble),0.88), rgba(var(--tj-surface-strong),0.66))')}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-visible md:overflow-hidden">
+        <section className="px-3 py-3 md:px-4 md:py-4" style={panelStyle('linear-gradient(135deg, rgba(var(--tj-bubble),0.88), rgba(var(--tj-surface-strong),0.66))')}>
+          <div className="flex flex-wrap items-start justify-between gap-3 md:gap-4">
             <div className="min-w-0">
               <SectionTitle title={selectedSlot ? slotTitle(selectedSlot) : '选择槽位'} />
               {selectedSlot && (
@@ -319,7 +319,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                   )}
                 </div>
               )}
-              <div className="mt-2 text-[13px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.84)' }}>
+              <div className="mt-1.5 text-[11px] leading-relaxed md:mt-2 md:text-[13px]" style={{ color: 'rgba(var(--tj-text-secondary),0.84)' }}>
                 {selectedSlot
                   ? selectedSlot.kind === 'normal'
                     ? '普通战技固定三格，只能选模板，不开放自由编辑。'
@@ -345,21 +345,21 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
           </div>
         </section>
 
-        <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[1fr_0.95fr]">
-          <section className="kaituo-options-scroll min-h-0 overflow-y-auto px-4 py-4 pr-2" style={panelStyle('rgba(var(--tj-bg-secondary),0.55)')}>
+        <div className="grid min-h-0 flex-1 gap-3 overflow-visible md:overflow-hidden xl:grid-cols-[1fr_0.95fr]">
+          <section className="kaituo-options-scroll min-h-[340px] max-h-[440px] overflow-y-auto overscroll-contain px-3 py-3 md:min-h-0 md:max-h-none md:overflow-y-auto md:px-4 md:py-4 md:pr-2" style={panelStyle('rgba(var(--tj-bg-secondary),0.55)')}>
             {selectedSlot?.kind === 'normal' && (
-              <div className="mb-4">
+              <div className="mb-4 min-h-[280px] md:min-h-0">
                 <SectionTitle title="普通战技模板" />
                 <ModeNotice
                   title="模板写入"
                   text="选择一个模板会直接覆盖当前普通槽位。普通战技不开放自由编辑，保证主剧情调用时稳定、清晰。"
                 />
-                <div className="mt-3 grid gap-2">
+                <div className="kaituo-options-scroll mt-3 grid max-h-[168px] gap-2 overflow-y-auto overscroll-contain pr-1 md:max-h-none md:overflow-visible md:pr-0">
                   {NORMAL_SKILL_PRESETS.map((preset) => (
                     <button
                       key={preset.id}
                       type="button"
-                      className="px-3 py-3 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
+                      className="px-2.5 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)] md:px-3 md:py-3"
                       onClick={() => applyPreset(preset, selectedSlot.slotIndex)}
                       style={{
                         background: draft.名称 === preset.名称 ? 'rgba(var(--tj-accent-primary),0.1)' : 'rgba(var(--tj-bg-primary),0.42)',
@@ -370,14 +370,14 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                       }}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-serif text-[14px] font-bold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+                        <span className="font-serif text-[12px] font-bold tracking-[0.08em] md:text-[14px] md:tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                           {preset.名称}
                         </span>
                         <span className="text-[11px]" style={{ color: '#75d6d8' }}>
                           {selectedSkill?.名称 === preset.名称 ? '已写入' : '写入槽位'}
                         </span>
                       </div>
-                      <p className="mt-1 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
+                      <p className="mt-1 text-[11px] leading-relaxed md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
                         {preset.描述}
                       </p>
                     </button>
@@ -404,7 +404,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
             )}
           </section>
 
-          <section className="kaituo-options-scroll min-h-0 overflow-y-auto px-4 py-4 pr-2" style={panelStyle('rgba(var(--tj-accent-primary),0.035)')}>
+          <section className="kaituo-options-scroll min-h-0 overflow-visible px-3 py-3 md:overflow-y-auto md:px-4 md:py-4 md:pr-2" style={panelStyle('rgba(var(--tj-accent-primary),0.035)')}>
             <SectionTitle title="已登记战技" />
             <div className="mt-3 space-y-3">
               {skillRecords.length ? (
@@ -475,7 +475,7 @@ function SkillEditor({
           value={draft.名称}
           onChange={(e) => onChange({ ...draft, 名称: e.target.value })}
           placeholder={selectedSlot?.kind === 'path' ? '例如：逐星断弦' : '请选择预设或输入名称'}
-          className="kaituo-input w-full px-3 py-2 text-sm"
+          className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
           style={{ clipPath: smallClip }}
         />
       </Field>
@@ -485,7 +485,7 @@ function SkillEditor({
           onChange={(e) => onChange({ ...draft, 描述: e.target.value })}
           rows={5}
           placeholder="写清楚这招如何出手、适合什么场景、会在正文中呈现出怎样的战斗风格。"
-          className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed"
+          className="kaituo-input w-full px-2.5 py-1.5 text-[12px] leading-relaxed md:px-3 md:py-2 md:text-sm"
           style={{ clipPath: smallClip }}
         />
       </Field>
@@ -495,7 +495,7 @@ function SkillEditor({
             value={draft.来源}
             onChange={(e) => onChange({ ...draft, 来源: e.target.value })}
             placeholder="普通预设 / 巡猎自创 / 光锥启发"
-            className="kaituo-input w-full px-3 py-2 text-sm"
+            className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
             style={{ clipPath: smallClip }}
           />
         </Field>
@@ -504,7 +504,7 @@ function SkillEditor({
             value={draft.关键词}
             onChange={(e) => onChange({ ...draft, 关键词: e.target.value })}
             placeholder="追击、单体、护盾"
-            className="kaituo-input w-full px-3 py-2 text-sm"
+            className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
             style={{ clipPath: smallClip }}
           />
         </Field>
@@ -513,7 +513,7 @@ function SkillEditor({
             value={draft.消耗}
             onChange={(e) => onChange({ ...draft, 消耗: e.target.value })}
             placeholder="轻微负担 / 命途共鸣 / 每场一次"
-            className="kaituo-input w-full px-3 py-2 text-sm"
+            className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
             style={{ clipPath: smallClip }}
           />
         </Field>
@@ -522,7 +522,7 @@ function SkillEditor({
             value={draft.冷却}
             onChange={(e) => onChange({ ...draft, 冷却: e.target.value })}
             placeholder="无 / 短暂间隔 / 每场一次"
-            className="kaituo-input w-full px-3 py-2 text-sm"
+            className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
             style={{ clipPath: smallClip }}
           />
         </Field>
@@ -533,7 +533,7 @@ function SkillEditor({
           onChange={(e) => onChange({ ...draft, 备注: e.target.value })}
           rows={3}
           placeholder="可记录限制、演出风格、和伙伴配合方式。"
-          className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed"
+          className="kaituo-input w-full px-2.5 py-1.5 text-[12px] leading-relaxed md:px-3 md:py-2 md:text-sm"
           style={{ clipPath: smallClip }}
         />
       </Field>
@@ -553,28 +553,28 @@ function NormalSkillReadonly({ skill }: { skill?: 战技记录 }) {
         <InfoTile label="来源" value={skill.来源 || '普通预设'} />
       </div>
       <Field label="描述">
-        <div className="kaituo-input w-full px-3 py-3 text-sm leading-relaxed" style={{ clipPath: smallClip }}>
+        <div className="kaituo-input w-full px-2.5 py-2 text-[12px] leading-relaxed md:px-3 md:py-3 md:text-sm" style={{ clipPath: smallClip }}>
           {skill.描述}
         </div>
       </Field>
       <div className="grid gap-3 md:grid-cols-2">
         <Field label="关键词">
-          <div className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+          <div className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm" style={{ clipPath: smallClip }}>
             {skill.关键词?.length ? skill.关键词.join('、') : '无'}
           </div>
         </Field>
         <Field label="消耗 / 冷却">
-          <div className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+          <div className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm" style={{ clipPath: smallClip }}>
             {skill.消耗 || '无'} / {skill.冷却 || '无'}
           </div>
         </Field>
       </div>
       <Field label="备注">
-        <div className="kaituo-input w-full px-3 py-3 text-sm leading-relaxed" style={{ clipPath: smallClip }}>
+        <div className="kaituo-input w-full px-2.5 py-2 text-[12px] leading-relaxed md:px-3 md:py-3 md:text-sm" style={{ clipPath: smallClip }}>
           {skill.备注 || '无'}
         </div>
       </Field>
-      <div className="text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
+      <div className="text-[11px] md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
         普通战技为模板制，只允许通过左侧预设替换槽位，不能自由编辑。
       </div>
     </div>
@@ -593,7 +593,7 @@ function ModePill({
   const isCyan = tone === 'cyan';
   return (
     <span
-      className="px-2 py-0.5 text-[11px] font-serif tracking-[0.18em]"
+      className="px-1.5 py-0.5 font-serif text-[10px] tracking-[0.08em] md:px-2 md:text-[11px] md:tracking-[0.18em]"
       style={{
         color: active ? (isCyan ? '#9ef0f0' : 'rgb(var(--tj-text-primary))') : 'rgba(var(--tj-text-secondary),0.72)',
         background: active
@@ -626,7 +626,7 @@ function ModeNotice({
   const isCyan = tone === 'cyan';
   return (
     <div
-      className="mt-2 px-3 py-3 text-[12px] leading-relaxed"
+      className="kaituo-options-scroll mt-2 min-h-[104px] max-h-[132px] overflow-y-auto overscroll-contain px-2.5 py-2 text-[11px] leading-relaxed md:min-h-0 md:max-h-none md:overflow-visible md:px-3 md:py-3 md:text-[12px]"
       style={{
         color: isCyan ? 'rgba(204,240,240,0.82)' : 'rgba(var(--tj-text-secondary),0.82)',
         background: isCyan ? 'rgba(117,214,216,0.045)' : 'rgba(var(--tj-accent-primary),0.045)',
@@ -636,7 +636,7 @@ function ModeNotice({
         clipPath: smallClip,
       }}
     >
-      <div className="mb-1 font-serif text-[11px] tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
+      <div className="mb-1 font-serif text-[10px] tracking-[0.12em] md:text-[11px] md:tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </div>
       {text}
@@ -658,7 +658,7 @@ function SkillRecordGroup({
   const isCyan = tone === 'cyan';
   return (
     <div
-      className="px-3 py-3"
+      className="px-2.5 py-2.5 md:px-3 md:py-3"
       style={{
         background: isCyan ? 'rgba(117,214,216,0.03)' : 'rgba(var(--tj-accent-primary),0.03)',
         boxShadow: isCyan
@@ -668,14 +668,14 @@ function SkillRecordGroup({
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-serif text-[12px] tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
+        <span className="font-serif text-[11px] tracking-[0.12em] md:text-[12px] md:tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
           {title}
         </span>
         <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
           {count} 条
         </span>
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className="space-y-2 md:space-y-3">{children}</div>
     </div>
   );
 }
@@ -692,13 +692,13 @@ function SlotGroup({
   onSelect: (slot: 战技槽位摘要) => void;
 }) {
   return (
-    <div>
+    <div className="min-w-0 md:min-w-0">
       {title && (
-        <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+        <div className="mb-1.5 font-serif text-[11px] tracking-[0.12em] md:mb-2 md:text-[12px] md:tracking-[0.22em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
           {title}
         </div>
       )}
-      <div className="space-y-1.5">
+      <div className="flex gap-2 overflow-x-auto overflow-y-hidden pb-1 md:block md:space-y-1.5 md:overflow-visible md:pb-0">
         {slots.map((slot) => {
           const key = slot.kind === 'normal'
             ? `normal:${slot.slotIndex}`
@@ -708,7 +708,7 @@ function SlotGroup({
             <button
               key={slot.id}
               type="button"
-              className="w-full px-3 py-2 text-left transition-all"
+              className="w-[112px] shrink-0 px-2 py-2 text-left transition-all md:w-full md:px-3"
               onClick={() => onSelect(slot)}
               style={{
                 background: active
@@ -721,14 +721,14 @@ function SlotGroup({
               }}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-serif text-[13px] tracking-[0.16em]" style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.82)' }}>
+                <span className="font-serif text-[11px] tracking-[0.08em] md:text-[13px] md:tracking-[0.16em]" style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.82)' }}>
                   {slot.kind === 'normal' ? `普通槽 ${slot.slotIndex}` : `槽位 ${slot.slotIndex}`}
                 </span>
-                <span className="text-[11px]" style={{ color: slot.occupiedSkillId ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.72)' }}>
+                <span className="text-[10px] md:text-[11px]" style={{ color: slot.occupiedSkillId ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.72)' }}>
                   {slot.occupiedSkillId ? (slot.occupiedSkillEnabled === false ? '停用' : '已填') : '空位'}
                 </span>
               </div>
-              <div className="mt-1 truncate text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.76)' }}>
+              <div className="mt-1 truncate text-[10px] md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.76)' }}>
                 {slot.occupiedSkillName ?? '等待写入战技'}
               </div>
             </button>
@@ -756,7 +756,7 @@ function SkillRecordCard({
   return (
     <button
       type="button"
-      className="w-full px-3 py-3 text-left transition-all"
+      className="w-full px-2.5 py-2.5 text-left transition-all md:px-3 md:py-3"
       onClick={onSelect}
       style={{
         background: selected
@@ -772,25 +772,25 @@ function SkillRecordCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="font-serif text-[14px] font-bold tracking-[0.16em]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : 'rgb(var(--tj-text-primary))' }}>
+          <div className="font-serif text-[12px] font-bold tracking-[0.08em] md:text-[14px] md:tracking-[0.16em]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : 'rgb(var(--tj-text-primary))' }}>
             {skill.名称}
           </div>
-          <div className="mt-1 text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.76)' }}>
+          <div className="mt-1 text-[10px] md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.76)' }}>
             {skill.类别} · {skill.槽位类型 === 'normal' ? `普通槽 ${skill.槽位序号}` : `${pathDef?.name ?? skill.关联命途} 槽 ${skill.槽位序号}`}
             {stage ? ` · ${stage.name}` : ''}
           </div>
         </div>
-        <span className="shrink-0 px-2 py-0.5 text-[11px]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : '#75d6d8' }}>
+        <span className="shrink-0 px-1.5 py-0.5 text-[10px] md:px-2 md:text-[11px]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : '#75d6d8' }}>
           {skill.已启用 === false ? 'OFF' : 'ON'}
         </span>
       </div>
-      <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.8)' }}>
+      <p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed md:mt-2 md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.8)' }}>
         {skill.描述}
       </p>
       {skill.关键词?.length ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {skill.关键词.slice(0, 4).map((keyword) => (
-            <span key={keyword} className="px-2 py-0.5 text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)', background: 'rgba(var(--tj-accent-primary),0.08)', clipPath: smallClip }}>
+            <span key={keyword} className="px-1.5 py-0.5 text-[10px] md:px-2 md:text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)', background: 'rgba(var(--tj-accent-primary),0.08)', clipPath: smallClip }}>
               {keyword}
             </span>
           ))}
@@ -813,7 +813,7 @@ function SectionTitle({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
       <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
-      <span className="font-serif text-[13px] font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{title}</span>
+      <span className="font-serif text-[12px] font-bold tracking-[0.14em] md:text-[13px] md:tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{title}</span>
       <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.32), transparent)' }} />
     </div>
   );
@@ -822,7 +822,7 @@ function SectionTitle({ title }: { title: string }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>
+      <div className="mb-1 font-serif text-[11px] tracking-[0.1em] md:mb-1.5 md:text-[12px] md:tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>
         {label}
       </div>
       {children}
@@ -832,16 +832,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-2" style={{ background: 'rgba(117,214,216,0.055)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.18)', clipPath: smallClip }}>
-      <div className="text-[12px]" style={{ color: 'rgba(117,214,216,0.72)' }}>{label}</div>
-      <div className="mt-0.5 truncate font-serif text-[14px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
+    <div className="px-2.5 py-1.5 md:px-3 md:py-2" style={{ background: 'rgba(117,214,216,0.055)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.18)', clipPath: smallClip }}>
+      <div className="text-[10px] md:text-[12px]" style={{ color: 'rgba(117,214,216,0.72)' }}>{label}</div>
+      <div className="mt-0.5 truncate font-serif text-[12px] md:text-[14px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
     </div>
   );
 }
 
 function EmptyNotice({ text }: { text: string }) {
   return (
-    <div className="px-3 py-3 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-text-secondary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary),0.18)', clipPath: smallClip }}>
+    <div className="px-2.5 py-2.5 text-[11px] leading-relaxed md:px-3 md:py-3 md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-text-secondary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary),0.18)', clipPath: smallClip }}>
       {text}
     </div>
   );

@@ -186,10 +186,10 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex h-full min-w-0 flex-col gap-3">
       {/* ── 顶部：新建配置（横向铺满） ── */}
       <div
-        className="flex items-center gap-3 px-4 py-2.5"
+        className="flex min-w-0 flex-col items-stretch gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4 sm:py-2.5"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.55)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
@@ -212,8 +212,8 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
         <select
           value={newProvider}
           onChange={(e) => setNewProvider(e.target.value as AI提供商)}
-          className="kaituo-input px-2.5 py-1.5 text-sm"
-          style={{ clipPath: smallClip, minWidth: 160 }}
+          className="kaituo-input min-w-0 px-2.5 py-1.5 text-sm"
+          style={{ clipPath: smallClip }}
         >
           {providerOptions.map((p) => (
             <option key={p.value} value={p.value}>
@@ -223,7 +223,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
         </select>
         <button
           onClick={handleCreate}
-          className="px-4 py-1.5 text-xs font-serif tracking-[0.25em] transition-all hover:opacity-90"
+          className="px-4 py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90 sm:py-1.5 sm:tracking-[0.25em]"
           style={{
             background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
             color: 'rgb(var(--tj-on-accent))',
@@ -234,7 +234,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
           ＋ 创建配置
         </button>
         <span
-          className="ml-auto text-xs tracking-wider"
+          className="text-xs tracking-wider sm:ml-auto"
           style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
         >
           共 {settings.configs.length} 个配置
@@ -242,9 +242,9 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
       </div>
 
       {/* ── 主体：左列表 + 右详情 ── */}
-      <div className="flex min-h-0 flex-1 gap-4">
-        <aside className="flex w-[220px] flex-shrink-0 flex-col">
-          <div className="flex-1 space-y-1.5 overflow-y-auto">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 md:flex-row">
+        <aside className="flex max-h-[32dvh] w-full flex-shrink-0 flex-col md:max-h-none md:w-[220px]">
+          <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
           {settings.configs.length === 0 && (
             <div
               className="px-3 py-4 text-center text-xs"
@@ -306,13 +306,13 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
         ) : (
           <>
             {/* 顶部操作条 */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2">
                 <span style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
                   {settings.activeConfigId === selectedConfig.id ? '◆' : '◇'}
                 </span>
                 <span
-                  className="font-serif text-sm font-bold tracking-[0.25em]"
+                  className="min-w-0 truncate font-serif text-sm font-bold tracking-[0.18em] sm:tracking-[0.25em]"
                   style={{
                     background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
                     WebkitBackgroundClip: 'text',
@@ -323,7 +323,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                   {settings.activeConfigId === selectedConfig.id ? '当前使用中' : '未启用'}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {settings.activeConfigId !== selectedConfig.id && (
                   <button
                     onClick={handleActivate}
@@ -401,18 +401,18 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
             {/* 模型选择 */}
             <FieldRow label="模型">
               <div className="space-y-1.5">
-                <div className="flex gap-1.5">
+                <div className="flex flex-col gap-1.5 sm:flex-row">
                   <input
                     value={selectedConfig.model}
                     onChange={(e) => updateConfig({ model: e.target.value })}
                     placeholder="模型 ID"
-                    className="kaituo-input flex-1 px-2.5 py-1.5 text-sm"
+                    className="kaituo-input min-w-0 flex-1 px-2.5 py-1.5 text-sm"
                     style={{ clipPath: smallClip }}
                   />
                   <button
                     onClick={handleFetchModels}
                     disabled={loadingModels}
-                    className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
+                    className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50 sm:py-1.5"
                     style={{
                       color: 'rgba(var(--tj-accent-primary), 0.85)',
                       boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
@@ -537,7 +537,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
             )}
 
             {/* 测试连接 */}
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
               <button
                 onClick={handleTest}
                 disabled={testing}
@@ -579,7 +579,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                   {testResult.ok ? '✓ 连接成功' : '✕ 连接失败'}
                 </div>
                 <pre
-                  className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed"
+                  className="max-w-full whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed"
                   style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}
                 >
                   {testResult.detail}

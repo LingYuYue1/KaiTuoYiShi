@@ -127,15 +127,15 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-        <div className="flex flex-wrap gap-2">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-x-hidden">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[1fr_auto]">
+        <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
           <ActionButton label={saving ? '保存中' : '手动存档'} tone="primary" disabled={saving} onClick={handleSave} />
           <ActionButton label={loading ? '读取中' : '载入最新'} disabled={loading} onClick={handleContinue} />
           <ActionButton label={importing ? '导入中' : '导入 JSON'} disabled={importing} onClick={handleImport} />
           <ActionButton label="导出当前" disabled={saving} onClick={handleExportCurrent} />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <FilterButton label="手动" count={grouped.manual.length} active={filter === 'manual'} onClick={() => setFilter('manual')} />
           <FilterButton label="自动" count={grouped.auto.length} active={filter === 'auto'} onClick={() => setFilter('auto')} />
           <FilterButton label="全部" count={saves.length} active={filter === 'all'} onClick={() => setFilter('all')} />
@@ -158,7 +158,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
         <Metric label="总计" value={saves.length} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
         {visible.length === 0 ? (
           <div
             className="p-6 text-center text-sm font-serif tracking-[0.2em]"
@@ -206,7 +206,7 @@ function ActionButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="px-4 py-2 text-sm font-serif tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-50"
+      className="w-full px-4 py-2 text-sm font-serif tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-50 sm:w-auto"
       style={{
         color: tone === 'primary' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.9)',
         background: tone === 'primary'
@@ -238,7 +238,7 @@ function FilterButton({
     <button
       type="button"
       onClick={onClick}
-      className="px-3 py-2 text-[12px] font-serif tracking-[0.16em] transition-all"
+      className="w-full px-3 py-2 text-[12px] font-serif tracking-[0.16em] transition-all sm:w-auto"
       style={{
         color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.84)',
         background: active
@@ -279,7 +279,7 @@ function SaveCard({
 }) {
   return (
     <div
-      className="grid gap-3 p-3 lg:grid-cols-[1fr_auto]"
+      className="grid min-w-0 gap-3 p-3 lg:grid-cols-[1fr_auto]"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.55)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
@@ -308,14 +308,14 @@ function SaveCard({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:items-center">
         <ActionButton label={loadingId === save.id ? '读取中' : '读取'} disabled={loadingId !== null} onClick={() => onLoad(save.id)} />
         <ActionButton label="导出" disabled={loadingId !== null} onClick={() => onExport(save.id)} />
         <button
           type="button"
           disabled={loadingId !== null}
           onClick={() => onDelete(save.id)}
-          className="px-3 py-2 text-[12px] font-serif tracking-[0.16em] transition-all hover:opacity-90 disabled:opacity-50"
+          className="w-full px-3 py-2 text-[12px] font-serif tracking-[0.16em] transition-all hover:opacity-90 disabled:opacity-50 sm:w-auto"
           style={{
             color: 'rgba(220, 120, 120, 0.9)',
             boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.35)',

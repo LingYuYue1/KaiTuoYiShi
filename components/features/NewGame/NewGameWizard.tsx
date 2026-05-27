@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { 角色数据结构 } from '@/models/character';
-import { 创建命途进度 } from '@/models/path';
+import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
+import type { 命途阶段 } from '@/models/path';
 import type { 世界状态 } from '@/models/world';
 import { 创建空世界状态 } from '@/models/world';
 import type { 主题预设 } from '@/models/settings';
@@ -59,6 +60,7 @@ const smallClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 const tightClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
+const OPENING_PATH_STAGE_DEFS = PATH_STAGE_DEFS;
 
 export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
   const [step, setStep] = useState<Step>('world');
@@ -75,6 +77,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
   const [background, setBackground] = useState('');
 
   const [pathId, setPathId] = useState<命途ID>('none');
+  const [pathStage, setPathStage] = useState<命途阶段>(0);
   const [factionId, setFactionId] = useState<阵营ID>('none');
   const [customIdentity, setCustomIdentity] = useState('');
   const [selectedAbilityIds, setSelectedAbilityIds] = useState<string[]>([]);
@@ -93,6 +96,10 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
     [storyMode],
   );
   const selectedPath = useMemo(() => getPath(pathId), [pathId]);
+  const selectedPathStage = useMemo(
+    () => PATH_STAGE_DEFS.find((item) => item.stage === pathStage) ?? PATH_STAGE_DEFS[0],
+    [pathStage],
+  );
   const selectedFaction = useMemo(() => getFaction(factionId) ?? factions[0], [factionId]);
   const selectedScenario = useMemo<OpeningScenario>(
     () => getStartingScenario(startingScenarioId) ?? startingScenarios[0],
@@ -116,13 +123,14 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
         location: '黑塔空间站',
         storyMode: storyModeDef.name,
         path: selectedPath,
+        pathStage: pathId !== 'none' ? selectedPathStage : undefined,
         faction: selectedFaction,
         customIdentity,
         customStartPrompt,
         canonicalTrailblazer: getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue,
         abilities: selectedAbilityNames,
       }),
-    [canonicalTrailblazer, customIdentity, customStartPrompt, selectedAbilityNames, selectedFaction, selectedPath, selectedScenario, storyModeDef.name],
+    [canonicalTrailblazer, customIdentity, customStartPrompt, pathId, selectedAbilityNames, selectedFaction, selectedPath, selectedPathStage, selectedScenario, storyModeDef.name],
   );
 
   const openingHighlights = selectedScenario?.openingHighlights ?? [];
@@ -146,6 +154,11 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
     setCustomAbilities((prev) => prev.filter((x) => x !== text));
   };
 
+  const handlePathChange = (nextPathId: 命途ID) => {
+    setPathId(nextPathId);
+    if (nextPathId === 'none') setPathStage(0);
+  };
+
   const handleStart = () => {
     const selectedPathDef = getPath(pathId);
     const selectedScenarioDef = selectedScenario;
@@ -154,7 +167,17 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
 
     const startingPaths =
       pathId && pathId !== 'none'
-        ? [创建命途进度(pathId, true, selectedScenarioDef?.name ?? '', '开局承载')]
+        ? [
+            {
+              ...创建命途进度(
+                pathId,
+                true,
+                selectedScenarioDef?.name ?? '',
+                `开局承载 · 初始阶段：${selectedPathStage.name}`,
+              ),
+              阶段: pathStage,
+            },
+          ]
         : [];
     const finalIdentity = customIdentity.trim();
     const factionIdentity = selectedFaction.id === 'none' ? '' : selectedFaction.name;
@@ -205,7 +228,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
 
     if (selectedPathDef) {
       worldState.全局事件 = [
-        `命途倾向：${selectedPathDef.name}（${selectedPathDef.aeon}）`,
+        `命途倾向：${selectedPathDef.name}（${selectedPathDef.aeon}）｜初始阶段：${selectedPathStage.name}（${selectedPathStage.title}）`,
         ...worldState.全局事件,
       ];
     }
@@ -239,7 +262,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden px-4 py-8"
+      className="relative h-[100dvh] overflow-x-hidden overflow-y-auto px-3 py-5 pb-[calc(var(--app-safe-bottom,0px)+2rem)] md:min-h-screen md:px-4 md:py-8"
       style={{
         background:
           'radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.08) 0, transparent 28%), radial-gradient(circle at top right, rgba(255, 255, 255, 0.04) 0, transparent 22%), linear-gradient(180deg, rgb(var(--tj-bg-primary)) 0%, rgb(var(--tj-bg-secondary)) 100%)',
@@ -263,13 +286,14 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
         />
       </div>
 
-      <div className="relative mx-auto grid w-full max-w-7xl gap-5 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+      <div className="relative mx-auto grid w-full min-w-0 max-w-7xl gap-4 md:gap-5 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
         <div className="hidden lg:block">
           <div className="sticky top-6">
               <OpeningLedger
                 scenario={selectedScenario}
                 storyMode={storyModeDef.name}
                 path={selectedPath}
+                pathStage={pathId !== 'none' ? selectedPathStage : undefined}
                 faction={selectedFaction}
                 currentDate="琥珀纪 2157.03.07"
               currentTime="06:40"
@@ -280,7 +304,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <button
             onClick={onBack}
             className="w-fit text-xs font-serif tracking-[0.28em] transition-opacity hover:opacity-80"
@@ -290,7 +314,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
           </button>
 
           <div
-            className="p-5 sm:p-6"
+            className="min-w-0 p-3 sm:p-6"
             style={{
               background:
                 'linear-gradient(180deg, rgba(14, 14, 18, 0.94) 0%, rgba(11, 10, 14, 0.98) 100%)',
@@ -305,7 +329,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                   开拓档案 / STAR RAIL BRIEFING
                 </div>
                 <h1
-                  className="mt-1 font-serif text-3xl font-bold tracking-[0.18em]"
+                  className="mt-1 font-serif text-2xl font-bold tracking-[0.12em] sm:text-3xl sm:tracking-[0.18em]"
                   style={{
                     background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
                     WebkitBackgroundClip: 'text',
@@ -325,7 +349,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
               </div>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-4 min-w-0 overflow-x-auto kaituo-options-scroll">
               <ProgressBar step={step} />
             </div>
 
@@ -334,6 +358,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                 scenario={selectedScenario}
                 storyMode={storyModeDef.name}
                 path={selectedPath}
+                pathStage={pathId !== 'none' ? selectedPathStage : undefined}
                 faction={selectedFaction}
                 currentDate="琥珀纪 2157.03.07"
                 currentTime="06:40"
@@ -381,7 +406,9 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
             {step === 'path' && (
               <PathStep
                 pathId={pathId}
-                onPath={setPathId}
+                pathStage={pathStage}
+                onPath={handlePathChange}
+                onPathStage={setPathStage}
                 selectedAbilityIds={selectedAbilityIds}
                 onToggleAbility={toggleAbility}
                 customAbilities={customAbilities}
@@ -423,6 +450,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                 background={background}
                 storyMode={storyMode}
                 pathId={pathId}
+                pathStage={pathStage}
                 factionId={factionId}
                 customIdentity={customIdentity}
                 selectedScenario={selectedScenario}
@@ -473,13 +501,13 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 function ProgressBar({ step }: { step: Step }) {
   const currentIdx = STEPS.indexOf(step);
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex min-w-[520px] items-center justify-center gap-1 sm:min-w-0">
       {STEPS.map((item, index) => {
         const active = item === step;
         const passed = index < currentIdx;
         const reached = active || passed;
         return (
-          <div key={item} className="flex min-w-0 flex-1 items-center gap-1">
+          <div key={item} className="flex min-w-[92px] flex-1 items-center gap-1 sm:min-w-0">
             <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
               <div
                 className="flex h-8 w-8 items-center justify-center text-xs font-bold"
@@ -497,7 +525,7 @@ function ProgressBar({ step }: { step: Step }) {
                 {passed ? '✓' : index + 1}
               </div>
               <div
-                className="truncate text-[10px] tracking-[0.16em]"
+                className="w-full truncate text-center text-[10px] tracking-[0.1em] sm:tracking-[0.16em]"
                 style={{ color: reached ? 'rgba(var(--tj-accent-primary), 0.78)' : 'rgba(var(--tj-text-secondary), 0.5)' }}
               >
                 {STEP_META[item].title}
@@ -524,6 +552,7 @@ function OpeningLedger({
   scenario,
   storyMode,
   path,
+  pathStage,
   faction,
   currentDate,
   currentTime,
@@ -534,6 +563,7 @@ function OpeningLedger({
   scenario?: OpeningScenario;
   storyMode: string;
   path?: ReturnType<typeof getPath>;
+  pathStage?: (typeof PATH_STAGE_DEFS)[number];
   faction?: ReturnType<typeof getFaction>;
   currentDate: string;
   currentTime: string;
@@ -562,6 +592,7 @@ function OpeningLedger({
         <Line label="地点" value={currentLocation} />
         <Line label="剧情模式" value={storyMode} />
         <Line label="命途" value={path ? `${path.name} · ${path.aeon}` : '无命途'} />
+        <Line label="阶段" value={path && pathStage ? `${pathStage.name} · ${pathStage.title}` : '未选择'} />
         <Line label="组织背景" value={faction?.name ?? '无固定组织'} />
         <Line label="能力" value={abilities.length ? abilities.join('、') : '暂未选择'} />
       </div>
@@ -594,7 +625,7 @@ function OpeningLedger({
 
 function Line({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-3">
+    <div className="grid grid-cols-[78px_minmax(0,1fr)] gap-2 sm:grid-cols-[88px_minmax(0,1fr)] sm:gap-3">
       <div style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>{label}</div>
       <div className="break-words" style={{ color: 'rgba(241, 234, 214, 0.96)' }}>
         {value}
@@ -689,7 +720,7 @@ function StepNav({
   ready?: boolean;
 }) {
   return (
-    <div className="mt-6 flex gap-3">
+    <div className="mt-6 flex flex-col gap-3 sm:flex-row">
       {onBack && (
         <button onClick={onBack} className="kaituo-btn kaituo-btn-secondary flex-1 px-4 py-3 text-sm">
           {backLabel}
@@ -712,7 +743,7 @@ function StepNav({
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="mb-5">
+    <div className="mb-5 min-w-0">
       <div
         className="mb-2 text-[11px] tracking-[0.32em]"
         style={{ color: 'rgba(var(--tj-accent-primary), 0.62)' }}
@@ -720,7 +751,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
         {subtitle}
       </div>
       <h3
-        className="font-serif text-2xl font-bold tracking-[0.18em]"
+        className="font-serif text-xl font-bold tracking-[0.12em] sm:text-2xl sm:tracking-[0.18em]"
         style={{
           background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
           WebkitBackgroundClip: 'text',
@@ -965,7 +996,9 @@ function CharacterStep({
 
 function PathStep({
   pathId,
+  pathStage,
   onPath,
+  onPathStage,
   selectedAbilityIds,
   onToggleAbility,
   customAbilities,
@@ -978,7 +1011,9 @@ function PathStep({
   ready,
 }: {
   pathId: 命途ID;
+  pathStage: 命途阶段;
   onPath: (id: 命途ID) => void;
+  onPathStage: (stage: 命途阶段) => void;
   selectedAbilityIds: string[];
   onToggleAbility: (id: string) => void;
   customAbilities: string[];
@@ -991,6 +1026,7 @@ function PathStep({
   ready: boolean;
 }) {
   const selectedPath = getPath(pathId);
+  const selectedStage = PATH_STAGE_DEFS.find((item) => item.stage === pathStage) ?? PATH_STAGE_DEFS[0];
 
   return (
     <div>
@@ -1058,6 +1094,81 @@ function PathStep({
                   {selectedPath.name} · {selectedPath.aeon}
                 </div>
                 <div className="mt-1">{selectedPath.description}</div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+              初始阶段
+            </div>
+            {selectedPath ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {OPENING_PATH_STAGE_DEFS.map((item) => {
+                  const active = pathStage === item.stage;
+                  return (
+                    <button
+                      key={item.stage}
+                      onClick={() => onPathStage(item.stage)}
+                      className="p-4 text-left transition-transform hover:-translate-y-0.5"
+                      style={{
+                        background: active
+                          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-secondary), 0.04))'
+                          : 'rgba(10, 9, 11, 0.58)',
+                        boxShadow: active
+                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
+                          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.13)',
+                        clipPath: tightClip,
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div
+                            className="font-serif text-base font-bold tracking-[0.14em]"
+                            style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                          >
+                            {item.name}
+                          </div>
+                          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
+                            {item.title}
+                          </div>
+                        </div>
+                        <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                          STAGE {item.stage}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
+                        {item.blurb}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div
+                className="p-3 text-xs leading-relaxed"
+                style={{
+                  background: 'rgba(var(--tj-bg-primary), 0.52)',
+                  color: 'rgba(var(--tj-text-secondary), 0.72)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                  clipPath: smallClip,
+                }}
+              >
+                未选择命途时无需选择阶段。
+              </div>
+            )}
+
+            {selectedPath && (
+              <div
+                className="mt-3 p-3 text-xs leading-relaxed"
+                style={{
+                  background: 'rgba(var(--tj-bg-primary), 0.52)',
+                  color: 'rgba(var(--tj-text-secondary), 0.84)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  clipPath: smallClip,
+                }}
+              >
+                当前开局将以「{selectedStage.name} · {selectedStage.title}」写入旅人命途档案。高阶段会明显改变首回合叙事强度与周围人物反应。
               </div>
             )}
           </div>
@@ -1465,6 +1576,7 @@ function OverviewStep({
   background,
   storyMode,
   pathId,
+  pathStage,
   factionId,
   customIdentity,
   selectedScenario,
@@ -1482,6 +1594,7 @@ function OverviewStep({
   background: string;
   storyMode: 剧情模式;
   pathId: 命途ID;
+  pathStage: 命途阶段;
   factionId: 阵营ID;
   customIdentity: string;
   selectedScenario?: OpeningScenario;
@@ -1493,6 +1606,7 @@ function OverviewStep({
 }) {
   const mode = getStoryMode(storyMode) ?? storyModes[0];
   const path = getPath(pathId);
+  const selectedStage = PATH_STAGE_DEFS.find((item) => item.stage === pathStage) ?? PATH_STAGE_DEFS[0];
   const faction = getFaction(factionId) ?? factions[0];
 
   return (
@@ -1520,6 +1634,7 @@ function OverviewStep({
             <OverviewRow label="当前地点" value="黑塔空间站" />
             <OverviewRow label="原著主角" value={getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue ?? '星'} />
             <OverviewRow label="命途" value={path ? `${path.name} · ${path.aeon}` : '无命途'} />
+            <OverviewRow label="命途阶段" value={path ? `${selectedStage.name} · ${selectedStage.title}` : '未选择'} />
             <OverviewRow label="组织背景" value={faction.name} />
             <OverviewRow label="身份" value={customIdentity.trim() || '未填写'} />
           </div>
@@ -1647,6 +1762,7 @@ function buildOpeningSummary({
   location,
   storyMode,
   path,
+  pathStage,
   faction,
   customIdentity,
   canonicalTrailblazer,
@@ -1657,6 +1773,7 @@ function buildOpeningSummary({
   location?: string;
   storyMode: string;
   path?: ReturnType<typeof getPath>;
+  pathStage?: (typeof PATH_STAGE_DEFS)[number];
   faction?: ReturnType<typeof getFaction>;
   customIdentity?: string;
   canonicalTrailblazer?: 世界状态['原著主角'];
@@ -1673,6 +1790,7 @@ function buildOpeningSummary({
   lines.push(`原著主角：${canonicalTrailblazer ?? '星'}`);
   if (path) {
     lines.push(`命途：${path.name} · ${path.aeon}`);
+    if (pathStage) lines.push(`命途阶段：${pathStage.name} · ${pathStage.title}`);
   } else {
     lines.push('命途：无命途');
   }

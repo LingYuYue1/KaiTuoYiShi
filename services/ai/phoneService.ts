@@ -7,10 +7,12 @@ import type { 手机会话, 手机联系人, 主动来信种子 } from '@/models
 import type { NPC记录 } from '@/models/npc';
 import { 提取NPC同行记忆文本列表 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
+import type { 聊天消息 } from '@/models/chat';
 import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
 import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
+import { buildImmediateStoryReview } from '@/hooks/useGame/historyWindow';
 
 export interface 手机回复上下文 {
   traveler: 角色数据结构;
@@ -24,6 +26,7 @@ export interface 手机回复上下文 {
   contact?: 手机联系人;
   userText?: string;
   seed?: 主动来信种子;
+  mainChatHistory?: 聊天消息[];
 }
 
 export interface 手机回复结果 {
@@ -118,6 +121,13 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
     ...ctx.memory.即时记忆.slice(-6).map((m) => `即时：${m}`),
     ...ctx.yiting.回忆档案.slice(-5).map((m) => `回忆档案：${m.名称 || `第${m.回合}回合`}｜${(m.摘要 || m.原文 || '').slice(0, 180)}`),
   ];
+  const storyReview = ctx.mainChatHistory?.length
+    ? buildImmediateStoryReview(ctx.mainChatHistory, 10)
+    : '';
+  const localArchiveLines = [
+    ...(ctx.chat.localArchive?.compressedSummaries ?? []).slice(-4).map((summary) => `已压缩摘要：${summary}`),
+    ...(ctx.chat.localArchive?.entries ?? []).slice(-6).map((entry) => `本地摘要：${entry.summary}`),
+  ];
   const npc = ctx.contact?.npcId
     ? ctx.npcRecords.find((item) => item.id === ctx.contact?.npcId)
     : undefined;
@@ -162,7 +172,9 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
     `玩家：${ctx.traveler.姓名 || '开拓者'}`,
     `当前时间：${ctx.world.当前日期 || ctx.world.当前时间 || '未知'}`,
     `地点：${ctx.world.当前地点 || '未设定'}`,
+    storyReview ? `最近主剧情回顾：\n${storyReview}` : '',
     memories.length ? `近期记忆：\n${memories.join('\n')}` : '',
+    localArchiveLines.length ? `当前手机会话本地摘要：\n${localArchiveLines.join('\n')}` : '',
     npcLine ? `相关 NPC 档案：\n${npcLine}` : '',
     groupNpcLines ? `群聊参与者档案：\n${groupNpcLines}` : '',
     recentNews ? `近期新闻：\n${recentNews}` : '',

@@ -50,6 +50,7 @@ export function InputArea({
   const [input, setInput] = useState('');
   const [rerollActionOptions, setRerollActionOptions] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastSubmittedRef = useRef('');
   const visibleActionOptions = useMemo(
     () => (actionOptions.length > 0 ? actionOptions : rerollActionOptions),
     [actionOptions, rerollActionOptions],
@@ -58,11 +59,20 @@ export function InputArea({
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
+    lastSubmittedRef.current = trimmed;
     onSend(trimmed);
     setInput('');
     setRerollActionOptions([]);
     inputRef.current?.focus();
   }, [input, loading, onSend]);
+
+  const handleAbortClick = useCallback(() => {
+    onAbort();
+    if (lastSubmittedRef.current) {
+      setInput(lastSubmittedRef.current);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [onAbort]);
 
   const handlePickOption = useCallback((text: string) => {
     setInput(text);
@@ -92,7 +102,7 @@ export function InputArea({
 
   return (
     <div
-      className="p-3"
+      className="shrink-0 p-2.5 pb-[calc(var(--app-safe-bottom,0px)+74px)] md:p-3 md:pb-3"
       style={{
         borderTop: '1px solid rgba(var(--tj-border), 0.72)',
         background: 'rgba(var(--tj-surface), 0.72)',
@@ -101,7 +111,7 @@ export function InputArea({
     >
       {workflowHint && (
         <div
-          className="mb-2 flex items-center justify-between gap-3 px-3 py-1.5 font-serif text-[11px] tracking-[0.18em]"
+          className="mb-1.5 flex items-center justify-between gap-3 px-3 py-1.5 font-serif text-[11px] tracking-[0.18em]"
           style={{
             color: 'rgba(var(--tj-text-primary), 0.9)',
             background: 'rgba(var(--tj-accent-primary), 0.06)',
@@ -174,7 +184,7 @@ export function InputArea({
       )}
 
       {/* 顶部横向快捷图标条 */}
-      <div className="mb-2 flex items-center gap-1.5">
+      <div className="mb-1.5 flex items-center gap-1.5">
         {canRestartOpening && (
           <IconButton
             glyph="↺"
@@ -225,7 +235,7 @@ export function InputArea({
         </div>
       )}
 
-      <div className="flex gap-2 items-stretch">
+      <div className="flex items-stretch gap-2">
         <textarea
           ref={inputRef}
           value={input}
@@ -233,16 +243,16 @@ export function InputArea({
           onKeyDown={handleKeyDown}
           placeholder={loading ? '正在回应……' : '说点什么，或者描述你的动作...'}
           disabled={loading || disabled}
-          rows={2}
-          className="kaituo-input flex-1 resize-none px-3.5 py-2.5 text-sm disabled:opacity-50"
+          rows={1}
+          className="kaituo-input max-h-24 min-h-[40px] flex-1 resize-none px-3 py-2 text-sm disabled:opacity-50 md:min-h-0 md:px-3.5 md:py-2.5"
           style={{
             clipPath: btnClip,
           }}
         />
         {loading ? (
           <button
-            onClick={onAbort}
-            className="flex items-center gap-2 px-5 text-sm font-medium font-serif tracking-[0.3em] transition-all hover:opacity-90"
+            onClick={handleAbortClick}
+            className="flex min-w-[58px] items-center justify-center gap-2 px-3 font-serif text-xs font-medium tracking-[0.14em] transition-all hover:opacity-90 md:min-w-[64px] md:px-5 md:text-sm md:tracking-[0.3em]"
             style={{
               background: 'linear-gradient(135deg, rgba(220, 90, 90, 0.9), rgba(180, 60, 60, 0.9))',
               color: 'rgb(var(--tj-on-accent))',
@@ -265,7 +275,7 @@ export function InputArea({
           <button
             onClick={handleSend}
             disabled={!input.trim() || disabled}
-            className="kaituo-btn kaituo-btn-primary group px-6 text-sm"
+            className="kaituo-btn kaituo-btn-primary group min-w-[58px] px-3 text-xs md:min-w-[64px] md:px-6 md:text-sm"
           >
             <span
               className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
@@ -276,7 +286,7 @@ export function InputArea({
         )}
       </div>
       <div
-        className="mt-1.5 text-right text-xs tracking-wider"
+        className="mt-1.5 hidden text-right text-xs tracking-wider md:block"
         style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}
       >
         Enter 发送 · Shift+Enter 换行

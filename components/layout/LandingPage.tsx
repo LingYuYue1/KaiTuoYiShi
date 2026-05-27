@@ -48,7 +48,7 @@ export function LandingPage({
 
   return (
     <div
-      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden"
+      className="relative flex h-[100dvh] flex-col items-center justify-center overflow-hidden px-5 py-6"
       style={{ background: '#080812' }}
     >
       {/* ── Twinkling star field ── */}
@@ -79,11 +79,11 @@ export function LandingPage({
       />
 
       {/* ── Hero Content ── */}
-      <div className="relative z-10 flex flex-col items-center animate-fade-in pt-4">
-        <div className="flex items-center gap-6 mb-3">
-          <span className="text-2xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.55)' }}>◆</span>
+      <div className="relative z-10 flex min-h-0 w-full max-w-[520px] flex-col items-center justify-center animate-fade-in">
+        <div className="mb-3 flex w-full items-center justify-center gap-3 sm:gap-6">
+          <span className="hidden text-2xl sm:inline" style={{ color: 'rgba(var(--tj-accent-primary), 0.55)' }}>◆</span>
           <h1
-            className="font-serif text-5xl md:text-6xl font-bold tracking-[0.4em]"
+            className="flex flex-col items-center gap-1 text-center font-serif text-[clamp(2.8rem,17vw,4rem)] font-bold leading-[0.98] tracking-[0.12em] sm:block sm:text-6xl sm:tracking-[0.28em]"
             style={{
               background: 'linear-gradient(180deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 50%, rgb(var(--tj-accent-secondary)) 100%)',
               WebkitBackgroundClip: 'text',
@@ -92,37 +92,38 @@ export function LandingPage({
               filter: 'drop-shadow(0 0 24px rgba(var(--tj-accent-primary), 0.35))',
             }}
           >
-            开拓轶事
+            <span>开拓</span>
+            <span>轶事</span>
           </h1>
-          <span className="text-2xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.55)' }}>◆</span>
+          <span className="hidden text-2xl sm:inline" style={{ color: 'rgba(var(--tj-accent-primary), 0.55)' }}>◆</span>
         </div>
 
-        <div className="flex items-center gap-4 mb-4">
+        <div className="mb-3 flex w-full items-center justify-center gap-3 sm:mb-4 sm:gap-4">
           <div
-            className="h-px w-14"
+            className="h-px w-10 sm:w-14"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.65))' }}
           />
           <p
-            className="text-base md:text-lg font-serif tracking-[0.5em]"
+            className="font-serif text-sm tracking-[0.28em] sm:text-lg sm:tracking-[0.5em]"
             style={{ color: '#e6d4a0' }}
           >
             崩坏·星穹铁道
           </p>
           <div
-            className="h-px w-14"
+            className="h-px w-10 sm:w-14"
             style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.65), transparent)' }}
           />
         </div>
 
         <p
-          className="text-sm tracking-[0.22em] mb-4"
+          className="mb-3 text-center text-xs leading-relaxed tracking-[0.16em] sm:mb-4 sm:text-sm sm:tracking-[0.22em]"
           style={{ color: 'rgba(220, 210, 180, 0.6)' }}
         >
           踏上命途，遨游星海，写下你的开拓之旅吧
         </p>
 
         {/* Four-pointed star */}
-        <div className="relative my-1">
+        <div className="relative my-0.5 sm:my-1">
           <svg
             width="100"
             height="50"
@@ -166,7 +167,7 @@ export function LandingPage({
           />
         </div>
 
-        <div className="flex flex-col gap-3.5 w-72 mt-3 animate-slide-up">
+        <div className="mt-3 flex w-full max-w-[340px] flex-col gap-3 animate-slide-up sm:w-72 sm:gap-3.5">
           <button
             onClick={onNewGame}
             className="kaituo-btn kaituo-btn-primary group px-6 py-3.5 text-base font-medium"

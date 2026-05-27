@@ -168,34 +168,34 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
 
   return (
     <div
-      className="kaituo-modal-overlay fixed inset-0 z-[150] flex items-center justify-center p-2"
+      className="kaituo-modal-overlay fixed inset-0 z-[150] flex items-stretch justify-center p-0 md:items-center md:p-2"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
-        className="flex h-[90vh] w-full max-w-[1280px] animate-slide-up flex-col overflow-hidden"
+        className="flex h-[100dvh] w-full min-w-0 max-w-[1280px] animate-slide-up flex-col overflow-hidden md:h-[90vh]"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.97), rgba(var(--tj-bg-primary), 0.98))',
           boxShadow:
             'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 0 32px rgba(var(--tj-accent-primary), 0.12), 0 20px 60px rgba(0, 0, 0, 0.6)',
-          clipPath: 'polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px)',
+          clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
         }}
       >
         <header
-          className="flex items-end justify-between gap-5 px-6 pb-3 pt-4"
+          className="flex flex-col gap-2 px-3 pb-2 pt-3 md:flex-row md:items-end md:justify-between md:gap-3 md:px-6 md:pb-3 md:pt-4"
           style={{
             borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.28)',
             background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.06), rgba(var(--tj-accent-primary), 0))',
           }}
         >
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-3">
-              <span className="text-xs font-serif tracking-[0.45em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.65)' }}>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+              <span className="text-[10px] font-serif tracking-[0.34em] md:text-xs md:tracking-[0.45em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.65)' }}>
                 ◆ INDEX
               </span>
               <h2
-                className="font-serif text-2xl font-semibold tracking-[0.3em]"
+                className="font-serif text-[24px] font-semibold leading-tight tracking-[0.12em] md:text-2xl md:tracking-[0.3em]"
                 style={{
                   background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
                   WebkitBackgroundClip: 'text',
@@ -206,11 +206,11 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
                 如我所书 · 世界书
               </h2>
             </div>
-            <p className="mt-1.5 font-serif text-[11px] italic tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+            <p className="mt-1 font-serif text-[10px] italic leading-relaxed tracking-[0.08em] md:mt-1.5 md:text-[11px] md:tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
               内置规范与额外世界书分流管理，保存后参与后续剧情生成。
             </p>
           </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 md:gap-2">
             {activeTab === 'user' && (
               <HeaderButton onClick={handleNewBook} primary>
                 ＋ 新建世界书
@@ -220,7 +220,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
             <HeaderButton onClick={handleExport}>导出</HeaderButton>
             <button
               onClick={onClose}
-              className="ml-1 px-2 py-1.5 text-base font-serif tracking-wider transition-all hover:opacity-80"
+              className="ml-1 px-2 py-1 text-sm font-serif tracking-wider transition-all hover:opacity-80 md:py-1.5 md:text-base"
               style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}
               title="关闭"
             >
@@ -229,8 +229,8 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
           </div>
         </header>
 
-        <div className="flex flex-1 overflow-hidden">
-          <aside className="flex w-[300px] flex-shrink-0 flex-col" style={{ borderRight: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
+          <aside className="flex max-h-[46dvh] w-full flex-shrink-0 flex-col md:max-h-none md:w-[300px]" style={{ borderRight: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
             <div className="flex gap-1 px-3 py-2.5" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}>
               <TabButton active={activeTab === 'builtin'} onClick={() => setActiveTab('builtin')} label="内置" />
               <TabButton active={activeTab === 'user'} onClick={() => setActiveTab('user')} label="额外" />
@@ -259,7 +259,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
             </div>
           </aside>
 
-          <main className="flex flex-1 flex-col overflow-hidden">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {selectedBook && selectedEntry ? (
               <EntryPane
                 book={selectedBook}
@@ -293,7 +293,7 @@ function HeaderButton({ children, onClick, primary = false }: { children: React.
   return (
     <button
       onClick={onClick}
-      className="px-3 py-1.5 text-xs font-serif tracking-[0.2em] transition-all hover:opacity-90"
+      className="px-2 py-1 text-[11px] font-serif tracking-[0.12em] transition-all hover:opacity-90 md:px-3 md:py-1.5 md:text-xs md:tracking-[0.2em]"
       style={{
         color: primary ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(var(--tj-text-secondary), 0.9)',
         boxShadow: `inset 0 0 0 1px ${primary ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-accent-primary), 0.3)'}`,
@@ -518,11 +518,11 @@ function PaneHeader({
   onNewEntry: () => void;
 }) {
   return (
-    <div className="px-6 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.22)' }}>
-      <div className="flex items-start gap-4">
+    <div className="px-4 py-4 md:px-6" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.22)' }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
         <div className="min-w-0 flex-1">
           {builtin ? (
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <span
                 className="h-6 w-[3px] flex-shrink-0"
                 style={{
@@ -531,7 +531,7 @@ function PaneHeader({
                 }}
               />
               <h3
-                className="font-serif text-xl font-semibold tracking-[0.28em]"
+                className="min-w-0 font-serif text-lg font-semibold tracking-[0.16em] sm:text-xl sm:tracking-[0.28em]"
                 style={{
                   background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 55%, rgb(var(--tj-accent-secondary)) 100%)',
                   WebkitBackgroundClip: 'text',
@@ -560,7 +560,7 @@ function PaneHeader({
             </>
           )}
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
           {!builtin && (
             <>
               <span className="text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}>
@@ -626,7 +626,7 @@ function EntryPane({
         onDeleteBook={onDeleteBook}
         onNewEntry={onNewEntry}
       />
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6">
         <EntryEditor entry={entry} builtin={builtin} onChange={onUpdateEntry} onDelete={onDeleteEntry} />
       </div>
     </div>
@@ -655,7 +655,7 @@ function EmptyBookPane({
         onDeleteBook={onDeleteBook}
         onNewEntry={onNewEntry}
       />
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6">
         <EmptyHint text={builtin ? '内置书暂无条目' : '本书暂无条目，点击右上角「＋ 新建条目」'} />
       </div>
     </div>
@@ -674,8 +674,8 @@ function EntryEditor({
   onDelete: () => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="min-w-0 space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="font-serif text-xs tracking-[0.35em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>
           {builtin ? '内置条目' : '条目'}
         </div>
@@ -697,7 +697,7 @@ function EntryEditor({
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="类型">
           <select
             value={entry.type}

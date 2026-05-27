@@ -396,6 +396,7 @@ function buildPhoneContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     contact,
     userText: sourceInput,
     seed,
+    mainChatHistory: state.chatHistory,
   };
   const sections: ContextSection[] = [];
   addSection(sections, {

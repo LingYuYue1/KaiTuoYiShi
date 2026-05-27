@@ -220,64 +220,70 @@ export function SettingsModal({
 
   return (
     <div
-      className="kaituo-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="kaituo-modal-overlay fixed inset-0 z-50 flex items-stretch justify-center p-0 md:items-center md:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="flex h-[88vh] w-full max-w-5xl animate-slide-up overflow-hidden"
+        className="flex h-[100dvh] w-full max-w-none animate-slide-up flex-col overflow-hidden md:h-[88vh] md:max-w-5xl md:flex-row"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98))',
           boxShadow:
             'inset 0 0 0 1px rgba(var(--tj-border), 0.86), 0 24px 64px rgba(var(--tj-shadow), 0.16)',
           clipPath:
-            'polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px)',
+            'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
         }}
       >
         {/* ── Left sidebar ── */}
         <aside
-          className="flex w-[260px] flex-shrink-0 flex-col"
+          className="flex max-h-[42dvh] w-full flex-shrink-0 flex-col md:max-h-none md:w-[260px]"
           style={{
             borderRight: '1px solid rgba(var(--tj-border), 0.76)' ,
+            borderBottom: '1px solid rgba(var(--tj-border), 0.76)' ,
             background: 'rgba(var(--tj-surface-strong), 0.72)' ,
           }}
         >
           {/* Sidebar header */}
           <div
-            className="px-5 py-5"
+            className="flex items-center justify-between gap-3 px-4 py-3 md:block md:px-5 md:py-5"
             style={{ borderBottom: '1px solid rgba(var(--tj-border), 0.72)' }}
           >
-            <div
-              className="font-serif text-xl font-bold tracking-[0.35em]"
-              style={{
-                background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-            >
-              <span style={{ color: 'rgba(var(--tj-accent-primary), 0.6)', WebkitTextFillColor: 'rgba(var(--tj-accent-primary), 0.6)' }}>◆</span>
-              <span className="ml-2">设 置</span>
+            <div>
+              <div
+                className="font-serif text-lg font-bold tracking-[0.28em] md:text-xl md:tracking-[0.35em]"
+                style={{
+                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                <span style={{ color: 'rgba(var(--tj-accent-primary), 0.6)', WebkitTextFillColor: 'rgba(var(--tj-accent-primary), 0.6)' }}>◆</span>
+                <span className="ml-2">设 置</span>
+              </div>
+              <div
+                className="mt-1.5 h-px w-40 md:w-full"
+                style={{
+                  background:
+                    'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.55), rgba(var(--tj-accent-primary), 0.1) 60%, transparent)',
+                }}
+              />
             </div>
-            <div
-              className="mt-1.5 h-px w-full"
-              style={{
-                background:
-                  'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.55), rgba(var(--tj-accent-primary), 0.1) 60%, transparent)',
-              }}
-            />
+            <button onClick={onClose} className="kaituo-close-btn text-xl md:hidden" aria-label="关闭">
+              X
+            </button>
           </div>
 
           {/* Tab list */}
-          <nav className="flex-1 overflow-y-auto py-3">
+          <nav className="flex gap-2 overflow-x-auto px-3 py-2 md:block md:flex-1 md:overflow-x-hidden md:overflow-y-auto md:px-0 md:py-3">
             {tabs.map((t) => {
               const active = activeTab === t.key;
               return (
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
-                  className="group flex w-full items-center gap-3 px-5 py-3 text-left transition-all"
+                  className="group flex w-[148px] flex-shrink-0 items-center gap-2 px-3 py-2 text-left transition-all md:w-full md:gap-3 md:px-5 md:py-3"
                   style={{
                     background: active
                       ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.14) 0%, rgba(var(--tj-accent-primary), 0.02) 75%, transparent)'
@@ -285,10 +291,12 @@ export function SettingsModal({
                     borderLeft: active
                       ? '2px solid rgba(var(--tj-accent-primary), 0.95)'
                       : '2px solid transparent',
+                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)' : 'none',
+                    clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
                   }}
                 >
                   <span
-                    className="text-lg transition-all"
+                    className="text-base transition-all md:text-lg"
                     style={{
                       color: active ? 'rgba(var(--tj-accent-primary), 1)' : 'rgba(var(--tj-accent-primary), 0.5)',
                       textShadow: 'none',
@@ -298,7 +306,7 @@ export function SettingsModal({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div
-                      className="font-serif text-sm tracking-[0.25em] transition-colors"
+                      className="truncate font-serif text-xs tracking-[0.18em] transition-colors md:text-sm md:tracking-[0.25em]"
                       style={{
                         color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(220, 200, 160, 0.85)',
                       }}
@@ -306,7 +314,7 @@ export function SettingsModal({
                       {t.label}
                     </div>
                     <div
-                      className="mt-0.5 text-xs tracking-wider transition-colors"
+                      className="mt-0.5 truncate text-[10px] tracking-wider transition-colors md:text-xs"
                       style={{
                         color: active ? 'rgba(var(--tj-text-secondary), 0.85)' : 'rgba(var(--tj-text-secondary), 0.6)',
                       }}
@@ -321,7 +329,7 @@ export function SettingsModal({
 
           {/* Sidebar footer */}
           <div
-            className="px-5 py-3 text-xs font-serif tracking-[0.25em]"
+            className="hidden px-5 py-3 text-xs font-serif tracking-[0.25em] md:block"
             style={{
               borderTop: '1px solid rgba(var(--tj-border), 0.72)',
               color: 'rgba(var(--tj-text-secondary), 0.55)',
@@ -333,10 +341,10 @@ export function SettingsModal({
         </aside>
 
         {/* ── Right content ── */}
-        <section className="flex min-w-0 flex-1 flex-col">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Right header */}
           <header
-            className="flex items-center justify-between px-6 py-4"
+            className="hidden items-center justify-between px-6 py-4 md:flex"
             style={{ borderBottom: '1px solid rgba(var(--tj-border), 0.74)' }}
           >
             <div className="min-w-0">
@@ -369,7 +377,7 @@ export function SettingsModal({
           </header>
 
           {/* Right body */}
-          <div className="flex-1 overflow-y-auto px-6 py-5">{renderTab()}</div>
+          <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 md:px-6 md:py-5">{renderTab()}</div>
         </section>
       </div>
     </div>

@@ -70,9 +70,9 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: 
   };
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <aside className="flex w-[260px] min-h-0 shrink-0 flex-col gap-3">
-        <div className="px-3 py-3" style={panelStyle}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
+      <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[260px]">
+        <div className="hidden px-3 py-3 md:block" style={panelStyle}>
           <div>
             <div>
               <div
@@ -100,7 +100,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: 
           </TabButton>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+        <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden pb-1 md:min-h-0 md:flex-1 md:block md:space-y-2 md:overflow-y-auto md:overflow-x-hidden md:pb-0 md:pr-1">
           {visible.length ? (
             visible.map((npc) => (
               <NpcListItem
@@ -118,7 +118,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: 
         </div>
       </aside>
 
-      <main className="min-w-0 min-h-0 flex-1 overflow-y-auto pr-1">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-visible md:overflow-y-auto md:pr-1">
         {selected ? (
           <NpcDetail
             npc={selected}
@@ -189,7 +189,7 @@ function NpcListItem({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-3 px-3 py-3 text-left transition-all hover:bg-[rgba(245,217,122,0.07)]"
+      className="group flex w-[132px] shrink-0 flex-col items-center gap-2 px-2 py-3 text-center transition-all hover:bg-[rgba(245,217,122,0.07)] md:w-full md:flex-row md:gap-3 md:px-3 md:text-left"
       style={{
         background: selected
           ? activeSurface
@@ -202,9 +202,9 @@ function NpcListItem({
     >
       <Avatar npc={npc} size={46} selected={selected} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center justify-center gap-2 md:justify-start">
           <span
-            className="truncate font-serif text-[14px] font-semibold tracking-[0.08em]"
+            className="max-w-full truncate font-serif text-[13px] font-semibold tracking-[0.08em] md:text-[14px]"
             style={{ color: selected ? titleColor : bodyColor }}
           >
             {npc.姓名}
@@ -212,7 +212,7 @@ function NpcListItem({
           {npc.同行 && <PresenceDot />}
         </div>
         <div
-          className="mt-0.5 truncate font-serif text-[12px] tracking-[0.1em]"
+          className="mt-0.5 truncate font-serif text-[11px] tracking-[0.1em] md:text-[12px]"
           style={{ color: mutedColor }}
         >
           {relation}

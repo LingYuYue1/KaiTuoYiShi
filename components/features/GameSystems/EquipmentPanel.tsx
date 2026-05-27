@@ -75,9 +75,9 @@ export function EquipmentPanel({ traveler, onTravelerChange }: EquipmentPanelPro
   };
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <aside className="flex w-[270px] min-h-0 shrink-0 flex-col gap-3">
-        <div className="px-4 py-3" style={panelStyle}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
+      <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[270px]">
+        <div className="hidden px-4 py-3 md:block" style={panelStyle}>
           <SectionHeader title="装备总览" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MetricTile label="已装备" value={`${equippedCount}/8`} />
@@ -95,7 +95,7 @@ export function EquipmentPanel({ traveler, onTravelerChange }: EquipmentPanelPro
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden pb-1 md:min-h-0 md:flex-1 md:block md:space-y-3 md:overflow-y-auto md:overflow-x-hidden md:pb-0 md:pr-1">
           {SLOT_GROUPS.map((group) => (
             <SlotGroup
               key={group.title}
@@ -110,15 +110,15 @@ export function EquipmentPanel({ traveler, onTravelerChange }: EquipmentPanelPro
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <div className="min-h-full px-5 py-5" style={panelStyle}>
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-visible md:overflow-y-auto md:pr-1">
+        <div className="min-h-full px-3 py-3 md:px-5 md:py-5" style={panelStyle}>
           <SelectedEquipment
             slot={selectedSlot}
             item={selectedItem}
             onUnequip={() => unequip(selectedSlot)}
           />
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+          <div className="mt-3 grid gap-3 md:mt-4 md:gap-4 xl:grid-cols-[0.92fr_1.08fr]">
             <PanelSection title="行装效果">
               {narrativeEffects.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
@@ -133,7 +133,7 @@ export function EquipmentPanel({ traveler, onTravelerChange }: EquipmentPanelPro
 
             <PanelSection title="穿戴说明">
               <p
-                className="font-serif text-[14px] leading-[1.85] tracking-wider"
+                className="font-serif text-[12px] leading-relaxed tracking-0 md:text-[14px] md:leading-[1.85] md:tracking-wider"
                 style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}
               >
                 光锥、武装、衣装与随身信物会在这里汇成一份统一的行装记录。槽位状态、叙事效果与已持有装备都能在此读取。
@@ -209,16 +209,16 @@ function SlotGroup({
   onSelect: (slot: 装备槽位ID) => void;
 }) {
   return (
-    <section>
+    <section className="min-w-[228px] md:min-w-0">
       <div className="mb-2 flex items-end justify-between">
-        <div className="font-serif text-[13px] font-semibold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+        <div className="font-serif text-[11px] font-semibold tracking-[0.12em] md:text-[13px] md:tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
           {title}
         </div>
-        <div className="font-serif text-[12px] tracking-[0.14em]" style={{ color: 'rgba(210, 198, 168, 0.72)' }}>
+        <div className="font-serif text-[10px] tracking-[0.06em] md:text-[12px] md:tracking-[0.14em]" style={{ color: 'rgba(210, 198, 168, 0.72)' }}>
           {note}
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="flex gap-2 md:block md:space-y-2">
         {slots.map((slot) => (
           <SlotButton
             key={slot}
@@ -249,7 +249,7 @@ function SlotButton({
     <button
       type="button"
       onClick={onClick}
-      className="w-full px-3 py-3 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
+      className="w-[112px] shrink-0 px-2 py-2 text-center transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)] md:w-full md:px-3 md:py-3 md:text-left"
       style={{
         background: selected
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
@@ -264,9 +264,9 @@ function SlotButton({
         clipPath: cardClip,
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col items-center gap-2 md:flex-row md:gap-3">
         <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center font-serif text-[22px]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center font-serif text-[16px] md:h-11 md:w-11 md:text-[22px]"
           style={{
             color: qualityColor,
             background: item ? `${qualityColor.replace('0.95', '0.12').replace('0.9', '0.12').replace('0.85', '0.12')}` : 'rgba(var(--tj-text-secondary), 0.05)',
@@ -277,14 +277,14 @@ function SlotButton({
           {slotGlyphs[slot]}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
+          <div className="flex min-w-0 items-center justify-center gap-2 md:justify-between">
+            <span className="font-serif text-[11px] tracking-[0.08em] md:text-[13px] md:tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
               {EQUIP_SLOT_LABELS[slot]}
             </span>
             {item && <QualityBadge item={item} />}
           </div>
           <div
-            className="mt-1 truncate font-serif text-[14px] font-semibold"
+            className="mt-0.5 truncate font-serif text-[10px] font-semibold md:mt-1 md:text-[14px]"
             style={{ color: item ? 'rgba(245, 235, 210, 0.98)' : 'rgba(170, 160, 135, 0.78)' }}
           >
             {item?.名称 ?? '未装备'}
@@ -312,7 +312,7 @@ function SelectedEquipment({
 
   return (
     <div
-      className="relative overflow-hidden px-5 py-5"
+      className="relative overflow-hidden px-3 py-3 md:px-5 md:py-5"
       style={{
         background: item
           ? `radial-gradient(circle at 10% 12%, ${qualityColor.replace('0.95', '0.2').replace('0.9', '0.18').replace('0.85', '0.18')}, transparent 34%), linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.09), rgba(var(--tj-accent-primary), 0.02))`
@@ -323,9 +323,9 @@ function SelectedEquipment({
         clipPath: cardClip,
       }}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3 md:gap-4">
         <div
-          className="flex h-[82px] w-[82px] shrink-0 items-center justify-center font-serif text-[40px]"
+          className="flex h-12 w-12 shrink-0 items-center justify-center font-serif text-[24px] md:h-[82px] md:w-[82px] md:text-[40px]"
           style={{
             color: qualityColor,
             background: item ? 'linear-gradient(135deg, rgba(var(--tj-bubble), 0.82), rgba(var(--tj-surface-strong), 0.72))' : 'rgba(var(--tj-text-secondary), 0.05)',
@@ -337,19 +337,19 @@ function SelectedEquipment({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="font-serif text-[13px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
+            <div className="font-serif text-[11px] tracking-[0.12em] md:text-[13px] md:tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
               {EQUIP_SLOT_LABELS[slot]}
             </div>
             {item && <QualityBadge item={item} />}
           </div>
           <h3
-            className="mt-1 break-words font-serif text-[24px] font-semibold tracking-[0.12em]"
+            className="mt-1 break-words font-serif text-[18px] font-semibold tracking-[0.06em] md:text-[24px] md:tracking-[0.12em]"
             style={{ color: item ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.86)' }}
           >
             {item?.名称 ?? '空槽位'}
           </h3>
           <p
-            className="mt-3 font-serif text-[14px] leading-[1.85] tracking-wider"
+            className="mt-2 font-serif text-[12px] leading-relaxed tracking-0 md:mt-3 md:text-[14px] md:leading-[1.85] md:tracking-wider"
             style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}
           >
             {item?.描述 || '该槽位尚无同步记录。'}
@@ -359,7 +359,7 @@ function SelectedEquipment({
           <button
             type="button"
             onClick={onUnequip}
-            className="shrink-0 px-3 py-2 font-serif text-[12px] tracking-[0.2em] transition-all hover:bg-[rgba(220,150,150,0.14)]"
+            className="shrink-0 px-2 py-1.5 font-serif text-[10px] tracking-[0.1em] transition-all hover:bg-[rgba(220,150,150,0.14)] md:px-3 md:py-2 md:text-[12px] md:tracking-[0.2em]"
             style={{
               color: 'rgba(245, 190, 190, 0.96)',
               boxShadow: 'inset 0 0 0 1px rgba(220, 150, 150, 0.46)',
@@ -372,7 +372,7 @@ function SelectedEquipment({
       </div>
 
       {item && (
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="mt-3 grid gap-2.5 md:mt-4 md:gap-3 lg:grid-cols-2">
           <DetailBlock title="叙事效果">
             {effectTags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
@@ -423,7 +423,7 @@ function SectionHeader({ title }: { title: string }) {
 function PanelSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
-      className="px-4 py-4"
+      className="px-3 py-3 md:px-4 md:py-4"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.035)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
@@ -431,7 +431,7 @@ function PanelSection({ title, children }: { title: string; children: ReactNode 
       }}
     >
       <SectionHeader title={title} />
-      <div className="mt-3">{children}</div>
+      <div className="mt-2 md:mt-3">{children}</div>
     </section>
   );
 }
@@ -439,14 +439,14 @@ function PanelSection({ title, children }: { title: string; children: ReactNode 
 function DetailBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div
-      className="px-3 py-3"
+      className="px-2.5 py-2.5 md:px-3 md:py-3"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-bubble), 0.72), rgba(var(--tj-surface-strong), 0.56))',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.46)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
+      <div className="mb-1.5 font-serif text-[11px] tracking-[0.12em] md:mb-2 md:text-[12px] md:tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
         {title}
       </div>
       {children}
@@ -478,7 +478,7 @@ function QualityBadge({ item }: { item: 背包物品 }) {
   const color = getQualityColor(item);
   return (
     <span
-      className="inline-flex px-2 py-0.5 font-serif text-[12px] tracking-[0.16em]"
+      className="inline-flex px-1.5 py-0.5 font-serif text-[10px] tracking-[0.08em] md:px-2 md:text-[12px] md:tracking-[0.16em]"
       style={{
         color,
         background: 'rgba(var(--tj-bubble), 0.72)',
@@ -494,7 +494,7 @@ function QualityBadge({ item }: { item: 背包物品 }) {
 function StatChip({ label, value }: { label: string; value: number }) {
   return (
     <span
-      className="inline-flex items-center gap-2 px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 font-serif text-[10px] tracking-[0.06em] md:gap-2 md:px-3 md:py-1 md:text-[12px] md:tracking-[0.14em]"
       style={{
         color: 'rgba(var(--tj-text-primary), 0.96)',
         background: 'rgba(var(--tj-accent-primary), 0.08)',
@@ -511,7 +511,7 @@ function StatChip({ label, value }: { label: string; value: number }) {
 function EffectChip({ text }: { text: string }) {
   return (
     <span
-      className="inline-flex px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
+      className="inline-flex px-2 py-0.5 font-serif text-[10px] tracking-[0.06em] md:px-3 md:py-1 md:text-[12px] md:tracking-[0.14em]"
       style={{
         color: 'rgba(var(--tj-text-primary), 0.96)',
         background: 'rgba(117, 214, 216, 0.08)',
@@ -526,8 +526,8 @@ function EffectChip({ text }: { text: string }) {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-3 font-serif text-[13px] leading-relaxed">
-      <span className="shrink-0 tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
+    <div className="flex gap-2 font-serif text-[11px] leading-relaxed md:gap-3 md:text-[13px]">
+      <span className="shrink-0 tracking-[0.08em] md:tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
         {label}
       </span>
       <span className="min-w-0 break-words" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
@@ -540,17 +540,17 @@ function InfoLine({ label, value }: { label: string; value: string }) {
 function EmptyNotice({ title, text }: { title: string; text: string }) {
   return (
     <div
-      className="px-4 py-5 text-center"
+      className="px-3 py-3 text-center md:px-4 md:py-5"
       style={{
         background: 'rgba(var(--tj-text-secondary), 0.055)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+      <div className="font-serif text-[12px] font-semibold tracking-[0.1em] md:text-[15px] md:tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
         {title}
       </div>
-      <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>
+      <div className="mt-1.5 font-serif text-[11px] leading-relaxed tracking-0 md:mt-2 md:text-[13px] md:tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>
         {text}
       </div>
     </div>
@@ -559,7 +559,7 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
 
 function MutedText({ children }: { children: ReactNode }) {
   return (
-    <div className="font-serif text-[13px] italic tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.78)' }}>
+    <div className="font-serif text-[11px] italic tracking-0 md:text-[13px] md:tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.78)' }}>
       {children}
     </div>
   );

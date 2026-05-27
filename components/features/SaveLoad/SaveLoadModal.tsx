@@ -33,6 +33,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<Tab>('manual');
+  const [showMobileHelp, setShowMobileHelp] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -146,27 +147,27 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
   return (
     <div
-      className="kaituo-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="kaituo-modal-overlay fixed inset-0 z-50 flex items-stretch justify-center p-0 md:items-center md:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="flex h-[85vh] w-full max-w-[960px] flex-col animate-slide-up overflow-hidden"
+        className="flex h-[100dvh] w-full min-w-0 max-w-[960px] flex-col animate-slide-up overflow-hidden md:h-[85vh]"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.97), rgba(var(--tj-bg-primary), 0.98))',
           boxShadow:
             'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 0 32px rgba(var(--tj-accent-primary), 0.12), 0 20px 60px rgba(0, 0, 0, 0.6)',
-          clipPath: shellClip,
+          clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
         }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-5 py-3"
+          className="flex items-center justify-between gap-3 px-4 py-3 md:px-5"
           style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.25)' }}
         >
           <h2
-            className="font-serif text-lg font-bold tracking-[0.3em]"
+            className="min-w-0 truncate font-serif text-lg font-bold tracking-[0.22em] md:tracking-[0.3em]"
             style={{
               background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
               WebkitBackgroundClip: 'text',
@@ -183,17 +184,17 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
         </div>
 
         {/* Body：左右双栏 */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden md:flex-row md:overflow-hidden">
           {/* 左栏：保存按钮 + 说明 */}
           <aside
-            className="flex w-[280px] flex-shrink-0 flex-col gap-4 px-5 py-5"
+            className="grid w-full flex-shrink-0 grid-cols-3 gap-2 px-4 py-4 md:flex md:w-[280px] md:flex-col md:gap-4 md:px-5 md:py-5"
             style={{ borderRight: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}
           >
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center justify-center gap-2 px-4 py-3 font-serif text-sm tracking-[0.3em] transition-all hover:opacity-90 disabled:opacity-50"
+              className="flex min-w-0 items-center justify-center gap-1 px-2 py-2 font-serif text-xs tracking-[0.08em] transition-all hover:opacity-90 disabled:opacity-50 md:gap-2 md:px-4 md:py-3 md:text-sm md:tracking-[0.3em]"
               style={{
                 background:
                   'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
@@ -209,7 +210,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
               type="button"
               onClick={handleImport}
               disabled={importing}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 font-serif text-sm tracking-[0.24em] transition-all hover:opacity-90 disabled:opacity-50"
+              className="flex min-w-0 items-center justify-center gap-1 px-2 py-2 font-serif text-xs tracking-[0.08em] transition-all hover:opacity-90 disabled:opacity-50 md:gap-2 md:px-4 md:py-2.5 md:text-sm md:tracking-[0.24em]"
               style={{
                 color: 'rgba(var(--tj-accent-primary), 0.92)',
                 background: 'rgba(var(--tj-bg-secondary), 0.55)',
@@ -223,7 +224,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
               type="button"
               onClick={handleExportCurrent}
               disabled={saving}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 font-serif text-sm tracking-[0.24em] transition-all hover:opacity-90 disabled:opacity-50"
+              className="flex min-w-0 items-center justify-center gap-1 px-2 py-2 font-serif text-xs tracking-[0.08em] transition-all hover:opacity-90 disabled:opacity-50 md:gap-2 md:px-4 md:py-2.5 md:text-sm md:tracking-[0.24em]"
               style={{
                 color: 'rgba(var(--tj-text-primary), 0.92)',
                 background: 'rgba(var(--tj-bg-secondary), 0.45)',
@@ -234,8 +235,31 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
               导出当前存档
             </button>
 
+            <details
+              open={showMobileHelp}
+              onToggle={(event) => setShowMobileHelp(event.currentTarget.open)}
+              className="col-span-3 md:hidden"
+              style={{
+                color: 'rgba(var(--tj-text-primary), 0.88)',
+                background: 'rgba(var(--tj-bg-secondary), 0.45)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                clipPath: cardClip,
+              }}
+            >
+              <summary className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
+                ◇ 关于存档
+              </summary>
+              <div className="px-3 pb-3 font-serif text-[12px] leading-relaxed tracking-wider">
+                <div>· 手动存档可随时保存，数量不限</div>
+                <div>· 每回合自动保存一次，最多保留 10 条</div>
+                <div>· 读取旧档前会自动生成保护存档</div>
+                <div>· 保护存档用于撤回误读，最多 3 条</div>
+                <div>· 导入 JSON 会放入保护存档分区</div>
+              </div>
+            </details>
+
             <div
-              className="px-3 py-3 font-serif text-[12.5px] leading-relaxed tracking-wider"
+              className="hidden px-3 py-3 font-serif text-[12.5px] leading-relaxed tracking-wider md:block"
               style={{
                 color: 'rgba(var(--tj-text-primary), 0.88)',
                 background: 'rgba(var(--tj-bg-secondary), 0.45)',
@@ -253,10 +277,10 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
               <div>· 导入 JSON 会放入保护存档分区</div>
             </div>
 
-            <div className="flex-1" />
+            <div className="hidden flex-1 md:block" />
 
             <div
-              className="px-3 py-2 text-center font-serif text-[12px] tracking-[0.22em]"
+              className="hidden px-3 py-2 text-center font-serif text-[12px] tracking-[0.22em] md:block"
               style={{
                 color: 'rgba(var(--tj-text-secondary), 0.65)',
               }}
@@ -266,10 +290,10 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
           </aside>
 
           {/* 右栏：tab 切换 + 列表 */}
-          <main className="flex flex-1 flex-col overflow-hidden">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {/* Tab bar */}
             <div
-              className="flex flex-shrink-0 gap-2 px-5 pt-4 pb-3"
+              className="grid flex-shrink-0 grid-cols-2 gap-2 px-4 pb-3 pt-4 md:flex md:overflow-x-auto md:px-5"
               style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}
             >
               <TabButton
@@ -298,7 +322,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
               />
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-5">
               {loading && saves.length === 0 && (
                 <div
                   className="p-6 text-center text-xs font-serif tracking-[0.2em]"
@@ -381,7 +405,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className="px-4 py-2 font-serif text-[13px] tracking-[0.28em] transition-all"
+      className="shrink-0 px-3 py-2 font-serif text-[12px] tracking-[0.16em] transition-all md:px-4 md:text-[13px] md:tracking-[0.28em]"
       style={{
         color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.85)',
         background: active
@@ -421,7 +445,7 @@ function SaveRow({
 }) {
   return (
     <div
-      className="flex items-center justify-between gap-3 p-3"
+      className="grid min-w-0 gap-3 p-3 md:flex md:items-center md:justify-between"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.55)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
@@ -430,7 +454,7 @@ function SaveRow({
     >
       {/* 左侧主信息：旅人名 + 元信息 */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-2">
           <span
             className="flex-shrink-0 font-serif text-[11px] tracking-[0.18em]"
             style={{ color: typeColor(item.type) }}
@@ -483,7 +507,7 @@ function SaveRow({
       </div>
 
       {/* 右侧按钮 */}
-      <div className="flex flex-shrink-0 gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-shrink-0">
         <button
           onClick={() => onLoad(item.id)}
           disabled={loadingId !== null}

@@ -2,6 +2,7 @@ import type { 记忆系统 } from '@/models/memory';
 import type { 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
+import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 
 const MEMORY_SNIPPET_LIMIT = 84;
 
@@ -327,13 +328,14 @@ export async function autoCompressMemorySystemWithArchivesAsync(
 
 export function compressNpcMemories(memories: string[], threshold: number, prompt: string): string[] {
   const size = Math.max(1, Math.trunc(threshold || 15));
-  if (!Array.isArray(memories) || memories.length < size) return memories;
+  if (!Array.isArray(memories)) return memories;
 
-  let next = memories.slice();
-  const note = prompt.trim();
+  let next = memories.map((item) => 清理NPC同行记忆摘要(item, prompt)).filter(Boolean);
+  if (next.length < size) return next;
+
   while (next.length >= size) {
     const chunk = next.slice(0, size);
-    const summary = note ? `${note}：${chunk.join(' / ')}` : chunk.join(' / ');
+    const summary = chunk.join(' / ');
     next = [`[压缩] ${summary}`, ...next.slice(size)];
   }
   return next;

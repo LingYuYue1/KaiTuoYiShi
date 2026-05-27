@@ -74,9 +74,9 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
 
   const counts = useMemo(() => 智库分类计数({ 条目: bucket === 'builtin' ? builtinEntries : bucket === 'custom' ? customEntries : normalized.条目 }), [bucket, builtinEntries, customEntries, normalized]);
 
-  const selected = activeEntries.find((entry) => entry.id === selectedId)
-    ?? activeEntries[0]
-    ?? null;
+  const selected = selectedId
+    ? activeEntries.find((entry) => entry.id === selectedId) ?? activeEntries[0] ?? null
+    : activeEntries[0] ?? null;
 
   const storyList = useMemo(
     () => buildStorySeries(activeEntries.filter((entry) => entry.分类 === 'story')),
@@ -163,9 +163,9 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   const visibleCount = activeEntries.length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:gap-4 md:overflow-y-hidden">
       <section
-        className="px-4 py-4"
+        className="min-w-0 px-3 py-3 md:px-4 md:py-4"
         style={{
           background:
             'radial-gradient(circle at 12% 0%, rgba(117, 214, 216, 0.08), transparent 36%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94))',
@@ -174,13 +174,13 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
           clipPath: cardClip,
         }}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-3">
           <div className="min-w-0">
-            <div className="font-mono text-[11px] tracking-[0.5em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="font-mono text-[10px] tracking-[0.38em] md:text-[11px] md:tracking-[0.5em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               ZHIKU / KNOWLEDGE CORE
             </div>
             <div
-              className="mt-1 font-serif text-[28px] font-semibold tracking-[0.2em]"
+              className="mt-1 font-serif text-[22px] font-semibold tracking-[0.18em] md:text-[28px] md:tracking-[0.2em]"
               style={{
                 background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 52%, rgb(var(--tj-accent-secondary)) 100%)',
                 WebkitBackgroundClip: 'text',
@@ -189,17 +189,17 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
             >
               智库
             </div>
-            <div className="mt-2 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.76)' }}>
+            <div className="mt-1 line-clamp-2 text-xs leading-relaxed md:mt-2 md:line-clamp-none md:text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.76)' }}>
               内置资料来自预设原著内容，只读。自制资料走独立接口，支持你自己继续补原著、补设定、补说明。
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex gap-2">
+          <div className="flex flex-col items-stretch gap-2 md:items-end">
+            <div className="hidden flex-wrap gap-2 sm:flex">
               <StatusChip label="内置" value={String(builtinEntries.length)} />
               <StatusChip label="自制" value={String(customEntries.length)} />
               <StatusChip label="总数" value={String(normalized.条目.length)} />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-1.5 md:gap-2">
               <TinyTab active={bucket === 'all'} onClick={() => setBucket('all')}>全部</TinyTab>
               <TinyTab active={bucket === 'builtin'} onClick={() => setBucket('builtin')}>内置</TinyTab>
               <TinyTab active={bucket === 'custom'} onClick={() => setBucket('custom')}>自制</TinyTab>
@@ -207,16 +207,16 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:mt-4">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索标题、关键词、来源或原文片段..."
-            className="kaituo-input px-3 py-2 text-sm"
+            className="kaituo-input min-w-0 px-3 py-2 text-xs md:text-sm"
             style={{ clipPath: smallClip }}
           />
           <div
-            className="px-3 py-2 text-xs font-mono tracking-[0.26em]"
+            className="px-2 py-2 text-[10px] font-mono tracking-[0.16em] md:px-3 md:text-xs md:tracking-[0.26em]"
             style={{
               color: saveFlash ? 'rgba(160, 230, 170, 0.95)' : 'rgba(var(--tj-text-secondary), 0.72)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
@@ -230,15 +230,15 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
 
       {bucket === 'custom' && (
         <section
-          className="px-4 py-4"
+          className="min-w-0 px-3 py-4 md:px-4"
           style={{
             background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.86), rgba(var(--tj-surface-strong),0.66))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
             clipPath: cardClip,
           }}
         >
-          <div className="flex items-center justify-between gap-3">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <div className="font-serif text-[14px] tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                 自制内容接口
               </div>
@@ -265,7 +265,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                 <Field label="标题">
                   <input value={draft.标题} onChange={(e) => setDraft({ ...draft, 标题: e.target.value })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
                 </Field>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <Field label="分类">
                     <select value={draft.分类} onChange={(e) => setDraft({ ...draft, 分类: e.target.value as 智库分类 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
                       {categories.map((cat) => <option key={cat} value={cat}>{ZHIKU_CATEGORY_LABELS[cat]}</option>)}
@@ -312,14 +312,14 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       )}
 
       <section
-        className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_minmax(0,1.2fr)] gap-3 overflow-hidden p-3"
+        className="grid min-h-0 min-w-0 flex-1 gap-3 overflow-y-auto overflow-x-hidden p-3 md:grid-cols-[220px_minmax(0,1fr)_minmax(0,1.2fr)] md:overflow-hidden"
         style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.82), rgba(var(--tj-surface-strong),0.62))',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
           clipPath: cardClip,
         }}
       >
-        <aside className="min-h-0 overflow-y-auto pr-1">
+        <aside className="-mx-1 flex min-h-0 gap-2 overflow-x-auto overflow-y-hidden px-1 pb-1 md:mx-0 md:block md:max-h-none md:overflow-y-auto md:overflow-x-hidden md:px-0 md:pb-0 md:pr-1">
           <CategoryButton label="全部" count={normalized.条目.length} desc="所有资料" active={activeCategory === 'all'} onClick={() => setActiveCategory('all')} />
           {categories.map((cat) => (
             <CategoryButton
@@ -333,7 +333,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
           ))}
         </aside>
 
-        <main className="min-h-0 overflow-y-auto pr-1">
+        <main className="min-w-0 overflow-x-hidden overflow-y-visible md:min-h-0 md:overflow-y-auto md:pr-1">
           <div className="mb-3 flex items-center justify-between gap-3 px-2">
             <div>
               <div className="font-serif text-[13px] tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
@@ -343,7 +343,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                 当前显示 {visibleCount} 条
               </div>
             </div>
-            <div className="text-[11px] font-mono tracking-[0.24em]" style={{ color: 'rgba(160, 200, 160, 0.82)' }}>
+            <div className="hidden text-[11px] font-mono tracking-[0.24em] md:block" style={{ color: 'rgba(160, 200, 160, 0.82)' }}>
               {bucket === 'builtin' ? 'READ ONLY' : bucket === 'custom' ? 'CUSTOM' : 'MIXED'}
             </div>
           </div>
@@ -357,24 +357,26 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                   key={group.id}
                   group={group}
                   expanded={expandedSeriesIds.includes(group.id)}
-                  selectedId={selected?.id ?? null}
+                  selectedId={selectedId}
                   onToggle={() => toggleStorySeries(group.id)}
-                  onSelectChapter={(entryId) => setSelectedId(entryId)}
+                  onSelectChapter={(entryId) => setSelectedId((prev) => (prev === entryId ? null : entryId))}
                 />
               ))}
               {flatEntries.map((entry) => (
-                <EntryButton key={entry.id} entry={entry} active={entry.id === selected?.id} onClick={() => setSelectedId(entry.id)} />
+                <EntryButton key={entry.id} entry={entry} active={entry.id === selectedId} onClick={() => setSelectedId((prev) => (prev === entry.id ? null : entry.id))} />
               ))}
             </>
           )}
         </main>
 
-        <DetailPanel
-          entry={selected}
-          onUpdate={updateSelected}
-          onDelete={deleteSelected}
-          onSelectCustomOnly={() => setBucket('custom')}
-        />
+        <div className="hidden min-h-0 md:block">
+          <DetailPanel
+            entry={selected}
+            onUpdate={updateSelected}
+            onDelete={deleteSelected}
+            onSelectCustomOnly={() => setBucket('custom')}
+          />
+        </div>
       </section>
     </div>
   );
@@ -384,18 +386,18 @@ function CategoryButton({ label, count, desc, active, onClick }: { label: string
   return (
     <button
       onClick={onClick}
-      className="mb-2 w-full px-3 py-3 text-left transition-all last:mb-0"
+      className="mb-0 flex h-[70px] min-w-[76px] shrink-0 flex-col justify-between px-2 py-2 text-center transition-all md:mb-2 md:h-auto md:w-full md:min-w-0 md:px-3 md:py-3 md:text-left md:last:mb-0"
       style={{
         background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-primary), 0.03))' : 'rgba(var(--tj-accent-primary), 0.035)',
         boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
         clipPath: smallClip,
       }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-serif text-sm tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{label}</span>
-        <span className="text-[11px] font-mono" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>{count}</span>
+      <div className="flex flex-col items-center justify-between gap-1 md:flex-row md:gap-3">
+        <span className="line-clamp-1 font-serif text-xs tracking-[0.12em] md:text-sm md:tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{label}</span>
+        <span className="text-[10px] font-mono md:text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>{count}</span>
       </div>
-      <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>{desc}</div>
+      <div className="hidden md:mt-1 md:block md:text-[11px] md:leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>{desc}</div>
     </button>
   );
 }
@@ -527,7 +529,7 @@ function StorySeriesGroup({
       </button>
 
       {expanded && (
-        <div className="mt-2 space-y-2 pl-3">
+        <div className="mt-2 space-y-2 pl-0 md:pl-3">
           {group.entries.map((entry) => (
             <StoryChapterButton
               key={entry.id}
@@ -544,71 +546,119 @@ function StorySeriesGroup({
 
 function StoryChapterButton({ entry, active, onClick }: { entry: 智库条目; active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full px-3 py-3 text-left transition-all"
-      style={{
-        background: active ? 'rgba(var(--tj-accent-primary), 0.1)' : 'rgba(var(--tj-bg-secondary), 0.35)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgb(var(--tj-on-accent))', background: 'rgba(var(--tj-accent-primary), 0.88)', clipPath: smallClip }}>
-              {entry.章节序号 ? `第${entry.章节序号}章` : '章节'}
-            </span>
-            <div className="font-serif text-[13px] font-semibold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-              {entry.标题}
+    <section className="w-full min-w-0 overflow-hidden">
+      <button
+        onClick={onClick}
+        className="w-full min-w-0 overflow-hidden px-3 py-3 text-left transition-all"
+        style={{
+          background: active ? 'rgba(var(--tj-accent-primary), 0.1)' : 'rgba(var(--tj-bg-secondary), 0.35)',
+          boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+          clipPath: smallClip,
+        }}
+      >
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgb(var(--tj-on-accent))', background: 'rgba(var(--tj-accent-primary), 0.88)', clipPath: smallClip }}>
+                {entry.章节序号 ? `第${entry.章节序号}章` : '章节'}
+              </span>
+              <div className="min-w-0 truncate font-serif text-[13px] font-semibold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+                {entry.标题}
+              </div>
             </div>
+            <p className="mt-2 line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
+              {entry.摘要 || entry.原文 || '暂无摘要'}
+            </p>
           </div>
-          <p className="mt-2 line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
-            {entry.摘要 || entry.原文 || '暂无摘要'}
-          </p>
+          <div className="hidden shrink-0 text-right text-[10px] font-mono tracking-[0.18em] md:block" style={{ color: 'rgba(160, 200, 160, 0.76)' }}>
+            {entry.来源 || '未标注来源'}
+          </div>
         </div>
-        <div className="shrink-0 text-right text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgba(160, 200, 160, 0.76)' }}>
-          {entry.来源 || '未标注来源'}
-        </div>
-      </div>
-    </button>
+      </button>
+      {active && <MobileEntryDetail entry={entry} />}
+    </section>
   );
 }
 
 function EntryButton({ entry, active, onClick }: { entry: 智库条目; active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="mb-2 w-full px-3 py-3 text-left transition-all last:mb-0"
+    <section className="mb-2 w-full min-w-0 overflow-hidden last:mb-0">
+      <button
+        onClick={onClick}
+        className="w-full min-w-0 overflow-hidden px-3 py-3 text-left transition-all"
+        style={{
+          background: active ? 'rgba(var(--tj-accent-primary), 0.09)' : 'rgba(var(--tj-bg-secondary), 0.48)',
+          boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+          clipPath: smallClip,
+        }}
+      >
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 truncate font-serif text-sm font-semibold tracking-[0.12em] md:tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+            {entry.标题}
+          </div>
+          <span
+            className="hidden shrink-0 px-2 py-0.5 text-[10px] font-mono tracking-[0.18em] md:inline-block"
+            style={{
+              color: 'rgb(var(--tj-on-accent))',
+              background: entry.builtin ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(54, 111, 74, 0.88)',
+              clipPath: smallClip,
+            }}
+          >
+            {entry.builtin ? 'BUILTIN' : 'CUSTOM'}
+          </span>
+        </div>
+        <p className="mt-2 line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
+          {entry.摘要 || entry.原文 || '暂无摘要'}
+        </p>
+        <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-[11px]">
+          <span className="min-w-0 truncate" style={{ color: 'rgba(160, 200, 160, 0.78)' }}>{entry.来源 || '未标注来源'}</span>
+          <span className="shrink-0" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>{ZHIKU_CATEGORY_LABELS[entry.分类]}</span>
+        </div>
+      </button>
+      {active && <MobileEntryDetail entry={entry} />}
+    </section>
+  );
+}
+
+function MobileEntryDetail({ entry }: { entry: 智库条目 }) {
+  return (
+    <div
+      className="mt-2 space-y-3 px-3 py-3 md:hidden"
       style={{
-        background: active ? 'rgba(var(--tj-accent-primary), 0.09)' : 'rgba(var(--tj-bg-secondary), 0.48)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.88), rgba(var(--tj-surface-strong),0.62))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.58), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.42)',
         clipPath: smallClip,
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 font-serif text-sm font-semibold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-          {entry.标题}
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
         <span
-          className="shrink-0 px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]"
-          style={{
-            color: 'rgb(var(--tj-on-accent))',
-            background: entry.builtin ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(54, 111, 74, 0.88)',
-            clipPath: smallClip,
-          }}
+          className="px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]"
+          style={{ color: 'rgb(var(--tj-on-accent))', background: 'rgba(var(--tj-accent-primary), 0.86)', clipPath: smallClip }}
         >
-          {entry.builtin ? 'BUILTIN' : 'CUSTOM'}
+          {ZHIKU_CATEGORY_LABELS[entry.分类]}
+        </span>
+        <span className="text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgba(160, 200, 160, 0.78)' }}>
+          {entry.builtin ? 'BUILTIN DATA' : 'CUSTOM DATA'}
         </span>
       </div>
-      <p className="mt-2 line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
-        {entry.摘要 || entry.原文 || '暂无摘要'}
-      </p>
-      <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-        <span style={{ color: 'rgba(160, 200, 160, 0.78)' }}>{entry.来源 || '未标注来源'}</span>
-        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>{ZHIKU_CATEGORY_LABELS[entry.分类]}</span>
+      <div className="font-serif text-[17px] font-semibold leading-snug tracking-[0.08em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+        {entry.标题}
       </div>
-    </button>
+      <p className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}>
+        {entry.摘要 || '暂无摘要'}
+      </p>
+      <div
+        className="max-h-[42dvh] overflow-y-auto whitespace-pre-wrap px-3 py-2 text-xs leading-relaxed"
+        style={{
+          color: 'rgba(var(--tj-text-primary), 0.86)',
+          background: 'rgba(var(--tj-bg-primary), 0.34)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
+          clipPath: smallClip,
+        }}
+      >
+        {entry.原文 || entry.摘要 || '暂无内容'}
+      </div>
+    </div>
   );
 }
 
@@ -628,7 +678,7 @@ function DetailPanel({
 
   return (
     <section
-      className="min-h-0 overflow-y-auto px-4 py-4"
+      className="min-h-0 min-w-0 overflow-y-auto px-3 py-4 md:px-4"
       style={{
         background: entry.builtin
           ? 'linear-gradient(135deg, rgba(var(--tj-bubble),0.94), rgba(var(--tj-tech-wash),0.72) 44%, rgba(var(--tj-surface-strong),0.82))'
@@ -637,9 +687,9 @@ function DetailPanel({
         clipPath: smallClip,
       }}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="text-xs font-mono tracking-[0.3em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>
               {entry.builtin ? 'BUILTIN DATA' : 'CUSTOM DATA'}
             </div>
@@ -658,14 +708,14 @@ function DetailPanel({
             value={entry.标题}
             onChange={(e) => onUpdate({ 标题: e.target.value })}
             readOnly={!editable}
-            className="mt-2 w-full bg-transparent font-serif text-[24px] font-semibold tracking-[0.16em] outline-none"
+            className="mt-2 w-full min-w-0 bg-transparent font-serif text-lg font-semibold tracking-[0.08em] outline-none md:text-[24px] md:tracking-[0.16em]"
             style={{ color: 'rgb(var(--tj-text-primary))', opacity: editable ? 1 : 0.95 }}
           />
           <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.9)' }}>
             {entry.builtin ? '内置条目只读，来自预设原著资料。' : '这里是自制条目编辑区，修改会即时保存到本地智库。'}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
           {!entry.builtin && (
             <button
               onClick={onDelete}
@@ -696,7 +746,7 @@ function DetailPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Field label="分类">
           <select
             value={entry.分类}

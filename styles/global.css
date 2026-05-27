@@ -25,6 +25,37 @@ html, body, #root {
 body {
   background-color: rgb(var(--tj-bg-primary));
   color: rgb(var(--tj-text-primary));
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@supports (height: 100dvh) {
+  .kaituo-app-shell {
+    height: 100dvh;
+  }
+}
+
+@media (max-width: 767px) {
+  .kaituo-mobile-chat-shell {
+    padding-top: calc(var(--app-safe-top, 0px) + 58px);
+  }
+
+  .kaituo-modal-overlay,
+  .kaituo-modal-overlay * {
+    max-width: 100vw;
+  }
+
+  .kaituo-modal-overlay input,
+  .kaituo-modal-overlay textarea,
+  .kaituo-modal-overlay select {
+    min-width: 0;
+  }
+
+  .kaituo-modal-overlay .grid,
+  .kaituo-modal-overlay .flex {
+    min-width: 0;
+  }
 }
 
 :root[data-theme='morningInk'] body {
