@@ -110,13 +110,13 @@ export function VariableUpdateTab({
       <div
         className="px-4 py-3 text-xs leading-relaxed"
         style={{
-          color: 'rgba(200, 188, 158, 0.78)',
-          background: 'rgba(245, 217, 122, 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          color: 'rgba(var(--tj-text-secondary), 0.78)',
+          background: 'rgba(var(--tj-accent-primary), 0.05)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath: cardClip,
         }}
       >
-        <div className="font-serif tracking-wider text-[13px] mb-1" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+        <div className="font-serif tracking-wider text-[13px] mb-1" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
           ◉ 变量自动更新
         </div>
         开启后，每回合主模型回完正文，会再调用一次「变量模型」专门分析正文，把背包、伙伴好感、手机来信、命途进度等变化以命令形式落到对应面板。
@@ -134,9 +134,9 @@ export function VariableUpdateTab({
         <div
           className="px-3 py-2 text-[11px] mb-3"
           style={{
-            color: 'rgba(200, 188, 158, 0.7)',
-            background: 'rgba(16, 14, 16, 0.45)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+            color: 'rgba(var(--tj-text-secondary), 0.7)',
+            background: 'rgba(var(--tj-bg-secondary), 0.45)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
             clipPath: smallClip,
           }}
         >
@@ -205,9 +205,9 @@ export function VariableUpdateTab({
                 disabled={loadingModels}
                 className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
-                  color: 'rgba(245, 217, 122, 0.85)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.35)',
-                  background: 'rgba(245, 217, 122, 0.05)',
+                  color: 'rgba(var(--tj-accent-primary), 0.85)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                  background: 'rgba(var(--tj-accent-primary), 0.05)',
                   clipPath: smallClip,
                 }}
               >
@@ -277,13 +277,13 @@ export function VariableUpdateTab({
       <div
         className="px-4 py-3 text-[11px] leading-relaxed"
         style={{
-          color: 'rgba(160, 148, 120, 0.7)',
-          background: 'rgba(16, 14, 16, 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.1)',
+          color: 'rgba(var(--tj-text-secondary), 0.7)',
+          background: 'rgba(var(--tj-bg-secondary), 0.45)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
           clipPath: cardClip,
         }}
       >
-        <div className="mb-1" style={{ color: 'rgba(245, 217, 122, 0.75)' }}>说明</div>
+        <div className="mb-1" style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>说明</div>
         变量模型推荐选用响应快、JSON 输出稳的模型（如 deepseek-chat / gpt-4o-mini）。它只负责按变量登记表写命令，不需要叙述能力。
       </div>
 
@@ -294,11 +294,11 @@ export function VariableUpdateTab({
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))',
-            color: '#1a1325',
+              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+            color: 'rgb(var(--tj-on-accent))',
             boxShadow: savedFlash
               ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
-              : 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 18px rgba(245, 217, 122, 0.22)',
+              : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
             clipPath: cardClip,
           }}
         >
@@ -329,7 +329,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label
         className="mb-1.5 block text-xs font-serif tracking-[0.2em]"
-        style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
       >
         {label}
       </label>
@@ -361,8 +361,8 @@ function ToggleRow({
     <div
       className="flex items-center justify-between px-3 py-2"
       style={{
-        background: 'rgba(16, 14, 16, 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+        background: 'rgba(var(--tj-bg-secondary), 0.45)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
         clipPath:
           'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
@@ -371,7 +371,7 @@ function ToggleRow({
         <div className="font-serif font-bold text-sm tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>
           {label}
         </div>
-        <div className="text-xs mt-0.5" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>
+        <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
           {desc}
         </div>
       </div>
@@ -380,11 +380,11 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
             : 'rgba(60, 55, 40, 0.7)',
           boxShadow: checked
-            ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 10px rgba(245, 217, 122, 0.25)'
-            : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
           clipPath:
             'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
         }}
@@ -393,7 +393,7 @@ function ToggleRow({
           className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
-            background: checked ? '#1a1325' : 'rgba(220, 200, 160, 0.85)',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
             clipPath:
               'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}

@@ -79,7 +79,7 @@ export async function generatePhoneReply(
   return parsePhoneReply(raw, messageLimit);
 }
 
-function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
+export function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
   const targetName = ctx.contact?.name ?? ctx.chat.title;
   const chatType = ctx.chat.type === 'group' ? '群聊' : ctx.chat.type === 'system' ? '系统通知' : '私聊';
   return [
@@ -111,7 +111,7 @@ function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
   ].join('\n');
 }
 
-function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: string; content: string }> {
+export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: string; content: string }> {
   const memories = [
     ...ctx.memory.长期记忆.slice(-5).map((m) => `长期：${m}`),
     ...ctx.memory.短期记忆.slice(-8).map((m) => `短期：${m}`),

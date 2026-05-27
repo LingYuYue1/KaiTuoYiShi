@@ -46,6 +46,24 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
     path: '/zhiku-presets/jarilo-vi-sunrise-chapters.json',
   },
   {
+    id: 'zhiku_xianzhou_luofu_travel_chapters',
+    title: '乘槎驭风仙窟游',
+    description: '仙舟罗浮前段主线剧情的小说化版本，从列车改道到罗浮危局展开。',
+    path: '/zhiku-presets/xianzhou-luofu-travel-chapters.json',
+  },
+  {
+    id: 'zhiku_xianzhou_luofu_cloud_tree_chapters',
+    title: '云树百丈蔽重楼',
+    description: '仙舟罗浮中段主线剧情的小说化版本，从丹鼎司战场到建木与幻胧危机。',
+    path: '/zhiku-presets/xianzhou-luofu-cloud-tree-chapters.json',
+  },
+  {
+    id: 'zhiku_xianzhou_luofu_aftermath_chapters',
+    title: '劫波渡尽战云收',
+    description: '仙舟罗浮后段收束剧情的小说化版本，梳理战后余波、盟友身份与告别。',
+    path: '/zhiku-presets/xianzhou-luofu-aftermath-chapters.json',
+  },
+  {
     id: 'zhiku_xianzhou_luofu_characters',
     title: '仙舟罗浮·角色资料',
     description: '仙舟罗浮相关核心人物的内置资料。',

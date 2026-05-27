@@ -44,15 +44,15 @@ export function NsfwSettingsTab({ settings, onChange }: Props) {
       <div
         className="px-4 py-4"
         style={{
-          background: 'linear-gradient(135deg, rgba(154, 94, 126, 0.14), rgba(245, 217, 122, 0.035))',
+          background: 'linear-gradient(135deg, rgba(154, 94, 126, 0.14), rgba(var(--tj-accent-primary), 0.035))',
           boxShadow: 'inset 0 0 0 1px rgba(214, 142, 174, 0.24)',
           clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)',
         }}
       >
-        <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: '#fff4d4' }}>
+        <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
           NSFW 设置
         </div>
-        <div className="mt-2 text-sm leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.76)' }}>
+        <div className="mt-2 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.76)' }}>
           这里只控制成人向内容授权与私密档案写入。关闭总开关时，正文不注入 NSFW 提示词，变量模型也不应写入 NSFW 档案。
         </div>
       </div>
@@ -75,22 +75,22 @@ export function NsfwSettingsTab({ settings, onChange }: Props) {
       <div
         className="px-4 py-4"
         style={{
-          background: 'rgba(16, 14, 16, 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+          background: 'rgba(var(--tj-bg-secondary), 0.45)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
           clipPath: smallClip,
         }}
       >
-        <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+        <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
           档案拆分规则
         </div>
-        <div className="mt-2 space-y-1 text-sm leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.76)' }}>
+        <div className="mt-2 space-y-1 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.76)' }}>
           <p>女性身体档案：胸部、女性私处、后庭、体态、体味。</p>
           <p>男性身体档案：男性器、后庭、体态、体味。</p>
           <p>普通人物外貌、穿着、性格、同行记忆不混写露骨内容。</p>
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 pt-3" style={{ background: 'linear-gradient(180deg, rgba(10,9,10,0), rgba(10,9,10,0.98) 30%)' }}>
+      <div className="sticky bottom-0 z-10 pt-3" style={{ background: 'linear-gradient(180deg, rgba(var(--tj-bg-primary),0), rgba(var(--tj-bg-primary),0.98) 30%)' }}>
         {saveMessage && (
           <div className="mb-2 text-right text-xs" style={{ color: saveMessage.startsWith('保存失败') ? 'rgba(255,180,180,0.92)' : 'rgba(165,230,170,0.92)' }}>
             {saveMessage}
@@ -101,11 +101,11 @@ export function NsfwSettingsTab({ settings, onChange }: Props) {
           onClick={handleSave}
           className="relative w-full overflow-hidden py-3 font-serif text-sm font-bold tracking-[0.32em] transition-all hover:opacity-95"
           style={{
-            color: '#1a1325',
+            color: 'rgb(var(--tj-on-accent))',
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(165, 230, 170, 0.96), rgba(105, 190, 130, 0.92))'
-              : 'linear-gradient(135deg, rgba(245, 217, 122, 0.96), rgba(212, 177, 90, 0.94))',
-            boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.52), 0 0 18px rgba(245,217,122,0.16)',
+              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(212, 177, 90, 0.94))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.52), 0 0 18px rgba(var(--tj-accent-primary),0.16)',
             clipPath: smallClip,
           }}
         >
@@ -134,8 +134,8 @@ function ToggleRow({
       className="flex items-center justify-between px-3 py-2"
       style={{
         opacity: disabled ? 0.58 : 1,
-        background: 'rgba(16, 14, 16, 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+        background: 'rgba(var(--tj-bg-secondary), 0.45)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
         clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
     >
@@ -143,7 +143,7 @@ function ToggleRow({
         <div className="font-serif text-sm font-bold tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>
           {label}
         </div>
-        <div className="mt-0.5 text-xs" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>
+        <div className="mt-0.5 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
           {desc}
         </div>
       </div>
@@ -154,11 +154,11 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all disabled:cursor-not-allowed"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
             : 'rgba(60, 55, 40, 0.7)',
           boxShadow: checked
-            ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 10px rgba(245, 217, 122, 0.25)'
-            : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
           clipPath: smallClip,
         }}
       >
@@ -166,7 +166,7 @@ function ToggleRow({
           className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
-            background: checked ? '#1a1325' : 'rgba(220, 200, 160, 0.85)',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
             clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}
         />

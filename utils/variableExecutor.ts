@@ -6,6 +6,7 @@
 import type { 变量命令, 变量命令结果 } from '@/models/variableCommand';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
+import { 对齐世界日期与天数, 解析琥珀日期序数, 格式化琥珀日期序数 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
@@ -13,7 +14,8 @@ import { 归一化智库系统 } from '@/models/zhiku';
 import type { 手机系统 } from '@/models/phone';
 import { 归一化手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
-import { 归一化NPC记录列表 } from '@/models/npc';
+import { 创建NPC记录, 归一化NPC记录列表 } from '@/models/npc';
+import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
 import type { 命途ID } from '@/models/journey';
@@ -67,13 +69,30 @@ export function applyVariableCommand(
   state: VariableState,
   setters: VariableSetters,
 ): 变量命令结果 {
-  const validation = validateCommand(cmd, state);
+  cmd = 规范化世界时间命令(cmd);
+  let effectiveState = state;
+  const parsedForEnsure = extractRoot(cmd.key);
+  if (parsedForEnsure?.root === 'NPC') {
+    const ensuredNpc = 确保NPC目标存在(state.NPC as NPC记录[], parsedForEnsure.rest, cmd);
+    if (ensuredNpc) {
+      effectiveState = { ...state, NPC: ensuredNpc };
+      setters.setNPC(ensuredNpc);
+    }
+  }
+  const validation = validateCommand(cmd, effectiveState);
   if (!validation.allowed) {
     return { command: cmd, ok: false, reason: validation.reason };
   }
   const { root, rest } = validation;
   if (!root || rest === undefined) {
     return { command: cmd, ok: false, reason: '内部错误：校验通过但未提取到根路径' };
+  }
+
+  if (root === '世界') {
+    const timeGuardReason = 校验世界时间命令(cmd, rest, effectiveState.世界 as 世界状态, effectiveState.世界 as 世界状态);
+    if (timeGuardReason) {
+      return { command: cmd, ok: false, reason: timeGuardReason };
+    }
   }
 
   let applyError: string | undefined;
@@ -161,8 +180,16 @@ export function reduceVariableCommands(
 ): { results: 变量命令结果[]; nextState: VariableState } {
   let cursor = { ...initialState };
   const results: 变量命令结果[] = [];
+  const normalizedCommands = commands.map(规范化世界时间命令);
+  const batchTimePlan = 分析批次时间计划(normalizedCommands, initialState.世界 as 世界状态);
 
-  for (const cmd of commands) {
+  for (const cmd of normalizedCommands) {
+    const preEnsuredNpc = extractRoot(cmd.key)?.root === 'NPC'
+      ? 确保NPC目标存在(cursor.NPC as NPC记录[], extractRoot(cmd.key)?.rest ?? '', cmd)
+      : null;
+    if (preEnsuredNpc) {
+      cursor = { ...cursor, NPC: preEnsuredNpc };
+    }
     const validation = validateCommand(cmd, cursor);
     if (!validation.allowed) {
       results.push({ command: cmd, ok: false, reason: validation.reason });
@@ -176,6 +203,24 @@ export function reduceVariableCommands(
     if (rest.length === 0 && cmd.action === 'delete') {
       results.push({ command: cmd, ok: false, reason: '禁止 delete 根路径' });
       continue;
+    }
+
+    if (root === '世界') {
+      const timeGuardReason = 校验世界时间命令(
+        cmd,
+        rest,
+        cursor.世界 as 世界状态,
+        initialState.世界 as 世界状态,
+        batchTimePlan,
+      );
+      if (timeGuardReason) {
+        results.push({ command: cmd, ok: false, reason: timeGuardReason });
+        continue;
+      }
+    }
+
+    if (root === '世界' && rest === '当前时间' && cmd.action === 'set') {
+      cursor = 补齐疑似跨夜时间(cursor, cmd);
     }
 
     if (root === '旅人' && rest === '背包' && cmd.action === 'push' && !解析获取物品输入(cmd.value)) {
@@ -237,7 +282,61 @@ export function reduceVariableCommands(
     results.push({ command: cmd, ok: true });
   }
 
+  cursor = 归一化变量世界状态(cursor);
   return { results, nextState: cursor };
+}
+
+function 规范化世界时间命令(cmd: 变量命令): 变量命令 {
+  const parsed = extractRoot(cmd.key);
+  if (parsed?.root !== '世界') return cmd;
+
+  if ((parsed.rest === '当前时间' || parsed.rest === '当前日期') && cmd.action !== 'set' && cmd.action !== 'delete') {
+    cmd = { ...cmd, action: 'set' };
+  }
+
+  if (parsed.rest === '当前时间' && typeof cmd.value === 'string') {
+    const minutes = 解析分钟序数(cmd.value);
+    if (minutes !== null) {
+      return { ...cmd, value: 格式化分钟序数(minutes) };
+    }
+  }
+
+  return cmd;
+}
+
+function 归一化变量世界状态(state: VariableState): VariableState {
+  const world = state.世界 as 世界状态 | undefined;
+  if (!world) return state;
+  const aligned = 对齐世界日期与天数(world.开拓天数, world.当前日期);
+  if (aligned.开拓天数 === world.开拓天数 && aligned.当前日期 === world.当前日期) return state;
+  return {
+    ...state,
+    世界: {
+      ...world,
+      ...aligned,
+    },
+  };
+}
+
+function 补齐疑似跨夜时间(state: VariableState, cmd: 变量命令): VariableState {
+  const world = state.世界 as 世界状态 | undefined;
+  if (!world) return state;
+  const current = 解析分钟序数(world.当前时间);
+  const next = 解析分钟序数(cmd.value);
+  if (current === null || next === null) return state;
+  const looksOvernight = current >= 20 * 60 && next <= 6 * 60;
+  if (!looksOvernight) return state;
+  const aligned = 对齐世界日期与天数(
+    Math.max(1, Math.trunc(Number(world.开拓天数) || 1)) + 1,
+    world.当前日期,
+  );
+  return {
+    ...state,
+    世界: {
+      ...world,
+      ...aligned,
+    },
+  };
 }
 
 /** 把 reduceVariableCommands 的结果通过 setters 一次性提交。
@@ -251,7 +350,7 @@ export function commitVariableState(
   setters: VariableSetters,
 ): void {
   if (state.旅人 !== initialState.旅人) setters.set旅人(state.旅人 as 角色数据结构);
-  if (state.世界 !== initialState.世界) setters.set世界(state.世界 as 世界状态);
+  if (state.世界 !== initialState.世界) setters.set世界(归一化变量世界状态(state).世界 as 世界状态);
   if (state.记忆 !== initialState.记忆) setters.set记忆(state.记忆 as 记忆系统);
   if (state.忆庭 !== initialState.忆庭) setters.set忆庭(state.忆庭 as 忆庭系统);
   if (state.智库 !== initialState.智库) setters.set智库(归一化智库系统(state.智库 as 智库系统));
@@ -259,6 +358,193 @@ export function commitVariableState(
   if (state.NPC !== initialState.NPC) setters.setNPC(归一化NPC记录列表(state.NPC));
   if (state.新闻 !== initialState.新闻) setters.set新闻(state.新闻 as 新闻条目[]);
   if (state.剧情 !== initialState.剧情) setters.set剧情(state.剧情 as 剧情节点[]);
+}
+
+function 校验世界时间命令(
+  cmd: 变量命令,
+  rest: string,
+  currentWorld: 世界状态,
+  baselineWorld?: 世界状态,
+  batchTimePlan?: 批次时间计划,
+): string | null {
+  if (rest === '当前日期') {
+    if (cmd.action !== 'set') return '世界.当前日期 只能使用 set 写入完整日期';
+    const next = 解析琥珀日期序数(cmd.value);
+    if (next === null) return '当前日期必须使用“琥珀纪 YYYY.MM.DD”，禁止写现实日期或其他纪年';
+    const current = 解析琥珀日期序数(currentWorld?.当前日期);
+    if (current !== null && next < current) return '拒绝时间回退：世界.当前日期 不能早于当前日期';
+    const baseline = 解析琥珀日期序数(baselineWorld?.当前日期);
+    if (baseline !== null && next > baseline + 1) {
+      cmd.value = 格式化琥珀日期序数(baseline + 1);
+      return null;
+    }
+    return null;
+  }
+
+  if (rest === '当前时间') {
+    if (cmd.action !== 'set') return '世界.当前时间 只能使用 set 写入 HH:mm';
+    const next = 解析分钟序数(cmd.value);
+    if (next === null) return '当前时间必须使用 24 小时制 HH:mm，禁止写时段词或场景名';
+    const current = 解析分钟序数(currentWorld?.当前时间);
+    const currentDate = 解析琥珀日期序数(currentWorld?.当前日期);
+    const baselineDate = 解析琥珀日期序数(baselineWorld?.当前日期);
+    const baselineTime = 解析分钟序数(baselineWorld?.当前时间);
+    const dateAlreadyAdvanced = currentDate !== null && baselineDate !== null && currentDate > baselineDate;
+    const dateWillAdvanceInBatch = batchTimePlan?.dateAdvances === true && batchTimePlan?.dayAdvances === true;
+    if (!dateAlreadyAdvanced && current !== null && next < current) {
+      if (current >= 20 * 60 && next <= 6 * 60) return null;
+      if (dateWillAdvanceInBatch) return null;
+      return `已忽略疑似时间回退：同一日期内 世界.当前时间 不能早于当前时间（当前 ${currentWorld?.当前时间 || '未知'}，尝试写入 ${String(cmd.value)}）；若剧情已跨日，请同批写入 世界.当前日期 的下一天`;
+    }
+    if (!dateAlreadyAdvanced && !dateWillAdvanceInBatch && baselineTime !== null && next - baselineTime > 60) {
+      const capped = Math.min(23 * 60 + 59, baselineTime + 30);
+      cmd.value = 格式化分钟序数(capped);
+      return null;
+    }
+    return null;
+  }
+
+  if (rest === '开拓天数') {
+    const current = Math.max(1, Math.trunc(Number(currentWorld?.开拓天数) || 1));
+    if (cmd.action !== 'add' && cmd.action !== 'set' && cmd.action !== 'sub') {
+      return '世界.开拓天数 只能使用 add 或 set';
+    }
+    if (cmd.action === 'sub') return '拒绝时间回退：世界.开拓天数 不允许使用 sub';
+    if (cmd.action === 'add') {
+      const delta = Number(cmd.value);
+      if (!Number.isFinite(delta)) return '开拓天数 add 必须是数字';
+      if (delta < 0) return '拒绝时间回退：世界.开拓天数 不能减少';
+      if (delta > 1) cmd.value = 1;
+      return null;
+    }
+    if (cmd.action === 'set') {
+      const next = Number(cmd.value);
+      if (!Number.isFinite(next)) return '开拓天数 set 必须是数字';
+      if (next < current) return '拒绝时间回退：世界.开拓天数 不能小于当前值';
+      if (next < 1) return '开拓天数不能小于 1';
+      if (next > current + 1) cmd.value = current + 1;
+    }
+  }
+
+  return null;
+}
+
+interface 批次时间计划 {
+  dateAdvances: boolean;
+  dayAdvances: boolean;
+}
+
+function 分析批次时间计划(commands: 变量命令[], baselineWorld: 世界状态): 批次时间计划 {
+  const baselineDate = 解析琥珀日期序数(baselineWorld?.当前日期);
+  const baselineDay = Math.max(1, Math.trunc(Number(baselineWorld?.开拓天数) || 1));
+  const dateAdvances = commands.some((cmd) => {
+    const parsed = extractRoot(cmd.key);
+    if (parsed?.root !== '世界' || parsed.rest !== '当前日期' || cmd.action !== 'set') return false;
+    const next = 解析琥珀日期序数(cmd.value);
+    return baselineDate !== null && next !== null && next === baselineDate + 1;
+  });
+  const dayAdvances = commands.some((cmd) => {
+    const parsed = extractRoot(cmd.key);
+    if (parsed?.root !== '世界' || parsed.rest !== '开拓天数') return false;
+    const value = Number(cmd.value);
+    if (!Number.isFinite(value)) return false;
+    if (cmd.action === 'add') return value === 1;
+    if (cmd.action === 'set') return value === baselineDay + 1;
+    return false;
+  });
+  return { dateAdvances, dayAdvances };
+}
+
+function 确保NPC目标存在(records: NPC记录[], rest: string, cmd: 变量命令): NPC记录[] | null {
+  if (cmd.action === 'push' && !rest) return null;
+  const match = rest.match(/^\[([^\]]+)\]/);
+  if (!match) return null;
+  const eq = match[1].indexOf('=');
+  if (eq < 0) return null;
+  const selectorField = match[1].slice(0, eq).trim();
+  const selectorValue = match[1].slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+  if (!selectorValue) return null;
+  const exists = records.some((item) =>
+    item.id === selectorValue ||
+    item.姓名 === selectorValue ||
+    item.别名 === selectorValue,
+  );
+  if (exists) return null;
+  const canonical = matchCanonical(NPC选择器值转角色名(selectorValue));
+  if (!canonical) return null;
+  const stableId = selectorField === 'id' && selectorValue.startsWith('npc_')
+    ? selectorValue
+    : `npc_${角色名转NPCID(canonical.name)}`;
+  const nowTurn = typeof cmd.value === 'number' ? cmd.value : 0;
+  const created = {
+    ...创建NPC记录({
+    姓名: canonical.name,
+    阶位: 'companion',
+    初见回合: nowTurn,
+    原著角色: true,
+    外貌: canonical.appearance,
+    性格: canonical.personality,
+    介绍: `${canonical.name}是当前剧情中出现的原著角色。`,
+    }),
+    id: stableId,
+    关系: 'acquaintance' as const,
+    备注: ['原著角色自动建档'],
+  };
+  return [...records, created];
+}
+
+function NPC选择器值转角色名(value: string): string {
+  const normalized = value.replace(/^npc[_-]/i, '').toLowerCase();
+  const map: Record<string, string> = {
+    march7th: '三月七',
+    march7: '三月七',
+    march: '三月七',
+    danheng: '丹恒',
+    dan_heng: '丹恒',
+    himeko: '姬子',
+    welt: '瓦尔特',
+    pompom: '帕姆',
+    'pom-pom': '帕姆',
+    herta: '黑塔',
+    asta: '艾丝妲',
+    arlan: '阿兰',
+    stelle: '星',
+    caelus: '穹',
+  };
+  return map[normalized] ?? value;
+}
+
+function 角色名转NPCID(name: string): string {
+  const map: Record<string, string> = {
+    三月七: 'march7th',
+    丹恒: 'danheng',
+    姬子: 'himeko',
+    瓦尔特: 'welt',
+    帕姆: 'pompom',
+    黑塔: 'herta',
+    艾丝妲: 'asta',
+    阿兰: 'arlan',
+    星: 'stelle',
+    穹: 'caelus',
+  };
+  return map[name] ?? name.toLowerCase().replace(/\s+/g, '_');
+}
+
+function 解析分钟序数(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function 格式化分钟序数(minutesOfDay: number): string {
+  const hours = Math.floor(minutesOfDay / 60);
+  const minutes = minutesOfDay % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
 // ── 背包 push 入参解析 ──
@@ -438,9 +724,8 @@ function 查找赋值等号(line: string): number {
 
 function 解析变量命令行(line: string): { action: 变量命令['action']; key: string; valueRaw?: string } | null {
   const head = line.match(/^(set|add|sub|push|delete)\s+/i);
-  if (!head) return null;
-  const action = head[1].toLowerCase() as 变量命令['action'];
-  const rest = line.slice(head[0].length).trim();
+  const action = (head ? head[1].toLowerCase() : 'set') as 变量命令['action'];
+  const rest = (head ? line.slice(head[0].length) : line).trim();
   if (!rest) return null;
 
   const eqIndex = 查找赋值等号(rest);
@@ -461,7 +746,7 @@ function 拆分变量命令行(block: string): string[] {
     const line = rawLine.trim();
     if (!line || line.startsWith('//') || line.startsWith('#')) continue;
 
-    const startsCommand = /^(set|add|sub|push|delete)\s+/i.test(line);
+    const startsCommand = /^(set|add|sub|push|delete)\s+/i.test(line) || /^[\w一-龥.[\]_-]+\s*[=＝]/.test(line);
     if (!current) {
       current = line;
       continue;
@@ -521,6 +806,12 @@ function isPlaceholderBackpackValue(raw: string | undefined): boolean {
   );
 }
 
+function isPlaceholderValue(raw: string | undefined): boolean {
+  if (!raw) return false;
+  const text = raw.trim();
+  return /\.\.\./.test(text) || /[{,]\s*(id|回合|摘要|名称|描述)\s*[,}]/.test(text);
+}
+
 /** 从 AI 文本中解析 <变量更新>...</变量更新> 块。每条命令：`<action> <path> = <json>`。
  *  支持多行 JSON / 代码块 / 全角等号；delete 可省略 = 后面的值。 */
 export function parseVariableCommands(rawText: string): { commands: 变量命令[]; parseErrors: string[] } {
@@ -549,6 +840,9 @@ export function parseVariableCommands(rawText: string): { commands: 变量命令
     }
 
     if (action === 'push' && key.trim() === '旅人.背包' && isPlaceholderBackpackValue(valueRaw)) {
+      continue;
+    }
+    if (isPlaceholderValue(valueRaw)) {
       continue;
     }
 

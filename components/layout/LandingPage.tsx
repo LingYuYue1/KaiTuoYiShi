@@ -81,26 +81,26 @@ export function LandingPage({
       {/* ── Hero Content ── */}
       <div className="relative z-10 flex flex-col items-center animate-fade-in pt-4">
         <div className="flex items-center gap-6 mb-3">
-          <span className="text-2xl" style={{ color: 'rgba(245, 217, 122, 0.55)' }}>◆</span>
+          <span className="text-2xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.55)' }}>◆</span>
           <h1
             className="font-serif text-5xl md:text-6xl font-bold tracking-[0.4em]"
             style={{
-              background: 'linear-gradient(180deg, #fff4d4 0%, #f5d97a 50%, #c4a35a 100%)',
+              background: 'linear-gradient(180deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 50%, rgb(var(--tj-accent-secondary)) 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-              filter: 'drop-shadow(0 0 24px rgba(245, 217, 122, 0.35))',
+              filter: 'drop-shadow(0 0 24px rgba(var(--tj-accent-primary), 0.35))',
             }}
           >
             开拓轶事
           </h1>
-          <span className="text-2xl" style={{ color: 'rgba(245, 217, 122, 0.55)' }}>◆</span>
+          <span className="text-2xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.55)' }}>◆</span>
         </div>
 
         <div className="flex items-center gap-4 mb-4">
           <div
             className="h-px w-14"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.65))' }}
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.65))' }}
           />
           <p
             className="text-base md:text-lg font-serif tracking-[0.5em]"
@@ -110,7 +110,7 @@ export function LandingPage({
           </p>
           <div
             className="h-px w-14"
-            style={{ background: 'linear-gradient(90deg, rgba(245, 217, 122, 0.65), transparent)' }}
+            style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.65), transparent)' }}
           />
         </div>
 
@@ -173,7 +173,7 @@ export function LandingPage({
           >
             <span
               className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(255, 245, 200, 0.45), transparent)' }}
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-text-primary), 0.45), transparent)' }}
             />
             <span className="relative">踏上旅途</span>
           </button>
@@ -184,7 +184,7 @@ export function LandingPage({
           >
             <span
               className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.25), transparent)' }}
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.25), transparent)' }}
             />
             <span className="relative">读取光锥</span>
           </button>
@@ -195,7 +195,7 @@ export function LandingPage({
           >
             <span
               className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.25), transparent)' }}
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.25), transparent)' }}
             />
             <span className="relative"> 如我所书 </span>
           </button>
@@ -206,7 +206,7 @@ export function LandingPage({
           >
             <span
               className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.25), transparent)' }}
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.25), transparent)' }}
             />
             <span className="relative"> 智库 </span>
           </button>
@@ -214,12 +214,12 @@ export function LandingPage({
           <div className="flex items-center gap-3 my-1 mx-2">
             <div
               className="h-px flex-1"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.35), transparent)' }}
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.35), transparent)' }}
             />
-            <span className="text-[10px]" style={{ color: 'rgba(245, 217, 122, 0.5)' }}>◆</span>
+            <span className="text-[10px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.5)' }}>◆</span>
             <div
               className="h-px flex-1"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.35), transparent)' }}
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.35), transparent)' }}
             />
           </div>
 

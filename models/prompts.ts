@@ -48,6 +48,7 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_response_format',
   'builtin_action_options',
   'builtin_no_control',
+  'builtin_npc_autonomy',
   'builtin_writing_style',
   'builtin_writing_style_hsr',
   'builtin_writing_style_baimiao',

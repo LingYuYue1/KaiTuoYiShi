@@ -90,13 +90,13 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
       <div
         className="px-4 py-3 text-xs leading-relaxed"
         style={{
-          color: 'rgba(200, 188, 158, 0.78)',
-          background: 'rgba(245, 217, 122, 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          color: 'rgba(var(--tj-text-secondary), 0.78)',
+          background: 'rgba(var(--tj-accent-primary), 0.05)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath: cardClip,
         }}
       >
-        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
           剧情编织
         </div>
         用于玩家导入 TXT 剧情，拆章并分解成“当前段 / 前一段 / 下一段”的运行时滑窗。它不负责世界演变；世界演变仍由星际和平周报承接。
@@ -124,9 +124,9 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
             max={5}
             value={story.chaptersPerSegment}
             onChange={(e) => patch({ chaptersPerSegment: Number(e.target.value) })}
-            className="flex-1 accent-[#f5d97a]"
+            className="flex-1 accent-[rgb(var(--tj-accent-primary))]"
           />
-          <span className="min-w-12 text-right text-xs font-serif" style={{ color: 'rgba(245, 217, 122, 0.85)' }}>
+          <span className="min-w-12 text-right text-xs font-serif" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
             {story.chaptersPerSegment} 章
           </span>
         </div>
@@ -135,14 +135,14 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
       <div
         className="space-y-3 px-4 py-4"
         style={{
-          background: 'rgba(16, 14, 16, 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+          background: 'rgba(var(--tj-bg-secondary), 0.45)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
           clipPath: cardClip,
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-          <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+          <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+          <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
             分解 API
           </span>
         </div>
@@ -193,9 +193,9 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
               disabled={loadingModels}
               className="px-3 py-2 text-xs font-serif tracking-wider disabled:opacity-50"
               style={{
-                color: 'rgba(245, 217, 122, 0.85)',
-                boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.35)',
-                background: 'rgba(245, 217, 122, 0.05)',
+                color: 'rgba(var(--tj-accent-primary), 0.85)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                background: 'rgba(var(--tj-accent-primary), 0.05)',
                 clipPath: smallClip,
               }}
             >
@@ -233,9 +233,9 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
         onClick={handleSave}
         className="w-full px-4 py-3 font-serif text-sm font-bold tracking-[0.3em]"
         style={{
-          color: savedFlash ? 'rgba(10, 9, 10, 0.95)' : 'rgba(245, 217, 122, 0.95)',
-          background: savedFlash ? 'linear-gradient(90deg, #9ad8a0, #f5d97a)' : 'rgba(245, 217, 122, 0.06)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.35)',
+          color: savedFlash ? 'rgba(var(--tj-bg-primary), 0.95)' : 'rgba(var(--tj-accent-primary), 0.95)',
+          background: savedFlash ? 'linear-gradient(90deg, #9ad8a0, rgb(var(--tj-accent-primary)))' : 'rgba(var(--tj-accent-primary), 0.06)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
           clipPath: cardClip,
         }}
       >
@@ -248,7 +248,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.75)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>
         {label}
       </div>
       {children}
@@ -258,9 +258,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ToggleRow({ label, desc, checked, onChange }: { label: string; desc: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3" style={{ background: 'rgba(245, 217, 122, 0.04)', boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)', clipPath: cardClip }}>
+    <div className="flex items-center justify-between gap-4 px-4 py-3" style={{ background: 'rgba(var(--tj-accent-primary), 0.04)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)', clipPath: cardClip }}>
       <div>
-        <div className="font-serif text-sm tracking-[0.16em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>{label}</div>
+        <div className="font-serif text-sm tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>{label}</div>
         <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(190, 178, 148, 0.72)' }}>{desc}</div>
       </div>
       <button
@@ -268,8 +268,8 @@ function ToggleRow({ label, desc, checked, onChange }: { label: string; desc: st
         className="relative h-7 w-14 shrink-0 transition-all"
         style={{
           borderRadius: 999,
-          background: checked ? 'rgba(245, 217, 122, 0.28)' : 'rgba(120, 110, 95, 0.22)',
-          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(245, 217, 122, 0.55)' : 'rgba(160, 148, 120, 0.28)'}`,
+          background: checked ? 'rgba(var(--tj-accent-primary), 0.28)' : 'rgba(120, 110, 95, 0.22)',
+          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-text-secondary), 0.28)'}`,
         }}
       >
         <span
@@ -277,8 +277,8 @@ function ToggleRow({ label, desc, checked, onChange }: { label: string; desc: st
           style={{
             left: checked ? 'calc(100% - 24px)' : '4px',
             borderRadius: 999,
-            background: checked ? '#f5d97a' : 'rgba(180, 170, 145, 0.8)',
-            boxShadow: checked ? '0 0 12px rgba(245, 217, 122, 0.45)' : 'none',
+            background: checked ? 'rgb(var(--tj-accent-primary))' : 'rgba(180, 170, 145, 0.8)',
+            boxShadow: checked ? '0 0 12px rgba(var(--tj-accent-primary), 0.45)' : 'none',
           }}
         />
       </button>

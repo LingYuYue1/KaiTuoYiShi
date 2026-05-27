@@ -99,11 +99,11 @@ export function PromptModulesTab({ settings, onChange }: Props) {
         <div className="flex items-center justify-between px-1">
           <span
             className="text-xs font-serif tracking-[0.2em]"
-            style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+            style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
           >
             ◆ 模块列表
           </span>
-          <span className="text-[10px]" style={{ color: 'rgba(160, 148, 120, 0.6)' }}>
+          <span className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}>
             {sorted.length} 条
           </span>
         </div>
@@ -117,11 +117,11 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                 className="mb-1.5 w-full px-3 py-2 text-left transition-all"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.16), rgba(245, 217, 122, 0.04))'
-                    : 'rgba(16, 14, 16, 0.45)',
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
+                    : 'rgba(var(--tj-bg-secondary), 0.45)',
                   boxShadow: active
-                    ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)'
-                    : 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
                   clipPath: smallClip,
                 }}
               >
@@ -129,10 +129,10 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                   <span
                     className="text-[10px] px-1.5 py-0.5"
                     style={{
-                      color: m.builtin ? '#1a1325' : 'rgba(245, 217, 122, 0.9)',
+                      color: m.builtin ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.9)',
                       background: m.builtin
-                        ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.9), rgba(212, 177, 90, 0.9))'
-                        : 'rgba(245, 217, 122, 0.12)',
+                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(212, 177, 90, 0.9))'
+                        : 'rgba(var(--tj-accent-primary), 0.12)',
                       clipPath:
                         'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
                     }}
@@ -148,7 +148,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                   <span
                     className="text-[10px]"
                     style={{
-                      color: m.enabled ? 'rgba(120, 220, 130, 0.85)' : 'rgba(160, 148, 120, 0.55)',
+                      color: m.enabled ? 'rgba(120, 220, 130, 0.85)' : 'rgba(var(--tj-text-secondary), 0.55)',
                     }}
                   >
                     {m.enabled ? '● 启用' : '○ 关闭'}
@@ -156,7 +156,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                 </div>
                 <div
                   className="mt-1 truncate text-xs"
-                  style={{ color: 'rgba(200, 188, 158, 0.6)' }}
+                  style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
                 >
                   [{PROMPT_MODULE_CATEGORY_LABELS[m.category]} · order {m.order}] {m.description || '—'}
                 </div>
@@ -165,13 +165,13 @@ export function PromptModulesTab({ settings, onChange }: Props) {
           })}
         </div>
 
-        <div className="flex flex-col gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(245, 217, 122, 0.18)' }}>
+        <div className="flex flex-col gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.18)' }}>
           <button
             onClick={addCustom}
             className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              background: 'linear-gradient(135deg, rgba(245, 217, 122, 0.9), rgba(212, 177, 90, 0.9))',
-              color: '#1a1325',
+              background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(212, 177, 90, 0.9))',
+              color: 'rgb(var(--tj-on-accent))',
               clipPath: smallClip,
             }}
           >
@@ -183,7 +183,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
             style={{
               background: 'transparent',
               color: 'rgba(220, 200, 160, 0.85)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.3)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
               clipPath: smallClip,
             }}
           >
@@ -203,7 +203,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
         ) : (
           <div
             className="flex flex-1 items-center justify-center text-sm"
-            style={{ color: 'rgba(200, 188, 158, 0.5)' }}
+            style={{ color: 'rgba(var(--tj-text-secondary), 0.5)' }}
           >
             暂无模块。点击「+ 新增自定义模块」开始。
           </div>
@@ -230,8 +230,8 @@ function EditorPanel({
       <div
         className="flex items-center justify-between px-3 py-2"
         style={{
-          background: 'rgba(16, 14, 16, 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          background: 'rgba(var(--tj-bg-secondary), 0.45)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath:
             'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
         }}
@@ -243,7 +243,7 @@ function EditorPanel({
           >
             启用此模块
           </div>
-          <div className="text-xs mt-0.5" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>
+          <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
             关闭后，本模块的内容不会注入到 system prompt
           </div>
         </div>
@@ -252,11 +252,11 @@ function EditorPanel({
           className="relative h-6 w-11 flex-shrink-0 transition-all"
           style={{
             background: m.enabled
-              ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
+              ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
               : 'rgba(60, 55, 40, 0.7)',
             boxShadow: m.enabled
-              ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 10px rgba(245, 217, 122, 0.25)'
-              : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+              ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+              : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
             clipPath: smallClip,
           }}
         >
@@ -264,7 +264,7 @@ function EditorPanel({
             className="absolute top-0.5 h-5 w-5 transition-transform"
             style={{
               left: m.enabled ? 'calc(100% - 1.375rem)' : '0.125rem',
-              background: m.enabled ? '#1a1325' : 'rgba(220, 200, 160, 0.85)',
+              background: m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
               clipPath:
                 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
             }}
@@ -326,7 +326,7 @@ function EditorPanel({
           />
         </Field>
       </div>
-      <div className="text-xs -mt-1" style={{ color: 'rgba(160, 148, 120, 0.7)' }}>
+      <div className="text-xs -mt-1" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
         order &lt; 30 注入到 system prompt 顶部；&ge; 30 注入到尾部。
       </div>
 
@@ -338,7 +338,7 @@ function EditorPanel({
           onChange={(next) => onPatch({ scope: next })}
         />
       </Field>
-      <div className="text-xs -mt-1" style={{ color: 'rgba(160, 148, 120, 0.7)' }}>
+      <div className="text-xs -mt-1" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
         勾选「任意」表示在所有场景注入；其他场景互斥于「任意」，选中具体场景将取消「任意」。
       </div>
 
@@ -353,13 +353,13 @@ function EditorPanel({
           style={{ clipPath: smallClip, opacity: readonly ? 0.8 : 1 }}
         />
       </Field>
-      <div className="text-xs" style={{ color: 'rgba(160, 148, 120, 0.7)' }}>
+      <div className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
         可用占位符：<code>{'{wordCountTarget}'}</code>（最少字数）/ <code>{'{personLabel}'}</code>（叙述人称描述）。注入时按当前设置替换。
       </div>
 
       {/* 删除按钮（自定义模块） */}
       {!readonly && !isBuiltinPromptModule(m.id) && m.id !== 'builtin_writing_style_custom' && (
-        <div className="pt-2" style={{ borderTop: '1px solid rgba(245, 217, 122, 0.15)' }}>
+        <div className="pt-2" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}>
           <button
             onClick={() => {
               if (confirm(`确定删除模块「${m.title}」？此操作不可撤销。`)) onDelete();
@@ -385,7 +385,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label
         className="mb-1.5 block text-xs font-serif tracking-[0.2em]"
-        style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
       >
         {label}
       </label>
@@ -394,7 +394,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const SCOPE_OPTIONS: 提示词模块作用域[] = ['all', 'main', 'opening', 'battle', 'calibration'];
+const SCOPE_OPTIONS: 提示词模块作用域[] = ['all', 'main', 'opening', 'battle', 'pathAwakening', 'calibration'];
 
 function ScopeChips({
   value,
@@ -431,12 +431,12 @@ function ScopeChips({
             className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all"
             style={{
               background: active
-                ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.85), rgba(212, 177, 90, 0.85))'
-                : 'rgba(16, 14, 16, 0.5)',
-              color: active ? '#1a1325' : 'rgba(220, 200, 160, 0.85)',
+                ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.85), rgba(212, 177, 90, 0.85))'
+                : 'rgba(var(--tj-bg-secondary), 0.5)',
+              color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
               boxShadow: active
-                ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5)'
-                : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+                ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
+                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
               clipPath:
                 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
               opacity: readonly ? 0.7 : 1,

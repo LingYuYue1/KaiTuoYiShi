@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 记忆系统 } from '@/models/memory';
 import type { 手机联系人, 手机会话, 手机系统, 主动来信种子 } from '@/models/phone';
@@ -11,6 +11,11 @@ import { 创建手机会话, 创建手机会话本地摘要条目, 创建手机�
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
 import type { 忆庭系统 } from '@/models/yiting';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemories } from '@/hooks/useGame/memoryUtils';
+import {
+  BUILTIN_PHONE_WALLPAPERS,
+  DEFAULT_PHONE_CHAT_WALLPAPER,
+  DEFAULT_PHONE_HOME_WALLPAPER,
+} from '@/data/builtinPhoneWallpapers';
 
 interface Props {
   phone: 手机系统;
@@ -34,8 +39,14 @@ const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px
 const cardClip = 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)';
 const phoneShellClip =
   'polygon(28px 0, calc(100% - 28px) 0, 100% 28px, 100% calc(100% - 28px), calc(100% - 28px) 100%, 28px 100%, 0 calc(100% - 28px), 0 28px)';
+const phoneShellSurface =
+  'radial-gradient(circle at 50% 0%, rgba(var(--tj-tech-cyan, var(--tj-accent-primary)), 0.16), transparent 32%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.99), rgba(var(--tj-surface-strong), 0.98))';
+const phoneScreenSurface =
+  'linear-gradient(180deg, rgba(var(--tj-surface), 0.98), rgba(var(--tj-bg-secondary), 0.96))';
+const phoneCardSurface =
+  'linear-gradient(135deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.82))';
 
-type PhoneApp = 'messages' | 'contacts' | 'news';
+type PhoneApp = 'messages' | 'contacts' | 'news' | 'wallpapers';
 
 function toPhoneContactId(npcId: string): string {
   return npcId.startsWith('npc_') ? npcId : `npc_${npcId}`;
@@ -84,7 +95,7 @@ export function PhoneModal({
           npcId: npc.id,
           name: npc.姓名,
           avatar: 读取NPC头像(npc, '手机'),
-          organization: npc.阵营ID,
+          organization: undefined,
           relationLabel: npc.阶位 === 'companion' ? '伙伴' : '路人',
           available: true,
           lastActiveTurn: npc.最近回合,
@@ -128,7 +139,7 @@ export function PhoneModal({
           npcId: npc.id,
           name: npc.姓名,
           avatar: 读取NPC头像(npc, '手机'),
-          organization: npc.阵营ID,
+          organization: undefined,
           relationLabel: npc.阶位 === 'companion' ? '伙伴' : '已认识',
           available: true,
           status: 'available' as const,
@@ -369,7 +380,7 @@ export function PhoneModal({
         npcId: byNpc.id,
         name: byNpc.姓名,
         avatar: 读取NPC头像(byNpc, '手机'),
-        organization: byNpc.阵营ID,
+        organization: undefined,
         relationLabel: byNpc.阶位 === 'companion' ? '伙伴' : '路人',
         available: true,
         lastActiveTurn: byNpc.最近回合,
@@ -577,7 +588,7 @@ export function PhoneModal({
         npcId: npc.id,
         name: npc.姓名,
         avatar: 读取NPC头像(npc, '手机'),
-        organization: npc.阵营ID,
+        organization: undefined,
         relationLabel: hiddenEnemy ? '敌对' : npc.阶位 === 'companion' ? '伙伴' : '路人',
         available: !hiddenEnemy,
         lastActiveTurn: npc.最近回合,
@@ -695,15 +706,25 @@ export function PhoneModal({
     }
   };
 
-  const activeAppTitle = activeApp === 'messages' ? '短讯' : activeApp === 'contacts' ? '通讯录' : '星际和平周报';
+  const activeAppTitle =
+    activeApp === 'messages' ? '短讯'
+    : activeApp === 'contacts' ? '通讯录'
+    : activeApp === 'news' ? '星际和平周报'
+    : '壁纸';
   const activeAppSubtitle =
-    activeApp === 'messages' ? 'MESSAGE APP' : activeApp === 'contacts' ? 'CONTACTS' : 'NEWS FEED';
-  const homeWallpaper = phone.wallpapers?.home;
-  const chatWallpaper = activeApp === 'messages' ? phone.wallpapers?.chat : undefined;
+    activeApp === 'messages' ? 'MESSAGE APP'
+    : activeApp === 'contacts' ? 'CONTACTS'
+    : activeApp === 'news' ? 'NEWS FEED'
+    : 'WALLPAPER';
+  const homeWallpaper = phone.wallpapers?.home || DEFAULT_PHONE_HOME_WALLPAPER;
+  const chatWallpaper = activeApp === 'messages'
+    ? phone.wallpapers?.chat || DEFAULT_PHONE_CHAT_WALLPAPER
+    : undefined;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-start bg-black/60 p-3 sm:p-4"
+      className="fixed inset-0 z-50 flex items-start justify-start p-3 sm:p-4"
+      style={{ background: 'rgba(var(--tj-bg-primary), 0.72)', backdropFilter: 'blur(10px)' }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -712,26 +733,25 @@ export function PhoneModal({
         <section
           className="relative flex h-[min(84vh,760px)] w-full max-w-[340px] flex-shrink-0 overflow-hidden p-3 xl:w-[340px]"
           style={{
-            background:
-              'radial-gradient(circle at 50% 0%, rgba(245, 217, 122, 0.11), transparent 34%), linear-gradient(180deg, rgba(24, 22, 23, 0.99), rgba(5, 5, 7, 0.995))',
+            background: phoneShellSurface,
             boxShadow:
-              'inset 0 0 0 1px rgba(245, 217, 122, 0.46), inset 0 0 0 8px rgba(0,0,0,0.28), 0 28px 74px rgba(0, 0, 0, 0.72)',
+              'inset 0 0 0 1px rgba(var(--tj-border), 0.72), inset 0 0 0 8px rgba(var(--tj-surface),0.48), 0 24px 54px rgba(var(--tj-shadow), 0.16)',
             clipPath: phoneShellClip,
           }}
         >
           <div
             className="pointer-events-none absolute left-1/2 top-2 h-1.5 w-24 -translate-x-1/2"
             style={{
-              background: 'rgba(245, 217, 122, 0.22)',
+              background: 'rgba(var(--tj-accent-primary), 0.22)',
               borderRadius: 999,
-              boxShadow: '0 0 10px rgba(245,217,122,0.18)',
+              boxShadow: '0 0 10px rgba(var(--tj-accent-primary),0.18)',
             }}
           />
           <div
             className="flex min-h-0 flex-1 overflow-hidden"
             style={{
-              background: 'linear-gradient(180deg, rgba(12, 11, 13, 0.98), rgba(4, 5, 7, 0.99))',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.32)',
+              background: phoneScreenSurface,
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
               clipPath: cardClip,
             }}
           >
@@ -751,10 +771,9 @@ export function PhoneModal({
           <section
             className="relative flex h-[min(84vh,760px)] w-full min-w-0 flex-none overflow-hidden p-3 xl:w-[980px]"
             style={{
-              background:
-                'radial-gradient(circle at 50% 0%, rgba(245, 217, 122, 0.08), transparent 28%), linear-gradient(180deg, rgba(18, 16, 18, 0.98), rgba(5, 5, 7, 0.99))',
+              background: phoneShellSurface,
               boxShadow:
-                'inset 0 0 0 1px rgba(245, 217, 122, 0.26), inset 0 0 0 8px rgba(0,0,0,0.24), 0 28px 74px rgba(0, 0, 0, 0.52)',
+                'inset 0 0 0 1px rgba(var(--tj-border), 0.7), inset 0 0 0 8px rgba(var(--tj-surface),0.48), 0 24px 54px rgba(var(--tj-shadow), 0.14)',
               clipPath: phoneShellClip,
             }}
           >
@@ -762,18 +781,18 @@ export function PhoneModal({
               className="flex min-h-0 w-full flex-col overflow-hidden"
               style={{
                 background: chatWallpaper
-                  ? `linear-gradient(180deg, rgba(12, 11, 13, 0.82), rgba(4, 5, 7, 0.92)), url(${chatWallpaper}) center/cover`
-                  : 'linear-gradient(180deg, rgba(12, 11, 13, 0.985), rgba(4, 5, 7, 0.995))',
-                boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+                  ? `linear-gradient(180deg, rgba(var(--tj-surface), 0.88), rgba(var(--tj-bg-secondary), 0.94)), url(${chatWallpaper}) center/cover`
+                  : phoneScreenSurface,
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
                 clipPath: cardClip,
               }}
             >
-              <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: 'rgba(245, 217, 122, 0.18)' }}>
+              <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: 'rgba(var(--tj-accent-primary), 0.18)' }}>
                 <div className="min-w-0">
-                  <div className="truncate font-serif text-base font-bold tracking-[0.2em]" style={{ color: '#f5d97a' }}>
+                  <div className="truncate font-serif text-base font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                     {activeAppTitle}
                   </div>
-                  <div className="mt-1 text-[11px] tracking-[0.18em]" style={{ color: 'rgba(200, 188, 158, 0.64)' }}>
+                  <div className="mt-1 text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
                     {activeAppSubtitle}
                   </div>
                 </div>
@@ -782,9 +801,9 @@ export function PhoneModal({
                   onClick={() => setActiveApp(null)}
                   className="px-2 py-1 text-xs font-serif tracking-[0.16em]"
                   style={{
-                    color: 'rgba(245, 217, 122, 0.85)',
-                    background: 'rgba(245, 217, 122, 0.05)',
-                    boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+                    color: 'rgba(var(--tj-accent-primary), 0.85)',
+                    background: 'rgba(var(--tj-accent-primary), 0.05)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
                     clipPath: smallClip,
                   }}
                 >
@@ -797,21 +816,21 @@ export function PhoneModal({
                   <aside
                     className="flex min-h-0 w-full flex-shrink-0 flex-col xl:w-[292px]"
                     style={{
-                      borderRight: '1px solid rgba(245, 217, 122, 0.22)',
-                      background: 'rgba(8, 7, 9, 0.54)',
+                      borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
+                      background: 'rgba(var(--tj-bubble), 0.86)',
                     }}
                   >
-                    <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.2)' }}>
+                    <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate font-serif text-sm font-bold tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+                          <div className="truncate font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                             短讯列表
                           </div>
-                          <div className="mt-1 text-[11px] tracking-[0.16em]" style={{ color: 'rgba(200, 188, 158, 0.64)' }}>
+                          <div className="mt-1 text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
                             待处理来信与会话
                           </div>
                         </div>
-                        <span className="text-[10px]" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>
+                        <span className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
                           {phone.chats.length}
                         </span>
                       </div>
@@ -820,11 +839,11 @@ export function PhoneModal({
                         onClick={() => setShowCreateGroup((v) => !v)}
                         className="mt-3 w-full py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90"
                         style={{
-                          color: showCreateGroup ? '#1a1325' : 'rgba(245, 217, 122, 0.88)',
+                          color: showCreateGroup ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.88)',
                           background: showCreateGroup
-                            ? 'linear-gradient(135deg, rgba(245,217,122,0.94), rgba(212,177,90,0.92))'
-                            : 'rgba(245, 217, 122, 0.055)',
-                          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(212,177,90,0.92))'
+                            : 'rgba(var(--tj-accent-primary), 0.055)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
                           clipPath: smallClip,
                         }}
                       >
@@ -838,13 +857,13 @@ export function PhoneModal({
                           <section
                             className="space-y-2"
                             style={{
-                              background: 'rgba(245, 217, 122, 0.055)',
-                              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+                              background: 'rgba(var(--tj-accent-primary), 0.055)',
+                              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                               clipPath: smallClip,
                               padding: '10px',
                             }}
                           >
-                            <div className="font-serif text-xs tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+                            <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                               新建群聊
                             </div>
                             <input
@@ -865,8 +884,8 @@ export function PhoneModal({
                                       key={contact.id}
                                       className="flex cursor-pointer items-center gap-2 px-2 py-1.5"
                                       style={{
-                                        background: checked ? 'rgba(245, 217, 122, 0.12)' : 'rgba(8, 7, 9, 0.34)',
-                                        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                                        background: checked ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-bg-primary), 0.34)',
+                                        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                                         clipPath: smallClip,
                                       }}
                                     >
@@ -880,7 +899,7 @@ export function PhoneModal({
                                         }
                                       />
                                       <Avatar name={contact.name} src={contact.avatar} />
-                                      <span className="min-w-0 truncate text-xs" style={{ color: '#fff4d4' }}>
+                                      <span className="min-w-0 truncate text-xs" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                                         {contact.name}
                                       </span>
                                     </label>
@@ -893,8 +912,8 @@ export function PhoneModal({
                               onClick={handleCreateGroupChat}
                               className="w-full py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90"
                               style={{
-                                color: '#1a1325',
-                                background: 'linear-gradient(135deg, rgba(245,217,122,0.95), rgba(212,177,90,0.95))',
+                                color: 'rgb(var(--tj-on-accent))',
+                                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
                                 clipPath: smallClip,
                               }}
                             >
@@ -905,17 +924,17 @@ export function PhoneModal({
                         <section
                           className="space-y-2"
                           style={{
-                            background: 'rgba(245, 217, 122, 0.04)',
-                            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                            background: 'rgba(var(--tj-accent-primary), 0.04)',
+                            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                             clipPath: smallClip,
                             padding: '10px',
                           }}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-serif text-xs tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+                            <span className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                               待处理来信
                             </span>
-                            <span className="text-[10px]" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>
+                            <span className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
                               {pendingSeeds.length}
                             </span>
                           </div>
@@ -978,15 +997,15 @@ export function PhoneModal({
                   <aside
                     className="flex min-h-0 w-full flex-shrink-0 flex-col xl:w-[280px]"
                     style={{
-                      borderRight: '1px solid rgba(245, 217, 122, 0.22)',
-                      background: 'rgba(8, 7, 9, 0.54)',
+                      borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
+                      background: 'rgba(var(--tj-bubble), 0.86)',
                     }}
                   >
-                    <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.2)' }}>
-                      <div className="truncate font-serif text-sm font-bold tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+                    <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
+                      <div className="truncate font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                         通讯录
                       </div>
-                      <div className="mt-1 text-[11px] tracking-[0.16em]" style={{ color: 'rgba(200, 188, 158, 0.64)' }}>
+                      <div className="mt-1 text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
                         已解锁联系人
                       </div>
                       <button
@@ -994,11 +1013,11 @@ export function PhoneModal({
                         onClick={() => setShowAddContact((v) => !v)}
                         className="mt-3 flex w-full items-center justify-between px-3 py-2 text-left transition-all hover:opacity-90"
                         style={{
-                          color: '#f5d97a',
-                          background: showAddContact ? 'rgba(245, 217, 122, 0.14)' : 'rgba(245, 217, 122, 0.05)',
+                          color: 'rgb(var(--tj-accent-primary))',
+                          background: showAddContact ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.05)',
                           boxShadow: showAddContact
-                            ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.48)'
-                            : 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+                            ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48)'
+                            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
                           clipPath: smallClip,
                         }}
                       >
@@ -1027,21 +1046,21 @@ export function PhoneModal({
                               className="w-full px-3 py-2 text-left transition-all"
                               style={{
                                 background:
-                                  activeContact?.id === contact.id ? 'rgba(245, 217, 122, 0.12)' : 'rgba(245, 217, 122, 0.04)',
+                                  activeContact?.id === contact.id ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-accent-primary), 0.04)',
                                 boxShadow:
                                   activeContact?.id === contact.id
-                                    ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)'
-                                    : 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)'
+                                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                                 clipPath: smallClip,
                               }}
                             >
                               <div className="flex items-center gap-2">
                                 <Avatar name={contact.name} src={contact.avatar} />
                                 <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-semibold" style={{ color: '#fff4d4' }}>
+                                  <div className="truncate text-sm font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                                     {contact.name}
                                   </div>
-                                  <div className="truncate text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.68)' }}>
+                                  <div className="truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
                                     {contact.relationLabel ?? '联系人'} {contact.organization ? `· ${contact.organization}` : ''}
                                   </div>
                                 </div>
@@ -1062,10 +1081,39 @@ export function PhoneModal({
                     />
                   </main>
                 </div>
-              ) : (
+              ) : activeApp === 'news' ? (
                 <div className="flex min-h-0 flex-1 overflow-hidden">
                   <NewsSurface news={news} />
                 </div>
+              ) : (
+                <WallpaperSurface
+                  homeWallpaper={homeWallpaper}
+                  chatWallpaper={phone.wallpapers?.chat || DEFAULT_PHONE_CHAT_WALLPAPER}
+                  onSetHome={(src) =>
+                    onPhoneChange((prev) => ({
+                      ...prev,
+                      wallpapers: { ...(prev.wallpapers ?? {}), home: src },
+                    }))
+                  }
+                  onSetChat={(src) =>
+                    onPhoneChange((prev) => ({
+                      ...prev,
+                      wallpapers: { ...(prev.wallpapers ?? {}), chat: src },
+                    }))
+                  }
+                  onResetHome={() =>
+                    onPhoneChange((prev) => ({
+                      ...prev,
+                      wallpapers: { ...(prev.wallpapers ?? {}), home: undefined },
+                    }))
+                  }
+                  onResetChat={() =>
+                    onPhoneChange((prev) => ({
+                      ...prev,
+                      wallpapers: { ...(prev.wallpapers ?? {}), chat: undefined },
+                    }))
+                  }
+                />
               )}
             </div>
           </section>
@@ -1097,13 +1145,13 @@ function PhoneHome({
       className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       style={{
         background: wallpaper
-          ? `linear-gradient(180deg, rgba(4,5,7,0.42), rgba(4,5,7,0.82)), url(${wallpaper}) center/cover`
-          : undefined,
+          ? `linear-gradient(180deg, rgba(var(--tj-surface),0.48), rgba(var(--tj-bg-secondary),0.72)), url(${wallpaper}) center/cover`
+          : phoneScreenSurface,
       }}
     >
       <div
         className="pointer-events-none absolute left-3 right-14 top-3 flex items-center justify-between gap-2 text-[9px] font-mono tracking-[0.14em]"
-        style={{ color: 'rgba(220, 208, 178, 0.72)' }}
+        style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}
       >
         <span className="truncate whitespace-nowrap">IPC-LINK 23:47</span>
         <span className="truncate whitespace-nowrap">SYNC ◆ 97%</span>
@@ -1115,9 +1163,9 @@ function PhoneHome({
           onClick={onClose}
           className="px-2 py-1 text-[10px] font-serif tracking-[0.12em]"
           style={{
-            color: 'rgba(245, 217, 122, 0.85)',
-            background: 'rgba(245, 217, 122, 0.05)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+            color: 'rgba(var(--tj-accent-primary), 0.85)',
+            background: 'rgba(var(--tj-accent-primary), 0.05)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
             clipPath: smallClip,
           }}
           aria-label="关闭"
@@ -1150,7 +1198,13 @@ function PhoneHome({
           onClick={() => onOpen('news')}
         />
         <AppIcon title="任务便签" subtitle="未启用" glyph="✧" disabled />
-        <AppIcon title="相册" subtitle="未启用" glyph="◌" disabled />
+        <AppIcon
+          title="相册"
+          subtitle="壁纸"
+          glyph="◌"
+          active={activeApp === 'wallpapers'}
+          onClick={() => onOpen('wallpapers')}
+        />
       </div>
     </div>
   );
@@ -1181,20 +1235,20 @@ function AppIcon({
       className="group relative flex min-h-[104px] flex-col items-center justify-center gap-1.5 transition-all hover:scale-[1.02] disabled:opacity-45 disabled:hover:scale-100"
       style={{
         background: disabled
-          ? 'rgba(245, 217, 122, 0.025)'
+          ? 'rgba(var(--tj-surface-strong), 0.68)'
           : active
-            ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.22), rgba(245, 217, 122, 0.08))'
-            : 'linear-gradient(135deg, rgba(245, 217, 122, 0.12), rgba(245, 217, 122, 0.035))',
+            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-tech-cyan, var(--tj-accent-primary)), 0.12))'
+            : phoneCardSurface,
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.36), 0 0 0 1px rgba(245, 217, 122, 0.12), 0 16px 28px rgba(0,0,0,0.24)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2), 0 12px 24px rgba(0,0,0,0.24)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)),0.5), 0 10px 22px rgba(var(--tj-shadow),0.09)'
+          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.58), 0 8px 18px rgba(var(--tj-shadow),0.06)',
         clipPath: cardClip,
       }}
     >
       {badge > 0 && (
         <span
           className="absolute right-2.5 top-2.5 rounded-full px-1.5 text-[10px] font-bold"
-          style={{ color: '#fff4f4', background: 'rgba(220, 80, 80, 0.65)' }}
+          style={{ color: 'rgb(var(--tj-on-accent))', background: 'rgb(var(--tj-danger))' }}
         >
           {badge}
         </span>
@@ -1202,18 +1256,18 @@ function AppIcon({
       <span
         className="flex h-10 w-10 items-center justify-center font-serif text-xl"
         style={{
-          color: disabled ? 'rgba(160, 148, 120, 0.7)' : '#f5d97a',
-          background: 'rgba(8, 7, 9, 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+          color: disabled ? 'rgba(var(--tj-text-secondary), 0.7)' : 'rgb(var(--tj-accent-primary))',
+          background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.96), rgba(var(--tj-surface-strong),0.82))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
           clipPath: smallClip,
         }}
       >
         {glyph}
       </span>
-      <span className="font-serif text-[12px] font-semibold tracking-[0.16em]" style={{ color: disabled ? 'rgba(160, 148, 120, 0.72)' : '#fff4d4' }}>
+      <span className="font-serif text-[12px] font-semibold tracking-[0.16em]" style={{ color: disabled ? 'rgba(var(--tj-text-secondary), 0.72)' : 'rgb(var(--tj-text-primary))' }}>
         {title}
       </span>
-      <span className="text-[10px]" style={{ color: 'rgba(200, 188, 158, 0.62)' }}>
+      <span className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
         {subtitle}
       </span>
     </button>
@@ -1231,14 +1285,14 @@ function ContactSurface({ contact, onOpenChat }: { contact?: 手机联系人; on
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.2)' }}>
+      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
         <div className="flex items-center gap-3">
           <Avatar name={contact.name} src={contact.avatar} />
           <div className="min-w-0">
-            <div className="truncate font-serif text-lg font-bold tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+            <div className="truncate font-serif text-lg font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
               {contact.name}
             </div>
-            <div className="mt-1 text-[11px] tracking-[0.18em]" style={{ color: 'rgba(200, 188, 158, 0.68)' }}>
+            <div className="mt-1 text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
               {contact.relationLabel ?? '联系人'} {contact.organization ? `· ${contact.organization}` : ''}
             </div>
           </div>
@@ -1247,7 +1301,7 @@ function ContactSurface({ contact, onOpenChat }: { contact?: 手机联系人; on
           className="rounded-full px-2 py-0.5 text-xs font-bold"
           style={{
             background: contact.available ? 'rgba(90, 180, 120, 0.18)' : 'rgba(220, 80, 80, 0.2)',
-            color: contact.available ? '#dff7e8' : '#ffd6d6',
+            color: contact.available ? 'rgb(var(--tj-sage-deep, var(--tj-accent-primary)))' : 'rgb(var(--tj-danger))',
           }}
         >
           {contact.available ? '在场' : '离线'}
@@ -1266,16 +1320,16 @@ function ContactSurface({ contact, onOpenChat }: { contact?: 手机联系人; on
           onClick={onOpenChat}
           className="mt-4 w-full py-2.5 text-sm font-serif tracking-[0.24em] transition-all hover:opacity-90"
           style={{
-            color: '#1a1325',
-            background: 'linear-gradient(135deg, rgba(245,217,122,0.95), rgba(212,177,90,0.95))',
-            boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 14px rgba(245,217,122,0.16)',
+            color: 'rgb(var(--tj-on-accent))',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 14px rgba(var(--tj-accent-primary),0.16)',
             clipPath: smallClip,
           }}
         >
           发送短讯
         </button>
-        <div className="mt-4 rounded-none px-4 py-4" style={{ background: 'rgba(245, 217, 122, 0.04)', boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)', clipPath: smallClip }}>
-          <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(200, 188, 158, 0.68)' }}>
+        <div className="mt-4 rounded-none px-4 py-4" style={{ background: 'rgba(var(--tj-accent-primary), 0.04)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)', clipPath: smallClip }}>
+          <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
             点击发送短讯会建立独立会话。聊天内容由手机系统 API 生成，不会直接塞进正文，但会写入记忆供后续剧情承接。
           </div>
         </div>
@@ -1295,16 +1349,16 @@ function AddContactPanel({
     <div
       className="mb-3 px-3 py-3"
       style={{
-        background: 'rgba(245, 217, 122, 0.035)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+        background: 'rgba(var(--tj-accent-primary), 0.035)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-2 font-serif text-[11px] font-bold tracking-[0.2em]" style={{ color: '#f5d97a' }}>
+      <div className="mb-2 font-serif text-[11px] font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         可添加对象
       </div>
       {candidates.length === 0 ? (
-        <div className="py-3 text-center text-[11px] leading-relaxed" style={{ color: 'rgba(200,188,158,0.62)' }}>
+        <div className="py-3 text-center text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>
           当前没有可添加的已认识角色。
         </div>
       ) : (
@@ -1314,27 +1368,171 @@ function AddContactPanel({
               key={contact.id}
               type="button"
               onClick={() => onAdd(contact)}
-              className="flex w-full items-center gap-2 px-2 py-2 text-left transition-all hover:bg-[rgba(245,217,122,0.08)]"
+              className="flex w-full items-center gap-2 px-2 py-2 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
               style={{
-                boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                 clipPath: smallClip,
               }}
             >
               <Avatar name={contact.name} src={contact.avatar} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold" style={{ color: '#fff4d4' }}>
+                <div className="truncate text-sm font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                   {contact.name}
                 </div>
-                <div className="truncate text-[10px]" style={{ color: 'rgba(200,188,158,0.65)' }}>
+                <div className="truncate text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary),0.65)' }}>
                   {contact.relationLabel ?? '已认识'} {contact.organization ? `· ${contact.organization}` : ''}
                 </div>
               </div>
-              <span className="font-serif text-lg" style={{ color: '#f5d97a' }}>+</span>
+              <span className="font-serif text-lg" style={{ color: 'rgb(var(--tj-accent-primary))' }}>+</span>
             </button>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function WallpaperSurface({
+  homeWallpaper,
+  chatWallpaper,
+  onSetHome,
+  onSetChat,
+  onResetHome,
+  onResetChat,
+}: {
+  homeWallpaper: string;
+  chatWallpaper: string;
+  onSetHome: (src: string) => void;
+  onSetChat: (src: string) => void;
+  onResetHome: () => void;
+  onResetChat: () => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-5 lg:grid-cols-[220px_1fr]">
+        <aside className="space-y-3">
+          <WallpaperPreview title="桌面预览" src={homeWallpaper} />
+          <WallpaperPreview title="短讯背景" src={chatWallpaper} compact />
+          <div className="grid grid-cols-2 gap-2">
+            <PhoneSmallButton label="桌面默认" onClick={onResetHome} />
+            <PhoneSmallButton label="短讯默认" onClick={onResetChat} />
+          </div>
+        </aside>
+
+        <main className="min-w-0">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+                内置壁纸
+              </div>
+              <div className="mt-1 text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                选择后会写入手机存档，玩家自定义优先于默认壁纸
+              </div>
+            </div>
+            <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+              {BUILTIN_PHONE_WALLPAPERS.length}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {BUILTIN_PHONE_WALLPAPERS.map((wallpaper) => {
+              const isHome = homeWallpaper === wallpaper.src;
+              const isChat = chatWallpaper === wallpaper.src;
+              return (
+                <article
+                  key={wallpaper.id}
+                  className="overflow-hidden"
+                  style={{
+                    background: 'rgba(var(--tj-bg-primary), 0.48)',
+                    boxShadow: isHome || isChat
+                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
+                      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                    clipPath: cardClip,
+                  }}
+                >
+                  <div className="aspect-[9/16] max-h-[260px] w-full overflow-hidden">
+                    <img
+                      src={wallpaper.src}
+                      alt={wallpaper.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="space-y-2 px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="truncate font-serif text-sm font-bold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+                        {wallpaper.title}
+                      </h3>
+                      {(isHome || isChat) && (
+                        <span className="shrink-0 text-[10px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+                          {isHome && isChat ? '桌面/短讯' : isHome ? '桌面' : '短讯'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
+                      {wallpaper.description}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <PhoneSmallButton label="设为桌面" active={isHome} onClick={() => onSetHome(wallpaper.src)} />
+                      <PhoneSmallButton label="设为短讯" active={isChat} onClick={() => onSetChat(wallpaper.src)} />
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function WallpaperPreview({ title, src, compact = false }: { title: string; src: string; compact?: boolean }) {
+  return (
+    <section
+      className="overflow-hidden"
+      style={{
+        background: 'rgba(var(--tj-bg-primary), 0.48)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        clipPath: cardClip,
+      }}
+    >
+      <div className={compact ? 'aspect-[16/9]' : 'aspect-[9/16]'}>
+        <img src={src} alt={title} loading="lazy" className="h-full w-full object-cover" />
+      </div>
+      <div className="px-3 py-2 font-serif text-xs tracking-[0.16em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+        {title}
+      </div>
+    </section>
+  );
+}
+
+function PhoneSmallButton({
+  label,
+  active = false,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="px-2.5 py-1.5 text-[11px] font-serif tracking-[0.12em] transition-all hover:opacity-90"
+      style={{
+        color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.88)',
+        background: active
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))'
+          : 'rgba(var(--tj-accent-primary), 0.055)',
+        boxShadow: active
+          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+        clipPath: smallClip,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -1355,22 +1553,22 @@ function NewsSurface({ news }: { news: 新闻条目[] }) {
                 key={item.id}
                 className="px-4 py-3"
                 style={{
-                  background: item.重要 ? 'rgba(245, 217, 122, 0.08)' : 'rgba(245, 217, 122, 0.04)',
+                  background: item.重要 ? 'rgba(var(--tj-accent-primary), 0.08)' : 'rgba(var(--tj-accent-primary), 0.04)',
                   boxShadow: item.重要
-                    ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.26)'
-                    : 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.26)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                   clipPath: smallClip,
                 }}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <h4 className="truncate font-serif text-sm font-bold tracking-[0.16em]" style={{ color: '#fff4d4' }}>
+                  <h4 className="truncate font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                     {item.标题}
                   </h4>
-                  <span className="flex-shrink-0 text-[10px] tracking-[0.14em]" style={{ color: 'rgba(245,217,122,0.78)' }}>
+                  <span className="flex-shrink-0 text-[10px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>
                     {item.状态}
                   </span>
                 </div>
-                <p className="mt-2 line-clamp-3 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.72)' }}>
+                <p className="mt-2 line-clamp-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
                   {item.正文 || '暂无正文。'}
                 </p>
               </article>
@@ -1385,10 +1583,10 @@ function NewsSurface({ news }: { news: 新闻条目[] }) {
 function InfoSurface({ title, text }: { title: string; text: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-      <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: '#f5d97a' }}>
+      <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </div>
-      <div className="mt-3 max-w-md text-sm leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.68)' }}>
+      <div className="mt-3 max-w-md text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
         {text}
       </div>
     </div>
@@ -1400,15 +1598,15 @@ function InfoCard({ label, value }: { label: string; value: string }) {
     <div
       className="px-4 py-3"
       style={{
-        background: 'rgba(245, 217, 122, 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+        background: 'rgba(var(--tj-accent-primary), 0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
         clipPath: smallClip,
       }}
     >
-      <div className="text-[11px] tracking-[0.16em]" style={{ color: 'rgba(200, 188, 158, 0.66)' }}>
+      <div className="text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.66)' }}>
         {label}
       </div>
-      <div className="mt-1 text-sm font-semibold" style={{ color: '#fff4d4' }}>
+      <div className="mt-1 text-sm font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {value}
       </div>
     </div>
@@ -1436,21 +1634,21 @@ function ChatSurface({
 }) {
   return (
     <>
-      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.2)' }}>
+      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
         <div>
-          <div className="font-serif text-lg font-bold tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+          <div className="font-serif text-lg font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
             {chat.title}
           </div>
-          <div className="mt-1 text-[11px] tracking-[0.2em]" style={{ color: 'rgba(200, 188, 158, 0.68)' }}>
+          <div className="mt-1 text-[11px] tracking-[0.2em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
             {chat.type === 'group' ? 'GROUP CHANNEL' : chat.type === 'system' ? 'SYSTEM NOTICE' : 'PRIVATE LINK'}
           </div>
-          <div className="mt-1 text-[11px]" style={{ color: 'rgba(160, 148, 120, 0.72)' }}>
+          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
             本地记忆 {chat.localArchive?.entries.length ?? 0}/{chat.localArchive?.threshold ?? 0}
             {chat.localArchive?.compressedSummaries.length ? ` · 已压缩 ${chat.localArchive.compressedSummaries.length} 次` : ''}
           </div>
         </div>
         {chat.unread > 0 && (
-          <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'rgba(220, 80, 80, 0.3)', color: '#ffd6d6' }}>
+          <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'rgba(220, 80, 80, 0.16)', color: 'rgb(var(--tj-danger))' }}>
             {chat.unread}
           </span>
         )}
@@ -1460,49 +1658,56 @@ function ChatSurface({
           <EmptyText text="这里还没有消息。输入短讯后，对方会通过手机系统 API 回复，并留下记忆摘要。" />
         ) : (
           <div className="space-y-3">
-            {chat.messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex items-end gap-2 ${msg.role === 'player' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.role !== 'player' && (
-                  <Avatar
-                    name={msg.senderName}
-                    src={msg.avatar || (contact && msg.senderId === contact.id ? contact.avatar : undefined)}
-                  />
-                )}
-                <div
-                  className="max-w-[76%] px-3 py-2 text-sm leading-relaxed"
-                  style={{
-                    color: msg.role === 'player' ? '#1a1325' : 'rgba(245, 235, 205, 0.95)',
-                    background:
-                      msg.role === 'player'
-                        ? 'linear-gradient(135deg, rgba(245,217,122,0.95), rgba(212,177,90,0.95))'
-                        : 'rgba(245, 217, 122, 0.08)',
-                    boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.25)',
-                    clipPath: smallClip,
-                  }}
-                >
-                  <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold opacity-75">
-                    <span>{msg.senderName}</span>
-                    {msg.turn > 0 && <span className="opacity-60">· 第 {msg.turn} 回合</span>}
+            {chat.messages.map((msg, index) => {
+              const previous = index > 0 ? chat.messages[index - 1] : undefined;
+              const turnGap = previous && previous.turn > 0 && msg.turn > previous.turn ? msg.turn - previous.turn : 0;
+              const showHistoryDivider = turnGap > 1;
+              return (
+                <Fragment key={msg.id}>
+                  {showHistoryDivider && <PhoneHistoryDivider turn={msg.turn} gap={turnGap} />}
+                  <div className={`flex items-end gap-2 ${msg.role === 'player' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.role !== 'player' && (
+                      <Avatar
+                        name={msg.senderName}
+                        src={msg.avatar || (contact && msg.senderId === contact.id ? contact.avatar : undefined)}
+                      />
+                    )}
+                    <div
+                      className="max-w-[76%] px-3 py-2 text-sm leading-relaxed"
+                      style={{
+                        color: msg.role === 'player' ? 'rgb(var(--tj-on-accent))' : 'rgba(var(--tj-text-primary), 0.94)',
+                        background:
+                          msg.role === 'player'
+                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))'
+                            : 'linear-gradient(135deg, rgba(var(--tj-bubble),0.98), rgba(var(--tj-surface-strong),0.88))',
+                        boxShadow: msg.role === 'player'
+                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)'
+                          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.62), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)),0.42)',
+                        clipPath: smallClip,
+                      }}
+                    >
+                      <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold opacity-75">
+                        <span>{msg.senderName}</span>
+                        {msg.turn > 0 && <span className="opacity-60">· 第 {msg.turn} 回合</span>}
+                      </div>
+                      {msg.content}
+                    </div>
+                    {msg.role === 'player' && (
+                      <Avatar name={traveler.姓名 || '我'} src={traveler.图像档案?.手机头像 || traveler.头像 || undefined} />
+                    )}
                   </div>
-                  {msg.content}
-                </div>
-                {msg.role === 'player' && (
-                  <Avatar name={traveler.姓名 || '我'} src={traveler.图像档案?.手机头像 || traveler.头像 || undefined} />
-                )}
-              </div>
-            ))}
+                </Fragment>
+              );
+            })}
           </div>
         )}
       </div>
-      <footer className="px-6 py-4" style={{ borderTop: '1px solid rgba(245, 217, 122, 0.18)' }}>
+      <footer className="px-6 py-4" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.18)' }}>
         {error && (
           <div
             className="mb-2 px-3 py-2 text-xs"
             style={{
-              color: 'rgba(255, 190, 170, 0.92)',
+              color: 'rgb(var(--tj-danger))',
               background: 'rgba(220, 80, 80, 0.08)',
               boxShadow: 'inset 0 0 0 1px rgba(220, 80, 80, 0.22)',
               clipPath: smallClip,
@@ -1514,9 +1719,9 @@ function ChatSurface({
         <div
           className="flex items-end gap-2 px-3 py-2"
           style={{
-            color: 'rgba(200, 188, 158, 0.65)',
-            background: 'rgba(8, 7, 9, 0.55)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+            color: 'rgba(var(--tj-text-secondary), 0.65)',
+            background: 'rgba(var(--tj-bubble), 0.96)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
             clipPath: smallClip,
           }}
         >
@@ -1532,7 +1737,7 @@ function ChatSurface({
             rows={2}
             placeholder="输入短讯..."
             className="min-h-[44px] flex-1 resize-none bg-transparent text-sm leading-relaxed outline-none"
-            style={{ color: '#fff4d4' }}
+            style={{ color: 'rgb(var(--tj-text-primary))' }}
           />
           <button
             type="button"
@@ -1540,8 +1745,8 @@ function ChatSurface({
             disabled={loading || !draft.trim()}
             className="px-4 py-2 text-xs font-serif tracking-[0.2em] transition-all disabled:opacity-45"
             style={{
-              color: '#1a1325',
-              background: 'linear-gradient(135deg, rgba(245,217,122,0.95), rgba(212,177,90,0.95))',
+              color: 'rgb(var(--tj-on-accent))',
+              background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
               clipPath: smallClip,
             }}
           >
@@ -1550,6 +1755,33 @@ function ChatSurface({
         </div>
       </footer>
     </>
+  );
+}
+
+function PhoneHistoryDivider({ turn, gap }: { turn: number; gap: number }) {
+  const gapLabel = gap > 1 ? `间隔 ${gap} 回合` : '稍后';
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <span
+        className="h-px flex-1"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.34))' }}
+      />
+      <span
+        className="shrink-0 px-3 py-1 font-serif text-[11px] tracking-[0.18em]"
+        style={{
+          color: 'rgba(var(--tj-accent-primary), 0.82)',
+          background: 'rgba(var(--tj-bubble), 0.72)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          clipPath: smallClip,
+        }}
+      >
+        历史消息 · {gapLabel} · 第 {turn} 回合
+      </span>
+      <span
+        className="h-px flex-1"
+        style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.34), transparent)' }}
+      />
+    </div>
   );
 }
 
@@ -1571,8 +1803,8 @@ function ChatListItem({
       onClick={onClick}
       className="w-full px-3 py-2 text-left transition-all"
       style={{
-        background: active ? 'rgba(245, 217, 122, 0.12)' : 'rgba(245, 217, 122, 0.04)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)' : 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+        background: active ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-accent-primary), 0.04)',
+        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
         clipPath: smallClip,
       }}
     >
@@ -1580,7 +1812,7 @@ function ChatListItem({
         <Avatar name={chat.title} src={avatar} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-semibold" style={{ color: active ? '#f5d97a' : '#fff4d4' }}>
+            <span className="truncate text-sm font-semibold" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgb(var(--tj-text-primary))' }}>
               {chat.title}
             </span>
             {chat.unread > 0 && (
@@ -1589,7 +1821,7 @@ function ChatListItem({
               </span>
             )}
           </div>
-          <div className="mt-1 truncate text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.62)' }}>
+          <div className="mt-1 truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
             {last?.content ?? '暂无消息'}
           </div>
         </div>
@@ -1616,19 +1848,19 @@ function SeedCard({
       className="px-3 py-2"
       style={{
         background: 'rgba(220, 80, 80, 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
         clipPath: smallClip,
       }}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="truncate text-sm font-semibold" style={{ color: '#fff4d4' }}>
+        <div className="truncate text-sm font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
           {seed.title}
         </div>
-        <span className="text-[10px]" style={{ color: seed.priority === 'urgent' ? '#ffd6d6' : 'rgba(245, 217, 122, 0.75)' }}>
+        <span className="text-[10px]" style={{ color: seed.priority === 'urgent' ? 'rgb(var(--tj-danger))' : 'rgba(var(--tj-accent-primary), 0.75)' }}>
           {seed.priority.toUpperCase()}
         </span>
       </div>
-      <div className="mt-1 line-clamp-3 text-[11px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>
+      <div className="mt-1 line-clamp-3 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
         {seed.context}
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1638,8 +1870,8 @@ function SeedCard({
           disabled={loading || coolingDown}
           className="py-1 text-[11px] font-serif tracking-[0.18em] disabled:opacity-50"
           style={{
-            color: '#1a1325',
-            background: 'linear-gradient(135deg, rgba(245,217,122,0.95), rgba(212,177,90,0.95))',
+            color: 'rgb(var(--tj-on-accent))',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
             clipPath: smallClip,
           }}
         >
@@ -1650,9 +1882,9 @@ function SeedCard({
           onClick={onDismiss}
           className="py-1 text-[11px] font-serif tracking-[0.18em]"
           style={{
-            color: 'rgba(245, 217, 122, 0.85)',
-            background: 'rgba(245, 217, 122, 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+            color: 'rgba(var(--tj-accent-primary), 0.85)',
+            background: 'rgba(var(--tj-accent-primary), 0.04)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
             clipPath: smallClip,
           }}
         >
@@ -1668,17 +1900,17 @@ function Avatar({ name, src }: { name: string; src?: string }) {
     <div
       className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full font-serif text-sm font-bold"
       style={{
-        color: '#f5d97a',
-        background: 'radial-gradient(circle at 35% 24%, rgba(245, 217, 122, 0.18), rgba(245, 217, 122, 0.04) 62%)',
+        color: 'rgb(var(--tj-accent-primary))',
+        background: 'radial-gradient(circle at 35% 24%, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.04) 62%)',
         boxShadow: src
-          ? '0 0 0 1px rgba(245, 217, 122, 0.54), 0 0 14px rgba(245, 217, 122, 0.12)'
-          : '0 0 0 1px rgba(245, 217, 122, 0.32)',
+          ? '0 0 0 1px rgba(var(--tj-accent-primary), 0.54), 0 0 14px rgba(var(--tj-accent-primary), 0.12)'
+          : '0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
       }}
     >
       {src ? <img src={src} alt={name} className="h-full w-full object-cover" /> : name[0] ?? '?'}
       <span
         className="pointer-events-none absolute inset-[5px] rounded-full"
-        style={{ boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)' }}
+        style={{ boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)' }}
       />
     </div>
   );
@@ -1686,7 +1918,7 @@ function Avatar({ name, src }: { name: string; src?: string }) {
 
 function EmptyText({ text }: { text: string }) {
   return (
-    <div className="px-4 py-8 text-center text-sm" style={{ color: 'rgba(200, 188, 158, 0.62)' }}>
+    <div className="px-4 py-8 text-center text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
       {text}
     </div>
   );

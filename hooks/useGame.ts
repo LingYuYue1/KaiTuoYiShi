@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
+import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统, 归一化忆庭系统 } from '@/models/yiting';
@@ -21,6 +22,7 @@ export interface UseGameReturn {
     handleSave: () => Promise<number>;
     handleReroll: () => Promise<string | void>;
     handleRestartOpening: () => void;
+    getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
   };
 }
 
@@ -81,6 +83,9 @@ export function useGame(): UseGameReturn {
   // 防止重 roll 后上一次的 NPC / 新闻等副作用与新一次的叠加。
   const handleReroll = useCallback(async (): Promise<string | void> => {
     if (state.loading) return;
+    state.abortControllerRef.current?.abort();
+    state.abortControllerRef.current = null;
+    state.setPendingVariable(false);
     const history = state.chatHistory;
     // 找到最后一条 AI 消息
     let lastAiIdx = -1;
@@ -178,6 +183,8 @@ export function useGame(): UseGameReturn {
     state.setPendingOpeningTrigger('[系统] 开启第 0 回合');
   }, [state]);
 
+  const getContextSnapshot = useCallback((kind?: ContextSnapshotKind) => buildContextSnapshot(state, kind), [state]);
+
   return {
     state,
     actions: {
@@ -189,6 +196,7 @@ export function useGame(): UseGameReturn {
       handleSave,
       handleReroll,
       handleRestartOpening,
+      getContextSnapshot,
     },
   };
 }

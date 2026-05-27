@@ -33,15 +33,6 @@ export type 命途ID =
   | 'nihility'
   | 'harmony';
 
-// 命途流派 —— 松散标签，用于流派之间的冲突（如仙舟 vs 丰饶）。
-// 不是强分类，一条命途也可不属于任何流派。
-export type 命途流派ID =
-  | 'xianzhou'   // 仙舟系：巡猎、存护倾向
-  | 'antlife'    // 反生命系：毁灭倾向
-  | 'cycle'      // 生死循环系：丰饶、记忆倾向
-  | 'cognition'  // 认知系：智识、虚无倾向
-  | 'sentiment'; // 情感系：同谐、欢愉倾向
-
 export interface 命途定义 {
   id: 命途ID;
   name: string;
@@ -51,14 +42,24 @@ export interface 命途定义 {
   lines?: [string, string];
   blurb: string;
   description: string;
-  school?: 命途流派ID;
 }
 
-// ── 世界观组织标签 ──
-// 独立的玩家阵营系统已删除。此类型仅作为 NPC / 新闻 / 智库的轻量组织标签使用。
-export type 组织标签ID = 'none' | 'genius_society' | 'company' | 'star_rangers' | 'astral_express';
-/** @deprecated 独立玩家阵营系统已删除；旧字段请逐步迁移到「组织标签ID」。 */
+// ── 世界观组织 / 玩家开局背景 ──
+// 这里只记录叙事身份,不维护阵营声望或加入状态变量。
+export type 组织标签ID =
+  | 'none'
+  | 'genius_society'
+  | 'company'
+  | 'star_rangers';
 export type 阵营ID = 组织标签ID;
+
+export interface 阵营定义 {
+  id: 阵营ID;
+  name: string;
+  shortName: string;
+  description: string;
+  openingHint: string;
+}
 
 // ── 能力预设 ──
 export interface 能力预设 {

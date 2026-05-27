@@ -30,6 +30,8 @@ export interface 时段定义 {
 
 import type { 难度ID, 剧情模式, 命途ID } from './journey';
 
+export const 默认琥珀日期 = '琥珀纪 2157.03.07';
+
 export interface 世界状态 {
   当前时段: 时段定义;
   已访问时段: string[];
@@ -83,20 +85,65 @@ export function 创建空世界状态(period?: 时段定义): 世界状态 {
 
 export function 归一化世界状态(input?: Partial<世界状态> | null): 世界状态 {
   const base = 创建空世界状态(input?.当前时段);
+  const alignedCalendar = 对齐世界日期与天数(
+    Math.max(1, Math.trunc(Number(input?.开拓天数) || 1)),
+    input?.当前日期?.trim() || 默认琥珀日期,
+  );
   return {
     ...base,
     ...(input ?? {}),
     当前时段: input?.当前时段 ?? base.当前时段,
     已访问时段: Array.isArray(input?.已访问时段) ? input.已访问时段 : [],
   纪年法: input?.纪年法?.trim() || '琥珀纪年',
-  开拓天数: Math.max(1, Math.trunc(Number(input?.开拓天数) || 1)),
-  当前日期: input?.当前日期?.trim() || '琥珀纪 2157.03.07',
+  开拓天数: alignedCalendar.开拓天数,
+  当前日期: alignedCalendar.当前日期,
   当前时间: normalizeClock(input?.当前时间) || '06:40',
   当前地点: input?.当前地点?.trim() || '',
   全局事件: Array.isArray(input?.全局事件) ? input.全局事件 : [],
   活跃人物: Array.isArray(input?.活跃人物) ? input.活跃人物 : [],
   氛围变化: input?.氛围变化 ?? '',
 };
+}
+
+export function 对齐世界日期与天数(dayValue: number, dateText: string): Pick<世界状态, '开拓天数' | '当前日期'> {
+  const baseSerial = 解析琥珀日期序数(默认琥珀日期);
+  const dateSerial = 解析琥珀日期序数(dateText);
+  const dayProgress = Math.max(0, Math.trunc(dayValue) - 1);
+  const dateProgress = baseSerial !== null && dateSerial !== null
+    ? Math.max(0, dateSerial - baseSerial)
+    : 0;
+  const progress = Math.max(dayProgress, dateProgress);
+  return {
+    开拓天数: progress + 1,
+    当前日期: baseSerial !== null ? 格式化琥珀日期序数(baseSerial + progress) : (dateText || 默认琥珀日期),
+  };
+}
+
+export function 推进琥珀日期(dateText: string, deltaDays = 1): string {
+  const serial = 解析琥珀日期序数(dateText);
+  if (serial === null) return dateText || 默认琥珀日期;
+  return 格式化琥珀日期序数(serial + Math.trunc(deltaDays));
+}
+
+export function 解析琥珀日期序数(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^琥珀纪\s*(\d{1,6})\.(\d{1,2})\.(\d{1,2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return year * 372 + (month - 1) * 31 + day;
+}
+
+export function 格式化琥珀日期序数(serial: number): string {
+  const safeSerial = Math.max(1, Math.trunc(serial));
+  const year = Math.floor((safeSerial - 1) / 372);
+  const dayOfYear = safeSerial - year * 372;
+  const month = Math.floor((dayOfYear - 1) / 31) + 1;
+  const day = ((dayOfYear - 1) % 31) + 1;
+  return `琥珀纪 ${year}.${month.toString().padStart(2, '0')}.${day.toString().padStart(2, '0')}`;
 }
 
 function normalizeClock(value?: string | null): string {

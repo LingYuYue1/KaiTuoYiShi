@@ -36,9 +36,9 @@ const slotGlyphs: Record<装备槽位ID, string> = {
 
 const panelStyle = {
   background:
-    'linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(9, 8, 10, 0.98))',
+    'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
   boxShadow:
-    'inset 0 0 0 1px rgba(245, 217, 122, 0.22), 0 18px 45px rgba(0, 0, 0, 0.22)',
+    'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
   clipPath: cardClip,
 };
 
@@ -134,7 +134,7 @@ export function EquipmentPanel({ traveler, onTravelerChange }: EquipmentPanelPro
             <PanelSection title="穿戴说明">
               <p
                 className="font-serif text-[14px] leading-[1.85] tracking-wider"
-                style={{ color: 'rgba(235, 223, 193, 0.92)' }}
+                style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}
               >
                 光锥、武装、衣装与随身信物会在这里汇成一份统一的行装记录。槽位状态、叙事效果与已持有装备都能在此读取。
               </p>
@@ -157,14 +157,14 @@ function SlotMatrix({
 }) {
   return (
     <div>
-      <div className="mb-2 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(220,208,178,0.72)' }}>
+      <div className="mb-2 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
         槽位矩阵
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {EQUIP_SLOT_ORDER.map((slot) => {
           const item = equippedBySlot.get(slot) ?? null;
           const active = slot === selectedSlot;
-          const color = item ? getQualityColor(item) : 'rgba(160,148,120,0.24)';
+          const color = item ? getQualityColor(item) : 'rgba(var(--tj-text-secondary),0.24)';
           return (
             <button
               key={slot}
@@ -177,12 +177,12 @@ function SlotMatrix({
                   ? color
                   : item
                     ? color.replace(/0\.\d+\)/, '0.42)')
-                    : 'rgba(160, 148, 120, 0.16)',
+                    : 'rgba(var(--tj-text-secondary), 0.16)',
                 boxShadow: active
-                  ? `0 0 10px ${color}, inset 0 0 0 1px rgba(255, 244, 212, 0.4)`
+                  ? `0 0 10px ${color}, inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4)`
                   : item
                     ? `inset 0 0 0 1px ${color}`
-                    : 'inset 0 0 0 1px rgba(160, 148, 120, 0.16)',
+                    : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.16)',
                 clipPath: smallClip,
               }}
             />
@@ -211,7 +211,7 @@ function SlotGroup({
   return (
     <section>
       <div className="mb-2 flex items-end justify-between">
-        <div className="font-serif text-[13px] font-semibold tracking-[0.22em]" style={{ color: '#f5d97a' }}>
+        <div className="font-serif text-[13px] font-semibold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
           {title}
         </div>
         <div className="font-serif text-[12px] tracking-[0.14em]" style={{ color: 'rgba(210, 198, 168, 0.72)' }}>
@@ -244,23 +244,23 @@ function SlotButton({
   selected: boolean;
   onClick: () => void;
 }) {
-  const qualityColor = item ? getQualityColor(item) : 'rgba(160, 148, 120, 0.75)';
+  const qualityColor = item ? getQualityColor(item) : 'rgba(var(--tj-text-secondary), 0.75)';
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full px-3 py-3 text-left transition-all hover:bg-[rgba(245,217,122,0.08)]"
+      className="w-full px-3 py-3 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
       style={{
         background: selected
-          ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.16), rgba(245, 217, 122, 0.04))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
           : item
-            ? 'rgba(245, 217, 122, 0.05)'
-            : 'rgba(160, 148, 120, 0.04)',
+            ? 'rgba(var(--tj-accent-primary), 0.05)'
+            : 'rgba(var(--tj-text-secondary), 0.04)',
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.58), inset 3px 0 0 rgba(245, 217, 122, 0.9)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.9)'
           : item
-            ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.24)'
-            : 'inset 0 0 0 1px rgba(160, 148, 120, 0.18)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)'
+            : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
         clipPath: cardClip,
       }}
     >
@@ -269,8 +269,8 @@ function SlotButton({
           className="flex h-11 w-11 shrink-0 items-center justify-center font-serif text-[22px]"
           style={{
             color: qualityColor,
-            background: item ? `${qualityColor.replace('0.95', '0.12').replace('0.9', '0.12').replace('0.85', '0.12')}` : 'rgba(160, 148, 120, 0.05)',
-            boxShadow: `inset 0 0 0 1px ${item ? qualityColor : 'rgba(160, 148, 120, 0.22)'}`,
+            background: item ? `${qualityColor.replace('0.95', '0.12').replace('0.9', '0.12').replace('0.85', '0.12')}` : 'rgba(var(--tj-text-secondary), 0.05)',
+            boxShadow: `inset 0 0 0 1px ${item ? qualityColor : 'rgba(var(--tj-text-secondary), 0.22)'}`,
             clipPath: smallClip,
           }}
         >
@@ -278,7 +278,7 @@ function SlotButton({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+            <span className="font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
               {EQUIP_SLOT_LABELS[slot]}
             </span>
             {item && <QualityBadge item={item} />}
@@ -304,7 +304,7 @@ function SelectedEquipment({
   item: 背包物品 | null;
   onUnequip: () => void;
 }) {
-  const qualityColor = item ? getQualityColor(item) : 'rgba(160, 148, 120, 0.72)';
+  const qualityColor = item ? getQualityColor(item) : 'rgba(var(--tj-text-secondary), 0.72)';
   const effectTags = item?.叙事效果 ?? [];
   const effectEntries = (item?.使用效果 ?? []).filter(
     (effect) => typeof effect?.目标属性 === 'string' && typeof effect?.数值 === 'number',
@@ -315,11 +315,11 @@ function SelectedEquipment({
       className="relative overflow-hidden px-5 py-5"
       style={{
         background: item
-          ? `radial-gradient(circle at 10% 12%, ${qualityColor.replace('0.95', '0.2').replace('0.9', '0.18').replace('0.85', '0.18')}, transparent 34%), linear-gradient(135deg, rgba(245, 217, 122, 0.09), rgba(245, 217, 122, 0.02))`
-          : 'linear-gradient(135deg, rgba(160, 148, 120, 0.08), rgba(160, 148, 120, 0.025))',
+          ? `radial-gradient(circle at 10% 12%, ${qualityColor.replace('0.95', '0.2').replace('0.9', '0.18').replace('0.85', '0.18')}, transparent 34%), linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.09), rgba(var(--tj-accent-primary), 0.02))`
+          : 'linear-gradient(135deg, rgba(var(--tj-text-secondary), 0.08), rgba(var(--tj-text-secondary), 0.025))',
         boxShadow: item
           ? `inset 0 0 0 1px ${qualityColor}`
-          : 'inset 0 0 0 1px rgba(160, 148, 120, 0.2)',
+          : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
         clipPath: cardClip,
       }}
     >
@@ -328,8 +328,8 @@ function SelectedEquipment({
           className="flex h-[82px] w-[82px] shrink-0 items-center justify-center font-serif text-[40px]"
           style={{
             color: qualityColor,
-            background: item ? 'rgba(9, 8, 10, 0.45)' : 'rgba(160, 148, 120, 0.05)',
-            boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 0 24px rgba(245, 217, 122, 0.1)`,
+            background: item ? 'linear-gradient(135deg, rgba(var(--tj-bubble), 0.82), rgba(var(--tj-surface-strong), 0.72))' : 'rgba(var(--tj-text-secondary), 0.05)',
+            boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 0 24px rgba(var(--tj-accent-primary), 0.1)`,
             clipPath: smallClip,
           }}
         >
@@ -337,20 +337,20 @@ function SelectedEquipment({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="font-serif text-[13px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.86)' }}>
+            <div className="font-serif text-[13px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
               {EQUIP_SLOT_LABELS[slot]}
             </div>
             {item && <QualityBadge item={item} />}
           </div>
           <h3
             className="mt-1 break-words font-serif text-[24px] font-semibold tracking-[0.12em]"
-            style={{ color: item ? '#fff4d4' : 'rgba(235, 223, 193, 0.86)' }}
+            style={{ color: item ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.86)' }}
           >
             {item?.名称 ?? '空槽位'}
           </h3>
           <p
             className="mt-3 font-serif text-[14px] leading-[1.85] tracking-wider"
-            style={{ color: 'rgba(235, 223, 193, 0.92)' }}
+            style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}
           >
             {item?.描述 || '该槽位尚无同步记录。'}
           </p>
@@ -411,11 +411,11 @@ function SelectedEquipment({
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+      <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </span>
-      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.35), transparent)' }} />
+      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.35), transparent)' }} />
     </div>
   );
 }
@@ -425,8 +425,8 @@ function PanelSection({ title, children }: { title: string; children: ReactNode 
     <section
       className="px-4 py-4"
       style={{
-        background: 'rgba(245, 217, 122, 0.035)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+        background: 'rgba(var(--tj-accent-primary), 0.035)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
         clipPath: cardClip,
       }}
     >
@@ -441,12 +441,12 @@ function DetailBlock({ title, children }: { title: string; children: ReactNode }
     <div
       className="px-3 py-3"
       style={{
-        background: 'rgba(9, 8, 10, 0.35)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-bubble), 0.72), rgba(var(--tj-surface-strong), 0.56))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.46)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(245, 217, 122, 0.86)' }}>
+      <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
         {title}
       </div>
       {children}
@@ -459,15 +459,15 @@ function MetricTile({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'rgba(245, 217, 122, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+        background: 'rgba(var(--tj-accent-primary), 0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.82)' }}>
+      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
         {label}
       </div>
-      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: '#fff4d4' }}>
+      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {value}
       </div>
     </div>
@@ -481,7 +481,7 @@ function QualityBadge({ item }: { item: 背包物品 }) {
       className="inline-flex px-2 py-0.5 font-serif text-[12px] tracking-[0.16em]"
       style={{
         color,
-        background: 'rgba(9, 8, 10, 0.28)',
+        background: 'rgba(var(--tj-bubble), 0.72)',
         boxShadow: `inset 0 0 0 1px ${color}`,
         clipPath: smallClip,
       }}
@@ -496,13 +496,13 @@ function StatChip({ label, value }: { label: string; value: number }) {
     <span
       className="inline-flex items-center gap-2 px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
       style={{
-        color: 'rgba(245, 235, 210, 0.96)',
-        background: 'rgba(245, 217, 122, 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+        color: 'rgba(var(--tj-text-primary), 0.96)',
+        background: 'rgba(var(--tj-accent-primary), 0.08)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
         clipPath: smallClip,
       }}
     >
-      <span style={{ color: 'rgba(220, 208, 178, 0.82)' }}>{label}</span>
+      <span style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>{label}</span>
       <span>+{value}</span>
     </span>
   );
@@ -513,7 +513,7 @@ function EffectChip({ text }: { text: string }) {
     <span
       className="inline-flex px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
       style={{
-        color: 'rgba(245, 235, 210, 0.96)',
+        color: 'rgba(var(--tj-text-primary), 0.96)',
         background: 'rgba(117, 214, 216, 0.08)',
         boxShadow: 'inset 0 0 0 1px rgba(117, 214, 216, 0.28)',
         clipPath: smallClip,
@@ -527,10 +527,10 @@ function EffectChip({ text }: { text: string }) {
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3 font-serif text-[13px] leading-relaxed">
-      <span className="shrink-0 tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.74)' }}>
+      <span className="shrink-0 tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
         {label}
       </span>
-      <span className="min-w-0 break-words" style={{ color: 'rgba(245, 235, 210, 0.95)' }}>
+      <span className="min-w-0 break-words" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
         {value}
       </span>
     </div>
@@ -542,12 +542,12 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
     <div
       className="px-4 py-5 text-center"
       style={{
-        background: 'rgba(160, 148, 120, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(160, 148, 120, 0.2)',
+        background: 'rgba(var(--tj-text-secondary), 0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
         {title}
       </div>
       <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>
@@ -573,8 +573,8 @@ function MiniEquipBar({ value }: { value: number }) {
           key={slot}
           className="h-1.5 flex-1"
           style={{
-            background: index < value ? '#f5d97a' : 'rgba(160, 148, 120, 0.18)',
-            boxShadow: index < value ? '0 0 8px rgba(245, 217, 122, 0.45)' : undefined,
+            background: index < value ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.18)',
+            boxShadow: index < value ? '0 0 8px rgba(var(--tj-accent-primary), 0.45)' : undefined,
           }}
         />
       ))}

@@ -216,14 +216,14 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
           <div
             className="mt-2 font-serif text-[22px] font-bold tracking-[0.22em]"
             style={{
-              background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 52%, #75d6d8 100%)',
+              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 52%, #75d6d8 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
             }}
           >
             战技工坊
           </div>
-          <p className="mt-2 text-[12px] leading-relaxed" style={{ color: 'rgba(220,208,178,0.82)' }}>
+          <p className="mt-2 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
             普通战技只能从内置模板中择取；命途战技由玩家按已解锁槽位自行构建，供主剧情描写战斗方式、招式名与命途风格。
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -234,8 +234,8 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
           </div>
         </section>
 
-        <section className="min-h-0 flex-1 overflow-hidden" style={panelStyle('rgba(10,9,10,0.76)')}>
-          <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(245,217,122,0.14)' }}>
+        <section className="min-h-0 flex-1 overflow-hidden" style={panelStyle('rgba(var(--tj-bg-primary),0.76)')}>
+          <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary),0.14)' }}>
             <SectionTitle title="槽位" />
           </div>
           <div className="kaituo-options-scroll max-h-full space-y-3 overflow-y-auto px-3 py-3 pr-2 pb-10">
@@ -252,7 +252,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                   命途战技
                 </span>
                 {selectedPath && (
-                  <span className="text-[11px]" style={{ color: 'rgba(160,148,120,0.75)' }}>
+                  <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.75)' }}>
                     {getPath(selectedPath.id)?.name ?? selectedPath.id} · {计算命途战技槽位数(selectedPath.阶段)} 槽
                   </span>
                 )}
@@ -274,9 +274,9 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                             setSelectedSlotKey(`path:${path.id}:1`);
                           }}
                           style={{
-                            color: active ? '#fff4d4' : 'rgba(220,208,178,0.78)',
-                            background: active ? 'rgba(245,217,122,0.12)' : 'rgba(117,214,216,0.045)',
-                            boxShadow: active ? 'inset 0 0 0 1px rgba(245,217,122,0.42)' : 'inset 0 0 0 1px rgba(117,214,216,0.16)',
+                            color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.78)',
+                            background: active ? 'rgba(var(--tj-accent-primary),0.12)' : 'rgba(117,214,216,0.045)',
+                            boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(117,214,216,0.16)',
                             clipPath: smallClip,
                           }}
                         >
@@ -306,7 +306,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
       </aside>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <section className="px-4 py-4" style={panelStyle('rgba(12,11,13,0.86)')}>
+        <section className="px-4 py-4" style={panelStyle('linear-gradient(135deg, rgba(var(--tj-bubble),0.88), rgba(var(--tj-surface-strong),0.66))')}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <SectionTitle title={selectedSlot ? slotTitle(selectedSlot) : '选择槽位'} />
@@ -319,7 +319,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                   )}
                 </div>
               )}
-              <div className="mt-2 text-[13px] leading-relaxed" style={{ color: 'rgba(220,208,178,0.84)' }}>
+              <div className="mt-2 text-[13px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.84)' }}>
                 {selectedSlot
                   ? selectedSlot.kind === 'normal'
                     ? '普通战技固定三格，只能选模板，不开放自由编辑。'
@@ -346,7 +346,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
         </section>
 
         <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[1fr_0.95fr]">
-          <section className="kaituo-options-scroll min-h-0 overflow-y-auto px-4 py-4 pr-2" style={panelStyle('rgba(16,14,16,0.55)')}>
+          <section className="kaituo-options-scroll min-h-0 overflow-y-auto px-4 py-4 pr-2" style={panelStyle('rgba(var(--tj-bg-secondary),0.55)')}>
             {selectedSlot?.kind === 'normal' && (
               <div className="mb-4">
                 <SectionTitle title="普通战技模板" />
@@ -359,25 +359,25 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                     <button
                       key={preset.id}
                       type="button"
-                      className="px-3 py-3 text-left transition-all hover:bg-[rgba(245,217,122,0.08)]"
+                      className="px-3 py-3 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
                       onClick={() => applyPreset(preset, selectedSlot.slotIndex)}
                       style={{
-                        background: draft.名称 === preset.名称 ? 'rgba(245,217,122,0.1)' : 'rgba(8,7,9,0.42)',
+                        background: draft.名称 === preset.名称 ? 'rgba(var(--tj-accent-primary),0.1)' : 'rgba(var(--tj-bg-primary),0.42)',
                         boxShadow: draft.名称 === preset.名称
-                          ? 'inset 0 0 0 1px rgba(245,217,122,0.42)'
+                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)'
                           : 'inset 0 0 0 1px rgba(117,214,216,0.13)',
                         clipPath: smallClip,
                       }}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-serif text-[14px] font-bold tracking-[0.16em]" style={{ color: '#fff4d4' }}>
+                        <span className="font-serif text-[14px] font-bold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                           {preset.名称}
                         </span>
                         <span className="text-[11px]" style={{ color: '#75d6d8' }}>
                           {selectedSkill?.名称 === preset.名称 ? '已写入' : '写入槽位'}
                         </span>
                       </div>
-                      <p className="mt-1 text-[12px] leading-relaxed" style={{ color: 'rgba(220,208,178,0.78)' }}>
+                      <p className="mt-1 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
                         {preset.描述}
                       </p>
                     </button>
@@ -404,7 +404,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
             )}
           </section>
 
-          <section className="kaituo-options-scroll min-h-0 overflow-y-auto px-4 py-4 pr-2" style={panelStyle('rgba(245,217,122,0.035)')}>
+          <section className="kaituo-options-scroll min-h-0 overflow-y-auto px-4 py-4 pr-2" style={panelStyle('rgba(var(--tj-accent-primary),0.035)')}>
             <SectionTitle title="已登记战技" />
             <div className="mt-3 space-y-3">
               {skillRecords.length ? (
@@ -574,7 +574,7 @@ function NormalSkillReadonly({ skill }: { skill?: 战技记录 }) {
           {skill.备注 || '无'}
         </div>
       </Field>
-      <div className="text-[12px]" style={{ color: 'rgba(160,148,120,0.78)' }}>
+      <div className="text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
         普通战技为模板制，只允许通过左侧预设替换槽位，不能自由编辑。
       </div>
     </div>
@@ -595,17 +595,17 @@ function ModePill({
     <span
       className="px-2 py-0.5 text-[11px] font-serif tracking-[0.18em]"
       style={{
-        color: active ? (isCyan ? '#9ef0f0' : '#fff4d4') : 'rgba(200,188,158,0.72)',
+        color: active ? (isCyan ? '#9ef0f0' : 'rgb(var(--tj-text-primary))') : 'rgba(var(--tj-text-secondary),0.72)',
         background: active
           ? isCyan
             ? 'rgba(117,214,216,0.12)'
-            : 'rgba(245,217,122,0.12)'
-          : 'rgba(245,217,122,0.04)',
+            : 'rgba(var(--tj-accent-primary),0.12)'
+          : 'rgba(var(--tj-accent-primary),0.04)',
         boxShadow: active
           ? isCyan
             ? 'inset 0 0 0 1px rgba(117,214,216,0.35)'
-            : 'inset 0 0 0 1px rgba(245,217,122,0.35)'
-          : 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.35)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
       }}
     >
@@ -628,15 +628,15 @@ function ModeNotice({
     <div
       className="mt-2 px-3 py-3 text-[12px] leading-relaxed"
       style={{
-        color: isCyan ? 'rgba(204,240,240,0.82)' : 'rgba(220,208,178,0.82)',
-        background: isCyan ? 'rgba(117,214,216,0.045)' : 'rgba(245,217,122,0.045)',
+        color: isCyan ? 'rgba(204,240,240,0.82)' : 'rgba(var(--tj-text-secondary),0.82)',
+        background: isCyan ? 'rgba(117,214,216,0.045)' : 'rgba(var(--tj-accent-primary),0.045)',
         boxShadow: isCyan
           ? 'inset 0 0 0 1px rgba(117,214,216,0.16)'
-          : 'inset 0 0 0 1px rgba(245,217,122,0.16)',
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-1 font-serif text-[11px] tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : '#f5d97a' }}>
+      <div className="mb-1 font-serif text-[11px] tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </div>
       {text}
@@ -660,18 +660,18 @@ function SkillRecordGroup({
     <div
       className="px-3 py-3"
       style={{
-        background: isCyan ? 'rgba(117,214,216,0.03)' : 'rgba(245,217,122,0.03)',
+        background: isCyan ? 'rgba(117,214,216,0.03)' : 'rgba(var(--tj-accent-primary),0.03)',
         boxShadow: isCyan
           ? 'inset 0 0 0 1px rgba(117,214,216,0.14)'
-          : 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-serif text-[12px] tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : '#f5d97a' }}>
+        <span className="font-serif text-[12px] tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
           {title}
         </span>
-        <span className="text-[11px]" style={{ color: 'rgba(160,148,120,0.72)' }}>
+        <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
           {count} 条
         </span>
       </div>
@@ -712,23 +712,23 @@ function SlotGroup({
               onClick={() => onSelect(slot)}
               style={{
                 background: active
-                  ? 'linear-gradient(135deg, rgba(245,217,122,0.13), rgba(117,214,216,0.06))'
-                  : 'rgba(8,7,9,0.45)',
+                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(117,214,216,0.06))'
+                  : 'rgba(var(--tj-bg-primary),0.45)',
                 boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(245,217,122,0.48), inset 3px 0 0 rgba(245,217,122,0.82)'
+                  ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48), inset 3px 0 0 rgba(var(--tj-accent-primary),0.82)'
                   : 'inset 0 0 0 1px rgba(117,214,216,0.14)',
                 clipPath: smallClip,
               }}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-serif text-[13px] tracking-[0.16em]" style={{ color: active ? '#fff4d4' : 'rgba(220,208,178,0.82)' }}>
+                <span className="font-serif text-[13px] tracking-[0.16em]" style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.82)' }}>
                   {slot.kind === 'normal' ? `普通槽 ${slot.slotIndex}` : `槽位 ${slot.slotIndex}`}
                 </span>
-                <span className="text-[11px]" style={{ color: slot.occupiedSkillId ? '#f5d97a' : 'rgba(160,148,120,0.72)' }}>
+                <span className="text-[11px]" style={{ color: slot.occupiedSkillId ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.72)' }}>
                   {slot.occupiedSkillId ? (slot.occupiedSkillEnabled === false ? '停用' : '已填') : '空位'}
                 </span>
               </div>
-              <div className="mt-1 truncate text-[12px]" style={{ color: 'rgba(200,188,158,0.76)' }}>
+              <div className="mt-1 truncate text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.76)' }}>
                 {slot.occupiedSkillName ?? '等待写入战技'}
               </div>
             </button>
@@ -760,37 +760,37 @@ function SkillRecordCard({
       onClick={onSelect}
       style={{
         background: selected
-          ? 'linear-gradient(135deg, rgba(245,217,122,0.13), rgba(117,214,216,0.06))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(117,214,216,0.06))'
           : skill.已启用 === false
-            ? 'rgba(160,148,120,0.04)'
-            : 'rgba(8,7,9,0.46)',
+            ? 'rgba(var(--tj-text-secondary),0.04)'
+            : 'rgba(var(--tj-bg-primary),0.46)',
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(245,217,122,0.48)'
-          : 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
       }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="font-serif text-[14px] font-bold tracking-[0.16em]" style={{ color: skill.已启用 === false ? 'rgba(160,148,120,0.75)' : '#fff4d4' }}>
+          <div className="font-serif text-[14px] font-bold tracking-[0.16em]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : 'rgb(var(--tj-text-primary))' }}>
             {skill.名称}
           </div>
-          <div className="mt-1 text-[12px]" style={{ color: 'rgba(160,148,120,0.76)' }}>
+          <div className="mt-1 text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.76)' }}>
             {skill.类别} · {skill.槽位类型 === 'normal' ? `普通槽 ${skill.槽位序号}` : `${pathDef?.name ?? skill.关联命途} 槽 ${skill.槽位序号}`}
             {stage ? ` · ${stage.name}` : ''}
           </div>
         </div>
-        <span className="shrink-0 px-2 py-0.5 text-[11px]" style={{ color: skill.已启用 === false ? 'rgba(160,148,120,0.75)' : '#75d6d8' }}>
+        <span className="shrink-0 px-2 py-0.5 text-[11px]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : '#75d6d8' }}>
           {skill.已启用 === false ? 'OFF' : 'ON'}
         </span>
       </div>
-      <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed" style={{ color: 'rgba(220,208,178,0.8)' }}>
+      <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.8)' }}>
         {skill.描述}
       </p>
       {skill.关键词?.length ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {skill.关键词.slice(0, 4).map((keyword) => (
-            <span key={keyword} className="px-2 py-0.5 text-[11px]" style={{ color: 'rgba(245,217,122,0.82)', background: 'rgba(245,217,122,0.08)', clipPath: smallClip }}>
+            <span key={keyword} className="px-2 py-0.5 text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)', background: 'rgba(var(--tj-accent-primary),0.08)', clipPath: smallClip }}>
               {keyword}
             </span>
           ))}
@@ -802,9 +802,9 @@ function SkillRecordCard({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-2" style={{ background: 'rgba(245,217,122,0.055)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.18)', clipPath: smallClip }}>
-      <div className="text-[12px]" style={{ color: 'rgba(220,208,178,0.72)' }}>{label}</div>
-      <div className="mt-0.5 font-serif text-[17px] font-bold" style={{ color: '#fff4d4' }}>{value}</div>
+    <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: smallClip }}>
+      <div className="text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{label}</div>
+      <div className="mt-0.5 font-serif text-[17px] font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
     </div>
   );
 }
@@ -812,9 +812,9 @@ function Metric({ label, value }: { label: string; value: string }) {
 function SectionTitle({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-      <span className="font-serif text-[13px] font-bold tracking-[0.24em]" style={{ color: '#f5d97a' }}>{title}</span>
-      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.32), transparent)' }} />
+      <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+      <span className="font-serif text-[13px] font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{title}</span>
+      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.32), transparent)' }} />
     </div>
   );
 }
@@ -822,7 +822,7 @@ function SectionTitle({ title }: { title: string }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.76)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>
         {label}
       </div>
       {children}
@@ -834,23 +834,23 @@ function InfoTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-3 py-2" style={{ background: 'rgba(117,214,216,0.055)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.18)', clipPath: smallClip }}>
       <div className="text-[12px]" style={{ color: 'rgba(117,214,216,0.72)' }}>{label}</div>
-      <div className="mt-0.5 truncate font-serif text-[14px]" style={{ color: '#fff4d4' }}>{value}</div>
+      <div className="mt-0.5 truncate font-serif text-[14px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
     </div>
   );
 }
 
 function EmptyNotice({ text }: { text: string }) {
   return (
-    <div className="px-3 py-3 text-[12px] leading-relaxed" style={{ color: 'rgba(160,148,120,0.78)', background: 'rgba(160,148,120,0.055)', boxShadow: 'inset 0 0 0 1px rgba(160,148,120,0.18)', clipPath: smallClip }}>
+    <div className="px-3 py-3 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-text-secondary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary),0.18)', clipPath: smallClip }}>
       {text}
     </div>
   );
 }
 
-function panelStyle(background = 'linear-gradient(180deg, rgba(18,16,18,0.96), rgba(8,7,9,0.98))') {
+function panelStyle(background = 'linear-gradient(180deg, rgba(var(--tj-bg-secondary),0.96), rgba(var(--tj-bg-primary),0.98))') {
   return {
     background,
-    boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.2), 0 18px 45px rgba(0,0,0,0.2)',
+    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.62), 0 14px 32px rgba(var(--tj-shadow),0.1)',
     clipPath: cardClip,
   };
 }

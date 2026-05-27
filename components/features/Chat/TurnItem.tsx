@@ -16,7 +16,7 @@ interface TurnItemProps {
   fallbackPathId?: string;
 }
 
-type ToolKey = 'edit' | 'thinking' | 'variables' | 'summary';
+type ToolKey = 'edit' | 'thinking' | 'variables' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
 export function TurnItem({ message, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId }: TurnItemProps) {
   const isUser = message.role === 'user';
@@ -53,7 +53,8 @@ export function TurnItem({ message, isStreaming, onEditBody, npcRecords, travele
 
 function UserTurnBubble({ content, traveler }: { content: string; traveler?: 角色数据结构 }) {
   const name = traveler?.姓名?.trim() || traveler?.别名?.trim() || '旅人';
-  const avatarUrl = traveler?.头像?.trim();
+  const avatarUrl = traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim();
+  const bubbleBg = 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
 
   return (
     <div className="mb-4 flex justify-end animate-slide-up">
@@ -62,17 +63,17 @@ function UserTurnBubble({ content, traveler }: { content: string; traveler?: 角
           <div
             className="absolute top-3 -right-1.5 h-3 w-3 rotate-45"
             style={{
-              background: 'rgba(226, 190, 96, 0.95)',
-              boxShadow: '1px -1px 0 0 rgba(255, 245, 200, 0.42)',
+              background: bubbleBg,
+              boxShadow: '1px -1px 0 0 rgba(var(--tj-accent-primary), 0.46)',
             }}
           />
           <div
-            className="relative px-4 py-2.5 text-sm leading-relaxed"
+            className="relative px-4 py-2.5 text-sm leading-7"
             style={{
-              background: 'linear-gradient(135deg, rgba(245, 217, 122, 0.96), rgba(212, 177, 90, 0.94))',
-              color: '#1a1325',
+              background: bubbleBg,
+              color: 'rgba(var(--tj-chat-text), 0.98)',
               clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
-              boxShadow: 'inset 0 0 0 1px rgba(255, 245, 200, 0.58), 0 0 18px rgba(245, 217, 122, 0.18)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px rgba(var(--tj-accent-primary), 0.08)',
               fontWeight: 600,
             }}
           >
@@ -93,10 +94,10 @@ function UserAvatarTile({ name, url }: { name: string; url?: string }) {
         className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full transition-transform duration-300 group-hover:scale-105 sm:h-12 sm:w-12"
         style={{
           background: url
-            ? 'rgba(20, 16, 28, 0.6)'
-            : 'linear-gradient(135deg, rgba(245, 217, 122, 0.34), rgba(245, 217, 122, 0.12))',
+            ? 'rgba(var(--tj-surface-strong), 0.72)'
+            : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.22), rgba(var(--tj-chat-bubble), 0.92))',
           boxShadow:
-            '0 0 0 1px rgba(245, 217, 122, 0.62), 0 0 16px rgba(245, 217, 122, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.08)',
+            '0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 14px rgba(var(--tj-accent-primary), 0.24), 0 8px 16px rgba(var(--tj-shadow), 0.16), inset 0 0 0 1px rgba(var(--tj-text-primary), 0.18)',
         }}
       >
         {url ? (
@@ -104,21 +105,21 @@ function UserAvatarTile({ name, url }: { name: string; url?: string }) {
         ) : (
           <span
             className="font-serif text-lg font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]"
-            style={{ color: '#f5d97a' }}
+            style={{ color: 'rgb(var(--tj-accent-primary))' }}
           >
             {initial}
           </span>
         )}
       </div>
       <div
-        className="max-w-[72px] px-2 py-0.5 text-center"
+        className="max-w-[78px] px-2 py-0.5 text-center"
         style={{
-          background: 'rgba(10, 8, 14, 0.72)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.34)',
+          background: 'rgba(var(--tj-chat-bubble), 0.88)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52), 0 0 10px rgba(var(--tj-accent-primary), 0.12)',
           clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
         }}
       >
-        <span className="block truncate font-serif text-[10px] tracking-[0.12em]" style={{ color: 'rgba(245, 217, 122, 0.94)' }}>
+        <span className="block truncate font-serif text-[11px] font-semibold tracking-[0.1em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.98)' }}>
           {name}
         </span>
       </div>
@@ -174,7 +175,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
   const card = (
     <div>
       {/* 顶部工具栏 */}
-      <div className="mb-2 flex items-center justify-center gap-1.5">
+      <div className="mb-2 flex flex-wrap items-center justify-center gap-1.5">
         <ToolButton
           label="修改正文"
           glyph="✎"
@@ -187,13 +188,20 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
           active={openTool === 'thinking'}
           onClick={() => toggle('thinking')}
         />
-        <TurnBadge value={message.gameTime ?? '?'} />
         <ToolButton
           label="变量记录"
           glyph="◈"
           active={openTool === 'variables'}
           disabled={!hasVariables}
           onClick={() => toggle('variables')}
+        />
+        <TurnBadge value={message.gameTime ?? '?'} />
+        <ToolButton
+          label="剧情规划"
+          glyph="◇"
+          active={openTool === 'storyPlan'}
+          disabled={!parsed.storyPlan?.trim()}
+          onClick={() => toggle('storyPlan')}
         />
         <ToolButton
           label="小总结"
@@ -202,6 +210,18 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
           disabled={!parsed.memory}
           onClick={() => toggle('summary')}
         />
+        <ToolButton
+          label="原始消息"
+          glyph="▣"
+          active={openTool === 'raw'}
+          onClick={() => toggle('raw')}
+        />
+        <ToolButton
+          label="请求上下文"
+          glyph="⬡"
+          active={openTool === 'context'}
+          onClick={() => toggle('context')}
+        />
       </div>
 
       {/* 展开面板 */}
@@ -209,8 +229,8 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
         <div
           className="mb-2 animate-fade-in"
           style={{
-            background: 'rgba(245, 217, 122, 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+            background: 'rgba(var(--tj-accent-primary), 0.04)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
             clipPath:
               'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
           }}
@@ -235,7 +255,16 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
           {openTool === 'variables' && (
             <VariablesPanel commands={parsed.commands} worldEvents={parsed.worldEvents} />
           )}
+          {openTool === 'storyPlan' && (
+            <PanelText content={parsed.storyPlan?.trim() || '本回合没有剧情规划保留项。'} label="剧情规划" />
+          )}
           {openTool === 'summary' && <PanelText content={parsed.memory} label="记忆收录" />}
+          {openTool === 'raw' && (
+            <PanelText content={parsed.rawText?.trim() || message.content || '本回合没有保存原始消息。'} label="原始消息" />
+          )}
+          {openTool === 'context' && (
+            <PanelText content={formatDebugContext(message)} label="请求上下文" />
+          )}
         </div>
       )}
 
@@ -257,7 +286,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
         {isStreaming && (
           <span
             className="inline-block w-1.5 h-4 ml-1 animate-pulse-soft"
-            style={{ background: 'rgb(var(--tj-accent-primary))', boxShadow: '0 0 6px rgba(245, 217, 122, 0.6)' }}
+            style={{ background: 'rgb(var(--tj-accent-primary))', boxShadow: '0 0 6px rgba(var(--tj-accent-primary), 0.6)' }}
           />
         )}
       </div>
@@ -278,12 +307,12 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
       {/* 底部信息：左=生成耗时，右=字数 */}
       <div
         className="mt-1 flex items-center justify-between px-1 text-xs tracking-wider"
-        style={{ color: 'rgba(160, 148, 120, 0.65)' }}
+        style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}
       >
         <span>
           {message.responseDurationSec != null ? (
             <>
-              <span style={{ color: 'rgba(245, 217, 122, 0.5)' }}>◆</span>
+              <span style={{ color: 'rgba(var(--tj-accent-primary), 0.5)' }}>◆</span>
               <span className="ml-1.5">{message.responseDurationSec}s</span>
             </>
           ) : (
@@ -292,7 +321,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
         </span>
         <span>
           <span className="mr-1.5">{[...parsed.body].length} 字</span>
-          <span style={{ color: 'rgba(245, 217, 122, 0.5)' }}>◆</span>
+          <span style={{ color: 'rgba(var(--tj-accent-primary), 0.5)' }}>◆</span>
         </span>
       </div>
     </div>
@@ -324,6 +353,23 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
       {card}
     </div>
   );
+}
+
+function formatDebugContext(message: 聊天消息): string {
+  const debug = message.debugContext;
+  if (!debug) return '这条历史消息没有保存请求上下文。请从新增按钮后的新回合开始查看。';
+  const recall = debug.recallPreview?.trim()
+    ? ['【剧情回忆召回预览】', debug.recallPreview.trim()].join('\n')
+    : '【剧情回忆召回预览】\n（无或未命中）';
+  const system = ['【System Prompt】', debug.systemPrompt || '（空）'].join('\n');
+  const messages = [
+    '【Messages】',
+    ...debug.messages.map((msg, index) => [
+      `## ${index + 1}. ${msg.role}`,
+      msg.content || '（空）',
+    ].join('\n')),
+  ].join('\n\n---\n\n');
+  return [recall, system, messages].join('\n\n====================\n\n');
 }
 
 // 出题回合:把 AI 输出的 <狭间问答> 块拆出来,以紧凑的三题列表呈现,方便玩家对照思考。
@@ -480,7 +526,7 @@ function AwakeningAftermathLine({
     <div className="mt-2 flex items-center justify-center px-3">
       <div
         className="font-serif text-[13px] leading-relaxed tracking-[0.12em] text-center"
-        style={{ color: 'rgba(255, 240, 200, 0.95)', textShadow: '0 0 18px rgba(245, 217, 122, 0.45)' }}
+        style={{ color: 'rgba(255, 240, 200, 0.95)', textShadow: '0 0 18px rgba(var(--tj-accent-primary), 0.45)' }}
       >
         你感觉到自己在「{label}」的路上,行进得更远了。
       </div>
@@ -508,17 +554,17 @@ function ToolButton({
       disabled={disabled}
       className="flex items-center gap-1.5 px-2.5 py-1 font-serif text-[11px] tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
-        color: active ? 'rgb(245, 217, 122)' : 'rgba(225, 213, 183, 0.85)',
-        background: active ? 'rgba(245, 217, 122, 0.14)' : 'rgba(245, 217, 122, 0.04)',
+        color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.85)',
+        background: active ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.04)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
         clipPath:
           'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
       }}
       title={label}
     >
-      <span className="text-xs" style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(245, 217, 122, 0.65)' }}>
+      <span className="text-xs" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary), 0.65)' }}>
         {glyph}
       </span>
       <span>{label}</span>
@@ -531,10 +577,10 @@ function TurnBadge({ value }: { value: string }) {
     <div
       className="px-3 py-1 font-serif text-[11px] tracking-[0.22em]"
       style={{
-        color: 'rgb(245, 217, 122)',
+        color: 'rgb(var(--tj-accent-primary))',
         background:
-          'linear-gradient(180deg, rgba(245, 217, 122, 0.18), rgba(196, 163, 90, 0.08))',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)',
+          'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-secondary), 0.08))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
         clipPath:
           'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
       }}
@@ -549,13 +595,13 @@ function PanelText({ content, label }: { content: string; label: string }) {
     <div className="px-4 py-3">
       <div
         className="mb-1.5 font-serif text-[11px] tracking-[0.3em]"
-        style={{ color: 'rgba(245, 217, 122, 0.7)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
       >
         ◆ {label}
       </div>
       <div
         className="whitespace-pre-wrap text-xs leading-relaxed"
-        style={{ color: 'rgba(200, 188, 158, 0.92)' }}
+        style={{ color: 'rgba(var(--tj-text-secondary), 0.92)' }}
       >
         {content}
       </div>
@@ -575,19 +621,19 @@ function VariablesPanel({
     <div className="px-4 py-3 text-xs">
       <div
         className="mb-1.5 font-serif text-[11px] tracking-[0.3em]"
-        style={{ color: 'rgba(245, 217, 122, 0.7)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
       >
         ◆ 本回合变量
       </div>
       {cmdEntries.length === 0 && worldEvents.length === 0 && (
-        <div style={{ color: 'rgba(160, 148, 120, 0.7)' }}>（无变量变动）</div>
+        <div style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>（无变量变动）</div>
       )}
       {cmdEntries.length > 0 && (
         <div className="space-y-1">
           {cmdEntries.map(([k, v]) => (
-            <div key={k} className="flex gap-2" style={{ color: 'rgba(225, 213, 183, 0.92)' }}>
-              <span style={{ color: 'rgba(245, 217, 122, 0.75)' }}>{k}</span>
-              <span style={{ color: 'rgba(160, 148, 120, 0.55)' }}>=</span>
+            <div key={k} className="flex gap-2" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
+              <span style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>{k}</span>
+              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>=</span>
               <span>{typeof v === 'string' ? v : JSON.stringify(v)}</span>
             </div>
           ))}
@@ -596,7 +642,7 @@ function VariablesPanel({
       {worldEvents.length > 0 && (
         <div className="mt-2 space-y-1">
           {worldEvents.map((e, i) => (
-            <div key={i} className="flex items-start gap-2" style={{ color: 'rgba(245, 217, 122, 0.85)' }}>
+            <div key={i} className="flex items-start gap-2" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
               <span className="mt-0.5">✦</span>
               <span>{e}</span>
             </div>
@@ -622,7 +668,7 @@ function EditBodyPanel({
     <div className="px-4 py-3">
       <div
         className="mb-1.5 font-serif text-[11px] tracking-[0.3em]"
-        style={{ color: 'rgba(245, 217, 122, 0.7)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
       >
         ◆ 修改正文
       </div>
@@ -642,9 +688,9 @@ function EditBodyPanel({
           onClick={onCancel}
           className="px-4 py-1.5 font-serif text-xs tracking-[0.25em] transition-all hover:opacity-90"
           style={{
-            color: 'rgba(225, 213, 183, 0.9)',
-            background: 'rgba(245, 217, 122, 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.25)',
+            color: 'rgba(var(--tj-text-primary), 0.9)',
+            background: 'rgba(var(--tj-accent-primary), 0.04)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
             clipPath:
               'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
           }}
@@ -656,9 +702,9 @@ function EditBodyPanel({
           onClick={onSave}
           className="px-4 py-1.5 font-serif text-xs tracking-[0.25em] transition-all hover:opacity-90"
           style={{
-            color: 'rgb(20, 16, 12)',
-            background: 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))',
-            boxShadow: 'inset 0 0 0 1px rgba(255, 245, 200, 0.5)',
+            color: 'rgb(var(--tj-on-accent))',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.95))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
             clipPath:
               'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
           }}

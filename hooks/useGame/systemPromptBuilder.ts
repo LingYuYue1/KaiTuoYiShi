@@ -6,7 +6,7 @@ import type { 提示词模块, 提示词模块作用域 } from '@/models/prompts
 import { PROMPT_MODULE_TOP_THRESHOLD } from '@/models/prompts';
 import type { 世界书 } from '@/models/worldbook';
 import type { NPC记录 } from '@/models/npc';
-import { NPC_RELATION_LABELS } from '@/models/npc';
+import { NPC_RELATION_LABELS, 提取NPC同行记忆文本列表 } from '@/models/npc';
 import { 计算命途战技槽位数, NORMAL_SKILL_SLOT_COUNT } from '@/models/skill';
 import type { 新闻条目 } from '@/models/news';
 import { NEWS_CATEGORY_LABELS } from '@/models/news';
@@ -26,10 +26,15 @@ import {
   getStoryMode,
 } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, PATH_CORE_BELIEFS } from '@/models/path';
-import { buildWorldbookInjection, type FilterContext } from '@/utils/worldbook';
+import { buildPromptLikeWorldbookInjection, buildWorldbookInjection, type FilterContext } from '@/utils/worldbook';
 import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
+import {
+  MAIN_IMMEDIATE_MEMORY_PROMPT_LIMIT,
+  MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT,
+  MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT,
+} from './historyWindow';
 
 // 当前 prompt 为重构期的中性骨架，具体的世界观/人物设定由世界书注入，
 // 「踏上旅途」向导写入的字段在此被汇总输出。
@@ -58,6 +63,7 @@ export function buildSystemPrompt(
   awakeningPhase?: 命途狭间阶段,
   yitingInjectionOverride?: string,
   zhikuInjectionOverride?: string,
+  suppressMemoryInjection?: boolean,
 ): string {
   const parts: string[] = [];
 
@@ -72,12 +78,19 @@ export function buildSystemPrompt(
   const moduleCtx = {
     wordCountTarget: settings.wordCountTarget,
     personLabel,
+    playerName: getPromptPlayerName(traveler),
     currentScope,
   };
 
   // ── 提示词模块·顶部（order < 30：开发者模式、叙述者人格等） ──
   const topModules = injectPromptModules(settings.promptModules, moduleCtx, 'top');
   if (topModules) parts.push(topModules);
+
+  // ── 世界书内置提示词（system_rule + 少量核心锚点）：为了可编辑放在世界书里，但按提示词注入与展示 ──
+  if (worldbooks && worldbookCtx) {
+    const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, worldbookCtx);
+    if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
+  }
 
   // ── 故事基调（剧情模式）──
   const tone = buildToneSection(worldState);
@@ -89,6 +102,12 @@ export function buildSystemPrompt(
   if (currentScope === 'main') {
     parts.push(buildMainStoryControlSection(worldState));
   }
+
+  const npcContinuitySection = buildNpcContinuitySection(worldState, npcRecords, _turnCount);
+  if (npcContinuitySection) parts.push(npcContinuitySection);
+
+  const timeAnchor = buildCurrentTimeAnchorSection(worldState);
+  if (timeAnchor) parts.push(timeAnchor);
 
   // ── 当前角色 ──
   parts.push(buildCharacterSection(traveler));
@@ -130,8 +149,8 @@ export function buildSystemPrompt(
   // ── 忆庭（仅控制召回；入库始终执行，不等同于短期/长期记忆） ──
   const yitingEnabled = settings.记忆系统?.忆庭启用 !== false;
   const yitingThreshold = settings.记忆系统?.忆庭召回最早触发回合 ?? 10;
-  if (yitingInjectionOverride?.trim()) {
-    parts.push(yitingInjectionOverride.trim());
+  if (yitingInjectionOverride !== undefined) {
+    if (yitingInjectionOverride.trim()) parts.push(yitingInjectionOverride.trim());
   } else if (yitingEnabled && yiting && worldbookCtx?.recentUserInput && worldbookCtx.turnCount > yitingThreshold) {
     const limit = settings.记忆系统?.忆庭召回条数 ?? 8;
     const yitingHit = retrieveYitingContext(yiting, worldbookCtx.recentUserInput, limit);
@@ -139,8 +158,8 @@ export function buildSystemPrompt(
   }
 
   // ── 智库（只注入按本回合输入检索到的摘要，不注入整库） ──
-  if (zhikuInjectionOverride?.trim()) {
-    parts.push(zhikuInjectionOverride.trim());
+  if (zhikuInjectionOverride !== undefined) {
+    if (zhikuInjectionOverride.trim()) parts.push(zhikuInjectionOverride.trim());
   } else if (settings.智库系统?.enabled && zhiku && worldbookCtx?.recentUserInput) {
     const zhikuHit = retrieveZhikuContext(zhiku, worldbookCtx.recentUserInput, settings.智库系统.maxRelatedEntries, worldbookCtx);
     if (zhikuHit.injection) parts.push(zhikuHit.injection);
@@ -159,26 +178,28 @@ export function buildSystemPrompt(
   }
 
   // ── 记忆注入 ──
-  if (settings.enableMemoryInjection) {
+  if (settings.enableMemoryInjection && !suppressMemoryInjection) {
     const memSections: string[] = [];
     if (memorySystem.长期记忆.length) {
+      const recentLongTerm = memorySystem.长期记忆.slice(-MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT);
       memSections.push(
-        `## 长期记忆\n\n${memorySystem.长期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
+        `# 记忆｜长期记忆\n\n${recentLongTerm.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
       );
     }
     if (memorySystem.短期记忆.length) {
+      const recentShortTerm = memorySystem.短期记忆.slice(-MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT);
       memSections.push(
-        `## 最近的事\n\n${memorySystem.短期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
+        `# 记忆｜短期记忆\n\n${recentShortTerm.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
       );
     }
     if (memorySystem.即时记忆.length) {
-      const recentImmediate = memorySystem.即时记忆.slice(-8);
+      const recentImmediate = memorySystem.即时记忆.slice(-MAIN_IMMEDIATE_MEMORY_PROMPT_LIMIT);
       memSections.push(
-        `## 即时记忆\n\n${recentImmediate.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
+        `# 记忆｜即时记忆\n\n${recentImmediate.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
       );
     }
     if (memSections.length) {
-      parts.push(`# 记忆\n\n${memSections.join('\n\n')}`);
+      parts.push(memSections.join('\n\n---\n\n'));
     }
   }
 
@@ -215,17 +236,30 @@ export function buildOpeningSystemPrompt(
   const moduleCtx = {
     wordCountTarget: settings.wordCountTarget,
     personLabel,
+    playerName: getPromptPlayerName(traveler),
     currentScope: 'opening' as 提示词模块作用域,
   };
 
   const topModules = injectPromptModules(settings.promptModules, moduleCtx, 'top');
   if (topModules) parts.push(topModules);
 
+  if (worldbooks && worldbookCtx) {
+    const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, {
+      ...worldbookCtx,
+      currentScope: 'opening',
+      turnCount,
+    });
+    if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
+  }
+
   const tone = buildToneSection(worldState);
   if (tone) parts.push(tone);
 
   const innerVoiceSection = buildInnerVoiceSection(settings);
   if (innerVoiceSection) parts.push(innerVoiceSection);
+
+  const timeAnchor = buildCurrentTimeAnchorSection(worldState);
+  if (timeAnchor) parts.push(timeAnchor);
 
   parts.push(buildCharacterSection(traveler));
 
@@ -259,7 +293,12 @@ export function buildOpeningSystemPrompt(
 interface PromptModuleInjectionCtx {
   wordCountTarget: number;
   personLabel: string;
+  playerName: string;
   currentScope: 提示词模块作用域;
+}
+
+function getPromptPlayerName(traveler: 角色数据结构): string {
+  return traveler.姓名?.trim() || '无名开拓者';
 }
 
 function buildInnerVoiceSection(settings: 游戏设置): string {
@@ -291,7 +330,10 @@ function injectPromptModules(
     .map((m) =>
       m.content
         .replace(/\{wordCountTarget\}/g, String(ctx.wordCountTarget))
-        .replace(/\{personLabel\}/g, ctx.personLabel),
+        .replace(/\{personLabel\}/g, ctx.personLabel)
+        .replace(/\{playerName\}/g, ctx.playerName)
+        .replace(/玩家姓名/g, ctx.playerName)
+        .replace(/主角姓名/g, ctx.playerName),
     )
     .join('\n\n---\n\n');
 }
@@ -309,7 +351,9 @@ function buildToneSection(worldState: 世界状态): string {
 function buildMainStoryControlSection(worldState: 世界状态): string {
   const lines: string[] = [];
   lines.push('- 本回合属于主剧情正文，不是开局校准、命途狭间、新闻后台、手机聊天或智库检索回合。');
-  lines.push('- 主剧情优先级：玩家本回合输入 > 当前场景与上一回合钩子 > 剧情编织滑窗 > 忆庭召回 > 智库注入 > 新闻苗头 > 普通背景资料。');
+  lines.push('- 主剧情优先级：玩家本回合输入 > 当前场景与上一回合钩子 > 即时剧情回顾 > 剧情回忆（强回忆优先） > 剧情编织滑窗 > 智库注入 > 新闻苗头 > 普通背景资料。');
+  lines.push('- 若 system 中存在「# 即时剧情回顾」或「【剧情回忆】」，正文必须先承接其中的人物、地点、上一动作、未结问题和强回忆事实；不得假装角色不认识刚刚或过去已见过的人。');
+  lines.push('- 如果强回忆或即时剧情回顾显示某 NPC 已与玩家见过、同行、约定或发生冲突，本回合必须沿用该关系状态；除非正文明确失忆/伪装/信息隔离，不得重新写成陌生人初见。');
   lines.push('- 智库只提供原著资料、人物、地点、道具、组织等事实锚点；剧情方向不能只靠智库百科硬推。');
   lines.push('- 剧情编织负责“这一段故事应该如何承接和铺垫”；若存在滑窗，应优先把当前段落的目标、人物关系和未结事项写进正文。');
   lines.push('- 新闻系统是世界演变与事件压力，不是强制主线脚本；只在与当前地点、人物或玩家目标有关时自然露出。');
@@ -323,6 +367,21 @@ function buildMainStoryControlSection(worldState: 世界状态): string {
     lines.push(`- 当前原著主角配置：${worldState.原著主角}。另一性别主角不自动登场，除非后续剧情或玩家设定明确引入。`);
   }
   return `# 主剧情运行锚点\n\n${lines.join('\n')}`;
+}
+
+function buildCurrentTimeAnchorSection(worldState: 世界状态): string {
+  const lines: string[] = [];
+  lines.push(`- 纪年法：${worldState.纪年法 || '琥珀纪年'}`);
+  lines.push(`- 开拓天数：第 ${Math.max(1, worldState.开拓天数 || 1)} 天`);
+  lines.push(`- 当前日期：${worldState.当前日期 || '未设定'}`);
+  lines.push(`- 当前时间：${worldState.当前时间 || '未设定'}`);
+  lines.push(`- 当前地点：${worldState.当前地点 || '未设定'}`);
+  lines.push('');
+  lines.push('写正文和 <变量草稿> 前必须先读取本锚点。');
+  lines.push('同一日期内，任何时间推进都只能从“当前时间”向后推，不能写早于当前时间的时刻。');
+  lines.push('如果剧情确实从当前时间推进到更早的钟点，例如 23:40 后到 00:10，必须在 <变量草稿> 明确写“跨日/次日/一夜过去”，不要只写一个更早的时间。');
+  lines.push('没有等待、赶路、休息、睡眠、检修或明确耗时证据时，不要为了气氛改写时间。');
+  return `# 当前时间锚点（变量一致性硬约束）\n\n${lines.join('\n')}`;
 }
 
 function buildCharacterSection(traveler: 角色数据结构): string {
@@ -484,48 +543,129 @@ function buildSceneSection(worldState: 世界状态): string {
   return `# 当前场景\n\n${lines.join('\n\n')}`;
 }
 
-// 已知伙伴注入：只取 tier='companion'，并按相关度过滤（同行 > 高好感 > 近回合见过），cap 10。
-// 路人（tier='extra'）不进 prompt，避免上下文爆炸；路人再现的临时注入由 sendWorkflow 在 npcEncounters 协议落地后处理。
+const COMPANION_PROMPT_LIMIT = 12;
+const RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW = 15;
+const EXTRA_NPC_PROMPT_LIMIT = 8;
+const NPC_CONTINUITY_PROMPT_LIMIT = 10;
+
+function buildNpcContinuitySection(worldState: 世界状态, npcRecords?: NPC记录[], turnCount = 0): string {
+  if (!npcRecords || npcRecords.length === 0) return '';
+
+  const recentCutoff = Math.max(1, turnCount - RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW);
+  const sceneNames = new Set((worldState.当前时段?.人物 ?? []).map((n) => n.姓名.trim()).filter(Boolean));
+  const currentLocation = worldState.当前地点?.trim();
+
+  const candidates = npcRecords
+    .map((npc) => {
+      const memories = 提取NPC同行记忆文本列表(npc);
+      const isRecent = Number(npc.最近回合 || 0) >= recentCutoff;
+      const isSceneNpc = sceneNames.has(npc.姓名) || Boolean(npc.别名 && sceneNames.has(npc.别名));
+      const hasContinuity =
+        npc.同行 ||
+        isRecent ||
+        isSceneNpc ||
+        memories.length > 0 ||
+        npc.关系 !== 'stranger' ||
+        npc.好感度 !== 0;
+      if (!hasContinuity) return null;
+      const score =
+        (isSceneNpc ? 100 : 0) +
+        (npc.同行 ? 80 : 0) +
+        (isRecent ? 50 : 0) +
+        Math.min(memories.length, 6) * 8 +
+        (npc.关系 !== 'stranger' ? 12 : 0) +
+        Math.min(Math.abs(npc.好感度), 20);
+      return { npc, memories, isRecent, isSceneNpc, score };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => b.score - a.score || Number(b.npc.最近回合 || 0) - Number(a.npc.最近回合 || 0))
+    .slice(0, NPC_CONTINUITY_PROMPT_LIMIT);
+
+  if (!candidates.length) return '';
+
+  const lines: string[] = [
+    '# 本回合人物关系连续性核对',
+    '',
+    '这段是正文生成前必须读取的关系状态表。凡是下列人物在本回合出场、被玩家提到、或由当前场景自然牵引出现，都必须沿用既有关系和共同经历。',
+    '- 若人物已见过玩家、委托过玩家、共同作战、同行、通信、产生承诺或冲突，正文禁止写成初次见面、禁止重新自我介绍、禁止问“你是谁/为什么来”这类陌生人模板。',
+    '- 可以因为职责、危机、信息差而质疑玩家，但质疑必须建立在既有关系上，例如“任务结果如何”“为什么只回来两人”“你们刚才遭遇了什么”，而不是抹掉前文。',
+    '- 若要表现 NPC 不记得或装作不认识，正文必须给出明确原因：失忆、伪装、通讯隔离、误认、被迫演戏或认知污染；否则视为错误。',
+  ];
+  if (currentLocation) lines.push(`- 当前地点：${currentLocation}。人物回应必须同时承接当前地点和之前任务链。`);
+
+  lines.push('', '关系表：');
+  for (const { npc, memories, isRecent, isSceneNpc } of candidates) {
+    const tags = [
+      NPC_RELATION_LABELS[npc.关系],
+      npc.同行 ? '同行中' : '',
+      isSceneNpc ? '当前场景人物' : '',
+      isRecent ? '近期见过' : '',
+      npc.原著角色 ? '原著角色' : '',
+    ].filter(Boolean);
+    const turnLine = `初见第${Math.max(1, Number(npc.初见回合 || 1))}回合，最近第${Math.max(1, Number(npc.最近回合 || npc.初见回合 || 1))}回合`;
+    const memoryLine = memories.length ? `；最近共同经历：${memories.slice(-3).join('；')}` : '';
+    const introLine = npc.介绍 ? `；身份/职责：${npc.介绍}` : '';
+    lines.push(`- ${npc.姓名}${npc.别名 ? `（${npc.别名}）` : ''}｜${tags.join(' · ')}｜好感${npc.好感度 > 0 ? '+' : ''}${npc.好感度}｜${turnLine}${introLine}${memoryLine}`);
+  }
+
+  return lines.join('\n');
+}
+
+// 已知伙伴注入：按相关度过滤（同行 > 近回合见过 > 有记忆/好感 > 高好感），避免刚见过的人过早掉出上下文。
+// 路人（tier='extra'）只注入近期或已有可承接关系/记忆的少量对象，避免上下文爆炸。
 function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string {
   if (!npcRecords || npcRecords.length === 0) return '';
   const companions = npcRecords.filter((n) => n.阶位 === 'companion');
-  const recentExtras = npcRecords.filter(
-    (n) => n.阶位 === 'extra' && Number(n.最近回合 || 0) >= Math.max(1, turnCount - 5),
-  );
+  const recentCutoff = Math.max(1, turnCount - RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW);
+  const recentExtras = npcRecords
+    .filter((n) => {
+      if (n.阶位 !== 'extra') return false;
+      const memoryCount = 提取NPC同行记忆文本列表(n).length;
+      return Number(n.最近回合 || 0) >= recentCutoff || memoryCount > 0 || n.好感度 !== 0 || n.关系 !== 'stranger';
+    })
+    .sort((a, b) => {
+      const recentDiff = Number(b.最近回合 || 0) - Number(a.最近回合 || 0);
+      if (recentDiff !== 0) return recentDiff;
+      const memoryDiff = 提取NPC同行记忆文本列表(b).length - 提取NPC同行记忆文本列表(a).length;
+      if (memoryDiff !== 0) return memoryDiff;
+      return Math.abs(b.好感度) - Math.abs(a.好感度);
+    });
   if (companions.length === 0 && recentExtras.length === 0) return '';
 
   const sorted = [...companions].sort((a, b) => {
     if (a.同行 !== b.同行) return a.同行 ? -1 : 1;
+    const recentDiff = Number(b.最近回合 || 0) - Number(a.最近回合 || 0);
+    const aIsRecent = Number(a.最近回合 || 0) >= recentCutoff;
+    const bIsRecent = Number(b.最近回合 || 0) >= recentCutoff;
+    if (aIsRecent !== bIsRecent) return aIsRecent ? -1 : 1;
     const affDiff = Math.abs(b.好感度) - Math.abs(a.好感度);
     if (affDiff !== 0) return affDiff;
-    return b.最近回合 - a.最近回合;
+    return recentDiff;
   });
 
   const formatNpc = (n: NPC记录) => {
     const tags: string[] = [NPC_RELATION_LABELS[n.关系]];
     if (n.同行) tags.push('同行中');
     if (n.原著角色) tags.push('原著角色');
-    if (n.阵营ID) {
-      tags.push(n.阵营ID);
-    }
     const desc: string[] = [];
     if (n.对玩家称呼) desc.push(`称呼：${n.对玩家称呼}`);
     if (n.外貌) desc.push(`外貌：${n.外貌}`);
     if (n.性格) desc.push(`性格：${n.性格}`);
     if (n.介绍) desc.push(`介绍：${n.介绍}`);
-    if (n.同行记忆?.length) desc.push(`同行记忆：${n.同行记忆.slice(-3).join('；')}`);
+    const memories = 提取NPC同行记忆文本列表(n).slice(-4);
+    if (memories.length) desc.push(`同行记忆：${memories.join('；')}`);
     const descPart = desc.length ? `\n  ${desc.join('；')}` : '';
     return `- ${n.姓名}${n.别名 ? `（${n.别名}）` : ''}｜${tags.join(' · ')}｜好感${n.好感度 > 0 ? '+' : ''}${n.好感度}${descPart}`;
   };
 
   const lines: string[] = [];
   if (sorted.length > 0) {
-    lines.push(...sorted.slice(0, 10).map(formatNpc));
+    lines.push(...sorted.slice(0, COMPANION_PROMPT_LIMIT).map(formatNpc));
   }
   if (recentExtras.length > 0) {
     if (lines.length > 0) lines.push('');
     lines.push('最近遇见的路人：');
-    lines.push(...recentExtras.slice(0, 6).map(formatNpc));
+    lines.push(...recentExtras.slice(0, EXTRA_NPC_PROMPT_LIMIT).map(formatNpc));
   }
   return `# 已知伙伴与路人\n\n${lines.join('\n')}`;
 }

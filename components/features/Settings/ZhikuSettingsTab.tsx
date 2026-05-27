@@ -117,13 +117,13 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
       <div
         className="px-4 py-3 text-xs leading-relaxed"
         style={{
-          color: 'rgba(200, 188, 158, 0.78)',
-          background: 'rgba(245, 217, 122, 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          color: 'rgba(var(--tj-text-secondary), 0.78)',
+          background: 'rgba(var(--tj-accent-primary), 0.05)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath: cardClip,
         }}
       >
-        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
           智库
         </div>
         这是原著资料中枢的独立配置。后续它会为周报、剧情和其他系统提供摘要、检索和约束，不直接替代主剧情模型。
@@ -147,19 +147,19 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
             style={{
               background:
                 zhiku.原著约束 === opt.value
-                  ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.14), rgba(245, 217, 122, 0.03))'
-                  : 'rgba(16, 14, 16, 0.45)',
+                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-primary), 0.03))'
+                  : 'rgba(var(--tj-bg-secondary), 0.45)',
               boxShadow:
                 zhiku.原著约束 === opt.value
-                  ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)'
-                  : 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+                  ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
+                  : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: smallClip,
             }}
           >
-            <div className="font-serif text-sm tracking-[0.22em]" style={{ color: 'rgb(245, 217, 122)' }}>
+            <div className="font-serif text-sm tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
               {opt.label}
             </div>
-            <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>
+            <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
               {opt.desc}
             </div>
           </button>
@@ -192,14 +192,14 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
       <div
         className="px-4 py-4 space-y-3"
         style={{
-          background: 'rgba(16, 14, 16, 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+          background: 'rgba(var(--tj-bg-secondary), 0.45)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
           clipPath: cardClip,
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-          <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+          <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+          <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
             智库 API
           </span>
         </div>
@@ -254,9 +254,9 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
               disabled={loadingModels}
               className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
               style={{
-                color: 'rgba(245, 217, 122, 0.85)',
-                boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.35)',
-                background: 'rgba(245, 217, 122, 0.05)',
+                color: 'rgba(var(--tj-accent-primary), 0.85)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                background: 'rgba(var(--tj-accent-primary), 0.05)',
                 clipPath: smallClip,
               }}
             >
@@ -304,7 +304,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
           />
         </Field>
 
-        <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.68)' }}>
+        <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
           这里建议使用便宜、稳定、偏检索型的模型。智库负责整理和召回，不追求长篇文采。
         </div>
       </div>
@@ -316,11 +316,11 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))',
-            color: '#1a1325',
+              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+            color: 'rgb(var(--tj-on-accent))',
             boxShadow: savedFlash
               ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
-              : 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 18px rgba(245, 217, 122, 0.22)',
+              : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
             clipPath: cardClip,
           }}
         >
@@ -350,7 +350,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 block text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(245, 217, 122, 0.85)' }}>
+      <div className="mb-1.5 block text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
         {label}
       </div>
       {children}
@@ -373,8 +373,8 @@ function ToggleRow({
     <div
       className="flex items-center justify-between px-3 py-2"
       style={{
-        background: 'rgba(16, 14, 16, 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+        background: 'rgba(var(--tj-bg-secondary), 0.45)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
         clipPath: smallClip,
       }}
     >
@@ -382,7 +382,7 @@ function ToggleRow({
         <div className="font-serif font-bold text-sm tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>
           {label}
         </div>
-        <div className="text-xs mt-0.5" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>
+        <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
           {desc}
         </div>
       </div>
@@ -391,11 +391,11 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
             : 'rgba(60, 55, 40, 0.7)',
           boxShadow: checked
-            ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 10px rgba(245, 217, 122, 0.25)'
-            : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
           clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
         }}
       >
@@ -403,7 +403,7 @@ function ToggleRow({
           className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
-            background: checked ? '#1a1325' : 'rgba(220, 200, 160, 0.85)',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
             clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}
         />

@@ -27,16 +27,16 @@ const smallClip =
 
 const panelStyle = {
   background:
-    'linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(9, 8, 10, 0.98))',
+    'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
   boxShadow:
-    'inset 0 0 0 1px rgba(245, 217, 122, 0.22), 0 18px 45px rgba(0, 0, 0, 0.22)',
+    'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
   clipPath: cardClip,
 };
 
 const layerMeta: Record<MemoryLayer, { label: string; subtitle: string; accent: string }> = {
   immediate: { label: '即时', subtitle: '最近几回合的原始记忆', accent: 'rgba(180, 200, 220, 0.9)' },
-  short: { label: '短期', subtitle: '已整理的事件摘要', accent: 'rgba(220, 208, 178, 0.9)' },
-  long: { label: '长期', subtitle: '不可忘却的稳定记忆', accent: 'rgba(245, 217, 122, 0.95)' },
+  short: { label: '短期', subtitle: '已整理的事件摘要', accent: 'rgba(var(--tj-text-secondary), 0.9)' },
+  long: { label: '长期', subtitle: '不可忘却的稳定记忆', accent: 'rgba(var(--tj-accent-primary), 0.95)' },
 };
 
 export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, settings }: MemoryPanelProps) {
@@ -120,34 +120,34 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
                   key={layer}
                   type="button"
                   onClick={() => setActiveLayer(layer)}
-                  className="w-full px-3 py-2.5 text-left transition-all hover:bg-[rgba(245,217,122,0.08)]"
+                  className="w-full px-3 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
                   style={{
                     background: active
-                      ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.16), rgba(245, 217, 122, 0.04))'
-                      : 'rgba(160, 148, 120, 0.04)',
+                      ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
+                      : 'rgba(var(--tj-text-secondary), 0.04)',
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.58), inset 3px 0 0 rgba(245, 217, 122, 0.9)'
-                      : 'inset 0 0 0 1px rgba(160, 148, 120, 0.18)',
+                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.9)'
+                      : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
                     clipPath: smallClip,
                   }}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span
                       className="font-serif text-[13px] tracking-[0.2em]"
-                      style={{ color: active ? '#f5d97a' : 'rgba(220, 208, 178, 0.88)' }}
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.88)' }}
                     >
                       {meta.label}
                     </span>
                     <span
                       className="font-serif text-[12px]"
-                      style={{ color: active ? '#fff4d4' : 'rgba(210, 198, 168, 0.8)' }}
+                      style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(210, 198, 168, 0.8)' }}
                     >
                       {count}
                     </span>
                   </div>
                   <div
                     className="mt-1 truncate font-serif text-[11px]"
-                    style={{ color: 'rgba(200, 188, 158, 0.74)' }}
+                    style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}
                   >
                     {meta.subtitle}
                   </div>
@@ -166,7 +166,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
               <div className="mt-2 font-serif text-[14px] tracking-[0.18em]" style={{ color: layerMeta[activeLayer].accent }}>
                 {layerMeta[activeLayer].label} · {selectedCount} 条
               </div>
-              <div className="mt-1 font-serif text-[12px] tracking-[0.12em]" style={{ color: 'rgba(200, 188, 158, 0.78)' }}>
+              <div className="mt-1 font-serif text-[12px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
                 {layerMeta[activeLayer].subtitle}
               </div>
             </div>
@@ -209,11 +209,11 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+      <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </span>
-      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.35), transparent)' }} />
+      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.35), transparent)' }} />
     </div>
   );
 }
@@ -223,15 +223,15 @@ function MetricTile({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'rgba(245, 217, 122, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+        background: 'rgba(var(--tj-accent-primary), 0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.82)' }}>
+      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
         {label}
       </div>
-      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: '#fff4d4' }}>
+      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {value}
       </div>
     </div>
@@ -243,15 +243,15 @@ function MemoryRow({ index, text }: { index: number; text: string }) {
     <div
       className="px-3 py-3"
       style={{
-        background: 'rgba(9, 8, 10, 0.35)',
-        boxShadow: 'inset 2px 0 0 rgba(245, 217, 122, 0.6), inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.84), rgba(var(--tj-surface-strong),0.56))',
+        boxShadow: 'inset 2px 0 0 rgba(var(--tj-accent-primary), 0.6), inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[11px] tracking-[0.16em]" style={{ color: 'rgba(200, 188, 158, 0.72)' }}>
+      <div className="font-serif text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
         #{index + 1}
       </div>
-      <div className="mt-1 whitespace-pre-wrap break-words font-serif text-[13px] leading-relaxed tracking-[0.04em]" style={{ color: 'rgba(235, 223, 193, 0.95)' }}>
+      <div className="mt-1 whitespace-pre-wrap break-words font-serif text-[13px] leading-relaxed tracking-[0.04em]" style={{ color: 'rgba(var(--tj-text-primary), 0.95)' }}>
         {text}
       </div>
     </div>
@@ -263,18 +263,18 @@ function HintCard({ title, value, text }: { title: string; value: string; text: 
     <div
       className="px-3 py-3"
       style={{
-        background: 'rgba(245, 217, 122, 0.05)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+        background: 'rgba(var(--tj-accent-primary), 0.05)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+      <div className="font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
         {title}
       </div>
-      <div className="mt-1 font-serif text-[14px] font-semibold" style={{ color: '#fff4d4' }}>
+      <div className="mt-1 font-serif text-[14px] font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {value}
       </div>
-      <div className="mt-1 font-serif text-[12px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.78)' }}>
+      <div className="mt-1 font-serif text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
         {text}
       </div>
     </div>
@@ -286,12 +286,12 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
     <div
       className="px-4 py-5 text-center"
       style={{
-        background: 'rgba(160, 148, 120, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(160, 148, 120, 0.2)',
+        background: 'rgba(var(--tj-text-secondary), 0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
         {title}
       </div>
       <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>
@@ -314,10 +314,10 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="font-serif text-[12px] tracking-[0.18em] px-3 py-1.5 transition-all hover:bg-[rgba(245,217,122,0.08)]"
+      className="font-serif text-[12px] tracking-[0.18em] px-3 py-1.5 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
       style={{
-        color: '#fff4d4',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.4)',
+        color: 'rgb(var(--tj-text-primary))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4)',
         clipPath: smallClip,
       }}
     >

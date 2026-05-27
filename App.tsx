@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
 import { LandingPage } from '@/components/layout/LandingPage';
 import { GameView } from '@/components/layout/GameView';
@@ -44,10 +44,11 @@ import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
+import type { 手机系统 } from '@/models/phone';
 import { 创建空手机系统 } from '@/models/phone';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import { loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
-import { applyStoryProgressSuggestion, markStorySegmentDeviated } from '@/services/storyProgressService';
+import { applyStoryProgressSuggestion, getCurrentStoryChapterLabel, markStorySegmentDeviated } from '@/services/storyProgressService';
 
 export default function App() {
   const { state, actions } = useGame();
@@ -73,14 +74,7 @@ export default function App() {
     ? GAME_MENU_ITEMS.find((item) => item.id === activeSystem) ?? null
     : null;
   const currentStoryChapter = useMemo(() => {
-    const series = state.剧情编织.系列列表.find((item) => item.id === state.剧情编织.当前系列ID)
-      ?? state.剧情编织.系列列表.find((item) => item.激活注入 !== false);
-    if (!series || series.激活注入 === false) return '';
-    const current = series.分段列表.find((segment) => segment.运行状态 === '当前')
-      ?? series.分段列表.find((segment) => segment.组号 === series.当前分段组号);
-    if (!current) return `${series.标题} · 未选择章节`;
-    const chapter = current.章节标题?.length ? current.章节标题.join(' / ') : current.标题;
-    return `${series.标题} · ${chapter}`;
+    return getCurrentStoryChapterLabel(state.剧情编织);
   }, [state.剧情编织]);
   const latestActiveTask = [...state.queueTasks].reverse().find((task) =>
     ['main_story', 'memory', 'variable', 'news', 'yiting', 'zhiku'].includes(task.id),
@@ -101,6 +95,16 @@ export default function App() {
     state.set剧情推进建议(null);
     void saveSetting('storyWeavingSystem', next);
   };
+
+  const setPhonePersistently = useCallback<React.Dispatch<React.SetStateAction<手机系统>>>((updater) => {
+    state.set手机((prev) => {
+      const next = typeof updater === 'function'
+        ? (updater as (value: 手机系统) => 手机系统)(prev)
+        : updater;
+      void saveSetting('phoneSystemState', next);
+      return next;
+    });
+  }, [state]);
 
   // 自动触发第 0 回合：handleStartGame 把触发文本写入 pendingOpeningTrigger，
   // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
@@ -164,9 +168,13 @@ export default function App() {
             gameSettings={state.gameSettings}
             onGameSettingsChange={state.setGameSettings}
             currentTheme={state.currentTheme}
-            onThemeChange={state.setCurrentTheme}
+            onThemeChange={(theme) => {
+              state.setCurrentTheme(theme);
+              void saveSetting('theme', theme);
+            }}
             onSave={actions.handleSave}
             onContinue={actions.handleContinue}
+            onLoadSave={(id) => handleLoadById(id, state)}
             initialTab={settingsInitialTab}
             旅人={state.旅人}
             世界={state.世界}
@@ -179,6 +187,7 @@ export default function App() {
             新闻={state.新闻}
             剧情编织={state.剧情编织}
             on剧情编织Change={state.set剧情编织}
+            getContextSnapshot={actions.getContextSnapshot}
             variableSetters={{
               set旅人: state.set旅人,
               set世界: state.set世界,
@@ -371,7 +380,7 @@ export default function App() {
                 album: state.相册,
                 onAlbumChange: state.set相册,
                 phone: state.手机,
-                onPhoneChange: state.set手机,
+                onPhoneChange: setPhonePersistently,
                 memorySystem: state.记忆,
                 onMemorySystemChange: state.set记忆,
                 yitingSystem: state.忆庭,
@@ -414,9 +423,13 @@ export default function App() {
           gameSettings={state.gameSettings}
           onGameSettingsChange={state.setGameSettings}
           currentTheme={state.currentTheme}
-          onThemeChange={state.setCurrentTheme}
+          onThemeChange={(theme) => {
+            state.setCurrentTheme(theme);
+            void saveSetting('theme', theme);
+          }}
           onSave={actions.handleSave}
           onContinue={actions.handleContinue}
+          onLoadSave={(id) => handleLoadById(id, state)}
           initialTab={settingsInitialTab}
           旅人={state.旅人}
           世界={state.世界}
@@ -429,13 +442,14 @@ export default function App() {
           新闻={state.新闻}
           剧情编织={state.剧情编织}
           on剧情编织Change={state.set剧情编织}
+          getContextSnapshot={actions.getContextSnapshot}
           variableSetters={{
             set旅人: state.set旅人,
             set世界: state.set世界,
             set记忆: state.set记忆,
             set忆庭: state.set忆庭,
             set智库: state.set智库,
-            set手机: state.set手机,
+            set手机: setPhonePersistently,
             setNPC: state.setNPC,
             set新闻: state.set新闻,
             set剧情: state.set剧情,
@@ -462,7 +476,7 @@ export default function App() {
           gameSettings={state.gameSettings}
           turnCount={state.turnCount}
           npcRecords={state.NPC}
-          onPhoneChange={state.set手机}
+          onPhoneChange={setPhonePersistently}
           onMemoryChange={state.set记忆}
           onYitingChange={state.set忆庭}
           onNpcRecordsChange={state.setNPC}

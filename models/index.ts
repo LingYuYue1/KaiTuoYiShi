@@ -15,7 +15,15 @@ export {
   归一化战技记录,
 } from './skill';
 export type { 时段定义, 世界状态, 时段NPC, 派系定义 } from './world';
-export { 创建空世界状态, 归一化世界状态 } from './world';
+export {
+  创建空世界状态,
+  归一化世界状态,
+  默认琥珀日期,
+  对齐世界日期与天数,
+  推进琥珀日期,
+  解析琥珀日期序数,
+  格式化琥珀日期序数,
+} from './world';
 export type { 手机系统, 手机联系人, 手机会话, 手机消息, 主动来信种子 } from './phone';
 export { 创建空手机系统, 归一化手机系统 } from './phone';
 export type { 聊天消息, 解析后回复, 消息角色 } from './chat';

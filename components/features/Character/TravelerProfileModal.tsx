@@ -18,6 +18,7 @@ export function TravelerProfileModal({ traveler, onClose }: Props) {
     ? PATH_STAGE_DEFS.find((s) => s.stage === primaryPath.阶段)
     : undefined;
   const primaryTraits = primaryPath ? 获取命途特质(primaryPath.id) : [];
+  const avatarUrl = traveler.头像?.trim() || traveler.图像档案?.头像?.trim();
 
   return (
     <Modal onClose={onClose} title="旅人档案">
@@ -25,24 +26,30 @@ export function TravelerProfileModal({ traveler, onClose }: Props) {
         {/* 顶部：头像 + 姓名 */}
         <div className="flex items-center gap-4">
           <div
-            className="flex h-[88px] w-[88px] shrink-0 items-center justify-center font-serif text-4xl font-bold"
+            className="flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden font-serif text-4xl font-bold"
             style={{
               background:
-                'radial-gradient(circle, rgba(28, 22, 18, 0.95) 0%, rgba(6, 5, 7, 0.95) 100%)',
+                avatarUrl
+                  ? 'rgb(var(--tj-surface-strong))'
+                  : 'radial-gradient(circle, rgba(var(--tj-bubble), 1) 0%, rgba(var(--tj-surface-strong), 1) 100%)',
               boxShadow:
-                'inset 0 0 0 1.5px rgba(245, 217, 122, 0.75), 0 0 22px rgba(245, 217, 122, 0.18)',
-              color: '#f5d97a',
+                'inset 0 0 0 1.5px rgba(var(--tj-accent-primary), 0.75), 0 0 22px rgba(var(--tj-accent-primary), 0.18)',
+              color: 'rgb(var(--tj-accent-primary))',
               clipPath:
                 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
             }}
           >
-            {traveler.姓名 ? traveler.姓名[0] : '?'}
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={`${traveler.姓名 || '旅人'} 头像`} className="h-full w-full object-cover" />
+            ) : (
+              traveler.姓名 ? traveler.姓名[0] : '?'
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div
               className="font-serif text-2xl font-bold tracking-[0.2em]"
               style={{
-                background: 'linear-gradient(180deg, #fff4d4 0%, #f5d97a 60%, #c4a35a 100%)',
+                background: 'linear-gradient(180deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 60%, rgb(var(--tj-accent-secondary)) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -53,7 +60,7 @@ export function TravelerProfileModal({ traveler, onClose }: Props) {
             {traveler.别名 && (
               <div
                 className="mt-1 font-serif text-sm italic tracking-[0.22em]"
-                style={{ color: 'rgba(220, 208, 178, 0.95)' }}
+                style={{ color: 'rgba(var(--tj-text-secondary), 0.95)' }}
               >
                 「{traveler.别名}」
               </div>
@@ -116,9 +123,9 @@ export function TravelerProfileModal({ traveler, onClose }: Props) {
         <div
           className="mt-2 px-3 py-2 text-[13px] font-serif tracking-wider"
           style={{
-            color: 'rgba(245, 217, 122, 0.95)',
-            background: 'rgba(245, 217, 122, 0.06)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.3)',
+            color: 'rgba(var(--tj-accent-primary), 0.95)',
+            background: 'linear-gradient(135deg, rgba(var(--tj-amber-soft),0.16), rgba(var(--tj-bubble),1))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
             clipPath: cardClip,
           }}
         >
@@ -134,7 +141,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <div
         className="mb-2 font-serif text-[13px] tracking-[0.35em]"
-        style={{ color: 'rgba(245, 217, 122, 0.95)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.95)' }}
       >
         ◆ {title.toUpperCase()}
       </div>
@@ -149,21 +156,21 @@ function InfoCell({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'rgba(245, 217, 122, 0.04)',
+        background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-paper-deep),0.72))',
         boxShadow:
-          'inset 0 0 0 1px rgba(245, 217, 122, 0.22), inset 2px 0 0 rgba(245, 217, 122, 0.55)',
+          'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22), inset 2px 0 0 rgba(var(--tj-accent-primary), 0.55)',
         clipPath: cardClip,
       }}
     >
       <span
         className="text-[12px] font-serif tracking-[0.3em]"
-        style={{ color: 'rgba(245, 217, 122, 0.9)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.96)' }}
       >
         {label}
       </span>
       <div
         className="mt-1 font-serif text-[15px] tracking-wider"
-        style={{ color: 'rgba(245, 233, 200, 1)' }}
+        style={{ color: 'rgba(var(--tj-text-primary), 0.96)' }}
       >
         {value}
       </div>
@@ -177,21 +184,21 @@ function BlockCell({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2.5"
       style={{
-        background: 'rgba(245, 217, 122, 0.04)',
+        background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-paper-deep),0.72))',
         boxShadow:
-          'inset 0 0 0 1px rgba(245, 217, 122, 0.22), inset 2px 0 0 rgba(245, 217, 122, 0.55)',
+          'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22), inset 2px 0 0 rgba(var(--tj-accent-primary), 0.55)',
         clipPath: cardClip,
       }}
     >
       <span
         className="text-[12px] font-serif tracking-[0.3em]"
-        style={{ color: 'rgba(245, 217, 122, 0.9)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}
       >
         {label}
       </span>
       <div
         className="mt-1 whitespace-pre-wrap font-serif text-[14px] leading-relaxed tracking-wider"
-        style={{ color: 'rgba(240, 228, 195, 0.98)' }}
+        style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}
       >
         {value}
       </div>
@@ -204,16 +211,16 @@ function TraitChip({ trait }: { trait: { 名称: string; 说明: string } }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'rgba(245, 217, 122, 0.06)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.12), rgb(var(--tj-bubble)))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28), inset 2px 0 0 rgba(var(--tj-accent-primary),0.42)',
         clipPath: cardClip,
       }}
       title={trait.说明}
     >
-      <div className="font-serif text-[13px] tracking-[0.22em]" style={{ color: '#f5d97a' }}>
+      <div className="font-serif text-[13px] tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {trait.名称}
       </div>
-      <div className="mt-1 font-serif text-[12px] leading-relaxed tracking-wider" style={{ color: 'rgba(220, 208, 178, 0.86)' }}>
+      <div className="mt-1 font-serif text-[12px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}>
         {trait.说明}
       </div>
     </div>

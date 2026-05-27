@@ -1,6 +1,6 @@
 // 路径解析与按路径修改 state 的工具。
 // 设计参考：墨色项目 utils/stateHelpers.ts 的 应用路径命令 / 解析路径片段。
-// 关键不同：我们不区分 "gameState." 前缀（前端协议直接用根名），路径用英文（traveler/npcRecords/...）。
+// 关键不同：我们不区分 "gameState." 前缀（前端协议直接用根名），路径使用当前中文 schema 根名。
 //
 // 支持的路径语法：
 //   foo                       根字段

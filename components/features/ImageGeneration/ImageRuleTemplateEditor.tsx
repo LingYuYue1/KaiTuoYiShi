@@ -243,7 +243,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
         className="grid gap-2 md:grid-cols-3"
         style={{
           background: 'rgba(0,0,0,0.18)',
-          boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
           clipPath: smallClip,
           padding: 8,
         }}
@@ -255,13 +255,13 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
             onClick={() => setActiveRuleTab(tab.id)}
             className="min-w-0 px-4 py-3 text-left transition-all"
             style={{
-              color: activeRuleTab === tab.id ? '#1a1325' : 'rgba(245,217,122,0.86)',
+              color: activeRuleTab === tab.id ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary),0.86)',
               background: activeRuleTab === tab.id
-                ? 'linear-gradient(135deg, rgba(245,217,122,0.96), rgba(196,163,90,0.92))'
-                : 'rgba(245,217,122,0.045)',
+                ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))'
+                : 'rgba(var(--tj-accent-primary),0.045)',
               boxShadow: activeRuleTab === tab.id
-                ? 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 16px rgba(245,217,122,0.10)'
-                : 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+                ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 16px rgba(var(--tj-accent-primary),0.10)'
+                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
               clipPath: smallClip,
             }}
           >
@@ -387,16 +387,16 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
         className="space-y-4 p-4"
         style={{
           background: 'rgba(0,0,0,0.24)',
-          boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
           clipPath: smallClip,
         }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="font-serif text-xs font-bold tracking-[0.24em]" style={{ color: 'rgba(245,217,122,0.78)' }}>
+            <div className="font-serif text-xs font-bold tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>
               规则模板
             </div>
-            <div className="mt-1 text-xs" style={{ color: 'rgba(220,208,178,0.62)' }}>
+            <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>
               选择当前启用的模型规则，并编辑基础模式与锚定模式规则。
             </div>
           </div>
@@ -408,13 +408,13 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                 onClick={() => setActiveSection(item.id)}
                 className="px-3 py-2 text-xs font-serif tracking-[0.12em] transition-all"
                 style={{
-                  color: activeSection === item.id ? '#1a1325' : 'rgba(245,217,122,0.86)',
+                  color: activeSection === item.id ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary),0.86)',
                   background: activeSection === item.id
-                    ? 'linear-gradient(135deg, rgba(245,217,122,0.96), rgba(196,163,90,0.9))'
-                    : 'rgba(245,217,122,0.055)',
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.9))'
+                    : 'rgba(var(--tj-accent-primary),0.055)',
                   boxShadow: activeSection === item.id
-                    ? 'inset 0 0 0 1px rgba(255,245,200,0.45)'
-                    : 'inset 0 0 0 1px rgba(245,217,122,0.18)',
+                    ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
                   clipPath: smallClip,
                 }}
               >
@@ -428,16 +428,16 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
           className="space-y-4 p-4"
           style={{
             background: 'rgba(0,0,0,0.28)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.10)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.10)',
             clipPath: smallClip,
           }}
         >
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3" style={{ borderColor: 'rgba(245,217,122,0.10)' }}>
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.10)' }}>
             <div>
-              <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.9)' }}>
+              <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.9)' }}>
                 {section.label}
               </div>
-              <div className="mt-1 text-xs" style={{ color: 'rgba(220,208,178,0.58)' }}>{section.desc}</div>
+              <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>{section.desc}</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <TemplateButton onClick={addPreset}>新增规则</TemplateButton>
@@ -511,9 +511,9 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
               <div
                 className="p-4 text-center text-sm"
                 style={{
-                  color: 'rgba(245,217,122,0.42)',
+                  color: 'rgba(var(--tj-accent-primary),0.42)',
                   background: 'rgba(0,0,0,0.18)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
                   clipPath: smallClip,
                 }}
               >
@@ -534,7 +534,7 @@ function SelectField({ label, value, onChange, presets }: { label: string; value
     : presets;
   return (
     <label className="block space-y-2">
-      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.66)' }}>{label}</span>
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
         <option value="">不启用</option>
         {options.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
@@ -546,7 +546,7 @@ function SelectField({ label, value, onChange, presets }: { label: string; value
 function ModelSelectField({ label, value, onChange, presets, emptyLabel }: { label: string; value: string; onChange: (value: string) => void; presets: 文生图模型规则集[]; emptyLabel: string }) {
   return (
     <label className="block space-y-2">
-      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.66)' }}>{label}</span>
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
         <option value="">{emptyLabel}</option>
         {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
@@ -558,7 +558,7 @@ function ModelSelectField({ label, value, onChange, presets, emptyLabel }: { lab
 function ArtistSelectField({ label, value, onChange, presets }: { label: string; value: string; onChange: (value: string) => void; presets: 文生图画师串预设[] }) {
   return (
     <label className="block space-y-2">
-      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.66)' }}>{label}</span>
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
         <option value="">不启用</option>
         {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
@@ -570,7 +570,7 @@ function ArtistSelectField({ label, value, onChange, presets }: { label: string;
 function PngSelectField({ label, value, onChange, presets }: { label: string; value: string; onChange: (value: string) => void; presets: 文生图PNG画风预设[] }) {
   return (
     <label className="block space-y-2">
-      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.66)' }}>{label}</span>
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
         <option value="">不启用</option>
         {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
@@ -582,7 +582,7 @@ function PngSelectField({ label, value, onChange, presets }: { label: string; va
 function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="block space-y-2">
-      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.66)' }}>{label}</span>
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
     </label>
   );
@@ -591,7 +591,7 @@ function TextInput({ label, value, onChange }: { label: string; value: string; o
 function TemplateTextarea({ label, value, onChange, rows }: { label: string; value: string; onChange: (value: string) => void; rows: number }) {
   return (
     <label className="block space-y-2">
-      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.66)' }}>{label}</span>
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -611,9 +611,9 @@ function TemplateButton({ children, onClick, disabled = false, danger = false }:
       disabled={disabled}
       className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-40"
       style={{
-        color: danger ? 'rgba(255,190,190,0.9)' : 'rgba(245,217,122,0.88)',
-        background: danger ? 'rgba(170,60,70,0.10)' : 'rgba(245,217,122,0.055)',
-        boxShadow: danger ? 'inset 0 0 0 1px rgba(255,130,140,0.22)' : 'inset 0 0 0 1px rgba(245,217,122,0.20)',
+        color: danger ? 'rgba(255,190,190,0.9)' : 'rgba(var(--tj-accent-primary),0.88)',
+        background: danger ? 'rgba(170,60,70,0.10)' : 'rgba(var(--tj-accent-primary),0.055)',
+        boxShadow: danger ? 'inset 0 0 0 1px rgba(255,130,140,0.22)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.20)',
         clipPath: smallClip,
       }}
     >
@@ -628,15 +628,15 @@ function TemplateCard({ eyebrow, title, desc, actions, children }: { eyebrow: st
       className="space-y-4 p-4"
       style={{
         background: 'rgba(0,0,0,0.24)',
-        boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
       }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3" style={{ borderColor: 'rgba(245,217,122,0.10)' }}>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.10)' }}>
         <div>
-          <div className="font-serif text-[11px] font-bold uppercase tracking-[0.24em]" style={{ color: 'rgba(245,217,122,0.58)' }}>{eyebrow}</div>
-          <div className="mt-1 font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.9)' }}>{title}</div>
-          <div className="mt-1 max-w-3xl text-xs leading-relaxed" style={{ color: 'rgba(220,208,178,0.58)' }}>{desc}</div>
+          <div className="font-serif text-[11px] font-bold uppercase tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary),0.58)' }}>{eyebrow}</div>
+          <div className="mt-1 font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.9)' }}>{title}</div>
+          <div className="mt-1 max-w-3xl text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>{desc}</div>
         </div>
         {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </div>
@@ -650,9 +650,9 @@ function EmptyBox({ children }: { children: ReactNode }) {
     <div
       className="p-4 text-center text-sm"
       style={{
-        color: 'rgba(245,217,122,0.42)',
+        color: 'rgba(var(--tj-accent-primary),0.42)',
         background: 'rgba(0,0,0,0.18)',
-        boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
         clipPath: smallClip,
       }}
     >

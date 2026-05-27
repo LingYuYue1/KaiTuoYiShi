@@ -177,17 +177,17 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
       <div
         className="px-4 py-4"
         style={{
-          background: 'radial-gradient(circle at top left, rgba(245, 217, 122, 0.16), transparent 38%), linear-gradient(135deg, rgba(18,16,18,0.88), rgba(8,7,9,0.94))',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28), 0 0 26px rgba(245, 217, 122, 0.08)',
+          background: 'radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.16), transparent 38%), linear-gradient(135deg, rgba(var(--tj-bg-secondary),0.88), rgba(var(--tj-bg-primary),0.94))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28), 0 0 26px rgba(var(--tj-accent-primary), 0.08)',
           clipPath: cardClip,
         }}
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: '#fff4d4' }}>
+            <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
               文生图控制台
             </div>
-            <div className="mt-2 max-w-3xl text-sm leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.78)' }}>
+            <div className="mt-2 max-w-3xl text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
               相册是所有图片的中转站。普通、场景、NSFW 三类接口分开配置；NSFW 不会回退到普通接口，避免正常游玩时混入成人内容。
             </div>
           </div>
@@ -205,13 +205,13 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
             onClick={() => setActivePage(page.id)}
             className="px-3 py-3 text-left transition-all"
             style={{
-              color: activePage === page.id ? '#1a1325' : 'rgba(245, 217, 122, 0.88)',
+              color: activePage === page.id ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.88)',
               background: activePage === page.id
-                ? 'linear-gradient(135deg, rgba(245,217,122,0.96), rgba(196,163,90,0.92))'
-                : 'rgba(245, 217, 122, 0.055)',
+                ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))'
+                : 'rgba(var(--tj-accent-primary), 0.055)',
               boxShadow: activePage === page.id
-                ? 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 16px rgba(245,217,122,0.12)'
-                : 'inset 0 0 0 1px rgba(245,217,122,0.18)',
+                ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 16px rgba(var(--tj-accent-primary),0.12)'
+                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
               clipPath: smallClip,
             }}
           >
@@ -366,7 +366,7 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
 
       {activePage === 'guide' && <GuidePage />}
 
-      <div className="sticky bottom-0 z-10 pt-3" style={{ background: 'linear-gradient(180deg, rgba(10,9,10,0), rgba(10,9,10,0.98) 30%)' }}>
+      <div className="sticky bottom-0 z-10 pt-3" style={{ background: 'linear-gradient(180deg, rgba(var(--tj-bg-primary),0), rgba(var(--tj-bg-primary),0.98) 30%)' }}>
         {message && (
           <div className="mb-2 text-right text-xs" style={{ color: message.startsWith('保存失败') ? 'rgba(255,180,180,0.92)' : 'rgba(165,230,170,0.92)' }}>
             {message}
@@ -377,11 +377,11 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
           onClick={handleSave}
           className="w-full py-3 font-serif text-sm font-bold tracking-[0.32em]"
           style={{
-            color: savedFlash ? '#122015' : '#1a1325',
+            color: savedFlash ? '#122015' : 'rgb(var(--tj-bg-primary))',
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(165, 230, 170, 0.96), rgba(105, 190, 130, 0.92))'
-              : 'linear-gradient(135deg, rgba(245, 217, 122, 0.96), rgba(212, 177, 90, 0.94))',
-            boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.52), 0 0 18px rgba(245,217,122,0.16)',
+              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(212, 177, 90, 0.94))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.52), 0 0 18px rgba(var(--tj-accent-primary),0.16)',
             clipPath: smallClip,
           }}
         >
@@ -440,10 +440,10 @@ function ApiBlock({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="font-serif text-base font-bold tracking-[0.24em]" style={{ color: nsfw ? '#f1b7ce' : '#f5d97a' }}>{title}</div>
-          <div className="mt-1 text-sm leading-relaxed" style={{ color: 'rgba(220,208,178,0.72)' }}>{desc}</div>
+          <div className="font-serif text-base font-bold tracking-[0.24em]" style={{ color: nsfw ? '#f1b7ce' : 'rgb(var(--tj-accent-primary))' }}>{title}</div>
+          <div className="mt-1 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{desc}</div>
         </div>
-        <button type="button" onClick={onTest} disabled={testing || !api.enabled} className="px-4 py-2 text-xs font-serif tracking-[0.18em] disabled:opacity-45" style={{ color: nsfw ? '#f1b7ce' : '#f5d97a', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(245,217,122,0.055)', boxShadow: nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.3)' : 'inset 0 0 0 1px rgba(245,217,122,0.28)', clipPath: smallClip }}>
+        <button type="button" onClick={onTest} disabled={testing || !api.enabled} className="px-4 py-2 text-xs font-serif tracking-[0.18em] disabled:opacity-45" style={{ color: nsfw ? '#f1b7ce' : 'rgb(var(--tj-accent-primary))', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(var(--tj-accent-primary),0.055)', boxShadow: nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.3)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)', clipPath: smallClip }}>
           {testing ? '测试中...' : '测试连接'}
         </button>
       </div>
@@ -506,7 +506,7 @@ function ApiBlock({
               <div className="flex gap-2">
                 <input value={api.model} onChange={(e) => onChange({ model: e.target.value })} placeholder={api.backend === 'comfyui' ? '填写本机已有 ckpt_name，例如 novaAnimeXL_v70Happyhalloween.safetensors' : suggestions[0] ?? '模型 ID'} list={`${apiKey}-models`} className="kaituo-input min-w-0 flex-1 px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
                 {api.backend === 'comfyui' && (
-                  <button type="button" onClick={handleFetchComfyModels} disabled={modelLoading || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: '#f5d97a', background: 'rgba(245,217,122,0.055)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.22)', clipPath: smallClip }}>
+                  <button type="button" onClick={handleFetchComfyModels} disabled={modelLoading || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
                     {modelLoading ? '读取中' : '获取'}
                   </button>
                 )}
@@ -540,10 +540,10 @@ function ApiBlock({
 
         <div className="space-y-3">
           <SubPanel title="端点预览">
-            <div className="break-all rounded px-3 py-2 text-xs font-mono" style={{ color: 'rgba(220,208,178,0.8)', background: 'rgba(8,7,9,0.58)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)' }}>
+            <div className="break-all rounded px-3 py-2 text-xs font-mono" style={{ color: 'rgba(var(--tj-text-secondary),0.8)', background: 'rgba(var(--tj-bg-primary),0.58)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)' }}>
               {endpoint || '填写 Base URL 后显示完整端点'}
             </div>
-            {backendHints(api.backend).map((line) => <div key={line} className="text-xs leading-relaxed" style={{ color: 'rgba(200,188,158,0.72)' }}>{line}</div>)}
+            {backendHints(api.backend).map((line) => <div key={line} className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{line}</div>)}
           </SubPanel>
           <SubPanel title="风格与重试">
             <Field label="默认风格">
@@ -556,7 +556,7 @@ function ApiBlock({
             </Field>
           </SubPanel>
           {testMessage && (
-            <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: testMessage.startsWith('连接失败') ? 'rgba(255,180,180,0.92)' : 'rgba(165,230,170,0.9)', background: 'rgba(8,7,9,0.46)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: smallClip }}>
+            <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: testMessage.startsWith('连接失败') ? 'rgba(255,180,180,0.92)' : 'rgba(165,230,170,0.9)', background: 'rgba(var(--tj-bg-primary),0.46)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
               {testMessage}
             </div>
           )}
@@ -619,7 +619,7 @@ function GuidePage() {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.75)' }}>{label}</div>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>{label}</div>
       {children}
     </label>
   );
@@ -627,13 +627,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function ToggleRow({ label, desc, checked, disabled = false, onChange }: { label: string; desc: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2" style={{ opacity: disabled ? 0.58 : 1, background: 'rgba(16, 14, 16, 0.45)', boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)', clipPath: smallClip }}>
+    <div className="flex items-center justify-between gap-3 px-3 py-2" style={{ opacity: disabled ? 0.58 : 1, background: 'rgba(var(--tj-bg-secondary), 0.45)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)', clipPath: smallClip }}>
       <div className="min-w-0">
         <div className="font-serif text-sm font-bold tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>{label}</div>
-        <div className="mt-0.5 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>{desc}</div>
+        <div className="mt-0.5 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>{desc}</div>
       </div>
-      <button type="button" disabled={disabled} onClick={() => onChange(!checked)} className="relative h-6 w-11 flex-shrink-0 transition-all disabled:cursor-not-allowed" style={{ background: checked ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))' : 'rgba(60, 55, 40, 0.7)', boxShadow: checked ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 10px rgba(245, 217, 122, 0.25)' : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)', clipPath: smallClip }}>
-        <div className="absolute top-0.5 h-5 w-5 transition-transform" style={{ left: checked ? 'calc(100% - 1.375rem)' : '0.125rem', background: checked ? '#1a1325' : 'rgba(220, 200, 160, 0.85)', clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)' }} />
+      <button type="button" disabled={disabled} onClick={() => onChange(!checked)} className="relative h-6 w-11 flex-shrink-0 transition-all disabled:cursor-not-allowed" style={{ background: checked ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))' : 'rgba(60, 55, 40, 0.7)', boxShadow: checked ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)', clipPath: smallClip }}>
+        <div className="absolute top-0.5 h-5 w-5 transition-transform" style={{ left: checked ? 'calc(100% - 1.375rem)' : '0.125rem', background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)', clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)' }} />
       </button>
     </div>
   );
@@ -641,8 +641,8 @@ function ToggleRow({ label, desc, checked, disabled = false, onChange }: { label
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-4 px-4 py-4" style={{ background: 'rgba(16,14,16,0.48)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.16)', clipPath: cardClip }}>
-      <div className="font-serif text-sm font-bold tracking-[0.24em]" style={{ color: '#f5d97a' }}>{title}</div>
+    <div className="space-y-4 px-4 py-4" style={{ background: 'rgba(var(--tj-bg-secondary),0.48)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: cardClip }}>
+      <div className="font-serif text-sm font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{title}</div>
       {children}
     </div>
   );
@@ -650,8 +650,8 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 
 function SubPanel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(8,7,9,0.38)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)', clipPath: smallClip }}>
-      <div className="font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(245,217,122,0.82)' }}>{title}</div>
+    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.38)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
+      <div className="font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>{title}</div>
       {children}
     </div>
   );
@@ -659,7 +659,7 @@ function SubPanel({ title, children }: { title: string; children: ReactNode }) {
 
 function Notice({ children, nsfw = false }: { children: ReactNode; nsfw?: boolean }) {
   return (
-    <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: nsfw ? 'rgba(241,183,206,0.9)' : 'rgba(220,208,178,0.76)', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(245,217,122,0.055)', boxShadow: nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.24)' : 'inset 0 0 0 1px rgba(245,217,122,0.16)', clipPath: smallClip }}>
+    <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: nsfw ? 'rgba(241,183,206,0.9)' : 'rgba(var(--tj-text-secondary),0.76)', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(var(--tj-accent-primary),0.055)', boxShadow: nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.24)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: smallClip }}>
       {children}
     </div>
   );
@@ -667,19 +667,19 @@ function Notice({ children, nsfw = false }: { children: ReactNode; nsfw?: boolea
 
 function GuideCard({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="px-3 py-3" style={{ background: 'rgba(8,7,9,0.38)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)', clipPath: smallClip }}>
-      <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: '#fff4d4' }}>{title}</div>
-      <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(200,188,158,0.72)' }}>{desc}</div>
+    <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.38)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
+      <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{title}</div>
+      <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{desc}</div>
     </div>
   );
 }
 
 type StatusTone = 'ok' | 'muted' | 'info' | 'nsfw';
 function StatusCard({ label, value, tone }: { label: string; value: string; tone: StatusTone }) {
-  const color = tone === 'ok' ? 'rgba(165,230,170,0.95)' : tone === 'info' ? 'rgba(160,205,235,0.92)' : tone === 'nsfw' ? 'rgba(241,183,206,0.95)' : 'rgba(200,188,158,0.72)';
+  const color = tone === 'ok' ? 'rgba(165,230,170,0.95)' : tone === 'info' ? 'rgba(160,205,235,0.92)' : tone === 'nsfw' ? 'rgba(241,183,206,0.95)' : 'rgba(var(--tj-text-secondary),0.72)';
   return (
-    <div className="px-3 py-2" style={{ background: 'rgba(8,7,9,0.42)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: smallClip }}>
-      <div className="text-[11px]" style={{ color: 'rgba(200,188,158,0.62)' }}>{label}</div>
+    <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
+      <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>{label}</div>
       <div className="mt-1 truncate font-serif text-sm font-bold" style={{ color }}>{value}</div>
     </div>
   );
@@ -688,8 +688,8 @@ function StatusCard({ label, value, tone }: { label: string; value: string; tone
 function InfoLine({ label, value, nsfw = false }: { label: string; value: string; nsfw?: boolean }) {
   return (
     <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-3 text-xs leading-relaxed">
-      <span style={{ color: nsfw ? 'rgba(241,183,206,0.88)' : 'rgba(245,217,122,0.72)' }}>{label}</span>
-      <span style={{ color: 'rgba(220,208,178,0.74)' }}>{value}</span>
+      <span style={{ color: nsfw ? 'rgba(241,183,206,0.88)' : 'rgba(var(--tj-accent-primary),0.72)' }}>{label}</span>
+      <span style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>{value}</span>
     </div>
   );
 }

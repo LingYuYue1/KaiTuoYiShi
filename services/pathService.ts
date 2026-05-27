@@ -14,10 +14,8 @@ import {
   STAGE_PROGRESS_MAX,
   DAILY_PROGRESS_CAP,
   创建命途进度,
-  PATH_SCHOOL_CONFLICTS,
   FORGET_RATE_BY_STAGE,
 } from '@/models/path';
-import { getPath } from '@/data/journeyPresets';
 
 /** 内部：找到指定命途的索引，找不到返回 -1。 */
 function findPathIndex(paths: 命途进度[], id: 命途ID): number {
@@ -193,7 +191,7 @@ export function awakenPath(
 
 // ── 公共：变量系统的统一入口 ──
 // 返回值带 awakenedPathIds，方便上层触发「命途狭间」剧情。
-// 同时返回 forgottenLosses（忘却 + 流派冲突造成的反向衰减），方便 UI 上做提示。
+// 同时返回 forgottenLosses（命途专注造成的忘却衰减），方便 UI 上做提示。
 export function applyPathDeltas(
   traveler: 角色数据结构,
   deltas: 命途增量[],
@@ -202,11 +200,11 @@ export function applyPathDeltas(
 ): {
   traveler: 角色数据结构;
   awakenedPathIds: 命途ID[];
-  forgottenLosses: { pathId: 命途ID; loss: number; reason: 'forget' | 'conflict' }[];
+  forgottenLosses: { pathId: 命途ID; loss: number; reason: 'forget' }[];
 } {
   let next = traveler;
   const awakenedPathIds: 命途ID[] = [];
-  const forgottenLosses: { pathId: 命途ID; loss: number; reason: 'forget' | 'conflict' }[] = [];
+  const forgottenLosses: { pathId: 命途ID; loss: number; reason: 'forget' }[] = [];
 
   for (const d of deltas) {
     if (d.newPath) {
@@ -237,10 +235,9 @@ export function applyPathDeltas(
         );
         next = progressResult.traveler;
 
-        // 正向推进时计算「忘却」与「流派冲突」衰减
+        // 正向推进时只计算「忘却」衰减；不同命途的理念冲突交给正文表现。
         if (progressResult.applied > 0) {
           const forgetLosses = computeForgetting(next, d.pathId, progressResult.applied);
-          const conflictLosses = computeSchoolConflicts(next, d.pathId, progressResult.applied);
 
           for (const fl of forgetLosses) {
             const i = findPathIndex(next.命途列表 ?? [], fl.pathId);
@@ -249,15 +246,6 @@ export function applyPathDeltas(
               ps[i] = bumpProgress(ps[i], -fl.loss);
               next = { ...next, 命途列表: ps };
               forgottenLosses.push({ pathId: fl.pathId, loss: fl.loss, reason: 'forget' });
-            }
-          }
-          for (const cl of conflictLosses) {
-            const i = findPathIndex(next.命途列表 ?? [], cl.pathId);
-            if (i >= 0) {
-              const ps = [...(next.命途列表 ?? [])];
-              ps[i] = bumpProgress(ps[i], -cl.loss);
-              next = { ...next, 命途列表: ps };
-              forgottenLosses.push({ pathId: cl.pathId, loss: cl.loss, reason: 'conflict' });
             }
           }
         }
@@ -287,35 +275,6 @@ export function computeForgetting(
     if (p.id === advancedPathId) continue;
     if (p.是否主命途) continue;
     const loss = Math.round(appliedDelta * rate);
-    if (loss > 0) losses.push({ pathId: p.id, loss });
-  }
-  return losses;
-}
-
-// ── 流派冲突 ──
-// 当推进方所属流派与目标流派存在 PATH_SCHOOL_CONFLICTS 配置时，
-// 按 intensity 让目标命途反向衰减。主命途也受冲突影响（理念层面的对立）。
-export function computeSchoolConflicts(
-  traveler: 角色数据结构,
-  advancedPathId: 命途ID,
-  appliedDelta: number,
-): { pathId: 命途ID; loss: number }[] {
-  if (appliedDelta <= 0) return [];
-  const paths = traveler.命途列表 ?? [];
-  const advancedDef = getPath(advancedPathId);
-  if (!advancedDef?.school) return [];
-
-  const conflictsFromAdvanced = PATH_SCHOOL_CONFLICTS.filter((c) => c.from === advancedDef.school);
-  if (conflictsFromAdvanced.length === 0) return [];
-
-  const losses: { pathId: 命途ID; loss: number }[] = [];
-  for (const p of paths) {
-    if (p.id === advancedPathId) continue;
-    const def = getPath(p.id);
-    if (!def?.school) continue;
-    const conflict = conflictsFromAdvanced.find((c) => c.to === def.school);
-    if (!conflict) continue;
-    const loss = Math.round(appliedDelta * conflict.intensity);
     if (loss > 0) losses.push({ pathId: p.id, loss });
   }
   return losses;

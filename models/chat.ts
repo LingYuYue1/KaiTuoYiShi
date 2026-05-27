@@ -30,6 +30,11 @@ export interface 聊天消息 {
   outputTokens?: number;
   responseDurationSec?: number;
   isStreaming?: boolean;
+  debugContext?: {
+    systemPrompt: string;
+    messages: Array<{ role: 消息角色; content: string }>;
+    recallPreview?: string;
+  };
   /** 该 AI 回复对应的「user 发送前」状态快照，用于 reroll 回滚。
    *  生成新 assistant message 时会清掉上一条的 snapshot，保证存档里至多只有最新一条带 snapshot。 */
   preTurnSnapshot?: 回合快照;
@@ -43,6 +48,10 @@ export interface 解析后回复 {
   worldEvents: string[];
   /** 由 <行动选项> 标签生成的可点选行动列表，最多 4 条。空数组表示本回合 AI 没给行动选项。 */
   actionOptions: string[];
+  /** 主剧情模型输出的低风险变量候选事实。不是最终命令，只给变量模型作为线索。 */
+  variableDraft: string;
+  /** 主剧情模型输出的后续承接备忘。用于下一回合接续伏笔、强制承接、延后/受阻项和镜头余波。 */
+  storyPlan: string;
   /** AI 在主流程中发出的「命途狭间」邀请。内容为命途 ID(hunt/destruction/...)。
    *  非空时 sendWorkflow 会写入 世界状态.待触发狭间,并在聊天区渲染一张邀请卡片。 */
   awakenInvite: string;
@@ -64,6 +73,8 @@ export function 创建空解析回复(): 解析后回复 {
     commands: {},
     worldEvents: [],
     actionOptions: [],
+    variableDraft: '',
+    storyPlan: '',
     awakenInvite: '',
     awakenQuestions: '',
     awakenJudgement: '',

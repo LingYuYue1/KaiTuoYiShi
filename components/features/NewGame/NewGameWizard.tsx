@@ -8,9 +8,12 @@ import type { 主题预设 } from '@/models/settings';
 import type {
   命途ID,
   剧情模式,
+  阵营ID,
 } from '@/models/journey';
 import {
   abilityPresets,
+  factions,
+  getFaction,
   getPath,
   getStartingScenario,
   getStoryMode,
@@ -72,6 +75,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
   const [background, setBackground] = useState('');
 
   const [pathId, setPathId] = useState<命途ID>('none');
+  const [factionId, setFactionId] = useState<阵营ID>('none');
   const [customIdentity, setCustomIdentity] = useState('');
   const [selectedAbilityIds, setSelectedAbilityIds] = useState<string[]>([]);
   const [customAbilityDraft, setCustomAbilityDraft] = useState('');
@@ -89,6 +93,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
     [storyMode],
   );
   const selectedPath = useMemo(() => getPath(pathId), [pathId]);
+  const selectedFaction = useMemo(() => getFaction(factionId) ?? factions[0], [factionId]);
   const selectedScenario = useMemo<OpeningScenario>(
     () => getStartingScenario(startingScenarioId) ?? startingScenarios[0],
     [startingScenarioId],
@@ -111,12 +116,13 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
         location: '黑塔空间站',
         storyMode: storyModeDef.name,
         path: selectedPath,
+        faction: selectedFaction,
         customIdentity,
         customStartPrompt,
         canonicalTrailblazer: getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue,
         abilities: selectedAbilityNames,
       }),
-    [canonicalTrailblazer, customIdentity, customStartPrompt, selectedAbilityNames, selectedPath, selectedScenario, storyModeDef.name],
+    [canonicalTrailblazer, customIdentity, customStartPrompt, selectedAbilityNames, selectedFaction, selectedPath, selectedScenario, storyModeDef.name],
   );
 
   const openingHighlights = selectedScenario?.openingHighlights ?? [];
@@ -151,7 +157,10 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
         ? [创建命途进度(pathId, true, selectedScenarioDef?.name ?? '', '开局承载')]
         : [];
     const finalIdentity = customIdentity.trim();
+    const factionIdentity = selectedFaction.id === 'none' ? '' : selectedFaction.name;
+    const displayIdentity = [factionIdentity, finalIdentity].filter(Boolean).join(' · ');
     const travelerBackground = background.trim();
+    const canonicalName = getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue;
 
     const traveler: 角色数据结构 = {
       姓名: name.trim() || '无名开拓者',
@@ -160,12 +169,13 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
       年龄: age,
       生日: birthday.trim(),
       身高: '',
-      身份: finalIdentity,
+      身份: displayIdentity,
       外貌: appearance.trim(),
       性格: personality.trim(),
       背景: travelerBackground,
       专长知识: [],
       头像: '',
+      图像档案: {},
       属性: {
         力量: 0,
         智慧: 0,
@@ -189,7 +199,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
     worldState.当前地点 = '黑塔空间站';
     worldState.剧情模式 = storyMode;
     worldState.起航之地ID = 'heita_station_incident';
-    worldState.原著主角 = getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue;
+    worldState.原著主角 = canonicalName;
     worldState.自定义开局 = customStartPrompt.trim();
     worldState.全局事件 = openingSummaryLines;
 
@@ -232,7 +242,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
       className="relative min-h-screen overflow-hidden px-4 py-8"
       style={{
         background:
-          'radial-gradient(circle at top left, rgba(245, 217, 122, 0.08) 0, transparent 28%), radial-gradient(circle at top right, rgba(255, 255, 255, 0.04) 0, transparent 22%), linear-gradient(180deg, rgb(var(--tj-bg-primary)) 0%, rgb(var(--tj-bg-secondary)) 100%)',
+          'radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.08) 0, transparent 28%), radial-gradient(circle at top right, rgba(255, 255, 255, 0.04) 0, transparent 22%), linear-gradient(180deg, rgb(var(--tj-bg-primary)) 0%, rgb(var(--tj-bg-secondary)) 100%)',
       }}
     >
       <div className="pointer-events-none absolute inset-0 opacity-[0.18]">
@@ -240,16 +250,16 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
           className="absolute inset-0"
           style={{
             backgroundImage:
-              'repeating-linear-gradient(90deg, rgba(245, 217, 122, 0.07) 0 1px, transparent 1px 86px), repeating-linear-gradient(0deg, rgba(245, 217, 122, 0.05) 0 1px, transparent 1px 78px)',
+              'repeating-linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.07) 0 1px, transparent 1px 86px), repeating-linear-gradient(0deg, rgba(var(--tj-accent-primary), 0.05) 0 1px, transparent 1px 78px)',
           }}
         />
         <div
           className="absolute left-0 right-0 top-0 h-px"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.38), transparent)' }}
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.38), transparent)' }}
         />
         <div
           className="absolute bottom-0 left-0 right-0 h-px"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.2), transparent)' }}
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.2), transparent)' }}
         />
       </div>
 
@@ -260,6 +270,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                 scenario={selectedScenario}
                 storyMode={storyModeDef.name}
                 path={selectedPath}
+                faction={selectedFaction}
                 currentDate="琥珀纪 2157.03.07"
               currentTime="06:40"
               currentLocation="黑塔空间站"
@@ -273,7 +284,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
           <button
             onClick={onBack}
             className="w-fit text-xs font-serif tracking-[0.28em] transition-opacity hover:opacity-80"
-            style={{ color: 'rgba(245, 217, 122, 0.72)' }}
+            style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}
           >
             ← 返回
           </button>
@@ -284,19 +295,19 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
               background:
                 'linear-gradient(180deg, rgba(14, 14, 18, 0.94) 0%, rgba(11, 10, 14, 0.98) 100%)',
               boxShadow:
-                'inset 0 0 0 1px rgba(245, 217, 122, 0.26), inset 0 0 18px rgba(245, 217, 122, 0.03), 0 18px 40px rgba(0, 0, 0, 0.46)',
+                'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.26), inset 0 0 18px rgba(var(--tj-accent-primary), 0.03), 0 18px 40px rgba(0, 0, 0, 0.46)',
               clipPath: cardClip,
             }}
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="text-[11px] tracking-[0.38em]" style={{ color: 'rgba(245, 217, 122, 0.56)' }}>
+                <div className="text-[11px] tracking-[0.38em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.56)' }}>
                   开拓档案 / STAR RAIL BRIEFING
                 </div>
                 <h1
                   className="mt-1 font-serif text-3xl font-bold tracking-[0.18em]"
                   style={{
-                    background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 45%, #c4a35a 100%)',
+                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
@@ -323,6 +334,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                 scenario={selectedScenario}
                 storyMode={storyModeDef.name}
                 path={selectedPath}
+                faction={selectedFaction}
                 currentDate="琥珀纪 2157.03.07"
                 currentTime="06:40"
                 currentLocation="黑塔空间站"
@@ -391,6 +403,8 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                 onCustomStartPrompt={setCustomStartPrompt}
                 customIdentity={customIdentity}
                 onCustomIdentity={setCustomIdentity}
+                factionId={factionId}
+                onFactionId={setFactionId}
                 canonicalTrailblazer={canonicalTrailblazer}
                 onCanonicalTrailblazer={setCanonicalTrailblazer}
                 selectedScenario={selectedScenario}
@@ -409,6 +423,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                 background={background}
                 storyMode={storyMode}
                 pathId={pathId}
+                factionId={factionId}
                 customIdentity={customIdentity}
                 selectedScenario={selectedScenario}
                 customStartPrompt={customStartPrompt}
@@ -424,7 +439,7 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
 
         <div className="hidden lg:block">
           <div className="sticky top-6">
-            <div className="mb-3 text-[11px] tracking-[0.38em]" style={{ color: 'rgba(245, 217, 122, 0.56)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.38em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.56)' }}>
               航行档案
             </div>
             <StepRail step={step} stepReady={stepReady} />
@@ -441,11 +456,11 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       className="p-3 text-left"
       style={{
         background: 'rgba(10, 9, 11, 0.7)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
         clipPath: smallClip,
       }}
     >
-      <div className="text-[10px] tracking-[0.26em]" style={{ color: 'rgba(245, 217, 122, 0.65)' }}>
+      <div className="text-[10px] tracking-[0.26em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.65)' }}>
         {label}
       </div>
       <div className="mt-1 text-sm font-medium" style={{ color: 'rgba(241, 234, 214, 0.94)' }}>
@@ -470,12 +485,12 @@ function ProgressBar({ step }: { step: Step }) {
                 className="flex h-8 w-8 items-center justify-center text-xs font-bold"
                 style={{
                   background: reached
-                    ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(196, 163, 90, 0.95))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.95))'
                     : 'rgba(10, 9, 11, 0.7)',
-                  color: reached ? '#1a1325' : 'rgba(200, 188, 158, 0.65)',
+                  color: reached ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.65)',
                   boxShadow: reached
-                    ? '0 0 10px rgba(245, 217, 122, 0.24)'
-                    : 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+                    ? '0 0 10px rgba(var(--tj-accent-primary), 0.24)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
                   clipPath: smallClip,
                 }}
               >
@@ -483,7 +498,7 @@ function ProgressBar({ step }: { step: Step }) {
               </div>
               <div
                 className="truncate text-[10px] tracking-[0.16em]"
-                style={{ color: reached ? 'rgba(245, 217, 122, 0.78)' : 'rgba(200, 188, 158, 0.5)' }}
+                style={{ color: reached ? 'rgba(var(--tj-accent-primary), 0.78)' : 'rgba(var(--tj-text-secondary), 0.5)' }}
               >
                 {STEP_META[item].title}
               </div>
@@ -493,8 +508,8 @@ function ProgressBar({ step }: { step: Step }) {
                 className="mb-5 h-px w-5 shrink-0"
                 style={{
                   background: passed
-                    ? 'linear-gradient(90deg, rgba(245, 217, 122, 0.65), rgba(245, 217, 122, 0.18))'
-                    : 'rgba(245, 217, 122, 0.14)',
+                    ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.65), rgba(var(--tj-accent-primary), 0.18))'
+                    : 'rgba(var(--tj-accent-primary), 0.14)',
                 }}
               />
             )}
@@ -509,6 +524,7 @@ function OpeningLedger({
   scenario,
   storyMode,
   path,
+  faction,
   currentDate,
   currentTime,
   currentLocation,
@@ -518,6 +534,7 @@ function OpeningLedger({
   scenario?: OpeningScenario;
   storyMode: string;
   path?: ReturnType<typeof getPath>;
+  faction?: ReturnType<typeof getFaction>;
   currentDate: string;
   currentTime: string;
   currentLocation: string;
@@ -529,13 +546,13 @@ function OpeningLedger({
       className="p-4"
       style={{
         background: 'linear-gradient(180deg, rgba(10, 10, 14, 0.96) 0%, rgba(8, 8, 11, 0.99) 100%)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18), 0 10px 24px rgba(0, 0, 0, 0.24)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18), 0 10px 24px rgba(0, 0, 0, 0.24)',
         clipPath: cardClip,
       }}
     >
       <div
         className="mb-3 text-[11px] tracking-[0.34em]"
-        style={{ color: 'rgba(245, 217, 122, 0.7)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
       >
         开局档案
       </div>
@@ -545,22 +562,23 @@ function OpeningLedger({
         <Line label="地点" value={currentLocation} />
         <Line label="剧情模式" value={storyMode} />
         <Line label="命途" value={path ? `${path.name} · ${path.aeon}` : '无命途'} />
+        <Line label="组织背景" value={faction?.name ?? '无固定组织'} />
         <Line label="能力" value={abilities.length ? abilities.join('、') : '暂未选择'} />
       </div>
 
       {highlights.length > 0 && (
         <div className="mt-4 space-y-2">
-          <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+          <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
             开局要点
           </div>
-          <div className="space-y-2 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.86)' }}>
+          <div className="space-y-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}>
             {highlights.map((text) => (
               <div
                 key={text}
                 className="p-2"
                 style={{
-                  background: 'rgba(8, 7, 9, 0.5)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+                  background: 'rgba(var(--tj-bg-primary), 0.5)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
                   clipPath: smallClip,
                 }}
               >
@@ -577,7 +595,7 @@ function OpeningLedger({
 function Line({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-3">
-      <div style={{ color: 'rgba(245, 217, 122, 0.68)' }}>{label}</div>
+      <div style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>{label}</div>
       <div className="break-words" style={{ color: 'rgba(241, 234, 214, 0.96)' }}>
         {value}
       </div>
@@ -598,11 +616,11 @@ function StepRail({
       className="p-4"
       style={{
         background: 'rgba(16, 13, 22, 0.8)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
         clipPath: cardClip,
       }}
     >
-      <div className="mb-3 text-[11px] tracking-[0.34em]" style={{ color: 'rgba(245, 217, 122, 0.7)' }}>
+      <div className="mb-3 text-[11px] tracking-[0.34em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}>
         步骤导航
       </div>
       <div className="space-y-2">
@@ -615,11 +633,11 @@ function StepRail({
               className="flex items-start gap-3 p-3"
               style={{
                 background: active
-                  ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.12), rgba(196, 163, 90, 0.04))'
+                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-secondary), 0.04))'
                   : 'rgba(10, 9, 11, 0.55)',
                 boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)'
-                  : 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                  ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)'
+                  : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                 clipPath: smallClip,
               }}
             >
@@ -627,12 +645,12 @@ function StepRail({
                 className="flex h-8 w-8 shrink-0 items-center justify-center text-xs font-bold"
                 style={{
                   background: done
-                    ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(196, 163, 90, 0.95))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.95))'
                     : 'rgba(24, 19, 31, 0.95)',
-                  color: done ? '#1c1326' : 'rgba(200, 188, 158, 0.72)',
+                  color: done ? '#1c1326' : 'rgba(var(--tj-text-secondary), 0.72)',
                   boxShadow: done
-                    ? '0 0 12px rgba(245, 217, 122, 0.22)'
-                    : 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+                    ? '0 0 12px rgba(var(--tj-accent-primary), 0.22)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                   clipPath: smallClip,
                 }}
               >
@@ -641,11 +659,11 @@ function StepRail({
               <div className="min-w-0">
                 <div
                   className="text-sm font-medium"
-                  style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(240, 234, 218, 0.92)' }}
+                  style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
                 >
                   {STEP_META[item].title}
                 </div>
-                <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.72)' }}>
+                <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
                   {STEP_META[item].subtitle}
                 </div>
               </div>
@@ -684,7 +702,7 @@ function StepNav({
       >
         <span
           className="pointer-events-none absolute inset-0 -translate-x-full transition-transform duration-700 ease-out group-hover:translate-x-full"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(255, 245, 200, 0.45), transparent)' }}
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-text-primary), 0.45), transparent)' }}
         />
         <span className="relative tracking-[0.2em] font-bold">{nextLabel}</span>
       </button>
@@ -697,14 +715,14 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
     <div className="mb-5">
       <div
         className="mb-2 text-[11px] tracking-[0.32em]"
-        style={{ color: 'rgba(245, 217, 122, 0.62)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.62)' }}
       >
         {subtitle}
       </div>
       <h3
         className="font-serif text-2xl font-bold tracking-[0.18em]"
         style={{
-          background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 45%, #c4a35a 100%)',
+          background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
@@ -730,7 +748,7 @@ function WorldStep({
       <SectionTitle title="世界设定" subtitle="决定故事张力与叙述基调" />
 
       <div>
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
             剧情模式
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -743,21 +761,21 @@ function WorldStep({
                   className="w-full p-4 text-left transition-transform hover:-translate-y-0.5"
                   style={{
                     background: active
-                      ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.10), rgba(196, 163, 90, 0.04))'
+                      ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
                       : 'rgba(10, 9, 11, 0.58)',
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.5), 0 0 14px rgba(245, 217, 122, 0.12)'
-                      : 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), 0 0 14px rgba(var(--tj-accent-primary), 0.12)'
+                      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
                     clipPath: tightClip,
                   }}
                 >
                   <div
                     className="font-serif text-base font-bold tracking-[0.14em]"
-                    style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(240, 234, 218, 0.92)' }}
+                    style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
                   >
                     {item.name}
                   </div>
-                  <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.82)' }}>
+                  <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
                     {item.description}
                   </div>
                 </button>
@@ -826,7 +844,7 @@ function CharacterStep({
             className="p-4"
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
@@ -868,7 +886,7 @@ function CharacterStep({
                 />
               </LabelField>
               <div>
-                <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+                <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
                   生日
                 </div>
                 <div className="grid grid-cols-[1fr_1fr] gap-2">
@@ -895,7 +913,7 @@ function CharacterStep({
             className="p-4"
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
@@ -932,7 +950,7 @@ function CharacterStep({
                   style={{ clipPath: smallClip }}
                 />
               </LabelField>
-              <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.64)' }}>
+              <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
                 这里写的是角色自己的经历，不是开局系统摘要；切入剧情的具体方式仍在「原著开局」页填写。
               </p>
             </div>
@@ -981,7 +999,7 @@ function PathStep({
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <div className="space-y-5">
           <div>
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               命途选择
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -994,31 +1012,31 @@ function PathStep({
                     className="p-4 text-left transition-transform hover:-translate-y-0.5"
                     style={{
                       background: active
-                        ? 'linear-gradient(160deg, rgba(245, 217, 122, 0.13), rgba(196, 163, 90, 0.05))'
+                        ? 'linear-gradient(160deg, rgba(var(--tj-accent-primary), 0.13), rgba(var(--tj-accent-secondary), 0.05))'
                         : 'rgba(10, 9, 11, 0.58)',
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.5), 0 0 14px rgba(245, 217, 122, 0.12)'
-                        : 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), 0 0 14px rgba(var(--tj-accent-primary), 0.12)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
                       clipPath: tightClip,
                     }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-3xl" style={{ color: active ? 'rgba(245,217,122,0.96)' : 'rgba(245,217,122,0.56)' }}>
+                        <div className="text-3xl" style={{ color: active ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-accent-primary),0.56)' }}>
                           {item.emblem}
                         </div>
                         <div
                           className="mt-1 font-serif text-base font-bold tracking-[0.14em]"
-                          style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(240, 234, 218, 0.92)' }}
+                          style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
                         >
                           {item.name}
                         </div>
                       </div>
-                      <div className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.72)' }}>
+                      <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
                         {item.aeon}
                       </div>
                     </div>
-                    <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.82)' }}>
+                    <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
                       {item.blurb}
                     </div>
                   </button>
@@ -1030,13 +1048,13 @@ function PathStep({
               <div
                 className="mt-3 p-3 text-xs leading-relaxed"
                 style={{
-                  background: 'rgba(8, 7, 9, 0.52)',
-                  color: 'rgba(200, 188, 158, 0.84)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+                  background: 'rgba(var(--tj-bg-primary), 0.52)',
+                  color: 'rgba(var(--tj-text-secondary), 0.84)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
                   clipPath: smallClip,
                 }}
               >
-                <div style={{ color: 'rgba(245, 217, 122, 0.82)' }}>
+                <div style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
                   {selectedPath.name} · {selectedPath.aeon}
                 </div>
                 <div className="mt-1">{selectedPath.description}</div>
@@ -1051,11 +1069,11 @@ function PathStep({
             className="p-4"
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               开局特质
             </div>
             <div className="grid grid-cols-1 gap-3">
@@ -1070,22 +1088,22 @@ function PathStep({
                     className="p-4 text-left transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
                     style={{
                       background: active
-                        ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.10), rgba(196, 163, 90, 0.04))'
-                        : 'rgba(8, 7, 9, 0.52)',
+                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
+                        : 'rgba(var(--tj-bg-primary), 0.52)',
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.45), 0 0 12px rgba(245, 217, 122, 0.1)'
-                        : 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                       clipPath: tightClip,
                     }}
                   >
                     <div
                       className="font-serif text-base font-bold tracking-[0.14em]"
-                      style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(240, 234, 218, 0.92)' }}
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
                     >
-                      <span style={{ color: 'rgba(245, 217, 122, 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
+                      <span style={{ color: 'rgba(var(--tj-accent-primary), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
                       {item.name}
                     </div>
-                    <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.82)' }}>
+                    <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
                       {item.description}
                     </div>
                   </button>
@@ -1094,7 +1112,7 @@ function PathStep({
             </div>
 
             <div className="mt-4">
-              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
                 自定义特质
               </div>
               <div className="flex gap-2">
@@ -1115,9 +1133,9 @@ function PathStep({
                   onClick={onAddCustomAbility}
                   className="px-3 text-base"
                   style={{
-                    background: 'rgba(245, 217, 122, 0.16)',
-                    color: 'rgba(245, 217, 122, 0.95)',
-                    boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.32)',
+                    background: 'rgba(var(--tj-accent-primary), 0.16)',
+                    color: 'rgba(var(--tj-accent-primary), 0.95)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1133,9 +1151,9 @@ function PathStep({
                       onClick={() => onRemoveCustomAbility(item)}
                       className="px-3 py-1 text-xs tracking-[0.18em]"
                       style={{
-                        background: 'rgba(245, 217, 122, 0.12)',
-                        color: 'rgba(245, 217, 122, 0.96)',
-                        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+                        background: 'rgba(var(--tj-accent-primary), 0.12)',
+                        color: 'rgba(var(--tj-accent-primary), 0.96)',
+                        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
                         clipPath: smallClip,
                       }}
                     >
@@ -1150,9 +1168,9 @@ function PathStep({
           <div
             className="p-4 text-xs leading-relaxed"
             style={{
-              background: 'rgba(8, 7, 9, 0.52)',
-              color: 'rgba(200, 188, 158, 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+              background: 'rgba(var(--tj-bg-primary), 0.52)',
+              color: 'rgba(var(--tj-text-secondary), 0.84)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
               clipPath: smallClip,
             }}
           >
@@ -1175,6 +1193,8 @@ function HistorianStep({
   onCustomStartPrompt,
   customIdentity,
   onCustomIdentity,
+  factionId,
+  onFactionId,
   canonicalTrailblazer,
   onCanonicalTrailblazer,
   selectedScenario,
@@ -1187,6 +1207,8 @@ function HistorianStep({
   onCustomStartPrompt: (v: string) => void;
   customIdentity: string;
   onCustomIdentity: (v: string) => void;
+  factionId: 阵营ID;
+  onFactionId: (id: 阵营ID) => void;
   canonicalTrailblazer: CanonicalTrailblazer;
   onCanonicalTrailblazer: (v: CanonicalTrailblazer) => void;
   selectedScenario?: OpeningScenario;
@@ -1202,11 +1224,11 @@ function HistorianStep({
           className="p-4"
           style={{
             background: 'rgba(10, 9, 11, 0.58)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
             clipPath: cardClip,
           }}
         >
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
             固定锚点
           </div>
           <div className="space-y-3">
@@ -1219,11 +1241,11 @@ function HistorianStep({
                   className="w-full p-4 text-left transition-transform hover:-translate-y-0.5"
                   style={{
                     background: active
-                      ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.10), rgba(196, 163, 90, 0.04))'
-                      : 'rgba(8, 7, 9, 0.52)',
+                      ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
+                      : 'rgba(var(--tj-bg-primary), 0.52)',
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.46), 0 0 14px rgba(245, 217, 122, 0.1)'
-                      : 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 0 14px rgba(var(--tj-accent-primary), 0.1)'
+                      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                     clipPath: tightClip,
                   }}
                 >
@@ -1231,15 +1253,15 @@ function HistorianStep({
                     <div>
                       <div
                         className="font-serif text-base font-bold tracking-[0.14em]"
-                        style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(240, 234, 218, 0.92)' }}
+                        style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
                       >
                         {item.name}
                       </div>
-                      <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.82)' }}>
+                      <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
                         {item.description}
                       </div>
                     </div>
-                    <div className="text-[11px]" style={{ color: 'rgba(245, 217, 122, 0.72)' }}>
+                    <div className="text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
                       原著主线
                     </div>
                   </div>
@@ -1250,17 +1272,17 @@ function HistorianStep({
 
           {selectedScenario?.openingHighlights?.length ? (
             <div className="mt-4">
-              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
                 开局要点
               </div>
-              <div className="space-y-2 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.84)' }}>
+              <div className="space-y-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}>
                 {selectedScenario.openingHighlights.map((item) => (
                   <div
                     key={item}
                     className="p-2"
                     style={{
-                      background: 'rgba(8, 7, 9, 0.5)',
-                      boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+                      background: 'rgba(var(--tj-bg-primary), 0.5)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
                       clipPath: smallClip,
                     }}
                   >
@@ -1278,7 +1300,7 @@ function HistorianStep({
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
               color: 'rgba(214, 202, 170, 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
@@ -1290,11 +1312,61 @@ function HistorianStep({
             className="p-4"
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+              组织背景
+            </div>
+            <div className="grid gap-2">
+              {factions.map((item) => {
+                const active = factionId === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onFactionId(item.id)}
+                    className="p-3 text-left transition-transform hover:-translate-y-0.5"
+                    style={{
+                      background: active
+                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
+                        : 'rgba(var(--tj-bg-primary), 0.52)',
+                      boxShadow: active
+                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                      clipPath: smallClip,
+                    }}
+                  >
+                    <div
+                      className="font-serif text-sm font-bold tracking-[0.12em]"
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                    >
+                      <span style={{ color: 'rgba(var(--tj-accent-primary), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
+                      {item.name}
+                    </div>
+                    <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
+                      {item.description}
+                    </div>
+                    {active ? (
+                      <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-accent-primary), 0.78)' }}>
+                        {item.openingHint}
+                      </div>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div
+            className="p-4"
+            style={{
+              background: 'rgba(10, 9, 11, 0.58)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              clipPath: cardClip,
+            }}
+          >
+            <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               自定义身份
             </div>
             <input
@@ -1304,7 +1376,7 @@ function HistorianStep({
               className="kaituo-input w-full px-3 py-2 text-sm"
               style={{ clipPath: smallClip }}
             />
-            <p className="mt-2 text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.64)' }}>
+            <p className="mt-2 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
               可留空。这里只用于描述你在开局时被他人如何理解，不会开启额外路线系统。
             </p>
           </div>
@@ -1313,11 +1385,11 @@ function HistorianStep({
             className="p-4"
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               原著主角
             </div>
             <div className="grid gap-2">
@@ -1330,21 +1402,21 @@ function HistorianStep({
                     className="p-3 text-left transition-transform hover:-translate-y-0.5"
                     style={{
                       background: active
-                        ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.10), rgba(196, 163, 90, 0.04))'
-                        : 'rgba(8, 7, 9, 0.52)',
+                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
+                        : 'rgba(var(--tj-bg-primary), 0.52)',
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.42), 0 0 12px rgba(245, 217, 122, 0.1)'
-                        : 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                       clipPath: smallClip,
                     }}
                   >
                     <div
                       className="font-serif text-base font-bold tracking-[0.12em]"
-                      style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(240, 234, 218, 0.92)' }}
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
                     >
                       {item.title}
                     </div>
-                    <div className="mt-1 text-xs" style={{ color: 'rgba(200, 188, 158, 0.78)' }}>
+                    <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
                       {item.subtitle}
                     </div>
                   </button>
@@ -1357,11 +1429,11 @@ function HistorianStep({
             className="p-4"
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+            <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               切入说明
             </div>
             <textarea
@@ -1372,7 +1444,7 @@ function HistorianStep({
               className="kaituo-input w-full resize-none px-3 py-2 text-sm"
               style={{ clipPath: smallClip }}
             />
-            <p className="mt-2 text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.64)' }}>
+            <p className="mt-2 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
               这段内容会作为首回合背景注入，不会单独显示在界面上，但会被正文和记忆系统读取。
             </p>
           </div>
@@ -1393,6 +1465,7 @@ function OverviewStep({
   background,
   storyMode,
   pathId,
+  factionId,
   customIdentity,
   selectedScenario,
   customStartPrompt,
@@ -1409,6 +1482,7 @@ function OverviewStep({
   background: string;
   storyMode: 剧情模式;
   pathId: 命途ID;
+  factionId: 阵营ID;
   customIdentity: string;
   selectedScenario?: OpeningScenario;
   customStartPrompt: string;
@@ -1419,6 +1493,7 @@ function OverviewStep({
 }) {
   const mode = getStoryMode(storyMode) ?? storyModes[0];
   const path = getPath(pathId);
+  const faction = getFaction(factionId) ?? factions[0];
 
   return (
     <div>
@@ -1429,7 +1504,7 @@ function OverviewStep({
           className="p-4"
           style={{
             background: 'rgba(10, 9, 11, 0.58)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
             clipPath: cardClip,
           }}
         >
@@ -1445,6 +1520,7 @@ function OverviewStep({
             <OverviewRow label="当前地点" value="黑塔空间站" />
             <OverviewRow label="原著主角" value={getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue ?? '星'} />
             <OverviewRow label="命途" value={path ? `${path.name} · ${path.aeon}` : '无命途'} />
+            <OverviewRow label="组织背景" value={faction.name} />
             <OverviewRow label="身份" value={customIdentity.trim() || '未填写'} />
           </div>
 
@@ -1452,12 +1528,12 @@ function OverviewStep({
             <div
               className="p-3"
               style={{
-                background: 'rgba(8, 7, 9, 0.54)',
-                boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+                background: 'rgba(var(--tj-bg-primary), 0.54)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
                 clipPath: smallClip,
               }}
             >
-              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
                 切入说明
               </div>
               <div className="text-sm leading-relaxed" style={{ color: 'rgba(241, 234, 214, 0.92)' }}>
@@ -1475,9 +1551,9 @@ function OverviewStep({
                     key={item}
                     className="px-3 py-1"
                     style={{
-                      background: 'rgba(245, 217, 122, 0.12)',
-                      color: 'rgba(245, 217, 122, 0.95)',
-                      boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.24)',
+                      background: 'rgba(var(--tj-accent-primary), 0.12)',
+                      color: 'rgba(var(--tj-accent-primary), 0.95)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
                       clipPath: smallClip,
                     }}
                   >
@@ -1485,7 +1561,7 @@ function OverviewStep({
                   </span>
                 ))
               ) : (
-                <span style={{ color: 'rgba(200, 188, 158, 0.72)' }}>暂未选择能力</span>
+                <span style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>暂未选择能力</span>
               )}
             </div>
           </div>
@@ -1497,17 +1573,17 @@ function OverviewStep({
             className="p-4"
             style={{
               background: 'linear-gradient(180deg, rgba(29, 24, 40, 0.95) 0%, rgba(16, 13, 22, 0.98) 100%)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               最终提醒
             </div>
             <div className="space-y-2 text-sm leading-relaxed" style={{ color: 'rgba(214, 202, 170, 0.86)' }}>
               <p>开局会把这些内容写入角色、世界状态和首回合提示词。</p>
               <p>换句话说，你现在确认的不只是外观和选择，而是整段旅程的第一页。</p>
-              <p style={{ color: 'rgba(245, 217, 122, 0.9)' }}>开局内容已固定为原著主线锚点，可以直接开始。</p>
+              <p style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>开局内容已固定为原著主线锚点，可以直接开始。</p>
             </div>
           </div>
 
@@ -1516,7 +1592,7 @@ function OverviewStep({
             style={{
               background: 'rgba(10, 9, 11, 0.58)',
               color: 'rgba(214, 202, 170, 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
           >
@@ -1539,7 +1615,7 @@ function OverviewStep({
 function LabelField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.68)' }}>
+      <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
         {label}
       </div>
       {children}
@@ -1549,7 +1625,7 @@ function LabelField({ label, children }: { label: string; children: ReactNode })
 
 function OverviewLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[11px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.72)' }}>
+    <div className="text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
       {children}
     </div>
   );
@@ -1558,7 +1634,7 @@ function OverviewLabel({ children }: { children: ReactNode }) {
 function OverviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-sm">
-      <div style={{ color: 'rgba(245, 217, 122, 0.68)' }}>{label}</div>
+      <div style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>{label}</div>
       <div className="break-words" style={{ color: 'rgba(241, 234, 214, 0.96)' }}>
         {value}
       </div>
@@ -1571,6 +1647,7 @@ function buildOpeningSummary({
   location,
   storyMode,
   path,
+  faction,
   customIdentity,
   canonicalTrailblazer,
   customStartPrompt,
@@ -1580,6 +1657,7 @@ function buildOpeningSummary({
   location?: string;
   storyMode: string;
   path?: ReturnType<typeof getPath>;
+  faction?: ReturnType<typeof getFaction>;
   customIdentity?: string;
   canonicalTrailblazer?: 世界状态['原著主角'];
   customStartPrompt?: string;
@@ -1597,6 +1675,10 @@ function buildOpeningSummary({
     lines.push(`命途：${path.name} · ${path.aeon}`);
   } else {
     lines.push('命途：无命途');
+  }
+  if (faction) {
+    lines.push(`组织背景：${faction.name}`);
+    if (faction.openingHint) lines.push(`组织提示：${faction.openingHint}`);
   }
   if (customIdentity?.trim()) lines.push(`身份：${customIdentity.trim()}`);
   if (customStartPrompt?.trim()) lines.push(`切入说明：${customStartPrompt.trim()}`);

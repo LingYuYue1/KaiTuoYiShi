@@ -31,11 +31,11 @@ export function Modal({ children, onClose, title, className = 'max-w-2xl' }: Mod
           <>
             <div className="flex items-center justify-between px-5 py-3.5">
               <div className="flex items-center gap-3">
-                <span className="text-base" style={{ color: 'rgba(245, 217, 122, 0.7)' }}>◆</span>
+                <span className="text-base" style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}>◆</span>
                 <h2
                   className="font-serif text-lg font-bold tracking-[0.2em]"
                   style={{
-                    background: 'linear-gradient(180deg, #fff4d4 0%, #f5d97a 60%, #c4a35a 100%)',
+                    background: 'linear-gradient(180deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 60%, rgb(var(--tj-accent-secondary)) 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',

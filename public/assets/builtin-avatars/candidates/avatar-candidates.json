@@ -1,0 +1,78 @@
+{
+  "updatedAt": "2026-05-26",
+  "notes": "Built-in avatar candidates for KaiTuoYiShi. Each character keeps three selectable variants unless noted otherwise.",
+  "characters": [
+    {
+      "id": "march7th",
+      "name": "三月七",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/march7th-01.png",
+        "public/assets/builtin-avatars/candidates/march7th-02.png",
+        "public/assets/builtin-avatars/candidates/march7th-03.png"
+      ]
+    },
+    {
+      "id": "danheng",
+      "name": "丹恒",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/danheng-01.png",
+        "public/assets/builtin-avatars/candidates/danheng-02.png",
+        "public/assets/builtin-avatars/candidates/danheng-03.png"
+      ]
+    },
+    {
+      "id": "himeko",
+      "name": "姬子",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/himeko-01.png",
+        "public/assets/builtin-avatars/candidates/himeko-02.png",
+        "public/assets/builtin-avatars/candidates/himeko-03.png"
+      ]
+    },
+    {
+      "id": "welt",
+      "name": "瓦尔特",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/welt-01.png",
+        "public/assets/builtin-avatars/candidates/welt-02.png",
+        "public/assets/builtin-avatars/candidates/welt-03.png"
+      ]
+    },
+    {
+      "id": "pom-pom",
+      "name": "帕姆",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/pom-pom-01.png",
+        "public/assets/builtin-avatars/candidates/pom-pom-02.png",
+        "public/assets/builtin-avatars/candidates/pom-pom-03.png"
+      ]
+    },
+    {
+      "id": "herta",
+      "name": "黑塔",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/herta-01.png",
+        "public/assets/builtin-avatars/candidates/herta-02.png",
+        "public/assets/builtin-avatars/candidates/herta-03.png"
+      ]
+    },
+    {
+      "id": "stelle",
+      "name": "星",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/stelle-01.png",
+        "public/assets/builtin-avatars/candidates/stelle-02.png",
+        "public/assets/builtin-avatars/candidates/stelle-03.png"
+      ]
+    },
+    {
+      "id": "caelus",
+      "name": "穹",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/caelus-01.png",
+        "public/assets/builtin-avatars/candidates/caelus-02.png",
+        "public/assets/builtin-avatars/candidates/caelus-03.png"
+      ]
+    }
+  ]
+}

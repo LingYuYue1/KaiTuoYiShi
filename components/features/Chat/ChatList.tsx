@@ -41,19 +41,19 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
         <div className="flex h-full flex-col items-center justify-center text-center">
           <div
             className="text-5xl mb-5"
-            style={{ color: 'rgba(245, 217, 122, 0.35)' }}
+            style={{ color: 'rgba(var(--tj-accent-primary), 0.35)' }}
           >
             ✦
           </div>
           <p
             className="text-sm font-serif tracking-[0.15em]"
-            style={{ color: 'rgba(230, 218, 188, 0.7)' }}
+            style={{ color: 'rgba(var(--tj-text-primary), 0.7)' }}
           >
             星轨深处，尚无回响……
           </p>
           <p
             className="mt-2 text-xs tracking-wider"
-            style={{ color: 'rgba(160, 148, 120, 0.6)' }}
+            style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
           >
             在此写下开拓之旅的第一页
           </p>
@@ -120,7 +120,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
                 className="h-1.5 w-1.5 animate-pulse-soft rounded-full"
                 style={{
                   background: 'rgb(var(--tj-accent-primary))',
-                  boxShadow: '0 0 6px rgba(245, 217, 122, 0.5)',
+                  boxShadow: '0 0 6px rgba(var(--tj-accent-primary), 0.5)',
                   animationDelay: `${i * 0.2}s`,
                 }}
               />
@@ -128,7 +128,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
           </div>
           <span
             className="text-xs font-serif tracking-wider"
-            style={{ color: 'rgba(160, 148, 120, 0.8)' }}
+            style={{ color: 'rgba(var(--tj-text-secondary), 0.8)' }}
           >
             正在沉思……
           </span>

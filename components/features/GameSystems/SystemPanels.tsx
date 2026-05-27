@@ -15,20 +15,20 @@ function SystemPlaceholder({ label, description }: PlaceholderProps) {
         className="px-4 py-3"
         style={{
           background:
-            'linear-gradient(180deg, rgba(245, 217, 122, 0.07), rgba(245, 217, 122, 0.015))',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+            'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.07), rgba(var(--tj-accent-primary), 0.015))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
           clipPath: cardClip,
         }}
       >
         <div
           className="font-serif text-xs tracking-[0.35em]"
-          style={{ color: 'rgba(245, 217, 122, 0.7)' }}
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
         >
           ◆ {label}
         </div>
         <div
           className="mt-2 font-serif text-sm leading-relaxed tracking-wider"
-          style={{ color: 'rgba(220, 208, 178, 0.85)' }}
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}
         >
           {description}
         </div>
@@ -37,12 +37,12 @@ function SystemPlaceholder({ label, description }: PlaceholderProps) {
       <div
         className="px-4 py-8 text-center font-serif text-xs italic tracking-[0.22em]"
         style={{
-          color: 'rgba(160, 148, 120, 0.65)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          color: 'rgba(var(--tj-text-secondary), 0.65)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath: cardClip,
         }}
       >
-        <div className="mb-2 text-2xl" style={{ color: 'rgba(245, 217, 122, 0.35)' }}>
+        <div className="mb-2 text-2xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.35)' }}>
           ◇
         </div>
         建设中

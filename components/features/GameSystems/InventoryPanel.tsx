@@ -49,9 +49,9 @@ const CATEGORY_GLYPHS: Record<物品分类, string> = {
 
 const panelStyle = {
   background:
-    'linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(9, 8, 10, 0.98))',
+    'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
   boxShadow:
-    'inset 0 0 0 1px rgba(245, 217, 122, 0.22), 0 18px 45px rgba(0, 0, 0, 0.22)',
+    'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
   clipPath: cardClip,
 };
 
@@ -207,21 +207,21 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                     setTab(cat);
                     setSelectedId(null);
                   }}
-                  className="w-full px-3 py-2.5 text-left transition-all hover:bg-[rgba(245,217,122,0.08)]"
+                  className="w-full px-3 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
                   style={{
                     background: active
-                      ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.16), rgba(245, 217, 122, 0.04))'
-                      : 'rgba(160, 148, 120, 0.04)',
+                      ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
+                      : 'rgba(var(--tj-text-secondary), 0.04)',
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.58), inset 3px 0 0 rgba(245, 217, 122, 0.9)'
-                      : 'inset 0 0 0 1px rgba(160, 148, 120, 0.18)',
+                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.9)'
+                      : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
                     clipPath: smallClip,
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span
                       className="inline-flex min-w-0 items-center gap-2 font-serif text-[13px] tracking-[0.2em]"
-                      style={{ color: active ? '#f5d97a' : 'rgba(220, 208, 178, 0.88)' }}
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.88)' }}
                     >
                       <span className="shrink-0 text-[12px]" style={{ color: active ? '#75d6d8' : 'rgba(117,214,216,0.68)' }}>
                         {cat === '全部' ? '✦' : CATEGORY_GLYPHS[cat]}
@@ -230,7 +230,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                     </span>
                     <span
                       className="font-serif text-[12px]"
-                      style={{ color: active ? '#fff4d4' : 'rgba(210, 198, 168, 0.8)' }}
+                      style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(210, 198, 168, 0.8)' }}
                     >
                       {count}
                     </span>
@@ -250,7 +250,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                 <SectionHeader title="物品陈列" />
                 <div
                   className="mt-2 font-serif text-[14px] tracking-[0.18em]"
-                  style={{ color: 'rgba(220, 208, 178, 0.86)' }}
+                  style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}
                 >
                   {tab === '全部' ? '全部物品' : ITEM_CATEGORY_LABELS[tab]} · 共 {visible.length} 件
                 </div>
@@ -267,9 +267,9 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
               <div
                 className="mt-3 px-3 py-2 font-serif text-[12px] tracking-[0.14em]"
                 style={{
-                  color: 'rgba(245, 217, 122, 0.95)',
-                  background: 'rgba(245, 217, 122, 0.06)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.3)',
+                  color: 'rgba(var(--tj-accent-primary), 0.95)',
+                  background: 'rgba(var(--tj-accent-primary), 0.06)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
                   clipPath: smallClip,
                 }}
               >
@@ -340,9 +340,9 @@ function ItemCell({
       className="group relative aspect-square w-full transition-all hover:brightness-110"
       style={{
         background: selected
-          ? 'linear-gradient(180deg, rgba(245, 217, 122, 0.18), rgba(245, 217, 122, 0.05))'
+          ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.05))'
           : 'rgba(20, 16, 22, 0.62)',
-        boxShadow: `inset 0 0 0 ${selected ? 2 : 1}px ${selected ? 'rgba(245, 217, 122, 0.9)' : qualityStroke}`,
+        boxShadow: `inset 0 0 0 ${selected ? 2 : 1}px ${selected ? 'rgba(var(--tj-accent-primary), 0.9)' : qualityStroke}`,
         clipPath: cellClip,
       }}
     >
@@ -358,9 +358,9 @@ function ItemCell({
       <div
         className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center font-serif text-[12px]"
         style={{
-          color: equipped ? '#fff4d4' : 'rgba(117,214,216,0.88)',
-          background: 'rgba(0, 0, 0, 0.38)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+          color: equipped ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-tech-cyan-deep),0.9)',
+          background: 'rgba(var(--tj-ui-panel-strong), 0.5)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
           clipPath: smallClip,
         }}
       >
@@ -379,8 +379,8 @@ function ItemCell({
       <div
         className="absolute inset-x-0 bottom-0 truncate px-1 py-0.5 text-center font-serif text-[12px] leading-tight tracking-wide"
         style={{
-          color: 'rgba(220, 208, 178, 0.95)',
-          background: 'linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.55))',
+          color: 'rgba(var(--tj-text-secondary), 0.95)',
+          background: 'linear-gradient(180deg, transparent, rgba(var(--tj-surface-strong),0.88))',
         }}
       >
         {item.名称}
@@ -390,9 +390,9 @@ function ItemCell({
         <div
           className="absolute right-0.5 top-0.5 px-1 font-serif text-[12px] font-semibold leading-none tracking-wider"
           style={{
-            color: '#fff4d4',
-            background: 'rgba(0, 0, 0, 0.68)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
+            color: 'rgb(var(--tj-text-primary))',
+            background: 'rgba(var(--tj-bubble), 0.92)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
             paddingTop: 2,
             paddingBottom: 2,
           }}
@@ -405,8 +405,8 @@ function ItemCell({
         <div
           className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full"
           style={{
-            background: 'rgba(245, 217, 122, 0.98)',
-            boxShadow: '0 0 6px rgba(245, 217, 122, 0.7)',
+            background: 'rgba(var(--tj-accent-primary), 0.98)',
+            boxShadow: '0 0 6px rgba(var(--tj-accent-primary), 0.7)',
           }}
           title={`已穿戴·${EQUIP_SLOT_LABELS[item.当前装备部位!]}`}
         />
@@ -420,8 +420,8 @@ function EmptyCell() {
     <div
       className="aspect-square w-full"
       style={{
-        background: 'rgba(20, 16, 22, 0.38)',
-        boxShadow: 'inset 0 0 0 1px rgba(200, 188, 160, 0.12)',
+        background: 'rgba(var(--tj-surface-strong), 0.46)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.24)',
         clipPath: cellClip,
       }}
     />
@@ -450,8 +450,8 @@ function ItemDetailOverlay({
       <div
         className="px-4 py-5"
         style={{
-          background: 'linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(9, 8, 10, 0.98))',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+          background: 'linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
           clipPath: cardClip,
         }}
       >
@@ -480,8 +480,8 @@ function ItemDetailOverlay({
     <div
       className="relative overflow-hidden px-4 py-4"
       style={{
-        background: `radial-gradient(circle at 12% 0%, ${qualityColor.replace(/0\.\d+\)/, '0.18)')}, transparent 38%), linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(9, 8, 10, 0.98))`,
-        boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 18px 45px rgba(0, 0, 0, 0.22)`,
+        background: `radial-gradient(circle at 12% 0%, ${qualityColor.replace(/0\.\d+\)/, '0.16)')}, transparent 38%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94))`,
+        boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 14px 32px rgba(var(--tj-shadow), 0.08)`,
         clipPath: cardClip,
       }}
     >
@@ -491,8 +491,8 @@ function ItemDetailOverlay({
             className="flex h-[68px] w-[68px] shrink-0 items-center justify-center font-serif text-[30px]"
             style={{
               color: qualityColor,
-              background: 'rgba(8, 7, 9, 0.56)',
-              boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 0 20px rgba(245, 217, 122, 0.08)`,
+              background: 'rgba(var(--tj-bg-primary), 0.56)',
+              boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 0 20px rgba(var(--tj-accent-primary), 0.08)`,
               clipPath: smallClip,
             }}
           >
@@ -516,7 +516,7 @@ function ItemDetailOverlay({
         <button
           type="button"
           onClick={onClose}
-          className="font-serif text-[14px] tracking-wider px-2 py-1 transition-all hover:bg-[rgba(245,217,122,0.08)]"
+          className="font-serif text-[14px] tracking-wider px-2 py-1 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
           style={{
             color: 'rgba(200, 188, 160, 0.85)',
             boxShadow: 'inset 0 0 0 1px rgba(200, 188, 160, 0.22)',
@@ -532,8 +532,8 @@ function ItemDetailOverlay({
         <div
           className="mt-3 inline-block px-2 py-0.5 font-serif text-[12px] tracking-[0.15em]"
           style={{
-            color: '#fff4d4',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)',
+            color: 'rgb(var(--tj-text-primary))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
             clipPath: smallClip,
           }}
         >
@@ -544,7 +544,7 @@ function ItemDetailOverlay({
       {item.描述 && (
         <p
           className="mt-3 font-serif text-[13px] leading-relaxed"
-          style={{ color: 'rgba(220, 208, 178, 0.95)' }}
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.95)' }}
         >
           {item.描述}
         </p>
@@ -604,13 +604,13 @@ function EquipmentDots({ traveler }: { traveler: 角色数据结构 }) {
   const inventory = traveler.背包 ?? [];
   return (
     <div className="mt-3">
-      <div className="mb-2 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(220,208,178,0.72)' }}>
+      <div className="mb-2 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
         装备同步
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {EQUIP_SLOT_ORDER.map((slot) => {
           const item = inventory.find((it) => it.id === slots[slot]);
-          const color = item ? (ITEM_QUALITY_COLORS[item.品质] ?? ITEM_QUALITY_COLORS.蓝) : 'rgba(160,148,120,0.28)';
+          const color = item ? (ITEM_QUALITY_COLORS[item.品质] ?? ITEM_QUALITY_COLORS.蓝) : 'rgba(var(--tj-text-secondary),0.28)';
           return (
             <div
               key={slot}
@@ -634,8 +634,8 @@ function MetaChip({ text, color }: { text: string; color: string }) {
       className="inline-flex px-2 py-0.5 font-serif text-[12px] tracking-[0.14em]"
       style={{
         color,
-        background: 'rgba(9, 8, 10, 0.38)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+        background: 'rgba(var(--tj-bubble), 0.78)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
         clipPath: smallClip,
       }}
     >
@@ -655,14 +655,14 @@ function ActionButton({
 }) {
   const palette =
     tone === 'gold'
-      ? { color: '#fff4d4', stroke: 'rgba(245, 217, 122, 0.45)' }
+      ? { color: 'rgb(var(--tj-text-primary))', stroke: 'rgba(var(--tj-accent-primary), 0.45)' }
       : { color: 'rgba(230, 170, 170, 0.95)', stroke: 'rgba(220, 150, 150, 0.45)' };
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="font-serif text-[12px] tracking-[0.2em] px-3 py-1 transition-all hover:bg-[rgba(245,217,122,0.08)]"
+      className="font-serif text-[12px] tracking-[0.2em] px-3 py-1 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
       style={{
         color: palette.color,
         boxShadow: `inset 0 0 0 1px ${palette.stroke}`,
@@ -677,13 +677,13 @@ function ActionButton({
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+      <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </span>
       <span
         className="h-px flex-1"
-        style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.35), transparent)' }}
+        style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.35), transparent)' }}
       />
     </div>
   );
@@ -694,12 +694,12 @@ function DetailBlock({ title, children }: { title: string; children: React.React
     <div
       className="px-3 py-3"
       style={{
-        background: 'rgba(9, 8, 10, 0.35)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-bubble), 0.78), rgba(var(--tj-surface-strong), 0.58))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(245, 217, 122, 0.86)' }}>
+      <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
         {title}
       </div>
       {children}
@@ -712,15 +712,15 @@ function MetricTile({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'rgba(245, 217, 122, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+        background: 'rgba(var(--tj-accent-primary), 0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.82)' }}>
+      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
         {label}
       </div>
-      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: '#fff4d4' }}>
+      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {value}
       </div>
     </div>
@@ -735,8 +735,8 @@ function MiniBar({ value }: { value: number }) {
           key={index}
           className="h-1.5 flex-1"
           style={{
-            background: index < Math.min(8, Math.max(0, value)) ? '#f5d97a' : 'rgba(160, 148, 120, 0.18)',
-            boxShadow: index < Math.min(8, Math.max(0, value)) ? '0 0 8px rgba(245, 217, 122, 0.45)' : undefined,
+            background: index < Math.min(8, Math.max(0, value)) ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.18)',
+            boxShadow: index < Math.min(8, Math.max(0, value)) ? '0 0 8px rgba(var(--tj-accent-primary), 0.45)' : undefined,
           }}
         />
       ))}
@@ -750,12 +750,12 @@ function StatChip({ label, value }: { label: string; value: number }) {
       className="inline-flex items-center gap-2 px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
       style={{
         color: 'rgba(245, 235, 210, 0.96)',
-        background: 'rgba(245, 217, 122, 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+        background: 'rgba(var(--tj-accent-primary), 0.08)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
         clipPath: smallClip,
       }}
     >
-      <span style={{ color: 'rgba(220, 208, 178, 0.82)' }}>{label}</span>
+      <span style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>{label}</span>
       <span>+{value}</span>
     </span>
   );
@@ -780,7 +780,7 @@ function EffectChip({ text }: { text: string }) {
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3 font-serif text-[13px] leading-relaxed">
-      <span className="shrink-0 tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.74)' }}>
+      <span className="shrink-0 tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
         {label}
       </span>
       <span className="min-w-0 break-words" style={{ color: 'rgba(245, 235, 210, 0.95)' }}>
@@ -795,12 +795,12 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
     <div
       className="px-4 py-5 text-center"
       style={{
-        background: 'rgba(160, 148, 120, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(160, 148, 120, 0.2)',
+        background: 'rgba(var(--tj-text-secondary), 0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
         {title}
       </div>
       <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>

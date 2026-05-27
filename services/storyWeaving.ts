@@ -10,6 +10,7 @@ import type {
 } from '@/models/storyWeaving';
 import { 归一化剧情编织分段 } from '@/models/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
+import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
 const 文本数组 = (value: unknown): string[] => (
@@ -263,6 +264,9 @@ function buildStoryWeavingSystemPrompt(): string {
   return [
     '你是「剧情编织官」，负责把玩家导入的小说化剧情拆解成可供叙事游戏运行时注入的结构化剧情资产。',
     '你不是续写模型，不写点评，不自由补设定。你只在输入原文边界内提炼：当前段发生了什么、后续必须承接什么、哪些原著/玩家文本边界不能越过、哪些内容可以提前铺垫。',
+    '',
+    '剧情编织思维链（内部执行，不要输出）：',
+    STORY_WEAVING_COT_PROMPT,
     '',
     '特别要求：',
     '- 保持星穹铁道同人项目可用的表达，不要套武侠术语。',

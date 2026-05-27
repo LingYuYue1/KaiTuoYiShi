@@ -1,5 +1,6 @@
 import type {
   能力预设,
+  阵营定义,
   难度定义,
   命途定义,
   起始场景,
@@ -91,7 +92,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '迅捷、精准、目标先于一切。',
     description: '被称为帝弓司命的游弋星神，无止尽地游荡于诸世界之间，铲除曾荼毒其家园的不死孽物。岚的游猎从来不计代价，其拯救和破坏也几无差别。',
-    school: 'xianzhou',
   },
   {
     id: 'destruction',
@@ -105,7 +105,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '以倾覆为道，烧尽腐朽换来重生。',
     description: '宇宙的诞生是一种错谬；文明若是浩瀚群星中悄然兴起的癌症，纷争即智慧生灵间唯一通行的语言。为了修正如是错误，抹去宇宙的污点，纳努克成为熵之化身，怀抱对诸神的否定飞升成神。「毁灭」并非过程，而是结果。在祂允诺的道路上，一切命途星神都将在热寂中终结。',
-    school: 'antlife',
   },
   {
     id: 'preservation',
@@ -119,7 +118,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '为脆弱筑墙，将熄灭挡在身外。',
     description: '天慧星墙、亚空晶壁、巨引源基盘的砌造者，崇拜者称其「琥珀王」。祂为更古老的黄昏战争幸存者，知晓大敌的吞噬迫在眉睫，因此不得不以光年为单位铸造障壁加以封印，隔绝保护尚有生机的世界。',
-    school: 'xianzhou',
   },
   {
     id: 'abundance',
@@ -133,7 +131,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '生命滋长，伤痛被温柔抚平。',
     description: '众生哺育者，乐土之神，旨在令生命兴盛不熄。药师执掌「丰饶」命途，「巡猎」的岚视祂为死敌。祂是从不拒绝祈愿，不忍视衰亡和病痛的星神。',
-    school: 'cycle',
   },
   {
     id: 'remembrance',
@@ -147,7 +144,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '收集星河之中将被遗忘的片段。',
     description: '思维即是存在，记忆即是存在的证据。执掌「记忆」命途的星神记录被遗忘的一切，为宇宙的重生做好准备。',
-    school: 'cycle',
   },
   {
     id: 'erudition',
@@ -161,7 +157,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '把未知拆解成可被读出的语言。',
     description: '执掌「智识」命途的星神，原为用于求解万物的星体计算机，由机器升格而成。博识尊试图体认宇宙，解开万物之谜。',
-    school: 'cognition',
   },
   {
     id: 'elation',
@@ -175,7 +170,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '将平庸的日常变作不可重复的烟火。',
     description: '欢乐乃是智慧生灵的特权，阿哈鼓舞信徒享受生命的欢愉，自命运刀锋般的转折中寻求快乐。祂不追求秩序与正确，只偏爱荒诞、胜负之外与令人捧腹的偏差。',
-    school: 'sentiment',
   },
   {
     id: 'nihility',
@@ -189,7 +183,6 @@ export const paths: 命途定义[] = [
     ],
     blurb: '凝视空无之处，亦被空无凝视。',
     description: 'Ⅸ不与其他星神往来，祂相信多宇宙的本质乃是虚无，因而毫无价值。虚无像一团层层雾障，靠近时会让人意识到一切都可能失重。',
-    school: 'cognition',
   },
   {
     id: 'harmony',
@@ -203,12 +196,48 @@ export const paths: 命途定义[] = [
     ],
     blurb: '让相异的声响汇聚成同一支乐章。',
     description: '来自多个谐乐天体世界的集群星神。千面一体的希佩，宣唱着和谐一致的喜乐。为了对抗宇宙无情的法则，智慧生命需要抹煞孱弱的私欲与个体的差别，融入同一阙谐乐中——以强援弱，以死护生。',
-    school: 'sentiment',
   },
 ];
 
 export function getPath(id: string): 命途定义 | undefined {
   return paths.find((p) => p.id === id);
+}
+
+// ── 组织背景 ──
+// 开局向导只把它作为叙事身份写入档案和首回合摘要,不创建阵营声望系统。
+export const factions: 阵营定义[] = [
+  {
+    id: 'none',
+    name: '无固定组织',
+    shortName: '自由身份',
+    description: '你不隶属于任何大型组织,可以是旅人、佣兵、研究协助者、空间站访客或临时卷入者。',
+    openingHint: '首回合不会默认给你组织支援,旁人会先按你的自定义身份与现场表现判断你。',
+  },
+  {
+    id: 'genius_society',
+    name: '天才俱乐部',
+    shortName: '天才俱乐部',
+    description: '你与博识尊注视下的天才网络有关,可以是成员、候选者、助手、研究对象或关联项目人员。',
+    openingHint: '建议在自定义身份里写清编号、项目或与黑塔空间站的关系,避免 AI 直接给出过高权限。',
+  },
+  {
+    id: 'company',
+    name: '星际和平公司（IPC）',
+    shortName: 'IPC',
+    description: '你与公司的商业、物流、安保、投资、债务或外勤体系有关,利益关系会影响他人对你的判断。',
+    openingHint: '首回合可体现合同、任务、授权或风险评估,但不会默认让公司完全保护你。',
+  },
+  {
+    id: 'star_rangers',
+    name: '巡海游侠',
+    shortName: '巡海游侠',
+    description: '你是信奉巡猎理念的独立游侠,以自己的方式追猎该被解决的目标,组织结构松散。',
+    openingHint: '列车上目前没有现役巡海游侠,你会作为独立来客或临时同行者被看待。',
+  },
+];
+
+export function getFaction(id: string): 阵营定义 | undefined {
+  return factions.find((f) => f.id === id);
 }
 
 // ── 能力预设 ──

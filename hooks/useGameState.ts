@@ -326,9 +326,12 @@ export function useGameState(): UseGameStateReturn {
           });
           return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
         });
-        setWorldbooks([...merged, ...userBooks]);
+        const nextWorldbooks = [...merged, ...userBooks];
+        setWorldbooks(nextWorldbooks);
+        await saveSetting(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
       } else {
         setWorldbooks(builtins);
+        await saveSetting(WORLDBOOK_STORAGE_KEY, builtins);
       }
 
       const saveExists = await hasAnySave();

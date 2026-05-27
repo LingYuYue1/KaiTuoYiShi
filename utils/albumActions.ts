@@ -107,6 +107,37 @@ export function 挂载NPC立绘图片(npcs: NPC记录[], params: { npcId: string
   });
 }
 
+export function 卸载NPC头像图片(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位 }): NPC记录[] {
+  return npcs.map((npc) => {
+    if (npc.id !== params.npcId) return npc;
+    const avatarSlots = { ...(npc.图像档案?.头像槽位 ?? {}) };
+    delete avatarSlots[params.slot];
+    const nextImage = { ...(npc.图像档案 ?? {}) };
+    nextImage.头像槽位 = Object.keys(avatarSlots).length ? avatarSlots : undefined;
+    if (params.slot === '档案') {
+      nextImage.头像 = undefined;
+    }
+    return {
+      ...npc,
+      头像: params.slot === '档案' ? '' : npc.头像,
+      图像档案: nextImage,
+    };
+  });
+}
+
+export function 卸载NPC立绘图片(npcs: NPC记录[], params: { npcId: string }): NPC记录[] {
+  return npcs.map((npc) => {
+    if (npc.id !== params.npcId) return npc;
+    return {
+      ...npc,
+      图像档案: {
+        ...(npc.图像档案 ?? {}),
+        立绘: undefined,
+      },
+    };
+  });
+}
+
 export function 挂载NPC_NSFW部位图片(
   npcs: NPC记录[],
   params: { npcId: string; slot: '女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考'; src: string },
@@ -127,6 +158,24 @@ export function 挂载NPC_NSFW部位图片(
   });
 }
 
+export function 卸载NPC_NSFW部位图片(
+  npcs: NPC记录[],
+  params: { npcId: string; slot: '女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考' },
+): NPC记录[] {
+  return npcs.map((npc) => {
+    if (npc.id !== params.npcId) return npc;
+    const partImages = { ...(npc.NSFW档案?.部位图片 ?? {}) };
+    delete partImages[params.slot];
+    return {
+      ...npc,
+      NSFW档案: {
+        ...(npc.NSFW档案 ?? {}),
+        部位图片: Object.keys(partImages).length ? partImages : undefined,
+      },
+    };
+  });
+}
+
 export function 挂载旅人图片(traveler: 角色数据结构, params: { slot: '头像' | '正文头像' | '手机头像' | '立绘'; src: string }): 角色数据结构 {
   const imageArchive = { ...(traveler.图像档案 ?? {}) };
   if (params.slot === '头像') imageArchive.头像 = params.src;
@@ -136,6 +185,19 @@ export function 挂载旅人图片(traveler: 角色数据结构, params: { slot:
   return {
     ...traveler,
     头像: params.slot === '头像' ? params.src : traveler.头像,
+    图像档案: imageArchive,
+  };
+}
+
+export function 卸载旅人图片(traveler: 角色数据结构, params: { slot: '头像' | '正文头像' | '手机头像' | '立绘' }): 角色数据结构 {
+  const imageArchive = { ...(traveler.图像档案 ?? {}) };
+  if (params.slot === '头像') imageArchive.头像 = undefined;
+  if (params.slot === '正文头像') imageArchive.正文头像 = undefined;
+  if (params.slot === '手机头像') imageArchive.手机头像 = undefined;
+  if (params.slot === '立绘') imageArchive.立绘 = undefined;
+  return {
+    ...traveler,
+    头像: params.slot === '头像' ? '' : traveler.头像,
     图像档案: imageArchive,
   };
 }

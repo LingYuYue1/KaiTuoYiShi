@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
+import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
 
 interface ThinkingBlockProps {
@@ -15,14 +16,14 @@ export function ThinkingBlock({ content, defaultOpen = false }: ThinkingBlockPro
     <div
       className="mb-3"
       style={{
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
-        background: 'rgba(245, 217, 122, 0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        background: 'rgba(var(--tj-accent-primary), 0.04)',
       }}
     >
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-serif tracking-wider transition-colors hover:bg-white/[0.02]"
-        style={{ color: 'rgba(245, 217, 122, 0.7)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
       >
         <span className="text-[10px]">{open ? '▼' : '▶'}</span>
         <span>◆ 思绪痕迹</span>
@@ -31,8 +32,8 @@ export function ThinkingBlock({ content, defaultOpen = false }: ThinkingBlockPro
         <div
           className="px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap animate-fade-in"
           style={{
-            borderTop: '1px solid rgba(245, 217, 122, 0.15)',
-            color: 'rgba(200, 188, 158, 0.85)',
+            borderTop: '1px solid rgba(var(--tj-accent-primary), 0.15)',
+            color: 'rgba(var(--tj-text-secondary), 0.85)',
           }}
         >
           {content}
@@ -63,6 +64,57 @@ const DIAG_RE = /^【\s*角色\s*】\s*([^：:]+)[：:]\s*(.*)$/;
 const NAMED_DIAG_RE = /^【\s*([^】]+?)\s*】\s*(.*)$/;
 const INNER_RE = /^【\s*心声\s*】\s*(.*)$/;
 
+const SOUND_EFFECT_TAGS = new Set([
+  '汪',
+  '汪汪',
+  '喵',
+  '喵喵',
+  '呜',
+  '呜呜',
+  '嗷',
+  '嗷呜',
+  '吼',
+  '吼吼',
+  '咆',
+  '咆哮',
+  '嘶吼',
+  '吱',
+  '吱呀',
+  '嘶',
+  '嘶嘶',
+  '轰',
+  '轰隆',
+  '砰',
+  '砰砰',
+  '咚',
+  '咚咚',
+  '咔',
+  '咔哒',
+  '滴',
+  '滴滴',
+  '滴答',
+  '叮',
+  '叮咚',
+  '啪',
+  '啪啪',
+  '哗',
+  '哗啦',
+  '沙',
+  '沙沙',
+  '呼',
+  '呼噜',
+  '唰',
+  '嗡',
+  '嗡嗡',
+  '滋',
+  '滋滋',
+  '咻',
+  '咻咻',
+  '哐',
+  '哐当',
+  '扑通',
+]);
+
 function parseBodyLines(body: string, traveler?: 角色数据结构): ParsedBodyLine[] {
   return body.split(/\r?\n/).flatMap<ParsedBodyLine>((raw) => {
     const trimmed = raw.trim();
@@ -70,6 +122,9 @@ function parseBodyLines(body: string, traveler?: 角色数据结构): ParsedBody
     let m = trimmed.match(NARR_RE);
     if (m) {
       const text = m[1].trim();
+      if (isSoundEffectText(text)) {
+        return { kind: 'narration', text };
+      }
       const quoted = extractFullQuotedSpeech(text);
       if (quoted && traveler) {
         return { kind: 'dialogue', name: getTravelerDisplayName(traveler), text: quoted };
@@ -82,7 +137,15 @@ function parseBodyLines(body: string, traveler?: 角色数据结构): ParsedBody
     if (m) return { kind: 'inner', text: m[1].trim() };
     m = trimmed.match(NAMED_DIAG_RE);
     if (m && !['旁白', '心声', '角色'].includes(m[1].trim())) {
-      return splitDialogueAndTrailingNarration(m[1].trim(), m[2].trim(), traveler);
+      const name = m[1].trim();
+      const text = m[2].trim();
+      if (isSoundEffectSpeakerName(name)) {
+        return { kind: 'narration', text: combineSoundEffectNarration(name, text) };
+      }
+      return splitDialogueAndTrailingNarration(name, text, traveler);
+    }
+    if (isSoundEffectText(trimmed)) {
+      return { kind: 'narration', text: trimmed };
     }
     const quoted = extractFullQuotedSpeech(trimmed);
     if (quoted && traveler) {
@@ -90,6 +153,39 @@ function parseBodyLines(body: string, traveler?: 角色数据结构): ParsedBody
     }
     return { kind: 'unparsed', text: trimmed };
   });
+}
+
+function normalizeSoundEffectTag(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/[~～…\.。！？!?、，,：:；;“”"‘’'（）()【】[\]《》<>·\-—]/g, '');
+}
+
+function isSoundEffectSpeakerName(name: string): boolean {
+  const clean = normalizeSoundEffectTag(name);
+  return isNormalizedSoundEffect(clean);
+}
+
+function isSoundEffectText(text: string): boolean {
+  const clean = normalizeSoundEffectTag(text);
+  return isNormalizedSoundEffect(clean);
+}
+
+function isNormalizedSoundEffect(clean: string): boolean {
+  if (!clean || clean.length > 8) return false;
+  if (SOUND_EFFECT_TAGS.has(clean)) return true;
+  return clean.length <= 6 && [...clean].every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0]);
+}
+
+function combineSoundEffectNarration(name: string, text: string): string {
+  const sound = name.trim();
+  const rest = text.trim();
+  if (!rest) return sound;
+  if (/[。！？!?…]$/.test(sound) || /^[。！？!?…、，,：:；;]/.test(rest)) {
+    return `${sound}${rest}`;
+  }
+  return `${sound}，${rest}`;
 }
 
 function getTravelerDisplayName(traveler: 角色数据结构): string {
@@ -183,13 +279,14 @@ interface AvatarTileProps {
 function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
   const dim = size === 'md' ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-11 h-11 sm:w-12 sm:h-12';
   const glow = withAlpha(color, 0.35);
+  const labelColor = withAlpha(color, 0.98);
   return (
     <div className="flex flex-col items-center gap-1.5 shrink-0">
       <div
         className={`${dim} rounded-full flex items-center justify-center overflow-hidden relative transition-transform duration-300 group-hover:scale-105`}
         style={{
-          background: url ? 'rgba(20, 16, 28, 0.6)' : `linear-gradient(135deg, ${withAlpha(color, 0.35)}, ${withAlpha(color, 0.12)})`,
-          boxShadow: `0 0 0 1px ${withAlpha(color, 0.55)}, 0 0 14px ${glow}, inset 0 0 0 1px rgba(255, 255, 255, 0.05)`,
+          background: url ? 'rgba(var(--tj-surface-strong), 0.72)' : `linear-gradient(135deg, ${withAlpha(color, 0.22)}, rgba(var(--tj-chat-bubble), 0.92))`,
+          boxShadow: `0 0 0 1px ${withAlpha(color, 0.58)}, 0 0 14px ${glow}, 0 8px 16px rgba(var(--tj-shadow), 0.16), inset 0 0 0 1px rgba(var(--tj-text-primary), 0.16)`,
         }}
       >
         {url ? (
@@ -204,17 +301,17 @@ function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
         )}
       </div>
       <div
-        className="px-2 py-0.5 max-w-[72px] text-center"
+        className="px-2 py-0.5 max-w-[78px] text-center"
         style={{
-          background: 'rgba(10, 8, 14, 0.65)',
-          boxShadow: `inset 0 0 0 1px ${withAlpha(color, 0.32)}`,
+          background: 'rgba(var(--tj-chat-bubble), 0.88)',
+          boxShadow: `inset 0 0 0 1px ${withAlpha(color, 0.52)}, 0 0 10px ${withAlpha(color, 0.12)}`,
           clipPath:
             'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
         }}
       >
         <span
-          className="block truncate font-serif text-[10px] tracking-[0.12em]"
-          style={{ color: withAlpha(color, 0.92) }}
+          className="block truncate font-serif text-[11px] font-semibold tracking-[0.1em]"
+          style={{ color: labelColor, textShadow: `0 0 8px ${withAlpha(color, 0.18)}` }}
         >
           {name}
         </span>
@@ -231,29 +328,32 @@ interface DialogueBubbleProps {
 }
 
 function DialogueBubble({ name, text, color, avatarUrl }: DialogueBubbleProps) {
+  const bubbleBg = 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
+  const bubbleStroke = withAlpha(color, 0.4);
+  const bubbleGlow = withAlpha(color, 0.08);
   return (
-    <div className="group my-3 flex items-start gap-3">
+    <div className="group my-3 flex items-start justify-start gap-3">
       <AvatarTile name={name} url={avatarUrl} color={color} size="sm" />
       <div className="relative flex-1 min-w-0 mt-1">
-        {/* 气泡左侧小三角 */}
+        {/* 气泡侧边小三角 */}
         <div
-          className="absolute top-3 -left-1.5 w-3 h-3 rotate-45"
+          className="absolute top-3 -left-1.5 h-3 w-3 rotate-45"
           style={{
-            background: 'rgba(20, 16, 28, 0.78)',
-            boxShadow: `-1px 1px 0 0 ${withAlpha(color, 0.4)}`,
+            background: bubbleBg,
+            boxShadow: `-1px 1px 0 0 ${bubbleStroke}`,
           }}
         />
         <div
           className="relative px-4 py-3"
           style={{
-            background: 'rgba(20, 16, 28, 0.78)',
-            color: 'rgb(var(--tj-text-primary))',
-            boxShadow: `inset 0 0 0 1px ${withAlpha(color, 0.4)}, 0 4px 18px rgba(0, 0, 0, 0.35), 0 0 22px ${withAlpha(color, 0.08)}`,
+            background: bubbleBg,
+            color: 'rgba(var(--tj-chat-text), 0.96)',
+            boxShadow: `inset 0 0 0 1px ${bubbleStroke}, 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px ${bubbleGlow}`,
             clipPath:
               'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
           }}
         >
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words tracking-wide">
+          <p className="text-sm leading-7 whitespace-pre-wrap break-words">
             {text}
           </p>
         </div>
@@ -313,19 +413,19 @@ function InnerVoiceBubble({ text, traveler }: InnerVoiceBubbleProps) {
 
 // 旁白：全宽容器 + 两侧金色竖条 + 顶部小符号点缀（无头像、无气泡）
 function NarrationLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
-  const baseColor = dimmed ? 'rgba(220, 208, 178, 0.72)' : 'rgb(var(--tj-text-primary))';
+  const baseColor = dimmed ? 'rgba(var(--tj-chat-muted), 0.72)' : 'rgba(var(--tj-chat-text), 0.94)';
   return (
     <div
       className="my-2.5 px-5 py-2.5 relative"
       style={{
-        background: 'rgba(245, 217, 122, 0.025)',
-        borderLeft: '2px solid rgba(245, 217, 122, 0.45)',
-        borderRight: '2px solid rgba(245, 217, 122, 0.22)',
+        background: 'rgba(var(--tj-accent-primary), 0.018)',
+        borderLeft: '2px solid rgba(var(--tj-accent-primary), 0.34)',
+        borderRight: '1px solid rgba(var(--tj-border), 0.24)',
       }}
       title={dimmed ? '该行未识别为 【旁白】/【角色名】/【心声】 任一格式' : undefined}
     >
       <p
-        className="text-sm leading-relaxed whitespace-pre-wrap break-words tracking-wide"
+        className="text-sm leading-7 whitespace-pre-wrap break-words"
         style={{ color: baseColor }}
       >
         {text}
@@ -347,10 +447,10 @@ export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true
         if (line.kind === 'dialogue') {
           const npc = lookupNpc(line.name, npcRecords);
           const protagonist = isProtagonist(line.name, traveler);
-          const color = protagonist ? 'rgb(245, 217, 122)' : nameToColor(line.name);
+          const color = protagonist ? 'rgb(var(--tj-accent-primary))' : nameToColor(line.name);
           const avatarUrl = protagonist
-            ? traveler?.头像?.trim() || undefined
-            : npc?.头像?.trim() || undefined;
+            ? traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim() || undefined
+            : 读取NPC头像(npc, '正文');
           return (
             <DialogueBubble
               key={i}
@@ -380,11 +480,11 @@ interface MemoryBlockProps {
 }
 
 // 流式阶段：剥出 <正文> 起始位置之后的内容，把 <thinking> 段藏在「开拓进行中.....」指示器下。
-// 一旦解析到 <正文>，就把 partial body 喂给 BodyBlock；正文之后的标签（短期记忆/动态世界/命令）
+// 一旦解析到 <正文>，就把 partial body 喂给 BodyBlock；正文之后的标签（短期记忆/动态世界/变量草稿/剧情规划/命令）
 // 出现就视为正文结束，从那里截断。
 const STREAM_BODY_START_RE = /<\s*(?:正文|body|content|text|内容)\s*>/i;
 const STREAM_AFTER_BODY_RE =
-  /<\s*(?:\/\s*(?:正文|body|content|text|内容)|短期记忆|memory|summary|recap|记忆|回忆|动态世界|world|worldevent|世界|事件|命令|command|commands|cmd)\s*>/i;
+  /<\s*(?:\/\s*(?:正文|body|content|text|内容)|短期记忆|memory|summary|recap|记忆|回忆|动态世界|world|worldevent|世界|事件|行动选项|actions|options|choice|choices|选项|变量草稿|variableDraft|变量候选|变量线索|变量摘要|剧情规划|storyPlan|storyPlanning|剧情计划|剧情安排|后续规划|命令|command|commands|cmd)\s*>/i;
 
 function extractStreamingBody(raw: string): { bodyStarted: boolean; bodyText: string } {
   const start = raw.match(STREAM_BODY_START_RE);
@@ -404,22 +504,22 @@ function PathfindingIndicator() {
       className="flex items-center gap-3 px-4 py-2.5 animate-fade-in"
       style={{
         background:
-          'linear-gradient(135deg, rgba(245, 217, 122, 0.08), rgba(245, 217, 122, 0.02))',
+          'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.08), rgba(var(--tj-accent-primary), 0.02))',
         boxShadow:
-          'inset 0 0 0 1px rgba(245, 217, 122, 0.4), 0 0 22px rgba(245, 217, 122, 0.08)',
+          'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4), 0 0 22px rgba(var(--tj-accent-primary), 0.08)',
         clipPath:
           'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
       }}
     >
       <span
         className="text-base animate-pulse-soft"
-        style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
       >
         ◇
       </span>
       <span
         className="font-serif text-sm tracking-[0.28em]"
-        style={{ color: 'rgba(245, 217, 122, 0.92)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.92)' }}
       >
         开拓进行中
       </span>
@@ -429,7 +529,7 @@ function PathfindingIndicator() {
             key={i}
             className="inline-block animate-pulse-soft font-mono leading-none"
             style={{
-              color: 'rgba(245, 217, 122, 0.85)',
+              color: 'rgba(var(--tj-accent-primary), 0.85)',
               fontSize: '14px',
               animationDelay: `${i * 0.15}s`,
             }}
@@ -472,15 +572,15 @@ export function MemoryBlock({ content }: MemoryBlockProps) {
     <div
       className="mt-3 text-xs"
       style={{
-        boxShadow: 'inset 0 0 0 1px rgba(196, 163, 90, 0.5)',
-        background: 'rgba(196, 163, 90, 0.05)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.5)',
+        background: 'rgba(var(--tj-accent-secondary), 0.05)',
         borderStyle: 'none',
       }}
     >
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-serif tracking-wider transition-colors hover:bg-white/[0.02]"
-        style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
       >
         <span className="text-[10px]">{open ? '▼' : '▶'}</span>
         <span>✦ 记忆收录</span>
@@ -489,7 +589,7 @@ export function MemoryBlock({ content }: MemoryBlockProps) {
         <div
           className="px-2.5 py-1.5 animate-fade-in"
           style={{
-            borderTop: '1px solid rgba(196, 163, 90, 0.35)',
+            borderTop: '1px solid rgba(var(--tj-accent-secondary), 0.35)',
             color: 'rgba(220, 200, 160, 0.9)',
           }}
         >

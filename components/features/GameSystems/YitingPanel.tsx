@@ -56,20 +56,20 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
     <div className="flex h-full min-h-0 gap-4">
       <aside className="flex w-[270px] min-h-0 shrink-0 flex-col gap-3">
         <section className="px-4 py-4" style={panelStyle('hero')}>
-          <div className="font-serif text-xs tracking-[0.34em]" style={{ color: 'rgba(245, 217, 122, 0.72)' }}>
+          <div className="font-serif text-xs tracking-[0.34em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
             回忆库
           </div>
           <div
             className="mt-1 font-serif text-2xl font-semibold tracking-[0.22em]"
             style={{
-              background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 50%, #c4a35a 100%)',
+              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 50%, rgb(var(--tj-accent-secondary)) 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
             }}
           >
             忆庭
           </div>
-          <p className="mt-3 text-xs leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.78)' }}>
+          <p className="mt-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
             这里保留每回合的可召回纪要。摘要用于检索和注入，原文只用于回看与核对，不直接塞进主剧情。
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -93,7 +93,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
                   className="px-3 py-2 text-left transition-all"
                   style={buttonStyle(active)}
                 >
-                  <div className="font-serif text-sm tracking-[0.18em]" style={{ color: active ? '#f5d97a' : 'rgba(225, 213, 183, 0.9)' }}>
+                  <div className="font-serif text-sm tracking-[0.18em]" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.9)' }}>
                     {item.label}
                   </div>
                 </button>
@@ -116,11 +116,11 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
 
       <main className="flex min-h-0 flex-1 gap-3 overflow-hidden">
         <section className="flex min-h-0 w-[350px] flex-col overflow-hidden" style={panelStyle()}>
-          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.14)' }}>
-            <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(245, 217, 122, 0.8)' }}>
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.14)' }}>
+            <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>
               摘要索引
             </div>
-            <div className="text-[11px]" style={{ color: 'rgba(160, 148, 120, 0.8)' }}>
+            <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.8)' }}>
               {filtered.length} 条
             </div>
           </div>
@@ -141,15 +141,15 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
                     style={buttonStyle(active)}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 truncate font-serif text-sm tracking-[0.14em]" style={{ color: '#fff4d4' }}>
+                      <div className="min-w-0 truncate font-serif text-sm tracking-[0.14em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                         {entry.名称 || `回合 ${entry.回合}`}
                       </div>
                       <KindBadge kind={kind} />
                     </div>
-                    <div className="mt-1 text-[11px]" style={{ color: 'rgba(160, 148, 120, 0.78)' }}>
+                    <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
                       回合 {entry.回合} · {formatDate(entry.时间戳)}
                     </div>
-                    <p className="mt-2 line-clamp-3 text-xs leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.88)' }}>
+                    <p className="mt-2 line-clamp-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.88)' }}>
                       {entry.摘要 || '暂无摘要'}
                     </p>
                   </button>
@@ -162,22 +162,22 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden" style={panelStyle('detail')}>
           {selected ? (
             <>
-              <div className="flex items-start justify-between gap-3 px-4 py-4" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.14)' }}>
+              <div className="flex items-start justify-between gap-3 px-4 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.14)' }}>
                 <div className="min-w-0">
-                  <div className="font-serif text-xs tracking-[0.34em]" style={{ color: 'rgba(245, 217, 122, 0.72)' }}>
+                  <div className="font-serif text-xs tracking-[0.34em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
                     回忆详情
                   </div>
                   <div
                     className="mt-1 truncate font-serif text-2xl font-semibold tracking-[0.16em]"
                     style={{
-                      background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 50%, #c4a35a 100%)',
+                      background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 50%, rgb(var(--tj-accent-secondary)) 100%)',
                       WebkitBackgroundClip: 'text',
                       WebkitTextFillColor: 'transparent',
                     }}
                   >
                     {selected.名称 || `回合 ${selected.回合}`}
                   </div>
-                  <div className="mt-2 text-sm leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.78)' }}>
+                  <div className="mt-2 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
                     回合 {selected.回合} · {formatDate(selected.时间戳)}
                   </div>
                 </div>
@@ -186,7 +186,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
 
               <div className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
                 <InfoBlock title="概要层 · 召回使用" important>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'rgba(235, 223, 193, 0.92)' }}>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
                     {selected.摘要 || '暂无摘要'}
                   </p>
                 </InfoBlock>
@@ -199,9 +199,9 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
                           key={keyword}
                           className="px-2 py-1 text-xs"
                           style={{
-                            color: 'rgba(245, 217, 122, 0.9)',
-                            background: 'rgba(245, 217, 122, 0.06)',
-                            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+                            color: 'rgba(var(--tj-accent-primary), 0.9)',
+                            background: 'rgba(var(--tj-accent-primary), 0.06)',
+                            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
                             clipPath: smallClip,
                           }}
                         >
@@ -213,7 +213,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
                 )}
 
                 <InfoBlock title="原文层 · 回看核对">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.86)' }}>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}>
                     {selected.原文 || '暂无原文'}
                   </p>
                 </InfoBlock>
@@ -258,11 +258,11 @@ function panelStyle(variant?: 'hero' | 'detail') {
   return {
     background:
       variant === 'hero'
-        ? 'linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(9, 8, 10, 0.98))'
+        ? 'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))'
         : variant === 'detail'
-          ? 'linear-gradient(180deg, rgba(18, 16, 22, 0.95), rgba(10, 9, 12, 0.95))'
-          : 'rgba(16, 14, 16, 0.42)',
-    boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)',
+          ? 'linear-gradient(180deg, rgba(var(--tj-surface), 0.92), rgba(var(--tj-surface-strong), 0.9))'
+          : 'rgba(var(--tj-bg-secondary), 0.42)',
+    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
     clipPath: cardClip,
   } as CSSProperties;
 }
@@ -270,11 +270,11 @@ function panelStyle(variant?: 'hero' | 'detail') {
 function buttonStyle(active: boolean) {
   return {
     background: active
-      ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.14), rgba(245, 217, 122, 0.03))'
-      : 'rgba(16, 14, 16, 0.45)',
+      ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-primary), 0.03))'
+      : 'rgba(var(--tj-bg-secondary), 0.45)',
     boxShadow: active
-      ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.5)'
-      : 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5)'
+      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
     clipPath: smallClip,
   };
 }
@@ -286,9 +286,9 @@ function KindBadge({ kind, large = false }: { kind: ArchiveFilter; large?: boole
     <span
       className={`${large ? 'px-3 py-1.5 text-[11px]' : 'px-2 py-0.5 text-[10px]'} shrink-0 font-serif tracking-[0.2em]`}
       style={{
-        color: gold ? '#1a1325' : '#0e1720',
+        color: gold ? 'rgb(var(--tj-bg-primary))' : '#0e1720',
         background: gold
-          ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
           : 'linear-gradient(135deg, rgba(180, 200, 220, 0.9), rgba(120, 160, 190, 0.9))',
         clipPath: smallClip,
       }}
@@ -301,11 +301,11 @@ function KindBadge({ kind, large = false }: { kind: ArchiveFilter; large?: boole
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+      <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </span>
-      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.35), transparent)' }} />
+      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.35), transparent)' }} />
     </div>
   );
 }
@@ -315,12 +315,12 @@ function InfoBlock({ title, children, important = false }: { title: string; chil
     <section
       className="mt-3 px-4 py-4 first:mt-0"
       style={{
-        background: important ? 'rgba(245, 217, 122, 0.055)' : 'rgba(16, 14, 16, 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+        background: important ? 'rgba(var(--tj-accent-primary), 0.055)' : 'rgba(var(--tj-bg-secondary), 0.45)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-3 font-serif text-xs tracking-[0.3em]" style={{ color: 'rgba(245, 217, 122, 0.82)' }}>
+      <div className="mb-3 font-serif text-xs tracking-[0.3em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
         {title}
       </div>
       {children}
@@ -333,15 +333,15 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'rgba(245, 217, 122, 0.05)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+        background: 'rgba(var(--tj-accent-primary), 0.05)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
         clipPath: smallClip,
       }}
     >
-      <div className="text-[11px]" style={{ color: 'rgba(160, 148, 120, 0.82)' }}>
+      <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
         {label}
       </div>
-      <div className="mt-1 truncate text-sm font-semibold" style={{ color: 'rgba(245, 217, 122, 0.95)' }}>
+      <div className="mt-1 truncate text-sm font-semibold" style={{ color: 'rgba(var(--tj-accent-primary), 0.95)' }}>
         {value}
       </div>
     </div>
@@ -353,9 +353,9 @@ function EmptyNotice({ text }: { text: string }) {
     <div
       className="px-4 py-6 text-center text-sm leading-relaxed"
       style={{
-        color: 'rgba(200, 188, 158, 0.72)',
-        background: 'rgba(245, 217, 122, 0.03)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+        color: 'rgba(var(--tj-text-secondary), 0.72)',
+        background: 'rgba(var(--tj-accent-primary), 0.03)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
         clipPath: smallClip,
       }}
     >

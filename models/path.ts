@@ -2,7 +2,7 @@
 // 命途影响通过阶段、特质回响与战技槽位进入正文叙事，不再承担独立战斗系统的数值职责。
 // 后续变量系统会通过 命途增量 + applyPathDeltas 接口来推进进度（见 services/pathService.ts）。
 
-import type { 命途ID, 命途流派ID } from './journey';
+import type { 命途ID } from './journey';
 
 // ── 阶段 ──
 // 五阶段:浅涉 → 践行 → 深诣 → 伪令使 → 令使
@@ -156,20 +156,6 @@ export const PATH_TRAIT_DEFS: Record<命途ID, 命途特质[]> = {
 export function 获取命途特质(id: 命途ID): 命途特质[] {
   return PATH_TRAIT_DEFS[id] ?? [];
 }
-
-// ── 流派冲突 ──
-// 仅描述「方向 + 强度」，非对称：A→B 有冲突，B→A 不一定。
-// 强度（0..1）= 推进方延迟会让对方按此比例反向衰减。
-export interface 命途流派冲突 {
-  from: 命途流派ID;
-  to: 命途流派ID;
-  intensity: number;
-}
-
-export const PATH_SCHOOL_CONFLICTS: 命途流派冲突[] = [
-  // 仙舟流派对丰饶（生死循环）的传统对立
-  { from: 'xianzhou', to: 'cycle', intensity: 0.5 },
-];
 
 // ── 忘却命途机制 ──
 // 当某条命途进入「深诣」(stage >= 2) 后继续推进，会以下表比率衰减其它「非主」命途的进度。

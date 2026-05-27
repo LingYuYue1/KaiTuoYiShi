@@ -133,13 +133,13 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
       <div
         className="px-4 py-3 text-xs leading-relaxed"
         style={{
-          color: 'rgba(200, 188, 158, 0.78)',
-          background: 'rgba(245, 217, 122, 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          color: 'rgba(var(--tj-text-secondary), 0.78)',
+          background: 'rgba(var(--tj-accent-primary), 0.05)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath: cardClip,
         }}
       >
-        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
           记忆系统管理
         </div>
         这里负责即时、短期、长期与 NPC 同行记忆的自动压缩。记忆总结 API 放在最上方，先决定压缩时用哪一个模型，再往下调阈值和提示词。
@@ -163,7 +163,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
             options={providerOptions.map((option) => ({ value: option.value, label: option.label }))}
           />
           <label className="block md:col-span-2">
-            <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+            <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
               模型
             </div>
             <div className="flex gap-2">
@@ -179,9 +179,9 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
                 onClick={handleFetchModels}
                 className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
-                  color: 'rgba(245, 217, 122, 0.9)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
-                  background: 'rgba(245, 217, 122, 0.06)',
+                  color: 'rgba(var(--tj-accent-primary), 0.9)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+                  background: 'rgba(var(--tj-accent-primary), 0.06)',
                   clipPath: smallClip,
                 }}
               >
@@ -248,9 +248,9 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
             onClick={handleFetchModels}
             className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
             style={{
-              color: 'rgba(245, 217, 122, 0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
-              background: 'rgba(245, 217, 122, 0.06)',
+              color: 'rgba(var(--tj-accent-primary), 0.9)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+              background: 'rgba(var(--tj-accent-primary), 0.06)',
               clipPath: smallClip,
             }}
           >
@@ -261,9 +261,9 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
             onClick={handleTestConnection}
             className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
             style={{
-              color: 'rgba(245, 217, 122, 0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
-              background: 'rgba(245, 217, 122, 0.06)',
+              color: 'rgba(var(--tj-accent-primary), 0.9)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+              background: 'rgba(var(--tj-accent-primary), 0.06)',
               clipPath: smallClip,
             }}
           >
@@ -272,7 +272,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
         </div>
 
         {modelChoices.length > 0 && (
-          <div className="mt-3 text-[11px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.74)' }}>
+          <div className="mt-3 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
             已获取模型：{modelChoices.slice(0, 8).join(' · ')}
           </div>
         )}
@@ -281,9 +281,9 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
           <div
             className="mt-3 px-3 py-2 text-xs"
             style={{
-              color: message.kind === 'error' ? '#ffb7b7' : 'rgba(220, 208, 178, 0.95)',
-              background: message.kind === 'error' ? 'rgba(120, 30, 30, 0.35)' : 'rgba(245, 217, 122, 0.05)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+              color: message.kind === 'error' ? '#ffb7b7' : 'rgba(var(--tj-text-secondary), 0.95)',
+              background: message.kind === 'error' ? 'rgba(120, 30, 30, 0.35)' : 'rgba(var(--tj-accent-primary), 0.05)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
               clipPath: smallClip,
             }}
           >
@@ -297,7 +297,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
             style={{
               color: testResult.ok ? 'rgba(220, 240, 220, 0.95)' : '#ffb7b7',
               background: testResult.ok ? 'rgba(60, 120, 70, 0.28)' : 'rgba(120, 30, 30, 0.35)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
               clipPath: smallClip,
             }}
           >
@@ -362,11 +362,11 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))',
-            color: '#1a1325',
+              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+            color: 'rgb(var(--tj-on-accent))',
             boxShadow: savedFlash
               ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
-              : 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 18px rgba(245, 217, 122, 0.22)',
+              : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
             clipPath: smallClip,
           }}
         >
@@ -376,9 +376,9 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
           <div
             className="px-3 py-2 text-xs"
             style={{
-              color: saveMessage.kind === 'error' ? '#ffb7b7' : 'rgba(220, 208, 178, 0.95)',
-              background: saveMessage.kind === 'error' ? 'rgba(120, 30, 30, 0.35)' : 'rgba(245, 217, 122, 0.05)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+              color: saveMessage.kind === 'error' ? '#ffb7b7' : 'rgba(var(--tj-text-secondary), 0.95)',
+              background: saveMessage.kind === 'error' ? 'rgba(120, 30, 30, 0.35)' : 'rgba(var(--tj-accent-primary), 0.05)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
               clipPath: smallClip,
             }}
           >
@@ -404,21 +404,21 @@ function ToggleField({
   return (
     <label
       className="flex cursor-pointer items-center justify-between gap-4 px-3 py-3"
-      style={{ boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.16)', clipPath: smallClip }}
+      style={{ boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: smallClip }}
     >
       <span>
-        <span className="block font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.92)' }}>
+        <span className="block font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.92)' }}>
           {label}
         </span>
-        <span className="mt-1 block text-xs leading-relaxed" style={{ color: 'rgba(200,188,158,0.74)' }}>
+        <span className="mt-1 block text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>
           {desc}
         </span>
       </span>
       <span
         className="relative h-7 w-12 shrink-0 transition-all"
         style={{
-          background: checked ? 'rgba(245,217,122,0.26)' : 'rgba(80,75,68,0.45)',
-          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(245,217,122,0.55)' : 'rgba(160,148,120,0.28)'}`,
+          background: checked ? 'rgba(var(--tj-accent-primary),0.26)' : 'rgba(80,75,68,0.45)',
+          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(var(--tj-accent-primary),0.55)' : 'rgba(var(--tj-text-secondary),0.28)'}`,
           borderRadius: 999,
         }}
       >
@@ -427,7 +427,7 @@ function ToggleField({
           className="absolute top-1 h-5 w-5 rounded-full transition-all"
           style={{
             left: checked ? 24 : 4,
-            background: checked ? '#f5d97a' : 'rgba(200,188,158,0.8)',
+            background: checked ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.8)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
           }}
         />
@@ -441,17 +441,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <div
         className="px-4 py-4"
         style={{
-          background: 'rgba(245, 217, 122, 0.035)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+          background: 'rgba(var(--tj-accent-primary), 0.035)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
         clipPath: cardClip,
       }}
     >
       <div className="flex items-center gap-2">
-        <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-        <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+        <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+        <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
           {title}
         </span>
-        <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.35), transparent)' }} />
+        <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.35), transparent)' }} />
       </div>
       <div className="mt-3 space-y-3">{children}</div>
     </div>
@@ -469,7 +469,7 @@ function InputField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
         {label}
       </div>
       <input
@@ -495,7 +495,7 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
         {label}
       </div>
       <select
@@ -533,7 +533,7 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
         {label}
       </div>
       <input
@@ -546,7 +546,7 @@ function NumberField({
         className="kaituo-input w-full px-3 py-2 text-sm"
         style={{ clipPath: smallClip }}
       />
-      <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>
+      <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
         {hint}
       </div>
     </label>
@@ -568,7 +568,7 @@ function TextareaField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
         {label}
       </div>
       <textarea
@@ -578,7 +578,7 @@ function TextareaField({
         className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed"
         style={{ clipPath: smallClip }}
       />
-      <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>
+      <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
         {hint}
       </div>
     </label>

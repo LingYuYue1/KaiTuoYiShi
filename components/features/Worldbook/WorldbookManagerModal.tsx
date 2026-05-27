@@ -176,28 +176,28 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
       <div
         className="flex h-[90vh] w-full max-w-[1280px] animate-slide-up flex-col overflow-hidden"
         style={{
-          background: 'linear-gradient(180deg, rgba(18, 16, 18, 0.97), rgba(10, 9, 10, 0.98))',
+          background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.97), rgba(var(--tj-bg-primary), 0.98))',
           boxShadow:
-            'inset 0 0 0 1px rgba(245, 217, 122, 0.45), 0 0 32px rgba(245, 217, 122, 0.12), 0 20px 60px rgba(0, 0, 0, 0.6)',
+            'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 0 32px rgba(var(--tj-accent-primary), 0.12), 0 20px 60px rgba(0, 0, 0, 0.6)',
           clipPath: 'polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px)',
         }}
       >
         <header
           className="flex items-end justify-between gap-5 px-6 pb-3 pt-4"
           style={{
-            borderBottom: '1px solid rgba(245, 217, 122, 0.28)',
-            background: 'linear-gradient(180deg, rgba(245, 217, 122, 0.06), rgba(245, 217, 122, 0))',
+            borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.28)',
+            background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.06), rgba(var(--tj-accent-primary), 0))',
           }}
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-3">
-              <span className="text-xs font-serif tracking-[0.45em]" style={{ color: 'rgba(245, 217, 122, 0.65)' }}>
+              <span className="text-xs font-serif tracking-[0.45em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.65)' }}>
                 ◆ INDEX
               </span>
               <h2
                 className="font-serif text-2xl font-semibold tracking-[0.3em]"
                 style={{
-                  background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 45%, #c4a35a 100%)',
+                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
@@ -206,7 +206,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
                 如我所书 · 世界书
               </h2>
             </div>
-            <p className="mt-1.5 font-serif text-[11px] italic tracking-[0.18em]" style={{ color: 'rgba(200, 188, 158, 0.62)' }}>
+            <p className="mt-1.5 font-serif text-[11px] italic tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
               内置规范与额外世界书分流管理，保存后参与后续剧情生成。
             </p>
           </div>
@@ -221,7 +221,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
             <button
               onClick={onClose}
               className="ml-1 px-2 py-1.5 text-base font-serif tracking-wider transition-all hover:opacity-80"
-              style={{ color: 'rgba(200, 188, 158, 0.62)' }}
+              style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}
               title="关闭"
             >
               ×
@@ -230,8 +230,8 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
         </header>
 
         <div className="flex flex-1 overflow-hidden">
-          <aside className="flex w-[300px] flex-shrink-0 flex-col" style={{ borderRight: '1px solid rgba(245, 217, 122, 0.2)' }}>
-            <div className="flex gap-1 px-3 py-2.5" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.15)' }}>
+          <aside className="flex w-[300px] flex-shrink-0 flex-col" style={{ borderRight: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
+            <div className="flex gap-1 px-3 py-2.5" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}>
               <TabButton active={activeTab === 'builtin'} onClick={() => setActiveTab('builtin')} label="内置" />
               <TabButton active={activeTab === 'user'} onClick={() => setActiveTab('user')} label="额外" />
             </div>
@@ -249,7 +249,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
               )}
             </div>
 
-            <div className="flex gap-2 p-3" style={{ borderTop: '1px solid rgba(245, 217, 122, 0.2)' }}>
+            <div className="flex gap-2 p-3" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
               <button onClick={handleSave} className="kaituo-btn kaituo-btn-primary flex-1 py-1.5 text-sm">
                 <span className="relative">保存</span>
               </button>
@@ -295,9 +295,9 @@ function HeaderButton({ children, onClick, primary = false }: { children: React.
       onClick={onClick}
       className="px-3 py-1.5 text-xs font-serif tracking-[0.2em] transition-all hover:opacity-90"
       style={{
-        color: primary ? 'rgba(245, 217, 122, 0.95)' : 'rgba(200, 188, 158, 0.9)',
-        boxShadow: `inset 0 0 0 1px ${primary ? 'rgba(245, 217, 122, 0.55)' : 'rgba(245, 217, 122, 0.3)'}`,
-        background: primary ? 'linear-gradient(180deg, rgba(245, 217, 122, 0.12), rgba(245, 217, 122, 0.02))' : 'transparent',
+        color: primary ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(var(--tj-text-secondary), 0.9)',
+        boxShadow: `inset 0 0 0 1px ${primary ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-accent-primary), 0.3)'}`,
+        background: primary ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))' : 'transparent',
         clipPath: smallClip,
       }}
     >
@@ -312,9 +312,9 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
       onClick={onClick}
       className="flex-1 px-2 py-1.5 text-xs font-serif tracking-[0.25em] transition-all"
       style={{
-        color: active ? 'rgb(245, 217, 122)' : 'rgba(200, 188, 158, 0.7)',
-        background: active ? 'linear-gradient(180deg, rgba(245, 217, 122, 0.18), rgba(245, 217, 122, 0.04))' : 'transparent',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)' : 'none',
+        color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.7)',
+        background: active ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.04))' : 'transparent',
+        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)' : 'none',
         clipPath: smallClip,
       }}
     >
@@ -365,15 +365,15 @@ function GroupTitle({ title }: { title: string }) {
         <span
           className="h-5 w-[3px] flex-shrink-0"
           style={{
-            background: 'linear-gradient(180deg, rgba(245, 217, 122, 0.95), rgba(196, 163, 90, 0.25))',
-            boxShadow: '0 0 7px rgba(245, 217, 122, 0.45)',
+            background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
+            boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
           }}
         />
         <div className="min-w-0 flex-1">
           <div
             className="truncate font-serif text-base font-semibold tracking-[0.28em]"
             style={{
-              background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 60%, #c4a35a 100%)',
+              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 60%, rgb(var(--tj-accent-secondary)) 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
@@ -384,7 +384,7 @@ function GroupTitle({ title }: { title: string }) {
           <div
             className="mt-1 h-px"
             style={{
-              background: 'linear-gradient(90deg, rgba(245, 217, 122, 0.45), rgba(245, 217, 122, 0.08), transparent)',
+              background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.45), rgba(var(--tj-accent-primary), 0.08), transparent)',
             }}
           />
         </div>
@@ -414,7 +414,7 @@ function BookSection({
         <div className="mb-1.5 flex items-center gap-2 px-2">
           <span
             className="font-serif text-[12px] tracking-[0.22em]"
-            style={{ color: 'rgba(220, 208, 178, 0.85)' }}
+            style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}
           >
             · {book.title || '未命名世界书'}
           </span>
@@ -429,15 +429,15 @@ function BookSection({
           <span
             className="h-5 w-[3px] flex-shrink-0"
             style={{
-              background: 'linear-gradient(180deg, rgba(245, 217, 122, 0.95), rgba(196, 163, 90, 0.25))',
-              boxShadow: '0 0 7px rgba(245, 217, 122, 0.45)',
+              background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
+              boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
             }}
           />
           <div className="min-w-0 flex-1">
             <div
               className="truncate font-serif text-base font-semibold tracking-[0.28em]"
               style={{
-                background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 60%, #c4a35a 100%)',
+                background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 60%, rgb(var(--tj-accent-secondary)) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -448,7 +448,7 @@ function BookSection({
             <div
               className="mt-1 h-px"
               style={{
-                background: 'linear-gradient(90deg, rgba(245, 217, 122, 0.45), rgba(245, 217, 122, 0.08), transparent)',
+                background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.45), rgba(var(--tj-accent-primary), 0.08), transparent)',
               }}
             />
           </div>
@@ -457,7 +457,7 @@ function BookSection({
       )}
 
       {book.entries.length === 0 ? (
-        <div className="pl-[13px] text-[11px] font-serif tracking-wider" style={{ color: 'rgba(160, 148, 120, 0.55)' }}>
+        <div className="pl-[13px] text-[11px] font-serif tracking-wider" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>
           暂无条目
         </div>
       ) : (
@@ -468,30 +468,30 @@ function BookSection({
               <button
                 key={entry.id}
                 onClick={() => onSelectEntry(entry.id)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-all hover:bg-[rgba(245,217,122,0.05)]"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.05)]"
                 style={{
                   background: active
-                    ? 'linear-gradient(90deg, rgba(245, 217, 122, 0.14), rgba(245, 217, 122, 0.02))'
-                    : 'rgba(245, 217, 122, 0.018)',
-                  boxShadow: active ? 'inset 2px 0 0 rgba(245, 217, 122, 0.9)' : 'inset 2px 0 0 rgba(245, 217, 122, 0.12)',
+                    ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-primary), 0.02))'
+                    : 'rgba(var(--tj-accent-primary), 0.018)',
+                  boxShadow: active ? 'inset 2px 0 0 rgba(var(--tj-accent-primary), 0.9)' : 'inset 2px 0 0 rgba(var(--tj-accent-primary), 0.12)',
                   clipPath: smallClip,
                 }}
               >
                 <span
                   className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
                   style={{
-                    background: entry.enabled ? 'rgba(245, 217, 122, 0.95)' : 'rgba(80, 70, 50, 0.55)',
-                    boxShadow: entry.enabled ? '0 0 4px rgba(245, 217, 122, 0.5)' : 'none',
+                    background: entry.enabled ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(80, 70, 50, 0.55)',
+                    boxShadow: entry.enabled ? '0 0 4px rgba(var(--tj-accent-primary), 0.5)' : 'none',
                   }}
                 />
                 <span className="min-w-0 flex-1">
                   <span
                     className="block truncate font-serif text-[13px] tracking-[0.18em]"
-                    style={{ color: active ? 'rgb(245, 217, 122)' : 'rgba(220, 208, 178, 0.9)' }}
+                    style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.9)' }}
                   >
                     {entry.title || '未命名条目'}
                   </span>
-                  <span className="mt-0.5 block truncate text-[10px] tracking-[0.12em]" style={{ color: 'rgba(160, 148, 120, 0.65)' }}>
+                  <span className="mt-0.5 block truncate text-[10px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
                     {ENTRY_TYPE_LABELS[entry.type]} · 优先级 {entry.priority}
                   </span>
                 </span>
@@ -518,7 +518,7 @@ function PaneHeader({
   onNewEntry: () => void;
 }) {
   return (
-    <div className="px-6 py-4" style={{ borderBottom: '1px solid rgba(245, 217, 122, 0.22)' }}>
+    <div className="px-6 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.22)' }}>
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
           {builtin ? (
@@ -526,14 +526,14 @@ function PaneHeader({
               <span
                 className="h-6 w-[3px] flex-shrink-0"
                 style={{
-                  background: 'linear-gradient(180deg, rgba(245, 217, 122, 0.95), rgba(196, 163, 90, 0.25))',
-                  boxShadow: '0 0 7px rgba(245, 217, 122, 0.45)',
+                  background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
+                  boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
                 }}
               />
               <h3
                 className="font-serif text-xl font-semibold tracking-[0.28em]"
                 style={{
-                  background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 55%, #c4a35a 100%)',
+                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 55%, rgb(var(--tj-accent-secondary)) 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
@@ -547,15 +547,15 @@ function PaneHeader({
               <input
                 value={book.title}
                 onChange={(event) => onUpdateBook({ title: event.target.value })}
-                className="w-full bg-transparent font-serif text-xl font-semibold tracking-[0.25em] outline-none focus:bg-[rgba(245,217,122,0.05)]"
-                style={{ color: 'rgb(245, 217, 122)' }}
+                className="w-full bg-transparent font-serif text-xl font-semibold tracking-[0.25em] outline-none focus:bg-[rgba(var(--tj-accent-primary),0.05)]"
+                style={{ color: 'rgb(var(--tj-accent-primary))' }}
               />
               <input
                 value={book.description}
                 onChange={(event) => onUpdateBook({ description: event.target.value })}
                 placeholder="描述或注释，可选"
-                className="mt-1.5 w-full bg-transparent text-xs font-serif italic tracking-wider outline-none focus:bg-[rgba(245,217,122,0.05)]"
-                style={{ color: 'rgba(160, 148, 120, 0.85)' }}
+                className="mt-1.5 w-full bg-transparent text-xs font-serif italic tracking-wider outline-none focus:bg-[rgba(var(--tj-accent-primary),0.05)]"
+                style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}
               />
             </>
           )}
@@ -563,7 +563,7 @@ function PaneHeader({
         <div className="flex flex-shrink-0 items-center gap-2">
           {!builtin && (
             <>
-              <span className="text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(200, 188, 158, 0.85)' }}>
+              <span className="text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}>
                 {book.enabled ? '启用' : '关闭'}
               </span>
               <ToggleSwitch checked={book.enabled} onChange={(enabled) => onUpdateBook({ enabled })} title="启用整本" />
@@ -571,9 +571,9 @@ function PaneHeader({
                 onClick={onNewEntry}
                 className="ml-2 px-3 py-1.5 text-xs font-serif tracking-[0.2em] transition-all hover:opacity-90"
                 style={{
-                  color: 'rgba(245, 217, 122, 0.95)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
-                  background: 'linear-gradient(180deg, rgba(245, 217, 122, 0.11), rgba(245, 217, 122, 0.02))',
+                  color: 'rgba(var(--tj-accent-primary), 0.95)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+                  background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.11), rgba(var(--tj-accent-primary), 0.02))',
                   clipPath: smallClip,
                 }}
               >
@@ -676,11 +676,11 @@ function EntryEditor({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="font-serif text-xs tracking-[0.35em]" style={{ color: 'rgba(245, 217, 122, 0.75)' }}>
+        <div className="font-serif text-xs tracking-[0.35em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>
           {builtin ? '内置条目' : '条目'}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(200, 188, 158, 0.85)' }}>
+          <span className="text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}>
             {entry.enabled ? '启用' : '关闭'}
           </span>
           <ToggleSwitch checked={entry.enabled} onChange={(enabled) => onChange({ enabled })} title="启用条目" />
@@ -771,13 +771,13 @@ function EntryEditor({
       <div
         className="px-3 py-2 text-xs font-serif tracking-wider"
         style={{
-          color: 'rgba(200, 188, 158, 0.75)',
-          background: 'rgba(245, 217, 122, 0.04)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+          color: 'rgba(var(--tj-text-secondary), 0.75)',
+          background: 'rgba(var(--tj-accent-primary), 0.04)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
           clipPath: cardClip,
         }}
       >
-        <span style={{ color: 'rgba(245, 217, 122, 0.75)' }}>◆ </span>
+        <span style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>◆ </span>
         {explainEntry(entry)}
       </div>
 
@@ -822,11 +822,11 @@ function ToggleSwitch({ checked, onChange, title }: { checked: boolean; onChange
       className="relative inline-flex h-[18px] w-[34px] flex-shrink-0 cursor-pointer items-center transition-all"
       style={{
         background: checked
-          ? 'linear-gradient(90deg, rgba(245, 217, 122, 0.55), rgba(196, 163, 90, 0.75))'
+          ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.55), rgba(var(--tj-accent-secondary), 0.75))'
           : 'rgba(28, 25, 28, 0.85)',
         boxShadow: checked
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.8), 0 0 6px rgba(245, 217, 122, 0.35)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.8), 0 0 6px rgba(var(--tj-accent-primary), 0.35)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
         borderRadius: 10,
       }}
     >
@@ -834,7 +834,7 @@ function ToggleSwitch({ checked, onChange, title }: { checked: boolean; onChange
         className="absolute h-[12px] w-[12px] transition-all"
         style={{
           left: checked ? 18 : 3,
-          background: checked ? '#fff4d4' : 'rgba(180, 168, 140, 0.85)',
+          background: checked ? 'rgb(var(--tj-text-primary))' : 'rgba(180, 168, 140, 0.85)',
           boxShadow: '0 0 3px rgba(0,0,0,0.4)',
           borderRadius: 6,
         }}
@@ -846,7 +846,7 @@ function ToggleSwitch({ checked, onChange, title }: { checked: boolean; onChange
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1 text-[10px] font-serif tracking-[0.3em]" style={{ color: 'rgba(245, 217, 122, 0.7)' }}>
+      <div className="mb-1 text-[10px] font-serif tracking-[0.3em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}>
         {label}
       </div>
       {children}
@@ -856,7 +856,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function EmptyList({ activeTab }: { activeTab: WorldbookTab }) {
   return (
-    <div className="px-4 py-10 text-center text-xs font-serif leading-6 tracking-wider" style={{ color: 'rgba(160, 148, 120, 0.65)' }}>
+    <div className="px-4 py-10 text-center text-xs font-serif leading-6 tracking-wider" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
       {activeTab === 'user' ? '尚无额外世界书\n点击顶部「＋ 新建世界书」' : '内置世界书加载异常'}
     </div>
   );
@@ -866,10 +866,10 @@ function EmptyHint({ text }: { text: string }) {
   return (
     <div className="flex h-full items-center justify-center py-12">
       <div className="text-center">
-        <div className="mb-3 text-4xl" style={{ color: 'rgba(245, 217, 122, 0.28)' }}>
+        <div className="mb-3 text-4xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.28)' }}>
           ◇
         </div>
-        <div className="whitespace-pre-line text-sm font-serif tracking-[0.2em]" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>
+        <div className="whitespace-pre-line text-sm font-serif tracking-[0.2em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
           {text}
         </div>
       </div>

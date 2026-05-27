@@ -789,11 +789,12 @@ export function 创建默认游戏设置(): 游戏设置 {
   };
 }
 
-export type 主题预设 = 'twilight' | 'steampunk' | 'deepspace';
+export type 主题预设 = 'deepspace' | 'morningInk';
+export type 存档类型 = 'manual' | 'auto' | 'backup' | 'imported';
 
 export interface 存档数据 {
   id: number;
-  type: 'manual' | 'auto';
+  type: 存档类型;
   timestamp: number;
   旅人: import('./character').角色数据结构;
   世界: import('./world').世界状态;
@@ -804,8 +805,8 @@ export interface 存档数据 {
   手机?: import('./phone').手机系统;               // 可选：兼容旧存档（手机系统）
   NPC?: import('./npc').NPC记录[];                 // 可选：兼容旧存档（v1 加入）
   相册?: import('./imageGeneration').相册系统;      // 可选：图片资产、挂载与生成任务
-  /** @deprecated 旧独立战斗系统字段。当前版本不再写入，仅允许旧存档携带后被忽略。 */
-  战斗?: import('./battle').战斗记录[];
+  /** @deprecated 旧独立战斗系统字段。当前版本不再读取或写入，仅允许旧存档携带后被忽略。 */
+  战斗?: unknown;
   新闻?: import('./news').新闻条目[];               // 可选：兼容旧存档（v1 加入）
   剧情?: import('./plot').剧情节点[];                // 可选：兼容旧存档（v1 加入）
   剧情编织?: import('./storyWeaving').剧情编织系统;   // 可选：自定义剧情编织系统

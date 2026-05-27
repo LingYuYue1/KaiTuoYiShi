@@ -18,6 +18,109 @@ export interface 变量命令 {
   value: unknown;
 }
 
+export type 变量事实类型 =
+  | 'traveler_profile'
+  | 'time'
+  | 'location'
+  | 'npc'
+  | 'item'
+  | 'world_event'
+  | 'phone_seed';
+
+export interface 旅人档案变量事实 {
+  type: 'traveler_profile';
+  identity?: string;
+  appearance?: string;
+  personality?: string;
+  background?: string;
+  abilityAdd?: string[];
+  knowledgeAdd?: string[];
+  evidence?: string;
+}
+
+export interface 时间变量事实 {
+  type: 'time';
+  /** no_change 表示明确不推进；elapsed 表示推进若干分钟；set_time 表示同日设定目标时刻；overnight / next_day 表示跨日。 */
+  mode: 'no_change' | 'elapsed' | 'set_time' | 'overnight' | 'next_day';
+  minutes?: number;
+  targetTime?: string;
+  evidence?: string;
+}
+
+export interface 地点变量事实 {
+  type: 'location';
+  location: string;
+  evidence?: string;
+}
+
+export interface NPC变量事实 {
+  type: 'npc';
+  id?: string;
+  name: string;
+  alias?: string;
+  tier?: 'companion' | 'extra';
+  affinityDelta?: number;
+  affinitySet?: number;
+  relation?: string;
+  following?: boolean;
+  appearance?: string;
+  clothing?: string;
+  speechStyle?: string;
+  personality?: string;
+  intro?: string;
+  playerAddress?: string;
+  memory?: string;
+  evidence?: string;
+}
+
+export interface 物品变量事实 {
+  type: 'item';
+  action: 'gain';
+  category: 'food' | 'consumable' | 'lightcone' | 'weapon' | 'clothing' | 'accessory' | 'memento' | 'key';
+  name: string;
+  description?: string;
+  quantity?: number;
+  quality?: '蓝' | '紫' | '金';
+  stackable?: boolean;
+  source?: '剧情掉落' | '任务奖励' | '商店' | '打造' | '其它';
+  sourceDescription?: string;
+  narrativeEffects?: string[];
+  evidence?: string;
+}
+
+export interface 世界事件变量事实 {
+  type: 'world_event';
+  text: string;
+  evidence?: string;
+}
+
+export interface 手机来信变量事实 {
+  type: 'phone_seed';
+  targetType?: 'private' | 'group';
+  targetId?: string;
+  targetName?: string;
+  title: string;
+  context: string;
+  triggerType?: 'injury' | 'victory' | 'defeat' | 'location_change' | 'important_item' | 'relationship' | 'news' | 'quest' | 'time' | 'custom';
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  relatedNpcIds?: string[];
+  evidence?: string;
+}
+
+export type 变量事实 =
+  | 旅人档案变量事实
+  | 时间变量事实
+  | 地点变量事实
+  | NPC变量事实
+  | 物品变量事实
+  | 世界事件变量事实
+  | 手机来信变量事实;
+
+export interface 变量事实批次 {
+  facts: 变量事实[];
+  parseErrors: string[];
+}
+
 /** 变量命令应用结果，包含成功失败信息，便于在抽屉里展示给玩家调试。 */
 export interface 变量命令结果 {
   command: 变量命令;

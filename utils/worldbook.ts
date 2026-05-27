@@ -2,6 +2,15 @@ import type { 世界书, 世界书条目, 世界书导出数据, 世界书条目
 import { 创建空世界书, 创建空世界书条目, ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
 import type { 剧情模式 } from '@/models/journey';
 
+export const PROMPT_LIKE_WORLDBOOK_ENTRY_IDS = new Set([
+  'builtin_compass_overview',
+  'builtin_worldview_spine',
+]);
+
+function isPromptLikeWorldbookEntry(entry: 世界书条目): boolean {
+  return entry.type === 'system_rule' || PROMPT_LIKE_WORLDBOOK_ENTRY_IDS.has(entry.id);
+}
+
 // ── Storage key ──
 export const WORLDBOOK_STORAGE_KEY = 'worldbooks';
 
@@ -18,7 +27,7 @@ export function normalizeWorldbooks(books: 世界书[]): 世界书[] {
           ? ['opening']
           : ['all'];
       // 去重 + 过滤非法值
-      const validScopes: 世界书作用域[] = ['main', 'opening', 'battle', 'calibration', 'all'];
+      const validScopes: 世界书作用域[] = ['main', 'opening', 'battle', 'pathAwakening', 'calibration', 'all'];
       scope = Array.from(new Set(scope.filter((s) => validScopes.includes(s))));
       if (!scope.length) scope = ['all'];
 
@@ -136,7 +145,7 @@ function bookMatchesStoryMode(book: 世界书, ctx: FilterContext): boolean {
   return book.storyModeGate.includes(ctx.storyMode);
 }
 
-function selectEntries(books: 世界书[], ctx: FilterContext): 世界书条目[] {
+function selectEntries(books: 世界书[], ctx: FilterContext): Array<{ entry: 世界书条目; bookTitle: string }> {
   const all: Array<{ entry: 世界书条目; bookTitle: string }> = [];
   for (const book of books) {
     if (!book.enabled) continue;
@@ -149,45 +158,53 @@ function selectEntries(books: 世界书[], ctx: FilterContext): 世界书条目[
     }
   }
   all.sort((a, b) => (b.entry.priority ?? 100) - (a.entry.priority ?? 100));
-  return all.map((a) => a.entry);
+  return all;
 }
 
 export function buildWorldbookInjection(
   books: 世界书[],
   ctx: FilterContext,
 ): string {
-  const selected = selectEntries(books, ctx);
+  const selected = selectEntries(books, ctx).filter(({ entry }) => !isPromptLikeWorldbookEntry(entry));
   if (!selected.length) return '';
 
-  const grouped: Record<世界书条目类型, 世界书条目[]> = {
-    world_lore: [],
-    character_lore: [],
-    atmosphere: [],
-    system_rule: [],
-  };
+  return selected
+    .map(({ entry, bookTitle }) => {
+      const category = entry.type === 'system_rule' ? '提示词' : '世界书';
+      const typeLabel = ENTRY_TYPE_LABELS[entry.type] ?? '世界书';
+      return [
+        `# ${category}｜${entry.title}`,
+        `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
+        '',
+        replaceWorldbookPlaceholders(entry.content, ctx),
+      ].join('\n');
+    })
+    .join('\n\n---\n\n');
+}
 
-  for (const e of selected) {
-    grouped[e.type]?.push(e);
-  }
+export function buildPromptLikeWorldbookInjection(
+  books: 世界书[],
+  ctx: FilterContext,
+): string {
+  const selected = selectEntries(books, ctx).filter(({ entry }) => isPromptLikeWorldbookEntry(entry));
+  if (!selected.length) return '';
 
-  const parts: string[] = [];
-  const groupHeaders: Record<世界书条目类型, string> = {
-    world_lore: '## 附加世界观',
-    character_lore: '## 附加角色设定',
-    atmosphere: '## 氛围参考',
-    system_rule: '## 附加系统规则',
-  };
+  return selected
+    .map(({ entry, bookTitle }) => [
+      `# 提示词｜${entry.title}`,
+      `来源：${bookTitle} / 世界书内置提示词 / 优先级 ${entry.priority}`,
+      '',
+      replaceWorldbookPlaceholders(entry.content, ctx),
+    ].join('\n'))
+    .join('\n\n---\n\n');
+}
 
-  for (const type of ['world_lore', 'character_lore', 'atmosphere', 'system_rule'] as 世界书条目类型[]) {
-    const entries = grouped[type];
-    if (!entries.length) continue;
-    parts.push(groupHeaders[type]);
-    for (const e of entries) {
-      parts.push(`### ${e.title}\n${e.content}`);
-    }
-  }
-
-  return parts.join('\n\n');
+function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
+  const playerName = ctx.travelerName?.trim() || '无名开拓者';
+  return content
+    .replace(/\{playerName\}/g, playerName)
+    .replace(/玩家姓名/g, playerName)
+    .replace(/主角姓名/g, playerName);
 }
 
 // ── Entry explanation (for UI preview) ──

@@ -91,21 +91,28 @@ export function InputArea({
   );
 
   return (
-    <div className="p-3" style={{ borderTop: '1px solid rgba(245, 217, 122, 0.18)' }}>
+    <div
+      className="p-3"
+      style={{
+        borderTop: '1px solid rgba(var(--tj-border), 0.72)',
+        background: 'rgba(var(--tj-surface), 0.72)',
+        boxShadow: '0 -8px 22px rgba(var(--tj-shadow), 0.05)',
+      }}
+    >
       {workflowHint && (
         <div
           className="mb-2 flex items-center justify-between gap-3 px-3 py-1.5 font-serif text-[11px] tracking-[0.18em]"
           style={{
-            color: 'rgba(235, 223, 193, 0.9)',
-            background: 'rgba(245, 217, 122, 0.06)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+            color: 'rgba(var(--tj-text-primary), 0.9)',
+            background: 'rgba(var(--tj-accent-primary), 0.06)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
             clipPath: iconClip,
           }}
         >
           <span className="min-w-0 truncate">{workflowHint}</span>
           <span className="flex shrink-0 items-center gap-2">
           {workflowFailCount > 0 && (
-            <span style={{ color: workflowRetrying ? 'rgba(245,217,122,0.92)' : 'rgba(255,180,180,0.9)' }}>
+            <span style={{ color: workflowRetrying ? 'rgba(var(--tj-accent-primary),0.92)' : 'rgba(255,180,180,0.9)' }}>
               失败 {workflowFailCount} 次{workflowRetrying ? '，正在重试' : ''}
             </span>
           )}
@@ -135,15 +142,15 @@ export function InputArea({
             <span className="inline-flex items-center gap-1.5 shrink-0">
               <span
                 className="h-1.5 w-1.5 animate-pulse-soft rounded-full"
-                style={{ background: 'rgb(245, 217, 122)', boxShadow: '0 0 8px rgba(245, 217, 122, 0.75)' }}
+                style={{ background: 'rgb(var(--tj-accent-primary))', boxShadow: '0 0 8px rgba(var(--tj-accent-primary), 0.75)' }}
               />
               <span
                 className="h-1.5 w-1.5 animate-pulse-soft rounded-full"
-                style={{ background: 'rgb(245, 217, 122)', animationDelay: '0.14s', boxShadow: '0 0 8px rgba(245, 217, 122, 0.55)' }}
+                style={{ background: 'rgb(var(--tj-accent-primary))', animationDelay: '0.14s', boxShadow: '0 0 8px rgba(var(--tj-accent-primary), 0.55)' }}
               />
               <span
                 className="h-1.5 w-1.5 animate-pulse-soft rounded-full"
-                style={{ background: 'rgb(245, 217, 122)', animationDelay: '0.28s', boxShadow: '0 0 8px rgba(245, 217, 122, 0.35)' }}
+                style={{ background: 'rgb(var(--tj-accent-primary))', animationDelay: '0.28s', boxShadow: '0 0 8px rgba(var(--tj-accent-primary), 0.35)' }}
               />
             </span>
           )}
@@ -203,11 +210,11 @@ export function InputArea({
               type="button"
               onClick={() => handlePickOption(opt)}
               title="点击填入输入框，可继续微调"
-              className="group relative px-3 py-1.5 text-xs leading-tight transition-all hover:bg-[rgba(245,217,122,0.16)] whitespace-nowrap shrink-0"
+              className="group relative px-3 py-1.5 text-xs leading-tight transition-all hover:bg-[rgba(var(--tj-accent-primary),0.16)] whitespace-nowrap shrink-0"
               style={{
-                color: 'rgba(245, 217, 122, 0.92)',
-                background: 'rgba(245, 217, 122, 0.06)',
-                boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.35)',
+                color: 'rgba(var(--tj-accent-primary), 0.92)',
+                background: 'rgba(var(--tj-accent-primary), 0.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
                 clipPath: iconClip,
               }}
             >
@@ -238,7 +245,7 @@ export function InputArea({
             className="flex items-center gap-2 px-5 text-sm font-medium font-serif tracking-[0.3em] transition-all hover:opacity-90"
             style={{
               background: 'linear-gradient(135deg, rgba(220, 90, 90, 0.9), rgba(180, 60, 60, 0.9))',
-              color: '#fff',
+              color: 'rgb(var(--tj-on-accent))',
               clipPath: btnClip,
               boxShadow: 'inset 0 0 0 1px rgba(255, 180, 180, 0.4)',
             }}
@@ -262,7 +269,7 @@ export function InputArea({
           >
             <span
               className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(255, 245, 200, 0.45), transparent)' }}
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-text-primary), 0.45), transparent)' }}
             />
             <span className="relative">发送</span>
           </button>
@@ -270,7 +277,7 @@ export function InputArea({
       </div>
       <div
         className="mt-1.5 text-right text-xs tracking-wider"
-        style={{ color: 'rgba(160, 148, 120, 0.55)' }}
+        style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}
       >
         Enter 发送 · Shift+Enter 换行
       </div>
@@ -300,13 +307,13 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       title={tooltip}
-      className="flex h-7 w-9 items-center justify-center font-serif text-base transition-all hover:bg-[rgba(245,217,122,0.14)] disabled:opacity-30 disabled:cursor-not-allowed"
+      className="flex h-7 w-9 items-center justify-center font-serif text-base transition-all hover:bg-[rgba(var(--tj-accent-primary),0.14)] disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
-        color: active ? 'rgb(245, 217, 122)' : 'rgba(245, 217, 122, 0.85)',
-        background: active ? 'rgba(245, 217, 122, 0.14)' : 'rgba(245, 217, 122, 0.05)',
+        color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary), 0.85)',
+        background: active ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.05)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.3)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
         clipPath: iconClip,
       }}
     >

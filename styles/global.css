@@ -27,6 +27,128 @@ body {
   color: rgb(var(--tj-text-primary));
 }
 
+:root[data-theme='morningInk'] body {
+  background:
+    linear-gradient(90deg, rgba(145, 83, 58, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(145, 83, 58, 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 12%, rgba(145, 83, 58, 0.08), transparent 32%),
+    radial-gradient(circle at 84% 18%, rgba(118, 128, 111, 0.08), transparent 36%),
+    rgb(var(--tj-bg-primary));
+  background-size: 28px 28px, 28px 28px, auto, auto, auto;
+}
+
+.kaituo-text-gradient {
+  background: linear-gradient(
+    180deg,
+    rgba(var(--tj-text-primary), 0.98) 0%,
+    rgba(var(--tj-accent-primary), 0.88) 58%,
+    rgba(var(--tj-accent-secondary), 0.92) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.kaituo-game-bg {
+  background:
+    linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(6, 5, 7, 0.98));
+}
+
+.kaituo-chat-surface {
+  background:
+    linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(6, 5, 7, 0.98));
+}
+
+.kaituo-left-panel,
+.kaituo-right-menu {
+  background:
+    linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(6, 5, 7, 0.98));
+}
+
+.kaituo-left-panel {
+  box-shadow: inset -1px 0 0 rgba(245, 217, 122, 0.22);
+}
+
+.kaituo-right-menu {
+  box-shadow: inset 1px 0 0 rgba(245, 217, 122, 0.22);
+}
+
+.kaituo-topbar {
+  background: linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(8, 7, 9, 0.98));
+  box-shadow: inset 0 -1px 0 rgba(245, 217, 122, 0.25);
+}
+
+.kaituo-system-drawer-overlay {
+  background: rgba(6, 5, 14, 0.55);
+  backdrop-filter: blur(1px);
+}
+
+.kaituo-system-drawer {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(117, 214, 216, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(18, 16, 18, 0.98), rgba(10, 9, 10, 0.99));
+  box-shadow:
+    inset 1px 0 0 rgba(245, 217, 122, 0.45),
+    -8px 0 24px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme='morningInk'] .kaituo-game-bg {
+  background:
+    linear-gradient(90deg, rgba(var(--tj-border), 0.18) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(var(--tj-border), 0.12) 1px, transparent 1px),
+    radial-gradient(circle at 22% 0%, rgba(var(--tj-accent-primary), 0.07), transparent 32%),
+    linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.98), rgba(var(--tj-bg-primary), 0.98));
+  background-size: 32px 32px, 32px 32px, auto, auto;
+}
+
+:root[data-theme='morningInk'] .kaituo-chat-surface {
+  background:
+    linear-gradient(90deg, rgba(var(--tj-border), 0.12) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(var(--tj-border), 0.08) 1px, transparent 1px),
+    radial-gradient(circle at 16% 0%, rgba(var(--tj-tech-cyan), 0.09), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.98), rgba(var(--tj-bg-primary), 0.96));
+  background-size: 34px 34px, 34px 34px, auto, auto;
+}
+
+:root[data-theme='morningInk'] .kaituo-left-panel,
+:root[data-theme='morningInk'] .kaituo-right-menu {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(var(--tj-tech-cyan), 0.09), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98));
+}
+
+:root[data-theme='morningInk'] .kaituo-left-panel {
+  box-shadow:
+    inset -1px 0 0 rgba(var(--tj-border), 0.76),
+    8px 0 22px rgba(var(--tj-shadow), 0.05);
+}
+
+:root[data-theme='morningInk'] .kaituo-right-menu {
+  box-shadow:
+    inset 1px 0 0 rgba(var(--tj-border), 0.76),
+    -8px 0 22px rgba(var(--tj-shadow), 0.05);
+}
+
+:root[data-theme='morningInk'] .kaituo-topbar {
+  background:
+    linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98));
+  box-shadow: inset 0 -1px 0 rgba(var(--tj-border), 0.84);
+}
+
+:root[data-theme='morningInk'] .kaituo-system-drawer-overlay {
+  background: rgba(70, 58, 42, 0.24);
+}
+
+:root[data-theme='morningInk'] .kaituo-system-drawer {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 32%),
+    linear-gradient(180deg, rgba(var(--tj-bubble), 0.99), rgba(var(--tj-surface-strong), 0.98));
+  box-shadow:
+    inset 1px 0 0 rgba(var(--tj-border), 0.9),
+    -10px 0 22px rgba(var(--tj-shadow), 0.1);
+}
+
 /* Noise overlay */
 .bg-noise {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
@@ -49,22 +171,22 @@ body.modal-open {
 /* 行动选项 / 紧凑横向滚动条：金色细条，匹配开拓轶事主题 */
 .kaituo-options-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(245, 217, 122, 0.45) rgba(20, 16, 14, 0.4);
+  scrollbar-color: rgba(var(--tj-accent-primary), 0.45) rgba(var(--tj-bg-secondary), 0.4);
 }
 .kaituo-options-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 .kaituo-options-scroll::-webkit-scrollbar-track {
-  background: rgba(20, 16, 14, 0.4);
+  background: rgba(var(--tj-bg-secondary), 0.4);
   border-radius: 3px;
 }
 .kaituo-options-scroll::-webkit-scrollbar-thumb {
-  background: rgba(245, 217, 122, 0.45);
+  background: rgba(var(--tj-accent-primary), 0.45);
   border-radius: 3px;
 }
 .kaituo-options-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(245, 217, 122, 0.75);
+  background: rgba(var(--tj-accent-primary), 0.75);
 }
 
 /* Smooth scroll for chat */
@@ -100,6 +222,13 @@ body.modal-open {
     inset 0 0 0 1px rgba(255, 245, 200, 0.6),
     0 0 24px rgba(245, 217, 122, 0.25);
 }
+
+:root[data-theme='morningInk'] .kaituo-btn-primary {
+  background: linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(126, 76, 53));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 252, 245, 0.45),
+    0 10px 22px rgba(var(--tj-shadow), 0.12);
+}
 .kaituo-btn-primary:hover {
   box-shadow:
     inset 0 0 0 1px rgba(255, 245, 200, 0.95),
@@ -111,6 +240,13 @@ body.modal-open {
   color: #e6d4a0;
   backdrop-filter: blur(4px);
   box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.4);
+}
+
+:root[data-theme='morningInk'] .kaituo-btn-secondary,
+:root[data-theme='morningInk'] .kaituo-btn-quiet,
+:root[data-theme='morningInk'] .kaituo-card,
+:root[data-theme='morningInk'] .kaituo-modal-shell {
+  backdrop-filter: none;
 }
 .kaituo-btn-secondary:hover {
   background: rgba(40, 32, 22, 0.7);
@@ -141,6 +277,15 @@ body.modal-open {
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   transition: box-shadow 0.2s;
 }
+
+:root[data-theme='morningInk'] .kaituo-card {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(108, 168, 178, 0.09), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-bubble), 0.97), rgba(var(--tj-surface-strong), 0.9));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-border), 0.72),
+    0 8px 20px rgba(var(--tj-shadow), 0.06);
+}
 .kaituo-card-hover:hover {
   box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.45);
 }
@@ -153,6 +298,20 @@ body.modal-open {
   border: none;
   outline: none;
   transition: box-shadow 0.2s, background 0.2s;
+}
+
+:root[data-theme='morningInk'] .kaituo-input {
+  background: rgba(var(--tj-bubble), 0.98);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-border), 0.82),
+    0 4px 14px rgba(var(--tj-shadow), 0.05);
+}
+
+:root[data-theme='morningInk'] .kaituo-input:focus {
+  background: rgb(var(--tj-bubble));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.62),
+    0 0 0 3px rgba(var(--tj-accent-primary), 0.08);
 }
 .kaituo-input::placeholder {
   color: rgba(160, 148, 120, 0.5);
@@ -168,6 +327,11 @@ body.modal-open {
   backdrop-filter: blur(3px);
 }
 
+:root[data-theme='morningInk'] .kaituo-modal-overlay {
+  background: rgba(70, 58, 42, 0.24);
+  backdrop-filter: blur(2px);
+}
+
 /* 弹窗外壳：带切角 + 金边 + 暗紫渐变底 */
 .kaituo-modal-shell {
   background: linear-gradient(180deg, rgba(18, 16, 18, 0.97), rgba(10, 9, 10, 0.97));
@@ -178,28 +342,36 @@ body.modal-open {
   clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
 }
 
+:root[data-theme='morningInk'] .kaituo-modal-shell {
+  background:
+    linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-border), 0.82),
+    0 24px 60px rgba(var(--tj-shadow), 0.16);
+}
+
 /* 分隔线：横向金色渐变 */
 .kaituo-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(245, 217, 122, 0.35), transparent);
+  background: linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.34), transparent);
 }
 
 /* 标签 / 小徽章 */
 .kaituo-tag {
-  background: rgba(245, 217, 122, 0.12);
-  color: rgba(245, 217, 122, 0.9);
-  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.3);
+  background: rgba(var(--tj-accent-primary), 0.12);
+  color: rgba(var(--tj-accent-primary), 0.9);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3);
   font-family: 'Noto Serif SC', SimSun, serif;
   letter-spacing: 0.1em;
 }
 
 /* 关闭按钮（弹窗右上角等） */
 .kaituo-close-btn {
-  color: rgba(245, 217, 122, 0.6);
+  color: rgba(var(--tj-accent-primary), 0.72);
   transition: color 0.2s, transform 0.25s;
 }
 .kaituo-close-btn:hover {
-  color: rgba(255, 240, 180, 1);
+  color: rgba(var(--tj-text-primary), 1);
   transform: rotate(90deg);
 }
 
@@ -215,7 +387,7 @@ body.modal-open {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(245, 217, 122, 0.12),
+    rgba(var(--tj-accent-primary), 0.12),
     transparent
   );
   transform: translateX(-110%);
@@ -228,32 +400,52 @@ body.modal-open {
 .kaituo-menu-item:hover {
   background: linear-gradient(
     90deg,
-    rgba(245, 217, 122, 0.1),
-    rgba(245, 217, 122, 0.02)
+    rgba(var(--tj-accent-primary), 0.1),
+    rgba(var(--tj-accent-primary), 0.02)
   ) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(245, 217, 122, 0.5),
-    inset 2px 0 0 rgba(245, 217, 122, 0.7),
-    0 0 14px rgba(245, 217, 122, 0.08) !important;
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5),
+    inset 2px 0 0 rgba(var(--tj-accent-primary), 0.7),
+    0 0 14px rgba(var(--tj-accent-primary), 0.08) !important;
 }
 .kaituo-menu-item:hover .kaituo-menu-glyph {
-  color: rgb(245, 217, 122) !important;
-  background: rgba(245, 217, 122, 0.16) !important;
-  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.55) !important;
+  color: rgb(var(--tj-accent-primary)) !important;
+  background: rgba(var(--tj-accent-primary), 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55) !important;
 }
 .kaituo-menu-item:hover .kaituo-menu-label {
-  color: rgb(255, 244, 212) !important;
+  color: rgb(var(--tj-text-primary)) !important;
   letter-spacing: 0.26em;
 }
 
 /* 底部按钮 hover */
 .kaituo-menu-footer:hover {
-  color: rgb(255, 244, 212) !important;
-  background: rgba(245, 217, 122, 0.12) !important;
+  color: rgb(var(--tj-text-primary)) !important;
+  background: rgba(var(--tj-accent-primary), 0.12) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(245, 217, 122, 0.55),
-    0 0 12px rgba(245, 217, 122, 0.1) !important;
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55),
+    0 0 12px rgba(var(--tj-accent-primary), 0.1) !important;
   letter-spacing: 0.32em;
+}
+
+:root[data-theme='morningInk'] .kaituo-menu-item:hover {
+  background: linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.1), rgba(var(--tj-bubble), 0.72)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42),
+    inset 3px 0 0 rgba(var(--tj-accent-primary), 0.62),
+    0 6px 16px rgba(var(--tj-shadow), 0.06) !important;
+}
+
+:root[data-theme='morningInk'] .kaituo-menu-item:hover .kaituo-menu-glyph {
+  background: rgba(var(--tj-accent-primary), 0.1) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42) !important;
+}
+
+:root[data-theme='morningInk'] .kaituo-menu-footer:hover {
+  background: rgba(var(--tj-bubble), 0.92) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45),
+    0 6px 16px rgba(var(--tj-shadow), 0.06) !important;
 }
 
 .panel-btn {
@@ -261,17 +453,19 @@ body.modal-open {
   font-family: 'Noto Serif SC', SimSun, serif;
   font-size: 0.75rem;
   letter-spacing: 0.12em;
-  color: rgba(245, 217, 122, 0.88);
-  background: rgba(245, 217, 122, 0.055);
-  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.28);
+  color: rgba(var(--tj-accent-primary), 0.88);
+  background: rgba(var(--tj-accent-primary), 0.055);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28);
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
   transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
 .panel-btn:hover:not(:disabled) {
-  color: rgb(255, 244, 212);
-  background: rgba(245, 217, 122, 0.11);
-  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.5), 0 0 14px rgba(245, 217, 122, 0.12);
+  color: rgb(var(--tj-text-primary));
+  background: rgba(var(--tj-accent-primary), 0.11);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5),
+    0 0 14px rgba(var(--tj-accent-primary), 0.12);
 }
 
 .panel-btn:disabled {
@@ -280,10 +474,188 @@ body.modal-open {
 }
 
 .panel-btn.strong {
-  background: linear-gradient(90deg, rgba(245, 217, 122, 0.2), rgba(245, 217, 122, 0.08));
+  background: linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.2), rgba(var(--tj-accent-primary), 0.08));
 }
 
 .panel-btn.danger {
   color: rgba(230, 145, 145, 0.9);
   box-shadow: inset 0 0 0 1px rgba(230, 145, 145, 0.28);
+}
+
+:root[data-theme='morningInk'] .kaituo-modal-overlay [style*="rgba(0, 0, 0"] {
+  box-shadow: none;
+}
+
+:root[data-theme='morningInk'] aside {
+  scrollbar-color: rgba(var(--tj-accent-primary), 0.38) rgba(var(--tj-surface-strong), 0.4);
+}
+
+:root[data-theme='morningInk'] .panel-btn {
+  color: rgba(var(--tj-accent-primary), 0.9);
+  background: rgba(var(--tj-bubble), 0.78);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-border), 0.82);
+}
+
+:root[data-theme='morningInk'] .panel-btn:hover:not(:disabled) {
+  color: rgb(var(--tj-text-primary));
+  background: rgba(var(--tj-bubble), 0.98);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48),
+    0 6px 16px rgba(var(--tj-shadow), 0.07);
+}
+
+.kaituo-panel-surface {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(var(--tj-accent-primary), 0.07), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-surface), 0.98), rgba(var(--tj-bg-primary), 0.98));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22),
+    0 18px 45px rgba(var(--tj-shadow), 0.18);
+}
+
+:root[data-theme='morningInk'] .kaituo-panel-surface {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.14), transparent 36%),
+    radial-gradient(circle at 92% 10%, rgba(var(--tj-accent-primary), 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-border), 0.78),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 14px 28px rgba(var(--tj-shadow), 0.08);
+}
+
+.kaituo-soft-surface {
+  background: rgba(var(--tj-accent-primary), 0.045);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16);
+}
+
+:root[data-theme='morningInk'] .kaituo-soft-surface {
+  background:
+    linear-gradient(135deg, rgba(var(--tj-paper-warm), 0.92), rgba(var(--tj-paper-deep), 0.62));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-border), 0.68),
+    0 6px 16px rgba(var(--tj-shadow), 0.045);
+}
+
+:root[data-theme='morningInk'] .kaituo-tech-surface {
+  background:
+    linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.12), rgba(var(--tj-bubble), 0.88) 42%, rgba(var(--tj-paper-deep), 0.5));
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.26),
+    inset 3px 0 0 rgba(var(--tj-accent-primary), 0.38);
+}
+
+:root[data-theme='morningInk'] [style*="rgba(9, 8, 10"],
+:root[data-theme='morningInk'] [style*="rgba(8, 10, 14"],
+:root[data-theme='morningInk'] [style*="rgba(12, 11, 12"],
+:root[data-theme='morningInk'] [style*="rgba(12,11,13"],
+:root[data-theme='morningInk'] [style*="rgba(18, 16, 22"],
+:root[data-theme='morningInk'] [style*="rgba(10, 9, 12"],
+:root[data-theme='morningInk'] [style*="rgba(0,0,0"] {
+  background:
+    linear-gradient(135deg, rgba(var(--tj-bubble), 0.9), rgba(var(--tj-surface-strong), 0.68)) !important;
+}
+
+:root[data-theme='morningInk'] [style*="0 18px 45px rgba(0"],
+:root[data-theme='morningInk'] [style*="0 24px 48px rgba(0"],
+:root[data-theme='morningInk'] [style*="0 0 18px rgba(var(--tj-accent-primary)"],
+:root[data-theme='morningInk'] [style*="0 0 24px rgba(var(--tj-accent-primary)"] {
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-border), 0.64),
+    0 10px 24px rgba(var(--tj-shadow), 0.07) !important;
+}
+
+:root[data-theme='morningInk'] [style*="rgba(245, 235, 210"],
+:root[data-theme='morningInk'] [style*="rgba(210, 198, 168"] {
+  color: rgba(var(--tj-text-primary), 0.92) !important;
+}
+
+:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary), 0.5"],
+:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary),0.5"],
+:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary), 0.6"],
+:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary),0.6"],
+:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary), 0.7"],
+:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary),0.7"] {
+  color: rgba(74, 62, 50, 0.88) !important;
+}
+
+:root[data-theme='morningInk'] [style*="rgba(117,214,216"],
+:root[data-theme='morningInk'] [style*="rgba(117, 214, 216"],
+:root[data-theme='morningInk'] [style*="#75d6d8"] {
+  color: rgba(38, 105, 116, 0.92) !important;
+}
+
+:root[data-theme='morningInk'] [style*="rgba(160, 230, 170"],
+:root[data-theme='morningInk'] [style*="#9ef0f0"],
+:root[data-theme='morningInk'] [style*="rgba(204,240,240"] {
+  color: rgba(54, 111, 74, 0.92) !important;
+}
+
+:root[data-theme='morningInk'] [style*="rgba(245,190,140"],
+:root[data-theme='morningInk'] [style*="rgba(230,170,120"] {
+  color: rgba(145, 83, 58, 0.94) !important;
+}
+
+:root[data-theme='morningInk'] .kaituo-input,
+:root[data-theme='morningInk'] .kaituo-input:read-only,
+:root[data-theme='morningInk'] .kaituo-input:disabled {
+  color: rgba(var(--tj-text-primary), 0.96);
+  opacity: 1;
+}
+
+:root[data-theme='morningInk'] .kaituo-input:disabled {
+  background: rgba(var(--tj-surface-strong), 0.84);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-border), 0.7);
+}
+
+:root[data-theme='morningInk'] [style*="rgba(5, 5, 7"],
+:root[data-theme='morningInk'] [style*="rgba(6, 5, 14"],
+:root[data-theme='morningInk'] [style*="rgba(20, 18, 20"],
+:root[data-theme='morningInk'] [style*="rgba(28, 22, 18"] {
+  background:
+    linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong))) !important;
+}
+
+:root[data-theme='morningInk'] [style*="rgba(8,7,9"],
+:root[data-theme='morningInk'] [style*="rgba(8, 7, 9"],
+:root[data-theme='morningInk'] [style*="rgba(16,14,16"],
+:root[data-theme='morningInk'] [style*="rgba(16, 14, 16"],
+:root[data-theme='morningInk'] [style*="rgba(20,18,14"],
+:root[data-theme='morningInk'] [style*="rgba(14, 26, 18"],
+:root[data-theme='morningInk'] [style*="rgba(0, 0, 0"],
+:root[data-theme='morningInk'] [style*="rgba(0,0,0"] {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.9)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-border), 0.64),
+    0 8px 18px rgba(var(--tj-shadow), 0.055) !important;
+}
+
+:root[data-theme='morningInk'] .bg-black\/25,
+:root[data-theme='morningInk'] .bg-black\/30 {
+  background:
+    linear-gradient(135deg, rgba(var(--tj-surface-strong), 0.96), rgba(var(--tj-bg-primary), 0.88)) !important;
+}
+
+:root[data-theme='morningInk'] [style*="#fff4d4"],
+:root[data-theme='morningInk'] [style*="rgba(235, 223, 193"],
+:root[data-theme='morningInk'] [style*="rgba(220,208,178"],
+:root[data-theme='morningInk'] [style*="rgba(220, 208, 178"],
+:root[data-theme='morningInk'] [style*="rgba(200,188,158"],
+:root[data-theme='morningInk'] [style*="rgba(200, 188, 158"],
+:root[data-theme='morningInk'] [style*="rgba(180, 168, 140"],
+:root[data-theme='morningInk'] [style*="rgba(160, 148, 120"] {
+  color: rgba(var(--tj-text-primary), 0.9) !important;
+}
+
+:root[data-theme='morningInk'] [style*="#f1b7ce"],
+:root[data-theme='morningInk'] [style*="rgba(241,183,206"] {
+  color: rgba(156, 82, 108, 0.95) !important;
+}
+
+:root[data-theme='morningInk'] [style*="rgba(255,180,180"],
+:root[data-theme='morningInk'] [style*="rgba(255,170,170"],
+:root[data-theme='morningInk'] [style*="#ffd6d6"] {
+  color: rgb(var(--tj-danger)) !important;
 }

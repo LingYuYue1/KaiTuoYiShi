@@ -43,7 +43,7 @@ const SYSTEMS: SystemMeta[] = [
     rootLabel: '旅人',
     desc: '档案、命途、战技、背包、装备',
     policy: 'writable',
-    accent: '#f5d97a',
+    accent: 'rgb(var(--tj-accent-primary))',
     hiddenFields: ['属性', '主命途'],
   },
   { key: 'world', label: '世界', rootLabel: '世界', desc: '时间、地点、天数、全局事件', policy: 'writable', accent: '#9fd6ff' },
@@ -252,16 +252,16 @@ export function VariableManagerTab(props: Props) {
       <aside
         className="space-y-2 p-3"
         style={{
-          background: 'rgba(16, 14, 16, 0.42)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+          background: 'rgba(var(--tj-bg-secondary), 0.42)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
           clipPath: cardClip,
         }}
       >
         <div className="px-1 pb-1">
-          <div className="font-serif text-sm font-bold tracking-[0.24em]" style={{ color: '#f5d97a' }}>
+          <div className="font-serif text-sm font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
             变量中枢
           </div>
-          <div className="mt-1 text-xs" style={{ color: 'rgba(200,188,158,0.68)' }}>
+          <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.68)' }}>
             按系统查看与修正存档数据。
           </div>
         </div>
@@ -275,22 +275,24 @@ export function VariableManagerTab(props: Props) {
               onClick={() => setActiveKey(system.key)}
               className="w-full px-3 py-2.5 text-left transition-all"
               style={{
-                background: active ? 'rgba(245,217,122,0.13)' : 'rgba(245,217,122,0.035)',
+                background: active
+                  ? 'linear-gradient(135deg, rgba(var(--tj-bubble),0.96), rgba(var(--tj-surface-strong),0.86))'
+                  : 'rgba(var(--tj-bubble),0.72)',
                 boxShadow: active
-                  ? `inset 2px 0 0 ${system.accent}, inset 0 0 0 1px rgba(245,217,122,0.34)`
-                  : 'inset 0 0 0 1px rgba(245,217,122,0.10)',
+                  ? `inset 3px 0 0 ${system.accent}, inset 0 0 0 1px rgba(var(--tj-border),0.82), 0 6px 14px rgba(var(--tj-shadow),0.06)`
+                  : 'inset 0 0 0 1px rgba(var(--tj-border),0.5)',
                 clipPath: smallClip,
               }}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-serif text-sm font-bold tracking-wider" style={{ color: active ? system.accent : 'rgba(220,204,170,0.88)' }}>
+                <span className="font-serif text-sm font-bold tracking-wider" style={{ color: active ? system.accent : 'rgba(var(--tj-ui-body),0.92)' }}>
                   {system.label}
                 </span>
-                <span className="font-mono text-[10px]" style={{ color: 'rgba(200,188,158,0.58)' }}>
+                <span className="font-mono text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
                   {countValue(value)}
                 </span>
               </div>
-              <div className="mt-0.5 truncate text-[11px]" style={{ color: 'rgba(200,188,158,0.58)' }}>
+              <div className="mt-0.5 truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
                 {system.desc}
               </div>
             </button>
@@ -302,8 +304,8 @@ export function VariableManagerTab(props: Props) {
         <div
           className="p-4"
           style={{
-            background: 'linear-gradient(135deg, rgba(245,217,122,0.10), rgba(16,14,16,0.42) 58%, rgba(16,14,16,0.68))',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.18)',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.10), rgba(var(--tj-bg-secondary),0.42) 58%, rgba(var(--tj-bg-secondary),0.68))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
             clipPath: cardClip,
           }}
         >
@@ -311,21 +313,21 @@ export function VariableManagerTab(props: Props) {
             <div>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2" style={{ background: activeSystem.accent, boxShadow: `0 0 12px ${activeSystem.accent}` }} />
-                <h3 className="font-serif text-lg font-bold tracking-[0.22em]" style={{ color: '#f5d97a' }}>
+                <h3 className="font-serif text-lg font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                   {activeSystem.label}
                 </h3>
                 <span
                   className="px-2 py-0.5 text-[11px]"
                   style={{
-                    color: activeSystem.policy === 'writable' ? 'rgba(180,235,190,0.95)' : 'rgba(220,205,165,0.82)',
-                    boxShadow: `inset 0 0 0 1px ${activeSystem.policy === 'writable' ? 'rgba(180,235,190,0.35)' : 'rgba(245,217,122,0.24)'}`,
+                    color: activeSystem.policy === 'writable' ? 'rgba(var(--tj-ui-success),0.95)' : 'rgba(var(--tj-ui-muted),0.86)',
+                    boxShadow: `inset 0 0 0 1px ${activeSystem.policy === 'writable' ? 'rgba(180,235,190,0.35)' : 'rgba(var(--tj-accent-primary),0.24)'}`,
                     clipPath: smallClip,
                   }}
                 >
                   {policyLabel(activeSystem.policy)}
                 </span>
               </div>
-              <p className="mt-1 text-xs" style={{ color: 'rgba(200,188,158,0.68)' }}>
+              <p className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.68)' }}>
                 {activeSystem.desc}
                 {activeSystem.hiddenFields?.length ? ` · 已隐藏旧字段：${activeSystem.hiddenFields.join(' / ')}` : ''}
               </p>
@@ -336,9 +338,9 @@ export function VariableManagerTab(props: Props) {
                   key={item}
                   className="px-2 py-1 font-mono text-[11px]"
                   style={{
-                    color: 'rgba(235,224,190,0.88)',
-                    background: 'rgba(8,7,9,0.38)',
-                    boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.13)',
+                    color: 'rgba(var(--tj-ui-body),0.9)',
+                    background: 'rgba(var(--tj-bg-primary),0.38)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.13)',
                     clipPath: smallClip,
                   }}
                 >
@@ -355,9 +357,9 @@ export function VariableManagerTab(props: Props) {
               onClick={() => setMode('fields')}
               className="px-4 py-1.5 text-xs font-serif tracking-wider"
               style={{
-                background: mode === 'fields' ? 'linear-gradient(135deg, rgba(245,217,122,0.95), rgba(196,163,90,0.95))' : 'transparent',
-                color: mode === 'fields' ? '#19130d' : 'rgba(220,204,170,0.85)',
-                boxShadow: mode === 'fields' ? 'none' : 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+                background: mode === 'fields' ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-accent-secondary),0.95))' : 'transparent',
+                color: mode === 'fields' ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.88)',
+                boxShadow: mode === 'fields' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
                 clipPath: smallClip,
               }}
             >
@@ -367,9 +369,9 @@ export function VariableManagerTab(props: Props) {
               onClick={() => setMode('json')}
               className="px-4 py-1.5 text-xs font-serif tracking-wider"
               style={{
-                background: mode === 'json' ? 'linear-gradient(135deg, rgba(245,217,122,0.95), rgba(196,163,90,0.95))' : 'transparent',
-                color: mode === 'json' ? '#19130d' : 'rgba(220,204,170,0.85)',
-                boxShadow: mode === 'json' ? 'none' : 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+                background: mode === 'json' ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-accent-secondary),0.95))' : 'transparent',
+                color: mode === 'json' ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.88)',
+                boxShadow: mode === 'json' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
                 clipPath: smallClip,
               }}
             >
@@ -382,14 +384,14 @@ export function VariableManagerTab(props: Props) {
             <button
               onClick={resetDraft}
               className="px-3 py-1.5 text-xs font-serif tracking-wider"
-              style={{ color: 'rgba(220,204,170,0.84)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.22)', clipPath: smallClip }}
+              style={{ color: 'rgba(var(--tj-ui-body),0.88)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.56)', clipPath: smallClip }}
             >
               重置草稿
             </button>
             <button
               onClick={saveDraft}
               className="px-4 py-1.5 text-xs font-serif font-bold tracking-wider"
-              style={{ background: 'linear-gradient(135deg, #fff4d4, #f5d97a 48%, #c4a35a)', color: '#19130d', clipPath: smallClip }}
+              style={{ background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)), rgb(var(--tj-accent-primary)) 48%, rgb(var(--tj-accent-secondary)))', color: 'rgb(var(--tj-on-accent))', clipPath: smallClip }}
             >
               保存到存档
             </button>
@@ -399,8 +401,8 @@ export function VariableManagerTab(props: Props) {
         <div
           className="p-3"
           style={{
-            background: 'rgba(16,14,16,0.45)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+            background: 'rgba(var(--tj-bg-secondary),0.45)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
             clipPath: cardClip,
           }}
         >
@@ -456,17 +458,17 @@ function TreeNode({
       style={{
         marginLeft: depth === 0 ? 0 : 12,
         paddingLeft: depth === 0 ? 0 : 8,
-        borderLeft: depth === 0 ? 'none' : '1px solid rgba(245,217,122,0.10)',
+        borderLeft: depth === 0 ? 'none' : '1px solid rgba(var(--tj-accent-primary),0.10)',
       }}
     >
       <summary className="flex cursor-pointer select-none items-center gap-2 py-1">
-        <span className="font-serif text-[13px] font-bold" style={{ color: depth === 0 ? '#f5d97a' : 'rgba(230,214,178,0.92)' }}>
+        <span className="font-serif text-[13px] font-bold" style={{ color: depth === 0 ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-ui-body),0.94)' }}>
           {label}
         </span>
-        <span className="font-mono text-[10px]" style={{ color: 'rgba(200,188,158,0.58)' }}>
+        <span className="font-mono text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
           {isArray ? `[${value.length}]` : `{${Object.keys(value).length}}`}
         </span>
-        <span className="text-[11px]" style={{ color: 'rgba(200,188,158,0.58)' }}>
+        <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
           {summarizeValue(value)}
         </span>
         <button
@@ -565,10 +567,10 @@ function LeafRow({
       style={{
         marginLeft: depth === 0 ? 0 : 12,
         paddingLeft: depth === 0 ? 0 : 8,
-        borderLeft: depth === 0 ? 'none' : '1px solid rgba(245,217,122,0.08)',
+        borderLeft: depth === 0 ? 'none' : '1px solid rgba(var(--tj-accent-primary),0.08)',
       }}
     >
-      <span className="min-w-[128px] flex-shrink-0 pt-1 font-serif text-xs" style={{ color: 'rgba(230,214,178,0.9)' }}>
+      <span className="min-w-[128px] flex-shrink-0 pt-1 font-serif text-xs" style={{ color: 'rgba(var(--tj-ui-body),0.92)' }}>
         {label}
       </span>
 
@@ -576,7 +578,7 @@ function LeafRow({
         <button
           onClick={() => onChange('')}
           className="px-2 py-1 text-[11px]"
-          style={{ color: 'rgba(200,188,158,0.72)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.18)', clipPath: smallClip }}
+          style={{ color: 'rgba(var(--tj-text-secondary),0.72)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: smallClip }}
         >
           null
         </button>
@@ -587,7 +589,7 @@ function LeafRow({
           style={{
             background: value ? 'rgba(165,230,170,0.16)' : 'rgba(135,135,135,0.14)',
             color: value ? 'rgba(165,230,170,0.95)' : 'rgba(210,200,172,0.78)',
-            boxShadow: `inset 0 0 0 1px ${value ? 'rgba(165,230,170,0.32)' : 'rgba(245,217,122,0.16)'}`,
+            boxShadow: `inset 0 0 0 1px ${value ? 'rgba(165,230,170,0.32)' : 'rgba(var(--tj-accent-primary),0.16)'}`,
             clipPath: smallClip,
           }}
         >

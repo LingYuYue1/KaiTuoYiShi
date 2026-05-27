@@ -103,21 +103,21 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
       <div
         className="p-3 space-y-3"
         style={{
-          background: 'rgba(16, 14, 16, 0.4)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          background: 'rgba(var(--tj-bg-secondary), 0.4)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath: cardClip,
         }}
       >
         <div
           className="font-serif text-xs tracking-[0.3em]"
-          style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
         >
           ◆ 狭间状态
         </div>
 
         {/* 待触发狭间 */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: 'rgba(200, 188, 158, 0.85)', minWidth: 80 }}>
+          <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)', minWidth: 80 }}>
             待触发狭间
           </span>
           <select
@@ -140,8 +140,8 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                 className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
                   background:
-                    'linear-gradient(135deg, rgba(245, 217, 122, 0.92), rgba(212, 177, 90, 0.92))',
-                  color: '#1a1325',
+                    'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(212, 177, 90, 0.92))',
+                  color: 'rgb(var(--tj-on-accent))',
                   clipPath: smallClip,
                 }}
               >
@@ -151,8 +151,8 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                 onClick={() => set世界((prev) => 拒绝命途狭间(prev))}
                 className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
-                  color: 'rgba(200, 188, 158, 0.85)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.3)',
+                  color: 'rgba(var(--tj-text-secondary), 0.85)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
                   clipPath: smallClip,
                 }}
               >
@@ -164,7 +164,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
 
         {/* 进行中狭间 */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: 'rgba(200, 188, 158, 0.85)', minWidth: 80 }}>
+          <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)', minWidth: 80 }}>
             进行中狭间
           </span>
           <select
@@ -198,7 +198,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
           )}
         </div>
 
-        <div className="text-[11px]" style={{ color: 'rgba(160, 148, 120, 0.7)', lineHeight: 1.5 }}>
+        <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)', lineHeight: 1.5 }}>
           说明:正常流程是 AI 发邀请 → 写入待触发狭间 → 玩家点踏入卡片 → 进入进行中 → AI 出题 →
           AI 写评判 → 落地清空。这里的选择器仅用于本地手动测试。
         </div>
@@ -208,19 +208,19 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
       <div
         className="p-3 space-y-2"
         style={{
-          background: 'rgba(16, 14, 16, 0.4)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          background: 'rgba(var(--tj-bg-secondary), 0.4)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath: cardClip,
         }}
       >
         <div
           className="font-serif text-xs tracking-[0.3em]"
-          style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
         >
           ◆ 命途列表(共 {命途列表.length} 条)
         </div>
         {命途列表.length === 0 ? (
-          <div className="text-xs py-3 text-center" style={{ color: 'rgba(160, 148, 120, 0.7)' }}>
+          <div className="text-xs py-3 text-center" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
             旅人尚未踏上任何命途。请在下方「添加命途」处选一条踏上。
           </div>
         ) : (
@@ -233,7 +233,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                   className="p-2.5 space-y-2"
                   style={{
                     background: 'rgba(28, 24, 20, 0.5)',
-                    boxShadow: `inset 0 0 0 1px ${p.待升阶 ? 'rgba(245, 217, 122, 0.55)' : 'rgba(245, 217, 122, 0.18)'}`,
+                    boxShadow: `inset 0 0 0 1px ${p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-accent-primary), 0.18)'}`,
                     clipPath: smallClip,
                   }}
                 >
@@ -241,16 +241,16 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
                       className="font-serif text-sm font-bold"
-                      style={{ color: 'rgba(245, 217, 122, 0.95)' }}
+                      style={{ color: 'rgba(var(--tj-accent-primary), 0.95)' }}
                     >
                       {def?.emblem ?? '○'} {中文名(p.id)}
                     </span>
-                    <span className="text-[11px]" style={{ color: 'rgba(160, 148, 120, 0.7)' }}>
+                    <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
                       ({p.id})
                     </span>
                     <label
                       className="flex items-center gap-1 text-[11px] cursor-pointer"
-                      style={{ color: 'rgba(200, 188, 158, 0.85)' }}
+                      style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}
                     >
                       <input
                         type="radio"
@@ -264,8 +264,8 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                       <span
                         className="text-[11px] px-1.5 py-0.5"
                         style={{
-                          color: 'rgba(245, 217, 122, 0.95)',
-                          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)',
+                          color: 'rgba(var(--tj-accent-primary), 0.95)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
                           clipPath: smallClip,
                         }}
                       >
@@ -278,8 +278,8 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                         title="把进度调到 99 并标 待升阶 = true,模拟自然达标"
                         className="px-2 py-0.5 text-[11px] transition-all hover:opacity-90"
                         style={{
-                          color: 'rgba(245, 217, 122, 0.95)',
-                          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.35)',
+                          color: 'rgba(var(--tj-accent-primary), 0.95)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
                           clipPath: smallClip,
                         }}
                       >
@@ -302,7 +302,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                   {/* 字段行:阶段 / 进度 / 待升阶开关 / 今日累计 / 觉醒于 */}
                   <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>阶段</span>
+                      <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>阶段</span>
                       <select
                         value={p.阶段}
                         onChange={(e) => 更新命途(p.id, { 阶段: Number(e.target.value) as 命途阶段 })}
@@ -317,7 +317,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                       </select>
                     </label>
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>
+                      <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
                         进度 (0–{STAGE_PROGRESS_MAX})
                       </span>
                       <input
@@ -331,14 +331,14 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                       />
                     </label>
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>待升阶</span>
+                      <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>待升阶</span>
                       <button
                         onClick={() => 更新命途(p.id, { 待升阶: !p.待升阶 })}
                         className="px-2 py-1 text-xs font-mono text-left"
                         style={{
-                          background: p.待升阶 ? 'rgba(245, 217, 122, 0.18)' : 'rgba(60, 55, 50, 0.4)',
-                          color: p.待升阶 ? 'rgba(245, 217, 122, 0.95)' : 'rgba(200, 188, 158, 0.7)',
-                          boxShadow: `inset 0 0 0 1px ${p.待升阶 ? 'rgba(245, 217, 122, 0.5)' : 'rgba(160, 148, 120, 0.3)'}`,
+                          background: p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.18)' : 'rgba(60, 55, 50, 0.4)',
+                          color: p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(var(--tj-text-secondary), 0.7)',
+                          boxShadow: `inset 0 0 0 1px ${p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.5)' : 'rgba(var(--tj-text-secondary), 0.3)'}`,
                           clipPath: smallClip,
                         }}
                       >
@@ -346,7 +346,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                       </button>
                     </label>
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>
+                      <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
                         今日累计 / 上限 10
                       </span>
                       <div className="flex gap-1">
@@ -363,8 +363,8 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                           title="重置今日累计与日期"
                           className="px-2 text-[11px]"
                           style={{
-                            color: 'rgba(200, 188, 158, 0.85)',
-                            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.3)',
+                            color: 'rgba(var(--tj-text-secondary), 0.85)',
+                            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
                             clipPath: smallClip,
                           }}
                         >
@@ -373,7 +373,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                       </div>
                     </label>
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>觉醒于</span>
+                      <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>觉醒于</span>
                       <input
                         value={p.觉醒于}
                         onChange={(e) => 更新命途(p.id, { 觉醒于: e.target.value })}
@@ -382,7 +382,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                       />
                     </label>
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.7)' }}>备注</span>
+                      <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>备注</span>
                       <input
                         value={p.备注}
                         onChange={(e) => 更新命途(p.id, { 备注: e.target.value })}
@@ -405,8 +405,8 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
 
         {/* 添加新命途 */}
         {未踏命途.length > 0 && (
-          <div className="flex items-center gap-2 pt-2 border-t" style={{ borderColor: 'rgba(245, 217, 122, 0.12)' }}>
-            <span className="text-xs" style={{ color: 'rgba(200, 188, 158, 0.85)' }}>踏上新命途</span>
+          <div className="flex items-center gap-2 pt-2 border-t" style={{ borderColor: 'rgba(var(--tj-accent-primary), 0.12)' }}>
+            <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}>踏上新命途</span>
             <select
               defaultValue=""
               onChange={(e) => {
@@ -434,19 +434,19 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
       <div
         className="p-3 text-[11px] space-y-1"
         style={{
-          background: 'rgba(16, 14, 16, 0.4)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+          background: 'rgba(var(--tj-bg-secondary), 0.4)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
           clipPath: cardClip,
           color: 'rgba(190, 178, 145, 0.85)',
           lineHeight: 1.6,
         }}
       >
-        <div style={{ color: 'rgba(245, 217, 122, 0.85)' }}>◆ 变量路径速查</div>
+        <div style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>◆ 变量路径速查</div>
         <div>• 旅人.命途列表[].id / 阶段 / 进度 / 待升阶 / 今日累计 / 是否主命途</div>
         <div>• 旅人.主命途(兼容字段)</div>
         <div>• 世界.待触发狭间 (邀请中,等待玩家点踏入)</div>
         <div>• 世界.进行中狭间 (狭间问答中,AI 应出题/评判)</div>
-        <div style={{ color: 'rgba(160, 148, 120, 0.7)', marginTop: 4 }}>
+        <div style={{ color: 'rgba(var(--tj-text-secondary), 0.7)', marginTop: 4 }}>
           AI 触发狭间:在正文中输出 &lt;触发狭间&gt;命途ID&lt;/触发狭间&gt;; AI 回应:
           &lt;狭间评判&gt;升阶&lt;/狭间评判&gt;
         </div>

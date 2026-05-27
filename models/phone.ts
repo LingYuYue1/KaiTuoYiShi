@@ -205,6 +205,54 @@ export function 归一化手机系统(input?: Partial<手机系统> | null): 手
   const base = 创建空手机系统();
   const chats = Array.isArray(input?.chats) ? input.chats : base.chats;
   const seeds = Array.isArray(input?.messageSeeds) ? input.messageSeeds : [];
+  const normalizedChats = chats.map((chat) => ({
+    id: chat.id || `chat_${Date.now()}`,
+    type: chat.type ?? 'private',
+    title: chat.title || '未命名会话',
+    participantIds: Array.isArray(chat.participantIds) ? chat.participantIds : [],
+    messages: Array.isArray(chat.messages)
+      ? chat.messages.map((message) => ({
+          ...message,
+          avatar: typeof message.avatar === 'string' ? message.avatar : undefined,
+        }))
+      : [],
+    localArchive: {
+      ...创建手机会话本地库(chat.type ?? 'private'),
+      ...(chat.localArchive ?? {}),
+      entries: Array.isArray(chat.localArchive?.entries)
+        ? chat.localArchive.entries
+            .map((entry) => ({
+              ...entry,
+              summary: typeof entry.summary === 'string' ? entry.summary.trim() : '',
+              source: entry.source ?? 'private',
+              messageCount: Math.max(0, Number(entry.messageCount) || 0),
+              createdAt: Number(entry.createdAt) || Date.now(),
+            }))
+            .filter((entry) => entry.summary)
+        : [],
+      compressedSummaries: Array.isArray(chat.localArchive?.compressedSummaries)
+        ? chat.localArchive.compressedSummaries.filter((item) => typeof item === 'string' && item.trim())
+        : [],
+      lastCompressedTurn: Number(chat.localArchive?.lastCompressedTurn) || undefined,
+    },
+    unread: Math.max(0, Number(chat.unread) || 0),
+    pinned: Boolean(chat.pinned),
+    updatedAt: Number(chat.updatedAt) || Date.now(),
+  }));
+  const normalizedSeeds = seeds.map((seed) => ({
+    id: seed.id || `phone_seed_${Date.now()}`,
+    turn: Math.max(0, Number(seed.turn) || 0),
+    source: seed.source ?? 'system',
+    triggerType: seed.triggerType ?? 'custom',
+    priority: seed.priority ?? 'normal',
+    targetType: seed.targetType ?? 'private',
+    targetId: seed.targetId || '',
+    title: seed.title || '未命名来信',
+    context: seed.context || '',
+    relatedNpcIds: Array.isArray(seed.relatedNpcIds) ? seed.relatedNpcIds : [],
+    expiresAfterTurns: seed.expiresAfterTurns,
+    status: seed.status ?? 'pending',
+  }));
   return {
     contacts: Array.isArray(input?.contacts)
       ? input.contacts.map((contact) => ({
@@ -216,57 +264,9 @@ export function 归一化手机系统(input?: Partial<手机系统> | null): 手
           unlockSource: contact.unlockSource,
         }))
       : [],
-    chats: chats.map((chat) => ({
-      id: chat.id || `chat_${Date.now()}`,
-      type: chat.type ?? 'private',
-      title: chat.title || '未命名会话',
-      participantIds: Array.isArray(chat.participantIds) ? chat.participantIds : [],
-      messages: Array.isArray(chat.messages)
-        ? chat.messages.map((message) => ({
-            ...message,
-            avatar: typeof message.avatar === 'string' ? message.avatar : undefined,
-          }))
-        : [],
-      localArchive: {
-        ...创建手机会话本地库(chat.type ?? 'private'),
-        ...(chat.localArchive ?? {}),
-        entries: Array.isArray(chat.localArchive?.entries)
-          ? chat.localArchive.entries
-              .map((entry) => ({
-                ...entry,
-                summary: typeof entry.summary === 'string' ? entry.summary.trim() : '',
-                source: entry.source ?? 'private',
-                messageCount: Math.max(0, Number(entry.messageCount) || 0),
-                createdAt: Number(entry.createdAt) || Date.now(),
-              }))
-              .filter((entry) => entry.summary)
-          : [],
-        compressedSummaries: Array.isArray(chat.localArchive?.compressedSummaries)
-          ? chat.localArchive.compressedSummaries.filter((item) => typeof item === 'string' && item.trim())
-          : [],
-        lastCompressedTurn: Number(chat.localArchive?.lastCompressedTurn) || undefined,
-      },
-      unread: Math.max(0, Number(chat.unread) || 0),
-      pinned: Boolean(chat.pinned),
-      updatedAt: Number(chat.updatedAt) || Date.now(),
-    })),
-    messageSeeds: seeds.map((seed) => ({
-      id: seed.id || `phone_seed_${Date.now()}`,
-      turn: Math.max(0, Number(seed.turn) || 0),
-      source: seed.source ?? 'system',
-      triggerType: seed.triggerType ?? 'custom',
-      priority: seed.priority ?? 'normal',
-      targetType: seed.targetType ?? 'private',
-      targetId: seed.targetId || '',
-      title: seed.title || '未命名来信',
-      context: seed.context || '',
-      relatedNpcIds: Array.isArray(seed.relatedNpcIds) ? seed.relatedNpcIds : [],
-      expiresAfterTurns: seed.expiresAfterTurns,
-      status: seed.status ?? 'pending',
-    })),
-    unreadTotal: Number.isFinite(Number(input?.unreadTotal))
-      ? Math.max(0, Number(input?.unreadTotal))
-      : 计算手机未读({ chats, messageSeeds: seeds }),
+    chats: normalizedChats,
+    messageSeeds: normalizedSeeds,
+    unreadTotal: 计算手机未读({ chats: normalizedChats, messageSeeds: normalizedSeeds }),
     wallpapers: 归一化手机壁纸((input as { wallpapers?: unknown; 壁纸?: unknown } | null | undefined)?.wallpapers ?? (input as { 壁纸?: unknown } | null | undefined)?.壁纸),
   };
 }

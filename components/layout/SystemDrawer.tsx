@@ -19,22 +19,17 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
     <>
       <div
         onClick={onClose}
-        className="absolute inset-0 z-30 transition-opacity duration-200"
+        className="kaituo-system-drawer-overlay absolute inset-0 z-30 transition-opacity duration-200"
         style={{
-          background: 'rgba(6, 5, 14, 0.55)',
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
         }}
       />
 
       <aside
-        className="absolute inset-0 z-40 flex flex-col overflow-hidden transition-transform duration-300"
+        className="kaituo-system-drawer absolute inset-0 z-40 flex flex-col overflow-hidden transition-transform duration-300"
         style={{
           transform: open ? 'translateX(0)' : 'translateX(105%)',
-          background:
-            'linear-gradient(180deg, rgba(18, 16, 18, 0.98), rgba(10, 9, 10, 0.99))',
-          boxShadow:
-            'inset 1px 0 0 rgba(245, 217, 122, 0.45), -8px 0 24px rgba(0, 0, 0, 0.45)',
         }}
         aria-hidden={!open}
       >
@@ -44,16 +39,16 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
           onClick={onClose}
           aria-label="关闭面板"
           title="关闭"
-          className="absolute z-50 flex h-9 w-9 items-center justify-center font-serif text-base transition-all hover:bg-[rgba(245,217,122,0.18)]"
+          className="absolute z-50 flex h-9 w-9 items-center justify-center font-serif text-base transition-all hover:bg-[rgba(var(--tj-accent-primary),0.18)]"
           style={{
             top: '50%',
             left: '-18px',
             transform: 'translateY(-50%)',
-            color: 'rgb(245, 217, 122)',
+            color: 'rgb(var(--tj-accent-primary))',
             background:
-              'linear-gradient(135deg, rgba(20, 18, 20, 0.96), rgba(10, 9, 10, 0.98))',
+              'linear-gradient(135deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface), 0.98))',
             boxShadow:
-              'inset 0 0 0 1px rgba(245, 217, 122, 0.55), -2px 0 8px rgba(0, 0, 0, 0.45)',
+              'inset 0 0 0 1px rgba(var(--tj-border), 0.9), -2px 0 8px rgba(var(--tj-shadow), 0.1)',
             borderRadius: '50%',
           }}
         >
@@ -62,9 +57,9 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
         <header
           className="flex items-center gap-3 px-5 py-4"
           style={{
-            borderBottom: '1px solid rgba(245, 217, 122, 0.28)',
+            borderBottom: '1px solid rgba(var(--tj-border), 0.78)' ,
             background:
-              'linear-gradient(180deg, rgba(245, 217, 122, 0.07), rgba(245, 217, 122, 0))',
+              'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.07), rgba(var(--tj-accent-primary), 0))',
             clipPath: headerClip,
           }}
         >
@@ -72,10 +67,10 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
             <span
               className="flex h-9 w-9 flex-shrink-0 items-center justify-center font-serif text-base"
               style={{
-                color: 'rgb(245, 217, 122)',
+                color: 'rgb(var(--tj-accent-primary))',
                 background:
-                  'linear-gradient(135deg, rgba(245, 217, 122, 0.12), rgba(245, 217, 122, 0.02))',
-                boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
+                  'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
                 clipPath:
                   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
               }}
@@ -88,7 +83,7 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
               className="truncate font-serif text-lg font-semibold tracking-[0.3em]"
               style={{
                 background:
-                  'linear-gradient(135deg, #fff4d4 0%, #f5d97a 55%, #c4a35a 100%)',
+                  'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 55%, rgb(var(--tj-accent-secondary)) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -99,7 +94,7 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
             {subtitle && (
               <p
                 className="mt-1 font-serif text-[12px] italic leading-relaxed tracking-[0.16em]"
-                style={{ color: 'rgba(235, 223, 193, 0.92)' }}
+                style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}
               >
                 {subtitle}
               </p>
@@ -108,7 +103,7 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
           <button
             onClick={onClose}
             className="px-2 py-1 text-lg font-serif transition-all hover:opacity-80"
-            style={{ color: 'rgba(200, 188, 158, 0.7)' }}
+            style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}
             title="关闭"
           >
             ×

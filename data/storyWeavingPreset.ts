@@ -7,6 +7,9 @@ const STORY_PRESET_IDS = new Set([
   'zhiku_herta_station_chapter1',
   'zhiku_jarilo_vi_chapters',
   'zhiku_jarilo_vi_sunrise_chapters',
+  'zhiku_xianzhou_luofu_travel_chapters',
+  'zhiku_xianzhou_luofu_cloud_tree_chapters',
+  'zhiku_xianzhou_luofu_aftermath_chapters',
 ]);
 
 const CANON_START_SERIES_ID = 'story_canon_zhiku_herta_station_chapter1';

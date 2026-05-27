@@ -1,13 +1,42 @@
 ﻿:root {
-  /* Deep Space Star Trails (default) - cyan on deep blue-black */
+  /* 开拓金辉（默认） */
   --tj-bg-primary: 8, 7, 9;
-  --tj-bg-secondary: 15, 15, 30;
-  --tj-text-primary: 200, 220, 240;
-  --tj-text-secondary: 120, 150, 180;
-  --tj-accent-primary: 0, 220, 200;
-  --tj-accent-secondary: 180, 0, 180;
-  --tj-border: 40, 40, 60;
-  --tj-danger: 255, 60, 100;
+  --tj-bg-secondary: 16, 14, 16;
+  --tj-text-primary: 230, 218, 188;
+  --tj-text-secondary: 160, 148, 120;
+  --tj-accent-primary: 245, 217, 122;
+  --tj-accent-secondary: 196, 163, 90;
+  --tj-border: 245, 217, 122;
+  --tj-danger: 220, 90, 90;
+  --tj-on-accent: 26, 19, 37;
+  --tj-surface: 16, 14, 16;
+  --tj-surface-strong: 10, 9, 10;
+  --tj-bubble: 8, 7, 9;
+  --tj-chat-bubble: 20, 16, 28;
+  --tj-chat-bubble-alpha: 0.78;
+  --tj-chat-text: 236, 224, 194;
+  --tj-chat-muted: 182, 168, 132;
+  --tj-shadow: 0, 0, 0;
+  --tj-tech-cyan: 117, 214, 216;
+  --tj-tech-cyan-deep: 117, 214, 216;
+  --tj-tech-blue: 120, 145, 185;
+  --tj-tech-blue-deep: 120, 145, 185;
+  --tj-paper-deep: 10, 9, 10;
+  --tj-paper-warm: 16, 14, 16;
+  --tj-amber-soft: 245, 217, 122;
+  --tj-amber-deep: 245, 217, 122;
+  --tj-sage-soft: 160, 230, 170;
+  --tj-sage-deep: 160, 230, 170;
+  --tj-tech-wash: 16, 14, 16;
+  --tj-ui-title: 255, 244, 212;
+  --tj-ui-body: 235, 223, 193;
+  --tj-ui-muted: 180, 168, 140;
+  --tj-ui-faint: 160, 148, 120;
+  --tj-ui-active-text: 26, 19, 37;
+  --tj-ui-panel: 16, 14, 16;
+  --tj-ui-panel-strong: 8, 7, 9;
+  --tj-ui-nsfw: 241, 183, 206;
+  --tj-ui-success: 165, 230, 170;
 
   --scrollbar-thumb: var(--tj-accent-primary);
   --scrollbar-track: var(--tj-bg-secondary);

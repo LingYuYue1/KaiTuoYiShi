@@ -46,14 +46,14 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
       className="mx-3 mb-2 p-4"
       style={{
         background:
-          'linear-gradient(135deg, rgba(245, 217, 122, 0.08) 0%, rgba(140, 100, 60, 0.10) 100%)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
+          'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.08) 0%, rgba(140, 100, 60, 0.10) 100%)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
         clipPath: cardClip,
       }}
     >
       <div
         className="mb-2 text-xs tracking-[0.4em]"
-        style={{ color: 'rgba(245, 217, 122, 0.7)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
       >
         命 途 狭 间 之 引
       </div>
@@ -84,7 +84,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
           className="flex-1 px-4 py-2 text-sm font-serif tracking-[0.3em] transition-all hover:opacity-90 disabled:opacity-40"
           style={{
             background:
-              'linear-gradient(135deg, rgba(245, 217, 122, 0.85), rgba(200, 160, 80, 0.85))',
+              'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.85), rgba(200, 160, 80, 0.85))',
             color: '#1a1610',
             clipPath: btnClip,
             boxShadow: 'inset 0 0 0 1px rgba(255, 235, 180, 0.5)',
@@ -101,7 +101,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
             background: 'rgba(50, 45, 40, 0.6)',
             color: 'rgba(200, 188, 160, 0.85)',
             clipPath: btnClip,
-            boxShadow: 'inset 0 0 0 1px rgba(160, 148, 120, 0.35)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.35)',
           }}
         >
           暂 缓

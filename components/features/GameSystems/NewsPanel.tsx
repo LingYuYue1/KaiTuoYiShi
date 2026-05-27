@@ -19,17 +19,17 @@ const chipClip =
   'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)';
 
 const STATUS_COLORS: Record<新闻状态, string> = {
-  upcoming: '#f5d97a',
-  ongoing: '#75d6d8',
-  completed: '#d8b35f',
-  archived: '#9b9078',
+  upcoming: 'rgb(var(--tj-accent-primary))',
+  ongoing: 'rgb(var(--tj-tech-cyan-deep))',
+  completed: 'rgb(var(--tj-amber-deep))',
+  archived: 'rgba(var(--tj-text-secondary), 0.92)',
 };
 
 const STATUS_BACKGROUNDS: Record<新闻状态, string> = {
-  upcoming: 'rgba(245, 217, 122, 0.12)',
-  ongoing: 'rgba(117, 214, 216, 0.10)',
-  completed: 'rgba(216, 179, 95, 0.10)',
-  archived: 'rgba(155, 144, 120, 0.08)',
+  upcoming: 'rgba(var(--tj-accent-primary), 0.14)',
+  ongoing: 'rgba(var(--tj-tech-cyan), 0.16)',
+  completed: 'rgba(var(--tj-amber-soft), 0.18)',
+  archived: 'rgba(var(--tj-surface-strong), 0.95)',
 };
 
 const STATUS_CODES: Record<新闻状态, string> = {
@@ -76,7 +76,7 @@ export function NewsPanel({ news, turnCount }: NewsPanelProps) {
         className="pointer-events-none absolute inset-0 opacity-60"
         style={{
           background:
-            'linear-gradient(rgba(117, 214, 216, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(245, 217, 122, 0.035) 1px, transparent 1px)',
+            'linear-gradient(rgba(117, 214, 216, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.035) 1px, transparent 1px)',
           backgroundSize: '22px 22px, 22px 22px',
           maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.28))',
         }}
@@ -87,31 +87,31 @@ export function NewsPanel({ news, turnCount }: NewsPanelProps) {
           className="px-4 py-3"
           style={{
             background:
-              'linear-gradient(135deg, rgba(245, 217, 122, 0.16), rgba(117, 214, 216, 0.08) 42%, rgba(10, 9, 10, 0.92))',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.42), inset 0 -1px 0 rgba(117, 214, 216, 0.28)',
+              'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.16), rgb(var(--tj-bubble)) 42%, rgba(var(--tj-amber-soft), 0.12))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.78), inset 4px 0 0 rgba(var(--tj-tech-cyan-deep), 0.52)',
           }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2" style={{ background: '#75d6d8', boxShadow: '0 0 12px rgba(117, 214, 216, 0.85)' }} />
-                <span className="font-serif text-[12px] font-bold tracking-[0.28em]" style={{ color: 'rgba(117, 214, 216, 0.95)' }}>
+                <span className="h-2 w-2" style={{ background: 'rgb(var(--tj-tech-cyan-deep))', boxShadow: '0 0 8px rgba(var(--tj-tech-cyan), 0.45)' }} />
+                <span className="font-serif text-[12px] font-bold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-tech-cyan-deep))' }}>
                   IPC SECURE FEED
                 </span>
               </div>
-              <div className="mt-1 font-serif text-[18px] font-bold tracking-[0.22em]" style={{ color: '#fff4d4' }}>
+              <div className="mt-1 font-serif text-[18px] font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                 星际和平周报
               </div>
-              <div className="mt-1 text-[12px] tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.78)' }}>
+              <div className="mt-1 text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
                 第 {issue} 期 / 总第 {turnCount} 回 / INTERASTRAL BULLETIN
               </div>
             </div>
             <div className="flex flex-col items-end gap-1 text-right">
-              <span className="text-[12px] font-bold tracking-[0.2em]" style={{ color: '#f5d97a' }}>
+              <span className="text-[12px] font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                 ON-AIR
               </span>
               <SignalBars />
-              <span className="text-[12px]" style={{ color: 'rgba(160, 148, 120, 0.82)' }}>
+              <span className="text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
                 {news.length} 条记录
               </span>
             </div>
@@ -136,12 +136,12 @@ export function NewsPanel({ news, turnCount }: NewsPanelProps) {
 
       <div className="relative mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="h-px w-8" style={{ background: 'linear-gradient(90deg, #f5d97a, transparent)' }} />
-          <span className="font-serif text-[12px] font-bold tracking-[0.22em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+          <span className="h-px w-8" style={{ background: 'linear-gradient(90deg, rgb(var(--tj-accent-primary)), transparent)' }} />
+          <span className="font-serif text-[12px] font-bold tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
             {tab === 'all' ? '全域新闻流' : NEWS_STATUS_LABELS[tab]}
           </span>
         </div>
-        <span className="text-[12px] tracking-[0.16em]" style={{ color: 'rgba(117, 214, 216, 0.75)' }}>
+        <span className="text-[12px] tracking-[0.16em]" style={{ color: 'rgb(var(--tj-tech-cyan-deep))' }}>
           {visible.length.toString().padStart(2, '0')} ITEMS
         </span>
       </div>
@@ -173,9 +173,9 @@ function SignalBars() {
           className="w-1.5"
           style={{
             height,
-            background: index === 3 ? '#f5d97a' : '#75d6d8',
-            boxShadow: index === 3 ? '0 0 10px rgba(245, 217, 122, 0.5)' : '0 0 8px rgba(117, 214, 216, 0.35)',
-            opacity: 0.72 + index * 0.08,
+            background: index === 3 ? 'rgb(var(--tj-accent-primary))' : 'rgb(var(--tj-tech-cyan-deep))',
+            boxShadow: index === 3 ? '0 0 8px rgba(var(--tj-accent-primary), 0.35)' : '0 0 8px rgba(var(--tj-tech-cyan), 0.28)',
+            opacity: 0.88,
           }}
         />
       ))}
@@ -189,7 +189,7 @@ function StatusChip({
   count,
   active,
   onClick,
-  color = '#f5d97a',
+  color = 'rgb(var(--tj-accent-primary))',
 }: {
   label: string;
   code: string;
@@ -204,12 +204,12 @@ function StatusChip({
       className="group min-w-0 px-3 py-2 text-left transition-all"
       style={{
         clipPath: chipClip,
-        color: active ? '#fff4d4' : 'rgba(220, 208, 178, 0.76)',
+        color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.84)',
         background: active
-          ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.14), rgba(117, 214, 216, 0.08))'
-          : 'rgba(12, 11, 12, 0.62)',
+          ? 'linear-gradient(135deg, rgba(var(--tj-amber-soft), 0.18), rgba(var(--tj-tech-cyan), 0.12))'
+          : 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.48), 0 0 18px rgba(245, 217, 122, 0.08)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48), 0 0 18px rgba(var(--tj-accent-primary), 0.08)'
           : 'inset 0 0 0 1px rgba(117, 214, 216, 0.16)',
       }}
     >
@@ -217,7 +217,7 @@ function StatusChip({
         <span className="truncate font-serif text-[12px] font-bold tracking-[0.16em]">{label}</span>
         <span className="text-[14px] font-bold" style={{ color }}>{count}</span>
       </div>
-      <div className="mt-0.5 text-[12px] tracking-[0.18em]" style={{ color: active ? color : 'rgba(117, 214, 216, 0.55)' }}>
+      <div className="mt-0.5 text-[12px] tracking-[0.18em]" style={{ color: active ? color : 'rgba(var(--tj-tech-cyan-deep), 0.82)' }}>
         {code}
       </div>
     </button>
@@ -232,26 +232,26 @@ function FeaturedCard({ entry }: { entry: 新闻条目 }) {
       style={{
         clipPath: panelClip,
         background:
-          'linear-gradient(135deg, rgba(245, 217, 122, 0.12), rgba(117, 214, 216, 0.08) 48%, rgba(14, 13, 14, 0.82))',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.32), inset 4px 0 0 rgba(245, 217, 122, 0.72)',
+          'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.14), rgb(var(--tj-bubble)) 48%, rgba(var(--tj-amber-soft), 0.14))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.76), inset 4px 0 0 rgba(var(--tj-accent-primary), 0.72)',
       }}
     >
-      <div className="pointer-events-none absolute right-3 top-3 text-[34px] font-bold leading-none opacity-[0.07]" style={{ color: '#fff4d4' }}>
+      <div className="pointer-events-none absolute right-3 top-3 text-[34px] font-bold leading-none opacity-[0.07]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         IPC
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="font-serif text-[12px] font-bold tracking-[0.24em]" style={{ color }}>
           HEADLINE / {NEWS_STATUS_LABELS[entry.状态]}
         </span>
-        <span className="text-[12px] tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.72)' }}>
+        <span className="text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-primary), 0.78)' }}>
           TURN {entry.回合}
         </span>
       </div>
-      <h3 className="mt-2 font-serif text-[16px] font-bold leading-relaxed" style={{ color: '#fff4d4' }}>
+      <h3 className="mt-2 font-serif text-[16px] font-bold leading-relaxed" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {entry.标题}
       </h3>
       {entry.正文 && (
-        <p className="mt-2 text-[13px] leading-relaxed" style={{ color: 'rgba(232, 224, 198, 0.86)' }}>
+        <p className="mt-2 text-[13px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
           {entry.正文}
         </p>
       )}
@@ -268,8 +268,8 @@ function NewsCard({ entry }: { entry: 新闻条目 }) {
       style={{
         clipPath: panelClip,
         background:
-          'linear-gradient(90deg, rgba(117, 214, 216, 0.055), rgba(245, 217, 122, 0.035), rgba(12, 11, 12, 0.72))',
-        boxShadow: 'inset 0 0 0 1px rgba(117, 214, 216, 0.18)',
+          'linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.12), rgb(var(--tj-bubble)) 36%, rgb(var(--tj-surface-strong)))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.68)',
       }}
     >
       <div className="flex gap-3">
@@ -282,15 +282,15 @@ function NewsCard({ entry }: { entry: 新闻条目 }) {
             <span className="font-serif text-[12px] font-bold tracking-[0.18em]" style={{ color }}>
               {STATUS_CODES[entry.状态]}
             </span>
-            <span className="text-[12px] tracking-[0.14em]" style={{ color: 'rgba(160, 148, 120, 0.75)' }}>
+            <span className="text-[12px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-text-primary), 0.78)' }}>
               #{entry.回合}
             </span>
           </div>
-          <h4 className="mt-1 font-serif text-[14px] font-bold leading-snug" style={{ color: 'rgba(255, 244, 212, 0.95)' }}>
+          <h4 className="mt-1 font-serif text-[14px] font-bold leading-snug" style={{ color: 'rgba(var(--tj-text-primary), 0.95)' }}>
             {entry.标题}
           </h4>
           {entry.正文 && (
-            <p className="mt-1 text-[13px] leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.78)' }}>
+            <p className="mt-1 text-[13px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.84)' }}>
               {entry.正文}
             </p>
           )}
@@ -326,20 +326,20 @@ function MetaTag({
 }) {
   const color =
     tone === 'gold'
-      ? '#f5d97a'
+      ? 'rgb(var(--tj-accent-primary))'
       : tone === 'cyan'
-        ? '#75d6d8'
+        ? 'rgb(var(--tj-tech-cyan-deep))'
         : tone === 'status' && status
           ? STATUS_COLORS[status]
-          : 'rgba(220, 208, 178, 0.74)';
-  const background = status ? STATUS_BACKGROUNDS[status] : 'rgba(10, 9, 10, 0.58)';
+          : 'rgba(var(--tj-text-primary), 0.82)';
+  const background = status ? STATUS_BACKGROUNDS[status] : 'rgb(var(--tj-bubble))';
   return (
     <span
       className="px-2 py-0.5 text-[12px] tracking-[0.1em]"
       style={{
         color,
         background,
-        boxShadow: 'inset 0 0 0 1px rgba(117, 214, 216, 0.14)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.58)',
         clipPath: chipClip,
       }}
     >
@@ -354,19 +354,19 @@ function EmptyState() {
       className="relative overflow-hidden px-4 py-9 text-center"
       style={{
         clipPath: panelClip,
-        background: 'linear-gradient(135deg, rgba(117, 214, 216, 0.08), rgba(245, 217, 122, 0.04), rgba(12, 11, 12, 0.75))',
-        boxShadow: 'inset 0 0 0 1px rgba(117, 214, 216, 0.22)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.13), rgb(var(--tj-bubble)), rgba(var(--tj-amber-soft), 0.12))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
       }}
     >
       <div className="mx-auto mb-3 h-14 w-14" style={{
-        background: 'repeating-conic-gradient(from 0deg, rgba(117,214,216,0.75) 0deg 12deg, transparent 12deg 24deg)',
+        background: 'repeating-conic-gradient(from 0deg, rgba(var(--tj-tech-cyan-deep),0.75) 0deg 12deg, transparent 12deg 24deg)',
         borderRadius: '999px',
         boxShadow: '0 0 22px rgba(117, 214, 216, 0.16)',
       }} />
-      <div className="font-serif text-[14px] font-bold tracking-[0.22em]" style={{ color: '#f5d97a' }}>
+      <div className="font-serif text-[14px] font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         周报频道待机中
       </div>
-      <div className="mt-1 text-[13px] leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.72)' }}>
+      <div className="mt-1 text-[13px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.8)' }}>
         暂无可刊登事件。新闻模型会在世界态势出现变化后写入记录。
       </div>
     </div>

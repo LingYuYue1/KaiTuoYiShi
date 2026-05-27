@@ -15,11 +15,11 @@ const smallClip =
 
 // 命令 action → 颜色标签（参考墨色项目的配色风格）
 const ACTION_STYLE: Record<变量命令动作, { bg: string; border: string; color: string; label: string }> = {
-  set:    { bg: 'rgba(96, 165, 250, 0.15)',  border: 'rgba(96, 165, 250, 0.4)',  color: 'rgb(147, 197, 253)', label: 'SET' },
-  add:    { bg: 'rgba(110, 231, 183, 0.15)', border: 'rgba(110, 231, 183, 0.4)', color: 'rgb(167, 243, 208)', label: 'ADD' },
-  sub:    { bg: 'rgba(252, 211, 77, 0.15)',  border: 'rgba(252, 211, 77, 0.4)',  color: 'rgb(253, 224, 71)',  label: 'SUB' },
-  push:   { bg: 'rgba(196, 181, 253, 0.15)', border: 'rgba(196, 181, 253, 0.4)', color: 'rgb(216, 180, 254)', label: 'PUSH' },
-  delete: { bg: 'rgba(252, 165, 165, 0.15)', border: 'rgba(252, 165, 165, 0.4)', color: 'rgb(254, 202, 202)', label: 'DEL' },
+  set:    { bg: 'rgba(62, 112, 156, 0.12)',  border: 'rgba(62, 112, 156, 0.38)',  color: 'rgb(43, 88, 128)', label: 'SET' },
+  add:    { bg: 'rgba(54, 111, 74, 0.12)', border: 'rgba(54, 111, 74, 0.38)', color: 'rgb(42, 94, 61)', label: 'ADD' },
+  sub:    { bg: 'rgba(145, 99, 42, 0.12)',  border: 'rgba(145, 99, 42, 0.38)',  color: 'rgb(132, 84, 36)',  label: 'SUB' },
+  push:   { bg: 'rgba(103, 82, 145, 0.12)', border: 'rgba(103, 82, 145, 0.38)', color: 'rgb(86, 68, 125)', label: 'PUSH' },
+  delete: { bg: 'rgba(176, 72, 68, 0.12)', border: 'rgba(176, 72, 68, 0.38)', color: 'rgb(150, 54, 52)', label: 'DEL' },
 };
 
 type TaskStatus = 队列任务状态;
@@ -58,13 +58,13 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
           width: '24px',
           height: pending ? 112 : 88,
           background: open
-            ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
-            : 'linear-gradient(180deg, rgba(28, 22, 18, 0.95), rgba(14, 12, 14, 0.95))',
-          color: open ? '#1a1325' : 'rgba(245, 217, 122, 0.85)',
+            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+            : 'linear-gradient(180deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
+          color: open ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.85)',
           boxShadow: open
-            ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 4px 0 12px rgba(245, 217, 122, 0.2)'
-            : 'inset 0 0 0 1px rgba(245, 217, 122, 0.35), 2px 0 8px rgba(0, 0, 0, 0.4)',
-          opacity: open ? 1 : 0.85,
+            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 4px 0 12px rgba(var(--tj-accent-primary), 0.2)'
+            : 'inset 0 0 0 1px rgba(var(--tj-border), 0.86), 2px 0 8px rgba(var(--tj-shadow), 0.1)',
+          opacity: 1,
           clipPath: 'polygon(0 0, 100% 8px, 100% calc(100% - 8px), 0 100%)',
           writingMode: 'vertical-rl',
           textOrientation: 'upright',
@@ -78,7 +78,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
         {pending && (
           <span
             className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full animate-pulse"
-            style={{ background: '#f5d97a', boxShadow: '0 0 6px rgba(245, 217, 122, 0.8)' }}
+            style={{ background: 'rgb(var(--tj-accent-primary))', boxShadow: '0 0 6px rgba(var(--tj-accent-primary), 0.8)' }}
           />
         )}
       </button>
@@ -88,7 +88,8 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
         onClick={() => setOpen(false)}
         className="absolute inset-0 z-30 transition-opacity duration-200"
         style={{
-          background: 'rgba(6, 5, 14, 0.55)',
+          background: 'rgba(56, 48, 40, 0.14)',
+          backdropFilter: 'blur(1px)',
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
         }}
@@ -103,9 +104,9 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
           left: 0,
           width: 'min(440px, 92vw)',
           transform: open ? 'translateX(0)' : 'translateX(-105%)',
-          background: 'linear-gradient(180deg, rgba(18, 16, 18, 0.98), rgba(10, 9, 10, 0.99))',
+          background: 'radial-gradient(circle at 12% 0%, rgba(117,214,216,0.1), transparent 32%), linear-gradient(180deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
           boxShadow:
-            'inset -1px 0 0 rgba(245, 217, 122, 0.45), 8px 0 24px rgba(0, 0, 0, 0.45)',
+            'inset -1px 0 0 rgba(var(--tj-border), 0.9), 8px 0 22px rgba(var(--tj-shadow), 0.1)',
         }}
         aria-hidden={!open}
       >
@@ -115,16 +116,16 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
           onClick={() => setOpen(false)}
           aria-label="关闭队列"
           title="关闭"
-          className="absolute z-50 flex h-9 w-9 items-center justify-center font-serif text-base transition-all hover:bg-[rgba(245,217,122,0.18)]"
+          className="absolute z-50 flex h-9 w-9 items-center justify-center font-serif text-base transition-all hover:bg-[rgba(var(--tj-accent-primary),0.18)]"
           style={{
             top: '50%',
             right: '-18px',
             transform: 'translateY(-50%)',
-            color: 'rgb(245, 217, 122)',
+            color: 'rgb(var(--tj-accent-primary))',
             background:
-              'linear-gradient(135deg, rgba(20, 18, 20, 0.96), rgba(10, 9, 10, 0.98))',
+              'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
             boxShadow:
-              'inset 0 0 0 1px rgba(245, 217, 122, 0.55), 2px 0 8px rgba(0, 0, 0, 0.45)',
+              'inset 0 0 0 1px rgba(var(--tj-border), 0.9), 2px 0 8px rgba(var(--tj-shadow), 0.1)',
             borderRadius: '50%',
           }}
         >
@@ -135,18 +136,18 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
         <header
           className="flex items-center gap-3 px-5 py-4"
           style={{
-            borderBottom: '1px solid rgba(245, 217, 122, 0.28)',
+            borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.28)',
             background:
-              'linear-gradient(180deg, rgba(245, 217, 122, 0.07), rgba(245, 217, 122, 0))',
+              'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.07), rgba(var(--tj-accent-primary), 0))',
           }}
         >
           <span
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center font-serif text-base"
             style={{
-              color: 'rgb(245, 217, 122)',
+              color: 'rgb(var(--tj-accent-primary))',
               background:
-                'linear-gradient(135deg, rgba(245, 217, 122, 0.12), rgba(245, 217, 122, 0.02))',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
+                'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
               clipPath:
                 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
             }}
@@ -158,7 +159,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
               className="truncate font-serif text-lg font-semibold tracking-[0.3em]"
               style={{
                 background:
-                  'linear-gradient(135deg, #fff4d4 0%, #f5d97a 55%, #c4a35a 100%)',
+                  'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 55%, rgb(var(--tj-accent-secondary)) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -168,7 +169,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
             </h3>
             <p
               className="mt-1 font-serif text-[11px] italic leading-relaxed tracking-[0.16em]"
-              style={{ color: 'rgba(235, 223, 193, 0.78)' }}
+              style={{ color: 'rgba(var(--tj-text-primary), 0.78)' }}
             >
               每回合 AI 输出后，依次跑完队列里所有任务
             </p>
@@ -236,13 +237,13 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
   return (
     <div
       style={{
-        background: 'rgba(16, 14, 16, 0.55)',
+        background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
         boxShadow: `inset 0 0 0 1px ${
           status === 'pending'
-            ? 'rgba(245, 217, 122, 0.45)'
+            ? 'rgba(var(--tj-accent-primary), 0.45)'
             : status === 'failed'
               ? 'rgba(255, 130, 130, 0.35)'
-              : 'rgba(245, 217, 122, 0.18)'
+              : 'rgba(var(--tj-border), 0.7)'
         }`,
         clipPath: smallClip,
       }}
@@ -253,9 +254,9 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
         <span
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center font-serif text-sm font-bold rounded-full"
           style={{
-            color: 'rgb(245, 217, 122)',
-            background: 'rgba(245, 217, 122, 0.08)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.5)',
+            color: 'rgb(var(--tj-accent-primary))',
+            background: 'rgba(var(--tj-accent-primary), 0.08)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5)',
           }}
         >
           {index}
@@ -266,26 +267,26 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
           <div className="flex items-center gap-2">
             <span
               className="font-serif text-sm font-semibold tracking-[0.15em]"
-              style={{ color: 'rgba(245, 217, 122, 0.95)' }}
+              style={{ color: 'rgba(var(--tj-accent-primary), 0.95)' }}
             >
               {title}
             </span>
-            <span className="text-[10px]" style={{ color: 'rgba(160, 148, 120, 0.7)' }}>
+            <span className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
               · {turnLabel}
             </span>
           </div>
           {subtitle && (
-            <div className="mt-0.5 text-[10px] truncate" style={{ color: 'rgba(160, 148, 120, 0.62)' }}>
+            <div className="mt-0.5 text-[10px] truncate" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
               {subtitle}
             </div>
           )}
           {summary && (
-            <div className="mt-0.5 text-[10px]" style={{ color: 'rgba(200, 188, 158, 0.65)' }}>
+            <div className="mt-0.5 text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
               {summary}
             </div>
           )}
           {retrySummary && (
-            <div className="mt-0.5 text-[10px]" style={{ color: task?.retrying ? 'rgba(245, 217, 122, 0.88)' : 'rgba(255, 180, 180, 0.86)' }}>
+            <div className="mt-0.5 text-[10px]" style={{ color: task?.retrying ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(255, 180, 180, 0.86)' }}>
               {retrySummary}
             </div>
           )}
@@ -299,9 +300,9 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
               onClick={() => onCancel(task.id)}
               className="px-2 py-1 text-[10px] font-serif tracking-[0.16em] transition-all hover:opacity-90"
               style={{
-                color: 'rgba(255, 210, 170, 0.92)',
-                background: 'rgba(120, 50, 35, 0.24)',
-                boxShadow: 'inset 0 0 0 1px rgba(255, 160, 120, 0.32)',
+                color: 'rgba(145, 83, 58, 0.96)',
+                background: 'rgba(var(--tj-accent-primary), 0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34)',
                 clipPath: smallClip,
               }}
             >
@@ -315,7 +316,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
       {/* 按钮条 */}
       <div
         className="flex items-stretch gap-2 px-3 pb-3"
-        style={{ borderTop: '1px dashed rgba(245, 217, 122, 0.15)', paddingTop: '10px' }}
+        style={{ borderTop: '1px dashed rgba(var(--tj-accent-primary), 0.15)', paddingTop: '10px' }}
       >
         <ViewButton
           label="查看原始信息"
@@ -357,9 +358,9 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
         title="已完成"
         style={{
-          color: 'rgb(167, 243, 208)',
-          background: 'rgba(110, 231, 183, 0.12)',
-          boxShadow: 'inset 0 0 0 1px rgba(110, 231, 183, 0.45)',
+          color: 'rgb(42, 94, 61)',
+          background: 'rgba(54, 111, 74, 0.12)',
+          boxShadow: 'inset 0 0 0 1px rgba(54, 111, 74, 0.45)',
         }}
       >
         ✓
@@ -372,7 +373,7 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
         title="部分失败"
         style={{
-          color: 'rgb(254, 202, 202)',
+          color: 'rgb(150, 54, 52)',
           background: 'rgba(252, 165, 165, 0.12)',
           boxShadow: 'inset 0 0 0 1px rgba(252, 165, 165, 0.45)',
         }}
@@ -387,9 +388,9 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
         title="已跳过"
         style={{
-          color: 'rgba(200, 188, 158, 0.72)',
-          background: 'rgba(245, 217, 122, 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.24)',
+          color: 'rgba(var(--tj-text-secondary), 0.72)',
+          background: 'rgba(var(--tj-accent-primary), 0.05)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
         }}
       >
         -
@@ -402,9 +403,9 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
         title="已取消"
         style={{
-          color: 'rgba(255, 210, 170, 0.86)',
-          background: 'rgba(120, 50, 35, 0.18)',
-          boxShadow: 'inset 0 0 0 1px rgba(255, 160, 120, 0.34)',
+          color: 'rgba(145, 83, 58, 0.92)',
+          background: 'rgba(var(--tj-accent-primary), 0.08)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
         }}
       >
         ×
@@ -416,9 +417,9 @@ function StatusIcon({ status }: { status: TaskStatus }) {
       className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
       title="待运行"
       style={{
-        color: 'rgba(160, 148, 120, 0.55)',
-        background: 'rgba(245, 217, 122, 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+          color: 'rgba(var(--tj-text-primary), 0.68)',
+        background: 'rgba(var(--tj-accent-primary), 0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
       }}
     >
       ◇
@@ -441,13 +442,13 @@ function Spinner() {
         cy="11"
         r="8"
         fill="none"
-        stroke="rgba(245, 217, 122, 0.18)"
+        stroke="rgba(var(--tj-accent-primary), 0.18)"
         strokeWidth="2"
       />
       <path
         d="M 11 3 A 8 8 0 0 1 19 11"
         fill="none"
-        stroke="rgb(245, 217, 122)"
+        stroke="rgb(var(--tj-accent-primary))"
         strokeWidth="2"
         strokeLinecap="round"
       />
@@ -473,13 +474,13 @@ function ViewButton({
       disabled={disabled}
       className="flex-1 px-2 py-1.5 font-serif text-[11px] tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-35 disabled:cursor-not-allowed"
       style={{
-        color: active ? 'rgb(20, 16, 12)' : 'rgba(245, 217, 122, 0.92)',
+        color: active ? 'rgb(20, 16, 12)' : 'rgba(var(--tj-accent-primary), 0.92)',
         background: active
-          ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
-          : 'rgba(245, 217, 122, 0.04)',
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+          : 'rgba(var(--tj-accent-primary), 0.04)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.55)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.32)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.55)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
         clipPath:
           'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
       }}
@@ -494,16 +495,16 @@ function RawTextPanel({ raw }: { raw: string }) {
     <div className="px-3 pb-3">
       <div
         className="mb-1 font-serif text-[10px] tracking-[0.3em]"
-        style={{ color: 'rgba(245, 217, 122, 0.6)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.6)' }}
       >
         ◆ 原始信息
       </div>
       <pre
         className="whitespace-pre-wrap break-all text-[11px] leading-relaxed px-2.5 py-2 max-h-72 overflow-y-auto"
         style={{
-          color: 'rgba(220, 210, 180, 0.92)',
-          background: 'rgba(8, 7, 9, 0.5)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+          color: 'rgba(var(--tj-text-primary), 0.94)',
+          background: 'rgb(var(--tj-bubble))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.7)',
           clipPath: smallClip,
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }}
@@ -519,7 +520,7 @@ function CommandsPanel({ batch }: { batch: 变量命令批次 }) {
     <div className="px-3 pb-3 space-y-1.5">
       <div
         className="mb-1 font-serif text-[10px] tracking-[0.3em]"
-        style={{ color: 'rgba(245, 217, 122, 0.6)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.6)' }}
       >
         ◆ 变量命令
       </div>
@@ -527,8 +528,8 @@ function CommandsPanel({ batch }: { batch: 变量命令批次 }) {
         <div
           className="text-[10px] italic px-2 py-1.5"
           style={{
-            color: 'rgba(200, 188, 158, 0.7)',
-            background: 'rgba(245, 217, 122, 0.04)',
+            color: 'rgba(var(--tj-text-primary), 0.82)',
+            background: 'rgb(var(--tj-bubble))',
             clipPath: smallClip,
           }}
         >
@@ -536,7 +537,7 @@ function CommandsPanel({ batch }: { batch: 变量命令批次 }) {
         </div>
       )}
       {batch.results.length === 0 && (
-        <div className="text-[10px] text-center py-2" style={{ color: 'rgba(160, 148, 120, 0.5)' }}>
+        <div className="text-[10px] text-center py-2" style={{ color: 'rgba(var(--tj-text-primary), 0.72)' }}>
           本回合无变量变化
         </div>
       )}
@@ -569,8 +570,8 @@ function CommandRow({ result }: { result: 变量命令结果 }) {
     <div
       className="px-2 py-1.5 text-[11px]"
       style={{
-        background: ok ? 'rgba(8, 7, 9, 0.4)' : 'rgba(120, 30, 30, 0.15)',
-        boxShadow: `inset 0 0 0 1px ${ok ? 'rgba(245, 217, 122, 0.1)' : 'rgba(255, 130, 130, 0.3)'}`,
+        background: ok ? 'rgb(var(--tj-bubble))' : 'rgba(176, 72, 68, 0.1)',
+        boxShadow: `inset 0 0 0 1px ${ok ? 'rgba(var(--tj-border), 0.68)' : 'rgba(176, 72, 68, 0.34)'}`,
         clipPath: smallClip,
       }}
       title={reason}
@@ -587,12 +588,12 @@ function CommandRow({ result }: { result: 变量命令结果 }) {
         >
           {style.label}
         </span>
-        <span className="font-mono break-all min-w-0 flex-1" style={{ color: 'rgba(220, 210, 180, 0.95)' }}>
+        <span className="font-mono break-all min-w-0 flex-1" style={{ color: 'rgba(var(--tj-text-primary), 0.94)' }}>
           {command.key}
           {valuePreview && (
             <>
-              <span style={{ color: 'rgba(160, 148, 120, 0.6)' }}> = </span>
-              <span style={{ color: ok ? 'rgba(245, 217, 122, 0.9)' : 'rgba(255, 180, 180, 0.85)' }}>{valuePreview}</span>
+              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}> = </span>
+              <span style={{ color: ok ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(176, 72, 68, 0.9)' }}>{valuePreview}</span>
             </>
           )}
         </span>

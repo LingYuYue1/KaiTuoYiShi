@@ -6,12 +6,27 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录, NPC头像槽位 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import { saveSetting } from '@/services/dbService';
-import { 添加图片到相册, 创建相册图片条目, fileToDataUrl, 挂载NPC头像图片, 挂载NPC立绘图片, 挂载NPC_NSFW部位图片, 读取相册条目地址 } from '@/utils/albumActions';
+import {
+  添加图片到相册,
+  创建相册图片条目,
+  fileToDataUrl,
+  挂载NPC头像图片,
+  挂载NPC立绘图片,
+  挂载NPC_NSFW部位图片,
+  挂载旅人图片,
+  卸载NPC头像图片,
+  卸载NPC立绘图片,
+  卸载NPC_NSFW部位图片,
+  卸载旅人图片,
+  读取相册条目地址,
+} from '@/utils/albumActions';
 import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt } from '@/utils/imagePromptRules';
 import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
+import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
+import { matchCanonical } from '@/data/canonicalCharacters';
 
 interface AlbumPanelProps {
   album: 相册系统;
@@ -37,6 +52,19 @@ type LibraryStatusFilter = 'all' | 'ready' | 'empty';
 
 const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
+const panelSurface = 'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface),0.74), rgba(var(--tj-bg-primary),0.92))';
+const insetSurface = 'linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))';
+const imageWellSurface = 'linear-gradient(135deg, rgba(var(--tj-surface-strong),0.8), rgba(var(--tj-bg-primary),0.88))';
+const titleColor = 'rgb(var(--tj-ui-title))';
+const bodyColor = 'rgba(var(--tj-ui-body),0.94)';
+const mutedColor = 'rgba(var(--tj-ui-muted),0.78)';
+const faintColor = 'rgba(var(--tj-ui-faint),0.66)';
+const activeTextColor = 'rgb(var(--tj-ui-active-text))';
+const accentColor = 'rgb(var(--tj-accent-primary))';
+const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
+const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))';
+const quietAccentSurface = 'rgba(var(--tj-accent-primary),0.055)';
+const cardSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel),0.74), rgba(var(--tj-ui-panel-strong),0.68))';
 
 const tabs: { id: WorkTab; label: string; desc: string }[] = [
   { id: 'manual', label: '手动生成', desc: '按用途生成' },
@@ -99,19 +127,19 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const activeEntry = album.entries.find((entry) => entry.id === activeEntryId) ?? album.entries[0] ?? null;
   const companions = npcs.filter((npc) => npc.阶位 === 'companion');
   const libraryRecords = useMemo(
-    () => buildCharacterLibraryRecords(npcs, album, assetMap, nsfwVisible && showNsfw),
-    [npcs, album, assetMap, nsfwVisible, showNsfw],
+    () => buildCharacterLibraryRecords(traveler, npcs, album, assetMap, nsfwVisible && showNsfw),
+    [traveler, npcs, album, assetMap, nsfwVisible, showNsfw],
   );
   const filteredLibraryRecords = useMemo(() => {
     const query = libraryNameFilter.trim().toLowerCase();
     return libraryRecords.filter((record) => {
-      if (query && !record.npc.姓名.toLowerCase().includes(query) && !(record.npc.别名 ?? '').toLowerCase().includes(query)) return false;
+      if (query && !record.name.toLowerCase().includes(query) && !(record.alias ?? '').toLowerCase().includes(query)) return false;
       if (libraryStatusFilter === 'ready' && record.imageCount <= 0) return false;
       if (libraryStatusFilter === 'empty' && record.imageCount > 0) return false;
       return true;
     });
   }, [libraryNameFilter, libraryRecords, libraryStatusFilter]);
-  const activeLibraryRecord = filteredLibraryRecords.find((record) => record.npc.id === libraryNpcId) ?? filteredLibraryRecords[0] ?? null;
+  const activeLibraryRecord = filteredLibraryRecords.find((record) => record.id === libraryNpcId) ?? filteredLibraryRecords[0] ?? null;
   const stats = useMemo(() => ({
     total: album.entries.length,
     generated: album.assets.filter((asset) => asset.source === 'generated').length,
@@ -296,43 +324,98 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     void handleGenerate(target.nsfw, { prompt: target.prompt, negativePrompt: target.negativePrompt, title: '重试生成' });
   };
 
-  const mountSelectedToNpc = (params: { npcId: string; entryId: string; src: string; slot: 图片槽位 }) => {
+  const mountSelectedToCharacter = (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => {
     const entry = album.entries.find((item) => item.id === params.entryId);
-    if (!entry) return;
+    const isBuiltinEntry = params.entryId.startsWith('builtin-avatar:');
+    if (!entry && !isBuiltinEntry) return;
+    const sourceLabel = isBuiltinEntry ? '原著' : '文生图';
+    if (params.targetKind === 'traveler') {
+      if (params.slot === 'portrait') {
+        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: '立绘', src: params.src }));
+      } else if (params.slot.toString().startsWith('nsfw_')) {
+        setMessage('旅人档案暂不支持挂载 NSFW 部位图。');
+        return;
+      } else {
+        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: params.src }));
+      }
+      if (entry) {
+        onAlbumChange((prev) => ({
+          ...prev,
+          entries: prev.entries.map((item) =>
+            item.id === params.entryId
+              ? {
+                  ...item,
+                  targetType: 'traveler',
+                  targetId: params.targetId,
+                  slot: params.slot,
+                }
+              : item,
+          ),
+        }));
+      }
+      setMessage(`已挂载到 ${slotLabel(params.slot)}。`);
+      return;
+    }
     if (params.slot === 'portrait') {
-      onNpcChange((prev) => 挂载NPC立绘图片(prev, { npcId: params.npcId, src: params.src, source: '文生图' }));
+      onNpcChange((prev) => 挂载NPC立绘图片(prev, { npcId: params.targetId, src: params.src, source: sourceLabel }));
     } else if (params.slot === 'nsfw_female_chest') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.npcId, slot: '女性胸部', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性胸部', src: params.src }));
     } else if (params.slot === 'nsfw_female_genital') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.npcId, slot: '女性私处', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性私处', src: params.src }));
     } else if (params.slot === 'nsfw_male_genital') {
       if (!gameSettings.enableMaleNsfwArchive) {
         setMessage('男性 NSFW 档案未开启，不能挂载男性器部位图。');
         return;
       }
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.npcId, slot: '男性器', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '男性器', src: params.src }));
     } else if (params.slot === 'nsfw_rear') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.npcId, slot: '后庭', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '后庭', src: params.src }));
     } else if (params.slot === 'nsfw_body_reference') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.npcId, slot: '体态参考', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '体态参考', src: params.src }));
     } else {
-      onNpcChange((prev) => 挂载NPC头像图片(prev, { npcId: params.npcId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: params.src, source: '文生图' }));
+      onNpcChange((prev) => 挂载NPC头像图片(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: params.src, source: sourceLabel }));
     }
-    onAlbumChange((prev) => ({
-      ...prev,
-      entries: prev.entries.map((item) =>
-        item.id === params.entryId
-          ? {
-              ...item,
-              targetType: params.slot.toString().startsWith('nsfw_') ? 'nsfw_part' : 'npc',
-              targetId: params.npcId,
-              slot: params.slot,
-              nsfw: item.nsfw || params.slot.toString().startsWith('nsfw_'),
-            }
-          : item,
-      ),
-    }));
+    if (entry) {
+      onAlbumChange((prev) => ({
+        ...prev,
+        entries: prev.entries.map((item) =>
+          item.id === params.entryId
+            ? {
+                ...item,
+                targetType: params.slot.toString().startsWith('nsfw_') ? 'nsfw_part' : 'npc',
+                targetId: params.targetId,
+                slot: params.slot,
+                nsfw: item.nsfw || params.slot.toString().startsWith('nsfw_'),
+              }
+            : item,
+        ),
+      }));
+    }
     setMessage(`已挂载到 ${slotLabel(params.slot)}。`);
+  };
+
+  const unmountCharacterSlot = (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; slot: MountedImageSlot }) => {
+    if (params.targetKind === 'traveler') {
+      onTravelerChange((prev) => 卸载旅人图片(prev, { slot: mapMountedSlotToTravelerSlot(params.slot.key) }));
+      setMessage(`已卸下${params.slot.label}。`);
+      return;
+    }
+    if (params.slot.key === 'portrait') {
+      onNpcChange((prev) => 卸载NPC立绘图片(prev, { npcId: params.targetId }));
+    } else if (params.slot.key === 'nsfw-female-chest') {
+      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性胸部' }));
+    } else if (params.slot.key === 'nsfw-female-genital') {
+      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性私处' }));
+    } else if (params.slot.key === 'nsfw-male-genital') {
+      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '男性器' }));
+    } else if (params.slot.key === 'nsfw-rear') {
+      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '后庭' }));
+    } else if (params.slot.key === 'nsfw-body-reference') {
+      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '体态参考' }));
+    } else {
+      onNpcChange((prev) => 卸载NPC头像图片(prev, { npcId: params.targetId, slot: mapMountedSlotToNpcAvatarSlot(params.slot.key) }));
+    }
+    setMessage(`已卸下${params.slot.label}。`);
   };
 
   const saveNpcAnchor = (npcId: string, patch: NonNullable<NPC记录['图像档案']>['角色锚点']) => {
@@ -541,14 +624,15 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 onSelectNpc={setLibraryNpcId}
                 onSelectEntry={setActiveEntryId}
                 onCreate={() => setActiveTab('manual')}
-                onMount={mountSelectedToNpc}
+                onMount={mountSelectedToCharacter}
+                onUnmount={unmountCharacterSlot}
                 maleNsfwEnabled={gameSettings.enableMaleNsfwArchive}
               />
             )}
             {activeTab === 'anchor' && (
               <CharacterAnchorWorkspace
-                records={filteredLibraryRecords}
-                activeRecord={activeLibraryRecord}
+                records={filteredLibraryRecords.filter(isNpcLibraryRecord)}
+                activeRecord={isNpcLibraryRecord(activeLibraryRecord) ? activeLibraryRecord : null}
                 activeNpcId={libraryNpcId}
                 onSelectNpc={setLibraryNpcId}
                 requirement={anchorRequirement}
@@ -643,7 +727,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
             )}
           </main>
           {message && (
-            <div className="mt-4 px-3 py-2 text-xs leading-relaxed" style={{ color: message.includes('失败') ? 'rgba(255,180,180,0.9)' : 'rgba(165,230,170,0.88)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: smallClip }}>
+            <div className="mt-4 px-3 py-2 text-xs leading-relaxed" style={{ color: message.includes('失败') ? 'rgba(255,180,180,0.9)' : 'rgba(165,230,170,0.88)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
               {message}
             </div>
           )}
@@ -655,14 +739,14 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
 
 function Header({ stats }: { stats: { total: number; generated: number; nsfw: number; failed: number } }) {
   return (
-    <div className="px-4 py-3" style={{ background: 'linear-gradient(135deg, rgba(20,18,14,0.92), rgba(8,7,9,0.96))', boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.24)', clipPath: cardClip }}>
+    <div className="px-4 py-3" style={{ background: panelSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), 0.55), 0 10px 24px rgba(var(--tj-shadow), 0.08)', clipPath: cardClip }}>
       <div className="space-y-4">
         <div>
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center font-serif text-sm" style={{ color: '#1a1325', background: 'linear-gradient(135deg, #f5d97a, #c4a35a)', clipPath: smallClip }}>▧</span>
+            <span className="flex h-9 w-9 items-center justify-center font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-active-text))', background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))', clipPath: smallClip }}>▧</span>
             <div>
-              <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: '#fff4d4' }}>相册</div>
-              <div className="mt-0.5 text-[11px] uppercase tracking-[0.22em]" style={{ color: 'rgba(245,217,122,0.55)' }}>Image Dock</div>
+              <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>相册</div>
+              <div className="mt-0.5 text-[11px] uppercase tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.55)' }}>Image Dock</div>
             </div>
           </div>
         </div>
@@ -682,8 +766,8 @@ function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab; setAct
     <Panel title="工作台">
       <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
         {tabs.map((tab) => (
-          <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className="group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-all" style={{ color: activeTab === tab.id ? '#1a1325' : 'rgba(245,217,122,0.86)', background: activeTab === tab.id ? 'linear-gradient(135deg, #f5d97a, #c4a35a)' : 'rgba(245,217,122,0.055)', boxShadow: activeTab === tab.id ? 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 16px rgba(245,217,122,0.12)' : 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: smallClip }}>
-            <span className="h-2 w-2 flex-shrink-0" style={{ background: activeTab === tab.id ? '#1a1325' : 'rgba(245,217,122,0.52)', clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)' }} />
+          <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className="group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-all" style={{ color: activeTab === tab.id ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-accent-primary),0.86)', background: activeTab === tab.id ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))' : 'rgba(var(--tj-accent-primary),0.055)', boxShadow: activeTab === tab.id ? 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 16px rgba(var(--tj-accent-primary),0.12)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
+            <span className="h-2 w-2 flex-shrink-0" style={{ background: activeTab === tab.id ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-accent-primary),0.52)', clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)' }} />
             <span className="min-w-0 flex-1">
               <span className="block font-serif text-sm font-bold tracking-[0.16em]">{tab.label}</span>
               <span className="mt-0.5 block truncate text-[11px] opacity-70">{tab.desc}</span>
@@ -707,10 +791,10 @@ function NsfwVisibilityToggle({
   if (!nsfwVisible) return null;
   return (
     <Panel title="NSFW 资源">
-      <div className="mb-3 text-xs leading-relaxed" style={{ color: 'rgba(200,188,158,0.66)' }}>
+      <div className="mb-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>
         成人图片与普通图片隔离显示，关闭后不会出现在资源库和角色槽位。
       </div>
-      <button type="button" onClick={() => setShowNsfw(!showNsfw)} className="w-full px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: showNsfw ? '#24121b' : 'rgba(241,183,206,0.88)', background: showNsfw ? 'linear-gradient(135deg, #f1b7ce, #c989a6)' : 'rgba(214,142,174,0.08)', boxShadow: 'inset 0 0 0 1px rgba(214,142,174,0.28)', clipPath: smallClip }}>
+      <button type="button" onClick={() => setShowNsfw(!showNsfw)} className="w-full px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: showNsfw ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-nsfw),0.88)', background: showNsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), #c989a6)' : 'rgba(var(--tj-ui-nsfw),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.28)', clipPath: smallClip }}>
         {showNsfw ? '隐藏 NSFW 图片' : '显示 NSFW 图片'}
       </button>
     </Panel>
@@ -729,6 +813,7 @@ function CharacterLibraryWorkspace({
   onSelectEntry,
   onCreate,
   onMount,
+  onUnmount,
   maleNsfwEnabled,
 }: {
   records: CharacterLibraryRecord[];
@@ -741,7 +826,8 @@ function CharacterLibraryWorkspace({
   onSelectNpc: (id: string) => void;
   onSelectEntry: (id: string) => void;
   onCreate: () => void;
-  onMount: (params: { npcId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
+  onMount: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
+  onUnmount: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; slot: MountedImageSlot }) => void;
   maleNsfwEnabled: boolean;
 }) {
   const totals = useMemo(() => ({
@@ -770,9 +856,9 @@ function CharacterLibraryWorkspace({
               <option value="empty">暂无图片</option>
             </select>
           </Field>
-          <div className="px-3 py-2" style={{ background: 'rgba(8,7,9,0.36)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.1)', clipPath: smallClip }}>
-            <div className="text-[11px]" style={{ color: 'rgba(245,217,122,0.62)' }}>当前统计</div>
-            <div className="mt-1 font-serif text-sm tracking-[0.12em]" style={{ color: '#fff4d4' }}>
+          <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.1)', clipPath: smallClip }}>
+            <div className="text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.62)' }}>当前统计</div>
+            <div className="mt-1 font-serif text-sm tracking-[0.12em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>
               {totals.current} 个角色 / {totals.images} 张图
             </div>
           </div>
@@ -785,10 +871,10 @@ function CharacterLibraryWorkspace({
             {records.length ? (
               records.map((record) => (
                 <CharacterArchiveButton
-                  key={record.npc.id}
+                  key={record.id}
                   record={record}
-                  active={activeRecord?.npc.id === record.npc.id}
-                  onClick={() => onSelectNpc(record.npc.id)}
+                  active={activeRecord?.id === record.id}
+                  onClick={() => onSelectNpc(record.id)}
                 />
               ))
             ) : (
@@ -797,20 +883,24 @@ function CharacterLibraryWorkspace({
           </div>
         </Panel>
 
-        <Panel title={activeRecord ? `${activeRecord.npc.姓名} · 图像档案` : '图像档案'}>
+        <Panel title={activeRecord ? `${activeRecord.name} · 图像档案` : '图像档案'}>
           {activeRecord ? (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                 {activeRecord.slots.map((slot) => (
-                  <MountedSlotPreview key={slot.key} label={slot.label} src={slot.src} nsfw={slot.nsfw} />
+                  <MountedSlotPreview
+                    key={slot.key}
+                    slot={slot}
+                    onUnmount={() => onUnmount({ targetKind: activeRecord.kind, targetId: activeRecord.id, slot })}
+                  />
                 ))}
               </div>
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(245,217,122,0.82)' }}>
+                  <div className="font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>
                     相册资源
                   </div>
-                  <button type="button" onClick={onCreate} className="px-3 py-1.5 font-serif text-xs tracking-[0.16em]" style={{ color: '#1a1325', background: 'linear-gradient(135deg, #f5d97a, #c4a35a)', clipPath: smallClip }}>
+                  <button type="button" onClick={onCreate} className="px-3 py-1.5 font-serif text-xs tracking-[0.16em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))', clipPath: smallClip }}>
                     生成 / 导入
                   </button>
                 </div>
@@ -821,7 +911,8 @@ function CharacterLibraryWorkspace({
                         key={entry.entry.id}
                         item={entry}
                         active={activeEntryId === entry.entry.id}
-                        npcId={activeRecord.npc.id}
+                        targetKind={activeRecord.kind}
+                        targetId={activeRecord.id}
                         maleNsfwEnabled={maleNsfwEnabled}
                         onClick={() => onSelectEntry(entry.entry.id)}
                         onMount={onMount}
@@ -843,39 +934,44 @@ function CharacterLibraryWorkspace({
 }
 
 function CharacterArchiveButton({ record, active, onClick }: { record: CharacterLibraryRecord; active: boolean; onClick: () => void }) {
-  const avatar = 读取NPC头像(record.npc, '档案') || record.slots.find((slot) => slot.src)?.src;
+  const avatar = record.avatar || record.slots.find((slot) => slot.src)?.src;
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full min-w-0 items-center gap-3 px-3 py-3 text-left transition-all hover:bg-[rgba(245,217,122,0.07)]"
+      className="flex w-full min-w-0 items-center gap-3 px-3 py-3 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.07)]"
       style={{
-        background: active ? 'linear-gradient(90deg, rgba(245,217,122,0.16), rgba(245,217,122,0.04))' : 'rgba(8,7,9,0.36)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(245,217,122,0.58)' : 'inset 0 0 0 1px rgba(245,217,122,0.12)',
+        background: active ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.16), rgba(var(--tj-accent-primary),0.04))' : 'rgba(var(--tj-ui-panel-strong),0.36)',
+        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.58)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
         clipPath: smallClip,
       }}
     >
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: 'rgba(245,217,122,0.08)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.28)' }}>
-        {avatar ? <img src={avatar} alt={record.npc.姓名} className="h-full w-full object-cover" /> : <span className="font-serif text-sm" style={{ color: 'rgba(245,217,122,0.72)' }}>{record.npc.姓名.slice(0, 1)}</span>}
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: 'rgba(var(--tj-accent-primary),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)' }}>
+        {avatar ? <img src={avatar} alt={record.name} className="h-full w-full object-cover" /> : <span className="font-serif text-sm" style={{ color: 'rgba(var(--tj-accent-primary),0.72)' }}>{record.name.slice(0, 1)}</span>}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: '#fff4d4' }}>{record.npc.姓名}</div>
-        <div className="mt-0.5 truncate text-[11px]" style={{ color: 'rgba(200,188,158,0.66)' }}>
-          已装 {record.mountedCount} / 资源 {record.imageCount}
+        <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{record.name}</div>
+        <div className="mt-0.5 truncate text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>
+          已装 {record.mountedCount} / 资源 {record.resourceCount}
         </div>
       </div>
     </button>
   );
 }
 
-function MountedSlotPreview({ label, src, nsfw }: { label: string; src?: string; nsfw?: boolean }) {
+function MountedSlotPreview({ slot, onUnmount }: { slot: MountedImageSlot; onUnmount: () => void }) {
   return (
-    <div className="overflow-hidden" style={{ background: nsfw ? 'rgba(214,142,174,0.055)' : 'rgba(245,217,122,0.035)', boxShadow: nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.2)' : 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: smallClip }}>
-      <div className="aspect-[4/3] bg-black/30">
-        {src ? <img src={src} alt={label} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(180,168,140,0.58)' }}>待写入</div>}
+    <div className="overflow-hidden" style={{ background: slot.nsfw ? 'rgba(var(--tj-ui-nsfw),0.055)' : 'rgba(var(--tj-accent-primary),0.035)', boxShadow: slot.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.2)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
+      <div className="aspect-[4/3] ">
+        {slot.src ? <img src={slot.src} alt={slot.label} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-faint),0.58)' }}>待写入</div>}
       </div>
-      <div className="px-3 py-2">
-        <div className="truncate font-serif text-xs font-bold tracking-[0.14em]" style={{ color: nsfw ? '#f1b7ce' : '#fff4d4' }}>{label}</div>
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <div className="truncate font-serif text-xs font-bold tracking-[0.14em]" style={{ color: slot.nsfw ? 'rgb(var(--tj-ui-nsfw))' : 'rgb(var(--tj-ui-title))' }}>{slot.label}</div>
+        {slot.src && (
+          <button type="button" onClick={onUnmount} className="shrink-0 px-2 py-1 font-serif text-[10px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-danger),0.9)', background: 'rgba(var(--tj-danger),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.22)', clipPath: smallClip }}>
+            卸下
+          </button>
+        )}
       </div>
     </div>
   );
@@ -892,8 +988,8 @@ function CharacterAnchorWorkspace({
   onDeleteAnchor,
   onExtractAnchor,
 }: {
-  records: CharacterLibraryRecord[];
-  activeRecord: CharacterLibraryRecord | null;
+  records: NpcLibraryRecord[];
+  activeRecord: NpcLibraryRecord | null;
   activeNpcId: string;
   onSelectNpc: (id: string) => void;
   requirement: string;
@@ -925,24 +1021,24 @@ function CharacterAnchorWorkspace({
                   onClick={() => onSelectNpc(record.npc.id)}
                   className="w-full px-3 py-3 text-left transition-all"
                   style={{
-                    background: active ? 'linear-gradient(90deg, rgba(245,217,122,0.16), rgba(245,217,122,0.04))' : 'rgba(8,7,9,0.36)',
-                    boxShadow: active ? 'inset 0 0 0 1px rgba(245,217,122,0.58)' : 'inset 0 0 0 1px rgba(245,217,122,0.12)',
+                    background: active ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.16), rgba(var(--tj-accent-primary),0.04))' : 'rgba(var(--tj-ui-panel-strong),0.36)',
+                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.58)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
                     clipPath: smallClip,
                   }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: '#fff4d4' }}>{record.npc.姓名}</div>
-                      <div className="mt-1 text-[11px]" style={{ color: 'rgba(200,188,158,0.62)' }}>
+                      <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{record.npc.姓名}</div>
+                      <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.62)' }}>
                         {hasAnchor ? anchor?.名称 || '角色锚点' : '未建立锚点'}
                       </div>
                     </div>
-                    <span className="shrink-0 px-2 py-1 text-[10px] tracking-[0.12em]" style={{ color: hasAnchor ? '#1a1325' : 'rgba(200,188,158,0.66)', background: hasAnchor ? 'linear-gradient(135deg, #f5d97a, #c4a35a)' : 'rgba(245,217,122,0.06)', clipPath: smallClip }}>
+                    <span className="shrink-0 px-2 py-1 text-[10px] tracking-[0.12em]" style={{ color: hasAnchor ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-muted),0.66)', background: hasAnchor ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))' : 'rgba(var(--tj-accent-primary),0.06)', clipPath: smallClip }}>
                       {hasAnchor ? (anchor?.是否启用 === false ? '停用' : '启用') : '空'}
                     </span>
                   </div>
                   {anchor?.场景生图自动注入 && (
-                    <div className="mt-2 text-[10px] tracking-[0.14em]" style={{ color: 'rgba(245,217,122,0.7)' }}>场景联动</div>
+                    <div className="mt-2 text-[10px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary),0.7)' }}>场景联动</div>
                   )}
                 </button>
               );
@@ -973,9 +1069,9 @@ function CharacterAnchorWorkspace({
 
 function AnchorStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="px-3 py-2" style={{ background: 'rgba(8,7,9,0.36)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.1)', clipPath: smallClip }}>
-      <div className="text-[10px] tracking-[0.14em]" style={{ color: 'rgba(245,217,122,0.62)' }}>{label}</div>
-      <div className="mt-1 font-serif text-base font-bold" style={{ color: '#fff4d4' }}>{value}</div>
+    <div className="px-3 py-2" style={{ background: insetSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.62)', clipPath: smallClip }}>
+      <div className="text-[10px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary),0.62)' }}>{label}</div>
+      <div className="mt-1 font-serif text-base font-bold" style={{ color: 'rgb(var(--tj-ui-title))' }}>{value}</div>
     </div>
   );
 }
@@ -1024,11 +1120,11 @@ function CharacterAnchorPanel({
   });
 
   return (
-    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(0,0,0,0.22)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: smallClip }}>
+    <div className="space-y-3 px-3 py-3" style={{ background: cardSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.58)', clipPath: smallClip }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.88)' }}>角色锚点管理</div>
-          <div className="mt-1 text-[11px]" style={{ color: 'rgba(200,188,158,0.64)' }}>角色锚点用于稳定 NPC 外观，每名角色只保留一个锚点。</div>
+          <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>角色锚点管理</div>
+          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.64)' }}>角色锚点用于稳定 NPC 外观，每名角色只保留一个锚点。</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={onExtract}>AI提取锚点</Button>
@@ -1069,14 +1165,14 @@ function AnchorToggle({ label, desc, checked, onChange }: { label: string; desc:
       type="button"
       onClick={() => onChange(!checked)}
       className="flex items-center justify-between gap-3 px-3 py-2 text-left"
-      style={{ background: checked ? 'rgba(245,217,122,0.08)' : 'rgba(8,7,9,0.36)', boxShadow: checked ? 'inset 0 0 0 1px rgba(245,217,122,0.28)' : 'inset 0 0 0 1px rgba(245,217,122,0.12)', clipPath: smallClip }}
+      style={{ background: checked ? 'rgba(var(--tj-accent-primary),0.08)' : 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: checked ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}
     >
       <span className="min-w-0">
-        <span className="block font-serif text-xs font-bold tracking-[0.14em]" style={{ color: checked ? '#fff4d4' : 'rgba(220,208,178,0.74)' }}>{label}</span>
-        <span className="mt-0.5 block truncate text-[10px]" style={{ color: 'rgba(200,188,158,0.58)' }}>{desc}</span>
+        <span className="block font-serif text-xs font-bold tracking-[0.14em]" style={{ color: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.74)' }}>{label}</span>
+        <span className="mt-0.5 block truncate text-[10px]" style={{ color: 'rgba(var(--tj-ui-muted),0.58)' }}>{desc}</span>
       </span>
-      <span className="h-5 w-9 shrink-0 rounded-full p-0.5" style={{ background: checked ? 'rgba(245,217,122,0.36)' : 'rgba(120,120,130,0.28)' }}>
-        <span className="block h-4 w-4 rounded-full transition-all" style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)', background: checked ? '#fff4d4' : 'rgba(220,220,230,0.7)' }} />
+      <span className="h-5 w-9 shrink-0 rounded-full p-0.5" style={{ background: checked ? 'rgba(var(--tj-accent-primary),0.36)' : 'rgba(120,120,130,0.28)' }}>
+        <span className="block h-4 w-4 rounded-full transition-all" style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)', background: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(220,220,230,0.7)' }} />
       </span>
     </button>
   );
@@ -1085,38 +1181,41 @@ function AnchorToggle({ label, desc, checked, onChange }: { label: string; desc:
 function CharacterEntryCard({
   item,
   active,
-  npcId,
+  targetKind,
+  targetId,
   maleNsfwEnabled,
   onClick,
   onMount,
 }: {
   item: CharacterLibraryEntry;
   active: boolean;
-  npcId: string;
+  targetKind: CharacterLibraryRecord['kind'];
+  targetId: string;
   maleNsfwEnabled: boolean;
   onClick: () => void;
-  onMount: (params: { npcId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
+  onMount: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
 }) {
-  const mountSlots = getMountSlotsForEntry(item.entry, maleNsfwEnabled);
+  const mountSlots = getMountSlotsForEntry(item.entry, maleNsfwEnabled, targetKind);
   return (
     <div
       className="group overflow-hidden text-left transition-all"
       style={{
-        background: 'rgba(16, 14, 16, 0.52)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(245,217,122,0.78), 0 0 18px rgba(245,217,122,0.1)' : item.entry.nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.32)' : 'inset 0 0 0 1px rgba(245,217,122,0.16)',
+        background: 'rgba(var(--tj-ui-panel), 0.52)',
+        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.78), 0 0 18px rgba(var(--tj-accent-primary),0.1)' : item.entry.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
         clipPath: cardClip,
       }}
     >
       <button type="button" onClick={onClick} className="block w-full text-left">
-        <div className="aspect-[4/3] bg-black/25">
-          {item.src ? <img src={item.src} alt={item.entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center text-3xl" style={{ color: 'rgba(245,217,122,0.28)' }}>✧</div>}
+        <div className="aspect-[4/3] ">
+          {item.src ? <img src={item.src} alt={item.entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center text-3xl" style={{ color: 'rgba(var(--tj-accent-primary),0.28)' }}>✧</div>}
         </div>
       </button>
       <div className="space-y-2 px-3 py-2">
-        <div className="truncate font-serif text-sm" style={{ color: '#fff4d4' }}>{item.entry.title}</div>
-        <div className="mt-1 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'rgba(200,188,158,0.68)' }}>
+        <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{item.entry.title}</div>
+        <div className="mt-1 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>
           <span>{slotLabel(item.entry.slot)}</span>
-          {item.entry.nsfw && <span style={{ color: '#f1b7ce' }}>NSFW</span>}
+          {item.sourceLabel && <span style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>{item.sourceLabel}</span>}
+          {item.entry.nsfw && <span style={{ color: 'rgb(var(--tj-ui-nsfw))' }}>NSFW</span>}
         </div>
         <div className="grid grid-cols-2 gap-1.5">
           {mountSlots.map((slot) => (
@@ -1124,12 +1223,12 @@ function CharacterEntryCard({
               key={slot.value}
               type="button"
               disabled={!item.src}
-              onClick={() => onMount({ npcId, entryId: item.entry.id, src: item.src, slot: slot.value })}
+              onClick={() => onMount({ targetKind, targetId, entryId: item.entry.id, src: item.src, slot: slot.value })}
               className="px-2 py-1.5 font-serif text-[11px] tracking-[0.1em] transition-all disabled:opacity-40"
               style={{
-                color: slot.nsfw ? '#f1b7ce' : 'rgba(245,217,122,0.9)',
-                background: slot.nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(245,217,122,0.055)',
-                boxShadow: slot.nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.24)' : 'inset 0 0 0 1px rgba(245,217,122,0.2)',
+                color: slot.nsfw ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-accent-primary),0.9)',
+                background: slot.nsfw ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-accent-primary),0.055)',
+                boxShadow: slot.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.24)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.2)',
                 clipPath: smallClip,
               }}
             >
@@ -1142,7 +1241,15 @@ function CharacterEntryCard({
   );
 }
 
-function getMountSlotsForEntry(entry: 相册条目, maleNsfwEnabled: boolean): Array<{ value: 图片槽位; label: string; nsfw?: boolean }> {
+function getMountSlotsForEntry(entry: 相册条目, maleNsfwEnabled: boolean, targetKind: CharacterLibraryRecord['kind'] = 'npc'): Array<{ value: 图片槽位; label: string; nsfw?: boolean }> {
+  if (targetKind === 'traveler') {
+    return [
+      { value: 'avatar_profile', label: '档案' },
+      { value: 'avatar_story', label: '正文' },
+      { value: 'avatar_phone', label: '手机' },
+      { value: 'portrait', label: '立绘' },
+    ];
+  }
   if (entry.nsfw || entry.targetType === 'nsfw_part') {
     return [
       { value: 'nsfw_female_chest', label: '胸部', nsfw: true },
@@ -1162,9 +1269,9 @@ function getMountSlotsForEntry(entry: 相册条目, maleNsfwEnabled: boolean): A
 
 function EmptyLibraryBox({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-none border border-dashed px-6 text-center" style={{ borderColor: 'rgba(95,115,150,0.34)', color: 'rgba(160,148,120,0.72)' }}>
+    <div className="flex min-h-[280px] items-center justify-center rounded-none border border-dashed px-6 text-center" style={{ borderColor: 'rgba(95,115,150,0.34)', color: 'rgba(var(--tj-ui-faint),0.72)' }}>
       <div>
-        <div className="font-serif text-base tracking-[0.18em]" style={{ color: '#fff4d4' }}>{title}</div>
+        <div className="font-serif text-base tracking-[0.18em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{title}</div>
         <div className="mt-3 text-sm leading-relaxed" style={{ color: 'rgba(160,168,185,0.72)' }}>{desc}</div>
       </div>
     </div>
@@ -1174,11 +1281,11 @@ function EmptyLibraryBox({ title, desc }: { title: string; desc: string }) {
 function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: { entries: 相册条目[]; assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>; activeId?: string; onSelect: (id: string) => void; onCreate: () => void }) {
   if (entries.length === 0) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center px-4 py-16 text-center" style={{ color: 'rgba(160, 148, 120, 0.72)', background: 'linear-gradient(180deg, rgba(16,14,16,0.45), rgba(8,7,9,0.62))', boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)', clipPath: cardClip }}>
+      <div className="flex min-h-[360px] items-center justify-center px-4 py-16 text-center" style={{ color: 'rgba(var(--tj-ui-faint), 0.72)', background: 'linear-gradient(180deg, rgba(var(--tj-ui-panel),0.45), rgba(var(--tj-ui-panel-strong),0.62))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)', clipPath: cardClip }}>
         <div>
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center font-serif text-2xl" style={{ color: 'rgba(245,217,122,0.78)', background: 'rgba(245,217,122,0.06)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.24)', clipPath: smallClip }}>▧</div>
-          <div className="font-serif text-base tracking-[0.24em]" style={{ color: '#fff4d4' }}>暂无图片</div>
-          <button type="button" onClick={onCreate} className="mt-5 px-5 py-2.5 font-serif text-xs font-bold tracking-[0.2em]" style={{ color: '#1a1325', background: 'linear-gradient(135deg, #f5d97a, #c4a35a)', boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 16px rgba(245,217,122,0.12)', clipPath: smallClip }}>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center font-serif text-2xl" style={{ color: 'rgba(var(--tj-accent-primary),0.78)', background: 'rgba(var(--tj-accent-primary),0.06)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)', clipPath: smallClip }}>▧</div>
+          <div className="font-serif text-base tracking-[0.24em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>暂无图片</div>
+          <button type="button" onClick={onCreate} className="mt-5 px-5 py-2.5 font-serif text-xs font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))', boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 16px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
             生成 / 导入
           </button>
         </div>
@@ -1191,15 +1298,15 @@ function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: { entrie
         const asset = assetMap.get(entry.assetId);
         const src = asset?.dataUrl || asset?.url || asset?.localRef || '';
         return (
-          <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="group overflow-hidden text-left transition-all" style={{ background: 'rgba(16, 14, 16, 0.52)', boxShadow: activeId === entry.id ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.78), 0 0 18px rgba(245,217,122,0.1)' : entry.nsfw ? 'inset 0 0 0 1px rgba(214, 142, 174, 0.32)' : 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)', clipPath: cardClip }}>
-            <div className="aspect-[4/3] bg-black/25">
-              {src ? <img src={src} alt={entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center text-3xl" style={{ color: 'rgba(245, 217, 122, 0.28)' }}>✧</div>}
+          <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="group overflow-hidden text-left transition-all" style={{ background: 'rgba(var(--tj-ui-panel), 0.52)', boxShadow: activeId === entry.id ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.78), 0 0 18px rgba(var(--tj-accent-primary),0.1)' : entry.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.32)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)', clipPath: cardClip }}>
+            <div className="aspect-[4/3] ">
+              {src ? <img src={src} alt={entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center text-3xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.28)' }}>✧</div>}
             </div>
             <div className="px-3 py-2">
-              <div className="truncate font-serif text-sm" style={{ color: '#fff4d4' }}>{entry.title}</div>
-              <div className="mt-1 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.68)' }}>
+              <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{entry.title}</div>
+              <div className="mt-1 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted), 0.68)' }}>
                 <span>{slotLabel(entry.slot)}</span>
-                {entry.nsfw && <span style={{ color: '#f1b7ce' }}>NSFW</span>}
+                {entry.nsfw && <span style={{ color: 'rgb(var(--tj-ui-nsfw))' }}>NSFW</span>}
               </div>
             </div>
           </button>
@@ -1242,13 +1349,13 @@ function CreateWorkspace(props: {
                   onClick={() => props.setGenerateTarget(target.id)}
                   className="px-3 py-3 text-left transition-all"
                   style={{
-                    color: props.generateTarget === target.id ? '#1a1325' : target.nsfw ? 'rgba(241,183,206,0.9)' : 'rgba(220,208,178,0.82)',
+                    color: props.generateTarget === target.id ? 'rgb(var(--tj-ui-active-text))' : target.nsfw ? 'rgba(var(--tj-ui-nsfw),0.9)' : 'rgba(var(--tj-ui-muted),0.82)',
                     background: props.generateTarget === target.id
-                      ? target.nsfw ? 'linear-gradient(135deg, #f1b7ce, #c989a6)' : 'linear-gradient(135deg, #f5d97a, #c4a35a)'
-                      : target.nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(8,7,9,0.36)',
+                      ? target.nsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), #c989a6)' : 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))'
+                      : target.nsfw ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-ui-panel-strong),0.36)',
                     boxShadow: props.generateTarget === target.id
-                      ? 'inset 0 0 0 1px rgba(255,245,200,0.42), 0 0 12px rgba(245,217,122,0.1)'
-                      : target.nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.24)' : 'inset 0 0 0 1px rgba(245,217,122,0.12)',
+                      ? 'inset 0 0 0 1px rgba(255,245,200,0.42), 0 0 12px rgba(var(--tj-accent-primary),0.1)'
+                      : target.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.24)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1280,7 +1387,7 @@ function CreateWorkspace(props: {
             <textarea rows={4} value={props.sceneText} onChange={(e) => props.setSceneText(e.target.value)} placeholder="写清地点、时间、人物站位、想要画面像纯场景还是故事快照。" className="kaituo-input w-full resize-y px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
           </Field>
         ) : props.currentTarget.targetType === 'traveler' ? (
-          <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: 'rgba(220,208,178,0.72)', background: 'rgba(245,217,122,0.045)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)', clipPath: smallClip }}>
+          <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)', background: 'rgba(var(--tj-accent-primary),0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
             当前用途会读取旅人档案中的姓名、性别、身份、外貌、性格、命途与能力生成草稿。
           </div>
         ) : (
@@ -1311,12 +1418,12 @@ function CreateWorkspace(props: {
       </Panel>
       <div className="space-y-4">
         <Panel title="上传图片">
-          <div className="text-xs leading-relaxed" style={{ color: 'rgba(200,188,158,0.66)' }}>本地图片会直接进入相册，之后可选中并挂载到伙伴头像。</div>
+          <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>本地图片会直接进入相册，之后可选中并挂载到伙伴头像。</div>
           <Field label="上传标题"><input value={props.uploadTitle} onChange={(e) => props.setUploadTitle(e.target.value)} className="kaituo-input w-full px-2 py-1.5 text-xs" style={{ clipPath: smallClip }} /></Field>
-          <input type="file" accept="image/*" onChange={(e) => props.onUpload(e.target.files?.[0] ?? null)} className="block w-full text-xs" style={{ color: 'rgba(220,208,178,0.72)' }} />
+          <input type="file" accept="image/*" onChange={(e) => props.onUpload(e.target.files?.[0] ?? null)} className="block w-full text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }} />
         </Panel>
         <Panel title="远程图片">
-          <div className="text-xs leading-relaxed" style={{ color: 'rgba(200,188,158,0.66)' }}>适合粘贴外部图片链接。部署到网站后，远程图片是否能显示取决于图片源是否允许跨站访问。</div>
+          <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>适合粘贴外部图片链接。部署到网站后，远程图片是否能显示取决于图片源是否允许跨站访问。</div>
           <Field label="图片 URL"><input value={props.remoteUrl} onChange={(e) => props.setRemoteUrl(e.target.value)} className="kaituo-input w-full px-2 py-1.5 text-xs font-mono" style={{ clipPath: smallClip }} /></Field>
           <Field label="标题"><input value={props.urlTitle} onChange={(e) => props.setUrlTitle(e.target.value)} className="kaituo-input w-full px-2 py-1.5 text-xs" style={{ clipPath: smallClip }} /></Field>
           <Button onClick={props.onRemote}>加入远程图片</Button>
@@ -1330,7 +1437,7 @@ function CreateWorkspace(props: {
 function QueueWorkspace({ tasks, onRetry }: { tasks: 图片生成任务[]; onRetry: (task?: 图片生成任务) => void }) {
   if (!tasks.length) {
     return (
-      <div className="px-4 py-16 text-center" style={{ color: 'rgba(160,148,120,0.72)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.15)', clipPath: cardClip }}>
+      <div className="px-4 py-16 text-center" style={{ color: 'rgba(var(--tj-ui-faint),0.72)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)', clipPath: cardClip }}>
         <div className="font-serif text-sm tracking-[0.24em]">暂无生成任务</div>
       </div>
     );
@@ -1338,13 +1445,13 @@ function QueueWorkspace({ tasks, onRetry }: { tasks: 图片生成任务[]; onRet
   return (
     <div className="space-y-3">
       {tasks.map((task) => (
-        <div key={task.id} className="px-4 py-3" style={{ background: 'rgba(16,14,16,0.48)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: cardClip }}>
+        <div key={task.id} className="px-4 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.48)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: cardClip }}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="truncate font-serif text-sm" style={{ color: '#fff4d4' }}>{task.prompt || '未命名任务'}</div>
-              <div className="mt-1 text-xs" style={{ color: 'rgba(200,188,158,0.68)' }}>{task.backend} / {slotLabel(task.slot)}{task.dimensions ? ` / ${task.dimensions}` : ''}</div>
+              <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{task.prompt || '未命名任务'}</div>
+              <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>{task.backend} / {slotLabel(task.slot)}{task.dimensions ? ` / ${task.dimensions}` : ''}</div>
             </div>
-            <span className="text-xs" style={{ color: task.status === 'failed' ? 'rgba(255,170,170,0.9)' : task.status === 'success' ? 'rgba(165,230,170,0.9)' : 'rgba(245,217,122,0.78)' }}>{statusLabel(task.status)}</span>
+            <span className="text-xs" style={{ color: task.status === 'failed' ? 'rgba(255,170,170,0.9)' : task.status === 'success' ? 'rgba(165,230,170,0.9)' : 'rgba(var(--tj-accent-primary),0.78)' }}>{statusLabel(task.status)}</span>
           </div>
           {task.error && <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(255,180,180,0.88)' }}>{task.error}</div>}
           {task.status === 'failed' && <div className="mt-3 max-w-40"><Button onClick={() => onRetry(task)}>重试此任务</Button></div>}
@@ -1360,7 +1467,7 @@ function HistoryWorkspace({ album, assetMap, onSelect }: { album: 相册系统; 
     .sort((a, b) => b.createdAt - a.createdAt);
   if (!generatedEntries.length) {
     return (
-      <div className="px-4 py-16 text-center" style={{ color: 'rgba(160,148,120,0.72)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.15)', clipPath: cardClip }}>
+      <div className="px-4 py-16 text-center" style={{ color: 'rgba(var(--tj-ui-faint),0.72)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)', clipPath: cardClip }}>
         <div className="font-serif text-sm tracking-[0.24em]">暂无图片历史</div>
       </div>
     );
@@ -1370,15 +1477,15 @@ function HistoryWorkspace({ album, assetMap, onSelect }: { album: 相册系统; 
       {generatedEntries.map((entry) => {
         const asset = assetMap.get(entry.assetId);
         return (
-          <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left" style={{ background: 'rgba(16,14,16,0.48)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)', clipPath: cardClip }}>
-            <div className="h-14 w-20 flex-shrink-0 overflow-hidden" style={{ background: 'rgba(8,7,9,0.52)', clipPath: smallClip }}>
+          <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left" style={{ background: 'rgba(var(--tj-ui-panel),0.48)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: cardClip }}>
+            <div className="h-14 w-20 flex-shrink-0 overflow-hidden" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.52)', clipPath: smallClip }}>
               {asset?.dataUrl || asset?.url || asset?.localRef ? <img src={asset.dataUrl || asset.url || asset.localRef} alt={entry.title} className="h-full w-full object-cover" /> : null}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate font-serif text-sm" style={{ color: '#fff4d4' }}>{entry.title}</div>
-              <div className="mt-1 text-xs" style={{ color: 'rgba(200,188,158,0.68)' }}>{slotLabel(entry.slot)} · {new Date(entry.createdAt).toLocaleString()}</div>
+              <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{entry.title}</div>
+              <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>{slotLabel(entry.slot)} · {new Date(entry.createdAt).toLocaleString()}</div>
             </div>
-            {entry.nsfw && <span className="text-xs" style={{ color: '#f1b7ce' }}>NSFW</span>}
+            {entry.nsfw && <span className="text-xs" style={{ color: 'rgb(var(--tj-ui-nsfw))' }}>NSFW</span>}
           </button>
         );
       })}
@@ -1390,7 +1497,7 @@ function SceneWorkspace({ imageSettings, sceneText, setSceneText, onSelectScene,
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <Panel title="场景图">
-        <div className="text-xs leading-relaxed" style={{ color: 'rgba(200,188,158,0.72)' }}>
+        <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>
           场景图适合地点、章节关键画面、新闻配图。若启用独立场景接口，会优先走场景接口。
         </div>
         <Field label="场景说明">
@@ -1422,7 +1529,7 @@ function RulesWorkspace({
   return (
     <div className="space-y-4">
       <Panel title="规则中心">
-        <div className="text-xs leading-relaxed" style={{ color: 'rgba(220,208,178,0.72)' }}>
+        <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>
           这里和设置里的文生图规则模板是同一份数据。结构对齐墨色：按 NPC、场景和场景判定三类模板分别维护当前生效规则。
         </div>
         <ImageRuleTemplateEditor rules={rules} onChange={onChange} />
@@ -1446,8 +1553,8 @@ function ManageWorkspace({ activeEntry, onDelete, onCleanup, onExport, onImport 
       <Panel title="导入导出">
         <Button onClick={onExport}>导出相册 JSON</Button>
         <label className="block cursor-pointer">
-          <div className="mb-1 text-[11px]" style={{ color: 'rgba(245,217,122,0.68)' }}>导入相册 JSON</div>
-          <div className="px-3 py-2 text-center font-serif text-xs tracking-[0.16em]" style={{ color: 'rgba(245,217,122,0.9)', background: 'rgba(245,217,122,0.055)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.28)', clipPath: smallClip }}>
+          <div className="mb-1 text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.68)' }}>导入相册 JSON</div>
+          <div className="px-3 py-2 text-center font-serif text-xs tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary),0.9)', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)', clipPath: smallClip }}>
             选择相册文件
           </div>
           <input type="file" accept="application/json,.json" onChange={(e) => onImport(e.target.files?.[0] ?? null)} className="hidden" />
@@ -1469,11 +1576,11 @@ function WorkflowGuide({ imageEnabled, currentTarget }: { imageEnabled: boolean;
 
 function GuideStep({ index, title, desc, active }: { index: string; title: string; desc: string; active: boolean }) {
   return (
-    <div className="flex items-center gap-3 px-3 py-3" style={{ background: active ? 'rgba(245,217,122,0.075)' : 'rgba(8,7,9,0.34)', boxShadow: active ? 'inset 0 0 0 1px rgba(245,217,122,0.22)' : 'inset 0 0 0 1px rgba(245,217,122,0.1)', clipPath: smallClip }}>
-      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center font-serif text-sm font-bold" style={{ color: active ? '#1a1325' : 'rgba(200,188,158,0.65)', background: active ? 'linear-gradient(135deg, #f5d97a, #c4a35a)' : 'rgba(245,217,122,0.06)', clipPath: smallClip }}>{index}</span>
+    <div className="flex items-center gap-3 px-3 py-3" style={{ background: active ? 'rgba(var(--tj-accent-primary),0.075)' : 'rgba(var(--tj-ui-panel-strong),0.34)', boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.1)', clipPath: smallClip }}>
+      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center font-serif text-sm font-bold" style={{ color: active ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-muted),0.65)', background: active ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))' : 'rgba(var(--tj-accent-primary),0.06)', clipPath: smallClip }}>{index}</span>
       <div className="min-w-0">
-        <div className="font-serif text-sm font-bold tracking-[0.12em]" style={{ color: active ? '#fff4d4' : 'rgba(220,208,178,0.72)' }}>{title}</div>
-        <div className="mt-0.5 truncate text-xs" style={{ color: 'rgba(200,188,158,0.66)' }}>{desc}</div>
+        <div className="font-serif text-sm font-bold tracking-[0.12em]" style={{ color: active ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.72)' }}>{title}</div>
+        <div className="mt-0.5 truncate text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>{desc}</div>
       </div>
     </div>
   );
@@ -1491,61 +1598,88 @@ function GenerationSummary({ target, size }: { target: typeof generateTargets[nu
 
 function MiniInfo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-2" style={{ background: 'rgba(8,7,9,0.36)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.1)', clipPath: smallClip }}>
-      <div className="text-[11px]" style={{ color: 'rgba(245,217,122,0.62)' }}>{label}</div>
-      <div className="mt-1 truncate text-xs" style={{ color: 'rgba(220,208,178,0.82)' }}>{value}</div>
+    <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.1)', clipPath: smallClip }}>
+      <div className="text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.62)' }}>{label}</div>
+      <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.82)' }}>{value}</div>
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(16,14,16,0.48)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.16)', clipPath: cardClip }}>
-      <div className="font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(245,217,122,0.82)' }}>{title}</div>
+    <div className="space-y-3 px-3 py-3" style={{ background: panelSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.68), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)),0.36)', clipPath: cardClip }}>
+      <div className="font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>{title}</div>
       {children}
     </div>
   );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="block"><div className="mb-1 text-[11px]" style={{ color: 'rgba(245,217,122,0.68)' }}>{label}</div>{children}</label>;
+  return <label className="block"><div className="mb-1 text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.68)' }}>{label}</div>{children}</label>;
 }
 
 function Button({ children, onClick, disabled = false, tone = 'normal' }: { children: ReactNode; onClick: () => void; disabled?: boolean; tone?: 'normal' | 'nsfw' }) {
-  return <button type="button" disabled={disabled} onClick={onClick} className="w-full px-3 py-2 text-xs font-serif tracking-[0.16em] disabled:opacity-45" style={{ color: tone === 'nsfw' ? '#f1b7ce' : 'rgba(245,217,122,0.9)', background: tone === 'nsfw' ? 'rgba(214,142,174,0.08)' : 'rgba(245,217,122,0.055)', boxShadow: tone === 'nsfw' ? 'inset 0 0 0 1px rgba(214,142,174,0.3)' : 'inset 0 0 0 1px rgba(245,217,122,0.28)', clipPath: smallClip }}>{children}</button>;
+  return <button type="button" disabled={disabled} onClick={onClick} className="w-full px-3 py-2 text-xs font-serif tracking-[0.16em] disabled:opacity-45" style={{ color: tone === 'nsfw' ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-accent-primary),0.9)', background: tone === 'nsfw' ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-accent-primary),0.055)', boxShadow: tone === 'nsfw' ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.3)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)', clipPath: smallClip }}>{children}</button>;
 }
 
 function Stat({ label, value, tone = 'normal' }: { label: string; value: number; tone?: 'normal' | 'nsfw' | 'danger' }) {
-  const color = tone === 'nsfw' ? '#f1b7ce' : tone === 'danger' ? 'rgba(255,180,180,0.9)' : '#f5d97a';
-  return <div className="px-2 py-2" style={{ background: 'rgba(8, 7, 9, 0.42)', boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)', clipPath: smallClip }}><div className="font-serif text-base font-bold" style={{ color }}>{value}</div><div className="text-[11px]" style={{ color: 'rgba(200, 188, 158, 0.64)' }}>{label}</div></div>;
+  const color = tone === 'nsfw' ? 'rgba(156,82,108,0.96)' : tone === 'danger' ? 'rgb(var(--tj-danger))' : 'rgb(var(--tj-accent-primary))';
+  return <div className="px-2 py-2" style={{ background: insetSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)', clipPath: smallClip }}><div className="font-serif text-base font-bold" style={{ color }}>{value}</div><div className="text-[11px] font-medium" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>{label}</div></div>;
 }
 
 function InfoLine({ label, value }: { label: string; value: string }) {
-  return <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-2"><span style={{ color: 'rgba(245,217,122,0.68)' }}>{label}</span><span className="truncate">{value}</span></div>;
+  return <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-2"><span style={{ color: 'rgba(var(--tj-accent-primary),0.68)' }}>{label}</span><span className="truncate">{value}</span></div>;
 }
 
 interface CharacterLibraryEntry {
   entry: 相册条目;
   src: string;
+  sourceLabel?: string;
 }
 
-interface CharacterLibraryRecord {
-  npc: NPC记录;
+interface MountedImageSlot {
+  key: string;
+  label: string;
+  src?: string;
+  nsfw?: boolean;
+}
+
+type CharacterLibraryRecord = TravelerLibraryRecord | NpcLibraryRecord;
+
+interface BaseCharacterLibraryRecord {
+  id: string;
+  kind: 'traveler' | 'npc';
+  name: string;
+  alias?: string;
+  avatar?: string;
   entries: CharacterLibraryEntry[];
-  slots: Array<{ key: string; label: string; src?: string; nsfw?: boolean }>;
+  slots: MountedImageSlot[];
   imageCount: number;
+  resourceCount: number;
   mountedCount: number;
 }
 
+interface TravelerLibraryRecord extends BaseCharacterLibraryRecord {
+  kind: 'traveler';
+  traveler: 角色数据结构;
+}
+
+interface NpcLibraryRecord extends BaseCharacterLibraryRecord {
+  kind: 'npc';
+  npc: NPC记录;
+}
+
 function buildCharacterLibraryRecords(
+  traveler: 角色数据结构,
   npcs: NPC记录[],
   album: 相册系统,
   assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
   includeNsfw: boolean,
 ): CharacterLibraryRecord[] {
-  return npcs
+  const travelerRecord = buildTravelerLibraryRecord(traveler, album, assetMap);
+  const npcRecords = npcs
     .filter((npc) => npc.阶位 === 'companion' || npc.原著角色)
-    .map((npc) => {
+    .map((npc): NpcLibraryRecord => {
       const slots = [
         { key: 'avatar-profile', label: '档案头像', src: 读取NPC头像(npc, '档案') },
         { key: 'avatar-story', label: '正文头像', src: 读取NPC头像(npc, '正文') },
@@ -1559,7 +1693,7 @@ function buildCharacterLibraryRecords(
           { key: 'nsfw-body-reference', label: '体态参考', src: npc.NSFW档案?.部位图片?.体态参考, nsfw: true },
         ] : []),
       ];
-      const entries = album.entries
+      const albumEntries = album.entries
         .filter((entry) => {
           if (entry.nsfw && !includeNsfw) return false;
           if (entry.targetId === npc.id) return true;
@@ -1570,22 +1704,129 @@ function buildCharacterLibraryRecords(
           entry,
           src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
         }));
+      const builtinEntries = buildBuiltinAvatarEntries(npc);
+      const entries = [...builtinEntries, ...albumEntries];
       const mountedCount = slots.filter((slot) => Boolean(slot.src)).length;
+      const resourceCount = entries.length;
       return {
+        id: npc.id,
+        kind: 'npc',
+        name: npc.姓名,
+        alias: npc.别名,
+        avatar: 读取NPC头像(npc, '档案'),
         npc,
         entries,
         slots,
-        imageCount: entries.length + mountedCount,
+        imageCount: resourceCount + mountedCount,
+        resourceCount,
         mountedCount,
       };
     })
     .sort((a, b) => b.imageCount - a.imageCount || a.npc.姓名.localeCompare(b.npc.姓名, 'zh-Hans-CN'));
+  return [travelerRecord, ...npcRecords];
+}
+
+function buildTravelerLibraryRecord(
+  traveler: 角色数据结构,
+  album: 相册系统,
+  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
+): TravelerLibraryRecord {
+  const travelerId = 'traveler';
+  const slots: MountedImageSlot[] = [
+    { key: 'traveler-avatar-profile', label: '档案头像', src: traveler.图像档案?.头像 || traveler.头像 || undefined },
+    { key: 'traveler-avatar-story', label: '正文头像', src: traveler.图像档案?.正文头像 },
+    { key: 'traveler-avatar-phone', label: '手机头像', src: traveler.图像档案?.手机头像 },
+    { key: 'traveler-portrait', label: '角色立绘', src: traveler.图像档案?.立绘 },
+  ];
+  const entries = album.entries
+    .filter((entry) => {
+      if (entry.nsfw) return false;
+      if (entry.targetType === 'traveler') return true;
+      return entry.title.includes(traveler.姓名 || '旅人') || entry.title.includes('旅人');
+    })
+    .map((entry) => ({
+      entry,
+      src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
+    }));
+  const mountedCount = slots.filter((slot) => Boolean(slot.src)).length;
+  const resourceCount = entries.length;
+  return {
+    id: travelerId,
+    kind: 'traveler',
+    name: traveler.姓名 || '旅人',
+    alias: traveler.别名,
+    avatar: traveler.图像档案?.头像 || traveler.头像 || undefined,
+    traveler,
+    entries,
+    slots,
+    imageCount: resourceCount + mountedCount,
+    resourceCount,
+    mountedCount,
+  };
+}
+
+function isNpcLibraryRecord(record: CharacterLibraryRecord | null | undefined): record is NpcLibraryRecord {
+  return record?.kind === 'npc';
+}
+
+function buildBuiltinAvatarEntries(npc: NPC记录): CharacterLibraryEntry[] {
+  const canonical = findNpcCanonicalName(npc);
+  const set = getBuiltinAvatarSet(canonical);
+  if (!set) return [];
+  return set.candidates.map((candidate): CharacterLibraryEntry => ({
+    entry: {
+      id: `builtin-avatar:${npc.id}:${candidate.id}`,
+      assetId: candidate.id,
+      title: candidate.title,
+      targetType: 'npc',
+      targetId: npc.id,
+      slot: 'avatar_profile',
+      tags: ['内置头像', set.canonicalName],
+      nsfw: false,
+      createdAt: 0,
+      note: '随包内置头像',
+    },
+    src: candidate.src,
+    sourceLabel: '内置',
+  }));
+}
+
+function findNpcCanonicalName(npc: NPC记录): string | undefined {
+  const names = [npc.姓名, npc.别名]
+    .flatMap((item) => (item ?? '').split(/[\/／|、,，]/))
+    .map((item) => item.trim())
+    .filter(Boolean);
+  for (const name of names) {
+    const canonical = matchCanonical(name);
+    if (canonical) return canonical.name;
+  }
+  return undefined;
 }
 
 function mapImageSlotToNpcAvatarSlot(slot: 图片槽位): NPC头像槽位 {
   if (slot === 'avatar_story') return '正文';
   if (slot === 'avatar_phone') return '手机';
   return '档案';
+}
+
+function mapImageSlotToTravelerSlot(slot: 图片槽位): '头像' | '正文头像' | '手机头像' | '立绘' {
+  if (slot === 'avatar_story') return '正文头像';
+  if (slot === 'avatar_phone') return '手机头像';
+  if (slot === 'portrait') return '立绘';
+  return '头像';
+}
+
+function mapMountedSlotToNpcAvatarSlot(key: string): NPC头像槽位 {
+  if (key === 'avatar-story') return '正文';
+  if (key === 'avatar-phone') return '手机';
+  return '档案';
+}
+
+function mapMountedSlotToTravelerSlot(key: string): '头像' | '正文头像' | '手机头像' | '立绘' {
+  if (key === 'traveler-avatar-story') return '正文头像';
+  if (key === 'traveler-avatar-phone') return '手机头像';
+  if (key === 'traveler-portrait') return '立绘';
+  return '头像';
 }
 
 function buildTravelerSourceText(traveler: 角色数据结构): string {
@@ -1609,7 +1850,6 @@ function buildNpcSourceText(npc: NPC记录): string {
     npc.别名 ? `别名：${npc.别名}` : '',
     npc.性别 ? `性别：${npc.性别}` : '',
     npc.原著角色 ? '原著角色：是' : '',
-    npc.阵营ID ? `阵营：${npc.阵营ID}` : '',
     npc.外貌 ? `外貌：${npc.外貌}` : '',
     npc.穿着 ? `穿着：${npc.穿着}` : '',
     npc.性格 ? `性格：${npc.性格}` : '',

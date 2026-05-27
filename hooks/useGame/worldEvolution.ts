@@ -1,4 +1,5 @@
 import type { 世界状态, 时段定义 } from '@/models/world';
+import { 推进琥珀日期 } from '@/models/world';
 import { timePeriodPresets } from '@/data/timePeriodPresets';
 
 export function switchTimePeriod(
@@ -41,7 +42,7 @@ function getDefaultTime(period: 时段定义): string {
 function incrementTime(time: string): string {
   const normalized = time.trim();
   const base = normalizeClock(normalized) || getDefaultTimeByPeriod('清晨');
-  return addMinutes(base, 180);
+  return addMinutes(base, 10);
 }
 
 function 是否跨日(before: string, after: string): boolean {
@@ -93,25 +94,4 @@ function getDefaultTimeByPeriod(periodName: string): string {
     深夜: '00:30',
   };
   return map[periodName] || '06:40';
-}
-
-function 推进琥珀日期(dateText: string): string {
-  const match = dateText.match(/^(.*?)(\d+)\.(\d{1,2})\.(\d{1,2})(.*)$/);
-  if (!match) return dateText;
-  const prefix = match[1] || '琥珀纪 ';
-  let year = Number(match[2]);
-  let month = Number(match[3]);
-  let day = Number(match[4]) + 1;
-  const suffix = match[5] || '';
-
-  if (day > 30) {
-    day = 1;
-    month += 1;
-  }
-  if (month > 12) {
-    month = 1;
-    year += 1;
-  }
-
-  return `${prefix}${year}.${month.toString().padStart(2, '0')}.${day.toString().padStart(2, '0')}${suffix}`;
 }

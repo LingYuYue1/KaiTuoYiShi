@@ -6,6 +6,7 @@
 // 2. 校验命令 → AI 输出后逐条比对，路径不在白名单的直接拒绝（防止 AI 瞎编字段）。
 
 import type { 变量命令 } from '@/models/variableCommand';
+import { matchCanonical } from '@/data/canonicalCharacters';
 import { 解析路径片段, 读取路径值 } from './variablePath';
 
 /** 变量命令允许操作的根路径，全部对应 useGameState 的一个 setter。 */
@@ -28,7 +29,6 @@ const NPC_ARRAY_ITEM_FIELDS = new Set([
   '阶位',
   '好感度',
   '关系',
-  '阵营ID',
   '同行',
   '初见回合',
   '最近回合',
@@ -175,8 +175,8 @@ const ARRAY_SCHEMA_TEMPLATES: ArraySchemaTemplate[] = [
     path: 'NPC',
     title: 'NPC[] 伙伴/路人档案对象',
     actionHint: '新角色入档使用 `push NPC = {...完整对象...}`；已有角色更新使用 `NPC[id=xxx].字段`。',
-    required: ['id', '姓名', '阶位', '好感度', '关系', '同行', '初见回合', '最近回合', '备注'],
-    recommended: ['性别', '别名', '对玩家称呼', '外貌', '穿着', '说话方式', '性格', '介绍', '同行记忆', '原著角色', '图像档案', 'NSFW档案'],
+    required: ['id', '姓名', '阶位'],
+    recommended: ['好感度', '关系', '同行', '初见回合', '最近回合', '备注', '性别', '别名', '对玩家称呼', '外貌', '穿着', '说话方式', '性格', '介绍', '同行记忆', '原著角色', '图像档案', 'NSFW档案'],
     example: '{"id":"npc_march7th","姓名":"三月七","阶位":"companion","好感度":5,"关系":"acquaintance","同行":true,"初见回合":1,"最近回合":1,"备注":["星穹列车乘员"],"原著角色":true,"外貌":"粉色短发，蓝粉渐变眼眸，少女体态轻快，常带相机。","穿着":"星穹列车风格短外套与裙装，配色明亮。","说话方式":"语速轻快，常用吐槽和感叹把紧张气氛拉回来。","性格":"活泼外向，遇事先冲上去，但会认真记住同伴的安危。","介绍":"星穹列车乘员，失去过去记忆，却以开拓的热情面对旅途。"}',
     forbidden: ['怪物、泛称敌人、一次性杂兵不要入档。', '不要重复 push 同一人物的别称或状态称呼。', '对玩家称呼不明确时写“未知”，不要写“你”“喂”等临时指代。'],
   },
@@ -413,18 +413,34 @@ function getLastPathField(rawPath: string): string | null {
   return typeof last === 'string' && !last.startsWith('[') ? last : null;
 }
 
+function joinRootPath(root: VariableRootKey, rest: string): string {
+  if (!rest) return root;
+  return rest.startsWith('[') ? `${root}${rest}` : `${root}.${rest}`;
+}
+
+function normalizeSchemaPath(path: string): string {
+  return path
+    .replace(/\.\[/g, '[')
+    .replace(/\[[^\]=]+=[^\]]+\]/g, (selector) => {
+      const eq = selector.indexOf('=');
+      const field = selector.slice(1, eq).trim();
+      return `[${field}=...]`;
+    });
+}
+
 function findSchemaTemplate(path: string): ArraySchemaTemplate | undefined {
-  return ARRAY_SCHEMA_TEMPLATES.find((template) => template.path === path);
+  const normalized = normalizeSchemaPath(path);
+  return ARRAY_SCHEMA_TEMPLATES.find((template) => template.path === path || template.path === normalized);
 }
 
 function isSchemaArrayPath(root: VariableRootKey, rest: string): boolean {
-  const fullPath = rest ? `${root}.${rest}` : root;
+  const fullPath = joinRootPath(root, rest);
   return Boolean(findSchemaTemplate(fullPath));
 }
 
 function isKnownSchemaItemField(root: VariableRootKey, rest: string): boolean {
   const arrayPath = getArrayPathBeforeSelector(rest);
-  const fullArrayPath = arrayPath ? `${root}.${arrayPath}` : root;
+  const fullArrayPath = joinRootPath(root, arrayPath);
   const template = findSchemaTemplate(fullArrayPath);
   if (!template) return false;
   const field = getLastPathField(rest);
@@ -432,17 +448,75 @@ function isKnownSchemaItemField(root: VariableRootKey, rest: string): boolean {
   return [...template.required, ...(template.recommended ?? [])].includes(field);
 }
 
-function getMissingSelectorTargetReason(root: VariableRootKey, rest: string): string | null {
-  if (!hasIdSelector(rest)) return null;
+function selectorTargetExists(rootValue: unknown, rest: string): boolean {
+  if (!hasIdSelector(rest)) return true;
   const arrayPath = getArrayPathBeforeSelector(rest);
-  const fullArrayPath = arrayPath ? `${root}.${arrayPath}` : root;
+  const selectorMatch = rest.slice(arrayPath.length).match(/^\[([^\]]+)\]/);
+  if (!selectorMatch) return true;
+  const eq = selectorMatch[1].indexOf('=');
+  if (eq < 0) return true;
+  const field = selectorMatch[1].slice(0, eq).trim();
+  const expected = selectorMatch[1].slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+  const targetArray = arrayPath ? 读取路径值(rootValue, arrayPath).value : rootValue;
+  if (!Array.isArray(targetArray)) return false;
+  return targetArray.some((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const record = item as Record<string, unknown>;
+    const candidates = field === 'id'
+      ? [record.id, record.姓名, record.name, record.名称, record.名字, record.别名]
+      : [record[field]];
+    return candidates.some((candidate) => {
+      if (typeof candidate !== 'string') return false;
+      return candidate.trim() === expected || candidate.trim().toLowerCase() === expected.toLowerCase();
+    });
+  });
+}
+
+function getMissingSelectorTargetReason(root: VariableRootKey, rest: string, rootValue: unknown): string | null {
+  if (!hasIdSelector(rest)) return null;
+  if (selectorTargetExists(rootValue, rest)) return null;
+  if (root === 'NPC' && isAutoEnsurableCanonicalNpcSelector(rest)) return null;
+  const arrayPath = getArrayPathBeforeSelector(rest);
+  const fullArrayPath = joinRootPath(root, arrayPath);
   const template = findSchemaTemplate(fullArrayPath);
   if (!template) return null;
   return `${fullArrayPath} 中找不到该 id。若这是新对象，请先使用 push ${fullArrayPath} = ${template.example}`;
 }
 
+function isAutoEnsurableCanonicalNpcSelector(rest: string): boolean {
+  const selector = rest.match(/^\[([^\]]+)\]/);
+  if (!selector) return false;
+  const eq = selector[1].indexOf('=');
+  if (eq < 0) return false;
+  const field = selector[1].slice(0, eq).trim();
+  if (field !== 'id' && field !== '姓名' && field !== '名称' && field !== '名字' && field !== '别名') return false;
+  const rawValue = selector[1].slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+  return Boolean(matchCanonical(npcSelectorValueToCanonicalName(rawValue)));
+}
+
+function npcSelectorValueToCanonicalName(value: string): string {
+  const normalized = value.replace(/^npc[_-]/i, '').toLowerCase();
+  const map: Record<string, string> = {
+    march7th: '三月七',
+    march7: '三月七',
+    march: '三月七',
+    danheng: '丹恒',
+    dan_heng: '丹恒',
+    himeko: '姬子',
+    welt: '瓦尔特',
+    pompom: '帕姆',
+    'pom-pom': '帕姆',
+    herta: '黑塔',
+    asta: '艾丝妲',
+    arlan: '阿兰',
+    stelle: '星',
+    caelus: '穹',
+  };
+  return map[normalized] ?? value;
+}
+
 function validateSchemaPushValue(root: VariableRootKey, rest: string, value: unknown): string | null {
-  const fullPath = rest ? `${root}.${rest}` : root;
+  const fullPath = joinRootPath(root, rest);
   const template = findSchemaTemplate(fullPath);
   if (!template) return null;
 
@@ -528,6 +602,9 @@ function isAwakeningProtectedPath(rawKey: string, action: 变量命令['action']
 
 function isDeprecatedProtectedPath(rawKey: string): string | null {
   const k = rawKey.trim();
+  if (/^NPC(?:\[[^\]]+\])?\.阵营ID$/.test(k)) {
+    return '独立派系/阵营变量已废弃；NPC 阵营归属只作为原著/开局资料保留，变量模型不得维护';
+  }
   if (/^NPC(?:\[[^\]]+\])?\.好感$/.test(k)) {
     return 'NPC 好感字段正式名称是 好感度，请改用 NPC[id=...].好感度';
   }
@@ -544,6 +621,9 @@ function isDeprecatedProtectedPath(rawKey: string): string | null {
 export function validateCommand(cmd: 变量命令, state: Partial<VariableState>): CommandValidation {
   if (!cmd || typeof cmd.key !== 'string') {
     return { allowed: false, reason: '命令格式错误：缺少 key' };
+  }
+  if (cmd.key.trim() === '旅人.穿着') {
+    return { allowed: false, reason: '旅人.穿着 未登记；玩家服装请合并写入 旅人.外貌，NPC 服装才写 NPC[id=...].穿着' };
   }
   // 狭间状态机 + 命途结构字段:变量模型只能读不能写,违者直接拒
   if (isAwakeningProtectedPath(cmd.key, cmd.action)) {
@@ -582,6 +662,8 @@ export function validateCommand(cmd: 变量命令, state: Partial<VariableState>
   }
 
   if (cmd.action === 'push' && isSchemaArrayPath(parsed.root, parsed.rest)) {
+    const selectorMissingReason = getMissingSelectorTargetReason(parsed.root, parsed.rest, rootValue);
+    if (selectorMissingReason) return { allowed: false, reason: selectorMissingReason };
     const schemaError = validateSchemaPushValue(parsed.root, parsed.rest, cmd.value);
     if (schemaError) return { allowed: false, reason: schemaError };
     return { allowed: true, root: parsed.root, rest: parsed.rest };
@@ -596,7 +678,7 @@ export function validateCommand(cmd: 变量命令, state: Partial<VariableState>
     return { allowed: true, root: parsed.root, rest: parsed.rest };
   }
 
-  const selectorMissingReason = getMissingSelectorTargetReason(parsed.root, parsed.rest);
+  const selectorMissingReason = getMissingSelectorTargetReason(parsed.root, parsed.rest, rootValue);
   if (selectorMissingReason) {
     return { allowed: false, reason: selectorMissingReason };
   }

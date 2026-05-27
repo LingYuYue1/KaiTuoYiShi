@@ -191,21 +191,21 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
       <div
         className="flex items-center gap-3 px-4 py-2.5"
         style={{
-          background: 'rgba(16, 14, 16, 0.55)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+          background: 'rgba(var(--tj-bg-secondary), 0.55)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
           clipPath: cardClip,
         }}
       >
         <span
           className="font-serif text-xs tracking-[0.3em]"
-          style={{ color: 'rgba(245, 217, 122, 0.85)' }}
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
         >
           ◆ 新建配置
         </span>
-        <span style={{ color: 'rgba(245, 217, 122, 0.2)' }}>|</span>
+        <span style={{ color: 'rgba(var(--tj-accent-primary), 0.2)' }}>|</span>
         <span
           className="text-xs tracking-wider"
-          style={{ color: 'rgba(200, 188, 158, 0.7)' }}
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}
         >
           供应商
         </span>
@@ -225,9 +225,9 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
           onClick={handleCreate}
           className="px-4 py-1.5 text-xs font-serif tracking-[0.25em] transition-all hover:opacity-90"
           style={{
-            background: 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))',
-            color: '#1a1325',
-            boxShadow: 'inset 0 0 0 1px rgba(255, 245, 200, 0.5)',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+            color: 'rgb(var(--tj-on-accent))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
             clipPath: smallClip,
           }}
         >
@@ -235,7 +235,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
         </button>
         <span
           className="ml-auto text-xs tracking-wider"
-          style={{ color: 'rgba(160, 148, 120, 0.6)' }}
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
         >
           共 {settings.configs.length} 个配置
         </span>
@@ -248,7 +248,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
           {settings.configs.length === 0 && (
             <div
               className="px-3 py-4 text-center text-xs"
-              style={{ color: 'rgba(160, 148, 120, 0.65)' }}
+              style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}
             >
               暂无配置
             </div>
@@ -263,28 +263,28 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                 className="block w-full px-3 py-2 text-left transition-all"
                 style={{
                   background: selected
-                    ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.14), rgba(196, 163, 90, 0.04))'
-                    : 'rgba(16, 14, 16, 0.5)',
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-secondary), 0.04))'
+                    : 'rgba(var(--tj-bg-secondary), 0.5)',
                   boxShadow: selected
-                    ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.55)'
-                    : 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                   clipPath: smallClip,
                 }}
               >
                 <div className="flex items-center gap-1.5">
-                  <span style={{ color: active ? 'rgba(245, 217, 122, 0.95)' : 'rgba(245, 217, 122, 0.35)' }}>
+                  <span style={{ color: active ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(var(--tj-accent-primary), 0.35)' }}>
                     {active ? '◆' : '◇'}
                   </span>
                   <span
                     className="truncate font-serif text-xs tracking-wider"
-                    style={{ color: selected ? 'rgb(245, 217, 122)' : 'rgb(var(--tj-text-primary))' }}
+                    style={{ color: selected ? 'rgb(var(--tj-accent-primary))' : 'rgb(var(--tj-text-primary))' }}
                   >
                     {c.name || '（未命名）'}
                   </span>
                 </div>
                 <div
                   className="ml-4 mt-0.5 truncate text-[10px] tracking-wider"
-                  style={{ color: 'rgba(200, 188, 158, 0.55)' }}
+                  style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}
                 >
                   {c.provider} · {c.model || '—'}
                 </div>
@@ -299,7 +299,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
         {!selectedConfig ? (
           <div
             className="flex h-full items-center justify-center text-sm"
-            style={{ color: 'rgba(160, 148, 120, 0.6)' }}
+            style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
           >
             请先在左侧创建并选择一个配置
           </div>
@@ -308,13 +308,13 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
             {/* 顶部操作条 */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+                <span style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
                   {settings.activeConfigId === selectedConfig.id ? '◆' : '◇'}
                 </span>
                 <span
                   className="font-serif text-sm font-bold tracking-[0.25em]"
                   style={{
-                    background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 45%, #c4a35a 100%)',
+                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
@@ -329,9 +329,9 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                     onClick={handleActivate}
                     className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))',
-                      color: '#1a1325',
-                      boxShadow: 'inset 0 0 0 1px rgba(255, 245, 200, 0.5)',
+                      background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+                      color: 'rgb(var(--tj-on-accent))',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
                       clipPath: smallClip,
                     }}
                   >
@@ -414,9 +414,9 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                     disabled={loadingModels}
                     className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
                     style={{
-                      color: 'rgba(245, 217, 122, 0.85)',
-                      boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.35)',
-                      background: 'rgba(245, 217, 122, 0.05)',
+                      color: 'rgba(var(--tj-accent-primary), 0.85)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                      background: 'rgba(var(--tj-accent-primary), 0.05)',
                       clipPath: smallClip,
                     }}
                   >
@@ -456,12 +456,12 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                         className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all"
                         style={{
                           background: active
-                            ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))'
+                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
                             : 'transparent',
-                          color: active ? '#1a1325' : 'rgba(200, 188, 158, 0.85)',
+                          color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
                           boxShadow: active
-                            ? 'inset 0 0 0 1px rgba(255, 245, 200, 0.5)'
-                            : 'inset 0 0 0 1px rgba(245, 217, 122, 0.3)',
+                            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
+                            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
                           clipPath: smallClip,
                         }}
                       >
@@ -507,18 +507,18 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
               <div
                 className="p-3 text-xs"
                 style={{
-                  background: 'rgba(245, 217, 122, 0.04)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.25)',
+                  background: 'rgba(var(--tj-accent-primary), 0.04)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
                   clipPath: smallClip,
                 }}
               >
                 <div
                   className="mb-1 font-serif tracking-[0.2em]"
-                  style={{ color: 'rgba(245, 217, 122, 0.9)' }}
+                  style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}
                 >
                   ✦ {recommendation.providerLabel} · {recommendation.modelLabel}
                 </div>
-                <div className="leading-relaxed" style={{ color: 'rgba(220, 208, 178, 0.85)' }}>
+                <div className="leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}>
                   官方最大输出：{recommendation.officialMaxOutput.toLocaleString()} · 建议档位：
                   {recommendation.suggestedSelection.toLocaleString()}
                   <br />
@@ -529,7 +529,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 inline-block text-[11px] underline-offset-2 hover:underline"
-                  style={{ color: 'rgba(245, 217, 122, 0.6)' }}
+                  style={{ color: 'rgba(var(--tj-accent-primary), 0.6)' }}
                 >
                   来源：{recommendation.sourceLabel}
                 </a>
@@ -543,9 +543,9 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                 disabled={testing}
                 className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
-                  color: 'rgba(245, 217, 122, 0.9)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
-                  background: 'rgba(245, 217, 122, 0.06)',
+                  color: 'rgba(var(--tj-accent-primary), 0.9)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+                  background: 'rgba(var(--tj-accent-primary), 0.06)',
                   clipPath: smallClip,
                 }}
               >
@@ -554,7 +554,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
               {message && (
                 <span
                   className="text-xs tracking-wider"
-                  style={{ color: message.kind === 'error' ? 'rgba(220, 120, 120, 0.9)' : 'rgba(200, 188, 158, 0.85)' }}
+                  style={{ color: message.kind === 'error' ? 'rgba(220, 120, 120, 0.9)' : 'rgba(var(--tj-text-secondary), 0.85)' }}
                 >
                   {message.text}
                 </span>
@@ -580,7 +580,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                 </div>
                 <pre
                   className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed"
-                  style={{ color: 'rgba(220, 208, 178, 0.85)' }}
+                  style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}
                 >
                   {testResult.detail}
                 </pre>
@@ -595,11 +595,11 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                 style={{
                   background: savedFlash
                     ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-                    : 'linear-gradient(135deg, rgba(245, 217, 122, 0.95), rgba(212, 177, 90, 0.95))',
-                  color: '#1a1325',
+                    : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+                  color: 'rgb(var(--tj-on-accent))',
                   boxShadow: savedFlash
                     ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
-                    : 'inset 0 0 0 1px rgba(255, 245, 200, 0.5), 0 0 18px rgba(245, 217, 122, 0.22)',
+                    : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
                   clipPath: cardClip,
                 }}
               >

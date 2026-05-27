@@ -14,6 +14,8 @@ const TAG_RULES: TagRule[] = [
   { tag: '命令', key: 'commands', aliases: ['command', 'commands', 'cmd'] },
   { tag: '动态世界', key: 'worldEvents', aliases: ['world', 'worldevent', '世界', '事件'], isArray: true },
   { tag: '行动选项', key: 'actionOptions', aliases: ['actions', 'options', 'choice', 'choices', '选项'], isArray: true },
+  { tag: '变量草稿', key: 'variableDraft', aliases: ['variableDraft', '变量候选', '变量线索', '变量摘要'] },
+  { tag: '剧情规划', key: 'storyPlan', aliases: ['storyPlan', 'storyPlanning', '剧情计划', '剧情安排', '后续规划'] },
   { tag: '触发狭间', key: 'awakenInvite', aliases: ['awakeninvite', '狭间邀请', '命途狭间触发'] },
   { tag: '狭间问答', key: 'awakenQuestions', aliases: ['awakenquestions', '命途狭间问答'] },
   { tag: '狭间评判', key: 'awakenJudgement', aliases: ['awakenjudgement', '命途狭间评判'] },

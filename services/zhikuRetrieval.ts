@@ -3,6 +3,7 @@ import type { API配置项, 智库系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { ZHIKU_CATEGORY_LABELS, 搜索智库条目 } from '@/models/zhiku';
+import { ZHIKU_COT_PROMPT } from '@/prompts/cot/zhikuCot';
 
 export interface 智库检索结果 {
   entries: 智库条目[];
@@ -164,6 +165,9 @@ export async function retrieveZhikuContextWithModel(
 
   const systemPrompt = [
     '你是原著资料中枢「智库」的召回模型。你的任务不是写正文，而是从候选资料中挑出最相关条目，供后续注入主剧情。',
+    '',
+    '## 智库思维链（内部执行，不要输出）',
+    ZHIKU_COT_PROMPT,
     '',
     sceneHints.length ? `当前开局锚点：${sceneHints.slice(0, 8).join('、')}` : '当前开局锚点：无',
     '若开局地点、当前地点或场景明显指向某一条故事线，请优先选择同区域资料，不要让空间站等通用背景抢走召回权。',

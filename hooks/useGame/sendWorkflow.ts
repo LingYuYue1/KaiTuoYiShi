@@ -12,11 +12,12 @@ import {
   upsertRecallEntry,
 } from './memoryUtils';
 import { runNewsGenerationStep } from './newsWorkflow';
-import { buildStoryProgressSuggestion } from '@/services/storyProgressService';
+import { autoAlignCanonStoryProgress, buildStoryProgressSuggestion } from '@/services/storyProgressService';
 import { 归一化世界状态 } from '@/models/world';
 import { saveGame, saveSetting } from '@/services/dbService';
 import { buildSavePayload } from './saveLoadWorkflow';
 import { parseVariableCommands, snapshotVariableState, reduceVariableCommands, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
+import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
 import type { 变量命令, 变量命令批次 } from '@/models/variableCommand';
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/services/pathService';
 import { 创建默认记忆系统设置 } from '@/models/settings';
@@ -26,6 +27,7 @@ import { retrieveYitingContextWithModel } from '@/services/yitingRetrieval';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { 创建默认智库系统设置 } from '@/models/settings';
 import { 提取NPC同行记忆文本列表, type NPC同行记忆条目 } from '@/models/npc';
+import { buildImmediateStoryReview, buildMainRecallQuery, getMainHistoryWindow } from './historyWindow';
 
 /** CoT 伪装历史：在 `user:开始任务` 后注入一条 assistant 历史，强化思考段输出习惯。
  *  内容刻意保留 `<thinking>` 段，让模型 in-context 学到「下次也要写 thinking」。 */
@@ -217,6 +219,34 @@ function splitStreamingReveal(text: string): string[] {
   return chunks;
 }
 
+function isPageHidden(): boolean {
+  return typeof document !== 'undefined' && document.hidden;
+}
+
+function waitStreamingPreviewDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0 || signal?.aborted || isPageHidden() || typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    let done = false;
+    let timer: number | undefined;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (typeof timer === 'number') window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      signal?.removeEventListener('abort', finish);
+      resolve();
+    };
+    const onVisibilityChange = () => {
+      if (isPageHidden()) finish();
+    };
+    timer = window.setTimeout(finish, ms);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    signal?.addEventListener('abort', finish, { once: true });
+  });
+}
+
 function buildRecentTurnWindowForNews(history: 聊天消息[], currentUserInput: string, currentBody: string, interval: number): string[] {
   const windowSize = Math.max(5, Math.min(10, Math.trunc(interval) || 5));
   const pairs: string[] = [];
@@ -248,6 +278,10 @@ async function revealStreamingPreview(
 ): Promise<void> {
   const chunks = splitStreamingReveal(text);
   if (!chunks.length) return;
+  if (isPageHidden()) {
+    state.setStreamingMessage(text.trim());
+    return;
+  }
   const minChunks = options?.minChunks ?? 8;
   const delayMs = options?.delayMs ?? 18;
   const revealChunks =
@@ -268,7 +302,11 @@ async function revealStreamingPreview(
     if (signal?.aborted) return;
     preview += chunk;
     state.setStreamingMessage(preview);
-    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    await waitStreamingPreviewDelay(delayMs, signal);
+    if (isPageHidden()) {
+      state.setStreamingMessage(text.trim());
+      return;
+    }
   }
 }
 
@@ -325,6 +363,7 @@ export async function executeSendWorkflow(
   state.abortControllerRef.current?.abort();
   const abortController = new AbortController();
   state.abortControllerRef.current = abortController;
+  const isCurrentWorkflow = () => state.abortControllerRef.current === abortController;
 
   deps.onBeforeSend();
   state.setLoading(true);
@@ -397,6 +436,14 @@ export async function executeSendWorkflow(
       // 当前剧情模式，用于按 storyModeGate 过滤主线世界书（4 选 1）
       storyMode: effectiveWorld.剧情模式,
     };
+    const recallQuery = buildMainRecallQuery({
+      userInput,
+      history: updatedHistory,
+      currentLocation: effectiveWorld.当前地点,
+      npcNames: state.NPC
+        .filter((npc) => npc.同行 || Number(npc.最近回合 || 0) >= Math.max(1, state.turnCount - 15))
+        .map((npc) => npc.姓名),
+    });
     let newsForPrompt = state.新闻;
     let openingNewsPreprocessed = false;
     if (isOpeningSystemTrigger && state.gameSettings.新闻系统?.enabled && state.gameSettings.新闻系统?.autoGenerate) {
@@ -432,10 +479,10 @@ export async function executeSendWorkflow(
       cancellable: yitingRecallEnabled,
     });
     const [yitingPreview, zhikuPreview] = await Promise.all([
-      yitingRecallEnabled && state.忆庭 && worldbookCtx.recentUserInput
+      yitingRecallEnabled && state.忆庭 && recallQuery
         ? retrieveYitingContextWithModel(
             state.忆庭,
-            worldbookCtx.recentUserInput,
+            recallQuery,
             state.gameSettings.记忆系统?.忆庭召回条数 ?? 8,
             state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
             config,
@@ -467,13 +514,15 @@ export async function executeSendWorkflow(
     ]);
     const memoryHint = isOpeningSystemTrigger
       ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
+      : yitingPreview?.injection
+      ? `剧情回忆已命中，已暂停普通长短期记忆注入：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
       : state.gameSettings.enableMemoryInjection
       ? `记忆上下文已注入：即时 ${state.记忆.即时记忆.length} 条 / 短期 ${state.记忆.短期记忆.length} 条 / 长期 ${state.记忆.长期记忆.length} 条`
       : '记忆上下文已跳过';
     const yitingHint = !yitingEnabled
       ? '忆庭召回已关闭'
       : yitingPreview?.entries.length
-      ? `忆庭已召回：${yitingPreview.entries.slice(0, 2).map((entry) => entry.名称 || `第${entry.回合}回合`).join('、')}`
+      ? `剧情回忆已召回：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
       : yitingRecallEnabled
         ? `忆庭已召回：${state.忆庭?.回忆档案?.length ? '无相关档案' : '当前还没有可召回档案'}`
         : `忆庭已召回：未到第${(state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) + 1}回合`;
@@ -486,6 +535,13 @@ export async function executeSendWorkflow(
       : '智库已跳过';
     state.setWorkflowHint(isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}`);
     state.setWorkflowStatus('done');
+    const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory, 12) : '';
+    const storyRecallInjection = [
+      immediateStoryReview
+        ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n')
+        : '',
+      yitingPreview?.injection ?? '',
+    ].filter((item) => item.trim()).join('\n\n');
     const systemPrompt = isOpeningSystemTrigger
       ? buildOpeningSystemPrompt(
           state.旅人,
@@ -512,14 +568,14 @@ export async function executeSendWorkflow(
           state.忆庭,
           state.手机,
           awakeningPhase,
-          yitingPreview?.injection,
-          zhikuPreview?.injection,
+          storyRecallInjection || (yitingRecallEnabled ? '' : undefined),
+          zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined,
+          Boolean(yitingPreview?.injection),
         );
 
     // 3. Prepare messages for API
     const apiMessages: 聊天消息[] = [];
-    // Include recent history for context (last 20 messages)
-    const recentHistory = updatedHistory.slice(-40);
+    const recentHistory = getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆);
     for (const msg of recentHistory) {
       // 跳过 [系统] 触发消息，避免污染 AI 上下文
       if (msg.role === 'user' && msg.content.startsWith('[系统]')) {
@@ -589,7 +645,7 @@ export async function executeSendWorkflow(
           systemPrompt,
           onDelta: (delta) => {
             streamedText += delta;
-            if (!state.gameSettings.enableStreaming) {
+            if (!state.gameSettings.enableStreaming || isPageHidden()) {
               state.setStreamingMessage(streamedText);
               return;
             }
@@ -600,12 +656,17 @@ export async function executeSendWorkflow(
                 if (abortController.signal.aborted) return;
                 previewText += chunk;
                 state.setStreamingMessage(previewText);
-                await new Promise<void>((resolve) => setTimeout(resolve, 14));
+                await waitStreamingPreviewDelay(14, abortController.signal);
+                if (isPageHidden()) {
+                  state.setStreamingMessage(streamedText);
+                  previewText = streamedText;
+                  return;
+                }
               }
             });
           },
           signal: abortController.signal,
-          streaming: state.gameSettings.enableStreaming && !forcePreviewStream,
+          streaming: state.gameSettings.enableStreaming && !forcePreviewStream && !isPageHidden(),
           repairTags: state.gameSettings.enableTagRepair,
         });
         const candidateText = (result.parsed.body?.trim() || result.fullText.trim() || streamedText.trim());
@@ -688,6 +749,11 @@ export async function executeSendWorkflow(
       parsedResponse: parsedForDisplay,
       responseDurationSec: duration,
       preTurnSnapshot,
+      debugContext: {
+        systemPrompt,
+        messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
+        recallPreview: yitingPreview?.previewText,
+      },
     });
     const finalHistory = [...updatedHistory, aiMsg];
     state.setChatHistory(finalHistory);
@@ -699,7 +765,10 @@ export async function executeSendWorkflow(
 
     // 6. Update memory
     pushQueueTask(state, 'memory', 'pending', { detail: '正在写入即时记忆并检查压缩阈值。' });
-    const rawMemory = buildImmediateMemory(userInput, displayText);
+    const rawMemory = buildImmediateMemory(userInput, [
+      result.parsed.memory?.trim() ? `本回合小结：${result.parsed.memory.trim()}` : '',
+      displayText,
+    ].filter(Boolean).join('\n\n'));
     let mem = addImmediateMemory(state.记忆, rawMemory, state.turnCount);
     const compression = await autoCompressMemorySystemWithArchivesAsync(
       mem,
@@ -780,31 +849,6 @@ export async function executeSendWorkflow(
     if (worldAfter !== state.世界) state.set世界(worldAfter);
     if (travelerAfter !== state.旅人) state.set旅人(travelerAfter);
 
-    // 8.25 正文落地自动存档：先用主流程结果写一次，避免变量校准失败/刷新页面丢进度。
-    //      变量校准成功后会在第 9 步再写一次（包含 variableOverrides）。
-    if (state.gameSettings.enableAutoSaveEveryTurn) {
-      try {
-        pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入正文落地阶段自动存档。' });
-        const interimSave = buildSavePayload(state, 'auto', {
-          chatHistory: finalHistory,
-          记忆: mem,
-          忆庭: yitingWithCompression,
-          手机: state.手机,
-          // 7/7a/7b 的 旅人/世界 修改也要写进存档,否则校准期间刷新会丢 待触发狭间。
-          旅人: travelerAfter !== state.旅人 ? travelerAfter : undefined,
-          世界: worldAfter !== state.世界 ? worldAfter : undefined,
-        });
-        await saveGame(interimSave);
-        state.setHasSave(true);
-        pushQueueTask(state, 'autosave', 'success', { detail: '正文落地阶段自动存档完成。' });
-      } catch (saveErr) {
-        console.warn('[sendWorkflow] 正文落地阶段自动存档失败：', saveErr);
-        pushQueueTask(state, 'autosave', 'failed', {
-          detail: saveErr instanceof Error ? saveErr.message : '正文落地阶段自动存档失败。',
-        });
-      }
-    }
-
     // 8.5 变量模型校准：主回复完成 → 调用独立的变量模型分析正文，把结构化命令落地。
     //     失败/超时不影响主流程，只在 console 报警。
     pushQueueTask(state, 'variable', state.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
@@ -815,6 +859,7 @@ export async function executeSendWorkflow(
       mainApiConfig: config,
       userInput,
       body: displayText,
+      variableDraft: result.parsed.variableDraft,
       turnAfter: state.turnCount + 1,
       // 本回合主流程已经更新过的切片，传入保证变量模型看到最新值
       memorySystemSnapshot: mem,
@@ -825,6 +870,9 @@ export async function executeSendWorkflow(
       signal: abortController.signal,
       allowYiting: yitingEnabled,
       });
+      if (abortController.signal.aborted || !isCurrentWorkflow()) {
+        throw new DOMException('Workflow aborted', 'AbortError');
+      }
       if (state.gameSettings.enableVariableUpdate) {
         pushQueueTask(state, 'variable', 'success', {
           detail: variableOverrides ? '变量命令已落地。' : '本回合没有可落地的变量命令。',
@@ -943,9 +991,28 @@ export async function executeSendWorkflow(
           detail: '忆庭已检索，本回合没有命中相关档案。',
         });
       }
-      // 9. Auto-save —— 用共享 buildSavePayload，传 overrides 因为 React state 此刻还没回写
+
+      const storyAlignment = autoAlignCanonStoryProgress({
+        storyWeaving: state.剧情编织,
+        turnCount: state.turnCount + 1,
+        userInput,
+        body: displayText,
+      });
+      if (storyAlignment.changed) {
+        state.set剧情编织(storyAlignment.system);
+        await saveSetting('storyWeavingSystem', storyAlignment.system);
+      }
+      const storySuggestion = storyAlignment.suggestion ?? buildStoryProgressSuggestion({
+        storyWeaving: storyAlignment.system,
+        turnCount: state.turnCount + 1,
+        userInput,
+        body: displayText,
+      });
+      state.set剧情推进建议(storySuggestion);
+
+      // 9. Auto-save —— 每回合只在后台队列收尾写一次，避免正文/变量阶段重复生成多条自动存档。
       if (state.gameSettings.enableAutoSaveEveryTurn) {
-        pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入后台队列收尾自动存档。' });
+        pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' });
         const saveData = buildSavePayload(state, 'auto', {
           chatHistory: finalHistory,
           记忆: variableOverrides?.记忆 ?? mem,
@@ -956,20 +1023,14 @@ export async function executeSendWorkflow(
           NPC: npcAfterCompression,
           新闻: newsAfterGeneration ?? variableOverrides?.新闻,
       剧情: variableOverrides?.剧情,
+      剧情编织: storyAlignment.system,
       queueTasks: state.queueTasks,
         });
       await saveGame(saveData);
-      pushQueueTask(state, 'autosave', 'success', { detail: '后台队列收尾自动存档完成。' });
+      pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' });
       state.setHasSave(true);
     }
 
-    const storySuggestion = buildStoryProgressSuggestion({
-      storyWeaving: state.剧情编织,
-      turnCount: state.turnCount + 1,
-      userInput,
-      body: displayText,
-    });
-    state.set剧情推进建议(storySuggestion);
     await saveSetting('theme', state.currentTheme);
     await saveSetting('apiSettings', state.apiSettings);
     await saveSetting('gameSettings', state.gameSettings);
@@ -997,21 +1058,23 @@ export async function executeSendWorkflow(
       });
     }
   } finally {
-    state.setLoading(false);
-    state.setStreamingMessage('');
-    if (!keepWorkflowHint) {
-      state.setWorkflowHint('');
-      state.setWorkflowStatus('');
+    if (isCurrentWorkflow()) {
+      state.setLoading(false);
+      state.setStreamingMessage('');
+      if (!keepWorkflowHint) {
+        state.setWorkflowHint('');
+        state.setWorkflowStatus('');
+      }
+      state.setPendingVariable(false);
+      if (!pendingVariableStarted) {
+        pushQueueTask(state, 'memory', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
+        pushQueueTask(state, 'variable', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
+        pushQueueTask(state, 'news', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
+        pushQueueTask(state, 'autosave', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
+      }
+      state.abortControllerRef.current = null;
+      deps.onAfterSend();
     }
-    state.setPendingVariable(false);
-    if (!pendingVariableStarted) {
-      pushQueueTask(state, 'memory', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
-      pushQueueTask(state, 'variable', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
-      pushQueueTask(state, 'news', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
-      pushQueueTask(state, 'autosave', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
-    }
-    state.abortControllerRef.current = null;
-    deps.onAfterSend();
   }
 }
 
@@ -1022,6 +1085,7 @@ interface VariableCalibrationParams {
   mainApiConfig: import('@/models/settings').API配置项;
   userInput: string;
   body: string;
+  variableDraft?: string;
   /** 主流程结束后的回合数(已 +1)。 */
   turnAfter: number;
   memorySystemSnapshot: import('@/models/memory').记忆系统;
@@ -1084,6 +1148,7 @@ async function runVariableCalibrationStep(
   try {
     const { rawText } = await callVariableModel(variableConfig, {
       body: params.body,
+      variableDraft: params.variableDraft,
       userInput: params.userInput,
       turnCount: params.turnAfter - 1, // 这条变量是给「刚结束的那回合」用的
       state: stateSnapshot,
@@ -1092,13 +1157,22 @@ async function runVariableCalibrationStep(
       signal: params.signal,
       retryCount: state.gameSettings.variableApi.retryCount ?? 2,
     });
+    if (params.signal?.aborted) return null;
 
-    const { commands, parseErrors } = parseVariableCommands(rawText);
+    const parsedFacts = parseVariableFacts(rawText);
+    const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1);
+    const parsedLegacyCommands = parseVariableCommands(rawText);
+    const commands = [...factCommands.commands, ...parsedLegacyCommands.commands];
+    const parseErrors = [
+      ...parsedFacts.parseErrors.map((reason) => `变量事实：${reason}`),
+      ...parsedLegacyCommands.parseErrors.map((reason) => `变量命令：${reason}`),
+    ];
     const { allowedCommands, rejectedCommands } = applyNsfwVariablePolicy(commands, {
       nsfwEnabled: state.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
     });
     const { results, nextState } = reduceVariableCommands(allowedCommands, stateSnapshot);
+    if (params.signal?.aborted) return null;
 
     // 解析错误也合并进 results，让玩家在面板里看到
     const errResults = parseErrors.map((reason) => ({
@@ -1106,7 +1180,12 @@ async function runVariableCalibrationStep(
       ok: false,
       reason,
     }));
-    const allResults = [...errResults, ...rejectedCommands, ...results];
+    const warningResults = factCommands.warnings.map((reason) => ({
+      command: { action: 'set' as const, key: '(事实忽略)', value: null },
+      ok: false,
+      reason,
+    }));
+    const allResults = [...errResults, ...warningResults, ...rejectedCommands, ...results];
 
     // 把整个 batch 推入历史
     const batch: 变量命令批次 = {
@@ -1116,13 +1195,21 @@ async function runVariableCalibrationStep(
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
       results: allResults,
+      report: [
+        `变量事实：${parsedFacts.facts.length} 条，生成内部命令 ${factCommands.commands.length} 条。`,
+        parsedLegacyCommands.commands.length ? `兼容旧命令：${parsedLegacyCommands.commands.length} 条。` : '兼容旧命令：0 条。',
+        factCommands.warnings.length ? `事实警告：${factCommands.warnings.length} 条。` : '事实警告：0 条。',
+        ...factCommands.notes,
+      ].join('\n'),
       rawText,
     };
     state.setVariableBatches((prev) => [...prev, batch]);
 
     // 没有任何成功命令时，无需 setState；返回空 overrides 让 save 用主流程的值
-    const anyApplied = results.some((r) => r.ok);
-    if (!anyApplied) return null;
+      const anyApplied = results.some((r) => r.ok);
+      const worldSelfHealed = nextState.世界 !== stateSnapshot.世界;
+      if (!anyApplied && !worldSelfHealed) return null;
+      if (params.signal?.aborted) return null;
 
     // 一次性提交所有切片到 React state。传 stateSnapshot 作 initialState,
     // commitVariableState 内部用引用相等过滤——变量模型没改的 root 不会 setState,

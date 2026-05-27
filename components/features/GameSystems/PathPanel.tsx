@@ -23,9 +23,9 @@ const smallClip =
 
 const panelStyle = {
   background:
-    'linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(9, 8, 10, 0.98))',
+    'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
   boxShadow:
-    'inset 0 0 0 1px rgba(245, 217, 122, 0.22), 0 18px 45px rgba(0, 0, 0, 0.22)',
+    'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
   clipPath: cardClip,
 };
 
@@ -122,15 +122,15 @@ function PathListItem({
       className="group w-full px-3 py-3 text-left transition-all"
       style={{
         background: selected
-          ? 'linear-gradient(135deg, rgba(245, 217, 122, 0.18), rgba(245, 217, 122, 0.045))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.045))'
           : walked
-            ? 'rgba(245, 217, 122, 0.055)'
-            : 'rgba(160, 148, 120, 0.04)',
+            ? 'rgba(var(--tj-accent-primary), 0.055)'
+            : 'rgba(var(--tj-text-secondary), 0.04)',
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.62), inset 3px 0 0 rgba(245, 217, 122, 0.9)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.62), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.9)'
           : walked
-            ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)'
-            : 'inset 0 0 0 1px rgba(160, 148, 120, 0.18)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)'
+            : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
         clipPath: cardClip,
       }}
     >
@@ -140,7 +140,7 @@ function PathListItem({
           <div className="flex items-center gap-2">
             <span
               className="truncate font-serif text-[15px] font-semibold tracking-[0.18em]"
-              style={{ color: walked ? '#f5d97a' : 'rgba(235, 223, 193, 0.9)' }}
+              style={{ color: walked ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.9)' }}
             >
               {def.name}
             </span>
@@ -148,7 +148,7 @@ function PathListItem({
           </div>
           <div
             className="mt-1 truncate font-serif text-[12px] tracking-[0.12em]"
-            style={{ color: 'rgba(220, 208, 178, 0.82)' }}
+            style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}
           >
             星神 {def.aeon}
           </div>
@@ -158,7 +158,7 @@ function PathListItem({
       <div className="mt-3 flex items-center justify-between gap-3">
         <span
           className="min-w-0 flex-1 truncate font-serif text-[12px] tracking-[0.16em]"
-          style={{ color: walked ? 'rgba(245, 217, 122, 0.9)' : 'rgba(170, 160, 135, 0.78)' }}
+          style={{ color: walked ? 'rgba(var(--tj-accent-primary), 0.9)' : 'rgba(170, 160, 135, 0.78)' }}
         >
           {walked ? `${PATH_STAGE_DEFS[stage].name}${originLabel ? ` · ${originLabel}` : ''}` : '未觉醒'}
         </span>
@@ -209,7 +209,7 @@ function PathDetails({
                 <p
                   key={index}
                   className="font-serif text-[13px] leading-[1.8] tracking-wider"
-                  style={{ color: index === 0 ? '#fff4d4' : 'rgba(226, 218, 196, 0.84)' }}
+                    style={{ color: index === 0 ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.86)' }}
                 >
                   {index === 0 ? `「${line}」` : line}
                 </p>
@@ -218,7 +218,7 @@ function PathDetails({
           )}
           <p
             className="font-serif text-[14px] leading-[1.85] tracking-wider"
-            style={{ color: 'rgba(226, 218, 196, 0.88)' }}
+            style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}
           >
             {def.description}
           </p>
@@ -250,19 +250,19 @@ function PathDetails({
           <>
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <div className="font-serif text-[18px] font-semibold tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+                <div className="font-serif text-[18px] font-semibold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                   {stageDef.name}
-                  <span className="ml-2 text-[13px] font-normal italic" style={{ color: 'rgba(235, 223, 193, 0.92)' }}>
+                  <span className="ml-2 text-[13px] font-normal italic" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
                     {stageDef.title}
                   </span>
                 </div>
-                <p className="mt-2 font-serif text-[14px] leading-relaxed tracking-wider" style={{ color: 'rgba(235, 223, 193, 0.94)' }}>
+                <p className="mt-2 font-serif text-[14px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.94)' }}>
                   {stageDef.blurb}
                 </p>
               </div>
-              <div className="font-serif text-[22px] font-bold" style={{ color: '#fff4d4' }}>
+              <div className="font-serif text-[22px] font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                 {progress}
-                <span className="text-[13px] font-normal" style={{ color: 'rgba(220, 208, 178, 0.82)' }}>
+                <span className="text-[13px] font-normal" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
                   /{STAGE_PROGRESS_MAX}
                 </span>
               </div>
@@ -284,11 +284,11 @@ function PathDetails({
           <button
             type="button"
             onClick={onSetPrimary}
-            className="font-serif text-[13px] tracking-[0.22em] transition-all hover:bg-[rgba(245,217,122,0.18)]"
+            className="font-serif text-[13px] tracking-[0.22em] transition-all hover:bg-[rgba(var(--tj-accent-primary),0.18)]"
             style={{
-              color: '#fff4d4',
-              background: 'rgba(245, 217, 122, 0.1)',
-              boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)',
+              color: 'rgb(var(--tj-text-primary))',
+              background: 'rgba(var(--tj-accent-primary), 0.1)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
               padding: '8px 18px',
               clipPath: smallClip,
             }}
@@ -304,11 +304,11 @@ function PathDetails({
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-4 w-[3px]" style={{ background: '#f5d97a' }} />
-      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: '#f5d97a' }}>
+      <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+      <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </span>
-      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.35), transparent)' }} />
+      <span className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.35), transparent)' }} />
     </div>
   );
 }
@@ -333,21 +333,21 @@ function PathArchiveHero({
       className="relative overflow-hidden px-5 py-5"
       style={{
         background: walked
-          ? 'radial-gradient(circle at 8% 12%, rgba(245, 217, 122, 0.26), transparent 30%), radial-gradient(circle at 92% 8%, rgba(245, 217, 122, 0.14), transparent 24%), linear-gradient(135deg, rgba(245, 217, 122, 0.12), rgba(9, 8, 10, 0.72) 48%, rgba(245, 217, 122, 0.055))'
-          : 'linear-gradient(135deg, rgba(160, 148, 120, 0.09), rgba(9, 8, 10, 0.76))',
+          ? 'radial-gradient(circle at 8% 12%, rgba(var(--tj-accent-primary), 0.12), transparent 30%), radial-gradient(circle at 92% 8%, rgba(117,214,216,0.08), transparent 24%), linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)) 54%, rgb(var(--tj-bubble)))'
+          : 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
         boxShadow: walked
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.42), 0 0 30px rgba(245, 217, 122, 0.08)'
-          : 'inset 0 0 0 1px rgba(160, 148, 120, 0.24)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 30px rgba(var(--tj-accent-primary), 0.08)'
+          : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.24)',
         clipPath: cardClip,
       }}
     >
       <div
         className="pointer-events-none absolute left-0 top-0 h-px w-full"
-        style={{ background: 'linear-gradient(90deg, rgba(245,217,122,0.85), transparent 72%)' }}
+        style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.85), transparent 72%)' }}
       />
       <div
         className="pointer-events-none absolute right-5 top-4 font-serif text-[10px] tracking-[0.42em]"
-        style={{ color: 'rgba(245, 217, 122, 0.38)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.38)' }}
       >
         PATH ARCHIVE
       </div>
@@ -359,7 +359,7 @@ function PathArchiveHero({
             <div className="flex flex-wrap items-center gap-2">
               <h3
                 className="font-serif text-[28px] font-semibold tracking-[0.28em]"
-                style={{ color: walked ? '#f5d97a' : 'rgba(235, 223, 193, 0.92)' }}
+                style={{ color: walked ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
               >
                 {def.name}
               </h3>
@@ -374,7 +374,7 @@ function PathArchiveHero({
             {def.blurb && (
               <p
                 className="mt-4 max-w-[780px] font-serif text-[16px] font-semibold leading-relaxed tracking-wider"
-                style={{ color: '#fff4d4' }}
+                style={{ color: 'rgb(var(--tj-text-primary))' }}
               >
                 {def.blurb}
               </p>
@@ -382,7 +382,7 @@ function PathArchiveHero({
             {def.intro && (
               <p
                 className="mt-2 max-w-[860px] font-serif text-[13px] leading-relaxed tracking-wider"
-                style={{ color: 'rgba(226, 218, 196, 0.84)' }}
+                style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}
               >
                 {def.intro}
               </p>
@@ -393,25 +393,25 @@ function PathArchiveHero({
         <div
           className="flex w-full shrink-0 flex-col justify-between px-4 py-3 xl:w-[210px]"
           style={{
-            background: 'rgba(5, 5, 7, 0.38)',
-            boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+            background: 'linear-gradient(135deg, rgb(var(--tj-surface-strong)), rgb(var(--tj-bubble)))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.76), inset 3px 0 0 rgba(var(--tj-accent-primary),0.38)',
             clipPath: smallClip,
           }}
         >
           <div>
-            <div className="font-serif text-[11px] tracking-[0.3em]" style={{ color: 'rgba(220, 208, 178, 0.78)' }}>
+            <div className="font-serif text-[11px] tracking-[0.3em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
               CURRENT STAGE
             </div>
-            <div className="mt-2 font-serif text-[22px] font-bold tracking-[0.18em]" style={{ color: '#f5d97a' }}>
+            <div className="mt-2 font-serif text-[22px] font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
               {walked ? stageDef.name : '未觉醒'}
             </div>
-            <div className="mt-1 font-serif text-[12px] italic tracking-wider" style={{ color: 'rgba(235, 223, 193, 0.86)' }}>
+            <div className="mt-1 font-serif text-[12px] italic tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}>
               {walked ? stageDef.title : '等待剧情触发'}
             </div>
           </div>
           <div className="mt-4">
             <MiniProgress value={progress} active={walked} />
-            <div className="mt-2 text-right font-serif text-[13px]" style={{ color: 'rgba(245, 235, 210, 0.9)' }}>
+            <div className="mt-2 text-right font-serif text-[13px]" style={{ color: 'rgba(var(--tj-text-primary), 0.9)' }}>
               {walked ? `${progress}/${STAGE_PROGRESS_MAX}` : '--/--'}
             </div>
           </div>
@@ -426,8 +426,8 @@ function PanelSection({ title, children }: { title: string; children: ReactNode 
     <section
       className="px-4 py-4"
       style={{
-        background: 'rgba(245, 217, 122, 0.035)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+        background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
         clipPath: cardClip,
       }}
     >
@@ -442,15 +442,15 @@ function MetricTile({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'rgba(245, 217, 122, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+        background: 'rgba(var(--tj-accent-primary), 0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(220, 208, 178, 0.82)' }}>
+      <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
         {label}
       </div>
-      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: '#fff4d4' }}>
+      <div className="mt-1 truncate font-serif text-[15px] font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
         {value}
       </div>
     </div>
@@ -473,13 +473,13 @@ function PathEmblem({
     <div
       className={`relative flex shrink-0 items-center justify-center font-serif ${dimension}`}
       style={{
-        color: active ? '#f5d97a' : 'rgba(245, 217, 122, 0.48)',
+        color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary), 0.48)',
         background: active
-          ? 'radial-gradient(circle, rgba(245, 217, 122, 0.16), rgba(245, 217, 122, 0.045))'
-          : 'rgba(160, 148, 120, 0.05)',
+          ? 'radial-gradient(circle, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.045))'
+          : 'rgba(var(--tj-text-secondary), 0.05)',
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.58), 0 0 20px rgba(245, 217, 122, 0.18)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.24)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 20px rgba(var(--tj-accent-primary), 0.18)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
         clipPath: smallClip,
       }}
     >
@@ -493,12 +493,12 @@ function Badge({ children, tone }: { children: ReactNode; tone: 'gold' | 'muted'
     <span
       className="inline-flex items-center px-2 py-0.5 font-serif text-[12px] tracking-[0.16em]"
       style={{
-        color: tone === 'gold' ? '#fff4d4' : 'rgba(210, 198, 168, 0.9)',
-        background: tone === 'gold' ? 'rgba(245, 217, 122, 0.16)' : 'rgba(160, 148, 120, 0.08)',
+        color: tone === 'gold' ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.78)',
+        background: tone === 'gold' ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgb(var(--tj-surface-strong))',
         boxShadow:
           tone === 'gold'
-            ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.42)'
-            : 'inset 0 0 0 1px rgba(160, 148, 120, 0.24)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42)'
+            : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.24)',
         clipPath: smallClip,
       }}
     >
@@ -513,15 +513,15 @@ function InfoPill({ label, value, tone = 'gold' }: { label: string; value: strin
     <span
       className="inline-flex items-center gap-2 px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
       style={{
-        color: cyan ? 'rgba(220, 244, 255, 0.94)' : 'rgba(245, 235, 210, 0.95)',
-        background: cyan ? 'rgba(108, 212, 255, 0.065)' : 'rgba(245, 217, 122, 0.07)',
+        color: cyan ? 'rgba(38, 105, 116, 0.96)' : 'rgba(var(--tj-text-primary), 0.94)',
+        background: cyan ? 'rgba(117, 214, 216, 0.12)' : 'rgba(var(--tj-accent-primary), 0.09)',
         boxShadow: cyan
           ? 'inset 0 0 0 1px rgba(108, 212, 255, 0.22)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
         clipPath: smallClip,
       }}
     >
-      <span style={{ color: cyan ? 'rgba(170, 226, 255, 0.72)' : 'rgba(220, 208, 178, 0.75)' }}>{label}</span>
+      <span style={{ color: cyan ? 'rgba(38, 105, 116, 0.82)' : 'rgba(var(--tj-text-secondary), 0.9)' }}>{label}</span>
       <span>{value}</span>
     </span>
   );
@@ -533,17 +533,17 @@ function TraitChip({ trait }: { trait: { 名称: string; 说明: string } }) {
       className="px-3 py-2"
       style={{
         background:
-          'linear-gradient(135deg, rgba(108, 212, 255, 0.06), rgba(245, 217, 122, 0.055))',
+          'linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-tech-wash),0.82))',
         boxShadow:
-          'inset 0 0 0 1px rgba(108, 212, 255, 0.18), inset 2px 0 0 rgba(245, 217, 122, 0.38)',
+          'inset 0 0 0 1px rgba(108, 212, 255, 0.18), inset 2px 0 0 rgba(var(--tj-accent-primary), 0.38)',
         clipPath: smallClip,
       }}
       title={trait.说明}
     >
-      <div className="font-serif text-[13px] tracking-[0.2em]" style={{ color: '#f5d97a' }}>
+      <div className="font-serif text-[13px] tracking-[0.2em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         {trait.名称}
       </div>
-      <div className="mt-1 max-w-[220px] font-serif text-[12px] leading-relaxed tracking-wider" style={{ color: 'rgba(226, 218, 196, 0.84)' }}>
+      <div className="mt-1 max-w-[220px] font-serif text-[12px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
         {trait.说明}
       </div>
     </div>
@@ -555,15 +555,15 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
     <div
       className="px-4 py-5 text-center"
       style={{
-        background: 'rgba(160, 148, 120, 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(160, 148, 120, 0.2)',
+        background: 'rgb(var(--tj-bubble))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.68)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(245, 217, 122, 0.9)' }}>
+      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
         {title}
       </div>
-      <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>
+      <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
         {text}
       </div>
     </div>
@@ -572,13 +572,13 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
 
 function MiniProgress({ value, active }: { value: number; active: boolean }) {
   return (
-    <div className="h-1.5 w-20 overflow-hidden" style={{ background: 'rgba(160, 148, 120, 0.18)' }}>
+    <div className="h-1.5 w-20 overflow-hidden" style={{ background: 'rgba(var(--tj-text-secondary), 0.18)' }}>
       <div
         className="h-full transition-all"
         style={{
           width: `${active ? (value / STAGE_PROGRESS_MAX) * 100 : 0}%`,
-          background: '#f5d97a',
-          boxShadow: '0 0 8px rgba(245, 217, 122, 0.45)',
+          background: 'rgb(var(--tj-accent-primary))',
+          boxShadow: '0 0 8px rgba(var(--tj-accent-primary), 0.45)',
         }}
       />
     </div>
@@ -597,22 +597,22 @@ function StageTimeline({ stage, progress }: { stage: 命途阶段; progress: num
             <div
               className="relative h-2 overflow-hidden"
               style={{
-                background: 'rgba(160, 148, 120, 0.14)',
+                background: 'rgba(var(--tj-text-secondary), 0.14)',
                 boxShadow: isCurrent
-                  ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.45)'
-                  : 'inset 0 0 0 1px rgba(160, 148, 120, 0.18)',
+                  ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)'
+                  : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
               }}
             >
               <div
                 className="h-full"
                 style={{
                   width: `${fill}%`,
-                  background: isPast || isCurrent ? '#f5d97a' : 'transparent',
-                  boxShadow: isCurrent ? '0 0 9px rgba(245, 217, 122, 0.55)' : undefined,
+                  background: isPast || isCurrent ? 'rgb(var(--tj-accent-primary))' : 'transparent',
+                  boxShadow: isCurrent ? '0 0 9px rgba(var(--tj-accent-primary), 0.55)' : undefined,
                 }}
               />
             </div>
-            <div className="mt-2 truncate font-serif text-[12px]" style={{ color: isCurrent ? '#f5d97a' : 'rgba(210, 198, 168, 0.78)' }}>
+            <div className="mt-2 truncate font-serif text-[12px]" style={{ color: isCurrent ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.74)' }}>
               {PATH_STAGE_DEFS[s].name}
             </div>
           </div>

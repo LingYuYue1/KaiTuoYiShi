@@ -3,12 +3,9 @@
 // v2+ 会扩充到星穹列车、仙舟、IPC、天才俱乐部等成员；当前只放第一阶段（登上列车前后）
 // 玩家最有可能遭遇的几个核心角色。
 
-import type { 阵营ID } from '@/models/journey';
-
 export interface CanonicalCharacterDef {
   name: string;
   aliases?: string[];
-  factionId?: 阵营ID;
   appearance?: string;
   personality?: string;
 }
@@ -107,7 +104,6 @@ export const CANONICAL_CHARACTERS: CanonicalCharacterDef[] = [
   {
     name: '希儿',
     aliases: ['Seele'],
-    factionId: 'star_rangers',
     appearance: '紫发暗瞳，左眼戴黑色眼罩。',
     personality: '冷峻锐利，对地下街抱有归属感。',
   },

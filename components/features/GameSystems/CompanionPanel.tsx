@@ -18,18 +18,19 @@ const smallClip =
   'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)';
 
 const panelStyle: CSSProperties = {
-  background: 'linear-gradient(180deg, rgba(245, 217, 122, 0.045), rgba(245, 217, 122, 0.018))',
-  boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)',
+  background: 'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface), 0.74), rgba(var(--tj-bg-primary), 0.92))',
+  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), 0.36)',
   clipPath: cardClip,
 };
-
-const ORGANIZATION_LABELS: Record<string, string> = {
-  genius_society: '天才俱乐部',
-  company: '星际和平公司',
-  star_rangers: '巡海游侠',
-  astral_express: '星穹列车',
-  none: '未归属',
-};
+const titleColor = 'rgb(var(--tj-ui-title))';
+const bodyColor = 'rgba(var(--tj-ui-body), 0.95)';
+const mutedColor = 'rgba(var(--tj-ui-muted), 0.82)';
+const faintColor = 'rgba(var(--tj-ui-faint), 0.74)';
+const accentColor = 'rgb(var(--tj-accent-primary))';
+const activeTextColor = 'rgb(var(--tj-ui-active-text))';
+const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
+const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
+const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
 
 export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: CompanionPanelProps) {
   const [tab, setTab] = useState<NPC阶位>('companion');
@@ -76,13 +77,13 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: 
             <div>
               <div
                 className="font-serif text-[12px] tracking-[0.3em]"
-                style={{ color: 'rgba(245, 217, 122, 0.92)' }}
+                style={{ color: accentColor }}
               >
                 人际档案
               </div>
               <div
                 className="mt-1 font-serif text-[12px] tracking-[0.12em]"
-                style={{ color: 'rgba(220, 208, 178, 0.78)' }}
+                style={{ color: mutedColor }}
               >
                 同行 {travelingCount} / 朋友 {friendCount} / 全部 {normalizedRecords.length}
               </div>
@@ -159,13 +160,13 @@ function TabButton({
       onClick={onClick}
       className="min-w-0 flex-1 whitespace-nowrap px-2.5 py-2 font-serif text-[12px] tracking-[0.18em] transition-all"
       style={{
-        color: active ? '#fff4d4' : 'rgba(220, 208, 178, 0.74)',
+        color: active ? titleColor : faintColor,
         background: active
-          ? 'linear-gradient(180deg, rgba(245, 217, 122, 0.16), rgba(245, 217, 122, 0.045))'
-          : 'rgba(245, 217, 122, 0.025)',
+          ? activeSurface
+          : 'rgba(var(--tj-accent-primary), 0.035)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.62), 0 0 14px rgba(245, 217, 122, 0.08)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.22)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.56), 0 8px 18px rgba(var(--tj-shadow), 0.08)'
+          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.46)',
         clipPath: smallClip,
       }}
     >
@@ -191,11 +192,11 @@ function NpcListItem({
       className="group flex w-full items-center gap-3 px-3 py-3 text-left transition-all hover:bg-[rgba(245,217,122,0.07)]"
       style={{
         background: selected
-          ? 'linear-gradient(90deg, rgba(245, 217, 122, 0.17), rgba(245, 217, 122, 0.045))'
-          : 'rgba(245, 217, 122, 0.028)',
+          ? activeSurface
+          : quietSurface,
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.62), inset 3px 0 0 rgba(245, 217, 122, 0.95)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.2)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.56), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.82)'
+          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.5)',
         clipPath: smallClip,
       }}
     >
@@ -204,7 +205,7 @@ function NpcListItem({
         <div className="flex items-center gap-2">
           <span
             className="truncate font-serif text-[14px] font-semibold tracking-[0.08em]"
-            style={{ color: selected ? '#fff4d4' : 'rgba(235, 223, 193, 0.96)' }}
+            style={{ color: selected ? titleColor : bodyColor }}
           >
             {npc.姓名}
           </span>
@@ -212,7 +213,7 @@ function NpcListItem({
         </div>
         <div
           className="mt-0.5 truncate font-serif text-[12px] tracking-[0.1em]"
-          style={{ color: 'rgba(180, 168, 140, 0.78)' }}
+          style={{ color: mutedColor }}
         >
           {relation}
           {npc.原著角色 ? ' / 原著' : ''}
@@ -239,10 +240,10 @@ function Avatar({
     width: size,
     height: size,
     borderRadius: '50%',
-    background: 'linear-gradient(145deg, rgba(245, 217, 122, 0.15), rgba(245, 217, 122, 0.035))',
+    background: 'linear-gradient(145deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-tech-cyan), 0.055))',
     boxShadow: selected
-      ? '0 0 0 1px rgba(245, 217, 122, 0.8), 0 0 18px rgba(245, 217, 122, 0.18)'
-      : '0 0 0 1px rgba(245, 217, 122, 0.42)',
+      ? '0 0 0 1px rgba(var(--tj-accent-primary), 0.72), 0 0 18px rgba(var(--tj-accent-primary), 0.16)'
+      : '0 0 0 1px rgba(var(--tj-border), 0.72)',
   };
 
   if (src) {
@@ -268,12 +269,12 @@ function Avatar({
       style={{
         ...style,
         fontSize: Math.max(16, Math.floor(size * 0.42)),
-        color: selected ? '#fff4d4' : 'rgba(245, 217, 122, 0.92)',
+        color: selected ? titleColor : accentColor,
       }}
     >
       <span
         className="absolute inset-[6px] rounded-full"
-        style={{ boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.16)' }}
+        style={{ boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.38)' }}
       />
       {npc.姓名.slice(0, 1)}
     </div>
@@ -307,7 +308,6 @@ function NpcDetail({
   onToggleTraveling: () => void;
   nsfwEnabled: boolean;
 }) {
-  const organizationLabel = npc.阵营ID ? ORGANIZATION_LABELS[npc.阵营ID] ?? npc.阵营ID : '未归属';
   const isCompanion = npc.阶位 === 'companion';
   const [detailTab, setDetailTab] = useState<DetailTab>('archive');
 
@@ -341,7 +341,7 @@ function NpcDetail({
               <h3
                 className="truncate font-serif text-[24px] font-semibold tracking-[0.18em]"
                 style={{
-                  background: 'linear-gradient(135deg, #fff4d4 0%, #f5d97a 58%, #c4a35a 100%)',
+                  background: 'linear-gradient(135deg, rgb(var(--tj-ui-title)) 0%, rgb(var(--tj-accent-primary)) 58%, rgb(var(--tj-accent-secondary)) 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
@@ -358,7 +358,6 @@ function NpcDetail({
             <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
               <InfoPill label="性别" value={npc.性别 || '未知'} />
               <InfoPill label="关系" value={NPC_RELATION_LABELS[npc.关系] ?? npc.关系} />
-              <InfoPill label="势力" value={organizationLabel} />
               <InfoPill label="最近" value={`第 ${npc.最近回合} 回合`} />
             </div>
 
@@ -383,7 +382,7 @@ function NpcDetail({
               )}
               <span
                 className="font-serif text-[12px] tracking-[0.12em] px-2 py-1"
-                style={{ color: 'rgba(180, 168, 140, 0.76)' }}
+                style={{ color: faintColor }}
               >
                 初见第 {npc.初见回合} 回合
               </span>
@@ -507,19 +506,19 @@ function AvatarSlotCard({
     <div
       className="flex min-w-0 items-center gap-3 px-3 py-3"
       style={{
-        background: src ? 'rgba(245, 217, 122, 0.055)' : 'rgba(245, 217, 122, 0.025)',
+        background: src ? 'rgba(var(--tj-accent-primary), 0.075)' : quietSurface,
         boxShadow: src
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.28)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.14)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)'
+          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
         clipPath: smallClip,
       }}
     >
       <Avatar npc={npc} size={42} slot={slot} selected={Boolean(src)} />
       <div className="min-w-0">
-        <div className="truncate font-serif text-[12px] font-semibold tracking-[0.16em]" style={{ color: '#fff4d4' }}>
+        <div className="truncate font-serif text-[12px] font-semibold tracking-[0.16em]" style={{ color: titleColor }}>
           {label}
         </div>
-        <div className="mt-0.5 truncate text-[10.5px] tracking-[0.12em]" style={{ color: 'rgba(180, 168, 140, 0.74)' }}>
+        <div className="mt-0.5 truncate text-[10.5px] tracking-[0.12em]" style={{ color: faintColor }}>
           {src ? description : `${description} · 待生成`}
         </div>
       </div>
@@ -538,17 +537,17 @@ function NSFWArchivePanel({ npc }: { npc: NPC记录 }) {
       <div
         className="px-4 py-4"
         style={{
-          background: 'linear-gradient(135deg, rgba(154, 94, 126, 0.13), rgba(245, 217, 122, 0.025))',
+          background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.13), rgba(var(--tj-ui-panel), 0.72))',
           boxShadow: 'inset 0 0 0 1px rgba(214, 142, 174, 0.22)',
           clipPath: smallClip,
         }}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="font-serif text-[13px] font-semibold tracking-[0.22em]" style={{ color: '#fff4d4' }}>
+            <div className="font-serif text-[13px] font-semibold tracking-[0.22em]" style={{ color: titleColor }}>
               独立档案接口
             </div>
-            <div className="mt-1 text-[11px] tracking-[0.12em]" style={{ color: 'rgba(220, 208, 178, 0.72)' }}>
+            <div className="mt-1 text-[11px] tracking-[0.12em]" style={{ color: faintColor }}>
               后续 NSFW 模式读取，普通剧情默认不调用
             </div>
           </div>
@@ -609,7 +608,7 @@ function NSFWArchivePanel({ npc }: { npc: NPC记录 }) {
           {tags.length ? (
             tags.map((tag) => <Chip key={tag} tone="silver">{tag}</Chip>)
           ) : (
-            <span className="font-serif text-[12px] italic tracking-[0.12em]" style={{ color: 'rgba(180, 168, 140, 0.72)' }}>
+            <span className="font-serif text-[12px] italic tracking-[0.12em]" style={{ color: faintColor }}>
               暂无标签，等待后续模式写入
             </span>
           )}
@@ -628,15 +627,15 @@ function PartImageSlot({ title, src }: { title: string; src?: string }) {
     <div
       className="overflow-hidden"
       style={{
-        background: src ? 'rgba(214, 142, 174, 0.075)' : 'rgba(214, 142, 174, 0.035)',
-        boxShadow: src ? 'inset 0 0 0 1px rgba(214, 142, 174, 0.28)' : 'inset 0 0 0 1px rgba(214, 142, 174, 0.12)',
+        background: src ? 'rgba(var(--tj-ui-nsfw), 0.075)' : 'rgba(var(--tj-ui-nsfw), 0.035)',
+        boxShadow: src ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.28)' : 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.12)',
         clipPath: smallClip,
       }}
     >
-      <div className="aspect-[4/3] bg-black/25">
+      <div className="aspect-[4/3]" style={{ background: 'rgba(var(--tj-ui-panel-strong), 0.58)' }}>
         {src ? <img src={src} alt={title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[11px]" style={{ color: 'rgba(220, 180, 200, 0.56)' }}>待挂载</div>}
       </div>
-      <div className="px-2 py-1.5 text-[11px]" style={{ color: '#f1b7ce' }}>{title}</div>
+      <div className="px-2 py-1.5 text-[11px]" style={{ color: nsfwColor }}>{title}</div>
     </div>
   );
 }
@@ -644,7 +643,7 @@ function PartImageSlot({ title, src }: { title: string; src?: string }) {
 function BodyArchiveSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-2 font-serif text-[12px] tracking-[0.24em]" style={{ color: 'rgba(245, 217, 122, 0.88)' }}>
+      <div className="mb-2 font-serif text-[12px] tracking-[0.24em]" style={{ color: accentColor }}>
         {title}
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -662,7 +661,7 @@ function formatNsfwAge(age: NPC_NSFW年龄确认 | undefined): string {
 
 function TagGroup({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
-    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(0,0,0,0.16)', boxShadow: 'inset 0 0 0 1px rgba(214,142,174,0.18)', clipPath: smallClip }}>
+    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.68)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.18)', clipPath: smallClip }}>
       <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(235, 190, 205, 0.82)' }}>
         {title}
       </div>
@@ -679,7 +678,7 @@ function TagGroup({ title, items, empty }: { title: string; items: string[]; emp
 
 function ArchiveField({ title, text }: { title: string; text?: string }) {
   return (
-    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(0,0,0,0.14)', boxShadow: 'inset 0 0 0 1px rgba(214,142,174,0.16)', clipPath: smallClip }}>
+    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.16)', clipPath: smallClip }}>
       <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(235, 190, 205, 0.82)' }}>
         {title}
       </div>
@@ -690,14 +689,14 @@ function ArchiveField({ title, text }: { title: string; text?: string }) {
 
 function ListBlock({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
-    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(0,0,0,0.14)', boxShadow: 'inset 0 0 0 1px rgba(214,142,174,0.16)', clipPath: smallClip }}>
+    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.16)', clipPath: smallClip }}>
       <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(235, 190, 205, 0.82)' }}>
         {title}
       </div>
       {items.length ? (
         <ul className="max-h-[180px] space-y-1.5 overflow-y-auto pr-1">
           {items.map((item, index) => (
-            <li key={`${index}-${item}`} className="font-serif text-[13px] leading-relaxed tracking-[0.06em]" style={{ color: 'rgba(235, 223, 193, 0.92)' }}>
+            <li key={`${index}-${item}`} className="font-serif text-[13px] leading-relaxed tracking-[0.06em]" style={{ color: bodyColor }}>
               {item}
             </li>
           ))}
@@ -714,18 +713,18 @@ function InfoPill({ label, value }: { label: string; value: string }) {
     <div
       className="min-w-0 px-3 py-2"
       style={{
-        background: 'rgba(0, 0, 0, 0.18)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.18)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
         clipPath: smallClip,
       }}
     >
       <div
         className="font-serif text-[11px] tracking-[0.24em]"
-        style={{ color: 'rgba(180, 168, 140, 0.78)' }}
+        style={{ color: 'rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), 0.86)' }}
       >
         {label}
       </div>
-      <div className="mt-1 truncate font-serif text-[13px] tracking-[0.08em]" style={{ color: '#fff4d4' }}>
+      <div className="mt-1 truncate font-serif text-[13px] tracking-[0.08em]" style={{ color: titleColor }}>
         {value}
       </div>
     </div>
@@ -739,10 +738,10 @@ function ActionChip({ active, onClick, children }: { active: boolean; onClick: (
       onClick={onClick}
       className="px-3 py-1.5 font-serif text-[12px] tracking-[0.16em] transition-all hover:bg-[rgba(245,217,122,0.08)]"
       style={{
-        color: active ? 'rgba(245, 217, 122, 0.96)' : 'rgba(220, 208, 178, 0.78)',
+        color: active ? accentColor : faintColor,
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(245, 217, 122, 0.52)'
-          : 'inset 0 0 0 1px rgba(245, 217, 122, 0.24)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52)'
+          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.52)',
         clipPath: smallClip,
       }}
     >
@@ -757,7 +756,7 @@ function AffinityBadge({ value }: { value: number }) {
     <div
       className="flex w-[92px] shrink-0 flex-col items-center justify-center px-3 py-3"
       style={{
-        background: 'rgba(0, 0, 0, 0.2)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))',
         boxShadow: `inset 0 0 0 1px ${tone.stroke}`,
         clipPath: cardClip,
       }}
@@ -769,7 +768,7 @@ function AffinityBadge({ value }: { value: number }) {
         {value > 0 ? '+' : ''}
         {value}
       </div>
-      <div className="mt-1 font-serif text-[11px] tracking-[0.22em]" style={{ color: 'rgba(180, 168, 140, 0.82)' }}>
+      <div className="mt-1 font-serif text-[11px] tracking-[0.22em]" style={{ color: mutedColor }}>
         好感度
       </div>
     </div>
@@ -787,8 +786,8 @@ function AffinityMeter({ value, compact = false }: { value: number; compact?: bo
       <div
         className="relative h-1.5 flex-1 overflow-hidden"
         style={{
-          background: 'rgba(0,0,0,0.35)',
-          boxShadow: 'inset 0 0 0 1px rgba(245, 217, 122, 0.15)',
+          background: 'rgba(var(--tj-surface-strong),0.72)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
         }}
       >
         <div
@@ -799,7 +798,7 @@ function AffinityMeter({ value, compact = false }: { value: number; compact?: bo
           }}
         />
       </div>
-      <span className="w-8 text-right font-mono text-[11px]" style={{ color: 'rgba(220, 208, 178, 0.86)' }}>
+      <span className="w-8 text-right font-mono text-[11px]" style={{ color: mutedColor }}>
         {value > 0 ? '+' : ''}
         {value}
       </span>
@@ -825,7 +824,7 @@ function getAffinityTone(value: number) {
   if (value >= 0) {
     return {
       color: 'rgba(222, 207, 205, 0.9)',
-      stroke: 'rgba(245, 217, 122, 0.24)',
+      stroke: 'rgba(var(--tj-border), 0.42)',
       fill: 'linear-gradient(90deg, rgba(160, 150, 150, 0.4), rgba(222, 207, 205, 0.78))',
     };
   }
@@ -848,11 +847,11 @@ function DetailBlock({ title, children }: { title: string; children: ReactNode }
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="h-3 w-[3px]" style={{ background: 'rgba(245, 217, 122, 0.82)' }} />
-      <h4 className="font-serif text-[13px] tracking-[0.26em]" style={{ color: 'rgba(245, 217, 122, 0.92)' }}>
+      <span className="h-3 w-[3px]" style={{ background: 'rgba(var(--tj-accent-primary), 0.82)' }} />
+      <h4 className="font-serif text-[13px] tracking-[0.26em]" style={{ color: accentColor }}>
         {children}
       </h4>
-      <span className="h-px flex-1" style={{ background: 'rgba(245, 217, 122, 0.16)' }} />
+      <span className="h-px flex-1" style={{ background: 'rgba(var(--tj-border), 0.46)' }} />
     </div>
   );
 }
@@ -862,7 +861,7 @@ function Paragraph({ text, placeholder, italic = false }: { text?: string; place
   return (
     <p
       className={`font-serif text-[13.5px] leading-relaxed tracking-[0.06em] ${italic ? 'italic' : ''}`}
-      style={{ color: 'rgba(235, 223, 193, 0.95)' }}
+      style={{ color: bodyColor }}
     >
       {text}
     </p>
@@ -880,9 +879,9 @@ function MemoryPanel({ npc }: { npc: NPC记录 }) {
               key={`${index}-${memory}`}
               className="px-3 py-2 font-serif text-[13px] leading-relaxed tracking-[0.06em]"
               style={{
-                color: 'rgba(235, 223, 193, 0.95)',
-                background: 'rgba(0, 0, 0, 0.18)',
-                boxShadow: 'inset 2px 0 0 rgba(245, 217, 122, 0.62), inset 0 0 0 1px rgba(245, 217, 122, 0.12)',
+                color: bodyColor,
+                background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))',
+                boxShadow: 'inset 2px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), 0.62), inset 0 0 0 1px rgba(var(--tj-border), 0.56)',
                 clipPath: smallClip,
               }}
             >
@@ -899,7 +898,7 @@ function MemoryPanel({ npc }: { npc: NPC记录 }) {
 
 function EmptyText({ text }: { text: string }) {
   return (
-    <p className="font-serif text-[12.5px] italic tracking-[0.12em]" style={{ color: 'rgba(180, 168, 140, 0.74)' }}>
+    <p className="font-serif text-[12.5px] italic tracking-[0.12em]" style={{ color: faintColor }}>
       {text}
     </p>
   );
@@ -908,8 +907,8 @@ function EmptyText({ text }: { text: string }) {
 function Chip({ tone, children }: { tone: 'gold' | 'silver'; children: ReactNode }) {
   const palette =
     tone === 'gold'
-      ? { color: 'rgba(245, 217, 122, 0.94)', stroke: 'rgba(245, 217, 122, 0.45)' }
-      : { color: 'rgba(220, 208, 178, 0.9)', stroke: 'rgba(245, 217, 122, 0.24)' };
+      ? { color: 'rgba(var(--tj-accent-primary), 0.94)', stroke: 'rgba(var(--tj-accent-primary), 0.45)' }
+      : { color: mutedColor, stroke: 'rgba(var(--tj-border), 0.54)' };
   return (
     <span
       className="px-2 py-0.5 font-serif text-[12px] tracking-[0.18em]"
@@ -923,10 +922,10 @@ function Chip({ tone, children }: { tone: 'gold' | 'silver'; children: ReactNode
 function EmptyRoster({ tab }: { tab: NPC阶位 }) {
   return (
     <div className="px-4 py-8 text-center" style={panelStyle}>
-      <div className="font-serif text-[20px]" style={{ color: 'rgba(245, 217, 122, 0.45)' }}>
+      <div className="font-serif text-[20px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.45)' }}>
         ✦
       </div>
-      <div className="mt-2 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(220, 208, 178, 0.76)' }}>
+      <div className="mt-2 font-serif text-[13px] tracking-[0.18em]" style={{ color: faintColor }}>
         {tab === 'companion' ? '尚未结识伙伴' : '尚无路人档案'}
       </div>
     </div>
@@ -937,10 +936,10 @@ function NoSelection({ tab }: { tab: NPC阶位 }) {
   return (
     <div className="flex h-full items-center justify-center px-6 text-center" style={panelStyle}>
       <div>
-        <div className="font-serif text-[28px]" style={{ color: 'rgba(245, 217, 122, 0.42)' }}>
+        <div className="font-serif text-[28px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.42)' }}>
           ✦
         </div>
-        <div className="mt-3 font-serif text-[14px] tracking-[0.22em]" style={{ color: 'rgba(220, 208, 178, 0.76)' }}>
+        <div className="mt-3 font-serif text-[14px] tracking-[0.22em]" style={{ color: faintColor }}>
           从左侧选择一位{tab === 'companion' ? '伙伴' : '路人'}
         </div>
       </div>
