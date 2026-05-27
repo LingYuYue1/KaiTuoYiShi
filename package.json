@@ -1,7 +1,7 @@
 {
   "name": "kaituoyishi",
   "private": false,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "开拓轶事：一个以 React + TypeScript 构建的崩坏：星穹铁道同人叙事 Web 应用。",
   "license": "MIT",
   "type": "module",
