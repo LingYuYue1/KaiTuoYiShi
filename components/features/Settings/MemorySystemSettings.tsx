@@ -350,7 +350,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
           value={memory.NPC记忆压缩提示词}
           onChange={(value) => patchMemory({ NPC记忆压缩提示词: value })}
           rows={7}
-          hint="只整理对应 NPC 的同行记忆，重点保留称呼变化、承诺、亏欠、信任/冲突原因与私人细节。"
+          hint="只整理对应 NPC 自身可知的同行记忆，输出一段 40-140 字自然中文，保留稳定关系、称呼、承诺、亏欠与冲突原因。"
         />
       </Section>
 

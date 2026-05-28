@@ -134,7 +134,7 @@ export function buildSystemPrompt(
 
   // ── 剧情编织（玩家导入 TXT 后生成的章节滑窗）──
   if (settings.剧情编织系统?.enabled && settings.剧情编织系统.currentWindow) {
-    const storyWeavingSection = buildStoryWeavingInjection(storyWeaving);
+    const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);
     if (storyWeavingSection) parts.push(storyWeavingSection);
   }
 
@@ -351,11 +351,12 @@ function buildToneSection(worldState: 世界状态): string {
 function buildMainStoryControlSection(worldState: 世界状态): string {
   const lines: string[] = [];
   lines.push('- 本回合属于主剧情正文，不是开局校准、命途狭间、新闻后台、手机聊天或智库检索回合。');
-  lines.push('- 主剧情优先级：玩家本回合输入 > 当前场景与上一回合钩子 > 即时剧情回顾 > 剧情回忆（强回忆优先） > 剧情编织滑窗 > 智库注入 > 新闻苗头 > 普通背景资料。');
+  lines.push('- 主剧情优先级：玩家本回合输入 > 当前场景与上一回合钩子 > 即时剧情回顾 > 剧情回忆（强回忆优先） > 当前剧情事实 > 剧情编织滑窗（仅作门禁素材） > 智库注入 > 新闻苗头 > 普通背景资料。');
   lines.push('- 若 system 中存在「# 即时剧情回顾」或「【剧情回忆】」，正文必须先承接其中的人物、地点、上一动作、未结问题和强回忆事实；不得假装角色不认识刚刚或过去已见过的人。');
   lines.push('- 如果强回忆或即时剧情回顾显示某 NPC 已与玩家见过、同行、约定或发生冲突，本回合必须沿用该关系状态；除非正文明确失忆/伪装/信息隔离，不得重新写成陌生人初见。');
   lines.push('- 智库只提供原著资料、人物、地点、道具、组织等事实锚点；剧情方向不能只靠智库百科硬推。');
-  lines.push('- 剧情编织负责“这一段故事应该如何承接和铺垫”；若存在滑窗，应优先把当前段落的目标、人物关系和未结事项写进正文。');
+  lines.push('- 剧情编织负责提供章节素材和防抢跑边界，不是强制脚本。只有滑窗门禁明确写“已满足强承接条件”时，才可把当前段目标和未结事项推到正文前台；未满足时只用作氛围、人物关系、伏笔和防重复参考。');
+  lines.push('- 若即时剧情回顾、剧情回忆、短期记忆或当前状态显示某事件已经完成、敌人已经被击退、危机已经解除，正文禁止因为剧情编织仍停在该段而重新生成同一事件或同一敌人。');
   lines.push('- 新闻系统是世界演变与事件压力，不是强制主线脚本；只在与当前地点、人物或玩家目标有关时自然露出。');
   lines.push('- 战斗不作为独立玩法抢占主剧情。发生冲突时以正文里的动作链、角色气质、战技表现和代价推进。');
   lines.push('- 命途只允许少量落在评语、气质、动作风格或代价上，不要写成巡猎直觉、毁灭本能、自动预警或身体反射。');

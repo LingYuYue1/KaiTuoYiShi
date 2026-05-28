@@ -35,6 +35,15 @@ Step 4：识别已有对象与合并
 - 原著角色优先按稳定身份入档；怪物、泛称敌人、一次性路人不入 NPC 和手机联系人。
 - 如果无法确认某段同行记忆属于哪一位 NPC，不写同行记忆，只写更稳的 world_event 或不写。
 
+Step 4.5：NPC 记忆写入审计
+- 对每个已建档且本回合与玩家发生有效互动的 NPC，判断是否需要写 npc.memory。
+- 有效互动必须产生可承接结果：新认识、称呼变化、信任/冲突变化、共同任务或危险、承诺与亏欠、物品/情报交付、离队/同行、伤势/状态改变、手机约定或亲密关系边界变化。
+- memory 必须写成“事件 -> NPC 对玩家的认知/关系影响”，不要写纯场景描写、重复寒暄或未来计划。
+- 写 memory 时同步审计 affinityDelta、relation、following、playerAddress 和稳定档案字段是否因正文事实需要刷新。
+- 未建档 NPC 先判定是否入档：原著、具名重要、任务关键、同行、累计多次互动且会再出现者可入档；一次性路人/泛称敌人/怪物不入档。
+- 新入档前必须查重合并；若已有前情，memory 要补上最关键的初遇、承诺、亏欠或冲突，避免新档案从本回合断层开始。
+- 长间隔重登场时只刷新现有字段：外貌 -> appearance，穿着 -> clothing，称呼 -> playerAddress，关系态度 -> relation/affinityDelta，同行状态 -> following；身份/所属势力/地点/伤势等没有独立 NPC 字段的长期状态，写进 intro、memory 或 world_event，不要编造 age/faction/location/injury/present 字段。
+
 Step 5：判断时间地点
 - 不要每回合机械推进时间；短对话、观察、拿取小物、原地交互通常 no_change 或不写 time。
 - 明确“几分钟后 / 绕过封锁门 / 抵达某地”才写 elapsed。

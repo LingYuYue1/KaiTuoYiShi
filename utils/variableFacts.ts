@@ -417,12 +417,19 @@ export function factsToVariableCommands(
   facts: 变量事实[],
   state: VariableState,
   turn: number,
+  options: {
+    phoneSeedsEnabled?: boolean;
+    maxPhoneSeedsPerTurn?: number;
+  } = {},
 ): { commands: 变量命令[]; notes: string[]; warnings: string[] } {
   const commands: 变量命令[] = [];
   const notes: string[] = [];
   const warnings: string[] = [];
   const world = state.世界 as 世界状态;
   const npcs = (state.NPC as NPC记录[]) ?? [];
+  const phoneSeedsEnabled = options.phoneSeedsEnabled !== false;
+  const maxPhoneSeedsPerTurn = Math.max(0, Math.trunc(options.maxPhoneSeedsPerTurn ?? 2));
+  let phoneSeedsWritten = 0;
 
   const push = (command: 变量命令) => commands.push(command);
 
@@ -576,6 +583,14 @@ export function factsToVariableCommands(
     }
 
     if (fact.type === 'phone_seed') {
+      if (!phoneSeedsEnabled || maxPhoneSeedsPerTurn <= 0) {
+        warnings.push(`phone_seed 已忽略：手机主动来信种子已关闭或每回合上限为 0（${fact.title}）。`);
+        continue;
+      }
+      if (phoneSeedsWritten >= maxPhoneSeedsPerTurn) {
+        warnings.push(`phone_seed 已忽略：本回合来信种子已达到上限 ${maxPhoneSeedsPerTurn}（${fact.title}）。`);
+        continue;
+      }
       const targetId = resolvePhoneTargetId(fact, npcs);
       if (!targetId) {
         warnings.push(`phone_seed 已忽略：缺少 targetId/targetName/relatedNpcIds，无法确定来信目标（${fact.title}）。`);
@@ -599,6 +614,7 @@ export function factsToVariableCommands(
           status: 'pending',
         },
       });
+      phoneSeedsWritten += 1;
     }
   }
 

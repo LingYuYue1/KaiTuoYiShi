@@ -234,7 +234,7 @@ export function LandingPage({
       </div>
 
       <p className="absolute bottom-4 left-0 right-0 z-10 text-center text-xs opacity-20" style={{ color: 'rgb(var(--tj-text-secondary))' }}>
-        开拓轶事 v0.2
+        开拓轶事 v0.2.1 测试版
       </p>
     </div>
   );

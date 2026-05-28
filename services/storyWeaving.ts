@@ -11,6 +11,7 @@ import type {
 import { 归一化剧情编织分段 } from '@/models/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
+import type { FilterContext } from '@/utils/worldbook';
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
 const 文本数组 = (value: unknown): string[] => (
@@ -54,7 +55,7 @@ export async function decomposeStorySegment(params: {
   return parseStoryWeavingResult(raw, params.segment);
 }
 
-export function buildStoryWeavingInjection(system?: 剧情编织系统): string {
+export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: Pick<FilterContext, 'recentUserInput' | 'recentAIResponse' | 'currentLocation'>): string {
   if (!system?.系列列表?.length) return '';
   const series = system.系列列表.find((item) => item.id === system.当前系列ID) ?? system.系列列表[0];
   if (!series || series.激活注入 === false) return '';
@@ -85,11 +86,16 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统): string 
     `启用注入：${series.激活注入 ? '是' : '否'}`,
   ].join('\n');
   const recentIndexBlock = buildRecentSegmentIndex(completed, safeIndex);
+  const gate = evaluateSegmentGate(current, ctx);
 
   const blocks = [
     '# 剧情编织滑窗',
     '',
-    '以下内容来自剧情编织系统。只有运行状态为“当前”的分段能作为本回合剧情方向；“已经历”的分段只可作为既成事实简略承接，不得重新演一遍；“未开始”的下一段只能轻微铺垫，不得提前揭露角色未知信息。若玩家已经走出不同 IF 线，以已发生剧情为准；若条目标有信息可见性，必须遵守谁知道/谁不知道/读者视角边界。',
+    '以下内容来自剧情编织系统。它是“软参考素材”，不是强制复演脚本。正文必须优先承接玩家本回合输入、即时剧情回顾、剧情回忆、当前地点和已成立事实；若这些事实显示某事件已经发生或已被解决，禁止因为滑窗仍停在该段而重演同一危机、同一敌人或同一章节事件。',
+    gate.mode === 'strong'
+      ? `本回合门禁：已满足强承接条件（${gate.reasons.join('；')}）。可以读取当前段的目标、人物关系和未结事项，但仍不得覆盖已发生事实。`
+      : `本回合门禁：未满足强承接条件（${gate.reasons.join('；') || '当前地点、玩家输入和近期上下文未明显命中当前段'}）。当前段只能作为氛围、人物关系、伏笔、未结事项和防抢跑参考，不得直接推进或复演原文段落。`,
+    '“已经历”的分段只可作为既成事实简略承接，不得重新演一遍；“未开始”的下一段只能轻微铺垫，不得提前揭露角色未知信息。若玩家已经走出不同 IF 线，以已发生剧情为准；若条目标有信息可见性，必须遵守谁知道/谁不知道/读者视角边界。',
     '',
     seriesOverview,
     '',
@@ -99,20 +105,22 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统): string 
     factionIndex.length ? `# 派系索引\n${factionIndex.slice(0, 8).join('、')}` : '',
     recentIndexBlock,
     formatWindowSegment('已经历承接', previous, 'brief'),
-    formatWindowSegment('当前段内容', current, 'current'),
+    formatWindowSegment(gate.mode === 'strong' ? '当前段强承接素材' : '当前段软参考素材', current, gate.mode),
     formatWindowSegment('下一段预热', next, 'brief'),
   ].filter(Boolean);
   return blocks.join('\n').trim();
 }
 
-function formatWindowSegment(title: string, segment?: 剧情编织分段, mode: 'brief' | 'current' = 'brief'): string {
+type StoryWeavingInjectionMode = 'brief' | 'soft' | 'strong';
+
+function formatWindowSegment(title: string, segment?: 剧情编织分段, mode: StoryWeavingInjectionMode = 'brief'): string {
   if (!segment) return '';
   const lines: string[] = [`【${title}】`, `组号：${segment.组号}`, `运行状态：${segment.运行状态}`, `章节范围：${segment.章节范围 || segment.标题}`];
   if (segment.章节标题.length) lines.push(`章节标题：${segment.章节标题.join(' / ')}`);
-  if (segment.原文摘要) lines.push(`原文摘要：${segment.原文摘要}`);
-  if (segment.本段概括) lines.push(`概括：${segment.本段概括}`);
+  if (mode === 'strong' && segment.原文摘要) lines.push(`原文摘要：${segment.原文摘要}`);
+  if (segment.本段概括) lines.push(`${mode === 'strong' ? '概括' : '素材概括'}：${segment.本段概括}`);
   if (segment.时间线起点 || segment.时间线终点) lines.push(`时间线：${segment.时间线起点 || '未知'} -> ${segment.时间线终点 || '未知'}`);
-  if (mode === 'current') {
+  if (mode === 'strong') {
     appendList(lines, '开局已成立事实', segment.开局已成立事实, 6);
     appendList(lines, '前段延续事实', segment.前段延续事实, 8);
     appendList(lines, '本段结束状态', segment.本段结束状态, 8);
@@ -154,12 +162,81 @@ function formatWindowSegment(title: string, segment?: 剧情编织分段, mode: 
         lines.push(`[${index + 1}] ${item.角色名}：${[...item.本段变化, ...item.本段后状态].slice(0, 4).join('；') || '无'}`);
       });
     }
+  } else if (mode === 'soft') {
+    appendList(lines, '可作为既有关系/气氛参考', [...segment.开局已成立事实, ...segment.前段延续事实], 5);
+    appendList(lines, '未结事项/后续参考', segment.给后续参考, 5);
+    appendVisibleList(lines, '防抢跑硬约束', segment.原著硬约束, 3);
+    appendVisibleList(lines, '可轻微铺垫', segment.可提前铺垫, 3);
+    appendList(lines, '可能相关角色', segment.登场角色, 8);
+    appendList(lines, '可能相关地点', segment.涉及地点, 6);
+    if (segment.关键事件.length) {
+      lines.push('关键事件门禁：');
+      segment.关键事件.slice(0, 4).forEach((event, index) => {
+        lines.push(`[${index + 1}] ${event.事件名 || '未命名事件'}`);
+        appendList(lines, '触发条件', event.触发条件, 3);
+        appendList(lines, '阻断条件', event.阻断条件, 3);
+        appendList(lines, '事件结果只可作为防重复参考', event.事件结果, 3);
+      });
+    }
   } else {
     appendList(lines, '结束状态', segment.本段结束状态, 4);
     appendList(lines, '前段延续事实', segment.前段延续事实, 4);
     appendVisibleList(lines, '硬约束', segment.原著硬约束, 3);
   }
   return lines.join('\n');
+}
+
+function evaluateSegmentGate(
+  segment: 剧情编织分段,
+  ctx?: Pick<FilterContext, 'recentUserInput' | 'recentAIResponse' | 'currentLocation'>,
+): { mode: 'soft' | 'strong'; reasons: string[] } {
+  const source = normalizeForGate([
+    ctx?.recentUserInput ?? '',
+    ctx?.recentAIResponse ?? '',
+    ctx?.currentLocation ?? '',
+  ].join('\n'));
+  const reasons: string[] = [];
+  if (!source) return { mode: 'soft', reasons: ['缺少当前输入、地点或近期正文作为门禁证据'] };
+
+  const locationHits = segment.涉及地点
+    .filter((item) => item.trim().length >= 2 && source.includes(normalizeForGate(item)));
+  if (locationHits.length) reasons.push(`地点命中：${locationHits.slice(0, 3).join('、')}`);
+
+  const roleHits = segment.登场角色
+    .filter((item) => item.trim().length >= 2 && source.includes(normalizeForGate(item)));
+  if (roleHits.length) reasons.push(`人物命中：${roleHits.slice(0, 4).join('、')}`);
+
+  const triggerTerms = [
+    ...segment.关键事件.flatMap((event) => [event.事件名, ...event.触发条件]),
+    ...segment.给后续参考,
+  ];
+  const triggerHits = triggerTerms
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2 && splitGateTerms(item).filter((term) => source.includes(term)).length >= 2);
+  if (triggerHits.length) reasons.push(`任务/事件条件命中 ${triggerHits.length} 项`);
+
+  const input = normalizeForGate(ctx?.recentUserInput ?? '');
+  const actionWords = ['前往', '进入', '寻找', '追问', '调查', '启动', '汇报', '战斗', '迎击', '救援', '继续', '抵达', '登上', '打开', '检查'];
+  if (input && actionWords.some((word) => input.includes(word))) {
+    const localHits = [...locationHits, ...roleHits].length + triggerHits.length;
+    if (localHits > 0) reasons.push('玩家行动正在触碰当前段入口');
+  }
+
+  const strong = locationHits.length > 0 && (roleHits.length > 0 || triggerHits.length > 0 || reasons.includes('玩家行动正在触碰当前段入口'));
+  return { mode: strong ? 'strong' : 'soft', reasons };
+}
+
+function normalizeForGate(text: string): string {
+  return text.replace(/\s+/g, '').trim();
+}
+
+function splitGateTerms(text: string): string[] {
+  return Array.from(new Set(
+    normalizeForGate(text)
+      .split(/[，。；、：:,.!?！？「」『』（）()[\]【】\-—]/g)
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2),
+  )).slice(0, 8);
 }
 
 function deriveStageSummary(segments: 剧情编织分段[]): string {

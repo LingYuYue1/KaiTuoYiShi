@@ -1157,7 +1157,10 @@ async function runVariableCalibrationStep(
     if (params.signal?.aborted) return null;
 
     const parsedFacts = parseVariableFacts(rawText);
-    const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1);
+    const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1, {
+      phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds,
+      maxPhoneSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
+    });
     const parsedLegacyCommands = parseVariableCommands(rawText);
     const commands = [...factCommands.commands, ...parsedLegacyCommands.commands];
     const parseErrors = [
