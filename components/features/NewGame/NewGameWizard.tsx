@@ -22,11 +22,13 @@ import {
   startingScenarios,
   storyModes,
 } from '@/data/journeyPresets';
+import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
 interface NewGameWizardProps {
   onStart: (traveler: 角色数据结构, worldState: 世界状态) => void;
   onBack: () => void;
   currentTheme: 主题预设;
+  onGenerateTravelerTemplate?: (context: TravelerTemplateContext) => Promise<TravelerTemplateDraft>;
 }
 
 type Step = 'world' | 'character' | 'path' | 'historian' | 'overview';
@@ -62,7 +64,7 @@ const tightClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const OPENING_PATH_STAGE_DEFS = PATH_STAGE_DEFS;
 
-export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
+export function NewGameWizard({ onStart, onBack, onGenerateTravelerTemplate }: NewGameWizardProps) {
   const [step, setStep] = useState<Step>('world');
 
   const [storyMode, setStoryMode] = useState<剧情模式>('normal');
@@ -397,6 +399,8 @@ export function NewGameWizard({ onStart, onBack }: NewGameWizardProps) {
                 onPersonality={setPersonality}
                 background={background}
                 onBackground={setBackground}
+                storyModeName={storyModeDef.name}
+                onGenerateTemplate={onGenerateTravelerTemplate}
                 onNext={goNext}
                 onBack={goPrev}
                 ready={stepReady.character}
@@ -741,9 +745,9 @@ function StepNav({
   );
 }
 
-function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+function SectionTitle({ title, subtitle, compact = false }: { title: string; subtitle: string; compact?: boolean }) {
   return (
-    <div className="mb-5 min-w-0">
+    <div className={`${compact ? '' : 'mb-5'} min-w-0`}>
       <div
         className="mb-2 text-[11px] tracking-[0.32em]"
         style={{ color: 'rgba(var(--tj-accent-primary), 0.62)' }}
@@ -839,6 +843,8 @@ function CharacterStep({
   onPersonality,
   background,
   onBackground,
+  storyModeName,
+  onGenerateTemplate,
   onNext,
   onBack,
   ready,
@@ -861,13 +867,94 @@ function CharacterStep({
   onPersonality: (v: string) => void;
   background: string;
   onBackground: (v: string) => void;
+  storyModeName: string;
+  onGenerateTemplate?: (context: TravelerTemplateContext) => Promise<TravelerTemplateDraft>;
   onNext: () => void;
   onBack: () => void;
   ready: boolean;
 }) {
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateError, setTemplateError] = useState('');
+  const [templatePrompt, setTemplatePrompt] = useState('');
+
+  const handleGenerateTemplate = async () => {
+    if (!onGenerateTemplate || templateLoading) return;
+    setTemplateError('');
+    setTemplateLoading(true);
+    try {
+      const draft = await onGenerateTemplate({
+        storyModeName,
+        existingName: name,
+        existingAlias: alias,
+        existingGender: gender,
+        existingAge: age,
+        existingBirthday: birthday,
+        userPrompt: templatePrompt,
+      });
+      onName(draft.name);
+      onAlias(draft.alias);
+      onGender(draft.gender);
+      onAge(draft.age);
+      onBirthday(draft.birthday);
+      onAppearance(draft.appearance);
+      onPersonality(draft.personality);
+      onBackground(draft.background);
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : '模板生成失败，请稍后再试。');
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
   return (
     <div>
-      <SectionTitle title="角色档案" subtitle="把主角写得更像一位真正会走进故事的人" />
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <SectionTitle title="角色档案" subtitle="把主角写得更像一位真正会走进故事的人" compact />
+        {onGenerateTemplate ? (
+          <div className="flex w-full flex-col gap-1 sm:max-w-xl sm:items-end">
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <input
+                value={templatePrompt}
+                onChange={(event) => setTemplatePrompt(event.target.value)}
+                disabled={templateLoading}
+                placeholder="可填生成偏好，例如：公司调查员、冷静强势、会一点虚数奇术"
+                className="min-w-0 flex-1 px-3 py-2 text-xs outline-none disabled:cursor-wait disabled:opacity-60"
+                style={{
+                  background: 'rgba(10, 9, 11, 0.52)',
+                  color: 'rgba(250, 244, 224, 0.92)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  clipPath: smallClip,
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleGenerateTemplate}
+                disabled={templateLoading}
+                className="kaituo-btn kaituo-btn-secondary shrink-0 px-4 py-2.5 text-xs disabled:cursor-wait disabled:opacity-60"
+              >
+                <span className="tracking-[0.18em]">{templateLoading ? '生成中...' : '随机生成模板'}</span>
+              </button>
+            </div>
+            <span className="text-[10px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+              可填偏好；该功能走主 API 模型
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {templateError ? (
+        <div
+          className="mb-4 px-3 py-2 text-xs leading-relaxed"
+          style={{
+            background: 'rgba(180, 64, 64, 0.12)',
+            color: 'rgba(255, 210, 210, 0.92)',
+            boxShadow: 'inset 0 0 0 1px rgba(255, 120, 120, 0.24)',
+            clipPath: smallClip,
+          }}
+        >
+          {templateError}
+        </div>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-1">
         <div className="space-y-4">

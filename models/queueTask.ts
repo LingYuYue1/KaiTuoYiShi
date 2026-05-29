@@ -1,4 +1,4 @@
-export type 队列任务ID = 'main_story' | 'memory' | 'variable' | 'news' | 'world_evolution' | 'yiting' | 'zhiku' | 'autosave';
+export type 队列任务ID = 'main_story' | 'memory' | 'variable' | 'news' | 'world_evolution' | 'yiting' | 'zhiku' | 'phone' | 'autosave';
 export type 队列任务状态 = 'pending' | 'success' | 'failed' | 'idle' | 'skipped' | 'cancelled';
 
 export interface 队列任务记录 {

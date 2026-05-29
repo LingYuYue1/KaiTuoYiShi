@@ -97,6 +97,16 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
             }
           }
         }
+        const previousUserInput =
+          msg.role === 'assistant'
+            ? (() => {
+                for (let i = idx - 1; i >= 0; i--) {
+                  const prev = visibleMessages[i];
+                  if (prev?.role === 'user') return prev.content;
+                }
+                return undefined;
+              })()
+            : undefined;
         return (
           <TurnItem
             key={msg.id}
@@ -106,6 +116,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
             traveler={traveler}
             showInnerVoice={showInnerVoice}
             fallbackPathId={fallbackPathId}
+            previousUserInput={previousUserInput}
           />
         );
       })}

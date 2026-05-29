@@ -12,6 +12,9 @@ const ITEM_QUALITIES = new Set<物品品质>(['蓝', '紫', '金']);
 const NPC_RELATIONS = new Set<NPC关系类型>(['stranger', 'acquaintance', 'friend', 'close', 'rival', 'enemy']);
 const PHONE_TRIGGER_TYPES = new Set<主动来信类型>(['injury', 'victory', 'defeat', 'location_change', 'important_item', 'relationship', 'news', 'quest', 'time', 'custom']);
 const PHONE_PRIORITIES = new Set<主动来信优先级>(['low', 'normal', 'high', 'urgent']);
+const NSFW_AGE_VALUES = new Set(['adult', 'unknown', 'minor_blocked']);
+const NSFW_BLOCKED_CANONICAL_NAMES = new Set(['帕姆']);
+const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|怪物|怪兽|裂界生物|反物质|虚卒|机兵|机械|机器人|生物|动物|宠物|造物|傀儡|人偶|投影)/i;
 const FACT_TYPE_ALIASES: Record<string, 变量事实['type']> = {
   旅人: 'traveler_profile',
   旅人档案: 'traveler_profile',
@@ -42,6 +45,10 @@ const FACT_TYPE_ALIASES: Record<string, 变量事实['type']> = {
   phoneSeed: 'phone_seed',
   phone_message_seed: 'phone_seed',
   message_seed: 'phone_seed',
+  NSFW档案: 'nsfw_archive',
+  nsfw: 'nsfw_archive',
+  nsfw_archive: 'nsfw_archive',
+  nsfwArchive: 'nsfw_archive',
 };
 const ITEM_CATEGORY_ALIASES: Record<string, 物品分类> = {
   食物: 'food',
@@ -119,6 +126,30 @@ function 字符串数组(value: unknown): string[] | undefined {
     .map((item) => item.trim())
     .filter(Boolean);
   return list.length ? list : undefined;
+}
+
+function 读取字符串对象(value: unknown, allowedKeys: string[]): Record<string, string> | undefined {
+  if (!是对象(value)) return undefined;
+  const output: Record<string, string> = {};
+  for (const key of allowedKeys) {
+    const text = 读字符串(value[key]);
+    if (text) output[key] = text;
+  }
+  return Object.keys(output).length ? output : undefined;
+}
+
+function 归一化年龄确认(value: unknown): 'adult' | 'unknown' | 'minor_blocked' | undefined {
+  const text = 读字符串(value);
+  const normalized = ({
+    成人: 'adult',
+    成年: 'adult',
+    未知: 'unknown',
+    年龄不明: 'unknown',
+    未成年阻止: 'minor_blocked',
+    未成年: 'minor_blocked',
+    禁止: 'minor_blocked',
+  } as Record<string, string>)[text] ?? text;
+  return NSFW_AGE_VALUES.has(normalized) ? normalized as 'adult' | 'unknown' | 'minor_blocked' : undefined;
 }
 
 function npcNameFromId(id: string): string {
@@ -312,6 +343,32 @@ function 归一化事实(raw: unknown): 变量事实 | null {
       evidence: 读字符串(raw.evidence || raw.证据) || undefined,
     };
   }
+  if (type === 'nsfw_archive') {
+    const npcId = 读字符串(raw.npcId || raw.NPCID || raw.id);
+    const npcName = 读字符串(raw.npcName || raw.name || raw.姓名 || raw.名称) || npcNameFromId(npcId);
+    if (!npcName) return null;
+    const femaleBody = 读取字符串对象(raw.femaleBodyArchive ?? raw.女性身体档案, ['胸部', '女性私处', '后庭', '体态', '体味']);
+    const maleBody = 读取字符串对象(raw.maleBodyArchive ?? raw.男性身体档案, ['男性器', '后庭', '体态', '体味']);
+    return {
+      type: 'nsfw_archive',
+      npcId: npcId || undefined,
+      npcName,
+      enabled: typeof raw.enabled === 'boolean' ? raw.enabled : typeof raw.启用 === 'boolean' ? raw.启用 : undefined,
+      ageConfirm: 归一化年龄确认(raw.ageConfirm ?? raw.年龄确认),
+      intimacyStage: 读字符串(raw.intimacyStage || raw.亲密阶段) || undefined,
+      boundaries: 读字符串或数组(raw.boundaries ?? raw.边界) || undefined,
+      preferences: 字符串数组(raw.preferences ?? raw.偏好),
+      sensitivePoints: 字符串数组(raw.sensitivePoints ?? raw.敏感点),
+      taboos: 字符串数组(raw.taboos ?? raw.禁忌),
+      femaleBodyArchive: femaleBody,
+      maleBodyArchive: maleBody,
+      experiences: 字符串数组(raw.experiences ?? raw.经历),
+      longTermFacts: 字符串数组(raw.longTermFacts ?? raw.长期事实),
+      tags: 字符串数组(raw.tags ?? raw.标签),
+      notes: 读字符串或数组(raw.notes ?? raw.备注) || undefined,
+      evidence: 读字符串(raw.evidence || raw.证据) || undefined,
+    };
+  }
   return null;
 }
 
@@ -398,6 +455,25 @@ function findNpc(records: NPC记录[], id: string, name: string): NPC记录 | un
   );
 }
 
+function isNsfwBlockedNpc(npc: NPC记录 | undefined, name: string): string | null {
+  const canonicalName = matchCanonical(npc?.姓名 ?? name)?.name ?? matchCanonical(name)?.name;
+  const haystack = [
+    name,
+    npc?.姓名,
+    npc?.别名,
+    npc?.介绍,
+    npc?.外貌,
+    npc?.备注?.join(' '),
+  ].filter(Boolean).join(' ');
+  if (canonicalName && NSFW_BLOCKED_CANONICAL_NAMES.has(canonicalName)) {
+    return `${canonicalName} 属于非人/生物形态或暂不支持对象，禁止写入 NSFW 档案`;
+  }
+  if (NSFW_BLOCKED_NAME_RE.test(haystack)) {
+    return `${name} 命中非人/生物形态/怪物/机械等屏蔽词，禁止写入 NSFW 档案`;
+  }
+  return null;
+}
+
 function 数组已有文本(value: unknown, text: string): boolean {
   return Array.isArray(value) && value.some((item) => typeof item === 'string' && item.trim() === text.trim());
 }
@@ -435,16 +511,7 @@ export function factsToVariableCommands(
 
   for (const fact of facts) {
     if (fact.type === 'traveler_profile') {
-      if (fact.identity) push({ action: 'set', key: '旅人.身份', value: fact.identity });
-      if (fact.appearance) push({ action: 'set', key: '旅人.外貌', value: fact.appearance });
-      if (fact.personality) push({ action: 'set', key: '旅人.性格', value: fact.personality });
-      if (fact.background) push({ action: 'set', key: '旅人.背景', value: fact.background });
-      fact.abilityAdd?.forEach((ability) => {
-        if (!数组已有文本((state.旅人 as { 能力?: unknown }).能力, ability)) push({ action: 'push', key: '旅人.能力', value: ability });
-      });
-      fact.knowledgeAdd?.forEach((knowledge) => {
-        if (!数组已有文本((state.旅人 as { 专长知识?: unknown }).专长知识, knowledge)) push({ action: 'push', key: '旅人.专长知识', value: knowledge });
-      });
+      notes.push('已静默忽略 traveler_profile：旅人核心档案由玩家手写维护，变量系统不再修改身份、外貌、性格、背景、能力或专长知识。');
       continue;
     }
 
@@ -557,6 +624,41 @@ export function factsToVariableCommands(
       continue;
     }
 
+    if (fact.type === 'nsfw_archive') {
+      const id = fact.npcId?.trim() || npcIdFromName(fact.npcName);
+      const existing = findNpc(npcs, id, fact.npcName);
+      if (!existing) {
+        warnings.push(`nsfw_archive 已忽略：找不到 NPC ${fact.npcName}，NSFW 档案只更新已入档 NPC。`);
+        continue;
+      }
+      const blockedReason = isNsfwBlockedNpc(existing, fact.npcName);
+      if (blockedReason) {
+        warnings.push(`nsfw_archive 已忽略：${blockedReason}。`);
+        continue;
+      }
+      const key = `NPC[id=${existing.id}].NSFW档案`;
+      const archive: Record<string, unknown> = {};
+      archive.enabled = fact.enabled ?? true;
+      if (fact.ageConfirm) archive.年龄确认 = fact.ageConfirm;
+      if (fact.intimacyStage) archive.亲密阶段 = fact.intimacyStage;
+      if (fact.boundaries) archive.边界 = fact.boundaries;
+      if (fact.preferences?.length) archive.偏好 = fact.preferences;
+      if (fact.sensitivePoints?.length) archive.敏感点 = fact.sensitivePoints;
+      if (fact.taboos?.length) archive.禁忌 = fact.taboos;
+      if (fact.femaleBodyArchive && Object.keys(fact.femaleBodyArchive).length) archive.女性身体档案 = fact.femaleBodyArchive;
+      if (fact.maleBodyArchive && Object.keys(fact.maleBodyArchive).length) archive.男性身体档案 = fact.maleBodyArchive;
+      if (fact.experiences?.length) archive.经历 = fact.experiences;
+      if (fact.longTermFacts?.length) archive.长期事实 = fact.longTermFacts;
+      if (fact.tags?.length) archive.标签 = fact.tags;
+      if (fact.notes) archive.备注 = fact.notes;
+      if (Object.keys(archive).length <= 1 && archive.enabled === true) {
+        warnings.push(`nsfw_archive 已忽略：${fact.npcName} 没有可写入的长期档案字段。`);
+        continue;
+      }
+      push({ action: 'set', key, value: archive });
+      continue;
+    }
+
     if (fact.type === 'item') {
       push({
         action: 'push',
@@ -596,6 +698,10 @@ export function factsToVariableCommands(
         warnings.push(`phone_seed 已忽略：缺少 targetId/targetName/relatedNpcIds，无法确定来信目标（${fact.title}）。`);
         continue;
       }
+      const relatedNpcIds = Array.from(new Set([
+        ...(fact.relatedNpcIds ?? []),
+        targetId.startsWith('npc_') || targetId.startsWith('npc-') ? targetId : '',
+      ].map((id) => id.trim()).filter(Boolean)));
       push({
         action: 'push',
         key: '手机.messageSeeds',
@@ -609,7 +715,7 @@ export function factsToVariableCommands(
           targetId,
           title: fact.title,
           context: fact.context,
-          relatedNpcIds: fact.relatedNpcIds ?? [],
+          relatedNpcIds,
           expiresAfterTurns: 6,
           status: 'pending',
         },

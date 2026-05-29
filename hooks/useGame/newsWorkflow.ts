@@ -2,6 +2,7 @@ import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { callNewsModel, applyNewsGenerationResult } from '@/services/ai/newsModel';
 import type { 新闻条目 } from '@/models/news';
 import type { API配置项 } from '@/models/settings';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化世界状态 } from '@/models/world';
 
 interface NewsGenerationParams {
@@ -9,7 +10,9 @@ interface NewsGenerationParams {
   mainBody: string;
   userInput: string;
   recentTurns?: string[];
+  storyWeavingSnapshot?: 剧情编织系统;
   signal?: AbortSignal;
+  shouldCommit?: () => boolean;
 }
 
 export async function runNewsGenerationStep(params: NewsGenerationParams): Promise<新闻条目[] | null> {
@@ -48,13 +51,14 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
       news: state.新闻,
       npcRecords: state.NPC,
       plotNodes: state.剧情,
-      storyWeaving: state.剧情编织,
+      storyWeaving: params.storyWeavingSnapshot ?? state.剧情编织,
       signal: params.signal,
       retryCount: newsSettings.api.retryCount ?? 2,
     });
 
+    if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
     const nextNews = applyNewsGenerationResult(state.新闻, result.parsed);
-    if (nextNews !== state.新闻) {
+    if (!params.signal?.aborted && params.shouldCommit?.() !== false && nextNews !== state.新闻) {
       state.set新闻(nextNews);
     }
     return nextNews;

@@ -8,6 +8,7 @@ import { 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC�
 import type { 新闻条目 } from '@/models/news';
 import type { 世界状态 } from '@/models/world';
 import type { API设置, 游戏设置 } from '@/models/settings';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建手机会话, 创建手机会话本地摘要条目, 创建手机会话本地库, 创建手机消息, 计算手机未读, type 手机消息 } from '@/models/phone';
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
 import type { 忆庭系统 } from '@/models/yiting';
@@ -25,6 +26,7 @@ interface Props {
   memory: 记忆系统;
   yiting: 忆庭系统;
   news: 新闻条目[];
+  storyWeaving: 剧情编织系统;
   apiSettings: API设置;
   gameSettings: 游戏设置;
   turnCount: number;
@@ -61,6 +63,7 @@ export function PhoneModal({
   memory,
   yiting,
   news,
+  storyWeaving,
   apiSettings,
   gameSettings,
   turnCount,
@@ -467,10 +470,15 @@ export function PhoneModal({
     return shouldFlush ? flushedSummary : '';
   };
 
-  const commitPhoneMemory = async (summary: string, contact?: 手机联系人) => {
+  const commitPhoneMemory = async (summary: string, contact?: 手机联系人, options: { force?: boolean } = {}) => {
     const trimmed = summary.trim();
     if (!trimmed) return;
-    const withImmediate = addImmediateMemory(memory, `【手机】${trimmed}`, turnCount);
+    const normalizedSummary = trimmed.startsWith('【手机】') ? trimmed : `【手机】${trimmed}`;
+    const alreadyInMemory = memory.即时记忆.some((item) => item.includes(trimmed))
+      || memory.短期记忆.some((item) => item.includes(trimmed))
+      || memory.长期记忆.some((item) => item.includes(trimmed));
+    if (!options.force && alreadyInMemory) return;
+    const withImmediate = addImmediateMemory(memory, normalizedSummary, turnCount);
     const compression = await autoCompressMemorySystemWithArchivesAsync(
       withImmediate,
       turnCount,
@@ -488,6 +496,7 @@ export function PhoneModal({
       onNpcRecordsChange((prev) =>
         prev.map((npc) => {
           if (npc.id !== contact.npcId) return npc;
+          if (!options.force && 提取NPC同行记忆文本列表(npc).some((item) => item.includes(trimmed))) return npc;
           const existingEntries = npc.同行记忆 ?? [];
           const compressedTexts = compressNpcMemories(
             [...提取NPC同行记忆文本列表(npc), trimmed],
@@ -574,6 +583,7 @@ export function PhoneModal({
         contact,
         userText: text,
         mainChatHistory,
+        storyWeaving,
       }, phoneApiConfig.retryCount ?? 2);
       await appendMessagesToChatSequentially(
         activeChat.id,
@@ -585,6 +595,11 @@ export function PhoneModal({
         reply.summary ?? reply.messages.join(' / '),
         activeChat.type === 'group' ? 'group' : 'private',
         reply.messages.length,
+      );
+      await commitPhoneMemory(
+        `手机${activeChat.type === 'group' ? `群聊「${activeChat.title}」` : contact ? `私聊「${contact.name}」` : '私聊'}：${reply.summary ?? reply.messages.join(' / ')}`,
+        contact,
+        { force: true },
       );
       if (flushedSummary) {
         await commitPhoneMemory(flushedSummary, contact);
@@ -693,6 +708,7 @@ export function PhoneModal({
         contact: seed.targetType === 'private' ? contact : undefined,
         seed,
         mainChatHistory,
+        storyWeaving,
       }, phoneApiConfig.retryCount ?? 2);
       onPhoneChange((prev) => {
         const hasContact = prev.contacts.some((item) => item.id === contact.id);
@@ -714,6 +730,11 @@ export function PhoneModal({
         seed.targetType === 'group' ? 'group' : seed.targetType === 'private' ? 'private' : 'system',
         reply.messages.length,
         seed.id,
+      );
+      await commitPhoneMemory(
+        `主动来信「${seed.title}」：${reply.summary ?? reply.messages.join(' / ')}`,
+        seed.targetType === 'private' ? contact : undefined,
+        { force: true },
       );
       if (flushedSummary) {
         await commitPhoneMemory(flushedSummary, seed.targetType === 'private' ? contact : undefined);

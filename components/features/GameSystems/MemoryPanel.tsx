@@ -91,8 +91,8 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
         : memorySystem.长期记忆.length;
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <aside className="flex w-[260px] min-h-0 shrink-0 flex-col gap-3">
+    <div className="flex min-h-full w-full min-w-0 flex-col gap-3 overflow-x-hidden md:h-full md:min-h-0 md:flex-row md:gap-4 md:overflow-hidden">
+      <aside className="flex w-full min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[260px]">
         <div className="px-4 py-4" style={panelStyle}>
           <SectionHeader title="记忆总览" />
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -105,7 +105,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
 
         <div className="px-4 py-3" style={panelStyle}>
           <SectionHeader title="层级切换" />
-          <div className="mt-3 grid gap-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3 md:grid-cols-1">
             {(Object.keys(layerMeta) as MemoryLayer[]).map((layer) => {
               const meta = layerMeta[layer];
               const active = activeLayer === layer;
@@ -158,8 +158,8 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <div className="min-h-full px-5 py-5" style={panelStyle}>
+      <main className="min-h-0 w-full min-w-0 flex-1 overflow-visible pr-0 md:overflow-y-auto md:pr-1">
+        <div className="min-h-full px-3 py-3 md:px-5 md:py-5" style={panelStyle}>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <SectionHeader title="记忆条目" />
@@ -195,7 +195,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
             )}
           </div>
 
-          <div className="mt-4 grid gap-2 xl:grid-cols-3">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
             <HintCard title="即时阈值" value={`${settings.即时转短期阈值} 条`} text="达到后会自动压缩到短期。" />
             <HintCard title="短期阈值" value={`${settings.短期转长期阈值} 条`} text="达到后会自动压缩到长期。" />
             <HintCard title="NPC 阈值" value={`${settings.NPC记忆压缩阈值} 条`} text="伙伴的与你同行的记忆达到后会自动压缩。" />

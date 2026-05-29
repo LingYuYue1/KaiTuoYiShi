@@ -44,11 +44,11 @@ import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
-import type { 手机系统 } from '@/models/phone';
 import { 创建空手机系统 } from '@/models/phone';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import { loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
-import { applyStoryProgressSuggestion, getCurrentStoryChapterLabel, markStorySegmentDeviated } from '@/services/storyProgressService';
+import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
+import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
 export default function App() {
   const { state, actions } = useGame();
@@ -79,32 +79,6 @@ export default function App() {
   const latestActiveTask = [...state.queueTasks].reverse().find((task) =>
     ['main_story', 'memory', 'variable', 'news', 'yiting', 'zhiku'].includes(task.id),
   );
-
-  const confirmStoryProgress = () => {
-    if (!state.剧情推进建议) return;
-    const next = applyStoryProgressSuggestion(state.剧情编织, state.剧情推进建议);
-    state.set剧情编织(next);
-    state.set剧情推进建议(null);
-    void saveSetting('storyWeavingSystem', next);
-  };
-
-  const deviateStoryProgress = () => {
-    if (!state.剧情推进建议) return;
-    const next = markStorySegmentDeviated(state.剧情编织, state.剧情推进建议);
-    state.set剧情编织(next);
-    state.set剧情推进建议(null);
-    void saveSetting('storyWeavingSystem', next);
-  };
-
-  const setPhonePersistently = useCallback<React.Dispatch<React.SetStateAction<手机系统>>>((updater) => {
-    state.set手机((prev) => {
-      const next = typeof updater === 'function'
-        ? (updater as (value: 手机系统) => 手机系统)(prev)
-        : updater;
-      void saveSetting('phoneSystemState', next);
-      return next;
-    });
-  }, [state]);
 
   // 自动触发第 0 回合：handleStartGame 把触发文本写入 pendingOpeningTrigger，
   // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
@@ -207,6 +181,18 @@ export default function App() {
 
   // ── New Game Wizard ──
   if (state.view === 'new_game') {
+    const getActiveApiConfig = () => {
+      if (state.apiSettings.activeConfigId) {
+        return state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs[0] ?? null;
+      }
+      return state.apiSettings.configs[0] ?? null;
+    };
+    const handleGenerateTravelerTemplate = async (context: TravelerTemplateContext): Promise<TravelerTemplateDraft> => {
+      const config = getActiveApiConfig();
+      if (!config) throw new Error('请先在设置中配置至少一个 API 接口。');
+      return generateTravelerTemplate(config, context);
+    };
+
     const handleStartGame = async (traveler: 角色数据结构, worldState: 世界状态) => {
       // 预检 API：configs 为空时给出明确提示，不切换 view，避免玩家被困在空白游戏页。
       if (state.apiSettings.configs.length === 0) {
@@ -225,7 +211,9 @@ export default function App() {
       state.set新闻([]);
       state.set剧情([]);
       try {
-        state.set剧情编织(await loadAllBundledStoryWeavingPresets());
+        const nextStoryWeaving = await loadAllBundledStoryWeavingPresets();
+        state.set剧情编织(nextStoryWeaving);
+        await saveSetting('storyWeavingSystem', nextStoryWeaving);
       } catch (err) {
         console.warn('[story-weaving] 新开局加载内置原著剧情失败，保留当前剧情编织状态:', err);
       }
@@ -238,6 +226,7 @@ export default function App() {
         onStart={handleStartGame}
         onBack={() => state.setView('home')}
         currentTheme={state.currentTheme}
+        onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
       />
     );
   }
@@ -260,11 +249,6 @@ export default function App() {
             onOpenPhone={() => setShowPhone(true)}
             phoneUnread={state.手机.unreadTotal}
             currentStoryChapter={currentStoryChapter}
-            storyProgressSuggestion={state.剧情推进建议}
-            storyProgressDisabled={state.loading || state.pendingVariable}
-            onConfirmStoryProgress={confirmStoryProgress}
-            onDeviateStoryProgress={deviateStoryProgress}
-            onDismissStoryProgress={() => state.set剧情推进建议(null)}
           />
         }
         rightPanel={
@@ -283,13 +267,13 @@ export default function App() {
               tasks={state.queueTasks}
               pending={state.pendingVariable}
               onCancelTask={(id) => {
-                if (id === 'main_story' || id === 'variable' || id === 'news' || id === 'yiting' || id === 'zhiku' || id === 'memory') {
+                if (id === 'main_story' || id === 'variable' || id === 'news' || id === 'phone' || id === 'yiting' || id === 'zhiku' || id === 'memory') {
                   state.abortControllerRef.current?.abort();
                   state.setQueueTasks((prev) => [
                     ...prev,
                     {
                       id,
-                      title: id === 'news' ? '星际和平周报' : id === 'variable' ? '变量生成' : id === 'yiting' ? '忆庭召回' : id === 'zhiku' ? '智库检索' : id === 'memory' ? '记忆整理' : '主剧情生成',
+                      title: id === 'news' ? '星际和平周报' : id === 'phone' ? '手机来信' : id === 'variable' ? '变量生成' : id === 'yiting' ? '忆庭召回' : id === 'zhiku' ? '智库检索' : id === 'memory' ? '记忆整理' : '主剧情生成',
                       turn: state.turnCount,
                       timestamp: Date.now(),
                       status: 'cancelled',
@@ -380,7 +364,7 @@ export default function App() {
                 album: state.相册,
                 onAlbumChange: state.set相册,
                 phone: state.手机,
-                onPhoneChange: setPhonePersistently,
+                onPhoneChange: state.set手机,
                 memorySystem: state.记忆,
                 onMemorySystemChange: state.set记忆,
                 yitingSystem: state.忆庭,
@@ -452,7 +436,7 @@ export default function App() {
             set记忆: state.set记忆,
             set忆庭: state.set忆庭,
             set智库: state.set智库,
-            set手机: setPhonePersistently,
+            set手机: state.set手机,
             setNPC: state.setNPC,
             set新闻: state.set新闻,
             set剧情: state.set剧情,
@@ -475,12 +459,13 @@ export default function App() {
           memory={state.记忆}
           yiting={state.忆庭}
           news={state.新闻}
+          storyWeaving={state.剧情编织}
           apiSettings={state.apiSettings}
           gameSettings={state.gameSettings}
           turnCount={state.turnCount}
           mainChatHistory={state.chatHistory}
           npcRecords={state.NPC}
-          onPhoneChange={setPhonePersistently}
+          onPhoneChange={state.set手机}
           onMemoryChange={state.set记忆}
           onYitingChange={state.set忆庭}
           onNpcRecordsChange={state.setNPC}

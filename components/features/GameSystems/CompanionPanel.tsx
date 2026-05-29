@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
 import { NPC_RELATION_LABELS, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
+import { buildNpcRelationshipPlanning, type NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
 
 interface CompanionPanelProps {
   npcRecords: NPC记录[];
@@ -10,7 +11,7 @@ interface CompanionPanelProps {
   nsfwEnabled: boolean;
 }
 
-type DetailTab = 'archive' | 'memory' | 'nsfw';
+type DetailTab = 'archive' | 'planning' | 'memory' | 'nsfw';
 
 const cardClip =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
@@ -56,6 +57,11 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: 
   }, [selectedId, visible]);
 
   const selected = visible.find((n) => n.id === selectedId) ?? null;
+  const relationshipPlanning = useMemo(
+    () => buildNpcRelationshipPlanning(normalizedRecords, Math.max(...normalizedRecords.map((npc) => Number(npc.最近回合) || 0), 1)),
+    [normalizedRecords],
+  );
+  const selectedPlanning = selected ? relationshipPlanning.条目.find((item) => item.npcId === selected.id) : undefined;
 
   const updateRecord = (id: string, patch: Partial<NPC记录>) => {
     onNpcRecordsChange((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch } : n)));
@@ -87,6 +93,9 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: 
               >
                 同行 {travelingCount} / 朋友 {friendCount} / 全部 {normalizedRecords.length}
               </div>
+            </div>
+            <div className="mt-3 text-[11px] leading-relaxed" style={{ color: mutedColor }}>
+              关系规划：{relationshipPlanning.总览}
             </div>
           </div>
         </div>
@@ -127,6 +136,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled }: 
             onDemote={() => demoteToExtra(selected.id)}
             onDelete={() => deleteRecord(selected.id)}
             onToggleTraveling={() => updateRecord(selected.id, { 同行: !selected.同行 })}
+            planning={selectedPlanning}
           />
         ) : (
           <NoSelection tab={tab} />
@@ -300,6 +310,7 @@ function NpcDetail({
   onDelete,
   onToggleTraveling,
   nsfwEnabled,
+  planning,
 }: {
   npc: NPC记录;
   onPromote: () => void;
@@ -307,13 +318,15 @@ function NpcDetail({
   onDelete: () => void;
   onToggleTraveling: () => void;
   nsfwEnabled: boolean;
+  planning?: NPC关系规划条目;
 }) {
   const isCompanion = npc.阶位 === 'companion';
   const [detailTab, setDetailTab] = useState<DetailTab>('archive');
 
   useEffect(() => {
     if (!nsfwEnabled && detailTab === 'nsfw') setDetailTab('archive');
-  }, [detailTab, nsfwEnabled]);
+    if (!planning && detailTab === 'planning') setDetailTab('archive');
+  }, [detailTab, nsfwEnabled, planning]);
 
   return (
     <div className="flex min-h-full flex-col gap-4">
@@ -389,14 +402,19 @@ function NpcDetail({
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col gap-3 xl:w-[278px] xl:items-stretch">
+          <div className="flex shrink-0 flex-col gap-3 xl:w-[360px] xl:items-stretch">
             <div className="flex justify-end">
               <AffinityBadge value={npc.好感度} />
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-4">
               <TabButton active={detailTab === 'archive'} onClick={() => setDetailTab('archive')}>
                 伙伴档案
               </TabButton>
+              {planning && (
+                <TabButton active={detailTab === 'planning'} onClick={() => setDetailTab('planning')}>
+                  关系规划
+                </TabButton>
+              )}
               <TabButton active={detailTab === 'memory'} onClick={() => setDetailTab('memory')}>
                 同行记忆
               </TabButton>
@@ -409,6 +427,22 @@ function NpcDetail({
           </div>
         </div>
       </section>
+
+      {planning && detailTab === 'planning' && (
+        <section className="px-4 py-3 text-xs leading-relaxed" style={panelStyle}>
+          <div className="font-serif text-[12px] tracking-[0.22em]" style={{ color: accentColor }}>
+            关系规划
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2" style={{ color: bodyColor }}>
+            <span>优先级：{planning.优先级}</span>
+            <span>建议：{planning.建议动作}</span>
+          </div>
+          <div className="mt-2 grid gap-3 md:grid-cols-2">
+            <MiniList title="理由" items={planning.理由} />
+            <MiniList title="关注点" items={planning.关注点} />
+          </div>
+        </section>
+      )}
 
       {detailTab === 'archive' && (
         <>
@@ -866,6 +900,25 @@ function Paragraph({ text, placeholder, italic = false }: { text?: string; place
       {text}
     </p>
   );
+}
+
+function MiniList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <div className="font-serif text-[11px] tracking-[0.18em]" style={{ color: accentColor }}>{title}</div>
+      <div className="mt-1 space-y-1" style={{ color: mutedColor }}>
+        {(items.length ? items : ['暂无']).slice(0, 5).map((item, index) => (
+          <div key={`${title}_${item}_${index}`}>- {compactListText(item)}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function compactListText(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= 72) return normalized;
+  return `${normalized.slice(0, 71)}…`;
 }
 
 function MemoryPanel({ npc }: { npc: NPC记录 }) {

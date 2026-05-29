@@ -53,7 +53,7 @@ export interface SaveListItemSummary {
   type: 存档类型;
   timestamp: number;
   travelerName: string;
-  turnCount: number;       // 已进行的回合数（= chatHistory.length + 1，与 applySaveToState 对齐）
+  turnCount: number;       // 当前运行回合计数；旧存档缺失时按 chatHistory 兜底推算
   worldPeriodName: string; // 当前世界期名，空字符串表示未设置
   currentDate: string;
   currentTime: string;
@@ -75,7 +75,7 @@ export async function getSaveList(): Promise<SaveListItemSummary[]> {
           type: normalizeSaveType(s.type),
           timestamp: s.timestamp,
           travelerName: s.旅人?.姓名 ?? '',
-          turnCount: (s.chatHistory?.length ?? 0) + 1,
+          turnCount: s.turnCount ?? ((s.chatHistory?.length ?? 0) + 1),
           worldPeriodName: s.世界?.当前时段?.名称 ?? '',
           currentDate: s.世界?.当前日期 ?? '',
           currentTime: s.世界?.当前时间 ?? '',
@@ -197,7 +197,7 @@ export function exportSaveJson(save: 存档数据): void {
   const a = document.createElement('a');
   a.href = url;
   const travelerName = sanitizeFilename(save.旅人?.姓名 || 'traveler');
-  const turnCount = (save.chatHistory?.length ?? 0) + 1;
+  const turnCount = save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1);
   const stamp = new Date(save.timestamp || Date.now())
     .toISOString()
     .replace(/[:.]/g, '-');

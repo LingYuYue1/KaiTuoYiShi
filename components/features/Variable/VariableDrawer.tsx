@@ -45,6 +45,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
   const queueRows = [
     latestTaskById.get('variable') ?? createIdleTask('variable', '变量生成', '解析正文并落地变量命令'),
     latestTaskById.get('news') ?? createIdleTask('news', '星际和平周报', '独立 API 推演新闻与后台事件'),
+    latestTaskById.get('phone') ?? createIdleTask('phone', '手机来信', '主动来信种子与通讯入口'),
   ];
 
   return (

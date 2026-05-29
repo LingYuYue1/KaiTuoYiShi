@@ -1,8 +1,6 @@
 import type { 角色数据结构 } from '@/models/character';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS } from '@/models/path';
-import type { 剧情推进建议 } from '@/models/storyProgress';
-import { StoryProgressSuggestionCard } from '@/components/features/Story/StoryProgressSuggestionCard';
 
 interface LeftPanelProps {
   traveler: 角色数据结构;
@@ -11,11 +9,6 @@ interface LeftPanelProps {
   onOpenPhone?: () => void;
   phoneUnread?: number;
   currentStoryChapter?: string;
-  storyProgressSuggestion?: 剧情推进建议 | null;
-  onConfirmStoryProgress?: () => void;
-  onDeviateStoryProgress?: () => void;
-  onDismissStoryProgress?: () => void;
-  storyProgressDisabled?: boolean;
   desktop?: boolean;
 }
 
@@ -25,11 +18,6 @@ export function LeftPanel({
   onOpenPhone,
   phoneUnread = 0,
   currentStoryChapter,
-  storyProgressSuggestion = null,
-  onConfirmStoryProgress,
-  onDeviateStoryProgress,
-  onDismissStoryProgress,
-  storyProgressDisabled = false,
   desktop = true,
 }: LeftPanelProps) {
   const mainPath = traveler.命途列表?.find((path) => path.是否主命途) ?? traveler.命途列表?.[0];
@@ -194,14 +182,6 @@ export function LeftPanel({
             </div>
           </div>
         )}
-        <StoryProgressSuggestionCard
-          compact
-          suggestion={storyProgressSuggestion}
-          disabled={storyProgressDisabled}
-          onConfirm={onConfirmStoryProgress ?? (() => {})}
-          onDeviate={onDeviateStoryProgress ?? (() => {})}
-          onDismiss={onDismissStoryProgress ?? (() => {})}
-        />
       </div>
     </div>
   );

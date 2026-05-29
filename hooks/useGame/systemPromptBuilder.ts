@@ -99,6 +99,12 @@ export function buildSystemPrompt(
   const innerVoiceSection = buildInnerVoiceSection(settings);
   if (innerVoiceSection) parts.push(innerVoiceSection);
 
+  const responseLengthSection = buildResponseLengthSection(settings);
+  if (responseLengthSection) parts.push(responseLengthSection);
+
+  const speakerAttributionSection = buildSpeakerAttributionSection(traveler);
+  if (speakerAttributionSection) parts.push(speakerAttributionSection);
+
   if (currentScope === 'main') {
     parts.push(buildMainStoryControlSection(worldState));
   }
@@ -258,6 +264,12 @@ export function buildOpeningSystemPrompt(
   const innerVoiceSection = buildInnerVoiceSection(settings);
   if (innerVoiceSection) parts.push(innerVoiceSection);
 
+  const responseLengthSection = buildResponseLengthSection(settings);
+  if (responseLengthSection) parts.push(responseLengthSection);
+
+  const speakerAttributionSection = buildSpeakerAttributionSection(traveler);
+  if (speakerAttributionSection) parts.push(speakerAttributionSection);
+
   const timeAnchor = buildCurrentTimeAnchorSection(worldState);
   if (timeAnchor) parts.push(timeAnchor);
 
@@ -305,6 +317,38 @@ function buildInnerVoiceSection(settings: 游戏设置): string {
   return settings.enableInnerVoice
     ? '# 心声开关\n\n- 当前设置：心声输出开启。正文可使用【心声】段呈现主角的即时内心微动，但不要替玩家做决定。'
     : '# 心声开关\n\n- 当前设置：心声输出关闭。正文只保留【旁白】与【角色名】，不要输出【心声】段，也不要用内心独白替代旁白。';
+}
+
+function buildResponseLengthSection(settings: 游戏设置): string {
+  const target = Math.max(100, Math.trunc(Number(settings.wordCountTarget) || 500));
+  const softUpper = Math.ceil(target * 1.35);
+  const paragraphHint =
+    target >= 1200
+      ? '正文应拆成多个自然段，保留充足动作、环境、对话和承接余波。'
+      : target >= 700
+        ? '正文应有完整场景推进，避免只用短对白或摘要带过。'
+        : '正文可以紧凑，但不能低于目标字数。';
+  return [
+    '# 正文字数硬约束',
+    '',
+    `- 当前游戏设置的正文字数目标：不少于 ${target} 个中文字符。`,
+    `- <正文> 标签内的可见正文必须按这个目标展开，建议区间约 ${target}-${softUpper} 字；不要因为思维链、记忆、剧情编织、行动选项或模型默认习惯而缩短正文。`,
+    `- ${paragraphHint}`,
+    '- 本约束优先于可编辑提示词模块中的旧字数描述；若其他模块出现不同字数要求，以本段为准。',
+  ].join('\n');
+}
+
+function buildSpeakerAttributionSection(traveler: 角色数据结构): string {
+  const playerName = getPromptPlayerName(traveler);
+  return [
+    '# 发言归属硬约束',
+    '',
+    `- 【${playerName}】只允许承载玩家本回合输入中明确说出口的原话，或玩家明确要求转述为自己说出的话。`,
+    '- 玩家只是行动、观察、沉默、看向某人、移动或心理活动时，不要把旁白、环境反应、拟声词、怪物吼叫或 NPC 台词写到玩家名下。',
+    '- NPC 说话必须使用对应 NPC 名牌，例如【三月七】、【丹恒】；不知道说话者时使用【旁白】，不要用玩家名代替。',
+    '- 环境音效、生物吼叫、爆炸声、机械声、脚步声、广播声等只能写成【旁白】描述，禁止写成【玩家名】轰隆、【玩家名】吼、【玩家名】滴滴。', 
+    '- 可以在【旁白】中转述“你听见……”“她说……”，但转述内容不能冒充玩家发言；除非玩家输入明确包含这句话。', 
+  ].join('\n');
 }
 
 function injectPromptModules(

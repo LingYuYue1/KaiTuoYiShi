@@ -19,7 +19,6 @@ import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空剧情编织系统, 归一化剧情编织系统 } from '@/models/storyWeaving';
-import type { 剧情推进建议 } from '@/models/storyProgress';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务记录 } from '@/models/queueTask';
 import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
@@ -148,8 +147,6 @@ export interface UseGameStateReturn {
   set剧情: React.Dispatch<React.SetStateAction<剧情节点[]>>;
   剧情编织: 剧情编织系统;
   set剧情编织: React.Dispatch<React.SetStateAction<剧情编织系统>>;
-  剧情推进建议: 剧情推进建议 | null;
-  set剧情推进建议: React.Dispatch<React.SetStateAction<剧情推进建议 | null>>;
   variableBatches: 变量命令批次[];
   setVariableBatches: React.Dispatch<React.SetStateAction<变量命令批次[]>>;
   queueTasks: 队列任务记录[];
@@ -197,7 +194,6 @@ export function useGameState(): UseGameStateReturn {
   const [新闻, set新闻] = useState<新闻条目[]>([]);
   const [剧情, set剧情] = useState<剧情节点[]>([]);
   const [剧情编织, set剧情编织] = useState<剧情编织系统>(创建空剧情编织系统);
-  const [剧情推进建议, set剧情推进建议] = useState<剧情推进建议 | null>(null);
   const [variableBatches, setVariableBatches] = useState<变量命令批次[]>([]);
   const [queueTasks, setQueueTasks] = useState<队列任务记录[]>([]);
   const [apiSettings, setApiSettings] = useState<API设置>(创建空API设置);
@@ -381,7 +377,6 @@ export function useGameState(): UseGameStateReturn {
     新闻, set新闻,
     剧情, set剧情,
     剧情编织, set剧情编织,
-    剧情推进建议, set剧情推进建议,
     variableBatches, setVariableBatches,
     queueTasks, setQueueTasks,
     apiSettings, setApiSettings,

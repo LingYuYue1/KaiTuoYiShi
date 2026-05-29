@@ -1,15 +1,14 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
+import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
 import { 创建空记忆系统 } from '@/models/memory';
-import { 创建空忆庭系统, 归一化忆庭系统 } from '@/models/yiting';
-import { 归一化智库系统 } from '@/models/zhiku';
-import { 创建空手机系统, 归一化手机系统 } from '@/models/phone';
-import { 归一化世界状态 } from '@/models/world';
-import { 归一化剧情编织系统 } from '@/models/storyWeaving';
+import { 创建空忆庭系统 } from '@/models/yiting';
+import { 创建空手机系统 } from '@/models/phone';
 import type { API配置项 } from '@/models/settings';
+import { saveSetting } from '@/services/dbService';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -28,6 +27,7 @@ export interface UseGameReturn {
 
 export function useGame(): UseGameReturn {
   const state = useGameState();
+  const rerollContextRef = useRef<{ nonce: string; previousResponse: string } | null>(null);
 
   const getActiveConfig = useCallback((): API配置项 | null => {
     if (!state.apiSettings.activeConfigId) {
@@ -51,7 +51,10 @@ export function useGame(): UseGameReturn {
         state,
         getActiveConfig,
         onBeforeSend: () => {},
-        onAfterSend: () => {},
+        onAfterSend: () => {
+          rerollContextRef.current = null;
+        },
+        rerollContext: rerollContextRef.current,
       });
     },
     [state, getActiveConfig],
@@ -82,10 +85,12 @@ export function useGame(): UseGameReturn {
   // 关键：用 aiMsg.preTurnSnapshot 把所有变量切片回滚到「该 user 发送前」的状态，
   // 防止重 roll 后上一次的 NPC / 新闻等副作用与新一次的叠加。
   const handleReroll = useCallback(async (): Promise<string | void> => {
-    if (state.loading) return;
+    if (state.loading || state.pendingVariable) {
+      state.setWorkflowHint('后台结算尚未完成，稍等完成后再重roll，避免记忆/忆庭/变量写入错位。');
+      return;
+    }
     state.abortControllerRef.current?.abort();
     state.abortControllerRef.current = null;
-    state.setPendingVariable(false);
     const history = state.chatHistory;
     // 找到最后一条 AI 消息
     let lastAiIdx = -1;
@@ -107,29 +112,21 @@ export function useGame(): UseGameReturn {
     if (lastUserIdx === -1) return;
     const userInput = history[lastUserIdx].content;
     const snapshot = history[lastAiIdx].preTurnSnapshot;
-    const fallbackZhiku = state.智库;
+    const previousResponse = history[lastAiIdx].parsedResponse?.body || history[lastAiIdx].content || '';
+    rerollContextRef.current = {
+      nonce: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      previousResponse,
+    };
 
     // 砍掉 user + ai；如果有 snapshot，把所有变量切片回滚到 user 发送前
     const trimmed = history.slice(0, lastUserIdx);
     state.setChatHistory(trimmed);
+    state.setStreamingMessage('');
+    state.setWorkflowStatus('');
+    state.setWorkflowHint(snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。');
     if (snapshot) {
-      const nextZhiku = snapshot.智库
-        ? 归一化智库系统(snapshot.智库 as UseGameStateReturn['智库'])
-        : fallbackZhiku;
-      state.set旅人(snapshot.旅人 as Parameters<typeof state.set旅人>[0]);
-      state.set世界(归一化世界状态(snapshot.世界 as UseGameStateReturn['世界']));
-      state.set记忆(snapshot.记忆 as Parameters<typeof state.set记忆>[0]);
-      state.set忆庭(归一化忆庭系统(snapshot.忆庭 as UseGameStateReturn['忆庭']));
-      state.set智库(nextZhiku);
-      state.set手机(归一化手机系统(snapshot.手机 as UseGameStateReturn['手机']));
-      state.setNPC(snapshot.NPC as Parameters<typeof state.setNPC>[0]);
-      state.set新闻(snapshot.新闻 as Parameters<typeof state.set新闻>[0]);
-      state.set剧情(snapshot.剧情 as Parameters<typeof state.set剧情>[0]);
-      state.set剧情编织(归一化剧情编织系统(snapshot.剧情编织 as UseGameStateReturn['剧情编织']));
-      state.set剧情推进建议(null);
-      state.setVariableBatches(snapshot.variableBatches as Parameters<typeof state.setVariableBatches>[0]);
-      state.setQueueTasks((snapshot.queueTasks ?? []) as Parameters<typeof state.setQueueTasks>[0]);
-      state.setTurnCount(snapshot.turnCount);
+      const nextStoryWeaving = restorePreTurnSnapshot(state, snapshot);
+      await saveSetting('storyWeavingSystem', nextStoryWeaving);
     } else {
       // 老回复没 snapshot（迁移期 / 旧存档），只能粗略 turnCount -1，状态保持不变
       state.setTurnCount(Math.max(1, state.turnCount - 1));
@@ -156,7 +153,6 @@ export function useGame(): UseGameReturn {
     state.setNPC([]);
     state.set新闻([]);
     state.set剧情([]);
-    state.set剧情推进建议(null);
     state.setVariableBatches([]);
     state.setQueueTasks([]);
 

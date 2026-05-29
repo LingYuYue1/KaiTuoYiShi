@@ -6,6 +6,7 @@ import type { 剧情节点 } from '@/models/plot';
 import type { 新闻条目, 新闻生成结果, 新闻条目补丁 } from '@/models/news';
 import { 归一化新闻条目 } from '@/models/news';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
+import { getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { NEWS_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';
@@ -287,7 +288,7 @@ function buildStoryWeavingNewsBrief(system?: 剧情编织系统): string {
 
   const lines: string[] = [
     '【主注入剧情轨道】',
-    ...formatStorySeriesForNews(activeSeries, true),
+    ...formatStorySeriesForNews(activeSeries, true, system.当前进度),
   ];
   if (sideSeries.length) {
     lines.push('【非主注入剧情轨道 / 支线苗头】');
@@ -299,9 +300,18 @@ function buildStoryWeavingNewsBrief(system?: 剧情编织系统): string {
   return lines.join('\n');
 }
 
-function formatStorySeriesForNews(series: NonNullable<剧情编织系统['系列列表'][number]>, primary: boolean): string[] {
+function formatStorySeriesForNews(
+  series: NonNullable<剧情编织系统['系列列表'][number]>,
+  primary: boolean,
+  anchor?: 剧情编织系统['当前进度'],
+): string[] {
   const segments = [...series.分段列表].sort((a, b) => a.组号 - b.组号);
-  const current = segments.find((segment) => segment.运行状态 === '当前');
+  const diagnostics = primary ? getStoryWeavingInjectionDiagnostics({ 系列列表: [series], 当前系列ID: series.id, 当前进度: anchor }) : null;
+  const current = diagnostics
+    ? segments.find((segment) => segment.id === diagnostics.当前分段ID)
+    : segments.find((segment) => segment.id === anchor?.当前分段ID && !['已经历', '已跳过', '已偏离', '暂停'].includes(segment.运行状态))
+      ?? segments.find((segment) => segment.组号 === anchor?.当前分段组号 && segment.运行状态 === '当前')
+      ?? segments.find((segment) => segment.运行状态 === '当前');
   const next = current
     ? segments.find((segment) => segment.组号 > current.组号 && segment.运行状态 === '未开始')
     : segments.find((segment) => segment.运行状态 === '未开始');
@@ -316,6 +326,32 @@ function formatStorySeriesForNews(series: NonNullable<剧情编织系统['系列
     `来源：${series.来源类型 === 'canon' ? '原著剧情轨道' : '玩家自制剧情'}`,
     `新闻权限：${primary ? '主轨道外围压力' : '支线苗头 / 低优先级传闻'}`,
   ];
+  if (primary && anchor) {
+    lines.push('【剧情进度锚点】');
+    lines.push(JSON.stringify({
+      推进状态: anchor.推进状态,
+      当前分段组号: anchor.当前分段组号,
+      已完成摘要: anchor.已完成摘要.slice(0, 6),
+      历史归档: anchor.历史归档.slice(-6).map((item) => ({
+        分段组号: item.分段组号,
+        分段标题: item.分段标题,
+        归档状态: item.归档状态,
+        摘要: item.摘要,
+      })),
+      当前待解问题: anchor.当前待解问题.slice(0, 6),
+      最近判定理由: anchor.最近判定理由.slice(0, 5),
+    }, null, 2));
+    if (diagnostics) {
+      lines.push('【注入窗口诊断】');
+      lines.push(JSON.stringify({
+        健康状态: diagnostics.健康状态,
+        实际注入分段组号: diagnostics.当前分段组号,
+        实际注入分段标题: diagnostics.当前分段标题,
+        归档锚点标题: diagnostics.归档锚点标题,
+        检查项: diagnostics.检查项,
+      }, null, 2));
+    }
+  }
   if (current) {
     lines.push('【当前段外围压力】');
     lines.push(formatSegmentForNews(current, series.id, 'current'));

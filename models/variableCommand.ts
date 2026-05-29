@@ -25,7 +25,8 @@ export type 变量事实类型 =
   | 'npc'
   | 'item'
   | 'world_event'
-  | 'phone_seed';
+  | 'phone_seed'
+  | 'nsfw_archive';
 
 export interface 旅人档案变量事实 {
   type: 'traveler_profile';
@@ -107,6 +108,37 @@ export interface 手机来信变量事实 {
   evidence?: string;
 }
 
+export interface NSFW档案变量事实 {
+  type: 'nsfw_archive';
+  npcId?: string;
+  npcName: string;
+  enabled?: boolean;
+  ageConfirm?: 'adult' | 'unknown' | 'minor_blocked';
+  intimacyStage?: string;
+  boundaries?: string;
+  preferences?: string[];
+  sensitivePoints?: string[];
+  taboos?: string[];
+  femaleBodyArchive?: {
+    胸部?: string;
+    女性私处?: string;
+    后庭?: string;
+    体态?: string;
+    体味?: string;
+  };
+  maleBodyArchive?: {
+    男性器?: string;
+    后庭?: string;
+    体态?: string;
+    体味?: string;
+  };
+  experiences?: string[];
+  longTermFacts?: string[];
+  tags?: string[];
+  notes?: string;
+  evidence?: string;
+}
+
 export type 变量事实 =
   | 旅人档案变量事实
   | 时间变量事实
@@ -114,7 +146,8 @@ export type 变量事实 =
   | NPC变量事实
   | 物品变量事实
   | 世界事件变量事实
-  | 手机来信变量事实;
+  | 手机来信变量事实
+  | NSFW档案变量事实;
 
 export interface 变量事实批次 {
   facts: 变量事实[];

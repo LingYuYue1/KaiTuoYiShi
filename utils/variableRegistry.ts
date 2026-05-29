@@ -88,9 +88,9 @@ const ROOT_WRITE_POLICIES: Record<VariableRootKey, RootWritePolicy> = {
     label: '旅人',
     policy: 'partial',
     owner: '变量系统 + 命途/装备/战技服务层',
-    note: '可写基本档案、背包、装备引用、战技和已有命途进度。',
-    allowed: 'set 基本档案；push 旅人.背包；set 旅人.装备；玩家确认后 push/set 旅人.战技列表；add/sub 旅人.命途列表[id=...].进度。',
-    forbidden: '不要写 属性、主命途、命途列表整条目、命途阶段、待升阶、是否主命途。',
+    note: '玩家手写核心档案只读；变量系统只写运行时资产、装备引用、战技和已有命途进度。',
+    allowed: 'push 旅人.背包；set 旅人.装备；玩家确认后 push/set 旅人.战技列表；add/sub 旅人.命途列表[id=...].进度。',
+    forbidden: '不要写姓名、别名、性别、年龄、生日、身高、身份、外貌、性格、背景、专长知识、能力、头像、图像档案、属性、主命途、命途列表整条目、命途阶段、待升阶、是否主命途。',
   },
   世界: {
     label: '世界',
@@ -159,6 +159,23 @@ const READONLY_ROOTS = new Set<VariableRootKey>(
     .filter(([, policy]) => policy.policy === 'readonly')
     .map(([root]) => root as VariableRootKey),
 );
+
+const TRAVELER_PLAYER_AUTHORED_FIELDS = new Set([
+  '姓名',
+  '别名',
+  '性别',
+  '年龄',
+  '生日',
+  '身高',
+  '身份',
+  '外貌',
+  '性格',
+  '背景',
+  '专长知识',
+  '能力',
+  '头像',
+  '图像档案',
+]);
 
 interface ArraySchemaTemplate {
   path: string;
@@ -324,7 +341,9 @@ export function buildVariableRegistry(state: Partial<VariableState>, options?: R
     if (result.length >= maxLines) break;
   }
 
-  return Array.from(new Set(result)).slice(0, maxLines);
+  return Array.from(new Set(result))
+    .filter((path) => path !== '旅人' && !isTravelerPlayerAuthoredPath(path))
+    .slice(0, maxLines);
 }
 
 /** 把登记表格式化成 prompt 注入文本。 */
@@ -617,13 +636,33 @@ function isDeprecatedProtectedPath(rawKey: string): string | null {
   return null;
 }
 
+function isTravelerPlayerAuthoredPath(rawKey: string): boolean {
+  const parsed = extractRoot(rawKey);
+  if (parsed?.root !== '旅人') return false;
+  if (!parsed.rest) return false;
+  const tokens = 解析路径片段(parsed.rest);
+  const first = tokens[0];
+  return typeof first === 'string' && TRAVELER_PLAYER_AUTHORED_FIELDS.has(first);
+}
+
+export function isTravelerPlayerAuthoredVariablePath(rawKey: string): boolean {
+  const key = rawKey.trim();
+  return key === '旅人' || key === '旅人.穿着' || isTravelerPlayerAuthoredPath(key);
+}
+
 /** 校验一条命令是否符合登记表。 */
 export function validateCommand(cmd: 变量命令, state: Partial<VariableState>): CommandValidation {
   if (!cmd || typeof cmd.key !== 'string') {
     return { allowed: false, reason: '命令格式错误：缺少 key' };
   }
-  if (cmd.key.trim() === '旅人.穿着') {
-    return { allowed: false, reason: '旅人.穿着 未登记；玩家服装请合并写入 旅人.外貌，NPC 服装才写 NPC[id=...].穿着' };
+  if (isTravelerPlayerAuthoredVariablePath(cmd.key) && cmd.key.trim() === '旅人.穿着') {
+    return { allowed: false, reason: '旅人.穿着 未登记；旅人外观/服装属于玩家手写档案，变量模型不得维护；NPC 服装才写 NPC[id=...].穿着' };
+  }
+  if (isTravelerPlayerAuthoredVariablePath(cmd.key)) {
+    return {
+      allowed: false,
+      reason: `旅人核心档案 ${cmd.key} 由玩家手写维护，变量模型不得 ${cmd.action}。请改写为 NPC 记忆、世界事件、物品或剧情正文承接。`,
+    };
   }
   // 狭间状态机 + 命途结构字段:变量模型只能读不能写,违者直接拒
   if (isAwakeningProtectedPath(cmd.key, cmd.action)) {
@@ -651,6 +690,12 @@ export function validateCommand(cmd: 变量命令, state: Partial<VariableState>
 
   // 整段根：始终允许（push/set/delete 根本身）
   if (parsed.rest.length === 0) {
+    if (parsed.root === '旅人') {
+      return {
+        allowed: false,
+        reason: `旅人根对象包含玩家手写核心档案，变量模型不得 ${cmd.action} 整个旅人。请写入 旅人.背包 / 旅人.装备 / 旅人.战技列表 / 旅人.命途列表[id=...].进度 等允许路径。`,
+      };
+    }
     if (cmd.action === 'push' && !Array.isArray(rootValue)) {
       return { allowed: false, reason: `push 目标 ${parsed.root} 不是数组` };
     }

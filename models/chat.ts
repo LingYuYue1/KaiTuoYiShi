@@ -11,12 +11,14 @@ export interface 回合快照 {
   智库?: unknown;
   手机?: unknown;
   NPC: unknown[];
+  相册?: unknown;
   新闻: unknown[];
   剧情: unknown[];
   剧情编织?: unknown;
   variableBatches: unknown[];
   queueTasks?: unknown[];
   turnCount: number;
+  pendingOpeningTrigger?: string | null;
 }
 
 export interface 聊天消息 {

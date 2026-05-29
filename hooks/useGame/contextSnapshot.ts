@@ -7,6 +7,9 @@ import { buildPhoneMessages, buildPhoneSystemPrompt } from '@/services/ai/phoneS
 import { buildVariableModelPrompt } from '@/services/ai/variableModel';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
+import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
+import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
+import { buildNpcRelationshipPlanning } from '@/services/npcRelationshipPlanning';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
 import { snapshotVariableState } from '@/utils/variableExecutor';
 import { buildImmediateStoryReview, buildMainRecallQuery, getMainHistoryWindow } from './historyWindow';
@@ -125,6 +128,107 @@ function categoryForPromptSection(title: string): string {
   if (title.includes('剧情编织')) return '剧情';
   if (title.includes('思维链')) return '思维链';
   return '系统';
+}
+
+function formatStoryWeavingProgressSnapshot(state: UseGameStateReturn): string {
+  const story = state.剧情编织;
+  const progress = story.当前进度;
+  const diagnostics = getStoryWeavingInjectionDiagnostics(story);
+  const series = story.系列列表.find((item) => item.id === (progress?.当前系列ID || story.当前系列ID))
+    ?? story.系列列表.find((item) => item.激活注入 !== false)
+    ?? story.系列列表[0];
+  const current = series?.分段列表.find((segment) => segment.id === progress?.当前分段ID)
+    ?? series?.分段列表.find((segment) => segment.组号 === progress?.当前分段组号)
+    ?? series?.分段列表.find((segment) => segment.组号 === series.当前分段组号)
+    ?? series?.分段列表.find((segment) => segment.运行状态 === '当前');
+  if (!series || !current) return '当前没有可用的剧情编织进度锚点。';
+  return [
+    '# 剧情编织进度快照',
+    '',
+    `系列：${series.标题}`,
+    `当前分段：第 ${current.组号} 段「${current.标题}」`,
+    `运行状态：${current.运行状态}`,
+    `推进状态：${progress?.推进状态 ?? '未记录'}`,
+    diagnostics ? `注入健康：${diagnostics.健康状态}` : '',
+    diagnostics ? `实际注入当前段：第 ${diagnostics.当前分段组号} 段「${diagnostics.当前分段标题}」｜${diagnostics.当前分段运行状态}` : '',
+    diagnostics?.归档锚点标题 ? `已跳过归档锚点：第 ${diagnostics.归档锚点组号} 段「${diagnostics.归档锚点标题}」` : '',
+    diagnostics?.检查项.length ? `注入检查：\n${diagnostics.检查项.map((item) => `- ${item}`).join('\n')}` : '',
+    `最近判定回合：${progress?.最近一次推进判定回合 ?? '未记录'}`,
+    progress?.最近门禁结果 ? `最近门禁结果：${progress.最近门禁结果}` : '',
+    progress?.已完成摘要?.length ? `已完成摘要：\n${progress.已完成摘要.map((item) => `- ${item}`).join('\n')}` : '',
+    progress?.当前待解问题?.length ? `当前待解问题：\n${progress.当前待解问题.map((item) => `- ${item}`).join('\n')}` : '',
+    progress?.最近判定理由?.length ? `最近判定理由：\n${progress.最近判定理由.map((item) => `- ${item}`).join('\n')}` : '',
+    progress?.历史归档?.length ? `历史归档：\n${progress.历史归档.slice(-8).map((item) => `- 第${item.分段组号}段「${item.分段标题}」｜${item.归档状态}${item.归档回合 ? `｜回合${item.归档回合}` : ''}：${item.摘要}`).join('\n')}` : '',
+    current.本段结束状态.length ? `本段结束状态：\n${current.本段结束状态.slice(0, 6).map((item) => `- ${item}`).join('\n')}` : '',
+    current.给后续参考.length ? `给后续参考：\n${current.给后续参考.slice(0, 6).map((item) => `- ${item}`).join('\n')}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function formatStoryWeavingGateSnapshot(state: UseGameStateReturn, ctx: {
+  recentUserInput: string;
+  recentAIResponse?: string;
+  currentLocation?: string;
+}): string {
+  const gate = evaluateStoryWeavingGate(state.剧情编织, {
+    recentUserInput: ctx.recentUserInput,
+    recentAIResponse: ctx.recentAIResponse ?? '',
+    currentLocation: ctx.currentLocation ?? '',
+  });
+  const diagnostics = getStoryWeavingInjectionDiagnostics(state.剧情编织);
+  if (!gate) return '当前没有可评估的剧情编织门禁。';
+  return [
+    '# 剧情编织门禁预览',
+    '',
+    `系列ID：${gate.系列ID ?? '未知'}`,
+    `分段：第 ${gate.分段组号 ?? '?'} 段`,
+    `门禁结果：${gate.mode}`,
+    diagnostics ? `注入健康：${diagnostics.健康状态}` : '',
+    diagnostics ? `实际注入当前段：第 ${diagnostics.当前分段组号} 段「${diagnostics.当前分段标题}」｜${diagnostics.当前分段运行状态}` : '',
+    diagnostics?.归档锚点标题 ? `已跳过归档锚点：第 ${diagnostics.归档锚点组号} 段「${diagnostics.归档锚点标题}」` : '',
+    diagnostics?.前一分段标题 ? `历史承接段：${diagnostics.前一分段标题}` : '',
+    diagnostics?.下一分段标题 ? `下一段预热：${diagnostics.下一分段标题}` : '',
+    diagnostics?.检查项.length ? `注入检查：\n${diagnostics.检查项.map((item) => `- ${item}`).join('\n')}` : '',
+    gate.reasons.length ? `命中理由：\n${gate.reasons.map((item) => `- ${item}`).join('\n')}` : '命中理由：无，默认软参考',
+  ].filter(Boolean).join('\n');
+}
+
+function formatStoryPlanningAnalysisSnapshot(state: UseGameStateReturn): string {
+  const analysis = buildStoryPlanningAnalysis(state.剧情编织);
+  if (!analysis) return '当前没有可用的剧情规划分析。';
+  return [
+    '# 剧情规划分析快照',
+    '',
+    `系列：${analysis.系列标题}`,
+    `当前分段：第 ${analysis.当前分段组号} 段「${analysis.当前分段标题}」`,
+    `推进状态：${analysis.推进状态}`,
+    `门禁结果：${analysis.门禁结果}`,
+    `建议动作：${analysis.建议动作}`,
+    `偏离风险：${analysis.偏离风险}`,
+    analysis.分析理由.length ? `分析理由：\n${analysis.分析理由.map((item) => `- ${item}`).join('\n')}` : '',
+    analysis.关注事项.length ? `关注事项：\n${analysis.关注事项.map((item) => `- ${item}`).join('\n')}` : '',
+    analysis.切段条件.length ? `切段条件：\n${analysis.切段条件.map((item) => `- ${item}`).join('\n')}` : '',
+    analysis.待迁移事项.length ? `待迁移事项：\n${analysis.待迁移事项.map((item) => `- ${item}`).join('\n')}` : '',
+    analysis.下一步调度.length ? `下一步调度：\n${analysis.下一步调度.map((item) => `- ${item}`).join('\n')}` : '',
+    analysis.归档检查.length ? `归档检查：\n${analysis.归档检查.map((item) => `- ${item}`).join('\n')}` : '',
+    analysis.历史摘要.length ? `历史摘要：\n${analysis.历史摘要.map((item) => `- ${item}`).join('\n')}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function formatNpcRelationshipPlanningSnapshot(state: UseGameStateReturn): string {
+  const analysis = buildNpcRelationshipPlanning(state.NPC, state.turnCount);
+  return [
+    '# NPC 关系规划分析',
+    '',
+    analysis.总览,
+    '',
+    ...analysis.条目.slice(0, 8).map((item, index) => [
+      `${index + 1}. ${item.姓名}｜${item.关系}｜好感 ${item.好感度}｜${item.同行 ? '同行' : '未同行'}`,
+      `优先级：${item.优先级}`,
+      `建议动作：${item.建议动作}`,
+      item.理由.length ? `理由：${item.理由.join('；')}` : '',
+      item.关注点.length ? `关注点：${item.关注点.join('；')}` : '',
+    ].filter(Boolean).join('\n')),
+  ].filter(Boolean).join('\n\n');
 }
 
 function buildApiMessages(
@@ -293,6 +397,30 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       );
 
   const sections: ContextSection[] = [];
+  addSection(sections, {
+    id: 'story_weaving_progress',
+    title: '剧情编织进度快照',
+    category: '剧情',
+    content: formatStoryWeavingProgressSnapshot(state),
+  });
+  addSection(sections, {
+    id: 'story_weaving_gate',
+    title: '剧情编织门禁预览',
+    category: '剧情',
+    content: formatStoryWeavingGateSnapshot(state, worldbookCtx),
+  });
+  addSection(sections, {
+    id: 'story_planning_analysis',
+    title: '剧情规划分析快照',
+    category: '剧情',
+    content: formatStoryPlanningAnalysisSnapshot(state),
+  });
+  addSection(sections, {
+    id: 'npc_relationship_planning',
+    title: 'NPC 关系规划分析',
+    category: '伙伴',
+    content: formatNpcRelationshipPlanningSnapshot(state),
+  });
   splitPromptSections(systemPrompt).forEach((item, index) => {
     addSection(sections, {
       id: `system_${index}`,
@@ -367,7 +495,8 @@ function buildVariableContextSnapshot(state: UseGameStateReturn): ContextSnapsho
       '',
       '---',
       '',
-      '请阅读上面的正文，输出本回合的 <变量更新> 命令块。',
+      '请阅读上面的正文，输出 <thinking>、<变量事实> JSON 和兼容 <变量更新> 块。默认让 <变量更新> 留空。',
+      '只按“主模型回复正文”里实际发生的台前事实落库；剧情编织/智库/新闻/回忆材料如果没有进入正文，不是变量事实。',
     ].join('\n'),
   });
   return finalizeSnapshot('variable', '变量模型上下文', sections, sourceInput);
@@ -397,8 +526,15 @@ function buildPhoneContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     userText: sourceInput,
     seed,
     mainChatHistory: state.chatHistory,
+    storyWeaving: state.剧情编织,
   };
   const sections: ContextSection[] = [];
+  addSection(sections, {
+    id: 'yiting_story_progress',
+    title: '剧情编织进度快照',
+    category: '剧情',
+    content: formatStoryWeavingProgressSnapshot(state),
+  });
   addSection(sections, {
     id: 'phone_system',
     title: '手机系统提示词',

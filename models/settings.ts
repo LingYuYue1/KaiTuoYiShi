@@ -811,6 +811,8 @@ export interface 存档数据 {
   id: number;
   type: 存档类型;
   timestamp: number;
+  /** 当前运行回合计数。旧存档没有该字段时，读档会按聊天记录兜底推算。 */
+  turnCount?: number;
   旅人: import('./character').角色数据结构;
   世界: import('./world').世界状态;
   chatHistory: import('./chat').聊天消息[];

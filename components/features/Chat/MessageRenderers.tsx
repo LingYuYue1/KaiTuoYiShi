@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
+import { shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
 
 interface ThinkingBlockProps {
   content: string;
@@ -48,6 +49,7 @@ interface BodyBlockProps {
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
+  userInput?: string;
 }
 
 // 三种行格式：【旁白】/【角色名】/【心声】。
@@ -84,6 +86,7 @@ const SOUND_EFFECT_TAGS = new Set([
   '嘶嘶',
   '轰',
   '轰隆',
+  '轰隆隆',
   '砰',
   '砰砰',
   '咚',
@@ -113,9 +116,11 @@ const SOUND_EFFECT_TAGS = new Set([
   '哐',
   '哐当',
   '扑通',
+  '隆',
+  '隆隆',
 ]);
 
-function parseBodyLines(body: string, traveler?: 角色数据结构): ParsedBodyLine[] {
+function parseBodyLines(body: string, traveler?: 角色数据结构, userInput?: string): ParsedBodyLine[] {
   return body.split(/\r?\n/).flatMap<ParsedBodyLine>((raw) => {
     const trimmed = raw.trim();
     if (!trimmed) return { kind: 'blank' };
@@ -126,7 +131,7 @@ function parseBodyLines(body: string, traveler?: 角色数据结构): ParsedBody
         return { kind: 'narration', text };
       }
       const quoted = extractFullQuotedSpeech(text);
-      if (quoted && traveler) {
+      if (quoted && traveler && !shouldRenderAsNarrationForPlayerLine(quoted, userInput)) {
         return { kind: 'dialogue', name: getTravelerDisplayName(traveler), text: quoted };
       }
       return { kind: 'narration', text };
@@ -142,7 +147,7 @@ function parseBodyLines(body: string, traveler?: 角色数据结构): ParsedBody
       if (isSoundEffectSpeakerName(name)) {
         return { kind: 'narration', text: combineSoundEffectNarration(name, text) };
       }
-      return splitDialogueAndTrailingNarration(name, text, traveler);
+      return splitDialogueAndTrailingNarration(name, text, traveler, userInput);
     }
     if (isSoundEffectText(trimmed)) {
       return { kind: 'narration', text: trimmed };
@@ -173,9 +178,10 @@ function isSoundEffectText(text: string): boolean {
 }
 
 function isNormalizedSoundEffect(clean: string): boolean {
-  if (!clean || clean.length > 8) return false;
+  if (!clean || clean.length > 18) return false;
   if (SOUND_EFFECT_TAGS.has(clean)) return true;
-  return clean.length <= 6 && [...clean].every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0]);
+  if (clean.length <= 8 && [...clean].every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0])) return true;
+  return /^(轰隆隆|轰隆|隆隆|轰|隆|砰|咚|咔哒|咔|吼|嗷|嘶|呜|滴滴|滴|嗡|滋|哐当|哐|啪|唰|咻){1,5}$/.test(clean);
 }
 
 function combineSoundEffectNarration(name: string, text: string): string {
@@ -205,9 +211,13 @@ function splitDialogueAndTrailingNarration(
   name: string,
   text: string,
   traveler?: 角色数据结构,
+  userInput?: string,
 ): ParsedBodyLine[] {
   if (!traveler || !isProtagonist(name, traveler)) {
     return [{ kind: 'dialogue', name, text }];
+  }
+  if (shouldRenderAsNarrationForPlayerLine(text, userInput)) {
+    return [{ kind: 'narration', text }];
   }
 
   const quoteMatch = text.match(/^([“"「].+?[”"」][。！？!?]?)(\s+.+)$/);
@@ -434,8 +444,8 @@ function NarrationLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
   );
 }
 
-export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true }: BodyBlockProps) {
-  const lines = useMemo(() => (content ? parseBodyLines(content, traveler) : []), [content, traveler]);
+export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true, userInput }: BodyBlockProps) {
+  const lines = useMemo(() => (content ? parseBodyLines(content, traveler, userInput) : []), [content, traveler, userInput]);
   if (!content) return null;
 
   return (
@@ -547,9 +557,10 @@ interface StreamingPreviewProps {
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
+  userInput?: string;
 }
 
-export function StreamingPreview({ content, npcRecords, traveler, showInnerVoice = true }: StreamingPreviewProps) {
+export function StreamingPreview({ content, npcRecords, traveler, showInnerVoice = true, userInput }: StreamingPreviewProps) {
   const { bodyStarted, bodyText } = useMemo(() => extractStreamingBody(content), [content]);
 
   return (
@@ -557,7 +568,7 @@ export function StreamingPreview({ content, npcRecords, traveler, showInnerVoice
       <PathfindingIndicator />
       {bodyStarted && bodyText && (
         <div className="px-1 py-1">
-          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} />
+          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={userInput} />
         </div>
       )}
     </div>

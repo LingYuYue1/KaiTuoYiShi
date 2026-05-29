@@ -12,13 +12,14 @@ interface TurnItemProps {
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
+  previousUserInput?: string;
   // 历史评判消息若 awakenPathId 为空,由 ChatList 向前查找补一个 ID 进来。
   fallbackPathId?: string;
 }
 
 type ToolKey = 'edit' | 'thinking' | 'variables' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
-export function TurnItem({ message, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId }: TurnItemProps) {
+export function TurnItem({ message, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
 
@@ -38,6 +39,7 @@ export function TurnItem({ message, isStreaming, onEditBody, npcRecords, travele
           traveler={traveler}
           showInnerVoice={showInnerVoice}
           fallbackPathId={fallbackPathId}
+          previousUserInput={previousUserInput}
         />
       ) : message.isStreaming ? (
         <StreamingPreview
@@ -45,6 +47,7 @@ export function TurnItem({ message, isStreaming, onEditBody, npcRecords, travele
           npcRecords={npcRecords}
           traveler={traveler}
           showInnerVoice={showInnerVoice}
+          userInput={previousUserInput}
         />
       ) : null}
     </div>
@@ -136,9 +139,10 @@ interface AiTurnCardProps {
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
   fallbackPathId?: string;
+  previousUserInput?: string;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -280,7 +284,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
             showInnerVoice={showInnerVoice}
           />
         ) : (
-          <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} />
+      <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={previousUserInput} />
         )}
 
         {isStreaming && (
@@ -359,8 +363,8 @@ function formatDebugContext(message: 聊天消息): string {
   const debug = message.debugContext;
   if (!debug) return '这条历史消息没有保存请求上下文。请从新增按钮后的新回合开始查看。';
   const recall = debug.recallPreview?.trim()
-    ? ['【剧情回忆召回预览】', debug.recallPreview.trim()].join('\n')
-    : '【剧情回忆召回预览】\n（无或未命中）';
+    ? ['【回忆与剧情编织预览】', debug.recallPreview.trim()].join('\n')
+    : '【回忆与剧情编织预览】\n（无或未命中）';
   const system = ['【System Prompt】', debug.systemPrompt || '（空）'].join('\n');
   const messages = [
     '【Messages】',

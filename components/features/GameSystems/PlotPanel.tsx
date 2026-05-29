@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { API设置, 游戏设置 } from '@/models/settings';
-import type { 剧情编织分段, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
+import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
 import {
   创建剧情编织系列FromText,
   归一化剧情编织系统,
   重建剧情编织系列FromText,
 } from '@/models/storyWeaving';
-import { buildStoryWeavingApiConfig, decomposeStorySegment } from '@/services/storyWeaving';
+import { buildStoryWeavingApiConfig, decomposeStorySegment, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
+import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { saveSetting } from '@/services/dbService';
 import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 
@@ -75,6 +76,63 @@ const splitList = (value: string) =>
     .split(/\n|；|;|\|/g)
     .map((item) => item.replace(/^[-*]\s*/, '').trim())
     .filter(Boolean);
+const uniqueText = (values: string[], limit: number) => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values.map((item) => item.trim()).filter(Boolean)) {
+    const key = value.replace(/\s+/g, '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+    if (result.length >= limit) break;
+  }
+  return result;
+};
+
+function buildManualProgressAnchor(
+  previous: 剧情编织进度锚点 | undefined,
+  series: 剧情编织系列,
+  segment: 剧情编织分段,
+  note: string,
+): 剧情编织进度锚点 {
+  return {
+    当前系列ID: series.id,
+    当前分段ID: segment.id,
+    当前分段组号: segment.组号,
+    推进状态: segment.运行状态 === '已经历' ? '已完成'
+      : segment.运行状态 === '已偏离' ? '已偏离'
+        : segment.运行状态 === '暂停' ? '暂停'
+          : segment.运行状态 === '未开始' ? '未开始'
+            : '推进中',
+    已完成摘要: previous?.已完成摘要 ?? [],
+    当前待解问题: uniqueText([
+      ...segment.给后续参考,
+      ...segment.关键事件.flatMap((event) => event.触发条件),
+    ], 10),
+    切换说明: uniqueText([...(previous?.切换说明 ?? []), note], 10),
+    历史归档: previous?.历史归档 ?? [],
+    最近门禁结果: previous?.最近门禁结果,
+    最近判定理由: ['手动修正剧情编织进度'],
+    最近一次推进判定回合: previous?.最近一次推进判定回合,
+    updatedAt: Date.now(),
+  };
+}
+
+function getSeriesAnchorSegment(series: 剧情编织系列): 剧情编织分段 | undefined {
+  return series.分段列表.find((segment) => segment.组号 === series.当前分段组号 && segment.运行状态 === '当前')
+    ?? series.分段列表.find((segment) => segment.组号 === series.当前分段组号)
+    ?? series.分段列表.find((segment) => segment.运行状态 === '当前')
+    ?? series.分段列表[0];
+}
+
+function buildSeriesProgressAnchor(
+  previous: 剧情编织进度锚点 | undefined,
+  series: 剧情编织系列 | undefined,
+  note: string,
+): 剧情编织进度锚点 | undefined {
+  const segment = series ? getSeriesAnchorSegment(series) : undefined;
+  return series && segment ? buildManualProgressAnchor(previous, series, segment, note) : undefined;
+}
 
 function draftFromSegment(segment: 剧情编织分段): SegmentDraft {
   return {
@@ -127,12 +185,16 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const customSeries = useMemo(() => normalized.系列列表.filter((series) => series.来源类型 !== 'canon'), [normalized.系列列表]);
   const visibleSeries = trackTab === 'canon' ? canonSeries : customSeries;
   const activeSeries = normalized.系列列表.find((s) => s.id === normalized.当前系列ID) ?? normalized.系列列表[0];
+  const activeProgress = normalized.当前进度?.当前系列ID === activeSeries?.id ? normalized.当前进度 : undefined;
+  const planningAnalysis = useMemo(() => buildStoryPlanningAnalysis(normalized), [normalized]);
+  const injectionDiagnostics = useMemo(() => getStoryWeavingInjectionDiagnostics(normalized), [normalized]);
   const viewSeries = visibleSeries.find((s) => s.id === activeSeries?.id)
     ?? visibleSeries.find((s) => s.id === expandedSeriesId)
     ?? visibleSeries[0];
   const selectedSegment = viewSeries?.分段列表.find((s) => s.id === selectedSegmentId)
     ?? viewSeries?.分段列表.find((s) => s.组号 === viewSeries.当前分段组号)
     ?? viewSeries?.分段列表[0];
+  const selectedProgress = normalized.当前进度?.当前分段ID === selectedSegment?.id ? normalized.当前进度 : undefined;
   const visibleSystem = useMemo<剧情编织系统>(() => ({
     ...normalized,
     系列列表: visibleSeries,
@@ -148,7 +210,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     && activeCurrentSegments.some(({ series }) => series.来源类型 !== 'canon');
 
   const handleSelectSeries = async (series: 剧情编织系列) => {
-    await persist({ ...normalized, 当前系列ID: series.id });
+    await persist({
+      ...normalized,
+      当前系列ID: series.id,
+      当前进度: buildSeriesProgressAnchor(normalized.当前进度, series, `切换当前剧情系列：${series.标题}`),
+    });
     setExpandedSeriesId((current) => current === series.id ? null : series.id);
     setSelectedSegmentId(series.分段列表[0]?.id ?? null);
   };
@@ -204,6 +270,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     const next = {
       系列列表: [...normalized.系列列表, series],
       当前系列ID: series.id,
+      当前进度: buildSeriesProgressAnchor(normalized.当前进度, series, `导入剧情系列：${series.标题}`),
     };
     setSelectedSegmentId(series.分段列表[0]?.id ?? null);
     setExpandedSeriesId(series.id);
@@ -260,9 +327,14 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     try {
       const bundled = await loadAllBundledStoryWeavingPresets();
       const merged = mergeBundledStoryWeavingPresets(normalized, bundled);
+      const current = merged.系列列表.find((series) => series.id === merged.当前系列ID) ?? merged.系列列表[0];
       setSelectedSegmentId(merged.系列列表[0]?.分段列表[0]?.id ?? null);
       setExpandedSeriesId(merged.系列列表[0]?.id ?? null);
-      await persist(merged);
+      await persist({
+        ...merged,
+        当前系列ID: current?.id,
+        当前进度: buildSeriesProgressAnchor(merged.当前进度, current, '恢复内置原著剧情后同步当前锚点'),
+      });
       setMessage(`已恢复内置原著剧情：${bundled.系列列表.length} 个轨道。`);
     } catch (err) {
       const text = (err as Error).message;
@@ -297,36 +369,47 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   };
 
   const handleSetCurrent = async (series: 剧情编织系列, group: number) => {
-    await updateSeries(series.id, (s) => ({
-      ...s,
+    const target = series.分段列表.find((item) => item.组号 === group);
+    if (!target) return;
+    const now = Date.now();
+    const nextSeries: 剧情编织系列 = {
+      ...series,
       当前分段组号: group,
-      分段列表: s.分段列表.map((item) => ({
+      分段列表: series.分段列表.map((item) => ({
         ...item,
         运行状态: item.组号 === group ? '当前' : item.运行状态 === '当前' ? '未开始' : item.运行状态,
-        updatedAt: item.组号 === group || item.运行状态 === '当前' ? Date.now() : item.updatedAt,
+        updatedAt: item.组号 === group || item.运行状态 === '当前' ? now : item.updatedAt,
       })),
-      updatedAt: Date.now(),
-    }));
+      updatedAt: now,
+    };
+    await persist({
+      ...normalized,
+      当前系列ID: series.id,
+      系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
+      当前进度: buildManualProgressAnchor(normalized.当前进度, nextSeries, { ...target, 运行状态: '当前', updatedAt: now }, `手动设为当前：${target.标题}`),
+    });
   };
 
   const handleSetRuntimeStatus = async (series: 剧情编织系列, segment: 剧情编织分段, status: 剧情编织运行状态) => {
-    await updateSeries(series.id, (s) => ({
-      ...s,
-      当前分段组号: status === '当前' ? segment.组号 : s.当前分段组号,
-      分段列表: s.分段列表.map((item) => {
-        if (status === '当前') {
-          return {
-            ...item,
-            运行状态: item.id === segment.id ? '当前' : item.运行状态 === '当前' ? '未开始' : item.运行状态,
-            updatedAt: item.id === segment.id || item.运行状态 === '当前' ? Date.now() : item.updatedAt,
-          };
-        }
-        return item.id === segment.id
-          ? { ...item, 运行状态: status, updatedAt: Date.now() }
-          : item;
-      }),
-      updatedAt: Date.now(),
-    }));
+    if (status === '当前') {
+      await handleSetCurrent(series, segment.组号);
+      return;
+    }
+    const now = Date.now();
+    const nextSeries: 剧情编织系列 = {
+      ...series,
+      分段列表: series.分段列表.map((item) => item.id === segment.id ? { ...item, 运行状态: status, updatedAt: now } : item),
+      updatedAt: now,
+    };
+    const nextSegment = { ...segment, 运行状态: status, updatedAt: now };
+    const nextProgress = normalized.当前进度?.当前分段ID === segment.id
+      ? buildManualProgressAnchor(normalized.当前进度, nextSeries, nextSegment, `手动标记为${status}：${segment.标题}`)
+      : normalized.当前进度;
+    await persist({
+      ...normalized,
+      系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
+      当前进度: nextProgress,
+    });
   };
 
   const handleSaveDraft = async (series: 剧情编织系列, segment: 剧情编织分段) => {
@@ -460,13 +543,17 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     }
     if (!window.confirm('确认删除这个剧情系列？')) return;
     const rest = normalized.系列列表.filter((s) => s.id !== seriesId);
-    await persist({ 系列列表: rest, 当前系列ID: rest[0]?.id });
+    await persist({
+      系列列表: rest,
+      当前系列ID: rest[0]?.id,
+      当前进度: buildSeriesProgressAnchor(normalized.当前进度, rest[0], '删除剧情系列后同步当前锚点'),
+    });
     setSelectedSegmentId(rest[0]?.分段列表[0]?.id ?? null);
     setExpandedSeriesId(rest[0]?.id ?? null);
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:overflow-hidden">
+    <div className="kaituo-options-scroll relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
       <div
         className="pointer-events-none absolute inset-0 opacity-70"
         style={{
@@ -476,9 +563,10 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.9), rgba(0,0,0,0.2))',
         }}
       />
-      <div className="relative z-10 flex h-full min-h-0 flex-col gap-3">
-        <HeaderCard
-          activeSeries={activeSeries}
+      <div className="relative z-10 flex min-h-max flex-col gap-3 pb-6">
+                <HeaderCard
+                  activeSeries={activeSeries}
+                  progress={activeProgress}
           seriesCount={normalized.系列列表.length}
           totalChapters={normalized.系列列表.reduce((sum, series) => sum + series.章节列表.length, 0)}
           totalSegments={normalized.系列列表.reduce((sum, series) => sum + series.分段列表.length, 0)}
@@ -536,10 +624,38 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                       <span style={{ color: activeSeries.来源类型 === 'canon' ? 'rgb(var(--tj-accent-primary))' : 'rgba(145,210,175,0.9)' }}>
                         {activeSeries.来源类型 === 'canon' ? '原著剧情' : '自制剧情'}
                       </span>
-                      <span>当前段 {activeSeries.当前分段组号}</span>
+                      <span>当前段 {activeProgress?.当前分段组号 ?? activeSeries.当前分段组号}</span>
+                      {activeProgress && <span>推进状态 {activeProgress.推进状态}</span>}
                     </>
                   )}
                 </div>
+                {activeProgress && (
+                  <div className="mt-2 grid gap-2 text-[11px] md:grid-cols-3">
+                    <ProgressMiniBlock label="已完成摘要" values={activeProgress.已完成摘要} />
+                    <ProgressMiniBlock label="当前待解问题" values={activeProgress.当前待解问题} />
+                    <ProgressMiniBlock label="最近判定理由" values={activeProgress.最近判定理由} />
+                  </div>
+                )}
+                {injectionDiagnostics && (
+                  <div className="mt-2 grid gap-2 text-[11px] md:grid-cols-3">
+                    <ProgressMiniBlock
+                      label={`注入健康：${injectionDiagnostics.健康状态}`}
+                      values={injectionDiagnostics.检查项}
+                    />
+                    <ProgressMiniBlock
+                      label="实际注入段"
+                      values={[`第 ${injectionDiagnostics.当前分段组号} 段「${injectionDiagnostics.当前分段标题}」｜${injectionDiagnostics.当前分段运行状态}`]}
+                    />
+                    <ProgressMiniBlock
+                      label="窗口预热"
+                      values={[
+                        injectionDiagnostics.归档锚点标题 ? `跳过归档：第 ${injectionDiagnostics.归档锚点组号} 段「${injectionDiagnostics.归档锚点标题}」` : '',
+                        injectionDiagnostics.前一分段标题 ? `历史：${injectionDiagnostics.前一分段标题}` : '',
+                        injectionDiagnostics.下一分段标题 ? `下一段：${injectionDiagnostics.下一分段标题}` : '',
+                      ].filter(Boolean)}
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex shrink-0 gap-1 rounded-none p-1" style={{ background: 'rgba(var(--tj-bg-primary),0.58)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.16)', clipPath: smallClip }}>
                 {([
@@ -704,18 +820,48 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                 busy={Boolean(busyBatch)}
               />
               {selectedSegment && draft ? (
-                <SegmentDetail
-                  series={viewSeries}
-                  segment={selectedSegment}
-                  draft={draft}
-                  onDraftChange={setDraft}
-                  busy={busyId === selectedSegment.id}
-                  onDecompose={() => void handleDecompose(viewSeries, selectedSegment)}
-                  onSetCurrent={() => void handleSetCurrent(viewSeries, selectedSegment.组号)}
-                  onSetRuntimeStatus={(status) => void handleSetRuntimeStatus(viewSeries, selectedSegment, status)}
-                  onSaveDraft={() => void handleSaveDraft(viewSeries, selectedSegment)}
-                  onResetDraft={() => setDraft(draftFromSegment(selectedSegment))}
-                />
+                <>
+                  <SegmentDetail
+                    series={viewSeries}
+                    segment={selectedSegment}
+                    draft={draft}
+                    onDraftChange={setDraft}
+                    busy={busyId === selectedSegment.id}
+                    onDecompose={() => void handleDecompose(viewSeries, selectedSegment)}
+                    onSetCurrent={() => void handleSetCurrent(viewSeries, selectedSegment.组号)}
+                    onSetRuntimeStatus={(status) => void handleSetRuntimeStatus(viewSeries, selectedSegment, status)}
+                    onSaveDraft={() => void handleSaveDraft(viewSeries, selectedSegment)}
+                    onResetDraft={() => setDraft(draftFromSegment(selectedSegment))}
+                    progress={selectedProgress}
+                  />
+                  {planningAnalysis && (
+                    <div
+                      className="px-3 py-3 text-xs leading-relaxed md:px-4"
+                      style={{ background: 'rgba(117,214,216,0.045)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.18)', clipPath: cardClip }}
+                    >
+                      <div className="font-serif text-[11px] tracking-[0.2em]" style={{ color: 'rgba(117,214,216,0.86)' }}>
+                        规划分析
+                      </div>
+                      <div className="mt-1" style={{ color: 'rgba(var(--tj-text-primary),0.9)' }}>
+                        {planningAnalysis.系列标题} · 第{planningAnalysis.当前分段组号}段「{planningAnalysis.当前分段标题}」
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-2" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
+                        <span>建议：{planningAnalysis.建议动作}</span>
+                        <span>推进：{planningAnalysis.推进状态}</span>
+                        <span>门禁：{planningAnalysis.门禁结果}</span>
+                        <span>偏离风险：{planningAnalysis.偏离风险}</span>
+                      </div>
+                      <div className="mt-2 grid gap-2 md:grid-cols-3">
+                        <ProgressMiniBlock label="分析理由" values={planningAnalysis.分析理由} />
+                        <ProgressMiniBlock label="关注事项" values={planningAnalysis.关注事项} />
+                        <ProgressMiniBlock label="切段条件" values={planningAnalysis.切段条件} />
+                        <ProgressMiniBlock label="待迁移事项" values={planningAnalysis.待迁移事项} />
+                        <ProgressMiniBlock label="下一步调度" values={planningAnalysis.下一步调度} />
+                        <ProgressMiniBlock label="归档检查" values={planningAnalysis.归档检查} />
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <EmptyState />
               )}
@@ -731,12 +877,14 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
 
 function HeaderCard({
   activeSeries,
+  progress,
   seriesCount,
   totalChapters,
   totalSegments,
   busyBatch,
 }: {
   activeSeries?: 剧情编织系列;
+  progress?: 剧情编织进度锚点;
   seriesCount: number;
   totalChapters: number;
   totalSegments: number;
@@ -779,8 +927,26 @@ function HeaderCard({
           <StatCard label="系列" value={String(seriesCount).padStart(2, '0')} tone="rgb(var(--tj-accent-primary))" />
           <StatCard label="章节" value={String(totalChapters).padStart(2, '0')} tone="#75d6d8" />
           <StatCard label="分段" value={String(totalSegments).padStart(2, '0')} tone="#b6d7ff" />
-          <StatCard label="当前" value={activeSeries ? `${activeSeries.当前分段组号}` : '--'} tone="#d8b35f" />
+          <StatCard label="当前" value={progress ? `${progress.当前分段组号}` : activeSeries ? `${activeSeries.当前分段组号}` : '--'} tone="#d8b35f" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ProgressMiniBlock({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div
+      className="min-w-0 px-2.5 py-2"
+      style={{
+        background: 'rgba(var(--tj-bg-primary),0.42)',
+        boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.14)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="font-serif text-[10px] tracking-[0.16em]" style={{ color: 'rgba(117,214,216,0.74)' }}>{label}</div>
+      <div className="mt-1 line-clamp-3 leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
+        {values.slice(-3).join('；') || '暂无'}
       </div>
     </div>
   );
@@ -993,6 +1159,7 @@ function SegmentDetail({
   series,
   segment,
   draft,
+  progress,
   onDraftChange,
   busy,
   onDecompose,
@@ -1004,6 +1171,7 @@ function SegmentDetail({
   series: 剧情编织系列;
   segment: 剧情编织分段;
   draft: SegmentDraft;
+  progress?: 剧情编织进度锚点;
   onDraftChange: (draft: SegmentDraft) => void;
   busy: boolean;
   onDecompose: () => void;
@@ -1058,6 +1226,41 @@ function SegmentDetail({
         </div>
         {segment.最近错误 && <div className="mt-2 text-xs" style={{ color: 'rgba(230,130,130,0.9)' }}>{segment.最近错误}</div>}
       </div>
+
+      {progress && (
+        <InfoBlock title="当前章节进度锚点" empty="暂无锚点。" hasContent>
+          <div className="grid gap-2 md:grid-cols-2">
+            <div>推进状态：{progress.推进状态}</div>
+            <div>当前分段：{progress.当前分段组号}</div>
+            <div>最近判定回合：{progress.最近一次推进判定回合 ?? '未记录'}</div>
+            <div>最近门禁：{progress.最近门禁结果 ?? '未记录'}</div>
+          </div>
+          <div className="mt-2 space-y-1">
+            {progress.切换说明.slice(-3).map((item, index) => <div key={`${item}_${index}`}>- {item}</div>)}
+            {!progress.切换说明.length && <div style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>暂无切换说明</div>}
+          </div>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            <div>
+              <div style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>已完成摘要</div>
+              {(progress.已完成摘要.slice(-5).length ? progress.已完成摘要.slice(-5) : ['暂无']).map((item, index) => <div key={`${item}_${index}`}>- {item}</div>)}
+            </div>
+            <div>
+              <div style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>最近判定理由</div>
+              {(progress.最近判定理由.length ? progress.最近判定理由 : ['暂无']).map((item, index) => <div key={`${item}_${index}`}>- {item}</div>)}
+            </div>
+          </div>
+          {progress.历史归档.length > 0 && (
+            <div className="mt-2">
+              <div style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>历史归档</div>
+              {progress.历史归档.slice(-5).map((item) => (
+                <div key={item.id} className="mt-1">
+                  - 第{item.分段组号}段「{item.分段标题}」｜{item.归档状态}{item.归档回合 ? `｜回合 ${item.归档回合}` : ''}：{item.摘要 || '无摘要'}
+                </div>
+              ))}
+            </div>
+          )}
+        </InfoBlock>
+      )}
 
       <ManualEditor draft={draft} onDraftChange={onDraftChange} />
 

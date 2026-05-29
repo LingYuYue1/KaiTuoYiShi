@@ -8,11 +8,13 @@ import type { NPC记录 } from '@/models/npc';
 import { 提取NPC同行记忆文本列表 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 聊天消息 } from '@/models/chat';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
 import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { buildImmediateStoryReview } from '@/hooks/useGame/historyWindow';
+import { getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 
 export interface 手机回复上下文 {
   traveler: 角色数据结构;
@@ -27,6 +29,7 @@ export interface 手机回复上下文 {
   userText?: string;
   seed?: 主动来信种子;
   mainChatHistory?: 聊天消息[];
+  storyWeaving?: 剧情编织系统;
 }
 
 export interface 手机回复结果 {
@@ -166,6 +169,7 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
     .slice(-5)
     .map((item) => `- [${item.状态}] ${item.标题}${item.正文 ? `：${item.正文.slice(0, 120)}` : ''}`)
     .join('\n');
+  const storyProgress = buildStoryProgressBrief(ctx.storyWeaving);
 
   const context = [
     `当前回合：${ctx.turnCount}`,
@@ -178,6 +182,7 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
     npcLine ? `相关 NPC 档案：\n${npcLine}` : '',
     groupNpcLines ? `群聊参与者档案：\n${groupNpcLines}` : '',
     recentNews ? `近期新闻：\n${recentNews}` : '',
+    storyProgress ? `剧情编织进度锚点：\n${storyProgress}` : '',
     ctx.seed
       ? `主动来信种子：\n标题：${ctx.seed.title}\n来源：${ctx.seed.source}/${ctx.seed.triggerType}\n优先级：${ctx.seed.priority}\n事件上下文：${ctx.seed.context}`
       : '',
@@ -197,6 +202,41 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
     ...history,
     { role: 'user', content: prompt },
   ];
+}
+
+function buildStoryProgressBrief(system?: 剧情编织系统): string {
+  const anchor = system?.当前进度;
+  if (!system?.系列列表?.length || !anchor) return '';
+  const diagnostics = getStoryWeavingInjectionDiagnostics(system);
+  const series = system.系列列表.find((item) => item.id === diagnostics?.系列ID)
+    ?? system.系列列表.find((item) => item.id === anchor.当前系列ID)
+    ?? system.系列列表.find((item) => item.id === system.当前系列ID)
+    ?? system.系列列表[0];
+  const current = diagnostics
+    ? series?.分段列表.find((item) => item.id === diagnostics.当前分段ID)
+    : series?.分段列表.find((item) => item.id === anchor.当前分段ID)
+      ?? series?.分段列表.find((item) => item.组号 === anchor.当前分段组号);
+  const lines = [
+    `系列：${series?.标题 ?? '未知'}`,
+    `当前段：${diagnostics?.当前分段组号 ?? anchor.当前分段组号}${current?.标题 ? `｜${current.标题}` : ''}`,
+    `推进状态：${anchor.推进状态}`,
+  ];
+  if (diagnostics) {
+    lines.push(`注入窗口健康：${diagnostics.健康状态}`);
+    lines.push(`实际注入段：第${diagnostics.当前分段组号}段「${diagnostics.当前分段标题}」`);
+    if (diagnostics.归档锚点标题) {
+      lines.push(`已跳过归档锚点：第${diagnostics.归档锚点组号}段「${diagnostics.归档锚点标题}」`);
+    }
+    if (diagnostics.检查项.length) lines.push(`检查项：${diagnostics.检查项.join('；')}`);
+  }
+  if (anchor.已完成摘要.length) lines.push(`已发生/已归档：${anchor.已完成摘要.slice(-5).join('；')}`);
+  if (anchor.历史归档.length) {
+    lines.push(`最近历史归档：${anchor.历史归档.slice(-3).map((item) => `第${item.分段组号}段「${item.分段标题}」${item.摘要 ? `：${item.摘要}` : ''}`).join('；')}`);
+  }
+  if (anchor.当前待解问题.length) lines.push(`仍可回应的待解问题：${anchor.当前待解问题.slice(0, 5).join('；')}`);
+  if (anchor.最近判定理由.length) lines.push(`最近判定理由：${anchor.最近判定理由.slice(0, 4).join('；')}`);
+  lines.push('边界：手机只能承接已发生事实、已公开后果、角色合理可知的信息或待解问题；不得提前发送下一章结论，不得把剧情编织素材当成已发生事实。');
+  return lines.join('\n');
 }
 
 function parsePhoneReply(raw: string, messageLimit = 6): 手机回复结果 {
