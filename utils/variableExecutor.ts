@@ -21,7 +21,7 @@ import type { 剧情节点 } from '@/models/plot';
 import type { 命途ID } from '@/models/journey';
 import { 推进命途进度 } from '@/services/pathService';
 import { 获取物品, type 获取物品输入 } from './inventoryActions';
-import type { 物品分类, 物品品质 } from '@/models/inventory';
+import type { 背包物品, 物品分类, 物品品质 } from '@/models/inventory';
 import { 应用路径命令, 解析路径片段, 读取路径值 } from './variablePath';
 import { extractRoot, validateCommand, type VariableState } from './variableRegistry';
 
@@ -77,6 +77,13 @@ export function applyVariableCommand(
     if (ensuredNpc) {
       effectiveState = { ...state, NPC: ensuredNpc };
       setters.setNPC(ensuredNpc);
+    }
+  }
+  if (parsedForEnsure?.root === '旅人') {
+    const backpackQuantityChange = 应用背包数量扣减命令(effectiveState.旅人 as 角色数据结构, parsedForEnsure.rest, cmd);
+    if (backpackQuantityChange.matched) {
+      if (backpackQuantityChange.nextTraveler) setters.set旅人(backpackQuantityChange.nextTraveler);
+      return { command: cmd, ok: true, reason: backpackQuantityChange.reason };
     }
   }
   const validation = validateCommand(cmd, effectiveState);
@@ -184,11 +191,20 @@ export function reduceVariableCommands(
   const batchTimePlan = 分析批次时间计划(normalizedCommands, initialState.世界 as 世界状态);
 
   for (const cmd of normalizedCommands) {
-    const preEnsuredNpc = extractRoot(cmd.key)?.root === 'NPC'
-      ? 确保NPC目标存在(cursor.NPC as NPC记录[], extractRoot(cmd.key)?.rest ?? '', cmd)
+    const parsedRoot = extractRoot(cmd.key);
+    const preEnsuredNpc = parsedRoot?.root === 'NPC'
+      ? 确保NPC目标存在(cursor.NPC as NPC记录[], parsedRoot.rest, cmd)
       : null;
     if (preEnsuredNpc) {
       cursor = { ...cursor, NPC: preEnsuredNpc };
+    }
+    if (parsedRoot?.root === '旅人') {
+      const backpackQuantityChange = 应用背包数量扣减命令(cursor.旅人 as 角色数据结构, parsedRoot.rest, cmd);
+      if (backpackQuantityChange.matched) {
+        if (backpackQuantityChange.nextTraveler) cursor = { ...cursor, 旅人: backpackQuantityChange.nextTraveler };
+        results.push({ command: cmd, ok: true, reason: backpackQuantityChange.reason });
+        continue;
+      }
     }
     const validation = validateCommand(cmd, cursor);
     if (!validation.allowed) {
@@ -336,6 +352,68 @@ function 补齐疑似跨夜时间(state: VariableState, cmd: 变量命令): Vari
       ...world,
       ...aligned,
     },
+  };
+}
+
+function 解析背包数量扣减目标(rest: string, cmd: 变量命令): { field: string; expected: string; count: number } | null {
+  if (cmd.action !== 'sub') return null;
+  const tokens = 解析路径片段(rest);
+  if (tokens.length !== 3 || tokens[0] !== '背包' || tokens[2] !== '数量') return null;
+  const selector = tokens[1];
+  if (typeof selector !== 'string' || !selector.startsWith('[') || !selector.endsWith(']')) return null;
+  const inner = selector.slice(1, -1);
+  const eq = inner.indexOf('=');
+  if (eq < 0) return null;
+  const field = inner.slice(0, eq).trim();
+  const expected = inner.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+  if (!field || !expected) return null;
+  return {
+    field,
+    expected,
+    count: Math.max(1, Math.trunc(Number(cmd.value) || 1)),
+  };
+}
+
+function 匹配背包物品(item: 背包物品, field: string, expected: string): boolean {
+  const normalizedExpected = expected.trim();
+  const expectedLower = normalizedExpected.toLowerCase();
+  const candidates = field === 'id'
+    ? [item.id, item.名称]
+    : [(item as unknown as Record<string, unknown>)[field]];
+  return candidates.some((candidate) => {
+    if (typeof candidate !== 'string') return false;
+    const normalizedCandidate = candidate.trim();
+    return normalizedCandidate === normalizedExpected || normalizedCandidate.toLowerCase() === expectedLower;
+  });
+}
+
+function 应用背包数量扣减命令(
+  traveler: 角色数据结构,
+  rest: string,
+  cmd: 变量命令,
+): { matched: boolean; nextTraveler?: 角色数据结构; reason?: string } {
+  const target = 解析背包数量扣减目标(rest, cmd);
+  if (!target) return { matched: false };
+  const inventory = traveler.背包 ?? [];
+  const index = inventory.findIndex((item) => 匹配背包物品(item, target.field, target.expected));
+  if (index < 0) {
+    return {
+      matched: true,
+      reason: `已忽略背包消耗：背包中没有「${target.expected}」，不再视为变量错误。`,
+    };
+  }
+  const item = inventory[index];
+  const consumed = Math.min(item.数量, target.count);
+  const remain = item.数量 - consumed;
+  const nextInventory = [...inventory];
+  if (remain > 0) nextInventory[index] = { ...item, 数量: remain };
+  else nextInventory.splice(index, 1);
+  return {
+    matched: true,
+    nextTraveler: { ...traveler, 背包: nextInventory },
+    reason: remain > 0
+      ? `消耗 ${item.名称} ×${consumed}（剩余 ${remain}）`
+      : `消耗 ${item.名称} ×${consumed}（已用尽）`,
   };
 }
 

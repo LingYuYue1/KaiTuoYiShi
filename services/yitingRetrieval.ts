@@ -18,7 +18,6 @@ interface 剧情回忆候选 {
   id: string;
   index: number;
   score: number;
-  fullText: boolean;
 }
 
 export function retrieveYitingContext(
@@ -29,7 +28,7 @@ export function retrieveYitingContext(
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '' };
   }
-  const candidates = buildRecallCandidates(system, query, 24, 6, 20);
+  const candidates = buildRecallCandidates(system, query, 24, 6);
   const fallback = buildLocalRecallFallback(candidates, limit);
   const entries = [...fallback.strongEntries, ...fallback.weakEntries];
   if (!entries.length) return { entries, strongEntries: [], weakEntries: [], injection: '', previewText: fallback.previewText };
@@ -62,16 +61,14 @@ export async function retrieveYitingContextWithModel(
     return fallback;
   }
 
-  const candidates = buildRecallCandidates(system, query, 24, 6, 20);
+  const candidates = buildRecallCandidates(system, query, 24, 6);
   if (!candidates.length) return fallback;
 
   const candidateText = candidates
     .map((candidate, index) => {
       const entry = candidate.entry;
       const keywords = entry.检索关键词?.length ? `｜关键词：${entry.检索关键词.slice(0, 8).join('、')}` : '';
-      const body = candidate.fullText
-        ? `原文：\n${entry.原文 || entry.摘要 || '无原文'}`
-        : `概括：${entry.摘要 || entry.原文 || '无概括'}`;
+      const body = `概括：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '无概括'}`;
       const localMarker = candidate.score > 0 ? `｜本地相关度：${candidate.score.toFixed(1)}` : '';
       return [
         `${index + 1}. ${entry.名称 || `第${entry.回合}回合回忆`}｜回合：${entry.回合}｜类型：${entry.类型 ?? '回忆'}${keywords}${localMarker}`,
@@ -162,16 +159,14 @@ function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系
   };
 }
 
-function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6, fullTextCount = 20): 剧情回忆候选[] {
+function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6): 剧情回忆候选[] {
   const entries = [...(system.回忆档案 ?? [])].sort((a, b) => a.回合 - b.回合);
   const terms = extractRecallTerms(query);
-  const fullStartIndex = Math.max(0, entries.length - Math.max(1, fullTextCount));
   const scored = entries.map((entry, index) => ({
     entry,
     id: entry.名称 || `【回忆${String(Math.max(1, entry.回合 || index + 1)).padStart(3, '0')}】`,
     index,
     score: scoreRecallCandidate(entry, query, terms, index, entries.length),
-    fullText: index >= fullStartIndex,
   }));
   const topScored = [...scored]
     .sort((a, b) => b.score - a.score || b.index - a.index)
@@ -237,17 +232,17 @@ function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆
   if (!strongEntries.length && !weakEntries.length) return '';
   const strongBlocks = strongEntries.map((entry) => {
     const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
-    return `${title}：\n${entry.原文 || entry.摘要 || '（无原文）'}`;
+    return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
   });
   const weakBlocks = weakEntries.map((entry) => {
     const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
-    return `${title}：\n${entry.摘要 || entry.原文 || '（无概括）'}`;
+    return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
   });
   return [
     '# 即时剧情回顾｜剧情回忆',
     '',
     '【剧情回忆】',
-    '以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料。强回忆用于恢复原文细节，弱回忆用于背景补充；若与当前已发生剧情冲突，以当前剧情为准。',
+    '以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料。这里注入的是概要层纪要，不是正文原文；若与当前已发生剧情冲突，以当前剧情为准。',
     '',
     '强回忆：',
     strongBlocks.length ? strongBlocks.join('\n\n') : '无',
@@ -255,6 +250,16 @@ function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆
     '弱回忆：',
     weakBlocks.length ? weakBlocks.join('\n\n') : '无',
   ].join('\n');
+}
+
+function buildBriefFromRaw(raw: string, limit = 260): string {
+  const cleaned = String(raw || '')
+    .replace(/玩家输入：[\s\S]*?(?=\n正文：|\n回合小结：|\n动态世界：|\n后续选项：|$)/g, '')
+    .replace(/正文：/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  return cleaned.length > limit ? `${cleaned.slice(0, limit)}…` : cleaned;
 }
 
 function buildLocalRecallFallback(candidates: 剧情回忆候选[], limit: number): { strongEntries: 回忆条目[]; weakEntries: 回忆条目[]; previewText: string } {

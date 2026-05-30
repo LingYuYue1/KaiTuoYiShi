@@ -552,6 +552,7 @@ function CommandsPanel({ batch }: { batch: 变量命令批次 }) {
 function CommandRow({ result }: { result: 变量命令结果 }) {
   const { command, ok, reason } = result;
   const style = ACTION_STYLE[command.action];
+  const isNotice = result.kind === 'warning' || result.kind === 'error' || result.kind === 'rejected';
 
   const valuePreview = useMemo(() => {
     if (command.action === 'delete') return '';
@@ -587,11 +588,11 @@ function CommandRow({ result }: { result: 变量命令结果 }) {
             clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
           }}
         >
-          {style.label}
+          {result.kind === 'warning' ? '提示' : result.kind === 'error' ? '解析' : result.kind === 'rejected' ? '拒绝' : style.label}
         </span>
         <span className="font-mono break-all min-w-0 flex-1" style={{ color: 'rgba(var(--tj-text-primary), 0.94)' }}>
-          {command.key}
-          {valuePreview && (
+          {isNotice ? (reason ?? command.key) : command.key}
+          {!isNotice && valuePreview && (
             <>
               <span style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}> = </span>
               <span style={{ color: ok ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(176, 72, 68, 0.9)' }}>{valuePreview}</span>
@@ -599,7 +600,7 @@ function CommandRow({ result }: { result: 变量命令结果 }) {
           )}
         </span>
       </div>
-      {!ok && reason && (
+      {!isNotice && !ok && reason && (
         <div className="mt-1 text-[10px] pl-1" style={{ color: 'rgba(255, 160, 160, 0.85)' }}>
           ✗ {reason}
         </div>

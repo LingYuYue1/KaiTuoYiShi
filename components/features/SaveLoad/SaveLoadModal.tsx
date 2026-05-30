@@ -3,8 +3,8 @@ import {
   getSaveList,
   deleteSave,
   loadSave,
-  exportSaveJson,
-  importSaveJson,
+  exportSavePackage,
+  importSaveFile,
   saveGame,
   type SaveListItemSummary,
 } from '@/services/dbService';
@@ -65,7 +65,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     try {
       const id = await onSave();
       const save = await loadSave(id);
-      if (save) exportSaveJson(save);
+      if (save) exportSavePackage(save);
       await refresh();
       setTab('manual');
     } catch (err) {
@@ -91,20 +91,19 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
   const handleExport = async (id: number) => {
     const save = await loadSave(id);
-    if (save) exportSaveJson(save);
+    if (save) exportSavePackage(save);
   };
 
   const handleImport = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,application/json';
+    input.accept = '.ktysave,.zip,.json,application/zip,application/json';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
       setImporting(true);
       try {
-        const text = await file.text();
-        const data = importSaveJson(text);
+        const data = await importSaveFile(file);
         data.id = 0;
         data.type = 'imported';
         data.timestamp = Date.now();
@@ -218,7 +217,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
                 clipPath: cardClip,
               }}
             >
-              {importing ? '导入中…' : '导入 JSON'}
+              {importing ? '导入中…' : '导入存档包'}
             </button>
             <button
               type="button"
@@ -254,7 +253,8 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
                 <div>· 每回合自动保存一次，最多保留 10 条</div>
                 <div>· 读取旧档前会自动生成保护存档</div>
                 <div>· 保护存档用于撤回误读，最多 3 条</div>
-                <div>· 导入 JSON 会放入保护存档分区</div>
+                <div>· 导出存档包默认不包含 API Key</div>
+                <div>· 导入存档包 / 旧 JSON 会放入保护存档分区</div>
               </div>
             </details>
 
@@ -274,7 +274,8 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
               <div>· 每回合自动保存一次，最多保留 10 条</div>
               <div>· 读取旧档前会自动生成保护存档</div>
               <div>· 保护存档用于撤回误读，最多 3 条</div>
-              <div>· 导入 JSON 会放入保护存档分区</div>
+              <div>· 导出存档包默认不包含 API Key</div>
+              <div>· 导入存档包 / 旧 JSON 会放入保护存档分区</div>
             </div>
 
             <div className="hidden flex-1 md:block" />

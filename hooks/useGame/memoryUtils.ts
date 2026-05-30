@@ -5,6 +5,19 @@ import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 
 const MEMORY_SNIPPET_LIMIT = 84;
+const NPC_MEMORY_SUMMARY_LIMIT = 160;
+const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
+  /剧情编织进度/,
+  /当前进入第\s*\d+\s*段/,
+  /最新归档/,
+  /已归档/,
+  /待解[:：]/,
+  /判定[:：]/,
+  /推进状态/,
+  /注入健康/,
+  /实际注入/,
+  /门禁/,
+];
 
 export function buildImmediateMemory(userInput: string, aiResponse: string): string {
   const input = userInput.trim();
@@ -33,6 +46,30 @@ function collectSummaryLines(items: string[], limit = 4): string[] {
     if (lines.length >= limit) break;
   }
   return lines;
+}
+
+function isNpcMemorySystemNoise(text: string): boolean {
+  return NPC_MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function compactNpcMemoryChunk(chunk: string[]): string {
+  const cleaned = chunk
+    .map((item) => 清理NPC同行记忆摘要(item))
+    .map((item) => item.replace(/^\[压缩\]\s*/u, '').trim())
+    .filter(Boolean)
+    .filter((item) => !isNpcMemorySystemNoise(item));
+  if (!cleaned.length) return '';
+
+  const relationshipKeywords = /认可|信任|警觉|戒备|质询|邀请|同行|托付|承诺|感谢|配合|救下|救援|保护|冲突|和解|称呼|关系|好感|怀疑|赞赏|担心|约定/;
+  const prioritized = [
+    ...cleaned.filter((item) => relationshipKeywords.test(item)),
+    ...cleaned.filter((item) => !relationshipKeywords.test(item)),
+  ];
+  const lines = collectSummaryLines([...prioritized].reverse(), 3).reverse();
+  const summary = lines.join('；').replace(/\s*\/\s*/g, '；').trim();
+  return summary.length > NPC_MEMORY_SUMMARY_LIMIT
+    ? `${summary.slice(0, NPC_MEMORY_SUMMARY_LIMIT - 1)}…`
+    : summary;
 }
 
 function pickSummaryClause(text: string, limit = 48): string {
@@ -330,13 +367,16 @@ export function compressNpcMemories(memories: string[], threshold: number, promp
   const size = Math.max(1, Math.trunc(threshold || 15));
   if (!Array.isArray(memories)) return memories;
 
-  let next = memories.map((item) => 清理NPC同行记忆摘要(item, prompt)).filter(Boolean);
+  let next = memories
+    .map((item) => 清理NPC同行记忆摘要(item, prompt))
+    .filter(Boolean)
+    .filter((item) => !isNpcMemorySystemNoise(item));
   if (next.length < size) return next;
 
   while (next.length >= size) {
     const chunk = next.slice(0, size);
-    const summary = chunk.join(' / ');
-    next = [`[压缩] ${summary}`, ...next.slice(size)];
+    const summary = compactNpcMemoryChunk(chunk);
+    next = [...(summary ? [`[压缩] ${summary}`] : []), ...next.slice(size)];
   }
   return next;
 }

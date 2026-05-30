@@ -36,6 +36,7 @@ export interface 聊天消息 {
     systemPrompt: string;
     messages: Array<{ role: 消息角色; content: string }>;
     recallPreview?: string;
+    zhikuRecallPreview?: string;
   };
   /** 该 AI 回复对应的「user 发送前」状态快照，用于 reroll 回滚。
    *  生成新 assistant message 时会清掉上一条的 snapshot，保证存档里至多只有最新一条带 snapshot。 */

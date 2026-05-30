@@ -60,6 +60,27 @@ function latestUserInput(history: 聊天消息[]): string {
     .trim() ?? '';
 }
 
+function latestUserIndex(history: 聊天消息[]): number {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const msg = history[index];
+    if (msg.role === 'user' && msg.content.trim()) return index;
+  }
+  return -1;
+}
+
+function historyThroughLatestUser(history: 聊天消息[]): 聊天消息[] {
+  const index = latestUserIndex(history);
+  return index >= 0 ? history.slice(0, index + 1) : history;
+}
+
+function latestAssistantZhikuDebugRecall(history: 聊天消息[]): string {
+  return [...history]
+    .reverse()
+    .find((msg) => msg.role === 'assistant' && msg.debugContext?.zhikuRecallPreview?.trim())
+    ?.debugContext?.zhikuRecallPreview
+    ?.trim() ?? '';
+}
+
 function sectionTitle(content: string, fallback: string): string {
   const first = content
     .split(/\r?\n/)
@@ -158,7 +179,10 @@ function formatStoryWeavingProgressSnapshot(state: UseGameStateReturn): string {
     progress?.已完成摘要?.length ? `已完成摘要：\n${progress.已完成摘要.map((item) => `- ${item}`).join('\n')}` : '',
     progress?.当前待解问题?.length ? `当前待解问题：\n${progress.当前待解问题.map((item) => `- ${item}`).join('\n')}` : '',
     progress?.最近判定理由?.length ? `最近判定理由：\n${progress.最近判定理由.map((item) => `- ${item}`).join('\n')}` : '',
-    progress?.历史归档?.length ? `历史归档：\n${progress.历史归档.slice(-8).map((item) => `- 第${item.分段组号}段「${item.分段标题}」｜${item.归档状态}${item.归档回合 ? `｜回合${item.归档回合}` : ''}：${item.摘要}`).join('\n')}` : '',
+    progress?.历史归档?.length ? `历史归档：\n${progress.历史归档.slice(-8).map((item) => {
+      const roleProgress = item.角色推进摘要?.length ? `｜角色推进：${item.角色推进摘要.slice(0, 3).join('；')}` : '';
+      return `- 第${item.分段组号}段「${item.分段标题}」｜${item.归档状态}${item.归档回合 ? `｜回合${item.归档回合}` : ''}：${item.摘要}${roleProgress}`;
+    }).join('\n')}` : '',
     current.本段结束状态.length ? `本段结束状态：\n${current.本段结束状态.slice(0, 6).map((item) => `- ${item}`).join('\n')}` : '',
     current.给后续参考.length ? `给后续参考：\n${current.给后续参考.slice(0, 6).map((item) => `- ${item}`).join('\n')}` : '',
   ].filter(Boolean).join('\n');
@@ -306,6 +330,7 @@ export function buildContextSnapshot(state: UseGameStateReturn, kind: ContextSna
 
 function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
+  const recallHistory = historyThroughLatestUser(state.chatHistory);
   const isOpeningSystemTrigger = state.turnCount === 1 && sourceInput.startsWith('[系统]');
   const isAwakeningEnterTrigger = sourceInput === '[系统] 踏入命途狭间';
   const awakeningPathId = state.世界.进行中狭间 ?? state.世界.待触发狭间;
@@ -332,7 +357,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   };
   const recallQuery = buildMainRecallQuery({
     userInput: sourceInput,
-    history: state.chatHistory,
+    history: recallHistory,
     currentLocation: state.世界.当前地点,
     npcNames: state.NPC
       .filter((npc) => npc.同行 || Number(npc.最近回合 || 0) >= Math.max(1, state.turnCount - 15))
@@ -351,7 +376,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const zhikuPreview = state.gameSettings.智库系统?.enabled && sourceInput
     ? retrieveZhikuContext(
         state.智库,
-        sourceInput,
+        recallQuery,
         state.gameSettings.智库系统.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
         worldbookCtx,
       )
@@ -527,6 +552,7 @@ function buildPhoneContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     seed,
     mainChatHistory: state.chatHistory,
     storyWeaving: state.剧情编织,
+    zhiku: state.智库,
   };
   const sections: ContextSection[] = [];
   addSection(sections, {
@@ -610,10 +636,9 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
   const candidates = state.忆庭.回忆档案
     .slice(-24)
     .map((entry, index) => {
-      const fullText = index >= Math.max(0, Math.min(24, state.忆庭.回忆档案.length) - 20);
       return [
         `${index + 1}. ${entry.名称 || `第${entry.回合}回合回忆`}｜回合：${entry.回合}｜类型：${entry.类型 ?? '回忆'}`,
-        fullText ? `原文：\n${entry.原文 || entry.摘要 || '无原文'}` : `概括：${entry.摘要 || entry.原文 || '无概括'}`,
+        `概括：\n${entry.摘要 || (entry.原文 ? `${entry.原文.slice(0, 220)}…` : '无概括')}`,
       ].join('\n');
     })
     .join('\n\n');
@@ -642,7 +667,7 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
       '实际召回查询：',
       recallQuery || '（无）',
       `召回条数上限：${settings.忆庭召回条数 ?? 8}`,
-      '本地预筛：topK 24；最近 6 条强制保底；最新 20 条候选给完整原文；更早候选给概括。',
+      '本地预筛：topK 24；最近 6 条强制保底；候选统一给概要层，不把正文原文作为主剧情召回材料。',
       '',
       '候选回忆：',
       candidates || '（当前没有候选回忆档案）',
@@ -656,17 +681,51 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
 
 function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
+  const recallHistory = historyThroughLatestUser(state.chatHistory);
   const sceneContext = {
     startScenarioId: state.世界.起航之地ID,
     startSceneName: state.世界.当前地点,
     currentLocation: state.世界.当前地点,
+    npcNames: state.NPC
+      .filter((npc) => npc.同行 || Number(npc.最近回合 || 0) >= Math.max(1, state.turnCount - 15))
+      .map((npc) => npc.姓名),
   };
+  const recallQuery = buildMainRecallQuery({
+    userInput: sourceInput,
+    history: recallHistory,
+    currentLocation: state.世界.当前地点,
+    npcNames: sceneContext.npcNames,
+  });
   const limit = state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries;
-  const fallback = retrieveZhikuContext(state.智库, sourceInput, limit, sceneContext);
+  const fallback = retrieveZhikuContext(state.智库, recallQuery, limit, sceneContext);
+  const actualRecallPreview = latestAssistantZhikuDebugRecall(state.chatHistory);
   const candidateText = fallback.entries.length
     ? fallback.entries.map((entry, index) => `${index + 1}. ${entry.标题}\n摘要：${entry.摘要 || entry.原文.slice(0, 220) || '无摘要'}`).join('\n\n')
     : '（当前没有命中候选资料）';
+  const zhikuDiagnostics = fallback.diagnostics;
+  const diagnosticText = zhikuDiagnostics
+    ? [
+        `场景锚点：${zhikuDiagnostics.场景锚点.join('、') || '无'}`,
+        `相关角色：${zhikuDiagnostics.相关角色.join('、') || '无'}`,
+        `人物锚点：${zhikuDiagnostics.人物锚点.join('、') || '无'}`,
+        `候选资料：${zhikuDiagnostics.候选资料.join('、') || '无'}`,
+        `角色相关资料：${zhikuDiagnostics.角色相关资料.join('、') || '无'}`,
+        `强相关资料：${zhikuDiagnostics.强相关资料.join('、') || '无'}`,
+        `弱相关资料：${zhikuDiagnostics.弱相关资料.join('、') || '无'}`,
+        `已注入资料：${zhikuDiagnostics.已注入资料.join('、') || '无'}`,
+        zhikuDiagnostics.被门禁过滤.length
+          ? `门禁过滤：${zhikuDiagnostics.被门禁过滤.map((item) => `${item.标题}（${item.原因}）`).join('；')}`
+          : '门禁过滤：无',
+        `检查项：${zhikuDiagnostics.检查项.join('；') || '无'}`,
+      ].join('\n')
+    : '（无诊断信息）';
   const sections: ContextSection[] = [];
+  addSection(sections, {
+    id: 'zhiku_actual_saved_preview',
+    title: '上一回合真实保存的召回诊断',
+    category: '实际',
+    content: actualRecallPreview || '（上一条 AI 回复没有保存召回诊断；请从新增诊断后的新回合开始查看。）',
+  });
   addSection(sections, {
     id: 'zhiku_system',
     title: '智库召回提示词',
@@ -677,10 +736,13 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       '规则：',
       '- 只返回候选列表中的编号，不要编造新条目。',
       '- 优先选择与当前输入直接相关、能影响剧情理解或设定判断的条目。',
+      '- 角色相关资料只挑人物表现、主体人格、OOC风险、角色边界类条目，且不占用强/弱相关资料名额。',
+      '- 强相关资料、弱相关资料只挑非角色类设定资料；原著剧情正文仍由剧情编织管理，不走智库普通召回。',
       '- 原著剧情正文不参与智库普通召回；剧情推进由剧情编织系统管理，避免已完成剧情重复注入。',
-      '- 如果完全无关，强相关资料与弱相关资料都写无。',
+      '- 如果完全无关，对应分类写无。',
       '',
-      '输出格式必须严格为两行：',
+      '输出格式必须严格为三行：',
+      '角色相关资料：【编号】|【编号】',
       '强相关资料：【编号】|【编号】',
       '弱相关资料：【编号】|【编号】',
     ].join('\n'),
@@ -691,10 +753,17 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     category: '用户',
     content: [
       `玩家当前输入：${sourceInput || '（无）'}`,
+      '',
+      '主流程增强召回查询：',
+      recallQuery || '（无）',
+      '',
       `召回条数上限：${limit}`,
       '',
       '候选资料：',
       candidateText,
+      '',
+      '本地召回诊断：',
+      diagnosticText,
       '',
       '本地注入预览：',
       fallback.injection || '（未命中）',

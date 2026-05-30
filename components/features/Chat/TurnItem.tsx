@@ -363,8 +363,8 @@ function formatDebugContext(message: 聊天消息): string {
   const debug = message.debugContext;
   if (!debug) return '这条历史消息没有保存请求上下文。请从新增按钮后的新回合开始查看。';
   const recall = debug.recallPreview?.trim()
-    ? ['【回忆与剧情编织预览】', debug.recallPreview.trim()].join('\n')
-    : '【回忆与剧情编织预览】\n（无或未命中）';
+    ? ['【回忆、剧情编织与智库预览】', debug.recallPreview.trim()].join('\n')
+    : '【回忆、剧情编织与智库预览】\n（无或未命中）';
   const system = ['【System Prompt】', debug.systemPrompt || '（空）'].join('\n');
   const messages = [
     '【Messages】',

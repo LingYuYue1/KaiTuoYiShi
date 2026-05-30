@@ -41,7 +41,14 @@ import {
 import type { 提示词模块 } from '@/models/prompts';
 import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID } from '@/models/prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
-import { isBundledZhikuDuplicate, loadAllBundledZhikuPresets } from '@/data/zhikuPreset';
+import {
+  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
+  buildPersistedZhikuSystem,
+  isBundledZhikuDuplicate,
+  loadAllBundledZhikuPresets,
+  mergeZhikuRuntimeUnlockOverrides,
+  removeLegacyZhikuCharacterEntries,
+} from '@/data/zhikuPreset';
 import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
 import { applyTheme } from '@/styles/themes';
@@ -263,18 +270,34 @@ export function useGameState(): UseGameStateReturn {
       try {
         const preset = await loadAllBundledZhikuPresets();
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
-        const customEntries = savedZhiku?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [];
+        const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+        const migrationAt = savedMigrationAt ?? Date.now();
+        if (!savedMigrationAt) {
+          await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+        }
+        const customEntries = removeLegacyZhikuCharacterEntries(
+          savedZhiku?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
+          migrationAt,
+        );
         const mergedZhiku = 归一化智库系统({
-          条目: [...preset.条目, ...customEntries],
+          条目: [...mergeZhikuRuntimeUnlockOverrides(preset.条目, savedZhiku?.条目), ...customEntries],
         });
         set智库(mergedZhiku);
-        await saveSetting('zhikuSystem', mergedZhiku);
+        await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
       } catch (err) {
         console.warn('[zhiku] preset 加载失败，回退到本地已存智库:', err);
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
         if (savedZhiku) {
+          const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+          const migrationAt = savedMigrationAt ?? Date.now();
+          if (!savedMigrationAt) {
+            await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+          }
           set智库(归一化智库系统({
-            条目: savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry)),
+            条目: removeLegacyZhikuCharacterEntries(
+              savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry)),
+              migrationAt,
+            ),
           }));
         }
       }

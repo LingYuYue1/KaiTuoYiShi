@@ -6,6 +6,7 @@ interface LandingPageProps {
   onSettings: () => void;
   onWorldbookManager: () => void;
   onZhikuManager: () => void;
+  onCloudSave: () => void;
 }
 
 interface TwinkleStar {
@@ -24,6 +25,7 @@ export function LandingPage({
   onSettings,
   onWorldbookManager,
   onZhikuManager,
+  onCloudSave,
 }: LandingPageProps) {
   const stars: TwinkleStar[] = useMemo(() => {
     const list: TwinkleStar[] = [];
@@ -77,6 +79,20 @@ export function LandingPage({
           background: 'radial-gradient(ellipse at 50% 48%, rgba(20,28,60,0) 15%, rgba(16,20,40,0) 35%, rgba(10,12,22,0.6) 60%, rgba(5,6,14,0.9) 80%, rgba(2,3,8,1) 100%)',
         }}
       />
+
+      <button
+        type="button"
+        onClick={onCloudSave}
+        className="absolute left-4 top-4 z-20 px-4 py-2 font-serif text-[12px] tracking-[0.18em] transition-all hover:opacity-90 sm:left-5 sm:top-5 sm:text-[13px]"
+        style={{
+          color: 'rgba(var(--tj-accent-primary), 0.92)',
+          background: 'rgba(var(--tj-bg-primary), 0.32)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 10px 24px rgba(0,0,0,0.22)',
+          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+        }}
+      >
+        GitHub 云存档
+      </button>
 
       {/* ── Hero Content ── */}
       <div className="relative z-10 flex min-h-0 w-full max-w-[520px] flex-col items-center justify-center animate-fade-in">
@@ -234,7 +250,7 @@ export function LandingPage({
       </div>
 
       <p className="absolute bottom-4 left-0 right-0 z-10 text-center text-xs opacity-60" style={{ color: 'rgb(var(--tj-text-secondary))' }}>
-        开拓轶事 v0.3 测试版
+        开拓轶事 v0.4.2
       </p>
     </div>
   );

@@ -1,4 +1,5 @@
 import type { 存档数据, 存档类型 } from '@/models/settings';
+import { buildSavePackage, parseSavePackage, sanitizeSaveForExport } from './savePackage';
 
 const DB_NAME = 'TimeJourneyDB';
 const DB_VERSION = 1;
@@ -119,6 +120,22 @@ export async function deleteSave(id: number): Promise<void> {
   });
 }
 
+export async function replaceAllSaves(nextSaves: 存档数据[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SAVES_STORE, 'readwrite');
+    const store = tx.objectStore(SAVES_STORE);
+    store.clear();
+    for (let index = 0; index < nextSaves.length; index += 1) {
+      const save = nextSaves[index];
+      const normalizedId = Number.isFinite(save.id) && save.id > 0 ? save.id : index + 1;
+      store.put({ ...save, id: normalizedId });
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export async function hasAnySave(): Promise<boolean> {
   const list = await getSaveList();
   return list.length > 0;
@@ -191,7 +208,7 @@ async function rotateManagedSaves(db: IDBDatabase): Promise<void> {
 // ── Export / Import ──
 
 export function exportSaveJson(save: 存档数据): void {
-  const json = JSON.stringify(save, null, 2);
+  const json = JSON.stringify(sanitizeSaveForExport(save), null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -206,6 +223,21 @@ export function exportSaveJson(save: 存档数据): void {
   URL.revokeObjectURL(url);
 }
 
+export function exportSavePackage(save: 存档数据): void {
+  const blob = buildSavePackage(save);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const travelerName = sanitizeFilename(save.旅人?.姓名 || 'traveler');
+  const turnCount = save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1);
+  const stamp = new Date(save.timestamp || Date.now())
+    .toISOString()
+    .replace(/[:.]/g, '-');
+  a.download = `KaiTuoYiShi-${travelerName}-turn-${turnCount}-${stamp}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function importSaveJson(json: string): 存档数据 {
   const data = JSON.parse(json) as 存档数据;
   if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
@@ -215,6 +247,24 @@ export function importSaveJson(json: string): 存档数据 {
     throw new Error('无效的存档文件');
   }
   return data;
+}
+
+export async function importSaveFile(file: File): Promise<存档数据> {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.json') || file.type === 'application/json') {
+    return importSaveJson(await file.text());
+  }
+  if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
+    const data = await parseSavePackage(await file.arrayBuffer());
+    if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
+      throw new Error('无效的存档包');
+    }
+    if (!data.gameSettings || !data.apiSettings || !data.theme) {
+      throw new Error('无效的存档包');
+    }
+    return data;
+  }
+  throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
 }
 
 function normalizeSaveType(type: unknown): 存档类型 {

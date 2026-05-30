@@ -188,8 +188,8 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const activeProgress = normalized.当前进度?.当前系列ID === activeSeries?.id ? normalized.当前进度 : undefined;
   const planningAnalysis = useMemo(() => buildStoryPlanningAnalysis(normalized), [normalized]);
   const injectionDiagnostics = useMemo(() => getStoryWeavingInjectionDiagnostics(normalized), [normalized]);
-  const viewSeries = visibleSeries.find((s) => s.id === activeSeries?.id)
-    ?? visibleSeries.find((s) => s.id === expandedSeriesId)
+  const viewSeries = visibleSeries.find((s) => s.id === expandedSeriesId)
+    ?? visibleSeries.find((s) => s.id === activeSeries?.id)
     ?? visibleSeries[0];
   const selectedSegment = viewSeries?.分段列表.find((s) => s.id === selectedSegmentId)
     ?? viewSeries?.分段列表.find((s) => s.组号 === viewSeries.当前分段组号)
@@ -209,12 +209,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const hasCrossTrackCurrent = activeCurrentSegments.some(({ series }) => series.来源类型 === 'canon')
     && activeCurrentSegments.some(({ series }) => series.来源类型 !== 'canon');
 
-  const handleSelectSeries = async (series: 剧情编织系列) => {
-    await persist({
-      ...normalized,
-      当前系列ID: series.id,
-      当前进度: buildSeriesProgressAnchor(normalized.当前进度, series, `切换当前剧情系列：${series.标题}`),
-    });
+  const handlePreviewSeries = (series: 剧情编织系列) => {
     setExpandedSeriesId((current) => current === series.id ? null : series.id);
     setSelectedSegmentId(series.分段列表[0]?.id ?? null);
   };
@@ -292,10 +287,22 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
       const system = '系列列表' in parsed
         ? 归一化剧情编织系统(parsed)
         : 归一化剧情编织系统({ 系列列表: [parsed], 当前系列ID: parsed.id });
-      await persist(system);
+      const customOnly = system.系列列表.length > 0 && system.系列列表.every((series) => series.来源类型 !== 'canon');
+      const next = customOnly
+        ? 归一化剧情编织系统({
+          ...normalized,
+          系列列表: [
+            ...normalized.系列列表.filter((series) => !system.系列列表.some((incoming) => incoming.id === series.id)),
+            ...system.系列列表,
+          ],
+          当前系列ID: system.当前系列ID ?? system.系列列表[0]?.id ?? normalized.当前系列ID,
+          当前进度: system.当前进度 ?? normalized.当前进度,
+        })
+        : system;
+      await persist(next);
       setSelectedSegmentId(system.系列列表[0]?.分段列表[0]?.id ?? null);
       setExpandedSeriesId(system.当前系列ID ?? system.系列列表[0]?.id ?? null);
-      setMessage(`已导入剧情编织 JSON：${system.系列列表.length} 个系列。`);
+      setMessage(`已导入剧情编织 JSON：${system.系列列表.length} 个系列${customOnly ? '（已并入自制轨道）' : ''}。`);
     } catch (err) {
       const text = (err as Error).message;
       setMessage(`JSON 导入失败：${text}`);
@@ -305,15 +312,34 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     }
   };
 
-  const handleExportJson = () => {
-    const blob = new Blob([JSON.stringify(normalized, null, 2)], { type: 'application/json;charset=utf-8' });
+  const downloadStoryWeavingJson = (payload: 剧情编织系统 | 剧情编织系列, filePrefix: string) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `kaituo-story-weaving-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `${filePrefix}-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    setMessage('剧情编织数据已导出。');
+  };
+
+  const handleExportCustomJson = () => {
+    const custom = normalized.系列列表.filter((series) => series.来源类型 !== 'canon');
+    if (!custom.length) {
+      setMessage('没有可导出的自制剧情轨道。');
+      return;
+    }
+    const currentCustom = custom.find((series) => series.id === normalized.当前系列ID) ?? custom[0];
+    downloadStoryWeavingJson(归一化剧情编织系统({
+      系列列表: custom,
+      当前系列ID: currentCustom.id,
+      当前进度: normalized.当前进度?.当前系列ID === currentCustom.id ? normalized.当前进度 : buildSeriesProgressAnchor(undefined, currentCustom, '导出自制剧情轨道'),
+    }), 'kaituo-story-weaving-custom');
+    setMessage(`已导出自制剧情轨道：${custom.length} 个。`);
+  };
+
+  const handleExportAllJson = () => {
+    downloadStoryWeavingJson(normalized, 'kaituo-story-weaving-full-backup');
+    setMessage('剧情编织完整备份已导出。');
   };
 
   const handleImportPasted = async () => {
@@ -581,7 +607,8 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             <button className="panel-btn" onClick={() => setPasteOpen((v) => !v)}>粘贴导入</button>
             <button className="panel-btn" onClick={() => jsonInputRef.current?.click()}>导入 JSON</button>
             <button className="panel-btn" onClick={() => void handleRestoreCanonPresets()}>恢复内置原著</button>
-            <button className="panel-btn" disabled={!normalized.系列列表.length} onClick={handleExportJson}>导出 JSON</button>
+            <button className="panel-btn" disabled={!customSeries.length} onClick={handleExportCustomJson}>导出自制</button>
+            <button className="panel-btn" disabled={!normalized.系列列表.length} onClick={handleExportAllJson}>导出全部备份</button>
           </div>
           <div
             className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 text-[11px] md:min-w-[220px] md:justify-end"
@@ -700,18 +727,20 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             <div className="kaituo-options-scroll flex gap-2 overflow-x-auto pb-1">
               {visibleSeries.map((series) => {
                 const active = series.id === normalized.当前系列ID;
+                const viewing = series.id === viewSeries?.id;
+                const selected = active || viewing;
                 return (
                   <button
                     key={series.id}
-                    onClick={() => void handleSelectSeries(series)}
+                    onClick={() => handlePreviewSeries(series)}
                     className="shrink-0 px-3 py-2 text-left transition-all"
                     style={{
                       minWidth: 'min(180px, 78vw)',
                       clipPath: smallClip,
-                      background: active
+                      background: selected
                         ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.14), rgba(117,214,216,0.08))'
                         : 'rgba(var(--tj-bg-primary),0.62)',
-                      boxShadow: active
+                      boxShadow: selected
                         ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
                         : 'inset 0 0 0 1px rgba(117,214,216,0.14)',
                     }}
@@ -719,12 +748,12 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className="min-w-0 truncate font-serif text-[12px] font-bold"
-                        style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.84)' }}
+                        style={{ color: selected ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.84)' }}
                       >
                         {series.标题}
                       </span>
-                      <span className="text-[11px]" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(117,214,216,0.66)' }}>
-                        {active ? 'INJECTING' : 'SELECT'}
+                      <span className="text-[11px]" style={{ color: selected ? 'rgb(var(--tj-accent-primary))' : 'rgba(117,214,216,0.66)' }}>
+                        {active ? 'INJECTING' : viewing ? 'VIEWING' : 'VIEW'}
                       </span>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
@@ -795,11 +824,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           <div className="flex flex-col gap-3 overflow-visible lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[260px_minmax(0,1fr)] lg:overflow-hidden">
             <SeriesTree
               system={visibleSystem}
-              activeSeries={activeSeries ?? viewSeries}
+              activeSeries={viewSeries}
               selectedSegmentId={selectedSegment?.id ?? null}
               expandedSeriesId={expandedSeriesId}
               busyId={busyId}
-              onSelectSeries={(series) => void handleSelectSeries(series)}
+              onSelectSeries={handlePreviewSeries}
               onSelectSegment={(segment) => setSelectedSegmentId(segment.id)}
               onSelectChapter={(series, chapterSeq) => {
                 const segment = series.分段列表.find((item) => item.起始章序号 <= chapterSeq && item.结束章序号 >= chapterSeq);

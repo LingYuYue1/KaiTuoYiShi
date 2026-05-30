@@ -12,6 +12,57 @@ const STORY_PRESET_IDS = new Set([
   'zhiku_xianzhou_luofu_aftermath_chapters',
 ]);
 
+const decomposedOnlyStoryWeavingPresets: BundledStoryWeavingPreset[] = [
+  {
+    id: 'story_canon_side_belobog_future_market',
+    title: '【支线】贝洛伯格-冬梦激醒',
+    description: '已分解内置剧情编织：贝洛伯格版本活动剧情。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_side_xianzhou_foxian_tale',
+    title: '【支线】仙舟罗浮-狐斋志异',
+    description: '已分解内置剧情编织：仙舟罗浮版本活动剧情。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_side_herta_crown_of_mundane_and_divine',
+    title: '【支线】黑塔空间站-庸与神的冠冕',
+    description: '已分解内置剧情编织：黑塔空间站版本活动剧情。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_penacony_noise_and_fury',
+    title: '匹诺康尼其一-喧哗与骚动',
+    description: '已分解内置剧情编织：匹诺康尼开端。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_penacony_cat_among_pigeons',
+    title: '匹诺康尼其二-鸽群中的猫',
+    description: '已分解内置剧情编织：匹诺康尼中段。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_penacony_in_our_time',
+    title: '匹诺康尼其三-在我们的时代里',
+    description: '已分解内置剧情编织：匹诺康尼高潮段。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_penacony_farewell_penacony',
+    title: '匹诺康尼其四-再见，匹诺康尼',
+    description: '已分解内置剧情编织：匹诺康尼收束段。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_penacony_depart_on_eighth_day',
+    title: '匹诺康尼其五-在第八日启程',
+    description: '已分解内置剧情编织：匹诺康尼后续启程。',
+    zhikuPresetId: '',
+  },
+];
+
 const CANON_START_SERIES_ID = 'story_canon_zhiku_herta_station_chapter1';
 
 export interface BundledStoryWeavingPreset {
@@ -28,7 +79,8 @@ export const bundledStoryWeavingPresets: BundledStoryWeavingPreset[] = bundledZh
     title: preset.title,
     description: preset.description,
     zhikuPresetId: preset.id,
-  }));
+  }))
+  .concat(decomposedOnlyStoryWeavingPresets);
 
 export async function loadBundledStoryWeavingPreset(preset: BundledStoryWeavingPreset): Promise<剧情编织系列 | null> {
   const decomposed = await loadDecomposedCanonSeries(preset.id);

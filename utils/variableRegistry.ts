@@ -502,6 +502,18 @@ function getMissingSelectorTargetReason(root: VariableRootKey, rest: string, roo
   return `${fullArrayPath} 中找不到该 id。若这是新对象，请先使用 push ${fullArrayPath} = ${template.example}`;
 }
 
+const NON_INVENTORY_INFORMATION_RE = /(坐标|座标|位置|地点|方位|路线|路径|权限$|访问权限|通行权限|许可$|口令|密码|暗号|线索|情报|消息|讯息|资料|记录|名单|地址|坐标点)/;
+const PHYSICAL_INFORMATION_CARRIER_RE = /(卡|钥匙|钥|芯片|终端|地图|纸条|便签|信件|文书|档案袋|票|通行证|徽章|铭牌|印章|玉牌|玉兆|令牌|样本|碎片|装置|模块|硬盘|数据盘|存储器)/;
+
+function isInformationOnlyBackpackValue(value: Record<string, unknown>): boolean {
+  const name = typeof value.名称 === 'string' ? value.名称.trim() : '';
+  const description = typeof value.描述 === 'string' ? value.描述.trim() : '';
+  const sourceDescription = typeof value.来源描述 === 'string' ? value.来源描述.trim() : '';
+  const haystack = [name, description, sourceDescription].filter(Boolean).join(' ');
+  if (!NON_INVENTORY_INFORMATION_RE.test(haystack)) return false;
+  return !PHYSICAL_INFORMATION_CARRIER_RE.test(name);
+}
+
 function isAutoEnsurableCanonicalNpcSelector(rest: string): boolean {
   const selector = rest.match(/^\[([^\]]+)\]/);
   if (!selector) return false;
@@ -555,6 +567,9 @@ function validateSchemaPushValue(root: VariableRootKey, rest: string, value: unk
     }
     if (!desc || desc === '描述' || desc.includes('...')) return '背包物品描述不能是占位符';
     if ('属性加成' in value) return '背包物品.属性加成 是旧数值装备字段，变量模型不得继续写入';
+    if (isInformationOnlyBackpackValue(value)) {
+      return '坐标、位置、权限信息、线索、情报或消息不是实体背包物品；请写入 world_event、NPC 记忆或正文承接。只有卡片、地图、芯片、纸条、钥匙、徽章、样本等实体载体才可入背包';
+    }
   }
 
   if (template.path === '手机.messageSeeds') {

@@ -16,6 +16,7 @@ import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 import { WorldbookManagerModal } from '@/components/features/Worldbook/WorldbookManagerModal';
 import { ZhikuManagerModal } from '@/components/features/GameSystems/ZhikuManagerModal';
 import { SaveLoadModal } from '@/components/features/SaveLoad/SaveLoadModal';
+import { GitHubCloudSaveModal } from '@/components/features/CloudSave/GitHubCloudSaveModal';
 import { EquipmentPanel } from '@/components/features/GameSystems/EquipmentPanel';
 import { SkillPanel } from '@/components/features/GameSystems/SkillPanel';
 import { InventoryPanel } from '@/components/features/GameSystems/InventoryPanel';
@@ -56,6 +57,7 @@ export default function App() {
   const [showWorldbookManager, setShowWorldbookManager] = useState(false);
   const [showZhikuManager, setShowZhikuManager] = useState(false);
   const [showSaveLoad, setShowSaveLoad] = useState(false);
+  const [showCloudSave, setShowCloudSave] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
@@ -91,6 +93,12 @@ export default function App() {
     }
   }, [state.view, state.pendingOpeningTrigger, state, actions]);
 
+  useEffect(() => {
+    if (window.location.pathname === '/oauth/github/callback') {
+      setShowCloudSave(true);
+    }
+  }, []);
+
   // ── Home ──
   if (state.view === 'home') {
     return (
@@ -104,6 +112,7 @@ export default function App() {
           }}
           onWorldbookManager={() => setShowWorldbookManager(true)}
           onZhikuManager={() => setShowZhikuManager(true)}
+          onCloudSave={() => setShowCloudSave(true)}
         />
         {showWorldbookManager && (
           <WorldbookManagerModal
@@ -132,6 +141,12 @@ export default function App() {
               return ok;
             }}
             onClose={() => setShowSaveLoad(false)}
+          />
+        )}
+        {showCloudSave && (
+          <GitHubCloudSaveModal
+            onSave={actions.handleSave}
+            onClose={() => setShowCloudSave(false)}
           />
         )}
         {showSettings && (
@@ -460,6 +475,7 @@ export default function App() {
           yiting={state.忆庭}
           news={state.新闻}
           storyWeaving={state.剧情编织}
+          zhiku={state.智库}
           apiSettings={state.apiSettings}
           gameSettings={state.gameSettings}
           turnCount={state.turnCount}
@@ -493,6 +509,13 @@ export default function App() {
             return ok;
           }}
           onClose={() => setShowSaveLoad(false)}
+        />
+      )}
+
+      {showCloudSave && (
+        <GitHubCloudSaveModal
+          onSave={actions.handleSave}
+          onClose={() => setShowCloudSave(false)}
         />
       )}
     </>
@@ -565,6 +588,8 @@ function renderSystemPanel(
           onNpcRecordsChange={ctx.onNpcRecordsChange}
           turnCount={ctx.turnCount}
           nsfwEnabled={ctx.gameSettings.enableNsfw}
+          maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}
+          zhikuSystem={ctx.zhikuSystem}
         />
       );
     case 'album':

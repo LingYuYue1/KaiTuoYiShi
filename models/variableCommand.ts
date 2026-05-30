@@ -158,6 +158,7 @@ export interface 变量事实批次 {
 export interface 变量命令结果 {
   command: 变量命令;
   ok: boolean;
+  kind?: 'command' | 'warning' | 'error' | 'rejected';
   /** 失败原因：路径未登记 / 类型不匹配 / 解析错误等 */
   reason?: string;
 }

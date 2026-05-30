@@ -1,7 +1,7 @@
 import type { API配置项, 新闻API覆盖 } from '@/models/settings';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
-import type { NPC记录 } from '@/models/npc';
+import type { NPC关系类型, NPC记录 } from '@/models/npc';
 import type { 剧情节点 } from '@/models/plot';
 import type { 新闻条目, 新闻生成结果, 新闻条目补丁 } from '@/models/news';
 import { 归一化新闻条目 } from '@/models/news';
@@ -142,8 +142,8 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
     '## 现有新闻',
     JSON.stringify(currentNews, null, 2),
     '',
-    '## 相关 NPC',
-    JSON.stringify(request.npcRecords ?? [], null, 2),
+    '## 相关 NPC 公开摘要',
+    JSON.stringify(buildPublicNpcBriefs(request.npcRecords ?? []), null, 2),
     '',
     '## 剧情节点',
     JSON.stringify(request.plotNodes ?? [], null, 2),
@@ -153,6 +153,50 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
     '',
     '请根据上面内容输出本回合星际和平公司周报的结构化 JSON。优先少而精，最多新增 3 条。',
   ].join('\n');
+}
+
+function buildPublicNpcBriefs(npcs: NPC记录[]): Array<{
+  姓名: string;
+  别名?: string;
+  阶位: NPC记录['阶位'];
+  公开关系: string;
+  最近回合: number;
+  原著角色?: boolean;
+  公开介绍?: string;
+  装备摘要?: string;
+  备注?: string[];
+}> {
+  return npcs
+    .filter((npc) => npc.阶位 === 'companion' || npc.同行 || npc.最近回合 > 0)
+    .sort((a, b) => b.最近回合 - a.最近回合)
+    .slice(0, 12)
+    .map((npc) => ({
+      姓名: npc.姓名,
+      别名: npc.别名,
+      阶位: npc.阶位,
+      公开关系: toPublicRelationLabel(npc.关系),
+      最近回合: npc.最近回合,
+      原著角色: npc.原著角色 || undefined,
+      公开介绍: npc.介绍 ? npc.介绍.slice(0, 120) : undefined,
+      装备摘要: npc.装备摘要 ? npc.装备摘要.slice(0, 100) : undefined,
+      备注: npc.备注?.slice(0, 3),
+    }));
+}
+
+function toPublicRelationLabel(relation: NPC关系类型): string {
+  switch (relation) {
+    case 'enemy':
+      return '敌对或通缉风险';
+    case 'rival':
+      return '竞争 / 对立';
+    case 'close':
+    case 'friend':
+      return '友好同行';
+    case 'acquaintance':
+      return '认识';
+    default:
+      return '公开关系不明';
+  }
 }
 
 export function applyNewsGenerationResult(current: 新闻条目[], result: 新闻生成结果): 新闻条目[] {
@@ -296,7 +340,7 @@ function buildStoryWeavingNewsBrief(system?: 剧情编织系统): string {
       lines.push(...formatStorySeriesForNews(series, false));
     }
   }
-  lines.push('约束：新闻必须区分主注入轨道和非主注入轨道；主轨道可提供外围压力，非主轨道只能作为支线苗头、传闻或低优先级背景，不得抢走主剧情推进权。新闻只能读取外围压力、可铺垫事项、已发生后果和偏离状态；不得刊登完整原文，不得剧透核心反转，不得把已经历分段重新包装成未来事件。');
+  lines.push('约束：新闻必须区分主注入轨道和非主注入轨道；主轨道可提供外围压力，非主轨道只能作为支线苗头、传闻或低优先级背景，不得抢走主剧情推进权。新闻只能读取外围压力、可铺垫事项、已发生后果和偏离状态；不得刊登完整原文，不得剧透核心反转，不得把已经历分段重新包装成未来事件；不得把私密人格、手机私聊、NSFW 档案、未公开身份或未解锁形态写成公开报道。');
   return lines.join('\n');
 }
 
@@ -337,6 +381,7 @@ function formatStorySeriesForNews(
         分段标题: item.分段标题,
         归档状态: item.归档状态,
         摘要: item.摘要,
+        角色推进摘要: item.角色推进摘要?.slice(0, 4) ?? [],
       })),
       当前待解问题: anchor.当前待解问题.slice(0, 6),
       最近判定理由: anchor.最近判定理由.slice(0, 5),

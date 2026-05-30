@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   deleteSave,
-  exportSaveJson,
+  exportSavePackage,
   getSaveList,
-  importSaveJson,
+  importSaveFile,
   loadSave,
   saveGame,
   type SaveListItemSummary,
@@ -68,7 +68,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     try {
       const id = await onSave();
       const save = await loadSave(id);
-      if (save) exportSaveJson(save);
+      if (save) exportSavePackage(save);
       await refresh();
       setFilter('manual');
     } finally {
@@ -98,19 +98,19 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
 
   const handleExport = async (id: number) => {
     const save = await loadSave(id);
-    if (save) exportSaveJson(save);
+    if (save) exportSavePackage(save);
   };
 
   const handleImport = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,application/json';
+    input.accept = '.ktysave,.zip,.json,application/zip,application/json';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
       setImporting(true);
       try {
-        const data = importSaveJson(await file.text());
+        const data = await importSaveFile(file);
         data.id = 0;
         data.type = 'imported';
         data.timestamp = Date.now();
@@ -132,7 +132,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
         <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
           <ActionButton label={saving ? '保存中' : '手动存档'} tone="primary" disabled={saving} onClick={handleSave} />
           <ActionButton label={loading ? '读取中' : '载入最新'} disabled={loading} onClick={handleContinue} />
-          <ActionButton label={importing ? '导入中' : '导入 JSON'} disabled={importing} onClick={handleImport} />
+          <ActionButton label={importing ? '导入中' : '导入存档包'} disabled={importing} onClick={handleImport} />
           <ActionButton label="导出当前" disabled={saving} onClick={handleExportCurrent} />
         </div>
         <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap">
@@ -156,6 +156,18 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
         <Metric label="自动" value={grouped.auto.length} />
         <Metric label="保护存档" value={grouped.protectedItems.length} />
         <Metric label="总计" value={saves.length} />
+      </div>
+
+      <div
+        className="px-3 py-2 font-serif text-[12px] leading-relaxed tracking-wider"
+        style={{
+          color: 'rgba(var(--tj-text-secondary), 0.74)',
+          background: 'rgba(var(--tj-bg-secondary), 0.32)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+          clipPath: cardClip,
+        }}
+      >
+        导出存档包默认不包含 API Key；导入存档包 / 旧 JSON 会放入保护存档分区。
       </div>
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">

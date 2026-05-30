@@ -9,6 +9,7 @@ import type { 新闻条目 } from '@/models/news';
 import type { 世界状态 } from '@/models/world';
 import type { API设置, 游戏设置 } from '@/models/settings';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
+import type { 智库系统 } from '@/models/zhiku';
 import { 创建手机会话, 创建手机会话本地摘要条目, 创建手机会话本地库, 创建手机消息, 计算手机未读, type 手机消息 } from '@/models/phone';
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
 import type { 忆庭系统 } from '@/models/yiting';
@@ -27,6 +28,7 @@ interface Props {
   yiting: 忆庭系统;
   news: 新闻条目[];
   storyWeaving: 剧情编织系统;
+  zhiku: 智库系统;
   apiSettings: API设置;
   gameSettings: 游戏设置;
   turnCount: number;
@@ -64,6 +66,7 @@ export function PhoneModal({
   yiting,
   news,
   storyWeaving,
+  zhiku,
   apiSettings,
   gameSettings,
   turnCount,
@@ -584,6 +587,7 @@ export function PhoneModal({
         userText: text,
         mainChatHistory,
         storyWeaving,
+        zhiku,
       }, phoneApiConfig.retryCount ?? 2);
       await appendMessagesToChatSequentially(
         activeChat.id,
@@ -709,6 +713,7 @@ export function PhoneModal({
         seed,
         mainChatHistory,
         storyWeaving,
+        zhiku,
       }, phoneApiConfig.retryCount ?? 2);
       onPhoneChange((prev) => {
         const hasContact = prev.contacts.some((item) => item.id === contact.id);

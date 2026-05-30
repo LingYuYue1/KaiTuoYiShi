@@ -166,6 +166,7 @@ export interface 剧情编织历史归档 {
   归档回合?: number;
   归档状态: '已经历' | '已跳过' | '已偏离' | '已完成';
   摘要: string;
+  角色推进摘要?: string[];
   切换说明: string;
   判定理由: string[];
   createdAt: number;
@@ -505,6 +506,7 @@ function 归一化历史归档列表(value: unknown): 剧情编织历史归档[]
       归档回合: Number(raw?.归档回合) || undefined,
       归档状态: status,
       摘要: 读文本(raw?.摘要).trim(),
+      角色推进摘要: 去重文本列表(文本列表(raw?.角色推进摘要), 12),
       切换说明: 读文本(raw?.切换说明).trim(),
       判定理由: 去重文本列表(文本列表(raw?.判定理由), 8),
       createdAt: Number(raw?.createdAt) || Date.now(),

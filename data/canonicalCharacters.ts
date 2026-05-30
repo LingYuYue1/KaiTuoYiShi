@@ -93,13 +93,13 @@ export const CANONICAL_CHARACTERS: CanonicalCharacterDef[] = [
     name: '星',
     aliases: ['灰发少女', 'Stelle', '开拓者·星'],
     appearance: '灰发少女，外形干净利落，带着刚苏醒不久的冷白感。',
-    personality: '沉静、直接，行动里带着本能的试探与坚定。',
+    personality: '刚苏醒时会先观察，但长期表现应直接、好奇、行动感强，熟悉同伴后会自然吐槽和接梗。',
   },
   {
     name: '穹',
     aliases: ['灰发少年', 'Caelus', '开拓者·穹'],
     appearance: '灰发少年，轮廓清爽，神情常带着刚醒来的疏离。',
-    personality: '克制、安静，习惯先观察再行动。',
+    personality: '刚苏醒时偏克制观察，长期应保留直接、好奇和行动感，不应被写成空白沉默工具人。',
   },
   {
     name: '希儿',

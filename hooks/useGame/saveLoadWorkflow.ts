@@ -13,6 +13,15 @@ import {
   归一化手机系统设置,
 } from '@/models/settings';
 import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveSetting } from '@/services/dbService';
+import {
+  buildPersistedZhikuSystem,
+  isBundledZhikuDuplicate,
+  loadAllBundledZhikuPresets,
+  mergeZhikuRuntimeUnlockOverrides,
+  removeLegacyZhikuCharacterEntries,
+  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
+} from '@/data/zhikuPreset';
+import { loadSetting } from '@/services/dbService';
 import { normalizeMemorySystem } from './memoryUtils';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
@@ -41,7 +50,7 @@ export function buildSavePayload(
     chatHistory: overrides?.chatHistory ?? state.chatHistory,
     记忆: overrides?.记忆 ?? state.记忆,
     忆庭: overrides?.忆庭 ?? state.忆庭,
-    智库: overrides?.智库 ?? state.智库,
+    智库: buildPersistedZhikuSystem(overrides?.智库 ?? state.智库),
     手机: overrides?.手机 ?? state.手机,
     NPC: overrides?.NPC ?? state.NPC,
     相册: overrides?.相册 ?? state.相册,
@@ -118,7 +127,22 @@ async function applySaveToState(
       save.忆庭 ?? ({ 回忆档案: legacyArchives } as Partial<import('@/models/yiting').忆庭系统>),
     ),
   );
-  state.set智库(归一化智库系统(save.智库 ?? { 条目: [] }));
+  const savedZhikuMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+  const zhikuMigrationAt = savedZhikuMigrationAt ?? Date.now();
+  if (!savedZhikuMigrationAt) {
+    await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, zhikuMigrationAt);
+  }
+  const nextZhiku = 归一化智库系统({
+    条目: [
+      ...mergeZhikuRuntimeUnlockOverrides((await loadAllBundledZhikuPresets()).条目, save.智库?.条目),
+      ...removeLegacyZhikuCharacterEntries(
+        save.智库?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
+        zhikuMigrationAt,
+      ),
+    ],
+  });
+  state.set智库(nextZhiku);
+  await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));
   state.setNPC(归一化NPC记录列表(save.NPC));   // 旧存档/AI 半成品对象统一兜底
   state.set相册(归一化相册系统(save.相册));

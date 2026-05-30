@@ -5,6 +5,19 @@ const PROMPT_LEAK_PATTERNS = [
   /^请把与你同行的记忆整理得更凝练，保留称呼、约定、关系变化和关键事件。[：:]\s*/u,
 ];
 
+const SYSTEM_MEMORY_PATTERNS = [
+  /剧情编织进度/,
+  /当前进入第\s*\d+\s*段/,
+  /最新归档/,
+  /已归档/,
+  /待解[:：]/,
+  /判定[:：]/,
+  /推进状态/,
+  /注入健康/,
+  /实际注入/,
+  /门禁/,
+];
+
 export function 清理NPC同行记忆摘要(raw: string, prompt?: string): string {
   let text = (raw || '').replace(/\s+/g, ' ').trim();
   if (!text) return '';
@@ -19,6 +32,8 @@ export function 清理NPC同行记忆摘要(raw: string, prompt?: string): strin
   for (const pattern of PROMPT_LEAK_PATTERNS) {
     text = text.replace(pattern, '').trim();
   }
+
+  if (SYSTEM_MEMORY_PATTERNS.some((pattern) => pattern.test(text))) return '';
 
   return text;
 }

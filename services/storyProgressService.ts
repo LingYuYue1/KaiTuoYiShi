@@ -73,11 +73,17 @@ export function autoAlignCanonStoryProgress(params: {
     .sort((a, b) => b.score.value - a.score.value || b.segment.组号 - a.segment.组号);
   const best = scored[0];
   const currentScore = scored.find((item) => item.segment.id === current.id)?.score.value ?? 0;
+  const laterSegmentHighConfidence = Boolean(
+    best &&
+    best.segment.组号 > current.组号 &&
+    best.score.value >= 7 &&
+    best.score.value - currentScore >= 3,
+  );
   const canJumpToLaterSegment = series.来源类型 === 'canon'
     || (best && best.segment.组号 === current.组号 + 1 && best.score.value >= 7);
   if (!best || best.segment.组号 <= current.组号 || best.score.value < 5 || best.score.value - currentScore < 2 || !canJumpToLaterSegment) {
     const completionScore = scoreCompletionSignals(current, source);
-    if (completionScore.value < 3 || !completionScore.explicitEnding) {
+    if ((completionScore.value < 3 || !completionScore.explicitEnding) && !laterSegmentHighConfidence) {
       const diagnosticSystem = refreshProgressDiagnostics({
         normalized,
         series,
@@ -104,7 +110,9 @@ export function autoAlignCanonStoryProgress(params: {
       current,
       next,
       turnCount: params.turnCount,
-      reasons: completionScore.reasons.length ? completionScore.reasons : ['后台判定当前分段已达到结束状态'],
+      reasons: laterSegmentHighConfidence && best
+        ? [`高置信命中后续分段「${best.segment.标题}」，后台允许归档当前段`, ...best.score.reasons]
+        : completionScore.reasons.length ? completionScore.reasons : ['后台判定当前分段已达到结束状态'],
       mode: next ? 'advance' : 'complete',
       gateSnapshot: params.gateSnapshot,
     });
@@ -331,6 +339,7 @@ function buildHistoryArchiveEntry(params: {
     || params.segment.本段概括
     || params.segment.原文摘要
     || params.segment.标题;
+  const roleProgressSummary = buildRoleProgressArchiveSummary(params.segment);
   const id = `story_archive_${params.series.id}_${params.segment.id}_${params.turnCount}`;
   if (params.previous?.历史归档?.some((item) => item.id === id || (item.分段ID === params.segment.id && item.归档回合 === params.turnCount))) {
     return undefined;
@@ -344,10 +353,26 @@ function buildHistoryArchiveEntry(params: {
     归档回合: params.turnCount,
     归档状态: params.status,
     摘要: summary,
+    角色推进摘要: roleProgressSummary,
     切换说明: params.switchNote,
     判定理由: uniqueText(params.reasons, 8),
     createdAt: Date.now(),
   };
+}
+
+function buildRoleProgressArchiveSummary(segment: 剧情编织分段): string[] {
+  const items = segment.角色推进.flatMap((item) => {
+    const role = item.角色名.trim();
+    if (!role) return [];
+    const changes = uniqueText([
+      ...item.本段变化,
+      ...item.本段后状态,
+      ...item.对后续影响,
+    ], 3);
+    if (!changes.length) return [];
+    return [`${role}：${changes.join('；')}`];
+  });
+  return uniqueText(items, 8);
 }
 
 function uniqueArchives(items: 剧情编织历史归档[], limit: number): 剧情编织历史归档[] {

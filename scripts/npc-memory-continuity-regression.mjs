@@ -7,10 +7,13 @@ function assert(condition, message) {
 const builder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 const historyWindow = fs.readFileSync('hooks/useGame/historyWindow.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const memoryUtils = fs.readFileSync('hooks/useGame/memoryUtils.ts', 'utf8');
+const npcMemorySanitizer = fs.readFileSync('utils/npcMemorySanitizer.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
 const inputArea = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
+const storyProgressNpcMemoryFunction = sendWorkflow.match(/function applyStoryProgressNpcMemory[\s\S]*?\n}\n\nfunction formatZhikuDiagnosticsPreview/)?.[0] ?? '';
 
 assert(builder.includes('function buildNpcContinuitySection'), '主剧情 prompt 必须构建 NPC 连续性核对表。');
 assert(builder.includes('# 本回合人物关系连续性核对'), 'NPC 连续性核对表必须有可定位标题。');
@@ -37,5 +40,16 @@ assert(sendWorkflow.includes('state.setPendingVariable(false)'), '后台结算�
 assert(inputArea.includes('disabled={loading || disabled}'), '变量结算 pending 时输入框必须禁用。');
 assert(app.includes('disabled={state.pendingVariable}'), 'App 必须把 pendingVariable 传给输入区。');
 assert(app.includes('disabled={state.loading || state.pendingVariable}'), '系统触发按钮也必须在变量结算期间禁用。');
+
+assert(sendWorkflow.includes('latestArchive?.角色推进摘要 ?? []'), 'story archive NPC memory must only read role progress summaries.');
+assert(sendWorkflow.includes('const matched = roleProgress.find'), 'story archive NPC memory must match summaries by NPC name.');
+assert(storyProgressNpcMemoryFunction, 'story progress NPC memory helper must be present.');
+assert(!storyProgressNpcMemoryFunction.includes('摘要: _memoryLine'), 'full story progress diagnostics must not be written into NPC companion memories.');
+assert(!storyProgressNpcMemoryFunction.includes('storyProgressMemoryLine'), 'story progress NPC memory helper must not read the full progress memory line.');
+assert(memoryUtils.includes('NPC_MEMORY_SYSTEM_NOISE_PATTERNS'), 'NPC memory compression must filter story progress/system diagnostic noise.');
+assert(memoryUtils.includes('compactNpcMemoryChunk'), 'NPC memory compression must compact a chunk into a concise summary.');
+assert(memoryUtils.includes('!isNpcMemorySystemNoise'), 'NPC memory compression must drop system noise before summarizing.');
+assert(!memoryUtils.includes("const summary = chunk.join(' / ')"), 'NPC memory compression must not slash-join raw memories.');
+assert(npcMemorySanitizer.includes('SYSTEM_MEMORY_PATTERNS'), 'NPC memory sanitizer must filter old story progress diagnostic contamination.');
 
 console.log('npc memory continuity regression ok');

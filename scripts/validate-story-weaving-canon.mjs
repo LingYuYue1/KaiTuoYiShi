@@ -11,6 +11,14 @@ const expectedSeries = [
   { id: 'story_canon_zhiku_xianzhou_luofu_travel_chapters', minSegments: 10 },
   { id: 'story_canon_zhiku_xianzhou_luofu_cloud_tree_chapters', minSegments: 5 },
   { id: 'story_canon_zhiku_xianzhou_luofu_aftermath_chapters', minSegments: 1 },
+  { id: 'story_canon_penacony_noise_and_fury', minSegments: 11 },
+  { id: 'story_canon_penacony_cat_among_pigeons', minSegments: 9 },
+  { id: 'story_canon_penacony_in_our_time', minSegments: 12 },
+  { id: 'story_canon_penacony_farewell_penacony', minSegments: 7 },
+  { id: 'story_canon_penacony_depart_on_eighth_day', minSegments: 6 },
+  { id: 'story_canon_side_belobog_future_market', minSegments: 3 },
+  { id: 'story_canon_side_herta_crown_of_mundane_and_divine', minSegments: 6 },
+  { id: 'story_canon_side_xianzhou_foxian_tale', minSegments: 10 },
 ];
 
 function fail(message) {

@@ -6,6 +6,7 @@ dist/
 *.tsbuildinfo
 .tmp-regression/
 .tmp-story-weaving-regression/
+.wrangler/
 
 # Local environment
 .env

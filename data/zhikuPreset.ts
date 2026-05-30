@@ -6,7 +6,11 @@ export interface BundledZhikuPreset {
   title: string;
   description: string;
   path: string;
+  updatedAt?: string;
 }
+
+export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
+export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_';
 
 export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
@@ -16,22 +20,11 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
     path: '/zhiku-presets/herta-station-chapters.json',
   },
   {
-    id: 'zhiku_express_characters',
-    title: '星穹列车·角色资料',
-    description: '星穹列车主要成员的内置人物资料。',
-    path: '/zhiku-presets/express-characters.json',
-  },
-  {
-    id: 'zhiku_express_support_characters',
-    title: '星穹列车补充·角色资料',
-    description: '星穹列车相关人物中常被引用但需要单独强调的补充资料。',
-    path: '/zhiku-presets/express-support-characters.json',
-  },
-  {
-    id: 'zhiku_herta_station_characters',
-    title: '黑塔空间站·角色资料',
-    description: '黑塔空间站相关人物的内置资料。',
-    path: '/zhiku-presets/herta-station-characters.json',
+    id: 'zhiku_character_rebuild_core',
+    title: '人物重建·列车组核心样本',
+    description: '按主体人格、形态阶段、命途能力、剧情解锁与 OOC 风险拆分的新版人物资料样本。',
+    path: '/zhiku-presets/character-rebuild-core.json',
+    updatedAt: '2026-05-29-trailblazer-path-split',
   },
   {
     id: 'zhiku_jarilo_vi_chapters',
@@ -62,48 +55,6 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
     title: '劫波渡尽战云收',
     description: '仙舟罗浮后段收束剧情的小说化版本，梳理战后余波、盟友身份与告别。',
     path: '/zhiku-presets/xianzhou-luofu-aftermath-chapters.json',
-  },
-  {
-    id: 'zhiku_xianzhou_luofu_characters',
-    title: '仙舟罗浮·角色资料',
-    description: '仙舟罗浮相关核心人物的内置资料。',
-    path: '/zhiku-presets/xianzhou-luofu-characters.json',
-  },
-  {
-    id: 'zhiku_xianzhou_alliance_characters',
-    title: '仙舟联盟·角色资料',
-    description: '仙舟联盟后续高频人物与相关特殊形态的内置资料。',
-    path: '/zhiku-presets/xianzhou-alliance-characters.json',
-  },
-  {
-    id: 'zhiku_jarilo_vi_characters',
-    title: '雅利洛-Ⅵ·角色资料',
-    description: '雅利洛-Ⅵ与贝洛伯格相关核心人物的内置资料。',
-    path: '/zhiku-presets/jarilo-vi-characters.json',
-  },
-  {
-    id: 'zhiku_penacony_characters',
-    title: '匹诺康尼·角色资料',
-    description: '匹诺康尼相关核心人物的内置资料。',
-    path: '/zhiku-presets/penacony-characters.json',
-  },
-  {
-    id: 'zhiku_amphoreus_characters',
-    title: '翁法罗斯·角色资料',
-    description: '翁法罗斯相关核心人物与特殊形态的内置资料。',
-    path: '/zhiku-presets/amphoreus-characters.json',
-  },
-  {
-    id: 'zhiku_faction_characters',
-    title: '势力相关·角色资料',
-    description: '星核猎手、公司与其他高频势力相关人物的内置资料。',
-    path: '/zhiku-presets/faction-characters.json',
-  },
-  {
-    id: 'zhiku_genius_society_characters',
-    title: '天才俱乐部与博识学会·角色资料',
-    description: '天才俱乐部、博识学会及相关高频科研人物的内置资料。',
-    path: '/zhiku-presets/genius-society-characters.json',
   },
   {
     id: 'zhiku_item_core',
@@ -189,8 +140,76 @@ export function isBundledZhikuDuplicate(entry: Partial<智库条目>): boolean {
   return title.includes('黑塔空间站') && raw.includes('今天是昨天的明天');
 }
 
+export function shouldRemoveLegacyZhikuCharacterEntry(entry: Partial<智库条目>, migrationAt: number): boolean {
+  if (entry.分类 !== 'character') return false;
+  if (isRebuiltZhikuCharacterEntry(entry)) return false;
+  if (entry.builtin) return true;
+  const changedAt = Math.max(Number(entry.createdAt) || 0, Number(entry.updatedAt) || 0);
+  return migrationAt <= 0 || changedAt <= migrationAt;
+}
+
+export function removeLegacyZhikuCharacterEntries(
+  entries: 智库条目[] | undefined,
+  migrationAt: number,
+): 智库条目[] {
+  return (entries ?? []).filter((entry) => !shouldRemoveLegacyZhikuCharacterEntry(entry, migrationAt));
+}
+
+export function isRebuiltZhikuCharacterEntry(entry: Partial<智库条目>): boolean {
+  return typeof entry.id === 'string' && entry.id.startsWith(ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX);
+}
+
+export function mergeZhikuRuntimeUnlockOverrides(
+  bundledEntries: 智库条目[],
+  savedEntries: 智库条目[] | undefined,
+): 智库条目[] {
+  const savedById = new Map(
+    (savedEntries ?? [])
+      .filter((entry) => entry.id && (entry.运行时解锁状态 || entry.运行时解锁备注))
+      .map((entry) => [entry.id, entry]),
+  );
+  return bundledEntries.map((entry) => {
+    const saved = savedById.get(entry.id);
+    if (!saved) return entry;
+    return {
+      ...entry,
+      运行时解锁状态: saved.运行时解锁状态,
+      运行时解锁备注: saved.运行时解锁备注,
+    };
+  });
+}
+
+export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智库系统 {
+  const source = 归一化智库系统(system);
+  return 归一化智库系统({
+    条目: source.条目
+      .filter((entry) => !entry.builtin || Boolean(entry.运行时解锁状态 || entry.运行时解锁备注))
+      .map((entry) => {
+        if (!entry.builtin) return entry;
+        return {
+          id: entry.id,
+          标题: entry.标题,
+          分类: entry.分类,
+          摘要: '',
+          原文: '',
+          来源: entry.来源,
+          关键词: [],
+          运行时解锁状态: entry.运行时解锁状态,
+          运行时解锁备注: entry.运行时解锁备注,
+          关联条目ID: [],
+          重要度: entry.重要度,
+          可用于联动: entry.可用于联动,
+          builtin: true,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+        };
+      }),
+  });
+}
+
 export async function loadBundledZhikuPreset(preset: BundledZhikuPreset): Promise<智库系统> {
-  const res = await fetch(preset.path);
+  const separator = preset.path.includes('?') ? '&' : '?';
+  const res = await fetch(`${preset.path}${separator}v=${encodeURIComponent(preset.updatedAt ?? preset.id)}`);
   if (!res.ok) {
     throw new Error(`加载智库预设失败：${preset.title}（${res.status}）`);
   }
@@ -198,19 +217,21 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset): Promis
   const entries = Array.isArray(data.entries) ? (data.entries as unknown as 智库条目[]) : [];
   const seriesOrder = bundledZhikuPresets.findIndex((item) => item.id === preset.id) + 1;
   return 归一化智库系统({
-    条目: entries.map((entry, index) => ({
-      ...entry,
-      id: entry.id || `${preset.id}_${index + 1}`,
-      ...(entry.分类 === 'story'
-        ? {
-            系列ID: entry.系列ID || preset.id,
-            系列标题: entry.系列标题 || preset.title,
-            系列序号: entry.系列序号 || seriesOrder,
-            章节序号: entry.章节序号 || index + 1,
-          }
-        : {}),
-      builtin: true,
-    })),
+    条目: entries
+      .filter((entry) => entry.分类 !== 'character' || isRebuiltZhikuCharacterEntry(entry))
+      .map((entry, index) => ({
+        ...entry,
+        id: entry.id || `${preset.id}_${index + 1}`,
+        ...(entry.分类 === 'story'
+          ? {
+              系列ID: entry.系列ID || preset.id,
+              系列标题: entry.系列标题 || preset.title,
+              系列序号: entry.系列序号 || seriesOrder,
+              章节序号: entry.章节序号 || index + 1,
+            }
+          : {}),
+        builtin: true,
+      })),
   });
 }
 

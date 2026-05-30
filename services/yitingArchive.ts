@@ -11,6 +11,7 @@ export interface YitingArchiveSource {
   worldEvents?: string[];
   actionOptions?: string[];
   gameTime?: string;
+  gameClock?: string;
   location?: string;
 }
 
@@ -44,13 +45,11 @@ export async function buildYitingArchiveEntry(
 ): Promise<YitingArchiveResult> {
   const inputText = [
     `回合：${source.turn}`,
-    `时间：${source.gameTime || '未知'}`,
+    `时间：${formatSourceTime(source)}`,
     `地点：${source.location || '未知'}`,
     `玩家输入：${source.userInput.trim() || '（空）'}`,
     `正文：${source.body.trim() || '（空）'}`,
     source.memory?.trim() ? `正文小结：${source.memory.trim()}` : '',
-    source.worldEvents?.length ? `动态世界：${source.worldEvents.join(' / ')}` : '',
-    source.actionOptions?.length ? `行动选项：${source.actionOptions.join(' / ')}` : '',
   ].filter(Boolean).join('\n');
 
   const fallback = createFallbackArchiveEntry(source);
@@ -69,9 +68,13 @@ export async function buildYitingArchiveEntry(
     '额外要求：',
     '- 你只是在压缩当前回合，不要抄写正文，不要把原文大段复制回来。',
     '- SUMMARY 必须使用规整格式：第一行“时间：...”，第二行“地点：...”，空一行后写“概要：”，下面 3-6 条客观索引句，每条以“- ”开头。',
+    '- 每条概要必须以本回合时间开头，格式类似“- 琥珀纪 2157.03.07 06:40，某人在某地做了什么，导致什么结果”。',
     '- 每条概要 60-120 字，且每条都要包含人物/地点/行动/结果/未结事项中的至少三项。',
     '- SUMMARY 不是正文截断，也不是氛围复述；它要像检索条目一样清楚可查，优先保留关键事实、关系变化、承诺、冲突与后果。',
     '- BODY 是备用详细纪要，不是原文层；系统会自行保存真实原文。BODY 只允许补充已发生事实，不得新增事件。',
+    '- 禁止把“动态世界”“行动选项”“后续选项”“系统提示”“变量草稿”“剧情编织进度”写入 SUMMARY 或 BODY；这些不是正文内已经发生的纪要内容。',
+    '- 原著角色的长期人格不要由忆庭精炼改写；单回合沉默、紧张、冷淡、受伤、戒备或少话只能作为当时状态，不能总结成长期性格变化。',
+    '- 原著角色长期口吻与行为边界以智库人物主体资料为准；忆庭只记录共同经历、关系事实、承诺、冲突和后果。',
   ].join('\n');
 
   const userPrompt = [
@@ -92,7 +95,7 @@ export async function buildYitingArchiveEntry(
       { retries: retryCount, signal, label: '忆庭纪要精炼' },
     );
     const parsed = parseArchiveSections(raw);
-    const summary = buildFinalSummary(parsed.summary, parsed.body, fallback.摘要, source.gameTime, source.location);
+    const summary = buildFinalSummary(parsed.summary, parsed.body, fallback.摘要, formatSourceTime(source), source.location);
     return {
       entry: {
         ...fallback,
@@ -118,9 +121,7 @@ function createFallbackArchiveEntry(source: YitingArchiveSource): 回忆条目 {
     原文: [
       `玩家输入：${source.userInput.trim() || '（空）'}`,
       `正文：${source.body.trim() || '（空）'}`,
-      source.memory?.trim() ? `回合小结：${source.memory.trim()}` : '',
-      source.worldEvents?.length ? `动态世界：${source.worldEvents.join(' / ')}` : '',
-      source.actionOptions?.length ? `行动选项：${source.actionOptions.join(' / ')}` : '',
+      source.memory?.trim() ? `回合小结：${summarizeBodyForFallback(source.memory, 420)}` : '',
     ].filter(Boolean).join('\n'),
     检索关键词: buildKeywordsFromText(source.userInput, summary, source.body),
     来源回合: [source.turn],
@@ -152,13 +153,7 @@ function buildFallbackSummary(source: YitingArchiveSource): string {
     lines.push(`- 玩家输入：${shortenLine(source.userInput, 90)}`);
     lines.push(`- 正文推进：${summarizeBodyForFallback(source.body, 180)}`);
   }
-  if (source.worldEvents?.length) {
-    lines.push(`- 动态世界：${source.worldEvents.map((item) => shortenLine(item, 64)).join('；')}`);
-  }
-  if (source.actionOptions?.length) {
-    lines.push(`- 后续选项：${source.actionOptions.map((item) => shortenLine(item, 42)).join(' / ')}`);
-  }
-  return formatArchiveSummary(source.gameTime, source.location, dedupeLines(lines).slice(0, 6));
+  return formatArchiveSummary(formatSourceTime(source), source.location, dedupeLines(lines).slice(0, 6));
 }
 
 function buildFinalSummary(summary: string, body: string, fallback: string, time?: string, location?: string): string {
@@ -183,7 +178,9 @@ function formatArchiveSummary(time: string | undefined, location: string | undef
   const cleanLines = lines
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => line.startsWith('- ') ? line : `- ${line}`);
+    .filter((line) => !isArchiveNoiseLine(line))
+    .map((line) => line.startsWith('- ') ? line : `- ${line}`)
+    .map((line) => prefixLineWithTime(line, time));
   return [
     `时间：${time || '未知'}`,
     `地点：${location || '未知'}`,
@@ -191,6 +188,23 @@ function formatArchiveSummary(time: string | undefined, location: string | undef
     '概要：',
     ...(cleanLines.length ? cleanLines : ['- 本回合暂无可提炼概要。']),
   ].join('\n');
+}
+
+function isArchiveNoiseLine(line: string): boolean {
+  return /动态世界|行动选项|后续选项|系统提示|变量草稿|剧情编织进度|最近判定理由/.test(line);
+}
+
+function formatSourceTime(source: YitingArchiveSource): string {
+  return [source.gameTime, source.gameClock].filter(Boolean).join(' ') || '未知';
+}
+
+function prefixLineWithTime(line: string, time?: string): string {
+  const clean = line.trim();
+  if (!time || time === '未知') return clean;
+  const body = clean.replace(/^-\s*/, '').trim();
+  if (!body) return clean;
+  if (body.includes(time) || /琥珀纪\s*\d|星历\s*\d|\d{4}[.\/-]\d{1,2}[.\/-]\d{1,2}/.test(body)) return `- ${body}`;
+  return `- ${time}，${body}`;
 }
 
 function dedupeLines(lines: string[]): string[] {
@@ -225,6 +239,7 @@ function normalizeArchiveSummary(summary: string): string[] {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+    .filter((line) => !isArchiveNoiseLine(line))
     .map((line) => line.replace(/^[\d一二三四五六七八九十]+[.、)\]]\s*/, '- '))
     .map((line) => line.replace(/^[*•—·]\s*/, '- '))
     .map((line) => line.startsWith('- ') ? line : `- ${line}`);
@@ -238,6 +253,7 @@ function normalizeArchiveSummary(summary: string): string[] {
     .split(/[。！？!?；;\n]/)
     .map((line) => line.trim())
     .filter(Boolean)
+    .filter((line) => !isArchiveNoiseLine(line))
     .slice(0, 6)
     .map((line) => `- ${line}`);
 }

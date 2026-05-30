@@ -5,7 +5,7 @@ import { 对齐世界日期与天数, 推进琥珀日期 } from '@/models/world'
 import type { NPC记录, NPC关系类型 } from '@/models/npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
-import type { 主动来信类型, 主动来信优先级 } from '@/models/phone';
+import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/models/phone';
 
 const ITEM_CATEGORIES = new Set<物品分类>(['food', 'consumable', 'lightcone', 'weapon', 'clothing', 'accessory', 'memento', 'key']);
 const ITEM_QUALITIES = new Set<物品品质>(['蓝', '紫', '金']);
@@ -13,8 +13,8 @@ const NPC_RELATIONS = new Set<NPC关系类型>(['stranger', 'acquaintance', 'fri
 const PHONE_TRIGGER_TYPES = new Set<主动来信类型>(['injury', 'victory', 'defeat', 'location_change', 'important_item', 'relationship', 'news', 'quest', 'time', 'custom']);
 const PHONE_PRIORITIES = new Set<主动来信优先级>(['low', 'normal', 'high', 'urgent']);
 const NSFW_AGE_VALUES = new Set(['adult', 'unknown', 'minor_blocked']);
-const NSFW_BLOCKED_CANONICAL_NAMES = new Set(['帕姆']);
-const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|怪物|怪兽|裂界生物|反物质|虚卒|机兵|机械|机器人|生物|动物|宠物|造物|傀儡|人偶|投影)/i;
+const NSFW_BLOCKED_CANONICAL_NAMES = new Set(['帕姆', '白露', '彦卿', '虎克', '克拉拉']);
+const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|白露|彦卿|虎克|克拉拉|怪物|怪兽|裂界生物|反物质|虚卒|机兵|机械|机器人|生物|动物|宠物|造物|傀儡|人偶|投影)/i;
 const FACT_TYPE_ALIASES: Record<string, 变量事实['type']> = {
   旅人: 'traveler_profile',
   旅人档案: 'traveler_profile',
@@ -455,6 +455,10 @@ function findNpc(records: NPC记录[], id: string, name: string): NPC记录 | un
   );
 }
 
+function isCanonicalNpcPersonalityProtected(npc: NPC记录 | undefined, name: string): boolean {
+  return Boolean(npc?.原著角色 || matchCanonical(npc?.姓名 ?? name) || matchCanonical(name));
+}
+
 function isNsfwBlockedNpc(npc: NPC记录 | undefined, name: string): string | null {
   const canonicalName = matchCanonical(npc?.姓名 ?? name)?.name ?? matchCanonical(name)?.name;
   const haystack = [
@@ -478,6 +482,58 @@ function 数组已有文本(value: unknown, text: string): boolean {
   return Array.isArray(value) && value.some((item) => typeof item === 'string' && item.trim() === text.trim());
 }
 
+function mergeUniqueTexts(...groups: Array<string[] | undefined>): string[] | undefined {
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const group of groups) {
+    for (const item of group ?? []) {
+      const text = item.trim();
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      output.push(text);
+    }
+  }
+  return output.length ? output : undefined;
+}
+
+function buildConservativeNsfwArchive(existing: NPC记录, fact: Extract<变量事实, { type: 'nsfw_archive' }>): Record<string, unknown> {
+  const current = existing.NSFW档案 ?? {};
+  const archive: Record<string, unknown> = {};
+  archive.enabled = fact.enabled ?? current.enabled ?? true;
+  archive.年龄确认 = fact.ageConfirm ?? current.年龄确认 ?? 'unknown';
+  archive.亲密阶段 = fact.intimacyStage ?? current.亲密阶段 ?? '未建立';
+  archive.边界 = fact.boundaries
+    ?? current.边界
+    ?? '仅作为私密档案预留；未确认成人、明确同意与关系边界前，不写具体身体细节或亲密经历。';
+  const longTermFacts = mergeUniqueTexts(
+    current.长期事实,
+    fact.longTermFacts,
+    ['NSFW 总开关开启后创建的保守基线档案；不代表已发生亲密剧情。'],
+  );
+  if (longTermFacts?.length) archive.长期事实 = longTermFacts;
+  const tags = mergeUniqueTexts(current.标签, fact.tags, ['保守基线', '等待剧情事实补充']);
+  if (tags?.length) archive.标签 = tags;
+  archive.备注 = fact.notes
+    ?? current.备注
+    ?? '该档案只承接后续已发生的成人向长期事实，普通外貌、性格与同行记忆保持隔离。';
+  return archive;
+}
+
+const NON_INVENTORY_INFORMATION_RE = /(坐标|座标|位置|地点|方位|路线|路径|权限$|访问权限|通行权限|许可$|口令|密码|暗号|线索|情报|消息|讯息|资料|记录|名单|名单信息|地址|坐标点)/;
+const PHYSICAL_INFORMATION_CARRIER_RE = /(卡|钥匙|钥|芯片|终端|地图|纸条|便签|信件|文书|档案袋|票|通行证|徽章|铭牌|印章|玉牌|玉兆|令牌|样本|碎片|装置|模块|硬盘|数据盘|存储器)/;
+
+function 是非背包信息物品(input: {
+  name: string;
+  description?: string;
+  evidence?: string;
+  sourceDescription?: string;
+}): boolean {
+  const name = input.name.trim();
+  const haystack = [name, input.description, input.evidence, input.sourceDescription].filter(Boolean).join(' ');
+  if (!NON_INVENTORY_INFORMATION_RE.test(haystack)) return false;
+  return !PHYSICAL_INFORMATION_CARRIER_RE.test(name);
+}
+
 function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }>, npcs: NPC记录[]): string | null {
   if (fact.targetId?.trim()) return fact.targetId.trim();
   if (fact.targetName?.trim()) {
@@ -487,6 +543,54 @@ function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }
   }
   const related = fact.relatedNpcIds?.find((id) => id.trim());
   return related?.trim() ?? null;
+}
+
+function normalizePhoneSeedComparableText(text: string): string {
+  return text
+    .replace(/\s+/g, '')
+    .replace(/[，。！？!?；;、,.…~～“”"'\[\]（）()《》<>]/g, '')
+    .trim();
+}
+
+function isPhoneSeedTextSimilar(a: string, b: string): boolean {
+  const left = normalizePhoneSeedComparableText(a);
+  const right = normalizePhoneSeedComparableText(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.length >= 12 && right.includes(left)) return true;
+  if (right.length >= 12 && left.includes(right)) return true;
+  const shared = [...new Set(left)].filter((char) => right.includes(char)).length;
+  return shared / Math.max(1, Math.min(left.length, right.length)) >= 0.82;
+}
+
+function hasRecentSimilarPhoneSeed(phone: 手机系统 | undefined, input: {
+  turn: number;
+  targetId: string;
+  relatedNpcIds: string[];
+  title: string;
+  context: string;
+  windowTurns?: number;
+}): boolean {
+  if (!phone?.messageSeeds?.length) return false;
+  const windowTurns = Math.max(3, input.windowTurns ?? 12);
+  const ids = new Set([input.targetId, ...input.relatedNpcIds].filter(Boolean));
+  const currentText = `${input.title}\n${input.context}`;
+  return phone.messageSeeds.some((seed) => {
+    if (input.turn - (Number(seed.turn) || 0) > windowTurns) return false;
+    const seedIds = new Set([seed.targetId, ...seed.relatedNpcIds].filter(Boolean));
+    const sameTarget = [...ids].some((id) => seedIds.has(id) || seedIds.has(`npc_${id}`) || id === seed.targetId);
+    if (!sameTarget) return false;
+    return isPhoneSeedTextSimilar(currentText, `${seed.title}\n${seed.context}`);
+  });
+}
+
+function hasRecentNonUrgentPhoneSeed(phone: 手机系统 | undefined, turn: number, windowTurns = 3): boolean {
+  if (!phone?.messageSeeds?.length) return false;
+  const safeWindow = Math.max(3, Math.trunc(windowTurns) || 3);
+  return phone.messageSeeds.some((seed) => {
+    if (seed.priority === 'urgent' || seed.priority === 'high') return false;
+    return turn - (Number(seed.turn) || 0) < safeWindow;
+  });
 }
 
 export function factsToVariableCommands(
@@ -503,6 +607,7 @@ export function factsToVariableCommands(
   const warnings: string[] = [];
   const world = state.世界 as 世界状态;
   const npcs = (state.NPC as NPC记录[]) ?? [];
+  const phone = state.手机 as 手机系统 | undefined;
   const phoneSeedsEnabled = options.phoneSeedsEnabled !== false;
   const maxPhoneSeedsPerTurn = Math.max(0, Math.trunc(options.maxPhoneSeedsPerTurn ?? 2));
   let phoneSeedsWritten = 0;
@@ -583,7 +688,7 @@ export function factsToVariableCommands(
             外貌: fact.appearance ?? canonical?.appearance,
             穿着: fact.clothing,
             说话方式: fact.speechStyle,
-            性格: fact.personality ?? canonical?.personality,
+            性格: canonical?.personality ?? fact.personality,
             介绍: fact.intro ?? (canonical ? `${canonical.name}是当前剧情中出现的原著角色。` : ''),
             同行记忆: fact.memory ? [{
               id: `npc_mem_${id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
@@ -606,7 +711,13 @@ export function factsToVariableCommands(
         if (fact.appearance) push({ action: 'set', key: `${key}.外貌`, value: fact.appearance });
         if (fact.clothing) push({ action: 'set', key: `${key}.穿着`, value: fact.clothing });
         if (fact.speechStyle) push({ action: 'set', key: `${key}.说话方式`, value: fact.speechStyle });
-        if (fact.personality) push({ action: 'set', key: `${key}.性格`, value: fact.personality });
+        if (fact.personality) {
+          if (isCanonicalNpcPersonalityProtected(existing, fact.name)) {
+            notes.push(`已忽略 ${existing.姓名} 的 personality 更新：原著角色长期性格由智库人物主体资料校准，变量系统只记录本回合经历和关系变化。`);
+          } else {
+            push({ action: 'set', key: `${key}.性格`, value: fact.personality });
+          }
+        }
         if (fact.intro) push({ action: 'set', key: `${key}.介绍`, value: fact.intro });
         if (fact.playerAddress) push({ action: 'set', key: `${key}.对玩家称呼`, value: fact.playerAddress });
         if (fact.memory) push({
@@ -637,8 +748,7 @@ export function factsToVariableCommands(
         continue;
       }
       const key = `NPC[id=${existing.id}].NSFW档案`;
-      const archive: Record<string, unknown> = {};
-      archive.enabled = fact.enabled ?? true;
+      const archive = buildConservativeNsfwArchive(existing, fact);
       if (fact.ageConfirm) archive.年龄确认 = fact.ageConfirm;
       if (fact.intimacyStage) archive.亲密阶段 = fact.intimacyStage;
       if (fact.boundaries) archive.边界 = fact.boundaries;
@@ -651,15 +761,20 @@ export function factsToVariableCommands(
       if (fact.longTermFacts?.length) archive.长期事实 = fact.longTermFacts;
       if (fact.tags?.length) archive.标签 = fact.tags;
       if (fact.notes) archive.备注 = fact.notes;
-      if (Object.keys(archive).length <= 1 && archive.enabled === true) {
-        warnings.push(`nsfw_archive 已忽略：${fact.npcName} 没有可写入的长期档案字段。`);
-        continue;
-      }
       push({ action: 'set', key, value: archive });
       continue;
     }
 
     if (fact.type === 'item') {
+      if (是非背包信息物品({
+        name: fact.name,
+        description: fact.description,
+        evidence: fact.evidence,
+        sourceDescription: fact.sourceDescription,
+      })) {
+        warnings.push(`item 已忽略：${fact.name} 是坐标/权限/线索/情报等信息，不是可放入背包的实体物品；请用 world_event、npc.memory 或剧情承接。`);
+        continue;
+      }
       push({
         action: 'push',
         key: '旅人.背包',
@@ -698,10 +813,25 @@ export function factsToVariableCommands(
         warnings.push(`phone_seed 已忽略：缺少 targetId/targetName/relatedNpcIds，无法确定来信目标（${fact.title}）。`);
         continue;
       }
+      const priority = fact.priority ?? 'normal';
+      if ((priority === 'low' || priority === 'normal') && hasRecentNonUrgentPhoneSeed(phone, turn)) {
+        warnings.push(`phone_seed 已忽略：近期已有普通主动来信，低频/普通来信进入全局冷却（${fact.title}）。`);
+        continue;
+      }
       const relatedNpcIds = Array.from(new Set([
         ...(fact.relatedNpcIds ?? []),
         targetId.startsWith('npc_') || targetId.startsWith('npc-') ? targetId : '',
       ].map((id) => id.trim()).filter(Boolean)));
+      if (hasRecentSimilarPhoneSeed(phone, {
+        turn,
+        targetId,
+        relatedNpcIds,
+        title: fact.title,
+        context: fact.context,
+      })) {
+        warnings.push(`phone_seed 已忽略：近期已有同对象同事件的主动来信，避免重复刷屏（${fact.title}）。`);
+        continue;
+      }
       push({
         action: 'push',
         key: '手机.messageSeeds',
@@ -710,7 +840,7 @@ export function factsToVariableCommands(
           turn,
           source: 'main_story',
           triggerType: fact.triggerType ?? 'custom',
-          priority: fact.priority ?? 'normal',
+          priority,
           targetType: fact.targetType ?? 'private',
           targetId,
           title: fact.title,
