@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { LandingPage } from '@/components/layout/LandingPage';
+import { LandingPage, type PresenceSnapshot } from '@/components/layout/LandingPage';
 import { GameView } from '@/components/layout/GameView';
 import { TopBar } from '@/components/layout/TopBar';
 import { LeftPanel } from '@/components/layout/LeftPanel';
@@ -51,6 +51,17 @@ import { loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
+const PRESENCE_SESSION_KEY = 'kty_presence_session_id';
+
+function getPresenceSessionId(): string {
+  if (typeof window === 'undefined') return '';
+  const existing = window.sessionStorage.getItem(PRESENCE_SESSION_KEY);
+  if (existing) return existing;
+  const sessionId = `kty_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  window.sessionStorage.setItem(PRESENCE_SESSION_KEY, sessionId);
+  return sessionId;
+}
+
 export default function App() {
   const { state, actions } = useGame();
   const [showSettings, setShowSettings] = useState(false);
@@ -62,6 +73,8 @@ export default function App() {
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
   const [activeSystem, setActiveSystem] = useState<GameSystemId | null>(null);
+  const [presence, setPresence] = useState<PresenceSnapshot | null>(null);
+  const [presenceFailed, setPresenceFailed] = useState(false);
 
   const handleMenuSelect = (id: GameSystemId) => {
     if (id === 'worldbook') {
@@ -99,6 +112,43 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const sessionId = getPresenceSessionId();
+    if (!sessionId) return undefined;
+    const heartbeat = async () => {
+      try {
+        const res = await fetch('/api/presence', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sessionId, path: `${window.location.pathname}${window.location.search}`, view: state.view }),
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(`presence ${res.status}`);
+        const data = await res.json() as PresenceSnapshot;
+        if (!cancelled) {
+          setPresence(data);
+          setPresenceFailed(false);
+        }
+      } catch {
+        if (!cancelled) setPresenceFailed(true);
+      }
+    };
+    void heartbeat();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void heartbeat();
+    }, 30_000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void heartbeat();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [state.view]);
+
   // ── Home ──
   if (state.view === 'home') {
     return (
@@ -113,6 +163,8 @@ export default function App() {
           onWorldbookManager={() => setShowWorldbookManager(true)}
           onZhikuManager={() => setShowZhikuManager(true)}
           onCloudSave={() => setShowCloudSave(true)}
+          presence={presence}
+          presenceFailed={presenceFailed}
         />
         {showWorldbookManager && (
           <WorldbookManagerModal

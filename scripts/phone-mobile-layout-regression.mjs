@@ -27,6 +27,22 @@ const checks = [
     label: 'desktop shell remains available at xl breakpoint',
     ok: source.includes("activeApp ? 'hidden xl:flex' : 'flex'") && source.includes('xl:w-[980px]'),
   },
+  {
+    label: 'mobile phone sidebars keep scroll inside the list panel',
+    ok:
+      source.includes("flex-col overflow-hidden xl:w-[292px]") &&
+      source.includes("flex-col overflow-hidden xl:w-[280px]"),
+  },
+  {
+    label: 'mobile message and contact lists have touch scroll containers',
+    ok:
+      (source.match(/min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3/g) ?? []).length >= 2 &&
+      source.includes('[-webkit-overflow-scrolling:touch]'),
+  },
+  {
+    label: 'mobile group member picker keeps independent touch scroll',
+    ok: source.includes('max-h-36 touch-pan-y space-y-1 overflow-y-auto overscroll-contain pr-1'),
+  },
 ];
 
 const failed = checks.filter((check) => !check.ok);

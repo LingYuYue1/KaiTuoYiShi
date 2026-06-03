@@ -7,6 +7,8 @@ interface LandingPageProps {
   onWorldbookManager: () => void;
   onZhikuManager: () => void;
   onCloudSave: () => void;
+  presence: PresenceSnapshot | null;
+  presenceFailed: boolean;
 }
 
 interface TwinkleStar {
@@ -19,6 +21,14 @@ interface TwinkleStar {
   color: string;
 }
 
+export interface PresenceSnapshot {
+  online: number;
+  onlineCount?: number;
+  storage?: 'r2' | 'kv' | 'memory';
+  ttlSeconds: number;
+  updatedAt: string;
+}
+
 export function LandingPage({
   onNewGame,
   onLoadSave,
@@ -26,6 +36,8 @@ export function LandingPage({
   onWorldbookManager,
   onZhikuManager,
   onCloudSave,
+  presence,
+  presenceFailed,
 }: LandingPageProps) {
   const stars: TwinkleStar[] = useMemo(() => {
     const list: TwinkleStar[] = [];
@@ -93,6 +105,25 @@ export function LandingPage({
       >
         GitHub 云存档
       </button>
+
+      <div
+        className="absolute right-4 top-4 z-20 flex items-center gap-2 px-4 py-2 font-serif text-[12px] tracking-[0.16em] sm:right-5 sm:top-5 sm:text-[13px]"
+        style={{
+          color: 'rgba(var(--tj-text-primary), 0.86)',
+          background: 'rgba(var(--tj-bg-primary), 0.32)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34), 0 10px 24px rgba(0,0,0,0.22)',
+          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+        }}
+      >
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{
+            background: presenceFailed ? 'rgba(var(--tj-text-secondary), 0.65)' : 'rgba(95, 231, 176, 0.95)',
+            boxShadow: presenceFailed ? 'none' : '0 0 10px rgba(95, 231, 176, 0.8)',
+          }}
+        />
+        <span>{presence ? `在线开拓者 ${presence.online} 人` : '在线开拓者'}</span>
+      </div>
 
       {/* ── Hero Content ── */}
       <div className="relative z-10 flex min-h-0 w-full max-w-[520px] flex-col items-center justify-center animate-fade-in">
@@ -250,7 +281,7 @@ export function LandingPage({
       </div>
 
       <p className="absolute bottom-4 left-0 right-0 z-10 text-center text-xs opacity-60" style={{ color: 'rgb(var(--tj-text-secondary))' }}>
-        开拓轶事 v0.4.5
+        开拓轶事 v0.4.7
       </p>
     </div>
   );

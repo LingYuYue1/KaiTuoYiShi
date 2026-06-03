@@ -62,6 +62,7 @@ export function buildPhoneApiConfig(settings: 游戏设置, apiSettings: API设�
     maxTokens: phoneApi.maxTokens ?? mainConfig?.maxTokens ?? 900,
     temperature: phoneApi.temperature ?? mainConfig?.temperature ?? 0.75,
     retryCount: phoneApi.retryCount ?? mainConfig?.retryCount ?? 2,
+    enableClaudeMode: settings.enableClaudeMode === true,
     createdAt: 0,
     updatedAt: Date.now(),
   };

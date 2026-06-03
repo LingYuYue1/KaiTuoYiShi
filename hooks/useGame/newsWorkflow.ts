@@ -28,13 +28,14 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
   const config: API配置项 = {
     id: '__news_system__',
     name: '星际和平周报',
-    provider: api.provider || mainConfig?.provider || 'openai',
+    provider: api.provider || mainConfig?.provider || 'openai_compatible',
     baseUrl: api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: api.apiKey.trim() || mainConfig?.apiKey || '',
     model: api.model.trim() || mainConfig?.model || '',
     maxTokens: api.maxTokens ?? mainConfig?.maxTokens,
     temperature: api.temperature ?? mainConfig?.temperature,
     retryCount: api.retryCount ?? mainConfig?.retryCount ?? 2,
+    enableClaudeMode: state.gameSettings.enableClaudeMode === true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

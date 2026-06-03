@@ -18,8 +18,11 @@ export async function fetchModels(config: any): Promise<string[]> {
       if (config.provider === 'gemini') {
         return fetchGeminiModels(baseRaw, apiKey);
       }
-      if (config.provider === 'claude') {
+      if (config.provider === 'claude' || config.provider === 'claude_compatible') {
         return fetchClaudeModels(baseRaw, apiKey);
+      }
+      if (config.provider === 'baidu') {
+        return fetchBaiduQianfanModels(baseRaw, apiKey);
       }
       return fetchOpenAICompatibleModels(baseRaw, apiKey);
     },
@@ -52,6 +55,34 @@ async function fetchOpenAICompatibleModels(baseRaw: string, apiKey: string): Pro
     }
   }
   throw new Error(`获取模型列表失败：\n${errors.join('\n')}`);
+}
+
+async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise<string[]> {
+  const base = baseRaw.replace(/\/+$/, '');
+  const root = base.replace(/\/v[12](?:\/.*)?$/i, '');
+  const candidates = Array.from(new Set([`${root}/v2/models`, `${base}/models`]));
+  const errors: string[] = [];
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        errors.push(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
+        continue;
+      }
+      const data = await res.json();
+      if (data && Array.isArray(data.data)) {
+        const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+        if (ids.length) return ids;
+      }
+      errors.push(`${url} -> 返回格式异常（缺 data 数组）`);
+    } catch (e) {
+      errors.push(`${url} -> ${(e as Error).message}`);
+    }
+  }
+  throw new Error(`百度千帆获取模型列表失败：\n${errors.join('\n')}`);
 }
 
 async function fetchGeminiModels(baseRaw: string, apiKey: string): Promise<string[]> {

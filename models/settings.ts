@@ -1,4 +1,4 @@
-export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'deepseek' | 'openai_compatible';
+export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'openai_compatible';
 
 import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
@@ -15,6 +15,7 @@ export interface API配置项 {
   maxTokens?: number;
   temperature?: number;
   retryCount?: number;
+  enableClaudeMode?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -182,6 +183,7 @@ export interface 游戏设置 {
   enableStreaming: boolean;
   /** 开发者模式：开启后向 AI 注入提示词，AI 会把玩家消息视作开发者测试指令并尽量配合。 */
   devMode: boolean;
+  enableClaudeMode: boolean;
   /** 变量自动更新：主模型回完正文后，调用变量模型分析正文并落地变量命令。 */
   enableVariableUpdate: boolean;
   /** 星际和平周报：独立新闻演进系统，和变量系统分离。 */
@@ -220,6 +222,17 @@ export interface 游戏设置 {
   enableMaleNsfwArchive: boolean;
   /** 防止抢话（NoControl）：开启后注入「角色边界」提示词模块，禁止 AI 代写玩家言行与正文内选项菜单。 */
   enableNoControl: boolean;
+  /** 额外功能：用于承载不属于核心叙事/API/系统面板的小型修复与玩法增强。 */
+  额外功能: 额外功能设置;
+}
+
+export interface 污染词清理设置 {
+  enabled: boolean;
+  words: string[];
+}
+
+export interface 额外功能设置 {
+  污染词清理: 污染词清理设置;
 }
 
 export interface 记忆系统设置 {
@@ -820,6 +833,7 @@ export function 创建默认游戏设置(): 游戏设置 {
     enableInnerVoice: true,
     enableStreaming: true,
     devMode: false,
+    enableClaudeMode: false,
     enableVariableUpdate: false,
     新闻系统: 创建默认星际和平周报设置(),
     手机系统: 创建默认手机系统设置(),
@@ -839,6 +853,33 @@ export function 创建默认游戏设置(): 游戏设置 {
     enableNsfw: false,
     enableMaleNsfwArchive: false,
     enableNoControl: true,
+    额外功能: 创建默认额外功能设置(),
+  };
+}
+
+export function 创建默认额外功能设置(): 额外功能设置 {
+  return {
+    污染词清理: {
+      enabled: true,
+      words: ['极其'],
+    },
+  };
+}
+
+export function 归一化额外功能设置(input?: Partial<额外功能设置>): 额外功能设置 {
+  const defaults = 创建默认额外功能设置();
+  const rawWords = input?.污染词清理?.words;
+  const words = Array.isArray(rawWords)
+    ? rawWords.map((word) => String(word || '').trim()).filter(Boolean)
+    : defaults.污染词清理.words;
+  return {
+    ...defaults,
+    ...input,
+    污染词清理: {
+      ...defaults.污染词清理,
+      ...(input?.污染词清理 ?? {}),
+      words: words.length ? Array.from(new Set(words)).slice(0, 50) : defaults.污染词清理.words,
+    },
   };
 }
 

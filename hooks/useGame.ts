@@ -34,16 +34,13 @@ export function useGame(): UseGameReturn {
       if (state.apiSettings.configs.length > 0) {
         const first = state.apiSettings.configs[0];
         state.setApiSettings((prev) => ({ ...prev, activeConfigId: first.id }));
-        return first;
+        return { ...first, enableClaudeMode: state.gameSettings.enableClaudeMode === true };
       }
       return null;
     }
-    return (
-      state.apiSettings.configs.find(
-        (c) => c.id === state.apiSettings.activeConfigId,
-      ) ?? null
-    );
-  }, [state.apiSettings.activeConfigId, state.apiSettings.configs, state.setApiSettings]);
+    const config = state.apiSettings.configs.find((c) => c.id === state.apiSettings.activeConfigId) ?? null;
+    return config ? { ...config, enableClaudeMode: state.gameSettings.enableClaudeMode === true } : null;
+  }, [state.apiSettings.activeConfigId, state.apiSettings.configs, state.gameSettings.enableClaudeMode, state.setApiSettings]);
 
   const handleSend = useCallback(
     async (text: string) => {

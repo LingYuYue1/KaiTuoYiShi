@@ -25,6 +25,10 @@ assert(phoneModal.includes("手机${activeChat.type === 'group'"), '玩家主动
 assert(phoneModal.includes('主动来信「${seed.title}」'), '主动来信生成后也必须回写记忆摘要。');
 assert(phoneModal.includes('onNpcRecordsChange'), '私聊摘要必须能写回对应 NPC 同行记忆。');
 assert(phoneModal.includes("来源: '手机'"), '手机写入 NPC 同行记忆时来源必须标记为手机。');
+assert(phoneModal.includes('FALLBACK_STORY_CONTACTS'), '手机联系人为空时必须提供剧情联系人兜底。');
+assert(phoneModal.includes('buildFallbackContactsFromStory'), '手机联系人兜底必须从近期正文/地点识别已登场角色。');
+assert(phoneModal.includes('mainChatHistory') && phoneModal.includes('existingContacts: phone.contacts'), '联系人兜底必须只救空联系人旧存档，不能覆盖已有联系人。');
+assert(phoneModal.includes('三月七') && phoneModal.includes('丹恒') && phoneModal.includes('贝洛伯格'), '联系人兜底必须覆盖列车组和雅利洛阶段常见联系人。');
 
 assert(phoneService.includes('最近已发送短讯（禁止复读或同序改写）'), '手机模型上下文必须注入最近短讯禁止复读清单。');
 assert(phoneService.includes('dedupePhoneReply'), '手机回复落地前必须做结果去重，避免主动来信原样复读。');

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ApiSettingsTab } from './ApiSettings';
 import { ThemeSettingsTab } from './ThemeSettings';
 import { GameSettingsTab } from './GameSettings';
@@ -12,6 +12,7 @@ import { StoryWeavingSettingsTab } from './StoryWeavingSettingsTab';
 import { NsfwSettingsTab } from './NsfwSettingsTab';
 import { ImageGenerationSettingsTab } from './ImageGenerationSettingsTab';
 import { PromptModulesTab } from './PromptModulesTab';
+import { ExtraFeaturesSettingsTab } from './ExtraFeaturesSettingsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
 import { VariableUpdateTab } from './VariableUpdateSettings';
@@ -29,6 +30,7 @@ import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { VariableSetters } from '@/utils/variableExecutor';
+import { saveSetting } from '@/services/dbService';
 
 export type SettingsTab = Tab;
 
@@ -60,7 +62,7 @@ interface SettingsModalProps {
   initialTab?: Tab;
 }
 
-type Tab = 'api' | 'game' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'imageGeneration' | 'prompts' | 'variables' | 'varUpdate' | 'theme' | 'storage';
+type Tab = 'api' | 'game' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'imageGeneration' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
 
 const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'game', label: '游戏设定', icon: '❖', subtitle: '叙述风格与人格' },
@@ -77,6 +79,7 @@ const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'imageGeneration', label: '文生图', icon: '▧', subtitle: '相册与图片生成接口' },
   { key: 'variables', label: '变量管理', icon: '◈', subtitle: '存档数据查看与调试' },
   { key: 'prompts', label: '提示词模块', icon: '❘', subtitle: 'AI 系统级硬规则' },
+  { key: 'extra', label: '额外功能', icon: '✦', subtitle: '污染词清理与扩展功能' },
   { key: 'theme', label: '主题风格', icon: '◇', subtitle: '配色与氛围' },
   { key: 'storage', label: '存档管理', icon: '✧', subtitle: '本地存档与导入导出' },
 ];
@@ -109,6 +112,10 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
+  const persistGameSettingsChange = useCallback((next: 游戏设置) => {
+    onGameSettingsChange(next);
+    void saveSetting('gameSettings', next);
+  }, [onGameSettingsChange]);
 
   const renderTab = (): ReactNode => {
     switch (activeTab) {
@@ -118,14 +125,14 @@ export function SettingsModal({
             settings={apiSettings}
             onChange={onApiSettingsChange}
             gameSettings={gameSettings}
-            onGameSettingsChange={onGameSettingsChange}
+            onGameSettingsChange={persistGameSettingsChange}
           />
         );
       case 'game':
         return (
           <GameSettingsTab
             settings={gameSettings}
-            onChange={onGameSettingsChange}
+            onChange={persistGameSettingsChange}
             worldState={世界}
             onWorldStateChange={on世界Change}
           />
@@ -134,7 +141,7 @@ export function SettingsModal({
         return (
           <MemorySystemSettingsTab
             settings={gameSettings}
-            onChange={onGameSettingsChange}
+            onChange={persistGameSettingsChange}
             apiSettings={apiSettings}
           />
         );
@@ -142,7 +149,7 @@ export function SettingsModal({
         return (
           <YitingSettingsTab
             settings={gameSettings}
-            onChange={onGameSettingsChange}
+            onChange={persistGameSettingsChange}
             apiSettings={apiSettings}
           />
         );
@@ -150,7 +157,7 @@ export function SettingsModal({
         return (
           <NewsSystemSettingsTab
             settings={gameSettings}
-            onChange={onGameSettingsChange}
+            onChange={persistGameSettingsChange}
             apiSettings={apiSettings}
           />
         );
@@ -158,7 +165,7 @@ export function SettingsModal({
         return (
           <PhoneSystemSettingsTab
             settings={gameSettings}
-            onChange={onGameSettingsChange}
+            onChange={persistGameSettingsChange}
             apiSettings={apiSettings}
           />
         );
@@ -166,7 +173,7 @@ export function SettingsModal({
         return (
           <ZhikuSettingsTab
             settings={gameSettings}
-            onChange={onGameSettingsChange}
+            onChange={persistGameSettingsChange}
             apiSettings={apiSettings}
           />
         );
@@ -174,7 +181,7 @@ export function SettingsModal({
         return (
           <StoryWeavingSettingsTab
             settings={gameSettings}
-            onChange={onGameSettingsChange}
+            onChange={persistGameSettingsChange}
             apiSettings={apiSettings}
           />
         );
@@ -187,11 +194,13 @@ export function SettingsModal({
           />
         );
       case 'nsfw':
-        return <NsfwSettingsTab settings={gameSettings} onChange={onGameSettingsChange} />;
+        return <NsfwSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'imageGeneration':
-        return <ImageGenerationSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={apiSettings} />;
+        return <ImageGenerationSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} apiSettings={apiSettings} />;
       case 'prompts':
-        return <PromptModulesTab settings={gameSettings} onChange={onGameSettingsChange} />;
+        return <PromptModulesTab settings={gameSettings} onChange={persistGameSettingsChange} />;
+      case 'extra':
+        return <ExtraFeaturesSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'variables':
         return (
           <VariableManagerTab
@@ -212,7 +221,7 @@ export function SettingsModal({
         return (
           <VariableUpdateTab
             gameSettings={gameSettings}
-            onGameSettingsChange={onGameSettingsChange}
+            onGameSettingsChange={persistGameSettingsChange}
             apiSettings={apiSettings}
           />
         );
@@ -343,7 +352,7 @@ export function SettingsModal({
             }}
           >
             <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
-            <span className="ml-2">开拓轶事 · v0.4.5</span>
+            <span className="ml-2">开拓轶事 · v0.4.7</span>
           </div>
         </aside>
 

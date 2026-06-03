@@ -254,6 +254,12 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
 
       {/* Toggles */}
       <ToggleRow
+        label="Claude 专用模式"
+        desc="只让 Claude / Claude 兼容接口使用 Anthropic Messages API；OpenAI 兼容、百度千帆、DeepSeek、Gemini 不受影响。OpenAI 兼容 Claude 中转请保持关闭。"
+        checked={settings.enableClaudeMode}
+        onChange={(v) => onChange({ ...settings, enableClaudeMode: v })}
+      />
+      <ToggleRow
         label="叙述者人格"
         desc="AI 以特定角色身份回应，而非中立旁白（同步「提示词模块·叙述者人格」开关）"
         checked={settings.enableTavernKeeperPersona}

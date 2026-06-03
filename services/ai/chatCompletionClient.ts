@@ -21,10 +21,14 @@ export interface ChatCompletionRequest {
 
 function detectProvider(config: API配置项): string {
   const url = config.baseUrl.toLowerCase();
-  const model = config.model.toLowerCase();
   if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
   if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
-  if (config.provider === 'claude' || url.includes('anthropic') || model.includes('claude')) return 'claude';
+  if (
+    config.enableClaudeMode === true &&
+    (config.provider === 'claude' || config.provider === 'claude_compatible')
+  ) {
+    return 'claude';
+  }
   return 'openai_compatible';
 }
 
@@ -38,6 +42,112 @@ function buildMessages(
   }
   result.push(...messages);
   return result;
+}
+
+function normalizeClaudeBaseUrl(baseUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  return base.endsWith('/v1') ? base : `${base}/v1`;
+}
+
+function buildOpenAICompatibleChatUrl(baseUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  if (/\/chat\/completions$/i.test(base)) return base;
+  return `${base}/chat/completions`;
+}
+
+function normalizeClaudeMessages(
+  messages: Array<{ role: string; content: string }>,
+): { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
+  const system = messages
+    .filter((m) => m.role === 'system' && m.content.trim())
+    .map((m) => m.content.trim())
+    .join('\n\n');
+  const normalized: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') continue;
+    const content = msg.content.trim();
+    if (!content) continue;
+    const role: 'user' | 'assistant' = msg.role === 'assistant' ? 'assistant' : 'user';
+    const last = normalized[normalized.length - 1];
+    if (last?.role === role) {
+      last.content = `${last.content}\n\n${content}`;
+    } else {
+      normalized.push({ role, content });
+    }
+  }
+
+  if (normalized.length === 0 || normalized[0].role !== 'user') {
+    normalized.unshift({ role: 'user', content: '请开始本轮回应。' });
+  }
+  if (normalized[normalized.length - 1]?.role !== 'user') {
+    normalized.push({ role: 'user', content: '请继续并完成当前请求。' });
+  }
+
+  return { system, messages: normalized };
+}
+
+function buildClaudeRequestBody(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  stream: boolean,
+): Record<string, unknown> {
+  const claudePayload = normalizeClaudeMessages(messages);
+  const bodyObj: Record<string, unknown> = {
+    model: config.model,
+    max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
+    messages: claudePayload.messages,
+    stream,
+  };
+  if (claudePayload.system) {
+    bodyObj.system = claudePayload.system;
+  }
+  return bodyObj;
+}
+
+function claudeHeaders(config: API配置项): HeadersInit {
+  return {
+    'Content-Type': 'application/json',
+    'x-api-key': config.apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+  };
+}
+
+function formatClaudeError(status: number, text: string): Error {
+  const lower = text.toLowerCase();
+  const hint = (() => {
+    if (status === 401) return 'API Key 无效或未授权。';
+    if (status === 403) return '账号权限、模型权限、地区限制或浏览器直连权限被拒绝。';
+    if (status === 404) return 'Base URL、/v1 路径或模型名可能不正确。';
+    if (status === 400 && (lower.includes('final') || lower.includes('role'))) {
+      return '消息角色格式不符合 Claude 要求；客户端已自动尝试保证最后一条为用户内容。';
+    }
+    if (
+      status === 400 &&
+      (lower.includes('unsupported parameter') ||
+        lower.includes('temperature') ||
+        lower.includes('top_p') ||
+        lower.includes('top_k') ||
+        lower.includes('thinking'))
+    ) {
+      return 'Claude 模型拒绝了可选参数；当前客户端默认不会上传 temperature / top_p / top_k / thinking。';
+    }
+    if (lower.includes('failed to fetch') || lower.includes('cors')) {
+      return '浏览器直连或 CORS 被拦截，请检查代理是否允许浏览器访问。';
+    }
+    return '请检查 Claude 专用模式、供应商类型、Base URL、模型名和 Key。';
+  })();
+  return new Error(`Claude API Error ${status}: ${hint}\n${text}`);
+}
+
+function parseClaudeTextResponse(json: unknown): string {
+  const data = json as { content?: Array<{ type?: string; text?: string }> };
+  return (data.content ?? [])
+    .filter((part) => part?.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text ?? '')
+    .join('');
 }
 
 export async function chatCompletion(
@@ -68,7 +178,7 @@ async function streamOpenAICompatible(
   request: ChatCompletionRequest,
   callbacks: StreamCallbacks,
 ): Promise<string> {
-  const url = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const url = buildOpenAICompatibleChatUrl(config.baseUrl);
   const body = JSON.stringify({
     model: config.model,
     messages,
@@ -145,35 +255,19 @@ async function streamClaude(
   request: ChatCompletionRequest,
   callbacks: StreamCallbacks,
 ): Promise<string> {
-  const url = `${config.baseUrl.replace(/\/$/, '')}/messages`;
-  const systemMsg = messages.find((m) => m.role === 'system');
-  const chatMsgs = messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role, content: m.content }));
-
-  const body = JSON.stringify({
-    model: config.model,
-    max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
-    temperature: request.temperature ?? config.temperature ?? 0.8,
-    system: systemMsg?.content ?? '',
-    messages: chatMsgs,
-    stream: true,
-  });
+  const url = `${normalizeClaudeBaseUrl(config.baseUrl)}/messages`;
+  const body = JSON.stringify(buildClaudeRequestBody(config, messages, request, true));
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': config.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: claudeHeaders(config),
     body,
     signal: request.signal,
   });
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`Claude API Error ${response.status}: ${text}`);
+    throw formatClaudeError(response.status, text);
   }
 
   const reader = response.body?.getReader();
@@ -232,6 +326,28 @@ async function streamClaude(
 
   callbacks.onDone();
   return fullText;
+}
+
+async function completionClaudeNonStream(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+): Promise<string> {
+  const url = `${normalizeClaudeBaseUrl(config.baseUrl)}/messages`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: claudeHeaders(config),
+    body: JSON.stringify(buildClaudeRequestBody(config, messages, request, false)),
+    signal: request.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw formatClaudeError(response.status, text);
+  }
+
+  const json = await response.json();
+  return parseClaudeTextResponse(json);
 }
 
 // ── Gemini streaming ──
@@ -336,9 +452,13 @@ export async function chatCompletionNonStream(
 ): Promise<string> {
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
-  const url = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const url = buildOpenAICompatibleChatUrl(config.baseUrl);
 
-  if (provider === 'claude' || provider === 'gemini') {
+  if (provider === 'claude') {
+    return completionClaudeNonStream(config, msgs, request);
+  }
+
+  if (provider === 'gemini') {
     return chatCompletion(config, request, {
       onDelta: () => {},
       onDone: () => {},

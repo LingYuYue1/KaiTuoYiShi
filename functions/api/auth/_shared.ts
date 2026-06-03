@@ -1,6 +1,6 @@
 export interface PagesContextLike {
   request: Request;
-  env: Record<string, string | undefined>;
+  env: Record<string, unknown>;
 }
 
 export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
@@ -20,8 +20,9 @@ export function optionsResponse(): Response {
   return jsonResponse({ ok: true });
 }
 
-export function readRequiredEnv(env: Record<string, string | undefined>, key: string): string {
-  const value = env[key]?.trim();
+export function readRequiredEnv(env: Record<string, unknown>, key: string): string {
+  const raw = env[key];
+  const value = typeof raw === 'string' ? raw.trim() : '';
   if (!value) throw new Error(`Cloudflare 环境变量缺失：${key}`);
   return value;
 }

@@ -37,6 +37,7 @@ import {
   归一化剧情编织系统设置,
   归一化手机系统设置,
   归一化文生图系统设置,
+  归一化额外功能设置,
 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID } from '@/models/prompts';
@@ -241,7 +242,9 @@ export function useGameState(): UseGameStateReturn {
           剧情编织系统: 归一化剧情编织系统设置(savedGame.剧情编织系统),
           文生图系统: 归一化文生图系统设置(savedGame.文生图系统),
           记忆系统: 归一化记忆系统设置(savedGame.记忆系统),
+          额外功能: 归一化额外功能设置(savedGame.额外功能),
           variableApi: savedGame.variableApi ?? defaults.variableApi,
+          enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
           enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
           promptModules: migratePromptModules(savedGame),
         };
@@ -374,6 +377,7 @@ export function useGameState(): UseGameStateReturn {
             剧情编织系统: 归一化剧情编织系统设置(prev.剧情编织系统),
             文生图系统: 归一化文生图系统设置(prev.文生图系统),
             记忆系统: 归一化记忆系统设置(prev.记忆系统),
+            enableClaudeMode: prev.enableClaudeMode ?? 创建默认游戏设置().enableClaudeMode,
           }
         : {
             ...prev,
@@ -382,6 +386,7 @@ export function useGameState(): UseGameStateReturn {
             剧情编织系统: 创建默认剧情编织系统设置(),
             文生图系统: 创建默认文生图系统设置(),
             记忆系统: 创建默认记忆系统设置(),
+            enableClaudeMode: 创建默认游戏设置().enableClaudeMode,
           },
     );
   }, []);

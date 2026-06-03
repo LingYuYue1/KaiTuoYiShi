@@ -37,6 +37,7 @@ export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: 
     maxTokens: api.maxTokens ?? mainConfig.maxTokens ?? 4096,
     temperature: api.temperature ?? mainConfig.temperature ?? 0.25,
     retryCount: api.retryCount ?? mainConfig.retryCount ?? 2,
+    enableClaudeMode: settings.enableClaudeMode === true,
   };
 }
 

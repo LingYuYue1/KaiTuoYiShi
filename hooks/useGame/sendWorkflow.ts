@@ -37,6 +37,7 @@ import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/s
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
+import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
 
 function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情编织系统): string {
   const before = previous.当前进度;
@@ -985,16 +986,18 @@ export async function executeSendWorkflow(
     pushQueueTask(state, 'main_story', 'success', {
       detail: `正文生成完成，用时 ${Math.round(duration)}s。`,
     });
+    const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
     const parsedBody = normalizePlayerSpeechInBody({
-      body: result.parsed.body?.trim() ?? '',
+      body: cleanedParsed.body?.trim() ?? '',
       playerName: state.旅人.姓名 || state.旅人.别名 || '你',
       userInput,
     });
+    const finalBody = sanitizeContaminatedText(parsedBody, state.gameSettings.额外功能);
     const sanitizedRawText = replaceBodyInRawResponse(
-      result.parsed.rawText || result.fullText || streamedText,
-      parsedBody,
+      cleanedParsed.rawText || result.fullText || streamedText,
+      finalBody,
     );
-    const displayText = parsedBody || result.fullText || streamedText;
+    const displayText = finalBody || sanitizeContaminatedText(result.fullText || streamedText, state.gameSettings.额外功能);
     if (state.gameSettings.enableStreaming) {
       if (streamEventCount > 0) {
         await previewChain;
@@ -1011,7 +1014,7 @@ export async function executeSendWorkflow(
     // 兜底:如果 effectiveWorld 当前帧没拿到(罕见 race),从 chatHistory 向前找最近一条出题消息
     // 取它的 awakenPathId,确保评判消息一定拿得到命途名。
     const isAwakeningTurn =
-      !!(result.parsed.awakenQuestions?.trim() || result.parsed.awakenJudgement?.trim());
+      !!(cleanedParsed.awakenQuestions?.trim() || cleanedParsed.awakenJudgement?.trim());
     let awakenPathId = '';
     if (isAwakeningTurn) {
       awakenPathId = effectiveWorld.进行中狭间 ?? '';
@@ -1026,9 +1029,9 @@ export async function executeSendWorkflow(
         }
       }
     }
-    const baseParsed = parsedBody
-      ? { ...result.parsed, body: parsedBody, rawText: sanitizedRawText }
-      : { ...result.parsed, body: displayText, rawText: sanitizedRawText };
+    const baseParsed = finalBody
+      ? { ...cleanedParsed, body: finalBody, rawText: sanitizedRawText }
+      : { ...cleanedParsed, body: displayText, rawText: sanitizedRawText };
     const parsedForDisplay = awakenPathId
       ? { ...baseParsed, awakenPathId }
       : baseParsed;
@@ -1071,7 +1074,7 @@ export async function executeSendWorkflow(
     // 6. Update memory
     pushQueueTask(state, 'memory', 'pending', { detail: '正在写入即时记忆并检查压缩阈值。' });
     const rawMemory = buildImmediateMemory(userInput, [
-      result.parsed.memory?.trim() ? `本回合小结：${result.parsed.memory.trim()}` : '',
+      parsedForDisplay.memory?.trim() ? `本回合小结：${parsedForDisplay.memory.trim()}` : '',
       displayText,
     ].filter(Boolean).join('\n\n'));
     let mem = addImmediateMemory(state.记忆, rawMemory, state.turnCount);
@@ -1101,18 +1104,18 @@ export async function executeSendWorkflow(
     let travelerAfter: typeof state.旅人 = state.旅人;
 
     // 7. 全局事件
-    if (result.parsed.worldEvents.length) {
+    if (parsedForDisplay.worldEvents.length) {
       worldAfter = {
         ...worldAfter,
-        全局事件: [...worldAfter.全局事件, ...result.parsed.worldEvents],
+        全局事件: [...worldAfter.全局事件, ...parsedForDisplay.worldEvents],
       };
     }
 
     // 7a. 命途狭间·邀请发出 → 写入 世界.待触发狭间
     //     校验:必须是已踏上 + 待升阶 的命途,才允许邀请落地。AI 偶发误标(把已经过去的命途
     //     又邀请一次)直接静默丢弃。
-    if (result.parsed.awakenInvite?.trim() && !worldAfter.待触发狭间 && !worldAfter.进行中狭间) {
-      const invitedId = 解析命途ID(result.parsed.awakenInvite);
+    if (parsedForDisplay.awakenInvite?.trim() && !worldAfter.待触发狭间 && !worldAfter.进行中狭间) {
+      const invitedId = 解析命途ID(parsedForDisplay.awakenInvite);
       if (invitedId) {
         const target = (travelerAfter.命途列表 ?? []).find((p) => p.id === invitedId);
         if (target?.待升阶) {
@@ -1121,14 +1124,14 @@ export async function executeSendWorkflow(
           console.warn('[sendWorkflow] 命途狭间邀请被忽略:目标命途未达待升阶状态:', invitedId);
         }
       } else {
-        console.warn('[sendWorkflow] 无法解析狭间邀请的命途 ID:', result.parsed.awakenInvite);
+        console.warn('[sendWorkflow] 无法解析狭间邀请的命途 ID:', parsedForDisplay.awakenInvite);
       }
     }
 
     // 7b. 命途狭间·评判落地 → 调用 应用狭间结果,清空 世界.进行中狭间
-    if (result.parsed.awakenJudgement?.trim() && worldAfter.进行中狭间) {
+    if (parsedForDisplay.awakenJudgement?.trim() && worldAfter.进行中狭间) {
       const pathId = worldAfter.进行中狭间;
-      const judgementRaw = result.parsed.awakenJudgement.trim();
+      const judgementRaw = parsedForDisplay.awakenJudgement.trim();
       const judgement: 狭间评判 | null =
         judgementRaw.includes('升阶')
         || judgementRaw.includes('突破')
@@ -1165,7 +1168,7 @@ export async function executeSendWorkflow(
       mainApiConfig: config,
       userInput,
       body: displayText,
-      variableDraft: result.parsed.variableDraft,
+      variableDraft: parsedForDisplay.variableDraft,
       turnAfter: state.turnCount + 1,
       // 本回合主流程已经更新过的切片，传入保证变量模型看到最新值
       memorySystemSnapshot: mem,
@@ -1234,6 +1237,7 @@ export async function executeSendWorkflow(
         turnCount: state.turnCount + 1,
         userInput,
         body: displayText,
+        currentLocation: variableOverrides?.世界?.当前地点 ?? worldAfter.当前地点 ?? effectiveWorld.当前地点,
         gateSnapshot: storyWeavingGate,
       });
       const storyProgressMemoryLine = storyAlignment.progressed
@@ -1334,11 +1338,11 @@ export async function executeSendWorkflow(
         turn: state.turnCount,
         userInput,
         body: displayText,
-        memory: result.parsed.memory,
+        memory: parsedForDisplay.memory,
         worldEvents: storyProgressMemoryLine
-          ? [...result.parsed.worldEvents, storyProgressMemoryLine]
-          : result.parsed.worldEvents,
-        actionOptions: result.parsed.actionOptions,
+          ? [...parsedForDisplay.worldEvents, storyProgressMemoryLine]
+          : parsedForDisplay.worldEvents,
+        actionOptions: parsedForDisplay.actionOptions,
         gameTime: effectiveWorld?.当前日期 || undefined,
         gameClock: effectiveWorld?.当前时间 || undefined,
         location: effectiveWorld?.当前地点 || undefined,

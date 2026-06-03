@@ -460,6 +460,14 @@ assert(
   storyProgressSourceForHighConfidence.includes('高置信命中后续分段'),
   '剧情推进必须允许高置信命中后续分段时归档当前段，避免只因当前段结束状态未精确命中而卡住。',
 );
+assert(storyProgressSourceForHighConfidence.includes('findCrossSeriesCanonAlignment'), '剧情编织必须支持原著系列跨章节纠偏，避免正文到雅利洛但锚点仍停黑塔。');
+assert(storyProgressSourceForHighConfidence.includes('scoreCanonSeriesPresence'), '跨系列纠偏必须使用系列级地点/人物/派系评分。');
+assert(storyProgressSourceForHighConfidence.includes('跨系列纠偏：近期正文/地点强命中'), '跨系列纠偏必须在进度理由里留下可诊断说明。');
+assert(storyProgressSourceForHighConfidence.includes('currentLocation?: string'), '剧情编织纠偏必须允许当前地点参与判断。');
+const saveLoadWorkflowSource = fs.readFileSync(path.join(root, 'hooks/useGame/saveLoadWorkflow.ts'), 'utf8');
+assert(saveLoadWorkflowSource.includes('autoAlignCanonStoryProgress'), '读档时必须尝试修复旧存档剧情编织锚点。');
+assert(saveLoadWorkflowSource.includes('recentAssistant?.parsedResponse?.body'), '读档修复必须使用最近正文作为纠偏证据。');
+assert(saveLoadWorkflowSource.includes('currentLocation: save.世界?.当前地点'), '读档修复必须使用存档当前地点作为纠偏证据。');
 assert(
   ambiguousPlanning.切段条件.some((item) => item.includes('异常信号源已经定位并完成封存')),
   '规划分析应保留明确切段条件。',

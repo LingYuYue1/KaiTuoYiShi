@@ -57,7 +57,9 @@ const providerOptions: { value: AI提供商 | ''; label: string }[] = [
   { value: 'openai_compatible', label: 'OpenAI 兼容' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'baidu', label: '百度千帆' },
   { value: 'claude', label: 'Claude' },
+  { value: 'claude_compatible', label: 'Claude 兼容' },
   { value: 'gemini', label: 'Gemini' },
 ];
 
@@ -174,6 +176,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
     baseUrl: image.词组转化器API.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: image.词组转化器API.apiKey.trim() || mainConfig?.apiKey || '',
     model: image.词组转化器API.model.trim() || mainConfig?.model || '',
+    enableClaudeMode: settings.enableClaudeMode === true,
   };
 
   const handleFetchTokenizerModels = async () => {
@@ -191,6 +194,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
         baseUrl: tokenizerEffective.baseUrl,
         apiKey: tokenizerEffective.apiKey,
         model: tokenizerEffective.model,
+        enableClaudeMode: tokenizerEffective.enableClaudeMode,
         createdAt: 0,
         updatedAt: 0,
       };

@@ -16,7 +16,9 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'openai_compatible', label: 'OpenAI 兼容' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'baidu', label: '百度千帆' },
   { value: 'claude', label: 'Claude' },
+  { value: 'claude_compatible', label: 'Claude 兼容' },
   { value: 'gemini', label: 'Gemini' },
 ];
 
@@ -47,6 +49,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
     baseUrl: story.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: story.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: story.api.model.trim() || mainConfig?.model || '',
+    enableClaudeMode: settings.enableClaudeMode === true,
   };
 
   const handleFetchModels = async () => {
@@ -64,6 +67,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
         baseUrl: effectiveApi.baseUrl,
         apiKey: effectiveApi.apiKey,
         model: effectiveApi.model,
+        enableClaudeMode: effectiveApi.enableClaudeMode,
         createdAt: 0,
         updatedAt: 0,
       });

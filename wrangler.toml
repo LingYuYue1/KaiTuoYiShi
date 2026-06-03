@@ -1,0 +1,10 @@
+name = "kaituoyishi"
+compatibility_date = "2026-06-03"
+pages_build_output_dir = "dist"
+
+[vars]
+ONLINE_SESSIONS_KV_PREFIX = "kaituoyishi/online"
+
+[[kv_namespaces]]
+binding = "ONLINE_SESSIONS_KV"
+id = "fa2733b4a1b64405997a4f34f725234f"

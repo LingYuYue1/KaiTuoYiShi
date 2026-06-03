@@ -18,7 +18,9 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'openai_compatible', label: 'OpenAI 兼容' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'baidu', label: '百度千帆' },
   { value: 'claude', label: 'Claude' },
+  { value: 'claude_compatible', label: 'Claude 兼容' },
   { value: 'gemini', label: 'Gemini' },
 ];
 
@@ -50,6 +52,7 @@ export function VariableUpdateTab({
     baseUrl: override.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: override.apiKey.trim() || mainConfig?.apiKey || '',
     model: override.model.trim() || mainConfig?.model || '',
+    enableClaudeMode: gameSettings.enableClaudeMode === true,
   };
 
   const usingMain = {
@@ -79,6 +82,7 @@ export function VariableUpdateTab({
         baseUrl: effective.baseUrl,
         apiKey: effective.apiKey,
         model: effective.model,
+        enableClaudeMode: effective.enableClaudeMode,
         createdAt: 0,
         updatedAt: 0,
       };

@@ -11,6 +11,7 @@ import {
   归一化星际和平周报设置,
   归一化智库系统设置,
   归一化手机系统设置,
+  归一化额外功能设置,
 } from '@/models/settings';
 import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveSetting } from '@/services/dbService';
 import {
@@ -31,6 +32,7 @@ import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
+import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 
 // 共享的存档负载构造函数：手动 / 自动两条路径都走这一处，未来加字段只改一处。
 // overrides 用于 sendWorkflow 里那一刻 React state 还没回写、但已有新值的字段
@@ -40,6 +42,7 @@ export function buildSavePayload(
   type: 存档类型,
   overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
 ): 存档数据 {
+  const persistedChatHistory = stripRuntimeOnlyFieldsFromChatHistory(overrides?.chatHistory ?? state.chatHistory);
   return {
     id: 0,
     type,
@@ -47,7 +50,7 @@ export function buildSavePayload(
     turnCount: overrides?.turnCount ?? state.turnCount,
     旅人: overrides?.旅人 ?? state.旅人,
     世界: overrides?.世界 ?? state.世界,
-    chatHistory: overrides?.chatHistory ?? state.chatHistory,
+    chatHistory: persistedChatHistory,
     记忆: overrides?.记忆 ?? state.记忆,
     忆庭: overrides?.忆庭 ?? state.忆庭,
     智库: buildPersistedZhikuSystem(overrides?.智库 ?? state.智库),
@@ -67,10 +70,24 @@ export function buildSavePayload(
       剧情编织系统: 归一化剧情编织系统设置(state.gameSettings.剧情编织系统),
       文生图系统: 归一化文生图系统设置(state.gameSettings.文生图系统),
       记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统 ?? 创建默认记忆系统设置()),
+      额外功能: 归一化额外功能设置(state.gameSettings.额外功能),
     },
     apiSettings: state.apiSettings,
     theme: state.currentTheme,
   };
+}
+
+function stripRuntimeOnlyFieldsFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
+  if (!Array.isArray(chatHistory)) return [];
+  return chatHistory.map((message) => {
+    const clean = { ...message } as typeof message & {
+      debugContext?: unknown;
+      preTurnSnapshot?: unknown;
+    };
+    delete clean.debugContext;
+    delete clean.preTurnSnapshot;
+    return clean;
+  });
 }
 
 export async function handleLoadLatest(
@@ -148,7 +165,17 @@ async function applySaveToState(
   state.set相册(归一化相册系统(save.相册));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(save.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
-  const nextStoryWeaving = 归一化剧情编织系统(save.剧情编织);
+  const normalizedStoryWeaving = 归一化剧情编织系统(save.剧情编织);
+  const recentUser = [...(save.chatHistory ?? [])].reverse().find((message) => message.role === 'user');
+  const recentAssistant = [...(save.chatHistory ?? [])].reverse().find((message) => message.role === 'assistant');
+  const storyRepair = autoAlignCanonStoryProgress({
+    storyWeaving: normalizedStoryWeaving,
+    turnCount: save.turnCount ?? (save.chatHistory.length + 1),
+    userInput: recentUser?.content ?? '',
+    body: recentAssistant?.parsedResponse?.body ?? recentAssistant?.content ?? '',
+    currentLocation: save.世界?.当前地点,
+  });
+  const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
   await saveSetting('storyWeavingSystem', nextStoryWeaving);
   state.setVariableBatches(save.variableBatches ?? []); // 旧存档没有该字段，兜底空数组
@@ -164,7 +191,9 @@ async function applySaveToState(
     剧情编织系统: 归一化剧情编织系统设置(save.gameSettings.剧情编织系统),
     文生图系统: 归一化文生图系统设置(save.gameSettings.文生图系统),
     记忆系统: 归一化记忆系统设置(save.gameSettings.记忆系统),
+    额外功能: 归一化额外功能设置(save.gameSettings.额外功能),
     variableApi: save.gameSettings.variableApi ?? defaults.variableApi,
+    enableClaudeMode: save.gameSettings.enableClaudeMode ?? defaults.enableClaudeMode,
     enableMaleNsfwArchive: save.gameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
     promptModules: migratePromptModules(save.gameSettings),
   });

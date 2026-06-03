@@ -17,6 +17,7 @@ export function autoAlignCanonStoryProgress(params: {
   turnCount: number;
   body: string;
   userInput: string;
+  currentLocation?: string;
   gateSnapshot?: 剧情编织门禁快照 | null;
 }): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
@@ -64,7 +65,22 @@ export function autoAlignCanonStoryProgress(params: {
     return { system: normalized, changed: false, progressed: false };
   }
 
-  const source = `${params.userInput}\n${params.body}`;
+  const source = `${params.currentLocation ?? ''}\n${params.userInput}\n${params.body}`;
+  const crossSeries = findCrossSeriesCanonAlignment(normalized, series, current, source);
+  if (crossSeries) {
+    const nextSystem = switchCanonSeries({
+      normalized,
+      fromSeries: series,
+      fromCurrent: current,
+      toSeries: crossSeries.series,
+      toCurrent: crossSeries.segment,
+      turnCount: params.turnCount,
+      reasons: crossSeries.reasons,
+      gateSnapshot: params.gateSnapshot,
+    });
+    return { system: nextSystem, changed: true, progressed: true };
+  }
+
   const candidates = segments.filter((segment) =>
     segment.组号 >= current.组号 && segment.组号 <= current.组号 + 4 && !['已跳过', '已偏离', '暂停'].includes(segment.运行状态),
   );
@@ -166,6 +182,100 @@ function getCurrentSegment(series: 剧情编织系列, anchor?: 剧情编织进�
     ?? series.分段列表.find((segment) => segment.组号 === series.当前分段组号 && segment.运行状态 === '当前')
     ?? series.分段列表.find((segment) => segment.组号 === series.当前分段组号)
     ?? series.分段列表.find((segment) => segment.运行状态 === '当前');
+}
+
+function findCrossSeriesCanonAlignment(
+  system: 剧情编织系统,
+  activeSeries: 剧情编织系列,
+  activeCurrent: 剧情编织分段,
+  source: string,
+): { series: 剧情编织系列; segment: 剧情编织分段; reasons: string[] } | null {
+  if (activeSeries.来源类型 !== 'canon') return null;
+  const activeScore = scoreCanonSeriesPresence(activeSeries, source);
+  const candidates = system.系列列表
+    .filter((series) => series.id !== activeSeries.id && series.来源类型 === 'canon' && series.激活注入 !== false)
+    .map((series) => {
+      const score = scoreCanonSeriesPresence(series, source);
+      const completedSegments = series.分段列表
+        .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成')
+        .sort((a, b) => a.组号 - b.组号);
+      const segmentScores = completedSegments
+        .map((segment) => ({ segment, score: scoreSegmentPresence(segment, source) }))
+        .sort((a, b) => b.score.value - a.score.value || a.segment.组号 - b.segment.组号);
+      const bestSegment = segmentScores[0]?.score.value >= 4 ? segmentScores[0].segment : completedSegments[0];
+      return { series, score, bestSegment };
+    })
+    .filter((item): item is { series: 剧情编织系列; score: { value: number; reasons: string[] }; bestSegment: 剧情编织分段 } => Boolean(item.bestSegment))
+    .sort((a, b) => b.score.value - a.score.value);
+  const best = candidates[0];
+  if (!best || best.score.value < 8 || best.score.value - activeScore.value < 4) return null;
+  const staleActive = activeCurrent.组号 <= 4 && activeScore.value <= 4;
+  const strongWorldShift = best.score.reasons.some((reason) => /雅利洛|贝洛伯格|雪原|银鬃铁卫|下层区|地火|仙舟|罗浮/.test(reason));
+  if (!staleActive && !strongWorldShift) return null;
+  return {
+    series: best.series,
+    segment: best.bestSegment,
+    reasons: uniqueText([
+      `跨系列纠偏：近期正文/地点强命中「${best.series.标题}」`,
+      `原锚点「${activeSeries.标题} / ${activeCurrent.标题}」与当前上下文不匹配`,
+      ...best.score.reasons,
+    ], 8),
+  };
+}
+
+function switchCanonSeries(params: {
+  normalized: 剧情编织系统;
+  fromSeries: 剧情编织系列;
+  fromCurrent: 剧情编织分段;
+  toSeries: 剧情编织系列;
+  toCurrent: 剧情编织分段;
+  turnCount: number;
+  reasons: string[];
+  gateSnapshot?: 剧情编织门禁快照 | null;
+}): 剧情编织系统 {
+  const now = Date.now();
+  const nextFromSeries: 剧情编织系列 = {
+    ...params.fromSeries,
+    分段列表: params.fromSeries.分段列表.map((segment) =>
+      segment.id === params.fromCurrent.id && segment.运行状态 === '当前'
+        ? { ...segment, 运行状态: '已偏离' as const, updatedAt: now }
+        : segment,
+    ),
+    updatedAt: now,
+  };
+  const nextToSeries: 剧情编织系列 = {
+    ...params.toSeries,
+    当前分段组号: params.toCurrent.组号,
+    分段列表: params.toSeries.分段列表.map((segment) => {
+      if (segment.组号 < params.toCurrent.组号 && ['当前', '未开始'].includes(segment.运行状态)) {
+        return { ...segment, 运行状态: '已经历' as const, updatedAt: now };
+      }
+      if (segment.id === params.toCurrent.id) {
+        return { ...segment, 运行状态: '当前' as const, updatedAt: now };
+      }
+      return segment.运行状态 === '当前' ? { ...segment, 运行状态: '未开始' as const, updatedAt: now } : segment;
+    }),
+    updatedAt: now,
+  };
+  return 归一化剧情编织系统({
+    ...params.normalized,
+    当前系列ID: params.toSeries.id,
+    系列列表: params.normalized.系列列表.map((series) => {
+      if (series.id === params.fromSeries.id) return nextFromSeries;
+      if (series.id === params.toSeries.id) return nextToSeries;
+      return series;
+    }),
+    当前进度: buildProgressAnchor({
+      previous: params.normalized.当前进度,
+      series: params.toSeries,
+      current: params.toCurrent,
+      completedSegment: params.fromCurrent,
+      turnCount: params.turnCount,
+      reasons: params.reasons,
+      switchNote: `后台跨系列纠偏：从「${params.fromSeries.标题}」切换到「${params.toSeries.标题} / ${params.toCurrent.标题}」`,
+      gateSnapshot: params.gateSnapshot,
+    }),
+  });
 }
 
 function settleCurrentSegment(params: {
@@ -475,6 +585,43 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): { valu
     reasons.push(`命中事件结果 ${eventHits} 项`);
   }
 
+  return { value, reasons };
+}
+
+function scoreCanonSeriesPresence(series: 剧情编织系列, text: string): { value: number; reasons: string[] } {
+  const source = normalizeText(text);
+  let value = 0;
+  const reasons: string[] = [];
+  const titleTerms = splitMeaningfulTerms([
+    series.标题,
+    series.作品名,
+    series.当前阶段概括,
+  ].join(' '));
+  const titleHits = titleTerms.filter((term) => source.includes(term));
+  if (titleHits.length) {
+    value += Math.min(4, titleHits.length * 2);
+    reasons.push(`命中系列标题/阶段词：${titleHits.slice(0, 4).join('、')}`);
+  }
+  const indexTerms = uniqueText([
+    ...series.涉及地点索引,
+    ...series.涉及派系索引,
+    ...series.核心角色,
+  ], 40);
+  const indexHits = indexTerms.filter((term) => term.length >= 2 && source.includes(term));
+  if (indexHits.length) {
+    value += Math.min(8, indexHits.length * 2);
+    reasons.push(`命中系列地点/人物/派系：${indexHits.slice(0, 6).join('、')}`);
+  }
+  const segmentEntityTerms = uniqueText(series.分段列表.flatMap((segment) => [
+    ...segment.登场角色,
+    ...segment.涉及地点,
+    ...segment.涉及派系,
+  ]), 80);
+  const segmentHits = segmentEntityTerms.filter((term) => term.length >= 2 && source.includes(term));
+  if (segmentHits.length >= 2) {
+    value += Math.min(6, segmentHits.length);
+    reasons.push(`命中分段实体：${segmentHits.slice(0, 6).join('、')}`);
+  }
   return { value, reasons };
 }
 

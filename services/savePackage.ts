@@ -50,6 +50,7 @@ export function buildSavePackage(save: 存档数据): Blob {
 
 export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   const sanitized = JSON.parse(JSON.stringify(save)) as 存档数据;
+  sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
   for (const config of sanitized.apiSettings?.configs ?? []) {
     clearApiKey(config);
   }
@@ -69,6 +70,19 @@ export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   clearApiKey(settings?.文生图系统?.词组转化器API);
 
   return sanitized;
+}
+
+function stripRuntimeDebugFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
+  if (!Array.isArray(chatHistory)) return [];
+  return chatHistory.map((message) => {
+    const clean = { ...message } as typeof message & {
+      debugContext?: unknown;
+      preTurnSnapshot?: unknown;
+    };
+    delete clean.debugContext;
+    delete clean.preTurnSnapshot;
+    return clean;
+  });
 }
 
 export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数据> {

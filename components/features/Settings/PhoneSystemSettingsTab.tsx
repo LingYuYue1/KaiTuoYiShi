@@ -18,7 +18,9 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'openai_compatible', label: 'OpenAI 兼容' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'baidu', label: '百度千帆' },
   { value: 'claude', label: 'Claude' },
+  { value: 'claude_compatible', label: 'Claude 兼容' },
   { value: 'gemini', label: 'Gemini' },
 ];
 
@@ -52,6 +54,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
     baseUrl: phone.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: phone.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: phone.api.model.trim() || mainConfig?.model || '',
+    enableClaudeMode: settings.enableClaudeMode === true,
   };
 
   const handleFetchModels = async () => {
@@ -69,6 +72,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
         baseUrl: effectiveApi.baseUrl,
         apiKey: effectiveApi.apiKey,
         model: effectiveApi.model,
+        enableClaudeMode: effectiveApi.enableClaudeMode,
         retryCount: phone.api.retryCount ?? mainConfig?.retryCount ?? 2,
         createdAt: 0,
         updatedAt: 0,

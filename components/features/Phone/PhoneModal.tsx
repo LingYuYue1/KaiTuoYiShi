@@ -59,6 +59,64 @@ function toPhoneContactId(npcId: string): string {
   return npcId.startsWith('npc_') ? npcId : `npc_${npcId}`;
 }
 
+const FALLBACK_STORY_CONTACTS: Array<Pick<手机联系人, 'id' | 'name' | 'organization' | 'relationLabel' | 'avatar'> & { aliases: string[] }> = [
+  { id: 'canon_march_7th', name: '三月七', aliases: ['三月七', '三月'], organization: '星穹列车', relationLabel: '伙伴', avatar: '三' },
+  { id: 'canon_dan_heng', name: '丹恒', aliases: ['丹恒'], organization: '星穹列车', relationLabel: '伙伴', avatar: '丹' },
+  { id: 'canon_himeko', name: '姬子', aliases: ['姬子'], organization: '星穹列车', relationLabel: '列车组', avatar: '姬' },
+  { id: 'canon_welt', name: '瓦尔特', aliases: ['瓦尔特', '杨叔'], organization: '星穹列车', relationLabel: '列车组', avatar: '瓦' },
+  { id: 'canon_pompom', name: '帕姆', aliases: ['帕姆'], organization: '星穹列车', relationLabel: '列车长', avatar: '帕' },
+  { id: 'canon_asta', name: '艾丝妲', aliases: ['艾丝妲'], organization: '黑塔空间站', relationLabel: '已认识', avatar: '艾' },
+  { id: 'canon_arlan', name: '阿兰', aliases: ['阿兰'], organization: '黑塔空间站', relationLabel: '已认识', avatar: '阿' },
+  { id: 'canon_bronya', name: '布洛妮娅', aliases: ['布洛妮娅'], organization: '贝洛伯格', relationLabel: '已认识', avatar: '布' },
+  { id: 'canon_seele', name: '希儿', aliases: ['希儿'], organization: '地火', relationLabel: '已认识', avatar: '希' },
+  { id: 'canon_sampo', name: '桑博', aliases: ['桑博'], organization: '贝洛伯格', relationLabel: '已认识', avatar: '桑' },
+  { id: 'canon_natasha', name: '娜塔莎', aliases: ['娜塔莎'], organization: '地火', relationLabel: '已认识', avatar: '娜' },
+  { id: 'canon_gepard', name: '杰帕德', aliases: ['杰帕德'], organization: '银鬃铁卫', relationLabel: '已认识', avatar: '杰' },
+];
+
+function buildFallbackContactsFromStory(params: {
+  mainChatHistory: 聊天消息[];
+  world: 世界状态;
+  existingContacts: 手机联系人[];
+  turnCount: number;
+}): 手机联系人[] {
+  if (params.existingContacts.length > 0) return [];
+  const recentText = [
+    params.world.当前地点,
+    ...params.mainChatHistory
+      .slice(-18)
+      .map((message) => message.parsedResponse?.body || message.content),
+  ].join('\n');
+  const unlocked = FALLBACK_STORY_CONTACTS
+    .filter((contact) => contact.aliases.some((alias) => recentText.includes(alias)))
+    .slice(0, 8)
+    .map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      avatar: contact.avatar,
+      organization: contact.organization,
+      relationLabel: contact.relationLabel,
+      available: true,
+      status: 'available' as const,
+      unlockSource: 'story' as const,
+      lastActiveTurn: params.turnCount,
+    }));
+  if (unlocked.length) return unlocked;
+  return FALLBACK_STORY_CONTACTS
+    .slice(0, 2)
+    .map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      avatar: contact.avatar,
+      organization: contact.organization,
+      relationLabel: contact.relationLabel,
+      available: true,
+      status: 'available' as const,
+      unlockSource: 'system' as const,
+      lastActiveTurn: params.turnCount,
+    }));
+}
+
 export function PhoneModal({
   phone,
   traveler,
@@ -114,9 +172,19 @@ export function PhoneModal({
         })),
     [normalizedNpcRecords],
   );
+  const fallbackStoryContacts = useMemo(
+    () =>
+      buildFallbackContactsFromStory({
+        mainChatHistory,
+        world,
+        existingContacts: phone.contacts,
+        turnCount,
+      }),
+    [mainChatHistory, phone.contacts, turnCount, world],
+  );
 
   const contacts = useMemo(() => {
-    return phone.contacts
+    return [...phone.contacts, ...fallbackStoryContacts]
       .map((contact) => {
         const derived =
           derivedContacts.find((item) => item.id === contact.id) ??
@@ -140,7 +208,7 @@ export function PhoneModal({
         }
         return contact.available !== false;
       });
-  }, [derivedContacts, normalizedNpcRecords, phone.contacts]);
+  }, [derivedContacts, fallbackStoryContacts, normalizedNpcRecords, phone.contacts]);
   const addableNpcContacts = useMemo(
     () =>
       normalizedNpcRecords
@@ -873,7 +941,7 @@ export function PhoneModal({
               {activeApp === 'messages' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
                   <aside
-                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col xl:w-[292px]`}
+                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col overflow-hidden xl:w-[292px]`}
                     style={{
                       borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
                       background: 'rgba(var(--tj-bubble), 0.86)',
@@ -910,7 +978,7 @@ export function PhoneModal({
                       </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-3 py-3">
+                    <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch]">
                       <div className="space-y-3">
                         {showCreateGroup && (
                           <section
@@ -932,7 +1000,7 @@ export function PhoneModal({
                               className="kaituo-input w-full px-2.5 py-2 text-xs"
                               style={{ clipPath: smallClip }}
                             />
-                            <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+                            <div className="max-h-36 touch-pan-y space-y-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
                               {contacts.length === 0 ? (
                                 <EmptyText text="暂无可选择联系人。" />
                               ) : (
@@ -1055,7 +1123,7 @@ export function PhoneModal({
               ) : activeApp === 'contacts' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
                   <aside
-                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col xl:w-[280px]`}
+                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col overflow-hidden xl:w-[280px]`}
                     style={{
                       borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
                       background: 'rgba(var(--tj-bubble), 0.86)',
@@ -1085,7 +1153,7 @@ export function PhoneModal({
                         <span className="text-base">{showAddContact ? '−' : '+'}</span>
                       </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto px-3 py-3">
+                    <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch]">
                       <div className="space-y-2">
                         {showAddContact && (
                           <AddContactPanel

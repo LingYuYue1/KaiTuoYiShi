@@ -11,6 +11,8 @@ assert(apiSettings.includes("kind: 'api-profile'"), 'API 配置包必须有独�
 assert(apiSettings.includes("const API_PROFILE_SLOTS_KEY = 'apiProfileSlots'"), '本机 API 方案槽位必须有独立 settings key。');
 assert(apiSettings.includes('interface API方案槽位'), '必须定义本机 API 方案槽位结构。');
 assert(apiSettings.includes('includeApiKeys'), 'API 配置包必须标记是否包含 API Key。');
+assert(apiSettings.includes('enableClaudeMode: gameSettings.enableClaudeMode === true'), 'API 配置包必须保存 Claude 专用模式开关。');
+assert(apiSettings.includes('enableClaudeMode: profile.enableClaudeMode'), '导入 API 配置包必须恢复 Claude 专用模式开关。');
 assert(apiSettings.includes('cloneWithoutKeys'), '安全导出必须走清理 API Key 的副本。');
 assert(apiSettings.includes("(target as { apiKey?: string }).apiKey = ''"), '安全导出必须清空 apiKey。');
 assert(apiSettings.includes('window.confirm'), '私人 API 配置包导出必须二次确认。');
@@ -61,6 +63,6 @@ for (const key of [
 assert(apiSettings.includes("await saveSetting('apiSettings', nextApiSettings)"), '导入 API 配置包必须持久化主 API 设置。');
 assert(apiSettings.includes("await saveSetting('gameSettings', nextGameSettings)"), '导入 API 配置包必须持久化独立系统 API 设置。');
 assert(apiSettings.includes('await saveSetting(API_PROFILE_SLOTS_KEY, slots)'), '本机 API 方案槽位必须持久化。');
-assert(settingsModal.includes('gameSettings={gameSettings}') && settingsModal.includes('onGameSettingsChange={onGameSettingsChange}'), '设置弹窗必须把 gameSettings 传给 API 页。');
+assert(settingsModal.includes('gameSettings={gameSettings}') && settingsModal.includes('onGameSettingsChange={persistGameSettingsChange}'), '设置弹窗必须把 gameSettings 和统一持久化入口传给 API 页。');
 
 console.log('api profile regression ok');

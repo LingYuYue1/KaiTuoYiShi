@@ -22,6 +22,7 @@ interface API配置包 {
   version: 1;
   exportedAt: string;
   includeApiKeys: boolean;
+  enableClaudeMode?: boolean;
   apiSettings: API设置;
   routes: {
     variableApi: 游戏设置['variableApi'];
@@ -52,7 +53,9 @@ const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: stri
   { value: 'openai_compatible', label: 'OpenAI 兼容', defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
   { value: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
   { value: 'deepseek', label: 'DeepSeek', defaultBaseUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
+  { value: 'baidu', label: '百度千帆', defaultBaseUrl: 'https://qianfan.baidubce.com/v2', defaultModel: 'ernie-4.5-turbo-128k' },
   { value: 'claude', label: 'Claude', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
+  { value: 'claude_compatible', label: 'Claude 兼容', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
   { value: 'gemini', label: 'Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', defaultModel: 'gemini-2.5-pro' },
 ];
 
@@ -99,6 +102,7 @@ function buildApiProfile(settings: API设置, gameSettings: 游戏设置, includ
     version: 1,
     exportedAt: new Date().toISOString(),
     includeApiKeys,
+    enableClaudeMode: gameSettings.enableClaudeMode === true,
     apiSettings: settings,
     routes: {
       variableApi: gameSettings.variableApi,
@@ -262,6 +266,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
     };
     const nextGameSettings: 游戏设置 = {
       ...gameSettings,
+      enableClaudeMode: profile.enableClaudeMode ?? gameSettings.enableClaudeMode ?? false,
       variableApi: profile.routes.variableApi,
       新闻系统: { ...gameSettings.新闻系统, api: profile.routes.新闻系统 },
       手机系统: { ...gameSettings.手机系统, api: profile.routes.手机系统 },
@@ -383,7 +388,11 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
     setLoadingAuxModels(true);
     setAuxFetchMessage(null);
     try {
-      const list = await fetchModels({ ...selectedConfig, retryCount: selectedConfig.retryCount ?? 2 });
+      const list = await fetchModels({
+        ...selectedConfig,
+        enableClaudeMode: gameSettings.enableClaudeMode === true,
+        retryCount: selectedConfig.retryCount ?? 2,
+      });
       setAuxModelOptions(list);
       setAuxFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型，请从列表选择。` });
     } catch (e) {
@@ -398,7 +407,11 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
     setLoadingModels(true);
     setMessage(null);
     try {
-      const list = await fetchModels({ ...selectedConfig, retryCount: selectedConfig.retryCount ?? 2 });
+      const list = await fetchModels({
+        ...selectedConfig,
+        enableClaudeMode: gameSettings.enableClaudeMode === true,
+        retryCount: selectedConfig.retryCount ?? 2,
+      });
       setModelOptions(list);
       setMessage({ kind: 'info', text: `获取到 ${list.length} 个模型。` });
     } catch (e) {
@@ -413,7 +426,11 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await testConnection({ ...selectedConfig, retryCount: selectedConfig.retryCount ?? 2 });
+      const result = await testConnection({
+        ...selectedConfig,
+        enableClaudeMode: gameSettings.enableClaudeMode === true,
+        retryCount: selectedConfig.retryCount ?? 2,
+      });
       setTestResult(result);
     } finally {
       setTesting(false);
@@ -789,10 +806,15 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
               <input
                 value={selectedConfig.baseUrl}
                 onChange={(e) => updateConfig({ baseUrl: e.target.value })}
-                placeholder="https://api.example.com/v1"
+                placeholder={selectedConfig.provider === 'baidu' ? 'https://qianfan.baidubce.com/v2 或 /v2/coding' : 'https://api.example.com/v1'}
                 className="kaituo-input w-full px-2.5 py-1.5 text-sm"
                 style={{ clipPath: smallClip }}
               />
+              {selectedConfig.provider === 'baidu' && (
+                <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                  普通千帆填 https://qianfan.baidubce.com/v2；Coding Plan 填 https://qianfan.baidubce.com/v2/coding。若复制了完整 chat/completions 地址也会自动兼容。
+                </div>
+              )}
             </FieldRow>
 
             <FieldRow label="API Key">
