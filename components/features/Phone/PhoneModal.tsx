@@ -53,6 +53,7 @@ const phoneCardSurface =
   'linear-gradient(135deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.82))';
 
 type PhoneApp = 'messages' | 'contacts' | 'news' | 'wallpapers';
+type MobilePhoneView = 'list' | 'chat' | 'contact';
 
 function toPhoneContactId(npcId: string): string {
   return npcId.startsWith('npc_') ? npcId : `npc_${npcId}`;
@@ -90,6 +91,7 @@ export function PhoneModal({
   const [showAddContact, setShowAddContact] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState('');
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
+  const [mobileView, setMobileView] = useState<MobilePhoneView>('list');
   const normalizedNpcRecords = useMemo(() => 归一化NPC记录列表(npcRecords), [npcRecords]);
   const mainConfig = useMemo(
     () => apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? null,
@@ -210,6 +212,10 @@ export function PhoneModal({
     void handleGenerateSeed(autoSeed);
   }, [autoSeed?.id]);
 
+  useEffect(() => {
+    setMobileView('list');
+  }, [activeApp]);
+
   const recalc = (next: 手机系统): 手机系统 => ({
     ...next,
     unreadTotal: 计算手机未读(next),
@@ -247,6 +253,7 @@ export function PhoneModal({
     if (existing) {
       setActiveChatId(existing.id);
       setActiveApp('messages');
+      setMobileView('chat');
       markChatRead(existing.id);
       return existing;
     }
@@ -271,6 +278,7 @@ export function PhoneModal({
     });
     setActiveChatId(newChat.id);
     setActiveApp('messages');
+    setMobileView('chat');
     return newChat;
   };
 
@@ -530,11 +538,13 @@ export function PhoneModal({
   const handleSelectChat = (chatId: string) => {
     setActiveChatId(chatId);
     markChatRead(chatId);
+    setMobileView('chat');
   };
 
   const handleStartChat = (contact: 手机联系人) => {
     setActiveContactId(contact.id);
     ensurePrivateChat(contact);
+    setMobileView('chat');
   };
 
   const handleSendPhoneMessage = async () => {
@@ -697,6 +707,7 @@ export function PhoneModal({
       });
       setActiveChatId(chat.id);
       setActiveApp('messages');
+      setMobileView('chat');
     }
 
     try {
@@ -746,6 +757,7 @@ export function PhoneModal({
       }
       setActiveChatId(chat.id);
       setActiveApp('messages');
+      setMobileView('chat');
     } catch (err) {
       setPhoneError(`生成来信失败：${(err as Error).message}`);
     } finally {
@@ -778,7 +790,7 @@ export function PhoneModal({
     >
       <div className="flex h-full w-full flex-col items-start gap-3 overflow-auto xl:flex-row xl:items-start">
         <section
-          className="relative flex h-[min(84vh,760px)] w-full max-w-[340px] flex-shrink-0 overflow-hidden p-3 xl:w-[340px]"
+          className={`${activeApp ? 'hidden xl:flex' : 'flex'} relative h-[min(84vh,760px)] w-full max-w-[340px] flex-shrink-0 overflow-hidden p-3 xl:w-[340px]`}
           style={{
             background: phoneShellSurface,
             boxShadow:
@@ -816,7 +828,7 @@ export function PhoneModal({
 
         {activeApp && (
           <section
-            className="relative flex h-[min(84vh,760px)] w-full min-w-0 flex-none overflow-hidden p-3 xl:w-[980px]"
+            className="relative flex h-[min(86vh,780px)] w-full min-w-0 flex-none overflow-hidden p-3 xl:h-[min(84vh,760px)] xl:w-[980px]"
             style={{
               background: phoneShellSurface,
               boxShadow:
@@ -834,7 +846,7 @@ export function PhoneModal({
                 clipPath: cardClip,
               }}
             >
-              <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: 'rgba(var(--tj-accent-primary), 0.18)' }}>
+              <header className="flex items-center justify-between gap-4 border-b px-4 py-3 sm:px-5 sm:py-4" style={{ borderColor: 'rgba(var(--tj-accent-primary), 0.18)' }}>
                 <div className="min-w-0">
                   <div className="truncate font-serif text-base font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                     {activeAppTitle}
@@ -861,7 +873,7 @@ export function PhoneModal({
               {activeApp === 'messages' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
                   <aside
-                    className="flex min-h-0 w-full flex-shrink-0 flex-col xl:w-[292px]"
+                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col xl:w-[292px]`}
                     style={{
                       borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
                       background: 'rgba(var(--tj-bubble), 0.86)',
@@ -1020,7 +1032,7 @@ export function PhoneModal({
                     </div>
                   </aside>
 
-                  <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <main className={`${mobileView === 'chat' ? 'flex' : 'hidden xl:flex'} min-h-0 min-w-0 flex-1 flex-col`}>
                     {activeChat ? (
                       <ChatSurface
                         chat={activeChat}
@@ -1031,6 +1043,7 @@ export function PhoneModal({
                         onDraftChange={setDraft}
                         loading={sendingChatId === activeChat.id}
                         error={phoneError}
+                        onBack={() => setMobileView('list')}
                       />
                     ) : (
                       <div className="flex flex-1 items-center justify-center">
@@ -1042,7 +1055,7 @@ export function PhoneModal({
               ) : activeApp === 'contacts' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
                   <aside
-                    className="flex min-h-0 w-full flex-shrink-0 flex-col xl:w-[280px]"
+                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col xl:w-[280px]`}
                     style={{
                       borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
                       background: 'rgba(var(--tj-bubble), 0.86)',
@@ -1089,6 +1102,7 @@ export function PhoneModal({
                               type="button"
                               onClick={() => {
                                 setActiveContactId(contact.id);
+                                setMobileView('contact');
                               }}
                               className="w-full px-3 py-2 text-left transition-all"
                               style={{
@@ -1119,12 +1133,13 @@ export function PhoneModal({
                     </div>
                   </aside>
 
-                  <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <main className={`${mobileView === 'contact' ? 'flex' : 'hidden xl:flex'} min-h-0 min-w-0 flex-1 flex-col`}>
                     <ContactSurface
                       contact={activeContact}
                       onOpenChat={() => {
                         if (activeContact) handleStartChat(activeContact);
                       }}
+                      onBack={() => setMobileView('list')}
                     />
                   </main>
                 </div>
@@ -1321,7 +1336,7 @@ function AppIcon({
   );
 }
 
-function ContactSurface({ contact, onOpenChat }: { contact?: 手机联系人; onOpenChat: () => void }) {
+function ContactSurface({ contact, onOpenChat, onBack }: { contact?: 手机联系人; onOpenChat: () => void; onBack?: () => void }) {
   if (!contact) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-center">
@@ -1332,8 +1347,23 @@ function ContactSurface({ contact, onOpenChat }: { contact?: 手机联系人; on
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
+      <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
         <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-2 py-1 text-xs font-serif tracking-[0.14em] xl:hidden"
+              style={{
+                color: 'rgba(var(--tj-accent-primary), 0.88)',
+                background: 'rgba(var(--tj-accent-primary), 0.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                clipPath: smallClip,
+              }}
+            >
+              返回
+            </button>
+          )}
           <Avatar name={contact.name} src={contact.avatar} />
           <div className="min-w-0">
             <div className="truncate font-serif text-lg font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
@@ -1355,7 +1385,7 @@ function ContactSurface({ contact, onOpenChat }: { contact?: 手机联系人; on
         </span>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
         <div className="grid gap-3 lg:grid-cols-2">
           <InfoCard label="身份" value={contact.relationLabel ?? '联系人'} />
           <InfoCard label="势力" value={contact.organization || '未知'} />
@@ -1667,6 +1697,7 @@ function ChatSurface({
   draft,
   loading,
   error,
+  onBack,
   onDraftChange,
   onSend,
 }: {
@@ -1676,13 +1707,30 @@ function ChatSurface({
   draft: string;
   loading: boolean;
   error: string;
+  onBack?: () => void;
   onDraftChange: (text: string) => void;
   onSend: () => void;
 }) {
   return (
     <>
-      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
-        <div>
+      <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}>
+        <div className="flex min-w-0 items-center gap-3">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-2 py-1 text-xs font-serif tracking-[0.14em] xl:hidden"
+              style={{
+                color: 'rgba(var(--tj-accent-primary), 0.88)',
+                background: 'rgba(var(--tj-accent-primary), 0.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                clipPath: smallClip,
+              }}
+            >
+              返回
+            </button>
+          )}
+          <div className="min-w-0">
           <div className="font-serif text-lg font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
             {chat.title}
           </div>
@@ -1692,6 +1740,7 @@ function ChatSurface({
           <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
             本地记忆 {chat.localArchive?.entries.length ?? 0}/{chat.localArchive?.threshold ?? 0}
             {chat.localArchive?.compressedSummaries.length ? ` · 已压缩 ${chat.localArchive.compressedSummaries.length} 次` : ''}
+          </div>
           </div>
         </div>
         {chat.unread > 0 && (
@@ -1720,7 +1769,7 @@ function ChatSurface({
                       />
                     )}
                     <div
-                      className="max-w-[76%] px-3 py-2 text-sm leading-relaxed"
+                      className="max-w-[82%] px-3 py-2 text-sm leading-relaxed sm:max-w-[76%]"
                       style={{
                         color: msg.role === 'player' ? 'rgb(var(--tj-on-accent))' : 'rgba(var(--tj-text-primary), 0.94)',
                         background:
@@ -1749,7 +1798,7 @@ function ChatSurface({
           </div>
         )}
       </div>
-      <footer className="px-6 py-4" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.18)' }}>
+      <footer className="px-4 py-3 sm:px-6 sm:py-4" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.18)' }}>
         {error && (
           <div
             className="mb-2 px-3 py-2 text-xs"
@@ -1764,7 +1813,7 @@ function ChatSurface({
           </div>
         )}
         <div
-          className="flex items-end gap-2 px-3 py-2"
+          className="flex items-end gap-2 px-2.5 py-2 sm:px-3"
           style={{
             color: 'rgba(var(--tj-text-secondary), 0.65)',
             background: 'rgba(var(--tj-bubble), 0.96)',
@@ -1783,14 +1832,14 @@ function ChatSurface({
             }}
             rows={2}
             placeholder="输入短讯..."
-            className="min-h-[44px] flex-1 resize-none bg-transparent text-sm leading-relaxed outline-none"
+            className="min-h-[44px] min-w-0 flex-1 resize-none bg-transparent text-sm leading-relaxed outline-none"
             style={{ color: 'rgb(var(--tj-text-primary))' }}
           />
           <button
             type="button"
             onClick={onSend}
             disabled={loading || !draft.trim()}
-            className="px-4 py-2 text-xs font-serif tracking-[0.2em] transition-all disabled:opacity-45"
+            className="flex-shrink-0 px-3 py-2 text-xs font-serif tracking-[0.16em] transition-all disabled:opacity-45 sm:px-4 sm:tracking-[0.2em]"
             style={{
               color: 'rgb(var(--tj-on-accent))',
               background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { API设置, API配置项, AI提供商 } from '@/models/settings';
+import type { API设置, API配置项, AI提供商, 游戏设置 } from '@/models/settings';
 import {
   MAX_OUTPUT_TIERS,
   inferMaxOutputTier,
@@ -7,12 +7,46 @@ import {
   type MaxOutputTier,
 } from '@/data/modelRecommendations';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
+import { loadSetting, saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: API设置;
   onChange: (s: API设置) => void;
+  gameSettings: 游戏设置;
+  onGameSettingsChange: (s: 游戏设置) => void;
 }
+
+interface API配置包 {
+  app: 'KaiTuoYiShi';
+  kind: 'api-profile';
+  version: 1;
+  exportedAt: string;
+  includeApiKeys: boolean;
+  apiSettings: API设置;
+  routes: {
+    variableApi: 游戏设置['variableApi'];
+    新闻系统: 游戏设置['新闻系统']['api'];
+    手机系统: 游戏设置['手机系统']['api'];
+    智库系统: 游戏设置['智库系统']['api'];
+    剧情编织系统: 游戏设置['剧情编织系统']['api'];
+    记忆总结API: 游戏设置['记忆系统']['记忆总结API'];
+    忆庭召回API: 游戏设置['记忆系统']['忆庭召回API'];
+    忆庭精炼API: 游戏设置['记忆系统']['忆庭精炼API'];
+    文生图普通接口: 游戏设置['文生图系统']['普通接口'];
+    文生图场景接口: 游戏设置['文生图系统']['场景接口'];
+    文生图NSFW接口: 游戏设置['文生图系统']['NSFW接口'];
+    文生图词组转化器API: 游戏设置['文生图系统']['词组转化器API'];
+  };
+}
+
+interface API方案槽位 {
+  id: string;
+  name: string;
+  savedAt: number;
+  profile: API配置包;
+}
+
+const API_PROFILE_SLOTS_KEY = 'apiProfileSlots';
 
 const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: string; defaultModel: string }[] = [
   { value: 'openai_compatible', label: 'OpenAI 兼容', defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
@@ -44,7 +78,71 @@ function makeNewConfig(provider: AI提供商): API配置项 {
   };
 }
 
-export function ApiSettingsTab({ settings, onChange }: Props) {
+function cloneWithoutKeys<T>(value: T, includeApiKeys: boolean): T {
+  const cloned = JSON.parse(JSON.stringify(value)) as T;
+  if (includeApiKeys) return cloned;
+  const clear = (target: unknown) => {
+    if (target && typeof target === 'object' && 'apiKey' in target) {
+      (target as { apiKey?: string }).apiKey = '';
+    }
+  };
+  const root = cloned as unknown as API配置包;
+  for (const config of root.apiSettings?.configs ?? []) clear(config);
+  for (const item of Object.values(root.routes ?? {})) clear(item);
+  return cloned;
+}
+
+function buildApiProfile(settings: API设置, gameSettings: 游戏设置, includeApiKeys: boolean): API配置包 {
+  return cloneWithoutKeys({
+    app: 'KaiTuoYiShi',
+    kind: 'api-profile',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    includeApiKeys,
+    apiSettings: settings,
+    routes: {
+      variableApi: gameSettings.variableApi,
+      新闻系统: gameSettings.新闻系统.api,
+      手机系统: gameSettings.手机系统.api,
+      智库系统: gameSettings.智库系统.api,
+      剧情编织系统: gameSettings.剧情编织系统.api,
+      记忆总结API: gameSettings.记忆系统.记忆总结API,
+      忆庭召回API: gameSettings.记忆系统.忆庭召回API,
+      忆庭精炼API: gameSettings.记忆系统.忆庭精炼API,
+      文生图普通接口: gameSettings.文生图系统.普通接口,
+      文生图场景接口: gameSettings.文生图系统.场景接口,
+      文生图NSFW接口: gameSettings.文生图系统.NSFW接口,
+      文生图词组转化器API: gameSettings.文生图系统.词组转化器API,
+    },
+  }, includeApiKeys);
+}
+
+function validateApiProfile(input: unknown): API配置包 {
+  const data = input as Partial<API配置包>;
+  if (!data || typeof data !== 'object' || data.app !== 'KaiTuoYiShi' || data.kind !== 'api-profile') {
+    throw new Error('不是有效的开拓轶事 API 配置包。');
+  }
+  if (data.version !== 1) {
+    throw new Error('API 配置包版本不兼容，请更新客户端后再导入。');
+  }
+  if (!data.apiSettings || !Array.isArray(data.apiSettings.configs) || !data.routes) {
+    throw new Error('API 配置包缺少必要配置。');
+  }
+  return data as API配置包;
+}
+
+function downloadApiProfile(profile: API配置包): void {
+  const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  a.download = `KaiTuoYiShi-api-profile-${profile.includeApiKeys ? 'private' : 'safe'}-${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSettingsChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
     settings.activeConfigId ?? settings.configs[0]?.id ?? null,
   );
@@ -55,6 +153,11 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [message, setMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [profileSlots, setProfileSlots] = useState<API方案槽位[]>([]);
+  const [auxModel, setAuxModel] = useState('gemini-2.5-flash');
+  const [auxModelOptions, setAuxModelOptions] = useState<string[]>([]);
+  const [loadingAuxModels, setLoadingAuxModels] = useState(false);
+  const [auxFetchMessage, setAuxFetchMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
   const selectedConfig = useMemo(
     () => settings.configs.find((c) => c.id === selectedId) ?? null,
@@ -64,9 +167,17 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
   // Reset model options when switching config
   useEffect(() => {
     setModelOptions([]);
+    setAuxModelOptions([]);
     setTestResult(null);
     setMessage(null);
+    setAuxFetchMessage(null);
   }, [selectedId]);
+
+  useEffect(() => {
+    loadSetting<API方案槽位[]>(API_PROFILE_SLOTS_KEY)
+      .then((slots) => setProfileSlots(Array.isArray(slots) ? slots : []))
+      .catch(() => setProfileSlots([]));
+  }, []);
 
   // 常驻默认配置：列表为空时自动补一个 OpenAI 兼容占位，避免右侧空状态。
   useEffect(() => {
@@ -141,6 +252,147 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
     }
   };
 
+  const applyApiProfile = async (profile: API配置包) => {
+    const nextApiSettings: API设置 = {
+      activeConfigId: profile.apiSettings.activeConfigId,
+      configs: profile.apiSettings.configs.map((config) => ({
+        ...config,
+        updatedAt: Date.now(),
+      })),
+    };
+    const nextGameSettings: 游戏设置 = {
+      ...gameSettings,
+      variableApi: profile.routes.variableApi,
+      新闻系统: { ...gameSettings.新闻系统, api: profile.routes.新闻系统 },
+      手机系统: { ...gameSettings.手机系统, api: profile.routes.手机系统 },
+      智库系统: { ...gameSettings.智库系统, api: profile.routes.智库系统 },
+      剧情编织系统: { ...gameSettings.剧情编织系统, api: profile.routes.剧情编织系统 },
+      记忆系统: {
+        ...gameSettings.记忆系统,
+        记忆总结API: profile.routes.记忆总结API,
+        忆庭召回API: profile.routes.忆庭召回API,
+        忆庭精炼API: profile.routes.忆庭精炼API,
+      },
+      文生图系统: {
+        ...gameSettings.文生图系统,
+            普通接口: profile.routes.文生图普通接口,
+            场景接口: profile.routes.文生图场景接口,
+            NSFW接口: profile.routes.文生图NSFW接口,
+            词组转化器API: profile.routes.文生图词组转化器API,
+          },
+    };
+    onChange(nextApiSettings);
+    onGameSettingsChange(nextGameSettings);
+    setSelectedId(nextApiSettings.activeConfigId ?? nextApiSettings.configs[0]?.id ?? null);
+    await saveSetting('apiSettings', nextApiSettings);
+    await saveSetting('gameSettings', nextGameSettings);
+  };
+
+  const persistProfileSlots = async (slots: API方案槽位[]) => {
+    setProfileSlots(slots);
+    await saveSetting(API_PROFILE_SLOTS_KEY, slots);
+  };
+
+  const handleSaveProfileSlot = async () => {
+    const defaultName = selectedConfig?.name || `API 方案 ${profileSlots.length + 1}`;
+    const name = window.prompt('给当前 API 方案起个名字：', defaultName)?.trim();
+    if (!name) return;
+    const slot: API方案槽位 = {
+      id: `api_profile_${Date.now()}`,
+      name,
+      savedAt: Date.now(),
+      profile: buildApiProfile(settings, gameSettings, true),
+    };
+    await persistProfileSlots([slot, ...profileSlots].slice(0, 12));
+    setMessage({ kind: 'info', text: `已保存 API 方案：${name}` });
+  };
+
+  const handleLoadProfileSlot = async (slot: API方案槽位) => {
+    await applyApiProfile(slot.profile);
+    setMessage({ kind: 'info', text: `已切换到 API 方案：${slot.name}` });
+  };
+
+  const handleDeleteProfileSlot = async (slot: API方案槽位) => {
+    if (!window.confirm(`删除 API 方案「${slot.name}」？`)) return;
+    await persistProfileSlots(profileSlots.filter((item) => item.id !== slot.id));
+    setMessage({ kind: 'info', text: `已删除 API 方案：${slot.name}` });
+  };
+
+  const handleExportProfile = (includeApiKeys: boolean) => {
+    if (
+      includeApiKeys &&
+      !window.confirm('私人 API 配置包会包含 API Key。只适合自己换设备迁移，不要发给别人。确认导出吗？')
+    ) {
+      return;
+    }
+    downloadApiProfile(buildApiProfile(settings, gameSettings, includeApiKeys));
+    setMessage({
+      kind: 'info',
+      text: includeApiKeys ? '已导出私人 API 配置包，请勿分享。' : '已导出安全 API 配置包，API Key 已清空。',
+    });
+  };
+
+  const handleImportProfile = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const profile = validateApiProfile(JSON.parse(await file.text()));
+        await applyApiProfile(profile);
+        setMessage({
+          kind: 'info',
+          text: profile.includeApiKeys ? '已导入私人 API 配置包。' : '已导入 API 配置包；如未包含 Key，请补填密钥。',
+        });
+      } catch (e) {
+        setMessage({ kind: 'error', text: `导入失败：${(e as Error).message}` });
+      }
+    };
+    input.click();
+  };
+
+  const handleApplyAuxModel = async () => {
+    const model = auxModel.trim();
+    if (!model) {
+      setMessage({ kind: 'error', text: '请先填写要套用到其他 API 的模型 ID。' });
+      return;
+    }
+    const nextGameSettings: 游戏设置 = {
+      ...gameSettings,
+      variableApi: { ...gameSettings.variableApi, model },
+      新闻系统: { ...gameSettings.新闻系统, api: { ...gameSettings.新闻系统.api, model } },
+      手机系统: { ...gameSettings.手机系统, api: { ...gameSettings.手机系统.api, model } },
+      智库系统: { ...gameSettings.智库系统, api: { ...gameSettings.智库系统.api, model } },
+      剧情编织系统: { ...gameSettings.剧情编织系统, api: { ...gameSettings.剧情编织系统.api, model } },
+      记忆系统: {
+        ...gameSettings.记忆系统,
+        记忆总结API: { ...gameSettings.记忆系统.记忆总结API, model },
+        忆庭召回API: { ...gameSettings.记忆系统.忆庭召回API, model },
+        忆庭精炼API: { ...gameSettings.记忆系统.忆庭精炼API, model },
+      },
+    };
+    onGameSettingsChange(nextGameSettings);
+    await saveSetting('gameSettings', nextGameSettings);
+    setMessage({ kind: 'info', text: `已把其他文本 API 模型统一改为：${model}` });
+  };
+
+  const handleFetchAuxModels = async () => {
+    if (!selectedConfig) return;
+    setLoadingAuxModels(true);
+    setAuxFetchMessage(null);
+    try {
+      const list = await fetchModels({ ...selectedConfig, retryCount: selectedConfig.retryCount ?? 2 });
+      setAuxModelOptions(list);
+      setAuxFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型，请从列表选择。` });
+    } catch (e) {
+      setAuxFetchMessage({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setLoadingAuxModels(false);
+    }
+  };
+
   const handleFetchModels = async () => {
     if (!selectedConfig) return;
     setLoadingModels(true);
@@ -186,7 +438,26 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
   };
 
   return (
-    <div className="flex h-full min-w-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
+      <div
+        className="px-3 py-3 text-xs leading-relaxed sm:px-4"
+        style={{
+          color: 'rgba(var(--tj-text-secondary), 0.78)',
+          background: 'rgba(var(--tj-accent-primary), 0.045)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+          clipPath: cardClip,
+        }}
+      >
+        <div className="font-serif tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+          ◆ API 配置提示
+        </div>
+        <div className="mt-1.5 space-y-0.5">
+          <div>安全包：不会保存 Key 数据，适合分享配置模板。</div>
+          <div>私人包：会保存 Key 数据，请不要发给其他人。</div>
+          <div>个别功能需要手动开启；主剧情和变量推荐使用智商高一点的模型，例如 3.1 Pro。</div>
+        </div>
+      </div>
+
       {/* ── 顶部：新建配置（横向铺满） ── */}
       <div
         className="flex min-w-0 flex-col items-stretch gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4 sm:py-2.5"
@@ -241,8 +512,145 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
         </span>
       </div>
 
+      <div
+        className="flex min-w-0 flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:px-4"
+        style={{
+          background: 'rgba(var(--tj-bg-secondary), 0.45)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+          clipPath: cardClip,
+        }}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="font-serif text-xs tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
+            ◆ API 配置包
+          </div>
+          <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+            导入/导出主 API 与变量、新闻、手机、智库、剧情编织、记忆、文生图等独立接口。安全导出会清空 API Key。
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-shrink-0">
+          <button
+            onClick={() => handleExportProfile(false)}
+            className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+            style={{
+              color: 'rgba(var(--tj-accent-primary), 0.9)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+              clipPath: smallClip,
+            }}
+          >
+            导出安全包
+          </button>
+          <button
+            onClick={() => handleExportProfile(true)}
+            className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+            style={{
+              color: 'rgba(255, 190, 120, 0.92)',
+              boxShadow: 'inset 0 0 0 1px rgba(255, 190, 120, 0.35)',
+              clipPath: smallClip,
+            }}
+          >
+            导出私人包
+          </button>
+          <button
+            onClick={handleImportProfile}
+            className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+            style={{
+              background: 'rgba(var(--tj-accent-primary), 0.08)',
+              color: 'rgba(var(--tj-text-primary), 0.92)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+              clipPath: smallClip,
+            }}
+          >
+            导入配置包
+          </button>
+        </div>
+      </div>
+
+      <div
+        className="flex min-w-0 flex-col gap-3 px-3 py-3 sm:px-4"
+        style={{
+          background: 'rgba(var(--tj-bg-secondary), 0.38)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+          clipPath: cardClip,
+        }}
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="font-serif text-xs tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
+              ◆ 本机 API 方案
+            </div>
+            <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+              像存档一样保存当前整套 API 配置，之后可在本机一键切换。方案槽位会保留 API Key，请不要把浏览器数据交给他人。
+            </div>
+          </div>
+          <button
+            onClick={handleSaveProfileSlot}
+            className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+            style={{
+              background: 'rgba(var(--tj-accent-primary), 0.08)',
+              color: 'rgba(var(--tj-accent-primary), 0.92)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+              clipPath: smallClip,
+            }}
+          >
+            保存当前方案
+          </button>
+        </div>
+
+        {profileSlots.length === 0 ? (
+          <div className="px-3 py-2 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+            暂无本机 API 方案。
+          </div>
+        ) : (
+          <div className="grid gap-2 md:grid-cols-2">
+            {profileSlots.map((slot) => (
+              <div
+                key={slot.id}
+                className="flex min-w-0 items-center gap-2 px-3 py-2"
+                style={{
+                  background: 'rgba(var(--tj-bg-secondary), 0.48)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                  clipPath: smallClip,
+                }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-serif text-xs tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+                    {slot.name}
+                  </div>
+                  <div className="mt-0.5 truncate text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                    {new Date(slot.savedAt).toLocaleString('zh-CN')} · {slot.profile.apiSettings.configs.length} 个主 API
+                  </div>
+                </div>
+                <button
+                  onClick={() => void handleLoadProfileSlot(slot)}
+                  className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+                  style={{
+                    color: 'rgba(var(--tj-accent-primary), 0.9)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+                    clipPath: smallClip,
+                  }}
+                >
+                  读取
+                </button>
+                <button
+                  onClick={() => void handleDeleteProfileSlot(slot)}
+                  className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+                  style={{
+                    color: 'rgba(220, 120, 120, 0.88)',
+                    boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.28)',
+                    clipPath: smallClip,
+                  }}
+                >
+                  删除
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* ── 主体：左列表 + 右详情 ── */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 md:flex-row">
+      <div className="flex min-w-0 flex-col gap-4 md:flex-row">
         <aside className="flex max-h-[32dvh] w-full flex-shrink-0 flex-col md:max-h-none md:w-[220px]">
           <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
           {settings.configs.length === 0 && (
@@ -295,7 +703,7 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
       </aside>
 
       {/* ── 右侧：详情 ── */}
-      <section className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+      <section className="flex min-w-0 flex-1 flex-col gap-3 pr-1">
         {!selectedConfig ? (
           <div
             className="flex h-full items-center justify-center text-sm"
@@ -442,6 +850,82 @@ export function ApiSettingsTab({ settings, onChange }: Props) {
                 )}
               </div>
             </FieldRow>
+
+            <div
+              className="space-y-2 p-3 text-xs"
+              style={{
+                background: 'rgba(var(--tj-bg-secondary), 0.42)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                clipPath: smallClip,
+              }}
+            >
+              <div className="font-serif tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
+                ◆ 其他 API 模型设置
+              </div>
+              <div className="leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                正文继续使用上方主模型；这里只批量修改变量、新闻、手机、智库、剧情编织、记忆与忆庭的模型 ID，不改 Base URL / Key，也不影响文生图。
+              </div>
+              <div className="flex flex-col gap-1.5 sm:flex-row">
+                <input
+                  value={auxModel}
+                  onChange={(e) => setAuxModel(e.target.value)}
+                  placeholder="例如 gemini-2.5-flash"
+                  className="kaituo-input min-w-0 flex-1 px-2.5 py-1.5 text-sm"
+                  style={{ clipPath: smallClip }}
+                />
+                <button
+                  onClick={() => void handleFetchAuxModels()}
+                  disabled={loadingAuxModels}
+                  className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{
+                    color: 'rgba(var(--tj-accent-primary), 0.86)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+                    clipPath: smallClip,
+                  }}
+                >
+                  {loadingAuxModels ? '获取中…' : '获取列表'}
+                </button>
+                <button
+                  onClick={() => void handleApplyAuxModel()}
+                  className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+                  style={{
+                    background: 'rgba(var(--tj-accent-primary), 0.08)',
+                    color: 'rgba(var(--tj-accent-primary), 0.92)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                    clipPath: smallClip,
+                  }}
+                >
+                  一键套用到其他 API
+                </button>
+              </div>
+              {auxModelOptions.length > 0 && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) setAuxModel(e.target.value);
+                  }}
+                  className="kaituo-input w-full px-2.5 py-1.5 text-xs"
+                  style={{ clipPath: smallClip }}
+                >
+                  <option value="">— 从列表选择（{auxModelOptions.length}） —</option>
+                  {auxModelOptions.map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {auxFetchMessage && (
+                <div
+                  className="text-[11px]"
+                  style={{
+                    color: auxFetchMessage.kind === 'error' ? 'rgba(220, 120, 120, 0.9)' : 'rgba(160, 200, 160, 0.78)',
+                  }}
+                >
+                  {auxFetchMessage.text}
+                </div>
+              )}
+            </div>
 
             {/* 最大输出 token 档位 */}
             <FieldRow label="最大输出 Token">

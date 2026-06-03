@@ -66,6 +66,7 @@ export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   clearApiKey(settings?.文生图系统?.普通接口);
   clearApiKey(settings?.文生图系统?.场景接口);
   clearApiKey(settings?.文生图系统?.NSFW接口);
+  clearApiKey(settings?.文生图系统?.词组转化器API);
 
   return sanitized;
 }

@@ -2,7 +2,15 @@
 export default {
   content: [
     './index.html',
-    './**/*.{ts,tsx}',
+    './App.tsx',
+    './index.tsx',
+    './components/**/*.{ts,tsx}',
+    './hooks/**/*.{ts,tsx}',
+    './utils/**/*.{ts,tsx}',
+    './services/**/*.{ts,tsx}',
+    './data/**/*.{ts,tsx}',
+    './models/**/*.{ts,tsx}',
+    './prompts/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {

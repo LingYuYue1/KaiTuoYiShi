@@ -113,7 +113,14 @@ export function SettingsModal({
   const renderTab = (): ReactNode => {
     switch (activeTab) {
       case 'api':
-        return <ApiSettingsTab settings={apiSettings} onChange={onApiSettingsChange} />;
+        return (
+          <ApiSettingsTab
+            settings={apiSettings}
+            onChange={onApiSettingsChange}
+            gameSettings={gameSettings}
+            onGameSettingsChange={onGameSettingsChange}
+          />
+        );
       case 'game':
         return (
           <GameSettingsTab
@@ -182,7 +189,7 @@ export function SettingsModal({
       case 'nsfw':
         return <NsfwSettingsTab settings={gameSettings} onChange={onGameSettingsChange} />;
       case 'imageGeneration':
-        return <ImageGenerationSettingsTab settings={gameSettings} onChange={onGameSettingsChange} />;
+        return <ImageGenerationSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={apiSettings} />;
       case 'prompts':
         return <PromptModulesTab settings={gameSettings} onChange={onGameSettingsChange} />;
       case 'variables':
@@ -336,7 +343,7 @@ export function SettingsModal({
             }}
           >
             <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
-            <span className="ml-2">开拓轶事 · v0.1</span>
+            <span className="ml-2">开拓轶事 · v0.4.5</span>
           </div>
         </aside>
 

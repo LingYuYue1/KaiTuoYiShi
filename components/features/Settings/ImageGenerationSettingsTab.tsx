@@ -1,5 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type {
+  AI提供商,
+  API配置项,
+  API设置,
   自动NPC生图构图,
   自动NPC生图性别筛选,
   自动生图场景构图,
@@ -12,14 +15,17 @@ import type {
   文生图规则中心设置,
   文生图响应格式,
   文生图预设接口路径,
+  文生图词组转化器API覆盖,
 } from '@/models/settings';
 import { saveSetting } from '@/services/dbService';
+import { fetchModels } from '@/services/ai/apiTools';
 import { fetchComfyCheckpoints, testImageGenerationConnection } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
+  apiSettings: API设置;
 }
 
 type Page = 'overview' | 'normal' | 'scene' | 'nsfw' | 'rules' | 'tokenizer' | 'automation' | 'guide';
@@ -44,6 +50,15 @@ const backendOptions: { value: 文生图后端类型; label: string }[] = [
   { value: 'novelai', label: 'NovelAI 官方' },
   { value: 'sd_webui', label: 'Stable Diffusion WebUI' },
   { value: 'comfyui', label: 'ComfyUI' },
+];
+
+const providerOptions: { value: AI提供商 | ''; label: string }[] = [
+  { value: '', label: '跟随主 API' },
+  { value: 'openai_compatible', label: 'OpenAI 兼容' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'gemini', label: 'Gemini' },
 ];
 
 const responseOptions: { value: 文生图响应格式; label: string }[] = [
@@ -107,17 +122,21 @@ const modelSuggestions: Record<文生图后端类型, string[]> = {
   comfyui: ['由 Workflow 决定，可留空'],
 };
 
-export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
+export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: Props) {
   const [activePage, setActivePage] = useState<Page>('overview');
   const [message, setMessage] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
   const [testingKey, setTestingKey] = useState<ApiKey | null>(null);
+  const [tokenizerModels, setTokenizerModels] = useState<string[]>([]);
+  const [tokenizerModelLoading, setTokenizerModelLoading] = useState(false);
+  const [tokenizerModelMessage, setTokenizerModelMessage] = useState('');
   const [testMessages, setTestMessages] = useState<Record<ApiKey, string>>({
     普通接口: '',
     场景接口: '',
     NSFW接口: '',
   });
   const image = settings.文生图系统;
+  const mainConfig = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
   const nsfwUsable = settings.enableNsfw && image.enableNsfwImageGeneration && image.NSFW接口.enabled;
 
   const patchSystem = (patch: Partial<typeof image>) => {
@@ -139,6 +158,50 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
 
   const patchRules = (patch: Partial<文生图规则中心设置>) => {
     patchSystem({ rules: { ...image.rules, ...patch } });
+  };
+
+  const patchTokenizerApi = (patch: Partial<文生图词组转化器API覆盖>) => {
+    patchSystem({
+      词组转化器API: {
+        ...image.词组转化器API,
+        ...patch,
+      },
+    });
+  };
+
+  const tokenizerEffective = {
+    provider: image.词组转化器API.provider || mainConfig?.provider || 'openai_compatible',
+    baseUrl: image.词组转化器API.baseUrl.trim() || mainConfig?.baseUrl || '',
+    apiKey: image.词组转化器API.apiKey.trim() || mainConfig?.apiKey || '',
+    model: image.词组转化器API.model.trim() || mainConfig?.model || '',
+  };
+
+  const handleFetchTokenizerModels = async () => {
+    if (!tokenizerEffective.baseUrl || !tokenizerEffective.apiKey) {
+      setTokenizerModelMessage('缺少 Base URL 或 API Key（含主 API 回退后仍为空）。');
+      return;
+    }
+    setTokenizerModelLoading(true);
+    setTokenizerModelMessage('');
+    try {
+      const tempConfig: API配置项 = {
+        id: '__image_prompt_tokenizer_models__',
+        name: '文生图词组转化器',
+        provider: tokenizerEffective.provider as AI提供商,
+        baseUrl: tokenizerEffective.baseUrl,
+        apiKey: tokenizerEffective.apiKey,
+        model: tokenizerEffective.model,
+        createdAt: 0,
+        updatedAt: 0,
+      };
+      const list = await fetchModels(tempConfig);
+      setTokenizerModels(list);
+      setTokenizerModelMessage(`获取到 ${list.length} 个模型。`);
+    } catch (err) {
+      setTokenizerModelMessage(`获取失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setTokenizerModelLoading(false);
+    }
   };
 
   const statusCards = useMemo(() => [
@@ -308,6 +371,57 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
       {activePage === 'tokenizer' && (
         <Panel title="词组转化器">
           <ToggleRow label="启用词组转化器" desc="开启后，相册会优先把档案整理成提示词草稿，玩家仍可手动编辑。" checked={image.enablePromptTokenizer} onChange={(v) => patchSystem({ enablePromptTokenizer: v })} />
+          <SubPanel title="词组转化器 API">
+            <Notice>
+              这里负责角色锚点、伙伴档案、场景摘要到图片 Prompt 的文本整理，不是最终图片生成接口。字段留空时回退主 API。
+            </Notice>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="服务商">
+                <select value={image.词组转化器API.provider} onChange={(e) => patchTokenizerApi({ provider: e.target.value as AI提供商 | '' })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                  {providerOptions.map((item) => <option key={item.value || 'main'} value={item.value}>{item.label}</option>)}
+                </select>
+              </Field>
+              <Field label="失败重试">
+                <input type="number" min={0} max={5} value={image.词组转化器API.retryCount ?? 2} onChange={(e) => patchTokenizerApi({ retryCount: Math.max(0, Number(e.target.value) || 0) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+              </Field>
+            </div>
+            <Field label="Base URL">
+              <input value={image.词组转化器API.baseUrl} onChange={(e) => patchTokenizerApi({ baseUrl: e.target.value })} placeholder={mainConfig ? `留空则用主 API：${mainConfig.baseUrl}` : 'https://...'} className="kaituo-input w-full px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
+              {!image.词组转化器API.baseUrl.trim() && mainConfig?.baseUrl && <FallbackHint text={`将复用主 API：${mainConfig.baseUrl}`} />}
+            </Field>
+            <Field label="API Key">
+              <input type="password" value={image.词组转化器API.apiKey} onChange={(e) => patchTokenizerApi({ apiKey: e.target.value })} placeholder={mainConfig?.apiKey ? '留空则用主 API 的 Key' : 'sk-...'} className="kaituo-input w-full px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
+              {!image.词组转化器API.apiKey.trim() && mainConfig?.apiKey && <FallbackHint text="将复用主 API 的 Key" />}
+            </Field>
+            <Field label="模型">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input value={image.词组转化器API.model} onChange={(e) => patchTokenizerApi({ model: e.target.value })} placeholder={mainConfig?.model ? `留空则用主 API：${mainConfig.model}` : '模型 ID'} className="kaituo-input min-w-0 flex-1 px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
+                <button type="button" onClick={() => void handleFetchTokenizerModels()} disabled={tokenizerModelLoading} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+                  {tokenizerModelLoading ? '获取中' : '获取列表'}
+                </button>
+              </div>
+              {tokenizerModels.length > 0 && (
+                <select value="" onChange={(e) => e.target.value && patchTokenizerApi({ model: e.target.value })} className="kaituo-input mt-2 w-full px-3 py-2 text-xs" style={{ clipPath: smallClip }}>
+                  <option value="">— 从列表选择（{tokenizerModels.length}） —</option>
+                  {tokenizerModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
+              )}
+              {tokenizerModelMessage && (
+                <div className="mt-2 text-xs leading-relaxed" style={{ color: tokenizerModelMessage.startsWith('获取失败') ? 'rgba(255,180,180,0.9)' : 'rgba(165,230,170,0.88)' }}>
+                  {tokenizerModelMessage}
+                </div>
+              )}
+              {!image.词组转化器API.model.trim() && mainConfig?.model && <FallbackHint text={`将复用主 API：${mainConfig.model}`} />}
+            </Field>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="最大输出 Token">
+                <input type="number" min={256} max={4096} value={image.词组转化器API.maxTokens ?? 1600} onChange={(e) => patchTokenizerApi({ maxTokens: Math.max(256, Number(e.target.value) || 1600) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+              </Field>
+              <Field label="温度">
+                <input type="number" min={0} max={2} step={0.05} value={image.词组转化器API.temperature ?? 0.45} onChange={(e) => patchTokenizerApi({ temperature: Number(e.target.value) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+              </Field>
+            </div>
+          </SubPanel>
           <Field label="转化器系统提示词">
             <textarea
               value={image.promptTokenizerSystemPrompt}
@@ -690,6 +804,14 @@ function InfoLine({ label, value, nsfw = false }: { label: string; value: string
     <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-3 text-xs leading-relaxed">
       <span style={{ color: nsfw ? 'rgba(241,183,206,0.88)' : 'rgba(var(--tj-accent-primary),0.72)' }}>{label}</span>
       <span style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>{value}</span>
+    </div>
+  );
+}
+
+function FallbackHint({ text }: { text: string }) {
+  return (
+    <div className="mt-1.5 text-[11px]" style={{ color: 'rgba(160, 200, 160, 0.72)' }}>
+      → {text}
     </div>
   );
 }

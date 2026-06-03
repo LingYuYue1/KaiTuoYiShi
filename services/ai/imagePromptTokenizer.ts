@@ -20,13 +20,18 @@ export interface ImagePromptTokenizerResult {
 export function buildImagePromptTokenizerConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
   const mainConfig = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
   if (!settings.文生图系统.enablePromptTokenizer || !mainConfig) return null;
+  const override = settings.文生图系统.词组转化器API;
   return {
     ...mainConfig,
     id: '__image_prompt_tokenizer__',
     name: '文生图词组转化器',
-    maxTokens: Math.min(mainConfig.maxTokens ?? 1200, 1600),
-    temperature: mainConfig.temperature ?? 0.45,
-    retryCount: mainConfig.retryCount ?? 2,
+    provider: override.provider || mainConfig.provider,
+    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
+    apiKey: override.apiKey.trim() || mainConfig.apiKey,
+    model: override.model.trim() || mainConfig.model,
+    maxTokens: Math.min(override.maxTokens ?? mainConfig.maxTokens ?? 1600, 2400),
+    temperature: override.temperature ?? mainConfig.temperature ?? 0.45,
+    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
     updatedAt: Date.now(),
   };
 }

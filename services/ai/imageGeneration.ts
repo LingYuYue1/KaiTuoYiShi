@@ -115,6 +115,15 @@ function parseSize(size: string): { width: number; height: number } {
   };
 }
 
+function normalizeNovelAISize(size: string): { width: number; height: number } {
+  const parsed = parseSize(size);
+  const snap = (value: number) => Math.max(64, Math.min(2048, Math.round(value / 64) * 64));
+  return {
+    width: snap(parsed.width),
+    height: snap(parsed.height),
+  };
+}
+
 function readPath(config: 文生图API配置): string {
   if (config.pathMode === 'custom' && config.customPath.trim()) return config.customPath.trim();
   switch (config.backend) {
@@ -193,7 +202,50 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
   if (!config.baseUrl.trim()) throw new Error('请填写 NovelAI Base URL。');
   if (!config.apiKey.trim()) throw new Error('请填写 NovelAI Token。');
   if (!config.model.trim()) throw new Error('请填写 NovelAI 模型。');
-  const { width, height } = parseSize(request.size || config.defaultSize);
+  const { width, height } = normalizeNovelAISize(request.size || config.defaultSize);
+  const prompt = request.prompt.trim();
+  const negativePrompt = mergeNegativePrompt(config, request);
+  const model = config.model.trim();
+  const parameters: Record<string, unknown> = {
+    width,
+    height,
+    scale: config.cfgScale,
+    sampler: config.sampler,
+    steps: config.steps,
+    seed: config.seed >= 0 ? config.seed : Math.floor(Math.random() * 2147483647),
+    n_samples: 1,
+    ucPreset: 0,
+    cfg_rescale: 0,
+    controlnet_strength: 1,
+    dynamic_thresholding: false,
+    params_version: 3,
+    legacy: false,
+    legacy_uc: false,
+    legacy_v3_extend: false,
+    negative_prompt: negativePrompt,
+    noise_schedule: config.noiseSchedule,
+    qualityToggle: true,
+    sm: false,
+    sm_dyn: false,
+    add_original_image: true,
+    characterPrompts: [],
+    use_coords: false,
+    deliberate_euler_ancestral_bug: false,
+    prefer_brownian: true,
+  };
+
+  if (model.startsWith('nai-diffusion-4')) {
+    parameters.v4_prompt = {
+      caption: { base_caption: prompt, char_captions: [] },
+      use_coords: false,
+      use_order: true,
+    };
+    parameters.v4_negative_prompt = {
+      caption: { base_caption: negativePrompt, char_captions: [] },
+      legacy_uc: false,
+    };
+  }
+
   const response = await fetch(joinUrl(config.baseUrl.replace(/^https:\/\/novelai\.net/i, 'https://image.novelai.net'), readPath(config)), {
     method: 'POST',
     headers: {
@@ -201,28 +253,16 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
       Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
-      input: request.prompt.trim(),
-      model: config.model,
+      input: prompt,
+      model,
       action: 'generate',
-      parameters: {
-        width,
-        height,
-        scale: config.cfgScale,
-        sampler: config.sampler,
-        steps: config.steps,
-        seed: config.seed >= 0 ? config.seed : Math.floor(Math.random() * 2147483647),
-        n_samples: 1,
-        ucPreset: 0,
-        qualityToggle: true,
-        noise_schedule: config.noiseSchedule,
-        negative_prompt: mergeNegativePrompt(config, request),
-      },
+      parameters,
     }),
     signal: request.signal,
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`NovelAI 图片接口错误 ${response.status}: ${text || response.statusText}`);
+    throw new Error(formatNovelAIError(response.status, text || response.statusText, model));
   }
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -233,7 +273,22 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
     }
   }
   const blob = await response.blob();
-  return { src: await blobToDataUrl(blob), mimeType: blob.type || 'image/png', model: config.model, backend: config.backend };
+  const image = await readNovelAIImageBlob(blob, contentType);
+  return { src: image.src, mimeType: image.mimeType, model: config.model, backend: config.backend };
+}
+
+function formatNovelAIError(status: number, text: string, model: string): string {
+  const tips: string[] = [];
+  if (status === 500 && model.startsWith('nai-diffusion-4')) {
+    tips.push('NAI V4/V4.5 需要 v4_prompt 参数；当前版本已自动补齐。若仍失败，请检查模型名是否为账号可用模型，以及尺寸是否为 64 的倍数。');
+  }
+  if (status === 401 || status === 403) {
+    tips.push('请检查 NovelAI Token 是否有效，且账号订阅/额度允许生图。');
+  }
+  if (status === 400) {
+    tips.push('请检查模型名、尺寸、采样器、噪点表或提示词长度。');
+  }
+  return [`NovelAI 图片接口错误 ${status}: ${text}`, ...tips].filter(Boolean).join('\n');
 }
 
 async function generateSdWebUIImage(config: 文生图API配置, request: ImageGenerationRequest): Promise<ImageGenerationResult> {
@@ -460,6 +515,127 @@ async function pollComfyResult(config: 文生图API配置, promptId: string, sig
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function readNovelAIImageBlob(blob: Blob, contentType: string): Promise<{ src: string; mimeType: string }> {
+  const declaredType = blob.type || contentType;
+  if (isZipContentType(declaredType)) {
+    return readFirstImageFromZip(blob);
+  }
+  const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  if (isZipHeader(header)) {
+    return readFirstImageFromZip(blob);
+  }
+  const mimeType = normalizeImageMimeType(declaredType, undefined);
+  return { src: await blobToDataUrl(blob), mimeType };
+}
+
+function isZipContentType(contentType: string): boolean {
+  return /(?:application|binary)\/(?:zip|x-zip-compressed)|application\/octet-stream/i.test(contentType);
+}
+
+function isZipHeader(header: Uint8Array): boolean {
+  return header.length >= 4 && header[0] === 0x50 && header[1] === 0x4b && header[2] === 0x03 && header[3] === 0x04;
+}
+
+async function readFirstImageFromZip(blob: Blob): Promise<{ src: string; mimeType: string }> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const entry = findFirstZipImageEntry(bytes);
+  if (!entry) throw new Error('NovelAI 返回了压缩包，但里面没有找到 PNG/JPEG/WebP 图片。');
+
+  const compressed = bytes.slice(entry.dataOffset, entry.dataOffset + entry.compressedSize);
+  const imageBytes = entry.compressionMethod === 0
+    ? compressed
+    : entry.compressionMethod === 8
+      ? await inflateRaw(compressed)
+      : undefined;
+  if (!imageBytes) throw new Error(`NovelAI 返回的压缩包使用了暂不支持的压缩方式：${entry.compressionMethod}。`);
+
+  const mimeType = normalizeImageMimeType('', entry.filename, imageBytes);
+  const imageBlob = new Blob([imageBytes], { type: mimeType });
+  return { src: await blobToDataUrl(imageBlob), mimeType };
+}
+
+function findFirstZipImageEntry(bytes: Uint8Array): { filename: string; compressionMethod: number; compressedSize: number; dataOffset: number } | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const eocdOffset = findEndOfCentralDirectory(view);
+  if (eocdOffset >= 0) {
+    const entryCount = view.getUint16(eocdOffset + 10, true);
+    let offset = view.getUint32(eocdOffset + 16, true);
+    for (let index = 0; index < entryCount && offset + 46 <= bytes.length; index += 1) {
+      if (view.getUint32(offset, true) !== 0x02014b50) break;
+      const compressionMethod = view.getUint16(offset + 10, true);
+      const compressedSize = view.getUint32(offset + 20, true);
+      const filenameLength = view.getUint16(offset + 28, true);
+      const extraLength = view.getUint16(offset + 30, true);
+      const commentLength = view.getUint16(offset + 32, true);
+      const localHeaderOffset = view.getUint32(offset + 42, true);
+      const filename = decodeZipFilename(bytes.slice(offset + 46, offset + 46 + filenameLength));
+      if (isImageFilename(filename)) {
+        const dataOffset = getZipLocalDataOffset(view, localHeaderOffset);
+        if (dataOffset >= 0) return { filename, compressionMethod, compressedSize, dataOffset };
+      }
+      offset += 46 + filenameLength + extraLength + commentLength;
+    }
+  }
+
+  let offset = 0;
+  while (offset + 30 <= bytes.length && view.getUint32(offset, true) === 0x04034b50) {
+    const compressionMethod = view.getUint16(offset + 8, true);
+    const compressedSize = view.getUint32(offset + 18, true);
+    const filenameLength = view.getUint16(offset + 26, true);
+    const extraLength = view.getUint16(offset + 28, true);
+    const filename = decodeZipFilename(bytes.slice(offset + 30, offset + 30 + filenameLength));
+    const dataOffset = offset + 30 + filenameLength + extraLength;
+    if (isImageFilename(filename) && compressedSize > 0) return { filename, compressionMethod, compressedSize, dataOffset };
+    offset = dataOffset + compressedSize;
+  }
+  return null;
+}
+
+function findEndOfCentralDirectory(view: DataView): number {
+  for (let offset = view.byteLength - 22; offset >= 0; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) return offset;
+  }
+  return -1;
+}
+
+function getZipLocalDataOffset(view: DataView, localHeaderOffset: number): number {
+  if (localHeaderOffset < 0 || localHeaderOffset + 30 > view.byteLength) return -1;
+  if (view.getUint32(localHeaderOffset, true) !== 0x04034b50) return -1;
+  const filenameLength = view.getUint16(localHeaderOffset + 26, true);
+  const extraLength = view.getUint16(localHeaderOffset + 28, true);
+  return localHeaderOffset + 30 + filenameLength + extraLength;
+}
+
+function decodeZipFilename(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return Array.from(bytes, (item) => String.fromCharCode(item)).join('');
+  }
+}
+
+function isImageFilename(filename: string): boolean {
+  return /\.(png|jpe?g|webp)$/i.test(filename);
+}
+
+async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
+  const Decompression = (globalThis as typeof globalThis & { DecompressionStream?: new (format: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
+  if (!Decompression) throw new Error('当前浏览器不支持解压 NovelAI 返回的 zip 图片包。');
+  const stream = new Blob([bytes]).stream().pipeThrough(new Decompression('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function normalizeImageMimeType(contentType: string, filename?: string, bytes?: Uint8Array): string {
+  if (/image\/png/i.test(contentType)) return 'image/png';
+  if (/image\/jpe?g/i.test(contentType)) return 'image/jpeg';
+  if (/image\/webp/i.test(contentType)) return 'image/webp';
+  if (filename && /\.jpe?g$/i.test(filename)) return 'image/jpeg';
+  if (filename && /\.webp$/i.test(filename)) return 'image/webp';
+  if (bytes?.length && bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg';
+  if (bytes?.length && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return 'image/webp';
+  return 'image/png';
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {

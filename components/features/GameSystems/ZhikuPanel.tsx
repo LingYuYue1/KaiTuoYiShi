@@ -824,7 +824,7 @@ function CharacterWorkspace({
               {groups.reduce((total, group) => total + group.profiles.length, 0)} 名 / {visibleCount} 条
             </div>
           </div>
-          <div className="hidden shrink-0 whitespace-nowrap text-[10px] font-mono tracking-[0.18em] md:block" style={{ color: 'rgba(160, 200, 160, 0.82)' }}>
+          <div className="hidden shrink-0 whitespace-nowrap text-[11px] font-mono tracking-[0.14em] md:block" style={{ color: 'rgba(190, 224, 190, 0.92)' }}>
             {bucket === 'builtin' ? 'READ ONLY' : bucket === 'custom' ? 'CUSTOM' : 'REBUILD'}
           </div>
         </div>
@@ -850,7 +850,7 @@ function CharacterWorkspace({
           <div className="font-serif text-[13px] tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
             形态 / 节点
           </div>
-          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
+          <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}>
             人格、命途、阶段与解锁边界
           </div>
         </div>
@@ -870,7 +870,7 @@ function CharacterWorkspace({
               <div className="font-serif text-[16px] font-semibold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                 {activeProfile.name}
               </div>
-              <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
+              <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}>
                 {activeProfile.entries.length} 个资料节点
               </div>
             </div>
@@ -1153,7 +1153,7 @@ function CharacterSoftStructurePreview({ entry }: { entry: 智库条目 }) {
               clipPath: smallClip,
             }}
           >
-            <div className="text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+            <div className="text-[11px] font-mono tracking-[0.12em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
               {label}
             </div>
             <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
@@ -1174,7 +1174,7 @@ function CharacterSoftStructurePreview({ entry }: { entry: 智库条目 }) {
                 clipPath: smallClip,
               }}
             >
-              <div className="text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+              <div className="text-[11px] font-mono tracking-[0.12em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
                 {label}
               </div>
               <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>

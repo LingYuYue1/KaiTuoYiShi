@@ -9,6 +9,7 @@ import {
   STAGE_PROGRESS_MAX,
 } from '@/models/path';
 import { paths as ALL_PATHS } from '@/data/journeyPresets';
+import { setPrimaryPath } from '@/services/pathService';
 
 interface PathPanelProps {
   traveler: 角色数据结构;
@@ -55,7 +56,6 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
   const primaryDef = cards.find((p) => p.id === primaryRecord?.id);
 
   const handleSetPrimary = async (pathId: 命途ID) => {
-    const { setPrimaryPath } = await import('@/services/pathService');
     onTravelerChange(setPrimaryPath(traveler, pathId));
   };
 

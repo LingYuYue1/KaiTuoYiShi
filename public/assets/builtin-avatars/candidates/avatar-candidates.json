@@ -57,6 +57,24 @@
       ]
     },
     {
+      "id": "asta",
+      "name": "艾丝妲",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/asta-01.png",
+        "public/assets/builtin-avatars/candidates/asta-02.png",
+        "public/assets/builtin-avatars/candidates/asta-03.png"
+      ]
+    },
+    {
+      "id": "arlan",
+      "name": "阿兰",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/arlan-01.png",
+        "public/assets/builtin-avatars/candidates/arlan-02.png",
+        "public/assets/builtin-avatars/candidates/arlan-03.png"
+      ]
+    },
+    {
       "id": "stelle",
       "name": "星",
       "variants": [
@@ -72,6 +90,15 @@
         "public/assets/builtin-avatars/candidates/caelus-01.png",
         "public/assets/builtin-avatars/candidates/caelus-02.png",
         "public/assets/builtin-avatars/candidates/caelus-03.png"
+      ]
+    },
+    {
+      "id": "bronya",
+      "name": "布洛妮娅",
+      "variants": [
+        "public/assets/builtin-avatars/candidates/bronya-01.png",
+        "public/assets/builtin-avatars/candidates/bronya-02.png",
+        "public/assets/builtin-avatars/candidates/bronya-03.png"
       ]
     }
   ]

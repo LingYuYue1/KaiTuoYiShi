@@ -145,6 +145,29 @@ export function 创建空忆庭API覆盖(): 忆庭API覆盖 {
   };
 }
 
+/** 文生图词组转化器 API 覆盖：用于角色锚点/档案到图片 prompt 的文本整理，留空字段回退主 API。 */
+export interface 文生图词组转化器API覆盖 {
+  provider: AI提供商 | '';
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  maxTokens?: number;
+  temperature?: number;
+  retryCount?: number;
+}
+
+export function 创建空文生图词组转化器API覆盖(): 文生图词组转化器API覆盖 {
+  return {
+    provider: '',
+    baseUrl: '',
+    apiKey: '',
+    model: '',
+    maxTokens: 1600,
+    temperature: 0.45,
+    retryCount: 2,
+  };
+}
+
 export type 原著约束强度 = 'loose' | 'standard' | 'strict';
 
 export interface 游戏设置 {
@@ -392,6 +415,7 @@ export interface 文生图系统设置 {
   NSFW接口: 文生图API配置;
   enableNsfwImageGeneration: boolean;
   enablePromptTokenizer: boolean;
+  词组转化器API: 文生图词组转化器API覆盖;
   promptTokenizerSystemPrompt: string;
   rules: 文生图规则中心设置;
   enableAutoSceneGeneration: boolean;
@@ -447,6 +471,7 @@ export function 创建默认文生图系统设置(): 文生图系统设置 {
     },
     enableNsfwImageGeneration: false,
     enablePromptTokenizer: true,
+    词组转化器API: 创建空文生图词组转化器API覆盖(),
     promptTokenizerSystemPrompt: [
       '你是「开拓轶事」的图片提示词转化器。',
       '请把角色档案、场景摘要或 NSFW 档案转化为适合图片生成模型的提示词。',
@@ -511,6 +536,15 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
     },
     enableNsfwImageGeneration: input.enableNsfwImageGeneration === true,
     enablePromptTokenizer: input.enablePromptTokenizer !== false,
+    词组转化器API: {
+      ...创建空文生图词组转化器API覆盖(),
+      ...(input.词组转化器API ?? {}),
+      retryCount: Math.max(0, Math.trunc(Number(input.词组转化器API?.retryCount ?? defaults.词组转化器API.retryCount ?? 2)) || 0),
+      maxTokens: Math.max(256, Math.trunc(Number(input.词组转化器API?.maxTokens ?? defaults.词组转化器API.maxTokens ?? 1600)) || 1600),
+      temperature: Number.isFinite(Number(input.词组转化器API?.temperature ?? defaults.词组转化器API.temperature))
+        ? Number(input.词组转化器API?.temperature ?? defaults.词组转化器API.temperature)
+        : defaults.词组转化器API.temperature,
+    },
     promptTokenizerSystemPrompt: String(input.promptTokenizerSystemPrompt ?? defaults.promptTokenizerSystemPrompt),
     rules: normalizeImageRules(input.rules),
     enableAutoSceneGeneration: input.enableAutoSceneGeneration === true,

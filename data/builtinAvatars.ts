@@ -11,6 +11,14 @@ export interface BuiltinAvatarSet {
 
 const BASE = '/assets/builtin-avatars/candidates';
 
+const BUILTIN_AVATAR_CANONICAL_ALIASES: Record<string, string> = {
+  '丹恒·饮月': '丹恒',
+  '饮月': '丹恒',
+  'Imbibitor Lunae': '丹恒',
+  '三月七·巡猎': '三月七',
+  '巡猎三月七': '三月七',
+};
+
 export const BUILTIN_AVATAR_SETS: BuiltinAvatarSet[] = [
   {
     canonicalName: '三月七',
@@ -92,11 +100,20 @@ export const BUILTIN_AVATAR_SETS: BuiltinAvatarSet[] = [
       { id: 'caelus-03', title: '穹 03', src: `${BASE}/caelus-03.png` },
     ],
   },
+  {
+    canonicalName: '布洛妮娅',
+    candidates: [
+      { id: 'bronya-01', title: '布洛妮娅 01', src: `${BASE}/bronya-01.png` },
+      { id: 'bronya-02', title: '布洛妮娅 02', src: `${BASE}/bronya-02.png` },
+      { id: 'bronya-03', title: '布洛妮娅 03', src: `${BASE}/bronya-03.png` },
+    ],
+  },
 ];
 
 export function getBuiltinAvatarSet(canonicalName: string | undefined): BuiltinAvatarSet | undefined {
   if (!canonicalName) return undefined;
-  return BUILTIN_AVATAR_SETS.find((set) => set.canonicalName === canonicalName);
+  const ownerName = BUILTIN_AVATAR_CANONICAL_ALIASES[canonicalName] ?? canonicalName;
+  return BUILTIN_AVATAR_SETS.find((set) => set.canonicalName === ownerName);
 }
 
 export function getDefaultBuiltinAvatar(canonicalName: string | undefined): string | undefined {

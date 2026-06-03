@@ -24,7 +24,7 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
     title: '人物重建·列车组核心样本',
     description: '按主体人格、形态阶段、命途能力、剧情解锁与 OOC 风险拆分的新版人物资料样本。',
     path: '/zhiku-presets/character-rebuild-core.json',
-    updatedAt: '2026-05-29-trailblazer-path-split',
+    updatedAt: '2026-05-31-character-canon-audit-1',
   },
   {
     id: 'zhiku_jarilo_vi_chapters',
