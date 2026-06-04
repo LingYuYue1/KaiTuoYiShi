@@ -145,6 +145,12 @@ const BUNDLED_HERTA_STORY_TITLES = new Set([
   '第五章 旅途正在继续',
 ]);
 
+const READONLY_MIGRATED_LORE_PRESET_IDS = new Set([
+  'zhiku_paths_core',
+  'zhiku_aeons_core',
+  'zhiku_xianzhou_history',
+]);
+
 export function isBundledZhikuDuplicate(entry: Partial<智库条目>): boolean {
   if (entry.builtin) return false;
   if (entry.分类 !== 'story') return false;
@@ -234,11 +240,22 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset): Promis
   const data = await res.json() as { entries?: unknown[] };
   const entries = Array.isArray(data.entries) ? (data.entries as unknown as 智库条目[]) : [];
   const seriesOrder = bundledZhikuPresets.findIndex((item) => item.id === preset.id) + 1;
+  const isReadonlyMigratedLore = READONLY_MIGRATED_LORE_PRESET_IDS.has(preset.id);
   return 归一化智库系统({
     条目: entries
       .filter((entry) => entry.分类 !== 'character' || isRebuiltZhikuCharacterEntry(entry))
       .map((entry, index) => ({
         ...entry,
+        ...(isReadonlyMigratedLore
+          ? {
+              资料类型: entry.资料类型 || '迁移设定资料',
+              解锁状态: entry.解锁状态 || '只读资料',
+              剧透等级: entry.剧透等级 || (preset.id === 'zhiku_paths_core' ? '中度' : '重大'),
+              使用范围: entry.使用范围?.length ? entry.使用范围 : ['智库', '设定浏览'],
+              可否主剧情注入: false,
+              重要度: Math.min(Number(entry.重要度) || 3, 3),
+            }
+          : {}),
         id: entry.id || `${preset.id}_${index + 1}`,
         ...(entry.分类 === 'story'
           ? {

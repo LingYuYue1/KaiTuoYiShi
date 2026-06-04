@@ -41,6 +41,7 @@
     "test:zhiku-scroll": "node scripts/zhiku-detail-scroll-regression.mjs",
     "test:zhiku-character-mobile": "node scripts/zhiku-character-mobile-regression.mjs",
     "test:zhiku-character-rebuild": "node scripts/zhiku-character-rebuild-regression.mjs",
+    "test:zhiku-knowledge-migration": "node scripts/zhiku-knowledge-migration-regression.mjs",
     "test:zhiku-guinaifen": "node scripts/zhiku-guinaifen-regression.mjs",
     "validate:story-weaving-canon": "node scripts/validate-story-weaving-canon.mjs",
     "deploy:cf": "npm run build && wrangler pages deploy dist --project-name=kaituoyishi --branch=main",
