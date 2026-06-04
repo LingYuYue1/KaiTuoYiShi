@@ -1,7 +1,7 @@
 export interface 回忆条目 {
   id: string;
   名称?: string;
-  类型?: '短期压缩' | '长期压缩' | '精炼纪要';
+  类型?: '短期压缩' | '中期压缩' | '长期压缩' | '精炼纪要';
   摘要: string;
   原文: string;
   检索关键词?: string[];

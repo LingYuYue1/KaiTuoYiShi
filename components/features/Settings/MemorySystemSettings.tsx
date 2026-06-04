@@ -145,13 +145,13 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
         <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
           记忆系统管理
         </div>
-        这里负责即时、短期、长期与 NPC 同行记忆的自动压缩。记忆总结 API 放在最上方，先决定压缩时用哪一个模型，再往下调阈值和提示词。
+        这里负责即时、短期、中期、长期与 NPC 同行记忆的自动压缩。即时记忆主要作为内部缓存和压缩入口；中期记忆用于承接阶段剧情链，长期记忆只保留稳定事实。
       </div>
 
       <Section title="系统开关">
         <ToggleField
           label="启用记忆注入"
-          desc="开启后，主剧情生成前会注入即时 / 短期 / 长期记忆。关闭后仍保留记忆入库和压缩，方便之后重新开启。"
+          desc="开启后，主剧情生成前会注入短期 / 中期 / 长期记忆；即时记忆只作为内部缓存和压缩入口。关闭后仍保留记忆入库和压缩，方便之后重新开启。"
           checked={settings.enableMemoryInjection}
           onChange={(checked) => onChange({ ...settings, enableMemoryInjection: checked })}
         />
@@ -311,7 +311,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
       </Section>
 
       <Section title="自动压缩阈值">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <NumberField
             label="即时 → 短期"
             value={memory.即时转短期阈值}
@@ -319,10 +319,19 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
             hint="达到这个条数时，系统会自动把即时记忆整理进短期。"
           />
           <NumberField
-            label="短期 → 长期"
-            value={memory.短期转长期阈值}
-            onChange={(value) => patchMemory({ 短期转长期阈值: Math.max(1, Math.trunc(value)) })}
-            hint="达到这个条数时，系统会自动把短期记忆整理进长期。"
+            label="短期 → 中期"
+            value={memory.短期转中期阈值}
+            onChange={(value) => {
+              const next = Math.max(1, Math.trunc(value));
+              patchMemory({ 短期转中期阈值: next, 短期转长期阈值: next });
+            }}
+            hint="达到这个条数时，系统会自动把短期记忆整理成阶段剧情链。"
+          />
+          <NumberField
+            label="中期 → 长期"
+            value={memory.中期转长期阈值}
+            onChange={(value) => patchMemory({ 中期转长期阈值: Math.max(1, Math.trunc(value)) })}
+            hint="达到这个条数时，系统会自动把中期记忆沉淀为长期稳定事实。"
           />
           <NumberField
             label="NPC 记忆"
@@ -342,11 +351,18 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
           hint="整理每回合原始记录，保留剧情推进、玩家选择、NPC 态度、物品变化与当前目标。"
         />
         <TextareaField
-          label="短期转长期"
-          value={memory.短期转长期提示词}
-          onChange={(value) => patchMemory({ 短期转长期提示词: value })}
+          label="短期转中期"
+          value={memory.短期转中期提示词}
+          onChange={(value) => patchMemory({ 短期转中期提示词: value })}
           rows={7}
-          hint="把多回合短期记忆压成稳定事实，保留主线转折、关系变化、不可逆后果与长期目标。"
+          hint="把多回合短期记忆压成阶段摘要，保留任务进展、近期关系变化、未解决事项与下一步牵引。"
+        />
+        <TextareaField
+          label="中期转长期"
+          value={memory.中期转长期提示词}
+          onChange={(value) => patchMemory({ 中期转长期提示词: value, 短期转长期提示词: value })}
+          rows={7}
+          hint="把阶段剧情链沉淀成稳定事实，保留主线转折、关系变化、不可逆后果与长期目标。"
         />
         <TextareaField
           label="NPC 记忆压缩"

@@ -25,7 +25,9 @@ assert(builder.indexOf('buildNpcContinuitySection(worldState, npcRecords, _turnC
 assert(builder.includes('最近遇见的路人'), '近期路人也必须能进入主剧情上下文。');
 assert(builder.includes('提取NPC同行记忆文本列表(n).slice(-4)'), '伙伴档案必须注入最近 NPC 同行记忆。');
 
-assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITH_MEMORY = 20'), '开启记忆注入时仍必须保留足够近期原文历史。');
+assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITH_MEMORY = 20'), '开启记忆注入时主剧情原始 history messages 应保留约 10 回合承接。');
+assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20'), '无可注入记忆时主剧情原始 history messages 也应保留约 10 回合承接。');
+assert(historyWindow.includes('MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20'), '即时剧情回顾必须扩展为主要近期剧情承接通道。');
 assert(historyWindow.includes('buildImmediateStoryReview'), '低回合必须有即时剧情回顾，不依赖忆庭阈值。');
 assert(historyWindow.includes('# 即时剧情回顾') || sendWorkflow.includes('# 即时剧情回顾'), '真实请求必须注入即时剧情回顾标题。');
 

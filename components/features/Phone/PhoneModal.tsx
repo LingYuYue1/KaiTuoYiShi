@@ -555,6 +555,7 @@ export function PhoneModal({
     const normalizedSummary = trimmed.startsWith('【手机】') ? trimmed : `【手机】${trimmed}`;
     const alreadyInMemory = memory.即时记忆.some((item) => item.includes(trimmed))
       || memory.短期记忆.some((item) => item.includes(trimmed))
+      || (memory.中期记忆 ?? []).some((item) => item.includes(trimmed))
       || memory.长期记忆.some((item) => item.includes(trimmed));
     if (!options.force && alreadyInMemory) return;
     const withImmediate = addImmediateMemory(memory, normalizedSummary, turnCount);

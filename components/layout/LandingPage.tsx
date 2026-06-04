@@ -7,8 +7,6 @@ interface LandingPageProps {
   onWorldbookManager: () => void;
   onZhikuManager: () => void;
   onCloudSave: () => void;
-  presence: PresenceSnapshot | null;
-  presenceFailed: boolean;
 }
 
 interface TwinkleStar {
@@ -21,14 +19,6 @@ interface TwinkleStar {
   color: string;
 }
 
-export interface PresenceSnapshot {
-  online: number;
-  onlineCount?: number;
-  storage?: 'r2' | 'kv' | 'memory';
-  ttlSeconds: number;
-  updatedAt: string;
-}
-
 export function LandingPage({
   onNewGame,
   onLoadSave,
@@ -36,8 +26,6 @@ export function LandingPage({
   onWorldbookManager,
   onZhikuManager,
   onCloudSave,
-  presence,
-  presenceFailed,
 }: LandingPageProps) {
   const stars: TwinkleStar[] = useMemo(() => {
     const list: TwinkleStar[] = [];
@@ -118,11 +106,11 @@ export function LandingPage({
         <span
           className="h-2 w-2 rounded-full"
           style={{
-            background: presenceFailed ? 'rgba(var(--tj-text-secondary), 0.65)' : 'rgba(95, 231, 176, 0.95)',
-            boxShadow: presenceFailed ? 'none' : '0 0 10px rgba(95, 231, 176, 0.8)',
+            background: 'rgba(var(--tj-text-secondary), 0.65)',
+            boxShadow: 'none',
           }}
         />
-        <span>{presence ? `在线开拓者 ${presence.online} 人` : '在线开拓者'}</span>
+        <span>在线开拓者</span>
       </div>
 
       {/* ── Hero Content ── */}
@@ -281,7 +269,7 @@ export function LandingPage({
       </div>
 
       <p className="absolute bottom-4 left-0 right-0 z-10 text-center text-xs opacity-60" style={{ color: 'rgb(var(--tj-text-secondary))' }}>
-        开拓轶事 v0.4.7
+        开拓轶事 v0.5
       </p>
     </div>
   );

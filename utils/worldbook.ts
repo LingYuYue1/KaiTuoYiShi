@@ -115,6 +115,10 @@ export interface FilterContext {
   startSceneName?: string;
   /** 当前地点文本，优先用来做地理锚点。 */
   currentLocation?: string;
+  /** 本回合明确在场、刚说话或被玩家点名的角色名。不得用地点名自动推导。 */
+  npcNames?: string[];
+  /** 原著主角选择，用于智库门禁星/穹单主角召回。 */
+  originalProtagonist?: '星' | '穹' | '星穹双主角';
   /** 当前注入场景。条目 scope 包含此值或 'all' 时才会被选入。 */
   currentScope: 'main' | 'opening' | 'battle' | 'pathAwakening' | 'calibration';
   /** 当前剧情模式。书 storyModeGate 非空时仅 gate 命中此值才注入；undefined 视为不参与 gate 过滤。 */

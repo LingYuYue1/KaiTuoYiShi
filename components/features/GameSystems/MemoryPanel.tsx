@@ -1,13 +1,15 @@
 // 记忆系统面板（v2）。
-// 左侧切换 即时 / 短期 / 长期，右侧显示条目与整理动作。
+// 左侧切换 即时 / 短期 / 中期 / 长期，右侧显示条目与整理动作。
 
 import { useState } from 'react';
 import type { 记忆系统 } from '@/models/memory';
 import type { 记忆系统设置 } from '@/models/settings';
 import {
   checkCompressionThreshold,
+  checkMiddleTermThreshold,
   checkLongTermThreshold,
   compressToShortTerm,
+  compressToMiddleTerm,
   compressToLongTerm,
 } from '@/hooks/useGame/memoryUtils';
 
@@ -18,7 +20,7 @@ interface MemoryPanelProps {
   settings: 记忆系统设置;
 }
 
-type MemoryLayer = 'immediate' | 'short' | 'long';
+type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long';
 
 const cardClip =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
@@ -36,6 +38,7 @@ const panelStyle = {
 const layerMeta: Record<MemoryLayer, { label: string; subtitle: string; accent: string }> = {
   immediate: { label: '即时', subtitle: '最近几回合的原始记忆', accent: 'rgba(180, 200, 220, 0.9)' },
   short: { label: '短期', subtitle: '已整理的事件摘要', accent: 'rgba(var(--tj-text-secondary), 0.9)' },
+  middle: { label: '中期', subtitle: '阶段剧情链与未结事项', accent: 'rgba(130, 208, 192, 0.92)' },
   long: { label: '长期', subtitle: '不可忘却的稳定记忆', accent: 'rgba(var(--tj-accent-primary), 0.95)' },
 };
 
@@ -47,7 +50,9 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
       ? memorySystem.即时记忆
       : activeLayer === 'short'
         ? memorySystem.短期记忆
-        : memorySystem.长期记忆;
+        : activeLayer === 'middle'
+          ? (memorySystem.中期记忆 ?? [])
+          : memorySystem.长期记忆;
 
   const handleCompressShort = () => {
     const threshold = settings.即时转短期阈值 || 25;
@@ -66,17 +71,35 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
     });
   };
 
-  const handleCompressLong = () => {
-    const threshold = settings.短期转长期阈值 || 40;
-    if (!checkLongTermThreshold(memorySystem, threshold)) {
-      if (!confirm(`短期记忆不足 ${threshold} 条，仍要压缩当前累积内容到长期？`)) return;
+  const handleCompressMiddle = () => {
+    const threshold = settings.短期转中期阈值 || settings.短期转长期阈值 || 20;
+    if (!checkMiddleTermThreshold(memorySystem, threshold)) {
+      if (!confirm(`短期记忆不足 ${threshold} 条，仍要压缩当前累积内容到中期？`)) return;
     }
     onMemorySystemChange((prev) => {
       let next = prev;
       if (next.短期记忆.length > 0 && next.短期记忆.length < threshold) {
-        return compressToLongTerm(next, turnCount, next.短期记忆.length);
+        return compressToMiddleTerm(next, turnCount, next.短期记忆.length);
       }
       while (next.短期记忆.length >= threshold) {
+        next = compressToMiddleTerm(next, turnCount, threshold);
+      }
+      return next;
+    });
+  };
+
+  const handleCompressLong = () => {
+    const threshold = settings.中期转长期阈值 || 10;
+    if (!checkLongTermThreshold(memorySystem, threshold)) {
+      if (!confirm(`中期记忆不足 ${threshold} 条，仍要压缩当前累积内容到长期？`)) return;
+    }
+    onMemorySystemChange((prev) => {
+      let next = prev;
+      const middle = next.中期记忆 ?? [];
+      if (middle.length > 0 && middle.length < threshold) {
+        return compressToLongTerm(next, turnCount, middle.length);
+      }
+      while ((next.中期记忆 ?? []).length >= threshold) {
         next = compressToLongTerm(next, turnCount, threshold);
       }
       return next;
@@ -88,7 +111,9 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
       ? memorySystem.即时记忆.length
       : activeLayer === 'short'
         ? memorySystem.短期记忆.length
-        : memorySystem.长期记忆.length;
+        : activeLayer === 'middle'
+          ? (memorySystem.中期记忆 ?? []).length
+          : memorySystem.长期记忆.length;
 
   return (
     <div className="flex min-h-full w-full min-w-0 flex-col gap-3 overflow-x-hidden md:h-full md:min-h-0 md:flex-row md:gap-4 md:overflow-hidden">
@@ -98,6 +123,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MetricTile label="即时" value={`${memorySystem.即时记忆.length}`} />
             <MetricTile label="短期" value={`${memorySystem.短期记忆.length}`} />
+            <MetricTile label="中期" value={`${(memorySystem.中期记忆 ?? []).length}`} />
             <MetricTile label="长期" value={`${memorySystem.长期记忆.length}`} />
             <MetricTile label="NPC" value={`${settings.NPC记忆压缩阈值} 条`} />
           </div>
@@ -114,7 +140,9 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
                   ? memorySystem.即时记忆.length
                   : layer === 'short'
                     ? memorySystem.短期记忆.length
-                    : memorySystem.长期记忆.length;
+                    : layer === 'middle'
+                      ? (memorySystem.中期记忆 ?? []).length
+                      : memorySystem.长期记忆.length;
               return (
                 <button
                   key={layer}
@@ -178,6 +206,11 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
                 </ActionButton>
               )}
               {activeLayer === 'short' && (
+                <ActionButton onClick={handleCompressMiddle} tone="gold">
+                  压缩到中期
+                </ActionButton>
+              )}
+              {activeLayer === 'middle' && (
                 <ActionButton onClick={handleCompressLong} tone="gold">
                   压缩到长期
                 </ActionButton>
@@ -197,7 +230,8 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
 
           <div className="mt-4 grid gap-2 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
             <HintCard title="即时阈值" value={`${settings.即时转短期阈值} 条`} text="达到后会自动压缩到短期。" />
-            <HintCard title="短期阈值" value={`${settings.短期转长期阈值} 条`} text="达到后会自动压缩到长期。" />
+            <HintCard title="短期阈值" value={`${settings.短期转中期阈值} 条`} text="达到后会自动压缩到中期。" />
+            <HintCard title="中期阈值" value={`${settings.中期转长期阈值} 条`} text="达到后会自动压缩到长期。" />
             <HintCard title="NPC 阈值" value={`${settings.NPC记忆压缩阈值} 条`} text="伙伴的与你同行的记忆达到后会自动压缩。" />
           </div>
         </div>

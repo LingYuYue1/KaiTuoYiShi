@@ -13,7 +13,7 @@ const smallClip = 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px
 const filterItems: { id: ArchiveFilter; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'turn', label: '回合纪要' },
-  { id: 'compressed', label: '旧压缩' },
+  { id: 'compressed', label: '压缩档案' },
 ];
 
 export function YitingPanel({ yitingSystem }: YitingPanelProps) {
@@ -75,7 +75,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Metric label="总档案" value={`${stats.total}`} />
             <Metric label="回合纪要" value={`${stats.turn}`} />
-            <Metric label="旧压缩" value={`${stats.compressed}`} />
+            <Metric label="压缩档案" value={`${stats.compressed}`} />
             <Metric label="召回材料" value="摘要" />
           </div>
         </section>
@@ -244,7 +244,7 @@ function getArchiveKind(entry: 回忆条目): ArchiveFilter {
 function sourceLabel(entry: 回忆条目): string {
   const kind = getArchiveKind(entry);
   if (kind === 'turn') return '回合纪要';
-  return entry.类型 ?? '旧压缩档案';
+  return entry.类型 ?? '压缩档案';
 }
 
 function formatDate(value?: string): string {
@@ -280,7 +280,7 @@ function buttonStyle(active: boolean) {
 }
 
 function KindBadge({ kind, large = false }: { kind: ArchiveFilter; large?: boolean }) {
-  const label = kind === 'compressed' ? '旧压缩' : '纪要';
+  const label = kind === 'compressed' ? '压缩' : '纪要';
   const gold = kind === 'turn';
   return (
     <span

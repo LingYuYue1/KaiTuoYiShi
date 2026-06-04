@@ -1,4 +1,5 @@
 import { chatCompletionNonStream } from './chatCompletionClient';
+import { appendApiErrorReport } from './apiErrorReportService';
 import { withRetries } from './retry';
 
 export interface ConnectionTestResult {
@@ -42,7 +43,16 @@ async function fetchOpenAICompatibleModels(baseRaw: string, apiKey: string): Pro
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (!res.ok) {
-        errors.push(`${url} -> ${res.status}`);
+        const text = await res.text().catch(() => '');
+        void appendApiErrorReport({
+          source: '模型列表',
+          config: { provider: 'openai_compatible', baseUrl: baseRaw, apiKey },
+          status: res.status,
+          requestUrl: url,
+          requestMode: 'models',
+          responseText: text,
+        });
+        errors.push(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
         continue;
       }
       const data = await res.json();
@@ -51,6 +61,13 @@ async function fetchOpenAICompatibleModels(baseRaw: string, apiKey: string): Pro
         if (ids.length) return ids;
       }
     } catch (e) {
+      void appendApiErrorReport({
+        source: '模型列表',
+        config: { provider: 'openai_compatible', baseUrl: baseRaw, apiKey },
+        requestUrl: url,
+        requestMode: 'models',
+        error: e,
+      });
       errors.push(`${url} -> ${(e as Error).message}`);
     }
   }
@@ -64,11 +81,25 @@ async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise
   const errors: string[] = [];
   for (const url of candidates) {
     try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${apiKey}` },
+      const res = await fetch('/api/qianfan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'models',
+          baseUrl: url,
+          apiKey,
+        }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
+        void appendApiErrorReport({
+          source: '百度千帆模型列表',
+          config: { provider: 'baidu', baseUrl: baseRaw, apiKey },
+          status: res.status,
+          requestUrl: url,
+          requestMode: 'models',
+          responseText: text,
+        });
         errors.push(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
         continue;
       }
@@ -79,6 +110,13 @@ async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise
       }
       errors.push(`${url} -> 返回格式异常（缺 data 数组）`);
     } catch (e) {
+      void appendApiErrorReport({
+        source: '百度千帆模型列表',
+        config: { provider: 'baidu', baseUrl: baseRaw, apiKey },
+        requestUrl: url,
+        requestMode: 'models',
+        error: e,
+      });
       errors.push(`${url} -> ${(e as Error).message}`);
     }
   }
@@ -88,9 +126,26 @@ async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise
 async function fetchGeminiModels(baseRaw: string, apiKey: string): Promise<string[]> {
   const base = baseRaw.replace(/\/+$/, '');
   const url = `${base}/models?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url);
+  const res = await fetch(url).catch((e) => {
+    void appendApiErrorReport({
+      source: 'Gemini 模型列表',
+      config: { provider: 'gemini', baseUrl: baseRaw, apiKey },
+      requestUrl: url,
+      requestMode: 'models',
+      error: e,
+    });
+    throw e;
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'Gemini 模型列表',
+      config: { provider: 'gemini', baseUrl: baseRaw, apiKey },
+      status: res.status,
+      requestUrl: url,
+      requestMode: 'models',
+      responseText: text,
+    });
     throw new Error(`Gemini /models 失败 ${res.status}：${text.slice(0, 200)}`);
   }
   const data = await res.json();
@@ -116,9 +171,26 @@ async function fetchClaudeModels(baseRaw: string, apiKey: string): Promise<strin
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
+  }).catch((e) => {
+    void appendApiErrorReport({
+      source: 'Claude 模型列表',
+      config: { provider: 'claude', baseUrl: baseRaw, apiKey },
+      requestUrl: url,
+      requestMode: 'models',
+      error: e,
+    });
+    throw e;
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'Claude 模型列表',
+      config: { provider: 'claude', baseUrl: baseRaw, apiKey },
+      status: res.status,
+      requestUrl: url,
+      requestMode: 'models',
+      responseText: text,
+    });
     throw new Error(`Claude /models 失败 ${res.status}：${text.slice(0, 200)}`);
   }
   const data = await res.json();
@@ -156,6 +228,12 @@ export async function testConnection(config: any): Promise<ConnectionTestResult>
     };
   } catch (e) {
     const raw = (e as Error).message || String(e);
+    void appendApiErrorReport({
+      source: '连接测试',
+      config,
+      requestMode: 'test',
+      error: e,
+    });
     return { ok: false, detail: raw };
   }
 }

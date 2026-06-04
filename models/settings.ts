@@ -196,7 +196,7 @@ export interface 游戏设置 {
   剧情编织系统: 剧情编织系统设置;
   /** 文生图：普通图片、场景图和 NSFW 图片的生成接口配置。 */
   文生图系统: 文生图系统设置;
-  /** 记忆系统管理：即时/短期/长期与 NPC 同行记忆的压缩规则。 */
+  /** 记忆系统管理：即时/短期/中期/长期与 NPC 同行记忆的压缩规则。 */
   记忆系统: 记忆系统设置;
   /** 变量模型 API 覆盖：可独立填 baseUrl/apiKey/model，留空字段会回退到主 API。 */
   variableApi: 变量API覆盖;
@@ -237,6 +237,9 @@ export interface 额外功能设置 {
 
 export interface 记忆系统设置 {
   即时转短期阈值: number;
+  短期转中期阈值: number;
+  中期转长期阈值: number;
+  /** @deprecated 旧版字段。新版本使用 短期转中期阈值 / 中期转长期阈值。 */
   短期转长期阈值: number;
   NPC记忆压缩阈值: number;
   /** 记忆总结 API：用于即时/短期压缩，留空时回退主 API。 */
@@ -245,6 +248,9 @@ export interface 记忆系统设置 {
   忆庭启用: boolean;
   忆庭召回最早触发回合: number;
   即时转短期提示词: string;
+  短期转中期提示词: string;
+  中期转长期提示词: string;
+  /** @deprecated 旧版字段。新版本使用 短期转中期提示词 / 中期转长期提示词。 */
   短期转长期提示词: string;
   NPC记忆压缩提示词: string;
   忆庭召回API: 忆庭API覆盖;
@@ -577,7 +583,9 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
 export function 创建默认记忆系统设置(): 记忆系统设置 {
   return {
     即时转短期阈值: 25,
-    短期转长期阈值: 40,
+    短期转中期阈值: 20,
+    中期转长期阈值: 10,
+    短期转长期阈值: 20,
     NPC记忆压缩阈值: 15,
     记忆总结API: {
       provider: '',
@@ -594,8 +602,20 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
       '不要写成流水账，不要保留无意义寒暄，不要添加原文没有的信息。输出 3-6 条要点，每条包含「谁/在哪里/做了什么/造成什么变化」，必要时标明未解决的悬念或待办。',
       '原著角色的单回合沉默、紧张、冷淡、受伤、戒备或少话只能作为当时状态记录，不得压缩成长期人格；长期口吻与行为边界以智库人物主体资料为准。',
     ].join('\n'),
+    短期转中期提示词: [
+      '你是叙事游戏的阶段记忆管理员。请把多条「短期记忆」压缩为适合放入「中期记忆」的阶段摘要。',
+      '中期记忆用于承接最近一段剧情链，而不是永久设定库。请保留任务进展、人物关系的近期变化、玩家明确选择、未解决事项、当前地点/目标、重要物品状态和下一步牵引。',
+      '请合并重复内容，删除一次性氛围描写和已经无后续影响的小动作。输出 4-8 条要点，优先写清「事件」「影响」「仍需承接的问题」。',
+      '原著角色的单回合沉默、紧张、冷淡、受伤、戒备或少话只能作为当时状态记录，不得压缩成长期人格；长期口吻与行为边界以智库人物主体资料为准。',
+    ].join('\n'),
+    中期转长期提示词: [
+      '你是叙事游戏的长期记忆管理员。请把多条「中期记忆」压缩为稳定、可长期注入 AI 上下文的「长期记忆」。',
+      '长期记忆只保留不应被遗忘的事实：主线转折、已确认设定、玩家身份与能力变化、重要承诺、组织关系、关键 NPC 关系、不可逆后果、长期目标和反复出现的伏笔。',
+      '请删除一次性场景细节、重复描述、临时情绪和已经解决的小事件。输出 4-8 条结构化要点，优先写清「事实」「影响」「后续牵引」。不要改写成小说段落，也不要添加没有依据的新设定。',
+      '不得把原著角色某几回合的临时沉默、紧张、冷淡、受伤或戒备归纳为长期性格改变；若确有关系变化，只写共同经历和当前关系事实。',
+    ].join('\n'),
     短期转长期提示词: [
-      '你是叙事游戏的长期记忆管理员。请把多条「短期记忆」压缩为稳定、可长期注入 AI 上下文的「长期记忆」。',
+      '你是叙事游戏的长期记忆管理员。请把多条「中期记忆」压缩为稳定、可长期注入 AI 上下文的「长期记忆」。',
       '长期记忆只保留不应被遗忘的事实：主线转折、已确认设定、玩家身份与能力变化、重要承诺、组织关系、关键 NPC 关系、不可逆后果、长期目标和反复出现的伏笔。',
       '请删除一次性场景细节、重复描述、临时情绪和已经解决的小事件。输出 4-8 条结构化要点，优先写清「事实」「影响」「后续牵引」。不要改写成小说段落，也不要添加没有依据的新设定。',
       '不得把原著角色某几回合的临时沉默、紧张、冷淡、受伤或戒备归纳为长期性格改变；若确有关系变化，只写共同经历和当前关系事实。',
@@ -760,10 +780,27 @@ const 旧版NPC默认记忆压缩提示词 = [
 export function 归一化记忆系统设置(input?: Partial<记忆系统设置>): 记忆系统设置 {
   const defaults = 创建默认记忆系统设置();
   if (!input) return defaults;
+  const oldShortToLongThreshold = Number(input.短期转长期阈值);
+  const shortToMiddleThreshold = Math.max(
+    1,
+    Math.trunc(Number(input.短期转中期阈值 ?? input.短期转长期阈值 ?? defaults.短期转中期阈值) || defaults.短期转中期阈值),
+  );
+  const middleToLongThreshold = Math.max(
+    1,
+    Math.trunc(Number(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值),
+  );
+  const shortToMiddlePrompt = input.短期转中期提示词 ?? defaults.短期转中期提示词;
+  const middleToLongPrompt = input.中期转长期提示词 ?? input.短期转长期提示词 ?? defaults.中期转长期提示词;
 
   const merged: 记忆系统设置 = {
     ...defaults,
     ...input,
+    短期转中期阈值: shortToMiddleThreshold,
+    中期转长期阈值: middleToLongThreshold,
+    短期转长期阈值: shortToMiddleThreshold,
+    短期转中期提示词: shortToMiddlePrompt,
+    中期转长期提示词: middleToLongPrompt,
+    短期转长期提示词: middleToLongPrompt,
     记忆总结API: {
       ...defaults.记忆总结API,
       ...(input.记忆总结API ?? {}),
@@ -799,7 +836,9 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
     return {
       ...defaults,
       即时转短期阈值: input.即时转短期阈值 === 10 ? defaults.即时转短期阈值 : merged.即时转短期阈值,
-      短期转长期阈值: input.短期转长期阈值 === 10 ? defaults.短期转长期阈值 : merged.短期转长期阈值,
+      短期转中期阈值: oldShortToLongThreshold === 10 ? defaults.短期转中期阈值 : merged.短期转中期阈值,
+      中期转长期阈值: merged.中期转长期阈值,
+      短期转长期阈值: oldShortToLongThreshold === 10 ? defaults.短期转长期阈值 : merged.短期转长期阈值,
       NPC记忆压缩阈值: input.NPC记忆压缩阈值 === 10 ? defaults.NPC记忆压缩阈值 : merged.NPC记忆压缩阈值,
       记忆总结API: merged.记忆总结API,
       忆庭召回最早触发回合: merged.忆庭召回最早触发回合,

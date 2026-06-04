@@ -158,6 +158,9 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
   const [message, setMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const [profileSlots, setProfileSlots] = useState<API方案槽位[]>([]);
+  const [auxProvider, setAuxProvider] = useState(providerOptions.find((p) => p.value === 'gemini')?.value ?? providerOptions[0].value);
+  const [auxBaseUrl, setAuxBaseUrl] = useState(providerOptions.find((p) => p.value === 'gemini')?.defaultBaseUrl ?? '');
+  const [auxApiKey, setAuxApiKey] = useState('');
   const [auxModel, setAuxModel] = useState('gemini-2.5-flash');
   const [auxModelOptions, setAuxModelOptions] = useState<string[]>([]);
   const [loadingAuxModels, setLoadingAuxModels] = useState(false);
@@ -359,39 +362,59 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
   };
 
   const handleApplyAuxModel = async () => {
+    const provider = auxProvider;
+    const baseUrl = auxBaseUrl.trim();
+    const apiKey = auxApiKey.trim();
     const model = auxModel.trim();
+    if (!baseUrl || !apiKey) {
+      setMessage({ kind: 'error', text: '请先填写其他 API 的 Base URL 和 API Key。' });
+      return;
+    }
     if (!model) {
       setMessage({ kind: 'error', text: '请先填写要套用到其他 API 的模型 ID。' });
       return;
     }
+    const auxApiPatch = { provider, baseUrl, apiKey, model };
     const nextGameSettings: 游戏设置 = {
       ...gameSettings,
-      variableApi: { ...gameSettings.variableApi, model },
-      新闻系统: { ...gameSettings.新闻系统, api: { ...gameSettings.新闻系统.api, model } },
-      手机系统: { ...gameSettings.手机系统, api: { ...gameSettings.手机系统.api, model } },
-      智库系统: { ...gameSettings.智库系统, api: { ...gameSettings.智库系统.api, model } },
-      剧情编织系统: { ...gameSettings.剧情编织系统, api: { ...gameSettings.剧情编织系统.api, model } },
+      variableApi: { ...gameSettings.variableApi, ...auxApiPatch },
+      新闻系统: { ...gameSettings.新闻系统, api: { ...gameSettings.新闻系统.api, ...auxApiPatch } },
+      手机系统: { ...gameSettings.手机系统, api: { ...gameSettings.手机系统.api, ...auxApiPatch } },
+      智库系统: { ...gameSettings.智库系统, api: { ...gameSettings.智库系统.api, ...auxApiPatch } },
+      剧情编织系统: { ...gameSettings.剧情编织系统, api: { ...gameSettings.剧情编织系统.api, ...auxApiPatch } },
       记忆系统: {
         ...gameSettings.记忆系统,
-        记忆总结API: { ...gameSettings.记忆系统.记忆总结API, model },
-        忆庭召回API: { ...gameSettings.记忆系统.忆庭召回API, model },
-        忆庭精炼API: { ...gameSettings.记忆系统.忆庭精炼API, model },
+        记忆总结API: { ...gameSettings.记忆系统.记忆总结API, ...auxApiPatch },
+        忆庭召回API: { ...gameSettings.记忆系统.忆庭召回API, ...auxApiPatch },
+        忆庭精炼API: { ...gameSettings.记忆系统.忆庭精炼API, ...auxApiPatch },
       },
     };
     onGameSettingsChange(nextGameSettings);
     await saveSetting('gameSettings', nextGameSettings);
-    setMessage({ kind: 'info', text: `已把其他文本 API 模型统一改为：${model}` });
+    setMessage({ kind: 'info', text: `已把其他文本 API 统一套用为：${provider} / ${model}` });
   };
 
   const handleFetchAuxModels = async () => {
-    if (!selectedConfig) return;
+    const baseUrl = auxBaseUrl.trim();
+    const apiKey = auxApiKey.trim();
+    if (!baseUrl || !apiKey) {
+      setAuxFetchMessage({ kind: 'error', text: '请先填写其他 API 的 Base URL 和 API Key。' });
+      return;
+    }
     setLoadingAuxModels(true);
     setAuxFetchMessage(null);
     try {
       const list = await fetchModels({
-        ...selectedConfig,
+        id: 'aux-api-preview',
+        name: '其他 API',
+        provider: auxProvider,
+        baseUrl,
+        apiKey,
+        model: auxModel.trim(),
         enableClaudeMode: gameSettings.enableClaudeMode === true,
-        retryCount: selectedConfig.retryCount ?? 2,
+        retryCount: 2,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       });
       setAuxModelOptions(list);
       setAuxFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型，请从列表选择。` });
@@ -885,8 +908,47 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
                 ◆ 其他 API 模型设置
               </div>
               <div className="leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-                正文继续使用上方主模型；这里只批量修改变量、新闻、手机、智库、剧情编织、记忆与忆庭的模型 ID，不改 Base URL / Key，也不影响文生图。
+                正文继续使用上方主模型；这里可以批量修改变量、新闻、手机、智库、剧情编织、记忆与忆庭的供应商、Base URL、Key 和模型 ID，不影响文生图。
               </div>
+              <div className="grid gap-1.5 sm:grid-cols-[180px_minmax(0,1fr)]">
+                <select
+                  value={auxProvider}
+                  onChange={(e) => {
+                    const nextProvider = e.target.value as typeof auxProvider;
+                    const meta = providerOptions.find((p) => p.value === nextProvider);
+                    setAuxProvider(nextProvider);
+                    if (meta) {
+                      setAuxBaseUrl(meta.defaultBaseUrl);
+                      setAuxModel(meta.defaultModel);
+                    }
+                    setAuxModelOptions([]);
+                    setAuxFetchMessage(null);
+                  }}
+                  className="kaituo-input min-w-0 px-2.5 py-1.5 text-sm"
+                  style={{ clipPath: smallClip }}
+                >
+                  {providerOptions.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={auxBaseUrl}
+                  onChange={(e) => setAuxBaseUrl(e.target.value)}
+                  placeholder="其他 API Base URL"
+                  className="kaituo-input min-w-0 px-2.5 py-1.5 text-sm"
+                  style={{ clipPath: smallClip }}
+                />
+              </div>
+              <input
+                value={auxApiKey}
+                onChange={(e) => setAuxApiKey(e.target.value)}
+                placeholder="其他 API Key"
+                type="password"
+                className="kaituo-input w-full px-2.5 py-1.5 text-sm"
+                style={{ clipPath: smallClip }}
+              />
               <div className="flex flex-col gap-1.5 sm:flex-row">
                 <input
                   value={auxModel}

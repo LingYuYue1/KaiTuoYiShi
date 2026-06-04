@@ -50,7 +50,10 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
           </h3>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#d8caa4]/80">
             <span>顺序与类目一览</span>
-            <span>估算上传 Tokens：{formatTokenCount(snapshot.estimatedTokens)}</span>
+            <span>真实上传 Tokens：{formatTokenCount(snapshot.uploadEstimatedTokens)}</span>
+            {snapshot.diagnosticEstimatedTokens > 0 ? (
+              <span>诊断参考 Tokens：{formatTokenCount(snapshot.diagnosticEstimatedTokens)}</span>
+            ) : null}
             <span>区块：{snapshot.sections.length} 项</span>
           </div>
         </div>
@@ -82,7 +85,7 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
         style={{ border: '1px solid rgba(var(--tj-accent-primary),0.22)', background: 'rgba(0,0,0,0.22)', clipPath: cardClip }}
       >
         <span className="text-[rgb(var(--tj-accent-primary))]">说明：</span>
-        当前为本地预览计数，不会调用 API。Token 为估算值，用来判断上下文体量；真实计费以模型服务商为准。
+        当前为本地预览计数，不会调用 API。真实上传 Tokens 只统计会进入请求的区块；诊断参考不会发送给模型。真实计费以模型服务商为准。
         {snapshot.sourceInput ? <span className="ml-2">参考输入：{snapshot.sourceInput.slice(0, 80)}</span> : null}
         {copyHint ? <span className="ml-3 text-emerald-300">{copyHint}</span> : null}
       </div>

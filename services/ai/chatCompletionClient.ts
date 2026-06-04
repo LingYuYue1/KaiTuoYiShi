@@ -1,5 +1,6 @@
 import type { API配置项 } from '@/models/settings';
 import type { 聊天消息 } from '@/models/chat';
+import { appendApiErrorReport } from './apiErrorReportService';
 
 export interface StreamCallbacks {
   onDelta: (delta: string) => void;
@@ -53,6 +54,84 @@ function buildOpenAICompatibleChatUrl(baseUrl: string): string {
   const base = baseUrl.replace(/\/+$/, '');
   if (/\/chat\/completions$/i.test(base)) return base;
   return `${base}/chat/completions`;
+}
+
+function buildQianfanProxyBody(config: API配置项, body: Record<string, unknown>): string {
+  return JSON.stringify({
+    kind: 'chat',
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    body,
+  });
+}
+
+function isBaiduQianfanConfig(config: API配置项): boolean {
+  return config.provider === 'baidu' || /qianfan\.baidubce\.com/i.test(config.baseUrl);
+}
+
+function normalizeOpenAICompatibleModel(config: API配置项): string {
+  const model = config.model.trim();
+  if (isBaiduQianfanConfig(config) && /^glm[-_\s]?5\.1$/i.test(model)) {
+    return 'glm-5.1';
+  }
+  return model;
+}
+
+function buildOpenAICompatibleRequestBody(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  stream: boolean,
+): Record<string, unknown> {
+  return {
+    model: normalizeOpenAICompatibleModel(config),
+    messages,
+    max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
+    temperature: request.temperature ?? config.temperature ?? 0.8,
+    stream,
+  };
+}
+
+function formatOpenAICompatibleError(config: API配置项, status: number, text: string): Error {
+  if (isBaiduQianfanConfig(config)) {
+    const model = config.model.trim();
+    const normalized = normalizeOpenAICompatibleModel(config);
+    const aliasHint = model && model !== normalized
+      ? `已将模型名 ${model} 按百度千帆兼容规则归一为 ${normalized}；`
+      : '';
+    const lower = text.toLowerCase();
+    const hint = (() => {
+      if (status === 401 || status === 403) return '请检查百度千帆 API Key、账号权限和 Coding Plan 模型权限；如果错误码是 coding_plan_api_key_not_allowed，说明某个独立 API 仍在用 /v2，代理会自动补试 /v2/coding。';
+      if (status === 404) return `${aliasHint}官方 GLM-5.1 的 model 参数接入点 ID 是 glm-5.1；Coding Plan Key 必须继续使用 /v2/coding，系统只会在该路径下尝试大小写别名。若仍 404，请检查该 API Key 的千帆模型列表是否实际包含 glm-5.1，或账号是否开通该模型。`;
+      if (status === 400 && (lower.includes('model') || lower.includes('parameter') || lower.includes('1210'))) {
+        return `${aliasHint}请优先确认模型 ID 填 glm-5.1；如果仍失败，说明当前千帆账号或 Coding Plan 对该模型/参数未开放。`;
+      }
+      return `${aliasHint}请检查百度千帆 Base URL、模型 ID、Key 与账号权限。`;
+    })();
+    return new Error(`百度千帆 API Error ${status}: ${hint}\n${text}`);
+  }
+  return new Error(`API Error ${status}: ${text}`);
+}
+
+async function fetchWithApiErrorReport(
+  config: API配置项,
+  source: string,
+  url: string,
+  requestMode: 'stream' | 'non-stream' | 'models' | 'test' | 'unknown',
+  init: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    void appendApiErrorReport({
+      source,
+      config,
+      requestUrl: url,
+      requestMode,
+      error,
+    });
+    throw error;
+  }
 }
 
 function normalizeClaudeMessages(
@@ -178,16 +257,12 @@ async function streamOpenAICompatible(
   request: ChatCompletionRequest,
   callbacks: StreamCallbacks,
 ): Promise<string> {
-  const url = buildOpenAICompatibleChatUrl(config.baseUrl);
-  const body = JSON.stringify({
-    model: config.model,
-    messages,
-    max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
-    temperature: request.temperature ?? config.temperature ?? 0.8,
-    stream: true,
-  });
+  const upstreamUrl = buildOpenAICompatibleChatUrl(config.baseUrl);
+  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true);
+  const url = isBaiduQianfanConfig(config) ? '/api/qianfan' : upstreamUrl;
+  const body = isBaiduQianfanConfig(config) ? buildQianfanProxyBody(config, requestBody) : JSON.stringify(requestBody);
 
-  const response = await fetch(url, {
+  const response = await fetchWithApiErrorReport(config, '聊天补全', url, 'stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -199,7 +274,15 @@ async function streamOpenAICompatible(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`API Error ${response.status}: ${text}`);
+    void appendApiErrorReport({
+      source: '聊天补全',
+      config,
+      status: response.status,
+      requestUrl: upstreamUrl,
+      requestMode: 'stream',
+      responseText: text,
+    });
+    throw formatOpenAICompatibleError(config, response.status, text);
   }
 
   const reader = response.body?.getReader();
@@ -258,7 +341,7 @@ async function streamClaude(
   const url = `${normalizeClaudeBaseUrl(config.baseUrl)}/messages`;
   const body = JSON.stringify(buildClaudeRequestBody(config, messages, request, true));
 
-  const response = await fetch(url, {
+  const response = await fetchWithApiErrorReport(config, 'Claude 聊天补全', url, 'stream', {
     method: 'POST',
     headers: claudeHeaders(config),
     body,
@@ -267,6 +350,14 @@ async function streamClaude(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'Claude 聊天补全',
+      config,
+      status: response.status,
+      requestUrl: url,
+      requestMode: 'stream',
+      responseText: text,
+    });
     throw formatClaudeError(response.status, text);
   }
 
@@ -334,7 +425,7 @@ async function completionClaudeNonStream(
   request: ChatCompletionRequest,
 ): Promise<string> {
   const url = `${normalizeClaudeBaseUrl(config.baseUrl)}/messages`;
-  const response = await fetch(url, {
+  const response = await fetchWithApiErrorReport(config, 'Claude 非流式补全', url, 'non-stream', {
     method: 'POST',
     headers: claudeHeaders(config),
     body: JSON.stringify(buildClaudeRequestBody(config, messages, request, false)),
@@ -343,6 +434,14 @@ async function completionClaudeNonStream(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'Claude 非流式补全',
+      config,
+      status: response.status,
+      requestUrl: url,
+      requestMode: 'non-stream',
+      responseText: text,
+    });
     throw formatClaudeError(response.status, text);
   }
 
@@ -381,7 +480,7 @@ async function streamGemini(
     };
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithApiErrorReport(config, 'Gemini 聊天补全', url, 'stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -393,6 +492,14 @@ async function streamGemini(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'Gemini 聊天补全',
+      config,
+      status: response.status,
+      requestUrl: url,
+      requestMode: 'stream',
+      responseText: text,
+    });
     throw new Error(`Gemini API Error ${response.status}: ${text}`);
   }
 
@@ -452,7 +559,8 @@ export async function chatCompletionNonStream(
 ): Promise<string> {
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
-  const url = buildOpenAICompatibleChatUrl(config.baseUrl);
+  const upstreamUrl = buildOpenAICompatibleChatUrl(config.baseUrl);
+  const url = isBaiduQianfanConfig(config) ? '/api/qianfan' : upstreamUrl;
 
   if (provider === 'claude') {
     return completionClaudeNonStream(config, msgs, request);
@@ -466,25 +574,29 @@ export async function chatCompletionNonStream(
     });
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithApiErrorReport(config, '非流式补全', url, 'non-stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,
     },
-    body: JSON.stringify({
-      model: config.model,
-      messages: msgs,
-      max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
-      temperature: request.temperature ?? config.temperature ?? 0.8,
-      stream: false,
-    }),
+    body: isBaiduQianfanConfig(config)
+      ? buildQianfanProxyBody(config, buildOpenAICompatibleRequestBody(config, msgs, request, false))
+      : JSON.stringify(buildOpenAICompatibleRequestBody(config, msgs, request, false)),
     signal: request.signal,
   });
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`API Error ${response.status}: ${text}`);
+    void appendApiErrorReport({
+      source: '非流式补全',
+      config,
+      status: response.status,
+      requestUrl: upstreamUrl,
+      requestMode: 'non-stream',
+      responseText: text,
+    });
+    throw formatOpenAICompatibleError(config, response.status, text);
   }
 
   const json = await response.json();

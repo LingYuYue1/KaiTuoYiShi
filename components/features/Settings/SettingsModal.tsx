@@ -13,6 +13,7 @@ import { NsfwSettingsTab } from './NsfwSettingsTab';
 import { ImageGenerationSettingsTab } from './ImageGenerationSettingsTab';
 import { PromptModulesTab } from './PromptModulesTab';
 import { ExtraFeaturesSettingsTab } from './ExtraFeaturesSettingsTab';
+import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
 import { VariableUpdateTab } from './VariableUpdateSettings';
@@ -62,11 +63,12 @@ interface SettingsModalProps {
   initialTab?: Tab;
 }
 
-type Tab = 'api' | 'game' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'imageGeneration' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
+type Tab = 'api' | 'apiErrors' | 'game' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'imageGeneration' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
 
 const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'game', label: '游戏设定', icon: '❖', subtitle: '叙述风格与人格' },
   { key: 'api', label: 'API 接口', icon: '✦', subtitle: 'AI 模型与密钥' },
+  { key: 'apiErrors', label: '错误报告', icon: '!', subtitle: 'API 失败原因记录' },
   { key: 'varUpdate', label: '变量更新', icon: '◉', subtitle: '变量模型 API 与开关' },
   { key: 'yiting', label: '忆庭', icon: '◌', subtitle: '回忆档案与召回 API' },
   { key: 'memory', label: '记忆系统', icon: '◐', subtitle: '压缩阈值、API 与提示词' },
@@ -128,6 +130,8 @@ export function SettingsModal({
             onGameSettingsChange={persistGameSettingsChange}
           />
         );
+      case 'apiErrors':
+        return <ApiErrorReportsTab />;
       case 'game':
         return (
           <GameSettingsTab
@@ -352,7 +356,7 @@ export function SettingsModal({
             }}
           >
             <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
-            <span className="ml-2">开拓轶事 · v0.4.7</span>
+            <span className="ml-2">开拓轶事 · v0.5</span>
           </div>
         </aside>
 

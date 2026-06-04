@@ -24,6 +24,7 @@ import { 获取物品, type 获取物品输入 } from './inventoryActions';
 import type { 背包物品, 物品分类, 物品品质 } from '@/models/inventory';
 import { 应用路径命令, 解析路径片段, 读取路径值 } from './variablePath';
 import { extractRoot, validateCommand, type VariableState } from './variableRegistry';
+import { appendWorldEvents } from './worldEvents';
 
 /** 执行器需要的 setters 集合（与 useGameState 对齐）。 */
 export interface VariableSetters {
@@ -118,6 +119,12 @@ export function applyVariableCommand(
 
   const runUpdate = <T,>(setter: React.Dispatch<React.SetStateAction<T>>): void => {
     setter((prev) => {
+      if (root === '世界' && rest === '全局事件' && cmd.action === 'push') {
+        return {
+          ...(prev as 世界状态),
+          全局事件: appendWorldEvents((prev as 世界状态).全局事件 ?? [], [cmd.value]),
+        } as T;
+      }
       const result = 应用路径命令(prev, rest, cmd.action, cmd.value);
       if (!result.ok) {
         applyError = result.reason ?? '应用失败';
@@ -287,6 +294,19 @@ export function reduceVariableCommands(
         });
         continue;
       }
+    }
+
+    if (root === '世界' && rest === '全局事件' && cmd.action === 'push') {
+      const world = cursor.世界 as 世界状态;
+      cursor = {
+        ...cursor,
+        世界: {
+          ...world,
+          全局事件: appendWorldEvents(world.全局事件 ?? [], [cmd.value]),
+        },
+      };
+      results.push({ command: cmd, ok: true });
+      continue;
     }
 
     const applied = 应用路径命令(cursor[root], rest, cmd.action, cmd.value);

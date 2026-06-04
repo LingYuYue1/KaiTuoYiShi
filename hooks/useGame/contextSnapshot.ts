@@ -12,8 +12,14 @@ import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { buildNpcRelationshipPlanning } from '@/services/npcRelationshipPlanning';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
 import { snapshotVariableState } from '@/utils/variableExecutor';
-import { buildImmediateStoryReview, buildMainRecallQuery, getMainHistoryWindow } from './historyWindow';
+import {
+  buildImmediateStoryReview,
+  buildLeanAssistantHistoryContent,
+  buildMainRecallQuery,
+  getMainHistoryWindow,
+} from './historyWindow';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
+import { getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 
 const COT_FAKE_HISTORY_USER = '开始任务';
 const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
@@ -38,6 +44,8 @@ export interface ContextSection {
   order: number;
   content: string;
   estimatedTokens: number;
+  upload?: boolean;
+  diagnostic?: boolean;
 }
 
 export type ContextSnapshotKind = 'main' | 'variable' | 'phone' | 'news' | 'yiting' | 'zhiku';
@@ -48,6 +56,8 @@ export interface ContextSnapshot {
   sections: ContextSection[];
   fullText: string;
   estimatedTokens: number;
+  uploadEstimatedTokens: number;
+  diagnosticEstimatedTokens: number;
   createdAt: number;
   sourceInput: string;
 }
@@ -111,6 +121,12 @@ function finalizeSnapshot(
     .map((section) => `【${section.category}｜${section.title}】\n${section.content}`)
     .join('\n\n---\n\n');
   const estimatedTokens = sections.reduce((sum, section) => sum + section.estimatedTokens, 0);
+  const uploadEstimatedTokens = sections
+    .filter((section) => section.upload !== false && !section.diagnostic)
+    .reduce((sum, section) => sum + section.estimatedTokens, 0);
+  const diagnosticEstimatedTokens = sections
+    .filter((section) => section.diagnostic || section.upload === false)
+    .reduce((sum, section) => sum + section.estimatedTokens, 0);
 
   return {
     kind,
@@ -118,6 +134,8 @@ function finalizeSnapshot(
     sections,
     fullText,
     estimatedTokens,
+    uploadEstimatedTokens,
+    diagnosticEstimatedTokens,
     createdAt: Date.now(),
     sourceInput,
   };
@@ -127,6 +145,38 @@ function formatMessages(messages: Array<{ role: string; content: string }>): str
   return messages
     .map((msg, index) => `## ${index + 1}. ${msg.role}\n\n${msg.content}`)
     .join('\n\n---\n\n');
+}
+
+function formatMainRequestOrderOverview(
+  systemPromptSections: Array<{ title: string; content: string }>,
+  apiMessages: 聊天消息[],
+): string {
+  const lines: string[] = [
+    '# 主剧情真实请求顺序总览',
+    '',
+    '本区块是本地诊断，不会发送给模型；下面列出的 System Prompt 分段与 API messages 才是本轮真实请求顺序。',
+    '',
+    '## System Prompt 分段',
+  ];
+  if (systemPromptSections.length) {
+    systemPromptSections.forEach((section, index) => {
+      lines.push(`${index + 1}. ${section.title}｜约 ${estimateTextTokens(section.content)} tokens`);
+    });
+  } else {
+    lines.push('- 无 System Prompt 分段。');
+  }
+
+  lines.push('', '## API Messages');
+  if (apiMessages.length) {
+    apiMessages.forEach((message, index) => {
+      const preview = message.content.replace(/\s+/g, ' ').trim().slice(0, 90);
+      lines.push(`${index + 1}. role=${message.role}｜约 ${estimateTextTokens(message.content)} tokens｜${preview || '（空）'}`);
+    });
+  } else {
+    lines.push('- 无 API messages。');
+  }
+
+  return lines.join('\n');
 }
 
 function splitPromptSections(systemPrompt: string): Array<{ title: string; content: string }> {
@@ -275,7 +325,7 @@ function buildApiMessages(
     if (msg.role === 'user') {
       messages.push(msg);
     } else if (msg.role === 'assistant' && msg.parsedResponse) {
-      messages.push(创建聊天消息('assistant', msg.content));
+      messages.push(创建聊天消息('assistant', buildLeanAssistantHistoryContent(msg)));
     }
   }
 
@@ -352,6 +402,14 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     startScenarioId: state.世界.起航之地ID,
     startSceneName: state.世界.当前地点,
     currentLocation: state.世界.当前地点,
+    npcNames: getZhikuNpcNamesForTurn({
+      world: state.世界,
+      npcs: state.NPC,
+      history: recallHistory,
+      userInput: sourceInput,
+      turnCount: state.turnCount,
+    }),
+    originalProtagonist: state.世界.原著主角,
     currentScope,
     storyMode: state.世界.剧情模式,
   };
@@ -359,9 +417,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     userInput: sourceInput,
     history: recallHistory,
     currentLocation: state.世界.当前地点,
-    npcNames: state.NPC
-      .filter((npc) => npc.同行 || Number(npc.最近回合 || 0) >= Math.max(1, state.turnCount - 15))
-      .map((npc) => npc.姓名),
+    npcNames: worldbookCtx.npcNames,
   });
 
   const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
@@ -382,7 +438,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       )
     : null;
 
-  const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(state.chatHistory, 12) : '';
+  const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(state.chatHistory) : '';
   const storyRecallInjection = [
     immediateStoryReview
       ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n')
@@ -421,40 +477,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         Boolean(yitingPreview?.injection),
       );
 
-  const sections: ContextSection[] = [];
-  addSection(sections, {
-    id: 'story_weaving_progress',
-    title: '剧情编织进度快照',
-    category: '剧情',
-    content: formatStoryWeavingProgressSnapshot(state),
-  });
-  addSection(sections, {
-    id: 'story_weaving_gate',
-    title: '剧情编织门禁预览',
-    category: '剧情',
-    content: formatStoryWeavingGateSnapshot(state, worldbookCtx),
-  });
-  addSection(sections, {
-    id: 'story_planning_analysis',
-    title: '剧情规划分析快照',
-    category: '剧情',
-    content: formatStoryPlanningAnalysisSnapshot(state),
-  });
-  addSection(sections, {
-    id: 'npc_relationship_planning',
-    title: 'NPC 关系规划分析',
-    category: '伙伴',
-    content: formatNpcRelationshipPlanningSnapshot(state),
-  });
-  splitPromptSections(systemPrompt).forEach((item, index) => {
-    addSection(sections, {
-      id: `system_${index}`,
-      title: item.title,
-      category: categoryForPromptSection(item.title),
-      content: item.content,
-    });
-  });
-
+  const systemPromptSections = splitPromptSections(systemPrompt);
   const apiMessages = buildApiMessages(state.chatHistory, {
     isOpeningSystemTrigger,
     isAwakeningEnterTrigger,
@@ -464,12 +487,64 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     settings: state.gameSettings,
     memorySystem: state.记忆,
   });
+  const sections: ContextSection[] = [];
+  addSection(sections, {
+    id: 'main_request_order_overview',
+    title: '主剧情真实请求顺序总览',
+    category: '诊断',
+    content: formatMainRequestOrderOverview(systemPromptSections, apiMessages),
+    upload: false,
+    diagnostic: true,
+  });
+  addSection(sections, {
+    id: 'story_weaving_progress',
+    title: '剧情编织进度快照',
+    category: '诊断',
+    content: formatStoryWeavingProgressSnapshot(state),
+    upload: false,
+    diagnostic: true,
+  });
+  addSection(sections, {
+    id: 'story_weaving_gate',
+    title: '剧情编织门禁预览',
+    category: '诊断',
+    content: formatStoryWeavingGateSnapshot(state, worldbookCtx),
+    upload: false,
+    diagnostic: true,
+  });
+  addSection(sections, {
+    id: 'story_planning_analysis',
+    title: '剧情规划分析快照',
+    category: '诊断',
+    content: formatStoryPlanningAnalysisSnapshot(state),
+    upload: false,
+    diagnostic: true,
+  });
+  addSection(sections, {
+    id: 'npc_relationship_planning',
+    title: 'NPC 关系规划分析',
+    category: '诊断',
+    content: formatNpcRelationshipPlanningSnapshot(state),
+    upload: false,
+    diagnostic: true,
+  });
+  systemPromptSections.forEach((item, index) => {
+    addSection(sections, {
+      id: `system_${index}`,
+      title: item.title,
+      category: categoryForPromptSection(item.title),
+      content: item.content,
+      upload: true,
+    });
+  });
+
   if (apiMessages.length) {
     addSection(sections, {
       id: 'history_window',
       title: `历史记录（${apiMessages.length} 条）`,
       category: '历史',
       content: formatMessages(apiMessages.map((msg) => ({ role: msg.role, content: msg.content }))),
+      upload: true,
     });
   }
 
@@ -628,9 +703,13 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
     userInput: sourceInput,
     history: state.chatHistory,
     currentLocation: state.世界.当前地点,
-    npcNames: state.NPC
-      .filter((npc) => npc.同行 || Number(npc.最近回合 || 0) >= Math.max(1, state.turnCount - 15))
-      .map((npc) => npc.姓名),
+    npcNames: getExplicitNpcNamesForTurn({
+      world: state.世界,
+      npcs: state.NPC,
+      history: state.chatHistory,
+      userInput: sourceInput,
+      turnCount: state.turnCount,
+    }),
   });
   const fallback = retrieveYitingContext(state.忆庭, recallQuery, settings.忆庭召回条数 ?? 8);
   const candidates = state.忆庭.回忆档案
@@ -686,9 +765,14 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     startScenarioId: state.世界.起航之地ID,
     startSceneName: state.世界.当前地点,
     currentLocation: state.世界.当前地点,
-    npcNames: state.NPC
-      .filter((npc) => npc.同行 || Number(npc.最近回合 || 0) >= Math.max(1, state.turnCount - 15))
-      .map((npc) => npc.姓名),
+    npcNames: getZhikuNpcNamesForTurn({
+      world: state.世界,
+      npcs: state.NPC,
+      history: recallHistory,
+      userInput: sourceInput,
+      turnCount: state.turnCount,
+    }),
+    originalProtagonist: state.世界.原著主角,
   };
   const recallQuery = buildMainRecallQuery({
     userInput: sourceInput,

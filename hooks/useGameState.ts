@@ -177,6 +177,10 @@ export interface UseGameStateReturn {
   setWorkflowHint: React.Dispatch<React.SetStateAction<string>>;
   workflowStatus: 'searching' | 'done' | '';
   setWorkflowStatus: React.Dispatch<React.SetStateAction<'searching' | 'done' | ''>>;
+  liveRecallSummary: string;
+  setLiveRecallSummary: React.Dispatch<React.SetStateAction<string>>;
+  liveRecallFullContent: string;
+  setLiveRecallFullContent: React.Dispatch<React.SetStateAction<string>>;
   /** 变量模型校准正在跑（正文已落地，变量在结算中）。期间禁止发下一轮。 */
   pendingVariable: boolean;
   setPendingVariable: React.Dispatch<React.SetStateAction<boolean>>;
@@ -213,6 +217,8 @@ export function useGameState(): UseGameStateReturn {
   const [streamingMessage, setStreamingMessage] = useState('');
   const [workflowHint, setWorkflowHint] = useState('');
   const [workflowStatus, setWorkflowStatus] = useState<'searching' | 'done' | ''>('');
+  const [liveRecallSummary, setLiveRecallSummary] = useState('');
+  const [liveRecallFullContent, setLiveRecallFullContent] = useState('');
   const [pendingVariable, setPendingVariable] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
@@ -416,6 +422,8 @@ export function useGameState(): UseGameStateReturn {
     streamingMessage, setStreamingMessage,
     workflowHint, setWorkflowHint,
     workflowStatus, setWorkflowStatus,
+    liveRecallSummary, setLiveRecallSummary,
+    liveRecallFullContent, setLiveRecallFullContent,
     pendingVariable, setPendingVariable,
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,

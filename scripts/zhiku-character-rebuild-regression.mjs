@@ -8,10 +8,15 @@ const preset = fs.readFileSync('data/zhikuPreset.ts', 'utf8');
 const model = fs.readFileSync('models/zhiku.ts', 'utf8');
 const chatModel = fs.readFileSync('models/chat.ts', 'utf8');
 const panel = fs.readFileSync('components/features/GameSystems/ZhikuPanel.tsx', 'utf8');
+const app = fs.readFileSync('App.tsx', 'utf8');
+const leftPanel = fs.readFileSync('components/layout/LeftPanel.tsx', 'utf8');
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
 const state = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
 const retrieval = fs.readFileSync('services/zhikuRetrieval.ts', 'utf8');
+const zhikuCot = fs.readFileSync('prompts/cot/zhikuCot.ts', 'utf8');
+const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
+const npcPresence = fs.readFileSync('hooks/useGame/npcPresence.ts', 'utf8');
 const storyProgress = fs.readFileSync('services/storyProgressService.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const settingsModel = fs.readFileSync('models/settings.ts', 'utf8');
@@ -171,7 +176,11 @@ assert(
 );
 assert(
   retrieval.includes('sceneContext?.npcNames') &&
-    retrieval.includes('ZHIKU_SCENE_CHARACTER_HINTS') &&
+    !retrieval.includes('ZHIKU_SCENE_CHARACTER_HINTS') &&
+    retrieval.includes('buildCharacterDetectionText') &&
+    retrieval.includes("!/^当前地点[:：]/") &&
+    retrieval.includes('黑塔空间站') &&
+    retrieval.includes('空间站[「“"]?黑塔') &&
     retrieval.includes('主体|OOC|风险') &&
     retrieval.includes('人物主体人格用于校准口吻与行为边界') &&
     retrieval.includes('外貌、性格、说话方式、行为习惯、关系边界与禁止误写字段是角色表现的优先锚点') &&
@@ -182,7 +191,32 @@ assert(
     retrieval.includes('性格锚点：') &&
     retrieval.includes('说话方式：') &&
     ['外貌：', '性格：', '口吻：', '行为：', '关系边界：', '禁止误写：'].every((label) => retrieval.includes(label)),
-  'zhiku retrieval must prioritize in-scene character persona anchors.',
+  'zhiku retrieval must prioritize explicit in-scene character persona anchors without using scene-default character fallback.',
+);
+assert(
+  systemPromptBuilder.includes('# 角色在场状态') &&
+    systemPromptBuilder.includes('当前明确在场/同行') &&
+    systemPromptBuilder.includes('近期相关但不在场') &&
+    systemPromptBuilder.includes('预期登场/需提前校准') &&
+    systemPromptBuilder.includes('允许智库提前召回口吻和人格') &&
+    systemPromptBuilder.includes('不得自动让黑塔本人出场或召回黑塔人格'),
+  'main prompt must expose current present/absent character status and prevent location-only persona recall.',
+);
+assert(
+  npcPresence.includes('getAnticipatedNpcNamesForTurn') &&
+    npcPresence.includes("addUnique(names, '帕姆')") &&
+    npcPresence.includes('getZhikuNpcNamesForTurn') &&
+    npcPresence.includes("originalProtagonist === '星'") &&
+    npcPresence.includes("originalProtagonist === '穹'"),
+  'npc presence helpers must expose anticipated character recall and filter 星/穹 by single-protagonist mode.',
+);
+assert(
+  retrieval.includes('originalProtagonist') &&
+    retrieval.includes('isAllowedOriginalProtagonistName') &&
+    retrieval.includes('isAllowedOriginalProtagonistEntry') &&
+    retrieval.includes("originalProtagonist === '星'") &&
+    retrieval.includes("originalProtagonist === '穹'"),
+  'zhiku retrieval must gate 星/穹 character entries by the selected original protagonist mode.',
 );
 assert(
   retrieval.includes('/未解锁|锁定|只读/i') &&
@@ -208,15 +242,32 @@ assert(
   'default zhiku recall count should be 8.',
 );
 assert(
+  zhikuCot.includes('上下文故事分析') &&
+    zhikuCot.includes('前文已经出现了谁') &&
+    zhikuCot.includes('剧情下一步最可能牵出哪些角色或地点') &&
+    zhikuCot.includes('角色状态归类') &&
+    zhikuCot.includes('预期登场判断') &&
+    zhikuCot.includes('避免首次出场时乱写') &&
+    zhikuCot.includes('黑塔空间站') &&
+    zhikuCot.includes('输出只允许是最终编号分组'),
+  'zhiku CoT must reason over story context, present/anticipated characters, and gate location names before selecting recall entries.',
+);
+assert(
   retrieval.includes('characterEntries?: 智库条目[]') &&
     retrieval.includes('strongEntries?: 智库条目[]') &&
     retrieval.includes('weakEntries?: 智库条目[]') &&
     retrieval.includes('interface 智库召回分组') &&
+    retrieval.includes('const CHARACTER_ANCHOR_ENTRY_LIMIT = 10') &&
+    retrieval.includes('const CHARACTER_ANCHOR_ENTRIES_PER_ROLE = 2') &&
+    retrieval.includes('function getCharacterAnchorLimit') &&
     retrieval.includes('function isNormalRecallEntry') &&
     retrieval.includes("entry.分类 !== 'character' && entry.分类 !== 'story'") &&
-    retrieval.includes('角色相关资料：【编号】|【编号】') &&
+    retrieval.includes('角色相关资料：【编号】|【编号】|【编号】|【编号】') &&
     retrieval.includes('输出格式必须严格为三行') &&
     retrieval.includes('角色相关资料只挑') &&
+    retrieval.includes('多人同场时优先覆盖每个在场/预期登场角色的主体人格与 OOC 风险') &&
+    retrieval.includes('本回合召回上下文') &&
+    retrieval.includes('弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留') &&
     retrieval.includes('不要把 character 条目放进强/弱相关') &&
     retrieval.includes('characterEntries: characterAnchors') &&
     retrieval.includes('strongEntries: primaryEntries') &&
@@ -226,7 +277,7 @@ assert(
     retrieval.includes("formatGroup('角色相关资料', groups.characterEntries)") &&
     retrieval.includes("formatGroup('强相关资料', groups.strongEntries)") &&
     retrieval.includes("formatGroup('弱相关资料', groups.weakEntries)"),
-  'zhiku recall must keep character persona entries in separate slots from strong/weak normal references.',
+    'zhiku recall must keep character persona entries in separate slots from strong/weak normal references.',
 );
 assert(
     contextSnapshot.includes('本地召回诊断') &&
@@ -236,8 +287,10 @@ assert(
     contextSnapshot.includes('historyThroughLatestUser') &&
     contextSnapshot.includes('主流程增强召回查询') &&
     contextSnapshot.includes('buildMainRecallQuery({') &&
+    contextSnapshot.includes('getZhikuNpcNamesForTurn') &&
+    contextSnapshot.includes('originalProtagonist: state.世界.原著主角') &&
     contextSnapshot.includes('zhikuDiagnostics.被门禁过滤') &&
-    contextSnapshot.includes('npcNames: state.NPC') &&
+    contextSnapshot.includes('npcNames: sceneContext.npcNames') &&
     contextSnapshot.includes('相关角色') &&
     contextSnapshot.includes('人物锚点') &&
     contextSnapshot.includes('zhikuDiagnostics.角色相关资料') &&
@@ -896,6 +949,18 @@ assert(
   entries.some((entry) => entry.关键词?.includes('角色:帕姆') && entry.关键词?.includes('非NSFW')),
   'Pom-Pom must keep the non-NSFW creature-form boundary.',
 );
+const pomPomEntries = entries.filter((entry) => entry.关键词?.includes('角色:帕姆'));
+const pomPomText = JSON.stringify(pomPomEntries);
+assert(
+  pomPomText.includes('第三人称自称') &&
+    pomPomText.includes('某某乘客') &&
+    pomPomText.includes('列车长权威') &&
+    pomPomText.includes('装忙') &&
+    pomPomText.includes('调节温度') &&
+    pomPomText.includes('照顾植物') &&
+    pomPomText.includes('Fandom Pom-Pom Messages'),
+  'Pom-Pom persona must preserve canon-like speech and daily conductor behavior anchors.',
+);
 
 function tagValues(entry, key) {
   return (entry.关键词 ?? [])
@@ -1063,19 +1128,56 @@ assert(
   sendWorkflow.includes('type 智库召回诊断') &&
     sendWorkflow.includes('formatZhikuDiagnosticsPreview') &&
     sendWorkflow.includes('zhikuPreview?.diagnostics') &&
+    sendWorkflow.includes('retrieveZhikuContextWithModel(\n            state.智库,\n            recallQuery,') &&
     sendWorkflow.includes('智库召回诊断：'),
-  'saved per-turn request context must include zhiku retrieval diagnostics.',
+  'saved per-turn request context must include zhiku retrieval diagnostics, and main zhiku recall must use the enhanced recall query rather than raw user input.',
 );
 assert(
   turnItem.includes('回忆、剧情编织与智库预览'),
   'turn request context heading must mention zhiku because recallPreview now includes zhiku diagnostics.',
 );
 assert(
-  chatModel.includes('zhikuRecallPreview?: string') &&
+  chatModel.includes('recallSummary?: string') &&
+    chatModel.includes('recallFullContent?: string') &&
+    chatModel.includes('zhikuRecallPreview?: string') &&
+    chatModel.includes('zhikuRecallInjection?: string') &&
+    sendWorkflow.includes('formatZhikuRecallSummary(zhikuPreview?.diagnostics)') &&
+    sendWorkflow.includes('formatYitingRecallSummary(yitingPreview?.previewText)') &&
+    sendWorkflow.includes("state.setLiveRecallSummary('智库召回：检索中\\n记忆召回：检索中')") &&
+    sendWorkflow.includes('state.setLiveRecallSummary(recallSummaryForTurn)') &&
+    sendWorkflow.includes('state.setLiveRecallFullContent(recallFullContentForTurn)') &&
+    sendWorkflow.includes('const recallFullContentForTurn = [') &&
+    sendWorkflow.includes('recallSummary: recallSummaryForTurn') &&
+    sendWorkflow.includes('recallFullContent: recallFullContentForTurn') &&
+    sendWorkflow.includes('【智库完整召回】') &&
+    sendWorkflow.includes('【记忆完整召回】') &&
     sendWorkflow.includes('zhikuRecallPreview: formatZhikuDiagnosticsPreview(zhikuPreview?.diagnostics)') &&
+    sendWorkflow.includes("zhikuRecallInjection: zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : ''") &&
     contextSnapshot.includes('msg.debugContext?.zhikuRecallPreview') &&
     !contextSnapshot.includes('msg.debugContext?.recallPreview?.trim()'),
-  'zhiku context tab must read the saved zhiku-only diagnostics instead of the combined memory/story/zhiku preview.',
+  'debug context must save concise recall summary plus zhiku diagnostics.',
+);
+assert(
+  app.includes('latestRecallSummary') &&
+    app.includes('latestRecallFullContent') &&
+    app.includes('state.loading && state.liveRecallSummary.trim()') &&
+    app.includes('state.loading && state.liveRecallFullContent.trim()') &&
+    app.includes('debugContext?.recallSummary') &&
+    app.includes('recallSummary={latestRecallSummary}') &&
+    app.includes('recallFullContent={latestRecallFullContent}') &&
+    leftPanel.includes('function RecallSummaryWindow') &&
+    leftPanel.includes('召回摘要') &&
+    leftPanel.includes("expanded ? '收起' : '完整'") &&
+    leftPanel.includes('本回合无召回摘要'),
+  'main UI must show concise zhiku/yiting recall summaries in the left sidebar instead of full injection text.',
+);
+assert(
+  retrieval.includes('## 角色执行约束') &&
+    retrieval.includes('正文必须至少在该角色的一处对话、动作、表情或反应里体现性格锚点与说话方式') &&
+    retrieval.includes('禁止把原著角色写成通用 NPC、无差别旁白工具人或长期沉默背景板') &&
+    retrieval.includes('关系边界') &&
+    retrieval.includes('禁止误写'),
+  'zhiku character injection must explicitly turn recalled persona anchors into executable main-story constraints.',
 );
 assert(
   runtimeUnlock.includes('applyStoryArchiveZhikuRuntimeUnlock') &&

@@ -2,7 +2,7 @@ import type { API配置项, 记忆系统设置, 忆庭API覆盖 } from '@/models
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 
-export type MemoryCompressionKind = 'short' | 'long';
+export type MemoryCompressionKind = 'short' | 'middle' | 'long';
 
 export interface MemoryCompressionSource {
   kind: MemoryCompressionKind;
@@ -57,7 +57,7 @@ export async function summarizeMemoryBatch(
 
   const userPrompt = [
     `回合：${source.turn}`,
-    `压缩类型：${source.kind === 'short' ? '即时 -> 短期' : '短期 -> 长期'}`,
+    `压缩类型：${getCompressionLabel(source.kind)}`,
     '本批材料如下：',
     source.items.map((item, index) => `${index + 1}. ${item}`).join('\n'),
   ].join('\n');
@@ -75,7 +75,7 @@ export async function summarizeMemoryBatch(
       {
         retries: retryCount,
         signal,
-        label: source.kind === 'short' ? '即时记忆压缩' : '短期记忆压缩',
+        label: source.kind === 'short' ? '即时记忆压缩' : source.kind === 'middle' ? '中期记忆压缩' : '长期记忆压缩',
       },
     );
     const summary = normalizeSummaryOutput(raw);
@@ -89,7 +89,7 @@ export async function summarizeMemoryBatch(
 }
 
 function buildFallbackSummary(items: string[], turn: number, kind: MemoryCompressionKind): string {
-  const title = kind === 'short' ? '即时转短期' : '短期转长期';
+  const title = kind === 'short' ? '即时转短期' : kind === 'middle' ? '短期转中期' : '中期转长期';
   const maxLines = kind === 'short' ? 6 : 8;
   const lines = dedupeLines(
     items
@@ -102,6 +102,12 @@ function buildFallbackSummary(items: string[], turn: number, kind: MemoryCompres
   }
 
   return [`【${title}·回合${turn}】`, ...lines.map((line) => (line.startsWith('- ') ? line : `- ${line}`))].join('\n');
+}
+
+function getCompressionLabel(kind: MemoryCompressionKind): string {
+  if (kind === 'short') return '即时 -> 短期';
+  if (kind === 'middle') return '短期 -> 中期';
+  return '中期 -> 长期';
 }
 
 function normalizeSummaryOutput(raw: string): string {

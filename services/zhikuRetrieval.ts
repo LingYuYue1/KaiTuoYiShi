@@ -43,7 +43,11 @@ interface 智库场景上下文 {
   startSceneName?: string;
   currentLocation?: string;
   npcNames?: string[];
+  originalProtagonist?: '星' | '穹' | '星穹双主角';
 }
+
+const CHARACTER_ANCHOR_ENTRY_LIMIT = 10;
+const CHARACTER_ANCHOR_ENTRIES_PER_ROLE = 2;
 
 const ZHIKU_SCENE_HINTS: Record<string, string[]> = {
   heita_station_incident: ['黑塔空间站', '黑塔', '空间站', '主控舱段', '基座舱段', '收容舱段', '支援舱段', '防卫科'],
@@ -59,13 +63,6 @@ const ZHIKU_STOP_WORDS = new Set([
   '相关', '看看', '看看吧', '继续', '一下', '一下子', '这边', '那边', '这里', '那里',
   '当前', '现在', '本回合', '回合', '系统', '模块', '条目',
 ]);
-
-const ZHIKU_SCENE_CHARACTER_HINTS: Record<string, string[]> = {
-  heita_station_incident: ['三月七', '丹恒', '艾丝妲', '阿兰', '黑塔'],
-  astral_express_temp_passenger: ['三月七', '丹恒', '姬子', '瓦尔特'],
-  xianzhou_luofu_entry: ['三月七', '丹恒', '瓦尔特'],
-  jarilo_frontier: ['三月七', '丹恒'],
-};
 
 function isMainStoryInjectableZhikuEntry(entry: 智库条目): boolean {
   return !getMainStoryBlockReason(entry);
@@ -156,6 +153,7 @@ function buildRelevantCharacterNames(system: 智库系统, query: string, sceneC
       (system.条目 ?? [])
         .filter((entry) => entry.分类 === 'character')
         .flatMap((entry) => 获取智库人物名列表(entry))
+        .filter((name) => isAllowedOriginalProtagonistName(name, sceneContext?.originalProtagonist))
         .filter(Boolean),
     ),
   ).sort((a, b) => b.length - a.length);
@@ -163,9 +161,7 @@ function buildRelevantCharacterNames(system: 智库系统, query: string, sceneC
 
   const explicitNames = new Set<string>();
   const joinedText = [
-    query,
-    sceneContext?.currentLocation ?? '',
-    sceneContext?.startSceneName ?? '',
+    buildCharacterDetectionText(query),
     ...(sceneContext?.npcNames ?? []),
   ].filter(Boolean).join(' ');
   for (const name of allCharacterNames) {
@@ -175,9 +171,7 @@ function buildRelevantCharacterNames(system: 智库系统, query: string, sceneC
   }
   if (explicitNames.size > 0) return Array.from(explicitNames);
 
-  const sceneDefaults = sceneContext?.startScenarioId ? ZHIKU_SCENE_CHARACTER_HINTS[sceneContext.startScenarioId] : undefined;
-  if (!sceneDefaults?.length) return [];
-  return sceneDefaults.filter((name) => allCharacterNames.some((candidate) => namesLikelySame(candidate, name)));
+  return [];
 }
 
 function namesLikelySame(a: string, b: string): boolean {
@@ -189,22 +183,33 @@ function namesLikelySame(a: string, b: string): boolean {
 function nameAppearsInText(name: string, text: string): boolean {
   const cleanName = name.trim();
   if (!cleanName || !text.trim()) return false;
+  const semanticText = cleanName === '黑塔'
+    ? text.replace(/空间站[「“"]?黑塔[」”"]?|黑塔空间站/g, '')
+    : text;
   if (cleanName.length <= 1) {
     const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|[\\s，。！？、：；“”"'（）()《》【】])${escaped}($|[\\s，。！？、：；“”"'（）()《》【】])`).test(text);
+    return new RegExp(`(^|[\\s，。！？、：；“”"'（）()《》【】])${escaped}($|[\\s，。！？、：；“”"'（）()《》【】])`).test(semanticText);
   }
-  return text.includes(cleanName);
+  return semanticText.includes(cleanName);
+}
+
+function buildCharacterDetectionText(query: string): string {
+  return query
+    .split(/\r?\n/)
+    .filter((line) => !/^当前地点[:：]/.test(line.trim()))
+    .join('\n');
 }
 
 function buildCharacterAnchorEntries(system: 智库系统, query: string, limit: number, sceneContext?: 智库场景上下文): 智库条目[] {
   const relevantNames = buildRelevantCharacterNames(system, query, sceneContext);
   if (!relevantNames.length) return [];
 
-  const anchorLimit = Math.min(Math.max(2, Math.ceil(limit / 2)), 4);
+  const anchorLimit = getCharacterAnchorLimit(limit);
   const entriesByName = new Map<string, 智库条目[]>();
   for (const entry of system.条目 ?? []) {
     if (entry.分类 !== 'character' || !isMainStoryInjectableZhikuEntry(entry)) continue;
     const characterNames = 获取智库人物名列表(entry);
+    if (!isAllowedOriginalProtagonistEntry(characterNames, sceneContext?.originalProtagonist)) continue;
     const matchedName = relevantNames.find((name) => characterNames.some((characterName) => namesLikelySame(characterName, name)));
     if (!matchedName) continue;
     const current = entriesByName.get(matchedName) ?? [];
@@ -217,13 +222,27 @@ function buildCharacterAnchorEntries(system: 智库系统, query: string, limit:
     const pickedForRole = (entriesByName.get(name) ?? [])
       .sort(比较智库人物节点)
       .filter(isCharacterAnchorNode)
-      .slice(0, 2);
+      .slice(0, CHARACTER_ANCHOR_ENTRIES_PER_ROLE);
     for (const entry of pickedForRole) {
       if (!anchors.some((item) => item.id === entry.id)) anchors.push(entry);
       if (anchors.length >= anchorLimit) return anchors;
     }
   }
   return anchors;
+}
+
+function getCharacterAnchorLimit(limit: number): number {
+  return Math.min(Math.max(4, limit), CHARACTER_ANCHOR_ENTRY_LIMIT);
+}
+
+function isAllowedOriginalProtagonistName(name: string, originalProtagonist?: 智库场景上下文['originalProtagonist']): boolean {
+  if (originalProtagonist === '星') return !namesLikelySame(name, '穹');
+  if (originalProtagonist === '穹') return !namesLikelySame(name, '星');
+  return true;
+}
+
+function isAllowedOriginalProtagonistEntry(names: string[], originalProtagonist?: 智库场景上下文['originalProtagonist']): boolean {
+  return names.every((name) => isAllowedOriginalProtagonistName(name, originalProtagonist));
 }
 
 function isCharacterAnchorNode(entry: 智库条目): boolean {
@@ -354,14 +373,15 @@ export async function retrieveZhikuContextWithModel(
     '- 角色相关资料只挑 character / 人物表现 / 主体人格 / OOC风险 / 角色边界类条目，用于校准口吻、行为和人设稳定性。',
     '- 强相关资料、弱相关资料只挑非角色类设定资料，例如地点、组织、物品、概念、敌人、机制等；不要把 character 条目放进强/弱相关。',
     '- 如果候选中有在场角色的“角色主体 / 主体人格 / OOC风险”，它们优先放入角色相关资料，且不占用强/弱相关资料名额。',
+    `- 角色相关资料最多可选 ${CHARACTER_ANCHOR_ENTRY_LIMIT} 条；多人同场时优先覆盖每个在场/预期登场角色的主体人格与 OOC 风险。`,
     '- 形态、命途、阶段资料不得覆盖主体人格；未解锁、只读或非主剧情范围的人物资料不得当作当前事实。',
     '- 原著剧情正文不参与智库普通召回；剧情推进由剧情编织系统管理，避免已完成剧情重复注入。',
     '- 如果有连续事件链、人物关系链、地点链、物品链，优先保留承接最强的条目。',
-    '- 强相关资料可多于 1 条，但不要为了凑数选择弱相关。若完全无关，对应分类写无。',
+    '- 强相关资料可多于 1 条；弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留。若完全无关，对应分类写无。',
     '- 返回时按相关性从高到低排序。',
     '',
     '输出格式必须严格为三行：',
-    '角色相关资料：【编号】|【编号】',
+    '角色相关资料：【编号】|【编号】|【编号】|【编号】',
     '强相关资料：【编号】|【编号】',
     '弱相关资料：【编号】|【编号】',
     '若某类为空，写“无”。',
@@ -371,7 +391,7 @@ export async function retrieveZhikuContextWithModel(
   ].join('\n');
 
   const userPrompt = [
-    `玩家当前输入：${query.trim()}`,
+    `本回合召回上下文：${query.trim()}`,
     `召回条数上限：${limit}`,
     '',
     '候选资料：',
@@ -529,7 +549,8 @@ function parseZhikuIndexes(
       if (isWeak && isNormalRecallEntry(entry) && !weak.includes(index) && !strong.includes(index)) weak.push(index);
     }
   }
-  const characterEntries = mergeZhikuEntries(character.map((index) => candidates[index]), fallbackCharacterEntries);
+  const characterEntries = mergeZhikuEntries(character.map((index) => candidates[index]), fallbackCharacterEntries)
+    .slice(0, getCharacterAnchorLimit(limit));
   return {
     characterEntries,
     strongEntries: strong.map((index) => candidates[index]).slice(0, limit),
@@ -551,6 +572,14 @@ function buildZhikuInjection(groups: 智库召回分组, sceneHints: string[] = 
     '',
     '以下内容来自原著资料中枢的检索结果。它们用于提供设定依据、人物线索、地点、道具与概念参考，不直接注入原著剧情正文；若与当前已发生剧情冲突，以当前剧情为准。',
     '人物主体人格用于校准口吻与行为边界；外貌、性格、说话方式、行为习惯、关系边界与禁止误写字段是角色表现的优先锚点；形态/命途资料不得覆盖主体人格；未解锁资料不得当作当前事实。',
+    groups.characterEntries.length
+      ? [
+          '## 角色执行约束',
+          '- 本回合若出现“角色相关资料”中的人物，正文必须至少在该角色的一处对话、动作、表情或反应里体现性格锚点与说话方式。',
+          '- 不得只把人物资料当作姓名表；禁止把原著角色写成通用 NPC、无差别旁白工具人或长期沉默背景板。',
+          '- “关系边界”和“禁止误写”按硬边界处理；若当前剧情需要偏离，必须先用正文事实解释偏离原因。',
+        ].join('\n')
+      : '',
     sceneHints.length ? `当前开局锚点：${sceneHints.slice(0, 8).join('、')}` : '当前开局锚点：无',
     '',
     ...formatGroup('角色相关资料', groups.characterEntries),

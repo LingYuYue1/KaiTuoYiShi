@@ -1,5 +1,6 @@
 import { jsonResponse, optionsResponse, type PagesContextLike } from './auth/_shared';
 
+const PRESENCE_SYSTEM_ENABLED = false;
 const HEARTBEAT_TTL_MS = 2 * 60 * 1000;
 const SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 500;
@@ -28,7 +29,8 @@ type PresenceBody = {
   ttlSeconds: number;
   updatedAt: string;
   serverTime: string;
-  storage: 'r2' | 'kv' | 'memory';
+  storage: 'r2' | 'kv' | 'memory' | 'disabled';
+  disabled?: boolean;
 };
 
 type PresenceMemoryState = {
@@ -147,6 +149,21 @@ function buildPresenceBody(sessions: PresenceSessionRecord[], now: number, stora
     updatedAt: serverTime,
     serverTime,
     storage,
+  };
+}
+
+function buildDisabledPresenceBody(): PresenceBody {
+  const serverTime = new Date().toISOString();
+  return {
+    online: 0,
+    onlineCount: 0,
+    onlineSessionCount: 0,
+    totalRecentCount: 0,
+    ttlSeconds: 0,
+    updatedAt: serverTime,
+    serverTime,
+    storage: 'disabled',
+    disabled: true,
   };
 }
 
@@ -273,12 +290,18 @@ function noStore(init: ResponseInit = {}): ResponseInit {
 export const onRequestOptions = async (): Promise<Response> => optionsResponse();
 
 export const onRequestGet = async ({ env }: PagesContextLike): Promise<Response> => {
+  if (!PRESENCE_SYSTEM_ENABLED) {
+    return jsonResponse(buildDisabledPresenceBody(), noStore());
+  }
   const now = Date.now();
   const { sessions, storage } = await readPresenceSessions(env, now);
   return jsonResponse(buildPresenceBody(sessions, now, storage), noStore());
 };
 
 export const onRequestPost = async ({ request, env }: PagesContextLike): Promise<Response> => {
+  if (!PRESENCE_SYSTEM_ENABLED) {
+    return jsonResponse(buildDisabledPresenceBody(), noStore());
+  }
   const now = Date.now();
   let sessionId = '';
   let path = '';

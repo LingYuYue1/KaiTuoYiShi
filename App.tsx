@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { LandingPage, type PresenceSnapshot } from '@/components/layout/LandingPage';
+import { LandingPage } from '@/components/layout/LandingPage';
 import { GameView } from '@/components/layout/GameView';
 import { TopBar } from '@/components/layout/TopBar';
 import { LeftPanel } from '@/components/layout/LeftPanel';
@@ -51,17 +51,6 @@ import { loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
-const PRESENCE_SESSION_KEY = 'kty_presence_session_id';
-
-function getPresenceSessionId(): string {
-  if (typeof window === 'undefined') return '';
-  const existing = window.sessionStorage.getItem(PRESENCE_SESSION_KEY);
-  if (existing) return existing;
-  const sessionId = `kty_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  window.sessionStorage.setItem(PRESENCE_SESSION_KEY, sessionId);
-  return sessionId;
-}
-
 export default function App() {
   const { state, actions } = useGame();
   const [showSettings, setShowSettings] = useState(false);
@@ -73,8 +62,6 @@ export default function App() {
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
   const [activeSystem, setActiveSystem] = useState<GameSystemId | null>(null);
-  const [presence, setPresence] = useState<PresenceSnapshot | null>(null);
-  const [presenceFailed, setPresenceFailed] = useState(false);
 
   const handleMenuSelect = (id: GameSystemId) => {
     if (id === 'worldbook') {
@@ -91,6 +78,36 @@ export default function App() {
   const currentStoryChapter = useMemo(() => {
     return getCurrentStoryChapterLabel(state.剧情编织);
   }, [state.剧情编织]);
+  const latestRecallSummary = useMemo(() => {
+    if (state.loading && state.liveRecallSummary.trim()) return state.liveRecallSummary.trim();
+    const latest = [...state.chatHistory]
+      .reverse()
+      .find((msg) =>
+        msg.role === 'assistant' &&
+        (
+          msg.debugContext?.recallSummary?.trim() ||
+          msg.debugContext?.zhikuRecallPreview?.trim()
+        ),
+      );
+    return latest?.debugContext?.recallSummary?.trim()
+      || latest?.debugContext?.zhikuRecallPreview?.trim()
+      || '';
+  }, [state.chatHistory, state.liveRecallSummary, state.loading]);
+  const latestRecallFullContent = useMemo(() => {
+    if (state.loading && state.liveRecallFullContent.trim()) return state.liveRecallFullContent.trim();
+    const latest = [...state.chatHistory]
+      .reverse()
+      .find((msg) =>
+        msg.role === 'assistant' &&
+        (
+          msg.debugContext?.recallFullContent?.trim() ||
+          msg.debugContext?.zhikuRecallInjection?.trim()
+        ),
+      );
+    return latest?.debugContext?.recallFullContent?.trim()
+      || latest?.debugContext?.zhikuRecallInjection?.trim()
+      || '';
+  }, [state.chatHistory, state.liveRecallFullContent, state.loading]);
   const latestActiveTask = [...state.queueTasks].reverse().find((task) =>
     ['main_story', 'memory', 'variable', 'news', 'yiting', 'zhiku'].includes(task.id),
   );
@@ -112,43 +129,6 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const sessionId = getPresenceSessionId();
-    if (!sessionId) return undefined;
-    const heartbeat = async () => {
-      try {
-        const res = await fetch('/api/presence', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ sessionId, path: `${window.location.pathname}${window.location.search}`, view: state.view }),
-          cache: 'no-store',
-        });
-        if (!res.ok) throw new Error(`presence ${res.status}`);
-        const data = await res.json() as PresenceSnapshot;
-        if (!cancelled) {
-          setPresence(data);
-          setPresenceFailed(false);
-        }
-      } catch {
-        if (!cancelled) setPresenceFailed(true);
-      }
-    };
-    void heartbeat();
-    const timer = window.setInterval(() => {
-      if (!document.hidden) void heartbeat();
-    }, 30_000);
-    const handleVisibilityChange = () => {
-      if (!document.hidden) void heartbeat();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [state.view]);
-
   // ── Home ──
   if (state.view === 'home') {
     return (
@@ -163,8 +143,6 @@ export default function App() {
           onWorldbookManager={() => setShowWorldbookManager(true)}
           onZhikuManager={() => setShowZhikuManager(true)}
           onCloudSave={() => setShowCloudSave(true)}
-          presence={presence}
-          presenceFailed={presenceFailed}
         />
         {showWorldbookManager && (
           <WorldbookManagerModal
@@ -270,7 +248,7 @@ export default function App() {
       state.set世界(worldState);
       state.setChatHistory([]);
       state.setTurnCount(1);
-      state.set记忆({ 即时记忆: [], 短期记忆: [], 长期记忆: [] });
+      state.set记忆({ 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
       state.set忆庭({ 回忆档案: [] });
       // 重置运行时游戏系统切片，避免上一局存档残留污染新局
       state.setNPC([]);
@@ -316,6 +294,8 @@ export default function App() {
             onOpenPhone={() => setShowPhone(true)}
             phoneUnread={state.手机.unreadTotal}
             currentStoryChapter={currentStoryChapter}
+            recallSummary={latestRecallSummary}
+            recallFullContent={latestRecallFullContent}
           />
         }
         rightPanel={

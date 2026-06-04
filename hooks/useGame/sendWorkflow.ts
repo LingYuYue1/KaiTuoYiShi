@@ -1,6 +1,7 @@
 ﻿import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { 创建聊天消息, type 聊天消息, type 回合快照 } from '@/models/chat';
 import { sendChatMessage } from '@/services/ai/text';
+import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { callVariableModel } from '@/services/ai/variableModel';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import {
@@ -32,12 +33,19 @@ import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { 创建默认智库系统设置 } from '@/models/settings';
 import { 提取NPC同行记忆文本列表, type NPC记录, type NPC同行记忆条目 } from '@/models/npc';
 import type { 手机系统, 主动来信种子 } from '@/models/phone';
-import { buildImmediateStoryReview, buildMainRecallQuery, getMainHistoryWindow } from './historyWindow';
+import {
+  buildImmediateStoryReview,
+  buildLeanAssistantHistoryContent,
+  buildMainRecallQuery,
+  getMainHistoryWindow,
+} from './historyWindow';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
+import { appendWorldEvents } from '@/utils/worldEvents';
+import { getZhikuNpcNamesForTurn } from './npcPresence';
 
 function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情编织系统): string {
   const before = previous.当前进度;
@@ -126,6 +134,49 @@ function formatZhikuDiagnosticsPreview(diagnostics?: 智库召回诊断): string
       : '门禁过滤：无',
     diagnostics.检查项.length ? `检查项：${diagnostics.检查项.join('；')}` : '',
   ].filter(Boolean).join('\n');
+}
+
+function getZhikuEntryKind(title: string): string {
+  if (/【人物】|角色|人物/.test(title)) return '角色';
+  if (/【地点】|地点|空间站|列车|贝洛伯格|罗浮|仙舟|匹诺康尼|雅利洛/.test(title)) return '地点';
+  if (/【组织】|阵营|组织|公司|列车组|天才俱乐部/.test(title)) return '组织';
+  if (/【物品】|道具|奇物|星核|光锥/.test(title)) return '物品';
+  if (/【敌人】|敌人|军团|裂界|怪物/.test(title)) return '敌人';
+  return '资料';
+}
+
+function cleanRecallTitle(title: string): string {
+  return String(title || '')
+    .replace(/^【[^】]+】/, '')
+    .split(/[｜|：:]/)[0]
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+function formatZhikuRecallSummary(diagnostics?: 智库召回诊断): string {
+  const titles = diagnostics?.已注入资料 ?? [];
+  if (!titles.length) return '智库召回：无';
+  const items = titles
+    .map((title) => {
+      const name = cleanRecallTitle(title);
+      return name ? `${getZhikuEntryKind(title)}${name}` : '';
+    })
+    .filter(Boolean);
+  return `智库召回：${items.length ? items.join('，') : '无'}`;
+}
+
+function formatYitingRecallSummary(previewText?: string): string {
+  const text = String(previewText || '').trim();
+  if (!text) return '记忆召回：无';
+  const names = Array.from(
+    new Set(
+      text
+        .split(/[|\n，,]/)
+        .map((item) => item.replace(/^强回忆[:：]/, '').replace(/^弱回忆[:：]/, '').trim())
+        .filter((item) => item && item !== '无'),
+    ),
+  );
+  return `记忆召回：${names.length ? names.join('，') : '无'}`;
 }
 
 function getStoryWeavingWriteSignature(system: 剧情编织系统): string {
@@ -623,6 +674,8 @@ export async function executeSendWorkflow(
   state.setStreamingMessage('');
   state.setWorkflowHint('忆庭召回 / 智库检索中');
   state.setWorkflowStatus('searching');
+  state.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
+  state.setLiveRecallFullContent('');
   pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true });
   let pendingVariableStarted = false;
   let keepWorkflowHint = false;
@@ -691,6 +744,14 @@ export async function executeSendWorkflow(
       startScenarioId: effectiveWorld.起航之地ID,
       startSceneName: effectiveWorld.当前地点,
       currentLocation: effectiveWorld.当前地点,
+      npcNames: getZhikuNpcNamesForTurn({
+        world: effectiveWorld,
+        npcs: state.NPC,
+        history: updatedHistory,
+        userInput,
+        turnCount: state.turnCount,
+      }),
+      originalProtagonist: effectiveWorld.原著主角,
       currentScope,
       // 当前剧情模式，用于按 storyModeGate 过滤主线世界书（4 选 1）
       storyMode: effectiveWorld.剧情模式,
@@ -699,9 +760,7 @@ export async function executeSendWorkflow(
       userInput,
       history: updatedHistory,
       currentLocation: effectiveWorld.当前地点,
-      npcNames: state.NPC
-        .filter((npc) => npc.同行 || Number(npc.最近回合 || 0) >= Math.max(1, state.turnCount - 15))
-        .map((npc) => npc.姓名),
+      npcNames: worldbookCtx.npcNames,
     });
     let newsForPrompt = state.新闻;
     let openingNewsPreprocessed = false;
@@ -766,7 +825,7 @@ export async function executeSendWorkflow(
       zhikuRecallEnabled
         ? retrieveZhikuContextWithModel(
             state.智库,
-            worldbookCtx.recentUserInput,
+            recallQuery,
             state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
             state.gameSettings.智库系统 ?? 创建默认智库系统设置(),
             config,
@@ -780,12 +839,22 @@ export async function executeSendWorkflow(
         : Promise.resolve(null),
     ]);
     assertWorkflowActive();
+    const recallSummaryForTurn = [
+      formatZhikuRecallSummary(zhikuPreview?.diagnostics),
+      formatYitingRecallSummary(yitingPreview?.previewText),
+    ].join('\n');
+    const recallFullContentForTurn = [
+      zhikuPreview?.injection ? ['【智库完整召回】', zhikuPreview.injection].join('\n') : '',
+      yitingPreview?.injection ? ['【记忆完整召回】', yitingPreview.injection].join('\n') : '',
+    ].filter(Boolean).join('\n\n');
+    state.setLiveRecallSummary(recallSummaryForTurn);
+    state.setLiveRecallFullContent(recallFullContentForTurn);
     const memoryHint = isOpeningSystemTrigger
       ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
       : yitingPreview?.injection
-      ? `剧情回忆已命中，已暂停普通长短期记忆注入：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
+      ? `剧情回忆已命中，已暂停普通短中长期记忆注入：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
       : state.gameSettings.enableMemoryInjection
-      ? `记忆上下文已注入：即时 ${state.记忆.即时记忆.length} 条 / 短期 ${state.记忆.短期记忆.length} 条 / 长期 ${state.记忆.长期记忆.length} 条`
+      ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(state.记忆.中期记忆 ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
       : '记忆上下文已跳过';
     const yitingHint = !yitingEnabled
       ? '忆庭召回已关闭'
@@ -803,7 +872,7 @@ export async function executeSendWorkflow(
       : '智库已跳过';
     state.setWorkflowHint(isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}`);
     state.setWorkflowStatus('done');
-    const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory, 12) : '';
+    const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
     const storyRecallInjection = [
       immediateStoryReview
         ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n')
@@ -865,8 +934,7 @@ export async function executeSendWorkflow(
       if (msg.role === 'user') {
         apiMessages.push(msg);
       } else if (msg.role === 'assistant' && msg.parsedResponse) {
-        // Send the raw response text for AI context
-        apiMessages.push(创建聊天消息('assistant', msg.content));
+        apiMessages.push(创建聊天消息('assistant', buildLeanAssistantHistoryContent(msg)));
       }
     }
     if (isOpeningSystemTrigger) {
@@ -952,6 +1020,13 @@ export async function executeSendWorkflow(
         });
         const candidateText = (result.parsed.body?.trim() || result.fullText.trim() || streamedText.trim());
         if (!candidateText) {
+          void appendApiErrorReport({
+            source: '主剧情工作流',
+            config,
+            requestMode: state.gameSettings.enableStreaming && !forcePreviewStream && !isPageHidden() ? 'stream' : 'non-stream',
+            error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次返回空响应，触发自动重试。`),
+            responseText: result.fullText || streamedText || '（空响应）',
+          });
           if (attempt < Math.max(2, maxAttempts)) {
             console.warn(`[sendWorkflow] 第 ${attempt} 次返回空响应，自动重试。`);
             continue;
@@ -965,6 +1040,20 @@ export async function executeSendWorkflow(
           throw innerErr;
         }
         lastErr = innerErr;
+        const innerMessage = innerErr instanceof Error ? innerErr.message : String(innerErr ?? '');
+        const alreadyReportedByApiLayer =
+          innerMessage.includes('API Error') ||
+          innerMessage.includes('Failed to fetch') ||
+          innerMessage.includes('No response body');
+        if (!alreadyReportedByApiLayer) {
+          void appendApiErrorReport({
+            source: '主剧情工作流',
+            config,
+            requestMode: state.gameSettings.enableStreaming && !forcePreviewStream && !isPageHidden() ? 'stream' : 'non-stream',
+            error: innerErr,
+            responseText: streamedText || previewText || '',
+          });
+        }
         if (attempt >= maxAttempts) break;
         pushQueueTask(state, 'main_story', 'pending', {
           detail: `主剧情生成失败 ${attempt} 次，正在自动重试。`,
@@ -1043,7 +1132,10 @@ export async function executeSendWorkflow(
       debugContext: {
         systemPrompt,
         messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
+        recallSummary: recallSummaryForTurn,
+        recallFullContent: recallFullContentForTurn,
         zhikuRecallPreview: formatZhikuDiagnosticsPreview(zhikuPreview?.diagnostics),
+        zhikuRecallInjection: zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : '',
         recallPreview: [
           yitingPreview?.previewText ?? '',
           storyWeavingGate
@@ -1091,8 +1183,8 @@ export async function executeSendWorkflow(
     const yitingWithCompression = state.忆庭;
     pushQueueTask(state, 'memory', 'success', {
       detail: compression.usedModel
-        ? '即时/短期/长期记忆已调用记忆总结 API 完成整理。'
-        : '即时/短期/长期记忆已使用本地摘要完成整理。',
+        ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
+        : '即时/短期/中期/长期记忆已使用本地摘要完成整理。',
     });
 
     // 7 / 7a / 7b. 世界 + 旅人 的本回合修改全部累计到本地变量,最后一次性 set。
@@ -1107,7 +1199,7 @@ export async function executeSendWorkflow(
     if (parsedForDisplay.worldEvents.length) {
       worldAfter = {
         ...worldAfter,
-        全局事件: [...worldAfter.全局事件, ...parsedForDisplay.worldEvents],
+        全局事件: appendWorldEvents(worldAfter.全局事件, parsedForDisplay.worldEvents),
       };
     }
 

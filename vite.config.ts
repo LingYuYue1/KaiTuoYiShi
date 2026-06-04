@@ -1,9 +1,54 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { handleQianfanProxyRequest } from './services/ai/qianfanProxyCore';
+
+function readRequestBody(req: import('node:http').IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'kty-local-qianfan-proxy',
+      configureServer(server) {
+        server.middlewares.use('/api/qianfan', async (req, res) => {
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 200;
+            res.setHeader('content-type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({ ok: true }));
+            return;
+          }
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            res.setHeader('content-type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+            return;
+          }
+          const body = await readRequestBody(req);
+          const response = await handleQianfanProxyRequest(new Request('http://localhost/api/qianfan', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body,
+          }));
+          res.statusCode = response.status;
+          response.headers.forEach((value, key) => {
+            res.setHeader(key, value);
+          });
+          res.end(Buffer.from(await response.arrayBuffer()));
+        });
+      },
+    },
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),

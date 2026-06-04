@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS } from '@/models/path';
@@ -9,6 +10,8 @@ interface LeftPanelProps {
   onOpenPhone?: () => void;
   phoneUnread?: number;
   currentStoryChapter?: string;
+  recallSummary?: string;
+  recallFullContent?: string;
   desktop?: boolean;
 }
 
@@ -18,6 +21,8 @@ export function LeftPanel({
   onOpenPhone,
   phoneUnread = 0,
   currentStoryChapter,
+  recallSummary = '',
+  recallFullContent = '',
   desktop = true,
 }: LeftPanelProps) {
   const mainPath = traveler.命途列表?.find((path) => path.是否主命途) ?? traveler.命途列表?.[0];
@@ -182,8 +187,87 @@ export function LeftPanel({
             </div>
           </div>
         )}
+        <RecallSummaryWindow content={recallSummary} fullContent={recallFullContent} />
       </div>
     </div>
+  );
+}
+
+function RecallSummaryWindow({ content, fullContent }: { content: string; fullContent: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const trimmed = content.trim();
+  const full = fullContent.trim();
+  const lines = trimmed ? trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+  const entryCount = lines.reduce((sum, line) => {
+    const [, value = ''] = line.split(/[:：]/);
+    if (!value.trim() || value.trim() === '无') return sum;
+    return sum + value.split(/[，,|]/).map((item) => item.trim()).filter(Boolean).length;
+  }, 0);
+  return (
+    <section
+      className="mt-3 flex min-h-[150px] flex-1 flex-col overflow-hidden px-3 py-2.5"
+      style={{
+        background: 'linear-gradient(135deg, rgba(117,214,216,0.055), rgba(var(--tj-accent-primary),0.035))',
+        boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.22)',
+        clipPath:
+          'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-serif text-[10px] tracking-[0.28em]" style={{ color: 'rgba(117,214,216,0.86)' }}>
+          召回摘要
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <div className="font-serif text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.72)' }}>
+            {entryCount > 0 ? `${entryCount} 条` : '无命中'}
+          </div>
+          <button
+            type="button"
+            disabled={!full}
+            onClick={() => setExpanded((value) => !value)}
+            className="px-1.5 py-0.5 font-serif text-[10px] tracking-[0.14em] transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-35"
+            style={{
+              color: 'rgba(117,214,216,0.9)',
+              boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.22)',
+              background: 'rgba(117,214,216,0.055)',
+              clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+            }}
+            title={full ? '显示完整召回内容' : '本回合没有完整召回内容'}
+          >
+            {expanded ? '收起' : '完整'}
+          </button>
+        </div>
+      </div>
+      <div
+        className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 text-[11px] leading-relaxed"
+        style={{ color: 'rgba(var(--tj-text-primary),0.88)' }}
+      >
+        {expanded && full ? (
+          <pre className="whitespace-pre-wrap break-words font-sans text-[10.5px] leading-relaxed">{full}</pre>
+        ) : lines.length ? (
+          <div className="space-y-2">
+            {lines.map((line, index) => {
+              const [label, ...rest] = line.split(/[:：]/);
+              const value = rest.join('：').trim();
+              return (
+                <div key={`${label}-${index}`}>
+                  <div className="font-serif text-[10px] tracking-[0.2em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+                    {label}
+                  </div>
+                  <div className="mt-0.5 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary),0.9)' }}>
+                    {value || '无'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="font-serif tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-secondary),0.64)' }}>
+            本回合无召回摘要
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

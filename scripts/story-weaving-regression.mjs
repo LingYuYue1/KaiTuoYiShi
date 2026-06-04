@@ -665,7 +665,7 @@ const phoneNext = segment({
 const phoneMessages = phoneService.buildPhoneMessages({
   traveler: { 姓名: '开拓者' },
   world: { 当前日期: '琥珀纪 2157.03.08', 当前时间: '12:00', 当前地点: '测试地点' },
-  memory: { 长期记忆: [], 短期记忆: [], 即时记忆: [] },
+  memory: { 长期记忆: [], 中期记忆: [], 短期记忆: [], 即时记忆: [] },
   yiting: { 回忆档案: [] },
   npcRecords: [],
   news: [],

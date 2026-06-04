@@ -47,7 +47,7 @@ const SYSTEMS: SystemMeta[] = [
     hiddenFields: ['属性', '主命途'],
   },
   { key: 'world', label: '世界', rootLabel: '世界', desc: '时间、地点、天数、全局事件', policy: 'writable', accent: '#9fd6ff' },
-  { key: 'memory', label: '记忆', rootLabel: '记忆', desc: '即时、短期、长期记忆', policy: 'manual', accent: '#b7e2b4' },
+  { key: 'memory', label: '记忆', rootLabel: '记忆', desc: '即时、短期、中期、长期记忆', policy: 'manual', accent: '#b7e2b4' },
   { key: 'yiting', label: '忆庭', rootLabel: '忆庭', desc: '回忆档案与召回索引', policy: 'manual', accent: '#d4c5ff' },
   { key: 'phone', label: '手机', rootLabel: '手机', desc: '联系人、会话、来信种子', policy: 'writable', accent: '#86e6dd' },
   { key: 'npc', label: '伙伴', rootLabel: 'NPC', desc: '伙伴、路人、同行记忆', policy: 'writable', accent: '#ffc2d6' },

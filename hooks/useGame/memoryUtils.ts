@@ -93,12 +93,13 @@ function limitSummaryLine(text: string, limit: number): string {
   return cleaned.length > limit ? `${cleaned.slice(0, limit)}…` : cleaned;
 }
 
-function buildArchiveSummary(items: string[], turn: number, kind: 'short' | 'long'): string {
+function buildArchiveSummary(items: string[], turn: number, kind: 'short' | 'middle' | 'long'): string {
   const lines = collectSummaryLines(items, kind === 'long' ? 5 : 4);
   const fallback = items.map(normalizeMemorySnippet).filter(Boolean).join('；');
   const body = lines.length ? lines.join('；') : fallback;
   const content = lines.length ? lines.map((line) => `- ${line}`) : [`- ${body || '空白'}`];
-  return [`【${kind === 'long' ? '长期纪要' : '短期纪要'}·回合${turn}】`, ...content].join('\n');
+  const label = kind === 'long' ? '长期纪要' : kind === 'middle' ? '中期纪要' : '短期纪要';
+  return [`【${label}·回合${turn}】`, ...content].join('\n');
 }
 
 function buildKeywords(items: string[]): string[] {
@@ -160,17 +161,46 @@ export function createShortTermArchiveEntry(rawMemories: string[], turn: number,
   };
 }
 
-export function checkLongTermThreshold(system: 记忆系统, threshold = 40): boolean {
+export function checkMiddleTermThreshold(system: 记忆系统, threshold = 20): boolean {
   return system.短期记忆.length >= Math.max(1, Math.trunc(threshold));
 }
 
-export function compressToLongTerm(system: 记忆系统, turn: number, batchSize = 40): 记忆系统 {
+export function compressToMiddleTerm(system: 记忆系统, turn: number, batchSize = 20): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
   const oldest = system.短期记忆.slice(0, size);
-  const compressed = buildArchiveSummary(oldest, turn, 'long');
+  const compressed = buildArchiveSummary(oldest, turn, 'middle');
   return {
     ...system,
     短期记忆: system.短期记忆.slice(size),
+    中期记忆: [...(system.中期记忆 ?? []), compressed],
+  };
+}
+
+export function createMiddleTermArchiveEntry(shortMemories: string[], turn: number, summaryOverride?: string): 回忆条目 {
+  return {
+    id: `recall_middle_${Date.now()}`,
+    名称: `【中期纪要 ${String(Math.max(1, turn)).padStart(3, '0')}】`,
+    类型: '中期压缩',
+    摘要: summaryOverride?.trim() || buildArchiveSummary(shortMemories, turn, 'middle'),
+    原文: shortMemories.join('\n'),
+    检索关键词: buildKeywords(shortMemories),
+    来源回合: [turn],
+    回合: turn,
+    时间戳: new Date().toISOString(),
+  };
+}
+
+export function checkLongTermThreshold(system: 记忆系统, threshold = 10): boolean {
+  return (system.中期记忆 ?? []).length >= Math.max(1, Math.trunc(threshold));
+}
+
+export function compressToLongTerm(system: 记忆系统, turn: number, batchSize = 10): 记忆系统 {
+  const size = Math.max(1, Math.trunc(batchSize));
+  const oldest = (system.中期记忆 ?? []).slice(0, size);
+  const compressed = buildArchiveSummary(oldest, turn, 'long');
+  return {
+    ...system,
+    中期记忆: (system.中期记忆 ?? []).slice(size),
     长期记忆: [...system.长期记忆, compressed],
   };
 }
@@ -259,17 +289,21 @@ export function upsertRecallEntry(system: { 回忆档案: 回忆条目[] }, entr
 export function autoCompressMemorySystem(
   system: 记忆系统,
   turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转长期阈值'>,
+  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
 ): 记忆系统 {
   let next = system;
   const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转长期阈值 || 40));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
+  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
 
   while (next.即时记忆.length >= immediateThreshold) {
     next = compressToShortTerm(next, turn, immediateThreshold);
   }
   while (next.短期记忆.length >= shortThreshold) {
-    next = compressToLongTerm(next, turn, shortThreshold);
+    next = compressToMiddleTerm(next, turn, shortThreshold);
+  }
+  while ((next.中期记忆 ?? []).length >= middleThreshold) {
+    next = compressToLongTerm(next, turn, middleThreshold);
   }
   return next;
 }
@@ -277,12 +311,13 @@ export function autoCompressMemorySystem(
 export function autoCompressMemorySystemWithArchives(
   system: 记忆系统,
   turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转长期阈值'>,
+  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
 ): { memory: 记忆系统; archives: 回忆条目[] } {
   let next = system;
   const archives: 回忆条目[] = [];
   const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转长期阈值 || 40));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
+  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
 
   while (next.即时记忆.length >= immediateThreshold) {
     const raw = next.即时记忆.slice(0, immediateThreshold);
@@ -291,8 +326,13 @@ export function autoCompressMemorySystemWithArchives(
   }
   while (next.短期记忆.length >= shortThreshold) {
     const raw = next.短期记忆.slice(0, shortThreshold);
+    archives.push(createMiddleTermArchiveEntry(raw, turn));
+    next = compressToMiddleTerm(next, turn, shortThreshold);
+  }
+  while ((next.中期记忆 ?? []).length >= middleThreshold) {
+    const raw = (next.中期记忆 ?? []).slice(0, middleThreshold);
     archives.push(createLongTermArchiveEntry(raw, turn));
-    next = compressToLongTerm(next, turn, shortThreshold);
+    next = compressToLongTerm(next, turn, middleThreshold);
   }
   return { memory: next, archives };
 }
@@ -307,7 +347,8 @@ export async function autoCompressMemorySystemWithArchivesAsync(
   let next = system;
   const archives: 回忆条目[] = [];
   const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转长期阈值 || 40));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
+  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
   const retryCount = settings.记忆总结API?.retryCount ?? 2;
   let usedFallback = false;
   let usedModel = false;
@@ -340,10 +381,34 @@ export async function autoCompressMemorySystemWithArchivesAsync(
     const raw = next.短期记忆.slice(0, shortThreshold);
     const result = await summarizeMemoryBatch(
       {
+        kind: 'middle',
+        turn,
+        items: raw,
+        prompt: settings.短期转中期提示词,
+      },
+      settings,
+      mainConfig,
+      signal,
+      retryCount,
+    );
+    usedFallback = usedFallback || result.usedFallback;
+    usedModel = usedModel || !result.usedFallback;
+    archives.push(createMiddleTermArchiveEntry(raw, turn, result.summary));
+    next = {
+      ...next,
+      短期记忆: next.短期记忆.slice(shortThreshold),
+      中期记忆: [...(next.中期记忆 ?? []), result.summary],
+    };
+  }
+
+  while ((next.中期记忆 ?? []).length >= middleThreshold) {
+    const raw = (next.中期记忆 ?? []).slice(0, middleThreshold);
+    const result = await summarizeMemoryBatch(
+      {
         kind: 'long',
         turn,
         items: raw,
-        prompt: settings.短期转长期提示词,
+        prompt: settings.中期转长期提示词 || settings.短期转长期提示词,
       },
       settings,
       mainConfig,
@@ -355,7 +420,7 @@ export async function autoCompressMemorySystemWithArchivesAsync(
     archives.push(createLongTermArchiveEntry(raw, turn, result.summary));
     next = {
       ...next,
-      短期记忆: next.短期记忆.slice(shortThreshold),
+      中期记忆: (next.中期记忆 ?? []).slice(middleThreshold),
       长期记忆: [...next.长期记忆, result.summary],
     };
   }
@@ -388,6 +453,11 @@ export function formatMemoryForPrompt(system: 记忆系统): string {
       '【长期记忆】\n' + system.长期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n'),
     );
   }
+  if ((system.中期记忆 ?? []).length) {
+    sections.push(
+      '【中期记忆】\n' + (system.中期记忆 ?? []).map((m, i) => `${i + 1}. ${m}`).join('\n'),
+    );
+  }
   if (system.短期记忆.length) {
     sections.push(
       '【短期记忆】\n' + system.短期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n'),
@@ -400,6 +470,7 @@ export function normalizeMemorySystem(raw: 记忆系统): 记忆系统 {
   return {
     即时记忆: raw.即时记忆 ?? [],
     短期记忆: raw.短期记忆 ?? [],
+    中期记忆: raw.中期记忆 ?? [],
     长期记忆: raw.长期记忆 ?? [],
   };
 }

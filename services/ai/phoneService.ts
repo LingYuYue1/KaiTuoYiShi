@@ -125,6 +125,7 @@ export function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
 export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: string; content: string }> {
   const memories = [
     ...ctx.memory.长期记忆.slice(-5).map((m) => `长期：${m}`),
+    ...(ctx.memory.中期记忆 ?? []).slice(-6).map((m) => `中期：${m}`),
     ...ctx.memory.短期记忆.slice(-8).map((m) => `短期：${m}`),
     ...ctx.memory.即时记忆.slice(-6).map((m) => `即时：${m}`),
     ...ctx.yiting.回忆档案.slice(-5).map((m) => `回忆档案：${m.名称 || `第${m.回合}回合`}｜${(m.摘要 || m.原文 || '').slice(0, 180)}`),

@@ -31,10 +31,11 @@ import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
 import {
-  MAIN_IMMEDIATE_MEMORY_PROMPT_LIMIT,
   MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT,
+  MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT,
   MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT,
 } from './historyWindow';
+import { getAnticipatedNpcNamesForTurn } from './npcPresence';
 
 // 当前 prompt 为重构期的中性骨架，具体的世界观/人物设定由世界书注入，
 // 「踏上旅途」向导写入的字段在此被汇总输出。
@@ -112,8 +113,15 @@ export function buildSystemPrompt(
   const npcContinuitySection = buildNpcContinuitySection(worldState, npcRecords, _turnCount);
   if (npcContinuitySection) parts.push(npcContinuitySection);
 
+  const npcPresenceSection = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput);
+  if (npcPresenceSection) parts.push(npcPresenceSection);
+
   const timeAnchor = buildCurrentTimeAnchorSection(worldState);
   if (timeAnchor) parts.push(timeAnchor);
+
+  // ── 当前场景：紧跟时间锚点，确保地点 / 环境优先于资料块被读取 ──
+  const sceneFromWorldbook = buildSceneSection(worldState);
+  if (sceneFromWorldbook) parts.push(sceneFromWorldbook);
 
   // ── 当前角色 ──
   parts.push(buildCharacterSection(traveler));
@@ -171,39 +179,16 @@ export function buildSystemPrompt(
     if (zhikuHit.injection) parts.push(zhikuHit.injection);
   }
 
-  // ── 当前场景 ──
-  const sceneFromWorldbook = buildSceneSection(worldState);
-  if (sceneFromWorldbook) parts.push(sceneFromWorldbook);
-
   // ── 命途狭间状态（待升阶 / 待触发 / 进行中 三态注入） ──
   const awakeningSection = buildPathAwakeningSection(traveler, worldState, awakeningPhase);
   if (awakeningSection) parts.push(awakeningSection);
 
-  if (worldState.全局事件.length) {
-    parts.push(`近期事件：\n${worldState.全局事件.map((e) => `- ${e}`).join('\n')}`);
-  }
+  const recentWorldEventsSection = buildRecentWorldEventsSection(worldState.全局事件);
+  if (recentWorldEventsSection) parts.push(recentWorldEventsSection);
 
   // ── 记忆注入 ──
   if (settings.enableMemoryInjection && !suppressMemoryInjection) {
-    const memSections: string[] = [];
-    if (memorySystem.长期记忆.length) {
-      const recentLongTerm = memorySystem.长期记忆.slice(-MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT);
-      memSections.push(
-        `# 记忆｜长期记忆\n\n${recentLongTerm.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
-      );
-    }
-    if (memorySystem.短期记忆.length) {
-      const recentShortTerm = memorySystem.短期记忆.slice(-MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT);
-      memSections.push(
-        `# 记忆｜短期记忆\n\n${recentShortTerm.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
-      );
-    }
-    if (memorySystem.即时记忆.length) {
-      const recentImmediate = memorySystem.即时记忆.slice(-MAIN_IMMEDIATE_MEMORY_PROMPT_LIMIT);
-      memSections.push(
-        `# 记忆｜即时记忆\n\n${recentImmediate.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
-      );
-    }
+    const memSections = buildLayeredMemorySections(memorySystem);
     if (memSections.length) {
       parts.push(memSections.join('\n\n---\n\n'));
     }
@@ -281,9 +266,8 @@ export function buildOpeningSystemPrompt(
   const scene = buildSceneSection(worldState);
   if (scene) parts.push(scene);
 
-  if (worldState.全局事件.length) {
-    parts.push(`近期事件：\n${worldState.全局事件.map((e) => `- ${e}`).join('\n')}`);
-  }
+  const recentWorldEventsSection = buildRecentWorldEventsSection(worldState.全局事件);
+  if (recentWorldEventsSection) parts.push(recentWorldEventsSection);
   const newsSection = buildNewsSection(news);
   if (newsSection) parts.push(newsSection);
 
@@ -300,6 +284,71 @@ export function buildOpeningSystemPrompt(
   if (bottomModules) parts.push(bottomModules);
 
   return parts.join('\n\n---\n\n');
+}
+
+function normalizeMemoryFingerprint(text: string): string {
+  return text
+    .replace(/【[^】]{0,24}】/g, '')
+    .replace(/[第回合纪要即时短期中期长期压缩档案记忆总结：:，,。！？!?、；;\s\-\d]/g, '')
+    .toLowerCase()
+    .slice(0, 160);
+}
+
+function isSimilarMemoryEntry(entry: string, seen: string[]): boolean {
+  const fp = normalizeMemoryFingerprint(entry);
+  if (fp.length < 18) return false;
+  return seen.some((item) => {
+    if (!item) return false;
+    if (fp.includes(item) || item.includes(fp)) return true;
+    const left = new Set([...fp]);
+    let overlap = 0;
+    for (const ch of item) {
+      if (left.has(ch)) overlap += 1;
+    }
+    return overlap / Math.max(fp.length, item.length) >= 0.72;
+  });
+}
+
+function pickDedupedMemoryEntries(entries: string[], limit: number, seen: string[]): string[] {
+  const picked: string[] = [];
+  const source = entries.map((item) => item.trim()).filter(Boolean);
+  for (let i = source.length - 1; i >= 0 && picked.length < limit; i -= 1) {
+    const entry = source[i];
+    if (isSimilarMemoryEntry(entry, seen)) continue;
+    picked.unshift(entry);
+    const fp = normalizeMemoryFingerprint(entry);
+    if (fp) seen.push(fp);
+  }
+  return picked;
+}
+
+function formatMemorySection(title: string, entries: string[]): string {
+  return `# 记忆｜${title}\n\n${entries.map((m, i) => `${i + 1}. ${m}`).join('\n')}`;
+}
+
+function buildLayeredMemorySections(memorySystem: 记忆系统): string[] {
+  const seen: string[] = [];
+  const shortTerm = pickDedupedMemoryEntries(
+    memorySystem.短期记忆,
+    MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT,
+    seen,
+  );
+  const middleTerm = pickDedupedMemoryEntries(
+    memorySystem.中期记忆 ?? [],
+    MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT,
+    seen,
+  );
+  const longTerm = pickDedupedMemoryEntries(
+    memorySystem.长期记忆,
+    MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT,
+    seen,
+  );
+
+  const sections: string[] = [];
+  if (longTerm.length) sections.push(formatMemorySection('长期记忆', longTerm));
+  if (middleTerm.length) sections.push(formatMemorySection('中期记忆', middleTerm));
+  if (shortTerm.length) sections.push(formatMemorySection('短期记忆', shortTerm));
+  return sections;
 }
 
 interface PromptModuleInjectionCtx {
@@ -589,10 +638,80 @@ function buildSceneSection(worldState: 世界状态): string {
   return `# 当前场景\n\n${lines.join('\n\n')}`;
 }
 
+const RECENT_WORLD_EVENT_PROMPT_LIMIT = 12;
+
+function normalizeWorldEventFingerprint(text: string): string {
+  return text
+    .replace(/【[^】]{0,24}】/g, '')
+    .replace(/[第回合纪要动态世界事件新闻线索：:，,。！？!?、；;\s\-\d]/g, '')
+    .toLowerCase()
+    .slice(0, 120);
+}
+
+function compactWorldEvent(text: string): string {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  return cleaned.length > 160 ? `${cleaned.slice(0, 160)}...` : cleaned;
+}
+
+function buildRecentWorldEventsSection(events: string[]): string {
+  if (!events.length) return '';
+  const picked: string[] = [];
+  const seen = new Set<string>();
+  for (let i = events.length - 1; i >= 0 && picked.length < RECENT_WORLD_EVENT_PROMPT_LIMIT; i -= 1) {
+    const event = compactWorldEvent(events[i] ?? '');
+    if (!event) continue;
+    const fp = normalizeWorldEventFingerprint(event);
+    if (fp && seen.has(fp)) continue;
+    if (fp) seen.add(fp);
+    picked.unshift(event);
+  }
+  return picked.length ? `# 近期事件\n\n${picked.map((e) => `- ${e}`).join('\n')}` : '';
+}
+
 const COMPANION_PROMPT_LIMIT = 12;
 const RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW = 15;
 const EXTRA_NPC_PROMPT_LIMIT = 8;
 const NPC_CONTINUITY_PROMPT_LIMIT = 10;
+const NPC_PRESENCE_RECENT_WINDOW = 6;
+
+function buildNpcPresenceSection(worldState: 世界状态, npcRecords?: NPC记录[], turnCount = 0, userInput = ''): string {
+  const sceneNames = (worldState.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean);
+  const records = npcRecords ?? [];
+  const current = records
+    .filter((npc) => npc.同行 || sceneNames.some((name) => name === npc.姓名 || name === npc.别名))
+    .map((npc) => npc.姓名);
+  const recentCutoff = Math.max(1, turnCount - NPC_PRESENCE_RECENT_WINDOW);
+  const nearby = records
+    .filter((npc) =>
+      !current.includes(npc.姓名) &&
+      Number(npc.最近回合 || 0) >= recentCutoff &&
+      (npc.阶位 === 'companion' || npc.原著角色 || 提取NPC同行记忆文本列表(npc).length > 0),
+    )
+    .sort((a, b) => Number(b.最近回合 || 0) - Number(a.最近回合 || 0))
+    .slice(0, 8)
+    .map((npc) => `${npc.姓名}（最近第${Math.max(1, Number(npc.最近回合 || 1))}回合）`);
+  const sceneOnly = sceneNames.filter((name) => !current.some((item) => item === name));
+  const anticipated = getAnticipatedNpcNamesForTurn({ world: worldState, userInput });
+  if (!current.length && !nearby.length && !sceneOnly.length && !anticipated.length) return '';
+
+  return [
+    '# 角色在场状态',
+    '',
+    `- 当前明确在场/同行：${current.length ? Array.from(new Set(current)).join('、') : '无明确记录'}`,
+    `- 近期相关但不在场：${nearby.length ? nearby.join('、') : '无'}`,
+    `- 预期登场/需提前校准：${anticipated.length ? anticipated.join('、') : '无'}`,
+    `- 当前场景候选人物：${sceneOnly.length ? sceneOnly.join('、') : '无'}`,
+    '- 写作规则：只有“当前明确在场/同行”或玩家本回合明确点名的人物可以自然发言、行动或被智库召回为角色锚点。',
+    '- “预期登场/需提前校准”的人物允许智库提前召回口吻和人格，用于他们即将入场、广播、通讯或被他人提及时不 OOC；但在正文里仍要通过合理镜头让其入场，不得凭空站到当前地点。',
+    '- “近期相关但不在场”的人物只能通过回忆、通讯、旁人提及或后续登场铺垫出现，不得凭空站到当前镜头里。',
+    '- “当前场景候选人物”只代表地点可能相关，不等于本人已在场；例如地点叫黑塔空间站时，不得自动让黑塔本人出场或召回黑塔人格，除非正文/玩家输入明确出现黑塔或人偶黑塔。',
+    worldState.原著主角 === '星'
+      ? '- 原著主角门禁：当前为单主角“星”，智库与正文不得同时召回或表现“穹”为并列原著主角。'
+      : worldState.原著主角 === '穹'
+        ? '- 原著主角门禁：当前为单主角“穹”，智库与正文不得同时召回或表现“星”为并列原著主角。'
+        : '',
+  ].join('\n');
+}
 
 function buildNpcContinuitySection(worldState: 世界状态, npcRecords?: NPC记录[], turnCount = 0): string {
   if (!npcRecords || npcRecords.length === 0) return '';
