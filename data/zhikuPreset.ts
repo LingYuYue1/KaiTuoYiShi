@@ -116,6 +116,24 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
     description: '星神、命途、组织与核心世界舞台的基础资料。',
     path: '/zhiku-presets/worldview-core.json',
   },
+  {
+    id: 'zhiku_paths_core',
+    title: '命途·哲学定义',
+    description: '18条命途的哲学定义、现实对应与核心理念分析。来源：知识库迁移。',
+    path: '/zhiku-presets/paths-core.json',
+  },
+  {
+    id: 'zhiku_aeons_core',
+    title: '星神·完整档案',
+    description: '18位星神的详细档案，含外表、经历、智库记载与本质设定。来源：知识库迁移。',
+    path: '/zhiku-presets/aeons-core.json',
+  },
+  {
+    id: 'zhiku_xianzhou_history',
+    title: '仙舟联盟·编年史',
+    description: '仙舟联盟从古国启航到星历8100年的完整编年史，分四段。来源：知识库迁移。',
+    path: '/zhiku-presets/xianzhou-history.json',
+  },
 ];
 
 const BUNDLED_HERTA_STORY_TITLES = new Set([
