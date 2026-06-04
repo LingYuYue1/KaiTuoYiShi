@@ -72,7 +72,6 @@ function getMainStoryBlockReason(entry: 智库条目): string | null {
   if (!entry.可用于联动) return '该资料标记为不可联动。';
   if (entry.分类 === 'story') return '原著剧情正文由剧情编织管理，不走智库普通召回。';
   if (entry.可否主剧情注入 === false) return '该资料标记为不可主剧情注入。';
-  if (entry.分类 !== 'character') return null;
 
   const meta = 解析智库软结构标签(entry);
   return getMainStoryZhikuMetaBlockReason(meta);
@@ -92,7 +91,7 @@ function getMainStoryZhikuMetaBlockReason(meta: 智库软结构标签): string |
   if (/未解锁|锁定|只读/i.test(unlock)) return `解锁状态为「${unlock}」，暂不注入主剧情。`;
 
   const spoiler = meta.剧透等级 ?? '';
-  if (/重大/i.test(spoiler) && !/默认可用|已解锁|当前可用/i.test(unlock)) {
+  if (/重大/i.test(spoiler) && !/默认可用|已解锁|当前可用|可预热/i.test(unlock)) {
     return `剧透等级为「${spoiler}」，且当前未解锁。`;
   }
 
@@ -572,6 +571,7 @@ function buildZhikuInjection(groups: 智库召回分组, sceneHints: string[] = 
     '',
     '以下内容来自原著资料中枢的检索结果。它们用于提供设定依据、人物线索、地点、道具与概念参考，不直接注入原著剧情正文；若与当前已发生剧情冲突，以当前剧情为准。',
     '人物主体人格用于校准口吻与行为边界；外貌、性格、说话方式、行为习惯、关系边界与禁止误写字段是角色表现的优先锚点；形态/命途资料不得覆盖主体人格；未解锁资料不得当作当前事实。',
+    '迁移设定资料可能包含原著公开信息、寰宇记载、学者考据与整理者分析；正文只可把它们作为概念、背景和气质参考，不得把混合推论写成已确认事实。',
     groups.characterEntries.length
       ? [
           '## 角色执行约束',

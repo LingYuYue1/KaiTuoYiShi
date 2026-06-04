@@ -148,11 +148,25 @@ const BUNDLED_MAIN_STORY_TITLES = new Set([
   '第一章：安灵布奠，天清路远',
 ]);
 
-const READONLY_MIGRATED_LORE_PRESET_IDS = new Set([
+const LINKABLE_MIGRATED_LORE_PRESET_IDS = new Set([
   'zhiku_paths_core',
   'zhiku_aeons_core',
   'zhiku_xianzhou_history',
 ]);
+
+function normalizeMigratedLoreEntry(entry: 智库条目, preset: BundledZhikuPreset, index: number): Partial<智库条目> {
+  const isXianzhouHistory = preset.id === 'zhiku_xianzhou_history';
+  const isLockedXianzhouHistory = isXianzhouHistory && index >= 2;
+  return {
+    资料类型: entry.资料类型 || '迁移设定资料',
+    解锁状态: entry.解锁状态 || (isLockedXianzhouHistory ? '未解锁' : '默认可用'),
+    解锁条件: entry.解锁条件 || (isLockedXianzhouHistory ? '推进到仙舟罗浮相关剧情后由剧情编织归档解锁' : undefined),
+    剧透等级: entry.剧透等级 || (preset.id === 'zhiku_paths_core' ? '中度' : '重大'),
+    使用范围: entry.使用范围?.length ? entry.使用范围 : ['智库', '设定浏览', '主剧情'],
+    可否主剧情注入: entry.可否主剧情注入 ?? true,
+    重要度: Math.min(Number(entry.重要度) || 3, 3),
+  };
+}
 
 export function isBundledZhikuDuplicate(entry: Partial<智库条目>): boolean {
   if (entry.builtin) return false;
@@ -244,21 +258,14 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset): Promis
   const data = await res.json() as { entries?: unknown[] };
   const entries = Array.isArray(data.entries) ? (data.entries as unknown as 智库条目[]) : [];
   const seriesOrder = bundledZhikuPresets.findIndex((item) => item.id === preset.id) + 1;
-  const isReadonlyMigratedLore = READONLY_MIGRATED_LORE_PRESET_IDS.has(preset.id);
+  const isLinkableMigratedLore = LINKABLE_MIGRATED_LORE_PRESET_IDS.has(preset.id);
   return 归一化智库系统({
     条目: entries
       .filter((entry) => entry.分类 !== 'character' || isRebuiltZhikuCharacterEntry(entry))
       .map((entry, index) => ({
         ...entry,
-        ...(isReadonlyMigratedLore
-          ? {
-              资料类型: entry.资料类型 || '迁移设定资料',
-              解锁状态: entry.解锁状态 || '只读资料',
-              剧透等级: entry.剧透等级 || (preset.id === 'zhiku_paths_core' ? '中度' : '重大'),
-              使用范围: entry.使用范围?.length ? entry.使用范围 : ['智库', '设定浏览'],
-              可否主剧情注入: false,
-              重要度: Math.min(Number(entry.重要度) || 3, 3),
-            }
+        ...(isLinkableMigratedLore
+          ? normalizeMigratedLoreEntry(entry, preset, index)
           : {}),
         id: entry.id || `${preset.id}_${index + 1}`,
         ...(entry.分类 === 'story'

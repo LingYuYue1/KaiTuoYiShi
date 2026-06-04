@@ -50,9 +50,10 @@ function decideRuntimeUnlock(
   entry: 智库条目,
   archives: 剧情编织历史归档[],
 ): { status: string; reason: string } | null {
-  if (entry.分类 !== 'character') return null;
+  if (entry.分类 === 'story') return null;
   if (entry.可用于联动 === false) return null;
   const meta = 解析智库软结构标签(entry);
+  if (!isRuntimeUnlockableZhikuEntry(entry, meta)) return null;
   const currentUnlock = normalizeText(entry.运行时解锁状态 ?? entry.解锁状态 ?? meta.解锁状态);
   if (isAlreadyOpen(currentUnlock)) return null;
   if (isReadOnlyOrManualOnly(entry)) return null;
@@ -74,6 +75,19 @@ function decideRuntimeUnlock(
   }
 
   return null;
+}
+
+function isRuntimeUnlockableZhikuEntry(entry: 智库条目, meta: ReturnType<typeof 解析智库软结构标签>): boolean {
+  if (entry.分类 === 'character') return true;
+  const text = [
+    entry.资料类型,
+    meta.资料类型,
+    entry.解锁条件,
+    entry.首次可用剧情段,
+    entry.关联剧情分段ID,
+    ...(entry.关键词 ?? []),
+  ].filter(Boolean).join(' ');
+  return /迁移设定资料|剧情编织|归档|解锁|首次可用|关联剧情/.test(text);
 }
 
 function archiveMatchesExactField(entry: 智库条目, archive: 剧情编织历史归档): boolean {
