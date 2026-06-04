@@ -242,15 +242,20 @@ assert(
   'default zhiku recall count should be 8.',
 );
 assert(
-  zhikuCot.includes('上下文故事分析') &&
+    zhikuCot.includes('Step0: 召回目标与上下文故事分析') &&
     zhikuCot.includes('前文已经出现了谁') &&
-    zhikuCot.includes('剧情下一步最可能牵出哪些角色或地点') &&
-    zhikuCot.includes('角色状态归类') &&
-    zhikuCot.includes('预期登场判断') &&
+    zhikuCot.includes('哪些角色、地点、组织、物品、命途或星神概念') &&
+    zhikuCot.includes('Step1: 角色状态归类') &&
+    zhikuCot.includes('Step2: NPC 信息域与可知范围') &&
+    zhikuCot.includes('背景资料不等于 NPC 全知') &&
+    zhikuCot.includes('Step3: 预期登场判断') &&
     zhikuCot.includes('避免首次出场时乱写') &&
     zhikuCot.includes('黑塔空间站') &&
+    zhikuCot.includes('Step5: 资料层级切分') &&
+    zhikuCot.includes('迁移设定资料可能混合原著公开信息、寰宇记载、学者考据与整理者分析') &&
+    zhikuCot.includes('Step8: 输出自检') &&
     zhikuCot.includes('输出只允许是最终编号分组'),
-  'zhiku CoT must reason over story context, present/anticipated characters, and gate location names before selecting recall entries.',
+  'zhiku CoT must use distributed Step reasoning over story context, character state, NPC knowledge scope, anticipated characters, lore layers, and final recall groups.',
 );
 assert(
   retrieval.includes('characterEntries?: 智库条目[]') &&
