@@ -268,9 +268,15 @@ export function LandingPage({
         </div>
       </div>
 
-      <p className="absolute bottom-4 left-0 right-0 z-10 text-center text-xs opacity-60" style={{ color: 'rgb(var(--tj-text-secondary))' }}>
-        开拓轶事 v0.5
-      </p>
+      <div
+        className="absolute bottom-4 left-4 right-4 z-10 flex flex-col items-center gap-1 text-center text-xs opacity-60"
+        style={{ color: 'rgb(var(--tj-text-secondary))' }}
+      >
+        <p>开拓轶事 v0.5</p>
+        <p className="text-[11px] leading-relaxed">
+          作者 Ling · 智库部分内容贡献者 11MOMO
+        </p>
+      </div>
     </div>
   );
 }
