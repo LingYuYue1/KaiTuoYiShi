@@ -14,47 +14,11 @@ export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_
 
 export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
-    id: 'zhiku_herta_station_chapter1',
-    title: '今天是昨天的明天',
-    description: '黑塔空间站剧情的小说化版本，从混乱开场到登上星穹列车。',
-    path: '/zhiku-presets/herta-station-chapters.json',
-  },
-  {
     id: 'zhiku_character_rebuild_core',
     title: '人物重建·列车组核心样本',
     description: '按主体人格、形态阶段、命途能力、剧情解锁与 OOC 风险拆分的新版人物资料样本。',
     path: '/zhiku-presets/character-rebuild-core.json',
     updatedAt: '2026-05-31-character-canon-audit-1',
-  },
-  {
-    id: 'zhiku_jarilo_vi_chapters',
-    title: '于枯索的冬夜里',
-    description: '雅利洛-Ⅵ与贝洛伯格主线剧情的小说化版本。',
-    path: '/zhiku-presets/jarilo-vi-chapters.json',
-  },
-  {
-    id: 'zhiku_jarilo_vi_sunrise_chapters',
-    title: '于曈昽的骄阳下',
-    description: '雅利洛-Ⅵ与贝洛伯格后半段主线剧情的小说化版本。',
-    path: '/zhiku-presets/jarilo-vi-sunrise-chapters.json',
-  },
-  {
-    id: 'zhiku_xianzhou_luofu_travel_chapters',
-    title: '乘槎驭风仙窟游',
-    description: '仙舟罗浮前段主线剧情的小说化版本，从列车改道到罗浮危局展开。',
-    path: '/zhiku-presets/xianzhou-luofu-travel-chapters.json',
-  },
-  {
-    id: 'zhiku_xianzhou_luofu_cloud_tree_chapters',
-    title: '云树百丈蔽重楼',
-    description: '仙舟罗浮中段主线剧情的小说化版本，从丹鼎司战场到建木与幻胧危机。',
-    path: '/zhiku-presets/xianzhou-luofu-cloud-tree-chapters.json',
-  },
-  {
-    id: 'zhiku_xianzhou_luofu_aftermath_chapters',
-    title: '劫波渡尽战云收',
-    description: '仙舟罗浮后段收束剧情的小说化版本，梳理战后余波、盟友身份与告别。',
-    path: '/zhiku-presets/xianzhou-luofu-aftermath-chapters.json',
   },
   {
     id: 'zhiku_item_core',
@@ -136,13 +100,52 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
   },
 ];
 
-const BUNDLED_HERTA_STORY_TITLES = new Set([
+const BUNDLED_MAIN_STORY_TITLES = new Set([
   '第一章 混乱行至深处',
   '第二章 漩涡止于中心',
   '第三章 宇宙安宁片刻',
   '第四章 阴影从未离去',
   '第四章支线 模拟宇宙',
   '第五章 旅途正在继续',
+  '第一章 激「冻」人心的大冒险',
+  '第二章 如果在冬夜，一群旅人',
+  '第三章 永冬城之夜',
+  '第四章 躲得过初一，躲不过十五',
+  '第五章 捉迷藏',
+  '第六章 第八条、也是最后一条规则',
+  '第七章 她等待刀尖已经太久',
+  '第八章 他们有多少人已掉进深渊',
+  '第九章 相会在日落时分',
+  '第十章 已故去的必如雪崩再来',
+  '第十一章 躺在铁锈中',
+  '第十二章 腐烂或燃烧',
+  '第十三章 我们不擅长告别',
+  '第一章 在屋外的黑暗中洗涤',
+  '第二章 不可制造偶像',
+  '第三章 青年近卫军',
+  '第四章 兵士们默默无言',
+  '第五章 星星是冰冷的玩具',
+  '第六章 过去早已无路可通',
+  '第七章 回归',
+  '第八章 从凶险和泥泞的沼泽中',
+  '第九章 时不我待，我的朋友',
+  '第十章 静静的星河',
+  '第一章 旅进青霄，不速之邀',
+  '第二章 行遏流云，身入魔阴',
+  '第三章 紫府通谒，将军定策',
+  '第四章 旧影婆娑，追思错落',
+  '第五章 犬迹追从，谛听狐踪',
+  '第六章 迴星周旋，未卜知先',
+  '第六章 长乐新朋，青鸟候风',
+  '第七章极数问玄，历事穷观',
+  '第八章 神木重萌，掣转天衡',
+  '第九章茸客鸣呦，玉角盘虬',
+  '第一章：金鼎灵树，穷途梼杌',
+  '第二章上：螣蛇无穴，旧梦亡阙',
+  '第二章（下）：得其雨露，安其壤土',
+  '第三章：有龙矫矫，其渊渺渺',
+  '第四章：仙骸成空，大劫有终',
+  '第一章：安灵布奠，天清路远',
 ]);
 
 const READONLY_MIGRATED_LORE_PRESET_IDS = new Set([
@@ -159,7 +162,8 @@ export function isBundledZhikuDuplicate(entry: Partial<智库条目>): boolean {
   const source = typeof entry.来源 === 'string' ? entry.来源 : '';
   const raw = typeof entry.原文 === 'string' ? entry.原文 : '';
 
-  if (BUNDLED_HERTA_STORY_TITLES.has(title)) return true;
+  if (source.includes('开拓轶事·项目内置剧情')) return true;
+  if (BUNDLED_MAIN_STORY_TITLES.has(title)) return true;
   if (source.includes('剧情-黑塔空间站')) return true;
   return title.includes('黑塔空间站') && raw.includes('今天是昨天的明天');
 }
