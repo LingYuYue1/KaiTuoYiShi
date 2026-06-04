@@ -242,15 +242,25 @@ assert(
   'default zhiku recall count should be 8.',
 );
 assert(
-  zhikuCot.includes('上下文故事分析') &&
-    zhikuCot.includes('前文已经出现了谁') &&
-    zhikuCot.includes('剧情下一步最可能牵出哪些角色或地点') &&
-    zhikuCot.includes('角色状态归类') &&
-    zhikuCot.includes('预期登场判断') &&
-    zhikuCot.includes('避免首次出场时乱写') &&
-    zhikuCot.includes('黑塔空间站') &&
-    zhikuCot.includes('输出只允许是最终编号分组'),
-  'zhiku CoT must reason over story context, present/anticipated characters, and gate location names before selecting recall entries.',
+    zhikuCot.includes('Step0: 上下文分析与场景校准') &&
+    zhikuCot.includes('即时剧情回顾') &&
+    zhikuCot.includes('校准当前场景') &&
+    zhikuCot.includes('Step1: 在场角色分析') &&
+    zhikuCot.includes('谁明确在场、谁只是被提及、谁近期相关但不在场') &&
+    zhikuCot.includes('Step2: 预期登场预测') &&
+    zhikuCot.includes('合理登场路径') &&
+    zhikuCot.includes('Step3: 当前场景分析与资料查找') &&
+    zhikuCot.includes('必须查找') &&
+    zhikuCot.includes('Step4: 资料与角色召回门禁') &&
+    zhikuCot.includes('智库本身不决定角色出场、不推进剧情、不让资料自动变成正文事实') &&
+    zhikuCot.includes('背景资料不等于 NPC 全知') &&
+    zhikuCot.includes('Step5: 角色、资料整理与审查分析') &&
+    zhikuCot.includes('Step6: 判断资料相关性') &&
+    zhikuCot.includes('强相关资料：当前镜头必须知道') &&
+    zhikuCot.includes('Step7: 确认召回内容') &&
+    zhikuCot.includes('Step8: 自检并输出') &&
+    zhikuCot.includes('若某类为空，写“无”'),
+  'zhiku CoT must use the agreed Step0-Step8 workflow for context, present roles, anticipated roles, scene data lookup, recall gates, review, relevance, final selection, and output self-check.',
 );
 assert(
   retrieval.includes('characterEntries?: 智库条目[]') &&
