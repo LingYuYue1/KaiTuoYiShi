@@ -21,7 +21,7 @@ execFileSync(
 );
 
 const mod = await import(pathToFileURL(`${process.cwd()}/.tmp-regression/player-speech/playerSpeechGuard.js`).href);
-const { normalizePlayerSpeechInBody, replaceBodyInRawResponse, shouldRenderAsNarrationForPlayerLine } = mod;
+const { normalizeInlineSpeakerTags, normalizePlayerSpeechInBody, replaceBodyInRawResponse, shouldRenderAsNarrationForPlayerLine } = mod;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -70,6 +70,18 @@ assert(
   '玩家台词后混入动作时应拆成玩家台词 + 旁白。',
 );
 
+const inlineSpeakerTags = normalizeInlineSpeakerTags('【旁白】刀锋落下。【瓦尔特】……冷静。【旁白】月台终于安静。');
+assert(
+  inlineSpeakerTags === '【旁白】刀锋落下。\n【瓦尔特】……冷静。\n【旁白】月台终于安静。',
+  '同一行里连续出现多个【旁白】/【角色名】标签时，必须拆成多行渲染。',
+);
+
+const normalizedInlineBody = normalize('【旁白】刀锋落下。【瓦尔特】……冷静。【旁白】月台终于安静。', '');
+assert(
+  normalizedInlineBody === '【旁白】刀锋落下。\n【瓦尔特】……冷静。\n【旁白】月台终于安静。',
+  '正文落库清洗必须先拆分行内角色标签。',
+);
+
 assert(
   shouldRenderAsNarrationForPlayerLine('轰隆——！！！', '我看向前方') === true,
   '渲染旧消息时，玩家名下拟声词应兜底改旁白。',
@@ -84,6 +96,10 @@ const rendererSource = fs.readFileSync('components/features/Chat/MessageRenderer
 assert(
   rendererSource.includes('quoted && traveler && !shouldRenderAsNarrationForPlayerLine(quoted, userInput)'),
   '旁白中的整句引号只有在玩家输入有证据时才能提升为玩家气泡。',
+);
+assert(
+  rendererSource.includes('normalizeInlineSpeakerTags(body).split'),
+  '渲染旧消息时也必须拆分同一行内的多个角色标签。',
 );
 
 assert(
@@ -109,6 +125,17 @@ assert(
   '替换 rawText 正文块时不能破坏 thinking / 记忆等其他标签。',
 );
 
+const protocolRawWithoutBody = replaceBodyInRawResponse(
+  '<thinking>Step0: 读取上下文</thinking>\n<短期记忆>- 空间站震动。</短期记忆>',
+  '【旁白】空间站震动。',
+);
+assert(
+  protocolRawWithoutBody.includes('<thinking>Step0: 读取上下文</thinking>') &&
+    protocolRawWithoutBody.includes('<短期记忆>- 空间站震动。</短期记忆>') &&
+    !protocolRawWithoutBody.startsWith('【旁白】空间站震动。'),
+  'rawText 含协议标签但缺 <正文> 时，不能把原始消息压成清洗后的纯正文。',
+);
+
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const renderers = fs.readFileSync('components/features/Chat/MessageRenderers.tsx', 'utf8');
 const chatList = fs.readFileSync('components/features/Chat/ChatList.tsx', 'utf8');
@@ -117,6 +144,9 @@ assert(sendWorkflow.includes("from '@/utils/playerSpeechGuard'"), 'sendWorkflow 
 assert(sendWorkflow.includes('replaceBodyInRawResponse'), 'sendWorkflow 必须保存清洗后的原始消息正文块。');
 assert(sendWorkflow.includes('userInput,'), 'sendWorkflow 清洗玩家气泡时必须传入本回合玩家输入。');
 assert(renderers.includes('shouldRenderAsNarrationForPlayerLine'), '渲染层必须对旧消息玩家气泡做兜底归属检查。');
+assert(renderers.includes('normalizeInlineSpeakerTags'), '渲染层必须复用行内角色标签拆分工具。');
+assert(!renderers.includes('该行未识别为 【旁白】/【角色名】/【心声】 任一格式'), '无前缀正文应按普通旁白显示，不应在玩家界面用暗色警告。');
+assert(!renderers.includes('dimmed'), '无前缀正文渲染不得继续使用 dimmed 旁白色差。');
 assert(chatList.includes('previousUserInput'), 'ChatList 必须把 AI 回复对应的上一条玩家输入传给渲染层。');
 
 console.log('player speech guard regression ok');

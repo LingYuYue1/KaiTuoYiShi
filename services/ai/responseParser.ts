@@ -97,6 +97,76 @@ function buildTagPattern(): RegExp {
   return new RegExp(`<(${unique.join('|')})>([\\s\\S]*?)(?=<(?:${unique.join('|')})>|$)`, 'gi');
 }
 
+export function cleanActionOptionText(text: string): string {
+  let cleaned = text.trim();
+  for (let i = 0; i < 3; i++) {
+    const next = cleaned
+      .replace(/^(?:行动选项|后续选项|可选行动|actions?|options?|choices?)\s*[:：]\s*/i, '')
+      .replace(/^[-*•·]\s*/, '')
+      .replace(/^[（(]?\d+[）)]\s*/, '')
+      .replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '')
+      .replace(/^\d+[\.\)、:：]\s*/, '')
+      .replace(/^[A-Za-z][\.\)、:：]\s*/, '')
+      .replace(/^(?:选项|选择|行动|方案)\s*[一二三四五六七八九十\dA-Da-d]+\s*[:：.)、-]\s*/, '')
+      .replace(/^(?:选项|选择|行动|方案)\s*[:：]\s*/, '')
+      .trim();
+    if (next === cleaned) break;
+    cleaned = next;
+  }
+  return cleaned;
+}
+
+function isInvalidActionOption(option: string): boolean {
+  const normalized = option.trim();
+  if (!normalized) return true;
+  if (/^<\/?[A-Za-z0-9_\-\u3400-\u9fff]+\s*>$/i.test(normalized)) return true;
+  if (/<\/?\s*(?:disclaimer|免责声明|正文|短期记忆|剧情规划|变量草稿|变量候选|变量线索|变量摘要|命令|行动选项|动态世界|thinking|think|狭间问答|狭间评判)\s*>/i.test(normalized)) return true;
+  if (/^(?:行动选项|后续选项|可选行动|选项|actions?|options?|choices?)\s*[:：]?$/i.test(normalized)) return true;
+  if (/本(?:段|故事|内容|作品).*虚构|纯属虚构|免责声明|disclaimer/i.test(normalized)) return true;
+  return normalized.length > 120;
+}
+
+export function parseActionOptionsBlock(optionsBlock: string): string[] {
+  const text = (optionsBlock || '').trim();
+  if (!text) return [];
+
+  const splitCandidateLine = (line: string): string[] => {
+    const normalizedLine = line.trim();
+    if (!normalizedLine) return [];
+
+    const inlineEnumeratedMatches = Array.from(
+      normalizedLine.matchAll(/(?:^|\s)((?:\d+[\.)、:：]|[A-Za-z][\.)、:：]|[(（]\d+[)）]|[①②③④⑤⑥⑦⑧⑨⑩])\s*[\s\S]*?)(?=\s+(?:\d+[\.)、:：]|[A-Za-z][\.)、:：]|[(（]\d+[)）]|[①②③④⑤⑥⑦⑧⑨⑩])\s*|$)/g),
+    ).map((match) => (match[1] || '').trim()).filter(Boolean);
+    if (inlineEnumeratedMatches.length >= 2) {
+      return inlineEnumeratedMatches.map(cleanActionOptionText);
+    }
+
+    const quotedSegments = Array.from(
+      normalizedLine.matchAll(/[“"]([^“”"]{1,120})[”"]/g),
+    ).map((match) => (match[1] || '').trim()).filter(Boolean);
+    if (quotedSegments.length >= 2) return quotedSegments;
+
+    if (/[；;]/.test(normalizedLine)) {
+      const parts = normalizedLine.split(/[；;]/).map(cleanActionOptionText).filter(Boolean);
+      if (parts.length >= 2) return parts;
+    }
+
+    return [cleanActionOptionText(normalizedLine)].filter(Boolean);
+  };
+
+  const parsed = text
+    .replace(/<\s*disclaimer\s*>[\s\S]*?(?:<\s*\/\s*disclaimer\s*>|$)/gi, '\n')
+    .replace(/<\s*免责声明\s*>[\s\S]*?(?:<\s*\/\s*免责声明\s*>|$)/gi, '\n')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap(splitCandidateLine)
+    .filter((option) => !isInvalidActionOption(option));
+
+  return Array.from(new Set(parsed)).slice(0, 6);
+}
+
 export function parseResponse(rawText: string, options?: { repair?: boolean }): 解析后回复 {
   const text = options?.repair ? repairTags(rawText) : rawText;
   const result = 创建空解析回复();
@@ -176,24 +246,10 @@ export function parseResponse(rawText: string, options?: { repair?: boolean }): 
     if (leftover) result.body = leftover;
   }
 
-  // 把 <行动选项> 块进一步按行拆成单独选项；每行去掉前缀 `- `/`* `/`• `/数字`.`/`、`。
+  // 把 <行动选项> 块进一步拆成单独选项；兼容逐行、内联编号、引号片段和分号连写。
   // 同时去重、限制最多 6 条，避免 AI 失控生成 20 条。
   if (result.actionOptions.length) {
-    const expanded: string[] = [];
-    for (const block of result.actionOptions) {
-      for (const rawLine of block.split(/\r?\n/)) {
-        const cleaned = rawLine
-          .trim()
-          .replace(/^[-*•·]\s*/, '')
-          .replace(/^\d+[\.\)、]\s*/, '')
-          .replace(/^选项\s*\d*[:：]?\s*/, '')
-          .trim();
-        if (cleaned && !expanded.includes(cleaned)) expanded.push(cleaned);
-        if (expanded.length >= 6) break;
-      }
-      if (expanded.length >= 6) break;
-    }
-    result.actionOptions = expanded;
+    result.actionOptions = parseActionOptionsBlock(result.actionOptions.join('\n'));
   }
 
   result.body = stripProtocolBlocksFromBody(result.body);

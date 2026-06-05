@@ -15,6 +15,7 @@ export const BUILTIN_BOOK_IDS = [
   'builtin_compass',
   'builtin_worldview_core',
   'builtin_paths_lore',
+  'builtin_power_system_overview',
   'builtin_zhiku',
   'builtin_starrail_weekly_news',
   'builtin_phone_system',
@@ -189,8 +190,8 @@ const BATTLE_NARRATION_CONTENT = `## 战斗描写规范
 
 ### 战技联动
 - 若「# 战技系统」里存在已登记战技，优先让玩家的出手方式体现这些战技的关键词、效果、消耗与限制；正文只描述效果，不直接报出战技名称。
-- 未登记战技时，也可以用命途、装备、环境和身体动作来表现，不临时编造大量新技能。
-- 战技使用应有代价：动作空隙、体力消耗、暴露位置、装备磨损、被敌人看穿、影响旁人安全等；代价写成叙事后果，不写数值。
+- 未登记战技时，也可以用命途、随身物、环境和身体动作来表现，不临时编造大量新技能。
+- 战技使用应有代价：动作空隙、体力消耗、暴露位置、随身物受损、被敌人看穿、影响旁人安全等；代价写成叙事后果，不写数值。
 
 ### 后果写法
 - 伤势写成可观察事实：左肩被擦开、呼吸乱了、手腕发麻、外套烧焦、终端碎裂、通道被封死。
@@ -836,6 +837,42 @@ const PATHS_TENSION = `**命途本身之间没有冲突**。冲突来自**星神
 
 这意味着：玩家选择某条命途时不会自动获得敌人；若玩家自定义身份里写明与某个组织存在关系，才会在剧情中承接该组织的盟友、对手与现实代价。`;
 
+const POWER_SYSTEM_OVERVIEW_CONTENT = `## 力量体系总览
+
+本条是项目内部常驻战力标尺，用于约束主剧情与命途觉醒中的力量表现。它不是角色可见的数值面板，也不是世界内人物会直接背诵的术语；正文应把分级表现为动作、压迫感、代价、战术选择与旁人反应。
+
+### 基础原则
+
+- 命途不是技能树，也不等于固定职业。踏上命途代表某种信念、行事方式或存在倾向被星神路径照见；具体表现仍取决于个人经历、训练、装备、环境与剧情证据。
+- 命途力量不是万能解释。普通身体能力、武器、奇物、科技、忆质、星核污染、丰饶赐福、智械系统、组织资源都可能改变战斗结果。
+- 分级只给主剧情提供尺度，不允许把战斗写成数值比较。强者也会受伤、被牵制、被信息差误导或因保护他人而付出代价。
+- 星神、令使、星核级异常、星神造物、奇物灾害和文明级武装不按普通命途行者分级机械套用。
+
+### 分级战力口径声明
+
+以下“一人敌百 / 敌百 / 小型舰队 / 编队 / 城市军力”等战力参考，默认对标对象是无命途力量的普通士兵、普通治安武装、普通军队、常规载具与常规科技火力。
+
+这些参考不代表可以同时压制同数量的命途行者、令使、星核级异常、星神造物或特殊超凡单位。
+
+若对手同样拥有命途力量、星核污染、丰饶赐福、智械军团核心、奇物、忆质、虚数灾变等超凡加成，应按对方实际设定重新评估，不得机械套用人数或军力规模。
+
+### 命途行者阶段
+
+| 阶位 | 别名 | 说明 | 实力参考 |
+|---|---|---|---|
+| 浅涉 | 初级 | 刚踏上命途，对命途的理解主要来自踏上命途时一瞬间的信念；力量表现不稳定，常依赖直觉、情绪与场景刺激。 | 可对抗约百名无命途普通士兵 / 普通治安武装 |
+| 践行 | 中级 | 已经在命途上走了一段距离，对命途有自己的理解；能把力量稳定嵌入战斗、移动、感知、防御或辅助行为。 | 可对抗小型舰队对应的无命途士兵、登舰部队或地面武装，不等于击毁舰船本体 |
+| 深诣 | 高级 | 在命途上走了相当远，所行之事与命途理念高度合一；能在局部战场形成压倒性影响，但仍受资源、情报与环境限制。 | 可单挑行星级编队对应的无命途地面 / 人员武装，但不等于徒手击毁整支舰队 |
+| 伪令使 | 顶级 | 自然修行的天花板，既是命途践行者，也开始拓展自身对命途的解释；继续迈入令使必须经历星神授力。 | 可正面对抗 II 级行星重要城市级常规军力，包括重火力和常规舰队支援；但不代表碾压同级命途行者或令使 |
+
+### 叙事使用规则
+
+- 同阶之间仍可能差距巨大。战斗结果由角色性格、准备时间、目标、地形、装备、情报、伤势、保护对象和命途适配共同决定。
+- 低阶角色可以凭计划、协作、地形、奇物或牺牲拖住高阶角色；高阶角色也可能因顾忌平民、保护同伴、压制污染或隐藏身份而无法全力出手。
+- 不要把“浅涉可敌百”写成一人轻松屠杀百人。更合适的表现是压制、突围、牵制、震慑、夺取关键位置或迫使常规部队改变战术。
+- 不要用分级替代角色塑造。角色的命途表现必须贴合其信念与行为方式：巡猎偏目标与追击，存护偏守护与承受，毁灭偏破坏与代价，丰饶偏生命与失控，记忆偏锚定与回响，智识偏推演与结构，欢愉偏反常与戏剧性，虚无偏剥离与空洞，同谐偏共鸣与协作，开拓偏道路与跨越。
+- 若剧情需要突破本标尺，必须先给出明确铺垫：星神瞥视、令使授力、奇物代价、星核污染、特殊环境、群体仪式或长期积累。`;
+
 const PATHS_AWAKENING_INTERROGATION = `## 命途狭间·三问桥段(升阶仪式)
 
 这与「初次接触命途」时的瞥视狭间是**两个不同事件**。当旅人在某条命途上长期践行,把命途进度累积至满载(99/100)时,
@@ -1340,7 +1377,30 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 6. 智库：原著资料中枢占位世界书。scope=calibration，避免注入主叙事。
+  // 6. 力量体系：主剧情与命途觉醒常驻战力标尺，避免模型把常规军力误写成命途行者群体。
+  const powerSystemOverviewBook: 世界书 = {
+    id: 'builtin_power_system_overview',
+    title: '力量体系总览',
+    description: '主剧情常驻注入的项目力量体系标尺：约束命途行者阶段、常规军力参照与战斗叙事边界。',
+    enabled: true,
+    entries: [
+      entry({
+        id: 'builtin_power_system_overview_scale',
+        title: '力量体系总览',
+        content: POWER_SYSTEM_OVERVIEW_CONTENT,
+        type: 'system_rule',
+        injectMode: 'always',
+        keywords: [],
+        priority: 198,
+        enabled: true,
+        scope: ['main', 'pathAwakening'],
+      }, now),
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // 7. 智库：原著资料中枢占位世界书。scope=calibration，避免注入主叙事。
   const zhikuBook: 世界书 = {
     id: 'builtin_zhiku',
     title: '智库',
@@ -1363,7 +1423,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 7. 星际和平周报：独立新闻系统可见世界书。scope=calibration，避免注入主叙事。
+  // 8. 星际和平周报：独立新闻系统可见世界书。scope=calibration，避免注入主叙事。
   const newsWeeklyBook: 世界书 = {
     id: 'builtin_starrail_weekly_news',
     title: '星际和平周报',
@@ -1386,7 +1446,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 8. 手机系统：独立通讯终端世界书。scope=calibration，避免注入主叙事。
+  // 9. 手机系统：独立通讯终端世界书。scope=calibration，避免注入主叙事。
   const phoneSystemBook: 世界书 = {
     id: 'builtin_phone_system',
     title: '手机系统',
@@ -1409,7 +1469,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 9. 剧情编织：玩家自定义剧情导入与滑窗注入说明。scope=calibration，避免直接注入主叙事。
+  // 10. 剧情编织：玩家自定义剧情导入与滑窗注入说明。scope=calibration，避免直接注入主叙事。
   const storyWeavingBook: 世界书 = {
     id: 'builtin_story_weaving',
     title: '剧情编织',
@@ -1440,7 +1500,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 10. 伙伴档案：用于 NPC 记录写作与合并规则。scope=calibration，避免直接注入主叙事。
+  // 11. 伙伴档案：用于 NPC 记录写作与合并规则。scope=calibration，避免直接注入主叙事。
   const companionArchiveBook: 世界书 = {
     id: 'builtin_companion_archive',
     title: '伙伴档案',
@@ -1463,7 +1523,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 11. NSFW 档案：成人向独立档案世界书。scope=calibration，避免默认注入主叙事。
+  // 12. NSFW 档案：成人向独立档案世界书。scope=calibration，避免默认注入主叙事。
   const nsfwArchiveBook: 世界书 = {
     id: 'builtin_nsfw_archive',
     title: 'NSFW 档案',
@@ -1486,7 +1546,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 12. 变量系统：主剧情后结构化结算层。scope=calibration，避免直接注入主叙事。
+  // 13. 变量系统：主剧情后结构化结算层。scope=calibration，避免直接注入主叙事。
   const variableSystemBook: 世界书 = {
     id: 'builtin_variable_system',
     title: '变量系统',
@@ -1509,6 +1569,6 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  return [openingRuleBook, narrativeGeneralBook, forbiddenPhrasesBook, compassBook, worldviewBook, pathsBook, zhikuBook, newsWeeklyBook, phoneSystemBook, storyWeavingBook, companionArchiveBook, nsfwArchiveBook, variableSystemBook];
+  return [openingRuleBook, narrativeGeneralBook, forbiddenPhrasesBook, compassBook, worldviewBook, pathsBook, powerSystemOverviewBook, zhikuBook, newsWeeklyBook, phoneSystemBook, storyWeavingBook, companionArchiveBook, nsfwArchiveBook, variableSystemBook];
 }
 

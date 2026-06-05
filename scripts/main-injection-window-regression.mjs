@@ -22,18 +22,26 @@ assert(historyWindow.includes('MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20'), '即时
 assert(historyWindow.includes('maxMessages = MAIN_IMMEDIATE_STORY_REVIEW_LIMIT'), '即时剧情回顾默认必须读取统一常量。');
 assert(historyWindow.includes('buildLeanAssistantHistoryContent'), '必须提供主剧情历史 assistant 消息瘦身函数。');
 assert(historyWindow.includes('function hasMeaningfulText'), '即时剧情回顾必须过滤“无/暂无”等占位结构化文本。');
-assert(historyWindow.includes('【历史正文】'), '瘦身后的 assistant 历史必须保留正文锚点。');
+assert(historyWindow.includes('<正文>'), '瘦身后的 assistant 历史必须用标准 <正文> 协议保留正文锚点。');
+assert(historyWindow.includes('normalizeHistoryBodyForPrompt'), '瘦身后的 assistant 历史正文必须补齐旁白前缀，避免污染后续格式。');
+assert(historyWindow.includes('禁止把历史回合号、历史压缩说明或历史标签照抄进新正文'), '瘦身后的 assistant 历史必须明确禁止照抄历史元标签。');
+assert(!historyWindow.includes('【历史时间】'), '瘦身后的 assistant 历史不得使用会被正文渲染成角色的【历史时间】标签。');
+assert(!historyWindow.includes('【历史正文】'), '瘦身后的 assistant 历史不得使用会被正文渲染成角色的【历史正文】标签。');
 assert(!historyWindow.includes('【历史短期记忆】'), '瘦身后的 assistant 历史不得重复上传短期记忆。');
 assert(!historyWindow.includes('【历史变量草稿】'), '瘦身后的 assistant 历史不得重复上传变量草稿。');
 assert(!historyWindow.includes('【历史剧情规划】'), '瘦身后的 assistant 历史不得重复上传剧情规划。');
-assert(historyWindow.includes('needsBodyFallback = !memory && !events && !storyPlan'), '即时剧情回顾应在缺少结构化摘要时才回退正文摘录。');
-assert(historyWindow.includes('正文摘录：'), '即时剧情回顾正文内容只能作为兜底摘录。');
+assert(historyWindow.includes('needsBodyFallback = !memory && !events && !storyPlan'), '即时剧情回顾应识别缺少结构化摘要的兜底场景。');
+assert(historyWindow.includes('正文锚点：'), '即时剧情回顾必须保留短正文锚点，避免摘要遗漏导致 NPC 近回合失忆。');
+assert(historyWindow.includes('needsBodyFallback ? 260 : 180'), '即时剧情回顾有结构化摘要时也应保留更短正文锚点。');
+assert(!historyWindow.includes('const body = needsBodyFallback ?'), '即时剧情回顾不得只在兜底时才读取正文。');
 assert(!historyWindow.includes('正文：${compactText(body, 320)}'), '即时剧情回顾不得继续默认重复上传 assistant 正文。');
 
 assert(sendWorkflow.includes('buildImmediateStoryReview(updatedHistory)'), '主剧情真实请求必须使用默认即时剧情回顾窗口。');
 assert(!sendWorkflow.includes('buildImmediateStoryReview(updatedHistory, 12)'), '主剧情真实请求不得继续固定 12 条即时剧情回顾。');
 assert(sendWorkflow.includes('buildLeanAssistantHistoryContent(msg)'), '主剧情原始 assistant messages 必须先瘦身，避免和即时剧情回顾重复。');
 assert(!sendWorkflow.includes("创建聊天消息('assistant', msg.content)"), '主剧情不得继续直接上传 assistant raw content。');
+assert(sendWorkflow.includes('stripLeakedHistoryMetaFromBody'), '主剧情落库前必须清理模型照抄的历史元标签。');
+assert(sendWorkflow.includes("tag === '历史时间'"), '模型照抄【历史时间】时必须从正文中移除。');
 assert(contextSnapshot.includes('buildImmediateStoryReview(state.chatHistory)'), '上下文预览必须使用同一即时剧情回顾窗口。');
 assert(!contextSnapshot.includes('buildImmediateStoryReview(state.chatHistory, 12)'), '上下文预览不得继续固定 12 条即时剧情回顾。');
 

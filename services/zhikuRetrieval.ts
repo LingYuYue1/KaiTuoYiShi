@@ -2,6 +2,7 @@
 import type { API配置项, 智库系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
+import { normalizeStructuredModelText } from '@/services/ai/structuredOutputRepair';
 import { ZHIKU_CATEGORY_LABELS, 搜索智库条目 } from '@/models/zhiku';
 import type { 智库软结构标签 } from '@/models/zhiku';
 import { 解析智库软结构标签, 获取智库人物名, 获取智库人物名列表, 比较智库人物节点 } from '@/models/zhiku';
@@ -357,45 +358,8 @@ export async function retrieveZhikuContextWithModel(
     })
     .join('\n\n');
 
-  const systemPrompt = [
-    '你是原著资料中枢「智库」的召回模型。你的任务不是写正文，而是从候选资料中挑出最相关条目，供后续注入主剧情。',
-    '',
-    '## 智库思维链（内部执行，不要输出）',
-    ZHIKU_COT_PROMPT,
-    '',
-    sceneHints.length ? `当前开局锚点：${sceneHints.slice(0, 8).join('、')}` : '当前开局锚点：无',
-    '若开局地点、当前地点或场景明显指向某一条故事线，请优先选择同区域资料，不要让空间站等通用背景抢走召回权。',
-    '',
-    '规则：',
-    '- 只返回候选列表中的编号，不要编造新条目。',
-    '- 优先选择与当前输入直接相关、能影响剧情理解或设定判断的条目。',
-    '- 角色相关资料只挑 character / 人物表现 / 主体人格 / OOC风险 / 角色边界类条目，用于校准口吻、行为和人设稳定性。',
-    '- 强相关资料、弱相关资料只挑非角色类设定资料，例如地点、组织、物品、概念、敌人、机制等；不要把 character 条目放进强/弱相关。',
-    '- 如果候选中有在场角色的“角色主体 / 主体人格 / OOC风险”，它们优先放入角色相关资料，且不占用强/弱相关资料名额。',
-    `- 角色相关资料最多可选 ${CHARACTER_ANCHOR_ENTRY_LIMIT} 条；多人同场时优先覆盖每个在场/预期登场角色的主体人格与 OOC 风险。`,
-    '- 形态、命途、阶段资料不得覆盖主体人格；未解锁、只读或非主剧情范围的人物资料不得当作当前事实。',
-    '- 原著剧情正文不参与智库普通召回；剧情推进由剧情编织系统管理，避免已完成剧情重复注入。',
-    '- 如果有连续事件链、人物关系链、地点链、物品链，优先保留承接最强的条目。',
-    '- 强相关资料可多于 1 条；弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留。若完全无关，对应分类写无。',
-    '- 返回时按相关性从高到低排序。',
-    '',
-    '输出格式必须严格为三行：',
-    '角色相关资料：【编号】|【编号】|【编号】|【编号】',
-    '强相关资料：【编号】|【编号】',
-    '弱相关资料：【编号】|【编号】',
-    '若某类为空，写“无”。',
-    '',
-    '额外说明：',
-    '- 你看到的候选已经是本回合初筛结果，请专注于最终筛选，而不是二次扩写摘要。',
-  ].join('\n');
-
-  const userPrompt = [
-    `本回合召回上下文：${query.trim()}`,
-    `召回条数上限：${limit}`,
-    '',
-    '候选资料：',
-    candidateText,
-  ].join('\n');
+  const systemPrompt = buildZhikuModelSystemPrompt(sceneHints);
+  const userPrompt = buildZhikuModelUserPrompt(query, limit, candidateText);
 
   try {
     const rawText = await withRetries(
@@ -412,8 +376,20 @@ export async function retrieveZhikuContextWithModel(
     const pickedGroups = parseZhikuIndexes(rawText, candidates, limit, fallback.characterEntries ?? []);
     const picked = mergeZhikuGroups(pickedGroups);
     if (!picked.length) {
-      return { entries: [], injection: '', usedModel: true, rawText, diagnostics: fallback.diagnostics };
+      return {
+        ...fallback,
+        usedModel: true,
+        rawText,
+        diagnostics: {
+          ...(fallback.diagnostics ?? buildEmptyZhikuDiagnostics()),
+          检查项: [
+            ...((fallback.diagnostics ?? buildEmptyZhikuDiagnostics()).检查项),
+            '智库模型已使用 Step0~Step8 思维链，但没有返回有效编号；已回退本地召回结果。',
+          ],
+        },
+      };
     }
+    const fallbackDiagnostics = fallback.diagnostics ?? buildEmptyZhikuDiagnostics();
     return {
       entries: picked,
       characterEntries: pickedGroups.characterEntries,
@@ -423,16 +399,61 @@ export async function retrieveZhikuContextWithModel(
       usedModel: true,
       rawText,
       diagnostics: {
-        ...(fallback.diagnostics ?? buildEmptyZhikuDiagnostics()),
+        ...fallbackDiagnostics,
         角色相关资料: pickedGroups.characterEntries.map((entry) => entry.标题),
         强相关资料: pickedGroups.strongEntries.map((entry) => entry.标题).slice(0, limit),
         弱相关资料: pickedGroups.weakEntries.map((entry) => entry.标题).slice(0, limit),
         已注入资料: picked.map((entry) => entry.标题),
+        检查项: [
+          ...fallbackDiagnostics.检查项,
+          '智库模型已使用 Step0~Step8 思维链完成上下文分析、角色门禁、资料相关性判断与最终召回。',
+        ],
       },
     };
   } catch {
     return fallback;
   }
+}
+
+export function buildZhikuModelSystemPrompt(sceneHints: string[] = []): string {
+  return [
+    ZHIKU_COT_PROMPT,
+    '',
+    '## 输出与筛选硬规则',
+    sceneHints.length ? `当前开局锚点：${sceneHints.slice(0, 8).join('、')}` : '当前开局锚点：无',
+    '若开局地点、当前地点或场景明显指向某一条故事线，请优先选择同区域资料，不要让空间站等通用背景抢走召回权。',
+    '',
+    '- 只返回候选列表中的编号与候选标题，不要编造新条目；推荐写成【编号：候选标题】。',
+    '- 角色相关资料只挑 character / 人物表现 / 主体人格 / OOC风险 / 角色边界类条目，用于校准口吻、行为和人设稳定性。',
+    '- 强相关资料、弱相关资料只挑非角色类设定资料，例如地点、组织、物品、概念、敌人、机制等；不要把 character 条目放进强/弱相关。',
+    '- 如果候选中有在场角色的“角色主体 / 主体人格 / OOC风险”，它们优先放入角色相关资料，且不占用强/弱相关资料名额。',
+    `- 角色相关资料最多可选 ${CHARACTER_ANCHOR_ENTRY_LIMIT} 条；多人同场时优先覆盖每个在场/预期登场角色的主体人格与 OOC 风险。`,
+    '- 形态、命途、阶段资料不得覆盖主体人格；未解锁、只读或非主剧情范围的人物资料不得当作当前事实。',
+    '- 原著剧情正文不参与智库普通召回；剧情推进由剧情编织系统管理，避免已完成剧情重复注入。',
+    '- 如果有连续事件链、人物关系链、地点链、物品链，优先保留承接最强的条目。',
+    '- 强相关资料可多于 1 条；弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留。若完全无关，对应分类写无。',
+    '- 返回时按相关性从高到低排序。',
+    '',
+    '输出格式必须严格为三行：',
+    '角色相关资料：【编号：候选标题】|【编号：候选标题】|【编号：候选标题】',
+    '强相关资料：【编号：候选标题】|【编号：候选标题】',
+    '弱相关资料：【编号：候选标题】|【编号：候选标题】',
+    '若某类为空，写“无”。',
+    '',
+    '额外说明：',
+    '- 你看到的候选已经是本回合初筛结果，请专注于最终筛选，而不是二次扩写摘要。',
+    '- 不要输出内部分析、解释文字或额外格式。',
+  ].join('\n');
+}
+
+export function buildZhikuModelUserPrompt(query: string, limit: number, candidateText: string): string {
+  return [
+    `本回合召回上下文：${query.trim()}`,
+    `召回条数上限：${limit}`,
+    '',
+    '候选资料：',
+    candidateText,
+  ].join('\n');
 }
 
 function resolveZhikuRecallConfig(mainConfig: API配置项, settings: 智库系统设置): API配置项 {
@@ -530,7 +551,7 @@ function parseZhikuIndexes(
   const character: number[] = [];
   const strong: number[] = [];
   const weak: number[] = [];
-  const text = (raw || '').trim();
+  const text = normalizeStructuredModelText(raw);
   for (const line of text.split(/\r?\n/)) {
     const isCharacter = /角色相关资料|人物相关资料|角色资料|人物资料/i.test(line);
     const isStrong = /强相关资料|强回忆/i.test(line);
@@ -547,6 +568,15 @@ function parseZhikuIndexes(
       if (isStrong && isNormalRecallEntry(entry) && !strong.includes(index)) strong.push(index);
       if (isWeak && isNormalRecallEntry(entry) && !weak.includes(index) && !strong.includes(index)) weak.push(index);
     }
+    if (!matches.length) {
+      const namedIndexes = findZhikuCandidateIndexesByName(content, candidates);
+      for (const index of namedIndexes) {
+        const entry = candidates[index];
+        if (isCharacter && entry.分类 === 'character' && !character.includes(index)) character.push(index);
+        if (isStrong && isNormalRecallEntry(entry) && !strong.includes(index)) strong.push(index);
+        if (isWeak && isNormalRecallEntry(entry) && !weak.includes(index) && !strong.includes(index)) weak.push(index);
+      }
+    }
   }
   const characterEntries = mergeZhikuEntries(character.map((index) => candidates[index]), fallbackCharacterEntries)
     .slice(0, getCharacterAnchorLimit(limit));
@@ -555,6 +585,23 @@ function parseZhikuIndexes(
     strongEntries: strong.map((index) => candidates[index]).slice(0, limit),
     weakEntries: weak.map((index) => candidates[index]).slice(0, limit),
   };
+}
+
+function findZhikuCandidateIndexesByName(content: string, candidates: 智库条目[]): number[] {
+  const parts = content
+    .split(/[|｜,，、]/)
+    .map((item) => item.replace(/[【】\[\]\s]/g, '').trim())
+    .filter(Boolean);
+  const indexes: number[] = [];
+  for (const part of parts) {
+    const index = candidates.findIndex((entry) => {
+      const title = entry.标题.replace(/\s+/g, '');
+      const characterNames = 获取智库人物名列表(entry).map((name) => name.replace(/\s+/g, ''));
+      return title === part || title.includes(part) || part.includes(title) || characterNames.some((name) => name === part);
+    });
+    if (index >= 0 && !indexes.includes(index)) indexes.push(index);
+  }
+  return indexes;
 }
 
 function buildZhikuInjection(groups: 智库召回分组, sceneHints: string[] = []): string {

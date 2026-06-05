@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
@@ -22,6 +22,7 @@ import {
   startingScenarios,
   storyModes,
 } from '@/data/journeyPresets';
+import { loadSetting, saveSetting } from '@/services/dbService';
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
 interface NewGameWizardProps {
@@ -35,7 +36,37 @@ type Step = 'world' | 'character' | 'path' | 'historian' | 'overview';
 type CanonicalTrailblazer = 'stelle' | 'caelus' | 'both';
 type OpeningScenario = (typeof startingScenarios)[number];
 
+interface OpeningPresetDraft {
+  storyMode: 剧情模式;
+  name: string;
+  alias: string;
+  gender: string;
+  age: number;
+  birthday: string;
+  appearance: string;
+  personality: string;
+  background: string;
+  pathId: 命途ID;
+  pathStage: 命途阶段;
+  factionId: 阵营ID;
+  customIdentity: string;
+  selectedAbilityIds: string[];
+  customAbilities: string[];
+  startingScenarioId: string;
+  canonicalTrailblazer: CanonicalTrailblazer;
+  customStartPrompt: string;
+}
+
+interface OpeningPlayerPreset {
+  id: string;
+  title: string;
+  updatedAt: number;
+  draft: OpeningPresetDraft;
+}
+
 const STEPS: Step[] = ['world', 'character', 'path', 'historian', 'overview'];
+const OPENING_PLAYER_PRESETS_KEY = 'openingPlayerPresets';
+const MAX_OPENING_PLAYER_PRESETS = 20;
 
 const STEP_META: Record<Step, { title: string; subtitle: string }> = {
   world: { title: '世界设定', subtitle: '先定故事底色与回合张力' },
@@ -66,6 +97,10 @@ const OPENING_PATH_STAGE_DEFS = PATH_STAGE_DEFS;
 
 export function NewGameWizard({ onStart, onBack, onGenerateTravelerTemplate }: NewGameWizardProps) {
   const [step, setStep] = useState<Step>('world');
+  const [openingPresets, setOpeningPresets] = useState<OpeningPlayerPreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetNameDraft, setPresetNameDraft] = useState('');
+  const [presetStatus, setPresetStatus] = useState('');
 
   const [storyMode, setStoryMode] = useState<剧情模式>('normal');
 
@@ -93,6 +128,26 @@ export function NewGameWizard({ onStart, onBack, onGenerateTravelerTemplate }: N
   const [customStartPrompt, setCustomStartPrompt] = useState('');
   const birthdayParts = useMemo(() => splitBirthday(birthday), [birthday]);
 
+  useEffect(() => {
+    let cancelled = false;
+    loadSetting<OpeningPlayerPreset[]>(OPENING_PLAYER_PRESETS_KEY)
+      .then((saved) => {
+        if (cancelled) return;
+        const normalized = normalizeOpeningPresets(saved);
+        setOpeningPresets(normalized);
+        if (normalized.length > 0) {
+          setSelectedPresetId(normalized[0].id);
+          setPresetNameDraft(normalized[0].title);
+        }
+      })
+      .catch((err) => {
+        console.warn('[new-game] 开局预设读取失败:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const storyModeDef = useMemo(
     () => getStoryMode(storyMode) ?? storyModes[0],
     [storyMode],
@@ -106,6 +161,49 @@ export function NewGameWizard({ onStart, onBack, onGenerateTravelerTemplate }: N
   const selectedScenario = useMemo<OpeningScenario>(
     () => getStartingScenario(startingScenarioId) ?? startingScenarios[0],
     [startingScenarioId],
+  );
+
+  const currentPresetDraft = useMemo<OpeningPresetDraft>(
+    () => ({
+      storyMode,
+      name,
+      alias,
+      gender,
+      age,
+      birthday,
+      appearance,
+      personality,
+      background,
+      pathId,
+      pathStage,
+      factionId,
+      customIdentity,
+      selectedAbilityIds,
+      customAbilities,
+      startingScenarioId,
+      canonicalTrailblazer,
+      customStartPrompt,
+    }),
+    [
+      alias,
+      appearance,
+      background,
+      birthday,
+      canonicalTrailblazer,
+      customAbilities,
+      customIdentity,
+      customStartPrompt,
+      factionId,
+      gender,
+      age,
+      name,
+      pathId,
+      pathStage,
+      personality,
+      selectedAbilityIds,
+      startingScenarioId,
+      storyMode,
+    ],
   );
 
   const selectedAbilityNames = useMemo(
@@ -154,6 +252,81 @@ export function NewGameWizard({ onStart, onBack, onGenerateTravelerTemplate }: N
 
   const removeCustomAbility = (text: string) => {
     setCustomAbilities((prev) => prev.filter((x) => x !== text));
+  };
+
+  const persistOpeningPresets = async (nextPresets: OpeningPlayerPreset[]) => {
+    const normalized = normalizeOpeningPresets(nextPresets);
+    setOpeningPresets(normalized);
+    await saveSetting(OPENING_PLAYER_PRESETS_KEY, normalized);
+  };
+
+  const applyOpeningPreset = (presetId: string) => {
+    const preset = openingPresets.find((item) => item.id === presetId);
+    if (!preset) return;
+    const draft = sanitizeOpeningPresetDraft(preset.draft);
+    setStoryMode(draft.storyMode);
+    setName(draft.name);
+    setAlias(draft.alias);
+    setGender(draft.gender);
+    setAge(draft.age);
+    setBirthday(draft.birthday);
+    setAppearance(draft.appearance);
+    setPersonality(draft.personality);
+    setBackground(draft.background);
+    setPathId(draft.pathId);
+    setPathStage(draft.pathStage);
+    setFactionId(draft.factionId);
+    setCustomIdentity(draft.customIdentity);
+    setSelectedAbilityIds(draft.selectedAbilityIds);
+    setCustomAbilities(draft.customAbilities);
+    setCustomAbilityDraft('');
+    setStartingScenarioId(draft.startingScenarioId);
+    setCanonicalTrailblazer(draft.canonicalTrailblazer);
+    setCustomStartPrompt(draft.customStartPrompt);
+    setSelectedPresetId(preset.id);
+    setPresetNameDraft(preset.title);
+    setPresetStatus(`已套用预设：${preset.title}`);
+  };
+
+  const saveCurrentOpeningPreset = async () => {
+    const title = (presetNameDraft.trim() || name.trim() || alias.trim() || '未命名开局预设').slice(0, 32);
+    const existingBySelected = openingPresets.find((item) => item.id === selectedPresetId);
+    const existingByTitle = openingPresets.find((item) => item.title === title);
+    const id = existingBySelected?.id ?? existingByTitle?.id ?? `opening-${Date.now().toString(36)}`;
+    const nextPreset: OpeningPlayerPreset = {
+      id,
+      title,
+      updatedAt: Date.now(),
+      draft: currentPresetDraft,
+    };
+    const nextPresets = [
+      nextPreset,
+      ...openingPresets.filter((item) => item.id !== id && item.title !== title),
+    ].slice(0, MAX_OPENING_PLAYER_PRESETS);
+    try {
+      await persistOpeningPresets(nextPresets);
+      setSelectedPresetId(id);
+      setPresetNameDraft(title);
+      setPresetStatus(`已保存预设：${title}`);
+    } catch (err) {
+      console.warn('[new-game] 开局预设保存失败:', err);
+      setPresetStatus('保存失败，请稍后再试');
+    }
+  };
+
+  const deleteSelectedOpeningPreset = async () => {
+    if (!selectedPresetId) return;
+    const target = openingPresets.find((item) => item.id === selectedPresetId);
+    const nextPresets = openingPresets.filter((item) => item.id !== selectedPresetId);
+    try {
+      await persistOpeningPresets(nextPresets);
+      setSelectedPresetId(nextPresets[0]?.id ?? '');
+      setPresetNameDraft(nextPresets[0]?.title ?? '');
+      setPresetStatus(target ? `已删除预设：${target.title}` : '已删除预设');
+    } catch (err) {
+      console.warn('[new-game] 开局预设删除失败:', err);
+      setPresetStatus('删除失败，请稍后再试');
+    }
   };
 
   const handlePathChange = (nextPathId: 命途ID) => {
@@ -211,7 +384,6 @@ export function NewGameWizard({ onStart, onBack, onGenerateTravelerTemplate }: N
       主命途: pathId,
       命途列表: startingPaths,
       能力: abilityNames,
-      装备: {},
       背包: [],
       战技列表: [],
     };
@@ -346,8 +518,19 @@ export function NewGameWizard({ onStart, onBack, onGenerateTravelerTemplate }: N
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-2 sm:min-w-[260px]">
+              <div className="grid grid-cols-1 gap-2 sm:min-w-[320px]">
                 <MiniStat label="剧情模式" value={storyModeDef.name} />
+                <OpeningPresetControls
+                  presets={openingPresets}
+                  selectedPresetId={selectedPresetId}
+                  presetNameDraft={presetNameDraft}
+                  status={presetStatus}
+                  onPresetNameDraft={setPresetNameDraft}
+                  onSelectPreset={setSelectedPresetId}
+                  onApplyPreset={applyOpeningPreset}
+                  onSavePreset={saveCurrentOpeningPreset}
+                  onDeletePreset={deleteSelectedOpeningPreset}
+                />
               </div>
             </div>
 
@@ -497,6 +680,115 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       </div>
       <div className="mt-1 text-sm font-medium" style={{ color: 'rgba(241, 234, 214, 0.94)' }}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+function OpeningPresetControls({
+  presets,
+  selectedPresetId,
+  presetNameDraft,
+  status,
+  onPresetNameDraft,
+  onSelectPreset,
+  onApplyPreset,
+  onSavePreset,
+  onDeletePreset,
+}: {
+  presets: OpeningPlayerPreset[];
+  selectedPresetId: string;
+  presetNameDraft: string;
+  status: string;
+  onPresetNameDraft: (value: string) => void;
+  onSelectPreset: (value: string) => void;
+  onApplyPreset: (id: string) => void;
+  onSavePreset: () => void;
+  onDeletePreset: () => void;
+}) {
+  const hasSelected = Boolean(selectedPresetId && presets.some((item) => item.id === selectedPresetId));
+
+  return (
+    <div
+      className="p-3 text-left"
+      style={{
+        background: 'rgba(10, 9, 11, 0.72)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[10px] tracking-[0.26em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.65)' }}>
+          我的开局预设
+        </div>
+        <div className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}>
+          {presets.length}/{MAX_OPENING_PLAYER_PRESETS}
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <input
+          value={presetNameDraft}
+          onChange={(event) => onPresetNameDraft(event.target.value)}
+          placeholder="预设名，例如：公司调查员"
+          className="kaituo-input w-full px-3 py-2 text-xs"
+          style={{ clipPath: smallClip }}
+        />
+
+        <select
+          value={selectedPresetId}
+          onChange={(event) => {
+            const nextId = event.target.value;
+            onSelectPreset(nextId);
+            const selected = presets.find((item) => item.id === nextId);
+            if (selected) onPresetNameDraft(selected.title);
+          }}
+          className="kaituo-input w-full px-3 py-2 text-xs"
+          style={{ clipPath: smallClip }}
+        >
+          <option value="">暂无已保存预设</option>
+          {presets.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.title}
+            </option>
+          ))}
+        </select>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={onSavePreset}
+            className="kaituo-btn kaituo-btn-primary px-2 py-2 text-[11px]"
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            onClick={() => selectedPresetId && onApplyPreset(selectedPresetId)}
+            disabled={!hasSelected}
+            className="kaituo-btn kaituo-btn-secondary px-2 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            套用
+          </button>
+          <button
+            type="button"
+            onClick={onDeletePreset}
+            disabled={!hasSelected}
+            className="px-2 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
+            style={{
+              background: 'rgba(180, 64, 64, 0.12)',
+              color: 'rgba(255, 210, 210, 0.92)',
+              boxShadow: 'inset 0 0 0 1px rgba(255, 120, 120, 0.22)',
+              clipPath: smallClip,
+            }}
+          >
+            删除
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-2 text-[10px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+        {status || '只保存开局表单，不保存 API key 或存档进度。'}
       </div>
     </div>
   );
@@ -1898,6 +2190,92 @@ function buildOpeningSummary({
 
 function getCanonicalTrailblazer(id: CanonicalTrailblazer) {
   return CANONICAL_TRAILBLAZERS.find((item) => item.id === id) ?? CANONICAL_TRAILBLAZERS[0];
+}
+
+function normalizeOpeningPresets(value: unknown): OpeningPlayerPreset[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const raw = item as Partial<OpeningPlayerPreset>;
+      const draft = sanitizeOpeningPresetDraft(raw.draft);
+      const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 32) : draft.name || '未命名开局预设';
+      return {
+        id: typeof raw.id === 'string' && raw.id ? raw.id : `opening-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        title,
+        updatedAt: typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : Date.now(),
+        draft,
+      };
+    })
+    .filter((item): item is OpeningPlayerPreset => Boolean(item))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_OPENING_PLAYER_PRESETS);
+}
+
+function sanitizeOpeningPresetDraft(value: unknown): OpeningPresetDraft {
+  const raw = value && typeof value === 'object' ? (value as Partial<OpeningPresetDraft>) : {};
+  return {
+    storyMode: isStoryMode(raw.storyMode) ? raw.storyMode : 'normal',
+    name: sanitizeText(raw.name),
+    alias: sanitizeText(raw.alias),
+    gender: sanitizeText(raw.gender),
+    age: normalizeAge(raw.age),
+    birthday: sanitizeText(raw.birthday),
+    appearance: sanitizeText(raw.appearance),
+    personality: sanitizeText(raw.personality),
+    background: sanitizeText(raw.background),
+    pathId: isPathId(raw.pathId) ? raw.pathId : 'none',
+    pathStage: isPathStage(raw.pathStage) ? raw.pathStage : 0,
+    factionId: isFactionId(raw.factionId) ? raw.factionId : 'none',
+    customIdentity: sanitizeText(raw.customIdentity),
+    selectedAbilityIds: sanitizeStringArray(raw.selectedAbilityIds)
+      .filter((id) => abilityPresets.some((ability) => ability.id === id))
+      .slice(0, 2),
+    customAbilities: sanitizeStringArray(raw.customAbilities).slice(0, 8),
+    startingScenarioId:
+      typeof raw.startingScenarioId === 'string' && startingScenarios.some((item) => item.id === raw.startingScenarioId)
+        ? raw.startingScenarioId
+        : startingScenarios[0]?.id ?? '',
+    canonicalTrailblazer: isCanonicalTrailblazer(raw.canonicalTrailblazer) ? raw.canonicalTrailblazer : 'stelle',
+    customStartPrompt: sanitizeText(raw.customStartPrompt),
+  };
+}
+
+function sanitizeText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function sanitizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+}
+
+function normalizeAge(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 20;
+  return Math.max(0, Math.min(999, Math.round(num)));
+}
+
+function isStoryMode(value: unknown): value is 剧情模式 {
+  return storyModes.some((item) => item.id === value);
+}
+
+function isPathId(value: unknown): value is 命途ID {
+  return paths.some((item) => item.id === value);
+}
+
+function isPathStage(value: unknown): value is 命途阶段 {
+  return PATH_STAGE_DEFS.some((item) => item.stage === value);
+}
+
+function isFactionId(value: unknown): value is 阵营ID {
+  return factions.some((item) => item.id === value);
+}
+
+function isCanonicalTrailblazer(value: unknown): value is CanonicalTrailblazer {
+  return CANONICAL_TRAILBLAZERS.some((item) => item.id === value);
 }
 
 function splitBirthday(value: string): { month: string; day: string } {

@@ -3,16 +3,43 @@ import type { 剧情编织分段, 剧情编织系列, 剧情编织系统 } from 
 import { 归一化剧情编织系统, 归一化剧情编织系列 } from '@/models/storyWeaving';
 import { bundledZhikuPresets, loadBundledZhikuPreset } from '@/data/zhikuPreset';
 
-const STORY_PRESET_IDS = new Set([
-  'zhiku_herta_station_chapter1',
-  'zhiku_jarilo_vi_chapters',
-  'zhiku_jarilo_vi_sunrise_chapters',
-  'zhiku_xianzhou_luofu_travel_chapters',
-  'zhiku_xianzhou_luofu_cloud_tree_chapters',
-  'zhiku_xianzhou_luofu_aftermath_chapters',
-]);
-
-const decomposedOnlyStoryWeavingPresets: BundledStoryWeavingPreset[] = [
+const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
+  {
+    id: 'story_canon_zhiku_herta_station_chapter1',
+    title: '黑塔空间站-今天是昨天的明天',
+    description: '已分解内置剧情编织：黑塔空间站开局主线。',
+    zhikuPresetId: 'zhiku_herta_station_chapter1',
+  },
+  {
+    id: 'story_canon_zhiku_jarilo_vi_chapters',
+    title: '雅利洛-VI-于枯索的冬夜里',
+    description: '已分解内置剧情编织：雅利洛-VI 主线前段。',
+    zhikuPresetId: 'zhiku_jarilo_vi_chapters',
+  },
+  {
+    id: 'story_canon_zhiku_jarilo_vi_sunrise_chapters',
+    title: '雅利洛-VI-黎明将至',
+    description: '已分解内置剧情编织：雅利洛-VI 主线后段。',
+    zhikuPresetId: 'zhiku_jarilo_vi_sunrise_chapters',
+  },
+  {
+    id: 'story_canon_zhiku_xianzhou_luofu_travel_chapters',
+    title: '仙舟罗浮其一-乘槎驭风仙窟游',
+    description: '已分解内置剧情编织：仙舟罗浮主线开端。',
+    zhikuPresetId: 'zhiku_xianzhou_luofu_travel_chapters',
+  },
+  {
+    id: 'story_canon_zhiku_xianzhou_luofu_cloud_tree_chapters',
+    title: '仙舟罗浮其二-云树百丈蔽重楼',
+    description: '已分解内置剧情编织：仙舟罗浮建木危机。',
+    zhikuPresetId: 'zhiku_xianzhou_luofu_cloud_tree_chapters',
+  },
+  {
+    id: 'story_canon_zhiku_xianzhou_luofu_aftermath_chapters',
+    title: '仙舟罗浮其三-安灵布奠，天清路远',
+    description: '已分解内置剧情编织：仙舟罗浮主线收束。',
+    zhikuPresetId: 'zhiku_xianzhou_luofu_aftermath_chapters',
+  },
   {
     id: 'story_canon_side_belobog_future_market',
     title: '【支线】贝洛伯格-冬梦激醒',
@@ -72,15 +99,7 @@ export interface BundledStoryWeavingPreset {
   zhikuPresetId: string;
 }
 
-export const bundledStoryWeavingPresets: BundledStoryWeavingPreset[] = bundledZhikuPresets
-  .filter((preset) => STORY_PRESET_IDS.has(preset.id))
-  .map((preset) => ({
-    id: `story_canon_${preset.id}`,
-    title: preset.title,
-    description: preset.description,
-    zhikuPresetId: preset.id,
-  }))
-  .concat(decomposedOnlyStoryWeavingPresets);
+export const bundledStoryWeavingPresets: BundledStoryWeavingPreset[] = decomposedStoryWeavingPresets;
 
 export async function loadBundledStoryWeavingPreset(preset: BundledStoryWeavingPreset): Promise<剧情编织系列 | null> {
   const decomposed = await loadDecomposedCanonSeries(preset.id);

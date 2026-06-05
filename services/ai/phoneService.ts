@@ -1,4 +1,4 @@
-import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+﻿import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
@@ -15,6 +15,7 @@ import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
 import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
+import { extractJsonLikeText, normalizeStructuredModelText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import { buildImmediateStoryReview } from '@/hooks/useGame/historyWindow';
 import { getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 
@@ -27,6 +28,7 @@ export interface 手机回复上下文 {
   news: 新闻条目[];
   turnCount: number;
   chat: 手机会话;
+  contacts?: 手机联系人[];
   contact?: 手机联系人;
   userText?: string;
   seed?: 主动来信种子;
@@ -75,18 +77,24 @@ export async function generatePhoneReply(
 ): Promise<手机回复结果> {
   const systemPrompt = buildPhoneSystemPrompt(ctx);
   const messages = buildPhoneMessages(ctx);
-  const messageLimit = ctx.chat.type === 'group' ? 15 : 6;
+  const messageLimit = ctx.chat.type === 'group' ? 20 : 6;
+  const minMessages = ctx.chat.type === 'group' ? 12 : 3;
   const raw = await withRetries(
     () =>
       chatCompletionNonStream(config, {
         systemPrompt,
         messages,
-        maxTokens: config.maxTokens ?? 1200,
+        maxTokens: config.maxTokens ?? (ctx.chat.type === 'group' ? 1800 : 1200),
         temperature: config.temperature ?? 0.75,
       }),
     { retries: retryCount, label: '手机系统' },
   );
-  return dedupePhoneReply(parsePhoneReply(raw, messageLimit), ctx, messageLimit);
+  return ensurePhoneReplyMinimum(
+    dedupePhoneReply(parsePhoneReply(raw, messageLimit, minMessages), ctx, messageLimit, minMessages),
+    ctx,
+    messageLimit,
+    minMessages,
+  );
 }
 
 export function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
@@ -103,9 +111,10 @@ export function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
     '写法要求：',
     ctx.chat.type === 'group'
       ? [
-          '- 群聊一次输出总条数 6-15 条，不要让所有人都说话。',
+          '- 群聊一次输出总条数必须为 12-20 条，少于 12 条视为错误；不要让所有人都说话。',
           '- 每个角色本轮回复条目可为 0-6 条，先判断谁需要说话，再决定每个人说几条。',
           '- 群聊内容要像真实多人聊天，保持不同角色的短句交错与节奏，不要写成长篇小说。',
+          '- 群聊 messages 每条必须使用「姓名：内容」格式，至少出现 3 位不同发言者。',
         ].join('\n')
       : [
           '- 一次回复生成 3-6 条短讯，像真实聊天连续弹出。',
@@ -118,7 +127,9 @@ export function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
     '- 允许体现关系、担心、调侃、任务提醒或新闻反应；不要越权修改变量。',
     '- 手机聊天会写回记忆，所以内容要能被摘要，不要只剩空话或表情包式废句。',
     '严格输出 JSON，不要代码块，不要解释：',
-    '{"messages":["短讯1","短讯2"],"summary":"一句话通讯摘要"}',
+    ctx.chat.type === 'group'
+      ? '{"messages":["三月七：短讯1","丹恒：短讯2","三月七：短讯3","姬子：短讯4","丹恒：短讯5","三月七：短讯6","姬子：短讯7","三月七：短讯8","丹恒：短讯9","姬子：短讯10","三月七：短讯11","丹恒：短讯12"],"summary":"一句话群聊摘要"}'
+      : '{"messages":["短讯1","短讯2","短讯3"],"summary":"一句话通讯摘要"}',
   ].join('\n');
 }
 
@@ -158,20 +169,8 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
   const groupNpcLines =
     ctx.chat.type === 'group'
       ? ctx.chat.participantIds
-          .map((participantId) =>
-            ctx.npcRecords.find((item) => item.id === participantId || `npc_${item.id}` === participantId),
-          )
-          .filter((item): item is NPC记录 => Boolean(item))
-          .map((item) =>
-            [
-              `- ${item.姓名}`,
-              item.别名 ? `别名：${item.别名}` : '',
-              `关系：${item.关系}，好感度：${item.好感度}`,
-              item.性格 ? `${item.原著角色 ? '临时/旧档案性格参考' : '性格'}：${item.性格}${item.原著角色 ? '（长期口吻以智库人物主体资料为准）' : ''}` : '',
-              item.说话方式 ? `说话方式：${item.说话方式}` : '',
-              提取NPC同行记忆文本列表(item).length ? `最近同行记忆：${提取NPC同行记忆文本列表(item).slice(-3).join('；')}` : '',
-            ].filter(Boolean).join('；'),
-          )
+          .map((participantId) => formatPhoneGroupParticipant(ctx, participantId))
+          .filter(Boolean)
           .join('\n')
       : '';
   const zhikuPersona = buildPhoneZhikuPersonaBrief(ctx);
@@ -221,8 +220,37 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
   return [
     { role: 'user', content: `【上下文】\n${context}` },
     ...history,
-    { role: 'user', content: prompt },
+    { role: 'user', content: ctx.chat.type === 'group' ? `${prompt}\n\n群聊硬性要求：本次 messages 至少 12 条，必须使用「姓名：内容」格式，至少 3 位不同发言者。` : prompt },
   ];
+}
+
+function resolvePhoneGroupParticipant(ctx: 手机回复上下文, participantId: string): { name: string; npc?: NPC记录; contact?: 手机联系人 } | undefined {
+  const contact = ctx.contacts?.find((item) => item.id === participantId || item.npcId === participantId);
+  const npc = ctx.npcRecords.find(
+    (item) =>
+      item.id === participantId ||
+      `npc_${item.id}` === participantId ||
+      (contact?.npcId && item.id === contact.npcId) ||
+      item.姓名 === contact?.name,
+  );
+  if (npc) return { name: npc.姓名, npc, contact };
+  if (contact?.name) return { name: contact.name, contact };
+  return undefined;
+}
+
+function formatPhoneGroupParticipant(ctx: 手机回复上下文, participantId: string): string {
+  const participant = resolvePhoneGroupParticipant(ctx, participantId);
+  if (!participant) return `- ${participantId}`;
+  const item = participant.npc;
+  if (!item) return `- ${participant.name}；通讯录联系人`;
+  return [
+    `- ${item.姓名}`,
+    item.别名 ? `别名：${item.别名}` : '',
+    `关系：${item.关系}，好感度：${item.好感度}`,
+    item.性格 ? `${item.原著角色 ? '临时/旧档案性格参考' : '性格'}：${item.性格}${item.原著角色 ? '（长期口吻以智库人物主体资料为准）' : ''}` : '',
+    item.说话方式 ? `说话方式：${item.说话方式}` : '',
+    提取NPC同行记忆文本列表(item).length ? `最近同行记忆：${提取NPC同行记忆文本列表(item).slice(-3).join('；')}` : '',
+  ].filter(Boolean).join('；');
 }
 
 function buildPhoneZhikuPersonaBrief(ctx: 手机回复上下文): string {
@@ -276,9 +304,9 @@ function collectPhoneParticipantNames(ctx: 手机回复上下文): string[] {
   }
   if (ctx.chat.type === 'group') {
     for (const participantId of ctx.chat.participantIds) {
-      const npc = ctx.npcRecords.find((item) => item.id === participantId || `npc_${item.id}` === participantId);
-      addName(npc?.姓名);
-      addName(npc?.别名);
+      const participant = resolvePhoneGroupParticipant(ctx, participantId);
+      addName(participant?.name);
+      addName(participant?.npc?.别名);
     }
   }
   return Array.from(names).slice(0, 8);
@@ -343,16 +371,12 @@ function buildStoryProgressBrief(system?: 剧情编织系统): string {
   return lines.join('\n');
 }
 
-function parsePhoneReply(raw: string, messageLimit = 6): 手机回复结果 {
-  const cleaned = raw
-    .trim()
-    .replace(/^```(?:json|JSON)?\s*/, '')
-    .replace(/```$/, '')
-    .trim();
-  const jsonText = cleaned.match(/\{[\s\S]*\}/)?.[0] ?? cleaned;
+function parsePhoneReply(raw: string, messageLimit = 6, minMessages = 1): 手机回复结果 {
+  const cleaned = normalizeStructuredModelText(raw);
+  const jsonText = extractJsonLikeText(cleaned, 'object');
   try {
-    const parsed = JSON.parse(jsonText) as Partial<手机回复结果> & { messages?: unknown };
-    const normalizedMessages = normalizePhoneMessages(parsed.messages, parsed.message, messageLimit);
+    const parsed = parseJsonWithRepair<Partial<手机回复结果> & { messages?: unknown }>(jsonText, 'object');
+    const normalizedMessages = normalizePhoneMessages(parsed.messages, parsed.message, messageLimit, minMessages);
     if (normalizedMessages.length) {
       return {
         messages: normalizedMessages,
@@ -364,25 +388,25 @@ function parsePhoneReply(raw: string, messageLimit = 6): 手机回复结果 {
     // fall through
   }
   return {
-    messages: fallbackPhoneMessages(cleaned, messageLimit),
+    messages: fallbackPhoneMessages(cleaned, messageLimit, minMessages),
     message: cleaned.replace(/^["']|["']$/g, '').trim().slice(0, 1600) || '（通讯信号短暂波动，对方没有留下可读消息。）',
   };
 }
 
-function dedupePhoneReply(reply: 手机回复结果, ctx: 手机回复上下文, messageLimit: number): 手机回复结果 {
+function dedupePhoneReply(reply: 手机回复结果, ctx: 手机回复上下文, messageLimit: number, minMessages = 1): 手机回复结果 {
   const recent = ctx.chat.messages
     .filter((msg) => msg.role === 'contact')
     .slice(-12)
     .map((msg) => normalizeComparableText(msg.content))
     .filter(Boolean);
-  if (!recent.length) return reply;
+  if (!recent.length) return ensurePhoneReplyMinimum(reply, ctx, messageLimit, minMessages);
 
   const fresh = reply.messages.filter((message) => {
     const normalized = normalizeComparableText(message);
     if (!normalized) return false;
     return !recent.some((old) => arePhoneMessagesTooSimilar(normalized, old));
   });
-  if (fresh.length >= Math.min(3, Math.max(1, messageLimit))) {
+  if (fresh.length >= Math.min(minMessages, Math.max(1, messageLimit))) {
     return {
       ...reply,
       messages: fresh.slice(0, messageLimit),
@@ -390,7 +414,7 @@ function dedupePhoneReply(reply: 手机回复结果, ctx: 手机回复上下文,
     };
   }
 
-  const fallback = buildNonRepeatingPhoneFallback(ctx, recent, messageLimit);
+  const fallback = buildNonRepeatingPhoneFallback(ctx, recent, messageLimit, minMessages);
   return {
     messages: fallback,
     message: fallback.join('\n'),
@@ -433,7 +457,10 @@ function longestCommonSubstringLength(a: string, b: string): number {
   return best;
 }
 
-function buildNonRepeatingPhoneFallback(ctx: 手机回复上下文, recent: string[], messageLimit: number): string[] {
+function buildNonRepeatingPhoneFallback(ctx: 手机回复上下文, recent: string[], messageLimit: number, minMessages = 1): string[] {
+  if (ctx.chat.type === 'group') {
+    return buildGroupFallbackPhoneMessages(ctx, recent, messageLimit, minMessages);
+  }
   const name = ctx.contact?.name ?? ctx.chat.title;
   const seedTitle = ctx.seed?.title ?? '刚才那件事';
   const candidates = ctx.seed
@@ -450,11 +477,55 @@ function buildNonRepeatingPhoneFallback(ctx: 手机回复上下文, recent: stri
   const scoped = ctx.seed ? candidates.map((line, index) => (index === 0 ? line.replace('刚才那事', `「${seedTitle}」`) : line)) : candidates;
   const fresh = scoped
     .filter((line) => !recent.some((old) => arePhoneMessagesTooSimilar(normalizeComparableText(line), old)))
-    .slice(0, Math.max(1, Math.min(messageLimit, ctx.chat.type === 'group' ? 6 : 3)));
+    .slice(0, Math.max(1, Math.min(messageLimit, minMessages)));
   return fresh.length ? fresh : [`${name}发来新的跟进：我这边先不重复刚才那些了，等你确认后续。`];
 }
 
-function normalizePhoneMessages(messages: unknown, singleMessage?: unknown, maxCount = 6): string[] {
+function ensurePhoneReplyMinimum(reply: 手机回复结果, ctx: 手机回复上下文, messageLimit: number, minMessages: number): 手机回复结果 {
+  if (reply.messages.length >= minMessages || ctx.chat.type !== 'group') return {
+    ...reply,
+    messages: reply.messages.slice(0, messageLimit),
+    message: reply.messages.slice(0, messageLimit).join('\n'),
+  };
+  const fallback = buildGroupFallbackPhoneMessages(ctx, [], messageLimit, minMessages - reply.messages.length);
+  const merged = [...reply.messages, ...fallback].slice(0, messageLimit);
+  return {
+    ...reply,
+    messages: merged,
+    message: merged.join('\n'),
+    summary: reply.summary || `群聊「${ctx.chat.title}」围绕${ctx.seed ? `「${ctx.seed.title}」` : '当前话题'}展开了多人接力讨论。`,
+  };
+}
+
+function buildGroupFallbackPhoneMessages(ctx: 手机回复上下文, recent: string[], messageLimit: number, minMessages: number): string[] {
+  const participants = ctx.chat.participantIds
+    .map((id) => resolvePhoneGroupParticipant(ctx, id)?.name)
+    .filter((name): name is string => Boolean(name))
+    .slice(0, 4);
+  const speakers = participants.length >= 2 ? participants : [ctx.chat.title, '频道成员'];
+  const topic = ctx.seed?.title || ctx.userText || ctx.seed?.context || '刚才那件事';
+  const templates = [
+    (name: string) => `${name}：我看到了，先把「${topic}」记下来。`,
+    (name: string) => `${name}：别急，先确认哪些信息是真的。`,
+    (name: string) => `${name}：如果有新情况，记得同步到这个频道。`,
+    (name: string) => `${name}：我这边会留意后续动静。`,
+    (name: string) => `${name}：先别让这件事在外面扩散。`,
+    (name: string) => `${name}：等开拓者那边回话，我们再定下一步。`,
+  ];
+  const lines: string[] = [];
+  for (let index = 0; lines.length < Math.min(messageLimit, Math.max(1, minMessages)); index += 1) {
+    const speaker = speakers[index % speakers.length];
+    const line = templates[index % templates.length](speaker);
+    if (!recent.some((old) => arePhoneMessagesTooSimilar(normalizeComparableText(line), old))) {
+      lines.push(line);
+    } else if (index > templates.length * Math.max(1, speakers.length)) {
+      lines.push(`${speaker}：这次先补一句新的，别重复前面聊过的内容。`);
+    }
+  }
+  return lines;
+}
+
+function normalizePhoneMessages(messages: unknown, singleMessage?: unknown, maxCount = 6, minCount = 1): string[] {
   const rawList = Array.isArray(messages)
     ? messages
     : typeof singleMessage === 'string'
@@ -465,7 +536,7 @@ function normalizePhoneMessages(messages: unknown, singleMessage?: unknown, maxC
     .map((item) => item.replace(/\s+/g, ' ').trim())
     .filter(Boolean)
     .slice(0, Math.max(1, maxCount));
-  if (cleaned.length >= 3) return cleaned;
+  if (cleaned.length >= minCount) return cleaned;
   if (cleaned.length > 0) {
     const expanded = cleaned.flatMap((line) =>
       line
@@ -474,10 +545,10 @@ function normalizePhoneMessages(messages: unknown, singleMessage?: unknown, maxC
         .filter(Boolean),
     );
     const deduped = Array.from(new Set(expanded)).slice(0, Math.max(1, maxCount));
-    if (deduped.length >= 3) return deduped;
+    if (deduped.length >= minCount) return deduped;
     const source = deduped.length ? deduped : cleaned;
     if (source.length === 1 && source[0].length > 24) {
-      return splitTextIntoChunks(source[0], Math.min(3, Math.max(1, maxCount))).slice(0, Math.max(1, maxCount));
+      return splitTextIntoChunks(source[0], Math.min(minCount, Math.max(1, maxCount))).slice(0, Math.max(1, maxCount));
     }
     if (source.length === 2) {
       const longerIndex = source[0].length >= source[1].length ? 0 : 1;
@@ -492,15 +563,15 @@ function normalizePhoneMessages(messages: unknown, singleMessage?: unknown, maxC
   return cleaned.slice(0, Math.max(1, maxCount));
 }
 
-function fallbackPhoneMessages(text: string, maxCount = 6): string[] {
+function fallbackPhoneMessages(text: string, maxCount = 6, minCount = 1): string[] {
   const base = text.replace(/^["']|["']$/g, '').trim();
   if (!base) return ['（通讯信号短暂波动，对方没有留下可读消息。）'];
   const parts = base
     .split(/[\n。！？!?；;]+/)
     .map((item) => item.trim())
     .filter(Boolean);
-  if (parts.length >= 3) return parts.slice(0, Math.max(1, maxCount));
-  if (base.length > 48) return splitTextIntoChunks(base, Math.min(3, Math.max(1, maxCount))).slice(0, Math.max(1, maxCount));
+  if (parts.length >= minCount) return parts.slice(0, Math.max(1, maxCount));
+  if (base.length > 48) return splitTextIntoChunks(base, Math.min(minCount, Math.max(1, maxCount))).slice(0, Math.max(1, maxCount));
   return [base.slice(0, 1600)];
 }
 

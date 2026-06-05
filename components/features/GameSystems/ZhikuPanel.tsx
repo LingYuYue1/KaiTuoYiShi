@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { 智库系统, 智库分类, 智库条目 } from '@/models/zhiku';
 import {
   ZHIKU_CATEGORY_LABELS,
+  isRetiredZhikuCategory,
   比较智库人物节点,
   创建智库条目,
   获取智库人物名,
@@ -39,13 +40,14 @@ const categoryDescriptions: Record<智库分类, string> = {
   system: '项目规则 / 调用规范',
 };
 
-const categories: 智库分类[] = ['story', 'character', 'npc', 'location', 'item', 'faction', 'term', 'event', 'system'];
+const categories: 智库分类[] = ['story', 'character', 'location', 'faction', 'term', 'event'];
 const zhikuScopeOptions = ['主剧情', '手机', '新闻', '变量参考', '剧情编织', '通用', '只读'];
 
 export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props) {
   const normalized = useMemo(() => 归一化智库系统(zhikuSystem), [zhikuSystem]);
-  const builtinEntries = useMemo(() => normalized.条目.filter((entry) => entry.builtin), [normalized]);
-  const customEntries = useMemo(() => normalized.条目.filter((entry) => !entry.builtin), [normalized]);
+  const visibleEntries = useMemo(() => normalized.条目.filter((entry) => !isRetiredZhikuCategory(entry.分类)), [normalized]);
+  const builtinEntries = useMemo(() => visibleEntries.filter((entry) => entry.builtin), [visibleEntries]);
+  const customEntries = useMemo(() => visibleEntries.filter((entry) => !entry.builtin), [visibleEntries]);
   const [bucket, setBucket] = useState<Bucket>('all');
   const [activeCategory, setActiveCategory] = useState<智库分类 | 'all'>('all');
   const [query, setQuery] = useState('');
@@ -81,7 +83,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
     let pool =
       bucket === 'builtin' ? builtinEntries
         : bucket === 'custom' ? customEntries
-        : normalized.条目;
+        : visibleEntries;
     const hasQuery = !!query.trim();
     if (hasQuery) {
       pool = 搜索智库条目({ 条目: pool }, query, 200);
@@ -90,9 +92,9 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       pool = pool.filter((entry) => entry.分类 === activeCategory);
     }
     return hasQuery ? pool : [...pool].sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [activeCategory, bucket, builtinEntries, customEntries, normalized, query]);
+  }, [activeCategory, bucket, builtinEntries, customEntries, query, visibleEntries]);
 
-  const counts = useMemo(() => 智库分类计数({ 条目: bucket === 'builtin' ? builtinEntries : bucket === 'custom' ? customEntries : normalized.条目 }), [bucket, builtinEntries, customEntries, normalized]);
+  const counts = useMemo(() => 智库分类计数({ 条目: bucket === 'builtin' ? builtinEntries : bucket === 'custom' ? customEntries : visibleEntries }), [bucket, builtinEntries, customEntries, visibleEntries]);
 
   const selected = selectedId
     ? activeEntries.find((entry) => entry.id === selectedId) ?? activeEntries[0] ?? null

@@ -9,7 +9,6 @@ import type {
 } from './journey';
 import type { 命途进度 } from './path';
 import { 创建命途进度 } from './path';
-import type { 装备槽位ID } from './equipment';
 import type { 背包物品 } from './inventory';
 import type { 战技记录 } from './skill';
 
@@ -46,9 +45,6 @@ export interface 角色数据结构 {
   命途列表: 命途进度[];
   能力: string[];
 
-  // 装备 + 背包(v2 统一为 背包物品。装备字段是 槽位 → 背包物品.id 的引用映射,
-  // 真正的物品数据存在 背包 数组里;查询装备时从 背包 里按 id 找。)
-  装备: Partial<Record<装备槽位ID, string>>;
   背包: 背包物品[];
   战技列表: 战技记录[];
 }
@@ -72,7 +68,6 @@ export function 创建空角色(): 角色数据结构 {
     主命途: '',
     命途列表: [],
     能力: [],
-    装备: {},
     背包: [],
     战技列表: [],
   };

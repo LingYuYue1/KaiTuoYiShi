@@ -6,6 +6,10 @@ function assert(condition, message) {
 
 const archive = fs.readFileSync('services/yitingArchive.ts', 'utf8');
 const retrieval = fs.readFileSync('services/yitingRetrieval.ts', 'utf8');
+const chatModel = fs.readFileSync('models/chat.ts', 'utf8');
+const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
+const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
 const workflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const pkg = fs.readFileSync('package.json', 'utf8');
 
@@ -26,6 +30,15 @@ assert(retrieval.includes('这里注入的是概要层纪要，不是正文原�
 assert(retrieval.includes('buildBriefFromRaw'), '忆庭召回必须有旧档原文摘要兜底。');
 assert(!retrieval.includes('entry.原文 || entry.摘要 ||'), '忆庭召回不得优先把原文注入主剧情。');
 assert(!retrieval.includes('强回忆用于恢复原文细节'), '忆庭召回口径不得再鼓励恢复正文原文。');
+assert(chatModel.includes('yitingRecallRawText?: string'), '聊天 debugContext 必须保存忆庭模型原始返回。');
+assert(chatModel.includes('yitingRecallUsedModel?: boolean'), '聊天 debugContext 必须保存忆庭是否调用模型。');
+assert(sendWorkflow.includes('yitingRecallPreview: yitingPreview?.previewText ??'), '主流程必须保存忆庭召回预览。');
+assert(sendWorkflow.includes('yitingRecallRawText: yitingPreview?.rawText ??'), '主流程必须保存忆庭模型 rawText。');
+assert(sendWorkflow.includes('yitingRecallUsedModel: yitingPreview?.usedModel === true'), '主流程必须保存忆庭模型是否被调用。');
+assert(turnItem.includes('【忆庭模型原始返回】'), '聊天请求上下文必须单独显示忆庭模型原始返回。');
+assert(turnItem.includes('本回合未调用忆庭模型，使用本地摘要检索'), '聊天请求上下文必须说明忆庭未调用模型时走本地摘要检索或未触发。');
+assert(contextSnapshot.includes('latestAssistantYitingDebugRecall'), '上下文页必须读取上一回合保存的忆庭 rawText。');
+assert(contextSnapshot.includes('上一回合真实保存的忆庭召回诊断'), '忆庭上下文页必须显示上一回合真实保存的召回诊断。');
 assert(pkg.includes('test:yiting-archive'), 'package.json 必须提供忆庭纪要回归脚本。');
 
 console.log('yiting archive regression ok');

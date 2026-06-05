@@ -5,12 +5,12 @@
 
 export type 提示词模块类目 = 'cot' | 'format' | 'persona' | 'devmode' | 'style' | 'custom';
 
-/** 模块注入场景。与世界书 scope 对齐，便于未来变量模型 / 战斗模型复用同一过滤器。
+/** 模块注入场景。与世界书 scope 对齐，便于主剧情与独立模型提示词展示复用同一分类。
  * - main: 主流程正文（除开局外）
  * - opening: 开局首回合
  * - battle: 战斗 / 判定专用（预留）
  * - pathAwakening: 命途狭间专用回合（进入狭间问答的那一回合）
- * - calibration: 变量模型校准（预留）
+ * - calibration: 独立模型 / 校准模型提示词展示（新闻、手机、智库、变量、剧情编织等；不注入主剧情）
  * - all: 任意场景都注入（CoT 之外的格式 / 人格 / 开发者模式默认走这个）
  */
 export type 提示词模块作用域 = 'main' | 'opening' | 'battle' | 'pathAwakening' | 'calibration' | 'all';
@@ -49,6 +49,7 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_action_options',
   'builtin_no_control',
   'builtin_npc_autonomy',
+  'builtin_npc_ledger_continuity',
   'builtin_writing_style',
   'builtin_writing_style_hsr',
   'builtin_writing_style_baimiao',
@@ -83,7 +84,7 @@ export const PROMPT_MODULE_SCOPE_LABELS: Record<提示词模块作用域, string
   opening: '开局',
   battle: '战斗',
   pathAwakening: '命途狭间',
-  calibration: '变量校准',
+  calibration: '独立模型',
   all: '任意',
 };
 

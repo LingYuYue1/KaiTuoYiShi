@@ -5,6 +5,31 @@ export interface PlayerSpeechGuardOptions {
 }
 
 const BODY_TAG_NAMES = ['正文', 'body', 'content', 'text', '内容'];
+const PROTOCOL_TAG_NAMES = [
+  ...BODY_TAG_NAMES,
+  'thinking',
+  'think',
+  '思考',
+  '短期记忆',
+  'memory',
+  '动态世界',
+  'world',
+  '变量草稿',
+  'variableDraft',
+  '剧情规划',
+  'storyPlan',
+];
+const INLINE_SYSTEM_TAG_NAMES = new Set([
+  '历史时间',
+  '历史正文',
+  '历史狭间问答',
+  '历史狭间评判',
+  '历史短期记忆',
+  '历史变量草稿',
+  '历史剧情规划',
+]);
+const INLINE_EXPLICIT_LINE_TAG_NAMES = new Set(['旁白', '角色', '心声']);
+const INLINE_SPEAKER_TAG_RE = /【\s*([^】\r\n]{1,16})\s*】/g;
 
 const SOUND_EFFECT_TAGS = new Set([
   '汪',
@@ -61,7 +86,7 @@ const SOUND_EFFECT_TAGS = new Set([
 const PLAYER_SPEECH_VERBS_RE = /(?:我|俺|本旅人|玩家)?\s*(?:说|喊|叫|问|回答|回应|解释|自我介绍|命令|低声|大声|开口|说道|喊道|问道|答道)\s*[：:]/;
 
 export function normalizePlayerSpeechInBody(options: PlayerSpeechGuardOptions): string {
-  const body = options.body;
+  const body = normalizeInlineSpeakerTags(options.body);
   if (!body.trim()) return body;
   const safeName = options.playerName.trim() || '你';
   const evidence = buildPlayerSpeechEvidence(options.userInput ?? '');
@@ -112,6 +137,49 @@ export function normalizePlayerSpeechInBody(options: PlayerSpeechGuardOptions): 
     .join('\n');
 }
 
+export function normalizeInlineSpeakerTags(text: string): string {
+  if (!text || !text.includes('【')) return text;
+  return text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .flatMap(splitInlineSpeakerTagsInLine)
+    .join('\n');
+}
+
+function splitInlineSpeakerTagsInLine(line: string): string[] {
+  if (!line.includes('【')) return [line];
+  const ranges: number[] = [];
+  INLINE_SPEAKER_TAG_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = INLINE_SPEAKER_TAG_RE.exec(line)) !== null) {
+    const label = match[1].trim();
+    if (!shouldSplitInlineSpeakerTag(line, match.index, label)) continue;
+    ranges.push(match.index);
+  }
+  if (ranges.length <= 1) return [line];
+  const result: string[] = [];
+  for (let i = 0; i < ranges.length; i += 1) {
+    const start = ranges[i];
+    const end = ranges[i + 1] ?? line.length;
+    const segment = line.slice(start, end).trim();
+    if (segment) result.push(segment);
+  }
+  const prefix = line.slice(0, ranges[0]).trim();
+  return prefix ? [prefix, ...result] : result;
+}
+
+function shouldSplitInlineSpeakerTag(line: string, index: number, label: string): boolean {
+  const normalized = label.replace(/\s+/g, '');
+  if (!normalized || INLINE_SYSTEM_TAG_NAMES.has(normalized)) return false;
+  if (INLINE_EXPLICIT_LINE_TAG_NAMES.has(normalized)) return true;
+  if (normalized.length > 12 || /[，,。！？!?；;：:、"'“”‘’<>《》（）()[\]\s]/.test(normalized)) return false;
+  if (index <= 0) return true;
+  const before = line.slice(0, index).replace(/\s+$/g, '');
+  if (!before) return true;
+  const prev = before.at(-1) ?? '';
+  return /[。！？!?；;：:，,、」”》）)\]}]/.test(prev);
+}
+
 export function shouldRenderAsNarrationForPlayerLine(text: string, userInput?: string): boolean {
   const speech = stripOuterQuote(text);
   const evidence = buildPlayerSpeechEvidence(userInput ?? '');
@@ -136,6 +204,10 @@ export function replaceBodyInRawResponse(rawText: string, sanitizedBody: string)
   if (openBlock.test(rawText)) {
     return rawText.replace(openBlock, (_match, open: string) => `${open}\n${body}`);
   }
+
+  const protocolTagGroup = PROTOCOL_TAG_NAMES.map(escapeRegExp).join('|');
+  const hasAnyProtocolTag = new RegExp(`<\\s*\\/?\\s*(?:${protocolTagGroup})\\s*>`, 'i').test(rawText);
+  if (hasAnyProtocolTag) return rawText;
 
   return body;
 }

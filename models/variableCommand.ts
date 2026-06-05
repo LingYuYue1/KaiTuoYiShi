@@ -71,6 +71,14 @@ export interface NPC变量事实 {
   intro?: string;
   playerAddress?: string;
   memory?: string;
+  recentInteraction?: string;
+  longTermImpression?: string;
+  relationshipStage?: string;
+  sharedExperiences?: string[];
+  openItems?: string[];
+  unresolvedConflicts?: string[];
+  mustRemember?: string[];
+  doNotForget?: string[];
   evidence?: string;
 }
 

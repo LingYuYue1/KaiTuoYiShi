@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const appSource = fs.readFileSync('App.tsx', 'utf8');
 const saveLoadSource = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const savePackageSource = fs.readFileSync('services/savePackage.ts', 'utf8');
 const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const sendWorkflowSource = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const allSources = [
@@ -32,5 +33,26 @@ assert(saveLoadSource.includes('state.set新闻(归一化新闻列表(save.新�
 assert(saveLoadSource.includes('state.setVariableBatches(save.variableBatches ?? [])'), '读档变量批次必须来自目标存档或空列表兜底。');
 assert(saveLoadSource.includes('state.setQueueTasks(save.queueTasks ?? [])'), '读档后台队列必须来自目标存档或空列表兜底。');
 assert(appSource.includes('onPhoneChange={state.set手机}'), '手机 UI 修改只能进入当前运行态，不能写全局手机备份。');
+
+assert(saveLoadSource.includes('apiSettings: 创建空API设置()'), '新建存档不得把本机主 API 配置绑定进存档。');
+assert(saveLoadSource.includes('buildSaveGameSettingsSnapshot'), '保存存档前必须清理 gameSettings 中的本机 API 覆盖项。');
+assert(saveLoadSource.includes('preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings)'), '读档必须保留本机 API 覆盖项。');
+assert(!saveLoadSource.includes('state.setApiSettings(save.apiSettings)'), '读档不得用存档里的 apiSettings 覆盖本机 API 设置。');
+assert(!saveLoadSource.includes('state.setCurrentTheme(save.theme)'), '读档不得用存档主题覆盖本机主题偏好。');
+assert(saveLoadSource.includes('variableApi: localSettings.variableApi'), '读档必须保留本机变量模型 API 覆盖。');
+assert(saveLoadSource.includes('enableClaudeMode: localSettings.enableClaudeMode === true'), '读档必须保留本机 Claude 专用模式。');
+assert(saveLoadSource.includes('api: local.新闻系统.api'), '读档必须保留本机新闻系统 API 覆盖。');
+assert(saveLoadSource.includes('api: local.手机系统.api'), '读档必须保留本机手机系统 API 覆盖。');
+assert(saveLoadSource.includes('api: local.智库系统.api'), '读档必须保留本机智库系统 API 覆盖。');
+assert(saveLoadSource.includes('api: local.剧情编织系统.api'), '读档必须保留本机剧情编织 API 覆盖。');
+assert(saveLoadSource.includes('记忆总结API: local.记忆系统.记忆总结API'), '读档必须保留本机记忆总结 API 覆盖。');
+assert(saveLoadSource.includes('忆庭召回API: local.记忆系统.忆庭召回API'), '读档必须保留本机忆庭召回 API 覆盖。');
+assert(saveLoadSource.includes('忆庭精炼API: local.记忆系统.忆庭精炼API'), '读档必须保留本机忆庭精炼 API 覆盖。');
+assert(saveLoadSource.includes('普通接口: local.文生图系统.普通接口'), '读档必须保留本机文生图普通接口。');
+assert(saveLoadSource.includes('场景接口: local.文生图系统.场景接口'), '读档必须保留本机文生图场景接口。');
+assert(saveLoadSource.includes('NSFW接口: local.文生图系统.NSFW接口'), '读档必须保留本机文生图 NSFW 接口。');
+assert(saveLoadSource.includes('词组转化器API: local.文生图系统.词组转化器API'), '读档必须保留本机文生图词组转化器 API。');
+assert(savePackageSource.includes('sanitized.apiSettings = 创建空API设置()'), '导出旧存档时也必须移除嵌入的主 API 配置。');
+assert(savePackageSource.includes('stripEmbeddedApiSettings'), '存档包导出必须统一清理嵌入 API 配置。');
 
 console.log('save isolation regression ok');

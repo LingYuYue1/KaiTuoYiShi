@@ -1,6 +1,6 @@
 // 背包系统面板(v4)。
 // 左侧概览 + 分类切换，右侧方格网格 + 详情浮层。
-// 所有写入走 utils/inventoryActions 服务层，避免直接戳数组遗漏装备槽同步 / 堆叠合并 等副作用。
+// 所有写入走 utils/inventoryActions 服务层，避免直接戳数组遗漏堆叠合并等副作用。
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
@@ -9,15 +9,11 @@ import {
   ITEM_CATEGORY_LABELS,
   ITEM_CATEGORY_ORDER,
   ITEM_QUALITY_COLORS,
-  是装备类,
 } from '@/models/inventory';
 import {
   使用物品,
-  穿戴物品,
   丢弃物品,
-  卸下槽位,
 } from '@/utils/inventoryActions';
-import { EQUIP_SLOT_LABELS, EQUIP_SLOT_ORDER } from '@/models/equipment';
 
 interface InventoryPanelProps {
   traveler: 角色数据结构;
@@ -77,11 +73,6 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
     return c;
   }, [inventory]);
 
-  const equippedCount = useMemo(
-    () => inventory.filter((it) => Boolean(it.当前装备部位)).length,
-    [inventory],
-  );
-
   const usableCount = useMemo(
     () => inventory.filter((it) => USABLE_CATEGORIES.includes(it.类别)).length,
     [inventory],
@@ -135,27 +126,6 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
     });
   };
 
-  const handleEquip = (itemId: string) => {
-    onTravelerChange((prev) => {
-      const res = 穿戴物品(prev, itemId);
-      showFlash(res.message);
-      return res.ok ? res.traveler : prev;
-    });
-  };
-
-  const handleUnequip = (itemId: string) => {
-    onTravelerChange((prev) => {
-      const item = (prev.背包 ?? []).find((it) => it.id === itemId);
-      if (!item?.当前装备部位) {
-        showFlash('该物品当前未穿戴');
-        return prev;
-      }
-      const res = 卸下槽位(prev, item.当前装备部位);
-      showFlash(res.message);
-      return res.ok ? res.traveler : prev;
-    });
-  };
-
   const handleDrop = (itemId: string, count?: number) => {
     if (!confirm(count ? `确认丢弃 ${count} 件?` : '确认全部丢弃该物品?')) return;
     let willEmpty = false;
@@ -184,12 +154,11 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
             <MetricTile label="物品总数" value={`${inventory.length}`} />
             <MetricTile label="总堆叠量" value={`${totalQuantity}`} />
             <MetricTile label="可用道具" value={`${usableCount}`} />
-            <MetricTile label="已穿戴" value={`${equippedCount}`} />
+            <MetricTile label="叙事物品" value={`${counts.lightcone + counts.weapon + counts.clothing + counts.accessory}`} />
           </div>
           <div className="mt-3">
             <MiniBar value={inventory.length} />
           </div>
-          <EquipmentDots traveler={traveler} />
         </div>
 
         <div className="px-3 py-3 md:px-4 md:py-3" style={panelStyle}>
@@ -305,8 +274,6 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                   item={selectedItem}
                   onClose={() => setSelectedId(null)}
                   onUse={() => selectedItem && handleUse(selectedItem.id)}
-                  onEquip={() => selectedItem && handleEquip(selectedItem.id)}
-                  onUnequip={() => selectedItem && handleUnequip(selectedItem.id)}
                   onDropOne={() => selectedItem && handleDrop(selectedItem.id, 1)}
                   onDropAll={() => selectedItem && handleDrop(selectedItem.id)}
                 />
@@ -328,7 +295,6 @@ function ItemCell({
   selected: boolean;
   onClick: () => void;
 }) {
-  const equipped = Boolean(item.当前装备部位);
   const qualityColor = ITEM_QUALITY_COLORS[item.品质] ?? ITEM_QUALITY_COLORS.蓝;
   const qualityStroke = qualityColor.replace(/0\.\d+\)/, '0.52)');
 
@@ -358,7 +324,7 @@ function ItemCell({
       <div
         className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center font-serif text-[12px]"
         style={{
-          color: equipped ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-tech-cyan-deep),0.9)',
+          color: 'rgba(var(--tj-tech-cyan-deep),0.9)',
           background: 'rgba(var(--tj-ui-panel-strong), 0.5)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
           clipPath: smallClip,
@@ -400,17 +366,6 @@ function ItemCell({
           ×{item.数量}
         </div>
       )}
-
-      {equipped && (
-        <div
-          className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full"
-          style={{
-            background: 'rgba(var(--tj-accent-primary), 0.98)',
-            boxShadow: '0 0 6px rgba(var(--tj-accent-primary), 0.7)',
-          }}
-          title={`已穿戴·${EQUIP_SLOT_LABELS[item.当前装备部位!]}`}
-        />
-      )}
     </button>
   );
 }
@@ -432,16 +387,12 @@ function ItemDetailOverlay({
   item,
   onClose,
   onUse,
-  onEquip,
-  onUnequip,
   onDropOne,
   onDropAll,
 }: {
   item: 背包物品 | null;
   onClose: () => void;
   onUse: () => void;
-  onEquip: () => void;
-  onUnequip: () => void;
   onDropOne: () => void;
   onDropAll: () => void;
 }) {
@@ -462,8 +413,6 @@ function ItemDetailOverlay({
   }
 
   const usable = USABLE_CATEGORIES.includes(item.类别);
-  const equippable = 是装备类(item);
-  const equipped = Boolean(item.当前装备部位);
   const qualityColor = ITEM_QUALITY_COLORS[item.品质] ?? ITEM_QUALITY_COLORS.蓝;
   const effectEntries = item.叙事效果 ?? [];
   const effects = Array.isArray(item.使用效果)
@@ -528,19 +477,6 @@ function ItemDetailOverlay({
         </button>
       </div>
 
-      {equipped && (
-        <div
-          className="mt-3 inline-block px-2 py-0.5 font-serif text-[11px] tracking-[0.14em] md:text-[12px] md:tracking-[0.15em]"
-          style={{
-            color: 'rgb(var(--tj-text-primary))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
-            clipPath: smallClip,
-          }}
-        >
-          已穿戴 · {EQUIP_SLOT_LABELS[item.当前装备部位!]}
-        </div>
-      )}
-
       {item.描述 && (
         <p
           className="mt-3 font-serif text-[12px] leading-relaxed md:text-[13px]"
@@ -578,51 +514,14 @@ function ItemDetailOverlay({
             {item.来源描述 && <InfoLine label="备注" value={item.来源描述} />}
           </div>
         </DetailBlock>
-
-        {item.装备槽位 && (
-          <DetailBlock title="装备槽位">
-            <InfoLine label="适配" value={EQUIP_SLOT_LABELS[item.装备槽位]} />
-          </DetailBlock>
-        )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {usable && <ActionButton onClick={onUse} tone="gold">使用</ActionButton>}
-        {equippable && !equipped && <ActionButton onClick={onEquip} tone="gold">穿戴</ActionButton>}
-        {equippable && equipped && <ActionButton onClick={onUnequip} tone="gold">卸下</ActionButton>}
         {item.数量 > 1 && <ActionButton onClick={onDropOne} tone="red">丢弃 1</ActionButton>}
         <ActionButton onClick={onDropAll} tone="red">
           {item.数量 > 1 ? `全部丢弃 ×${item.数量}` : '丢弃'}
         </ActionButton>
-      </div>
-    </div>
-  );
-}
-
-function EquipmentDots({ traveler }: { traveler: 角色数据结构 }) {
-  const slots = traveler.装备 ?? {};
-  const inventory = traveler.背包 ?? [];
-  return (
-    <div className="mt-3">
-      <div className="mb-2 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
-        装备同步
-      </div>
-      <div className="grid grid-cols-4 gap-1.5">
-        {EQUIP_SLOT_ORDER.map((slot) => {
-          const item = inventory.find((it) => it.id === slots[slot]);
-          const color = item ? (ITEM_QUALITY_COLORS[item.品质] ?? ITEM_QUALITY_COLORS.蓝) : 'rgba(var(--tj-text-secondary),0.28)';
-          return (
-            <div
-              key={slot}
-              title={`${EQUIP_SLOT_LABELS[slot]}${item ? ` · ${item.名称}` : ' · 空'}`}
-              className="h-2.5"
-              style={{
-                background: color,
-                boxShadow: item ? `0 0 8px ${color}` : undefined,
-              }}
-            />
-          );
-        })}
       </div>
     </div>
   );

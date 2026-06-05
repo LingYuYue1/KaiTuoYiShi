@@ -263,6 +263,23 @@ assert(
   'zhiku CoT must use the agreed Step0-Step8 workflow for context, present roles, anticipated roles, scene data lookup, recall gates, review, relevance, final selection, and output self-check.',
 );
 assert(
+  retrieval.includes('ZHIKU_COT_PROMPT') &&
+    retrieval.includes('const systemPrompt = buildZhikuModelSystemPrompt(sceneHints)') &&
+    retrieval.includes('export function buildZhikuModelSystemPrompt') &&
+    retrieval.includes('ZHIKU_COT_PROMPT,') &&
+    retrieval.includes('export function buildZhikuModelUserPrompt') &&
+    retrieval.includes('systemPrompt,') &&
+    retrieval.includes('chatCompletionNonStream(api') &&
+    retrieval.includes('智库模型已使用 Step0~Step8 思维链完成上下文分析、角色门禁、资料相关性判断与最终召回。'),
+  'zhiku model retrieval must send the Step0-Step8 CoT prompt as the request system prompt and expose a diagnostic marker when it is used.',
+);
+assert(
+  retrieval.includes('智库模型已使用 Step0~Step8 思维链，但没有返回有效编号；已回退本地召回结果。') &&
+    retrieval.includes('...fallback') &&
+    !retrieval.includes("return { entries: [], injection: '', usedModel: true, rawText, diagnostics: fallback.diagnostics }"),
+  'zhiku model retrieval must fall back to local recall instead of dropping all zhiku injection when the model returns no valid indexes.',
+);
+assert(
   retrieval.includes('characterEntries?: 智库条目[]') &&
     retrieval.includes('strongEntries?: 智库条目[]') &&
     retrieval.includes('weakEntries?: 智库条目[]') &&
@@ -272,7 +289,9 @@ assert(
     retrieval.includes('function getCharacterAnchorLimit') &&
     retrieval.includes('function isNormalRecallEntry') &&
     retrieval.includes("entry.分类 !== 'character' && entry.分类 !== 'story'") &&
-    retrieval.includes('角色相关资料：【编号】|【编号】|【编号】|【编号】') &&
+    retrieval.includes('推荐写成【编号：候选标题】') &&
+    retrieval.includes('角色相关资料：【编号：候选标题】|【编号：候选标题】|【编号：候选标题】') &&
+    retrieval.includes('function findZhikuCandidateIndexesByName') &&
     retrieval.includes('输出格式必须严格为三行') &&
     retrieval.includes('角色相关资料只挑') &&
     retrieval.includes('多人同场时优先覆盖每个在场/预期登场角色的主体人格与 OOC 风险') &&
@@ -295,8 +314,10 @@ assert(
     contextSnapshot.includes('latestAssistantZhikuDebugRecall') &&
     contextSnapshot.includes('zhikuRecallPreview') &&
     contextSnapshot.includes('historyThroughLatestUser') &&
-    contextSnapshot.includes('主流程增强召回查询') &&
     contextSnapshot.includes('buildMainRecallQuery({') &&
+    contextSnapshot.includes('buildZhikuModelSystemPrompt') &&
+    contextSnapshot.includes('buildZhikuModelUserPrompt') &&
+    contextSnapshot.includes('智库召回提示词（Step0~Step8）') &&
     contextSnapshot.includes('getZhikuNpcNamesForTurn') &&
     contextSnapshot.includes('originalProtagonist: state.世界.原著主角') &&
     contextSnapshot.includes('zhikuDiagnostics.被门禁过滤') &&
@@ -306,9 +327,8 @@ assert(
     contextSnapshot.includes('zhikuDiagnostics.角色相关资料') &&
     contextSnapshot.includes('zhikuDiagnostics.强相关资料') &&
     contextSnapshot.includes('zhikuDiagnostics.弱相关资料') &&
-    contextSnapshot.includes('输出格式必须严格为三行') &&
-    contextSnapshot.includes('角色相关资料：【编号】|【编号】'),
-  'zhiku request context must show local retrieval diagnostics for OOC/gate debugging.',
+    !contextSnapshot.includes('你是原著资料中枢「智库」的召回模型。你的任务不是写正文，而是从候选资料中挑出最相关条目'),
+  'zhiku request context must reuse the real Step0-Step8 model prompt and show local retrieval diagnostics for OOC/gate debugging.',
 );
 assert(
   panel.includes("activeCategory === 'character'") &&
@@ -435,15 +455,6 @@ for (const path of bundledPresetPaths) {
 assert(allBundledCharacters.length === activeBundledCharacters.length, 'all bundled character entries must survive the runtime preset filter.');
 const rebuildCharacterEntries = entries.filter((entry) => entry.分类 === 'character');
 assert(activeBundledCharacters.length === rebuildCharacterEntries.length, 'global bundled character scan must match character-rebuild-core active character entries.');
-
-const enemyUnitNames = ['虚卒', '末日兽', '践踏者', '死龙', '敌方指挥官', '机械守卫', '召唤型敌群', '异常构造体', '精英敌人', '终局首领'];
-for (const name of enemyUnitNames) {
-  const entry = allBundledEntries.find((item) => item.标题 === name);
-  assert(entry, `enemy unit entry must exist: ${name}`);
-  assert(entry.分类 !== 'character', `enemy unit must not use character category because rebuilt-character filtering would hide it: ${name}`);
-  assert(entry.分类 === 'npc', `enemy unit should live in npc category for normal zhiku retrieval: ${name}`);
-  assert(entry.可用于联动 !== false, `enemy unit must remain linkable for zhiku retrieval: ${name}`);
-}
 
 const requiredRoles = [
   '星', '穹', '三月七', '丹恒', '姬子', '瓦尔特', '帕姆',
@@ -1149,8 +1160,10 @@ assert(
 assert(
   chatModel.includes('recallSummary?: string') &&
     chatModel.includes('recallFullContent?: string') &&
-    chatModel.includes('zhikuRecallPreview?: string') &&
+  chatModel.includes('zhikuRecallPreview?: string') &&
     chatModel.includes('zhikuRecallInjection?: string') &&
+    chatModel.includes('zhikuRecallRawText?: string') &&
+    chatModel.includes('zhikuRecallUsedModel?: boolean') &&
     sendWorkflow.includes('formatZhikuRecallSummary(zhikuPreview?.diagnostics)') &&
     sendWorkflow.includes('formatYitingRecallSummary(yitingPreview?.previewText)') &&
     sendWorkflow.includes("state.setLiveRecallSummary('智库召回：检索中\\n记忆召回：检索中')") &&
@@ -1163,9 +1176,20 @@ assert(
     sendWorkflow.includes('【记忆完整召回】') &&
     sendWorkflow.includes('zhikuRecallPreview: formatZhikuDiagnosticsPreview(zhikuPreview?.diagnostics)') &&
     sendWorkflow.includes("zhikuRecallInjection: zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : ''") &&
+    sendWorkflow.includes('zhikuRecallRawText: zhikuPreview?.rawText ??') &&
+    sendWorkflow.includes('zhikuRecallUsedModel: zhikuPreview?.usedModel === true') &&
     contextSnapshot.includes('msg.debugContext?.zhikuRecallPreview') &&
+    contextSnapshot.includes('msg.debugContext?.zhikuRecallRawText') &&
+    contextSnapshot.includes('智库模型原始返回') &&
     !contextSnapshot.includes('msg.debugContext?.recallPreview?.trim()'),
-  'debug context must save concise recall summary plus zhiku diagnostics.',
+  'debug context must save concise recall summary, zhiku diagnostics, and raw zhiku model output.',
+);
+assert(
+  turnItem.includes('【智库模型原始返回】') &&
+    turnItem.includes('debug.zhikuRecallRawText') &&
+    turnItem.includes('debug.zhikuRecallUsedModel') &&
+    turnItem.includes('本回合未调用智库模型，使用本地规则召回'),
+  'turn request context must expose the raw zhiku model output separately from local prompt previews.',
 );
 assert(
   app.includes('latestRecallSummary') &&

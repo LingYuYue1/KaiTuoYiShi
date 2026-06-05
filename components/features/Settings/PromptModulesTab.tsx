@@ -69,7 +69,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
   };
 
   const resetBuiltins = () => {
-    if (!confirm('确定将所有内置模块的内容/标题恢复为初始？\n（自定义模块不会被删除，玩家修改过的内置 enabled 状态会被保留为当前值）')) {
+    if (!confirm('确定将所有内置模块的内容/标题恢复为初始？\n（自定义模块不会被删除，玩家修改过的主剧情内置 enabled 状态会被保留；独立模型展示模块会保持展示状态）')) {
       return;
     }
     const fresh = createBuiltinPromptModules();
@@ -77,10 +77,11 @@ export function PromptModulesTab({ settings, onChange }: Props) {
       if (!isBuiltinPromptModule(m.id)) return m;
       const def = fresh.find((f) => f.id === m.id);
       if (!def) return m;
-      // 保留玩家当前的 enabled，覆盖其它字段
+      const isCalibrationBuiltin = def.scope?.includes('calibration');
+      // 保留玩家当前的主剧情 enabled，覆盖其它字段；独立模型展示模块不作为真实请求开关。
       return {
         ...def,
-        enabled: m.enabled,
+        enabled: isCalibrationBuiltin ? true : m.enabled,
         createdAt: m.createdAt,
         updatedAt: Date.now(),
       };
@@ -110,6 +111,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           {sorted.map((m) => {
             const active = m.id === selected?.id;
+            const isCalibrationModule = m.scope?.includes('calibration');
             return (
               <button
                 key={m.id}
@@ -148,10 +150,10 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                   <span
                     className="text-[10px]"
                     style={{
-                      color: m.enabled ? 'rgba(120, 220, 130, 0.85)' : 'rgba(var(--tj-text-secondary), 0.55)',
+                      color: isCalibrationModule || m.enabled ? 'rgba(120, 220, 130, 0.85)' : 'rgba(var(--tj-text-secondary), 0.55)',
                     }}
                   >
-                    {m.enabled ? '● 启用' : '○ 关闭'}
+                    {isCalibrationModule ? '● 展示' : m.enabled ? '● 启用' : '○ 关闭'}
                   </span>
                 </div>
                 <div
@@ -223,6 +225,7 @@ function EditorPanel({
   onDelete: () => void;
 }) {
   const readonly = m.builtin && m.id !== 'builtin_writing_style_custom';
+  const isCalibrationModule = m.scope?.includes('calibration');
 
   return (
     <div className="min-w-0 space-y-3">
@@ -241,30 +244,41 @@ function EditorPanel({
             className="font-serif font-bold text-sm tracking-wider"
             style={{ color: 'rgb(var(--tj-text-primary))' }}
           >
-            启用此模块
+            {isCalibrationModule ? '独立模型展示' : '启用此模块'}
           </div>
           <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
-            关闭后，本模块的内容不会注入到 system prompt
+            {isCalibrationModule
+              ? '独立模型提示词展示：新闻、手机、智库、变量、剧情编织等真实请求由对应服务层共享 prompt 构建；可在“上下文”页核对实际发送内容。'
+              : '关闭后，本模块的内容不会注入到当前作用域的 system prompt。'}
           </div>
         </div>
         <button
-          onClick={() => onPatch({ enabled: !m.enabled })}
+          type="button"
+          disabled={isCalibrationModule}
+          aria-disabled={isCalibrationModule}
+          title={isCalibrationModule ? '独立模型展示模块不是真实请求开关' : undefined}
+          onClick={() => {
+            if (isCalibrationModule) return;
+            onPatch({ enabled: !m.enabled });
+          }}
           className="relative h-6 w-11 flex-shrink-0 transition-all"
           style={{
-            background: m.enabled
+            background: isCalibrationModule || m.enabled
               ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
               : 'rgba(60, 55, 40, 0.7)',
-            boxShadow: m.enabled
+            boxShadow: isCalibrationModule || m.enabled
               ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
               : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
             clipPath: smallClip,
+            cursor: isCalibrationModule ? 'not-allowed' : 'pointer',
+            opacity: isCalibrationModule ? 0.82 : 1,
           }}
         >
           <div
             className="absolute top-0.5 h-5 w-5 transition-transform"
             style={{
-              left: m.enabled ? 'calc(100% - 1.375rem)' : '0.125rem',
-              background: m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
+              left: isCalibrationModule || m.enabled ? 'calc(100% - 1.375rem)' : '0.125rem',
+              background: isCalibrationModule || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
               clipPath:
                 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
             }}
@@ -339,7 +353,9 @@ function EditorPanel({
         />
       </Field>
       <div className="text-xs -mt-1" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
-        勾选「任意」表示在所有场景注入；其他场景互斥于「任意」，选中具体场景将取消「任意」。
+        {isCalibrationModule
+          ? '「独立模型」作用域用于展示独立 API / 校准模型提示词，不会进入主剧情 system prompt；真实调用以对应上下文页为准。'
+          : '勾选「任意」表示在所有场景注入；其他场景互斥于「任意」，选中具体场景将取消「任意」。'}
       </div>
 
       {/* 内容 */}

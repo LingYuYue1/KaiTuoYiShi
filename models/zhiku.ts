@@ -1,5 +1,12 @@
 export type 智库分类 = 'story' | 'character' | 'npc' | 'location' | 'item' | 'faction' | 'term' | 'event' | 'system';
 
+export const RETIRED_ZHIKU_CATEGORIES = ['npc', 'item', 'system'] as const satisfies readonly 智库分类[];
+const RETIRED_ZHIKU_CATEGORY_SET = new Set<智库分类>(RETIRED_ZHIKU_CATEGORIES);
+
+export function isRetiredZhikuCategory(category: 智库分类): boolean {
+  return RETIRED_ZHIKU_CATEGORY_SET.has(category);
+}
+
 export const ZHIKU_CATEGORY_LABELS: Record<智库分类, string> = {
   story: '剧情',
   character: '人物',

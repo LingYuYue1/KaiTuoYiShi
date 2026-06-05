@@ -1,7 +1,8 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { migratePromptModules } from '@/hooks/useGameState';
-import type { 存档数据, 存档类型 } from '@/models/settings';
+import type { 存档数据, 存档类型, 游戏设置 } from '@/models/settings';
 import {
+  创建空API设置,
   创建默认游戏设置,
   创建默认记忆系统设置,
   创建默认手机系统设置,
@@ -20,6 +21,7 @@ import {
   loadAllBundledZhikuPresets,
   mergeZhikuRuntimeUnlockOverrides,
   removeLegacyZhikuCharacterEntries,
+  removeRetiredZhikuEntries,
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
 import { loadSetting } from '@/services/dbService';
@@ -62,7 +64,7 @@ export function buildSavePayload(
     剧情编织: 归一化剧情编织系统(overrides?.剧情编织 ?? state.剧情编织),
     variableBatches: overrides?.variableBatches ?? state.variableBatches,
     queueTasks: overrides?.queueTasks ?? state.queueTasks,
-    gameSettings: {
+    gameSettings: buildSaveGameSettingsSnapshot({
       ...state.gameSettings,
       新闻系统: 归一化星际和平周报设置(state.gameSettings.新闻系统),
       手机系统: 归一化手机系统设置(state.gameSettings.手机系统 ?? 创建默认手机系统设置()),
@@ -71,8 +73,8 @@ export function buildSavePayload(
       文生图系统: 归一化文生图系统设置(state.gameSettings.文生图系统),
       记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统 ?? 创建默认记忆系统设置()),
       额外功能: 归一化额外功能设置(state.gameSettings.额外功能),
-    },
-    apiSettings: state.apiSettings,
+    }),
+    apiSettings: 创建空API设置(),
     theme: state.currentTheme,
   };
 }
@@ -82,12 +84,98 @@ function stripRuntimeOnlyFieldsFromChatHistory(chatHistory: 存档数据['chatHi
   return chatHistory.map((message) => {
     const clean = { ...message } as typeof message & {
       debugContext?: unknown;
-      preTurnSnapshot?: unknown;
     };
     delete clean.debugContext;
-    delete clean.preTurnSnapshot;
     return clean;
   });
+}
+
+function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
+  const defaults = 创建默认游戏设置();
+  return {
+    ...settings,
+    enableClaudeMode: defaults.enableClaudeMode,
+    deepSeekMainMode: defaults.deepSeekMainMode,
+    variableApi: defaults.variableApi,
+    新闻系统: {
+      ...settings.新闻系统,
+      api: defaults.新闻系统.api,
+    },
+    手机系统: {
+      ...settings.手机系统,
+      api: defaults.手机系统.api,
+    },
+    智库系统: {
+      ...settings.智库系统,
+      api: defaults.智库系统.api,
+    },
+    剧情编织系统: {
+      ...settings.剧情编织系统,
+      api: defaults.剧情编织系统.api,
+    },
+    文生图系统: {
+      ...settings.文生图系统,
+      普通接口: defaults.文生图系统.普通接口,
+      场景接口: defaults.文生图系统.场景接口,
+      useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
+      NSFW接口: defaults.文生图系统.NSFW接口,
+      词组转化器API: defaults.文生图系统.词组转化器API,
+    },
+    记忆系统: {
+      ...settings.记忆系统,
+      记忆总结API: defaults.记忆系统.记忆总结API,
+      忆庭召回API: defaults.记忆系统.忆庭召回API,
+      忆庭精炼API: defaults.记忆系统.忆庭精炼API,
+    },
+  };
+}
+
+function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings: 游戏设置): 游戏设置 {
+  const local = {
+    新闻系统: 归一化星际和平周报设置(localSettings.新闻系统),
+    手机系统: 归一化手机系统设置(localSettings.手机系统 ?? 创建默认手机系统设置()),
+    智库系统: 归一化智库系统设置(localSettings.智库系统),
+    剧情编织系统: 归一化剧情编织系统设置(localSettings.剧情编织系统),
+    文生图系统: 归一化文生图系统设置(localSettings.文生图系统),
+    记忆系统: 归一化记忆系统设置(localSettings.记忆系统 ?? 创建默认记忆系统设置()),
+  };
+
+  return {
+    ...nextFromSave,
+    enableClaudeMode: localSettings.enableClaudeMode === true,
+    deepSeekMainMode: localSettings.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
+    variableApi: localSettings.variableApi,
+    新闻系统: {
+      ...nextFromSave.新闻系统,
+      api: local.新闻系统.api,
+    },
+    手机系统: {
+      ...nextFromSave.手机系统,
+      api: local.手机系统.api,
+    },
+    智库系统: {
+      ...nextFromSave.智库系统,
+      api: local.智库系统.api,
+    },
+    剧情编织系统: {
+      ...nextFromSave.剧情编织系统,
+      api: local.剧情编织系统.api,
+    },
+    文生图系统: {
+      ...nextFromSave.文生图系统,
+      普通接口: local.文生图系统.普通接口,
+      场景接口: local.文生图系统.场景接口,
+      useSeparateSceneApi: local.文生图系统.useSeparateSceneApi,
+      NSFW接口: local.文生图系统.NSFW接口,
+      词组转化器API: local.文生图系统.词组转化器API,
+    },
+    记忆系统: {
+      ...nextFromSave.记忆系统,
+      记忆总结API: local.记忆系统.记忆总结API,
+      忆庭召回API: local.记忆系统.忆庭召回API,
+      忆庭精炼API: local.记忆系统.忆庭精炼API,
+    },
+  };
 }
 
 export async function handleLoadLatest(
@@ -153,7 +241,9 @@ async function applySaveToState(
     条目: [
       ...mergeZhikuRuntimeUnlockOverrides((await loadAllBundledZhikuPresets()).条目, save.智库?.条目),
       ...removeLegacyZhikuCharacterEntries(
-        save.智库?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
+        removeRetiredZhikuEntries(
+          save.智库?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
+        ),
         zhikuMigrationAt,
       ),
     ],
@@ -180,9 +270,10 @@ async function applySaveToState(
   await saveSetting('storyWeavingSystem', nextStoryWeaving);
   state.setVariableBatches(save.variableBatches ?? []); // 旧存档没有该字段，兜底空数组
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
-  // 兼容旧存档：variableApi 字段是后加的；promptModules 是后加的（需补齐 4 条 builtin + 迁移 customPrompt）
+  // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。
+  // API 配置属于本机设置，不跟随存档读取；否则旧档/导入档会把当前可用 API 覆盖成空值。
   const defaults = 创建默认游戏设置();
-  state.setGameSettings({
+  const nextGameSettingsFromSave: 游戏设置 = {
     ...defaults,
     ...save.gameSettings,
     新闻系统: 归一化星际和平周报设置(save.gameSettings.新闻系统),
@@ -192,13 +283,10 @@ async function applySaveToState(
     文生图系统: 归一化文生图系统设置(save.gameSettings.文生图系统),
     记忆系统: 归一化记忆系统设置(save.gameSettings.记忆系统),
     额外功能: 归一化额外功能设置(save.gameSettings.额外功能),
-    variableApi: save.gameSettings.variableApi ?? defaults.variableApi,
-    enableClaudeMode: save.gameSettings.enableClaudeMode ?? defaults.enableClaudeMode,
     enableMaleNsfwArchive: save.gameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
     promptModules: migratePromptModules(save.gameSettings),
-  });
-  state.setApiSettings(save.apiSettings);
-  state.setCurrentTheme(save.theme);
+  };
+  state.setGameSettings(preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings));
   state.setHasSave(true);
   state.setView('game');
   state.setTurnCount(save.turnCount ?? (save.chatHistory.length + 1));

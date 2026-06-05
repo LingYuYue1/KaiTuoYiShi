@@ -1,4 +1,5 @@
 import type { 存档数据 } from '@/models/settings';
+import { 创建空API设置, 创建默认游戏设置 } from '@/models/settings';
 
 const PACKAGE_VERSION = 1;
 const encoder = new TextEncoder();
@@ -51,11 +52,19 @@ export function buildSavePackage(save: 存档数据): Blob {
 export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   const sanitized = JSON.parse(JSON.stringify(save)) as 存档数据;
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
+  stripEmbeddedApiSettings(sanitized);
+  return sanitized;
+}
+
+function stripEmbeddedApiSettings(sanitized: 存档数据): void {
+  const defaults = 创建默认游戏设置();
+  const settings = sanitized.gameSettings ?? defaults;
+  sanitized.gameSettings = settings;
+
   for (const config of sanitized.apiSettings?.configs ?? []) {
     clearApiKey(config);
   }
 
-  const settings = sanitized.gameSettings;
   clearApiKey(settings?.variableApi);
   clearApiKey(settings?.新闻系统?.api);
   clearApiKey(settings?.手机系统?.api);
@@ -69,7 +78,43 @@ export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   clearApiKey(settings?.文生图系统?.NSFW接口);
   clearApiKey(settings?.文生图系统?.词组转化器API);
 
-  return sanitized;
+  sanitized.apiSettings = 创建空API设置();
+  sanitized.gameSettings = {
+    ...defaults,
+    ...settings,
+    enableClaudeMode: defaults.enableClaudeMode,
+    variableApi: defaults.variableApi,
+    新闻系统: {
+      ...(settings.新闻系统 ?? defaults.新闻系统),
+      api: defaults.新闻系统.api,
+    },
+    手机系统: {
+      ...(settings.手机系统 ?? defaults.手机系统),
+      api: defaults.手机系统.api,
+    },
+    智库系统: {
+      ...(settings.智库系统 ?? defaults.智库系统),
+      api: defaults.智库系统.api,
+    },
+    剧情编织系统: {
+      ...(settings.剧情编织系统 ?? defaults.剧情编织系统),
+      api: defaults.剧情编织系统.api,
+    },
+    记忆系统: {
+      ...(settings.记忆系统 ?? defaults.记忆系统),
+      记忆总结API: defaults.记忆系统.记忆总结API,
+      忆庭召回API: defaults.记忆系统.忆庭召回API,
+      忆庭精炼API: defaults.记忆系统.忆庭精炼API,
+    },
+    文生图系统: {
+      ...(settings.文生图系统 ?? defaults.文生图系统),
+      普通接口: defaults.文生图系统.普通接口,
+      场景接口: defaults.文生图系统.场景接口,
+      useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
+      NSFW接口: defaults.文生图系统.NSFW接口,
+      词组转化器API: defaults.文生图系统.词组转化器API,
+    },
+  };
 }
 
 function stripRuntimeDebugFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
@@ -77,10 +122,8 @@ function stripRuntimeDebugFromChatHistory(chatHistory: 存档数据['chatHistory
   return chatHistory.map((message) => {
     const clean = { ...message } as typeof message & {
       debugContext?: unknown;
-      preTurnSnapshot?: unknown;
     };
     delete clean.debugContext;
-    delete clean.preTurnSnapshot;
     return clean;
   });
 }

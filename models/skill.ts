@@ -36,18 +36,7 @@ export interface 战技槽位摘要 {
   unlocked: boolean;
 }
 
-export interface 战技模板 {
-  id: string;
-  名称: string;
-  描述: string;
-  来源: string;
-  关键词: string[];
-  推荐消耗: string;
-  推荐冷却: string;
-  备注: string;
-}
-
-export const NORMAL_SKILL_SLOT_COUNT = 3;
+export const NORMAL_SKILL_SLOT_COUNT = 1;
 
 export function 计算命途战技槽位数(stage: number): number {
   return Math.max(1, Math.min(5, stage + 1));

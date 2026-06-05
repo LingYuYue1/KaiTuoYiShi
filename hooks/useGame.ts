@@ -34,12 +34,18 @@ export function useGame(): UseGameReturn {
       if (state.apiSettings.configs.length > 0) {
         const first = state.apiSettings.configs[0];
         state.setApiSettings((prev) => ({ ...prev, activeConfigId: first.id }));
-        return { ...first, enableClaudeMode: state.gameSettings.enableClaudeMode === true };
+        return {
+          ...first,
+          enableClaudeMode: state.gameSettings.enableClaudeMode === true,
+        };
       }
       return null;
     }
     const config = state.apiSettings.configs.find((c) => c.id === state.apiSettings.activeConfigId) ?? null;
-    return config ? { ...config, enableClaudeMode: state.gameSettings.enableClaudeMode === true } : null;
+    return config ? {
+      ...config,
+      enableClaudeMode: state.gameSettings.enableClaudeMode === true,
+    } : null;
   }, [state.apiSettings.activeConfigId, state.apiSettings.configs, state.gameSettings.enableClaudeMode, state.setApiSettings]);
 
   const handleSend = useCallback(
@@ -166,11 +172,10 @@ export function useGame(): UseGameReturn {
       氛围变化: '',
     }));
 
-    // traveler：保留创角时的所有静态字段，把道具 / 装备运行时累积重置回开局态
+    // traveler：保留创角时的所有静态字段，把道具运行时累积重置回开局态
     state.set旅人((prev) => ({
       ...prev,
       背包: [],
-      装备: {},
     }));
 
     state.setPendingOpeningTrigger('[系统] 开启第 0 回合');

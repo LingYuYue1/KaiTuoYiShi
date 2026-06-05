@@ -5,7 +5,6 @@ export type {
   战技槽位摘要,
   战技槽位类型,
   战技类别,
-  战技模板,
 } from './skill';
 export {
   计算命途战技槽位数,

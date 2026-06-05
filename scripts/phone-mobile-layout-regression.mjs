@@ -43,6 +43,80 @@ const checks = [
     label: 'mobile group member picker keeps independent touch scroll',
     ok: source.includes('max-h-36 touch-pan-y space-y-1 overflow-y-auto overscroll-contain pr-1'),
   },
+  {
+    label: 'chat surface auto-scrolls to latest message on open and append',
+    ok:
+      source.includes('messagesScrollRef') &&
+      source.includes('messagesEndRef') &&
+      source.includes('container.scrollTop = container.scrollHeight') &&
+      source.includes("messagesEndRef.current?.scrollIntoView({ block: 'end' })") &&
+      source.includes('[chat.id, chat.messages.length]'),
+  },
+  {
+    label: 'message sidebar separates private and group chat lists',
+    ok:
+      source.includes("type MessageListMode = 'private' | 'group'") &&
+      source.includes('const [messageListMode, setMessageListMode]') &&
+      source.includes("messageListMode === 'group' ? groupChats : privateChats") &&
+      source.includes("好友 ${privateChats.length}") &&
+      source.includes("群聊 ${groupChats.length}"),
+  },
+  {
+    label: 'pending phone seeds can collapse in message sidebar',
+    ok:
+      source.includes('const [showPendingSeeds, setShowPendingSeeds]') &&
+      source.includes('setShowPendingSeeds((v) => !v)') &&
+      source.includes("showPendingSeeds ? '收起' : '展开'"),
+  },
+  {
+    label: 'auto-created group chats use standardized titles',
+    ok:
+      source.includes('buildStandardGroupTitle') &&
+      source.includes('拉人入群') &&
+      source.includes('列车组频道') &&
+      source.includes('临时频道') &&
+      source.includes('title: buildStandardGroupTitle(groupParticipantIds, seed.title)'),
+  },
+  {
+    label: 'group chat title can be renamed from chat surface',
+    ok:
+      source.includes('handleRenameGroupChat') &&
+      source.includes('onRenameGroup') &&
+      source.includes('setRenamingGroup(true)') &&
+      source.includes("chat.type === 'group' && !renamingGroup") &&
+      source.includes('title: nextTitle'),
+  },
+  {
+    label: 'group chat members can be viewed from chat surface',
+    ok:
+      source.includes('groupMembers={activeChat.type ===') &&
+      source.includes('const [showGroupMembers, setShowGroupMembers]') &&
+      source.includes('setShowGroupMembers((v) => !v)') &&
+      source.includes('成员 {groupMembers?.length ?? chat.participantIds.length}') &&
+      source.includes('群聊成员') &&
+      source.includes('max-h-64 w-[min(320px,calc(100vw-48px))]'),
+  },
+  {
+    label: 'group chat members panel can add contacts to the group',
+    ok:
+      source.includes('handleAddGroupMember') &&
+      source.includes('participantIds: [...chat.participantIds, contact.id]') &&
+      source.includes('groupAddCandidates={activeChat.type ===') &&
+      source.includes('const [showAddMembers, setShowAddMembers]') &&
+      source.includes('aria-label="拉人入群"') &&
+      source.includes('title="拉人入群"') &&
+      source.includes('setShowGroupMembers(false)') &&
+      source.includes('onAddGroupMember?.(chat.id, candidate)') &&
+      source.includes('暂无可拉入的联系人。'),
+  },
+  {
+    label: 'chat header wraps controls for narrow mobile widths',
+    ok:
+      source.includes('relative flex flex-wrap items-start justify-between') &&
+      source.includes('flex min-w-0 flex-1 items-center gap-3') &&
+      source.includes('flex flex-shrink-0 items-start gap-2') &&
+      source.includes('flex flex-col items-end gap-2'),
+  },
 ];
 
 const failed = checks.filter((check) => !check.ok);

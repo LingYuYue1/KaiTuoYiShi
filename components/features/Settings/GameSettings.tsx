@@ -259,6 +259,41 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
         checked={settings.enableClaudeMode}
         onChange={(v) => onChange({ ...settings, enableClaudeMode: v })}
       />
+      <Field label="◆ DeepSeek 主剧情模式">
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { value: 'off' as const, label: '关闭', desc: '按普通 OpenAI 兼容续聊' },
+            { value: 'standard' as const, label: '标准', desc: '直发并追加 DS 格式校验' },
+            { value: 'lock_format' as const, label: '锁格式', desc: '尝试 prefix 锁定 <thinking>' },
+          ]).map((opt) => {
+            const active = (settings.deepSeekMainMode ?? 'off') === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onChange({ ...settings, deepSeekMainMode: opt.value })}
+                className="px-3 py-2 text-left transition-all hover:opacity-90"
+                style={{
+                  background: active
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+                    : 'rgba(var(--tj-bg-secondary), 0.45)',
+                  color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
+                  boxShadow: active
+                    ? '0 0 16px rgba(var(--tj-accent-primary), 0.18)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  clipPath: smallClip,
+                }}
+              >
+                <div className="text-xs font-serif font-bold tracking-wider">{opt.label}</div>
+                <div className="mt-0.5 text-[10px] leading-snug opacity-75">{opt.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
+          仅当主 API 供应商或 Base URL 命中 DeepSeek 时生效；后台变量、智库、手机、剧情编织继续使用各自接口设置。
+        </p>
+      </Field>
       <ToggleRow
         label="叙述者人格"
         desc="AI 以特定角色身份回应，而非中立旁白（同步「提示词模块·叙述者人格」开关）"

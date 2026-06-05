@@ -5,8 +5,8 @@ import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块作用域 } from '@/models/prompts';
 import { PROMPT_MODULE_TOP_THRESHOLD } from '@/models/prompts';
 import type { 世界书 } from '@/models/worldbook';
-import type { NPC记录 } from '@/models/npc';
-import { NPC_RELATION_LABELS, 提取NPC同行记忆文本列表 } from '@/models/npc';
+import type { NPC记录, NPC账本选择结果 } from '@/models/npc';
+import { formatNpcLedgerForPrompt, NPC_RELATION_LABELS, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
 import { 计算命途战技槽位数, NORMAL_SKILL_SLOT_COUNT } from '@/models/skill';
 import type { 新闻条目 } from '@/models/news';
 import { NEWS_CATEGORY_LABELS } from '@/models/news';
@@ -16,8 +16,6 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 手机系统 } from '@/models/phone';
-import type { 装备槽位ID } from '@/models/equipment';
-import { EQUIP_SLOT_LABELS, EQUIP_SLOT_ORDER } from '@/models/equipment';
 import type { 背包物品 } from '@/models/inventory';
 import { ITEM_CATEGORY_LABELS } from '@/models/inventory';
 import {
@@ -65,6 +63,7 @@ export function buildSystemPrompt(
   yitingInjectionOverride?: string,
   zhikuInjectionOverride?: string,
   suppressMemoryInjection?: boolean,
+  npcLedgerSelectionOverride?: NPC账本选择结果,
 ): string {
   const parts: string[] = [];
 
@@ -110,10 +109,20 @@ export function buildSystemPrompt(
     parts.push(buildMainStoryControlSection(worldState));
   }
 
-  const npcContinuitySection = buildNpcContinuitySection(worldState, npcRecords, _turnCount);
+  const npcLedgerSelection = npcLedgerSelectionOverride ?? selectNpcLedgersForTurn({
+    records: npcRecords,
+    turnCount: _turnCount,
+    explicitNames: worldbookCtx?.npcNames,
+    sceneNames: worldState.当前时段?.人物?.map((npc) => npc.姓名),
+    recalledNames: worldbookCtx?.npcNames,
+  });
+  const npcLedgerSection = buildNpcLedgerContinuitySection(npcLedgerSelection);
+  if (npcLedgerSection) parts.push(npcLedgerSection);
+
+  const npcContinuitySection = buildNpcContinuitySection(worldState, npcRecords, _turnCount, worldbookCtx?.npcNames);
   if (npcContinuitySection) parts.push(npcContinuitySection);
 
-  const npcPresenceSection = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput);
+  const npcPresenceSection = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames);
   if (npcPresenceSection) parts.push(npcPresenceSection);
 
   const timeAnchor = buildCurrentTimeAnchorSection(worldState);
@@ -133,10 +142,6 @@ export function buildSystemPrompt(
   // ── 已知伙伴（只把 tier='companion' 的喂给 AI，路人不进上下文） ──
   const companionsSection = buildCompanionsSection(npcRecords, _turnCount);
   if (companionsSection) parts.push(companionsSection);
-
-  // ── 装备（已穿戴的 4 槽位） ──
-  const equipmentSection = buildEquipmentSection(traveler);
-  if (equipmentSection) parts.push(equipmentSection);
 
   // ── 背包（最多前 10 件，按 category 分组） ──
   const inventorySection = buildInventorySection(traveler);
@@ -550,11 +555,13 @@ function buildOpeningCutInSection(worldState: 世界状态): string {
 }
 
 function buildSkillSection(traveler: 角色数据结构): string {
-  const skills = traveler.战技列表 ?? [];
+  const skills = (traveler.战技列表 ?? []).filter(
+    (skill) => skill.槽位类型 !== 'normal' || (skill.槽位序号 >= 1 && skill.槽位序号 <= NORMAL_SKILL_SLOT_COUNT),
+  );
   const paths = traveler.命途列表 ?? [];
 
   const lines: string[] = [];
-  lines.push(`- 普通战技槽位：${NORMAL_SKILL_SLOT_COUNT} 个，始终保留。`);
+  lines.push(`- 普通战技槽位：${NORMAL_SKILL_SLOT_COUNT} 个，始终保留；该槽位由玩家自制，不再使用内置普通战技预设。`);
 
   if (paths.length) {
     lines.push('- 命途战技槽位：');
@@ -578,11 +585,11 @@ function buildSkillSection(traveler: 角色数据结构): string {
 
   if (enabledSkills.length) {
     const normalSkills = skills
-      .filter((skill) => skill.槽位类型 === 'normal' && skill.已启用 !== false)
+      .filter((skill) => skill.槽位类型 === 'normal' && skill.已启用 !== false && skill.槽位序号 <= NORMAL_SKILL_SLOT_COUNT)
       .sort((a, b) => a.槽位序号 - b.槽位序号)
       .map((skill) => `${skill.槽位序号}. ${skill.名称}`);
     if (normalSkills.length) {
-      lines.push(`- 已登记普通战技（仅供系统识别，不在正文直呼名称）：${normalSkills.join(' / ')}`);
+      lines.push(`- 已登记普通自制战技（仅供系统识别，不在正文直呼名称）：${normalSkills.join(' / ')}`);
     }
 
     lines.push('- 已登记战技详情：');
@@ -674,9 +681,28 @@ const EXTRA_NPC_PROMPT_LIMIT = 8;
 const NPC_CONTINUITY_PROMPT_LIMIT = 10;
 const NPC_PRESENCE_RECENT_WINDOW = 6;
 
-function buildNpcPresenceSection(worldState: 世界状态, npcRecords?: NPC记录[], turnCount = 0, userInput = ''): string {
+function normalizeExplicitNpcNames(names?: string[]): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of names ?? []) {
+    const name = raw.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    normalized.push(name);
+  }
+  return normalized;
+}
+
+function buildNpcPresenceSection(
+  worldState: 世界状态,
+  npcRecords?: NPC记录[],
+  turnCount = 0,
+  userInput = '',
+  explicitNpcNames: string[] = [],
+): string {
   const sceneNames = (worldState.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean);
   const records = npcRecords ?? [];
+  const explicitNames = normalizeExplicitNpcNames(explicitNpcNames);
   const current = records
     .filter((npc) => npc.同行 || sceneNames.some((name) => name === npc.姓名 || name === npc.别名))
     .map((npc) => npc.姓名);
@@ -692,16 +718,18 @@ function buildNpcPresenceSection(worldState: 世界状态, npcRecords?: NPC记�
     .map((npc) => `${npc.姓名}（最近第${Math.max(1, Number(npc.最近回合 || 1))}回合）`);
   const sceneOnly = sceneNames.filter((name) => !current.some((item) => item === name));
   const anticipated = getAnticipatedNpcNamesForTurn({ world: worldState, userInput });
-  if (!current.length && !nearby.length && !sceneOnly.length && !anticipated.length) return '';
+  if (!current.length && !nearby.length && !sceneOnly.length && !anticipated.length && !explicitNames.length) return '';
 
   return [
     '# 角色在场状态',
     '',
     `- 当前明确在场/同行：${current.length ? Array.from(new Set(current)).join('、') : '无明确记录'}`,
+    `- 近期正文/玩家输入明确人物或预期相关：${explicitNames.length ? explicitNames.join('、') : '无'}`,
     `- 近期相关但不在场：${nearby.length ? nearby.join('、') : '无'}`,
     `- 预期登场/需提前校准：${anticipated.length ? anticipated.join('、') : '无'}`,
     `- 当前场景候选人物：${sceneOnly.length ? sceneOnly.join('、') : '无'}`,
-    '- 写作规则：只有“当前明确在场/同行”或玩家本回合明确点名的人物可以自然发言、行动或被智库召回为角色锚点。',
+    '- 写作规则：只有“当前明确在场/同行”、玩家本回合明确点名、或即时剧情回顾/最近正文锚点显示仍在当前镜头、通讯、同行链路中的人物，可以自然发言、行动或被智库召回为角色锚点。',
+    '- “近期正文/玩家输入明确人物或预期相关”不是自动在场名单；但若即时剧情回顾或最近正文锚点显示他们刚与玩家对话、行动、委托、冲突或同行，正文必须承接这段关系与刚发生的事实，禁止写成完全陌生、初次见面或突然遗忘。',
     '- “预期登场/需提前校准”的人物允许智库提前召回口吻和人格，用于他们即将入场、广播、通讯或被他人提及时不 OOC；但在正文里仍要通过合理镜头让其入场，不得凭空站到当前地点。',
     '- “近期相关但不在场”的人物只能通过回忆、通讯、旁人提及或后续登场铺垫出现，不得凭空站到当前镜头里。',
     '- “当前场景候选人物”只代表地点可能相关，不等于本人已在场；例如地点叫黑塔空间站时，不得自动让黑塔本人出场或召回黑塔人格，除非正文/玩家输入明确出现黑塔或人偶黑塔。',
@@ -713,27 +741,49 @@ function buildNpcPresenceSection(worldState: 世界状态, npcRecords?: NPC记�
   ].join('\n');
 }
 
-function buildNpcContinuitySection(worldState: 世界状态, npcRecords?: NPC记录[], turnCount = 0): string {
-  if (!npcRecords || npcRecords.length === 0) return '';
+function buildNpcLedgerContinuitySection(selection: NPC账本选择结果): string {
+  if (!selection.selected.length) return '';
+  return [
+    '# 本回合 NPC 关系与记忆强制承接',
+    '',
+    '以下 NPC 账本属于当前状态事实，不是普通背景资料。若这些 NPC 本回合出场、通讯、被玩家点名或由当前镜头自然牵引，正文必须承接其关系、记忆、承诺、冲突和最近互动。',
+    '- 禁止把已认识、已同行、已承诺、已冲突或已有私有记忆的 NPC 写成初识、陌生、无共同经历。',
+    '- 若要表现 NPC 不记得或装作不认识，正文必须给出明确原因：失忆、伪装、通讯隔离、误认、被迫演戏、时间线重置或认知污染。',
+    '- 账本相关不等于自动在场；不在当前镜头的人只能通过通讯、回忆、旁人提及或后续合理入场承接。',
+    '',
+    ...selection.selected.map(formatNpcLedgerForPrompt),
+  ].join('\n');
+}
 
+function buildNpcContinuitySection(
+  worldState: 世界状态,
+  npcRecords?: NPC记录[],
+  turnCount = 0,
+  explicitNpcNames: string[] = [],
+): string {
+  const records = npcRecords ?? [];
+  const explicitNames = normalizeExplicitNpcNames(explicitNpcNames);
   const recentCutoff = Math.max(1, turnCount - RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW);
   const sceneNames = new Set((worldState.当前时段?.人物 ?? []).map((n) => n.姓名.trim()).filter(Boolean));
   const currentLocation = worldState.当前地点?.trim();
 
-  const candidates = npcRecords
+  const candidates = records
     .map((npc) => {
       const memories = 提取NPC同行记忆文本列表(npc);
       const isRecent = Number(npc.最近回合 || 0) >= recentCutoff;
+      const isExplicit = explicitNames.some((name) => name === npc.姓名 || name === npc.别名);
       const isSceneNpc = sceneNames.has(npc.姓名) || Boolean(npc.别名 && sceneNames.has(npc.别名));
       const hasContinuity =
         npc.同行 ||
         isRecent ||
+        isExplicit ||
         isSceneNpc ||
         memories.length > 0 ||
         npc.关系 !== 'stranger' ||
         npc.好感度 !== 0;
       if (!hasContinuity) return null;
       const score =
+        (isExplicit ? 120 : 0) +
         (isSceneNpc ? 100 : 0) +
         (npc.同行 ? 80 : 0) +
         (isRecent ? 50 : 0) +
@@ -746,7 +796,16 @@ function buildNpcContinuitySection(worldState: 世界状态, npcRecords?: NPC记
     .sort((a, b) => b.score - a.score || Number(b.npc.最近回合 || 0) - Number(a.npc.最近回合 || 0))
     .slice(0, NPC_CONTINUITY_PROMPT_LIMIT);
 
-  if (!candidates.length) return '';
+  const representedNames = new Set<string>();
+  for (const { npc } of candidates) {
+    representedNames.add(npc.姓名);
+    if (npc.别名) representedNames.add(npc.别名);
+  }
+  const fallbackNames = explicitNames
+    .filter((name) => !representedNames.has(name))
+    .slice(0, Math.max(0, NPC_CONTINUITY_PROMPT_LIMIT - candidates.length));
+
+  if (!candidates.length && !fallbackNames.length) return '';
 
   const lines: string[] = [
     '# 本回合人物关系连续性核对',
@@ -771,6 +830,10 @@ function buildNpcContinuitySection(worldState: 世界状态, npcRecords?: NPC记
     const memoryLine = memories.length ? `；最近共同经历：${memories.slice(-3).join('；')}` : '';
     const introLine = npc.介绍 ? `；身份/职责：${npc.介绍}` : '';
     lines.push(`- ${npc.姓名}${npc.别名 ? `（${npc.别名}）` : ''}｜${tags.join(' · ')}｜好感${npc.好感度 > 0 ? '+' : ''}${npc.好感度}｜${turnLine}${introLine}${memoryLine}`);
+  }
+
+  for (const name of fallbackNames) {
+    lines.push(`- ${name}｜近期正文/玩家输入明确出现或预期相关｜档案尚未落库｜必须读取即时剧情回顾和最近正文锚点；若其中显示其刚发生对话、动作、委托、冲突或同行状态，正文必须承接，禁止写成完全陌生、初次见面或无记忆。`);
   }
 
   return lines.join('\n');
@@ -840,30 +903,6 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
   }
   return `# 已知伙伴与路人\n\n${lines.join('\n')}`;
 }
-// 装备注入：从背包里找出已穿戴的物品(当前装备部位 == 槽位 ID),
-// 列出 名称、描述和叙事效果，供 AI 描述主角可用资源时引用。
-function buildEquipmentSection(traveler: 角色数据结构): string {
-  const slots = traveler.装备 ?? {};
-  const inventory = traveler.背包 ?? [];
-  const slotEntries = EQUIP_SLOT_ORDER
-    .map((slot) => {
-      const itemId = slots[slot];
-      if (!itemId) return null;
-      const item = inventory.find((it) => it.id === itemId);
-      if (!item) return null;
-      return { slot, item };
-    })
-    .filter((e): e is { slot: 装备槽位ID; item: 背包物品 } => Boolean(e));
-  if (slotEntries.length === 0) return '';
-
-  const lines = slotEntries.map(({ slot, item }) => {
-    const effectText = item.叙事效果?.length ? `（效果：${item.叙事效果.join('、')}）` : '';
-    const descPart = item.描述 ? ` —— ${item.描述}` : '';
-    return `- ${EQUIP_SLOT_LABELS[slot]}：${item.名称}${effectText}${descPart}`;
-  });
-  return `# 已穿戴装备\n\n${lines.join('\n')}`;
-}
-
 // 背包注入：按 category 分桶，每桶最多取 3 件；总数控制在前 10 件，避免上下文膨胀。
 // 末尾附 物品获取协议:教 AI 用 push 旅人.背包 = {...} 把剧情中提到的物品落地到背包。
 function buildInventorySection(traveler: 角色数据结构): string {
@@ -898,13 +937,8 @@ function buildInventorySection(traveler: 角色数据结构): string {
     '- 类别 取值:food / consumable / lightcone / weapon / clothing / accessory / memento / key',
     '- 品质 取值:蓝 / 紫 / 金(对应原作 3/4/5 星)',
     '- 同名同类的可堆叠物品会自动合并数量,直接 push 即可,不要手动加数量。',
-    '- 装备类(lightcone / weapon / clothing / accessory) 默认每件独立(可堆叠=false),不要写 数量>1。',
-    '- 装备槽位 取值:lightcone / weapon / head(帽子) / outfit(衣服) / legs(裤子) / feet(鞋子) / accessory1 / accessory2。',
-    '  · lightcone 类别 → 装备槽位:lightcone',
-    '  · weapon 类别 → 装备槽位:weapon',
-    '  · clothing 类别 → 装备槽位 必须是 head/outfit/legs/feet 之一',
-    '  · accessory 类别 → 装备槽位 可写 accessory1 或 accessory2(穿戴时会自动选空槽)',
-    '- 叙事效果 使用字符串数组,例如 `["近身防卫","破解终端时更稳定"]`。装备和道具不再生成数值属性加成。',
+    '- lightcone / weapon / clothing / accessory 现在只作为背包物品类别,不再建立穿戴槽位或已穿戴状态。',
+    '- 叙事效果 使用字符串数组,例如 `["近身防卫","破解终端时更稳定"]`。物品不再生成数值属性加成。',
     '- 属性加成 是旧字段,不要再主动生成；已有旧物品里出现时只当兼容数据。',
     '- 使用效果 才是对象数组,例如 `[{"目标属性":"恢复体力","数值":1}]`,只用在 food / consumable 上；它只作为叙事提示，不修改旧战斗数值。',
   ].join('\n');

@@ -10,6 +10,7 @@ import type {
 } from '@/models/storyWeaving';
 import { 归一化剧情编织分段 } from '@/models/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
+import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
 import type { FilterContext } from '@/utils/worldbook';
 
@@ -565,7 +566,7 @@ function buildStoryWeavingUserPrompt(params: {
 
 function parseStoryWeavingResult(raw: string, base: 剧情编织分段): 剧情编织分段 {
   const candidate = extractJson(raw);
-  const parsed = JSON.parse(candidate) as Record<string, unknown>;
+  const parsed = parseJsonWithRepair<Record<string, unknown>>(candidate, 'object');
   return 归一化剧情编织分段({
     ...base,
     本段概括: 读文本(parsed.本段概括).trim(),
@@ -594,9 +595,7 @@ function parseStoryWeavingResult(raw: string, base: 剧情编织分段): 剧情�
 }
 
 function extractJson(raw: string): string {
-  const source = raw.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-  const start = source.indexOf('{');
-  const end = source.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('剧情编织模型未返回 JSON 对象。');
-  return source.slice(start, end + 1);
+  const candidate = extractJsonLikeText(raw, 'object');
+  if (!candidate.trim().startsWith('{')) throw new Error('剧情编织模型未返回 JSON 对象。');
+  return candidate;
 }

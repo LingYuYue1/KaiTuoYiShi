@@ -62,8 +62,9 @@ assert(client.includes('parseClaudeTextResponse'), 'Claude 非流式响应必须
 assert(client.includes("normalized[normalized.length - 1]?.role !== 'user'"), 'Claude messages 最后一条必须补成 user。');
 assert(client.includes("'anthropic-dangerous-direct-browser-access': 'true'"), '浏览器直连 Claude 必须带 direct browser access header。');
 
-const claudeFunction = client.slice(client.indexOf('async function streamClaude'), client.indexOf('// ── Gemini streaming'));
-assert(!claudeFunction.includes('temperature:'), 'Claude Messages API 默认请求体不得上传 temperature。');
+const claudeRequestBodyFunction = client.slice(client.indexOf('function buildClaudeRequestBody'), client.indexOf('function claudeHeaders'));
+const claudeFunction = client.slice(client.indexOf('async function streamClaude'), client.indexOf('async function completionClaudeNonStream'));
+assert(!claudeRequestBodyFunction.includes('temperature:'), 'Claude Messages API 默认请求体不得上传 temperature。');
 assert(client.includes('max_tokens'), 'Claude Messages API 必须使用 max_tokens。');
 assert(claudeFunction.includes('/messages'), 'Claude Messages API 必须请求 /messages。');
 assert(client.includes('buildClaudeRequestBody(config, messages, request, false)'), 'Claude 非流式请求必须设置 stream:false。');

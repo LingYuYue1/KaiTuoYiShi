@@ -30,6 +30,52 @@ export interface NPC同行记忆条目 {
   关联NPCID?: string[];
 }
 
+export interface NPC总结记忆条目 {
+  id: string;
+  回合范围?: string;
+  条数?: number;
+  摘要: string;
+  保留事实?: string[];
+  关系变化?: string[];
+  未完成事项?: string[];
+}
+
+export interface NPC记忆账本视图 {
+  npcId: string;
+  姓名: string;
+  别名?: string;
+  当前关系阶段: string;
+  好感度: number;
+  同行: boolean;
+  初见回合: number;
+  最近回合: number;
+  对玩家称呼?: string;
+  最近互动?: string;
+  对玩家长期印象?: string;
+  共同经历: string[];
+  未完成事项: string[];
+  未解决冲突: string[];
+  必须记得: string[];
+  禁止遗忘: string[];
+  总结记忆: NPC总结记忆条目[];
+  最近原始记忆: string[];
+  有账本字段: boolean;
+}
+
+export interface NPC账本选择条目 {
+  npc: NPC记录;
+  ledger: NPC记忆账本视图;
+  score: number;
+  reasons: string[];
+  fields: string[];
+  presentState: 'current' | 'explicit' | 'recent' | 'background';
+}
+
+export interface NPC账本选择结果 {
+  selected: NPC账本选择条目[];
+  skipped: Array<{ name: string; reason: string }>;
+}
+
 export interface NPC_NSFW档案 {
   enabled?: boolean;
   年龄确认?: NPC_NSFW年龄确认;
@@ -192,6 +238,15 @@ export interface NPC记录 {
   介绍?: string;                     // 人物介绍 / 背景
   装备摘要?: string;                 // 自由文本描述其装备/武器,后续接 NPC装备 schema 再扩
   同行记忆?: NPC同行记忆条目[];      // 与玩家共同经历的关键节点,AI 推进剧情时填充
+  最近互动?: string;                 // NPC 账本：最近一次会影响后续态度的互动
+  对玩家长期印象?: string;           // NPC 账本：该 NPC 如何稳定看待玩家
+  当前关系阶段?: string;             // NPC 账本：比关系枚举更具体的阶段描述
+  共同经历?: string[];               // NPC 账本：稳定共同经历
+  未完成事项?: string[];             // NPC 账本：承诺、约定、待办
+  未解决冲突?: string[];             // NPC 账本：尚未化解的冲突/误会
+  必须记得?: string[];               // NPC 账本：主剧情不得遗忘的事实
+  禁止遗忘?: string[];               // NPC 账本：强保护事实，解决前不得删除
+  总结记忆?: NPC总结记忆条目[];      // NPC 账本：压缩后的长期关系记忆
   备注: string[];
   原著角色?: boolean;                // 来自原著角色库的标记
   NSFW档案?: NPC_NSFW档案;
@@ -295,6 +350,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
   const rawIntro = source.介绍 ?? source.简介 ?? source.description;
   const rawEquipment = source.装备摘要 ?? source.装备 ?? source.equipment;
   const rawMemories = source.同行记忆 ?? source.memories ?? source.memory;
+  const rawSummaryMemories = source.总结记忆 ?? source.summaryMemories ?? source.memorySummaries;
   const rawNotes = source.备注 ?? source.notes;
   const rawAvatar = source.头像 ?? source.avatar ?? source.avatarUrl;
   const rawNSFW = source.NSFW档案 ?? source.nsfw ?? source.NSFW;
@@ -325,6 +381,15 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     介绍: typeof rawIntro === 'string' ? rawIntro : undefined,
     装备摘要: typeof rawEquipment === 'string' ? rawEquipment : undefined,
     同行记忆: 归一化同行记忆列表(rawMemories),
+    最近互动: readNpcString(source.最近互动 ?? source.recentInteraction),
+    对玩家长期印象: readNpcString(source.对玩家长期印象 ?? source.longTermImpression),
+    当前关系阶段: readNpcString(source.当前关系阶段 ?? source.relationshipStage),
+    共同经历: normalizeNpcTextList(source.共同经历 ?? source.sharedExperiences),
+    未完成事项: normalizeNpcTextList(source.未完成事项 ?? source.openItems),
+    未解决冲突: normalizeNpcTextList(source.未解决冲突 ?? source.unresolvedConflicts),
+    必须记得: normalizeNpcTextList(source.必须记得 ?? source.mustRemember),
+    禁止遗忘: normalizeNpcTextList(source.禁止遗忘 ?? source.doNotForget),
+    总结记忆: 归一化NPC总结记忆列表(rawSummaryMemories),
     备注: Array.isArray(rawNotes)
       ? rawNotes.filter((note): note is string => typeof note === 'string')
       : [],
@@ -349,6 +414,15 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     最近回合: Math.max(base.最近回合 ?? 0, incoming.最近回合 ?? 0),
     好感度: 选择更可信的好感度(base, incoming, preferred),
     同行记忆: 合并同行记忆(base.同行记忆 ?? [], incoming.同行记忆 ?? []),
+    最近互动: preferred.最近互动 ?? base.最近互动 ?? incoming.最近互动,
+    对玩家长期印象: preferred.对玩家长期印象 ?? base.对玩家长期印象 ?? incoming.对玩家长期印象,
+    当前关系阶段: preferred.当前关系阶段 ?? base.当前关系阶段 ?? incoming.当前关系阶段,
+    共同经历: 去重文本列表([...(base.共同经历 ?? []), ...(incoming.共同经历 ?? [])]),
+    未完成事项: 去重文本列表([...(base.未完成事项 ?? []), ...(incoming.未完成事项 ?? [])]),
+    未解决冲突: 去重文本列表([...(base.未解决冲突 ?? []), ...(incoming.未解决冲突 ?? [])]),
+    必须记得: 去重文本列表([...(base.必须记得 ?? []), ...(incoming.必须记得 ?? [])]),
+    禁止遗忘: 去重文本列表([...(base.禁止遗忘 ?? []), ...(incoming.禁止遗忘 ?? [])]),
+    总结记忆: 合并NPC总结记忆(base.总结记忆 ?? [], incoming.总结记忆 ?? []),
     备注: 去重文本列表([...(base.备注 ?? []), ...(incoming.备注 ?? [])]),
     原著角色: Boolean(base.原著角色 || incoming.原著角色),
     头像: preferred.头像 ?? base.头像 ?? incoming.头像,
@@ -549,6 +623,18 @@ function 去重文本列表(lines: string[]): string[] {
   return output;
 }
 
+function readNpcString(raw: unknown): string | undefined {
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+}
+
+function normalizeNpcTextList(raw: unknown): string[] | undefined {
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    return text ? [text] : undefined;
+  }
+  return normalizeStringList(raw);
+}
+
 function 合并同行记忆(a: NPC同行记忆条目[], b: NPC同行记忆条目[]): NPC同行记忆条目[] {
   const seen = new Set<string>();
   const output: NPC同行记忆条目[] = [];
@@ -559,6 +645,18 @@ function 合并同行记忆(a: NPC同行记忆条目[], b: NPC同行记忆条目
     output.push(item);
   }
   return output.sort((left, right) => (left.回合 || 0) - (right.回合 || 0));
+}
+
+function 合并NPC总结记忆(a: NPC总结记忆条目[], b: NPC总结记忆条目[]): NPC总结记忆条目[] {
+  const seen = new Set<string>();
+  const output: NPC总结记忆条目[] = [];
+  for (const item of [...a, ...b]) {
+    const key = `${item.回合范围 ?? ''}:${item.摘要.replace(/\s+/g, '').toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(item);
+  }
+  return output;
 }
 
 function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
@@ -607,6 +705,36 @@ function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
       acc.push(item);
       return acc;
     }, []);
+}
+
+function 归一化NPC总结记忆列表(raw: unknown): NPC总结记忆条目[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item, index): NPC总结记忆条目 | null => {
+      if (typeof item === 'string') {
+        const summary = 清理NPC同行记忆摘要(item);
+        if (!summary) return null;
+        return {
+          id: `npc_summary_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+          摘要: summary,
+        };
+      }
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+      const obj = item as Partial<NPC总结记忆条目> & Record<string, unknown>;
+      const summary = readNpcString(obj.摘要 ?? obj.summary ?? obj.内容);
+      if (!summary) return null;
+      const count = Number(obj.条数 ?? obj.count);
+      return {
+        id: readNpcString(obj.id) ?? `npc_summary_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+        回合范围: readNpcString(obj.回合范围 ?? obj.turnRange),
+        条数: Number.isFinite(count) ? count : undefined,
+        摘要: 清理NPC同行记忆摘要(summary),
+        保留事实: normalizeNpcTextList(obj.保留事实 ?? obj.facts),
+        关系变化: normalizeNpcTextList(obj.关系变化 ?? obj.relationshipChanges),
+        未完成事项: normalizeNpcTextList(obj.未完成事项 ?? obj.openItems),
+      };
+    })
+    .filter((item): item is NPC总结记忆条目 => Boolean(item));
 }
 
 function 归一化NSFW档案(raw: unknown): NPC记录['NSFW档案'] {
@@ -886,6 +1014,211 @@ export function 提取NPC同行记忆文本列表(record: Pick<NPC记录, '同�
     .map((item) => (typeof item === 'string' ? item : item?.摘要 ?? ''))
     .map((text) => 清理NPC同行记忆摘要(text))
     .filter((text) => Boolean(text));
+}
+
+export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 4): NPC记忆账本视图 {
+  const memories = 提取NPC同行记忆文本列表(record);
+  const legacySummaryMemories: NPC总结记忆条目[] = memories
+    .filter((item) => item.startsWith('[压缩]'))
+    .map((item, index) => ({
+      id: `legacy_summary_${record.id}_${index}`,
+      摘要: item.replace(/^\[压缩\]\s*/, '').trim(),
+    }))
+    .filter((item) => Boolean(item.摘要));
+  const rawMemories = memories.filter((item) => !item.startsWith('[压缩]'));
+  const summaries = 合并NPC总结记忆(record.总结记忆 ?? [], legacySummaryMemories);
+  const hasLedgerFields = Boolean(
+    record.最近互动 ||
+    record.对玩家长期印象 ||
+    record.当前关系阶段 ||
+    record.共同经历?.length ||
+    record.未完成事项?.length ||
+    record.未解决冲突?.length ||
+    record.必须记得?.length ||
+    record.禁止遗忘?.length ||
+    record.总结记忆?.length,
+  );
+
+  return {
+    npcId: record.id,
+    姓名: record.姓名,
+    别名: record.别名,
+    当前关系阶段: record.当前关系阶段?.trim() || NPC_RELATION_LABELS[record.关系] || record.关系,
+    好感度: Number(record.好感度) || 0,
+    同行: Boolean(record.同行),
+    初见回合: Math.max(1, Number(record.初见回合 || 1)),
+    最近回合: Math.max(1, Number(record.最近回合 || record.初见回合 || 1)),
+    对玩家称呼: record.对玩家称呼,
+    最近互动: record.最近互动 || rawMemories.slice(-1)[0],
+    对玩家长期印象: record.对玩家长期印象,
+    共同经历: record.共同经历 ?? [],
+    未完成事项: record.未完成事项 ?? [],
+    未解决冲突: record.未解决冲突 ?? [],
+    必须记得: record.必须记得 ?? [],
+    禁止遗忘: record.禁止遗忘 ?? [],
+    总结记忆: summaries,
+    最近原始记忆: rawMemories.slice(-Math.max(1, recentMemoryLimit)),
+    有账本字段: hasLedgerFields,
+  };
+}
+
+export function formatNpcLedgerForPrompt(item: NPC账本选择条目): string {
+  const { ledger, reasons } = item;
+  const lines = [
+    `${ledger.姓名}${ledger.别名 ? `（${ledger.别名}）` : ''}：`,
+    `- 选中原因：${reasons.join('；') || '相关 NPC'}`,
+    `- 当前关系阶段：${ledger.当前关系阶段}；好感${ledger.好感度 > 0 ? '+' : ''}${ledger.好感度}；${ledger.同行 ? '当前同行' : '未标记同行'}；初见第${ledger.初见回合}回合，最近第${ledger.最近回合}回合`,
+    ledger.对玩家称呼 ? `- 对玩家称呼：${ledger.对玩家称呼}` : '',
+    ledger.对玩家长期印象 ? `- 对玩家长期印象：${ledger.对玩家长期印象}` : '',
+    ledger.最近互动 ? `- 最近互动：${ledger.最近互动}` : '',
+    ledger.必须记得.length ? `- 必须记得：${ledger.必须记得.slice(0, 4).join('；')}` : '',
+    ledger.禁止遗忘.length ? `- 禁止遗忘：${ledger.禁止遗忘.slice(0, 4).join('；')}` : '',
+    ledger.共同经历.length ? `- 共同经历：${ledger.共同经历.slice(-4).join('；')}` : '',
+    ledger.未完成事项.length ? `- 未完成事项：${ledger.未完成事项.slice(0, 4).join('；')}` : '',
+    ledger.未解决冲突.length ? `- 未解决冲突：${ledger.未解决冲突.slice(0, 4).join('；')}` : '',
+    ledger.总结记忆.length ? `- 总结记忆：${ledger.总结记忆.slice(-2).map((summary) => summary.摘要).join('；')}` : '',
+    ledger.最近原始记忆.length ? `- 最近原始记忆：${ledger.最近原始记忆.slice(-3).join('；')}` : '',
+    '- 承接要求：若该 NPC 本回合出场、通讯、被玩家点名或被当前镜头自然牵引，必须沿用以上关系、记忆、承诺和冲突；禁止写成初识、陌生或忘记共同经历，除非正文明确给出失忆、伪装、时间线重置或信息隔离原因。',
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+function npcLedgerHasProtectedItems(ledger: NPC记忆账本视图): boolean {
+  return (
+    ledger.未完成事项.length > 0 ||
+    ledger.未解决冲突.length > 0 ||
+    ledger.必须记得.length > 0 ||
+    ledger.禁止遗忘.length > 0
+  );
+}
+
+export function selectNpcLedgersForTurn(params: {
+  records?: NPC记录[];
+  turnCount?: number;
+  explicitNames?: string[];
+  sceneNames?: string[];
+  recalledNames?: string[];
+  limit?: number;
+  recentWindow?: number;
+}): NPC账本选择结果 {
+  const records = params.records ?? [];
+  const turnCount = Math.max(1, Number(params.turnCount || 1));
+  const limit = Math.max(1, Math.trunc(params.limit ?? 6));
+  const recentWindow = Math.max(1, Math.trunc(params.recentWindow ?? 15));
+  const explicitNames = normalizeNpcNameSet(params.explicitNames ?? []);
+  const sceneNames = normalizeNpcNameSet(params.sceneNames ?? []);
+  const recalledNames = normalizeNpcNameSet(params.recalledNames ?? []);
+  const recentCutoff = Math.max(1, turnCount - recentWindow);
+
+  const candidates = records
+    .map((npc) => {
+      const ledger = buildNpcMemoryLedgerView(npc);
+      const isExplicit = npcNameInSet(npc, explicitNames);
+      const isScene = npcNameInSet(npc, sceneNames);
+      const isRecalled = npcNameInSet(npc, recalledNames);
+      const isRecent = Number(npc.最近回合 || 0) >= recentCutoff;
+      const hasProtectedItems = npcLedgerHasProtectedItems(ledger);
+      const hasMemory = ledger.最近原始记忆.length > 0 || ledger.总结记忆.length > 0 || Boolean(ledger.最近互动);
+      const hasRelation = npc.关系 !== 'stranger' || Math.abs(Number(npc.好感度 || 0)) > 0;
+      const shouldConsider = isExplicit || isScene || isRecalled || npc.同行 || isRecent || hasProtectedItems || hasMemory || hasRelation || npc.阶位 === 'companion';
+      if (!shouldConsider) return null;
+      const reasons = [
+        isExplicit ? '玩家本回合/近期明确点名' : '',
+        isScene ? '当前场景明确人物' : '',
+        npc.同行 ? '当前同行' : '',
+        isRecent ? '最近回合出现过' : '',
+        isRecalled ? '智库/世界书/近期上下文命中' : '',
+        hasProtectedItems ? '存在未完成事项/必须记得' : '',
+        hasMemory ? '已有 NPC 私有记忆' : '',
+        hasRelation ? '已有非陌生关系或好感变化' : '',
+        npc.原著角色 ? '原著角色档案' : '',
+      ].filter(Boolean);
+      const fields = [
+        ledger.最近互动 ? '最近互动' : '',
+        ledger.对玩家长期印象 ? '对玩家长期印象' : '',
+        ledger.必须记得.length ? '必须记得' : '',
+        ledger.禁止遗忘.length ? '禁止遗忘' : '',
+        ledger.未完成事项.length ? '未完成事项' : '',
+        ledger.未解决冲突.length ? '未解决冲突' : '',
+        ledger.共同经历.length ? '共同经历' : '',
+        ledger.总结记忆.length ? '总结记忆' : '',
+        ledger.最近原始记忆.length ? '最近原始记忆' : '',
+      ].filter(Boolean);
+      const score =
+        (isExplicit ? 160 : 0) +
+        (isScene ? 120 : 0) +
+        (npc.同行 ? 110 : 0) +
+        (hasProtectedItems ? 90 : 0) +
+        (isRecent ? 55 : 0) +
+        (isRecalled ? 45 : 0) +
+        (ledger.有账本字段 ? 35 : 0) +
+        (hasMemory ? 28 : 0) +
+        (npc.阶位 === 'companion' ? 18 : 0) +
+        (hasRelation ? 16 : 0) +
+        Math.min(24, Math.abs(Number(npc.好感度 || 0)));
+      const presentState: NPC账本选择条目['presentState'] = isScene || npc.同行
+        ? 'current'
+        : isExplicit
+          ? 'explicit'
+          : isRecent
+            ? 'recent'
+            : 'background';
+      return { npc, ledger, score, reasons, fields, presentState };
+    })
+    .filter((item): item is NPC账本选择条目 => Boolean(item))
+    .sort((a, b) => b.score - a.score || b.ledger.最近回合 - a.ledger.最近回合);
+
+  const selected: NPC账本选择条目[] = [];
+  const selectedIds = new Set(selected.map((item) => item.npc.id));
+  const addCandidate = (item: NPC账本选择条目, extraReason?: string) => {
+    if (selected.length >= limit || selectedIds.has(item.npc.id)) return;
+    selectedIds.add(item.npc.id);
+    selected.push(extraReason && !item.reasons.includes(extraReason)
+      ? { ...item, reasons: [...item.reasons, extraReason] }
+      : item);
+  };
+
+  for (const item of candidates) {
+    if (item.presentState === 'current' || item.presentState === 'explicit') addCandidate(item);
+  }
+
+  const protectedReserve = Math.min(3, Math.max(1, Math.floor(limit / 2)));
+  let protectedAdded = 0;
+  for (const item of candidates) {
+    if (selected.length >= limit || protectedAdded >= protectedReserve) break;
+    if (!npcLedgerHasProtectedItems(item.ledger) || selectedIds.has(item.npc.id)) continue;
+    addCandidate(item, '保护事项保底');
+    protectedAdded += 1;
+  }
+
+  for (const item of candidates) {
+    addCandidate(item);
+  }
+
+  const skipped = candidates
+    .filter((item) => !selectedIds.has(item.npc.id))
+    .map((item) => ({ name: item.npc.姓名, reason: `超过 Top ${limit}，得分 ${item.score}，原因：${item.reasons.join('；') || '低相关'}` }));
+
+  for (const npc of records) {
+    if (selectedIds.has(npc.id)) continue;
+    if (candidates.some((item) => item.npc.id === npc.id)) continue;
+    if (npc.阶位 === 'companion' || npc.同行 || npc.关系 !== 'stranger' || 提取NPC同行记忆文本列表(npc).length > 0) {
+      skipped.push({ name: npc.姓名, reason: '本回合没有点名、在场、近期出现、未完成事项或召回命中' });
+    }
+  }
+
+  return { selected, skipped };
+}
+
+function normalizeNpcNameSet(names: string[]): Set<string> {
+  return new Set(names.map((name) => 规范化NPC身份文本(name)).filter(Boolean));
+}
+
+function npcNameInSet(npc: NPC记录, names: Set<string>): boolean {
+  if (!names.size) return false;
+  return [npc.姓名, npc.别名]
+    .filter((name): name is string => typeof name === 'string' && Boolean(name.trim()))
+    .some((name) => names.has(规范化NPC身份文本(name)));
 }
 
 export function 读取NPC头像(record: Pick<NPC记录, '姓名' | '别名' | '头像' | '图像档案'> | undefined, slot: NPC头像槽位 = '档案'): string | undefined {

@@ -23,6 +23,7 @@ interface API配置包 {
   exportedAt: string;
   includeApiKeys: boolean;
   enableClaudeMode?: boolean;
+  deepSeekMainMode?: 游戏设置['deepSeekMainMode'];
   apiSettings: API设置;
   routes: {
     variableApi: 游戏设置['variableApi'];
@@ -54,6 +55,7 @@ const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: stri
   { value: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
   { value: 'deepseek', label: 'DeepSeek', defaultBaseUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
   { value: 'baidu', label: '百度千帆', defaultBaseUrl: 'https://qianfan.baidubce.com/v2', defaultModel: 'ernie-4.5-turbo-128k' },
+  { value: 'opencode', label: 'OpenCode Zen', defaultBaseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
   { value: 'claude', label: 'Claude', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
   { value: 'claude_compatible', label: 'Claude 兼容', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
   { value: 'gemini', label: 'Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', defaultModel: 'gemini-2.5-pro' },
@@ -103,6 +105,7 @@ function buildApiProfile(settings: API设置, gameSettings: 游戏设置, includ
     exportedAt: new Date().toISOString(),
     includeApiKeys,
     enableClaudeMode: gameSettings.enableClaudeMode === true,
+    deepSeekMainMode: gameSettings.deepSeekMainMode ?? 'off',
     apiSettings: settings,
     routes: {
       variableApi: gameSettings.variableApi,
@@ -270,6 +273,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
     const nextGameSettings: 游戏设置 = {
       ...gameSettings,
       enableClaudeMode: profile.enableClaudeMode ?? gameSettings.enableClaudeMode ?? false,
+      deepSeekMainMode: profile.deepSeekMainMode ?? gameSettings.deepSeekMainMode ?? 'off',
       variableApi: profile.routes.variableApi,
       新闻系统: { ...gameSettings.新闻系统, api: profile.routes.新闻系统 },
       手机系统: { ...gameSettings.手机系统, api: profile.routes.手机系统 },

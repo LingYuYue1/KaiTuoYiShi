@@ -148,6 +148,7 @@ for (const sourcePath of [
   'services/npcRelationshipPlanning.ts',
   'services/ai/newsModel.ts',
   'services/ai/phoneService.ts',
+  'services/ai/structuredOutputRepair.ts',
   'services/ai/variableModel.ts',
 ]) {
   transpileModule(sourcePath);
@@ -455,6 +456,7 @@ assert(ambiguousPlanning.建议动作 === '等待正文证据', `泛收束词场
 assert(ambiguousPlanning.偏离风险 === '中', `缺少明确收束证据时偏离/错位风险应为中，得到 ${ambiguousPlanning.偏离风险}`);
 
 const storyProgressSourceForHighConfidence = fs.readFileSync(path.join(root, 'services/storyProgressService.ts'), 'utf8');
+const sendWorkflowSourceForStoryAlignment = fs.readFileSync(path.join(root, 'hooks/useGame/sendWorkflow.ts'), 'utf8');
 assert(
   storyProgressSourceForHighConfidence.includes('laterSegmentHighConfidence') &&
   storyProgressSourceForHighConfidence.includes('高置信命中后续分段'),
@@ -464,6 +466,23 @@ assert(storyProgressSourceForHighConfidence.includes('findCrossSeriesCanonAlignm
 assert(storyProgressSourceForHighConfidence.includes('scoreCanonSeriesPresence'), '跨系列纠偏必须使用系列级地点/人物/派系评分。');
 assert(storyProgressSourceForHighConfidence.includes('跨系列纠偏：近期正文/地点强命中'), '跨系列纠偏必须在进度理由里留下可诊断说明。');
 assert(storyProgressSourceForHighConfidence.includes('currentLocation?: string'), '剧情编织纠偏必须允许当前地点参与判断。');
+assert(
+  sendWorkflowSourceForStoryAlignment.includes('const storyAlignment = isOpeningSystemTrigger') &&
+    sendWorkflowSourceForStoryAlignment.includes('? { system: state.剧情编织, changed: false, progressed: false }') &&
+    sendWorkflowSourceForStoryAlignment.includes(': autoAlignCanonStoryProgress({'),
+  '开局第 0 回合不得执行剧情编织自动对齐，避免首回合被后台误切到贝洛伯格/支线轨道。',
+);
+assert(
+  storyProgressSourceForHighConfidence.includes('!isSideCanonSeries(series)') &&
+    storyProgressSourceForHighConfidence.includes('function isSideCanonSeries') &&
+    storyProgressSourceForHighConfidence.includes('function hasStrongCrossSeriesWorldShift'),
+  '跨系列纠偏必须排除支线自动候选，并要求明确世界迁移信号。',
+);
+assert(
+  storyProgressSourceForHighConfidence.includes('params.turnCount >= 4 ? findCrossSeriesCanonAlignment') ||
+    storyProgressSourceForHighConfidence.includes('params.turnCount >= 4'),
+  '跨系列纠偏不得在开局前几回合运行，避免空间站开局被公共角色或泛背景词带偏。',
+);
 const saveLoadWorkflowSource = fs.readFileSync(path.join(root, 'hooks/useGame/saveLoadWorkflow.ts'), 'utf8');
 assert(saveLoadWorkflowSource.includes('autoAlignCanonStoryProgress'), '读档时必须尝试修复旧存档剧情编织锚点。');
 assert(saveLoadWorkflowSource.includes('recentAssistant?.parsedResponse?.body'), '读档修复必须使用最近正文作为纠偏证据。');
@@ -790,6 +809,11 @@ assert(storyWeavingPresetSource.includes('buildCanonFallbackEndStates'), '智库
 assert(storyWeavingPresetSource.includes('buildCanonFallbackEventResults'), '智库兜底转换必须通过事件结果清洗函数。');
 assert(!storyWeavingPresetSource.includes('本段结束状态: entry.摘要 ? [entry.摘要] : []'), '智库兜底转换不得把摘要直接作为本段结束状态。');
 assert(!storyWeavingPresetSource.includes('事件结果: entry.摘要 ? [entry.摘要] : []'), '智库兜底转换不得把摘要直接作为事件结果。');
+assert(storyWeavingPresetSource.includes('const decomposedStoryWeavingPresets'), '剧情编织内置预设必须独立维护，不能依赖智库 story 预设列表。');
+assert(!storyWeavingPresetSource.includes('const STORY_PRESET_IDS'), '剧情编织内置预设不得继续通过智库预设 ID 过滤生成。');
+for (const seriesId of expectedCanonSeriesIds) {
+  assert(storyWeavingPresetSource.includes(`id: '${seriesId}'`), `剧情编织内置预设列表缺少 ${seriesId}。`);
+}
 
 const decomposedCanonPath = path.join(root, 'data/storyWeavingCanonDecomposed.json');
 assert(fs.existsSync(decomposedCanonPath), '内置剧情编织应包含已分解 canon 预设 JSON。');

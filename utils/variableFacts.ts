@@ -6,6 +6,7 @@ import type { NPC记录, NPC关系类型 } from '@/models/npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
 import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/models/phone';
+import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 
 const ITEM_CATEGORIES = new Set<物品分类>(['food', 'consumable', 'lightcone', 'weapon', 'clothing', 'accessory', 'memento', 'key']);
 const ITEM_QUALITIES = new Set<物品品质>(['蓝', '紫', '金']);
@@ -94,10 +95,7 @@ const PHONE_PRIORITY_ALIASES: Record<string, 主动来信优先级> = {
 };
 
 function 清理事实块(block: string): string {
-  return block
-    .replace(/```(?:json|JSON)?/g, '')
-    .replace(/```/g, '')
-    .trim();
+  return extractJsonLikeText(block, 'any');
 }
 
 function 读字符串(value: unknown): string {
@@ -120,11 +118,14 @@ function 读字符串或数组(value: unknown): string {
 }
 
 function 字符串数组(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const list = value
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const list = Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : typeof value === 'string' && value.trim()
+      ? [value.trim()]
+      : [];
   return list.length ? list : undefined;
 }
 
@@ -178,6 +179,8 @@ function inferNpcTier(fact: Extract<变量事实, { type: 'npc' }>, canonical: R
   if (canonical) return 'companion';
   if (fact.following) return 'companion';
   if (fact.memory) return 'companion';
+  if (fact.recentInteraction || fact.longTermImpression || fact.relationshipStage) return 'companion';
+  if (fact.sharedExperiences?.length || fact.openItems?.length || fact.unresolvedConflicts?.length || fact.mustRemember?.length || fact.doNotForget?.length) return 'companion';
   if (typeof fact.affinityDelta === 'number' && fact.affinityDelta !== 0) return 'companion';
   if (typeof fact.affinitySet === 'number' && fact.affinitySet !== 0) return 'companion';
   if (fact.relation && fact.relation !== 'stranger' && fact.relation !== 'acquaintance') return 'companion';
@@ -188,6 +191,23 @@ function 读取记忆摘要(value: unknown): string {
   if (typeof value === 'string') return value.trim();
   if (!是对象(value)) return '';
   return 读字符串(value.摘要 || value.summary || value.text || value.内容);
+}
+
+function pushNpcLedgerListCommands(
+  push: (command: 变量命令) => void,
+  key: string,
+  field: '共同经历' | '未完成事项' | '未解决冲突' | '必须记得' | '禁止遗忘',
+  incoming?: string[],
+  existing?: string[],
+) {
+  if (!incoming?.length) return;
+  const seen = new Set((existing ?? []).map((item) => item.trim()).filter(Boolean));
+  for (const item of incoming) {
+    const text = item.trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    push({ action: 'push', key: `${key}.${field}`, value: text });
+  }
 }
 
 function 归一化事实类型(value: unknown): 变量事实['type'] | '' {
@@ -286,6 +306,14 @@ function 归一化事实(raw: unknown): 变量事实 | null {
       intro: 读字符串(raw.intro || raw.介绍) || undefined,
       playerAddress: 读字符串(raw.playerAddress || raw.对玩家称呼) || undefined,
       memory: 读取记忆摘要(raw.memory ?? raw.同行记忆 ?? raw.记忆) || undefined,
+      recentInteraction: 读字符串(raw.recentInteraction || raw.最近互动) || undefined,
+      longTermImpression: 读字符串(raw.longTermImpression || raw.对玩家长期印象 || raw.长期印象) || undefined,
+      relationshipStage: 读字符串(raw.relationshipStage || raw.当前关系阶段 || raw.关系阶段) || undefined,
+      sharedExperiences: 字符串数组(raw.sharedExperiences ?? raw.共同经历),
+      openItems: 字符串数组(raw.openItems ?? raw.未完成事项 ?? raw.未完成承诺),
+      unresolvedConflicts: 字符串数组(raw.unresolvedConflicts ?? raw.未解决冲突 ?? raw.冲突),
+      mustRemember: 字符串数组(raw.mustRemember ?? raw.必须记得),
+      doNotForget: 字符串数组(raw.doNotForget ?? raw.禁止遗忘),
       evidence: 读字符串(raw.evidence || raw.证据) || undefined,
     };
   }
@@ -383,7 +411,7 @@ export function parseVariableFacts(rawText: string): { facts: 变量事实[]; pa
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(block);
+    parsed = parseJsonWithRepair(block, 'any');
   } catch (err) {
     parseErrors.push(`变量事实 JSON 无法解析：${err instanceof Error ? err.message : String(err)}`);
     return { facts, parseErrors };
@@ -697,6 +725,14 @@ export function factsToVariableCommands(
               来源: '变量',
               关联NPCID: [id],
             }] : [],
+            最近互动: fact.recentInteraction ?? fact.memory,
+            对玩家长期印象: fact.longTermImpression,
+            当前关系阶段: fact.relationshipStage,
+            共同经历: fact.sharedExperiences,
+            未完成事项: fact.openItems,
+            未解决冲突: fact.unresolvedConflicts,
+            必须记得: fact.mustRemember,
+            禁止遗忘: fact.doNotForget,
             备注: fact.evidence ? [fact.evidence] : [],
             原著角色: Boolean(canonical),
           },
@@ -720,6 +756,14 @@ export function factsToVariableCommands(
         }
         if (fact.intro) push({ action: 'set', key: `${key}.介绍`, value: fact.intro });
         if (fact.playerAddress) push({ action: 'set', key: `${key}.对玩家称呼`, value: fact.playerAddress });
+        if (fact.recentInteraction || fact.memory) push({ action: 'set', key: `${key}.最近互动`, value: fact.recentInteraction ?? fact.memory });
+        if (fact.longTermImpression) push({ action: 'set', key: `${key}.对玩家长期印象`, value: fact.longTermImpression });
+        if (fact.relationshipStage) push({ action: 'set', key: `${key}.当前关系阶段`, value: fact.relationshipStage });
+        pushNpcLedgerListCommands(push, key, '共同经历', fact.sharedExperiences, existing.共同经历);
+        pushNpcLedgerListCommands(push, key, '未完成事项', fact.openItems, existing.未完成事项);
+        pushNpcLedgerListCommands(push, key, '未解决冲突', fact.unresolvedConflicts, existing.未解决冲突);
+        pushNpcLedgerListCommands(push, key, '必须记得', fact.mustRemember, existing.必须记得);
+        pushNpcLedgerListCommands(push, key, '禁止遗忘', fact.doNotForget, existing.禁止遗忘);
         if (fact.memory) push({
           action: 'push',
           key: `${key}.同行记忆`,

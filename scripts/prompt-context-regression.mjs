@@ -6,6 +6,11 @@ const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const variableExecutor = fs.readFileSync('utils/variableExecutor.ts', 'utf8');
 const worldEvents = fs.readFileSync('utils/worldEvents.ts', 'utf8');
+const promptModel = fs.readFileSync('models/prompts.ts', 'utf8');
+const worldbookModel = fs.readFileSync('models/worldbook.ts', 'utf8');
+const promptModulesTab = fs.readFileSync('components/features/Settings/PromptModulesTab.tsx', 'utf8');
+const worldbookManager = fs.readFileSync('components/features/Worldbook/WorldbookManagerModal.tsx', 'utf8');
+const gameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -39,6 +44,26 @@ assert(contextSnapshot.includes('upload: false') && contextSnapshot.includes('di
 assert(contextSnapshot.includes('formatMainRequestOrderOverview'), '上下文查看必须提供主剧情真实请求顺序总览。');
 assert(contextSnapshot.includes('main_request_order_overview'), '主剧情真实请求顺序总览必须作为独立区块展示。');
 assert(contextSnapshot.includes('System Prompt 分段') && contextSnapshot.includes('API Messages'), '真实请求顺序总览必须同时列出 system 分段和 API messages。');
+assert(promptModel.includes("calibration: '独立模型'"), '提示词模块 calibration 作用域必须显示为独立模型，不能继续误标为变量校准。');
+assert(worldbookModel.includes("calibration: '独立模型'"), '世界书 calibration 作用域必须显示为独立模型，不能继续误标为变量校准。');
+assert(promptModel.includes('独立模型 / 校准模型提示词展示'), '提示词模块类型注释必须说明 calibration 是独立模型提示词展示。');
+assert(worldbookModel.includes('独立模型 / 校准模型资料展示'), '世界书类型注释必须说明 calibration 是独立模型资料展示。');
+assert(promptModulesTab.includes('独立模型提示词展示：新闻、手机、智库、变量、剧情编织等真实请求由对应服务层共享 prompt 构建'), '提示词模块 UI 必须说明独立模型真实请求由服务层共享 prompt 构建。');
+assert(promptModulesTab.includes('可在“上下文”页核对实际发送内容'), '提示词模块 UI 必须引导玩家到上下文页核对独立模型真实请求。');
+assert(promptModulesTab.includes('不会进入主剧情 system prompt'), '提示词模块 UI 必须说明独立模型作用域不会进入主剧情 system prompt。');
+assert(promptModulesTab.includes("disabled={isCalibrationModule}"), '独立模型提示词展示模块不得继续显示为可操作开关。');
+assert(promptModulesTab.includes("title={isCalibrationModule ? '独立模型展示模块不是真实请求开关'"), '独立模型提示词展示模块必须说明不是真实请求开关。');
+assert(promptModulesTab.includes("{isCalibrationModule ? '● 展示'"), '独立模型提示词列表状态必须显示为展示而不是普通启用/关闭。');
+assert(promptModulesTab.includes('enabled: isCalibrationBuiltin ? true : m.enabled'), '重置内置提示词时必须强制独立模型展示模块保持展示状态。');
+assert(gameState.includes('enabled: isCalibrationBuiltin ? true : hit.enabled'), '旧存档迁移必须强制独立模型提示词模块保持展示状态。');
+assert(gameState.includes('function isCalibrationWorldbook(book: 世界书)'), '内置独立模型世界书必须有迁移识别函数。');
+assert(gameState.includes('if (isCalibrationWorldbook(builtin)) return builtin;'), '旧存档里的独立模型世界书编辑稿不得覆盖源码真实展示。');
+assert(worldbookManager.includes('独立模型资料仅作真实请求展示'), '世界书 UI 必须说明独立模型资料只作真实请求展示。');
+assert(worldbookManager.includes('独立模型资料展示：真实请求不读取这里的 enabled 或编辑稿'), '世界书 UI 必须说明独立模型真实请求不读取这里的开关或编辑稿。');
+assert(worldbookManager.includes('disabled={calibrationDisplay}'), '独立模型世界书展示条目的开关和编辑控件必须只读。');
+assert(worldbookManager.includes("title={calibrationDisplay ? '独立模型展示条目不是真实请求开关'"), '独立模型世界书展示条目必须说明不是真实请求开关。');
+assert(!promptModel.includes("calibration: '变量校准'"), '提示词模块 calibration 标签不得继续显示变量校准。');
+assert(!worldbookModel.includes("calibration: '变量校准'"), '世界书 calibration 标签不得继续显示变量校准。');
 
 assert(mainCot.includes('每个 Step 必须产出会影响本回合正文、短期记忆、动态世界、变量草稿或剧情规划的判断'), '主剧情 COT 必须要求每步产出有用判断。');
 assert(mainCot.includes('无触发及原因'), '主剧情 COT 必须允许无关步骤短路并说明原因。');

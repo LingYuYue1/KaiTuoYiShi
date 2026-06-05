@@ -66,7 +66,7 @@ export function autoAlignCanonStoryProgress(params: {
   }
 
   const source = `${params.currentLocation ?? ''}\n${params.userInput}\n${params.body}`;
-  const crossSeries = findCrossSeriesCanonAlignment(normalized, series, current, source);
+  const crossSeries = params.turnCount >= 4 ? findCrossSeriesCanonAlignment(normalized, series, current, source) : null;
   if (crossSeries) {
     const nextSystem = switchCanonSeries({
       normalized,
@@ -193,7 +193,12 @@ function findCrossSeriesCanonAlignment(
   if (activeSeries.来源类型 !== 'canon') return null;
   const activeScore = scoreCanonSeriesPresence(activeSeries, source);
   const candidates = system.系列列表
-    .filter((series) => series.id !== activeSeries.id && series.来源类型 === 'canon' && series.激活注入 !== false)
+    .filter((series) =>
+      series.id !== activeSeries.id &&
+      series.来源类型 === 'canon' &&
+      series.激活注入 !== false &&
+      !isSideCanonSeries(series)
+    )
     .map((series) => {
       const score = scoreCanonSeriesPresence(series, source);
       const completedSegments = series.分段列表
@@ -209,9 +214,8 @@ function findCrossSeriesCanonAlignment(
     .sort((a, b) => b.score.value - a.score.value);
   const best = candidates[0];
   if (!best || best.score.value < 8 || best.score.value - activeScore.value < 4) return null;
-  const staleActive = activeCurrent.组号 <= 4 && activeScore.value <= 4;
-  const strongWorldShift = best.score.reasons.some((reason) => /雅利洛|贝洛伯格|雪原|银鬃铁卫|下层区|地火|仙舟|罗浮/.test(reason));
-  if (!staleActive && !strongWorldShift) return null;
+  const strongWorldShift = hasStrongCrossSeriesWorldShift(source, best.series);
+  if (!strongWorldShift) return null;
   return {
     series: best.series,
     segment: best.bestSegment,
@@ -221,6 +225,28 @@ function findCrossSeriesCanonAlignment(
       ...best.score.reasons,
     ], 8),
   };
+}
+
+function isSideCanonSeries(series: 剧情编织系列): boolean {
+  const text = `${series.id}\n${series.标题}\n${series.作品名 ?? ''}`;
+  return /(^|_)side_|【支线】|支线/.test(text);
+}
+
+function hasStrongCrossSeriesWorldShift(source: string, targetSeries: 剧情编织系列): boolean {
+  const normalizedSource = normalizeText(source);
+  const targetText = normalizeText([
+    targetSeries.id,
+    targetSeries.标题,
+    targetSeries.作品名,
+    targetSeries.涉及地点索引.join(' '),
+    targetSeries.涉及派系索引.join(' '),
+  ].join(' '));
+  const worldSignals = [
+    { target: /jarilo|雅利洛|贝洛伯格|银鬃铁卫|下层区|地火/i, source: /雅利洛|贝洛伯格|雪原|永冬岭|银鬃铁卫|下层区|地火|磐岩镇|克里珀堡/ },
+    { target: /xianzhou|luofu|仙舟|罗浮|建木|丹鼎司|太卜司/i, source: /仙舟|罗浮|星槎|建木|丹鼎司|太卜司|神策府|工造司|长乐天/ },
+    { target: /penacony|匹诺康尼|白日梦|黄金的时刻|晖长石/i, source: /匹诺康尼|白日梦|黄金的时刻|黄金时刻|晖长石|梦境|家族|星期日|流萤/ },
+  ];
+  return worldSignals.some((signal) => signal.target.test(targetText) && signal.source.test(normalizedSource));
 }
 
 function switchCanonSeries(params: {

@@ -666,7 +666,7 @@ function 解析获取物品输入(raw: unknown): 获取物品输入 | null {
     out.品质 = obj.品质 as 物品品质;
   }
   if (typeof obj.可堆叠 === 'boolean') out.可堆叠 = obj.可堆叠;
-  if (typeof obj.装备槽位 === 'string') out.装备槽位 = obj.装备槽位 as 获取物品输入['装备槽位'];
+  // 玩家装备系统已退役：忽略旧模型偶尔输出的装备槽位，避免新物品继续落旧穿戴字段。
   if (Array.isArray(obj.叙事效果)) {
     const cleaned = obj.叙事效果
       .filter((item): item is string => typeof item === 'string')
@@ -674,16 +674,7 @@ function 解析获取物品输入(raw: unknown): 获取物品输入 | null {
       .filter(Boolean);
     if (cleaned.length > 0) out.叙事效果 = cleaned;
   }
-  if (obj.属性加成 && typeof obj.属性加成 === 'object' && !Array.isArray(obj.属性加成)) {
-    // 属性加成 必须是 {字段名: 数字} 纯数值映射;AI 偶尔会写成 {目标属性,数值} 对象,过滤掉
-    const cleaned: Record<string, number> = {};
-    for (const [k, v] of Object.entries(obj.属性加成 as Record<string, unknown>)) {
-      if (typeof v === 'number' && Number.isFinite(v)) cleaned[k] = v;
-    }
-    if (Object.keys(cleaned).length > 0) {
-      out.属性加成 = cleaned as 获取物品输入['属性加成'];
-    }
-  }
+  // 旧数值装备字段已退役：即使模型夹带 属性加成，也不再写入新背包物品。
   if (Array.isArray(obj.使用效果)) {
     const cleaned = obj.使用效果.filter(
       (e): e is { 目标属性: string; 数值: number } =>

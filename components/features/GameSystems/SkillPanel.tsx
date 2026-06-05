@@ -4,7 +4,6 @@ import type { 命途ID } from '@/models/journey';
 import type { 命途进度, 命途阶段 } from '@/models/path';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { getPath } from '@/data/journeyPresets';
-import { NORMAL_SKILL_PRESETS } from '@/data/skillPresets';
 import {
   NORMAL_SKILL_SLOT_COUNT,
   创建战技记录,
@@ -13,7 +12,6 @@ import {
   归一化战技记录,
   type 战技记录,
   type 战技槽位摘要,
-  type 战技模板,
 } from '@/models/skill';
 
 interface SkillPanelProps {
@@ -51,7 +49,7 @@ const emptyDraft: SkillDraft = {
 export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
   const pathRecords = traveler.命途列表 ?? [];
   const skillRecords = useMemo(
-    () => (traveler.战技列表 ?? []).map(归一化战技记录),
+    () => (traveler.战技列表 ?? []).map(归一化战技记录).filter(isVisibleSkillRecord),
     [traveler.战技列表],
   );
   const slotSummary = useMemo(
@@ -84,7 +82,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
   const filledPath = pathSlots.filter((slot) => slot.occupiedSkillId).length;
   const enabledSkills = skillRecords.filter((skill) => skill.已启用 !== false).length;
   const normalSkillRecords = skillRecords
-    .filter((skill) => skill.槽位类型 === 'normal')
+    .filter((skill) => skill.槽位类型 === 'normal' && skill.槽位序号 <= NORMAL_SKILL_SLOT_COUNT)
     .sort((a, b) => sortSkill(a, b));
   const pathSkillRecords = skillRecords
     .filter((skill) => skill.槽位类型 === 'path')
@@ -92,10 +90,6 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
 
   const saveSkill = () => {
     if (!selectedSlot) return;
-    if (selectedSlot.kind === 'normal') {
-      window.alert('普通战技只能从内置预设中选择，不能自定义编辑。');
-      return;
-    }
     const name = draft.名称.trim();
     const description = draft.描述.trim();
     if (!name || !description) {
@@ -117,11 +111,11 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
         }
       : 创建战技记录({
           名称: name,
-          类别: '命途',
+          类别: selectedSlot.kind === 'normal' ? '普通' : '命途',
           槽位类型: selectedSlot.kind,
           槽位序号: selectedSlot.slotIndex,
           描述: description,
-          来源: draft.来源.trim() || '命途战技自定义',
+          来源: draft.来源.trim() || (selectedSlot.kind === 'normal' ? '普通战技自制' : '命途战技自定义'),
           关联命途: selectedSlot.pathId,
           关联阶段: selectedSlot.pathStage,
           关键词: splitKeywords(draft.关键词),
@@ -163,46 +157,6 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
     }));
   };
 
-  const applyPreset = (preset: 战技模板, slotIndex: number) => {
-    setSelectedSlotKey(`normal:${slotIndex}`);
-    const presetDraft = {
-      名称: preset.名称,
-      描述: preset.描述,
-      来源: preset.来源,
-      关键词: preset.关键词.join('、'),
-      消耗: preset.推荐消耗,
-      冷却: preset.推荐冷却,
-      备注: preset.备注,
-    };
-    setDraft(presetDraft);
-    const existing = skillRecords.find((skill) => skill.槽位类型 === 'normal' && skill.槽位序号 === slotIndex);
-    const nextSkill: 战技记录 = existing
-      ? {
-          ...existing,
-          名称: preset.名称,
-          描述: preset.描述,
-          来源: preset.来源,
-          关键词: preset.关键词,
-          消耗: preset.推荐消耗,
-          冷却: preset.推荐冷却,
-          备注: preset.备注,
-          更新时间: Date.now(),
-        }
-      : 创建战技记录({
-          名称: preset.名称,
-          类别: '普通',
-          槽位类型: 'normal',
-          槽位序号: slotIndex,
-          描述: preset.描述,
-          来源: preset.来源,
-          关键词: preset.关键词,
-          消耗: preset.推荐消耗,
-          冷却: preset.推荐冷却,
-          备注: preset.备注,
-        });
-    upsertSkill(nextSkill);
-  };
-
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
       <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[270px]">
@@ -224,7 +178,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
             战技工坊
           </div>
           <p className="mt-2 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-            普通战技只能从内置模板中择取；命途战技由玩家按已解锁槽位自行构建，供主剧情描写战斗方式、招式名与命途风格。
+            普通战技保留 1 个自制槽位；命途战技由玩家按已解锁槽位自行构建，供主剧情描写战斗方式、招式名与命途风格。
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Metric label="普通" value={`${filledNormal}/${NORMAL_SKILL_SLOT_COUNT}`} />
@@ -298,7 +252,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                   </div>
                 </>
               ) : (
-                <EmptyNotice text="尚未踏上任何命途。当前只能配置三格普通战技。" />
+                <EmptyNotice text="尚未踏上任何命途。当前只能配置 1 个普通自制战技。" />
               )}
             </div>
           </div>
@@ -312,7 +266,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
               <SectionTitle title={selectedSlot ? slotTitle(selectedSlot) : '选择槽位'} />
               {selectedSlot && (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <ModePill active={selectedSlot.kind === 'normal'} label="普通模板" />
+                  <ModePill active={selectedSlot.kind === 'normal'} label="普通自制" />
                   <ModePill active={selectedSlot.kind === 'path'} label="命途自创" />
                   {selectedSlot.kind === 'path' && selectedPath && (
                     <ModePill active label={`${PATH_STAGE_DEFS.find((item) => item.stage === selectedPath.阶段)?.name ?? '未知'} · ${计算命途战技槽位数(selectedPath.阶段)} 槽`} tone="cyan" />
@@ -322,7 +276,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
               <div className="mt-1.5 text-[11px] leading-relaxed md:mt-2 md:text-[13px]" style={{ color: 'rgba(var(--tj-text-secondary),0.84)' }}>
                 {selectedSlot
                   ? selectedSlot.kind === 'normal'
-                    ? '普通战技固定三格，只能选模板，不开放自由编辑。'
+                    ? '普通战技现在只有 1 个自制槽位，可以自由编辑名称、描述与表现方式。'
                     : '命途战技按每条命途独立解锁，玩家可以自由编辑名称、描述与表现方式。'
                   : '先在左侧选择一个槽位。'}
               </div>
@@ -336,80 +290,38 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                   <button className="panel-btn danger" onClick={() => deleteSkill(selectedSkill.id)}>移除</button>
                 </>
               )}
-              {selectedSlot?.kind === 'path' && (
-                <button className="panel-btn strong" disabled={!selectedSlot} onClick={saveSkill}>
-                  {selectedSkill ? '保存命途战技' : '写入命途槽位'}
-                </button>
-              )}
+              <button className="panel-btn strong" disabled={!selectedSlot} onClick={saveSkill}>
+                {selectedSkill ? '保存战技' : '写入槽位'}
+              </button>
             </div>
           </div>
         </section>
 
         <div className="grid min-h-0 flex-1 gap-3 overflow-visible md:overflow-hidden xl:grid-cols-[1fr_0.95fr]">
           <section className="kaituo-options-scroll min-h-[340px] max-h-[440px] overflow-y-auto overscroll-contain px-3 py-3 md:min-h-0 md:max-h-none md:overflow-y-auto md:px-4 md:py-4 md:pr-2" style={panelStyle('rgba(var(--tj-bg-secondary),0.55)')}>
-            {selectedSlot?.kind === 'normal' && (
-              <div className="mb-4 min-h-[280px] md:min-h-0">
-                <SectionTitle title="普通战技模板" />
-                <ModeNotice
-                  title="模板写入"
-                  text="选择一个模板会直接覆盖当前普通槽位。普通战技不开放自由编辑，保证主剧情调用时稳定、清晰。"
-                />
-                <div className="kaituo-options-scroll mt-3 grid max-h-[168px] gap-2 overflow-y-auto overscroll-contain pr-1 md:max-h-none md:overflow-visible md:pr-0">
-                  {NORMAL_SKILL_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      className="px-2.5 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)] md:px-3 md:py-3"
-                      onClick={() => applyPreset(preset, selectedSlot.slotIndex)}
-                      style={{
-                        background: draft.名称 === preset.名称 ? 'rgba(var(--tj-accent-primary),0.1)' : 'rgba(var(--tj-bg-primary),0.42)',
-                        boxShadow: draft.名称 === preset.名称
-                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)'
-                          : 'inset 0 0 0 1px rgba(117,214,216,0.13)',
-                        clipPath: smallClip,
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-serif text-[12px] font-bold tracking-[0.08em] md:text-[14px] md:tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-                          {preset.名称}
-                        </span>
-                        <span className="text-[11px]" style={{ color: '#75d6d8' }}>
-                          {selectedSkill?.名称 === preset.名称 ? '已写入' : '写入槽位'}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] leading-relaxed md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
-                        {preset.描述}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {selectedSlot?.kind === 'path' ? (
+            {selectedSlot ? (
               <>
-                <SectionTitle title="创造命途战技" />
+                <SectionTitle title={selectedSlot.kind === 'normal' ? '创造普通战技' : '创造命途战技'} />
                 <ModeNotice
-                  title="命途自创"
-                  text="命途战技可以自由命名与描述。建议把命途特质、出手方式、限制与代价写清楚，正文会优先引用这些信息。"
-                  tone="cyan"
+                  title={selectedSlot.kind === 'normal' ? '普通自制' : '命途自创'}
+                  text={selectedSlot.kind === 'normal'
+                    ? '普通战技可以自由命名与描述。建议写清出手方式、限制、风格和适合场景，正文会把它当作旅人的通用战斗能力。'
+                    : '命途战技可以自由命名与描述。建议把命途特质、出手方式、限制与代价写清楚，正文会优先引用这些信息。'}
+                  tone={selectedSlot.kind === 'normal' ? 'gold' : 'cyan'}
                 />
                 <SkillEditor draft={draft} onChange={setDraft} selectedSlot={selectedSlot} selectedPath={selectedPath} />
               </>
             ) : (
-              <>
-                <SectionTitle title="普通战技详情" />
-                <NormalSkillReadonly skill={selectedSkill} />
-              </>
+              <EmptyNotice text="先选择普通槽位或命途槽位创建战技。" />
             )}
           </section>
 
           <section className="kaituo-options-scroll min-h-0 overflow-visible px-3 py-3 md:overflow-y-auto md:px-4 md:py-4 md:pr-2" style={panelStyle('rgba(var(--tj-accent-primary),0.035)')}>
             <SectionTitle title="已登记战技" />
             <div className="mt-3 space-y-3">
-              {skillRecords.length ? (
+              {normalSkillRecords.length || pathSkillRecords.length ? (
                 <>
-                  <SkillRecordGroup title="普通模板" count={normalSkillRecords.length}>
+                  <SkillRecordGroup title="普通自制" count={normalSkillRecords.length}>
                     {normalSkillRecords.map((skill) => (
                       <SkillRecordCard
                         key={skill.id}
@@ -439,7 +351,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                   </SkillRecordGroup>
                 </>
               ) : (
-                <EmptyNotice text="当前还没有登记战技。先选择一个普通预设，或在解锁命途槽位后创造命途战技。" />
+                <EmptyNotice text="当前还没有登记战技。先选择普通槽位，或在解锁命途槽位后创造命途战技。" />
               )}
             </div>
           </section>
@@ -474,7 +386,7 @@ function SkillEditor({
         <input
           value={draft.名称}
           onChange={(e) => onChange({ ...draft, 名称: e.target.value })}
-          placeholder={selectedSlot?.kind === 'path' ? '例如：逐星断弦' : '请选择预设或输入名称'}
+          placeholder={selectedSlot?.kind === 'path' ? '例如：逐星断弦' : '例如：折光步'}
           className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
           style={{ clipPath: smallClip }}
         />
@@ -494,7 +406,7 @@ function SkillEditor({
           <input
             value={draft.来源}
             onChange={(e) => onChange({ ...draft, 来源: e.target.value })}
-            placeholder="普通预设 / 巡猎自创 / 光锥启发"
+            placeholder="普通自制 / 巡猎自创 / 光锥启发"
             className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
             style={{ clipPath: smallClip }}
           />
@@ -537,46 +449,6 @@ function SkillEditor({
           style={{ clipPath: smallClip }}
         />
       </Field>
-    </div>
-  );
-}
-
-function NormalSkillReadonly({ skill }: { skill?: 战技记录 }) {
-  if (!skill) {
-    return <EmptyNotice text="先从左侧选择一个普通战技模板，系统会直接写入对应槽位。" />;
-  }
-
-  return (
-    <div className="mt-3 space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <InfoTile label="名称" value={skill.名称} />
-        <InfoTile label="来源" value={skill.来源 || '普通预设'} />
-      </div>
-      <Field label="描述">
-        <div className="kaituo-input w-full px-2.5 py-2 text-[12px] leading-relaxed md:px-3 md:py-3 md:text-sm" style={{ clipPath: smallClip }}>
-          {skill.描述}
-        </div>
-      </Field>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="关键词">
-          <div className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm" style={{ clipPath: smallClip }}>
-            {skill.关键词?.length ? skill.关键词.join('、') : '无'}
-          </div>
-        </Field>
-        <Field label="消耗 / 冷却">
-          <div className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm" style={{ clipPath: smallClip }}>
-            {skill.消耗 || '无'} / {skill.冷却 || '无'}
-          </div>
-        </Field>
-      </div>
-      <Field label="备注">
-        <div className="kaituo-input w-full px-2.5 py-2 text-[12px] leading-relaxed md:px-3 md:py-3 md:text-sm" style={{ clipPath: smallClip }}>
-          {skill.备注 || '无'}
-        </div>
-      </Field>
-      <div className="text-[11px] md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
-        普通战技为模板制，只允许通过左侧预设替换槽位，不能自由编辑。
-      </div>
     </div>
   );
 }
@@ -880,6 +752,10 @@ function splitKeywords(value: string): string[] {
     .split(/[,，、\s/|]+/g)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function isVisibleSkillRecord(skill: 战技记录): boolean {
+  return skill.槽位类型 !== 'normal' || (skill.槽位序号 >= 1 && skill.槽位序号 <= NORMAL_SKILL_SLOT_COUNT);
 }
 
 function sameSlot(a: 战技记录, b: 战技记录): boolean {

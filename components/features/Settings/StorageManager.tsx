@@ -167,7 +167,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
           clipPath: cardClip,
         }}
       >
-        导出存档包默认不包含 API Key；导入存档包 / 旧 JSON 会放入保护存档分区。
+        导出存档包默认不包含 API Key / API 配置；导入存档包 / 旧 JSON 会放入保护存档分区。
       </div>
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">

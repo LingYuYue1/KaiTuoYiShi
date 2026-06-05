@@ -356,7 +356,7 @@ export function SettingsModal({
             }}
           >
             <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
-            <span className="ml-2">开拓轶事 · v0.5</span>
+            <span className="ml-2">开拓轶事 · v0.6</span>
           </div>
         </aside>
 

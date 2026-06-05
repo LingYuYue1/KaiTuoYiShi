@@ -21,6 +21,8 @@ const builtinIds: readonly string[] = BUILTIN_BOOK_IDS;
 const storyModeIds: readonly string[] = STORY_MODE_BOOK_IDS;
 const isBuiltinBook = (book: 世界书) => builtinIds.includes(book.id) || storyModeIds.includes(book.id);
 const isStoryModeBook = (book: 世界书) => storyModeIds.includes(book.id);
+const isCalibrationEntry = (entry: 世界书条目) => entry.scope?.includes('calibration') === true;
+const isCalibrationBook = (book: 世界书) => book.entries.some(isCalibrationEntry);
 
 export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
   const [draft, setDraft] = useState<世界书[]>(() => normalizeWorldbooks(worldbooks));
@@ -207,7 +209,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
               </h2>
             </div>
             <p className="mt-1 font-serif text-[10px] italic leading-relaxed tracking-[0.08em] md:mt-1.5 md:text-[11px] md:tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
-              内置规范与额外世界书分流管理，保存后参与后续剧情生成。
+              内置规范与额外世界书分流管理；主剧情世界书保存后参与生成，独立模型资料仅作真实请求展示。
             </p>
           </div>
           <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 md:gap-2">
@@ -464,6 +466,7 @@ function BookSection({
         <div className="space-y-1.5 pl-[13px]">
           {book.entries.map((entry) => {
             const active = selectedEntryId === entry.id;
+            const calibrationDisplay = builtin && isCalibrationEntry(entry);
             return (
               <button
                 key={entry.id}
@@ -480,8 +483,8 @@ function BookSection({
                 <span
                   className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
                   style={{
-                    background: entry.enabled ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(80, 70, 50, 0.55)',
-                    boxShadow: entry.enabled ? '0 0 4px rgba(var(--tj-accent-primary), 0.5)' : 'none',
+                    background: calibrationDisplay || entry.enabled ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(80, 70, 50, 0.55)',
+                    boxShadow: calibrationDisplay || entry.enabled ? '0 0 4px rgba(var(--tj-accent-primary), 0.5)' : 'none',
                   }}
                 />
                 <span className="min-w-0 flex-1">
@@ -492,7 +495,7 @@ function BookSection({
                     {entry.title || '未命名条目'}
                   </span>
                   <span className="mt-0.5 block truncate text-[10px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
-                    {ENTRY_TYPE_LABELS[entry.type]} · 优先级 {entry.priority}
+                    {calibrationDisplay ? '独立模型展示' : ENTRY_TYPE_LABELS[entry.type]} · 优先级 {entry.priority}
                   </span>
                 </span>
               </button>
@@ -517,31 +520,39 @@ function PaneHeader({
   onDeleteBook: () => void;
   onNewEntry: () => void;
 }) {
+  const calibrationDisplay = builtin && isCalibrationBook(book);
   return (
     <div className="px-4 py-4 md:px-6" style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.22)' }}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
         <div className="min-w-0 flex-1">
           {builtin ? (
-            <div className="flex min-w-0 items-center gap-3">
-              <span
-                className="h-6 w-[3px] flex-shrink-0"
-                style={{
-                  background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
-                  boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
-                }}
-              />
-              <h3
-                className="min-w-0 font-serif text-lg font-semibold tracking-[0.16em] sm:text-xl sm:tracking-[0.28em]"
-                style={{
-                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 55%, rgb(var(--tj-accent-secondary)) 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}
-              >
-                {book.title}
-              </h3>
-            </div>
+            <>
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className="h-6 w-[3px] flex-shrink-0"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
+                    boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
+                  }}
+                />
+                <h3
+                  className="min-w-0 font-serif text-lg font-semibold tracking-[0.16em] sm:text-xl sm:tracking-[0.28em]"
+                  style={{
+                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 55%, rgb(var(--tj-accent-secondary)) 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  {book.title}
+                </h3>
+              </div>
+              {calibrationDisplay && (
+                <p className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+                  独立模型资料展示：真实新闻、手机、变量、智库等请求由服务层源码常量构建；这里用于核对内容，不作为开关或编辑入口。
+                </p>
+              )}
+            </>
           ) : (
             <>
               <input
@@ -627,7 +638,13 @@ function EntryPane({
         onNewEntry={onNewEntry}
       />
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6">
-        <EntryEditor entry={entry} builtin={builtin} onChange={onUpdateEntry} onDelete={onDeleteEntry} />
+        <EntryEditor
+          entry={entry}
+          builtin={builtin}
+          calibrationDisplay={builtin && isCalibrationEntry(entry)}
+          onChange={onUpdateEntry}
+          onDelete={onDeleteEntry}
+        />
       </div>
     </div>
   );
@@ -665,11 +682,13 @@ function EmptyBookPane({
 function EntryEditor({
   entry,
   builtin,
+  calibrationDisplay,
   onChange,
   onDelete,
 }: {
   entry: 世界书条目;
   builtin: boolean;
+  calibrationDisplay: boolean;
   onChange: (partial: Partial<世界书条目>) => void;
   onDelete: () => void;
 }) {
@@ -677,23 +696,46 @@ function EntryEditor({
     <div className="min-w-0 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="font-serif text-xs tracking-[0.35em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>
-          {builtin ? '内置条目' : '条目'}
+          {calibrationDisplay ? '独立模型展示条目' : builtin ? '内置条目' : '条目'}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-serif tracking-[0.2em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}>
-            {entry.enabled ? '启用' : '关闭'}
+            {calibrationDisplay ? '展示' : entry.enabled ? '启用' : '关闭'}
           </span>
-          <ToggleSwitch checked={entry.enabled} onChange={(enabled) => onChange({ enabled })} title="启用条目" />
+          <ToggleSwitch
+            checked={calibrationDisplay || entry.enabled}
+            disabled={calibrationDisplay}
+            onChange={(enabled) => onChange({ enabled })}
+            title={calibrationDisplay ? '独立模型展示条目不是真实请求开关' : '启用条目'}
+          />
         </div>
       </div>
+
+      {calibrationDisplay && (
+        <div
+          className="px-3 py-2 text-xs leading-relaxed"
+          style={{
+            color: 'rgba(var(--tj-text-secondary), 0.78)',
+            background: 'rgba(var(--tj-accent-primary), 0.045)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            clipPath: cardClip,
+          }}
+        >
+          独立模型资料展示：真实请求不读取这里的 enabled 或编辑稿，而是由新闻、手机、变量、智库等服务层共享 prompt / worldbook 常量构建。实际发送内容请在“上下文”页核对。
+        </div>
+      )}
 
       <Field label="条目标题">
         <input
           value={entry.title}
-          onChange={(event) => onChange({ title: event.target.value })}
+          readOnly={calibrationDisplay}
+          onChange={(event) => {
+            if (calibrationDisplay) return;
+            onChange({ title: event.target.value });
+          }}
           placeholder="条目标题"
           className="kaituo-input w-full px-3 py-2 text-sm font-serif tracking-wider"
-          style={{ clipPath: smallClip }}
+          style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
         />
       </Field>
 
@@ -701,9 +743,10 @@ function EntryEditor({
         <Field label="类型">
           <select
             value={entry.type}
+            disabled={calibrationDisplay}
             onChange={(event) => onChange({ type: event.target.value as 世界书条目类型 })}
             className="kaituo-input w-full px-2.5 py-2 text-xs"
-            style={{ clipPath: smallClip }}
+            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
           >
             {(Object.entries(ENTRY_TYPE_LABELS) as [世界书条目类型, string][]).map(([key, label]) => (
               <option key={key} value={key}>
@@ -715,9 +758,10 @@ function EntryEditor({
         <Field label="注入模式">
           <select
             value={entry.injectMode}
+            disabled={calibrationDisplay}
             onChange={(event) => onChange({ injectMode: event.target.value as 世界书注入方式 })}
             className="kaituo-input w-full px-2.5 py-2 text-xs"
-            style={{ clipPath: smallClip }}
+            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
           >
             <option value="always">始终注入</option>
             <option value="keyword_match">关键词匹配</option>
@@ -726,11 +770,12 @@ function EntryEditor({
         <Field label="回合守卫">
           <select
             value={entry.turnGuard ?? ''}
+            disabled={calibrationDisplay}
             onChange={(event) =>
               onChange({ turnGuard: event.target.value === 'first_only' ? 'first_only' : undefined })
             }
             className="kaituo-input w-full px-2.5 py-2 text-xs"
-            style={{ clipPath: smallClip }}
+            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
           >
             <option value="">每回合注入</option>
             <option value="first_only">仅首回合</option>
@@ -740,11 +785,12 @@ function EntryEditor({
           <input
             type="number"
             value={entry.priority}
+            disabled={calibrationDisplay}
             onChange={(event) => onChange({ priority: Number(event.target.value) || 0 })}
             min={0}
             max={999}
             className="kaituo-input w-full px-2.5 py-2 text-xs"
-            style={{ clipPath: smallClip }}
+            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
           />
         </Field>
       </div>
@@ -753,6 +799,7 @@ function EntryEditor({
         <Field label="触发关键词（逗号分隔）">
           <input
             value={entry.keywords.join(', ')}
+            readOnly={calibrationDisplay}
             onChange={(event) =>
               onChange({
                 keywords: event.target.value
@@ -763,7 +810,7 @@ function EntryEditor({
             }
             placeholder="关键词，逗号分隔"
             className="kaituo-input w-full px-3 py-2 text-xs"
-            style={{ clipPath: smallClip }}
+            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
           />
         </Field>
       )}
@@ -784,11 +831,15 @@ function EntryEditor({
       <Field label="条目内容">
         <textarea
           value={entry.content}
-          onChange={(event) => onChange({ content: event.target.value })}
+          readOnly={calibrationDisplay}
+          onChange={(event) => {
+            if (calibrationDisplay) return;
+            onChange({ content: event.target.value });
+          }}
           rows={16}
           placeholder="条目内容"
           className="kaituo-input w-full resize-none px-3 py-2.5 text-sm leading-relaxed"
-          style={{ clipPath: smallClip }}
+          style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.82 : 1 }}
         />
       </Field>
 
@@ -809,17 +860,29 @@ function EntryEditor({
   );
 }
 
-function ToggleSwitch({ checked, onChange, title }: { checked: boolean; onChange: (checked: boolean) => void; title?: string }) {
+function ToggleSwitch({
+  checked,
+  disabled = false,
+  onChange,
+  title,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  title?: string;
+}) {
   return (
     <span
       role="switch"
       aria-checked={checked}
+      aria-disabled={disabled}
       title={title}
       onClick={(event) => {
         event.stopPropagation();
+        if (disabled) return;
         onChange(!checked);
       }}
-      className="relative inline-flex h-[18px] w-[34px] flex-shrink-0 cursor-pointer items-center transition-all"
+      className="relative inline-flex h-[18px] w-[34px] flex-shrink-0 items-center transition-all"
       style={{
         background: checked
           ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.55), rgba(var(--tj-accent-secondary), 0.75))'
@@ -828,6 +891,8 @@ function ToggleSwitch({ checked, onChange, title }: { checked: boolean; onChange
           ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.8), 0 0 6px rgba(var(--tj-accent-primary), 0.35)'
           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
         borderRadius: 10,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.78 : 1,
       }}
     >
       <span

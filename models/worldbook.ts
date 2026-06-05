@@ -9,7 +9,7 @@ export type WorldbookTurnGuard = 'first_only';
  * - main: 主流程正文（除开局外）
  * - opening: 开局首回合
  * - battle: 战斗 / 判定专用 CoT（预留，目前未使用）
- * - calibration: 变量模型校准（预留，目前未使用）
+ * - calibration: 独立模型 / 校准模型资料展示（新闻、手机、智库、变量、剧情编织等；不注入主剧情）
  * - all: 任意场景都注入
  */
 export type 世界书作用域 = 'main' | 'opening' | 'battle' | 'pathAwakening' | 'calibration' | 'all';
@@ -19,7 +19,7 @@ export const SCOPE_LABELS: Record<世界书作用域, string> = {
   opening: '开局',
   battle: '战斗',
   pathAwakening: '命途狭间',
-  calibration: '变量校准',
+  calibration: '独立模型',
   all: '任意',
 };
 

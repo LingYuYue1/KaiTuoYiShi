@@ -36,6 +36,7 @@ assert(newsSource.includes('shouldCommit?: () => boolean'), '新闻子流程必�
 assert(newsSource.includes('params.shouldCommit?.() === false'), '新闻子流程写入前必须检查提交闸门。');
 assert(settingsSource.includes('turnCount?: number'), '存档数据必须持久化真实 turnCount。');
 assert(saveLoadSource.includes('turnCount: overrides?.turnCount ?? state.turnCount'), '保存负载必须写入真实 turnCount。');
+assert(!saveLoadSource.includes('delete clean.preTurnSnapshot'), '本地存档必须保留最新 preTurnSnapshot，读档后立即重roll才能完整回滚变量切片。');
 assert(saveLoadSource.includes('state.setTurnCount(save.turnCount ?? (save.chatHistory.length + 1))'), '读档必须优先恢复真实 turnCount。');
 assert(dbSource.includes('s.turnCount ?? ((s.chatHistory?.length ?? 0) + 1)'), '存档列表必须优先显示真实 turnCount。');
 

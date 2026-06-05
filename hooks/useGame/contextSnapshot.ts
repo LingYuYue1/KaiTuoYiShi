@@ -5,11 +5,13 @@ import { 创建默认智库系统设置, 创建默认记忆系统设置 } from '
 import { buildNewsModelPrompt, buildNewsUserMessage } from '@/services/ai/newsModel';
 import { buildPhoneMessages, buildPhoneSystemPrompt } from '@/services/ai/phoneService';
 import { buildVariableModelPrompt } from '@/services/ai/variableModel';
+import { NPC_MEMORY_WRITE_RULE_PROMPT } from '@/data/variableWorldbook';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
-import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
+import { buildZhikuModelSystemPrompt, buildZhikuModelUserPrompt, retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { buildNpcRelationshipPlanning } from '@/services/npcRelationshipPlanning';
+import { formatNpcLedgerForPrompt, selectNpcLedgersForTurn, type NPC账本选择结果 } from '@/models/npc';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
 import { snapshotVariableState } from '@/utils/variableExecutor';
 import {
@@ -84,11 +86,92 @@ function historyThroughLatestUser(history: 聊天消息[]): 聊天消息[] {
 }
 
 function latestAssistantZhikuDebugRecall(history: 聊天消息[]): string {
-  return [...history]
+  const latest = [...history]
     .reverse()
-    .find((msg) => msg.role === 'assistant' && msg.debugContext?.zhikuRecallPreview?.trim())
-    ?.debugContext?.zhikuRecallPreview
-    ?.trim() ?? '';
+    .find((msg) => msg.role === 'assistant' && (
+      msg.debugContext?.zhikuRecallPreview?.trim() ||
+      msg.debugContext?.zhikuRecallRawText?.trim() ||
+      msg.debugContext?.zhikuRecallUsedModel !== undefined
+    ));
+  const debug = latest?.debugContext;
+  if (!debug) return '';
+  return [
+    debug.zhikuRecallUsedModel
+      ? `智库模型原始返回：\n${debug.zhikuRecallRawText?.trim() || '（智库模型已调用，但没有保存到原始返回文本。）'}`
+      : '智库模型原始返回：\n（本回合未调用智库模型，使用本地规则召回；本地规则不会执行 Step0~Step8 模型思维链。）',
+    '',
+    debug.zhikuRecallPreview?.trim() || '智库召回诊断：无',
+  ].join('\n').trim();
+}
+
+function latestAssistantYitingDebugRecall(history: 聊天消息[]): string {
+  const latest = [...history]
+    .reverse()
+    .find((msg) => msg.role === 'assistant' && (
+      msg.debugContext?.yitingRecallPreview?.trim() ||
+      msg.debugContext?.yitingRecallRawText?.trim() ||
+      msg.debugContext?.yitingRecallUsedModel !== undefined
+    ));
+  const debug = latest?.debugContext;
+  if (!debug) return '';
+  return [
+    debug.yitingRecallUsedModel
+      ? `忆庭模型原始返回：\n${debug.yitingRecallRawText?.trim() || '（忆庭模型已调用，但没有保存到原始返回文本。）'}`
+      : '忆庭模型原始返回：\n（本回合未调用忆庭模型，使用本地摘要检索，或未到忆庭召回触发回合。）',
+    '',
+    debug.yitingRecallPreview?.trim() || '忆庭召回诊断：无',
+  ].join('\n').trim();
+}
+
+function latestAssistantNpcLedgerDebug(history: 聊天消息[]): string {
+  const latest = [...history]
+    .reverse()
+    .find((msg) => msg.role === 'assistant' && (msg.debugContext?.npcLedgerInjection || msg.debugContext?.npcLedgerUpdate));
+  const injection = latest?.debugContext?.npcLedgerInjection;
+  const update = latest?.debugContext?.npcLedgerUpdate;
+  if (!injection && !update) return '';
+  return [
+    injection ? '【NPC账本注入诊断】' : '',
+    injection ? `已注入：${injection.selectedNames.length ? injection.selectedNames.join('、') : '无'}` : '',
+    injection?.injected.length
+      ? `注入详情：\n${injection.injected.map((item) => [
+          `- ${item.name}`,
+          `  原因：${item.reason.join('；') || '相关'}`,
+          `  字段：${item.fields.join('；') || '无账本字段，仅旧档案兜底'}`,
+          `  标记：最近互动=${item.hasRecentInteraction ? '是' : '否'}；必须记得=${item.hasMustRemember ? '是' : '否'}；未完成事项=${item.hasUnresolvedItems ? '是' : '否'}`,
+        ].join('\n')).join('\n')}`
+      : '',
+    injection?.skippedNames.length
+      ? `未注入示例：\n${injection.skippedNames.slice(0, 8).map((item) => `- ${item.name}：${item.reason}`).join('\n')}`
+      : '',
+    update ? '【NPC账本更新诊断】' : '',
+    update ? `更新 NPC：${update.updatedNames.length ? update.updatedNames.join('、') : '无'}` : '',
+    update?.memoryAppended.length
+      ? `追加同行记忆：\n${update.memoryAppended.slice(0, 8).map((item) => `- ${item}`).join('\n')}`
+      : '',
+    update?.ledgerFieldsUpdated.length
+      ? `账本字段：\n${update.ledgerFieldsUpdated.slice(0, 12).map((item) => `- ${item}`).join('\n')}`
+      : '',
+    update?.summaryTriggered.length
+      ? `触发总结记忆压缩：${update.summaryTriggered.join('、')}`
+      : '',
+    update?.warnings.length
+      ? `警告：\n${update.warnings.slice(0, 8).map((item) => `- ${item}`).join('\n')}`
+      : '',
+  ].filter(Boolean).join('\n');
+}
+
+function formatNpcLedgerSelectionSnapshot(selection: NPC账本选择结果): string {
+  return [
+    '# 本回合 NPC 账本预期注入',
+    '',
+    selection.selected.length
+      ? selection.selected.map(formatNpcLedgerForPrompt).join('\n\n')
+      : '（本回合没有 NPC 账本进入强制承接区。）',
+    selection.skipped.length
+      ? `\n未注入示例：\n${selection.skipped.slice(0, 10).map((item) => `- ${item.name}：${item.reason}`).join('\n')}`
+      : '',
+  ].filter(Boolean).join('\n');
 }
 
 function sectionTitle(content: string, fallback: string): string {
@@ -445,6 +528,15 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       : '',
     yitingPreview?.injection ?? '',
   ].filter((item) => item.trim()).join('\n\n');
+  const npcLedgerSelection = !isOpeningSystemTrigger
+    ? selectNpcLedgersForTurn({
+        records: state.NPC,
+        turnCount: state.turnCount,
+        explicitNames: worldbookCtx.npcNames,
+        sceneNames: state.世界.当前时段?.人物?.map((npc) => npc.姓名),
+        recalledNames: worldbookCtx.npcNames,
+      })
+    : undefined;
 
   const systemPrompt = isOpeningSystemTrigger
     ? buildOpeningSystemPrompt(
@@ -475,6 +567,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         storyRecallInjection || (yitingEnabled && recallQuery && state.turnCount > yitingThreshold ? '' : undefined),
         zhikuPreview?.injection,
         Boolean(yitingPreview?.injection),
+        npcLedgerSelection,
       );
 
   const systemPromptSections = splitPromptSections(systemPrompt);
@@ -528,6 +621,24 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     upload: false,
     diagnostic: true,
   });
+  addSection(sections, {
+    id: 'npc_ledger_actual_saved',
+    title: '上一回合真实保存的 NPC 账本诊断',
+    category: '实际',
+    content: latestAssistantNpcLedgerDebug(state.chatHistory) || '（上一条 AI 回复没有保存 NPC 账本诊断；请从本功能更新后的新回合开始查看。）',
+    upload: false,
+    diagnostic: true,
+  });
+  if (npcLedgerSelection) {
+    addSection(sections, {
+      id: 'npc_ledger_preview',
+      title: '本回合 NPC 账本预期注入',
+      category: '诊断',
+      content: formatNpcLedgerSelectionSnapshot(npcLedgerSelection),
+      upload: false,
+      diagnostic: true,
+    });
+  }
   systemPromptSections.forEach((item, index) => {
     addSection(sections, {
       id: `system_${index}`,
@@ -568,6 +679,18 @@ function buildVariableContextSnapshot(state: UseGameStateReturn): ContextSnapsho
     剧情: state.剧情,
   });
   const sections: ContextSection[] = [];
+  addSection(sections, {
+    id: 'variable_npc_memory_rule',
+    title: 'NPC档案记忆写入法则（完整）',
+    category: '诊断',
+    content: [
+      '本区块是从变量模型系统提示词中单独抽出的完整 NPC 写入法则，方便核对；真实请求仍通过“变量模型系统提示词”发送。',
+      '',
+      NPC_MEMORY_WRITE_RULE_PROMPT,
+    ].join('\n'),
+    upload: false,
+    diagnostic: true,
+  });
   addSection(sections, {
     id: 'variable_system',
     title: '变量模型系统提示词',
@@ -699,6 +822,7 @@ function buildNewsContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
 function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const settings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
+  const actualRecallPreview = latestAssistantYitingDebugRecall(state.chatHistory);
   const recallQuery = buildMainRecallQuery({
     userInput: sourceInput,
     history: state.chatHistory,
@@ -805,6 +929,12 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     : '（无诊断信息）';
   const sections: ContextSection[] = [];
   addSection(sections, {
+    id: 'yiting_actual_saved_preview',
+    title: '上一回合真实保存的忆庭召回诊断',
+    category: '实际',
+    content: actualRecallPreview || '（上一条 AI 回复没有保存忆庭召回诊断；请从新增诊断后的新回合开始查看。）',
+  });
+  addSection(sections, {
     id: 'zhiku_actual_saved_preview',
     title: '上一回合真实保存的召回诊断',
     category: '实际',
@@ -812,24 +942,9 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   });
   addSection(sections, {
     id: 'zhiku_system',
-    title: '智库召回提示词',
+    title: '智库召回提示词（Step0~Step8）',
     category: '系统',
-    content: [
-      '你是原著资料中枢「智库」的召回模型。你的任务不是写正文，而是从候选资料中挑出最相关条目，供后续注入主剧情。',
-      '',
-      '规则：',
-      '- 只返回候选列表中的编号，不要编造新条目。',
-      '- 优先选择与当前输入直接相关、能影响剧情理解或设定判断的条目。',
-      '- 角色相关资料只挑人物表现、主体人格、OOC风险、角色边界类条目，且不占用强/弱相关资料名额。',
-      '- 强相关资料、弱相关资料只挑非角色类设定资料；原著剧情正文仍由剧情编织管理，不走智库普通召回。',
-      '- 原著剧情正文不参与智库普通召回；剧情推进由剧情编织系统管理，避免已完成剧情重复注入。',
-      '- 如果完全无关，对应分类写无。',
-      '',
-      '输出格式必须严格为三行：',
-      '角色相关资料：【编号】|【编号】',
-      '强相关资料：【编号】|【编号】',
-      '弱相关资料：【编号】|【编号】',
-    ].join('\n'),
+    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? []),
   });
   addSection(sections, {
     id: 'zhiku_user',
@@ -838,13 +953,7 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     content: [
       `玩家当前输入：${sourceInput || '（无）'}`,
       '',
-      '主流程增强召回查询：',
-      recallQuery || '（无）',
-      '',
-      `召回条数上限：${limit}`,
-      '',
-      '候选资料：',
-      candidateText,
+      buildZhikuModelUserPrompt(recallQuery, limit, candidateText),
       '',
       '本地召回诊断：',
       diagnosticText,

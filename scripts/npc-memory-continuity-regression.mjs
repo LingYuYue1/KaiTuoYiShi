@@ -11,6 +11,7 @@ const memoryUtils = fs.readFileSync('hooks/useGame/memoryUtils.ts', 'utf8');
 const npcMemorySanitizer = fs.readFileSync('utils/npcMemorySanitizer.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
+const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const inputArea = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
 const storyProgressNpcMemoryFunction = sendWorkflow.match(/function applyStoryProgressNpcMemory[\s\S]*?\n}\n\nfunction formatZhikuDiagnosticsPreview/)?.[0] ?? '';
@@ -20,8 +21,12 @@ assert(builder.includes('# 本回合人物关系连续性核对'), 'NPC 连续�
 assert(builder.includes('禁止写成初次见面'), 'NPC 连续性核对表必须禁止已认识 NPC 被写回初见。');
 assert(builder.includes('最近共同经历'), 'NPC 连续性核对表必须注入 NPC 同行记忆摘要。');
 assert(builder.includes('RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW = 15'), '近期 NPC 注入窗口必须覆盖低回合连续互动。');
-assert(builder.includes('buildNpcContinuitySection(worldState, npcRecords, _turnCount)'), 'buildSystemPrompt 必须实际注入 NPC 连续性核对表。');
-assert(builder.indexOf('buildNpcContinuitySection(worldState, npcRecords, _turnCount)') < builder.indexOf('buildCompanionsSection(npcRecords, _turnCount)'), 'NPC 连续性核对表应早于伙伴档案注入。');
+assert(builder.includes('buildNpcContinuitySection(worldState, npcRecords, _turnCount, worldbookCtx?.npcNames)'), 'buildSystemPrompt 必须把近期/预期相关人物接入 NPC 连续性核对表。');
+assert(builder.indexOf('buildNpcContinuitySection(worldState, npcRecords, _turnCount, worldbookCtx?.npcNames)') < builder.indexOf('buildCompanionsSection(npcRecords, _turnCount)'), 'NPC 连续性核对表应早于伙伴档案注入。');
+assert(builder.includes('buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames)'), '角色在场状态必须接入近期/预期相关人物。');
+assert(builder.includes('近期正文/玩家输入明确人物或预期相关'), '角色在场状态必须显示近期正文/玩家输入明确人物或预期相关人物。');
+assert(builder.includes('档案尚未落库'), 'NPC 连续性核对必须在变量档案未落库时提供兜底行。');
+assert(builder.includes('最近正文锚点'), 'NPC 连续性兜底必须要求读取最近正文锚点承接刚发生事实。');
 assert(builder.includes('最近遇见的路人'), '近期路人也必须能进入主剧情上下文。');
 assert(builder.includes('提取NPC同行记忆文本列表(n).slice(-4)'), '伙伴档案必须注入最近 NPC 同行记忆。');
 
@@ -34,8 +39,9 @@ assert(historyWindow.includes('# 即时剧情回顾') || sendWorkflow.includes('
 assert(variableFacts.includes("if (fact.memory) return 'companion'"), '有 NPC 记忆的新 NPC 必须自动升为 companion。');
 assert(variableFacts.includes('key: `${key}.最近回合`'), '已有 NPC 本回合有事实时必须刷新最近回合。');
 assert(variableFacts.includes('key: `${key}.同行记忆`'), 'NPC fact memory 必须写入同行记忆。');
-assert(variableModel.includes('已建档 NPC 本回合与玩家发生有效互动时，必须审计是否需要写 memory'), '变量模型必须审计已有 NPC 的互动记忆。');
-assert(variableModel.includes('新入档时，如果即时剧情回顾/回忆/登记表显示该 NPC 与玩家已有关键前因'), '新入档 NPC 必须补关键前因，避免从中途断层。');
+assert(variableModel.includes('<NPC档案记忆写入法则>'), '变量模型 NPC 字段说明必须指向完整 NPC 写入法则。');
+assert(variableWorldbook.includes('对已建档 NPC：本回合与玩家发生有效互动时，必须审计是否写 \\`memory\\`'), '变量世界书完整法则必须审计已有 NPC 的互动记忆。');
+assert(variableWorldbook.includes('新入档时若即时剧情回顾、忆庭回忆或当前登记表已显示此前关键互动'), '新入档 NPC 必须补关键前因，避免从中途断层。');
 
 assert(sendWorkflow.includes('state.setPendingVariable(true)'), '正文落地后变量结算期间必须设置 pendingVariable。');
 assert(sendWorkflow.includes('state.setPendingVariable(false)'), '后台结算结束后必须清理 pendingVariable。');

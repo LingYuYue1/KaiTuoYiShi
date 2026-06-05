@@ -7,6 +7,7 @@ interface LandingPageProps {
   onWorldbookManager: () => void;
   onZhikuManager: () => void;
   onCloudSave: () => void;
+  onReleaseAnnouncements: () => void;
 }
 
 interface TwinkleStar {
@@ -26,6 +27,7 @@ export function LandingPage({
   onWorldbookManager,
   onZhikuManager,
   onCloudSave,
+  onReleaseAnnouncements,
 }: LandingPageProps) {
   const stars: TwinkleStar[] = useMemo(() => {
     const list: TwinkleStar[] = [];
@@ -80,19 +82,34 @@ export function LandingPage({
         }}
       />
 
-      <button
-        type="button"
-        onClick={onCloudSave}
-        className="absolute left-4 top-4 z-20 px-4 py-2 font-serif text-[12px] tracking-[0.18em] transition-all hover:opacity-90 sm:left-5 sm:top-5 sm:text-[13px]"
-        style={{
-          color: 'rgba(var(--tj-accent-primary), 0.92)',
-          background: 'rgba(var(--tj-bg-primary), 0.32)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 10px 24px rgba(0,0,0,0.22)',
-          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
-        }}
-      >
-        GitHub 云存档
-      </button>
+      <div className="absolute left-4 top-4 z-20 flex flex-wrap items-center gap-2 sm:left-5 sm:top-5">
+        <button
+          type="button"
+          onClick={onCloudSave}
+          className="px-4 py-2 font-serif text-[12px] tracking-[0.18em] transition-all hover:opacity-90 sm:text-[13px]"
+          style={{
+            color: 'rgba(var(--tj-accent-primary), 0.92)',
+            background: 'rgba(var(--tj-bg-primary), 0.32)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 10px 24px rgba(0,0,0,0.22)',
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+        >
+          GitHub 云存档
+        </button>
+        <button
+          type="button"
+          onClick={onReleaseAnnouncements}
+          className="px-4 py-2 font-serif text-[12px] tracking-[0.18em] transition-all hover:opacity-90 sm:text-[13px]"
+          style={{
+            color: 'rgba(var(--tj-text-primary), 0.9)',
+            background: 'rgba(var(--tj-bg-primary), 0.28)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.36), 0 10px 24px rgba(0,0,0,0.2)',
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+        >
+          更新公告
+        </button>
+      </div>
 
       <div
         className="absolute right-4 top-4 z-20 flex items-center gap-2 px-4 py-2 font-serif text-[12px] tracking-[0.16em] sm:right-5 sm:top-5 sm:text-[13px]"
@@ -272,7 +289,7 @@ export function LandingPage({
         className="absolute bottom-4 left-4 right-4 z-10 flex flex-col items-center gap-1 text-center text-xs opacity-60"
         style={{ color: 'rgb(var(--tj-text-secondary))' }}
       >
-        <p>开拓轶事 v0.5</p>
+        <p>开拓轶事 v0.6</p>
         <p className="text-[11px] leading-relaxed">
           作者 Ling · 智库部分内容贡献者 11MOMO
         </p>

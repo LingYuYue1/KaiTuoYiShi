@@ -1,4 +1,4 @@
-export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'openai_compatible';
+export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'opencode' | 'openai_compatible';
 
 import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
@@ -170,6 +170,7 @@ export function 创建空文生图词组转化器API覆盖(): 文生图词组转
 }
 
 export type 原著约束强度 = 'loose' | 'standard' | 'strict';
+export type DeepSeek主剧情模式 = 'off' | 'standard' | 'lock_format';
 
 export interface 游戏设置 {
   wordCountTarget: number;
@@ -184,6 +185,8 @@ export interface 游戏设置 {
   /** 开发者模式：开启后向 AI 注入提示词，AI 会把玩家消息视作开发者测试指令并尽量配合。 */
   devMode: boolean;
   enableClaudeMode: boolean;
+  /** DeepSeek 主剧情专用模式：只在主 API 是 DeepSeek 时生效，用于降低续聊污染、reasoning 泄漏和格式漂移。 */
+  deepSeekMainMode: DeepSeek主剧情模式;
   /** 变量自动更新：主模型回完正文后，调用变量模型分析正文并落地变量命令。 */
   enableVariableUpdate: boolean;
   /** 星际和平周报：独立新闻演进系统，和变量系统分离。 */
@@ -873,6 +876,7 @@ export function 创建默认游戏设置(): 游戏设置 {
     enableStreaming: true,
     devMode: false,
     enableClaudeMode: false,
+    deepSeekMainMode: 'off',
     enableVariableUpdate: false,
     新闻系统: 创建默认星际和平周报设置(),
     手机系统: 创建默认手机系统设置(),

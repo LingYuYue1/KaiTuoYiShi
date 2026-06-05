@@ -253,7 +253,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
                 <div>· 每回合自动保存一次，最多保留 10 条</div>
                 <div>· 读取旧档前会自动生成保护存档</div>
                 <div>· 保护存档用于撤回误读，最多 3 条</div>
-                <div>· 导出存档包默认不包含 API Key</div>
+                <div>· 导出存档包默认不包含 API Key / API 配置</div>
                 <div>· 导入存档包 / 旧 JSON 会放入保护存档分区</div>
               </div>
             </details>

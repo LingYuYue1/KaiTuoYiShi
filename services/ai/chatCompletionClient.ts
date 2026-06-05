@@ -12,16 +12,23 @@ export interface StreamCallbacks {
  *  这类「reasoning summary」是厂商内置格式（英文 **Header** 段），不受 system prompt 控制，
  *  会跳过我们设计的 Step0-Step10 CoT。统一只接收正式 content 流。 */
 
+type ChatMessagePayload = { role: string; content: string; prefix?: boolean };
+
 export interface ChatCompletionRequest {
-  messages: Array<{ role: string; content: string }>;
+  messages: ChatMessagePayload[];
   systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
   signal?: AbortSignal;
+  /** DeepSeek beta prefix completion. Only the DeepSeek branch reads this flag. */
+  prefixMode?: boolean;
+  /** Assistant prefill used when prefixMode is true. */
+  prefixContent?: string;
 }
 
 function detectProvider(config: API配置项): string {
   const url = config.baseUrl.toLowerCase();
+  if (config.provider === 'opencode' || /opencode\.ai\/zen\/v1/i.test(url)) return 'opencode';
   if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
   if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
   if (
@@ -35,14 +42,70 @@ function detectProvider(config: API配置项): string {
 
 function buildMessages(
   systemPrompt: string | undefined,
-  messages: Array<{ role: string; content: string }>,
-): Array<{ role: string; content: string }> {
-  const result: Array<{ role: string; content: string }> = [];
+  messages: ChatMessagePayload[],
+): ChatMessagePayload[] {
+  const result: ChatMessagePayload[] = [];
   if (systemPrompt) {
     result.push({ role: 'system', content: systemPrompt });
   }
   result.push(...messages);
   return result;
+}
+
+function isDeepSeekConfig(config: API配置项): boolean {
+  return detectProvider(config) === 'deepseek';
+}
+
+function normalizeDeepSeekPrefixBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  if (!trimmed || !/deepseek/i.test(trimmed)) return trimmed;
+  if (/\/beta$/i.test(trimmed)) return trimmed;
+  if (/\/v\d+$/i.test(trimmed)) return trimmed.replace(/\/v\d+$/i, '/beta');
+  return `${trimmed}/beta`;
+}
+
+function shouldUseDeepSeekPrefix(config: API配置项, request: ChatCompletionRequest): boolean {
+  return request.prefixMode === true && isDeepSeekConfig(config);
+}
+
+function withDeepSeekPrefixMessages(
+  config: API配置项,
+  messages: ChatMessagePayload[],
+  request: ChatCompletionRequest,
+): { config: API配置项; messages: ChatMessagePayload[]; prefix: string } {
+  if (!shouldUseDeepSeekPrefix(config, request)) return { config, messages, prefix: '' };
+  const prefix = request.prefixContent ?? '<thinking>\n';
+  const withoutOldPrefix = messages.filter((msg) => msg.prefix !== true);
+  return {
+    config: {
+      ...config,
+      baseUrl: normalizeDeepSeekPrefixBaseUrl(config.baseUrl),
+    },
+    messages: [
+      ...withoutOldPrefix,
+      { role: 'assistant', content: prefix, prefix: true },
+    ],
+    prefix,
+  };
+}
+
+function stripDeepSeekPrefixMessages(messages: ChatMessagePayload[]): ChatMessagePayload[] {
+  return messages
+    .filter((msg) => msg.prefix !== true)
+    .map((msg) => {
+      const { prefix: _prefix, ...rest } = msg;
+      return rest;
+    });
+}
+
+function mergePrefixResult(prefix: string, text: string): string {
+  if (!prefix) return text;
+  return text.startsWith(prefix) ? text : `${prefix}${text}`;
+}
+
+function isDeepSeekPrefixUnsupportedError(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error ?? '');
+  return /prefix/i.test(text) && /(unsupported|not support|不支持|invalid|beta|400|422)/i.test(text);
 }
 
 function normalizeClaudeBaseUrl(baseUrl: string): string {
@@ -54,6 +117,104 @@ function buildOpenAICompatibleChatUrl(baseUrl: string): string {
   const base = baseUrl.replace(/\/+$/, '');
   if (/\/chat\/completions$/i.test(base)) return base;
   return `${base}/chat/completions`;
+}
+
+type OpenCodeEndpoint = 'responses' | 'messages' | 'gemini' | 'chat';
+
+function normalizeOpenCodeBaseUrl(baseUrl: string): string {
+  let base = baseUrl.trim().replace(/\/+$/, '');
+  base = base.split('?')[0] ?? base;
+  base = base
+    .replace(/\/zen\/go\/v1/i, '/zen/v1')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/messages$/i, '')
+    .replace(/\/responses$/i, '')
+    .replace(/\/models\/[^/]+(?::(?:stream)?generateContent)?$/i, '');
+  if (/\/zen$/i.test(base)) return `${base}/v1`;
+  return base;
+}
+
+function normalizeOpenCodeModelId(model: string): string {
+  return model.trim().replace(/^opencode\//i, '');
+}
+
+function inferOpenCodeEndpoint(model: string): OpenCodeEndpoint {
+  const id = normalizeOpenCodeModelId(model).toLowerCase();
+  if (/^gpt[-_]/.test(id)) return 'responses';
+  if (/^(claude|qwen)/.test(id)) return 'messages';
+  if (/^gemini/.test(id)) return 'gemini';
+  return 'chat';
+}
+
+function withOpenCodeNormalizedConfig(config: API配置项): API配置项 {
+  return {
+    ...config,
+    baseUrl: normalizeOpenCodeBaseUrl(config.baseUrl),
+    model: normalizeOpenCodeModelId(config.model),
+  };
+}
+
+function openCodeHeaders(config: API配置项, mode: 'openai' | 'anthropic' | 'gemini' = 'openai'): HeadersInit {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${config.apiKey}`,
+  };
+  if (mode === 'anthropic') {
+    headers['x-api-key'] = config.apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
+  if (mode === 'gemini') {
+    headers['x-goog-api-key'] = config.apiKey;
+  }
+  return headers;
+}
+
+function buildOpenCodeUrl(config: API配置项, endpoint: OpenCodeEndpoint): string {
+  const base = normalizeOpenCodeBaseUrl(config.baseUrl);
+  if (endpoint === 'responses') return `${base}/responses`;
+  if (endpoint === 'messages') return `${base}/messages`;
+  if (endpoint === 'gemini') return `${base}/models/${encodeURIComponent(normalizeOpenCodeModelId(config.model))}`;
+  return `${base}/chat/completions`;
+}
+
+function buildOpenCodeProxyBody(
+  config: API配置项,
+  endpoint: OpenCodeEndpoint,
+  body: Record<string, unknown>,
+  stream: boolean,
+): string {
+  return JSON.stringify({
+    kind: 'chat',
+    endpoint,
+    baseUrl: normalizeOpenCodeBaseUrl(config.baseUrl),
+    apiKey: config.apiKey,
+    model: normalizeOpenCodeModelId(config.model),
+    stream,
+    body,
+  });
+}
+
+function formatOpenCodeError(config: API配置项, endpoint: OpenCodeEndpoint, status: number, text: string): Error {
+  const model = normalizeOpenCodeModelId(config.model);
+  const lowerText = text.toLowerCase();
+  const path = endpoint === 'responses'
+    ? '/responses'
+    : endpoint === 'messages'
+      ? '/messages'
+      : endpoint === 'gemini'
+        ? '/models/{model}:generateContent'
+        : '/chat/completions';
+  const hint = (() => {
+    if (lowerText.includes('creditserror') || lowerText.includes('insufficient balance')) {
+      return 'OpenCode Zen 工作区余额不足，请先到 OpenCode Billing 充值，或切换到有余额的工作区/API Key。';
+    }
+    if (status === 401 || status === 403) return '请检查 OpenCode Zen API Key、余额、工作区权限和该模型是否已启用。';
+    if (status === 404) return `请检查模型 ID 是否存在于 OpenCode Zen 模型列表；当前模型 ${model || '（空）'} 按 ${path} 路由。GPT 走 /responses，Claude/Qwen 走 /messages，Gemini 走 /models/{model}:generateContent，其余模型走 /chat/completions。`;
+    if (status === 400) return '请检查模型 ID、上下文长度和请求参数；如果模型来自 OpenCode 配置示例，可直接填 opencode/xxx，系统会自动去掉 opencode/ 前缀。';
+    return '请检查 OpenCode Zen Base URL、模型 ID、Key、余额和模型权限。';
+  })();
+  return new Error(`OpenCode Zen API Error ${status}: ${hint}\n${text}`);
 }
 
 function buildQianfanProxyBody(config: API配置项, body: Record<string, unknown>): string {
@@ -79,7 +240,7 @@ function normalizeOpenAICompatibleModel(config: API配置项): string {
 
 function buildOpenAICompatibleRequestBody(
   config: API配置项,
-  messages: Array<{ role: string; content: string }>,
+  messages: ChatMessagePayload[],
   request: ChatCompletionRequest,
   stream: boolean,
 ): Record<string, unknown> {
@@ -237,8 +398,21 @@ export async function chatCompletion(
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
 
+  if (provider === 'opencode') {
+    return streamOpenCode(config, msgs, request, callbacks);
+  }
   if (provider === 'deepseek') {
-    return streamOpenAICompatible(config, msgs, request, callbacks);
+    const payload = withDeepSeekPrefixMessages(config, msgs, request);
+    try {
+      const text = await streamOpenAICompatible(payload.config, payload.messages, request, callbacks);
+      return mergePrefixResult(payload.prefix, text);
+    } catch (error) {
+      if (payload.prefix && isDeepSeekPrefixUnsupportedError(error)) {
+        console.warn('[DeepSeek Prefix] 当前接口不支持 prefix，已自动降级为标准模式。', error);
+        return streamOpenAICompatible(config, stripDeepSeekPrefixMessages(msgs), { ...request, prefixMode: false }, callbacks);
+      }
+      throw error;
+    }
   }
   if (provider === 'claude') {
     return streamClaude(config, msgs, request, callbacks);
@@ -449,6 +623,523 @@ async function completionClaudeNonStream(
   return parseClaudeTextResponse(json);
 }
 
+// ── OpenCode Zen (model-family routed) ──
+
+function buildOpenCodeResponsesBody(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  stream: boolean,
+): Record<string, unknown> {
+  const system = messages
+    .filter((m) => m.role === 'system' && m.content.trim())
+    .map((m) => m.content.trim())
+    .join('\n\n');
+  const input = messages
+    .filter((m) => m.role !== 'system' && m.content.trim())
+    .map((m) => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content,
+    }));
+  if (input.length === 0) {
+    input.push({ role: 'user', content: '请开始本轮回应。' });
+  }
+
+  const bodyObj: Record<string, unknown> = {
+    model: normalizeOpenCodeModelId(config.model),
+    input,
+    max_output_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
+    temperature: request.temperature ?? config.temperature ?? 0.8,
+    stream,
+  };
+  if (system) bodyObj.instructions = system;
+  return bodyObj;
+}
+
+function buildOpenCodeGeminiBody(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+): Record<string, unknown> {
+  const systemMsg = messages.find((m) => m.role === 'system');
+  const contents = messages
+    .filter((m) => m.role !== 'system' && m.content.trim())
+    .map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+  if (contents.length === 0) {
+    contents.push({ role: 'user', parts: [{ text: '请开始本轮回应。' }] });
+  }
+
+  const bodyObj: Record<string, unknown> = {
+    contents,
+    generationConfig: {
+      maxOutputTokens: request.maxTokens ?? config.maxTokens ?? 2048,
+      temperature: request.temperature ?? config.temperature ?? 0.8,
+    },
+  };
+  if (systemMsg?.content.trim()) {
+    bodyObj.systemInstruction = {
+      parts: [{ text: systemMsg.content }],
+    };
+  }
+  return bodyObj;
+}
+
+function buildOpenCodeGeminiUrl(config: API配置项, stream: boolean): string {
+  const base = normalizeOpenCodeBaseUrl(config.baseUrl);
+  const model = encodeURIComponent(normalizeOpenCodeModelId(config.model));
+  return `${base}/models/${model}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
+}
+
+function parseOpenCodeResponsesText(json: unknown): string {
+  const data = json as {
+    output_text?: string;
+    text?: string;
+    choices?: Array<{ message?: { content?: string } }>;
+    output?: Array<{
+      content?: Array<{ type?: string; text?: string; content?: string }>;
+    }>;
+  };
+  if (typeof data.output_text === 'string') return data.output_text;
+  if (typeof data.text === 'string') return data.text;
+  const fromOutput = (data.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .filter((part) => part?.type === 'output_text' || part?.type === 'text' || typeof part?.text === 'string')
+    .map((part) => part.text ?? part.content ?? '')
+    .join('');
+  if (fromOutput) return fromOutput;
+  return data.choices?.[0]?.message?.content ?? '';
+}
+
+function parseOpenCodeGeminiText(json: unknown): string {
+  const data = json as { candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } }> };
+  return (data.candidates?.[0]?.content?.parts ?? [])
+    .filter((part) => !part.thought && typeof part.text === 'string')
+    .map((part) => part.text ?? '')
+    .join('');
+}
+
+function readOpenCodeResponsesStreamDelta(parsed: any): string {
+  if (
+    parsed?.type === 'response.output_text.delta' ||
+    parsed?.type === 'response.text.delta' ||
+    parsed?.type === 'response.content_part.delta'
+  ) {
+    return parsed.delta?.text ?? parsed.delta ?? '';
+  }
+  return parsed?.choices?.[0]?.delta?.content ?? parsed?.delta?.text ?? '';
+}
+
+async function streamOpenCode(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  callbacks: StreamCallbacks,
+): Promise<string> {
+  const normalized = withOpenCodeNormalizedConfig(config);
+  const endpoint = inferOpenCodeEndpoint(normalized.model);
+  if (endpoint === 'chat') {
+    return streamOpenCodeChat(normalized, messages, request, callbacks);
+  }
+  if (endpoint === 'messages') {
+    return streamOpenCodeMessages(normalized, messages, request, callbacks);
+  }
+  if (endpoint === 'gemini') {
+    return streamOpenCodeGemini(normalized, messages, request, callbacks);
+  }
+  return streamOpenCodeResponses(normalized, messages, request, callbacks);
+}
+
+async function streamOpenCodeChat(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  callbacks: StreamCallbacks,
+): Promise<string> {
+  const endpoint: OpenCodeEndpoint = 'chat';
+  const upstreamUrl = buildOpenCodeUrl(config, endpoint);
+  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true);
+  const response = await fetchWithApiErrorReport(config, 'OpenCode Zen Chat 补全', '/api/opencode', 'stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: buildOpenCodeProxyBody(config, endpoint, requestBody, true),
+    signal: request.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'OpenCode Zen Chat 补全',
+      config,
+      status: response.status,
+      requestUrl: upstreamUrl,
+      requestMode: 'stream',
+      responseText: text,
+    });
+    throw formatOpenCodeError(config, endpoint, response.status, text);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed.choices?.[0]?.delta;
+          const text = delta?.content ?? '';
+          if (text) {
+            fullText += text;
+            callbacks.onDelta(text);
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  callbacks.onDone();
+  return fullText;
+}
+
+async function streamOpenCodeMessages(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  callbacks: StreamCallbacks,
+): Promise<string> {
+  const endpoint: OpenCodeEndpoint = 'messages';
+  const upstreamUrl = buildOpenCodeUrl(config, endpoint);
+  const response = await fetchWithApiErrorReport(config, 'OpenCode Zen Messages 补全', '/api/opencode', 'stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: buildOpenCodeProxyBody(config, endpoint, buildClaudeRequestBody(config, messages, request, true), true),
+    signal: request.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'OpenCode Zen Messages 补全',
+      config,
+      status: response.status,
+      requestUrl: upstreamUrl,
+      requestMode: 'stream',
+      responseText: text,
+    });
+    throw formatOpenCodeError(config, endpoint, response.status, text);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let buffer = '';
+  let currentBlockIsThinking = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'content_block_start') {
+            currentBlockIsThinking = parsed.content_block?.type === 'thinking';
+            if (currentBlockIsThinking) continue;
+            const text = parsed.content_block?.text ?? '';
+            if (text) {
+              fullText += text;
+              callbacks.onDelta(text);
+            }
+          } else if (parsed.type === 'content_block_delta') {
+            if (parsed.delta?.type === 'thinking_delta' || currentBlockIsThinking) continue;
+            const text = parsed.delta?.text ?? '';
+            if (text) {
+              fullText += text;
+              callbacks.onDelta(text);
+            }
+          } else if (parsed.type === 'content_block_stop') {
+            currentBlockIsThinking = false;
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  callbacks.onDone();
+  return fullText;
+}
+
+async function streamOpenCodeResponses(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  callbacks: StreamCallbacks,
+): Promise<string> {
+  const endpoint: OpenCodeEndpoint = 'responses';
+  const upstreamUrl = buildOpenCodeUrl(config, endpoint);
+  const response = await fetchWithApiErrorReport(config, 'OpenCode Zen Responses 补全', '/api/opencode', 'stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: buildOpenCodeProxyBody(config, endpoint, buildOpenCodeResponsesBody(config, messages, request, true), true),
+    signal: request.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'OpenCode Zen Responses 补全',
+      config,
+      status: response.status,
+      requestUrl: upstreamUrl,
+      requestMode: 'stream',
+      responseText: text,
+    });
+    throw formatOpenCodeError(config, endpoint, response.status, text);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const text = readOpenCodeResponsesStreamDelta(parsed);
+          if (text) {
+            fullText += text;
+            callbacks.onDelta(text);
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  callbacks.onDone();
+  return fullText;
+}
+
+async function streamOpenCodeGemini(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+  callbacks: StreamCallbacks,
+): Promise<string> {
+  const endpoint: OpenCodeEndpoint = 'gemini';
+  const upstreamUrl = buildOpenCodeGeminiUrl(config, true);
+  const response = await fetchWithApiErrorReport(config, 'OpenCode Zen Gemini 补全', '/api/opencode', 'stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: buildOpenCodeProxyBody(config, endpoint, buildOpenCodeGeminiBody(config, messages, request), true),
+    signal: request.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'OpenCode Zen Gemini 补全',
+      config,
+      status: response.status,
+      requestUrl: upstreamUrl,
+      requestMode: 'stream',
+      responseText: text,
+    });
+    throw formatOpenCodeError(config, endpoint, response.status, text);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const text = parseOpenCodeGeminiText(parsed);
+          if (text) {
+            fullText += text;
+            callbacks.onDelta(text);
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  callbacks.onDone();
+  return fullText;
+}
+
+async function completionOpenCodeNonStream(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+): Promise<string> {
+  const normalized = withOpenCodeNormalizedConfig(config);
+  const endpoint = inferOpenCodeEndpoint(normalized.model);
+
+  if (endpoint === 'chat') {
+    const upstreamUrl = buildOpenCodeUrl(normalized, endpoint);
+    const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Chat 非流式补全', '/api/opencode', 'non-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: buildOpenCodeProxyBody(normalized, endpoint, buildOpenAICompatibleRequestBody(normalized, messages, request, false), false),
+      signal: request.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      void appendApiErrorReport({
+        source: 'OpenCode Zen Chat 非流式补全',
+        config: normalized,
+        status: response.status,
+        requestUrl: upstreamUrl,
+        requestMode: 'non-stream',
+        responseText: text,
+      });
+      throw formatOpenCodeError(normalized, endpoint, response.status, text);
+    }
+    const json = await response.json();
+    return json.choices?.[0]?.message?.content ?? '';
+  }
+
+  if (endpoint === 'messages') {
+    const upstreamUrl = buildOpenCodeUrl(normalized, endpoint);
+    const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Messages 非流式补全', '/api/opencode', 'non-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: buildOpenCodeProxyBody(normalized, endpoint, buildClaudeRequestBody(normalized, messages, request, false), false),
+      signal: request.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      void appendApiErrorReport({
+        source: 'OpenCode Zen Messages 非流式补全',
+        config: normalized,
+        status: response.status,
+        requestUrl: upstreamUrl,
+        requestMode: 'non-stream',
+        responseText: text,
+      });
+      throw formatOpenCodeError(normalized, endpoint, response.status, text);
+    }
+    return parseClaudeTextResponse(await response.json());
+  }
+
+  if (endpoint === 'gemini') {
+    const upstreamUrl = buildOpenCodeGeminiUrl(normalized, false);
+    const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Gemini 非流式补全', '/api/opencode', 'non-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: buildOpenCodeProxyBody(normalized, endpoint, buildOpenCodeGeminiBody(normalized, messages, request), false),
+      signal: request.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      void appendApiErrorReport({
+        source: 'OpenCode Zen Gemini 非流式补全',
+        config: normalized,
+        status: response.status,
+        requestUrl: upstreamUrl,
+        requestMode: 'non-stream',
+        responseText: text,
+      });
+      throw formatOpenCodeError(normalized, endpoint, response.status, text);
+    }
+    return parseOpenCodeGeminiText(await response.json());
+  }
+
+  const upstreamUrl = buildOpenCodeUrl(normalized, endpoint);
+  const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Responses 非流式补全', '/api/opencode', 'non-stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: buildOpenCodeProxyBody(normalized, endpoint, buildOpenCodeResponsesBody(normalized, messages, request, false), false),
+    signal: request.signal,
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'OpenCode Zen Responses 非流式补全',
+      config: normalized,
+      status: response.status,
+      requestUrl: upstreamUrl,
+      requestMode: 'non-stream',
+      responseText: text,
+    });
+    throw formatOpenCodeError(normalized, endpoint, response.status, text);
+  }
+  return parseOpenCodeResponsesText(await response.json());
+}
+
 // ── Gemini streaming ──
 
 async function streamGemini(
@@ -559,8 +1250,9 @@ export async function chatCompletionNonStream(
 ): Promise<string> {
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
-  const upstreamUrl = buildOpenAICompatibleChatUrl(config.baseUrl);
-  const url = isBaiduQianfanConfig(config) ? '/api/qianfan' : upstreamUrl;
+  if (provider === 'opencode') {
+    return completionOpenCodeNonStream(config, msgs, request);
+  }
 
   if (provider === 'claude') {
     return completionClaudeNonStream(config, msgs, request);
@@ -574,31 +1266,48 @@ export async function chatCompletionNonStream(
     });
   }
 
-  const response = await fetchWithApiErrorReport(config, '非流式补全', url, 'non-stream', {
+  const deepSeekPayload = provider === 'deepseek'
+    ? withDeepSeekPrefixMessages(config, msgs, request)
+    : { config, messages: msgs, prefix: '' };
+
+  const effectiveUrl = isBaiduQianfanConfig(deepSeekPayload.config)
+    ? '/api/qianfan'
+    : buildOpenAICompatibleChatUrl(deepSeekPayload.config.baseUrl);
+  const response = await fetchWithApiErrorReport(deepSeekPayload.config, '非流式补全', effectiveUrl, 'non-stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${deepSeekPayload.config.apiKey}`,
     },
-    body: isBaiduQianfanConfig(config)
-      ? buildQianfanProxyBody(config, buildOpenAICompatibleRequestBody(config, msgs, request, false))
-      : JSON.stringify(buildOpenAICompatibleRequestBody(config, msgs, request, false)),
+    body: isBaiduQianfanConfig(deepSeekPayload.config)
+      ? buildQianfanProxyBody(deepSeekPayload.config, buildOpenAICompatibleRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false))
+      : JSON.stringify(buildOpenAICompatibleRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false)),
     signal: request.signal,
   });
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    const error = formatOpenAICompatibleError(deepSeekPayload.config, response.status, text);
+    if (deepSeekPayload.prefix && isDeepSeekPrefixUnsupportedError(error)) {
+      console.warn('[DeepSeek Prefix] 当前接口不支持 prefix，已自动降级为标准模式。', error);
+      return chatCompletionNonStream(config, {
+        ...request,
+        messages: request.messages,
+        prefixMode: false,
+        prefixContent: undefined,
+      });
+    }
     void appendApiErrorReport({
       source: '非流式补全',
-      config,
+      config: deepSeekPayload.config,
       status: response.status,
-      requestUrl: upstreamUrl,
+      requestUrl: effectiveUrl,
       requestMode: 'non-stream',
       responseText: text,
     });
-    throw formatOpenAICompatibleError(config, response.status, text);
+    throw error;
   }
 
   const json = await response.json();
-  return json.choices?.[0]?.message?.content ?? '';
+  return mergePrefixResult(deepSeekPayload.prefix, json.choices?.[0]?.message?.content ?? '');
 }

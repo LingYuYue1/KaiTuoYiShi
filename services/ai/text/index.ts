@@ -12,6 +12,9 @@ export interface ChatRequest {
   streaming?: boolean;
   /** 是否启用标签修复（解析前先 repairTags）。默认 false。 */
   repairTags?: boolean;
+  /** DeepSeek 主剧情锁格式：只在 DeepSeek provider 下生效。 */
+  prefixMode?: boolean;
+  prefixContent?: string;
 }
 
 export interface ChatResult {
@@ -39,6 +42,8 @@ export async function sendChatMessage(
         messages: apiMessages,
         systemPrompt: request.systemPrompt,
         signal: request.signal,
+        prefixMode: request.prefixMode,
+        prefixContent: request.prefixContent,
       },
       callbacks,
     );
@@ -47,6 +52,8 @@ export async function sendChatMessage(
       messages: apiMessages,
       systemPrompt: request.systemPrompt,
       signal: request.signal,
+      prefixMode: request.prefixMode,
+      prefixContent: request.prefixContent,
     });
   }
 

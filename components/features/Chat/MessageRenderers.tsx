@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
-import { shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
+import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
 
 interface ThinkingBlockProps {
   content: string;
@@ -53,7 +53,7 @@ interface BodyBlockProps {
 }
 
 // 三种行格式：【旁白】/【角色名】/【心声】。
-// 无前缀的行兜底为旁白渲染（容忍 AI 偶发不按格式输出），用稍暗的色调暗示。
+// 无前缀的行兜底为旁白渲染（容忍 AI 偶发不按格式输出）。
 type ParsedBodyLine =
   | { kind: 'narration'; text: string }
   | { kind: 'dialogue'; name: string; text: string }
@@ -121,7 +121,7 @@ const SOUND_EFFECT_TAGS = new Set([
 ]);
 
 function parseBodyLines(body: string, traveler?: 角色数据结构, userInput?: string): ParsedBodyLine[] {
-  return body.split(/\r?\n/).flatMap<ParsedBodyLine>((raw) => {
+  return normalizeInlineSpeakerTags(body).split(/\r?\n/).flatMap<ParsedBodyLine>((raw) => {
     const trimmed = raw.trim();
     if (!trimmed) return { kind: 'blank' };
     let m = trimmed.match(NARR_RE);
@@ -422,8 +422,7 @@ function InnerVoiceBubble({ text, traveler }: InnerVoiceBubbleProps) {
 }
 
 // 旁白：全宽容器 + 两侧金色竖条 + 顶部小符号点缀（无头像、无气泡）
-function NarrationLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
-  const baseColor = dimmed ? 'rgba(var(--tj-chat-muted), 0.72)' : 'rgba(var(--tj-chat-text), 0.94)';
+function NarrationLine({ text }: { text: string }) {
   return (
     <div
       className="my-2.5 px-5 py-2.5 relative"
@@ -432,11 +431,10 @@ function NarrationLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
         borderLeft: '2px solid rgba(var(--tj-accent-primary), 0.34)',
         borderRight: '1px solid rgba(var(--tj-border), 0.24)',
       }}
-      title={dimmed ? '该行未识别为 【旁白】/【角色名】/【心声】 任一格式' : undefined}
     >
       <p
         className="text-sm leading-7 whitespace-pre-wrap break-words"
-        style={{ color: baseColor }}
+        style={{ color: 'rgba(var(--tj-chat-text), 0.94)' }}
       >
         {text}
       </p>
@@ -478,8 +476,7 @@ export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true
         if (line.kind === 'narration') {
           return <NarrationLine key={i} text={line.text} />;
         }
-        // unparsed：兜底旁白样式但稍微淡一档，方便玩家肉眼发现 AI 没按格式
-        return <NarrationLine key={i} text={line.text} dimmed />;
+        return <NarrationLine key={i} text={line.text} />;
       })}
     </div>
   );

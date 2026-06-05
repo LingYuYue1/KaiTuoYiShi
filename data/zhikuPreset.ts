@@ -1,5 +1,5 @@
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
-import { 归一化智库系统 } from '@/models/zhiku';
+import { isRetiredZhikuCategory, 归一化智库系统 } from '@/models/zhiku';
 
 export interface BundledZhikuPreset {
   id: string;
@@ -21,52 +21,10 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
     updatedAt: '2026-05-31-character-canon-audit-1',
   },
   {
-    id: 'zhiku_item_core',
-    title: '物品与规则·总览资料',
-    description: '光锥、遗器、奇物、星核等高频物品与规则概念的内置资料。',
-    path: '/zhiku-presets/item-core.json',
-  },
-  {
-    id: 'zhiku_item_expanded',
-    title: '基础资源·扩展资料',
-    description: '信用点、星琼与常用养成资源的补充资料。',
-    path: '/zhiku-presets/item-expanded.json',
-  },
-  {
-    id: 'zhiku_enemy_core',
-    title: '敌对单位·总览资料',
-    description: '反物质军团、末日兽、虚卒与常见敌对概念的内置资料。',
-    path: '/zhiku-presets/enemy-core.json',
-  },
-  {
-    id: 'zhiku_enemy_expanded',
-    title: '敌对单位·扩展资料',
-    description: '敌方指挥官、机械守卫与精英敌人的细化资料。',
-    path: '/zhiku-presets/enemy-expanded.json',
-  },
-  {
-    id: 'zhiku_npc_core',
-    title: '常驻NPC·总览资料',
-    description: '会在正文、手机、新闻和任务中反复出现的常驻NPC类型资料。',
-    path: '/zhiku-presets/npc-core.json',
-  },
-  {
-    id: 'zhiku_npc_expanded',
-    title: '常驻NPC·扩展资料',
-    description: '空间站、罗浮、贝洛伯格与匹诺康尼的常驻NPC细化类型。',
-    path: '/zhiku-presets/npc-expanded.json',
-  },
-  {
     id: 'zhiku_location_core',
     title: '常用地点·细化资料',
     description: '主控舱段、观景车厢、贝洛伯格等高频场景节点的内置资料。',
     path: '/zhiku-presets/location-core.json',
-  },
-  {
-    id: 'zhiku_battle_expanded',
-    title: '战斗机制·扩展资料',
-    description: '弱点击破、追加攻击、反击与状态异常等战斗机制资料。',
-    path: '/zhiku-presets/battle-expanded.json',
   },
   {
     id: 'zhiku_term_core',
@@ -182,6 +140,14 @@ export function isBundledZhikuDuplicate(entry: Partial<智库条目>): boolean {
   return title.includes('黑塔空间站') && raw.includes('今天是昨天的明天');
 }
 
+export function shouldRemoveRetiredZhikuEntry(entry: Partial<智库条目>): boolean {
+  return Boolean(entry.分类 && isRetiredZhikuCategory(entry.分类));
+}
+
+export function removeRetiredZhikuEntries(entries: 智库条目[] | undefined): 智库条目[] {
+  return (entries ?? []).filter((entry) => !shouldRemoveRetiredZhikuEntry(entry));
+}
+
 export function shouldRemoveLegacyZhikuCharacterEntry(entry: Partial<智库条目>, migrationAt: number): boolean {
   if (entry.分类 !== 'character') return false;
   if (isRebuiltZhikuCharacterEntry(entry)) return false;
@@ -225,6 +191,7 @@ export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智
   const source = 归一化智库系统(system);
   return 归一化智库系统({
     条目: source.条目
+      .filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))
       .filter((entry) => !entry.builtin || Boolean(entry.运行时解锁状态 || entry.运行时解锁备注))
       .map((entry) => {
         if (!entry.builtin) return entry;
@@ -261,6 +228,7 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset): Promis
   const isLinkableMigratedLore = LINKABLE_MIGRATED_LORE_PRESET_IDS.has(preset.id);
   return 归一化智库系统({
     条目: entries
+      .filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))
       .filter((entry) => entry.分类 !== 'character' || isRebuiltZhikuCharacterEntry(entry))
       .map((entry, index) => ({
         ...entry,

@@ -41,7 +41,7 @@ const SYSTEMS: SystemMeta[] = [
     key: 'traveler',
     label: '旅人',
     rootLabel: '旅人',
-    desc: '档案、命途、战技、背包、装备',
+    desc: '档案、命途、战技、背包',
     policy: 'writable',
     accent: 'rgb(var(--tj-accent-primary))',
     hiddenFields: ['属性', '主命途'],

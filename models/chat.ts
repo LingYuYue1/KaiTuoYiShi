@@ -1,3 +1,5 @@
+import type { NPC账本选择结果 } from './npc';
+
 export type 消息角色 = 'user' | 'assistant' | 'system';
 
 /** 「本回合 user 发送之前」的变量切片快照。挂在 assistant message 上，用于 reroll 时回滚。
@@ -38,8 +40,38 @@ export interface 聊天消息 {
     recallPreview?: string;
     recallSummary?: string;
     recallFullContent?: string;
+    deepSeekMainMode?: 'off' | 'standard' | 'lock_format';
+    deepSeekCotFakeHistorySkipped?: boolean;
+    deepSeekPrefixMode?: boolean;
+    deepSeekProtocolIssues?: string[];
+    mainRequestMode?: 'stream' | 'non-stream';
+    yitingRecallPreview?: string;
+    yitingRecallRawText?: string;
+    yitingRecallUsedModel?: boolean;
     zhikuRecallPreview?: string;
     zhikuRecallInjection?: string;
+    zhikuRecallRawText?: string;
+    zhikuRecallUsedModel?: boolean;
+    npcLedgerInjection?: {
+      selectedNames: string[];
+      skippedNames: Array<{ name: string; reason: string }>;
+      injected: Array<{
+        name: string;
+        reason: string[];
+        fields: string[];
+        hasRecentInteraction: boolean;
+        hasMustRemember: boolean;
+        hasUnresolvedItems: boolean;
+      }>;
+    };
+    npcLedgerUpdate?: {
+      updatedNames: string[];
+      memoryAppended: string[];
+      ledgerFieldsUpdated: string[];
+      summaryTriggered: string[];
+      warnings: string[];
+    };
+    npcLedgerSelectionRaw?: NPC账本选择结果;
   };
   /** 该 AI 回复对应的「user 发送前」状态快照，用于 reroll 回滚。
    *  生成新 assistant message 时会清掉上一条的 snapshot，保证存档里至多只有最新一条带 snapshot。 */

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
+import { parseActionOptionsBlock } from '@/services/ai/responseParser';
 
 interface InputAreaProps {
   onSend: (text: string) => void;
@@ -51,10 +52,10 @@ export function InputArea({
   const [rerollActionOptions, setRerollActionOptions] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSubmittedRef = useRef('');
-  const visibleActionOptions = useMemo(
-    () => (actionOptions.length > 0 ? actionOptions : rerollActionOptions),
-    [actionOptions, rerollActionOptions],
-  );
+  const visibleActionOptions = useMemo(() => {
+    const source = actionOptions.length > 0 ? actionOptions : rerollActionOptions;
+    return parseActionOptionsBlock(source.join('\n'));
+  }, [actionOptions, rerollActionOptions]);
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
@@ -74,10 +75,21 @@ export function InputArea({
     }
   }, [onAbort]);
 
-  const handlePickOption = useCallback((text: string) => {
-    setInput(text);
-    inputRef.current?.focus();
+  const appendActionOptionToInput = useCallback((current: string, option: string) => {
+    const normalizedCurrent = current.trim();
+    const normalizedOption = option.trim();
+    if (!normalizedOption) return normalizedCurrent;
+    if (!normalizedCurrent) return normalizedOption;
+    if (/[，,、；;。！？!?\s]$/.test(normalizedCurrent)) {
+      return `${normalizedCurrent} ${normalizedOption}`.trim();
+    }
+    return `${normalizedCurrent}；${normalizedOption}`;
   }, []);
+
+  const handlePickOption = useCallback((text: string) => {
+    setInput((current) => appendActionOptionToInput(current, text));
+    inputRef.current?.focus();
+  }, [appendActionOptionToInput]);
 
   const showOptions = !loading && !disabled && visibleActionOptions.length > 0;
 
@@ -219,7 +231,7 @@ export function InputArea({
               key={`${idx}-${opt}`}
               type="button"
               onClick={() => handlePickOption(opt)}
-              title="点击填入输入框，可继续微调"
+              title="点击加入输入框，可继续微调"
               className="group relative px-3 py-1.5 text-xs leading-tight transition-all hover:bg-[rgba(var(--tj-accent-primary),0.16)] whitespace-nowrap shrink-0"
               style={{
                 color: 'rgba(var(--tj-accent-primary), 0.92)',

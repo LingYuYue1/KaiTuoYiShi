@@ -49,6 +49,7 @@ import {
   loadAllBundledZhikuPresets,
   mergeZhikuRuntimeUnlockOverrides,
   removeLegacyZhikuCharacterEntries,
+  removeRetiredZhikuEntries,
 } from '@/data/zhikuPreset';
 import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
@@ -64,6 +65,10 @@ const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'opening_core',
 ]);
 
+function isCalibrationWorldbook(book: 世界书): boolean {
+  return book.entries.some((entry) => entry.scope?.includes('calibration'));
+}
+
 export type ViewState = 'home' | 'new_game' | 'game';
 
 export function migratePromptModules(savedGame: 游戏设置): 提示词模块[] {
@@ -78,11 +83,13 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
     const hit = saved.find((m) => m.id === b.id);
     if (hit) {
       // 内置模块 content / title / description / scope / category 永远以源码为准(UI 上对内置为只读),
-      // 只保留用户可调的 enabled / order / 时间戳。否则 IndexedDB 里持久化的旧 content
+      // 只保留用户可调的主剧情 enabled / order / 时间戳。否则 IndexedDB 里持久化的旧 content
       // 会反向覆盖源码更新,导致改了源码但跑出旧 prompt。
+      // calibration/独立模型模块只是服务层真实 prompt 的只读展示，不是 API 开关；旧存档里曾关闭也必须拉回展示状态。
+      const isCalibrationBuiltin = b.scope?.includes('calibration');
       return {
         ...b,
-        enabled: hit.enabled,
+        enabled: isCalibrationBuiltin ? true : hit.enabled,
         order: hit.order,
         createdAt: hit.createdAt ?? b.createdAt,
         updatedAt: hit.updatedAt ?? b.updatedAt,
@@ -251,6 +258,7 @@ export function useGameState(): UseGameStateReturn {
           额外功能: 归一化额外功能设置(savedGame.额外功能),
           variableApi: savedGame.variableApi ?? defaults.variableApi,
           enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
+          deepSeekMainMode: savedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
           enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
           promptModules: migratePromptModules(savedGame),
         };
@@ -285,7 +293,9 @@ export function useGameState(): UseGameStateReturn {
           await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
         }
         const customEntries = removeLegacyZhikuCharacterEntries(
-          savedZhiku?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
+          removeRetiredZhikuEntries(
+            savedZhiku?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
+          ),
           migrationAt,
         );
         const mergedZhiku = 归一化智库系统({
@@ -304,7 +314,7 @@ export function useGameState(): UseGameStateReturn {
           }
           set智库(归一化智库系统({
             条目: removeLegacyZhikuCharacterEntries(
-              savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry)),
+              removeRetiredZhikuEntries(savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))),
               migrationAt,
             ),
           }));
@@ -347,6 +357,10 @@ export function useGameState(): UseGameStateReturn {
         const merged = builtins.map((builtin) => {
           const saved = savedWorldbooks.find((b) => b.id === builtin.id);
           if (!saved) return builtin;
+          // calibration 内置世界书只是独立模型真实 prompt 的只读资料展示。
+          // 新闻/手机/变量等服务层直接 import 源码常量，旧存档里的编辑/关闭不会影响真实 API；
+          // 因此这里必须回到源码最新版，避免 UI 展示与真实请求再次分叉。
+          if (isCalibrationWorldbook(builtin)) return builtin;
           const savedEntries = saved.entries || [];
           const entries = builtin.entries.map((entry) => {
             const savedEntry = savedEntries.find((item) => item.id === entry.id);
@@ -384,6 +398,7 @@ export function useGameState(): UseGameStateReturn {
             文生图系统: 归一化文生图系统设置(prev.文生图系统),
             记忆系统: 归一化记忆系统设置(prev.记忆系统),
             enableClaudeMode: prev.enableClaudeMode ?? 创建默认游戏设置().enableClaudeMode,
+            deepSeekMainMode: prev.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
           }
         : {
             ...prev,
@@ -393,6 +408,7 @@ export function useGameState(): UseGameStateReturn {
             文生图系统: 创建默认文生图系统设置(),
             记忆系统: 创建默认记忆系统设置(),
             enableClaudeMode: 创建默认游戏设置().enableClaudeMode,
+            deepSeekMainMode: 创建默认游戏设置().deepSeekMainMode,
           },
     );
   }, []);

@@ -49,20 +49,54 @@ export function buildLeanAssistantHistoryContent(msg: 聊天消息): string {
   const parsed = msg.parsedResponse;
   if (!parsed) return compactText(msg.content, 1200);
 
-  const lines: string[] = [];
-  if (msg.gameTime?.trim()) lines.push(`【历史时间】${msg.gameTime.trim()}`);
-
   const body = parsed.body?.trim() || msg.content.trim();
-  if (body) lines.push(`【历史正文】\n${compactText(body, 900)}`);
+  const normalizedBody = normalizeHistoryBodyForPrompt(body);
+  const lines: string[] = [
+    '<thinking>',
+    'Step0: 历史回合瘦身',
+    '- 这是旧回合 assistant 历史压缩，只用于承接最近语气、动作和事实。',
+    '- 历史思维链已省略；新回合必须重新按当前思维链输出完整 Step。',
+    '- 禁止把历史回合号、历史压缩说明或历史标签照抄进新正文。',
+    '</thinking>',
+    '',
+    '<正文>',
+    normalizedBody ? compactText(normalizedBody, 900) : '【旁白】（历史正文已省略）',
+    '</正文>',
+    '',
+    '<短期记忆>',
+    '（历史短期记忆已由记忆系统保存，本条 assistant 历史不重复上传。）',
+    '</短期记忆>',
+    '',
+    '<动态世界>',
+    '（历史动态世界已由世界事件系统保存，本条 assistant 历史不重复上传。）',
+    '</动态世界>',
+    '',
+    '<变量草稿>',
+    '（历史变量草稿已由变量系统处理，本条 assistant 历史不重复上传。）',
+    '</变量草稿>',
+  ];
 
   if (parsed.awakenQuestions?.trim()) {
-    lines.push(`【历史狭间问答】\n${compactText(parsed.awakenQuestions, 360)}`);
+    lines.push('', '<狭间问答>', compactText(parsed.awakenQuestions, 360), '</狭间问答>');
   }
   if (parsed.awakenJudgement?.trim()) {
-    lines.push(`【历史狭间评判】${compactText(parsed.awakenJudgement, 220)}`);
+    lines.push('', '<狭间评判>', compactText(parsed.awakenJudgement, 220), '</狭间评判>');
   }
 
   return lines.join('\n\n').trim() || compactText(msg.content, 1200);
+}
+
+function normalizeHistoryBodyForPrompt(body: string): string {
+  return body
+    .split(/\r?\n/)
+    .map((raw) => {
+      const line = raw.trim();
+      if (!line) return '';
+      if (/^【[^】]+】/.test(line)) return line;
+      return `【旁白】${line}`;
+    })
+    .join('\n')
+    .trim();
 }
 
 export function buildMainRecallQuery(input: {
@@ -119,8 +153,8 @@ export function buildImmediateStoryReview(history: 聊天消息[], maxMessages =
     const events = parsed?.worldEvents?.length ? `动态世界：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 90)).join(' / ')}` : '';
     const storyPlan = hasMeaningfulText(parsed?.storyPlan) ? `剧情规划：${compactText(parsed!.storyPlan, 260)}` : '';
     const needsBodyFallback = !memory && !events && !storyPlan;
-    const body = needsBodyFallback ? (parsed?.body || msg.content) : '';
-    const bodyText = body ? `正文摘录：${compactText(body, 240)}` : '';
+    const body = parsed?.body || msg.content;
+    const bodyText = body ? `正文锚点：${compactText(body, needsBodyFallback ? 260 : 180)}` : '';
     return ['AI', memory, events, storyPlan, bodyText].filter(Boolean).join('｜');
   });
 

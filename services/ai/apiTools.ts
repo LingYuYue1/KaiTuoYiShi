@@ -25,10 +25,77 @@ export async function fetchModels(config: any): Promise<string[]> {
       if (config.provider === 'baidu') {
         return fetchBaiduQianfanModels(baseRaw, apiKey);
       }
+      if (config.provider === 'opencode') {
+        return fetchOpenCodeModels(baseRaw, apiKey);
+      }
       return fetchOpenAICompatibleModels(baseRaw, apiKey);
     },
     { retries: retryCount, label: '模型列表' },
   );
+}
+
+function normalizeOpenCodeModelsBaseUrl(baseRaw: string): string {
+  let base = baseRaw.replace(/\/+$/, '');
+  base = base.split('?')[0] ?? base;
+  base = base
+    .replace(/\/zen\/go\/v1/i, '/zen/v1')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/messages$/i, '')
+    .replace(/\/responses$/i, '')
+    .replace(/\/models(?:\/.*)?$/i, '');
+  if (/^https:\/\/opencode\.ai$/i.test(base)) return `${base}/zen/v1`;
+  if (/\/zen$/i.test(base)) return `${base}/v1`;
+  return base;
+}
+
+async function fetchOpenCodeModels(baseRaw: string, apiKey: string): Promise<string[]> {
+  const base = normalizeOpenCodeModelsBaseUrl(baseRaw);
+  const candidates = Array.from(new Set([`${base}/models`, 'https://opencode.ai/zen/v1/models']));
+  const errors: string[] = [];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch('/api/opencode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'models',
+          baseUrl: url,
+          apiKey,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        void appendApiErrorReport({
+          source: 'OpenCode Zen 模型列表',
+          config: { provider: 'opencode', baseUrl: baseRaw, apiKey },
+          status: res.status,
+          requestUrl: url,
+          requestMode: 'models',
+          responseText: text,
+        });
+        errors.push(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
+        continue;
+      }
+      const data = await res.json();
+      if (data && Array.isArray(data.data)) {
+        const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+        if (ids.length) return ids;
+      }
+      errors.push(`${url} -> 返回格式异常（缺 data 数组）`);
+    } catch (e) {
+      void appendApiErrorReport({
+        source: 'OpenCode Zen 模型列表',
+        config: { provider: 'opencode', baseUrl: baseRaw, apiKey },
+        requestUrl: url,
+        requestMode: 'models',
+        error: e,
+      });
+      errors.push(`${url} -> ${(e as Error).message}`);
+    }
+  }
+
+  throw new Error(`OpenCode Zen 获取模型列表失败：\n${errors.join('\n')}`);
 }
 
 async function fetchOpenAICompatibleModels(baseRaw: string, apiKey: string): Promise<string[]> {

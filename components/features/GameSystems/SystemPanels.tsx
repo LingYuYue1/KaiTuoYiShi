@@ -63,15 +63,6 @@ export function PathPanel() {
   );
 }
 
-export function EquipmentPanel() {
-  return (
-    <SystemPlaceholder
-      label="装备"
-      description="光锥、遗器与战备物资的穿戴与切换。装备会反向影响 AI 对主角能力的描述。"
-    />
-  );
-}
-
 export function InventoryPanel() {
   return (
     <SystemPlaceholder

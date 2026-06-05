@@ -17,7 +17,7 @@ import { WorldbookManagerModal } from '@/components/features/Worldbook/Worldbook
 import { ZhikuManagerModal } from '@/components/features/GameSystems/ZhikuManagerModal';
 import { SaveLoadModal } from '@/components/features/SaveLoad/SaveLoadModal';
 import { GitHubCloudSaveModal } from '@/components/features/CloudSave/GitHubCloudSaveModal';
-import { EquipmentPanel } from '@/components/features/GameSystems/EquipmentPanel';
+import { ReleaseAnnouncementsModal } from '@/components/features/Release/ReleaseAnnouncementsModal';
 import { SkillPanel } from '@/components/features/GameSystems/SkillPanel';
 import { InventoryPanel } from '@/components/features/GameSystems/InventoryPanel';
 import { NewsPanel } from '@/components/features/GameSystems/NewsPanel';
@@ -58,6 +58,7 @@ export default function App() {
   const [showZhikuManager, setShowZhikuManager] = useState(false);
   const [showSaveLoad, setShowSaveLoad] = useState(false);
   const [showCloudSave, setShowCloudSave] = useState(false);
+  const [showReleaseAnnouncements, setShowReleaseAnnouncements] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
@@ -143,6 +144,7 @@ export default function App() {
           onWorldbookManager={() => setShowWorldbookManager(true)}
           onZhikuManager={() => setShowZhikuManager(true)}
           onCloudSave={() => setShowCloudSave(true)}
+          onReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
         />
         {showWorldbookManager && (
           <WorldbookManagerModal
@@ -177,6 +179,11 @@ export default function App() {
           <GitHubCloudSaveModal
             onSave={actions.handleSave}
             onClose={() => setShowCloudSave(false)}
+          />
+        )}
+        {showReleaseAnnouncements && (
+          <ReleaseAnnouncementsModal
+            onClose={() => setShowReleaseAnnouncements(false)}
           />
         )}
         {showSettings && (
@@ -598,13 +605,6 @@ function renderSystemPanel(
       );
     case 'skill':
       return <SkillPanel traveler={ctx.traveler} onTravelerChange={ctx.onTravelerChange} />;
-    case 'equipment':
-      return (
-        <EquipmentPanel
-          traveler={ctx.traveler}
-          onTravelerChange={ctx.onTravelerChange}
-        />
-      );
     case 'inventory':
       return (
         <InventoryPanel
@@ -622,6 +622,7 @@ function renderSystemPanel(
           nsfwEnabled={ctx.gameSettings.enableNsfw}
           maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}
           zhikuSystem={ctx.zhikuSystem}
+          devMode={ctx.gameSettings.devMode}
         />
       );
     case 'album':

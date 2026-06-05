@@ -1,13 +1,10 @@
-// 背包系统数据模型(v2,统一装备+背包)。
+// 背包系统数据模型(v3,玩家装备系统退役后统一为叙事物品背包)。
 //
 // 设计要点:
 // - 6 大分类(食物/消耗品/光锥/武器/纪念品/关键道具)
 // - 品质三档:蓝/紫/金(对应崩铁原著 3/4/5 星)
-// - 装备 + 背包统一 schema:光锥/武器也是背包物品,
-//   通过 `当前装备部位` 字段判断是否已穿戴
+// - 光锥 / 武器 / 衣物 / 饰品只是背包物品类别，不再建立穿戴槽位
 // - 消耗品 / 食物可写 `使用效果`,玩家点「使用」直接走服务层施加到角色
-
-import type { 装备槽位ID } from './equipment';
 
 export type 物品分类 =
   | 'food'
@@ -41,8 +38,8 @@ export const ITEM_CATEGORY_ORDER: 物品分类[] = [
   'key',
 ];
 
-/** 装备类的分类:这些类型可以穿戴。 */
-export const EQUIPPABLE_CATEGORIES: 物品分类[] = ['lightcone', 'weapon', 'clothing', 'accessory'];
+/** 叙事物品分类:默认不堆叠，但不再可穿戴。 */
+export const NARRATIVE_ITEM_CATEGORIES: 物品分类[] = ['lightcone', 'weapon', 'clothing', 'accessory'];
 
 export type 物品品质 = '蓝' | '紫' | '金';
 
@@ -76,12 +73,7 @@ export interface 背包物品 {
   可堆叠: boolean;
   获得回合: number;
 
-  // 装备类专用(仅当 类别 ∈ EQUIPPABLE_CATEGORIES 时有意义)
-  装备槽位?: 装备槽位ID;          // 这件装备的目标槽位
-  当前装备部位?: 装备槽位ID;       // 当前穿戴在哪个槽位(空 = 未穿戴)
   叙事效果?: string[];
-  /** @deprecated 旧数值装备字段，仅用于兼容旧存档。新物品不要再写入。 */
-  属性加成?: Record<string, number>;
 
   // 消耗品 / 食物专用
   使用效果?: 物品使用效果[];
@@ -101,10 +93,7 @@ export function 创建背包物品(input: {
   品质?: 物品品质;
   可堆叠?: boolean;
   获得回合: number;
-  装备槽位?: 装备槽位ID;
   叙事效果?: string[];
-  /** @deprecated 旧数值装备字段，仅用于兼容旧存档。 */
-  属性加成?: Record<string, number>;
   使用效果?: 物品使用效果[];
   价值?: number;
   来源?: 物品来源;
@@ -120,9 +109,7 @@ export function 创建背包物品(input: {
     品质: input.品质 ?? '蓝',
     可堆叠: input.可堆叠 ?? defaultStackable(input.类别),
     获得回合: input.获得回合,
-    装备槽位: input.装备槽位,
     叙事效果: input.叙事效果,
-    属性加成: input.属性加成,
     使用效果: input.使用效果,
     价值: input.价值,
     来源: input.来源,
@@ -131,17 +118,7 @@ export function 创建背包物品(input: {
   };
 }
 
-/** 默认堆叠规则:装备类不堆叠(每件独立),其它默认可叠。 */
+/** 默认堆叠规则:叙事物品不堆叠(每件独立),其它默认可叠。 */
 export function defaultStackable(category: 物品分类): boolean {
-  return !EQUIPPABLE_CATEGORIES.includes(category);
-}
-
-/** 是否属于装备类。 */
-export function 是装备类(item: 背包物品): boolean {
-  return EQUIPPABLE_CATEGORIES.includes(item.类别);
-}
-
-/** 是否已穿戴(装备类专用)。 */
-export function 是已穿戴(item: 背包物品): boolean {
-  return Boolean(item.当前装备部位);
+  return !NARRATIVE_ITEM_CATEGORIES.includes(category);
 }
