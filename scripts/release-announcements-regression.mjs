@@ -32,13 +32,13 @@ assert(
   'In-game announcements must not read CHANGELOG.md directly.',
 );
 assert(
-  data.includes("version: 'v0.6'") &&
-    data.indexOf("version: 'v0.6'") < data.indexOf("version: 'v0.5.2'") &&
-    data.includes('DeepSeek、API 与 NPC 记忆重制优化') &&
-    data.includes('OpenCode Zen 已适配') &&
-    data.includes('NPC 档案升级为更明确的账本结构') &&
-    data.includes('私聊和群聊列表可分开查看'),
-  'Release announcement data must include the current v0.6 player-facing notice.',
+  data.includes("version: 'v0.7'") &&
+    data.indexOf("version: 'v0.7'") < data.indexOf("version: 'v0.5.2'") &&
+    data.includes('智库角色档案、缓存诊断与剧情推进优化') &&
+    data.includes('每回合显示 token 消耗与缓存命中信息') &&
+    data.includes('剧情编织推进改为累计证据与分级跨段纠偏') &&
+    data.includes('跨段纠偏时，中间段会按“已跳过”归档'),
+  'Release announcement data must include the current v0.7 player-facing notice.',
 );
 
 console.log('release announcements regression ok');
