@@ -47,7 +47,7 @@ import {
   buildPersistedZhikuSystem,
   isBundledZhikuDuplicate,
   loadAllBundledZhikuPresets,
-  mergeZhikuRuntimeUnlockOverrides,
+  mergeBundledZhikuSystem,
   removeLegacyZhikuCharacterEntries,
   removeRetiredZhikuEntries,
 } from '@/data/zhikuPreset';
@@ -259,6 +259,7 @@ export function useGameState(): UseGameStateReturn {
           variableApi: savedGame.variableApi ?? defaults.variableApi,
           enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
           deepSeekMainMode: savedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
+          enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
           enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
           promptModules: migratePromptModules(savedGame),
         };
@@ -292,15 +293,7 @@ export function useGameState(): UseGameStateReturn {
         if (!savedMigrationAt) {
           await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
         }
-        const customEntries = removeLegacyZhikuCharacterEntries(
-          removeRetiredZhikuEntries(
-            savedZhiku?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
-          ),
-          migrationAt,
-        );
-        const mergedZhiku = 归一化智库系统({
-          条目: [...mergeZhikuRuntimeUnlockOverrides(preset.条目, savedZhiku?.条目), ...customEntries],
-        });
+        const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
         set智库(mergedZhiku);
         await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
       } catch (err) {

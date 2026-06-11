@@ -32,6 +32,7 @@ export interface 聊天消息 {
   parsedResponse?: 解析后回复;
   inputTokens?: number;
   outputTokens?: number;
+  tokenUsage?: 回合Token消耗;
   responseDurationSec?: number;
   isStreaming?: boolean;
   debugContext?: {
@@ -44,6 +45,9 @@ export interface 聊天消息 {
     deepSeekCotFakeHistorySkipped?: boolean;
     deepSeekPrefixMode?: boolean;
     deepSeekProtocolIssues?: string[];
+    rerollSimilarity?: number;
+    rerollSimilarityRetried?: boolean;
+    cachePrefixDiagnostics?: 缓存前缀诊断;
     mainRequestMode?: 'stream' | 'non-stream';
     yitingRecallPreview?: string;
     yitingRecallRawText?: string;
@@ -76,6 +80,40 @@ export interface 聊天消息 {
   /** 该 AI 回复对应的「user 发送前」状态快照，用于 reroll 回滚。
    *  生成新 assistant message 时会清掉上一条的 snapshot，保证存档里至多只有最新一条带 snapshot。 */
   preTurnSnapshot?: 回合快照;
+}
+
+export interface 缓存前缀诊断 {
+  currentPromptTokens: number;
+  previousPromptTokens?: number;
+  commonPrefixChars: number;
+  commonPrefixTokens: number;
+  commonPrefixRate: number;
+  firstDiffCurrentSection: string;
+  firstDiffPreviousSection?: string;
+  firstDiffCurrentExcerpt: string;
+  firstDiffPreviousExcerpt?: string;
+  changedTailTokens: number;
+  largestChangedSections: Array<{
+    label: string;
+    tokens: number;
+  }>;
+}
+
+export interface 回合Token消耗 {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedTokens?: number;
+  uncachedTokens?: number;
+  cacheHitRate?: number;
+  source: 'api' | 'estimate' | 'mixed';
+  provider?: string;
+  model?: string;
+  usageFormat?: string;
+  usagePath?: string;
+  rawUsageKeys?: string[];
+  cacheDiagnostic?: string;
+  rawUsage?: unknown;
 }
 
 export interface 解析后回复 {

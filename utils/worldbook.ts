@@ -205,10 +205,7 @@ export function buildPromptLikeWorldbookInjection(
 
 function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
   const playerName = ctx.travelerName?.trim() || '无名开拓者';
-  return content
-    .replace(/\{playerName\}/g, playerName)
-    .replace(/玩家姓名/g, playerName)
-    .replace(/主角姓名/g, playerName);
+  return content.replace(/\{playerName\}/g, playerName);
 }
 
 // ── Entry explanation (for UI preview) ──

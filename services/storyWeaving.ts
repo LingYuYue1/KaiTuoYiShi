@@ -97,6 +97,7 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: Pi
     gate.mode === 'strong'
       ? `本回合门禁：已满足强承接条件（${gate.reasons.join('；')}）。可以读取当前段的目标、人物关系和未结事项，但仍不得覆盖已发生事实。`
       : `本回合门禁：未满足强承接条件（${gate.reasons.join('；') || '当前地点、玩家输入和近期上下文未明显命中当前段'}）。当前段只能作为氛围、人物关系、伏笔、未结事项和防抢跑参考，不得直接推进或复演原文段落。`,
+    '剧情推进节奏：强承接只代表可以推进当前段的一拍，不代表必须在一回合内完成多个章节目标；下一段预热只能轻微铺垫，不得把未发生的事件写成既成事实。若进度锚点显示中间段为“已跳过”，只按路线校正理解，不可补写成玩家已经完整经历。',
     '“已经历”的分段只可作为既成事实简略承接，不得重新演一遍；“未开始”的下一段只能轻微铺垫，不得提前揭露角色未知信息。若玩家已经走出不同 IF 线，以已发生剧情为准；若条目标有信息可见性，必须遵守谁知道/谁不知道/读者视角边界。',
     '',
     seriesOverview,
@@ -246,6 +247,10 @@ function formatProgressAnchor(anchor: 剧情编织系统['当前进度']): strin
   appendList(lines, '已完成摘要', anchor.已完成摘要, 6);
   appendList(lines, '当前待解问题', anchor.当前待解问题, 6);
   appendList(lines, '最近判定理由', anchor.最近判定理由, 5);
+  if ((anchor.连续推进证据回合 ?? 0) > 0 || (anchor.卡段回合数 ?? 0) > 0) {
+    lines.push(`推进证据累计：${anchor.连续推进证据回合 ?? 0}/2；卡段回合：${anchor.卡段回合数 ?? 0}`);
+  }
+  appendList(lines, '推进证据', anchor.推进证据 ?? [], 4);
   return lines.join('\n');
 }
 

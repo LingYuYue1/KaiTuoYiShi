@@ -8,7 +8,9 @@
 import type { API配置项 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { buildVariableRegistryPrompt, type VariableState } from '@/utils/variableRegistry';
+import { parseVariableFacts } from '@/utils/variableFacts';
 import { withRetries } from '@/services/ai/retry';
+import { CANONICAL_CHARACTERS } from '@/data/canonicalCharacters';
 import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/companionArchiveWorldbook';
 import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT } from '@/data/variableWorldbook';
 import { VARIABLE_COT_PROMPT } from '@/prompts/cot/variableCot';
@@ -35,6 +37,131 @@ export interface VariableModelRequest {
 export interface VariableModelResult {
   /** 模型的完整原始返回（含 <变量事实> 与兼容 <变量更新> 块）。 */
   rawText: string;
+}
+
+interface VariableProtocolCheck {
+  ok: boolean;
+  issues: string[];
+}
+
+interface EmptyFactsReview {
+  shouldRetry: boolean;
+  npcNames: string[];
+  cueSummary: string;
+}
+
+const LIGHT_MEMORY_CUE_RE = /(一起|共同|同时|同桌|围坐|招呼|邀请|递给|递来|端出|分享|品尝|尝了|吃|喝|点心|糕点|奶酥|茶|咖啡|料理|手艺|食谱|评价|反馈|称赞|夸|吐槽|玩笑|闲聊|聊天|回应|看向|问|答|陪|安慰|训练|复盘|合照)/;
+
+function readObjectString(value: unknown, key: string): string {
+  if (!value || typeof value !== 'object') return '';
+  const raw = (value as Record<string, unknown>)[key];
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+function readObjectBoolean(value: unknown, key: string): boolean {
+  if (!value || typeof value !== 'object') return false;
+  return (value as Record<string, unknown>)[key] === true;
+}
+
+function readObjectArray(value: unknown, key: string): unknown[] {
+  if (!value || typeof value !== 'object') return [];
+  const raw = (value as Record<string, unknown>)[key];
+  return Array.isArray(raw) ? raw : [];
+}
+
+function nameAppearsInText(text: string, name: string): boolean {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  if (trimmed.length > 1) return text.includes(trimmed);
+  const escaped = trimmed.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  return new RegExp(`[【「『（(\\s，。！？；、:]${escaped}[】」』）)\\s，。！？；、:]`).test(text)
+    || new RegExp(`${escaped}[：:和与也把将拿递说问笑看尝吃喝]`).test(text);
+}
+
+function collectImportantNpcNames(state: VariableState): string[] {
+  const names = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value.trim()) names.add(value.trim());
+  };
+  for (const def of CANONICAL_CHARACTERS) {
+    add(def.name);
+    def.aliases?.forEach(add);
+  }
+  const records = Array.isArray(state.NPC) ? state.NPC : [];
+  for (const record of records) {
+    const important =
+      readObjectString(record, '阶位') === 'companion' ||
+      readObjectBoolean(record, '同行') ||
+      readObjectBoolean(record, '原著角色') ||
+      readObjectArray(record, '同行记忆').length > 0 ||
+      Boolean(readObjectString(record, '最近互动')) ||
+      Boolean(readObjectString(record, '当前关系阶段'));
+    if (!important) continue;
+    add(readObjectString(record, '姓名'));
+    add(readObjectString(record, '别名'));
+  }
+  return [...names].filter((name) => name.length >= 1);
+}
+
+function collectPlayerNames(state: VariableState): string[] {
+  const traveler = state.旅人;
+  return [
+    readObjectString(traveler, '姓名'),
+    readObjectString(traveler, '别名'),
+    '玩家',
+    '旅人',
+    '主角',
+    '开拓者',
+    '你',
+  ].filter(Boolean);
+}
+
+function reviewVariableModelContent(rawText: string, request: VariableModelRequest): EmptyFactsReview {
+  const parsed = parseVariableFacts(rawText);
+  if (parsed.parseErrors.length || parsed.facts.length > 0) {
+    return { shouldRetry: false, npcNames: [], cueSummary: '' };
+  }
+  const sourceText = [
+    request.body,
+    request.variableDraft ?? '',
+    request.userInput,
+  ].join('\n');
+  if (!LIGHT_MEMORY_CUE_RE.test(sourceText)) {
+    return { shouldRetry: false, npcNames: [], cueSummary: '' };
+  }
+  const npcNames = collectImportantNpcNames(request.state)
+    .filter((name) => nameAppearsInText(sourceText, name))
+    .slice(0, 6);
+  if (!npcNames.length) {
+    return { shouldRetry: false, npcNames: [], cueSummary: '' };
+  }
+  const hasPlayerReference = collectPlayerNames(request.state)
+    .some((name) => nameAppearsInText(sourceText, name));
+  if (!hasPlayerReference && !/(玩家|旅人|主角|开拓者|你|一同|一起|共同|同时)/.test(sourceText)) {
+    return { shouldRetry: false, npcNames: [], cueSummary: '' };
+  }
+  return {
+    shouldRetry: true,
+    npcNames,
+    cueSummary: '正文命中重要 NPC 与玩家的共同日常互动线索，但 <变量事实> 为空',
+  };
+}
+
+function buildVariableContentReviewPrompt(review: EmptyFactsReview, previousRawText: string): string {
+  const excerpt = previousRawText.length > 1600 ? `${previousRawText.slice(0, 1600)}...` : previousRawText;
+  return [
+    '变量事实内容复审：上一版协议完整，但输出了空 facts。',
+    `${review.cueSummary}。`,
+    `疑似相关 NPC：${review.npcNames.join('、') || '未识别'}`,
+    '请重新审计“重要 NPC 的低风险日常轻记忆”：',
+    '- 如果正文写明已入档/原著/同行 NPC 与玩家一起吃饭、喝茶、品尝点心、训练、复盘、玩笑、等待评价或共同完成小动作，应输出 npc fact。',
+    '- 这类轻记忆只写 memory、recentInteraction、sharedExperiences、longTermImpression；没有明确关系变化时不要写 affinityDelta，不要改 relation，不要覆盖 personality。',
+    '- 不要把玩家品尝公共食物写成背包 item；不要因为短对话机械推进 time。',
+    '- 如果复审后确认只是背景提及、NPC 没有与玩家形成共同动作或可承接细节，仍可输出 {"facts":[]}，但 thinking 必须说明为什么不是轻记忆。',
+    '请只重新输出完整三个标签：<thinking>、<变量事实>、<变量更新>。',
+    '上一版输出摘录：',
+    excerpt,
+  ].join('\n');
 }
 
 /** 变量模型的 system prompt：事实协议 + 登记表 + 兼容命令协议。 */
@@ -99,10 +226,21 @@ export function buildVariableModelPrompt(
     '- 字段：id、name、alias、tier、affinityDelta、affinitySet、relation、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、relationshipStage、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。',
     '- name 是必填字段；即使已经写了 id，也要写中文姓名，例如 `{"id":"npc_march7th","name":"三月七"}`。',
     '- 完整写入规则见下方“变量系统世界书（必须遵守）”中的 `<NPC档案记忆写入法则>`；本节只列事实字段和示例。',
+    '- 原著角色的长期 personality / 性格 不由变量系统改写；长期口吻、人格与行为边界以智库人物主体资料校准。',
+    '- 不要把“本回合沉默/紧张/冷淡”固化成长期性格；这类单回合状态只写进 memory、recentInteraction、relationshipStage、openItems、unresolvedConflicts、mustRemember、doNotForget 或 world_event。',
+    '',
+    '重要 NPC 的低风险日常轻记忆：',
+    '- 对已入档、原著角色、同行角色、当前镜头重点角色，只要正文写明他们与玩家发生了具体共同互动，就应审计 npc 事实；不要求一定有任务、冲突或好感变化。',
+    '- 共同互动包括：一起吃饭/喝茶/品尝点心、一起训练或复盘、共同观看/调查某物、互相开玩笑、角色招呼玩家参与日常、等待玩家评价自己的手艺、对玩家反应作出明确回应。',
+    '- 这类事实只写低风险字段：memory、recentInteraction、sharedExperiences、longTermImpression。没有明确升温/冲突时，不写 affinityDelta，不改 relation，不写夸张 relationshipStage。',
+    '- 多人日常场景优先写 1-3 位与玩家直接交集最强的 NPC：递东西/发起邀请者、与玩家同步行动者、等待玩家反馈者。只在旁边说一句无承接价值的话的角色可以跳过。',
+    '- “纯寒暄不落库”只适用于没有具体对象、没有共同动作、没有可下次引用细节的问候；不要把重要 NPC 的共同日常全部判成无事实。',
     '',
     'NPC 账本示例：',
     '{"type":"npc","id":"npc_march7th","name":"三月七","memory":"三月七把寻找失踪科员的请求交给玩家，并给了备用通讯码。","recentInteraction":"三月七在主控舱段委托玩家寻找失踪科员，并约定用备用通讯码联系。","relationshipStage":"信任中的同行委托","sharedExperiences":["在主控舱段约定一起追查失踪科员"],"openItems":["帮三月七寻找失踪科员并回传线索"],"mustRemember":["三月七给过玩家备用通讯码，后续联系不能写成陌生人"],"evidence":"正文写明三月七交给玩家备用通讯码并委托追查"}',
     '{"type":"npc","id":"npc_danheng","name":"丹恒","memory":"丹恒发现玩家隐瞒了星核线索，暂时压下质问但保留警惕。","recentInteraction":"丹恒要求玩家解释星核线索来源，玩家没有完全说明。","relationshipStage":"合作但存在警惕","unresolvedConflicts":["玩家隐瞒星核线索来源，丹恒尚未完全信任解释"],"doNotForget":["丹恒已经察觉玩家隐瞒星核线索，冲突解决前不能写成毫无芥蒂"],"evidence":"正文写明丹恒沉默片刻后要求玩家之后给出完整解释"}',
+    '{"type":"npc","id":"npc_march7th","name":"三月七","memory":"三月七在观景车厢招呼玩家一起品尝帕姆做的蜂蜜奶酥，记下玩家愿意参与列车日常。","recentInteraction":"三月七和玩家在观景车厢一起尝蜂蜜奶酥，气氛轻松。","sharedExperiences":["在观景车厢一起品尝帕姆做的蜂蜜奶酥"],"evidence":"正文写明三月七主动招呼玩家吃点心，玩家实际品尝"}',
+    '{"type":"npc","id":"npc_stelle","name":"星","memory":"星和玩家在观景车厢同步拿起蜂蜜奶酥，并用营养膏玩笑给出正面评价。","recentInteraction":"星与玩家一起尝点心，用轻松吐槽回应帕姆的手艺。","sharedExperiences":["在观景车厢一起尝蜂蜜奶酥并评价味道"],"evidence":"正文写明星和玩家同时拿点心，星给出正面评价"}',
     '',
     '### 物品：item',
     '- 字段：action="gain"、category、name、description、quantity、quality、stackable、source、sourceDescription、narrativeEffects、evidence。',
@@ -218,21 +356,106 @@ export async function callVariableModel(
     '',
     '请阅读上面的正文，输出 <thinking>、<变量事实> JSON 和兼容 <变量更新> 块。默认让 <变量更新> 留空。',
     '再次强调：只按“主模型回复正文”里实际发生的台前事实落库；剧情编织/智库/新闻/回忆材料如果没有进入正文，不是变量事实。',
+    '重要补充：不要把重要 NPC 与玩家的共同日常全部判成无事实；一起吃点心、喝茶、训练、复盘、玩笑、等待评价等有具体对象和共同动作的场景，应审计低风险 npc 轻记忆。',
+    '协议硬要求：即使没有任何可落库事实，也必须输出 `<变量事实>{"facts":[]}</变量事实>` 和空的 `<变量更新></变量更新>`；禁止只输出 thinking。',
   ].join('\n');
 
-  const rawText = await withRetries(
-    () =>
-      chatCompletionNonStream(config, {
-        messages: [{ role: 'user', content: userMessage }],
-        systemPrompt,
-        signal: request.signal,
-        // 变量模型需要保留可检查的 thinking + facts + 少量兼容命令。
-        maxTokens: config.maxTokens ?? 2200,
-        // 较低温度，减少幻觉。
-        temperature: config.temperature ?? 0.25,
-      }),
+  const requestOnce = (messages: Array<{ role: string; content: string }>) =>
+    chatCompletionNonStream(config, {
+      messages,
+      systemPrompt,
+      signal: request.signal,
+      // 变量模型需要保留可检查的 thinking + facts + 少量兼容命令。
+      maxTokens: config.maxTokens ?? 2200,
+      // 较低温度，减少幻觉。
+      temperature: config.temperature ?? 0.25,
+    });
+
+  let rawText = await withRetries(
+    () => requestOnce([{ role: 'user', content: userMessage }]),
     { retries: request.retryCount ?? 0, signal: request.signal, label: '变量模型' },
   );
 
+  let protocol = checkVariableModelProtocol(rawText);
+  if (!protocol.ok) {
+    rawText = await withRetries(
+      () => requestOnce([
+        { role: 'user', content: userMessage },
+        { role: 'assistant', content: rawText },
+        { role: 'user', content: buildVariableProtocolRepairPrompt(protocol, rawText) },
+      ]),
+      { retries: 1, signal: request.signal, label: '变量模型协议修复' },
+    );
+    protocol = checkVariableModelProtocol(rawText);
+  }
+
+  if (!protocol.ok) {
+    rawText = ensureVariableProtocolFallback(rawText);
+  } else {
+    const contentReview = reviewVariableModelContent(rawText, request);
+    if (contentReview.shouldRetry) {
+      rawText = await withRetries(
+        () => requestOnce([
+          { role: 'user', content: userMessage },
+          { role: 'assistant', content: rawText },
+          { role: 'user', content: buildVariableContentReviewPrompt(contentReview, rawText) },
+        ]),
+        { retries: 1, signal: request.signal, label: '变量模型内容复审' },
+      );
+      protocol = checkVariableModelProtocol(rawText);
+      if (!protocol.ok) {
+        rawText = ensureVariableProtocolFallback(rawText);
+      }
+    }
+  }
+
   return { rawText };
+}
+
+function checkVariableModelProtocol(rawText: string): VariableProtocolCheck {
+  const issues: string[] = [];
+  if (!/<thinking>[\s\S]*?<\/thinking>/i.test(rawText) && !/<think>[\s\S]*?<\/think>/i.test(rawText)) {
+    issues.push('缺少 <thinking>');
+  }
+  if (!/<变量事实>[\s\S]*?<\/变量事实>/i.test(rawText)) {
+    issues.push('缺少 <变量事实>');
+  }
+  if (!/<变量更新>[\s\S]*?<\/变量更新>/i.test(rawText)) {
+    issues.push('缺少 <变量更新>');
+  }
+  return { ok: issues.length === 0, issues };
+}
+
+function buildVariableProtocolRepairPrompt(protocol: VariableProtocolCheck, previousRawText: string): string {
+  const excerpt = previousRawText.length > 1600 ? `${previousRawText.slice(0, 1600)}...` : previousRawText;
+  return [
+    '变量模型协议修复：上一版输出不完整。',
+    `失败项：${protocol.issues.join('；') || '未知协议错误'}。`,
+    '请不要继续解释，不要复述正文，只重新输出完整三个标签：',
+    '1. <thinking>：简短说明提取到什么事实；',
+    '2. <变量事实>：必须是合法 JSON。没有可落库事实时输出 {"facts":[]}；',
+    '3. <变量更新>：必须存在，默认留空。',
+    '上一版输出摘录：',
+    excerpt,
+  ].join('\n');
+}
+
+function ensureVariableProtocolFallback(rawText: string): string {
+  const thinking = (() => {
+    const matched = rawText.match(/<thinking>([\s\S]*?)<\/thinking>/i)
+      ?? rawText.match(/<think>([\s\S]*?)<\/think>/i);
+    const text = matched?.[1]?.trim();
+    return text || '变量模型未返回完整协议；前端使用空事实兜底，避免错误落库。';
+  })();
+  const factsBlock = rawText.match(/<变量事实>[\s\S]*?<\/变量事实>/i)?.[0]
+    ?? '<变量事实>\n{"facts":[]}\n</变量事实>';
+  const updatesBlock = rawText.match(/<变量更新>[\s\S]*?<\/变量更新>/i)?.[0]
+    ?? '<变量更新>\n</变量更新>';
+  return [
+    '<thinking>',
+    thinking,
+    '</thinking>',
+    factsBlock,
+    updatesBlock,
+  ].join('\n');
 }

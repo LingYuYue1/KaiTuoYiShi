@@ -7,6 +7,7 @@ import {
   创建智库条目,
   获取智库人物名,
   获取智库人物名列表,
+  获取智库核心触发词,
   获取智库人物节点标题,
   归一化智库系统,
   解析智库软结构标签,
@@ -14,8 +15,13 @@ import {
   智库分类计数,
 } from '@/models/zhiku';
 import type { 智库系统设置 } from '@/models/settings';
-import { saveSetting } from '@/services/dbService';
-import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
+import { loadSetting, saveSetting } from '@/services/dbService';
+import {
+  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
+  buildPersistedZhikuSystem,
+  loadAllBundledZhikuPresets,
+  mergeBundledZhikuSystem,
+} from '@/data/zhikuPreset';
 
 interface Props {
   zhikuSystem: 智库系统;
@@ -42,6 +48,7 @@ const categoryDescriptions: Record<智库分类, string> = {
 
 const categories: 智库分类[] = ['story', 'character', 'location', 'faction', 'term', 'event'];
 const zhikuScopeOptions = ['主剧情', '手机', '新闻', '变量参考', '剧情编织', '通用', '只读'];
+const isDevBuild = typeof import.meta !== 'undefined' && Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props) {
   const normalized = useMemo(() => 归一化智库系统(zhikuSystem), [zhikuSystem]);
@@ -54,6 +61,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   const [selectedId, setSelectedId] = useState<string | null>(normalized.条目[0]?.id ?? null);
   const [showComposer, setShowComposer] = useState(customEntries.length === 0);
   const [saveFlash, setSaveFlash] = useState(false);
+  const [devRefreshStatus, setDevRefreshStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [expandedSeriesIds, setExpandedSeriesIds] = useState<string[]>([]);
   const [expandedCharacterGroupIds, setExpandedCharacterGroupIds] = useState<string[]>([]);
   const [draft, setDraft] = useState({
@@ -156,6 +164,31 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
     await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
     setSaveFlash(true);
     window.setTimeout(() => setSaveFlash(false), 1200);
+  };
+
+  const handleDevRefreshBundled = async () => {
+    if (!isDevBuild || devRefreshStatus === 'loading') return;
+    setDevRefreshStatus('loading');
+    try {
+      const bundled = await loadAllBundledZhikuPresets({ cacheBust: Date.now() });
+      const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+      const migrationAt = savedMigrationAt ?? Date.now();
+      if (!savedMigrationAt) {
+        await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+      }
+      const next = mergeBundledZhikuSystem(bundled, normalized, migrationAt);
+      onZhikuSystemChange(next);
+      await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
+      setSelectedId((prev) => (prev && next.条目.some((entry) => entry.id === prev) ? prev : next.条目[0]?.id ?? null));
+      setSaveFlash(true);
+      setDevRefreshStatus('done');
+      window.setTimeout(() => setSaveFlash(false), 1200);
+      window.setTimeout(() => setDevRefreshStatus('idle'), 1600);
+    } catch (err) {
+      console.warn('[zhiku] dev refresh bundled presets failed:', err);
+      setDevRefreshStatus('error');
+      window.setTimeout(() => setDevRefreshStatus('idle'), 2400);
+    }
   };
 
   const handleCreateCustom = async () => {
@@ -285,6 +318,23 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
               <StatusChip label="自制" value={String(customEntries.length)} />
               <StatusChip label="总数" value={String(normalized.条目.length)} />
             </div>
+            {isDevBuild && (
+              <button
+                type="button"
+                onClick={handleDevRefreshBundled}
+                disabled={devRefreshStatus === 'loading'}
+                title="重新读取 public/zhiku-presets 内置智库，并保留自制条目与运行时解锁备注。"
+                className="px-3 py-1.5 text-[11px] font-mono tracking-[0.18em] transition-all hover:opacity-90 disabled:cursor-wait disabled:opacity-65"
+                style={{
+                  color: devRefreshStatus === 'done' ? 'rgba(160, 230, 170, 0.96)' : devRefreshStatus === 'error' ? 'rgba(255, 150, 130, 0.95)' : 'rgba(var(--tj-accent-primary), 0.92)',
+                  background: 'rgba(var(--tj-accent-primary), 0.055)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                  clipPath: smallClip,
+                }}
+              >
+                {devRefreshStatus === 'loading' ? '刷新中' : devRefreshStatus === 'done' ? '已刷新' : devRefreshStatus === 'error' ? '刷新失败' : 'DEV 刷新内置智库'}
+              </button>
+            )}
             <div className="flex flex-wrap gap-1.5 md:gap-2">
               <TinyTab active={bucket === 'all'} onClick={() => setBucket('all')}>全部</TinyTab>
               <TinyTab active={bucket === 'builtin'} onClick={() => setBucket('builtin')}>内置</TinyTab>
@@ -476,7 +526,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       <section
         className={`grid min-h-0 min-w-0 flex-1 gap-3 overflow-y-auto overflow-x-hidden p-3 md:overflow-hidden ${
           activeCategory === 'character'
-            ? 'md:grid-cols-[170px_160px_220px_minmax(0,1fr)] lg:grid-cols-[190px_180px_260px_minmax(0,1fr)]'
+            ? 'md:grid-cols-[170px_220px_minmax(0,1fr)] lg:grid-cols-[190px_260px_minmax(0,1fr)]'
             : 'md:grid-cols-[220px_minmax(0,1fr)_minmax(0,1.2fr)]'
         }`}
         style={{
@@ -509,7 +559,6 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
             expandedGroupIds={expandedCharacterGroupIds}
             onToggleGroup={toggleCharacterGroup}
             onSelectProfile={(entryId) => setSelectedId(entryId)}
-            onSelectEntry={(entryId) => setSelectedId((prev) => (prev === entryId ? null : entryId))}
             onUpdate={updateSelected}
             onDelete={deleteSelected}
             onSelectCustomOnly={() => setBucket('custom')}
@@ -593,6 +642,7 @@ type CharacterProfile = {
   groupId: string;
   groupLabel: string;
   groupKind: CharacterGroupKind;
+  groupOrder?: number;
   entries: 智库条目[];
 };
 
@@ -602,10 +652,10 @@ type CharacterGroup = {
   id: string;
   label: string;
   kind: CharacterGroupKind;
+  order?: number;
   profiles: CharacterProfile[];
 };
 
-const characterNodeFallbacks = ['主体人格', '阶段 / 形态', '命途 / 能力', '剧情解锁', '关系边界', 'OOC 风险'];
 const characterGroupFallbacks: Array<{ label: string; kind: CharacterGroupKind; aliases: string[] }> = [
   { label: '星穹列车', kind: '组织', aliases: ['星穹列车', '列车组', '无名客', '列车', '帕姆'] },
   { label: '黑塔空间站', kind: '地区', aliases: ['黑塔空间站', '空间站', '防卫科', '主控舱段', '基座舱段', '收容舱段', '支援舱段'] },
@@ -643,7 +693,7 @@ function buildCharacterWorkspace(entries: 智库条目[]): { profiles: Character
   const profiles = new Map<string, CharacterProfile>();
 
   for (const entry of entries) {
-    const names = getCharacterNames(entry);
+    const names = getCharacterProfileNames(entry);
     for (const name of names) {
       const current = profiles.get(name);
       if (current) {
@@ -657,6 +707,7 @@ function buildCharacterWorkspace(entries: 智库条目[]): { profiles: Character
         groupId: group.id,
         groupLabel: group.label,
         groupKind: group.kind,
+        groupOrder: entry.系列序号,
         entries: [entry],
       });
     }
@@ -679,6 +730,7 @@ function buildCharacterWorkspace(entries: 智库条目[]): { profiles: Character
       id: profile.groupId,
       label: profile.groupLabel,
       kind: profile.groupKind,
+      order: profile.groupOrder,
       profiles: [profile],
     });
   }
@@ -690,8 +742,15 @@ function buildCharacterWorkspace(entries: 智库条目[]): { profiles: Character
         ...group,
         profiles: [...group.profiles].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')),
       }))
-      .sort((a, b) => characterGroupPriority[a.kind] - characterGroupPriority[b.kind] || a.label.localeCompare(b.label, 'zh-Hans-CN')),
+      .sort(compareCharacterGroups),
   };
+}
+
+function compareCharacterGroups(a: CharacterGroup, b: CharacterGroup): number {
+  const orderA = Number.isFinite(a.order) ? a.order ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+  const orderB = Number.isFinite(b.order) ? b.order ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+  if (orderA !== orderB) return orderA - orderB;
+  return characterGroupPriority[a.kind] - characterGroupPriority[b.kind] || a.label.localeCompare(b.label, 'zh-Hans-CN');
 }
 
 function getCharacterName(entry: 智库条目): string {
@@ -702,8 +761,11 @@ function getCharacterNames(entry: 智库条目): string[] {
   return 获取智库人物名列表(entry);
 }
 
-function getCharacterNodeLabel(entry: 智库条目): string {
-  return 获取智库人物节点标题(entry);
+function getCharacterProfileNames(entry: 智库条目): string[] {
+  const primary = getCharacterName(entry).trim();
+  if (primary) return [primary];
+  const names = getCharacterNames(entry).map((name) => name.trim()).filter(Boolean);
+  return names.length ? [names[0]] : [entry.标题];
 }
 
 function resolveCharacterGroup(entry: 智库条目, characterName = getCharacterName(entry)): { id: string; label: string; kind: CharacterGroupKind } {
@@ -796,7 +858,6 @@ function CharacterWorkspace({
   expandedGroupIds,
   onToggleGroup,
   onSelectProfile,
-  onSelectEntry,
   onUpdate,
   onDelete,
   onSelectCustomOnly,
@@ -809,7 +870,6 @@ function CharacterWorkspace({
   expandedGroupIds: string[];
   onToggleGroup: (groupId: string) => void;
   onSelectProfile: (entryId: string) => void;
-  onSelectEntry: (entryId: string) => void;
   onUpdate: (patch: Partial<智库条目>) => void;
   onDelete: () => void;
   onSelectCustomOnly: () => void;
@@ -846,47 +906,6 @@ function CharacterWorkspace({
           ))
         )}
       </main>
-
-      <section className="min-w-0 overflow-x-hidden overflow-y-visible md:min-h-0 md:overflow-y-auto md:pr-1">
-        <div className="mb-3 px-2">
-          <div className="font-serif text-[13px] tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
-            形态 / 节点
-          </div>
-          <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}>
-            人格、命途、阶段与解锁边界
-          </div>
-        </div>
-
-        {!activeProfile ? (
-          <CharacterNodeBlueprint />
-        ) : (
-          <>
-            <div
-              className="mb-3 px-3 py-3"
-              style={{
-                background: 'rgba(var(--tj-bg-secondary), 0.38)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
-                clipPath: smallClip,
-              }}
-            >
-              <div className="font-serif text-[16px] font-semibold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-                {activeProfile.name}
-              </div>
-              <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}>
-                {activeProfile.entries.length} 个资料节点
-              </div>
-            </div>
-            {activeProfile.entries.map((entry) => (
-              <CharacterNodeButton
-                key={entry.id}
-                entry={entry}
-                active={entry.id === activeEntry?.id}
-                onClick={() => onSelectEntry(entry.id)}
-              />
-            ))}
-          </>
-        )}
-      </section>
 
       <div className="min-h-0 min-w-0 overflow-hidden md:h-full">
         {activeEntry ? (
@@ -1008,81 +1027,6 @@ function CharacterProfileButton({ profile, active, onClick }: { profile: Charact
         {profile.groupLabel}
       </div>
     </button>
-  );
-}
-
-function CharacterNodeButton({ entry, active, onClick }: { entry: 智库条目; active: boolean; onClick: () => void }) {
-  const meta = 解析智库软结构标签(entry);
-  const badges = [
-    meta.资料类型,
-    meta.解锁状态 ? `解锁:${meta.解锁状态}` : '',
-    meta.剧透等级 ? `剧透:${meta.剧透等级}` : '',
-  ].filter(Boolean);
-
-  return (
-    <button
-      onClick={onClick}
-      className="mb-2 w-full min-w-0 overflow-hidden px-3 py-3 text-left transition-all last:mb-0"
-      style={{
-        background: active ? 'rgba(var(--tj-accent-primary), 0.09)' : 'rgba(var(--tj-bg-secondary), 0.42)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="font-serif text-[13px] font-semibold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-        {getCharacterNodeLabel(entry)}
-      </div>
-      {badges.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {badges.slice(0, 3).map((badge) => (
-            <span
-              key={badge}
-              className="px-1.5 py-0.5 text-[9px] font-mono tracking-[0.12em]"
-              style={{
-                color: 'rgba(var(--tj-accent-primary), 0.9)',
-                background: 'rgba(var(--tj-accent-primary), 0.07)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
-                clipPath: smallClip,
-              }}
-            >
-              {badge}
-            </span>
-          ))}
-        </div>
-      )}
-      <p className="mt-2 line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
-        {entry.摘要 || entry.原文 || '暂无摘要'}
-      </p>
-      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-mono tracking-[0.16em]">
-        <span style={{ color: 'rgba(160, 200, 160, 0.76)' }}>{entry.builtin ? 'BUILTIN' : 'CUSTOM'}</span>
-        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>{entry.来源 || '未标注来源'}</span>
-      </div>
-    </button>
-  );
-}
-
-function CharacterNodeBlueprint() {
-  return (
-    <div className="space-y-2">
-      {characterNodeFallbacks.map((label) => (
-        <div
-          key={label}
-          className="px-3 py-3"
-          style={{
-            background: 'rgba(var(--tj-bg-secondary), 0.3)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
-            clipPath: smallClip,
-          }}
-        >
-          <div className="font-serif text-[13px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>
-            {label}
-          </div>
-          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
-            等待新人物资料接入
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -1538,6 +1482,28 @@ function DetailPanel({
         </div>
       </div>
 
+      {entry.分类 === 'character' ? (
+        <CharacterProfileWorkspace entry={entry} editable={editable} onUpdate={onUpdate} />
+      ) : (
+        <DetailMetadataForm entry={entry} editable={editable} characterMeta={characterMeta} onUpdate={onUpdate} />
+      )}
+    </section>
+  );
+}
+
+function DetailMetadataForm({
+  entry,
+  editable,
+  characterMeta,
+  onUpdate,
+}: {
+  entry: 智库条目;
+  editable: boolean;
+  characterMeta: ReturnType<typeof 解析智库软结构标签> | null;
+  onUpdate: (patch: Partial<智库条目>) => void;
+}) {
+  return (
+    <>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Field label="分类">
           <select
@@ -1631,8 +1597,928 @@ function DetailPanel({
           style={{ clipPath: smallClip }}
         />
       </Field>
+    </>
+  );
+}
+
+function CharacterProfileWorkspace({
+  entry,
+  editable,
+  onUpdate,
+}: {
+  entry: 智库条目;
+  editable: boolean;
+  onUpdate: (patch: Partial<智库条目>) => void;
+}) {
+  const meta = 解析智库软结构标签(entry);
+  const sections = parseZhikuMarkdownSections(entry.原文);
+  const identity = sections.find((section) => /基础|身份|识别/.test(section.title));
+  const facts = sections.find((section) => /常驻|事实/.test(section.title));
+  const story = sections.find((section) => /角色故事|故事层|经历脉络/.test(section.title));
+  const corpus = sections.find((section) => section.title.includes('语料'));
+  const ability = sections.find((section) => /能力|职责/.test(section.title));
+  const gates = findCharacterGateSection(sections);
+  const injection = sections.find((section) => /注入/.test(section.title));
+  const scope = meta.使用范围.length ? meta.使用范围 : entry.使用范围 ?? [];
+  const identityMap = parseCharacterIdentityFields(identity?.body ?? '');
+  const gateCards = parseCharacterGateCards(gates?.body ?? '');
+  const corpusGroups = parseMarkdownSubsections(corpus?.body ?? '');
+  const storyGroups = parseMarkdownSubsections(story?.body ?? '');
+  const identityRows = buildCharacterIdentityRows(entry, meta, identityMap);
+  const identityMissing = identityRows.filter((row) => row.missing).map((row) => row.label);
+  const anchorRows = buildCharacterAnchorRows(entry);
+  const keywordBuckets = buildCharacterKeywordBuckets(entry, identityMap);
+  const [activeSection, setActiveSection] = useState<CharacterProfileSectionKey>('identity');
+  const healthItems = [
+    { label: '身份完整', value: `${identityRows.length - identityMissing.length}/${identityRows.length}` },
+    { label: '表现锚点', value: `${anchorRows.length}/6` },
+    { label: '故事段', value: String(storyGroups.length || (story ? 1 : 0)) },
+    { label: '语料组', value: String(corpusGroups.length || (corpus ? 1 : 0)) },
+    { label: '门禁卡', value: String(gateCards.length) },
+    { label: '关键词触发', value: `${keywordBuckets.triggerTerms.length}/${keywordBuckets.total}` },
+  ];
+  const keyTags = [
+    meta.资料类型 || entry.资料类型 || '角色档案',
+    meta.解锁状态 || entry.解锁状态 || '未标注解锁',
+    meta.剧透等级 ? `剧透:${meta.剧透等级}` : '',
+    ...scope.slice(0, 3),
+  ].filter(Boolean);
+  const profileSummary = entry.摘要.trim() || facts?.body.split('\n').find((line) => line.trim()) || '角色档案';
+  const sectionTabs: Array<{ key: CharacterProfileSectionKey; label: string; available: boolean }> = [
+    { key: 'identity', label: '身份', available: true },
+    { key: 'health', label: '健康度', available: true },
+    { key: 'facts', label: '事实', available: Boolean(facts) },
+    { key: 'story', label: '故事', available: Boolean(story) },
+    { key: 'anchors', label: '锚点', available: anchorRows.length > 0 },
+    { key: 'corpus', label: '语料', available: Boolean(corpus) },
+    { key: 'ability', label: '能力', available: Boolean(ability) },
+    { key: 'gates', label: '门禁', available: Boolean(gates) },
+    { key: 'injection', label: '注入', available: true },
+  ];
+  const visibleSection = sectionTabs.some((item) => item.key === activeSection && item.available) ? activeSection : 'identity';
+
+  return (
+    <section className="mt-4 space-y-3">
+      <div
+        className="px-3 py-3 md:px-4"
+        style={{
+          background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.1), rgba(var(--tj-bg-primary), 0.26), rgba(var(--tj-surface-strong), 0.52))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.44)',
+          clipPath: smallClip,
+        }}
+      >
+        <div className="min-w-0">
+          <div className="min-w-0">
+            <div className="text-[11px] font-mono tracking-[0.3em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+              角色档案工作台
+            </div>
+            <div className="mt-2 font-serif text-[20px] font-semibold tracking-[0.16em] md:text-[24px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+              {entry.标题}
+            </div>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}>
+              {profileSummary}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {keyTags.map((tag) => (
+            <CharacterBadge key={tag} label={tag} />
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[9.5rem_minmax(0,1fr)]">
+        <aside
+          className="flex gap-1.5 overflow-x-auto pb-1 lg:sticky lg:top-0 lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0"
+          style={{ scrollbarWidth: 'thin' }}
+        >
+          {sectionTabs.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => item.available && setActiveSection(item.key)}
+              disabled={!item.available}
+              className="shrink-0 px-3.5 py-2.5 text-center text-[12px] font-mono font-semibold tracking-[0.16em] transition-all lg:w-full lg:px-4 lg:py-3 lg:text-left lg:text-[13px]"
+              style={{
+                color: visibleSection === item.key ? 'rgb(var(--tj-bg-primary))' : item.available ? 'rgba(var(--tj-accent-primary), 0.9)' : 'rgba(var(--tj-text-secondary), 0.42)',
+                background: visibleSection === item.key ? 'rgba(var(--tj-accent-primary), 0.82)' : 'rgba(var(--tj-bg-primary), 0.2)',
+                boxShadow: visibleSection === item.key
+                  ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.72), 0 0 18px rgba(var(--tj-accent-primary), 0.12)'
+                  : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.13)',
+                clipPath: smallClip,
+                cursor: item.available ? 'pointer' : 'not-allowed',
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </aside>
+
+        <div className="min-w-0 space-y-3">
+          {visibleSection === 'identity' && (
+            <CharacterWorkbenchSection title="基础身份层" eyebrow="防止模型自行补完未知身份" tone="plain">
+              <div className="grid gap-2 md:grid-cols-2">
+                {identityRows.map((row) => (
+                  <CharacterIdentityCell key={row.label} {...row} />
+                ))}
+              </div>
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'health' && (
+            <CharacterWorkbenchSection title="档案健康度" eyebrow="整理资料时优先补缺口" tone={identityMissing.length ? 'gate' : 'plain'}>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                {healthItems.map((item) => (
+                  <CharacterMetric
+                    key={item.label}
+                    label={item.label}
+                    value={item.value}
+                    attention={(item.label === '身份完整' && identityMissing.length > 0) || (item.label === '关键词触发' && keywordBuckets.triggerTerms.length === 0)}
+                  />
+                ))}
+              </div>
+              <div className="mt-3">
+                <div className="mb-1.5 text-[11px] font-mono tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+                  关键词触发
+                </div>
+                <div className="grid gap-2 xl:grid-cols-3">
+                  <CharacterKeywordTile label="核心触发词" keywords={keywordBuckets.triggerTerms} emptyText="未标注" attention={!keywordBuckets.triggerTerms.length} />
+                  <CharacterKeywordTile label="软结构标签" keywords={keywordBuckets.softTags} emptyText="未标注" />
+                  <CharacterKeywordTile label="补充关键词" keywords={keywordBuckets.supplementalTerms} emptyText="未标注" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="mb-1.5 text-[11px] font-mono tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+                  身份缺口
+                </div>
+                {identityMissing.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {identityMissing.map((item) => (
+                      <CharacterBadge key={item} label={item} tone="warn" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
+                    基础身份层已覆盖当前 UI 检查项。
+                  </div>
+                )}
+              </div>
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'facts' && facts && (
+            <CharacterWorkbenchSection title="常驻事实" eyebrow="默认可用的角色底盘" tone="plain">
+              <CharacterTextBlock body={facts.body} compact />
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'story' && story && (
+            <CharacterWorkbenchSection title="角色故事" eyebrow="解释动机，不得整段复读" tone="plain">
+              {storyGroups.length ? (
+                <div className="grid gap-2 xl:grid-cols-2">
+                  {storyGroups.map((group) => (
+                    <CharacterSubsectionCard key={group.title} title={group.title} body={group.body} />
+                  ))}
+                </div>
+              ) : (
+                <CharacterTextBlock body={story.body} />
+              )}
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'anchors' && (
+            <CharacterWorkbenchSection title="表现锚点" eyebrow="保证角色写得像" tone="plain">
+              <div className="grid gap-2 xl:grid-cols-2">
+                {anchorRows.map((row) => (
+                  <CharacterInfoTile key={row.label} label={row.label} value={row.value} danger={row.label === '禁止误写'} />
+                ))}
+              </div>
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'corpus' && corpus && (
+            <CharacterWorkbenchSection title="语料参考" eyebrow="只学节奏，不得复读" tone="corpus">
+              {corpusGroups.length ? (
+                <div className="grid gap-2 xl:grid-cols-2">
+                  {corpusGroups.map((group) => (
+                    <CharacterSubsectionCard key={group.title} title={group.title} body={group.body} />
+                  ))}
+                </div>
+              ) : (
+                <CharacterTextBlock body={corpus.body} />
+              )}
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'ability' && ability && (
+            <CharacterWorkbenchSection title="能力与职责" eyebrow="能力不能覆盖主体人格" tone="plain">
+              <CharacterTextBlock body={ability.body} />
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'gates' && (
+            <CharacterWorkbenchSection title="门禁中心" eyebrow="门禁内容完整可见，按剧情状态注入" tone="gate">
+              {gateCards.length ? (
+                <div className="grid gap-2 xl:grid-cols-2">
+                  {gateCards.map((card) => (
+                    <CharacterGateCard key={card.title} card={card} />
+                  ))}
+                </div>
+              ) : (
+                <CharacterTextBlock body={gates?.body || '暂无门禁资料'} />
+              )}
+            </CharacterWorkbenchSection>
+          )}
+
+          {visibleSection === 'injection' && (
+            <CharacterWorkbenchSection title="本回合注入预览" eyebrow="可见 / 可用 / 可注入分离" tone="inject">
+              <div className="grid gap-2 xl:grid-cols-3">
+                <CharacterInjectionTile label="会注入" value={buildInjectedPreview(anchorRows, scope)} tone="ok" />
+                <CharacterInjectionTile label="仅提醒" value={gateCards.filter((card) => card.locked).map((card) => card.title).join('、') || '暂无被锁门禁'} tone="gate" />
+                <CharacterInjectionTile label="不可臆造" value={identityMap.get('不可臆造') || inferForbiddenIdentityText(entry, identityMissing)} tone="warn" />
+              </div>
+              {injection && <div className="mt-3"><CharacterTextBlock body={injection.body} /></div>}
+            </CharacterWorkbenchSection>
+          )}
+        </div>
+      </div>
     </section>
   );
+}
+
+function CharacterInfoTile({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div
+      className="min-w-0 px-3 py-3"
+      style={{
+        background: danger ? 'rgba(120, 45, 45, 0.16)' : 'rgba(var(--tj-bg-primary), 0.24)',
+        boxShadow: danger ? 'inset 0 0 0 1px rgba(255, 135, 120, 0.2)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.38)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="text-[11px] font-mono tracking-[0.18em]" style={{ color: danger ? 'rgba(255, 165, 150, 0.9)' : 'rgba(var(--tj-accent-primary), 0.88)' }}>
+        {label}
+      </div>
+      <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function CharacterWorkbenchSection({
+  title,
+  eyebrow,
+  tone,
+  children,
+}: {
+  title: string;
+  eyebrow: string;
+  tone: 'corpus' | 'gate' | 'plain' | 'inject';
+  children: ReactNode;
+}) {
+  const accent =
+    tone === 'gate'
+      ? 'rgba(255, 178, 112, 0.9)'
+      : tone === 'inject'
+        ? 'rgba(150, 220, 180, 0.92)'
+      : tone === 'corpus'
+        ? 'rgba(var(--tj-accent-primary), 0.95)'
+        : 'rgba(var(--tj-text-secondary), 0.82)';
+  const background =
+    tone === 'gate'
+      ? 'linear-gradient(135deg, rgba(128, 70, 34, 0.2), rgba(var(--tj-bg-primary), 0.2))'
+      : tone === 'inject'
+        ? 'linear-gradient(135deg, rgba(40, 96, 72, 0.18), rgba(var(--tj-bg-primary), 0.2))'
+      : tone === 'corpus'
+        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.1), rgba(var(--tj-bg-primary), 0.2))'
+        : 'rgba(var(--tj-bg-primary), 0.18)';
+
+  return (
+    <section
+      className="px-3 py-3"
+      style={{
+        background,
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="font-serif text-[15px] font-semibold tracking-[0.16em]" style={{ color: accent }}>
+          {title}
+        </div>
+        <div className="text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+          {eyebrow}
+        </div>
+      </div>
+      <div className="mt-2">{children}</div>
+    </section>
+  );
+}
+
+function CharacterTextBlock({ body, compact = false }: { body: string; compact?: boolean }) {
+  return (
+    <div className={`whitespace-pre-wrap text-xs leading-relaxed ${compact ? 'max-h-44 overflow-y-auto pr-1' : ''}`} style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}>
+      {body.trim() || '暂无内容'}
+    </div>
+  );
+}
+
+function CharacterMetric({ label, value, attention = false }: { label: string; value: string; attention?: boolean }) {
+  return (
+    <div
+      className="min-w-0 px-3 py-2"
+      style={{
+        background: attention ? 'rgba(128, 70, 34, 0.18)' : 'rgba(var(--tj-bg-primary), 0.2)',
+        boxShadow: attention ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.22)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.32)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="truncate text-[10px] font-mono tracking-[0.16em]" style={{ color: attention ? 'rgba(255, 190, 120, 0.88)' : 'rgba(var(--tj-text-secondary), 0.72)' }}>
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-semibold" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function CharacterKeywordTile({
+  label,
+  keywords,
+  emptyText,
+  attention = false,
+}: {
+  label: string;
+  keywords: string[];
+  emptyText: string;
+  attention?: boolean;
+}) {
+  return (
+    <div
+      className="min-w-0 px-3 py-3"
+      style={{
+        background: attention ? 'rgba(128, 70, 34, 0.14)' : 'rgba(var(--tj-bg-primary), 0.2)',
+        boxShadow: attention ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.22)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.32)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="text-[10px] font-mono tracking-[0.16em]" style={{ color: attention ? 'rgba(255, 190, 120, 0.88)' : 'rgba(var(--tj-text-secondary), 0.72)' }}>
+        {label}
+      </div>
+      {keywords.length ? (
+        <div className="mt-2 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto pr-1">
+          {keywords.map((keyword) => (
+            <CharacterBadge key={`${label}:${keyword}`} label={keyword} tone={attention ? 'warn' : 'plain'} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
+          {emptyText}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CharacterBadge({ label, tone = 'plain' }: { label: string; tone?: 'plain' | 'warn' | 'ok' }) {
+  const color = tone === 'warn' ? 'rgba(255, 178, 112, 0.9)' : tone === 'ok' ? 'rgba(155, 225, 175, 0.92)' : 'rgba(var(--tj-accent-primary), 0.92)';
+  return (
+    <span
+      className="px-2 py-0.5 text-[10px] font-mono tracking-[0.14em]"
+      style={{
+        color,
+        background: 'rgba(var(--tj-accent-primary), 0.06)',
+        boxShadow: `inset 0 0 0 1px ${tone === 'warn' ? 'rgba(255, 178, 112, 0.18)' : 'rgba(var(--tj-accent-primary), 0.14)'}`,
+        clipPath: smallClip,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function CharacterIdentityCell({ label, value, missing, wide }: CharacterIdentityRow) {
+  return (
+    <div
+      className={`min-w-0 px-3 py-3 ${wide ? 'md:col-span-2' : ''}`}
+      style={{
+        background: missing ? 'rgba(128, 70, 34, 0.13)' : 'rgba(var(--tj-bg-primary), 0.22)',
+        boxShadow: missing ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.2)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.34)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="text-[11px] font-mono tracking-[0.18em]" style={{ color: missing ? 'rgba(255, 190, 120, 0.9)' : 'rgba(var(--tj-accent-primary), 0.84)' }}>
+        {label}
+      </div>
+      <div className="mt-1 text-xs leading-relaxed" style={{ color: missing ? 'rgba(var(--tj-text-secondary), 0.72)' : 'rgba(var(--tj-text-primary), 0.88)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function CharacterSubsectionCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      className="min-w-0 px-3 py-3"
+      style={{
+        background: 'rgba(var(--tj-bg-primary), 0.2)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.32)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="font-serif text-[13px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.92)' }}>
+        {title}
+      </div>
+      <CharacterTextBlock body={body} />
+    </div>
+  );
+}
+
+function CharacterGateCard({ card }: { card: CharacterGateCardData }) {
+  return (
+    <div
+      className="min-w-0 px-3 py-3"
+      style={{
+        background: card.locked ? 'linear-gradient(135deg, rgba(128, 70, 34, 0.18), rgba(var(--tj-bg-primary), 0.2))' : 'rgba(var(--tj-bg-primary), 0.22)',
+        boxShadow: card.locked ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.24)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.34)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 font-serif text-[14px] font-semibold tracking-[0.12em]" style={{ color: card.locked ? 'rgba(255, 190, 120, 0.94)' : 'rgba(var(--tj-text-primary), 0.9)' }}>
+          {card.title}
+        </div>
+        <CharacterBadge label={card.status} tone={card.locked ? 'warn' : 'ok'} />
+      </div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <CharacterGateRow label="类型" value={card.type || '未标注'} />
+        <CharacterGateRow label="剧透" value={card.spoiler || '未标注'} />
+        <CharacterGateRow label="当前注入" value={card.injection} />
+        <CharacterGateRow label="标准解锁" value={card.condition || '未标注'} />
+      </div>
+      {card.defaultAvailable && (
+        <div className="mt-2">
+          <CharacterGateRow label="默认可用" value={card.defaultAvailable} block />
+        </div>
+      )}
+      {card.defaultHandling && (
+        <div className="mt-2">
+          <CharacterGateRow label="默认处理" value={card.defaultHandling} block />
+        </div>
+      )}
+      {card.usage && (
+        <div className="mt-2">
+          <CharacterGateRow label="使用方式" value={card.usage} block />
+        </div>
+      )}
+      {card.activation && (
+        <div className="mt-2">
+          <CharacterGateRow label="启用方式" value={card.activation} block />
+        </div>
+      )}
+      {card.manifestation && (
+        <div className="mt-2">
+          <CharacterGateRow label="显现机制" value={card.manifestation} block />
+        </div>
+      )}
+      {card.expansion && (
+        <div className="mt-2">
+          <CharacterGateRow label="展开条件 / 使用" value={card.expansion} block />
+        </div>
+      )}
+      {card.triggeredInjection && (
+        <div className="mt-2">
+          <CharacterGateRow label="触发后注入" value={card.triggeredInjection} block />
+        </div>
+      )}
+      {card.knowledgeBoundary && (
+        <div className="mt-2">
+          <CharacterGateRow label="知情边界" value={card.knowledgeBoundary} block />
+        </div>
+      )}
+      {card.rollbackRule && (
+        <div className="mt-2">
+          <CharacterGateRow label="回落规则" value={card.rollbackRule} block />
+        </div>
+      )}
+      {card.appearanceRule && (
+        <div className="mt-2">
+          <CharacterGateRow label="外貌规则" value={card.appearanceRule} block />
+        </div>
+      )}
+      {card.personalityRule && (
+        <div className="mt-2">
+          <CharacterGateRow label="人格规则" value={card.personalityRule} block />
+        </div>
+      )}
+      {card.inheritance && (
+        <div className="mt-2">
+          <CharacterGateRow label="继承规则" value={card.inheritance} block />
+        </div>
+      )}
+      {card.memoryRule && (
+        <div className="mt-2">
+          <CharacterGateRow label="记忆规则" value={card.memoryRule} block />
+        </div>
+      )}
+      {card.earlyBoundary && (
+        <div className="mt-2">
+          <CharacterGateRow label="提前启用边界" value={card.earlyBoundary} block />
+        </div>
+      )}
+      <div className="mt-2">
+        <CharacterGateRow label="允许预热 / 门禁" value={card.preview || card.gate || '未标注'} block />
+      </div>
+      <div className="mt-2">
+        <CharacterGateRow label="禁止行为" value={card.forbidden || '未标注'} block danger />
+      </div>
+    </div>
+  );
+}
+
+function CharacterGateRow({ label, value, block = false, danger = false }: { label: string; value: string; block?: boolean; danger?: boolean }) {
+  return (
+    <div
+      className={`min-w-0 px-2.5 py-2 ${block ? '' : 'sm:min-h-[4.4rem]'}`}
+      style={{
+        background: danger ? 'rgba(120, 45, 45, 0.12)' : 'rgba(var(--tj-bg-secondary), 0.28)',
+        boxShadow: danger ? 'inset 0 0 0 1px rgba(255, 135, 120, 0.16)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.24)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="text-[10px] font-mono tracking-[0.16em]" style={{ color: danger ? 'rgba(255, 165, 150, 0.86)' : 'rgba(var(--tj-text-secondary), 0.72)' }}>
+        {label}
+      </div>
+      <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.84)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function CharacterInjectionTile({ label, value, tone }: { label: string; value: string; tone: 'ok' | 'gate' | 'warn' }) {
+  const color = tone === 'ok' ? 'rgba(155, 225, 175, 0.92)' : tone === 'gate' ? 'rgba(255, 190, 120, 0.9)' : 'rgba(255, 165, 150, 0.9)';
+  return (
+    <div
+      className="min-w-0 px-3 py-3"
+      style={{
+        background: 'rgba(var(--tj-bg-primary), 0.22)',
+        boxShadow: `inset 0 0 0 1px ${tone === 'warn' ? 'rgba(255, 135, 120, 0.18)' : 'rgba(var(--tj-border), 0.34)'}`,
+        clipPath: smallClip,
+      }}
+    >
+      <div className="text-[11px] font-mono tracking-[0.18em]" style={{ color }}>
+        {label}
+      </div>
+      <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.84)' }}>
+        {value || '暂无'}
+      </div>
+    </div>
+  );
+}
+
+function parseZhikuMarkdownSections(raw: string): Array<{ title: string; body: string }> {
+  const sections: Array<{ title: string; body: string[] }> = [];
+  let current: { title: string; body: string[] } | null = null;
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^##\s+(.+?)\s*$/);
+    if (match) {
+      current = { title: match[1].trim(), body: [] };
+      sections.push(current);
+      continue;
+    }
+    if (current) current.body.push(line);
+  }
+  return sections.map((section) => ({ title: section.title, body: section.body.join('\n').trim() }));
+}
+
+type CharacterIdentityRow = {
+  label: string;
+  value: string;
+  missing?: boolean;
+  wide?: boolean;
+};
+
+type CharacterGateCardData = {
+  title: string;
+  status: string;
+  type: string;
+  spoiler: string;
+  injection: string;
+  condition: string;
+  defaultAvailable: string;
+  defaultHandling: string;
+  usage: string;
+  activation: string;
+  manifestation: string;
+  expansion: string;
+  triggeredInjection: string;
+  knowledgeBoundary: string;
+  rollbackRule: string;
+  appearanceRule: string;
+  personalityRule: string;
+  inheritance: string;
+  memoryRule: string;
+  earlyBoundary: string;
+  preview: string;
+  gate: string;
+  forbidden: string;
+  locked: boolean;
+};
+
+type CharacterProfileSectionKey = 'identity' | 'health' | 'facts' | 'story' | 'anchors' | 'corpus' | 'ability' | 'gates' | 'injection';
+
+function parseCharacterIdentityFields(raw: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const lines = raw.split(/\r?\n/);
+  const identityLines: string[] = [];
+  let inIdentitySection = false;
+  for (const line of lines) {
+    const title = line.match(/^##\s+(.+?)\s*$/);
+    if (title) {
+      inIdentitySection = /基础识别|基础身份|身份层/.test(title[1]);
+      continue;
+    }
+    if (inIdentitySection) identityLines.push(line);
+  }
+  const sourceLines = identityLines.length ? identityLines : lines;
+  for (const line of sourceLines) {
+    const trimmed = line.trim().replace(/^[-*]\s*/, '');
+    const match = trimmed.match(/^([^:：]+)[:：]\s*(.+)$/u);
+    if (!match) continue;
+    const key = normalizeCharacterIdentityKey(match[1]);
+    const value = match[2]?.trim();
+    if (key && value) map.set(key, value);
+  }
+  return map;
+}
+
+function findCharacterGateSection(sections: Array<{ title: string; body: string }>): { title: string; body: string } | undefined {
+  return (
+    sections.find((section) => /形态|人格|阶段|门禁|真相/.test(section.title)) ??
+    sections.find((section) =>
+      /边界|写法/.test(section.title) &&
+      /门禁|阶段边界|展开条件|默认处理|知情边界|回落规则|解锁|阶段锁定/.test(section.body),
+    )
+  );
+}
+
+function normalizeCharacterIdentityKey(raw: string): string {
+  const key = raw.trim();
+  if (/角色ID|ID/i.test(key)) return '角色ID';
+  if (/名称|标准名称|显示名称/.test(key)) return '名称';
+  if (/别名|称呼/.test(key)) return '别名';
+  if (/性别/.test(key)) return '性别';
+  if (/年龄/.test(key)) return '年龄状态';
+  if (/出身|出生|故乡|来源地|原籍/.test(key)) return '出身';
+  if (/^(外貌|外观|外貌描述|外观描述)$/.test(key)) return '外貌';
+  if (/^(形态|形态列表|可用形态)$/.test(key)) return '形态';
+  if (/种族|身体|存在形态|存在/.test(key)) return '存在形态';
+  if (/所属|组织|阵营/.test(key)) return '所属';
+  if (/职务|身份/.test(key)) return '身份';
+  if (/信息域|已知|未知|知道|不知道/.test(key)) return '当前信息域';
+  if (/使用范围|可用范围|范围/.test(key)) return '使用范围';
+  if (/不可臆造|不得编造|禁止臆造/.test(key)) return '不可臆造';
+  if (/触发词|关键词/.test(key)) return '触发词';
+  return key;
+}
+
+function buildCharacterIdentityRows(
+  entry: 智库条目,
+  meta: ReturnType<typeof 解析智库软结构标签>,
+  identityMap: Map<string, string>,
+): CharacterIdentityRow[] {
+  const get = (key: string, fallback = '') => identityMap.get(key) || fallback;
+  const roleName = meta.角色名 || entry.关联角色ID || 获取智库人物名(entry);
+  const appearance = get('外貌', get('存在形态', entry.外貌锚点 ?? inferExistenceForm(entry) ?? ''));
+  return [
+    { label: '角色ID', value: get('角色ID', getRoleIdFromKeywords(entry) || '未标注'), missing: !get('角色ID') && !getRoleIdFromKeywords(entry) },
+    { label: '名称', value: get('名称', roleName || entry.标题), missing: !get('名称') && !roleName },
+    { label: '别名 / 称呼', value: get('别名', inferAliases(entry) || '未标注'), missing: !get('别名') && !inferAliases(entry) },
+    { label: '性别 / 性别表达', value: get('性别', inferGender(entry) || '未标注'), missing: !get('性别') && !inferGender(entry) },
+    { label: '年龄状态', value: get('年龄状态', inferAgeState(entry) || '未标注'), missing: !get('年龄状态') && !inferAgeState(entry) },
+    { label: '外貌', value: appearance || '未标注', missing: !appearance, wide: true },
+    { label: '形态', value: get('形态', meta.形态 || '未标注'), missing: !get('形态') && !meta.形态 },
+    { label: '所属 / 组织', value: get('所属', inferOrganization(entry) || '未标注'), missing: !get('所属') && !inferOrganization(entry) },
+    { label: '出身', value: get('出身', '未标注'), missing: !get('出身') },
+    { label: '身份 / 职务', value: get('身份', inferCharacterRole(entry) || '未标注'), missing: !get('身份') && !inferCharacterRole(entry) },
+    { label: '当前信息域', value: get('当前信息域', '按当前剧情阶段与玩家已知事实执行'), missing: false },
+  ];
+}
+
+function buildCharacterAnchorRows(entry: 智库条目): Array<{ label: string; value: string }> {
+  return [
+    { label: '外貌', value: entry.外貌锚点 ?? '' },
+    { label: '性格', value: entry.性格锚点 ?? '' },
+    { label: '说话方式', value: entry.说话方式 ?? '' },
+    { label: '行为习惯', value: entry.行为习惯 ?? '' },
+    { label: '关系边界', value: entry.关系边界 ?? '' },
+    { label: '禁止误写', value: entry.禁止误写 ?? '' },
+  ].filter((row) => row.value.trim());
+}
+
+function buildCharacterKeywordBuckets(entry: 智库条目, identityMap: Map<string, string>): { triggerTerms: string[]; softTags: string[]; supplementalTerms: string[]; total: number } {
+  const keywords = dedupeTextList(entry.关键词 ?? []);
+  const identityTriggers = dedupeTextList([
+    ...获取智库核心触发词(entry),
+    ...splitKeywordText(identityMap.get('触发词') ?? ''),
+  ]);
+  const softTags = keywords.filter((keyword) => Boolean(parseCharacterTag(keyword)));
+  const supplementalTerms = keywords.filter((keyword) => !parseCharacterTag(keyword) && !identityTriggers.includes(keyword));
+  const triggerTerms = identityTriggers;
+  return {
+    triggerTerms,
+    softTags,
+    supplementalTerms,
+    total: keywords.length,
+  };
+}
+
+function splitKeywordText(text: string): string[] {
+  return text
+    .split(/[,，、;；\n]/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function dedupeTextList(items: string[]): string[] {
+  return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
+}
+
+function parseMarkdownSubsections(raw: string): Array<{ title: string; body: string }> {
+  const sections: Array<{ title: string; body: string[] }> = [];
+  let current: { title: string; body: string[] } | null = null;
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^###\s+(.+?)\s*$/);
+    if (match) {
+      current = { title: match[1].trim(), body: [] };
+      sections.push(current);
+      continue;
+    }
+    if (current) current.body.push(line);
+  }
+  return sections.map((section) => ({ title: section.title, body: section.body.join('\n').trim() })).filter((section) => section.body);
+}
+
+function parseCharacterGateCards(raw: string): CharacterGateCardData[] {
+  const cards = parseMarkdownSubsections(raw);
+  return cards.map((section) => {
+    const fields = parseCharacterIdentityFields(section.body);
+    const statusFromTitle = section.title.match(/^(未解锁|已解锁|默认可用|可预热|只读|手动启用|剧情显式触发|边界提醒)[:：]\s*(.+)$/u);
+    const status = fields.get('解锁状态') || statusFromTitle?.[1] || inferGateStatus(section.title, section.body);
+    const title = statusFromTitle?.[2]?.trim() || section.title;
+    const type = fields.get('关系类型') || fields.get('类型') || inferGateType(title, section.body);
+    const spoiler = fields.get('剧透等级') || inferSpoilerLevel(section.body);
+    const condition = fields.get('标准解锁') || fields.get('标准解锁条件') || fields.get('解锁条件') || fields.get('首次可用剧情段') || '';
+    const defaultAvailable = fields.get('默认可用') || '';
+    const defaultHandling = fields.get('默认处理') || '';
+    const usage = fields.get('使用方式') || '';
+    const activation = fields.get('启用方式') || fields.get('触发方式') || '';
+    const manifestation = fields.get('显现机制') || fields.get('显现方式') || '';
+    const expansion = fields.get('展开条件') || fields.get('展开后使用') || '';
+    const triggeredInjection = fields.get('触发后注入') || fields.get('启用后注入') || '';
+    const knowledgeBoundary = fields.get('知情边界') || '';
+    const rollbackRule = fields.get('回落规则') || '';
+    const appearanceRule = fields.get('外貌规则') || '';
+    const personalityRule = fields.get('人格规则') || '';
+    const inheritance = fields.get('继承规则') || '';
+    const memoryRule = fields.get('记忆规则') || fields.get('记忆连续性') || '';
+    const earlyBoundary = fields.get('提前启用边界') || fields.get('提前触发边界') || '';
+    const gate = fields.get('门禁') || extractLineValue(section.body, '门禁') || '';
+    const preview = extractLineValue(section.body, '允许预热') || '';
+    const forbidden = fields.get('禁止') || extractLineValue(section.body, '禁止') || '';
+    const locked = /未解锁|只读|边界提醒|门禁|重大/.test([status, spoiler, section.body].join(' '));
+    const injection = fields.get('当前注入') || fields.get('注入方式') || (locked ? '仅注入边界提醒，不注入完整内容' : '允许按当前剧情完整注入');
+    return {
+      title,
+      status,
+      type,
+      spoiler,
+      condition,
+      defaultAvailable,
+      defaultHandling,
+      usage,
+      activation,
+      manifestation,
+      expansion,
+      triggeredInjection,
+      knowledgeBoundary,
+      rollbackRule,
+      appearanceRule,
+      personalityRule,
+      inheritance,
+      memoryRule,
+      earlyBoundary,
+      preview,
+      gate,
+      forbidden,
+      locked,
+      injection,
+    };
+  });
+}
+
+function extractLineValue(raw: string, label: string): string {
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim().replace(/^[-*]\s*/, '');
+    const match = trimmed.match(/^([^:：]+)[:：]\s*(.+)$/u);
+    if (match && match[1]?.includes(label)) return match[2]?.trim() ?? '';
+  }
+  return '';
+}
+
+function getRoleIdFromKeywords(entry: 智库条目): string {
+  const roleId = (entry.关键词 ?? [])
+    .map(parseCharacterTag)
+    .find((tag) => tag?.key === '角色ID')?.value;
+  return roleId ?? '';
+}
+
+function inferAliases(entry: 智库条目): string {
+  const roleName = entry.关联角色ID || 获取智库人物名(entry);
+  const keywords = (entry.关键词 ?? []).filter((keyword) => !parseCharacterTag(keyword));
+  return keywords.filter((keyword) => keyword !== roleName && keyword.length <= 18).slice(0, 6).join('、');
+}
+
+function inferGender(entry: 智库条目): string {
+  const text = [entry.标题, entry.摘要, entry.原文, entry.外貌锚点, entry.性格锚点].join('\n');
+  if (/少女|女性|女孩|女/.test(text)) return '女性';
+  if (/少年|男性|男孩|男/.test(text)) return '男性';
+  return '';
+}
+
+function inferAgeState(entry: 智库条目): string {
+  const text = [entry.摘要, entry.原文, entry.外貌锚点, entry.禁止误写].join('\n');
+  if (/年龄未知|实际年龄未知|真实年龄/.test(text)) return '实际年龄未知';
+  if (/少女|少年/.test(text)) return '外貌 / 表现为少年少女阶段，实际年龄需按资料注明';
+  return '';
+}
+
+function inferExistenceForm(entry: 智库条目): string {
+  const text = [entry.摘要, entry.原文, entry.外貌锚点].join('\n');
+  if (/人类外观/.test(text)) return '人类外观';
+  if (/机械|机器人|人偶/.test(text)) return '机械 / 人偶相关存在形态';
+  if (/忆者|忆灵|记忆/.test(text)) return '记忆 / 忆质相关存在形态';
+  return '';
+}
+
+function inferOrganization(entry: 智库条目): string {
+  const tag = (entry.关键词 ?? [])
+    .map(parseCharacterTag)
+    .find((item) => item && ['所属', '组织', '阵营', '归属'].includes(item.key));
+  if (tag?.value) return tag.value;
+  const group = resolveCharacterGroup(entry);
+  return group.label === '未分组 / 待整理' ? '' : group.label;
+}
+
+function inferCharacterRole(entry: 智库条目): string {
+  const text = [entry.标题, entry.摘要, entry.原文, ...(entry.关键词 ?? [])].join('\n');
+  if (/星穹列车|无名客/.test(text)) return '星穹列车乘员 / 无名客';
+  if (/开拓者|星核载体/.test(text)) return '开拓者 / 星核载体';
+  return '';
+}
+
+function inferForbiddenIdentityText(entry: 智库条目, missing: string[]): string {
+  const explicit = entry.禁止误写?.trim();
+  const base = explicit || '不得编造未公开身份、真实年龄、过去真相或未解锁形态。';
+  return missing.length ? `${base} 当前身份缺口：${missing.join('、')}。` : base;
+}
+
+function inferGateStatus(title: string, body: string): string {
+  const text = `${title}\n${body}`;
+  if (/未解锁/.test(text)) return '未解锁';
+  if (/已解锁/.test(text)) return '已解锁';
+  if (/默认可用/.test(text)) return '默认可用';
+  if (/剧情显式触发/.test(text)) return '剧情显式触发';
+  if (/可预热/.test(text)) return '可预热';
+  if (/边界提醒/.test(text)) return '边界提醒';
+  if (/只读/.test(text)) return '只读';
+  return '未标注';
+}
+
+function inferGateType(title: string, body: string): string {
+  const text = `${title}\n${body}`;
+  if (/第二人格|关联人格/.test(text)) return '关联人格 / 第二人格';
+  if (/形态|巡猎|饮月|命途/.test(text)) return '普通形态 / 命途阶段';
+  if (/真相|身世|过去/.test(text)) return '剧情 / 真相门禁';
+  return '门禁资料';
+}
+
+function inferSpoilerLevel(body: string): string {
+  if (/重大/.test(body)) return '重大';
+  if (/中等/.test(body)) return '中等';
+  if (/轻微/.test(body)) return '轻微';
+  if (/无/.test(body)) return '无';
+  return '';
+}
+
+function buildInjectedPreview(anchorRows: Array<{ label: string; value: string }>, scope: string[]): string {
+  const anchors = anchorRows.map((row) => row.label).join('、') || '暂无表现锚点';
+  const scopeText = scope.length ? `范围：${scope.slice(0, 4).join(' / ')}` : '范围未标注';
+  return `${anchors}。${scopeText}`;
 }
 
 function StructuredCharacterFields({

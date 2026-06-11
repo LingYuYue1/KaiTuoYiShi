@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const appSource = fs.readFileSync('App.tsx', 'utf8');
 const saveLoadSource = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const zhikuPresetSource = fs.readFileSync('data/zhikuPreset.ts', 'utf8');
 const savePackageSource = fs.readFileSync('services/savePackage.ts', 'utf8');
 const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const sendWorkflowSource = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
@@ -22,8 +23,10 @@ assert(!saveLoadSource.includes('mergePhoneSystems'), '读档不得把目标存�
 assert(saveLoadSource.includes('state.set手机(归一化手机系统(save.手机))'), '读档手机状态必须只来自目标存档本身。');
 assert(
   saveLoadSource.includes('loadAllBundledZhikuPresets') &&
-    saveLoadSource.includes('mergeZhikuRuntimeUnlockOverrides') &&
-    saveLoadSource.includes('save.智库?.条目') &&
+    saveLoadSource.includes('mergeBundledZhikuSystem') &&
+    saveLoadSource.includes('save.智库') &&
+    zhikuPresetSource.includes('mergeZhikuRuntimeUnlockOverrides') &&
+    zhikuPresetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
     saveLoadSource.includes('state.set智库(nextZhiku)'),
   '读档智库必须来自当前内置预设与目标存档自制条目/运行时覆盖，不能沿用当前运行态。',
 );

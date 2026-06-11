@@ -9,16 +9,62 @@ export interface BundledZhikuPreset {
   updatedAt?: string;
 }
 
+export interface LoadBundledZhikuOptions {
+  cacheBust?: string | number;
+}
+
 export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
 export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_';
 
 export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
     id: 'zhiku_character_rebuild_core',
-    title: '人物重建·列车组核心样本',
-    description: '按主体人格、形态阶段、命途能力、剧情解锁与 OOC 风险拆分的新版人物资料样本。',
+    title: '人物重建·星穹列车角色档案',
+    description: '星穹列车角色重构预设：以一个角色一个档案包的方式维护正式角色资料，当前包含星、穹、三月七、丹恒、瓦尔特·杨、姬子与帕姆，并在档案内部承载语料、能力、命途阶段、形态 / 人格边界与过往边界。语料只作口吻参考，禁止照抄或原句搬运。',
     path: '/zhiku-presets/character-rebuild-core.json',
-    updatedAt: '2026-05-31-character-canon-audit-1',
+    updatedAt: '2026-06-10-astral-express-character-profiles-37',
+  },
+  {
+    id: 'zhiku_stellaron_hunters_character_rebuild',
+    title: '人物重建·星核猎手角色档案',
+    description: '星核猎手角色重构预设：以一个角色一个档案包的方式维护卡芙卡、刃、银狼、流萤与艾利欧。档案内部承载常驻事实、角色故事、表现锚点、语料 / 暂无语料边界、能力职责和阶段 / 过往边界；有语料者只作口吻参考，禁止照抄或原句搬运，艾利欧暂不提供语料。',
+    path: '/zhiku-presets/stellaron-hunters-character-rebuild.json',
+    updatedAt: '2026-06-09-stellaron-hunters-character-profiles-11',
+  },
+  {
+    id: 'zhiku_herta_station_character_rebuild',
+    title: '人物重建·黑塔空间站角色档案',
+    description: '黑塔空间站角色重构预设：以一个角色一个档案包的方式维护黑塔、艾丝妲与阿兰。档案内部承载常驻事实、角色故事、表现锚点、语料、职责模块和阶段边界；语料只作口吻参考，禁止照抄或原句搬运。',
+    path: '/zhiku-presets/herta-station-character-rebuild.json',
+    updatedAt: '2026-06-08-herta-station-character-profiles-12',
+  },
+  {
+    id: 'zhiku_genius_society_character_rebuild',
+    title: '人物重建·天才俱乐部角色档案',
+    description: '天才俱乐部角色重构预设：以一个角色一个档案包的方式维护阮·梅与螺丝咕姆，并补充史蒂芬、赞达尔轻量 NPC 锚点。黑塔已归入黑塔空间站角色档案，本分组不重复塞入；档案内部承载常驻事实、角色故事、表现锚点、语料、职责模块和阶段 / 写法边界；语料只作口吻参考，禁止照抄或原句搬运。',
+    path: '/zhiku-presets/genius-society-character-rebuild.json',
+    updatedAt: '2026-06-10-genius-society-character-profiles-8',
+  },
+  {
+    id: 'zhiku_intelligentsia_guild_character_rebuild',
+    title: '人物重建·博识学会角色档案',
+    description: '博识学会角色重构预设：以一个角色一个档案包的方式维护真理医生。档案内部承载常驻事实、角色故事、表现锚点、语料、职责模块和阶段 / 写法边界；语料只作口吻参考，禁止照抄或原句搬运。',
+    path: '/zhiku-presets/intelligentsia-guild-character-rebuild.json',
+    updatedAt: '2026-06-10-intelligentsia-guild-character-profiles-3',
+  },
+  {
+    id: 'zhiku_belobog_character_rebuild',
+    title: '人物重建·贝洛伯格角色档案',
+    description: '贝洛伯格角色重构预设：以一个角色一个档案包的方式维护布洛妮娅、希儿、杰帕德、希露瓦、佩拉、娜塔莎、克拉拉、史瓦罗、桑博、虎克、卢卡、玲可与可可利亚。档案内部承载常驻事实、角色故事、表现锚点、语料、职责模块和阶段 / 写法边界；语料只作口吻参考，禁止照抄或原句搬运。',
+    path: '/zhiku-presets/belobog-character-rebuild.json',
+    updatedAt: '2026-06-10-belobog-character-profiles-15',
+  },
+  {
+    id: 'zhiku_xianzhou_luofu_character_rebuild',
+    title: '人物重建·罗浮仙舟角色档案',
+    description: '罗浮仙舟角色重构预设：以一个角色一个档案包的方式维护景元、彦卿、符玄、白露、停云、灵砂、驭空、青雀、罗刹、镜流、桂乃芬、素裳、藿藿、寒鸦与雪衣；全员已按完整档案骨架精修，并补齐可写外貌与出身锚点，其他仙舟归属角色不放入本分组。',
+    path: '/zhiku-presets/xianzhou-luofu-character-rebuild.json',
+    updatedAt: '2026-06-11-xianzhou-luofu-character-profiles-8',
   },
   {
     id: 'zhiku_location_core',
@@ -187,6 +233,23 @@ export function mergeZhikuRuntimeUnlockOverrides(
   });
 }
 
+export function mergeBundledZhikuSystem(
+  bundledSystem: 智库系统,
+  currentSystem: 智库系统 | null | undefined,
+  migrationAt: number,
+): 智库系统 {
+  const current = 归一化智库系统(currentSystem);
+  const customEntries = removeLegacyZhikuCharacterEntries(
+    removeRetiredZhikuEntries(
+      current.条目.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)),
+    ),
+    migrationAt,
+  );
+  return 归一化智库系统({
+    条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, current.条目), ...customEntries],
+  });
+}
+
 export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智库系统 {
   const source = 归一化智库系统(system);
   return 归一化智库系统({
@@ -216,9 +279,10 @@ export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智
   });
 }
 
-export async function loadBundledZhikuPreset(preset: BundledZhikuPreset): Promise<智库系统> {
+export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
   const separator = preset.path.includes('?') ? '&' : '?';
-  const res = await fetch(`${preset.path}${separator}v=${encodeURIComponent(preset.updatedAt ?? preset.id)}`);
+  const cacheBust = options.cacheBust !== undefined ? `&r=${encodeURIComponent(String(options.cacheBust))}` : '';
+  const res = await fetch(`${preset.path}${separator}v=${encodeURIComponent(preset.updatedAt ?? preset.id)}${cacheBust}`);
   if (!res.ok) {
     throw new Error(`加载智库预设失败：${preset.title}（${res.status}）`);
   }
@@ -243,14 +307,20 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset): Promis
               系列序号: entry.系列序号 || seriesOrder,
               章节序号: entry.章节序号 || index + 1,
             }
-          : {}),
+          : entry.分类 === 'character'
+            ? {
+                系列ID: entry.系列ID || preset.id,
+                系列标题: entry.系列标题 || preset.title,
+                系列序号: entry.系列序号 || seriesOrder,
+              }
+            : {}),
         builtin: true,
       })),
   });
 }
 
-export async function loadAllBundledZhikuPresets(): Promise<智库系统> {
-  const systems = await Promise.all(bundledZhikuPresets.map((preset) => loadBundledZhikuPreset(preset)));
+export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
+  const systems = await Promise.all(bundledZhikuPresets.map((preset) => loadBundledZhikuPreset(preset, options)));
   return 归一化智库系统({
     条目: systems.flatMap((system) => system.条目),
   });

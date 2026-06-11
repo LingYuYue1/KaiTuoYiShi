@@ -92,6 +92,12 @@ export function buildSystemPrompt(
     if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
   }
 
+  // ── 提示词模块·稳定协议（order >= 30：CoT、回复格式、文风、玩家自定义模块） ──
+  // DeepSeek 等前缀缓存要求从请求开头连续一致。把大块固定协议放在动态场景/记忆/智库之前，
+  // 可以让后续回合即便状态块变化，也尽量复用前面的稳定前缀。
+  const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');
+  if (bottomModules) parts.push(bottomModules);
+
   // ── 故事基调（剧情模式）──
   const tone = buildToneSection(worldState);
   if (tone) parts.push(tone);
@@ -109,40 +115,13 @@ export function buildSystemPrompt(
     parts.push(buildMainStoryControlSection(worldState));
   }
 
-  const npcLedgerSelection = npcLedgerSelectionOverride ?? selectNpcLedgersForTurn({
-    records: npcRecords,
-    turnCount: _turnCount,
-    explicitNames: worldbookCtx?.npcNames,
-    sceneNames: worldState.当前时段?.人物?.map((npc) => npc.姓名),
-    recalledNames: worldbookCtx?.npcNames,
-  });
-  const npcLedgerSection = buildNpcLedgerContinuitySection(npcLedgerSelection);
-  if (npcLedgerSection) parts.push(npcLedgerSection);
-
-  const npcContinuitySection = buildNpcContinuitySection(worldState, npcRecords, _turnCount, worldbookCtx?.npcNames);
-  if (npcContinuitySection) parts.push(npcContinuitySection);
-
-  const npcPresenceSection = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames);
-  if (npcPresenceSection) parts.push(npcPresenceSection);
-
-  const timeAnchor = buildCurrentTimeAnchorSection(worldState);
-  if (timeAnchor) parts.push(timeAnchor);
-
-  // ── 当前场景：紧跟时间锚点，确保地点 / 环境优先于资料块被读取 ──
-  const sceneFromWorldbook = buildSceneSection(worldState);
-  if (sceneFromWorldbook) parts.push(sceneFromWorldbook);
-
-  // ── 当前角色 ──
+  // ── 当前角色与相对稳定的角色能力：通常比本回合状态变化慢，放在动态块之前提高缓存前缀长度。 ──
   parts.push(buildCharacterSection(traveler));
 
-  // ── 战技（普通槽位 + 命途槽位 + 已登记招式） ──
   const skillSection = buildSkillSection(traveler);
   if (skillSection) parts.push(skillSection);
 
-  // ── 已知伙伴（只把 tier='companion' 的喂给 AI，路人不进上下文） ──
-  const companionsSection = buildCompanionsSection(npcRecords, _turnCount);
-  if (companionsSection) parts.push(companionsSection);
-
+  // ── 以下为每回合运行时上下文：半稳定资料先放，高波动回合锚点与 NPC 承接块在尾部兜底。 ──
   // ── 背包（最多前 10 件，按 category 分组） ──
   const inventorySection = buildInventorySection(traveler);
   if (inventorySection) parts.push(inventorySection);
@@ -151,12 +130,6 @@ export function buildSystemPrompt(
   const plotSection = buildPlotSection(plotNodes);
   if (plotSection) parts.push(plotSection);
 
-  // ── 剧情编织（玩家导入 TXT 后生成的章节滑窗）──
-  if (settings.剧情编织系统?.enabled && settings.剧情编织系统.currentWindow) {
-    const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);
-    if (storyWeavingSection) parts.push(storyWeavingSection);
-  }
-
   // ── 新闻（最近 5 条标题） ──
   const newsSection = buildNewsSection(news);
   if (newsSection) parts.push(newsSection);
@@ -164,6 +137,23 @@ export function buildSystemPrompt(
   // ── 手机通讯（只注入已压缩摘要与待处理来信，不注入完整聊天原文） ──
   const phoneSection = buildPhoneSection(phone);
   if (phoneSection) parts.push(phoneSection);
+
+  // ── 世界书注入（受 settings.enableWorldbookInjection 控制；首回合规范以条目形式存在于内置世界书）──
+  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
+    const injection = buildWorldbookInjection(worldbooks, worldbookCtx);
+    if (injection) {
+      parts.push(injection);
+    }
+  }
+
+  // ── 高波动回合锚点后置，用于保护 DeepSeek/OpenAI-compatible 前缀缓存。 ──
+  // 时间、场景、即时回顾、智库表演卡、记忆和 NPC 账本仍完整注入，只是不再抢占稳定前缀。
+  const timeAnchor = buildCurrentTimeAnchorSection(worldState);
+  if (timeAnchor) parts.push(timeAnchor);
+
+  // ── 当前场景：仍紧跟时间锚点，确保地点 / 环境优先于后续回忆与角色承接块被读取 ──
+  const sceneFromWorldbook = buildSceneSection(worldState);
+  if (sceneFromWorldbook) parts.push(sceneFromWorldbook);
 
   // ── 忆庭（仅控制召回；入库始终执行，不等同于短期/长期记忆） ──
   const yitingEnabled = settings.记忆系统?.忆庭启用 !== false;
@@ -174,6 +164,12 @@ export function buildSystemPrompt(
     const limit = settings.记忆系统?.忆庭召回条数 ?? 8;
     const yitingHit = retrieveYitingContext(yiting, worldbookCtx.recentUserInput, limit);
     if (yitingHit.injection) parts.push(yitingHit.injection);
+  }
+
+  // ── 剧情编织（玩家导入 TXT 后生成的章节滑窗）：高波动，放在当前事实与即时回顾之后。──
+  if (settings.剧情编织系统?.enabled && settings.剧情编织系统.currentWindow) {
+    const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);
+    if (storyWeavingSection) parts.push(storyWeavingSection);
   }
 
   // ── 智库（只注入按本回合输入检索到的摘要，不注入整库） ──
@@ -199,17 +195,27 @@ export function buildSystemPrompt(
     }
   }
 
-  // ── 世界书注入（受 settings.enableWorldbookInjection 控制；首回合规范以条目形式存在于内置世界书）──
-  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
-    const injection = buildWorldbookInjection(worldbooks, worldbookCtx);
-    if (injection) {
-      parts.push(injection);
-    }
-  }
+  // ── 高波动 NPC 连续性块后置。 ──
+  // 内容仍然完整注入，且位于 system prompt 尾部，对正文生成保持强承接优先级。
+  const npcLedgerSelection = npcLedgerSelectionOverride ?? selectNpcLedgersForTurn({
+    records: npcRecords,
+    turnCount: _turnCount,
+    explicitNames: worldbookCtx?.npcNames,
+    sceneNames: worldState.当前时段?.人物?.map((npc) => npc.姓名),
+    recalledNames: worldbookCtx?.npcNames,
+  });
+  const npcPresenceSection = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames);
+  if (npcPresenceSection) parts.push(npcPresenceSection);
 
-  // ── 提示词模块·尾部（order >= 30：CoT、回复格式、玩家自定义模块） ──
-  const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');
-  if (bottomModules) parts.push(bottomModules);
+  const npcLedgerSection = buildNpcLedgerContinuitySection(npcLedgerSelection);
+  if (npcLedgerSection) parts.push(npcLedgerSection);
+
+  const npcContinuitySection = buildNpcContinuitySection(worldState, npcRecords, _turnCount, worldbookCtx?.npcNames);
+  if (npcContinuitySection) parts.push(npcContinuitySection);
+
+  // ── 已知伙伴（只把 tier='companion' 的喂给 AI，路人不进上下文） ──
+  const companionsSection = buildCompanionsSection(npcRecords, _turnCount);
+  if (companionsSection) parts.push(companionsSection);
 
   return parts.join('\n\n---\n\n');
 }
@@ -248,6 +254,9 @@ export function buildOpeningSystemPrompt(
     if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
   }
 
+  const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');
+  if (bottomModules) parts.push(bottomModules);
+
   const tone = buildToneSection(worldState);
   if (tone) parts.push(tone);
 
@@ -260,10 +269,10 @@ export function buildOpeningSystemPrompt(
   const speakerAttributionSection = buildSpeakerAttributionSection(traveler);
   if (speakerAttributionSection) parts.push(speakerAttributionSection);
 
+  parts.push(buildCharacterSection(traveler));
+
   const timeAnchor = buildCurrentTimeAnchorSection(worldState);
   if (timeAnchor) parts.push(timeAnchor);
-
-  parts.push(buildCharacterSection(traveler));
 
   const openingCutIn = buildOpeningCutInSection(worldState);
   if (openingCutIn) parts.push(openingCutIn);
@@ -284,9 +293,6 @@ export function buildOpeningSystemPrompt(
     });
     if (injection) parts.push(injection);
   }
-
-  const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');
-  if (bottomModules) parts.push(bottomModules);
 
   return parts.join('\n\n---\n\n');
 }
@@ -394,13 +400,18 @@ function buildResponseLengthSection(settings: 游戏设置): string {
 
 function buildSpeakerAttributionSection(traveler: 角色数据结构): string {
   const playerName = getPromptPlayerName(traveler);
+  const playerTag = `【${playerName}】`;
   return [
     '# 发言归属硬约束',
     '',
-    `- 【${playerName}】只允许承载玩家本回合输入中明确说出口的原话，或玩家明确要求转述为自己说出的话。`,
+    `- 当前玩家角色的发言标签固定为 ${playerTag}；玩家已明确说出口的原话，只能使用这个真实标签承载。`,
+    '- 禁止把说明词“玩家角色名”当成角色标签输出；正文中不要生成任何包含“玩家角色名”的发言标签。',
+    `- ${playerTag} 只允许承载玩家本回合输入中明确说出口的原话，或玩家明确要求转述为自己说出的话。`,
+    `- 玩家本回合明确输入了引号原话、冒号后发言、问句、命令短句、自我介绍或短促回应时，正文必须拆出一行 ${playerTag} + 原话；不要写成【旁白】你说……，也不要让旁白把玩家原话吞成概括。`,
+    `- 玩家输入同时包含动作与原话时：动作写进【旁白】，原话单独写成 ${playerTag}；不要把两者合并到同一条旁白或同一条玩家气泡。`,
     '- 玩家只是行动、观察、沉默、看向某人、移动或心理活动时，不要把旁白、环境反应、拟声词、怪物吼叫或 NPC 台词写到玩家名下。',
     '- NPC 说话必须使用对应 NPC 名牌，例如【三月七】、【丹恒】；不知道说话者时使用【旁白】，不要用玩家名代替。',
-    '- 环境音效、生物吼叫、爆炸声、机械声、脚步声、广播声等只能写成【旁白】描述，禁止写成【玩家名】轰隆、【玩家名】吼、【玩家名】滴滴。', 
+    `- 环境音效、生物吼叫、爆炸声、机械声、脚步声、广播声等只能写成【旁白】描述，禁止写到 ${playerTag} 下。`,
     '- 可以在【旁白】中转述“你听见……”“她说……”，但转述内容不能冒充玩家发言；除非玩家输入明确包含这句话。', 
   ].join('\n');
 }
@@ -429,9 +440,7 @@ function injectPromptModules(
       m.content
         .replace(/\{wordCountTarget\}/g, String(ctx.wordCountTarget))
         .replace(/\{personLabel\}/g, ctx.personLabel)
-        .replace(/\{playerName\}/g, ctx.playerName)
-        .replace(/玩家姓名/g, ctx.playerName)
-        .replace(/主角姓名/g, ctx.playerName),
+        .replace(/\{playerName\}/g, ctx.playerName),
     )
     .join('\n\n---\n\n');
 }

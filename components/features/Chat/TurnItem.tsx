@@ -4,6 +4,7 @@ import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
 import { BodyBlock, StreamingPreview } from './MessageRenderers';
 import { getPath } from '@/data/journeyPresets';
+import { formatTokenCount } from '@/utils/tokenEstimate';
 
 interface TurnItemProps {
   message: 聊天消息;
@@ -17,7 +18,7 @@ interface TurnItemProps {
   fallbackPathId?: string;
 }
 
-type ToolKey = 'edit' | 'thinking' | 'variables' | 'storyPlan' | 'summary' | 'raw' | 'context';
+type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
 export function TurnItem({ message, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: TurnItemProps) {
   const isUser = message.role === 'user';
@@ -151,8 +152,6 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
     if (key === 'edit') setDraft(parsed.body);
   };
 
-  const hasVariables = Object.keys(parsed.commands).length > 0 || parsed.worldEvents.length > 0;
-
   // 命途狭间消息识别:出题回合 awakenQuestions 非空,评判回合 awakenJudgement 非空。
   // 满足其一即套狭间皮肤(暗紫红 + 赤金 + 暗光晕)以视觉上和主剧情消息区分。
   const awakeningKind: '出题' | '评判' | null =
@@ -193,11 +192,10 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
           onClick={() => toggle('thinking')}
         />
         <ToolButton
-          label="变量记录"
-          glyph="◈"
-          active={openTool === 'variables'}
-          disabled={!hasVariables}
-          onClick={() => toggle('variables')}
+          label="响应详情"
+          glyph="◉"
+          active={openTool === 'usage'}
+          onClick={() => toggle('usage')}
         />
         <TurnBadge value={message.gameTime ?? '?'} />
         <ToolButton
@@ -256,8 +254,8 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
           {openTool === 'thinking' && (
             <PanelText content={parsed.thinking?.trim() || '本回合未输出思维链。'} label="思绪痕迹" />
           )}
-          {openTool === 'variables' && (
-            <VariablesPanel commands={parsed.commands} worldEvents={parsed.worldEvents} />
+          {openTool === 'usage' && (
+            <UsagePanel message={message} onClose={() => setOpenTool(null)} />
           )}
           {openTool === 'storyPlan' && (
             <PanelText content={parsed.storyPlan?.trim() || '本回合没有剧情规划保留项。'} label="剧情规划" />
@@ -386,7 +384,29 @@ function formatDebugContext(message: 聊天消息): string {
     debug.deepSeekProtocolIssues?.length
       ? `协议校验失败项：${debug.deepSeekProtocolIssues.join('；')}`
       : '协议校验失败项：无',
+    typeof debug.rerollSimilarity === 'number'
+      ? `重roll相似度：${Math.round(debug.rerollSimilarity * 100)}%`
+      : '重roll相似度：未触发',
+    `重roll自动换写：${debug.rerollSimilarityRetried ? '是' : '否'}`,
   ].join('\n');
+  const cachePrefixDiagnostics = debug.cachePrefixDiagnostics
+    ? [
+        '【缓存前缀诊断】',
+        `公共前缀：${formatTokenCount(debug.cachePrefixDiagnostics.commonPrefixTokens)} / ${formatTokenCount(debug.cachePrefixDiagnostics.currentPromptTokens)} tokens（${(debug.cachePrefixDiagnostics.commonPrefixRate * 100).toFixed(1)}%）`,
+        `首次变化（本回合）：${debug.cachePrefixDiagnostics.firstDiffCurrentSection}`,
+        debug.cachePrefixDiagnostics.firstDiffPreviousSection
+          ? `首次变化（上一回合）：${debug.cachePrefixDiagnostics.firstDiffPreviousSection}`
+          : '',
+        `变化后估算：${formatTokenCount(debug.cachePrefixDiagnostics.changedTailTokens)} tokens`,
+        debug.cachePrefixDiagnostics.largestChangedSections.length
+          ? `变化后大块：${debug.cachePrefixDiagnostics.largestChangedSections.map((item) => `${item.label}≈${formatTokenCount(item.tokens)}`).join('；')}`
+          : '',
+        `本回合变化片段：${debug.cachePrefixDiagnostics.firstDiffCurrentExcerpt}`,
+        debug.cachePrefixDiagnostics.firstDiffPreviousExcerpt
+          ? `上一回合变化片段：${debug.cachePrefixDiagnostics.firstDiffPreviousExcerpt}`
+          : '',
+      ].filter(Boolean).join('\n')
+    : '';
   const npcLedger = debug.npcLedgerInjection
     ? [
         '【NPC账本注入诊断】',
@@ -430,7 +450,9 @@ function formatDebugContext(message: 聊天消息): string {
       msg.content || '（空）',
     ].join('\n')),
   ].join('\n\n---\n\n');
-  return [deepSeekDiagnostics, yitingRaw, zhikuRaw, npcLedger, npcLedgerUpdate, recall, system, messages].join('\n\n====================\n\n');
+  return [deepSeekDiagnostics, cachePrefixDiagnostics, yitingRaw, zhikuRaw, npcLedger, npcLedgerUpdate, recall, system, messages]
+    .filter(Boolean)
+    .join('\n\n====================\n\n');
 }
 
 // 出题回合:把 AI 输出的 <狭间问答> 块拆出来,以紧凑的三题列表呈现,方便玩家对照思考。
@@ -670,48 +692,254 @@ function PanelText({ content, label }: { content: string; label: string }) {
   );
 }
 
-function VariablesPanel({
-  commands,
-  worldEvents,
-}: {
-  commands: Record<string, unknown>;
-  worldEvents: string[];
-}) {
-  const cmdEntries = Object.entries(commands);
+function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () => void }) {
+  const usage = message.tokenUsage;
+  const inputTokens = usage?.inputTokens ?? message.inputTokens ?? 0;
+  const outputTokens = usage?.outputTokens ?? message.outputTokens ?? 0;
+  const totalTokens = usage?.totalTokens ?? inputTokens + outputTokens;
+  const cachedTokens = usage?.cachedTokens;
+  const uncachedTokens = usage?.uncachedTokens;
+  const sourceLabel = usage?.source === 'api' ? 'API返回' : usage?.source === 'mixed' ? '混合' : '本地估算';
+  const timeText = formatTurnTime(message.timestamp);
+  const turn = message.gameTime ?? '?';
+  const cacheKnown = typeof cachedTokens === 'number' || typeof uncachedTokens === 'number' || typeof usage?.cacheHitRate === 'number';
+  const usageFormat = usage?.usageFormat ?? '未记录';
+  const usagePath = usage?.usagePath ?? '未记录';
+  const rawUsageKeys = usage?.rawUsageKeys?.length
+    ? usage.rawUsageKeys.join(', ')
+    : usage?.rawUsage && typeof usage.rawUsage === 'object'
+      ? Object.keys(usage.rawUsage as Record<string, unknown>).sort().join(', ')
+      : '未记录';
+  const cacheDiagnostic = usage?.cacheDiagnostic
+    ?? (usage?.rawUsage != null
+      ? 'API 已返回 usage，但没有可识别的缓存统计字段。'
+      : '当前回合没有 API usage 原始字段，只能显示本地估算。');
+  const cacheOptimizationHint = buildCacheOptimizationHint({
+    provider: usage?.provider,
+    model: usage?.model,
+    inputTokens,
+    cachedTokens,
+    uncachedTokens,
+    cacheHitRate: usage?.cacheHitRate,
+    cacheKnown,
+  });
+  const cachePrefixDiagnostics = message.debugContext?.cachePrefixDiagnostics;
+
   return (
-    <div className="px-4 py-3 text-xs">
-      <div
-        className="mb-1.5 font-serif text-[11px] tracking-[0.3em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
-      >
-        ◆ 本回合变量
+    <div className="px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 font-serif text-[15px]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>◷</span>
+          <div>
+            <div className="font-serif text-[13px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.95)' }}>
+              第 {turn} 回合
+            </div>
+            <div className="mt-0.5 text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
+              响应详情 · {sourceLabel}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-7 w-7 items-center justify-center text-xs transition-opacity hover:opacity-85"
+          style={{
+            color: 'rgba(var(--tj-text-secondary),0.8)',
+            background: 'rgba(var(--tj-bg-primary),0.24)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.34)',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+          }}
+          title="关闭响应详情"
+        >
+          ×
+        </button>
       </div>
-      {cmdEntries.length === 0 && worldEvents.length === 0 && (
-        <div style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>（无变量变动）</div>
-      )}
-      {cmdEntries.length > 0 && (
-        <div className="space-y-1">
-          {cmdEntries.map(([k, v]) => (
-            <div key={k} className="flex gap-2" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
-              <span style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}>{k}</span>
-              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>=</span>
-              <span>{typeof v === 'string' ? v : JSON.stringify(v)}</span>
+
+      <div className="mt-3 grid gap-2.5">
+        <UsageSection title="时间">
+          <div className="space-y-1 text-xs leading-relaxed">
+            <div>
+              <span style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>时间</span>
+              <div className="mt-0.5 font-mono text-[12px]" style={{ color: 'rgba(var(--tj-text-primary),0.94)' }}>{timeText}</div>
             </div>
-          ))}
-        </div>
-      )}
-      {worldEvents.length > 0 && (
-        <div className="mt-2 space-y-1">
-          {worldEvents.map((e, i) => (
-            <div key={i} className="flex items-start gap-2" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
-              <span className="mt-0.5">✦</span>
-              <span>{e}</span>
+            <div>
+              <span style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>耗时</span>
+              <span className="ml-2 font-mono" style={{ color: 'rgba(var(--tj-accent-primary),0.9)' }}>
+                {message.responseDurationSec != null ? `${message.responseDurationSec.toFixed(1)} 秒` : '未记录'}
+              </span>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        </UsageSection>
+
+        <UsageSection title="Tokens">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <UsageMetric label="输入" value={inputTokens ? formatTokenCount(inputTokens) : '0'} tone="neutral" />
+            <UsageMetric label="输出" value={outputTokens ? formatTokenCount(outputTokens) : '0'} tone="primary" />
+            <UsageMetric label="总计" value={totalTokens ? formatTokenCount(totalTokens) : '0'} tone="gold" />
+          </div>
+        </UsageSection>
+
+        <UsageSection title="缓存" highlighted>
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <UsageMetric label="命中" value={typeof cachedTokens === 'number' ? formatTokenCount(cachedTokens) : '未返回'} tone="green" />
+            <UsageMetric label="未命中" value={typeof uncachedTokens === 'number' ? formatTokenCount(uncachedTokens) : '未返回'} tone="red" />
+          </div>
+          <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
+            {cacheKnown
+              ? `缓存字段来自 ${sourceLabel}${usage?.cacheHitRate != null ? `，命中率 ${(usage.cacheHitRate * 100).toFixed(1)}%` : ''}。`
+              : usage?.rawUsage != null
+                ? `${cacheDiagnostic} Gemini 原生缓存统计通常是 usageMetadata.cachedContentTokenCount；若原始 usage 只有 prompt_tokens / completion_tokens / total_tokens，说明当前接口或中转未透传缓存命中。`
+                : '当前接口没有返回缓存字段；输入/输出 token 仍可查看，缓存命中不做本地猜测。'}
+          </div>
+          {cacheOptimizationHint && (
+            <div
+              className="mt-2 px-2 py-1.5 text-[11px] leading-relaxed"
+              style={{
+                color: 'rgba(var(--tj-text-primary),0.86)',
+                background: 'rgba(255,220,110,0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(255,220,110,0.22)',
+              }}
+            >
+              <span style={{ color: 'rgba(255,220,110,0.92)' }}>缓存优化：</span>{cacheOptimizationHint}
+            </div>
+          )}
+          {cachePrefixDiagnostics && (
+            <div
+              className="mt-2 px-2 py-1.5 text-[11px] leading-relaxed"
+              style={{
+                color: 'rgba(var(--tj-text-primary),0.86)',
+                background: 'rgba(120,190,255,0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(120,190,255,0.22)',
+              }}
+            >
+              <div style={{ color: 'rgba(150,210,255,0.95)' }}>前缀诊断</div>
+              <div className="mt-1 grid gap-1">
+                <div>公共前缀：{formatTokenCount(cachePrefixDiagnostics.commonPrefixTokens)} / {formatTokenCount(cachePrefixDiagnostics.currentPromptTokens)} tokens（{(cachePrefixDiagnostics.commonPrefixRate * 100).toFixed(1)}%）</div>
+                <div>首次变化：{cachePrefixDiagnostics.firstDiffCurrentSection}</div>
+                <div>变化后估算：{formatTokenCount(cachePrefixDiagnostics.changedTailTokens)} tokens</div>
+              </div>
+              {cachePrefixDiagnostics.largestChangedSections.length > 0 && (
+                <div className="mt-1.5" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
+                  {cachePrefixDiagnostics.largestChangedSections.slice(0, 4).map((item) => `${item.label}≈${formatTokenCount(item.tokens)}`).join('；')}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="mt-2 grid gap-1.5 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
+            <div><span style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>模型：</span>{usage?.provider ?? '未记录'} / {usage?.model ?? '未记录'}</div>
+            <div><span style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>Usage格式：</span>{usageFormat} · {usagePath}</div>
+            <div><span style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>原始字段：</span>{rawUsageKeys || '未记录'}</div>
+          </div>
+          {usage?.rawUsage != null && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>
+                原始 usage 字段
+              </summary>
+              <pre
+                className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded-none px-2 py-1.5 text-[10px] leading-relaxed"
+                style={{
+                  color: 'rgba(var(--tj-text-secondary),0.82)',
+                  background: 'rgba(var(--tj-bg-primary),0.28)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.22)',
+                }}
+              >
+                {formatRawUsage(usage.rawUsage)}
+              </pre>
+            </details>
+          )}
+        </UsageSection>
+      </div>
     </div>
   );
+}
+
+function buildCacheOptimizationHint(input: {
+  provider?: string;
+  model?: string;
+  inputTokens: number;
+  cachedTokens?: number;
+  uncachedTokens?: number;
+  cacheHitRate?: number;
+  cacheKnown: boolean;
+}): string {
+  if (!input.cacheKnown) return '';
+  const providerModel = `${input.provider ?? ''} ${input.model ?? ''}`;
+  const isDeepSeek = /deepseek/i.test(providerModel);
+  const hitRate = typeof input.cacheHitRate === 'number'
+    ? input.cacheHitRate
+    : typeof input.cachedTokens === 'number' && input.inputTokens > 0
+      ? input.cachedTokens / input.inputTokens
+      : undefined;
+  if (isDeepSeek && (input.cachedTokens === 0 || hitRate === 0)) {
+    return 'DeepSeek 已返回缓存统计但命中为 0，说明统计链路已通，当前请求前缀仍未复用成功。建议连续生成 2-3 个新回合观察；若仍为 0，优先检查 system prompt 前段是否仍有时间、场景、记忆、智库等动态内容提前抖动。';
+  }
+  if (isDeepSeek && typeof hitRate === 'number' && hitRate > 0 && hitRate < 0.25) {
+    return 'DeepSeek 已命中部分缓存，但比例偏低。可继续把稳定规则、CoT 和固定世界观保持在请求最前段，把当前状态、记忆、智库与历史消息后置。';
+  }
+  if (isDeepSeek && typeof hitRate === 'number' && hitRate >= 0.25) {
+    return 'DeepSeek 缓存已经开始命中，说明前缀重排有效。后续重点是保持开头规则稳定，避免把回合时间、当前场景或检索结果插回请求前部。';
+  }
+  return '';
+}
+
+function UsageSection({ title, highlighted = false, children }: { title: string; highlighted?: boolean; children: React.ReactNode }) {
+  return (
+    <section
+      className="px-3 py-2.5"
+      style={{
+        background: highlighted ? 'rgba(var(--tj-accent-primary),0.08)' : 'rgba(var(--tj-bg-primary),0.22)',
+        boxShadow: highlighted
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.34)'
+          : 'inset 0 0 0 1px rgba(var(--tj-border),0.28)',
+        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+      }}
+    >
+      <div className="mb-2 font-serif text-[10px] uppercase tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>
+        {title}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function UsageMetric({ label, value, tone }: { label: string; value: string; tone: 'neutral' | 'primary' | 'gold' | 'green' | 'red' }) {
+  const color =
+    tone === 'primary' ? 'rgba(var(--tj-accent-primary),0.95)'
+      : tone === 'gold' ? 'rgba(255,220,110,0.95)'
+      : tone === 'green' ? 'rgba(150,235,160,0.95)'
+      : tone === 'red' ? 'rgba(255,135,145,0.95)'
+      : 'rgba(var(--tj-text-primary),0.92)';
+  return (
+    <div className="min-w-0">
+      <div className="font-serif text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary),0.76)' }}>
+        {label}
+      </div>
+      <div className="mt-0.5 break-words font-mono text-[13px] font-bold" style={{ color }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function formatTurnTime(timestamp: number): string {
+  if (!timestamp) return '未记录';
+  return new Date(timestamp).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatRawUsage(raw: unknown): string {
+  try {
+    return JSON.stringify(raw, null, 2);
+  } catch {
+    return String(raw);
+  }
 }
 
 function EditBodyPanel({

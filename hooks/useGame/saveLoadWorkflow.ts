@@ -17,18 +17,14 @@ import {
 import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveSetting } from '@/services/dbService';
 import {
   buildPersistedZhikuSystem,
-  isBundledZhikuDuplicate,
   loadAllBundledZhikuPresets,
-  mergeZhikuRuntimeUnlockOverrides,
-  removeLegacyZhikuCharacterEntries,
-  removeRetiredZhikuEntries,
+  mergeBundledZhikuSystem,
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
 import { loadSetting } from '@/services/dbService';
 import { normalizeMemorySystem } from './memoryUtils';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
-import { 归一化智库系统 } from '@/models/zhiku';
 import { 归一化手机系统 } from '@/models/phone';
 import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化相册系统 } from '@/models/imageGeneration';
@@ -96,6 +92,7 @@ function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
     ...settings,
     enableClaudeMode: defaults.enableClaudeMode,
     deepSeekMainMode: defaults.deepSeekMainMode,
+    enableCacheDiagnostics: defaults.enableCacheDiagnostics,
     variableApi: defaults.variableApi,
     新闻系统: {
       ...settings.新闻系统,
@@ -144,6 +141,7 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
     ...nextFromSave,
     enableClaudeMode: localSettings.enableClaudeMode === true,
     deepSeekMainMode: localSettings.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
+    enableCacheDiagnostics: localSettings.enableCacheDiagnostics ?? 创建默认游戏设置().enableCacheDiagnostics,
     variableApi: localSettings.variableApi,
     新闻系统: {
       ...nextFromSave.新闻系统,
@@ -237,17 +235,7 @@ async function applySaveToState(
   if (!savedZhikuMigrationAt) {
     await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, zhikuMigrationAt);
   }
-  const nextZhiku = 归一化智库系统({
-    条目: [
-      ...mergeZhikuRuntimeUnlockOverrides((await loadAllBundledZhikuPresets()).条目, save.智库?.条目),
-      ...removeLegacyZhikuCharacterEntries(
-        removeRetiredZhikuEntries(
-          save.智库?.条目?.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)) ?? [],
-        ),
-        zhikuMigrationAt,
-      ),
-    ],
-  });
+  const nextZhiku = mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt);
   state.set智库(nextZhiku);
   await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));

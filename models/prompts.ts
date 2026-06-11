@@ -20,7 +20,7 @@ export interface 提示词模块 {
   title: string;
   description: string;
   category: 提示词模块类目;
-  /** 提示词正文。可含占位符：{wordCountTarget} / {personLabel}，注入时替换。 */
+  /** 提示词正文。可含占位符：{wordCountTarget} / {personLabel} / {playerName}，注入时替换。 */
   content: string;
   enabled: boolean;
   /** 是否内置。内置模块的 id 在 BUILTIN_PROMPT_MODULE_IDS 白名单里，content/title 在 UI 中只读。 */

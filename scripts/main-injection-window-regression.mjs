@@ -22,9 +22,11 @@ assert(historyWindow.includes('MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20'), '即时
 assert(historyWindow.includes('maxMessages = MAIN_IMMEDIATE_STORY_REVIEW_LIMIT'), '即时剧情回顾默认必须读取统一常量。');
 assert(historyWindow.includes('buildLeanAssistantHistoryContent'), '必须提供主剧情历史 assistant 消息瘦身函数。');
 assert(historyWindow.includes('function hasMeaningfulText'), '即时剧情回顾必须过滤“无/暂无”等占位结构化文本。');
+assert(historyWindow.includes('# 历史 assistant 压缩摘要'), '瘦身后的 assistant 历史必须使用中性历史摘要标题，避免伪装成本回合 thinking。');
 assert(historyWindow.includes('<正文>'), '瘦身后的 assistant 历史必须用标准 <正文> 协议保留正文锚点。');
 assert(historyWindow.includes('normalizeHistoryBodyForPrompt'), '瘦身后的 assistant 历史正文必须补齐旁白前缀，避免污染后续格式。');
 assert(historyWindow.includes('禁止把历史回合号、历史压缩说明或历史标签照抄进新正文'), '瘦身后的 assistant 历史必须明确禁止照抄历史元标签。');
+assert(!historyWindow.includes('Step0: 历史回合瘦身'), '瘦身后的 assistant 历史不得再伪造 Step0 thinking，避免污染本回合思维链。');
 assert(!historyWindow.includes('【历史时间】'), '瘦身后的 assistant 历史不得使用会被正文渲染成角色的【历史时间】标签。');
 assert(!historyWindow.includes('【历史正文】'), '瘦身后的 assistant 历史不得使用会被正文渲染成角色的【历史正文】标签。');
 assert(!historyWindow.includes('【历史短期记忆】'), '瘦身后的 assistant 历史不得重复上传短期记忆。');

@@ -51,9 +51,11 @@ assert(
 );
 
 assert(
-  useGameState.includes('removeRetiredZhikuEntries') &&
-    saveLoad.includes('removeRetiredZhikuEntries'),
-  '启动加载与读档流程必须清理旧存档残留的退役智库页条目。',
+  presetSource.includes('mergeBundledZhikuSystem') &&
+    presetSource.includes('removeRetiredZhikuEntries(') &&
+    useGameState.includes('mergeBundledZhikuSystem') &&
+    saveLoad.includes('mergeBundledZhikuSystem'),
+  '启动加载与读档流程必须通过统一合并入口清理旧存档残留的退役智库页条目。',
 );
 
 assert(

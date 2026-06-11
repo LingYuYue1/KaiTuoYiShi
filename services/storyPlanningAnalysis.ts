@@ -71,12 +71,13 @@ function decideAction(anchor: 剧情编织进度锚点 | undefined, current: 剧
   if (current.运行状态 === '已经历' || anchor?.推进状态 === '已完成') return '可归档或切段';
   if (anchor?.最近门禁结果 === 'strong') return '允许强承接';
   if (anchor?.最近判定理由?.some((item) => item.includes('未推进'))) return '等待正文证据';
+  if ((anchor?.连续推进证据回合 ?? 0) > 0) return '等待正文证据';
   return '继续软参考';
 }
 
 function decideDeviationRisk(anchor: 剧情编织进度锚点 | undefined, current: 剧情编织分段): 剧情规划分析快照['偏离风险'] {
   if (current.运行状态 === '已偏离') return '高';
-  if (anchor?.最近判定理由?.some((item) => item.includes('偏离') || item.includes('人工检查') || item.includes('风险'))) return '高';
+  if (anchor?.最近判定理由?.some((item) => item.includes('偏离') || item.includes('人工检查') || item.includes('风险') || item.includes('疑似命中后续'))) return '高';
   if (current.运行状态 === '已跳过' || current.运行状态 === '暂停') return '中';
   if (anchor?.最近判定理由?.some((item) => item.includes('未推进') || item.includes('缺少明确收束证据'))) return '中';
   return '低';
@@ -87,6 +88,8 @@ function buildReasons(anchor: 剧情编织进度锚点 | undefined, current: 剧
     `当前分段运行状态：${current.运行状态}`,
     anchor?.推进状态 ? `锚点推进状态：${anchor.推进状态}` : '',
     anchor?.最近门禁结果 ? `最近门禁：${anchor.最近门禁结果}` : '最近门禁未记录',
+    (anchor?.连续推进证据回合 ?? 0) > 0 ? `推进证据累计：${anchor?.连续推进证据回合 ?? 0}/2` : '',
+    (anchor?.卡段回合数 ?? 0) > 0 ? `卡段回合：${anchor?.卡段回合数}` : '',
     ...(anchor?.最近判定理由 ?? []).slice(0, 5),
   ].filter(Boolean);
   return uniqueText(reasons, 8);
@@ -96,6 +99,7 @@ function buildConcerns(anchor: 剧情编织进度锚点 | undefined, current: �
   return uniqueText([
     ...current.给后续参考,
     ...current.关键事件.flatMap((event) => event.触发条件),
+    ...(anchor?.推进证据 ?? []).map((item) => `推进证据：${item}`),
     ...(anchor?.当前待解问题 ?? []),
   ], 8);
 }

@@ -26,6 +26,9 @@ const saveLoad = read('hooks/useGame/saveLoadWorkflow.ts');
 const apiSettings = read('components/features/Settings/ApiSettings.tsx');
 const chatModel = read('models/chat.ts');
 const turnItem = read('components/features/Chat/TurnItem.tsx');
+const variableModel = read('services/ai/variableModel.ts');
+const variableWorldbook = read('data/variableWorldbook.ts');
+const variableCot = read('prompts/cot/variableCot.ts');
 
 assert(settings.includes("export type DeepSeek主剧情模式 = 'off' | 'standard' | 'lock_format'"), '游戏设置必须声明 DeepSeek 主剧情模式枚举。');
 assert(settings.includes('deepSeekMainMode: DeepSeek主剧情模式'), '游戏设置必须保存 deepSeekMainMode。');
@@ -72,6 +75,14 @@ assert(turnItem.includes('主剧情请求模式：'), '请求上下文必须展�
 
 assert(repair.includes('extractJsonLikeText') && repair.includes('repairLooseJsonText') && repair.includes('parseNumberedRecallLines'), '必须提供结构化输出修复工具。');
 assert(variableFacts.includes('parseJsonWithRepair') && variableFacts.includes('extractJsonLikeText(block'), '变量事实解析必须使用 JSON 修复。');
+assert(variableModel.includes('checkVariableModelProtocol'), '变量模型必须校验 <thinking>/<变量事实>/<变量更新> 协议完整性。');
+assert(variableModel.includes('buildVariableProtocolRepairPrompt'), '变量模型协议不完整时必须追加修复提示重试。');
+assert(variableModel.includes('ensureVariableProtocolFallback') && variableModel.includes('{"facts":[]}'), '变量模型协议重试仍失败时必须兜底为空 facts，避免只有 thinking。');
+assert(variableModel.includes('禁止只输出 thinking'), '变量模型用户消息必须明确禁止只输出 thinking。');
+assert(variableModel.includes('reviewVariableModelContent') && variableModel.includes('buildVariableContentReviewPrompt'), '变量模型必须在空 facts 且疑似漏掉重要 NPC 日常轻记忆时触发内容复审。');
+assert(variableModel.includes('低风险日常轻记忆') && variableModel.includes('蜂蜜奶酥'), '变量模型提示必须允许重要 NPC 共同日常写入轻记忆。');
+assert(variableWorldbook.includes('共同日常也属于低风险有效互动') && variableWorldbook.includes('memory/recentInteraction/sharedExperiences'), '变量世界书必须明确重要 NPC 共同日常可写轻记忆。');
+assert(variableCot.includes('重要 NPC 的共同日常可以是低风险可承接结果'), '变量 CoT 必须审计重要 NPC 日常轻记忆。');
 assert(phoneService.includes('parseJsonWithRepair') && phoneService.includes('normalizeStructuredModelText(raw)'), '手机 JSON 解析必须使用结构化输出修复。');
 assert(zhiku.includes('normalizeStructuredModelText(raw)'), '智库编号解析必须先清理结构化模型输出。');
 assert(storyWeaving.includes('parseJsonWithRepair') && storyWeaving.includes("extractJsonLikeText(raw, 'object')"), '剧情编织 JSON 解析必须使用结构化输出修复。');

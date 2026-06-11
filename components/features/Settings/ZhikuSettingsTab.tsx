@@ -172,16 +172,19 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="联动上限">
+        <Field label="关键词资料上限">
           <input
             type="number"
             min={1}
-            max={12}
+            max={5}
             value={zhiku.maxRelatedEntries}
-            onChange={(e) => patch({ maxRelatedEntries: Math.max(1, Number(e.target.value) || 1) })}
+            onChange={(e) => patch({ maxRelatedEntries: Math.min(5, Math.max(1, Number(e.target.value) || 1)) })}
             className="kaituo-input w-full px-3 py-2 text-sm"
             style={{ clipPath: smallClip }}
           />
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+            仅控制关键词召回的非角色资料上限；角色档案关键词上限固定 15 条，AI 另可补充最多 8 条。
+          </p>
         </Field>
 
         <Field label="导入后自动摘要">

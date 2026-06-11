@@ -16,12 +16,13 @@ import { estimateTextTokens } from '@/utils/tokenEstimate';
 import { snapshotVariableState } from '@/utils/variableExecutor';
 import {
   buildImmediateStoryReview,
+  buildZhikuKeywordRecallQuery,
   buildLeanAssistantHistoryContent,
   buildMainRecallQuery,
   getMainHistoryWindow,
 } from './historyWindow';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
-import { getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
+import { getAnticipatedNpcNamesForTurn, getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 
 const COT_FAKE_HISTORY_USER = '开始任务';
 const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
@@ -496,11 +497,35 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     currentScope,
     storyMode: state.世界.剧情模式,
   };
+  const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({
+    world: state.世界,
+    history: recallHistory,
+    userInput: sourceInput,
+  });
+  const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(state.chatHistory) : '';
+  const zhikuSceneContext = {
+    ...worldbookCtx,
+    startScenarioId: undefined,
+    startSceneName: undefined,
+    currentLocation: undefined,
+    npcNames: [],
+    presentNpcNamesForFallback: worldbookCtx.npcNames,
+    anticipatedNpcNames: anticipatedZhikuNpcNames,
+    aiSupplementHints: {
+      currentLocation: state.世界.当前地点,
+      presentNpcNames: worldbookCtx.npcNames,
+      immediateStoryReview: immediateStoryReviewForZhiku,
+    },
+  };
   const recallQuery = buildMainRecallQuery({
     userInput: sourceInput,
     history: recallHistory,
     currentLocation: state.世界.当前地点,
     npcNames: worldbookCtx.npcNames,
+  });
+  const zhikuRecallQuery = buildZhikuKeywordRecallQuery({
+    userInput: sourceInput,
+    history: recallHistory,
   });
 
   const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
@@ -515,13 +540,13 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const zhikuPreview = state.gameSettings.智库系统?.enabled && sourceInput
     ? retrieveZhikuContext(
         state.智库,
-        recallQuery,
+        zhikuRecallQuery,
         state.gameSettings.智库系统.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
-        worldbookCtx,
+        zhikuSceneContext,
       )
     : null;
 
-  const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(state.chatHistory) : '';
+  const immediateStoryReview = immediateStoryReviewForZhiku;
   const storyRecallInjection = [
     immediateStoryReview
       ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n')
@@ -885,24 +910,36 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
 function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const recallHistory = historyThroughLatestUser(state.chatHistory);
+  const presentZhikuNpcNames = getZhikuNpcNamesForTurn({
+    world: state.世界,
+    npcs: state.NPC,
+    history: recallHistory,
+    userInput: sourceInput,
+    turnCount: state.turnCount,
+  });
+  const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({
+    world: state.世界,
+    history: recallHistory,
+    userInput: sourceInput,
+  });
+  const immediateStoryReview = buildImmediateStoryReview(state.chatHistory);
   const sceneContext = {
-    startScenarioId: state.世界.起航之地ID,
-    startSceneName: state.世界.当前地点,
-    currentLocation: state.世界.当前地点,
-    npcNames: getZhikuNpcNamesForTurn({
-      world: state.世界,
-      npcs: state.NPC,
-      history: recallHistory,
-      userInput: sourceInput,
-      turnCount: state.turnCount,
-    }),
+    startScenarioId: undefined,
+    startSceneName: undefined,
+    currentLocation: undefined,
+    npcNames: [],
+    presentNpcNamesForFallback: presentZhikuNpcNames,
+    anticipatedNpcNames: anticipatedZhikuNpcNames,
+    aiSupplementHints: {
+      currentLocation: state.世界.当前地点,
+      presentNpcNames: presentZhikuNpcNames,
+      immediateStoryReview,
+    },
     originalProtagonist: state.世界.原著主角,
   };
-  const recallQuery = buildMainRecallQuery({
+  const recallQuery = buildZhikuKeywordRecallQuery({
     userInput: sourceInput,
     history: recallHistory,
-    currentLocation: state.世界.当前地点,
-    npcNames: sceneContext.npcNames,
   });
   const limit = state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries;
   const fallback = retrieveZhikuContext(state.智库, recallQuery, limit, sceneContext);
@@ -915,11 +952,17 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     ? [
         `场景锚点：${zhikuDiagnostics.场景锚点.join('、') || '无'}`,
         `相关角色：${zhikuDiagnostics.相关角色.join('、') || '无'}`,
-        `人物锚点：${zhikuDiagnostics.人物锚点.join('、') || '无'}`,
+        `在场角色兜底召回：${zhikuDiagnostics.在场角色兜底召回.join('、') || '无'}`,
+        `关键词召回：${zhikuDiagnostics.关键词召回.join('、') || '无'}`,
+        `AI检索补充：${zhikuDiagnostics.AI检索补充.join('、') || '无'}`,
+        `关键词资料召回：${zhikuDiagnostics.关键词资料召回.join('、') || '无'}`,
+        `AI检索补充强资料：${zhikuDiagnostics.AI检索补充强资料.join('、') || '无'}`,
+        `AI检索补充弱资料：${zhikuDiagnostics.AI检索补充弱资料.join('、') || '无'}`,
         `候选资料：${zhikuDiagnostics.候选资料.join('、') || '无'}`,
-        `角色相关资料：${zhikuDiagnostics.角色相关资料.join('、') || '无'}`,
-        `强相关资料：${zhikuDiagnostics.强相关资料.join('、') || '无'}`,
-        `弱相关资料：${zhikuDiagnostics.弱相关资料.join('、') || '无'}`,
+        `AI候选资料：${zhikuDiagnostics.AI候选资料.join('、') || '无'}`,
+        `最终注入角色资料（已去重）：${zhikuDiagnostics.角色相关资料.join('、') || '无'}`,
+        `最终注入强资料：${zhikuDiagnostics.强相关资料.join('、') || '无'}`,
+        `最终注入弱资料：${zhikuDiagnostics.弱相关资料.join('、') || '无'}`,
         `已注入资料：${zhikuDiagnostics.已注入资料.join('、') || '无'}`,
         zhikuDiagnostics.被门禁过滤.length
           ? `门禁过滤：${zhikuDiagnostics.被门禁过滤.map((item) => `${item.标题}（${item.原因}）`).join('；')}`
@@ -953,7 +996,11 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     content: [
       `玩家当前输入：${sourceInput || '（无）'}`,
       '',
-      buildZhikuModelUserPrompt(recallQuery, limit, candidateText),
+      buildZhikuModelUserPrompt(recallQuery, limit, candidateText, {
+        keywordRecallTitles: zhikuDiagnostics?.关键词召回资料 ?? [],
+        anticipatedNpcNames: anticipatedZhikuNpcNames,
+        aiSupplementHints: sceneContext.aiSupplementHints,
+      }),
       '',
       '本地召回诊断：',
       diagnosticText,

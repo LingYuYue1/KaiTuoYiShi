@@ -154,6 +154,9 @@ export interface 剧情编织进度锚点 {
   最近门禁结果?: 'soft' | 'strong';
   最近判定理由: string[];
   最近一次推进判定回合?: number;
+  推进证据?: string[];
+  连续推进证据回合?: number;
+  卡段回合数?: number;
   updatedAt: number;
 }
 
@@ -476,6 +479,9 @@ export function 归一化剧情编织进度锚点(
     最近门禁结果: rawGate,
     最近判定理由: 去重文本列表(文本列表(raw?.最近判定理由), 8),
     最近一次推进判定回合: Number(raw?.最近一次推进判定回合) || undefined,
+    推进证据: 去重文本列表(文本列表(raw?.推进证据), 8),
+    连续推进证据回合: Math.max(0, Math.trunc(Number(raw?.连续推进证据回合) || 0)),
+    卡段回合数: Math.max(0, Math.trunc(Number(raw?.卡段回合数) || 0)),
     updatedAt: Number(raw?.updatedAt) || Date.now(),
   };
 }

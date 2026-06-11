@@ -166,6 +166,66 @@ for (const key of [
 
 assert(result.warnings.length === 0, `不应产生警告：${result.warnings.join('；')}`);
 
+const lightMemoryRawText = `<变量事实>
+{
+  "facts": [
+    {
+      "type": "npc",
+      "id": "npc_march7th",
+      "name": "三月七",
+      "memory": "三月七在观景车厢招呼玩家一起品尝帕姆做的蜂蜜奶酥，记下玩家愿意参与列车日常。",
+      "recentInteraction": "三月七和玩家在观景车厢一起尝蜂蜜奶酥，气氛轻松。",
+      "sharedExperiences": ["在观景车厢一起品尝帕姆做的蜂蜜奶酥"],
+      "evidence": "正文写明三月七主动招呼玩家吃点心，玩家实际品尝"
+    },
+    {
+      "type": "npc",
+      "id": "npc_stelle",
+      "name": "星",
+      "memory": "星和玩家在观景车厢同步拿起蜂蜜奶酥，并用营养膏玩笑给出正面评价。",
+      "recentInteraction": "星与玩家一起尝点心，用轻松吐槽回应帕姆的手艺。",
+      "sharedExperiences": ["在观景车厢一起尝蜂蜜奶酥并评价味道"],
+      "evidence": "正文写明星和玩家同时拿点心，星给出正面评价"
+    }
+  ]
+}
+</变量事实>`;
+
+const lightParsed = parseVariableFacts(lightMemoryRawText);
+assert(lightParsed.parseErrors.length === 0, `轻记忆变量事实不应解析失败：${lightParsed.parseErrors.join('；')}`);
+const lightResult = factsToVariableCommands(lightParsed.facts, {
+  ...state,
+  NPC: [
+    ...state.NPC,
+    {
+      id: 'npc_stelle',
+      姓名: '星',
+      阶位: 'companion',
+      好感度: 0,
+      关系: 'friend',
+      同行: true,
+      初见回合: 1,
+      最近回合: 10,
+      同行记忆: [],
+      备注: [],
+      原著角色: true,
+    },
+  ],
+}, 13, { phoneSeedsEnabled: false });
+const lightKeys = lightResult.commands.map((command) => command.key);
+for (const key of [
+  'NPC[id=npc_march7th].最近互动',
+  'NPC[id=npc_march7th].共同经历',
+  'NPC[id=npc_march7th].同行记忆',
+  'NPC[id=npc_stelle].最近互动',
+  'NPC[id=npc_stelle].共同经历',
+  'NPC[id=npc_stelle].同行记忆',
+]) {
+  assert(lightKeys.includes(key), `重要 NPC 日常轻记忆应落库，缺少：${key}`);
+}
+assert(!lightKeys.some((key) => key.endsWith('.好感度') || key.endsWith('.关系')), '蜂蜜奶酥轻记忆不应自动改好感或关系。');
+assert(lightResult.warnings.length === 0, `轻记忆不应产生警告：${lightResult.warnings.join('；')}`);
+
 const selection = selectNpcLedgersForTurn({
   turnCount: 100,
   limit: 2,

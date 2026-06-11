@@ -1,5 +1,5 @@
 ﻿import type { UseGameStateReturn } from '@/hooks/useGameState';
-import { 创建聊天消息, type 聊天消息, type 回合快照, type 解析后回复 } from '@/models/chat';
+import { 创建聊天消息, type 聊天消息, type 回合快照, type 回合Token消耗, type 解析后回复 } from '@/models/chat';
 import { sendChatMessage } from '@/services/ai/text';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { callVariableModel } from '@/services/ai/variableModel';
@@ -35,6 +35,7 @@ import { selectNpcLedgersForTurn, 提取NPC同行记忆文本列表, type NPC记
 import type { 手机系统, 主动来信种子 } from '@/models/phone';
 import {
   buildImmediateStoryReview,
+  buildZhikuKeywordRecallQuery,
   buildLeanAssistantHistoryContent,
   buildMainRecallQuery,
   getMainHistoryWindow,
@@ -45,7 +46,8 @@ import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/p
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
 import { appendWorldEvents } from '@/utils/worldEvents';
-import { getZhikuNpcNamesForTurn } from './npcPresence';
+import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
+import { estimateTextTokens } from '@/utils/tokenEstimate';
 
 const DEEPSEEK_MAIN_FORMAT_GUARD = [
   'DeepSeek 主剧情格式校验：本轮必须从 <thinking> 开始输出，禁止直接从 <正文> 开始。',
@@ -189,11 +191,17 @@ function formatZhikuDiagnosticsPreview(diagnostics?: 智库召回诊断): string
     '智库召回诊断：',
     `场景锚点：${diagnostics.场景锚点.join('、') || '无'}`,
     `相关角色：${diagnostics.相关角色.join('、') || '无'}`,
-    `人物锚点：${diagnostics.人物锚点.join('、') || '无'}`,
+    `在场角色兜底召回：${diagnostics.在场角色兜底召回.join('、') || '无'}`,
+    `关键词召回：${diagnostics.关键词召回.join('、') || '无'}`,
+    `AI检索补充：${diagnostics.AI检索补充.join('、') || '无'}`,
+    `关键词资料召回：${diagnostics.关键词资料召回.join('、') || '无'}`,
+    `AI检索补充强资料：${diagnostics.AI检索补充强资料.join('、') || '无'}`,
+    `AI检索补充弱资料：${diagnostics.AI检索补充弱资料.join('、') || '无'}`,
     `候选资料：${diagnostics.候选资料.join('、') || '无'}`,
-    `角色相关资料：${diagnostics.角色相关资料.join('、') || '无'}`,
-    `强相关资料：${diagnostics.强相关资料.join('、') || '无'}`,
-    `弱相关资料：${diagnostics.弱相关资料.join('、') || '无'}`,
+    `AI候选资料：${diagnostics.AI候选资料.join('、') || '无'}`,
+    `最终注入角色资料（已去重）：${diagnostics.角色相关资料.join('、') || '无'}`,
+    `最终注入强资料：${diagnostics.强相关资料.join('、') || '无'}`,
+    `最终注入弱资料：${diagnostics.弱相关资料.join('、') || '无'}`,
     `已注入资料：${diagnostics.已注入资料.join('、') || '无'}`,
     diagnostics.被门禁过滤.length
       ? `门禁过滤：${diagnostics.被门禁过滤.map((item) => `${item.标题}（${item.原因}）`).join('；')}`
@@ -220,15 +228,24 @@ function cleanRecallTitle(title: string): string {
 }
 
 function formatZhikuRecallSummary(diagnostics?: 智库召回诊断): string {
-  const titles = diagnostics?.已注入资料 ?? [];
-  if (!titles.length) return '智库召回：无';
-  const items = titles
-    .map((title) => {
-      const name = cleanRecallTitle(title);
-      return name ? `${getZhikuEntryKind(title)}${name}` : '';
-    })
-    .filter(Boolean);
-  return `智库召回：${items.length ? items.join('，') : '无'}`;
+  if (!diagnostics) return '智库召回：无';
+  const formatList = (titles: string[]) => {
+    const items = titles
+      .map((title) => {
+        const name = cleanRecallTitle(title);
+        return name ? `${getZhikuEntryKind(title)}${name}` : '';
+      })
+      .filter(Boolean);
+    return items.length ? items.join('，') : '无';
+  };
+  return [
+    `在场角色兜底召回：${formatList(diagnostics.在场角色兜底召回)}`,
+    `关键词召回：${formatList(diagnostics.关键词召回)}`,
+    `AI检索补充：${formatList(diagnostics.AI检索补充)}`,
+    `关键词资料召回：${formatList(diagnostics.关键词资料召回)}`,
+    `AI检索补充强资料：${formatList(diagnostics.AI检索补充强资料)}`,
+    `AI检索补充弱资料：${formatList(diagnostics.AI检索补充弱资料)}`,
+  ].join('\n');
 }
 
 function formatYitingRecallSummary(previewText?: string): string {
@@ -243,6 +260,186 @@ function formatYitingRecallSummary(previewText?: string): string {
     ),
   );
   return `记忆召回：${names.length ? names.join('，') : '无'}`;
+}
+
+type ApiTokenUsage = Awaited<ReturnType<typeof sendChatMessage>>['usage'];
+
+function buildTurnTokenUsage(input: {
+  apiUsage?: ApiTokenUsage;
+  systemPrompt: string;
+  messages: 聊天消息[];
+  outputText: string;
+  provider: string;
+  model: string;
+}): 回合Token消耗 {
+  const promptText = [
+    input.systemPrompt,
+    ...input.messages.map((msg) => `${msg.role}\n${msg.content}`),
+  ].filter(Boolean).join('\n\n');
+  const estimatedInput = estimateTextTokens(promptText);
+  const estimatedOutput = estimateTextTokens(input.outputText);
+  const inputTokens = Math.round(input.apiUsage?.inputTokens ?? estimatedInput);
+  const outputTokens = Math.round(input.apiUsage?.outputTokens ?? estimatedOutput);
+  const totalTokens = Math.round(input.apiUsage?.totalTokens ?? inputTokens + outputTokens);
+  const apiHasCoreUsage =
+    typeof input.apiUsage?.inputTokens === 'number' ||
+    typeof input.apiUsage?.outputTokens === 'number' ||
+    typeof input.apiUsage?.totalTokens === 'number';
+  const cachedTokens = typeof input.apiUsage?.cachedTokens === 'number'
+    ? Math.round(input.apiUsage.cachedTokens)
+    : undefined;
+  const uncachedTokens = typeof input.apiUsage?.uncachedTokens === 'number'
+    ? Math.round(input.apiUsage.uncachedTokens)
+    : undefined;
+  const apiHasAnyUsage = apiHasCoreUsage || typeof cachedTokens === 'number' || typeof uncachedTokens === 'number';
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    cachedTokens,
+    uncachedTokens,
+    cacheHitRate: typeof input.apiUsage?.cacheHitRate === 'number'
+      ? input.apiUsage.cacheHitRate
+      : apiHasCoreUsage && typeof cachedTokens === 'number' && inputTokens > 0
+        ? cachedTokens / inputTokens
+        : undefined,
+    source: apiHasCoreUsage ? 'api' : apiHasAnyUsage ? 'mixed' : 'estimate',
+    provider: input.apiUsage?.provider ?? input.provider,
+    model: input.apiUsage?.model ?? input.model,
+    usageFormat: input.apiUsage?.usageFormat,
+    usagePath: input.apiUsage?.usagePath,
+    rawUsageKeys: input.apiUsage?.rawUsageKeys,
+    cacheDiagnostic: input.apiUsage?.cacheDiagnostic,
+    rawUsage: input.apiUsage?.rawUsage,
+  };
+}
+
+type CacheDiagnosticsMessage = {
+  role: 聊天消息['role'];
+  content: string;
+};
+
+type CacheDiagnosticsSection = {
+  label: string;
+  text: string;
+  start: number;
+  end: number;
+};
+
+function splitSystemPromptForCacheDiagnostics(systemPrompt: string): Array<{ label: string; text: string }> {
+  const lines = systemPrompt.split(/\r?\n/);
+  const sections: Array<{ label: string; text: string }> = [];
+  let label = 'System Prompt / 开头';
+  let buffer: string[] = [];
+  const flush = () => {
+    const text = buffer.join('\n').trim();
+    if (text) sections.push({ label, text });
+    buffer = [];
+  };
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const heading =
+      trimmed.match(/^#{1,6}\s+(.+)$/)?.[1]?.trim() ||
+      trimmed.match(/^【([^】]{2,40})】/)?.[1]?.trim();
+    if (heading) {
+      flush();
+      label = `System Prompt / ${heading}`;
+    }
+    buffer.push(line);
+  }
+  flush();
+  return sections.length ? sections : [{ label, text: systemPrompt }];
+}
+
+function buildCacheDiagnosticsSections(systemPrompt: string, messages: CacheDiagnosticsMessage[]): CacheDiagnosticsSection[] {
+  const rawSections = [
+    ...splitSystemPromptForCacheDiagnostics(systemPrompt),
+    ...messages.map((message, index) => ({
+      label: `Messages / #${index + 1} ${message.role}`,
+      text: message.content || '（空）',
+    })),
+  ];
+  const sections: CacheDiagnosticsSection[] = [];
+  let cursor = 0;
+  for (const section of rawSections) {
+    const start = cursor;
+    const text = `<<<${section.label}>>>\n${section.text}`;
+    const end = start + text.length;
+    sections.push({ ...section, text, start, end });
+    cursor = end + 2;
+  }
+  return sections;
+}
+
+function serializeCacheDiagnosticsSections(sections: CacheDiagnosticsSection[]): string {
+  return sections.map((section) => section.text).join('\n\n');
+}
+
+function getCommonPrefixLength(left: string, right: string): number {
+  const max = Math.min(left.length, right.length);
+  let index = 0;
+  while (index < max && left.charCodeAt(index) === right.charCodeAt(index)) index++;
+  return index;
+}
+
+function findCacheDiagnosticsSection(sections: CacheDiagnosticsSection[], index: number): CacheDiagnosticsSection | undefined {
+  return sections.find((section) => index >= section.start && index <= section.end)
+    ?? sections.at(-1);
+}
+
+function excerptCacheDiagnosticsText(text: string, index: number): string {
+  if (!text) return '（空）';
+  const start = Math.max(0, index - 80);
+  const end = Math.min(text.length, index + 160);
+  return text
+    .slice(start, end)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 260) || '（空）';
+}
+
+function buildCachePrefixDiagnostics(input: {
+  enabled: boolean;
+  systemPrompt: string;
+  messages: CacheDiagnosticsMessage[];
+  previous?: {
+    systemPrompt: string;
+    messages: CacheDiagnosticsMessage[];
+  };
+}): NonNullable<聊天消息['debugContext']>['cachePrefixDiagnostics'] | undefined {
+  if (!input.enabled || !input.previous) return undefined;
+  const currentSections = buildCacheDiagnosticsSections(input.systemPrompt, input.messages);
+  const previousSections = buildCacheDiagnosticsSections(input.previous.systemPrompt, input.previous.messages);
+  const currentText = serializeCacheDiagnosticsSections(currentSections);
+  const previousText = serializeCacheDiagnosticsSections(previousSections);
+  const commonPrefixChars = getCommonPrefixLength(currentText, previousText);
+  const currentPromptTokens = estimateTextTokens(currentText);
+  const previousPromptTokens = estimateTextTokens(previousText);
+  const commonPrefixTokens = estimateTextTokens(currentText.slice(0, commonPrefixChars));
+  const firstCurrent = findCacheDiagnosticsSection(currentSections, commonPrefixChars);
+  const firstPrevious = findCacheDiagnosticsSection(previousSections, commonPrefixChars);
+  const changedTailTokens = estimateTextTokens(currentText.slice(commonPrefixChars));
+  const largestChangedSections = currentSections
+    .filter((section) => section.end >= commonPrefixChars)
+    .map((section) => ({
+      label: section.label,
+      tokens: estimateTextTokens(section.text),
+    }))
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 6);
+  return {
+    currentPromptTokens,
+    previousPromptTokens,
+    commonPrefixChars,
+    commonPrefixTokens,
+    commonPrefixRate: currentText.length ? commonPrefixChars / currentText.length : 0,
+    firstDiffCurrentSection: firstCurrent?.label ?? '未知',
+    firstDiffPreviousSection: firstPrevious?.label,
+    firstDiffCurrentExcerpt: excerptCacheDiagnosticsText(currentText, commonPrefixChars),
+    firstDiffPreviousExcerpt: excerptCacheDiagnosticsText(previousText, commonPrefixChars),
+    changedTailTokens,
+    largestChangedSections,
+  };
 }
 
 function buildNpcLedgerDebug(selection?: NPC账本选择结果): NonNullable<聊天消息['debugContext']>['npcLedgerInjection'] | undefined {
@@ -847,6 +1044,68 @@ function compactForRerollInstruction(text: string): string {
   return cleaned.length > 900 ? `${cleaned.slice(0, 900)}...` : cleaned;
 }
 
+function normalizeRerollCompareText(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, '')
+    .replace(/[【】「」『』“”"'‘’（）()\[\]{}<>《》,，.。!！?？:：;；、\s]/g, '')
+    .toLowerCase()
+    .slice(0, 6000);
+}
+
+function calculateRerollSimilarity(nextText: string, previousText: string): number {
+  const left = normalizeRerollCompareText(nextText);
+  const right = normalizeRerollCompareText(previousText);
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  if (left.length >= 80 && right.includes(left)) return 0.98;
+  if (right.length >= 80 && left.includes(right)) return 0.98;
+
+  const buildGrams = (text: string): Set<string> => {
+    const grams = new Set<string>();
+    for (let index = 0; index <= text.length - 8; index += 2) {
+      grams.add(text.slice(index, index + 8));
+    }
+    return grams;
+  };
+  const leftGrams = buildGrams(left);
+  const rightGrams = buildGrams(right);
+  if (!leftGrams.size || !rightGrams.size) return 0;
+  let shared = 0;
+  for (const gram of leftGrams) {
+    if (rightGrams.has(gram)) shared += 1;
+  }
+  return shared / Math.max(1, Math.min(leftGrams.size, rightGrams.size));
+}
+
+function buildRerollGenerationGuard(nonce: string, previousResponse: string): string {
+  return [
+    '重roll末尾强约束：本轮是玩家主动要求重写上一版回复。',
+    `重roll nonce: ${nonce}`,
+    '事实起点、玩家输入和可用上下文保持一致，但正文表达路径必须明显不同。',
+    '必须更换开场镜头、段落推进顺序、对白切入、收尾钩子和行动选项写法；不得复用上一版前三句、连续短语、变量草稿句式或相同结尾。',
+    '如果上一版以旁白开场，本版优先从角色动作或短对白开场；如果上一版以对白开场，本版优先从环境、动作或感官细节切入。',
+    '仍必须遵守当前主剧情输出标签和格式要求，不得因为重roll省略 <thinking>、<正文>、<短期记忆>、<动态世界> 或 <变量草稿>。',
+    previousResponse
+      ? `上一版回复摘录（只用于避重复，不是当前事实）：${compactForRerollInstruction(previousResponse)}`
+      : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildRerollSimilarityRetryGuard(previousResponse: string, similarity: number): string {
+  return [
+    '重roll自动换写：上一版重roll结果与被替换回复过于相似。',
+    `相似度：${Math.round(similarity * 100)}%。`,
+    '请完全换一种写法重写本回合：',
+    '- 保留事实起点和玩家输入，但更换开场镜头、行动顺序、对白切入、句式和收束钩子。',
+    '- 不得复用上一版连续短语、段落结构、对白顺序或相同结尾。',
+    '- 若上一版以旁白开场，本版优先以 NPC 动作或一句短对白开场；若上一版以对白开场，本版优先以环境或动作开场。',
+    '- 仍必须遵守当前主剧情输出标签和格式要求，不得省略 <thinking>、<正文>、<短期记忆>、<动态世界> 或 <变量草稿>。',
+    previousResponse
+      ? `被替换回复摘录（只用于避重复）：${compactForRerollInstruction(previousResponse)}`
+      : '',
+  ].filter(Boolean).join('\n');
+}
+
 export async function executeSendWorkflow(
   userInput: string,
   deps: SendWorkflowDeps,
@@ -973,11 +1232,35 @@ export async function executeSendWorkflow(
       // 当前剧情模式，用于按 storyModeGate 过滤主线世界书（4 选 1）
       storyMode: effectiveWorld.剧情模式,
     };
+    const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({
+      world: effectiveWorld,
+      history: updatedHistory,
+      userInput,
+    });
+    const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
+    const zhikuSceneContext = {
+      ...worldbookCtx,
+      startScenarioId: undefined,
+      startSceneName: undefined,
+      currentLocation: undefined,
+      npcNames: [],
+      presentNpcNamesForFallback: worldbookCtx.npcNames,
+      anticipatedNpcNames: anticipatedZhikuNpcNames,
+      aiSupplementHints: {
+        currentLocation: effectiveWorld.当前地点,
+        presentNpcNames: worldbookCtx.npcNames,
+        immediateStoryReview: immediateStoryReviewForZhiku,
+      },
+    };
     const recallQuery = buildMainRecallQuery({
       userInput,
       history: updatedHistory,
       currentLocation: effectiveWorld.当前地点,
       npcNames: worldbookCtx.npcNames,
+    });
+    const zhikuRecallQuery = buildZhikuKeywordRecallQuery({
+      userInput,
+      history: updatedHistory,
     });
     let newsForPrompt = state.新闻;
     let openingNewsPreprocessed = false;
@@ -1042,13 +1325,13 @@ export async function executeSendWorkflow(
       zhikuRecallEnabled
         ? retrieveZhikuContextWithModel(
             state.智库,
-            recallQuery,
+            zhikuRecallQuery,
             state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
             state.gameSettings.智库系统 ?? 创建默认智库系统设置(),
             config,
             abortController.signal,
             state.gameSettings.智库系统?.api.retryCount ?? 2,
-            worldbookCtx,
+            zhikuSceneContext,
           ).catch((err) => {
             console.warn('[zhiku-retrieval] 智库检索失败：', err);
             return null;
@@ -1143,6 +1426,7 @@ export async function executeSendWorkflow(
         '# 重roll生成约束',
         `本次请求是玩家对上一版回复的重roll。重roll nonce: ${deps.rerollContext.nonce}`,
         '必须基于同一事实起点重新组织镜头、描写、对话和节奏；禁止复用上一版回复的具体段落、句式、变量草稿或行动选项。',
+        '开场方式、对白切入、段落顺序和结尾钩子都要换；不要复用上一版前三句、连续短语或相同收束。',
         '可以保留必要事实一致性，但正文展开方式必须明显不同；如果上一版已经处理某事件，本次不得因为重roll而把旧副作用当作已发生事实。',
         deps.rerollContext.previousResponse
           ? `上一版回复摘录（仅用于避重复，不是当前事实）：${compactForRerollInstruction(deps.rerollContext.previousResponse)}`
@@ -1191,6 +1475,12 @@ export async function executeSendWorkflow(
     if (deepSeekMainActive) {
       apiMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
     }
+    if (deps.rerollContext && !isOpeningSystemTrigger) {
+      apiMessages.push(创建聊天消息(
+        'user',
+        buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
+      ));
+    }
 
     // 3b. CoT 伪装历史注入：在消息序列最前面塞一对 user/assistant，强化思考段输出习惯。
     //     DeepSeek 专用模式下不注入这段伪装续聊，避免污染真实 user 输入并降低格式漂移。
@@ -1213,9 +1503,11 @@ export async function executeSendWorkflow(
     const configuredMaxAttempts = state.gameSettings.autoRetryOnError
       ? Math.max(1, state.gameSettings.autoRetryCount) + 1
       : 1;
-    const maxAttempts = deepSeekMainActive ? Math.max(2, configuredMaxAttempts) : configuredMaxAttempts;
+    const maxAttempts = (deepSeekMainActive || deps.rerollContext) ? Math.max(2, configuredMaxAttempts) : configuredMaxAttempts;
     let lastErr: unknown = null;
     let deepSeekProtocolIssuesForTurn: string[] = [];
+    let rerollSimilarityForTurn: number | undefined;
+    let rerollSimilarityRetried = false;
     let attempt = 0;
     while (attempt < maxAttempts) {
       attempt++;
@@ -1270,6 +1562,31 @@ export async function executeSendWorkflow(
             continue;
           }
           throw new Error('AI response was empty');
+        }
+        const rerollSimilarity = deps.rerollContext
+          ? calculateRerollSimilarity(candidateText, deps.rerollContext.previousResponse)
+          : 0;
+        if (deps.rerollContext) {
+          rerollSimilarityForTurn = rerollSimilarity;
+        }
+        if (deps.rerollContext && rerollSimilarity >= 0.86 && attempt < maxAttempts) {
+          rerollSimilarityRetried = true;
+          void appendApiErrorReport({
+            source: '重roll相似度校验',
+            config,
+            requestMode: mainRequestMode,
+            error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次重roll结果与上一版过于相似，相似度 ${Math.round(rerollSimilarity * 100)}%。`),
+            responseText: result.fullText || streamedText || candidateText,
+          });
+          apiMessages.push(创建聊天消息('user', buildRerollSimilarityRetryGuard(deps.rerollContext.previousResponse, rerollSimilarity)));
+          pushQueueTask(state, 'main_story', 'pending', {
+            detail: '重roll结果与上一版过于相似，正在强制换写。',
+            failCount: attempt,
+            retrying: true,
+            cancellable: true,
+          });
+          console.warn(`[sendWorkflow] 第 ${attempt}/${maxAttempts} 次重roll与上一版过于相似，自动换写，相似度：${rerollSimilarity.toFixed(3)}`);
+          continue;
         }
         const protocolIssues = deepSeekMainActive
           ? getDeepSeekMainProtocolIssues(result.parsed, result.fullText || streamedText)
@@ -1388,9 +1705,34 @@ export async function executeSendWorkflow(
     const parsedForDisplay = awakenPathId
       ? { ...baseParsed, awakenPathId }
       : baseParsed;
+    const tokenUsage = buildTurnTokenUsage({
+      apiUsage: result.usage,
+      systemPrompt,
+      messages: apiMessages,
+      outputText: result.fullText || displayText,
+      provider: config.provider,
+      model: config.model,
+    });
+    const previousDebugContext = [...updatedHistory]
+      .reverse()
+      .find((msg) => msg.role === 'assistant' && msg.debugContext?.systemPrompt)?.debugContext;
+    const cachePrefixDiagnostics = buildCachePrefixDiagnostics({
+      enabled: state.gameSettings.enableCacheDiagnostics === true,
+      systemPrompt,
+      messages: apiMessages,
+      previous: previousDebugContext
+        ? {
+            systemPrompt: previousDebugContext.systemPrompt,
+            messages: previousDebugContext.messages,
+          }
+        : undefined,
+    });
     const aiMsg = 创建聊天消息('assistant', displayText, {
       gameTime: `${state.turnCount}`,
       parsedResponse: parsedForDisplay,
+      inputTokens: tokenUsage.inputTokens,
+      outputTokens: tokenUsage.outputTokens,
+      tokenUsage,
       responseDurationSec: duration,
       preTurnSnapshot,
       debugContext: {
@@ -1400,6 +1742,9 @@ export async function executeSendWorkflow(
         deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory === true,
         deepSeekPrefixMode: deepSeekLockFormat,
         deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
+        rerollSimilarity: rerollSimilarityForTurn,
+        rerollSimilarityRetried,
+        cachePrefixDiagnostics,
         mainRequestMode,
         recallSummary: recallSummaryForTurn,
         recallFullContent: recallFullContentForTurn,

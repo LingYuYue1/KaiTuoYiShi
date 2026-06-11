@@ -165,8 +165,9 @@ writeStub('data/variableWorldbook.mjs', 'export const VARIABLE_SYSTEM_WORLDBOOK_
 writeStub('data/companionArchiveWorldbook.mjs', 'export const COMPANION_ARCHIVE_WORLDBOOK_CONTENT = "";\n');
 writeStub('hooks/useGame/historyWindow.mjs', 'export function buildImmediateStoryReview() { return ""; }\n');
 writeStub('utils/worldbook.mjs', 'export {};\n');
+writeStub('utils/variableFacts.mjs', 'export function parseVariableFacts() { return []; }\n');
 writeStub('utils/variableRegistry.mjs', 'export function buildVariableRegistryPrompt() { return ""; }\n');
-writeStub('data/canonicalCharacters.mjs', 'export function matchCanonical() { return null; }\n');
+writeStub('data/canonicalCharacters.mjs', 'export const CANONICAL_CHARACTERS = [];\nexport function matchCanonical() { return null; }\n');
 writeStub('data/builtinAvatars.mjs', 'export function getDefaultBuiltinAvatar() { return undefined; }\n');
 writeStub('utils/npcMemorySanitizer.mjs', 'export function 清理NPC同行记忆摘要(value) { return typeof value === "string" ? value.trim() : ""; }\n');
 
@@ -222,7 +223,8 @@ function buildArchivedAnchorSystem({
   };
 }
 
-function buildActiveCurrentSystem({ seriesId = 'series_active_guard', current, next, sourceType = 'canon' }) {
+function buildActiveCurrentSystem({ seriesId = 'series_active_guard', current, next, segments, sourceType = 'canon', progressPatch = {} }) {
+  const segmentList = segments ?? [current, next].filter(Boolean);
   return {
     当前系列ID: seriesId,
     系列列表: [{
@@ -232,14 +234,14 @@ function buildActiveCurrentSystem({ seriesId = 'series_active_guard', current, n
       来源类型: sourceType,
       来源智库条目ID: [],
       章节列表: [],
-      分段列表: [current, next],
+      分段列表: segmentList,
       每段章数: 1,
       激活注入: true,
       当前分段组号: current.组号,
       当前阶段概括: '',
       核心角色摘要: [],
-      核心角色: [...new Set([...current.登场角色, ...next.登场角色])],
-      涉及地点索引: [...new Set([...current.涉及地点, ...next.涉及地点])],
+      核心角色: [...new Set(segmentList.flatMap((segment) => segment.登场角色))],
+      涉及地点索引: [...new Set(segmentList.flatMap((segment) => segment.涉及地点))],
       涉及派系索引: [],
       createdAt: 1,
       updatedAt: 1,
@@ -257,6 +259,7 @@ function buildActiveCurrentSystem({ seriesId = 'series_active_guard', current, n
       最近判定理由: ['测试：当前段仍在推进中'],
       最近一次推进判定回合: 20,
       updatedAt: 1,
+      ...progressPatch,
     },
   };
 }
@@ -458,9 +461,10 @@ assert(ambiguousPlanning.偏离风险 === '中', `缺少明确收束证据时偏
 const storyProgressSourceForHighConfidence = fs.readFileSync(path.join(root, 'services/storyProgressService.ts'), 'utf8');
 const sendWorkflowSourceForStoryAlignment = fs.readFileSync(path.join(root, 'hooks/useGame/sendWorkflow.ts'), 'utf8');
 assert(
-  storyProgressSourceForHighConfidence.includes('laterSegmentHighConfidence') &&
-  storyProgressSourceForHighConfidence.includes('高置信命中后续分段'),
-  '剧情推进必须允许高置信命中后续分段时归档当前段，避免只因当前段结束状态未精确命中而卡住。',
+  storyProgressSourceForHighConfidence.includes('decideSegmentAlignment') &&
+    storyProgressSourceForHighConfidence.includes('强证据跨两段纠偏') &&
+    storyProgressSourceForHighConfidence.includes('显式阶段跳转纠偏'),
+  '剧情推进必须保留分级跨段纠偏：相邻段可高置信对齐，跨两段要强证据，跨三段以上要显式阶段跳转。',
 );
 assert(storyProgressSourceForHighConfidence.includes('findCrossSeriesCanonAlignment'), '剧情编织必须支持原著系列跨章节纠偏，避免正文到雅利洛但锚点仍停黑塔。');
 assert(storyProgressSourceForHighConfidence.includes('scoreCanonSeriesPresence'), '跨系列纠偏必须使用系列级地点/人物/派系评分。');
@@ -549,6 +553,200 @@ assert(
     item.角色推进摘要?.some((text) => text.includes('三月七') && text.includes('门禁异常解除')),
   ),
   '自动推进历史归档应沉淀角色推进摘要，供记忆、手机、新闻承接已发生的角色阶段变化。',
+);
+
+const accumulatedCurrent = segment({
+  id: 'seg_accumulated_current',
+  组号: 1,
+  标题: '异常信号源，定位封存',
+  运行状态: '当前',
+  本段概括: '观景车厢，异常信号源，谱线，封存流程。',
+  本段结束状态: ['异常信号源定位完成并封存'],
+  给后续参考: ['封存后再追查来源'],
+  登场角色: ['凌'],
+  涉及地点: ['观景车厢'],
+});
+const accumulatedNext = segment({
+  id: 'seg_accumulated_next',
+  组号: 2,
+  标题: '追查信号来源',
+  运行状态: '未开始',
+  本段概括: '玩家追查异常信号的来源。',
+  本段结束状态: ['信号来源查明'],
+  登场角色: ['凌'],
+});
+const accumulatedFirst = storyProgress.autoAlignCanonStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_accumulated_progress',
+    current: accumulatedCurrent,
+    next: accumulatedNext,
+  }),
+  turnCount: 31,
+  userInput: '我继续调查异常信号源，检查谱线，确认封存流程。',
+  body: '凌在观景车厢展开记录，异常信号源的谱线被逐项确认，封存流程开始推进。',
+});
+assert(accumulatedFirst.progressed === false, '单回合推进证据不应立刻归档当前段。');
+assert(accumulatedFirst.system.当前进度?.连续推进证据回合 === 1, '首回合有效推进证据应累计为 1。');
+assert(accumulatedFirst.system.当前进度?.推进证据?.length > 0, '推进证据应写入诊断锚点。');
+const accumulatedSecond = storyProgress.autoAlignCanonStoryProgress({
+  storyWeaving: accumulatedFirst.system,
+  turnCount: 32,
+  userInput: '我继续沿着谱线排查异常信号源，把封存流程推进到底。',
+  body: '观景车厢里的记录继续更新，凌确认异常信号源的谱线稳定，封存流程被完整推进。',
+});
+assert(accumulatedSecond.progressed === true, '连续两回合有效推进证据应允许当前段自动推进。');
+assert(accumulatedSecond.system.当前进度?.当前分段ID === accumulatedNext.id, '累计推进后应进入下一段。');
+assert(accumulatedSecond.system.当前进度?.连续推进证据回合 === 0, '推进成功后应清空连续推进证据。');
+
+const jumpCurrent = segment({
+  id: 'seg_jump_current',
+  组号: 1,
+  标题: '旧调查，入口巡检',
+  运行状态: '当前',
+  本段概括: '旧入口，巡检，问询。',
+  本段结束状态: ['旧入口巡检完成'],
+  登场角色: ['玩家'],
+  涉及地点: ['旧入口'],
+});
+const jumpMiddle = segment({
+  id: 'seg_jump_middle',
+  组号: 2,
+  标题: '中间过渡，线索整理',
+  运行状态: '未开始',
+  本段概括: '玩家整理过渡线索。',
+  本段结束状态: ['过渡线索整理完成'],
+  登场角色: ['玩家'],
+  涉及地点: ['资料室'],
+});
+const jumpTarget = segment({
+  id: 'seg_jump_target',
+  组号: 3,
+  标题: '星槎海，丹鼎司，追捕',
+  运行状态: '未开始',
+  本段概括: '星槎海，丹鼎司，药王秘传，追捕行动。',
+  本段结束状态: ['药王秘传，据点暴露'],
+  登场角色: ['符玄', '景元'],
+  涉及地点: ['星槎海', '丹鼎司'],
+  关键事件: [{
+    事件名: '追捕药王秘传',
+    事件说明: '星槎海，丹鼎司，符玄，景元，药王秘传。',
+    触发条件: ['抵达星槎海'],
+    阻断条件: [],
+    事件结果: ['药王秘传，据点暴露'],
+    信息可见性: 'public',
+  }],
+});
+const twoSegmentJump = storyProgress.autoAlignCanonStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_two_segment_jump',
+    current: jumpCurrent,
+    segments: [jumpCurrent, jumpMiddle, jumpTarget],
+  }),
+  turnCount: 40,
+  userInput: '我赶到星槎海，和符玄、景元一起追捕药王秘传。',
+  body: '星槎海的丹鼎司警戒线已经拉开，符玄与景元正在追捕药王秘传，追捕行动让药王秘传据点暴露。',
+});
+assert(twoSegmentJump.progressed === true, '强证据命中后两段时应允许跨两段纠偏。');
+assert(twoSegmentJump.system.当前进度?.当前分段ID === jumpTarget.id, '跨两段纠偏应对齐到命中目标段。');
+assert(
+  twoSegmentJump.system.当前进度?.历史归档.some((item) => item.分段ID === jumpMiddle.id && item.归档状态 === '已跳过'),
+  '跨两段纠偏时中间段应按已跳过归档，避免写成已完成事实。',
+);
+assert(
+  !twoSegmentJump.system.当前进度?.已完成摘要.some((item) => item.includes('过渡线索整理完成')),
+  '跨段跳过的中间段不得进入已完成摘要。',
+);
+
+const longJumpSegments = [
+  segment({
+    id: 'seg_long_jump_current',
+    组号: 1,
+    标题: '旧入口，检查',
+    运行状态: '当前',
+    本段概括: '旧入口，检查。',
+    本段结束状态: ['旧入口检查完成'],
+    登场角色: ['玩家'],
+    涉及地点: ['旧入口'],
+  }),
+  segment({
+    id: 'seg_long_jump_2',
+    组号: 2,
+    标题: '过渡二',
+    运行状态: '未开始',
+    本段概括: '过渡二。',
+    本段结束状态: ['过渡二完成'],
+    登场角色: ['玩家'],
+    涉及地点: ['资料室'],
+  }),
+  segment({
+    id: 'seg_long_jump_3',
+    组号: 3,
+    标题: '过渡三',
+    运行状态: '未开始',
+    本段概括: '过渡三。',
+    本段结束状态: ['过渡三完成'],
+    登场角色: ['玩家'],
+    涉及地点: ['资料室'],
+  }),
+  segment({
+    id: 'seg_long_jump_4',
+    组号: 4,
+    标题: '过渡四',
+    运行状态: '未开始',
+    本段概括: '过渡四。',
+    本段结束状态: ['过渡四完成'],
+    登场角色: ['玩家'],
+    涉及地点: ['资料室'],
+  }),
+  segment({
+    id: 'seg_long_jump_target',
+    组号: 5,
+    标题: '太卜司，穷观阵，审讯',
+    运行状态: '未开始',
+    本段概括: '太卜司，穷观阵，符玄，卡芙卡，审讯。',
+    本段结束状态: ['卡芙卡，审讯结束'],
+    登场角色: ['符玄', '卡芙卡'],
+    涉及地点: ['太卜司', '穷观阵'],
+    关键事件: [{
+      事件名: '穷观阵审讯',
+      事件说明: '太卜司，穷观阵，符玄，卡芙卡，审讯。',
+      触发条件: ['抵达太卜司'],
+      阻断条件: [],
+      事件结果: ['卡芙卡，审讯结束'],
+      信息可见性: 'public',
+    }],
+  }),
+];
+const longJumpWithoutStageSignal = storyProgress.autoAlignCanonStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_long_jump_without_stage_signal',
+    current: longJumpSegments[0],
+    segments: longJumpSegments,
+  }),
+  turnCount: 41,
+  userInput: '我在太卜司的穷观阵旁询问符玄和卡芙卡审讯的事。',
+  body: '太卜司的穷观阵旁，符玄盯着卡芙卡，审讯记录不断亮起，卡芙卡审讯结束的结论被写入案卷。',
+});
+assert(longJumpWithoutStageSignal.progressed === false, '跨三段以上没有明确阶段跳转词时不得直接大跳。');
+assert(
+  longJumpWithoutStageSignal.system.当前进度?.最近判定理由.some((item) => item.includes('需要明确阶段/时空跳转词')),
+  '未大跳诊断应说明缺少明确阶段/时空跳转词。',
+);
+const longJumpWithStageSignal = storyProgress.autoAlignCanonStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_long_jump_with_stage_signal',
+    current: longJumpSegments[0],
+    segments: longJumpSegments,
+  }),
+  turnCount: 42,
+  userInput: '数日后，我已经抵达太卜司，直接进入穷观阵旁的审讯现场。',
+  body: '数日后，众人已经抵达太卜司。穷观阵旁，符玄盯着卡芙卡，审讯记录不断亮起，卡芙卡审讯结束的结论被写入案卷。',
+});
+assert(longJumpWithStageSignal.progressed === true, '跨三段以上有明确阶段跳转词和强证据时应允许大跳纠偏。');
+assert(longJumpWithStageSignal.system.当前进度?.当前分段ID === longJumpSegments[4].id, '显式阶段跳转应对齐到远端目标段。');
+assert(
+  longJumpWithStageSignal.system.当前进度?.历史归档.filter((item) => item.归档状态 === '已跳过').length >= 3,
+  '显式大跳时中间段应以已跳过归档。',
 );
 
 const skippedPlanning = storyPlanning.buildStoryPlanningAnalysis(buildArchivedAnchorSystem({

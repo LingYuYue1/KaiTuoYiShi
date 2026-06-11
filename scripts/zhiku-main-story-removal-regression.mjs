@@ -42,13 +42,16 @@ assert(
 );
 
 assert(
-  useGameStateSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
+  presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
+    presetSource.includes('mergeBundledZhikuSystem') &&
+    useGameStateSource.includes('mergeBundledZhikuSystem(preset, savedZhiku, migrationAt)') &&
     useGameStateSource.includes('savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))'),
   '启动加载时必须过滤旧存档残留的主线剧情智库条目',
 );
 
 assert(
-  saveLoadSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)'),
+  presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
+    saveLoadSource.includes('mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt)'),
   '导入存档时必须过滤旧存档残留的主线剧情智库条目',
 );
 

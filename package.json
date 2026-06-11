@@ -18,6 +18,7 @@
     "test:baidu-qianfan": "node scripts/baidu-qianfan-regression.mjs",
     "test:opencode-api": "node scripts/opencode-api-adaptation-regression.mjs",
     "test:deepseek-format": "node scripts/deepseek-format-stability-regression.mjs",
+    "test:turn-usage": "node scripts/turn-usage-regression.mjs",
     "test:presence": "node scripts/presence-regression.mjs",
     "test:settings-save": "node scripts/settings-save-regression.mjs",
     "test:extra-features": "node scripts/extra-features-regression.mjs",
@@ -57,6 +58,7 @@
     "test:zhiku-guinaifen": "node scripts/zhiku-guinaifen-regression.mjs",
     "validate:story-weaving-canon": "node scripts/validate-story-weaving-canon.mjs",
     "deploy:cf": "npm run build && wrangler pages deploy dist --project-name=kaituoyishi --branch=main",
+    "deploy:cf:preview": "npm run build && wrangler pages deploy dist --project-name=kaituoyishi-preview --branch=main",
     "preview": "vite preview"
   },
   "dependencies": {

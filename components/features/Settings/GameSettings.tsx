@@ -295,6 +295,12 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
         </p>
       </Field>
       <ToggleRow
+        label="缓存前缀诊断"
+        desc="开启后，新回合的响应详情会显示请求与上一回合从哪里开始变化、公共前缀估算 tokens 和变化后较大的请求块。只用于排查缓存命中，默认关闭。"
+        checked={settings.enableCacheDiagnostics ?? false}
+        onChange={(v) => onChange({ ...settings, enableCacheDiagnostics: v })}
+      />
+      <ToggleRow
         label="叙述者人格"
         desc="AI 以特定角色身份回应，而非中立旁白（同步「提示词模块·叙述者人格」开关）"
         checked={settings.enableTavernKeeperPersona}

@@ -263,15 +263,18 @@ export function 获取智库人物名(entry: 智库条目): string {
 }
 
 export function 获取智库人物名列表(entry: Pick<智库条目, '标题' | '关键词'> & Partial<Pick<智库条目, '关联角色ID'>>): string[] {
+  const names: string[] = [];
   const explicitRole = normalizeOptionalText(entry.关联角色ID);
-  if (explicitRole) return [explicitRole];
+  if (explicitRole) names.push(explicitRole);
 
-  const tagNames = (entry.关键词 ?? [])
+  names.push(
+    ...(entry.关键词 ?? [])
     .map((keyword) => parseKeywordTag(keyword))
-    .filter((tag): tag is { key: string; value: string } => !!tag && ['角色', '人物', '角色ID', '归属角色'].includes(tag.key))
+      .filter((tag): tag is { key: string; value: string } => !!tag && ['角色', '人物', '归属角色'].includes(tag.key))
     .map((tag) => tag.value.trim())
-    .filter(Boolean);
-  if (tagNames.length) return Array.from(new Set(tagNames));
+      .filter(Boolean),
+  );
+  if (names.length) return Array.from(new Set(names));
 
   return entry.标题
     .replace(/[｜|].*$/u, '')
@@ -284,6 +287,19 @@ export function 获取智库人物名列表(entry: Pick<智库条目, '标题' |
         .replace(/\(.*?\)/gu, '')
         .trim()]
     : [entry.标题];
+}
+
+export function 获取智库核心触发词(entry: Pick<智库条目, '原文'>): string[] {
+  const source = String(entry.原文 ?? '');
+  const match = source.match(/核心触发词[:：]\s*([^\n]+)/u);
+  if (!match) return [];
+  return Array.from(new Set(
+    match[1]
+      .replace(/[。；;]+$/u, '')
+      .split(/[,，、;；\n]/u)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ));
 }
 
 export function 获取智库人物节点标题(entry: 智库条目): string {

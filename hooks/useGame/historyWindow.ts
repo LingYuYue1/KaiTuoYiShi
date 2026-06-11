@@ -8,6 +8,7 @@ export const MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20;
 export const MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 12;
 export const MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT = 10;
 export const MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 12;
+export const MAIN_RECALL_ASSISTANT_BODY_WINDOW = 5;
 
 export function hasInjectableMemory(memorySystem: 记忆系统): boolean {
   return (
@@ -52,12 +53,11 @@ export function buildLeanAssistantHistoryContent(msg: 聊天消息): string {
   const body = parsed.body?.trim() || msg.content.trim();
   const normalizedBody = normalizeHistoryBodyForPrompt(body);
   const lines: string[] = [
-    '<thinking>',
-    'Step0: 历史回合瘦身',
+    '# 历史 assistant 压缩摘要',
+    '',
     '- 这是旧回合 assistant 历史压缩，只用于承接最近语气、动作和事实。',
-    '- 历史思维链已省略；新回合必须重新按当前思维链输出完整 Step。',
+    '- 旧回合思维链已省略；新回合必须重新按当前思维链输出完整 Step。',
     '- 禁止把历史回合号、历史压缩说明或历史标签照抄进新正文。',
-    '</thinking>',
     '',
     '<正文>',
     normalizedBody ? compactText(normalizedBody, 900) : '【旁白】（历史正文已省略）',
@@ -104,6 +104,7 @@ export function buildMainRecallQuery(input: {
   history: 聊天消息[];
   currentLocation?: string;
   npcNames?: string[];
+  includeRecentUserInputs?: boolean;
 }): string {
   const lines: string[] = [];
   const userInput = input.userInput.trim();
@@ -112,16 +113,18 @@ export function buildMainRecallQuery(input: {
   const npcNames = (input.npcNames ?? []).map((name) => name.trim()).filter(Boolean).slice(0, 12);
   if (npcNames.length) lines.push(`当前相关人物：${npcNames.join('、')}`);
 
-  const recent = input.history.slice(-8);
-  const recentUsers = recent
-    .filter((msg) => msg.role === 'user' && !msg.content.startsWith('[系统]'))
-    .slice(-3)
-    .map((msg) => compactText(msg.content, 80));
-  if (recentUsers.length) lines.push(`最近玩家输入：${recentUsers.join(' / ')}`);
+  const recent = input.history.slice(-Math.max(8, MAIN_RECALL_ASSISTANT_BODY_WINDOW * 2 + 4));
+  if (input.includeRecentUserInputs !== false) {
+    const recentUsers = recent
+      .filter((msg) => msg.role === 'user' && !msg.content.startsWith('[系统]'))
+      .slice(-3)
+      .map((msg) => compactText(msg.content, 80));
+    if (recentUsers.length) lines.push(`最近玩家输入：${recentUsers.join(' / ')}`);
+  }
 
   const recentAssistants = recent
     .filter((msg) => msg.role === 'assistant')
-    .slice(-2)
+    .slice(-MAIN_RECALL_ASSISTANT_BODY_WINDOW)
     .map((msg) => {
       const parsed = msg.parsedResponse;
       const memory = parsed?.memory ? `小结：${compactText(parsed.memory, 140)}` : '';
@@ -132,7 +135,32 @@ export function buildMainRecallQuery(input: {
       return [memory, bodyText, events, storyPlan].filter(Boolean).join('；');
     })
     .filter(Boolean);
-  if (recentAssistants.length) lines.push(`最近剧情承接：${recentAssistants.join('\n')}`);
+  if (recentAssistants.length) lines.push(`最近${MAIN_RECALL_ASSISTANT_BODY_WINDOW}条正文承接：${recentAssistants.join('\n')}`);
+
+  return lines.join('\n').trim() || userInput;
+}
+
+function extractAssistantBodyText(msg: 聊天消息): string {
+  if (msg.parsedResponse?.body?.trim()) return msg.parsedResponse.body.trim();
+  const raw = msg.content ?? '';
+  const match = raw.match(/<正文>\s*([\s\S]*?)\s*<\/正文>/i);
+  return (match?.[1] ?? raw).trim();
+}
+
+export function buildZhikuKeywordRecallQuery(input: {
+  userInput: string;
+  history: 聊天消息[];
+}): string {
+  const lines: string[] = [];
+  const userInput = input.userInput.trim();
+  if (userInput) lines.push(`玩家当前输入：${compactText(userInput, 160)}`);
+
+  const recentBodies = input.history
+    .filter((msg) => msg.role === 'assistant')
+    .slice(-MAIN_RECALL_ASSISTANT_BODY_WINDOW)
+    .map((msg) => compactText(extractAssistantBodyText(msg), 260))
+    .filter(Boolean);
+  if (recentBodies.length) lines.push(`最近${MAIN_RECALL_ASSISTANT_BODY_WINDOW}条正文承接：${recentBodies.join('\n')}`);
 
   return lines.join('\n').trim() || userInput;
 }

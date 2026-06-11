@@ -187,6 +187,8 @@ export interface 游戏设置 {
   enableClaudeMode: boolean;
   /** DeepSeek 主剧情专用模式：只在主 API 是 DeepSeek 时生效，用于降低续聊污染、reasoning 泄漏和格式漂移。 */
   deepSeekMainMode: DeepSeek主剧情模式;
+  /** 缓存前缀诊断：开启后在响应详情中记录本回合请求与上一回合请求的前缀变化位置。 */
+  enableCacheDiagnostics: boolean;
   /** 变量自动更新：主模型回完正文后，调用变量模型分析正文并落地变量命令。 */
   enableVariableUpdate: boolean;
   /** 星际和平周报：独立新闻演进系统，和变量系统分离。 */
@@ -688,7 +690,7 @@ export function 创建默认智库系统设置(): 智库系统设置 {
     enabled: true,
     api: 创建空智库API覆盖(),
     原著约束: 'standard',
-    maxRelatedEntries: 8,
+    maxRelatedEntries: 5,
     autoSummarizeOnImport: true,
   };
 }
@@ -748,7 +750,7 @@ export function 归一化智库系统设置(input?: Partial<智库系统设置>)
       ...(input.api ?? {}),
       retryCount: Math.max(0, Math.trunc(Number(input.api?.retryCount ?? defaults.api.retryCount ?? 2)) || 0),
     },
-    maxRelatedEntries: Math.max(1, Number(input.maxRelatedEntries ?? defaults.maxRelatedEntries) || defaults.maxRelatedEntries),
+    maxRelatedEntries: Math.min(5, Math.max(1, Math.trunc(Number(input.maxRelatedEntries ?? defaults.maxRelatedEntries)) || defaults.maxRelatedEntries)),
   };
 }
 
@@ -877,6 +879,7 @@ export function 创建默认游戏设置(): 游戏设置 {
     devMode: false,
     enableClaudeMode: false,
     deepSeekMainMode: 'off',
+    enableCacheDiagnostics: false,
     enableVariableUpdate: false,
     新闻系统: 创建默认星际和平周报设置(),
     手机系统: 创建默认手机系统设置(),

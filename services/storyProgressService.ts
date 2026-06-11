@@ -89,36 +89,38 @@ export function autoAlignCanonStoryProgress(params: {
     .sort((a, b) => b.score.value - a.score.value || b.segment.组号 - a.segment.组号);
   const best = scored[0];
   const currentScore = scored.find((item) => item.segment.id === current.id)?.score.value ?? 0;
-  const laterSegmentHighConfidence = Boolean(
-    best &&
-    best.segment.组号 > current.组号 &&
-    best.score.value >= 7 &&
-    best.score.value - currentScore >= 3,
-  );
-  const canJumpToLaterSegment = series.来源类型 === 'canon'
-    || (best && best.segment.组号 === current.组号 + 1 && best.score.value >= 7);
-  if (!best || best.segment.组号 <= current.组号 || best.score.value < 5 || best.score.value - currentScore < 2 || !canJumpToLaterSegment) {
-    const completionScore = scoreCompletionSignals(current, source);
-    if ((completionScore.value < 3 || !completionScore.explicitEnding) && !laterSegmentHighConfidence) {
-      const diagnosticSystem = refreshProgressDiagnostics({
-        normalized,
-        series,
-        current,
-        turnCount: params.turnCount,
-        gateSnapshot: params.gateSnapshot,
-        reasons: buildNoProgressReasons({
-          best,
-          currentScore,
-          completionScore,
-          canJumpToLaterSegment,
-        }),
-      });
-      return {
-        system: diagnosticSystem,
-        changed: diagnosticSystem !== normalized,
-        progressed: false,
-      };
-    }
+  const completionScore = scoreCompletionSignals(current, source);
+  const progressEvidence = scoreProgressEvidence(current, source, params.gateSnapshot, completionScore);
+  const evidenceState = buildProgressEvidenceState({
+    previous: normalized.当前进度,
+    current,
+    turnCount: params.turnCount,
+    evidence: progressEvidence,
+  });
+  const alignmentDecision = decideSegmentAlignment({
+    series,
+    current,
+    best,
+    currentScore,
+    source,
+    completionScore,
+    evidenceState,
+  });
+  if (alignmentDecision.allow && alignmentDecision.target) {
+    const alignedSystem = alignToLaterSegment({
+      normalized,
+      series,
+      current,
+      target: alignmentDecision.target.segment,
+      turnCount: params.turnCount,
+      reasons: alignmentDecision.reasons,
+      currentArchiveStatus: alignmentDecision.currentArchiveStatus,
+      gateSnapshot: params.gateSnapshot,
+    });
+    return { system: alignedSystem, changed: true, progressed: true };
+  }
+
+  if (completionScore.value >= 3 && completionScore.explicitEnding) {
     const next = segments.find((segment) => segment.组号 > current.组号 && segment.运行状态 === '未开始');
     const settledSystem = settleCurrentSegment({
       normalized,
@@ -126,49 +128,52 @@ export function autoAlignCanonStoryProgress(params: {
       current,
       next,
       turnCount: params.turnCount,
-      reasons: laterSegmentHighConfidence && best
-        ? [`高置信命中后续分段「${best.segment.标题}」，后台允许归档当前段`, ...best.score.reasons]
-        : completionScore.reasons.length ? completionScore.reasons : ['后台判定当前分段已达到结束状态'],
+      reasons: completionScore.reasons.length ? completionScore.reasons : ['后台判定当前分段已达到结束状态'],
       mode: next ? 'advance' : 'complete',
       gateSnapshot: params.gateSnapshot,
     });
     return { system: settledSystem, changed: true, progressed: true };
   }
 
-  const now = Date.now();
-  const nextSeries: 剧情编织系列 = {
-    ...series,
-    当前分段组号: best.segment.组号,
-    分段列表: series.分段列表.map((segment) => {
-      if (segment.组号 < best.segment.组号 && ['当前', '未开始'].includes(segment.运行状态)) {
-        return { ...segment, 运行状态: '已经历' as const, updatedAt: now };
-      }
-      if (segment.id === best.segment.id) {
-        return { ...segment, 运行状态: '当前' as const, updatedAt: now };
-      }
-      if (segment.运行状态 === '当前') {
-        return { ...segment, 运行状态: '未开始' as const, updatedAt: now };
-      }
-      return segment;
-    }),
-    updatedAt: now,
-  };
-  const nextSystem = 归一化剧情编织系统({
-    ...normalized,
-    当前系列ID: series.id,
-    系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
-    当前进度: buildProgressAnchor({
-      previous: normalized.当前进度,
+  if (evidenceState.consecutive >= 2 && progressEvidence.valid) {
+    const next = segments.find((segment) => segment.组号 > current.组号 && segment.运行状态 === '未开始');
+    const settledSystem = settleCurrentSegment({
+      normalized,
       series,
-      current: best.segment,
-      completedSegment: current,
+      current,
+      next,
       turnCount: params.turnCount,
-      reasons: best.score.reasons,
-      switchNote: `后台对齐到「${best.segment.标题}」`,
+      reasons: uniqueText([
+        `连续 ${evidenceState.consecutive} 回合出现有效推进证据，后台允许当前段归档`,
+        ...progressEvidence.reasons,
+      ], 8),
+      mode: next ? 'advance' : 'complete',
       gateSnapshot: params.gateSnapshot,
+    });
+    return { system: settledSystem, changed: true, progressed: true };
+  }
+
+  const diagnosticSystem = refreshProgressDiagnostics({
+    normalized,
+    series,
+    current,
+    turnCount: params.turnCount,
+    gateSnapshot: params.gateSnapshot,
+    evidenceState,
+    reasons: buildNoProgressReasons({
+      best,
+      currentScore,
+      completionScore,
+      alignmentReasons: alignmentDecision.reasons,
+      progressEvidence,
+      evidenceState,
     }),
   });
-  return { system: nextSystem, changed: true, progressed: true };
+  return {
+    system: diagnosticSystem,
+    changed: diagnosticSystem !== normalized,
+    progressed: false,
+  };
 }
 
 function getActiveSeries(system: 剧情编织系统): 剧情编织系列 | undefined {
@@ -299,6 +304,71 @@ function switchCanonSeries(params: {
       turnCount: params.turnCount,
       reasons: params.reasons,
       switchNote: `后台跨系列纠偏：从「${params.fromSeries.标题}」切换到「${params.toSeries.标题} / ${params.toCurrent.标题}」`,
+      archiveStatus: '已偏离',
+      gateSnapshot: params.gateSnapshot,
+    }),
+  });
+}
+
+function alignToLaterSegment(params: {
+  normalized: 剧情编织系统;
+  series: 剧情编织系列;
+  current: 剧情编织分段;
+  target: 剧情编织分段;
+  turnCount: number;
+  reasons: string[];
+  currentArchiveStatus: '已经历' | '已跳过';
+  gateSnapshot?: 剧情编织门禁快照 | null;
+}): 剧情编织系统 {
+  const now = Date.now();
+  const skippedSegments = params.series.分段列表
+    .filter((segment) =>
+      segment.组号 < params.target.组号 &&
+      segment.id !== params.current.id &&
+      ['当前', '未开始'].includes(segment.运行状态),
+    )
+    .sort((a, b) => a.组号 - b.组号);
+  const nextSeries: 剧情编织系列 = {
+    ...params.series,
+    当前分段组号: params.target.组号,
+    分段列表: params.series.分段列表.map((segment) => {
+      if (segment.id === params.current.id && ['当前', '未开始'].includes(segment.运行状态)) {
+        return { ...segment, 运行状态: params.currentArchiveStatus, updatedAt: now };
+      }
+      if (segment.组号 < params.target.组号 && ['当前', '未开始'].includes(segment.运行状态)) {
+        return { ...segment, 运行状态: '已跳过' as const, updatedAt: now };
+      }
+      if (segment.id === params.target.id) {
+        return { ...segment, 运行状态: '当前' as const, updatedAt: now };
+      }
+      if (segment.运行状态 === '当前') {
+        return { ...segment, 运行状态: '未开始' as const, updatedAt: now };
+      }
+      return segment;
+    }),
+    updatedAt: now,
+  };
+  const additionalArchives = skippedSegments.map((segment) => ({
+    segment,
+    status: '已跳过' as const,
+    switchNote: `后台跨段纠偏到「${params.target.标题}」，中间段「${segment.标题}」仅按进度校正跳过，不写成已完成事实`,
+  }));
+  return 归一化剧情编织系统({
+    ...params.normalized,
+    当前系列ID: params.series.id,
+    系列列表: params.normalized.系列列表.map((item) => item.id === params.series.id ? nextSeries : item),
+    当前进度: buildProgressAnchor({
+      previous: params.normalized.当前进度,
+      series: params.series,
+      current: params.target,
+      completedSegment: params.current,
+      turnCount: params.turnCount,
+      reasons: params.reasons,
+      switchNote: params.currentArchiveStatus === '已经历'
+        ? `后台对齐到「${params.target.标题}」，当前段按已经历归档`
+        : `后台对齐到「${params.target.标题}」，当前段仅按进度校正跳过`,
+      archiveStatus: params.currentArchiveStatus,
+      additionalArchives,
       gateSnapshot: params.gateSnapshot,
     }),
   });
@@ -356,6 +426,7 @@ function refreshProgressDiagnostics(params: {
   current: 剧情编织分段;
   turnCount: number;
   reasons: string[];
+  evidenceState: 推进证据状态;
   gateSnapshot?: 剧情编织门禁快照 | null;
 }): 剧情编织系统 {
   const previous = params.normalized.当前进度;
@@ -372,6 +443,9 @@ function refreshProgressDiagnostics(params: {
     已完成摘要: previous?.已完成摘要 ?? [],
     切换说明: previous?.切换说明 ?? [],
     历史归档: previous?.历史归档 ?? [],
+    推进证据: params.evidenceState.evidence,
+    连续推进证据回合: params.evidenceState.consecutive,
+    卡段回合数: params.evidenceState.stuckTurns,
   };
   const sameAnchor = previous
     && previous.当前系列ID === nextAnchor.当前系列ID
@@ -380,7 +454,10 @@ function refreshProgressDiagnostics(params: {
     && previous.推进状态 === nextAnchor.推进状态
     && previous.最近一次推进判定回合 === nextAnchor.最近一次推进判定回合
     && sameTextList(previous.最近判定理由, nextAnchor.最近判定理由)
-    && sameTextList(previous.当前待解问题, nextAnchor.当前待解问题);
+    && sameTextList(previous.当前待解问题, nextAnchor.当前待解问题)
+    && sameTextList(previous.推进证据, nextAnchor.推进证据)
+    && (previous.连续推进证据回合 ?? 0) === (nextAnchor.连续推进证据回合 ?? 0)
+    && (previous.卡段回合数 ?? 0) === (nextAnchor.卡段回合数 ?? 0);
   if (sameAnchor) return params.normalized;
   return 归一化剧情编织系统({
     ...params.normalized,
@@ -390,10 +467,12 @@ function refreshProgressDiagnostics(params: {
 }
 
 function buildNoProgressReasons(params: {
-  best?: { segment: 剧情编织分段; score: { value: number; reasons: string[] } };
+  best?: 分段评分;
   currentScore: number;
-  completionScore: { value: number; explicitEnding: boolean; reasons: string[] };
-  canJumpToLaterSegment: boolean;
+  completionScore: 完成判定评分;
+  alignmentReasons: string[];
+  progressEvidence: 推进证据评分;
+  evidenceState: 推进证据状态;
 }): string[] {
   const reasons = [
     `未推进：当前段结束判定 ${params.completionScore.value}/3，${params.completionScore.explicitEnding ? '已有明确收束证据' : '缺少明确收束证据'}`,
@@ -404,9 +483,15 @@ function buildNoProgressReasons(params: {
     reasons.push('未推进：候选分段无有效组号');
   } else {
     reasons.push(`未推进：最佳候选「${params.best.segment.标题}」对齐分 ${params.best.score.value}，当前段对齐分 ${params.currentScore}`);
-    if (params.best.score.value < 5) reasons.push('未推进：后续分段命中分低于 5');
-    if (params.best.score.value - params.currentScore < 2) reasons.push('未推进：后续分段相对当前段优势不足 2 分');
-    if (!params.canJumpToLaterSegment) reasons.push('未推进：原创剧情只允许高置信推进到相邻下一段');
+  }
+  reasons.push(...params.alignmentReasons);
+  if (params.progressEvidence.blockers.length) {
+    reasons.push(`未推进：命中阻断/否定词 ${params.progressEvidence.blockers.slice(0, 4).join('、')}`);
+  } else if (params.progressEvidence.valid) {
+    reasons.push(`推进证据累计：连续 ${params.evidenceState.consecutive}/2 回合`);
+    reasons.push(...params.progressEvidence.reasons);
+  } else {
+    reasons.push(...params.progressEvidence.reasons);
   }
   if (params.completionScore.reasons.length) {
     reasons.push(...params.completionScore.reasons);
@@ -423,9 +508,16 @@ function buildProgressAnchor(params: {
   reasons: string[];
   switchNote: string;
   completed?: boolean;
+  archiveStatus?: 剧情编织历史归档['归档状态'];
+  additionalArchives?: Array<{
+    segment: 剧情编织分段;
+    status: 剧情编织历史归档['归档状态'];
+    switchNote: string;
+  }>;
   gateSnapshot?: 剧情编织门禁快照 | null;
 }): 剧情编织进度锚点 {
-  const completedSummary = params.completedSegment
+  const archiveStatus = params.archiveStatus ?? (params.completed ? '已完成' : '已经历');
+  const completedSummary = params.completedSegment && ['已经历', '已完成'].includes(archiveStatus)
     ? params.completedSegment.本段结束状态[0]
       || params.completedSegment.本段概括
       || params.completedSegment.原文摘要
@@ -443,9 +535,20 @@ function buildProgressAnchor(params: {
       turnCount: params.turnCount,
       reasons: params.reasons,
       switchNote: params.switchNote,
-      status: params.completed ? '已完成' : '已经历',
+      status: archiveStatus,
     })
     : undefined;
+  const additionalArchives = (params.additionalArchives ?? [])
+    .map((item) => buildHistoryArchiveEntry({
+      previous: params.previous,
+      series: params.series,
+      segment: item.segment,
+      turnCount: params.turnCount,
+      reasons: params.reasons,
+      switchNote: item.switchNote,
+      status: item.status,
+    }))
+    .filter(Boolean) as 剧情编织历史归档[];
   return {
     当前系列ID: params.series.id,
     当前分段ID: params.current.id,
@@ -454,10 +557,13 @@ function buildProgressAnchor(params: {
     已完成摘要: uniqueText([...(params.previous?.已完成摘要 ?? []), completedSummary], 12),
     当前待解问题: uniqueText(pending, 10),
     切换说明: uniqueText([...(params.previous?.切换说明 ?? []), params.switchNote], 10),
-    历史归档: uniqueArchives([...(params.previous?.历史归档 ?? []), archive].filter(Boolean) as 剧情编织历史归档[], 30),
+    历史归档: uniqueArchives([...(params.previous?.历史归档 ?? []), archive, ...additionalArchives].filter(Boolean) as 剧情编织历史归档[], 30),
     最近门禁结果: params.gateSnapshot?.mode ?? params.previous?.最近门禁结果,
     最近判定理由: uniqueText(params.reasons, 8),
     最近一次推进判定回合: params.turnCount,
+    推进证据: [],
+    连续推进证据回合: 0,
+    卡段回合数: 0,
     updatedAt: Date.now(),
   };
 }
@@ -471,11 +577,18 @@ function buildHistoryArchiveEntry(params: {
   switchNote: string;
   status: 剧情编织历史归档['归档状态'];
 }): 剧情编织历史归档 | undefined {
-  const summary = params.segment.本段结束状态[0]
-    || params.segment.本段概括
+  const baseSummary = params.segment.本段概括
     || params.segment.原文摘要
     || params.segment.标题;
-  const roleProgressSummary = buildRoleProgressArchiveSummary(params.segment);
+  const summary = params.status === '已跳过'
+    ? `按进度校正跳过：${baseSummary}（未确认完整经历）`
+    : params.status === '已偏离'
+      ? `路线已偏离：${baseSummary}（不作为已完成事实）`
+      : params.segment.本段结束状态[0]
+        || baseSummary;
+  const roleProgressSummary = ['已跳过', '已偏离'].includes(params.status)
+    ? []
+    : buildRoleProgressArchiveSummary(params.segment);
   const id = `story_archive_${params.series.id}_${params.segment.id}_${params.turnCount}`;
   if (params.previous?.历史归档?.some((item) => item.id === id || (item.分段ID === params.segment.id && item.归档回合 === params.turnCount))) {
     return undefined;
@@ -542,10 +655,23 @@ function sameTextList(left?: string[], right?: string[]): boolean {
   return a.length === b.length && a.every((item, index) => item === b[index]);
 }
 
-function scoreCompletionSignals(segment: 剧情编织分段, text: string): { value: number; explicitEnding: boolean; reasons: string[] } {
+type 分段存在评分 = { value: number; reasons: string[]; categories: string[] };
+type 分段评分 = { segment: 剧情编织分段; score: 分段存在评分 };
+type 完成判定评分 = { value: number; explicitEnding: boolean; reasons: string[]; blockers: string[] };
+type 推进证据评分 = { valid: boolean; value: number; reasons: string[]; blockers: string[] };
+type 推进证据状态 = { evidence: string[]; consecutive: number; stuckTurns: number };
+type 跨段对齐判定 = {
+  allow: boolean;
+  target?: 分段评分;
+  reasons: string[];
+  currentArchiveStatus: '已经历' | '已跳过';
+};
+
+function scoreCompletionSignals(segment: 剧情编织分段, text: string): 完成判定评分 {
   const source = normalizeText(text);
   let value = 0;
   const reasons: string[] = [];
+  const blockers = detectProgressBlockers(source);
   const endStates = [...segment.本段结束状态, ...segment.关键事件.flatMap((event) => event.事件结果)].filter(Boolean);
   const endingHits = countHits(source, endStates);
   if (endingHits > 0) {
@@ -564,21 +690,27 @@ function scoreCompletionSignals(segment: 剧情编织分段, text: string): { va
     value += Math.min(2, resultHits);
     reasons.push('正文出现阶段收束信号');
   }
-  const explicitEnding = endingHits > 0 || (titleHits >= 2 && resultHits >= 2);
+  if (blockers.length) {
+    value = Math.max(0, value - 2);
+    reasons.push(`出现否定/阻断信号：${blockers.slice(0, 4).join('、')}`);
+  }
+  const explicitEnding = blockers.length === 0 && (endingHits > 0 || (titleHits >= 2 && resultHits >= 2));
   if (!explicitEnding) reasons.push('缺少明确结束状态或标题+收束词组合，暂不自动归档');
-  return { value, explicitEnding, reasons };
+  return { value, explicitEnding, reasons, blockers };
 }
 
-function scoreSegmentPresence(segment: 剧情编织分段, text: string): { value: number; reasons: string[] } {
+function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段存在评分 {
   const source = normalizeText(text);
   let value = 0;
   const reasons: string[] = [];
+  const categories: string[] = [];
 
   const titleTerms = splitMeaningfulTerms(segment.标题);
   const titleHits = titleTerms.filter((term) => source.includes(term)).length;
   if (titleHits >= 2) {
     value += 3;
     reasons.push(`命中标题词 ${titleHits} 项`);
+    categories.push('标题');
   }
 
   const summaryTerms = splitMeaningfulTerms([
@@ -590,14 +722,25 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): { valu
   if (summaryHits >= 2) {
     value += Math.min(5, summaryHits);
     reasons.push(`命中概括关键词 ${summaryHits} 项`);
+    categories.push('概括');
   }
 
-  const entityTerms = [...segment.登场角色, ...segment.涉及地点, ...segment.涉及派系]
+  const roleTerms = segment.登场角色
     .map((item) => item.trim())
     .filter((item) => item.length >= 2 && source.includes(item));
+  const locationTerms = segment.涉及地点
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2 && source.includes(item));
+  const factionTerms = segment.涉及派系
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2 && source.includes(item));
+  const entityTerms = [...roleTerms, ...locationTerms, ...factionTerms];
   if (entityTerms.length >= 2) {
     value += Math.min(3, entityTerms.length);
     reasons.push(`命中人物/地点 ${entityTerms.slice(0, 4).join('、')}`);
+    if (roleTerms.length) categories.push('登场角色');
+    if (locationTerms.length) categories.push('地点');
+    if (factionTerms.length) categories.push('派系');
   }
 
   const eventTerms = splitMeaningfulTerms([
@@ -609,9 +752,217 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): { valu
   if (eventHits >= 2) {
     value += Math.min(3, eventHits);
     reasons.push(`命中事件结果 ${eventHits} 项`);
+    categories.push('事件结果');
   }
 
-  return { value, reasons };
+  return { value, reasons, categories: uniqueText(categories, 8) };
+}
+
+function scoreProgressEvidence(
+  segment: 剧情编织分段,
+  text: string,
+  gateSnapshot: 剧情编织门禁快照 | null | undefined,
+  completionScore: 完成判定评分,
+): 推进证据评分 {
+  const source = normalizeText(text);
+  const blockers = completionScore.blockers.length ? completionScore.blockers : detectProgressBlockers(source);
+  const segmentScore = scoreSegmentPresence(segment, text);
+  const actionWords = ['继续', '前往', '进入', '寻找', '追问', '调查', '启动', '汇报', '战斗', '迎击', '救援', '抵达', '登上', '打开', '检查', '确认', '封存', '交付', '汇合'];
+  const actionHits = actionWords.filter((word) => source.includes(word));
+  let value = 0;
+  const reasons: string[] = [];
+  if (completionScore.value >= 2) {
+    value += completionScore.value;
+    reasons.push(`当前段收束/结果证据 ${completionScore.value} 分`);
+  }
+  if (segmentScore.value >= 3) {
+    value += Math.min(3, segmentScore.value);
+    reasons.push(`当前段正文命中 ${segmentScore.value} 分`);
+  }
+  if (gateSnapshot?.mode === 'strong') {
+    value += 2;
+    reasons.push('最近门禁为强承接');
+  }
+  if (actionHits.length) {
+    value += 1;
+    reasons.push(`玩家/正文动作词：${actionHits.slice(0, 4).join('、')}`);
+  }
+  if (blockers.length) {
+    return {
+      valid: false,
+      value: Math.max(0, value - 2),
+      reasons: [`推进证据被否定/阻断信号压制：${blockers.slice(0, 4).join('、')}`],
+      blockers,
+    };
+  }
+  const valid = value >= 4 && (
+    completionScore.value >= 2 ||
+    gateSnapshot?.mode === 'strong' ||
+    (actionHits.length > 0 && segmentScore.value >= 3)
+  );
+  if (!valid) {
+    reasons.push('有效推进证据不足，暂不累计切段');
+  }
+  return { valid, value, reasons: uniqueText(reasons, 8), blockers };
+}
+
+function buildProgressEvidenceState(params: {
+  previous?: 剧情编织进度锚点;
+  current: 剧情编织分段;
+  turnCount: number;
+  evidence: 推进证据评分;
+}): 推进证据状态 {
+  const sameSegment = params.previous?.当前分段ID === params.current.id;
+  const previousTurn = params.previous?.最近一次推进判定回合 ?? 0;
+  const isNewTurn = params.turnCount > previousTurn;
+  const previousStuck = sameSegment ? params.previous?.卡段回合数 ?? 0 : 0;
+  const stuckTurns = sameSegment && isNewTurn ? previousStuck + 1 : previousStuck;
+  if (!params.evidence.valid) {
+    return { evidence: [], consecutive: 0, stuckTurns };
+  }
+  const previousConsecutive = sameSegment ? params.previous?.连续推进证据回合 ?? 0 : 0;
+  const consecutive = sameSegment && isNewTurn
+    ? previousConsecutive + 1
+    : Math.max(1, previousConsecutive);
+  const previousEvidence = sameSegment ? params.previous?.推进证据 ?? [] : [];
+  return {
+    evidence: uniqueText([...previousEvidence, ...params.evidence.reasons], 8),
+    consecutive,
+    stuckTurns,
+  };
+}
+
+function decideSegmentAlignment(params: {
+  series: 剧情编织系列;
+  current: 剧情编织分段;
+  best?: 分段评分;
+  currentScore: number;
+  source: string;
+  completionScore: 完成判定评分;
+  evidenceState: 推进证据状态;
+}): 跨段对齐判定 {
+  const { best, current, currentScore } = params;
+  if (!best) {
+    return { allow: false, reasons: ['未推进：没有可对齐候选分段'], currentArchiveStatus: '已跳过' };
+  }
+  const distance = best.segment.组号 - current.组号;
+  if (distance <= 0) {
+    return { allow: false, reasons: ['未推进：最佳候选仍是当前段或更早分段'], currentArchiveStatus: '已跳过' };
+  }
+  const advantage = best.score.value - currentScore;
+  const stageSignals = detectExplicitStageJumpSignals(params.source);
+  const categoryCount = best.score.categories.length;
+  const canCanonJump = params.series.来源类型 === 'canon';
+  const currentArchiveStatus: '已经历' | '已跳过' =
+    params.completionScore.explicitEnding || params.evidenceState.consecutive >= 2 ? '已经历' : '已跳过';
+
+  if (distance === 1) {
+    const allow = best.score.value >= 5 && advantage >= 2 && (canCanonJump || best.score.value >= 7);
+    return {
+      allow,
+      target: allow ? best : undefined,
+      currentArchiveStatus,
+      reasons: allow
+        ? uniqueText([
+          `相邻分段高置信对齐：命中「${best.segment.标题}」`,
+          `对齐分 ${best.score.value}，领先当前段 ${advantage} 分`,
+          ...best.score.reasons,
+        ], 8)
+        : uniqueText([
+          `未推进：相邻分段「${best.segment.标题}」证据不足`,
+          best.score.value < 5 ? '未推进：后续分段命中分低于 5' : '',
+          advantage < 2 ? '未推进：后续分段相对当前段优势不足 2 分' : '',
+          !canCanonJump && best.score.value < 7 ? '未推进：原创剧情推进到下一段需要至少 7 分' : '',
+        ], 8),
+    };
+  }
+
+  if (distance === 2) {
+    const allow = canCanonJump && best.score.value >= 8 && advantage >= 3 && categoryCount >= 3;
+    return {
+      allow,
+      target: allow ? best : undefined,
+      currentArchiveStatus,
+      reasons: allow
+        ? uniqueText([
+          `强证据跨两段纠偏：命中「${best.segment.标题}」`,
+          `命中类别：${best.score.categories.join('、')}`,
+          `对齐分 ${best.score.value}，领先当前段 ${advantage} 分`,
+          ...best.score.reasons,
+        ], 8)
+        : uniqueText([
+          `疑似命中后续第 ${best.segment.组号} 段「${best.segment.标题}」，但未达到跨两段纠偏阈值`,
+          best.score.value < 8 ? '未推进：跨两段需要至少 8 分' : '',
+          advantage < 3 ? '未推进：跨两段需要领先当前段至少 3 分' : '',
+          categoryCount < 3 ? '未推进：跨两段需要至少 3 类证据共同命中' : '',
+        ], 8),
+    };
+  }
+
+  const allowLongJump = canCanonJump &&
+    distance <= 4 &&
+    best.score.value >= 10 &&
+    advantage >= 4 &&
+    categoryCount >= 4 &&
+    stageSignals.length > 0;
+  return {
+    allow: allowLongJump,
+    target: allowLongJump ? best : undefined,
+    currentArchiveStatus,
+    reasons: allowLongJump
+      ? uniqueText([
+        `显式阶段跳转纠偏：跨 ${distance} 段对齐到「${best.segment.标题}」`,
+        `阶段跳转信号：${stageSignals.join('、')}`,
+        `命中类别：${best.score.categories.join('、')}`,
+        `对齐分 ${best.score.value}，领先当前段 ${advantage} 分`,
+        ...best.score.reasons,
+      ], 8)
+      : uniqueText([
+        `疑似命中后续第 ${best.segment.组号} 段「${best.segment.标题}」，但未直接大跳`,
+        distance > 4 ? '未推进：自动纠偏最多只评估后 4 段' : '',
+        best.score.value < 10 ? '未推进：跨三段以上需要至少 10 分' : '',
+        advantage < 4 ? '未推进：跨三段以上需要领先当前段至少 4 分' : '',
+        categoryCount < 4 ? '未推进：跨三段以上需要至少 4 类证据共同命中' : '',
+        stageSignals.length === 0 ? '未推进：跨三段以上需要明确阶段/时空跳转词' : '',
+      ], 8),
+  };
+}
+
+function detectProgressBlockers(source: string): string[] {
+  const normalized = normalizeText(source);
+  const blockers = [
+    '还没有',
+    '还没',
+    '尚未',
+    '没有完成',
+    '没有被',
+    '并没有',
+    '并未',
+    '未能',
+    '未完成',
+    '暂未',
+    '没能',
+    '无法',
+    '失败',
+    '受阻',
+    '中断',
+    '被阻止',
+  ];
+  return blockers.filter((word) => normalized.includes(word));
+}
+
+function detectExplicitStageJumpSignals(source: string): string[] {
+  const normalized = normalizeText(source);
+  const signals: Array<[RegExp, string]> = [
+    [/跳过|略过|省略/, '明确跳过'],
+    [/数日后|几日后|数小时后|几小时后|半日后|翌日|第二天|一夜过去/, '时间跳转'],
+    [/已经抵达|已抵达|抵达了|到达了/, '已经抵达'],
+    [/离开.+前往|从.+转往|转向.+继续/, '地点转移'],
+    [/直接前往|直接进入|直接来到/, '直接进入后段'],
+    [/剧情进入|章节进入|进入.+阶段|进入.+章节/, '章节阶段切换'],
+    [/事件已经结束|危机已经解除|告一段落/, '事件已结束'],
+  ];
+  return signals.flatMap(([pattern, label]) => pattern.test(normalized) ? [label] : []);
 }
 
 function scoreCanonSeriesPresence(series: 剧情编织系列, text: string): { value: number; reasons: string[] } {
