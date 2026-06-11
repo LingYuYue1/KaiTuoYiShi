@@ -36,13 +36,21 @@ function detectProvider(config: API配置项): string {
   if (config.provider === 'opencode' || /opencode\.ai\/zen\/v1/i.test(url)) return 'opencode';
   if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
   if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
-  if (
-    config.enableClaudeMode === true &&
-    (config.provider === 'claude' || config.provider === 'claude_compatible')
-  ) {
+  if (shouldUseClaudeMessagesApi(config)) {
     return 'claude';
   }
   return 'openai_compatible';
+}
+
+function isLikelyClaudeModel(model: string): boolean {
+  return /(^|[\/:._\-\s])(claude|opus|sonnet|haiku)([\/:._\-\s]|$)/i.test(model.trim());
+}
+
+function shouldUseClaudeMessagesApi(config: API配置项): boolean {
+  if (config.provider === 'claude') return true;
+  if (config.provider !== 'claude_compatible') return false;
+  if (config.enableClaudeMode !== true) return false;
+  return isLikelyClaudeModel(config.model);
 }
 
 function buildMessages(
@@ -937,6 +945,11 @@ function normalizeClaudeMessages(
   return { system, messages: normalized };
 }
 
+function buildClaudeTextBlocks(text: string): Array<{ type: 'text'; text: string }> {
+  const content = text.trim();
+  return content ? [{ type: 'text', text: content }] : [{ type: 'text', text: ' ' }];
+}
+
 function buildClaudeRequestBody(
   config: API配置项,
   messages: Array<{ role: string; content: string }>,
@@ -947,22 +960,32 @@ function buildClaudeRequestBody(
   const bodyObj: Record<string, unknown> = {
     model: config.model,
     max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
-    messages: claudePayload.messages,
+    messages: claudePayload.messages.map((message) => ({
+      role: message.role,
+      content: buildClaudeTextBlocks(message.content),
+    })),
     stream,
   };
   if (claudePayload.system) {
-    bodyObj.system = claudePayload.system;
+    bodyObj.system = buildClaudeTextBlocks(claudePayload.system);
   }
   return bodyObj;
 }
 
 function claudeHeaders(config: API配置项): HeadersInit {
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-api-key': config.apiKey,
     'anthropic-version': '2023-06-01',
     'anthropic-dangerous-direct-browser-access': 'true',
   };
+  if (config.provider === 'claude_compatible') {
+    headers['anthropic-client-name'] = 'claude-code';
+    headers['anthropic-client-version'] = '1.0.0';
+    headers['x-claude-code-attribution'] = '1';
+    headers['x-claude-code-client'] = 'claude-code';
+  }
+  return headers;
 }
 
 function formatClaudeError(status: number, text: string): Error {
@@ -973,6 +996,9 @@ function formatClaudeError(status: number, text: string): Error {
     if (status === 404) return 'Base URL、/v1 路径或模型名可能不正确。';
     if (status === 400 && (lower.includes('final') || lower.includes('role'))) {
       return '消息角色格式不符合 Claude 要求；客户端已自动尝试保证最后一条为用户内容。';
+    }
+    if (status === 400 && lower.includes('system') && (lower.includes('数组') || lower.includes('array'))) {
+      return '当前 Claude 专用模式会使用根级 system 数组；如果仍报错，请检查中转是否裁剪了请求体或要求 Claude Code 专属字段。';
     }
     if (
       status === 400 &&
@@ -998,6 +1024,89 @@ function parseClaudeTextResponse(json: unknown): string {
     .filter((part) => part?.type === 'text' && typeof part.text === 'string')
     .map((part) => part.text ?? '')
     .join('');
+}
+
+type CompatibleStreamTextState = {
+  currentBlockIsThinking: boolean;
+};
+
+function readCompatibleTextContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => readCompatibleTextContent(part))
+      .join('');
+  }
+  if (!content || typeof content !== 'object') return '';
+  const part = content as Record<string, any>;
+  const type = typeof part.type === 'string' ? part.type : '';
+  if (part.thought === true || /^(thinking|reasoning|thinking_delta|reasoning_delta)$/i.test(type)) {
+    return '';
+  }
+  if (typeof part.text === 'string') return part.text;
+  if (typeof part.output_text === 'string') return part.output_text;
+  if (typeof part.content === 'string') return part.content;
+  if (Array.isArray(part.content)) return readCompatibleTextContent(part.content);
+  return '';
+}
+
+function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTextState): string {
+  if (parsed?.type === 'content_block_start') {
+    const blockType = parsed.content_block?.type;
+    state.currentBlockIsThinking = blockType === 'thinking' || blockType === 'reasoning';
+    if (state.currentBlockIsThinking) return '';
+    return readCompatibleTextContent(parsed.content_block?.text ?? parsed.content_block?.content ?? parsed.content_block);
+  }
+  if (parsed?.type === 'content_block_delta') {
+    const deltaType = parsed.delta?.type;
+    if (deltaType === 'thinking_delta' || deltaType === 'reasoning_delta' || state.currentBlockIsThinking) return '';
+    return readCompatibleTextContent(parsed.delta?.text ?? parsed.delta?.content ?? parsed.delta);
+  }
+  if (parsed?.type === 'content_block_stop') {
+    state.currentBlockIsThinking = false;
+    return '';
+  }
+  if (
+    parsed?.type === 'response.output_text.delta' ||
+    parsed?.type === 'response.text.delta' ||
+    parsed?.type === 'response.content_part.delta'
+  ) {
+    return readCompatibleTextContent(parsed.delta?.text ?? parsed.delta ?? parsed.text);
+  }
+
+  const choice = parsed?.choices?.[0];
+  const delta = choice?.delta;
+  if (delta?.type === 'thinking_delta' || delta?.type === 'reasoning_delta' || delta?.thought === true) {
+    return '';
+  }
+  return (
+    readCompatibleTextContent(delta?.content) ||
+    readCompatibleTextContent(delta?.text) ||
+    readCompatibleTextContent(choice?.text) ||
+    readCompatibleTextContent(parsed?.delta?.text) ||
+    readCompatibleTextContent(parsed?.delta?.content) ||
+    readCompatibleTextContent(parsed?.delta) ||
+    parseOpenCodeGeminiText(parsed) ||
+    readCompatibleTextContent(parsed?.output_text) ||
+    readCompatibleTextContent(parsed?.text) ||
+    readCompatibleTextContent(parsed?.content)
+  );
+}
+
+function parseOpenAICompatibleTextResponse(json: unknown): string {
+  const data = json as Record<string, any>;
+  const choice = data?.choices?.[0];
+  return (
+    readCompatibleTextContent(choice?.message?.content) ||
+    readCompatibleTextContent(choice?.text) ||
+    readCompatibleTextContent(data?.message?.content) ||
+    parseClaudeTextResponse(json) ||
+    parseOpenCodeResponsesText(json) ||
+    parseOpenCodeGeminiText(json) ||
+    readCompatibleTextContent(data?.output_text) ||
+    readCompatibleTextContent(data?.text) ||
+    readCompatibleTextContent(data?.content)
+  );
 }
 
 export async function chatCompletion(
@@ -1080,6 +1189,7 @@ async function streamOpenAICompatible(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false };
 
   try {
     while (true) {
@@ -1099,13 +1209,12 @@ async function streamOpenAICompatible(
         try {
           const parsed = JSON.parse(data);
           emitUsageFromResponse(parsed, config, request);
-          const delta = parsed.choices?.[0]?.delta;
-          if (!delta) continue;
+          const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
 
-          // 只接收正式 content；reasoning_content（厂商内置思考摘要）整路丢弃
-          if (delta.content) {
-            fullText += delta.content;
-            callbacks.onDelta(delta.content);
+          // Accept visible text from compatible chunks; drop thinking/reasoning deltas.
+          if (text) {
+            fullText += text;
+            callbacks.onDelta(text);
           }
         } catch {
           // skip malformed SSE lines
@@ -1328,7 +1437,7 @@ function parseOpenCodeResponsesText(json: unknown): string {
     .map((part) => part.text ?? part.content ?? '')
     .join('');
   if (fromOutput) return fromOutput;
-  return data.choices?.[0]?.message?.content ?? '';
+  return readCompatibleTextContent(data.choices?.[0]?.message?.content);
 }
 
 function parseOpenCodeGeminiText(json: unknown): string {
@@ -1345,9 +1454,9 @@ function readOpenCodeResponsesStreamDelta(parsed: any): string {
     parsed?.type === 'response.text.delta' ||
     parsed?.type === 'response.content_part.delta'
   ) {
-    return parsed.delta?.text ?? parsed.delta ?? '';
+    return readCompatibleTextContent(parsed.delta?.text ?? parsed.delta ?? parsed.text);
   }
-  return parsed?.choices?.[0]?.delta?.content ?? parsed?.delta?.text ?? '';
+  return readCompatibleTextContent(parsed?.choices?.[0]?.delta?.content) || readCompatibleTextContent(parsed?.delta?.text);
 }
 
 async function streamOpenCode(
@@ -1410,6 +1519,7 @@ async function streamOpenCodeChat(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false };
 
   try {
     while (true) {
@@ -1427,8 +1537,7 @@ async function streamOpenCodeChat(
         try {
           const parsed = JSON.parse(data);
           emitUsageFromResponse(parsed, config, request);
-          const delta = parsed.choices?.[0]?.delta;
-          const text = delta?.content ?? '';
+          const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
           if (text) {
             fullText += text;
             callbacks.onDelta(text);
@@ -1697,7 +1806,7 @@ async function completionOpenCodeNonStream(
     }
     const json = await response.json();
     emitUsageFromResponse(json, normalized, request);
-    return json.choices?.[0]?.message?.content ?? '';
+    return parseOpenAICompatibleTextResponse(json);
   }
 
   if (endpoint === 'messages') {
@@ -1945,5 +2054,5 @@ export async function chatCompletionNonStream(
 
   const json = await response.json();
   emitUsageFromResponse(json, deepSeekPayload.config, request);
-  return mergePrefixResult(deepSeekPayload.prefix, json.choices?.[0]?.message?.content ?? '');
+  return mergePrefixResult(deepSeekPayload.prefix, parseOpenAICompatibleTextResponse(json));
 }

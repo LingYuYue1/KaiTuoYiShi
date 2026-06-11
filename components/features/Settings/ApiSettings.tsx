@@ -914,6 +914,18 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
               <div className="leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
                 正文继续使用上方主模型；这里可以批量修改变量、新闻、手机、智库、剧情编织、记忆与忆庭的供应商、Base URL、Key 和模型 ID，不影响文生图。
               </div>
+              <div
+                className="leading-relaxed"
+                style={{
+                  color: 'rgba(255, 215, 150, 0.86)',
+                  background: 'rgba(255, 190, 120, 0.07)',
+                  boxShadow: 'inset 0 0 0 1px rgba(255, 190, 120, 0.18)',
+                  clipPath: smallClip,
+                  padding: '0.45rem 0.6rem',
+                }}
+              >
+                怎么选：其他功能用 Gemini 或通用中转时，选 Gemini / OpenAI 兼容；其他功能也用 Claude 时，选 Claude 或 Claude 兼容。系统会让 Claude 模型走 Claude 通道，并避免 Gemini 被送进 Claude 专用接口。
+              </div>
               <div className="grid gap-1.5 sm:grid-cols-[180px_minmax(0,1fr)]">
                 <select
                   value={auxProvider}

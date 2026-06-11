@@ -255,7 +255,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
       {/* Toggles */}
       <ToggleRow
         label="Claude 专用模式"
-        desc="只让 Claude / Claude 兼容接口使用 Anthropic Messages API；OpenAI 兼容、百度千帆、DeepSeek、Gemini 不受影响。OpenAI 兼容 Claude 中转请保持关闭。"
+        desc="用于 Claude 兼容中转的 Messages API。开启后，模型名像 Claude / Opus / Sonnet / Haiku 的 Claude 兼容请求会走 Claude 通道；Gemini、DeepSeek、OpenAI 兼容模型仍走各自通道。"
         checked={settings.enableClaudeMode}
         onChange={(v) => onChange({ ...settings, enableClaudeMode: v })}
       />
