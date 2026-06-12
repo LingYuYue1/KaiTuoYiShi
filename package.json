@@ -17,6 +17,7 @@
     "test:claude-compatible": "node scripts/claude-compatible-regression.mjs",
     "test:baidu-qianfan": "node scripts/baidu-qianfan-regression.mjs",
     "test:opencode-api": "node scripts/opencode-api-adaptation-regression.mjs",
+    "test:pioneer-api": "node scripts/pioneer-api-regression.mjs",
     "test:deepseek-format": "node scripts/deepseek-format-stability-regression.mjs",
     "test:turn-usage": "node scripts/turn-usage-regression.mjs",
     "test:presence": "node scripts/presence-regression.mjs",

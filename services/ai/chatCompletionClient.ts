@@ -1,6 +1,7 @@
 import type { API配置项 } from '@/models/settings';
 import type { 聊天消息, 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
+import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 
 export interface StreamCallbacks {
   onDelta: (delta: string) => void;
@@ -257,8 +258,21 @@ function buildQianfanProxyBody(config: API配置项, body: Record<string, unknow
   });
 }
 
+function buildPioneerProxyBody(config: API配置项, body: Record<string, unknown>): string {
+  return JSON.stringify({
+    kind: 'chat',
+    baseUrl: normalizePioneerBaseUrl(config.baseUrl),
+    apiKey: config.apiKey,
+    body,
+  });
+}
+
 function isBaiduQianfanConfig(config: API配置项): boolean {
   return config.provider === 'baidu' || /qianfan\.baidubce\.com/i.test(config.baseUrl);
+}
+
+function isPioneerConfig(config: API配置项): boolean {
+  return isPioneerBaseUrl(config.baseUrl);
 }
 
 function normalizeOpenAICompatibleModel(config: API配置项): string {
@@ -1151,16 +1165,25 @@ async function streamOpenAICompatible(
   callbacks: StreamCallbacks,
   includeUsage: boolean = true,
 ): Promise<string> {
-  const upstreamUrl = buildOpenAICompatibleChatUrl(config.baseUrl);
+  const upstreamBaseUrl = isPioneerConfig(config) ? normalizePioneerBaseUrl(config.baseUrl) : config.baseUrl;
+  const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
   const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true, includeUsage);
-  const url = isBaiduQianfanConfig(config) ? '/api/qianfan' : upstreamUrl;
-  const body = isBaiduQianfanConfig(config) ? buildQianfanProxyBody(config, requestBody) : JSON.stringify(requestBody);
+  const url = isBaiduQianfanConfig(config)
+    ? '/api/qianfan'
+    : isPioneerConfig(config)
+      ? '/api/pioneer'
+      : upstreamUrl;
+  const body = isBaiduQianfanConfig(config)
+    ? buildQianfanProxyBody(config, requestBody)
+    : isPioneerConfig(config)
+      ? buildPioneerProxyBody(config, requestBody)
+      : JSON.stringify(requestBody);
 
   const response = await fetchWithApiErrorReport(config, '聊天补全', url, 'stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
+      ...(url.startsWith('/api/') ? {} : { Authorization: `Bearer ${config.apiKey}` }),
     },
     body,
     signal: request.signal,
@@ -2014,18 +2037,28 @@ export async function chatCompletionNonStream(
     ? withDeepSeekPrefixMessages(config, msgs, request)
     : { config, messages: msgs, prefix: '' };
 
+  const upstreamBaseUrl = isPioneerConfig(deepSeekPayload.config)
+    ? normalizePioneerBaseUrl(deepSeekPayload.config.baseUrl)
+    : deepSeekPayload.config.baseUrl;
+  const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
   const effectiveUrl = isBaiduQianfanConfig(deepSeekPayload.config)
     ? '/api/qianfan'
-    : buildOpenAICompatibleChatUrl(deepSeekPayload.config.baseUrl);
+    : isPioneerConfig(deepSeekPayload.config)
+      ? '/api/pioneer'
+      : upstreamUrl;
+  const diagnosticUrl = effectiveUrl.startsWith('/api/') ? upstreamUrl : effectiveUrl;
+  const requestBody = buildOpenAICompatibleRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false);
   const response = await fetchWithApiErrorReport(deepSeekPayload.config, '非流式补全', effectiveUrl, 'non-stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${deepSeekPayload.config.apiKey}`,
+      ...(effectiveUrl.startsWith('/api/') ? {} : { Authorization: `Bearer ${deepSeekPayload.config.apiKey}` }),
     },
     body: isBaiduQianfanConfig(deepSeekPayload.config)
-      ? buildQianfanProxyBody(deepSeekPayload.config, buildOpenAICompatibleRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false))
-      : JSON.stringify(buildOpenAICompatibleRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false)),
+      ? buildQianfanProxyBody(deepSeekPayload.config, requestBody)
+      : isPioneerConfig(deepSeekPayload.config)
+        ? buildPioneerProxyBody(deepSeekPayload.config, requestBody)
+        : JSON.stringify(requestBody),
     signal: request.signal,
   });
 
@@ -2045,7 +2078,7 @@ export async function chatCompletionNonStream(
       source: '非流式补全',
       config: deepSeekPayload.config,
       status: response.status,
-      requestUrl: effectiveUrl,
+      requestUrl: diagnosticUrl,
       requestMode: 'non-stream',
       responseText: text,
     });

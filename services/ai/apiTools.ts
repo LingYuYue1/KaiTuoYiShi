@@ -1,6 +1,7 @@
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { withRetries } from './retry';
+import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 
 export interface ConnectionTestResult {
   ok: boolean;
@@ -27,6 +28,9 @@ export async function fetchModels(config: any): Promise<string[]> {
       }
       if (config.provider === 'opencode') {
         return fetchOpenCodeModels(baseRaw, apiKey);
+      }
+      if (isPioneerBaseUrl(baseRaw)) {
+        return fetchPioneerModels(baseRaw, apiKey);
       }
       return fetchOpenAICompatibleModels(baseRaw, apiKey);
     },
@@ -96,6 +100,49 @@ async function fetchOpenCodeModels(baseRaw: string, apiKey: string): Promise<str
   }
 
   throw new Error(`OpenCode Zen 获取模型列表失败：\n${errors.join('\n')}`);
+}
+
+async function fetchPioneerModels(baseRaw: string, apiKey: string): Promise<string[]> {
+  const base = normalizePioneerBaseUrl(baseRaw);
+  const url = `${base}/models`;
+  try {
+    const res = await fetch('/api/pioneer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'models',
+        baseUrl: base,
+        apiKey,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      void appendApiErrorReport({
+        source: 'Pioneer 模型列表',
+        config: { provider: 'openai_compatible', baseUrl: baseRaw, apiKey },
+        status: res.status,
+        requestUrl: url,
+        requestMode: 'models',
+        responseText: text,
+      });
+      throw new Error(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
+    }
+    const data = await res.json();
+    if (data && Array.isArray(data.data)) {
+      const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+      if (ids.length) return ids;
+    }
+    throw new Error(`${url} -> 返回格式异常（缺 data 数组）`);
+  } catch (e) {
+    void appendApiErrorReport({
+      source: 'Pioneer 模型列表',
+      config: { provider: 'openai_compatible', baseUrl: baseRaw, apiKey },
+      requestUrl: url,
+      requestMode: 'models',
+      error: e,
+    });
+    throw new Error(`Pioneer 获取模型列表失败：\n${(e as Error).message}`);
+  }
 }
 
 async function fetchOpenAICompatibleModels(baseRaw: string, apiKey: string): Promise<string[]> {

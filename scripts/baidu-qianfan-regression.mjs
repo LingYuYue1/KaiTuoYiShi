@@ -44,7 +44,11 @@ assert(client.includes('normalizeOpenAICompatibleModel'), '百度千帆必须在
 assert(client.includes("return 'glm-5.1'"), '百度千帆必须把玩家常填的 glm5.1 / GLM5.1 优先归一为小写模型 ID glm-5.1。');
 assert(client.includes('formatOpenAICompatibleError'), '百度千帆失败时必须提供专用错误诊断，避免玩家只看到反复重试。');
 assert(client.includes('百度千帆 API Error'), '百度千帆错误提示必须明确标出供应商。');
-assert(client.includes("isBaiduQianfanConfig(config) ? '/api/qianfan'"), '百度千帆聊天请求必须走同源 /api/qianfan 代理，避免浏览器 CORS Failed to fetch。');
+assert(
+  client.includes("isBaiduQianfanConfig(config) ? '/api/qianfan'") ||
+    client.includes("isBaiduQianfanConfig(config)\n    ? '/api/qianfan'"),
+  '百度千帆聊天请求必须走同源 /api/qianfan 代理，避免浏览器 CORS Failed to fetch。',
+);
 assert(client.includes('buildQianfanProxyBody'), '百度千帆聊天请求必须构造代理请求体。');
 assert(apiTools.includes("config.provider === 'baidu'"), '百度千帆模型列表必须有独立路径归一化，避免误请求 /v1/models。');
 assert(apiTools.includes('fetchBaiduQianfanModels(baseRaw, apiKey)'), '百度千帆必须使用专用模型列表函数。');
