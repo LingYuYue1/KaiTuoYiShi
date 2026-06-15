@@ -3,9 +3,6 @@ import type {
   AI提供商,
   API配置项,
   API设置,
-  自动NPC生图构图,
-  自动NPC生图性别筛选,
-  自动生图场景构图,
   游戏设置,
   NovelAI噪点表,
   NovelAI采样器,
@@ -28,7 +25,7 @@ interface Props {
   apiSettings: API设置;
 }
 
-type Page = 'overview' | 'normal' | 'scene' | 'nsfw' | 'rules' | 'tokenizer' | 'automation' | 'guide';
+type Page = 'overview' | 'normal' | 'scene' | 'nsfw' | 'rules' | 'tokenizer' | 'guide';
 type ApiKey = '普通接口' | '场景接口' | 'NSFW接口';
 
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -41,7 +38,6 @@ const pages: { id: Page; label: string; desc: string }[] = [
   { id: 'nsfw', label: 'NSFW接口', desc: '成人内容隔离' },
   { id: 'rules', label: '规则中心', desc: '生成提示词规范' },
   { id: 'tokenizer', label: '转化器', desc: '档案转 prompt' },
-  { id: 'automation', label: '自动任务', desc: '后台队列预设' },
   { id: 'guide', label: '接口说明', desc: '后端填写参考' },
 ];
 
@@ -98,24 +94,6 @@ const styleOptions: { value: 文生图默认风格; label: string }[] = [
   { value: 'anime', label: '二次元' },
   { value: 'realistic', label: '写实' },
   { value: 'custom', label: '自定义' },
-];
-
-const sceneCompositionOptions: { value: 自动生图场景构图; label: string }[] = [
-  { value: '纯场景', label: '纯场景' },
-  { value: '故事快照', label: '故事快照' },
-  { value: '剧照', label: '剧照' },
-];
-
-const npcCompositionOptions: { value: 自动NPC生图构图; label: string }[] = [
-  { value: '头像', label: '头像' },
-  { value: '半身', label: '半身' },
-  { value: '立绘', label: '立绘' },
-];
-
-const genderFilterOptions: { value: 自动NPC生图性别筛选; label: string }[] = [
-  { value: '全部', label: '全部' },
-  { value: '男', label: '男性' },
-  { value: '女', label: '女性' },
 ];
 
 const modelSuggestions: Record<文生图后端类型, string[]> = {
@@ -300,7 +278,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
           <Panel title="工作流说明">
             <InfoLine label="普通资源" value="伙伴头像、正文头像、手机头像、角色立绘。" />
             <InfoLine label="场景资源" value="地点壁纸、手机背景、剧情快照、新闻配图。" />
-            <InfoLine label="NSFW资源" value="只读取 NSFW 档案，只进 NSFW 相册过滤，不参与普通自动任务。" nsfw />
+            <InfoLine label="NSFW资源" value="只读取 NSFW 档案，只进 NSFW 相册过滤，不参与普通手动任务。" nsfw />
             <InfoLine label="任务保存" value="图片先进入相册，再由玩家挂载到对应槽位。" />
           </Panel>
         </div>
@@ -345,7 +323,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
           <Notice nsfw>
             NSFW 生图必须同时满足：NSFW 总开关开启、NSFW 生图开关开启、NSFW 接口启用。它不会自动回退到普通接口或场景接口。
           </Notice>
-          <ToggleRow label="启用 NSFW 生图" desc="关闭时相册不显示 NSFW 生成按钮，自动任务也不会生成成人图片。" checked={Boolean(settings.enableNsfw && image.enableNsfwImageGeneration)} disabled={!settings.enableNsfw} onChange={(v) => patchSystem({ enableNsfwImageGeneration: settings.enableNsfw ? v : false })} />
+          <ToggleRow label="启用 NSFW 生图" desc="关闭时相册不显示 NSFW 生成按钮，也不会向 NSFW 独立接口提交图片任务。" checked={Boolean(settings.enableNsfw && image.enableNsfwImageGeneration)} disabled={!settings.enableNsfw} onChange={(v) => patchSystem({ enableNsfwImageGeneration: settings.enableNsfw ? v : false })} />
           {settings.enableNsfw && image.enableNsfwImageGeneration ? (
             <ApiBlock
               title="NSFW 独立接口"
@@ -440,45 +418,6 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
             <GuideCard title="角色头像" desc="抓外貌、发型、服饰、表情、脸部辨识度，不写长剧情。" />
             <GuideCard title="场景剧照" desc="抓地点、时间、光线、镜头关系和一瞬间的动作。" />
             <GuideCard title="手机背景" desc="抓地点气质、留白、竖屏适配和不遮挡图标的构图。" />
-          </div>
-        </Panel>
-      )}
-
-      {activePage === 'automation' && (
-        <Panel title="自动任务配置">
-          <Notice>这里先保存自动任务策略，实际排队会在后续接入伙伴、背包、新闻和剧情回合。默认全部关闭，避免突然消耗生图额度。</Notice>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <SubPanel title="场景自动生图">
-              <ToggleRow label="启用场景队列" desc="后续用于关键地点、新闻事件或章节切换时自动排队。" checked={image.enableAutoSceneGeneration} onChange={(v) => patchSystem({ enableAutoSceneGeneration: v })} />
-              <Field label="触发间隔回合">
-                <input type="number" min={1} max={20} value={image.autoSceneIntervalTurns} onChange={(e) => patchSystem({ autoSceneIntervalTurns: Math.max(1, Number(e.target.value) || 1) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
-              </Field>
-              <Field label="构图要求">
-                <select value={image.autoSceneComposition} onChange={(e) => patchSystem({ autoSceneComposition: e.target.value as 自动生图场景构图 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-                  {sceneCompositionOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
-              </Field>
-              <Field label="默认尺寸">
-                <input value={image.autoSceneSize} onChange={(e) => patchSystem({ autoSceneSize: e.target.value })} className="kaituo-input w-full px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
-              </Field>
-            </SubPanel>
-            <SubPanel title="伙伴自动生图">
-              <ToggleRow label="启用伙伴队列" desc="后续用于原著角色、重要伙伴或无头像联系人自动补图。" checked={image.enableAutoNpcGeneration} onChange={(v) => patchSystem({ enableAutoNpcGeneration: v })} />
-              <Field label="性别筛选">
-                <select value={image.autoNpcGenderFilter} onChange={(e) => patchSystem({ autoNpcGenderFilter: e.target.value as 自动NPC生图性别筛选 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-                  {genderFilterOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
-              </Field>
-              <ToggleRow label="只生成重要伙伴" desc="开启后路人、泛称 NPC 不进入自动生图队列。" checked={image.autoNpcImportantOnly} onChange={(v) => patchSystem({ autoNpcImportantOnly: v })} />
-              <Field label="默认构图">
-                <select value={image.autoNpcComposition} onChange={(e) => patchSystem({ autoNpcComposition: e.target.value as 自动NPC生图构图 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-                  {npcCompositionOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
-              </Field>
-              <Field label="默认尺寸">
-                <input value={image.autoNpcSize} onChange={(e) => patchSystem({ autoNpcSize: e.target.value })} className="kaituo-input w-full px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
-              </Field>
-            </SubPanel>
           </div>
         </Panel>
       )}

@@ -6,6 +6,7 @@
 export interface CanonicalCharacterDef {
   name: string;
   aliases?: string[];
+  gender?: '男' | '女' | '其他';
   appearance?: string;
   personality?: string;
 }
@@ -14,96 +15,112 @@ export const CANONICAL_CHARACTERS: CanonicalCharacterDef[] = [
   {
     name: '帕姆',
     aliases: ['Pom-Pom', 'Pom Pom'],
+    gender: '其他',
     appearance: '列车长模样的小巧兔型助手。',
     personality: '认真负责，礼貌而有原则。',
   },
   {
     name: '三月七',
     aliases: ['三月', 'March 7th'],
+    gender: '女',
     appearance: '粉发蓝眼少女，背着一张冰晶弓。',
     personality: '开朗活泼，记忆缺失但毫不在意。',
   },
   {
     name: '丹恒',
     aliases: ['Dan Heng'],
+    gender: '男',
     appearance: '青发长辫青年，沉默寡言。',
     personality: '冷静理性，对自身过往讳莫如深。',
   },
   {
     name: '姬子',
     aliases: ['Himeko'],
+    gender: '女',
     appearance: '红发金眸的成熟女性，列车上的咖啡常客。',
     personality: '从容大气，星穹列车的领航人。',
   },
   {
     name: '瓦尔特',
     aliases: ['瓦尔特·扬', 'Welt'],
+    gender: '男',
     appearance: '黑发戴墨镜的绅士，手持权杖。',
     personality: '深思熟虑，见识极广，带着旧时代的沉重。',
   },
   {
     name: '艾丝妲',
     aliases: ['Asta'],
+    gender: '女',
     appearance: '浅粉发的年轻女性，衣着得体而利落。',
     personality: '热情、果断，擅长协调与调度。',
   },
   {
     name: '阿兰',
     aliases: ['Arlan'],
+    gender: '男',
     appearance: '黑发少年，常穿防卫科制服，神情安静。',
     personality: '寡言克制，把责任看得很重。',
   },
   {
     name: '黑塔',
     aliases: ['Herta'],
+    gender: '女',
     appearance: '傀儡式天才少女形象，常见于人偶或投影。',
     personality: '高傲、好奇、兴趣导向。',
   },
   {
     name: '景元',
     aliases: ['Jing Yuan'],
+    gender: '男',
     appearance: '白发长发男子，常带慵懒神态。',
     personality: '温和沉稳，善于布局。',
   },
   {
     name: '符玄',
     aliases: ['Fu Xuan'],
+    gender: '女',
     appearance: '紫发少女，气质锐利。',
     personality: '强势、精于推演，讲话直接。',
   },
   {
     name: '白露',
     aliases: ['Bailu'],
+    gender: '女',
     appearance: '白发龙角少女，个子娇小。',
     personality: '活泼机敏，医者气质明显。',
   },
   {
     name: '丹恒·饮月',
     aliases: ['饮月', 'Imbibitor Lunae'],
+    gender: '男',
     appearance: '与丹恒相近但更具龙裔威压。',
     personality: '克制而沉静，带着旧日沉重。',
   },
   {
     name: '三月七·巡猎',
     aliases: ['巡猎三月七'],
+    gender: '女',
     appearance: '三月七的另一命途形态，气质更凌厉。',
     personality: '依旧活泼，但行动更锋利果断。',
   },
   {
     name: '星',
     aliases: ['灰发少女', 'Stelle', '开拓者·星'],
+    gender: '女',
     appearance: '灰发少女，外形干净利落，带着刚苏醒不久的冷白感。',
     personality: '刚苏醒时会先观察，但长期表现应直接、好奇、行动感强，熟悉同伴后会自然吐槽和接梗。',
   },
   {
     name: '穹',
     aliases: ['灰发少年', 'Caelus', '开拓者·穹'],
+    gender: '男',
     appearance: '灰发少年，轮廓清爽，神情常带着刚醒来的疏离。',
     personality: '刚苏醒时偏克制观察，长期应保留直接、好奇和行动感，不应被写成空白沉默工具人。',
   },
   {
     name: '希儿',
     aliases: ['Seele'],
+    gender: '女',
     appearance: '紫发暗瞳，左眼戴黑色眼罩。',
     personality: '冷峻锐利，对地下街抱有归属感。',
   },

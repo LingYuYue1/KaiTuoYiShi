@@ -3,7 +3,7 @@ import type { NPC记录, NPC性别, NPC_NSFW档案 } from '@/models/npc';
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import { 获取智库人物名列表, 解析智库软结构标签, 比较智库人物节点 } from '@/models/zhiku';
 
-type CanonicalArchiveBaseline = {
+export type CanonicalArchiveBaseline = {
   性别?: NPC性别;
   外貌?: string;
   性格?: string;
@@ -84,9 +84,52 @@ const CANONICAL_ARCHIVE_BASELINES: Record<string, CanonicalArchiveBaseline> = {
     介绍: '贝洛伯格下层区出身的战斗者，重视地下街同伴。',
     nsfw年龄确认: 'adult',
   },
+  帕姆: {
+    性别: '其他',
+    穿着: '列车长制服，小巧体型。',
+    说话方式: '礼貌正式，偶尔带点自豪和唠叨。',
+    介绍: '星穹列车列车长，认真负责的兔型助手。',
+    nsfw年龄确认: 'unknown',
+  },
+  阿兰: {
+    性别: '男',
+    穿着: '黑塔空间站防卫科制服，简洁实用。',
+    说话方式: '简短克制，不主动展开话题。',
+    介绍: '黑塔空间站防卫科负责人，沉默但可靠。',
+    nsfw年龄确认: 'unknown',
+  },
+  黑塔: {
+    性别: '女',
+    穿着: '天才少女人偶外形，精致但带有距离感。',
+    说话方式: '高傲直接，兴趣驱动，不耐烦时会直接表达。',
+    介绍: '天才俱乐部成员，黑塔空间站的实际主人。',
+    nsfw年龄确认: 'unknown',
+  },
+  白露: {
+    性别: '女',
+    穿着: '龙角少女装束，活泼明亮。',
+    说话方式: '轻快好奇，带医者的自信和孩子的任性。',
+    介绍: '罗浮丹鼎司衔药龙女，持明族龙尊。',
+    nsfw年龄确认: 'unknown',
+  },
+  '丹恒·饮月': {
+    性别: '男',
+    穿着: '与丹恒相近但更具龙裔威压的装束。',
+    说话方式: '克制而沉静，用词比丹恒更古雅。',
+    介绍: '丹恒的龙裔形态，持明族饮月君旧身。',
+    nsfw年龄确认: 'unknown',
+  },
+  '三月七·巡猎': {
+    性别: '女',
+    穿着: '巡猎命途形态装束，比普通三月七更凌厉。',
+    说话方式: '依旧活泼但更果断，行动优先于犹豫。',
+    介绍: '三月七的巡猎命途形态。',
+    nsfw年龄确认: 'unknown',
+  },
 };
 
-const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|Peppy|白露|彦卿|虎克|克拉拉|怪物|怪兽|裂界生物|反物质|虚卒|机兵|机械|机器人|生物|动物|宠物|造物|傀儡|人偶|投影)/i;
+// NSFW 硬禁名单：智械/机械/非人形对象（帕姆、佩佩、史瓦罗）+ 怪物/裂界生物。
+const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|Pepper|史瓦罗|Svarog|机械|机兵|虚卒|机器人|造物|傀儡|人偶|投影|怪物|裂界生物)/i;
 
 function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -109,18 +152,6 @@ function shouldPatchArchiveField(current: unknown, incoming: unknown): incoming 
   const currentText = current.trim();
   const incomingText = incoming.trim();
   return isWeakArchiveText(currentText) && incomingText.length >= currentText.length + 6;
-}
-
-function mergeList(existing: string[] | undefined, additions: string[]): string[] {
-  const seen = new Set<string>();
-  const output: string[] = [];
-  for (const item of [...(existing ?? []), ...additions]) {
-    const text = item.trim();
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    output.push(text);
-  }
-  return output;
 }
 
 function isNsfwBlockedNpc(npc: NPC记录, canonicalName?: string): boolean {
@@ -193,22 +224,44 @@ function shouldCreateNsfwBaseline(
 function buildNsfwBaseline(npc: NPC记录, baseline?: CanonicalArchiveBaseline): NPC_NSFW档案 {
   const existing = npc.NSFW档案 ?? {};
   const age = existing.年龄确认 ?? baseline?.nsfw年龄确认 ?? 'unknown';
+  // NSFW 年龄门禁已解除：年龄确认降级为纯展示信息，不再限制档案写入或显示。
+  // 基线档案只建一个干净空壳（enabled + 年龄 + 亲密阶段占位），把内容留给事实填充，
+  // 不再写「保守基线」「等待剧情事实补充」等占位文案。
   return {
     ...existing,
     enabled: true,
     年龄确认: age,
     亲密阶段: existing.亲密阶段 ?? '未建立',
-    边界: existing.边界 ?? '仅作为私密档案预留；未确认成人、明确同意与关系边界前，不写具体身体细节或亲密经历。',
-    长期事实: mergeList(existing.长期事实, [
-      'NSFW 总开关开启后创建的保守基线档案；不代表已发生亲密剧情。',
-    ]),
-    标签: mergeList(existing.标签, ['保守基线', '等待剧情事实补充']),
-    备注: existing.备注 ?? '该档案只承接后续已发生的成人向长期事实，普通外貌、性格与同行记忆保持隔离。',
   };
 }
 
 function archiveChanged(a: NPC_NSFW档案 | undefined, b: NPC_NSFW档案): boolean {
   return JSON.stringify(a ?? null) !== JSON.stringify(b);
+}
+
+/**
+ * 判断一个 NPC 是否需要变量模型补建 NSFW 基线档案。
+ * 触发条件：NSFW 开启、通过门禁、档案缺少实质内容（身体档案/偏好/敏感点等都空）。
+ * 已有实质内容的档案不重复生成。
+ */
+export function needsNsfwBaseline(
+  npc: NPC记录,
+  baseline: CanonicalArchiveBaseline | undefined,
+  options: { nsfwEnabled: boolean; maleNsfwArchiveEnabled: boolean },
+): boolean {
+  if (!shouldCreateNsfwBaseline(npc, baseline, options)) return false;
+  const archive = npc.NSFW档案;
+  if (!archive?.enabled) return true;
+  // 检查是否已有实质内容（任一字段有值即视为已填充，不重复生成）。
+  const hasFemaleBody = archive.女性身体档案 && Object.values(archive.女性身体档案).some((v) => typeof v === 'string' && v.trim());
+  const hasMaleBody = archive.男性身体档案 && Object.values(archive.男性身体档案).some((v) => typeof v === 'string' && v.trim());
+  const gender = baseline?.性别 ?? npc.性别;
+  const bodyFilled = gender === '男' ? hasMaleBody : (hasFemaleBody || hasMaleBody);
+  const hasPrefs = (archive.偏好?.length ?? 0) > 0;
+  const hasSensitive = (archive.敏感点?.length ?? 0) > 0;
+  const hasExperiences = (archive.经历?.length ?? 0) > 0;
+  // 只要有一个实质字段有值，就认为基线已建立，不重复生成。
+  return !bodyFilled && !hasPrefs && !hasSensitive && !hasExperiences;
 }
 
 export function enrichNpcArchives(
@@ -248,6 +301,16 @@ export function enrichNpcArchives(
       const archive = buildNsfwBaseline(updated, baseline);
       if (archiveChanged(updated.NSFW档案, archive)) {
         updated = { ...updated, NSFW档案: archive };
+      }
+    }
+
+    // 清理 NSFW 档案中的占位字段：这些字段只有发生实际亲密剧情后才有意义，基线阶段不应存在。
+    if (updated.NSFW档案) {
+      const nsfw = updated.NSFW档案;
+      const hasPlaceholder = nsfw.标签?.length || nsfw.备注 || nsfw.长期事实?.length;
+      if (hasPlaceholder) {
+        const { 标签, 备注, 长期事实, ...rest } = nsfw as NPC记录['NSFW档案'] & { 标签?: unknown; 备注?: unknown; 长期事实?: unknown };
+        updated = { ...updated, NSFW档案: rest as NPC记录['NSFW档案'] };
       }
     }
 

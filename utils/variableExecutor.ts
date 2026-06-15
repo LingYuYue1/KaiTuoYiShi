@@ -580,6 +580,7 @@ function 确保NPC目标存在(records: NPC记录[], rest: string, cmd: 变量�
     阶位: 'companion',
     初见回合: nowTurn,
     原著角色: true,
+    性别: canonical.gender as import('@/models/npc').NPC性别 | undefined,
     外貌: canonical.appearance,
     性格: canonical.personality,
     介绍: `${canonical.name}是当前剧情中出现的原著角色。`,

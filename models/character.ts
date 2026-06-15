@@ -11,6 +11,7 @@ import type { 命途进度 } from './path';
 import { 创建命途进度 } from './path';
 import type { 背包物品 } from './inventory';
 import type { 战技记录 } from './skill';
+import type { NPC角色锚点档案 } from './npc';
 
 export interface 角色数据结构 {
   // 基本信息
@@ -35,6 +36,7 @@ export interface 角色数据结构 {
     正文头像?: string;
     手机头像?: string;
     立绘?: string;
+    角色锚点?: NPC角色锚点档案;
   };
 
   // 「踏上旅途」相关字段

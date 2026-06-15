@@ -7,6 +7,7 @@ const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toSt
 export function 创建相册图片条目(input: {
   title: string;
   src: string;
+  originalUrl?: string;
   source: 图片资源['source'];
   nsfw?: boolean;
   targetType?: 图片目标类型;
@@ -27,7 +28,8 @@ export function 创建相册图片条目(input: {
   const entryId = makeId('album');
   const asset: 图片资源 = {
     id: assetId,
-    url: isDataUrl ? undefined : input.src,
+    url: input.originalUrl?.trim() || (!isDataUrl ? input.src : undefined),
+    originalUrl: input.originalUrl?.trim() || undefined,
     dataUrl: isDataUrl ? input.src : undefined,
     mimeType: input.mimeType,
     source: input.source,

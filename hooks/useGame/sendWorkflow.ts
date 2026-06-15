@@ -2,7 +2,7 @@
 import { 创建聊天消息, type 聊天消息, type 回合快照, type 回合Token消耗, type 解析后回复 } from '@/models/chat';
 import { sendChatMessage } from '@/services/ai/text';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
-import { callVariableModel } from '@/services/ai/variableModel';
+import { callVariableModel, type NsfwBaselineCandidate } from '@/services/ai/variableModel';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import {
   buildImmediateMemory,
@@ -15,7 +15,7 @@ import {
 import { runNewsGenerationStep } from './newsWorkflow';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
-import { 归一化世界状态 } from '@/models/world';
+import { 归一化世界状态, type 世界状态 } from '@/models/world';
 import { loadSetting, saveGame, saveSetting } from '@/services/dbService';
 import { buildSavePayload } from './saveLoadWorkflow';
 import { parseVariableCommands, snapshotVariableState, reduceVariableCommands, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
@@ -43,7 +43,7 @@ import {
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
-import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
+import { enrichNpcArchives, needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
@@ -55,6 +55,13 @@ const DEEPSEEK_MAIN_FORMAT_GUARD = [
   '<thinking> 内必须按当前生效的思维链 Step 标题，用中文逐步写出实际判断；不允许只写正文，不允许省略 thinking，不允许只写“已思考”。',
   '不要在标签外输出解释、道歉、说明或额外标题。',
 ].join('\n');
+
+function formatOriginalProtagonistForOpening(originalProtagonist: 世界状态['原著主角']): string {
+  if (originalProtagonist === '星') return '原作主角星';
+  if (originalProtagonist === '穹') return '原作主角穹';
+  if (originalProtagonist === '星穹双主角') return '原作主角星与穹';
+  return '所选原著主角';
+}
 
 function hasProtocolTag(rawText: string, tagNames: string[]): boolean {
   return tagNames.some((tag) => {
@@ -840,8 +847,9 @@ function getNsfwBlockedCommandReason(command: 变量命令, npcs: NPC记录[]): 
     Boolean(item.别名 && text.includes(item.别名)),
   );
   const haystack = [text, npc?.姓名, npc?.别名, npc?.介绍, npc?.外貌, npc?.备注?.join(' ')].filter(Boolean).join(' ');
-  if (/(帕姆|Pom-Pom|Pom Pom|佩佩|白露|彦卿|虎克|克拉拉|怪物|怪兽|裂界生物|反物质|虚卒|机兵|机械|机器人|生物|动物|宠物|造物|傀儡|人偶|投影)/i.test(haystack)) {
-    return `NSFW 档案已阻止：${npc?.姓名 ?? (selectorValue || '目标')} 属于非人/生物形态/怪物/机械/未成年或暂不支持对象。`;
+  // NSFW 硬禁只针对智械/机械/非人形对象（帕姆、史瓦罗等），不再针对具体角色名或过宽类别词。
+  if (/(帕姆|Pom-Pom|Pom Pom|机械|机兵|虚卒|机器人|造物|傀儡|人偶|投影)/i.test(haystack)) {
+    return `NSFW 档案已阻止：${npc?.姓名 ?? (selectorValue || '目标')} 属于智械/机械/非人形对象。`;
   }
   return null;
 }
@@ -1270,9 +1278,10 @@ export async function executeSendWorkflow(
         cancellable: true,
       });
       try {
+        const openingProtagonist = formatOriginalProtagonistForOpening(effectiveWorld.原著主角);
         const preNews = await runNewsGenerationStep({
           state,
-          mainBody: '开局初始化：原著主线即将从黑塔空间站危机开始，星/穹苏醒前夕，空间站遭遇反物质军团入侵。',
+          mainBody: `开局初始化：原著主线即将从黑塔空间站危机开始，${openingProtagonist}苏醒前夕，空间站遭遇反物质军团入侵。`,
           userInput,
           recentTurns: ['- 系统：开局初始化\n  正文：黑塔空间站危机即将开始，新闻系统先生成可供首回合参考的世界事件苗头。'],
           signal: abortController.signal,
@@ -1908,6 +1917,9 @@ export async function executeSendWorkflow(
         maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
         zhiku: state.智库,
       });
+
+      // NSFW 基线补建：开启 NSFW 后，把需要补建基线的 NPC 信息传给变量模型，
+      // 变量模型在变量更新那一次调用里顺带生成 NSFW 基线档案，走正常 nsfw_archive facts 落库链路。
       const npcSourceForCompression = archiveEnrichment.records;
       const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
       const npcCompressionSummaryTriggered: string[] = [];
@@ -2278,6 +2290,27 @@ async function runVariableCalibrationStep(
   });
 
   try {
+    // NSFW 基线候选：开启时，为缺少实质内容的 NPC 在变量更新那一次调用里生成基线。
+    const nsfwBaselineCandidates: NsfwBaselineCandidate[] = [];
+    if (state.gameSettings.enableNsfw) {
+      const npcRecords = (stateSnapshot.NPC ?? []) as NPC记录[];
+      for (const npc of npcRecords) {
+        if (nsfwBaselineCandidates.length >= 2) break;
+        if (needsNsfwBaseline(npc, undefined, {
+          nsfwEnabled: true,
+          maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
+        })) {
+          nsfwBaselineCandidates.push({
+            npcId: npc.id,
+            npcName: npc.姓名 ?? npc.别名 ?? '',
+            gender: npc.性别,
+            appearance: typeof npc.外貌 === 'string' ? npc.外貌 : undefined,
+            personality: typeof npc.性格 === 'string' ? npc.性格 : undefined,
+            intro: typeof npc.介绍 === 'string' ? npc.介绍 : undefined,
+          });
+        }
+      }
+    }
     const { rawText } = await callVariableModel(variableConfig, {
       body: params.body,
       variableDraft: params.variableDraft,
@@ -2286,6 +2319,7 @@ async function runVariableCalibrationStep(
       state: stateSnapshot,
       nsfwEnabled: state.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
+      nsfwBaselineCandidates,
       signal: params.signal,
       retryCount: state.gameSettings.variableApi.retryCount ?? 2,
     });
@@ -2358,11 +2392,13 @@ async function runVariableCalibrationStep(
     if (params.shouldCommit?.() === false) return null;
     state.setVariableBatches((prev) => [...prev, batch]);
 
+    if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
+
     // 没有任何成功命令时，无需 setState；返回空 overrides 让 save 用主流程的值
-      const anyApplied = results.some((r) => r.ok);
-      const worldSelfHealed = nextState.世界 !== stateSnapshot.世界;
-      if (!anyApplied && !worldSelfHealed) return { batch, npcLedgerUpdate };
-      if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
+    const anyApplied = results.some((r) => r.ok);
+    const worldSelfHealed = nextState.世界 !== stateSnapshot.世界;
+    if (!anyApplied && !worldSelfHealed) return { batch, npcLedgerUpdate };
+    if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
     // 一次性提交所有切片到 React state。传 stateSnapshot 作 initialState,
     // commitVariableState 内部用引用相等过滤——变量模型没改的 root 不会 setState,
@@ -2414,4 +2450,3 @@ async function runVariableCalibrationStep(
     };
   }
 }
-

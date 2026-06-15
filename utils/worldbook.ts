@@ -205,7 +205,26 @@ export function buildPromptLikeWorldbookInjection(
 
 function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
   const playerName = ctx.travelerName?.trim() || '无名开拓者';
-  return content.replace(/\{playerName\}/g, playerName);
+  const originalProtagonistName = formatOriginalProtagonistName(ctx.originalProtagonist);
+  const originalProtagonistSubject = formatOriginalProtagonistSubject(ctx.originalProtagonist);
+  return content
+    .replace(/\{playerName\}/g, playerName)
+    .replace(/\{originalProtagonistName\}/g, originalProtagonistName)
+    .replace(/\{originalProtagonistSubject\}/g, originalProtagonistSubject);
+}
+
+function formatOriginalProtagonistName(originalProtagonist: FilterContext['originalProtagonist']): string {
+  if (originalProtagonist === '星') return '星';
+  if (originalProtagonist === '穹') return '穹';
+  if (originalProtagonist === '星穹双主角') return '星与穹';
+  return '所选原著主角';
+}
+
+function formatOriginalProtagonistSubject(originalProtagonist: FilterContext['originalProtagonist']): string {
+  if (originalProtagonist === '星') return '原作主角星';
+  if (originalProtagonist === '穹') return '原作主角穹';
+  if (originalProtagonist === '星穹双主角') return '原作主角星与穹';
+  return '所选原著主角';
 }
 
 // ── Entry explanation (for UI preview) ──

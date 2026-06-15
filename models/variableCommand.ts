@@ -60,6 +60,7 @@ export interface NPC变量事实 {
   name: string;
   alias?: string;
   tier?: 'companion' | 'extra';
+  gender?: '男' | '女' | '其他';
   affinityDelta?: number;
   affinitySet?: number;
   relation?: string;

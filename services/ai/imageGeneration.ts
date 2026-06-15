@@ -13,6 +13,7 @@ export interface ImageGenerationResult {
   mimeType?: string;
   model?: string;
   backend?: string;
+  originalUrl?: string;
 }
 
 export async function generateImage(config: 文生图API配置, request: ImageGenerationRequest): Promise<ImageGenerationResult> {
@@ -183,7 +184,7 @@ async function generateOpenAICompatibleImage(config: 文生图API配置, request
   if (!first) throw new Error('图片接口没有返回结果。');
 
   if (typeof first.url === 'string' && first.url.trim()) {
-    return { src: first.url.trim(), model: config.model, backend: config.backend };
+    return persistRemoteImage(first.url.trim(), { model: config.model, backend: config.backend, signal: request.signal });
   }
 
   if (typeof first.b64_json === 'string' && first.b64_json.trim()) {
@@ -506,7 +507,7 @@ async function pollComfyResult(config: 文生图API配置, promptId: string, sig
           subfolder: image.subfolder || '',
           type: image.type || 'output',
         });
-        return { src: joinUrl(config.baseUrl, `/view?${params.toString()}`), model: config.model, backend: config.backend };
+        return persistRemoteImage(joinUrl(config.baseUrl, `/view?${params.toString()}`), { model: config.model, backend: config.backend, signal });
       }
     }
   }
@@ -528,6 +529,29 @@ async function readNovelAIImageBlob(blob: Blob, contentType: string): Promise<{ 
   }
   const mimeType = normalizeImageMimeType(declaredType, undefined);
   return { src: await blobToDataUrl(blob), mimeType };
+}
+
+async function persistRemoteImage(url: string, meta: { model?: string; backend?: string; signal?: AbortSignal }): Promise<ImageGenerationResult> {
+  try {
+    const response = await fetch(url, { signal: meta.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const mimeType = normalizeImageMimeType(blob.type || response.headers.get('content-type') || '', undefined);
+    return {
+      src: await blobToDataUrl(new Blob([blob], { type: mimeType })),
+      mimeType,
+      model: meta.model,
+      backend: meta.backend,
+      originalUrl: url,
+    };
+  } catch {
+    return {
+      src: url,
+      model: meta.model,
+      backend: meta.backend,
+      originalUrl: url,
+    };
+  }
 }
 
 function isZipContentType(contentType: string): boolean {

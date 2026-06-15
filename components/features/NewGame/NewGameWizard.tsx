@@ -1707,7 +1707,7 @@ function HistorianStep({
 }) {
   return (
     <div>
-      <SectionTitle title="原著开局" subtitle="故事固定从星/穹苏醒前的黑塔空间站开始" />
+      <SectionTitle title="原著开局" subtitle="故事固定从所选原著主角苏醒前的黑塔空间站开始" />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
         <div
@@ -2009,9 +2009,9 @@ function OverviewStep({
             <OverviewRow label="生日" value={birthday || '未填写'} />
             <OverviewRow label="背景故事" value={background.trim() || '未填写'} />
             <OverviewRow label="剧情模式" value={mode.name} />
-            <OverviewRow label="开局锚点" value={selectedScenario?.name ?? '黑塔空间站 · 星之苏醒'} />
+            <OverviewRow label="开局锚点" value={selectedScenario?.name ?? '黑塔空间站 · 主线苏醒前夕'} />
             <OverviewRow label="当前地点" value="黑塔空间站" />
-            <OverviewRow label="原著主角" value={getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue ?? '星'} />
+            <OverviewRow label="原著主角" value={getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue ?? '未指定'} />
             <OverviewRow label="命途" value={path ? `${path.name} · ${path.aeon}` : '无命途'} />
             <OverviewRow label="命途阶段" value={path ? `${selectedStage.name} · ${selectedStage.title}` : '未选择'} />
             <OverviewRow label="组织背景" value={faction.name} />
@@ -2166,7 +2166,7 @@ function buildOpeningSummary({
   lines.push(`日期：琥珀纪 2157.03.07`);
   lines.push(`时间：06:40`);
   lines.push(`地点：${location ?? scenario?.name ?? '黑塔空间站'}`);
-  lines.push(`原著主角：${canonicalTrailblazer ?? '星'}`);
+  lines.push(`原著主角：${canonicalTrailblazer ?? '未指定'}`);
   if (path) {
     lines.push(`命途：${path.name} · ${path.aeon}`);
     if (pathStage) lines.push(`命途阶段：${pathStage.name} · ${pathStage.title}`);

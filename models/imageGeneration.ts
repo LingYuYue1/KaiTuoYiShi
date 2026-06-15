@@ -24,6 +24,7 @@ export type 图片槽位 =
 export interface 图片资源 {
   id: string;
   url?: string;
+  originalUrl?: string;
   dataUrl?: string;
   localRef?: string;
   mimeType?: string;

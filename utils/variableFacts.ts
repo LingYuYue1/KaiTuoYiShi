@@ -14,8 +14,10 @@ const NPC_RELATIONS = new Set<NPC关系类型>(['stranger', 'acquaintance', 'fri
 const PHONE_TRIGGER_TYPES = new Set<主动来信类型>(['injury', 'victory', 'defeat', 'location_change', 'important_item', 'relationship', 'news', 'quest', 'time', 'custom']);
 const PHONE_PRIORITIES = new Set<主动来信优先级>(['low', 'normal', 'high', 'urgent']);
 const NSFW_AGE_VALUES = new Set(['adult', 'unknown', 'minor_blocked']);
-const NSFW_BLOCKED_CANONICAL_NAMES = new Set(['帕姆', '白露', '彦卿', '虎克', '克拉拉']);
-const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|白露|彦卿|虎克|克拉拉|怪物|怪兽|裂界生物|反物质|虚卒|机兵|机械|机器人|生物|动物|宠物|造物|傀儡|人偶|投影)/i;
+// NSFW 硬禁名单：智械/机械/非人形对象（帕姆、佩佩、史瓦罗）+ 怪物/裂界生物。
+// 白露、彦卿、虎克、克拉拉已从硬禁移除（年龄门禁解除），按 NSFW 总开关正常处理。
+const NSFW_BLOCKED_CANONICAL_NAMES = new Set(['帕姆', '佩佩']);
+const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|Pepper|史瓦罗|Svarog|机械|机兵|虚卒|机器人|造物|傀儡|人偶|投影|怪物|裂界生物)/i;
 const FACT_TYPE_ALIASES: Record<string, 变量事实['type']> = {
   旅人: 'traveler_profile',
   旅人档案: 'traveler_profile',
@@ -299,6 +301,11 @@ function 归一化事实(raw: unknown): 变量事实 | null {
       affinitySet: 数字(raw.affinitySet ?? raw.好感度),
       relation: NPC_RELATIONS.has(relation as NPC关系类型) ? relation : undefined,
       following: typeof raw.following === 'boolean' ? raw.following : typeof raw.同行 === 'boolean' ? raw.同行 : undefined,
+      gender: raw.gender === '男' || raw.gender === '女' || raw.gender === '其他'
+        ? raw.gender
+        : raw.性别 === '男' || raw.性别 === '女' || raw.性别 === '其他'
+          ? raw.性别
+          : undefined,
       appearance: 读字符串(raw.appearance || raw.外貌) || undefined,
       clothing: 读字符串(raw.clothing || raw.穿着) || undefined,
       speechStyle: 读字符串(raw.speechStyle || raw.说话方式) || undefined,
@@ -498,10 +505,10 @@ function isNsfwBlockedNpc(npc: NPC记录 | undefined, name: string): string | nu
     npc?.备注?.join(' '),
   ].filter(Boolean).join(' ');
   if (canonicalName && NSFW_BLOCKED_CANONICAL_NAMES.has(canonicalName)) {
-    return `${canonicalName} 属于非人/生物形态或暂不支持对象，禁止写入 NSFW 档案`;
+    return `${canonicalName} 属于智械/机械/非人形对象，禁止写入 NSFW 档案`;
   }
   if (NSFW_BLOCKED_NAME_RE.test(haystack)) {
-    return `${name} 命中非人/生物形态/怪物/机械等屏蔽词，禁止写入 NSFW 档案`;
+    return `${name} 命中智械/机械/非人形等屏蔽词，禁止写入 NSFW 档案`;
   }
   return null;
 }
@@ -524,26 +531,23 @@ function mergeUniqueTexts(...groups: Array<string[] | undefined>): string[] | un
   return output.length ? output : undefined;
 }
 
-function buildConservativeNsfwArchive(existing: NPC记录, fact: Extract<变量事实, { type: 'nsfw_archive' }>): Record<string, unknown> {
+function buildNsfwArchiveUpdate(existing: NPC记录, fact: Extract<变量事实, { type: 'nsfw_archive' }>): Record<string, unknown> {
   const current = existing.NSFW档案 ?? {};
   const archive: Record<string, unknown> = {};
+  // NSFW 年龄门禁已解除：年龄确认降级为纯展示信息，不再限制档案写入。
+  // 落库改为字段级合并（existing 优先，fact 补充），不再强制塞入保守基线占位文案。
   archive.enabled = fact.enabled ?? current.enabled ?? true;
   archive.年龄确认 = fact.ageConfirm ?? current.年龄确认 ?? 'unknown';
   archive.亲密阶段 = fact.intimacyStage ?? current.亲密阶段 ?? '未建立';
-  archive.边界 = fact.boundaries
-    ?? current.边界
-    ?? '仅作为私密档案预留；未确认成人、明确同意与关系边界前，不写具体身体细节或亲密经历。';
-  const longTermFacts = mergeUniqueTexts(
-    current.长期事实,
-    fact.longTermFacts,
-    ['NSFW 总开关开启后创建的保守基线档案；不代表已发生亲密剧情。'],
-  );
+  // 边界/备注只在 fact 或 existing 有值时写入，不再写保守基线默认长文。
+  if (fact.boundaries) archive.边界 = fact.boundaries;
+  else if (current.边界) archive.边界 = current.边界;
+  const longTermFacts = mergeUniqueTexts(current.长期事实, fact.longTermFacts);
   if (longTermFacts?.length) archive.长期事实 = longTermFacts;
-  const tags = mergeUniqueTexts(current.标签, fact.tags, ['保守基线', '等待剧情事实补充']);
+  const tags = mergeUniqueTexts(current.标签, fact.tags);
   if (tags?.length) archive.标签 = tags;
-  archive.备注 = fact.notes
-    ?? current.备注
-    ?? '该档案只承接后续已发生的成人向长期事实，普通外貌、性格与同行记忆保持隔离。';
+  if (fact.notes) archive.备注 = fact.notes;
+  else if (current.备注) archive.备注 = current.备注;
   return archive;
 }
 
@@ -713,6 +717,7 @@ export function factsToVariableCommands(
             初见回合: turn,
             最近回合: turn,
             对玩家称呼: fact.playerAddress,
+            性别: fact.gender ?? (canonical?.gender as import('@/models/npc').NPC性别 | undefined),
             外貌: fact.appearance ?? canonical?.appearance,
             穿着: fact.clothing,
             说话方式: fact.speechStyle,
@@ -744,6 +749,7 @@ export function factsToVariableCommands(
         else if (typeof fact.affinityDelta === 'number') push({ action: 'add', key: `${key}.好感度`, value: fact.affinityDelta });
         if (fact.relation) push({ action: 'set', key: `${key}.关系`, value: fact.relation });
         if (typeof fact.following === 'boolean') push({ action: 'set', key: `${key}.同行`, value: fact.following });
+        if (fact.gender) push({ action: 'set', key: `${key}.性别`, value: fact.gender });
         if (fact.appearance) push({ action: 'set', key: `${key}.外貌`, value: fact.appearance });
         if (fact.clothing) push({ action: 'set', key: `${key}.穿着`, value: fact.clothing });
         if (fact.speechStyle) push({ action: 'set', key: `${key}.说话方式`, value: fact.speechStyle });
@@ -792,7 +798,7 @@ export function factsToVariableCommands(
         continue;
       }
       const key = `NPC[id=${existing.id}].NSFW档案`;
-      const archive = buildConservativeNsfwArchive(existing, fact);
+      const archive = buildNsfwArchiveUpdate(existing, fact);
       if (fact.ageConfirm) archive.年龄确认 = fact.ageConfirm;
       if (fact.intimacyStage) archive.亲密阶段 = fact.intimacyStage;
       if (fact.boundaries) archive.边界 = fact.boundaries;

@@ -3,7 +3,7 @@ import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目
 import type { 角色数据结构 } from '@/models/character';
 import type { API设置, 游戏设置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
 import type { 手机系统 } from '@/models/phone';
-import type { NPC记录, NPC头像槽位 } from '@/models/npc';
+import type { NPC记录, NPC头像槽位, NPC角色锚点档案 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import { saveSetting } from '@/services/dbService';
 import {
@@ -49,6 +49,7 @@ type WorkTab = 'manual' | 'library' | 'anchor' | 'scene' | 'rules' | 'queue' | '
 type GenerateTarget = 'traveler_avatar' | 'traveler_portrait' | 'npc_avatar' | 'npc_portrait' | 'scene' | 'phone_wallpaper' | 'nsfw_reference';
 type NsfwPartImageSlot = '女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考';
 type LibraryStatusFilter = 'all' | 'ready' | 'empty';
+type LibraryResourceFilter = 'all' | 'unassigned' | 'traveler' | 'npc' | 'scene';
 
 const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -119,13 +120,19 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const [sceneText, setSceneText] = useState('');
   const [libraryNameFilter, setLibraryNameFilter] = useState('');
   const [libraryStatusFilter, setLibraryStatusFilter] = useState<LibraryStatusFilter>('all');
+  const [libraryResourceFilter, setLibraryResourceFilter] = useState<LibraryResourceFilter>('unassigned');
   const [libraryNpcId, setLibraryNpcId] = useState('');
+  const [travelerAnchorRequirement, setTravelerAnchorRequirement] = useState('');
   const [anchorRequirement, setAnchorRequirement] = useState('');
   const nsfwVisible = nsfwEnabled && nsfwImageEnabled;
 
   const assetMap = useMemo(() => new Map(album.assets.map((asset) => [asset.id, asset])), [album.assets]);
   const activeEntry = album.entries.find((entry) => entry.id === activeEntryId) ?? album.entries[0] ?? null;
   const companions = npcs.filter((npc) => npc.阶位 === 'companion');
+  const resourceEntries = useMemo(
+    () => buildAlbumResourceEntries(album, assetMap, nsfwVisible && showNsfw),
+    [album, assetMap, nsfwVisible, showNsfw],
+  );
   const libraryRecords = useMemo(
     () => buildCharacterLibraryRecords(traveler, npcs, album, assetMap, nsfwVisible && showNsfw),
     [traveler, npcs, album, assetMap, nsfwVisible, showNsfw],
@@ -140,6 +147,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     });
   }, [libraryNameFilter, libraryRecords, libraryStatusFilter]);
   const activeLibraryRecord = filteredLibraryRecords.find((record) => record.id === libraryNpcId) ?? filteredLibraryRecords[0] ?? null;
+  const filteredResourceEntries = useMemo(() => filterLibraryResourceEntries(resourceEntries, libraryResourceFilter), [libraryResourceFilter, resourceEntries]);
+  const unassignedResourceCount = useMemo(() => resourceEntries.filter((entry) => isUnassignedAlbumEntry(entry.entry)).length, [resourceEntries]);
   const stats = useMemo(() => ({
     total: album.entries.length,
     generated: album.assets.filter((asset) => asset.source === 'generated').length,
@@ -292,6 +301,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         model: result.model,
         backend: result.backend,
         mimeType: result.mimeType,
+        originalUrl: result.originalUrl,
       });
       onAlbumChange((prev) => ({
         ...添加图片到相册(prev, item),
@@ -488,6 +498,68 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     });
   };
 
+  const saveTravelerAnchor = (patch: NPC角色锚点档案 | undefined) => {
+    onTravelerChange((prev) => ({
+      ...prev,
+      图像档案: {
+        ...(prev.图像档案 ?? {}),
+        角色锚点: {
+          ...(prev.图像档案?.角色锚点 ?? {}),
+          ...(patch ?? {}),
+          id: patch?.id || prev.图像档案?.角色锚点?.id || `anchor_traveler_${Date.now()}`,
+          名称: patch?.名称 || prev.图像档案?.角色锚点?.名称 || prev.姓名 || '旅人',
+          来源: patch?.来源 || prev.图像档案?.角色锚点?.来源 || 'manual',
+          createdAt: prev.图像档案?.角色锚点?.createdAt || Date.now(),
+          updatedAt: Date.now(),
+        },
+      },
+    }));
+    setMessage('主控锚点已保存。');
+  };
+
+  const deleteTravelerAnchor = () => {
+    onTravelerChange((prev) => ({
+      ...prev,
+      图像档案: {
+        ...(prev.图像档案 ?? {}),
+        角色锚点: undefined,
+      },
+    }));
+    setMessage('主控锚点已删除。');
+  };
+
+  const extractTravelerAnchor = (requirement: string) => {
+    const positive = [
+      traveler.性别 ? `${traveler.性别}` : '',
+      traveler.年龄 ? `${traveler.年龄}` : '',
+      traveler.身高,
+      traveler.身份,
+      traveler.外貌,
+      traveler.主命途 ? `path: ${traveler.主命途}` : '',
+      traveler.能力?.length ? traveler.能力.join(', ') : '',
+      requirement ? `extra focus: ${requirement}` : '',
+    ].filter(Boolean).join(', ');
+    const tagsFrom = (text?: string) => (text ?? '')
+      .split(/[，,、\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+    saveTravelerAnchor({
+      名称: traveler.姓名 || '旅人',
+      是否启用: true,
+      生成时默认附加: true,
+      场景生图自动注入: true,
+      正面提示词: positive,
+      负面提示词: '',
+      结构化特征: {
+        外貌标签: tagsFrom(traveler.外貌),
+        特殊特征标签: [...tagsFrom(traveler.身份), ...(traveler.能力 ?? []).slice(0, 8)],
+      },
+      来源: 'manual',
+      原始提取文本: [traveler.身份, traveler.外貌, traveler.主命途, ...(traveler.能力 ?? []), requirement].filter(Boolean).join('\n'),
+    });
+  };
+
   const applyTokenizerIfAvailable = async (input: {
     title: string;
     mode: string;
@@ -525,10 +597,13 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const handleBuildPrompt = async () => {
     const target = currentTarget;
     if (target.tokenizerMode === 'scene') {
+      const presentNpcs = buildPresentSceneNpcs(npcs, sceneText);
       const built = buildSceneImagePrompt({
         text: sceneText,
         mode: target.id === 'phone_wallpaper' ? 'phone_wallpaper' : 'scene',
         rules: imageSettings.rules,
+        traveler,
+        presentNpcs,
         extraRequirement,
         size: resolvedSize,
         slot: target.slot,
@@ -536,7 +611,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       const refined = await applyTokenizerIfAvailable({
         title: target.label,
         mode: target.id,
-        sourceText: sceneText || target.desc,
+        sourceText: buildSceneSourceText(sceneText || target.desc, traveler, presentNpcs),
         prompt: built.prompt,
         negative: built.negative,
       });
@@ -617,20 +692,30 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 records={filteredLibraryRecords}
                 activeRecord={activeLibraryRecord}
                 activeEntryId={activeEntry?.id}
+                resourceEntries={filteredResourceEntries}
                 nameFilter={libraryNameFilter}
                 setNameFilter={setLibraryNameFilter}
                 statusFilter={libraryStatusFilter}
                 setStatusFilter={setLibraryStatusFilter}
+                resourceFilter={libraryResourceFilter}
+                setResourceFilter={setLibraryResourceFilter}
                 onSelectNpc={setLibraryNpcId}
                 onSelectEntry={setActiveEntryId}
                 onCreate={() => setActiveTab('manual')}
                 onMount={mountSelectedToCharacter}
                 onUnmount={unmountCharacterSlot}
                 maleNsfwEnabled={gameSettings.enableMaleNsfwArchive}
+                unassignedCount={unassignedResourceCount}
               />
             )}
             {activeTab === 'anchor' && (
               <CharacterAnchorWorkspace
+                traveler={traveler}
+                travelerRequirement={travelerAnchorRequirement}
+                setTravelerRequirement={setTravelerAnchorRequirement}
+                onSaveTravelerAnchor={saveTravelerAnchor}
+                onDeleteTravelerAnchor={deleteTravelerAnchor}
+                onExtractTravelerAnchor={extractTravelerAnchor}
                 records={filteredLibraryRecords.filter(isNpcLibraryRecord)}
                 activeRecord={isNpcLibraryRecord(activeLibraryRecord) ? activeLibraryRecord : null}
                 activeNpcId={libraryNpcId}
@@ -805,30 +890,38 @@ function CharacterLibraryWorkspace({
   records,
   activeRecord,
   activeEntryId,
+  resourceEntries,
   nameFilter,
   setNameFilter,
   statusFilter,
   setStatusFilter,
+  resourceFilter,
+  setResourceFilter,
   onSelectNpc,
   onSelectEntry,
   onCreate,
   onMount,
   onUnmount,
   maleNsfwEnabled,
+  unassignedCount,
 }: {
   records: CharacterLibraryRecord[];
   activeRecord: CharacterLibraryRecord | null;
   activeEntryId?: string;
+  resourceEntries: CharacterLibraryEntry[];
   nameFilter: string;
   setNameFilter: (value: string) => void;
   statusFilter: LibraryStatusFilter;
   setStatusFilter: (value: LibraryStatusFilter) => void;
+  resourceFilter: LibraryResourceFilter;
+  setResourceFilter: (value: LibraryResourceFilter) => void;
   onSelectNpc: (id: string) => void;
   onSelectEntry: (id: string) => void;
   onCreate: () => void;
   onMount: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
   onUnmount: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; slot: MountedImageSlot }) => void;
   maleNsfwEnabled: boolean;
+  unassignedCount: number;
 }) {
   const totals = useMemo(() => ({
     current: records.length,
@@ -863,6 +956,40 @@ function CharacterLibraryWorkspace({
             </div>
           </div>
         </div>
+      </Panel>
+
+      <Panel title="全量资源库">
+        <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>
+            上传、远程导入和生成结果都会先进入这里。未归档图片可手动挂载到旅人或当前选中的伙伴槽位。
+          </div>
+          <Field label="资源视图">
+            <select value={resourceFilter} onChange={(event) => setResourceFilter(event.target.value as LibraryResourceFilter)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+              <option value="unassigned">未归档图片（{unassignedCount}）</option>
+              <option value="all">全部图片</option>
+              <option value="traveler">旅人图片</option>
+              <option value="npc">伙伴图片</option>
+              <option value="scene">场景 / 手机图片</option>
+            </select>
+          </Field>
+        </div>
+        {resourceEntries.length ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">
+            {resourceEntries.map((item) => (
+              <ResourceEntryCard
+                key={item.entry.id}
+                item={item}
+                active={activeEntryId === item.entry.id}
+                activeRecord={activeRecord}
+                maleNsfwEnabled={maleNsfwEnabled}
+                onClick={() => onSelectEntry(item.entry.id)}
+                onMount={onMount}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyLibraryBox title="暂无可显示资源" desc="上传、远程导入或手动生成后，图片会先出现在这里。" />
+        )}
       </Panel>
 
       <div className="grid gap-4 xl:grid-cols-[190px_minmax(0,1fr)]">
@@ -947,7 +1074,7 @@ function CharacterArchiveButton({ record, active, onClick }: { record: Character
       }}
     >
       <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: 'rgba(var(--tj-accent-primary),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)' }}>
-        {avatar ? <img src={avatar} alt={record.name} className="h-full w-full object-cover" /> : <span className="font-serif text-sm" style={{ color: 'rgba(var(--tj-accent-primary),0.72)' }}>{record.name.slice(0, 1)}</span>}
+        <SafeAlbumImage src={avatar} alt={record.name} className="h-full w-full object-cover" emptyLabel={record.name.slice(0, 1)} failedLabel="失效" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{record.name}</div>
@@ -963,7 +1090,7 @@ function MountedSlotPreview({ slot, onUnmount }: { slot: MountedImageSlot; onUnm
   return (
     <div className="overflow-hidden" style={{ background: slot.nsfw ? 'rgba(var(--tj-ui-nsfw),0.055)' : 'rgba(var(--tj-accent-primary),0.035)', boxShadow: slot.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.2)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
       <div className="aspect-[4/3] ">
-        {slot.src ? <img src={slot.src} alt={slot.label} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-faint),0.58)' }}>待写入</div>}
+        <SafeAlbumImage src={slot.src} alt={slot.label} className="h-full w-full object-cover" emptyLabel="待写入" failedLabel="图片失效" />
       </div>
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <div className="truncate font-serif text-xs font-bold tracking-[0.14em]" style={{ color: slot.nsfw ? 'rgb(var(--tj-ui-nsfw))' : 'rgb(var(--tj-ui-title))' }}>{slot.label}</div>
@@ -978,6 +1105,12 @@ function MountedSlotPreview({ slot, onUnmount }: { slot: MountedImageSlot; onUnm
 }
 
 function CharacterAnchorWorkspace({
+  traveler,
+  travelerRequirement,
+  setTravelerRequirement,
+  onSaveTravelerAnchor,
+  onDeleteTravelerAnchor,
+  onExtractTravelerAnchor,
   records,
   activeRecord,
   activeNpcId,
@@ -988,6 +1121,12 @@ function CharacterAnchorWorkspace({
   onDeleteAnchor,
   onExtractAnchor,
 }: {
+  traveler: 角色数据结构;
+  travelerRequirement: string;
+  setTravelerRequirement: (value: string) => void;
+  onSaveTravelerAnchor: (anchor: NPC角色锚点档案) => void;
+  onDeleteTravelerAnchor: () => void;
+  onExtractTravelerAnchor: (requirement: string) => void;
   records: NpcLibraryRecord[];
   activeRecord: NpcLibraryRecord | null;
   activeNpcId: string;
@@ -1000,13 +1139,34 @@ function CharacterAnchorWorkspace({
 }) {
   const anchoredCount = records.filter((record) => record.npc.图像档案?.角色锚点?.正面提示词 || record.npc.图像档案?.角色锚点?.负面提示词).length;
   const enabledCount = records.filter((record) => record.npc.图像档案?.角色锚点?.是否启用 !== false && (record.npc.图像档案?.角色锚点?.正面提示词 || record.npc.图像档案?.角色锚点?.负面提示词)).length;
+  const travelerAnchor = traveler.图像档案?.角色锚点;
+  const travelerHasAnchor = Boolean(travelerAnchor?.正面提示词 || travelerAnchor?.负面提示词);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
       <Panel title="锚点角色">
         <div className="mb-3 grid grid-cols-2 gap-2">
-          <AnchorStat label="已建立" value={anchoredCount} />
-          <AnchorStat label="启用中" value={enabledCount} />
+          <AnchorStat label="已建立" value={anchoredCount + (travelerHasAnchor ? 1 : 0)} />
+          <AnchorStat label="启用中" value={enabledCount + (travelerHasAnchor && travelerAnchor?.是否启用 !== false ? 1 : 0)} />
+        </div>
+        <div
+          className="mb-2 w-full px-3 py-3 text-left"
+          style={{ background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary),0.05))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.5)', clipPath: smallClip }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>主控 · {traveler.姓名 || '旅人'}</div>
+              <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.62)' }}>
+                {travelerHasAnchor ? travelerAnchor?.名称 || '主控锚点' : '未建立锚点'}
+              </div>
+            </div>
+            <span className="shrink-0 px-2 py-1 text-[10px] tracking-[0.12em]" style={{ color: travelerHasAnchor ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-muted),0.66)', background: travelerHasAnchor ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))' : 'rgba(var(--tj-accent-primary),0.06)', clipPath: smallClip }}>
+              {travelerHasAnchor ? (travelerAnchor?.是否启用 === false ? '停用' : '启用') : '空'}
+            </span>
+          </div>
+          {travelerAnchor?.场景生图自动注入 && (
+            <div className="mt-2 text-[10px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary),0.7)' }}>场景联动</div>
+          )}
         </div>
         <div className="max-h-[620px] space-y-2 overflow-y-auto pr-1">
           {records.length ? (
@@ -1049,22 +1209,70 @@ function CharacterAnchorWorkspace({
         </div>
       </Panel>
 
-      <Panel title={activeRecord ? `${activeRecord.npc.姓名} · 角色锚点` : '角色锚点'}>
-        {activeRecord ? (
+      <div className="space-y-4">
+        <Panel title={`${traveler.姓名 || '旅人'} · 主控锚点`}>
           <CharacterAnchorPanel
-            npc={activeRecord.npc}
+            label="主控锚点管理"
+            desc="主控锚点用于稳定旅人外观，角色图和场景图都会优先读取它。"
+            nameFallback={traveler.姓名 || '旅人'}
+            anchor={traveler.图像档案?.角色锚点}
+            requirement={travelerRequirement}
+            setRequirement={setTravelerRequirement}
+            onExtract={() => onExtractTravelerAnchor(travelerRequirement)}
+            onSave={onSaveTravelerAnchor}
+            onDelete={onDeleteTravelerAnchor}
+          />
+        </Panel>
+        <Panel title={activeRecord ? `${activeRecord.npc.姓名} · 角色锚点` : '角色锚点'}>
+          {activeRecord ? (
+          <CharacterAnchorPanel
+            label="角色锚点管理"
+            desc="角色锚点用于稳定 NPC 外观，每名角色只保留一个锚点。"
+            nameFallback={activeRecord.npc.姓名}
+            anchor={activeRecord.npc.图像档案?.角色锚点}
             requirement={requirement}
             setRequirement={setRequirement}
             onExtract={() => onExtractAnchor(activeRecord.npc.id, requirement)}
             onSave={(anchor) => onSaveAnchor(activeRecord.npc.id, anchor)}
             onDelete={() => onDeleteAnchor(activeRecord.npc.id)}
           />
-        ) : (
+          ) : (
           <EmptyLibraryBox title="未选择角色" desc="先在左侧选择一个伙伴，再建立用于稳定外观的角色锚点。" />
-        )}
-      </Panel>
+          )}
+        </Panel>
+      </div>
     </div>
   );
+}
+
+function SafeAlbumImage({
+  src,
+  alt,
+  className,
+  emptyLabel = '待写入',
+  failedLabel = '图片失效',
+}: {
+  src?: string;
+  alt: string;
+  className: string;
+  emptyLabel?: string;
+  failedLabel?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+  if (!src || failed) {
+    return (
+      <div
+        className={`${className} flex items-center justify-center px-2 text-center font-serif text-xs tracking-[0.12em]`}
+        style={{ background: imageWellSurface, color: failed ? 'rgba(255,180,180,0.88)' : 'rgba(var(--tj-ui-faint),0.58)' }}
+      >
+        {failed ? failedLabel : emptyLabel}
+      </div>
+    );
+  }
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={className} />;
 }
 
 function AnchorStat({ label, value }: { label: string; value: number }) {
@@ -1077,22 +1285,27 @@ function AnchorStat({ label, value }: { label: string; value: number }) {
 }
 
 function CharacterAnchorPanel({
-  npc,
+  label,
+  desc,
+  nameFallback,
+  anchor,
   requirement,
   setRequirement,
   onExtract,
   onSave,
   onDelete,
 }: {
-  npc: NPC记录;
+  label: string;
+  desc: string;
+  nameFallback: string;
+  anchor?: NPC角色锚点档案;
   requirement: string;
   setRequirement: (value: string) => void;
   onExtract: () => void;
-  onSave: (anchor: NonNullable<NPC记录['图像档案']>['角色锚点']) => void;
+  onSave: (anchor: NPC角色锚点档案) => void;
   onDelete: () => void;
 }) {
-  const anchor = npc.图像档案?.角色锚点;
-  const [name, setName] = useState(anchor?.名称 || npc.姓名);
+  const [name, setName] = useState(anchor?.名称 || nameFallback);
   const [enabled, setEnabled] = useState(anchor?.是否启用 !== false);
   const [defaultApply, setDefaultApply] = useState(anchor?.生成时默认附加 !== false);
   const [sceneInject, setSceneInject] = useState(anchor?.场景生图自动注入 !== false);
@@ -1100,13 +1313,13 @@ function CharacterAnchorPanel({
   const [negative, setNegative] = useState(anchor?.负面提示词 || '');
 
   useEffect(() => {
-    setName(anchor?.名称 || npc.姓名);
+    setName(anchor?.名称 || nameFallback);
     setEnabled(anchor?.是否启用 !== false);
     setDefaultApply(anchor?.生成时默认附加 !== false);
     setSceneInject(anchor?.场景生图自动注入 !== false);
     setPositive(anchor?.正面提示词 || '');
     setNegative(anchor?.负面提示词 || '');
-  }, [anchor, npc.姓名]);
+  }, [anchor, nameFallback]);
 
   const save = () => onSave({
     ...(anchor ?? {}),
@@ -1123,8 +1336,8 @@ function CharacterAnchorPanel({
     <div className="space-y-3 px-3 py-3" style={{ background: cardSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.58)', clipPath: smallClip }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>角色锚点管理</div>
-          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.64)' }}>角色锚点用于稳定 NPC 外观，每名角色只保留一个锚点。</div>
+          <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>{label}</div>
+          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.64)' }}>{desc}</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={onExtract}>AI提取锚点</Button>
@@ -1189,13 +1402,14 @@ function CharacterEntryCard({
 }: {
   item: CharacterLibraryEntry;
   active: boolean;
-  targetKind: CharacterLibraryRecord['kind'];
-  targetId: string;
+  targetKind?: CharacterLibraryRecord['kind'];
+  targetId?: string;
   maleNsfwEnabled: boolean;
   onClick: () => void;
-  onMount: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
+  onMount?: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
 }) {
-  const mountSlots = getMountSlotsForEntry(item.entry, maleNsfwEnabled, targetKind);
+  const canMount = Boolean(targetKind && targetId && onMount);
+  const mountSlots = canMount && targetKind ? getMountSlotsForEntry(item.entry, maleNsfwEnabled, targetKind) : [];
   return (
     <div
       className="group overflow-hidden text-left transition-all"
@@ -1207,7 +1421,7 @@ function CharacterEntryCard({
     >
       <button type="button" onClick={onClick} className="block w-full text-left">
         <div className="aspect-[4/3] ">
-          {item.src ? <img src={item.src} alt={item.entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center text-3xl" style={{ color: 'rgba(var(--tj-accent-primary),0.28)' }}>✧</div>}
+          <SafeAlbumImage src={item.src} alt={item.entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" emptyLabel="无图片" failedLabel="图片失效" />
         </div>
       </button>
       <div className="space-y-2 px-3 py-2">
@@ -1217,13 +1431,17 @@ function CharacterEntryCard({
           {item.sourceLabel && <span style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>{item.sourceLabel}</span>}
           {item.entry.nsfw && <span style={{ color: 'rgb(var(--tj-ui-nsfw))' }}>NSFW</span>}
         </div>
+        {canMount && (
         <div className="grid grid-cols-2 gap-1.5">
           {mountSlots.map((slot) => (
             <button
               key={slot.value}
               type="button"
               disabled={!item.src}
-              onClick={() => onMount({ targetKind, targetId, entryId: item.entry.id, src: item.src, slot: slot.value })}
+              onClick={() => {
+                if (!targetKind || !targetId || !onMount) return;
+                onMount({ targetKind, targetId, entryId: item.entry.id, src: item.src, slot: slot.value });
+              }}
               className="px-2 py-1.5 font-serif text-[11px] tracking-[0.1em] transition-all disabled:opacity-40"
               style={{
                 color: slot.nsfw ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-accent-primary),0.9)',
@@ -1236,7 +1454,45 @@ function CharacterEntryCard({
             </button>
           ))}
         </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function ResourceEntryCard({
+  item,
+  active,
+  activeRecord,
+  maleNsfwEnabled,
+  onClick,
+  onMount,
+}: {
+  item: CharacterLibraryEntry;
+  active: boolean;
+  activeRecord: CharacterLibraryRecord | null;
+  maleNsfwEnabled: boolean;
+  onClick: () => void;
+  onMount: (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => void;
+}) {
+  const targetKind = activeRecord?.kind;
+  const targetId = activeRecord?.id;
+  return (
+    <div className="space-y-1.5">
+      <CharacterEntryCard
+        item={item}
+        active={active}
+        targetKind={targetKind}
+        targetId={targetId}
+        maleNsfwEnabled={maleNsfwEnabled}
+        onClick={onClick}
+        onMount={targetKind && targetId ? onMount : undefined}
+      />
+      {(!targetKind || !targetId) && (
+        <div className="px-2 text-[10px] leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.58)' }}>
+          先选一个旅人或伙伴，再可直接挂载。
+        </div>
+      )}
     </div>
   );
 }
@@ -1300,7 +1556,7 @@ function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: { entrie
         return (
           <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="group overflow-hidden text-left transition-all" style={{ background: 'rgba(var(--tj-ui-panel), 0.52)', boxShadow: activeId === entry.id ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.78), 0 0 18px rgba(var(--tj-accent-primary),0.1)' : entry.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.32)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)', clipPath: cardClip }}>
             <div className="aspect-[4/3] ">
-              {src ? <img src={src} alt={entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center text-3xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.28)' }}>✧</div>}
+              <SafeAlbumImage src={src} alt={entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" emptyLabel="无图片" failedLabel="图片失效" />
             </div>
             <div className="px-3 py-2">
               <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{entry.title}</div>
@@ -1384,11 +1640,11 @@ function CreateWorkspace(props: {
         )}
         {props.currentTarget.tokenizerMode === 'scene' ? (
           <Field label="场景说明">
-            <textarea rows={4} value={props.sceneText} onChange={(e) => props.setSceneText(e.target.value)} placeholder="写清地点、时间、人物站位、想要画面像纯场景还是故事快照。" className="kaituo-input w-full resize-y px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+            <textarea rows={4} value={props.sceneText} onChange={(e) => props.setSceneText(e.target.value)} placeholder="写清地点、时间、人物站位、想要画面像纯场景还是故事快照。会自动读取主控锚点和当前同行角色锚点。" className="kaituo-input w-full resize-y px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
           </Field>
         ) : props.currentTarget.targetType === 'traveler' ? (
           <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)', background: 'rgba(var(--tj-accent-primary),0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
-            当前用途会读取旅人档案中的姓名、性别、身份、外貌、性格、命途与能力生成草稿。
+            当前用途会读取旅人档案与主控锚点中的姓名、性别、身份、外貌、性格、命途与能力生成草稿。
           </div>
         ) : (
           <Field label="来源伙伴">
@@ -1417,8 +1673,8 @@ function CreateWorkspace(props: {
         </div>
       </Panel>
       <div className="space-y-4">
-        <Panel title="上传图片">
-          <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>本地图片会直接进入相册，之后可选中并挂载到伙伴头像。</div>
+      <Panel title="上传图片">
+          <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>本地图片会直接进入相册，并显示在资源库的未归档图片里，之后可手动挂载到旅人或伙伴槽位。</div>
           <Field label="上传标题"><input value={props.uploadTitle} onChange={(e) => props.setUploadTitle(e.target.value)} className="kaituo-input w-full px-2 py-1.5 text-xs" style={{ clipPath: smallClip }} /></Field>
           <input type="file" accept="image/*" onChange={(e) => props.onUpload(e.target.files?.[0] ?? null)} className="block w-full text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }} />
         </Panel>
@@ -1479,7 +1735,7 @@ function HistoryWorkspace({ album, assetMap, onSelect }: { album: 相册系统; 
         return (
           <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left" style={{ background: 'rgba(var(--tj-ui-panel),0.48)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: cardClip }}>
             <div className="h-14 w-20 flex-shrink-0 overflow-hidden" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.52)', clipPath: smallClip }}>
-              {asset?.dataUrl || asset?.url || asset?.localRef ? <img src={asset.dataUrl || asset.url || asset.localRef} alt={entry.title} className="h-full w-full object-cover" /> : null}
+              <SafeAlbumImage src={asset?.dataUrl || asset?.url || asset?.localRef || ''} alt={entry.title} className="h-full w-full object-cover" emptyLabel="无图片" failedLabel="图片失效" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{entry.title}</div>
@@ -1765,6 +2021,32 @@ function buildTravelerLibraryRecord(
   };
 }
 
+function buildAlbumResourceEntries(
+  album: 相册系统,
+  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
+  includeNsfw: boolean,
+): CharacterLibraryEntry[] {
+  return album.entries
+    .filter((entry) => includeNsfw || !entry.nsfw)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((entry) => ({
+      entry,
+      src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
+    }));
+}
+
+function filterLibraryResourceEntries(entries: CharacterLibraryEntry[], filter: LibraryResourceFilter): CharacterLibraryEntry[] {
+  if (filter === 'all') return entries;
+  if (filter === 'unassigned') return entries.filter((item) => isUnassignedAlbumEntry(item.entry));
+  if (filter === 'traveler') return entries.filter((item) => item.entry.targetType === 'traveler');
+  if (filter === 'npc') return entries.filter((item) => item.entry.targetType === 'npc' || item.entry.targetType === 'nsfw_part');
+  return entries.filter((item) => item.entry.targetType === 'scene' || item.entry.targetType === 'phone' || item.entry.slot === 'scene' || item.entry.slot === 'phone_wallpaper' || item.entry.slot === 'phone_chat_background');
+}
+
+function isUnassignedAlbumEntry(entry: 相册条目): boolean {
+  return entry.targetType === 'misc' || !entry.targetId;
+}
+
 function isNpcLibraryRecord(record: CharacterLibraryRecord | null | undefined): record is NpcLibraryRecord {
   return record?.kind === 'npc';
 }
@@ -1829,6 +2111,39 @@ function mapMountedSlotToTravelerSlot(key: string): '头像' | '正文头像' | 
   return '头像';
 }
 
+function buildPresentSceneNpcs(npcs: NPC记录[], sceneText: string): NPC记录[] {
+  const text = sceneText.trim();
+  return npcs
+    .map((npc) => ({
+      npc,
+      score: (text && (text.includes(npc.姓名) || Boolean(npc.别名 && text.includes(npc.别名))) ? 100 : 0) + (npc.同行 ? 80 : 0) + (npc.图像档案?.角色锚点?.正面提示词 ? 20 : 0),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || b.npc.最近回合 - a.npc.最近回合)
+    .map((item) => item.npc)
+    .slice(0, 4);
+}
+
+function buildSceneSourceText(text: string, traveler: 角色数据结构, presentNpcs: NPC记录[]): string {
+  const travelerAnchor = traveler.图像档案?.角色锚点;
+  return [
+    `场景说明：${text || '未填写'}`,
+    `主控角色：${traveler.姓名 || '旅人'}`,
+    traveler.外貌 ? `主控外貌：${traveler.外貌}` : '',
+    travelerAnchor?.正面提示词 ? `主控锚点：${travelerAnchor.正面提示词}` : '',
+    travelerAnchor?.负面提示词 ? `主控负面锚点：${travelerAnchor.负面提示词}` : '',
+    presentNpcs.length ? `在场角色：${presentNpcs.map((npc) => npc.姓名).join('、')}` : '',
+    ...presentNpcs.map((npc) => {
+      const anchor = npc.图像档案?.角色锚点;
+      return [
+        `${npc.姓名}：${[npc.外貌, npc.穿着].filter(Boolean).join('，')}`,
+        anchor?.正面提示词 ? `${npc.姓名}锚点：${anchor.正面提示词}` : '',
+        anchor?.负面提示词 ? `${npc.姓名}负面锚点：${anchor.负面提示词}` : '',
+      ].filter(Boolean).join('\n');
+    }),
+  ].filter(Boolean).join('\n');
+}
+
 function buildTravelerSourceText(traveler: 角色数据结构): string {
   return [
     `姓名：${traveler.姓名 || '未命名旅人'}`,
@@ -1841,6 +2156,9 @@ function buildTravelerSourceText(traveler: 角色数据结构): string {
     traveler.背景 ? `背景：${traveler.背景}` : '',
     traveler.能力?.length ? `能力：${traveler.能力.join('、')}` : '',
     traveler.主命途 ? `命途：${traveler.主命途}` : '',
+    traveler.图像档案?.角色锚点?.名称 ? `主控锚点名称：${traveler.图像档案.角色锚点.名称}` : '',
+    traveler.图像档案?.角色锚点?.正面提示词 ? `主控锚点：${traveler.图像档案.角色锚点.正面提示词}` : '',
+    traveler.图像档案?.角色锚点?.负面提示词 ? `主控负面锚点：${traveler.图像档案.角色锚点.负面提示词}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -1858,6 +2176,9 @@ function buildNpcSourceText(npc: NPC记录): string {
     npc.装备摘要 ? `装备：${npc.装备摘要}` : '',
     npc.图像档案?.头像提示词 ? `头像提示词：${npc.图像档案.头像提示词}` : '',
     npc.图像档案?.立绘提示词 ? `立绘提示词：${npc.图像档案.立绘提示词}` : '',
+    npc.图像档案?.角色锚点?.名称 ? `角色锚点名称：${npc.图像档案.角色锚点.名称}` : '',
+    npc.图像档案?.角色锚点?.正面提示词 ? `角色锚点：${npc.图像档案.角色锚点.正面提示词}` : '',
+    npc.图像档案?.角色锚点?.负面提示词 ? `角色负面锚点：${npc.图像档案.角色锚点.负面提示词}` : '',
     npc.NSFW档案?.enabled ? `NSFW档案：${JSON.stringify(npc.NSFW档案)}` : '',
   ].filter(Boolean).join('\n');
 }

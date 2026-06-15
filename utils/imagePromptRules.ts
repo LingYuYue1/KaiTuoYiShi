@@ -1,6 +1,6 @@
 import type { 图片槽位 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
-import type { NPC记录 } from '@/models/npc';
+import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 画师串预设适用范围 } from '@/models/settings';
 
 export type 生图Prompt模式 = 'avatar' | 'portrait' | 'scene' | 'phone_wallpaper' | 'nsfw';
@@ -636,8 +636,7 @@ function readNsfwArchive(npc: NPC记录): string {
   ]);
 }
 
-function readNpcCharacterAnchorPrompt(npc: NPC记录): string {
-  const anchor = npc.图像档案?.角色锚点;
+function readCharacterAnchorPrompt(anchor: NPC角色锚点档案 | undefined, label: string): string {
   if (!anchor || anchor.是否启用 === false) return '';
   const features = anchor.结构化特征
     ? Object.entries(anchor.结构化特征)
@@ -645,16 +644,63 @@ function readNpcCharacterAnchorPrompt(npc: NPC记录): string {
         .join('\n')
     : '';
   return [
-    anchor.名称 ? `character anchor name: ${anchor.名称}` : undefined,
-    anchor.正面提示词 ? `character anchor positive prompt: ${anchor.正面提示词}` : undefined,
-    features ? `structured anchor features:\n${features}` : undefined,
+    anchor.名称 ? `${label} anchor name: ${anchor.名称}` : undefined,
+    anchor.正面提示词 ? `${label} anchor positive prompt: ${anchor.正面提示词}` : undefined,
+    features ? `${label} structured anchor features:\n${features}` : undefined,
   ].filter(Boolean).join('\n');
 }
 
-function readNpcCharacterAnchorNegative(npc: NPC记录): string {
-  const anchor = npc.图像档案?.角色锚点;
+function readCharacterAnchorNegative(anchor: NPC角色锚点档案 | undefined): string {
   if (!anchor || anchor.是否启用 === false) return '';
   return anchor.负面提示词 || '';
+}
+
+function readNpcCharacterAnchorPrompt(npc: NPC记录): string {
+  return readCharacterAnchorPrompt(npc.图像档案?.角色锚点, 'character');
+}
+
+function readNpcCharacterAnchorNegative(npc: NPC记录): string {
+  return readCharacterAnchorNegative(npc.图像档案?.角色锚点);
+}
+
+function readTravelerCharacterAnchorPrompt(traveler: 角色数据结构): string {
+  return readCharacterAnchorPrompt(traveler.图像档案?.角色锚点, 'player character');
+}
+
+function readTravelerCharacterAnchorNegative(traveler: 角色数据结构): string {
+  return readCharacterAnchorNegative(traveler.图像档案?.角色锚点);
+}
+
+function readSceneCharacterAnchors(traveler?: 角色数据结构, presentNpcs?: NPC记录[]): { prompt: string; negative: string; hasAnchor: boolean } {
+  const travelerAnchor = traveler?.图像档案?.角色锚点;
+  const travelerPrompt = traveler && travelerAnchor?.场景生图自动注入 !== false
+    ? readTravelerCharacterAnchorPrompt(traveler)
+    : '';
+  const travelerNegative = traveler && travelerAnchor?.场景生图自动注入 !== false
+    ? readTravelerCharacterAnchorNegative(traveler)
+    : '';
+  const npcParts = (presentNpcs ?? [])
+    .filter((npc) => npc.图像档案?.角色锚点?.场景生图自动注入 !== false)
+    .map((npc) => {
+      const prompt = readNpcCharacterAnchorPrompt(npc);
+      return prompt ? `${npc.姓名}:\n${prompt}` : '';
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+  const npcNegative = (presentNpcs ?? [])
+    .filter((npc) => npc.图像档案?.角色锚点?.场景生图自动注入 !== false)
+    .map(readNpcCharacterAnchorNegative)
+    .filter(Boolean)
+    .slice(0, 4);
+  const prompt = compactJoin([
+    travelerPrompt ? `player character visual anchor:\n${travelerPrompt}` : undefined,
+    npcParts.length ? `present character visual anchors:\n${npcParts.join('\n\n')}` : undefined,
+  ]);
+  return {
+    prompt,
+    negative: compactJoin([travelerNegative, ...npcNegative]),
+    hasAnchor: Boolean(prompt || travelerNegative || npcNegative.length),
+  };
 }
 
 export function buildNpcImagePrompt(params: {
@@ -669,7 +715,7 @@ export function buildNpcImagePrompt(params: {
   const archiveText = mode === 'nsfw' ? readNsfwArchive(npc) : '';
   const anchorPrompt = readNpcCharacterAnchorPrompt(npc);
   const anchorNegative = readNpcCharacterAnchorNegative(npc);
-  const hasAnchor = Boolean(anchorPrompt || npc.外貌 || npc.穿着 || npc.图像档案?.头像提示词 || npc.图像档案?.立绘提示词);
+  const hasAnchor = Boolean(anchorPrompt || anchorNegative || npc.外貌 || npc.穿着 || npc.图像档案?.头像提示词 || npc.图像档案?.立绘提示词);
   const prompt = compactJoin([
     rules.hsrBaseStyle,
     rules.compositionRule,
@@ -711,7 +757,9 @@ export function buildTravelerImagePrompt(params: {
 }): 生图Prompt结果 {
   const { traveler, mode, rules, extraRequirement, size } = params;
   const template = 获取当前规则模板(rules, 'npc');
-  const hasAnchor = Boolean(traveler.外貌 || traveler.身份 || traveler.能力?.length);
+  const anchorPrompt = readTravelerCharacterAnchorPrompt(traveler);
+  const anchorNegative = readTravelerCharacterAnchorNegative(traveler);
+  const hasAnchor = Boolean(anchorPrompt || anchorNegative || traveler.外貌 || traveler.身份 || traveler.能力?.length);
   const prompt = compactJoin([
     rules.hsrBaseStyle,
     rules.compositionRule,
@@ -732,12 +780,13 @@ export function buildTravelerImagePrompt(params: {
     traveler.性格 ? `visible personality impression: ${traveler.性格}` : undefined,
     traveler.能力?.length ? `abilities: ${traveler.能力.join(', ')}` : undefined,
     traveler.主命途 ? `path: ${traveler.主命途}` : undefined,
+    anchorPrompt,
     size ? `target canvas size: ${size}` : undefined,
     extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
   ]);
   return {
     prompt,
-    negative: compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), rules.commonNegative]),
+    negative: compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative]),
   };
 }
 
@@ -745,29 +794,32 @@ export function buildSceneImagePrompt(params: {
   text: string;
   mode: Extract<生图Prompt模式, 'scene' | 'phone_wallpaper'>;
   rules: 文生图规则中心设置;
+  traveler?: 角色数据结构;
+  presentNpcs?: NPC记录[];
   extraRequirement?: string;
   size?: string;
   slot?: 图片槽位;
 }): 生图Prompt结果 {
-  const { text, mode, rules, extraRequirement, size } = params;
+  const { text, mode, rules, traveler, presentNpcs, extraRequirement, size } = params;
   const template = 获取当前规则模板(rules, 'scene');
+  const sceneAnchors = readSceneCharacterAnchors(traveler, presentNpcs);
   return {
     prompt: compactJoin([
       rules.hsrBaseStyle,
       rules.compositionRule,
       rules.modelCompatibilityRule,
       rules.artistPresetPositive,
-      ...stylePromptParts(rules, 'scene', true),
+      ...stylePromptParts(rules, 'scene', sceneAnchors.hasAnchor),
       template?.提示词,
-      template?.场景角色锚定模式提示词,
-      template?.无锚点回退提示词,
+      sceneAnchors.hasAnchor ? template?.场景角色锚定模式提示词 : template?.无锚点回退提示词,
       template?.输出格式提示词,
       ruleForMode(mode, rules),
       mode === 'scene' ? rules.sceneCharacterRule : undefined,
       text,
+      sceneAnchors.prompt,
       size ? `target canvas size: ${size}` : undefined,
       extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
     ]),
-    negative: compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'scene'), rules.commonNegative]),
+    negative: compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'scene'), sceneAnchors.negative, rules.commonNegative]),
   };
 }

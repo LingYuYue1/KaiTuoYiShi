@@ -246,7 +246,7 @@ export function SettingsModal({
       }}
     >
       <div
-        className="flex h-[100dvh] w-full max-w-none animate-slide-up flex-col overflow-hidden md:h-[88vh] md:max-w-5xl md:flex-row"
+        className="flex h-[100dvh] w-full max-w-none animate-slide-up flex-col overflow-hidden md:h-[90vh] md:max-w-7xl md:flex-row"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98))',
           boxShadow:
@@ -356,7 +356,7 @@ export function SettingsModal({
             }}
           >
             <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
-            <span className="ml-2">开拓轶事 · v0.7</span>
+            <span className="ml-2">开拓轶事 · v0.7.2</span>
           </div>
         </aside>
 

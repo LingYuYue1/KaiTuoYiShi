@@ -91,12 +91,6 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled, ma
 
   const promoteToCompanion = (id: string) => updateRecord(id, { 阶位: 'companion' });
   const demoteToExtra = (id: string) => updateRecord(id, { 阶位: 'extra', 同行: false });
-  const deleteRecord = (id: string) => {
-    if (!confirm('确认删除这份 NPC 档案？此操作不可撤销。')) return;
-    onNpcRecordsChange((prev) => prev.filter((n) => n.id !== id));
-    if (selectedId === id) setSelectedId(null);
-  };
-
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
       <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[260px]">
@@ -156,7 +150,6 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled, ma
             nsfwEnabled={nsfwEnabled}
             onPromote={() => promoteToCompanion(selected.id)}
             onDemote={() => demoteToExtra(selected.id)}
-            onDelete={() => deleteRecord(selected.id)}
             onToggleTraveling={() => updateRecord(selected.id, { 同行: !selected.同行 })}
             planning={selectedPlanning}
             devMode={devMode}
@@ -330,7 +323,6 @@ function NpcDetail({
   npc,
   onPromote,
   onDemote,
-  onDelete,
   onToggleTraveling,
   nsfwEnabled,
   planning,
@@ -339,7 +331,6 @@ function NpcDetail({
   npc: NPC记录;
   onPromote: () => void;
   onDemote: () => void;
-  onDelete: () => void;
   onToggleTraveling: () => void;
   nsfwEnabled: boolean;
   planning?: NPC关系规划条目;
@@ -389,7 +380,6 @@ function NpcDetail({
               </h3>
               {npc.别名 && <span className="font-serif text-[13px] italic text-[#d8ccb0]">({npc.别名})</span>}
               {npc.原著角色 && <Chip tone="gold">原著角色</Chip>}
-              {nsfwEnabled && npc.NSFW档案?.enabled && <Chip tone="silver">NSFW 预留</Chip>}
               {npc.图像档案?.状态 && <Chip tone="silver">{npc.图像档案.状态 === 'pending' ? '图像生成中' : '图像档案'}</Chip>}
             </div>
 
@@ -510,21 +500,6 @@ function NpcDetail({
       {detailTab === 'memory' && <MemoryPanel npc={npc} devMode={devMode} />}
 
       {nsfwEnabled && detailTab === 'nsfw' && <NSFWArchivePanel npc={npc} />}
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={onDelete}
-          className="px-3 py-1.5 font-serif text-[12px] tracking-[0.18em] transition-all hover:bg-[rgba(220,80,80,0.08)]"
-          style={{
-            color: 'rgba(238, 142, 142, 0.88)',
-            boxShadow: 'inset 0 0 0 1px rgba(238, 142, 142, 0.36)',
-            clipPath: smallClip,
-          }}
-        >
-          删除档案
-        </button>
-      </div>
     </div>
   );
 }
@@ -713,9 +688,11 @@ function BodyArchiveSection({ title, children }: { title: string; children: Reac
 }
 
 function formatNsfwAge(age: NPC_NSFW年龄确认 | undefined): string {
+  // 年龄确认已降级为纯展示信息，不再控制写入或显示。
   if (age === 'adult') return '成人';
-  if (age === 'minor_blocked') return '禁止写入';
-  return '未确认';
+  if (age === 'minor_blocked') return '标注未成年';
+  if (age === 'unknown') return '未标注';
+  return '未标注';
 }
 
 function TagGroup({ title, items, empty }: { title: string; items: string[]; empty: string }) {

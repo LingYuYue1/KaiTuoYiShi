@@ -21,6 +21,7 @@ Thumbs.db
 
 # Local assistant memory / private planning notes
 .claude/
+.superpowers/
 AGENTS.md
 docs/
 
