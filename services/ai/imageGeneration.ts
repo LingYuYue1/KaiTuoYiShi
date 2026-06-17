@@ -59,7 +59,7 @@ export async function generateImage(config: 文生图API配置, request: ImageGe
 }
 
 /**
- * 生成正文插图：调用生图 API 并返回叙事插图结构。
+ * 生成故事快照：调用生图 API 并返回叙事插图结构。
  * @param config 生图接口配置
  * @param prompt 正面提示词
  * @param negativePrompt 负面提示词
@@ -88,6 +88,7 @@ export async function generateNarrativeImage(
       id: imageId,
       dataUrl: result.src,
       type,
+      kind: type === 'scene' ? 'snapshot' : 'character',
       prompt,
       negativePrompt,
       description,
@@ -98,6 +99,7 @@ export async function generateNarrativeImage(
       id: imageId,
       dataUrl: '',
       type,
+      kind: type === 'scene' ? 'snapshot' : 'character',
       prompt,
       negativePrompt,
       description,
@@ -110,7 +112,8 @@ export async function generateNarrativeImage(
 export async function testImageGenerationConnection(config: 文生图API配置): Promise<string> {
   if (!config.enabled) throw new Error('当前接口未启用。');
   if (!config.baseUrl.trim()) throw new Error('请先填写 Base URL。');
-  const endpoint = joinUrl(config.baseUrl, readPath(config));
+  const path = config.backend === 'openai_compatible' ? readOpenAICompatibleImagePath(config) : readPath(config);
+  const endpoint = joinUrl(config.baseUrl, path);
 
   if (config.backend === 'openai_compatible') {
     if (!config.apiKey.trim()) throw new Error('OpenAI 兼容接口需要 API Key。');
@@ -127,8 +130,8 @@ export async function testImageGenerationConnection(config: 文生图API配置):
       }),
     });
     const text = await response.text().catch(() => '');
-    if (response.ok || response.status === 400) {
-      return `连接可达：${endpoint}。${response.status === 400 ? '接口返回了参数校验结果，通常说明地址与鉴权已进入服务端。' : '接口响应成功。'}`;
+    if (response.ok || response.status === 400 || isOpenAICompatibleImageValidationResponse(response.status, text)) {
+      return `连接可达：${endpoint}。${response.ok ? '接口响应成功。' : '接口返回了参数校验结果，通常说明地址与鉴权已进入服务端。'}`;
     }
     throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
   }
@@ -331,9 +334,29 @@ async function readJsonResponse(response: Response, label: string): Promise<any>
 }
 
 function joinUrl(baseUrl: string, path: string): string {
+  if (/^https?:\/\//i.test(path.trim())) return path.trim();
   const base = baseUrl.replace(/\/+$/, '');
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `${base}${cleanPath}`;
+}
+
+function normalizeOpenAICompatibleImagePath(path: string): string {
+  const raw = String(path || '').trim() || '/images/generations';
+  const clean = raw.replace(/\/+$/, '');
+  if (/\/v1$/i.test(clean) || /^v1$/i.test(clean)) {
+    return `${clean.startsWith('/') || /^https?:\/\//i.test(clean) ? clean : `/${clean}`}/images/generations`;
+  }
+  return raw;
+}
+
+function readOpenAICompatibleImagePath(config: 文生图API配置): string {
+  return normalizeOpenAICompatibleImagePath(readPath(config));
+}
+
+function isOpenAICompatibleImageValidationResponse(status: number, text: string): boolean {
+  if (status !== 400 && status !== 422) return false;
+  const lower = text.toLowerCase();
+  return lower.includes('prompt') && (lower.includes('required') || lower.includes('missing') || lower.includes('field required'));
 }
 
 function parseSize(size: string): { width: number; height: number } {
@@ -343,6 +366,16 @@ function parseSize(size: string): { width: number; height: number } {
     width: Math.max(64, Math.trunc(Number(match[1]) || 1024)),
     height: Math.max(64, Math.trunc(Number(match[2]) || 1024)),
   };
+}
+
+function normalizeOpenAICompatibleImageSize(size: string): string {
+  const raw = String(size || '').trim();
+  if (!raw || raw === 'auto') return '1024x1024';
+  if (/^(1024x1024|1024x1536|1536x1024)$/i.test(raw)) return raw.toLowerCase();
+  const { width, height } = parseSize(raw);
+  if (width > height * 1.15) return '1536x1024';
+  if (height > width * 1.15) return '1024x1536';
+  return '1024x1024';
 }
 
 function normalizeNovelAISize(size: string): { width: number; height: number } {
@@ -374,6 +407,19 @@ function mergeNegativePrompt(config: 文生图API配置, request: ImageGeneratio
     .map((item) => item?.trim())
     .filter(Boolean)
     .join(', ');
+}
+
+function formatOpenAICompatibleImageError(status: number, text: string): string {
+  const tips: string[] = [];
+  const lower = text.toLowerCase();
+  if (status >= 500 && (lower.includes('new_api_error') || lower.includes('do_request_failed') || lower.includes('upstream error'))) {
+    tips.push('上游图片接口请求失败。若头像/立绘和手动故事快照可用但自动故事快照失败，优先检查本次正文快照提示词、并发限制、response_format 支持和中转模型能力。');
+    tips.push('若仍失败，请检查中转的图片模型、/images/generations 路径、余额、并发限制和 response_format 支持情况。');
+  }
+  if (status === 400 && /size|dimension|resolution/i.test(text)) {
+    tips.push('图片接口拒绝了尺寸参数。OpenAI 兼容接口会自动使用 1024x1024 / 1536x1024 / 1024x1536。');
+  }
+  return [`图片接口错误 ${status}: ${text}`, ...tips].filter(Boolean).join('\n');
 }
 
 function normalizeReferenceImages(referenceImages?: ImageReferenceInput[]): ImageReferenceInput[] {
@@ -410,7 +456,7 @@ async function generateOpenAICompatibleImage(config: 文生图API配置, request
     throw new Error('OpenAI 兼容的 /images/generations 路径不保证支持参考图。请改用支持参考图的图片编辑端点，或先关闭参考图参与生成。');
   }
 
-  const url = joinUrl(config.baseUrl, readPath(config));
+  const url = joinUrl(config.baseUrl, readOpenAICompatibleImagePath(config));
   const negative = mergeNegativePrompt(config, request);
   const prompt = negative
     ? `${request.prompt.trim()}\n\nNegative prompt: ${negative}`
@@ -425,7 +471,7 @@ async function generateOpenAICompatibleImage(config: 文生图API配置, request
     body: JSON.stringify({
       model: config.model,
       prompt,
-      size: request.size || config.defaultSize || '1024x1024',
+      size: normalizeOpenAICompatibleImageSize(request.size || config.defaultSize || '1024x1024'),
       n: 1,
       response_format: config.responseFormat === 'dataUrl' ? 'b64_json' : config.responseFormat,
     }),
@@ -434,7 +480,7 @@ async function generateOpenAICompatibleImage(config: 文生图API配置, request
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`图片接口错误 ${response.status}: ${text || response.statusText}`);
+    throw new Error(formatOpenAICompatibleImageError(response.status, text || response.statusText));
   }
 
   const data = await readJsonResponse(response, 'OpenAI 兼容图片接口');

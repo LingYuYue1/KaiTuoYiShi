@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
+import type { VisualTextSettings } from '@/models/settings';
 import { BodyBlock, StreamingPreview } from './MessageRenderers';
 import { getPath } from '@/data/journeyPresets';
 import { formatTokenCount } from '@/utils/tokenEstimate';
@@ -16,18 +17,19 @@ interface TurnItemProps {
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
   previousUserInput?: string;
+  visualTextSettings?: VisualTextSettings;
   // 历史评判消息若 awakenPathId 为空,由 ChatList 向前查找补一个 ID 进来。
   fallbackPathId?: string;
 }
 
 type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
-export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: TurnItemProps) {
+export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
 
   if (isUser) {
-    return <UserTurnBubble content={message.content} traveler={traveler} />;
+    return <UserTurnBubble content={message.content} traveler={traveler} fontSize={visualTextSettings?.playerFontSize ?? 14} />;
   }
 
   return (
@@ -45,6 +47,7 @@ export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrati
           showInnerVoice={showInnerVoice}
           fallbackPathId={fallbackPathId}
           previousUserInput={previousUserInput}
+          visualTextSettings={visualTextSettings}
         />
       ) : message.isStreaming ? (
         <StreamingPreview
@@ -53,13 +56,14 @@ export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrati
           traveler={traveler}
           showInnerVoice={showInnerVoice}
           userInput={previousUserInput}
+          visualTextSettings={visualTextSettings}
         />
       ) : null}
     </div>
   );
 }
 
-function UserTurnBubble({ content, traveler }: { content: string; traveler?: 角色数据结构 }) {
+function UserTurnBubble({ content, traveler, fontSize = 14 }: { content: string; traveler?: 角色数据结构; fontSize?: number }) {
   const name = traveler?.姓名?.trim() || traveler?.别名?.trim() || '旅人';
   const avatarUrl = traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim();
   const bubbleBg = 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
@@ -76,13 +80,15 @@ function UserTurnBubble({ content, traveler }: { content: string; traveler?: 角
             }}
           />
           <div
-            className="relative px-4 py-2.5 text-sm leading-7"
+            className="relative px-4 py-2.5"
             style={{
               background: bubbleBg,
               color: 'rgba(var(--tj-chat-text), 0.98)',
               clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px rgba(var(--tj-accent-primary), 0.08)',
               fontWeight: 600,
+              fontSize: `${fontSize}px`,
+              lineHeight: 1.8,
             }}
           >
             {content}
@@ -147,9 +153,10 @@ interface AiTurnCardProps {
   showInnerVoice?: boolean;
   fallbackPathId?: string;
   previousUserInput?: string;
+  visualTextSettings?: VisualTextSettings;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -286,9 +293,10 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
             npcRecords={npcRecords}
             traveler={traveler}
             showInnerVoice={showInnerVoice}
+            visualTextSettings={visualTextSettings}
           />
         ) : (
-      <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={previousUserInput} />
+      <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={previousUserInput} visualTextSettings={visualTextSettings} />
         )}
 
         {isStreaming && (
@@ -299,7 +307,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
         )}
       </div>
 
-      {/* 正文插图卡片 */}
+      {/* 故事快照卡片 */}
       {((message.narrativeImages && message.narrativeImages.length > 0) || (narrativeImageManualEnabled && !isStreaming)) && (
         <div className="px-1 py-2 space-y-2">
           {(message.narrativeImages ?? []).map((img) => (
@@ -582,6 +590,7 @@ function AwakeningOracleBlock({
   npcRecords,
   traveler,
   showInnerVoice = true,
+  visualTextSettings,
 }: {
   content: string;
   pathName: string;
@@ -589,6 +598,7 @@ function AwakeningOracleBlock({
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
+  visualTextSettings?: VisualTextSettings;
 }) {
   if (!content?.trim()) return null;
   const subtitle = kind === '评判' ? '评 语' : '低 语';
@@ -613,7 +623,7 @@ function AwakeningOracleBlock({
           <span style={{ color: 'rgba(200, 150, 200, 0.6)' }}>{pathName}</span>
         )}
       </div>
-      <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} />
+      <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} visualTextSettings={visualTextSettings} />
     </div>
   );
 }
@@ -1026,7 +1036,7 @@ function EditBodyPanel({
   );
 }
 
-/** 正文插图可折叠卡片 */
+/** 故事快照可折叠卡片 */
 function NarrativeImageCard({
   image,
   messageId,
@@ -1038,8 +1048,8 @@ function NarrativeImageCard({
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  const typeLabel = image.type === 'scene' ? '场景' : '角色';
-  const icon = image.type === 'scene' ? '🏞' : '👤';
+  const typeLabel = image.kind === 'snapshot' || image.type === 'scene' ? '故事快照' : '角色插图';
+  const icon = image.kind === 'snapshot' || image.type === 'scene' ? '▧' : '👤';
   const canRegenerate = !!onRegenerateNarrativeImage;
   const handleRegenerate = () => {
     void onRegenerateNarrativeImage?.(messageId);
@@ -1056,7 +1066,7 @@ function NarrativeImageCard({
         }}
       >
         <span className="animate-pulse-soft">⏳</span>
-        <span className="flex-1">正在生成{typeLabel}插图...</span>
+        <span className="flex-1">正在生成{typeLabel}...</span>
         {canRegenerate && (
           <button type="button" disabled className="px-2 py-1 text-[11px] opacity-45">
             重新生成
@@ -1077,7 +1087,7 @@ function NarrativeImageCard({
         }}
       >
         <span>❌</span>
-        <span className="min-w-0 flex-1 break-words">{typeLabel}插图生成失败{image.error ? `：${image.error}` : ''}</span>
+        <span className="min-w-0 flex-1 break-words">{typeLabel}生成失败{image.error ? `：${image.error}` : ''}</span>
         {canRegenerate && (
           <button
             type="button"
@@ -1111,7 +1121,7 @@ function NarrativeImageCard({
         style={{ color: 'rgba(var(--tj-text-primary), 0.85)' }}
       >
         <span>{icon}</span>
-        <span className="flex-1 font-medium">{typeLabel}：{image.description}</span>
+        <span className="flex-1 font-medium">{typeLabel}：{image.description || '剧情瞬间'}</span>
         {canRegenerate && (
           <span
             role="button"
@@ -1189,13 +1199,13 @@ function NarrativeImageManualCard({
         style={{ color: 'rgba(var(--tj-text-primary), 0.85)' }}
       >
         <span>▧</span>
-        <span className="flex-1 font-medium">正文插图：等待手动生成故事快照</span>
+        <span className="flex-1 font-medium">故事快照：等待手动生成</span>
         <span style={{ color: 'rgba(var(--tj-text-secondary), 0.5)' }}>{expanded ? '收起' : '展开'}</span>
       </button>
       {expanded && (
-        <div className="px-3 pb-3">
+        <div className="flex justify-center px-3 pb-3">
           <div className="mb-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
-            当前为手动正文插图模式。点击下方按钮后，会读取本回合正文并生成一张故事快照。
+            当前为手动故事快照模式。点击下方按钮后，会读取本回合正文并生成一张故事快照。
           </div>
           <button
             type="button"
@@ -1209,7 +1219,7 @@ function NarrativeImageManualCard({
               clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
             }}
           >
-            <div className="font-serif text-xs tracking-[0.18em]">生成正文插图</div>
+            <div className="font-serif text-xs tracking-[0.18em]">生成故事快照</div>
           </button>
         </div>
       )}

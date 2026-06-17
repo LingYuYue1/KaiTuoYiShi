@@ -34,6 +34,7 @@ export type ChatCompletionUsage = Partial<Omit<回合Token消耗, 'source'>> & {
 
 function detectProvider(config: API配置项): string {
   const url = config.baseUrl.toLowerCase();
+  if (config.provider === 'mimo' || /xiaomimimo|mimo\.mi/i.test(url)) return 'mimo';
   if (config.provider === 'opencode' || /opencode\.ai\/zen\/v1/i.test(url)) return 'opencode';
   if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
   if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
@@ -275,12 +276,30 @@ function isPioneerConfig(config: API配置项): boolean {
   return isPioneerBaseUrl(config.baseUrl);
 }
 
+function isMimoConfig(config: API配置项): boolean {
+  return detectProvider(config) === 'mimo';
+}
+
 function normalizeOpenAICompatibleModel(config: API配置项): string {
   const model = config.model.trim();
   if (isBaiduQianfanConfig(config) && /^glm[-_\s]?5\.1$/i.test(model)) {
     return 'glm-5.1';
   }
   return model;
+}
+
+function normalizeMimoBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  if (!trimmed) return trimmed;
+  if (/\/v1$/i.test(trimmed)) return trimmed;
+  return `${trimmed}/v1`;
+}
+
+function buildMimoAuthHeaders(apiKey: string): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'api-key': apiKey,
+  };
 }
 
 function buildOpenAICompatibleRequestBody(
@@ -290,13 +309,19 @@ function buildOpenAICompatibleRequestBody(
   stream: boolean,
   includeUsage: boolean = true,
 ): Record<string, unknown> {
+  const isMimo = isMimoConfig(config);
   const body: Record<string, unknown> = {
     model: normalizeOpenAICompatibleModel(config),
     messages,
-    max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
-    temperature: request.temperature ?? config.temperature ?? 0.8,
     stream,
   };
+  if (isMimo) {
+    body.max_completion_tokens = request.maxTokens ?? config.maxTokens ?? 2048;
+    body.thinking = { type: 'disabled' };
+  } else {
+    body.max_tokens = request.maxTokens ?? config.maxTokens ?? 2048;
+    body.temperature = request.temperature ?? config.temperature ?? 0.8;
+  }
   if (stream && includeUsage && request.onUsage) {
     body.stream_options = { include_usage: true };
   }
@@ -1131,6 +1156,9 @@ export async function chatCompletion(
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
 
+  if (provider === 'mimo') {
+    return streamOpenAICompatible(config, msgs, request, callbacks);
+  }
   if (provider === 'opencode') {
     return streamOpenCode(config, msgs, request, callbacks);
   }
@@ -1181,10 +1209,12 @@ async function streamOpenAICompatible(
 
   const response = await fetchWithApiErrorReport(config, '聊天补全', url, 'stream', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(url.startsWith('/api/') ? {} : { Authorization: `Bearer ${config.apiKey}` }),
-    },
+    headers: isMimoConfig(config)
+      ? buildMimoAuthHeaders(config.apiKey)
+      : {
+          'Content-Type': 'application/json',
+          ...(url.startsWith('/api/') ? {} : { Authorization: `Bearer ${config.apiKey}` }),
+        },
     body,
     signal: request.signal,
   });
@@ -2017,6 +2047,35 @@ export async function chatCompletionNonStream(
 ): Promise<string> {
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
+
+  if (provider === 'mimo') {
+    const upstreamBaseUrl = normalizeMimoBaseUrl(config.baseUrl);
+    const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
+    const requestBody = buildOpenAICompatibleRequestBody(config, msgs, request, false);
+    const response = await fetchWithApiErrorReport(config, '非流式补全', upstreamUrl, 'non-stream', {
+      method: 'POST',
+      headers: buildMimoAuthHeaders(config.apiKey),
+      body: JSON.stringify(requestBody),
+      signal: request.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      void appendApiErrorReport({
+        source: '非流式补全',
+        config,
+        status: response.status,
+        requestUrl: upstreamUrl,
+        requestMode: 'non-stream',
+        responseText: text,
+      });
+      throw formatOpenAICompatibleError(config, response.status, text);
+    }
+
+    const json = await response.json();
+    emitUsageFromResponse(json, config, request);
+    return parseOpenAICompatibleTextResponse(json);
+  }
   if (provider === 'opencode') {
     return completionOpenCodeNonStream(config, msgs, request);
   }

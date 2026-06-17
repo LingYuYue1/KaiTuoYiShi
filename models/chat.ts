@@ -82,7 +82,7 @@ export interface 聊天消息 {
   /** 该 AI 回复对应的「user 发送前」状态快照，用于 reroll 回滚。
    *  生成新 assistant message 时会清掉上一条的 snapshot，保证存档里至多只有最新一条带 snapshot。 */
   preTurnSnapshot?: 回合快照;
-  /** 本回合的正文插图（后台生成完成后填充） */
+  /** 本回合的故事快照（由正文生图后台生成完成后填充） */
   narrativeImages?: 叙事插图[];
 }
 
@@ -91,8 +91,10 @@ export interface 叙事插图 {
   id: string;
   /** 图片数据 URL */
   dataUrl: string;
-  /** 图片类型：场景 / 角色 */
+  /** 底层图片槽位：场景 / 角色。正文生图固定作为故事快照展示。 */
   type: 'scene' | 'character';
+  /** 语义类型：用于把正文生图从普通场景图中区分出来。 */
+  kind?: 'snapshot' | 'scene' | 'character';
   /** 生成用的提示词 */
   prompt: string;
   /** 负面提示词 */

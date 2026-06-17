@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { ApiSettingsTab } from './ApiSettings';
 import { ThemeSettingsTab } from './ThemeSettings';
 import { GameSettingsTab } from './GameSettings';
+import { VisualSettingsTab } from './VisualSettingsTab';
 import { MemorySystemSettingsTab } from './MemorySystemSettings';
 import { YitingSettingsTab } from './YitingSettingsTab';
 import { NewsSystemSettingsTab } from './NewsSystemSettingsTab';
@@ -62,9 +63,10 @@ interface SettingsModalProps {
   initialTab?: Tab;
 }
 
-type Tab = 'api' | 'apiErrors' | 'game' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
+type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
 
 const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
+  { key: 'visual', label: '视觉设置', icon: '◇', subtitle: '正文显示与字号' },
   { key: 'game', label: '游戏设定', icon: '❖', subtitle: '叙述风格与人格' },
   { key: 'api', label: 'API 接口', icon: '✦', subtitle: 'AI 模型与密钥' },
   { key: 'apiErrors', label: '错误报告', icon: '!', subtitle: 'API 失败原因记录' },
@@ -139,6 +141,8 @@ export function SettingsModal({
             onWorldStateChange={on世界Change}
           />
         );
+      case 'visual':
+        return <VisualSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'memory':
         return (
           <MemorySystemSettingsTab
@@ -352,7 +356,7 @@ export function SettingsModal({
             }}
           >
             <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
-            <span className="ml-2">开拓轶事 · v0.8</span>
+            <span className="ml-2">开拓轶事 · v0.8.1</span>
           </div>
         </aside>
 

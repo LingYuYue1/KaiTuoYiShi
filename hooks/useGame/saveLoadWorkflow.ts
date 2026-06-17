@@ -13,6 +13,7 @@ import {
   归一化智库系统设置,
   归一化手机系统设置,
   归一化额外功能设置,
+  归一化视觉文本设置,
 } from '@/models/settings';
 import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveSetting } from '@/services/dbService';
 import {
@@ -69,6 +70,7 @@ export function buildSavePayload(
       文生图系统: 归一化文生图系统设置(state.gameSettings.文生图系统),
       记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统 ?? 创建默认记忆系统设置()),
       额外功能: 归一化额外功能设置(state.gameSettings.额外功能),
+      visualTextSettings: 归一化视觉文本设置(state.gameSettings.visualTextSettings),
     }),
     apiSettings: 创建空API设置(),
     theme: state.currentTheme,
@@ -93,6 +95,7 @@ function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
     enableClaudeMode: defaults.enableClaudeMode,
     deepSeekMainMode: defaults.deepSeekMainMode,
     backgroundTaskMode: settings.backgroundTaskMode ?? defaults.backgroundTaskMode,
+    visualTextSettings: 归一化视觉文本设置(settings.visualTextSettings),
     enableCacheDiagnostics: defaults.enableCacheDiagnostics,
     variableApi: defaults.variableApi,
     新闻系统: {
@@ -149,6 +152,7 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
     deepSeekMainMode: localSettings.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
     backgroundTaskMode: localSettings.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
     enableCacheDiagnostics: localSettings.enableCacheDiagnostics ?? 创建默认游戏设置().enableCacheDiagnostics,
+    visualTextSettings: 归一化视觉文本设置(nextFromSave.visualTextSettings),
     variableApi: localSettings.variableApi,
     新闻系统: {
       ...nextFromSave.新闻系统,
@@ -285,6 +289,7 @@ async function applySaveToState(
     额外功能: 归一化额外功能设置(save.gameSettings.额外功能),
     backgroundTaskMode: save.gameSettings.backgroundTaskMode ?? defaults.backgroundTaskMode,
     enableMaleNsfwArchive: save.gameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
+    visualTextSettings: 归一化视觉文本设置(save.gameSettings.visualTextSettings),
     promptModules: migratePromptModules(save.gameSettings),
   };
   state.setGameSettings(preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings));

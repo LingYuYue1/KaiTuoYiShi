@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
+import type { VisualTextSettings } from '@/models/settings';
 import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
 
 interface ThinkingBlockProps {
@@ -50,6 +51,25 @@ interface BodyBlockProps {
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
   userInput?: string;
+  visualTextSettings?: VisualTextSettings;
+}
+
+const DEFAULT_VISUAL_TEXT_SETTINGS: VisualTextSettings = {
+  narrationFontSize: 15,
+  dialogueFontSize: 15,
+  playerFontSize: 14,
+};
+
+function clampFontSize(value: unknown, fallback: number): number {
+  return Math.max(13, Math.min(30, Math.trunc(Number(value) || fallback)));
+}
+
+function normalizeVisualTextSettings(input?: Partial<VisualTextSettings>): VisualTextSettings {
+  return {
+    narrationFontSize: clampFontSize(input?.narrationFontSize, DEFAULT_VISUAL_TEXT_SETTINGS.narrationFontSize),
+    dialogueFontSize: clampFontSize(input?.dialogueFontSize, DEFAULT_VISUAL_TEXT_SETTINGS.dialogueFontSize),
+    playerFontSize: clampFontSize(input?.playerFontSize, DEFAULT_VISUAL_TEXT_SETTINGS.playerFontSize),
+  };
 }
 
 // 三种行格式：【旁白】/【角色名】/【心声】。
@@ -337,7 +357,7 @@ interface DialogueBubbleProps {
   avatarUrl?: string;
 }
 
-function DialogueBubble({ name, text, color, avatarUrl }: DialogueBubbleProps) {
+function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15 }: DialogueBubbleProps & { fontSize?: number }) {
   const bubbleBg = 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
   const bubbleStroke = withAlpha(color, 0.4);
   const bubbleGlow = withAlpha(color, 0.08);
@@ -363,7 +383,7 @@ function DialogueBubble({ name, text, color, avatarUrl }: DialogueBubbleProps) {
               'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
           }}
         >
-          <p className="text-sm leading-7 whitespace-pre-wrap break-words">
+          <p className="whitespace-pre-wrap break-words" style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}>
             {text}
           </p>
         </div>
@@ -378,7 +398,7 @@ interface InnerVoiceBubbleProps {
 }
 
 // 主角心声：圆头像 + 顶部「·心绪·」标签 + 虚线边气泡 + 暖橘斜体
-function InnerVoiceBubble({ text, traveler }: InnerVoiceBubbleProps) {
+function InnerVoiceBubble({ text, traveler, fontSize = 15 }: InnerVoiceBubbleProps & { fontSize?: number }) {
   const PEACH = 'rgb(235, 195, 155)';
   const name = traveler?.姓名?.trim() || '我';
   const avatarUrl = traveler?.头像?.trim() || undefined;
@@ -412,7 +432,7 @@ function InnerVoiceBubble({ text, traveler }: InnerVoiceBubbleProps) {
             textShadow: `0 0 12px ${withAlpha(PEACH, 0.18)}`,
           }}
         >
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words tracking-wide">
+          <p className="whitespace-pre-wrap break-words tracking-wide" style={{ fontSize: `${fontSize}px`, lineHeight: 1.75 }}>
             {text}
           </p>
         </div>
@@ -422,7 +442,7 @@ function InnerVoiceBubble({ text, traveler }: InnerVoiceBubbleProps) {
 }
 
 // 旁白：全宽容器 + 两侧金色竖条 + 顶部小符号点缀（无头像、无气泡）
-function NarrationLine({ text }: { text: string }) {
+function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: number }) {
   return (
     <div
       className="my-2.5 px-5 py-2.5 relative"
@@ -433,8 +453,8 @@ function NarrationLine({ text }: { text: string }) {
       }}
     >
       <p
-        className="text-sm leading-7 whitespace-pre-wrap break-words"
-        style={{ color: 'rgba(var(--tj-chat-text), 0.94)' }}
+        className="whitespace-pre-wrap break-words"
+        style={{ color: 'rgba(var(--tj-chat-text), 0.94)', fontSize: `${fontSize}px`, lineHeight: 1.8 }}
       >
         {text}
       </p>
@@ -442,8 +462,9 @@ function NarrationLine({ text }: { text: string }) {
   );
 }
 
-export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true, userInput }: BodyBlockProps) {
+export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true, userInput, visualTextSettings }: BodyBlockProps) {
   const lines = useMemo(() => (content ? parseBodyLines(content, traveler, userInput) : []), [content, traveler, userInput]);
+  const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
   if (!content) return null;
 
   return (
@@ -466,17 +487,18 @@ export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true
               text={line.text}
               color={color}
               avatarUrl={avatarUrl}
+              fontSize={protagonist ? fontSettings.playerFontSize : fontSettings.dialogueFontSize}
             />
           );
         }
         if (line.kind === 'inner') {
           if (!showInnerVoice) return null;
-          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} />;
+          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} fontSize={fontSettings.dialogueFontSize} />;
         }
         if (line.kind === 'narration') {
-          return <NarrationLine key={i} text={line.text} />;
+          return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
         }
-        return <NarrationLine key={i} text={line.text} />;
+        return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
       })}
     </div>
   );
@@ -557,15 +579,16 @@ interface StreamingPreviewProps {
   userInput?: string;
 }
 
-export function StreamingPreview({ content, npcRecords, traveler, showInnerVoice = true, userInput }: StreamingPreviewProps) {
+export function StreamingPreview({ content, npcRecords, traveler, showInnerVoice = true, userInput, visualTextSettings }: StreamingPreviewProps & { visualTextSettings?: VisualTextSettings }) {
   const { bodyStarted, bodyText } = useMemo(() => extractStreamingBody(content), [content]);
+  const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
 
   return (
     <div className="space-y-2">
       <PathfindingIndicator />
       {bodyStarted && bodyText && (
         <div className="px-1 py-1">
-          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={userInput} />
+          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={userInput} visualTextSettings={fontSettings} />
         </div>
       )}
     </div>

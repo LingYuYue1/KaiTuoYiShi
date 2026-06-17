@@ -18,6 +18,7 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'deepseek', label: 'DeepSeek' },
   { value: 'baidu', label: '百度千帆' },
   { value: 'opencode', label: 'OpenCode Zen' },
+  { value: 'mimo', label: '小米 MiMo' },
   { value: 'claude', label: 'Claude' },
   { value: 'claude_compatible', label: 'Claude 兼容' },
   { value: 'gemini', label: 'Gemini' },

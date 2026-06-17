@@ -17,6 +17,9 @@ export async function fetchModels(config: any): Promise<string[]> {
 
   return withRetries(
     async () => {
+      if (config.provider === 'mimo' || /xiaomimimo|mimo\.mi/i.test(baseRaw)) {
+        return fetchMimoModels(baseRaw, apiKey);
+      }
       if (config.provider === 'gemini') {
         return fetchGeminiModels(baseRaw, apiKey);
       }
@@ -100,6 +103,54 @@ async function fetchOpenCodeModels(baseRaw: string, apiKey: string): Promise<str
   }
 
   throw new Error(`OpenCode Zen 获取模型列表失败：\n${errors.join('\n')}`);
+}
+
+async function fetchMimoModels(baseRaw: string, apiKey: string): Promise<string[]> {
+  const base = baseRaw.replace(/\/+$/, '');
+  const normalized = base.replace(/\/v1$/i, '');
+  const candidates = Array.from(new Set([`${normalized}/v1/models`, `${base}/models`]));
+  const errors: string[] = [];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': apiKey,
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        void appendApiErrorReport({
+          source: '小米 MiMo 模型列表',
+          config: { provider: 'mimo', baseUrl: baseRaw, apiKey },
+          status: res.status,
+          requestUrl: url,
+          requestMode: 'models',
+          responseText: text,
+        });
+        errors.push(`${url} -> ${res.status}${text ? `: ${text.slice(0, 120)}` : ''}`);
+        continue;
+      }
+      const data = await res.json();
+      if (data && Array.isArray(data.data)) {
+        const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+        if (ids.length) return ids;
+      }
+      errors.push(`${url} -> 返回格式异常（缺 data 数组）`);
+    } catch (e) {
+      void appendApiErrorReport({
+        source: '小米 MiMo 模型列表',
+        config: { provider: 'mimo', baseUrl: baseRaw, apiKey },
+        requestUrl: url,
+        requestMode: 'models',
+        error: e,
+      });
+      errors.push(`${url} -> ${(e as Error).message}`);
+    }
+  }
+
+  throw new Error(`小米 MiMo 获取模型列表失败：\n${errors.join('\n')}`);
 }
 
 async function fetchPioneerModels(baseRaw: string, apiKey: string): Promise<string[]> {

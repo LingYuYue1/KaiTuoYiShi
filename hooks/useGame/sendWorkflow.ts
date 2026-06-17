@@ -50,8 +50,9 @@ import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSa
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
-import { buildSceneImagePrompt } from '@/utils/imagePromptRules';
+import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
+import { 创建相册图片条目, 添加图片到相册 } from '@/utils/albumActions';
 
 const DEEPSEEK_MAIN_FORMAT_GUARD = [
   'DeepSeek 主剧情格式校验：本轮必须从 <thinking> 开始输出，禁止直接从 <正文> 开始。',
@@ -902,8 +903,8 @@ function pushQueueTask(
     zhiku: '智库检索',
     phone: '手机来信',
     autosave: '自动存档',
-    narrative_image_parse: '正文插图解析',
-    narrative_image_generate: '正文插图生成',
+    narrative_image_parse: '故事快照解析',
+    narrative_image_generate: '故事快照生成',
   };
   const subtitleMap: Record<队列任务ID, string> = {
     main_story: '主 API 输出正文与行动选项',
@@ -911,8 +912,8 @@ function pushQueueTask(
     variable: '解析正文并落地变量命令',
     news: '独立 API 推演新闻与后台事件',
     world_evolution: '后续接入独立世界演变 API',
-    narrative_image_parse: '从正文提取画面提示词',
-    narrative_image_generate: '调用生图 API 生成插图',
+    narrative_image_parse: '从正文提取故事快照提示词',
+    narrative_image_generate: '调用生图 API 生成故事快照',
     yiting: '后续接入回忆检索队列',
     zhiku: '独立 API 检索原著资料',
     phone: '主动来信种子与通讯入口',
@@ -1094,6 +1095,38 @@ function resolveNarrativeImageGenerationApi(state: UseGameStateReturn): 文生�
   return imageSettings.普通接口.enabled ? imageSettings.普通接口 : null;
 }
 
+function archiveNarrativeSnapshotToAlbum(
+  state: UseGameStateReturn,
+  image: import('@/models/chat').叙事插图,
+  params: {
+    title: string;
+    size: string;
+    sourcePrompt: string;
+  },
+): import('@/models/chat').叙事插图 {
+  if (image.status !== 'done' || !image.dataUrl) return image;
+  const item = 创建相册图片条目({
+    title: params.title || image.description || '故事快照',
+    src: image.dataUrl,
+    source: 'generated',
+    targetType: 'scene',
+    slot: 'scene',
+    prompt: image.prompt,
+    negativePrompt: image.negativePrompt,
+    sourcePrompt: params.sourcePrompt,
+    finalPrompt: image.prompt,
+    finalNegativePrompt: image.negativePrompt,
+    dimensions: params.size,
+    tags: ['故事快照', '正文生图'],
+    note: '故事快照',
+  });
+  state.set相册((prev) => 添加图片到相册(prev, item));
+  return {
+    ...image,
+    assetId: item.asset.id,
+  };
+}
+
 async function generateNarrativeImagesForMessage(params: {
   state: UseGameStateReturn;
   messageId: string;
@@ -1115,6 +1148,7 @@ async function generateNarrativeImagesForMessage(params: {
               id: `narrative_failed_${turn}_${Date.now()}`,
               dataUrl: '',
               type: 'scene' as const,
+              kind: 'snapshot' as const,
               prompt: '',
               negativePrompt: '',
               description: '故事快照',
@@ -1125,9 +1159,9 @@ async function generateNarrativeImagesForMessage(params: {
         : msg,
     ));
   };
-  pushQueueTask(state, 'narrative_image_parse', 'pending', { detail: '正在解析正文画面提示词。', turn });
+  pushQueueTask(state, 'narrative_image_parse', 'pending', { detail: '正在解析正文中的故事快照提示词。', turn });
   try {
-    const { parseNarrativeImagePrompts } = await import('@/services/ai/narrativeImageParse');
+    const { parseStorySnapshotPrompt } = await import('@/services/ai/narrativeImageParse');
     const { generateNarrativeImage } = await import('@/services/ai/imageGeneration');
     const playerAppearanceMode = state.gameSettings.文生图系统?.正文生图?.playerAppearanceMode ?? 'auto';
     const presentNpcRecords = (state.NPC ?? [])
@@ -1140,7 +1174,7 @@ async function generateNarrativeImagesForMessage(params: {
         appearance: typeof npc.外貌 === 'string' ? npc.外貌 : undefined,
         clothing: typeof npc.穿着 === 'string' ? npc.穿着 : undefined,
       }));
-    const parseResult = await parseNarrativeImagePrompts(tokenizerConfig, {
+    const parsedSnapshot = await parseStorySnapshotPrompt(tokenizerConfig, {
       body,
       traveler: playerAppearanceMode === 'off' ? undefined : {
         name: traveler.姓名 || traveler.别名 || '玩家角色',
@@ -1152,54 +1186,52 @@ async function generateNarrativeImagesForMessage(params: {
       playerAppearanceMode,
       presentNpcs,
     }, signal);
-    if (!parseResult.images.length) {
-      pushQueueTask(state, 'narrative_image_parse', 'success', { detail: '正文未提取到可绘制画面。', turn });
-      failMessage('正文未提取到可绘制画面。');
-      return [];
-    }
     pushQueueTask(state, 'narrative_image_parse', 'success', {
-      detail: `已提取 ${parseResult.images.length} 个画面提示词。`,
+      detail: `已解析故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
       turn,
     });
     const generatedImages: import('@/models/chat').叙事插图[] = [];
-    for (const img of parseResult.images) {
-      pushQueueTask(state, 'narrative_image_generate', 'pending', {
-        detail: `正在生成${img.type === 'scene' ? '场景' : '角色'}插图：${img.description}。`,
-        turn,
-      });
-      const imageId = `narrative_${turn}_${img.type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-      const ruledPrompt = buildSceneImagePrompt({
-        text: [
-          `story snapshot draft: ${img.description}`,
-          img.prompt ? `parsed positive prompt: ${img.prompt}` : '',
-          img.negativePrompt ? `parsed negative hint: ${img.negativePrompt}` : '',
-        ].filter(Boolean).join('\n'),
-        mode: 'scene',
-        rules: state.gameSettings.文生图系统.rules,
-        traveler: state.旅人,
-        forceTravelerVisible: playerAppearanceMode === 'force',
-        presentNpcs: presentNpcRecords,
-        extraRequirement: 'This image is an in-story snapshot generated from the current narrative turn. Keep a single clear moment and follow the active scene style rules.',
-        size: img.type === 'scene' ? '1280x720' : '1024x1024',
-        slot: img.type === 'scene' ? 'scene' : 'portrait',
-      });
-      const result = await generateNarrativeImage(
-        imageApiConfig,
-        ruledPrompt.prompt,
-        ruledPrompt.negative,
-        img.type,
-        img.description,
-        imageId,
-        signal,
-      );
-      generatedImages.push(result);
-      pushQueueTask(state, 'narrative_image_generate', result.status === 'done' ? 'success' : 'failed', {
-        detail: result.status === 'done'
-          ? `${img.description} 插图生成完成。`
-          : `${img.description} 插图生成失败：${result.error}`,
-        turn,
-      });
+    pushQueueTask(state, 'narrative_image_generate', 'pending', {
+      detail: `正在生成故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
+      turn,
+    });
+    const imageId = `narrative_${turn}_snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const lockedPrompt = 应用场景角色锚点锁({
+      prompt: parsedSnapshot.prompt,
+      negative: parsedSnapshot.negativePrompt,
+      traveler: playerAppearanceMode === 'off' ? undefined : traveler,
+      forceTravelerVisible: playerAppearanceMode === 'force',
+      presentNpcs: presentNpcRecords,
+    });
+    const promptRefined = 应用质量增强提示词(
+      state.gameSettings.文生图系统.rules,
+      lockedPrompt.prompt,
+      lockedPrompt.negative,
+    );
+    const result = await generateNarrativeImage(
+      imageApiConfig,
+      promptRefined.prompt,
+      promptRefined.negative,
+      'scene',
+      parsedSnapshot.title || '故事快照',
+      imageId,
+      signal,
+    );
+    if (result.status === 'done' || result.status === 'failed') {
+      result.kind = 'snapshot';
     }
+    const archivedResult = archiveNarrativeSnapshotToAlbum(state, result, {
+      title: parsedSnapshot.title || '故事快照',
+      size: '1280x720',
+      sourcePrompt: body,
+    });
+    generatedImages.push(archivedResult);
+    pushQueueTask(state, 'narrative_image_generate', result.status === 'done' ? 'success' : 'failed', {
+      detail: result.status === 'done'
+        ? `${parsedSnapshot.title || '故事快照'} 故事快照生成完成。`
+        : `${parsedSnapshot.title || '故事快照'} 故事快照生成失败：${result.error}`,
+      turn,
+    });
     if (generatedImages.length > 0) {
       state.setChatHistory((prev) => {
         const targetIdx = prev.findIndex((msg) => msg.id === messageId);
@@ -1221,7 +1253,7 @@ async function generateNarrativeImagesForMessage(params: {
     if ((err as Error).name !== 'AbortError') {
       failMessage((err as Error).message);
       pushQueueTask(state, 'narrative_image_parse', 'failed', {
-        detail: `正文插图解析失败：${(err as Error).message}`,
+        detail: `故事快照解析失败：${(err as Error).message}`,
         turn,
       });
     }
@@ -1241,7 +1273,7 @@ export async function regenerateNarrativeImagesForMessage(
   const narrative = state.gameSettings.文生图系统?.正文生图;
   if (!narrative?.enabled) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
-      detail: '正文生图未启用，无法重新生成插图。',
+      detail: '正文生图未启用，无法重新生成故事快照。',
       turn: Number(message.gameTime) || state.turnCount,
     });
     return;
@@ -1249,7 +1281,7 @@ export async function regenerateNarrativeImagesForMessage(
   const mainConfig = getActiveConfig();
   if (!mainConfig) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
-      detail: '未配置主 API，无法解析正文插图提示词。',
+      detail: '未配置主 API，无法解析故事快照提示词。',
       turn: Number(message.gameTime) || state.turnCount,
     });
     return;
@@ -1257,7 +1289,7 @@ export async function regenerateNarrativeImagesForMessage(
   const tokenizerConfig = resolveNarrativeImageTokenizerConfig(state, mainConfig);
   if (!tokenizerConfig) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
-      detail: '正文生图词组转化器未配置，无法解析正文插图提示词。',
+      detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
       turn: Number(message.gameTime) || state.turnCount,
     });
     return;
@@ -1265,7 +1297,7 @@ export async function regenerateNarrativeImagesForMessage(
   const imageApiConfig = resolveNarrativeImageGenerationApi(state);
   if (!imageApiConfig) {
     pushQueueTask(state, 'narrative_image_generate', 'failed', {
-      detail: '正文生图主文生图接口未启用，无法生成插图。',
+      detail: '正文生图主文生图接口未启用，无法生成故事快照。',
       turn: Number(message.gameTime) || state.turnCount,
     });
     return;
@@ -1285,6 +1317,7 @@ export async function regenerateNarrativeImagesForMessage(
                 prompt: '',
                 negativePrompt: '',
                 description: '故事快照',
+                kind: 'snapshot' as const,
                 status: 'generating' as const,
               }],
         }
@@ -2426,15 +2459,15 @@ export async function executeSendWorkflow(
         const tokenizerConfig = resolveNarrativeImageTokenizerConfig(state, config);
         const imageApiConfig = resolveNarrativeImageGenerationApi(state);
         if (!tokenizerConfig) {
-          pushQueueTask(state, 'narrative_image_parse', 'failed', {
-            detail: '正文生图词组转化器未配置，无法解析正文插图提示词。',
-            turn: state.turnCount,
-          });
+    pushQueueTask(state, 'narrative_image_parse', 'failed', {
+      detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
+      turn: state.turnCount,
+    });
           return;
         }
         if (!imageApiConfig) {
           pushQueueTask(state, 'narrative_image_generate', 'failed', {
-            detail: '正文生图主文生图接口未启用，无法生成插图。',
+            detail: '正文生图主文生图接口未启用，无法生成故事快照。',
             turn: state.turnCount,
           });
           return;

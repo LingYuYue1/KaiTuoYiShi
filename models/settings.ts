@@ -1,4 +1,4 @@
-export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'opencode' | 'openai_compatible';
+export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'opencode' | 'mimo' | 'openai_compatible';
 
 import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
@@ -173,6 +173,12 @@ export type 原著约束强度 = 'loose' | 'standard' | 'strict';
 export type DeepSeek主剧情模式 = 'off' | 'standard' | 'lock_format';
 export type 后台任务模式 = 'sequential' | 'parallel';
 
+export interface VisualTextSettings {
+  narrationFontSize: number;
+  dialogueFontSize: number;
+  playerFontSize: number;
+}
+
 export interface 游戏设置 {
   wordCountTarget: number;
   narrativePerson: 'first' | 'second' | 'third';
@@ -224,6 +230,7 @@ export interface 游戏设置 {
   autoRetryCount: number;
   /** 每回合结束自动存档：正文落地与后台队列收尾时都会写入最近自动存档。 */
   enableAutoSaveEveryTurn: boolean;
+  visualTextSettings: VisualTextSettings;
   /** NSFW 模式：开启后注入独立 NSFW 提示词模块，并允许成人确认后的私密档案写入。 */
   enableNsfw: boolean;
   /** 男性 NSFW 档案：默认关闭。关闭时变量模型不得写入男性身体档案和男性私密字段。 */
@@ -1042,10 +1049,29 @@ export function 创建默认游戏设置(): 游戏设置 {
     autoRetryOnError: true,
     autoRetryCount: 2,
     enableAutoSaveEveryTurn: true,
+    visualTextSettings: 创建默认视觉文本设置(),
     enableNsfw: false,
     enableMaleNsfwArchive: false,
     enableNoControl: true,
     额外功能: 创建默认额外功能设置(),
+  };
+}
+
+export function 创建默认视觉文本设置(): VisualTextSettings {
+  return {
+    narrationFontSize: 15,
+    dialogueFontSize: 15,
+    playerFontSize: 14,
+  };
+}
+
+export function 归一化视觉文本设置(input?: Partial<VisualTextSettings>): VisualTextSettings {
+  const defaults = 创建默认视觉文本设置();
+  const clamp = (value: unknown, fallback: number) => Math.max(13, Math.min(30, Math.trunc(Number(value) || fallback)));
+  return {
+    narrationFontSize: clamp(input?.narrationFontSize, defaults.narrationFontSize),
+    dialogueFontSize: clamp(input?.dialogueFontSize, defaults.dialogueFontSize),
+    playerFontSize: clamp(input?.playerFontSize, defaults.playerFontSize),
   };
 }
 

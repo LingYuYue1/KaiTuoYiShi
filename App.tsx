@@ -391,6 +391,7 @@ export default function App() {
               npcRecords={state.NPC}
               traveler={state.旅人}
               showInnerVoice={state.gameSettings.enableInnerVoice}
+              visualTextSettings={state.gameSettings.visualTextSettings}
               onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
               narrativeImageManualEnabled={Boolean(
                 state.gameSettings.文生图系统?.正文生图?.enabled

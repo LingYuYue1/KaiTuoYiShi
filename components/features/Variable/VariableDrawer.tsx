@@ -44,8 +44,8 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
 
   const queueRows = [
     latestTaskById.get('variable') ?? createIdleTask('variable', '变量生成', '解析正文并落地变量命令'),
-    latestTaskById.get('narrative_image_parse') ?? createIdleTask('narrative_image_parse', '正文插图解析', '从正文提取画面提示词'),
-    latestTaskById.get('narrative_image_generate') ?? createIdleTask('narrative_image_generate', '正文插图生成', '调用生图 API 生成插图'),
+    latestTaskById.get('narrative_image_parse') ?? createIdleTask('narrative_image_parse', '故事快照解析', '从正文提取故事快照提示词'),
+    latestTaskById.get('narrative_image_generate') ?? createIdleTask('narrative_image_generate', '故事快照生成', '调用生图 API 生成故事快照'),
     latestTaskById.get('news') ?? createIdleTask('news', '星际和平周报', '独立 API 推演新闻与后台事件'),
     latestTaskById.get('phone') ?? createIdleTask('phone', '手机来信', '主动来信种子与通讯入口'),
   ];

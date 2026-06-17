@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
+import type { VisualTextSettings } from '@/models/settings';
 import { TurnItem } from './TurnItem';
 
 interface ChatListProps {
@@ -15,9 +16,10 @@ interface ChatListProps {
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
+  visualTextSettings?: VisualTextSettings;
 }
 
-export function ChatList({ messages, loading, streamingMessage, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true }: ChatListProps) {
+export function ChatList({ messages, loading, streamingMessage, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, visualTextSettings }: ChatListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [nearBottom, setNearBottom] = useState(true);
 
@@ -121,6 +123,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
             showInnerVoice={showInnerVoice}
             fallbackPathId={fallbackPathId}
             previousUserInput={previousUserInput}
+            visualTextSettings={visualTextSettings}
           />
         );
       })}
@@ -139,6 +142,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
           npcRecords={npcRecords}
           traveler={traveler}
           showInnerVoice={showInnerVoice}
+          visualTextSettings={visualTextSettings}
         />
       )}
 

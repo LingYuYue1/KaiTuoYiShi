@@ -909,6 +909,17 @@ function readCharacterAnchorPrompt(anchor: NPC角色锚点档案 | undefined, la
   ].filter(Boolean).join('\n');
 }
 
+function readCharacterAnchorLock(anchor: NPC角色锚点档案 | undefined, label: string): string {
+  const prompt = readCharacterAnchorPrompt(anchor, label);
+  if (!prompt) return '';
+  return [
+    `${label} APPEARANCE LOCK: the following visual anchor is the stable identity baseline and has higher priority than ordinary profile text, style presets, reference-image influence, and extra requirements.`,
+    'Do not change hairstyle, hair color, eye color, body type, age impression, stable outfit, signature accessories, species traits, or identity props unless the user explicitly asks for a costume change, disguise, injury, transformation, or story-established appearance change.',
+    'If other prompt sections conflict with this appearance lock, keep this appearance lock and only apply non-conflicting pose, expression, camera, lighting, background, and temporary prop details.',
+    prompt,
+  ].join('\n');
+}
+
 function readCharacterAnchorNegative(anchor: NPC角色锚点档案 | undefined): string {
   if (!anchor || anchor.是否启用 === false) return '';
   return anchor.负面提示词 || '';
@@ -916,6 +927,10 @@ function readCharacterAnchorNegative(anchor: NPC角色锚点档案 | undefined):
 
 function readNpcCharacterAnchorPrompt(npc: NPC记录): string {
   return readCharacterAnchorPrompt(npc.图像档案?.角色锚点, 'character');
+}
+
+function readNpcCharacterAnchorLock(npc: NPC记录): string {
+  return readCharacterAnchorLock(npc.图像档案?.角色锚点, 'character');
 }
 
 function readNpcCharacterAnchorNegative(npc: NPC记录): string {
@@ -926,6 +941,10 @@ function readTravelerCharacterAnchorPrompt(traveler: 角色数据结构): string
   return readCharacterAnchorPrompt(traveler.图像档案?.角色锚点, 'player character');
 }
 
+function readTravelerCharacterAnchorLock(traveler: 角色数据结构): string {
+  return readCharacterAnchorLock(traveler.图像档案?.角色锚点, 'player character');
+}
+
 function readTravelerCharacterAnchorNegative(traveler: 角色数据结构): string {
   return readCharacterAnchorNegative(traveler.图像档案?.角色锚点);
 }
@@ -933,7 +952,7 @@ function readTravelerCharacterAnchorNegative(traveler: 角色数据结构): stri
 function readSceneCharacterAnchors(traveler?: 角色数据结构, presentNpcs?: NPC记录[]): { prompt: string; negative: string; hasAnchor: boolean } {
   const travelerAnchor = traveler?.图像档案?.角色锚点;
   const travelerPrompt = traveler && travelerAnchor?.场景生图自动注入 !== false
-    ? readTravelerCharacterAnchorPrompt(traveler)
+    ? readTravelerCharacterAnchorLock(traveler)
     : '';
   const travelerNegative = traveler && travelerAnchor?.场景生图自动注入 !== false
     ? readTravelerCharacterAnchorNegative(traveler)
@@ -941,8 +960,8 @@ function readSceneCharacterAnchors(traveler?: 角色数据结构, presentNpcs?: 
   const npcParts = (presentNpcs ?? [])
     .filter((npc) => npc.图像档案?.角色锚点?.场景生图自动注入 !== false)
     .map((npc) => {
-      const prompt = readNpcCharacterAnchorPrompt(npc);
-      return prompt ? `${npc.姓名}:\n${prompt}` : '';
+      const lock = readNpcCharacterAnchorLock(npc);
+      return lock ? `${npc.姓名}:\n${lock}` : '';
     })
     .filter(Boolean)
     .slice(0, 4);
@@ -962,6 +981,25 @@ function readSceneCharacterAnchors(traveler?: 角色数据结构, presentNpcs?: 
   };
 }
 
+export function 应用场景角色锚点锁(params: {
+  prompt: string;
+  negative: string;
+  traveler?: 角色数据结构;
+  forceTravelerVisible?: boolean;
+  presentNpcs?: NPC记录[];
+}): 生图Prompt结果 {
+  const sceneAnchors = readSceneCharacterAnchors(params.traveler, params.presentNpcs);
+  const prompt = compactJoin([
+    params.prompt,
+    params.forceTravelerVisible && params.traveler
+      ? `required visible player character: include ${params.traveler.姓名 || 'the player character'} as a visible person in the image, not an unseen POV; preserve the player character appearance lock exactly`
+      : undefined,
+    sceneAnchors.prompt,
+  ]);
+  const negative = compactJoin([params.negative, sceneAnchors.negative]);
+  return { prompt, negative };
+}
+
 export function buildNpcImagePrompt(params: {
   npc: NPC记录;
   mode: Exclude<生图Prompt模式, 'scene' | 'phone_wallpaper'>;
@@ -973,6 +1011,7 @@ export function buildNpcImagePrompt(params: {
   const template = 获取当前规则模板(rules, 'npc');
   const archiveText = mode === 'nsfw' ? readNsfwArchive(npc) : '';
   const anchorPrompt = readNpcCharacterAnchorPrompt(npc);
+  const anchorLock = readNpcCharacterAnchorLock(npc);
   const anchorNegative = readNpcCharacterAnchorNegative(npc);
   const hasAnchor = Boolean(anchorPrompt || anchorNegative || npc.外貌 || npc.穿着 || npc.图像档案?.头像提示词 || npc.图像档案?.立绘提示词);
   const prompt = compactJoin([
@@ -1000,6 +1039,7 @@ export function buildNpcImagePrompt(params: {
     archiveText,
     size ? `target canvas size: ${size}` : undefined,
     extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
+    anchorLock,
   ]);
   return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative, mode === 'nsfw' ? rules.nsfwNegative : undefined]));
 }
@@ -1014,6 +1054,7 @@ export function buildTravelerImagePrompt(params: {
   const { traveler, mode, rules, extraRequirement, size } = params;
   const template = 获取当前规则模板(rules, 'npc');
   const anchorPrompt = readTravelerCharacterAnchorPrompt(traveler);
+  const anchorLock = readTravelerCharacterAnchorLock(traveler);
   const anchorNegative = readTravelerCharacterAnchorNegative(traveler);
   const hasAnchor = Boolean(anchorPrompt || anchorNegative || traveler.外貌 || traveler.身份 || traveler.能力?.length);
   const prompt = compactJoin([
@@ -1039,6 +1080,7 @@ export function buildTravelerImagePrompt(params: {
     anchorPrompt,
     size ? `target canvas size: ${size}` : undefined,
     extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
+    anchorLock,
   ]);
   return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative]));
 }

@@ -38,6 +38,7 @@ import {
   归一化手机系统设置,
   归一化文生图系统设置,
   归一化额外功能设置,
+  归一化视觉文本设置,
 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID } from '@/models/prompts';
@@ -262,6 +263,7 @@ export function useGameState(): UseGameStateReturn {
           backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
           enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
           enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
+          visualTextSettings: 归一化视觉文本设置(savedGame.visualTextSettings),
           promptModules: migratePromptModules(savedGame),
         };
         // 迁移后清空 legacy customPrompt，避免下次启动重复追加
@@ -394,6 +396,7 @@ export function useGameState(): UseGameStateReturn {
             enableClaudeMode: prev.enableClaudeMode ?? 创建默认游戏设置().enableClaudeMode,
             deepSeekMainMode: prev.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
             backgroundTaskMode: prev.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
+            visualTextSettings: 归一化视觉文本设置(prev.visualTextSettings),
           }
         : {
             ...prev,
@@ -405,6 +408,7 @@ export function useGameState(): UseGameStateReturn {
             enableClaudeMode: 创建默认游戏设置().enableClaudeMode,
             deepSeekMainMode: 创建默认游戏设置().deepSeekMainMode,
             backgroundTaskMode: 创建默认游戏设置().backgroundTaskMode,
+            visualTextSettings: 归一化视觉文本设置(prev.visualTextSettings),
           },
     );
   }, []);

@@ -73,6 +73,7 @@ const providerOptions: { value: AI提供商 | ''; label: string }[] = [
   { value: 'deepseek', label: 'DeepSeek' },
   { value: 'baidu', label: '百度千帆' },
   { value: 'opencode', label: 'OpenCode Zen' },
+  { value: 'mimo', label: '小米 MiMo' },
   { value: 'claude', label: 'Claude' },
   { value: 'claude_compatible', label: 'Claude 兼容' },
   { value: 'gemini', label: 'Gemini' },
@@ -839,9 +840,19 @@ function readPath(api: 文生图API配置): string {
   return readPresetPath(api.backend);
 }
 
+function normalizeOpenAICompatibleImagePath(path: string): string {
+  const raw = String(path || '').trim() || '/images/generations';
+  const clean = raw.replace(/\/+$/, '');
+  if (/\/v1$/i.test(clean) || /^v1$/i.test(clean)) {
+    return `${clean.startsWith('/') || /^https?:\/\//i.test(clean) ? clean : `/${clean}`}/images/generations`;
+  }
+  return raw;
+}
+
 function endpointPreview(api: 文生图API配置): string {
   if (!api.baseUrl.trim()) return '';
-  return `${api.baseUrl.replace(/\/+$/, '')}${readPath(api).startsWith('/') ? readPath(api) : `/${readPath(api)}`}`;
+  const path = api.backend === 'openai_compatible' ? normalizeOpenAICompatibleImagePath(readPath(api)) : readPath(api);
+  return `${api.baseUrl.replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 function baseUrlPlaceholder(backend: 文生图后端类型): string {

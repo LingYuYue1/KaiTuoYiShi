@@ -56,6 +56,7 @@ const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: stri
   { value: 'deepseek', label: 'DeepSeek', defaultBaseUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
   { value: 'baidu', label: '百度千帆', defaultBaseUrl: 'https://qianfan.baidubce.com/v2', defaultModel: 'ernie-4.5-turbo-128k' },
   { value: 'opencode', label: 'OpenCode Zen', defaultBaseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
+  { value: 'mimo', label: '小米 MiMo', defaultBaseUrl: 'https://api.xiaomimimo.com/v1', defaultModel: 'mimo-v2.5-pro' },
   { value: 'claude', label: 'Claude', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
   { value: 'claude_compatible', label: 'Claude 兼容', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
   { value: 'gemini', label: 'Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', defaultModel: 'gemini-2.5-pro' },
@@ -839,6 +840,11 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
               {selectedConfig.provider === 'baidu' && (
                 <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
                   普通千帆填 https://qianfan.baidubce.com/v2；Coding Plan 填 https://qianfan.baidubce.com/v2/coding。若复制了完整 chat/completions 地址也会自动兼容。
+                </div>
+              )}
+              {selectedConfig.provider === 'mimo' && (
+                <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                  小米 MiMo 官方 OpenAI 兼容接口默认填 https://api.xiaomimimo.com/v1。系统会自动使用 max_completion_tokens，并默认关闭深度思考，避免思维链挤占正文或污染格式。
                 </div>
               )}
             </FieldRow>

@@ -27,7 +27,7 @@ import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/I
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
 import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
 import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
-import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用质量增强提示词 } from '@/utils/imagePromptRules';
+import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
 import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
@@ -64,6 +64,7 @@ type AlbumImportTarget = {
   scope: 'character' | 'scene';
   targetType: 图片目标类型;
   targetId?: string;
+  sceneKind?: Exclude<SceneLibraryFilter, 'all'>;
 };
 type StorySnapshotSummary = {
   title: string;
@@ -272,6 +273,18 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setMessage('图片已加入相册。');
   };
 
+  const clearPromptDraft = () => {
+    setPrompt('');
+    setNegativePrompt('');
+    setLastPromptMeta(null);
+  };
+
+  const invalidatePromptDraft = (reason: string) => {
+    clearPromptDraft();
+    setPromptEditorOpen(false);
+    setMessage(reason);
+  };
+
   const patchReferenceSettings = (patch: Partial<文生图参考图设置>) => {
     const nextSettings: 游戏设置 = {
       ...gameSettings,
@@ -284,6 +297,11 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       },
     };
     persistGameSettingsChange(nextSettings);
+    if (patch.enabled === false) {
+      clearPromptDraft();
+      setPromptEditorOpen(false);
+      setMessage('参考图已关闭，已清空当前生成草稿。');
+    }
   };
 
   const uploadReferenceImages = async (files: FileList | null, record: CharacterLibraryRecord | null) => {
@@ -715,7 +733,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         },
       };
     }));
-    setMessage('角色锚点已保存。');
+    invalidatePromptDraft('角色锚点已保存，当前生成草稿已清空，请重新生成。');
   };
 
   const deleteNpcAnchor = (npcId: string) => {
@@ -729,7 +747,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         },
       };
     }));
-    setMessage('角色锚点已删除。');
+    invalidatePromptDraft('角色锚点已删除，当前生成草稿已清空，请重新生成。');
   };
 
   const extractNpcAnchor = async (npcId: string, requirement: string) => {
@@ -750,7 +768,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         requirement,
       });
       saveNpcAnchor(npcId, anchor);
-      setMessage(`已 AI 提取并保存 ${npc.姓名} 的角色锚点。`);
+      invalidatePromptDraft(`已 AI 提取并保存 ${npc.姓名} 的角色锚点，当前生成草稿已清空，请重新生成。`);
     } catch (err) {
       setMessage(`角色锚点 AI 提取失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -774,7 +792,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         },
       },
     }));
-    setMessage('主控锚点已保存。');
+    invalidatePromptDraft('主控锚点已保存，当前生成草稿已清空，请重新生成。');
   };
 
   const deleteTravelerAnchor = () => {
@@ -785,7 +803,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         角色锚点: undefined,
       },
     }));
-    setMessage('主控锚点已删除。');
+    invalidatePromptDraft('主控锚点已删除，当前生成草稿已清空，请重新生成。');
   };
 
   const extractTravelerAnchor = async (requirement: string) => {
@@ -804,7 +822,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         requirement,
       });
       saveTravelerAnchor(anchor);
-      setMessage('已 AI 提取并保存主控锚点。');
+      invalidatePromptDraft('已 AI 提取并保存主控锚点，当前生成草稿已清空，请重新生成。');
     } catch (err) {
       setMessage(`主控锚点 AI 提取失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -998,6 +1016,14 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         try {
           parsed = await parseSceneImagePrompt(parserConfig, {
             body: sourceText,
+            traveler: {
+              name: traveler.姓名 || traveler.别名 || '玩家角色',
+              gender: traveler.性别 || undefined,
+              appearance: traveler.外貌 || undefined,
+              identity: traveler.身份 || undefined,
+              anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
+            },
+            playerAppearanceMode: 'auto',
             presentNpcs: presentNpcs.map((npc) => ({
               name: npc.姓名,
               appearance: npc.外貌,
@@ -1014,7 +1040,13 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       }
 
       if (parsed) {
-        const enhanced = 应用质量增强提示词(imageSettings.rules, parsed.prompt, parsed.negativePrompt);
+        const lockedPrompt = 应用场景角色锚点锁({
+          prompt: parsed.prompt,
+          negative: parsed.negativePrompt,
+          traveler,
+          presentNpcs,
+        });
+        const enhanced = 应用质量增强提示词(imageSettings.rules, lockedPrompt.prompt, lockedPrompt.negative);
         const summary: SceneImageSummary = {
           title: parsed.title,
           location: parsed.location,
@@ -1066,6 +1098,14 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         try {
           parsed = await parseStorySnapshotPrompt(parserConfig, {
             body: sourceText,
+            traveler: {
+              name: traveler.姓名 || traveler.别名 || '玩家角色',
+              gender: traveler.性别 || undefined,
+              appearance: traveler.外貌 || undefined,
+              identity: traveler.身份 || undefined,
+              anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
+            },
+            playerAppearanceMode: 'auto',
             presentNpcs: presentNpcs.map((npc) => ({
               name: npc.姓名,
               appearance: npc.外貌,
@@ -1107,7 +1147,13 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
 
       let promptRefined: { prompt: string; negative: string };
       if (parsed) {
-        promptRefined = 应用质量增强提示词(imageSettings.rules, parsed.prompt, parsed.negativePrompt);
+        const lockedPrompt = 应用场景角色锚点锁({
+          prompt: parsed.prompt,
+          negative: parsed.negativePrompt,
+          traveler,
+          presentNpcs,
+        });
+        promptRefined = 应用质量增强提示词(imageSettings.rules, lockedPrompt.prompt, lockedPrompt.negative);
       } else {
         const built = buildSceneImagePrompt({
           text: nextSceneText,
@@ -1148,9 +1194,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     if (next === 'traveler_avatar' || next === 'npc_avatar') setSizePreset('1:1');
     if (next === 'traveler_portrait' || next === 'npc_portrait') setSizePreset((prev) => (prev === '1:1' ? '3:4' : prev));
     setGenerateTitle('');
-    setPrompt('');
-    setNegativePrompt('');
-    setLastPromptMeta(null);
+    clearPromptDraft();
   };
 
   return (
@@ -4463,7 +4507,7 @@ function ImportWorkspace({
   onImport: (file: File | null, target: AlbumImportTarget) => void;
 }) {
   const [scope, setScope] = useState<'character' | 'scene'>('character');
-  const [targetKind, setTargetKind] = useState<'traveler' | 'npc' | 'scene' | 'phone'>('npc');
+  const [targetKind, setTargetKind] = useState<'traveler' | 'npc' | 'scene' | 'snapshot' | 'phone'>('npc');
   const [targetId, setTargetId] = useState('traveler');
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -4478,7 +4522,7 @@ function ImportWorkspace({
 
   const targetLabel = scope === 'character'
     ? (targetKind === 'traveler' ? '旅人' : characterOptions.find((item) => item.id === targetId)?.title || '伙伴')
-    : (targetKind === 'scene' ? '场景图' : '手机背景');
+    : (targetKind === 'snapshot' ? '故事快照' : targetKind === 'scene' ? '场景图' : '手机背景');
 
   const openPicker = () => fileRef.current?.click();
   const handleImport = (file: File | null) => {
@@ -4487,8 +4531,11 @@ function ImportWorkspace({
       scope,
       targetType: scope === 'character'
         ? (targetId === 'traveler' ? 'traveler' : 'npc')
-        : targetKind,
+        : targetKind === 'phone' ? 'phone' : 'scene',
       targetId: scope === 'character' ? targetId : undefined,
+      sceneKind: scope === 'scene'
+        ? (targetKind === 'snapshot' ? 'snapshot' : targetKind === 'phone' ? 'phone' : 'scene')
+        : undefined,
     });
   };
 
@@ -4501,7 +4548,7 @@ function ImportWorkspace({
           value={scope}
           options={[
             { id: 'character', title: '角色', desc: '旅人或伙伴图库' },
-            { id: 'scene', title: '场景', desc: '场景图或手机背景' },
+            { id: 'scene', title: '场景', desc: '场景图、故事快照或手机背景' },
           ]}
           onChange={(value) => {
             const nextScope = value as 'character' | 'scene';
@@ -4535,13 +4582,14 @@ function ImportWorkspace({
             <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.68)' }}>具体场景</div>
             <OptionButtonGroup
               label=""
-              columns="md:grid-cols-2"
+              columns="md:grid-cols-3"
               value={targetKind}
               options={[
                 { id: 'scene', title: '场景图', desc: '导入到场景库' },
+                { id: 'snapshot', title: '故事快照', desc: '导入到场景库' },
                 { id: 'phone', title: '手机背景', desc: '导入到场景库' },
               ]}
-              onChange={(value) => setTargetKind(value as 'scene' | 'phone')}
+              onChange={(value) => setTargetKind(value as 'scene' | 'snapshot' | 'phone')}
             />
           </div>
         )}
@@ -4803,6 +4851,8 @@ function classifySceneLibraryEntry(entry: 相册条目): Exclude<SceneLibraryFil
   const tags = new Set((entry.tags ?? []).map((tag) => tag.trim()).filter(Boolean));
   const note = (entry.note ?? '').trim();
   const title = entry.title.trim();
+  const kindHint = `${title} ${note} ${Array.from(tags).join(' ')}`;
+  if (/故事快照|快照|正文插图/.test(kindHint)) return 'snapshot';
   const text = `${title} ${note} ${Array.from(tags).join(' ')}`;
   if (tags.has('故事快照') || entry.targetType === 'scene' && /快照|正文插图|剧情瞬间/.test(text)) return 'snapshot';
   if (entry.targetType === 'phone' || entry.slot === 'phone_wallpaper' || entry.slot === 'phone_chat_background' || tags.has('手机背景') || /手机背景|壁纸/.test(text)) return 'phone';
@@ -5393,14 +5443,17 @@ function applyImportTarget(album: 相册系统, target: AlbumImportTarget): 相�
   };
 }
 
-function resolveImportTargetPatch(target: AlbumImportTarget, entry: 相册条目): Pick<相册条目, 'targetType' | 'targetId' | 'slot' | 'tags'> {
+function resolveImportTargetPatch(target: AlbumImportTarget, entry: 相册条目): Pick<相册条目, 'targetType' | 'targetId' | 'slot' | 'tags' | 'note'> {
   if (target.scope === 'scene') {
-    const isPhone = target.targetType === 'phone';
+    const sceneKind = target.sceneKind ?? (target.targetType === 'phone' ? 'phone' : 'scene');
+    const isPhone = sceneKind === 'phone';
+    const tag = sceneKind === 'snapshot' ? '故事快照' : isPhone ? '手机背景' : '场景图';
     return {
       targetType: isPhone ? 'phone' : 'scene',
       targetId: target.targetId,
       slot: isPhone ? 'phone_wallpaper' : 'scene',
-      tags: [isPhone ? '手机背景' : '场景图'],
+      tags: [tag],
+      note: entry.note || tag,
     };
   }
   const isTraveler = target.targetType === 'traveler';
@@ -5410,6 +5463,7 @@ function resolveImportTargetPatch(target: AlbumImportTarget, entry: 相册条目
     targetId: target.targetId,
     slot,
     tags: [slotLabel(slot)],
+    note: entry.note,
   };
 }
 
