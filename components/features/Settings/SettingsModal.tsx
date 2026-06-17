@@ -10,7 +10,6 @@ import { PhoneSystemSettingsTab } from './PhoneSystemSettingsTab';
 import { ZhikuSettingsTab } from './ZhikuSettingsTab';
 import { StoryWeavingSettingsTab } from './StoryWeavingSettingsTab';
 import { NsfwSettingsTab } from './NsfwSettingsTab';
-import { ImageGenerationSettingsTab } from './ImageGenerationSettingsTab';
 import { PromptModulesTab } from './PromptModulesTab';
 import { ExtraFeaturesSettingsTab } from './ExtraFeaturesSettingsTab';
 import { ApiErrorReportsTab } from './ApiErrorReportsTab';
@@ -63,7 +62,7 @@ interface SettingsModalProps {
   initialTab?: Tab;
 }
 
-type Tab = 'api' | 'apiErrors' | 'game' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'imageGeneration' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
+type Tab = 'api' | 'apiErrors' | 'game' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
 
 const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'game', label: '游戏设定', icon: '❖', subtitle: '叙述风格与人格' },
@@ -78,7 +77,6 @@ const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'storyWeaving', label: '剧情编织', icon: '❖', subtitle: 'TXT 导入与分解 API' },
   { key: 'context', label: '上下文', icon: '▤', subtitle: '主剧情 Token 计数' },
   { key: 'nsfw', label: 'NSFW', icon: '◇', subtitle: '成人内容与私密档案' },
-  { key: 'imageGeneration', label: '文生图', icon: '▧', subtitle: '相册与图片生成接口' },
   { key: 'variables', label: '变量管理', icon: '◈', subtitle: '存档数据查看与调试' },
   { key: 'prompts', label: '提示词模块', icon: '❘', subtitle: 'AI 系统级硬规则' },
   { key: 'extra', label: '额外功能', icon: '✦', subtitle: '污染词清理与扩展功能' },
@@ -199,8 +197,6 @@ export function SettingsModal({
         );
       case 'nsfw':
         return <NsfwSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
-      case 'imageGeneration':
-        return <ImageGenerationSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} apiSettings={apiSettings} />;
       case 'prompts':
         return <PromptModulesTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'extra':
@@ -356,7 +352,7 @@ export function SettingsModal({
             }}
           >
             <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
-            <span className="ml-2">开拓轶事 · v0.7.2</span>
+            <span className="ml-2">开拓轶事 · v0.8</span>
           </div>
         </aside>
 

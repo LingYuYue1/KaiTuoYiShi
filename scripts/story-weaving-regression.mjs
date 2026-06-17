@@ -161,7 +161,7 @@ writeStub('prompts/cot/phoneCot.mjs', 'export const PHONE_COT_PROMPT = "";\n');
 writeStub('prompts/cot/variableCot.mjs', 'export const VARIABLE_COT_PROMPT = "";\n');
 writeStub('data/newsWorldbook.mjs', 'export const NEWS_WORLD_BOOK_PROMPT = "";\n');
 writeStub('data/phoneWorldbook.mjs', 'export const PHONE_WORLD_BOOK_PROMPT = "";\n');
-writeStub('data/variableWorldbook.mjs', 'export const VARIABLE_SYSTEM_WORLDBOOK_PROMPT = "";\n');
+writeStub('data/variableWorldbook.mjs', 'export const VARIABLE_SYSTEM_WORLDBOOK_PROMPT = "";\nexport const NSFW_ARCHIVE_SEPARATION_RULE = "";\n');
 writeStub('data/companionArchiveWorldbook.mjs', 'export const COMPANION_ARCHIVE_WORLDBOOK_CONTENT = "";\n');
 writeStub('hooks/useGame/historyWindow.mjs', 'export function buildImmediateStoryReview() { return ""; }\n');
 writeStub('utils/worldbook.mjs', 'export {};\n');

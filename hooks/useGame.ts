@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
-import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
+import { executeSendWorkflow, regenerateNarrativeImagesForMessage } from '@/hooks/useGame/sendWorkflow';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
@@ -20,6 +20,7 @@ export interface UseGameReturn {
     handleGoHome: () => void;
     handleSave: () => Promise<number>;
     handleReroll: () => Promise<string | void>;
+    handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
     handleRestartOpening: () => void;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
   };
@@ -138,6 +139,10 @@ export function useGame(): UseGameReturn {
     return userInput;
   }, [state]);
 
+  const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
+    await regenerateNarrativeImagesForMessage(state, getActiveConfig, messageId);
+  }, [state, getActiveConfig]);
+
   // 重新开局：清掉所有运行时累积的变量切片，保留创角设定（名字 / 命途 / 世界周期 等）。
   // 不这样做的话，老的 NPC / 新闻 / 剧情节点 / variableBatches / 全局事件
   // 会留在状态里和新开局叠加，下次重开就是双份甚至 N 份数据。
@@ -193,6 +198,7 @@ export function useGame(): UseGameReturn {
       handleGoHome,
       handleSave,
       handleReroll,
+      handleRegenerateNarrativeImage,
       handleRestartOpening,
       getContextSnapshot,
     },

@@ -38,6 +38,42 @@ import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
+
+function MysteryChatModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal onClose={onClose} title="神秘聊天" className="max-w-lg">
+      <div className="space-y-4">
+        <div
+          className="rounded-sm px-4 py-4 text-sm leading-7"
+          style={{
+            background: 'rgba(var(--tj-bg-primary), 0.34)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.7)',
+          }}
+        >
+          <div className="font-serif text-base tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+            960494342
+          </div>
+          <p className="mt-3" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
+            本群只进行内部交流与聊天，禁止对外宣传。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full px-4 py-2 font-serif text-sm tracking-[0.18em]"
+          style={{
+            color: 'rgb(var(--tj-ui-active-text))',
+            background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgb(var(--tj-tech-cyan)) 100%)',
+            boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.46)',
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+        >
+          关闭
+        </button>
+      </div>
+    </Modal>
+  );
+}
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
@@ -59,6 +95,7 @@ export default function App() {
   const [showSaveLoad, setShowSaveLoad] = useState(false);
   const [showCloudSave, setShowCloudSave] = useState(false);
   const [showReleaseAnnouncements, setShowReleaseAnnouncements] = useState(false);
+  const [showMysteryChat, setShowMysteryChat] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
@@ -145,6 +182,8 @@ export default function App() {
           onZhikuManager={() => setShowZhikuManager(true)}
           onCloudSave={() => setShowCloudSave(true)}
           onReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
+          onDiscordPost={() => window.open('https://discord.com/channels/1380075940285124724/1509136913792241704', '_blank', 'noopener,noreferrer')}
+          onMysteryChat={() => setShowMysteryChat(true)}
         />
         {showWorldbookManager && (
           <WorldbookManagerModal
@@ -185,6 +224,9 @@ export default function App() {
           <ReleaseAnnouncementsModal
             onClose={() => setShowReleaseAnnouncements(false)}
           />
+        )}
+        {showMysteryChat && (
+          <MysteryChatModal onClose={() => setShowMysteryChat(false)} />
         )}
         {showSettings && (
           <SettingsModal
@@ -349,6 +391,11 @@ export default function App() {
               npcRecords={state.NPC}
               traveler={state.旅人}
               showInnerVoice={state.gameSettings.enableInnerVoice}
+              onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
+              narrativeImageManualEnabled={Boolean(
+                state.gameSettings.文生图系统?.正文生图?.enabled
+                && state.gameSettings.文生图系统.正文生图.mode === 'manual',
+              )}
               onEditBody={(id, newBody) => {
                 state.setChatHistory((prev) =>
                   prev.map((m) =>
@@ -436,6 +483,7 @@ export default function App() {
                 onGameSettingsChange: state.setGameSettings,
                 apiSettings: state.apiSettings,
                 turnCount: state.turnCount,
+                mainChatHistory: state.chatHistory,
               })}
             </SystemDrawer>
           </>
@@ -592,6 +640,7 @@ function renderSystemPanel(
     onGameSettingsChange: React.Dispatch<React.SetStateAction<import('@/models/settings').游戏设置>>;
     apiSettings: import('@/models/settings').API设置;
     turnCount: number;
+    mainChatHistory: import('@/models/chat').聊天消息[];
   },
 ) {
   switch (id) {
@@ -642,6 +691,7 @@ function renderSystemPanel(
           imageSettings={ctx.gameSettings.文生图系统}
           nsfwEnabled={ctx.gameSettings.enableNsfw}
           nsfwImageEnabled={ctx.gameSettings.文生图系统.enableNsfwImageGeneration}
+          mainChatHistory={ctx.mainChatHistory}
         />
       );
     case 'news':

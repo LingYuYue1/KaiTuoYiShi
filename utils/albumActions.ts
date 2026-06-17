@@ -16,6 +16,11 @@ export function 创建相册图片条目(input: {
   mimeType?: string;
   prompt?: string;
   negativePrompt?: string;
+  sourcePrompt?: string;
+  finalPrompt?: string;
+  finalNegativePrompt?: string;
+  anchorMode?: boolean;
+  anchorSummary?: string;
   dimensions?: string;
   model?: string;
   backend?: string;
@@ -37,6 +42,11 @@ export function 创建相册图片条目(input: {
     createdAt: now,
     prompt: input.prompt,
     negativePrompt: input.negativePrompt,
+    sourcePrompt: input.sourcePrompt,
+    finalPrompt: input.finalPrompt,
+    finalNegativePrompt: input.finalNegativePrompt,
+    anchorMode: input.anchorMode,
+    anchorSummary: input.anchorSummary,
     dimensions: input.dimensions,
     model: input.model,
     backend: input.backend,

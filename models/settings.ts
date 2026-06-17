@@ -171,6 +171,7 @@ export function 创建空文生图词组转化器API覆盖(): 文生图词组转
 
 export type 原著约束强度 = 'loose' | 'standard' | 'strict';
 export type DeepSeek主剧情模式 = 'off' | 'standard' | 'lock_format';
+export type 后台任务模式 = 'sequential' | 'parallel';
 
 export interface 游戏设置 {
   wordCountTarget: number;
@@ -187,6 +188,8 @@ export interface 游戏设置 {
   enableClaudeMode: boolean;
   /** DeepSeek 主剧情专用模式：只在主 API 是 DeepSeek 时生效，用于降低续聊污染、reasoning 泄漏和格式漂移。 */
   deepSeekMainMode: DeepSeek主剧情模式;
+  /** 后台任务执行模式：主剧情与变量落库之后，控制新闻、忆庭入库、手机种子和正文插图的收尾顺序。 */
+  backgroundTaskMode: 后台任务模式;
   /** 缓存前缀诊断：开启后在响应详情中记录本回合请求与上一回合请求的前缀变化位置。 */
   enableCacheDiagnostics: boolean;
   /** 变量自动更新：主模型回完正文后，调用变量模型分析正文并落地变量命令。 */
@@ -347,6 +350,11 @@ export interface 文生图规则中心设置 {
   画师串预设列表: 文生图画师串预设[];
   当前NPC画师串预设ID: string;
   当前场景画师串预设ID: string;
+  详细画风预设列表: 文生图详细画风预设[];
+  当前NPC详细画风预设ID: string;
+  当前场景详细画风预设ID: string;
+  质量增强预设列表: 文生图质量增强预设[];
+  当前质量增强预设ID: string;
   PNG画风预设列表: 文生图PNG画风预设[];
   当前NPCPNG画风预设ID: string;
   当前场景PNG画风预设ID: string;
@@ -385,6 +393,29 @@ export interface 文生图画师串预设 {
   名称: string;
   适用范围: 画师串预设适用范围;
   画师串: string;
+  正面提示词: string;
+  负面提示词: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface 文生图详细画风预设 {
+  id: string;
+  名称: string;
+  适用范围: 画师串预设适用范围;
+  风格定位: string;
+  构图镜头: string;
+  光影色彩: string;
+  材质细节: string;
+  正面提示词: string;
+  负面提示词: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface 文生图质量增强预设 {
+  id: string;
+  名称: string;
   正面提示词: string;
   负面提示词: string;
   createdAt: number;
@@ -431,6 +462,46 @@ export interface 文生图规则模板 {
   updatedAt: number;
 }
 
+export interface 正文生图解析API配置 {
+  provider: AI提供商 | '';
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  maxTokens?: number;
+  temperature?: number;
+  retryCount?: number;
+}
+
+export interface 正文生图设置 {
+  /** 总开关 */
+  enabled: boolean;
+  /** 模式：自动每回合触发 / 手动按钮触发 */
+  mode: 'auto' | 'manual';
+  /** 玩家出镜：关闭 / 正文在场时自动 / 强制尽量出镜 */
+  playerAppearanceMode: 'off' | 'auto' | 'force';
+  /** @deprecated 正文生图固定为故事快照，仅保留字段兼容旧存档。 */
+  preference: 'scene_only' | 'character_only' | 'both';
+  /** 生成时机：立即阻塞 / 回合内排队 / 纯异步 */
+  timing: 'immediate' | 'queue_current' | 'queue_async';
+  /** 提示词解析模型 API 配置（独立，不走主剧情模型） */
+  parserApi: 正文生图解析API配置;
+  /** 生图接口 API 配置 */
+  imageApi: 文生图API配置;
+}
+
+export interface 文生图参考图设置 {
+  /** 总开关：关闭时参考图只作为相册素材保存，不参与生成。 */
+  enabled: boolean;
+  /** SD WebUI 启用参考图时走 img2img，值越高越接近文字提示，越低越贴近参考图。 */
+  sdWebuiDenoisingStrength: number;
+  /** ComfyUI 需要工作流显式接收参考图占位符，默认不开启以免误导。 */
+  enableComfyWorkflowReference: boolean;
+  /** OpenAI 兼容图片接口各中转差异很大，默认仅保存和提示，不自动传图。 */
+  enableOpenAICompatibleReference: boolean;
+  /** NovelAI 参考图能力接口差异较大，默认仅保存和提示，不自动传图。 */
+  enableNovelAIReference: boolean;
+}
+
 export interface 文生图系统设置 {
   enabled: boolean;
   普通接口: 文生图API配置;
@@ -453,6 +524,10 @@ export interface 文生图系统设置 {
   autoNpcSize: string;
   enableAutoItemGeneration: boolean;
   autoItemSize: string;
+  /** 正文生图：在剧情正文中插入 AI 生成的场景/角色插图 */
+  正文生图: 正文生图设置;
+  /** 参考图：玩家手动开启后，按后端能力把相册参考图传入生成流程。 */
+  参考图: 文生图参考图设置;
 }
 
 export function 创建默认文生图API配置(): 文生图API配置 {
@@ -515,6 +590,38 @@ export function 创建默认文生图系统设置(): 文生图系统设置 {
     autoNpcSize: '1024x1024',
     enableAutoItemGeneration: false,
     autoItemSize: '1024x1024',
+    正文生图: 创建默认正文生图设置(),
+    参考图: 创建默认文生图参考图设置(),
+  };
+}
+
+export function 创建默认文生图参考图设置(): 文生图参考图设置 {
+  return {
+    enabled: false,
+    sdWebuiDenoisingStrength: 0.55,
+    enableComfyWorkflowReference: false,
+    enableOpenAICompatibleReference: false,
+    enableNovelAIReference: false,
+  };
+}
+
+export function 创建默认正文生图设置(): 正文生图设置 {
+  return {
+    enabled: false,
+    mode: 'auto',
+    playerAppearanceMode: 'auto',
+    preference: 'both',
+    timing: 'queue_current',
+    parserApi: {
+      provider: '',
+      baseUrl: '',
+      apiKey: '',
+      model: '',
+      maxTokens: 1600,
+      temperature: 0.3,
+      retryCount: 1,
+    },
+    imageApi: 创建默认文生图API配置(),
   };
 }
 
@@ -582,6 +689,44 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
     autoNpcSize: String(input.autoNpcSize || defaults.autoNpcSize),
     enableAutoItemGeneration: false,
     autoItemSize: String(input.autoItemSize || defaults.autoItemSize),
+    正文生图: 归一化正文生图设置(input.正文生图),
+    参考图: 归一化文生图参考图设置(input.参考图),
+  };
+}
+
+export function 归一化文生图参考图设置(input?: Partial<文生图参考图设置>): 文生图参考图设置 {
+  const defaults = 创建默认文生图参考图设置();
+  if (!input) return defaults;
+  return {
+    enabled: input.enabled === true,
+    sdWebuiDenoisingStrength: Math.max(0.05, Math.min(0.95, Number(input.sdWebuiDenoisingStrength ?? defaults.sdWebuiDenoisingStrength) || defaults.sdWebuiDenoisingStrength)),
+    enableComfyWorkflowReference: input.enableComfyWorkflowReference === true,
+    enableOpenAICompatibleReference: input.enableOpenAICompatibleReference === true,
+    enableNovelAIReference: input.enableNovelAIReference === true,
+  };
+}
+
+export function 归一化正文生图设置(input?: Partial<正文生图设置>): 正文生图设置 {
+  const defaults = 创建默认正文生图设置();
+  if (!input) return defaults;
+  return {
+    enabled: input.enabled === true,
+    mode: input.mode === 'manual' ? 'manual' : 'auto',
+    playerAppearanceMode: input.playerAppearanceMode === 'off' || input.playerAppearanceMode === 'force' ? input.playerAppearanceMode : 'auto',
+    preference: input.preference ?? defaults.preference,
+    timing: input.timing ?? defaults.timing,
+    parserApi: {
+      provider: (input.parserApi?.provider ?? '') as AI提供商 | '',
+      baseUrl: String(input.parserApi?.baseUrl ?? ''),
+      apiKey: String(input.parserApi?.apiKey ?? ''),
+      model: String(input.parserApi?.model ?? ''),
+      maxTokens: Math.max(256, Math.trunc(Number(input.parserApi?.maxTokens ?? defaults.parserApi.maxTokens ?? 1600)) || 1600),
+      temperature: Number.isFinite(Number(input.parserApi?.temperature))
+        ? Number(input.parserApi?.temperature)
+        : defaults.parserApi.temperature,
+      retryCount: Math.max(0, Math.trunc(Number(input.parserApi?.retryCount ?? defaults.parserApi.retryCount ?? 1)) || 1),
+    },
+    imageApi: 归一化文生图API配置(input.imageApi),
   };
 }
 
@@ -879,6 +1024,7 @@ export function 创建默认游戏设置(): 游戏设置 {
     devMode: false,
     enableClaudeMode: false,
     deepSeekMainMode: 'off',
+    backgroundTaskMode: 'sequential',
     enableCacheDiagnostics: false,
     enableVariableUpdate: false,
     新闻系统: 创建默认星际和平周报设置(),

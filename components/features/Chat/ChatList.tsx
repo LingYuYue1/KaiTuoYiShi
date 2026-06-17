@@ -10,12 +10,14 @@ interface ChatListProps {
   streamingMessage: string;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onEditBody?: (id: string, newBody: string) => void;
+  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
 }
 
-export function ChatList({ messages, loading, streamingMessage, scrollRef, onEditBody, npcRecords, traveler, showInnerVoice = true }: ChatListProps) {
+export function ChatList({ messages, loading, streamingMessage, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true }: ChatListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [nearBottom, setNearBottom] = useState(true);
 
@@ -112,6 +114,8 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
             key={msg.id}
             message={msg}
             onEditBody={onEditBody}
+            onRegenerateNarrativeImage={onRegenerateNarrativeImage}
+            narrativeImageManualEnabled={narrativeImageManualEnabled}
             npcRecords={npcRecords}
             traveler={traveler}
             showInnerVoice={showInnerVoice}

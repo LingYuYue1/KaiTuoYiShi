@@ -5,6 +5,7 @@ import {
   NEWS_CATEGORY_LABELS,
   NEWS_STATUS_LABELS,
   NEWS_STATUS_ORDER,
+  getNewsIssueNumber,
 } from '@/models/news';
 
 interface NewsPanelProps {
@@ -40,7 +41,7 @@ const STATUS_CODES: Record<新闻状态, string> = {
 };
 
 export function NewsPanel({ news, turnCount }: NewsPanelProps) {
-  const issue = Math.max(1, Math.floor(turnCount / 10) + 1);
+  const issue = getNewsIssueNumber(turnCount);
   const [tab, setTab] = useState<新闻状态 | 'all'>('all');
 
   const sorted = useMemo(

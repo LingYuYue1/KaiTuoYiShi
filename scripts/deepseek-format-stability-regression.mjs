@@ -44,6 +44,9 @@ assert(gameSettings.includes('锁定 <thinking>'), 'DeepSeek 锁格式 UI 必须
 assert(gameSettings.includes('仅当主 API 供应商或 Base URL 命中 DeepSeek 时生效'), 'DeepSeek 模式 UI 必须说明只影响 DeepSeek 主 API。');
 
 assert(sendWorkflow.includes('isDeepSeekMainConfig'), '主剧情必须有 DeepSeek 主 API 检测。');
+assert(sendWorkflow.includes('resolveMainStoryConfig') && sendWorkflow.includes("model: 'deepseek-chat'"), '主剧情必须把 DeepSeek reasoner 临时适配为 deepseek-chat，避免 reasoning-only 空响应。');
+assert(sendWorkflow.includes('const mainStoryConfig = mainStoryConfigResolution.config'), '主剧情必须使用适配后的实际请求配置。');
+assert(sendWorkflow.includes('sendChatMessage(mainStoryConfig'), '主剧情发送必须使用适配后的 DeepSeek 配置。');
 assert(sendWorkflow.includes('!deepSeekMainActive'), 'DeepSeek 专用模式必须跳过 CoT 伪装历史。');
 assert(sendWorkflow.includes("prefixContent: '<thinking>\\n'"), 'DeepSeek 锁格式必须从 thinking 起点续写。');
 assert(!sendWorkflow.includes("prefixContent: '<正文>\\n'"), 'DeepSeek 锁格式不得再锁到正文起点，否则会跳过思维链。');
@@ -53,6 +56,7 @@ assert(sendWorkflow.includes('getDeepSeekMainProtocolIssues'), 'DeepSeek 主剧�
 assert(sendWorkflow.includes('buildDeepSeekProtocolRetryGuard'), 'DeepSeek 协议失败时必须追加重试守卫。');
 assert(sendWorkflow.includes('Math.max(2, configuredMaxAttempts)'), 'DeepSeek 专用模式至少要保留一次协议失败重试。');
 assert(sendWorkflow.includes('deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : \'off\''), 'debugContext 必须记录本轮 DeepSeek 模式。');
+assert(sendWorkflow.includes('deepSeekMainOriginalModel: mainStoryConfigResolution.originalModel') && sendWorkflow.includes('deepSeekMainAdaptedModel: mainStoryConfigResolution.adaptedModel'), 'debugContext 必须记录 DeepSeek reasoner 到 chat 的主剧情模型适配。');
 assert(sendWorkflow.includes('deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn'), 'debugContext 必须记录 DeepSeek 协议校验失败项。');
 assert(sendWorkflow.includes('const shouldStreamMainRequest = state.gameSettings.enableStreaming && !isPageHidden()'), '主剧情真实请求是否流式只能由流式设置和页面可见性决定。');
 assert(sendWorkflow.includes('streaming: shouldStreamMainRequest'), '主剧情必须把真实流式开关传给 text service。');
@@ -70,7 +74,9 @@ assert(client.includes('isDeepSeekPrefixUnsupportedError'), 'DeepSeek prefix 不
 assert(client.includes('prefixMode === true && isDeepSeekConfig(config)'), 'prefixMode 必须只作用于 DeepSeek。');
 assert(client.includes('已自动降级为标准模式'), 'DeepSeek prefix 不支持时必须自动降级标准模式。');
 assert(chatModel.includes('deepSeekProtocolIssues?: string[]'), '聊天 debugContext 类型必须保存 DeepSeek 协议失败项。');
+assert(chatModel.includes('deepSeekMainOriginalModel?: string') && chatModel.includes('deepSeekMainAdaptedModel?: string'), '聊天 debugContext 类型必须保存 DeepSeek 主剧情模型适配信息。');
 assert(turnItem.includes('【DeepSeek 主剧情诊断】') && turnItem.includes('协议校验失败项'), '请求上下文必须展示 DeepSeek 主剧情诊断。');
+assert(turnItem.includes('主剧情模型适配：'), '请求上下文必须展示 DeepSeek 主剧情模型适配。');
 assert(turnItem.includes('主剧情请求模式：'), '请求上下文必须展示本轮真实主剧情请求模式。');
 
 assert(repair.includes('extractJsonLikeText') && repair.includes('repairLooseJsonText') && repair.includes('parseNumberedRecallLines'), '必须提供结构化输出修复工具。');

@@ -288,7 +288,6 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
       文生图系统: {
         ...gameSettings.文生图系统,
             普通接口: profile.routes.文生图普通接口,
-            场景接口: profile.routes.文生图场景接口,
             NSFW接口: profile.routes.文生图NSFW接口,
             词组转化器API: profile.routes.文生图词组转化器API,
           },

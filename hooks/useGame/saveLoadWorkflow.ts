@@ -92,6 +92,7 @@ function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
     ...settings,
     enableClaudeMode: defaults.enableClaudeMode,
     deepSeekMainMode: defaults.deepSeekMainMode,
+    backgroundTaskMode: settings.backgroundTaskMode ?? defaults.backgroundTaskMode,
     enableCacheDiagnostics: defaults.enableCacheDiagnostics,
     variableApi: defaults.variableApi,
     新闻系统: {
@@ -117,6 +118,11 @@ function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
       useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
       NSFW接口: defaults.文生图系统.NSFW接口,
       词组转化器API: defaults.文生图系统.词组转化器API,
+      正文生图: {
+        ...settings.文生图系统.正文生图,
+        parserApi: defaults.文生图系统.正文生图.parserApi,
+        imageApi: defaults.文生图系统.正文生图.imageApi,
+      },
     },
     记忆系统: {
       ...settings.记忆系统,
@@ -141,6 +147,7 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
     ...nextFromSave,
     enableClaudeMode: localSettings.enableClaudeMode === true,
     deepSeekMainMode: localSettings.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
+    backgroundTaskMode: localSettings.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
     enableCacheDiagnostics: localSettings.enableCacheDiagnostics ?? 创建默认游戏设置().enableCacheDiagnostics,
     variableApi: localSettings.variableApi,
     新闻系统: {
@@ -166,6 +173,11 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
       useSeparateSceneApi: local.文生图系统.useSeparateSceneApi,
       NSFW接口: local.文生图系统.NSFW接口,
       词组转化器API: local.文生图系统.词组转化器API,
+      正文生图: {
+        ...nextFromSave.文生图系统.正文生图,
+        parserApi: local.文生图系统.正文生图.parserApi,
+        imageApi: local.文生图系统.正文生图.imageApi,
+      },
     },
     记忆系统: {
       ...nextFromSave.记忆系统,
@@ -271,6 +283,7 @@ async function applySaveToState(
     文生图系统: 归一化文生图系统设置(save.gameSettings.文生图系统),
     记忆系统: 归一化记忆系统设置(save.gameSettings.记忆系统),
     额外功能: 归一化额外功能设置(save.gameSettings.额外功能),
+    backgroundTaskMode: save.gameSettings.backgroundTaskMode ?? defaults.backgroundTaskMode,
     enableMaleNsfwArchive: save.gameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
     promptModules: migratePromptModules(save.gameSettings),
   };

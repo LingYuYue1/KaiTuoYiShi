@@ -19,6 +19,7 @@ export type 图片槽位 =
   | 'nsfw_male_genital'
   | 'nsfw_rear'
   | 'nsfw_body_reference'
+  | 'reference_image'
   | 'misc';
 
 export interface 图片资源 {
@@ -36,6 +37,12 @@ export interface 图片资源 {
   createdAt: number;
   prompt?: string;
   negativePrompt?: string;
+  sourcePrompt?: string;
+  finalPrompt?: string;
+  finalNegativePrompt?: string;
+  anchorMode?: boolean;
+  anchorSummary?: string;
+  referenceImageIds?: string[];
   dimensions?: string;
   model?: string;
   backend?: 图片后端类型 | string;
@@ -70,6 +77,12 @@ export interface 图片生成任务 {
   nsfw: boolean;
   prompt: string;
   negativePrompt?: string;
+  sourcePrompt?: string;
+  finalPrompt?: string;
+  finalNegativePrompt?: string;
+  anchorMode?: boolean;
+  anchorSummary?: string;
+  referenceImageIds?: string[];
   dimensions?: string;
   resultAssetId?: string;
   error?: string;
@@ -137,6 +150,7 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
         backend: task.backend || 'openai_compatible',
         nsfw: task.nsfw === true,
         prompt: String(task.prompt || ''),
+        referenceImageIds: normalizeStringArray(task.referenceImageIds),
         dimensions: typeof task.dimensions === 'string' ? task.dimensions : undefined,
         retryCount: Math.max(0, Math.trunc(Number(task.retryCount) || 0)),
         createdAt: Number(task.createdAt) || Date.now(),

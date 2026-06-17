@@ -1,7 +1,7 @@
 import type { 图片槽位 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
-import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 画师串预设适用范围 } from '@/models/settings';
+import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
 
 export type 生图Prompt模式 = 'avatar' | 'portrait' | 'scene' | 'phone_wallpaper' | 'nsfw';
 
@@ -15,14 +15,16 @@ const seedTime = 1;
 export const 默认文生图规则模板列表: 文生图规则模板[] = [
   {
     id: 'transformer_nai_npc',
-    名称: 'NAI · NPC角色生成',
+    名称: 'NAI · 角色生成',
     类型: 'npc',
     提示词: [
-      '你是 NovelAI / NAI 角色提示词整理器。',
-      '请把旅人或 NPC 档案转化为适合 NAI 的英文 Danbooru 风格 tags，使用逗号分隔。',
+      '你是 NovelAI / NAI 角色生成规则整理器。',
+      '适用范围：旅人头像、旅人立绘、伙伴头像、伙伴立绘，以及 NSFW 参考图的基础角色层。',
+      '请把旅人或伙伴档案转化为适合 NAI 的英文 Danbooru 风格 tags，使用逗号分隔。',
       '优先顺序：质量词、角色主体、年龄感、发型发色、眼睛、表情、体态、服装层次、材质配饰、身份道具、姿势、构图、背景与光影。',
-      '标签要具体可见，不写剧情解释、心理分析、关系总结或抽象文学描述。',
+      '角色锚点、头像提示词、立绘提示词、NSFW 档案是更高优先级资料；与普通档案冲突时，以锚点和专用档案为准。',
       '原著角色必须保留官方辨识度；原创角色以档案的长期外貌、穿着和身份道具为锚点。',
+      '标签要具体可见，不写剧情解释、心理分析、关系总结、关系评价或抽象文学描述。',
       '避免过度权重、过量括号和互相冲突的标签；必要时使用少量强调即可。',
     ].join('\n'),
     角色锚定模式提示词: [
@@ -41,13 +43,16 @@ export const 默认文生图规则模板列表: 文生图规则模板[] = [
   },
   {
     id: 'transformer_banana_npc',
-    名称: 'GeminiBanana · NPC角色生成',
+    名称: 'GeminiBanana · 角色生成',
     类型: 'npc',
     提示词: [
-      '你是 Gemini Banana 角色提示词整理器。',
+      '你是 Gemini Banana 角色生成规则整理器。',
+      '适用范围：旅人头像、旅人立绘、伙伴头像、伙伴立绘，以及 NSFW 参考图的基础角色层。',
       '请把角色档案整理成清晰、可执行、偏自然语言的英文角色图提示词。',
       '不要使用 NovelAI 权重语法，不要堆砌过碎的 Danbooru 标签。',
       '提示词顺序：主体身份、稳定外观、身材体态、常驻服装、配饰/武器、动作表情、镜头、光影、背景。',
+      '如果有角色锚点，锚点负责稳定身份；普通档案只补充当前镜头里缺失但可见的信息。',
+      'NSFW 参考图只读取 NSFW 专用档案与当前部位要求，不把成人标签带回普通头像或立绘。',
       '保留崩坏：星穹铁道的科技幻想感、星际材质、金属饰边、能量细节和阵营风格。',
     ].join('\n'),
     角色锚定模式提示词: [
@@ -61,13 +66,16 @@ export const 默认文生图规则模板列表: 文生图规则模板[] = [
   },
   {
     id: 'transformer_grok_npc',
-    名称: 'Grok · NPC角色生成',
+    名称: 'Grok · 角色生成',
     类型: 'npc',
     提示词: [
-      '你是 Grok 图像提示词整理器。',
+      '你是 Grok 角色生成规则整理器。',
+      '适用范围：旅人头像、旅人立绘、伙伴头像、伙伴立绘，以及 NSFW 参考图的基础角色层。',
       '请把角色档案整理成直接、具体、可执行的英文角色图提示词。',
       '提示词应像给画面调度下指令：主体是谁、稳定外观是什么、穿什么、拿什么、站在哪里、做什么动作、镜头如何取景、光线如何落下。',
+      '先稳定角色辨识度，再处理镜头与气氛；不要为了画面漂亮而改掉官方角色或长期档案锚点。',
       '把性格和关系转成可见的表情、姿态、距离、视线和手部动作，不写心理旁白。',
+      'NSFW 参考图只描述当前选择部位、身体档案和构图要求，不扩散到普通生图。',
       '保留崩坏：星穹铁道的星际材质、阵营符号、科技幻想服装结构和干净高级的角色海报感。',
       '语言应自然但紧凑，不堆砌空泛赞美词，不写无法被画面验证的抽象描述。',
     ].join('\n'),
@@ -82,15 +90,47 @@ export const 默认文生图规则模板列表: 文生图规则模板[] = [
     updatedAt: seedTime + 2,
   },
   {
-    id: 'transformer_comfyui_npc',
-    名称: 'ComfyUI · NPC角色生成',
+    id: 'transformer_gpt_image_npc',
+    名称: 'GPT Image · 角色生成',
     类型: 'npc',
     提示词: [
-      '你是「开拓轶事」的 ComfyUI 角色提示词整理器。',
-      '你的任务是把旅人或 NPC 档案转化为可直接用于角色生图的英文 prompt，并保持崩坏：星穹铁道式科幻奇幻质感。',
+      '你是「开拓轶事」的 GPT Image / OpenAI 兼容图片模型角色提示词整理器。',
+      '适用范围：旅人头像、旅人立绘、伙伴头像、伙伴立绘，以及 NSFW 参考图的基础角色层。',
+      '请把角色档案整理成自然语言英文 prompt，句子清楚、画面指令明确，适合 gpt-image / OpenAI compatible images 接口直接读取。',
+      '不要使用 Danbooru 权重语法、括号权重、过碎标签堆砌或 ComfyUI 节点名；用自然语言描述主体、外观、服装、动作、镜头、光线和背景。',
+      '优先顺序：角色身份与年龄感、稳定外貌、发型发色、眼睛、体态、常驻服装、材质与配饰、身份道具、表情动作、构图与光线。',
+      '如果输入包含角色锚点、头像提示词、立绘提示词或 NSFW 档案，优先使用这些专用字段；普通档案只补齐缺失视觉信息。',
+      '原著角色保持官方辨识度；原创角色保持档案与锚点的一致性，不为了画面华丽而重设人物。',
+      '把性格和关系转化为可见的表情、视线、姿态、距离和手部动作，不写心理分析、剧情解释或关系总结。',
+      '普通头像和立绘不得继承 NSFW 标签；NSFW 参考图只描述当前部位、身体档案与构图要求。',
+    ].join('\n'),
+    角色锚定模式提示词: [
+      '锚定模式下，稳定外观完全沿用角色锚点：发型、发色、眼睛、体型、年龄感、常驻服装、标志性配饰和阵营元素都不要重写。',
+      '只补充当前图片所需的变化：pose, expression, camera framing, lighting, temporary prop, temporary outfit adjustment, background。',
+      '如果用户要求与锚点冲突，除非明确是换装、伪装、受伤或剧情外观变化，否则仍以锚点为准。',
+    ].join('\n'),
+    无锚点回退提示词: [
+      '没有角色锚点时，根据档案保守补全长期可复用的外观设定。',
+      '资料不足时，补齐低冲突的发型、发色、眼睛、体态、服装层次、身份道具和表情。',
+      '不要把一次性场景、情绪或战斗动作写成永久外观。',
+    ].join('\n'),
+    输出格式提示词: '只输出英文 image prompt 正文，不输出标题、解释、JSON、Markdown 或中文。',
+    createdAt: seedTime + 3,
+    updatedAt: seedTime + 3,
+  },
+  {
+    id: 'transformer_comfyui_npc',
+    名称: 'ComfyUI · 角色生成',
+    类型: 'npc',
+    提示词: [
+      '你是「开拓轶事」的 ComfyUI 角色生成规则整理器。',
+      '适用范围：旅人头像、旅人立绘、伙伴头像、伙伴立绘，以及 NSFW 参考图的基础角色层。',
+      '你的任务是把旅人或伙伴档案转化为可直接用于角色生图的英文 prompt，并保持崩坏：星穹铁道式科幻奇幻质感。',
       '请按顺序整理：角色身份与年龄感、稳定外貌、发型发色、眼睛、体态、常驻服装、材质与配饰、武器或身份道具、姿态表情、镜头构图、光影。',
+      '如果输入包含角色锚点、头像提示词、立绘提示词或 NSFW 档案，优先使用这些专用字段；普通档案只负责补齐缺失视觉信息。',
       '原著角色必须保留官方辨识度，不得擅自改成无关服装；原创角色以档案为长期锚点。',
-      '把性格和关系转化为可见表情、姿态、视线、动作和光线，不写剧情解释、心理分析或抽象形容。',
+      '把性格和关系转化为可见表情、姿态、视线、动作和光线，不写剧情解释、心理分析、关系总结或抽象形容。',
+      '普通头像和立绘不得继承 NSFW 标签；NSFW 参考图只能使用当前部位和 NSFW 专用档案。',
       '输出应适合普通 ComfyUI workflow 的纯文本 prompt，不强依赖特定节点名。',
     ].join('\n'),
     角色锚定模式提示词: [
@@ -104,8 +144,8 @@ export const 默认文生图规则模板列表: 文生图规则模板[] = [
       '资料很少时也要补出年龄感、脸部气质、体态、衣着层次和身份道具。',
     ].join('\n'),
     输出格式提示词: '只输出可直接用于图片模型的 prompt 文本，不输出解释、标题或 JSON。',
-    createdAt: seedTime,
-    updatedAt: seedTime,
+    createdAt: seedTime + 4,
+    updatedAt: seedTime + 4,
   },
   {
     id: 'transformer_comfyui_scene',
@@ -114,9 +154,12 @@ export const 默认文生图规则模板列表: 文生图规则模板[] = [
     提示词: [
       '你是「开拓轶事」的 ComfyUI 场景提示词整理器。',
       '把正文片段、新闻事件或地点描述转化为单帧可执行的英文场景 prompt。',
+      '适用范围：场景图、故事快照、手机背景。正文生图当前固定走故事快照，不再依赖场景判定规则。',
       '先建立地点、空间结构、时间、天气、光源、材质和前中远景，再写人物站位、动作关系、镜头与氛围。',
       '场景必须保持一个清晰时刻、一个主要视角、一个主光源和一个叙事焦点。',
       '黑塔空间站、雅利洛、仙舟、匹诺康尼等地点要优先保留原著气质和建筑/科技/文化风格。',
+      '故事快照应像剧情剧照：人物、动作、道具和空间关系都服务于一个瞬间；场景图应让地点和环境成为第一可读信息。',
+      '手机背景优先保留干净留白、纵向构图和图标安全区。',
       '不要把连续剧情、多段动作或多视角塞进同一张图。',
     ].join('\n'),
     场景角色锚定模式提示词: [
@@ -130,35 +173,50 @@ export const 默认文生图规则模板列表: 文生图规则模板[] = [
     updatedAt: seedTime + 2,
   },
   {
+    id: 'transformer_gpt_image_scene',
+    名称: 'GPT Image · 场景生成',
+    类型: 'scene',
+    提示词: [
+      '你是「开拓轶事」的 GPT Image / OpenAI 兼容图片模型场景提示词整理器。',
+      '适用范围：场景图、故事快照、手机背景。正文生图当前固定走故事快照，不再依赖场景判定规则。',
+      '请把正文片段、地点描述、新闻事件或手机背景需求整理成自然语言英文 image prompt。',
+      '不要使用 Danbooru 权重语法、括号权重、过碎标签堆砌或 ComfyUI 节点名；用清晰句子描述一个可生成的单帧画面。',
+      '先写地点与空间结构，再写时间、天气、主光源、材质、前景/中景/远景，最后写人物站位、动作关系、镜头和氛围。',
+      '故事快照必须像剧情剧照：一个清晰时刻、一个主要视角、一个叙事焦点；不要把连续剧情、多段动作或多个镜头塞进同一张图。',
+      '场景图要让地点和环境成为第一可读信息；手机背景要考虑纵向裁切、干净留白和图标安全区。',
+      '如果出现角色，只写画面需要的识别外观、站位、动作和互动，不要把场景图变成角色立绘拼贴。',
+      '保留崩坏：星穹铁道的科幻奇幻质感、星际材质、空间层级和地点文化特征。',
+    ].join('\n'),
+    场景角色锚定模式提示词: [
+      '如果场景中有人物且存在角色锚点，请沿用锚点外观；不要在场景提示词里重设发型、体型、常驻服饰和标志性配饰。',
+      '人物只服务于当前场景：站位、视线、动作、互动关系、受光方向和与环境的比例。',
+      '多人场景最多突出 1-3 个主要人物，其余人物保持背景化，避免抢走地点主体。',
+    ].join('\n'),
+    无锚点回退提示词: [
+      '无锚点时，只为主要人物补少量识别信息。',
+      '资料不足时优先保证地点、光线、空间关系和镜头清楚，不要凭空扩写大段人物外观。',
+    ].join('\n'),
+    输出格式提示词: '只输出英文 image prompt 正文，不输出标题、解释、JSON、Markdown 或中文。',
+    createdAt: seedTime + 5,
+    updatedAt: seedTime + 5,
+  },
+  {
     id: 'transformer_banana_scene',
     名称: 'GeminiBanana · 场景生成',
     类型: 'scene',
     提示词: [
       '你是 Gemini Banana 场景提示词整理器。',
       '请把场景资料整理成自然语言英文提示词，适合生成地点壁纸、剧情剧照或手机背景。',
+      '正文生图固定作为故事快照处理；不要再输出风景/快照二选一的判定。',
       '优先写地点、空间、材质、时间、光照、天气和镜头，再写人物位置与关系。',
+      '如果是手机背景，画面要适合纵向裁切并保留图标安全区；如果是故事快照，保留人物动作与空间层级。',
       '保持单帧可执行，不写连续事件，不写解释腔。',
     ].join('\n'),
     场景角色锚定模式提示词: '角色外观来自锚点，请重点生成他们在场景中的位置、互动、动作、镜头设计与环境关系。',
     无锚点回退提示词: '用少量识别词帮助辨认人物，但不要让人物压过场景主体。',
     输出格式提示词: '输出英文 prompt，空间关系清楚，适合图像模型直接读取。',
-    createdAt: seedTime + 3,
-    updatedAt: seedTime + 3,
-  },
-  {
-    id: 'transformer_hsr_scene_judge',
-    名称: '通用 · 场景判定',
-    类型: 'scene_judge',
-    提示词: [
-      '你负责判断当前文本更适合生成“风景场景”还是“故事快照”。',
-      '只有文本能稳定对应到一个单一时刻、一个清晰地点、一个主要事件时，才判为故事快照。',
-      '如果文本主要是对话、心理、设定说明、回忆、抽象氛围或连续动作，默认判为风景场景。',
-      '故事快照至少应具备：明确地点、在场人物、可见动作、道具/站位/空间关系中的三项。',
-      '即使判为故事快照，也必须保证地点和环境清晰可读，不允许变成人物拼贴。',
-      '只输出“风景场景”或“故事快照”。',
-    ].join('\n'),
-    createdAt: seedTime + 4,
-    updatedAt: seedTime + 4,
+    createdAt: seedTime + 6,
+    updatedAt: seedTime + 6,
   },
 ];
 
@@ -193,6 +251,78 @@ export const 默认文生图画师串预设列表: 文生图画师串预设[] = 
   },
 ];
 
+export const 默认文生图详细画风预设列表: 文生图详细画风预设[] = [
+  {
+    id: 'detail_style_hsr_character_default',
+    名称: '崩铁 · 角色详细画风',
+    适用范围: 'npc',
+    风格定位: 'premium anime RPG character key visual, elegant sci-fi fantasy design, official game promotional illustration feel',
+    构图镜头: 'clear character-focused framing, readable silhouette, stable facial features, balanced pose, clean background separation',
+    光影色彩: 'soft cinematic key light, polished highlights, controlled contrast, luminous accent colors without overpowering the character',
+    材质细节: 'layered fabric, metallic trims, translucent energy details, refined accessories, crisp outfit seams and material variation',
+    正面提示词: 'highly refined character rendering, expressive eyes, clean linework, detailed outfit construction, polished game illustration',
+    负面提示词: 'messy outfit, unreadable silhouette, distorted face, overdesigned accessories, muddy colors, excessive bloom',
+    createdAt: seedTime + 12,
+    updatedAt: seedTime + 12,
+  },
+  {
+    id: 'detail_style_hsr_scene_default',
+    名称: '崩铁 · 场景详细画风',
+    适用范围: 'scene',
+    风格定位: 'cinematic sci-fi fantasy environment concept art, Honkai: Star Rail inspired location atmosphere, story still composition',
+    构图镜头: 'clear foreground midground background layers, strong spatial depth, one readable focal point, cinematic camera angle',
+    光影色彩: 'atmospheric lighting, luminous sci-fi accents, controlled color palette, visible light direction, soft volumetric depth',
+    材质细节: 'polished metal, glass, stone, fabric banners, holographic panels, environmental wear, readable architectural culture',
+    正面提示词: 'immersive environment, layered composition, cinematic atmosphere, crisp spatial structure, refined concept art finish',
+    负面提示词: 'flat background, cluttered scene, weak focal point, incoherent architecture, unreadable scale, text, watermark',
+    createdAt: seedTime + 13,
+    updatedAt: seedTime + 13,
+  },
+];
+
+export const 默认文生图质量增强预设列表: 文生图质量增强预设[] = [
+  {
+    id: 'quality_stability_light',
+    名称: '轻度稳定',
+    正面提示词: [
+      'stable character anatomy and coherent body structure',
+      'stable hairstyle matching the character anchor',
+      'hair keeps its intended shape unless strong wind, zero gravity, explosion shockwave, or combat impact is explicitly requested',
+      'each visible character has exactly two arms and two hands, natural arm placement, clear body silhouette',
+      'visible hands should look natural with coherent fingers and relaxed wrists',
+      'avoid limb merging in multi-character scenes, keep character outlines separated',
+    ].join(', '),
+    负面提示词: [
+      'extra hands, extra arms, duplicated limbs, fused fingers, malformed fingers',
+      'broken wrists, twisted arms, dislocated shoulders, incoherent anatomy',
+      'floating hair strands, exaggerated wind-blown hair, messy hair shape, inconsistent hairstyle, hair covering face',
+      'merged bodies, tangled limbs, unclear silhouette',
+    ].join(', '),
+    createdAt: seedTime + 40,
+    updatedAt: seedTime + 40,
+  },
+  {
+    id: 'quality_stability_strong',
+    名称: '强稳定',
+    正面提示词: [
+      'prioritize anatomical stability over complex action',
+      'clear readable pose, coherent shoulders, arms, wrists, hands, and fingers',
+      'each character has exactly two arms and two hands; no duplicated or ghost limbs',
+      'hands may appear naturally, but must be attached to the correct arms with believable five-finger structure when visible',
+      'stable hairstyle strictly follows the character anchor; no exaggerated flying hair unless explicitly caused by the scene',
+      'separate character silhouettes, no body merging, no tangled multi-person anatomy',
+    ].join(', '),
+    负面提示词: [
+      'extra hands, extra arms, extra limbs, duplicate hands, ghost hands',
+      'bad hands, malformed hands, fused fingers, extra fingers, missing fingers, broken wrists',
+      'twisted arms, impossible pose, dislocated joints, merged bodies, tangled limbs',
+      'wild floating hair, messy hair mass, inconsistent hairstyle, hair covering eyes, unreadable silhouette',
+    ].join(', '),
+    createdAt: seedTime + 41,
+    updatedAt: seedTime + 41,
+  },
+];
+
 export const 默认文生图PNG画风预设列表: 文生图PNG画风预设[] = [
   {
     id: 'png_hsr_clean_default',
@@ -221,7 +351,7 @@ export const 默认文生图模型规则集列表: 文生图模型规则集[] = 
     是否启用: true,
     NPC词组转化器提示词预设ID: 'transformer_comfyui_npc',
     场景词组转化器提示词预设ID: 'transformer_comfyui_scene',
-    场景判定提示词预设ID: 'transformer_hsr_scene_judge',
+    场景判定提示词预设ID: '',
     createdAt: seedTime + 30,
     updatedAt: seedTime + 30,
   },
@@ -237,9 +367,29 @@ export const 默认文生图模型规则集列表: 文生图模型规则集[] = 
     是否启用: false,
     NPC词组转化器提示词预设ID: 'transformer_banana_npc',
     场景词组转化器提示词预设ID: 'transformer_banana_scene',
-    场景判定提示词预设ID: 'transformer_hsr_scene_judge',
+    场景判定提示词预设ID: '',
     createdAt: seedTime + 31,
     updatedAt: seedTime + 31,
+  },
+  {
+    id: 'model_rule_gpt_image_default',
+    名称: 'GPT Image · 默认规则集',
+    模型专属提示词: [
+      'Use natural English image prompt sentences suitable for GPT Image or OpenAI-compatible image generation APIs.',
+      'Do not use Danbooru tag syntax, bracket weights, JSON, Markdown, or ComfyUI node references.',
+      'Write one coherent visual instruction with clear subject, environment, camera, lighting, style, and negative constraints.',
+      'Keep prompt content visually verifiable; convert personality and relationships into expression, posture, gaze, distance, and action.',
+    ].join('\n'),
+    锚定模式模型提示词: [
+      'When character anchors are available, treat them as fixed identity references.',
+      'Only describe current-scene variations such as pose, expression, framing, lighting, temporary props, temporary outfit changes, and background.',
+    ].join('\n'),
+    是否启用: false,
+    NPC词组转化器提示词预设ID: 'transformer_gpt_image_npc',
+    场景词组转化器提示词预设ID: 'transformer_gpt_image_scene',
+    场景判定提示词预设ID: '',
+    createdAt: seedTime + 32,
+    updatedAt: seedTime + 32,
   },
 ];
 
@@ -247,6 +397,11 @@ export const 默认文生图规则中心: 文生图规则中心设置 = {
   画师串预设列表: 默认文生图画师串预设列表,
   当前NPC画师串预设ID: 'artist_hsr_character_default',
   当前场景画师串预设ID: 'artist_hsr_scene_default',
+  详细画风预设列表: 默认文生图详细画风预设列表,
+  当前NPC详细画风预设ID: 'detail_style_hsr_character_default',
+  当前场景详细画风预设ID: 'detail_style_hsr_scene_default',
+  质量增强预设列表: 默认文生图质量增强预设列表,
+  当前质量增强预设ID: '',
   PNG画风预设列表: 默认文生图PNG画风预设列表,
   当前NPCPNG画风预设ID: 'png_hsr_clean_default',
   当前场景PNG画风预设ID: 'png_hsr_clean_default',
@@ -254,7 +409,7 @@ export const 默认文生图规则中心: 文生图规则中心设置 = {
   词组转化器提示词预设列表: 默认文生图规则模板列表,
   当前NPC词组转化器提示词预设ID: 'transformer_comfyui_npc',
   当前场景词组转化器提示词预设ID: 'transformer_comfyui_scene',
-  当前场景判定提示词预设ID: 'transformer_hsr_scene_judge',
+  当前场景判定提示词预设ID: '',
   hsrBaseStyle: [
     'Honkai: Star Rail inspired sci-fi fantasy illustration',
     'premium anime game key visual quality',
@@ -375,6 +530,8 @@ export function normalizeImageRules(input?: Partial<文生图规则中心设置>
   const defaults = 默认文生图规则中心;
   if (!input) return defaults;
   const artistPresets = normalizeArtistPresets(input.画师串预设列表);
+  const detailStylePresets = normalizeDetailStylePresets(input.详细画风预设列表);
+  const qualityPresets = normalizeQualityEnhancementPresets(input.质量增强预设列表);
   const pngPresets = normalizePngStylePresets(input.PNG画风预设列表);
   const presets = normalizeRuleTemplates(input.词组转化器提示词预设列表);
   const modelRules = normalizeModelRuleSets(input.模型词组转化器预设列表, presets);
@@ -382,6 +539,11 @@ export function normalizeImageRules(input?: Partial<文生图规则中心设置>
     画师串预设列表: artistPresets,
     当前NPC画师串预设ID: resolveArtistPresetId(input.当前NPC画师串预设ID, artistPresets, 'npc'),
     当前场景画师串预设ID: resolveArtistPresetId(input.当前场景画师串预设ID, artistPresets, 'scene'),
+    详细画风预设列表: detailStylePresets,
+    当前NPC详细画风预设ID: resolveDetailStylePresetId(input.当前NPC详细画风预设ID, detailStylePresets, 'npc'),
+    当前场景详细画风预设ID: resolveDetailStylePresetId(input.当前场景详细画风预设ID, detailStylePresets, 'scene'),
+    质量增强预设列表: qualityPresets,
+    当前质量增强预设ID: resolveQualityEnhancementPresetId(input.当前质量增强预设ID, qualityPresets),
     PNG画风预设列表: pngPresets,
     当前NPCPNG画风预设ID: resolvePngPresetId(input.当前NPCPNG画风预设ID, pngPresets),
     当前场景PNG画风预设ID: resolvePngPresetId(input.当前场景PNG画风预设ID, pngPresets),
@@ -443,13 +605,43 @@ export function 获取当前模型规则集(rules: 文生图规则中心设置):
 
 export function 获取当前画师串预设(rules: 文生图规则中心设置, scope: 'npc' | 'scene'): 文生图画师串预设 | null {
   const id = scope === 'scene' ? rules.当前场景画师串预设ID : rules.当前NPC画师串预设ID;
+  if (!id) return null;
   const list = rules.画师串预设列表.filter((preset) => preset.适用范围 === scope || preset.适用范围 === 'all');
-  return list.find((preset) => preset.id === id) ?? list[0] ?? null;
+  return list.find((preset) => preset.id === id) ?? null;
+}
+
+export function 获取当前详细画风预设(rules: 文生图规则中心设置, scope: 'npc' | 'scene'): 文生图详细画风预设 | null {
+  const id = scope === 'scene' ? rules.当前场景详细画风预设ID : rules.当前NPC详细画风预设ID;
+  if (!id) return null;
+  const list = rules.详细画风预设列表.filter((preset) => preset.适用范围 === scope || preset.适用范围 === 'all');
+  return list.find((preset) => preset.id === id) ?? null;
 }
 
 export function 获取当前PNG画风预设(rules: 文生图规则中心设置, scope: 'npc' | 'scene'): 文生图PNG画风预设 | null {
   const id = scope === 'scene' ? rules.当前场景PNG画风预设ID : rules.当前NPCPNG画风预设ID;
-  return rules.PNG画风预设列表.find((preset) => preset.id === id) ?? rules.PNG画风预设列表[0] ?? null;
+  if (!id) return null;
+  return rules.PNG画风预设列表.find((preset) => preset.id === id) ?? null;
+}
+
+export function 获取当前质量增强预设(rules: 文生图规则中心设置): 文生图质量增强预设 | null {
+  const id = rules.当前质量增强预设ID;
+  if (!id) return null;
+  return rules.质量增强预设列表.find((preset) => preset.id === id) ?? null;
+}
+
+export function 质量增强正面提示词(rules: 文生图规则中心设置): string {
+  return 获取当前质量增强预设(rules)?.正面提示词 || '';
+}
+
+export function 质量增强负面提示词(rules: 文生图规则中心设置): string {
+  return 获取当前质量增强预设(rules)?.负面提示词 || '';
+}
+
+export function 应用质量增强提示词(rules: 文生图规则中心设置, prompt: string, negative: string): 生图Prompt结果 {
+  return {
+    prompt: compactJoin([prompt, 质量增强正面提示词(rules)]),
+    negative: compactJoin([negative, 质量增强负面提示词(rules)]),
+  };
 }
 
 function normalizeRuleTemplates(input: unknown): 文生图规则模板[] {
@@ -497,6 +689,50 @@ function normalizeArtistPresets(input: unknown): 文生图画师串预设[] {
     : [];
   const merged = new Map<string, 文生图画师串预设>();
   [...默认文生图画师串预设列表, ...normalized].forEach((item) => merged.set(item.id, item));
+  return Array.from(merged.values());
+}
+
+function normalizeDetailStylePresets(input: unknown): 文生图详细画风预设[] {
+  const normalized = Array.isArray(input)
+    ? input.map((item, index) => {
+        const source = item as Partial<文生图详细画风预设> | null | undefined;
+        const scope = normalizeArtistScope(source?.适用范围);
+        return {
+          id: String(source?.id || `detail_style_${scope}_${Date.now()}_${index}`),
+          名称: String(source?.名称 || (scope === 'scene' ? '场景详细画风' : 'NPC详细画风')),
+          适用范围: scope,
+          风格定位: String(source?.风格定位 ?? ''),
+          构图镜头: String(source?.构图镜头 ?? ''),
+          光影色彩: String(source?.光影色彩 ?? ''),
+          材质细节: String(source?.材质细节 ?? ''),
+          正面提示词: String(source?.正面提示词 ?? ''),
+          负面提示词: String(source?.负面提示词 ?? ''),
+          createdAt: Number(source?.createdAt) || Date.now(),
+          updatedAt: Number(source?.updatedAt) || Date.now(),
+        } satisfies 文生图详细画风预设;
+      })
+    : [];
+  const merged = new Map<string, 文生图详细画风预设>();
+  [...默认文生图详细画风预设列表, ...normalized].forEach((item) => merged.set(item.id, item));
+  return Array.from(merged.values());
+}
+
+function normalizeQualityEnhancementPresets(input: unknown): 文生图质量增强预设[] {
+  const normalized = Array.isArray(input)
+    ? input.map((item, index) => {
+        const source = item as Partial<文生图质量增强预设> | null | undefined;
+        return {
+          id: String(source?.id || `quality_stability_${Date.now()}_${index}`),
+          名称: String(source?.名称 || '质量增强预设'),
+          正面提示词: String(source?.正面提示词 ?? ''),
+          负面提示词: String(source?.负面提示词 ?? ''),
+          createdAt: Number(source?.createdAt) || Date.now(),
+          updatedAt: Number(source?.updatedAt) || Date.now(),
+        } satisfies 文生图质量增强预设;
+      })
+    : [];
+  const merged = new Map<string, 文生图质量增强预设>();
+  [...默认文生图质量增强预设列表, ...normalized].forEach((item) => merged.set(item.id, item));
   return Array.from(merged.values());
 }
 
@@ -558,6 +794,15 @@ function normalizePngSource(value: unknown): PNG画风预设来源 {
 }
 
 function resolveArtistPresetId(inputId: unknown, presets: 文生图画师串预设[], scope: 'npc' | 'scene'): string {
+  if (inputId === '') return '';
+  const id = String(inputId || '').trim();
+  const scoped = presets.filter((preset) => preset.适用范围 === scope || preset.适用范围 === 'all');
+  if (id && scoped.some((preset) => preset.id === id)) return id;
+  return scoped[0]?.id ?? '';
+}
+
+function resolveDetailStylePresetId(inputId: unknown, presets: 文生图详细画风预设[], scope: 'npc' | 'scene'): string {
+  if (inputId === '') return '';
   const id = String(inputId || '').trim();
   const scoped = presets.filter((preset) => preset.适用范围 === scope || preset.适用范围 === 'all');
   if (id && scoped.some((preset) => preset.id === id)) return id;
@@ -565,9 +810,16 @@ function resolveArtistPresetId(inputId: unknown, presets: 文生图画师串预�
 }
 
 function resolvePngPresetId(inputId: unknown, presets: 文生图PNG画风预设[]): string {
+  if (inputId === '') return '';
   const id = String(inputId || '').trim();
   if (id && presets.some((preset) => preset.id === id)) return id;
   return presets[0]?.id ?? '';
+}
+
+function resolveQualityEnhancementPresetId(inputId: unknown, presets: 文生图质量增强预设[]): string {
+  const id = String(inputId || '').trim();
+  if (id && presets.some((preset) => preset.id === id)) return id;
+  return '';
 }
 
 function normalizeTemplateType(value: unknown): 文生图规则模板类型 {
@@ -582,9 +834,9 @@ function resolveActiveTemplateId(inputId: unknown, presets: 文生图规则模�
 }
 
 function templateTypeLabel(type: 文生图规则模板类型): string {
-  if (type === 'scene') return '场景转化规则';
-  if (type === 'scene_judge') return '场景判定规则';
-  return 'NPC 转化规则';
+  if (type === 'scene') return '场景生成规则';
+  if (type === 'scene_judge') return '场景判定规则（旧配置兼容）';
+  return '角色生成规则';
 }
 
 function compactJoin(parts: Array<string | undefined>): string {
@@ -594,12 +846,18 @@ function compactJoin(parts: Array<string | undefined>): string {
 function stylePromptParts(rules: 文生图规则中心设置, scope: 'npc' | 'scene', anchored: boolean): Array<string | undefined> {
   const modelRule = 获取当前模型规则集(rules);
   const artist = 获取当前画师串预设(rules, scope);
+  const detailStyle = 获取当前详细画风预设(rules, scope);
   const png = 获取当前PNG画风预设(rules, scope);
   return [
     modelRule?.模型专属提示词,
     anchored ? modelRule?.锚定模式模型提示词 : undefined,
     artist?.画师串,
     artist?.正面提示词,
+    detailStyle?.风格定位,
+    detailStyle?.构图镜头,
+    detailStyle?.光影色彩,
+    detailStyle?.材质细节,
+    detailStyle?.正面提示词,
     png?.画师串,
     png?.正面提示词,
   ];
@@ -607,8 +865,9 @@ function stylePromptParts(rules: 文生图规则中心设置, scope: 'npc' | 'sc
 
 function styleNegativeParts(rules: 文生图规则中心设置, scope: 'npc' | 'scene'): Array<string | undefined> {
   const artist = 获取当前画师串预设(rules, scope);
+  const detailStyle = 获取当前详细画风预设(rules, scope);
   const png = 获取当前PNG画风预设(rules, scope);
-  return [artist?.负面提示词, png?.负面提示词];
+  return [artist?.负面提示词, detailStyle?.负面提示词, png?.负面提示词];
 }
 
 function ruleForMode(mode: 生图Prompt模式, rules: 文生图规则中心设置): string {
@@ -742,10 +1001,7 @@ export function buildNpcImagePrompt(params: {
     size ? `target canvas size: ${size}` : undefined,
     extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
   ]);
-  return {
-    prompt,
-    negative: compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative, mode === 'nsfw' ? rules.nsfwNegative : undefined]),
-  };
+  return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative, mode === 'nsfw' ? rules.nsfwNegative : undefined]));
 }
 
 export function buildTravelerImagePrompt(params: {
@@ -784,10 +1040,7 @@ export function buildTravelerImagePrompt(params: {
     size ? `target canvas size: ${size}` : undefined,
     extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
   ]);
-  return {
-    prompt,
-    negative: compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative]),
-  };
+  return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative]));
 }
 
 export function buildSceneImagePrompt(params: {
@@ -795,16 +1048,16 @@ export function buildSceneImagePrompt(params: {
   mode: Extract<生图Prompt模式, 'scene' | 'phone_wallpaper'>;
   rules: 文生图规则中心设置;
   traveler?: 角色数据结构;
+  forceTravelerVisible?: boolean;
   presentNpcs?: NPC记录[];
   extraRequirement?: string;
   size?: string;
   slot?: 图片槽位;
 }): 生图Prompt结果 {
-  const { text, mode, rules, traveler, presentNpcs, extraRequirement, size } = params;
+  const { text, mode, rules, traveler, forceTravelerVisible, presentNpcs, extraRequirement, size } = params;
   const template = 获取当前规则模板(rules, 'scene');
   const sceneAnchors = readSceneCharacterAnchors(traveler, presentNpcs);
-  return {
-    prompt: compactJoin([
+  const prompt = compactJoin([
       rules.hsrBaseStyle,
       rules.compositionRule,
       rules.modelCompatibilityRule,
@@ -816,10 +1069,11 @@ export function buildSceneImagePrompt(params: {
       ruleForMode(mode, rules),
       mode === 'scene' ? rules.sceneCharacterRule : undefined,
       text,
+      forceTravelerVisible && traveler ? `required visible player character: include ${traveler.姓名 || 'the player character'} as a visible person in the image, not an unseen POV; show their body language, expression, and spatial relationship to the scene` : undefined,
       sceneAnchors.prompt,
       size ? `target canvas size: ${size}` : undefined,
       extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
-    ]),
-    negative: compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'scene'), sceneAnchors.negative, rules.commonNegative]),
-  };
+    ]);
+  const negative = compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'scene'), sceneAnchors.negative, rules.commonNegative]);
+  return 应用质量增强提示词(rules, prompt, negative);
 }

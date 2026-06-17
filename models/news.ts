@@ -129,3 +129,8 @@ export function 创建新闻补丁(input: 新闻条目补丁): 新闻条目补�
     正文: input.正文?.trim() ?? input.正文,
   };
 }
+
+export function getNewsIssueNumber(turnCount: number): number {
+  const turn = Math.max(0, Math.trunc(Number(turnCount) || 0));
+  return Math.max(1, Math.floor(turn / 10) + 1);
+}

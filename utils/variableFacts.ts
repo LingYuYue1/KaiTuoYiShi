@@ -531,6 +531,13 @@ function mergeUniqueTexts(...groups: Array<string[] | undefined>): string[] | un
   return output.length ? output : undefined;
 }
 
+function mergePreferredText(current: unknown, incoming: unknown): string | undefined {
+  const next = typeof incoming === 'string' ? incoming.trim() : '';
+  if (next) return next;
+  const existing = typeof current === 'string' ? current.trim() : '';
+  return existing || undefined;
+}
+
 function buildNsfwArchiveUpdate(existing: NPC记录, fact: Extract<变量事实, { type: 'nsfw_archive' }>): Record<string, unknown> {
   const current = existing.NSFW档案 ?? {};
   const archive: Record<string, unknown> = {};
@@ -546,9 +553,42 @@ function buildNsfwArchiveUpdate(existing: NPC记录, fact: Extract<变量事实,
   if (longTermFacts?.length) archive.长期事实 = longTermFacts;
   const tags = mergeUniqueTexts(current.标签, fact.tags);
   if (tags?.length) archive.标签 = tags;
+  const experiences = mergeUniqueTexts(current.经历, fact.experiences);
+  if (experiences?.length) archive.经历 = experiences;
+  const currentFemale = current.女性身体档案 ?? {};
+  const currentMale = current.男性身体档案 ?? {};
+  const femaleIncoming = fact.femaleBodyArchive ?? {};
+  const maleIncoming = fact.maleBodyArchive ?? {};
+  if (Object.keys(femaleIncoming).length || Object.keys(currentFemale).length) {
+    const femaleArchive = {
+      胸部: mergePreferredText(currentFemale.胸部, femaleIncoming.胸部),
+      女性私处: mergePreferredText(currentFemale.女性私处, femaleIncoming.女性私处),
+      后庭: mergePreferredText(currentFemale.后庭, femaleIncoming.后庭),
+      体态: mergePreferredText(currentFemale.体态, femaleIncoming.体态),
+      体味: mergePreferredText(currentFemale.体味, femaleIncoming.体味),
+    };
+    if (pruneEmptyObject(femaleArchive)) archive.女性身体档案 = femaleArchive;
+  }
+  if (Object.keys(maleIncoming).length || Object.keys(currentMale).length) {
+    const maleArchive = {
+      男性器: mergePreferredText(currentMale.男性器, maleIncoming.男性器),
+      后庭: mergePreferredText(currentMale.后庭, maleIncoming.后庭),
+      体态: mergePreferredText(currentMale.体态, maleIncoming.体态),
+      体味: mergePreferredText(currentMale.体味, maleIncoming.体味),
+    };
+    if (pruneEmptyObject(maleArchive)) archive.男性身体档案 = maleArchive;
+  }
   if (fact.notes) archive.备注 = fact.notes;
   else if (current.备注) archive.备注 = current.备注;
   return archive;
+}
+
+function pruneEmptyObject<T extends Record<string, unknown>>(obj: T): T | undefined {
+  for (const key of Object.keys(obj)) {
+    const value = obj[key];
+    if (typeof value === 'string' && !value.trim()) delete obj[key];
+  }
+  return Object.keys(obj).length ? obj : undefined;
 }
 
 const NON_INVENTORY_INFORMATION_RE = /(坐标|座标|位置|地点|方位|路线|路径|权限$|访问权限|通行权限|许可$|口令|密码|暗号|线索|情报|消息|讯息|资料|记录|名单|名单信息|地址|坐标点)/;

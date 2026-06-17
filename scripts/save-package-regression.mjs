@@ -48,6 +48,8 @@ assert(savePackage.includes('settings?.文生图系统?.普通接口'), '文生�
 assert(savePackage.includes('settings?.文生图系统?.场景接口'), '文生图场景接口 apiKey 必须清理。');
 assert(savePackage.includes('settings?.文生图系统?.NSFW接口'), '文生图 NSFW 接口 apiKey 必须清理。');
 assert(savePackage.includes('settings?.文生图系统?.词组转化器API'), '文生图词组转化器 API apiKey 必须清理。');
+assert(savePackage.includes('settings?.文生图系统?.正文生图?.parserApi'), '正文生图解析 API apiKey 必须清理。');
+assert(savePackage.includes('settings?.文生图系统?.正文生图?.imageApi'), '正文生图生图 API apiKey 必须清理。');
 
 assert(dbService.includes('exportSavePackage'), 'dbService 必须导出新存档包导出函数。');
 assert(dbService.includes('importSaveFile'), 'dbService 必须导出统一导入函数。');

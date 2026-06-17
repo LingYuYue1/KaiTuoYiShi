@@ -77,6 +77,8 @@ function stripEmbeddedApiSettings(sanitized: 存档数据): void {
   clearApiKey(settings?.文生图系统?.场景接口);
   clearApiKey(settings?.文生图系统?.NSFW接口);
   clearApiKey(settings?.文生图系统?.词组转化器API);
+  clearApiKey(settings?.文生图系统?.正文生图?.parserApi);
+  clearApiKey(settings?.文生图系统?.正文生图?.imageApi);
 
   sanitized.apiSettings = 创建空API设置();
   sanitized.gameSettings = {
@@ -113,6 +115,11 @@ function stripEmbeddedApiSettings(sanitized: 存档数据): void {
       useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
       NSFW接口: defaults.文生图系统.NSFW接口,
       词组转化器API: defaults.文生图系统.词组转化器API,
+      正文生图: {
+        ...(settings.文生图系统?.正文生图 ?? defaults.文生图系统.正文生图),
+        parserApi: defaults.文生图系统.正文生图.parserApi,
+        imageApi: defaults.文生图系统.正文生图.imageApi,
+      },
     },
   };
 }

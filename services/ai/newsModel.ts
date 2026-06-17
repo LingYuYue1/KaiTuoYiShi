@@ -4,7 +4,7 @@ import type { 世界状态 } from '@/models/world';
 import type { NPC关系类型, NPC记录 } from '@/models/npc';
 import type { 剧情节点 } from '@/models/plot';
 import type { 新闻条目, 新闻生成结果, 新闻条目补丁 } from '@/models/news';
-import { 归一化新闻条目 } from '@/models/news';
+import { getNewsIssueNumber, 归一化新闻条目 } from '@/models/news';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
 import { getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
@@ -24,6 +24,7 @@ export interface NewsModelRequest {
   npcRecords?: NPC记录[];
   plotNodes?: 剧情节点[];
   storyWeaving?: 剧情编织系统;
+  maxNewEntriesPerTurn?: number;
   signal?: AbortSignal;
   retryCount?: number;
 }
@@ -55,8 +56,9 @@ export async function callNewsModel(request: NewsModelRequest): Promise<NewsMode
   };
 }
 
-export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount' | 'world' | 'traveler' | 'news'> & Partial<Pick<NewsModelRequest, 'npcRecords' | 'plotNodes' | 'storyWeaving'>>): string {
-  const issue = Math.floor(request.turnCount / 10);
+export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount' | 'world' | 'traveler' | 'news'> & Partial<Pick<NewsModelRequest, 'npcRecords' | 'plotNodes' | 'storyWeaving' | 'maxNewEntriesPerTurn'>>): string {
+  const issue = getNewsIssueNumber(request.turnCount);
+  const maxNewEntries = normalizeMaxNewEntries(request.maxNewEntriesPerTurn);
   const recentNews = [...request.news].sort((a, b) => b.回合 - a.回合).slice(0, 12);
   const storyBrief = buildStoryWeavingNewsBrief(request.storyWeaving);
 
@@ -81,6 +83,12 @@ export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount'
     '- 状态只能取 upcoming / ongoing / completed / archived',
     '- 新增条目可以不写 id；更新条目必须带 id',
     '- 归档与删除数组里只写 id',
+    '',
+    '## 本期更新要求',
+    `- 本次最多新增 ${maxNewEntries} 条新闻。`,
+    '- 如果已有新闻仍在继续推进，优先用“更新”改写旧条目的状态、回合、标题或正文，而不是让新一期沿用旧内容。',
+    '- 只要当前回合或近期窗口出现足以公开报道的变化，就必须至少输出 1 条“新增”或“更新”。',
+    '- 只有确实没有任何公共层变化时，才允许四个数组都为空，并在“说明”里写明“本期无可刊登变化”。',
     '',
     `## 期号信息`,
     `- 当前期号：第 ${issue} 期`,
@@ -151,7 +159,7 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
     '## 剧情编织联动摘要',
     buildStoryWeavingNewsBrief(request.storyWeaving) || '（无可供新闻读取的剧情编织摘要）',
     '',
-    '请根据上面内容输出本回合星际和平公司周报的结构化 JSON。优先少而精，最多新增 3 条。',
+    `请根据上面内容输出本回合星际和平公司周报的结构化 JSON。优先少而精，最多新增 ${normalizeMaxNewEntries(request.maxNewEntriesPerTurn)} 条。若有既有新闻需要进入新一期，必须更新它的回合和正文进展，不要只复述上一期内容。`,
   ].join('\n');
 }
 
@@ -227,6 +235,15 @@ export function applyNewsGenerationResult(current: 新闻条目[], result: 新�
     if (b.回合 !== a.回合) return b.回合 - a.回合;
     return b.时间戳 - a.时间戳;
   });
+}
+
+export function hasNewsGenerationChanges(result: 新闻生成结果): boolean {
+  return Boolean(
+    result.新增?.length ||
+    result.更新?.length ||
+    result.归档?.length ||
+    result.删除?.length,
+  );
 }
 
 function applyPatchToMap(map: Map<string, 新闻条目>, patch: 新闻条目补丁, allowCreate = true): void {
@@ -451,6 +468,10 @@ function extractJsonCandidate(text: string): string {
   const end = trimmed.lastIndexOf('}');
   if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
   return trimmed;
+}
+
+function normalizeMaxNewEntries(value: unknown): number {
+  return Math.max(1, Math.min(5, Math.trunc(Number(value ?? 3)) || 3));
 }
 
 const NEWS_STATUS_RANK: Record<新闻条目['状态'], number> = {

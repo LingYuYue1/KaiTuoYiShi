@@ -309,6 +309,24 @@ export function reduceVariableCommands(
       continue;
     }
 
+    // 手机联系人去重：push 前检查是否已有同名/同 id 联系人
+    if (root === '手机' && rest === 'contacts' && cmd.action === 'push') {
+      const phone = cursor.手机 as import('@/models/phone').手机系统 | undefined;
+      const incoming = cmd.value as Record<string, unknown> | undefined;
+      if (phone?.contacts && incoming) {
+        const incomingId = typeof incoming.id === 'string' ? incoming.id : '';
+        const incomingName = typeof incoming.name === 'string' ? incoming.name : '';
+        const duplicate = phone.contacts.some((c) =>
+          (incomingId && c.id === incomingId) ||
+          (incomingName && c.name === incomingName),
+        );
+        if (duplicate) {
+          results.push({ command: cmd, ok: true, reason: `联系人 ${incomingName || incomingId} 已存在，跳过重复添加` });
+          continue;
+        }
+      }
+    }
+
     const applied = 应用路径命令(cursor[root], rest, cmd.action, cmd.value);
     if (!applied.ok) {
       results.push({ command: cmd, ok: false, reason: applied.reason ?? '应用失败' });
@@ -319,7 +337,57 @@ export function reduceVariableCommands(
   }
 
   cursor = 归一化变量世界状态(cursor);
+  cursor = 去重NPC记录(cursor);
   return { results, nextState: cursor };
+}
+
+/** 轻量 NPC 去重：合并同 canonical name 的重复记录，保留数据更丰富的那条。 */
+function 去重NPC记录(state: VariableState): VariableState {
+  const records = state.NPC as NPC记录[] | undefined;
+  if (!records || records.length <= 1) return state;
+  const seen = new Map<string, NPC记录>();
+  const deduped: NPC记录[] = [];
+  for (const npc of records) {
+    const canonical = matchCanonical(npc.姓名) ?? (npc.别名 ? matchCanonical(npc.别名) : null);
+    const key = canonical?.name ?? npc.姓名;
+    const existing = seen.get(key);
+    if (existing) {
+      // 保留数据更丰富的那条（字段非空数更多）
+      const existingScore = NPC数据丰富度(existing);
+      const currentScore = NPC数据丰富度(npc);
+      if (currentScore > existingScore) {
+        // 替换：把 existing 从 deduped 中移除，用 current 替代
+        const idx = deduped.indexOf(existing);
+        if (idx >= 0) deduped.splice(idx, 1);
+        deduped.push(npc);
+        seen.set(key, npc);
+      }
+      // 否则保留 existing，跳过 current
+    } else {
+      seen.set(key, npc);
+      deduped.push(npc);
+    }
+  }
+  if (deduped.length === records.length) return state;
+  return { ...state, NPC: deduped };
+}
+
+function NPC数据丰富度(npc: NPC记录): number {
+  let score = 0;
+  if (npc.外貌) score++;
+  if (npc.性格) score++;
+  if (npc.介绍) score++;
+  if (npc.性别) score++;
+  if (npc.穿着) score++;
+  if (npc.说话方式) score++;
+  if (npc.最近互动) score++;
+  if (npc.对玩家长期印象) score++;
+  if (npc.当前关系阶段) score++;
+  if ((npc.同行记忆?.length ?? 0) > 0) score += 2;
+  if ((npc.共同经历?.length ?? 0) > 0) score++;
+  if ((npc.未完成事项?.length ?? 0) > 0) score++;
+  if ((npc.未解决冲突?.length ?? 0) > 0) score++;
+  return score;
 }
 
 function 规范化世界时间命令(cmd: 变量命令): 变量命令 {
@@ -562,13 +630,23 @@ function 确保NPC目标存在(records: NPC记录[], rest: string, cmd: 变量�
   const selectorField = match[1].slice(0, eq).trim();
   const selectorValue = match[1].slice(eq + 1).trim().replace(/^["']|["']$/g, '');
   if (!selectorValue) return null;
+  // 严格匹配（id / 姓名 / 别名）
   const exists = records.some((item) =>
     item.id === selectorValue ||
     item.姓名 === selectorValue ||
     item.别名 === selectorValue,
   );
   if (exists) return null;
-  const canonical = matchCanonical(NPC选择器值转角色名(selectorValue));
+  // 模糊匹配（原著角色库 canonical name），与 findNpc 保持一致
+  const canonicalName = NPC选择器值转角色名(selectorValue);
+  const canonical = matchCanonical(canonicalName);
+  if (canonical) {
+    const fuzzyExists = records.some((item) =>
+      item.姓名 === canonical.name ||
+      canonical.aliases?.some((a) => a === item.姓名 || a === item.别名),
+    );
+    if (fuzzyExists) return null;
+  }
   if (!canonical) return null;
   const stableId = selectorField === 'id' && selectorValue.startsWith('npc_')
     ? selectorValue

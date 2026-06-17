@@ -259,6 +259,7 @@ export function useGameState(): UseGameStateReturn {
           variableApi: savedGame.variableApi ?? defaults.variableApi,
           enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
           deepSeekMainMode: savedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
+          backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
           enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
           enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
           promptModules: migratePromptModules(savedGame),
@@ -392,6 +393,7 @@ export function useGameState(): UseGameStateReturn {
             记忆系统: 归一化记忆系统设置(prev.记忆系统),
             enableClaudeMode: prev.enableClaudeMode ?? 创建默认游戏设置().enableClaudeMode,
             deepSeekMainMode: prev.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
+            backgroundTaskMode: prev.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
           }
         : {
             ...prev,
@@ -402,6 +404,7 @@ export function useGameState(): UseGameStateReturn {
             记忆系统: 创建默认记忆系统设置(),
             enableClaudeMode: 创建默认游戏设置().enableClaudeMode,
             deepSeekMainMode: 创建默认游戏设置().deepSeekMainMode,
+            backgroundTaskMode: 创建默认游戏设置().backgroundTaskMode,
           },
     );
   }, []);

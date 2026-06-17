@@ -1,5 +1,6 @@
 ﻿import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { 创建聊天消息, type 聊天消息, type 回合快照, type 回合Token消耗, type 解析后回复 } from '@/models/chat';
+import type { 新闻条目 } from '@/models/news';
 import { sendChatMessage } from '@/services/ai/text';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { callVariableModel, type NsfwBaselineCandidate } from '@/services/ai/variableModel';
@@ -24,6 +25,7 @@ import { isTravelerPlayerAuthoredVariablePath } from '@/utils/variableRegistry';
 import type { 变量事实, 变量命令, 变量命令批次 } from '@/models/variableCommand';
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/services/pathService';
 import { 创建默认记忆系统设置 } from '@/models/settings';
+import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
 import type { 队列任务ID, 队列任务状态 } from '@/models/queueTask';
 import { retrieveZhikuContext, retrieveZhikuContextWithModel, type 智库召回诊断 } from '@/services/zhikuRetrieval';
 import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
@@ -48,6 +50,8 @@ import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSa
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
+import { buildSceneImagePrompt } from '@/utils/imagePromptRules';
+import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
 
 const DEEPSEEK_MAIN_FORMAT_GUARD = [
   'DeepSeek 主剧情格式校验：本轮必须从 <thinking> 开始输出，禁止直接从 <正文> 开始。',
@@ -776,6 +780,24 @@ function isDeepSeekMainConfig(config: { provider?: string; baseUrl?: string }): 
   return provider === 'deepseek' || baseUrl.includes('deepseek');
 }
 
+function isDeepSeekReasonerModel(model?: string): boolean {
+  return /^deepseek-reasoner(?:$|[/:._\-\s])/i.test((model ?? '').trim());
+}
+
+function resolveMainStoryConfig(config: API配置项): { config: API配置项; originalModel?: string; adaptedModel?: string } {
+  if (isDeepSeekMainConfig(config) && isDeepSeekReasonerModel(config.model)) {
+    return {
+      config: {
+        ...config,
+        model: 'deepseek-chat',
+      },
+      originalModel: config.model,
+      adaptedModel: 'deepseek-chat',
+    };
+  }
+  return { config };
+}
+
 function applyNsfwVariablePolicy(
   commands: 变量命令[],
   policy: { nsfwEnabled: boolean; maleNsfwArchiveEnabled: boolean },
@@ -880,6 +902,8 @@ function pushQueueTask(
     zhiku: '智库检索',
     phone: '手机来信',
     autosave: '自动存档',
+    narrative_image_parse: '正文插图解析',
+    narrative_image_generate: '正文插图生成',
   };
   const subtitleMap: Record<队列任务ID, string> = {
     main_story: '主 API 输出正文与行动选项',
@@ -887,6 +911,8 @@ function pushQueueTask(
     variable: '解析正文并落地变量命令',
     news: '独立 API 推演新闻与后台事件',
     world_evolution: '后续接入独立世界演变 API',
+    narrative_image_parse: '从正文提取画面提示词',
+    narrative_image_generate: '调用生图 API 生成插图',
     yiting: '后续接入回忆检索队列',
     zhiku: '独立 API 检索原著资料',
     phone: '主动来信种子与通讯入口',
@@ -1052,6 +1078,229 @@ function compactForRerollInstruction(text: string): string {
   return cleaned.length > 900 ? `${cleaned.slice(0, 900)}...` : cleaned;
 }
 
+function buildSingleApiSettings(config: API配置项): API设置 {
+  return {
+    activeConfigId: config.id,
+    configs: [config],
+  };
+}
+
+function resolveNarrativeImageTokenizerConfig(state: UseGameStateReturn, mainConfig: API配置项): API配置项 | null {
+  return buildImagePromptTokenizerConfig(state.gameSettings, buildSingleApiSettings(mainConfig));
+}
+
+function resolveNarrativeImageGenerationApi(state: UseGameStateReturn): 文生图API配置 | null {
+  const imageSettings = state.gameSettings.文生图系统;
+  return imageSettings.普通接口.enabled ? imageSettings.普通接口 : null;
+}
+
+async function generateNarrativeImagesForMessage(params: {
+  state: UseGameStateReturn;
+  messageId: string;
+  body: string;
+  tokenizerConfig: API配置项;
+  imageApiConfig: 文生图API配置;
+  turn: number;
+  signal?: AbortSignal;
+  replaceExisting?: boolean;
+}): Promise<import('@/models/chat').叙事插图[] | null> {
+  const { state, messageId, body, tokenizerConfig, imageApiConfig, turn, signal, replaceExisting = false } = params;
+  const failMessage = (error: string) => {
+    if (!replaceExisting) return;
+    state.setChatHistory((prev) => prev.map((msg) =>
+      msg.id === messageId && msg.role === 'assistant'
+        ? {
+            ...msg,
+            narrativeImages: [{
+              id: `narrative_failed_${turn}_${Date.now()}`,
+              dataUrl: '',
+              type: 'scene' as const,
+              prompt: '',
+              negativePrompt: '',
+              description: '故事快照',
+              status: 'failed' as const,
+              error,
+            }],
+          }
+        : msg,
+    ));
+  };
+  pushQueueTask(state, 'narrative_image_parse', 'pending', { detail: '正在解析正文画面提示词。', turn });
+  try {
+    const { parseNarrativeImagePrompts } = await import('@/services/ai/narrativeImageParse');
+    const { generateNarrativeImage } = await import('@/services/ai/imageGeneration');
+    const playerAppearanceMode = state.gameSettings.文生图系统?.正文生图?.playerAppearanceMode ?? 'auto';
+    const presentNpcRecords = (state.NPC ?? [])
+      .filter((npc: import('@/models/npc').NPC记录) => npc.阶位 === 'companion' && (npc.外貌 || npc.穿着))
+      .slice(0, 8);
+    const traveler = state.旅人;
+    const presentNpcs = presentNpcRecords
+      .map((npc: import('@/models/npc').NPC记录) => ({
+        name: npc.姓名,
+        appearance: typeof npc.外貌 === 'string' ? npc.外貌 : undefined,
+        clothing: typeof npc.穿着 === 'string' ? npc.穿着 : undefined,
+      }));
+    const parseResult = await parseNarrativeImagePrompts(tokenizerConfig, {
+      body,
+      traveler: playerAppearanceMode === 'off' ? undefined : {
+        name: traveler.姓名 || traveler.别名 || '玩家角色',
+        gender: traveler.性别 || undefined,
+        appearance: traveler.外貌 || undefined,
+        identity: traveler.身份 || undefined,
+        anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
+      },
+      playerAppearanceMode,
+      presentNpcs,
+    }, signal);
+    if (!parseResult.images.length) {
+      pushQueueTask(state, 'narrative_image_parse', 'success', { detail: '正文未提取到可绘制画面。', turn });
+      failMessage('正文未提取到可绘制画面。');
+      return [];
+    }
+    pushQueueTask(state, 'narrative_image_parse', 'success', {
+      detail: `已提取 ${parseResult.images.length} 个画面提示词。`,
+      turn,
+    });
+    const generatedImages: import('@/models/chat').叙事插图[] = [];
+    for (const img of parseResult.images) {
+      pushQueueTask(state, 'narrative_image_generate', 'pending', {
+        detail: `正在生成${img.type === 'scene' ? '场景' : '角色'}插图：${img.description}。`,
+        turn,
+      });
+      const imageId = `narrative_${turn}_${img.type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const ruledPrompt = buildSceneImagePrompt({
+        text: [
+          `story snapshot draft: ${img.description}`,
+          img.prompt ? `parsed positive prompt: ${img.prompt}` : '',
+          img.negativePrompt ? `parsed negative hint: ${img.negativePrompt}` : '',
+        ].filter(Boolean).join('\n'),
+        mode: 'scene',
+        rules: state.gameSettings.文生图系统.rules,
+        traveler: state.旅人,
+        forceTravelerVisible: playerAppearanceMode === 'force',
+        presentNpcs: presentNpcRecords,
+        extraRequirement: 'This image is an in-story snapshot generated from the current narrative turn. Keep a single clear moment and follow the active scene style rules.',
+        size: img.type === 'scene' ? '1280x720' : '1024x1024',
+        slot: img.type === 'scene' ? 'scene' : 'portrait',
+      });
+      const result = await generateNarrativeImage(
+        imageApiConfig,
+        ruledPrompt.prompt,
+        ruledPrompt.negative,
+        img.type,
+        img.description,
+        imageId,
+        signal,
+      );
+      generatedImages.push(result);
+      pushQueueTask(state, 'narrative_image_generate', result.status === 'done' ? 'success' : 'failed', {
+        detail: result.status === 'done'
+          ? `${img.description} 插图生成完成。`
+          : `${img.description} 插图生成失败：${result.error}`,
+        turn,
+      });
+    }
+    if (generatedImages.length > 0) {
+      state.setChatHistory((prev) => {
+        const targetIdx = prev.findIndex((msg) => msg.id === messageId);
+        if (targetIdx < 0) return prev;
+        const targetMsg = prev[targetIdx];
+        if (targetMsg.role !== 'assistant') return prev;
+        const updated = [...prev];
+        updated[targetIdx] = {
+          ...targetMsg,
+          narrativeImages: replaceExisting
+            ? generatedImages
+            : [...(targetMsg.narrativeImages ?? []), ...generatedImages],
+        };
+        return updated;
+      });
+    }
+    return generatedImages;
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      failMessage((err as Error).message);
+      pushQueueTask(state, 'narrative_image_parse', 'failed', {
+        detail: `正文插图解析失败：${(err as Error).message}`,
+        turn,
+      });
+    }
+    return null;
+  }
+}
+
+export async function regenerateNarrativeImagesForMessage(
+  state: UseGameStateReturn,
+  getActiveConfig: () => API配置项 | null,
+  messageId: string,
+): Promise<void> {
+  const message = state.chatHistory.find((item) => item.id === messageId);
+  if (!message || message.role !== 'assistant') return;
+  const body = message.parsedResponse?.body?.trim() || message.content.trim();
+  if (!body) return;
+  const narrative = state.gameSettings.文生图系统?.正文生图;
+  if (!narrative?.enabled) {
+    pushQueueTask(state, 'narrative_image_parse', 'failed', {
+      detail: '正文生图未启用，无法重新生成插图。',
+      turn: Number(message.gameTime) || state.turnCount,
+    });
+    return;
+  }
+  const mainConfig = getActiveConfig();
+  if (!mainConfig) {
+    pushQueueTask(state, 'narrative_image_parse', 'failed', {
+      detail: '未配置主 API，无法解析正文插图提示词。',
+      turn: Number(message.gameTime) || state.turnCount,
+    });
+    return;
+  }
+  const tokenizerConfig = resolveNarrativeImageTokenizerConfig(state, mainConfig);
+  if (!tokenizerConfig) {
+    pushQueueTask(state, 'narrative_image_parse', 'failed', {
+      detail: '正文生图词组转化器未配置，无法解析正文插图提示词。',
+      turn: Number(message.gameTime) || state.turnCount,
+    });
+    return;
+  }
+  const imageApiConfig = resolveNarrativeImageGenerationApi(state);
+  if (!imageApiConfig) {
+    pushQueueTask(state, 'narrative_image_generate', 'failed', {
+      detail: '正文生图主文生图接口未启用，无法生成插图。',
+      turn: Number(message.gameTime) || state.turnCount,
+    });
+    return;
+  }
+  const turn = Number(message.gameTime) || state.turnCount;
+  const previousImages = message.narrativeImages ?? [];
+  state.setChatHistory((prev) => prev.map((item) =>
+    item.id === messageId
+      ? {
+          ...item,
+          narrativeImages: previousImages.length
+            ? previousImages.map((img) => ({ ...img, status: 'generating' as const, error: undefined }))
+            : [{
+                id: `narrative_regen_${turn}_${Date.now()}`,
+                dataUrl: '',
+                type: 'scene' as const,
+                prompt: '',
+                negativePrompt: '',
+                description: '故事快照',
+                status: 'generating' as const,
+              }],
+        }
+      : item,
+  ));
+  await generateNarrativeImagesForMessage({
+    state,
+    messageId,
+    body,
+    tokenizerConfig,
+    imageApiConfig,
+    turn,
+    replaceExisting: true,
+  });
+}
+
 function normalizeRerollCompareText(text: string): string {
   return text
     .replace(/<[^>]+>/g, '')
@@ -1119,11 +1368,14 @@ export async function executeSendWorkflow(
   deps: SendWorkflowDeps,
 ): Promise<void> {
   const { state } = deps;
-  const config = deps.getActiveConfig();
-  if (!config) {
+  const rawConfig = deps.getActiveConfig();
+  if (!rawConfig) {
     alert('请先在设置中配置API');
     return;
   }
+  const config = rawConfig;
+  const mainStoryConfigResolution = resolveMainStoryConfig(config);
+  const mainStoryConfig = mainStoryConfigResolution.config;
   const isOpeningSystemTrigger = state.turnCount === 1 && userInput.startsWith('[系统]');
   const openingInstruction =
     '请根据当前角色、当前场景、世界书与内置提示词，直接生成第 0 回合开场叙事。不要等待玩家再次输入。';
@@ -1271,6 +1523,7 @@ export async function executeSendWorkflow(
       history: updatedHistory,
     });
     let newsForPrompt = state.新闻;
+    let openingNewsForSave: 新闻条目[] | null = null;
     let openingNewsPreprocessed = false;
     if (isOpeningSystemTrigger && state.gameSettings.新闻系统?.enabled && state.gameSettings.新闻系统?.autoGenerate) {
       pushQueueTask(state, 'news', 'pending', {
@@ -1289,9 +1542,14 @@ export async function executeSendWorkflow(
         });
         assertWorkflowActive();
         openingNewsPreprocessed = true;
-        newsForPrompt = preNews ?? state.新闻;
+        newsForPrompt = preNews?.news ?? state.新闻;
+        openingNewsForSave = preNews?.news ?? null;
         pushQueueTask(state, 'news', 'success', {
-          detail: preNews?.length ? `开局新闻预处理完成，当前 ${preNews.length} 条新闻记录。` : '开局新闻预处理完成，暂无新增新闻。',
+          detail: preNews?.changed
+            ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。`
+            : preNews
+              ? '开局新闻预处理完成，但本轮没有可写新闻变化。'
+              : '开局新闻预处理未生成可用结果。',
         });
       } catch (err) {
         pushQueueTask(state, 'news', 'failed', {
@@ -1476,7 +1734,7 @@ export async function executeSendWorkflow(
     }
 
     const deepSeekMainMode = state.gameSettings.deepSeekMainMode ?? 'off';
-    const deepSeekMainActive = isDeepSeekMainConfig(config) && deepSeekMainMode !== 'off';
+    const deepSeekMainActive = isDeepSeekMainConfig(mainStoryConfig) && deepSeekMainMode !== 'off';
     const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
     const shouldUseCotFakeHistory =
       state.gameSettings.enableCotFakeHistory && !isOpeningSystemTrigger && !deepSeekMainActive;
@@ -1526,7 +1784,7 @@ export async function executeSendWorkflow(
       previewChain = Promise.resolve();
       state.setStreamingMessage('');
       try {
-        result = await sendChatMessage(config, {
+        result = await sendChatMessage(mainStoryConfig, {
           messages: apiMessages,
           systemPrompt,
           onDelta: (delta) => {
@@ -1561,7 +1819,7 @@ export async function executeSendWorkflow(
         if (!candidateText) {
           void appendApiErrorReport({
             source: '主剧情工作流',
-            config,
+            config: mainStoryConfig,
             requestMode: mainRequestMode,
             error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次返回空响应，触发自动重试。`),
             responseText: result.fullText || streamedText || '（空响应）',
@@ -1582,7 +1840,7 @@ export async function executeSendWorkflow(
           rerollSimilarityRetried = true;
           void appendApiErrorReport({
             source: '重roll相似度校验',
-            config,
+            config: mainStoryConfig,
             requestMode: mainRequestMode,
             error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次重roll结果与上一版过于相似，相似度 ${Math.round(rerollSimilarity * 100)}%。`),
             responseText: result.fullText || streamedText || candidateText,
@@ -1604,7 +1862,7 @@ export async function executeSendWorkflow(
           deepSeekProtocolIssuesForTurn = protocolIssues;
           void appendApiErrorReport({
             source: 'DeepSeek 主剧情协议校验',
-            config,
+            config: mainStoryConfig,
             requestMode: mainRequestMode,
             error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次输出协议不完整：${protocolIssues.join('；')}`),
             responseText: result.fullText || streamedText || '（空响应）',
@@ -1638,7 +1896,7 @@ export async function executeSendWorkflow(
         if (!alreadyReportedByApiLayer) {
           void appendApiErrorReport({
             source: '主剧情工作流',
-            config,
+          config: mainStoryConfig,
             requestMode: mainRequestMode,
             error: innerErr,
             responseText: streamedText || previewText || '',
@@ -1751,6 +2009,8 @@ export async function executeSendWorkflow(
         deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory === true,
         deepSeekPrefixMode: deepSeekLockFormat,
         deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
+        deepSeekMainOriginalModel: mainStoryConfigResolution.originalModel,
+        deepSeekMainAdaptedModel: mainStoryConfigResolution.adaptedModel,
         rerollSimilarity: rerollSimilarityForTurn,
         rerollSimilarityRetried,
         cachePrefixDiagnostics,
@@ -2041,38 +2301,6 @@ export async function executeSendWorkflow(
       const newsTurn = state.turnCount + 1;
       const shouldRunOpeningNews = isOpeningSystemTrigger && newsEnabled;
       const shouldRunNews = newsEnabled && ((shouldRunOpeningNews && !openingNewsPreprocessed) || (newsTurn > 0 && newsTurn % newsInterval === 0));
-      let newsAfterGeneration = state.新闻;
-      if (!newsSettings?.enabled || !newsSettings?.autoGenerate) {
-        pushQueueTask(state, 'news', 'skipped', {
-          detail: '星际和平周报未开启，已跳过。',
-        });
-      } else if (!shouldRunNews) {
-        pushQueueTask(state, 'news', 'skipped', {
-          detail: `未到新闻触发间隔（每 ${newsInterval} 回合一次），已跳过。`,
-        });
-      } else {
-        pushQueueTask(state, 'news', 'pending', {
-          detail: shouldRunOpeningNews
-            ? '开局首回合正在先处理一次星际和平周报。'
-            : `正在调用星际和平周报独立 API（读取最近 ${newsInterval} 回合）。`,
-          cancellable: true,
-        });
-        newsAfterGeneration =
-          (await runNewsGenerationStep({
-            state,
-            mainBody: displayText,
-            userInput,
-            recentTurns: buildRecentTurnWindowForNews(finalHistory, userInput, displayText, newsInterval),
-            storyWeavingSnapshot: storyWeavingForSave,
-            signal: abortController.signal,
-            shouldCommit: isCurrentWorkflow,
-          })) ?? state.新闻;
-        assertWorkflowActive();
-        pushQueueTask(state, 'news', 'success', {
-          detail: '星际和平周报检查完成。',
-        });
-      }
-
       const yitingBase = mergeYitingSystems(yitingWithCompression, variableOverrides?.忆庭);
       const turnRecallSource = {
         turn: state.turnCount,
@@ -2087,71 +2315,174 @@ export async function executeSendWorkflow(
         gameClock: effectiveWorld?.当前时间 || undefined,
         location: effectiveWorld?.当前地点 || undefined,
       };
-      // 忆庭入库始终执行；这里的开关只控制“是否召回并注入正文”。
-      const turnRecallEntryResult = await buildYitingArchiveEntry(
-        turnRecallSource,
-        memorySettings,
-        config,
-        abortController.signal,
-        memorySettings.忆庭召回API.retryCount ?? 2,
-      );
-      assertWorkflowActive();
-      const turnRecallEntry = turnRecallEntryResult.entry;
-      const yitingAfterTurnRecall = upsertRecallEntry(yitingBase, turnRecallEntry);
-      state.set忆庭(yitingAfterTurnRecall);
-      pushQueueTask(state, 'memory', 'success', {
-        detail: turnRecallEntryResult.usedFallback ? '忆庭纪要已使用主回复小总结入库。' : '忆庭纪要已由独立模型压缩并入库。',
-      });
-      if (!yitingEnabled) {
-        pushQueueTask(state, 'yiting', 'skipped', {
-          detail: '忆庭召回已关闭，但入库仍已执行。',
-        });
-      } else if (!yitingRecallEnabled) {
-        pushQueueTask(state, 'yiting', 'skipped', {
-          detail: `未到第${(memorySettings.忆庭召回最早触发回合 ?? 10) + 1}回合，忆庭召回已跳过。`,
-        });
-      } else if (yitingPreview?.entries.length) {
-        pushQueueTask(state, 'yiting', 'success', {
-          detail: yitingPreview.usedModel ? '忆庭召回已由独立模型完成。' : '忆庭召回已由本地摘要检索完成。',
-        });
-      } else {
-        pushQueueTask(state, 'yiting', 'success', {
-          detail: '忆庭已检索，本回合没有命中相关档案。',
-        });
-      }
-
+      let newsAfterGeneration: 新闻条目[] | null = openingNewsForSave;
+      let yitingAfterTurnRecall = yitingBase;
       let phoneAfterFallbackSeed = variableOverrides?.手机 ?? state.手机;
-      if (state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds) {
-        const fallbackSeed = buildFallbackPhoneSeed({
-          phone: phoneAfterFallbackSeed,
-          npcs: npcAfterCompression,
-          turn: state.turnCount + 1,
-          userInput,
-          body: displayText,
-          maxSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
-          contactCooldownTurns: state.gameSettings.手机系统.contactCooldownTurns,
+      let finalHistoryForSave = finalHistory;
+
+      const runNewsBackgroundJob = async (): Promise<void> => {
+        if (!newsSettings?.enabled || !newsSettings?.autoGenerate) {
+          pushQueueTask(state, 'news', 'skipped', {
+            detail: '星际和平周报未开启，已跳过。',
+          });
+          return;
+        }
+        if (!shouldRunNews) {
+          pushQueueTask(state, 'news', 'skipped', {
+            detail: `未到新闻触发间隔（每 ${newsInterval} 回合一次），已跳过。`,
+          });
+          return;
+        }
+        pushQueueTask(state, 'news', 'pending', {
+          detail: shouldRunOpeningNews
+            ? '开局首回合正在先处理一次星际和平周报。'
+            : `正在调用星际和平周报独立 API（读取最近 ${newsInterval} 回合）。`,
+          cancellable: true,
         });
-        if (fallbackSeed) {
-          phoneAfterFallbackSeed = {
-            ...phoneAfterFallbackSeed,
-            messageSeeds: [...phoneAfterFallbackSeed.messageSeeds, fallbackSeed],
-            unreadTotal: phoneAfterFallbackSeed.unreadTotal + 1,
-          };
-          state.set手机(phoneAfterFallbackSeed);
-          pushQueueTask(state, 'phone', 'success', {
-            detail: `已补充低频主动来信种子：${fallbackSeed.title}。`,
+        const newsGenerationResult = await runNewsGenerationStep({
+          state,
+          mainBody: displayText,
+          userInput,
+          recentTurns: buildRecentTurnWindowForNews(finalHistory, userInput, displayText, newsInterval),
+          storyWeavingSnapshot: storyWeavingForSave,
+          signal: abortController.signal,
+          shouldCommit: isCurrentWorkflow,
+        });
+        assertWorkflowActive();
+        newsAfterGeneration = newsGenerationResult?.news ?? state.新闻;
+        pushQueueTask(state, 'news', 'success', {
+          detail: newsGenerationResult?.changed
+            ? `星际和平周报已更新，当前共 ${newsAfterGeneration.length} 条新闻记录。`
+            : newsGenerationResult
+              ? '星际和平周报本回合没有可写新闻变化。'
+              : '星际和平周报未生成有效结果。',
+        });
+      };
+
+      const runYitingArchiveJob = async (): Promise<void> => {
+        // 忆庭入库始终执行；这里的开关只控制“是否召回并注入正文”。
+        const turnRecallEntryResult = await buildYitingArchiveEntry(
+          turnRecallSource,
+          memorySettings,
+          config,
+          abortController.signal,
+          memorySettings.忆庭召回API.retryCount ?? 2,
+        );
+        assertWorkflowActive();
+        const turnRecallEntry = turnRecallEntryResult.entry;
+        yitingAfterTurnRecall = upsertRecallEntry(yitingBase, turnRecallEntry);
+        state.set忆庭(yitingAfterTurnRecall);
+        pushQueueTask(state, 'memory', 'success', {
+          detail: turnRecallEntryResult.usedFallback ? '忆庭纪要已使用主回复小总结入库。' : '忆庭纪要已由独立模型压缩并入库。',
+        });
+        if (!yitingEnabled) {
+          pushQueueTask(state, 'yiting', 'skipped', {
+            detail: '忆庭召回已关闭，但入库仍已执行。',
+          });
+        } else if (!yitingRecallEnabled) {
+          pushQueueTask(state, 'yiting', 'skipped', {
+            detail: `未到第${(memorySettings.忆庭召回最早触发回合 ?? 10) + 1}回合，忆庭召回已跳过。`,
+          });
+        } else if (yitingPreview?.entries.length) {
+          pushQueueTask(state, 'yiting', 'success', {
+            detail: yitingPreview.usedModel ? '忆庭召回已由独立模型完成。' : '忆庭召回已由本地摘要检索完成。',
+          });
+        } else {
+          pushQueueTask(state, 'yiting', 'success', {
+            detail: '忆庭已检索，本回合没有命中相关档案。',
           });
         }
+      };
+
+      const runPhoneFallbackJob = async (): Promise<void> => {
+        if (state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds) {
+          const fallbackSeed = buildFallbackPhoneSeed({
+            phone: phoneAfterFallbackSeed,
+            npcs: npcAfterCompression,
+            turn: state.turnCount + 1,
+            userInput,
+            body: displayText,
+            maxSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
+            contactCooldownTurns: state.gameSettings.手机系统.contactCooldownTurns,
+          });
+          if (fallbackSeed) {
+            phoneAfterFallbackSeed = {
+              ...phoneAfterFallbackSeed,
+              messageSeeds: [...phoneAfterFallbackSeed.messageSeeds, fallbackSeed],
+              unreadTotal: phoneAfterFallbackSeed.unreadTotal + 1,
+            };
+            state.set手机(phoneAfterFallbackSeed);
+            pushQueueTask(state, 'phone', 'success', {
+              detail: `已补充低频主动来信种子：${fallbackSeed.title}。`,
+            });
+          }
+        }
+      };
+
+      const runNarrativeImageJob = async (): Promise<void> => {
+        const 正文生图设置 = state.gameSettings.文生图系统?.正文生图;
+        if (!正文生图设置?.enabled || 正文生图设置.mode !== 'auto') return;
+        const targetMessageId = aiMsg.id;
+        const tokenizerConfig = resolveNarrativeImageTokenizerConfig(state, config);
+        const imageApiConfig = resolveNarrativeImageGenerationApi(state);
+        if (!tokenizerConfig) {
+          pushQueueTask(state, 'narrative_image_parse', 'failed', {
+            detail: '正文生图词组转化器未配置，无法解析正文插图提示词。',
+            turn: state.turnCount,
+          });
+          return;
+        }
+        if (!imageApiConfig) {
+          pushQueueTask(state, 'narrative_image_generate', 'failed', {
+            detail: '正文生图主文生图接口未启用，无法生成插图。',
+            turn: state.turnCount,
+          });
+          return;
+        }
+        const generatedImages = await generateNarrativeImagesForMessage({
+          state,
+          messageId: targetMessageId,
+          body: displayText,
+          tokenizerConfig,
+          imageApiConfig,
+          turn: state.turnCount,
+          signal: abortController.signal,
+        });
+        assertWorkflowActive();
+        if (generatedImages?.length) {
+          finalHistoryForSave = finalHistory.map((msg) =>
+            msg.id === targetMessageId && msg.role === 'assistant'
+              ? {
+                  ...msg,
+                  narrativeImages: [...(msg.narrativeImages ?? []), ...generatedImages],
+                }
+              : msg,
+          );
+        }
+      };
+
+      if ((state.gameSettings.backgroundTaskMode ?? 'sequential') === 'parallel') {
+        await Promise.all([
+          runNewsBackgroundJob(),
+          runYitingArchiveJob(),
+          runPhoneFallbackJob(),
+          runNarrativeImageJob(),
+        ]);
+      } else {
+        await runNewsBackgroundJob();
+        await runYitingArchiveJob();
+        await runPhoneFallbackJob();
+        await runNarrativeImageJob();
       }
 
-      // 9. Auto-save —— 每回合只在后台队列收尾写一次，避免正文/变量阶段重复生成多条自动存档。
+      // 10. Auto-save —— 每回合只在后台队列收尾写一次，避免正文/变量阶段重复生成多条自动存档。
       if (state.gameSettings.enableAutoSaveEveryTurn) {
         pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' });
         const variableBatchesForSave = variableOverrides?.batch
           ? [...state.variableBatches, variableOverrides.batch]
           : state.variableBatches;
         const saveData = buildSavePayload(state, 'auto', {
-          chatHistory: finalHistory,
+          chatHistory: finalHistoryForSave,
           记忆: memoryAfterStoryProgress,
           忆庭: yitingAfterTurnRecall,
           手机: phoneAfterFallbackSeed,

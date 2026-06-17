@@ -1,5 +1,5 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
-import { callNewsModel, applyNewsGenerationResult } from '@/services/ai/newsModel';
+import { callNewsModel, applyNewsGenerationResult, hasNewsGenerationChanges } from '@/services/ai/newsModel';
 import type { 新闻条目 } from '@/models/news';
 import type { API配置项 } from '@/models/settings';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
@@ -15,7 +15,13 @@ interface NewsGenerationParams {
   shouldCommit?: () => boolean;
 }
 
-export async function runNewsGenerationStep(params: NewsGenerationParams): Promise<新闻条目[] | null> {
+export interface NewsGenerationStepResult {
+  news: 新闻条目[];
+  changed: boolean;
+  summary?: string;
+}
+
+export async function runNewsGenerationStep(params: NewsGenerationParams): Promise<NewsGenerationStepResult | null> {
   const { state } = params;
   const newsSettings = state.gameSettings.新闻系统;
   if (!newsSettings?.enabled || !newsSettings.autoGenerate) return null;
@@ -53,20 +59,48 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
       npcRecords: state.NPC,
       plotNodes: state.剧情,
       storyWeaving: params.storyWeavingSnapshot ?? state.剧情编织,
+      maxNewEntriesPerTurn: newsSettings.maxNewEntriesPerTurn,
       signal: params.signal,
       retryCount: newsSettings.api.retryCount ?? 2,
     });
 
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
     const nextNews = applyNewsGenerationResult(state.新闻, result.parsed);
-    if (!params.signal?.aborted && params.shouldCommit?.() !== false && nextNews !== state.新闻) {
+    const changed = hasNewsGenerationChanges(result.parsed) && !areNewsListsEquivalent(state.新闻, nextNews);
+    if (changed && !params.signal?.aborted && params.shouldCommit?.() !== false) {
       state.set新闻(nextNews);
     }
-    return nextNews;
+    return {
+      news: nextNews,
+      changed,
+      summary: result.parsed.说明,
+    };
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {
       console.warn('[news-model] 生成失败：', err);
     }
     return null;
   }
+}
+
+function areNewsListsEquivalent(left: 新闻条目[], right: 新闻条目[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => areNewsEntriesEquivalent(item, right[index]));
+}
+
+function areNewsEntriesEquivalent(left: 新闻条目, right: 新闻条目 | undefined): boolean {
+  if (!right) return false;
+  return (
+    left.id === right.id &&
+    left.类目 === right.类目 &&
+    left.状态 === right.状态 &&
+    left.回合 === right.回合 &&
+    left.标题 === right.标题 &&
+    left.正文 === right.正文 &&
+    left.重要 === right.重要 &&
+    left.关联剧情系列ID === right.关联剧情系列ID &&
+    left.关联剧情分段ID === right.关联剧情分段ID &&
+    JSON.stringify(left.组织标签 ?? []) === JSON.stringify(right.组织标签 ?? []) &&
+    JSON.stringify(left.关联系统 ?? []) === JSON.stringify(right.关联系统 ?? [])
+  );
 }

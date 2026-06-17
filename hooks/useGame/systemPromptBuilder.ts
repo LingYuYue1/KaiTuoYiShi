@@ -5,7 +5,7 @@ import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块作用域 } from '@/models/prompts';
 import { PROMPT_MODULE_TOP_THRESHOLD } from '@/models/prompts';
 import type { 世界书 } from '@/models/worldbook';
-import type { NPC记录, NPC账本选择结果 } from '@/models/npc';
+import type { NPC记录, NPC账本选择结果, NPC同行记忆条目 } from '@/models/npc';
 import { formatNpcLedgerForPrompt, NPC_RELATION_LABELS, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
 import { 计算命途战技槽位数, NORMAL_SKILL_SLOT_COUNT } from '@/models/skill';
 import type { 新闻条目 } from '@/models/news';
@@ -767,6 +767,7 @@ function buildNpcLedgerContinuitySection(selection: NPC账本选择结果): stri
     '',
     '以下 NPC 账本属于当前状态事实，不是普通背景资料。若这些 NPC 本回合出场、通讯、被玩家点名或由当前镜头自然牵引，正文必须承接其关系、记忆、承诺、冲突和最近互动。',
     '- 禁止把已认识、已同行、已承诺、已冲突或已有私有记忆的 NPC 写成初识、陌生、无共同经历。',
+    '- 来源为“手机”的同行记忆代表玩家与该 NPC 已有私下通讯热度；若该 NPC 当前在场、被玩家点名或自然入场，正文应承接手机里聊出的熟悉度、情绪余温、称呼和未尽话题，不要写成不温不火的陌生寒暄。',
     '- 若要表现 NPC 不记得或装作不认识，正文必须给出明确原因：失忆、伪装、通讯隔离、误认、被迫演戏、时间线重置或认知污染。',
     '- 账本相关不等于自动在场；不在当前镜头的人只能通过通讯、回忆、旁人提及或后续合理入场承接。',
     '',
@@ -847,8 +848,9 @@ function buildNpcContinuitySection(
     ].filter(Boolean);
     const turnLine = `初见第${Math.max(1, Number(npc.初见回合 || 1))}回合，最近第${Math.max(1, Number(npc.最近回合 || npc.初见回合 || 1))}回合`;
     const memoryLine = memories.length ? `；最近共同经历：${memories.slice(-3).join('；')}` : '';
+    const phoneMemoryLine = buildRecentPhoneMemoryLine(npc);
     const introLine = npc.介绍 ? `；身份/职责：${npc.介绍}` : '';
-    lines.push(`- ${npc.姓名}${npc.别名 ? `（${npc.别名}）` : ''}｜${tags.join(' · ')}｜好感${npc.好感度 > 0 ? '+' : ''}${npc.好感度}｜${turnLine}${introLine}${memoryLine}`);
+    lines.push(`- ${npc.姓名}${npc.别名 ? `（${npc.别名}）` : ''}｜${tags.join(' · ')}｜好感${npc.好感度 > 0 ? '+' : ''}${npc.好感度}｜${turnLine}${introLine}${memoryLine}${phoneMemoryLine}`);
   }
 
   for (const name of fallbackNames) {
@@ -907,6 +909,8 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
     }
     const memories = 提取NPC同行记忆文本列表(n).slice(-4);
     if (memories.length) desc.push(`同行记忆：${memories.join('；')}`);
+    const phoneMemories = getRecentPhoneMemoryTexts(n).slice(-2);
+    if (phoneMemories.length) desc.push(`最近手机私聊：${phoneMemories.join('；')}（正文若该角色入场，必须承接私聊热度与未尽话题）`);
     const descPart = desc.length ? `\n  ${desc.join('；')}` : '';
     return `- ${n.姓名}${n.别名 ? `（${n.别名}）` : ''}｜${tags.join(' · ')}｜好感${n.好感度 > 0 ? '+' : ''}${n.好感度}${descPart}`;
   };
@@ -1000,6 +1004,18 @@ function buildNewsSection(news?: 新闻条目[]): string {
     (n) => `- [${NEWS_CATEGORY_LABELS[n.类目]} · 第 ${n.回合} 回] ${n.标题}`,
   );
   return `# 近期新闻\n\n${lines.join('\n')}`;
+}
+
+function getRecentPhoneMemoryTexts(npc: NPC记录): string[] {
+  return (npc.同行记忆 ?? [])
+    .filter((item): item is NPC同行记忆条目 => typeof item !== 'string' && item?.来源 === '手机')
+    .map((item) => item.摘要?.trim())
+    .filter((text): text is string => Boolean(text));
+}
+
+function buildRecentPhoneMemoryLine(npc: NPC记录): string {
+  const phoneMemories = getRecentPhoneMemoryTexts(npc).slice(-2);
+  return phoneMemories.length ? `；最近手机私聊：${phoneMemories.join('；')}` : '';
 }
 
 function buildPhoneSection(phone?: 手机系统): string {

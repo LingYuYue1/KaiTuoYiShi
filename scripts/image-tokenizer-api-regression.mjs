@@ -8,6 +8,7 @@ const settings = fs.readFileSync('models/settings.ts', 'utf8');
 const tokenizer = fs.readFileSync('services/ai/imagePromptTokenizer.ts', 'utf8');
 const imageSettings = fs.readFileSync('components/features/Settings/ImageGenerationSettingsTab.tsx', 'utf8');
 const settingsModal = fs.readFileSync('components/features/Settings/SettingsModal.tsx', 'utf8');
+const albumPanel = fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8');
 const savePackage = fs.readFileSync('services/savePackage.ts', 'utf8');
 
 assert(settings.includes('export interface 文生图词组转化器API覆盖'), '必须定义文生图词组转化器 API 覆盖。');
@@ -25,7 +26,9 @@ assert(imageSettings.includes('词组转化器 API'), '文生图设置页必须�
 assert(imageSettings.includes('handleFetchTokenizerModels'), '文生图设置页必须支持获取词组转化器模型列表。');
 assert(imageSettings.includes('patchTokenizerApi'), '文生图设置页必须能修改词组转化器 API。');
 assert(imageSettings.includes('apiSettings: API设置'), '文生图设置页必须接收主 API 设置用于回退。');
-assert(settingsModal.includes('apiSettings={apiSettings}'), '设置弹窗必须把主 API 设置传给文生图设置页。');
+assert(albumPanel.includes('<ImageGenerationSettingsTab'), '相册工作台必须渲染文生图设置页。');
+assert(albumPanel.includes('apiSettings={apiSettings}'), '相册工作台必须把主 API 设置传给文生图设置页。');
+assert(!settingsModal.includes('<ImageGenerationSettingsTab'), '设置弹窗不应再渲染文生图设置页。');
 assert(savePackage.includes('settings?.文生图系统?.词组转化器API'), '导出存档包必须清理文生图词组转化器 API Key。');
 
 console.log('image tokenizer api regression ok');

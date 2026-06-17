@@ -55,6 +55,8 @@ assert(saveLoadSource.includes('普通接口: local.文生图系统.普通接口
 assert(saveLoadSource.includes('场景接口: local.文生图系统.场景接口'), '读档必须保留本机文生图场景接口。');
 assert(saveLoadSource.includes('NSFW接口: local.文生图系统.NSFW接口'), '读档必须保留本机文生图 NSFW 接口。');
 assert(saveLoadSource.includes('词组转化器API: local.文生图系统.词组转化器API'), '读档必须保留本机文生图词组转化器 API。');
+assert(saveLoadSource.includes('parserApi: local.文生图系统.正文生图.parserApi'), '读档必须保留本机正文生图解析 API。');
+assert(saveLoadSource.includes('imageApi: local.文生图系统.正文生图.imageApi'), '读档必须保留本机正文生图生图 API。');
 assert(savePackageSource.includes('sanitized.apiSettings = 创建空API设置()'), '导出旧存档时也必须移除嵌入的主 API 配置。');
 assert(savePackageSource.includes('stripEmbeddedApiSettings'), '存档包导出必须统一清理嵌入 API 配置。');
 

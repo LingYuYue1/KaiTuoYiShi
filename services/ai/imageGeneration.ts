@@ -1,11 +1,22 @@
 import type { 文生图API配置 } from '@/models/settings';
+import type { 叙事插图 } from '@/models/chat';
+import { fetchModels } from '@/services/ai/apiTools';
 
 export interface ImageGenerationRequest {
   prompt: string;
   negativePrompt?: string;
   nsfw?: boolean;
   size?: string;
+  referenceImages?: ImageReferenceInput[];
+  referenceStrength?: number;
   signal?: AbortSignal;
+}
+
+export interface ImageReferenceInput {
+  id?: string;
+  src: string;
+  weight?: number;
+  role?: 'character' | 'style' | 'composition';
 }
 
 export interface ImageGenerationResult {
@@ -15,6 +26,21 @@ export interface ImageGenerationResult {
   backend?: string;
   originalUrl?: string;
 }
+
+export interface ComfyWorkflowCandidate {
+  id: string;
+  title: string;
+  source: 'queue' | 'history';
+  workflowJson: string;
+}
+
+const NOVELAI_IMAGE_MODELS = [
+  'nai-diffusion-4-5-full',
+  'nai-diffusion-4-5-curated',
+  'nai-diffusion-4-full',
+  'nai-diffusion-4-curated-preview',
+  'nai-diffusion-3',
+];
 
 export async function generateImage(config: 文生图API配置, request: ImageGenerationRequest): Promise<ImageGenerationResult> {
   if (!config.enabled) throw new Error('当前文生图接口未启用。');
@@ -30,6 +56,55 @@ export async function generateImage(config: 文生图API配置, request: ImageGe
     return generateComfyUIImage(config, request);
   }
   return generateOpenAICompatibleImage(config, request);
+}
+
+/**
+ * 生成正文插图：调用生图 API 并返回叙事插图结构。
+ * @param config 生图接口配置
+ * @param prompt 正面提示词
+ * @param negativePrompt 负面提示词
+ * @param type 图片类型
+ * @param description 中文描述
+ * @param imageId 图片 ID
+ * @param signal 中断信号
+ */
+export async function generateNarrativeImage(
+  config: 文生图API配置,
+  prompt: string,
+  negativePrompt: string,
+  type: 'scene' | 'character',
+  description: string,
+  imageId: string,
+  signal?: AbortSignal,
+): Promise<叙事插图> {
+  try {
+    const result = await generateImage(config, {
+      prompt,
+      negativePrompt: negativePrompt || undefined,
+      size: type === 'scene' ? '1280x720' : '1024x1024',
+      signal,
+    });
+    return {
+      id: imageId,
+      dataUrl: result.src,
+      type,
+      prompt,
+      negativePrompt,
+      description,
+      status: 'done',
+    };
+  } catch (err) {
+    return {
+      id: imageId,
+      dataUrl: '',
+      type,
+      prompt,
+      negativePrompt,
+      description,
+      status: 'failed',
+      error: (err as Error).message ?? '生图失败',
+    };
+  }
 }
 
 export async function testImageGenerationConnection(config: 文生图API配置): Promise<string> {
@@ -95,10 +170,164 @@ export async function fetchComfyCheckpoints(config: 文生图API配置): Promise
     const text = await response.text().catch(() => '');
     throw new Error(`获取 ComfyUI 模型列表失败 ${response.status}: ${text || response.statusText}`);
   }
-  const data = await response.json();
+  const data = await readJsonResponse(response, 'ComfyUI 模型列表');
   const options = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
   if (!Array.isArray(options)) return [];
   return options.map((item) => String(item)).filter(Boolean);
+}
+
+export async function fetchImageGenerationModels(config: 文生图API配置): Promise<string[]> {
+  if (config.backend === 'novelai') {
+    return NOVELAI_IMAGE_MODELS;
+  }
+  if (config.backend === 'comfyui') {
+    return fetchComfyCheckpoints(config);
+  }
+  if (config.backend === 'sd_webui') {
+    return fetchSdWebUiModels(config);
+  }
+  return fetchModels({
+    id: '__image_generation_models__',
+    name: '文生图模型列表',
+    provider: 'openai_compatible',
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    model: config.model,
+    retryCount: config.retryCount,
+    createdAt: 0,
+    updatedAt: 0,
+  });
+}
+
+async function fetchSdWebUiModels(config: 文生图API配置): Promise<string[]> {
+  if (!config.baseUrl.trim()) throw new Error('请先填写 Stable Diffusion WebUI Base URL。');
+  const response = await fetch(joinUrl(config.baseUrl, '/sdapi/v1/sd-models'));
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`获取 SD WebUI 模型列表失败 ${response.status}: ${text || response.statusText}`);
+  }
+  const data = await readJsonResponse(response, 'SD WebUI 模型列表');
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((item) => {
+      if (!item || typeof item !== 'object') return '';
+      const record = item as Record<string, unknown>;
+      return String(record.title || record.model_name || record.filename || '').trim();
+    })
+    .filter(Boolean);
+}
+
+export async function fetchComfyWorkflowCandidates(
+  config: 文生图API配置,
+  source: 'queue' | 'history',
+): Promise<ComfyWorkflowCandidate[]> {
+  if (!config.baseUrl.trim()) throw new Error('请先填写 ComfyUI Base URL。');
+  const endpoint = source === 'queue' ? '/queue' : '/history?max_items=20';
+  const response = await fetch(joinUrl(config.baseUrl, endpoint));
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`读取 ComfyUI ${source === 'queue' ? '队列' : '历史'}失败 ${response.status}: ${text || response.statusText}`);
+  }
+  const data = await readJsonResponse(response, 'ComfyUI 工作流列表');
+  return source === 'queue'
+    ? extractComfyQueueWorkflows(data)
+    : extractComfyHistoryWorkflows(data);
+}
+
+function extractComfyQueueWorkflows(data: unknown): ComfyWorkflowCandidate[] {
+  const root = isRecord(data) ? data : {};
+  const rows = [
+    ...asArray(root.queue_running),
+    ...asArray(root.queue_pending),
+  ];
+  const results: ComfyWorkflowCandidate[] = [];
+  for (const row of rows) {
+    const arr = Array.isArray(row) ? row : [];
+    const promptId = String(arr[1] ?? results.length + 1);
+    const workflow = normalizeComfyWorkflowPayload(arr[2] ?? row);
+    if (!workflow) continue;
+    results.push(buildComfyWorkflowCandidate('queue', promptId, workflow));
+  }
+  return results;
+}
+
+function extractComfyHistoryWorkflows(data: unknown): ComfyWorkflowCandidate[] {
+  if (!isRecord(data)) return [];
+  const results: ComfyWorkflowCandidate[] = [];
+  for (const [promptId, rawEntry] of Object.entries(data).reverse()) {
+    const entry = isRecord(rawEntry) ? rawEntry : {};
+    const workflow = normalizeComfyWorkflowPayload(entry.prompt ?? rawEntry);
+    if (!workflow) continue;
+    results.push(buildComfyWorkflowCandidate('history', promptId, workflow));
+  }
+  return results;
+}
+
+function buildComfyWorkflowCandidate(
+  source: 'queue' | 'history',
+  promptId: string,
+  workflow: Record<string, unknown>,
+): ComfyWorkflowCandidate {
+  const nodes = Object.values(workflow).filter(isRecord);
+  const ckpt = nodes
+    .map((node) => isRecord(node.inputs) ? node.inputs.ckpt_name : undefined)
+    .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  const label = source === 'queue' ? '队列' : '历史';
+  return {
+    id: promptId,
+    source,
+    title: `${label} ${promptId}${ckpt ? ` · ${ckpt}` : ''} · ${nodes.length} 节点`,
+    workflowJson: JSON.stringify(workflow, null, 2),
+  };
+}
+
+function normalizeComfyWorkflowPayload(payload: unknown): Record<string, unknown> | null {
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const found = normalizeComfyWorkflowPayload(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isRecord(payload)) return null;
+  if (looksLikeComfyWorkflow(payload)) return payload;
+  const prompt = normalizeComfyWorkflowPayload(payload.prompt);
+  if (prompt) return prompt;
+  const workflow = normalizeComfyWorkflowPayload(payload.workflow);
+  if (workflow) return workflow;
+  return null;
+}
+
+function looksLikeComfyWorkflow(payload: Record<string, unknown>): boolean {
+  const nodes = Object.values(payload).filter(isRecord);
+  return nodes.some((node) => typeof node.class_type === 'string' && isRecord(node.inputs));
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function readJsonResponse(response: Response, label: string): Promise<any> {
+  const text = await response.text().catch(() => '');
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error(`${label}返回空响应。`);
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    const contentType = response.headers.get('content-type') || '';
+    const preview = trimmed.slice(0, 180).replace(/\s+/g, ' ');
+    const isHtml = /^<!doctype\s+html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed) || contentType.includes('text/html');
+    if (isHtml) {
+      throw new Error(`${label}返回了网页而不是 JSON。请检查 Base URL 和接口路径是否指向图片 API 端点，当前响应预览：${preview}`);
+    }
+    throw new Error(`${label}返回的内容不是合法 JSON：${(err as Error).message}。响应预览：${preview}`);
+  }
 }
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -147,10 +376,39 @@ function mergeNegativePrompt(config: 文生图API配置, request: ImageGeneratio
     .join(', ');
 }
 
+function normalizeReferenceImages(referenceImages?: ImageReferenceInput[]): ImageReferenceInput[] {
+  return (referenceImages ?? [])
+    .map((item) => ({
+      ...item,
+      id: item.id?.trim(),
+      src: String(item.src || '').trim(),
+      role: item.role ?? 'composition',
+      weight: Number.isFinite(Number(item.weight)) ? Number(item.weight) : undefined,
+    }))
+    .filter((item) => item.src.length > 0);
+}
+
+function stripDataUrlPrefix(src: string): string {
+  return src.startsWith('data:') ? src.slice(src.indexOf(',') + 1) : src;
+}
+
+function clampReferenceStrength(value?: number): number {
+  if (!Number.isFinite(Number(value))) return 0.55;
+  return Math.max(0.05, Math.min(0.95, Number(value)));
+}
+
+function readSdWebUiImagePath(config: 文生图API配置, useImg2Img: boolean): string {
+  if (config.pathMode === 'custom' && config.customPath.trim()) return config.customPath.trim();
+  return useImg2Img ? '/sdapi/v1/img2img' : '/sdapi/v1/txt2img';
+}
+
 async function generateOpenAICompatibleImage(config: 文生图API配置, request: ImageGenerationRequest): Promise<ImageGenerationResult> {
   if (!config.baseUrl.trim()) throw new Error('请填写图片接口 Base URL。');
   if (!config.apiKey.trim()) throw new Error('请填写图片接口 API Key。');
   if (!config.model.trim()) throw new Error('请填写图片模型。');
+  if (normalizeReferenceImages(request.referenceImages).length > 0) {
+    throw new Error('OpenAI 兼容的 /images/generations 路径不保证支持参考图。请改用支持参考图的图片编辑端点，或先关闭参考图参与生成。');
+  }
 
   const url = joinUrl(config.baseUrl, readPath(config));
   const negative = mergeNegativePrompt(config, request);
@@ -179,7 +437,7 @@ async function generateOpenAICompatibleImage(config: 文生图API配置, request
     throw new Error(`图片接口错误 ${response.status}: ${text || response.statusText}`);
   }
 
-  const data = await response.json();
+  const data = await readJsonResponse(response, 'OpenAI 兼容图片接口');
   const first = data?.data?.[0];
   if (!first) throw new Error('图片接口没有返回结果。');
 
@@ -203,6 +461,9 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
   if (!config.baseUrl.trim()) throw new Error('请填写 NovelAI Base URL。');
   if (!config.apiKey.trim()) throw new Error('请填写 NovelAI Token。');
   if (!config.model.trim()) throw new Error('请填写 NovelAI 模型。');
+  if (normalizeReferenceImages(request.referenceImages).length > 0) {
+    throw new Error('当前 NovelAI 生图链路尚未接入 img2img / vibe transfer 参考图参数。请先关闭参考图参与生成。');
+  }
   const { width, height } = normalizeNovelAISize(request.size || config.defaultSize);
   const prompt = request.prompt.trim();
   const negativePrompt = mergeNegativePrompt(config, request);
@@ -267,7 +528,7 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
   }
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
-    const data = await response.json();
+    const data = await readJsonResponse(response, 'NovelAI 图片接口');
     const b64 = data?.data?.[0]?.b64_json || data?.image || data?.output?.[0];
     if (typeof b64 === 'string' && b64.trim()) {
       return { src: b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`, mimeType: 'image/png', model: config.model, backend: config.backend };
@@ -295,27 +556,36 @@ function formatNovelAIError(status: number, text: string, model: string): string
 async function generateSdWebUIImage(config: 文生图API配置, request: ImageGenerationRequest): Promise<ImageGenerationResult> {
   if (!config.baseUrl.trim()) throw new Error('请填写 Stable Diffusion WebUI Base URL。');
   const { width, height } = parseSize(request.size || config.defaultSize);
-  const response = await fetch(joinUrl(config.baseUrl, readPath(config)), {
+  const referenceImages = normalizeReferenceImages(request.referenceImages);
+  const useImg2Img = referenceImages.length > 0;
+  const endpoint = useImg2Img ? readSdWebUiImagePath(config, true) : readPath(config);
+  const payload: Record<string, unknown> = {
+    prompt: request.prompt.trim(),
+    negative_prompt: mergeNegativePrompt(config, request),
+    steps: config.steps,
+    cfg_scale: config.cfgScale,
+    width,
+    height,
+    seed: config.seed,
+    sampler_name: config.sampler,
+    override_settings: config.model ? { sd_model_checkpoint: config.model } : undefined,
+  };
+  if (useImg2Img) {
+    payload.init_images = referenceImages.map((item) => stripDataUrlPrefix(item.src));
+    payload.denoising_strength = clampReferenceStrength(request.referenceStrength);
+    payload.resize_mode = 1;
+  }
+  const response = await fetch(joinUrl(config.baseUrl, endpoint), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: request.prompt.trim(),
-      negative_prompt: mergeNegativePrompt(config, request),
-      steps: config.steps,
-      cfg_scale: config.cfgScale,
-      width,
-      height,
-      seed: config.seed,
-      sampler_name: config.sampler,
-      override_settings: config.model ? { sd_model_checkpoint: config.model } : undefined,
-    }),
+    body: JSON.stringify(payload),
     signal: request.signal,
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     throw new Error(`SD WebUI 图片接口错误 ${response.status}: ${text || response.statusText}`);
   }
-  const data = await response.json();
+  const data = await readJsonResponse(response, 'SD WebUI 图片接口');
   const first = data?.images?.[0];
   if (typeof first === 'string' && first.trim()) {
     return { src: first.startsWith('data:') ? first : `data:image/png;base64,${first}`, mimeType: 'image/png', model: config.model, backend: config.backend };
@@ -342,6 +612,8 @@ async function generateComfyUIImage(config: 文生图API配置, request: ImageGe
       '请在文生图设置的「Checkpoint / 模型名」里选择本机已有 ckpt_name。',
     ].join('\n'));
   }
+  const referenceImages = normalizeReferenceImages(request.referenceImages);
+  const firstReferenceImage = referenceImages[0]?.src ? stripDataUrlPrefix(referenceImages[0].src) : '';
   const workflowText = config.comfyWorkflowJson
     .replaceAll('__PROMPT__', request.prompt.trim())
     .replaceAll('{{prompt}}', request.prompt.trim())
@@ -364,7 +636,12 @@ async function generateComfyUIImage(config: 文生图API配置, request: ImageGe
     .replaceAll('__MODEL__', modelName)
     .replaceAll('__CKPT_NAME__', modelName)
     .replaceAll('{{model}}', modelName)
-    .replaceAll('{{ckpt_name}}', modelName);
+    .replaceAll('{{ckpt_name}}', modelName)
+    .replaceAll('__REFERENCE_IMAGE__', firstReferenceImage)
+    .replaceAll('{{reference_image}}', firstReferenceImage);
+  if (referenceImages.length > 0 && !/__REFERENCE_IMAGE__|\{\{reference_image\}\}/.test(config.comfyWorkflowJson)) {
+    throw new Error('当前 ComfyUI 工作流没有参考图占位符。请在工作流中预留 __REFERENCE_IMAGE__ 或 {{reference_image}}，或关闭参考图参与生成。');
+  }
   let promptPayload: unknown;
   try {
     promptPayload = JSON.parse(workflowText);
@@ -394,7 +671,7 @@ async function generateComfyUIImage(config: 文生图API配置, request: ImageGe
     const text = await response.text().catch(() => '');
     throw new Error(`ComfyUI /prompt 错误 ${response.status}: ${formatComfyError(text || response.statusText)}`);
   }
-  const data = await response.json();
+  const data = await readJsonResponse(response, 'ComfyUI Prompt');
   const promptId = data?.prompt_id;
   if (!promptId) throw new Error('ComfyUI 未返回 prompt_id。');
   return pollComfyResult(config, String(promptId), request.signal);
@@ -495,7 +772,7 @@ async function pollComfyResult(config: 文生图API配置, promptId: string, sig
     await delay(1500);
     const response = await fetch(joinUrl(config.baseUrl, `/history/${promptId}`), { signal });
     if (!response.ok) continue;
-    const history = await response.json();
+    const history = await readJsonResponse(response, 'ComfyUI 历史结果');
     const item = history?.[promptId];
     const outputs = item?.outputs && typeof item.outputs === 'object' ? Object.values(item.outputs) : [];
     for (const output of outputs as any[]) {

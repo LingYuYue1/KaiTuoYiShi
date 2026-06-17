@@ -648,6 +648,10 @@ export function PhoneModal({
             同行记忆: ledgerCompression.memories,
             总结记忆: ledgerCompression.summaries,
             最近互动: trimmed,
+            关系: npc.关系 === 'stranger' ? 'acquaintance' : npc.关系,
+            当前关系阶段: npc.当前关系阶段 || '已通过手机建立私聊联系',
+            共同经历: [...new Set([...(npc.共同经历 ?? []), trimmed])].slice(-8),
+            对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
             最近回合: turnCount,
           };
         }),

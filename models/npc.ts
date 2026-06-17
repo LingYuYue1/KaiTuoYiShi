@@ -121,6 +121,7 @@ export interface NPC角色锚点档案 {
   场景生图自动注入?: boolean;
   正面提示词?: string;
   负面提示词?: string;
+  中文摘要?: string;
   结构化特征?: {
     外貌标签?: string[];
     身材标签?: string[];
@@ -927,6 +928,7 @@ function 归一化NPC角色锚点(raw: unknown): NPC角色锚点档案 | undefin
     场景生图自动注入: readBool('场景生图自动注入', 'sceneAutoInject') ?? true,
     正面提示词: readString('正面提示词', 'positivePrompt'),
     负面提示词: readString('负面提示词', 'negativePrompt'),
+    中文摘要: readString('中文摘要', 'chineseSummary'),
     来源: normalizeAnchorSource(source.来源 ?? source.source),
     原始提取文本: readString('原始提取文本', 'rawText'),
     提取模型信息: readString('提取模型信息', 'modelInfo'),
@@ -968,6 +970,7 @@ function 角色锚点有内容(anchor: NPC角色锚点档案): boolean {
     anchor.名称 ||
     anchor.正面提示词 ||
     anchor.负面提示词 ||
+    anchor.中文摘要 ||
     Object.values(anchor.结构化特征 ?? {}).some((list) => list?.length),
   );
 }

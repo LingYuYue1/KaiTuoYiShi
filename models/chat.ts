@@ -45,6 +45,8 @@ export interface 聊天消息 {
     deepSeekCotFakeHistorySkipped?: boolean;
     deepSeekPrefixMode?: boolean;
     deepSeekProtocolIssues?: string[];
+    deepSeekMainOriginalModel?: string;
+    deepSeekMainAdaptedModel?: string;
     rerollSimilarity?: number;
     rerollSimilarityRetried?: boolean;
     cachePrefixDiagnostics?: 缓存前缀诊断;
@@ -80,6 +82,29 @@ export interface 聊天消息 {
   /** 该 AI 回复对应的「user 发送前」状态快照，用于 reroll 回滚。
    *  生成新 assistant message 时会清掉上一条的 snapshot，保证存档里至多只有最新一条带 snapshot。 */
   preTurnSnapshot?: 回合快照;
+  /** 本回合的正文插图（后台生成完成后填充） */
+  narrativeImages?: 叙事插图[];
+}
+
+export interface 叙事插图 {
+  /** 唯一 ID */
+  id: string;
+  /** 图片数据 URL */
+  dataUrl: string;
+  /** 图片类型：场景 / 角色 */
+  type: 'scene' | 'character';
+  /** 生成用的提示词 */
+  prompt: string;
+  /** 负面提示词 */
+  negativePrompt?: string;
+  /** 中文描述（用于卡片标题） */
+  description?: string;
+  /** 生成状态 */
+  status: 'generating' | 'done' | 'failed';
+  /** 错误信息 */
+  error?: string;
+  /** 关联的相册资源 ID */
+  assetId?: string;
 }
 
 export interface 缓存前缀诊断 {

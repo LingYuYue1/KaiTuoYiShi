@@ -8,6 +8,8 @@ interface LandingPageProps {
   onZhikuManager: () => void;
   onCloudSave: () => void;
   onReleaseAnnouncements: () => void;
+  onDiscordPost: () => void;
+  onMysteryChat: () => void;
 }
 
 interface TwinkleStar {
@@ -28,6 +30,8 @@ export function LandingPage({
   onZhikuManager,
   onCloudSave,
   onReleaseAnnouncements,
+  onDiscordPost,
+  onMysteryChat,
 }: LandingPageProps) {
   const stars: TwinkleStar[] = useMemo(() => {
     const list: TwinkleStar[] = [];
@@ -108,6 +112,32 @@ export function LandingPage({
           }}
         >
           更新公告
+        </button>
+        <button
+          type="button"
+          onClick={onDiscordPost}
+          className="px-4 py-2 font-serif text-[12px] tracking-[0.18em] transition-all hover:opacity-90 sm:text-[13px]"
+          style={{
+            color: 'rgba(var(--tj-accent-primary), 0.92)',
+            background: 'rgba(var(--tj-bg-primary), 0.28)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34), 0 10px 24px rgba(0,0,0,0.2)',
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+        >
+          Discord 帖
+        </button>
+        <button
+          type="button"
+          onClick={onMysteryChat}
+          className="px-4 py-2 font-serif text-[12px] tracking-[0.18em] transition-all hover:opacity-90 sm:text-[13px]"
+          style={{
+            color: 'rgba(var(--tj-text-primary), 0.9)',
+            background: 'rgba(var(--tj-bg-primary), 0.28)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.36), 0 10px 24px rgba(0,0,0,0.2)',
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+        >
+          神秘聊天
         </button>
       </div>
 
@@ -289,7 +319,7 @@ export function LandingPage({
         className="absolute bottom-4 left-4 right-4 z-10 flex flex-col items-center gap-1 text-center text-xs opacity-60"
         style={{ color: 'rgb(var(--tj-text-secondary))' }}
       >
-        <p>开拓轶事 v0.7.2</p>
+        <p>开拓轶事 v0.8</p>
         <p className="text-[11px] leading-relaxed">
           作者 Ling · 智库部分内容贡献者 11MOMO
         </p>

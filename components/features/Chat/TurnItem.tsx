@@ -10,6 +10,8 @@ interface TurnItemProps {
   message: 聊天消息;
   isStreaming?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
+  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
@@ -20,7 +22,7 @@ interface TurnItemProps {
 
 type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
-export function TurnItem({ message, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: TurnItemProps) {
+export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
 
@@ -36,6 +38,8 @@ export function TurnItem({ message, isStreaming, onEditBody, npcRecords, travele
           parsed={parsed}
           isStreaming={isStreaming}
           onEditBody={onEditBody}
+          onRegenerateNarrativeImage={onRegenerateNarrativeImage}
+          narrativeImageManualEnabled={narrativeImageManualEnabled}
           npcRecords={npcRecords}
           traveler={traveler}
           showInnerVoice={showInnerVoice}
@@ -136,6 +140,8 @@ interface AiTurnCardProps {
   parsed: NonNullable<聊天消息['parsedResponse']>;
   isStreaming?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
+  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
   showInnerVoice?: boolean;
@@ -143,7 +149,7 @@ interface AiTurnCardProps {
   previousUserInput?: string;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -293,6 +299,18 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, npcRecords, trav
         )}
       </div>
 
+      {/* 正文插图卡片 */}
+      {((message.narrativeImages && message.narrativeImages.length > 0) || (narrativeImageManualEnabled && !isStreaming)) && (
+        <div className="px-1 py-2 space-y-2">
+          {(message.narrativeImages ?? []).map((img) => (
+            <NarrativeImageCard key={img.id} image={img} messageId={message.id} onRegenerateNarrativeImage={onRegenerateNarrativeImage} />
+          ))}
+          {(!message.narrativeImages || message.narrativeImages.length === 0) && (
+            narrativeImageManualEnabled ? <NarrativeImageManualCard messageId={message.id} onRegenerateNarrativeImage={onRegenerateNarrativeImage} /> : null
+          )}
+        </div>
+      )}
+
       {/* 狭间消息:出题回合展示三道凝练题面 / 评判回合展示升阶徽章 + 行进感言 */}
       {awakeningKind === '出题' && parsed.awakenQuestions?.trim() && (
         <AwakeningQuestionsBlock raw={parsed.awakenQuestions} />
@@ -379,6 +397,9 @@ function formatDebugContext(message: 聊天消息): string {
     '【DeepSeek 主剧情诊断】',
     `主剧情请求模式：${debug.mainRequestMode ?? '未知'}`,
     `模式：${debug.deepSeekMainMode ?? 'off'}`,
+    debug.deepSeekMainOriginalModel && debug.deepSeekMainAdaptedModel
+      ? `主剧情模型适配：${debug.deepSeekMainOriginalModel} → ${debug.deepSeekMainAdaptedModel}`
+      : '主剧情模型适配：未触发',
     `跳过 CoT 伪装历史：${debug.deepSeekCotFakeHistorySkipped ? '是' : '否'}`,
     `Prefix 锁格式：${debug.deepSeekPrefixMode ? '是' : '否'}`,
     debug.deepSeekProtocolIssues?.length
@@ -1001,6 +1022,197 @@ function EditBodyPanel({
           保存
         </button>
       </div>
+    </div>
+  );
+}
+
+/** 正文插图可折叠卡片 */
+function NarrativeImageCard({
+  image,
+  messageId,
+  onRegenerateNarrativeImage,
+}: {
+  image: import('@/models/chat').叙事插图;
+  messageId: string;
+  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const typeLabel = image.type === 'scene' ? '场景' : '角色';
+  const icon = image.type === 'scene' ? '🏞' : '👤';
+  const canRegenerate = !!onRegenerateNarrativeImage;
+  const handleRegenerate = () => {
+    void onRegenerateNarrativeImage?.(messageId);
+  };
+
+  if (image.status === 'generating') {
+    return (
+      <div
+        className="flex items-center gap-2 px-3 py-2 text-xs"
+        style={{
+          background: 'rgba(var(--tj-accent-primary), 0.06)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          color: 'rgba(var(--tj-text-secondary), 0.8)',
+        }}
+      >
+        <span className="animate-pulse-soft">⏳</span>
+        <span className="flex-1">正在生成{typeLabel}插图...</span>
+        {canRegenerate && (
+          <button type="button" disabled className="px-2 py-1 text-[11px] opacity-45">
+            重新生成
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (image.status === 'failed') {
+    return (
+      <div
+        className="flex items-center gap-2 px-3 py-2 text-xs"
+        style={{
+          background: 'rgba(200, 60, 60, 0.06)',
+          boxShadow: 'inset 0 0 0 1px rgba(200, 60, 60, 0.2)',
+          color: 'rgba(var(--tj-text-secondary), 0.8)',
+        }}
+      >
+        <span>❌</span>
+        <span className="min-w-0 flex-1 break-words">{typeLabel}插图生成失败{image.error ? `：${image.error}` : ''}</span>
+        {canRegenerate && (
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            className="shrink-0 px-2 py-1 font-serif text-[11px] tracking-[0.12em] transition-all hover:opacity-85"
+            style={{
+              color: 'rgba(var(--tj-accent-primary),0.95)',
+              background: 'rgba(var(--tj-accent-primary),0.06)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)',
+              clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+            }}
+          >
+            重新生成
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        background: 'rgba(var(--tj-accent-primary), 0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+      }}
+    >
+      {/* 标题栏：点击折叠/展开 */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-all hover:opacity-80"
+        style={{ color: 'rgba(var(--tj-text-primary), 0.85)' }}
+      >
+        <span>{icon}</span>
+        <span className="flex-1 font-medium">{typeLabel}：{image.description}</span>
+        {canRegenerate && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleRegenerate();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                handleRegenerate();
+              }
+            }}
+            className="px-2 py-1 font-serif text-[11px] tracking-[0.12em] transition-all hover:opacity-85"
+            style={{
+              color: 'rgba(var(--tj-accent-primary),0.95)',
+              background: 'rgba(var(--tj-accent-primary),0.06)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
+              clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+            }}
+          >
+            重新生成
+          </span>
+        )}
+        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.5)' }}>
+          {expanded ? '▲' : '▼'}
+        </span>
+      </button>
+
+      {/* 展开内容：图片 */}
+      {expanded && image.dataUrl && (
+        <div className="px-3 pb-3">
+          <img
+            src={image.dataUrl}
+            alt={image.description || typeLabel}
+            className="max-w-full rounded"
+            style={{
+              maxHeight: '512px',
+              objectFit: 'contain',
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NarrativeImageManualCard({
+  messageId,
+  onRegenerateNarrativeImage,
+}: {
+  messageId: string;
+  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const canGenerate = !!onRegenerateNarrativeImage;
+  const handleGenerate = () => {
+    void onRegenerateNarrativeImage?.(messageId);
+  };
+
+  return (
+    <div
+      style={{
+        background: 'rgba(var(--tj-accent-primary), 0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-all hover:opacity-80"
+        style={{ color: 'rgba(var(--tj-text-primary), 0.85)' }}
+      >
+        <span>▧</span>
+        <span className="flex-1 font-medium">正文插图：等待手动生成故事快照</span>
+        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.5)' }}>{expanded ? '收起' : '展开'}</span>
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3">
+          <div className="mb-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.74)' }}>
+            当前为手动正文插图模式。点击下方按钮后，会读取本回合正文并生成一张故事快照。
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={!canGenerate}
+            className="w-full px-3 py-2 text-left transition-all hover:opacity-90 disabled:opacity-45"
+            style={{
+              color: 'rgb(var(--tj-on-accent))',
+              background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(223,211,130,0.96) 48%, rgb(var(--tj-tech-cyan, 118, 211, 224)) 100%)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)',
+              clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            }}
+          >
+            <div className="font-serif text-xs tracking-[0.18em]">生成正文插图</div>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

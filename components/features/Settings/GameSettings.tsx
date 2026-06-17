@@ -387,6 +387,40 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
         checked={settings.enableAutoSaveEveryTurn}
         onChange={(v) => onChange({ ...settings, enableAutoSaveEveryTurn: v })}
       />
+      <Field label="◆ 后台任务模式">
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: 'sequential' as const, label: '稳序', desc: '变量落库后按顺序处理后台任务，接口压力最低' },
+            { value: 'parallel' as const, label: '并行', desc: '变量落库后同时启动新闻、忆庭入库、手机种子和正文插图' },
+          ]).map((opt) => {
+            const active = (settings.backgroundTaskMode ?? 'sequential') === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onChange({ ...settings, backgroundTaskMode: opt.value })}
+                className="px-3 py-2 text-left transition-all hover:opacity-90"
+                style={{
+                  background: active
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+                    : 'rgba(var(--tj-bg-secondary), 0.45)',
+                  color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
+                  boxShadow: active
+                    ? '0 0 16px rgba(var(--tj-accent-primary), 0.18)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  clipPath: smallClip,
+                }}
+              >
+                <div className="text-xs font-serif font-bold tracking-wider">{opt.label}</div>
+                <div className="mt-0.5 text-[10px] leading-snug opacity-75">{opt.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
+          主剧情前的忆庭召回与智库召回始终会先完成；并行模式只影响主剧情和变量落库之后的后台收尾任务。
+        </p>
+      </Field>
       <ToggleRow
         label="记忆注入"
         desc="将之前的记忆注入 system prompt"

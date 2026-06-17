@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 画师串预设适用范围 } from '@/models/settings';
-import { 获取规则模板列表 } from '@/utils/imagePromptRules';
+import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
+import { normalizeImageRules, 获取规则模板列表 } from '@/utils/imagePromptRules';
 
 interface Props {
   rules: 文生图规则中心设置;
@@ -9,45 +9,59 @@ interface Props {
 
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-const ruleSections: { id: 文生图规则模板类型; label: string; desc: string }[] = [
-  { id: 'npc', label: 'NPC 转化规则', desc: '角色图使用基础规则；锚定开启后改用专属锚定规则。' },
-  { id: 'scene', label: '场景转化规则', desc: '场景图使用空间与构图规则；角色锚定存在时改用场景锚定规则。' },
-  { id: 'scene_judge', label: '场景判定规则', desc: '用于判断当前文本应生成风景场景还是故事快照。' },
+type VisibleRuleSection = Exclude<文生图规则模板类型, 'scene_judge'>;
+
+const ruleSections: { id: VisibleRuleSection; label: string; desc: string }[] = [
+  { id: 'npc', label: '角色生成规则', desc: '旅人头像、旅人立绘、伙伴头像、伙伴立绘和 NSFW 参考图都会读取这里。' },
+  { id: 'scene', label: '场景生成规则', desc: '场景图、故事快照和手机背景都会读取这里；有角色锚点时只注入在场人物。' },
 ];
 
 type RuleCenterTab = 'model' | 'style' | 'template';
+type StyleLayerTab = 'artist' | 'detail' | 'quality' | 'png';
 
 const ruleCenterTabs: { id: RuleCenterTab; label: string; desc: string }[] = [
-  { id: 'template', label: '规则模板', desc: 'NPC / 场景 / 判定' },
-  { id: 'model', label: '模型规则集', desc: '绑定模型与模板' },
+  { id: 'template', label: '规则模板', desc: '角色 / 场景' },
+  { id: 'model', label: '模型规则集', desc: '绑定规则与模型' },
   { id: 'style', label: '风格预设', desc: '画师串 / PNG' },
 ];
 
 export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const [activeRuleTab, setActiveRuleTab] = useState<RuleCenterTab>('template');
-  const [activeSection, setActiveSection] = useState<文生图规则模板类型>('npc');
+  const [activeStyleLayer, setActiveStyleLayer] = useState<StyleLayerTab>('artist');
+  const [activeSection, setActiveSection] = useState<VisibleRuleSection>('npc');
   const [styleScope, setStyleScope] = useState<'npc' | 'scene'>('npc');
   const [modelEditorId, setModelEditorId] = useState('');
   const [artistEditorId, setArtistEditorId] = useState('');
+  const [detailStyleEditorId, setDetailStyleEditorId] = useState('');
+  const [qualityEditorId, setQualityEditorId] = useState('');
   const [pngEditorId, setPngEditorId] = useState('');
-  const [editorIds, setEditorIds] = useState<Record<文生图规则模板类型, string>>({
+  const [editorIds, setEditorIds] = useState<Record<VisibleRuleSection, string>>({
     npc: '',
     scene: '',
-    scene_judge: '',
   });
 
+  const normalizedRules = useMemo(() => normalizeImageRules(rules), [rules]);
   const section = ruleSections.find((item) => item.id === activeSection) ?? ruleSections[0];
-  const presets = useMemo(() => 获取规则模板列表(rules, activeSection), [rules, activeSection]);
-  const activeId = getActiveId(rules, activeSection);
+  const presets = useMemo(() => 获取规则模板列表(normalizedRules, activeSection), [normalizedRules, activeSection]);
+  const activeId = getActiveId(normalizedRules, activeSection);
   const editorId = editorIds[activeSection] || activeId || presets[0]?.id || '';
   const selectedPreset = presets.find((preset) => preset.id === editorId) ?? presets[0] ?? null;
-  const activeModelRule = rules.模型词组转化器预设列表.find((preset) => preset.是否启用) ?? null;
-  const selectedModelRule = rules.模型词组转化器预设列表.find((preset) => preset.id === (modelEditorId || activeModelRule?.id)) ?? rules.模型词组转化器预设列表[0] ?? null;
-  const scopedArtistPresets = rules.画师串预设列表.filter((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all');
-  const activeArtistId = styleScope === 'scene' ? rules.当前场景画师串预设ID : rules.当前NPC画师串预设ID;
+  const activeModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.是否启用) ?? null;
+  const selectedModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.id === (modelEditorId || activeModelRule?.id)) ?? normalizedRules.模型词组转化器预设列表[0] ?? null;
+  const scopedArtistPresets = normalizedRules.画师串预设列表.filter((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all');
+  const activeArtistId = styleScope === 'scene' ? normalizedRules.当前场景画师串预设ID : normalizedRules.当前NPC画师串预设ID;
+  const activeArtist = activeArtistId ? scopedArtistPresets.find((preset) => preset.id === activeArtistId) ?? null : null;
   const selectedArtist = scopedArtistPresets.find((preset) => preset.id === (artistEditorId || activeArtistId)) ?? scopedArtistPresets[0] ?? null;
-  const activePngId = styleScope === 'scene' ? rules.当前场景PNG画风预设ID : rules.当前NPCPNG画风预设ID;
-  const selectedPng = rules.PNG画风预设列表.find((preset) => preset.id === (pngEditorId || activePngId)) ?? rules.PNG画风预设列表[0] ?? null;
+  const scopedDetailStylePresets = normalizedRules.详细画风预设列表.filter((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all');
+  const activeDetailStyleId = styleScope === 'scene' ? normalizedRules.当前场景详细画风预设ID : normalizedRules.当前NPC详细画风预设ID;
+  const activeDetailStyle = activeDetailStyleId ? scopedDetailStylePresets.find((preset) => preset.id === activeDetailStyleId) ?? null : null;
+  const selectedDetailStyle = scopedDetailStylePresets.find((preset) => preset.id === (detailStyleEditorId || activeDetailStyleId)) ?? scopedDetailStylePresets[0] ?? null;
+  const activeQualityId = normalizedRules.当前质量增强预设ID;
+  const activeQuality = activeQualityId ? normalizedRules.质量增强预设列表.find((preset) => preset.id === activeQualityId) ?? null : null;
+  const selectedQuality = normalizedRules.质量增强预设列表.find((preset) => preset.id === (qualityEditorId || activeQualityId)) ?? normalizedRules.质量增强预设列表[0] ?? null;
+  const activePngId = styleScope === 'scene' ? normalizedRules.当前场景PNG画风预设ID : normalizedRules.当前NPCPNG画风预设ID;
+  const activePng = activePngId ? normalizedRules.PNG画风预设列表.find((preset) => preset.id === activePngId) ?? null : null;
+  const selectedPng = normalizedRules.PNG画风预设列表.find((preset) => preset.id === (pngEditorId || activePngId)) ?? normalizedRules.PNG画风预设列表[0] ?? null;
 
   useEffect(() => {
     if (editorIds[activeSection] && presets.some((preset) => preset.id === editorIds[activeSection])) return;
@@ -55,9 +69,9 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   }, [activeId, activeSection, editorIds, presets]);
 
   useEffect(() => {
-    if (modelEditorId && rules.模型词组转化器预设列表.some((preset) => preset.id === modelEditorId)) return;
-    setModelEditorId(activeModelRule?.id || rules.模型词组转化器预设列表[0]?.id || '');
-  }, [activeModelRule?.id, modelEditorId, rules.模型词组转化器预设列表]);
+    if (modelEditorId && normalizedRules.模型词组转化器预设列表.some((preset) => preset.id === modelEditorId)) return;
+    setModelEditorId(activeModelRule?.id || normalizedRules.模型词组转化器预设列表[0]?.id || '');
+  }, [activeModelRule?.id, modelEditorId, normalizedRules.模型词组转化器预设列表]);
 
   useEffect(() => {
     if (artistEditorId && scopedArtistPresets.some((preset) => preset.id === artistEditorId)) return;
@@ -65,9 +79,19 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   }, [activeArtistId, artistEditorId, scopedArtistPresets]);
 
   useEffect(() => {
-    if (pngEditorId && rules.PNG画风预设列表.some((preset) => preset.id === pngEditorId)) return;
-    setPngEditorId(activePngId || rules.PNG画风预设列表[0]?.id || '');
-  }, [activePngId, pngEditorId, rules.PNG画风预设列表]);
+    if (detailStyleEditorId && scopedDetailStylePresets.some((preset) => preset.id === detailStyleEditorId)) return;
+    setDetailStyleEditorId(activeDetailStyleId || scopedDetailStylePresets[0]?.id || '');
+  }, [activeDetailStyleId, detailStyleEditorId, scopedDetailStylePresets]);
+
+  useEffect(() => {
+    if (qualityEditorId && normalizedRules.质量增强预设列表.some((preset) => preset.id === qualityEditorId)) return;
+    setQualityEditorId(activeQualityId || normalizedRules.质量增强预设列表[0]?.id || '');
+  }, [activeQualityId, normalizedRules.质量增强预设列表, qualityEditorId]);
+
+  useEffect(() => {
+    if (pngEditorId && normalizedRules.PNG画风预设列表.some((preset) => preset.id === pngEditorId)) return;
+    setPngEditorId(activePngId || normalizedRules.PNG画风预设列表[0]?.id || '');
+  }, [activePngId, pngEditorId, normalizedRules.PNG画风预设列表]);
 
   const setActiveId = (id: string) => {
     onChange({ [activeIdKey(activeSection)]: id } as Partial<文生图规则中心设置>);
@@ -79,7 +103,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
 
   const updatePreset = (id: string, updater: (preset: 文生图规则模板) => 文生图规则模板) => {
     onChange({
-      词组转化器提示词预设列表: rules.词组转化器提示词预设列表.map((preset) => (
+      词组转化器提示词预设列表: normalizedRules.词组转化器提示词预设列表.map((preset) => (
         preset.id === id ? updater(preset) : preset
       )),
     });
@@ -94,21 +118,21 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
       提示词: '',
       角色锚定模式提示词: activeSection === 'npc' ? '' : undefined,
       场景角色锚定模式提示词: activeSection === 'scene' ? '' : undefined,
-      无锚点回退提示词: activeSection !== 'scene_judge' ? '' : undefined,
-      输出格式提示词: activeSection !== 'scene_judge' ? '' : undefined,
+      无锚点回退提示词: '',
+      输出格式提示词: '',
       createdAt: now,
       updatedAt: now,
     };
     onChange({
-      词组转化器提示词预设列表: [...rules.词组转化器提示词预设列表, next],
-      [activeIdKey(activeSection)]: getActiveId(rules, activeSection) || next.id,
+      词组转化器提示词预设列表: [...normalizedRules.词组转化器提示词预设列表, next],
+      [activeIdKey(activeSection)]: getActiveId(normalizedRules, activeSection) || next.id,
     } as Partial<文生图规则中心设置>);
     setEditorId(next.id);
   };
 
   const deletePreset = () => {
     if (!selectedPreset) return;
-    const remaining = rules.词组转化器提示词预设列表.filter((preset) => preset.id !== selectedPreset.id);
+    const remaining = normalizedRules.词组转化器提示词预设列表.filter((preset) => preset.id !== selectedPreset.id);
     const nextActive = remaining.find((preset) => preset.类型 === activeSection)?.id ?? '';
     onChange({
       词组转化器提示词预设列表: remaining,
@@ -119,7 +143,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
 
   const updateModelRule = (id: string, updater: (preset: 文生图模型规则集) => 文生图模型规则集) => {
     onChange({
-      模型词组转化器预设列表: rules.模型词组转化器预设列表.map((preset) => (
+      模型词组转化器预设列表: normalizedRules.模型词组转化器预设列表.map((preset) => (
         preset.id === id ? updater(preset) : preset
       )),
     });
@@ -132,27 +156,27 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
       名称: '新建模型规则集',
       模型专属提示词: '',
       锚定模式模型提示词: '',
-      是否启用: rules.模型词组转化器预设列表.length === 0,
-      NPC词组转化器提示词预设ID: 获取规则模板列表(rules, 'npc')[0]?.id ?? '',
-      场景词组转化器提示词预设ID: 获取规则模板列表(rules, 'scene')[0]?.id ?? '',
-      场景判定提示词预设ID: 获取规则模板列表(rules, 'scene_judge')[0]?.id ?? '',
+      是否启用: normalizedRules.模型词组转化器预设列表.length === 0,
+      NPC词组转化器提示词预设ID: 获取规则模板列表(normalizedRules, 'npc')[0]?.id ?? '',
+      场景词组转化器提示词预设ID: 获取规则模板列表(normalizedRules, 'scene')[0]?.id ?? '',
+      场景判定提示词预设ID: normalizedRules.当前场景判定提示词预设ID || 获取规则模板列表(normalizedRules, 'scene_judge')[0]?.id || '',
       createdAt: now,
       updatedAt: now,
     };
-    onChange({ 模型词组转化器预设列表: [...rules.模型词组转化器预设列表, next] });
+    onChange({ 模型词组转化器预设列表: [...normalizedRules.模型词组转化器预设列表, next] });
     setModelEditorId(next.id);
   };
 
   const deleteModelRule = () => {
     if (!selectedModelRule) return;
-    const remaining = rules.模型词组转化器预设列表.filter((preset) => preset.id !== selectedModelRule.id);
+    const remaining = normalizedRules.模型词组转化器预设列表.filter((preset) => preset.id !== selectedModelRule.id);
     onChange({ 模型词组转化器预设列表: remaining });
     setModelEditorId(remaining[0]?.id ?? '');
   };
 
   const setActiveModelRule = (id: string) => {
     onChange({
-      模型词组转化器预设列表: rules.模型词组转化器预设列表.map((preset) => ({
+      模型词组转化器预设列表: normalizedRules.模型词组转化器预设列表.map((preset) => ({
         ...preset,
         是否启用: id ? preset.id === id : false,
         updatedAt: preset.id === id ? Date.now() : preset.updatedAt,
@@ -162,7 +186,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
 
   const updateArtist = (id: string, updater: (preset: 文生图画师串预设) => 文生图画师串预设) => {
     onChange({
-      画师串预设列表: rules.画师串预设列表.map((preset) => (
+      画师串预设列表: normalizedRules.画师串预设列表.map((preset) => (
         preset.id === id ? updater(preset) : preset
       )),
     });
@@ -181,7 +205,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
       updatedAt: now,
     };
     onChange({
-      画师串预设列表: [...rules.画师串预设列表, next],
+      画师串预设列表: [...normalizedRules.画师串预设列表, next],
       [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: activeArtistId || next.id,
     } as Partial<文生图规则中心设置>);
     setArtistEditorId(next.id);
@@ -189,7 +213,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
 
   const deleteArtist = () => {
     if (!selectedArtist) return;
-    const remaining = rules.画师串预设列表.filter((preset) => preset.id !== selectedArtist.id);
+    const remaining = normalizedRules.画师串预设列表.filter((preset) => preset.id !== selectedArtist.id);
     const nextId = remaining.find((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all')?.id ?? '';
     onChange({
       画师串预设列表: remaining,
@@ -198,9 +222,86 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     setArtistEditorId(nextId);
   };
 
+  const updateDetailStyle = (id: string, updater: (preset: 文生图详细画风预设) => 文生图详细画风预设) => {
+    onChange({
+      详细画风预设列表: normalizedRules.详细画风预设列表.map((preset) => (
+        preset.id === id ? updater(preset) : preset
+      )),
+    });
+  };
+
+  const addDetailStyle = () => {
+    const now = Date.now();
+    const next: 文生图详细画风预设 = {
+      id: `detail_style_${styleScope}_${now}`,
+      名称: styleScope === 'scene' ? '新建场景详细画风' : '新建NPC详细画风',
+      适用范围: styleScope,
+      风格定位: '',
+      构图镜头: '',
+      光影色彩: '',
+      材质细节: '',
+      正面提示词: '',
+      负面提示词: '',
+      createdAt: now,
+      updatedAt: now,
+    };
+    onChange({
+      详细画风预设列表: [...normalizedRules.详细画风预设列表, next],
+      [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: activeDetailStyleId || next.id,
+    } as Partial<文生图规则中心设置>);
+    setDetailStyleEditorId(next.id);
+  };
+
+  const deleteDetailStyle = () => {
+    if (!selectedDetailStyle) return;
+    const remaining = normalizedRules.详细画风预设列表.filter((preset) => preset.id !== selectedDetailStyle.id);
+    const nextId = remaining.find((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all')?.id ?? '';
+    onChange({
+      详细画风预设列表: remaining,
+      [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: activeDetailStyleId === selectedDetailStyle.id ? nextId : activeDetailStyleId,
+    } as Partial<文生图规则中心设置>);
+    setDetailStyleEditorId(nextId);
+  };
+
+  const updateQuality = (id: string, updater: (preset: 文生图质量增强预设) => 文生图质量增强预设) => {
+    onChange({
+      质量增强预设列表: normalizedRules.质量增强预设列表.map((preset) => (
+        preset.id === id ? updater(preset) : preset
+      )),
+    });
+  };
+
+  const addQuality = () => {
+    const now = Date.now();
+    const next: 文生图质量增强预设 = {
+      id: `quality_stability_${now}`,
+      名称: '新建质量增强',
+      正面提示词: '',
+      负面提示词: '',
+      createdAt: now,
+      updatedAt: now,
+    };
+    onChange({
+      质量增强预设列表: [...normalizedRules.质量增强预设列表, next],
+      当前质量增强预设ID: activeQualityId || next.id,
+    });
+    setQualityEditorId(next.id);
+  };
+
+  const deleteQuality = () => {
+    if (!selectedQuality) return;
+    const remaining = normalizedRules.质量增强预设列表.filter((preset) => preset.id !== selectedQuality.id);
+    const nextId = remaining[0]?.id ?? '';
+    onChange({
+      质量增强预设列表: remaining,
+      当前质量增强预设ID: activeQualityId === selectedQuality.id ? '' : activeQualityId,
+    });
+    setQualityEditorId(nextId);
+  };
+
   const updatePng = (id: string, updater: (preset: 文生图PNG画风预设) => 文生图PNG画风预设) => {
     onChange({
-      PNG画风预设列表: rules.PNG画风预设列表.map((preset) => (
+      PNG画风预设列表: normalizedRules.PNG画风预设列表.map((preset) => (
         preset.id === id ? updater(preset) : preset
       )),
     });
@@ -219,7 +320,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
       updatedAt: now,
     };
     onChange({
-      PNG画风预设列表: [...rules.PNG画风预设列表, next],
+      PNG画风预设列表: [...normalizedRules.PNG画风预设列表, next],
       [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: activePngId || next.id,
     } as Partial<文生图规则中心设置>);
     setPngEditorId(next.id);
@@ -227,12 +328,12 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
 
   const deletePng = () => {
     if (!selectedPng) return;
-    const remaining = rules.PNG画风预设列表.filter((preset) => preset.id !== selectedPng.id);
+    const remaining = normalizedRules.PNG画风预设列表.filter((preset) => preset.id !== selectedPng.id);
     const nextId = remaining[0]?.id ?? '';
     onChange({
       PNG画风预设列表: remaining,
-      当前NPCPNG画风预设ID: rules.当前NPCPNG画风预设ID === selectedPng.id ? nextId : rules.当前NPCPNG画风预设ID,
-      当前场景PNG画风预设ID: rules.当前场景PNG画风预设ID === selectedPng.id ? nextId : rules.当前场景PNG画风预设ID,
+      当前NPCPNG画风预设ID: normalizedRules.当前NPCPNG画风预设ID === selectedPng.id ? nextId : normalizedRules.当前NPCPNG画风预设ID,
+      当前场景PNG画风预设ID: normalizedRules.当前场景PNG画风预设ID === selectedPng.id ? nextId : normalizedRules.当前场景PNG画风预设ID,
     });
     setPngEditorId(nextId);
   };
@@ -275,7 +376,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
       <TemplateCard
         eyebrow="模型规则集"
         title="模型规则集"
-        desc="对标墨色：模型规则集负责绑定 NPC / 场景 / 场景判定模板，并提供模型专属规则与锚定模式模型规则。"
+        desc="模型规则集负责绑定角色生成规则与场景生成规则，并提供模型专属规则与锚定模式补充。场景判定层已退场，正文生图固定走故事快照流程。"
         actions={
           <>
             <TemplateButton onClick={addModelRule}>新增规则集</TemplateButton>
@@ -289,24 +390,23 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
               label="当前启用"
               value={activeModelRule?.id ?? ''}
               onChange={setActiveModelRule}
-              presets={rules.模型词组转化器预设列表}
+              presets={normalizedRules.模型词组转化器预设列表}
               emptyLabel="不启用模型规则集"
             />
             <ModelSelectField
               label="当前编辑"
               value={selectedModelRule?.id ?? ''}
               onChange={setModelEditorId}
-              presets={rules.模型词组转化器预设列表}
+              presets={normalizedRules.模型词组转化器预设列表}
               emptyLabel="未选择规则集"
             />
           </div>
           {selectedModelRule ? (
             <div className="space-y-4">
               <TextInput label="规则集名称" value={selectedModelRule.名称} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, 名称: value, updatedAt: Date.now() }))} />
-              <div className="grid gap-3 md:grid-cols-3">
-                <SelectField label="绑定 NPC 规则" value={selectedModelRule.NPC词组转化器提示词预设ID} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, NPC词组转化器提示词预设ID: value, updatedAt: Date.now() }))} presets={获取规则模板列表(rules, 'npc')} />
-                <SelectField label="绑定场景规则" value={selectedModelRule.场景词组转化器提示词预设ID} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, 场景词组转化器提示词预设ID: value, updatedAt: Date.now() }))} presets={获取规则模板列表(rules, 'scene')} />
-                <SelectField label="绑定判定规则" value={selectedModelRule.场景判定提示词预设ID} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, 场景判定提示词预设ID: value, updatedAt: Date.now() }))} presets={获取规则模板列表(rules, 'scene_judge')} />
+              <div className="grid gap-3 md:grid-cols-2">
+                <SelectField label="绑定角色生成规则" value={selectedModelRule.NPC词组转化器提示词预设ID} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, NPC词组转化器提示词预设ID: value, updatedAt: Date.now() }))} presets={获取规则模板列表(normalizedRules, 'npc')} />
+                <SelectField label="绑定场景生成规则" value={selectedModelRule.场景词组转化器提示词预设ID} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, 场景词组转化器提示词预设ID: value, updatedAt: Date.now() }))} presets={获取规则模板列表(normalizedRules, 'scene')} />
               </div>
               <TemplateTextarea label="基础模型规则" value={selectedModelRule.模型专属提示词} rows={5} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, 模型专属提示词: value, updatedAt: Date.now() }))} />
               <TemplateTextarea label="锚定模式模型规则" value={selectedModelRule.锚定模式模型提示词 || ''} rows={5} onChange={(value) => updateModelRule(selectedModelRule.id, (preset) => ({ ...preset, 锚定模式模型提示词: value, updatedAt: Date.now() }))} />
@@ -321,26 +421,38 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
       {activeRuleTab === 'style' && (
       <TemplateCard
         eyebrow="风格预设"
-        title="画师串 / PNG 画风"
-        desc="画师串负责正负面风格层，PNG 画风用于后续从参考图或 PNG 元数据提炼出的风格层。两者都会参与最终 prompt。"
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <TemplateButton onClick={addArtist}>新增画师串</TemplateButton>
-            <TemplateButton onClick={deleteArtist} disabled={!selectedArtist} danger>删除画师串</TemplateButton>
-            <TemplateButton onClick={addPng}>新增PNG画风</TemplateButton>
-            <TemplateButton onClick={deletePng} disabled={!selectedPng} danger>删除PNG画风</TemplateButton>
-          </div>
-        }
-      >
+        title="风格层"
+        desc="画师串、详细画风和 PNG 画风会叠加使用；这里用分层切换方式单独编辑每一层。"
+        >
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            <TemplateButton onClick={() => setStyleScope('npc')} disabled={styleScope === 'npc'}>NPC</TemplateButton>
-            <TemplateButton onClick={() => setStyleScope('scene')} disabled={styleScope === 'scene'}>场景</TemplateButton>
+            <LayerSwitchButton active={styleScope === 'npc'} onClick={() => setStyleScope('npc')}>NPC</LayerSwitchButton>
+            <LayerSwitchButton active={styleScope === 'scene'} onClick={() => setStyleScope('scene')}>场景</LayerSwitchButton>
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="flex flex-wrap gap-2">
+            <LayerSwitchButton active={activeStyleLayer === 'artist'} onClick={() => setActiveStyleLayer('artist')}>画师串</LayerSwitchButton>
+            <LayerSwitchButton active={activeStyleLayer === 'detail'} onClick={() => setActiveStyleLayer('detail')}>详细画风</LayerSwitchButton>
+            <LayerSwitchButton active={activeStyleLayer === 'quality'} onClick={() => setActiveStyleLayer('quality')}>质量增强</LayerSwitchButton>
+            <LayerSwitchButton active={activeStyleLayer === 'png'} onClick={() => setActiveStyleLayer('png')}>PNG 画风</LayerSwitchButton>
+          </div>
+
+          {activeStyleLayer === 'artist' && (
             <div className="space-y-4">
+              <StylePaneTitleWithState
+                title="画师串"
+                desc="保留原来的简版风格层，适合放短标签、作者串或基础正负面词。"
+                activeName={activeArtist?.名称}
+                activeTag={activeArtistId ? '启用中' : '已禁用'}
+                active={Boolean(activeArtistId)}
+                onEnable={() => selectedArtist && onChange({ [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: selectedArtist.id } as Partial<文生图规则中心设置>)}
+                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: '' } as Partial<文生图规则中心设置>)}
+                enableDisabled={!selectedArtist || selectedArtist.id === activeArtistId}
+                disableDisabled={!activeArtistId}
+                onAdd={addArtist}
+                onDelete={deleteArtist}
+                deleteDisabled={!selectedArtist}
+              />
               <div className="grid gap-3 md:grid-cols-2">
-                <ArtistSelectField label="当前使用画师串" value={activeArtistId} onChange={(value) => onChange({ [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: value } as Partial<文生图规则中心设置>)} presets={scopedArtistPresets} />
                 <ArtistSelectField label="当前编辑画师串" value={selectedArtist?.id ?? ''} onChange={setArtistEditorId} presets={scopedArtistPresets} />
               </div>
               {selectedArtist ? (
@@ -357,10 +469,95 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                 </>
               ) : <EmptyBox>暂无画师串预设。</EmptyBox>}
             </div>
+          )}
+
+          {activeStyleLayer === 'detail' && (
             <div className="space-y-4">
+              <StylePaneTitleWithState
+                title="详细画风"
+                desc="独立于旧画师串，用更细的层级控制风格、镜头、光影和材质。"
+                activeName={activeDetailStyle?.名称}
+                activeTag={activeDetailStyleId ? '启用中' : '已禁用'}
+                active={Boolean(activeDetailStyleId)}
+                onEnable={() => selectedDetailStyle && onChange({ [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: selectedDetailStyle.id } as Partial<文生图规则中心设置>)}
+                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: '' } as Partial<文生图规则中心设置>)}
+                enableDisabled={!selectedDetailStyle || selectedDetailStyle.id === activeDetailStyleId}
+                disableDisabled={!activeDetailStyleId}
+                onAdd={addDetailStyle}
+                onDelete={deleteDetailStyle}
+                deleteDisabled={!selectedDetailStyle}
+              />
               <div className="grid gap-3 md:grid-cols-2">
-                <PngSelectField label="当前使用PNG画风" value={activePngId} onChange={(value) => onChange({ [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: value } as Partial<文生图规则中心设置>)} presets={rules.PNG画风预设列表} />
-                <PngSelectField label="当前编辑PNG画风" value={selectedPng?.id ?? ''} onChange={setPngEditorId} presets={rules.PNG画风预设列表} />
+                <DetailStyleSelectField label="当前编辑详细画风" value={selectedDetailStyle?.id ?? ''} onChange={setDetailStyleEditorId} presets={scopedDetailStylePresets} />
+              </div>
+              {selectedDetailStyle ? (
+                <>
+                  <TextInput label="详细画风名称" value={selectedDetailStyle.名称} onChange={(value) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 名称: value, updatedAt: Date.now() }))} />
+                  <select value={selectedDetailStyle.适用范围} onChange={(e) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 适用范围: e.target.value as 画师串预设适用范围, updatedAt: Date.now() }))} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                    <option value="npc">NPC</option>
+                    <option value="scene">场景</option>
+                    <option value="all">通用</option>
+                  </select>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <TemplateTextarea label="风格定位" value={selectedDetailStyle.风格定位} rows={4} onChange={(value) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 风格定位: value, updatedAt: Date.now() }))} />
+                    <TemplateTextarea label="构图镜头" value={selectedDetailStyle.构图镜头} rows={4} onChange={(value) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 构图镜头: value, updatedAt: Date.now() }))} />
+                    <TemplateTextarea label="光影色彩" value={selectedDetailStyle.光影色彩} rows={4} onChange={(value) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 光影色彩: value, updatedAt: Date.now() }))} />
+                    <TemplateTextarea label="材质细节" value={selectedDetailStyle.材质细节} rows={4} onChange={(value) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 材质细节: value, updatedAt: Date.now() }))} />
+                  </div>
+                  <TemplateTextarea label="详细正面提示词" value={selectedDetailStyle.正面提示词} rows={5} onChange={(value) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 正面提示词: value, updatedAt: Date.now() }))} />
+                  <TemplateTextarea label="详细负面提示词" value={selectedDetailStyle.负面提示词} rows={4} onChange={(value) => updateDetailStyle(selectedDetailStyle.id, (preset) => ({ ...preset, 负面提示词: value, updatedAt: Date.now() }))} />
+                </>
+              ) : <EmptyBox>暂无详细画风预设。</EmptyBox>}
+            </div>
+          )}
+
+          {activeStyleLayer === 'quality' && (
+            <div className="space-y-4">
+              <StylePaneTitleWithState
+                title="质量增强"
+                desc="可选的人体、发型与轮廓稳定层。默认禁用，启用后会叠加到角色、场景、故事快照和正文插图的最终提示词。"
+                activeName={activeQuality?.名称}
+                activeTag={activeQualityId ? '启用中' : '已禁用'}
+                active={Boolean(activeQualityId)}
+                onEnable={() => selectedQuality && onChange({ 当前质量增强预设ID: selectedQuality.id })}
+                onDisable={() => onChange({ 当前质量增强预设ID: '' })}
+                enableDisabled={!selectedQuality || selectedQuality.id === activeQualityId}
+                disableDisabled={!activeQualityId}
+                onAdd={addQuality}
+                onDelete={deleteQuality}
+                deleteDisabled={!selectedQuality}
+              />
+              <div className="grid gap-3 md:grid-cols-2">
+                <QualitySelectField label="当前编辑质量增强" value={selectedQuality?.id ?? ''} onChange={setQualityEditorId} presets={normalizedRules.质量增强预设列表} />
+              </div>
+              {selectedQuality ? (
+                <>
+                  <TextInput label="质量增强名称" value={selectedQuality.名称} onChange={(value) => updateQuality(selectedQuality.id, (preset) => ({ ...preset, 名称: value, updatedAt: Date.now() }))} />
+                  <TemplateTextarea label="正面增强提示词" value={selectedQuality.正面提示词} rows={6} onChange={(value) => updateQuality(selectedQuality.id, (preset) => ({ ...preset, 正面提示词: value, updatedAt: Date.now() }))} />
+                  <TemplateTextarea label="负面增强提示词" value={selectedQuality.负面提示词} rows={5} onChange={(value) => updateQuality(selectedQuality.id, (preset) => ({ ...preset, 负面提示词: value, updatedAt: Date.now() }))} />
+                </>
+              ) : <EmptyBox>暂无质量增强预设。</EmptyBox>}
+            </div>
+          )}
+
+          {activeStyleLayer === 'png' && (
+            <div className="space-y-4">
+              <StylePaneTitleWithState
+                title="PNG 画风"
+                desc="从参考图或 PNG 元数据整理出的风格层，可和详细画风同时叠加。"
+                activeName={activePng?.名称}
+                activeTag={activePngId ? '启用中' : '已禁用'}
+                active={Boolean(activePngId)}
+                onEnable={() => selectedPng && onChange({ [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: selectedPng.id } as Partial<文生图规则中心设置>)}
+                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: '' } as Partial<文生图规则中心设置>)}
+                enableDisabled={!selectedPng || selectedPng.id === activePngId}
+                disableDisabled={!activePngId}
+                onAdd={addPng}
+                onDelete={deletePng}
+                deleteDisabled={!selectedPng}
+              />
+              <div className="grid gap-3 md:grid-cols-2">
+                <PngSelectField label="当前编辑PNG画风" value={selectedPng?.id ?? ''} onChange={setPngEditorId} presets={normalizedRules.PNG画风预设列表} />
               </div>
               {selectedPng ? (
                 <>
@@ -377,7 +574,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                 </>
               ) : <EmptyBox>暂无PNG画风预设。</EmptyBox>}
             </div>
-          </div>
+          )}
         </div>
       </TemplateCard>
       )}
@@ -397,7 +594,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
               规则模板
             </div>
             <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>
-              选择当前启用的模型规则，并编辑基础模式与锚定模式规则。
+              角色生成与场景生成分开维护；普通用户只需要选择当前生效模板，高级用户可以继续编辑细项。
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -469,9 +666,9 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                   onChange={(value) => updatePreset(selectedPreset.id, (preset) => ({ ...preset, 名称: value, updatedAt: Date.now() }))}
                 />
                 <TemplateTextarea
-                  label={activeSection === 'scene_judge' ? '判定规则' : '基础转化规则'}
+                  label="基础生成规则"
                   value={selectedPreset.提示词}
-                  rows={activeSection === 'scene_judge' ? 10 : 8}
+                  rows={8}
                   onChange={(value) => updatePreset(selectedPreset.id, (preset) => ({ ...preset, 提示词: value, updatedAt: Date.now() }))}
                 />
                 {activeSection === 'npc' && (
@@ -490,22 +687,18 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                     onChange={(value) => updatePreset(selectedPreset.id, (preset) => ({ ...preset, 场景角色锚定模式提示词: value, updatedAt: Date.now() }))}
                   />
                 )}
-                {activeSection !== 'scene_judge' && (
-                  <>
-                    <TemplateTextarea
-                      label="无锚点回退规则"
-                      value={selectedPreset.无锚点回退提示词 || ''}
-                      rows={4}
-                      onChange={(value) => updatePreset(selectedPreset.id, (preset) => ({ ...preset, 无锚点回退提示词: value, updatedAt: Date.now() }))}
-                    />
-                    <TemplateTextarea
-                      label="输出格式规则"
-                      value={selectedPreset.输出格式提示词 || ''}
-                      rows={4}
-                      onChange={(value) => updatePreset(selectedPreset.id, (preset) => ({ ...preset, 输出格式提示词: value, updatedAt: Date.now() }))}
-                    />
-                  </>
-                )}
+                <TemplateTextarea
+                  label="无锚点回退规则"
+                  value={selectedPreset.无锚点回退提示词 || ''}
+                  rows={4}
+                  onChange={(value) => updatePreset(selectedPreset.id, (preset) => ({ ...preset, 无锚点回退提示词: value, updatedAt: Date.now() }))}
+                />
+                <TemplateTextarea
+                  label="输出格式规则"
+                  value={selectedPreset.输出格式提示词 || ''}
+                  rows={4}
+                  onChange={(value) => updatePreset(selectedPreset.id, (preset) => ({ ...preset, 输出格式提示词: value, updatedAt: Date.now() }))}
+                />
               </div>
             ) : (
               <div
@@ -567,6 +760,18 @@ function ArtistSelectField({ label, value, onChange, presets }: { label: string;
   );
 }
 
+function DetailStyleSelectField({ label, value, onChange, presets }: { label: string; value: string; onChange: (value: string) => void; presets: 文生图详细画风预设[] }) {
+  return (
+    <label className="block space-y-2">
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+        <option value="">不启用</option>
+        {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
+      </select>
+    </label>
+  );
+}
+
 function PngSelectField({ label, value, onChange, presets }: { label: string; value: string; onChange: (value: string) => void; presets: 文生图PNG画风预设[] }) {
   return (
     <label className="block space-y-2">
@@ -576,6 +781,96 @@ function PngSelectField({ label, value, onChange, presets }: { label: string; va
         {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
       </select>
     </label>
+  );
+}
+
+function QualitySelectField({ label, value, onChange, presets }: { label: string; value: string; onChange: (value: string) => void; presets: 文生图质量增强预设[] }) {
+  return (
+    <label className="block space-y-2">
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+        <option value="">不启用</option>
+        {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function StylePaneTitle({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div
+      className="space-y-1 p-3"
+      style={{
+        background: 'rgba(var(--tj-accent-primary),0.045)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="font-serif text-xs font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>{title}</div>
+      <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>{desc}</div>
+    </div>
+  );
+}
+
+function StylePaneTitleWithState({
+  title,
+  desc,
+  activeName,
+  activeTag,
+  active,
+  onEnable,
+  onDisable,
+  enableDisabled,
+  disableDisabled,
+  onAdd,
+  onDelete,
+  deleteDisabled,
+}: {
+  title: string;
+  desc: string;
+  activeName?: string | null;
+  activeTag: string;
+  active: boolean;
+  onEnable: () => void;
+  onDisable: () => void;
+  enableDisabled?: boolean;
+  disableDisabled?: boolean;
+  onAdd: () => void;
+  onDelete: () => void;
+  deleteDisabled?: boolean;
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 p-3"
+      style={{
+        background: 'rgba(var(--tj-accent-primary),0.045)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="font-serif text-xs font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>{title}</div>
+        <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>{desc}</div>
+      </div>
+      <div className="flex min-w-[250px] flex-wrap items-center justify-end gap-2">
+        <div
+          className="px-3 py-2 text-[11px] font-serif tracking-[0.12em]"
+          style={{
+            color: active ? 'rgba(var(--tj-accent-primary),0.94)' : 'rgba(var(--tj-text-secondary),0.45)',
+            background: active ? 'rgba(var(--tj-accent-primary),0.075)' : 'rgba(255,255,255,0.035)',
+            boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)' : 'inset 0 0 0 1px rgba(var(--tj-text-secondary),0.10)',
+            clipPath: smallClip,
+          }}
+          title={activeName || '未启用'}
+        >
+          {activeTag}{activeName ? ` · ${activeName}` : ''}
+        </div>
+        <TemplateButton onClick={onAdd}>新增</TemplateButton>
+        <TemplateButton onClick={onDelete} disabled={deleteDisabled} danger>删除</TemplateButton>
+        <TemplateButton onClick={onEnable} disabled={enableDisabled}>启用当前编辑</TemplateButton>
+        <TemplateButton onClick={onDisable} disabled={disableDisabled} danger>禁用此层</TemplateButton>
+      </div>
+    </div>
   );
 }
 
@@ -614,6 +909,28 @@ function TemplateButton({ children, onClick, disabled = false, danger = false }:
         color: danger ? 'rgba(255,190,190,0.9)' : 'rgba(var(--tj-accent-primary),0.88)',
         background: danger ? 'rgba(170,60,70,0.10)' : 'rgba(var(--tj-accent-primary),0.055)',
         boxShadow: danger ? 'inset 0 0 0 1px rgba(255,130,140,0.22)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.20)',
+        clipPath: smallClip,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LayerSwitchButton({ children, active, onClick }: { children: ReactNode; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="px-4 py-2 text-xs font-serif tracking-[0.16em] transition-all"
+      style={{
+        color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary),0.78)',
+        background: active
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-accent-secondary),0.88))'
+          : 'rgba(var(--tj-accent-primary),0.045)',
+        boxShadow: active
+          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.38), 0 0 14px rgba(var(--tj-accent-secondary),0.18)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
         clipPath: smallClip,
       }}
     >
@@ -661,14 +978,12 @@ function EmptyBox({ children }: { children: ReactNode }) {
   );
 }
 
-function getActiveId(rules: 文生图规则中心设置, type: 文生图规则模板类型): string {
+function getActiveId(rules: 文生图规则中心设置, type: VisibleRuleSection): string {
   if (type === 'scene') return rules.当前场景词组转化器提示词预设ID;
-  if (type === 'scene_judge') return rules.当前场景判定提示词预设ID;
   return rules.当前NPC词组转化器提示词预设ID;
 }
 
-function activeIdKey(type: 文生图规则模板类型): keyof 文生图规则中心设置 {
+function activeIdKey(type: VisibleRuleSection): keyof 文生图规则中心设置 {
   if (type === 'scene') return '当前场景词组转化器提示词预设ID';
-  if (type === 'scene_judge') return '当前场景判定提示词预设ID';
   return '当前NPC词组转化器提示词预设ID';
 }

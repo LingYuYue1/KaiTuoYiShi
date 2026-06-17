@@ -57,12 +57,13 @@ for (const key of [
   '忆庭召回API',
   '忆庭精炼API',
   '文生图普通接口',
-  '文生图场景接口',
   '文生图NSFW接口',
   '文生图词组转化器API',
 ]) {
   assert(apiSettings.includes(key), `API 配置包必须覆盖 ${key}。`);
 }
+assert(apiSettings.includes('文生图场景接口'), 'API 配置包可保留文生图场景接口字段用于旧包兼容。');
+assert(!apiSettings.includes('场景接口: profile.routes.文生图场景接口'), '导入 API 配置包不得再用场景接口覆盖运行配置。');
 
 assert(apiSettings.includes("await saveSetting('apiSettings', nextApiSettings)"), '导入 API 配置包必须持久化主 API 设置。');
 assert(apiSettings.includes("await saveSetting('gameSettings', nextGameSettings)"), '导入 API 配置包必须持久化独立系统 API 设置。');
