@@ -191,6 +191,7 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
     `玩家：${ctx.traveler.姓名 || '开拓者'}`,
     `当前时间：${ctx.world.当前日期 || ctx.world.当前时间 || '未知'}`,
     `地点：${ctx.world.当前地点 || '未设定'}`,
+    `开局档案：\n${formatPhoneOpeningArchive(ctx.world.开局档案)}`,
     storyReview ? `最近主剧情回顾：\n${storyReview}` : '',
     memories.length ? `近期记忆：\n${memories.join('\n')}` : '',
     localArchiveLines.length ? `当前手机会话本地摘要：\n${localArchiveLines.join('\n')}` : '',
@@ -222,6 +223,25 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
     ...history,
     { role: 'user', content: ctx.chat.type === 'group' ? `${prompt}\n\n群聊硬性要求：本次 messages 至少 12 条，必须使用「姓名：内容」格式，至少 3 位不同发言者。` : prompt },
   ];
+}
+
+function formatPhoneOpeningArchive(archive: 世界状态['开局档案']): string {
+  if (!archive) return '无结构化开局档案。';
+  const summary = archive.整理档案;
+  return [
+    `来源：${archive.来源}`,
+    `地区：${archive.地区名称 || '未标注'}`,
+    `章节锚点：${archive.章节锚点名称 || '未标注'}`,
+    `主线启用：${archive.主线启用 === false ? '否' : '是'}`,
+    archive.章节参考说明 ? `章节参考：${archive.章节参考说明}` : '',
+    archive.玩家介入原文 ? `玩家介入：${archive.玩家介入原文}` : '',
+    summary?.初始地点参考 ? `初始地点：${summary.初始地点参考}` : '',
+    summary?.自定义起始地点 ? `自定义起始地点：${summary.自定义起始地点}` : '',
+    summary?.起始情境 ? `起始情境：${summary.起始情境}` : '',
+    summary?.当前目标 ? `当前目标：${summary.当前目标}` : '',
+    summary?.已认识角色?.length ? `已认识角色：${summary.已认识角色.join('、')}` : '',
+    summary?.初始关系?.length ? `初始关系：${summary.初始关系.join('；')}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 function resolvePhoneGroupParticipant(ctx: 手机回复上下文, participantId: string): { name: string; npc?: NPC记录; contact?: 手机联系人 } | undefined {

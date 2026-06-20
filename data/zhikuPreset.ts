@@ -62,9 +62,16 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
     id: 'zhiku_xianzhou_luofu_character_rebuild',
     title: '人物重建·罗浮仙舟角色档案',
-    description: '罗浮仙舟角色重构预设：以一个角色一个档案包的方式维护景元、彦卿、符玄、白露、停云、灵砂、驭空、青雀、罗刹、镜流、桂乃芬、素裳、藿藿、寒鸦与雪衣；全员已按完整档案骨架精修，并补齐可写外貌与出身锚点，其他仙舟归属角色不放入本分组。',
+    description: '罗浮仙舟角色重构预设：以一个角色一个档案包的方式维护景元、彦卿、符玄、白露、停云、灵砂、驭空、青雀、罗刹、镜流、桂乃芬、素裳、藿藿、寒鸦与雪衣；全员已完成语料层与故事层重写，保留官方叙事与对话，其他仙舟归属角色不放入本分组。',
     path: '/zhiku-presets/xianzhou-luofu-character-rebuild.json',
-    updatedAt: '2026-06-11-xianzhou-luofu-character-profiles-8',
+    updatedAt: '2026-06-18-xianzhou-luofu-story-layer-full-rewrite',
+  },
+  {
+    id: 'zhiku_interastral_peace_corporation_character_rebuild',
+    title: '人物重建·星际和平公司角色档案',
+    description: '星际和平公司角色重构预设：以一个角色一个档案包的方式维护托帕、砂金与翡翠；档案内部承载常驻事实、角色故事、表现锚点、语料、职责模块和阶段/写法边界；砂金同时关联匹诺康尼资料大区，翡翠暂以剧情门禁形态存在；语料只作口吻参考，禁止照抄或原句搬运。',
+    path: '/zhiku-presets/interastral-peace-corporation-character-rebuild.json',
+    updatedAt: '2026-06-18-ipc-character-profiles-1',
   },
   {
     id: 'zhiku_location_core',

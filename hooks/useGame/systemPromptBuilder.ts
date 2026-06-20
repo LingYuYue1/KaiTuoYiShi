@@ -4,6 +4,7 @@ import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块作用域 } from '@/models/prompts';
 import { PROMPT_MODULE_TOP_THRESHOLD } from '@/models/prompts';
+import type { 开局来源 } from '@/models/journey';
 import type { 世界书 } from '@/models/worldbook';
 import type { NPC记录, NPC账本选择结果, NPC同行记忆条目 } from '@/models/npc';
 import { formatNpcLedgerForPrompt, NPC_RELATION_LABELS, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
@@ -80,6 +81,7 @@ export function buildSystemPrompt(
     personLabel,
     playerName: getPromptPlayerName(traveler),
     currentScope,
+    openingSource: worldState.开局档案?.来源,
   };
 
   // ── 提示词模块·顶部（order < 30：开发者模式、叙述者人格等） ──
@@ -114,6 +116,9 @@ export function buildSystemPrompt(
   if (currentScope === 'main') {
     parts.push(buildMainStoryControlSection(worldState));
   }
+
+  const openingArchiveSection = buildOpeningArchiveSection(worldState, currentScope === 'opening');
+  if (openingArchiveSection) parts.push(openingArchiveSection);
 
   // ── 当前角色与相对稳定的角色能力：通常比本回合状态变化慢，放在动态块之前提高缓存前缀长度。 ──
   parts.push(buildCharacterSection(traveler));
@@ -240,6 +245,7 @@ export function buildOpeningSystemPrompt(
     personLabel,
     playerName: getPromptPlayerName(traveler),
     currentScope: 'opening' as 提示词模块作用域,
+    openingSource: worldState.开局档案?.来源,
   };
 
   const topModules = injectPromptModules(settings.promptModules, moduleCtx, 'top');
@@ -276,6 +282,9 @@ export function buildOpeningSystemPrompt(
 
   const openingCutIn = buildOpeningCutInSection(worldState);
   if (openingCutIn) parts.push(openingCutIn);
+
+  const openingArchiveSection = buildOpeningArchiveSection(worldState, true);
+  if (openingArchiveSection) parts.push(openingArchiveSection);
 
   const scene = buildSceneSection(worldState);
   if (scene) parts.push(scene);
@@ -367,6 +376,7 @@ interface PromptModuleInjectionCtx {
   personLabel: string;
   playerName: string;
   currentScope: 提示词模块作用域;
+  openingSource?: 开局来源;
 }
 
 function getPromptPlayerName(traveler: 角色数据结构): string {
@@ -428,6 +438,10 @@ function injectPromptModules(
       const scope = m.scope?.length ? m.scope : (['all'] as 提示词模块作用域[]);
       return scope.includes('all') || scope.includes(ctx.currentScope);
     })
+    .filter((m) => {
+      if (!m.openingSourceGate?.length) return true;
+      return ctx.currentScope === 'opening' && !!ctx.openingSource && m.openingSourceGate.includes(ctx.openingSource);
+    })
     .filter((m) =>
       position === 'top'
         ? m.order < PROMPT_MODULE_TOP_THRESHOLD
@@ -479,7 +493,57 @@ function buildMainStoryControlSection(worldState: 世界状态): string {
   } else if (worldState.原著主角) {
     lines.push(`- 当前原著主角配置：${worldState.原著主角}。另一性别主角不自动登场，除非后续剧情或玩家设定明确引入。`);
   }
+  const archive = worldState.开局档案;
+  if (archive) {
+    lines.push(`- 当前开局档案：${archive.来源 === 'free' ? '自由开局' : archive.来源 === 'workshop' ? '创意工坊' : '官方预设'} / ${archive.地区名称} / ${archive.章节锚点名称}。`);
+    lines.push('- 后续回合必须承接开局档案和当前地点，不能无理由回到默认黑塔空间站开局，也不能重播首回合入场。');
+    lines.push('- 开局锚点之前的原作主线不得被自动补演或转跳推进；若提及，只能作为既成背景、回忆、资料、新闻或旁人简述。');
+  }
   return `# 主剧情运行锚点\n\n${lines.join('\n')}`;
+}
+
+function buildOpeningArchiveSection(worldState: 世界状态, isOpeningTurn: boolean): string {
+  const archive = worldState.开局档案;
+  if (!archive) return '';
+  const summary = archive.整理档案;
+  const lines: string[] = [];
+  lines.push(`- 当前开局模式：${archive.来源 === 'free' ? '自由开局' : archive.来源 === 'workshop' ? '创意工坊' : '官方预设'}`);
+  lines.push(`- 来源：${archive.来源 === 'free' ? '自由开局' : archive.来源 === 'workshop' ? '创意工坊' : '官方预设'}`);
+  lines.push(`- 地区：${archive.地区名称}（${archive.地区ID}）`);
+  lines.push(`- 章节锚点：${archive.章节锚点名称}（${archive.章节锚点ID}）`);
+  lines.push(`- 章节参考性质：${archive.参考性质}。章节只提供背景参考，不硬锁玩家自由设定。`);
+  lines.push('- 进度边界：选择的章节锚点就是当前开局起点；锚点之前的主线只作既成背景/资料参考，不得作为正文自动跳转、补演或推进目标。');
+  if (archive.章节参考说明) lines.push(`- 章节参考说明：${archive.章节参考说明}`);
+  if (archive.玩家介入原文) lines.push(`- 玩家介入原文：${archive.玩家介入原文}`);
+  if (archive.来源 !== 'official_preset') {
+    lines.push('- 自由开局现实：玩家介入原文和整理档案可以建立原著之外的起始地点、原创事件、原创组织、自定义切入点或平行支线；这些内容若已写入开局档案，必须作为已成立设定承接，不得强行改回原著默认地点。');
+  }
+  if (archive.官方预设ID) lines.push(`- 官方预设ID：${archive.官方预设ID}`);
+  if (archive.创意工坊模板ID) lines.push(`- 创意工坊模板ID：${archive.创意工坊模板ID}`);
+  if (summary?.玩家身份) lines.push(`- 玩家身份：${summary.玩家身份}`);
+  if (summary?.来到此地原因) lines.push(`- 来到此地原因：${summary.来到此地原因}`);
+  if (summary?.当前目标) lines.push(`- 当前目标：${summary.当前目标}`);
+  if (summary?.起始情境) lines.push(`- 起始情境：${summary.起始情境}`);
+  if (summary?.初始地点参考) lines.push(`- 初始地点参考：${summary.初始地点参考}`);
+  if (summary?.关键角色参考?.length) lines.push(`- 关键角色参考：${summary.关键角色参考.join('、')}（只用于背景资料和可能牵引，不代表已认识或当前在场）`);
+  if (summary?.已认识角色?.length) lines.push(`- 已认识角色：${summary.已认识角色.join('、')}`);
+  if (summary?.初始关系?.length) lines.push(`- 初始关系：${summary.初始关系.join('；')}`);
+  if (summary?.叙事倾向?.length) lines.push(`- 叙事倾向：${summary.叙事倾向.join('、')}`);
+  if (summary?.特别要求?.length) lines.push(`- 特别要求：${summary.特别要求.join('；')}`);
+  if (summary?.冲突协调?.length) lines.push(`- 冲突协调：${summary.冲突协调.join('；')}`);
+  if (summary?.关键角色参考?.length || summary?.已认识角色?.length || summary?.初始关系?.length) {
+    lines.push('- 人物边界：关键角色参考只代表背景相关人物；已认识角色/初始关系只代表长期关系参考；这些都不代表当前在场，是否入场仍以当前场景、玩家点名和剧情调度为准。');
+  }
+  if (archive.防回退规则.length) {
+    lines.push('- 防回退规则：');
+    for (const rule of archive.防回退规则) lines.push(`  · ${rule}`);
+  }
+  lines.push(
+    isOpeningTurn
+      ? '- 首回合写法：必须把开局档案视为已经成立的事实，快速建立当前地区氛围、玩家切入点和可接触对象。'
+      : '- 后续写法：开局档案持续生效；除非剧情明确转场，不得把玩家强行拉回默认黑塔空间站开局。',
+  );
+  return `# 开局档案（长期锚点）\n\n${lines.join('\n')}`;
 }
 
 function buildCurrentTimeAnchorSection(worldState: 世界状态): string {

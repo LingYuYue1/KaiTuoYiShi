@@ -1,4 +1,4 @@
-export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'opencode' | 'mimo' | 'openai_compatible';
+export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'opencode' | 'mimo' | 'ark' | 'openai_compatible';
 
 import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';

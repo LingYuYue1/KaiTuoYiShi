@@ -2,6 +2,7 @@ import type { API配置项 } from '@/models/settings';
 import type { 聊天消息, 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
+import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
 
 export interface StreamCallbacks {
   onDelta: (delta: string) => void;
@@ -35,6 +36,7 @@ export type ChatCompletionUsage = Partial<Omit<回合Token消耗, 'source'>> & {
 function detectProvider(config: API配置项): string {
   const url = config.baseUrl.toLowerCase();
   if (config.provider === 'mimo' || /xiaomimimo|mimo\.mi/i.test(url)) return 'mimo';
+  if (config.provider === 'ark' || isArkBaseUrl(config.baseUrl)) return 'ark';
   if (config.provider === 'opencode' || /opencode\.ai\/zen\/v1/i.test(url)) return 'opencode';
   if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
   if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
@@ -266,6 +268,10 @@ function buildPioneerProxyBody(config: API配置项, body: Record<string, unknow
     apiKey: config.apiKey,
     body,
   });
+}
+
+function isArkConfig(config: API配置项): boolean {
+  return config.provider === 'ark' || isArkBaseUrl(config.baseUrl);
 }
 
 function isBaiduQianfanConfig(config: API配置项): boolean {
@@ -911,6 +917,18 @@ function firstNumber(...values: unknown[]): number | undefined {
 }
 
 function formatOpenAICompatibleError(config: API配置项, status: number, text: string): Error {
+  if (isArkConfig(config)) {
+    const lower = text.toLowerCase();
+    const hint = (() => {
+      if (lower.includes('modelnotopen') || lower.includes('model not open')) {
+        return '火山方舟模型服务未开通，请到火山方舟控制台开通对应模型后再试。';
+      }
+      if (status === 401 || status === 403) return '请检查火山方舟 API Key、访问权限和模型服务是否已开通。';
+      if (status === 404) return '请检查火山方舟模型 ID、Base URL 是否为 https://ark.cn-beijing.volces.com/api/v3。';
+      return '请检查火山方舟 Base URL、模型 ID、API Key、余额和模型服务开通状态。';
+    })();
+    return new Error(`火山方舟 API Error ${status}: ${hint}\n${text}`);
+  }
   if (isBaiduQianfanConfig(config)) {
     const model = config.model.trim();
     const normalized = normalizeOpenAICompatibleModel(config);
@@ -1193,15 +1211,23 @@ async function streamOpenAICompatible(
   callbacks: StreamCallbacks,
   includeUsage: boolean = true,
 ): Promise<string> {
-  const upstreamBaseUrl = isPioneerConfig(config) ? normalizePioneerBaseUrl(config.baseUrl) : config.baseUrl;
+  const upstreamBaseUrl = isArkConfig(config)
+    ? normalizeArkBaseUrl(config.baseUrl)
+    : isPioneerConfig(config)
+      ? normalizePioneerBaseUrl(config.baseUrl)
+      : config.baseUrl;
   const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
   const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true, includeUsage);
-  const url = isBaiduQianfanConfig(config)
+  const url = isArkConfig(config)
+    ? '/api/ark'
+    : isBaiduQianfanConfig(config)
     ? '/api/qianfan'
     : isPioneerConfig(config)
       ? '/api/pioneer'
       : upstreamUrl;
-  const body = isBaiduQianfanConfig(config)
+  const body = isArkConfig(config)
+    ? buildArkProxyBody(config, requestBody)
+    : isBaiduQianfanConfig(config)
     ? buildQianfanProxyBody(config, requestBody)
     : isPioneerConfig(config)
       ? buildPioneerProxyBody(config, requestBody)
@@ -2096,11 +2122,15 @@ export async function chatCompletionNonStream(
     ? withDeepSeekPrefixMessages(config, msgs, request)
     : { config, messages: msgs, prefix: '' };
 
-  const upstreamBaseUrl = isPioneerConfig(deepSeekPayload.config)
-    ? normalizePioneerBaseUrl(deepSeekPayload.config.baseUrl)
-    : deepSeekPayload.config.baseUrl;
+  const upstreamBaseUrl = isArkConfig(deepSeekPayload.config)
+    ? normalizeArkBaseUrl(deepSeekPayload.config.baseUrl)
+    : isPioneerConfig(deepSeekPayload.config)
+      ? normalizePioneerBaseUrl(deepSeekPayload.config.baseUrl)
+      : deepSeekPayload.config.baseUrl;
   const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
-  const effectiveUrl = isBaiduQianfanConfig(deepSeekPayload.config)
+  const effectiveUrl = isArkConfig(deepSeekPayload.config)
+    ? '/api/ark'
+    : isBaiduQianfanConfig(deepSeekPayload.config)
     ? '/api/qianfan'
     : isPioneerConfig(deepSeekPayload.config)
       ? '/api/pioneer'
@@ -2113,7 +2143,9 @@ export async function chatCompletionNonStream(
       'Content-Type': 'application/json',
       ...(effectiveUrl.startsWith('/api/') ? {} : { Authorization: `Bearer ${deepSeekPayload.config.apiKey}` }),
     },
-    body: isBaiduQianfanConfig(deepSeekPayload.config)
+    body: isArkConfig(deepSeekPayload.config)
+      ? buildArkProxyBody(deepSeekPayload.config, requestBody)
+      : isBaiduQianfanConfig(deepSeekPayload.config)
       ? buildQianfanProxyBody(deepSeekPayload.config, requestBody)
       : isPioneerConfig(deepSeekPayload.config)
         ? buildPioneerProxyBody(deepSeekPayload.config, requestBody)

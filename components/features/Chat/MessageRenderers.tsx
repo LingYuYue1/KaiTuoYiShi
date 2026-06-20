@@ -2,8 +2,10 @@ import { useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
+import type { 相册系统 } from '@/models/imageGeneration';
 import type { VisualTextSettings } from '@/models/settings';
 import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
+import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface ThinkingBlockProps {
   content: string;
@@ -49,6 +51,7 @@ interface BodyBlockProps {
   content: string;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
+  album?: 相册系统;
   showInnerVoice?: boolean;
   userInput?: string;
   visualTextSettings?: VisualTextSettings;
@@ -395,13 +398,14 @@ function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15 }: Dialogu
 interface InnerVoiceBubbleProps {
   text: string;
   traveler?: 角色数据结构;
+  album?: 相册系统;
 }
 
 // 主角心声：圆头像 + 顶部「·心绪·」标签 + 虚线边气泡 + 暖橘斜体
-function InnerVoiceBubble({ text, traveler, fontSize = 15 }: InnerVoiceBubbleProps & { fontSize?: number }) {
+function InnerVoiceBubble({ text, traveler, album, fontSize = 15 }: InnerVoiceBubbleProps & { fontSize?: number }) {
   const PEACH = 'rgb(235, 195, 155)';
   const name = traveler?.姓名?.trim() || '我';
-  const avatarUrl = traveler?.头像?.trim() || undefined;
+  const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined;
   return (
     <div className="group my-3 flex items-start gap-3">
       <AvatarTile name={name} url={avatarUrl} color={PEACH} size="md" />
@@ -462,7 +466,7 @@ function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: numbe
   );
 }
 
-export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true, userInput, visualTextSettings }: BodyBlockProps) {
+export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings }: BodyBlockProps) {
   const lines = useMemo(() => (content ? parseBodyLines(content, traveler, userInput) : []), [content, traveler, userInput]);
   const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
   if (!content) return null;
@@ -478,8 +482,8 @@ export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true
           const protagonist = isProtagonist(line.name, traveler);
           const color = protagonist ? 'rgb(var(--tj-accent-primary))' : nameToColor(line.name);
           const avatarUrl = protagonist
-            ? traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim() || undefined
-            : 读取NPC头像(npc, '正文');
+            ? 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined
+            : 解析相册资源引用(album, 读取NPC头像(npc, '正文')) || undefined;
           return (
             <DialogueBubble
               key={i}
@@ -493,7 +497,7 @@ export function BodyBlock({ content, npcRecords, traveler, showInnerVoice = true
         }
         if (line.kind === 'inner') {
           if (!showInnerVoice) return null;
-          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} fontSize={fontSettings.dialogueFontSize} />;
+          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} album={album} fontSize={fontSettings.dialogueFontSize} />;
         }
         if (line.kind === 'narration') {
           return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
@@ -575,11 +579,12 @@ interface StreamingPreviewProps {
   content: string;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
+  album?: 相册系统;
   showInnerVoice?: boolean;
   userInput?: string;
 }
 
-export function StreamingPreview({ content, npcRecords, traveler, showInnerVoice = true, userInput, visualTextSettings }: StreamingPreviewProps & { visualTextSettings?: VisualTextSettings }) {
+export function StreamingPreview({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings }: StreamingPreviewProps & { visualTextSettings?: VisualTextSettings }) {
   const { bodyStarted, bodyText } = useMemo(() => extractStreamingBody(content), [content]);
   const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
 
@@ -588,7 +593,7 @@ export function StreamingPreview({ content, npcRecords, traveler, showInnerVoice
       <PathfindingIndicator />
       {bodyStarted && bodyText && (
         <div className="px-1 py-1">
-          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={userInput} visualTextSettings={fontSettings} />
+          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={userInput} visualTextSettings={fontSettings} />
         </div>
       )}
     </div>

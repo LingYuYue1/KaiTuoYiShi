@@ -1,24 +1,27 @@
 import type { 角色数据结构 } from '@/models/character';
+import type { 相册系统 } from '@/models/imageGeneration';
 import { Modal } from '@/components/ui/Modal';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, 获取命途特质 } from '@/models/path';
+import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface Props {
   traveler: 角色数据结构;
+  album?: 相册系统;
   onClose: () => void;
 }
 
 const cardClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
-export function TravelerProfileModal({ traveler, onClose }: Props) {
+export function TravelerProfileModal({ traveler, album, onClose }: Props) {
   const primaryPath = traveler.命途列表?.find((p) => p.是否主命途) ?? traveler.命途列表?.[0];
   const primaryPathDef = primaryPath ? getPath(primaryPath.id) : undefined;
   const primaryStageDef = primaryPath
     ? PATH_STAGE_DEFS.find((s) => s.stage === primaryPath.阶段)
     : undefined;
   const primaryTraits = primaryPath ? 获取命途特质(primaryPath.id) : [];
-  const avatarUrl = traveler.头像?.trim() || traveler.图像档案?.头像?.trim();
+  const avatarUrl = 解析相册资源引用(album, traveler.头像?.trim() || traveler.图像档案?.头像?.trim());
 
   return (
     <Modal onClose={onClose} title="旅人档案">

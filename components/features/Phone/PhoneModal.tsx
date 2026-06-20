@@ -10,6 +10,7 @@ import type { 世界状态 } from '@/models/world';
 import type { API设置, 游戏设置 } from '@/models/settings';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
+import type { 相册系统 } from '@/models/imageGeneration';
 import { 创建手机会话, 创建手机会话本地摘要条目, 创建手机会话本地库, 创建手机消息, 计算手机未读, type 手机消息 } from '@/models/phone';
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
 import type { 忆庭系统 } from '@/models/yiting';
@@ -19,6 +20,7 @@ import {
   DEFAULT_PHONE_CHAT_WALLPAPER,
   DEFAULT_PHONE_HOME_WALLPAPER,
 } from '@/data/builtinPhoneWallpapers';
+import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface Props {
   phone: 手机系统;
@@ -34,6 +36,7 @@ interface Props {
   turnCount: number;
   mainChatHistory: 聊天消息[];
   npcRecords: NPC记录[];
+  album?: 相册系统;
   onPhoneChange: React.Dispatch<React.SetStateAction<手机系统>>;
   onMemoryChange: React.Dispatch<React.SetStateAction<记忆系统>>;
   onYitingChange: React.Dispatch<React.SetStateAction<忆庭系统>>;
@@ -132,6 +135,7 @@ export function PhoneModal({
   turnCount,
   mainChatHistory,
   npcRecords,
+  album,
   onPhoneChange,
   onMemoryChange,
   onYitingChange,
@@ -167,13 +171,13 @@ export function PhoneModal({
           id: toPhoneContactId(npc.id),
           npcId: npc.id,
           name: npc.姓名,
-          avatar: 读取NPC头像(npc, '手机'),
+          avatar: 解析相册资源引用(album, 读取NPC头像(npc, '手机')),
           organization: undefined,
           relationLabel: npc.阶位 === 'companion' ? '伙伴' : '路人',
           available: true,
           lastActiveTurn: npc.最近回合,
         })),
-    [normalizedNpcRecords],
+    [album, normalizedNpcRecords],
   );
   const fallbackStoryContacts = useMemo(
     () =>
@@ -195,7 +199,7 @@ export function PhoneModal({
         return {
           ...derived,
           ...contact,
-          avatar: contact.avatar || derived?.avatar,
+          avatar: 解析相册资源引用(album, contact.avatar || derived?.avatar),
           organization: contact.organization || (contact as { faction?: string }).faction || derived?.organization,
           relationLabel: contact.relationLabel || derived?.relationLabel,
           available: contact.available ?? derived?.available ?? true,
@@ -211,7 +215,7 @@ export function PhoneModal({
         }
         return contact.available !== false;
       });
-  }, [derivedContacts, fallbackStoryContacts, normalizedNpcRecords, phone.contacts]);
+  }, [album, derivedContacts, fallbackStoryContacts, normalizedNpcRecords, phone.contacts]);
   const addableNpcContacts = useMemo(
     () =>
       normalizedNpcRecords
@@ -221,7 +225,7 @@ export function PhoneModal({
           id: toPhoneContactId(npc.id),
           npcId: npc.id,
           name: npc.姓名,
-          avatar: 读取NPC头像(npc, '手机'),
+          avatar: 解析相册资源引用(album, 读取NPC头像(npc, '手机')),
           organization: undefined,
           relationLabel: npc.阶位 === 'companion' ? '伙伴' : '已认识',
           available: true,
@@ -944,9 +948,9 @@ export function PhoneModal({
     : activeApp === 'contacts' ? 'CONTACTS'
     : activeApp === 'news' ? 'NEWS FEED'
     : 'WALLPAPER';
-  const homeWallpaper = phone.wallpapers?.home || DEFAULT_PHONE_HOME_WALLPAPER;
+  const homeWallpaper = 解析相册资源引用(album, phone.wallpapers?.home) || DEFAULT_PHONE_HOME_WALLPAPER;
   const chatWallpaper = activeApp === 'messages'
-    ? phone.wallpapers?.chat || DEFAULT_PHONE_CHAT_WALLPAPER
+    ? 解析相册资源引用(album, phone.wallpapers?.chat) || DEFAULT_PHONE_CHAT_WALLPAPER
     : undefined;
 
   return (
@@ -1389,7 +1393,7 @@ export function PhoneModal({
               ) : (
                 <WallpaperSurface
                   homeWallpaper={homeWallpaper}
-                  chatWallpaper={phone.wallpapers?.chat || DEFAULT_PHONE_CHAT_WALLPAPER}
+                  chatWallpaper={解析相册资源引用(album, phone.wallpapers?.chat) || DEFAULT_PHONE_CHAT_WALLPAPER}
                   onSetHome={(src) =>
                     onPhoneChange((prev) => ({
                       ...prev,

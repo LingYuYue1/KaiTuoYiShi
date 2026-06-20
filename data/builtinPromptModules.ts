@@ -1,6 +1,6 @@
 ﻿import type { 提示词模块 } from '@/models/prompts';
 import { MAIN_COT_PROMPT } from '@/prompts/cot/mainCot';
-import { OPENING_COT_PROMPT } from '@/prompts/cot/openingCot';
+import { FREE_OPENING_COT_PROMPT, OPENING_COT_PROMPT, PRESET_OPENING_COT_PROMPT } from '@/prompts/cot/openingCot';
 import { PATH_AWAKENING_COT_PROMPT } from '@/prompts/cot/pathAwakeningCot';
 import { NEWS_COT_PROMPT } from '@/prompts/cot/newsCot';
 import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
@@ -530,6 +530,14 @@ const OPENING_COT_CONTENT = `# 开局思维链
 
 ${OPENING_COT_PROMPT}`;
 
+const PRESET_OPENING_COT_CONTENT = `# 预设开局思维链
+
+${PRESET_OPENING_COT_PROMPT}`;
+
+const FREE_OPENING_COT_CONTENT = `# 自由开局思维链
+
+${FREE_OPENING_COT_PROMPT}`;
+
 const MAIN_PLOT_COT_CONTENT = `# 主剧情思维链
 
 ${MAIN_COT_PROMPT}`;
@@ -779,6 +787,34 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       builtin: true,
       order: 89,
       scope: ['main', 'opening'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_preset_opening_cot',
+      title: '预设开局思维链',
+      description: '官方预设开局附加 CoT：提高地区/章节锚点权重，避免非黑塔开局回落默认黑塔，并要求玩家介入方式融入预设。',
+      category: 'cot',
+      content: PRESET_OPENING_COT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 46,
+      scope: ['opening'],
+      openingSourceGate: ['official_preset'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_free_opening_cot',
+      title: '自由开局思维链',
+      description: '自由开局/创意工坊附加 CoT：玩家介入原文和整理档案优先，地区/章节仅作背景参考，并温和协调设定冲突。',
+      category: 'cot',
+      content: FREE_OPENING_COT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 47,
+      scope: ['opening'],
+      openingSourceGate: ['free', 'workshop'],
       createdAt: now,
       updatedAt: now,
     },

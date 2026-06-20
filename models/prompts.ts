@@ -30,6 +30,8 @@ export interface 提示词模块 {
   /** 允许注入的场景。空数组等价于 ['all']（运行时兜底）。
    *  填 ['all'] 表示任何回合都注入；填 ['main'] 表示首回合不注入；填 ['opening'] 表示仅首回合注入。 */
   scope: 提示词模块作用域[];
+  /** 可选：仅在开局档案来源命中时注入，用于区分官方预设 / 自由开局 / 创意工坊开局。 */
+  openingSourceGate?: ('official_preset' | 'free' | 'workshop')[];
   createdAt: number;
   updatedAt: number;
 }
@@ -38,6 +40,8 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_dev_mode',
   'builtin_narrator_persona',
   'builtin_opening_cot',
+  'builtin_preset_opening_cot',
+  'builtin_free_opening_cot',
   'builtin_main_plot_cot',
   'builtin_path_awakening_cot',
   'builtin_news_cot',

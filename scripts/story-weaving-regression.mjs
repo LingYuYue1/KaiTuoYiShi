@@ -165,6 +165,7 @@ writeStub('data/variableWorldbook.mjs', 'export const VARIABLE_SYSTEM_WORLDBOOK_
 writeStub('data/companionArchiveWorldbook.mjs', 'export const COMPANION_ARCHIVE_WORLDBOOK_CONTENT = "";\n');
 writeStub('hooks/useGame/historyWindow.mjs', 'export function buildImmediateStoryReview() { return ""; }\n');
 writeStub('utils/worldbook.mjs', 'export {};\n');
+writeStub('utils/promptPayloadSanitizer.mjs', 'export function stringifyPromptPayload(value) { return JSON.stringify(value); }\n');
 writeStub('utils/variableFacts.mjs', 'export function parseVariableFacts() { return []; }\n');
 writeStub('utils/variableRegistry.mjs', 'export function buildVariableRegistryPrompt() { return ""; }\n');
 writeStub('data/canonicalCharacters.mjs', 'export const CANONICAL_CHARACTERS = [];\nexport function matchCanonical() { return null; }\n');
@@ -379,6 +380,46 @@ assert(doomsdayCurrentBlock.includes('下一段：登上星穹列车'), '末日�
 assert(!doomsdayCurrentBlock.includes('反物质军团袭击空间站，末日兽被击退'), '末日兽旧段概括不得残留在当前素材块里。');
 assert(doomsdayInjection.includes('末日兽已被击退'), '末日兽结果仍可作为已发生承接事实保留。');
 
+const defaultHertaOpeningSegment = segment({
+  id: 'seg_default_herta_opening',
+  组号: 1,
+  标题: '黑塔空间站 · 主线苏醒前夕',
+  运行状态: '当前',
+  本段概括: '黑塔空间站遭遇反物质军团袭击，原著主角即将在封存舱苏醒。',
+  本段结束状态: ['空间站危机进入收束'],
+  登场角色: ['三月七', '丹恒'],
+  涉及地点: ['黑塔空间站'],
+});
+const xianzhouOpeningSegment = segment({
+  id: 'seg_xianzhou_luofu_opening',
+  组号: 4,
+  标题: '罗浮仙舟 · 初抵罗浮',
+  运行状态: '未开始',
+  章节范围: '仙舟罗浮主线初抵罗浮',
+  本段概括: '玩家从星槎海中枢切入仙舟罗浮，围绕星核与云骑军局势展开行动。',
+  本段结束状态: ['玩家完成罗浮开局承接'],
+  登场角色: ['景元', '停云', '瓦尔特'],
+  涉及地点: ['仙舟罗浮', '星槎海中枢'],
+});
+const xianzhouRelocationInjection = storyWeaving.buildStoryWeavingInjection(buildActiveCurrentSystem({
+  seriesId: 'series_opening_relocation_guard',
+  current: defaultHertaOpeningSegment,
+  next: xianzhouOpeningSegment,
+  segments: [defaultHertaOpeningSegment, xianzhouOpeningSegment],
+}), {
+  recentUserInput: '我已经抵达仙舟罗浮，准备从星槎海中枢介入。',
+  recentAIResponse: '',
+  currentLocation: '仙舟罗浮 · 星槎海中枢',
+  openingRegionName: '罗浮仙舟',
+  openingChapterName: '罗浮仙舟 · 初抵罗浮',
+  openingEntryText: '我从星槎海中枢接入仙舟主线。',
+  openingArchiveText: '开局档案：官方预设；地区：罗浮仙舟；章节锚点：罗浮仙舟 · 初抵罗浮；章节锚点之前的主线段落视为前置背景，不进入当前滑窗推进队列。',
+});
+const xianzhouRelocationBlock = extractBlock(xianzhouRelocationInjection, '当前段强承接素材') || extractBlock(xianzhouRelocationInjection, '当前段软参考素材');
+assert(xianzhouRelocationInjection.includes('已跳过与开局地区不符的默认滑窗'), '仙舟开局必须留下跳过默认黑塔滑窗的诊断。');
+assert(xianzhouRelocationBlock.includes('罗浮仙舟 · 初抵罗浮'), '选择仙舟开局时，剧情编织当前素材必须重定位到仙舟段。');
+assert(!xianzhouRelocationBlock.includes('黑塔空间站 · 主线苏醒前夕'), '选择仙舟开局时，黑塔默认开局不得继续作为当前素材注入。');
+
 const archivedSocialExample = segment({
   id: 'seg_archived_social_example',
   组号: 1,
@@ -489,8 +530,13 @@ assert(
 );
 const saveLoadWorkflowSource = fs.readFileSync(path.join(root, 'hooks/useGame/saveLoadWorkflow.ts'), 'utf8');
 assert(saveLoadWorkflowSource.includes('autoAlignCanonStoryProgress'), '读档时必须尝试修复旧存档剧情编织锚点。');
+assert(saveLoadWorkflowSource.includes('alignStoryWeavingToOpeningArchive') && saveLoadWorkflowSource.includes('safeWorld.开局档案'), '读档时必须先按开局档案对齐剧情编织锚点，避免罗浮/匹诺康尼旧档继续显示黑塔。');
 assert(saveLoadWorkflowSource.includes('recentAssistant?.parsedResponse?.body'), '读档修复必须使用最近正文作为纠偏证据。');
-assert(saveLoadWorkflowSource.includes('currentLocation: save.世界?.当前地点'), '读档修复必须使用存档当前地点作为纠偏证据。');
+assert(
+  saveLoadWorkflowSource.includes('currentLocation: save.世界?.当前地点') ||
+    saveLoadWorkflowSource.includes('currentLocation: safeWorld.当前地点'),
+  '读档修复必须使用存档当前地点作为纠偏证据。',
+);
 assert(
   ambiguousPlanning.切段条件.some((item) => item.includes('异常信号源已经定位并完成封存')),
   '规划分析应保留明确切段条件。',

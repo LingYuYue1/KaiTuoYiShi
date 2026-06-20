@@ -29,8 +29,14 @@ assert(service.includes('kaituoyishi-cloud-save'), 'GitHub 云存档必须有默
 assert(service.includes('PUT'), 'GitHub 云存档上传必须使用 Contents API 写入。');
 assert(service.includes('Authorization: `Bearer'), 'GitHub 云存档必须使用用户 Token 授权。');
 assert(service.includes('buildSavePackage(save)'), 'GitHub 云存档必须复用标准 ZIP 存档包。');
+assert(service.includes('await buildSavePackage(save)'), 'GitHub 云存档生成 ZIP 包必须等待异步压缩完成。');
 assert(service.includes('parseSavePackage'), 'GitHub 云存档下载后必须复用存档包解析。');
 assert(service.includes('github-cloud-save'), 'GitHub 云端 manifest 必须标记云存档类型。');
+assert(service.includes('contentHash?: string'), 'GitHub 云端 manifest 条目必须支持内容指纹。');
+assert(service.includes('hashCloudSave(save)'), 'GitHub 云存档必须为本地存档生成稳定内容指纹。');
+assert(service.includes('previousByCloudId'), 'GitHub 整批同步必须按 cloudId 查找既有云端记录。');
+assert(service.includes('previousItem?.contentHash === contentHash'), 'GitHub 整批同步必须跳过内容未变化的存档。');
+assert(service.includes('未变化，跳过上传'), 'GitHub 整批同步跳过上传时必须更新进度提示。');
 assert(service.includes('readFileBase64'), 'GitHub 云存档必须支持通过 blob 读取较大文件。');
 assert(service.includes('const cloudId = `local-save-${localSaveId}`'), 'GitHub 云存档整批同步必须使用稳定本地存档 id 覆盖同一云端文件。');
 assert(service.includes('deleteContent(config'), 'GitHub 云存档整批同步必须清理旧 manifest 中不再存在的云端存档。');

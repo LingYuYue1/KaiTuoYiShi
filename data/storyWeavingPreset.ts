@@ -2,6 +2,7 @@ import type { 智库条目 } from '@/models/zhiku';
 import type { 剧情编织分段, 剧情编织系列, 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化剧情编织系统, 归一化剧情编织系列 } from '@/models/storyWeaving';
 import { bundledZhikuPresets, loadBundledZhikuPreset } from '@/data/zhikuPreset';
+import type { 开局档案 } from '@/models/world';
 
 const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
   {
@@ -92,6 +93,59 @@ const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
 
 const CANON_START_SERIES_ID = 'story_canon_zhiku_herta_station_chapter1';
 
+const OPENING_STORY_WEAVING_ANCHORS: Record<string, { seriesId: string; segmentGroup: number; note: string }> = {
+  herta_station_incident: {
+    seriesId: 'story_canon_zhiku_herta_station_chapter1',
+    segmentGroup: 1,
+    note: '黑塔空间站序章开局，从空间站危机前段注入。',
+  },
+  belobog_arrival: {
+    seriesId: 'story_canon_zhiku_jarilo_vi_chapters',
+    segmentGroup: 2,
+    note: '雅利洛-VI 初抵贝洛伯格阶段开局，黑塔空间站序章只作前置背景，直接从永冬雪原与贝洛伯格城门注入。',
+  },
+  belobog_underworld: {
+    seriesId: 'story_canon_zhiku_jarilo_vi_chapters',
+    segmentGroup: 5,
+    note: '雅利洛-VI 下层区阶段开局，贝洛伯格前段只作前置背景。',
+  },
+  belobog_cocolia_crisis: {
+    seriesId: 'story_canon_zhiku_jarilo_vi_sunrise_chapters',
+    segmentGroup: 5,
+    note: '贝洛伯格可可利亚危机前夜开局，前中段只作前置背景，直接从残响回廊与北方雪原入口注入。',
+  },
+  luofu_arrival: {
+    seriesId: 'story_canon_zhiku_xianzhou_luofu_travel_chapters',
+    segmentGroup: 1,
+    note: '仙舟罗浮初抵阶段开局，黑塔与雅利洛主线只作前置背景。',
+  },
+  luofu_kafka_interrogation: {
+    seriesId: 'story_canon_zhiku_xianzhou_luofu_travel_chapters',
+    segmentGroup: 8,
+    note: '太卜司审问前后开局，罗浮初抵与追踪前段只作前置背景。',
+  },
+  luofu_phantylia_crisis: {
+    seriesId: 'story_canon_zhiku_xianzhou_luofu_cloud_tree_chapters',
+    segmentGroup: 4,
+    note: '建木灾变阶段开局，罗浮前中段与丹鼎司前置只作背景，直接从鳞渊境与建木玄根危机注入。',
+  },
+  penacony_invitation: {
+    seriesId: 'story_canon_penacony_noise_and_fury',
+    segmentGroup: 3,
+    note: '匹诺康尼盛会邀约阶段开局，此前主线只作前置背景，直接从白日梦酒店入场与宾客身份核验注入。',
+  },
+  penacony_dream_edge: {
+    seriesId: 'story_canon_penacony_noise_and_fury',
+    segmentGroup: 8,
+    note: '匹诺康尼梦境边界异动阶段开局，入梦前段只作前置背景，直接从筑梦边缘与秘密据点天台注入。',
+  },
+  penacony_reverie_crisis: {
+    seriesId: 'story_canon_penacony_in_our_time',
+    segmentGroup: 10,
+    note: '匹诺康尼美梦崩塌前夜开局，前中段只作前置背景，直接从热砂会场、匹诺康尼大剧院与总摊牌前注入。',
+  },
+};
+
 export interface BundledStoryWeavingPreset {
   id: string;
   title: string;
@@ -100,6 +154,82 @@ export interface BundledStoryWeavingPreset {
 }
 
 export const bundledStoryWeavingPresets: BundledStoryWeavingPreset[] = decomposedStoryWeavingPresets;
+
+export function getOpeningStoryWeavingAnchor(chapterId?: string): { seriesId: string; segmentGroup: number; note: string } | undefined {
+  const id = chapterId?.trim();
+  return id ? OPENING_STORY_WEAVING_ANCHORS[id] : undefined;
+}
+
+export function alignStoryWeavingToOpeningArchive(system: 剧情编织系统, archive?: 开局档案): 剧情编织系统 {
+  const normalized = 归一化剧情编织系统(system);
+  if (!normalized.系列列表.length || !archive) return normalized;
+  if (archive.主线启用 === false) {
+    return 归一化剧情编织系统({
+      系列列表: normalized.系列列表.map((series) => series.来源类型 === 'canon'
+        ? { ...series, 激活注入: false, updatedAt: Date.now() }
+        : series),
+      当前系列ID: normalized.当前系列ID,
+      当前进度: normalized.当前进度,
+    });
+  }
+
+  const anchor = getOpeningStoryWeavingAnchor(archive.章节锚点ID);
+  if (!anchor) return normalized;
+  const targetSeries = normalized.系列列表.find((series) => series.id === anchor.seriesId || series.内置预设ID === anchor.seriesId);
+  if (!targetSeries) return normalized;
+  const targetSegment = targetSeries.分段列表.find((segment) => segment.组号 === anchor.segmentGroup)
+    ?? targetSeries.分段列表.find((segment) => segment.运行状态 === '当前')
+    ?? targetSeries.分段列表[0];
+  if (!targetSegment) return normalized;
+
+  const now = Date.now();
+  const nextSeriesList = normalized.系列列表.map((series) => {
+    if (series.id !== targetSeries.id) return series;
+    return 归一化剧情编织系列({
+      ...series,
+      激活注入: true,
+      当前分段组号: targetSegment.组号,
+      当前阶段概括: archive.章节参考说明 || series.当前阶段概括,
+      分段列表: series.分段列表.map((segment) => {
+        if (segment.id === targetSegment.id) {
+          return { ...segment, 运行状态: '当前' as const, updatedAt: now };
+        }
+        if (segment.组号 < targetSegment.组号 && segment.运行状态 !== '已偏离') {
+          return { ...segment, 运行状态: '已跳过' as const, updatedAt: now };
+        }
+        return { ...segment, 运行状态: segment.运行状态 === '当前' ? '未开始' as const : segment.运行状态, updatedAt: now };
+      }),
+      updatedAt: now,
+    });
+  });
+
+  return 归一化剧情编织系统({
+    系列列表: nextSeriesList,
+    当前系列ID: targetSeries.id,
+    当前进度: {
+      当前系列ID: targetSeries.id,
+      当前分段ID: targetSegment.id,
+      当前分段组号: targetSegment.组号,
+      推进状态: '推进中',
+      已完成摘要: [],
+      当前待解问题: targetSegment.给后续参考.slice(0, 8),
+      切换说明: [
+        `开局章节锚点：${archive.地区名称} / ${archive.章节锚点名称}`,
+        anchor.note,
+      ],
+      历史归档: [],
+      最近门禁结果: 'soft',
+      最近判定理由: [
+        `新开局按章节锚点「${archive.章节锚点ID}」定位到内置剧情轨道「${targetSeries.标题}」第 ${targetSegment.组号} 段。`,
+      ],
+      最近一次推进判定回合: 0,
+      推进证据: [archive.章节参考说明, archive.玩家介入原文].filter(Boolean).slice(0, 4),
+      连续推进证据回合: 0,
+      卡段回合数: 0,
+      updatedAt: now,
+    },
+  });
+}
 
 export async function loadBundledStoryWeavingPreset(preset: BundledStoryWeavingPreset): Promise<剧情编织系列 | null> {
   const decomposed = await loadDecomposedCanonSeries(preset.id);
@@ -184,6 +314,7 @@ async function loadDecomposedCanonSeries(presetId: string): Promise<剧情编织
 
 function buildCanonSeriesFromZhikuEntries(preset: BundledStoryWeavingPreset, entries: 智库条目[]): 剧情编织系列 {
   const now = 1779580800000;
+  const openingFacts = buildCanonOpeningFacts(preset);
   const chapters = entries.map((entry, index) => {
     const content = entry.原文.trim() || entry.摘要.trim();
     return {
@@ -215,7 +346,7 @@ function buildCanonSeriesFromZhikuEntries(preset: BundledStoryWeavingPreset, ent
       本段概括: entry.摘要,
       时间线起点: '',
       时间线终点: '',
-      开局已成立事实: index === 0 ? ['黑塔空间站正遭遇反物质军团入侵，星核猎手正在按剧本行动。'] : [],
+      开局已成立事实: index === 0 ? openingFacts : [],
       前段延续事实: index > 0 ? [entries[index - 1]?.摘要 || '前一段剧情已经发生，当前段应承接其后果。'] : [],
       本段结束状态: fallbackEndStates,
       给后续参考: index < entries.length - 1 ? [entries[index + 1]?.摘要 || '后续剧情仍需按当前系列继续推进。'] : [],
@@ -283,6 +414,22 @@ function compareStoryEntries(a: 智库条目, b: 智库条目): number {
   return orderA - orderB || a.标题.localeCompare(b.标题, 'zh-Hans-CN');
 }
 
+function buildCanonOpeningFacts(preset: BundledStoryWeavingPreset): string[] {
+  if (preset.id.includes('jarilo') || preset.id.includes('belobog')) {
+    return ['雅利洛-VI 与贝洛伯格相关主线已成为当前剧情轨道；黑塔空间站序章只作为前置背景，不作为当前开局现场。'];
+  }
+  if (preset.id.includes('xianzhou') || preset.id.includes('luofu')) {
+    return ['仙舟罗浮相关主线已成为当前剧情轨道；黑塔空间站与雅利洛-VI 主线只作为前置背景，不作为当前开局现场。'];
+  }
+  if (preset.id.includes('penacony')) {
+    return ['匹诺康尼相关主线已成为当前剧情轨道；此前主线只作为前置背景，不作为当前开局现场。'];
+  }
+  if (preset.id.includes('herta')) {
+    return ['黑塔空间站正遭遇反物质军团入侵，星核猎手正在按剧本行动。'];
+  }
+  return ['当前内置剧情轨道已按所选系列启动；其他地区主线只作为前置背景，不作为当前开局现场。'];
+}
+
 function buildCanonFallbackEndStates(entry: 智库条目, index: number, entries: 智库条目[]): string[] {
   const title = entry.标题.trim() || `第${entry.章节序号 ?? index + 1}段`;
   const text = `${entry.标题}\n${entry.摘要}\n${entry.关键词.join(' ')}`;
@@ -338,18 +485,34 @@ function dedupeText(items: string[], maxCount: number): string[] {
 
 function extractKnownNames(entry: 智库条目): string[] {
   const text = `${entry.标题}\n${entry.摘要}\n${entry.关键词.join(' ')}`;
-  return ['开拓者', '卡芙卡', '银狼', '三月七', '丹恒', '姬子', '瓦尔特', '帕姆', '艾丝妲', '阿兰', '黑塔', '可可利亚', '布洛妮娅', '希儿', '桑博', '娜塔莎']
+  return [
+    '开拓者', '卡芙卡', '银狼', '三月七', '丹恒', '姬子', '瓦尔特', '帕姆',
+    '艾丝妲', '阿兰', '黑塔',
+    '可可利亚', '布洛妮娅', '希儿', '桑博', '娜塔莎', '杰帕德', '佩拉', '史瓦罗',
+    '停云', '驭空', '符玄', '景元', '彦卿', '白露', '青雀', '素裳', '罗刹', '丹枢', '幻胧',
+    '星期日', '知更鸟', '砂金', '黑天鹅', '流萤', '黄泉', '加拉赫', '花火', '米沙',
+  ]
     .filter((name) => text.includes(name));
 }
 
 function extractKnownLocations(entry: 智库条目): string[] {
   const text = `${entry.标题}\n${entry.摘要}\n${entry.关键词.join(' ')}`;
-  return ['黑塔空间站', '星穹列车', '雅利洛-Ⅵ', '贝洛伯格', '下层区', '上层区', '仙舟罗浮']
+  return [
+    '黑塔空间站', '星穹列车',
+    '雅利洛-Ⅵ', '雅利洛-VI', '贝洛伯格', '下层区', '上层区', '行政区', '磐岩镇', '大矿区', '永冬岭',
+    '仙舟罗浮', '罗浮', '星槎海', '流云渡', '长乐天', '太卜司', '工造司', '丹鼎司', '鳞渊境', '建木',
+    '匹诺康尼', '白日梦酒店', '黄金的时刻', '梦境边界', '筑梦边缘', '热砂海选会场', '匹诺康尼大剧院',
+  ]
     .filter((name) => text.includes(name));
 }
 
 function extractKnownFactions(entry: 智库条目): string[] {
   const text = `${entry.标题}\n${entry.摘要}\n${entry.关键词.join(' ')}`;
-  return ['星核猎手', '星穹列车', '反物质军团', '黑塔空间站', '银鬃铁卫', '地火', '星际和平公司']
+  return [
+    '星核猎手', '星穹列车', '反物质军团', '黑塔空间站',
+    '银鬃铁卫', '地火', '星际和平公司',
+    '云骑军', '太卜司', '丹鼎司', '工造司', '十王司',
+    '家族', '猎犬家系', '橡木家系', '巡海游侠',
+  ]
     .filter((name) => text.includes(name));
 }

@@ -79,6 +79,8 @@ const NPC_NSFW_FIELDS = new Set([
   '体味',
 ]);
 
+const PROMPT_BINARY_IMAGE_PATH_RE = /(?:^|\.)头像$|(?:^|\.)图像档案\.(?:头像|立绘)(?:$|\.)|(?:^|\.)图像档案\.头像槽位(?:$|\.)/;
+
 export type VariableRootKey = typeof VARIABLE_ROOT_KEYS[number];
 
 type RootPolicy = 'writable' | 'partial' | 'readonly';
@@ -351,8 +353,12 @@ export function buildVariableRegistry(state: Partial<VariableState>, options?: R
   }
 
   return Array.from(new Set(result))
-    .filter((path) => path !== '旅人' && !isTravelerPlayerAuthoredPath(path))
+    .filter((path) => path !== '旅人' && !isTravelerPlayerAuthoredPath(path) && !isPromptBinaryImagePath(path))
     .slice(0, maxLines);
+}
+
+function isPromptBinaryImagePath(path: string): boolean {
+  return PROMPT_BINARY_IMAGE_PATH_RE.test(path);
 }
 
 /** 把登记表格式化成 prompt 注入文本。 */

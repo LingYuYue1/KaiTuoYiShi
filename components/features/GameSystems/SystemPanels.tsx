@@ -105,7 +105,7 @@ export function PlotPanel() {
   return (
     <SystemPlaceholder
       label="剧情"
-      description="剧情编织与关键节点的规划。第一阶段聚焦「登上星穹列车」一条线，自制剧情可在后续通过编织系统扩展。"
+      description="剧情编织与关键节点的规划。当前支持黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼和自由开局的章节锚点，系统会按开局档案与当前地点选择注入窗口。"
     />
   );
 }

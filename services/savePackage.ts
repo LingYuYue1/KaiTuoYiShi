@@ -1,7 +1,9 @@
 import type { 存档数据 } from '@/models/settings';
 import { 创建空API设置, 创建默认游戏设置 } from '@/models/settings';
+import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
+import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 
-const PACKAGE_VERSION = 1;
+const PACKAGE_VERSION = 2;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const PACKAGE_CORE_FILES = ['manifest.json', 'save.json'] as const;
@@ -18,20 +20,42 @@ const SYSTEM_ENTRY_PATHS = [
   'systems/variable-batches.json',
   'systems/queue-tasks.json',
 ] as const;
+const TREE_NODE_DELTA_PATH = 'tree/node-delta.json';
+const TREE_MANIFEST_PATH = 'tree/tree-manifest.json';
+const TREE_NODE_DIR = 'tree/nodes';
 
 export interface 存档包清单 {
   app: 'KaiTuoYiShi';
-  kind: 'save-package';
+  kind: 'save-package' | 'save-tree-package';
   packageVersion: number;
   exportedAt: string;
   travelerName: string;
   turnCount: number;
   timestamp: number;
   format: 'ktysave';
+  nodeCount?: number;
+  rootId?: string;
   privacy: {
     apiKeysRemoved: boolean;
   };
   files: string[];
+}
+
+export interface 存档树包清单 {
+  rootId: string;
+  exportedAt: string;
+  nodeCount: number;
+  latestSaveId: number;
+  nodes: Array<{
+    id: number;
+    nodeId: string;
+    parentNodeId?: string;
+    branchName?: string;
+    type: 存档数据['type'];
+    timestamp: number;
+    turnCount: number;
+    path: string;
+  }>;
 }
 
 type ZipEntryInput = {
@@ -40,17 +64,82 @@ type ZipEntryInput = {
 };
 
 type ZipEntryOutput = ZipEntryInput & {
+  compressedBytes: Uint8Array;
+  compressionMethod: 0 | 8;
   crc32: number;
 };
 
-export function buildSavePackage(save: 存档数据): Blob {
-  const entries = splitSaveIntoPackageEntries(sanitizeSaveForExport(save));
-  const bytes = createZip(entries);
+export async function buildSavePackage(save: 存档数据): Promise<Blob> {
+  const entries = splitSaveIntoPackageEntries(sanitizeSaveForExport(compactDuplicatedSaveImages(save)));
+  const bytes = await createZip(entries);
   return new Blob([bytes], { type: 'application/zip' });
 }
 
+export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob> {
+  const normalized = saves
+    .filter((save) => save && typeof save === 'object')
+    .map((save) => sanitizeSaveForExport(compactDuplicatedSaveImages(save)))
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0) || (Number(a.id) || 0) - (Number(b.id) || 0));
+  if (!normalized.length) {
+    throw new Error('没有可导出的存档树节点');
+  }
+  const rootId = getSaveTreeRootId(normalized[0]) || `tree-${Date.now()}`;
+  const latest = [...normalized].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+  const nodeEntries = normalized.map((save, index) => {
+    const tree = getSaveTreeMetaLoose(save);
+    const nodeId = tree?.nodeId || `legacy-node-${Number(save.id) || index + 1}`;
+    const path = `${TREE_NODE_DIR}/${sanitizePackageSegment(nodeId)}-${Number(save.id) || index + 1}.json`;
+    return {
+      save,
+      path,
+      meta: {
+        id: Number(save.id) || index + 1,
+        nodeId,
+        parentNodeId: tree?.parentNodeId,
+        branchName: tree?.branchName,
+        type: save.type,
+        timestamp: Number(save.timestamp) || Date.now(),
+        turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1),
+        path,
+      },
+    };
+  });
+  const treeManifest: 存档树包清单 = {
+    rootId,
+    exportedAt: new Date().toISOString(),
+    nodeCount: nodeEntries.length,
+    latestSaveId: Number(latest.id) || nodeEntries.at(-1)?.meta.id || 0,
+    nodes: nodeEntries.map((entry) => entry.meta),
+  };
+  const files: Array<[string, unknown]> = [
+    [TREE_MANIFEST_PATH, treeManifest],
+    ...nodeEntries.map((entry) => [entry.path, entry.save] as [string, unknown]),
+  ];
+  const manifest: 存档包清单 = {
+    app: 'KaiTuoYiShi',
+    kind: 'save-tree-package',
+    packageVersion: PACKAGE_VERSION,
+    exportedAt: new Date().toISOString(),
+    travelerName: latest.旅人?.姓名 || 'traveler',
+    turnCount: latest.turnCount ?? ((latest.chatHistory?.length ?? 0) + 1),
+    timestamp: latest.timestamp || Date.now(),
+    format: 'ktysave',
+    nodeCount: nodeEntries.length,
+    rootId,
+    privacy: {
+      apiKeysRemoved: true,
+    },
+    files: ['manifest.json', ...files.map(([name]) => name)],
+  };
+  const entries = [
+    textEntry('manifest.json', manifest),
+    ...files.map(([name, value]) => textEntry(name, value)),
+  ];
+  return new Blob([await createZip(entries)], { type: 'application/zip' });
+}
+
 export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
-  const sanitized = JSON.parse(JSON.stringify(save)) as 存档数据;
+  const sanitized = JSON.parse(JSON.stringify(compactDuplicatedSaveImages(save))) as 存档数据;
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
   stripEmbeddedApiSettings(sanitized);
   return sanitized;
@@ -136,14 +225,23 @@ function stripRuntimeDebugFromChatHistory(chatHistory: 存档数据['chatHistory
 }
 
 export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数据> {
-  const files = readZip(buffer);
+  const files = await readZip(buffer);
   const manifestText = files.get('manifest.json');
-  const saveText = files.get('save.json');
-  if (!manifestText || !saveText) {
-    throw new Error('存档包缺少 manifest.json 或 save.json');
+  if (!manifestText) {
+    throw new Error('存档包缺少 manifest.json');
   }
   const manifest = JSON.parse(manifestText) as Partial<存档包清单>;
   validatePackageManifest(manifest, files);
+  if (manifest.kind === 'save-tree-package') {
+    const tree = parseSaveTreePackageFiles(files, manifest);
+    const latest = tree.nodes.find((save) => Number(save.id) === tree.latestSaveId) ?? tree.nodes.at(-1);
+    if (!latest) throw new Error('存档树包没有可导入节点');
+    return latest;
+  }
+  const saveText = files.get('save.json');
+  if (!saveText) {
+    throw new Error('存档包缺少 save.json');
+  }
   const save = JSON.parse(saveText) as 存档数据;
   const read = <T,>(path: string): T | undefined => {
     const text = files.get(path);
@@ -162,6 +260,45 @@ export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数�
     剧情编织: read<存档数据['剧情编织']>('systems/story-weaving.json') ?? save.剧情编织,
     variableBatches: read<存档数据['variableBatches']>('systems/variable-batches.json') ?? save.variableBatches,
     queueTasks: read<存档数据['queueTasks']>('systems/queue-tasks.json') ?? save.queueTasks,
+  };
+}
+
+export async function parseSaveTreePackage(buffer: ArrayBuffer): Promise<存档数据[]> {
+  const files = await readZip(buffer);
+  const manifestText = files.get('manifest.json');
+  if (!manifestText) {
+    throw new Error('存档包缺少 manifest.json');
+  }
+  const manifest = JSON.parse(manifestText) as Partial<存档包清单>;
+  validatePackageManifest(manifest, files);
+  if (manifest.kind !== 'save-tree-package') {
+    return [await parseSavePackage(buffer)];
+  }
+  return parseSaveTreePackageFiles(files, manifest).nodes;
+}
+
+function parseSaveTreePackageFiles(files: Map<string, string>, manifest: Partial<存档包清单>): { latestSaveId: number; nodes: 存档数据[] } {
+  const treeManifestText = files.get(TREE_MANIFEST_PATH);
+  if (!treeManifestText) {
+    throw new Error('存档树包缺少 tree/tree-manifest.json');
+  }
+  const treeManifest = JSON.parse(treeManifestText) as Partial<存档树包清单>;
+  if (!Array.isArray(treeManifest.nodes) || treeManifest.nodes.length === 0) {
+    throw new Error('存档树包节点清单为空');
+  }
+  const nodes = treeManifest.nodes.map((node) => {
+    if (!node?.path || !isSafePackagePath(node.path)) {
+      throw new Error('存档树包节点路径异常');
+    }
+    const text = files.get(node.path);
+    if (!text) {
+      throw new Error(`存档树包缺少节点文件：${node.path}`);
+    }
+    return JSON.parse(text) as 存档数据;
+  });
+  return {
+    latestSaveId: Number(treeManifest.latestSaveId) || Number(manifest.timestamp) || 0,
+    nodes,
   };
 }
 
@@ -193,6 +330,7 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     [SYSTEM_ENTRY_PATHS[8], 剧情编织],
     [SYSTEM_ENTRY_PATHS[9], variableBatches],
     [SYSTEM_ENTRY_PATHS[10], queueTasks],
+    [TREE_NODE_DELTA_PATH, buildSaveNodeDeltaRecord(save, Number(save.id) || 0)],
   ] satisfies Array<[string, unknown]>).filter(([, value]) => value !== undefined);
 
   const manifest: 存档包清单 = {
@@ -229,7 +367,7 @@ function clearApiKey(config: { apiKey?: string } | null | undefined): void {
 }
 
 function validatePackageManifest(manifest: Partial<存档包清单>, files: Map<string, string>): void {
-  if (manifest.app !== 'KaiTuoYiShi' || manifest.kind !== 'save-package') {
+  if (manifest.app !== 'KaiTuoYiShi' || (manifest.kind !== 'save-package' && manifest.kind !== 'save-tree-package')) {
     throw new Error('不是有效的开拓轶事存档包');
   }
   if (manifest.format !== 'ktysave') {
@@ -254,7 +392,8 @@ function validatePackageManifest(manifest: Partial<存档包清单>, files: Map<
     }
   }
 
-  for (const path of PACKAGE_CORE_FILES) {
+  const coreFiles = manifest.kind === 'save-tree-package' ? ['manifest.json', TREE_MANIFEST_PATH] : PACKAGE_CORE_FILES;
+  for (const path of coreFiles) {
     if (!manifest.files.includes(path) || !files.has(path)) {
       throw new Error(`存档包缺少核心文件：${path}`);
     }
@@ -272,22 +411,28 @@ function isSafePackagePath(path: unknown): path is string {
   );
 }
 
-function createZip(inputEntries: ZipEntryInput[]): Uint8Array {
-  const entries: ZipEntryOutput[] = inputEntries.map((entry) => ({
-    ...entry,
-    crc32: crc32(entry.bytes),
-  }));
+async function createZip(inputEntries: ZipEntryInput[]): Promise<Uint8Array> {
+  const entries: ZipEntryOutput[] = [];
+  for (const entry of inputEntries) {
+    const compressedBytes = await deflateRawIfAvailable(entry.bytes);
+    entries.push({
+      ...entry,
+      compressedBytes: compressedBytes ?? entry.bytes,
+      compressionMethod: compressedBytes ? 8 : 0,
+      crc32: crc32(entry.bytes),
+    });
+  }
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
   let offset = 0;
 
   for (const entry of entries) {
     const nameBytes = encoder.encode(entry.name);
-    const local = new Uint8Array(30 + nameBytes.length + entry.bytes.length);
+    const local = new Uint8Array(30 + nameBytes.length + entry.compressedBytes.length);
     const view = new DataView(local.buffer);
     writeLocalHeader(view, entry, nameBytes);
     local.set(nameBytes, 30);
-    local.set(entry.bytes, 30 + nameBytes.length);
+    local.set(entry.compressedBytes, 30 + nameBytes.length);
     localParts.push(local);
 
     const central = new Uint8Array(46 + nameBytes.length);
@@ -310,16 +455,30 @@ function createZip(inputEntries: ZipEntryInput[]): Uint8Array {
   return concatBytes([...localParts, ...centralParts, eocd]);
 }
 
+function getSaveTreeMetaLoose(save: 存档数据): { rootId?: string; nodeId?: string; parentNodeId?: string; branchName?: string } | undefined {
+  return (save as 存档数据 & { saveTree?: { rootId?: string; nodeId?: string; parentNodeId?: string; branchName?: string } }).saveTree;
+}
+
+function getSaveTreeRootId(save: 存档数据): string | undefined {
+  return getSaveTreeMetaLoose(save)?.rootId;
+}
+
+function sanitizePackageSegment(value: string): string {
+  return value
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 80) || 'node';
+}
+
 function writeLocalHeader(view: DataView, entry: ZipEntryOutput, nameBytes: Uint8Array): void {
   const { time, date } = dosDateTime(new Date());
   view.setUint32(0, 0x04034b50, true);
   view.setUint16(4, 20, true);
   view.setUint16(6, 0, true);
-  view.setUint16(8, 0, true);
+  view.setUint16(8, entry.compressionMethod, true);
   view.setUint16(10, time, true);
   view.setUint16(12, date, true);
   view.setUint32(14, entry.crc32, true);
-  view.setUint32(18, entry.bytes.length, true);
+  view.setUint32(18, entry.compressedBytes.length, true);
   view.setUint32(22, entry.bytes.length, true);
   view.setUint16(26, nameBytes.length, true);
   view.setUint16(28, 0, true);
@@ -331,11 +490,11 @@ function writeCentralHeader(view: DataView, entry: ZipEntryOutput, nameBytes: Ui
   view.setUint16(4, 20, true);
   view.setUint16(6, 20, true);
   view.setUint16(8, 0, true);
-  view.setUint16(10, 0, true);
+  view.setUint16(10, entry.compressionMethod, true);
   view.setUint16(12, time, true);
   view.setUint16(14, date, true);
   view.setUint32(16, entry.crc32, true);
-  view.setUint32(20, entry.bytes.length, true);
+  view.setUint32(20, entry.compressedBytes.length, true);
   view.setUint32(24, entry.bytes.length, true);
   view.setUint16(28, nameBytes.length, true);
   view.setUint16(30, 0, true);
@@ -346,7 +505,7 @@ function writeCentralHeader(view: DataView, entry: ZipEntryOutput, nameBytes: Ui
   view.setUint32(42, offset, true);
 }
 
-function readZip(buffer: ArrayBuffer): Map<string, string> {
+async function readZip(buffer: ArrayBuffer): Promise<Map<string, string>> {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const files = new Map<string, string>();
@@ -356,7 +515,7 @@ function readZip(buffer: ArrayBuffer): Map<string, string> {
     if (signature === 0x02014b50 || signature === 0x06054b50) break;
     if (signature !== 0x04034b50) throw new Error('存档包 ZIP 结构损坏');
     const compression = view.getUint16(offset + 8, true);
-    if (compression !== 0) throw new Error('暂不支持压缩格式的存档包');
+    if (compression !== 0 && compression !== 8) throw new Error('暂不支持此 ZIP 压缩格式的存档包');
     const crc = view.getUint32(offset + 14, true);
     const compressedSize = view.getUint32(offset + 18, true);
     const fileSize = view.getUint32(offset + 22, true);
@@ -366,14 +525,41 @@ function readZip(buffer: ArrayBuffer): Map<string, string> {
     const dataStart = nameStart + nameLength + extraLength;
     const dataEnd = dataStart + compressedSize;
     if (dataEnd > bytes.length) throw new Error('存档包文件长度异常');
-    if (compressedSize !== fileSize) throw new Error('存档包条目大小异常');
     const name = decoder.decode(bytes.slice(nameStart, nameStart + nameLength));
-    const data = bytes.slice(dataStart, dataEnd);
+    const compressedData = bytes.slice(dataStart, dataEnd);
+    const data = compression === 8 ? await inflateRaw(compressedData) : compressedData;
+    if (data.length !== fileSize) throw new Error('存档包条目大小异常');
     if (crc32(data) !== crc) throw new Error(`存档包条目校验失败：${name}`);
     files.set(name, decoder.decode(data));
     offset = dataEnd;
   }
   return files;
+}
+
+async function deflateRawIfAvailable(bytes: Uint8Array): Promise<Uint8Array | null> {
+  if (!('CompressionStream' in globalThis)) return null;
+  try {
+    return await runCompressionStream(bytes, 'deflate-raw');
+  } catch {
+    return null;
+  }
+}
+
+async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
+  if (!('DecompressionStream' in globalThis)) {
+    throw new Error('当前浏览器不支持压缩存档包解压，请更新浏览器或使用未压缩旧包');
+  }
+  return runDecompressionStream(bytes, 'deflate-raw');
+}
+
+async function runCompressionStream(bytes: Uint8Array, format: CompressionFormat): Promise<Uint8Array> {
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream(format));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function runDecompressionStream(bytes: Uint8Array, format: CompressionFormat): Promise<Uint8Array> {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 function dosDateTime(date: Date): { time: number; date: number } {

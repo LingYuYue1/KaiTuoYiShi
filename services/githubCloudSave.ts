@@ -16,6 +16,7 @@ export interface GitHubCloudSaveItem {
   cloudId: string;
   localSaveId?: number;
   saveType?: string;
+  contentHash?: string;
   travelerName: string;
   turnCount: number;
   timestamp: number;
@@ -157,8 +158,9 @@ export async function listGitHubCloudSaves(config: GitHubCloudSaveConfig): Promi
 export async function uploadSaveToGitHubCloud(config: GitHubCloudSaveConfig, save: 存档数据): Promise<GitHubCloudSaveItem> {
   validateGitHubCloudConfig(config);
   const manifest = (await readManifest(config)) ?? createEmptyManifest();
-  const blob = buildSavePackage(save);
+  const blob = await buildSavePackage(save);
   const buffer = await blob.arrayBuffer();
+  const contentHash = hashCloudSave(save);
   const stamp = new Date(save.timestamp || Date.now()).toISOString().replace(/[:.]/g, '-');
   const travelerName = save.旅人?.姓名 || 'traveler';
   const turnCount = save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1);
@@ -177,6 +179,7 @@ export async function uploadSaveToGitHubCloud(config: GitHubCloudSaveConfig, sav
 
   const item: GitHubCloudSaveItem = {
     cloudId,
+    contentHash,
     travelerName,
     turnCount,
     timestamp: save.timestamp || Date.now(),
@@ -202,18 +205,32 @@ export async function uploadAllSavesToGitHubCloud(
   validateGitHubCloudConfig(config);
   const previousManifest = (await readManifest(config)) ?? createEmptyManifest();
   const nextItems: GitHubCloudSaveItem[] = [];
+  const previousByCloudId = new Map(previousManifest.saves.map((item) => [item.cloudId, item]));
 
   const ordered = [...saves].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   for (let index = 0; index < ordered.length; index += 1) {
     const save = ordered[index];
-    const blob = buildSavePackage(save);
-    const buffer = await blob.arrayBuffer();
     const localSaveId = Number.isFinite(save.id) && save.id > 0 ? save.id : nextItems.length + 1;
     const cloudId = `local-save-${localSaveId}`;
     const savePath = joinCloudPath(config.rootPath, 'saves', `${cloudId}.zip`);
-    const previousSave = await getContent(config, savePath);
     const label = `${save.旅人?.姓名 || 'traveler'} · 第 ${save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1)} 回合`;
+    const contentHash = hashCloudSave(save);
+    const previousItem = previousByCloudId.get(cloudId);
     onProgress?.(index, ordered.length, label);
+
+    if (previousItem?.contentHash === contentHash && previousItem.path === savePath) {
+      nextItems.push({
+        ...previousItem,
+        localSaveId,
+        saveType: String(save.type || previousItem.saveType || 'manual'),
+      });
+      onProgress?.(index + 1, ordered.length, `${label}（未变化，跳过上传）`);
+      continue;
+    }
+
+    const blob = await buildSavePackage(save);
+    const buffer = await blob.arrayBuffer();
+    const previousSave = await getContent(config, savePath);
 
     await putContent(
       config,
@@ -228,6 +245,7 @@ export async function uploadAllSavesToGitHubCloud(
       cloudId,
       localSaveId,
       saveType: String(save.type || 'manual'),
+      contentHash,
       travelerName: save.旅人?.姓名 || 'traveler',
       turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1),
       timestamp: save.timestamp || Date.now(),
@@ -281,6 +299,35 @@ async function readManifest(config: GitHubCloudSaveConfig): Promise<GitHubCloudS
     updatedAt: String(manifest.updatedAt || ''),
     saves: Array.isArray(manifest.saves) ? manifest.saves as GitHubCloudSaveItem[] : [],
   };
+}
+
+function hashCloudSave(save: 存档数据): string {
+  const payload = JSON.stringify({
+    id: Number(save.id) || 0,
+    type: save.type || 'manual',
+    timestamp: save.timestamp || 0,
+    turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1),
+    travelerName: save.旅人?.姓名 || '',
+    worldDate: save.世界?.当前日期 || '',
+    worldTime: save.世界?.当前时间 || '',
+    worldLocation: save.世界?.当前地点 || '',
+    chatCount: save.chatHistory?.length ?? 0,
+    lastMessage: save.chatHistory?.at(-1)?.content ?? '',
+    albumAssetIds: (save.相册?.assets ?? []).map((asset) => asset.id).sort(),
+    npcCount: save.NPC?.length ?? 0,
+    memoryCount: Array.isArray((save.记忆 as { longTermMemories?: unknown[] } | undefined)?.longTermMemories)
+      ? (save.记忆 as { longTermMemories?: unknown[] }).longTermMemories?.length ?? 0
+      : 0,
+    variableBatchCount: save.variableBatches?.length ?? 0,
+    queueTaskCount: save.queueTasks?.length ?? 0,
+    saveTree: (save as 存档数据 & { saveTree?: unknown }).saveTree ?? null,
+  });
+  let hash = 2166136261;
+  for (let index = 0; index < payload.length; index += 1) {
+    hash ^= payload.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
 async function writeManifest(config: GitHubCloudSaveConfig, manifest: GitHubCloudSaveManifest): Promise<void> {

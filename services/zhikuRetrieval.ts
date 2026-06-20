@@ -52,6 +52,10 @@ interface 智库场景上下文 {
   startScenarioId?: string;
   startSceneName?: string;
   currentLocation?: string;
+  openingRegionName?: string;
+  openingChapterName?: string;
+  openingEntryText?: string;
+  openingArchiveText?: string;
   npcNames?: string[];
   presentNpcNamesForFallback?: string[];
   anticipatedNpcNames?: string[];
@@ -61,6 +65,7 @@ interface 智库场景上下文 {
     immediateStoryReview?: string;
     recentStoryContext?: string;
     storyPlan?: string;
+    openingArchiveText?: string;
   };
   originalProtagonist?: '星' | '穹' | '星穹双主角';
 }
@@ -71,6 +76,7 @@ interface 智库AI补充线索 {
   immediateStoryReview?: string;
   recentStoryContext?: string;
   storyPlan?: string;
+  openingArchiveText?: string;
 }
 
 export interface 智库模型用户提示词选项 {
@@ -86,9 +92,19 @@ const CHARACTER_ANCHOR_ENTRIES_PER_ROLE = 2;
 
 const ZHIKU_SCENE_HINTS: Record<string, string[]> = {
   heita_station_incident: ['黑塔空间站', '黑塔', '空间站', '主控舱段', '基座舱段', '收容舱段', '支援舱段', '防卫科'],
+  belobog_arrival: ['雅利洛', '贝洛伯格', '雪原', '行政区', '银鬃铁卫', '杰帕德', '布洛妮娅', '裂界'],
+  belobog_underworld: ['雅利洛', '贝洛伯格', '下层区', '磐岩镇', '大矿区', '地火', '娜塔莎', '希儿', '史瓦罗'],
+  belobog_cocolia_crisis: ['雅利洛', '贝洛伯格', '可可利亚', '大守护者', '永冬岭', '残响回廊', '星核', '布洛妮娅'],
   astral_express_temp_passenger: ['星穹列车', '列车', '无名客'],
+  luofu_arrival: ['仙舟', '罗浮', '星槎海', '流云渡', '云骑军', '停云', '驭空', '卡芙卡'],
+  luofu_kafka_interrogation: ['仙舟', '罗浮', '太卜司', '穷观阵', '符玄', '卡芙卡', '青雀', '建木'],
+  luofu_phantylia_crisis: ['仙舟', '罗浮', '建木', '鳞渊境', '丹鼎司', '丰饶孽物', '幻胧', '景元'],
   xianzhou_luofu_entry: ['仙舟', '罗浮', '长乐天', '金人巷', '工造司', '神策府', '鳞渊境', '流云渡'],
   jarilo_frontier: ['雅利洛', '贝洛伯格', '下层区', '上层区', '磐岩镇', '行政区', '残响回廊', '铆钉镇', '永冬岭', '机械聚落', '地火', '史瓦罗'],
+  penacony_entry: ['匹诺康尼', '白日梦酒店', '黄金的时刻', '梦境边界', '筑梦边缘', '家族', '猎犬家系', '谐乐大典'],
+  penacony_invitation: ['匹诺康尼', '白日梦酒店', '盛会之星', '家族', '宾客', '入梦池', '星期日', '知更鸟'],
+  penacony_dream_edge: ['匹诺康尼', '黄金的时刻', '梦境边界', '筑梦边缘', '钟表小子', '猎犬家系', '流萤', '砂金'],
+  penacony_reverie_crisis: ['匹诺康尼', '美梦崩塌', '谐乐大典', '匹诺康尼大剧院', '家族真相', '星期日', '知更鸟', '黄泉'],
 };
 
 const ZHIKU_STOP_WORDS = new Set([
@@ -136,7 +152,14 @@ function getMainStoryZhikuMetaBlockReason(meta: 智库软结构标签): string |
 function buildZhikuSceneHints(sceneContext?: 智库场景上下文): string[] {
   if (!sceneContext) return [];
   const hints = new Set<string>();
-  const raw = [sceneContext.startSceneName, sceneContext.currentLocation]
+  const raw = [
+    sceneContext.startSceneName,
+    sceneContext.currentLocation,
+    sceneContext.openingRegionName,
+    sceneContext.openingChapterName,
+    sceneContext.openingEntryText,
+    sceneContext.openingArchiveText,
+  ]
     .filter((value): value is string => !!value && !!value.trim())
     .map((value) => value.trim())
     .join(' ');
@@ -154,6 +177,7 @@ function buildZhikuSceneHints(sceneContext?: 智库场景上下文): string[] {
   if (/黑塔|空间站/.test(raw)) addHints(ZHIKU_SCENE_HINTS.heita_station_incident);
   if (/贝洛伯格|雅利洛/.test(raw)) addHints(ZHIKU_SCENE_HINTS.jarilo_frontier);
   if (/仙舟|罗浮/.test(raw)) addHints(ZHIKU_SCENE_HINTS.xianzhou_luofu_entry);
+  if (/匹诺康尼|白日梦酒店|黄金的时刻|梦境|家族|谐乐大典/.test(raw)) addHints(ZHIKU_SCENE_HINTS.penacony_entry);
   if (/列车|星穹/.test(raw)) addHints(ZHIKU_SCENE_HINTS.astral_express_temp_passenger);
 
   return Array.from(hints).slice(0, 16);
@@ -695,6 +719,7 @@ function buildAiSupplementHintQuery(hints?: 智库AI补充线索): string {
   const parts = [
     hints.currentLocation,
     ...(hints.presentNpcNames ?? []),
+    hints.openingArchiveText,
     hints.immediateStoryReview,
     hints.recentStoryContext,
     hints.storyPlan,
@@ -707,6 +732,7 @@ function formatAiSupplementHints(hints?: 智库AI补充线索): string {
   const lines = [
     hints.currentLocation?.trim() ? `当前地点：${compactPromptText(hints.currentLocation, 80)}` : '',
     hints.presentNpcNames?.length ? `在场角色分析：${hints.presentNpcNames.map((name) => name.trim()).filter(Boolean).slice(0, 12).join('、')}` : '',
+    hints.openingArchiveText?.trim() ? `开局档案：${compactPromptText(hints.openingArchiveText, 700)}` : '',
     hints.immediateStoryReview?.trim() ? `即时剧情回顾：${compactPromptText(hints.immediateStoryReview, 700)}` : '',
     hints.recentStoryContext?.trim() ? `最近剧情承接：${compactPromptText(hints.recentStoryContext, 500)}` : '',
     hints.storyPlan?.trim() ? `剧情规划：${compactPromptText(hints.storyPlan, 300)}` : '',

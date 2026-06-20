@@ -16,7 +16,7 @@ import {
 import { runNewsGenerationStep } from './newsWorkflow';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
-import { 归一化世界状态, type 世界状态 } from '@/models/world';
+import { 归一化世界状态, 格式化开局档案上下文, type 世界状态 } from '@/models/world';
 import { loadSetting, saveGame, saveSetting } from '@/services/dbService';
 import { buildSavePayload } from './saveLoadWorkflow';
 import { parseVariableCommands, snapshotVariableState, reduceVariableCommands, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
@@ -26,7 +26,7 @@ import type { 变量事实, 变量命令, 变量命令批次 } from '@/models/va
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/services/pathService';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
-import type { 队列任务ID, 队列任务状态 } from '@/models/queueTask';
+import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
 import { retrieveZhikuContext, retrieveZhikuContextWithModel, type 智库召回诊断 } from '@/services/zhikuRetrieval';
 import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
 import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
@@ -52,7 +52,8 @@ import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPre
 import { estimateTextTokens } from '@/utils/tokenEstimate';
 import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
-import { 创建相册图片条目, 添加图片到相册 } from '@/utils/albumActions';
+import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
+import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 
 const DEEPSEEK_MAIN_FORMAT_GUARD = [
   'DeepSeek 主剧情格式校验：本轮必须从 <thinking> 开始输出，禁止直接从 <正文> 开始。',
@@ -887,6 +888,9 @@ function pushQueueTask(
     detail?: string;
     rawText?: string;
     turn?: number;
+    targetMessageId?: string;
+    targetBatchId?: string;
+    retryHint?: string;
     failCount?: number;
     retrying?: boolean;
     cancellable?: boolean;
@@ -930,6 +934,9 @@ function pushQueueTask(
       status,
       detail: patch?.detail,
       rawText: patch?.rawText,
+      targetMessageId: patch?.targetMessageId,
+      targetBatchId: patch?.targetBatchId,
+      retryHint: patch?.retryHint,
       failCount: patch?.failCount,
       retrying: patch?.retrying,
       cancellable: patch?.cancellable,
@@ -1123,6 +1130,7 @@ function archiveNarrativeSnapshotToAlbum(
   state.set相册((prev) => 添加图片到相册(prev, item));
   return {
     ...image,
+    dataUrl: 创建相册资源引用(item.asset.id),
     assetId: item.asset.id,
   };
 }
@@ -1159,7 +1167,11 @@ async function generateNarrativeImagesForMessage(params: {
         : msg,
     ));
   };
-  pushQueueTask(state, 'narrative_image_parse', 'pending', { detail: '正在解析正文中的故事快照提示词。', turn });
+  pushQueueTask(state, 'narrative_image_parse', 'pending', {
+    detail: '正在解析正文中的故事快照提示词。',
+    turn,
+    targetMessageId: messageId,
+  });
   try {
     const { parseStorySnapshotPrompt } = await import('@/services/ai/narrativeImageParse');
     const { generateNarrativeImage } = await import('@/services/ai/imageGeneration');
@@ -1189,11 +1201,13 @@ async function generateNarrativeImagesForMessage(params: {
     pushQueueTask(state, 'narrative_image_parse', 'success', {
       detail: `已解析故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
       turn,
+      targetMessageId: messageId,
     });
     const generatedImages: import('@/models/chat').叙事插图[] = [];
     pushQueueTask(state, 'narrative_image_generate', 'pending', {
       detail: `正在生成故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
       turn,
+      targetMessageId: messageId,
     });
     const imageId = `narrative_${turn}_snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const lockedPrompt = 应用场景角色锚点锁({
@@ -1231,6 +1245,7 @@ async function generateNarrativeImagesForMessage(params: {
         ? `${parsedSnapshot.title || '故事快照'} 故事快照生成完成。`
         : `${parsedSnapshot.title || '故事快照'} 故事快照生成失败：${result.error}`,
       turn,
+      targetMessageId: messageId,
     });
     if (generatedImages.length > 0) {
       state.setChatHistory((prev) => {
@@ -1255,6 +1270,7 @@ async function generateNarrativeImagesForMessage(params: {
       pushQueueTask(state, 'narrative_image_parse', 'failed', {
         detail: `故事快照解析失败：${(err as Error).message}`,
         turn,
+        targetMessageId: messageId,
       });
     }
     return null;
@@ -1275,6 +1291,7 @@ export async function regenerateNarrativeImagesForMessage(
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '正文生图未启用，无法重新生成故事快照。',
       turn: Number(message.gameTime) || state.turnCount,
+      targetMessageId: messageId,
     });
     return;
   }
@@ -1283,6 +1300,7 @@ export async function regenerateNarrativeImagesForMessage(
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '未配置主 API，无法解析故事快照提示词。',
       turn: Number(message.gameTime) || state.turnCount,
+      targetMessageId: messageId,
     });
     return;
   }
@@ -1291,6 +1309,7 @@ export async function regenerateNarrativeImagesForMessage(
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
       turn: Number(message.gameTime) || state.turnCount,
+      targetMessageId: messageId,
     });
     return;
   }
@@ -1299,6 +1318,7 @@ export async function regenerateNarrativeImagesForMessage(
     pushQueueTask(state, 'narrative_image_generate', 'failed', {
       detail: '正文生图主文生图接口未启用，无法生成故事快照。',
       turn: Number(message.gameTime) || state.turnCount,
+      targetMessageId: messageId,
     });
     return;
   }
@@ -1332,6 +1352,214 @@ export async function regenerateNarrativeImagesForMessage(
     turn,
     replaceExisting: true,
   });
+}
+
+export async function retryQueueTask(
+  state: UseGameStateReturn,
+  getActiveConfig: () => API配置项 | null,
+  task: 队列任务记录,
+  mode: 'retry' | 'reroll' = 'retry',
+): Promise<void> {
+  if (task.id === 'narrative_image_parse' || task.id === 'narrative_image_generate') {
+    const targetMessageId = task.targetMessageId ?? findLatestAssistantMessage(state.chatHistory)?.id;
+    if (!targetMessageId) {
+      pushQueueTask(state, task.id, 'failed', {
+        detail: '未找到可重试的正文回合。',
+        failCount: (task.failCount ?? 0) + 1,
+      });
+      return;
+    }
+    pushQueueTask(state, task.id, 'pending', {
+      detail: mode === 'reroll' ? '正在重新解析并生成故事快照。' : '正在重试故事快照任务。',
+      turn: task.turn || state.turnCount,
+      targetMessageId,
+      retrying: true,
+      failCount: task.failCount,
+    });
+    await regenerateNarrativeImagesForMessage(state, getActiveConfig, targetMessageId);
+    return;
+  }
+
+  if (task.id === 'news') {
+    await retryNewsQueueTask(state, task, mode);
+    return;
+  }
+
+  if (task.id === 'variable') {
+    await retryVariableQueueTask(state, getActiveConfig, task, mode);
+  }
+}
+
+async function retryNewsQueueTask(
+  state: UseGameStateReturn,
+  task: 队列任务记录,
+  mode: 'retry' | 'reroll',
+): Promise<void> {
+  const assistant = findLatestAssistantMessage(state.chatHistory);
+  if (!assistant) {
+    pushQueueTask(state, 'news', 'failed', {
+      detail: '未找到可用于新闻重试的正文回合。',
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+  const userInput = findPreviousUserInput(state.chatHistory, assistant.id);
+  const body = assistant.parsedResponse?.body?.trim() || assistant.content.trim();
+  if (!body) {
+    pushQueueTask(state, 'news', 'failed', {
+      detail: '当前正文为空，无法重试新闻生成。',
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+  const newsSettings = state.gameSettings.新闻系统;
+  const interval = Math.max(5, Math.min(10, Math.trunc(newsSettings?.generateIntervalTurns ?? 5) || 5));
+  const abortController = new AbortController();
+  pushQueueTask(state, 'news', 'pending', {
+    detail: mode === 'reroll' ? '正在重生成星际和平周报，本次不受回合间隔限制。' : '正在重试星际和平周报，本次不受回合间隔限制。',
+    turn: Number(assistant.gameTime) || task.turn || state.turnCount,
+    retrying: true,
+    failCount: task.failCount,
+    targetMessageId: assistant.id,
+  });
+  try {
+    const result = await runNewsGenerationStep({
+      state,
+      mainBody: body,
+      userInput,
+      recentTurns: buildRecentTurnWindowForNews(state.chatHistory, userInput, body, interval),
+      storyWeavingSnapshot: state.剧情编织,
+      signal: abortController.signal,
+    });
+    pushQueueTask(state, 'news', result ? 'success' : 'failed', {
+      detail: result
+        ? result.changed
+          ? `星际和平周报已${mode === 'reroll' ? '重生成' : '重试更新'}，当前共 ${result.news.length} 条新闻记录。`
+          : '星际和平周报已重试，但模型没有返回可写入的新变化。'
+        : '星际和平周报重试失败，请检查新闻 API 配置或模型返回。',
+      turn: Number(assistant.gameTime) || task.turn || state.turnCount,
+      failCount: result ? task.failCount : (task.failCount ?? 0) + 1,
+      targetMessageId: assistant.id,
+    });
+  } catch (err) {
+    pushQueueTask(state, 'news', 'failed', {
+      detail: `星际和平周报重试失败：${(err as Error).message}`,
+      turn: Number(assistant.gameTime) || task.turn || state.turnCount,
+      failCount: (task.failCount ?? 0) + 1,
+      targetMessageId: assistant.id,
+    });
+  }
+}
+
+async function retryVariableQueueTask(
+  state: UseGameStateReturn,
+  getActiveConfig: () => API配置项 | null,
+  task: 队列任务记录,
+  mode: 'retry' | 'reroll',
+): Promise<void> {
+  if (!state.gameSettings.enableVariableUpdate) {
+    pushQueueTask(state, 'variable', 'failed', {
+      detail: '变量更新未启用，无法手动重试。',
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+  const batch = findRetryableVariableBatch(state.variableBatches, task.targetBatchId);
+  if (!batch) {
+    pushQueueTask(state, 'variable', 'failed', {
+      detail: '未找到可安全重试的失败变量批次。若上一批已有成功命令，为避免重复结算，请不要直接重跑整批。',
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+  const assistant = findAssistantMessageForTurn(state.chatHistory, batch.turn) ?? findLatestAssistantMessage(state.chatHistory);
+  const mainConfig = getActiveConfig();
+  if (!assistant || !mainConfig) {
+    pushQueueTask(state, 'variable', 'failed', {
+      detail: !assistant ? '未找到变量批次对应的正文回合。' : '未配置主 API，无法重试变量结算。',
+      targetBatchId: batch.id,
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+  const body = assistant.parsedResponse?.body?.trim() || assistant.content.trim();
+  if (!body) {
+    pushQueueTask(state, 'variable', 'failed', {
+      detail: '当前正文为空，无法重试变量结算。',
+      targetBatchId: batch.id,
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+  pushQueueTask(state, 'variable', 'pending', {
+    detail: mode === 'reroll' ? '正在重生成变量结算结果。' : '正在重试变量结算。',
+    turn: batch.turn,
+    targetMessageId: assistant.id,
+    targetBatchId: batch.id,
+    retrying: true,
+    failCount: task.failCount,
+  });
+  const overrides = await runVariableCalibrationStep({
+    state,
+    mainApiConfig: mainConfig,
+    userInput: findPreviousUserInput(state.chatHistory, assistant.id),
+    body,
+    variableDraft: assistant.parsedResponse?.variableDraft,
+    turnAfter: batch.turn + 1,
+    memorySystemSnapshot: state.记忆,
+    travelerSnapshot: state.旅人,
+    worldSnapshot: state.世界,
+    allowYiting: false,
+  });
+  const retryBatch = overrides?.batch;
+  const hasFailure = retryBatch?.results.some((result) => !result.ok);
+  pushQueueTask(state, 'variable', retryBatch && !hasFailure ? 'success' : retryBatch ? 'failed' : 'failed', {
+    detail: retryBatch
+      ? hasFailure
+        ? '变量结算已重试，但仍存在失败命令，请展开查看原始信息。'
+        : '变量结算已重试并落地。'
+      : '变量结算重试未返回结果。',
+    turn: batch.turn,
+    targetMessageId: assistant.id,
+    targetBatchId: retryBatch?.id ?? batch.id,
+    failCount: hasFailure || !retryBatch ? (task.failCount ?? 0) + 1 : task.failCount,
+  });
+}
+
+function findLatestAssistantMessage(history: 聊天消息[]): 聊天消息 | undefined {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index];
+    if (item.role === 'assistant') return item;
+  }
+  return undefined;
+}
+
+function findAssistantMessageForTurn(history: 聊天消息[], turn: number): 聊天消息 | undefined {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index];
+    if (item.role === 'assistant' && Number(item.gameTime) === turn) return item;
+  }
+  return undefined;
+}
+
+function findPreviousUserInput(history: 聊天消息[], assistantId: string): string {
+  const assistantIndex = history.findIndex((item) => item.id === assistantId);
+  if (assistantIndex < 0) return '';
+  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+    const item = history[index];
+    if (item.role === 'user') return item.content;
+  }
+  return '';
+}
+
+function findRetryableVariableBatch(batches: 变量命令批次[], targetBatchId?: string): 变量命令批次 | undefined {
+  const candidates = targetBatchId
+    ? batches.filter((batch) => batch.id === targetBatchId)
+    : [...batches].reverse();
+  return candidates.find((batch) =>
+    batch.results.length > 0 &&
+    batch.results.every((result) => !result.ok),
+  );
 }
 
 function normalizeRerollCompareText(text: string): string {
@@ -1456,7 +1684,7 @@ export async function executeSendWorkflow(
   try {
     // 0. 本回合 user 发送之前的全状态快照，留给 reroll 回滚用。
     //    避免重 roll 时上次的变量副作用堆叠（NPC / 新闻等都会双份）。
-    const preTurnSnapshot: 回合快照 = {
+    const fullPreTurnSnapshot: 回合快照 = {
       旅人: cloneForSnapshot(state.旅人),
       世界: cloneForSnapshot(effectiveWorld),
       记忆: cloneForSnapshot(state.记忆),
@@ -1473,7 +1701,8 @@ export async function executeSendWorkflow(
       turnCount: state.turnCount,
       pendingOpeningTrigger: state.pendingOpeningTrigger,
     };
-    rollbackSnapshotOnAbort = preTurnSnapshot;
+    const preTurnSnapshot = compactPreTurnSnapshot(fullPreTurnSnapshot);
+    rollbackSnapshotOnAbort = fullPreTurnSnapshot;
 
     // 1. Add user message。同时把过往 assistant 上的 snapshot 全部清掉，只保留即将生成的最新一条，
     //    避免存档无限膨胀（snapshot 只服务"最近一次 reroll"，老的没用）。
@@ -1504,6 +1733,7 @@ export async function executeSendWorkflow(
     const awakeningPhase: 'question' | 'judgement' | undefined = effectiveWorld.进行中狭间
       ? (isAwakeningEnterTrigger ? 'question' : 'judgement')
       : undefined;
+    const openingArchiveText = 格式化开局档案上下文(effectiveWorld.开局档案);
     const worldbookCtx = {
       recentUserInput: userInput,
       recentAIResponse: '',
@@ -1511,8 +1741,13 @@ export async function executeSendWorkflow(
       travelerName: state.旅人.姓名,
       turnCount: state.turnCount,
       startScenarioId: effectiveWorld.起航之地ID,
-      startSceneName: effectiveWorld.当前地点,
+      startSceneName: effectiveWorld.开局档案?.章节锚点名称 ?? effectiveWorld.当前地点,
       currentLocation: effectiveWorld.当前地点,
+      openingRegionName: effectiveWorld.开局档案?.地区名称,
+      openingChapterName: effectiveWorld.开局档案?.章节锚点名称,
+      openingEntryText: effectiveWorld.开局档案?.玩家介入原文,
+      openingSource: effectiveWorld.开局档案?.来源,
+      openingArchiveText,
       npcNames: getZhikuNpcNamesForTurn({
         world: effectiveWorld,
         npcs: state.NPC,
@@ -1543,6 +1778,7 @@ export async function executeSendWorkflow(
         currentLocation: effectiveWorld.当前地点,
         presentNpcNames: worldbookCtx.npcNames,
         immediateStoryReview: immediateStoryReviewForZhiku,
+        openingArchiveText,
       },
     };
     const recallQuery = buildMainRecallQuery({
@@ -1565,11 +1801,22 @@ export async function executeSendWorkflow(
       });
       try {
         const openingProtagonist = formatOriginalProtagonistForOpening(effectiveWorld.原著主角);
+        const openingArchive = effectiveWorld.开局档案;
+        const openingPressure = openingArchive?.整理档案?.特别要求?.length
+          ? openingArchive.整理档案.特别要求.join('；')
+          : openingArchive?.章节参考说明 || effectiveWorld.当前地点 || '当前开局地区';
+        const openingNewsBody = [
+          `开局初始化：当前开局为${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '未知地区'}「${openingArchive?.章节锚点名称 ?? effectiveWorld.起航之地ID ?? '未命名章节'}」。`,
+          `章节参考：${openingArchive?.章节参考说明 ?? '按当前开局档案和世界状态生成首回合世界事件苗头。'}`,
+          `开局压力：${openingPressure}`,
+          openingArchive?.玩家介入原文 ? `玩家介入：${openingArchive.玩家介入原文}` : '',
+          `原著主角配置：${openingProtagonist}`,
+        ].filter(Boolean).join('\n');
         const preNews = await runNewsGenerationStep({
           state,
-          mainBody: `开局初始化：原著主线即将从黑塔空间站危机开始，${openingProtagonist}苏醒前夕，空间站遭遇反物质军团入侵。`,
+          mainBody: openingNewsBody,
           userInput,
-          recentTurns: ['- 系统：开局初始化\n  正文：黑塔空间站危机即将开始，新闻系统先生成可供首回合参考的世界事件苗头。'],
+          recentTurns: [`- 系统：开局初始化\n  正文：${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '当前地区'}「${openingArchive?.章节锚点名称 ?? '当前开局'}」即将开始，新闻系统先生成可供首回合参考的世界事件苗头。`],
           signal: abortController.signal,
           shouldCommit: isCurrentWorkflow,
         });
@@ -2462,6 +2709,7 @@ export async function executeSendWorkflow(
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
       turn: state.turnCount,
+      targetMessageId,
     });
           return;
         }
@@ -2469,6 +2717,7 @@ export async function executeSendWorkflow(
           pushQueueTask(state, 'narrative_image_generate', 'failed', {
             detail: '正文生图主文生图接口未启用，无法生成故事快照。',
             turn: state.turnCount,
+            targetMessageId,
           });
           return;
         }

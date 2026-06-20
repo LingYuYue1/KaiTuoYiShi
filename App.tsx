@@ -83,7 +83,7 @@ import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
 import { 创建空手机系统 } from '@/models/phone';
 import { 创建默认记忆系统设置 } from '@/models/settings';
-import { loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { alignStoryWeavingToOpeningArchive, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
@@ -287,7 +287,7 @@ export default function App() {
       return generateTravelerTemplate(config, context);
     };
 
-    const handleStartGame = async (traveler: 角色数据结构, worldState: 世界状态) => {
+    const handleStartGame = async (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords: NPC记录[] = []) => {
       // 预检 API：configs 为空时给出明确提示，不切换 view，避免玩家被困在空白游戏页。
       if (state.apiSettings.configs.length === 0) {
         alert('请先在设置中配置至少一个 API 接口，再开始旅途。');
@@ -300,12 +300,15 @@ export default function App() {
       state.set记忆({ 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
       state.set忆庭({ 回忆档案: [] });
       // 重置运行时游戏系统切片，避免上一局存档残留污染新局
-      state.setNPC([]);
+      state.setNPC(initialNpcRecords);
       state.set手机(创建空手机系统());
       state.set新闻([]);
       state.set剧情([]);
       try {
-        const nextStoryWeaving = await loadAllBundledStoryWeavingPresets();
+        const nextStoryWeaving = alignStoryWeavingToOpeningArchive(
+          await loadAllBundledStoryWeavingPresets(),
+          worldState.开局档案,
+        );
         state.set剧情编织(nextStoryWeaving);
         await saveSetting('storyWeavingSystem', nextStoryWeaving);
       } catch (err) {
@@ -320,6 +323,7 @@ export default function App() {
         onStart={handleStartGame}
         onBack={() => state.setView('home')}
         currentTheme={state.currentTheme}
+        openingArchiveApiConfig={getActiveApiConfig()}
         onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
       />
     );
@@ -339,6 +343,7 @@ export default function App() {
         leftPanel={
           <LeftPanel
             traveler={state.旅人}
+            album={state.相册}
             onOpenProfile={() => setShowCharacter(true)}
             onOpenPhone={() => setShowPhone(true)}
             phoneUnread={state.手机.unreadTotal}
@@ -362,6 +367,9 @@ export default function App() {
               batches={state.variableBatches}
               tasks={state.queueTasks}
               pending={state.pendingVariable}
+              onRetryTask={(task, mode) => {
+                void actions.handleRetryQueueTask(task, mode);
+              }}
               onCancelTask={(id) => {
                 if (id === 'main_story' || id === 'variable' || id === 'news' || id === 'phone' || id === 'yiting' || id === 'zhiku' || id === 'memory') {
                   state.abortControllerRef.current?.abort();
@@ -390,6 +398,7 @@ export default function App() {
               scrollRef={state.scrollRef}
               npcRecords={state.NPC}
               traveler={state.旅人}
+              album={state.相册}
               showInnerVoice={state.gameSettings.enableInnerVoice}
               visualTextSettings={state.gameSettings.visualTextSettings}
               onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
@@ -550,6 +559,7 @@ export default function App() {
       {showCharacter && (
         <TravelerProfileModal
           traveler={state.旅人}
+          album={state.相册}
           onClose={() => setShowCharacter(false)}
         />
       )}
@@ -569,6 +579,7 @@ export default function App() {
           turnCount={state.turnCount}
           mainChatHistory={state.chatHistory}
           npcRecords={state.NPC}
+          album={state.相册}
           onPhoneChange={state.set手机}
           onMemoryChange={state.set记忆}
           onYitingChange={state.set忆庭}
@@ -668,6 +679,7 @@ function renderSystemPanel(
         <CompanionPanel
           npcRecords={ctx.npcRecords}
           onNpcRecordsChange={ctx.onNpcRecordsChange}
+          album={ctx.album}
           turnCount={ctx.turnCount}
           nsfwEnabled={ctx.gameSettings.enableNsfw}
           maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}

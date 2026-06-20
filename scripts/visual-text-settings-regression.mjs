@@ -47,6 +47,10 @@ assert(renderer.includes('fontSettings.playerFontSize'), 'BodyBlock should use p
 assert(useGameState.includes('归一化视觉文本设置(savedGame.visualTextSettings)'), 'startup settings load should normalize visualTextSettings');
 assert(useGameState.includes('归一化视觉文本设置(prev.visualTextSettings)'), 'state migration effect should normalize visualTextSettings');
 assert(saveLoad.includes('归一化视觉文本设置(state.gameSettings.visualTextSettings)'), 'save payload should normalize visualTextSettings');
-assert(saveLoad.includes('归一化视觉文本设置(save.gameSettings.visualTextSettings)'), 'save load should normalize visualTextSettings from save');
+assert(
+  saveLoad.includes('归一化视觉文本设置(safeGameSettings.visualTextSettings)') ||
+    saveLoad.includes('归一化视觉文本设置(save.gameSettings.visualTextSettings)'),
+  'save load should normalize visualTextSettings from save',
+);
 
 console.log('PASS visual text settings regression');

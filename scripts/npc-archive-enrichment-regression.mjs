@@ -27,11 +27,13 @@ assert(enrichment.includes('穹:') && enrichment.includes('失忆不等于无个
 assert(enrichment.includes('shouldCreateNsfwBaseline'), '必须提供 NSFW 基线创建门禁。');
 assert(enrichment.includes('nsfwEnabled') && enrichment.includes('maleNsfwArchiveEnabled'), 'NSFW 基线必须受总开关与男性档案开关约束。');
 assert(!enrichment.includes('if (!baseline) return false'), 'NSFW 保守基线不能依赖少数手写角色基线，否则多数伙伴永远空档。');
-assert(enrichment.includes('未建立') && enrichment.includes('不代表已发生亲密剧情'), 'NSFW 基线必须是保守预留，不得伪造亲密剧情。');
-assert(enrichment.includes('未确认成人、明确同意与关系边界前，不写具体身体细节'), '未知年龄或未确认边界时不得写具体身体细节。');
+assert(enrichment.includes('未建立'), 'NSFW 基线必须保留亲密阶段空壳，等待后续剧情事实补充。');
+assert(enrichment.includes('基线档案只建一个干净空壳') && enrichment.includes('不再写「保守基线」'), 'NSFW 基线必须保持可更新空壳，不得恢复会阻塞后续补充的保守占位。');
+assert(enrichment.includes('return !bodyFilled && !hasPrefs && !hasSensitive && !hasExperiences'), 'NSFW 空壳档案必须仍被视为需要后续事实补充。');
+assert(!enrichment.includes('不代表已发生亲密剧情') && !enrichment.includes('未确认成人、明确同意与关系边界前，不写具体身体细节'), 'NSFW 基线不得写回旧版保守占位文案。');
 assert(enrichment.includes('帕姆') && enrichment.includes('佩佩') && enrichment.includes('白露') && enrichment.includes('机械') && enrichment.includes('人偶'), 'NSFW 基线必须屏蔽帕姆、佩佩、未成年/儿童外观、机械、人偶等对象。');
 
-assert(sendWorkflow.includes("import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment'"), 'sendWorkflow 必须引入伙伴档案补全器。');
+assert(/import\s+\{[^}]*enrichNpcArchives[^}]*\}\s+from\s+['"]@\/utils\/npcArchiveEnrichment['"]/.test(sendWorkflow), 'sendWorkflow 必须引入伙伴档案补全器。');
 assert(sendWorkflow.includes('const archiveEnrichment = enrichNpcArchives(npcSource'), '变量校准后必须先补全伙伴档案。');
 assert(sendWorkflow.includes('zhiku: state.智库'), '后台补档必须接入智库结构化人物资料。');
 assert(sendWorkflow.includes('const npcSourceForCompression = archiveEnrichment.records'), 'NPC 记忆压缩必须使用补全后的伙伴档案。');

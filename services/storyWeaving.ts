@@ -59,10 +59,16 @@ export async function decomposeStorySegment(params: {
   return parseStoryWeavingResult(raw, params.segment);
 }
 
-export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: Pick<FilterContext, 'recentUserInput' | 'recentAIResponse' | 'currentLocation'>): string {
+type StoryWeavingRuntimeContext = Pick<
+  FilterContext,
+  'recentUserInput' | 'recentAIResponse' | 'currentLocation' | 'openingRegionName' | 'openingChapterName' | 'openingEntryText' | 'openingSource' | 'openingArchiveText'
+>;
+
+export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: StoryWeavingRuntimeContext): string {
   const resolved = resolveInjectionWindow(system);
   if (!resolved) return '';
-  const { series, completed, current, archivedAnchor } = resolved;
+  const relocated = relocateCurrentSegmentByOpeningArchive(resolved, ctx);
+  const { series, completed, current, archivedAnchor, relocationNote } = relocated;
   const progress = system?.当前进度;
 
   const currentIndex = completed.findIndex((segment) => segment.id === current.id);
@@ -99,6 +105,10 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: Pi
       : `本回合门禁：未满足强承接条件（${gate.reasons.join('；') || '当前地点、玩家输入和近期上下文未明显命中当前段'}）。当前段只能作为氛围、人物关系、伏笔、未结事项和防抢跑参考，不得直接推进或复演原文段落。`,
     '剧情推进节奏：强承接只代表可以推进当前段的一拍，不代表必须在一回合内完成多个章节目标；下一段预热只能轻微铺垫，不得把未发生的事件写成既成事实。若进度锚点显示中间段为“已跳过”，只按路线校正理解，不可补写成玩家已经完整经历。',
     '“已经历”的分段只可作为既成事实简略承接，不得重新演一遍；“未开始”的下一段只能轻微铺垫，不得提前揭露角色未知信息。若玩家已经走出不同 IF 线，以已发生剧情为准；若条目标有信息可见性，必须遵守谁知道/谁不知道/读者视角边界。',
+    ctx?.openingArchiveText
+      ? `当前开局档案锚点：\n${ctx.openingArchiveText}\n剧情编织只能按这份开局档案做软参考协调；自由开局和创意工坊开局下，不得强行把玩家拉回导入章节的默认入口。章节锚点之前的主线段落视为前置背景，不进入当前滑窗推进队列，也不得被正文补演。`
+      : '',
+    relocationNote ? `开局锚点重定位：${relocationNote}` : '',
     '',
     seriesOverview,
     '',
@@ -147,17 +157,18 @@ export interface 剧情编织注入诊断 {
 
 export function evaluateStoryWeavingGate(
   system?: 剧情编织系统,
-  ctx?: Pick<FilterContext, 'recentUserInput' | 'recentAIResponse' | 'currentLocation'>,
+  ctx?: StoryWeavingRuntimeContext,
 ): 剧情编织门禁快照 | null {
   const resolved = resolveInjectionWindow(system);
   if (!resolved) return null;
-  const gate = evaluateSegmentGate(resolved.current, ctx);
+  const relocated = relocateCurrentSegmentByOpeningArchive(resolved, ctx);
+  const gate = evaluateSegmentGate(relocated.current, ctx);
   return {
-    系列ID: resolved.series.id,
-    分段ID: resolved.current.id,
-    分段组号: resolved.current.组号,
+    系列ID: relocated.series.id,
+    分段ID: relocated.current.id,
+    分段组号: relocated.current.组号,
     mode: gate.mode,
-    reasons: gate.reasons,
+    reasons: relocated.relocationNote ? [relocated.relocationNote, ...gate.reasons] : gate.reasons,
   };
 }
 
@@ -235,6 +246,82 @@ function resolveInjectionWindow(system?: 剧情编织系统): {
     ?? completed.find((segment) => segment.组号 > (archivedAnchor?.组号 ?? 0) && segment.运行状态 === '未开始')
     ?? completed.find((segment) => segment.组号 === series.当前分段组号 && !ARCHIVED_RUNTIME_STATUSES.has(segment.运行状态));
   return current ? { series, completed, current, archivedAnchor } : null;
+}
+
+function relocateCurrentSegmentByOpeningArchive(
+  resolved: {
+    series: 剧情编织系列;
+    completed: 剧情编织分段[];
+    current: 剧情编织分段;
+    archivedAnchor?: 剧情编织分段;
+  },
+  ctx?: StoryWeavingRuntimeContext,
+): {
+  series: 剧情编织系列;
+  completed: 剧情编织分段[];
+  current: 剧情编织分段;
+  archivedAnchor?: 剧情编织分段;
+  relocationNote?: string;
+} {
+  const openingText = [
+    ctx?.openingRegionName ?? '',
+    ctx?.openingChapterName ?? '',
+    ctx?.openingEntryText ?? '',
+    ctx?.openingArchiveText ?? '',
+  ].join('\n').trim();
+  if (!openingText) return resolved;
+
+  const currentScore = scoreSegmentAgainstOpening(resolved.current, openingText);
+  const candidate = resolved.completed
+    .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成' && !ARCHIVED_RUNTIME_STATUSES.has(segment.运行状态))
+    .map((segment) => ({ segment, score: scoreSegmentAgainstOpening(segment, openingText) }))
+    .filter((item) => item.score >= 6)
+    .sort((a, b) => b.score - a.score || a.segment.组号 - b.segment.组号)[0];
+
+  if (!candidate || candidate.segment.id === resolved.current.id || candidate.score <= currentScore + 1) {
+    return resolved;
+  }
+  const previous = resolved.completed
+    .slice()
+    .reverse()
+    .find((segment) => segment.组号 < candidate.segment.组号 && !ARCHIVED_RUNTIME_STATUSES.has(segment.运行状态));
+  return {
+    ...resolved,
+    current: candidate.segment,
+    archivedAnchor: previous ?? resolved.archivedAnchor,
+    relocationNote: `当前开局命中「${candidate.segment.标题}」，已跳过与开局地区不符的默认滑窗「${resolved.current.标题}」。`,
+  };
+}
+
+function scoreSegmentAgainstOpening(segment: 剧情编织分段, openingText: string): number {
+  const source = normalizeForGate(openingText);
+  if (!source) return 0;
+  let score = 0;
+  const fields: Array<[string, number]> = [
+    [segment.标题, 5],
+    [segment.章节范围, 4],
+    [segment.本段概括, 3],
+    [segment.原文摘要, 2],
+  ];
+  fields.forEach(([value, weight]) => {
+    const text = normalizeForGate(value || '');
+    if (text && source.includes(text)) score += weight;
+  });
+  [...segment.章节标题, ...segment.涉及地点, ...segment.涉及派系].forEach((item) => {
+    const text = normalizeForGate(item || '');
+    if (text.length >= 2 && source.includes(text)) score += 3;
+  });
+  segment.地图地点档案.forEach((item) => {
+    const text = normalizeForGate(item.名称 || '');
+    if (text.length >= 2 && source.includes(text)) score += 3;
+    const parent = normalizeForGate(item.上级地点 || '');
+    if (parent.length >= 2 && source.includes(parent)) score += 2;
+  });
+  segment.角色档案.forEach((item) => {
+    const text = normalizeForGate(item.名称 || '');
+    if (text.length >= 2 && source.includes(text)) score += 1;
+  });
+  return score;
 }
 
 function formatProgressAnchor(anchor: 剧情编织系统['当前进度']): string {
@@ -329,12 +416,16 @@ function formatWindowSegment(title: string, segment?: 剧情编织分段, mode: 
 
 function evaluateSegmentGate(
   segment: 剧情编织分段,
-  ctx?: Pick<FilterContext, 'recentUserInput' | 'recentAIResponse' | 'currentLocation'>,
+  ctx?: StoryWeavingRuntimeContext,
 ): { mode: 'soft' | 'strong'; reasons: string[] } {
   const source = normalizeForGate([
     ctx?.recentUserInput ?? '',
     ctx?.recentAIResponse ?? '',
     ctx?.currentLocation ?? '',
+    ctx?.openingRegionName ?? '',
+    ctx?.openingChapterName ?? '',
+    ctx?.openingEntryText ?? '',
+    ctx?.openingArchiveText ?? '',
   ].join('\n'));
   const reasons: string[] = [];
   if (!source) return { mode: 'soft', reasons: ['缺少当前输入、地点或近期正文作为门禁证据'] };
@@ -361,6 +452,18 @@ function evaluateSegmentGate(
   if (input && actionWords.some((word) => input.includes(word))) {
     const localHits = [...locationHits, ...roleHits].length + triggerHits.length;
     if (localHits > 0) reasons.push('玩家行动正在触碰当前段入口');
+  }
+  if (ctx?.openingArchiveText?.trim()) {
+    const archiveHits = [
+      ...segment.涉及地点,
+      ...segment.登场角色,
+      ...segment.涉及派系,
+      segment.章节范围,
+      segment.标题,
+    ]
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2 && normalizeForGate(ctx.openingArchiveText ?? '').includes(normalizeForGate(item)));
+    if (archiveHits.length) reasons.push(`开局档案命中：${archiveHits.slice(0, 4).join('、')}`);
   }
 
   const strong = locationHits.length > 0 && (roleHits.length > 0 || triggerHits.length > 0 || reasons.includes('玩家行动正在触碰当前段入口'));

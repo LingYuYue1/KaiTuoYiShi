@@ -45,8 +45,7 @@ assert(client.includes("return 'glm-5.1'"), '百度千帆必须把玩家常填�
 assert(client.includes('formatOpenAICompatibleError'), '百度千帆失败时必须提供专用错误诊断，避免玩家只看到反复重试。');
 assert(client.includes('百度千帆 API Error'), '百度千帆错误提示必须明确标出供应商。');
 assert(
-  client.includes("isBaiduQianfanConfig(config) ? '/api/qianfan'") ||
-    client.includes("isBaiduQianfanConfig(config)\n    ? '/api/qianfan'"),
+  /isBaiduQianfanConfig\(config\)\s*\?\s*'\/api\/qianfan'/.test(client),
   '百度千帆聊天请求必须走同源 /api/qianfan 代理，避免浏览器 CORS Failed to fetch。',
 );
 assert(client.includes('buildQianfanProxyBody'), '百度千帆聊天请求必须构造代理请求体。');

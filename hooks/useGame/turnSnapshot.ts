@@ -1,6 +1,6 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { 回合快照 } from '@/models/chat';
-import { 归一化相册系统 } from '@/models/imageGeneration';
+import { 归一化相册系统, type 相册系统 } from '@/models/imageGeneration';
 import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化手机系统 } from '@/models/phone';
 import { 归一化新闻列表 } from '@/models/news';
@@ -18,7 +18,7 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
   state.set智库(归一化智库系统(snapshot.智库 as UseGameStateReturn['智库']));
   state.set手机(归一化手机系统(snapshot.手机 as UseGameStateReturn['手机']));
   state.setNPC(归一化NPC记录列表(snapshot.NPC as UseGameStateReturn['NPC']));
-  state.set相册(归一化相册系统(snapshot.相册 as UseGameStateReturn['相册']));
+  state.set相册((current) => restoreAlbumSnapshot(snapshot.相册 as UseGameStateReturn['相册'], current));
   state.set新闻(归一化新闻列表(snapshot.新闻 as UseGameStateReturn['新闻']));
   state.set剧情(snapshot.剧情 as Parameters<typeof state.set剧情>[0]);
   const storyWeaving = 归一化剧情编织系统(snapshot.剧情编织 as UseGameStateReturn['剧情编织']);
@@ -28,4 +28,19 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
   state.setTurnCount(snapshot.turnCount);
   state.setPendingOpeningTrigger(snapshot.pendingOpeningTrigger ?? null);
   return storyWeaving;
+}
+
+function restoreAlbumSnapshot(snapshotAlbum: UseGameStateReturn['相册'], currentAlbum: 相册系统): 相册系统 {
+  const normalized = 归一化相册系统(snapshotAlbum);
+  const currentAssets = new Map((currentAlbum.assets ?? []).map((asset) => [asset.id, asset]));
+  return {
+    ...normalized,
+    assets: normalized.assets.map((asset) => {
+      const current = currentAssets.get(asset.id);
+      if (typeof asset.dataUrl === 'string' && asset.dataUrl.startsWith('asset:') && current?.dataUrl) {
+        return { ...asset, dataUrl: current.dataUrl, originalUrl: current.originalUrl };
+      }
+      return asset;
+    }),
+  };
 }

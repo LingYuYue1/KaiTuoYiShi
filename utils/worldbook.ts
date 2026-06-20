@@ -1,6 +1,6 @@
 import type { 世界书, 世界书条目, 世界书导出数据, 世界书条目类型, 世界书作用域 } from '@/models/worldbook';
 import { 创建空世界书, 创建空世界书条目, ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
-import type { 剧情模式 } from '@/models/journey';
+import type { 剧情模式, 开局来源 } from '@/models/journey';
 
 export const PROMPT_LIKE_WORLDBOOK_ENTRY_IDS = new Set([
   'builtin_compass_overview',
@@ -115,6 +115,16 @@ export interface FilterContext {
   startSceneName?: string;
   /** 当前地点文本，优先用来做地理锚点。 */
   currentLocation?: string;
+  /** 当前开局档案地区，用于非黑塔开局优先召回对应区域资料。 */
+  openingRegionName?: string;
+  /** 当前开局档案章节锚点，用于章节相关资料召回。 */
+  openingChapterName?: string;
+  /** 玩家自由介入或预设切入摘要，用于召回点名角色、组织、地点。 */
+  openingEntryText?: string;
+  /** 当前开局来源，用于区分官方预设、自由开局和创意工坊模板。 */
+  openingSource?: 开局来源;
+  /** 结构化开局档案摘要，用于非默认开局召回地区、人物、地点与防回退规则。 */
+  openingArchiveText?: string;
   /** 本回合明确在场、刚说话或被玩家点名的角色名。不得用地点名自动推导。 */
   npcNames?: string[];
   /** 原著主角选择，用于智库门禁星/穹单主角召回。 */
@@ -132,6 +142,12 @@ function entryMatchesKeywords(entry: 世界书条目, ctx: FilterContext): boole
     ctx.recentAIResponse,
     ctx.worldName,
     ctx.travelerName,
+    ctx.currentLocation,
+    ctx.openingRegionName,
+    ctx.openingChapterName,
+    ctx.openingEntryText,
+    ctx.openingSource,
+    ctx.openingArchiveText,
   ].join(' ').toLowerCase();
   return entry.keywords.some((kw) => haystack.includes(kw.toLowerCase()));
 }
@@ -210,7 +226,11 @@ function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): stri
   return content
     .replace(/\{playerName\}/g, playerName)
     .replace(/\{originalProtagonistName\}/g, originalProtagonistName)
-    .replace(/\{originalProtagonistSubject\}/g, originalProtagonistSubject);
+    .replace(/\{originalProtagonistSubject\}/g, originalProtagonistSubject)
+    .replace(/\{openingRegionName\}/g, ctx.openingRegionName?.trim() || '当前开局地区')
+    .replace(/\{openingChapterName\}/g, ctx.openingChapterName?.trim() || '当前章节锚点')
+    .replace(/\{openingEntryText\}/g, ctx.openingEntryText?.trim() || '无额外开局介入文本')
+    .replace(/\{openingArchiveText\}/g, ctx.openingArchiveText?.trim() || '无结构化开局档案');
 }
 
 function formatOriginalProtagonistName(originalProtagonist: FilterContext['originalProtagonist']): string {

@@ -1,5 +1,12 @@
 import type {
+  官方开局预设,
+  创意工坊开局模板,
+  创意工坊开局模板包,
+  地区自由开局引导,
+  开局地区,
+  开局章节锚点,
   能力预设,
+  自由开局写作问题,
   阵营定义,
   难度定义,
   命途定义,
@@ -240,6 +247,507 @@ export function getFaction(id: string): 阵营定义 | undefined {
   return factions.find((f) => f.id === id);
 }
 
+export const openingRegions: 开局地区[] = [
+  {
+    id: 'herta_space_station',
+    name: '黑塔空间站',
+    description: '奇物、研究员、星核与反物质军团危机交错的原著主线起点。',
+    defaultLocationHint: '黑塔空间站',
+  },
+  {
+    id: 'jarilo_vi',
+    name: '贝洛伯格',
+    description: '永冬星球上的孤城，上层区、下层区与裂界危机共同塑造开局张力。',
+    defaultLocationHint: '雅利洛-VI · 贝洛伯格',
+  },
+  {
+    id: 'xianzhou_luofu',
+    name: '罗浮仙舟',
+    description: '仙舟联盟旗舰之一，星核危机、丰饶孽物与云骑军戒备牵动主线。',
+    defaultLocationHint: '仙舟罗浮',
+  },
+  {
+    id: 'penacony',
+    name: '匹诺康尼',
+    description: '以美梦为主题的盛会之地，家族、梦境与宾客身份天然适合自由切入。',
+    defaultLocationHint: '匹诺康尼',
+  },
+];
+
+export const openingChapterAnchors: 开局章节锚点[] = [
+  {
+    id: 'herta_station_incident',
+    regionId: 'herta_space_station',
+    name: '主线苏醒前夕',
+    summary: '空间站遭遇反物质军团入侵，所选原著主角仍处于封存状态，列车组即将与危机交汇。',
+    officialChapterName: '今日亦是昨日的明日',
+    officialChapterPhase: '序章前段',
+    priorStoryState: '这是当前可选主线最早锚点，不存在需要跳过的前置主线。正文应从空间站危机切入，不重播玩家未选择的其他开局。',
+    referenceDate: '琥珀纪 2157.03.07',
+    referenceTime: '06:40',
+    defaultLocationHint: '黑塔空间站',
+    keyNpcs: ['三月七', '瓦尔特', '丹恒', '姬子', '艾丝妲', '阿兰', '黑塔'],
+    loreKeywords: ['黑塔空间站', '反物质军团', '星核', '封存舱', '星穹列车'],
+    openingPressure: ['空间站警报', '反物质军团入侵', '原著主角尚未苏醒', '玩家以外来变量切入'],
+  },
+  {
+    id: 'belobog_arrival',
+    regionId: 'jarilo_vi',
+    name: '初抵贝洛伯格',
+    summary: '列车组抵达永冬星球前后，上下层城矛盾、银鬃铁卫戒备与裂界阴影尚未完全摊开。',
+    officialChapterName: '于枯索的冬夜里',
+    officialChapterPhase: '第二章「如果在冬夜，一群旅人」',
+    priorStoryState: '黑塔空间站序章已作为背景前置处理，不进入正文转跳推进；正文直接从雅利洛-VI与贝洛伯格初抵阶段展开。',
+    defaultLocationHint: '雅利洛-VI · 雪原或贝洛伯格城外',
+    keyNpcs: ['杰帕德', '布洛妮娅', '希儿', '娜塔莎', '桑博', '克拉拉'],
+    loreKeywords: ['贝洛伯格', '雅利洛-VI', '银鬃铁卫', '下层区', '裂界'],
+    openingPressure: ['永冬环境', '城防盘查', '上下层隔阂', '裂界威胁'],
+  },
+  {
+    id: 'belobog_underworld',
+    regionId: 'jarilo_vi',
+    name: '下层区暗流',
+    summary: '列车组与贝洛伯格地下势力逐渐接触，地火、矿区、裂界侵蚀和上下层隔绝成为主要压力。',
+    officialChapterName: '于枯索的冬夜里',
+    officialChapterPhase: '第五章「捉迷藏」',
+    priorStoryState: '黑塔空间站序章与贝洛伯格初抵阶段已作为背景前置处理，不进入正文转跳推进；正文直接从下层区、地火和矿区压力展开。',
+    defaultLocationHint: '雅利洛-VI · 下层区或大矿区',
+    keyNpcs: ['希儿', '娜塔莎', '桑博', '虎克', '克拉拉', '史瓦罗'],
+    loreKeywords: ['下层区', '地火', '大矿区', '裂界', '史瓦罗'],
+    openingPressure: ['下层区资源紧张', '地火戒备', '矿区异动', '上下层封锁'],
+  },
+  {
+    id: 'belobog_cocolia_crisis',
+    regionId: 'jarilo_vi',
+    name: '可可利亚危机前夜',
+    summary: '贝洛伯格真相逐渐浮出水面，大守护者、星核意志和永冬命运都逼近摊牌。',
+    officialChapterName: '于曙光中',
+    officialChapterPhase: '第五章「星星是冰冷的玩具」',
+    priorStoryState: '黑塔空间站序章与贝洛伯格前中段已作为背景前置处理，不进入正文转跳推进；正文直接从真相摊牌与永冬岭危机前夜展开。',
+    defaultLocationHint: '雅利洛-VI · 贝洛伯格城内或永冬岭方向',
+    keyNpcs: ['布洛妮娅', '可可利亚', '杰帕德', '希儿', '娜塔莎'],
+    loreKeywords: ['可可利亚', '星核', '大守护者', '永冬岭', '贝洛伯格真相'],
+    openingPressure: ['大守护者疑云', '星核诱导', '城市命运', '真相暴露前夜'],
+  },
+  {
+    id: 'luofu_arrival',
+    regionId: 'xianzhou_luofu',
+    name: '初抵罗浮',
+    summary: '列车组抵达罗浮前后，仙舟内部戒备、卡芙卡线索、星核危机和云骑军调度共同形成压力。',
+    officialChapterName: '乘槎驭风仙窟游',
+    officialChapterPhase: '第一章「旅进青霄，不速之邀」',
+    priorStoryState: '黑塔空间站与雅利洛-VI主线已作为背景前置处理，不进入正文转跳推进；正文直接从仙舟罗浮初抵与卡芙卡线索展开。',
+    defaultLocationHint: '仙舟罗浮 · 星槎海中枢或流云渡',
+    keyNpcs: ['景元', '彦卿', '符玄', '停云', '素裳', '白露', '驭空'],
+    loreKeywords: ['仙舟罗浮', '云骑军', '星槎海', '卡芙卡', '丰饶孽物', '建木'],
+    openingPressure: ['仙舟戒备', '星核危机', '卡芙卡线索', '云骑军盘查'],
+  },
+  {
+    id: 'luofu_kafka_interrogation',
+    regionId: 'xianzhou_luofu',
+    name: '太卜司审问前后',
+    summary: '卡芙卡被带入太卜司，穷观阵、星核猎手线索和罗浮内患开始把局势推向建木异变。',
+    officialChapterName: '乘槎驭风仙窟游',
+    officialChapterPhase: '第七章「极数问玄，历事穷观」',
+    priorStoryState: '黑塔空间站、雅利洛-VI与罗浮初抵阶段已作为背景前置处理，不进入正文转跳推进；正文直接从太卜司、穷观阵和建木异变前兆展开。',
+    defaultLocationHint: '仙舟罗浮 · 太卜司',
+    keyNpcs: ['符玄', '卡芙卡', '景元', '瓦尔特', '三月七', '青雀'],
+    loreKeywords: ['太卜司', '穷观阵', '卡芙卡', '星核猎手', '建木'],
+    openingPressure: ['穷观阵审问', '星核猎手线索', '罗浮内患', '建木异变前兆'],
+  },
+  {
+    id: 'luofu_phantylia_crisis',
+    regionId: 'xianzhou_luofu',
+    name: '建木灾变',
+    summary: '建木重生后，丰饶与毁灭的阴影逼近罗浮核心，云骑军、列车组与仙舟高层都被卷入危局。',
+    officialChapterName: '云树百丈蔽重楼',
+    officialChapterPhase: '第三章「有龙矫矫，其渊渺渺」',
+    priorStoryState: '黑塔空间站、雅利洛-VI与罗浮前中段已作为背景前置处理，不进入正文转跳推进；正文直接从建木灾变、云骑调度和幻胧阴影展开。',
+    defaultLocationHint: '仙舟罗浮 · 建木所在洞天周边',
+    keyNpcs: ['景元', '符玄', '彦卿', '白露', '停云', '瓦尔特'],
+    loreKeywords: ['建木', '幻胧', '丰饶孽物', '云骑军', '罗浮危机'],
+    openingPressure: ['建木重生', '丰饶孽物失控', '毁灭令使阴影', '云骑军调度'],
+  },
+  {
+    id: 'penacony_invitation',
+    regionId: 'penacony',
+    name: '盛会邀约',
+    summary: '匹诺康尼盛会前后，宾客身份、梦境入口与家族秩序构成开局背景。',
+    officialChapterName: '喧哗与骚动',
+    officialChapterPhase: '「那些逐梦的年轻人」',
+    priorStoryState: '黑塔空间站、雅利洛-VI与仙舟罗浮主线已作为背景前置处理，不进入正文转跳推进；正文直接从匹诺康尼盛会邀约与入梦前后展开。',
+    defaultLocationHint: '匹诺康尼 · 白日梦酒店或梦境边界',
+    keyNpcs: ['星期日', '知更鸟', '砂金', '黄泉', '花火', '流萤'],
+    loreKeywords: ['匹诺康尼', '家族', '白日梦酒店', '美梦', '盛会之星'],
+    openingPressure: ['宾客身份', '梦境规则', '家族秩序', '异常邀请'],
+  },
+  {
+    id: 'penacony_dream_edge',
+    regionId: 'penacony',
+    name: '梦境边界异动',
+    summary: '宾客进入美梦后，梦境边界、钟表小子传闻、猎犬家系巡查和异常死亡阴影开始浮现。',
+    officialChapterName: '喧哗与骚动 / 鸽群中的猫',
+    officialChapterPhase: '「夜色名为温柔」',
+    priorStoryState: '匹诺康尼入场与此前主线已作为背景前置处理，不进入正文转跳推进；正文直接从入梦后的边界异动、家族巡查与死亡阴影展开。',
+    defaultLocationHint: '匹诺康尼 · 黄金的时刻或梦境边界',
+    keyNpcs: ['星期日', '砂金', '黄泉', '花火', '流萤', '黑天鹅'],
+    loreKeywords: ['黄金的时刻', '梦境边界', '家族', '猎犬家系', '异常死亡'],
+    openingPressure: ['梦境异常', '家族巡查', '宾客秘密', '死亡阴影'],
+  },
+  {
+    id: 'penacony_reverie_crisis',
+    regionId: 'penacony',
+    name: '美梦崩塌前夜',
+    summary: '匹诺康尼盛会表象下的矛盾濒临爆发，家族、公司、巡海游侠与梦境深处的真相互相牵制。',
+    officialChapterName: '鸽群中的猫 / 在我们的时代里',
+    officialChapterPhase: '「上升的一切必将汇合」',
+    priorStoryState: '匹诺康尼前中段与此前主线已作为背景前置处理，不进入正文转跳推进；正文直接从盛会失衡、家族真相和美梦崩塌前夜展开。',
+    defaultLocationHint: '匹诺康尼 · 白日梦酒店深处或梦境剧场',
+    keyNpcs: ['星期日', '知更鸟', '砂金', '黄泉', '花火', '流萤'],
+    loreKeywords: ['谐乐大典', '美梦崩塌', '家族真相', '公司博弈', '梦境剧场'],
+    openingPressure: ['盛会失衡', '家族真相', '公司博弈', '梦境深层危机'],
+  },
+];
+
+export const officialOpeningPresets: 官方开局预设[] = [
+  {
+    id: 'official_herta_station_incident',
+    source: 'official_preset',
+    regionId: 'herta_space_station',
+    regionName: '黑塔空间站',
+    chapterId: 'herta_station_incident',
+    chapterName: '主线苏醒前夕',
+    title: '黑塔空间站 · 主线苏醒前夕',
+    summary: '从空间站危机切入原著主线起点。玩家不是星/穹，也不是列车既定成员，而是原著之外的新变量。',
+    referenceDate: '琥珀纪 2157.03.07',
+    referenceTime: '06:40',
+    defaultLocationHint: '黑塔空间站',
+    keyNpcs: ['三月七', '瓦尔特', '丹恒', '姬子', '艾丝妲', '阿兰'],
+    loreKeywords: ['黑塔空间站', '反物质军团', '星核', '封存舱', '星穹列车'],
+    openingPressure: ['空间站警报', '反物质军团入侵', '原著主角尚未苏醒'],
+    recommendedEntryAngles: ['收到空间站求援', '追踪异常星核信号', '作为访客被卷入危机', '受委托调查奇物异常'],
+  },
+  {
+    id: 'official_belobog_arrival',
+    source: 'official_preset',
+    regionId: 'jarilo_vi',
+    regionName: '贝洛伯格',
+    chapterId: 'belobog_arrival',
+    chapterName: '初抵贝洛伯格',
+    title: '贝洛伯格 · 初抵贝洛伯格',
+    summary: '以永冬、裂界和上下层城隔阂为背景，玩家从贝洛伯格外围或城内边缘切入主线。',
+    defaultLocationHint: '雅利洛-VI · 雪原或贝洛伯格城外',
+    keyNpcs: ['杰帕德', '布洛妮娅', '希儿', '娜塔莎', '桑博', '克拉拉'],
+    loreKeywords: ['贝洛伯格', '雅利洛-VI', '银鬃铁卫', '下层区', '裂界'],
+    openingPressure: ['永冬环境', '城防盘查', '上下层隔阂', '裂界威胁'],
+    recommendedEntryAngles: ['作为外来访客抵达城外', '因委托接触上层区或下层区', '在裂界边缘被卷入事件', '与地火或银鬃铁卫发生交集'],
+  },
+  {
+    id: 'official_belobog_underworld',
+    source: 'official_preset',
+    regionId: 'jarilo_vi',
+    regionName: '贝洛伯格',
+    chapterId: 'belobog_underworld',
+    chapterName: '下层区暗流',
+    title: '贝洛伯格 · 下层区暗流',
+    summary: '以下层区、地火和矿区压力为背景，让玩家从地下城生活、委托或裂界事故切入。',
+    defaultLocationHint: '雅利洛-VI · 下层区或大矿区',
+    keyNpcs: ['希儿', '娜塔莎', '桑博', '虎克', '克拉拉', '史瓦罗'],
+    loreKeywords: ['下层区', '地火', '大矿区', '裂界', '史瓦罗'],
+    openingPressure: ['下层区资源紧张', '地火戒备', '矿区异动', '上下层封锁'],
+    recommendedEntryAngles: ['作为下层区居民或外来委托人介入', '在矿区救援中卷入裂界事件', '与地火或娜塔莎诊所发生联系', '因史瓦罗或克拉拉线索进入机械聚落'],
+  },
+  {
+    id: 'official_belobog_cocolia_crisis',
+    source: 'official_preset',
+    regionId: 'jarilo_vi',
+    regionName: '贝洛伯格',
+    chapterId: 'belobog_cocolia_crisis',
+    chapterName: '可可利亚危机前夜',
+    title: '贝洛伯格 · 可可利亚危机前夜',
+    summary: '以贝洛伯格真相临近摊牌为背景，玩家可从城内调查、银鬃铁卫线或永冬岭方向切入。',
+    defaultLocationHint: '雅利洛-VI · 贝洛伯格城内或永冬岭方向',
+    keyNpcs: ['布洛妮娅', '可可利亚', '杰帕德', '希儿', '娜塔莎'],
+    loreKeywords: ['可可利亚', '星核', '大守护者', '永冬岭', '贝洛伯格真相'],
+    openingPressure: ['大守护者疑云', '星核诱导', '城市命运', '真相暴露前夜'],
+    recommendedEntryAngles: ['作为调查者接近大守护者线索', '因银鬃铁卫行动进入城内危局', '从永冬岭异常能量切入', '与布洛妮娅或下层区线索产生交叉'],
+  },
+  {
+    id: 'official_luofu_arrival',
+    source: 'official_preset',
+    regionId: 'xianzhou_luofu',
+    regionName: '罗浮仙舟',
+    chapterId: 'luofu_arrival',
+    chapterName: '初抵罗浮',
+    title: '罗浮仙舟 · 初抵罗浮',
+    summary: '以罗浮戒备、星核危机和卡芙卡线索为背景，玩家通过自写介入方式进入仙舟局势。',
+    defaultLocationHint: '仙舟罗浮 · 星槎海中枢或流云渡',
+    keyNpcs: ['景元', '彦卿', '符玄', '停云', '素裳', '白露'],
+    loreKeywords: ['仙舟罗浮', '云骑军', '星槎海', '卡芙卡', '丰饶孽物'],
+    openingPressure: ['仙舟戒备', '云骑军盘查', '星核危机', '卡芙卡线索'],
+    recommendedEntryAngles: ['以外来旅人身份接受盘查', '因委托抵达罗浮', '与商会或星槎航线相关', '提前认识某位仙舟角色'],
+  },
+  {
+    id: 'official_luofu_kafka_interrogation',
+    source: 'official_preset',
+    regionId: 'xianzhou_luofu',
+    regionName: '罗浮仙舟',
+    chapterId: 'luofu_kafka_interrogation',
+    chapterName: '太卜司审问前后',
+    title: '罗浮仙舟 · 太卜司审问前后',
+    summary: '以太卜司、穷观阵和卡芙卡审问为背景，让玩家从卜算、护送、旁听或异常线索切入。',
+    defaultLocationHint: '仙舟罗浮 · 太卜司',
+    keyNpcs: ['符玄', '卡芙卡', '景元', '瓦尔特', '三月七', '青雀'],
+    loreKeywords: ['太卜司', '穷观阵', '卡芙卡', '星核猎手', '建木'],
+    openingPressure: ['穷观阵审问', '星核猎手线索', '罗浮内患', '建木异变前兆'],
+    recommendedEntryAngles: ['以太卜司协助者或访客身份进入', '因卡芙卡线索被卷入审问前后', '与青雀或符玄产生任务交集', '从玉兆异常或卜算偏差切入'],
+  },
+  {
+    id: 'official_luofu_phantylia_crisis',
+    source: 'official_preset',
+    regionId: 'xianzhou_luofu',
+    regionName: '罗浮仙舟',
+    chapterId: 'luofu_phantylia_crisis',
+    chapterName: '建木灾变',
+    title: '罗浮仙舟 · 建木灾变',
+    summary: '以建木重生和丰饶孽物失控为背景，玩家从救援、云骑调度或洞天异常中切入。',
+    defaultLocationHint: '仙舟罗浮 · 建木所在洞天周边',
+    keyNpcs: ['景元', '符玄', '彦卿', '白露', '停云', '瓦尔特'],
+    loreKeywords: ['建木', '幻胧', '丰饶孽物', '云骑军', '罗浮危机'],
+    openingPressure: ['建木重生', '丰饶孽物失控', '毁灭令使阴影', '云骑军调度'],
+    recommendedEntryAngles: ['随云骑救援队进入受灾区域', '作为医士或护卫协助疏散', '追踪建木异常能量', '与景元调度或白露救治线交叉'],
+  },
+  {
+    id: 'official_penacony_invitation',
+    source: 'official_preset',
+    regionId: 'penacony',
+    regionName: '匹诺康尼',
+    chapterId: 'penacony_invitation',
+    chapterName: '盛会邀约',
+    title: '匹诺康尼 · 盛会邀约',
+    summary: '以美梦、宾客身份和家族秩序为背景，让玩家从白日梦酒店或梦境边界切入。',
+    defaultLocationHint: '匹诺康尼 · 白日梦酒店或梦境边界',
+    keyNpcs: ['星期日', '知更鸟', '砂金', '黄泉', '花火', '流萤'],
+    loreKeywords: ['匹诺康尼', '家族', '白日梦酒店', '美梦', '盛会之星'],
+    openingPressure: ['宾客身份', '梦境规则', '家族秩序', '异常邀请'],
+    recommendedEntryAngles: ['作为宾客受邀进入', '从梦境边界意外醒来', '受家族或中介邀请', '沿异常梦境线索介入'],
+  },
+  {
+    id: 'official_penacony_dream_edge',
+    source: 'official_preset',
+    regionId: 'penacony',
+    regionName: '匹诺康尼',
+    chapterId: 'penacony_dream_edge',
+    chapterName: '梦境边界异动',
+    title: '匹诺康尼 · 梦境边界异动',
+    summary: '以进入美梦后的异常信号为背景，玩家从黄金的时刻、梦境边界或宾客秘密切入。',
+    defaultLocationHint: '匹诺康尼 · 黄金的时刻或梦境边界',
+    keyNpcs: ['星期日', '砂金', '黄泉', '花火', '流萤', '黑天鹅'],
+    loreKeywords: ['黄金的时刻', '梦境边界', '家族', '猎犬家系', '异常死亡'],
+    openingPressure: ['梦境异常', '家族巡查', '宾客秘密', '死亡阴影'],
+    recommendedEntryAngles: ['作为宾客在梦境边界醒来', '被猎犬家系盘问身份', '因梦境异常接近流萤或黑天鹅线索', '从异常死亡传闻开始调查'],
+  },
+  {
+    id: 'official_penacony_reverie_crisis',
+    source: 'official_preset',
+    regionId: 'penacony',
+    regionName: '匹诺康尼',
+    chapterId: 'penacony_reverie_crisis',
+    chapterName: '美梦崩塌前夜',
+    title: '匹诺康尼 · 美梦崩塌前夜',
+    summary: '以盛会失衡和梦境深层真相为背景，玩家从酒店深处、梦境剧场或多方博弈切入。',
+    defaultLocationHint: '匹诺康尼 · 白日梦酒店深处或梦境剧场',
+    keyNpcs: ['星期日', '知更鸟', '砂金', '黄泉', '花火', '流萤'],
+    loreKeywords: ['谐乐大典', '美梦崩塌', '家族真相', '公司博弈', '梦境剧场'],
+    openingPressure: ['盛会失衡', '家族真相', '公司博弈', '梦境深层危机'],
+    recommendedEntryAngles: ['以宾客身份发现梦境异常', '因公司或家族委托进入博弈', '追随知更鸟或星期日线索', '从梦境剧场的异常舞台切入'],
+  },
+];
+
+export const freeOpeningWritingQuestions: 自由开局写作问题[] = [
+  {
+    id: 'identity',
+    title: '你是谁',
+    description: '写清身份、来历、阵营关系和别人第一眼会怎样判断你。',
+    examples: ['空间站临时研究协助者', '受雇调查裂界异动的外来人', '持有邀请函的匹诺康尼宾客'],
+  },
+  {
+    id: 'reason',
+    title: '你为什么在这里',
+    description: '给出抵达当前地区的原因，最好能和委托、事故、调查、邀请或逃亡相连。',
+    examples: ['收到求援通讯', '追踪一枚异常信标', '被某位角色邀请同行'],
+  },
+  {
+    id: 'entry_scene',
+    title: '从哪里开始',
+    description: '指定初始地点、事件前后或第一个可互动对象，避免开局只剩背景介绍。',
+    examples: ['流云渡盘查口', '下层区娜塔莎诊所外', '白日梦酒店入住柜台'],
+  },
+  {
+    id: 'relationships',
+    title: '你认识谁',
+    description: '说明和重要角色是陌生、见过、合作过、亲近还是有矛盾。没有写明就默认陌生或初识。',
+    examples: ['与素裳有过一次护送合作', '只在档案中见过黑塔', '和砂金互相试探但谈不上信任'],
+  },
+  {
+    id: 'tone',
+    title: '你想要什么氛围',
+    description: '选择日常、悬疑、战斗、暧昧、调查、轻松或压迫感，让首回合更贴近玩法。',
+    examples: ['偏调查和悬疑', '先日常相处再进入主线', '直接从危机现场开场'],
+  },
+];
+
+export const freeOpeningGuides: 地区自由开局引导[] = [
+  {
+    regionId: 'herta_space_station',
+    overview: '黑塔空间站适合写成研究、奇物、权限、求援通讯或反物质军团危机中的临时变量。',
+    identityHints: ['研究协助者', '奇物相关访客', '空间站临时雇员', '被求援通讯卷入的外来人'],
+    entryAngles: ['收到空间站求援', '追踪星核或奇物异常', '在维护通道醒来', '被艾丝妲或阿兰临时请求协助'],
+    relationshipHints: ['可以提前认识艾丝妲、阿兰或某位研究员', '与黑塔相关需写清权限来源', '不要默认与列车组已经非常熟'],
+    pacingHints: ['适合快速建立警报和行动压力', '若想日常开局，可写在危机前数小时或模拟宇宙相关支线'],
+    cautionNotes: ['只有选择黑塔地区时才默认空间站危机', '星/穹是否登场仍由原著主角选择控制'],
+    sampleTexts: ['我是空间站外聘的奇物记录员，刚完成交接时警报响起，艾丝妲的通讯要求我协助疏散收容舱附近的研究员。'],
+  },
+  {
+    regionId: 'jarilo_vi',
+    overview: '贝洛伯格适合写成永冬求生、城防盘查、下层区委托、裂界事故或上下层城矛盾。',
+    identityHints: ['雪原迷路者', '外来委托人', '下层区居民', '银鬃铁卫临时协助者', '裂界调查员'],
+    entryAngles: ['从雪原抵达城门', '在下层区接触地火', '因矿区事故被卷入', '追踪裂界侵蚀或星核线索'],
+    relationshipHints: ['可写与娜塔莎、希儿、桑博或杰帕德的已知关系', '上下层身份差异会影响别人态度'],
+    pacingHints: ['想慢热就从城门盘查或诊所日常开始', '想紧张就从裂界事故、矿区坍塌或铁卫追捕开始'],
+    cautionNotes: ['章节锚点只是背景参考，不会强迫玩家立刻解决星核', '涉及可可利亚时需保留大守护者权力边界'],
+    sampleTexts: ['我是受下层区委托寻找失踪矿工的外来人，刚到大矿区就遇见裂界怪物和地火巡逻队，希儿还不确定我是不是可信。'],
+  },
+  {
+    regionId: 'xianzhou_luofu',
+    overview: '罗浮仙舟适合写成云骑盘查、星槎航线、商会委托、太卜司线索、医士救援或建木灾变支线。',
+    identityHints: ['外来旅人', '商会随行人员', '云骑临时协助者', '医士或丹鼎司相关人士', '被太卜司关注的异常个体'],
+    entryAngles: ['在星槎海接受盘查', '从流云渡货运事故切入', '因卡芙卡线索被牵连', '在太卜司或长乐天收到委托'],
+    relationshipHints: ['可以提前认识素裳、桂乃芬、白露或青雀', '景元、符玄等高层不会无条件信任玩家'],
+    pacingHints: ['日常可从长乐天、商会或医馆开始', '主线压力可从云骑戒备、星核猎手线索或建木异动开始'],
+    cautionNotes: ['不要把朱明、曜青等其他仙舟角色默认塞进罗浮开局', '云骑军权限、太卜司机密和将军调度都需要合理理由'],
+    sampleTexts: ['我是随商会船队抵达罗浮的外来旅人，在流云渡货运区被云骑盘查时，素裳认出我曾帮她处理过一次星槎事故。'],
+  },
+  {
+    regionId: 'penacony',
+    overview: '匹诺康尼适合写成宾客身份、梦境异常、家族秩序、公司博弈、邀请函或梦境边界事件。',
+    identityHints: ['受邀宾客', '公司随行人员', '梦境异常调查者', '被邀请函误送的人', '在美梦中醒来的外来者'],
+    entryAngles: ['在白日梦酒店办理入住', '从梦境边界醒来', '因邀请函异常进入美梦', '被猎犬家系或家族成员盘问'],
+    relationshipHints: ['可写和砂金、流萤、黑天鹅或花火的初始关系', '星期日和家族不会轻易放开秩序边界'],
+    pacingHints: ['想轻松可从酒店、商业街或黄金的时刻开始', '想悬疑可从梦境异常、死亡传闻或身份核验开始'],
+    cautionNotes: ['自由开局可以弱化主线，但梦境规则和家族秩序仍要保留', '不要让所有关键人物一开场同时围着玩家转'],
+    sampleTexts: ['我是持有异常邀请函的宾客，醒来时不在自己的客房，而是在梦境边界的空走廊里，黑天鹅似乎比我更早知道这件事。'],
+  },
+];
+
+export const workshopOpeningTemplates: 创意工坊开局模板[] = [
+  {
+    id: 'workshop_herta_curio_distress',
+    source: 'workshop',
+    title: '黑塔 · 奇物求援',
+    author: 'system',
+    version: '0.1.0',
+    regionId: 'herta_space_station',
+    chapterId: 'herta_station_incident',
+    summary: '玩家因奇物记录、异常权限或求援通讯进入黑塔空间站，在反物质军团危机边缘切入。',
+    defaultLocationHint: '黑塔空间站 · 收容舱段或主控舱段',
+    keyNpcs: ['艾丝妲', '阿兰', '黑塔', '三月七'],
+    loreKeywords: ['黑塔空间站', '奇物', '求援通讯', '反物质军团', '封存舱'],
+    openingPressure: ['空间站警报', '奇物异常', '权限核验', '反物质军团入侵'],
+    tags: ['黑塔空间站', '奇物', '危机切入', '研究协助'],
+    playerEntryTemplate: '我是{身份}，因为{来到此地原因}进入黑塔空间站。开局从{起始地点}开始，我与{已认识角色}的关系是{初始关系}。本开局希望{叙事倾向}。',
+    editableFields: [
+      { id: '身份', label: '身份', placeholder: '例如：奇物记录员、空间站访客、临时研究协助者', required: true },
+      { id: '来到此地原因', label: '来到此地原因', placeholder: '例如：收到求援通讯、追踪奇物异常、执行外部委托', required: true },
+      { id: '起始地点', label: '起始地点', placeholder: '例如：收容舱段、主控舱段、维护通道' },
+      { id: '已认识角色', label: '已认识角色', placeholder: '例如：艾丝妲、阿兰；不认识可写“暂无”' },
+      { id: '初始关系', label: '初始关系', placeholder: '例如：临时协作、远程联系过、只是档案里见过' },
+      { id: '叙事倾向', label: '叙事倾向', placeholder: '例如：危机救援、奇物调查、先紧张后日常', multiline: true },
+    ],
+  },
+  {
+    id: 'workshop_luofu_trade_commission',
+    source: 'workshop',
+    title: '罗浮 · 商会来客',
+    author: 'system',
+    version: '0.1.0',
+    regionId: 'xianzhou_luofu',
+    chapterId: 'luofu_arrival',
+    summary: '玩家以商会或货运相关身份抵达罗浮，在云骑盘查、流云渡异常和星核危机边缘切入。',
+    defaultLocationHint: '仙舟罗浮 · 流云渡',
+    keyNpcs: ['素裳', '桂乃芬', '停云', '景元'],
+    loreKeywords: ['流云渡', '商会', '云骑军', '星槎货运'],
+    openingPressure: ['货运异常', '云骑盘查', '星核危机背景'],
+    tags: ['罗浮', '日常切入', '商会', '可慢热'],
+    playerEntryTemplate: '我是{身份}，因{来到此地原因}抵达罗浮。开局从流云渡的货运盘查开始，我和{已认识角色}的关系是{初始关系}。本开局希望{叙事倾向}。',
+    editableFields: [
+      { id: '身份', label: '身份', placeholder: '例如：商会随行人员、货运护卫、外来旅人', required: true },
+      { id: '来到此地原因', label: '来到此地原因', placeholder: '例如：护送一批异常货物、寻找失联星槎、受人委托', required: true },
+      { id: '已认识角色', label: '已认识角色', placeholder: '例如：素裳、桂乃芬；不认识可写“暂无”' },
+      { id: '初始关系', label: '初始关系', placeholder: '例如：见过一面、互相欠人情、只是听说过' },
+      { id: '叙事倾向', label: '叙事倾向', placeholder: '例如：先日常后主线，偏调查和轻松互动', multiline: true },
+    ],
+  },
+  {
+    id: 'workshop_belobog_clinic_request',
+    source: 'workshop',
+    title: '贝洛伯格 · 诊所委托',
+    author: 'system',
+    version: '0.1.0',
+    regionId: 'jarilo_vi',
+    chapterId: 'belobog_underworld',
+    summary: '玩家从娜塔莎诊所、下层区资源压力和矿区异常切入，适合慢热关系与地下城支线。',
+    defaultLocationHint: '雅利洛-VI · 下层区娜塔莎诊所',
+    keyNpcs: ['娜塔莎', '希儿', '桑博', '虎克'],
+    loreKeywords: ['下层区', '娜塔莎诊所', '地火', '大矿区'],
+    openingPressure: ['药品短缺', '矿区异动', '地火戒备'],
+    tags: ['贝洛伯格', '下层区', '支线生活', '关系慢热'],
+    playerEntryTemplate: '我是{身份}，因为{来到此地原因}来到下层区。开局地点在娜塔莎诊所附近，我与{已认识角色}的关系是{初始关系}，希望故事{叙事倾向}。',
+    editableFields: [
+      { id: '身份', label: '身份', placeholder: '例如：外来医助、矿区救援者、流浪者', required: true },
+      { id: '来到此地原因', label: '来到此地原因', placeholder: '例如：送药、寻找失踪矿工、调查裂界污染', required: true },
+      { id: '已认识角色', label: '已认识角色', placeholder: '例如：娜塔莎、希儿、桑博' },
+      { id: '初始关系', label: '初始关系', placeholder: '例如：被救助过、合作过、互相怀疑' },
+      { id: '叙事倾向', label: '叙事倾向', placeholder: '例如：偏日常照料、地下城调查、逐步介入主线', multiline: true },
+    ],
+  },
+  {
+    id: 'workshop_penacony_misdelivered_invitation',
+    source: 'workshop',
+    title: '匹诺康尼 · 误投邀请函',
+    author: 'system',
+    version: '0.1.0',
+    regionId: 'penacony',
+    chapterId: 'penacony_invitation',
+    summary: '玩家持有来源不明或信息异常的匹诺康尼邀请函，在酒店核验、美梦边界和家族秩序之间切入。',
+    defaultLocationHint: '匹诺康尼 · 白日梦酒店大堂',
+    keyNpcs: ['星期日', '知更鸟', '砂金', '黑天鹅'],
+    loreKeywords: ['匹诺康尼', '白日梦酒店', '邀请函', '家族', '梦境边界'],
+    openingPressure: ['身份核验', '邀请函异常', '梦境规则', '家族秩序'],
+    tags: ['匹诺康尼', '宾客身份', '悬疑', '梦境异常'],
+    playerEntryTemplate: '我是{身份}，持有一封{邀请函异常}的邀请函抵达匹诺康尼。开局从白日梦酒店的身份核验开始，我与{已认识角色}的关系是{初始关系}。本开局希望{叙事倾向}。',
+    editableFields: [
+      { id: '身份', label: '身份', placeholder: '例如：受邀宾客、公司随行人员、被误送邀请的人', required: true },
+      { id: '邀请函异常', label: '邀请函异常', placeholder: '例如：收件人不对、签名缺失、梦境坐标异常', required: true },
+      { id: '已认识角色', label: '已认识角色', placeholder: '例如：砂金、黑天鹅、流萤；不认识可写“暂无”' },
+      { id: '初始关系', label: '初始关系', placeholder: '例如：互相试探、刚见面、对方似乎知道你的来历' },
+      { id: '叙事倾向', label: '叙事倾向', placeholder: '例如：悬疑调查、宾客社交、梦境异常逐步升级', multiline: true },
+    ],
+  },
+];
+
+export const workshopOpeningTemplatePacks: 创意工坊开局模板包[] = [
+  {
+    schema: 'kaituo-opening-workshop-pack',
+    version: '0.1.0',
+    title: '星穹开局样例包',
+    author: 'system',
+    description: '内置示例包，便于后续创意工坊导入导出校验。',
+    tags: ['示例', '开局', '创意工坊'],
+    templates: workshopOpeningTemplates,
+  },
+];
+
 // ── 能力预设 ──
 // 开局特质：偏向崩铁世界观中的技术、命途、裂界、光锥与智库适性。
 export const abilityPresets: 能力预设[] = [
@@ -275,14 +783,15 @@ export const abilityPresets: 能力预设[] = [
   },
 ];
 
-// ── 起始地点 ──
-// 项目重定位后，默认开局固定为原著主线即将开始的黑塔空间站。
-// 不再提供其他起始地点或自定义起始场景，避免项目再次扩散成多路线大舞台。
+// ── 起始地点 / 官方章节锚点 ──
+// 多开局重构后，这里暴露各地区的官方章节入口。
+// 自由开局与创意工坊会通过开局档案承接玩家自定义切入，不再把黑塔空间站作为唯一默认路线。
 export const startingScenarios: 起始场景[] = [
   {
     id: 'heita_station_incident',
     name: '黑塔空间站 · 主线苏醒前夕',
     description: '空间站「黑塔」正遭遇反物质军团入侵——警报响彻每一节舱段。所选原著主角仍沉睡在封存舱中，主线即将被点亮；瓦尔特与三月七已先一步抵达空间站。玩家会以自定义身份切入这场危机，但开局锚点始终固定在原著主线起点。',
+    officialPresetId: 'official_herta_station_incident',
     openingHighlights: [
       '警报席卷空间站各舱段，反物质军团正在撕开防线。',
       '所选原著主角尚未正式苏醒，原著主线即将被点亮。',
@@ -290,8 +799,156 @@ export const startingScenarios: 起始场景[] = [
       '旅人会以自定义身份接入这场危机，成为原著之外的新变量。',
     ],
   },
+  {
+    id: 'belobog_arrival',
+    name: '贝洛伯格 · 初抵贝洛伯格',
+    description: '永冬星球上的孤城与裂界危机正逐渐摊开，玩家从城外、雪原或上下层城边缘切入。',
+    officialPresetId: 'official_belobog_arrival',
+    openingHighlights: [
+      '永冬与裂界威胁让贝洛伯格保持高度戒备。',
+      '上层区与下层区的隔阂已存在，但还没有完全失控。',
+      '玩家适合以外来访客、委托人或边缘涉事者身份切入。',
+    ],
+  },
+  {
+    id: 'belobog_underworld',
+    name: '贝洛伯格 · 下层区暗流',
+    description: '围绕下层区、地火、诊所与矿区异常展开，适合慢热生活线和地下城委托切入。',
+    officialPresetId: 'official_belobog_underworld',
+    openingHighlights: [
+      '下层区资源紧张，地火与诊所都在各自应对压力。',
+      '矿区、裂界或旧机器残骸很容易成为第一个事件钩子。',
+      '玩家更适合以居民、委托人、救援协助者身份进入。',
+    ],
+  },
+  {
+    id: 'belobog_cocolia_crisis',
+    name: '贝洛伯格 · 可可利亚危机前夜',
+    description: '大守护者、星核与永冬岭阴影开始逼近摊牌，适合调查、潜入与立场分裂开场。',
+    officialPresetId: 'official_belobog_cocolia_crisis',
+    openingHighlights: [
+      '贝洛伯格的真相开始浮出水面，但局势仍有回旋余地。',
+      '上层区的压力和下层区的现实都在逼近冲突点。',
+      '玩家更适合以调查者、协助者或被卷入者身份切入。',
+    ],
+  },
+  {
+    id: 'luofu_arrival',
+    name: '罗浮仙舟 · 初抵罗浮',
+    description: '仙舟罗浮的星核危机、云骑军盘查与卡芙卡线索并行推进，适合从星槎海或流云渡切入。',
+    officialPresetId: 'official_luofu_arrival',
+    openingHighlights: [
+      '仙舟内部戒备增强，云骑军正在压住局势。',
+      '卡芙卡线索与星核危机交叠，局势敏感。',
+      '玩家可作为外来旅人、委托对象或临时协助者进入主线。',
+    ],
+  },
+  {
+    id: 'luofu_kafka_interrogation',
+    name: '罗浮仙舟 · 太卜司审问前后',
+    description: '围绕太卜司、穷观阵与卡芙卡线索展开，适合卜算、护送、旁听与调查切入。',
+    officialPresetId: 'official_luofu_kafka_interrogation',
+    openingHighlights: [
+      '太卜司和云骑军都在处理同一批异常线索。',
+      '卡芙卡相关事件让仙舟局势更紧绷。',
+      '玩家可以从协助、旁听或异常消息切入。',
+    ],
+  },
+  {
+    id: 'luofu_phantylia_crisis',
+    name: '罗浮仙舟 · 建木灾变',
+    description: '建木异变、丰饶孽物和云骑调度全面升级，适合救援、冲突和高压推进。',
+    officialPresetId: 'official_luofu_phantylia_crisis',
+    openingHighlights: [
+      '建木灾变让罗浮所有高层与前线都进入紧急状态。',
+      '云骑军、医士和列车组都可能被直接卷入救援链路。',
+      '玩家的开场更适合带有强压力和明确行动目标。',
+    ],
+  },
+  {
+    id: 'penacony_invitation',
+    name: '匹诺康尼 · 盛会邀约',
+    description: '梦境、家族秩序与宾客身份构成前台压力，适合从酒店、梦境边界或异常邀请切入。',
+    officialPresetId: 'official_penacony_invitation',
+    openingHighlights: [
+      '宾客身份与梦境规则是匹诺康尼开局的核心张力。',
+      '家族秩序看似平稳，但异常邀请已埋下伏笔。',
+      '玩家可以从白日梦酒店、梦境边界或受邀身份切入。',
+    ],
+  },
+  {
+    id: 'penacony_dream_edge',
+    name: '匹诺康尼 · 梦境边界异动',
+    description: '梦境规则开始出现裂缝，适合从边界、入住核验或异常死亡传闻进入。',
+    officialPresetId: 'official_penacony_dream_edge',
+    openingHighlights: [
+      '黄金的时刻看似热闹，梦境边界却已经出现异常。',
+      '家族秩序和宾客秘密开始互相碰撞。',
+      '玩家适合从边界醒来、异常盘问或调查传闻切入。',
+    ],
+  },
+  {
+    id: 'penacony_reverie_crisis',
+    name: '匹诺康尼 · 美梦崩塌前夜',
+    description: '家族、公司和梦境剧场的矛盾濒临爆发，适合从多方博弈和深层危机切入。',
+    officialPresetId: 'official_penacony_reverie_crisis',
+    openingHighlights: [
+      '盛会背后的冲突已经接近不可逆。',
+      '梦境深处的真相、家族秩序和公司博弈都开始摊牌。',
+      '玩家适合以宾客、协助者或调查者身份进入漩涡。',
+    ],
+  },
 ];
 
 export function getStartingScenario(id: string): 起始场景 | undefined {
   return startingScenarios.find((s) => s.id === id);
+}
+
+export function getOpeningRegion(id: string): 开局地区 | undefined {
+  return openingRegions.find((region) => region.id === id);
+}
+
+export function getOpeningChapterAnchor(id: string): 开局章节锚点 | undefined {
+  return openingChapterAnchors.find((chapter) => chapter.id === id);
+}
+
+export function getOfficialOpeningPreset(id: string): 官方开局预设 | undefined {
+  return officialOpeningPresets.find((preset) => preset.id === id);
+}
+
+export function getOfficialOpeningPresetByChapterId(chapterId: string): 官方开局预设 | undefined {
+  return officialOpeningPresets.find((preset) => preset.chapterId === chapterId);
+}
+
+export function getOfficialOpeningPresetsByRegion(regionId: string): 官方开局预设[] {
+  return officialOpeningPresets.filter((preset) => preset.regionId === regionId);
+}
+
+export function getFreeOpeningGuide(regionId: string): 地区自由开局引导 | undefined {
+  return freeOpeningGuides.find((guide) => guide.regionId === regionId);
+}
+
+export function getWorkshopOpeningTemplate(id: string): 创意工坊开局模板 | undefined {
+  return workshopOpeningTemplates.find((template) => template.id === id);
+}
+
+export function getWorkshopOpeningTemplatesByRegion(regionId: string): 创意工坊开局模板[] {
+  return workshopOpeningTemplates.filter((template) => template.regionId === regionId);
+}
+
+export function getWorkshopOpeningTemplatePack(schema = 'kaituo-opening-workshop-pack'): 创意工坊开局模板包 | undefined {
+  return workshopOpeningTemplatePacks.find((pack) => pack.schema === schema);
+}
+
+export function getOpeningScenarioBundle(scenarioId: string): {
+  region?: 开局地区;
+  chapter?: 开局章节锚点;
+  preset?: 官方开局预设;
+} {
+  const chapter = getOpeningChapterAnchor(scenarioId);
+  const preset = getOfficialOpeningPresetByChapterId(scenarioId)
+    ?? (chapter ? getOfficialOpeningPresetByChapterId(chapter.id) : undefined)
+    ?? officialOpeningPresets.find((item) => item.chapterId === scenarioId || item.regionId === chapter?.regionId);
+  const region = chapter ? getOpeningRegion(chapter.regionId) : preset ? getOpeningRegion(preset.regionId) : undefined;
+  return { region, chapter, preset };
 }

@@ -1,13 +1,18 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  getSaveList,
   deleteSave,
-  loadSave,
   exportSavePackage,
-  importSaveFile,
+  exportSaveTreePackage,
+  getSaveList,
+  importSaveFileAsMany,
+  loadSave,
+  loadSaveTree,
+  repairSaveDatabase,
+  rebuildSaveSummariesBatch,
   saveGame,
   type SaveListItemSummary,
 } from '@/services/dbService';
+import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
   onSave: () => Promise<number>;
@@ -24,8 +29,6 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-// 存档管理面板：左侧保存新存档 + 说明，右侧已有存档列表。
-// 列表顶部 tab 切换手动 / 自动，默认显示手动。每条卡片展示旅人名、回合数、世界期，方便辨识。
 export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,17 +37,66 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<Tab>('manual');
   const [showMobileHelp, setShowMobileHelp] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [rebuildingSummaries, setRebuildingSummaries] = useState(false);
+  const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
 
   const refresh = async () => {
     setLoading(true);
-    const list = await getSaveList();
-    setSaves(list);
-    setLoading(false);
+    setLoadError('');
+    try {
+      const list = await getSaveList();
+      setSaves(list);
+    } catch (err) {
+      console.error('[save-list] load failed', err);
+      setLoadError(err instanceof Error ? err.message : '存档列表读取失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const rebuildLoop = async () => {
+      setRebuildingSummaries(true);
+      try {
+        for (let guard = 0; guard < 200 && !cancelled; guard += 1) {
+          const added = await rebuildSaveSummariesBatch(24);
+          if (cancelled || added <= 0) break;
+          const list = await getSaveList();
+          if (!cancelled) setSaves(list);
+          await new Promise((resolve) => globalThis.setTimeout(resolve, 80));
+        }
+      } catch (err) {
+        console.warn('[save-list] background summary recovery failed', err);
+      } finally {
+        if (!cancelled) setRebuildingSummaries(false);
+      }
+    };
+    void rebuildLoop();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRepairList = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      await repairSaveDatabase();
+      const list = await getSaveList();
+      setSaves(list);
+    } catch (err) {
+      console.error('[save-list] repair failed', err);
+      setLoadError(err instanceof Error ? err.message : '存档摘要修复失败');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -65,7 +117,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     try {
       const id = await onSave();
       const save = await loadSave(id);
-      if (save) exportSavePackage(save);
+      if (save) await exportSavePackage(save);
       await refresh();
       setTab('manual');
     } catch (err) {
@@ -78,9 +130,15 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
   const handleLoad = async (id: number) => {
     setLoadingId(id);
-    const ok = await onLoad(id);
-    setLoadingId(null);
-    if (!ok) alert('加载失败');
+    try {
+      const ok = await onLoad(id);
+      if (!ok) alert('加载失败：没有读取到可用存档内容');
+    } catch (err) {
+      console.error('[save-load] load failed', err);
+      alert(`加载失败：${err instanceof Error ? err.message : '存档读取或恢复过程异常'}`);
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -91,7 +149,12 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
   const handleExport = async (id: number) => {
     const save = await loadSave(id);
-    if (save) exportSavePackage(save);
+    if (save) await exportSavePackage(save);
+  };
+
+  const handleExportTree = async (rootId: string) => {
+    const treeSaves = await loadSaveTree(rootId);
+    if (treeSaves.length) await exportSaveTreePackage(treeSaves);
   };
 
   const handleImport = () => {
@@ -103,11 +166,14 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
       if (!file) return;
       setImporting(true);
       try {
-        const data = await importSaveFile(file);
-        data.id = 0;
-        data.type = 'imported';
-        data.timestamp = Date.now();
-        await saveGame(data);
+        const imported = await importSaveFileAsMany(file);
+        const now = Date.now();
+        for (const [index, data] of imported.entries()) {
+          data.id = 0;
+          data.type = 'imported';
+          data.timestamp = now + index;
+          await saveGame(data);
+        }
         await refresh();
         setTab('protected');
       } catch (err) {
@@ -126,12 +192,36 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     const protectedItems = saves.filter((s) => s.type === 'backup' || s.type === 'imported');
     return { manualSaves: manual, autoSaves: auto, protectedSaves: protectedItems };
   }, [saves]);
+  const allVisibleSaves = useMemo(() => saves.filter((s) => s.type !== 'auto'), [saves]);
 
-  const visibleSaves =
-    tab === 'manual' ? manualSaves
-    : tab === 'auto' ? autoSaves
-    : tab === 'protected' ? protectedSaves
-    : saves;
+  const allTreeGroups = useMemo(() => buildSaveTreeGroups(saves), [saves]);
+  const visibleTreeGroups = useMemo(
+    () => allTreeGroups
+      .map((group) => buildVisibleSaveTreeGroup(group, tab))
+      .filter((group): group is SaveTreeDisplayGroup => Boolean(group)),
+    [allTreeGroups, tab],
+  );
+  const visibleNodeCount = useMemo(
+    () => visibleTreeGroups.reduce((sum, group) => sum + group.nodeCount, 0),
+    [visibleTreeGroups],
+  );
+  const totalBranches = allTreeGroups.reduce((sum, group) => sum + group.branchCount, 0);
+  const totalSizeBytes = allTreeGroups.reduce((sum, group) => sum + group.totalSizeBytes, 0);
+  const latestSave = saves[0];
+  const selectedTree =
+    visibleTreeGroups.find((group) => group.rootId === selectedRootId) ??
+    visibleTreeGroups[0] ??
+    null;
+
+  useEffect(() => {
+    if (visibleTreeGroups.length === 0) {
+      if (selectedRootId !== null) setSelectedRootId(null);
+      return;
+    }
+    if (!selectedRootId || !visibleTreeGroups.some((group) => group.rootId === selectedRootId)) {
+      setSelectedRootId(visibleTreeGroups[0].rootId);
+    }
+  }, [selectedRootId, visibleTreeGroups]);
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
@@ -147,246 +237,469 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   return (
     <div
       className="kaituo-modal-overlay fixed inset-0 z-50 flex items-stretch justify-center p-0 md:items-center md:p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
-        className="flex h-[100dvh] w-full min-w-0 max-w-[960px] flex-col animate-slide-up overflow-hidden md:h-[85vh]"
+        className="flex h-[100dvh] w-full min-w-0 max-w-[1500px] flex-col animate-slide-up overflow-hidden md:h-[88vh]"
         style={{
-          background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.97), rgba(var(--tj-bg-primary), 0.98))',
+          background:
+            'radial-gradient(circle at 15% 10%, rgba(91,153,255,0.18), transparent 31%), radial-gradient(circle at 85% 20%, rgba(142,215,255,0.10), transparent 28%), linear-gradient(90deg, rgba(142,215,255,0.055) 1px, transparent 1px), linear-gradient(180deg, rgba(142,215,255,0.045) 1px, transparent 1px), linear-gradient(135deg, #05070c, #0b1019 44%, #08070a)',
+          backgroundSize: 'auto, auto, 44px 44px, 44px 44px, auto',
           boxShadow:
-            'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 0 32px rgba(var(--tj-accent-primary), 0.12), 0 20px 60px rgba(0, 0, 0, 0.6)',
-          clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
+            '0 24px 70px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(142,215,255,0.28), inset 0 0 0 2px rgba(245,217,122,0.04)',
+          clipPath: shellClip,
         }}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between gap-3 px-4 py-3 md:px-5"
-          style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.25)' }}
+        <header
+          className="relative flex items-center justify-between gap-3 overflow-hidden px-4 py-3 md:px-6"
+          style={{
+            borderBottom: '1px solid rgba(142,215,255,0.20)',
+            background: 'linear-gradient(90deg, rgba(142,215,255,0.10), transparent 42%), rgba(12,18,29,0.82)',
+          }}
         >
-          <h2
-            className="min-w-0 truncate font-serif text-lg font-bold tracking-[0.22em] md:tracking-[0.3em]"
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
             style={{
-              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              background:
+                'linear-gradient(110deg, transparent 0 42%, rgba(142,215,255,0.12) 47%, transparent 52%), radial-gradient(circle at 76% 0%, rgba(245,217,122,0.08), transparent 28%)',
+            }}
+          />
+          <div className="relative min-w-0">
+            <div className="font-serif text-[11px] tracking-[0.28em]" style={{ color: 'rgba(142,215,255,0.82)' }}>
+              SAVE TREE CONTROL
+            </div>
+            <h2
+              className="mt-1 min-w-0 truncate font-serif text-xl font-bold tracking-[0.22em] md:tracking-[0.32em]"
+              style={{ color: '#eee2c6' }}
+            >
+              存档树控制台
+            </h2>
+          </div>
+          <div className="relative hidden min-w-0 flex-1 justify-end gap-3 text-right font-serif text-[12px] tracking-[0.12em] md:flex">
+            <span style={{ color: 'rgba(238, 226, 198, 0.66)' }}>
+              {latestSave ? `最新节点 #${latestSave.id} / 第 ${latestSave.turnCount} 回合` : '暂无节点'}
+            </span>
+            {rebuildingSummaries && <span style={{ color: 'rgba(142,215,255,0.9)' }}>索引恢复中</span>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="relative h-9 w-9 shrink-0 text-lg transition-all hover:opacity-90"
+            aria-label="关闭"
+            style={{
+              color: 'rgba(238,226,198,0.78)',
+              background: 'rgba(142,215,255,0.07)',
+              boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+              clipPath: smallClip,
             }}
           >
-            <span style={{ color: 'rgba(var(--tj-accent-primary), 0.6)', WebkitTextFillColor: 'rgba(var(--tj-accent-primary), 0.6)' }}>◆</span>
-            <span className="ml-2">存档管理</span>
-          </h2>
-          <button onClick={onClose} className="kaituo-close-btn" aria-label="关闭">
-            ✕
+            ×
           </button>
-        </div>
+        </header>
 
-        {/* Body：左右双栏 */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden md:flex-row md:overflow-hidden">
-          {/* 左栏：保存按钮 + 说明 */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden md:grid md:grid-cols-[320px_minmax(0,1fr)_270px] md:overflow-hidden">
           <aside
-            className="grid w-full flex-shrink-0 grid-cols-3 gap-2 px-4 py-4 md:flex md:w-[280px] md:flex-col md:gap-4 md:px-5 md:py-5"
-            style={{ borderRight: '1px solid rgba(var(--tj-accent-primary), 0.2)' }}
+            className="kaituo-options-scroll grid w-full flex-shrink-0 grid-cols-2 gap-2 overflow-y-visible px-4 py-4 pb-6 md:flex md:min-h-0 md:w-auto md:flex-col md:gap-4 md:overflow-y-auto md:px-5 md:py-5 md:pb-6 md:pr-4"
+            style={{
+              borderRight: '1px solid rgba(142,215,255,0.18)',
+              background: 'radial-gradient(circle at 0 0, rgba(142,215,255,0.12), transparent 34%), rgba(8,12,20,0.62)',
+            }}
           >
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="flex min-w-0 items-center justify-center gap-1 px-2 py-2 font-serif text-xs tracking-[0.08em] transition-all hover:opacity-90 disabled:opacity-50 md:gap-2 md:px-4 md:py-3 md:text-sm md:tracking-[0.3em]"
-              style={{
-                background:
-                  'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
-                color: 'rgb(var(--tj-on-accent))',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
-                clipPath: cardClip,
-              }}
-            >
-              <span style={{ fontSize: '15px' }}>＋</span>
-              {saving ? '保存中…' : '保存新存档'}
-            </button>
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={importing}
-              className="flex min-w-0 items-center justify-center gap-1 px-2 py-2 font-serif text-xs tracking-[0.08em] transition-all hover:opacity-90 disabled:opacity-50 md:gap-2 md:px-4 md:py-2.5 md:text-sm md:tracking-[0.24em]"
-              style={{
-                color: 'rgba(var(--tj-accent-primary), 0.92)',
-                background: 'rgba(var(--tj-bg-secondary), 0.55)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
-                clipPath: cardClip,
-              }}
-            >
-              {importing ? '导入中…' : '导入存档包'}
-            </button>
-            <button
-              type="button"
-              onClick={handleExportCurrent}
-              disabled={saving}
-              className="flex min-w-0 items-center justify-center gap-1 px-2 py-2 font-serif text-xs tracking-[0.08em] transition-all hover:opacity-90 disabled:opacity-50 md:gap-2 md:px-4 md:py-2.5 md:text-sm md:tracking-[0.24em]"
-              style={{
-                color: 'rgba(var(--tj-text-primary), 0.92)',
-                background: 'rgba(var(--tj-bg-secondary), 0.45)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
-                clipPath: cardClip,
-              }}
-            >
-              导出当前存档
-            </button>
+            <div className="col-span-2 grid gap-2">
+              <SaveActionButton primary onClick={handleSave} disabled={saving}>
+                {saving ? '保存中' : '保存新节点'}
+              </SaveActionButton>
+              <SaveActionButton onClick={handleImport} disabled={importing}>
+                {importing ? '导入中' : '导入存档包'}
+              </SaveActionButton>
+              <SaveActionButton onClick={handleExportCurrent} disabled={saving}>
+                导出当前节点
+              </SaveActionButton>
+              <SaveActionButton warn onClick={handleRepairList} disabled={loading}>
+                {loading ? '修复中' : '修复存档索引'}
+              </SaveActionButton>
+            </div>
 
             <details
               open={showMobileHelp}
               onToggle={(event) => setShowMobileHelp(event.currentTarget.open)}
-              className="col-span-3 md:hidden"
+              className="col-span-2 md:hidden"
               style={{
-                color: 'rgba(var(--tj-text-primary), 0.88)',
-                background: 'rgba(var(--tj-bg-secondary), 0.45)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                color: 'rgba(238,226,198,0.84)',
+                background: 'rgba(18,28,43,0.62)',
+                boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.16)',
                 clipPath: cardClip,
               }}
             >
-              <summary className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
-                ◇ 关于存档
+              <summary className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.88)' }}>
+                关于存档
               </summary>
               <div className="px-3 pb-3 font-serif text-[12px] leading-relaxed tracking-wider">
-                <div>· 手动存档可随时保存，数量不限</div>
-                <div>· 每回合自动保存一次，最多保留 10 条</div>
-                <div>· 读取旧档前会自动生成保护存档</div>
-                <div>· 保护存档用于撤回误读，最多 3 条</div>
-                <div>· 导出存档包默认不包含 API Key / API 配置</div>
-                <div>· 导入存档包 / 旧 JSON 会放入保护存档分区</div>
+                <div>手动存档可随时保存，读取旧节点后会形成新的分支。</div>
+                <div>自动节点优先使用差量存储，旧存档会在后台恢复摘要索引。</div>
+                <div>导出存档包默认不包含 API Key / API 配置。</div>
               </div>
             </details>
 
+            <div className="col-span-2 grid grid-cols-2 gap-2">
+              <SaveMetric value={saves.length} label="总节点" />
+              <SaveMetric value={totalBranches} label="分支" />
+              <SaveMetric value={autoSaves.length} label="自动" />
+              <SaveMetric value={protectedSaves.length} label="保护" />
+            </div>
+
+            <MiniSaveTreeMap
+              nodeCount={saves.length}
+              branchCount={totalBranches}
+              sizeText={formatSize(totalSizeBytes)}
+            />
+
             <div
-              className="hidden px-3 py-3 font-serif text-[12.5px] leading-relaxed tracking-wider md:block"
+              className="col-span-2 hidden px-3 py-3 font-serif text-[12px] leading-relaxed tracking-wider md:block"
               style={{
-                color: 'rgba(var(--tj-text-primary), 0.88)',
-                background: 'rgba(var(--tj-bg-secondary), 0.45)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                color: 'rgba(238,226,198,0.82)',
+                background: 'rgba(18,28,43,0.42)',
+                boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.14)',
                 clipPath: cardClip,
               }}
             >
-              <div className="mb-1.5 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
-                ◇ 关于存档
+              <div className="mb-1.5 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.86)' }}>
+                存档策略
               </div>
-              <div>· 手动存档可随时保存，数量不限</div>
-              <div>· 每回合自动保存一次，最多保留 10 条</div>
-              <div>· 读取旧档前会自动生成保护存档</div>
-              <div>· 保护存档用于撤回误读，最多 3 条</div>
-              <div>· 导出存档包默认不包含 API Key</div>
-              <div>· 导入存档包 / 旧 JSON 会放入保护存档分区</div>
+              <div>手动节点最多保留 6 个，超出后清理最旧节点</div>
+              <div>自动存档最多保留 6 棵树，并优先使用差量存储</div>
+              <div>保护 / 导入存档不计入手动上限</div>
+              <div>读取节点后继续保存会生成新分支</div>
+              <div>整树导出会带走当前旅程分叉</div>
             </div>
 
             <div className="hidden flex-1 md:block" />
 
-            <div
-              className="hidden px-3 py-2 text-center font-serif text-[12px] tracking-[0.22em] md:block"
-              style={{
-                color: 'rgba(var(--tj-text-secondary), 0.65)',
-              }}
-            >
-              共 {saves.length} 条 · 手动 {manualSaves.length} · 自动 {autoSaves.length} · 保护 {protectedSaves.length}
+            <div className="col-span-2 hidden text-center font-serif text-[12px] tracking-[0.22em] md:block" style={{ color: 'rgba(238,226,198,0.46)' }}>
+              共 {saves.length} 节点 / {allTreeGroups.length} 棵树
+              {rebuildingSummaries ? ' / 正在恢复旧存档索引' : ''}
             </div>
           </aside>
 
-          {/* 右栏：tab 切换 + 列表 */}
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {/* Tab bar */}
             <div
-              className="grid flex-shrink-0 grid-cols-2 gap-2 px-4 pb-3 pt-4 md:flex md:overflow-x-auto md:px-5"
-              style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}
+              className="flex flex-shrink-0 flex-col gap-3 px-4 pb-3 pt-4 md:px-5 lg:flex-row lg:items-center lg:justify-between"
+              style={{ borderBottom: '1px solid rgba(142,215,255,0.14)' }}
             >
-              <TabButton
-                label="手动存档"
-                count={manualSaves.length}
-                active={tab === 'manual'}
-                onClick={() => setTab('manual')}
-              />
-              <TabButton
-                label="自动存档"
-                count={autoSaves.length}
-                active={tab === 'auto'}
-                onClick={() => setTab('auto')}
-              />
-              <TabButton
-                label="全部"
-                count={saves.length}
-                active={tab === 'all'}
-                onClick={() => setTab('all')}
-              />
-              <TabButton
-                label="保护存档"
-                count={protectedSaves.length}
-                active={tab === 'protected'}
-                onClick={() => setTab('protected')}
-              />
+              <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+                <TabButton label="手动" count={manualSaves.length} active={tab === 'manual'} onClick={() => setTab('manual')} />
+                <TabButton label="自动" count={autoSaves.length} active={tab === 'auto'} onClick={() => setTab('auto')} />
+                <TabButton label="保护" count={protectedSaves.length} active={tab === 'protected'} onClick={() => setTab('protected')} />
+                <TabButton label="全部" count={allVisibleSaves.length} active={tab === 'all'} onClick={() => setTab('all')} />
+              </div>
+              <div className="font-serif text-[12px] tracking-[0.12em]" style={{ color: 'rgba(238,226,198,0.58)' }}>
+                当前视图：{visibleTreeGroups.length} 棵树 / {visibleNodeCount} 节点
+                {selectedTree ? ` / 当前树 #${selectedTree.latestSave.id}` : ''}
+              </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-5">
-              {loading && saves.length === 0 && (
+            <div className="kaituo-options-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-7 md:px-5">
+              {loading && saves.length === 0 && <EmptyState text="加载中..." />}
+
+              {rebuildingSummaries && saves.length > 0 && (
                 <div
-                  className="p-6 text-center text-xs font-serif tracking-[0.2em]"
-                  style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}
+                  className="mb-3 px-3 py-2 text-center font-serif text-[12px] tracking-[0.14em]"
+                  style={{
+                    color: 'rgba(142,215,255,0.92)',
+                    background: 'rgba(142,215,255,0.08)',
+                    boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+                    clipPath: smallClip,
+                  }}
                 >
-                  加载中…
+                  正在恢复旧存档索引，存档数量可能继续增加
                 </div>
               )}
 
-              {!loading && visibleSaves.length === 0 && (
+              {!loading && loadError && (
                 <div
-                  className="p-6 text-center"
+                  className="p-5 text-center font-serif"
                   style={{
-                    background: 'rgba(var(--tj-bg-secondary), 0.4)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+                    background: 'rgba(92, 36, 36, 0.28)',
+                    boxShadow: 'inset 0 0 0 1px rgba(255, 150, 150, 0.25)',
                     clipPath: cardClip,
                   }}
                 >
-                  <div className="mb-2 text-2xl" style={{ color: 'rgba(var(--tj-accent-primary), 0.45)' }}>✦</div>
-                  <p
-                    className="text-sm font-serif tracking-[0.2em]"
-                    style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}
-                  >
-                    {tab === 'manual'
-                      ? '尚无手动存档'
-                      : tab === 'auto'
-                        ? '尚无自动存档'
-                        : tab === 'protected'
-                          ? '尚无保护存档'
-                          : '尚无存档'}
-                  </p>
-                  <p
-                    className="mt-1.5 text-xs font-serif tracking-wider"
-                    style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}
-                  >
-                    {tab === 'manual'
-                      ? '点击左侧「保存新存档」留下第一道印记'
-                      : tab === 'auto'
-                        ? '开启旅程并推进回合后将自动留下印记'
-                        : tab === 'protected'
-                          ? '读取旧档前的自动备份和导入 JSON 会出现在这里'
-                          : '当前还没有任何存档'}
-                  </p>
+                  <div className="text-sm tracking-[0.18em]" style={{ color: 'rgba(255,205,205,0.92)' }}>
+                    存档列表读取失败
+                  </div>
+                  <div className="mt-2 text-xs leading-relaxed tracking-wider" style={{ color: 'rgba(238,226,198,0.72)' }}>
+                    {loadError}
+                  </div>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <SaveActionButton onClick={refresh}>重新读取</SaveActionButton>
+                    <SaveActionButton primary onClick={handleRepairList} disabled={loading}>
+                      修复摘要
+                    </SaveActionButton>
+                  </div>
                 </div>
               )}
 
-              <div className="space-y-2">
-                {visibleSaves.map((s) => (
-                  <SaveRow
-                    key={s.id}
-                    item={s}
+              {!loading && !loadError && visibleTreeGroups.length === 0 && (
+                <EmptyState
+                  text={
+                    tab === 'manual'
+                      ? '暂无手动存档'
+                      : tab === 'auto'
+                        ? '暂无自动存档'
+                        : tab === 'protected'
+                          ? '暂无保护存档'
+                          : '暂无存档'
+                  }
+                  detail={
+                    tab === 'manual'
+                      ? '点击左侧“保存新节点”留下第一道印记。'
+                      : '推进旅程后，新的节点会显示在这里。'
+                  }
+                />
+              )}
+
+              {selectedTree && (
+                <div className="space-y-4">
+                  <SaveTreeGroup
+                    key={selectedTree.rootId}
+                    group={selectedTree}
                     loadingId={loadingId}
                     onLoad={handleLoad}
                     onDelete={handleDelete}
                     onExport={handleExport}
+                    onExportTree={handleExportTree}
                     formatTime={formatTime}
                   />
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           </main>
+
+          <aside
+            className="flex min-h-0 min-w-0 flex-col px-4 py-4 md:px-4 md:py-5"
+            style={{
+              borderLeft: '1px solid rgba(142,215,255,0.18)',
+              background: 'radial-gradient(circle at 100% 0, rgba(142,215,255,0.10), transparent 36%), rgba(8,12,20,0.48)',
+            }}
+          >
+            <SaveTreeSelector
+              groups={visibleTreeGroups}
+              selectedRootId={selectedTree?.rootId ?? null}
+              onSelect={setSelectedRootId}
+            />
+          </aside>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SaveActionButton({
+  children,
+  primary = false,
+  warn = false,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  primary?: boolean;
+  warn?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="cursor-pointer px-3 py-2.5 font-serif text-[12px] font-semibold tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      style={{
+        color: primary ? '#07101a' : warn ? '#f5d97a' : 'rgba(238,226,198,0.76)',
+        background: primary
+          ? 'linear-gradient(135deg, #8ed7ff, #5b99ff)'
+          : warn
+            ? 'rgba(245,217,122,0.06)'
+            : 'rgba(142,215,255,0.07)',
+        boxShadow: primary
+          ? 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 20px rgba(91,153,255,0.24)'
+          : warn
+            ? 'inset 0 0 0 1px rgba(245,217,122,0.28)'
+            : 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+        clipPath: smallClip,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SaveMetric({ value, label }: { value: number; label: string }) {
+  return (
+    <div
+      className="px-3 py-3 font-serif"
+      style={{
+        background: 'rgba(142,215,255,0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.13)',
+        clipPath: smallClip,
+      }}
+    >
+      <b className="block text-[21px] leading-none tracking-[0.04em]" style={{ color: '#8ed7ff' }}>
+        {value}
+      </b>
+      <span className="mt-1 block text-[11px] tracking-[0.16em]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function MiniSaveTreeMap({
+  nodeCount,
+  branchCount,
+  sizeText,
+}: {
+  nodeCount: number;
+  branchCount: number;
+  sizeText: string;
+}) {
+  return (
+    <div
+      className="col-span-2 min-h-[170px] px-3 py-3 font-serif"
+      style={{
+        background: 'rgba(0,0,0,0.20)',
+        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+        clipPath: cardClip,
+      }}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.86)' }}>
+          当前存档树
+        </h3>
+        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+          {sizeText}
+        </span>
+      </div>
+      <div className="relative h-[112px]">
+        <MiniLine left={26} top={24} width={88} rotate={20} />
+        <MiniLine left={105} top={55} width={88} rotate={-18} />
+        <MiniLine left={105} top={55} width={68} rotate={42} />
+        <MiniDot left={22} top={20} />
+        <MiniDot left={102} top={50} />
+        <MiniDot left={190} top={25} gold />
+        <MiniDot left={167} top={101} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <SmallTag>{nodeCount} 节点</SmallTag>
+        <SmallTag gold>{branchCount} 分支</SmallTag>
+      </div>
+    </div>
+  );
+}
+
+function MiniLine({ left, top, width, rotate }: { left: number; top: number; width: number; rotate: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute h-px"
+      style={{
+        left,
+        top,
+        width,
+        transform: `rotate(${rotate}deg)`,
+        transformOrigin: 'left center',
+        background: 'rgba(142,215,255,0.3)',
+      }}
+    />
+  );
+}
+
+function MiniDot({ left, top, gold = false }: { left: number; top: number; gold?: boolean }) {
+  return (
+    <i
+      aria-hidden="true"
+      className="absolute h-[9px] w-[9px] rounded-full"
+      style={{
+        left,
+        top,
+        background: gold ? '#f5d97a' : '#8ed7ff',
+        boxShadow: gold ? '0 0 14px rgba(245,217,122,.72)' : '0 0 16px rgba(142,215,255,.8)',
+      }}
+    />
+  );
+}
+
+function SaveTreeSelector({
+  groups,
+  selectedRootId,
+  onSelect,
+}: {
+  groups: SaveTreeDisplayGroup[];
+  selectedRootId: string | null;
+  onSelect: (rootId: string) => void;
+}) {
+  return (
+    <div
+      className="kaituo-options-scroll min-h-0 flex-1 px-3 py-3 pb-5 font-serif md:overflow-y-auto"
+      style={{
+        background: 'linear-gradient(180deg, rgba(142,215,255,0.075), rgba(0,0,0,0.18))',
+        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.16), 0 0 24px rgba(0,0,0,0.18)',
+        clipPath: cardClip,
+      }}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.86)' }}>
+          存档树列表
+        </h3>
+        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+          点击切换路线
+        </span>
+      </div>
+      {groups.length === 0 ? (
+        <div className="py-3 text-center text-[12px] tracking-[0.16em]" style={{ color: 'rgba(238,226,198,0.46)' }}>
+          暂无可选存档树
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {groups.map((group) => {
+            const active = group.rootId === selectedRootId;
+            const title = group.latestSave.travelerName || group.rootSave.travelerName || '未命名旅人';
+            return (
+              <button
+                key={group.rootId}
+                type="button"
+                onClick={() => onSelect(group.rootId)}
+                className="min-w-0 cursor-pointer px-3 py-2 text-left transition-all hover:opacity-90"
+                style={{
+                  background: active
+                    ? 'linear-gradient(90deg, rgba(142,215,255,0.18), rgba(91,153,255,0.06))'
+                    : 'rgba(142,215,255,0.045)',
+                  boxShadow: active
+                    ? 'inset 3px 0 0 #8ed7ff, inset 0 0 0 1px rgba(142,215,255,0.32)'
+                    : 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+                  clipPath: smallClip,
+                }}
+              >
+                <div className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="truncate text-[13px] font-semibold tracking-[0.12em]" style={{ color: active ? '#eee2c6' : 'rgba(238,226,198,0.78)' }}>
+                    {title}
+                  </span>
+                  <span className="shrink-0 text-[11px]" style={{ color: active ? '#8ed7ff' : 'rgba(238,226,198,0.42)' }}>
+                    #{group.latestSave.id}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tracking-[0.1em]" style={{ color: 'rgba(238,226,198,0.54)' }}>
+                  <span>{group.nodeCount} 节点</span>
+                  <span>{group.branchCount} 分支</span>
+                  <span>第 {group.latestSave.turnCount} 回合</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -406,26 +719,98 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 px-3 py-2 font-serif text-[12px] tracking-[0.16em] transition-all md:px-4 md:text-[13px] md:tracking-[0.28em]"
+      className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.16em] transition-all md:px-4 md:text-[13px] md:tracking-[0.24em]"
       style={{
-        color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.85)',
-        background: active
-          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
-          : 'rgba(var(--tj-bg-secondary), 0.5)',
+        color: active ? '#07101a' : 'rgba(238,226,198,0.70)',
+        background: active ? 'linear-gradient(135deg, #8ed7ff, #5b99ff)' : 'rgba(142,215,255,0.05)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.55)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+          ? 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 24px rgba(91,153,255,0.28)'
+          : 'inset 0 0 0 1px rgba(142,215,255,0.15)',
         clipPath: smallClip,
       }}
     >
       {label}
-      <span
-        className="ml-2 font-serif text-[11px]"
-        style={{ color: active ? 'rgba(26, 19, 37, 0.7)' : 'rgba(var(--tj-text-secondary), 0.6)' }}
-      >
+      <span className="ml-2 text-[11px]" style={{ color: active ? 'rgba(7,16,26,0.66)' : 'rgba(238,226,198,0.46)' }}>
         {count}
       </span>
     </button>
+  );
+}
+
+function SaveTreeGroup({
+  group,
+  loadingId,
+  onLoad,
+  onDelete,
+  onExport,
+  onExportTree,
+  formatTime,
+}: {
+  group: SaveTreeDisplayGroup;
+  loadingId: number | null;
+  onLoad: (id: number) => void;
+  onDelete: (id: number) => void;
+  onExport: (id: number) => void;
+  onExportTree: (rootId: string) => void;
+  formatTime: (ts: number) => string;
+}) {
+  return (
+    <section
+      className="min-w-0 overflow-hidden p-3"
+      style={{
+        background: 'linear-gradient(135deg, rgba(18,28,43,0.52), rgba(8,12,20,0.56))',
+        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+        clipPath: cardClip,
+      }}
+    >
+      <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3 font-serif">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-2">
+            <span className="text-[11px] tracking-[0.18em]" style={{ color: '#8ed7ff' }}>
+              存档树
+            </span>
+            <span className="truncate text-[15px] font-semibold tracking-wider" style={{ color: '#eee2c6' }}>
+              {group.latestSave.travelerName || group.rootSave.travelerName || '未命名旅人'}
+            </span>
+            <span className="text-[11px]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+              最新 #{group.latestSave.id}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tracking-wider" style={{ color: 'rgba(238,226,198,0.58)' }}>
+            <span>{group.nodeCount} 个节点</span>
+            <span>{group.branchCount} 个分支</span>
+            <span>{formatSize(group.totalSizeBytes)}</span>
+            <span>第 {group.latestSave.turnCount} 回合</span>
+          </div>
+        </div>
+        <SaveActionButton onClick={() => onExportTree(group.rootId)} disabled={loadingId !== null}>
+          导出整树
+        </SaveActionButton>
+      </div>
+
+      <div className="relative space-y-3 pl-6">
+        <span
+          aria-hidden="true"
+          className="absolute bottom-2 left-[10px] top-2 w-px"
+          style={{ background: 'linear-gradient(#8ed7ff, rgba(142,215,255,0.08))' }}
+        />
+        {group.nodes.map((node, index) => (
+          <SaveRow
+            key={node.save.id}
+            item={node.save}
+            loadingId={loadingId}
+            onLoad={onLoad}
+            onDelete={onDelete}
+            onExport={onExport}
+            formatTime={formatTime}
+            treeLabel={node.isRoot ? '根节点' : `分支 +${node.depth}`}
+            isLatest={node.isLatest}
+            depth={node.depth}
+            visualLevel={index}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -436,6 +821,10 @@ function SaveRow({
   onDelete,
   onExport,
   formatTime,
+  treeLabel,
+  isLatest = false,
+  depth,
+  visualLevel,
 }: {
   item: SaveListItemSummary;
   loadingId: number | null;
@@ -443,111 +832,169 @@ function SaveRow({
   onDelete: (id: number) => void;
   onExport: (id: number) => void;
   formatTime: (ts: number) => string;
+  treeLabel?: string;
+  isLatest?: boolean;
+  depth: number;
+  visualLevel: number;
 }) {
+  const visualIndent = Math.min(visualLevel, 5) * 14;
   return (
-    <div
-      className="grid min-w-0 gap-3 p-3 md:flex md:items-center md:justify-between"
+    <article
+      className={`relative grid min-w-0 gap-3 md:grid-cols-[1fr_auto] md:items-center ${
+        isLatest ? 'p-4 md:gap-4' : 'p-3'
+      }`}
       style={{
-        background: 'rgba(var(--tj-bg-secondary), 0.55)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+        marginLeft: visualIndent,
+        background: isLatest
+          ? 'linear-gradient(135deg, rgba(142,215,255,0.18), rgba(245,217,122,0.09)), rgba(10,16,27,0.92)'
+          : 'rgba(10,16,27,0.74)',
+        boxShadow: isLatest
+          ? 'inset 0 0 0 1px rgba(245,217,122,0.46), inset 0 0 0 2px rgba(142,215,255,0.08), 0 0 28px rgba(142,215,255,0.10), 0 0 22px rgba(245,217,122,0.08)'
+          : 'inset 0 0 0 1px rgba(142,215,255,0.18)',
         clipPath: cardClip,
       }}
     >
-      {/* 左侧主信息：旅人名 + 元信息 */}
-      <div className="min-w-0 flex-1">
+      <span
+        aria-hidden="true"
+        className={`absolute left-[-22px] rounded-full ${isLatest ? 'top-6 h-[14px] w-[14px]' : 'top-5 h-[11px] w-[11px]'}`}
+        style={{
+          background: isLatest ? '#f5d97a' : '#8ed7ff',
+          boxShadow: isLatest ? '0 0 18px rgba(245,217,122,0.82), 0 0 28px rgba(142,215,255,0.28)' : '0 0 16px rgba(142,215,255,0.78)',
+        }}
+      />
+      {depth > 0 && (
+        <span
+          aria-hidden="true"
+          className={`absolute left-[-16px] h-px ${isLatest ? 'top-[31px]' : 'top-[25px]'}`}
+          style={{
+            width: 16 + visualIndent,
+            background: 'linear-gradient(90deg, rgba(142,215,255,0.36), rgba(142,215,255,0.05))',
+          }}
+        />
+      )}
+
+      <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-          <span
-            className="flex-shrink-0 font-serif text-[11px] tracking-[0.18em]"
-            style={{ color: typeColor(item.type) }}
-          >
+          <span className={`font-serif tracking-[0.18em] ${isLatest ? 'text-[12px]' : 'text-[11px]'}`} style={{ color: typeColor(item.type) }}>
             {typeLabel(item.type)}
           </span>
-          <span
-            className="truncate font-serif text-[15px] font-semibold tracking-wider"
-            style={{ color: 'rgb(var(--tj-text-primary))' }}
-          >
-            {item.travelerName || '（未命名旅人）'}
+          <span className={`truncate font-serif font-semibold tracking-wider ${isLatest ? 'text-[17px]' : 'text-[15px]'}`} style={{ color: '#eee2c6' }}>
+            {item.travelerName || '未命名旅人'}
           </span>
-          <span
-            className="flex-shrink-0 font-serif text-[11px] tracking-wider"
-            style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}
-          >
+          <span className="font-serif text-[11px] tracking-wider" style={{ color: 'rgba(238,226,198,0.42)' }}>
             #{item.id}
           </span>
+          {treeLabel && <SmallTag>{treeLabel}</SmallTag>}
+          {isLatest && <SmallTag gold>最新</SmallTag>}
         </div>
-        <div
-          className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-serif text-[12px] tracking-wider"
-          style={{ color: 'rgba(var(--tj-text-primary), 0.85)' }}
-        >
-          <span style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>第 {item.turnCount} 回合</span>
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 font-serif tracking-wider ${isLatest ? 'mt-2 text-[13px]' : 'mt-1 text-[12px]'}`} style={{ color: 'rgba(238,226,198,0.78)' }}>
+          <span style={{ color: '#8ed7ff' }}>第 {item.turnCount} 回合</span>
           {(item.currentDate || item.currentTime || item.currentLocation) && (
             <>
-              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.35)' }}>·</span>
+              <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
               <span>{[item.currentDate, item.currentTime, item.currentLocation].filter(Boolean).join(' / ')}</span>
             </>
           )}
           {item.worldPeriodName && (
             <>
-              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.35)' }}>·</span>
+              <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
               <span>{item.worldPeriodName}</span>
             </>
           )}
-          <span style={{ color: 'rgba(var(--tj-text-secondary), 0.35)' }}>·</span>
-          <span style={{ color: 'rgba(var(--tj-text-secondary), 0.75)' }}>{formatTime(item.timestamp)}</span>
-          <span style={{ color: 'rgba(var(--tj-text-secondary), 0.35)' }}>·</span>
-          <span style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>{formatSize(item.sizeBytes)}</span>
+          <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
+          <span style={{ color: 'rgba(238,226,198,0.56)' }}>{formatTime(item.timestamp)}</span>
+          <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
+          <span style={{ color: 'rgba(238,226,198,0.56)' }}>{formatSize(item.sizeBytes)}</span>
         </div>
         {item.lastSummary && (
-          <div
-            className="mt-1 line-clamp-2 font-serif text-[12px] leading-relaxed"
-            style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}
-          >
+          <div className={`font-serif leading-relaxed ${isLatest ? 'mt-2 line-clamp-3 text-[13px]' : 'mt-1 line-clamp-2 text-[12px]'}`} style={{ color: 'rgba(238,226,198,0.62)' }}>
             {item.lastSummary}
           </div>
         )}
       </div>
 
-      {/* 右侧按钮 */}
       <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-shrink-0">
         <button
+          type="button"
           onClick={() => onLoad(item.id)}
           disabled={loadingId !== null}
-          className="px-3 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:opacity-50"
+          className={`cursor-pointer font-serif font-semibold tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${
+            isLatest ? 'px-4 py-2.5 text-[13px]' : 'px-3 py-2 text-xs'
+          }`}
           style={{
-            background:
-              'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
-            color: 'rgb(var(--tj-on-accent))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
+            background: 'linear-gradient(135deg, #8ed7ff, #5b99ff)',
+            color: '#07101a',
+            boxShadow: 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 18px rgba(91,153,255,0.20)',
             clipPath: smallClip,
           }}
         >
-          {loadingId === item.id ? '读取中…' : '读取'}
+          {loadingId === item.id ? '读取中' : '读取'}
         </button>
         <button
-          onClick={() => onDelete(item.id)}
-          disabled={loadingId !== null}
-          className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:opacity-50"
-          style={{
-            color: 'rgba(220, 120, 120, 0.9)',
-            boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.35)',
-            clipPath: smallClip,
-          }}
-        >
-          删除
-        </button>
-        <button
+          type="button"
           onClick={() => onExport(item.id)}
           disabled={loadingId !== null}
-          className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:opacity-50"
+          className="cursor-pointer px-2.5 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            color: 'rgba(var(--tj-text-secondary), 0.9)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+            color: 'rgba(142,215,255,0.92)',
+            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.28)',
             clipPath: smallClip,
           }}
         >
           导出
         </button>
+        <button
+          type="button"
+          onClick={() => onDelete(item.id)}
+          disabled={loadingId !== null}
+          className="cursor-pointer px-2.5 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          style={{
+            color: 'rgba(255,156,156,0.9)',
+            boxShadow: 'inset 0 0 0 1px rgba(255,156,156,0.28)',
+            clipPath: smallClip,
+          }}
+        >
+          删除
+        </button>
       </div>
+    </article>
+  );
+}
+
+function SmallTag({ children, gold = false }: { children: ReactNode; gold?: boolean }) {
+  return (
+    <span
+      className="px-1.5 py-0.5 font-serif text-[10px] tracking-[0.12em]"
+      style={{
+        color: gold ? '#f5d97a' : '#8ed7ff',
+        background: gold ? 'rgba(245,217,122,0.08)' : 'rgba(142,215,255,0.08)',
+        boxShadow: gold ? 'inset 0 0 0 1px rgba(245,217,122,0.16)' : 'inset 0 0 0 1px rgba(142,215,255,0.16)',
+        clipPath: smallClip,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function EmptyState({ text, detail }: { text: string; detail?: string }) {
+  return (
+    <div
+      className="p-6 text-center font-serif"
+      style={{
+        background: 'rgba(18,28,43,0.46)',
+        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.15)',
+        clipPath: cardClip,
+      }}
+    >
+      <p className="text-sm tracking-[0.2em]" style={{ color: 'rgba(238,226,198,0.86)' }}>
+        {text}
+      </p>
+      {detail && (
+        <p className="mt-1.5 text-xs tracking-wider" style={{ color: 'rgba(238,226,198,0.56)' }}>
+          {detail}
+        </p>
+      )}
     </div>
   );
 }
@@ -560,14 +1007,44 @@ function typeLabel(type: SaveListItemSummary['type']): string {
 }
 
 function typeColor(type: SaveListItemSummary['type']): string {
-  if (type === 'auto') return 'rgba(140, 210, 255, 0.86)';
-  if (type === 'backup') return 'rgba(255, 190, 120, 0.9)';
-  if (type === 'imported') return 'rgba(165, 230, 170, 0.9)';
-  return 'rgba(var(--tj-accent-primary), 0.9)';
+  if (type === 'auto') return 'rgba(142,215,255,0.86)';
+  if (type === 'backup') return 'rgba(255,190,120,0.9)';
+  if (type === 'imported') return 'rgba(158,232,183,0.9)';
+  return 'rgba(245,217,122,0.9)';
 }
 
 function formatSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function matchesSaveTab(save: SaveListItemSummary, tab: Tab): boolean {
+  if (tab === 'all') return save.type !== 'auto';
+  if (tab === 'manual') return save.type === 'manual';
+  if (tab === 'auto') return save.type === 'auto';
+  return save.type === 'backup' || save.type === 'imported';
+}
+
+function buildVisibleSaveTreeGroup(group: SaveTreeDisplayGroup, tab: Tab): SaveTreeDisplayGroup | null {
+  const nodes = group.nodes.filter((node) => matchesSaveTab(node.save, tab));
+  if (!nodes.length) return null;
+  const latestSave = [...nodes].sort((a, b) => b.save.timestamp - a.save.timestamp || b.save.id - a.save.id)[0].save;
+  const rootSave = nodes.find((node) => node.isRoot)?.save ?? nodes[nodes.length - 1].save;
+  const forkNodeIds = new Set<string>();
+  for (const node of nodes) {
+    const parentNodeId = node.save.saveTree?.parentNodeId;
+    if (parentNodeId && nodes.some((candidate) => candidate.save.saveTree?.nodeId === parentNodeId)) {
+      forkNodeIds.add(parentNodeId);
+    }
+  }
+  return {
+    ...group,
+    rootSave,
+    latestSave,
+    nodes,
+    nodeCount: nodes.length,
+    branchCount: Math.max(0, forkNodeIds.size ? group.branchCount : 0),
+    totalSizeBytes: nodes.reduce((sum, node) => sum + Math.max(0, node.save.sizeBytes || 0), 0),
+  };
 }

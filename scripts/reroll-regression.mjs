@@ -26,7 +26,7 @@ assert(!source.includes('state.setPendingVariable(false);\n\n      const npcSour
 assert(source.includes('const assertWorkflowActive = () =>'), '后台结算阶段必须有当前工作流闸门。');
 assert(source.includes('assertWorkflowActive();\n    mem = compression.memory'), '记忆压缩 await 后必须检查当前工作流，避免旧记忆写回。');
 assert(source.includes('shouldCommit: isCurrentWorkflow'), '新闻/变量等子流程必须接收当前工作流提交闸门。');
-assert(source.includes('assertWorkflowActive();\n      const turnRecallEntry = turnRecallEntryResult.entry;'), '忆庭入库前必须检查当前工作流，避免重roll后旧纪要写回。');
+assert(/assertWorkflowActive\(\);\s*const turnRecallEntry = turnRecallEntryResult\.entry;/.test(source), '忆庭入库前必须检查当前工作流，避免重roll后旧纪要写回。');
 assert(source.includes('turnCount: state.turnCount + 1'), '自动存档必须保存真实 turnCount。');
 assert(source.includes('# 重roll生成约束'), '重roll请求必须注入避重复约束。');
 assert(source.includes('重roll nonce'), '重roll请求必须带 nonce，避免同上下文确定性复刻。');
@@ -51,7 +51,7 @@ assert(newsSource.includes('params.shouldCommit?.() === false'), '新闻子流�
 assert(settingsSource.includes('turnCount?: number'), '存档数据必须持久化真实 turnCount。');
 assert(saveLoadSource.includes('turnCount: overrides?.turnCount ?? state.turnCount'), '保存负载必须写入真实 turnCount。');
 assert(!saveLoadSource.includes('delete clean.preTurnSnapshot'), '本地存档必须保留最新 preTurnSnapshot，读档后立即重roll才能完整回滚变量切片。');
-assert(saveLoadSource.includes('state.setTurnCount(save.turnCount ?? (save.chatHistory.length + 1))'), '读档必须优先恢复真实 turnCount。');
-assert(dbSource.includes('s.turnCount ?? ((s.chatHistory?.length ?? 0) + 1)'), '存档列表必须优先显示真实 turnCount。');
+assert(saveLoadSource.includes('state.setTurnCount(save.turnCount ?? (safeChatHistory.length + 1))') || saveLoadSource.includes('state.setTurnCount(save.turnCount ?? (save.chatHistory.length + 1))'), '读档必须优先恢复真实 turnCount。');
+assert(dbSource.includes('turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1)'), '存档摘要必须优先显示真实 turnCount。');
 
 console.log('reroll regression ok');

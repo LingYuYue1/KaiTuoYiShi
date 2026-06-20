@@ -15,7 +15,8 @@ assert(service.includes('不要让玩家取代星/穹'), '模板提示词必须�
 assert(service.includes('不要默认玩家是星穹列车既定成员'), '模板提示词必须防止默认列车成员身份。');
 assert(service.includes('不是路人 NPC 模板'), '模板提示词必须避免生成弱路人 NPC 模板。');
 assert(service.includes('用户提供了生成偏好'), '模板提示词必须支持玩家生成偏好。');
-assert(service.includes('黑塔空间站危机'), '模板提示词必须围绕当前开局锚点。');
+assert(service.includes('当前开局地区、章节锚点、地点或自由开局设定'), '模板提示词必须围绕当前开局锚点。');
+assert(service.includes('不要默认回到黑塔空间站危机'), '模板提示词必须防止非黑塔开局回落默认黑塔危机。');
 assert(service.includes('parseTravelerTemplateJson'), '模板服务必须解析模型 JSON。');
 assert(service.includes('normalizeTravelerTemplate'), '模板服务必须归一化输出字段。');
 assert(service.includes('existingName') && service.includes('existingGender') && service.includes('existingAge'), '模板生成必须读取已有姓名/性别/年龄锚点。');

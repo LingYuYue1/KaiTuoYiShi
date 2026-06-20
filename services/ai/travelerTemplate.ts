@@ -3,6 +3,12 @@ import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 
 export interface TravelerTemplateContext {
   storyModeName?: string;
+  openingSourceLabel?: string;
+  openingRegionName?: string;
+  openingChapterName?: string;
+  openingLocationHint?: string;
+  openingMainlineEnabled?: boolean;
+  openingEntryText?: string;
   existingName?: string;
   existingAlias?: string;
   existingGender?: string;
@@ -49,7 +55,9 @@ function buildTravelerTemplatePrompt(): string {
     '- 不要让玩家取代星/穹，不要默认玩家是星穹列车既定成员。',
     '- 这是玩家主角模板，不是路人 NPC 模板；角色必须有清晰行动能力、开局动机和可参与危机的个人优势。',
     '- 不要生成过弱、无目标、只能被动等待救援的模板；也不要生成碾压原著主角或掌握完整真相的模板。',
-    '- 背景要能合理切入黑塔空间站危机，但不要提前知道完整主线真相。',
+    '- 背景要能合理切入用户消息中的当前开局地区、章节锚点、地点或自由开局设定；不要默认回到黑塔空间站危机。',
+    '- 若当前开局不是黑塔空间站，不要把反物质军团入侵、封存舱、星/穹苏醒写成模板的必要动因。',
+    '- 若自由开局关闭主线，模板应贴合玩家自定义地点和事件，不强行写原著主线入口。',
     '- 如果用户提供了生成偏好，请优先贴合偏好里的身份、气质、能力方向、强度、关系钩子或禁忌项。',
     '- 外貌要具体可视化，包含发色/眼睛/体态/服装/标志物中的至少 4 项。',
     '- 性格要写可被剧情调用的行为倾向，不要只堆标签。',
@@ -66,6 +74,12 @@ function buildTravelerTemplateUserMessage(context: TravelerTemplateContext): str
     '请生成一份随机旅人角色模板。',
     '',
     `剧情模式：${context.storyModeName || '标准开拓'}`,
+    `开局模式：${context.openingSourceLabel || '官方预设'}`,
+    `开局地区：${context.openingRegionName?.trim() || '未指定，按默认开局处理'}`,
+    `章节锚点：${context.openingChapterName?.trim() || '未指定'}`,
+    `初始地点：${context.openingLocationHint?.trim() || '未指定'}`,
+    `主线启用：${context.openingMainlineEnabled === false ? '否，自由开局以玩家自定义设定为主' : '是或未指定'}`,
+    `开局设定/玩家介入：${context.openingEntryText?.trim() || '未填写'}`,
     `已有姓名：${context.existingName?.trim() || '未填写，可随机生成'}`,
     `已有别名：${context.existingAlias?.trim() || '未填写，可随机生成或留空'}`,
     `已有性别：${context.existingGender?.trim() || '未填写，可随机生成'}`,
@@ -74,10 +88,10 @@ function buildTravelerTemplateUserMessage(context: TravelerTemplateContext): str
     `玩家生成偏好：${context.userPrompt?.trim() || '未填写，可自由发挥，但不要生成弱路人模板'}`,
     '',
     '请让模板具备：',
-    '- 一个能进入黑塔空间站开局的身份动因。',
+    '- 一个能进入当前开局地点或当前自定义事件的身份动因。',
     '- 一个不抢原著主角位置的个人目标。',
     '- 1-2 个可被 NPC 互动承接的小缺点或习惯。',
-    '- 一点星际旅行、组织委托、研究事故、命途回响或求援信号相关的钩子。',
+    '- 一点星际旅行、组织委托、本地事件、命途回响、求援信号或玩家自定义关系相关的钩子。',
   ].join('\n');
 }
 

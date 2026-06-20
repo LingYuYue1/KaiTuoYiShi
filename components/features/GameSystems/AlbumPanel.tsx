@@ -11,6 +11,7 @@ import { saveSetting } from '@/services/dbService';
 import {
   添加图片到相册,
   创建相册图片条目,
+  创建相册资源引用,
   fileToDataUrl,
   挂载NPC头像图片,
   挂载NPC立绘图片,
@@ -21,6 +22,7 @@ import {
   卸载NPC_NSFW部位图片,
   卸载旅人图片,
   读取相册条目地址,
+  解析相册资源引用,
 } from '@/utils/albumActions';
 import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
@@ -589,14 +591,15 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     const isBuiltinEntry = params.entryId.startsWith('builtin-avatar:');
     if (!entry && !isBuiltinEntry) return;
     const sourceLabel = isBuiltinEntry ? '原著' : '文生图';
+    const mountedSrc = entry ? 创建相册资源引用(entry.assetId) : params.src;
     if (params.targetKind === 'traveler') {
       if (params.slot === 'portrait') {
-        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: '立绘', src: params.src }));
+        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: '立绘', src: mountedSrc }));
       } else if (params.slot.toString().startsWith('nsfw_')) {
         setMessage('旅人档案暂不支持挂载 NSFW 部位图。');
         return;
       } else {
-        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: params.src }));
+        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: mountedSrc }));
       }
       if (entry) {
         onAlbumChange((prev) => ({
@@ -617,23 +620,23 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       return;
     }
     if (params.slot === 'portrait') {
-      onNpcChange((prev) => 挂载NPC立绘图片(prev, { npcId: params.targetId, src: params.src, source: sourceLabel }));
+      onNpcChange((prev) => 挂载NPC立绘图片(prev, { npcId: params.targetId, src: mountedSrc, source: sourceLabel }));
     } else if (params.slot === 'nsfw_female_chest') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性胸部', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性胸部', src: mountedSrc }));
     } else if (params.slot === 'nsfw_female_genital') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性私处', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性私处', src: mountedSrc }));
     } else if (params.slot === 'nsfw_male_genital') {
       if (!gameSettings.enableMaleNsfwArchive) {
         setMessage('男性 NSFW 档案未开启，不能挂载男性器部位图。');
         return;
       }
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '男性器', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '男性器', src: mountedSrc }));
     } else if (params.slot === 'nsfw_rear') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '后庭', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '后庭', src: mountedSrc }));
     } else if (params.slot === 'nsfw_body_reference') {
-      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '体态参考', src: params.src }));
+      onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '体态参考', src: mountedSrc }));
     } else {
-      onNpcChange((prev) => 挂载NPC头像图片(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: params.src, source: sourceLabel }));
+      onNpcChange((prev) => 挂载NPC头像图片(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: mountedSrc, source: sourceLabel }));
     }
     if (entry) {
       onAlbumChange((prev) => ({
@@ -1219,6 +1222,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
             {activeTab === 'library' && (
               <CharacterLibraryWorkspace
                 records={filteredLibraryRecords}
+                album={album}
                 activeRecord={activeLibraryRecord}
                 activeEntryId={activeEntryId ?? undefined}
                 resourceEntries={resourceEntries}
@@ -1548,6 +1552,7 @@ function NsfwVisibilityToggle({
 
 function CharacterLibraryWorkspace({
   records,
+  album,
   activeRecord,
   activeEntryId,
   resourceEntries,
@@ -1560,6 +1565,7 @@ function CharacterLibraryWorkspace({
   maleNsfwEnabled,
 }: {
   records: CharacterLibraryRecord[];
+  album: 相册系统;
   activeRecord: CharacterLibraryRecord | null;
   activeEntryId?: string;
   resourceEntries: CharacterLibraryEntry[];
@@ -1591,8 +1597,8 @@ function CharacterLibraryWorkspace({
     [activeRecord, resourceEntries],
   );
   const visibleCharacterEntries = useMemo(
-    () => buildVisibleCharacterEntries(activeRecord, resourceEntries),
-    [activeRecord, resourceEntries],
+    () => buildVisibleCharacterEntries(activeRecord, resourceEntries, album),
+    [activeRecord, resourceEntries, album],
   );
   const previewEntry = useMemo(
     () => visibleCharacterEntries.find((item) => item.entry.id === activeEntryId) ?? (selectedIds.length === 1 ? visibleCharacterEntries.find((item) => item.entry.id === selectedIds[0]) : null) ?? null,
@@ -4712,10 +4718,10 @@ function buildCharacterLibraryRecords(
     .filter((npc) => npc.阶位 === 'companion' || npc.原著角色)
     .map((npc): NpcLibraryRecord => {
       const slots = [
-        { key: 'avatar-profile', label: '档案头像', src: 读取NPC头像(npc, '档案') },
-        { key: 'avatar-story', label: '正文头像', src: 读取NPC头像(npc, '正文') },
-        { key: 'avatar-phone', label: '手机头像', src: 读取NPC头像(npc, '手机') },
-        { key: 'portrait', label: '角色立绘', src: npc.图像档案?.立绘 },
+        { key: 'avatar-profile', label: '档案头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '档案')) },
+        { key: 'avatar-story', label: '正文头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '正文')) },
+        { key: 'avatar-phone', label: '手机头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '手机')) },
+        { key: 'portrait', label: '角色立绘', src: 解析相册资源引用(album, npc.图像档案?.立绘) },
       ];
       const albumEntries = album.entries
         .filter((entry) => {
@@ -4738,7 +4744,7 @@ function buildCharacterLibraryRecords(
         kind: 'npc',
         name: npc.姓名,
         alias: npc.别名,
-        avatar: 读取NPC头像(npc, '档案'),
+        avatar: 解析相册资源引用(album, 读取NPC头像(npc, '档案')),
         npc,
         entries,
         slots,
@@ -4758,10 +4764,10 @@ function buildTravelerLibraryRecord(
 ): TravelerLibraryRecord {
   const travelerId = 'traveler';
   const slots: MountedImageSlot[] = [
-    { key: 'traveler-avatar-profile', label: '档案头像', src: traveler.图像档案?.头像 || traveler.头像 || undefined },
-    { key: 'traveler-avatar-story', label: '正文头像', src: traveler.图像档案?.正文头像 },
-    { key: 'traveler-avatar-phone', label: '手机头像', src: traveler.图像档案?.手机头像 },
-    { key: 'traveler-portrait', label: '角色立绘', src: traveler.图像档案?.立绘 },
+    { key: 'traveler-avatar-profile', label: '档案头像', src: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined) },
+    { key: 'traveler-avatar-story', label: '正文头像', src: 解析相册资源引用(album, traveler.图像档案?.正文头像) },
+    { key: 'traveler-avatar-phone', label: '手机头像', src: 解析相册资源引用(album, traveler.图像档案?.手机头像) },
+    { key: 'traveler-portrait', label: '角色立绘', src: 解析相册资源引用(album, traveler.图像档案?.立绘) },
   ];
   const entries = album.entries
     .filter((entry) => {
@@ -4782,7 +4788,7 @@ function buildTravelerLibraryRecord(
     kind: 'traveler',
     name: traveler.姓名 || '旅人',
     alias: traveler.别名,
-    avatar: traveler.图像档案?.头像 || traveler.头像 || undefined,
+    avatar: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined),
     traveler,
     entries,
     slots,
@@ -4972,11 +4978,12 @@ function buildScopedCharacterGalleryEntries(record: CharacterLibraryRecord | nul
 function buildVisibleCharacterEntries(
   record: CharacterLibraryRecord | null,
   resourceEntries: CharacterLibraryEntry[],
+  album: 相册系统,
 ): CharacterLibraryEntry[] {
   if (!record) return [];
   const scoped = buildScopedCharacterGalleryEntries(record, resourceEntries);
   const recordEntries = record.entries.filter((item) => isCharacterLibrarySlot(item.entry.slot) || item.entry.targetId === record.id);
-  const builtin = record.kind === 'npc' ? buildBuiltinAvatarEntries(record.npc) : buildTravelerBuiltinAvatarEntries(record.traveler);
+  const builtin = record.kind === 'npc' ? buildBuiltinAvatarEntries(record.npc) : buildTravelerBuiltinAvatarEntries(record.traveler, album);
   const merged = [...builtin, ...recordEntries, ...scoped];
   const seen = new Set<string>();
   return merged.filter((item) => {
@@ -5012,8 +5019,10 @@ function buildBuiltinAvatarEntries(npc: NPC记录): CharacterLibraryEntry[] {
   }));
 }
 
-function buildTravelerBuiltinAvatarEntries(traveler: 角色数据结构): CharacterLibraryEntry[] {
-  const avatar = traveler.图像档案?.头像 || traveler.头像 || '';
+function buildTravelerBuiltinAvatarEntries(traveler: 角色数据结构, album: 相册系统): CharacterLibraryEntry[] {
+  const rawAvatar = traveler.图像档案?.头像 || traveler.头像 || '';
+  if (rawAvatar.trim().startsWith('asset:')) return [];
+  const avatar = 解析相册资源引用(album, rawAvatar) || '';
   if (!avatar) return [];
   return [{
     entry: {

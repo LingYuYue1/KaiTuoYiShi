@@ -26,9 +26,9 @@ assert(viteConfig.includes('handlePioneerProxyRequest'), 'Local Vite Pioneer pro
 assert(client.includes("from './pioneerProxyCore'"), 'Chat client must import Pioneer helpers.');
 assert(client.includes('function buildPioneerProxyBody'), 'OpenAI-compatible chat path must build Pioneer proxy bodies.');
 assert(client.includes('function isPioneerConfig'), 'OpenAI-compatible chat path must detect Pioneer by Base URL.');
-assert(client.includes("isPioneerConfig(config)\n      ? '/api/pioneer'"), 'Streaming OpenAI-compatible Pioneer requests must use same-origin proxy.');
+assert(/isPioneerConfig\(config\)\s*\?\s*'\/api\/pioneer'/.test(client), 'Streaming OpenAI-compatible Pioneer requests must use same-origin proxy.');
 assert(client.includes('buildPioneerProxyBody(config, requestBody)'), 'Streaming Pioneer requests must send body through proxy wrapper.');
-assert(client.includes("isPioneerConfig(deepSeekPayload.config)\n      ? '/api/pioneer'"), 'Non-stream Pioneer requests must use same-origin proxy.');
+assert(/isPioneerConfig\(deepSeekPayload\.config\)\s*\?\s*'\/api\/pioneer'/.test(client), 'Non-stream Pioneer requests must use same-origin proxy.');
 assert(client.includes('buildPioneerProxyBody(deepSeekPayload.config, requestBody)'), 'Non-stream Pioneer requests must send body through proxy wrapper.');
 
 assert(apiTools.includes('isPioneerBaseUrl(baseRaw)'), 'Model list fetch must detect Pioneer by Base URL.');

@@ -23,6 +23,7 @@ import {
 } from './historyWindow';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import { getAnticipatedNpcNamesForTurn, getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
+import { 格式化开局档案上下文 } from '@/models/world';
 
 const COT_FAKE_HISTORY_USER = '开始任务';
 const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
@@ -326,11 +327,21 @@ function formatStoryWeavingGateSnapshot(state: UseGameStateReturn, ctx: {
   recentUserInput: string;
   recentAIResponse?: string;
   currentLocation?: string;
+  openingRegionName?: string;
+  openingChapterName?: string;
+  openingEntryText?: string;
+  openingSource?: import('@/models/journey').开局来源;
+  openingArchiveText?: string;
 }): string {
   const gate = evaluateStoryWeavingGate(state.剧情编织, {
     recentUserInput: ctx.recentUserInput,
     recentAIResponse: ctx.recentAIResponse ?? '',
     currentLocation: ctx.currentLocation ?? '',
+    openingRegionName: ctx.openingRegionName,
+    openingChapterName: ctx.openingChapterName,
+    openingEntryText: ctx.openingEntryText,
+    openingSource: ctx.openingSource,
+    openingArchiveText: ctx.openingArchiveText,
   });
   const diagnostics = getStoryWeavingInjectionDiagnostics(state.剧情编织);
   if (!gate) return '当前没有可评估的剧情编织门禁。';
@@ -477,6 +488,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     ? (isAwakeningEnterTrigger ? 'question' : 'judgement')
     : undefined;
 
+  const openingArchiveText = 格式化开局档案上下文(state.世界.开局档案);
   const worldbookCtx = {
     recentUserInput: sourceInput,
     recentAIResponse: '',
@@ -484,8 +496,13 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     travelerName: state.旅人.姓名,
     turnCount: state.turnCount,
     startScenarioId: state.世界.起航之地ID,
-    startSceneName: state.世界.当前地点,
+    startSceneName: state.世界.开局档案?.章节锚点名称 ?? state.世界.当前地点,
     currentLocation: state.世界.当前地点,
+    openingRegionName: state.世界.开局档案?.地区名称,
+    openingChapterName: state.世界.开局档案?.章节锚点名称,
+    openingEntryText: state.世界.开局档案?.玩家介入原文,
+    openingSource: state.世界.开局档案?.来源,
+    openingArchiveText,
     npcNames: getZhikuNpcNamesForTurn({
       world: state.世界,
       npcs: state.NPC,
@@ -508,6 +525,9 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     startScenarioId: undefined,
     startSceneName: undefined,
     currentLocation: undefined,
+    openingRegionName: worldbookCtx.openingRegionName,
+    openingChapterName: worldbookCtx.openingChapterName,
+    openingEntryText: worldbookCtx.openingEntryText,
     npcNames: [],
     presentNpcNamesForFallback: worldbookCtx.npcNames,
     anticipatedNpcNames: anticipatedZhikuNpcNames,
@@ -515,6 +535,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       currentLocation: state.世界.当前地点,
       presentNpcNames: worldbookCtx.npcNames,
       immediateStoryReview: immediateStoryReviewForZhiku,
+      openingArchiveText,
     },
   };
   const recallQuery = buildMainRecallQuery({

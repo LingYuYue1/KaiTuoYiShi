@@ -3,9 +3,11 @@ import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
 import type { VisualTextSettings } from '@/models/settings';
+import type { 相册系统 } from '@/models/imageGeneration';
 import { BodyBlock, StreamingPreview } from './MessageRenderers';
 import { getPath } from '@/data/journeyPresets';
 import { formatTokenCount } from '@/utils/tokenEstimate';
+import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface TurnItemProps {
   message: 聊天消息;
@@ -15,6 +17,7 @@ interface TurnItemProps {
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
+  album?: 相册系统;
   showInnerVoice?: boolean;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
@@ -24,12 +27,12 @@ interface TurnItemProps {
 
 type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
-export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
+export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
 
   if (isUser) {
-    return <UserTurnBubble content={message.content} traveler={traveler} fontSize={visualTextSettings?.playerFontSize ?? 14} />;
+    return <UserTurnBubble content={message.content} traveler={traveler} album={album} fontSize={visualTextSettings?.playerFontSize ?? 14} />;
   }
 
   return (
@@ -44,6 +47,7 @@ export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrati
           narrativeImageManualEnabled={narrativeImageManualEnabled}
           npcRecords={npcRecords}
           traveler={traveler}
+          album={album}
           showInnerVoice={showInnerVoice}
           fallbackPathId={fallbackPathId}
           previousUserInput={previousUserInput}
@@ -54,6 +58,7 @@ export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrati
           content={message.content}
           npcRecords={npcRecords}
           traveler={traveler}
+          album={album}
           showInnerVoice={showInnerVoice}
           userInput={previousUserInput}
           visualTextSettings={visualTextSettings}
@@ -63,9 +68,9 @@ export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrati
   );
 }
 
-function UserTurnBubble({ content, traveler, fontSize = 14 }: { content: string; traveler?: 角色数据结构; fontSize?: number }) {
+function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: string; traveler?: 角色数据结构; album?: 相册系统; fontSize?: number }) {
   const name = traveler?.姓名?.trim() || traveler?.别名?.trim() || '旅人';
-  const avatarUrl = traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim();
+  const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim());
   const bubbleBg = 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
 
   return (
@@ -150,13 +155,14 @@ interface AiTurnCardProps {
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
+  album?: 相册系统;
   showInnerVoice?: boolean;
   fallbackPathId?: string;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -292,11 +298,12 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
             kind={awakeningKind}
             npcRecords={npcRecords}
             traveler={traveler}
+            album={album}
             showInnerVoice={showInnerVoice}
             visualTextSettings={visualTextSettings}
           />
         ) : (
-      <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} userInput={previousUserInput} visualTextSettings={visualTextSettings} />
+      <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={previousUserInput} visualTextSettings={visualTextSettings} />
         )}
 
         {isStreaming && (
@@ -311,7 +318,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
       {((message.narrativeImages && message.narrativeImages.length > 0) || (narrativeImageManualEnabled && !isStreaming)) && (
         <div className="px-1 py-2 space-y-2">
           {(message.narrativeImages ?? []).map((img) => (
-            <NarrativeImageCard key={img.id} image={img} messageId={message.id} onRegenerateNarrativeImage={onRegenerateNarrativeImage} />
+            <NarrativeImageCard key={img.id} image={img} messageId={message.id} album={album} onRegenerateNarrativeImage={onRegenerateNarrativeImage} />
           ))}
           {(!message.narrativeImages || message.narrativeImages.length === 0) && (
             narrativeImageManualEnabled ? <NarrativeImageManualCard messageId={message.id} onRegenerateNarrativeImage={onRegenerateNarrativeImage} /> : null
@@ -589,6 +596,7 @@ function AwakeningOracleBlock({
   kind,
   npcRecords,
   traveler,
+  album,
   showInnerVoice = true,
   visualTextSettings,
 }: {
@@ -597,6 +605,7 @@ function AwakeningOracleBlock({
   kind: '出题' | '评判';
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
+  album?: 相册系统;
   showInnerVoice?: boolean;
   visualTextSettings?: VisualTextSettings;
 }) {
@@ -623,7 +632,7 @@ function AwakeningOracleBlock({
           <span style={{ color: 'rgba(200, 150, 200, 0.6)' }}>{pathName}</span>
         )}
       </div>
-      <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} showInnerVoice={showInnerVoice} visualTextSettings={visualTextSettings} />
+      <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} visualTextSettings={visualTextSettings} />
     </div>
   );
 }
@@ -1040,13 +1049,16 @@ function EditBodyPanel({
 function NarrativeImageCard({
   image,
   messageId,
+  album,
   onRegenerateNarrativeImage,
 }: {
   image: import('@/models/chat').叙事插图;
   messageId: string;
+  album?: 相册系统;
   onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const imageSrc = 解析相册资源引用(album, image.dataUrl);
 
   const typeLabel = image.kind === 'snapshot' || image.type === 'scene' ? '故事快照' : '角色插图';
   const icon = image.kind === 'snapshot' || image.type === 'scene' ? '▧' : '👤';
@@ -1154,10 +1166,10 @@ function NarrativeImageCard({
       </button>
 
       {/* 展开内容：图片 */}
-      {expanded && image.dataUrl && (
+      {expanded && imageSrc && (
         <div className="px-3 pb-3">
           <img
-            src={image.dataUrl}
+            src={imageSrc}
             alt={image.description || typeLabel}
             className="max-w-full rounded"
             style={{

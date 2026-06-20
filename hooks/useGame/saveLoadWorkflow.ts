@@ -1,6 +1,9 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { migratePromptModules } from '@/hooks/useGameState';
 import type { 存档数据, 存档类型, 游戏设置 } from '@/models/settings';
+import type { 聊天消息 } from '@/models/chat';
+import { 创建空角色, 确保命途列表 } from '@/models/character';
+import type { 角色数据结构 } from '@/models/character';
 import {
   创建空API设置,
   创建默认游戏设置,
@@ -32,6 +35,11 @@ import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
+import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
+import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
+import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
+
+let activeSaveTreeMeta: 存档树元信息 | null = null;
 
 // 共享的存档负载构造函数：手动 / 自动两条路径都走这一处，未来加字段只改一处。
 // overrides 用于 sendWorkflow 里那一刻 React state 还没回写、但已有新值的字段
@@ -42,10 +50,11 @@ export function buildSavePayload(
   overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
 ): 存档数据 {
   const persistedChatHistory = stripRuntimeOnlyFieldsFromChatHistory(overrides?.chatHistory ?? state.chatHistory);
-  return {
+  const timestamp = Date.now();
+  const baseSave = {
     id: 0,
     type,
-    timestamp: Date.now(),
+    timestamp,
     turnCount: overrides?.turnCount ?? state.turnCount,
     旅人: overrides?.旅人 ?? state.旅人,
     世界: overrides?.世界 ?? state.世界,
@@ -75,6 +84,16 @@ export function buildSavePayload(
     apiSettings: 创建空API设置(),
     theme: state.currentTheme,
   };
+  const parentSave = activeSaveTreeMeta
+    ? ({ id: 0, type, timestamp, 旅人: baseSave.旅人, 世界: baseSave.世界, chatHistory: [], 记忆: baseSave.记忆, gameSettings: baseSave.gameSettings, apiSettings: baseSave.apiSettings, theme: baseSave.theme, saveTree: activeSaveTreeMeta } as unknown as 存档数据)
+    : null;
+  const withTree = attachSaveTreeMeta(baseSave as 存档数据, buildNextSaveTreeMeta({
+    previous: parentSave,
+    type,
+    timestamp,
+  }));
+  activeSaveTreeMeta = getSaveTreeMeta(withTree);
+  return compactDuplicatedSaveImages(withTree);
 }
 
 function stripRuntimeOnlyFieldsFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
@@ -228,17 +247,27 @@ async function saveLoadBackupIfNeeded(state: UseGameStateReturn): Promise<void> 
     Boolean(state.旅人.姓名?.trim()) ||
     Boolean(state.世界.当前地点?.trim());
   if (!hasProgress) return;
-  await saveGame(buildSavePayload(state, 'backup'));
-  state.setHasSave(true);
+  try {
+    await saveGame(buildSavePayload(state, 'backup'));
+    state.setHasSave(true);
+  } catch (error) {
+    console.warn('[save-load] backup before loading failed; continue loading selected save', error);
+  }
 }
 
 async function applySaveToState(
   save: 存档数据,
   state: UseGameStateReturn,
 ): Promise<void> {
-  state.set旅人(save.旅人);
-  state.set世界(归一化世界状态(save.世界));
-  state.setChatHistory(save.chatHistory);
+  activeSaveTreeMeta = getSaveTreeMeta(save);
+  const safeChatHistory = normalizeSaveChatHistory(save.chatHistory);
+  const safeWorld = 归一化世界状态(save.世界);
+  const safeTraveler = normalizeSavedTraveler(save.旅人, safeWorld.当前日期);
+  const safeGameSettings = normalizeSavedGameSettings(save.gameSettings);
+
+  state.set旅人(safeTraveler);
+  state.set世界(safeWorld);
+  state.setChatHistory(safeChatHistory);
   state.set记忆(normalizeMemorySystem(save.记忆));   // 老存档缺 longTermMemories 时兜底
   const legacyArchives = (save.记忆 as unknown as { 回忆档案?: unknown[] })?.回忆档案 ?? [];
   state.set忆庭(
@@ -259,15 +288,18 @@ async function applySaveToState(
   state.set相册(归一化相册系统(save.相册));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(save.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
-  const normalizedStoryWeaving = 归一化剧情编织系统(save.剧情编织);
-  const recentUser = [...(save.chatHistory ?? [])].reverse().find((message) => message.role === 'user');
-  const recentAssistant = [...(save.chatHistory ?? [])].reverse().find((message) => message.role === 'assistant');
+  const normalizedStoryWeaving = alignStoryWeavingToOpeningArchive(
+    归一化剧情编织系统(save.剧情编织),
+    safeWorld.开局档案,
+  );
+  const recentUser = [...safeChatHistory].reverse().find((message) => message.role === 'user');
+  const recentAssistant = [...safeChatHistory].reverse().find((message) => message.role === 'assistant');
   const storyRepair = autoAlignCanonStoryProgress({
     storyWeaving: normalizedStoryWeaving,
-    turnCount: save.turnCount ?? (save.chatHistory.length + 1),
+    turnCount: save.turnCount ?? (safeChatHistory.length + 1),
     userInput: recentUser?.content ?? '',
     body: recentAssistant?.parsedResponse?.body ?? recentAssistant?.content ?? '',
-    currentLocation: save.世界?.当前地点,
+    currentLocation: safeWorld.当前地点,
   });
   const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
@@ -279,21 +311,56 @@ async function applySaveToState(
   const defaults = 创建默认游戏设置();
   const nextGameSettingsFromSave: 游戏设置 = {
     ...defaults,
-    ...save.gameSettings,
-    新闻系统: 归一化星际和平周报设置(save.gameSettings.新闻系统),
-    手机系统: 归一化手机系统设置(save.gameSettings.手机系统),
-    智库系统: 归一化智库系统设置(save.gameSettings.智库系统),
-    剧情编织系统: 归一化剧情编织系统设置(save.gameSettings.剧情编织系统),
-    文生图系统: 归一化文生图系统设置(save.gameSettings.文生图系统),
-    记忆系统: 归一化记忆系统设置(save.gameSettings.记忆系统),
-    额外功能: 归一化额外功能设置(save.gameSettings.额外功能),
-    backgroundTaskMode: save.gameSettings.backgroundTaskMode ?? defaults.backgroundTaskMode,
-    enableMaleNsfwArchive: save.gameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
-    visualTextSettings: 归一化视觉文本设置(save.gameSettings.visualTextSettings),
-    promptModules: migratePromptModules(save.gameSettings),
+    ...safeGameSettings,
+    新闻系统: 归一化星际和平周报设置(safeGameSettings.新闻系统),
+    手机系统: 归一化手机系统设置(safeGameSettings.手机系统),
+    智库系统: 归一化智库系统设置(safeGameSettings.智库系统),
+    剧情编织系统: 归一化剧情编织系统设置(safeGameSettings.剧情编织系统),
+    文生图系统: 归一化文生图系统设置(safeGameSettings.文生图系统),
+    记忆系统: 归一化记忆系统设置(safeGameSettings.记忆系统),
+    额外功能: 归一化额外功能设置(safeGameSettings.额外功能),
+    backgroundTaskMode: safeGameSettings.backgroundTaskMode ?? defaults.backgroundTaskMode,
+    enableMaleNsfwArchive: safeGameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
+    visualTextSettings: 归一化视觉文本设置(safeGameSettings.visualTextSettings),
+    promptModules: migratePromptModules(safeGameSettings),
   };
   state.setGameSettings(preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings));
   state.setHasSave(true);
   state.setView('game');
-  state.setTurnCount(save.turnCount ?? (save.chatHistory.length + 1));
+  state.setTurnCount(save.turnCount ?? (safeChatHistory.length + 1));
+}
+
+function normalizeSaveChatHistory(value: unknown): 聊天消息[] {
+  return Array.isArray(value) ? (value as 聊天消息[]) : [];
+}
+
+function normalizeSavedTraveler(value: unknown, awakenedAt = ''): 角色数据结构 {
+  const base = 创建空角色();
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<角色数据结构>
+    : {};
+  return 确保命途列表({
+    ...base,
+    ...raw,
+    姓名: typeof raw.姓名 === 'string' ? raw.姓名 : base.姓名,
+    别名: typeof raw.别名 === 'string' ? raw.别名 : base.别名,
+    性别: typeof raw.性别 === 'string' ? raw.性别 : base.性别,
+    年龄: Number.isFinite(Number(raw.年龄)) ? Number(raw.年龄) : base.年龄,
+    专长知识: Array.isArray(raw.专长知识) ? raw.专长知识.filter((item): item is string => typeof item === 'string') : base.专长知识,
+    图像档案: raw.图像档案 && typeof raw.图像档案 === 'object' ? raw.图像档案 : base.图像档案,
+    属性: raw.属性 ?? base.属性,
+    命途列表: Array.isArray(raw.命途列表) ? raw.命途列表 : base.命途列表,
+    能力: Array.isArray(raw.能力) ? raw.能力.filter((item): item is string => typeof item === 'string') : base.能力,
+    背包: Array.isArray(raw.背包) ? raw.背包 : base.背包,
+    战技列表: Array.isArray(raw.战技列表) ? raw.战技列表 : base.战技列表,
+  }, awakenedAt);
+}
+
+function normalizeSavedGameSettings(value: unknown): 游戏设置 {
+  const defaults = 创建默认游戏设置();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return defaults;
+  return {
+    ...defaults,
+    ...(value as Partial<游戏设置>),
+  };
 }

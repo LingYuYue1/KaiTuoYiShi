@@ -38,6 +38,7 @@
     "test:traveler-profile": "node scripts/traveler-profile-guard-regression.mjs",
     "test:traveler-template": "node scripts/traveler-template-regression.mjs",
     "test:opening-preset": "node scripts/opening-preset-regression.mjs",
+    "test:opening-story-alignment": "node scripts/opening-story-alignment-regression.mjs",
     "test:equipment-retirement": "node scripts/equipment-retirement-regression.mjs",
     "test:power-system-worldbook": "node scripts/power-system-worldbook-regression.mjs",
     "test:release-announcements": "node scripts/release-announcements-regression.mjs",

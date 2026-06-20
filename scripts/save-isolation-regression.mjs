@@ -35,6 +35,11 @@ assert(saveLoadSource.includes('state.setNPC(归一化NPC记录列表(save.NPC))
 assert(saveLoadSource.includes('state.set新闻(归一化新闻列表(save.新闻))'), '读档新闻必须来自目标存档或空列表兜底。');
 assert(saveLoadSource.includes('state.setVariableBatches(save.variableBatches ?? [])'), '读档变量批次必须来自目标存档或空列表兜底。');
 assert(saveLoadSource.includes('state.setQueueTasks(save.queueTasks ?? [])'), '读档后台队列必须来自目标存档或空列表兜底。');
+assert(saveLoadSource.includes('normalizeSavedGameSettings(save.gameSettings)'), '读档必须允许旧存档缺失 gameSettings，并用默认游戏设置兜底。');
+assert(saveLoadSource.includes('if (!value || typeof value !== \'object\' || Array.isArray(value)) return defaults'), '旧存档 gameSettings 为空或异常时必须回落默认设置。');
+assert(saveLoadSource.includes('normalizeSaveChatHistory(save.chatHistory)'), '读档必须允许旧存档缺失 chatHistory，并用空数组兜底。');
+assert(saveLoadSource.includes('normalizeSavedTraveler(save.旅人'), '读档必须归一化旧旅人字段，补齐战技、命途列表等新增字段。');
+assert(saveLoadSource.includes('确保命途列表'), '旧旅人只有主命途时必须恢复命途列表。');
 assert(appSource.includes('onPhoneChange={state.set手机}'), '手机 UI 修改只能进入当前运行态，不能写全局手机备份。');
 
 assert(saveLoadSource.includes('apiSettings: 创建空API设置()'), '新建存档不得把本机主 API 配置绑定进存档。');

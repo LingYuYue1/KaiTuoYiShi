@@ -8,6 +8,7 @@ interface Props {
   /** 变量模型正在跑（主回复已落地，变量结算中）。 */
   pending?: boolean;
   onCancelTask?: (id: 队列任务ID) => void;
+  onRetryTask?: (task: 队列任务记录, mode: 'retry' | 'reroll') => void | Promise<void>;
 }
 
 const smallClip =
@@ -24,7 +25,7 @@ const ACTION_STYLE: Record<变量命令动作, { bg: string; border: string; col
 
 type TaskStatus = 队列任务状态;
 
-export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props) {
+export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryTask }: Props) {
   const [open, setOpen] = useState(false);
 
   const latest = batches.length > 0 ? batches[batches.length - 1] : null;
@@ -191,6 +192,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask }: Props)
               batch={task.id === 'variable' ? latest ?? undefined : undefined}
               task={task}
               onCancel={onCancelTask}
+              onRetry={onRetryTask}
             />
           ))}
         </div>
@@ -213,9 +215,10 @@ interface TaskRowProps {
   batch?: 变量命令批次;
   task?: 队列任务记录;
   onCancel?: (id: 队列任务ID) => void;
+  onRetry?: (task: 队列任务记录, mode: 'retry' | 'reroll') => void | Promise<void>;
 }
 
-function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: TaskRowProps) {
+function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetry }: TaskRowProps) {
   // 默认折叠；用户点「查看原始信息 / 查看变量」才展开。
   const [view, setView] = useState<'raw' | 'commands' | null>(null);
 
@@ -236,6 +239,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
       ? `失败 ${task.failCount} 次`
       : '';
   const canCancel = status === 'pending' && !!task?.cancellable && !!onCancel;
+  const canRetry = status === 'failed' && !!task && isRetryableQueueTask(task.id) && !!onRetry;
 
   return (
     <div
@@ -297,6 +301,12 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
 
         {/* 状态图标 */}
         <div className="flex shrink-0 items-center gap-2">
+          {canRetry && task && (
+            <div className="flex items-center gap-1">
+              <QueueActionButton label="重试" onClick={() => void onRetry?.(task, 'retry')} />
+              <QueueActionButton label="重生成" onClick={() => void onRetry?.(task, 'reroll')} />
+            </div>
+          )}
           {canCancel && task && (
             <button
               type="button"
@@ -340,6 +350,28 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel }: Task
       {view === 'raw' && !batch?.rawText && task?.rawText && <RawTextPanel raw={task.rawText} />}
       {view === 'commands' && batch && <CommandsPanel batch={batch} />}
     </div>
+  );
+}
+
+function isRetryableQueueTask(id: 队列任务ID): boolean {
+  return id === 'variable' || id === 'news' || id === 'narrative_image_parse' || id === 'narrative_image_generate';
+}
+
+function QueueActionButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="px-2 py-1 font-serif text-[10px] tracking-[0.12em] transition-all hover:opacity-85"
+      style={{
+        color: 'rgb(var(--tj-accent-primary))',
+        background: 'rgba(var(--tj-accent-primary), 0.08)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+        clipPath: smallClip,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

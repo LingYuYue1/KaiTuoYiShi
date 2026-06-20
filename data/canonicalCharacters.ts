@@ -1,7 +1,5 @@
-// 原著角色库（v1 最小集合）。
-// 在 NPC 首次进入档案时用 matchCanonical 自动识别为原著角色 → tier='companion'。
-// v2+ 会扩充到星穹列车、仙舟、IPC、天才俱乐部等成员；当前只放第一阶段（登上列车前后）
-// 玩家最有可能遭遇的几个核心角色。
+// 原著角色库。NPC 首次进入档案时会用 matchCanonical 自动识别为原著角色 → tier='companion'。
+// 这里只保留高频基础识别信息；精修人设与地区扩展由智库档案负责召回。
 
 export interface CanonicalCharacterDef {
   name: string;
@@ -123,6 +121,27 @@ export const CANONICAL_CHARACTERS: CanonicalCharacterDef[] = [
     gender: '女',
     appearance: '紫发暗瞳，左眼戴黑色眼罩。',
     personality: '冷峻锐利，对地下街抱有归属感。',
+  },
+  {
+    name: '托帕',
+    aliases: ['Topaz', '叶珉'],
+    gender: '女',
+    appearance: '棕色短发微翘，公司制服外套敞开，腰间挂次元扑满胶囊。',
+    personality: '秩序中的正义感，合同信仰，对弱者有善意但总经公司逻辑翻译。',
+  },
+  {
+    name: '砂金',
+    aliases: ['Aventurine', '卡卡瓦卡'],
+    gender: '男',
+    appearance: '金色短发配花色西装与夸张饰物，左腕绑筹码手环，瞳色异彩。',
+    personality: '赌徒哲学中的求生本能，高风险高精度，自信来自活下来的代价。',
+  },
+  {
+    name: '翡翠',
+    aliases: ['Jade'],
+    gender: '女',
+    appearance: '成熟女性，优雅冷峻，公司高层制服风格，佩饰低调。',
+    personality: '筹码哲学中的克制，一切有价格但不必立刻交换，冷峻是信息过剩后的耐心。',
   },
 ];
 

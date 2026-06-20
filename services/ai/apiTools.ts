@@ -2,6 +2,7 @@ import { chatCompletionNonStream } from './chatCompletionClient';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { withRetries } from './retry';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
+import { isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
 
 export interface ConnectionTestResult {
   ok: boolean;
@@ -31,6 +32,9 @@ export async function fetchModels(config: any): Promise<string[]> {
       }
       if (config.provider === 'opencode') {
         return fetchOpenCodeModels(baseRaw, apiKey);
+      }
+      if (config.provider === 'ark' || isArkBaseUrl(baseRaw)) {
+        return fetchArkModels(baseRaw, apiKey);
       }
       if (isPioneerBaseUrl(baseRaw)) {
         return fetchPioneerModels(baseRaw, apiKey);
@@ -193,6 +197,49 @@ async function fetchPioneerModels(baseRaw: string, apiKey: string): Promise<stri
       error: e,
     });
     throw new Error(`Pioneer 获取模型列表失败：\n${(e as Error).message}`);
+  }
+}
+
+async function fetchArkModels(baseRaw: string, apiKey: string): Promise<string[]> {
+  const base = normalizeArkBaseUrl(baseRaw);
+  const url = `${base}/models`;
+  try {
+    const res = await fetch('/api/ark', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'models',
+        baseUrl: base,
+        apiKey,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      void appendApiErrorReport({
+        source: '火山方舟模型列表',
+        config: { provider: 'ark', baseUrl: baseRaw, apiKey },
+        status: res.status,
+        requestUrl: url,
+        requestMode: 'models',
+        responseText: text,
+      });
+      throw new Error(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
+    }
+    const data = await res.json();
+    if (data && Array.isArray(data.data)) {
+      const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+      if (ids.length) return ids;
+    }
+    throw new Error(`${url} -> 返回格式异常（缺 data 数组）`);
+  } catch (e) {
+    void appendApiErrorReport({
+      source: '火山方舟模型列表',
+      config: { provider: 'ark', baseUrl: baseRaw, apiKey },
+      requestUrl: url,
+      requestMode: 'models',
+      error: e,
+    });
+    throw new Error(`火山方舟获取模型列表失败：\n${(e as Error).message}`);
   }
 }
 

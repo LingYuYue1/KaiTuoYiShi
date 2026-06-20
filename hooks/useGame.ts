@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
-import { executeSendWorkflow, regenerateNarrativeImagesForMessage } from '@/hooks/useGame/sendWorkflow';
+import { executeSendWorkflow, regenerateNarrativeImagesForMessage, retryQueueTask } from '@/hooks/useGame/sendWorkflow';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
@@ -8,7 +8,10 @@ import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
 import type { API配置项 } from '@/models/settings';
+import type { 队列任务记录 } from '@/models/queueTask';
+import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
 import { saveSetting } from '@/services/dbService';
+import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -21,6 +24,7 @@ export interface UseGameReturn {
     handleSave: () => Promise<number>;
     handleReroll: () => Promise<string | void>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
+    handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
     handleRestartOpening: () => void;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
   };
@@ -143,6 +147,10 @@ export function useGame(): UseGameReturn {
     await regenerateNarrativeImagesForMessage(state, getActiveConfig, messageId);
   }, [state, getActiveConfig]);
 
+  const handleRetryQueueTask = useCallback(async (task: 队列任务记录, mode: 'retry' | 'reroll' = 'retry') => {
+    await retryQueueTask(state, getActiveConfig, task, mode);
+  }, [state, getActiveConfig]);
+
   // 重新开局：清掉所有运行时累积的变量切片，保留创角设定（名字 / 命途 / 世界周期 等）。
   // 不这样做的话，老的 NPC / 新闻 / 剧情节点 / variableBatches / 全局事件
   // 会留在状态里和新开局叠加，下次重开就是双份甚至 N 份数据。
@@ -157,25 +165,50 @@ export function useGame(): UseGameReturn {
     state.setTurnCount(1);
     state.setStreamingMessage('');
 
-    // 清空所有运行时累积的独立切片
-    state.setNPC([]);
+    const restartOpeningArchive = 归一化开局档案(state.世界.开局档案, state.世界);
+
+    // 清空所有运行时累积的独立切片，再按开局档案恢复初始关系种子
+    state.setNPC(根据开局档案创建初始NPC记录(restartOpeningArchive));
     state.set新闻([]);
     state.set剧情([]);
     state.setVariableBatches([]);
     state.setQueueTasks([]);
+    const nextStoryWeaving = alignStoryWeavingToOpeningArchive(state.剧情编织, restartOpeningArchive);
+    state.set剧情编织(nextStoryWeaving);
+    saveSetting('storyWeavingSystem', nextStoryWeaving);
 
-    // worldState：保留创角时的 currentPeriod / difficulty / storyMode / startingScenarioId / customStartPrompt
-    //（这些是世界书 + 向导设的），清掉运行时累积的事件链 / 时间 / 活跃 NPC / 氛围
-    state.set世界((prev) => ({
-      ...prev,
-      已访问时段: [],
-      纪年法: prev.纪年法 || '琥珀纪年',
-      开拓天数: 1,
-      当前时间: '06:40',
-      全局事件: [],
-      活跃人物: [],
-      氛围变化: '',
-    }));
+    // worldState：保留创角时的 currentPeriod / difficulty / storyMode / startingScenarioId / customStartPrompt。
+    // 重新开局时必须重建开局档案对应的已成立事实，否则非黑塔/自由开局会只剩字段，缺少后续注入锚点。
+    state.set世界((prev) => {
+      const openingArchive = restartOpeningArchive;
+      const openingSummary = openingArchive.整理档案;
+      const nextLocation =
+        openingSummary?.初始地点参考?.trim()
+        || prev.当前地点?.trim()
+        || openingArchive.地区名称;
+      const nextDate = openingSummary?.初始日期参考?.trim() || prev.当前日期;
+      const nextTime = openingSummary?.初始时间参考?.trim() || prev.当前时间 || '06:40';
+      return {
+        ...prev,
+        开局档案: openingArchive,
+        起航之地ID: openingArchive.章节锚点ID || prev.起航之地ID,
+        自定义开局: openingArchive.玩家介入原文 || prev.自定义开局,
+        当前地点: nextLocation,
+        已访问时段: [],
+        纪年法: prev.纪年法 || '琥珀纪年',
+        开拓天数: 1,
+        当前日期: nextDate,
+        当前时间: nextTime,
+        全局事件: 生成开局已成立事实(openingArchive, {
+          currentDate: nextDate,
+          currentTime: nextTime,
+          currentLocation: nextLocation,
+          originalProtagonist: prev.原著主角,
+        }),
+        活跃人物: [],
+        氛围变化: '',
+      };
+    });
 
     // traveler：保留创角时的所有静态字段，把道具运行时累积重置回开局态
     state.set旅人((prev) => ({
@@ -199,6 +232,7 @@ export function useGame(): UseGameReturn {
       handleSave,
       handleReroll,
       handleRegenerateNarrativeImage,
+      handleRetryQueueTask,
       handleRestartOpening,
       getContextSnapshot,
     },

@@ -34,6 +34,7 @@ const geniusSocietyPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/gen
 const intelligentsiaGuildPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/intelligentsia-guild-character-rebuild.json', 'utf8'));
 const belobogPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/belobog-character-rebuild.json', 'utf8'));
 const xianzhouLuofuPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/xianzhou-luofu-character-rebuild.json', 'utf8'));
+const ipcPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/interastral-peace-corporation-character-rebuild.json', 'utf8'));
 const panel = fs.readFileSync('components/features/GameSystems/ZhikuPanel.tsx', 'utf8');
 
 const profileById = new Map((rebuildPreset.entries ?? []).map((entry) => [entry.id, entry]));
@@ -213,7 +214,7 @@ assert(
 );
 assert(
   xianzhouLuofuPreset.id === 'zhiku_xianzhou_luofu_character_rebuild' &&
-    xianzhouLuofuPreset.updatedAt === '2026-06-11-xianzhou-luofu-character-profiles-8' &&
+    xianzhouLuofuPreset.updatedAt === '2026-06-18-xianzhou-luofu-story-layer-full-rewrite' &&
     xianzhouLuofuPreset.entries?.length === 15 &&
     [
       'zhiku_character_rebuild_jing_yuan_profile',
@@ -232,13 +233,13 @@ assert(
       'zhiku_character_rebuild_hanya_profile',
       'zhiku_character_rebuild_xueyi_profile',
     ].every((id) => xianzhouLuofuProfileById.has(id)) &&
-    !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('云璃') &&
+    !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '云璃' || e.关联角色ID === '云璃') &&
     String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_lingsha_profile')?.原文 ?? '').includes('丹鼎司丹士长') &&
     String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_lingsha_profile')?.原文 ?? '').includes('浮元') &&
-    !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('飞霄') &&
-    !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('椒丘') &&
-    !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('貊泽') &&
-    !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('怀炎'),
+    !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '飞霄' || e.关联角色ID === '飞霄') &&
+    !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '椒丘' || e.关联角色ID === '椒丘') &&
+    !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '貊泽' || e.关联角色ID === '貊泽') &&
+    !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '怀炎' || e.关联角色ID === '怀炎'),
   'Xianzhou Luofu rebuilt character preset must exist with Luofu roster and exclude other-ship characters.',
 );
 const xianzhouLuofuBailu = xianzhouLuofuProfileById.get('zhiku_character_rebuild_bailu_profile');
@@ -265,10 +266,11 @@ for (const entry of xianzhouLuofuPreset.entries ?? []) {
       source.includes('## 角色故事层') &&
       source.includes('## 语料层') &&
       storyLayer.length >= 600 &&
-      (storyLayer.match(/^### /gm) ?? []).length === 4 &&
+      (storyLayer.match(/^### /gm) ?? []).length === 5 &&
+      storyLayer.includes('### 写法指导') &&
       !source.includes('角色等级') &&
       !source.includes('解锁条件'),
-    `Xianzhou Luofu ${entry.标题} profile must keep expanded refined story and corpus layers.`,
+    `Xianzhou Luofu ${entry.标题} profile must keep expanded refined story and corpus layers with 写法指导 section.`,
   );
   assert(
     typeof entry.出身 === 'string' &&
@@ -286,6 +288,19 @@ for (const entry of xianzhouLuofuPreset.entries ?? []) {
       !source.includes('官方资料'),
     `Xianzhou Luofu ${entry.标题} profile must keep profiles-8 refined origin and appearance anchors.`,
   );
+}
+// IPC preset basic assertions
+{
+  assert(ipcPreset.id === 'zhiku_interastral_peace_corporation_character_rebuild', 'IPC preset id changed.');
+  assert(ipcPreset.updatedAt === '2026-06-18-ipc-character-profiles-1', 'IPC preset updatedAt changed.');
+  assert(ipcPreset.entries?.length === 3, `IPC preset must have 3 entries, got ${ipcPreset.entries?.length}.`);
+  const ipcNames = ipcPreset.entries.map(e => e.标题);
+  assert(ipcNames.includes('托帕'), 'IPC preset must include 托帕.');
+  assert(ipcNames.includes('砂金'), 'IPC preset must include 砂金.');
+  assert(ipcNames.includes('翡翠'), 'IPC preset must include 翡翠.');
+  const jade = ipcPreset.entries.find(e => e.标题 === '翡翠');
+  assert(jade?.资料类型 === '剧情门禁', '翡翠 must be 剧情门禁.');
+  assert(jade?.解锁状态 === '未解锁', '翡翠 must be 未解锁.');
 }
 assert(
   String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_jing_yuan_profile')?.出身 ?? '').includes('地衡司') &&

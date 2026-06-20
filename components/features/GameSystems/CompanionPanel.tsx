@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
 import { NPC_RELATION_LABELS, buildNpcMemoryLedgerView, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
+import type { 相册系统 } from '@/models/imageGeneration';
 import type { 智库系统 } from '@/models/zhiku';
 import { buildNpcRelationshipPlanning, type NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
+import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface CompanionPanelProps {
   npcRecords: NPC记录[];
   onNpcRecordsChange: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+  album?: 相册系统;
   turnCount: number;
   nsfwEnabled: boolean;
   maleNsfwArchiveEnabled?: boolean;
@@ -38,7 +41,7 @@ const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
 const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
 
-export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled, maleNsfwArchiveEnabled = false, zhikuSystem, devMode = false }: CompanionPanelProps) {
+export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnabled, maleNsfwArchiveEnabled = false, zhikuSystem, devMode = false }: CompanionPanelProps) {
   const [tab, setTab] = useState<NPC阶位>('companion');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const normalizedRecords = useMemo(() => {
@@ -131,6 +134,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled, ma
               <NpcListItem
                 key={npc.id}
                 npc={npc}
+                album={album}
                 selected={npc.id === selectedId}
                 onClick={() => {
                   setSelectedId(npc.id);
@@ -147,6 +151,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, nsfwEnabled, ma
         {selected ? (
           <NpcDetail
             npc={selected}
+            album={album}
             nsfwEnabled={nsfwEnabled}
             onPromote={() => promoteToCompanion(selected.id)}
             onDemote={() => demoteToExtra(selected.id)}
@@ -203,10 +208,12 @@ function TabButton({
 
 function NpcListItem({
   npc,
+  album,
   selected,
   onClick,
 }: {
   npc: NPC记录;
+  album?: 相册系统;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -226,7 +233,7 @@ function NpcListItem({
         clipPath: smallClip,
       }}
     >
-      <Avatar npc={npc} size={46} selected={selected} />
+      <Avatar npc={npc} album={album} size={46} selected={selected} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center justify-center gap-2 md:justify-start">
           <span
@@ -252,16 +259,18 @@ function NpcListItem({
 
 function Avatar({
   npc,
+  album,
   size,
   selected = false,
   slot = '档案',
 }: {
   npc: NPC记录;
+  album?: 相册系统;
   size: number;
   selected?: boolean;
   slot?: '档案' | '正文' | '手机';
 }) {
-  const src = 读取NPC头像(npc, slot);
+  const src = 解析相册资源引用(album, 读取NPC头像(npc, slot));
   const style: CSSProperties = {
     width: size,
     height: size,
@@ -321,6 +330,7 @@ function PresenceDot() {
 
 function NpcDetail({
   npc,
+  album,
   onPromote,
   onDemote,
   onToggleTraveling,
@@ -329,6 +339,7 @@ function NpcDetail({
   devMode,
 }: {
   npc: NPC记录;
+  album?: 相册系统;
   onPromote: () => void;
   onDemote: () => void;
   onToggleTraveling: () => void;
@@ -349,7 +360,7 @@ function NpcDetail({
       <section className="px-5 py-4" style={panelStyle}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
           <div className="relative shrink-0">
-            <Avatar npc={npc} size={88} selected />
+            <Avatar npc={npc} album={album} size={88} selected />
             {npc.同行 && (
               <div
                 className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 font-serif text-[11px] tracking-[0.18em]"
@@ -492,7 +503,7 @@ function NpcDetail({
             <DetailBlock title="装备面板">
               <Paragraph text={npc.装备摘要} placeholder="尚未记录其装备与随身物" italic />
             </DetailBlock>
-            <VisualArchivePanel npc={npc} />
+            <VisualArchivePanel npc={npc} album={album} />
           </section>
         </>
       )}
@@ -504,13 +515,13 @@ function NpcDetail({
   );
 }
 
-function VisualArchivePanel({ npc }: { npc: NPC记录 }) {
+function VisualArchivePanel({ npc, album }: { npc: NPC记录; album?: 相册系统 }) {
   return (
     <DetailBlock title="视觉档案预留">
       <div className="grid gap-3 sm:grid-cols-3">
-        <AvatarSlotCard npc={npc} slot="档案" label="档案头像" description="伙伴面板" />
-        <AvatarSlotCard npc={npc} slot="正文" label="正文头像" description="剧情气泡" />
-        <AvatarSlotCard npc={npc} slot="手机" label="小手机头像" description="短讯名片" />
+        <AvatarSlotCard npc={npc} album={album} slot="档案" label="档案头像" description="伙伴面板" />
+        <AvatarSlotCard npc={npc} album={album} slot="正文" label="正文头像" description="剧情气泡" />
+        <AvatarSlotCard npc={npc} album={album} slot="手机" label="小手机头像" description="短讯名片" />
       </div>
       <div className="mt-3 grid gap-2 lg:grid-cols-2">
         <InfoPill label="图像状态" value={npc.图像档案?.状态 ?? 'none'} />
@@ -526,16 +537,18 @@ function VisualArchivePanel({ npc }: { npc: NPC记录 }) {
 
 function AvatarSlotCard({
   npc,
+  album,
   slot,
   label,
   description,
 }: {
   npc: NPC记录;
+  album?: 相册系统;
   slot: '档案' | '正文' | '手机';
   label: string;
   description: string;
 }) {
-  const src = 读取NPC头像(npc, slot);
+  const src = 解析相册资源引用(album, 读取NPC头像(npc, slot));
   return (
     <div
       className="flex min-w-0 items-center gap-3 px-3 py-3"
@@ -547,7 +560,7 @@ function AvatarSlotCard({
         clipPath: smallClip,
       }}
     >
-      <Avatar npc={npc} size={42} slot={slot} selected={Boolean(src)} />
+      <Avatar npc={npc} album={album} size={42} slot={slot} selected={Boolean(src)} />
       <div className="min-w-0">
         <div className="truncate font-serif text-[12px] font-semibold tracking-[0.16em]" style={{ color: titleColor }}>
           {label}

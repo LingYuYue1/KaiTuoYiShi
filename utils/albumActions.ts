@@ -82,6 +82,19 @@ export function 读取相册条目地址(album: 相册系统, entryId: string): 
   return asset?.dataUrl || asset?.url || asset?.localRef || undefined;
 }
 
+export function 创建相册资源引用(assetId: string): string {
+  return assetId ? `asset:${assetId}` : '';
+}
+
+export function 解析相册资源引用(album: 相册系统 | undefined, value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('asset:')) return trimmed;
+  const assetId = trimmed.slice('asset:'.length);
+  const asset = album?.assets.find((item) => item.id === assetId);
+  return asset?.dataUrl || asset?.url || asset?.localRef || undefined;
+}
+
 export function 挂载NPC头像图片(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位; src: string; source?: '手动' | '原著' | '文生图' | '占位' }): NPC记录[] {
   return npcs.map((npc) => {
     if (npc.id !== params.npcId) return npc;

@@ -11,6 +11,7 @@ import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { NEWS_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';
 import { NEWS_COT_PROMPT } from '@/prompts/cot/newsCot';
+import { stringifyPromptPayload } from '@/utils/promptPayloadSanitizer';
 
 export interface NewsModelRequest {
   config: API配置项 | 新闻API覆盖;
@@ -130,37 +131,54 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
       : '（无额外窗口上下文，仅使用本回合正文）',
     '',
     '## 旅人',
-    JSON.stringify(request.traveler, null, 2),
+    stringifyPromptPayload(request.traveler),
     '',
     '## 世界状态',
-    JSON.stringify(
+    stringifyPromptPayload(
       {
         当前日期: request.world.当前日期,
         当前时间: request.world.当前时间,
         当前地点: request.world.当前地点,
         当前时段: request.world.当前时段?.名称 ?? '',
+        开局档案: formatNewsOpeningArchive(request.world.开局档案),
         全局事件: request.world.全局事件,
         活跃人物: request.world.活跃人物?.map((n) => n.姓名 ?? ''),
         氛围变化: request.world.氛围变化,
       },
-      null,
-      2,
     ),
     '',
     '## 现有新闻',
-    JSON.stringify(currentNews, null, 2),
+    stringifyPromptPayload(currentNews),
     '',
     '## 相关 NPC 公开摘要',
-    JSON.stringify(buildPublicNpcBriefs(request.npcRecords ?? []), null, 2),
+    stringifyPromptPayload(buildPublicNpcBriefs(request.npcRecords ?? [])),
     '',
     '## 剧情节点',
-    JSON.stringify(request.plotNodes ?? [], null, 2),
+    stringifyPromptPayload(request.plotNodes ?? []),
     '',
     '## 剧情编织联动摘要',
     buildStoryWeavingNewsBrief(request.storyWeaving) || '（无可供新闻读取的剧情编织摘要）',
     '',
     `请根据上面内容输出本回合星际和平公司周报的结构化 JSON。优先少而精，最多新增 ${normalizeMaxNewEntries(request.maxNewEntriesPerTurn)} 条。若有既有新闻需要进入新一期，必须更新它的回合和正文进展，不要只复述上一期内容。`,
   ].join('\n');
+}
+
+function formatNewsOpeningArchive(archive: 世界状态['开局档案']): string {
+  if (!archive) return '无结构化开局档案';
+  const summary = archive.整理档案;
+  return [
+    `来源：${archive.来源}`,
+    `地区：${archive.地区名称}`,
+    `章节锚点：${archive.章节锚点名称}`,
+    `主线启用：${archive.主线启用 === false ? '否' : '是'}`,
+    archive.章节参考说明 ? `章节参考：${archive.章节参考说明}` : '',
+    archive.玩家介入原文 ? `玩家介入：${archive.玩家介入原文}` : '',
+    summary?.初始地点参考 ? `初始地点：${summary.初始地点参考}` : '',
+    summary?.自定义起始地点 ? `自定义起始地点：${summary.自定义起始地点}` : '',
+    summary?.当前目标 ? `当前目标：${summary.当前目标}` : '',
+    summary?.已认识角色?.length ? `已认识角色：${summary.已认识角色.join('、')}` : '',
+    summary?.初始关系?.length ? `初始关系：${summary.初始关系.join('；')}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 function buildPublicNpcBriefs(npcs: NPC记录[]): Array<{

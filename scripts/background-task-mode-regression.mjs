@@ -26,7 +26,8 @@ assert(gameSettings.includes('稳序') && gameSettings.includes('并行'), 'back
 assert(gameSettings.includes('主剧情前的忆庭召回与智库召回始终会先完成'), 'UI must explain pre-main recalls still finish before main story.');
 
 assert(gameState.includes('backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode'), 'old local settings must normalize missing backgroundTaskMode.');
-assert(saveLoad.includes('backgroundTaskMode: save.gameSettings.backgroundTaskMode ?? defaults.backgroundTaskMode'), 'loaded saves must normalize missing backgroundTaskMode.');
+assert(saveLoad.includes('backgroundTaskMode: localSettings.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode'), 'loaded saves must preserve local backgroundTaskMode preference.');
+assert(saveLoad.includes('state.setGameSettings(preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings))'), 'save load must apply local-preference preservation when importing save settings.');
 
 const recallStart = sendWorkflow.indexOf('const [yitingPreview, zhikuPreview] = await Promise.all([');
 assert(recallStart >= 0, 'pre-main yiting/zhiku recall must remain parallel with Promise.all.');

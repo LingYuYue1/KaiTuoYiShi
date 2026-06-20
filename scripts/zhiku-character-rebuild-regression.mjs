@@ -33,6 +33,7 @@ const geniusSocietyPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/gen
 const intelligentsiaGuildPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/intelligentsia-guild-character-rebuild.json', 'utf8'));
 const belobogPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/belobog-character-rebuild.json', 'utf8'));
 const xianzhouLuofuPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/xianzhou-luofu-character-rebuild.json', 'utf8'));
+const ipcPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/interastral-peace-corporation-character-rebuild.json', 'utf8'));
 const REBUILD_PREFIX = 'zhiku_character_rebuild_';
 const nativePenaconyOrganizations = new Set(['家族', '猎犬家系', '白日梦酒店', '橡木家系', '鸢尾花家系', '苜蓿草家系', '隐夜鸫家系']);
 const nativeAmphoreusOrganizations = new Set(['黄金裔', 'Chrysos Heirs', '奥赫玛']);
@@ -1308,7 +1309,7 @@ function assertBelobogProfileSet() {
 function assertXianzhouLuofuProfileSet() {
   assert(xianzhouLuofuPreset.id === 'zhiku_xianzhou_luofu_character_rebuild', 'Xianzhou Luofu character preset id changed.');
   assert(xianzhouLuofuPreset.title === '人物重建·罗浮仙舟角色档案', 'Xianzhou Luofu character preset title changed.');
-  assert(xianzhouLuofuPreset.updatedAt === '2026-06-11-xianzhou-luofu-character-profiles-8', 'Xianzhou Luofu character preset updatedAt changed.');
+  assert(xianzhouLuofuPreset.updatedAt === '2026-06-18-xianzhou-luofu-story-layer-full-rewrite', 'Xianzhou Luofu character preset updatedAt changed.');
 
   const profiles = new Map((xianzhouLuofuPreset.entries ?? []).map((entry) => [entry.id, entry]));
   const expected = [
@@ -1393,6 +1394,7 @@ function assertXianzhouLuofuProfileSet() {
     );
     const source = String(entry.原文 ?? '');
     const storyLayer = source.match(/## 角色故事层\n\n([\s\S]*?)(?=\n\n## 语料层)/)?.[1] ?? '';
+    const storySectionsInLayer = (storyLayer.match(/^### /gm) ?? []).length;
     assert(
       source.includes('## 角色详情') &&
         source.includes('## 角色故事层') &&
@@ -1400,10 +1402,11 @@ function assertXianzhouLuofuProfileSet() {
         source.includes('## 可写表现') &&
         source.includes('## 写法收束') &&
         storyLayer.length >= 600 &&
-        (storyLayer.match(/^### /gm) ?? []).length === 4 &&
+        storySectionsInLayer === 5 &&
+        storyLayer.includes('### 写法指导') &&
         !source.includes('角色等级') &&
         !source.includes('解锁条件'),
-      `Xianzhou Luofu ${entry.标题} profile must keep expanded refined story/corpus layers without unlock-condition wording.`,
+      `Xianzhou Luofu ${entry.标题} profile must keep expanded refined story/corpus layers with 写法指导 section, without unlock-condition wording.`,
     );
   }
   const bailu = profiles.get('zhiku_character_rebuild_bailu_profile');
@@ -1503,11 +1506,116 @@ function assertXianzhouLuofuProfileSet() {
       `Xianzhou Luofu ${entry?.标题 ?? id} must keep profiles-8 full-profile skeleton and refined anchors.`,
     );
   }
+
+  // 语料层断言：罗浮全员必须有完整语料层
+  for (const [id] of expected) {
+    const entry = profiles.get(id);
+    const source = String(entry?.原文 ?? '');
+    assert(
+      source.includes('## 语料层') &&
+        source.includes('语料只作口吻参考') &&
+        source.includes('### 初次见面') &&
+        source.includes('### 日常场景参考') &&
+        !source.includes('### 口吻锚点'),
+      `Xianzhou Luofu ${entry?.标题 ?? id} must have refined corpus layer with official voice lines and daily scene references, not legacy abstract description.`,
+    );
+  }
+
   const serialized = JSON.stringify(xianzhouLuofuPreset);
   assert(serialized.includes('灵砂') && serialized.includes('丹鼎司丹士长') && serialized.includes('灵砂浮元'), 'Xianzhou Luofu preset must include Lingsha as a Luofu Alchemy Commission profile.');
-  for (const excluded of ['云璃', '飞霄', '椒丘', '貊泽', '怀炎', '朱明仙舟', '曜青仙舟']) {
-    assert(!serialized.includes(excluded), `Xianzhou Luofu preset must not include other-ship character or faction: ${excluded}`);
+  // 排除断言只检查角色条目标题和关联角色ID，不检查语料中提及的其他仙舟角色名
+  for (const excluded of ['云璃', '飞霄', '椒丘', '貊泽', '怀炎']) {
+    const hasExcludedEntry = (xianzhouLuofuPreset.entries ?? []).some(
+      (entry) => entry.标题 === excluded || entry.关联角色ID === excluded,
+    );
+    assert(!hasExcludedEntry, `Xianzhou Luofu preset must not include other-ship character as entry: ${excluded}`);
   }
+  for (const excluded of ['朱明仙舟', '曜青仙舟']) {
+    const hasExcludedEntry = (xianzhouLuofuPreset.entries ?? []).some(
+      (entry) => entry.标题 === excluded || entry.关联角色ID === excluded,
+    );
+    assert(!hasExcludedEntry, `Xianzhou Luofu preset must not include other-ship faction as entry: ${excluded}`);
+  }
+}
+
+function assertIpcProfileSet() {
+  assert(ipcPreset.id === 'zhiku_interastral_peace_corporation_character_rebuild', 'IPC preset id changed.');
+  assert(ipcPreset.title === '人物重建·星际和平公司角色档案', 'IPC preset title changed.');
+  assert(ipcPreset.updatedAt === '2026-06-18-ipc-character-profiles-1', 'IPC preset updatedAt changed.');
+
+  const profiles = new Map((ipcPreset.entries ?? []).map((entry) => [entry.id, entry]));
+  const expected = [
+    ['zhiku_character_rebuild_topaz_profile', ['托帕', 'Topaz', '债务收割人', '账账搭档']],
+    ['zhiku_character_rebuild_aventurine_profile', ['砂金', 'Aventurine', '石心十人砂金', '卡卡瓦卡']],
+    ['zhiku_character_rebuild_jade_profile', ['翡翠', 'Jade', '石心十人翡翠', '公司收藏家']],
+  ];
+  assert(profiles.size === expected.length, `IPC preset must have ${expected.length} entries, got ${profiles.size}`);
+
+  for (const [id, triggers] of expected) {
+    const entry = profiles.get(id);
+    assert(entry, `IPC profile ${id} must exist.`);
+    assert(entry.分类 === 'character', `IPC ${entry.标题} must be character type.`);
+    assert(entry.关键词?.includes('资料大区:星际和平公司'), `IPC ${entry.标题} must have 资料大区:星际和平公司.`);
+    assert(entry.关键词?.includes('节点:单角色档案'), `IPC ${entry.标题} must have 节点:单角色档案.`);
+    // Verify core trigger keywords exist (not using assertCoreTriggers since IPC entries don't have 核心触发词 in 原文)
+    for (const trigger of triggers) {
+      const hasKeyword = entry.关键词?.some(k => k.includes(trigger)) || String(entry.原文 ?? '').includes(trigger);
+      assert(hasKeyword, `IPC ${entry.标题} must have trigger keyword or text for '${trigger}'.`);
+    }
+    assertNoBareKeywords(entry, ['星际和平公司', '公司', '战略投资部', '石心十人', '存护', '债务', '催收', '赌局'], `IPC ${entry.标题}`);
+  }
+
+  // Per-entry structural checks
+  for (const entry of ipcPreset.entries ?? []) {
+    const source = String(entry.原文 ?? '');
+    const storyLayer = source.match(/## 角色故事层\n\n([\s\S]*?)(?=\n\n## 表现锚点层)/)?.[1] ?? '';
+
+    assert(source.includes('## 常驻事实层'), `IPC ${entry.标题} must have 常驻事实层.`);
+    assert(source.includes('## 人物底色'), `IPC ${entry.标题} must have 人物底色.`);
+    assert(source.includes('## 角色故事层'), `IPC ${entry.标题} must have 角色故事层.`);
+    assert(source.includes('## 表现锚点层'), `IPC ${entry.标题} must have 表现锚点层.`);
+    assert(source.includes('## 语料层'), `IPC ${entry.标题} must have 语料层.`);
+    assert(source.includes('## 能力与职责模块'), `IPC ${entry.标题} must have 能力与职责模块.`);
+    assert(source.includes('## 历史故事与阶段边界层'), `IPC ${entry.标题} must have 历史故事与阶段边界层.`);
+    assert(storyLayer.length >= 600, `IPC ${entry.标题} story layer must be >= 600 chars, got ${storyLayer.length}.`);
+    assert((storyLayer.match(/^### /gm) ?? []).length === 5, `IPC ${entry.标题} story layer must have 5 ### sections (4 stories + 写法指导).`);
+    assert(storyLayer.includes('### 写法指导'), `IPC ${entry.标题} story layer must have ### 写法指导.`);
+    assert(!source.includes('角色等级'), `IPC ${entry.标题} must not have 角色等级.`);
+    assert(!source.includes('解锁条件'), `IPC ${entry.标题} must not have 解锁条件.`);
+    assert(typeof entry.出身 === 'string' && entry.出身.length >= 20, `IPC ${entry.标题} must have 出身 >= 20 chars.`);
+    assert(typeof entry.外貌锚点 === 'string' && entry.外貌锚点.length >= 60, `IPC ${entry.标题} must have 外貌锚点 >= 60 chars.`);
+    for (const field of ['外貌锚点', '性格锚点', '说话方式', '行为习惯', '关系边界', '禁止误写']) {
+      assert(typeof entry[field] === 'string' && entry[field].length >= 20, `IPC ${entry.标题} must have ${field} >= 20 chars.`);
+    }
+  }
+
+  // 托帕 specific: has corpus
+  const topaz = profiles.get('zhiku_character_rebuild_topaz_profile');
+  assert(topaz?.资料类型 === '单角色档案', '托帕 must be 单角色档案.');
+  assert(topaz?.关键词?.includes('语料只作参考'), '托帕 must have 语料只作参考.');
+  assert(topaz?.关键词?.includes('禁止照抄语料'), '托帕 must have 禁止照抄语料.');
+  assert(String(topaz?.原文 ?? '').includes('语料只作口吻参考'), '托帕 原文 must have 语料只作口吻参考.');
+
+  // 砂金 specific: has corpus
+  const aventurine = profiles.get('zhiku_character_rebuild_aventurine_profile');
+  assert(aventurine?.资料类型 === '单角色档案', '砂金 must be 单角色档案.');
+  assert(aventurine?.关键词?.includes('语料只作参考'), '砂金 must have 语料只作参考.');
+  assert(aventurine?.关键词?.includes('禁止照抄语料'), '砂金 must have 禁止照抄语料.');
+  assert(String(aventurine?.原文 ?? '').includes('语料只作口吻参考'), '砂金 原文 must have 语料只作口吻参考.');
+
+  // 翡翠 specific: locked, 剧情门禁, no corpus
+  const jade = profiles.get('zhiku_character_rebuild_jade_profile');
+  assert(jade?.资料类型 === '剧情门禁', '翡翠 must be 剧情门禁.');
+  assert(jade?.解锁状态 === '未解锁', '翡翠 must be 未解锁.');
+  assert(jade?.解锁条件, '翡翠 must have 解锁条件.');
+  assert(jade?.关键词?.includes('暂无语料'), '翡翠 must have 暂无语料.');
+  assert(jade?.关键词?.includes('翡翠暂不提供语料'), '翡翠 must have 翡翠暂不提供语料.');
+  assert(!jade?.关键词?.includes('语料只作参考'), '翡翠 must NOT have 语料只作参考.');
+
+  // Registration integration
+  assert(preset.includes('interastral-peace-corporation-character-rebuild.json'), 'zhikuPreset.ts must reference IPC preset file.');
+  assert(preset.includes('zhiku_interastral_peace_corporation_character_rebuild'), 'zhikuPreset.ts must have IPC preset id.');
+  assert(preset.includes('2026-06-18-ipc-character-profiles-1'), 'zhikuPreset.ts must have IPC preset updatedAt.');
 }
 
 const removedCharacterPresetPaths = [
@@ -1551,7 +1659,7 @@ assert(
       preset.includes('2026-06-10-genius-society-character-profiles-8') &&
       preset.includes('2026-06-10-intelligentsia-guild-character-profiles-3') &&
       preset.includes('2026-06-10-belobog-character-profiles-15') &&
-      preset.includes('2026-06-11-xianzhou-luofu-character-profiles-8') &&
+      preset.includes('2026-06-18-xianzhou-luofu-story-layer-full-rewrite') &&
     preset.includes('2026-06-09-stellaron-hunters-character-profiles-11') &&
     preset.includes('2026-06-08-herta-station-character-profiles-12') &&
     preset.includes('updatedAt') &&
@@ -1571,6 +1679,7 @@ assertGeniusSocietyProfileSet();
 assertIntelligentsiaGuildProfileSet();
 assertBelobogProfileSet();
 assertXianzhouLuofuProfileSet();
+assertIpcProfileSet();
 assert(
   panel.includes('groupOrder?: number') &&
     panel.includes('order?: number') &&

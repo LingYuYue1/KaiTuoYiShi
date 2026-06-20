@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
+import type { 相册系统 } from '@/models/imageGeneration';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS } from '@/models/path';
+import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface LeftPanelProps {
   traveler: 角色数据结构;
@@ -9,6 +11,7 @@ interface LeftPanelProps {
   onOpenProfile?: () => void;
   onOpenPhone?: () => void;
   phoneUnread?: number;
+  album?: 相册系统;
   currentStoryChapter?: string;
   recallSummary?: string;
   recallFullContent?: string;
@@ -20,6 +23,7 @@ export function LeftPanel({
   onOpenProfile,
   onOpenPhone,
   phoneUnread = 0,
+  album,
   currentStoryChapter,
   recallSummary = '',
   recallFullContent = '',
@@ -35,7 +39,7 @@ export function LeftPanel({
         pathStageDef?.name,
       ].filter(Boolean).join(' · ')
     : '尚未踏上';
-  const avatarUrl = traveler.头像?.trim() || traveler.图像档案?.头像?.trim();
+  const avatarUrl = 解析相册资源引用(album, traveler.头像?.trim() || traveler.图像档案?.头像?.trim());
 
   if (!desktop) return null;
 
