@@ -54,4 +54,14 @@ assert(!saveLoadSource.includes('delete clean.preTurnSnapshot'), '本地存档�
 assert(saveLoadSource.includes('state.setTurnCount(save.turnCount ?? (safeChatHistory.length + 1))') || saveLoadSource.includes('state.setTurnCount(save.turnCount ?? (save.chatHistory.length + 1))'), '读档必须优先恢复真实 turnCount。');
 assert(dbSource.includes('turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1)'), '存档摘要必须优先显示真实 turnCount。');
 
+// ── 主剧情生成失败后重 roll 不多回退一回合 ──
+// user 消息必须携带 preTurnSnapshot，这样生成失败时重 roll 能只砍孤立 user
+assert(source.includes('preTurnSnapshot,\n    });') || source.includes('preTurnSnapshot,'), 'sendWorkflow 创建 user 消息时必须携带 preTurnSnapshot，确保生成失败时重 roll 能找到快照。');
+// assistant 成功后必须清掉 user 上的 snapshot，避免存档膨胀
+assert(source.includes('assistant 消息已携带 preTurnSnapshot，清掉 user 消息上的'), 'assistant 成功后必须清掉 user 消息上的 preTurnSnapshot，避免存档膨胀。');
+// handleReroll 必须检测末尾孤立 user 的情况
+assert(useGameSource.includes('最后一条是 user 且没有对应的 assistant'), 'handleReroll 必须检测末尾孤立 user（主剧情生成失败）的情况。');
+assert(useGameSource.includes('已回滚到本回合发送前'), '孤立 user 重 roll 提示必须是"本回合"，不能误写"上一回合"。');
+assert(useGameSource.includes('rerollContextRef.current = null;'), '生成失败的重 roll 不需要 rerollContext（没有上一版回复可比对）。');
+
 console.log('reroll regression ok');

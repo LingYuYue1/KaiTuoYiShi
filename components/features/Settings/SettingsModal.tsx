@@ -4,19 +4,12 @@ import { ApiSettingsTab } from './ApiSettings';
 import { ThemeSettingsTab } from './ThemeSettings';
 import { GameSettingsTab } from './GameSettings';
 import { VisualSettingsTab } from './VisualSettingsTab';
-import { MemorySystemSettingsTab } from './MemorySystemSettings';
-import { YitingSettingsTab } from './YitingSettingsTab';
-import { NewsSystemSettingsTab } from './NewsSystemSettingsTab';
-import { PhoneSystemSettingsTab } from './PhoneSystemSettingsTab';
-import { ZhikuSettingsTab } from './ZhikuSettingsTab';
-import { StoryWeavingSettingsTab } from './StoryWeavingSettingsTab';
 import { NsfwSettingsTab } from './NsfwSettingsTab';
 import { PromptModulesTab } from './PromptModulesTab';
 import { ExtraFeaturesSettingsTab } from './ExtraFeaturesSettingsTab';
 import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
-import { VariableUpdateTab } from './VariableUpdateSettings';
 import { ContextViewerTab } from './ContextViewer';
 import type { API设置, 游戏设置 } from '@/models/settings';
 import type { 主题预设 } from '@/models/settings';
@@ -63,20 +56,13 @@ interface SettingsModalProps {
   initialTab?: Tab;
 }
 
-type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'memory' | 'yiting' | 'news' | 'phone' | 'zhiku' | 'storyWeaving' | 'context' | 'nsfw' | 'prompts' | 'extra' | 'variables' | 'varUpdate' | 'theme' | 'storage';
+type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'extra' | 'theme' | 'storage';
 
 const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'visual', label: '视觉设置', icon: '◇', subtitle: '正文显示与字号' },
   { key: 'game', label: '游戏设定', icon: '❖', subtitle: '叙述风格与人格' },
-  { key: 'api', label: 'API 接口', icon: '✦', subtitle: 'AI 模型与密钥' },
+  { key: 'api', label: 'API 接口', icon: '✦', subtitle: 'AI 模型、密钥与子功能接口' },
   { key: 'apiErrors', label: '错误报告', icon: '!', subtitle: 'API 失败原因记录' },
-  { key: 'varUpdate', label: '变量更新', icon: '◉', subtitle: '变量模型 API 与开关' },
-  { key: 'yiting', label: '忆庭', icon: '◌', subtitle: '回忆档案与召回 API' },
-  { key: 'memory', label: '记忆系统', icon: '◐', subtitle: '压缩阈值、API 与提示词' },
-  { key: 'news', label: '星际周报', icon: '☉', subtitle: '新闻演进与独立 API' },
-  { key: 'phone', label: '手机系统', icon: '▣', subtitle: '通讯终端与主动来信 API' },
-  { key: 'zhiku', label: '智库', icon: '◈', subtitle: '原著资料与独立 API' },
-  { key: 'storyWeaving', label: '剧情编织', icon: '❖', subtitle: 'TXT 导入与分解 API' },
   { key: 'context', label: '上下文', icon: '▤', subtitle: '主剧情 Token 计数' },
   { key: 'nsfw', label: 'NSFW', icon: '◇', subtitle: '成人内容与私密档案' },
   { key: 'variables', label: '变量管理', icon: '◈', subtitle: '存档数据查看与调试' },
@@ -143,54 +129,6 @@ export function SettingsModal({
         );
       case 'visual':
         return <VisualSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
-      case 'memory':
-        return (
-          <MemorySystemSettingsTab
-            settings={gameSettings}
-            onChange={persistGameSettingsChange}
-            apiSettings={apiSettings}
-          />
-        );
-      case 'yiting':
-        return (
-          <YitingSettingsTab
-            settings={gameSettings}
-            onChange={persistGameSettingsChange}
-            apiSettings={apiSettings}
-          />
-        );
-      case 'news':
-        return (
-          <NewsSystemSettingsTab
-            settings={gameSettings}
-            onChange={persistGameSettingsChange}
-            apiSettings={apiSettings}
-          />
-        );
-      case 'phone':
-        return (
-          <PhoneSystemSettingsTab
-            settings={gameSettings}
-            onChange={persistGameSettingsChange}
-            apiSettings={apiSettings}
-          />
-        );
-      case 'zhiku':
-        return (
-          <ZhikuSettingsTab
-            settings={gameSettings}
-            onChange={persistGameSettingsChange}
-            apiSettings={apiSettings}
-          />
-        );
-      case 'storyWeaving':
-        return (
-          <StoryWeavingSettingsTab
-            settings={gameSettings}
-            onChange={persistGameSettingsChange}
-            apiSettings={apiSettings}
-          />
-        );
       case 'context':
         void contextRefreshKey;
         return (
@@ -221,14 +159,6 @@ export function SettingsModal({
             setters={variableSetters}
           />
         );
-      case 'varUpdate':
-        return (
-          <VariableUpdateTab
-            gameSettings={gameSettings}
-            onGameSettingsChange={persistGameSettingsChange}
-            apiSettings={apiSettings}
-          />
-        );
       case 'theme':
         return <ThemeSettingsTab current={currentTheme} onChange={onThemeChange} />;
       case 'storage':
@@ -246,34 +176,24 @@ export function SettingsModal({
       }}
     >
       <div
-        className="flex h-[100dvh] w-full max-w-none animate-slide-up flex-col overflow-hidden md:h-[90vh] md:max-w-7xl md:flex-row"
+        className="kaituo-modal-shell kaituo-settings-shell flex h-[100dvh] w-full max-w-none animate-slide-up flex-col overflow-hidden md:h-[90vh] md:max-w-7xl md:flex-row"
         style={{
-          background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98))',
-          boxShadow:
-            'inset 0 0 0 1px rgba(var(--tj-border), 0.86), 0 24px 64px rgba(var(--tj-shadow), 0.16)',
-          clipPath:
-            'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
+          clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
         }}
       >
         {/* ── Left sidebar ── */}
         <aside
-          className="flex max-h-[42dvh] w-full flex-shrink-0 flex-col md:max-h-none md:w-[260px]"
-          style={{
-            borderRight: '1px solid rgba(var(--tj-border), 0.76)' ,
-            borderBottom: '1px solid rgba(var(--tj-border), 0.76)' ,
-            background: 'rgba(var(--tj-surface-strong), 0.72)' ,
-          }}
+          className="kaituo-settings-sidebar flex max-h-[42dvh] w-full flex-shrink-0 flex-col md:max-h-none md:w-[260px]"
         >
           {/* Sidebar header */}
           <div
-            className="flex items-center justify-between gap-3 px-4 py-3 md:block md:px-5 md:py-5"
-            style={{ borderBottom: '1px solid rgba(var(--tj-border), 0.72)' }}
+            className="kaituo-settings-sidebar-header flex items-center justify-between gap-3 px-4 py-3 md:block md:px-5 md:py-5"
           >
             <div>
               <div
                 className="font-serif text-lg font-bold tracking-[0.28em] md:text-xl md:tracking-[0.35em]"
                 style={{
-                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
+                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-tech-cyan)) 44%, rgb(var(--tj-accent-primary)) 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
@@ -303,22 +223,22 @@ export function SettingsModal({
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
-                  className="group flex w-[148px] flex-shrink-0 items-center gap-2 px-3 py-2 text-left transition-all md:w-full md:gap-3 md:px-5 md:py-3"
+                  className={`kaituo-settings-nav-item group flex w-[148px] flex-shrink-0 items-center gap-2 px-3 py-2 text-left transition-all md:w-full md:gap-3 md:px-5 md:py-3 ${active ? 'active' : ''}`}
                   style={{
                     background: active
-                      ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.14) 0%, rgba(var(--tj-accent-primary), 0.02) 75%, transparent)'
+                      ? 'linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.10), rgba(var(--tj-accent-primary), 0.03) 68%, transparent)'
                       : 'transparent',
                     borderLeft: active
-                      ? '2px solid rgba(var(--tj-accent-primary), 0.95)'
+                      ? '2px solid rgba(var(--tj-tech-cyan), 0.95)'
                       : '2px solid transparent',
-                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)' : 'none',
+                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)' : 'none',
                     clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
                   }}
                 >
                   <span
                     className="text-base transition-all md:text-lg"
                     style={{
-                      color: active ? 'rgba(var(--tj-accent-primary), 1)' : 'rgba(var(--tj-accent-primary), 0.5)',
+                      color: active ? 'rgba(var(--tj-tech-cyan), 1)' : 'rgba(var(--tj-tech-cyan), 0.5)',
                       textShadow: 'none',
                     }}
                   >
@@ -328,7 +248,7 @@ export function SettingsModal({
                     <div
                       className="truncate font-serif text-xs tracking-[0.18em] transition-colors md:text-sm md:tracking-[0.25em]"
                       style={{
-                        color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(220, 200, 160, 0.85)',
+                        color: active ? 'rgb(var(--tj-tech-cyan))' : 'rgba(220, 230, 240, 0.85)',
                       }}
                     >
                       {t.label}
@@ -336,7 +256,7 @@ export function SettingsModal({
                     <div
                       className="mt-0.5 truncate text-[10px] tracking-wider transition-colors md:text-xs"
                       style={{
-                        color: active ? 'rgba(var(--tj-text-secondary), 0.85)' : 'rgba(var(--tj-text-secondary), 0.6)',
+                        color: active ? 'rgba(var(--tj-ui-body), 0.82)' : 'rgba(var(--tj-text-secondary), 0.6)',
                       }}
                     >
                       {t.subtitle}
@@ -351,11 +271,11 @@ export function SettingsModal({
           <div
             className="hidden px-5 py-3 text-xs font-serif tracking-[0.25em] md:block"
             style={{
-              borderTop: '1px solid rgba(var(--tj-border), 0.72)',
+              borderTop: '1px solid rgba(var(--tj-border), 0.10)',
               color: 'rgba(var(--tj-text-secondary), 0.55)',
             }}
           >
-            <span style={{ color: 'rgba(var(--tj-accent-primary), 0.4)' }}>✦</span>
+            <span style={{ color: 'rgba(var(--tj-tech-cyan), 0.5)' }}>✦</span>
             <span className="ml-2">开拓轶事 · v0.8.1</span>
           </div>
         </aside>
@@ -364,18 +284,17 @@ export function SettingsModal({
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Right header */}
           <header
-            className="hidden items-center justify-between px-6 py-4 md:flex"
-            style={{ borderBottom: '1px solid rgba(var(--tj-border), 0.74)' }}
+            className="kaituo-settings-content-header hidden items-center justify-between px-6 py-4 md:flex"
           >
             <div className="min-w-0">
               <div className="flex items-baseline gap-3">
-                <span className="text-base" style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>
+                <span className="text-base" style={{ color: 'rgba(var(--tj-tech-cyan), 0.88)' }}>
                   {activeMeta.icon}
                 </span>
                 <h2
                   className="font-serif text-lg font-bold tracking-[0.3em]"
                   style={{
-                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 45%, rgb(var(--tj-accent-secondary)) 100%)',
+                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-tech-cyan)) 46%, rgb(var(--tj-accent-primary)) 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
@@ -397,7 +316,9 @@ export function SettingsModal({
           </header>
 
           {/* Right body */}
-          <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 md:px-6 md:py-5">{renderTab()}</div>
+          <div className="kaituo-settings-content-body min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 md:px-6 md:py-5">
+            <div className="kaituo-settings-pane">{renderTab()}</div>
+          </div>
         </section>
       </div>
     </div>

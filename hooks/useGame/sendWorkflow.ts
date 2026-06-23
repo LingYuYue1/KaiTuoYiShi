@@ -1706,8 +1706,11 @@ export async function executeSendWorkflow(
 
     // 1. Add user message。同时把过往 assistant 上的 snapshot 全部清掉，只保留即将生成的最新一条，
     //    避免存档无限膨胀（snapshot 只服务"最近一次 reroll"，老的没用）。
+    //    同时把 preTurnSnapshot 也挂到 user 消息上，这样主剧情生成失败（没有 assistant 消息）时，
+    //    重roll 仍能找到快照回滚，不会误回退到上一回合。
     const userMsg = 创建聊天消息('user', userInput, {
       gameTime: `${state.turnCount}`,
+      preTurnSnapshot,
     });
     const purgedHistory = state.chatHistory.map((m) =>
       m.role === 'assistant' && m.preTurnSnapshot
@@ -2327,6 +2330,11 @@ export async function executeSendWorkflow(
       },
     });
     let finalHistory = [...updatedHistory, aiMsg];
+    // assistant 消息已携带 preTurnSnapshot，清掉 user 消息上的，避免存档膨胀
+    const userMsgIdx = finalHistory.findIndex((m) => m.id === userMsg.id);
+    if (userMsgIdx >= 0 && finalHistory[userMsgIdx].preTurnSnapshot) {
+      finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } : m);
+    }
     state.setChatHistory(finalHistory);
     state.setTurnCount((prev) => prev + 1);
     state.setStreamingMessage('');

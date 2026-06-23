@@ -236,18 +236,24 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
       </div>
 
       {message && <div className="text-xs" style={{ color: message.includes('失败') ? 'rgba(220,120,120,0.9)' : 'rgba(160,200,160,0.85)' }}>{message}</div>}
-      <button
-        onClick={handleSave}
-        className="w-full px-4 py-3 font-serif text-sm font-bold tracking-[0.3em]"
-        style={{
-          color: savedFlash ? 'rgba(var(--tj-bg-primary), 0.95)' : 'rgba(var(--tj-accent-primary), 0.95)',
-          background: savedFlash ? 'linear-gradient(90deg, #9ad8a0, rgb(var(--tj-accent-primary)))' : 'rgba(var(--tj-accent-primary), 0.06)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
-          clipPath: cardClip,
-        }}
-      >
-        {savedFlash ? '已保存' : '保存剧情编织设置'}
-      </button>
+      <div className="flex flex-col items-stretch gap-2 pt-1">
+        <button
+          onClick={handleSave}
+          className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
+          style={{
+            background: savedFlash
+              ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
+              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+            color: 'rgb(var(--tj-on-accent))',
+            boxShadow: savedFlash
+              ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
+              : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
+            clipPath: cardClip,
+          }}
+        >
+          {savedFlash ? '✓ 已 保 存' : '◆ 保 存 配 置'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -265,27 +271,41 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ToggleRow({ label, desc, checked, onChange }: { label: string; desc: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3" style={{ background: 'rgba(var(--tj-accent-primary), 0.04)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)', clipPath: cardClip }}>
-      <div>
-        <div className="font-serif text-sm tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>{label}</div>
-        <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(190, 178, 148, 0.72)' }}>{desc}</div>
+    <div
+      className="flex items-center justify-between px-3 py-2"
+      style={{
+        background: 'rgba(var(--tj-bg-secondary), 0.45)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+      }}
+    >
+      <div className="min-w-0 mr-3">
+        <div className="font-serif font-bold text-sm tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+          {label}
+        </div>
+        <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
+          {desc}
+        </div>
       </div>
       <button
         onClick={() => onChange(!checked)}
-        className="relative h-7 w-14 shrink-0 transition-all"
+        className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
-          borderRadius: 999,
-          background: checked ? 'rgba(var(--tj-accent-primary), 0.28)' : 'rgba(120, 110, 95, 0.22)',
-          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-text-secondary), 0.28)'}`,
+          background: checked
+            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            : 'rgba(var(--tj-bg-secondary), 0.68)',
+          boxShadow: checked
+            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
         }}
       >
-        <span
-          className="absolute top-1 h-5 w-5 transition-all"
+        <div
+          className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
-            left: checked ? 'calc(100% - 24px)' : '4px',
-            borderRadius: 999,
-            background: checked ? 'rgb(var(--tj-accent-primary))' : 'rgba(180, 170, 145, 0.8)',
-            boxShadow: checked ? '0 0 12px rgba(var(--tj-accent-primary), 0.45)' : 'none',
+            left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
+            clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}
         />
       </button>

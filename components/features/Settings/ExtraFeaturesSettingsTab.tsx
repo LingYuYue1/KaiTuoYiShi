@@ -85,8 +85,8 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
         className="w-full py-3 font-serif text-sm font-bold tracking-[0.28em] transition-all hover:opacity-95"
         style={{
           color: 'rgb(var(--tj-on-accent))',
-          background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(212, 177, 90, 0.94))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.52), 0 0 18px rgba(var(--tj-accent-primary),0.16)',
+          background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.72), 0 0 18px rgba(var(--tj-tech-cyan),0.14)',
           clipPath: smallClip,
         }}
       >
@@ -130,8 +130,8 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
-            : 'rgba(60, 55, 40, 0.7)',
+            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
             : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
@@ -142,7 +142,7 @@ function ToggleRow({
           className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
-            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
             clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}
         />

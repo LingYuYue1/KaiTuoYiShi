@@ -8,6 +8,13 @@ import {
 } from '@/data/modelRecommendations';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
 import { loadSetting, saveSetting } from '@/services/dbService';
+import { MemorySystemSettingsTab } from './MemorySystemSettings';
+import { YitingSettingsTab } from './YitingSettingsTab';
+import { NewsSystemSettingsTab } from './NewsSystemSettingsTab';
+import { PhoneSystemSettingsTab } from './PhoneSystemSettingsTab';
+import { ZhikuSettingsTab } from './ZhikuSettingsTab';
+import { StoryWeavingSettingsTab } from './StoryWeavingSettingsTab';
+import { VariableUpdateTab } from './VariableUpdateSettings';
 
 interface Props {
   settings: API设置;
@@ -67,6 +74,113 @@ const cardClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
+
+type ApiSubview = 'overview' | 'variable' | 'memory' | 'yiting' | 'news' | 'zhiku' | 'story' | 'phone';
+
+const apiSubViews: { key: ApiSubview; label: string; hint: string }[] = [
+  { key: 'overview', label: '总接口设置', hint: '主 API、方案、API 包' },
+  { key: 'variable', label: '变量', hint: '变量独立接口' },
+  { key: 'memory', label: '记忆', hint: '记忆检索与精炼' },
+  { key: 'yiting', label: '忆庭', hint: '回忆库与召回' },
+  { key: 'news', label: '新闻', hint: '星际周报接口' },
+  { key: 'zhiku', label: '智库', hint: '原著资料接口' },
+  { key: 'story', label: '剧情', hint: '剧情编织接口' },
+  { key: 'phone', label: '手机', hint: '私聊与主动来信' },
+];
+
+interface AuxApiProfileState {
+  provider: AI提供商;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+const AUX_API_PROFILE_KEY = 'apiAuxProfileStates';
+
+function createDefaultAuxApiProfileState(provider: AI提供商 = 'gemini'): AuxApiProfileState {
+  const meta = providerOptions.find((p) => p.value === provider) ?? providerOptions[0];
+  return {
+    provider: meta.value,
+    baseUrl: meta.defaultBaseUrl,
+    apiKey: '',
+    model: meta.defaultModel,
+  };
+}
+
+function normalizeAuxApiProfileState(input?: Partial<AuxApiProfileState>): AuxApiProfileState {
+  const provider = providerOptions.find((p) => p.value === input?.provider) ?? providerOptions[0];
+  return {
+    provider: provider.value,
+    baseUrl: String(input?.baseUrl ?? provider.defaultBaseUrl),
+    apiKey: String(input?.apiKey ?? ''),
+    model: String(input?.model ?? provider.defaultModel),
+  };
+}
+
+function ApiSubviewButton({
+  active,
+  label,
+  hint,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex min-w-0 w-full items-center gap-3 px-3 py-3 text-left transition-all hover:opacity-95"
+      style={{
+        background: active
+          ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.24), rgba(var(--tj-accent-primary), 0.08))'
+          : 'rgba(var(--tj-bg-secondary), 0.34)',
+        color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary), 0.86)',
+        boxShadow: active
+          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.56), 0 0 18px rgba(var(--tj-tech-cyan), 0.10)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        clipPath: smallClip,
+      }}
+    >
+      <div
+        className="h-8 w-1.5 flex-shrink-0"
+        style={{
+          background: active
+            ? 'linear-gradient(180deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.88))'
+            : 'rgba(var(--tj-accent-primary), 0.18)',
+          clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0)',
+          opacity: active ? 1 : 0.75,
+        }}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className="font-serif text-xs tracking-[0.2em]">{label}</div>
+          <div
+            className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+            style={{
+              background: active ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-text-secondary), 0.28)',
+              boxShadow: active ? '0 0 10px rgba(var(--tj-tech-cyan), 0.35)' : 'none',
+            }}
+          />
+        </div>
+        <div
+          className="mt-0.5 truncate text-[10px] tracking-wider"
+          style={{ color: active ? 'rgba(var(--tj-ui-body), 0.82)' : 'rgba(var(--tj-text-secondary), 0.58)' }}
+        >
+          {hint}
+        </div>
+      </div>
+      <div
+        className="flex-shrink-0 text-[11px] transition-transform group-hover:translate-x-0.5"
+        style={{ color: active ? 'rgba(var(--tj-tech-cyan), 0.92)' : 'rgba(var(--tj-text-secondary), 0.42)' }}
+      >
+        →
+      </div>
+    </button>
+  );
+}
 
 function makeNewConfig(provider: AI提供商): API配置项 {
   const meta = providerOptions.find((p) => p.value === provider) ?? providerOptions[0];
@@ -152,6 +266,135 @@ function downloadApiProfile(profile: API配置包): void {
 }
 
 export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSettingsChange }: Props) {
+  const [activeSubview, setActiveSubview] = useState<ApiSubview>('overview');
+  const activeSubviewMeta = apiSubViews.find((item) => item.key === activeSubview) ?? apiSubViews[0];
+
+  const renderSubview = () => {
+    switch (activeSubview) {
+      case 'overview':
+        return (
+          <ApiSettingsOverviewTab
+            settings={settings}
+            onChange={onChange}
+            gameSettings={gameSettings}
+            onGameSettingsChange={onGameSettingsChange}
+          />
+        );
+      case 'variable':
+        return (
+          <VariableUpdateTab
+            gameSettings={gameSettings}
+            onGameSettingsChange={onGameSettingsChange}
+            apiSettings={settings}
+          />
+        );
+      case 'memory':
+        return <MemorySystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+      case 'yiting':
+        return <YitingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+      case 'news':
+        return <NewsSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+      case 'zhiku':
+        return <ZhikuSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+      case 'story':
+        return <StoryWeavingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+      case 'phone':
+        return <PhoneSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+    }
+  };
+
+  return (
+    <div className="kaituo-settings-pane flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
+      <div
+        className="lg:hidden flex min-w-0 flex-col gap-2 px-3 py-3 sm:px-4"
+        style={{
+          background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.54), rgba(var(--tj-bg-secondary), 0.34))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18), 0 8px 18px rgba(var(--tj-shadow), 0.06)',
+          clipPath: cardClip,
+        }}
+      >
+        <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.9)' }}>
+          {activeSubviewMeta.label}
+        </div>
+        <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+          {activeSubviewMeta.hint}
+        </div>
+        <select
+          value={activeSubview}
+          onChange={(e) => setActiveSubview(e.target.value as ApiSubview)}
+          className="kaituo-input w-full px-3 py-2 text-sm"
+          style={{ clipPath: smallClip }}
+        >
+          {apiSubViews.map((item) => (
+            <option key={item.key} value={item.key}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid min-h-0 gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <aside
+          className="hidden min-h-0 flex-col overflow-hidden lg:flex"
+          style={{
+            background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.44), rgba(var(--tj-bg-primary), 0.18))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14), 0 10px 22px rgba(var(--tj-shadow), 0.05)',
+            clipPath: cardClip,
+          }}
+        >
+          <div className="px-4 py-4">
+            <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.9)' }}>
+              API 子页
+            </div>
+            <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+              左侧选择功能页，右侧查看并编辑对应接口。
+            </div>
+          </div>
+          <div className="flex-1 space-y-2 overflow-y-auto px-3 pb-3">
+            {apiSubViews.map((item) => (
+              <ApiSubviewButton
+                key={item.key}
+                active={activeSubview === item.key}
+                label={item.label}
+                hint={item.hint}
+                onClick={() => setActiveSubview(item.key)}
+              />
+            ))}
+          </div>
+        </aside>
+
+        <section className="min-h-0 min-w-0">
+          <div
+            className="hidden items-center justify-between px-4 py-3 lg:flex"
+            style={{
+              background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.42), rgba(var(--tj-bg-secondary), 0.22))',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+              clipPath: cardClip,
+            }}
+            >
+            <div>
+              <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.9)' }}>
+                {activeSubviewMeta.label}
+              </div>
+              <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                {activeSubviewMeta.hint}
+              </div>
+            </div>
+            <div className="text-[10px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.5)' }}>
+              子页导航
+            </div>
+          </div>
+
+          <div className="min-h-0 pt-3 lg:pt-3">
+            {renderSubview()}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettingsChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
     settings.activeConfigId ?? settings.configs[0]?.id ?? null,
   );
@@ -163,10 +406,8 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
   const [message, setMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const [profileSlots, setProfileSlots] = useState<API方案槽位[]>([]);
-  const [auxProvider, setAuxProvider] = useState(providerOptions.find((p) => p.value === 'gemini')?.value ?? providerOptions[0].value);
-  const [auxBaseUrl, setAuxBaseUrl] = useState(providerOptions.find((p) => p.value === 'gemini')?.defaultBaseUrl ?? '');
-  const [auxApiKey, setAuxApiKey] = useState('');
-  const [auxModel, setAuxModel] = useState('gemini-2.5-flash');
+  const [auxProfilesByConfig, setAuxProfilesByConfig] = useState<Record<string, AuxApiProfileState>>({});
+  const [auxForm, setAuxForm] = useState<AuxApiProfileState>(() => createDefaultAuxApiProfileState());
   const [auxModelOptions, setAuxModelOptions] = useState<string[]>([]);
   const [loadingAuxModels, setLoadingAuxModels] = useState(false);
   const [auxFetchMessage, setAuxFetchMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
@@ -191,6 +432,29 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
       .catch(() => setProfileSlots([]));
   }, []);
 
+  useEffect(() => {
+    loadSetting<Record<string, AuxApiProfileState>>(AUX_API_PROFILE_KEY)
+      .then((saved) => {
+        if (!saved || typeof saved !== 'object') {
+          setAuxProfilesByConfig({});
+          return;
+        }
+        const next: Record<string, AuxApiProfileState> = {};
+        for (const [configId, value] of Object.entries(saved)) {
+          next[configId] = normalizeAuxApiProfileState(value);
+        }
+        setAuxProfilesByConfig(next);
+      })
+      .catch(() => setAuxProfilesByConfig({}));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    setAuxForm(auxProfilesByConfig[selectedId] ?? createDefaultAuxApiProfileState());
+    setAuxModelOptions([]);
+    setAuxFetchMessage(null);
+  }, [selectedId, auxProfilesByConfig]);
+
   // 常驻默认配置：列表为空时自动补一个 OpenAI 兼容占位，避免右侧空状态。
   useEffect(() => {
     if (settings.configs.length === 0) {
@@ -204,6 +468,17 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
       setSelectedId(settings.activeConfigId ?? settings.configs[0].id);
     }
   }, [settings.configs, settings.activeConfigId, selectedId, onChange]);
+
+  const persistAuxForm = async (nextForm: AuxApiProfileState) => {
+    setAuxForm(nextForm);
+    if (!selectedId) return;
+    const nextMap = {
+      ...auxProfilesByConfig,
+      [selectedId]: nextForm,
+    };
+    setAuxProfilesByConfig(nextMap);
+    await saveSetting(AUX_API_PROFILE_KEY, nextMap);
+  };
 
   const updateConfig = (patch: Partial<API配置项>) => {
     if (!selectedConfig) return;
@@ -367,10 +642,10 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
   };
 
   const handleApplyAuxModel = async () => {
-    const provider = auxProvider;
-    const baseUrl = auxBaseUrl.trim();
-    const apiKey = auxApiKey.trim();
-    const model = auxModel.trim();
+    const provider = auxForm.provider;
+    const baseUrl = auxForm.baseUrl.trim();
+    const apiKey = auxForm.apiKey.trim();
+    const model = auxForm.model.trim();
     if (!baseUrl || !apiKey) {
       setMessage({ kind: 'error', text: '请先填写其他 API 的 Base URL 和 API Key。' });
       return;
@@ -400,8 +675,8 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
   };
 
   const handleFetchAuxModels = async () => {
-    const baseUrl = auxBaseUrl.trim();
-    const apiKey = auxApiKey.trim();
+    const baseUrl = auxForm.baseUrl.trim();
+    const apiKey = auxForm.apiKey.trim();
     if (!baseUrl || !apiKey) {
       setAuxFetchMessage({ kind: 'error', text: '请先填写其他 API 的 Base URL 和 API Key。' });
       return;
@@ -412,10 +687,10 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
       const list = await fetchModels({
         id: 'aux-api-preview',
         name: '其他 API',
-        provider: auxProvider,
+        provider: auxForm.provider,
         baseUrl,
         apiKey,
-        model: auxModel.trim(),
+        model: auxForm.model.trim(),
         enableClaudeMode: gameSettings.enableClaudeMode === true,
         retryCount: 2,
         createdAt: Date.now(),
@@ -483,90 +758,13 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
   };
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
-      <div
-        className="px-3 py-3 text-xs leading-relaxed sm:px-4"
-        style={{
-          color: 'rgba(var(--tj-text-secondary), 0.78)',
-          background: 'rgba(var(--tj-accent-primary), 0.045)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
-          clipPath: cardClip,
-        }}
-      >
-        <div className="font-serif tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
-          ◆ API 配置提示
-        </div>
-        <div className="mt-1.5 space-y-0.5">
-          <div>安全包：不会保存 Key 数据，适合分享配置模板。</div>
-          <div>私人包：会保存 Key 数据，请不要发给其他人。</div>
-          <div>个别功能需要手动开启；主剧情和变量推荐使用智商高一点的模型，例如 3.1 Pro。</div>
-        </div>
-      </div>
-
-      {/* ── 顶部：新建配置（横向铺满） ── */}
-      <div
-        className="flex min-w-0 flex-col items-stretch gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4 sm:py-2.5"
-        style={{
-          background: 'rgba(var(--tj-bg-secondary), 0.55)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
-          clipPath: cardClip,
-        }}
-      >
-        <span
-          className="font-serif text-xs tracking-[0.3em]"
-          style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
-        >
-          ◆ 新建配置
-        </span>
-        <span style={{ color: 'rgba(var(--tj-accent-primary), 0.2)' }}>|</span>
-        <span
-          className="text-xs tracking-wider"
-          style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}
-        >
-          供应商
-        </span>
-        <select
-          value={newProvider}
-          onChange={(e) => setNewProvider(e.target.value as AI提供商)}
-          className="kaituo-input min-w-0 px-2.5 py-1.5 text-sm"
-          style={{ clipPath: smallClip }}
-        >
-          {providerOptions.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleCreate}
-          className="px-4 py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90 sm:py-1.5 sm:tracking-[0.25em]"
-          style={{
-            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
-            color: 'rgb(var(--tj-on-accent))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
-            clipPath: smallClip,
-          }}
-        >
-          ＋ 创建配置
-        </button>
-        <span
-          className="text-xs tracking-wider sm:ml-auto"
-          style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
-        >
-          共 {settings.configs.length} 个配置
-        </span>
-      </div>
-
+    <div className="kaituo-settings-pane flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
       <div
         className="flex min-w-0 flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:px-4"
-        style={{
-          background: 'rgba(var(--tj-bg-secondary), 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
-          clipPath: cardClip,
-        }}
+        style={{ clipPath: cardClip }}
       >
         <div className="min-w-0 flex-1">
-          <div className="font-serif text-xs tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
+          <div className="font-serif text-xs tracking-[0.24em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.85)' }}>
             ◆ API 配置包
           </div>
           <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
@@ -578,8 +776,8 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
             onClick={() => handleExportProfile(false)}
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              color: 'rgba(var(--tj-accent-primary), 0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+              color: 'rgba(var(--tj-tech-cyan), 0.9)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.35)',
               clipPath: smallClip,
             }}
           >
@@ -589,8 +787,8 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
             onClick={() => handleExportProfile(true)}
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              color: 'rgba(255, 190, 120, 0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(255, 190, 120, 0.35)',
+              color: 'rgba(var(--tj-accent-primary), 0.9)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28)',
               clipPath: smallClip,
             }}
           >
@@ -600,9 +798,9 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
             onClick={handleImportProfile}
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              background: 'rgba(var(--tj-accent-primary), 0.08)',
+              background: 'rgba(var(--tj-tech-cyan), 0.08)',
               color: 'rgba(var(--tj-text-primary), 0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.3)',
               clipPath: smallClip,
             }}
           >
@@ -694,6 +892,74 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
         )}
       </div>
 
+      <div
+        className="px-3 py-3 text-xs leading-relaxed sm:px-4"
+        style={{ color: 'rgba(var(--tj-text-secondary), 0.78)', clipPath: cardClip }}
+      >
+        <div className="font-serif tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+          ◆ API 配置提示
+        </div>
+        <div className="mt-1.5 space-y-0.5">
+          <div>安全包：不会保存 Key 数据，适合分享配置模板。</div>
+          <div>私人包：会保存 Key 数据，请不要发给其他人。</div>
+          <div>个别功能需要手动开启；主剧情和变量推荐使用智商高一点的模型，例如 3.1 Pro。</div>
+        </div>
+      </div>
+
+      {/* ── 新建配置（移动到提示下方） ── */}
+      <div
+        className="flex min-w-0 flex-col items-stretch gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4 sm:py-2.5"
+        style={{
+          background: 'rgba(var(--tj-bg-secondary), 0.55)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+          clipPath: cardClip,
+        }}
+      >
+        <span
+          className="font-serif text-xs tracking-[0.3em]"
+          style={{ color: 'rgba(var(--tj-tech-cyan), 0.85)' }}
+        >
+          ◆ 新建配置
+        </span>
+        <span style={{ color: 'rgba(var(--tj-accent-primary), 0.2)' }}>|</span>
+        <span
+          className="text-xs tracking-wider"
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}
+        >
+          供应商
+        </span>
+        <select
+          value={newProvider}
+          onChange={(e) => setNewProvider(e.target.value as AI提供商)}
+          className="kaituo-input min-w-0 px-2.5 py-1.5 text-sm"
+          style={{ clipPath: smallClip }}
+        >
+          {providerOptions.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={handleCreate}
+          className="px-4 py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90 sm:py-1.5 sm:tracking-[0.25em]"
+          style={{
+            background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.92))',
+            color: 'rgb(var(--tj-on-accent))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
+            clipPath: smallClip,
+          }}
+        >
+          ＋ 创建配置
+        </button>
+        <span
+          className="text-xs tracking-wider sm:ml-auto"
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
+        >
+          共 {settings.configs.length} 个配置
+        </span>
+      </div>
+
       {/* ── 主体：左列表 + 右详情 ── */}
       <div className="flex min-w-0 flex-col gap-4 md:flex-row">
         <aside className="flex max-h-[32dvh] w-full flex-shrink-0 flex-col md:max-h-none md:w-[220px]">
@@ -782,7 +1048,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
                     onClick={handleActivate}
                     className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+                      background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
                       color: 'rgb(var(--tj-on-accent))',
                       boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
                       clipPath: smallClip,
@@ -923,9 +1189,9 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
               <div
                 className="leading-relaxed"
                 style={{
-                  color: 'rgba(255, 215, 150, 0.86)',
-                  background: 'rgba(255, 190, 120, 0.07)',
-                  boxShadow: 'inset 0 0 0 1px rgba(255, 190, 120, 0.18)',
+                  color: 'rgba(var(--tj-text-primary), 0.92)',
+                  background: 'rgba(var(--tj-tech-cyan), 0.05)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
                   clipPath: smallClip,
                   padding: '0.45rem 0.6rem',
                 }}
@@ -934,17 +1200,16 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
               </div>
               <div className="grid gap-1.5 sm:grid-cols-[180px_minmax(0,1fr)]">
                 <select
-                  value={auxProvider}
+                  value={auxForm.provider}
                   onChange={(e) => {
-                    const nextProvider = e.target.value as typeof auxProvider;
+                    const nextProvider = e.target.value as AI提供商;
                     const meta = providerOptions.find((p) => p.value === nextProvider);
-                    setAuxProvider(nextProvider);
-                    if (meta) {
-                      setAuxBaseUrl(meta.defaultBaseUrl);
-                      setAuxModel(meta.defaultModel);
-                    }
-                    setAuxModelOptions([]);
-                    setAuxFetchMessage(null);
+                    void persistAuxForm({
+                      provider: nextProvider,
+                      baseUrl: meta?.defaultBaseUrl ?? auxForm.baseUrl,
+                      apiKey: auxForm.apiKey,
+                      model: meta?.defaultModel ?? auxForm.model,
+                    });
                   }}
                   className="kaituo-input min-w-0 px-2.5 py-1.5 text-sm"
                   style={{ clipPath: smallClip }}
@@ -956,16 +1221,16 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
                   ))}
                 </select>
                 <input
-                  value={auxBaseUrl}
-                  onChange={(e) => setAuxBaseUrl(e.target.value)}
+                  value={auxForm.baseUrl}
+                  onChange={(e) => void persistAuxForm({ ...auxForm, baseUrl: e.target.value })}
                   placeholder="其他 API Base URL"
                   className="kaituo-input min-w-0 px-2.5 py-1.5 text-sm"
                   style={{ clipPath: smallClip }}
                 />
               </div>
               <input
-                value={auxApiKey}
-                onChange={(e) => setAuxApiKey(e.target.value)}
+                value={auxForm.apiKey}
+                onChange={(e) => void persistAuxForm({ ...auxForm, apiKey: e.target.value })}
                 placeholder="其他 API Key"
                 type="password"
                 className="kaituo-input w-full px-2.5 py-1.5 text-sm"
@@ -973,8 +1238,8 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
               />
               <div className="flex flex-col gap-1.5 sm:flex-row">
                 <input
-                  value={auxModel}
-                  onChange={(e) => setAuxModel(e.target.value)}
+                  value={auxForm.model}
+                  onChange={(e) => void persistAuxForm({ ...auxForm, model: e.target.value })}
                   placeholder="例如 gemini-2.5-flash"
                   className="kaituo-input min-w-0 flex-1 px-2.5 py-1.5 text-sm"
                   style={{ clipPath: smallClip }}
@@ -1004,15 +1269,15 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
                   一键套用到其他 API
                 </button>
               </div>
-              {auxModelOptions.length > 0 && (
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) setAuxModel(e.target.value);
-                  }}
-                  className="kaituo-input w-full px-2.5 py-1.5 text-xs"
-                  style={{ clipPath: smallClip }}
-                >
+                {auxModelOptions.length > 0 && (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) void persistAuxForm({ ...auxForm, model: e.target.value });
+                    }}
+                    className="kaituo-input w-full px-2.5 py-1.5 text-xs"
+                    style={{ clipPath: smallClip }}
+                  >
                   <option value="">— 从列表选择（{auxModelOptions.length}） —</option>
                   {auxModelOptions.map((model) => (
                     <option key={model} value={model}>
@@ -1046,7 +1311,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
                         className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all"
                         style={{
                           background: active
-                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+                            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
                             : 'transparent',
                           color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
                           boxShadow: active
@@ -1185,7 +1450,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
                 style={{
                   background: savedFlash
                     ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-                    : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+                    : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
                   color: 'rgb(var(--tj-on-accent))',
                   boxShadow: savedFlash
                     ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
@@ -1209,7 +1474,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
     <label className="block">
       <div
         className="mb-1 text-xs font-serif tracking-[0.25em]"
-        style={{ color: 'rgba(220, 200, 160, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}
       >
         {label}
       </div>

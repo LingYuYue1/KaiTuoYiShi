@@ -201,7 +201,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                 className="flex-1 px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
                     : 'transparent',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
                   boxShadow: active
@@ -275,7 +275,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                 className="px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
                   boxShadow: active
@@ -402,7 +402,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                 className="px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
                   boxShadow: active
@@ -461,8 +461,8 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
             color: 'rgb(var(--tj-on-accent))',
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(165, 230, 170, 0.96), rgba(105, 190, 130, 0.92))'
-              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(212, 177, 90, 0.94))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.52), 0 0 18px rgba(var(--tj-accent-primary),0.16)',
+              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.72), 0 0 18px rgba(var(--tj-tech-cyan),0.14)',
             clipPath: smallClip,
           }}
         >
@@ -478,7 +478,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label
         className="mb-1.5 block text-xs font-serif tracking-[0.2em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
+        style={{ color: 'rgba(var(--tj-tech-cyan), 0.82)' }}
       >
         {label}
       </label>
@@ -502,8 +502,8 @@ function ToggleRow({
     <div
       className="flex items-center justify-between px-3 py-2"
       style={{
-        background: 'rgba(var(--tj-bg-secondary), 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        background: 'rgba(var(--tj-bg-secondary), 0.42)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
         clipPath:
           'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
@@ -524,8 +524,8 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
-            : 'rgba(60, 55, 40, 0.7)',
+          ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
             : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
@@ -537,7 +537,7 @@ function ToggleRow({
           className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
-            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
             clipPath:
               'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}

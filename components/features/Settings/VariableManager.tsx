@@ -171,17 +171,17 @@ function ArrayItemList({ items, search, onSearch, activeIndex, onSelect, accent 
                 className="mb-1 w-full px-2.5 py-2 text-left transition-all"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-bubble),0.96), rgba(var(--tj-surface-strong),0.86))'
-                    : 'rgba(var(--tj-bubble),0.5)',
+                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.24), rgba(var(--tj-accent-primary), 0.08))'
+                    : 'rgba(var(--tj-bg-secondary), 0.34)',
                   boxShadow: active
-                    ? `inset 3px 0 0 ${accent}, inset 0 0 0 1px rgba(var(--tj-border),0.82)`
-                    : 'inset 0 0 0 1px rgba(var(--tj-border),0.4)',
+                    ? `inset 3px 0 0 ${accent}, inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.56)`
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                   clipPath: smallClip,
                 }}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary),0.5)' }}>{index}</span>
-                  <span className="min-w-0 flex-1 truncate font-serif text-[13px] font-bold" style={{ color: active ? accent : 'rgba(var(--tj-ui-body),0.92)' }}>
+                  <span className="min-w-0 flex-1 truncate font-serif text-[13px] font-bold" style={{ color: active ? accent : 'rgb(var(--tj-text-primary))' }}>
                     {label}
                   </span>
                 </div>
@@ -372,7 +372,15 @@ export function VariableManagerTab(props: Props) {
         }}
       >
         <div className="px-1 pb-1">
-          <div className="font-serif text-base font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+          <div
+            className="font-serif text-base font-bold tracking-[0.24em]"
+            style={{
+              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-tech-cyan)) 46%, rgb(var(--tj-accent-primary)) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
             变量中枢
           </div>
           <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.68)' }}>
@@ -390,16 +398,16 @@ export function VariableManagerTab(props: Props) {
               className="w-full px-3 py-2.5 text-left transition-all"
               style={{
                 background: active
-                  ? 'linear-gradient(135deg, rgba(var(--tj-bubble),0.96), rgba(var(--tj-surface-strong),0.86))'
-                  : 'rgba(var(--tj-bubble),0.72)',
+                  ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.24), rgba(var(--tj-accent-primary), 0.08))'
+                  : 'rgba(var(--tj-bg-secondary), 0.34)',
                 boxShadow: active
-                  ? `inset 3px 0 0 ${system.accent}, inset 0 0 0 1px rgba(var(--tj-border),0.82), 0 6px 14px rgba(var(--tj-shadow),0.06)`
-                  : 'inset 0 0 0 1px rgba(var(--tj-border),0.5)',
+                  ? `inset 3px 0 0 ${system.accent}, inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.56), 0 0 18px rgba(var(--tj-tech-cyan), 0.10)`
+                  : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
                 clipPath: smallClip,
               }}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-serif text-base font-bold tracking-wider" style={{ color: active ? system.accent : 'rgba(var(--tj-ui-body),0.92)' }}>
+                <span className="font-serif text-base font-bold tracking-wider" style={{ color: active ? system.accent : 'rgb(var(--tj-text-primary))' }}>
                   {system.label}
                 </span>
                 <span className="font-mono text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
@@ -429,16 +437,24 @@ export function VariableManagerTab(props: Props) {
         <div
           className="p-4"
           style={{
-            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.10), rgba(var(--tj-bg-secondary),0.42) 58%, rgba(var(--tj-bg-secondary),0.68))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+            background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.10), rgba(var(--tj-bg-secondary), 0.42) 58%, rgba(var(--tj-bg-secondary), 0.68))',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
             clipPath: cardClip,
           }}
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="h-2 w-2" style={{ background: activeSystem.accent, boxShadow: `0 0 12px ${activeSystem.accent}` }} />
-                <h3 className="min-w-0 font-serif text-lg font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+                <h3
+                  className="min-w-0 font-serif text-lg font-bold tracking-[0.22em]"
+                  style={{
+                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-tech-cyan)) 46%, rgb(var(--tj-accent-primary)) 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
                   {isArraySystem && arrayDraft[activeArrayIndex]
                     ? `${activeSystem.label} · ${summarizeArrayItemLabel(arrayDraft[activeArrayIndex])}`
                     : activeSystem.label}
@@ -447,7 +463,7 @@ export function VariableManagerTab(props: Props) {
                   className="px-2 py-0.5 text-xs"
                   style={{
                     color: activeSystem.policy === 'writable' ? 'rgba(var(--tj-ui-success),0.95)' : 'rgba(var(--tj-ui-muted),0.86)',
-                    boxShadow: `inset 0 0 0 1px ${activeSystem.policy === 'writable' ? 'rgba(180,235,190,0.35)' : 'rgba(var(--tj-accent-primary),0.24)'}`,
+                    boxShadow: `inset 0 0 0 1px ${activeSystem.policy === 'writable' ? 'rgba(180,235,190,0.35)' : 'rgba(var(--tj-tech-cyan),0.24)'}`,
                     clipPath: smallClip,
                   }}
                 >
@@ -460,22 +476,6 @@ export function VariableManagerTab(props: Props) {
                 {activeSystem.hiddenFields?.length ? ` · 已隐藏旧字段：${activeSystem.hiddenFields.join(' / ')}` : ''}
               </p>
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              {stats.map((item) => (
-                <span
-                  key={item}
-                  className="px-2 py-1 font-mono text-xs"
-                  style={{
-                    color: 'rgba(var(--tj-ui-body),0.9)',
-                    background: 'rgba(var(--tj-bg-primary),0.38)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.13)',
-                    clipPath: smallClip,
-                  }}
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -485,9 +485,9 @@ export function VariableManagerTab(props: Props) {
               onClick={() => setMode('fields')}
               className="px-4 py-1.5 text-sm font-serif tracking-wider"
               style={{
-                background: mode === 'fields' ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-accent-secondary),0.95))' : 'transparent',
-                color: mode === 'fields' ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.88)',
-                boxShadow: mode === 'fields' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
+                background: mode === 'fields' ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))' : 'transparent',
+                color: mode === 'fields' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
+                boxShadow: mode === 'fields' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
                 clipPath: smallClip,
               }}
             >
@@ -497,33 +497,75 @@ export function VariableManagerTab(props: Props) {
               onClick={() => setMode('json')}
               className="px-4 py-1.5 text-sm font-serif tracking-wider"
               style={{
-                background: mode === 'json' ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-accent-secondary),0.95))' : 'transparent',
-                color: mode === 'json' ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.88)',
-                boxShadow: mode === 'json' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
+                background: mode === 'json' ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))' : 'transparent',
+                color: mode === 'json' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
+                boxShadow: mode === 'json' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
                 clipPath: smallClip,
               }}
             >
               整体 JSON
             </button>
           </div>
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-            {error && <span className="text-sm" style={{ color: 'rgba(255,135,135,0.95)' }}>✕ {error}</span>}
-            {savedFlash && <span className="text-sm" style={{ color: 'rgba(165,230,170,0.95)' }}>✓ 已保存</span>}
-            <button
-              onClick={resetDraft}
-              className="px-3 py-1.5 text-sm font-serif tracking-wider"
-              style={{ color: 'rgba(var(--tj-ui-body),0.88)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.56)', clipPath: smallClip }}
-            >
-              重置草稿
-            </button>
-            <button
-              onClick={saveDraft}
-              className="px-4 py-1.5 text-sm font-serif font-bold tracking-wider"
-              style={{ background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)), rgb(var(--tj-accent-primary)) 48%, rgb(var(--tj-accent-secondary)))', color: 'rgb(var(--tj-on-accent))', clipPath: smallClip }}
-            >
-              保存到存档
-            </button>
+        <div className="flex flex-col items-stretch gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1">
+              <button
+                onClick={resetDraft}
+                className="px-3 py-1.5 text-sm font-serif tracking-wider"
+                style={{ color: 'rgba(var(--tj-text-secondary), 0.85)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)', clipPath: smallClip }}
+              >
+                重置草稿
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {stats.map((item) => (
+                <span
+                  key={item}
+                  className="px-2 py-1 font-mono text-xs"
+                  style={{
+                    color: 'rgba(var(--tj-text-primary), 0.9)',
+                    background: 'rgba(var(--tj-bg-primary), 0.38)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
+                    clipPath: smallClip,
+                  }}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
+
+          <button
+            onClick={saveDraft}
+            className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
+            style={{
+              background: savedFlash
+                ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
+                : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+              color: 'rgb(var(--tj-on-accent))',
+              boxShadow: savedFlash
+                ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
+                : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
+              clipPath: cardClip,
+            }}
+          >
+            {savedFlash ? '✓ 已 保 存' : '◆ 保 存 修 改'}
+          </button>
+
+          {error && (
+            <div
+              className="px-3 py-2 text-xs"
+              style={{
+                color: 'rgba(220, 120, 120, 0.9)',
+                background: 'rgba(220, 120, 120, 0.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.25)',
+                clipPath: smallClip,
+              }}
+            >
+              ✕ {error}
+            </div>
+          )}
+        </div>
         </div>
 
         <div

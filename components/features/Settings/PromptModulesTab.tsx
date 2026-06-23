@@ -119,7 +119,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                 className="mb-1.5 w-full px-3 py-2 text-left transition-all"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.16), rgba(var(--tj-accent-primary), 0.04))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
                   boxShadow: active
                     ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
@@ -133,7 +133,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                     style={{
                       color: m.builtin ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.9)',
                       background: m.builtin
-                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(212, 177, 90, 0.9))'
+                        ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.92), rgba(var(--tj-accent-primary), 0.82))'
                         : 'rgba(var(--tj-accent-primary), 0.12)',
                       clipPath:
                         'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
@@ -172,7 +172,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
             onClick={addCustom}
             className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(212, 177, 90, 0.9))',
+              background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.92), rgba(var(--tj-accent-primary), 0.82))',
               color: 'rgb(var(--tj-on-accent))',
               clipPath: smallClip,
             }}
@@ -184,7 +184,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
             className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-80"
             style={{
               background: 'transparent',
-              color: 'rgba(220, 200, 160, 0.85)',
+              color: 'rgba(var(--tj-text-secondary), 0.82)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
               clipPath: smallClip,
             }}
@@ -264,8 +264,8 @@ function EditorPanel({
           className="relative h-6 w-11 flex-shrink-0 transition-all"
           style={{
             background: isCalibrationModule || m.enabled
-              ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
-              : 'rgba(60, 55, 40, 0.7)',
+                  ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+                  : 'rgba(var(--tj-bg-secondary), 0.68)',
             boxShadow: isCalibrationModule || m.enabled
               ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
               : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
@@ -278,7 +278,7 @@ function EditorPanel({
             className="absolute top-0.5 h-5 w-5 transition-transform"
             style={{
               left: isCalibrationModule || m.enabled ? 'calc(100% - 1.375rem)' : '0.125rem',
-              background: isCalibrationModule || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
+              background: isCalibrationModule || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
               clipPath:
                 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
             }}
@@ -447,9 +447,9 @@ function ScopeChips({
             className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all"
             style={{
               background: active
-                ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.85), rgba(212, 177, 90, 0.85))'
+                ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.85), rgba(var(--tj-accent-primary), 0.78))'
                 : 'rgba(var(--tj-bg-secondary), 0.5)',
-              color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(220, 200, 160, 0.85)',
+              color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
               boxShadow: active
                 ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
                 : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',

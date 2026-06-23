@@ -212,16 +212,19 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
               </select>
             )}
           </label>
-          <InputField
-            label="Base URL"
-            value={memory.记忆总结API.baseUrl}
-            onChange={(value) => patchApi({ baseUrl: value })}
-          />
-          <InputField
-            label="API Key"
-            value={memory.记忆总结API.apiKey}
-            onChange={(value) => patchApi({ apiKey: value })}
-          />
+	          <InputField
+	            label="Base URL"
+	            value={memory.记忆总结API.baseUrl}
+	            onChange={(value) => patchApi({ baseUrl: value })}
+	            placeholder={mainConfig?.baseUrl ? '留空则使用主 API：' + mainConfig.baseUrl : 'https://...'}
+	          />
+	          <InputField
+	            label="API Key"
+	            value={memory.记忆总结API.apiKey}
+	            onChange={(value) => patchApi({ apiKey: value })}
+	            type="password"
+	            placeholder={mainConfig?.apiKey ? '留空则使用主 API 的 Key' : 'sk-...'}
+	          />
           <NumberField
             label="最大输出"
             value={memory.记忆总结API.maxTokens ?? 1024}
@@ -376,34 +379,36 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
         />
       </Section>
 
-      <div className="flex flex-col items-end gap-2 pt-1">
+      <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
           type="button"
           onClick={handleSave}
-          className="px-5 py-2.5 text-sm font-serif tracking-[0.28em] transition-all hover:opacity-90"
+          className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
             boxShadow: savedFlash
               ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
               : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
-            clipPath: smallClip,
+            clipPath: cardClip,
           }}
         >
-          {savedFlash ? '✓ 已 保 存' : '◆ 保存记忆设置'}
+          {savedFlash ? '✓ 已 保 存' : '◆ 保 存 配 置'}
         </button>
-        {saveMessage && (
-          <div
-            className="px-3 py-2 text-xs"
-            style={{
-              color: saveMessage.kind === 'error' ? '#ffb7b7' : 'rgba(var(--tj-text-secondary), 0.95)',
-              background: saveMessage.kind === 'error' ? 'rgba(120, 30, 30, 0.35)' : 'rgba(var(--tj-accent-primary), 0.05)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
-              clipPath: smallClip,
-            }}
-          >
+	        {saveMessage && (
+	          <div
+	            className="px-3 py-2 text-xs"
+	            style={{
+	              color: saveMessage.kind === 'error' ? 'rgba(220, 120, 120, 0.9)' : 'rgba(160, 200, 160, 0.85)',
+	              background: saveMessage.kind === 'error' ? 'rgba(220, 120, 120, 0.06)' : 'rgba(120, 200, 140, 0.06)',
+	              boxShadow: saveMessage.kind === 'error'
+	                ? 'inset 0 0 0 1px rgba(220, 120, 120, 0.25)'
+	                : 'inset 0 0 0 1px rgba(120, 200, 140, 0.25)',
+	              clipPath: smallClip,
+	            }}
+	          >
             {saveMessage.text}
           </div>
         )}
@@ -424,37 +429,45 @@ function ToggleField({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label
-      className="flex cursor-pointer items-center justify-between gap-4 px-3 py-3"
-      style={{ boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: smallClip }}
+    <div
+      className="flex items-center justify-between px-3 py-2"
+      style={{
+        background: 'rgba(var(--tj-bg-secondary), 0.45)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+      }}
     >
-      <span>
-        <span className="block font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.92)' }}>
+      <div className="min-w-0 mr-3">
+        <div className="font-serif font-bold text-sm tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>
           {label}
-        </span>
-        <span className="mt-1 block text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>
+        </div>
+        <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
           {desc}
-        </span>
-      </span>
-      <span
-        className="relative h-7 w-12 shrink-0 transition-all"
+        </div>
+      </div>
+      <button
+        onClick={() => onChange(!checked)}
+        className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
-          background: checked ? 'rgba(var(--tj-accent-primary),0.26)' : 'rgba(80,75,68,0.45)',
-          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(var(--tj-accent-primary),0.55)' : 'rgba(var(--tj-text-secondary),0.28)'}`,
-          borderRadius: 999,
+          background: checked
+            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            : 'rgba(var(--tj-bg-secondary), 0.68)',
+          boxShadow: checked
+            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
         }}
       >
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
-        <span
-          className="absolute top-1 h-5 w-5 rounded-full transition-all"
+        <div
+          className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
-            left: checked ? 24 : 4,
-            background: checked ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.8)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+            left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
+            clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}
         />
-      </span>
-    </label>
+      </button>
+    </div>
   );
 }
 
@@ -484,10 +497,14 @@ function InputField({
   label,
   value,
   onChange,
+  type,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  type?: string;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
@@ -495,9 +512,11 @@ function InputField({
         {label}
       </div>
       <input
+        type={type ?? 'text'}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="kaituo-input w-full px-3 py-2 text-sm"
+        placeholder={placeholder}
+        className="kaituo-input w-full px-3 py-2 text-sm font-mono"
         style={{ clipPath: smallClip }}
       />
     </label>

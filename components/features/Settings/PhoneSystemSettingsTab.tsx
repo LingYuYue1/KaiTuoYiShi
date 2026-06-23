@@ -327,9 +327,9 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), 0 0 18px rgba(var(--tj-tech-cyan), 0.14)',
             clipPath: cardClip,
           }}
         >
@@ -378,51 +378,44 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label
-      className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3"
+    <div
+      className="flex items-center justify-between px-3 py-2"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
-        clipPath: smallClip,
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
     >
-      <span>
-        <span className="block font-serif text-sm tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+      <div className="min-w-0 mr-3">
+        <div className="font-serif font-bold text-sm tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>
           {label}
-        </span>
-        <span className="mt-0.5 block text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+        </div>
+        <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
           {desc}
-        </span>
-      </span>
-      <span
+        </div>
+      </div>
+      <button
+        onClick={() => onChange(!checked)}
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(212,177,90,0.92))'
-            : 'rgba(80, 72, 58, 0.45)',
+            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
-            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.5), 0 0 10px rgba(var(--tj-accent-primary),0.2)'
-            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)',
-          borderRadius: 999,
+            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
         }}
       >
-        <span
-          className="absolute top-1 h-4 w-4 transition-transform"
+        <div
+          className="absolute top-0.5 h-5 w-5 transition-transform"
           style={{
-            left: 4,
-            transform: checked ? 'translateX(20px)' : 'translateX(0)',
-            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
-            borderRadius: 999,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.45)',
+            left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
+            background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
+            clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
           }}
         />
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="sr-only"
-      />
-    </label>
+      </button>
+    </div>
   );
 }

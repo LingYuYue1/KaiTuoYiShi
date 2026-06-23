@@ -30,12 +30,18 @@ assert(dbService.includes('db.createObjectStore(SAVE_NODE_DELTAS_STORE'), 'DB �
 assert(dbService.includes('findAutoDeltaBase(db, storedData)'), '保存前必须尝试寻找自动存档 delta 基底。');
 assert(dbService.includes("if (save.type !== 'auto') return null"), '只有自动存档可以走 delta-only，手动/备份必须保持完整检查点。');
 assert(dbService.includes('MAX_DELTA_NODES_PER_CHECKPOINT'), '必须限制同一个 checkpoint 下连续 delta 节点数量。');
+assert(dbService.includes('loadDeltaBaseCandidateSummaries'), '自动存档 delta 基底候选必须合并 IndexedDB 摘要与桌面镜像摘要。');
+assert(dbService.includes('const desktopSummaries = await loadDesktopSaveMirrorListFirstSafely()'), '自动存档 delta 基底候选必须能读取桌面存档镜像摘要。');
+assert(dbService.includes('loadDeltaBaseCandidateSave'), '自动存档 delta 基底读取必须经过可回落到桌面镜像的帮助函数。');
+assert(dbService.includes('return loadDesktopSaveMirrorSaveFallbackSafely(id)'), 'IndexedDB 缺失基底存档时必须回落到桌面存档镜像。');
 assert(dbService.includes('resolveDeltaBaseSaveId(db, parentSave)'), '父节点是 delta-only 时必须追溯到最近 checkpoint 基底。');
 assert(dbService.includes('countDeltasUsingBase(db, baseSaveId)'), '必须统计当前 checkpoint 已挂载的 delta 节点数量。');
 assert(dbService.includes('deltaCount >= MAX_DELTA_NODES_PER_CHECKPOINT'), '达到上限后必须回退为完整 checkpoint。');
 assert(dbService.includes('store.put(buildDeltaOnlyStoredSave(savedForDelta, deltaBase.baseSaveId))'), '自动存档命中基底时必须将 saves 表正文替换为 delta-only 占位。');
 assert(dbService.includes("storageMode: 'delta'"), '写入 delta-only 时必须把节点记录标记为 delta 模式。');
 assert(dbService.includes('restoreDeltaSaveIfNeeded(db, save)'), '读档必须先恢复 delta-only 存档。');
+assert(dbService.includes('const rawBase = await loadDeltaBaseCandidateSave(db, baseSaveId)'), 'delta-only 恢复读取基底时必须经过可回落到桌面镜像的帮助函数。');
+assert(dbService.indexOf('const rawBase = await loadDeltaBaseCandidateSave(db, baseSaveId)') < dbService.indexOf('return restoreSaveFromDelta(base, save, delta)'), 'delta-only 恢复必须先解析基底存档，再合成 delta payload。');
 assert(dbService.includes('restoreSaveFromDelta(base, save, delta)'), '读档恢复必须从基底与 delta payload 合成完整存档。');
 assert(dbService.includes('getReferencedDeltaBaseIds'), '删除和轮转必须识别仍被 delta 引用的基底存档。');
 assert(dbService.includes('cleanupUnreferencedHiddenSaves'), '被隐藏保留的基底不再被引用后必须支持清理。');

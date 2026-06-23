@@ -14,6 +14,50 @@ import {
   restoreSaveFromDelta,
   type SaveNodeDeltaRecord,
 } from '@/utils/saveDeltaStorage';
+import {
+  beginDesktopSaveTransaction,
+  finishDesktopSaveTransaction,
+  listDesktopSaveMirror,
+  loadDesktopSaveMirrorSave,
+  loadDesktopSaveMirrorSaves,
+  mirrorSaveToDesktop,
+  removeSaveFromDesktopMirror,
+  replaceDesktopSaveMirror,
+  reserveDesktopSaveId,
+} from '@/services/desktop/desktopSaveMirror';
+import {
+  loadDesktopSaveNodeDelta,
+  loadDesktopSaveNodeDeltas,
+  mirrorSaveNodeDeltaToDesktop,
+  removeSaveNodeDeltasBySaveIdFromDesktopMirror,
+  replaceDesktopSaveDeltaMirror,
+} from '@/services/desktop/desktopSaveDeltaMirror';
+import {
+  loadSettingFromDesktopMirror,
+  mirrorSettingToDesktop,
+  removeSettingFromDesktopMirror,
+} from '@/services/desktop/desktopSettingsMirror';
+import {
+  cleanupUnreferencedDesktopAssets as cleanupDesktopAssetMirror,
+  loadDesktopAssetRecords,
+  mirrorAssetRecordsToDesktop,
+  replaceDesktopAssetMirror,
+  summarizeDesktopAssetMirror,
+  type DesktopAssetMaintenanceSummary,
+} from '@/services/desktop/desktopAssetMirror';
+import {
+  loadDesktopSaveBackup,
+  writeDesktopSaveBackup,
+  type DesktopSaveBackupReason,
+  type DesktopSaveBackupSummary,
+} from '@/services/desktop/desktopSaveBackup';
+import {
+  writeDesktopMigrationBackup,
+  previewDesktopMigrationBackup,
+  type DesktopMigrationBackupSummary,
+  type DesktopMigrationBackupPreview,
+} from '@/services/desktop/desktopMigrationBackup';
+import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 
 const DB_NAME = 'TimeJourneyDB';
 const DB_VERSION = 5;
@@ -105,19 +149,42 @@ export async function saveGame(data: 存档数据): Promise<number> {
   const assetRecords = extractSaveAssetRecords(data);
   const storedData = stripSaveAssetPayloadForStorage(data);
   const deltaBase = await findAutoDeltaBase(db, storedData);
-  return new Promise((resolve, reject) => {
+  const desktopSaveId = await reserveDesktopSaveIdSafely(db);
+  const desktopPrimarySave = desktopSaveId
+    ? ({ ...data, id: desktopSaveId } as 存档数据)
+    : null;
+  const desktopPrimaryStoredSave = desktopSaveId
+    ? ({ ...storedData, id: desktopSaveId } as 存档数据)
+    : null;
+  const desktopPrimaryDelta = desktopPrimaryStoredSave && desktopSaveId
+    ? buildSaveNodeDeltaRecord(
+      desktopPrimaryStoredSave,
+      desktopSaveId,
+      deltaBase
+        ? { baseSave: deltaBase.baseSave, baseSaveId: deltaBase.baseSaveId, storageMode: 'delta' }
+        : undefined,
+    )
+    : null;
+  const desktopPrimaryWritten = desktopPrimarySave
+    ? await writeDesktopPrimarySaveBeforeIndexedDbSafely(desktopPrimarySave, desktopPrimaryDelta, assetRecords)
+    : false;
+  let saved: { id: number; save: 存档数据; delta: SaveNodeDeltaRecord | null };
+  try {
+    saved = await new Promise<{ id: number; save: 存档数据; delta: SaveNodeDeltaRecord | null }>((resolve, reject) => {
     const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');
     const store = tx.objectStore(SAVES_STORE);
     const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
     const assetStore = tx.objectStore(SAVE_ASSETS_STORE);
     const deltaStore = tx.objectStore(SAVE_NODE_DELTAS_STORE);
-    // 让 autoIncrement 生效：调用方传的 id=0 视为「未指定」，删掉这个字段
-    // 否则 IDB 会拿 0 当显式主键，第二次 add 必然撞 "Key already exists"
+    // Web keeps IndexedDB autoIncrement. Desktop reserves ids in saves/sequence.json first
+    // so later file-primary save writes do not depend on browser-generated ids.
     for (const record of assetRecords) assetStore.put(record);
     const { id: _ignoredId, ...rest } = storedData;
     void _ignoredId;
     let savedId = 0;
-    const request = store.add(rest as 存档数据);
+    let savedDelta: SaveNodeDeltaRecord | null = null;
+    const saveForIndexedDb = desktopSaveId ? { ...rest, id: desktopSaveId } : rest;
+    const request = store.add(saveForIndexedDb as 存档数据);
     request.onsuccess = () => {
       const id = request.result as number;
       savedId = id;
@@ -132,16 +199,32 @@ export async function saveGame(data: 存档数据): Promise<number> {
           ? { baseSave: deltaBase.baseSave, baseSaveId: deltaBase.baseSaveId, storageMode: 'delta' }
           : undefined,
       );
-      if (delta) deltaStore.put(delta);
+      if (delta) {
+        savedDelta = delta;
+        deltaStore.put(delta);
+      }
       summaryStore.put(buildSaveSummary(savedForDelta));
     };
     request.onerror = () => reject(request.error);
     tx.oncomplete = () => {
       rotateManagedSaves(db).catch(() => {});
-      resolve(savedId);
+      resolve({ id: savedId, save: { ...data, id: savedId } as 存档数据, delta: savedDelta });
     };
     tx.onerror = () => reject(tx.error);
-  });
+    });
+  } catch (error) {
+    if (desktopPrimaryWritten && desktopSaveId && desktopPrimarySave) {
+      console.warn('[desktop-save-mirror] IndexedDB compatibility save failed after desktop primary write', error);
+      return desktopSaveId;
+    }
+    throw error;
+  }
+  if (!desktopPrimaryWritten || saved.id !== desktopSaveId) {
+    await mirrorDesktopSaveSafely(saved.save);
+    await mirrorDesktopSaveDeltaSafely(saved.delta);
+    await mirrorDesktopAssetsSafely(assetRecords);
+  }
+  return saved.id;
 }
 
 async function pruneManagedSavesBeforeWrite(db: IDBDatabase, type: 存档类型, keepCount: number): Promise<void> {
@@ -224,6 +307,10 @@ async function deleteManagedSaveItems(db: IDBDatabase, candidates: SaveListItemS
     tx.onerror = () => reject(tx.error);
   });
   await cleanupUnreferencedHiddenSaves(db);
+  for (const item of candidates) {
+    await removeDesktopSaveMirrorSafely(item.id);
+    await removeDesktopSaveDeltasBySaveIdSafely(item.id);
+  }
 }
 
 export interface SaveListItemSummary {
@@ -242,6 +329,13 @@ export interface SaveListItemSummary {
 }
 
 export async function getSaveList(): Promise<SaveListItemSummary[]> {
+  const desktopList = await loadDesktopSaveMirrorListFirstSafely();
+  if (desktopList.length > 0) {
+    void openDB().then((db) => ensureSaveSummaries(db, SUMMARY_REBUILD_BATCH_SIZE)).catch((error) => {
+      console.warn('[save-list] background summary rebuild failed', error);
+    });
+    return desktopList;
+  }
   const db = await openDB();
   let list = sortSaveSummaries(await readSaveSummaries(db));
   if (list.length > 0) {
@@ -255,23 +349,31 @@ export async function getSaveList(): Promise<SaveListItemSummary[]> {
   void ensureSaveSummaries(db, SUMMARY_REBUILD_BATCH_SIZE).catch((error) => {
     console.warn('[save-list] background summary rebuild failed', error);
   });
-  return list;
+  if (list.length > 0) return list;
+  return loadDesktopSaveMirrorListFallbackSafely();
 }
 
 export async function loadSave(id: number): Promise<存档数据 | null> {
+  const desktopSave = await loadDesktopSaveMirrorSaveFirstSafely(id);
+  if (desktopSave) return restoreDesktopAssetPayloadSafely(desktopSave);
   const db = await openDB();
   const save = await loadRawSave(db, id);
   const restoredSave = save ? await restoreDeltaSaveIfNeeded(db, save) : null;
-  if (!restoredSave) return null;
+  if (!restoredSave) {
+    const fallbackSave = await loadDesktopSaveMirrorSaveFallbackSafely(id);
+    return fallbackSave ? restoreDesktopAssetPayloadSafely(fallbackSave) : null;
+  }
   const saveForAssets = restoredSave;
-  if (!db.objectStoreNames.contains(SAVE_ASSETS_STORE)) return saveForAssets;
+  if (!db.objectStoreNames.contains(SAVE_ASSETS_STORE)) return restoreDesktopAssetPayloadSafely(saveForAssets);
   if (saveHasEmbeddedAssetPayload(saveForAssets)) {
     await migrateLoadedSaveAssets(db, saveForAssets);
   }
   const assetIds = collectSaveAlbumAssetIds(saveForAssets);
   if (!assetIds.length) return saveForAssets;
   const records = await loadSaveAssetRecords(db, assetIds);
-  return restoreSaveAssetPayloadFromRecords(saveForAssets, records);
+  const loadedIds = new Set(records.map((record) => record.id));
+  const desktopRecords = await loadDesktopAssetRecordsSafely(assetIds.filter((assetId) => !loadedIds.has(assetId)));
+  return restoreSaveAssetPayloadFromRecords(saveForAssets, [...records, ...desktopRecords]);
 }
 
 export async function loadLatestSave(): Promise<存档数据 | null> {
@@ -297,6 +399,8 @@ export async function deleteSave(id: number): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
   await cleanupUnreferencedHiddenSaves(db);
+  await removeDesktopSaveMirrorSafely(id);
+  await removeDesktopSaveDeltasBySaveIdSafely(id);
 }
 
 export async function loadSaveTree(rootId: string): Promise<存档数据[]> {
@@ -312,9 +416,18 @@ export async function loadSaveTree(rootId: string): Promise<存档数据[]> {
   return saves;
 }
 
-export async function replaceAllSaves(nextSaves: 存档数据[]): Promise<void> {
+export async function replaceAllSaves(
+  nextSaves: 存档数据[],
+  options: { skipDesktopBackup?: boolean; desktopBackupReason?: DesktopSaveBackupReason } = {},
+): Promise<void> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  if (!options.skipDesktopBackup) {
+    await backupCurrentSavesToDesktop(options.desktopBackupReason ?? 'before-replace');
+  }
+  const mirroredSaves: 存档数据[] = [];
+  const mirroredAssetRecords: SaveAssetRecord[] = [];
+  const mirroredDeltas: SaveNodeDeltaRecord[] = [];
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');
     const store = tx.objectStore(SAVES_STORE);
     const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
@@ -328,16 +441,109 @@ export async function replaceAllSaves(nextSaves: 存档数据[]): Promise<void> 
       const save = nextSaves[index];
       const normalizedId = Number.isFinite(save.id) && save.id > 0 ? save.id : index + 1;
       const normalizedSave = { ...save, id: normalizedId };
-      for (const record of extractSaveAssetRecords(normalizedSave)) assetStore.put(record);
+      const assetRecords = extractSaveAssetRecords(normalizedSave);
+      mirroredAssetRecords.push(...assetRecords);
+      for (const record of assetRecords) assetStore.put(record);
       const storedSave = stripSaveAssetPayloadForStorage(normalizedSave);
       store.put(storedSave);
       summaryStore.put(buildSaveSummary(storedSave));
+      mirroredSaves.push(normalizedSave);
       const delta = buildSaveNodeDeltaRecord(storedSave, normalizedId);
-      if (delta) deltaStore.put(delta);
+      if (delta) {
+        mirroredDeltas.push(delta);
+        deltaStore.put(delta);
+      }
     }
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+  await replaceDesktopSaveMirrorSafely(mirroredSaves);
+  await replaceDesktopSaveDeltaMirrorSafely(mirroredDeltas);
+  await replaceDesktopAssetMirrorSafely(mirroredAssetRecords);
+}
+
+export async function rebuildIndexedSaveCacheFromDesktopMirror(): Promise<number> {
+  const mirroredSaves = await loadDesktopSaveMirrorSaves();
+  if (!mirroredSaves.length) return 0;
+  await backupCurrentSavesToDesktop('before-restore');
+  const restoredSaves = await restoreDesktopAssetPayloadForSavesSafely(mirroredSaves);
+  await replaceAllSaves(restoredSaves, { skipDesktopBackup: true });
+  return mirroredSaves.length;
+}
+
+export async function restoreSavesFromDesktopMirror(): Promise<number> {
+  return rebuildIndexedSaveCacheFromDesktopMirror();
+}
+
+export async function restoreSavesFromDesktopBackup(backupPath: string): Promise<number> {
+  const backup = await loadDesktopSaveBackup(backupPath);
+  if (!backup?.saves.length) return 0;
+  await backupCurrentSavesToDesktop('before-restore');
+  const restoredSaves = await restoreDesktopAssetPayloadForSavesSafely(backup.saves);
+  await replaceAllSaves(restoredSaves, { skipDesktopBackup: true });
+  return backup.saves.length;
+}
+
+export async function backupCurrentSavesToDesktop(
+  reason: DesktopSaveBackupReason = 'manual',
+): Promise<DesktopSaveBackupSummary | null> {
+  if (!isDesktopRuntime()) return null;
+  const currentSaves = await loadCurrentSavesForDesktopBackup();
+  return writeDesktopSaveBackup(currentSaves, reason);
+}
+
+export async function backupDesktopStateBeforeOneTimeMigration(): Promise<DesktopMigrationBackupSummary | null> {
+  if (!isDesktopRuntime()) return null;
+  const currentSaves = await loadCurrentSavesForDesktopBackup();
+  return writeDesktopMigrationBackup(currentSaves, 'before-migration');
+}
+
+export async function previewDesktopStateBeforeOneTimeMigration(): Promise<DesktopMigrationBackupPreview | null> {
+  if (!isDesktopRuntime()) return null;
+  const currentSaves = await loadCurrentSavesForDesktopBackup();
+  return previewDesktopMigrationBackup(currentSaves, 'before-migration');
+}
+
+export async function summarizeDesktopAssets(): Promise<DesktopAssetMaintenanceSummary> {
+  const referencedAssetIds = await collectReferencedDesktopAssetIds();
+  return summarizeDesktopAssetMirror(referencedAssetIds);
+}
+
+export async function cleanupUnreferencedDesktopAssets(): Promise<DesktopAssetMaintenanceSummary> {
+  const referencedAssetIds = await collectReferencedDesktopAssetIds();
+  return cleanupDesktopAssetMirror(referencedAssetIds);
+}
+
+async function loadCurrentSavesForDesktopBackup(): Promise<存档数据[]> {
+  const list = await getSaveList();
+  const saves: 存档数据[] = [];
+  for (const item of [...list].sort((left, right) => left.timestamp - right.timestamp || left.id - right.id)) {
+    const save = await loadSave(item.id);
+    if (save) saves.push(save);
+  }
+  return saves;
+}
+
+async function collectReferencedDesktopAssetIds(): Promise<Set<string>> {
+  if (!isDesktopRuntime()) return new Set();
+  const list = await getSaveList();
+  const ids = new Set<string>();
+  let db: IDBDatabase | null = null;
+  for (const item of list) {
+    const mirroredSave = await loadDesktopSaveMirrorSaveFirstSafely(item.id);
+    if (mirroredSave) {
+      for (const id of collectSaveAlbumAssetIds(mirroredSave)) ids.add(id);
+      continue;
+    }
+    if (!db) db = await openDB();
+    const rawSave = await loadRawSave(db, item.id);
+    const restoredSave = rawSave
+      ? await restoreDeltaSaveIfNeeded(db, rawSave)
+      : await loadDesktopSaveMirrorSaveFallbackSafely(item.id);
+    if (!restoredSave) continue;
+    for (const id of collectSaveAlbumAssetIds(restoredSave)) ids.add(id);
+  }
+  return ids;
 }
 
 export async function hasAnySave(): Promise<boolean> {
@@ -358,15 +564,10 @@ async function findAutoDeltaBase(db: IDBDatabase, save: 存档数据): Promise<{
   if (save.type !== 'auto') return null;
   const tree = (save as 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 }).saveTree;
   if (!tree?.parentNodeId) return null;
-  const summaries = await new Promise<SaveListItemSummary[]>((resolve, reject) => {
-    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readonly');
-    const req = tx.objectStore(SAVE_SUMMARIES_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as SaveListItemSummary[]);
-    req.onerror = () => reject(req.error);
-  });
+  const summaries = await loadDeltaBaseCandidateSummaries(db);
   const parentSummary = summaries.find((item) => item.saveTree?.nodeId === tree.parentNodeId);
   if (!parentSummary?.id) return null;
-  const parentSave = await loadRawSave(db, parentSummary.id);
+  const parentSave = await loadDeltaBaseCandidateSave(db, parentSummary.id);
   if (!parentSave) return null;
   const baseSaveId = isDeltaOnlyStoredSave(parentSave)
     ? await resolveDeltaBaseSaveId(db, parentSave)
@@ -374,9 +575,34 @@ async function findAutoDeltaBase(db: IDBDatabase, save: 存档数据): Promise<{
   if (!baseSaveId) return null;
   const deltaCount = await countDeltasUsingBase(db, baseSaveId);
   if (deltaCount >= MAX_DELTA_NODES_PER_CHECKPOINT) return null;
-  const baseSave = await loadRawSave(db, baseSaveId);
+  const baseSave = await loadDeltaBaseCandidateSave(db, baseSaveId);
   if (!baseSave || isDeltaOnlyStoredSave(baseSave)) return null;
   return { baseSave, baseSaveId };
+}
+
+async function loadDeltaBaseCandidateSummaries(db: IDBDatabase): Promise<SaveListItemSummary[]> {
+  const indexedSummaries = await new Promise<SaveListItemSummary[]>((resolve, reject) => {
+    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readonly');
+    const req = tx.objectStore(SAVE_SUMMARIES_STORE).getAll();
+    req.onsuccess = () => resolve(req.result as SaveListItemSummary[]);
+    req.onerror = () => reject(req.error);
+  });
+  const desktopSummaries = await loadDesktopSaveMirrorListFirstSafely();
+  if (!desktopSummaries.length) return indexedSummaries;
+  const byId = new Map<number, SaveListItemSummary>();
+  for (const summary of indexedSummaries) {
+    if (summary.id) byId.set(summary.id, summary);
+  }
+  for (const summary of desktopSummaries) {
+    if (summary.id) byId.set(summary.id, summary);
+  }
+  return sortSaveSummaries(Array.from(byId.values()));
+}
+
+async function loadDeltaBaseCandidateSave(db: IDBDatabase, id: number): Promise<存档数据 | null> {
+  const indexedSave = await loadRawSave(db, id);
+  if (indexedSave) return indexedSave;
+  return loadDesktopSaveMirrorSaveFallbackSafely(id);
 }
 
 async function loadRawSave(db: IDBDatabase, id: number): Promise<存档数据 | null> {
@@ -395,12 +621,12 @@ async function restoreDeltaSaveIfNeeded(db: IDBDatabase, save: 存档数据, vis
   if (visited.has(saveId)) return save;
   visited.add(saveId);
   const tree = (save as 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 }).saveTree;
-  if (!tree?.nodeId || !db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)) return save;
+  if (!tree?.nodeId) return save;
   const delta = await loadDeltaRecordByNodeId(db, tree.nodeId);
   const baseSaveId = delta?.deltaPayload?.baseSaveId
     ?? (save as 存档数据 & { saveStorage?: { baseSaveId?: number } }).saveStorage?.baseSaveId;
   if (!delta || !baseSaveId) return save;
-  const rawBase = await loadRawSave(db, baseSaveId);
+  const rawBase = await loadDeltaBaseCandidateSave(db, baseSaveId);
   if (!rawBase) return save;
   const base = await restoreDeltaSaveIfNeeded(db, rawBase, visited);
   return restoreSaveFromDelta(base, save, delta);
@@ -408,14 +634,7 @@ async function restoreDeltaSaveIfNeeded(db: IDBDatabase, save: 存档数据, vis
 
 async function getReferencedDeltaBaseIds(db: IDBDatabase): Promise<Set<number>> {
   const referencedBaseIds = new Set<number>();
-  if (!db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)) return referencedBaseIds;
-  const deltas = await new Promise<SaveNodeDeltaRecord[]>((resolve, reject) => {
-    const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
-    const req = tx.objectStore(SAVE_NODE_DELTAS_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as SaveNodeDeltaRecord[]);
-    req.onerror = () => reject(req.error);
-  });
-  for (const delta of deltas) {
+  for (const delta of await loadAllDeltaRecords(db)) {
     if (delta.deltaPayload?.baseSaveId) referencedBaseIds.add(delta.deltaPayload.baseSaveId);
   }
   return referencedBaseIds;
@@ -431,18 +650,11 @@ async function resolveDeltaBaseSaveId(db: IDBDatabase, save: 存档数据): Prom
 }
 
 async function countDeltasUsingBase(db: IDBDatabase, baseSaveId: number): Promise<number> {
-  if (!db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)) return 0;
-  const deltas = await new Promise<SaveNodeDeltaRecord[]>((resolve, reject) => {
-    const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
-    const req = tx.objectStore(SAVE_NODE_DELTAS_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as SaveNodeDeltaRecord[]);
-    req.onerror = () => reject(req.error);
-  });
+  const deltas = await loadAllDeltaRecords(db);
   return deltas.filter((delta) => delta.deltaPayload?.baseSaveId === baseSaveId).length;
 }
 
 async function isSaveReferencedAsDeltaBase(db: IDBDatabase, saveId: number): Promise<boolean> {
-  if (!db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)) return false;
   const referencedBaseIds = await getReferencedDeltaBaseIds(db);
   return referencedBaseIds.has(saveId);
 }
@@ -455,12 +667,7 @@ async function cleanupUnreferencedHiddenSaves(db: IDBDatabase): Promise<void> {
       req.onsuccess = () => resolve(req.result as SaveListItemSummary[]);
       req.onerror = () => reject(req.error);
     }),
-    new Promise<SaveNodeDeltaRecord[]>((resolve, reject) => {
-      const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
-      const req = tx.objectStore(SAVE_NODE_DELTAS_STORE).getAll();
-      req.onsuccess = () => resolve(req.result as SaveNodeDeltaRecord[]);
-      req.onerror = () => reject(req.error);
-    }),
+    loadAllDeltaRecords(db),
     new Promise<存档数据[]>((resolve, reject) => {
       const tx = db.transaction(SAVES_STORE, 'readonly');
       const req = tx.objectStore(SAVES_STORE).getAll();
@@ -488,12 +695,36 @@ async function cleanupUnreferencedHiddenSaves(db: IDBDatabase): Promise<void> {
 }
 
 async function loadDeltaRecordByNodeId(db: IDBDatabase, nodeId: string): Promise<SaveNodeDeltaRecord | null> {
+  const desktopDelta = await loadDesktopSaveNodeDeltaSafely(nodeId);
+  if (desktopDelta) return desktopDelta;
+  if (!db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)) return null;
   return new Promise((resolve, reject) => {
     const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
     const req = tx.objectStore(SAVE_NODE_DELTAS_STORE).get(nodeId);
     req.onsuccess = () => resolve((req.result as SaveNodeDeltaRecord) ?? null);
     req.onerror = () => reject(req.error);
   });
+}
+
+async function loadAllDeltaRecords(db: IDBDatabase): Promise<SaveNodeDeltaRecord[]> {
+  const indexedDeltas = db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)
+    ? await new Promise<SaveNodeDeltaRecord[]>((resolve, reject) => {
+        const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
+        const req = tx.objectStore(SAVE_NODE_DELTAS_STORE).getAll();
+        req.onsuccess = () => resolve(req.result as SaveNodeDeltaRecord[]);
+        req.onerror = () => reject(req.error);
+      })
+    : [];
+  const desktopDeltas = await loadDesktopSaveNodeDeltasSafely();
+  if (!desktopDeltas.length) return indexedDeltas;
+  const byNodeId = new Map<string, SaveNodeDeltaRecord>();
+  for (const delta of indexedDeltas) {
+    if (delta.nodeId) byNodeId.set(delta.nodeId, delta);
+  }
+  for (const delta of desktopDeltas) {
+    if (delta.nodeId) byNodeId.set(delta.nodeId, delta);
+  }
+  return Array.from(byNodeId.values());
 }
 
 function collectSaveAlbumAssetIds(save: 存档数据): string[] {
@@ -530,6 +761,7 @@ async function migrateLoadedSaveAssets(db: IDBDatabase, save: 存档数据): Pro
   const records = extractSaveAssetRecords(save);
   if (!records.length) return;
   const storedSave = stripSaveAssetPayloadForStorage(save);
+  let migratedDelta: SaveNodeDeltaRecord | null = null;
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');
     const saveStore = tx.objectStore(SAVES_STORE);
@@ -540,28 +772,231 @@ async function migrateLoadedSaveAssets(db: IDBDatabase, save: 存档数据): Pro
     saveStore.put(storedSave);
     summaryStore.put(buildSaveSummary(storedSave));
     const delta = buildSaveNodeDeltaRecord(storedSave, Number(storedSave.id) || 0);
-    if (delta) deltaStore.put(delta);
+    if (delta) {
+      migratedDelta = delta;
+      deltaStore.put(delta);
+    }
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+  await mirrorDesktopSaveDeltaSafely(migratedDelta);
+  await mirrorDesktopAssetsSafely(records);
+}
+
+async function mirrorDesktopSaveSafely(save: 存档数据): Promise<void> {
+  try {
+    await mirrorSaveToDesktop(save, buildSaveSummary(save));
+  } catch (error) {
+    console.warn('[desktop-save-mirror] save mirror failed', error);
+  }
+}
+
+async function writeDesktopPrimarySaveBeforeIndexedDbSafely(
+  save: 存档数据,
+  delta: SaveNodeDeltaRecord | null,
+  assetRecords: SaveAssetRecord[],
+): Promise<boolean> {
+  if (!isDesktopRuntime()) return false;
+  let transactionId: string | null = null;
+  try {
+    transactionId = await beginDesktopSaveTransaction(Number(save.id) || 0, {
+      deltaNodeId: delta?.nodeId,
+      assetIds: assetRecords.map((record) => record.id).filter(Boolean),
+    });
+    await mirrorSaveToDesktop(save, buildSaveSummary(save));
+    await mirrorSaveNodeDeltaToDesktop(delta);
+    await mirrorAssetRecordsToDesktop(assetRecords);
+    await finishDesktopSaveTransaction(Number(save.id) || 0, transactionId);
+    return true;
+  } catch (error) {
+    console.warn('[desktop-save-mirror] desktop primary save write failed, falling back to IndexedDB primary write', error);
+    return false;
+  }
+}
+
+async function reserveDesktopSaveIdSafely(db: IDBDatabase): Promise<number | null> {
+  if (!isDesktopRuntime()) return null;
+  try {
+    const minimumNextId = await getNextIndexedSaveIdFloor(db);
+    return await reserveDesktopSaveId(minimumNextId);
+  } catch (error) {
+    console.warn('[desktop-save-mirror] save id reservation failed, falling back to IndexedDB autoIncrement', error);
+    return null;
+  }
+}
+
+async function getNextIndexedSaveIdFloor(db: IDBDatabase): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SAVES_STORE, 'readonly');
+    const store = tx.objectStore(SAVES_STORE);
+    const request = store.openCursor(null, 'prev');
+    request.onsuccess = () => {
+      const cursor = request.result;
+      const key = typeof cursor?.key === 'number' ? cursor.key : 0;
+      resolve(key + 1);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function mirrorDesktopSaveDeltaSafely(delta: SaveNodeDeltaRecord | null | undefined): Promise<void> {
+  if (!delta) return;
+  try {
+    await mirrorSaveNodeDeltaToDesktop(delta);
+  } catch (error) {
+    console.warn('[desktop-save-delta-mirror] delta mirror failed', error);
+  }
+}
+
+async function loadDesktopSaveNodeDeltaSafely(nodeId: string): Promise<SaveNodeDeltaRecord | null> {
+  if (!isDesktopRuntime()) return null;
+  try {
+    return await loadDesktopSaveNodeDelta(nodeId);
+  } catch (error) {
+    console.warn('[desktop-save-delta-mirror] delta priority load failed', error);
+    return null;
+  }
+}
+
+async function loadDesktopSaveNodeDeltasSafely(): Promise<SaveNodeDeltaRecord[]> {
+  if (!isDesktopRuntime()) return [];
+  try {
+    return await loadDesktopSaveNodeDeltas();
+  } catch (error) {
+    console.warn('[desktop-save-delta-mirror] delta list load failed', error);
+    return [];
+  }
+}
+
+async function removeDesktopSaveDeltasBySaveIdSafely(saveId: number): Promise<void> {
+  try {
+    await removeSaveNodeDeltasBySaveIdFromDesktopMirror(saveId);
+  } catch (error) {
+    console.warn('[desktop-save-delta-mirror] delta mirror delete failed', error);
+  }
+}
+
+async function replaceDesktopSaveDeltaMirrorSafely(deltas: SaveNodeDeltaRecord[]): Promise<void> {
+  try {
+    await replaceDesktopSaveDeltaMirror(deltas);
+  } catch (error) {
+    console.warn('[desktop-save-delta-mirror] delta mirror replace failed', error);
+  }
+}
+
+async function loadDesktopSaveMirrorListFirstSafely(): Promise<SaveListItemSummary[]> {
+  if (!isDesktopRuntime()) return [];
+  try {
+    return sortSaveSummaries(await listDesktopSaveMirror());
+  } catch (error) {
+    console.warn('[desktop-save-mirror] save mirror list priority read failed', error);
+    return [];
+  }
+}
+
+async function loadDesktopSaveMirrorListFallbackSafely(): Promise<SaveListItemSummary[]> {
+  if (!isDesktopRuntime()) return [];
+  try {
+    return sortSaveSummaries(await listDesktopSaveMirror());
+  } catch (error) {
+    console.warn('[desktop-save-mirror] save mirror list fallback failed', error);
+    return [];
+  }
+}
+
+async function loadDesktopSaveMirrorSaveFirstSafely(id: number): Promise<存档数据 | null> {
+  if (!isDesktopRuntime()) return null;
+  try {
+    return await loadDesktopSaveMirrorSave(id);
+  } catch (error) {
+    console.warn('[desktop-save-mirror] save mirror priority load failed', error);
+    return null;
+  }
+}
+
+async function loadDesktopSaveMirrorSaveFallbackSafely(id: number): Promise<存档数据 | null> {
+  if (!isDesktopRuntime()) return null;
+  try {
+    return await loadDesktopSaveMirrorSave(id);
+  } catch (error) {
+    console.warn('[desktop-save-mirror] save mirror load fallback failed', error);
+    return null;
+  }
+}
+
+async function restoreDesktopAssetPayloadSafely<T extends 存档数据>(save: T): Promise<T> {
+  const assetIds = collectSaveAlbumAssetIds(save);
+  if (!assetIds.length) return save;
+  const records = await loadDesktopAssetRecordsSafely(assetIds);
+  return restoreSaveAssetPayloadFromRecords(save, records);
+}
+
+async function restoreDesktopAssetPayloadForSavesSafely(saves: 存档数据[]): Promise<存档数据[]> {
+  const restored: 存档数据[] = [];
+  for (const save of saves) {
+    restored.push(await restoreDesktopAssetPayloadSafely(save));
+  }
+  return restored;
+}
+
+async function loadDesktopAssetRecordsSafely(assetIds: string[]): Promise<SaveAssetRecord[]> {
+  if (!isDesktopRuntime() || !assetIds.length) return [];
+  try {
+    return await loadDesktopAssetRecords(assetIds);
+  } catch (error) {
+    console.warn('[desktop-asset-mirror] asset mirror load failed', error);
+    return [];
+  }
+}
+
+async function removeDesktopSaveMirrorSafely(id: number): Promise<void> {
+  try {
+    await removeSaveFromDesktopMirror(id);
+  } catch (error) {
+    console.warn('[desktop-save-mirror] delete mirror failed', error);
+  }
+}
+
+async function replaceDesktopSaveMirrorSafely(saves: 存档数据[]): Promise<void> {
+  try {
+    await replaceDesktopSaveMirror(saves.map((save) => ({ save, summary: buildSaveSummary(save) })));
+  } catch (error) {
+    console.warn('[desktop-save-mirror] replace mirror failed', error);
+  }
+}
+
+async function mirrorDesktopAssetsSafely(records: SaveAssetRecord[]): Promise<void> {
+  try {
+    await mirrorAssetRecordsToDesktop(records);
+  } catch (error) {
+    console.warn('[desktop-asset-mirror] asset mirror failed', error);
+  }
+}
+
+async function replaceDesktopAssetMirrorSafely(records: SaveAssetRecord[]): Promise<void> {
+  try {
+    await replaceDesktopAssetMirror(records);
+  } catch (error) {
+    console.warn('[desktop-asset-mirror] asset mirror replace failed', error);
+  }
 }
 
 // ── Settings operations ──
 
 export async function saveSetting(key: string, value: unknown): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
-    const store = tx.objectStore(SETTINGS_STORE);
-    store.put({ key, value });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  if (isDesktopRuntime()) {
+    await mirrorSettingToDesktop(key, value);
+    await cacheIndexedSettingSafely(key, value);
+    return;
+  }
+  await writeIndexedSetting(key, value);
 }
 
 export async function loadSetting<T>(key: string): Promise<T | null> {
+  const desktopValue = await loadDesktopSettingFirstSafely<T>(key);
+  if (desktopValue !== null) return desktopValue;
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  const indexedValue = await new Promise<T | null>((resolve, reject) => {
     const tx = db.transaction(SETTINGS_STORE, 'readonly');
     const store = tx.objectStore(SETTINGS_STORE);
     const request = store.get(key);
@@ -571,17 +1006,73 @@ export async function loadSetting<T>(key: string): Promise<T | null> {
     };
     request.onerror = () => reject(request.error);
   });
+  if (indexedValue !== null) return indexedValue;
+  return loadDesktopSettingFallbackSafely<T>(key);
 }
 
 export async function deleteSetting(key: string): Promise<void> {
+  if (isDesktopRuntime()) {
+    await removeSettingFromDesktopMirror(key);
+    await deleteIndexedSettingSafely(key);
+    return;
+  }
+  await deleteIndexedSetting(key);
+}
+
+async function writeIndexedSetting(key: string, value: unknown): Promise<void> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    const store = tx.objectStore(SETTINGS_STORE);
+    store.put({ key, value });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function cacheIndexedSettingSafely(key: string, value: unknown): Promise<void> {
+  try {
+    await writeIndexedSetting(key, value);
+  } catch (error) {
+    console.warn('[desktop-settings-mirror] IndexedDB setting cache write failed', error);
+  }
+}
+
+async function loadDesktopSettingFirstSafely<T>(key: string): Promise<T | null> {
+  try {
+    return await loadSettingFromDesktopMirror<T>(key);
+  } catch (error) {
+    console.warn('[desktop-settings-mirror] setting priority load failed', error);
+    return null;
+  }
+}
+
+async function loadDesktopSettingFallbackSafely<T>(key: string): Promise<T | null> {
+  try {
+    return await loadSettingFromDesktopMirror<T>(key);
+  } catch (error) {
+    console.warn('[desktop-settings-mirror] setting mirror load failed', error);
+    return null;
+  }
+}
+
+async function deleteIndexedSetting(key: string): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(SETTINGS_STORE, 'readwrite');
     const store = tx.objectStore(SETTINGS_STORE);
     store.delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+async function deleteIndexedSettingSafely(key: string): Promise<void> {
+  try {
+    await deleteIndexedSetting(key);
+  } catch (error) {
+    console.warn('[desktop-settings-mirror] IndexedDB setting cache delete failed', error);
+  }
 }
 
 // ── Auto-save rotation ──

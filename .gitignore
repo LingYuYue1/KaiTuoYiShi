@@ -4,9 +4,15 @@ node_modules/
 # Build outputs
 dist/
 *.tsbuildinfo
+.tmp/
+.tmp-*/
+.tmp-*
 .tmp-regression/
 .tmp-story-weaving-regression/
+.desktop-release/
 .wrangler/
+src-tauri/target/
+backups/
 
 # Local environment
 .env
@@ -31,3 +37,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+docs/design/
+nul

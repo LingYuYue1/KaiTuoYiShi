@@ -100,6 +100,31 @@ export function useGame(): UseGameReturn {
     state.abortControllerRef.current?.abort();
     state.abortControllerRef.current = null;
     const history = state.chatHistory;
+
+    // 特殊情况：最后一条是 user 且没有对应的 assistant，说明本回合主剧情生成失败了。
+    // 此时只回退这条孤立的 user 消息，不应回退到上一回合。
+    const lastMsg = history[history.length - 1];
+    if (lastMsg && lastMsg.role === 'user') {
+      // 孤立 user：主剧情生成失败，只砍掉这条 user
+      const userInput = lastMsg.content;
+      const snapshot = lastMsg.preTurnSnapshot;
+      const trimmed = history.slice(0, -1);
+      state.setChatHistory(trimmed);
+      state.setStreamingMessage('');
+      state.setWorkflowStatus('');
+      state.setWorkflowHint(snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。');
+      if (snapshot) {
+        const nextStoryWeaving = restorePreTurnSnapshot(state, snapshot);
+        await saveSetting('storyWeavingSystem', nextStoryWeaving);
+      } else {
+        state.setTurnCount(Math.max(1, state.turnCount - 1));
+      }
+      // 生成失败的重 roll 不需要 rerollContext（没有上一版回复可比对）
+      rerollContextRef.current = null;
+      return userInput;
+    }
+
+    // 正常情况：找到最后一条 user → AI 对
     // 找到最后一条 AI 消息
     let lastAiIdx = -1;
     for (let i = history.length - 1; i >= 0; i--) {
