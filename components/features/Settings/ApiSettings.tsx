@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { API设置, API配置项, AI提供商, 游戏设置 } from '@/models/settings';
 import {
   MAX_OUTPUT_TIERS,
@@ -135,11 +135,11 @@ function ApiSubviewButton({
       className="group flex min-w-0 w-full items-center gap-3 px-3 py-3 text-left transition-all hover:opacity-95"
       style={{
         background: active
-          ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.24), rgba(var(--tj-accent-primary), 0.08))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.24), rgba(var(--tj-accent-primary), 0.08))'
           : 'rgba(var(--tj-bg-secondary), 0.34)',
         color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary), 0.86)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.56), 0 0 18px rgba(var(--tj-tech-cyan), 0.10)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.56), 0 0 18px rgba(var(--tj-accent-primary), 0.10)'
           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
         clipPath: smallClip,
       }}
@@ -148,7 +148,7 @@ function ApiSubviewButton({
         className="h-8 w-1.5 flex-shrink-0"
         style={{
           background: active
-            ? 'linear-gradient(180deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.88))'
+            ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-primary), 0.88))'
             : 'rgba(var(--tj-accent-primary), 0.18)',
           clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0)',
           opacity: active ? 1 : 0.75,
@@ -160,8 +160,8 @@ function ApiSubviewButton({
           <div
             className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
             style={{
-              background: active ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-text-secondary), 0.28)',
-              boxShadow: active ? '0 0 10px rgba(var(--tj-tech-cyan), 0.35)' : 'none',
+              background: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.28)',
+              boxShadow: active ? '0 0 10px rgba(var(--tj-accent-primary), 0.35)' : 'none',
             }}
           />
         </div>
@@ -174,7 +174,7 @@ function ApiSubviewButton({
       </div>
       <div
         className="flex-shrink-0 text-[11px] transition-transform group-hover:translate-x-0.5"
-        style={{ color: active ? 'rgba(var(--tj-tech-cyan), 0.92)' : 'rgba(var(--tj-text-secondary), 0.42)' }}
+        style={{ color: active ? 'rgba(var(--tj-accent-primary), 0.92)' : 'rgba(var(--tj-text-secondary), 0.42)' }}
       >
         →
       </div>
@@ -313,7 +313,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
           clipPath: cardClip,
         }}
       >
-        <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.9)' }}>
+        <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
           {activeSubviewMeta.label}
         </div>
         <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
@@ -343,7 +343,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
           }}
         >
           <div className="px-4 py-4">
-            <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.9)' }}>
+            <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
               API 子页
             </div>
             <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
@@ -373,7 +373,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
             }}
             >
             <div>
-              <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.9)' }}>
+              <div className="font-serif text-xs tracking-[0.28em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
                 {activeSubviewMeta.label}
               </div>
               <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
@@ -764,7 +764,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
         style={{ clipPath: cardClip }}
       >
         <div className="min-w-0 flex-1">
-          <div className="font-serif text-xs tracking-[0.24em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.85)' }}>
+          <div className="font-serif text-xs tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}>
             ◆ API 配置包
           </div>
           <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
@@ -776,8 +776,8 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
             onClick={() => handleExportProfile(false)}
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              color: 'rgba(var(--tj-tech-cyan), 0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.35)',
+              color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
               clipPath: smallClip,
             }}
           >
@@ -787,8 +787,8 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
             onClick={() => handleExportProfile(true)}
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              color: 'rgba(var(--tj-accent-primary), 0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28)',
+              color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
               clipPath: smallClip,
             }}
           >
@@ -798,9 +798,9 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
             onClick={handleImportProfile}
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
-              background: 'rgba(var(--tj-tech-cyan), 0.08)',
+              background: 'rgba(var(--tj-accent-primary), 0.08)',
               color: 'rgba(var(--tj-text-primary), 0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.3)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
               clipPath: smallClip,
             }}
           >
@@ -868,7 +868,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                   onClick={() => void handleLoadProfileSlot(slot)}
                   className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                   style={{
-                    color: 'rgba(var(--tj-accent-primary), 0.9)',
+                    color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
                     boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
                     clipPath: smallClip,
                   }}
@@ -896,7 +896,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
         className="px-3 py-3 text-xs leading-relaxed sm:px-4"
         style={{ color: 'rgba(var(--tj-text-secondary), 0.78)', clipPath: cardClip }}
       >
-        <div className="font-serif tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+        <div className="font-serif tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
           ◆ API 配置提示
         </div>
         <div className="mt-1.5 space-y-0.5">
@@ -917,7 +917,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
       >
         <span
           className="font-serif text-xs tracking-[0.3em]"
-          style={{ color: 'rgba(var(--tj-tech-cyan), 0.85)' }}
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
         >
           ◆ 新建配置
         </span>
@@ -944,7 +944,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
           onClick={handleCreate}
           className="px-4 py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90 sm:py-1.5 sm:tracking-[0.25em]"
           style={{
-            background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.92))',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-primary), 0.92))',
             color: 'rgb(var(--tj-on-accent))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
             clipPath: smallClip,
@@ -1027,7 +1027,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
             {/* 顶部操作条 */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-2">
-                <span style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+                <span style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
                   {settings.activeConfigId === selectedConfig.id ? '◆' : '◇'}
                 </span>
                 <span
@@ -1048,7 +1048,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                     onClick={handleActivate}
                     className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+                      background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(var(--tj-accent-primary), 0.84))',
                       color: 'rgb(var(--tj-on-accent))',
                       boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
                       clipPath: smallClip,
@@ -1190,8 +1190,8 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                 className="leading-relaxed"
                 style={{
                   color: 'rgba(var(--tj-text-primary), 0.92)',
-                  background: 'rgba(var(--tj-tech-cyan), 0.05)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
+                  background: 'rgba(var(--tj-accent-primary), 0.05)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                   clipPath: smallClip,
                   padding: '0.45rem 0.6rem',
                 }}
@@ -1311,7 +1311,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                         className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all"
                         style={{
                           background: active
-                            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-primary), 0.86))'
                             : 'transparent',
                           color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
                           boxShadow: active
@@ -1369,7 +1369,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
               >
                 <div
                   className="mb-1 font-serif tracking-[0.2em]"
-                  style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}
+                  style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}
                 >
                   ✦ {recommendation.providerLabel} · {recommendation.modelLabel}
                 </div>
@@ -1398,7 +1398,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                 disabled={testing}
                 className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
-                  color: 'rgba(var(--tj-accent-primary), 0.9)',
+                  color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
                   background: 'rgba(var(--tj-accent-primary), 0.06)',
                   clipPath: smallClip,
@@ -1450,7 +1450,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                 style={{
                   background: savedFlash
                     ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-                    : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+                    : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(var(--tj-accent-primary), 0.84))',
                   color: 'rgb(var(--tj-on-accent))',
                   boxShadow: savedFlash
                     ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { 智库系统, 智库分类, 智库条目 } from '@/models/zhiku';
 import {
   ZHIKU_CATEGORY_LABELS,
@@ -287,7 +287,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
         className="min-w-0 px-3 py-3 md:px-4 md:py-4"
         style={{
           background:
-            'radial-gradient(circle at 12% 0%, rgba(117, 214, 216, 0.08), transparent 36%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94))',
+            'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.08), transparent 36%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94))',
           boxShadow:
             'inset 0 0 0 1px rgba(var(--tj-border), 0.64), 0 14px 32px rgba(var(--tj-shadow), 0.08)',
           clipPath: cardClip,
@@ -387,7 +387,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
               className="px-3 py-2 text-xs font-mono tracking-[0.3em] transition-all hover:opacity-90"
               style={{
                 color: 'rgb(var(--tj-on-accent))',
-                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))',
                 clipPath: smallClip,
               }}
             >
@@ -511,7 +511,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                   className="w-full py-2.5 text-sm font-mono tracking-[0.34em] transition-all disabled:opacity-50"
                   style={{
                     color: 'rgb(var(--tj-on-accent))',
-                    background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+                    background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))',
                     clipPath: smallClip,
                   }}
                 >
@@ -1099,7 +1099,7 @@ function CharacterSoftStructurePreview({ entry }: { entry: 智库条目 }) {
               clipPath: smallClip,
             }}
           >
-            <div className="text-[11px] font-mono tracking-[0.12em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
+            <div className="text-[11px] font-mono tracking-[0.12em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(var(--tj-accent-secondary), 0.86))' }}>
               {label}
             </div>
             <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
@@ -1120,7 +1120,7 @@ function CharacterSoftStructurePreview({ entry }: { entry: 智库条目 }) {
                 clipPath: smallClip,
               }}
             >
-              <div className="text-[11px] font-mono tracking-[0.12em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
+              <div className="text-[11px] font-mono tracking-[0.12em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(var(--tj-accent-secondary), 0.86))' }}>
                 {label}
               </div>
               <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
@@ -1249,7 +1249,7 @@ function StorySeriesGroup({
               className="px-2 py-1 text-[10px] font-mono tracking-[0.22em]"
               style={{
                 color: group.builtin ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.92)',
-                background: group.builtin ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(var(--tj-accent-primary), 0.08)',
+                background: group.builtin ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))' : 'rgba(var(--tj-accent-primary), 0.08)',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                 clipPath: smallClip,
               }}
@@ -1294,7 +1294,7 @@ function StoryChapterButton({ entry, active, onClick }: { entry: 智库条目; a
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="shrink-0 px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgb(var(--tj-on-accent))', background: 'rgba(var(--tj-accent-primary), 0.88)', clipPath: smallClip }}>
+              <span className="shrink-0 px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]" style={{ color: 'rgb(var(--tj-on-accent))', background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))', clipPath: smallClip }}>
                 {entry.章节序号 ? `第${entry.章节序号}章` : '章节'}
               </span>
               <div className="min-w-0 truncate font-serif text-[13px] font-semibold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -1335,7 +1335,7 @@ function EntryButton({ entry, active, onClick }: { entry: 智库条目; active: 
             className="hidden shrink-0 px-2 py-0.5 text-[10px] font-mono tracking-[0.18em] md:inline-block"
             style={{
               color: 'rgb(var(--tj-on-accent))',
-              background: entry.builtin ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(54, 111, 74, 0.88)',
+              background: entry.builtin ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))' : 'rgba(54, 111, 74, 0.88)',
               clipPath: smallClip,
             }}
           >
@@ -1368,7 +1368,7 @@ function MobileEntryDetail({ entry }: { entry: 智库条目 }) {
       <div className="flex flex-wrap items-center gap-2">
         <span
           className="px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]"
-          style={{ color: 'rgb(var(--tj-on-accent))', background: 'rgba(var(--tj-accent-primary), 0.86)', clipPath: smallClip }}
+          style={{ color: 'rgb(var(--tj-on-accent))', background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(var(--tj-accent-secondary), 0.86))', clipPath: smallClip }}
         >
           {ZHIKU_CATEGORY_LABELS[entry.分类]}
         </span>
@@ -1433,7 +1433,7 @@ function DetailPanel({
               className="px-2 py-0.5 text-[10px] font-mono tracking-[0.18em]"
               style={{
                 color: 'rgb(var(--tj-on-accent))',
-                background: entry.builtin ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(54, 111, 74, 0.88)',
+                background: entry.builtin ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))' : 'rgba(54, 111, 74, 0.88)',
                 clipPath: smallClip,
               }}
             >
@@ -1669,7 +1669,7 @@ function CharacterProfileWorkspace({
       >
         <div className="min-w-0">
           <div className="min-w-0">
-            <div className="text-[11px] font-mono tracking-[0.3em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+            <div className="text-[11px] font-mono tracking-[0.3em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.86), rgba(var(--tj-accent-secondary), 0.82))' }}>
               角色档案工作台
             </div>
             <div className="mt-2 font-serif text-[20px] font-semibold tracking-[0.16em] md:text-[24px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -1701,7 +1701,7 @@ function CharacterProfileWorkspace({
               className="shrink-0 px-3.5 py-2.5 text-center text-[12px] font-mono font-semibold tracking-[0.16em] transition-all lg:w-full lg:px-4 lg:py-3 lg:text-left lg:text-[13px]"
               style={{
                 color: visibleSection === item.key ? 'rgb(var(--tj-bg-primary))' : item.available ? 'rgba(var(--tj-accent-primary), 0.9)' : 'rgba(var(--tj-text-secondary), 0.42)',
-                background: visibleSection === item.key ? 'rgba(var(--tj-accent-primary), 0.82)' : 'rgba(var(--tj-bg-primary), 0.2)',
+                background: visibleSection === item.key ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.86), rgba(var(--tj-accent-secondary), 0.82))' : 'rgba(var(--tj-bg-primary), 0.2)',
                 boxShadow: visibleSection === item.key
                   ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.72), 0 0 18px rgba(var(--tj-accent-primary), 0.12)'
                   : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.13)',
@@ -1738,7 +1738,7 @@ function CharacterProfileWorkspace({
                 ))}
               </div>
               <div className="mt-3">
-                <div className="mb-1.5 text-[11px] font-mono tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+                <div className="mb-1.5 text-[11px] font-mono tracking-[0.2em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.86), rgba(var(--tj-accent-secondary), 0.82))' }}>
                   关键词触发
                 </div>
                 <div className="grid gap-2 xl:grid-cols-3">
@@ -1748,7 +1748,7 @@ function CharacterProfileWorkspace({
                 </div>
               </div>
               <div className="mt-3">
-                <div className="mb-1.5 text-[11px] font-mono tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+                <div className="mb-1.5 text-[11px] font-mono tracking-[0.2em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.86), rgba(var(--tj-accent-secondary), 0.82))' }}>
                   身份缺口
                 </div>
                 {identityMissing.length ? (
@@ -1856,7 +1856,7 @@ function CharacterInfoTile({ label, value, danger = false }: { label: string; va
         clipPath: smallClip,
       }}
     >
-      <div className="text-[11px] font-mono tracking-[0.18em]" style={{ color: danger ? 'rgba(255, 165, 150, 0.9)' : 'rgba(var(--tj-accent-primary), 0.88)' }}>
+      <div className="text-[11px] font-mono tracking-[0.18em]" style={{ color: danger ? 'rgba(255, 165, 150, 0.9)' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))' }}>
         {label}
       </div>
       <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
@@ -2622,8 +2622,8 @@ function StructuredCharacterFields({
               disabled={!editable && !entry.builtin}
               className="px-3 py-2 text-xs font-mono tracking-[0.18em] transition-all disabled:opacity-45"
               style={{
-                color: displayedUnlock === status ? 'rgb(var(--tj-on-accent))' : 'rgba(var(--tj-accent-primary), 0.88)',
-                background: displayedUnlock === status ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(var(--tj-accent-primary), 0.05)',
+                color: displayedUnlock === status ? 'rgb(var(--tj-on-accent))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))',
+                background: displayedUnlock === status ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))' : 'rgba(var(--tj-accent-primary), 0.05)',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                 clipPath: smallClip,
               }}
@@ -2735,8 +2735,8 @@ function TinyTab({ active, onClick, children }: { active: boolean; onClick: () =
       onClick={onClick}
       className="px-3 py-1.5 text-xs font-mono tracking-[0.3em] transition-all"
       style={{
-        color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.88)',
-        background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))' : 'rgba(var(--tj-accent-primary), 0.04)',
+        color: active ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-accent-secondary), 0.88))',
+        background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))' : 'rgba(var(--tj-accent-primary), 0.04)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
         clipPath: smallClip,
       }}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { ContextSnapshot, ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { formatTokenCount } from '@/utils/tokenEstimate';
 
@@ -48,7 +48,7 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
           <h3 className="font-serif text-lg font-bold tracking-[0.24em] text-[rgb(var(--tj-accent-primary))]">
             {snapshot.title}
           </h3>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#d8caa4]/80">
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--tj-text-secondary))]/80">
             <span>顺序与类目一览</span>
             <span>真实上传 Tokens：{formatTokenCount(snapshot.uploadEstimatedTokens)}</span>
             {snapshot.diagnosticEstimatedTokens > 0 ? (
@@ -81,7 +81,7 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
       </div>
 
       <div
-        className="px-4 py-3 text-xs leading-6 text-[#d8caa4]/80"
+        className="px-4 py-3 text-xs leading-6 text-[rgb(var(--tj-text-secondary))]/80"
         style={{ border: '1px solid rgba(var(--tj-accent-primary),0.22)', background: 'rgba(0,0,0,0.22)', clipPath: cardClip }}
       >
         <span className="text-[rgb(var(--tj-accent-primary))]">说明：</span>
@@ -95,13 +95,13 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
           className="flex min-h-0 flex-col overflow-hidden"
           style={{ border: '1px solid rgba(var(--tj-accent-primary),0.2)', background: 'rgba(0,0,0,0.28)', clipPath: cardClip }}
         >
-          <div className="flex items-center justify-between border-b border-[rgb(var(--tj-accent-primary))]/15 px-4 py-3 text-xs text-[#d8caa4]/75">
+          <div className="flex items-center justify-between border-b border-[rgb(var(--tj-accent-primary))]/15 px-4 py-3 text-xs text-[rgb(var(--tj-text-secondary))]/75">
             <span>上下文顺序</span>
             <span>{snapshot.sections.length} 项</span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-[#121012] text-[rgb(var(--tj-accent-primary))]/80">
+              <thead className="sticky top-0 z-10 bg-[rgb(var(--tj-bg-secondary))] text-[rgb(var(--tj-accent-primary))]/80">
                 <tr>
                   <th className="w-10 border-b border-[rgb(var(--tj-accent-primary))]/15 p-2 text-center">#</th>
                   <th className="w-24 border-b border-[rgb(var(--tj-accent-primary))]/15 p-2">类目</th>
@@ -121,10 +121,10 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
                         setMode('single');
                       }}
                     >
-                      <td className="p-2 text-center text-[#d8caa4]/70">{section.order}</td>
-                      <td className="p-2 text-[#d8caa4]/75">{section.category}</td>
-                      <td className="max-w-[170px] truncate p-2 text-[#f4ead0]" title={section.title}>{section.title}</td>
-                      <td className="p-2 text-right text-[#d8caa4]/70">{formatTokenCount(section.estimatedTokens)}</td>
+                      <td className="p-2 text-center text-[rgb(var(--tj-text-secondary))]/70">{section.order}</td>
+                      <td className="p-2 text-[rgb(var(--tj-text-secondary))]/75">{section.category}</td>
+                      <td className="max-w-[170px] truncate p-2 text-[rgb(var(--tj-accent-primary))]" title={section.title}>{section.title}</td>
+                      <td className="p-2 text-right text-[rgb(var(--tj-text-secondary))]/70">{formatTokenCount(section.estimatedTokens)}</td>
                     </tr>
                   );
                 })}
@@ -137,12 +137,12 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
           className="flex min-h-0 flex-col overflow-hidden"
           style={{ border: '1px solid rgba(var(--tj-accent-primary),0.2)', background: 'rgba(0,0,0,0.28)', clipPath: cardClip }}
         >
-          <div className="flex items-center justify-between border-b border-[rgb(var(--tj-accent-primary))]/15 px-4 py-3 text-xs text-[#d8caa4]/75">
+          <div className="flex items-center justify-between border-b border-[rgb(var(--tj-accent-primary))]/15 px-4 py-3 text-xs text-[rgb(var(--tj-text-secondary))]/75">
             <span>{mode === 'all' ? '全部上下文内容' : selected?.title ?? '单项内容'}</span>
             <span>估算上传 {formatTokenCount(shownTokens)} Tokens</span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-[#eee8d6]">
+            <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-[rgb(var(--tj-text-primary))]">
               {content || '暂无上下文内容'}
             </pre>
           </div>
@@ -157,6 +157,6 @@ function buttonClass(active: boolean): string {
     'px-3 py-2 text-xs transition-colors',
     active
       ? 'border border-[rgb(var(--tj-accent-primary))]/80 bg-[rgb(var(--tj-accent-primary))]/15 text-[rgb(var(--tj-accent-primary))]'
-      : 'border border-[#9fb8ff]/50 bg-black/20 text-[#d7e2ff] hover:border-[rgb(var(--tj-accent-primary))]/65 hover:text-[rgb(var(--tj-accent-primary))]',
+      : 'border border-[rgb(var(--tj-accent-primary))]/50 bg-black/20 text-[rgb(var(--tj-accent-secondary))] hover:border-[rgb(var(--tj-accent-primary))]/65 hover:text-[rgb(var(--tj-accent-primary))]',
   ].join(' ');
 }

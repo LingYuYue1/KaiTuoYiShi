@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { 新闻条目, 新闻状态 } from '@/models/news';
 import {
@@ -77,9 +77,9 @@ export function NewsPanel({ news, turnCount }: NewsPanelProps) {
         className="pointer-events-none absolute inset-0 opacity-60"
         style={{
           background:
-            'linear-gradient(rgba(117, 214, 216, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.035) 1px, transparent 1px)',
+            'linear-gradient(rgba(var(--tj-tech-cyan), 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.035) 1px, transparent 1px)',
           backgroundSize: '22px 22px, 22px 22px',
-          maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.28))',
+          maskImage: 'linear-gradient(180deg, rgba(var(--tj-bg-primary),0.95), rgba(var(--tj-bg-primary),0.28))',
         }}
       />
 
@@ -138,7 +138,7 @@ export function NewsPanel({ news, turnCount }: NewsPanelProps) {
       <div className="relative mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="h-px w-8" style={{ background: 'linear-gradient(90deg, rgb(var(--tj-accent-primary)), transparent)' }} />
-          <span className="font-serif text-[12px] font-bold tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+          <span className="font-serif text-[12px] font-bold tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
             {tab === 'all' ? '全域新闻流' : NEWS_STATUS_LABELS[tab]}
           </span>
         </div>
@@ -211,7 +211,7 @@ function StatusChip({
           : 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
         boxShadow: active
           ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48), 0 0 18px rgba(var(--tj-accent-primary), 0.08)'
-          : 'inset 0 0 0 1px rgba(117, 214, 216, 0.16)',
+          : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)',
       }}
     >
       <div className="flex items-center justify-between gap-2">
@@ -362,7 +362,7 @@ function EmptyState() {
       <div className="mx-auto mb-3 h-14 w-14" style={{
         background: 'repeating-conic-gradient(from 0deg, rgba(var(--tj-tech-cyan-deep),0.75) 0deg 12deg, transparent 12deg 24deg)',
         borderRadius: '999px',
-        boxShadow: '0 0 22px rgba(117, 214, 216, 0.16)',
+        boxShadow: '0 0 22px rgba(var(--tj-tech-cyan), 0.16)',
       }} />
       <div className="font-serif text-[14px] font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
         周报频道待机中

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import type { API设置, 游戏设置 } from '@/models/settings';
 import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
 import {
@@ -39,33 +39,33 @@ type TrackTab = 'canon' | 'custom';
 const statusColor: Record<剧情编织分段['处理状态'], string> = {
   待处理: 'rgba(var(--tj-text-secondary), 0.8)',
   处理中: 'rgba(var(--tj-accent-primary), 0.95)',
-  已完成: 'rgba(145, 210, 175, 0.95)',
-  失败: 'rgba(230, 130, 130, 0.95)',
+  已完成: 'rgba(var(--tj-ui-success),0.95)',
+  失败: 'rgba(var(--tj-danger),0.95)',
 };
 
 const statusBg: Record<剧情编织分段['处理状态'], string> = {
   待处理: 'rgba(var(--tj-text-secondary), 0.12)',
   处理中: 'rgba(var(--tj-accent-primary), 0.16)',
-  已完成: 'rgba(145, 210, 175, 0.14)',
-  失败: 'rgba(230, 130, 130, 0.14)',
+  已完成: 'rgba(var(--tj-ui-success),0.14)',
+  失败: 'rgba(var(--tj-danger),0.14)',
 };
 
 const runtimeStatusColor: Record<剧情编织运行状态, string> = {
   未开始: 'rgba(var(--tj-text-secondary), 0.82)',
   当前: 'rgba(var(--tj-accent-primary), 0.96)',
-  已经历: 'rgba(145, 210, 175, 0.95)',
-  已跳过: 'rgba(160, 168, 245, 0.88)',
-  已偏离: 'rgba(230, 170, 120, 0.92)',
-  暂停: 'rgba(180, 180, 190, 0.82)',
+  已经历: 'rgba(var(--tj-ui-success),0.95)',
+  已跳过: 'rgba(var(--tj-tech-blue),0.88)',
+  已偏离: 'rgba(var(--tj-accent-secondary),0.92)',
+  暂停: 'rgba(var(--tj-text-secondary),0.82)',
 };
 
 const runtimeStatusBg: Record<剧情编织运行状态, string> = {
   未开始: 'rgba(var(--tj-text-secondary), 0.08)',
   当前: 'rgba(var(--tj-accent-primary), 0.15)',
-  已经历: 'rgba(145, 210, 175, 0.12)',
-  已跳过: 'rgba(160, 168, 245, 0.10)',
-  已偏离: 'rgba(230, 170, 120, 0.12)',
-  暂停: 'rgba(180, 180, 190, 0.08)',
+  已经历: 'rgba(var(--tj-ui-success),0.12)',
+  已跳过: 'rgba(var(--tj-tech-blue),0.10)',
+  已偏离: 'rgba(var(--tj-accent-secondary),0.12)',
+  暂停: 'rgba(var(--tj-text-secondary),0.08)',
 };
 
 const runtimeStatusOptions: 剧情编织运行状态[] = ['未开始', '当前', '已经历', '已跳过', '已偏离', '暂停'];
@@ -584,7 +584,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         className="pointer-events-none absolute inset-0 opacity-70"
         style={{
           background:
-            'linear-gradient(rgba(var(--tj-accent-primary),0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(117,214,216,0.03) 1px, transparent 1px)',
+            'linear-gradient(rgba(var(--tj-accent-primary),0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.03) 1px, transparent 1px)',
           backgroundSize: '24px 24px, 24px 24px',
           maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.9), rgba(0,0,0,0.2))',
         }}
@@ -614,12 +614,12 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 text-[11px] md:min-w-[220px] md:justify-end"
             style={{
               background: 'rgba(var(--tj-bg-primary),0.52)',
-              boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)',
               clipPath: smallClip,
               color: 'rgba(var(--tj-text-secondary),0.76)',
             }}
           >
-            <span style={{ color: '#75d6d8' }}>INJECT</span>
+            <span style={{ color: 'rgb(var(--tj-tech-cyan))' }}>INJECT</span>
             <span>{activeSeries ? `${activeSeries.章节列表.length}章 / ${activeSeries.分段列表.length}段` : '暂无系列'}</span>
             {busyBatch && <span style={{ color: 'rgb(var(--tj-accent-primary))' }}>{busyBatch}</span>}
           </div>
@@ -630,15 +630,15 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             className="flex flex-col gap-2 px-3 py-3"
             style={{
               background: 'rgba(var(--tj-bg-primary),0.45)',
-              boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.14)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
               clipPath: cardClip,
             }}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="h-px w-8" style={{ background: 'linear-gradient(90deg, #75d6d8, transparent)' }} />
-                  <span className="font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+                  <span className="h-px w-8" style={{ background: 'linear-gradient(90deg, rgb(var(--tj-tech-cyan)), transparent)' }} />
+                  <span className="font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.82)' }}>
                     当前主注入轨道
                   </span>
                 </div>
@@ -684,7 +684,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                   </div>
                 )}
               </div>
-              <div className="flex shrink-0 gap-1 rounded-none p-1" style={{ background: 'rgba(var(--tj-bg-primary),0.58)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.16)', clipPath: smallClip }}>
+              <div className="flex shrink-0 gap-1 rounded-none p-1" style={{ background: 'rgba(var(--tj-bg-primary),0.58)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)', clipPath: smallClip }}>
                 {([
                   ['canon', '原著剧情', canonSeries.length],
                   ['custom', '自制剧情', customSeries.length],
@@ -698,12 +698,12 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                       className="px-3 py-1.5 text-[12px] transition-all"
                       style={{
                         color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.78)',
-                        background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.16), rgba(117,214,216,0.08))' : 'transparent',
+                        background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.16), rgba(var(--tj-tech-cyan), 0.08))' : 'transparent',
                         boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.32)' : 'none',
                         clipPath: smallClip,
                       }}
                     >
-                      {label} <span style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(117,214,216,0.66)' }}>{count}</span>
+                      {label} <span style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-tech-cyan), 0.66)' }}>{count}</span>
                     </button>
                   );
                 })}
@@ -715,8 +715,8 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                 className="px-3 py-2 text-xs leading-relaxed"
                 style={{
                   color: 'rgba(var(--tj-accent-primary),0.88)',
-                  background: 'rgba(245,160,92,0.08)',
-                  boxShadow: 'inset 0 0 0 1px rgba(245,160,92,0.22)',
+                  background: 'rgba(var(--tj-accent-secondary),0.08)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.22)',
                   clipPath: smallClip,
                 }}
               >
@@ -738,11 +738,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                       minWidth: 'min(180px, 78vw)',
                       clipPath: smallClip,
                       background: selected
-                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.14), rgba(117,214,216,0.08))'
+                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.14), rgba(var(--tj-tech-cyan), 0.08))'
                         : 'rgba(var(--tj-bg-primary),0.62)',
                       boxShadow: selected
                         ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
-                        : 'inset 0 0 0 1px rgba(117,214,216,0.14)',
+                        : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -752,7 +752,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                       >
                         {series.标题}
                       </span>
-                      <span className="text-[11px]" style={{ color: selected ? 'rgb(var(--tj-accent-primary))' : 'rgba(117,214,216,0.66)' }}>
+                      <span className="text-[11px]" style={{ color: selected ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-tech-cyan), 0.66)' }}>
                         {active ? 'INJECTING' : viewing ? 'VIEWING' : 'VIEW'}
                       </span>
                     </div>
@@ -768,7 +768,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
               {visibleSeries.length === 0 && (
                 <div
                   className="min-w-[260px] px-3 py-3 text-xs leading-relaxed"
-                  style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-bg-primary),0.5)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.14)', clipPath: smallClip }}
+                  style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-bg-primary),0.5)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)', clipPath: smallClip }}
                 >
                   {trackTab === 'canon'
                     ? '暂无原著剧情轨道。可以点击“恢复内置原著”重新载入。'
@@ -783,7 +783,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           <div
             className="grid gap-2 px-3 py-3"
             style={{
-              background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.06), rgba(117,214,216,0.04), rgba(var(--tj-bg-primary),0.7))',
+              background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.06), rgba(var(--tj-tech-cyan), 0.04), rgba(var(--tj-bg-primary),0.7))',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
               clipPath: cardClip,
             }}
@@ -792,7 +792,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
               <div className="font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
                 PASTE IMPORT BUFFER
               </div>
-              <div className="text-[11px]" style={{ color: 'rgba(117,214,216,0.72)' }}>
+              <div className="text-[11px]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.72)' }}>
                 TXT / 小说化剧情
               </div>
             </div>
@@ -866,9 +866,9 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                   {planningAnalysis && (
                     <div
                       className="px-3 py-3 text-xs leading-relaxed md:px-4"
-                      style={{ background: 'rgba(117,214,216,0.045)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.18)', clipPath: cardClip }}
+                      style={{ background: 'rgba(var(--tj-tech-cyan), 0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)', clipPath: cardClip }}
                     >
-                      <div className="font-serif text-[11px] tracking-[0.2em]" style={{ color: 'rgba(117,214,216,0.86)' }}>
+                      <div className="font-serif text-[11px] tracking-[0.2em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.86)' }}>
                         规划分析
                       </div>
                       <div className="mt-1" style={{ color: 'rgba(var(--tj-text-primary),0.9)' }}>
@@ -898,7 +898,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           </div>
         )}
 
-        {message && <div className="text-xs" style={{ color: message.includes('失败') ? 'rgba(230,130,130,0.9)' : 'rgba(160,210,175,0.86)' }}>{message}</div>}
+        {message && <div className="text-xs" style={{ color: message.includes('失败') ? 'rgba(var(--tj-danger),0.9)' : 'rgba(var(--tj-ui-success),0.86)' }}>{message}</div>}
       </div>
     </div>
   );
@@ -923,7 +923,7 @@ function HeaderCard({
     <div
       className="relative overflow-hidden px-3 py-3 md:px-4 md:py-4"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.12), rgba(117,214,216,0.05) 38%, rgba(var(--tj-bg-primary),0.95))',
+        background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.12), rgba(var(--tj-tech-cyan), 0.05) 38%, rgba(var(--tj-bg-primary),0.95))',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24), 0 0 18px rgba(var(--tj-accent-primary),0.06)',
         clipPath: cardClip,
       }}
@@ -934,8 +934,8 @@ function HeaderCard({
       <div className="flex flex-col items-stretch gap-3 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2" style={{ background: '#75d6d8', boxShadow: '0 0 12px rgba(117,214,216,0.8)' }} />
-            <span className="font-serif text-[11px] tracking-[0.2em] md:text-[12px] md:tracking-[0.32em]" style={{ color: 'rgba(117,214,216,0.86)' }}>
+            <span className="h-2 w-2" style={{ background: 'rgb(var(--tj-tech-cyan))', boxShadow: '0 0 12px rgba(var(--tj-tech-cyan), 0.8)' }} />
+            <span className="font-serif text-[11px] tracking-[0.2em] md:text-[12px] md:tracking-[0.32em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.86)' }}>
               NARRATIVE WORKBENCH
             </span>
           </div>
@@ -954,9 +954,9 @@ function HeaderCard({
         </div>
         <div className="grid min-w-0 grid-cols-2 gap-2 md:min-w-[340px]">
           <StatCard label="系列" value={String(seriesCount).padStart(2, '0')} tone="rgb(var(--tj-accent-primary))" />
-          <StatCard label="章节" value={String(totalChapters).padStart(2, '0')} tone="#75d6d8" />
-          <StatCard label="分段" value={String(totalSegments).padStart(2, '0')} tone="#b6d7ff" />
-          <StatCard label="当前" value={progress ? `${progress.当前分段组号}` : activeSeries ? `${activeSeries.当前分段组号}` : '--'} tone="#d8b35f" />
+          <StatCard label="章节" value={String(totalChapters).padStart(2, '0')} tone="rgb(var(--tj-tech-cyan))" />
+          <StatCard label="分段" value={String(totalSegments).padStart(2, '0')} tone="rgb(var(--tj-tech-cyan))" />
+          <StatCard label="当前" value={progress ? `${progress.当前分段组号}` : activeSeries ? `${activeSeries.当前分段组号}` : '--'} tone="rgb(var(--tj-accent-primary))" />
         </div>
       </div>
     </div>
@@ -969,11 +969,11 @@ function ProgressMiniBlock({ label, values }: { label: string; values: string[] 
       className="min-w-0 px-2.5 py-2"
       style={{
         background: 'rgba(var(--tj-bg-primary),0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.14)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[10px] tracking-[0.16em]" style={{ color: 'rgba(117,214,216,0.74)' }}>{label}</div>
+      <div className="font-serif text-[10px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.74)' }}>{label}</div>
       <div className="mt-1 line-clamp-3 leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
         {values.slice(-3).join('；') || '暂无'}
       </div>
@@ -1000,8 +1000,8 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone: 
 }
 
 function Pill({ text, tone }: { text: string; tone: 'gold' | 'cyan' | 'muted' }) {
-  const color = tone === 'gold' ? 'rgb(var(--tj-accent-primary))' : tone === 'cyan' ? '#75d6d8' : 'rgba(var(--tj-text-secondary),0.82)';
-  const background = tone === 'gold' ? 'rgba(var(--tj-accent-primary),0.10)' : tone === 'cyan' ? 'rgba(117,214,216,0.08)' : 'rgba(255,255,255,0.03)';
+  const color = tone === 'gold' ? 'rgb(var(--tj-accent-primary))' : tone === 'cyan' ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-text-secondary),0.82)';
+  const background = tone === 'gold' ? 'rgba(var(--tj-accent-primary),0.10)' : tone === 'cyan' ? 'rgba(var(--tj-tech-cyan), 0.08)' : 'rgba(255,255,255,0.03)';
   return (
     <span
       className="px-2.5 py-1"
@@ -1044,7 +1044,7 @@ function SeriesControl({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="break-words font-serif text-[15px] font-bold md:text-base" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{series.标题}</div>
-          <div className="mt-1 text-xs" style={{ color: 'rgba(190,178,148,0.78)' }}>
+          <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
             {series.来源类型 === 'canon' ? '原著剧情轨道' : '玩家自制剧情'} · {series.章节列表.length} 章 · {series.分段列表.length} 段 · 已完成 {done} 段 · 每段 {series.每段章数} 章
           </div>
           {series.当前阶段概括 && (
@@ -1059,12 +1059,12 @@ function SeriesControl({
               </span>
             ))}
             {series.涉及地点索引.slice(0, 3).map((item) => (
-              <span key={item} className="px-2 py-1" style={{ background: 'rgba(145,210,175,0.08)', color: 'rgba(145,210,175,0.85)', clipPath: smallClip }}>
+              <span key={item} className="px-2 py-1" style={{ background: 'rgba(var(--tj-ui-success),0.08)', color: 'rgba(var(--tj-ui-success),0.85)', clipPath: smallClip }}>
                 {item}
               </span>
             ))}
             {series.涉及派系索引.slice(0, 3).map((item) => (
-              <span key={item} className="px-2 py-1" style={{ background: 'rgba(160,168,245,0.08)', color: 'rgba(160,168,245,0.85)', clipPath: smallClip }}>
+              <span key={item} className="px-2 py-1" style={{ background: 'rgba(var(--tj-tech-blue),0.08)', color: 'rgba(var(--tj-tech-blue),0.85)', clipPath: smallClip }}>
                 {item}
               </span>
             ))}
@@ -1218,7 +1218,7 @@ function SegmentDetail({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="break-words font-serif text-[15px] font-bold md:text-base" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{segment.标题}</div>
-            <div className="mt-1 text-xs" style={{ color: 'rgba(190,178,148,0.78)' }}>
+            <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
               {series.标题} · {series.来源类型 === 'canon' ? '原著轨道' : '自制轨道'} · {segment.章节范围} · {segment.字数} 字 · {segment.启用注入 ? '参与注入' : '不注入'}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -1253,7 +1253,7 @@ function SegmentDetail({
             </button>
           </div>
         </div>
-        {segment.最近错误 && <div className="mt-2 text-xs" style={{ color: 'rgba(230,130,130,0.9)' }}>{segment.最近错误}</div>}
+        {segment.最近错误 && <div className="mt-2 text-xs" style={{ color: 'rgba(var(--tj-danger),0.9)' }}>{segment.最近错误}</div>}
       </div>
 
       {progress && (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途ID } from '@/models/journey';
 import type { 命途进度, 命途阶段 } from '@/models/path';
@@ -162,15 +162,15 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
       <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[270px]">
         <section className="hidden px-4 py-4 md:block" style={panelStyle()}>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2" style={{ background: '#75d6d8', boxShadow: '0 0 12px rgba(117,214,216,0.8)' }} />
-            <span className="font-serif text-[12px] tracking-[0.3em]" style={{ color: 'rgba(117,214,216,0.86)' }}>
+            <span className="h-2 w-2" style={{ background: 'rgb(var(--tj-tech-cyan))', boxShadow: '0 0 12px rgba(var(--tj-tech-cyan), 0.8)' }} />
+            <span className="font-serif text-[12px] tracking-[0.3em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.86)' }}>
               COMBAT ARTS
             </span>
           </div>
           <div
             className="mt-2 font-serif text-[22px] font-bold tracking-[0.22em]"
             style={{
-              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 52%, #75d6d8 100%)',
+              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 52%, rgb(var(--tj-tech-cyan)) 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
             }}
@@ -202,7 +202,7 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
 
             <div className="min-w-0 md:min-w-0">
               <div className="mb-1.5 flex items-center justify-between gap-2 md:mb-2">
-                <span className="font-serif text-[11px] tracking-[0.12em] md:text-[12px] md:tracking-[0.22em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+                <span className="font-serif text-[11px] tracking-[0.12em] md:text-[12px] md:tracking-[0.22em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.82)' }}>
                   命途战技
                 </span>
                 {selectedPath && (
@@ -229,13 +229,13 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                           }}
                           style={{
                             color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.78)',
-                            background: active ? 'rgba(var(--tj-accent-primary),0.12)' : 'rgba(117,214,216,0.045)',
-                            boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(117,214,216,0.16)',
+                            background: active ? 'rgba(var(--tj-accent-primary),0.12)' : 'rgba(var(--tj-tech-cyan), 0.045)',
+                            boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)',
                             clipPath: smallClip,
                           }}
                         >
                           <span className="block truncate">{def?.name ?? path.id}</span>
-                          <span className="mt-0.5 block truncate text-[9px] md:text-[10px]" style={{ color: 'rgba(117,214,216,0.72)' }}>
+                          <span className="mt-0.5 block truncate text-[9px] md:text-[10px]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.72)' }}>
                             {stage?.name ?? '未知'} · {计算命途战技槽位数(path.阶段)} 槽
                           </span>
                         </button>
@@ -467,15 +467,15 @@ function ModePill({
     <span
       className="px-1.5 py-0.5 font-serif text-[10px] tracking-[0.08em] md:px-2 md:text-[11px] md:tracking-[0.18em]"
       style={{
-        color: active ? (isCyan ? '#9ef0f0' : 'rgb(var(--tj-text-primary))') : 'rgba(var(--tj-text-secondary),0.72)',
+        color: active ? (isCyan ? 'rgb(var(--tj-tech-cyan))' : 'rgb(var(--tj-text-primary))') : 'rgba(var(--tj-text-secondary),0.72)',
         background: active
           ? isCyan
-            ? 'rgba(117,214,216,0.12)'
+            ? 'rgba(var(--tj-tech-cyan), 0.12)'
             : 'rgba(var(--tj-accent-primary),0.12)'
           : 'rgba(var(--tj-accent-primary),0.04)',
         boxShadow: active
           ? isCyan
-            ? 'inset 0 0 0 1px rgba(117,214,216,0.35)'
+            ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.35)'
             : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.35)'
           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
@@ -501,14 +501,14 @@ function ModeNotice({
       className="kaituo-options-scroll mt-2 min-h-[104px] max-h-[132px] overflow-y-auto overscroll-contain px-2.5 py-2 text-[11px] leading-relaxed md:min-h-0 md:max-h-none md:overflow-visible md:px-3 md:py-3 md:text-[12px]"
       style={{
         color: isCyan ? 'rgba(204,240,240,0.82)' : 'rgba(var(--tj-text-secondary),0.82)',
-        background: isCyan ? 'rgba(117,214,216,0.045)' : 'rgba(var(--tj-accent-primary),0.045)',
+        background: isCyan ? 'rgba(var(--tj-tech-cyan), 0.045)' : 'rgba(var(--tj-accent-primary),0.045)',
         boxShadow: isCyan
-          ? 'inset 0 0 0 1px rgba(117,214,216,0.16)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)'
           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-1 font-serif text-[10px] tracking-[0.12em] md:text-[11px] md:tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
+      <div className="mb-1 font-serif text-[10px] tracking-[0.12em] md:text-[11px] md:tracking-[0.22em]" style={{ color: isCyan ? 'rgb(var(--tj-tech-cyan))' : 'rgb(var(--tj-accent-primary))' }}>
         {title}
       </div>
       {text}
@@ -532,15 +532,15 @@ function SkillRecordGroup({
     <div
       className="px-2.5 py-2.5 md:px-3 md:py-3"
       style={{
-        background: isCyan ? 'rgba(117,214,216,0.03)' : 'rgba(var(--tj-accent-primary),0.03)',
+        background: isCyan ? 'rgba(var(--tj-tech-cyan), 0.03)' : 'rgba(var(--tj-accent-primary),0.03)',
         boxShadow: isCyan
-          ? 'inset 0 0 0 1px rgba(117,214,216,0.14)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)'
           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-serif text-[11px] tracking-[0.12em] md:text-[12px] md:tracking-[0.22em]" style={{ color: isCyan ? '#9ef0f0' : 'rgb(var(--tj-accent-primary))' }}>
+        <span className="font-serif text-[11px] tracking-[0.12em] md:text-[12px] md:tracking-[0.22em]" style={{ color: isCyan ? 'rgb(var(--tj-tech-cyan))' : 'rgb(var(--tj-accent-primary))' }}>
           {title}
         </span>
         <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
@@ -566,7 +566,7 @@ function SlotGroup({
   return (
     <div className="min-w-0 md:min-w-0">
       {title && (
-        <div className="mb-1.5 font-serif text-[11px] tracking-[0.12em] md:mb-2 md:text-[12px] md:tracking-[0.22em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+        <div className="mb-1.5 font-serif text-[11px] tracking-[0.12em] md:mb-2 md:text-[12px] md:tracking-[0.22em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.82)' }}>
           {title}
         </div>
       )}
@@ -584,11 +584,11 @@ function SlotGroup({
               onClick={() => onSelect(slot)}
               style={{
                 background: active
-                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(117,214,216,0.06))'
+                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(var(--tj-tech-cyan), 0.06))'
                   : 'rgba(var(--tj-bg-primary),0.45)',
                 boxShadow: active
                   ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48), inset 3px 0 0 rgba(var(--tj-accent-primary),0.82)'
-                  : 'inset 0 0 0 1px rgba(117,214,216,0.14)',
+                  : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
                 clipPath: smallClip,
               }}
             >
@@ -632,7 +632,7 @@ function SkillRecordCard({
       onClick={onSelect}
       style={{
         background: selected
-          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(117,214,216,0.06))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(var(--tj-tech-cyan), 0.06))'
           : skill.已启用 === false
             ? 'rgba(var(--tj-text-secondary),0.04)'
             : 'rgba(var(--tj-bg-primary),0.46)',
@@ -652,7 +652,7 @@ function SkillRecordCard({
             {stage ? ` · ${stage.name}` : ''}
           </div>
         </div>
-        <span className="shrink-0 px-1.5 py-0.5 text-[10px] md:px-2 md:text-[11px]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : '#75d6d8' }}>
+        <span className="shrink-0 px-1.5 py-0.5 text-[10px] md:px-2 md:text-[11px]" style={{ color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary),0.75)' : 'rgb(var(--tj-tech-cyan))' }}>
           {skill.已启用 === false ? 'OFF' : 'ON'}
         </span>
       </div>
@@ -704,8 +704,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-2.5 py-1.5 md:px-3 md:py-2" style={{ background: 'rgba(117,214,216,0.055)', boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.18)', clipPath: smallClip }}>
-      <div className="text-[10px] md:text-[12px]" style={{ color: 'rgba(117,214,216,0.72)' }}>{label}</div>
+    <div className="px-2.5 py-1.5 md:px-3 md:py-2" style={{ background: 'rgba(var(--tj-tech-cyan), 0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)', clipPath: smallClip }}>
+      <div className="text-[10px] md:text-[12px]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.72)' }}>{label}</div>
       <div className="mt-0.5 truncate font-serif text-[12px] md:text-[14px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   backupDesktopStateBeforeOneTimeMigration,
   backupCurrentSavesToDesktop,
@@ -797,7 +797,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-x-hidden p-1"
       style={{
         background:
-          'radial-gradient(circle at 12% 0%, rgba(91,153,255,0.14), transparent 30%), linear-gradient(90deg, rgba(142,215,255,0.035) 1px, transparent 1px), linear-gradient(180deg, rgba(142,215,255,0.028) 1px, transparent 1px)',
+          'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan-deep),0.14), transparent 30%), linear-gradient(90deg, rgba(var(--tj-tech-cyan),0.035) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-cyan),0.028) 1px, transparent 1px)',
         backgroundSize: 'auto, 44px 44px, 44px 44px',
       }}
     >
@@ -819,9 +819,9 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       <div
         className="grid grid-cols-2 gap-3 px-3 py-3 text-center font-serif text-[12px] tracking-[0.18em] lg:grid-cols-4"
         style={{
-          color: 'rgba(238,226,198,0.82)',
-          background: 'rgba(142,215,255,0.055)',
-          boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.13)',
+          color: 'rgba(var(--tj-text-primary),0.82)',
+          background: 'rgba(var(--tj-tech-cyan),0.055)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.13)',
           clipPath: cardClip,
         }}
       >
@@ -834,9 +834,9 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       <div
         className="px-3 py-2 font-serif text-[12px] leading-relaxed tracking-wider"
         style={{
-          color: 'rgba(238,226,198,0.68)',
-          background: 'rgba(18,28,43,0.42)',
-          boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+          color: 'rgba(var(--tj-text-primary),0.68)',
+          background: 'rgba(var(--tj-panel-bg-start),0.42)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
           clipPath: cardClip,
         }}
       >
@@ -922,12 +922,12 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
             className="p-5 text-center font-serif"
             style={{
               color: 'rgba(var(--tj-text-secondary), 0.82)',
-              background: 'rgba(92, 36, 36, 0.28)',
-              boxShadow: 'inset 0 0 0 1px rgba(255, 150, 150, 0.25)',
+              background: 'rgba(var(--tj-danger), 0.28)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.25)',
               clipPath: cardClip,
             }}
           >
-            <div className="text-sm tracking-[0.18em]" style={{ color: 'rgba(255, 205, 205, 0.92)' }}>
+            <div className="text-sm tracking-[0.18em]" style={{ color: 'rgba(var(--tj-danger),0.92)' }}>
               存档列表读取失败
             </div>
             <div className="mt-2 text-xs leading-relaxed tracking-wider">{loadError}</div>
@@ -940,9 +940,9 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
           <div
             className="p-6 text-center text-sm font-serif tracking-[0.2em]"
             style={{
-              color: 'rgba(238,226,198,0.72)',
-              background: 'rgba(18,28,43,0.46)',
-              boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.15)',
+              color: 'rgba(var(--tj-text-primary),0.72)',
+              background: 'rgba(var(--tj-panel-bg-start),0.46)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.15)',
               clipPath: cardClip,
             }}
           >
@@ -992,31 +992,31 @@ function StorageSaveTreeGroup({
     <section
       className="min-w-0 p-2"
       style={{
-        background: 'linear-gradient(135deg, rgba(18,28,43,0.52), rgba(8,12,20,0.56))',
-        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-panel-bg-start),0.52), rgba(var(--tj-panel-bg-end),0.56))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.18)',
         clipPath: cardClip,
       }}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-2 py-1.5 font-serif">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-            <span className="text-[11px] tracking-[0.18em]" style={{ color: '#8ed7ff' }}>
+            <span className="text-[11px] tracking-[0.18em]" style={{ color: 'rgb(var(--tj-tech-cyan))' }}>
               存档树
             </span>
-            <span className="truncate text-[14px] font-bold tracking-wider" style={{ color: '#eee2c6' }}>
+            <span className="truncate text-[14px] font-bold tracking-wider" style={{ color: 'rgb(var(--tj-accent-secondary))' }}>
               {group.latestSave.travelerName || group.rootSave.travelerName || '未命名旅人'}
             </span>
-            <span className="text-[11px]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+            <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
               最新 #{group.latestSave.id}
             </span>
           </div>
-          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tracking-wider" style={{ color: 'rgba(238,226,198,0.58)' }}>
+          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tracking-wider" style={{ color: 'rgba(var(--tj-text-primary),0.58)' }}>
             <span>{group.nodeCount} 个节点</span>
             <span>{group.branchCount} 个分支</span>
             <span>{formatSize(group.totalSizeBytes)}</span>
           </div>
         </div>
-        <div className="text-[11px] tracking-[0.16em]" style={{ color: 'rgba(142,215,255,0.82)' }}>
+        <div className="text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.82)' }}>
           第 {group.latestSave.turnCount} 回合
         </div>
         <button
@@ -1025,8 +1025,8 @@ function StorageSaveTreeGroup({
           onClick={() => onExportTree(group.rootId)}
           className="px-2.5 py-1 font-serif text-[11px] tracking-[0.14em] transition-all hover:opacity-90 disabled:opacity-50"
           style={{
-            color: 'rgba(140, 210, 255, 0.92)',
-            boxShadow: 'inset 0 0 0 1px rgba(140, 210, 255, 0.28)',
+            color: 'rgba(var(--tj-tech-cyan), 0.92)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28)',
             clipPath: smallClip,
           }}
         >
@@ -1037,7 +1037,7 @@ function StorageSaveTreeGroup({
         <span
           aria-hidden="true"
           className="absolute bottom-2 left-[7px] top-2 w-px"
-          style={{ background: 'linear-gradient(#8ed7ff, rgba(142,215,255,0.08))' }}
+          style={{ background: 'linear-gradient(rgb(var(--tj-tech-cyan)), rgba(var(--tj-tech-cyan),0.08))' }}
         />
         {group.nodes.map((node, index) => {
           const indent = Math.min(index, 5) * 14;
@@ -1049,7 +1049,7 @@ function StorageSaveTreeGroup({
                   className="absolute left-1 top-4 h-px"
                   style={{
                     width: Math.max(8, indent - 6),
-                    background: 'rgba(142,215,255,0.32)',
+                    background: 'rgba(var(--tj-tech-cyan),0.32)',
                   }}
                 />
               )}
@@ -1084,15 +1084,15 @@ function StorageTreeSelector({
       className="kaituo-options-scroll min-h-0 p-3 pb-5 font-serif lg:max-h-[calc(100vh-330px)] lg:overflow-y-auto"
       style={{
         background: 'rgba(0,0,0,0.18)',
-        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
         clipPath: cardClip,
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.86)' }}>
+        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.86)' }}>
           存档树列表
         </h3>
-        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
           点击切换
         </span>
       </div>
@@ -1108,26 +1108,26 @@ function StorageTreeSelector({
               className="min-w-0 cursor-pointer px-3 py-2 text-left transition-all hover:opacity-90"
               style={{
                 background: active
-                  ? 'linear-gradient(90deg, rgba(142,215,255,0.18), rgba(91,153,255,0.06))'
-                  : 'rgba(142,215,255,0.045)',
+                  ? 'linear-gradient(90deg, rgba(var(--tj-tech-cyan),0.18), rgba(var(--tj-tech-cyan-deep),0.06))'
+                  : 'rgba(var(--tj-tech-cyan),0.045)',
                 boxShadow: active
-                  ? 'inset 3px 0 0 #8ed7ff, inset 0 0 0 1px rgba(142,215,255,0.32)'
-                  : 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+                  ? 'inset 3px 0 0 rgb(var(--tj-tech-cyan)), inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.32)'
+                  : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
                 clipPath: smallClip,
               }}
             >
               <div className="flex min-w-0 items-center justify-between gap-2">
                 <span
                   className="truncate text-[13px] font-semibold tracking-[0.12em]"
-                  style={{ color: active ? '#eee2c6' : 'rgba(238,226,198,0.78)' }}
+                  style={{ color: active ? 'rgb(var(--tj-accent-secondary))' : 'rgba(var(--tj-text-primary),0.78)' }}
                 >
                   {title}
                 </span>
-                <span className="shrink-0 text-[11px]" style={{ color: active ? '#8ed7ff' : 'rgba(238,226,198,0.42)' }}>
+                <span className="shrink-0 text-[11px]" style={{ color: active ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-text-primary),0.42)' }}>
                   #{group.latestSave.id}
                 </span>
               </div>
-              <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tracking-[0.1em]" style={{ color: 'rgba(238,226,198,0.54)' }}>
+              <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tracking-[0.1em]" style={{ color: 'rgba(var(--tj-text-primary),0.54)' }}>
                 <span>{group.nodeCount} 节点</span>
                 <span>{group.branchCount} 分支</span>
                 <span>第 {group.latestSave.turnCount} 回合</span>
@@ -1158,13 +1158,13 @@ function ActionButton({
       onClick={onClick}
       className="w-full cursor-pointer px-4 py-2 text-sm font-serif tracking-[0.18em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
       style={{
-        color: tone === 'primary' ? '#07101a' : 'rgba(142,215,255,0.92)',
+        color: tone === 'primary' ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.92)',
         background: tone === 'primary'
-          ? 'linear-gradient(135deg, #8ed7ff, #5b99ff)'
-          : 'rgba(142,215,255,0.07)',
+          ? 'linear-gradient(135deg, rgb(var(--tj-tech-cyan)), rgb(var(--tj-tech-cyan-deep)))'
+          : 'rgba(var(--tj-tech-cyan),0.07)',
         boxShadow: tone === 'primary'
-          ? 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 18px rgba(91,153,255,0.20)'
-          : 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.55), 0 0 18px rgba(var(--tj-tech-cyan-deep),0.20)'
+          : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
         clipPath: smallClip,
       }}
     >
@@ -1190,13 +1190,13 @@ function FilterButton({
       onClick={onClick}
       className="w-full cursor-pointer px-3 py-2 text-[12px] font-serif tracking-[0.16em] transition-all sm:w-auto"
       style={{
-        color: active ? '#07101a' : 'rgba(238,226,198,0.70)',
+        color: active ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-text-primary),0.70)',
         background: active
-          ? 'linear-gradient(135deg, #8ed7ff, #5b99ff)'
-          : 'rgba(142,215,255,0.05)',
+          ? 'linear-gradient(135deg, rgb(var(--tj-tech-cyan)), rgb(var(--tj-tech-cyan-deep)))'
+          : 'rgba(var(--tj-tech-cyan),0.05)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 22px rgba(91,153,255,0.22)'
-          : 'inset 0 0 0 1px rgba(142,215,255,0.15)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.55), 0 0 22px rgba(var(--tj-tech-cyan-deep),0.22)'
+          : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.15)',
         clipPath: smallClip,
       }}
     >
@@ -1208,8 +1208,8 @@ function FilterButton({
 function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="text-[11px]" style={{ color: 'rgba(238,226,198,0.52)' }}>{label}</div>
-      <div className="mt-0.5 text-base font-bold" style={{ color: '#8ed7ff' }}>{value}</div>
+      <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-primary),0.52)' }}>{label}</div>
+      <div className="mt-0.5 text-base font-bold" style={{ color: 'rgb(var(--tj-tech-cyan))' }}>{value}</div>
     </div>
   );
 }
@@ -1372,13 +1372,13 @@ function DesktopStorageStatus({
     <section
       className="grid min-w-0 gap-3 px-3 py-3 font-serif text-[12px] leading-relaxed tracking-wider lg:grid-cols-[1fr_auto]"
       style={{
-        color: 'rgba(238,226,198,0.72)',
+        color: 'rgba(var(--tj-text-primary),0.72)',
         background: isDesktop
-          ? 'linear-gradient(135deg, rgba(142,215,255,0.09), rgba(245,217,122,0.045)), rgba(18,28,43,0.44)'
-          : 'rgba(18,28,43,0.34)',
+          ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.09), rgba(var(--tj-accent-primary),0.045)), rgba(var(--tj-panel-bg-start),0.44)'
+          : 'rgba(var(--tj-panel-bg-start),0.34)',
         boxShadow: isDesktop
-          ? 'inset 0 0 0 1px rgba(142,215,255,0.22)'
-          : 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)'
+          : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
         clipPath: cardClip,
       }}
     >
@@ -1386,43 +1386,43 @@ function DesktopStorageStatus({
         className="grid min-w-0 gap-3 px-3 py-3 lg:col-span-2 lg:grid-cols-[1.15fr_0.85fr_auto]"
         style={{
           background: isDesktop
-            ? 'linear-gradient(135deg, rgba(8,12,20,0.82), rgba(21,22,24,0.62)), radial-gradient(circle at 12% 0%, rgba(245,217,122,0.13), transparent 34%)'
+            ? 'linear-gradient(135deg, rgba(var(--tj-panel-bg-end),0.82), rgba(var(--tj-surface-bg-start),0.62)), radial-gradient(circle at 12% 0%, rgba(var(--tj-accent-primary),0.13), transparent 34%)'
             : 'rgba(0,0,0,0.16)',
           boxShadow: isDesktop
-            ? 'inset 0 0 0 1px rgba(245,217,122,0.24), inset 0 1px 0 rgba(255,244,212,0.08), 0 0 24px rgba(245,217,122,0.08)'
-            : 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24), inset 0 1px 0 rgba(var(--tj-text-primary),0.08), 0 0 24px rgba(var(--tj-accent-primary),0.08)'
+            : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
           clipPath: cardClip,
         }}
       >
         <div className="min-w-0">
-          <div className="text-[11px] tracking-[0.24em]" style={{ color: isDesktop ? 'rgba(245,217,122,0.86)' : 'rgba(238,226,198,0.52)' }}>
+          <div className="text-[11px] tracking-[0.24em]" style={{ color: isDesktop ? 'rgba(var(--tj-accent-primary),0.86)' : 'rgba(var(--tj-text-primary),0.52)' }}>
             关于 / 更新
           </div>
           <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-2">
-            <span className="text-[16px] font-bold tracking-[0.16em]" style={{ color: isDesktop ? '#eee2c6' : 'rgba(238,226,198,0.72)' }}>
+            <span className="text-[16px] font-bold tracking-[0.16em]" style={{ color: isDesktop ? 'rgb(var(--tj-accent-secondary))' : 'rgba(var(--tj-text-primary),0.72)' }}>
               {isDesktop ? '开拓轶事 Desktop Edition' : '开拓轶事 Web Edition'}
             </span>
             <span
               className="px-2 py-0.5 text-[11px] tracking-[0.16em]"
               style={{
-                color: updateError ? 'rgba(255,156,156,0.94)' : update?.available ? '#07101a' : 'rgba(142,215,255,0.92)',
+                color: updateError ? 'rgba(var(--tj-danger),0.94)' : update?.available ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.92)',
                 background: updateError
-                  ? 'rgba(255,156,156,0.08)'
+                  ? 'rgba(var(--tj-danger),0.08)'
                   : update?.available
-                    ? 'linear-gradient(135deg, #f5d97a, #8ed7ff)'
-                    : 'rgba(142,215,255,0.08)',
+                    ? 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))'
+                    : 'rgba(var(--tj-tech-cyan),0.08)',
                 boxShadow: updateError
-                  ? 'inset 0 0 0 1px rgba(255,156,156,0.24)'
+                  ? 'inset 0 0 0 1px rgba(var(--tj-danger),0.24)'
                   : update?.available
-                    ? 'inset 0 0 0 1px rgba(255,255,255,0.42), 0 0 16px rgba(245,217,122,0.14)'
-                    : 'inset 0 0 0 1px rgba(142,215,255,0.22)',
+                    ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42), 0 0 16px rgba(var(--tj-accent-primary),0.14)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
                 clipPath: smallClip,
               }}
             >
               {updateStateLabel}
             </span>
           </div>
-          <div className="mt-2 text-[11px]" style={{ color: updateError ? 'rgba(255,156,156,0.9)' : 'rgba(238,226,198,0.68)' }}>
+          <div className="mt-2 text-[11px]" style={{ color: updateError ? 'rgba(var(--tj-danger),0.9)' : 'rgba(var(--tj-text-primary),0.68)' }}>
             {updateHint}
           </div>
         </div>
@@ -1440,9 +1440,9 @@ function DesktopStorageStatus({
             onClick={onCheckUpdate}
             className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             style={{
-              color: isDesktop ? 'rgba(142,215,255,0.94)' : 'rgba(238,226,198,0.44)',
-              background: 'rgba(142,215,255,0.08)',
-              boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.26)',
+              color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.94)' : 'rgba(var(--tj-text-primary),0.44)',
+              background: 'rgba(var(--tj-tech-cyan),0.08)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.26)',
               clipPath: smallClip,
             }}
           >
@@ -1455,9 +1455,9 @@ function DesktopStorageStatus({
               onClick={onInstallUpdate}
               className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               style={{
-                color: '#07101a',
-                background: 'linear-gradient(135deg, #f5d97a, #8ed7ff)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.46), 0 0 18px rgba(245,217,122,0.16)',
+                color: 'rgb(var(--tj-ui-active-text))',
+                background: 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.46), 0 0 18px rgba(var(--tj-accent-primary),0.16)',
                 clipPath: smallClip,
               }}
             >
@@ -1468,20 +1468,20 @@ function DesktopStorageStatus({
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-[11px] tracking-[0.2em]" style={{ color: isDesktop ? '#8ed7ff' : 'rgba(238,226,198,0.52)' }}>
+          <span className="text-[11px] tracking-[0.2em]" style={{ color: isDesktop ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-text-primary),0.52)' }}>
             运行平台
           </span>
-          <span className="text-[14px] font-bold tracking-[0.16em]" style={{ color: isDesktop ? '#eee2c6' : 'rgba(238,226,198,0.72)' }}>
+          <span className="text-[14px] font-bold tracking-[0.16em]" style={{ color: isDesktop ? 'rgb(var(--tj-accent-secondary))' : 'rgba(var(--tj-text-primary),0.72)' }}>
             {isDesktop ? 'Desktop Edition' : 'Web Edition'}
           </span>
           {info && (
-            <span className="text-[11px]" style={{ color: 'rgba(238,226,198,0.46)' }}>
+            <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-primary),0.46)' }}>
               v{info.version}
             </span>
           )}
         </div>
         {isDesktop ? (
-          <div className="mt-2 grid min-w-0 gap-1 text-[11px]" style={{ color: 'rgba(238,226,198,0.62)' }}>
+          <div className="mt-2 grid min-w-0 gap-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-primary),0.62)' }}>
             {releaseInfo && (
               <>
                 <PathLine label="发行版本" value={releaseInfo.title} />
@@ -1497,12 +1497,12 @@ function DesktopStorageStatus({
             <div
               className="mt-2 grid gap-2 px-3 py-3"
               style={{
-                background: 'rgba(12,18,28,0.62)',
-                boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.16)',
+                background: 'rgba(var(--tj-panel-bg-start),0.62)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.16)',
                 clipPath: smallClip,
               }}
             >
-              <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(142,215,255,0.84)' }}>
+              <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.84)' }}>
                 存储路径
               </div>
               <PathLine label="存档根目录" value={saveRootEdit || '跟随默认应用数据目录'} />
@@ -1513,9 +1513,9 @@ function DesktopStorageStatus({
                   onClick={onChooseSaveRoot}
                   className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
-                    color: 'rgba(142,215,255,0.92)',
-                    background: 'rgba(142,215,255,0.07)',
-                    boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+                    color: 'rgba(var(--tj-tech-cyan),0.92)',
+                    background: 'rgba(var(--tj-tech-cyan),0.07)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1527,9 +1527,9 @@ function DesktopStorageStatus({
                   onClick={onResetSaveRoot}
                   className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
-                    color: 'rgba(238,226,198,0.82)',
-                    background: 'rgba(238,226,198,0.06)',
-                    boxShadow: 'inset 0 0 0 1px rgba(238,226,198,0.18)',
+                    color: 'rgba(var(--tj-text-primary),0.82)',
+                    background: 'rgba(var(--tj-text-primary),0.06)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.18)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1544,9 +1544,9 @@ function DesktopStorageStatus({
                   onClick={onChooseBackupRoot}
                   className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
-                    color: 'rgba(142,215,255,0.92)',
-                    background: 'rgba(142,215,255,0.07)',
-                    boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+                    color: 'rgba(var(--tj-tech-cyan),0.92)',
+                    background: 'rgba(var(--tj-tech-cyan),0.07)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1558,9 +1558,9 @@ function DesktopStorageStatus({
                   onClick={onResetBackupRoot}
                   className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
-                    color: 'rgba(238,226,198,0.82)',
-                    background: 'rgba(238,226,198,0.06)',
-                    boxShadow: 'inset 0 0 0 1px rgba(238,226,198,0.18)',
+                    color: 'rgba(var(--tj-text-primary),0.82)',
+                    background: 'rgba(var(--tj-text-primary),0.06)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.18)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1572,9 +1572,9 @@ function DesktopStorageStatus({
                   onClick={onApplyStorageRoots}
                   className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
-                    color: '#07101a',
-                    background: 'linear-gradient(135deg, #f5d97a, #8ed7ff)',
-                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.46)',
+                    color: 'rgb(var(--tj-ui-active-text))',
+                    background: 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.46)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1631,18 +1631,18 @@ function DesktopStorageStatus({
             )}
             {desktopBackups.length > 0 && (
               <div className="mt-2 grid min-w-0 gap-1">
-                <div style={{ color: 'rgba(142,215,255,0.72)' }}>备份列表</div>
+                <div style={{ color: 'rgba(var(--tj-tech-cyan),0.72)' }}>备份列表</div>
                 {desktopBackups.slice(0, 5).map((backup) => (
                   <div
                     key={backup.path}
                     className="grid min-w-0 gap-2 px-2 py-1 sm:grid-cols-[1fr_auto]"
                     style={{
-                      background: 'rgba(142,215,255,0.045)',
-                      boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+                      background: 'rgba(var(--tj-tech-cyan),0.045)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
                       clipPath: smallClip,
                     }}
                   >
-                    <div className="min-w-0 break-all" style={{ color: 'rgba(238,226,198,0.68)' }}>
+                    <div className="min-w-0 break-all" style={{ color: 'rgba(var(--tj-text-primary),0.68)' }}>
                       {formatDesktopBackupLine(backup)}
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -1652,13 +1652,13 @@ function DesktopStorageStatus({
                         onClick={() => onSelectDesktopBackup(backup)}
                         className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{
-                          color: selectedDesktopBackup?.path === backup.path ? '#07101a' : 'rgba(142,215,255,0.92)',
+                          color: selectedDesktopBackup?.path === backup.path ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.92)',
                           background: selectedDesktopBackup?.path === backup.path
-                            ? 'linear-gradient(135deg, #f5d97a, #8ed7ff)'
-                            : 'rgba(142,215,255,0.08)',
+                            ? 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))'
+                            : 'rgba(var(--tj-tech-cyan),0.08)',
                           boxShadow: selectedDesktopBackup?.path === backup.path
-                            ? 'inset 0 0 0 1px rgba(255,255,255,0.42)'
-                            : 'inset 0 0 0 1px rgba(142,215,255,0.22)',
+                            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)'
+                            : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
                           clipPath: smallClip,
                         }}
                       >
@@ -1670,9 +1670,9 @@ function DesktopStorageStatus({
                         onClick={() => onExportDesktopBackup(backup)}
                         className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{
-                          color: 'rgba(142,215,255,0.92)',
-                          background: 'rgba(142,215,255,0.08)',
-                          boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.22)',
+                          color: 'rgba(var(--tj-tech-cyan),0.92)',
+                          background: 'rgba(var(--tj-tech-cyan),0.08)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
                           clipPath: smallClip,
                         }}
                       >
@@ -1684,9 +1684,9 @@ function DesktopStorageStatus({
                         onClick={() => onRestoreDesktopBackup(backup)}
                         className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{
-                          color: 'rgba(245,217,122,0.96)',
-                          background: 'rgba(245,217,122,0.08)',
-                          boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.22)',
+                          color: 'rgba(var(--tj-accent-primary),0.96)',
+                          background: 'rgba(var(--tj-accent-primary),0.08)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)',
                           clipPath: smallClip,
                         }}
                       >
@@ -1698,9 +1698,9 @@ function DesktopStorageStatus({
                         onClick={() => onDeleteDesktopBackup(backup)}
                         className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{
-                          color: 'rgba(255,156,156,0.92)',
-                          background: 'rgba(255,156,156,0.07)',
-                          boxShadow: 'inset 0 0 0 1px rgba(255,156,156,0.22)',
+                          color: 'rgba(var(--tj-danger),0.92)',
+                          background: 'rgba(var(--tj-danger),0.07)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.22)',
                           clipPath: smallClip,
                         }}
                       >
@@ -1722,18 +1722,18 @@ function DesktopStorageStatus({
             )}
             {diagnosticReports.length > 0 && (
               <div className="mt-2 grid min-w-0 gap-1">
-                <div style={{ color: 'rgba(142,215,255,0.72)' }}>日志中心</div>
+                <div style={{ color: 'rgba(var(--tj-tech-cyan),0.72)' }}>日志中心</div>
                 {diagnosticReports.slice(0, 5).map((report) => (
                   <div
                     key={report.path}
                     className="grid min-w-0 gap-2 px-2 py-1 sm:grid-cols-[1fr_auto]"
                     style={{
-                      background: 'rgba(142,215,255,0.045)',
-                      boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+                      background: 'rgba(var(--tj-tech-cyan),0.045)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
                       clipPath: smallClip,
                     }}
                   >
-                    <div className="min-w-0 break-all" style={{ color: 'rgba(238,226,198,0.68)' }}>
+                    <div className="min-w-0 break-all" style={{ color: 'rgba(var(--tj-text-primary),0.68)' }}>
                       {formatDesktopDiagnosticReportLine(report)}
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -1743,9 +1743,9 @@ function DesktopStorageStatus({
                         onClick={() => onExportDiagnosticReport(report)}
                         className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{
-                          color: 'rgba(142,215,255,0.92)',
-                          background: 'rgba(142,215,255,0.08)',
-                          boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.22)',
+                          color: 'rgba(var(--tj-tech-cyan),0.92)',
+                          background: 'rgba(var(--tj-tech-cyan),0.08)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
                           clipPath: smallClip,
                         }}
                       >
@@ -1757,9 +1757,9 @@ function DesktopStorageStatus({
                         onClick={() => onDeleteDiagnosticReport(report)}
                         className="cursor-pointer px-2 py-1 text-[11px] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{
-                          color: 'rgba(255,156,156,0.92)',
-                          background: 'rgba(255,156,156,0.07)',
-                          boxShadow: 'inset 0 0 0 1px rgba(255,156,156,0.22)',
+                          color: 'rgba(var(--tj-danger),0.92)',
+                          background: 'rgba(var(--tj-danger),0.07)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.22)',
                           clipPath: smallClip,
                         }}
                       >
@@ -1770,19 +1770,20 @@ function DesktopStorageStatus({
                 ))}
               </div>
             )}
-            <div className="mt-1" style={{ color: updateError ? 'rgba(255,156,156,0.9)' : 'rgba(238,226,198,0.62)' }}>
+            <div className="mt-1" style={{ color: updateError ? 'rgba(var(--tj-danger),0.9)' : 'rgba(var(--tj-text-primary),0.62)' }}>
               {updateHint}
             </div>
             {error && (
-              <div style={{ color: 'rgba(255,156,156,0.9)' }}>{error}</div>
+              <div style={{ color: 'rgba(var(--tj-danger),0.9)' }}>{error}</div>
             )}
           </div>
-        ) : (
-          <div className="mt-1 text-[11px]" style={{ color: 'rgba(238,226,198,0.58)' }}>
-            当前为浏览器运行模式，存档仍使用 Web 存储。桌面版会在本地应用数据目录创建 saves / backups / assets / logs 等目录，并提供应用内更新检查。
-          </div>
-        )}
+        ) : null}
       </div>
+      {!isDesktop && (
+        <div className="col-span-2 mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>
+          当前为浏览器运行模式，存档仍使用 Web 存储。桌面版会在本地应用数据目录创建 saves / backups / assets / logs 等目录，并提供应用内更新检查。
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
         <button
           type="button"
@@ -1790,11 +1791,11 @@ function DesktopStorageStatus({
           onClick={onProbe}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? '#07101a' : 'rgba(238,226,198,0.44)',
-            background: isDesktop ? 'linear-gradient(135deg, #8ed7ff, #5b99ff)' : 'rgba(142,215,255,0.04)',
+            color: isDesktop ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-text-primary),0.44)',
+            background: isDesktop ? 'linear-gradient(135deg, rgb(var(--tj-tech-cyan)), rgb(var(--tj-tech-cyan-deep)))' : 'rgba(var(--tj-tech-cyan),0.04)',
             boxShadow: isDesktop
-              ? 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 18px rgba(91,153,255,0.18)'
-              : 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+              ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.55), 0 0 18px rgba(var(--tj-tech-cyan-deep),0.18)'
+              : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.12)',
             clipPath: smallClip,
           }}
         >
@@ -1806,9 +1807,9 @@ function DesktopStorageStatus({
           onClick={onOpenSaveDir}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1820,9 +1821,9 @@ function DesktopStorageStatus({
           onClick={onBackupDesktopSaves}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(245,217,122,0.96)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(245,217,122,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-accent-primary),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1834,9 +1835,9 @@ function DesktopStorageStatus({
           onClick={onBackupDesktopMigration}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(245,217,122,0.96)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(245,217,122,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-accent-primary),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1848,9 +1849,9 @@ function DesktopStorageStatus({
           onClick={onOpenBackupDir}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1862,9 +1863,9 @@ function DesktopStorageStatus({
           onClick={onOpenLogDir}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1876,9 +1877,9 @@ function DesktopStorageStatus({
           onClick={onWriteDiagnosticReport}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(245,217,122,0.96)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(245,217,122,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-accent-primary),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1890,9 +1891,9 @@ function DesktopStorageStatus({
           onClick={() => onRestoreDesktopBackup(latestDesktopBackup)}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop && latestDesktopBackup && isRestorableDesktopBackup(latestDesktopBackup) ? 'rgba(245,217,122,0.96)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(245,217,122,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+            color: isDesktop && latestDesktopBackup && isRestorableDesktopBackup(latestDesktopBackup) ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-accent-primary),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1904,9 +1905,9 @@ function DesktopStorageStatus({
           onClick={onOpenConfigDir}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1918,9 +1919,9 @@ function DesktopStorageStatus({
           onClick={onOpenZhikuDir}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1932,9 +1933,9 @@ function DesktopStorageStatus({
           onClick={onOpenWorldbookDir}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1946,9 +1947,9 @@ function DesktopStorageStatus({
           onClick={onOpenAssetDir}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1960,9 +1961,9 @@ function DesktopStorageStatus({
           onClick={onCleanupDesktopAssets}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop && desktopAssetSummary && desktopAssetSummary.orphanAssets > 0 ? 'rgba(245,217,122,0.96)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(245,217,122,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+            color: isDesktop && desktopAssetSummary && desktopAssetSummary.orphanAssets > 0 ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-accent-primary),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1974,9 +1975,9 @@ function DesktopStorageStatus({
           onClick={onRepairDesktopIndexes}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop ? 'rgba(142,215,255,0.92)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(142,215,255,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.24)',
+            color: isDesktop ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-tech-cyan),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1988,9 +1989,9 @@ function DesktopStorageStatus({
           onClick={onRestoreDesktopMirror}
           className="w-full cursor-pointer px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: isDesktop && desktopMirrorCount > 0 ? 'rgba(245,217,122,0.96)' : 'rgba(238,226,198,0.44)',
-            background: 'rgba(245,217,122,0.07)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.24)',
+            color: isDesktop && desktopMirrorCount > 0 ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-text-primary),0.44)',
+            background: 'rgba(var(--tj-accent-primary),0.07)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -2009,12 +2010,12 @@ function DesktopBackupDetailPanel({ backup }: { backup: DesktopSaveBackupSummary
     <div
       className="mt-2 grid min-w-0 gap-2 px-3 py-2"
       style={{
-        background: 'linear-gradient(135deg, rgba(8,12,20,0.58), rgba(21,22,24,0.42))',
-        boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.18)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-panel-bg-end),0.58), rgba(var(--tj-surface-bg-start),0.42))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
         clipPath: smallClip,
       }}
     >
-      <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.82)' }}>
+      <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>
         备份详情
       </div>
       <div className="grid min-w-0 gap-1 text-[11px] sm:grid-cols-2">
@@ -2192,8 +2193,8 @@ function downloadDesktopDiagnosticReport(report: DesktopDiagnosticReport, fileNa
 function PathLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-w-0 gap-1 sm:grid-cols-[72px_1fr]">
-      <span style={{ color: 'rgba(142,215,255,0.72)' }}>{label}</span>
-      <span className="min-w-0 break-all" style={{ color: 'rgba(238,226,198,0.72)' }}>{value}</span>
+      <span style={{ color: 'rgba(var(--tj-tech-cyan),0.72)' }}>{label}</span>
+      <span className="min-w-0 break-all" style={{ color: 'rgba(var(--tj-text-primary),0.72)' }}>{value}</span>
     </div>
   );
 }
@@ -2222,11 +2223,11 @@ function SaveCard({
       }`}
       style={{
         background: isLatest
-          ? 'linear-gradient(135deg, rgba(142,215,255,0.18), rgba(245,217,122,0.09)), rgba(10,16,27,0.92)'
-          : 'rgba(10,16,27,0.74)',
+          ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.18), rgba(var(--tj-accent-primary),0.09)), rgba(var(--tj-panel-bg-start),0.92)'
+          : 'rgba(var(--tj-panel-bg-start),0.74)',
         boxShadow: isLatest
-          ? 'inset 0 0 0 1px rgba(245,217,122,0.46), inset 0 0 0 2px rgba(142,215,255,0.08), 0 0 28px rgba(142,215,255,0.10), 0 0 22px rgba(245,217,122,0.08)'
-          : 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.46), inset 0 0 0 2px rgba(var(--tj-tech-cyan),0.08), 0 0 28px rgba(var(--tj-tech-cyan),0.10), 0 0 22px rgba(var(--tj-accent-primary),0.08)'
+          : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.18)',
         clipPath: cardClip,
       }}
     >
@@ -2235,17 +2236,17 @@ function SaveCard({
           <span className={`font-serif tracking-[0.16em] ${isLatest ? 'text-[12px]' : 'text-[11px]'}`} style={{ color: typeColor(save.type) }}>
             {typeLabel(save.type)}
           </span>
-          <span className={`font-serif font-bold tracking-wider ${isLatest ? 'text-[17px]' : 'text-[15px]'}`} style={{ color: '#eee2c6' }}>
+          <span className={`font-serif font-bold tracking-wider ${isLatest ? 'text-[17px]' : 'text-[15px]'}`} style={{ color: 'rgb(var(--tj-accent-secondary))' }}>
             {save.travelerName || '未命名旅人'}
           </span>
-          <span className="text-[11px]" style={{ color: 'rgba(238,226,198,0.42)' }}>#{save.id}</span>
+          <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>#{save.id}</span>
           {treeLabel && (
             <span
               className="px-1.5 py-0.5 text-[10px] font-serif tracking-[0.12em]"
               style={{
-                color: 'rgba(140, 210, 255, 0.92)',
-                background: 'rgba(140, 210, 255, 0.09)',
-                boxShadow: 'inset 0 0 0 1px rgba(140, 210, 255, 0.25)',
+                color: 'rgba(var(--tj-tech-cyan), 0.92)',
+                background: 'rgba(var(--tj-tech-cyan), 0.09)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.25)',
                 clipPath: smallClip,
               }}
             >
@@ -2256,9 +2257,9 @@ function SaveCard({
             <span
               className="px-1.5 py-0.5 text-[10px] font-serif tracking-[0.12em]"
               style={{
-                color: '#f5d97a',
-                background: 'rgba(245,217,122,0.08)',
-                boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.16)',
+                color: 'rgb(var(--tj-accent-primary))',
+                background: 'rgba(var(--tj-accent-primary),0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
                 clipPath: smallClip,
               }}
             >
@@ -2266,14 +2267,14 @@ function SaveCard({
             </span>
           )}
         </div>
-        <div className={`flex flex-wrap gap-x-3 gap-y-1 font-serif tracking-wider ${isLatest ? 'mt-2 text-[13px]' : 'mt-1 text-[12px]'}`} style={{ color: 'rgba(238,226,198,0.78)' }}>
-          <span style={{ color: '#8ed7ff' }}>第 {save.turnCount} 回合</span>
+        <div className={`flex flex-wrap gap-x-3 gap-y-1 font-serif tracking-wider ${isLatest ? 'mt-2 text-[13px]' : 'mt-1 text-[12px]'}`} style={{ color: 'rgba(var(--tj-text-primary),0.78)' }}>
+          <span style={{ color: 'rgb(var(--tj-tech-cyan))' }}>第 {save.turnCount} 回合</span>
           <span>{[save.currentDate, save.currentTime, save.currentLocation].filter(Boolean).join(' / ') || save.worldPeriodName || '未知坐标'}</span>
           <span>{new Date(save.timestamp).toLocaleString('zh-CN')}</span>
           <span>{formatSize(save.sizeBytes)}</span>
         </div>
         {save.lastSummary && (
-          <div className={`leading-relaxed ${isLatest ? 'mt-2 line-clamp-3 text-[13px]' : 'mt-1.5 line-clamp-2 text-[12px]'}`} style={{ color: 'rgba(238,226,198,0.62)' }}>
+          <div className={`leading-relaxed ${isLatest ? 'mt-2 line-clamp-3 text-[13px]' : 'mt-1.5 line-clamp-2 text-[12px]'}`} style={{ color: 'rgba(var(--tj-text-primary),0.62)' }}>
             {save.lastSummary}
           </div>
         )}
@@ -2287,8 +2288,8 @@ function SaveCard({
           onClick={() => onDelete(save.id)}
           className="w-full cursor-pointer px-3 py-2 text-[12px] font-serif tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
-            color: 'rgba(255,156,156,0.9)',
-            boxShadow: 'inset 0 0 0 1px rgba(255,156,156,0.28)',
+            color: 'rgba(var(--tj-danger),0.9)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.28)',
             clipPath: smallClip,
           }}
         >
@@ -2307,9 +2308,9 @@ function typeLabel(type: SaveListItemSummary['type']): string {
 }
 
 function typeColor(type: SaveListItemSummary['type']): string {
-  if (type === 'auto') return 'rgba(140, 210, 255, 0.86)';
+  if (type === 'auto') return 'rgba(var(--tj-tech-cyan), 0.86)';
   if (type === 'backup') return 'rgba(var(--tj-tech-cyan), 0.9)';
-  if (type === 'imported') return 'rgba(165, 230, 170, 0.9)';
+  if (type === 'imported') return 'rgba(var(--tj-ui-success), 0.9)';
   return 'rgba(var(--tj-tech-cyan), 0.9)';
 }
 

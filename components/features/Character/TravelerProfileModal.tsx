@@ -1,4 +1,4 @@
-import type { 角色数据结构 } from '@/models/character';
+﻿import type { 角色数据结构 } from '@/models/character';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { Modal } from '@/components/ui/Modal';
 import { getPath } from '@/data/journeyPresets';
@@ -126,7 +126,7 @@ export function TravelerProfileModal({ traveler, album, onClose }: Props) {
         <div
           className="mt-2 px-3 py-2 text-[13px] font-serif tracking-wider"
           style={{
-            color: 'rgba(var(--tj-accent-primary), 0.95)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
             background: 'linear-gradient(135deg, rgba(var(--tj-amber-soft),0.16), rgba(var(--tj-bubble),1))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
             clipPath: cardClip,
@@ -144,7 +144,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <div
         className="mb-2 font-serif text-[13px] tracking-[0.35em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.95)' }}
+        style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' }}
       >
         ◆ {title.toUpperCase()}
       </div>
@@ -195,7 +195,7 @@ function BlockCell({ label, value }: { label: string; value: string }) {
     >
       <span
         className="text-[12px] font-serif tracking-[0.3em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}
+        style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}
       >
         {label}
       </span>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { AI提供商, API配置项, API设置, 游戏设置 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
 import { saveSetting } from '@/services/dbService';
@@ -116,7 +116,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
           clipPath: cardClip,
         }}
       >
-        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
           星际通讯终端
         </div>
         手机系统独立于主剧情，用于私聊、群聊和主动来信。它会读取主剧情记忆与 NPC 档案，但用单独 API 生成通讯内容。
@@ -327,7 +327,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+              : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), 0 0 18px rgba(var(--tj-tech-cyan), 0.14)',
             clipPath: cardClip,
@@ -358,7 +358,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-xs tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+      <div className="mb-1.5 font-serif text-xs tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
         {label}
       </div>
       {children}
@@ -399,7 +399,7 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'

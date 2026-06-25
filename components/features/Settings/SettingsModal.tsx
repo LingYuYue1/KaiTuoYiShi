@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+﻿import type { ReactNode } from 'react';
 import { useCallback, useState } from 'react';
 import { ApiSettingsTab } from './ApiSettings';
 import { ThemeSettingsTab } from './ThemeSettings';
@@ -11,8 +11,7 @@ import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
 import { ContextViewerTab } from './ContextViewer';
-import type { API设置, 游戏设置 } from '@/models/settings';
-import type { 主题预设 } from '@/models/settings';
+import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
 import type { ContextSnapshot, ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
@@ -105,6 +104,11 @@ export function SettingsModal({
     void saveSetting('gameSettings', next);
   }, [onGameSettingsChange]);
 
+  const persistThemeChange = useCallback((next: 主题预设) => {
+    onThemeChange(next);
+    void saveSetting('theme', next);
+  }, [onThemeChange]);
+
   const renderTab = (): ReactNode => {
     switch (activeTab) {
       case 'api':
@@ -160,7 +164,7 @@ export function SettingsModal({
           />
         );
       case 'theme':
-        return <ThemeSettingsTab current={currentTheme} onChange={onThemeChange} />;
+        return <ThemeSettingsTab current={currentTheme} onChange={persistThemeChange} />;
       case 'storage':
         return <StorageManagerTab onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} />;
     }
@@ -193,7 +197,7 @@ export function SettingsModal({
               <div
                 className="font-serif text-lg font-bold tracking-[0.28em] md:text-xl md:tracking-[0.35em]"
                 style={{
-                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-tech-cyan)) 44%, rgb(var(--tj-accent-primary)) 100%)',
+                  background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 44%, rgb(var(--tj-accent-primary)) 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
@@ -226,19 +230,19 @@ export function SettingsModal({
                   className={`kaituo-settings-nav-item group flex w-[148px] flex-shrink-0 items-center gap-2 px-3 py-2 text-left transition-all md:w-full md:gap-3 md:px-5 md:py-3 ${active ? 'active' : ''}`}
                   style={{
                     background: active
-                      ? 'linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.10), rgba(var(--tj-accent-primary), 0.03) 68%, transparent)'
+                      ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-primary), 0.03) 68%, transparent)'
                       : 'transparent',
                     borderLeft: active
-                      ? '2px solid rgba(var(--tj-tech-cyan), 0.95)'
+                      ? '2px solid linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))'
                       : '2px solid transparent',
-                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)' : 'none',
+                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)' : 'none',
                     clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
                   }}
                 >
                   <span
                     className="text-base transition-all md:text-lg"
                     style={{
-                      color: active ? 'rgba(var(--tj-tech-cyan), 1)' : 'rgba(var(--tj-tech-cyan), 0.5)',
+                      color: active ? 'rgba(var(--tj-accent-primary), 1)' : 'rgba(var(--tj-accent-primary), 0.5)',
                       textShadow: 'none',
                     }}
                   >
@@ -248,7 +252,7 @@ export function SettingsModal({
                     <div
                       className="truncate font-serif text-xs tracking-[0.18em] transition-colors md:text-sm md:tracking-[0.25em]"
                       style={{
-                        color: active ? 'rgb(var(--tj-tech-cyan))' : 'rgba(220, 230, 240, 0.85)',
+                        color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(220, 230, 240, 0.85)',
                       }}
                     >
                       {t.label}
@@ -275,7 +279,7 @@ export function SettingsModal({
               color: 'rgba(var(--tj-text-secondary), 0.55)',
             }}
           >
-            <span style={{ color: 'rgba(var(--tj-tech-cyan), 0.5)' }}>✦</span>
+            <span style={{ color: 'rgba(var(--tj-accent-primary), 0.5)' }}>✦</span>
             <span className="ml-2">开拓轶事 · v0.8.1</span>
           </div>
         </aside>
@@ -288,13 +292,13 @@ export function SettingsModal({
           >
             <div className="min-w-0">
               <div className="flex items-baseline gap-3">
-                <span className="text-base" style={{ color: 'rgba(var(--tj-tech-cyan), 0.88)' }}>
+                <span className="text-base" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' }}>
                   {activeMeta.icon}
                 </span>
                 <h2
                   className="font-serif text-lg font-bold tracking-[0.3em]"
                   style={{
-                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-tech-cyan)) 46%, rgb(var(--tj-accent-primary)) 100%)',
+                    background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 46%, rgb(var(--tj-accent-primary)) 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',

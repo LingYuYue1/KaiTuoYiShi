@@ -58,15 +58,6 @@ body {
   }
 }
 
-:root[data-theme='morningInk'] body {
-  background:
-    linear-gradient(90deg, rgba(145, 83, 58, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(145, 83, 58, 0.025) 1px, transparent 1px),
-    radial-gradient(circle at 18% 12%, rgba(145, 83, 58, 0.08), transparent 32%),
-    radial-gradient(circle at 84% 18%, rgba(118, 128, 111, 0.08), transparent 36%),
-    rgb(var(--tj-bg-primary));
-  background-size: 28px 28px, 28px 28px, auto, auto, auto;
-}
 
 .kaituo-text-gradient {
   background: linear-gradient(
@@ -83,102 +74,54 @@ body {
 
 .kaituo-game-bg {
   background:
-    linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(6, 5, 7, 0.98));
+    linear-gradient(180deg, rgba(var(--tj-surface-bg-start), 0.98), rgba(var(--tj-surface-bg-end), 0.98));
 }
 
 .kaituo-chat-surface {
   background:
-    linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(6, 5, 7, 0.98));
+    linear-gradient(180deg, rgba(var(--tj-surface-bg-start), 0.98), rgba(var(--tj-surface-bg-end), 0.98));
 }
 
 .kaituo-left-panel,
 .kaituo-right-menu {
   background:
-    linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(6, 5, 7, 0.98));
+    linear-gradient(180deg, rgba(var(--tj-surface-bg-start), 0.98), rgba(var(--tj-surface-bg-end), 0.98));
 }
 
 .kaituo-left-panel {
-  box-shadow: inset -1px 0 0 rgba(245, 217, 122, 0.22);
+  box-shadow: inset -1px 0 0 rgba(var(--tj-accent-primary), 0.22);
 }
 
 .kaituo-right-menu {
-  box-shadow: inset 1px 0 0 rgba(245, 217, 122, 0.22);
+  box-shadow: inset 1px 0 0 rgba(var(--tj-accent-primary), 0.22);
 }
 
 .kaituo-topbar {
-  background: linear-gradient(180deg, rgba(14, 12, 14, 0.98), rgba(8, 7, 9, 0.98));
-  box-shadow: inset 0 -1px 0 rgba(245, 217, 122, 0.25);
+  background: linear-gradient(180deg, rgba(var(--tj-surface-bg-start), 0.98), rgba(var(--tj-bg-primary), 0.98));
+  box-shadow: inset 0 -1px 0 rgba(var(--tj-accent-primary), 0.25);
 }
 
 .kaituo-system-drawer-overlay {
-  background: rgba(6, 5, 14, 0.55);
+  background: rgba(var(--tj-overlay-bg), 0.55);
   backdrop-filter: blur(1px);
 }
 
 .kaituo-system-drawer {
   background:
-    radial-gradient(circle at 12% 0%, rgba(117, 214, 216, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(18, 16, 18, 0.98), rgba(10, 9, 10, 0.99));
+    radial-gradient(circle at 12% 0%, rgba(var(--tj-accent-primary), 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-drawer-bg), 0.98), rgba(var(--tj-surface-strong), 0.99));
   box-shadow:
-    inset 1px 0 0 rgba(245, 217, 122, 0.45),
-    -8px 0 24px rgba(0, 0, 0, 0.45);
+    inset 1px 0 0 rgba(var(--tj-accent-primary), 0.45),
+    -8px 0 24px rgba(var(--tj-shadow), 0.45);
 }
 
-:root[data-theme='morningInk'] .kaituo-game-bg {
-  background:
-    linear-gradient(90deg, rgba(var(--tj-border), 0.18) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(var(--tj-border), 0.12) 1px, transparent 1px),
-    radial-gradient(circle at 22% 0%, rgba(var(--tj-accent-primary), 0.07), transparent 32%),
-    linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.98), rgba(var(--tj-bg-primary), 0.98));
-  background-size: 32px 32px, 32px 32px, auto, auto;
-}
 
-:root[data-theme='morningInk'] .kaituo-chat-surface {
-  background:
-    linear-gradient(90deg, rgba(var(--tj-border), 0.12) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(var(--tj-border), 0.08) 1px, transparent 1px),
-    radial-gradient(circle at 16% 0%, rgba(var(--tj-tech-cyan), 0.09), transparent 34%),
-    linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.98), rgba(var(--tj-bg-primary), 0.96));
-  background-size: 34px 34px, 34px 34px, auto, auto;
-}
 
-:root[data-theme='morningInk'] .kaituo-left-panel,
-:root[data-theme='morningInk'] .kaituo-right-menu {
-  background:
-    radial-gradient(circle at 18% 0%, rgba(var(--tj-tech-cyan), 0.09), transparent 34%),
-    linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98));
-}
 
-:root[data-theme='morningInk'] .kaituo-left-panel {
-  box-shadow:
-    inset -1px 0 0 rgba(var(--tj-border), 0.76),
-    8px 0 22px rgba(var(--tj-shadow), 0.05);
-}
 
-:root[data-theme='morningInk'] .kaituo-right-menu {
-  box-shadow:
-    inset 1px 0 0 rgba(var(--tj-border), 0.76),
-    -8px 0 22px rgba(var(--tj-shadow), 0.05);
-}
 
-:root[data-theme='morningInk'] .kaituo-topbar {
-  background:
-    linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98));
-  box-shadow: inset 0 -1px 0 rgba(var(--tj-border), 0.84);
-}
 
-:root[data-theme='morningInk'] .kaituo-system-drawer-overlay {
-  background: rgba(70, 58, 42, 0.24);
-}
 
-:root[data-theme='morningInk'] .kaituo-system-drawer {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 32%),
-    linear-gradient(180deg, rgba(var(--tj-bubble), 0.99), rgba(var(--tj-surface-strong), 0.98));
-  box-shadow:
-    inset 1px 0 0 rgba(var(--tj-border), 0.9),
-    -10px 0 22px rgba(var(--tj-shadow), 0.1);
-}
 
 /* Noise overlay */
 .bg-noise {
@@ -247,54 +190,42 @@ body.modal-open {
   clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
 }
 .kaituo-btn-primary {
-  background: linear-gradient(135deg, #f5d97a 0%, #d4b15a 100%);
-  color: #1a1325;
+  background: linear-gradient(135deg, rgb(var(--tj-btn-primary-start)) 0%, rgb(var(--tj-btn-primary-end)) 100%);
+  color: rgb(var(--tj-btn-primary-text));
   box-shadow:
-    inset 0 0 0 1px rgba(255, 245, 200, 0.6),
-    0 0 24px rgba(245, 217, 122, 0.25);
+    inset 0 0 0 1px rgba(var(--tj-text-primary),0.6),
+    0 0 24px rgba(var(--tj-accent-primary), 0.25);
 }
 
-:root[data-theme='morningInk'] .kaituo-btn-primary {
-  background: linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(126, 76, 53));
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 252, 245, 0.45),
-    0 10px 22px rgba(var(--tj-shadow), 0.12);
-}
 .kaituo-btn-primary:hover {
   box-shadow:
-    inset 0 0 0 1px rgba(255, 245, 200, 0.95),
-    0 0 36px rgba(245, 217, 122, 0.45);
+    inset 0 0 0 1px rgba(var(--tj-text-primary),0.95),
+    0 0 36px rgba(var(--tj-accent-primary), 0.45);
   transform: translateY(-1px);
 }
 .kaituo-btn-secondary {
-  background: rgba(16, 14, 16, 0.55);
-  color: #e6d4a0;
+  background: rgba(var(--tj-bg-secondary), 0.55);
+  color: rgb(var(--tj-accent-primary));
   backdrop-filter: blur(4px);
-  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4);
 }
 
-:root[data-theme='morningInk'] .kaituo-btn-secondary,
-:root[data-theme='morningInk'] .kaituo-btn-quiet,
-:root[data-theme='morningInk'] .kaituo-card,
-:root[data-theme='morningInk'] .kaituo-modal-shell {
-  backdrop-filter: none;
-}
 .kaituo-btn-secondary:hover {
-  background: rgba(40, 32, 22, 0.7);
+  background: rgba(var(--tj-surface-strong), 0.7);
   box-shadow:
-    inset 0 0 0 1px rgba(245, 217, 122, 0.75),
-    0 0 22px rgba(245, 217, 122, 0.18);
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.75),
+    0 0 22px rgba(var(--tj-accent-primary), 0.18);
 }
 .kaituo-btn-quiet {
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-  background: rgba(16, 14, 16, 0.35);
-  color: rgba(180, 168, 145, 0.85);
-  box-shadow: inset 0 0 0 1px rgba(110, 100, 80, 0.4);
+  background: rgba(var(--tj-bg-secondary), 0.35);
+  color: rgba(var(--tj-text-secondary), 0.85);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-border), 0.4);
   letter-spacing: 0.22em;
 }
 .kaituo-btn-quiet:hover {
-  color: rgba(220, 205, 170, 0.95);
-  box-shadow: inset 0 0 0 1px rgba(160, 145, 110, 0.65);
+  color: rgba(var(--tj-text-primary), 0.95);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.65);
 }
 
 /* ── 开拓轶事 · 通用容器/输入/弹窗工具类 ── */
@@ -303,8 +234,8 @@ body.modal-open {
 .kaituo-card {
   position: relative;
   background:
-    radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.11), transparent 34%),
-    linear-gradient(180deg, rgba(15, 21, 31, 0.84), rgba(8, 12, 19, 0.94));
+    radial-gradient(circle at 12% 0%, rgba(var(--tj-accent-primary), 0.11), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.84), rgba(var(--tj-panel-bg-end), 0.94));
   backdrop-filter: blur(10px);
   box-shadow:
     inset 0 0 0 1px rgba(var(--tj-border), 0.18),
@@ -313,22 +244,14 @@ body.modal-open {
   transition: box-shadow 0.2s;
 }
 
-:root[data-theme='morningInk'] .kaituo-card {
-  background:
-    radial-gradient(circle at 14% 0%, rgba(108, 168, 178, 0.09), transparent 34%),
-    linear-gradient(180deg, rgba(var(--tj-bubble), 0.97), rgba(var(--tj-surface-strong), 0.9));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.72),
-    0 8px 20px rgba(var(--tj-shadow), 0.06);
-}
 .kaituo-card-hover:hover {
-  box-shadow: inset 0 0 0 1px rgba(245, 217, 122, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45);
 }
 
 /* 输入框：input/textarea 通用 */
 .kaituo-input {
   background:
-    linear-gradient(180deg, rgba(12, 17, 26, 0.9), rgba(8, 11, 17, 0.96));
+    linear-gradient(180deg, rgba(var(--tj-input-bg-start), 0.9), rgba(var(--tj-input-bg-end), 0.96));
   color: rgb(var(--tj-text-primary));
   box-shadow:
     inset 0 0 0 1px rgba(var(--tj-border), 0.18),
@@ -338,27 +261,15 @@ body.modal-open {
   transition: box-shadow 0.2s, background 0.2s;
 }
 
-:root[data-theme='morningInk'] .kaituo-input {
-  background: rgba(var(--tj-bubble), 0.98);
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.82),
-    0 4px 14px rgba(var(--tj-shadow), 0.05);
-}
 
-:root[data-theme='morningInk'] .kaituo-input:focus {
-  background: rgb(var(--tj-bubble));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.62),
-    0 0 0 3px rgba(var(--tj-accent-primary), 0.08);
-}
 .kaituo-input::placeholder {
-  color: rgba(160, 148, 120, 0.5);
+  color: rgba(var(--tj-text-secondary), 0.5);
 }
 .kaituo-input:focus {
-  background: rgba(10, 15, 23, 0.98);
+  background: rgba(var(--tj-input-focus-bg), 0.98);
   box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.52),
-    0 0 0 3px rgba(var(--tj-tech-cyan), 0.08);
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52),
+    0 0 0 3px rgba(var(--tj-accent-primary), 0.08);
 }
 
 /* select 下拉框：深色主题适配 */
@@ -374,71 +285,45 @@ select.kaituo-input {
 }
 
 select.kaituo-input:focus {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='rgb(var(--tj-tech-cyan))' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='rgb(var(--tj-accent-primary))' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 select.kaituo-input option {
-  background: rgb(12, 17, 26);
+  background: rgb(var(--tj-option-bg));
   color: rgb(var(--tj-text-primary));
   padding: 6px 10px;
 }
 
 select.kaituo-input option:checked {
-  background: rgba(var(--tj-tech-cyan), 0.18);
-  color: rgb(var(--tj-tech-cyan));
+  background: rgba(var(--tj-accent-primary), 0.18);
+  color: rgb(var(--tj-accent-primary));
 }
 
-:root[data-theme='morningInk'] select.kaituo-input {
-  color-scheme: dark;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='rgba(212,177,90,0.7)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
 
-:root[data-theme='morningInk'] select.kaituo-input:focus {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='rgba(212,177,90,0.9)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
 
-:root[data-theme='morningInk'] select.kaituo-input option {
-  background: rgb(42, 34, 26);
-  color: rgb(var(--tj-text-primary));
-}
 
-:root[data-theme='morningInk'] select.kaituo-input option:checked {
-  background: rgba(212, 177, 90, 0.2);
-  color: rgba(212, 177, 90, 0.95);
-}
 
 /* 弹窗遮罩 */
 .kaituo-modal-overlay {
   background:
-    radial-gradient(circle at 50% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%),
+    radial-gradient(circle at 50% 0%, rgba(var(--tj-accent-primary), 0.12), transparent 34%),
     radial-gradient(circle at 50% 100%, rgba(var(--tj-accent-primary), 0.06), transparent 28%),
-    rgba(3, 7, 12, 0.78);
+    rgba(var(--tj-overlay-bg), 0.78);
   backdrop-filter: blur(6px);
 }
 
-:root[data-theme='morningInk'] .kaituo-modal-overlay {
-  background: rgba(70, 58, 42, 0.24);
-  backdrop-filter: blur(2px);
-}
 
 /* 弹窗外壳：带切角 + 金边 + 暗紫渐变底 */
 .kaituo-modal-shell {
   background:
-    radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.10), transparent 36%),
-    linear-gradient(180deg, rgba(16, 22, 32, 0.98), rgba(8, 12, 18, 0.99));
+    radial-gradient(circle at 12% 0%, rgba(var(--tj-accent-primary), 0.10), transparent 36%),
+    linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.98), rgba(var(--tj-panel-bg-end), 0.99));
   box-shadow:
     inset 0 0 0 1px rgba(var(--tj-border), 0.22),
     0 30px 82px rgba(var(--tj-shadow), 0.46);
   clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
 }
 
-:root[data-theme='morningInk'] .kaituo-modal-shell {
-  background:
-    linear-gradient(180deg, rgba(var(--tj-surface), 0.99), rgba(var(--tj-surface-strong), 0.98));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.82),
-    0 24px 60px rgba(var(--tj-shadow), 0.16);
-}
 
 /* 分隔线：横向金色渐变 */
 .kaituo-divider {
@@ -457,7 +342,7 @@ select.kaituo-input option:checked {
 
 /* 关闭按钮（弹窗右上角等） */
 .kaituo-close-btn {
-  color: rgba(var(--tj-tech-cyan), 0.82);
+  color: rgba(var(--tj-accent-primary), 0.82);
   transition: color 0.2s, transform 0.25s;
 }
 .kaituo-close-btn:hover {
@@ -518,44 +403,27 @@ select.kaituo-input option:checked {
   letter-spacing: 0.32em;
 }
 
-:root[data-theme='morningInk'] .kaituo-menu-item:hover {
-  background: linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.1), rgba(var(--tj-bubble), 0.72)) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42),
-    inset 3px 0 0 rgba(var(--tj-accent-primary), 0.62),
-    0 6px 16px rgba(var(--tj-shadow), 0.06) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-menu-item:hover .kaituo-menu-glyph {
-  background: rgba(var(--tj-accent-primary), 0.1) !important;
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-menu-footer:hover {
-  background: rgba(var(--tj-bubble), 0.92) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45),
-    0 6px 16px rgba(var(--tj-shadow), 0.06) !important;
-}
 
 .panel-btn {
   padding: 0.45rem 0.7rem;
   font-family: 'Noto Serif SC', SimSun, serif;
   font-size: 0.75rem;
   letter-spacing: 0.12em;
-  color: rgba(var(--tj-tech-cyan), 0.88);
-  background: rgba(var(--tj-tech-cyan), 0.055);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.24);
+  color: rgba(var(--tj-accent-primary), 0.88);
+  background: rgba(var(--tj-accent-primary), 0.055);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24);
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
   transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
 .panel-btn:hover:not(:disabled) {
   color: rgb(var(--tj-text-primary));
-  background: rgba(var(--tj-tech-cyan), 0.11);
+  background: rgba(var(--tj-accent-primary), 0.11);
   box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.48),
-    0 0 14px rgba(var(--tj-tech-cyan), 0.12);
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48),
+    0 0 14px rgba(var(--tj-accent-primary), 0.12);
 }
 
 .panel-btn:disabled {
@@ -564,29 +432,26 @@ select.kaituo-input option:checked {
 }
 
 .panel-btn.strong {
-  background: linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.2), rgba(var(--tj-accent-primary), 0.08));
+  background: linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.2), rgba(var(--tj-accent-secondary), 0.12));
 }
 
 .panel-btn.danger {
-  color: rgba(230, 145, 145, 0.9);
-  box-shadow: inset 0 0 0 1px rgba(230, 145, 145, 0.28);
+  color: rgba(var(--tj-danger), 0.9);
+  box-shadow: inset 0 0 0 1px rgba(var(--tj-danger), 0.28);
 }
 
-:root[data-theme='morningInk'] .kaituo-modal-overlay [style*="rgba(0, 0, 0"] {
-  box-shadow: none;
-}
 
 .kaituo-settings-shell {
   background:
-    radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 36%),
+    radial-gradient(circle at 12% 0%, rgba(var(--tj-accent-primary), 0.12), transparent 36%),
     radial-gradient(circle at 88% 10%, rgba(var(--tj-accent-primary), 0.08), transparent 30%),
-    linear-gradient(180deg, rgba(16, 22, 32, 0.98), rgba(8, 12, 18, 0.99));
+    linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.98), rgba(var(--tj-panel-bg-end), 0.99));
 }
 
 .kaituo-settings-sidebar {
   background:
-    radial-gradient(circle at 0 0%, rgba(var(--tj-tech-cyan), 0.10), transparent 36%),
-    linear-gradient(180deg, rgba(15, 21, 31, 0.98), rgba(9, 13, 19, 0.98));
+    radial-gradient(circle at 0 0%, rgba(var(--tj-accent-primary), 0.10), transparent 36%),
+    linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.98), rgba(var(--tj-panel-bg-end), 0.98));
   box-shadow: inset -1px 0 0 rgba(var(--tj-border), 0.12);
 }
 
@@ -603,7 +468,7 @@ select.kaituo-input option:checked {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.12), transparent 58%);
+  background: linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.12), transparent 58%);
   transform: translateX(-100%);
   transition: transform 0.35s ease;
   pointer-events: none;
@@ -615,18 +480,18 @@ select.kaituo-input option:checked {
 
 .kaituo-settings-nav-item.active {
   background:
-    linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.16), rgba(var(--tj-accent-primary), 0.04) 68%, transparent),
-    rgba(11, 17, 25, 0.9);
+    linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04) 68%, transparent),
+    rgba(var(--tj-panel-bg-start), 0.9);
   box-shadow:
-    inset 3px 0 0 rgba(var(--tj-tech-cyan), 0.95),
-    inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28);
+    inset 3px 0 0 rgba(var(--tj-accent-primary), 0.95),
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28);
 }
 
 .kaituo-settings-content-header {
   position: relative;
   background:
-    linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.10), transparent 42%),
-    linear-gradient(180deg, rgba(17, 24, 35, 0.84), rgba(11, 16, 24, 0.74));
+    linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.10), transparent 42%),
+    linear-gradient(180deg, rgba(var(--tj-surface-bg-start), 0.84), rgba(var(--tj-surface-bg-end), 0.74));
   border-bottom: 1px solid rgba(var(--tj-border), 0.12);
 }
 
@@ -635,30 +500,28 @@ select.kaituo-input option:checked {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(108deg, transparent 0 42%, rgba(var(--tj-tech-cyan), 0.08) 47%, transparent 52%);
+  background: linear-gradient(108deg, transparent 0 42%, rgba(var(--tj-accent-primary), 0.08) 47%, transparent 52%);
   opacity: 0.72;
 }
 
 .kaituo-settings-content-body {
   background:
-    linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.06) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(var(--tj-tech-cyan), 0.05) 1px, transparent 1px),
-    radial-gradient(circle at 18% 0%, rgba(var(--tj-tech-cyan), 0.14), transparent 32%),
+    linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.05) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(var(--tj-accent-primary), 0.14), transparent 32%),
     radial-gradient(circle at 90% 8%, rgba(var(--tj-accent-primary), 0.07), transparent 28%),
-    linear-gradient(180deg, rgba(13, 20, 30, 0.92), rgba(9, 13, 20, 0.98));
+    linear-gradient(180deg, rgba(var(--tj-surface-bg-start), 0.92), rgba(var(--tj-surface-bg-end), 0.98));
   background-size: 30px 30px, 30px 30px, auto, auto, auto;
 }
 
 .kaituo-settings-pane {
-  --tj-text-secondary: 214, 230, 244;
-  --tj-ui-body: 232, 242, 250;
   color: rgb(var(--tj-text-primary));
 }
 
 .kaituo-settings-pane .kaituo-input,
 .kaituo-settings-shell .kaituo-input {
   background:
-    linear-gradient(180deg, rgba(11, 16, 24, 0.92), rgba(8, 11, 17, 0.97));
+    linear-gradient(180deg, rgba(var(--tj-input-bg-start), 0.92), rgba(var(--tj-input-bg-end), 0.97));
   box-shadow:
     inset 0 0 0 1px rgba(var(--tj-border), 0.18),
     0 6px 16px rgba(var(--tj-shadow), 0.08);
@@ -667,8 +530,8 @@ select.kaituo-input option:checked {
 .kaituo-settings-pane .kaituo-input:focus,
 .kaituo-settings-shell .kaituo-input:focus {
   box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.52),
-    0 0 0 3px rgba(var(--tj-tech-cyan), 0.08);
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52),
+    0 0 0 3px rgba(var(--tj-accent-primary), 0.08);
 }
 
 /* 设置面板内 select 保留下拉箭头 */
@@ -682,21 +545,21 @@ select.kaituo-input option:checked {
 
 .kaituo-settings-pane select.kaituo-input:focus,
 .kaituo-settings-shell select.kaituo-input:focus {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='rgb(var(--tj-tech-cyan))' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='rgb(var(--tj-accent-primary))' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 .kaituo-settings-callout,
 .kaituo-settings-toolbar,
 .kaituo-settings-split {
   background:
-    linear-gradient(180deg, rgba(18, 25, 36, 0.88), rgba(10, 15, 23, 0.94));
+    linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.88), rgba(var(--tj-panel-bg-end), 0.94));
   box-shadow: inset 0 0 0 1px rgba(var(--tj-border), 0.12);
 }
 
 .kaituo-settings-callout {
   background:
-    radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.10), transparent 34%),
-    linear-gradient(180deg, rgba(19, 26, 38, 0.90), rgba(11, 16, 23, 0.96));
+    radial-gradient(circle at 10% 0%, rgba(var(--tj-accent-primary), 0.10), transparent 34%),
+    linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.90), rgba(var(--tj-panel-bg-end), 0.96));
 }
 
 .kaituo-settings-callout {
@@ -704,14 +567,14 @@ select.kaituo-input option:checked {
 }
 
 .kaituo-settings-callout strong,
-.kaituo-settings-callout [style*='rgba(var(--tj-tech-cyan), 0.88)'] {
-  color: rgba(var(--tj-tech-cyan), 0.98) !important;
+.kaituo-settings-callout [style*='rgba(var(--tj-accent-primary), 0.88)'] {
+  color: rgba(var(--tj-accent-primary), 0.98) !important;
 }
 
 .kaituo-settings-toolbar {
   background:
-    linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.10), rgba(var(--tj-accent-primary), 0.03) 72%, transparent),
-    rgba(12, 18, 27, 0.84);
+    linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-primary), 0.03) 72%, transparent),
+    rgba(var(--tj-panel-bg-start), 0.84);
 }
 
 .kaituo-settings-split {
@@ -719,88 +582,16 @@ select.kaituo-input option:checked {
   box-shadow: none;
 }
 
-:root[data-theme='morningInk'] .kaituo-settings-content-body {
-  background:
-    linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.06) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(var(--tj-tech-cyan), 0.05) 1px, transparent 1px),
-    radial-gradient(circle at 16% 0%, rgba(var(--tj-tech-cyan), 0.13), transparent 32%),
-    radial-gradient(circle at 88% 10%, rgba(var(--tj-accent-primary), 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.98), rgba(var(--tj-bg-primary), 0.98));
-  background-size: 30px 30px, 30px 30px, auto, auto, auto;
-}
 
-:root[data-theme='morningInk'] .kaituo-settings-pane {
-  --tj-text-secondary: 214, 230, 244;
-  --tj-ui-body: 232, 242, 250;
-  color: rgb(var(--tj-text-primary));
-}
 
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(212, 177, 90, 0.94))"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(212,177,90,0.94))"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.9), rgba(212, 177, 90, 0.9))"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(212,177,90,0.9))"] {
-  background: linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.92), rgba(var(--tj-accent-primary), 0.82)) !important;
-  color: rgb(var(--tj-text-primary)) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.72),
-    0 8px 18px rgba(var(--tj-shadow), 0.08) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary), 0.08)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary),0.08)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary), 0.06)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary),0.06)"] {
-  background: rgba(var(--tj-tech-cyan), 0.06) !important;
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.24) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(255, 215, 150, 0.86)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(255,215,150,0.86)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(255, 190, 120, 0.07)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(255,190,120,0.07)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(255, 190, 120, 0.18)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(255,190,120,0.18)"] {
-  color: rgba(var(--tj-text-primary), 0.92) !important;
-  background: rgba(var(--tj-tech-cyan), 0.05) !important;
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(220, 200, 160, 0.85)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(220,200,160,0.85)"] {
-  color: rgba(222, 235, 246, 0.9) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary), 0.85)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary),0.85)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary), 0.9)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(var(--tj-accent-primary),0.9)"] {
-  color: rgba(var(--tj-tech-cyan), 0.82) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(220, 120, 120, 0.9)"],
-:root[data-theme='morningInk'] .kaituo-settings-pane [style*="rgba(220,120,120,0.9)"] {
-  color: rgba(220, 130, 140, 0.92) !important;
-}
 
-:root[data-theme='morningInk'] aside {
-  scrollbar-color: rgba(var(--tj-accent-primary), 0.38) rgba(var(--tj-surface-strong), 0.4);
-}
 
-:root[data-theme='morningInk'] .panel-btn {
-  color: rgba(var(--tj-accent-primary), 0.9);
-  background: rgba(var(--tj-bubble), 0.78);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-border), 0.82);
-}
 
-:root[data-theme='morningInk'] .panel-btn:hover:not(:disabled) {
-  color: rgb(var(--tj-text-primary));
-  background: rgba(var(--tj-bubble), 0.98);
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48),
-    0 6px 16px rgba(var(--tj-shadow), 0.07);
-}
 
 .kaituo-panel-surface {
   background:
@@ -811,149 +602,25 @@ select.kaituo-input option:checked {
     0 18px 45px rgba(var(--tj-shadow), 0.18);
 }
 
-:root[data-theme='morningInk'] .kaituo-panel-surface {
-  background:
-    radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.14), transparent 36%),
-    radial-gradient(circle at 92% 10%, rgba(var(--tj-accent-primary), 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.78),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 14px 28px rgba(var(--tj-shadow), 0.08);
-}
 
 .kaituo-soft-surface {
   background: rgba(var(--tj-accent-primary), 0.045);
   box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16);
 }
 
-:root[data-theme='morningInk'] .kaituo-soft-surface {
-  background:
-    linear-gradient(135deg, rgba(var(--tj-paper-warm), 0.92), rgba(var(--tj-paper-deep), 0.62));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.68),
-    0 6px 16px rgba(var(--tj-shadow), 0.045);
-}
 
-:root[data-theme='morningInk'] .kaituo-tech-surface {
-  background:
-    linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.12), rgba(var(--tj-bubble), 0.88) 42%, rgba(var(--tj-paper-deep), 0.5));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.26),
-    inset 3px 0 0 rgba(var(--tj-accent-primary), 0.38);
-}
 
-:root[data-theme='morningInk'] [style*="rgba(9, 8, 10"],
-:root[data-theme='morningInk'] [style*="rgba(8, 10, 14"],
-:root[data-theme='morningInk'] [style*="rgba(12, 11, 12"],
-:root[data-theme='morningInk'] [style*="rgba(12,11,13"],
-:root[data-theme='morningInk'] [style*="rgba(18, 16, 22"],
-:root[data-theme='morningInk'] [style*="rgba(10, 9, 12"],
-:root[data-theme='morningInk'] [style*="rgba(0,0,0"] {
-  background:
-    linear-gradient(135deg, rgba(var(--tj-bubble), 0.9), rgba(var(--tj-surface-strong), 0.68)) !important;
-}
 
-:root[data-theme='morningInk'] [style*="0 18px 45px rgba(0"],
-:root[data-theme='morningInk'] [style*="0 24px 48px rgba(0"],
-:root[data-theme='morningInk'] [style*="0 0 18px rgba(var(--tj-accent-primary)"],
-:root[data-theme='morningInk'] [style*="0 0 24px rgba(var(--tj-accent-primary)"] {
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.64),
-    0 10px 24px rgba(var(--tj-shadow), 0.07) !important;
-}
 
-:root[data-theme='morningInk'] [style*="rgba(245, 235, 210"],
-:root[data-theme='morningInk'] [style*="rgba(210, 198, 168"] {
-  color: rgba(var(--tj-text-primary), 0.92) !important;
-}
 
-:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary), 0.5"],
-:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary),0.5"],
-:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary), 0.6"],
-:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary),0.6"],
-:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary), 0.7"],
-:root[data-theme='morningInk'] [style*="rgba(var(--tj-text-secondary),0.7"] {
-  color: rgba(219, 232, 244, 0.86) !important;
-}
 
-:root[data-theme='morningInk'] [style*="rgba(117,214,216"],
-:root[data-theme='morningInk'] [style*="rgba(117, 214, 216"],
-:root[data-theme='morningInk'] [style*="#75d6d8"] {
-  color: rgba(38, 105, 116, 0.92) !important;
-}
 
-:root[data-theme='morningInk'] [style*="rgba(160, 230, 170"],
-:root[data-theme='morningInk'] [style*="#9ef0f0"],
-:root[data-theme='morningInk'] [style*="rgba(204,240,240"] {
-  color: rgba(54, 111, 74, 0.92) !important;
-}
 
-:root[data-theme='morningInk'] [style*="rgba(245,190,140"],
-:root[data-theme='morningInk'] [style*="rgba(230,170,120"] {
-  color: rgba(145, 83, 58, 0.94) !important;
-}
 
-:root[data-theme='morningInk'] .kaituo-input,
-:root[data-theme='morningInk'] .kaituo-input:read-only,
-:root[data-theme='morningInk'] .kaituo-input:disabled {
-  color: rgba(var(--tj-text-primary), 0.96);
-  opacity: 1;
-}
 
-:root[data-theme='morningInk'] .kaituo-input:disabled {
-  background: rgba(var(--tj-surface-strong), 0.84);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-border), 0.7);
-}
 
-:root[data-theme='morningInk'] [style*="rgba(5, 5, 7"],
-:root[data-theme='morningInk'] [style*="rgba(6, 5, 14"],
-:root[data-theme='morningInk'] [style*="rgba(20, 18, 20"],
-:root[data-theme='morningInk'] [style*="rgba(28, 22, 18"] {
-  background:
-    linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong))) !important;
-}
 
-:root[data-theme='morningInk'] [style*="rgba(8,7,9"],
-:root[data-theme='morningInk'] [style*="rgba(8, 7, 9"],
-:root[data-theme='morningInk'] [style*="rgba(16,14,16"],
-:root[data-theme='morningInk'] [style*="rgba(16, 14, 16"],
-:root[data-theme='morningInk'] [style*="rgba(20,18,14"],
-:root[data-theme='morningInk'] [style*="rgba(14, 26, 18"],
-:root[data-theme='morningInk'] [style*="rgba(0, 0, 0"],
-:root[data-theme='morningInk'] [style*="rgba(0,0,0"] {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%),
-    linear-gradient(135deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.9)) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.64),
-    0 8px 18px rgba(var(--tj-shadow), 0.055) !important;
-}
 
-:root[data-theme='morningInk'] .bg-black\/25,
-:root[data-theme='morningInk'] .bg-black\/30 {
-  background:
-    linear-gradient(135deg, rgba(var(--tj-surface-strong), 0.96), rgba(var(--tj-bg-primary), 0.88)) !important;
-}
 
-:root[data-theme='morningInk'] [style*="#fff4d4"],
-:root[data-theme='morningInk'] [style*="rgba(235, 223, 193"],
-:root[data-theme='morningInk'] [style*="rgba(220,208,178"],
-:root[data-theme='morningInk'] [style*="rgba(220, 208, 178"],
-:root[data-theme='morningInk'] [style*="rgba(200,188,158"],
-:root[data-theme='morningInk'] [style*="rgba(200, 188, 158"],
-:root[data-theme='morningInk'] [style*="rgba(180, 168, 140"],
-:root[data-theme='morningInk'] [style*="rgba(160, 148, 120"] {
-  color: rgba(var(--tj-text-primary), 0.9) !important;
-}
 
-:root[data-theme='morningInk'] [style*="#f1b7ce"],
-:root[data-theme='morningInk'] [style*="rgba(241,183,206"] {
-  color: rgba(156, 82, 108, 0.95) !important;
-}
 
-:root[data-theme='morningInk'] [style*="rgba(255,180,180"],
-:root[data-theme='morningInk'] [style*="rgba(255,170,170"],
-:root[data-theme='morningInk'] [style*="#ffd6d6"] {
-  color: rgb(var(--tj-danger)) !important;
-}

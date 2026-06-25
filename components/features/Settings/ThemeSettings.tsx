@@ -1,10 +1,5 @@
-import type { 主题预设 } from '@/models/settings';
 import { themes } from '@/styles/themes';
-
-interface Props {
-  current: 主题预设;
-  onChange: (t: 主题预设) => void;
-}
+import type { 主题预设 } from '@/models/settings';
 
 const cardClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
@@ -17,7 +12,13 @@ const previewKeys = [
   '--tj-text-primary',
 ];
 
-export function ThemeSettingsTab({ current, onChange }: Props) {
+export function ThemeSettingsTab({
+  current,
+  onChange,
+}: {
+  current: 主题预设;
+  onChange: (t: 主题预设) => void;
+}) {
   return (
     <div>
       <div className="mb-5">
@@ -25,15 +26,15 @@ export function ThemeSettingsTab({ current, onChange }: Props) {
           className="font-serif text-sm tracking-[0.22em]"
           style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}
         >
-          ◆ 为这趟旅程挑一种基调
+          ◆ 选择主题
         </p>
         <p className="mt-1 text-xs tracking-wider" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
-          主题会立刻应用到游戏内界面，并随本地设置保存。
+          切换后立即生效，所有面板与控件配色同步变更。
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="flex flex-col gap-3">
         {themes.map((t) => {
-          const active = current === t.id;
+          const active = t.id === current;
           const accent = t.variables['--tj-accent-primary'];
           const accentSecondary = t.variables['--tj-accent-secondary'];
           const bg = t.variables['--tj-bg-secondary'];
@@ -42,14 +43,14 @@ export function ThemeSettingsTab({ current, onChange }: Props) {
             <button
               key={t.id}
               onClick={() => onChange(t.id as 主题预设)}
-              className="group min-h-[132px] p-4 text-left transition-all hover:-translate-y-0.5"
+              className="min-h-[132px] p-4 text-left transition-all"
               style={{
                 background: active
                   ? `linear-gradient(135deg, rgba(${accent}, 0.16), rgba(${bg}, 0.74))`
-                  : `linear-gradient(135deg, rgba(${bg}, 0.64), rgba(var(--tj-bg-primary), 0.42))`,
+                  : `rgba(var(--tj-bg-secondary), 0.34)`,
                 boxShadow: active
                   ? `inset 0 0 0 1px rgba(${accent}, 0.7), 0 0 18px rgba(${accent}, 0.16)`
-                  : `inset 0 0 0 1px rgba(${accent}, 0.22)`,
+                  : `inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)`,
                 clipPath: cardClip,
               }}
             >
@@ -70,7 +71,7 @@ export function ThemeSettingsTab({ current, onChange }: Props) {
                   <div className="min-w-0 flex-1">
                     <div
                       className="font-serif text-sm font-bold tracking-wider"
-                      style={{ color: active ? `rgb(${accent})` : `rgb(${text})` }}
+                      style={{ color: `rgb(${accent})` }}
                     >
                       {t.name}
                     </div>

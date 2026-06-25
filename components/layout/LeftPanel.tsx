@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { getPath } from '@/data/journeyPresets';
@@ -176,14 +176,14 @@ export function LeftPanel({
         {currentStoryChapter && (
           <div
             className="mt-2 px-3 py-2"
-            style={{
-              background: 'linear-gradient(135deg, rgba(117,214,216,0.07), rgba(var(--tj-accent-primary),0.04))',
-              boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.22)',
+style={{
+          background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.07), rgba(var(--tj-accent-primary), 0.04))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.22)',
               clipPath:
                 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
             }}
           >
-            <div className="font-serif text-[10px] tracking-[0.28em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+            <div className="font-serif text-[10px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.82)' }}>
               当前注入章节
             </div>
             <div className="mt-1 line-clamp-2 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary),0.9)' }}>
@@ -211,14 +211,14 @@ function RecallSummaryWindow({ content, fullContent }: { content: string; fullCo
     <section
       className="mt-3 flex min-h-[150px] flex-1 flex-col overflow-hidden px-3 py-2.5"
       style={{
-        background: 'linear-gradient(135deg, rgba(117,214,216,0.055), rgba(var(--tj-accent-primary),0.035))',
-        boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.22)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.055), rgba(var(--tj-accent-primary),0.035))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
         clipPath:
           'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="font-serif text-[10px] tracking-[0.28em]" style={{ color: 'rgba(117,214,216,0.86)' }}>
+        <div className="font-serif text-[10px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.86)' }}>
           召回摘要
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -231,9 +231,9 @@ function RecallSummaryWindow({ content, fullContent }: { content: string; fullCo
             onClick={() => setExpanded((value) => !value)}
             className="px-1.5 py-0.5 font-serif text-[10px] tracking-[0.14em] transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-35"
             style={{
-              color: 'rgba(117,214,216,0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(117,214,216,0.22)',
-              background: 'rgba(117,214,216,0.055)',
+              color: 'rgba(var(--tj-tech-cyan),0.9)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
+              background: 'rgba(var(--tj-tech-cyan),0.055)',
               clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
             }}
             title={full ? '显示完整召回内容' : '本回合没有完整召回内容'}
@@ -255,7 +255,7 @@ function RecallSummaryWindow({ content, fullContent }: { content: string; fullCo
               const value = rest.join('：').trim();
               return (
                 <div key={`${label}-${index}`}>
-                  <div className="font-serif text-[10px] tracking-[0.2em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+                  <div className="font-serif text-[10px] tracking-[0.2em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.82)' }}>
                     {label}
                   </div>
                   <div className="mt-0.5 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary),0.9)' }}>

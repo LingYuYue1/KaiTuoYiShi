@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { 世界状态 } from '@/models/world';
 import type { 主题预设 } from '@/models/settings';
 
@@ -33,7 +33,7 @@ export function TopBar({ worldState, onHome }: TopBarProps) {
           }}
           className="flex h-10 w-10 items-center justify-center text-sm transition-all"
           style={{
-            color: 'rgba(var(--tj-accent-primary), 0.9)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
             background: 'rgba(var(--tj-surface), 0.58)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34), 0 10px 28px rgba(var(--tj-shadow), 0.28)',
             backdropFilter: 'blur(10px)',
@@ -62,7 +62,7 @@ export function TopBar({ worldState, onHome }: TopBarProps) {
                 <span className="shrink-0 font-mono text-[11px] font-bold tracking-[0.14em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                   {dayText}
                 </span>
-                <span className="shrink-0 text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+                <span className="shrink-0 text-[11px]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
                   {timeText}
                 </span>
                 <span className="min-w-0 truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.92)' }}>

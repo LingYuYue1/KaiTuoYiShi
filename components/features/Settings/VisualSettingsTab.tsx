@@ -1,4 +1,4 @@
-import type { 游戏设置, VisualTextSettings } from '@/models/settings';
+﻿import type { 游戏设置, VisualTextSettings } from '@/models/settings';
 import { 创建默认视觉文本设置, 归一化视觉文本设置 } from '@/models/settings';
 
 interface Props {
@@ -93,7 +93,7 @@ export function VisualSettingsTab({ settings, onChange }: Props) {
           clipPath: smallClip,
         }}
       >
-        <div className="mb-3 font-serif text-xs tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+        <div className="mb-3 font-serif text-xs tracking-[0.24em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
           预览
         </div>
         <div className="space-y-3">
@@ -173,7 +173,7 @@ function FontSizeSlider({
             {desc}
           </div>
         </div>
-        <span className="shrink-0 font-mono text-sm font-bold" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+        <span className="shrink-0 font-mono text-sm font-bold" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
           {value}px
         </span>
       </div>

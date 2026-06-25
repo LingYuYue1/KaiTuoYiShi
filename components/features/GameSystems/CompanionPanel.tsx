@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
 import { NPC_RELATION_LABELS, buildNpcMemoryLedgerView, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
@@ -222,13 +222,13 @@ function NpcListItem({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-[132px] shrink-0 flex-col items-center gap-2 px-2 py-3 text-center transition-all hover:bg-[rgba(245,217,122,0.07)] md:w-full md:flex-row md:gap-3 md:px-3 md:text-left"
+      className="group flex w-[132px] shrink-0 flex-col items-center gap-2 px-2 py-3 text-center transition-all hover:bg-[rgba(var(--tj-accent-primary),0.07)] md:w-full md:flex-row md:gap-3 md:px-3 md:text-left"
       style={{
         background: selected
           ? activeSurface
           : quietSurface,
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.56), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.82)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.56), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))'
           : 'inset 0 0 0 1px rgba(var(--tj-border), 0.5)',
         clipPath: smallClip,
       }}
@@ -292,7 +292,7 @@ function Avatar({
         />
         <span
           className="pointer-events-none absolute inset-0 rounded-full"
-          style={{ boxShadow: 'inset 0 0 12px rgba(255, 244, 212, 0.12)' }}
+          style={{ boxShadow: 'inset 0 0 12px rgba(var(--tj-text-primary),0.12)' }}
         />
       </span>
     );
@@ -322,7 +322,7 @@ function PresenceDot() {
       className="h-2 w-2 shrink-0 rounded-full"
       style={{
         background: 'rgb(128, 224, 166)',
-        boxShadow: '0 0 8px rgba(128, 224, 166, 0.7)',
+        boxShadow: '0 0 8px rgba(var(--tj-ui-success),0.7)',
       }}
     />
   );
@@ -365,9 +365,9 @@ function NpcDetail({
               <div
                 className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 font-serif text-[11px] tracking-[0.18em]"
                 style={{
-                  color: 'rgba(185, 245, 204, 0.96)',
-                  background: 'rgba(14, 26, 18, 0.92)',
-                  boxShadow: 'inset 0 0 0 1px rgba(128, 224, 166, 0.48)',
+                  color: 'rgba(var(--tj-ui-success),0.96)',
+                  background: 'rgba(var(--tj-panel-bg-start),0.92)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-success),0.48)',
                   clipPath: smallClip,
                 }}
               >
@@ -389,7 +389,7 @@ function NpcDetail({
               >
                 {npc.姓名}
               </h3>
-              {npc.别名 && <span className="font-serif text-[13px] italic text-[#d8ccb0]">({npc.别名})</span>}
+              {npc.别名 && <span className="font-serif text-[13px] italic text-[rgb(var(--tj-text-secondary))]">({npc.别名})</span>}
               {npc.原著角色 && <Chip tone="gold">原著角色</Chip>}
               {npc.图像档案?.状态 && <Chip tone="silver">{npc.图像档案.状态 === 'pending' ? '图像生成中' : '图像档案'}</Chip>}
             </div>
@@ -585,7 +585,7 @@ function NSFWArchivePanel({ npc }: { npc: NPC记录 }) {
         className="px-4 py-4"
         style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.13), rgba(var(--tj-ui-panel), 0.72))',
-          boxShadow: 'inset 0 0 0 1px rgba(214, 142, 174, 0.22)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.22)',
           clipPath: smallClip,
         }}
       >
@@ -680,7 +680,7 @@ function PartImageSlot({ title, src }: { title: string; src?: string }) {
       }}
     >
       <div className="aspect-[4/3]" style={{ background: 'rgba(var(--tj-ui-panel-strong), 0.58)' }}>
-        {src ? <img src={src} alt={title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[11px]" style={{ color: 'rgba(220, 180, 200, 0.56)' }}>待挂载</div>}
+        {src ? <img src={src} alt={title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[11px]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.56)' }}>待挂载</div>}
       </div>
       <div className="px-2 py-1.5 text-[11px]" style={{ color: nsfwColor }}>{title}</div>
     </div>
@@ -711,7 +711,7 @@ function formatNsfwAge(age: NPC_NSFW年龄确认 | undefined): string {
 function TagGroup({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
     <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.68)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.18)', clipPath: smallClip }}>
-      <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(235, 190, 205, 0.82)' }}>
+      <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.82)' }}>
         {title}
       </div>
       {items.length ? (
@@ -728,7 +728,7 @@ function TagGroup({ title, items, empty }: { title: string; items: string[]; emp
 function ArchiveField({ title, text }: { title: string; text?: string }) {
   return (
     <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.16)', clipPath: smallClip }}>
-      <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(235, 190, 205, 0.82)' }}>
+      <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.82)' }}>
         {title}
       </div>
       <Paragraph text={text} placeholder="未记录" />
@@ -739,7 +739,7 @@ function ArchiveField({ title, text }: { title: string; text?: string }) {
 function ListBlock({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
     <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.16)', clipPath: smallClip }}>
-      <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(235, 190, 205, 0.82)' }}>
+      <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.82)' }}>
         {title}
       </div>
       {items.length ? (
@@ -785,7 +785,7 @@ function ActionChip({ active, onClick, children }: { active: boolean; onClick: (
     <button
       type="button"
       onClick={onClick}
-      className="px-3 py-1.5 font-serif text-[12px] tracking-[0.16em] transition-all hover:bg-[rgba(245,217,122,0.08)]"
+      className="px-3 py-1.5 font-serif text-[12px] tracking-[0.16em] transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
       style={{
         color: active ? accentColor : faintColor,
         boxShadow: active
@@ -858,29 +858,29 @@ function AffinityMeter({ value, compact = false }: { value: number; compact?: bo
 function getAffinityTone(value: number) {
   if (value >= 60) {
     return {
-      color: 'rgba(255, 132, 170, 0.98)',
-      stroke: 'rgba(255, 132, 170, 0.45)',
-      fill: 'linear-gradient(90deg, rgba(245, 120, 160, 0.62), rgba(255, 185, 205, 0.96))',
+      color: 'rgba(var(--tj-ui-nsfw),0.98)',
+      stroke: 'rgba(var(--tj-ui-nsfw),0.45)',
+      fill: 'linear-gradient(90deg, rgba(var(--tj-ui-nsfw),0.62), rgba(var(--tj-ui-nsfw),0.96))',
     };
   }
   if (value >= 30) {
     return {
-      color: 'rgba(235, 160, 178, 0.96)',
-      stroke: 'rgba(235, 160, 178, 0.38)',
-      fill: 'linear-gradient(90deg, rgba(220, 120, 150, 0.5), rgba(235, 160, 178, 0.9))',
+      color: 'rgba(var(--tj-ui-nsfw),0.96)',
+      stroke: 'rgba(var(--tj-ui-nsfw),0.38)',
+      fill: 'linear-gradient(90deg, rgba(var(--tj-ui-nsfw),0.5), rgba(var(--tj-ui-nsfw),0.9))',
     };
   }
   if (value >= 0) {
     return {
-      color: 'rgba(222, 207, 205, 0.9)',
+      color: 'rgba(var(--tj-text-secondary),0.9)',
       stroke: 'rgba(var(--tj-border), 0.42)',
-      fill: 'linear-gradient(90deg, rgba(160, 150, 150, 0.4), rgba(222, 207, 205, 0.78))',
+      fill: 'linear-gradient(90deg, rgba(var(--tj-text-secondary),0.4), rgba(var(--tj-text-secondary),0.78))',
     };
   }
   return {
-    color: 'rgba(150, 160, 186, 0.86)',
-    stroke: 'rgba(130, 145, 175, 0.34)',
-    fill: 'linear-gradient(90deg, rgba(75, 85, 110, 0.75), rgba(130, 145, 175, 0.62))',
+    color: 'rgba(var(--tj-tech-blue),0.86)',
+    stroke: 'rgba(var(--tj-tech-blue),0.34)',
+    fill: 'linear-gradient(90deg, rgba(var(--tj-panel-bg-start),0.75), rgba(var(--tj-tech-blue),0.62))',
   };
 }
 
@@ -896,7 +896,7 @@ function DetailBlock({ title, children }: { title: string; children: ReactNode }
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="h-3 w-[3px]" style={{ background: 'rgba(var(--tj-accent-primary), 0.82)' }} />
+      <span className="h-3 w-[3px]" style={{ background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }} />
       <h4 className="font-serif text-[13px] tracking-[0.26em]" style={{ color: accentColor }}>
         {children}
       </h4>
@@ -932,9 +932,9 @@ function MiniList({ title, items }: { title: string; items: string[] }) {
 
 function LedgerListCard({ title, items, tone = 'normal' }: { title: string; items: string[]; tone?: 'normal' | 'danger' }) {
   const visibleItems = items.length ? items : ['暂无'];
-  const toneColor = tone === 'danger' ? 'rgba(255, 132, 170, 0.92)' : accentColor;
+  const toneColor = tone === 'danger' ? 'rgba(var(--tj-ui-nsfw),0.92)' : accentColor;
   const railColor = tone === 'danger'
-    ? 'rgba(255, 132, 170, 0.45)'
+    ? 'rgba(var(--tj-ui-nsfw),0.45)'
     : 'rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), 0.52)';
 
   return (

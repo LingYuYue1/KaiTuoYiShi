@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               ◆
             </div>
-            <div className="mb-2 font-mono text-[11px] tracking-[0.5em]" style={{ color: 'rgba(117,214,216,0.82)' }}>
+            <div className="mb-2 font-mono text-[11px] tracking-[0.5em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.82)' }}>
               SYSTEM / TIMELINE ALERT
             </div>
             <h1

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { 世界书, 世界书条目, 世界书条目类型, 世界书注入方式 } from '@/models/worldbook';
 import { 创建空世界书条目, 创建空世界书, ENTRY_TYPE_LABELS } from '@/models/worldbook';
 import { exportWorldbooks, explainEntry, importWorldbooks, normalizeWorldbooks } from '@/utils/worldbook';
@@ -297,7 +297,7 @@ function HeaderButton({ children, onClick, primary = false }: { children: React.
       onClick={onClick}
       className="px-2 py-1 text-[11px] font-serif tracking-[0.12em] transition-all hover:opacity-90 md:px-3 md:py-1.5 md:text-xs md:tracking-[0.2em]"
       style={{
-        color: primary ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(var(--tj-text-secondary), 0.9)',
+        color: primary ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' : 'rgba(var(--tj-text-secondary), 0.9)',
         boxShadow: `inset 0 0 0 1px ${primary ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-accent-primary), 0.3)'}`,
         background: primary ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))' : 'transparent',
         clipPath: smallClip,
@@ -367,7 +367,7 @@ function GroupTitle({ title }: { title: string }) {
         <span
           className="h-5 w-[3px] flex-shrink-0"
           style={{
-            background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
+            background: 'linear-gradient(180deg, linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92)), rgba(var(--tj-accent-secondary), 0.25))',
             boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
           }}
         />
@@ -431,7 +431,7 @@ function BookSection({
           <span
             className="h-5 w-[3px] flex-shrink-0"
             style={{
-              background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
+              background: 'linear-gradient(180deg, linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92)), rgba(var(--tj-accent-secondary), 0.25))',
               boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
             }}
           />
@@ -483,7 +483,7 @@ function BookSection({
                 <span
                   className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
                   style={{
-                    background: calibrationDisplay || entry.enabled ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(80, 70, 50, 0.55)',
+                    background: calibrationDisplay || entry.enabled ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' : 'rgba(80, 70, 50, 0.55)',
                     boxShadow: calibrationDisplay || entry.enabled ? '0 0 4px rgba(var(--tj-accent-primary), 0.5)' : 'none',
                   }}
                 />
@@ -531,7 +531,7 @@ function PaneHeader({
                 <span
                   className="h-6 w-[3px] flex-shrink-0"
                   style={{
-                    background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.25))',
+                    background: 'linear-gradient(180deg, linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92)), rgba(var(--tj-accent-secondary), 0.25))',
                     boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
                   }}
                 />
@@ -582,7 +582,7 @@ function PaneHeader({
                 onClick={onNewEntry}
                 className="ml-2 px-3 py-1.5 text-xs font-serif tracking-[0.2em] transition-all hover:opacity-90"
                 style={{
-                  color: 'rgba(var(--tj-accent-primary), 0.95)',
+                  color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
                   background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.11), rgba(var(--tj-accent-primary), 0.02))',
                   clipPath: smallClip,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 
 interface MobileQuickMenuProps {
@@ -119,7 +119,7 @@ function DockButton({ item, active = false, onClick }: { item: MenuItem; active?
       onClick={onClick}
       className="relative flex h-[46px] min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-[12px] transition-all"
       style={{
-        color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-accent-primary), 0.88)',
+        color: active ? 'rgb(var(--tj-text-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))',
         background: active
           ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.06))'
           : 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.58), rgba(var(--tj-bg-primary), 0.36))',
@@ -150,7 +150,7 @@ function MenuTile({ item, onClick }: { item: MenuItem; onClick: () => void }) {
       <span
         className="relative flex h-8 w-8 items-center justify-center text-[12px]"
         style={{
-          color: 'rgba(var(--tj-accent-primary), 0.9)',
+          color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
           background: 'rgba(var(--tj-bg-secondary), 0.5)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
           clipPath: itemClip,
@@ -171,7 +171,7 @@ function Badge({ value }: { value: number }) {
     <span
       className="absolute -right-1 -top-1 min-w-4 px-1 text-center text-[9px] font-bold leading-4"
       style={{
-        color: '#fff4d4',
+        color: 'rgb(var(--tj-text-primary))',
         background: 'rgba(var(--tj-danger), 0.92)',
         borderRadius: 999,
       }}

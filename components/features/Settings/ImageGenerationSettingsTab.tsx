@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+﻿import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type {
   AI提供商,
   API配置项,
@@ -30,25 +30,8 @@ const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10
 const settingsGridLayer = 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.052) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-cyan),0.04) 1px, transparent 1px)';
 const settingsHeroSurface = `${settingsGridLayer}, radial-gradient(circle at 14% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface),0.76), rgba(var(--tj-bg-primary),0.94))`;
 const settingsGridSize = '26px 26px, 26px 26px, auto, auto';
-const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(223,211,130,0.96) 48%, rgb(var(--tj-tech-cyan)) 100%)';
-const imageSettingsThemeStyle = {
-  '--tj-bg-primary': '8, 7, 9',
-  '--tj-bg-secondary': '16, 14, 16',
-  '--tj-surface': '24, 22, 24',
-  '--tj-surface-strong': '34, 31, 33',
-  '--tj-text-primary': '244, 237, 218',
-  '--tj-text-secondary': '160, 148, 120',
-  '--tj-accent-primary': '245, 217, 122',
-  '--tj-accent-secondary': '196, 163, 90',
-  '--tj-tech-cyan': '118, 211, 224',
-  '--tj-ui-title': '245, 217, 122',
-  '--tj-ui-body': '214, 206, 184',
-  '--tj-ui-muted': '160, 148, 120',
-  '--tj-ui-panel': '20, 18, 21',
-  '--tj-ui-panel-strong': '30, 27, 30',
-  '--tj-ui-active-text': '26, 19, 37',
-  '--tj-ui-nsfw': '214, 142, 174',
-} as CSSProperties;
+const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(var(--tj-accent-mid),0.96) 48%, rgb(var(--tj-tech-cyan)) 100%)';
+
 
 const pages: { id: Page; label: string; desc: string }[] = [
   { id: 'overview', label: '总览', desc: '开关与隔离状态' },
@@ -229,7 +212,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
   };
 
   return (
-    <div className="space-y-5" style={imageSettingsThemeStyle}>
+    <div className="space-y-5" >
       <div
         className="px-4 py-4"
         style={{
@@ -265,7 +248,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
             style={{
               color: activePage === page.id ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body), 0.82)',
               background: activePage === page.id
-                ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-tech-cyan),0.82))'
+                ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.95), rgba(var(--tj-btn-primary-end),0.82))'
                 : 'rgba(var(--tj-ui-panel-strong), 0.42)',
               boxShadow: activePage === page.id
                 ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.4), 0 0 18px rgba(var(--tj-tech-cyan),0.14)'

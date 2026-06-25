@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
@@ -190,16 +190,16 @@ const tightClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const OPENING_PATH_STAGE_DEFS = PATH_STAGE_DEFS;
 const openingPageBackground =
-  'radial-gradient(circle at 16% 4%, rgba(var(--tj-accent-primary), 0.16), transparent 28%), radial-gradient(circle at 84% 12%, rgba(var(--tj-blue), 0.16), transparent 34%), radial-gradient(circle at 54% 110%, rgba(var(--tj-accent-secondary), 0.11), transparent 38%), linear-gradient(180deg, rgb(var(--tj-bg-secondary)), rgb(var(--tj-bg-primary)))';
+  'radial-gradient(circle at 16% 4%, rgba(var(--tj-accent-primary), 0.16), transparent 28%), radial-gradient(circle at 84% 12%, rgba(var(--tj-tech-blue), 0.16), transparent 34%), radial-gradient(circle at 54% 110%, rgba(var(--tj-accent-secondary), 0.11), transparent 38%), linear-gradient(180deg, rgb(var(--tj-bg-secondary)), rgb(var(--tj-bg-primary)))';
 const openingPageOverlay =
   'linear-gradient(rgba(var(--tj-accent-primary), 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.07) 1px, transparent 1px)';
 const openingTopPanelBackground =
-  'linear-gradient(180deg, rgba(var(--tj-panel), 0.80), rgba(7, 10, 15, 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
+  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
 const openingLedgerBackground =
-  'linear-gradient(180deg, rgba(var(--tj-panel), 0.80), rgba(7, 10, 15, 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
+  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
 const openingRailBackground =
-  'linear-gradient(180deg, rgba(var(--tj-panel), 0.80), rgba(7, 10, 15, 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
-const openingSoftPanelBackground = 'rgba(var(--tj-card), 0.58)';
+  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
+const openingSoftPanelBackground = 'rgba(var(--tj-surface), 0.58)';
 const openingGlowLine =
   'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.25), transparent 18% 82%, rgba(var(--tj-accent-secondary), 0.18))';
 const openingPanelShadow =
@@ -207,23 +207,11 @@ const openingPanelShadow =
 const openingPanelShadowStrong =
   'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.28), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.45), 0 18px 44px rgba(0, 0, 0, 0.34)';
 const openingCardBackground =
-  'linear-gradient(180deg, rgba(16, 22, 32, 0.76), rgba(8, 12, 18, 0.88))';
+  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.76), rgba(var(--tj-surface-bg-end), 0.88))';
 const openingActiveCardBackground =
-  'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-secondary), 0.10)), rgba(8, 12, 18, 0.9)';
+  'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-secondary), 0.10)), rgba(var(--tj-surface-bg-end), 0.9)';
 const openingCardBorder = 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.16)';
 const openingCyanBorder = 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52), 0 0 20px rgba(var(--tj-accent-primary), 0.10)';
-const openingTerminalThemeVars = {
-  '--tj-bg-primary': '5, 8, 13',
-  '--tj-bg-secondary': '9, 13, 20',
-  '--tj-panel': '14, 18, 26',
-  '--tj-panel2': '19, 24, 34',
-  '--tj-card': '16, 22, 32',
-  '--tj-blue': '83, 142, 255',
-  '--tj-accent-primary': '93, 224, 231',
-  '--tj-accent-secondary': '239, 207, 124',
-  '--tj-text-primary': '238, 232, 214',
-  '--tj-text-secondary': '157, 170, 178',
-} as CSSProperties;
 
 function getOpeningSourceLabel(source: OpeningSource): string {
   if (source === 'workshop') return '自由开局';
@@ -377,7 +365,7 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
   const [canonicalTrailblazer, setCanonicalTrailblazer] = useState<CanonicalTrailblazer>('stelle');
   const [customStartPrompt, setCustomStartPrompt] = useState('');
   const [startingGame, setStartingGame] = useState(false);
-  const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
+const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   const birthdayParts = useMemo(() => splitBirthday(birthday), [birthday]);
 
   useEffect(() => {
@@ -1049,11 +1037,10 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
 
   return (
     <div
-      className="opening-terminal-shell relative h-[100dvh] overflow-y-auto overflow-x-clip p-[18px] pb-[calc(var(--app-safe-bottom,0px)+18px)]"
-      style={{
-        ...openingTerminalThemeVars,
-        background: openingPageBackground,
-      }}
+      className="opening-terminal-shell opening-enter relative h-[100dvh] overflow-y-auto overflow-x-clip p-[18px] pb-[calc(var(--app-safe-bottom,0px)+18px)]"
+style={{
+  background: openingPageBackground,
+}}
     >
       <style>{`
         @keyframes openingRain {
@@ -1073,26 +1060,50 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
         @keyframes openingSpin {
           to { transform: rotate(360deg); }
         }
-        @keyframes openingDash {
-          to { stroke-dashoffset: -440; }
-        }
-        .opening-terminal-shell .kaituo-btn-primary {
-          background: linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.98), rgba(var(--tj-blue), 0.88));
+@keyframes openingDash {
+  to { stroke-dashoffset: -440; }
+}
+@keyframes openingBootFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes openingBootFadeLeft {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes openingBootFadeRight {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.opening-terminal-shell.opening-enter .opening-stagger-header {
+  animation: openingBootFade 0.38s ease-out both;
+}
+.opening-terminal-shell.opening-enter .opening-stagger-left {
+  animation: openingBootFadeLeft 0.38s ease-out 0.12s both;
+}
+.opening-terminal-shell.opening-enter .opening-stagger-center {
+  animation: openingBootFade 0.38s ease-out 0.22s both;
+}
+.opening-terminal-shell.opening-enter .opening-stagger-right {
+  animation: openingBootFadeRight 0.38s ease-out 0.32s both;
+}
+.opening-terminal-shell .kaituo-btn-primary {
+          background: linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.98), rgba(var(--tj-accent-secondary), 0.88));
           color: rgb(var(--tj-bg-primary));
           box-shadow:
-            inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+            inset 0 0 0 1px rgba(var(--tj-text-primary),0.38),
             0 0 22px rgba(var(--tj-accent-primary), 0.18);
         }
         .opening-terminal-shell .kaituo-btn-primary:hover {
           box-shadow:
-            inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+            inset 0 0 0 1px rgba(var(--tj-text-primary),0.55),
             0 0 30px rgba(var(--tj-accent-primary), 0.28);
         }
         .opening-terminal-shell .kaituo-btn-primary:disabled {
-          background: linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.42), rgba(var(--tj-blue), 0.28));
+          background: linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.42), rgba(var(--tj-accent-secondary), 0.28));
           color: rgba(var(--tj-bg-primary), 0.58);
           box-shadow:
-            inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+            inset 0 0 0 1px rgba(var(--tj-text-primary),0.18);
         }
       `}</style>
 
@@ -1145,7 +1156,7 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
           animation: 'openingSweep 7s linear infinite',
         }}
       />
-      <div className="pointer-events-none absolute right-[-16vw] top-[-18vw] hidden h-[52vw] min-h-[520px] w-[52vw] min-w-[520px] rounded-full border border-[rgba(var(--tj-accent-primary),0.16)] shadow-[inset_0_0_46px_rgba(var(--tj-accent-primary),0.05),_0_0_50px_rgba(83,142,255,0.08)] lg:block">
+      <div className="pointer-events-none absolute right-[-16vw] top-[-18vw] hidden h-[52vw] min-h-[520px] w-[52vw] min-w-[520px] rounded-full border border-[rgba(var(--tj-accent-primary),0.16)] shadow-[inset_0_0_46px_rgba(var(--tj-accent-primary),0.05),_0_0_50px_rgba(var(--tj-accent-primary),0.08)] lg:block">
         <div className="absolute inset-[9%] rounded-full border border-dashed border-[rgba(var(--tj-accent-secondary),0.18)]" />
         <div
           className="absolute inset-[22%] rounded-full border border-[rgba(var(--tj-accent-primary),0.13)]"
@@ -1178,12 +1189,18 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
         style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.16), transparent)' }}
       />
 
-      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-36px)] w-full flex-col gap-[14px]">
+      <div className="opening-boot-scan pointer-events-none absolute inset-x-0 top-0 z-50 h-[2px]"
+  style={{
+    background: `linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.7), rgba(var(--tj-accent-secondary), 0.4), transparent)`,
+    boxShadow: `0 0 12px rgba(var(--tj-accent-primary), 0.3), 0 2px 40px rgba(var(--tj-accent-primary), 0.15)`,
+  }}
+/>
+<main className="relative z-10 mx-auto flex min-h-[calc(100dvh-36px)] w-full flex-col gap-[14px]">
         <header
           className="grid min-h-[78px] shrink-0 gap-4 px-[18px] py-[14px] md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
           style={{
             background:
-              'linear-gradient(90deg, rgba(var(--tj-panel), 0.90), rgba(13, 18, 27, 0.76)), linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), transparent 48%, rgba(var(--tj-accent-secondary), 0.09))',
+              'linear-gradient(90deg, rgba(var(--tj-ui-panel), 0.90), rgba(var(--tj-panel-bg-start), 0.76)), linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), transparent 48%, rgba(var(--tj-accent-secondary), 0.09))',
             boxShadow: openingPanelShadowStrong,
             backdropFilter: 'blur(18px)',
             clipPath: cardClip,
@@ -1193,7 +1210,7 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
             <button
               onClick={onBack}
               className="mb-2 w-fit text-[11px] tracking-[0.28em] transition-opacity hover:opacity-80"
-              style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}
+              style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}
             >
               ← 返回
             </button>
@@ -1203,13 +1220,13 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
             <h1
               className="mt-1 font-serif text-2xl font-bold tracking-[0.12em] sm:text-3xl sm:tracking-[0.18em]"
               style={{
-                color: 'rgba(241, 234, 214, 0.98)',
+                color: 'rgba(var(--tj-text-primary),0.98)',
                 textShadow: '0 0 18px rgba(var(--tj-accent-secondary), 0.22)',
               }}
             >
               踏上旅途 · 星轨档案终端
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed" style={{ color: 'rgba(214, 202, 170, 0.82)' }}>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
               新版开局不再只是选择一段开场白，而是建立玩家、命途、介入方式与长期世界锚点。
             </p>
           </div>
@@ -1253,7 +1270,7 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
                     <div className="text-[11px] tracking-[0.32em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.62)' }}>
                       STEP {String(STEPS.indexOf(step) + 1).padStart(2, '0')} / {STEP_META[step].title.toUpperCase()}
                     </div>
-                    <h2 className="mt-1 font-serif text-2xl font-bold tracking-[0.16em]" style={{ color: 'rgba(241, 234, 214, 0.96)' }}>
+                    <h2 className="mt-1 font-serif text-2xl font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-primary),0.96)' }}>
                       {STEP_META[step].title}
                     </h2>
                     <p className="mt-1 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
@@ -1266,7 +1283,7 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
                     className="shrink-0 px-3 py-2 text-[11px] font-bold tracking-[0.18em] transition-shadow hover:shadow-[0_0_16px_rgba(var(--tj-accent-primary),0.16)]"
                     style={{
                       color: 'rgba(var(--tj-text-secondary), 0.78)',
-                      background: 'rgba(8, 13, 19, 0.46)',
+                      background: 'rgba(var(--tj-surface-strong), 0.46)',
                       boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                       clipPath: smallClip,
                     }}
@@ -1285,7 +1302,7 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
                 className="px-4 pb-4 pt-4"
                 style={{
                   background:
-                    'linear-gradient(180deg, rgba(var(--tj-panel2), 0.20), rgba(var(--tj-bg-primary), 0.04))',
+                    'linear-gradient(180deg, rgba(var(--tj-ui-panel-strong), 0.20), rgba(var(--tj-bg-primary), 0.04))',
                 }}
               >
                 <div className="mb-4">
@@ -1528,7 +1545,7 @@ function OpeningPresetControls({
     <div
       className="p-3 text-left"
       style={{
-        background: 'rgba(12, 10, 12, 0.78)',
+        background: 'rgba(var(--tj-surface-bg-start), 0.78)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
         clipPath: smallClip,
       }}
@@ -1592,9 +1609,9 @@ function OpeningPresetControls({
             disabled={!hasSelected}
             className="px-2 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
             style={{
-              background: 'rgba(180, 64, 64, 0.12)',
-              color: 'rgba(255, 210, 210, 0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(255, 120, 120, 0.22)',
+              background: 'rgba(var(--tj-danger),0.12)',
+              color: 'rgba(var(--tj-danger),0.92)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.22)',
               clipPath: smallClip,
             }}
           >
@@ -1626,7 +1643,7 @@ function ProgressBar({ step }: { step: Step }) {
                 style={{
                   background: reached
                     ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.95))'
-                    : 'rgba(10, 9, 11, 0.7)',
+                    : 'rgba(var(--tj-panel-bg-end),0.7)',
                   color: reached ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.65)',
                   boxShadow: reached
                     ? '0 0 10px rgba(var(--tj-accent-primary), 0.24)'
@@ -1638,7 +1655,7 @@ function ProgressBar({ step }: { step: Step }) {
               </div>
               <div
                 className="w-full truncate text-center text-[10px] tracking-[0.1em] sm:tracking-[0.16em]"
-                style={{ color: reached ? 'rgba(var(--tj-accent-primary), 0.78)' : 'rgba(var(--tj-text-secondary), 0.5)' }}
+                style={{ color: reached ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.84), rgba(var(--tj-accent-secondary),0.78))' : 'rgba(var(--tj-text-secondary), 0.5)' }}
               >
                 {STEP_META[item].title}
               </div>
@@ -1700,7 +1717,7 @@ function OpeningLedger({
         <span
           className="px-2 py-1 text-[10px] tracking-[0.18em]"
           style={{
-            color: 'rgba(var(--tj-accent-primary), 0.86)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))',
             background: 'rgba(var(--tj-accent-primary), 0.10)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
             clipPath: smallClip,
@@ -1796,9 +1813,9 @@ function OpeningSkillSlotGroup({
                 onClick={() => onSelect(key)}
                 className="min-w-[120px] px-3 py-2 text-left transition-transform hover:-translate-y-0.5"
                 style={{
-                  background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-blue), 0.06))'
-                    : 'rgba(8, 13, 19, 0.56)',
+background: active
+  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-secondary), 0.06))'
+  : 'rgba(var(--tj-surface-strong), 0.56)',
                   boxShadow: active
                     ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 12px rgba(var(--tj-accent-primary), 0.10)'
                     : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
@@ -1808,7 +1825,7 @@ function OpeningSkillSlotGroup({
                 <div className="text-[10px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
                   {slot.kind === 'normal' ? `普通槽 ${slot.slotIndex}` : `${slot.pathId ? getPath(slot.pathId)?.name : '命途'} 槽 ${slot.slotIndex}`}
                 </div>
-                <div className="mt-1 truncate font-serif text-sm font-bold tracking-[0.12em]" style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(240, 234, 218, 0.92)' }}>
+                <div className="mt-1 truncate font-serif text-sm font-bold tracking-[0.12em]" style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}>
                   {slot.occupiedSkillName ?? '空槽'}
                 </div>
                 <div className="mt-1 text-[10px]" style={{ color: slot.occupiedSkillId ? 'rgba(var(--tj-accent-primary), 0.92)' : 'rgba(var(--tj-text-secondary), 0.72)' }}>
@@ -1914,7 +1931,7 @@ function StepRail({
         <div
           className="px-2 py-1 text-[10px] tracking-[0.18em]"
           style={{
-            color: 'rgba(var(--tj-accent-primary), 0.86)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))',
             background: 'rgba(var(--tj-accent-primary), 0.10)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
             clipPath: smallClip,
@@ -1938,7 +1955,7 @@ function StepRail({
               style={{
                 background: active
                   ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-secondary), 0.08))'
-                  : 'rgba(8, 13, 19, 0.58)',
+                  : 'rgba(var(--tj-panel-bg-end), 0.58)',
                 boxShadow: active
                   ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48), 0 0 18px rgba(var(--tj-accent-primary), 0.10)'
                   : 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.13)',
@@ -1948,9 +1965,9 @@ function StepRail({
               <div
                 className="opening-step-badge flex h-[34px] w-[34px] shrink-0 items-center justify-center text-xs font-extrabold"
                 style={{
-                  background: done || active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.98), rgba(var(--tj-blue), 0.9))'
-                    : 'rgba(8, 13, 19, 0.74)',
+background: done || active
+  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.98), rgba(var(--tj-accent-secondary), 0.9))'
+  : 'rgba(var(--tj-surface-strong), 0.74)',
                   color: done || active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.72)',
                   boxShadow: done
                     ? '0 0 12px rgba(var(--tj-accent-primary), 0.22)'
@@ -1965,7 +1982,7 @@ function StepRail({
               <div className="min-w-0">
                 <div
                   className="text-sm font-medium"
-                  style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                  style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                 >
                   {item.title}
                 </div>
@@ -2073,7 +2090,7 @@ function WorldStep({
                   style={{
                     background: active
                       ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
-                      : 'rgba(10, 9, 11, 0.58)',
+                      : 'rgba(var(--tj-panel-bg-end),0.58)',
                     boxShadow: active
                       ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), 0 0 14px rgba(var(--tj-accent-primary), 0.12)'
                       : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
@@ -2082,7 +2099,7 @@ function WorldStep({
                 >
                   <div
                     className="font-serif text-base font-bold tracking-[0.14em]"
-                    style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                    style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                   >
                     {item.name}
                   </div>
@@ -2202,8 +2219,8 @@ function CharacterStep({
                 placeholder="可填生成偏好，例如：公司调查员、冷静强势、会一点虚数奇术"
                 className="min-w-0 flex-1 px-3 py-2 text-xs outline-none disabled:cursor-wait disabled:opacity-60"
                 style={{
-                  background: 'rgba(10, 9, 11, 0.52)',
-                  color: 'rgba(250, 244, 224, 0.92)',
+                  background: 'rgba(var(--tj-panel-bg-end),0.52)',
+                  color: 'rgba(var(--tj-text-primary),0.92)',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                   clipPath: smallClip,
                 }}
@@ -2228,9 +2245,9 @@ function CharacterStep({
         <div
           className="mb-4 px-3 py-2 text-xs leading-relaxed"
           style={{
-            background: 'rgba(180, 64, 64, 0.12)',
-            color: 'rgba(255, 210, 210, 0.92)',
-            boxShadow: 'inset 0 0 0 1px rgba(255, 120, 120, 0.24)',
+            background: 'rgba(var(--tj-danger),0.12)',
+            color: 'rgba(var(--tj-danger),0.92)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.24)',
             clipPath: smallClip,
           }}
         >
@@ -2243,7 +2260,7 @@ function CharacterStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -2312,7 +2329,7 @@ function CharacterStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -2422,7 +2439,7 @@ function PathStep({
                     style={{
                       background: active
                         ? 'linear-gradient(160deg, rgba(var(--tj-accent-primary), 0.13), rgba(var(--tj-accent-secondary), 0.05))'
-                        : 'rgba(10, 9, 11, 0.58)',
+                        : 'rgba(var(--tj-panel-bg-end),0.58)',
                       boxShadow: active
                         ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), 0 0 14px rgba(var(--tj-accent-primary), 0.12)'
                         : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
@@ -2439,7 +2456,7 @@ function PathStep({
                         </div>
                         <div
                           className="mt-2 font-serif text-base font-bold tracking-[0.14em]"
-                          style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                          style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                         >
                           {item.name}
                         </div>
@@ -2466,7 +2483,7 @@ function PathStep({
                   clipPath: smallClip,
                 }}
               >
-                <div style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+                <div style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
                   {selectedPath.name} · {selectedPath.aeon}
                 </div>
                 <div className="mt-1">{selectedPath.description}</div>
@@ -2490,7 +2507,7 @@ function PathStep({
                       style={{
                         background: active
                           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-secondary), 0.04))'
-                          : 'rgba(10, 9, 11, 0.58)',
+                          : 'rgba(var(--tj-panel-bg-end),0.58)',
                         boxShadow: active
                           ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
                           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.13)',
@@ -2501,7 +2518,7 @@ function PathStep({
                         <div>
                           <div
                             className="font-serif text-base font-bold tracking-[0.14em]"
-                            style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                            style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                           >
                             {item.name}
                           </div>
@@ -2555,7 +2572,7 @@ function PathStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -2585,7 +2602,7 @@ function PathStep({
                   >
                     <div
                       className="font-serif text-base font-bold tracking-[0.14em]"
-                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                     >
                       <span style={{ color: 'rgba(var(--tj-accent-primary), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
                       {item.name}
@@ -2769,7 +2786,7 @@ function SkillCreationStep({
         <div
           className="p-4"
           style={{
-            background: 'rgba(10, 9, 11, 0.58)',
+            background: 'rgba(var(--tj-panel-bg-end),0.58)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
             clipPath: cardClip,
           }}
@@ -2895,7 +2912,7 @@ function SkillCreationStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -2957,7 +2974,7 @@ function SkillCreationStep({
                                 className="px-2 py-0.5 text-[10px]"
                                 style={{
                                   background: 'rgba(var(--tj-accent-primary), 0.08)',
-                                  color: 'rgba(var(--tj-accent-primary), 0.82)',
+                                  color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))',
                                   clipPath: smallClip,
                                 }}
                               >
@@ -3471,7 +3488,7 @@ function OpeningAnchorStep({
                     >
                       <div className="grid gap-3 md:grid-cols-[172px_minmax(0,1fr)]">
                         <div>
-                          <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+                          <div className="text-[11px] leading-relaxed" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
                             {getOpeningOfficialChapterName(item)}
                           </div>
                           <div className="mt-1 text-xs font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -3508,7 +3525,7 @@ function OpeningAnchorStep({
                                   key={tag}
                                   className="px-2 py-1 text-[11px]"
                                   style={{
-                                    color: 'rgba(var(--tj-accent-primary), 0.82)',
+                                    color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))',
                                     background: 'rgba(var(--tj-accent-primary), 0.06)',
                                     boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
                                     clipPath: smallClip,
@@ -3549,7 +3566,7 @@ function OpeningAnchorStep({
                       <div
                         className="max-w-[46%] px-2 py-1 text-right text-[11px] leading-snug"
                         style={{
-                          color: 'rgba(var(--tj-accent-primary), 0.86)',
+                          color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))',
                           background: 'rgba(var(--tj-accent-primary), 0.08)',
                           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                           clipPath: smallClip,
@@ -3632,7 +3649,7 @@ function OpeningAnchorStep({
                 className="mt-3 min-h-[152px] w-full resize-none px-3 py-3 text-sm leading-relaxed outline-none"
                 style={{
                   color: 'rgb(var(--tj-text-primary))',
-                  background: 'rgba(1, 7, 12, 0.55)',
+                  background: 'rgba(var(--tj-panel-bg-end),0.55)',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
                   clipPath: smallClip,
                 }}
@@ -3716,7 +3733,7 @@ function FreeOpeningWorkshopField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 text-[11px] font-bold tracking-[0.08em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+      <div className="mb-1.5 text-[11px] font-bold tracking-[0.08em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
         {label}
       </div>
       <textarea
@@ -3726,7 +3743,7 @@ function FreeOpeningWorkshopField({
         className="min-h-[76px] w-full resize-y px-3 py-2 text-xs leading-relaxed outline-none"
         style={{
           color: 'rgb(var(--tj-text-primary))',
-          background: 'rgba(1, 7, 12, 0.55)',
+          background: 'rgba(var(--tj-panel-bg-end),0.55)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
           clipPath: smallClip,
         }}
@@ -3764,7 +3781,7 @@ function FreeOpeningNpcEditor({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-bold tracking-[0.12em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
+          <div className="text-[11px] font-bold tracking-[0.12em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))' }}>
             补充自制 NPC
           </div>
           <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
@@ -3853,7 +3870,7 @@ function FreeOpeningNpcEditor({
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {npc.pathstrider ? (
-                        <span className="px-2 py-1" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)', background: 'rgba(var(--tj-accent-primary), 0.06)', clipPath: smallClip }}>
+                        <span className="px-2 py-1" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))', background: 'rgba(var(--tj-accent-primary), 0.06)', clipPath: smallClip }}>
                           命途：{npc.pathstrider}
                         </span>
                       ) : null}
@@ -3927,7 +3944,7 @@ function HistorianStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -3956,7 +3973,7 @@ function HistorianStep({
                   >
                     <div
                       className="font-serif text-base font-bold tracking-[0.14em]"
-                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                     >
                       {item.title}
                     </div>
@@ -3975,7 +3992,7 @@ function HistorianStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -4004,7 +4021,7 @@ function HistorianStep({
                   >
                     <div
                       className="font-serif text-sm font-bold tracking-[0.12em]"
-                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(240, 234, 218, 0.92)' }}
+                      style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                     >
                       <span style={{ color: 'rgba(var(--tj-accent-primary), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
                       {item.name}
@@ -4013,7 +4030,7 @@ function HistorianStep({
                       {item.description}
                     </div>
                     {active && item.openingHint ? (
-                      <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-accent-primary), 0.78)' }}>
+                      <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.84), rgba(var(--tj-accent-secondary),0.78))' }}>
                         {item.openingHint}
                       </div>
                     ) : null}
@@ -4028,7 +4045,7 @@ function HistorianStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -4051,7 +4068,7 @@ function HistorianStep({
           <div
             className="p-4"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -4074,7 +4091,7 @@ function HistorianStep({
               <div className="mt-2 text-xs leading-relaxed">
                 当前版本固定使用原创旅人模式。后续这里会预留「扮演原著主角」等模式入口，现在先不改变存档结构。
               </div>
-              <div className="mt-3 inline-flex px-2 py-1 text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)', background: 'rgba(var(--tj-accent-primary), 0.08)', clipPath: smallClip }}>
+              <div className="mt-3 inline-flex px-2 py-1 text-[11px] tracking-[0.16em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))', background: 'rgba(var(--tj-accent-primary), 0.08)', clipPath: smallClip }}>
                 预留功能
               </div>
             </div>
@@ -4167,7 +4184,7 @@ function OverviewStep({
         <div
           className="p-4"
           style={{
-            background: 'rgba(10, 9, 11, 0.58)',
+            background: 'rgba(var(--tj-panel-bg-end),0.58)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
             clipPath: cardClip,
           }}
@@ -4209,7 +4226,7 @@ function OverviewStep({
               <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
                 切入说明
               </div>
-              <div className="text-sm leading-relaxed" style={{ color: 'rgba(241, 234, 214, 0.92)' }}>
+              <div className="text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary),0.92)' }}>
                 {customStartPrompt.trim() || '未填写'}
               </div>
             </div>
@@ -4254,7 +4271,7 @@ function OverviewStep({
                       clipPath: smallClip,
                     }}
                   >
-                    <div className="font-medium" style={{ color: 'rgba(241, 234, 214, 0.95)' }}>
+                    <div className="font-medium" style={{ color: 'rgba(var(--tj-text-primary),0.95)' }}>
                       {skill.名称}
                     </div>
                     <div className="mt-1 text-xs leading-relaxed">{skill.描述}</div>
@@ -4272,7 +4289,7 @@ function OverviewStep({
           <div
             className="p-4"
             style={{
-              background: 'linear-gradient(180deg, rgba(29, 24, 40, 0.95) 0%, rgba(16, 13, 22, 0.98) 100%)',
+              background: 'linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.95) 0%, rgba(var(--tj-panel-bg-end), 0.98) 100%)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
               clipPath: cardClip,
             }}
@@ -4280,7 +4297,7 @@ function OverviewStep({
             <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
               最终提醒
             </div>
-            <div className="space-y-2 text-sm leading-relaxed" style={{ color: 'rgba(214, 202, 170, 0.86)' }}>
+            <div className="space-y-2 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.86)' }}>
               <p>开局会把这些内容写入角色、世界状态和首回合提示词。</p>
               <p>换句话说，你现在确认的不只是外观和选择，而是整段旅程的第一页。</p>
               <p style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>开局档案会作为长期锚点写入世界状态，可以直接开始。</p>
@@ -4290,8 +4307,8 @@ function OverviewStep({
           <div
             className="p-4 text-sm leading-relaxed"
             style={{
-              background: 'rgba(10, 9, 11, 0.58)',
-              color: 'rgba(214, 202, 170, 0.84)',
+              background: 'rgba(var(--tj-panel-bg-end),0.58)',
+              color: 'rgba(var(--tj-text-secondary),0.84)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
               clipPath: cardClip,
             }}
@@ -4340,7 +4357,7 @@ function OverviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-sm">
       <div style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>{label}</div>
-      <div className="break-words" style={{ color: 'rgba(241, 234, 214, 0.96)' }}>
+      <div className="break-words" style={{ color: 'rgba(var(--tj-text-primary),0.96)' }}>
         {value}
       </div>
     </div>

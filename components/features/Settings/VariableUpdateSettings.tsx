@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { AI提供商, API配置项, API设置, 游戏设置, 变量API覆盖 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
 import { saveSetting } from '@/services/dbService';
@@ -123,7 +123,7 @@ export function VariableUpdateTab({
           clipPath: cardClip,
         }}
       >
-        <div className="font-serif tracking-wider text-[13px] mb-1" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+        <div className="font-serif tracking-wider text-[13px] mb-1" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
           ◉ 变量自动更新
         </div>
         开启后，每回合主模型回完正文，会再调用一次「变量模型」专门分析正文，把背包、伙伴好感、手机来信、命途进度等变化以命令形式落到对应面板。
@@ -301,7 +301,7 @@ export function VariableUpdateTab({
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+              : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
             boxShadow: savedFlash
               ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
@@ -387,7 +387,7 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'

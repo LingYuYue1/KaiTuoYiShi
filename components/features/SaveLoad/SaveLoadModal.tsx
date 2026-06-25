@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   deleteSave,
   exportSavePackage,
@@ -245,18 +245,18 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
         className="flex h-[100dvh] w-full min-w-0 max-w-[1500px] flex-col animate-slide-up overflow-hidden md:h-[88vh]"
         style={{
           background:
-            'radial-gradient(circle at 15% 10%, rgba(91,153,255,0.18), transparent 31%), radial-gradient(circle at 85% 20%, rgba(142,215,255,0.10), transparent 28%), linear-gradient(90deg, rgba(142,215,255,0.055) 1px, transparent 1px), linear-gradient(180deg, rgba(142,215,255,0.045) 1px, transparent 1px), linear-gradient(135deg, #05070c, #0b1019 44%, #08070a)',
+            'radial-gradient(circle at 15% 10%, rgba(var(--tj-tech-blue), 0.18), transparent 31%), radial-gradient(circle at 85% 20%, rgba(var(--tj-accent-primary), 0.10), transparent 28%), linear-gradient(90deg, rgba(var(--tj-tech-blue), 0.055) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-blue), 0.045) 1px, transparent 1px), linear-gradient(135deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)) 44%, rgb(var(--tj-bg-primary)))',
           backgroundSize: 'auto, auto, 44px 44px, 44px 44px, auto',
           boxShadow:
-            '0 24px 70px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(142,215,255,0.28), inset 0 0 0 2px rgba(245,217,122,0.04)',
+            '0 24px 70px rgba(var(--tj-shadow), 0.55), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28), inset 0 0 0 2px rgba(var(--tj-accent-primary), 0.04)',
           clipPath: shellClip,
         }}
       >
         <header
           className="relative flex items-center justify-between gap-3 overflow-hidden px-4 py-3 md:px-6"
           style={{
-            borderBottom: '1px solid rgba(142,215,255,0.20)',
-            background: 'linear-gradient(90deg, rgba(142,215,255,0.10), transparent 42%), rgba(12,18,29,0.82)',
+borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
+  background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.10), transparent 42%), rgba(var(--tj-surface), 0.82)',
           }}
         >
           <div
@@ -264,25 +264,25 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                'linear-gradient(110deg, transparent 0 42%, rgba(142,215,255,0.12) 47%, transparent 52%), radial-gradient(circle at 76% 0%, rgba(245,217,122,0.08), transparent 28%)',
+                'linear-gradient(110deg, transparent 0 42%, rgba(var(--tj-accent-primary), 0.12) 47%, transparent 52%), radial-gradient(circle at 76% 0%, rgba(var(--tj-accent-primary), 0.08), transparent 28%)',
             }}
           />
           <div className="relative min-w-0">
-            <div className="font-serif text-[11px] tracking-[0.28em]" style={{ color: 'rgba(142,215,255,0.82)' }}>
+            <div className="font-serif text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>
               SAVE TREE CONTROL
             </div>
             <h2
               className="mt-1 min-w-0 truncate font-serif text-xl font-bold tracking-[0.22em] md:tracking-[0.32em]"
-              style={{ color: '#eee2c6' }}
+              style={{ color: 'rgba(var(--tj-accent-secondary),1)' }}
             >
               存档树控制台
             </h2>
           </div>
           <div className="relative hidden min-w-0 flex-1 justify-end gap-3 text-right font-serif text-[12px] tracking-[0.12em] md:flex">
-            <span style={{ color: 'rgba(238, 226, 198, 0.66)' }}>
+            <span style={{ color: 'rgba(var(--tj-text-primary), 0.66)' }}>
               {latestSave ? `最新节点 #${latestSave.id} / 第 ${latestSave.turnCount} 回合` : '暂无节点'}
             </span>
-            {rebuildingSummaries && <span style={{ color: 'rgba(142,215,255,0.9)' }}>索引恢复中</span>}
+            {rebuildingSummaries && <span style={{ color: 'rgba(var(--tj-accent-primary),0.9)' }}>索引恢复中</span>}
           </div>
           <button
             type="button"
@@ -290,9 +290,9 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
             className="relative h-9 w-9 shrink-0 text-lg transition-all hover:opacity-90"
             aria-label="关闭"
             style={{
-              color: 'rgba(238,226,198,0.78)',
-              background: 'rgba(142,215,255,0.07)',
-              boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+              color: 'rgba(var(--tj-text-primary),0.78)',
+              background: 'rgba(var(--tj-accent-primary),0.07)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
               clipPath: smallClip,
             }}
           >
@@ -304,8 +304,8 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
           <aside
             className="kaituo-options-scroll grid w-full flex-shrink-0 grid-cols-2 gap-2 overflow-y-visible px-4 py-4 pb-6 md:flex md:min-h-0 md:w-auto md:flex-col md:gap-4 md:overflow-y-auto md:px-5 md:py-5 md:pb-6 md:pr-4"
             style={{
-              borderRight: '1px solid rgba(142,215,255,0.18)',
-              background: 'radial-gradient(circle at 0 0, rgba(142,215,255,0.12), transparent 34%), rgba(8,12,20,0.62)',
+              borderRight: '1px solid rgba(var(--tj-accent-primary),0.18)',
+              background: 'radial-gradient(circle at 0 0, rgba(var(--tj-accent-primary),0.12), transparent 34%), rgba(var(--tj-bg-primary), 0.62)',
             }}
           >
             <div className="col-span-2 grid gap-2">
@@ -328,13 +328,13 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
               onToggle={(event) => setShowMobileHelp(event.currentTarget.open)}
               className="col-span-2 md:hidden"
               style={{
-                color: 'rgba(238,226,198,0.84)',
-                background: 'rgba(18,28,43,0.62)',
-                boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.16)',
+                color: 'rgba(var(--tj-text-primary),0.84)',
+                background: 'rgba(var(--tj-accent-secondary),0.62)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
                 clipPath: cardClip,
               }}
             >
-              <summary className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.88)' }}>
+              <summary className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>
                 关于存档
               </summary>
               <div className="px-3 pb-3 font-serif text-[12px] leading-relaxed tracking-wider">
@@ -360,13 +360,13 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
             <div
               className="col-span-2 hidden px-3 py-3 font-serif text-[12px] leading-relaxed tracking-wider md:block"
               style={{
-                color: 'rgba(238,226,198,0.82)',
-                background: 'rgba(18,28,43,0.42)',
-                boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.14)',
+                color: 'rgba(var(--tj-text-primary),0.82)',
+                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.52), rgba(var(--tj-accent-secondary),0.48))',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
                 clipPath: cardClip,
               }}
             >
-              <div className="mb-1.5 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.86)' }}>
+              <div className="mb-1.5 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
                 存档策略
               </div>
               <div>手动节点最多保留 6 个，超出后清理最旧节点</div>
@@ -378,7 +378,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
             <div className="hidden flex-1 md:block" />
 
-            <div className="col-span-2 hidden text-center font-serif text-[12px] tracking-[0.22em] md:block" style={{ color: 'rgba(238,226,198,0.46)' }}>
+            <div className="col-span-2 hidden text-center font-serif text-[12px] tracking-[0.22em] md:block" style={{ color: 'rgba(var(--tj-text-primary),0.46)' }}>
               共 {saves.length} 节点 / {allTreeGroups.length} 棵树
               {rebuildingSummaries ? ' / 正在恢复旧存档索引' : ''}
             </div>
@@ -387,7 +387,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <div
               className="flex flex-shrink-0 flex-col gap-3 px-4 pb-3 pt-4 md:px-5 lg:flex-row lg:items-center lg:justify-between"
-              style={{ borderBottom: '1px solid rgba(142,215,255,0.14)' }}
+              style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary),0.14)' }}
             >
               <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
                 <TabButton label="手动" count={manualSaves.length} active={tab === 'manual'} onClick={() => setTab('manual')} />
@@ -395,7 +395,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
                 <TabButton label="保护" count={protectedSaves.length} active={tab === 'protected'} onClick={() => setTab('protected')} />
                 <TabButton label="全部" count={allVisibleSaves.length} active={tab === 'all'} onClick={() => setTab('all')} />
               </div>
-              <div className="font-serif text-[12px] tracking-[0.12em]" style={{ color: 'rgba(238,226,198,0.58)' }}>
+              <div className="font-serif text-[12px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-primary),0.58)' }}>
                 当前视图：{visibleTreeGroups.length} 棵树 / {visibleNodeCount} 节点
                 {selectedTree ? ` / 当前树 #${selectedTree.latestSave.id}` : ''}
               </div>
@@ -408,9 +408,9 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
                 <div
                   className="mb-3 px-3 py-2 text-center font-serif text-[12px] tracking-[0.14em]"
                   style={{
-                    color: 'rgba(142,215,255,0.92)',
-                    background: 'rgba(142,215,255,0.08)',
-                    boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+                    color: 'rgba(var(--tj-accent-primary),0.92)',
+                    background: 'rgba(var(--tj-accent-primary),0.08)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
                     clipPath: smallClip,
                   }}
                 >
@@ -422,15 +422,15 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
                 <div
                   className="p-5 text-center font-serif"
                   style={{
-                    background: 'rgba(92, 36, 36, 0.28)',
-                    boxShadow: 'inset 0 0 0 1px rgba(255, 150, 150, 0.25)',
+                    background: 'rgba(var(--tj-danger), 0.28)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.25)',
                     clipPath: cardClip,
                   }}
                 >
-                  <div className="text-sm tracking-[0.18em]" style={{ color: 'rgba(255,205,205,0.92)' }}>
+                  <div className="text-sm tracking-[0.18em]" style={{ color: 'rgba(var(--tj-danger),0.92)' }}>
                     存档列表读取失败
                   </div>
-                  <div className="mt-2 text-xs leading-relaxed tracking-wider" style={{ color: 'rgba(238,226,198,0.72)' }}>
+                  <div className="mt-2 text-xs leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary),0.72)' }}>
                     {loadError}
                   </div>
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -481,8 +481,8 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
           <aside
             className="flex min-h-0 min-w-0 flex-col px-4 py-4 md:px-4 md:py-5"
             style={{
-              borderLeft: '1px solid rgba(142,215,255,0.18)',
-              background: 'radial-gradient(circle at 100% 0, rgba(142,215,255,0.10), transparent 36%), rgba(8,12,20,0.48)',
+              borderLeft: '1px solid rgba(var(--tj-accent-primary),0.18)',
+              background: 'radial-gradient(circle at 100% 0, rgba(var(--tj-accent-primary),0.10), transparent 36%), rgba(var(--tj-panel-bg-end),0.48)',
             }}
           >
             <SaveTreeSelector
@@ -517,17 +517,17 @@ function SaveActionButton({
       disabled={disabled}
       className="cursor-pointer px-3 py-2.5 font-serif text-[12px] font-semibold tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       style={{
-        color: primary ? '#07101a' : warn ? '#f5d97a' : 'rgba(238,226,198,0.76)',
+        color: primary ? 'rgba(var(--tj-surface-bg-start),1)' : warn ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary),0.76)',
         background: primary
-          ? 'linear-gradient(135deg, #8ed7ff, #5b99ff)'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))'
           : warn
-            ? 'rgba(245,217,122,0.06)'
-            : 'rgba(142,215,255,0.07)',
+            ? 'rgba(var(--tj-accent-primary),0.06)'
+            : 'rgba(var(--tj-accent-primary),0.07)',
         boxShadow: primary
-          ? 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 20px rgba(91,153,255,0.24)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55), 0 0 20px rgba(var(--tj-tech-blue), 0.24)'
           : warn
-            ? 'inset 0 0 0 1px rgba(245,217,122,0.28)'
-            : 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
         clipPath: smallClip,
       }}
     >
@@ -541,15 +541,15 @@ function SaveMetric({ value, label }: { value: number; label: string }) {
     <div
       className="px-3 py-3 font-serif"
       style={{
-        background: 'rgba(142,215,255,0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.13)',
+        background: 'rgba(var(--tj-accent-primary),0.055)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.13)',
         clipPath: smallClip,
       }}
     >
-      <b className="block text-[21px] leading-none tracking-[0.04em]" style={{ color: '#8ed7ff' }}>
+      <b className="block text-[21px] leading-none tracking-[0.04em]" style={{ color: 'rgba(var(--tj-accent-primary),1)' }}>
         {value}
       </b>
-      <span className="mt-1 block text-[11px] tracking-[0.16em]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+      <span className="mt-1 block text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
         {label}
       </span>
     </div>
@@ -570,15 +570,15 @@ function MiniSaveTreeMap({
       className="col-span-2 min-h-[170px] px-3 py-3 font-serif"
       style={{
         background: 'rgba(0,0,0,0.20)',
-        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
         clipPath: cardClip,
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.86)' }}>
+        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
           当前存档树
         </h3>
-        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
           {sizeText}
         </span>
       </div>
@@ -610,7 +610,7 @@ function MiniLine({ left, top, width, rotate }: { left: number; top: number; wid
         width,
         transform: `rotate(${rotate}deg)`,
         transformOrigin: 'left center',
-        background: 'rgba(142,215,255,0.3)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.36), rgba(var(--tj-accent-secondary),0.3))',
       }}
     />
   );
@@ -624,8 +624,8 @@ function MiniDot({ left, top, gold = false }: { left: number; top: number; gold?
       style={{
         left,
         top,
-        background: gold ? '#f5d97a' : '#8ed7ff',
-        boxShadow: gold ? '0 0 14px rgba(245,217,122,.72)' : '0 0 16px rgba(142,215,255,.8)',
+        background: gold ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))',
+        boxShadow: gold ? '0 0 14px rgba(var(--tj-accent-primary),0.72)' : '0 0 16px rgba(var(--tj-accent-primary),.8)',
       }}
     />
   );
@@ -644,21 +644,21 @@ function SaveTreeSelector({
     <div
       className="kaituo-options-scroll min-h-0 flex-1 px-3 py-3 pb-5 font-serif md:overflow-y-auto"
       style={{
-        background: 'linear-gradient(180deg, rgba(142,215,255,0.075), rgba(0,0,0,0.18))',
-        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.16), 0 0 24px rgba(0,0,0,0.18)',
+        background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary),0.075), rgba(0,0,0,0.18))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16), 0 0 24px rgba(0,0,0,0.18)',
         clipPath: cardClip,
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(142,215,255,0.86)' }}>
+        <h3 className="text-[12px] font-medium tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
           存档树列表
         </h3>
-        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+        <span className="text-[11px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
           点击切换路线
         </span>
       </div>
       {groups.length === 0 ? (
-        <div className="py-3 text-center text-[12px] tracking-[0.16em]" style={{ color: 'rgba(238,226,198,0.46)' }}>
+        <div className="py-3 text-center text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-primary),0.46)' }}>
           暂无可选存档树
         </div>
       ) : (
@@ -674,23 +674,23 @@ function SaveTreeSelector({
                 className="min-w-0 cursor-pointer px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
                   background: active
-                    ? 'linear-gradient(90deg, rgba(142,215,255,0.18), rgba(91,153,255,0.06))'
-                    : 'rgba(142,215,255,0.045)',
+                    ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary), 0.06))'
+                    : 'rgba(var(--tj-accent-primary),0.045)',
                   boxShadow: active
-                    ? 'inset 3px 0 0 #8ed7ff, inset 0 0 0 1px rgba(142,215,255,0.32)'
-                    : 'inset 0 0 0 1px rgba(142,215,255,0.12)',
+                    ? 'inset 3px 0 0 rgba(var(--tj-accent-primary),1), inset 0 0 0 1px rgba(var(--tj-accent-primary),0.32)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
                   clipPath: smallClip,
                 }}
               >
                 <div className="flex min-w-0 items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-semibold tracking-[0.12em]" style={{ color: active ? '#eee2c6' : 'rgba(238,226,198,0.78)' }}>
+                  <span className="truncate text-[13px] font-semibold tracking-[0.12em]" style={{ color: active ? 'rgba(var(--tj-accent-secondary),1)' : 'rgba(var(--tj-text-primary),0.78)' }}>
                     {title}
                   </span>
-                  <span className="shrink-0 text-[11px]" style={{ color: active ? '#8ed7ff' : 'rgba(238,226,198,0.42)' }}>
+                  <span className="shrink-0 text-[11px]" style={{ color: active ? 'rgba(var(--tj-accent-primary),1)' : 'rgba(var(--tj-text-primary),0.42)' }}>
                     #{group.latestSave.id}
                   </span>
                 </div>
-                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tracking-[0.1em]" style={{ color: 'rgba(238,226,198,0.54)' }}>
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tracking-[0.1em]" style={{ color: 'rgba(var(--tj-text-primary),0.54)' }}>
                   <span>{group.nodeCount} 节点</span>
                   <span>{group.branchCount} 分支</span>
                   <span>第 {group.latestSave.turnCount} 回合</span>
@@ -721,16 +721,16 @@ function TabButton({
       onClick={onClick}
       className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.16em] transition-all md:px-4 md:text-[13px] md:tracking-[0.24em]"
       style={{
-        color: active ? '#07101a' : 'rgba(238,226,198,0.70)',
-        background: active ? 'linear-gradient(135deg, #8ed7ff, #5b99ff)' : 'rgba(142,215,255,0.05)',
+        color: active ? 'rgba(var(--tj-surface-bg-start),1)' : 'rgba(var(--tj-text-primary),0.70)',
+        background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))' : 'rgba(var(--tj-accent-primary),0.05)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 24px rgba(91,153,255,0.28)'
-          : 'inset 0 0 0 1px rgba(142,215,255,0.15)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-surface-bg-start), 0.55), 0 0 24px rgba(var(--tj-accent-primary), 0.28)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)',
         clipPath: smallClip,
       }}
     >
       {label}
-      <span className="ml-2 text-[11px]" style={{ color: active ? 'rgba(7,16,26,0.66)' : 'rgba(238,226,198,0.46)' }}>
+      <span className="ml-2 text-[11px]" style={{ color: active ? 'rgba(var(--tj-panel-bg-start),0.66)' : 'rgba(var(--tj-text-primary),0.46)' }}>
         {count}
       </span>
     </button>
@@ -758,25 +758,25 @@ function SaveTreeGroup({
     <section
       className="min-w-0 overflow-hidden p-3"
       style={{
-        background: 'linear-gradient(135deg, rgba(18,28,43,0.52), rgba(8,12,20,0.56))',
-        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+        background: 'linear-gradient(135deg, rgba(var(--tj-panel-bg-start),0.52), rgba(var(--tj-panel-bg-end),0.56))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
         clipPath: cardClip,
       }}
     >
       <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3 font-serif">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-            <span className="text-[11px] tracking-[0.18em]" style={{ color: '#8ed7ff' }}>
+            <span className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),1)' }}>
               存档树
             </span>
-            <span className="truncate text-[15px] font-semibold tracking-wider" style={{ color: '#eee2c6' }}>
+            <span className="truncate text-[15px] font-semibold tracking-wider" style={{ color: 'rgba(var(--tj-accent-secondary),1)' }}>
               {group.latestSave.travelerName || group.rootSave.travelerName || '未命名旅人'}
             </span>
-            <span className="text-[11px]" style={{ color: 'rgba(238,226,198,0.42)' }}>
+            <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
               最新 #{group.latestSave.id}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tracking-wider" style={{ color: 'rgba(238,226,198,0.58)' }}>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tracking-wider" style={{ color: 'rgba(var(--tj-text-primary),0.58)' }}>
             <span>{group.nodeCount} 个节点</span>
             <span>{group.branchCount} 个分支</span>
             <span>{formatSize(group.totalSizeBytes)}</span>
@@ -792,7 +792,7 @@ function SaveTreeGroup({
         <span
           aria-hidden="true"
           className="absolute bottom-2 left-[10px] top-2 w-px"
-          style={{ background: 'linear-gradient(#8ed7ff, rgba(142,215,255,0.08))' }}
+          style={{ background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),0.92))' }}
         />
         {group.nodes.map((node, index) => (
           <SaveRow
@@ -846,11 +846,11 @@ function SaveRow({
       style={{
         marginLeft: visualIndent,
         background: isLatest
-          ? 'linear-gradient(135deg, rgba(142,215,255,0.18), rgba(245,217,122,0.09)), rgba(10,16,27,0.92)'
-          : 'rgba(10,16,27,0.74)',
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary),0.09)), rgba(var(--tj-panel-bg-start),0.92)'
+          : 'rgba(var(--tj-panel-bg-start),0.74)',
         boxShadow: isLatest
-          ? 'inset 0 0 0 1px rgba(245,217,122,0.46), inset 0 0 0 2px rgba(142,215,255,0.08), 0 0 28px rgba(142,215,255,0.10), 0 0 22px rgba(245,217,122,0.08)'
-          : 'inset 0 0 0 1px rgba(142,215,255,0.18)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.46), inset 0 0 0 2px rgba(var(--tj-accent-primary),0.08), 0 0 28px rgba(var(--tj-accent-primary),0.10), 0 0 22px rgba(var(--tj-accent-primary),0.08)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
         clipPath: cardClip,
       }}
     >
@@ -858,8 +858,8 @@ function SaveRow({
         aria-hidden="true"
         className={`absolute left-[-22px] rounded-full ${isLatest ? 'top-6 h-[14px] w-[14px]' : 'top-5 h-[11px] w-[11px]'}`}
         style={{
-          background: isLatest ? '#f5d97a' : '#8ed7ff',
-          boxShadow: isLatest ? '0 0 18px rgba(245,217,122,0.82), 0 0 28px rgba(142,215,255,0.28)' : '0 0 16px rgba(142,215,255,0.78)',
+          background: isLatest ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))',
+          boxShadow: isLatest ? '0 0 18px rgba(var(--tj-accent-primary),0.82), 0 0 28px rgba(var(--tj-accent-primary),0.28)' : '0 0 16px rgba(var(--tj-accent-primary),0.78)',
         }}
       />
       {depth > 0 && (
@@ -868,7 +868,7 @@ function SaveRow({
           className={`absolute left-[-16px] h-px ${isLatest ? 'top-[31px]' : 'top-[25px]'}`}
           style={{
             width: 16 + visualIndent,
-            background: 'linear-gradient(90deg, rgba(142,215,255,0.36), rgba(142,215,255,0.05))',
+            background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.36), rgba(var(--tj-accent-primary),0.05))',
           }}
         />
       )}
@@ -878,36 +878,36 @@ function SaveRow({
           <span className={`font-serif tracking-[0.18em] ${isLatest ? 'text-[12px]' : 'text-[11px]'}`} style={{ color: typeColor(item.type) }}>
             {typeLabel(item.type)}
           </span>
-          <span className={`truncate font-serif font-semibold tracking-wider ${isLatest ? 'text-[17px]' : 'text-[15px]'}`} style={{ color: '#eee2c6' }}>
+          <span className={`truncate font-serif font-semibold tracking-wider ${isLatest ? 'text-[17px]' : 'text-[15px]'}`} style={{ color: 'rgba(var(--tj-accent-secondary),1)' }}>
             {item.travelerName || '未命名旅人'}
           </span>
-          <span className="font-serif text-[11px] tracking-wider" style={{ color: 'rgba(238,226,198,0.42)' }}>
+          <span className="font-serif text-[11px] tracking-wider" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
             #{item.id}
           </span>
           {treeLabel && <SmallTag>{treeLabel}</SmallTag>}
           {isLatest && <SmallTag gold>最新</SmallTag>}
         </div>
-        <div className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 font-serif tracking-wider ${isLatest ? 'mt-2 text-[13px]' : 'mt-1 text-[12px]'}`} style={{ color: 'rgba(238,226,198,0.78)' }}>
-          <span style={{ color: '#8ed7ff' }}>第 {item.turnCount} 回合</span>
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 font-serif tracking-wider ${isLatest ? 'mt-2 text-[13px]' : 'mt-1 text-[12px]'}`} style={{ color: 'rgba(var(--tj-text-primary),0.78)' }}>
+          <span style={{ color: 'rgba(var(--tj-accent-primary),1)' }}>第 {item.turnCount} 回合</span>
           {(item.currentDate || item.currentTime || item.currentLocation) && (
             <>
-              <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
+              <span style={{ color: 'rgba(var(--tj-text-primary),0.28)' }}>/</span>
               <span>{[item.currentDate, item.currentTime, item.currentLocation].filter(Boolean).join(' / ')}</span>
             </>
           )}
           {item.worldPeriodName && (
             <>
-              <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
+              <span style={{ color: 'rgba(var(--tj-text-primary),0.28)' }}>/</span>
               <span>{item.worldPeriodName}</span>
             </>
           )}
-          <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
-          <span style={{ color: 'rgba(238,226,198,0.56)' }}>{formatTime(item.timestamp)}</span>
-          <span style={{ color: 'rgba(238,226,198,0.28)' }}>/</span>
-          <span style={{ color: 'rgba(238,226,198,0.56)' }}>{formatSize(item.sizeBytes)}</span>
+          <span style={{ color: 'rgba(var(--tj-text-primary),0.28)' }}>/</span>
+          <span style={{ color: 'rgba(var(--tj-text-primary),0.56)' }}>{formatTime(item.timestamp)}</span>
+          <span style={{ color: 'rgba(var(--tj-text-primary),0.28)' }}>/</span>
+          <span style={{ color: 'rgba(var(--tj-text-primary),0.56)' }}>{formatSize(item.sizeBytes)}</span>
         </div>
         {item.lastSummary && (
-          <div className={`font-serif leading-relaxed ${isLatest ? 'mt-2 line-clamp-3 text-[13px]' : 'mt-1 line-clamp-2 text-[12px]'}`} style={{ color: 'rgba(238,226,198,0.62)' }}>
+          <div className={`font-serif leading-relaxed ${isLatest ? 'mt-2 line-clamp-3 text-[13px]' : 'mt-1 line-clamp-2 text-[12px]'}`} style={{ color: 'rgba(var(--tj-text-primary),0.62)' }}>
             {item.lastSummary}
           </div>
         )}
@@ -922,9 +922,9 @@ function SaveRow({
             isLatest ? 'px-4 py-2.5 text-[13px]' : 'px-3 py-2 text-xs'
           }`}
           style={{
-            background: 'linear-gradient(135deg, #8ed7ff, #5b99ff)',
-            color: '#07101a',
-            boxShadow: 'inset 0 0 0 1px rgba(236,249,255,0.55), 0 0 18px rgba(91,153,255,0.20)',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))',
+            color: 'rgba(var(--tj-surface-bg-start),1)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-surface-bg-start), 0.55), 0 0 18px rgba(var(--tj-accent-primary), 0.20)',
             clipPath: smallClip,
           }}
         >
@@ -936,8 +936,8 @@ function SaveRow({
           disabled={loadingId !== null}
           className="cursor-pointer px-2.5 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            color: 'rgba(142,215,255,0.92)',
-            boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.28)',
+            color: 'rgba(var(--tj-accent-primary),0.92)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)',
             clipPath: smallClip,
           }}
         >
@@ -949,8 +949,8 @@ function SaveRow({
           disabled={loadingId !== null}
           className="cursor-pointer px-2.5 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            color: 'rgba(255,156,156,0.9)',
-            boxShadow: 'inset 0 0 0 1px rgba(255,156,156,0.28)',
+            color: 'rgba(var(--tj-danger),0.9)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.28)',
             clipPath: smallClip,
           }}
         >
@@ -966,9 +966,9 @@ function SmallTag({ children, gold = false }: { children: ReactNode; gold?: bool
     <span
       className="px-1.5 py-0.5 font-serif text-[10px] tracking-[0.12em]"
       style={{
-        color: gold ? '#f5d97a' : '#8ed7ff',
-        background: gold ? 'rgba(245,217,122,0.08)' : 'rgba(142,215,255,0.08)',
-        boxShadow: gold ? 'inset 0 0 0 1px rgba(245,217,122,0.16)' : 'inset 0 0 0 1px rgba(142,215,255,0.16)',
+        color: gold ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary),1)',
+        background: gold ? 'rgba(var(--tj-accent-primary),0.08)' : 'rgba(var(--tj-accent-primary),0.08)',
+        boxShadow: gold ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
         clipPath: smallClip,
       }}
     >
@@ -982,16 +982,16 @@ function EmptyState({ text, detail }: { text: string; detail?: string }) {
     <div
       className="p-6 text-center font-serif"
       style={{
-        background: 'rgba(18,28,43,0.46)',
-        boxShadow: 'inset 0 0 0 1px rgba(142,215,255,0.15)',
+        background: 'rgba(var(--tj-panel-bg-start),0.46)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)',
         clipPath: cardClip,
       }}
     >
-      <p className="text-sm tracking-[0.2em]" style={{ color: 'rgba(238,226,198,0.86)' }}>
+      <p className="text-sm tracking-[0.2em]" style={{ color: 'rgba(var(--tj-text-primary),0.86)' }}>
         {text}
       </p>
       {detail && (
-        <p className="mt-1.5 text-xs tracking-wider" style={{ color: 'rgba(238,226,198,0.56)' }}>
+        <p className="mt-1.5 text-xs tracking-wider" style={{ color: 'rgba(var(--tj-text-primary),0.56)' }}>
           {detail}
         </p>
       )}
@@ -1007,10 +1007,10 @@ function typeLabel(type: SaveListItemSummary['type']): string {
 }
 
 function typeColor(type: SaveListItemSummary['type']): string {
-  if (type === 'auto') return 'rgba(142,215,255,0.86)';
-  if (type === 'backup') return 'rgba(255,190,120,0.9)';
-  if (type === 'imported') return 'rgba(158,232,183,0.9)';
-  return 'rgba(245,217,122,0.9)';
+  if (type === 'auto') return 'rgba(var(--tj-accent-primary),0.86)';
+  if (type === 'backup') return 'rgba(var(--tj-accent-secondary),0.9)';
+  if (type === 'imported') return 'rgba(var(--tj-ui-success),0.9)';
+  return 'rgba(var(--tj-accent-primary),0.9)';
 }
 
 function formatSize(bytes: number): string {

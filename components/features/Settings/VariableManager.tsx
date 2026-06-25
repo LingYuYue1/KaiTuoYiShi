@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { VariableSetters } from '@/utils/variableExecutor';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
@@ -485,7 +485,7 @@ export function VariableManagerTab(props: Props) {
               onClick={() => setMode('fields')}
               className="px-4 py-1.5 text-sm font-serif tracking-wider"
               style={{
-                background: mode === 'fields' ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))' : 'transparent',
+                background: mode === 'fields' ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))' : 'transparent',
                 color: mode === 'fields' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
                 boxShadow: mode === 'fields' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
                 clipPath: smallClip,
@@ -497,7 +497,7 @@ export function VariableManagerTab(props: Props) {
               onClick={() => setMode('json')}
               className="px-4 py-1.5 text-sm font-serif tracking-wider"
               style={{
-                background: mode === 'json' ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))' : 'transparent',
+                background: mode === 'json' ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))' : 'transparent',
                 color: mode === 'json' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
                 boxShadow: mode === 'json' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
                 clipPath: smallClip,
@@ -541,7 +541,7 @@ export function VariableManagerTab(props: Props) {
             style={{
               background: savedFlash
                 ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-                : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+                : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
               color: 'rgb(var(--tj-on-accent))',
               boxShadow: savedFlash
                 ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
@@ -884,7 +884,7 @@ function NsfwArchiveEditor({ value, onChange }: { value: Record<string, unknown>
     <div
       className="space-y-4 px-3 py-3"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.08), rgba(var(--tj-panel), 0.5))',
+        background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.08), rgba(var(--tj-ui-panel), 0.5))',
         boxShadow: 'inset 0 0 0 1px rgba(214, 142, 174, 0.24)',
         clipPath: cardClip,
       }}

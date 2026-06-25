@@ -1,4 +1,4 @@
-import { RELEASE_ANNOUNCEMENTS } from '@/data/releaseAnnouncements';
+﻿import { RELEASE_ANNOUNCEMENTS } from '@/data/releaseAnnouncements';
 import { Modal } from '@/components/ui/Modal';
 
 interface Props {
@@ -49,7 +49,7 @@ export function ReleaseAnnouncementsModal({ onClose }: Props) {
             <ul className="space-y-2">
               {item.highlights.map((highlight) => (
                 <li key={highlight} className="flex gap-2 text-sm leading-6">
-                  <span style={{ color: 'rgba(var(--tj-accent-primary), 0.78)' }}>◆</span>
+                  <span style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.84), rgba(var(--tj-accent-secondary),0.78))' }}>◆</span>
                   <span style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>{highlight}</span>
                 </li>
               ))}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+﻿import type { ReactNode } from 'react';
 import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 原著约束强度 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
@@ -130,7 +130,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
           clipPath: cardClip,
         }}
       >
-        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
           智库
         </div>
         这是原著资料中枢的独立配置。后续它会为周报、剧情和其他系统提供摘要、检索和约束，不直接替代主剧情模型。
@@ -326,7 +326,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+              : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
             boxShadow: savedFlash
               ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
@@ -401,7 +401,7 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'

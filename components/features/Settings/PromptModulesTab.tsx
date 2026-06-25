@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块类目, 提示词模块作用域 } from '@/models/prompts';
 import {
@@ -131,7 +131,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                   <span
                     className="text-[10px] px-1.5 py-0.5"
                     style={{
-                      color: m.builtin ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.9)',
+                      color: m.builtin ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
                       background: m.builtin
                         ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.92), rgba(var(--tj-accent-primary), 0.82))'
                         : 'rgba(var(--tj-accent-primary), 0.12)',
@@ -264,7 +264,7 @@ function EditorPanel({
           className="relative h-6 w-11 flex-shrink-0 transition-all"
           style={{
             background: isCalibrationModule || m.enabled
-                  ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+                  ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                   : 'rgba(var(--tj-bg-secondary), 0.68)',
             boxShadow: isCalibrationModule || m.enabled
               ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'

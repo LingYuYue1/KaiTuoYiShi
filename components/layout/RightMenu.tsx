@@ -1,4 +1,4 @@
-import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
+﻿import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 
 interface RightMenuProps {
   activeId: GameSystemId | null;
@@ -76,7 +76,7 @@ function SystemButton({
           ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.025))'
           : 'rgba(var(--tj-bubble), 0.34)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.95)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))'
           : 'inset 0 0 0 1px rgba(var(--tj-border), 0.64)',
         clipPath: itemClip,
       }}

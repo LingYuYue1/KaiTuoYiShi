@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useGitHubOAuth } from '@/hooks/useGitHubOAuth';
 import { getSaveList, loadSave, loadSetting, replaceAllSaves, saveSetting } from '@/services/dbService';
 import {
@@ -292,7 +292,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
             </div>
 
             <details open={showAdvanced} onToggle={(event) => setShowAdvanced(event.currentTarget.open)}>
-              <summary className="cursor-pointer font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.78)' }}>
+              <summary className="cursor-pointer font-serif text-[12px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.84), rgba(var(--tj-accent-secondary),0.78))' }}>
                 高级配置 / Token 备用绑定
               </summary>
               <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
@@ -391,9 +391,9 @@ function CloudButton({
       onClick={onClick}
       className="w-full px-4 py-2 text-sm font-serif tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-50"
       style={{
-        color: tone === 'primary' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.9)',
+        color: tone === 'primary' ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
         background: tone === 'primary'
-          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
           : 'rgba(var(--tj-bg-secondary), 0.55)',
         boxShadow: tone === 'primary'
           ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.52)'
@@ -441,7 +441,7 @@ function CloudProgress({
           className="h-full transition-all duration-300"
           style={{
             width: `${percent}%`,
-            background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))',
+            background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))',
           }}
         />
       </div>
@@ -465,7 +465,7 @@ function CloudRecordSummary({ saves }: { saves: GitHubCloudSaveItem[] }) {
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+      <div className="font-serif tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
         最近云端记录
       </div>
       <div style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -371,19 +371,19 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
       style={{
         // 暗紫红 + 微金,呼应虚境质感;主剧情是赤金,这里偏冷一点便于一眼区分
         background:
-          'linear-gradient(135deg, rgba(48, 22, 50, 0.55) 0%, rgba(28, 16, 30, 0.55) 60%, rgba(40, 24, 18, 0.55) 100%)',
+          'linear-gradient(135deg, rgba(var(--tj-panel-bg-start),0.55) 0%, rgba(var(--tj-panel-bg-end),0.55) 60%, rgba(var(--tj-accent-secondary),0.55) 100%)',
         boxShadow:
-          'inset 0 0 0 1px rgba(200, 130, 180, 0.35), 0 0 26px rgba(120, 60, 120, 0.18)',
+          'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.35), 0 0 26px rgba(var(--tj-accent-primary-deep),0.18)',
         clipPath:
           'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
       }}
     >
       <div
         className="mb-2 flex items-center justify-between text-[11px] font-serif tracking-[0.4em]"
-        style={{ color: 'rgba(230, 180, 220, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary),0.85)' }}
       >
         <span>◇ 命 途 狭 间 · {awakeningKind}</span>
-        <span style={{ color: 'rgba(190, 140, 180, 0.6)' }}>虚 境 之 问</span>
+        <span style={{ color: 'rgba(var(--tj-accent-secondary),0.6)' }}>虚 境 之 问</span>
       </div>
       {card}
     </div>
@@ -516,15 +516,15 @@ function AwakeningQuestionsBlock({ raw }: { raw: string }) {
     <div
       className="mt-2 p-3"
       style={{
-        background: 'rgba(20, 12, 22, 0.55)',
-        boxShadow: 'inset 0 0 0 1px rgba(220, 170, 210, 0.28)',
+        background: 'rgba(var(--tj-panel-bg-end),0.55)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.28)',
         clipPath:
           'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
       }}
     >
       <div
         className="mb-2 text-[11px] tracking-[0.32em]"
-        style={{ color: 'rgba(230, 180, 220, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary),0.85)' }}
       >
         ◆ 三 问 · {pathName || '命途意志'}
       </div>
@@ -533,17 +533,17 @@ function AwakeningQuestionsBlock({ raw }: { raw: string }) {
           <div key={i} className="flex gap-2 text-sm leading-relaxed">
             <span
               className="shrink-0 font-serif tracking-wider"
-              style={{ color: 'rgba(230, 180, 220, 0.85)' }}
+              style={{ color: 'rgba(var(--tj-accent-primary),0.85)' }}
             >
               {q.label}
             </span>
-            <span style={{ color: 'rgba(225, 215, 200, 0.95)' }}>{q.text}</span>
+            <span style={{ color: 'rgba(var(--tj-text-primary),0.95)' }}>{q.text}</span>
           </div>
         ))}
       </div>
       <div
         className="mt-2 text-[11px] leading-relaxed"
-        style={{ color: 'rgba(190, 160, 180, 0.7)' }}
+        style={{ color: 'rgba(var(--tj-accent-secondary),0.7)' }}
       >
         在下方输入框中回答这三问,命途意志将据此评判你是否能跨入下一阶。
       </div>
@@ -557,17 +557,17 @@ function AwakeningJudgementBadge({ judgement }: { judgement: string }) {
   const isPromote = j.includes('升阶') || /promote/i.test(j);
 
   let label = j;
-  let color = 'rgba(225, 215, 200, 0.95)';
-  let glow = 'rgba(180, 140, 200, 0.4)';
-  let bg = 'rgba(40, 22, 44, 0.55)';
-  let stroke = 'rgba(220, 170, 210, 0.45)';
+  let color = 'rgba(var(--tj-text-primary),0.95)';
+  let glow = 'rgba(var(--tj-accent-secondary),0.4)';
+  let bg = 'rgba(var(--tj-panel-bg-start),0.55)';
+  let stroke = 'rgba(var(--tj-accent-secondary),0.45)';
 
   if (isPromote) {
     label = '升 阶';
-    color = 'rgba(180, 240, 200, 0.95)';
-    glow = 'rgba(120, 220, 160, 0.55)';
-    bg = 'rgba(20, 40, 30, 0.55)';
-    stroke = 'rgba(150, 220, 180, 0.55)';
+    color = 'rgba(var(--tj-ui-success),0.95)';
+    glow = 'rgba(var(--tj-ui-success),0.55)';
+    bg = 'rgba(var(--tj-ui-success),0.15)';
+    stroke = 'rgba(var(--tj-ui-success),0.55)';
   }
 
   return (
@@ -616,20 +616,20 @@ function AwakeningOracleBlock({
       className="mx-1 px-4 py-3"
       style={{
         background:
-          'linear-gradient(180deg, rgba(20, 12, 22, 0.45) 0%, rgba(28, 18, 28, 0.45) 100%)',
+          'linear-gradient(180deg, rgba(var(--tj-panel-bg-end),0.45) 0%, rgba(var(--tj-panel-bg-start),0.45) 100%)',
         boxShadow:
-          'inset 0 0 0 1px rgba(220, 170, 210, 0.22), inset 0 0 32px rgba(120, 60, 120, 0.08)',
+          'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.22), inset 0 0 32px rgba(var(--tj-accent-primary-deep),0.08)',
         clipPath:
           'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
     >
       <div
         className="mb-2 flex items-center justify-between text-[11px] tracking-[0.32em]"
-        style={{ color: 'rgba(230, 180, 220, 0.8)' }}
+        style={{ color: 'rgba(var(--tj-accent-primary),0.8)' }}
       >
         <span>◆ 命途意志 · {subtitle}</span>
         {pathName && (
-          <span style={{ color: 'rgba(200, 150, 200, 0.6)' }}>{pathName}</span>
+          <span style={{ color: 'rgba(var(--tj-accent-secondary),0.6)' }}>{pathName}</span>
         )}
       </div>
       <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} visualTextSettings={visualTextSettings} />
@@ -649,7 +649,7 @@ function AwakeningAftermathLine({
     <div className="mt-2 flex items-center justify-center px-3">
       <div
         className="font-serif text-[13px] leading-relaxed tracking-[0.12em] text-center"
-        style={{ color: 'rgba(255, 240, 200, 0.95)', textShadow: '0 0 18px rgba(var(--tj-accent-primary), 0.45)' }}
+        style={{ color: 'rgba(var(--tj-text-primary),0.95)', textShadow: '0 0 18px rgba(var(--tj-accent-primary), 0.45)' }}
       >
         你感觉到自己在「{label}」的路上,行进得更远了。
       </div>
@@ -836,11 +836,11 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
               className="mt-2 px-2 py-1.5 text-[11px] leading-relaxed"
               style={{
                 color: 'rgba(var(--tj-text-primary),0.86)',
-                background: 'rgba(255,220,110,0.08)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,220,110,0.22)',
+                background: 'rgba(var(--tj-accent-primary),0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)',
               }}
             >
-              <span style={{ color: 'rgba(255,220,110,0.92)' }}>缓存优化：</span>{cacheOptimizationHint}
+              <span style={{ color: 'rgba(var(--tj-accent-primary),0.92)' }}>缓存优化：</span>{cacheOptimizationHint}
             </div>
           )}
           {cachePrefixDiagnostics && (
@@ -848,11 +848,11 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
               className="mt-2 px-2 py-1.5 text-[11px] leading-relaxed"
               style={{
                 color: 'rgba(var(--tj-text-primary),0.86)',
-                background: 'rgba(120,190,255,0.08)',
-                boxShadow: 'inset 0 0 0 1px rgba(120,190,255,0.22)',
+                background: 'rgba(var(--tj-tech-blue),0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-blue),0.22)',
               }}
             >
-              <div style={{ color: 'rgba(150,210,255,0.95)' }}>前缀诊断</div>
+              <div style={{ color: 'rgba(var(--tj-tech-blue),0.95)' }}>前缀诊断</div>
               <div className="mt-1 grid gap-1">
                 <div>公共前缀：{formatTokenCount(cachePrefixDiagnostics.commonPrefixTokens)} / {formatTokenCount(cachePrefixDiagnostics.currentPromptTokens)} tokens（{(cachePrefixDiagnostics.commonPrefixRate * 100).toFixed(1)}%）</div>
                 <div>首次变化：{cachePrefixDiagnostics.firstDiffCurrentSection}</div>
@@ -945,9 +945,9 @@ function UsageSection({ title, highlighted = false, children }: { title: string;
 function UsageMetric({ label, value, tone }: { label: string; value: string; tone: 'neutral' | 'primary' | 'gold' | 'green' | 'red' }) {
   const color =
     tone === 'primary' ? 'rgba(var(--tj-accent-primary),0.95)'
-      : tone === 'gold' ? 'rgba(255,220,110,0.95)'
-      : tone === 'green' ? 'rgba(150,235,160,0.95)'
-      : tone === 'red' ? 'rgba(255,135,145,0.95)'
+      : tone === 'gold' ? 'rgba(var(--tj-accent-primary),0.95)'
+      : tone === 'green' ? 'rgba(var(--tj-ui-success),0.95)'
+      : tone === 'red' ? 'rgba(var(--tj-danger),0.95)'
       : 'rgba(var(--tj-text-primary),0.92)';
   return (
     <div className="min-w-0">
@@ -1093,8 +1093,8 @@ function NarrativeImageCard({
       <div
         className="flex items-center gap-2 px-3 py-2 text-xs"
         style={{
-          background: 'rgba(200, 60, 60, 0.06)',
-          boxShadow: 'inset 0 0 0 1px rgba(200, 60, 60, 0.2)',
+          background: 'rgba(var(--tj-danger),0.06)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.2)',
           color: 'rgba(var(--tj-text-secondary), 0.8)',
         }}
       >
@@ -1226,7 +1226,7 @@ function NarrativeImageManualCard({
             className="w-full px-3 py-2 text-left transition-all hover:opacity-90 disabled:opacity-45"
             style={{
               color: 'rgb(var(--tj-on-accent))',
-              background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(223,211,130,0.96) 48%, rgb(var(--tj-tech-cyan, 118, 211, 224)) 100%)',
+              background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(var(--tj-accent-mid),0.96) 48%, rgb(var(--tj-accent-secondary)) 100%)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)',
               clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
             }}

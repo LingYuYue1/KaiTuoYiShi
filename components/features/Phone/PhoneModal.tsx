@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
@@ -1071,9 +1071,9 @@ export function PhoneModal({
                         onClick={() => setShowCreateGroup((v) => !v)}
                         className="mt-3 w-full py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90"
                         style={{
-                          color: showCreateGroup ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.88)',
+                          color: showCreateGroup ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))',
                           background: showCreateGroup
-                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(212,177,90,0.92))'
+                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-amber-deep),0.92))'
                             : 'rgba(var(--tj-accent-primary), 0.055)',
                           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
                           clipPath: smallClip,
@@ -1098,9 +1098,9 @@ export function PhoneModal({
                               onClick={() => setMessageListMode(mode)}
                               className="py-1.5 text-[11px] font-serif tracking-[0.14em] transition-all"
                               style={{
-                                color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.82)',
+                                color: active ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))',
                                 background: active
-                                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(212,177,90,0.92))'
+                                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-amber-deep),0.92))'
                                   : 'transparent',
                                 clipPath: smallClip,
                               }}
@@ -1174,7 +1174,7 @@ export function PhoneModal({
                               className="w-full py-2 text-xs font-serif tracking-[0.18em] transition-all hover:opacity-90"
                               style={{
                                 color: 'rgb(var(--tj-on-accent))',
-                                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
+                                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))',
                                 clipPath: smallClip,
                               }}
                             >
@@ -1598,7 +1598,7 @@ function ContactSurface({ contact, onOpenChat, onBack }: { contact?: 手机联�
               onClick={onBack}
               className="px-2 py-1 text-xs font-serif tracking-[0.14em] xl:hidden"
               style={{
-                color: 'rgba(var(--tj-accent-primary), 0.88)',
+                color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))',
                 background: 'rgba(var(--tj-accent-primary), 0.06)',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
                 clipPath: smallClip,
@@ -1641,7 +1641,7 @@ function ContactSurface({ contact, onOpenChat, onBack }: { contact?: 手机联�
           className="mt-4 w-full py-2.5 text-sm font-serif tracking-[0.24em] transition-all hover:opacity-90"
           style={{
             color: 'rgb(var(--tj-on-accent))',
-            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 14px rgba(var(--tj-accent-primary),0.16)',
             clipPath: smallClip,
           }}
@@ -1783,7 +1783,7 @@ function WallpaperSurface({
                         {wallpaper.title}
                       </h3>
                       {(isHome || isChat) && (
-                        <span className="shrink-0 text-[10px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+                        <span className="shrink-0 text-[10px]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
                           {isHome && isChat ? '桌面/短讯' : isHome ? '桌面' : '短讯'}
                         </span>
                       )}
@@ -1841,9 +1841,9 @@ function PhoneSmallButton({
       onClick={onClick}
       className="px-2.5 py-1.5 text-[11px] font-serif tracking-[0.12em] transition-all hover:opacity-90"
       style={{
-        color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.88)',
+        color: active ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))',
         background: active
-          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))'
           : 'rgba(var(--tj-accent-primary), 0.055)',
         boxShadow: active
           ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45)'
@@ -2004,7 +2004,7 @@ function ChatSurface({
               onClick={onBack}
               className="px-2 py-1 text-xs font-serif tracking-[0.14em] xl:hidden"
               style={{
-                color: 'rgba(var(--tj-accent-primary), 0.88)',
+                color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))',
                 background: 'rgba(var(--tj-accent-primary), 0.06)',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
                 clipPath: smallClip,
@@ -2076,9 +2076,9 @@ function ChatSurface({
                 }}
                 className="px-2.5 py-1.5 text-[11px] font-serif tracking-[0.14em]"
                 style={{
-                  color: showGroupMembers ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.86)',
+                  color: showGroupMembers ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))',
                   background: showGroupMembers
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(212,177,90,0.92))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-amber-deep),0.92))'
                     : 'rgba(var(--tj-accent-primary), 0.055)',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
                   clipPath: smallClip,
@@ -2094,9 +2094,9 @@ function ChatSurface({
                 }}
                 className="min-w-[58px] px-2.5 py-1.5 text-[13px] font-serif font-bold tracking-[0.12em]"
                 style={{
-                  color: showAddMembers ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.9)',
+                  color: showAddMembers ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
                   background: showAddMembers
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(212,177,90,0.92))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-amber-deep),0.92))'
                     : 'rgba(var(--tj-accent-primary), 0.05)',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
                   clipPath: smallClip,
@@ -2246,7 +2246,7 @@ function ChatSurface({
                         color: msg.role === 'player' ? 'rgb(var(--tj-on-accent))' : 'rgba(var(--tj-text-primary), 0.94)',
                         background:
                           msg.role === 'player'
-                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))'
+                            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))'
                             : 'linear-gradient(135deg, rgba(var(--tj-bubble),0.98), rgba(var(--tj-surface-strong),0.88))',
                         boxShadow: msg.role === 'player'
                           ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)'
@@ -2315,7 +2315,7 @@ function ChatSurface({
             className="flex-shrink-0 px-3 py-2 text-xs font-serif tracking-[0.16em] transition-all disabled:opacity-45 sm:px-4 sm:tracking-[0.2em]"
             style={{
               color: 'rgb(var(--tj-on-accent))',
-              background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
+              background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))',
               clipPath: smallClip,
             }}
           >
@@ -2338,7 +2338,7 @@ function PhoneHistoryDivider({ turn, gap }: { turn: number; gap: number }) {
       <span
         className="shrink-0 px-3 py-1 font-serif text-[11px] tracking-[0.18em]"
         style={{
-          color: 'rgba(var(--tj-accent-primary), 0.82)',
+          color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))',
           background: 'rgba(var(--tj-bubble), 0.72)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
           clipPath: smallClip,
@@ -2440,7 +2440,7 @@ function SeedCard({
           className="py-1 text-[11px] font-serif tracking-[0.18em] disabled:opacity-50"
           style={{
             color: 'rgb(var(--tj-on-accent))',
-            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(212,177,90,0.95))',
+            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))',
             clipPath: smallClip,
           }}
         >

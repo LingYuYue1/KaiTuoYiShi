@@ -1,4 +1,4 @@
-// 「命途狭间之引」邀请卡片。
+﻿// 「命途狭间之引」邀请卡片。
 //
 // AI 发出 <触发狭间>命途ID</触发狭间> → sendWorkflow 写入 世界.待触发狭间 → 本组件渲染。
 // 玩家点「踏入」→ App 调用 actions.handleSend('[系统] 踏入命途狭间')。
@@ -59,19 +59,19 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
       </div>
       <div
         className="mb-1 text-base font-serif"
-        style={{ color: 'rgba(255, 235, 180, 0.95)' }}
+        style={{ color: 'rgba(var(--tj-text-primary),0.95)' }}
       >
         「{def.name}」的意志正注视着你
       </div>
       <div
         className="mb-3 text-sm leading-relaxed"
-        style={{ color: 'rgba(225, 210, 170, 0.85)' }}
+        style={{ color: 'rgba(var(--tj-text-primary),0.85)' }}
       >
         {belief?.核心 ?? '命途的拷问即将开始。'}
       </div>
       <div
         className="mb-3 text-xs leading-relaxed"
-        style={{ color: 'rgba(190, 178, 145, 0.75)' }}
+        style={{ color: 'rgba(var(--tj-text-secondary),0.75)' }}
       >
         踏入后,下一回合不推进主剧情,而是进入命途狭间——你将在虚境中接受三道诘问,
         命途意志会据此评判是否让你跨入下一阶。可以选择暂缓,但满载的进度会一直等到你回头。
@@ -85,9 +85,9 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
           style={{
             background:
               'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.85), rgba(200, 160, 80, 0.85))',
-            color: '#1a1610',
+            color: 'rgb(var(--tj-ui-active-text))',
             clipPath: btnClip,
-            boxShadow: 'inset 0 0 0 1px rgba(255, 235, 180, 0.5)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.5)',
           }}
         >
           踏 入
@@ -98,8 +98,8 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
           disabled={disabled}
           className="px-4 py-2 text-sm tracking-[0.2em] transition-all hover:opacity-90 disabled:opacity-40"
           style={{
-            background: 'rgba(50, 45, 40, 0.6)',
-            color: 'rgba(200, 188, 160, 0.85)',
+            background: 'rgba(var(--tj-panel-bg-end),0.6)',
+            color: 'rgba(var(--tj-text-secondary),0.85)',
             clipPath: btnClip,
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.35)',
           }}

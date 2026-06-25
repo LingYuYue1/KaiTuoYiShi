@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
@@ -102,35 +102,14 @@ const faintColor = 'rgba(var(--tj-ui-faint),0.66)';
 const activeTextColor = 'rgb(var(--tj-ui-active-text))';
 const accentColor = 'rgb(var(--tj-accent-primary))';
 const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
-const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(223,211,130,0.96) 48%, rgb(var(--tj-tech-cyan)) 100%)';
+const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(var(--tj-accent-mid),0.96) 48%, rgb(var(--tj-tech-cyan)) 100%)';
 const quietAccentSurface = 'rgba(var(--tj-accent-primary),0.055)';
 const cardSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel),0.76), rgba(var(--tj-ui-panel-strong),0.72))';
 const heroGridBackgroundStyle = {
   backgroundSize: albumGridSize,
   backgroundPosition: '0 0, 0 0, center, center',
 } as CSSProperties;
-const albumThemeStyle = {
-  '--tj-bg-primary': '8, 7, 9',
-  '--tj-bg-secondary': '16, 14, 16',
-  '--tj-text-primary': '230, 218, 188',
-  '--tj-text-secondary': '160, 148, 120',
-  '--tj-accent-primary': '245, 217, 122',
-  '--tj-accent-secondary': '196, 163, 90',
-  '--tj-border': '245, 217, 122',
-  '--tj-on-accent': '26, 19, 37',
-  '--tj-surface': '16, 14, 16',
-  '--tj-surface-strong': '10, 9, 10',
-  '--tj-tech-cyan': '117, 214, 216',
-  '--tj-tech-cyan-deep': '117, 214, 216',
-  '--tj-ui-title': '255, 244, 212',
-  '--tj-ui-body': '235, 223, 193',
-  '--tj-ui-muted': '180, 168, 140',
-  '--tj-ui-faint': '160, 148, 120',
-  '--tj-ui-active-text': '26, 19, 37',
-  '--tj-ui-panel': '16, 14, 16',
-  '--tj-ui-panel-strong': '8, 7, 9',
-  color: 'rgb(230, 218, 188)',
-} as CSSProperties;
+
 
 const tabs: { id: WorkTab; label: string; desc: string; group: 'create' | 'manage' }[] = [
   { id: 'manual', label: '图片生成', desc: '生成图片与构图', group: 'create' },
@@ -1201,7 +1180,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   };
 
   return (
-    <div className="min-h-0 pb-3" style={albumThemeStyle}>
+    <div className="min-h-0 pb-3" >
       <div className="grid min-h-0 gap-4 xl:h-[calc(100vh-220px)] xl:min-h-[560px] xl:grid-cols-[250px_minmax(0,1fr)]">
         <aside className="min-h-0 space-y-3 overflow-y-auto pr-1">
           <WorkspaceTabs
@@ -1474,7 +1453,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
             )}
           </main>
           {message && (
-            <div className="mt-4 px-3 py-2 text-xs leading-relaxed" style={{ color: message.includes('失败') ? 'rgba(255,180,180,0.9)' : 'rgba(165,230,170,0.88)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
+            <div className="mt-4 px-3 py-2 text-xs leading-relaxed" style={{ color: message.includes('失败') ? 'rgba(var(--tj-danger),0.9)' : 'rgba(var(--tj-ui-success),0.88)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
               {message}
             </div>
           )}
@@ -1543,7 +1522,7 @@ function NsfwVisibilityToggle({
       <div className="mb-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>
         成人图片与普通图片隔离显示，关闭后不会出现在成品库和角色槽位。
       </div>
-      <button type="button" onClick={() => setShowNsfw(!showNsfw)} className="w-full px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: showNsfw ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-nsfw),0.88)', background: showNsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), #c989a6)' : 'rgba(var(--tj-ui-nsfw),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.28)', clipPath: smallClip }}>
+      <button type="button" onClick={() => setShowNsfw(!showNsfw)} className="w-full px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: showNsfw ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-nsfw),0.88)', background: showNsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), rgb(var(--tj-ui-nsfw)))' : 'rgba(var(--tj-ui-nsfw),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.28)', clipPath: smallClip }}>
         {showNsfw ? '隐藏 NSFW 图片' : '显示 NSFW 图片'}
       </button>
     </Panel>
@@ -1700,8 +1679,8 @@ function CharacterLibraryWorkspace({
               className="min-h-[42px] px-3 py-2 font-serif text-xs font-bold tracking-[0.14em]"
               style={{
                 color: batchMode ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-accent-primary),0.94)',
-                background: batchMode ? 'linear-gradient(135deg, rgb(var(--tj-tech-cyan)), rgb(var(--tj-accent-primary)))' : 'rgba(var(--tj-ui-panel-strong),0.42)',
-                boxShadow: batchMode ? 'inset 0 0 0 1px rgba(255,245,200,0.62), 0 0 22px rgba(var(--tj-tech-cyan),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+                background: batchMode ? 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))' : 'rgba(var(--tj-ui-panel-strong),0.42)',
+                boxShadow: batchMode ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.62), 0 0 22px rgba(var(--tj-tech-cyan),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
                 clipPath: smallClip,
               }}
             >
@@ -1712,7 +1691,7 @@ function CharacterLibraryWorkspace({
               disabled={!batchMode || selectedVisibleIds.length === 0}
               onClick={handleDeleteSelected}
               className="px-3 py-2 font-serif text-xs tracking-[0.14em] disabled:opacity-45"
-              style={{ color: 'rgba(255,205,205,0.92)', background: 'rgba(160,60,60,0.16)', boxShadow: 'inset 0 0 0 1px rgba(255,140,140,0.2)', clipPath: smallClip }}
+              style={{ color: 'rgba(var(--tj-danger),0.92)', background: 'rgba(var(--tj-danger),0.16)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.2)', clipPath: smallClip }}
             >
               批量删除
             </button>
@@ -1721,7 +1700,7 @@ function CharacterLibraryWorkspace({
               disabled={!activeRecord || (!activeEntryId && selectedVisibleIds.length !== 1)}
               onClick={handleOpenSlotPicker}
               className="px-3 py-2 font-serif text-xs tracking-[0.14em] disabled:opacity-45"
-              style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.38)', clipPath: smallClip }}
+              style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.38)', clipPath: smallClip }}
             >
               设置到槽位
             </button>
@@ -1878,8 +1857,8 @@ function SceneLibraryWorkspace({
             className="min-h-[42px] px-3 py-2 font-serif text-xs font-bold tracking-[0.14em]"
             style={{
               color: batchMode ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-accent-primary),0.94)',
-              background: batchMode ? 'linear-gradient(135deg, rgb(var(--tj-tech-cyan)), rgb(var(--tj-accent-primary)))' : 'rgba(var(--tj-ui-panel-strong),0.42)',
-              boxShadow: batchMode ? 'inset 0 0 0 1px rgba(255,245,200,0.62), 0 0 22px rgba(var(--tj-tech-cyan),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+              background: batchMode ? 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))' : 'rgba(var(--tj-ui-panel-strong),0.42)',
+              boxShadow: batchMode ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.62), 0 0 22px rgba(var(--tj-tech-cyan),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
               clipPath: smallClip,
             }}
           >
@@ -1890,7 +1869,7 @@ function SceneLibraryWorkspace({
             disabled={!batchMode || selectedVisibleIds.length === 0}
             onClick={handleDeleteSelected}
             className="px-3 py-2 font-serif text-xs tracking-[0.14em] disabled:opacity-45"
-            style={{ color: 'rgba(255,205,205,0.92)', background: 'rgba(160,60,60,0.16)', boxShadow: 'inset 0 0 0 1px rgba(255,140,140,0.2)', clipPath: smallClip }}
+            style={{ color: 'rgba(var(--tj-danger),0.92)', background: 'rgba(var(--tj-danger),0.16)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.2)', clipPath: smallClip }}
           >
             批量删除
           </button>
@@ -1968,7 +1947,7 @@ function SceneLibraryCard({
           style={{
             color: selected ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-accent-primary),0.82)',
             background: selected ? activeAccentSurface : 'rgba(0,0,0,0.58)',
-            boxShadow: selected ? 'inset 0 0 0 1px rgba(255,245,200,0.62), 0 0 18px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.36)',
+            boxShadow: selected ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.62), 0 0 18px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.36)',
             clipPath: smallClip,
           }}
         >
@@ -2378,7 +2357,7 @@ function ReferenceImageWorkspace({
               </div>
             </div>
             <div className="space-y-3">
-              <div className="px-3 py-3 text-xs leading-relaxed" style={{ color: activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.9)' : 'rgba(255,205,145,0.9)', background: activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.07)' : 'rgba(var(--tj-accent-primary),0.06)', boxShadow: `inset 0 0 0 1px ${activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.2)' : 'rgba(var(--tj-accent-primary),0.18)'}`, clipPath: smallClip }}>
+              <div className="px-3 py-3 text-xs leading-relaxed" style={{ color: activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.9)' : 'rgba(var(--tj-accent-secondary),0.9)', background: activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.07)' : 'rgba(var(--tj-accent-primary),0.06)', boxShadow: `inset 0 0 0 1px ${activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.2)' : 'rgba(var(--tj-accent-primary),0.18)'}`, clipPath: smallClip }}>
                 当前统一接口：{backendLabel(imageBackend)}
                 <br />
                 {activeSupport.message}
@@ -2430,7 +2409,7 @@ function ReferenceImageWorkspace({
                   disabled={!activeRecord}
                   onClick={() => fileInputRef.current?.click()}
                   className="px-4 py-2 font-serif text-xs font-bold tracking-[0.14em] disabled:opacity-45"
-                  style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.38)', clipPath: smallClip }}
+                  style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.38)', clipPath: smallClip }}
                 >
                   导入参考图
                 </button>
@@ -2442,7 +2421,7 @@ function ReferenceImageWorkspace({
                     setSelectedIds([]);
                   }}
                   className="px-4 py-2 font-serif text-xs tracking-[0.14em] disabled:opacity-45"
-                  style={{ color: 'rgba(255,205,205,0.92)', background: 'rgba(160,60,60,0.16)', boxShadow: 'inset 0 0 0 1px rgba(255,140,140,0.2)', clipPath: smallClip }}
+                  style={{ color: 'rgba(var(--tj-danger),0.92)', background: 'rgba(var(--tj-danger),0.16)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.2)', clipPath: smallClip }}
                 >
                   删除选中
                 </button>
@@ -2531,7 +2510,7 @@ function SafeAlbumImage({
     return (
       <div
         className={`${className} flex items-center justify-center px-2 text-center font-serif text-xs tracking-[0.12em]`}
-        style={{ background: imageWellSurface, color: failed ? 'rgba(255,180,180,0.88)' : 'rgba(var(--tj-ui-faint),0.58)' }}
+        style={{ background: imageWellSurface, color: failed ? 'rgba(var(--tj-danger),0.88)' : 'rgba(var(--tj-ui-faint),0.58)' }}
       >
         {failed ? failedLabel : emptyLabel}
       </div>
@@ -2707,8 +2686,8 @@ function AnchorToggle({ label, desc, checked, onChange }: { label: string; desc:
         <span className="block font-serif text-xs font-bold tracking-[0.14em]" style={{ color: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.74)' }}>{label}</span>
         <span className="mt-0.5 block truncate text-[10px]" style={{ color: 'rgba(var(--tj-ui-muted),0.58)' }}>{desc}</span>
       </span>
-      <span className="h-5 w-9 shrink-0 rounded-full p-0.5" style={{ background: checked ? 'rgba(var(--tj-accent-primary),0.36)' : 'rgba(120,120,130,0.28)' }}>
-        <span className="block h-4 w-4 rounded-full transition-all" style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)', background: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(220,220,230,0.7)' }} />
+      <span className="h-5 w-9 shrink-0 rounded-full p-0.5" style={{ background: checked ? 'rgba(var(--tj-accent-primary),0.36)' : 'rgba(var(--tj-text-secondary),0.28)' }}>
+        <span className="block h-4 w-4 rounded-full transition-all" style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)', background: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-text-secondary),0.7)' }} />
       </span>
     </button>
   );
@@ -2818,7 +2797,7 @@ function ResourceEntryCard({
               style={{
                 color: selected ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-accent-primary),0.82)',
                 background: selected ? activeAccentSurface : 'rgba(0,0,0,0.58)',
-                boxShadow: selected ? 'inset 0 0 0 1px rgba(255,245,200,0.62), 0 0 18px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.36)',
+                boxShadow: selected ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.62), 0 0 18px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.36)',
                 clipPath: smallClip,
               }}
             >
@@ -2840,7 +2819,7 @@ function ResourceEntryCard({
                   style={{
                     color: 'rgb(var(--tj-ui-active-text))',
                     background: activeAccentSurface,
-                    boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.52), 0 0 18px rgba(var(--tj-accent-primary),0.28)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.52), 0 0 18px rgba(var(--tj-accent-primary),0.28)',
                     clipPath: smallClip,
                   }}
                 >
@@ -2892,7 +2871,7 @@ function getMountSlotsForEntry(entry: 相册条目, maleNsfwEnabled: boolean, ta
 
 function EmptyLibraryBox({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-none border border-dashed px-6 text-center" style={{ borderColor: 'rgba(95,115,150,0.34)', color: 'rgba(var(--tj-ui-faint),0.72)' }}>
+    <div className="flex min-h-[280px] items-center justify-center rounded-none border border-dashed px-6 text-center" style={{ borderColor: 'rgba(var(--tj-border),0.34)', color: 'rgba(var(--tj-ui-faint),0.72)' }}>
       <div>
         <div className="font-serif text-base tracking-[0.18em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{title}</div>
         <div className="mt-3 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>{desc}</div>
@@ -2908,7 +2887,7 @@ function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: { entrie
         <div>
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center font-serif text-2xl" style={{ color: 'rgba(var(--tj-accent-primary),0.78)', background: 'rgba(var(--tj-accent-primary),0.06)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)', clipPath: smallClip }}>▧</div>
           <div className="font-serif text-base tracking-[0.24em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>暂无图片</div>
-          <button type="button" onClick={onCreate} className="mt-5 px-5 py-2.5 font-serif text-xs font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.45), 0 0 16px rgba(var(--tj-tech-cyan),0.12)', clipPath: smallClip }}>
+          <button type="button" onClick={onCreate} className="mt-5 px-5 py-2.5 font-serif text-xs font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 16px rgba(var(--tj-tech-cyan),0.12)', clipPath: smallClip }}>
             生成 / 导入
           </button>
         </div>
@@ -3020,10 +2999,10 @@ function CreateWorkspace(props: {
                     style={{
                       color: props.generateTarget === target.id ? 'rgb(var(--tj-ui-active-text))' : target.nsfw ? 'rgba(var(--tj-ui-nsfw),0.9)' : 'rgba(var(--tj-ui-muted),0.82)',
                       background: props.generateTarget === target.id
-                        ? target.nsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), #c989a6)' : activeAccentSurface
+                        ? target.nsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), rgb(var(--tj-ui-nsfw)))' : activeAccentSurface
                         : target.nsfw ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-ui-panel-strong),0.36)',
                       boxShadow: props.generateTarget === target.id
-                        ? 'inset 0 0 0 1px rgba(255,245,200,0.42), 0 0 12px rgba(var(--tj-accent-primary),0.1)'
+                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42), 0 0 12px rgba(var(--tj-accent-primary),0.1)'
                         : target.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.24)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
                       clipPath: smallClip,
                     }}
@@ -3134,13 +3113,13 @@ function DraftCanvasPreview({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [previewOpen]);
   const draftGrid =
-    'linear-gradient(90deg, rgba(var(--tj-tech-cyan),0.11) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-accent-primary),0.08) 1px, transparent 1px), radial-gradient(circle at 18% 12%, rgba(var(--tj-tech-cyan),0.12), transparent 32%), linear-gradient(180deg, rgba(2,3,5,0.92), rgba(7,7,8,0.98))';
+    'linear-gradient(90deg, rgba(var(--tj-tech-cyan),0.11) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-accent-primary),0.08) 1px, transparent 1px), radial-gradient(circle at 18% 12%, rgba(var(--tj-tech-cyan),0.12), transparent 32%), linear-gradient(180deg, rgba(var(--tj-bg-primary),0.92), rgba(var(--tj-bg-primary),0.98))';
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 text-xs">
         <div className="font-serif font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>当前画布</div>
         <div className="flex items-center gap-2">
-          <span className="font-serif tracking-[0.12em]" style={{ color: isFailed ? 'rgba(255,170,170,0.9)' : isSuccess ? 'rgba(165,230,170,0.9)' : 'rgba(var(--tj-tech-cyan),0.82)' }}>{stateLabel}</span>
+          <span className="font-serif tracking-[0.12em]" style={{ color: isFailed ? 'rgba(var(--tj-danger),0.9)' : isSuccess ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(var(--tj-tech-cyan),0.82)' }}>{stateLabel}</span>
           <span className="font-mono" style={{ color: 'rgba(var(--tj-accent-primary),0.72)' }}>{displaySize}</span>
         </div>
       </div>
@@ -3175,18 +3154,18 @@ function DraftCanvasPreview({
           </div>
         )}
         {!isSuccess && <svg className="absolute inset-x-6 bottom-8 top-14 h-[calc(100%-5.5rem)] w-[calc(100%-3rem)]" viewBox="0 0 680 300" preserveAspectRatio="none" aria-hidden="true">
-          <rect x="48" y="58" width="580" height="168" fill="none" stroke="rgba(117,214,216,0.46)" strokeWidth="1.4" />
-          <rect x="70" y="80" width="536" height="54" fill="none" stroke="rgba(245,217,122,0.18)" strokeWidth="1" />
-          <path d="M86 112 C180 44, 272 68, 350 112 S520 134, 598 82" fill="none" stroke="rgba(117,214,216,0.26)" strokeWidth="1.4" />
-          <ellipse cx="335" cy="246" rx="210" ry="30" fill="none" stroke="rgba(245,217,122,0.52)" strokeWidth="1.5" />
-          <path d="M220 254 C222 206, 256 178, 300 178 C344 178, 374 207, 382 254" fill="none" stroke="rgba(235,223,193,0.48)" strokeWidth="2" />
-          <path d="M100 256 C104 216, 128 188, 168 188 C210 188, 234 216, 244 256" fill="none" stroke="rgba(235,223,193,0.44)" strokeWidth="1.8" />
-          <path d="M424 256 C428 216, 454 190, 492 190 C532 190, 560 216, 572 256" fill="none" stroke="rgba(235,223,193,0.44)" strokeWidth="1.8" />
-          <circle cx="332" cy="148" r="36" fill="rgba(2,3,5,0.28)" stroke="rgba(235,223,193,0.62)" strokeWidth="2" />
-          <circle cx="164" cy="160" r="36" fill="rgba(2,3,5,0.24)" stroke="rgba(235,223,193,0.56)" strokeWidth="2" />
-          <circle cx="492" cy="162" r="32" fill="rgba(2,3,5,0.24)" stroke="rgba(235,223,193,0.54)" strokeWidth="2" />
-          <path d="M244 234 C285 210, 326 210, 370 234 C398 248, 430 236, 456 226" fill="none" stroke="rgba(117,214,216,0.72)" strokeWidth="1.6" />
-          <path d="M94 238 C156 215, 238 212, 310 230" fill="none" stroke="rgba(245,217,122,0.46)" strokeWidth="1.3" />
+          <rect x="48" y="58" width="580" height="168" fill="none" stroke="rgba(var(--tj-tech-cyan), 0.46)" strokeWidth="1.4" />
+          <rect x="70" y="80" width="536" height="54" fill="none" stroke="rgba(var(--tj-accent-primary),0.18)" strokeWidth="1" />
+          <path d="M86 112 C180 44, 272 68, 350 112 S520 134, 598 82" fill="none" stroke="rgba(var(--tj-tech-cyan), 0.26)" strokeWidth="1.4" />
+          <ellipse cx="335" cy="246" rx="210" ry="30" fill="none" stroke="rgba(var(--tj-accent-primary),0.52)" strokeWidth="1.5" />
+          <path d="M220 254 C222 206, 256 178, 300 178 C344 178, 374 207, 382 254" fill="none" stroke="rgba(var(--tj-text-primary),0.48)" strokeWidth="2" />
+          <path d="M100 256 C104 216, 128 188, 168 188 C210 188, 234 216, 244 256" fill="none" stroke="rgba(var(--tj-text-primary),0.44)" strokeWidth="1.8" />
+          <path d="M424 256 C428 216, 454 190, 492 190 C532 190, 560 216, 572 256" fill="none" stroke="rgba(var(--tj-text-primary),0.44)" strokeWidth="1.8" />
+          <circle cx="332" cy="148" r="36" fill="rgba(var(--tj-bg-primary),0.28)" stroke="rgba(var(--tj-text-primary),0.62)" strokeWidth="2" />
+          <circle cx="164" cy="160" r="36" fill="rgba(var(--tj-bg-primary),0.24)" stroke="rgba(var(--tj-text-primary),0.56)" strokeWidth="2" />
+          <circle cx="492" cy="162" r="32" fill="rgba(var(--tj-bg-primary),0.24)" stroke="rgba(var(--tj-text-primary),0.54)" strokeWidth="2" />
+          <path d="M244 234 C285 210, 326 210, 370 234 C398 248, 430 236, 456 226" fill="none" stroke="rgba(var(--tj-tech-cyan), 0.72)" strokeWidth="1.6" />
+          <path d="M94 238 C156 215, 238 212, 310 230" fill="none" stroke="rgba(var(--tj-accent-primary),0.46)" strokeWidth="1.3" />
         </svg>}
         {isRunning && (
           <div className="absolute inset-x-5 top-1/2 -translate-y-1/2 px-4 py-3" style={{ color: 'rgba(var(--tj-ui-body),0.9)', background: 'rgba(0,0,0,0.58)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)', clipPath: smallClip }}>
@@ -3199,7 +3178,7 @@ function DraftCanvasPreview({
             </div>
           </div>
         )}
-        <div className="absolute bottom-4 right-4 max-w-[340px] px-3 py-2 text-[11px] leading-relaxed" style={{ color: isFailed ? 'rgba(255,205,205,0.92)' : 'rgba(var(--tj-ui-body),0.86)', background: 'rgba(0,0,0,0.62)', boxShadow: `inset 0 0 0 1px ${isFailed ? 'rgba(255,170,170,0.28)' : 'rgba(var(--tj-accent-primary),0.22)'}`, clipPath: smallClip }}>
+        <div className="absolute bottom-4 right-4 max-w-[340px] px-3 py-2 text-[11px] leading-relaxed" style={{ color: isFailed ? 'rgba(var(--tj-danger),0.92)' : 'rgba(var(--tj-ui-body),0.86)', background: 'rgba(0,0,0,0.62)', boxShadow: `inset 0 0 0 1px ${isFailed ? 'rgba(255,170,170,0.28)' : 'rgba(var(--tj-accent-primary),0.22)'}`, clipPath: smallClip }}>
           {isFailed ? (task?.error || '生成失败，参数已保留。') : isSuccess ? '图片已生成并加入成品库，可继续重试、改参数或前往成品库挂载。' : '生成失败时保留这个画布卡片，直接显示错误、参数和重新生成按钮，不需要重 roll 主剧情。'}
           {isFailed && (
             <button type="button" onClick={onRetry} className="mt-2 block px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>
@@ -3280,9 +3259,9 @@ function ImagePreviewModal({ open, src, title, onClose }: { open: boolean; src: 
         onClick={onClose}
         className="fixed right-5 top-5 z-[10001] min-h-11 px-4 py-2 font-serif text-xs tracking-[0.16em]"
         style={{
-          color: 'rgb(26,19,37)',
-          background: 'linear-gradient(135deg, rgb(245,217,122), rgb(196,163,90))',
-          boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.48), 0 12px 36px rgba(0,0,0,0.42)',
+          color: 'rgb(var(--tj-ui-active-text))',
+          background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.48), 0 12px 36px rgba(0,0,0,0.42)',
           clipPath: smallClip,
         }}
       >
@@ -3291,13 +3270,13 @@ function ImagePreviewModal({ open, src, title, onClose }: { open: boolean; src: 
       <div
         className="relative flex h-[92vh] w-full max-w-6xl items-center justify-center overflow-hidden px-4 py-12"
         style={{
-          background: 'linear-gradient(180deg, rgb(8,7,9), rgb(16,14,16))',
-          boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.42), 0 24px 80px rgba(0,0,0,0.62)',
+          background: 'linear-gradient(180deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42), 0 24px 80px rgba(0,0,0,0.62)',
           clipPath: cardClip,
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="absolute left-5 top-4 max-w-[70%] truncate font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(245,217,122,0.82)' }}>
+        <div className="absolute left-5 top-4 max-w-[70%] truncate font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>
           {title}
         </div>
         <div className="flex h-full w-full items-center justify-center overflow-auto px-2 py-2">
@@ -3357,23 +3336,23 @@ function SlotPickerModal({
       <div
         className="w-full max-w-xl px-4 py-4"
         style={{
-          background: 'linear-gradient(180deg, rgb(8,7,9), rgb(16,14,16))',
-          boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.38), 0 24px 80px rgba(0,0,0,0.58)',
+          background: 'linear-gradient(180deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)))',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.38), 0 24px 80px rgba(0,0,0,0.58)',
           clipPath: cardClip,
         }}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.78)' }}>设置到槽位</div>
-            <div className="mt-1 truncate font-serif text-base font-bold" style={{ color: 'rgb(255,244,212)' }}>{recordName}</div>
-            <div className="mt-1 truncate text-xs" style={{ color: 'rgba(180,168,140,0.78)' }}>{entryTitle || '当前选中图片'}</div>
+            <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>设置到槽位</div>
+            <div className="mt-1 truncate font-serif text-base font-bold" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{recordName}</div>
+            <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>{entryTitle || '当前选中图片'}</div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="shrink-0 px-3 py-2 font-serif text-xs tracking-[0.14em]"
-            style={{ color: 'rgb(26,19,37)', background: 'linear-gradient(135deg, rgb(245,217,122), rgb(196,163,90))', clipPath: smallClip }}
+            style={{ color: 'rgb(var(--tj-ui-active-text))', background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))', clipPath: smallClip }}
           >
             关闭
           </button>
@@ -3388,9 +3367,9 @@ function SlotPickerModal({
                 onClick={() => onSelect(option.slot)}
                 className="min-h-[92px] px-4 py-3 text-left transition-all"
                 style={{
-                  color: recommended ? 'rgb(26,19,37)' : 'rgba(235,223,193,0.92)',
-                  background: recommended ? 'linear-gradient(135deg, rgb(245,217,122), rgb(196,163,90))' : 'rgba(16,14,16,0.78)',
-                  boxShadow: recommended ? 'inset 0 0 0 1px rgba(255,245,200,0.5), 0 0 18px rgba(245,217,122,0.12)' : 'inset 0 0 0 1px rgba(245,217,122,0.18)',
+                  color: recommended ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-text-primary),0.92)',
+                  background: recommended ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgb(var(--tj-accent-secondary)))' : 'rgba(var(--tj-bg-secondary),0.78)',
+                  boxShadow: recommended ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.5), 0 0 18px rgba(var(--tj-accent-primary),0.12)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
                   clipPath: smallClip,
                 }}
               >
@@ -3583,7 +3562,7 @@ function OptionButtonGroup(props: {
                 color: active ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.86)',
                 background: active ? activeAccentSurface : 'rgba(0,0,0,0.34)',
                 boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(255,245,200,0.48), 0 0 12px rgba(var(--tj-accent-primary),0.12)'
+                  ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.48), 0 0 12px rgba(var(--tj-accent-primary),0.12)'
                   : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
                 clipPath: smallClip,
               }}
@@ -3635,7 +3614,7 @@ function StudioHero({ imageEnabled, currentTarget }: { imageEnabled: boolean; cu
         <div className="font-serif text-xs tracking-[0.32em]" style={{ color: 'rgba(var(--tj-accent-primary),0.72)' }}>◆ 生成工作室</div>
         <div className="mt-1 font-serif text-xl font-bold tracking-[0.2em]" style={{ color: titleColor }}>图片生成</div>
         </div>
-        <div className="px-3 py-2 text-xs" style={{ color: imageEnabled ? 'rgba(165,230,170,0.9)' : 'rgba(255,180,180,0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
+        <div className="px-3 py-2 text-xs" style={{ color: imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
           {imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{currentTarget.label}
         </div>
       </div>
@@ -3647,8 +3626,8 @@ function StudioHero({ imageEnabled, currentTarget }: { imageEnabled: boolean; cu
 }
 
 function taskStatusTone(status: 图片生成任务['status']): { color: string; background: string; border: string } {
-  if (status === 'failed') return { color: 'rgba(255,180,180,0.94)', background: 'rgba(255,90,90,0.08)', border: 'rgba(255,120,120,0.3)' };
-  if (status === 'success') return { color: 'rgba(165,230,170,0.94)', background: 'rgba(100,220,140,0.08)', border: 'rgba(130,230,160,0.28)' };
+  if (status === 'failed') return { color: 'rgba(var(--tj-danger),0.94)', background: 'rgba(var(--tj-danger),0.08)', border: 'rgba(var(--tj-danger),0.3)' };
+  if (status === 'success') return { color: 'rgba(var(--tj-ui-success),0.94)', background: 'rgba(var(--tj-ui-success),0.08)', border: 'rgba(var(--tj-ui-success),0.28)' };
   if (status === 'cancelled') return { color: 'rgba(var(--tj-ui-faint),0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', border: 'rgba(var(--tj-ui-faint),0.16)' };
   return { color: 'rgba(var(--tj-accent-primary),0.94)', background: 'rgba(var(--tj-accent-primary),0.08)', border: 'rgba(var(--tj-accent-primary),0.28)' };
 }
@@ -3721,7 +3700,7 @@ function historyKindLabel(kind: Exclude<GenerationHistoryFilter, 'all'>): string
 function historyKindTone(kind: Exclude<GenerationHistoryFilter, 'all'>): { color: string; background: string; border: string } {
   if (kind === 'scene') return { color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.075)', border: 'rgba(var(--tj-tech-cyan),0.24)' };
   if (kind === 'snapshot') return { color: 'rgba(var(--tj-accent-primary),0.94)', background: 'rgba(var(--tj-accent-primary),0.075)', border: 'rgba(var(--tj-accent-primary),0.24)' };
-  if (kind === 'phone') return { color: 'rgba(180,210,255,0.94)', background: 'rgba(140,180,255,0.075)', border: 'rgba(160,200,255,0.22)' };
+  if (kind === 'phone') return { color: 'rgba(var(--tj-tech-blue),0.94)', background: 'rgba(var(--tj-tech-blue),0.075)', border: 'rgba(var(--tj-tech-blue),0.22)' };
   return { color: 'rgba(var(--tj-ui-body),0.9)', background: 'rgba(var(--tj-ui-panel-strong),0.38)', border: 'rgba(var(--tj-accent-primary),0.14)' };
 }
 
@@ -3788,7 +3767,7 @@ function QueueWorkspace({ tasks, onRetry }: { tasks: 图片生成任务[]; onRet
               </div>
 
               {task.error && (
-                <div className="mt-3 px-3 py-2 text-xs leading-relaxed" style={{ color: 'rgba(255,190,190,0.92)', background: 'rgba(255,80,80,0.065)', boxShadow: 'inset 0 0 0 1px rgba(255,120,120,0.18)', clipPath: smallClip }}>
+                <div className="mt-3 px-3 py-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-danger),0.92)', background: 'rgba(var(--tj-danger),0.065)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.18)', clipPath: smallClip }}>
                   {task.error}
                 </div>
               )}
@@ -3829,7 +3808,7 @@ function QueueHero({ stats }: { stats: { active: number; failed: number; success
             ['总数', stats.total],
           ].map(([label, value]) => (
             <div key={label} className="min-w-[68px] px-3 py-2" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
-              <div className="font-serif text-base font-bold" style={{ color: label === '失败' ? 'rgba(255,180,180,0.94)' : label === '进行中' ? 'rgba(var(--tj-accent-primary),0.94)' : titleColor }}>{value}</div>
+              <div className="font-serif text-base font-bold" style={{ color: label === '失败' ? 'rgba(var(--tj-danger),0.94)' : label === '进行中' ? 'rgba(var(--tj-accent-primary),0.94)' : titleColor }}>{value}</div>
               <div className="mt-0.5 text-[10px] tracking-[0.14em]" style={{ color: faintColor }}>{label}</div>
             </div>
           ))}
@@ -4364,7 +4343,7 @@ function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps & {
             <div className="font-serif text-xs tracking-[0.32em]" style={{ color: 'rgba(var(--tj-accent-primary),0.72)' }}>{props.eyebrow}</div>
             <div className="mt-1 font-serif text-xl font-bold tracking-[0.2em]" style={{ color: titleColor }}>{props.title}</div>
           </div>
-          <div className="px-3 py-2 text-xs" style={{ color: props.imageEnabled ? 'rgba(165,230,170,0.9)' : 'rgba(255,180,180,0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
+          <div className="px-3 py-2 text-xs" style={{ color: props.imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
             {props.imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{props.currentTarget.label}
           </div>
         </div>
@@ -4887,7 +4866,7 @@ function sceneLibraryKindColor(kind: Exclude<SceneLibraryFilter, 'all'>): string
   return {
     scene: 'rgba(var(--tj-tech-cyan),0.88)',
     snapshot: 'rgba(var(--tj-accent-primary),0.88)',
-    phone: 'rgba(180,210,255,0.9)',
+    phone: 'rgba(var(--tj-tech-blue),0.9)',
   }[kind];
 }
 
@@ -4895,7 +4874,7 @@ function sceneLibraryKindSurface(kind: Exclude<SceneLibraryFilter, 'all'>): stri
   return {
     scene: 'rgba(var(--tj-tech-cyan),0.08)',
     snapshot: 'rgba(var(--tj-accent-primary),0.08)',
-    phone: 'rgba(180,210,255,0.08)',
+    phone: 'rgba(var(--tj-tech-blue),0.08)',
   }[kind];
 }
 
@@ -4903,7 +4882,7 @@ function sceneLibraryKindBorder(kind: Exclude<SceneLibraryFilter, 'all'>): strin
   return {
     scene: 'rgba(var(--tj-tech-cyan),0.18)',
     snapshot: 'rgba(var(--tj-accent-primary),0.18)',
-    phone: 'rgba(180,210,255,0.18)',
+    phone: 'rgba(var(--tj-tech-blue),0.18)',
   }[kind];
 }
 

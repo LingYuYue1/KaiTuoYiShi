@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import  { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getSaveList, type SaveListItemSummary } from '@/services/dbService';
 import {
   buildDesktopReleaseInfo,
@@ -177,7 +177,7 @@ export function DesktopHomeScreen({
   return (
     <div
       className="relative flex min-h-[100dvh] overflow-hidden px-4 py-4 sm:px-6 sm:py-6"
-      style={{ background: 'radial-gradient(circle at top, rgba(42,34,18,0.42), rgba(6,7,10,1) 58%)' }}
+      style={{ background: 'radial-gradient(circle at top, rgba(var(--tj-panel-bg-start),0.42), rgba(var(--tj-bg-primary),1) 58%)' }}
     >
       {stars.map((star, index) => (
         <span
@@ -189,8 +189,8 @@ export function DesktopHomeScreen({
             width: `${star.size}px`,
             height: `${star.size}px`,
             opacity: star.opacity,
-            background: 'rgba(245,217,122,0.95)',
-            boxShadow: star.size > 1.8 ? '0 0 12px rgba(245,217,122,0.3)' : 'none',
+            background: 'rgba(var(--tj-accent-primary),0.95)',
+            boxShadow: star.size > 1.8 ? '0 0 12px rgba(var(--tj-accent-primary),0.3)' : 'none',
             animation: `star-twinkle ${star.duration}s ease-in-out ${star.delay}s infinite`,
           }}
         />
@@ -199,7 +199,7 @@ export function DesktopHomeScreen({
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse at 50% 18%, rgba(245,217,122,0.06), transparent 34%), radial-gradient(ellipse at 22% 78%, rgba(142,215,255,0.05), transparent 28%)',
+          background: 'radial-gradient(ellipse at 50% 18%, rgba(var(--tj-accent-primary),0.06), transparent 34%), radial-gradient(ellipse at 22% 78%, rgba(var(--tj-tech-cyan),0.05), transparent 28%)',
         }}
       />
 
@@ -207,15 +207,15 @@ export function DesktopHomeScreen({
         <aside
           className="hidden flex-col gap-3 xl:flex"
           style={{
-            background: 'rgba(9, 11, 16, 0.72)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12), 0 18px 38px rgba(0,0,0,0.18)',
+            background: 'rgba(var(--tj-panel-bg-end),0.72)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12), 0 18px 38px rgba(0,0,0,0.18)',
             clipPath: cardClip,
           }}
         >
           <div className="px-4 pt-4">
-            <div className="text-[11px] tracking-[0.22em]" style={{ color: 'rgba(245,217,122,0.8)' }}>工具箱</div>
-            <div className="mt-2 text-[22px] font-serif tracking-[0.16em]" style={{ color: 'rgb(245,217,122)' }}>本地入口</div>
-            <p className="mt-2 text-[12px] leading-6" style={{ color: 'rgba(238,226,198,0.62)' }}>
+            <div className="text-[11px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.8)' }}>工具箱</div>
+            <div className="mt-2 text-[22px] font-serif tracking-[0.16em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>本地入口</div>
+            <p className="mt-2 text-[12px] leading-6" style={{ color: 'rgba(var(--tj-text-primary),0.62)' }}>
               更新、目录、探针和迁移都放在这里，不占主视野。
             </p>
           </div>
@@ -237,23 +237,23 @@ export function DesktopHomeScreen({
           <header
             className="grid gap-4 px-4 py-4 lg:grid-cols-[1.15fr_0.85fr]"
             style={{
-              background: 'rgba(10, 12, 18, 0.74)',
-              boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14), 0 18px 42px rgba(0,0,0,0.26)',
+              background: 'rgba(var(--tj-panel-bg-end),0.74)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14), 0 18px 42px rgba(0,0,0,0.26)',
               clipPath: cardClip,
             }}
           >
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(245,217,122,0.84)' }}>
-                <span className="px-2 py-1" style={{ background: 'rgba(245,217,122,0.08)', clipPath: smallClip }}>DESKTOP EDITION</span>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.84)' }}>
+                <span className="px-2 py-1" style={{ background: 'rgba(var(--tj-accent-primary),0.08)', clipPath: smallClip }}>DESKTOP EDITION</span>
                 <span>?</span>
                 <span>{appVersion}</span>
                 <span>?</span>
                 <span>{desktopInfo?.identifier || 'com.kaituoyishi.desktop'}</span>
               </div>
-              <h1 className="mt-3 font-serif text-[54px] font-bold leading-none tracking-[0.16em] sm:text-[60px] lg:text-[66px]" style={{ color: 'rgb(245,217,122)' }}>
+              <h1 className="mt-3 font-serif text-[54px] font-bold leading-none tracking-[0.16em] sm:text-[60px] lg:text-[66px]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                 开拓轶事
               </h1>
-              <p className="mt-3 max-w-[58ch] text-sm leading-7" style={{ color: 'rgba(238,226,198,0.78)' }}>
+              <p className="mt-3 max-w-[58ch] text-sm leading-7" style={{ color: 'rgba(var(--tj-text-primary),0.78)' }}>
                 真正的桌面分支。继续游玩、检查更新、本地目录维护和离线数据主权，都在这一版里。
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
@@ -274,7 +274,7 @@ export function DesktopHomeScreen({
               </div>
             </div>
 
-            <div className="grid gap-2 text-[12px]" style={{ color: 'rgba(238,226,198,0.82)' }}>
+            <div className="grid gap-2 text-[12px]" style={{ color: 'rgba(var(--tj-text-primary),0.82)' }}>
               <DesktopLine label="更新状态" value={updateText} />
               <DesktopLine label="存档数量" value={`${saveCount} 个`} />
               <DesktopLine label="最近存档" value={latestSave ? `${latestSave.travelerName || '未命名旅人'} #${latestSave.id}` : '暂无可用存档'} />
@@ -298,18 +298,18 @@ export function DesktopHomeScreen({
                 <SecondaryButton label="存储管理" onClick={onOpenStorageManager} />
                 <SecondaryButton label="写入探针" onClick={() => void handleWriteProbe()} />
               </div>
-              <div className="mt-4 rounded-sm px-3 py-3 text-sm" style={{ background: 'rgba(12, 14, 20, 0.78)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)' }}>
+              <div className="mt-4 rounded-sm px-3 py-3 text-sm" style={{ background: 'rgba(var(--tj-panel-bg-start),0.78)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)' }}>
                 <SectionLabel text="最近存档" />
                 {latestSave ? (
                   <div className="mt-2 space-y-1.5">
-                    <div className="font-serif text-[15px] tracking-[0.16em]" style={{ color: 'rgb(245,217,122)' }}>{latestSave.travelerName || '未命名旅人'}</div>
+                    <div className="font-serif text-[15px] tracking-[0.16em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{latestSave.travelerName || '未命名旅人'}</div>
                     <DesktopLine label="回合" value={`第 ${latestSave.turnCount} 回合`} />
                     <DesktopLine label="地点" value={latestSave.currentLocation || latestSave.worldPeriodName || '未知坐标'} />
                     <DesktopLine label="时间" value={new Date(latestSave.timestamp).toLocaleString('zh-CN')} />
                     <DesktopLine label="摘要" value={latestSave.lastSummary || '暂无摘要'} />
                   </div>
                 ) : (
-                  <div className="mt-2" style={{ color: 'rgba(238,226,198,0.62)' }}>当前没有可继续的本地存档。</div>
+                  <div className="mt-2" style={{ color: 'rgba(var(--tj-text-primary),0.62)' }}>当前没有可继续的本地存档。</div>
                 )}
               </div>
             </DesktopPanel>
@@ -323,7 +323,7 @@ export function DesktopHomeScreen({
                 <SecondaryButton label="Discord 帖" onClick={onDiscordPost} />
                 <SecondaryButton label="神秘聊天" onClick={onMysteryChat} />
               </div>
-              <div className="mt-4 space-y-2 rounded-sm px-3 py-3 text-sm" style={{ background: 'rgba(13, 15, 21, 0.76)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)' }}>
+              <div className="mt-4 space-y-2 rounded-sm px-3 py-3 text-sm" style={{ background: 'rgba(var(--tj-panel-bg-start),0.76)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)' }}>
                 <SectionLabel text="版本信息" />
                 <DesktopLine label="当前版本" value={desktopReleaseInfo?.title || `开拓轶事 Desktop Edition ${appVersion}`} />
                 <DesktopLine label="更新源" value={desktopReleaseInfo?.updateEndpoint || '读取中'} />
@@ -335,11 +335,11 @@ export function DesktopHomeScreen({
                   </>
                 )}
               </div>
-              <div className="mt-4 rounded-sm px-3 py-3 text-sm" style={{ background: 'rgba(13, 15, 21, 0.76)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)' }}>
+              <div className="mt-4 rounded-sm px-3 py-3 text-sm" style={{ background: 'rgba(var(--tj-panel-bg-start),0.76)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)' }}>
                 <SectionLabel text="启动提示" />
-                <div className="mt-2 text-[12px] leading-7" style={{ color: 'rgba(238,226,198,0.68)' }}>{continueHint}</div>
-                {statusMessage && <div className="mt-2 text-[12px] leading-7" style={{ color: 'rgba(142,215,255,0.84)' }}>{statusMessage}</div>}
-                {loadError && <div className="mt-2 text-[12px] leading-7" style={{ color: 'rgba(255,156,156,0.9)' }}>{loadError}</div>}
+                <div className="mt-2 text-[12px] leading-7" style={{ color: 'rgba(var(--tj-text-primary),0.68)' }}>{continueHint}</div>
+                {statusMessage && <div className="mt-2 text-[12px] leading-7" style={{ color: 'rgba(var(--tj-tech-cyan),0.84)' }}>{statusMessage}</div>}
+                {loadError && <div className="mt-2 text-[12px] leading-7" style={{ color: 'rgba(var(--tj-danger),0.9)' }}>{loadError}</div>}
               </div>
             </DesktopPanel>
           </section>
@@ -351,10 +351,10 @@ export function DesktopHomeScreen({
 
 function DesktopPanel({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode; }) {
   return (
-    <section className="flex min-h-0 flex-col gap-3 px-4 py-4" style={{ background: 'rgba(9, 11, 16, 0.78)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12), 0 18px 38px rgba(0,0,0,0.18)', clipPath: cardClip }}>
+    <section className="flex min-h-0 flex-col gap-3 px-4 py-4" style={{ background: 'rgba(var(--tj-panel-bg-end),0.78)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12), 0 18px 38px rgba(0,0,0,0.18)', clipPath: cardClip }}>
       <div>
-        <div className="font-serif text-[18px] tracking-[0.18em]" style={{ color: 'rgb(245,217,122)' }}>{title}</div>
-        <p className="mt-1 text-[12px] leading-6" style={{ color: 'rgba(238,226,198,0.62)' }}>{subtitle}</p>
+        <div className="font-serif text-[18px] tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{title}</div>
+        <p className="mt-1 text-[12px] leading-6" style={{ color: 'rgba(var(--tj-text-primary),0.62)' }}>{subtitle}</p>
       </div>
       <div className="min-h-0 flex-1">{children}</div>
     </section>
@@ -364,18 +364,18 @@ function DesktopPanel({ title, subtitle, children }: { title: string; subtitle: 
 function DesktopLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1 text-[12px] sm:grid-cols-[72px_1fr]">
-      <span style={{ color: 'rgba(245,217,122,0.78)' }}>{label}</span>
-      <span className="min-w-0 break-all leading-6" style={{ color: 'rgba(238,226,198,0.74)' }}>{value}</span>
+      <span style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>{label}</span>
+      <span className="min-w-0 break-all leading-6" style={{ color: 'rgba(var(--tj-text-primary),0.74)' }}>{value}</span>
     </div>
   );
 }
 
 function StatTile({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="px-3 py-3" style={{ background: 'rgba(12, 15, 20, 0.72)', boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.12)', clipPath: smallClip }}>
-      <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(245,217,122,0.72)' }}>{label}</div>
-      <div className="mt-1 font-serif text-[15px] tracking-[0.12em]" style={{ color: 'rgb(238,226,198)' }}>{value}</div>
-      <div className="mt-1 text-[11px] leading-5" style={{ color: 'rgba(238,226,198,0.56)' }}>{detail}</div>
+    <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-panel-bg-start),0.72)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
+      <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.72)' }}>{label}</div>
+      <div className="mt-1 font-serif text-[15px] tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
+      <div className="mt-1 text-[11px] leading-5" style={{ color: 'rgba(var(--tj-text-primary),0.56)' }}>{detail}</div>
     </div>
   );
 }
@@ -387,17 +387,17 @@ function ToolButton({ label, onClick, active, tone }: { label: string; onClick: 
       onClick={onClick}
       className="w-full px-3 py-2 text-left text-[12px] tracking-[0.16em] transition-all hover:opacity-90"
       style={{
-        color: tone === 'accent' ? '#07101a' : 'rgba(238,226,198,0.9)',
+        color: tone === 'accent' ? 'rgba(var(--tj-surface-bg-start),1)' : 'rgba(var(--tj-text-primary),0.9)',
         background: active
-          ? 'linear-gradient(135deg, #f5d97a, #8ed7ff)'
+          ? 'linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgba(var(--tj-tech-cyan),1))'
           : tone === 'accent'
-            ? 'rgba(142,215,255,0.09)'
-            : 'rgba(14, 18, 24, 0.82)',
+            ? 'rgba(var(--tj-tech-cyan),0.09)'
+            : 'rgba(var(--tj-panel-bg-end),0.82)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(255,255,255,0.5), 0 0 18px rgba(245,217,122,0.14)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.5), 0 0 18px rgba(var(--tj-accent-primary),0.14)'
           : tone === 'accent'
-            ? 'inset 0 0 0 1px rgba(142,215,255,0.26)'
-            : 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+            ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.26)'
+            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
       }}
     >
@@ -413,9 +413,9 @@ function SecondaryButton({ label, onClick }: { label: string; onClick: () => voi
       onClick={onClick}
       className="w-full px-3 py-2 text-[12px] tracking-[0.16em] transition-all hover:opacity-90"
       style={{
-        color: 'rgba(238,226,198,0.9)',
-        background: 'rgba(14, 18, 24, 0.82)',
-        boxShadow: 'inset 0 0 0 1px rgba(245,217,122,0.14)',
+        color: 'rgba(var(--tj-text-primary),0.9)',
+        background: 'rgba(var(--tj-panel-bg-end),0.82)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
         clipPath: smallClip,
       }}
     >
@@ -425,7 +425,7 @@ function SecondaryButton({ label, onClick }: { label: string; onClick: () => voi
 }
 
 function SectionLabel({ text }: { text: string }) {
-  return <div className="text-[11px] tracking-[0.2em]" style={{ color: 'rgba(245,217,122,0.74)' }}>{text}</div>;
+  return <div className="text-[11px] tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.74)' }}>{text}</div>;
 }
 
 function formatSize(bytes: number): string {
@@ -433,4 +433,3 @@ function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
-

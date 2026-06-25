@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 
 interface LandingPageProps {
   onNewGame: () => void;
@@ -57,7 +57,7 @@ export function LandingPage({
   return (
     <div
       className="relative flex h-[100dvh] flex-col items-center justify-center overflow-hidden px-5 py-6"
-      style={{ background: '#080812' }}
+      style={{ background: 'rgb(var(--tj-bg-primary))' }}
     >
       {/* ── Twinkling star field ── */}
       {stars.map((s, i) => (
@@ -82,7 +82,7 @@ export function LandingPage({
       <div
         className="absolute inset-0 z-[1] pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse at 50% 48%, rgba(20,28,60,0) 15%, rgba(16,20,40,0) 35%, rgba(10,12,22,0.6) 60%, rgba(5,6,14,0.9) 80%, rgba(2,3,8,1) 100%)',
+          background: 'radial-gradient(ellipse at 50% 48%, rgba(var(--tj-bg-secondary),0) 15%, rgba(var(--tj-bg-secondary),0) 35%, rgba(var(--tj-bg-primary),0.6) 60%, rgba(var(--tj-bg-primary),0.9) 80%, rgba(var(--tj-bg-primary),1) 100%)',
         }}
       />
 
@@ -187,7 +187,7 @@ export function LandingPage({
           />
           <p
             className="font-serif text-sm tracking-[0.28em] sm:text-lg sm:tracking-[0.5em]"
-            style={{ color: '#e6d4a0' }}
+            style={{ color: 'rgb(var(--tj-accent-primary))' }}
           >
             崩坏·星穹铁道
           </p>
@@ -199,7 +199,7 @@ export function LandingPage({
 
         <p
           className="mb-3 text-center text-xs leading-relaxed tracking-[0.16em] sm:mb-4 sm:text-sm sm:tracking-[0.22em]"
-          style={{ color: 'rgba(220, 210, 180, 0.6)' }}
+          style={{ color: 'rgba(var(--tj-text-secondary),0.6)' }}
         >
           踏上命途，遨游星海，写下你的开拓之旅吧
         </p>
@@ -214,10 +214,10 @@ export function LandingPage({
           >
             <defs>
               <radialGradient id="hero-star-core" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="rgba(255,255,255,1)" />
-                <stop offset="25%" stopColor="rgba(240,245,255,0.9)" />
-                <stop offset="60%" stopColor="rgba(180,210,255,0.4)" />
-                <stop offset="100%" stopColor="rgba(140,180,240,0)" />
+                <stop offset="0%" stopColor="rgba(var(--tj-ui-title),1)" />
+                <stop offset="25%" stopColor="rgba(var(--tj-accent-primary),0.9)" />
+                <stop offset="60%" stopColor="rgba(var(--tj-accent-primary),0.4)" />
+                <stop offset="100%" stopColor="rgba(var(--tj-accent-primary),0)" />
               </radialGradient>
               <filter id="hero-star-glow">
                 <feGaussianBlur stdDeviation="1" result="blur" />
@@ -232,8 +232,8 @@ export function LandingPage({
               fill="url(#hero-star-core)"
               filter="url(#hero-star-glow)"
             />
-            <line x1="0" y1="-25" x2="0" y2="25" stroke="rgba(220,235,255,0.4)" strokeWidth="0.6" />
-            <line x1="-25" y1="0" x2="25" y2="0" stroke="rgba(220,235,255,0.4)" strokeWidth="0.6" />
+            <line x1="0" y1="-25" x2="0" y2="25" stroke="rgba(var(--tj-accent-primary),0.4)" strokeWidth="0.6" />
+            <line x1="-25" y1="0" x2="25" y2="0" stroke="rgba(var(--tj-accent-primary),0.4)" strokeWidth="0.6" />
           </svg>
           <div
             className="absolute rounded-full"
@@ -243,7 +243,7 @@ export function LandingPage({
               width: '80px',
               height: '80px',
               transform: 'translate(-50%, -50%)',
-              background: 'radial-gradient(circle, rgba(180,210,255,0.4) 0%, rgba(150,180,240,0.1) 40%, transparent 70%)',
+              background: 'radial-gradient(circle, rgba(var(--tj-accent-primary),0.4) 0%, rgba(var(--tj-accent-secondary),0.1) 40%, transparent 70%)',
               animation: 'star-glow-pulse 3s ease-in-out infinite',
             }}
           />

@@ -1,4 +1,4 @@
-import type { 游戏设置 } from '@/models/settings';
+﻿import type { 游戏设置 } from '@/models/settings';
 import { saveSetting } from '@/services/dbService';
 
 interface Props {
@@ -39,7 +39,7 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
         }}
       >
         <div>
-          <div className="font-serif text-sm font-bold tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+          <div className="font-serif text-sm font-bold tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
             污染词清理
           </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
@@ -55,7 +55,7 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
         />
 
         <div>
-          <label className="mb-1.5 block text-xs font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+          <label className="mb-1.5 block text-xs font-serif tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
             清理词表
           </label>
           <textarea
@@ -85,7 +85,7 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
         className="w-full py-3 font-serif text-sm font-bold tracking-[0.28em] transition-all hover:opacity-95"
         style={{
           color: 'rgb(var(--tj-on-accent))',
-          background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+          background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.72), 0 0 18px rgba(var(--tj-tech-cyan),0.14)',
           clipPath: smallClip,
         }}
@@ -130,7 +130,7 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'

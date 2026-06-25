@@ -1,4 +1,4 @@
-// 变量管理器·命途分区
+﻿// 变量管理器·命途分区
 //
 // 把分散在 旅人.命途列表 / 世界.待触发狭间 / 世界.进行中狭间 的命途数据
 // 集中在一个面板里,方便手动调试整套命途+狭间流程,不必钻进通用 JSON 树。
@@ -140,7 +140,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                 className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
                   background:
-                    'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(212, 177, 90, 0.92))',
+                    'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.92), rgba(var(--tj-amber-deep), 0.92))',
                   color: 'rgb(var(--tj-on-accent))',
                   clipPath: smallClip,
                 }}
@@ -241,7 +241,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
                       className="font-serif text-sm font-bold"
-                      style={{ color: 'rgba(var(--tj-accent-primary), 0.95)' }}
+                      style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' }}
                     >
                       {def?.emblem ?? '○'} {中文名(p.id)}
                     </span>
@@ -264,7 +264,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                       <span
                         className="text-[11px] px-1.5 py-0.5"
                         style={{
-                          color: 'rgba(var(--tj-accent-primary), 0.95)',
+                          color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
                           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
                           clipPath: smallClip,
                         }}
@@ -278,7 +278,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                         title="把进度调到 99 并标 待升阶 = true,模拟自然达标"
                         className="px-2 py-0.5 text-[11px] transition-all hover:opacity-90"
                         style={{
-                          color: 'rgba(var(--tj-accent-primary), 0.95)',
+                          color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
                           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
                           clipPath: smallClip,
                         }}
@@ -337,7 +337,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                         className="px-2 py-1 text-xs font-mono text-left"
                         style={{
                           background: p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.18)' : 'rgba(60, 55, 50, 0.4)',
-                          color: p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(var(--tj-text-secondary), 0.7)',
+                          color: p.待升阶 ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' : 'rgba(var(--tj-text-secondary), 0.7)',
                           boxShadow: `inset 0 0 0 1px ${p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.5)' : 'rgba(var(--tj-text-secondary), 0.3)'}`,
                           clipPath: smallClip,
                         }}

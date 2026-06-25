@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 忆庭API覆盖 } from '@/models/settings';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
@@ -209,7 +209,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
           clipPath: cardClip,
         }}
       >
-        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+        <div className="mb-1 font-serif text-[13px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
           忆庭
         </div>
         回忆库的独立接口分成两层：召回负责检索可注入的记忆，精炼负责把材料压成可回看的摘要与原文层。
@@ -285,7 +285,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
           style={{
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
-              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+              : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
             boxShadow: savedFlash
               ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
@@ -349,7 +349,7 @@ function ToggleField({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-            ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
@@ -419,7 +419,7 @@ function ApiSection({
           options={providerOptions.map((option) => ({ value: option.value, label: option.label }))}
         />
         <label className="block md:col-span-2">
-          <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
+          <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' }}>
             模型
           </div>
           <div className="flex gap-2">
@@ -435,7 +435,7 @@ function ApiSection({
               onClick={onFetchModels}
               className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
               style={{
-                color: 'rgba(var(--tj-accent-primary), 0.9)',
+                color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
                 background: 'rgba(var(--tj-accent-primary), 0.06)',
                 clipPath: smallClip,
@@ -496,7 +496,7 @@ function ApiSection({
           onClick={onFetchModels}
           className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
           style={{
-            color: 'rgba(var(--tj-accent-primary), 0.9)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
             background: 'rgba(var(--tj-accent-primary), 0.06)',
             clipPath: smallClip,
@@ -509,7 +509,7 @@ function ApiSection({
           onClick={onTest}
           className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
           style={{
-            color: 'rgba(var(--tj-accent-primary), 0.9)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
             background: 'rgba(var(--tj-accent-primary), 0.06)',
             clipPath: smallClip,
@@ -593,7 +593,7 @@ function InputField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' }}>
         {label}
       </div>
       <input
@@ -621,7 +621,7 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' }}>
         {label}
       </div>
       <select
@@ -659,7 +659,7 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' }}>
         {label}
       </div>
       <input
@@ -694,7 +694,7 @@ function TextareaField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
+      <div className="mb-1.5 font-serif text-[12px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' }}>
         {label}
       </div>
       <textarea

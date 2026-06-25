@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+﻿import { useMemo, useState, type CSSProperties } from 'react';
 import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 
 interface YitingPanelProps {
@@ -258,7 +258,7 @@ function panelStyle(variant?: 'hero' | 'detail') {
   return {
     background:
       variant === 'hero'
-        ? 'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))'
+        ? 'radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))'
         : variant === 'detail'
           ? 'linear-gradient(180deg, rgba(var(--tj-surface), 0.92), rgba(var(--tj-surface-strong), 0.9))'
           : 'rgba(var(--tj-bg-secondary), 0.42)',
@@ -286,10 +286,10 @@ function KindBadge({ kind, large = false }: { kind: ArchiveFilter; large?: boole
     <span
       className={`${large ? 'px-3 py-1.5 text-[11px]' : 'px-2 py-0.5 text-[10px]'} shrink-0 font-serif tracking-[0.2em]`}
       style={{
-        color: gold ? 'rgb(var(--tj-bg-primary))' : '#0e1720',
+        color: gold ? 'rgb(var(--tj-bg-primary))' : 'rgb(var(--tj-ui-active-text))',
         background: gold
-          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
-          : 'linear-gradient(135deg, rgba(180, 200, 220, 0.9), rgba(120, 160, 190, 0.9))',
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
+          : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.9))',
         clipPath: smallClip,
       }}
     >
@@ -320,7 +320,7 @@ function InfoBlock({ title, children, important = false }: { title: string; chil
         clipPath: smallClip,
       }}
     >
-      <div className="mb-3 font-serif text-xs tracking-[0.3em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
+      <div className="mb-3 font-serif text-xs tracking-[0.3em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
         {title}
       </div>
       {children}

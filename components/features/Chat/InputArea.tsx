@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+﻿import { useState, useRef, useCallback, useMemo } from 'react';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
 
 interface InputAreaProps {
@@ -142,9 +142,9 @@ export function InputArea({
             <span
               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-serif text-[12px] font-bold"
               style={{
-                color: 'rgb(12, 28, 20)',
-                background: 'linear-gradient(135deg, rgba(165, 255, 200, 0.95), rgba(90, 220, 155, 0.9))',
-                boxShadow: '0 0 10px rgba(120, 255, 185, 0.45), inset 0 0 0 1px rgba(235, 255, 240, 0.6)',
+                color: 'rgb(var(--tj-ui-active-text))',
+                background: 'linear-gradient(135deg, rgba(var(--tj-ui-success),0.95), rgba(var(--tj-ui-success),0.9))',
+                boxShadow: '0 0 10px rgba(var(--tj-ui-success),0.45), inset 0 0 0 1px rgba(var(--tj-ui-success),0.6)',
               }}
             >
               ✓
@@ -153,9 +153,9 @@ export function InputArea({
             <span
               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-serif text-[12px] font-bold"
               style={{
-                color: 'rgb(45, 10, 10)',
-                background: 'linear-gradient(135deg, rgba(255, 190, 190, 0.95), rgba(230, 120, 120, 0.9))',
-                boxShadow: '0 0 10px rgba(255, 120, 120, 0.38), inset 0 0 0 1px rgba(255, 235, 235, 0.55)',
+                color: 'rgb(var(--tj-ui-active-text))',
+                background: 'linear-gradient(135deg, rgba(var(--tj-danger),0.95), rgba(var(--tj-danger),0.9))',
+                boxShadow: '0 0 10px rgba(var(--tj-danger),0.38), inset 0 0 0 1px rgba(var(--tj-danger),0.55)',
               }}
             >
               !
@@ -182,9 +182,9 @@ export function InputArea({
               onClick={onCancelWorkflow}
               className="px-2 py-0.5 text-[10px] tracking-[0.16em]"
               style={{
-                color: 'rgba(255, 210, 170, 0.92)',
-                background: 'rgba(120, 50, 35, 0.2)',
-                boxShadow: 'inset 0 0 0 1px rgba(255, 160, 120, 0.3)',
+                color: 'rgba(var(--tj-text-primary),0.92)',
+                background: 'rgba(var(--tj-panel-bg-start),0.2)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.3)',
                 clipPath: iconClip,
               }}
             >
@@ -266,10 +266,10 @@ export function InputArea({
             onClick={handleAbortClick}
             className="flex min-w-[58px] items-center justify-center gap-2 px-3 font-serif text-xs font-medium tracking-[0.14em] transition-all hover:opacity-90 md:min-w-[64px] md:px-5 md:text-sm md:tracking-[0.3em]"
             style={{
-              background: 'linear-gradient(135deg, rgba(220, 90, 90, 0.9), rgba(180, 60, 60, 0.9))',
+              background: 'linear-gradient(135deg, rgba(var(--tj-danger),0.9), rgba(var(--tj-danger),0.9))',
               color: 'rgb(var(--tj-on-accent))',
               clipPath: btnClip,
-              boxShadow: 'inset 0 0 0 1px rgba(255, 180, 180, 0.4)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.4)',
             }}
           >
             <span className="inline-flex items-center gap-1">

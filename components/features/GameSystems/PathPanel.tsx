@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途定义, 命途ID } from '@/models/journey';
@@ -24,7 +24,7 @@ const smallClip =
 
 const panelStyle = {
   background:
-    'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
+    'radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
   boxShadow:
     'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
   clipPath: cardClip,
@@ -127,7 +127,7 @@ function PathListItem({
             ? 'rgba(var(--tj-accent-primary), 0.055)'
             : 'rgba(var(--tj-text-secondary), 0.04)',
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.62), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.9)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.62), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))'
           : walked
             ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)'
             : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
@@ -158,7 +158,7 @@ function PathListItem({
       <div className="mt-1.5 flex items-center justify-between gap-1.5 md:mt-3 md:gap-3">
         <span
           className="min-w-0 flex-1 truncate font-serif text-[10px] tracking-0 md:text-[12px] md:tracking-[0.16em]"
-          style={{ color: walked ? 'rgba(var(--tj-accent-primary), 0.9)' : 'rgba(170, 160, 135, 0.78)' }}
+          style={{ color: walked ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' : 'rgba(170, 160, 135, 0.78)' }}
         >
           {walked ? `${PATH_STAGE_DEFS[stage].name}${originLabel ? ` · ${originLabel}` : ''}` : '未觉醒'}
         </span>
@@ -333,7 +333,7 @@ function PathArchiveHero({
       className="relative overflow-hidden px-3 py-3 md:px-5 md:py-5"
       style={{
         background: walked
-          ? 'radial-gradient(circle at 8% 12%, rgba(var(--tj-accent-primary), 0.12), transparent 30%), radial-gradient(circle at 92% 8%, rgba(117,214,216,0.08), transparent 24%), linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)) 54%, rgb(var(--tj-bubble)))'
+          ? 'radial-gradient(circle at 8% 12%, rgba(var(--tj-accent-primary), 0.12), transparent 30%), radial-gradient(circle at 92% 8%, rgba(var(--tj-tech-cyan), 0.08), transparent 24%), linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)) 54%, rgb(var(--tj-bubble)))'
           : 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
         boxShadow: walked
           ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 30px rgba(var(--tj-accent-primary), 0.08)'
@@ -516,9 +516,9 @@ function InfoPill({ label, value, tone = 'gold' }: { label: string; value: strin
       className="inline-flex items-center gap-1.5 px-2 py-0.5 font-serif text-[10px] tracking-[0.04em] md:gap-2 md:px-3 md:py-1 md:text-[12px] md:tracking-[0.14em]"
       style={{
         color: cyan ? 'rgba(38, 105, 116, 0.96)' : 'rgba(var(--tj-text-primary), 0.94)',
-        background: cyan ? 'rgba(117, 214, 216, 0.12)' : 'rgba(var(--tj-accent-primary), 0.09)',
+        background: cyan ? 'rgba(var(--tj-tech-cyan), 0.12)' : 'rgba(var(--tj-accent-primary), 0.09)',
         boxShadow: cyan
-          ? 'inset 0 0 0 1px rgba(108, 212, 255, 0.22)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)'
           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
         clipPath: smallClip,
       }}
@@ -562,7 +562,7 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] font-semibold tracking-[0.1em] md:text-[15px] md:tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+      <div className="font-serif text-[12px] font-semibold tracking-[0.1em] md:text-[15px] md:tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
         {title}
       </div>
       <div className="mt-1.5 font-serif text-[11px] leading-relaxed tracking-0 md:mt-2 md:text-[13px] md:tracking-wider" style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}>

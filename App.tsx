@@ -260,10 +260,7 @@ export default function App() {
             gameSettings={state.gameSettings}
             onGameSettingsChange={state.setGameSettings}
             currentTheme={state.currentTheme}
-            onThemeChange={(theme) => {
-              state.setCurrentTheme(theme);
-              void saveSetting('theme', theme);
-            }}
+            onThemeChange={state.setCurrentTheme}
             onSave={actions.handleSave}
             onContinue={actions.handleContinue}
             onLoadSave={(id) => handleLoadById(id, state)}
@@ -546,10 +543,7 @@ export default function App() {
           gameSettings={state.gameSettings}
           onGameSettingsChange={state.setGameSettings}
           currentTheme={state.currentTheme}
-          onThemeChange={(theme) => {
-            state.setCurrentTheme(theme);
-            void saveSetting('theme', theme);
-          }}
+          onThemeChange={state.setCurrentTheme}
           onSave={actions.handleSave}
           onContinue={actions.handleContinue}
           onLoadSave={(id) => handleLoadById(id, state)}

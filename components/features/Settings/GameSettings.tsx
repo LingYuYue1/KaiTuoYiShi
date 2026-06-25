@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import type { 世界状态 } from '@/models/world';
@@ -201,7 +201,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                 className="flex-1 px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                     : 'transparent',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
                   boxShadow: active
@@ -275,7 +275,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                 className="px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
                   boxShadow: active
@@ -402,7 +402,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                 className="px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
                   background: active
-                    ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
                   boxShadow: active
@@ -461,7 +461,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
             color: 'rgb(var(--tj-on-accent))',
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(165, 230, 170, 0.96), rgba(105, 190, 130, 0.92))'
-              : 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.96), rgba(var(--tj-accent-primary), 0.84))',
+              : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.72), 0 0 18px rgba(var(--tj-tech-cyan),0.14)',
             clipPath: smallClip,
           }}
@@ -524,7 +524,7 @@ function ToggleRow({
         className="relative h-6 w-11 flex-shrink-0 transition-all"
         style={{
           background: checked
-          ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.95), rgba(var(--tj-accent-primary), 0.86))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'

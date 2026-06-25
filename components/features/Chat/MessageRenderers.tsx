@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -403,7 +403,7 @@ interface InnerVoiceBubbleProps {
 
 // 主角心声：圆头像 + 顶部「·心绪·」标签 + 虚线边气泡 + 暖橘斜体
 function InnerVoiceBubble({ text, traveler, album, fontSize = 15 }: InnerVoiceBubbleProps & { fontSize?: number }) {
-  const PEACH = 'rgb(235, 195, 155)';
+  const PEACH = 'rgb(var(--tj-accent-secondary))';
   const name = traveler?.姓名?.trim() || '我';
   const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined;
   return (
@@ -626,7 +626,7 @@ export function MemoryBlock({ content }: MemoryBlockProps) {
           className="px-2.5 py-1.5 animate-fade-in"
           style={{
             borderTop: '1px solid rgba(var(--tj-accent-secondary), 0.35)',
-            color: 'rgba(220, 200, 160, 0.9)',
+            color: 'rgba(var(--tj-text-primary),0.9)',
           }}
         >
           {content}

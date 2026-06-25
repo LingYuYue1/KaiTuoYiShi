@@ -1101,7 +1101,7 @@ export function 归一化额外功能设置(input?: Partial<额外功能设置>)
   };
 }
 
-export type 主题预设 = 'deepspace' | 'morningInk';
+export type 主题预设 = 'deepspace' | 'starOceanCyan';
 export type 存档类型 = 'manual' | 'auto' | 'backup' | 'imported';
 
 export interface 存档数据 {

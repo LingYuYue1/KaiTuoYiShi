@@ -1,4 +1,4 @@
-// 背包系统面板(v4)。
+﻿// 背包系统面板(v4)。
 // 左侧概览 + 分类切换，右侧方格网格 + 详情浮层。
 // 所有写入走 utils/inventoryActions 服务层，避免直接戳数组遗漏堆叠合并等副作用。
 
@@ -45,7 +45,7 @@ const CATEGORY_GLYPHS: Record<物品分类, string> = {
 
 const panelStyle = {
   background:
-    'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
+    'radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
   boxShadow:
     'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
   clipPath: cardClip,
@@ -182,7 +182,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                       ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
                       : 'rgba(var(--tj-text-secondary), 0.04)',
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.9)'
+                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))'
                       : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
                     clipPath: smallClip,
                   }}
@@ -192,7 +192,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                       className="inline-flex min-w-0 items-center gap-2 font-serif text-[13px] tracking-[0.2em]"
                       style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.88)' }}
                     >
-                      <span className="shrink-0 text-[12px]" style={{ color: active ? '#75d6d8' : 'rgba(117,214,216,0.68)' }}>
+                      <span className="shrink-0 text-[12px]" style={{ color: active ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-tech-cyan), 0.68)' }}>
                         {cat === '全部' ? '✦' : CATEGORY_GLYPHS[cat]}
                       </span>
                       <span className="truncate">{label}</span>
@@ -236,7 +236,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
               <div
                 className="mt-3 px-3 py-2 font-serif text-[12px] tracking-[0.14em]"
                 style={{
-                  color: 'rgba(var(--tj-accent-primary), 0.95)',
+                  color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
                   background: 'rgba(var(--tj-accent-primary), 0.06)',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
                   clipPath: smallClip,
@@ -308,7 +308,7 @@ function ItemCell({
         background: selected
           ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.05))'
           : 'rgba(20, 16, 22, 0.62)',
-        boxShadow: `inset 0 0 0 ${selected ? 2 : 1}px ${selected ? 'rgba(var(--tj-accent-primary), 0.9)' : qualityStroke}`,
+        boxShadow: `inset 0 0 0 ${selected ? 2 : 1}px ${selected ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' : qualityStroke}`,
         clipPath: cellClip,
       }}
     >
@@ -452,7 +452,7 @@ function ItemDetailOverlay({
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <MetaChip text={`${item.品质}品`} color={qualityColor} />
               <MetaChip text={`×${item.数量}`} color="rgba(245,235,210,0.92)" />
-              <MetaChip text={ITEM_CATEGORY_LABELS[item.类别]} color="rgba(117,214,216,0.9)" />
+              <MetaChip text={ITEM_CATEGORY_LABELS[item.类别]} color="rgba(var(--tj-tech-cyan), 0.9)" />
             </div>
             <h3
               className="mt-2 break-words font-serif text-[19px] font-semibold leading-tight tracking-[0.08em] md:text-[24px] md:tracking-[0.12em]"
@@ -598,7 +598,7 @@ function DetailBlock({ title, children }: { title: string; children: React.React
         clipPath: smallClip,
       }}
     >
-      <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}>
+      <div className="mb-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))' }}>
         {title}
       </div>
       {children}
@@ -666,8 +666,8 @@ function EffectChip({ text }: { text: string }) {
       className="inline-flex px-3 py-1 font-serif text-[12px] tracking-[0.14em]"
       style={{
         color: 'rgba(245, 235, 210, 0.96)',
-        background: 'rgba(117, 214, 216, 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(117, 214, 216, 0.28)',
+        background: 'rgba(var(--tj-tech-cyan), 0.08)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28)',
         clipPath: smallClip,
       }}
     >
@@ -699,7 +699,7 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
         {title}
       </div>
       <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>

@@ -1,4 +1,4 @@
-// 记忆系统面板（v2）。
+﻿// 记忆系统面板（v2）。
 // 左侧切换 即时 / 短期 / 中期 / 长期，右侧显示条目与整理动作。
 
 import { useState } from 'react';
@@ -29,17 +29,17 @@ const smallClip =
 
 const panelStyle = {
   background:
-    'radial-gradient(circle at 10% 0%, rgba(117, 214, 216, 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
+    'radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
   boxShadow:
     'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
   clipPath: cardClip,
 };
 
 const layerMeta: Record<MemoryLayer, { label: string; subtitle: string; accent: string }> = {
-  immediate: { label: '即时', subtitle: '最近几回合的原始记忆', accent: 'rgba(180, 200, 220, 0.9)' },
+  immediate: { label: '即时', subtitle: '最近几回合的原始记忆', accent: 'rgba(var(--tj-tech-blue),0.9)' },
   short: { label: '短期', subtitle: '已整理的事件摘要', accent: 'rgba(var(--tj-text-secondary), 0.9)' },
-  middle: { label: '中期', subtitle: '阶段剧情链与未结事项', accent: 'rgba(130, 208, 192, 0.92)' },
-  long: { label: '长期', subtitle: '不可忘却的稳定记忆', accent: 'rgba(var(--tj-accent-primary), 0.95)' },
+  middle: { label: '中期', subtitle: '阶段剧情链与未结事项', accent: 'rgba(var(--tj-ui-success),0.92)' },
+  long: { label: '长期', subtitle: '不可忘却的稳定记忆', accent: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' },
 };
 
 export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, settings }: MemoryPanelProps) {
@@ -154,7 +154,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
                       ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
                       : 'rgba(var(--tj-text-secondary), 0.04)',
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.9)'
+                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))'
                       : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
                     clipPath: smallClip,
                   }}
@@ -302,7 +302,7 @@ function HintCard({ title, value, text }: { title: string; value: string; text: 
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[12px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.88)' }}>
+      <div className="font-serif text-[12px] tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' }}>
         {title}
       </div>
       <div className="mt-1 font-serif text-[14px] font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -325,10 +325,10 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
         clipPath: smallClip,
       }}
     >
-      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+      <div className="font-serif text-[15px] font-semibold tracking-[0.18em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
         {title}
       </div>
-      <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(210, 198, 168, 0.82)' }}>
+      <div className="mt-2 font-serif text-[13px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
         {text}
       </div>
     </div>

@@ -54,7 +54,7 @@ import {
 } from '@/data/zhikuPreset';
 import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
-import { applyTheme } from '@/styles/themes';
+import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { loadSetting, saveSetting, hasAnySave } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
@@ -238,7 +238,7 @@ export function useGameState(): UseGameStateReturn {
   useEffect(() => {
     (async () => {
       const savedTheme = await loadSetting<主题预设>('theme');
-      if (savedTheme) setCurrentTheme(savedTheme);
+      if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
 
       const savedApi = await loadSetting<API设置>('apiSettings');
       if (savedApi) setApiSettings(savedApi);

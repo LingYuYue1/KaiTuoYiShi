@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { 变量命令批次, 变量命令结果, 变量命令动作 } from '@/models/variableCommand';
 import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
 
@@ -62,7 +62,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
           width: '24px',
           height: pending ? 112 : 88,
           background: open
-            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
             : 'linear-gradient(180deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
           color: open ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.85)',
           boxShadow: open
@@ -92,7 +92,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
         onClick={() => setOpen(false)}
         className="absolute inset-0 z-30 transition-opacity duration-200"
         style={{
-          background: 'rgba(56, 48, 40, 0.14)',
+          background: 'rgba(var(--tj-panel-bg-start),0.14)',
           backdropFilter: 'blur(1px)',
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
@@ -108,7 +108,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
           left: 0,
           width: 'min(440px, 92vw)',
           transform: open ? 'translateX(0)' : 'translateX(-105%)',
-          background: 'radial-gradient(circle at 12% 0%, rgba(117,214,216,0.1), transparent 32%), linear-gradient(180deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
+          background: 'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan),0.1), transparent 32%), linear-gradient(180deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
           boxShadow:
             'inset -1px 0 0 rgba(var(--tj-border), 0.9), 8px 0 22px rgba(var(--tj-shadow), 0.1)',
         }}
@@ -249,7 +249,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
           status === 'pending'
             ? 'rgba(var(--tj-accent-primary), 0.45)'
             : status === 'failed'
-              ? 'rgba(255, 130, 130, 0.35)'
+              ? 'rgba(var(--tj-danger),0.35)'
               : 'rgba(var(--tj-border), 0.7)'
         }`,
         clipPath: smallClip,
@@ -293,7 +293,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
             </div>
           )}
           {retrySummary && (
-            <div className="mt-0.5 text-[10px]" style={{ color: task?.retrying ? 'rgba(var(--tj-accent-primary), 0.88)' : 'rgba(255, 180, 180, 0.86)' }}>
+            <div className="mt-0.5 text-[10px]" style={{ color: task?.retrying ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' : 'rgba(255, 180, 180, 0.86)' }}>
               {retrySummary}
             </div>
           )}
@@ -313,7 +313,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
               onClick={() => onCancel(task.id)}
               className="px-2 py-1 text-[10px] font-serif tracking-[0.16em] transition-all hover:opacity-90"
               style={{
-                color: 'rgba(145, 83, 58, 0.96)',
+                color: 'rgba(var(--tj-accent-secondary),0.96)',
                 background: 'rgba(var(--tj-accent-primary), 0.08)',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34)',
                 clipPath: smallClip,
@@ -409,8 +409,8 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         title="部分失败"
         style={{
           color: 'rgb(150, 54, 52)',
-          background: 'rgba(252, 165, 165, 0.12)',
-          boxShadow: 'inset 0 0 0 1px rgba(252, 165, 165, 0.45)',
+          background: 'rgba(var(--tj-danger),0.12)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.45)',
         }}
       >
         ✗
@@ -438,7 +438,7 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
         title="已取消"
         style={{
-          color: 'rgba(145, 83, 58, 0.92)',
+          color: 'rgba(var(--tj-accent-secondary),0.92)',
           background: 'rgba(var(--tj-accent-primary), 0.08)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
         }}
@@ -511,7 +511,7 @@ function ViewButton({
       style={{
         color: active ? 'rgb(20, 16, 12)' : 'rgba(var(--tj-accent-primary), 0.92)',
         background: active
-          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(212, 177, 90, 0.95))'
+          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
           : 'rgba(var(--tj-accent-primary), 0.04)',
         boxShadow: active
           ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.55)'
@@ -635,7 +635,7 @@ function CommandRow({ result }: { result: 变量命令结果 }) {
         </span>
       </div>
       {!isNotice && !ok && reason && (
-        <div className="mt-1 text-[10px] pl-1" style={{ color: 'rgba(255, 160, 160, 0.85)' }}>
+        <div className="mt-1 text-[10px] pl-1" style={{ color: 'rgba(var(--tj-danger),0.85)' }}>
           ✗ {reason}
         </div>
       )}
