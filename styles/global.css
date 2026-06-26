@@ -180,6 +180,11 @@ body.modal-open {
   50% { opacity: 0.7; }
 }
 
+@keyframes ripple {
+  from { width: 0; height: 0; opacity: 0.4; }
+  to { width: 300px; height: 300px; opacity: 0; }
+}
+
 /* ── 开拓轶事 · 崩铁风按钮 ── */
 .kaituo-btn {
   position: relative;
@@ -188,6 +193,19 @@ body.modal-open {
   letter-spacing: 0.32em;
   transition: all 0.25s ease;
   clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+.kaituo-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.08) 0%, transparent 60%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.kaituo-btn:active::after {
+  opacity: 1;
+  transition: opacity 0s;
 }
 .kaituo-btn-primary {
   background: linear-gradient(135deg, rgb(var(--tj-btn-primary-start)) 0%, rgb(var(--tj-btn-primary-end)) 100%);
@@ -269,7 +287,8 @@ body.modal-open {
   background: rgba(var(--tj-input-focus-bg), 0.98);
   box-shadow:
     inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52),
-    0 0 0 3px rgba(var(--tj-accent-primary), 0.08);
+    0 0 0 3px rgba(var(--tj-accent-primary), 0.08),
+    0 0 16px rgba(var(--tj-accent-glow), 0.06);
 }
 
 /* select 下拉框：深色主题适配 */
@@ -415,7 +434,7 @@ select.kaituo-input option:checked {
   background: rgba(var(--tj-accent-primary), 0.055);
   box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24);
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease, opacity 0.15s;
 }
 
 .panel-btn:hover:not(:disabled) {

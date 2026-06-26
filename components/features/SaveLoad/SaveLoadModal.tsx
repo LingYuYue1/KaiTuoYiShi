@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   deleteSave,
   exportSavePackage,
@@ -241,19 +241,18 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div
-        className="flex h-[100dvh] w-full min-w-0 max-w-[1500px] flex-col animate-slide-up overflow-hidden md:h-[88vh]"
-        style={{
-          background:
-            'radial-gradient(circle at 15% 10%, rgba(var(--tj-tech-blue), 0.18), transparent 31%), radial-gradient(circle at 85% 20%, rgba(var(--tj-accent-primary), 0.10), transparent 28%), linear-gradient(90deg, rgba(var(--tj-tech-blue), 0.055) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-blue), 0.045) 1px, transparent 1px), linear-gradient(135deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)) 44%, rgb(var(--tj-bg-primary)))',
-          backgroundSize: 'auto, auto, 44px 44px, 44px 44px, auto',
-          boxShadow:
-            '0 24px 70px rgba(var(--tj-shadow), 0.55), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28), inset 0 0 0 2px rgba(var(--tj-accent-primary), 0.04)',
-          clipPath: shellClip,
-        }}
-      >
+      <div className="flex h-[100dvh] w-full min-w-0 max-w-[1500px] flex-col animate-slide-up md:h-[88vh] md:overflow-hidden"
+          style={{
+            background:
+              'radial-gradient(circle at 15% 10%, rgba(var(--tj-tech-blue), 0.18), transparent 31%), radial-gradient(circle at 85% 20%, rgba(var(--tj-accent-primary), 0.10), transparent 28%), linear-gradient(90deg, rgba(var(--tj-tech-blue), 0.055) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-blue), 0.045) 1px, transparent 1px), linear-gradient(135deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)) 44%, rgb(var(--tj-bg-primary)))',
+            backgroundSize: 'auto, auto, 44px 44px, 44px 44px, auto',
+            boxShadow:
+              '0 24px 70px rgba(var(--tj-shadow), 0.55), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28), inset 0 0 0 2px rgba(var(--tj-accent-primary), 0.04)',
+            clipPath: shellClip,
+          }}
+        >
         <header
-          className="relative flex items-center justify-between gap-3 overflow-hidden px-4 py-3 md:px-6"
+          className="relative flex shrink-0 items-center justify-between gap-3 overflow-hidden px-4 py-3 md:px-6"
           style={{
 borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
   background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.10), transparent 42%), rgba(var(--tj-surface), 0.82)',
@@ -300,93 +299,150 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
           </button>
         </header>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden md:grid md:grid-cols-[320px_minmax(0,1fr)_270px] md:overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto md:grid md:grid-cols-[320px_minmax(0,1fr)_270px] md:overflow-hidden">
           <aside
-            className="kaituo-options-scroll grid w-full flex-shrink-0 grid-cols-2 gap-2 overflow-y-visible px-4 py-4 pb-6 md:flex md:min-h-0 md:w-auto md:flex-col md:gap-4 md:overflow-y-auto md:px-5 md:py-5 md:pb-6 md:pr-4"
+            className="hidden w-full flex-shrink-0 flex-col md:flex md:min-h-0 md:w-auto md:flex-col md:gap-4 md:overflow-y-auto md:px-5 md:py-5 md:pb-6 md:pr-4"
             style={{
               borderRight: '1px solid rgba(var(--tj-accent-primary),0.18)',
               background: 'radial-gradient(circle at 0 0, rgba(var(--tj-accent-primary),0.12), transparent 34%), rgba(var(--tj-bg-primary), 0.62)',
             }}
           >
-            <div className="col-span-2 grid gap-2">
-              <SaveActionButton primary onClick={handleSave} disabled={saving}>
-                {saving ? '保存中' : '保存新节点'}
-              </SaveActionButton>
-              <SaveActionButton onClick={handleImport} disabled={importing}>
-                {importing ? '导入中' : '导入存档包'}
-              </SaveActionButton>
-              <SaveActionButton onClick={handleExportCurrent} disabled={saving}>
-                导出当前节点
-              </SaveActionButton>
-              <SaveActionButton warn onClick={handleRepairList} disabled={loading}>
-                {loading ? '修复中' : '修复存档索引'}
-              </SaveActionButton>
-            </div>
-
-            <details
-              open={showMobileHelp}
-              onToggle={(event) => setShowMobileHelp(event.currentTarget.open)}
-              className="col-span-2 md:hidden"
-              style={{
-                color: 'rgba(var(--tj-text-primary),0.84)',
-                background: 'rgba(var(--tj-accent-secondary),0.62)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
-                clipPath: cardClip,
-              }}
-            >
-              <summary className="cursor-pointer px-3 py-2 font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>
-                关于存档
-              </summary>
-              <div className="px-3 pb-3 font-serif text-[12px] leading-relaxed tracking-wider">
-                <div>手动存档可随时保存，读取旧节点后会形成新的分支。</div>
-                <div>自动节点优先使用差量存储，旧存档会在后台恢复摘要索引。</div>
-                <div>导出存档包默认不包含 API Key / API 配置。</div>
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-2">
+                <SaveActionButton primary onClick={handleSave} disabled={saving}>
+                  {saving ? '保存中' : '保存新节点'}
+                </SaveActionButton>
+                <SaveActionButton onClick={handleImport} disabled={importing}>
+                  {importing ? '导入中' : '导入存档包'}
+                </SaveActionButton>
+                <SaveActionButton onClick={handleExportCurrent} disabled={saving}>
+                  导出当前节点
+                </SaveActionButton>
+                <SaveActionButton warn onClick={handleRepairList} disabled={loading}>
+                  {loading ? '修复中' : '修复存档索引'}
+                </SaveActionButton>
               </div>
-            </details>
 
-            <div className="col-span-2 grid grid-cols-2 gap-2">
-              <SaveMetric value={saves.length} label="总节点" />
-              <SaveMetric value={totalBranches} label="分支" />
-              <SaveMetric value={autoSaves.length} label="自动" />
-              <SaveMetric value={protectedSaves.length} label="保护" />
-            </div>
-
-            <MiniSaveTreeMap
-              nodeCount={saves.length}
-              branchCount={totalBranches}
-              sizeText={formatSize(totalSizeBytes)}
-            />
-
-            <div
-              className="col-span-2 hidden px-3 py-3 font-serif text-[12px] leading-relaxed tracking-wider md:block"
-              style={{
-                color: 'rgba(var(--tj-text-primary),0.82)',
-                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.52), rgba(var(--tj-accent-secondary),0.48))',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
-                clipPath: cardClip,
-              }}
-            >
-              <div className="mb-1.5 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
-                存档策略
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <SaveMetric value={saves.length} label="总节点" />
+                <SaveMetric value={totalBranches} label="分支" />
+                <SaveMetric value={autoSaves.length} label="自动" />
+                <SaveMetric value={protectedSaves.length} label="保护" />
               </div>
-              <div>手动节点最多保留 6 个，超出后清理最旧节点</div>
-              <div>自动存档最多保留 6 棵树，并优先使用差量存储</div>
-              <div>保护 / 导入存档不计入手动上限</div>
-              <div>读取节点后继续保存会生成新分支</div>
-              <div>整树导出会带走当前旅程分叉</div>
-            </div>
 
-            <div className="hidden flex-1 md:block" />
+              <div className="mt-4">
+                <MiniSaveTreeMap
+                  nodeCount={saves.length}
+                  branchCount={totalBranches}
+                  sizeText={formatSize(totalSizeBytes)}
+                />
+              </div>
 
-            <div className="col-span-2 hidden text-center font-serif text-[12px] tracking-[0.22em] md:block" style={{ color: 'rgba(var(--tj-text-primary),0.46)' }}>
-              共 {saves.length} 节点 / {allTreeGroups.length} 棵树
-              {rebuildingSummaries ? ' / 正在恢复旧存档索引' : ''}
+              <div
+                className="mt-4 px-3 py-3 font-serif text-[12px] leading-relaxed tracking-wider"
+                style={{
+                  color: 'rgba(var(--tj-text-primary),0.82)',
+                  background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.52), rgba(var(--tj-accent-secondary),0.48))',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+                  clipPath: cardClip,
+                }}
+              >
+                <div className="mb-1.5 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
+                  存档策略
+                </div>
+                <div>手动节点最多保留 6 个，超出后清理最旧节点</div>
+                <div>自动存档最多保留 6 棵树，并优先使用差量存储</div>
+                <div>保护 / 导入存档不计入手动上限</div>
+                <div>读取节点后继续保存会生成新分支</div>
+                <div>整树导出会带走当前旅程分叉</div>
+              </div>
+
+              <div className="flex-1" />
+
+              <div className="mt-4 text-center font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-text-primary),0.46)' }}>
+                共 {saves.length} 节点 / {allTreeGroups.length} 棵树
+                {rebuildingSummaries ? ' / 正在恢复旧存档索引' : ''}
+              </div>
             </div>
           </aside>
 
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <main className="flex min-w-0 flex-col md:min-h-0 md:flex-1 md:overflow-hidden">
+            <div className="md:hidden flex flex-col">
+              <div className="flex gap-1.5 px-3 pb-1.5 pt-2.5">
+                <SaveActionButton primary onClick={handleSave} disabled={saving} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                  {saving ? '保存中' : '保存'}
+                </SaveActionButton>
+                <SaveActionButton onClick={handleImport} disabled={importing} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                  {importing ? '导入中' : '导入'}
+                </SaveActionButton>
+                <SaveActionButton onClick={handleExportCurrent} disabled={saving} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                  导出
+                </SaveActionButton>
+                <SaveActionButton warn onClick={handleRepairList} disabled={loading} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                  {loading ? '修复中' : '修复'}
+                </SaveActionButton>
+              </div>
+              {visibleTreeGroups.length > 0 && (
+                <div
+                  className="mx-3 mb-2 overflow-hidden font-serif"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary),0.075), rgba(0,0,0,0.18))',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16), 0 0 24px rgba(0,0,0,0.18)',
+                    clipPath: cardClip,
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1.5">
+                    <h3 className="text-[11px] font-medium tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
+                      存档树列表
+                    </h3>
+                    <span className="text-[10px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-primary),0.42)' }}>
+                      横向滚动切换
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto px-3 pb-2.5 no-scrollbar">
+                    <div className="flex gap-2 w-max">
+                      {visibleTreeGroups.map((group) => {
+                        const active = group.rootId === selectedTree?.rootId;
+                        const title = group.latestSave.travelerName || group.rootSave.travelerName || '未命名旅人';
+                        return (
+                          <button
+                            key={group.rootId}
+                            type="button"
+                            onClick={() => setSelectedRootId(group.rootId)}
+                            className="w-[155px] shrink-0 cursor-pointer px-2.5 py-2 text-left transition-all"
+                            style={{
+                              background: active
+                                ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary), 0.06))'
+                                : 'rgba(var(--tj-accent-primary),0.045)',
+                              boxShadow: active
+                                ? 'inset 3px 0 0 rgba(var(--tj-accent-primary),1), inset 0 0 0 1px rgba(var(--tj-accent-primary),0.32)'
+                                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+                              clipPath: smallClip,
+                            }}
+                          >
+                            <div className="flex min-w-0 items-center justify-between gap-1">
+                              <span className="truncate text-[12px] font-semibold tracking-[0.1em]" style={{ color: active ? 'rgba(var(--tj-accent-secondary),1)' : 'rgba(var(--tj-text-primary),0.78)' }}>
+                                {title}
+                              </span>
+                              <span className="shrink-0 text-[10px]" style={{ color: active ? 'rgba(var(--tj-accent-primary),1)' : 'rgba(var(--tj-text-primary),0.42)' }}>
+                                #{group.latestSave.id}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex gap-2 text-[10px] tracking-[0.08em]" style={{ color: 'rgba(var(--tj-text-primary),0.54)' }}>
+                              <span>{group.nodeCount}节点</span>
+                              <span>{group.branchCount}分支</span>
+                              <span>第{group.latestSave.turnCount}回合</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <div
-              className="flex flex-shrink-0 flex-col gap-3 px-4 pb-3 pt-4 md:px-5 lg:flex-row lg:items-center lg:justify-between"
+              className="flex flex-shrink-0 flex-col gap-2 px-3 pb-2 pt-3 md:px-5 md:pb-3 md:pt-4 lg:flex-row lg:items-center lg:justify-between"
               style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary),0.14)' }}
             >
               <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
@@ -395,13 +451,13 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                 <TabButton label="保护" count={protectedSaves.length} active={tab === 'protected'} onClick={() => setTab('protected')} />
                 <TabButton label="全部" count={allVisibleSaves.length} active={tab === 'all'} onClick={() => setTab('all')} />
               </div>
-              <div className="font-serif text-[12px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-primary),0.58)' }}>
+              <div className="font-serif text-[12px] tracking-[0.12em] md:block hidden" style={{ color: 'rgba(var(--tj-text-primary),0.58)' }}>
                 当前视图：{visibleTreeGroups.length} 棵树 / {visibleNodeCount} 节点
                 {selectedTree ? ` / 当前树 #${selectedTree.latestSave.id}` : ''}
               </div>
             </div>
 
-            <div className="kaituo-options-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-7 md:px-5">
+            <div className="kaituo-options-scroll relative overflow-x-hidden px-4 py-4 pb-7 md:min-h-0 md:flex-1 md:overflow-y-auto md:px-5">
               {loading && saves.length === 0 && <EmptyState text="加载中..." />}
 
               {rebuildingSummaries && saves.length > 0 && (
@@ -479,7 +535,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
           </main>
 
           <aside
-            className="flex min-h-0 min-w-0 flex-col px-4 py-4 md:px-4 md:py-5"
+            className="hidden min-h-0 min-w-0 flex-col px-4 py-4 md:flex md:px-4 md:py-5"
             style={{
               borderLeft: '1px solid rgba(var(--tj-accent-primary),0.18)',
               background: 'radial-gradient(circle at 100% 0, rgba(var(--tj-accent-primary),0.10), transparent 36%), rgba(var(--tj-panel-bg-end),0.48)',
@@ -503,19 +559,21 @@ function SaveActionButton({
   warn = false,
   disabled,
   onClick,
+  className = '',
 }: {
   children: ReactNode;
   primary?: boolean;
   warn?: boolean;
   disabled?: boolean;
   onClick: () => void;
+  className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="cursor-pointer px-3 py-2.5 font-serif text-[12px] font-semibold tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      className={`cursor-pointer font-serif text-[12px] font-semibold tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       style={{
         color: primary ? 'rgba(var(--tj-surface-bg-start),1)' : warn ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary),0.76)',
         background: primary
