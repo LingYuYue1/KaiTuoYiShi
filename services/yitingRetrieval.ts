@@ -2,6 +2,8 @@ import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
+import { YITING_RECALL_PROMPT as YITING_LEGACY_RECALL_PROMPT } from '@/prompts/cot/yitingCot';
+import type { 提示词模块 } from '@/models/prompts';
 
 export interface 忆庭召回结果 {
   entries: 回忆条目[];
@@ -50,6 +52,7 @@ export async function retrieveYitingContextWithModel(
   mainConfig: API配置项,
   signal?: AbortSignal,
   retryCount = 2,
+  promptModules?: 提示词模块[],
 ): Promise<忆庭召回结果> {
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
@@ -77,15 +80,7 @@ export async function retrieveYitingContextWithModel(
     })
     .join('\n\n');
 
-  const systemPrompt = [
-    buildRecallSystemPrompt(settings.忆庭召回提示词),
-    '',
-    '额外约束：',
-    '- 候选回忆已经用数字编号。你只能返回这些数字编号，不要返回标题、摘要或解释。',
-    '- 强回忆不设固定 1-2 条上限；若连续事件链、同一角色多轮互动、同一任务多个关键节点都影响当前回合，可以返回 3-6 条。',
-    '- 弱回忆用于背景补充；不要把本该强承接的关键前因降为弱回忆。',
-    '- 若候选中没有真正相关内容，强回忆和弱回忆都写“无”。',
-  ].join('\n');
+  const systemPrompt = buildYitingRecallSystemPrompt(promptModules);
 
   const userPrompt = [
     `玩家当前输入：${query.trim()}`,
@@ -129,6 +124,21 @@ export async function retrieveYitingContextWithModel(
   } catch {
     return fallback;
   }
+}
+
+export function buildYitingRecallSystemPrompt(promptModules?: 提示词模块[]): string {
+  const modulesSection = buildYitingRecallPromptModulesSection(promptModules);
+  if (modulesSection) return modulesSection;
+  return YITING_LEGACY_RECALL_PROMPT;
+}
+
+function buildYitingRecallPromptModulesSection(promptModules?: 提示词模块[]): string {
+  if (!promptModules || promptModules.length === 0) return '';
+  const filtered = promptModules
+    .filter((m) => m.enabled && m.scope?.includes('calibration'))
+    .sort((a, b) => a.order - b.order);
+  if (filtered.length === 0) return '';
+  return filtered.map((m) => m.content).join('\n\n');
 }
 
 function buildRecallSystemPrompt(customPrompt: string): string {

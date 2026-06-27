@@ -6,6 +6,7 @@ function assert(condition, message) {
 
 const archive = fs.readFileSync('services/yitingArchive.ts', 'utf8');
 const retrieval = fs.readFileSync('services/yitingRetrieval.ts', 'utf8');
+const yitingCot = fs.readFileSync('prompts/cot/yitingCot.ts', 'utf8');
 const chatModel = fs.readFileSync('models/chat.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
@@ -16,11 +17,11 @@ const pkg = fs.readFileSync('package.json', 'utf8');
 assert(archive.includes('gameClock?: string'), '忆庭纪要来源必须包含小时分钟字段。');
 assert(archive.includes('formatSourceTime(source)'), '忆庭纪要必须组合年月日与小时分钟。');
 assert(archive.includes('prefixLineWithTime'), '忆庭概要每条要点必须带发生时间前缀。');
-assert(archive.includes('SUMMARY 必须使用规整格式'), '忆庭精炼提示词必须要求规整摘要格式。');
-assert(archive.includes('不要抄写正文'), '忆庭精炼提示词必须禁止复制正文。');
-assert(archive.includes('BODY 是备用详细纪要，不是原文层'), '忆庭精炼必须区分 BODY 与真实原文层。');
+assert(yitingCot.includes('SUMMARY 必须使用规整格式'), '忆庭精炼提示词必须要求规整摘要格式。');
+assert(yitingCot.includes('不要抄写正文'), '忆庭精炼提示词必须禁止复制正文。');
+assert(yitingCot.includes('BODY 是备用详细纪要，不是原文层'), '忆庭精炼必须区分 BODY 与真实原文层。');
 assert(archive.includes('isArchiveNoiseLine'), '忆庭纪要必须过滤动态世界、行动选项等系统噪音。');
-assert(archive.includes('禁止把“动态世界”“行动选项”“后续选项”'), '忆庭精炼提示词必须禁止系统噪音进入纪要。');
+assert(yitingCot.includes('禁止把"动态世界""行动选项""后续选项"'), '忆庭精炼提示词必须禁止系统噪音进入纪要。');
 assert(!archive.includes('source.worldEvents?.length ? `动态世界'), '忆庭纪要原文层不得拼入动态世界系统材料。');
 assert(!archive.includes('source.actionOptions?.length ? `行动选项'), '忆庭纪要原文层不得拼入行动选项系统材料。');
 assert(!archive.includes('source.actionOptions?.length ? `后续选项'), '忆庭纪要兜底摘要不得拼入后续选项系统材料。');

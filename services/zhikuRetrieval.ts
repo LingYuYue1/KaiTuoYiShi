@@ -1,4 +1,4 @@
-﻿import type { 智库系统, 智库条目 } from '@/models/zhiku';
+import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import type { API配置项, 智库系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
@@ -6,7 +6,8 @@ import { normalizeStructuredModelText } from '@/services/ai/structuredOutputRepa
 import { ZHIKU_CATEGORY_LABELS, 搜索智库条目 } from '@/models/zhiku';
 import type { 智库软结构标签 } from '@/models/zhiku';
 import { 解析智库软结构标签, 获取智库人物名, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
-import { ZHIKU_COT_PROMPT } from '@/prompts/cot/zhikuCot';
+import { ZHIKU_COT_PROMPT as ZHIKU_LEGACY_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
+import type { 提示词模块 } from '@/models/prompts';
 
 
 export interface 智库检索结果 {
@@ -85,9 +86,6 @@ export interface 智库模型用户提示词选项 {
   aiSupplementHints?: 智库AI补充线索;
 }
 
-const CHARACTER_KEYWORD_RECALL_LIMIT = 15;
-const AI_SUPPLEMENT_ENTRY_LIMIT = 8;
-const NORMAL_KEYWORD_RECALL_LIMIT = 5;
 const CHARACTER_ANCHOR_ENTRIES_PER_ROLE = 2;
 
 const ZHIKU_SCENE_HINTS: Record<string, string[]> = {
@@ -495,6 +493,7 @@ export async function retrieveZhikuContextWithModel(
   signal?: AbortSignal,
   retryCount = 2,
   sceneContext?: 智库场景上下文,
+  promptModules?: 提示词模块[],
 ): Promise<智库检索结果> {
   if (!system?.条目?.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
@@ -532,7 +531,7 @@ export async function retrieveZhikuContextWithModel(
     })
     .join('\n\n');
 
-  const systemPrompt = buildZhikuModelSystemPrompt(sceneHints);
+  const systemPrompt = buildZhikuModelSystemPrompt(sceneHints, promptModules);
   const userPrompt = buildZhikuModelUserPrompt(query, normalLimit, candidateText, {
     keywordRecallTitles: keywordEntries.map((entry) => entry.标题),
     anticipatedNpcNames: sceneContext?.anticipatedNpcNames ?? [],
@@ -608,42 +607,28 @@ export async function retrieveZhikuContextWithModel(
   }
 }
 
-export function buildZhikuModelSystemPrompt(sceneHints: string[] = []): string {
+export function buildZhikuModelSystemPrompt(sceneHints: string[] = [], promptModules?: 提示词模块[]): string {
+  const sceneHintsLine = sceneHints.length ? `关键词层场景锚点：${sceneHints.slice(0, 8).join('、')}` : '关键词层场景锚点：无';
+  const modulesSection = buildZhikuPromptModulesSection(promptModules);
+  if (modulesSection) {
+    return [modulesSection, sceneHintsLine].join('\n');
+  }
+  // legacy 回退：未传 promptModules 时使用源文件 import
   return [
-    ZHIKU_COT_PROMPT,
+    ZHIKU_LEGACY_COT_PROMPT,
     '',
-    '## 输出与筛选硬规则',
-    sceneHints.length ? `关键词层场景锚点：${sceneHints.slice(0, 8).join('、')}` : '关键词层场景锚点：无',
-    '关键词层场景锚点若为空，不得自行把当前地点、组织名或世界名扩写成关键词召回；地点、即时剧情回顾、在场角色分析只可作为 AI 查缺补漏线索。',
-    '',
-    '- 第一层关键词召回已经完成。你是查缺补漏模型，不负责重筛、删除、替换或否定关键词召回结果。',
-    '- 你只能读取“召回扫描正文窗口”“AI 查缺补漏线索”和“未召回候选资料”的轻量元信息；不要把已关键词召回档案当作新的检索正文。',
-    '- 召回扫描正文窗口是唯一关键词触发来源；当前地点、当前相关人物、剧情规划、小结、动态事件、即时剧情回顾和在场角色分析等元信息不得触发关键词。',
-    '- AI 查缺补漏线索可以帮助判断候选资料是否必要，但只能从未召回候选中选编号，不能新增候选外资料，不能把宽地区词或组织词扩散成全员召回。',
-    '- 已关键词召回资料已经会进入最终注入，不要重复返回；只补充上下文确实需要但第一层没有命中的角色、地点、组织、物品、概念或机制。',
-    '- 只返回候选列表中的编号与候选标题，不要编造新条目；推荐写成【编号：候选标题】。',
-    '- 角色相关资料只挑 character / 人物表现 / 主体人格 / OOC风险 / 角色边界类条目，用于校准口吻、行为和人设稳定性。',
-    '- 强相关资料、弱相关资料只挑非角色类设定资料，例如地点、组织、物品、概念、敌人、机制等；不要把 character 条目放进强/弱相关。',
-    '- 如果候选中有正文窗口明确出现、玩家点名、当前在场分析确认或预期登场人物的“角色主体 / 主体人格 / OOC风险”，它们优先放入角色相关资料，且不占用强/弱相关资料名额。',
-    `- 关键词召回上限与 AI 补充上限分开计算：关键词最多召回 ${CHARACTER_KEYWORD_RECALL_LIMIT} 条角色档案、${NORMAL_KEYWORD_RECALL_LIMIT} 条非角色资料；AI 只能在关键词结果之外最多追加 ${AI_SUPPLEMENT_ENTRY_LIMIT} 条补充资料。`,
-    '- 关键词已经命中的角色不占用强/弱相关资料名额，AI 补充资料也不占用关键词召回名额。',
-    '- 多人同场时，角色相关资料优先覆盖每个正文窗口明确出现、在场分析确认或预期登场角色的主体人格与 OOC 风险。',
-    '- 形态、命途、阶段资料不得覆盖主体人格；未解锁、只读或非主剧情范围的人物资料不得当作当前事实。',
-    '- 原著剧情正文不参与智库普通召回；剧情推进由剧情编织系统管理，避免已完成剧情重复注入。',
-    '- 如果有连续事件链、人物关系链、地点链、物品链，优先保留承接最强的条目。',
-    '- 强相关资料可多于 1 条；弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留。若完全无关，对应分类写无。',
-    '- 返回时按相关性从高到低排序。',
-    '',
-    '输出格式必须严格为三行：',
-    '角色相关资料：【编号：候选标题】|【编号：候选标题】|【编号：候选标题】',
-    '强相关资料：【编号：候选标题】|【编号：候选标题】',
-    '弱相关资料：【编号：候选标题】|【编号：候选标题】',
-    '若某类为空，写“无”。',
-    '',
-    '额外说明：',
-    '- 你看到的候选是“尚未被关键词召回”的补充候选，请专注于判断缺口，而不是二次扩写摘要。',
-    '- 不要输出内部分析、解释文字或额外格式。',
+    ZHIKU_OUTPUT_FORMAT_PROMPT,
+    sceneHintsLine,
   ].join('\n');
+}
+
+function buildZhikuPromptModulesSection(promptModules?: 提示词模块[]): string {
+  if (!promptModules || promptModules.length === 0) return '';
+  const filtered = promptModules
+    .filter((m) => m.enabled && m.scope?.includes('calibration'))
+    .sort((a, b) => a.order - b.order);
+  if (filtered.length === 0) return '';
+  return filtered.map((m) => m.content).join('\n\n');
 }
 
 export function buildZhikuModelUserPrompt(query: string, limit: number, candidateText: string, options: 智库模型用户提示词选项 = {}): string {

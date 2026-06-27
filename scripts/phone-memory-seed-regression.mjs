@@ -11,6 +11,7 @@ const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const phoneCot = fs.readFileSync('prompts/cot/phoneCot.ts', 'utf8');
+const phoneOutputFormat = fs.readFileSync('prompts/cot/phoneOutputFormat.ts', 'utf8');
 const phoneWorldbook = fs.readFileSync('data/phoneWorldbook.ts', 'utf8');
 const builtinPromptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
 const queueTask = fs.readFileSync('models/queueTask.ts', 'utf8');
@@ -52,7 +53,7 @@ assert(phoneService.includes("const messageLimit = ctx.chat.type === 'group' ? 2
 assert(phoneService.includes("const minMessages = ctx.chat.type === 'group' ? 12 : 3"), 'group phone replies must have a service-level minimum of 12 messages.');
 assert(phoneService.includes('ensurePhoneReplyMinimum'), 'phone service must supplement group replies below the minimum instead of relying only on prompts.');
 assert(phoneService.includes('buildGroupFallbackPhoneMessages'), 'phone service must have multi-speaker fallback messages for thin group replies.');
-assert(phoneService.includes('至少出现 3 位不同发言者'), 'group phone prompt must require at least three different speakers.');
+assert(phoneOutputFormat.includes('至少出现 3 位不同发言者') || phoneService.includes('至少出现 3 位不同发言者'), 'group phone prompt must require at least three different speakers.');
 assert(phoneService.includes('至少 12 条'), 'group phone user prompt must require at least 12 messages.');
 assert(phoneService.includes('formatPhoneGroupParticipant'), 'group phone context must list participants from NPC records or contacts.');
 assert(phoneCot.includes('整个群聊总量必须为 12-20 条'), 'phone CoT must match the runtime group-chat 12-20 message rule.');

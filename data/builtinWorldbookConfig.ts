@@ -1,6 +1,4 @@
-﻿import type { 世界书, 世界书条目 } from '@/models/worldbook';
-import { NEWS_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';
-import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
+import type { 世界书, 世界书条目 } from '@/models/worldbook';
 import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/companionArchiveWorldbook';
 import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT } from '@/data/variableWorldbook';
 import { NSFW_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/nsfwWorldbook';
@@ -16,10 +14,6 @@ export const BUILTIN_BOOK_IDS = [
   'builtin_worldview_core',
   'builtin_paths_lore',
   'builtin_power_system_overview',
-  'builtin_zhiku',
-  'builtin_starrail_weekly_news',
-  'builtin_phone_system',
-  'builtin_story_weaving',
   'builtin_companion_archive',
   'builtin_nsfw_archive',
   'builtin_variable_system',
@@ -1408,105 +1402,21 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 7. 智库：原著资料中枢占位世界书。scope=calibration，避免注入主叙事。
-  const zhikuBook: 世界书 = {
-    id: 'builtin_zhiku',
-    title: '智库',
-    description: '原著资料中枢占位世界书：用于挂载原著知识、来源说明与联动约束。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_zhiku_guideline',
-        title: '智库总纲',
-        content: '智库是原著资料中枢的占位世界书。它负责承载原著知识、分类说明、约束提示与联动原则；实际的原著内容后续再逐步补充。检索时要先识别开局场景与当前地点，再优先召回同区域资料，避免空间站类通用背景压过当前路线。',
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 118,
-        enabled: true,
-        scope: ['calibration'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
+  // 7. 智库世界书已迁移到提示词模块系统（builtin_zhiku_cot + builtin_zhiku_output_format）。
+  //    智库系统调用 AI 时走自己的 buildZhikuModelSystemPrompt，从 settings.promptModules 读取。
+  //    此处不再生成 builtin_zhiku 世界书条目（死代码已清理，原 builtin_zhiku_guideline 无检索逻辑读取）。
 
-  // 8. 星际和平周报：独立新闻系统可见世界书。scope=calibration，避免注入主叙事。
-  const newsWeeklyBook: 世界书 = {
-    id: 'builtin_starrail_weekly_news',
-    title: '星际和平周报',
-    description: '独立新闻演进系统的世界书：定义四栏位、事件连续性、公司播报口吻与安全边界。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_starrail_weekly_news_worldbook',
-        title: '周报世界书',
-        content: NEWS_WORLD_BOOK_PROMPT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 120,
-        enabled: true,
-        scope: ['calibration'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
+  // 8. 星际和平周报世界书已迁移到提示词模块系统（builtin_news_worldbook）。
+  //    新闻系统调用 AI 时走自己的 buildNewsModelPrompt，从 settings.promptModules 读取。
+  //    此处不再生成 builtin_starrail_weekly_news 世界书条目（死代码已清理）。
 
-  // 9. 手机系统：独立通讯终端世界书。scope=calibration，避免注入主叙事。
-  const phoneSystemBook: 世界书 = {
-    id: 'builtin_phone_system',
-    title: '手机系统',
-    description: '独立手机通讯系统的世界书：定义私聊/群聊节奏、联系人解锁、主动来信、手机本地记忆、摘要回写与系统边界。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_phone_system_worldbook',
-        title: '手机通讯世界书',
-        content: PHONE_WORLD_BOOK_PROMPT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 121,
-        enabled: true,
-        scope: ['calibration'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
+  // 9. 手机系统世界书已迁移到提示词模块系统（builtin_phone_worldbook）。
+  //    手机系统调用 AI 时走自己的 buildPhoneSystemPrompt，从 settings.promptModules 读取。
+  //    此处不再生成 builtin_phone_system 世界书条目（死代码已清理，原 builtin_phone_system_worldbook 无检索逻辑读取）。
 
-  // 10. 剧情编织：玩家自定义剧情导入与滑窗注入说明。scope=calibration，避免直接注入主叙事。
-  const storyWeavingBook: 世界书 = {
-    id: 'builtin_story_weaving',
-    title: '剧情编织',
-    description: '剧情编织 / 小说分解系统的世界书：定义 TXT 导入、章节滑窗、章节索引、角色 / 地点 / 势力档案、硬约束、铺垫与信息边界。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_story_weaving_worldbook',
-        title: '剧情编织世界书',
-        content: [
-          '剧情编织是玩家自定义剧情的结构化导入系统。',
-          '',
-          '它负责把玩家导入的 TXT / 小说化剧情拆成章节与分段，再由独立模型提炼为可运行资产：当前段概括、承接事实、结束状态、后续参考、原著硬约束、可提前铺垫、关键事件、角色推进与信息可见性。',
-          '',
-          '运行时只注入“前一段 / 当前段 / 下一段”的滑窗，不把整篇文本塞进主剧情，避免消耗过多上下文。',
-          '',
-          '边界：新闻系统负责世界演变和远端事件推进；剧情编织只提供玩家导入剧情的结构路线和门禁素材，不强制复演原文。若玩家实际游玩已经偏离导入剧情，或记忆/当前状态显示某事件已经完成，以已发生事实为准。',
-        ].join('\n'),
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 122,
-        enabled: true,
-        scope: ['calibration'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
+  // 10. 剧情编织系统世界书已迁移到提示词模块系统（builtin_story_weaving_worldbook）。
+  //    剧情编织分解模型 AI 调用时走自己的 buildStoryWeavingSystemPrompt，从 settings.promptModules 读取。
+  //    此处不再生成 builtin_story_weaving 世界书条目（死代码已清理，原 builtin_story_weaving_worldbook 无检索逻辑读取）。
 
   // 11. 伙伴档案：用于 NPC 记录写作与合并规则。scope=calibration，避免直接注入主叙事。
   const companionArchiveBook: 世界书 = {
@@ -1577,6 +1487,6 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  return [openingRuleBook, narrativeGeneralBook, forbiddenPhrasesBook, compassBook, worldviewBook, pathsBook, powerSystemOverviewBook, zhikuBook, newsWeeklyBook, phoneSystemBook, storyWeavingBook, companionArchiveBook, nsfwArchiveBook, variableSystemBook];
+  return [openingRuleBook, narrativeGeneralBook, forbiddenPhrasesBook, compassBook, worldviewBook, pathsBook, powerSystemOverviewBook, companionArchiveBook, nsfwArchiveBook, variableSystemBook];
 }
 

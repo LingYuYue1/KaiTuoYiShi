@@ -189,8 +189,7 @@ function reviewVariableModelContent(rawText: string, request: VariableModelReque
   };
 }
 
-function buildVariableContentReviewPrompt(review: EmptyFactsReview, previousRawText: string): string {
-  const excerpt = previousRawText.length > 1600 ? `${previousRawText.slice(0, 1600)}...` : previousRawText;
+function buildVariableContentReviewPrompt(review: EmptyFactsReview): string {
   if (review.nsfwCue) {
     return [
       '变量事实内容复审：上一版协议完整，但输出了空 facts。',
@@ -203,8 +202,7 @@ function buildVariableContentReviewPrompt(review: EmptyFactsReview, previousRawT
       '- 身体档案用中文 key：女性写 胸部/女性私处/后庭/体态/体味，男性写 男性器/后庭/体态/体味；男性 NSFW 档案开关关闭时不写男性身体档案。',
       '- 如果复审后确认只是擦边、暗示或 NPC 未与玩家形成实际亲密互动，仍可输出 {"facts":[]}，但 thinking 必须说明为什么不应写 nsfw_archive。',
       '请只重新输出完整三个标签：<thinking>、<变量事实>、<变量更新>。',
-      '上一版输出摘录：',
-      excerpt,
+      '请从零开始重新输出，不要延续上一版内容。',
     ].join('\n');
   }
   return [
@@ -217,8 +215,7 @@ function buildVariableContentReviewPrompt(review: EmptyFactsReview, previousRawT
     '- 不要把玩家品尝公共食物写成背包 item；不要因为短对话机械推进 time。',
     '- 如果复审后确认只是背景提及、NPC 没有与玩家形成共同动作或可承接细节，仍可输出 {"facts":[]}，但 thinking 必须说明为什么不是轻记忆。',
     '请只重新输出完整三个标签：<thinking>、<变量事实>、<变量更新>。',
-    '上一版输出摘录：',
-    excerpt,
+    '请从零开始重新输出，不要延续上一版内容。',
   ].join('\n');
 }
 
@@ -466,8 +463,8 @@ export async function callVariableModel(
     rawText = await withRetries(
       () => requestOnce([
         { role: 'user', content: userMessage },
-        { role: 'assistant', content: rawText },
-        { role: 'user', content: buildVariableProtocolRepairPrompt(protocol, rawText) },
+        { role: 'assistant', content: '（上一版输出协议不完整，请按下方指令从零重新输出完整三个标签，不要延续上一版残缺结构。）' },
+        { role: 'user', content: buildVariableProtocolRepairPrompt(protocol) },
       ]),
       { retries: 1, signal: request.signal, label: '变量模型协议修复' },
     );
@@ -482,8 +479,8 @@ export async function callVariableModel(
       rawText = await withRetries(
         () => requestOnce([
           { role: 'user', content: userMessage },
-          { role: 'assistant', content: rawText },
-          { role: 'user', content: buildVariableContentReviewPrompt(contentReview, rawText) },
+          { role: 'assistant', content: '（上一版输出空 facts，请按下方指令重新审计并输出完整三个标签，不要延续上一版内容。）' },
+          { role: 'user', content: buildVariableContentReviewPrompt(contentReview) },
         ]),
         { retries: 1, signal: request.signal, label: '变量模型内容复审' },
       );
@@ -511,8 +508,7 @@ function checkVariableModelProtocol(rawText: string): VariableProtocolCheck {
   return { ok: issues.length === 0, issues };
 }
 
-function buildVariableProtocolRepairPrompt(protocol: VariableProtocolCheck, previousRawText: string): string {
-  const excerpt = previousRawText.length > 1600 ? `${previousRawText.slice(0, 1600)}...` : previousRawText;
+function buildVariableProtocolRepairPrompt(protocol: VariableProtocolCheck): string {
   return [
     '变量模型协议修复：上一版输出不完整。',
     `失败项：${protocol.issues.join('；') || '未知协议错误'}。`,
@@ -520,8 +516,7 @@ function buildVariableProtocolRepairPrompt(protocol: VariableProtocolCheck, prev
     '1. <thinking>：简短说明提取到什么事实；',
     '2. <变量事实>：必须是合法 JSON。没有可落库事实时输出 {"facts":[]}；',
     '3. <变量更新>：必须存在，默认留空。',
-    '上一版输出摘录：',
-    excerpt,
+    '请从零开始重新输出，不要延续上一版的残缺结构，也不要复述上一版内容。',
   ].join('\n');
 }
 

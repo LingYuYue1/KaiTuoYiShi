@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { API设置, 游戏设置 } from '@/models/settings';
 import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
 import {
@@ -473,6 +473,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         series,
         segment,
         previousSegment: getPreviousCompleted(series, segment),
+        promptModules: gameSettings.promptModules,
       });
       await updateSeries(series.id, (s) => ({
         ...s,
@@ -537,6 +538,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             series: workingSeries,
             segment: processingSegment,
             previousSegment: getPreviousCompleted(workingSeries, processingSegment),
+            promptModules: gameSettings.promptModules,
           });
           workingSeries = {
             ...workingSeries,

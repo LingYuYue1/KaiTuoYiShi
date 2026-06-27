@@ -11,7 +11,9 @@ import type {
 import { 归一化剧情编织分段 } from '@/models/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
-import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
+import { STORY_WEAVING_COT_PROMPT as SW_LEGACY_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
+import { STORY_WEAVING_OUTPUT_FORMAT_PROMPT as SW_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/storyWeavingOutputFormat';
+import type { 提示词模块 } from '@/models/prompts';
 import type { FilterContext } from '@/utils/worldbook';
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -48,9 +50,10 @@ export async function decomposeStorySegment(params: {
   segment: 剧情编织分段;
   previousSegment?: 剧情编织分段;
   signal?: AbortSignal;
+  promptModules?: 提示词模块[];
 }): Promise<剧情编织分段> {
   const raw = await chatCompletionNonStream(params.config, {
-    systemPrompt: buildStoryWeavingSystemPrompt(),
+    systemPrompt: buildStoryWeavingSystemPrompt(params.promptModules),
     messages: [{ role: 'user', content: buildStoryWeavingUserPrompt(params) }],
     maxTokens: params.config.maxTokens ?? 4096,
     temperature: params.config.temperature ?? 0.25,
@@ -588,13 +591,14 @@ function formatVisibility(value: { 谁知道: string[]; 谁不知道: string[]; 
   return parts.length ? `可见性：${parts.join('｜')}` : '可见性：公开或未限定';
 }
 
-function buildStoryWeavingSystemPrompt(): string {
+function buildStoryWeavingSystemPrompt(promptModules?: 提示词模块[]): string {
+  const modulesSection = buildStoryWeavingPromptModulesSection(promptModules);
   return [
     '你是「剧情编织官」，负责把玩家导入的小说化剧情拆解成可供叙事游戏运行时注入的结构化剧情资产。',
     '你不是续写模型，不写点评，不自由补设定。你只在输入原文边界内提炼：当前段发生了什么、后续必须承接什么、哪些原著/玩家文本边界不能越过、哪些内容可以提前铺垫。',
-    '',
+    modulesSection || [
     '剧情编织思维链（内部执行，不要输出）：',
-    STORY_WEAVING_COT_PROMPT,
+    SW_LEGACY_COT_PROMPT,
     '',
     '特别要求：',
     '- 保持星穹铁道同人项目可用的表达，不要套武侠术语。',
@@ -632,7 +636,17 @@ function buildStoryWeavingSystemPrompt(): string {
     '  "关键事件": [{"事件名":"...","事件说明":"...","前置条件":[],"触发条件":[],"阻断条件":[],"事件结果":["事件完成后的结果，不要复制本段摘要"],"对后续影响":[],"信息可见性":{"谁知道":[],"谁不知道":[],"是否仅读者视角可见":false}}],',
     '  "角色推进": [{"角色名":"...","本段前状态":[],"本段变化":[],"本段后状态":[],"对后续影响":[]}]',
     '}',
+    ].join('\n'),
   ].join('\n');
+}
+
+export function buildStoryWeavingPromptModulesSection(promptModules?: 提示词模块[]): string {
+  if (!promptModules || promptModules.length === 0) return '';
+  const filtered = promptModules
+    .filter((m) => m.enabled && m.scope?.includes('calibration'))
+    .sort((a, b) => a.order - b.order);
+  if (filtered.length === 0) return '';
+  return filtered.map((m) => m.content).join('\n\n');
 }
 
 function buildStoryWeavingUserPrompt(params: {

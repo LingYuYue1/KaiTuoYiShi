@@ -156,6 +156,8 @@ for (const sourcePath of [
 writeStub('services/ai/chatCompletionClient.mjs', 'export async function chatCompletionNonStream() { throw new Error("chatCompletionNonStream is not available in regression script"); }\n');
 writeStub('services/ai/retry.mjs', 'export async function withRetries(fn) { return fn(); }\n');
 writeStub('prompts/cot/storyWeavingCot.mjs', 'export const STORY_WEAVING_COT_PROMPT = "";\n');
+writeStub('prompts/cot/storyWeavingOutputFormat.mjs', 'export const STORY_WEAVING_OUTPUT_FORMAT_PROMPT = "";\n');
+writeStub('data/storyWeavingWorldbook.mjs', 'export const STORY_WEAVING_WORLD_BOOK_PROMPT = "";\n');
 writeStub('prompts/cot/newsCot.mjs', 'export const NEWS_COT_PROMPT = "";\n');
 writeStub('prompts/cot/phoneCot.mjs', 'export const PHONE_COT_PROMPT = "";\n');
 writeStub('prompts/cot/variableCot.mjs', 'export const VARIABLE_COT_PROMPT = "";\n');
@@ -1044,9 +1046,10 @@ assert(variablePrompt.includes('剧情编织滑窗、智库资料、新闻苗头
 assert(variablePrompt.includes('不要把剧情编织当前段、后续段、原著分段结果'), '变量模型提示词必须禁止把剧情编织分段直接落库。');
 
 const storyWeavingSource = fs.readFileSync(path.join(root, 'services/storyWeaving.ts'), 'utf8');
-assert(storyWeavingSource.includes('本段结束状态必须写成可判定的完成条件或阶段落点'), 'AI 分解提示词必须要求本段结束状态是可判定完成条件。');
-assert(storyWeavingSource.includes('不能写氛围句、悬念句、预告句'), 'AI 分解提示词必须禁止氛围句/悬念句进入结束状态。');
-assert(storyWeavingSource.includes('关键事件.事件结果必须写事件完成后的结果'), 'AI 分解提示词必须要求事件结果表达完成后的结果。');
+const storyWeavingOutputFormat = fs.readFileSync(path.join(root, 'prompts/cot/storyWeavingOutputFormat.ts'), 'utf8');
+assert(storyWeavingSource.includes('本段结束状态必须写成可判定的完成条件或阶段落点') || storyWeavingOutputFormat.includes('本段结束状态必须写成可判定的完成条件或阶段落点'), 'AI 分解提示词必须要求本段结束状态是可判定完成条件。');
+assert(storyWeavingSource.includes('不能写氛围句、悬念句、预告句') || storyWeavingOutputFormat.includes('不能写氛围句、悬念句、预告句'), 'AI 分解提示词必须禁止氛围句/悬念句进入结束状态。');
+assert(storyWeavingSource.includes('关键事件.事件结果必须写事件完成后的结果') || storyWeavingOutputFormat.includes('关键事件.事件结果必须写事件完成后的结果'), 'AI 分解提示词必须要求事件结果表达完成后的结果。');
 
 const storyWeavingPresetSource = fs.readFileSync(path.join(root, 'data/storyWeavingPreset.ts'), 'utf8');
 assert(storyWeavingPresetSource.includes('buildCanonFallbackEndStates'), '智库兜底转换必须通过可判定结束状态清洗函数。');

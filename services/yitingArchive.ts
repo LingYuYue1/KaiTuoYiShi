@@ -2,6 +2,8 @@ import type { API配置项, 忆庭API覆盖, 记忆系统设置 } from '@/models
 import type { 回忆条目 } from '@/models/yiting';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
+import { YITING_ARCHIVE_FORMAT_PROMPT as YITING_LEGACY_ARCHIVE_FORMAT_PROMPT } from '@/prompts/cot/yitingCot';
+import type { 提示词模块 } from '@/models/prompts';
 
 export interface YitingArchiveSource {
   turn: number;
@@ -42,6 +44,7 @@ export async function buildYitingArchiveEntry(
   mainConfig: API配置项,
   signal?: AbortSignal,
   retryCount = 2,
+  promptModules?: 提示词模块[],
 ): Promise<YitingArchiveResult> {
   const inputText = [
     `回合：${source.turn}`,
@@ -62,19 +65,11 @@ export async function buildYitingArchiveEntry(
     return { entry: fallback, usedFallback: true };
   }
 
+  const archiveFormatSection = buildYitingArchiveFormatSection(promptModules);
   const systemPrompt = [
     settings.忆庭精炼提示词,
     '',
-    '额外要求：',
-    '- 你只是在压缩当前回合，不要抄写正文，不要把原文大段复制回来。',
-    '- SUMMARY 必须使用规整格式：第一行“时间：...”，第二行“地点：...”，空一行后写“概要：”，下面 3-6 条客观索引句，每条以“- ”开头。',
-    '- 每条概要必须以本回合时间开头，格式类似“- 琥珀纪 2157.03.07 06:40，某人在某地做了什么，导致什么结果”。',
-    '- 每条概要 60-120 字，且每条都要包含人物/地点/行动/结果/未结事项中的至少三项。',
-    '- SUMMARY 不是正文截断，也不是氛围复述；它要像检索条目一样清楚可查，优先保留关键事实、关系变化、承诺、冲突与后果。',
-    '- BODY 是备用详细纪要，不是原文层；系统会自行保存真实原文。BODY 只允许补充已发生事实，不得新增事件。',
-    '- 禁止把“动态世界”“行动选项”“后续选项”“系统提示”“变量草稿”“剧情编织进度”写入 SUMMARY 或 BODY；这些不是正文内已经发生的纪要内容。',
-    '- 原著角色的长期人格不要由忆庭精炼改写；单回合沉默、紧张、冷淡、受伤、戒备或少话只能作为当时状态，不能总结成长期性格变化。',
-    '- 原著角色长期口吻与行为边界以智库人物主体资料为准；忆庭只记录共同经历、关系事实、承诺、冲突和后果。',
+    archiveFormatSection || YITING_LEGACY_ARCHIVE_FORMAT_PROMPT,
   ].join('\n');
 
   const userPrompt = [
@@ -290,4 +285,13 @@ function buildKeywordsFromText(...parts: string[]): string[] {
 
 function mergeKeywords(base: string[], extra: string[]): string[] {
   return Array.from(new Set([...base, ...extra])).slice(0, 24);
+}
+
+function buildYitingArchiveFormatSection(promptModules?: 提示词模块[]): string {
+  if (!promptModules || promptModules.length === 0) return '';
+  const filtered = promptModules
+    .filter((m) => m.enabled && m.scope?.includes('calibration') && m.category === 'format')
+    .sort((a, b) => a.order - b.order);
+  if (filtered.length === 0) return '';
+  return filtered.map((m) => m.content).join('\n\n');
 }

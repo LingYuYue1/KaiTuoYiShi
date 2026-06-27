@@ -1,4 +1,4 @@
-﻿import type { UseGameStateReturn } from '@/hooks/useGameState';
+import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { 创建聊天消息, type 聊天消息, type 回合快照, type 回合Token消耗, type 解析后回复 } from '@/models/chat';
 import type { 新闻条目 } from '@/models/news';
 import { sendChatMessage } from '@/services/ai/text';
@@ -1864,7 +1864,8 @@ export async function executeSendWorkflow(
             config,
             abortController.signal,
             state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 2,
-          ).catch((err) => {
+            state.gameSettings.promptModules,
+          ).catch((err: unknown) => {
             pushQueueTask(state, 'yiting', 'failed', {
               detail: err instanceof Error ? err.message : '忆庭召回失败。',
               failCount: state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 1,
@@ -1882,6 +1883,7 @@ export async function executeSendWorkflow(
             abortController.signal,
             state.gameSettings.智库系统?.api.retryCount ?? 2,
             zhikuSceneContext,
+            state.gameSettings.promptModules,
           ).catch((err) => {
             console.warn('[zhiku-retrieval] 智库检索失败：', err);
             return null;
@@ -2655,6 +2657,7 @@ export async function executeSendWorkflow(
           config,
           abortController.signal,
           memorySettings.忆庭召回API.retryCount ?? 2,
+          state.gameSettings.promptModules,
         );
         assertWorkflowActive();
         const turnRecallEntry = turnRecallEntryResult.entry;

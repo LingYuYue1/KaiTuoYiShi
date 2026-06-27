@@ -3,10 +3,10 @@ import { 创建聊天消息, type 聊天消息 } from '@/models/chat';
 import { 创建手机会话 } from '@/models/phone';
 import { 创建默认智库系统设置, 创建默认记忆系统设置 } from '@/models/settings';
 import { buildNewsModelPrompt, buildNewsUserMessage } from '@/services/ai/newsModel';
-import { buildPhoneMessages, buildPhoneSystemPrompt } from '@/services/ai/phoneService';
+import { buildPhoneMessages, buildPhoneSystemPrompt, buildPhonePromptModulesSection } from '@/services/ai/phoneService';
 import { buildVariableModelPrompt } from '@/services/ai/variableModel';
 import { NPC_MEMORY_WRITE_RULE_PROMPT } from '@/data/variableWorldbook';
-import { retrieveYitingContext } from '@/services/yitingRetrieval';
+import { retrieveYitingContext, buildYitingRecallSystemPrompt } from '@/services/yitingRetrieval';
 import { buildZhikuModelSystemPrompt, buildZhikuModelUserPrompt, retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
@@ -809,7 +809,7 @@ function buildPhoneContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     id: 'phone_system',
     title: '手机系统提示词',
     category: '系统',
-    content: buildPhoneSystemPrompt(ctx),
+    content: buildPhonePromptModulesSection(state.gameSettings.promptModules) || buildPhoneSystemPrompt(ctx),
   });
   addSection(sections, {
     id: 'phone_messages',
@@ -896,15 +896,7 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
     id: 'yiting_system',
     title: '忆庭召回提示词',
     category: '系统',
-    content: [
-      settings.忆庭召回提示词,
-      '',
-      '额外约束：',
-      '- 候选回忆已经用数字编号。你只能返回这些数字编号，不要返回标题、摘要或解释。',
-      '- 强回忆不设固定 1-2 条上限；若连续事件链、同一角色多轮互动、同一任务多个关键节点都影响当前回合，可以返回 3-6 条。',
-      '- 弱回忆用于背景补充；不要把本该强承接的关键前因降为弱回忆。',
-      '- 若候选中没有真正相关内容，强回忆和弱回忆都写“无”。',
-    ].join('\n'),
+    content: buildYitingRecallSystemPrompt(),
   });
   addSection(sections, {
     id: 'yiting_user',

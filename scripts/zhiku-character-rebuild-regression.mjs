@@ -1946,20 +1946,20 @@ assert(
 );
 assert(
   retrieval.includes('ZHIKU_COT_PROMPT') &&
-    retrieval.includes('const systemPrompt = buildZhikuModelSystemPrompt(sceneHints)') &&
+    retrieval.includes('const systemPrompt = buildZhikuModelSystemPrompt(sceneHints, promptModules)') &&
     retrieval.includes('export function buildZhikuModelSystemPrompt') &&
-    retrieval.includes('ZHIKU_COT_PROMPT,') &&
+    retrieval.includes('ZHIKU_LEGACY_COT_PROMPT,') &&
     retrieval.includes('export function buildZhikuModelUserPrompt') &&
     retrieval.includes('buildRecallSupplementCandidates') &&
     retrieval.includes('AI 查缺补漏线索（只用于判断是否缺少必要资料，不属于关键词扫描正文窗口）') &&
     retrieval.includes('formatAiSupplementHints(options.aiSupplementHints)') &&
     retrieval.includes('buildAiSupplementHintQuery(sceneContext?.aiSupplementHints)') &&
-    retrieval.includes('召回扫描正文窗口是唯一关键词触发来源') &&
+    zhikuCot.includes('召回扫描正文窗口是唯一关键词触发来源') &&
     retrieval.includes('当前地点、当前相关人物、剧情规划、小结、动态事件、即时剧情回顾和在场角色分析等元信息不得触发关键词') &&
     retrieval.includes('已关键词召回资料（只作为排除表，不含档案正文）') &&
     retrieval.includes('未召回候选资料（只可从这里补缺）') &&
-    retrieval.includes('不负责重筛、删除、替换或否定关键词召回结果') &&
-    retrieval.includes('只补充上下文确实需要但第一层没有命中的角色') &&
+    zhikuCot.includes('不负责重筛、删除、替换或否定关键词召回结果') &&
+    zhikuCot.includes('只补充上下文确实需要但第一层没有命中的角色') &&
     retrieval.includes("const summary = entry.摘要 || '无摘要'") &&
     retrieval.includes('systemPrompt,') &&
     retrieval.includes('chatCompletionNonStream(api') &&
@@ -1994,23 +1994,23 @@ assert(
     retrieval.includes('strongEntries?: 智库条目[]') &&
     retrieval.includes('weakEntries?: 智库条目[]') &&
     retrieval.includes('interface 智库召回分组') &&
-    retrieval.includes('const CHARACTER_KEYWORD_RECALL_LIMIT = 15') &&
-    retrieval.includes('const NORMAL_KEYWORD_RECALL_LIMIT = 5') &&
-    retrieval.includes('const AI_SUPPLEMENT_ENTRY_LIMIT = 8') &&
+    zhikuCot.includes('const CHARACTER_KEYWORD_RECALL_LIMIT = 15') &&
+    zhikuCot.includes('const NORMAL_KEYWORD_RECALL_LIMIT = 5') &&
+    zhikuCot.includes('const AI_SUPPLEMENT_ENTRY_LIMIT = 8') &&
     retrieval.includes('const CHARACTER_ANCHOR_ENTRIES_PER_ROLE = 2') &&
     retrieval.includes('function getCharacterAnchorLimit') &&
     retrieval.includes('function getNormalRelatedLimit') &&
     retrieval.includes('function isNormalRecallEntry') &&
     retrieval.includes("entry.分类 !== 'character' && entry.分类 !== 'story'") &&
-    retrieval.includes('推荐写成【编号：候选标题】') &&
-    retrieval.includes('角色相关资料：【编号：候选标题】|【编号：候选标题】|【编号：候选标题】') &&
+    zhikuCot.includes('推荐写成【编号：候选标题】') &&
+    zhikuCot.includes('角色相关资料：【编号：候选标题】|【编号：候选标题】|【编号：候选标题】') &&
     retrieval.includes('function findZhikuCandidateIndexesByName') &&
-    retrieval.includes('输出格式必须严格为三行') &&
-    retrieval.includes('角色相关资料只挑') &&
-    retrieval.includes('多人同场时，角色相关资料优先覆盖每个正文窗口明确出现、在场分析确认或预期登场角色的主体人格与 OOC 风险') &&
+    zhikuCot.includes('输出格式必须严格为三行') &&
+    zhikuCot.includes('角色相关资料只挑') &&
+    zhikuCot.includes('多人同场时，角色相关资料优先覆盖每个正文窗口明确出现、在场分析确认或预期登场角色的主体人格与 OOC 风险') &&
     retrieval.includes('召回扫描正文窗口') &&
-    retrieval.includes('弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留') &&
-    retrieval.includes('不要把 character 条目放进强/弱相关') &&
+    zhikuCot.includes('弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留') &&
+    zhikuCot.includes('不要把 character 条目放进强/弱相关') &&
     retrieval.includes('characterEntries: mergeZhikuEntries(characterAnchors, presentFallbackAnchors)') &&
     retrieval.includes('strongEntries: primaryEntries') &&
     retrieval.includes('weakEntries: weakSource.slice(0, Math.max(0, normalLimit - primaryEntries.length))') &&

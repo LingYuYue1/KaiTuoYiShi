@@ -1,12 +1,18 @@
-﻿import type { 提示词模块 } from '@/models/prompts';
+import type { 提示词模块 } from '@/models/prompts';
 import { MAIN_COT_PROMPT } from '@/prompts/cot/mainCot';
 import { FREE_OPENING_COT_PROMPT, OPENING_COT_PROMPT, PRESET_OPENING_COT_PROMPT } from '@/prompts/cot/openingCot';
 import { PATH_AWAKENING_COT_PROMPT } from '@/prompts/cot/pathAwakeningCot';
 import { NEWS_COT_PROMPT } from '@/prompts/cot/newsCot';
+import { NEWS_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';
 import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
+import { PHONE_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/phoneOutputFormat';
+import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import { VARIABLE_COT_PROMPT } from '@/prompts/cot/variableCot';
-import { ZHIKU_COT_PROMPT } from '@/prompts/cot/zhikuCot';
+import { ZHIKU_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/zhikuCot';
 import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
+import { STORY_WEAVING_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/storyWeavingOutputFormat';
+import { STORY_WEAVING_WORLD_BOOK_PROMPT } from '@/data/storyWeavingWorldbook';
+import { YITING_RECALL_PROMPT, YITING_ARCHIVE_FORMAT_PROMPT } from '@/prompts/cot/yitingCot';
 
 // 内置提示词模块。content 中可含 {wordCountTarget} / {personLabel} / {playerName} 占位符，
 // 在 systemPromptBuilder.injectPromptModules 中按运行时设置替换。
@@ -550,9 +556,30 @@ const NEWS_COT_CONTENT = `# 星际和平周报思维链
 
 ${NEWS_COT_PROMPT}`;
 
-const PHONE_COT_CONTENT = `# 手机系统思维链
+const NEWS_WORLDBOOK_CONTENT = NEWS_WORLD_BOOK_PROMPT;
 
-${PHONE_COT_PROMPT}`;
+const NEWS_OUTPUT_FORMAT_CONTENT = `# 结构化输出格式
+只输出 JSON，对象字段固定为：
+{
+  "新增": [ { ... } ],
+  "更新": [ { ... } ],
+  "归档": [ "news_id" ],
+  "删除": [ "news_id" ],
+  "说明": "..."
+}
+
+## JSON 字段定义
+- 新增/更新条目都可包含：id, 类目, 状态, 回合, 标题, 正文, 组织标签, 关联系统, 关联剧情系列ID, 关联剧情分段ID, 重要
+- 类目只能取 plan / chronicle / starlog / frontline
+- 状态只能取 upcoming / ongoing / completed / archived
+- 新增条目可以不写 id；更新条目必须带 id
+- 归档与删除数组里只写 id`;
+
+const PHONE_COT_CONTENT = PHONE_COT_PROMPT;
+
+const PHONE_WORLDBOOK_CONTENT = PHONE_WORLD_BOOK_PROMPT;
+
+const PHONE_OUTPUT_FORMAT_CONTENT = PHONE_OUTPUT_FORMAT_PROMPT;
 
 const VARIABLE_COT_CONTENT = `# 变量系统思维链
 
@@ -562,9 +589,17 @@ const ZHIKU_COT_CONTENT = `# 智库思维链
 
 ${ZHIKU_COT_PROMPT}`;
 
-const STORY_WEAVING_COT_CONTENT = `# 剧情编织思维链
+const ZHIKU_OUTPUT_FORMAT_CONTENT = ZHIKU_OUTPUT_FORMAT_PROMPT;
 
-${STORY_WEAVING_COT_PROMPT}`;
+const YITING_RECALL_CONTENT = YITING_RECALL_PROMPT;
+
+const YITING_ARCHIVE_FORMAT_CONTENT = YITING_ARCHIVE_FORMAT_PROMPT;
+
+const STORY_WEAVING_COT_CONTENT = STORY_WEAVING_COT_PROMPT;
+
+const STORY_WEAVING_WORLDBOOK_CONTENT = STORY_WEAVING_WORLD_BOOK_PROMPT;
+
+const STORY_WEAVING_OUTPUT_FORMAT_CONTENT = STORY_WEAVING_OUTPUT_FORMAT_PROMPT;
 
 export function createBuiltinPromptModules(): 提示词模块[] {
   const now = Date.now();
@@ -648,6 +683,32 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       updatedAt: now,
     },
     {
+      id: 'builtin_news_worldbook',
+      title: '星际和平周报世界书',
+      description: '新闻系统的世界书规则：四栏位定义、类目说明、HSR 风格约束、事件连续性、剧情编织联动、数量限制与输出安全。',
+      category: 'custom',
+      content: NEWS_WORLDBOOK_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 50,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_news_output_format',
+      title: '星际和平周报输出格式',
+      description: '新闻系统结构化 JSON 输出格式定义：新增/更新/归档/删除四数组、字段定义、类目与状态枚举。',
+      category: 'format',
+      content: NEWS_OUTPUT_FORMAT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 66,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
       id: 'builtin_zhiku_cot',
       title: '智库思维链',
       description: '原著资料中枢专用 CoT：负责检索、压缩、摘要与召回，不输出正文叙事。',
@@ -661,6 +722,58 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       updatedAt: now,
     },
     {
+      id: 'builtin_zhiku_output_format',
+      title: '智库输出与筛选规则',
+      description: '智库查缺补漏模型的输出格式与筛选硬规则：关键词召回上限、AI 补充上限、三行输出格式定义。',
+      category: 'format',
+      content: ZHIKU_OUTPUT_FORMAT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 67,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_yiting_recall',
+      title: '忆庭召回提示词',
+      description: '忆庭召回模型的系统提示词：从回忆档案中检索强弱回忆，区分相关程度与承接优先级。',
+      category: 'cot',
+      content: YITING_RECALL_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 68,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_yiting_archive_format',
+      title: '忆庭精炼输出格式',
+      description: '忆庭精炼模型的输出格式与额外约束：SUMMARY 规整格式、BODY 禁止新增事件、人格保护。',
+      category: 'format',
+      content: YITING_ARCHIVE_FORMAT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 69,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_phone_worldbook',
+      title: '手机系统世界书',
+      description: '手机独立通讯系统的世界书：定义私聊/群聊节奏、联系人解锁、主动来信、本地记忆、摘要回写与系统边界。',
+      category: 'cot',
+      content: PHONE_WORLDBOOK_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 50,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
       id: 'builtin_phone_cot',
       title: '手机系统思维链',
       description: '独立手机系统专用 CoT：整合主剧情记忆、NPC 档案、新闻、手机本地摘要与会话历史；区分私聊 3-6 条、群聊 12-20 条，并生成可回写的通讯摘要。仅供手机模型读取，默认不注入主叙事。',
@@ -668,7 +781,33 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       content: PHONE_COT_CONTENT,
       enabled: true,
       builtin: true,
-      order: 58,
+      order: 56,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_phone_output_format',
+      title: '手机系统输出格式',
+      description: '手机系统的写法要求与 JSON 输出格式：私聊 3-6 条/群聊 12-20 条、严禁复读、记忆写回约束。',
+      category: 'format',
+      content: PHONE_OUTPUT_FORMAT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 66,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_story_weaving_worldbook',
+      title: '剧情编织世界书',
+      description: '剧情编织系统的世界书：定义系统定位、TXT 导入拆解流程、滑窗注入边界与新闻系统边界。',
+      category: 'cot',
+      content: STORY_WEAVING_WORLDBOOK_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 50,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
@@ -681,7 +820,20 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       content: STORY_WEAVING_COT_CONTENT,
       enabled: true,
       builtin: true,
-      order: 59,
+      order: 56,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_story_weaving_output_format',
+      title: '剧情编织输出格式',
+      description: '剧情编织分解模型的特别要求与 JSON 输出格式：信息可见性、结束状态判定、JSON schema。',
+      category: 'format',
+      content: STORY_WEAVING_OUTPUT_FORMAT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 66,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,

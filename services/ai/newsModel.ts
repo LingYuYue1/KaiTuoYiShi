@@ -6,12 +6,32 @@ import type { 剧情节点 } from '@/models/plot';
 import type { 新闻条目, 新闻生成结果, 新闻条目补丁 } from '@/models/news';
 import { getNewsIssueNumber, 归一化新闻条目 } from '@/models/news';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
+import type { 提示词模块 } from '@/models/prompts';
 import { getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
-import { NEWS_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';
-import { NEWS_COT_PROMPT } from '@/prompts/cot/newsCot';
+import { NEWS_WORLD_BOOK_PROMPT as NEWS_LEGACY_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';
+import { NEWS_COT_PROMPT as NEWS_LEGACY_COT_PROMPT } from '@/prompts/cot/newsCot';
 import { stringifyPromptPayload } from '@/utils/promptPayloadSanitizer';
+
+/** 旧调用兼容回退：当未传入 promptModules 时使用的硬编码 JSON 输出格式。
+ *  正常路径下不会走这里，仅用于 contextSnapshot 等老调用点。 */
+const NEWS_LEGACY_OUTPUT_FORMAT = `# 结构化输出格式
+只输出 JSON，对象字段固定为：
+{
+  "新增": [ { ... } ],
+  "更新": [ { ... } ],
+  "归档": [ "news_id" ],
+  "删除": [ "news_id" ],
+  "说明": "..."
+}
+
+## JSON 字段定义
+- 新增/更新条目都可包含：id, 类目, 状态, 回合, 标题, 正文, 组织标签, 关联系统, 关联剧情系列ID, 关联剧情分段ID, 重要
+- 类目只能取 plan / chronicle / starlog / frontline
+- 状态只能取 upcoming / ongoing / completed / archived
+- 新增条目可以不写 id；更新条目必须带 id
+- 归档与删除数组里只写 id`;
 
 export interface NewsModelRequest {
   config: API配置项 | 新闻API覆盖;
@@ -26,6 +46,7 @@ export interface NewsModelRequest {
   plotNodes?: 剧情节点[];
   storyWeaving?: 剧情编织系统;
   maxNewEntriesPerTurn?: number;
+  promptModules?: 提示词模块[];
   signal?: AbortSignal;
   retryCount?: number;
 }
@@ -57,33 +78,16 @@ export async function callNewsModel(request: NewsModelRequest): Promise<NewsMode
   };
 }
 
-export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount' | 'world' | 'traveler' | 'news'> & Partial<Pick<NewsModelRequest, 'npcRecords' | 'plotNodes' | 'storyWeaving' | 'maxNewEntriesPerTurn'>>): string {
+export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount' | 'world' | 'traveler' | 'news'> & Partial<Pick<NewsModelRequest, 'npcRecords' | 'plotNodes' | 'storyWeaving' | 'maxNewEntriesPerTurn' | 'promptModules'>>): string {
   const issue = getNewsIssueNumber(request.turnCount);
   const maxNewEntries = normalizeMaxNewEntries(request.maxNewEntriesPerTurn);
   const recentNews = [...request.news].sort((a, b) => b.回合 - a.回合).slice(0, 12);
   const storyBrief = buildStoryWeavingNewsBrief(request.storyWeaving);
 
+  const promptModulesSection = buildNewsPromptModulesSection(request.promptModules);
+
   return [
-    NEWS_WORLD_BOOK_PROMPT,
-    '',
-    NEWS_COT_PROMPT,
-    '',
-    '# 结构化输出格式',
-    '只输出 JSON，对象字段固定为：',
-    '{',
-    '  "新增": [ { ... } ],',
-    '  "更新": [ { ... } ],',
-    '  "归档": [ "news_id" ],',
-    '  "删除": [ "news_id" ],',
-    '  "说明": "..."',
-    '}',
-    '',
-    '## JSON 字段定义',
-    '- 新增/更新条目都可包含：id, 类目, 状态, 回合, 标题, 正文, 组织标签, 关联系统, 关联剧情系列ID, 关联剧情分段ID, 重要',
-    '- 类目只能取 plan / chronicle / starlog / frontline',
-    '- 状态只能取 upcoming / ongoing / completed / archived',
-    '- 新增条目可以不写 id；更新条目必须带 id',
-    '- 归档与删除数组里只写 id',
+    promptModulesSection,
     '',
     '## 本期更新要求',
     `- 本次最多新增 ${maxNewEntries} 条新闻。`,
@@ -107,6 +111,26 @@ export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount'
       : '- 无',
     '',
   ].join('\n');
+}
+
+/** 从 settings.promptModules 中过滤出新闻系统的提示词模块（scope=calibration 且 enabled），
+ *  按 order 升序拼接 content。若未传入 promptModules（旧调用兼容），回退到原始的
+ *  世界书 + CoT + 硬编码 JSON 格式三段拼接。 */
+function buildNewsPromptModulesSection(promptModules?: 提示词模块[]): string {
+  if (!promptModules || promptModules.length === 0) {
+    return [
+      NEWS_LEGACY_WORLD_BOOK_PROMPT,
+      '',
+      NEWS_LEGACY_COT_PROMPT,
+      '',
+      NEWS_LEGACY_OUTPUT_FORMAT,
+    ].join('\n');
+  }
+  const filtered = promptModules
+    .filter((m) => m.enabled && m.scope?.includes('calibration'))
+    .sort((a, b) => a.order - b.order);
+  if (filtered.length === 0) return '';
+  return filtered.map((m) => m.content).join('\n\n');
 }
 
 export function buildNewsUserMessage(request: NewsModelRequest): string {

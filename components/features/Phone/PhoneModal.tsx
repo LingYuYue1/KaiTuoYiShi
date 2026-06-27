@@ -1,4 +1,4 @@
-﻿import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
@@ -767,7 +767,7 @@ export function PhoneModal({
         mainChatHistory,
         storyWeaving,
         zhiku,
-      }, phoneApiConfig.retryCount ?? 2);
+      }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
       await appendMessagesToChatSequentially(
         activeChat.id,
         createReplyMessages(activeChat, reply.messages, contact),
@@ -898,7 +898,7 @@ export function PhoneModal({
         mainChatHistory,
         storyWeaving,
         zhiku,
-      }, phoneApiConfig.retryCount ?? 2);
+      }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
       onPhoneChange((prev) => {
         const hasContact = prev.contacts.some((item) => item.id === contact.id);
         const next = {

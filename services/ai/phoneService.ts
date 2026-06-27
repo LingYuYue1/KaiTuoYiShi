@@ -1,4 +1,4 @@
-﻿import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
@@ -11,8 +11,9 @@ import type { 聊天消息 } from '@/models/chat';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import { 解析智库软结构标签, 获取智库人物名, 比较智库人物节点 } from '@/models/zhiku';
-import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
-import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
+import { PHONE_COT_PROMPT as PHONE_LEGACY_COT_PROMPT } from '@/prompts/cot/phoneCot';
+import { PHONE_WORLD_BOOK_PROMPT as PHONE_LEGACY_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
+import type { 提示词模块 } from '@/models/prompts';
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { extractJsonLikeText, normalizeStructuredModelText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
@@ -74,8 +75,9 @@ export async function generatePhoneReply(
   config: API配置项,
   ctx: 手机回复上下文,
   retryCount = 2,
+  promptModules?: 提示词模块[],
 ): Promise<手机回复结果> {
-  const systemPrompt = buildPhoneSystemPrompt(ctx);
+  const systemPrompt = buildPhoneSystemPrompt(ctx, promptModules);
   const messages = buildPhoneMessages(ctx);
   const messageLimit = ctx.chat.type === 'group' ? 20 : 6;
   const minMessages = ctx.chat.type === 'group' ? 12 : 3;
@@ -97,40 +99,52 @@ export async function generatePhoneReply(
   );
 }
 
-export function buildPhoneSystemPrompt(ctx: 手机回复上下文): string {
+export function buildPhoneSystemPrompt(ctx: 手机回复上下文, promptModules?: 提示词模块[]): string {
   const targetName = ctx.contact?.name ?? ctx.chat.title;
   const chatType = ctx.chat.type === 'group' ? '群聊' : ctx.chat.type === 'system' ? '系统通知' : '私聊';
+  const modulesSection = buildPhonePromptModulesSection(promptModules);
   return [
     '你是「开拓轶事」手机系统的独立短讯生成器，只负责生成手机通讯内容。',
     '你不是主剧情叙述者，不要推进现场战斗，不要输出正文标签，不要输出思维链，不要把回复写成长篇小说。',
     `当前会话类型：${chatType}。目标对象/频道：${targetName}。`,
-    '手机系统专属世界书：',
-    PHONE_WORLD_BOOK_PROMPT,
-    '手机系统专属思维链（仅内化，不输出）：',
-    PHONE_COT_PROMPT,
-    '写法要求：',
-    ctx.chat.type === 'group'
-      ? [
-          '- 群聊一次输出总条数必须为 12-20 条，少于 12 条视为错误；不要让所有人都说话。',
-          '- 每个角色本轮回复条目可为 0-6 条，先判断谁需要说话，再决定每个人说几条。',
-          '- 群聊内容要像真实多人聊天，保持不同角色的短句交错与节奏，不要写成长篇小说。',
-          '- 群聊 messages 每条必须使用「姓名：内容」格式，至少出现 3 位不同发言者。',
-        ].join('\n')
-      : [
-          '- 一次回复生成 3-6 条短讯，像真实聊天连续弹出。',
-          '- 每条尽量短，优先 8-45 个中文字符；最多不要超过两三句。',
-          '- 私聊要像真实聊天，不要写成长篇小说段落。',
-        ].join('\n'),
-    '- 群聊和私聊的判定方式不同，群聊必须先筛选发言者，再安排每个人的回复数量。',
-    '- 如果是主动来信，要承接种子里的事件原因，但不要编造主剧情没有发生的新结果。',
-    '- 严禁复读最近手机消息：不能逐句、同序、同义改写上一轮或历史来信；同一事件再次来信时必须换成新的角度，例如追问后续、补充提醒、报平安、改约定或只发一句短促跟进。',
-    '- 允许体现关系、担心、调侃、任务提醒或新闻反应；不要越权修改变量。',
-    '- 手机聊天会写回记忆，所以内容要能被摘要，不要只剩空话或表情包式废句。',
-    '严格输出 JSON，不要代码块，不要解释：',
-    ctx.chat.type === 'group'
-      ? '{"messages":["三月七：短讯1","丹恒：短讯2","三月七：短讯3","姬子：短讯4","丹恒：短讯5","三月七：短讯6","姬子：短讯7","三月七：短讯8","丹恒：短讯9","姬子：短讯10","三月七：短讯11","丹恒：短讯12"],"summary":"一句话群聊摘要"}'
-      : '{"messages":["短讯1","短讯2","短讯3"],"summary":"一句话通讯摘要"}',
+    modulesSection || [
+      '手机系统专属世界书：',
+      PHONE_LEGACY_WORLD_BOOK_PROMPT,
+      '手机系统专属思维链（仅内化，不输出）：',
+      PHONE_LEGACY_COT_PROMPT,
+      '写法要求：',
+      ctx.chat.type === 'group'
+        ? [
+            '- 群聊一次输出总条数必须为 12-20 条，少于 12 条视为错误；不要让所有人都说话。',
+            '- 每个角色本轮回复条目可为 0-6 条，先判断谁需要说话，再决定每个人说几条。',
+            '- 群聊内容要像真实多人聊天，保持不同角色的短句交错与节奏，不要写成长篇小说。',
+            '- 群聊 messages 每条必须使用「姓名：内容」格式，至少出现 3 位不同发言者。',
+          ].join('\n')
+        : [
+            '- 一次回复生成 3-6 条短讯，像真实聊天连续弹出。',
+            '- 每条尽量短，优先 8-45 个中文字符；最多不要超过两三句。',
+            '- 私聊要像真实聊天，不要写成长篇小说段落。',
+          ].join('\n'),
+      '- 群聊和私聊的判定方式不同，群聊必须先筛选发言者，再安排每个人的回复数量。',
+      '- 如果是主动来信，要承接种子里的事件原因，但不要编造主剧情没有发生的新结果。',
+      '- 严禁复读最近手机消息：不能逐句、同序、同义改写上一轮或历史来信；同一事件再次来信时必须换成新的角度，例如追问后续、补充提醒、报平安、改约定或只发一句短促跟进。',
+      '- 允许体现关系、担心、调侃、任务提醒或新闻反应；不要越权修改变量。',
+      '- 手机聊天会写回记忆，所以内容要能被摘要，不要只剩空话或表情包式废句。',
+      '严格输出 JSON，不要代码块，不要解释：',
+      ctx.chat.type === 'group'
+        ? '{"messages":["三月七：短讯1","丹恒：短讯2","三月七：短讯3","姬子：短讯4","丹恒：短讯5","三月七：短讯6","姬子：短讯7","三月七：短讯8","丹恒：短讯9","姬子：短讯10","三月七：短讯11","丹恒：短讯12"],"summary":"一句话群聊摘要"}'
+        : '{"messages":["短讯1","短讯2","短讯3"],"summary":"一句话通讯摘要"}',
+    ].join('\n'),
   ].join('\n');
+}
+
+export function buildPhonePromptModulesSection(promptModules?: 提示词模块[]): string {
+  if (!promptModules || promptModules.length === 0) return '';
+  const filtered = promptModules
+    .filter((m) => m.enabled && m.scope?.includes('calibration'))
+    .sort((a, b) => a.order - b.order);
+  if (filtered.length === 0) return '';
+  return filtered.map((m) => m.content).join('\n\n');
 }
 
 export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: string; content: string }> {

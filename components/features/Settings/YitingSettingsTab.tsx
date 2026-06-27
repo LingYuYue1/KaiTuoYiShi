@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 忆庭API覆盖 } from '@/models/settings';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
@@ -260,14 +260,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
         mainConfig={mainConfig}
       />
 
-      <Section title="召回规则">
-        <TextareaField
-          label="回忆库召回提示词"
-          value={memory.忆庭召回提示词}
-          onChange={(value) => patchMemory({ 忆庭召回提示词: value })}
-          rows={8}
-          hint="用于从回忆档案中挑出强回忆与弱回忆，优先保留能直接影响当前输入理解与后续行动的内容。"
-        />
+      <Section title="精炼规则">
         <TextareaField
           label="回忆库精炼提示词"
           value={memory.忆庭精炼提示词}

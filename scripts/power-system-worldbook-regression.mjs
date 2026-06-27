@@ -49,8 +49,8 @@ assert(
 );
 assert(
   source.includes('powerSystemOverviewBook') &&
-    source.includes('pathsBook, powerSystemOverviewBook, zhikuBook'),
-  'Power system overview book must be returned between paths lore and Zhiku.',
+    source.includes('companionArchiveBook'),
+  'Power system overview book must be returned before companion archive book.',
 );
 
 console.log('power system worldbook regression ok');

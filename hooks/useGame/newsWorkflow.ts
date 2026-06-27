@@ -60,6 +60,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
       plotNodes: state.剧情,
       storyWeaving: params.storyWeavingSnapshot ?? state.剧情编织,
       maxNewEntriesPerTurn: newsSettings.maxNewEntriesPerTurn,
+      promptModules: state.gameSettings.promptModules,
       signal: params.signal,
       retryCount: newsSettings.api.retryCount ?? 2,
     });
