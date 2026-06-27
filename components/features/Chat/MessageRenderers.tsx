@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -281,6 +281,10 @@ function nameToColor(name: string): string {
 
 // 把 rgb(r, g, b) 转成带 alpha 的 rgba，用于光晕/阴影。
 function withAlpha(rgb: string, alpha: number): string {
+  // 处理 CSS 变量格式：rgb(var(--tj-xxx)) → rgba(var(--tj-xxx), alpha)
+  if (rgb.includes('var(')) {
+    return rgb.replace('rgb(', 'rgba(').replace(/\)$/, `, ${alpha})`);
+  }
   return rgb.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
 }
 
@@ -360,10 +364,20 @@ interface DialogueBubbleProps {
   avatarUrl?: string;
 }
 
-function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15 }: DialogueBubbleProps & { fontSize?: number }) {
-  const bubbleBg = 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
-  const bubbleStroke = withAlpha(color, 0.4);
-  const bubbleGlow = withAlpha(color, 0.08);
+function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtagonist = false }: DialogueBubbleProps & { fontSize?: number; isProtagonist?: boolean }) {
+  // 主角对话：淡底金边；NPC 对话：深底+角色色描边
+  const bubbleBg = isProtagonist
+    ? 'rgba(var(--tj-accent-primary), 0.08)'
+    : 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
+  const bubbleStroke = isProtagonist
+    ? 'rgba(var(--tj-accent-primary), 0.55)'
+    : withAlpha(color, 0.4);
+  const bubbleGlow = isProtagonist
+    ? 'rgba(var(--tj-accent-primary), 0.06)'
+    : withAlpha(color, 0.08);
+  const textColor = isProtagonist
+    ? 'rgba(var(--tj-text-primary), 0.96)'
+    : 'rgba(var(--tj-chat-text), 0.96)';
   return (
     <div className="group my-3 flex items-start justify-start gap-3">
       <AvatarTile name={name} url={avatarUrl} color={color} size="sm" />
@@ -380,7 +394,7 @@ function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15 }: Dialogu
           className="relative px-4 py-3"
           style={{
             background: bubbleBg,
-            color: 'rgba(var(--tj-chat-text), 0.96)',
+            color: textColor,
             boxShadow: `inset 0 0 0 1px ${bubbleStroke}, 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px ${bubbleGlow}`,
             clipPath:
               'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
@@ -491,6 +505,7 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
               text={line.text}
               color={color}
               avatarUrl={avatarUrl}
+              isProtagonist={protagonist}
               fontSize={protagonist ? fontSettings.playerFontSize : fontSettings.dialogueFontSize}
             />
           );
