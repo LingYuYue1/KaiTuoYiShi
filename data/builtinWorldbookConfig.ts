@@ -1,7 +1,7 @@
 import type { 世界书, 世界书条目 } from '@/models/worldbook';
-import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/companionArchiveWorldbook';
-import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT } from '@/data/variableWorldbook';
-import { NSFW_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/nsfwWorldbook';
+// [迁移] COMPANION_ARCHIVE_WORLDBOOK_CONTENT / VARIABLE_SYSTEM_WORLDBOOK_PROMPT / NSFW_ARCHIVE_WORLDBOOK_CONTENT
+// 已迁移到提示词模块系统（builtin_companion_archive_worldbook / builtin_variable_worldbook / builtin_nsfw_archive_worldbook），
+// 不再以世界书条目形式注入，此处不再 import。
 
 // 「内置世界书与提示词」Tab 用 id 白名单判定。
 // 如果 IndexedDB 里某本世界书 id 在这里，UI 把它划到内置 Tab；否则归入「额外」Tab。
@@ -14,9 +14,6 @@ export const BUILTIN_BOOK_IDS = [
   'builtin_worldview_core',
   'builtin_paths_lore',
   'builtin_power_system_overview',
-  'builtin_companion_archive',
-  'builtin_nsfw_archive',
-  'builtin_variable_system',
   'builtin_story_normal',
   'builtin_story_harem',
   'builtin_story_romance_alt',
@@ -1418,75 +1415,18 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
   //    剧情编织分解模型 AI 调用时走自己的 buildStoryWeavingSystemPrompt，从 settings.promptModules 读取。
   //    此处不再生成 builtin_story_weaving 世界书条目（死代码已清理，原 builtin_story_weaving_worldbook 无检索逻辑读取）。
 
-  // 11. 伙伴档案：用于 NPC 记录写作与合并规则。scope=calibration，避免直接注入主叙事。
-  const companionArchiveBook: 世界书 = {
-    id: 'builtin_companion_archive',
-    title: '伙伴档案',
-    description: '伙伴系统专用档案世界书：定义外貌、穿着、说话方式、性格、同行记忆与同名角色合并规则。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_companion_archive_guideline',
-        title: '伙伴档案规范',
-        content: COMPANION_ARCHIVE_WORLDBOOK_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 123,
-        enabled: true,
-        scope: ['calibration'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
+  // 11. 伙伴档案世界书已迁移到提示词模块系统（builtin_companion_archive_worldbook）。
+  //    伙伴档案 AI 调用时走提示词模块拼接，从 settings.promptModules 读取。
+  //    此处不再生成 builtin_companion_archive 世界书条目（死代码已清理，原 builtin_companion_archive_guideline entry 无检索逻辑读取）。
 
-  // 12. NSFW 档案：成人向独立档案世界书。scope=calibration，避免默认注入主叙事。
-  const nsfwArchiveBook: 世界书 = {
-    id: 'builtin_nsfw_archive',
-    title: 'NSFW 档案',
-    description: 'NSFW 模式与伙伴私密档案世界书：定义成人确认、边界、男女分区身体档案、长期事实与普通档案隔离规则。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_nsfw_archive_worldbook',
-        title: 'NSFW 档案规范',
-        content: NSFW_ARCHIVE_WORLDBOOK_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 124,
-        enabled: true,
-        scope: ['calibration'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
+  // 12. NSFW 档案世界书已迁移到提示词模块系统（builtin_nsfw_archive_worldbook）。
+  //    NSFW 档案 AI 调用时走提示词模块拼接，从 settings.promptModules 读取。
+  //    此处不再生成 builtin_nsfw_archive 世界书条目（死代码已清理，原 builtin_nsfw_archive_worldbook entry 无检索逻辑读取）。
 
-  // 13. 变量系统：主剧情后结构化结算层。scope=calibration，避免直接注入主叙事。
-  const variableSystemBook: 世界书 = {
-    id: 'builtin_variable_system',
-    title: '变量系统',
-    description: '变量系统专用世界书：定义 root 边界、NPC 好感度字段、背包/手机/命途 schema、只读系统与旧字段禁写规则。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_variable_system_worldbook',
-        title: '变量系统规范',
-        content: VARIABLE_SYSTEM_WORLDBOOK_PROMPT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 125,
-        enabled: true,
-        scope: ['calibration'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
+  // 13. 变量系统世界书已迁移到提示词模块系统（builtin_variable_worldbook）。
+  //    变量系统 AI 调用时走提示词模块拼接，从 settings.promptModules 读取。
+  //    此处不再生成 builtin_variable_system 世界书条目（死代码已清理，原 builtin_variable_system_worldbook entry 无检索逻辑读取）。
 
-  return [openingRuleBook, narrativeGeneralBook, forbiddenPhrasesBook, compassBook, worldviewBook, pathsBook, powerSystemOverviewBook, companionArchiveBook, nsfwArchiveBook, variableSystemBook];
+  return [openingRuleBook, narrativeGeneralBook, forbiddenPhrasesBook, compassBook, worldviewBook, pathsBook, powerSystemOverviewBook];
 }
 

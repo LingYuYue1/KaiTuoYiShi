@@ -8,6 +8,9 @@ import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
 import { PHONE_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/phoneOutputFormat';
 import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import { VARIABLE_COT_PROMPT } from '@/prompts/cot/variableCot';
+import { VARIABLE_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
+import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT } from '@/data/variableWorldbook';
+import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/companionArchiveWorldbook';
 import { ZHIKU_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/zhikuCot';
 import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
 import { STORY_WEAVING_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/storyWeavingOutputFormat';
@@ -581,9 +584,13 @@ const PHONE_WORLDBOOK_CONTENT = PHONE_WORLD_BOOK_PROMPT;
 
 const PHONE_OUTPUT_FORMAT_CONTENT = PHONE_OUTPUT_FORMAT_PROMPT;
 
-const VARIABLE_COT_CONTENT = `# 变量系统思维链
+const VARIABLE_COT_CONTENT = VARIABLE_COT_PROMPT;
 
-${VARIABLE_COT_PROMPT}`;
+const VARIABLE_WORLDBOOK_CONTENT = VARIABLE_SYSTEM_WORLDBOOK_PROMPT;
+
+const VARIABLE_OUTPUT_FORMAT_CONTENT = VARIABLE_OUTPUT_FORMAT_PROMPT;
+
+const COMPANION_ARCHIVE_CONTENT = COMPANION_ARCHIVE_WORLDBOOK_CONTENT;
 
 const ZHIKU_COT_CONTENT = `# 智库思维链
 
@@ -839,6 +846,19 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       updatedAt: now,
     },
     {
+      id: 'builtin_variable_worldbook',
+      title: '变量系统世界书',
+      description: '变量系统的世界书：定义 root 边界、NPC 好感度字段、背包/手机/命途 schema、只读系统与旧字段禁写规则。',
+      category: 'cot',
+      content: VARIABLE_WORLDBOOK_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 50,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
       id: 'builtin_variable_cot',
       title: '变量系统思维链',
       description: '变量系统专用 CoT：从本回合正文提取已发生事实，优先输出 <变量事实> JSON；旧 <变量更新> 仅作兼容兜底。',
@@ -846,7 +866,33 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       content: VARIABLE_COT_CONTENT,
       enabled: true,
       builtin: true,
-      order: 60,
+      order: 56,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_variable_output_format',
+      title: '变量系统输出格式',
+      description: '变量模型的输出协议、事实类型说明（time/location/npc/item/world_event/phone_seed）、旧命令兼容格式、thinking 规范与严格约束。',
+      category: 'format',
+      content: VARIABLE_OUTPUT_FORMAT_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 66,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'builtin_companion_archive_worldbook',
+      title: '伙伴档案写作规范',
+      description: '伙伴档案的写作规范：外貌、穿着、说话方式、性格、同行记忆与同名角色合并规则。',
+      category: 'cot',
+      content: COMPANION_ARCHIVE_CONTENT,
+      enabled: true,
+      builtin: true,
+      order: 55,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,

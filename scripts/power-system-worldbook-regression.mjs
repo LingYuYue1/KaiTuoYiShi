@@ -48,9 +48,8 @@ assert(
   'Power system overview must preserve the four Pathstrider tiers.',
 );
 assert(
-  source.includes('powerSystemOverviewBook') &&
-    source.includes('companionArchiveBook'),
-  'Power system overview book must be returned before companion archive book.',
+  source.includes('powerSystemOverviewBook'),
+  'Power system overview book must be returned in builtin worldbook config.',
 );
 
 console.log('power system worldbook regression ok');

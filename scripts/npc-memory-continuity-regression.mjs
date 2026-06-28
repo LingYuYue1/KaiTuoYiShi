@@ -11,6 +11,7 @@ const memoryUtils = fs.readFileSync('hooks/useGame/memoryUtils.ts', 'utf8');
 const npcMemorySanitizer = fs.readFileSync('utils/npcMemorySanitizer.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
+const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const inputArea = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
@@ -39,7 +40,7 @@ assert(historyWindow.includes('# 即时剧情回顾') || sendWorkflow.includes('
 assert(variableFacts.includes("if (fact.memory) return 'companion'"), '有 NPC 记忆的新 NPC 必须自动升为 companion。');
 assert(variableFacts.includes('key: `${key}.最近回合`'), '已有 NPC 本回合有事实时必须刷新最近回合。');
 assert(variableFacts.includes('key: `${key}.同行记忆`'), 'NPC fact memory 必须写入同行记忆。');
-assert(variableModel.includes('<NPC档案记忆写入法则>'), '变量模型 NPC 字段说明必须指向完整 NPC 写入法则。');
+assert(variableModel.includes('<NPC档案记忆写入法则>') || variableOutputFormat.includes('<NPC档案记忆写入法则>'), '变量模型 NPC 字段说明必须指向完整 NPC 写入法则。');
 assert(variableWorldbook.includes('对已建档 NPC：本回合与玩家发生有效互动时，必须审计是否写 \\`memory\\`'), '变量世界书完整法则必须审计已有 NPC 的互动记忆。');
 assert(variableWorldbook.includes('新入档时若即时剧情回顾、忆庭回忆或当前登记表已显示此前关键互动'), '新入档 NPC 必须补关键前因，避免从中途断层。');
 

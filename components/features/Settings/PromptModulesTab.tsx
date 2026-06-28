@@ -13,14 +13,15 @@ const isOtherSystemModule = (m: 提示词模块) => m.scope?.includes('calibrati
 
 /** 独立系统分组映射：calibration 模块按子系统归类 */
 const CALIBRATION_SYSTEM_GROUPS: Record<string, { label: string; icon: string; emoji: string; match: (id: string) => boolean }> = {
-  news: { label: '新闻系统', icon: '◈', emoji: '🗞️', match: (id) => id === 'builtin_news_cot' || id === 'builtin_news_worldbook' || id === 'builtin_news_output_format' || id.startsWith('st_import_news_') },
-  phone: { label: '手机系统', icon: '◈', emoji: '📱', match: (id) => id === 'builtin_phone_cot' || id === 'builtin_phone_worldbook' || id === 'builtin_phone_output_format' || id.startsWith('st_import_phone_') },
-  zhiku: { label: '智库系统', icon: '◈', emoji: '📚', match: (id) => id === 'builtin_zhiku_cot' || id === 'builtin_zhiku_output_format' || id.startsWith('st_import_zhiku_') },
-  yiting: { label: '忆庭系统', icon: '◈', emoji: '🧠', match: (id) => id === 'builtin_yiting_recall' || id === 'builtin_yiting_archive_format' || id.startsWith('st_import_yiting_') },
-  variable: { label: '变量系统', icon: '◈', emoji: '⚙️', match: (id) => id === 'builtin_variable_cot' || id.startsWith('st_import_variable_') },
-  storyWeaving: { label: '剧情编织系统', icon: '◈', emoji: '📖', match: (id) => id === 'builtin_story_weaving_cot' || id === 'builtin_story_weaving_worldbook' || id === 'builtin_story_weaving_output_format' || id.startsWith('st_import_story_weaving_') },
+  news: { label: '新闻系统', icon: '◈', emoji: '🗞️', match: (id) => id === 'builtin_news_cot' || id === 'builtin_news_worldbook' || id === 'builtin_news_output_format' || id.startsWith('st_import_news_') || id.startsWith('custom_news_') },
+  phone: { label: '手机系统', icon: '◈', emoji: '📱', match: (id) => id === 'builtin_phone_cot' || id === 'builtin_phone_worldbook' || id === 'builtin_phone_output_format' || id.startsWith('st_import_phone_') || id.startsWith('custom_phone_') },
+  zhiku: { label: '智库系统', icon: '◈', emoji: '📚', match: (id) => id === 'builtin_zhiku_cot' || id === 'builtin_zhiku_output_format' || id.startsWith('st_import_zhiku_') || id.startsWith('custom_zhiku_') },
+  yiting: { label: '忆庭系统', icon: '◈', emoji: '🧠', match: (id) => id === 'builtin_yiting_recall' || id === 'builtin_yiting_archive_format' || id.startsWith('st_import_yiting_') || id.startsWith('custom_yiting_') },
+  variable: { label: '变量系统', icon: '◈', emoji: '⚙️', match: (id) => id === 'builtin_variable_cot' || id === 'builtin_variable_worldbook' || id === 'builtin_variable_output_format' || id.startsWith('st_import_variable_') || id.startsWith('custom_variable_') },
+  companionArchive: { label: '伙伴档案', icon: '◈', emoji: '👥', match: (id) => id === 'builtin_companion_archive_worldbook' || id.startsWith('st_import_companion_archive_') || id.startsWith('custom_companionArchive_') },
+  storyWeaving: { label: '剧情编织系统', icon: '◈', emoji: '📖', match: (id) => id === 'builtin_story_weaving_cot' || id === 'builtin_story_weaving_worldbook' || id === 'builtin_story_weaving_output_format' || id.startsWith('st_import_story_weaving_') || id.startsWith('custom_storyWeaving_') },
 };
-const CALIBRATION_GROUP_ORDER = ['news', 'phone', 'zhiku', 'yiting', 'variable', 'storyWeaving'] as const;
+const CALIBRATION_GROUP_ORDER = ['news', 'phone', 'zhiku', 'yiting', 'variable', 'companionArchive', 'storyWeaving'] as const;
 
 /** 根据模块 id 获取所属的系统分组 key，不属于任何已知系统的归入 'other' */
 const getCalibrationGroupKey = (m: 提示词模块): string => {
@@ -95,6 +96,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
   const selected = sorted.find((m) => m.id === selectedId) ?? sorted[0];
   // 系统切换：主剧情 / 独立模型
   const [activeSystem, setActiveSystem] = useState<'main' | 'calibration'>('main');
+  const [showAddModal, setShowAddModal] = useState(false);
   const visibleModules = useMemo(
     () => sorted.filter(activeSystem === 'main' ? isMainPlotModule : isOtherSystemModule),
     [sorted, activeSystem],
@@ -127,33 +129,77 @@ export function PromptModulesTab({ settings, onChange }: Props) {
     );
   };
 
-  const addCustom = () => {
+  const addCustomModule = (
+    systemKey: string,
+    category: 提示词模块类目,
+    replaceMode: 'replace' | 'coexist',
+  ) => {
     const now = Date.now();
-    const newId = `custom_${now}`;
-    const usedOrders = modules.map((m) => m.order);
-    const nextOrder = Math.max(1000, ...usedOrders) + 10;
+    const newId = `custom_${systemKey}_${category}_${now}`;
+    const isCal = systemKey !== 'main';
+    const scope: 提示词模块作用域[] = isCal ? ['calibration'] : ['all'];
+    const systemLabel = systemKey === 'main' ? '主剧情' : (CALIBRATION_SYSTEM_GROUPS[systemKey]?.label ?? systemKey);
+    const catLabel = PROMPT_MODULE_CATEGORY_LABELS[category];
+
+    const targetModules = isCal
+      ? modules.filter((m) => CALIBRATION_SYSTEM_GROUPS[systemKey]?.match(m.id))
+      : modules.filter(isMainPlotModule);
+    const nextOrder = (targetModules.length > 0 ? Math.max(...targetModules.map((m) => m.order)) : 0) + 10;
+
     const created: 提示词模块 = {
       id: newId,
-      title: '新自定义模块',
-      description: '',
-      category: 'custom',
+      title: `${systemLabel} · ${catLabel}`,
+      description: `${replaceMode === 'replace' ? '替换' : '叠加'} · ${systemLabel} · ${catLabel}`,
+      category,
       content: '',
       enabled: true,
       builtin: false,
       order: nextOrder,
-      scope: ['all'],
+      scope,
       createdAt: now,
       updatedAt: now,
     };
-    update([...modules, created]);
+
+    let next = [...modules, created];
+    if (replaceMode === 'replace') {
+      next = next.map((m) => {
+        if (!isBuiltinPromptModule(m.id)) return m;
+        const sameSystem = isCal
+          ? !!CALIBRATION_SYSTEM_GROUPS[systemKey]?.match(m.id)
+          : isMainPlotModule(m);
+        const sameCategory = m.category === category;
+        if (sameSystem && sameCategory && m.enabled) {
+          return { ...m, enabled: false, updatedAt: now };
+        }
+        return m;
+      });
+    }
+
+    update(next);
     setSelectedId(newId);
+    setShowAddModal(false);
   };
 
   const isCustomWritingStyleSlot = (id: string) => id === 'builtin_writing_style_custom';
 
   const removeModule = (id: string) => {
     if (isBuiltinPromptModule(id) || isCustomWritingStyleSlot(id)) return;
-    const next = modules.filter((m) => m.id !== id);
+    const target = modules.find((m) => m.id === id);
+    let next = modules.filter((m) => m.id !== id);
+    if (target && target.description?.startsWith('替换')) {
+      const isCal = target.scope?.includes('calibration');
+      next = next.map((m) => {
+        if (!isBuiltinPromptModule(m.id) || m.enabled) return m;
+        const sameSystem = isCal
+          ? !!Object.values(CALIBRATION_SYSTEM_GROUPS).find((g) => g.match(m.id) && g.match(id))
+          : isMainPlotModule(m) && isMainPlotModule(target);
+        const sameCategory = m.category === target.category;
+        if (sameSystem && sameCategory) {
+          return { ...m, enabled: true, updatedAt: Date.now() };
+        }
+        return m;
+      });
+    }
     update(next);
     if (selectedId === id) setSelectedId(next[0]?.id ?? null);
   };
@@ -252,17 +298,6 @@ export function PromptModulesTab({ settings, onChange }: Props) {
 
         <div className="flex flex-col gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.18)' }}>
           <button
-            onClick={addCustom}
-            className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
-            style={{
-              background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
-              color: 'rgb(var(--tj-on-accent))',
-              clipPath: smallClip,
-            }}
-          >
-            + 新增自定义模块
-          </button>
-          <button
             onClick={resetBuiltins}
             className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-80"
             style={{
@@ -287,19 +322,32 @@ export function PromptModulesTab({ settings, onChange }: Props) {
           >
             ◆ 模块编辑
           </span>
-          <button
-            onClick={importSTPreset}
-            className="px-3 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
-            style={{
-              background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.18), rgba(var(--tj-ui-nsfw), 0.08))',
-              color: 'rgba(var(--tj-ui-nsfw), 0.95)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.35)',
-              clipPath: smallClip,
-            }}
-            title="导入 SillyTavern 预设文件"
-          >
-            ◈ 导入酒馆预设
-          </button>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+              style={{
+                background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
+                color: 'rgb(var(--tj-on-accent))',
+                clipPath: smallClip,
+              }}
+            >
+              + 新增自定义模块
+            </button>
+            <button
+              onClick={importSTPreset}
+              className="px-3 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+              style={{
+                background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.18), rgba(var(--tj-ui-nsfw), 0.08))',
+                color: 'rgba(var(--tj-ui-nsfw), 0.95)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.35)',
+                clipPath: smallClip,
+              }}
+              title="导入 SillyTavern 预设文件"
+            >
+              ◈ 导入酒馆预设
+            </button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         {selected ? (
@@ -326,6 +374,12 @@ export function PromptModulesTab({ settings, onChange }: Props) {
         )}
         </div>
       </div>
+      {showAddModal && (
+        <AddCustomModuleModal
+          onConfirm={addCustomModule}
+          onCancel={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -890,6 +944,209 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+const ADD_MODAL_SYSTEM_OPTIONS = [
+  { key: 'main', label: '◆ 主剧情', emoji: '🌟' },
+  ...CALIBRATION_GROUP_ORDER.map((key) => {
+    const g = CALIBRATION_SYSTEM_GROUPS[key];
+    return { key, label: `${g.emoji} ${g.label}`, emoji: g.emoji };
+  }),
+] as const;
+
+const MAIN_PLOT_CATEGORIES: 提示词模块类目[] = ['cot', 'format', 'persona', 'devmode', 'style', 'custom'];
+const CALIBRATION_CATEGORIES: 提示词模块类目[] = ['cot', 'format', 'custom'];
+
+function AddCustomModuleModal({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (systemKey: string, category: 提示词模块类目, replaceMode: 'replace' | 'coexist') => void;
+  onCancel: () => void;
+}) {
+  const [systemKey, setSystemKey] = useState<string>('main');
+  const [category, setCategory] = useState<提示词模块类目>('cot');
+  const [replaceMode, setReplaceMode] = useState<'replace' | 'coexist'>('replace');
+
+  const categories = systemKey === 'main' ? MAIN_PLOT_CATEGORIES : CALIBRATION_CATEGORIES;
+
+  const handleConfirm = () => {
+    onConfirm(systemKey, category, replaceMode);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      onClick={onCancel}
+    >
+      <div
+        className="flex w-[360px] max-w-[90vw] flex-col gap-4 p-5"
+        style={{
+          background: 'rgb(var(--tj-bg-primary))',
+          boxShadow: '0 0 40px rgba(var(--tj-accent-primary), 0.12), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+          clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="text-sm font-serif tracking-[0.2em]"
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}
+        >
+          + 新增自定义模块
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <div
+              className="mb-2 text-xs font-serif tracking-[0.16em]"
+              style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}
+            >
+              1 · 目标系统
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ADD_MODAL_SYSTEM_OPTIONS.map((opt) => {
+                const active = systemKey === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => {
+                      setSystemKey(opt.key);
+                      setCategory('cot');
+                    }}
+                    className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all"
+                    style={{
+                      background: active
+                        ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.88), rgba(var(--tj-btn-primary-end), 0.78))'
+                        : 'rgba(var(--tj-bg-secondary), 0.5)',
+                      color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
+                      boxShadow: active
+                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div
+              className="mb-2 text-xs font-serif tracking-[0.16em]"
+              style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}
+            >
+              2 · 模块分类
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map((cat) => {
+                const active = category === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all"
+                    style={{
+                      background: active
+                        ? `rgba(var(${CATEGORY_COLOR_VAR[cat]}), 0.8)`
+                        : 'rgba(var(--tj-bg-secondary), 0.5)',
+                      color: active ? 'rgb(var(--tj-bg-primary))' : `rgba(var(${CATEGORY_COLOR_VAR[cat]}), 0.85)`,
+                      boxShadow: active
+                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.35)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {PROMPT_MODULE_CATEGORY_LABELS[cat]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div
+              className="mb-2 text-xs font-serif tracking-[0.16em]"
+              style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}
+            >
+              3 · 替换模式
+            </div>
+            <div className="flex gap-1.5">
+              {([
+                { key: 'replace' as const, label: '替换同分类内置', desc: '启用新模块，禁用同系统同分类内置' },
+                { key: 'coexist' as const, label: '叠加并存', desc: '新模块和内置模块独立并存' },
+              ]).map((opt) => {
+                const active = replaceMode === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setReplaceMode(opt.key)}
+                    className="flex-1 px-2.5 py-2 text-xs transition-all"
+                    style={{
+                      background: active
+                        ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.88), rgba(var(--tj-btn-primary-end), 0.78))'
+                        : 'rgba(var(--tj-bg-secondary), 0.5)',
+                      color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
+                      boxShadow: active
+                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div className="font-serif tracking-wider">{opt.label}</div>
+                    <div
+                      className="mt-0.5 text-[10px]"
+                      style={{ color: active ? 'rgba(var(--tj-bg-primary), 0.7)' : 'rgba(var(--tj-text-secondary), 0.55)' }}
+                    >
+                      {opt.desc}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-1" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 px-3 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-80"
+            style={{
+              background: 'transparent',
+              color: 'rgba(var(--tj-text-secondary), 0.82)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+              clipPath: smallClip,
+              cursor: 'pointer',
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className="flex-1 px-3 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
+              color: 'rgb(var(--tj-on-accent))',
+              clipPath: smallClip,
+              cursor: 'pointer',
+            }}
+          >
+            确认创建
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

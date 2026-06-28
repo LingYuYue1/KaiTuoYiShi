@@ -744,7 +744,7 @@ function buildVariableContextSnapshot(state: UseGameStateReturn): ContextSnapsho
     content: buildVariableModelPrompt(variableState, {
       enabled: state.gameSettings.enableNsfw,
       maleArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-    }),
+    }, state.gameSettings.promptModules),
   });
   addSection(sections, {
     id: 'variable_user',
@@ -848,6 +848,7 @@ function buildNewsContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     npcRecords: state.NPC,
     plotNodes: state.剧情,
     storyWeaving: state.剧情编织,
+    promptModules: state.gameSettings.promptModules,
   };
   const sections: ContextSection[] = [];
   addSection(sections, {
@@ -896,7 +897,7 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
     id: 'yiting_system',
     title: '忆庭召回提示词',
     category: '系统',
-    content: buildYitingRecallSystemPrompt(),
+    content: buildYitingRecallSystemPrompt(state.gameSettings.promptModules),
   });
   addSection(sections, {
     id: 'yiting_user',
@@ -1000,7 +1001,7 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     id: 'zhiku_system',
     title: '智库召回提示词（Step0~Step8）',
     category: '系统',
-    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? []),
+    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings.promptModules),
   });
   addSection(sections, {
     id: 'zhiku_user',

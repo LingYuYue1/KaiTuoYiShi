@@ -1,4 +1,4 @@
-// 变量模型 service：用独立 API config 把「正文」喂给一个轻量模型。
+﻿// 变量模型 service：用独立 API config 把「正文」喂给一个轻量模型。
 //
 // 新协议：
 // - 主输出是 <变量事实> JSON：AI 只提取事实，不直接猜路径、顺序和对象下标。
@@ -11,9 +11,11 @@ import { buildVariableRegistryPrompt, type VariableState } from '@/utils/variabl
 import { parseVariableFacts } from '@/utils/variableFacts';
 import { withRetries } from '@/services/ai/retry';
 import { CANONICAL_CHARACTERS } from '@/data/canonicalCharacters';
-import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/companionArchiveWorldbook';
-import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT, NSFW_ARCHIVE_SEPARATION_RULE } from '@/data/variableWorldbook';
-import { VARIABLE_COT_PROMPT } from '@/prompts/cot/variableCot';
+import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT as VAR_LEGACY_COMPANION_ARCHIVE } from '@/data/companionArchiveWorldbook';
+import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT as VAR_LEGACY_WORLDBOOK_PROMPT, NSFW_ARCHIVE_SEPARATION_RULE } from '@/data/variableWorldbook';
+import { VARIABLE_COT_PROMPT as VAR_LEGACY_COT_PROMPT } from '@/prompts/cot/variableCot';
+import { VARIABLE_OUTPUT_FORMAT_PROMPT as VAR_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
+import type { 提示词模块 } from '@/models/prompts';
 
 /** NSFW 基线候选：开启 NSFW 后，传给变量模型让它为缺少基线的 NPC 生成完整档案。 */
 export interface NsfwBaselineCandidate {
@@ -51,6 +53,7 @@ export interface VariableModelRequest {
   nsfwBaselineCandidates?: NsfwBaselineCandidate[];
   signal?: AbortSignal;
   retryCount?: number;
+  promptModules?: 提示词模块[];
 }
 
 export interface VariableModelResult {
@@ -223,13 +226,17 @@ function buildVariableContentReviewPrompt(review: EmptyFactsReview): string {
 export function buildVariableModelPrompt(
   state: VariableState,
   nsfwPolicy?: { enabled?: boolean; maleArchiveEnabled?: boolean; baselineCandidates?: NsfwBaselineCandidate[] },
+  promptModules?: 提示词模块[],
 ): string {
   const registry = buildVariableRegistryPrompt(state);
   const nsfwEnabled = Boolean(nsfwPolicy?.enabled);
   const maleArchiveEnabled = Boolean(nsfwPolicy?.maleArchiveEnabled);
   const baselineCandidates = nsfwPolicy?.baselineCandidates?.filter((c) => c.npcName) ?? [];
 
+  const modulesSection = buildVariablePromptModulesSection(promptModules, nsfwEnabled);
+
   return [
+    modulesSection || [
     '你是一个变量事实提取与结算模型，不是主剧情叙述者。',
     '你的任务是阅读本回合正文和主模型的 <变量草稿>，提取“已经台前发生、可以落库”的事实。',
     '默认不要直接写底层变量路径命令；路径、顺序、日期/天数对齐、NPC 建档和对象归一化由前端规则层处理。',
@@ -323,54 +330,17 @@ export function buildVariableModelPrompt(
     '- phone_seed 可以是 low/normal，不必都写 high；低频跟进也能让手机系统保持活性。不要因为担心打扰而完全不写。',
     '- targetName 优先写中文 NPC 名，relatedNpcIds 尽量写对应 NPC id；系统会转成联系人入口。',
     '',
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    nsfwEnabled && '### NSFW 档案：nsfw_archive',
-    nsfwEnabled && '- 字段：npcId、npcName、enabled、ageConfirm、intimacyStage、boundaries、preferences、sensitivePoints、taboos、femaleBodyArchive、maleBodyArchive、experiences、longTermFacts、tags、notes、evidence。',
-    nsfwEnabled && '- 对象是已入档重要 NPC（companion / 同行 / 原著角色）、本回合正文出现成人向亲密互动或长期关系变化时，应输出 nsfw_archive 事实。',
-    nsfwEnabled && '- 年龄门禁已解除：ageConfirm 只作展示信息（adult / unknown / minor_blocked），不再限制身体档案、偏好、敏感点或经历的写入。unknown 也能正常写入完整档案。',
-    nsfwEnabled && '- 亲密事实/偏好/敏感点/身体档案必须来自本回合正文证据或已成立的关系基础，不凭空编造。',
-    nsfwEnabled && '- femaleBodyArchive 字段使用中文 key：胸部、女性私处、后庭、体态、体味。maleBodyArchive 字段使用：男性器、后庭、体态、体味。',
-    nsfwEnabled && maleArchiveEnabled === false && '- 男性 NSFW 档案开关关闭时，不写 maleBodyArchive 或男性私密长期事实。',
-    nsfwEnabled && '- 帕姆、史瓦罗等智械/机械/非人形对象禁止写 nsfw_archive；其余角色（包括年龄未标注的）按 NSFW 总开关正常处理。',
-    nsfwEnabled && '- 示例：{"type":"nsfw_archive","npcName":"三月七","enabled":true,"ageConfirm":"unknown","intimacyStage":"暧昧试探","boundaries":"需要明确同意，不接受公开场合越界。","longTermFacts":["第12回合与玩家确认亲近前先确认边界。"],"tags":["慢热"],"evidence":"正文写明双方确认边界"}',
-    nsfwEnabled && '',
     '## 变量系统世界书（必须遵守）',
     '',
-    nsfwEnabled
-      ? `${VARIABLE_SYSTEM_WORLDBOOK_PROMPT}\n\n${NSFW_ARCHIVE_SEPARATION_RULE}`
-      : VARIABLE_SYSTEM_WORLDBOOK_PROMPT,
+    VAR_LEGACY_WORLDBOOK_PROMPT,
     '',
     '## 伙伴档案写作规范',
     '',
-    COMPANION_ARCHIVE_WORLDBOOK_CONTENT,
+    VAR_LEGACY_COMPANION_ARCHIVE,
     '',
     '## 变量系统思维链（内部执行，用于 thinking 结构）',
     '',
-    VARIABLE_COT_PROMPT,
-    '',
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    nsfwEnabled && '## NSFW 档案开关',
-    nsfwEnabled && `- 当前 NSFW 总开关：开启。`,
-    nsfwEnabled && `- 当前男性 NSFW 档案：${maleArchiveEnabled ? '开启' : '关闭'}。关闭时禁止写男性身体档案、男性私密部位和男性长期私密事实。`,
-    nsfwEnabled && '- NSFW 档案目前仍属于兼容旧命令范围；只有角色成人确认、且正文有稳定长期事实时才少量写入旧 <变量更新>。',
-    nsfwEnabled && '- NSFW 档案优先使用 <变量事实> 的 nsfw_archive，不要依赖旧路径命令；旧命令只作兜底。',
-    nsfwEnabled && '- 帕姆、佩佩、史瓦罗等智械/机械/非人形对象，以及怪物、裂界生物禁止写 NSFW 档案；其余角色（包括年龄未标注的）按 NSFW 总开关正常处理。',
-    ...(nsfwEnabled && baselineCandidates.length ? [
-      '',
-      '## NSFW 基线档案补建（本回合需要处理）',
-      '以下角色已入档但缺少 NSFW 基线档案。请为本回合列出的每个角色生成 nsfw_archive 事实，',
-      '基于角色的原著设定、外貌、性格和已有关系生成稳定的长期基线（不代表已发生亲密剧情）。',
-      '基线只写实质内容（边界、偏好、敏感点、禁忌、身体档案、经历），不要写标签、备注或长期事实。',
-      '- 亲密阶段基线统一写"未建立"。',
-      '- 偏好/敏感点基于角色性格合理推断，禁忌基于角色底线。',
-      '- 身体档案基于外貌锚点写简洁、稳定、可复用的描述；只为男性角色生成男性身体档案，只为女性角色生成女性身体档案。',
-      '- 女性身体档案尽量补齐：胸部、女性私处、后庭、体态、体味；男性身体档案尽量补齐：男性器、后庭、体态、体味。',
-      '- 经历只写“暂无亲密经历记录”这类中性基线，除非正文已发生过可确认亲密事实；不要把基线生成写成已发生关系。',
-      '- ageConfirm：原著角色按设定判断（adult/unknown），不确定写 unknown。',
-      '',
-      '待补建角色：',
-      ...baselineCandidates.map((c) => `- ${c.npcName}（id: ${c.npcId}，性别: ${c.gender || '未知'}）${c.appearance ? `；外貌: ${c.appearance}` : ''}${c.personality ? `；性格: ${c.personality}` : ''}`),
-    ] : []),
+    VAR_LEGACY_COT_PROMPT,
     '',
     '## 旧 <变量更新> 兼容命令格式',
     '',
@@ -402,6 +372,41 @@ export function buildVariableModelPrompt(
     '- 不要把剧情编织当前段、后续段、原著分段结果、未触发敌人、未抵达地点或未登场 NPC 当成本回合变量事实。',
     '- 不要输出 traveler_profile；旅人核心档案保护优先于正文里的临时描述。',
     '- 不确定就不写。宁可漏掉轻微变量，也不要写错对象、错日期、错路径。',
+    ].filter(Boolean).join('\n'),
+    ...(nsfwEnabled ? [
+      '',
+      '### NSFW 档案：nsfw_archive',
+      '- 字段：npcId、npcName、enabled、ageConfirm、intimacyStage、boundaries、preferences、sensitivePoints、taboos、femaleBodyArchive、maleBodyArchive、experiences、longTermFacts、tags、notes、evidence。',
+      '- 对象是已入档重要 NPC（companion / 同行 / 原著角色）、本回合正文出现成人向亲密互动或长期关系变化时，应输出 nsfw_archive 事实。',
+      '- 年龄门禁已解除：ageConfirm 只作展示信息（adult / unknown / minor_blocked），不再限制身体档案、偏好、敏感点或经历的写入。unknown 也能正常写入完整档案。',
+      '- 亲密事实/偏好/敏感点/身体档案必须来自本回合正文证据或已成立的关系基础，不凭空编造。',
+      '- femaleBodyArchive 字段使用中文 key：胸部、女性私处、后庭、体态、体味。maleBodyArchive 字段使用：男性器、后庭、体态、体味。',
+      maleArchiveEnabled === false ? '- 男性 NSFW 档案开关关闭时，不写 maleBodyArchive 或男性私密长期事实。' : '',
+      '- 帕姆、史瓦罗等智械/机械/非人形对象禁止写 nsfw_archive；其余角色（包括年龄未标注的）按 NSFW 总开关正常处理。',
+      `- 示例：{"type":"nsfw_archive","npcName":"三月七","enabled":true,"ageConfirm":"unknown","intimacyStage":"暧昧试探","boundaries":"需要明确同意，不接受公开场合越界。","longTermFacts":["第12回合与玩家确认亲近前先确认边界。"],"tags":["慢热"],"evidence":"正文写明双方确认边界"}`,
+    ] : []),
+    ...(nsfwEnabled ? [
+      '',
+      '## NSFW 档案开关',
+      `- 当前 NSFW 总开关：开启。`,
+      `- 当前男性 NSFW 档案：${maleArchiveEnabled ? '开启' : '关闭'}。关闭时禁止写男性身体档案、男性私密部位和男性长期私密事实。`,
+      '- NSFW 档案目前仍属于兼容旧命令范围；只有角色成人确认、且正文有稳定长期事实时才少量写入旧 <变量更新>。',
+      '- NSFW 档案优先使用 <变量事实> 的 nsfw_archive，不要依赖旧路径命令；旧命令只作兜底。',
+      '- 帕姆、佩佩、史瓦罗等智械/机械/非人形对象，以及怪物、裂界生物禁止写 NSFW 档案；其余角色（包括年龄未标注的）按 NSFW 总开关正常处理。',
+    ] : []),
+    ...(nsfwEnabled && baselineCandidates.length > 0 ? [
+      '',
+      '## NSFW 基线档案补建',
+      '- 本回合或近期对话暗示以下 NPC 与玩家已建立亲密关系，但还没有初始 NSFW 档案。如果正文有相关证据，优先为以下候选补建 nsfw_archive 基线档案：',
+      ...baselineCandidates.map((c) => `  - ${c.npcName}${c.gender ? `（${c.gender}）` : ''}`),
+      '',
+      '- 基线档案要求：',
+      '- 身体档案、经历可以尽量补齐（女性身体档案尽量补齐：胸部、女性私处、后庭、体态、体味；男性尽量补齐：男性器、后庭、体态、体味），但不确定的部位不硬凑。',
+      '- 经历只写“暂无亲密经历记录”这类中性基线，不要凭空编造亲密场景。',
+      '- boundaries / preferences / sensitivePoints 可以写"尚未探索"作占位。',
+      '- tags 可写 ["基线补建"] 标记。',
+      '- ageConfirm 可先写 unknown，运行时会根据 NPC 档案自动修正。',
+    ] : []),
     '',
     '---',
     '',
@@ -409,6 +414,22 @@ export function buildVariableModelPrompt(
     '',
     registry,
   ].filter(Boolean).join('\n');
+}
+
+export function buildVariablePromptModulesSection(
+  promptModules?: 提示词模块[],
+  nsfwEnabled?: boolean,
+): string {
+  if (!promptModules || promptModules.length === 0) return '';
+  const filtered = promptModules
+    .filter((m) => m.enabled && m.scope?.includes('calibration'))
+    .sort((a, b) => a.order - b.order);
+  if (filtered.length === 0) return '';
+  const base = filtered.map((m) => m.content).join('\n\n');
+  if (nsfwEnabled) {
+    return base + '\n\n' + NSFW_ARCHIVE_SEPARATION_RULE;
+  }
+  return base;
 }
 
 /** 调用变量模型，返回原始文本（待 parseVariableFacts / parseVariableCommands 解析）。 */
@@ -420,7 +441,7 @@ export async function callVariableModel(
     enabled: request.nsfwEnabled,
     maleArchiveEnabled: request.maleNsfwArchiveEnabled,
     baselineCandidates: request.nsfwBaselineCandidates,
-  });
+  }, request.promptModules);
 
   const userMessage = [
     `## 第 ${request.turnCount} 回合的正文`,

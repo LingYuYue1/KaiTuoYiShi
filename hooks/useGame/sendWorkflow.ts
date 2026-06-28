@@ -2946,6 +2946,7 @@ async function runVariableCalibrationStep(
       nsfwBaselineCandidates,
       signal: params.signal,
       retryCount: state.gameSettings.variableApi.retryCount ?? 2,
+      promptModules: state.gameSettings.promptModules,
     });
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 

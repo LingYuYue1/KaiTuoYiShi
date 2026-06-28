@@ -11,6 +11,7 @@ const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const promptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
 const variableCot = fs.readFileSync('prompts/cot/variableCot.ts', 'utf8');
+const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
 
 assert(executor.includes('解析背包数量扣减目标'), '变量执行器必须识别背包数量扣减兼容命令。');
 assert(executor.includes("tokens[0] !== '背包'") && executor.includes("tokens[2] !== '数量'"), '背包扣减兼容命令必须限定在 旅人.背包[...].数量。');
@@ -25,7 +26,7 @@ assert(facts.includes('是非背包信息物品'), '变量事实层必须过滤�
 assert(facts.includes('坐标/权限/线索/情报等信息，不是可放入背包的实体物品'), '纯信息 item 必须被转为可读 warning 而不是进入背包。');
 assert(registry.includes('isInformationOnlyBackpackValue'), '旧变量命令 push 背包也必须过滤纯信息物品。');
 assert(registry.includes('坐标、位置、权限信息、线索、情报或消息不是实体背包物品'), '旧变量命令过滤原因必须说明坐标/线索不是物品。');
-for (const source of [variableModel, variableWorldbook, promptModules, variableCot]) {
+for (const source of [variableModel, variableWorldbook, promptModules, variableCot, variableOutputFormat]) {
   assert(source.includes('坐标') && source.includes('信息') && source.includes('实体'), '提示词必须明确坐标/权限/线索等信息不是实体背包物品。');
 }
 

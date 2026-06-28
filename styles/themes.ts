@@ -118,9 +118,9 @@ export const themes: ThemeDefinition[] = [
       '--tj-btn-primary-end': '160, 140, 220',
       '--tj-btn-primary-text': '6, 14, 28',
       /* ── 聊天 ── */
-      '--tj-chat-bubble': '253, 250, 242',
-      '--tj-chat-bubble-alpha': '0.94',
-      '--tj-chat-text': '58, 50, 42',
+      '--tj-chat-bubble': '18, 22, 36',
+      '--tj-chat-bubble-alpha': '0.78',
+      '--tj-chat-text': '205, 222, 242',
       '--tj-chat-muted': '150, 172, 200',
       /* ── 阴影 ── */
       '--tj-shadow': '0, 0, 0',

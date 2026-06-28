@@ -8,6 +8,7 @@ const npcModel = fs.readFileSync('models/npc.ts', 'utf8');
 const variableCommand = fs.readFileSync('models/variableCommand.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
+const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const builtinPromptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
 const promptModel = fs.readFileSync('models/prompts.ts', 'utf8');
@@ -80,9 +81,9 @@ for (const field of [
 }
 
 assert(variableModel.includes('VARIABLE_SYSTEM_WORLDBOOK_PROMPT'), '变量模型系统提示词必须注入变量世界书。');
-assert(variableModel.includes('<NPC档案记忆写入法则>'), '变量模型 NPC 字段说明必须指向完整 NPC 写入法则块。');
-assert(variableModel.includes('三月七给过玩家备用通讯码'), '变量模型必须包含承诺/联系方式进入 mustRemember 的示例。');
-assert(variableModel.includes('丹恒已经察觉玩家隐瞒星核线索'), '变量模型必须包含冲突保护进入 doNotForget 的示例。');
+assert(variableModel.includes('<NPC档案记忆写入法则>') || variableOutputFormat.includes('<NPC档案记忆写入法则>'), '变量模型 NPC 字段说明必须指向完整 NPC 写入法则块。');
+assert(variableModel.includes('三月七给过玩家备用通讯码') || variableOutputFormat.includes('三月七给过玩家备用通讯码'), '变量模型必须包含承诺/联系方式进入 mustRemember 的示例。');
+assert(variableModel.includes('丹恒已经察觉玩家隐瞒星核线索') || variableOutputFormat.includes('丹恒已经察觉玩家隐瞒星核线索'), '变量模型必须包含冲突保护进入 doNotForget 的示例。');
 
 assert(variableFacts.includes('recentInteraction: 读字符串(raw.recentInteraction || raw.最近互动)'), '变量事实解析必须读取 recentInteraction/最近互动。');
 assert(variableFacts.includes('openItems: 字符串数组(raw.openItems ?? raw.未完成事项 ?? raw.未完成承诺)'), '变量事实解析必须读取未完成事项。');

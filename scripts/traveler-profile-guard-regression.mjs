@@ -10,6 +10,7 @@ const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
+const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
 const variableCot = fs.readFileSync('prompts/cot/variableCot.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const promptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
@@ -60,9 +61,9 @@ assert(sendWorkflow.includes('isTravelerPlayerAuthoredVariablePath'), '变量执
 assert(sendWorkflow.includes('skippedTravelerProfileLegacyCount'), '变量批次报告必须统计被静默忽略的旅人核心档案旧命令。');
 assert(sendWorkflow.includes('已静默忽略旅人核心档案旧命令'), '变量批次报告必须说明旧旅人档案命令已静默忽略。');
 
-assert(variableModel.includes('不得输出 traveler_profile'), '变量模型提示词必须禁止 traveler_profile。');
-assert(variableModel.includes('旅人核心档案由玩家手写维护'), '变量模型提示词必须说明旅人核心档案由玩家维护。');
-assert(variableModel.includes('剧情中获得的新身份称呼、临时伪装、别人对玩家能力的认知'), '变量模型必须给出替代落库方向。');
+assert(variableModel.includes('不得输出 traveler_profile') || variableOutputFormat.includes('不得输出 traveler_profile'), '变量模型提示词必须禁止 traveler_profile。');
+assert(variableModel.includes('旅人核心档案由玩家手写维护') || variableOutputFormat.includes('旅人核心档案由玩家手写维护'), '变量模型提示词必须说明旅人核心档案由玩家维护。');
+assert(variableModel.includes('剧情中获得的新身份称呼、临时伪装、别人对玩家能力的认知') || variableOutputFormat.includes('剧情中获得的新身份称呼、临时伪装、别人对玩家能力的认知'), '变量模型必须给出替代落库方向。');
 assert(variableCot.includes('不写 traveler_profile'), '变量 CoT 必须禁止 traveler_profile。');
 assert(variableCot.includes('剧情中获得的新身份称呼、临时伪装、别人对玩家能力的认知'), '变量 CoT 必须说明改写方向。');
 assert(variableWorldbook.includes('玩家手写核心档案只读'), '变量世界书必须说明玩家手写核心档案只读。');
@@ -72,8 +73,8 @@ assert(promptModules.includes('核心档案由玩家手写维护'), '主剧情�
 assert(variableFacts.includes('isCanonicalNpcPersonalityProtected'), '事实层必须保护原著 NPC 长期性格字段。');
 assert(variableFacts.includes('原著角色长期性格由智库人物主体资料校准'), '原著 NPC 性格保护必须写入变量报告说明。');
 assert(variableFacts.includes('性格: canonical?.personality ?? fact.personality'), '新建原著 NPC 时必须优先使用原著库性格而不是变量事实临时性格。');
-assert(variableModel.includes('原著角色的长期 personality / 性格 不由变量系统改写'), '变量模型提示词必须禁止改写原著角色长期性格。');
-assert(variableModel.includes('不要把“本回合沉默/紧张/冷淡”固化成长期性格'), '变量模型必须禁止把单回合状态固化成人格。');
+assert(variableModel.includes('原著角色的长期 personality / 性格 不由变量系统改写') || variableOutputFormat.includes('原著角色的长期 personality / 性格 不由变量系统改写'), '变量模型提示词必须禁止改写原著角色长期性格。');
+assert(variableModel.includes('不要把"本回合沉默/紧张/冷淡"固化成长期性格') || variableOutputFormat.includes('不要把"本回合沉默/紧张/冷淡"固化成长期性格'), '变量模型必须禁止把单回合状态固化成人格。');
 assert(variableWorldbook.includes('原著角色的长期 \\`性格\\` 由智库人物主体资料校准'), '变量世界书必须说明原著 NPC 性格由智库主体资料校准。');
 assert(canonicalCharacters.includes('熟悉同伴后会自然吐槽和接梗'), '星的原著兜底性格不能继续固化为长期沉默。');
 assert(canonicalCharacters.includes('不应被写成空白沉默工具人'), '穹的原著兜底性格不能继续固化为长期沉默。');

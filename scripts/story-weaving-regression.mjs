@@ -161,6 +161,7 @@ writeStub('data/storyWeavingWorldbook.mjs', 'export const STORY_WEAVING_WORLD_BO
 writeStub('prompts/cot/newsCot.mjs', 'export const NEWS_COT_PROMPT = "";\n');
 writeStub('prompts/cot/phoneCot.mjs', 'export const PHONE_COT_PROMPT = "";\n');
 writeStub('prompts/cot/variableCot.mjs', 'export const VARIABLE_COT_PROMPT = "";\n');
+writeStub('prompts/cot/variableOutputFormat.mjs', 'export const VARIABLE_OUTPUT_FORMAT_PROMPT = "";\n');
 writeStub('data/newsWorldbook.mjs', 'export const NEWS_WORLD_BOOK_PROMPT = "";\n');
 writeStub('data/phoneWorldbook.mjs', 'export const PHONE_WORLD_BOOK_PROMPT = "";\n');
 writeStub('data/variableWorldbook.mjs', 'export const VARIABLE_SYSTEM_WORLDBOOK_PROMPT = "";\nexport const NSFW_ARCHIVE_SEPARATION_RULE = "";\n');
@@ -1041,11 +1042,12 @@ assert(stageIndexBlock.includes('阶段索引当前段'), '阶段索引应保留
 assert(!stageIndexBlock.includes('阶段索引偏离段'), '阶段索引不应被已偏离段污染；偏离内容应留在历史归档/诊断层。');
 
 const variablePrompt = variableModel.buildVariableModelPrompt({});
-assert(variablePrompt.includes('只记录正文和变量草稿能相互印证的已发生事实'), '变量模型提示词必须保留正文事实边界。');
-assert(variablePrompt.includes('剧情编织滑窗、智库资料、新闻苗头、即时剧情回顾和剧情回忆'), '变量模型提示词必须明确参考材料不等于变量事实。');
-assert(variablePrompt.includes('不要把剧情编织当前段、后续段、原著分段结果'), '变量模型提示词必须禁止把剧情编织分段直接落库。');
+assert(variablePrompt.includes('只记录正文和变量草稿能相互印证的已发生事实') || variableOutputFormat.includes('只记录正文和变量草稿能相互印证的已发生事实'), '变量模型提示词必须保留正文事实边界。');
+assert(variablePrompt.includes('剧情编织滑窗、智库资料、新闻苗头、即时剧情回顾和剧情回忆') || variableOutputFormat.includes('剧情编织滑窗、智库资料、新闻苗头、即时剧情回顾和剧情回忆'), '变量模型提示词必须明确参考材料不等于变量事实。');
+assert(variablePrompt.includes('不要把剧情编织当前段、后续段、原著分段结果') || variableOutputFormat.includes('不要把剧情编织当前段、后续段、原著分段结果'), '变量模型提示词必须禁止把剧情编织分段直接落库。');
 
 const storyWeavingSource = fs.readFileSync(path.join(root, 'services/storyWeaving.ts'), 'utf8');
+const variableOutputFormat = fs.readFileSync(path.join(root, 'prompts/cot/variableOutputFormat.ts'), 'utf8');
 const storyWeavingOutputFormat = fs.readFileSync(path.join(root, 'prompts/cot/storyWeavingOutputFormat.ts'), 'utf8');
 assert(storyWeavingSource.includes('本段结束状态必须写成可判定的完成条件或阶段落点') || storyWeavingOutputFormat.includes('本段结束状态必须写成可判定的完成条件或阶段落点'), 'AI 分解提示词必须要求本段结束状态是可判定完成条件。');
 assert(storyWeavingSource.includes('不能写氛围句、悬念句、预告句') || storyWeavingOutputFormat.includes('不能写氛围句、悬念句、预告句'), 'AI 分解提示词必须禁止氛围句/悬念句进入结束状态。');

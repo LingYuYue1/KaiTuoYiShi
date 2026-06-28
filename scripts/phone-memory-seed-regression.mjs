@@ -9,6 +9,7 @@ const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
+const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const phoneCot = fs.readFileSync('prompts/cot/phoneCot.ts', 'utf8');
 const phoneOutputFormat = fs.readFileSync('prompts/cot/phoneOutputFormat.ts', 'utf8');
@@ -65,7 +66,7 @@ assert(!phoneWorldbook.includes('整个群聊本轮总回复量控制在 6-15 �
 assert(builtinPromptModules.includes('群聊 12-20 条'), 'builtin phone prompt module description must match the runtime group-chat 12-20 rule.');
 assert(!builtinPromptModules.includes('群聊 6-15 条'), 'builtin phone prompt module description must not keep the retired 6-15 group-chat rule.');
 
-assert(variableModel.includes('低频跟进') || variableModel.includes('手机不能长期沉默'), 'variable model prompt must audit low-frequency proactive phone messages.');
+assert((variableModel.includes('低频跟进') || variableOutputFormat.includes('低频跟进')) || variableModel.includes('手机不能长期沉默'), 'variable model prompt must audit low-frequency proactive phone messages.');
 assert(variableWorldbook.includes('手机不能长期沉默'), 'variable worldbook must audit low-frequency proactive phone messages.');
 assert(queueTask.includes("'phone'"), 'queue task types must include phone.');
 assert(drawer.includes("latestTaskById.get('phone')"), 'variable drawer must display phone queue tasks.');
