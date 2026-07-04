@@ -1,4 +1,5 @@
-import type { 提示词模块 } from '@/models/prompts';
+import { getDefaultModuleFields } from '@/models/prompts';
+import type { 提示词模块, 提示词模块类目, 提示词模块作用域 } from '@/models/prompts';
 import { MAIN_COT_PROMPT } from '@/prompts/cot/mainCot';
 import { FREE_OPENING_COT_PROMPT, OPENING_COT_PROMPT, PRESET_OPENING_COT_PROMPT } from '@/prompts/cot/openingCot';
 import { PATH_AWAKENING_COT_PROMPT } from '@/prompts/cot/pathAwakeningCot';
@@ -16,6 +17,17 @@ import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
 import { STORY_WEAVING_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/storyWeavingOutputFormat';
 import { STORY_WEAVING_WORLD_BOOK_PROMPT } from '@/data/storyWeavingWorldbook';
 import { YITING_RECALL_PROMPT, YITING_ARCHIVE_FORMAT_PROMPT } from '@/prompts/cot/yitingCot';
+
+function makeBuiltin(overrides: Partial<提示词模块> & { id: string; title: string; description: string; category: 提示词模块类目; content: string; order: number; scope: 提示词模块作用域[] }): 提示词模块 {
+  return {
+    enabled: true,
+    builtin: true,
+    ...getDefaultModuleFields(),
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  };
+}
 
 // 内置提示词模块。content 中可含 {wordCountTarget} / {personLabel} / {playerName} 占位符，
 // 在 systemPromptBuilder.injectPromptModules 中按运行时设置替换。
@@ -397,6 +409,32 @@ const NO_CONTROL_CONTENT = `# 角色边界（NoControl）/ 防止抢话
 - 文本中出现「你说道 / 你选择 / 你决定 / 你可以选择 / 请选择 / A.B.C. / 1.2.3.」等代写或选项化结构 → **必须删除并改写**为 NPC 或环境描述。
 - 文本中出现替玩家扩写的心理 / 神态 / 感受 / 动机 → 必须删除，或改写为**环境侧写 + NPC 视角观察**（如「她注意到你没回话」「他看你抿了一下嘴」这种第三方观察句，而非「你心里其实是难过的」这种代写句）。`;
 
+const PLAYER_SPEECH_EXPANSION_CONTENT = `# 抢话模式（适度代写玩家对白）
+
+## 1. 模式目标
+- 当前模式允许你在玩家没有写出完整对白时，**少量**为玩家角色补出自然、短促、贴合输入意图的对白或轻动作。
+- 目标是让主角不再像完全沉默的旁观者，而不是让 AI 接管玩家角色。
+- 你仍然主要扮演 NPC 与旁白；正文重心必须放在场景推进、NPC 反应、环境反馈与新局面上。
+
+## 2. 可代写范围
+- 玩家输入包含明确意图但没有原句时，可以把它扩写成 1-2 句短对白。例如“向三月七道谢”可写成【{playerName}】谢谢你带路。
+- 玩家输入是问话、寒暄、安慰、调侃、简单命令、简短态度表达时，可以补成简洁台词。
+- 可以搭配轻动作，如点头、抬手、停步、看向某人，但只能服务于玩家已输入的意图。
+- 玩家给出明确原话时，优先使用原话，不要擅自大幅改写。
+
+## 3. 禁止越界
+- 不要替玩家做关键决定、立场承诺、阵营选择、恋爱告白、生死选择、任务接受/拒绝、战斗杀招或重大道德判断。
+- 不要替玩家写长篇独白、连续追问、连续命令或一整段谈判；玩家对白通常不超过本回合正文的 25%。
+- 不要替玩家写深层心理、隐藏动机、强烈情绪、生理反应或无法从输入推出的私人想法。
+- 不要让【{playerName}】连续刷屏；玩家发言后必须让 NPC、环境或事件作出回应。
+- 不要把 NPC 台词挂到【{playerName}】下。
+
+## 4. 抢话节奏
+- 玩家本回合输入越短，代写越短；玩家输入越具体，承接越具体。
+- 若玩家只是动作输入，优先写动作结果；只有场景自然需要一句口头确认时，才补一句玩家短对白。
+- 若剧情处于高风险谈判、秘密选择、关系突破或战斗决策，宁可让 NPC 追问，也不要替玩家表态。
+- 输出前自检：玩家是否仍然拥有下一步选择权？如果没有，删减玩家对白，把推进交还给 NPC、环境和行动选项。`;
+
 const NPC_AUTONOMY_CONTENT = `# NPC 自主性 / 反待命物件
 
 NPC 不是玩家的随从按钮，也不是为了让玩家顺利推进而自动配合的道具。每个 NPC 都有自己的职责、目标、恐惧、信息盲区、立场、时间压力和关系边界。
@@ -470,6 +508,71 @@ const NSFW_CONTENT = `# NSFW 模式
 - 若成人向内容形成长期事实，后续变量系统应写入对应 NPC 的 \`NSFW档案\`，而不是普通人物介绍、外貌或同行记忆。
 - 可回写的长期事实包括：亲密阶段变化、明确边界、稳定偏好、敏感点、禁忌、关键经历、需要后续准确承接的承诺或风险。
 - 临时姿势、当场反应、单次氛围不应进入长期档案。`;
+
+// ── 复合情感协议（参考 Izumi felt[A+B]，P2 可选，默认关闭）────────────────
+// 玩家可选开启：开启后 AI 在思考段按 felt[A+B] 字段输出 NPC 当下复合情感，
+// 并在正文让情绪从行动 / 节奏 / 细节里自然流露，而不是直接告诉读者"她既 A 又 B"。
+
+const EMOTION_PROTOCOL_CONTENT = `# 复合情感协议（felt[A+B]）
+
+## 字段含义
+
+在主剧情思维链的 NPC 分析环节，对每个本轮有戏份的 NPC 输出一个 \`felt\` 字段，记录其当下的主观复合情感。
+
+格式：\`felt[主调+底色]\`
+- 主调：本轮占上风的情绪，决定角色整体行为基调（说话节奏、做事幅度、对外反应速度）
+- 底色：同一时刻并存但未占上风的情绪，不会消失，会在细节里流露
+
+示例：
+- \`felt[平静+专注]\`：整体安静不急躁（平静主导），但眼神一直盯着某处、注意力全在那里（专注在细节体现）
+- \`felt[矛盾+坚定]\`：行动上很果断（坚定主导），但收拾东西的手停了一下、走到门口脚步慢了一拍（矛盾在缝隙冒出来）
+- \`felt[紧张+期待]\`：表面绷着、动作拘谨（紧张主导），但语速比平时快、不自觉往前倾（期待在细节里）
+
+## 写作要求
+
+1. 人不是单细胞生物。同一时刻可以同时紧张和期待、生气和心疼、开心但有点不安。但这些情绪不是各占一半——总有一个是主调，另一个是底色。
+2. 占上风的情绪决定角色整体的行为基调；没占上风的那个情绪不会消失，它会在细节里流露。
+3. **不要写"她既感到 A 又感到 B"**——这是在替读者做心理分析。让情绪从角色做的事和节奏里自己流出来。
+4. felt 字段只在思维链里输出，不写进正文。正文里只通过动作、语气、节奏呈现情绪，不直接点名复合情感结构。
+5. 主调与底色都不是固定标签——同一 NPC 在不同回合主调可能切换，底色也可能变化。每回合根据当前情境重新判断。
+
+## 与现有系统的关系
+
+- 不替代 NPC 账本的情感记录，而是在思维链里临时标注本轮情感，帮 AI 决定正文节奏。
+- 与文风模块不冲突：文风决定行文质感，felt 决定角色当下的情绪底色。
+- NSFW 场景同样适用：亲密场景中的 felt 可能是 \`felt[渴望+紧张]\` 或 \`felt[主动+羞怯]\`，主调决定推进节奏，底色在细节里流露。`;
+
+// ── 认知隔离机制（参考 Izumi Master/<user>，P2 可选，默认关闭）────────────────
+// 玩家可选开启：开启后 AI 严格遵守"玩家 = Master（故事外读者）"与"旅者 = <user>（故事内角色）"
+// 的边界，不替旅者说话、不写旅者心理、不让旅者知道故事外信息。
+
+const COGNITIVE_ISOLATION_CONTENT = `# 认知隔离机制（Master / <user>）
+
+## 核心概念
+
+- **Master**：故事外的唯一读者（玩家本人）。Master 的输入决定故事内旅者的言行，但 Master 本人不进入故事。
+- **<user>**：故事内的旅者角色。所有用户输入内容都被视为 <user> 的话和行动。
+- Master 与 <user> 是两个不同的概念：Master 是现实中的玩家，<user> 是故事中的角色。
+
+## 写作规则
+
+1. **不替 <user> 说话**：不生成 <user> 的对白、心理描写、未明确输入的决定或额外动作。
+2. **不写 <user> 心理**：不以"沉默""思考""犹豫"等无言表现来描写 <user> 的内心。用户没输入的内容，<user> 就没做、没想。
+3. **<user> 认知受故事内限制**：<user> 只知道故事内他亲身经历、亲眼所见、亲耳所闻的事。故事外的世界书条目、NPC 账本、变量状态、思维链内容，<user> 都不知道。
+4. **如实处理用户输入**：用户输入什么，<user> 就说什么、做什么。不要替 <user> 润色、补充、修正或合理化。
+5. **NPC 不知道 <user> 没表现出来的事**：NPC 只能通过 <user> 的言行、表情、动作来感知 <user>，不能读心。
+
+## 与现有系统的关系
+
+- 与「角色边界 / 防止抢话」模块目标一致，但更明确：本模块额外强调 Master/<user> 概念分离与故事内认知限制。
+- 与「人称模块」不冲突：人称决定代词与镜头，本模块决定 AI 不能代写 <user> 的哪些内容。
+- 与 NPC 自主性模块协同：NPC 有自己的目的和行动，<user> 由玩家输入决定，两者边界清晰。
+- 若用户输入与故事内认知矛盾（例如 <user> 突然知道不该知道的事），AI 可通过 NPC 反应来提示不合理，而不是直接拒绝或替 <user> 修正。
+
+## 适用场景
+
+- 默认关闭：不开启时，AI 按现有规则写作（仍受「角色边界 / 防止抢话」约束）。
+- 开启后：适用于追求"玩家完全掌控旅者言行、AI 不代写"的玩家。沉浸感更强，但对玩家输入要求更高。`;
 
 // ── 人称模块（三选一，由「设置 → 游戏设定 → 叙述人称」控制启用）────────────────
 // 与「角色边界 / 防止抢话」共享一段通用边界文案：人称只决定代词与镜头，
@@ -611,490 +714,487 @@ const STORY_WEAVING_OUTPUT_FORMAT_CONTENT = STORY_WEAVING_OUTPUT_FORMAT_PROMPT;
 export function createBuiltinPromptModules(): 提示词模块[] {
   const now = Date.now();
   return [
-    {
+    makeBuiltin({
       id: 'builtin_dev_mode',
       title: '开发者模式',
       description: '开启后 AI 把玩家消息视为开发者测试指令，允许打破第四面墙配合调试。默认关闭。',
       category: 'devmode',
       content: DEV_MODE_CONTENT,
       enabled: false,
-      builtin: true,
       order: 5,
       scope: ['all'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_narrator_persona',
       title: '叙述者人格',
       description: 'AI 作为固定叙事主持者，以当前玩家角色为中心推进剧情并维护人设连续。',
       category: 'persona',
       content: NARRATOR_PERSONA_CONTENT,
       enabled: true,
-      builtin: true,
       order: 10,
       scope: ['all'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_opening_cot',
       title: '开局思维链',
       description: '首回合专用 CoT（12 步）：开局锚点 → 镜头方向 → 入场契机 → 感官三入口 → 命途与身份暗示 → NPC 状态 → 压力线 → 候选开场方案 → 反应 → 接口预留 → 记忆/动态世界 → 文风自检。仅 turnCount=1 时注入。',
       category: 'cot',
       content: OPENING_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 45,
+      order: 1000,
       scope: ['opening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_main_plot_cot',
       title: '主剧情思维链',
       description: '主流程 CoT（14 步）：上下文锚定 → 输入解析 → NPC 分析 → 候选方案 A/B + 选定理由 → 各 NPC 反应 → 冲突场面 → 状态 → 文风 → 自检。仅 turnCount>1 时注入。',
       category: 'cot',
       content: MAIN_PLOT_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 50,
+      order: 1010,
       scope: ['main'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_path_awakening_cot',
       title: '命途狭间思维链',
       description: '命途狭间专用 CoT（6 步）:身份锚定 → 虚境登场 → 出题 3 道（围绕命途核心理念）→ 升阶回应预设 → 命途意志诘问语气 → 输出格式约束。仅当世界状态.进行中狭间存在时注入,本回合完全替代主剧情流程。',
       category: 'cot',
       content: PATH_AWAKENING_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 55,
+      order: 1011,
       scope: ['pathAwakening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_news_cot',
       title: '星际和平周报思维链',
       description: '独立新闻系统专用 CoT：从主回合、世界状态和既有新闻中判断即将发生 / 进行中 / 已完成 / 归档新闻。仅供新闻模型读取，默认不注入主叙事。',
       category: 'cot',
       content: NEWS_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 56,
+      order: 1020,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_news_worldbook',
       title: '星际和平周报世界书',
       description: '新闻系统的世界书规则：四栏位定义、类目说明、HSR 风格约束、事件连续性、剧情编织联动、数量限制与输出安全。',
       category: 'custom',
       content: NEWS_WORLDBOOK_CONTENT,
       enabled: true,
-      builtin: true,
       order: 50,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_news_output_format',
       title: '星际和平周报输出格式',
       description: '新闻系统结构化 JSON 输出格式定义：新增/更新/归档/删除四数组、字段定义、类目与状态枚举。',
       category: 'format',
       content: NEWS_OUTPUT_FORMAT_CONTENT,
       enabled: true,
-      builtin: true,
       order: 66,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_zhiku_cot',
       title: '智库思维链',
       description: '原著资料中枢专用 CoT：负责检索、压缩、摘要与召回，不输出正文叙事。',
       category: 'cot',
       content: ZHIKU_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 57,
+      order: 1020,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_zhiku_output_format',
       title: '智库输出与筛选规则',
       description: '智库查缺补漏模型的输出格式与筛选硬规则：关键词召回上限、AI 补充上限、三行输出格式定义。',
       category: 'format',
       content: ZHIKU_OUTPUT_FORMAT_CONTENT,
       enabled: true,
-      builtin: true,
       order: 67,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_yiting_recall',
       title: '忆庭召回提示词',
       description: '忆庭召回模型的系统提示词：从回忆档案中检索强弱回忆，区分相关程度与承接优先级。',
       category: 'cot',
       content: YITING_RECALL_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 68,
+      order: 1020,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_yiting_archive_format',
       title: '忆庭精炼输出格式',
       description: '忆庭精炼模型的输出格式与额外约束：SUMMARY 规整格式、BODY 禁止新增事件、人格保护。',
       category: 'format',
       content: YITING_ARCHIVE_FORMAT_CONTENT,
       enabled: true,
-      builtin: true,
       order: 69,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_phone_worldbook',
       title: '手机系统世界书',
       description: '手机独立通讯系统的世界书：定义私聊/群聊节奏、联系人解锁、主动来信、本地记忆、摘要回写与系统边界。',
       category: 'cot',
       content: PHONE_WORLDBOOK_CONTENT,
       enabled: true,
-      builtin: true,
       order: 50,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_phone_cot',
       title: '手机系统思维链',
       description: '独立手机系统专用 CoT：整合主剧情记忆、NPC 档案、新闻、手机本地摘要与会话历史；区分私聊 3-6 条、群聊 12-20 条，并生成可回写的通讯摘要。仅供手机模型读取，默认不注入主叙事。',
       category: 'cot',
       content: PHONE_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 56,
+      order: 1020,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_phone_output_format',
       title: '手机系统输出格式',
       description: '手机系统的写法要求与 JSON 输出格式：私聊 3-6 条/群聊 12-20 条、严禁复读、记忆写回约束。',
       category: 'format',
       content: PHONE_OUTPUT_FORMAT_CONTENT,
       enabled: true,
-      builtin: true,
       order: 66,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_story_weaving_worldbook',
       title: '剧情编织世界书',
       description: '剧情编织系统的世界书：定义系统定位、TXT 导入拆解流程、滑窗注入边界与新闻系统边界。',
       category: 'cot',
       content: STORY_WEAVING_WORLDBOOK_CONTENT,
       enabled: true,
-      builtin: true,
       order: 50,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_story_weaving_cot',
       title: '剧情编织思维链',
       description: '剧情编织 / 小说分解专用 CoT：把玩家导入 TXT 拆成滑窗注入资产，强调硬约束、铺垫、关键事件与信息可见性。',
       category: 'cot',
       content: STORY_WEAVING_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 56,
+      order: 1020,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_story_weaving_output_format',
       title: '剧情编织输出格式',
       description: '剧情编织分解模型的特别要求与 JSON 输出格式：信息可见性、结束状态判定、JSON schema。',
       category: 'format',
       content: STORY_WEAVING_OUTPUT_FORMAT_CONTENT,
       enabled: true,
-      builtin: true,
       order: 66,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_variable_worldbook',
       title: '变量系统世界书',
       description: '变量系统的世界书：定义 root 边界、NPC 好感度字段、背包/手机/命途 schema、只读系统与旧字段禁写规则。',
       category: 'cot',
       content: VARIABLE_WORLDBOOK_CONTENT,
       enabled: true,
-      builtin: true,
       order: 50,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_variable_cot',
       title: '变量系统思维链',
       description: '变量系统专用 CoT：从本回合正文提取已发生事实，优先输出 <变量事实> JSON；旧 <变量更新> 仅作兼容兜底。',
       category: 'cot',
       content: VARIABLE_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 56,
+      order: 1020,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_variable_output_format',
       title: '变量系统输出格式',
       description: '变量模型的输出协议、事实类型说明（time/location/npc/item/world_event/phone_seed）、旧命令兼容格式、thinking 规范与严格约束。',
       category: 'format',
       content: VARIABLE_OUTPUT_FORMAT_CONTENT,
       enabled: true,
-      builtin: true,
       order: 66,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_companion_archive_worldbook',
       title: '伙伴档案写作规范',
       description: '伙伴档案的写作规范：外貌、穿着、说话方式、性格、同行记忆与同名角色合并规则。',
       category: 'cot',
       content: COMPANION_ARCHIVE_CONTENT,
       enabled: true,
-      builtin: true,
       order: 55,
       scope: ['calibration'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_response_format',
       title: '回复格式',
       description: '4 标签协议（thinking / 正文 / 短期记忆 / 动态世界）+ 正文行格式（旁白 / 角色；心声受游戏设定开关控制）。',
       category: 'format',
       content: RESPONSE_FORMAT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 80,
+      order: 1030,
       scope: ['all'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_perspective_first',
       title: '写作人称·第一人称（我）',
       description: '玩家用「我」指代，正文行映射 + 输出纯净性约束。三种人称互斥，由「游戏设定 → 叙述人称」控制。',
       category: 'format',
       content: PERSPECTIVE_FIRST_CONTENT,
       enabled: false,
-      builtin: true,
-      order: 82,
+      order: 1031,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_perspective_second',
       title: '写作人称·第二人称（你）',
       description: '默认人称：玩家用「你」指代，强代入视角 + 输出纯净性约束。三种人称互斥。',
       category: 'format',
       content: PERSPECTIVE_SECOND_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 82,
+      order: 1032,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_perspective_third',
       title: '写作人称·第三人称（他 / 她）',
       description: '玩家用姓名或「他 / 她」指代，全知视角 + 谨慎心声 + 输出纯净性约束。三种人称互斥。',
       category: 'format',
       content: PERSPECTIVE_THIRD_CONTENT,
       enabled: false,
-      builtin: true,
-      order: 82,
+      order: 1033,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_action_options',
       title: '行动选项规范',
       description: '要求 AI 在正文后输出 <行动选项> 标签，给玩家 3-4 条可点选的下一步动作。与「游戏设定·行动选项功能」联动。',
       category: 'format',
       content: ACTION_OPTIONS_CONTENT,
       enabled: false,
-      builtin: true,
-      order: 85,
+      order: 1034,
       scope: ['all'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_no_control',
       title: '角色边界（防止抢话）',
       description: '禁止 AI 代写玩家言行 / 心理 / 神态；规范双引号对白识别、表层意图优先、可验证阻力、禁止正文内选项菜单。与「游戏设定·防止抢话」联动。',
       category: 'custom',
       content: NO_CONTROL_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 88,
+      order: 1040,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
+      id: 'builtin_player_speech_expansion',
+      title: '角色边界（抢话）',
+      description: '允许 AI 少量扩写玩家对白或轻动作，让主角不完全沉默；限制长篇代写、关键决定和深层心理。与「游戏设定·抢话」联动。',
+      category: 'custom',
+      content: PLAYER_SPEECH_EXPANSION_CONTENT,
+      enabled: false,
+      order: 1040.5,
+      scope: ['main', 'opening'],
+      createdAt: now,
+      updatedAt: now,
+    }),
+    makeBuiltin({
       id: 'builtin_npc_autonomy',
       title: 'NPC 自主性',
       description: '防止 NPC 无理由顺从玩家；要求 NPC 按职责、目标、关系、权限和风险独立回应，可质疑、拒绝、谈条件或按自己的方式执行。',
       category: 'custom',
       content: NPC_AUTONOMY_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 89,
+      order: 1041,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_preset_opening_cot',
       title: '预设开局思维链',
       description: '官方预设开局附加 CoT：提高地区/章节锚点权重，避免非黑塔开局回落默认黑塔，并要求玩家介入方式融入预设。',
       category: 'cot',
       content: PRESET_OPENING_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 46,
+      order: 1001,
       scope: ['opening'],
       openingSourceGate: ['official_preset'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_free_opening_cot',
       title: '自由开局思维链',
       description: '自由开局/创意工坊附加 CoT：玩家介入原文和整理档案优先，地区/章节仅作背景参考，并温和协调设定冲突。',
       category: 'cot',
       content: FREE_OPENING_COT_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 47,
+      order: 1002,
       scope: ['opening'],
       openingSourceGate: ['free', 'workshop'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_npc_ledger_continuity',
       title: 'NPC 账本承接法则',
       description: '主剧情读取 NPC 账本时承接本存档私有经历、关系、承诺、冲突和未完成事项；明确账本相关不等于自动在场。',
       category: 'custom',
       content: NPC_LEDGER_CONTINUITY_CONTENT,
       enabled: true,
-      builtin: true,
-      order: 90,
+      order: 1042,
       scope: ['main'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_writing_style',
       title: '参考文风·日记体',
       description: '日记体见闻录（轻松随意 / 第三人称全知 / 对白≥40% / 比喻可爱 / 动作代替「说」）。三种文风互斥，在「游戏设定 → 默认文风」切换。',
       category: 'style',
       content: WRITING_STYLE_DIARY_CONTENT,
       enabled: false,
-      builtin: true,
       order: 70,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-    {
+    }),
+    makeBuiltin({
       id: 'builtin_writing_style_hsr',
       title: '参考文风·星海纪闻（崩铁式）',
       description: '默认文风：崩铁原作风（第三人称全知 + 星际宿命感 + 角色口吻差异 + 环境锚定式镜头）。三种文风互斥。',
       category: 'style',
       content: WRITING_STYLE_HSR_CONTENT,
       enabled: true,
-      builtin: true,
       order: 71,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-  {
+    }),
+  makeBuiltin({
     id: 'builtin_writing_style_baimiao',
     title: '参考文风·白描',
     description: '汪曾祺 / 沈从文 / 海明威式白描（动作 + 物件 + 简单对白 / 不写情绪 / 短句留白）。三种文风互斥。',
     category: 'style',
     content: WRITING_STYLE_BAIMIAO_CONTENT,
     enabled: false,
-    builtin: true,
     order: 72,
     scope: ['main', 'opening'],
     createdAt: now,
     updatedAt: now,
-  },
-    {
+  }),
+    makeBuiltin({
       id: 'builtin_writing_style_custom',
       title: '文风-自定义',
       description: '玩家自填文风槽位：把你喜欢的叙述口气、比喻偏好、对白节奏写在这里，然后启用它。',
       category: 'style',
       content: '',
       enabled: false,
-      builtin: true,
       order: 73,
       scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
-    },
-  {
+    }),
+  makeBuiltin({
     id: 'builtin_nsfw',
       title: 'NSFW 模式',
       description: '开启后注入 NSFW 边界与节奏指南，允许成年人亲密 / 性描写。与「NSFW 设置」总开关联动。',
       category: 'custom',
       content: NSFW_CONTENT,
       enabled: false,
-      builtin: true,
-      order: 90,
+      order: 1043,
       scope: ['main'],
       createdAt: now,
       updatedAt: now,
-    },
+    }),
+  makeBuiltin({
+    id: 'builtin_emotion_protocol',
+      title: '复合情感协议',
+      description: '开启后 AI 在思维链按 felt[主调+底色] 字段输出 NPC 当下复合情感，并在正文让情绪从行动 / 节奏 / 细节自然流露。参考 Izumi 预设的 felt 字段协议。',
+      category: 'custom',
+      content: EMOTION_PROTOCOL_CONTENT,
+      enabled: false,
+      order: 1044,
+      scope: ['main'],
+      createdAt: now,
+      updatedAt: now,
+    }),
+  makeBuiltin({
+    id: 'builtin_cognitive_isolation',
+      title: '认知隔离机制',
+      description: '开启后 AI 严格区分 Master（故事外玩家）与 <user>（故事内旅者），不替旅者说话、不写旅者心理、不让旅者知道故事外信息。参考 Izumi 预设的 Master/<user> 认知隔离。',
+      category: 'custom',
+      content: COGNITIVE_ISOLATION_CONTENT,
+      enabled: false,
+      order: 1045,
+      scope: ['main', 'opening'],
+      createdAt: now,
+      updatedAt: now,
+    }),
   ];
 }
-
-

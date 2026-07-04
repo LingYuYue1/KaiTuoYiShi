@@ -33,6 +33,7 @@ export default {
         'slide-up': 'slideUp 0.3s ease-out',
         'slide-in-left': 'slideInLeft 0.25s ease-out',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+        'marquee-linear': 'marqueeLinear var(--marquee-duration, 36s) linear infinite',
       },
       keyframes: {
         fadeIn: {
@@ -50,6 +51,10 @@ export default {
         pulseSoft: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.5' },
+        },
+        marqueeLinear: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
         },
       },
     },

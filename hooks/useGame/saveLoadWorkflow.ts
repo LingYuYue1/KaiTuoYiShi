@@ -1,5 +1,5 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
-import { migratePromptModules } from '@/hooks/useGameState';
+import { migratePromptModules, migrateStPresetOrders } from '@/hooks/useGameState';
 import type { 存档数据, 存档类型, 游戏设置 } from '@/models/settings';
 import type { 聊天消息 } from '@/models/chat';
 import { 创建空角色, 确保命途列表 } from '@/models/character';
@@ -41,6 +41,20 @@ import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
+export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nodeId?: string } | null): void {
+  if (!activeSaveTreeMeta) return;
+  if (!target?.rootId && !target?.nodeId) {
+    activeSaveTreeMeta = null;
+    return;
+  }
+  if (
+    (target.rootId && activeSaveTreeMeta.rootId === target.rootId) ||
+    (target.nodeId && activeSaveTreeMeta.nodeId === target.nodeId)
+  ) {
+    activeSaveTreeMeta = null;
+  }
+}
+
 // 共享的存档负载构造函数：手动 / 自动两条路径都走这一处，未来加字段只改一处。
 // overrides 用于 sendWorkflow 里那一刻 React state 还没回写、但已有新值的字段
 // （比如刚追加的 chatHistory、压缩过的 memorySystem）。
@@ -49,7 +63,9 @@ export function buildSavePayload(
   type: 存档类型,
   overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
 ): 存档数据 {
-  const persistedChatHistory = stripRuntimeOnlyFieldsFromChatHistory(overrides?.chatHistory ?? state.chatHistory);
+  const persistedChatHistory = compactOldChatMessages(
+    stripRuntimeOnlyFieldsFromChatHistory(overrides?.chatHistory ?? state.chatHistory),
+  );
   const timestamp = Date.now();
   const baseSave = {
     id: 0,
@@ -104,6 +120,50 @@ function stripRuntimeOnlyFieldsFromChatHistory(chatHistory: 存档数据['chatHi
     };
     delete clean.debugContext;
     return clean;
+  });
+}
+
+/**
+ * 存档瘦身：最近 N 轮完整保留，更早的 assistant 消息只保留正文。
+ * 不影响 user 消息、不影响聊天显示、不影响重 Roll。
+ *
+ * 「轮」= 一对 user + assistant 消息（2 条）。
+ * 默认保留最近 5 轮（10 条消息）。
+ */
+function compactOldChatMessages(chatHistory: 聊天消息[], keepRounds = 5): 聊天消息[] {
+  const keepCount = keepRounds * 2; // user + assistant per round
+  const cutoff = Math.max(0, chatHistory.length - keepCount);
+
+  return chatHistory.map((msg, i) => {
+    // 最近的消息完整保留
+    if (i >= cutoff) return msg;
+    // user 消息本来就没有 parsedResponse，不动
+    if (msg.role !== 'assistant' || !msg.parsedResponse) return msg;
+
+    // 早期 assistant 消息：只保留 body（正文），其余字段清空以节省存储
+    return {
+      ...msg,
+      parsedResponse: {
+        ...msg.parsedResponse,
+        rawText: '',
+        thinking: '',
+        memory: '',
+        commands: {},
+        worldEvents: [],
+        actionOptions: [],
+        variableDraft: '',
+        storyPlan: '',
+        awakenInvite: '',
+        awakenQuestions: '',
+        awakenJudgement: '',
+        awakenPathId: '',
+      },
+      // 这些调试/统计字段在大回合数下也很可观，早期消息不需要
+      inputTokens: undefined,
+      outputTokens: undefined,
+      tokenUsage: undefined,
+      responseDurationSec: undefined,
+    };
   });
 }
 
@@ -237,7 +297,9 @@ export function handleManualSave(state: UseGameStateReturn): Promise<number> {
 }
 
 export async function handleDeleteSave(id: number): Promise<void> {
+  const save = await loadSave(id);
   await dbDeleteSave(id);
+  clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
 }
 
 async function saveLoadBackupIfNeeded(state: UseGameStateReturn): Promise<void> {
@@ -323,6 +385,9 @@ async function applySaveToState(
     enableMaleNsfwArchive: safeGameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
     visualTextSettings: 归一化视觉文本设置(safeGameSettings.visualTextSettings),
     promptModules: migratePromptModules(safeGameSettings),
+    // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移
+    stPresets: migrateStPresetOrders(safeGameSettings.stPresets),
+    promptModuleOrderVersion: 1,
   };
   state.setGameSettings(preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings));
   state.setHasSave(true);

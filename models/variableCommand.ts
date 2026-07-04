@@ -26,7 +26,8 @@ export type 变量事实类型 =
   | 'item'
   | 'world_event'
   | 'phone_seed'
-  | 'nsfw_archive';
+  | 'nsfw_archive'
+  | 'weather';
 
 export interface 旅人档案变量事实 {
   type: 'traveler_profile';
@@ -51,6 +52,13 @@ export interface 时间变量事实 {
 export interface 地点变量事实 {
   type: 'location';
   location: string;
+  evidence?: string;
+}
+
+export interface 天气变量事实 {
+  type: 'weather';
+  /** 天气中文名，如 "暴风雪"、"星海潮汐"。解析器会转成内部 ID。 */
+  weather: string;
   evidence?: string;
 }
 
@@ -152,6 +160,7 @@ export type 变量事实 =
   | 旅人档案变量事实
   | 时间变量事实
   | 地点变量事实
+  | 天气变量事实
   | NPC变量事实
   | 物品变量事实
   | 世界事件变量事实

@@ -313,6 +313,11 @@ async function deleteManagedSaveItems(db: IDBDatabase, candidates: SaveListItemS
   }
 }
 
+async function collectSaveTreeSummaries(db: IDBDatabase, rootId: string): Promise<SaveListItemSummary[]> {
+  const summaries = await readSaveSummaries(db);
+  return summaries.filter((item) => item.saveTree?.rootId === rootId);
+}
+
 export interface SaveListItemSummary {
   id: number;
   type: 存档类型;
@@ -379,7 +384,10 @@ export async function loadSave(id: number): Promise<存档数据 | null> {
 export async function loadLatestSave(): Promise<存档数据 | null> {
   const list = await getSaveList();
   if (list.length === 0) return null;
-  const latestPlayable = list.find((item) => item.type !== 'backup') ?? list[0];
+  const latestPlayable = list.find((item) => item.type === 'manual' || item.type === 'imported')
+    ?? list.find((item) => item.type === 'auto')
+    ?? list.find((item) => item.type !== 'backup')
+    ?? list[0];
   return loadSave(latestPlayable.id);
 }
 
@@ -401,6 +409,17 @@ export async function deleteSave(id: number): Promise<void> {
   await cleanupUnreferencedHiddenSaves(db);
   await removeDesktopSaveMirrorSafely(id);
   await removeDesktopSaveDeltasBySaveIdSafely(id);
+}
+
+export async function deleteSaveTree(rootId: string): Promise<number> {
+  const trimmedRootId = rootId.trim();
+  if (!trimmedRootId) return 0;
+  const db = await openDB();
+  await ensureSaveSummaries(db, Infinity);
+  const candidates = await collectSaveTreeSummaries(db, trimmedRootId);
+  if (!candidates.length) return 0;
+  await deleteManagedSaveItems(db, candidates);
+  return candidates.length;
 }
 
 export async function loadSaveTree(rootId: string): Promise<存档数据[]> {

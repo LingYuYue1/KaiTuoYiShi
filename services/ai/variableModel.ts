@@ -1,4 +1,4 @@
-﻿// 变量模型 service：用独立 API config 把「正文」喂给一个轻量模型。
+// 变量模型 service：用独立 API config 把「正文」喂给一个轻量模型。
 //
 // 新协议：
 // - 主输出是 <变量事实> JSON：AI 只提取事实，不直接猜路径、顺序和对象下标。
@@ -16,6 +16,8 @@ import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT as VAR_LEGACY_WORLDBOOK_PROMPT, NSFW_A
 import { VARIABLE_COT_PROMPT as VAR_LEGACY_COT_PROMPT } from '@/prompts/cot/variableCot';
 import { VARIABLE_OUTPUT_FORMAT_PROMPT as VAR_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
 import type { 提示词模块 } from '@/models/prompts';
+import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+import { 获取地点可用天气, 天气列表, 天气名映射 } from '@/data/weatherRules';
 
 /** NSFW 基线候选：开启 NSFW 后，传给变量模型让它为缺少基线的 NPC 生成完整档案。 */
 export interface NsfwBaselineCandidate {
@@ -233,6 +235,19 @@ export function buildVariableModelPrompt(
   const maleArchiveEnabled = Boolean(nsfwPolicy?.maleArchiveEnabled);
   const baselineCandidates = nsfwPolicy?.baselineCandidates?.filter((c) => c.npcName) ?? [];
 
+  // 天气判断所需上下文：当前地点、当前天气、可用天气列表
+  const worldState = (state.世界 ?? {}) as { 当前地点?: string; 当前天气?: string };
+  const currentLocation = worldState.当前地点?.trim() || '未知';
+  const currentWeatherId = worldState.当前天气?.trim() || 'clear';
+  const currentWeatherName = 天气名映射[currentWeatherId] ?? currentWeatherId;
+  const availableWeatherIds = 获取地点可用天气(currentLocation);
+  const availableWeatherDesc = availableWeatherIds
+    .map((id) => {
+      const def = 天气列表.find((w) => w.id === id);
+      return def ? `${def.emoji} ${def.name}` : id;
+    })
+    .join('、');
+
   const modulesSection = buildVariablePromptModulesSection(promptModules, nsfwEnabled);
 
   return [
@@ -259,7 +274,7 @@ export function buildVariableModelPrompt(
     '```',
     '',
     '<变量更新> 是旧协议兼容层：默认留空。只有事实协议无法表达、且登记表明确允许、且正文证据非常清楚的复杂字段，才可以少量写旧命令。',
-    '时间、地点、NPC、物品、世界事件、手机来信种子必须优先写进 <变量事实>，不要再用旧命令直接写这些路径。旅人核心档案由玩家手写维护，不由变量系统修改。',
+    '时间、地点、天气、NPC、物品、世界事件、手机来信种子必须优先写进 <变量事实>，不要再用旧命令直接写这些路径。旅人核心档案由玩家手写维护，不由变量系统修改。',
     '',
     '## 变量事实类型',
     '',
@@ -284,6 +299,19 @@ export function buildVariableModelPrompt(
     '### 地点：location',
     '- 字段：location、evidence。',
     '- 只有地点明显变化或正文首次明确当前地点时输出。',
+    '',
+    '### 天气：weather',
+    '- 字段：weather（中文名）、evidence。',
+    `- 当前地点：${currentLocation}`,
+    `- 当前天气：${currentWeatherName}`,
+    `此地可用天气：${availableWeatherDesc}`,
+    '- 根据正文氛围和地点特征判断本回合天气是否变化。',
+    '- 如果正文没有明显天气暗示（如"下雨了""风雪交加""星空璀璨"），不输出 weather 事实（保持上一回合天气不变）。',
+    '- 不要频繁切换天气（至少持续 3-5 回合）。',
+    '- weather 字段必须严格从「此地可用天气」的中文名中选择，如 "暴风雪"、"星海潮汐"。',
+    '',
+    '示例：',
+    '{"type":"weather","weather":"小雨","evidence":"正文写明窗外开始飘起细雨"}',
     '',
     '### NPC：npc',
     '- 字段：id、name、alias、tier、gender、affinityDelta、affinitySet、relation、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、relationshipStage、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。',
@@ -328,7 +356,8 @@ export function buildVariableModelPrompt(
     '- 只生成“稍后可能发短信”的种子，不写完整 messages。',
     '- 每回合最多 0-2 条，普通寒暄不生成；但出现新约定、分头行动、任务进展、关系变化、危机收束、抵达新地点、关键物品、新闻苗头或 NPC 合理会追问/报平安/催进度时，必须审计是否写 1 条低频 phone_seed。',
     '- phone_seed 可以是 low/normal，不必都写 high；低频跟进也能让手机系统保持活性。不要因为担心打扰而完全不写。',
-    '- targetName 优先写中文 NPC 名，relatedNpcIds 尽量写对应 NPC id；系统会转成联系人入口。',
+    '- targetName 必填：写中文 NPC 名（如"三月七"）。relatedNpcIds 尽量写对应 NPC id；系统会转成联系人入口。',
+    '- 群聊种子 targetType 用 "group"，targetName 写群名或发起者名，relatedNpcIds 写至少 2 个参与者 id 或中文名。',
     '',
     '## 变量系统世界书（必须遵守）',
     '',
@@ -421,11 +450,8 @@ export function buildVariablePromptModulesSection(
   nsfwEnabled?: boolean,
 ): string {
   if (!promptModules || promptModules.length === 0) return '';
-  const filtered = promptModules
-    .filter((m) => m.enabled && m.scope?.includes('calibration'))
-    .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  const base = filtered.map((m) => m.content).join('\n\n');
+  const base = buildIndependentPromptModulesSection(promptModules, 'variable');
+  if (!base) return '';
   if (nsfwEnabled) {
     return base + '\n\n' + NSFW_ARCHIVE_SEPARATION_RULE;
   }

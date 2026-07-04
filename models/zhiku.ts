@@ -25,6 +25,7 @@ export interface 智库条目 {
   分类: 智库分类;
   摘要: string;
   原文: string;
+  角色故事摘要?: string;
   来源?: string;
   关键词: string[];
   资料类型?: string;
@@ -91,6 +92,7 @@ export function 创建智库条目(input: {
   分类?: 智库分类;
   摘要?: string;
   原文?: string;
+  角色故事摘要?: string;
   来源?: string;
   关键词?: string[];
   资料类型?: string;
@@ -129,6 +131,7 @@ export function 创建智库条目(input: {
     分类: input.分类 ?? 'story',
     摘要: input.摘要?.trim() ?? '',
     原文: input.原文?.trim() ?? '',
+    角色故事摘要: normalizeOptionalText(input.角色故事摘要),
     来源: input.来源?.trim() || undefined,
     关键词: normalizeKeywords(input.关键词),
     资料类型: normalizeOptionalText(input.资料类型),
@@ -335,6 +338,7 @@ function normalizeEntry(entry: Partial<智库条目>): 智库条目 {
     分类: category,
     摘要: typeof entry.摘要 === 'string' ? entry.摘要 : '',
     原文: typeof entry.原文 === 'string' ? entry.原文 : '',
+    角色故事摘要: normalizeOptionalText(entry.角色故事摘要),
     来源: typeof entry.来源 === 'string' && entry.来源.trim() ? entry.来源.trim() : undefined,
     关键词: normalizeKeywords(entry.关键词),
     资料类型: normalizeOptionalText(entry.资料类型),

@@ -7,6 +7,7 @@ import type { 新闻条目, 新闻生成结果, 新闻条目补丁 } from '@/mod
 import { getNewsIssueNumber, 归一化新闻条目 } from '@/models/news';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
 import type { 提示词模块 } from '@/models/prompts';
+import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import { getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
@@ -126,11 +127,7 @@ function buildNewsPromptModulesSection(promptModules?: 提示词模块[]): strin
       NEWS_LEGACY_OUTPUT_FORMAT,
     ].join('\n');
   }
-  const filtered = promptModules
-    .filter((m) => m.enabled && m.scope?.includes('calibration'))
-    .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  return filtered.map((m) => m.content).join('\n\n');
+  return buildIndependentPromptModulesSection(promptModules, 'news');
 }
 
 export function buildNewsUserMessage(request: NewsModelRequest): string {

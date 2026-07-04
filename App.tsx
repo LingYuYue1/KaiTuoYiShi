@@ -41,6 +41,179 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
 
+function JourneyLaunchOverlay() {
+  const starSeeds = useMemo(
+    () => Array.from({ length: 34 }, (_, index) => ({
+      id: index,
+      x: 8 + ((index * 17) % 84),
+      y: 10 + ((index * 29) % 78),
+      delay: (index % 8) * 0.045,
+      size: 1 + (index % 4) * 0.42,
+    })),
+    [],
+  );
+
+  return (
+    <div className="kaituo-journey-launch" role="status" aria-live="polite" aria-label="星轨已接入">
+      <div className="kaituo-journey-launch__field" />
+      <div className="kaituo-journey-launch__vignette" />
+      {starSeeds.map((star) => (
+        <span
+          key={star.id}
+          className="kaituo-journey-launch__star"
+          style={{
+            left: `${star.x}%`,
+            top: `${star.y}%`,
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            animationDelay: `${star.delay}s`,
+          }}
+        />
+      ))}
+      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--a" />
+      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--b" />
+      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--c" />
+      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--d" />
+      <div className="kaituo-journey-launch__core">
+        <div className="kaituo-journey-launch__ring" />
+        <div className="kaituo-journey-launch__glyph" aria-hidden="true">
+          <span className="kaituo-journey-launch__starburst kaituo-journey-launch__starburst--main" />
+          <span className="kaituo-journey-launch__starburst kaituo-journey-launch__starburst--cross" />
+          <span className="kaituo-journey-launch__starburst-core" />
+        </div>
+        <div className="kaituo-journey-launch__title">星轨已接入</div>
+        <div className="kaituo-journey-launch__subtitle">正在校准你的开拓坐标</div>
+      </div>
+      <div className="kaituo-journey-launch__flash" />
+    </div>
+  );
+}
+
+function HomeJourneyOverlay() {
+  const glints = useMemo(
+    () => Array.from({ length: 18 }, (_, index) => ({
+      id: index,
+      x: 10 + ((index * 23) % 80),
+      y: 14 + ((index * 31) % 70),
+      delay: (index % 6) * 0.055,
+      drift: index % 2 === 0 ? -1 : 1,
+    })),
+    [],
+  );
+
+  return (
+    <div className="kaituo-home-journey" role="status" aria-live="polite" aria-label="旅途入口开启中">
+      <div className="kaituo-home-journey__backdrop" />
+      <div className="kaituo-home-journey__tracks" />
+      {glints.map((glint) => (
+        <span
+          key={glint.id}
+          className="kaituo-home-journey__glint"
+          style={{
+            left: `${glint.x}%`,
+            top: `${glint.y}%`,
+            animationDelay: `${glint.delay}s`,
+            ['--glint-drift' as string]: glint.drift,
+          }}
+        />
+      ))}
+      <div className="kaituo-home-journey__door kaituo-home-journey__door--left" />
+      <div className="kaituo-home-journey__door kaituo-home-journey__door--right" />
+      <div className="kaituo-home-journey__threshold">
+        <div className="kaituo-home-journey__seal">启</div>
+        <div className="kaituo-home-journey__title">旅途入口已开启</div>
+        <div className="kaituo-home-journey__subtitle">正在进入开拓档案</div>
+      </div>
+      <div className="kaituo-home-journey__wipe" />
+    </div>
+  );
+}
+
+function SaveLoadOverlay() {
+  const dataNodes = useMemo(
+    () => Array.from({ length: 24 }, (_, index) => ({
+      id: index,
+      x: 8 + ((index * 19) % 84),
+      y: 12 + ((index * 37) % 74),
+      delay: (index % 8) * 0.045,
+      size: 2 + (index % 3),
+    })),
+    [],
+  );
+
+  return (
+    <div className="kaituo-save-load" role="status" aria-live="polite" aria-label="存档读取中">
+      <div className="kaituo-save-load__backdrop" />
+      <div className="kaituo-save-load__grid" />
+      {dataNodes.map((node) => (
+        <span
+          key={node.id}
+          className="kaituo-save-load__node"
+          style={{
+            left: `${node.x}%`,
+            top: `${node.y}%`,
+            width: `${node.size}px`,
+            height: `${node.size}px`,
+            animationDelay: `${node.delay}s`,
+          }}
+        />
+      ))}
+      <div className="kaituo-save-load__archive">
+        <div className="kaituo-save-load__frame" />
+        <div className="kaituo-save-load__seal">档</div>
+        <div className="kaituo-save-load__title">存档索引已唤醒</div>
+        <div className="kaituo-save-load__subtitle">正在同步开拓记忆</div>
+        <div className="kaituo-save-load__bar"><span /></div>
+      </div>
+      <div className="kaituo-save-load__scan kaituo-save-load__scan--a" />
+      <div className="kaituo-save-load__scan kaituo-save-load__scan--b" />
+    </div>
+  );
+}
+
+function BookOpenOverlay() {
+  const motes = useMemo(
+    () => Array.from({ length: 22 }, (_, index) => ({
+      id: index,
+      x: 12 + ((index * 21) % 76),
+      y: 18 + ((index * 29) % 62),
+      delay: (index % 7) * 0.05,
+      drift: index % 2 === 0 ? -1 : 1,
+    })),
+    [],
+  );
+
+  return (
+    <div className="kaituo-book-open" role="status" aria-live="polite" aria-label="书页展开中">
+      <div className="kaituo-book-open__backdrop" />
+      {motes.map((mote) => (
+        <span
+          key={mote.id}
+          className="kaituo-book-open__mote"
+          style={{
+            left: `${mote.x}%`,
+            top: `${mote.y}%`,
+            animationDelay: `${mote.delay}s`,
+            ['--book-mote-drift' as string]: mote.drift,
+          }}
+        />
+      ))}
+      <div className="kaituo-book-open__book">
+        <div className="kaituo-book-open__spine" />
+        <div className="kaituo-book-open__page kaituo-book-open__page--left"><span /><span /><span /></div>
+        <div className="kaituo-book-open__page kaituo-book-open__page--right"><span /><span /><span /></div>
+        <div className="kaituo-book-open__leaf kaituo-book-open__leaf--a" />
+        <div className="kaituo-book-open__leaf kaituo-book-open__leaf--b" />
+      </div>
+      <div className="kaituo-book-open__copy">
+        <div className="kaituo-book-open__title">如我所书</div>
+        <div className="kaituo-book-open__subtitle">正在翻开未署名的页</div>
+      </div>
+      <div className="kaituo-book-open__glow" />
+    </div>
+  );
+}
+
 function MysteryChatModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal onClose={onClose} title="神秘聊天" className="max-w-lg">
@@ -89,6 +262,30 @@ import { alignStoryWeavingToOpeningArchive, loadAllBundledStoryWeavingPresets } 
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
+const JOURNEY_LAUNCH_ANIMATION_MS = 1680;
+const HOME_JOURNEY_ANIMATION_MS = 1180;
+const HOME_JOURNEY_VIEW_SWITCH_MS = 520;
+const SAVE_LOAD_ANIMATION_MS = 1040;
+const SAVE_LOAD_VIEW_SWITCH_MS = 430;
+const BOOK_OPEN_ANIMATION_MS = 1080;
+const BOOK_OPEN_VIEW_SWITCH_MS = 460;
+const JOURNEY_LAUNCH_REDUCED_MOTION_MS = 320;
+const HOME_JOURNEY_REDUCED_MOTION_MS = 260;
+const HOME_JOURNEY_REDUCED_VIEW_SWITCH_MS = 90;
+const SAVE_LOAD_REDUCED_MOTION_MS = 260;
+const SAVE_LOAD_REDUCED_VIEW_SWITCH_MS = 90;
+const BOOK_OPEN_REDUCED_MOTION_MS = 260;
+const BOOK_OPEN_REDUCED_VIEW_SWITCH_MS = 90;
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+const getJourneyLaunchDelay = () => prefersReducedMotion() ? JOURNEY_LAUNCH_REDUCED_MOTION_MS : JOURNEY_LAUNCH_ANIMATION_MS;
+const getHomeJourneyDelay = () => prefersReducedMotion() ? HOME_JOURNEY_REDUCED_MOTION_MS : HOME_JOURNEY_ANIMATION_MS;
+const getHomeJourneyViewSwitchDelay = () => prefersReducedMotion() ? HOME_JOURNEY_REDUCED_VIEW_SWITCH_MS : HOME_JOURNEY_VIEW_SWITCH_MS;
+const getSaveLoadDelay = () => prefersReducedMotion() ? SAVE_LOAD_REDUCED_MOTION_MS : SAVE_LOAD_ANIMATION_MS;
+const getSaveLoadViewSwitchDelay = () => prefersReducedMotion() ? SAVE_LOAD_REDUCED_VIEW_SWITCH_MS : SAVE_LOAD_VIEW_SWITCH_MS;
+const getBookOpenDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_MOTION_MS : BOOK_OPEN_ANIMATION_MS;
+const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_VIEW_SWITCH_MS : BOOK_OPEN_VIEW_SWITCH_MS;
+
 export default function App() {
   const { state, actions } = useGame();
   const [showSettings, setShowSettings] = useState(false);
@@ -102,6 +299,10 @@ export default function App() {
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
   const [activeSystem, setActiveSystem] = useState<GameSystemId | null>(null);
+  const [launchingJourney, setLaunchingJourney] = useState(false);
+  const [homeJourneyTransitioning, setHomeJourneyTransitioning] = useState(false);
+  const [saveLoadTransitioning, setSaveLoadTransitioning] = useState(false);
+  const [bookOpenTransitioning, setBookOpenTransitioning] = useState(false);
 
   const handleMenuSelect = (id: GameSystemId) => {
     if (id === 'worldbook') {
@@ -111,6 +312,44 @@ export default function App() {
     }
     setActiveSystem((current) => (current === id ? null : id));
   };
+
+  const handleHomeNewGame = useCallback(async () => {
+    if (homeJourneyTransitioning || saveLoadTransitioning || bookOpenTransitioning || launchingJourney) return;
+    setHomeJourneyTransitioning(true);
+    const totalDelay = getHomeJourneyDelay();
+    const switchDelay = Math.min(getHomeJourneyViewSwitchDelay(), totalDelay);
+    await wait(switchDelay);
+    actions.handleNewGame();
+    await wait(Math.max(totalDelay - switchDelay, 0));
+    setHomeJourneyTransitioning(false);
+  }, [actions, bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
+
+  const handleHomeLoadSave = useCallback(async () => {
+    if (saveLoadTransitioning || homeJourneyTransitioning || bookOpenTransitioning || launchingJourney) return;
+    setSaveLoadTransitioning(true);
+    const totalDelay = getSaveLoadDelay();
+    const switchDelay = Math.min(getSaveLoadViewSwitchDelay(), totalDelay);
+    await wait(switchDelay);
+    setShowSaveLoad(true);
+    await wait(Math.max(totalDelay - switchDelay, 0));
+    setSaveLoadTransitioning(false);
+  }, [bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
+
+  const handleHomeWorldbookManager = useCallback(async () => {
+    if (bookOpenTransitioning || saveLoadTransitioning || homeJourneyTransitioning || launchingJourney) return;
+    setBookOpenTransitioning(true);
+    const totalDelay = getBookOpenDelay();
+    const switchDelay = Math.min(getBookOpenViewSwitchDelay(), totalDelay);
+    await wait(switchDelay);
+    setShowWorldbookManager(true);
+    await wait(Math.max(totalDelay - switchDelay, 0));
+    setBookOpenTransitioning(false);
+  }, [bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
+
+  const handleHomeMysteryChat = useCallback(() => {
+    if (bookOpenTransitioning || saveLoadTransitioning || homeJourneyTransitioning || launchingJourney) return;
+    setShowMysteryChat(true);
+  }, [bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
 
   const activeMenuItem = activeSystem
     ? GAME_MENU_ITEMS.find((item) => item.id === activeSystem) ?? null
@@ -175,8 +414,8 @@ export default function App() {
       <>
         {isDesktopRuntime() ? (
           <DesktopHomeScreen
-            onNewGame={actions.handleNewGame}
-            onLoadSave={() => setShowSaveLoad(true)}
+            onNewGame={handleHomeNewGame}
+            onLoadSave={handleHomeLoadSave}
             onContinue={actions.handleContinue}
             onOpenSettings={(tab = 'api') => {
               setSettingsInitialTab(tab);
@@ -186,29 +425,32 @@ export default function App() {
               setSettingsInitialTab('storage');
               setShowSettings(true);
             }}
-            onOpenWorldbookManager={() => setShowWorldbookManager(true)}
+            onOpenWorldbookManager={handleHomeWorldbookManager}
             onOpenZhikuManager={() => setShowZhikuManager(true)}
             onOpenCloudSave={() => setShowCloudSave(true)}
             onOpenReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
             onDiscordPost={() => window.open('https://discord.com/channels/1380075940285124724/1509136913792241704', '_blank', 'noopener,noreferrer')}
-            onMysteryChat={() => setShowMysteryChat(true)}
+            onMysteryChat={handleHomeMysteryChat}
           />
         ) : (
           <LandingPage
-            onNewGame={actions.handleNewGame}
-            onLoadSave={() => setShowSaveLoad(true)}
+            onNewGame={handleHomeNewGame}
+            onLoadSave={handleHomeLoadSave}
             onSettings={() => {
               setSettingsInitialTab('api');
               setShowSettings(true);
             }}
-            onWorldbookManager={() => setShowWorldbookManager(true)}
+            onWorldbookManager={handleHomeWorldbookManager}
             onZhikuManager={() => setShowZhikuManager(true)}
             onCloudSave={() => setShowCloudSave(true)}
             onReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
             onDiscordPost={() => window.open('https://discord.com/channels/1380075940285124724/1509136913792241704', '_blank', 'noopener,noreferrer')}
-            onMysteryChat={() => setShowMysteryChat(true)}
+            onMysteryChat={handleHomeMysteryChat}
           />
         )}
+        {homeJourneyTransitioning ? <HomeJourneyOverlay /> : null}
+        {saveLoadTransitioning ? <SaveLoadOverlay /> : null}
+        {bookOpenTransitioning ? <BookOpenOverlay /> : null}
         {showWorldbookManager && (
           <WorldbookManagerModal
             worldbooks={state.worldbooks}
@@ -277,6 +519,16 @@ export default function App() {
             剧情编织={state.剧情编织}
             on剧情编织Change={state.set剧情编织}
             getContextSnapshot={actions.getContextSnapshot}
+
+            worldbooks={state.worldbooks}
+
+            onWorldbooksChange={(books) => {
+
+              state.setWorldbooks(books);
+
+              saveSetting('worldbooks', books);
+
+            }}
             variableSetters={{
               set旅人: state.set旅人,
               set世界: state.set世界,
@@ -336,17 +588,24 @@ export default function App() {
         console.warn('[story-weaving] 新开局加载内置原著剧情失败，保留当前剧情编织状态:', err);
       }
       state.setPendingOpeningTrigger('[系统] 开启第 0 回合');
+      setLaunchingJourney(true);
+      await wait(getJourneyLaunchDelay());
       state.setView('game');
+      setLaunchingJourney(false);
     };
 
     return (
-      <NewGameWizard
-        onStart={handleStartGame}
-        onBack={() => state.setView('home')}
-        currentTheme={state.currentTheme}
-        openingArchiveApiConfig={getActiveApiConfig()}
-        onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
-      />
+      <>
+        <NewGameWizard
+          onStart={handleStartGame}
+          onBack={() => state.setView('home')}
+          currentTheme={state.currentTheme}
+          openingArchiveApiConfig={getActiveApiConfig()}
+          onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
+        />
+        {homeJourneyTransitioning ? <HomeJourneyOverlay /> : null}
+        {launchingJourney ? <JourneyLaunchOverlay /> : null}
+      </>
     );
   }
 
@@ -354,11 +613,16 @@ export default function App() {
   return (
     <>
       <GameView
+        weatherId={state.世界.当前天气}
         topBar={
           <TopBar
             worldState={state.世界}
             currentTheme={state.currentTheme}
             onHome={actions.handleGoHome}
+
+            news={state.新闻}
+
+            onOpenNews={() => setActiveSystem('news')}
           />
         }
         leftPanel={
@@ -560,6 +824,11 @@ export default function App() {
           剧情编织={state.剧情编织}
           on剧情编织Change={state.set剧情编织}
           getContextSnapshot={actions.getContextSnapshot}
+          worldbooks={state.worldbooks}
+          onWorldbooksChange={(books) => {
+            state.setWorldbooks(books);
+            saveSetting('worldbooks', books);
+          }}
           variableSetters={{
             set旅人: state.set旅人,
             set世界: state.set世界,
@@ -682,8 +951,8 @@ function renderSystemPanel(
           onAwakenedNewPath={ctx.onAwakenedNewPath}
         />
       );
-    case 'skill':
-      return <SkillPanel traveler={ctx.traveler} onTravelerChange={ctx.onTravelerChange} />;
+      case 'skill':
+        return <SkillPanel traveler={ctx.traveler} onTravelerChange={ctx.onTravelerChange} apiSettings={ctx.apiSettings} />;
     case 'inventory':
       return (
         <InventoryPanel

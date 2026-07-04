@@ -7,6 +7,7 @@ import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
 import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/models/phone';
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
+import { 天气列表 } from '@/data/weatherRules';
 
 const ITEM_CATEGORIES = new Set<物品分类>(['food', 'consumable', 'lightcone', 'weapon', 'clothing', 'accessory', 'memento', 'key']);
 const ITEM_QUALITIES = new Set<物品品质>(['蓝', '紫', '金']);
@@ -28,6 +29,8 @@ const FACT_TYPE_ALIASES: Record<string, 变量事实['type']> = {
   time: 'time',
   地点: 'location',
   location: 'location',
+  天气: 'weather',
+  weather: 'weather',
   NPC: 'npc',
   npc: 'npc',
   npc_memory: 'npc',
@@ -284,6 +287,11 @@ function 归一化事实(raw: unknown): 变量事实 | null {
     const location = 读字符串(raw.location || raw.地点);
     if (!location) return null;
     return { type: 'location', location, evidence: 读字符串(raw.evidence || raw.证据) || undefined };
+  }
+  if (type === 'weather') {
+    const weather = 读字符串(raw.weather || raw.天气);
+    if (!weather) return null;
+    return { type: 'weather', weather, evidence: 读字符串(raw.evidence || raw.证据) || undefined };
   }
   if (type === 'npc') {
     const id = 读字符串(raw.id);
@@ -614,7 +622,29 @@ function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }
     return existing?.id ?? id;
   }
   const related = fact.relatedNpcIds?.find((id) => id.trim());
-  return related?.trim() ?? null;
+  if (related?.trim()) return related.trim();
+  // 兜底:从 title/context/evidence 文本里匹配已知 NPC 姓名。
+  // AI 经常只写 context 不写 targetName,导致 phone_seed 被丢弃。
+  // 优先匹配已登记的 NPC,其次匹配经典角色(三月七/丹恒等)。
+  const haystack = `${fact.title ?? ''}\n${fact.context ?? ''}\n${fact.evidence ?? ''}`;
+  for (const npc of npcs) {
+    const name = npc.姓名?.trim();
+    if (name && name.length >= 2 && haystack.includes(name)) {
+      return npc.id;
+    }
+    const alias = npc.别名?.trim();
+    if (alias && alias.length >= 2 && haystack.includes(alias)) {
+      return npc.id;
+    }
+  }
+  // 经典角色兜底:即使 NPC 列表里没有,也允许生成种子(后续 PhoneModal 会自动创建联系人)
+  const canonicalNames = ['三月七', '丹恒', '姬子', '瓦尔特', '帕姆', '黑塔', '艾丝妲', '阿兰', '星', '穹'];
+  for (const name of canonicalNames) {
+    if (haystack.includes(name)) {
+      return npcIdFromName(name);
+    }
+  }
+  return null;
 }
 
 function normalizePhoneSeedComparableText(text: string): string {
@@ -735,6 +765,17 @@ export function factsToVariableCommands(
 
     if (fact.type === 'location') {
       push({ action: 'set', key: '世界.当前地点', value: fact.location });
+      continue;
+    }
+
+    if (fact.type === 'weather') {
+      // 天气中文名 → ID
+      const def = 天气列表.find((w) => w.name === fact.weather || w.id === fact.weather);
+      if (def) {
+        push({ action: 'set', key: '世界.当前天气', value: def.id });
+      } else {
+        warnings.push(`weather: 无法识别的天气名「${fact.weather}」，已忽略。`);
+      }
       continue;
     }
 

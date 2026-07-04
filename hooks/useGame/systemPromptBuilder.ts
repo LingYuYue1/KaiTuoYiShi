@@ -1,4 +1,4 @@
-﻿import type { 角色数据结构 } from '@/models/character';
+import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
@@ -25,7 +25,7 @@ import {
   getStoryMode,
 } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, PATH_CORE_BELIEFS } from '@/models/path';
-import { buildPromptLikeWorldbookInjection, buildWorldbookInjection, type FilterContext } from '@/utils/worldbook';
+import { buildPromptLikeWorldbookInjection, buildWorldbookChatModuleMessages, buildWorldbookInjection, type FilterContext } from '@/utils/worldbook';
 import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
@@ -35,6 +35,8 @@ import {
   MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT,
 } from './historyWindow';
 import { getAnticipatedNpcNamesForTurn } from './npcPresence';
+import { processMacros, type MacroContext } from '@/utils/macroEngine';
+import { isSTImportedModule } from '@/utils/stPresetParser';
 
 // 当前 prompt 为重构期的中性骨架，具体的世界观/人物设定由世界书注入，
 // 「踏上旅途」向导写入的字段在此被汇总输出。
@@ -65,8 +67,18 @@ export function buildSystemPrompt(
   zhikuInjectionOverride?: string,
   suppressMemoryInjection?: boolean,
   npcLedgerSelectionOverride?: NPC账本选择结果,
-): string {
+  triggerType?: string,
+  macroCtx?: MacroContext,
+): BuiltSystemPrompt {
   const parts: string[] = [];
+  const allChatMessages: ChatModuleMessage[] = [];
+  // ST 预设总开关：关闭时过滤所有 st_import_* 模块（保留预设库数据，仅不注入）。
+  // V2 酒馆预设使用原始 prompts + prompt_order 消息链；选中 V2 时也隔离 V1 st_import_* 残留，
+  // 避免同一份 ST 预设以 V1 模块和 V2 消息链两种形态重复注入。
+  const shouldFilterLegacyStModules = settings.enableStPreset === false || Boolean(settings.currentStPresetIdV2);
+  const effectiveModules = shouldFilterLegacyStModules
+    ? settings.promptModules.filter((m) => !isSTImportedModule(m))
+    : settings.promptModules;
 
   const personLabel =
     settings.narrativePerson === 'second' ? '第二人称"你"'
@@ -76,17 +88,20 @@ export function buildSystemPrompt(
   // 例外:当世界状态.进行中狭间存在,本回合必须走 pathAwakening scope —— 替代主剧情流程。
   const baseScope: 提示词模块作用域 = worldbookCtx?.currentScope ?? 'main';
   const currentScope: 提示词模块作用域 = worldState.进行中狭间 ? 'pathAwakening' : baseScope;
-  const moduleCtx = {
+  const moduleCtx: PromptModuleInjectionCtx = {
     wordCountTarget: settings.wordCountTarget,
     personLabel,
     playerName: getPromptPlayerName(traveler),
     currentScope,
     openingSource: worldState.开局档案?.来源,
+    triggerType,
+    macroCtx,
   };
 
   // ── 提示词模块·顶部（order < 30：开发者模式、叙述者人格等） ──
-  const topModules = injectPromptModules(settings.promptModules, moduleCtx, 'top');
-  if (topModules) parts.push(topModules);
+  const topResult = injectPromptModules(effectiveModules, moduleCtx, 'top');
+  if (topResult.systemSection) parts.push(topResult.systemSection);
+  allChatMessages.push(...topResult.chatModuleMessages);
 
   // ── 世界书内置提示词（system_rule + 少量核心锚点）：为了可编辑放在世界书里，但按提示词注入与展示 ──
   if (worldbooks && worldbookCtx) {
@@ -97,8 +112,15 @@ export function buildSystemPrompt(
   // ── 提示词模块·稳定协议（order >= 30：CoT、回复格式、文风、玩家自定义模块） ──
   // DeepSeek 等前缀缓存要求从请求开头连续一致。把大块固定协议放在动态场景/记忆/智库之前，
   // 可以让后续回合即便状态块变化，也尽量复用前面的稳定前缀。
-  const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');
-  if (bottomModules) parts.push(bottomModules);
+  const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');
+  if (bottomResult.systemSection) parts.push(bottomResult.systemSection);
+  allChatMessages.push(...bottomResult.chatModuleMessages);
+
+  // ── 思维链输出语言（cotLanguage，参考 Izumi，P2 可选）──
+  // 仅 main scope 且 cotLanguage 非 zh 时注入。位置紧随 bottom 模块（含主剧情 CoT）之后，
+  // 让 AI 在进入思考段前看到语言指示。
+  const cotLanguageSection = buildCotLanguageSection(settings, currentScope);
+  if (cotLanguageSection) parts.push(cotLanguageSection);
 
   // ── 故事基调（剧情模式）──
   const tone = buildToneSection(worldState);
@@ -148,6 +170,11 @@ export function buildSystemPrompt(
     const injection = buildWorldbookInjection(worldbooks, worldbookCtx);
     if (injection) {
       parts.push(injection);
+    }
+    // Phase 7.2：世界书深度插入条目转 ChatModuleMessage（注入到聊天历史指定 depth）
+    const worldbookDepthMessages = buildWorldbookChatModuleMessages(worldbooks, worldbookCtx);
+    if (worldbookDepthMessages.length > 0) {
+      allChatMessages.push(...worldbookDepthMessages);
     }
   }
 
@@ -222,7 +249,10 @@ export function buildSystemPrompt(
   const companionsSection = buildCompanionsSection(npcRecords, _turnCount);
   if (companionsSection) parts.push(companionsSection);
 
-  return parts.join('\n\n---\n\n');
+  return {
+    systemPrompt: parts.join('\n\n---\n\n'),
+    chatModuleMessages: allChatMessages,
+  };
 }
 
 export function buildOpeningSystemPrompt(
@@ -233,23 +263,36 @@ export function buildOpeningSystemPrompt(
   worldbooks?: 世界书[],
   worldbookCtx?: FilterContext,
   news?: 新闻条目[],
-): string {
+  triggerType?: string,
+  macroCtx?: MacroContext,
+): BuiltSystemPrompt {
   const parts: string[] = [];
+  const allChatMessages: ChatModuleMessage[] = [];
+  // ST 预设总开关：关闭时过滤所有 st_import_* 模块（保留预设库数据，仅不注入）。
+  // V2 酒馆预设使用原始 prompts + prompt_order 消息链；选中 V2 时也隔离 V1 st_import_* 残留，
+  // 避免同一份 ST 预设以 V1 模块和 V2 消息链两种形态重复注入。
+  const shouldFilterLegacyStModules = settings.enableStPreset === false || Boolean(settings.currentStPresetIdV2);
+  const effectiveModules = shouldFilterLegacyStModules
+    ? settings.promptModules.filter((m) => !isSTImportedModule(m))
+    : settings.promptModules;
 
   const personLabel =
     settings.narrativePerson === 'second' ? '第二人称"你"'
     : settings.narrativePerson === 'first' ? '第一人称"我"'
     : '第三人称"他/她"';
-  const moduleCtx = {
+  const moduleCtx: PromptModuleInjectionCtx = {
     wordCountTarget: settings.wordCountTarget,
     personLabel,
     playerName: getPromptPlayerName(traveler),
     currentScope: 'opening' as 提示词模块作用域,
     openingSource: worldState.开局档案?.来源,
+    triggerType,
+    macroCtx,
   };
 
-  const topModules = injectPromptModules(settings.promptModules, moduleCtx, 'top');
-  if (topModules) parts.push(topModules);
+  const topResult = injectPromptModules(effectiveModules, moduleCtx, 'top');
+  if (topResult.systemSection) parts.push(topResult.systemSection);
+  allChatMessages.push(...topResult.chatModuleMessages);
 
   if (worldbooks && worldbookCtx) {
     const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, {
@@ -260,8 +303,9 @@ export function buildOpeningSystemPrompt(
     if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
   }
 
-  const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');
-  if (bottomModules) parts.push(bottomModules);
+  const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');
+  if (bottomResult.systemSection) parts.push(bottomResult.systemSection);
+  allChatMessages.push(...bottomResult.chatModuleMessages);
 
   const tone = buildToneSection(worldState);
   if (tone) parts.push(tone);
@@ -295,15 +339,24 @@ export function buildOpeningSystemPrompt(
   if (newsSection) parts.push(newsSection);
 
   if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
-    const injection = buildWorldbookInjection(worldbooks, {
+    const openingWorldbookCtx: FilterContext = {
       ...worldbookCtx,
       currentScope: 'opening',
       turnCount,
-    });
+    };
+    const injection = buildWorldbookInjection(worldbooks, openingWorldbookCtx);
     if (injection) parts.push(injection);
+    // Phase 7.2：世界书深度插入条目（开局流程同样支持）
+    const worldbookDepthMessages = buildWorldbookChatModuleMessages(worldbooks, openingWorldbookCtx);
+    if (worldbookDepthMessages.length > 0) {
+      allChatMessages.push(...worldbookDepthMessages);
+    }
   }
 
-  return parts.join('\n\n---\n\n');
+  return {
+    systemPrompt: parts.join('\n\n---\n\n'),
+    chatModuleMessages: allChatMessages,
+  };
 }
 
 function normalizeMemoryFingerprint(text: string): string {
@@ -377,10 +430,61 @@ interface PromptModuleInjectionCtx {
   playerName: string;
   currentScope: 提示词模块作用域;
   openingSource?: 开局来源;
+  /** ST 预设兼容：当前触发生成类型。空=全触发（旧行为）。 */
+  triggerType?: string;
+  /** ST 预设兼容：宏变量上下文。不传=不执行宏处理（旧行为）。 */
+  macroCtx?: MacroContext;
+}
+
+/** 非 system 角色的提示词模块消息。带元数据字段供 Phase 4 depth 注入使用。 */
+export interface ChatModuleMessage {
+  role: string;
+  content: string;
+  /** 0=相对位置（已在 systemSection 中），1=In-Chat（需 depth 插入）。 */
+  _injectionPosition?: number;
+  /** In-Chat depth 值。0=末条消息后，1=末条消息前，依此类推。 */
+  _injectionDepth?: number;
+  /** 同 role 同 depth 内排序值。 */
+  _injectionOrder?: number;
+}
+
+/** injectPromptModules 的返回值。 */
+interface InjectedModules {
+  systemSection: string;
+  chatModuleMessages: ChatModuleMessage[];
+}
+
+/** buildSystemPrompt / buildOpeningSystemPrompt 的返回值。 */
+export interface BuiltSystemPrompt {
+  systemPrompt: string;
+  chatModuleMessages: ChatModuleMessage[];
 }
 
 function getPromptPlayerName(traveler: 角色数据结构): string {
   return traveler.姓名?.trim() || '无名开拓者';
+}
+
+/** 思维链输出语言标签映射（cotLanguage 设置 → AI 可读的语言名） */
+const COT_LANGUAGE_LABELS: Record<string, string> = {
+  zh: '中文',
+  en: 'English',
+  ja: '日本語',
+  fr: 'Français',
+  ru: 'Русский',
+  de: 'Deutsch',
+  es: 'Español',
+  it: 'Italiano',
+};
+
+/** 思维链语言提示段。cotLanguage 缺省或 'zh' 时不注入；其他值在主剧情 CoT 之后追加。
+ *  仅对正文生成流程生效（currentScope === 'main'），不影响开局 / 狭间 / 独立系统。 */
+function buildCotLanguageSection(settings: 游戏设置, currentScope: 提示词模块作用域): string {
+  if (currentScope !== 'main') return '';
+  const lang = settings.cotLanguage;
+  if (!lang || lang === 'zh') return '';
+  const label = COT_LANGUAGE_LABELS[lang];
+  if (!label) return '';
+  return `# 思维链输出语言\n\n- 主剧情思维链 <think> 思考段请用 ${label} 输出。\n- 正文（旁白、角色对白、行动选项）仍按原语言（中文）输出，不受此设置影响。\n- 思考段内的字段名（如 NPC 分析、候选方案 A/B、状态等）保持中文，仅描述性内容用 ${label}。`;
 }
 
 function buildInnerVoiceSection(settings: 游戏设置): string {
@@ -430,8 +534,8 @@ function injectPromptModules(
   modules: 提示词模块[] | undefined,
   ctx: PromptModuleInjectionCtx,
   position: 'top' | 'bottom',
-): string {
-  if (!modules || modules.length === 0) return '';
+): InjectedModules {
+  if (!modules || modules.length === 0) return { systemSection: '', chatModuleMessages: [] };
   const filtered = modules
     .filter((m) => m.enabled)
     .filter((m) => {
@@ -442,21 +546,48 @@ function injectPromptModules(
       if (!m.openingSourceGate?.length) return true;
       return ctx.currentScope === 'opening' && !!ctx.openingSource && m.openingSourceGate.includes(ctx.openingSource);
     })
+    .filter((m) => {
+      // ST 预设兼容：injectionTrigger 为空 = 全触发（旧行为）。
+      // 非空时必须包含当前 triggerType 才注入。
+      if (!m.injectionTrigger?.length) return true;
+      return !!ctx.triggerType && m.injectionTrigger.includes(ctx.triggerType);
+    })
     .filter((m) =>
       position === 'top'
         ? m.order < PROMPT_MODULE_TOP_THRESHOLD
         : m.order >= PROMPT_MODULE_TOP_THRESHOLD,
     )
     .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  return filtered
-    .map((m) =>
-      m.content
-        .replace(/\{wordCountTarget\}/g, String(ctx.wordCountTarget))
-        .replace(/\{personLabel\}/g, ctx.personLabel)
-        .replace(/\{playerName\}/g, ctx.playerName),
-    )
-    .join('\n\n---\n\n');
+  if (filtered.length === 0) return { systemSection: '', chatModuleMessages: [] };
+
+  // ST 预设兼容：role 分流。system 角色拼接到 systemSection，
+  // user/assistant 角色加入 chatModuleMessages（Phase 4 用于 depth 注入）。
+  const systemParts: string[] = [];
+  const chatMessages: ChatModuleMessage[] = [];
+  for (const m of filtered) {
+    const replaced = m.content
+      .replace(/\{wordCountTarget\}/g, String(ctx.wordCountTarget))
+      .replace(/\{personLabel\}/g, ctx.personLabel)
+      .replace(/\{playerName\}/g, ctx.playerName);
+    // ST 预设兼容：宏预处理（setvar/getvar/if 等）。不传 macroCtx = 旧行为（不处理）。
+    const content = ctx.macroCtx ? processMacros(replaced, ctx.macroCtx) : replaced;
+    const role = m.role ?? 'system';
+    if (role === 'system') {
+      systemParts.push(content);
+    } else {
+      chatMessages.push({
+        role,
+        content,
+        _injectionPosition: m.injectionPosition ?? 0,
+        _injectionDepth: m.injectionDepth ?? 4,
+        _injectionOrder: m.injectionOrder ?? m.order,
+      });
+    }
+  }
+  return {
+    systemSection: systemParts.join('\n\n---\n\n'),
+    chatModuleMessages: chatMessages,
+  };
 }
 
 function buildToneSection(worldState: 世界状态): string {

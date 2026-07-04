@@ -28,19 +28,19 @@ export const themes: ThemeDefinition[] = [
       '--tj-surface-strong': '10, 9, 10',
       '--tj-bubble': '8, 7, 9',
       /* ── 面板 / 弹窗背景 ── */
-      '--tj-panel-bg-start': '22, 18, 14',
-      '--tj-panel-bg-end': '12, 10, 8',
+      '--tj-panel-bg-start': '16, 14, 16',
+      '--tj-panel-bg-end': '10, 9, 10',
       /* ── 通用表面背景 ── */
-      '--tj-surface-bg-start': '18, 15, 12',
-      '--tj-surface-bg-end': '8, 7, 6',
+      '--tj-surface-bg-start': '14, 12, 14',
+      '--tj-surface-bg-end': '6, 5, 7',
       /* ── 抽屉 / 遮罩 ── */
-      '--tj-drawer-bg': '20, 17, 14',
+      '--tj-drawer-bg': '18, 16, 18',
       '--tj-overlay-bg': '5, 4, 3',
       /* ── 输入框 ── */
-      '--tj-input-bg-start': '18, 15, 12',
-      '--tj-input-bg-end': '12, 10, 8',
-      '--tj-input-focus-bg': '22, 18, 14',
-      '--tj-option-bg': '18, 15, 12',
+      '--tj-input-bg-start': '14, 12, 14',
+      '--tj-input-bg-end': '10, 9, 10',
+      '--tj-input-focus-bg': '18, 16, 18',
+      '--tj-option-bg': '14, 12, 14',
       /* ── 按钮（金蓝渐变） ── */
       '--tj-btn-primary-start': '245, 217, 122',
       '--tj-btn-primary-end': '142, 215, 255',
@@ -52,11 +52,11 @@ export const themes: ThemeDefinition[] = [
       '--tj-chat-muted': '182, 168, 132',
       /* ── 阴影 ── */
       '--tj-shadow': '0, 0, 0',
-      /* ── 科技色（开拓金辉：科技色 = 暖金色，与 accent 同色系） ── */
-      '--tj-tech-cyan': '245, 217, 122',
-      '--tj-tech-cyan-deep': '196, 163, 90',
-      '--tj-tech-blue': '180, 155, 100',
-      '--tj-tech-blue-deep': '160, 135, 85',
+      /* ── 科技色（冷青蓝，与金色 accent 形成对比） ── */
+      '--tj-tech-cyan': '117, 214, 216',
+      '--tj-tech-cyan-deep': '90, 185, 190',
+      '--tj-tech-blue': '150, 175, 210',
+      '--tj-tech-blue-deep': '130, 155, 190',
       /* ── 纸面 ── */
       '--tj-paper-deep': '10, 9, 10',
       '--tj-paper-warm': '16, 14, 16',

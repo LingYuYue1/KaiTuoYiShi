@@ -3,7 +3,7 @@
 // （CoT / 输出格式 / 叙述者人格 / 开发者模式）——按 scope 注入主流程 system prompt。
 // 设计参照墨色项目 models/system.ts 的「提示词结构」+「内置提示词条目结构」。
 
-export type 提示词模块类目 = 'cot' | 'format' | 'persona' | 'devmode' | 'style' | 'custom';
+export type 提示词模块类目 = 'cot' | 'format' | 'persona' | 'devmode' | 'jailbreak' | 'style' | 'custom';
 
 /** 模块注入场景。与世界书 scope 对齐，便于主剧情与独立模型提示词展示复用同一分类。
  * - main: 主流程正文（除开局外）
@@ -32,6 +32,23 @@ export interface 提示词模块 {
   scope: 提示词模块作用域[];
   /** 可选：仅在开局档案来源命中时注入，用于区分官方预设 / 自由开局 / 创意工坊开局。 */
   openingSourceGate?: ('official_preset' | 'free' | 'workshop')[];
+  /** ST 预设兼容：消息角色。system 走 systemPrompt 拼接，user/assistant 走 messages 插入。 */
+  role?: 'system' | 'user' | 'assistant';
+  /** ST 预设兼容：0=相对位置（按 order 排序），1=In-Chat（按 injectionDepth 插入聊天历史）。 */
+  injectionPosition?: 0 | 1;
+  /** ST 预设兼容：仅 injectionPosition=1 时有效。0=末条消息后，1=末条消息前，依此类推。 */
+  injectionDepth?: number;
+  /** ST 预设兼容：同 role 同 depth 内排序值，值越小越靠前。默认回退到 order。 */
+  injectionOrder?: number;
+  /** ST 预设兼容：触发生成类型。空=全触发。候选值：normal / continue / impersonate / swipe / regenerate / quiet。 */
+  injectionTrigger?: string[];
+  /** 模块来源：builtin=内置 / st_preset=ST预设导入 / user=用户自建。 */
+  source?: 'builtin' | 'st_preset' | 'user';
+  /** 替代行为：builtin=不可替换 / builtin_toggleable=可关不可删 / replaceable=可被ST导入替换 / extensible=可叠加。 */
+  replaceable?: 'builtin' | 'builtin_toggleable' | 'replaceable' | 'extensible';
+  /** 模块级锁定：true 时玩家无法关闭/删除/编辑。
+   *  二创成品预设(adapted_*)用此字段保持内置模块在二创预设中始终开启且无法关闭。 */
+  locked?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -64,6 +81,7 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_response_format',
   'builtin_action_options',
   'builtin_no_control',
+  'builtin_player_speech_expansion',
   'builtin_npc_autonomy',
   'builtin_npc_ledger_continuity',
   'builtin_writing_style',
@@ -74,6 +92,8 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_perspective_second',
   'builtin_perspective_third',
   'builtin_nsfw',
+  'builtin_emotion_protocol',
+  'builtin_cognitive_isolation',
 ] as const;
 
 export type 内置提示词模块ID = (typeof BUILTIN_PROMPT_MODULE_IDS)[number];
@@ -86,11 +106,30 @@ export function isBuiltinPromptModule(id: string): id is 内置提示词模块ID
 /** 顶部注入与尾部注入的分界 order 值。 */
 export const PROMPT_MODULE_TOP_THRESHOLD = 30;
 
+/**
+ * order 区间三层方案（ST 预设兼容）：
+ *   Tier 1 (1-99)    内置可覆盖模块（worldbook/输出格式/CoT 等）
+ *   Tier 2 (100-999) ST 导入模块（st_import_* 前缀）
+ *   Tier 3 (1000+)   内置压轴模块（CoT/格式/行动选项/NSFW/复合情感/认知隔离）
+ *
+ * LLM 优先级规律：靠后的指令优先级更高（更接近用户消息），所以 CoT/格式
+ * 必须排在 ST 之后（Tier 3），避免被 ST 预设覆盖导致输出格式错乱。
+ *
+ * calibration scope 允许 order 重复约定：
+ *   独立系统（news/phone/zhiku/yiting/storyWeaving/variable）各自的 worldbook(50) /
+ *   output_format(66) / cot(1020) 模块都使用相同 order 值。这不冲突，因为每个
+ *   独立系统的 buildXxxPromptModulesSection 函数只过滤自己系统的模块（scope +
+ *   id 前缀双重过滤），同 order 的模块不会在同一个 systemPrompt 里相遇。
+ *   若未来要做全局 order 校验或统一注入所有 calibration 模块，需先给每个独立
+ *   系统分配独立子区间（如 news=50/66/1020, phone=51/67/1021, ...）。
+ */
+
 export const PROMPT_MODULE_CATEGORY_LABELS: Record<提示词模块类目, string> = {
   cot: '思维链',
   format: '输出格式',
   persona: '叙述人格',
   devmode: '开发模式',
+  jailbreak: '越狱',
   style: '文风',
   custom: '自定义',
 };
@@ -106,3 +145,16 @@ export const PROMPT_MODULE_SCOPE_LABELS: Record<提示词模块作用域, string
 
 /** 旧版 builtin_cot id（已拆分为 builtin_opening_cot + builtin_main_plot_cot）。 */
 export const LEGACY_BUILTIN_COT_ID = 'builtin_cot';
+
+/** ST 预设兼容字段的默认值。用于旧存档迁移兜底、新建模块填充、运行时读取兜底。 */
+export function getDefaultModuleFields(): Pick<提示词模块, 'role' | 'injectionPosition' | 'injectionDepth' | 'injectionOrder' | 'injectionTrigger' | 'source' | 'replaceable'> {
+  return {
+    role: 'system',
+    injectionPosition: 0,
+    injectionDepth: 4,
+    injectionOrder: 100,
+    injectionTrigger: [],
+    source: 'builtin',
+    replaceable: 'builtin',
+  };
+}

@@ -22,8 +22,12 @@ import {
   getMainHistoryWindow,
 } from './historyWindow';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
+import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
+import { buildTavernMessageChain } from './tavernMessageChainBuilder';
+import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getAnticipatedNpcNamesForTurn, getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { 格式化开局档案上下文 } from '@/models/world';
+import { createMacroContext } from '@/utils/macroEngine';
 
 const COT_FAKE_HISTORY_USER = '开始任务';
 const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
@@ -235,6 +239,12 @@ function formatMessages(messages: Array<{ role: string; content: string }>): str
 function formatMainRequestOrderOverview(
   systemPromptSections: Array<{ title: string; content: string }>,
   apiMessages: 聊天消息[],
+  tavernStatus?: {
+    attempted: boolean;
+    used: boolean;
+    presetName?: string;
+    reason?: string;
+  },
 ): string {
   const lines: string[] = [
     '# 主剧情真实请求顺序总览',
@@ -261,7 +271,18 @@ function formatMainRequestOrderOverview(
     lines.push('- 无 API messages。');
   }
 
-  return lines.join('\n');
+  if (tavernStatus) {
+    lines.push(
+      '',
+      '## 酒馆预设状态',
+      `- 预设：${tavernStatus.presetName || '未选择'}`,
+      `- 尝试酒馆消息链：${tavernStatus.attempted ? '是' : '否'}`,
+      `- 当前快照已使用酒馆 messages：${tavernStatus.used ? '是' : '否'}`,
+      tavernStatus.reason ? `- 说明：${tavernStatus.reason}` : '',
+    );
+  }
+
+  return lines.filter(Boolean).join('\n');
 }
 
 function splitPromptSections(systemPrompt: string): Array<{ title: string; content: string }> {
@@ -584,7 +605,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       })
     : undefined;
 
-  const systemPrompt = isOpeningSystemTrigger
+  const builtPrompt = isOpeningSystemTrigger
     ? buildOpeningSystemPrompt(
         state.旅人,
         state.世界,
@@ -593,6 +614,8 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         state.worldbooks,
         worldbookCtx,
         state.新闻,
+        isOpeningSystemTrigger ? 'opening' : 'normal',
+        createMacroContext(state.gameSettings.macroGlobalVars),
       )
     : buildSystemPrompt(
         state.旅人,
@@ -614,10 +637,20 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         zhikuPreview?.injection,
         Boolean(yitingPreview?.injection),
         npcLedgerSelection,
+        isOpeningSystemTrigger ? 'opening' : 'normal',
+        createMacroContext(state.gameSettings.macroGlobalVars),
       );
-
-  const systemPromptSections = splitPromptSections(systemPrompt);
-  const apiMessages = buildApiMessages(state.chatHistory, {
+  // 上下文快照需要跟真实发送路径对齐：V2 酒馆预设只额外发送 Tavern messages，
+  // 原生 systemPrompt 仍完整发送，因此 Tavern 链路不重复塞原生底座和当前用户输入。
+  let systemPrompt = builtPrompt.systemPrompt;
+  let systemPromptSections = splitPromptSections(systemPrompt);
+  const recentHistory = getMainHistoryWindow(state.chatHistory, state.gameSettings, state.记忆);
+  const tavernHistory = recentHistory.filter((msg, index) => {
+    if (msg.role !== 'user') return true;
+    const isLastRecentMessage = index === recentHistory.length - 1;
+    return !(isLastRecentMessage && msg.content.trim() === sourceInput);
+  });
+  let apiMessages = buildApiMessages(state.chatHistory, {
     isOpeningSystemTrigger,
     isAwakeningEnterTrigger,
     awakeningPhase,
@@ -626,12 +659,61 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     settings: state.gameSettings,
     memorySystem: state.记忆,
   });
+  const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
+  const shouldTryTavernV2 =
+    state.gameSettings.enableStPreset !== false &&
+    Boolean(currentPresetV2?.preset?.prompts?.length) &&
+    Boolean(currentPresetV2?.preset?.prompt_order?.length);
+  const tavernStatus: Parameters<typeof formatMainRequestOrderOverview>[2] = {
+    attempted: shouldTryTavernV2,
+    used: false,
+    presetName: currentPresetV2?.name,
+    reason: currentPresetV2
+      ? state.gameSettings.enableStPreset === false
+        ? '酒馆预设总开关关闭。'
+        : ''
+      : '未选择酒馆 V2 预设，因此本回合仍走原生主流程。',
+  };
+  let requestMessagesTitle = '历史记录';
+  let requestMessagesCategory = '历史';
+  if (shouldTryTavernV2 && currentPresetV2) {
+    try {
+      const latestTavernInput = isOpeningSystemTrigger
+        ? '请根据当前角色、当前场景、世界书与内置提示词，直接生成第 0 回合开场叙事。不要等待玩家再次输入。'
+        : isAwakeningEnterTrigger && awakeningPathId
+          ? `玩家选择踏入「命途狭间」(命途 ID: ${awakeningPathId})。请按 pathAwakening 流程生成第一道诘问,不要推进主剧情,不要等玩家再次发言。`
+          : sourceInput;
+      const tavernMessages = buildTavernMessageChain({
+        settings: state.gameSettings,
+        preset: currentPresetV2.preset,
+        characterId: state.gameSettings.currentStCharacterId ?? currentPresetV2.characterId ?? null,
+        chatHistory: tavernHistory,
+        latestUserInput: latestTavernInput,
+        playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+        playerRole: state.旅人,
+        includeNativeContextInWorldbook: false,
+        triggerType: isOpeningSystemTrigger ? 'opening' : isAwakeningEnterTrigger ? 'pathAwakening' : 'normal',
+        macroCtx: createMacroContext(state.gameSettings.macroGlobalVars),
+      }).map((msg) => 创建聊天消息(msg.role, msg.content));
+      if (tavernMessages.length) {
+        apiMessages = tavernMessages;
+        requestMessagesTitle = '酒馆预设消息链';
+        requestMessagesCategory = '酒馆预设';
+        tavernStatus.used = true;
+        tavernStatus.reason = '快照已按当前酒馆 V2 预设生成额外 API messages；原生游戏底座 systemPrompt 仍会完整发送。酒馆 chatHistory 槽位只使用原生近期历史窗口，并排除当前用户输入，避免全量历史和本轮输入重复注入。';
+      } else {
+        tavernStatus.reason = '酒馆消息链为空；真实发送时会回退原生主流程。';
+      }
+    } catch (error) {
+      tavernStatus.reason = `酒馆消息链构建失败；真实发送时会回退原生主流程。${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
   const sections: ContextSection[] = [];
   addSection(sections, {
     id: 'main_request_order_overview',
     title: '主剧情真实请求顺序总览',
     category: '诊断',
-    content: formatMainRequestOrderOverview(systemPromptSections, apiMessages),
+    content: formatMainRequestOrderOverview(systemPromptSections, apiMessages, tavernStatus),
     upload: false,
     diagnostic: true,
   });
@@ -697,9 +779,9 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
 
   if (apiMessages.length) {
     addSection(sections, {
-      id: 'history_window',
-      title: `历史记录（${apiMessages.length} 条）`,
-      category: '历史',
+      id: requestMessagesCategory === '酒馆预设' ? 'tavern_preset_message_chain' : 'history_window',
+      title: `${requestMessagesTitle}（${apiMessages.length} 条）`,
+      category: requestMessagesCategory,
       content: formatMessages(apiMessages.map((msg) => ({ role: msg.role, content: msg.content }))),
       upload: true,
     });

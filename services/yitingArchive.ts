@@ -4,6 +4,7 @@ import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { YITING_ARCHIVE_FORMAT_PROMPT as YITING_LEGACY_ARCHIVE_FORMAT_PROMPT } from '@/prompts/cot/yitingCot';
 import type { 提示词模块 } from '@/models/prompts';
+import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 
 export interface YitingArchiveSource {
   turn: number;
@@ -289,9 +290,5 @@ function mergeKeywords(base: string[], extra: string[]): string[] {
 
 function buildYitingArchiveFormatSection(promptModules?: 提示词模块[]): string {
   if (!promptModules || promptModules.length === 0) return '';
-  const filtered = promptModules
-    .filter((m) => m.enabled && m.scope?.includes('calibration') && m.category === 'format')
-    .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  return filtered.map((m) => m.content).join('\n\n');
+  return buildIndependentPromptModulesSection(promptModules, 'yitingArchive', { category: 'format' });
 }

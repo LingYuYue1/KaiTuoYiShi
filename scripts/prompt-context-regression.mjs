@@ -77,9 +77,10 @@ assert(worldbookModel.includes('独立模型 / 校准模型资料展示'), '世�
 assert(promptModulesTab.includes('独立模型提示词展示：新闻、手机、智库、变量、剧情编织等真实请求由对应服务层共享 prompt 构建'), '提示词模块 UI 必须说明独立模型真实请求由服务层共享 prompt 构建。');
 assert(promptModulesTab.includes('可在“上下文”页核对实际发送内容'), '提示词模块 UI 必须引导玩家到上下文页核对独立模型真实请求。');
 assert(promptModulesTab.includes('不会进入主剧情 system prompt'), '提示词模块 UI 必须说明独立模型作用域不会进入主剧情 system prompt。');
-assert(promptModulesTab.includes("disabled={isCalibrationModule}"), '独立模型提示词展示模块不得继续显示为可操作开关。');
-assert(promptModulesTab.includes("title={isCalibrationModule ? '独立模型展示模块不是真实请求开关'"), '独立模型提示词展示模块必须说明不是真实请求开关。');
-assert(promptModulesTab.includes("{isCalibrationModule ? '● 展示'"), '独立模型提示词列表状态必须显示为展示而不是普通启用/关闭。');
+assert(promptModulesTab.includes('const toggleDisabled = isCalibrationModule'), '独立模型提示词展示模块必须用独立模型作用域派生开关禁用状态。');
+assert(promptModulesTab.includes('disabled={toggleDisabled}'), '独立模型提示词展示模块不得继续显示为可操作开关。');
+assert(promptModulesTab.includes("title={toggleDisabled ? '独立模型展示模块不是真实请求开关'"), '独立模型提示词展示模块必须说明不是真实请求开关。');
+assert(promptModulesTab.includes("{toggleDisabled ? '独立模型展示'"), '独立模型提示词列表状态必须显示为展示而不是普通启用/关闭。');
 assert(promptModulesTab.includes('enabled: isCalibrationBuiltin ? true : m.enabled'), '重置内置提示词时必须强制独立模型展示模块保持展示状态。');
 assert(gameState.includes('enabled: isCalibrationBuiltin ? true : hit.enabled'), '旧存档迁移必须强制独立模型提示词模块保持展示状态。');
 assert(gameState.includes('function isCalibrationWorldbook(book: 世界书)'), '内置独立模型世界书必须有迁移识别函数。');

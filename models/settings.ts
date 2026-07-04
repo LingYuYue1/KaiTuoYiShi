@@ -4,6 +4,7 @@ import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { 默认文生图规则中心, normalizeImageRules } from '@/utils/imagePromptRules';
 import type { 剧情编织API覆盖 } from './storyWeaving';
+import type { STWorldInfoEntry, STPresetEntry, STSamplingParams, STPresetEntryV2, TavernPostProcessMode } from './stTypes';
 
 export interface API配置项 {
   id: string;
@@ -14,6 +15,22 @@ export interface API配置项 {
   model: string;
   maxTokens?: number;
   temperature?: number;
+  /** 核采样概率阈值（0-1）。仅 OpenAI 兼容 / DeepSeek / Claude / Gemini 支持。 */
+  topP?: number;
+  /** 保留概率最高的前 K 个候选词。仅 Gemini 原生支持。 */
+  topK?: number;
+  /** 动态阈值采样（基于相对概率）。当前无 provider 实际消费，预留字段。 */
+  topA?: number;
+  /** 丢弃概率低于「最高概率 × min_p」的词（0-1）。当前无 provider 实际消费，预留字段。 */
+  minP?: number;
+  /** 重复惩罚系数（1=不生效，>1 惩罚）。OpenAI 兼容 / DeepSeek / Gemini 支持。 */
+  repetitionPenalty?: number;
+  /** 按 token 出现次数线性惩罚（-2 到 2）。OpenAI 兼容 / DeepSeek / Gemini 支持。 */
+  frequencyPenalty?: number;
+  /** 只要出现过就惩罚（-2 到 2）。OpenAI 兼容 / DeepSeek / Gemini 支持。 */
+  presencePenalty?: number;
+  /** 最大上下文窗口（tokens）。各 provider 均支持。 */
+  maxContext?: number;
   retryCount?: number;
   enableClaudeMode?: boolean;
   createdAt: number;
@@ -220,6 +237,60 @@ export interface 游戏设置 {
   customPrompt: string;
   /** 内置 + 玩家自定义的提示词模块。所有 enabled 模块都恒注入主流程 system prompt。 */
   promptModules: 提示词模块[];
+  /** ST 预设兼容：宏变量持久化。跨回合保留的全局变量。 */
+  macroGlobalVars?: Record<string, string>;
+  /** ST 预设兼容：已保存的预设库。玩家可导入多套预设，通过下拉切换。 */
+  stPresets?: STPresetEntry[];
+  /** ST 预设兼容：当前激活的预设 id。null=未激活任何预设。 */
+  currentStPresetId?: string | null;
+  /** ST 预设兼容：总开关。关闭后所有 st_import_* 模块不注入 systemPrompt，但保留预设库数据。 */
+  enableStPreset?: boolean;
+  /** ST 预设参数同步：激活带 samplingParams 的预设前，当前 API 采样参数的原始备份。
+   *  切回无参数预设/null 时按此值恢复。null=当前无预设覆盖参数。 */
+  stPresetApiBackup?: STSamplingParams | null;
+  /** 提示词模块 order 版本号（用于旧存档迁移）。
+   *  - 0/缺省：旧版 order 区间（内置 5-90 + ST 50+，会冲突）
+   *  - 1：方案 A 三层 order 区间（Tier 1: 1-99 / Tier 2: 100-999 ST / Tier 3: 1000+ 压轴） */
+  promptModuleOrderVersion?: number;
+  /** ST 预设兼容：V1 预设迁移/旧存档保留的世界书条目。V2 预设的 world_info 保存在 stPresetsV2[].preset 中。 */
+  stWorldInfos?: STWorldInfoEntry[];
+  /** 世界书条目触发状态表（Phase 7.1 升级，随存档持久化）。
+   *  key = 条目 id，value = 最近触发回合（messageCount 值）。
+   *  用于世界书条目的 delay / cooldown 判断。 */
+  worldbookTriggerStates?: Record<string, number>;
+
+  // === 新增：保留式 ST 预设字段 ===
+
+  /** ST 预设兼容 V2：保留原始结构的预设列表 */
+  stPresetsV2?: STPresetEntryV2[];
+
+  /** ST 预设兼容 V2：当前激活的预设 id */
+  currentStPresetIdV2?: string | null;
+
+  /** ST 预设兼容 V2：当前选中的 prompt_order.character_id 顺序槽位，不代表本项目角色卡。 */
+  currentStCharacterId?: number | null;
+
+  /** ST 预设兼容 V2：消息角色后处理模式 */
+  stPostProcessMode?: TavernPostProcessMode;
+
+  // === 保留但标记废弃的旧字段 ===
+
+  /** @deprecated V1 转译式预设列表，迁移后不再使用 */
+  // stPresets?: STPresetEntry[];
+
+  /** @deprecated V1 当前激活预设 id */
+  // currentStPresetId?: string | null;  // 复用此字段，迁移后指向 V2 条目
+
+  /** @deprecated V1 总开关，V2 复用 */
+  // enableStPreset?: boolean;
+
+  /** @deprecated V1 采样参数备份，V2 复用 */
+  // stPresetApiBackup?: STSamplingParams | null;
+  /** 思维链输出语言（参考 Izumi，P2 可选）。
+   *  - 'zh'（默认）：中文思考段
+   *  - 其他值：在主剧情思维链末尾追加"请用 X 语言输出 <think> 思考段"提示
+   *  可选值：'zh' / 'en' / 'ja' / 'fr' / 'ru' / 'de' / 'es' / 'it' */
+  cotLanguage?: 'zh' | 'en' | 'ja' | 'fr' | 'ru' | 'de' | 'es' | 'it';
   /** CoT 伪装历史消息注入：在 `user:开始任务` 之后注入一条伪装 assistant 历史消息，用于强化思考段输出习惯。 */
   enableCotFakeHistory: boolean;
   /** 标签修复：在解析 AI 回复前，自动修复常见标签错误（重复开标签、缺失闭标签等）。 */
@@ -237,6 +308,8 @@ export interface 游戏设置 {
   enableMaleNsfwArchive: boolean;
   /** 防止抢话（NoControl）：开启后注入「角色边界」提示词模块，禁止 AI 代写玩家言行与正文内选项菜单。 */
   enableNoControl: boolean;
+  /** 抢话模式：开启后注入「适度代写玩家对白」模块，允许 AI 少量扩写玩家话语；与 enableNoControl 互斥。 */
+  enablePlayerSpeechExpansion: boolean;
   /** 额外功能：用于承载不属于核心叙事/API/系统面板的小型修复与玩法增强。 */
   额外功能: 额外功能设置;
 }
@@ -246,8 +319,15 @@ export interface 污染词清理设置 {
   words: string[];
 }
 
+/** 标签块隐藏设置：用于隐藏 ST 预设中的"注入+清理"配对标签块（如抗空回的 <Q>...</WF>、抗截断的 <math>...</math>）。
+ *  这些标签块让 AI 生成特定内容起作用，但显示给玩家前需要整段移除，否则污染正文格式。 */
+export interface 标签块隐藏设置 {
+  enabled: boolean;
+}
+
 export interface 额外功能设置 {
   污染词清理: 污染词清理设置;
+  标签块隐藏: 标签块隐藏设置;
 }
 
 export interface 记忆系统设置 {
@@ -1053,7 +1133,22 @@ export function 创建默认游戏设置(): 游戏设置 {
     enableNsfw: false,
     enableMaleNsfwArchive: false,
     enableNoControl: true,
+    enablePlayerSpeechExpansion: false,
     额外功能: 创建默认额外功能设置(),
+    // ST 预设兼容相关字段（可选，这里显式列默认值保持风格一致）
+    cotLanguage: 'zh',
+    enableStPreset: true,
+    stPresets: [],
+    currentStPresetId: 'builtin_preset',
+    promptModuleOrderVersion: 1,
+    stWorldInfos: [],
+    macroGlobalVars: {},
+    worldbookTriggerStates: {},
+    // === 新增：保留式 ST 预设默认值 ===
+    stPresetsV2: [],
+    currentStPresetIdV2: null,
+    currentStCharacterId: null,
+    stPostProcessMode: '未选择',
   };
 }
 
@@ -1081,6 +1176,9 @@ export function 创建默认额外功能设置(): 额外功能设置 {
       enabled: true,
       words: ['极其'],
     },
+    标签块隐藏: {
+      enabled: true,
+    },
   };
 }
 
@@ -1097,6 +1195,10 @@ export function 归一化额外功能设置(input?: Partial<额外功能设置>)
       ...defaults.污染词清理,
       ...(input?.污染词清理 ?? {}),
       words: words.length ? Array.from(new Set(words)).slice(0, 50) : defaults.污染词清理.words,
+    },
+    标签块隐藏: {
+      ...defaults.标签块隐藏,
+      ...(input?.标签块隐藏 ?? {}),
     },
   };
 }

@@ -5,6 +5,7 @@ function assert(condition, message) {
 }
 
 const settingsModal = fs.readFileSync('components/features/Settings/SettingsModal.tsx', 'utf8');
+const apiSettings = fs.readFileSync('components/features/Settings/ApiSettings.tsx', 'utf8');
 const albumPanel = fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8');
 const independentTabs = [
   'MemorySystemSettings.tsx',
@@ -26,8 +27,8 @@ for (const tab of [
   'ZhikuSettingsTab',
   'StoryWeavingSettingsTab',
 ]) {
-  assert(settingsModal.includes(`<${tab}`), `设置弹窗必须渲染 ${tab}。`);
-  assert(settingsModal.includes('onChange={persistGameSettingsChange}'), '独立接口设置页必须使用统一持久化 onChange。');
+  assert(apiSettings.includes(`<${tab}`), `设置弹窗必须渲染 ${tab}（位于 ApiSettings.tsx）。`);
+  assert(apiSettings.includes('onChange={onGameSettingsChange}'), '独立接口设置页必须使用统一持久化 onChange（通过 onGameSettingsChange prop 传递）。');
 }
 assert(settingsModal.includes('onGameSettingsChange={persistGameSettingsChange}'), '变量更新和 API 配置批量修改必须使用统一持久化入口。');
 assert(!settingsModal.includes('<ImageGenerationSettingsTab'), '文生图设置已迁移到相册，设置弹窗不应再渲染。');

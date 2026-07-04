@@ -19,6 +19,7 @@ const canonicalCharacters = fs.readFileSync('data/canonicalCharacters.ts', 'utf8
 const settings = fs.readFileSync('models/settings.ts', 'utf8');
 const memoryCompression = fs.readFileSync('services/memoryCompression.ts', 'utf8');
 const yitingArchive = fs.readFileSync('services/yitingArchive.ts', 'utf8');
+const yitingCot = fs.readFileSync('prompts/cot/yitingCot.ts', 'utf8');
 
 const protectedFields = [
   '姓名',
@@ -88,6 +89,6 @@ assert(settings.includes('单回合沉默、紧张、冷淡、受伤、戒备或
 assert(settings.includes('长期人格、口吻和 OOC 边界以智库人物主体资料为准'), '默认 NPC 记忆压缩提示词必须以智库主体资料为长期人格来源。');
 assert(settings.includes('原著角色的长期人格不要由忆庭精炼改写'), '默认忆庭精炼提示词必须禁止改写原著角色长期人格。');
 assert(memoryCompression.includes('不得压缩成长期人格') && memoryCompression.includes('智库人物主体资料为准'), '记忆压缩运行时额外要求必须保护原著角色长期人格。');
-assert(yitingArchive.includes('长期人格不要由忆庭精炼改写') && yitingArchive.includes('忆庭只记录共同经历、关系事实、承诺、冲突和后果'), '忆庭精炼运行时额外要求必须保护原著角色长期人格。');
+assert(yitingCot.includes('长期人格不要由忆庭精炼改写') && yitingCot.includes('忆庭只记录共同经历、关系事实、承诺、冲突和后果'), '忆庭精炼运行时额外要求必须保护原著角色长期人格。');
 
 console.log('traveler profile guard regression ok');

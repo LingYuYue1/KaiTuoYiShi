@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   deleteSave,
+  deleteSaveTree,
   exportSavePackage,
   exportSaveTreePackage,
   getSaveList,
@@ -12,6 +13,7 @@ import {
   saveGame,
   type SaveListItemSummary,
 } from '@/services/dbService';
+import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
@@ -33,6 +35,8 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deletingRootId, setDeletingRootId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<Tab>('manual');
@@ -143,8 +147,37 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    await deleteSave(id);
-    await refresh();
+    const target = saves.find((save) => save.id === id)?.saveTree;
+    setDeletingId(id);
+    setSaves((prev) => prev.filter((save) => save.id !== id));
+    try {
+      await deleteSave(id);
+      clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
+      setDeletingId(null);
+      void refresh();
+    } catch (err) {
+      console.error('[save-delete] delete failed', err);
+      alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
+      await refresh();
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteTree = async (rootId: string, nodeCount: number) => {
+    if (!confirm(`确定删除这整棵存档树？将删除 ${nodeCount} 个节点，此操作不可恢复。`)) return;
+    setDeletingRootId(rootId);
+    setSaves((prev) => prev.filter((save) => save.saveTree?.rootId !== rootId));
+    try {
+      await deleteSaveTree(rootId);
+      clearActiveSaveTreeMetaIfMatches({ rootId });
+      setDeletingRootId(null);
+      void refresh();
+    } catch (err) {
+      console.error('[save-delete-tree] delete failed', err);
+      alert(`删除整树失败：${err instanceof Error ? err.message : '存档树删除过程异常'}`);
+      await refresh();
+      setDeletingRootId(null);
+    }
   };
 
   const handleExport = async (id: number) => {
@@ -186,15 +219,20 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     input.click();
   };
 
-  const { manualSaves, autoSaves, protectedSaves } = useMemo(() => {
-    const manual = saves.filter((s) => s.type === 'manual');
-    const auto = saves.filter((s) => s.type === 'auto');
-    const protectedItems = saves.filter((s) => s.type === 'backup' || s.type === 'imported');
-    return { manualSaves: manual, autoSaves: auto, protectedSaves: protectedItems };
-  }, [saves]);
-  const allVisibleSaves = useMemo(() => saves.filter((s) => s.type !== 'auto'), [saves]);
+  const visibleSaves = useMemo(
+    () => saves.filter((save) => save.id !== deletingId && save.saveTree?.rootId !== deletingRootId),
+    [deletingId, deletingRootId, saves],
+  );
 
-  const allTreeGroups = useMemo(() => buildSaveTreeGroups(saves), [saves]);
+  const { manualSaves, autoSaves, protectedSaves } = useMemo(() => {
+    const manual = visibleSaves.filter((s) => s.type === 'manual');
+    const auto = visibleSaves.filter((s) => s.type === 'auto');
+    const protectedItems = visibleSaves.filter((s) => s.type === 'backup' || s.type === 'imported');
+    return { manualSaves: manual, autoSaves: auto, protectedSaves: protectedItems };
+  }, [visibleSaves]);
+  const allVisibleSaves = useMemo(() => visibleSaves.filter((s) => s.type !== 'auto'), [visibleSaves]);
+
+  const allTreeGroups = useMemo(() => buildSaveTreeGroups(visibleSaves), [visibleSaves]);
   const visibleTreeGroups = useMemo(
     () => allTreeGroups
       .map((group) => buildVisibleSaveTreeGroup(group, tab))
@@ -207,7 +245,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   );
   const totalBranches = allTreeGroups.reduce((sum, group) => sum + group.branchCount, 0);
   const totalSizeBytes = allTreeGroups.reduce((sum, group) => sum + group.totalSizeBytes, 0);
-  const latestSave = saves[0];
+  const latestSave = visibleSaves[0];
   const selectedTree =
     visibleTreeGroups.find((group) => group.rootId === selectedRootId) ??
     visibleTreeGroups[0] ??
@@ -369,16 +407,16 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
           <main className="flex min-w-0 flex-col md:min-h-0 md:flex-1 md:overflow-hidden">
             <div className="md:hidden flex flex-col">
               <div className="flex gap-1.5 px-3 pb-1.5 pt-2.5">
-                <SaveActionButton primary onClick={handleSave} disabled={saving} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                <SaveActionButton primary size="sm" onClick={handleSave} disabled={saving} className="flex-1 min-w-0">
                   {saving ? '保存中' : '保存'}
                 </SaveActionButton>
-                <SaveActionButton onClick={handleImport} disabled={importing} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                <SaveActionButton size="sm" onClick={handleImport} disabled={importing} className="flex-1 min-w-0">
                   {importing ? '导入中' : '导入'}
                 </SaveActionButton>
-                <SaveActionButton onClick={handleExportCurrent} disabled={saving} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                <SaveActionButton size="sm" onClick={handleExportCurrent} disabled={saving} className="flex-1 min-w-0">
                   导出
                 </SaveActionButton>
-                <SaveActionButton warn onClick={handleRepairList} disabled={loading} className="flex-1 min-w-0 text-[11px] px-2 py-2">
+                <SaveActionButton warn size="sm" onClick={handleRepairList} disabled={loading} className="flex-1 min-w-0">
                   {loading ? '修复中' : '修复'}
                 </SaveActionButton>
               </div>
@@ -523,10 +561,13 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                     key={selectedTree.rootId}
                     group={selectedTree}
                     loadingId={loadingId}
+                    deletingId={deletingId}
+                    deletingRootId={deletingRootId}
                     onLoad={handleLoad}
                     onDelete={handleDelete}
                     onExport={handleExport}
                     onExportTree={handleExportTree}
+                    onDeleteTree={handleDeleteTree}
                     formatTime={formatTime}
                   />
                 </div>
@@ -557,32 +598,43 @@ function SaveActionButton({
   children,
   primary = false,
   warn = false,
+  danger = false,
   disabled,
   onClick,
   className = '',
+  size = 'md',
 }: {
   children: ReactNode;
   primary?: boolean;
   warn?: boolean;
+  danger?: boolean;
   disabled?: boolean;
   onClick: () => void;
   className?: string;
+  size?: 'sm' | 'md';
 }) {
+  // 用 size prop 区分尺寸,避免 PC 默认 padding 与 mobile 传入的 px-2 py-2 在 Tailwind 里冲突
+  // (Tailwind 中 px-4 的 CSS 定义在 px-2 之后,会覆盖 mobile 的值)。
+  const sizeClass = size === 'sm' ? 'px-2.5 py-2 text-[11px]' : 'px-4 py-3 text-[12px]';
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`cursor-pointer font-serif text-[12px] font-semibold tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`cursor-pointer font-serif ${sizeClass} font-semibold tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       style={{
-        color: primary ? 'rgba(var(--tj-surface-bg-start),1)' : warn ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary),0.76)',
+        color: primary ? 'rgba(var(--tj-surface-bg-start),1)' : danger ? 'rgba(var(--tj-danger),0.92)' : warn ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary),0.76)',
         background: primary
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))'
+          : danger
+            ? 'rgba(var(--tj-danger),0.07)'
           : warn
             ? 'rgba(var(--tj-accent-primary),0.06)'
             : 'rgba(var(--tj-accent-primary),0.07)',
         boxShadow: primary
           ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55), 0 0 20px rgba(var(--tj-tech-blue), 0.24)'
+          : danger
+            ? 'inset 0 0 0 1px rgba(var(--tj-danger),0.28)'
           : warn
             ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)'
             : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
@@ -798,18 +850,24 @@ function TabButton({
 function SaveTreeGroup({
   group,
   loadingId,
+  deletingId,
+  deletingRootId,
   onLoad,
   onDelete,
   onExport,
   onExportTree,
+  onDeleteTree,
   formatTime,
 }: {
   group: SaveTreeDisplayGroup;
   loadingId: number | null;
+  deletingId: number | null;
+  deletingRootId: string | null;
   onLoad: (id: number) => void;
   onDelete: (id: number) => void;
   onExport: (id: number) => void;
   onExportTree: (rootId: string) => void;
+  onDeleteTree: (rootId: string, nodeCount: number) => void;
   formatTime: (ts: number) => string;
 }) {
   return (
@@ -841,9 +899,14 @@ function SaveTreeGroup({
             <span>第 {group.latestSave.turnCount} 回合</span>
           </div>
         </div>
-        <SaveActionButton onClick={() => onExportTree(group.rootId)} disabled={loadingId !== null}>
-          导出整树
-        </SaveActionButton>
+        <div className="flex flex-wrap gap-2">
+          <SaveActionButton onClick={() => onExportTree(group.rootId)} disabled={loadingId !== null || deletingRootId !== null || deletingId !== null}>
+            导出整树
+          </SaveActionButton>
+          <SaveActionButton onClick={() => onDeleteTree(group.rootId, group.nodeCount)} disabled={loadingId !== null || deletingRootId !== null || deletingId !== null} danger>
+            {deletingRootId === group.rootId ? '删除中' : '删除整树'}
+          </SaveActionButton>
+        </div>
       </div>
 
       <div className="relative space-y-3 pl-6">
@@ -857,6 +920,7 @@ function SaveTreeGroup({
             key={node.save.id}
             item={node.save}
             loadingId={loadingId}
+            deletingId={deletingId}
             onLoad={onLoad}
             onDelete={onDelete}
             onExport={onExport}
@@ -875,6 +939,7 @@ function SaveTreeGroup({
 function SaveRow({
   item,
   loadingId,
+  deletingId,
   onLoad,
   onDelete,
   onExport,
@@ -886,6 +951,7 @@ function SaveRow({
 }: {
   item: SaveListItemSummary;
   loadingId: number | null;
+  deletingId: number | null;
   onLoad: (id: number) => void;
   onDelete: (id: number) => void;
   onExport: (id: number) => void;
@@ -1004,7 +1070,7 @@ function SaveRow({
         <button
           type="button"
           onClick={() => onDelete(item.id)}
-          disabled={loadingId !== null}
+          disabled={loadingId !== null || deletingId !== null}
           className="cursor-pointer px-2.5 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
             color: 'rgba(var(--tj-danger),0.9)',
@@ -1012,7 +1078,7 @@ function SaveRow({
             clipPath: smallClip,
           }}
         >
-          删除
+          {deletingId === item.id ? '删除中' : '删除'}
         </button>
       </div>
     </article>

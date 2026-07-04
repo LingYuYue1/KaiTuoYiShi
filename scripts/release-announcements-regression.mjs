@@ -18,7 +18,7 @@ assert(
   'Update announcement button must sit next to the GitHub cloud save entry.',
 );
 assert(
-  landing.includes('开拓轶事 v0.8.1'),
+  landing.includes('开拓轶事 v1.0'),
   'Landing page must show the current version.',
 );
 assert(
@@ -36,13 +36,18 @@ assert(
   'In-game announcements must not read CHANGELOG.md directly.',
 );
 assert(
-  data.includes("version: 'v0.8.1'") &&
-    data.indexOf("version: 'v0.8.1'") < data.indexOf("version: 'v0.8'") &&
-    data.includes('正文字号可调') &&
-    data.includes('Mimo') &&
-    data.includes('GPT / OpenAI 兼容图片路径') &&
-    data.includes('v0.8.1'),
-  'Release announcement data must include the current v0.8.1 player-facing notice.',
+  data.includes("version: 'v1.0'") &&
+    data.indexOf("version: 'v1.0'") < data.indexOf("version: 'v0.8.1'") &&
+    data.includes('酒馆预设') &&
+    data.includes('正文格式保护') &&
+    data.includes('token') &&
+    data.includes('智库') &&
+    data.includes('天气氛围') &&
+    data.includes('抢话') &&
+    data.includes('防抢话') &&
+    data.includes('AI 生成战技') &&
+    data.includes('v1.0'),
+  'Release announcement data must include the current v1.0 player-facing notice.',
 );
 
 console.log('release announcements regression ok');

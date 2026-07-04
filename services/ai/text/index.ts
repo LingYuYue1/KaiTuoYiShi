@@ -15,12 +15,31 @@ export interface ChatRequest {
   /** DeepSeek 主剧情锁格式：只在 DeepSeek provider 下生效。 */
   prefixMode?: boolean;
   prefixContent?: string;
+  /** 核采样概率阈值（0-1）。透传给 chatCompletion。 */
+  topP?: number;
+  /** 保留概率最高的前 K 个候选词。仅 Gemini 原生消费。 */
+  topK?: number;
+  /** 动态阈值采样。当前预留，无 provider 实际消费。 */
+  topA?: number;
+  /** 丢弃概率低于「最高概率 × min_p」的词（0-1）。当前预留。 */
+  minP?: number;
+  /** 重复惩罚系数（1=不生效，>1 惩罚）。 */
+  repetitionPenalty?: number;
+  /** 按 token 出现次数线性惩罚（-2 到 2）。 */
+  frequencyPenalty?: number;
+  /** 只要出现过就惩罚（-2 到 2）。 */
+  presencePenalty?: number;
+  /** 最大上下文窗口（tokens）。 */
+  maxContext?: number;
 }
 
 export interface ChatResult {
   fullText: string;
   parsed: 解析后回复;
   usage?: ChatCompletionUsage;
+  /** 结束原因：'stop'（正常结束）/ 'length' 或 'max_tokens'（被截断）/ 其他 provider 特有值。
+   *  用于抗截断检测，sendWorkflow 据此触发续写重试。 */
+  finishReason?: string;
 }
 
 export async function sendChatMessage(
@@ -53,11 +72,13 @@ export async function sendChatMessage(
   };
 
   let fullText: string;
+  let finishReason: string | undefined;
   if (useStream) {
     const callbacks: StreamCallbacks = {
       onDelta: request.onDelta,
       onDone: () => {},
       onError: (err) => { throw err; },
+      onFinishReason: (reason) => { finishReason = reason; },
     };
     fullText = await chatCompletion(
       config,
@@ -68,6 +89,14 @@ export async function sendChatMessage(
         onUsage,
         prefixMode: request.prefixMode,
         prefixContent: request.prefixContent,
+        topP: request.topP,
+        topK: request.topK,
+        topA: request.topA,
+        minP: request.minP,
+        repetitionPenalty: request.repetitionPenalty,
+        frequencyPenalty: request.frequencyPenalty,
+        presencePenalty: request.presencePenalty,
+        maxContext: request.maxContext,
       },
       callbacks,
     );
@@ -79,11 +108,19 @@ export async function sendChatMessage(
       onUsage,
       prefixMode: request.prefixMode,
       prefixContent: request.prefixContent,
+      topP: request.topP,
+      topK: request.topK,
+      topA: request.topA,
+      minP: request.minP,
+      repetitionPenalty: request.repetitionPenalty,
+      frequencyPenalty: request.frequencyPenalty,
+      presencePenalty: request.presencePenalty,
+      maxContext: request.maxContext,
     });
   }
 
   const parsed = parseResponse(fullText, { repair: request.repairTags === true });
-  return { fullText, parsed, usage };
+  return { fullText, parsed, usage, finishReason };
 }
 
 function mergeRawUsage(previous: unknown, next: unknown): unknown {

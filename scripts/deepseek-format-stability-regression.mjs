@@ -49,7 +49,9 @@ assert(sendWorkflow.includes('resolveMainStoryConfig') && sendWorkflow.includes(
 assert(sendWorkflow.includes('const mainStoryConfig = mainStoryConfigResolution.config'), '主剧情必须使用适配后的实际请求配置。');
 assert(sendWorkflow.includes('sendChatMessage(mainStoryConfig'), '主剧情发送必须使用适配后的 DeepSeek 配置。');
 assert(sendWorkflow.includes('!deepSeekMainActive'), 'DeepSeek 专用模式必须跳过 CoT 伪装历史。');
-assert(sendWorkflow.includes("prefixContent: '<thinking>\\n'"), 'DeepSeek 锁格式必须从 thinking 起点续写。');
+assert(sendWorkflow.includes('const usePresetPrefill = Boolean(presetAssistantPrefill) && !deepSeekLockFormat'), 'DeepSeek 锁格式下预设 assistantPrefill 不得覆盖 thinking 起点。');
+assert(sendWorkflow.includes("const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\\n' : presetAssistantPrefill"), 'DeepSeek 锁格式必须从 thinking 起点续写。');
+assert(sendWorkflow.includes('prefixContent: effectivePrefixContent'), '主剧情请求必须透传最终 assistant prefill 内容。');
 assert(!sendWorkflow.includes("prefixContent: '<正文>\\n'"), 'DeepSeek 锁格式不得再锁到正文起点，否则会跳过思维链。');
 assert(sendWorkflow.includes('DEEPSEEK_MAIN_FORMAT_GUARD'), 'DeepSeek 标准/锁格式必须追加专属格式守卫。');
 assert(sendWorkflow.includes('apiMessages.push(创建聊天消息(\'user\', DEEPSEEK_MAIN_FORMAT_GUARD))'), 'DeepSeek 格式守卫必须作为最后 user 消息进入主请求。');

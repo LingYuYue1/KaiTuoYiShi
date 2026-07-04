@@ -269,6 +269,7 @@ function buildQuickStats(system: SystemMeta, value: unknown): string[] {
       String(value.当前日期 ?? '日期未定'),
       String(value.当前时间 ?? '时间未定'),
       String(value.当前地点 ?? '地点未定'),
+      String(value.当前天气 ?? '天气未定'),
     ];
   }
   if (system.key === 'phone' && isRecord(value)) {
@@ -306,7 +307,21 @@ export function VariableManagerTab(props: Props) {
   );
 
   useEffect(() => {
-    const nextDraft = deepClone(visibleValue);
+    let nextDraft = deepClone(visibleValue);
+    // 确保「当前天气」紧跟「当前地点」
+    if (activeSystem.key === 'world' && isRecord(nextDraft)) {
+      const rec = nextDraft as Record<string, unknown>;
+      const weather = '当前天气' in rec ? rec['当前天气'] : '';
+      const ordered: Record<string, unknown> = {};
+      for (const key of Object.keys(rec)) {
+        if (key === '当前天气') continue; // 跳过，后面手动插入
+        ordered[key] = rec[key];
+        if (key === '当前地点') {
+          ordered['当前天气'] = weather;
+        }
+      }
+      nextDraft = ordered;
+    }
     setDraft(nextDraft);
     setJsonDraft(toJson(nextDraft));
     setError(null);

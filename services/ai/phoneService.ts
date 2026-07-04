@@ -14,6 +14,7 @@ import { 解析智库软结构标签, 获取智库人物名, 比较智库人物�
 import { PHONE_COT_PROMPT as PHONE_LEGACY_COT_PROMPT } from '@/prompts/cot/phoneCot';
 import { PHONE_WORLD_BOOK_PROMPT as PHONE_LEGACY_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import type { 提示词模块 } from '@/models/prompts';
+import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { extractJsonLikeText, normalizeStructuredModelText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
@@ -140,11 +141,7 @@ export function buildPhoneSystemPrompt(ctx: 手机回复上下文, promptModules
 
 export function buildPhonePromptModulesSection(promptModules?: 提示词模块[]): string {
   if (!promptModules || promptModules.length === 0) return '';
-  const filtered = promptModules
-    .filter((m) => m.enabled && m.scope?.includes('calibration'))
-    .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  return filtered.map((m) => m.content).join('\n\n');
+  return buildIndependentPromptModulesSection(promptModules, 'phone');
 }
 
 export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: string; content: string }> {

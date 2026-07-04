@@ -190,28 +190,28 @@ const tightClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const OPENING_PATH_STAGE_DEFS = PATH_STAGE_DEFS;
 const openingPageBackground =
-  'radial-gradient(circle at 16% 4%, rgba(var(--tj-accent-primary), 0.16), transparent 28%), radial-gradient(circle at 84% 12%, rgba(var(--tj-tech-blue), 0.16), transparent 34%), radial-gradient(circle at 54% 110%, rgba(var(--tj-accent-secondary), 0.11), transparent 38%), linear-gradient(180deg, rgb(var(--tj-bg-secondary)), rgb(var(--tj-bg-primary)))';
+  'radial-gradient(circle at 16% 4%, rgba(var(--tj-btn-primary-start), 0.16), transparent 28%), radial-gradient(circle at 84% 12%, rgba(var(--tj-tech-blue), 0.16), transparent 34%), radial-gradient(circle at 54% 110%, rgba(var(--tj-btn-primary-end), 0.11), transparent 38%), linear-gradient(180deg, rgb(var(--tj-bg-secondary)), rgb(var(--tj-bg-primary)))';
 const openingPageOverlay =
-  'linear-gradient(rgba(var(--tj-accent-primary), 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.07) 1px, transparent 1px)';
+  'linear-gradient(rgba(var(--tj-btn-primary-start), 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.07) 1px, transparent 1px)';
 const openingTopPanelBackground =
-  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
+  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-btn-primary-start), 0.10), transparent 36%)';
 const openingLedgerBackground =
-  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
+  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-btn-primary-start), 0.10), transparent 36%)';
 const openingRailBackground =
-  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-accent-primary), 0.10), transparent 36%)';
+  'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.80), rgba(var(--tj-panel-bg-end), 0.92)), radial-gradient(circle at top left, rgba(var(--tj-btn-primary-start), 0.10), transparent 36%)';
 const openingSoftPanelBackground = 'rgba(var(--tj-surface), 0.58)';
 const openingGlowLine =
-  'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.25), transparent 18% 82%, rgba(var(--tj-accent-secondary), 0.18))';
+  'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.25), transparent 18% 82%, rgba(var(--tj-btn-primary-end), 0.18))';
 const openingPanelShadow =
-  'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.24), inset 0 0 28px rgba(var(--tj-accent-primary), 0.025), 0 16px 36px rgba(0, 0, 0, 0.30)';
+  'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.24), inset 0 0 28px rgba(var(--tj-btn-primary-start), 0.025), 0 16px 36px rgba(0, 0, 0, 0.30)';
 const openingPanelShadowStrong =
-  'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.28), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.45), 0 18px 44px rgba(0, 0, 0, 0.34)';
+  'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.28), inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.45), 0 18px 44px rgba(0, 0, 0, 0.34)';
 const openingCardBackground =
   'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.76), rgba(var(--tj-surface-bg-end), 0.88))';
 const openingActiveCardBackground =
-  'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-secondary), 0.10)), rgba(var(--tj-surface-bg-end), 0.9)';
-const openingCardBorder = 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.16)';
-const openingCyanBorder = 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52), 0 0 20px rgba(var(--tj-accent-primary), 0.10)';
+  'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.18), rgba(var(--tj-btn-primary-end), 0.10)), rgba(var(--tj-surface-bg-end), 0.9)';
+const openingCardBorder = 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.16)';
+const openingCyanBorder = 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.52), 0 0 20px rgba(var(--tj-btn-primary-start), 0.10)';
 
 function getOpeningSourceLabel(source: OpeningSource): string {
   if (source === 'workshop') return '自由开局';
@@ -1088,19 +1088,19 @@ style={{
   animation: openingBootFadeRight 0.38s ease-out 0.32s both;
 }
 .opening-terminal-shell .kaituo-btn-primary {
-          background: linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.98), rgba(var(--tj-accent-secondary), 0.88));
+          background: linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.98), rgba(var(--tj-btn-primary-end), 0.88));
           color: rgb(var(--tj-bg-primary));
           box-shadow:
             inset 0 0 0 1px rgba(var(--tj-text-primary),0.38),
-            0 0 22px rgba(var(--tj-accent-primary), 0.18);
+            0 0 22px rgba(var(--tj-btn-primary-start), 0.18);
         }
         .opening-terminal-shell .kaituo-btn-primary:hover {
           box-shadow:
             inset 0 0 0 1px rgba(var(--tj-text-primary),0.55),
-            0 0 30px rgba(var(--tj-accent-primary), 0.28);
+            0 0 30px rgba(var(--tj-btn-primary-start), 0.28);
         }
         .opening-terminal-shell .kaituo-btn-primary:disabled {
-          background: linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.42), rgba(var(--tj-accent-secondary), 0.28));
+          background: linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.42), rgba(var(--tj-btn-primary-end), 0.28));
           color: rgba(var(--tj-bg-primary), 0.58);
           box-shadow:
             inset 0 0 0 1px rgba(var(--tj-text-primary),0.18);
@@ -1111,7 +1111,7 @@ style={{
         className="pointer-events-none absolute inset-[-20%]"
         style={{
           background:
-            'linear-gradient(115deg, transparent 0 36%, rgba(var(--tj-accent-primary), 0.10) 38%, transparent 42% 100%), linear-gradient(70deg, transparent 0 58%, rgba(var(--tj-accent-secondary), 0.09) 60%, transparent 64% 100%)',
+            'linear-gradient(115deg, transparent 0 36%, rgba(var(--tj-btn-primary-start), 0.10) 38%, transparent 42% 100%), linear-gradient(70deg, transparent 0 58%, rgba(var(--tj-btn-primary-end), 0.09) 60%, transparent 64% 100%)',
           filter: 'blur(0.2px)',
           transform: 'translate3d(-5%, 0, 0)',
           animation: 'openingLightDrift 9s ease-in-out infinite alternate',
@@ -1143,7 +1143,7 @@ style={{
         className="pointer-events-none absolute inset-0 opacity-[0.34]"
         style={{
           background:
-            'repeating-linear-gradient(180deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 4px), linear-gradient(180deg, transparent, rgba(var(--tj-accent-primary), 0.06), transparent)',
+            'repeating-linear-gradient(180deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 4px), linear-gradient(180deg, transparent, rgba(var(--tj-btn-primary-start), 0.06), transparent)',
           mixBlendMode: 'screen',
         }}
       />
@@ -1151,15 +1151,15 @@ style={{
         className="pointer-events-none absolute left-0 right-0 top-[-140px] h-[120px]"
         style={{
           background:
-            'linear-gradient(180deg, transparent, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-secondary), 0.08), transparent)',
+            'linear-gradient(180deg, transparent, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-btn-primary-end), 0.08), transparent)',
           filter: 'blur(1px)',
           animation: 'openingSweep 7s linear infinite',
         }}
       />
-      <div className="pointer-events-none absolute right-[-16vw] top-[-18vw] hidden h-[52vw] min-h-[520px] w-[52vw] min-w-[520px] rounded-full border border-[rgba(var(--tj-accent-primary),0.16)] shadow-[inset_0_0_46px_rgba(var(--tj-accent-primary),0.05),_0_0_50px_rgba(var(--tj-accent-primary),0.08)] lg:block">
-        <div className="absolute inset-[9%] rounded-full border border-dashed border-[rgba(var(--tj-accent-secondary),0.18)]" />
+      <div className="pointer-events-none absolute right-[-16vw] top-[-18vw] hidden h-[52vw] min-h-[520px] w-[52vw] min-w-[520px] rounded-full border border-[rgba(var(--tj-btn-primary-start),0.16)] shadow-[inset_0_0_46px_rgba(var(--tj-btn-primary-start),0.05),_0_0_50px_rgba(var(--tj-btn-primary-start),0.08)] lg:block">
+        <div className="absolute inset-[9%] rounded-full border border-dashed border-[rgba(var(--tj-btn-primary-end),0.18)]" />
         <div
-          className="absolute inset-[22%] rounded-full border border-[rgba(var(--tj-accent-primary),0.13)]"
+          className="absolute inset-[22%] rounded-full border border-[rgba(var(--tj-btn-primary-start),0.13)]"
           style={{ animation: 'openingSpin 16s linear infinite' }}
         />
       </div>
@@ -1173,10 +1173,10 @@ style={{
         ].map(([left, delay, text]) => (
           <div
             key={left}
-            className="absolute top-[-40vh] w-[72px] whitespace-pre-line font-mono text-[11px] leading-[1.75] text-[rgba(var(--tj-accent-primary),0.56)]"
+            className="absolute top-[-40vh] w-[72px] whitespace-pre-line font-mono text-[11px] leading-[1.75] text-[rgba(var(--tj-btn-primary-start),0.56)]"
             style={{
               left,
-              textShadow: '0 0 10px rgba(var(--tj-accent-primary), 0.32)',
+              textShadow: '0 0 10px rgba(var(--tj-btn-primary-start), 0.32)',
               animation: `openingRain 12s linear infinite ${delay}`,
             }}
           >
@@ -1186,13 +1186,13 @@ style={{
       </div>
       <div
         className="pointer-events-none absolute inset-x-0 top-[14%] hidden h-px opacity-[0.55] lg:block"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.16), transparent)' }}
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-btn-primary-start), 0.16), transparent)' }}
       />
 
       <div className="opening-boot-scan pointer-events-none absolute inset-x-0 top-0 z-50 h-[2px]"
   style={{
-    background: `linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.7), rgba(var(--tj-accent-secondary), 0.4), transparent)`,
-    boxShadow: `0 0 12px rgba(var(--tj-accent-primary), 0.3), 0 2px 40px rgba(var(--tj-accent-primary), 0.15)`,
+    background: `linear-gradient(90deg, transparent, rgba(var(--tj-btn-primary-start), 0.7), rgba(var(--tj-btn-primary-end), 0.4), transparent)`,
+    boxShadow: `0 0 12px rgba(var(--tj-btn-primary-start), 0.3), 0 2px 40px rgba(var(--tj-btn-primary-start), 0.15)`,
   }}
 />
 <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-36px)] w-full flex-col gap-[14px]">
@@ -1200,7 +1200,7 @@ style={{
           className="grid min-h-[78px] shrink-0 gap-4 px-[18px] py-[14px] md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
           style={{
             background:
-              'linear-gradient(90deg, rgba(var(--tj-ui-panel), 0.90), rgba(var(--tj-panel-bg-start), 0.76)), linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), transparent 48%, rgba(var(--tj-accent-secondary), 0.09))',
+              'linear-gradient(90deg, rgba(var(--tj-ui-panel), 0.90), rgba(var(--tj-panel-bg-start), 0.76)), linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), transparent 48%, rgba(var(--tj-btn-primary-end), 0.09))',
             boxShadow: openingPanelShadowStrong,
             backdropFilter: 'blur(18px)',
             clipPath: cardClip,
@@ -1210,18 +1210,18 @@ style={{
             <button
               onClick={onBack}
               className="mb-2 w-fit text-[11px] tracking-[0.28em] transition-opacity hover:opacity-80"
-              style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}
+              style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }}
             >
               ← 返回
             </button>
-            <div className="text-[11px] tracking-[0.38em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.58)' }}>
+            <div className="text-[11px] tracking-[0.38em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.58)' }}>
               KAI TUO TERMINAL / OPENING BRIEFING
             </div>
             <h1
               className="mt-1 font-serif text-2xl font-bold tracking-[0.12em] sm:text-3xl sm:tracking-[0.18em]"
               style={{
                 color: 'rgba(var(--tj-text-primary),0.98)',
-                textShadow: '0 0 18px rgba(var(--tj-accent-secondary), 0.22)',
+                textShadow: '0 0 18px rgba(var(--tj-btn-primary-end), 0.22)',
               }}
             >
               踏上旅途 · 星轨档案终端
@@ -1260,14 +1260,14 @@ style={{
               className="pointer-events-none absolute inset-0 opacity-[0.18]"
               style={{
                 background:
-                  'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.25), transparent 18% 82%, rgba(var(--tj-accent-secondary), 0.18)), linear-gradient(180deg, rgba(255,255,255,0.04), transparent 30%)',
+                  'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.25), transparent 18% 82%, rgba(var(--tj-btn-primary-end), 0.18)), linear-gradient(180deg, rgba(255,255,255,0.04), transparent 30%)',
               }}
             />
             <div className="relative flex min-h-full flex-col">
-              <div className="border-b border-[rgba(var(--tj-accent-secondary),0.16)] px-5 py-4">
+              <div className="border-b border-[rgba(var(--tj-btn-primary-end),0.16)] px-5 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="text-[11px] tracking-[0.32em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.62)' }}>
+                    <div className="text-[11px] tracking-[0.32em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.62)' }}>
                       STEP {String(STEPS.indexOf(step) + 1).padStart(2, '0')} / {STEP_META[step].title.toUpperCase()}
                     </div>
                     <h2 className="mt-1 font-serif text-2xl font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-primary),0.96)' }}>
@@ -1280,11 +1280,11 @@ style={{
                   <button
                     type="button"
                     onClick={openWorkshopEntry}
-                    className="shrink-0 px-3 py-2 text-[11px] font-bold tracking-[0.18em] transition-shadow hover:shadow-[0_0_16px_rgba(var(--tj-accent-primary),0.16)]"
+                    className="shrink-0 px-3 py-2 text-[11px] font-bold tracking-[0.18em] transition-shadow hover:shadow-[0_0_16px_rgba(var(--tj-btn-primary-start),0.16)]"
                     style={{
                       color: 'rgba(var(--tj-text-secondary), 0.78)',
                       background: 'rgba(var(--tj-surface-strong), 0.46)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
                       clipPath: smallClip,
                     }}
                     title="后续作为独立页面开放"
@@ -1504,11 +1504,11 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       className="p-[10px_12px] text-left"
       style={{
         background: openingSoftPanelBackground,
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.30), inset 0 0 0 2px rgba(var(--tj-accent-secondary), 0.08)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.30), inset 0 0 0 2px rgba(var(--tj-btn-primary-end), 0.08)',
         clipPath: smallClip,
       }}
     >
-      <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.64)' }}>
+      <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.64)' }}>
         {label}
       </div>
       <div className="mt-1 text-[13px] font-semibold" style={{ color: 'rgb(var(--tj-accent-secondary))' }}>
@@ -1546,12 +1546,12 @@ function OpeningPresetControls({
       className="p-3 text-left"
       style={{
         background: 'rgba(var(--tj-surface-bg-start), 0.78)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
         clipPath: smallClip,
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-[10px] tracking-[0.26em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.65)' }}>
+        <div className="text-[10px] tracking-[0.26em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.65)' }}>
           我的开局预设
         </div>
         <div className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}>
@@ -1642,12 +1642,12 @@ function ProgressBar({ step }: { step: Step }) {
                 className="flex h-8 w-8 items-center justify-center text-xs font-bold"
                 style={{
                   background: reached
-                    ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.95))'
+                    ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.95))'
                     : 'rgba(var(--tj-panel-bg-end),0.7)',
                   color: reached ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.65)',
                   boxShadow: reached
-                    ? '0 0 10px rgba(var(--tj-accent-primary), 0.24)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                    ? '0 0 10px rgba(var(--tj-btn-primary-start), 0.24)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
                   clipPath: smallClip,
                 }}
               >
@@ -1655,7 +1655,7 @@ function ProgressBar({ step }: { step: Step }) {
               </div>
               <div
                 className="w-full truncate text-center text-[10px] tracking-[0.1em] sm:tracking-[0.16em]"
-                style={{ color: reached ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.84), rgba(var(--tj-accent-secondary),0.78))' : 'rgba(var(--tj-text-secondary), 0.5)' }}
+                style={{ color: reached ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.84), rgba(var(--tj-btn-primary-end),0.78))' : 'rgba(var(--tj-text-secondary), 0.5)' }}
               >
                 {STEP_META[item].title}
               </div>
@@ -1665,8 +1665,8 @@ function ProgressBar({ step }: { step: Step }) {
                 className="mb-5 h-px w-5 shrink-0"
                 style={{
                   background: passed
-                    ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.65), rgba(var(--tj-accent-primary), 0.18))'
-                    : 'rgba(var(--tj-accent-primary), 0.14)',
+                    ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.65), rgba(var(--tj-btn-primary-start), 0.18))'
+                    : 'rgba(var(--tj-btn-primary-start), 0.14)',
                 }}
               />
             )}
@@ -1710,16 +1710,16 @@ function OpeningLedger({
         clipPath: cardClip,
       }}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[rgba(var(--tj-accent-secondary),0.16)] px-[15px] pb-[10px] pt-[14px]">
-        <div className="text-[11px] tracking-[0.34em]" style={{ color: 'rgba(var(--tj-accent-secondary), 0.92)' }}>
+      <div className="flex items-center justify-between gap-3 border-b border-[rgba(var(--tj-btn-primary-end),0.16)] px-[15px] pb-[10px] pt-[14px]">
+        <div className="text-[11px] tracking-[0.34em]" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.92)' }}>
           {'\u5b9e\u65f6\u5f00\u5c40\u6863\u6848'}
         </div>
         <span
           className="px-2 py-1 text-[10px] tracking-[0.18em]"
           style={{
-            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))',
-            background: 'rgba(var(--tj-accent-primary), 0.10)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))',
+            background: 'rgba(var(--tj-btn-primary-start), 0.10)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1735,18 +1735,18 @@ function OpeningLedger({
             clipPath: smallClip,
           }}
         >
-          <div className="relative z-10 text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+          <div className="relative z-10 text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
             ARCHIVE SIGNAL
           </div>
           <svg viewBox="0 0 320 86" preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 h-full w-full opacity-95">
             <path
               d="M0 58 C28 42 34 38 56 48 S94 70 118 50 154 16 178 38 208 62 238 42 274 24 320 30"
               fill="none"
-              stroke="rgba(var(--tj-accent-primary), 0.66)"
+              stroke="rgba(var(--tj-btn-primary-start), 0.66)"
               strokeWidth="2"
               strokeLinecap="round"
               style={{
-                filter: 'drop-shadow(0 0 6px rgba(var(--tj-accent-primary), 0.4))',
+                filter: 'drop-shadow(0 0 6px rgba(var(--tj-btn-primary-start), 0.4))',
                 strokeDasharray: 220,
                 animation: 'openingDash 4s linear infinite',
               }}
@@ -1760,7 +1760,7 @@ function OpeningLedger({
 
         {highlights.length > 0 && (
           <div className="space-y-2">
-            <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               {'\u5f00\u5c40\u8981\u70b9'}
             </div>
             <div className="space-y-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}>
@@ -1794,11 +1794,11 @@ function OpeningSkillSlotGroup({
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.45)',
         color: 'rgba(var(--tj-text-secondary), 0.82)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
         clipPath: smallClip,
       }}
     >
-      <div className="mb-2 text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+      <div className="mb-2 text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
         {title}
       </div>
       {slots.length > 0 ? (
@@ -1814,21 +1814,21 @@ function OpeningSkillSlotGroup({
                 className="min-w-[120px] px-3 py-2 text-left transition-transform hover:-translate-y-0.5"
                 style={{
 background: active
-  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-secondary), 0.06))'
+  ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.14), rgba(var(--tj-btn-primary-end), 0.06))'
   : 'rgba(var(--tj-surface-strong), 0.56)',
                   boxShadow: active
-                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 12px rgba(var(--tj-accent-primary), 0.10)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                    ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 12px rgba(var(--tj-btn-primary-start), 0.10)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                   clipPath: smallClip,
                 }}
               >
-                <div className="text-[10px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
+                <div className="text-[10px]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.72)' }}>
                   {slot.kind === 'normal' ? `普通槽 ${slot.slotIndex}` : `${slot.pathId ? getPath(slot.pathId)?.name : '命途'} 槽 ${slot.slotIndex}`}
                 </div>
                 <div className="mt-1 truncate font-serif text-sm font-bold tracking-[0.12em]" style={{ color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}>
                   {slot.occupiedSkillName ?? '空槽'}
                 </div>
-                <div className="mt-1 text-[10px]" style={{ color: slot.occupiedSkillId ? 'rgba(var(--tj-accent-primary), 0.92)' : 'rgba(var(--tj-text-secondary), 0.72)' }}>
+                <div className="mt-1 text-[10px]" style={{ color: slot.occupiedSkillId ? 'rgba(var(--tj-btn-primary-start), 0.92)' : 'rgba(var(--tj-text-secondary), 0.72)' }}>
                   {slot.occupiedSkillId ? (slot.occupiedSkillEnabled === false ? '已填 · 停用' : '已填') : '未装备'}
                 </div>
               </button>
@@ -1841,7 +1841,7 @@ background: active
           style={{
             background: 'rgba(var(--tj-bg-primary), 0.35)',
             color: 'rgba(var(--tj-text-secondary), 0.72)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.10)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.10)',
             clipPath: smallClip,
           }}
         >
@@ -1862,7 +1862,7 @@ function ArchiveCard({ label, title, body }: { label: string; title: string; bod
         clipPath: smallClip,
       }}
     >
-      <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>{label}</div>
+      <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>{label}</div>
       <div className="mt-[5px] break-words text-[13px] font-semibold leading-snug" style={{ color: 'rgb(var(--tj-text-primary))' }}>{title}</div>
       {body ? <div className="mt-[7px] break-words text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}>{body}</div> : null}
     </div>
@@ -1924,16 +1924,16 @@ function StepRail({
         clipPath: cardClip,
       }}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[rgba(var(--tj-accent-secondary),0.16)] px-[15px] pb-[10px] pt-[14px]">
-        <div className="text-[11px] tracking-[0.34em]" style={{ color: 'rgba(var(--tj-accent-secondary), 0.92)' }}>
+      <div className="flex items-center justify-between gap-3 border-b border-[rgba(var(--tj-btn-primary-end),0.16)] px-[15px] pb-[10px] pt-[14px]">
+        <div className="text-[11px] tracking-[0.34em]" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.92)' }}>
           建档流程
         </div>
         <div
           className="px-2 py-1 text-[10px] tracking-[0.18em]"
           style={{
-            color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))',
-            background: 'rgba(var(--tj-accent-primary), 0.10)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
+            color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))',
+            background: 'rgba(var(--tj-btn-primary-start), 0.10)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24)',
             clipPath: smallClip,
           }}
         >
@@ -1951,14 +1951,14 @@ function StepRail({
               type="button"
               onClick={() => onStepChange(item.key)}
               aria-current={active ? 'step' : undefined}
-              className="grid w-full cursor-pointer grid-cols-[34px_minmax(0,1fr)] gap-[10px] p-3 text-left transition duration-200 hover:-translate-y-[1px] hover:shadow-[0_0_18px_rgba(var(--tj-accent-primary),0.14)] focus:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--tj-accent-primary),0.45),0_0_18px_rgba(var(--tj-accent-primary),0.18)]"
+              className="grid w-full cursor-pointer grid-cols-[34px_minmax(0,1fr)] gap-[10px] p-3 text-left transition duration-200 hover:-translate-y-[1px] hover:shadow-[0_0_18px_rgba(var(--tj-btn-primary-start),0.14)] focus:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--tj-btn-primary-start),0.45),0_0_18px_rgba(var(--tj-btn-primary-start),0.18)]"
               style={{
                 background: active
-                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-secondary), 0.08))'
+                  ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-btn-primary-end), 0.08))'
                   : 'rgba(var(--tj-panel-bg-end), 0.58)',
                 boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48), 0 0 18px rgba(var(--tj-accent-primary), 0.10)'
-                  : 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.13)',
+                  ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.48), 0 0 18px rgba(var(--tj-btn-primary-start), 0.10)'
+                  : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.13)',
                 clipPath: smallClip,
               }}
             >
@@ -1966,14 +1966,14 @@ function StepRail({
                 className="opening-step-badge flex h-[34px] w-[34px] shrink-0 items-center justify-center text-xs font-extrabold"
                 style={{
 background: done || active
-  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.98), rgba(var(--tj-accent-secondary), 0.9))'
+  ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.98), rgba(var(--tj-btn-primary-end), 0.9))'
   : 'rgba(var(--tj-surface-strong), 0.74)',
                   color: done || active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.72)',
                   boxShadow: done
-                    ? '0 0 12px rgba(var(--tj-accent-primary), 0.22)'
+                    ? '0 0 12px rgba(var(--tj-btn-primary-start), 0.22)'
                     : active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                      ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.48), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
                   clipPath: smallClip,
                 }}
               >
@@ -2043,7 +2043,7 @@ function SectionTitle({ title, subtitle, compact = false }: { title: string; sub
     <div className={`${compact ? '' : 'mb-5'} min-w-0`}>
       <div
         className="mb-2 text-[11px] tracking-[0.32em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.62)' }}
+        style={{ color: 'rgba(var(--tj-btn-primary-start), 0.62)' }}
       >
         {subtitle}
       </div>
@@ -2076,7 +2076,7 @@ function WorldStep({
       <SectionTitle title="世界设定" subtitle="决定故事张力与叙述基调" />
 
       <div>
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
             剧情模式
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -2089,11 +2089,11 @@ function WorldStep({
                   className="w-full p-4 text-left transition-transform hover:-translate-y-0.5"
                   style={{
                     background: active
-                      ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
+                      ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.10), rgba(var(--tj-btn-primary-end), 0.04))'
                       : 'rgba(var(--tj-panel-bg-end),0.58)',
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), 0 0 14px rgba(var(--tj-accent-primary), 0.12)'
-                      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                      ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.5), 0 0 14px rgba(var(--tj-btn-primary-start), 0.12)'
+                      : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                     clipPath: tightClip,
                   }}
                 >
@@ -2221,7 +2221,7 @@ function CharacterStep({
                 style={{
                   background: 'rgba(var(--tj-panel-bg-end),0.52)',
                   color: 'rgba(var(--tj-text-primary),0.92)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
                   clipPath: smallClip,
                 }}
               />
@@ -2261,7 +2261,7 @@ function CharacterStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
@@ -2303,7 +2303,7 @@ function CharacterStep({
                 />
               </LabelField>
               <div>
-                <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+                <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
                   生日
                 </div>
                 <div className="grid grid-cols-[1fr_1fr] gap-2">
@@ -2330,7 +2330,7 @@ function CharacterStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
@@ -2425,7 +2425,7 @@ function PathStep({
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <div className="space-y-5">
           <div>
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               命途选择
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2438,11 +2438,11 @@ function PathStep({
                     className="p-4 text-left transition-transform hover:-translate-y-0.5"
                     style={{
                       background: active
-                        ? 'linear-gradient(160deg, rgba(var(--tj-accent-primary), 0.13), rgba(var(--tj-accent-secondary), 0.05))'
+                        ? 'linear-gradient(160deg, rgba(var(--tj-btn-primary-start), 0.13), rgba(var(--tj-btn-primary-end), 0.05))'
                         : 'rgba(var(--tj-panel-bg-end),0.58)',
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), 0 0 14px rgba(var(--tj-accent-primary), 0.12)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.5), 0 0 14px rgba(var(--tj-btn-primary-start), 0.12)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                       clipPath: tightClip,
                     }}
                   >
@@ -2450,7 +2450,7 @@ function PathStep({
                       <div className="min-w-0">
                         <div
                           className="flex h-[30px] w-[30px] items-center justify-center text-[22px] leading-none"
-                          style={{ color: active ? 'rgba(var(--tj-accent-primary),0.96)' : 'rgba(var(--tj-accent-primary),0.58)' }}
+                          style={{ color: active ? 'rgba(var(--tj-btn-primary-start),0.96)' : 'rgba(var(--tj-btn-primary-start),0.58)' }}
                         >
                           {item.emblem}
                         </div>
@@ -2479,11 +2479,11 @@ function PathStep({
                 style={{
                   background: 'rgba(var(--tj-bg-primary), 0.52)',
                   color: 'rgba(var(--tj-text-secondary), 0.84)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                   clipPath: smallClip,
                 }}
               >
-                <div style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
+                <div style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }}>
                   {selectedPath.name} · {selectedPath.aeon}
                 </div>
                 <div className="mt-1">{selectedPath.description}</div>
@@ -2492,7 +2492,7 @@ function PathStep({
           </div>
 
           <div>
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               初始阶段
             </div>
             {selectedPath ? (
@@ -2506,11 +2506,11 @@ function PathStep({
                       className="p-4 text-left transition-transform hover:-translate-y-0.5"
                       style={{
                         background: active
-                          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-secondary), 0.04))'
+                          ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), rgba(var(--tj-btn-primary-end), 0.04))'
                           : 'rgba(var(--tj-panel-bg-end),0.58)',
                         boxShadow: active
-                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
-                          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.13)',
+                          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.46), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
+                          : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.13)',
                         clipPath: tightClip,
                       }}
                     >
@@ -2522,7 +2522,7 @@ function PathStep({
                           >
                             {item.name}
                           </div>
-                          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
+                          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.72)' }}>
                             {item.title}
                           </div>
                         </div>
@@ -2543,7 +2543,7 @@ function PathStep({
                 style={{
                   background: 'rgba(var(--tj-bg-primary), 0.52)',
                   color: 'rgba(var(--tj-text-secondary), 0.72)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
                   clipPath: smallClip,
                 }}
               >
@@ -2557,7 +2557,7 @@ function PathStep({
                 style={{
                   background: 'rgba(var(--tj-bg-primary), 0.52)',
                   color: 'rgba(var(--tj-text-secondary), 0.84)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                   clipPath: smallClip,
                 }}
               >
@@ -2573,11 +2573,11 @@ function PathStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               开局特质
             </div>
             <div className="grid grid-cols-1 gap-3">
@@ -2592,11 +2592,11 @@ function PathStep({
                     className="p-4 text-left transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
                     style={{
                       background: active
-                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
+                        ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.10), rgba(var(--tj-btn-primary-end), 0.04))'
                         : 'rgba(var(--tj-bg-primary), 0.52)',
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.45), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
                       clipPath: tightClip,
                     }}
                   >
@@ -2604,7 +2604,7 @@ function PathStep({
                       className="font-serif text-base font-bold tracking-[0.14em]"
                       style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                     >
-                      <span style={{ color: 'rgba(var(--tj-accent-primary), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
+                      <span style={{ color: 'rgba(var(--tj-btn-primary-start), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
                       {item.name}
                     </div>
                     <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
@@ -2616,7 +2616,7 @@ function PathStep({
             </div>
 
             <div className="mt-4">
-              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
                 自定义特质
               </div>
               <div className="grid gap-2">
@@ -2653,9 +2653,9 @@ function PathStep({
                     onClick={onAddCustomAbility}
                     className="px-3 text-base"
                     style={{
-                      background: 'rgba(var(--tj-accent-primary), 0.16)',
-                      color: 'rgba(var(--tj-accent-primary), 0.95)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+                      background: 'rgba(var(--tj-btn-primary-start), 0.16)',
+                      color: 'rgba(var(--tj-btn-primary-start), 0.95)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.32)',
                       clipPath: smallClip,
                     }}
                   >
@@ -2674,9 +2674,9 @@ function PathStep({
                         onClick={() => onRemoveCustomAbility(item)}
                         className="max-w-full px-3 py-2 text-left text-xs tracking-[0.12em]"
                         style={{
-                          background: 'rgba(var(--tj-accent-primary), 0.12)',
-                          color: 'rgba(var(--tj-accent-primary), 0.96)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+                          background: 'rgba(var(--tj-btn-primary-start), 0.12)',
+                          color: 'rgba(var(--tj-btn-primary-start), 0.96)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.28)',
                           clipPath: smallClip,
                         }}
                         title="点击删除"
@@ -2701,7 +2701,7 @@ function PathStep({
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.52)',
               color: 'rgba(var(--tj-text-secondary), 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
               clipPath: smallClip,
             }}
           >
@@ -2787,11 +2787,11 @@ function SkillCreationStep({
           className="p-4"
           style={{
             background: 'rgba(var(--tj-panel-bg-end),0.58)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
             clipPath: cardClip,
           }}
         >
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
             新建战技
           </div>
           <div className="mb-4 grid gap-3">
@@ -2800,11 +2800,11 @@ function SkillCreationStep({
               style={{
                 background: 'rgba(var(--tj-bg-primary), 0.52)',
                 color: 'rgba(var(--tj-text-secondary), 0.84)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                 clipPath: smallClip,
               }}
             >
-              <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+              <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
                 当前装备槽位
               </div>
               <div className="mt-1 font-serif text-base font-bold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -2913,11 +2913,11 @@ function SkillCreationStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               已登记战技
             </div>
             {openingSkills.length > 0 ? (
@@ -2935,7 +2935,7 @@ function SkillCreationStep({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+                        <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
                           {openingSkillRecordSlotLabel(skill)}
                         </div>
                         <div className="mt-1 font-serif text-base font-bold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -2945,8 +2945,8 @@ function SkillCreationStep({
                           <span
                             className="px-2 py-0.5 text-[10px] tracking-[0.12em]"
                             style={{
-                              background: skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.12)' : 'rgba(var(--tj-accent-primary), 0.12)',
-                              color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.78)' : 'rgba(var(--tj-accent-primary), 0.92)',
+                              background: skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.12)' : 'rgba(var(--tj-btn-primary-start), 0.12)',
+                              color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.78)' : 'rgba(var(--tj-btn-primary-start), 0.92)',
                               clipPath: smallClip,
                             }}
                           >
@@ -2973,8 +2973,8 @@ function SkillCreationStep({
                                 key={keyword}
                                 className="px-2 py-0.5 text-[10px]"
                                 style={{
-                                  background: 'rgba(var(--tj-accent-primary), 0.08)',
-                                  color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))',
+                                  background: 'rgba(var(--tj-btn-primary-start), 0.08)',
+                                  color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))',
                                   clipPath: smallClip,
                                 }}
                               >
@@ -3000,8 +3000,8 @@ function SkillCreationStep({
                           onClick={() => onToggleOpeningSkill(skill.id)}
                           className="px-2 py-1 text-[11px]"
                           style={{
-                            background: skill.已启用 === false ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-text-secondary), 0.10)',
-                            color: skill.已启用 === false ? 'rgba(var(--tj-accent-primary), 0.96)' : 'rgba(var(--tj-text-secondary), 0.82)',
+                            background: skill.已启用 === false ? 'rgba(var(--tj-btn-primary-start), 0.12)' : 'rgba(var(--tj-text-secondary), 0.10)',
+                            color: skill.已启用 === false ? 'rgba(var(--tj-btn-primary-start), 0.96)' : 'rgba(var(--tj-text-secondary), 0.82)',
                             clipPath: smallClip,
                           }}
                         >
@@ -3012,8 +3012,8 @@ function SkillCreationStep({
                           onClick={() => onRemoveOpeningSkill(skill.id)}
                           className="px-2 py-1 text-[11px]"
                           style={{
-                            background: 'rgba(var(--tj-accent-primary), 0.12)',
-                            color: 'rgba(var(--tj-accent-primary), 0.96)',
+                            background: 'rgba(var(--tj-btn-primary-start), 0.12)',
+                            color: 'rgba(var(--tj-btn-primary-start), 0.96)',
                             clipPath: smallClip,
                           }}
                         >
@@ -3030,7 +3030,7 @@ function SkillCreationStep({
                 style={{
                   background: 'rgba(var(--tj-bg-primary), 0.5)',
                   color: 'rgba(var(--tj-text-secondary), 0.72)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
                   clipPath: smallClip,
                 }}
               >
@@ -3044,7 +3044,7 @@ function SkillCreationStep({
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.52)',
               color: 'rgba(var(--tj-text-secondary), 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
               clipPath: smallClip,
             }}
           >
@@ -3180,7 +3180,7 @@ function OpeningAnchorStep({
             clipPath: smallClip,
           }}
         >
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
             {openingSource === 'official_preset' ? '地区' : '已有地点'}
           </div>
           <div className="space-y-2">
@@ -3197,7 +3197,7 @@ function OpeningAnchorStep({
                       ? openingCardBackground
                       : openingCardBackground,
                     boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.48), inset 3px 0 0 rgba(var(--tj-accent-primary), 0.55)'
+                      ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.48), inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.55)'
                       : openingCardBorder,
                     clipPath: smallClip,
                   }}
@@ -3236,9 +3236,9 @@ function OpeningAnchorStep({
                 <span
                   className="px-2 py-1 text-[11px]"
                   style={{
-                    color: 'rgba(var(--tj-accent-primary), 0.88)',
-                    background: 'rgba(var(--tj-accent-primary), 0.08)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                    color: 'rgba(var(--tj-btn-primary-start), 0.88)',
+                    background: 'rgba(var(--tj-btn-primary-start), 0.08)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
                     clipPath: smallClip,
                   }}
                 >
@@ -3269,7 +3269,7 @@ function OpeningAnchorStep({
                   );
                 })}
               </div>
-              <div className="mt-3 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-accent-secondary), 0.92)' }}>
+              <div className="mt-3 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.92)' }}>
                 关闭主线后，原作主线不会自动注入正文。若后续需要罗浮、匹诺康尼等原作剧情，请在剧情编织中手动启用你想注入的主线内容。
               </div>
               {freeOpeningMainlineEnabled ? (
@@ -3278,7 +3278,7 @@ function OpeningAnchorStep({
                   style={{
                     background: 'rgba(var(--tj-bg-primary), 0.48)',
                     color: 'rgba(var(--tj-text-secondary), 0.78)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
                     clipPath: smallClip,
                   }}
                 >
@@ -3317,7 +3317,7 @@ function OpeningAnchorStep({
                       style={{
                         background: active ? openingActiveCardBackground : 'rgba(var(--tj-bg-primary), 0.35)',
                         boxShadow: active
-                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 18px rgba(var(--tj-accent-primary), 0.08)'
+                          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 18px rgba(var(--tj-btn-primary-start), 0.08)'
                           : openingCardBorder,
                         clipPath: smallClip,
                       }}
@@ -3338,7 +3338,7 @@ function OpeningAnchorStep({
                   style={{
                     background: 'rgba(var(--tj-bg-primary), 0.48)',
                     color: 'rgba(var(--tj-text-secondary), 0.78)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
                     clipPath: smallClip,
                   }}
                 >
@@ -3430,7 +3430,7 @@ function OpeningAnchorStep({
           >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+                <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
                   {openingSource === 'official_preset' ? '章节锚点' : effectiveMainlineEnabled ? '主线进度' : '主线已关闭'}
                 </div>
                 {openingSource !== 'official_preset' ? (
@@ -3451,7 +3451,7 @@ function OpeningAnchorStep({
                 style={{
                   background: 'rgba(var(--tj-bg-primary), 0.5)',
                   color: 'rgba(var(--tj-text-secondary), 0.78)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.18)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.18)',
                   clipPath: smallClip,
                 }}
               >
@@ -3481,14 +3481,14 @@ function OpeningAnchorStep({
                       style={{
                         background: active ? openingActiveCardBackground : openingCardBackground,
                         boxShadow: active
-                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), inset 4px 0 0 rgba(var(--tj-accent-primary), 0.54), 0 0 18px rgba(var(--tj-accent-primary), 0.08)'
+                          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), inset 4px 0 0 rgba(var(--tj-btn-primary-start), 0.54), 0 0 18px rgba(var(--tj-btn-primary-start), 0.08)'
                           : openingCardBorder,
                         clipPath: smallClip,
                       }}
                     >
                       <div className="grid gap-3 md:grid-cols-[172px_minmax(0,1fr)]">
                         <div>
-                          <div className="text-[11px] leading-relaxed" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
+                          <div className="text-[11px] leading-relaxed" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }}>
                             {getOpeningOfficialChapterName(item)}
                           </div>
                           <div className="mt-1 text-xs font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -3503,9 +3503,9 @@ function OpeningAnchorStep({
                             <span
                               className="px-2 py-1 text-[11px]"
                               style={{
-                                color: 'rgba(var(--tj-accent-secondary), 0.9)',
-                                background: 'rgba(var(--tj-accent-secondary), 0.08)',
-                                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.18)',
+                                color: 'rgba(var(--tj-btn-primary-end), 0.9)',
+                                background: 'rgba(var(--tj-btn-primary-end), 0.08)',
+                                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.18)',
                                 clipPath: smallClip,
                               }}
                             >
@@ -3525,9 +3525,9 @@ function OpeningAnchorStep({
                                   key={tag}
                                   className="px-2 py-1 text-[11px]"
                                   style={{
-                                    color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))',
-                                    background: 'rgba(var(--tj-accent-primary), 0.06)',
-                                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                                    color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))',
+                                    background: 'rgba(var(--tj-btn-primary-start), 0.06)',
+                                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                                     clipPath: smallClip,
                                   }}
                                 >
@@ -3551,7 +3551,7 @@ function OpeningAnchorStep({
                         ? openingCardBackground
                         : openingCardBackground,
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 20px rgba(var(--tj-accent-primary), 0.09)'
+                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 20px rgba(var(--tj-btn-primary-start), 0.09)'
                         : openingCardBorder,
                       clipPath: tightClip,
                     }}
@@ -3566,9 +3566,9 @@ function OpeningAnchorStep({
                       <div
                         className="max-w-[46%] px-2 py-1 text-right text-[11px] leading-snug"
                         style={{
-                          color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))',
-                          background: 'rgba(var(--tj-accent-primary), 0.08)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                          color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))',
+                          background: 'rgba(var(--tj-btn-primary-start), 0.08)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
                           clipPath: smallClip,
                         }}
                       >
@@ -3591,9 +3591,9 @@ function OpeningAnchorStep({
                             key={tag}
                             className="px-2 py-1 text-[11px]"
                             style={{
-                              color: 'rgba(var(--tj-accent-secondary), 0.92)',
-                              background: 'rgba(var(--tj-accent-secondary), 0.08)',
-                              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.18)',
+                              color: 'rgba(var(--tj-btn-primary-end), 0.92)',
+                              background: 'rgba(var(--tj-btn-primary-end), 0.08)',
+                              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.18)',
                               clipPath: smallClip,
                             }}
                           >
@@ -3611,7 +3611,7 @@ function OpeningAnchorStep({
                   style={{
                   background: 'rgba(var(--tj-bg-primary), 0.5)',
                   color: 'rgba(var(--tj-text-secondary), 0.72)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
                     clipPath: smallClip,
                   }}
                 >
@@ -3650,7 +3650,7 @@ function OpeningAnchorStep({
                 style={{
                   color: 'rgb(var(--tj-text-primary))',
                   background: 'rgba(var(--tj-panel-bg-end),0.55)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
                   clipPath: smallClip,
                 }}
               />
@@ -3675,8 +3675,8 @@ function OpeningAnchorStep({
                   className="mt-3 px-3 py-2 text-xs leading-relaxed"
                   style={{
                     color: 'rgba(var(--tj-text-secondary), 0.82)',
-                    background: 'rgba(var(--tj-accent-primary), 0.05)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                    background: 'rgba(var(--tj-btn-primary-start), 0.05)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                     clipPath: smallClip,
                   }}
                 >
@@ -3701,8 +3701,8 @@ function OpeningAnchorStep({
                     className="p-2.5 text-left text-xs leading-relaxed transition-transform hover:-translate-y-0.5"
                     style={{
                       color: 'rgba(var(--tj-text-primary), 0.84)',
-                      background: 'rgba(var(--tj-accent-primary), 0.06)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                      background: 'rgba(var(--tj-btn-primary-start), 0.06)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                       clipPath: smallClip,
                     }}
                   >
@@ -3733,7 +3733,7 @@ function FreeOpeningWorkshopField({
 }) {
   return (
     <label className="block">
-      <div className="mb-1.5 text-[11px] font-bold tracking-[0.08em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }}>
+      <div className="mb-1.5 text-[11px] font-bold tracking-[0.08em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }}>
         {label}
       </div>
       <textarea
@@ -3744,7 +3744,7 @@ function FreeOpeningWorkshopField({
         style={{
           color: 'rgb(var(--tj-text-primary))',
           background: 'rgba(var(--tj-panel-bg-end),0.55)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
           clipPath: smallClip,
         }}
       />
@@ -3775,13 +3775,13 @@ function FreeOpeningNpcEditor({
       className="p-3"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
         clipPath: smallClip,
       }}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-bold tracking-[0.12em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))' }}>
+          <div className="text-[11px] font-bold tracking-[0.12em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))' }}>
             补充自制 NPC
           </div>
           <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
@@ -3844,7 +3844,7 @@ function FreeOpeningNpcEditor({
       </div>
 
       <div className="mt-3">
-        <div className="mb-2 text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-secondary), 0.74)' }}>
+        <div className="mb-2 text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.74)' }}>
           已保存 NPC
         </div>
         {workshop.customNpcs.length ? (
@@ -3870,12 +3870,12 @@ function FreeOpeningNpcEditor({
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {npc.pathstrider ? (
-                        <span className="px-2 py-1" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))', background: 'rgba(var(--tj-accent-primary), 0.06)', clipPath: smallClip }}>
+                        <span className="px-2 py-1" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))', background: 'rgba(var(--tj-btn-primary-start), 0.06)', clipPath: smallClip }}>
                           命途：{npc.pathstrider}
                         </span>
                       ) : null}
                       {npc.ability ? (
-                        <span className="px-2 py-1" style={{ color: 'rgba(var(--tj-accent-secondary), 0.86)', background: 'rgba(var(--tj-accent-secondary), 0.08)', clipPath: smallClip }}>
+                        <span className="px-2 py-1" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.86)', background: 'rgba(var(--tj-btn-primary-end), 0.08)', clipPath: smallClip }}>
                           能力：{npc.ability}
                         </span>
                       ) : null}
@@ -3945,11 +3945,11 @@ function HistorianStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               原著主角选择
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -3963,11 +3963,11 @@ function HistorianStep({
                     className="min-h-[118px] p-4 text-left transition-transform hover:-translate-y-0.5"
                     style={{
                       background: active
-                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-secondary), 0.05))'
+                        ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), rgba(var(--tj-btn-primary-end), 0.05))'
                         : 'rgba(var(--tj-bg-primary), 0.52)',
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 0 14px rgba(var(--tj-accent-primary), 0.1)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.46), 0 0 14px rgba(var(--tj-btn-primary-start), 0.1)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
                       clipPath: tightClip,
                     }}
                   >
@@ -3993,11 +3993,11 @@ function HistorianStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               组织背景
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -4011,11 +4011,11 @@ function HistorianStep({
                     className="p-4 text-left transition-transform hover:-translate-y-0.5"
                     style={{
                       background: active
-                        ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-secondary), 0.04))'
+                        ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.10), rgba(var(--tj-btn-primary-end), 0.04))'
                         : 'rgba(var(--tj-bg-primary), 0.52)',
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 0 12px rgba(var(--tj-accent-primary), 0.1)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
                       clipPath: smallClip,
                     }}
                   >
@@ -4023,14 +4023,14 @@ function HistorianStep({
                       className="font-serif text-sm font-bold tracking-[0.12em]"
                       style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
                     >
-                      <span style={{ color: 'rgba(var(--tj-accent-primary), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
+                      <span style={{ color: 'rgba(var(--tj-btn-primary-start), 0.76)' }}>{active ? '✓ ' : '◆ '}</span>
                       {item.name}
                     </div>
                     <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
                       {item.description}
                     </div>
                     {active && item.openingHint ? (
-                      <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.84), rgba(var(--tj-accent-secondary),0.78))' }}>
+                      <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.84), rgba(var(--tj-btn-primary-end),0.78))' }}>
                         {item.openingHint}
                       </div>
                     ) : null}
@@ -4046,11 +4046,11 @@ function HistorianStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               自定义身份
             </div>
             <input
@@ -4069,19 +4069,19 @@ function HistorianStep({
             className="p-4"
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               游戏模式
             </div>
             <div
               className="p-4 text-sm leading-relaxed"
               style={{
-                background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.08), rgba(var(--tj-accent-secondary), 0.035))',
+                background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.08), rgba(var(--tj-btn-primary-end), 0.035))',
                 color: 'rgba(var(--tj-text-secondary), 0.86)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
                 clipPath: smallClip,
               }}
             >
@@ -4091,7 +4091,7 @@ function HistorianStep({
               <div className="mt-2 text-xs leading-relaxed">
                 当前版本固定使用原创旅人模式。后续这里会预留「扮演原著主角」等模式入口，现在先不改变存档结构。
               </div>
-              <div className="mt-3 inline-flex px-2 py-1 text-[11px] tracking-[0.16em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.9), rgba(var(--tj-accent-secondary),0.86))', background: 'rgba(var(--tj-accent-primary), 0.08)', clipPath: smallClip }}>
+              <div className="mt-3 inline-flex px-2 py-1 text-[11px] tracking-[0.16em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))', background: 'rgba(var(--tj-btn-primary-start), 0.08)', clipPath: smallClip }}>
                 预留功能
               </div>
             </div>
@@ -4102,7 +4102,7 @@ function HistorianStep({
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.52)',
               color: 'rgba(var(--tj-text-secondary), 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
               clipPath: smallClip,
             }}
           >
@@ -4185,7 +4185,7 @@ function OverviewStep({
           className="p-4"
           style={{
             background: 'rgba(var(--tj-panel-bg-end),0.58)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
             clipPath: cardClip,
           }}
         >
@@ -4219,11 +4219,11 @@ function OverviewStep({
               className="p-3"
               style={{
                 background: 'rgba(var(--tj-bg-primary), 0.54)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
                 clipPath: smallClip,
               }}
             >
-              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
                 切入说明
               </div>
               <div className="text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary),0.92)' }}>
@@ -4241,9 +4241,9 @@ function OverviewStep({
                     key={item}
                     className="px-3 py-1"
                     style={{
-                      background: 'rgba(var(--tj-accent-primary), 0.12)',
-                      color: 'rgba(var(--tj-accent-primary), 0.95)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
+                      background: 'rgba(var(--tj-btn-primary-start), 0.12)',
+                      color: 'rgba(var(--tj-btn-primary-start), 0.95)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24)',
                       clipPath: smallClip,
                     }}
                   >
@@ -4267,7 +4267,7 @@ function OverviewStep({
                     style={{
                       background: 'rgba(var(--tj-bg-primary), 0.52)',
                       color: 'rgba(var(--tj-text-secondary), 0.88)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
                       clipPath: smallClip,
                     }}
                   >
@@ -4290,17 +4290,17 @@ function OverviewStep({
             className="p-4"
             style={{
               background: 'linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.95) 0%, rgba(var(--tj-panel-bg-end), 0.98) 100%)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
               clipPath: cardClip,
             }}
           >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
               最终提醒
             </div>
             <div className="space-y-2 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.86)' }}>
               <p>开局会把这些内容写入角色、世界状态和首回合提示词。</p>
               <p>换句话说，你现在确认的不只是外观和选择，而是整段旅程的第一页。</p>
-              <p style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>开局档案会作为长期锚点写入世界状态，可以直接开始。</p>
+              <p style={{ color: 'rgba(var(--tj-btn-primary-start), 0.9)' }}>开局档案会作为长期锚点写入世界状态，可以直接开始。</p>
             </div>
           </div>
 
@@ -4309,7 +4309,7 @@ function OverviewStep({
             style={{
               background: 'rgba(var(--tj-panel-bg-end),0.58)',
               color: 'rgba(var(--tj-text-secondary),0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
               clipPath: cardClip,
             }}
           >
@@ -4337,7 +4337,7 @@ function OverviewStep({
 function LabelField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
+      <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
         {label}
       </div>
       {children}
@@ -4347,7 +4347,7 @@ function LabelField({ label, children }: { label: string; children: ReactNode })
 
 function OverviewLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.72)' }}>
+    <div className="text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.72)' }}>
       {children}
     </div>
   );
@@ -4356,7 +4356,7 @@ function OverviewLabel({ children }: { children: ReactNode }) {
 function OverviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-sm">
-      <div style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>{label}</div>
+      <div style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>{label}</div>
       <div className="break-words" style={{ color: 'rgba(var(--tj-text-primary),0.96)' }}>
         {value}
       </div>

@@ -38,7 +38,7 @@ const faintColor = 'rgba(var(--tj-ui-faint), 0.74)';
 const accentColor = 'rgb(var(--tj-accent-primary))';
 const activeTextColor = 'rgb(var(--tj-ui-active-text))';
 const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
-const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
+const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
 const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
 
 export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnabled, maleNsfwArchiveEnabled = false, zhikuSystem, devMode = false }: CompanionPanelProps) {
@@ -194,9 +194,9 @@ function TabButton({
         color: active ? titleColor : faintColor,
         background: active
           ? activeSurface
-          : 'rgba(var(--tj-accent-primary), 0.035)',
+          : 'rgba(var(--tj-btn-primary-start), 0.035)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.56), 0 8px 18px rgba(var(--tj-shadow), 0.08)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.56), 0 8px 18px rgba(var(--tj-shadow), 0.08)'
           : 'inset 0 0 0 1px rgba(var(--tj-border), 0.46)',
         clipPath: smallClip,
       }}
@@ -222,13 +222,13 @@ function NpcListItem({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-[132px] shrink-0 flex-col items-center gap-2 px-2 py-3 text-center transition-all hover:bg-[rgba(var(--tj-accent-primary),0.07)] md:w-full md:flex-row md:gap-3 md:px-3 md:text-left"
+      className="group flex w-[132px] shrink-0 flex-col items-center gap-2 px-2 py-3 text-center transition-all hover:bg-[rgba(var(--tj-btn-primary-start),0.07)] md:w-full md:flex-row md:gap-3 md:px-3 md:text-left"
       style={{
         background: selected
           ? activeSurface
           : quietSurface,
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.56), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))'
+          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.56), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))'
           : 'inset 0 0 0 1px rgba(var(--tj-border), 0.5)',
         clipPath: smallClip,
       }}
@@ -275,9 +275,9 @@ function Avatar({
     width: size,
     height: size,
     borderRadius: '50%',
-    background: 'linear-gradient(145deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-tech-cyan), 0.055))',
+    background: 'linear-gradient(145deg, rgba(var(--tj-btn-primary-start), 0.14), rgba(var(--tj-tech-cyan), 0.055))',
     boxShadow: selected
-      ? '0 0 0 1px rgba(var(--tj-accent-primary), 0.72), 0 0 18px rgba(var(--tj-accent-primary), 0.16)'
+      ? '0 0 0 1px rgba(var(--tj-btn-primary-start), 0.72), 0 0 18px rgba(var(--tj-btn-primary-start), 0.16)'
       : '0 0 0 1px rgba(var(--tj-border), 0.72)',
   };
 
@@ -553,9 +553,9 @@ function AvatarSlotCard({
     <div
       className="flex min-w-0 items-center gap-3 px-3 py-3"
       style={{
-        background: src ? 'rgba(var(--tj-accent-primary), 0.075)' : quietSurface,
+        background: src ? 'rgba(var(--tj-btn-primary-start), 0.075)' : quietSurface,
         boxShadow: src
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.32)'
           : 'inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
         clipPath: smallClip,
       }}
@@ -785,11 +785,11 @@ function ActionChip({ active, onClick, children }: { active: boolean; onClick: (
     <button
       type="button"
       onClick={onClick}
-      className="px-3 py-1.5 font-serif text-[12px] tracking-[0.16em] transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
+      className="px-3 py-1.5 font-serif text-[12px] tracking-[0.16em] transition-all hover:bg-[rgba(var(--tj-btn-primary-start),0.08)]"
       style={{
         color: active ? accentColor : faintColor,
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.52)'
           : 'inset 0 0 0 1px rgba(var(--tj-border), 0.52)',
         clipPath: smallClip,
       }}
@@ -896,7 +896,7 @@ function DetailBlock({ title, children }: { title: string; children: ReactNode }
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="h-3 w-[3px]" style={{ background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.86), rgba(var(--tj-accent-secondary),0.82))' }} />
+      <span className="h-3 w-[3px]" style={{ background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }} />
       <h4 className="font-serif text-[13px] tracking-[0.26em]" style={{ color: accentColor }}>
         {children}
       </h4>
@@ -1047,7 +1047,7 @@ function MemoryPanel({ npc, devMode = false }: { npc: NPC记录; devMode?: boole
                   style={{
                     color: bodyColor,
                     background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.56), rgba(var(--tj-surface-strong),0.66))',
-                    boxShadow: 'inset 2px 0 0 rgba(var(--tj-accent-primary), 0.54), inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
+                    boxShadow: 'inset 2px 0 0 rgba(var(--tj-btn-primary-start), 0.54), inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
                     clipPath: smallClip,
                   }}
                 >
@@ -1110,7 +1110,7 @@ function EmptyText({ text }: { text: string }) {
 function Chip({ tone, children }: { tone: 'gold' | 'silver'; children: ReactNode }) {
   const palette =
     tone === 'gold'
-      ? { color: 'rgba(var(--tj-accent-primary), 0.94)', stroke: 'rgba(var(--tj-accent-primary), 0.45)' }
+      ? { color: 'rgba(var(--tj-btn-primary-start), 0.94)', stroke: 'rgba(var(--tj-btn-primary-start), 0.45)' }
       : { color: mutedColor, stroke: 'rgba(var(--tj-border), 0.54)' };
   return (
     <span
@@ -1125,7 +1125,7 @@ function Chip({ tone, children }: { tone: 'gold' | 'silver'; children: ReactNode
 function EmptyRoster({ tab }: { tab: NPC阶位 }) {
   return (
     <div className="px-4 py-8 text-center" style={panelStyle}>
-      <div className="font-serif text-[20px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.45)' }}>
+      <div className="font-serif text-[20px]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.45)' }}>
         ✦
       </div>
       <div className="mt-2 font-serif text-[13px] tracking-[0.18em]" style={{ color: faintColor }}>
@@ -1139,7 +1139,7 @@ function NoSelection({ tab }: { tab: NPC阶位 }) {
   return (
     <div className="flex h-full items-center justify-center px-6 text-center" style={panelStyle}>
       <div>
-        <div className="font-serif text-[28px]" style={{ color: 'rgba(var(--tj-accent-primary), 0.42)' }}>
+        <div className="font-serif text-[28px]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.42)' }}>
           ✦
         </div>
         <div className="mt-3 font-serif text-[14px] tracking-[0.22em]" style={{ color: faintColor }}>

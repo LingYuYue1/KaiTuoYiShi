@@ -1,7 +1,7 @@
 {
   "name": "kaituoyishi",
   "private": false,
-  "version": "0.8.1",
+  "version": "1.0.0",
   "description": "开拓轶事：一个以 React + TypeScript 构建的崩坏：星穹铁道同人叙事 Web 应用。",
   "license": "MIT",
   "type": "module",
@@ -84,8 +84,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "@types/jquery": "^4.0.1",
+    "jquery": "^4.0.0",
+    "marked": "^18.0.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

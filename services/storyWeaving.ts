@@ -14,6 +14,7 @@ import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structur
 import { STORY_WEAVING_COT_PROMPT as SW_LEGACY_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
 import { STORY_WEAVING_OUTPUT_FORMAT_PROMPT as SW_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/storyWeavingOutputFormat';
 import type { 提示词模块 } from '@/models/prompts';
+import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import type { FilterContext } from '@/utils/worldbook';
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -642,11 +643,7 @@ function buildStoryWeavingSystemPrompt(promptModules?: 提示词模块[]): strin
 
 export function buildStoryWeavingPromptModulesSection(promptModules?: 提示词模块[]): string {
   if (!promptModules || promptModules.length === 0) return '';
-  const filtered = promptModules
-    .filter((m) => m.enabled && m.scope?.includes('calibration'))
-    .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  return filtered.map((m) => m.content).join('\n\n');
+  return buildIndependentPromptModulesSection(promptModules, 'storyWeaving');
 }
 
 function buildStoryWeavingUserPrompt(params: {

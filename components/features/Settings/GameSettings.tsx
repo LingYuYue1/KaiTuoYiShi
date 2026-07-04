@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import type { 世界状态 } from '@/models/world';
@@ -217,6 +217,48 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
         </div>
       </Field>
 
+      {/* 思维链输出语言（参考 Izumi，P2 可选） */}
+      <Field label="◆ 思维链语言">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(
+            [
+              { value: 'zh' as const, label: '中文' },
+              { value: 'en' as const, label: 'English' },
+              { value: 'ja' as const, label: '日本語' },
+              { value: 'fr' as const, label: 'Français' },
+              { value: 'ru' as const, label: 'Русский' },
+              { value: 'de' as const, label: 'Deutsch' },
+              { value: 'es' as const, label: 'Español' },
+              { value: 'it' as const, label: 'Italiano' },
+            ]
+          ).map((opt) => {
+            const active = (settings.cotLanguage ?? 'zh') === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => onChange({ ...settings, cotLanguage: opt.value })}
+                className="px-2 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+                style={{
+                  background: active
+                    ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
+                    : 'transparent',
+                  color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
+                  boxShadow: active
+                    ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+                  clipPath: smallClip,
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[10px] text-[color:rgba(var(--tj-text-secondary),0.6)]">
+          仅影响主剧情思维链 &lt;think&gt; 思考段语言，正文仍按中文输出。默认中文。
+        </p>
+      </Field>
+
       {/* 剧情偏向 */}
       <Field label="◆ 剧情偏向（可中途切换）">
         <div className="grid grid-cols-2 gap-2">
@@ -338,7 +380,29 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
           onChange({
             ...settings,
             enableNoControl: v,
-            promptModules: setModuleEnabled(settings.promptModules, 'builtin_no_control', v),
+            enablePlayerSpeechExpansion: v ? false : settings.enablePlayerSpeechExpansion,
+            promptModules: setModuleEnabled(
+              setModuleEnabled(settings.promptModules, 'builtin_no_control', v),
+              'builtin_player_speech_expansion',
+              v ? false : settings.enablePlayerSpeechExpansion,
+            ),
+          })
+        }
+      />
+      <ToggleRow
+        label="抢话 / 适度代写玩家对白"
+        desc="允许 AI 少量扩写玩家话语或轻动作，避免主角完全沉默；不允许代替玩家做关键决定、长篇独白或深层心理。"
+        checked={settings.enablePlayerSpeechExpansion === true}
+        onChange={(v) =>
+          onChange({
+            ...settings,
+            enablePlayerSpeechExpansion: v,
+            enableNoControl: v ? false : settings.enableNoControl,
+            promptModules: setModuleEnabled(
+              setModuleEnabled(settings.promptModules, 'builtin_player_speech_expansion', v),
+              'builtin_no_control',
+              v ? false : settings.enableNoControl,
+            ),
           })
         }
       />

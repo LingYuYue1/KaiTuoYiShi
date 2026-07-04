@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useCallback, useState } from 'react';
 import { ApiSettingsTab } from './ApiSettings';
 import { ThemeSettingsTab } from './ThemeSettings';
@@ -6,6 +6,7 @@ import { GameSettingsTab } from './GameSettings';
 import { VisualSettingsTab } from './VisualSettingsTab';
 import { NsfwSettingsTab } from './NsfwSettingsTab';
 import { PromptModulesTab } from './PromptModulesTab';
+import { TavernPresetsSettingsTab } from './TavernPresetsSettingsTab';
 import { ExtraFeaturesSettingsTab } from './ExtraFeaturesSettingsTab';
 import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
@@ -24,6 +25,7 @@ import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { VariableSetters } from '@/utils/variableExecutor';
 import { saveSetting } from '@/services/dbService';
+import type { 世界书 } from '@/models/worldbook';
 
 export type SettingsTab = Tab;
 
@@ -53,9 +55,13 @@ interface SettingsModalProps {
   variableSetters: VariableSetters;
   getContextSnapshot: (kind?: ContextSnapshotKind) => ContextSnapshot;
   initialTab?: Tab;
+  /** Phase 7.2：世界书数组（用于 ST 预设导入时注入 ST 世界书条目）。 */
+  worldbooks: 世界书[];
+  /** Phase 7.2：世界书变更回调（同时负责持久化到 IndexedDB）。 */
+  onWorldbooksChange: (books: 世界书[]) => void;
 }
 
-type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'extra' | 'theme' | 'storage';
+type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage';
 
 const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'visual', label: '视觉设置', icon: '◇', subtitle: '正文显示与字号' },
@@ -66,6 +72,7 @@ const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
   { key: 'nsfw', label: 'NSFW', icon: '◇', subtitle: '成人内容与私密档案' },
   { key: 'variables', label: '变量管理', icon: '◈', subtitle: '存档数据查看与调试' },
   { key: 'prompts', label: '提示词模块', icon: '❘', subtitle: 'AI 系统级硬规则' },
+  { key: 'tavernPresets', label: '酒馆预设', icon: '◆', subtitle: 'ST 导入与消息链' },
   { key: 'extra', label: '额外功能', icon: '✦', subtitle: '污染词清理与扩展功能' },
   { key: 'theme', label: '主题风格', icon: '◇', subtitle: '配色与氛围' },
   { key: 'storage', label: '存档管理', icon: '✧', subtitle: '本地存档与导入导出' },
@@ -96,6 +103,8 @@ export function SettingsModal({
   variableSetters,
   getContextSnapshot,
   initialTab = 'api',
+  worldbooks,
+  onWorldbooksChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
@@ -144,7 +153,27 @@ export function SettingsModal({
       case 'nsfw':
         return <NsfwSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'prompts':
-        return <PromptModulesTab settings={gameSettings} onChange={persistGameSettingsChange} />;
+        return (
+          <PromptModulesTab
+            settings={gameSettings}
+            onChange={persistGameSettingsChange}
+            worldbooks={worldbooks}
+            onWorldbooksChange={onWorldbooksChange}
+            apiSettings={apiSettings}
+            onApiSettingsChange={onApiSettingsChange}
+          />
+        );
+      case 'tavernPresets':
+        return (
+          <TavernPresetsSettingsTab
+            settings={gameSettings}
+            onChange={persistGameSettingsChange}
+            worldbooks={worldbooks}
+            onWorldbooksChange={onWorldbooksChange}
+            apiSettings={apiSettings}
+            onApiSettingsChange={onApiSettingsChange}
+          />
+        );
       case 'extra':
         return <ExtraFeaturesSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'variables':
@@ -171,6 +200,7 @@ export function SettingsModal({
   };
 
   const activeMeta = tabs.find((t) => t.key === activeTab)!;
+  const usesFullHeightPane = activeTab === 'prompts' || activeTab === 'tavernPresets';
 
   return (
     <div
@@ -320,8 +350,10 @@ export function SettingsModal({
           </header>
 
           {/* Right body */}
-          <div className="kaituo-settings-content-body min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 md:px-6 md:py-5">
-            <div className="kaituo-settings-pane">{renderTab()}</div>
+          <div className={`kaituo-settings-content-body min-w-0 flex-1 overflow-x-hidden px-3 py-4 md:px-6 md:py-5 ${
+            usesFullHeightPane ? 'overflow-y-auto md:overflow-hidden' : 'overflow-y-auto'
+          }`}>
+            <div className={`kaituo-settings-pane ${usesFullHeightPane ? 'md:h-full' : ''}`}>{renderTab()}</div>
           </div>
         </section>
       </div>

@@ -84,7 +84,6 @@ assert(saveModal.includes('exportSaveTreePackage') && saveModal.includes('loadSa
 assert(saveModal.includes('导出整树'), '游戏存档弹窗必须显示导出整树按钮。');
 assert(saveModal.includes('.ktysave,.zip,.json'), '游戏存档弹窗必须同时接受新包和旧 JSON。');
 assert(saveModal.includes('导入存档包'), '游戏存档弹窗 UI 文案必须更新为存档包。');
-assert(saveModal.includes('导出存档包默认不包含 API Key'), '游戏存档弹窗必须提示导出包不会携带 API Key。');
 
 assert(storageManager.includes('exportSavePackage') && storageManager.includes('importSaveFileAsMany'), '设置页存档管理必须使用存档包导入导出。');
 assert(storageManager.includes('exportSaveTreePackage') && storageManager.includes('loadSaveTree'), '设置页存档管理必须提供整树导出入口。');

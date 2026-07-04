@@ -1,4 +1,4 @@
-﻿import type { 游戏设置 } from '@/models/settings';
+import type { 游戏设置 } from '@/models/settings';
 import { saveSetting } from '@/services/dbService';
 
 interface Props {
@@ -11,6 +11,7 @@ const smallClip =
 
 export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
   const cleanup = settings.额外功能.污染词清理;
+  const tagHide = settings.额外功能.标签块隐藏;
   const patchCleanup = (patch: Partial<typeof cleanup>) => {
     onChange({
       ...settings,
@@ -18,6 +19,18 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
         ...settings.额外功能,
         污染词清理: {
           ...cleanup,
+          ...patch,
+        },
+      },
+    });
+  };
+  const patchTagHide = (patch: Partial<typeof tagHide>) => {
+    onChange({
+      ...settings,
+      额外功能: {
+        ...settings.额外功能,
+        标签块隐藏: {
+          ...tagHide,
           ...patch,
         },
       },
@@ -77,6 +90,31 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
             每行一个词，也可以用逗号分隔。建议只放明确污染词，避免误删正常叙事。
           </p>
         </div>
+      </section>
+
+      <section
+        className="space-y-3 p-4"
+        style={{
+          background: 'rgba(var(--tj-bg-secondary), 0.42)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+          clipPath: smallClip,
+        }}
+      >
+        <div>
+          <div className="font-serif text-sm font-bold tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
+            标签块隐藏
+          </div>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+            隐藏 ST 预设中“注入+清理”配对标签块（抗空回的 &lt;Q&gt;…&lt;/WF&gt; 越狱声明、抗截断的 &lt;math&gt;…&lt;/math&gt; 高数题占位）。这些内容对 AI 起作用但不应显示给玩家。
+          </p>
+        </div>
+
+        <ToggleRow
+          label="启用标签块隐藏"
+          desc="默认启用。整段移除上述标签块（含内容），在正文进入历史和后台系统前生效。"
+          checked={tagHide.enabled}
+          onChange={(enabled) => patchTagHide({ enabled })}
+        />
       </section>
 
       <button

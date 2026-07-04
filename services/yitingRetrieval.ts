@@ -4,6 +4,7 @@ import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { YITING_RECALL_PROMPT as YITING_LEGACY_RECALL_PROMPT } from '@/prompts/cot/yitingCot';
 import type { 提示词模块 } from '@/models/prompts';
+import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 
 export interface 忆庭召回结果 {
   entries: 回忆条目[];
@@ -134,11 +135,7 @@ export function buildYitingRecallSystemPrompt(promptModules?: 提示词模块[])
 
 function buildYitingRecallPromptModulesSection(promptModules?: 提示词模块[]): string {
   if (!promptModules || promptModules.length === 0) return '';
-  const filtered = promptModules
-    .filter((m) => m.enabled && m.scope?.includes('calibration'))
-    .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  return filtered.map((m) => m.content).join('\n\n');
+  return buildIndependentPromptModulesSection(promptModules, 'yitingRecall');
 }
 
 function buildRecallSystemPrompt(customPrompt: string): string {

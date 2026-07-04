@@ -416,7 +416,7 @@ for (const method of ['readText', 'writeText', 'readJson', 'writeJson', 'list', 
   assert(storageAdapter.includes(method), `storage adapter must include ${method}`);
 }
 
-const dbService = read('services/dbService.ts');
+const dbService = read('services/dbService.ts').replace(/\r\n/g, '\n');
 assert(dbService.includes('mirrorSaveToDesktop'), 'saveGame must mirror saves into the desktop data directory');
 assert(dbService.includes('reserveDesktopSaveId'), 'saveGame must reserve desktop save ids before the IndexedDB compatibility write');
 assert(dbService.includes('const desktopSaveId = await reserveDesktopSaveIdSafely(db)'), 'saveGame must reserve a desktop save id before opening the write transaction');

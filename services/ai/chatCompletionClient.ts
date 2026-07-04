@@ -8,6 +8,9 @@ export interface StreamCallbacks {
   onDelta: (delta: string) => void;
   onDone: () => void;
   onError: (err: Error) => void;
+  /** 可选：stream 解析到 finish_reason / stop_reason / finishReason 时回调。
+   *  用于抗截断检测（finishReason === 'length' / 'max_tokens' 表示被 max_tokens 截断）。 */
+  onFinishReason?: (reason: string) => void;
 }
 
 /** 丢弃模型的 reasoning_content / extended thinking / Gemini thought parts。
@@ -21,6 +24,22 @@ export interface ChatCompletionRequest {
   systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
+  /** 核采样概率阈值（0-1）。 */
+  topP?: number;
+  /** 保留概率最高的前 K 个候选词。仅 Gemini 原生消费。 */
+  topK?: number;
+  /** 动态阈值采样。当前预留，无 provider 实际消费。 */
+  topA?: number;
+  /** 丢弃概率低于「最高概率 × min_p」的词（0-1）。当前预留。 */
+  minP?: number;
+  /** 重复惩罚系数（1=不生效，>1 惩罚）。 */
+  repetitionPenalty?: number;
+  /** 按 token 出现次数线性惩罚（-2 到 2）。 */
+  frequencyPenalty?: number;
+  /** 只要出现过就惩罚（-2 到 2）。 */
+  presencePenalty?: number;
+  /** 最大上下文窗口（tokens）。 */
+  maxContext?: number;
   signal?: AbortSignal;
   onUsage?: (usage: ChatCompletionUsage) => void;
   /** DeepSeek beta prefix completion. Only the DeepSeek branch reads this flag. */
@@ -90,25 +109,94 @@ function shouldUseDeepSeekPrefix(config: API配置项, request: ChatCompletionRe
   return request.prefixMode === true && isDeepSeekConfig(config);
 }
 
+/**
+ * Phase 4：通用化 assistant prefill。
+ *
+ * 按 provider 分流到不同的 prefill 实现：
+ * - DeepSeek：baseUrl 改 /beta + { role: 'assistant', content: prefix, prefix: true }（DeepSeek beta 特性）
+ * - Claude：末尾追加 { role: 'assistant', content: prefix }（Claude 原生支持 prefill）
+ * - Gemini：末尾追加 { role: 'model', content: prefix }（Gemini 原生支持 prefill）
+ * - OpenAI 兼容：末尾追加 { role: 'assistant', content: prefix }（部分中转商支持）
+ *
+ * 不支持的 provider（如 mimo）静默降级，不 prefill。
+ * prefix 内容优先从 request.prefixContent 读取，默认 '<thinking>\n'。
+ */
+function withPrefixMessages(
+  config: API配置项,
+  messages: ChatMessagePayload[],
+  request: ChatCompletionRequest,
+): { config: API配置项; messages: ChatMessagePayload[]; prefix: string } {
+  if (request.prefixMode !== true) return { config, messages, prefix: '' };
+  const prefix = request.prefixContent ?? '<thinking>\n';
+  if (!prefix) return { config, messages, prefix: '' };
+
+  const provider = detectProvider(config);
+  const withoutOldPrefix = messages.filter((msg) => msg.prefix !== true);
+
+  // DeepSeek：走 /beta + prefix: true 标记
+  if (provider === 'deepseek') {
+    return {
+      config: {
+        ...config,
+        baseUrl: normalizeDeepSeekPrefixBaseUrl(config.baseUrl),
+      },
+      messages: [
+        ...withoutOldPrefix,
+        { role: 'assistant', content: prefix, prefix: true },
+      ],
+      prefix,
+    };
+  }
+
+  // Claude：末尾追加 assistant 消息（Claude 原生支持 prefill）
+  // 注意：normalizeClaudeMessages 会强制末条 user，但 prefill assistant 会在它之前插入
+  if (provider === 'claude') {
+    return {
+      config,
+      messages: [
+        ...withoutOldPrefix,
+        { role: 'assistant', content: prefix, prefix: true },
+      ],
+      prefix,
+    };
+  }
+
+  // Gemini：末尾追加 model 消息（Gemini 原生支持 prefill，角色名是 model）
+  if (provider === 'gemini') {
+    return {
+      config,
+      messages: [
+        ...withoutOldPrefix,
+        { role: 'model', content: prefix, prefix: true },
+      ],
+      prefix,
+    };
+  }
+
+  // OpenAI 兼容 / OpenCode / Ark / Pioneer 等：末尾追加 assistant 消息
+  // 部分中转商支持，不支持的会报错（由上层 try-catch 降级）
+  if (provider === 'openai_compatible' || provider === 'opencode' || provider === 'ark' || provider === 'mimo') {
+    return {
+      config,
+      messages: [
+        ...withoutOldPrefix,
+        { role: 'assistant', content: prefix, prefix: true },
+      ],
+      prefix,
+    };
+  }
+
+  // 未知 provider 静默降级
+  return { config, messages, prefix: '' };
+}
+
+// 兼容旧调用：保留 withDeepSeekPrefixMessages 作为 withPrefixMessages 的别名
 function withDeepSeekPrefixMessages(
   config: API配置项,
   messages: ChatMessagePayload[],
   request: ChatCompletionRequest,
 ): { config: API配置项; messages: ChatMessagePayload[]; prefix: string } {
-  if (!shouldUseDeepSeekPrefix(config, request)) return { config, messages, prefix: '' };
-  const prefix = request.prefixContent ?? '<thinking>\n';
-  const withoutOldPrefix = messages.filter((msg) => msg.prefix !== true);
-  return {
-    config: {
-      ...config,
-      baseUrl: normalizeDeepSeekPrefixBaseUrl(config.baseUrl),
-    },
-    messages: [
-      ...withoutOldPrefix,
-      { role: 'assistant', content: prefix, prefix: true },
-    ],
-    prefix,
-  };
+  return withPrefixMessages(config, messages, request);
 }
 
 function stripDeepSeekPrefixMessages(messages: ChatMessagePayload[]): ChatMessagePayload[] {
@@ -327,6 +415,19 @@ function buildOpenAICompatibleRequestBody(
   } else {
     body.max_tokens = request.maxTokens ?? config.maxTokens ?? 2048;
     body.temperature = request.temperature ?? config.temperature ?? 0.8;
+    // Phase 3：采样参数贯通（OpenAI 兼容 / DeepSeek / Ark / Pioneer 等）
+    // top_p / frequency_penalty / presence_penalty / repetition_penalty 大多数 OpenAI 兼容端点支持
+    const topP = request.topP ?? config.topP;
+    if (typeof topP === 'number') body.top_p = topP;
+    const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
+    if (typeof freqPenalty === 'number') body.frequency_penalty = freqPenalty;
+    const presPenalty = request.presencePenalty ?? config.presencePenalty;
+    if (typeof presPenalty === 'number') body.presence_penalty = presPenalty;
+    const repPenalty = request.repetitionPenalty ?? config.repetitionPenalty;
+    if (typeof repPenalty === 'number') body.repetition_penalty = repPenalty;
+    // max_context：OpenAI 兼容端点通常不支持显式字段，但 OpenRouter 等支持 max_context_tokens
+    const maxCtx = request.maxContext ?? config.maxContext;
+    if (typeof maxCtx === 'number') body.max_context_tokens = maxCtx;
   }
   if (stream && includeUsage && request.onUsage) {
     body.stream_options = { include_usage: true };
@@ -959,6 +1060,9 @@ async function fetchWithApiErrorReport(
   try {
     return await fetch(url, init);
   } catch (error) {
+    if (error && typeof error === 'object') {
+      (error as Error & { alreadyReportedByApiLayer?: boolean }).alreadyReportedByApiLayer = true;
+    }
     void appendApiErrorReport({
       source,
       config,
@@ -1026,6 +1130,9 @@ function buildClaudeRequestBody(
   if (claudePayload.system) {
     bodyObj.system = buildClaudeTextBlocks(claudePayload.system);
   }
+  // Phase 3：Claude 仅支持 max_context（通过 max_tokens 间接控制），
+  // 其他采样参数 Claude 故意不上传（参考 ST 行为，避免冲突）
+  // max_context 不直接发给 Claude，但可用于客户端侧裁剪历史（暂未实现）
   return bodyObj;
 }
 
@@ -1148,6 +1255,35 @@ function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTex
     readCompatibleTextContent(parsed?.text) ||
     readCompatibleTextContent(parsed?.content)
   );
+}
+
+/** 从 SSE chunk / 非流式 JSON 中提取 finish_reason / stop_reason / finishReason。
+ *  不同 provider 字段名不同：
+ *  - OpenAI 兼容: choices[0].finish_reason
+ *  - Claude: message_delta.delta.stop_reason (SSE) 或顶层 stop_reason (非流式)
+ *  - Gemini: candidates[0].finishReason (camelCase)
+ *  返回 undefined 表示该 chunk 无 finish_reason 或无法识别。 */
+function readFinishReason(parsed: any): string | undefined {
+  // OpenAI 兼容：choices[0].finish_reason
+  const choice = parsed?.choices?.[0];
+  if (choice && typeof choice.finish_reason === 'string' && choice.finish_reason) {
+    return choice.finish_reason;
+  }
+  // Claude SSE: message_delta.delta.stop_reason
+  if (parsed?.type === 'message_delta') {
+    const stopReason = parsed?.delta?.stop_reason;
+    if (typeof stopReason === 'string' && stopReason) return stopReason;
+  }
+  // Claude 非流式: stop_reason
+  if (typeof parsed?.stop_reason === 'string' && parsed.stop_reason) {
+    return parsed.stop_reason;
+  }
+  // Gemini: candidates[0].finishReason
+  const candidate = parsed?.candidates?.[0];
+  if (candidate && typeof candidate.finishReason === 'string' && candidate.finishReason) {
+    return candidate.finishReason;
+  }
+  return undefined;
 }
 
 function parseOpenAICompatibleTextResponse(json: unknown): string {
@@ -1295,6 +1431,9 @@ async function streamOpenAICompatible(
             fullText += text;
             callbacks.onDelta(text);
           }
+          // 采集 finish_reason（用于抗截断检测）
+          const fr = readFinishReason(parsed);
+          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
         } catch {
           // skip malformed SSE lines
         }
@@ -1385,6 +1524,9 @@ async function streamClaude(
           } else if (parsed.type === 'content_block_stop') {
             currentBlockIsThinking = false;
           }
+          // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
+          const fr = readFinishReason(parsed);
+          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
         } catch {
           // skip
         }
@@ -1458,6 +1600,13 @@ function buildOpenCodeResponsesBody(
     temperature: request.temperature ?? config.temperature ?? 0.8,
     stream,
   };
+  // Phase 3：OpenCode GPT 系列支持 top_p / frequency_penalty / presence_penalty
+  const topP = request.topP ?? config.topP;
+  if (typeof topP === 'number') bodyObj.top_p = topP;
+  const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
+  if (typeof freqPenalty === 'number') bodyObj.frequency_penalty = freqPenalty;
+  const presPenalty = request.presencePenalty ?? config.presencePenalty;
+  if (typeof presPenalty === 'number') bodyObj.presence_penalty = presPenalty;
   if (system) bodyObj.instructions = system;
   return bodyObj;
 }
@@ -1478,12 +1627,25 @@ function buildOpenCodeGeminiBody(
     contents.push({ role: 'user', parts: [{ text: '请开始本轮回应。' }] });
   }
 
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: request.maxTokens ?? config.maxTokens ?? 2048,
+    temperature: request.temperature ?? config.temperature ?? 0.8,
+  };
+  // Phase 3：Gemini 支持 top_p / top_k / repetition_penalty / frequency_penalty / presence_penalty
+  const topP = request.topP ?? config.topP;
+  if (typeof topP === 'number') generationConfig.topP = topP;
+  const topK = request.topK ?? config.topK;
+  if (typeof topK === 'number') generationConfig.topK = topK;
+  const repPenalty = request.repetitionPenalty ?? config.repetitionPenalty;
+  if (typeof repPenalty === 'number') generationConfig.repetitionPenalty = repPenalty;
+  const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
+  if (typeof freqPenalty === 'number') generationConfig.frequencyPenalty = freqPenalty;
+  const presPenalty = request.presencePenalty ?? config.presencePenalty;
+  if (typeof presPenalty === 'number') generationConfig.presencePenalty = presPenalty;
+
   const bodyObj: Record<string, unknown> = {
     contents,
-    generationConfig: {
-      maxOutputTokens: request.maxTokens ?? config.maxTokens ?? 2048,
-      temperature: request.temperature ?? config.temperature ?? 0.8,
-    },
+    generationConfig,
   };
   if (systemMsg?.content.trim()) {
     bodyObj.systemInstruction = {
@@ -1621,6 +1783,9 @@ async function streamOpenCodeChat(
             fullText += text;
             callbacks.onDelta(text);
           }
+          // 采集 finish_reason（OpenCode Chat 兼容 OpenAI 格式）
+          const fr = readFinishReason(parsed);
+          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
         } catch {
           // skip
         }
@@ -1704,6 +1869,9 @@ async function streamOpenCodeMessages(
           } else if (parsed.type === 'content_block_stop') {
             currentBlockIsThinking = false;
           }
+          // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
+          const fr = readFinishReason(parsed);
+          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
         } catch {
           // skip
         }
@@ -1773,6 +1941,9 @@ async function streamOpenCodeResponses(
             fullText += text;
             callbacks.onDelta(text);
           }
+          // 采集 finish_reason（Responses API 的 finish_reason 在顶层或 choices[0]）
+          const fr = readFinishReason(parsed);
+          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
         } catch {
           // skip
         }
@@ -1842,6 +2013,9 @@ async function streamOpenCodeGemini(
             fullText += text;
             callbacks.onDelta(text);
           }
+          // 采集 finishReason（OpenCode Gemini 的 candidates[0].finishReason）
+          const fr = readFinishReason(parsed);
+          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
         } catch {
           // skip
         }
@@ -1980,12 +2154,25 @@ async function streamGemini(
       parts: [{ text: m.content }],
     }));
 
+  const geminiGenConfig: Record<string, unknown> = {
+    maxOutputTokens: request.maxTokens ?? config.maxTokens ?? 2048,
+    temperature: request.temperature ?? config.temperature ?? 0.8,
+  };
+  // Phase 3：Gemini 原生支持 top_p / top_k / repetition_penalty / frequency_penalty / presence_penalty
+  const topP = request.topP ?? config.topP;
+  if (typeof topP === 'number') geminiGenConfig.topP = topP;
+  const topK = request.topK ?? config.topK;
+  if (typeof topK === 'number') geminiGenConfig.topK = topK;
+  const repPenalty = request.repetitionPenalty ?? config.repetitionPenalty;
+  if (typeof repPenalty === 'number') geminiGenConfig.repetitionPenalty = repPenalty;
+  const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
+  if (typeof freqPenalty === 'number') geminiGenConfig.frequencyPenalty = freqPenalty;
+  const presPenalty = request.presencePenalty ?? config.presencePenalty;
+  if (typeof presPenalty === 'number') geminiGenConfig.presencePenalty = presPenalty;
+
   const bodyObj: Record<string, unknown> = {
     contents,
-    generationConfig: {
-      maxOutputTokens: request.maxTokens ?? config.maxTokens ?? 2048,
-      temperature: request.temperature ?? config.temperature ?? 0.8,
-    },
+    generationConfig: geminiGenConfig,
   };
   if (systemMsg) {
     bodyObj.systemInstruction = {
@@ -2052,6 +2239,9 @@ async function streamGemini(
               }
             }
           }
+          // 采集 finishReason（Gemini 的 candidates[0].finishReason）
+          const fr = readFinishReason(parsed);
+          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
         } catch {
           // skip
         }

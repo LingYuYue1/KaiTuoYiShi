@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const source = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
-const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8');
+const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8').replace(/\r\n/g, '\n');
 const chatSource = fs.readFileSync('models/chat.ts', 'utf8');
 const turnItemSource = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
 const saveLoadSource = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');

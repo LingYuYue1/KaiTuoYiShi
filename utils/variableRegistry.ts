@@ -107,8 +107,8 @@ const ROOT_WRITE_POLICIES: Record<VariableRootKey, RootWritePolicy> = {
     label: '世界',
     policy: 'partial',
     owner: '变量系统 + 命途狭间服务层',
-    note: '可写日期、时间、地点、开拓天数、全局事件和氛围变化。',
-    allowed: 'set 世界.当前日期/当前时间/当前地点/氛围变化；add 世界.开拓天数；push 世界.全局事件。',
+    note: '可写日期、时间、地点、天气、开拓天数、全局事件和氛围变化。',
+    allowed: 'set 世界.当前日期/当前时间/当前地点/当前天气/氛围变化；add 世界.开拓天数；push 世界.全局事件。',
     forbidden: '不要写 进行中狭间、待触发狭间。',
   },
   记忆: {

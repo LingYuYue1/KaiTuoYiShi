@@ -129,6 +129,8 @@ export interface 世界状态 {
   当前时间: string;
   /** 当前地点：地图系统实装前，先以自由文本记录所在地点。 */
   当前地点: string;
+  /** 当前天气：AI 每回合根据地点和剧情判断，如 "星尘暴"、"雪"。不影响游戏机制，仅用于 UI 氛围展示。 */
+  当前天气?: string;
   全局事件: string[];
   活跃人物: 时段NPC[];
   氛围变化: string;
@@ -162,6 +164,7 @@ export function 创建空世界状态(period?: 时段定义): 世界状态 {
     当前日期: '',
     当前时间: '',
     当前地点: '',
+    当前天气: 'clear',
     全局事件: [],
     活跃人物: [],
     氛围变化: '',
@@ -184,6 +187,7 @@ export function 归一化世界状态(input?: Partial<世界状态> | null): 世
     当前日期: alignedCalendar.当前日期,
     当前时间: normalizeClock(input?.当前时间) || '06:40',
     当前地点: input?.当前地点?.trim() || '',
+    当前天气: input?.当前天气?.trim() || base.当前天气 || 'clear',
     全局事件: Array.isArray(input?.全局事件) ? input.全局事件 : [],
     活跃人物: Array.isArray(input?.活跃人物) ? input.活跃人物 : [],
     氛围变化: input?.氛围变化 ?? '',

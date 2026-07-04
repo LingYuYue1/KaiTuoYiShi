@@ -643,3 +643,543 @@ select.kaituo-input option:checked {
 
 
 
+
+
+/* Home transition overlays */
+.kaituo-journey-launch,
+.kaituo-home-journey,
+.kaituo-save-load,
+.kaituo-book-open {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  overflow: hidden;
+  pointer-events: none;
+  color: rgb(var(--tj-text-primary));
+  background: radial-gradient(circle at 50% 48%, rgba(var(--tj-accent-primary), 0.24), transparent 32%), linear-gradient(180deg, rgba(var(--tj-bg-primary), 0.9), rgba(var(--tj-bg-primary), 0.99));
+  animation: home-overlay-fade 1.08s cubic-bezier(0.16, 0.84, 0.2, 1) both;
+}
+
+.kaituo-journey-launch__field,
+.kaituo-home-journey__backdrop,
+.kaituo-save-load__backdrop,
+.kaituo-book-open__backdrop,
+.kaituo-journey-launch__flash,
+.kaituo-book-open__glow {
+  position: absolute;
+  inset: 0;
+}
+
+.kaituo-journey-launch__field,
+.kaituo-home-journey__backdrop,
+.kaituo-save-load__backdrop,
+.kaituo-book-open__backdrop {
+  background: repeating-linear-gradient(90deg, transparent 0 48px, rgba(var(--tj-accent-primary), 0.055) 49px 50px, transparent 51px 96px);
+  mask-image: radial-gradient(ellipse at center, black 0 52%, transparent 78%);
+  animation: home-overlay-backdrop 1s ease-out both;
+}
+
+.kaituo-journey-launch__star,
+.kaituo-home-journey__glint,
+.kaituo-save-load__node,
+.kaituo-book-open__mote {
+  position: absolute;
+  z-index: 3;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(var(--tj-accent-primary), 0.92);
+  box-shadow: 0 0 16px rgba(var(--tj-accent-primary), 0.58), 0 0 28px rgba(var(--tj-tech-cyan), 0.2);
+  opacity: 0;
+  animation: home-overlay-particle 0.9s ease-out both;
+}
+
+.kaituo-journey-launch {
+  perspective: 1200px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(var(--tj-text-primary), 0.18), transparent 10%),
+    radial-gradient(circle at 50% 50%, rgba(var(--tj-accent-primary), 0.28), transparent 36%),
+    linear-gradient(180deg, rgba(var(--tj-bg-primary), 0.88), rgba(var(--tj-bg-primary), 0.99));
+}
+
+.kaituo-journey-launch__field {
+  background:
+    radial-gradient(circle at center, rgba(var(--tj-tech-cyan), 0.16), transparent 32%),
+    repeating-radial-gradient(circle at center, rgba(var(--tj-accent-primary), 0.12) 0 1px, transparent 1px 46px);
+  animation: journey-field-focus 1.68s cubic-bezier(0.16, 0.84, 0.2, 1) both;
+}
+
+.kaituo-journey-launch__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: radial-gradient(circle at center, transparent 0 32%, rgba(0, 0, 0, 0.42) 78%, rgba(0, 0, 0, 0.72));
+}
+
+.kaituo-journey-launch__core {
+  animation: journey-core-lock 1.68s cubic-bezier(0.16, 0.84, 0.2, 1) both;
+}
+
+.kaituo-journey-launch__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(62vw, 330px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(var(--tj-accent-primary), 0.74);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 1px rgba(var(--tj-tech-cyan), 0.18),
+    0 0 40px rgba(var(--tj-accent-primary), 0.34),
+    inset 0 0 36px rgba(var(--tj-tech-cyan), 0.12);
+  opacity: 0;
+  animation: journey-ring-converge 1.68s cubic-bezier(0.16, 0.84, 0.2, 1) both;
+}
+
+.kaituo-journey-launch__rail,
+.kaituo-save-load__scan {
+  position: absolute;
+  left: -12%;
+  right: -12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--tj-tech-cyan), 0.72), rgba(var(--tj-accent-primary), 0.62), transparent);
+  box-shadow: 0 0 18px rgba(var(--tj-tech-cyan), 0.34);
+  opacity: 0;
+  animation: home-overlay-scan 1.02s ease-out both;
+}
+.kaituo-journey-launch__rail {
+  left: 50%;
+  right: auto;
+  top: 50%;
+  z-index: 4;
+  width: min(72vw, 620px);
+  height: 3px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(var(--tj-text-primary), 0.98) 0 2px, transparent 3px),
+    linear-gradient(90deg, transparent 0 4%, rgba(var(--tj-tech-cyan), 0.16) 14%, rgba(var(--tj-tech-cyan), 0.96) 46%, rgba(var(--tj-text-primary), 0.98) 50%, rgba(var(--tj-accent-primary), 0.88) 54%, rgba(var(--tj-accent-primary), 0.14) 86%, transparent 96%);
+  box-shadow: 0 0 26px rgba(var(--tj-tech-cyan), 0.52), 0 0 54px rgba(var(--tj-accent-primary), 0.3);
+  transform: var(--rail-start);
+  transform-origin: center;
+  animation: journey-rail-converge 1.52s cubic-bezier(0.1, 0.88, 0.18, 1) both;
+}
+.kaituo-journey-launch__rail--a { --rail-start: translate(-126%, -50%) rotate(0deg) scaleX(1.08); --rail-lock: translate(-50%, -50%) rotate(0deg) scaleX(0.16); animation-delay: 0.02s; }
+.kaituo-journey-launch__rail--b { --rail-start: translate(26%, -50%) rotate(180deg) scaleX(1.08); --rail-lock: translate(-50%, -50%) rotate(180deg) scaleX(0.16); animation-delay: 0.1s; }
+.kaituo-journey-launch__rail--c { --rail-start: translate(-50%, -126%) rotate(90deg) scaleX(1.08); --rail-lock: translate(-50%, -50%) rotate(90deg) scaleX(0.16); animation-delay: 0.18s; }
+.kaituo-journey-launch__rail--d { --rail-start: translate(-50%, 26%) rotate(-90deg) scaleX(1.08); --rail-lock: translate(-50%, -50%) rotate(-90deg) scaleX(0.16); animation-delay: 0.26s; }
+.kaituo-save-load__scan--a { top: 43%; animation-delay: 0.12s; }
+.kaituo-save-load__scan--b { top: 57%; animation-delay: 0.24s; }
+
+.kaituo-journey-launch__core,
+.kaituo-home-journey__threshold,
+.kaituo-save-load__archive,
+.kaituo-book-open__copy {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 8;
+  width: min(84vw, 430px);
+  transform: translate(-50%, -50%);
+  text-align: center;
+  animation: home-overlay-copy 1.02s ease-out both;
+}
+
+.kaituo-journey-launch__glyph,
+.kaituo-home-journey__seal,
+.kaituo-save-load__seal {
+  margin: 0 auto 14px;
+  display: grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  border: 1px solid rgba(var(--tj-accent-primary), 0.58);
+  border-radius: 999px;
+  color: rgb(var(--tj-accent-primary));
+  font-family: 'Noto Serif SC', SimSun, serif;
+  font-size: 28px;
+  box-shadow: inset 0 0 28px rgba(var(--tj-accent-primary), 0.14), 0 0 36px rgba(var(--tj-accent-primary), 0.28);
+}
+
+.kaituo-journey-launch__glyph {
+  position: relative;
+  z-index: 2;
+  width: 86px;
+  height: 86px;
+  font-size: 30px;
+  background: radial-gradient(circle, rgba(var(--tj-text-primary), 0.14), rgba(var(--tj-accent-primary), 0.08) 58%, transparent 70%);
+  overflow: visible;
+  animation: journey-glyph-breathe 1.68s cubic-bezier(0.16, 0.84, 0.2, 1) both;
+}
+
+.kaituo-journey-launch__starburst,
+.kaituo-journey-launch__starburst-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+}
+
+.kaituo-journey-launch__starburst {
+  width: 128px;
+  height: 128px;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.12) rotate(0deg);
+  background:
+    linear-gradient(90deg, transparent 0 30%, rgba(var(--tj-text-primary), 0.98) 47% 53%, transparent 70% 100%),
+    linear-gradient(180deg, transparent 0 30%, rgba(var(--tj-text-primary), 0.98) 47% 53%, transparent 70% 100%);
+  clip-path: polygon(50% 0, 56% 44%, 100% 50%, 56% 56%, 50% 100%, 44% 56%, 0 50%, 44% 44%);
+  filter: drop-shadow(0 0 14px rgba(var(--tj-tech-cyan), 0.72)) drop-shadow(0 0 32px rgba(var(--tj-accent-primary), 0.42));
+  animation: journey-starburst-main 1.68s cubic-bezier(0.12, 0.86, 0.2, 1) both;
+}
+
+.kaituo-journey-launch__starburst--main::before,
+.kaituo-journey-launch__starburst--main::after,
+.kaituo-journey-launch__starburst--cross::before,
+.kaituo-journey-launch__starburst--cross::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 126px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, transparent 0 9%, rgba(var(--tj-text-primary), 0.98) 42% 58%, transparent 91% 100%);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 22px rgba(var(--tj-tech-cyan), 0.6), 0 0 44px rgba(var(--tj-accent-primary), 0.38);
+}
+
+.kaituo-journey-launch__starburst--main::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.kaituo-journey-launch__starburst--cross {
+  width: 72px;
+  height: 72px;
+  transform: translate(-50%, -50%) scale(0.12) rotate(45deg);
+  animation: journey-starburst-cross 1.68s cubic-bezier(0.12, 0.86, 0.2, 1) both;
+}
+
+.kaituo-journey-launch__starburst--cross::before,
+.kaituo-journey-launch__starburst--cross::after {
+  height: 72px;
+  width: 3px;
+  background: linear-gradient(180deg, transparent, rgba(var(--tj-tech-cyan), 0.86) 34% 66%, transparent);
+}
+
+.kaituo-journey-launch__starburst--cross::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.kaituo-journey-launch__starburst-core {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.2);
+  background: rgb(var(--tj-text-primary));
+  box-shadow:
+    0 0 16px rgba(var(--tj-text-primary), 0.96),
+    0 0 34px rgba(var(--tj-tech-cyan), 0.62),
+    0 0 58px rgba(var(--tj-accent-primary), 0.42);
+  animation: journey-starburst-core 1.68s ease-out both;
+}
+
+.kaituo-journey-launch__flash {
+  background: radial-gradient(circle at center, rgba(var(--tj-text-primary), 0.72), rgba(var(--tj-tech-cyan), 0.34) 14%, rgba(var(--tj-accent-primary), 0.2) 32%, transparent 58%);
+  opacity: 0;
+  animation: journey-final-flash 1.68s ease-out both;
+}
+
+.kaituo-journey-launch__title,
+.kaituo-home-journey__title,
+.kaituo-save-load__title,
+.kaituo-book-open__title {
+  font-family: 'Noto Serif SC', SimSun, serif;
+  font-size: clamp(20px, 4.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-shadow: 0 0 24px rgba(var(--tj-accent-primary), 0.36);
+}
+
+.kaituo-journey-launch__subtitle,
+.kaituo-home-journey__subtitle,
+.kaituo-save-load__subtitle,
+.kaituo-book-open__subtitle {
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: rgba(var(--tj-text-secondary), 0.86);
+}
+
+.kaituo-home-journey__door {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 50%;
+  background:
+    linear-gradient(90deg, rgba(var(--tj-bg-primary), 0.98), rgba(var(--tj-panel-bg-start), 0.88)),
+    repeating-linear-gradient(0deg, transparent 0 38px, rgba(var(--tj-accent-primary), 0.08) 39px 40px, transparent 41px 78px);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28),
+    inset 0 0 44px rgba(var(--tj-accent-primary), 0.12),
+    0 0 52px rgba(var(--tj-accent-primary), 0.22);
+}
+.kaituo-home-journey__door--left { left: 0; transform-origin: right center; animation: home-door-left 1.18s cubic-bezier(0.16, 0.84, 0.2, 1) both; }
+.kaituo-home-journey__door--right { right: 0; transform-origin: left center; animation: home-door-right 1.18s cubic-bezier(0.16, 0.84, 0.2, 1) both; }
+.kaituo-home-journey__tracks { position: absolute; inset: 20% -10%; background: linear-gradient(115deg, transparent 42%, rgba(var(--tj-tech-cyan), 0.22), transparent 58%); animation: home-track-sweep 1.18s ease-out both; }
+.kaituo-home-journey__wipe { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(var(--tj-text-primary), 0.28), transparent); transform: translateX(-60%) skewX(-12deg); animation: home-overlay-wipe 1.18s ease-out both; }
+
+.kaituo-home-journey__threshold::before,
+.kaituo-home-journey__threshold::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: min(78vw, 420px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(var(--tj-accent-primary), 0.42);
+  border-radius: 999px;
+  transform: translate(-50%, -50%) scale(0.32);
+  opacity: 0;
+  box-shadow: 0 0 34px rgba(var(--tj-accent-primary), 0.24), inset 0 0 28px rgba(var(--tj-tech-cyan), 0.12);
+  animation: home-journey-bloom 1.18s cubic-bezier(0.16, 0.84, 0.2, 1) both;
+}
+
+.kaituo-home-journey__threshold::after {
+  animation-delay: 0.14s;
+  border-color: rgba(var(--tj-tech-cyan), 0.26);
+}
+
+.kaituo-save-load__grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(var(--tj-accent-primary), 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.08) 1px, transparent 1px); background-size: 48px 48px; animation: home-overlay-backdrop 1.04s ease-out both; }
+.kaituo-save-load__frame { position: absolute; inset: -18px 28px; border: 1px solid rgba(var(--tj-accent-primary), 0.3); clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.kaituo-save-load__bar { margin: 18px auto 0; width: min(260px, 70vw); height: 3px; overflow: hidden; background: rgba(var(--tj-border), 0.5); }
+.kaituo-save-load__bar span { display: block; height: 100%; background: linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.65), rgba(var(--tj-accent-primary), 0.92)); animation: save-load-bar 1.04s ease-out both; }
+
+.kaituo-book-open { perspective: 980px; background: radial-gradient(circle at 50% 48%, rgba(var(--tj-accent-primary), 0.34), transparent 34%), radial-gradient(circle at 50% 52%, rgba(var(--tj-tech-cyan), 0.16), transparent 42%), linear-gradient(180deg, rgba(var(--tj-bg-primary), 0.9), rgba(var(--tj-bg-primary), 0.99)); }
+.kaituo-book-open__book { position: absolute; left: 50%; top: 48%; z-index: 7; width: min(84vw, 500px); height: min(48vw, 260px); min-height: 190px; transform: translate(-50%, -50%) rotateX(12deg); transform-style: preserve-3d; animation: book-open-arrive 1.02s cubic-bezier(0.16, 0.84, 0.2, 1) both; }
+.kaituo-book-open__spine { position: absolute; left: 50%; top: 8%; bottom: 8%; z-index: 9; width: 2px; transform: translateX(-50%); background: linear-gradient(180deg, transparent, rgba(var(--tj-accent-primary), 0.8), transparent); box-shadow: 0 0 20px rgba(var(--tj-accent-primary), 0.48); }
+.kaituo-book-open__page { position: absolute; top: 0; width: 50%; height: 100%; overflow: hidden; border: 1px solid rgba(var(--tj-accent-primary), 0.46); background: linear-gradient(135deg, rgba(var(--tj-text-primary), 0.16), rgba(var(--tj-bg-secondary), 0.76)), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.14), transparent 34% 66%, rgba(var(--tj-tech-cyan), 0.08)); box-shadow: inset 0 0 34px rgba(var(--tj-accent-primary), 0.16), 0 0 38px rgba(var(--tj-accent-primary), 0.28), 0 20px 70px rgba(0, 0, 0, 0.42); transform-style: preserve-3d; }
+.kaituo-book-open__page span { position: absolute; left: 14%; right: 14%; height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--tj-text-secondary), 0.58), transparent); opacity: 0.72; }
+.kaituo-book-open__page span:nth-child(1) { top: 30%; }
+.kaituo-book-open__page span:nth-child(2) { top: 45%; }
+.kaituo-book-open__page span:nth-child(3) { top: 60%; }
+.kaituo-book-open__page--left { left: 0; border-radius: 14px 4px 4px 14px; transform-origin: right center; animation: book-open-left-page 1.02s cubic-bezier(0.18, 0.84, 0.2, 1) both; }
+.kaituo-book-open__page--right { right: 0; border-radius: 4px 14px 14px 4px; transform-origin: left center; animation: book-open-right-page 1.02s cubic-bezier(0.18, 0.84, 0.2, 1) both; }
+.kaituo-book-open__leaf { position: absolute; top: 6%; right: 8%; z-index: 10; width: 42%; height: 88%; border: 1px solid rgba(var(--tj-text-primary), 0.18); border-radius: 4px 12px 12px 4px; background: linear-gradient(90deg, rgba(var(--tj-text-primary), 0.18), rgba(var(--tj-accent-primary), 0.08)); transform-origin: left center; opacity: 0; }
+.kaituo-book-open__leaf--a { animation: book-open-leaf 0.72s 0.16s cubic-bezier(0.16, 0.84, 0.2, 1) both; }
+.kaituo-book-open__leaf--b { animation: book-open-leaf 0.7s 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) both; }
+.kaituo-book-open__copy { top: calc(50% + min(26vw, 150px)); }
+.kaituo-book-open__glow { background: radial-gradient(circle at center, rgba(var(--tj-text-primary), 0.46), rgba(var(--tj-accent-primary), 0.32) 18%, rgba(var(--tj-tech-cyan), 0.14) 36%, transparent 54%); opacity: 0; animation: book-open-glow 1.08s ease-out both; }
+
+@keyframes home-overlay-fade { 0% { opacity: 0; } 12%, 78% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes journey-field-focus { 0% { opacity: 0; transform: scale(1.22) rotate(0deg); } 18%, 80% { opacity: 1; } 100% { opacity: 0; transform: scale(0.9) rotate(5deg); } }
+@keyframes journey-rail-converge { 0% { opacity: 0; transform: var(--rail-start); filter: blur(10px); } 16% { opacity: 1; filter: blur(0); } 58% { opacity: 1; transform: var(--rail-start); } 82% { opacity: 1; transform: var(--rail-lock); filter: blur(0); } 100% { opacity: 0; transform: var(--rail-lock); filter: blur(8px); } }
+@keyframes journey-ring-converge { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.28) rotate(0deg); } 24% { opacity: 1; } 68% { opacity: 0.96; transform: translate(-50%, -50%) scale(1.04) rotate(28deg); } 82% { opacity: 1; transform: translate(-50%, -50%) scale(0.78) rotate(45deg); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.24) rotate(60deg); } }
+@keyframes journey-core-lock { 0% { opacity: 0; transform: translate(-50%, -46%) scale(0.84); filter: blur(8px); } 30%, 84% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } 100% { opacity: 0; transform: translate(-50%, -54%) scale(1.08); filter: blur(8px); } }
+@keyframes journey-glyph-breathe { 0% { transform: scale(0.64); opacity: 0; } 28% { opacity: 0.94; } 64% { transform: scale(0.96); opacity: 1; } 82% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
+@keyframes journey-starburst-main { 0%, 58% { opacity: 0; transform: translate(-50%, -50%) scale(0.12) rotate(0deg); filter: blur(10px); } 74% { opacity: 1; transform: translate(-50%, -50%) scale(1.08) rotate(0deg); filter: blur(0); } 86% { opacity: 0.98; transform: translate(-50%, -50%) scale(0.94) rotate(45deg); } 94% { opacity: 0.92; transform: translate(-50%, -50%) scale(1.12) rotate(45deg); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.42) rotate(45deg); filter: blur(10px); } }
+@keyframes journey-starburst-cross { 0%, 62% { opacity: 0; transform: translate(-50%, -50%) scale(0.12) rotate(45deg); filter: blur(8px); } 78% { opacity: 0.76; transform: translate(-50%, -50%) scale(1) rotate(45deg); filter: blur(0); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3) rotate(45deg); filter: blur(8px); } }
+@keyframes journey-starburst-core { 0%, 60% { opacity: 0; transform: translate(-50%, -50%) scale(0.18); } 76%, 88% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
+@keyframes journey-final-flash { 0%, 70% { opacity: 0; } 82% { opacity: 0.9; } 100% { opacity: 0; } }
+@keyframes home-overlay-backdrop { 0% { opacity: 0; transform: scale(1.08); } 28%, 78% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.1); } }
+@keyframes home-overlay-particle { 0% { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.5); } 34% { opacity: 1; } 100% { opacity: 0; transform: translate3d(18px, -42px, 0) scale(0.15); } }
+@keyframes home-overlay-scan { 0%, 12% { opacity: 0; transform: translateX(-20%); } 38%, 70% { opacity: 1; } 100% { opacity: 0; transform: translateX(20%); } }
+@keyframes home-overlay-copy { 0% { opacity: 0; transform: translate(-50%, -44%) scale(0.94); filter: blur(6px); } 24%, 70% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } 100% { opacity: 0; transform: translate(-50%, -54%) scale(1.05); filter: blur(8px); } }
+@keyframes home-door-left { 0% { transform: translateX(0) scaleX(1); } 22%, 44% { transform: translateX(-8%) scaleX(0.98); } 100% { transform: translateX(-108%) scaleX(0.92); } }
+@keyframes home-door-right { 0% { transform: translateX(0) scaleX(1); } 22%, 44% { transform: translateX(8%) scaleX(0.98); } 100% { transform: translateX(108%) scaleX(0.92); } }
+@keyframes home-journey-bloom { 0%, 12% { opacity: 0; transform: translate(-50%, -50%) scale(0.28); } 38% { opacity: 0.82; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.42); } }
+@keyframes home-track-sweep { 0% { opacity: 0; transform: translateX(-20%) skewX(-14deg); } 36%, 70% { opacity: 0.9; } 100% { opacity: 0; transform: translateX(20%) skewX(-14deg); } }
+@keyframes home-overlay-wipe { 0%, 66% { opacity: 0; transform: translateX(-60%) skewX(-12deg); } 82% { opacity: 0.46; } 100% { opacity: 0; transform: translateX(60%) skewX(-12deg); } }
+@keyframes save-load-bar { 0% { transform: translateX(-100%); } 100% { transform: translateX(0); } }
+@keyframes book-open-arrive { 0% { opacity: 0; transform: translate(-50%, -43%) rotateX(22deg) scale(0.82); filter: blur(6px); } 24%, 76% { opacity: 1; transform: translate(-50%, -50%) rotateX(12deg) scale(1); filter: blur(0); } 100% { opacity: 0; transform: translate(-50%, -54%) rotateX(8deg) scale(1.04); filter: blur(8px); } }
+@keyframes book-open-left-page { 0% { transform: rotateY(64deg); } 32%, 78% { transform: rotateY(0deg); } 100% { transform: rotateY(-8deg); } }
+@keyframes book-open-right-page { 0% { transform: rotateY(-64deg); } 32%, 78% { transform: rotateY(0deg); } 100% { transform: rotateY(8deg); } }
+@keyframes book-open-leaf { 0% { opacity: 0; transform: rotateY(0deg) translateZ(8px); } 18% { opacity: 0.7; } 100% { opacity: 0; transform: rotateY(-150deg) translateZ(14px); } }
+@keyframes book-open-glow { 0%, 70% { opacity: 0; } 82% { opacity: 0.68; } 100% { opacity: 0; } }
+
+/* Weather atmosphere */
+.kaituo-weather-atmosphere {
+  --weather-tint: rgba(var(--tj-accent-primary), 0.12);
+  --weather-tint-2: rgba(var(--tj-tech-cyan), 0.1);
+  --weather-particle: rgba(var(--tj-text-primary), 0.34);
+  --weather-particle-strong: rgba(var(--tj-tech-cyan), 0.54);
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.86;
+  mix-blend-mode: screen;
+}
+
+.kaituo-weather-atmosphere > span,
+.kaituo-weather-atmosphere::before,
+.kaituo-weather-atmosphere::after {
+  position: absolute;
+  content: '';
+  pointer-events: none;
+}
+
+.kaituo-weather-wash { inset: 0; background: radial-gradient(circle at 28% 12%, var(--weather-tint), transparent 32%), radial-gradient(circle at 78% 16%, var(--weather-tint-2), transparent 38%), linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 42%); opacity: 0.8; }
+.kaituo-weather-top { left: 0; right: 0; top: 0; height: 30%; background: linear-gradient(180deg, var(--weather-tint), transparent); opacity: 0.7; }
+.kaituo-weather-edge { top: 0; bottom: 0; width: 18%; opacity: 0.42; filter: blur(18px); }
+.kaituo-weather-edge-left { left: -7%; background: linear-gradient(90deg, var(--weather-tint), transparent); }
+.kaituo-weather-edge-right { right: -7%; background: linear-gradient(270deg, var(--weather-tint-2), transparent); }
+.kaituo-weather-motes { inset: -18% -12%; opacity: 0; background-repeat: repeat; transform: translate3d(0, 0, 0); }
+.kaituo-weather-motes-a { animation: weather-drift-a 13s linear infinite; }
+.kaituo-weather-motes-b { animation: weather-drift-b 18s linear infinite; }
+
+.kaituo-weather-clear { --weather-tint: rgba(255, 207, 128, 0.11); --weather-tint-2: rgba(122, 211, 255, 0.08); opacity: 0.62; }
+.kaituo-weather-clear .kaituo-weather-motes-a { opacity: 0.28; background-image: radial-gradient(circle, rgba(255, 236, 188, 0.44) 0 1px, transparent 1.8px); background-size: 180px 160px; }
+.kaituo-weather-cloudy { --weather-tint: rgba(174, 190, 210, 0.14); --weather-tint-2: rgba(126, 182, 212, 0.08); opacity: 0.68; }
+.kaituo-weather-cloudy .kaituo-weather-wash { background: radial-gradient(ellipse at 30% 8%, rgba(210, 222, 238, 0.16), transparent 34%), radial-gradient(ellipse at 72% 14%, rgba(176, 196, 216, 0.13), transparent 38%); filter: blur(1px); }
+.kaituo-weather-overcast { --weather-tint: rgba(118, 132, 150, 0.2); --weather-tint-2: rgba(86, 104, 130, 0.18); opacity: 0.78; mix-blend-mode: normal; }
+.kaituo-weather-overcast .kaituo-weather-wash { background: linear-gradient(180deg, rgba(95, 107, 124, 0.2), rgba(38, 45, 57, 0.12) 58%, transparent); }
+
+.kaituo-weather-light_rain { --weather-tint: rgba(92, 162, 210, 0.17); --weather-tint-2: rgba(176, 214, 238, 0.1); }
+.kaituo-weather-heavy_rain { --weather-tint: rgba(64, 118, 168, 0.24); --weather-tint-2: rgba(116, 174, 218, 0.14); opacity: 0.94; }
+.kaituo-weather-light_rain .kaituo-weather-motes-a,
+.kaituo-weather-heavy_rain .kaituo-weather-motes-a,
+.kaituo-weather-energy_rain .kaituo-weather-motes-a { opacity: 0.62; background-image: linear-gradient(105deg, transparent 0 45%, var(--weather-particle) 46% 48%, transparent 49% 100%); background-size: 82px 160px; animation: weather-rain-fall 0.82s linear infinite; }
+.kaituo-weather-heavy_rain .kaituo-weather-motes-a { opacity: 0.88; background-size: 58px 118px; animation-duration: 0.48s; }
+.kaituo-weather-heavy_rain .kaituo-weather-motes-b { opacity: 0.42; background-image: linear-gradient(105deg, transparent 0 44%, rgba(255,255,255,0.18) 45% 47%, transparent 48% 100%); background-size: 94px 150px; animation: weather-rain-fall 0.68s linear infinite reverse; }
+
+.kaituo-weather-snow { --weather-tint: rgba(205, 226, 245, 0.17); --weather-tint-2: rgba(255, 255, 255, 0.1); }
+.kaituo-weather-blizzard { --weather-tint: rgba(207, 231, 255, 0.26); --weather-tint-2: rgba(116, 172, 230, 0.16); opacity: 0.94; }
+.kaituo-weather-snow .kaituo-weather-motes-a,
+.kaituo-weather-blizzard .kaituo-weather-motes-a { opacity: 0.72; background-image: radial-gradient(circle, rgba(255,255,255,0.58) 0 1.2px, transparent 1.8px), radial-gradient(circle, rgba(190,225,255,0.36) 0 1px, transparent 1.6px); background-size: 120px 120px, 190px 170px; animation: weather-snow-fall 11s linear infinite; }
+.kaituo-weather-blizzard .kaituo-weather-motes-b { opacity: 0.5; background-image: linear-gradient(100deg, transparent 0 42%, rgba(230,245,255,0.28) 43% 45%, transparent 46% 100%); background-size: 120px 74px; animation: weather-wind-shear 1.7s linear infinite; }
+
+.kaituo-weather-star_dust_storm { --weather-tint: rgba(194, 143, 76, 0.24); --weather-tint-2: rgba(103, 190, 235, 0.1); opacity: 0.9; }
+.kaituo-weather-rift_wind { --weather-tint: rgba(104, 224, 212, 0.16); --weather-tint-2: rgba(202, 100, 255, 0.12); }
+.kaituo-weather-ether_fog { --weather-tint: rgba(163, 137, 255, 0.18); --weather-tint-2: rgba(103, 229, 214, 0.13); opacity: 0.82; }
+.kaituo-weather-aurora { --weather-tint: rgba(84, 246, 188, 0.16); --weather-tint-2: rgba(184, 109, 255, 0.18); }
+.kaituo-weather-energy_rain { --weather-tint: rgba(96, 218, 255, 0.18); --weather-tint-2: rgba(255, 220, 128, 0.12); }
+.kaituo-weather-data_storm { --weather-tint: rgba(58, 230, 214, 0.14); --weather-tint-2: rgba(106, 149, 255, 0.16); }
+.kaituo-weather-star_tide { --weather-tint: rgba(108, 182, 255, 0.18); --weather-tint-2: rgba(255, 180, 228, 0.14); }
+.kaituo-weather-star_dust_storm .kaituo-weather-motes-a { opacity: 0.52; background-image: radial-gradient(circle, rgba(255, 207, 132, 0.42) 0 1.3px, transparent 2px); background-size: 74px 86px; animation: weather-wind-shear 4.8s linear infinite; }
+.kaituo-weather-rift_wind .kaituo-weather-motes-a,
+.kaituo-weather-data_storm .kaituo-weather-motes-a { opacity: 0.55; background-image: linear-gradient(90deg, transparent 0 42%, rgba(var(--tj-tech-cyan),0.42) 43% 46%, transparent 47% 100%); background-size: 160px 46px; animation: weather-wind-shear 2.2s linear infinite; }
+.kaituo-weather-ether_fog .kaituo-weather-wash { opacity: 0.86; filter: blur(9px); background: radial-gradient(ellipse at 24% 16%, rgba(182, 164, 255, 0.22), transparent 42%), radial-gradient(ellipse at 72% 22%, rgba(108, 238, 218, 0.18), transparent 46%); animation: weather-fog-breathe 7s ease-in-out infinite alternate; }
+.kaituo-weather-aurora .kaituo-weather-top { height: 46%; opacity: 0.78; background: linear-gradient(112deg, transparent 0 16%, rgba(92,255,198,0.22) 26%, rgba(178,104,255,0.18) 48%, rgba(91,170,255,0.14) 66%, transparent 82%); animation: weather-aurora 8s ease-in-out infinite alternate; }
+.kaituo-weather-energy_rain .kaituo-weather-motes-a { --weather-particle: rgba(120, 232, 255, 0.5); }
+.kaituo-weather-data_storm .kaituo-weather-motes-b { opacity: 0.34; background-image: linear-gradient(180deg, rgba(var(--tj-tech-cyan),0.18) 0 1px, transparent 1px 18px), linear-gradient(90deg, rgba(var(--tj-accent-primary),0.12) 0 1px, transparent 1px 26px); background-size: 92px 92px; animation: weather-data-grid 5s linear infinite; }
+.kaituo-weather-star_tide .kaituo-weather-wash { background: radial-gradient(ellipse at 50% 100%, rgba(96,180,255,0.22), transparent 48%), radial-gradient(ellipse at 24% 24%, rgba(255,176,226,0.13), transparent 36%); animation: weather-tide 6.5s ease-in-out infinite alternate; }
+
+@keyframes weather-drift-a { 0% { transform: translate3d(-2%, 2%, 0); } 100% { transform: translate3d(4%, -6%, 0); } }
+@keyframes weather-drift-b { 0% { transform: translate3d(5%, -4%, 0); } 100% { transform: translate3d(-4%, 5%, 0); } }
+@keyframes weather-rain-fall { 0% { transform: translate3d(-4%, -18%, 0); } 100% { transform: translate3d(8%, 18%, 0); } }
+@keyframes weather-snow-fall { 0% { transform: translate3d(-2%, -14%, 0); } 100% { transform: translate3d(5%, 18%, 0); } }
+@keyframes weather-wind-shear { 0% { transform: translate3d(-8%, 0, 0); } 100% { transform: translate3d(8%, 0, 0); } }
+@keyframes weather-fog-breathe { 0% { transform: scale(1) translateX(-1%); } 100% { transform: scale(1.08) translateX(2%); } }
+@keyframes weather-aurora { 0% { transform: translateX(-4%) skewX(-8deg); } 100% { transform: translateX(4%) skewX(8deg); } }
+@keyframes weather-data-grid { 0% { transform: translate3d(0, -4%, 0); } 100% { transform: translate3d(4%, 4%, 0); } }
+@keyframes weather-tide { 0% { transform: translateY(2%) scale(1); } 100% { transform: translateY(-3%) scale(1.06); } }
+
+/* Weather atmosphere v3: top flowing light band only */
+.kaituo-game-bg {
+  --weather-frame: rgba(var(--tj-accent-primary), 0.4);
+  --weather-frame-soft: rgba(var(--tj-accent-primary), 0.16);
+  --weather-frame-cold: rgba(var(--tj-tech-cyan), 0.14);
+  --weather-line: rgba(var(--tj-text-primary), 0.24);
+}
+
+.kaituo-game-weather-clear { --weather-frame: rgba(255, 196, 96, 0.62); --weather-frame-soft: rgba(255, 178, 78, 0.2); --weather-frame-cold: rgba(114, 212, 255, 0.12); --weather-line: rgba(255, 226, 170, 0.3); }
+.kaituo-game-weather-cloudy { --weather-frame: rgba(182, 201, 224, 0.5); --weather-frame-soft: rgba(144, 165, 190, 0.2); --weather-frame-cold: rgba(120, 190, 228, 0.1); --weather-line: rgba(214, 226, 238, 0.22); }
+.kaituo-game-weather-overcast { --weather-frame: rgba(118, 136, 160, 0.56); --weather-frame-soft: rgba(76, 88, 110, 0.26); --weather-frame-cold: rgba(120, 146, 176, 0.13); --weather-line: rgba(170, 188, 210, 0.2); }
+.kaituo-game-weather-light_rain { --weather-frame: rgba(87, 172, 226, 0.62); --weather-frame-soft: rgba(52, 119, 178, 0.24); --weather-frame-cold: rgba(160, 220, 255, 0.16); --weather-line: rgba(150, 218, 255, 0.32); }
+.kaituo-game-weather-heavy_rain { --weather-frame: rgba(64, 142, 214, 0.78); --weather-frame-soft: rgba(34, 82, 148, 0.34); --weather-frame-cold: rgba(150, 212, 255, 0.18); --weather-line: rgba(168, 224, 255, 0.42); }
+.kaituo-game-weather-snow { --weather-frame: rgba(200, 236, 255, 0.74); --weather-frame-soft: rgba(156, 214, 255, 0.24); --weather-frame-cold: rgba(255, 255, 255, 0.16); --weather-line: rgba(238, 250, 255, 0.34); }
+.kaituo-game-weather-blizzard { --weather-frame: rgba(180, 226, 255, 0.9); --weather-frame-soft: rgba(98, 168, 235, 0.34); --weather-frame-cold: rgba(255, 255, 255, 0.2); --weather-line: rgba(246, 252, 255, 0.46); }
+.kaituo-game-weather-star_dust_storm { --weather-frame: rgba(255, 184, 92, 0.7); --weather-frame-soft: rgba(166, 96, 34, 0.28); --weather-frame-cold: rgba(101, 202, 255, 0.1); --weather-line: rgba(255, 216, 148, 0.32); }
+.kaituo-game-weather-rift_wind { --weather-frame: rgba(100, 246, 222, 0.74); --weather-frame-soft: rgba(92, 104, 255, 0.24); --weather-frame-cold: rgba(210, 96, 255, 0.2); --weather-line: rgba(154, 255, 238, 0.38); }
+.kaituo-game-weather-ether_fog { --weather-frame: rgba(174, 138, 255, 0.68); --weather-frame-soft: rgba(110, 95, 210, 0.28); --weather-frame-cold: rgba(108, 244, 226, 0.16); --weather-line: rgba(218, 202, 255, 0.32); }
+.kaituo-game-weather-aurora { --weather-frame: rgba(93, 255, 198, 0.78); --weather-frame-soft: rgba(98, 110, 255, 0.22); --weather-frame-cold: rgba(224, 112, 255, 0.22); --weather-line: rgba(170, 255, 224, 0.36); }
+.kaituo-game-weather-energy_rain { --weather-frame: rgba(104, 226, 255, 0.74); --weather-frame-soft: rgba(40, 142, 220, 0.24); --weather-frame-cold: rgba(255, 220, 120, 0.18); --weather-line: rgba(152, 240, 255, 0.38); }
+.kaituo-game-weather-data_storm { --weather-frame: rgba(56, 240, 218, 0.76); --weather-frame-soft: rgba(52, 100, 220, 0.28); --weather-frame-cold: rgba(144, 255, 238, 0.16); --weather-line: rgba(98, 255, 232, 0.42); }
+.kaituo-game-weather-star_tide { --weather-frame: rgba(112, 188, 255, 0.72); --weather-frame-soft: rgba(82, 112, 240, 0.24); --weather-frame-cold: rgba(255, 164, 226, 0.2); --weather-line: rgba(190, 220, 255, 0.34); }
+
+.kaituo-game-bg::before,
+.kaituo-game-bg::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.kaituo-game-bg::before {
+  z-index: 2;
+  height: 34px;
+  background:
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--weather-frame) 34%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--weather-frame-soft) 54%, transparent), transparent 72%);
+  opacity: 0.46;
+}
+
+.kaituo-game-bg::after {
+  z-index: 20;
+  height: 5px;
+  background:
+    linear-gradient(90deg, transparent 0%, var(--weather-frame-soft) 12%, var(--weather-frame) 30%, var(--weather-line) 48%, var(--weather-frame) 66%, var(--weather-frame-soft) 84%, transparent 100%);
+  background-size: 220% 100%;
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--weather-frame) 46%, transparent),
+    0 0 18px color-mix(in srgb, var(--weather-frame-soft) 46%, transparent);
+  opacity: 0.94;
+  animation: weather-top-band-flow 5.8s linear infinite;
+}
+
+.kaituo-game-bg .kaituo-chat-surface::before,
+.kaituo-game-bg .kaituo-left-panel::before,
+.kaituo-game-bg .kaituo-right-menu::before {
+  display: none;
+}
+
+.kaituo-weather-atmosphere { z-index: 3; opacity: 0; mix-blend-mode: screen; }
+.kaituo-weather-wash { opacity: 0; }
+.kaituo-weather-top { opacity: 0; height: 0; }
+.kaituo-weather-edge { opacity: 0; }
+.kaituo-weather-motes { opacity: 0 !important; }
+
+.kaituo-weather-light_rain .kaituo-weather-motes-a,
+.kaituo-weather-heavy_rain .kaituo-weather-motes-a,
+.kaituo-weather-energy_rain .kaituo-weather-motes-a { opacity: 0 !important; background-size: 150px 260px; }
+.kaituo-weather-heavy_rain .kaituo-weather-motes-b,
+.kaituo-weather-blizzard .kaituo-weather-motes-b,
+.kaituo-weather-rift_wind .kaituo-weather-motes-a,
+.kaituo-weather-data_storm .kaituo-weather-motes-a,
+.kaituo-weather-data_storm .kaituo-weather-motes-b { opacity: 0 !important; }
+.kaituo-weather-snow .kaituo-weather-motes-a,
+.kaituo-weather-blizzard .kaituo-weather-motes-a,
+.kaituo-weather-star_dust_storm .kaituo-weather-motes-a { opacity: 0 !important; }
+.kaituo-weather-aurora .kaituo-weather-top,
+.kaituo-weather-star_tide .kaituo-weather-wash,
+.kaituo-weather-ether_fog .kaituo-weather-wash { opacity: 0; }
+
+@keyframes weather-top-band-flow {
+  0% { background-position: 0% 50%; filter: saturate(0.9); }
+  50% { filter: saturate(1.18); }
+  100% { background-position: 220% 50%; filter: saturate(0.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kaituo-journey-launch,
+  .kaituo-journey-launch *,
+  .kaituo-home-journey,
+  .kaituo-home-journey *,
+  .kaituo-save-load,
+  .kaituo-save-load *,
+  .kaituo-book-open,
+  .kaituo-book-open *,
+  .kaituo-weather-atmosphere,
+  .kaituo-weather-atmosphere * {
+    animation-duration: 0.28s !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .kaituo-weather-atmosphere { opacity: 0.38; }
+}

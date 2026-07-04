@@ -27,9 +27,9 @@ assert(apiSettings.includes('handleApplyAuxModel'), 'API 页必须提供其他 A
 assert(apiSettings.includes('handleFetchAuxModels'), '其他 API 模型设置必须支持获取模型列表。');
 assert(apiSettings.includes('setAuxModelOptions(list)'), '其他 API 模型设置必须从接口返回列表中选择模型。');
 assert(apiSettings.includes('其他 API 模型设置'), 'API 页必须显示其他 API 模型设置面板。');
-assert(apiSettings.includes('auxProvider'), '其他 API 模型设置必须支持单独选择供应商。');
-assert(apiSettings.includes('auxBaseUrl'), '其他 API 模型设置必须支持单独填写 Base URL。');
-assert(apiSettings.includes('auxApiKey'), '其他 API 模型设置必须支持单独填写 API Key。');
+assert(apiSettings.includes('auxForm.provider'), '其他 API 模型设置必须支持单独选择供应商。');
+assert(apiSettings.includes('auxForm.baseUrl'), '其他 API 模型设置必须支持单独填写 Base URL。');
+assert(apiSettings.includes('auxForm.apiKey'), '其他 API 模型设置必须支持单独填写 API Key。');
 assert(apiSettings.includes('const auxApiPatch = { provider, baseUrl, apiKey, model }'), '其他 API 一键套用必须同时覆盖 provider/baseUrl/apiKey/model。');
 assert(apiSettings.includes('overflow-y-auto'), 'API 设置页大窗口必须提供内部滚动。');
 assert(!apiSettings.includes('flex-1 flex-col gap-3 overflow-y-auto'), 'API 配置详情区不得再单独滚动，应让整个 API 页滚动。');

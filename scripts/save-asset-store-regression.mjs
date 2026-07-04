@@ -23,7 +23,7 @@ assert(dbService.includes("const SAVE_ASSETS_STORE = 'saveAssets'"), '必须定�
 assert(dbService.includes('db.createObjectStore(SAVE_ASSETS_STORE'), '升级流程必须创建 saveAssets 表。');
 assert(dbService.includes('extractSaveAssetRecords(data)'), '保存时必须抽取相册图片资源。');
 assert(dbService.includes('stripSaveAssetPayloadForStorage(data)'), '保存时必须剥离存档内相册图片 payload。');
-assert(dbService.includes('restoreSaveAssetPayloadFromRecords(saveForAssets, records)'), '读档时必须从资源表还原图片 payload。');
+assert(dbService.includes('restoreSaveAssetPayloadFromRecords(saveForAssets, [...records, ...desktopRecords])'), '读档时必须从资源表还原图片 payload（合并 IndexedDB 与 desktop 镜像）。');
 assert(dbService.includes('saveHasEmbeddedAssetPayload(saveForAssets)'), '读到旧存档时必须检测内嵌图片 payload。');
 assert(dbService.includes('migrateLoadedSaveAssets(db, saveForAssets)'), '读到旧存档后必须惰性迁移图片资源，避免旧档一直巨大。');
 assert(dbService.includes('loadSaveAssetRecords(db, assetIds)'), '读档时必须按 assetId 批量读取资源表。');
@@ -49,7 +49,7 @@ assert(app.includes('<LeftPanel') && app.includes('album={state.相册}'), 'App 
 assert(app.includes('<TravelerProfileModal') && app.includes('album={state.相册}'), 'App 必须把相册传给旅人档案弹窗。');
 assert(app.includes('<CompanionPanel') && app.includes('album={ctx.album}'), 'App 必须把相册传给伙伴面板。');
 
-assert(turnItem.includes('return <UserTurnBubble content={message.content} traveler={traveler} album={album}'), '玩家气泡必须接收相册。');
+assert(turnItem.includes('<UserTurnBubble content={message.content} traveler={traveler} album={album}'), '玩家气泡必须接收相册。');
 assert(turnItem.includes('解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim())'), '玩家气泡头像必须解析 asset 引用。');
 assert(turnItem.includes('<BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} album={album}'), '主剧情正文必须把相册传给 BodyBlock。');
 assert(turnItem.includes('<BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} album={album}'), '命途狭间正文必须把相册传给 BodyBlock。');

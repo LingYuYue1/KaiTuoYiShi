@@ -4,6 +4,7 @@ import {
   backupCurrentSavesToDesktop,
   cleanupUnreferencedDesktopAssets,
   deleteSave,
+  deleteSaveTree,
   exportSavePackage,
   exportSaveTreePackage,
   getSaveList,
@@ -19,6 +20,7 @@ import {
   summarizeDesktopAssets,
   type SaveListItemSummary,
 } from '@/services/dbService';
+import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
 import {
   checkForDesktopUpdate,
   downloadAndInstallDesktopUpdate,
@@ -88,6 +90,8 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deletingRootId, setDeletingRootId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [filter, setFilter] = useState<Filter>('manual');
   const [loadError, setLoadError] = useState('');
@@ -240,15 +244,20 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     }
   };
 
-  const grouped = useMemo(() => {
-    const manual = saves.filter((s) => s.type === 'manual');
-    const auto = saves.filter((s) => s.type === 'auto');
-    const protectedItems = saves.filter((s) => s.type === 'backup' || s.type === 'imported');
-    return { manual, auto, protectedItems };
-  }, [saves]);
-  const allVisibleSaves = useMemo(() => saves.filter((s) => s.type !== 'auto'), [saves]);
+  const visibleSaves = useMemo(
+    () => saves.filter((save) => save.id !== deletingId && save.saveTree?.rootId !== deletingRootId),
+    [deletingId, deletingRootId, saves],
+  );
 
-  const allTreeGroups = useMemo(() => buildSaveTreeGroups(saves), [saves]);
+  const grouped = useMemo(() => {
+    const manual = visibleSaves.filter((s) => s.type === 'manual');
+    const auto = visibleSaves.filter((s) => s.type === 'auto');
+    const protectedItems = visibleSaves.filter((s) => s.type === 'backup' || s.type === 'imported');
+    return { manual, auto, protectedItems };
+  }, [visibleSaves]);
+  const allVisibleSaves = useMemo(() => visibleSaves.filter((s) => s.type !== 'auto'), [visibleSaves]);
+
+  const allTreeGroups = useMemo(() => buildSaveTreeGroups(visibleSaves), [visibleSaves]);
   const visibleTreeGroups = useMemo(
     () => allTreeGroups
       .map((group) => buildVisibleSaveTreeGroup(group, filter))
@@ -328,9 +337,39 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    await deleteSave(id);
-    await refresh();
-    await refreshDesktopMirrorCount();
+    const target = saves.find((save) => save.id === id)?.saveTree;
+    setDeletingId(id);
+    setSaves((prev) => prev.filter((save) => save.id !== id));
+    try {
+      await deleteSave(id);
+      clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
+      setDeletingId(null);
+      void refresh();
+      void refreshDesktopMirrorCount();
+    } catch (err) {
+      console.error('[storage-manager] delete failed', err);
+      alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
+      await refresh();
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteTree = async (rootId: string, nodeCount: number) => {
+    if (!confirm(`确定删除这整棵存档树？将删除 ${nodeCount} 个节点，此操作不可恢复。`)) return;
+    setDeletingRootId(rootId);
+    setSaves((prev) => prev.filter((save) => save.saveTree?.rootId !== rootId));
+    try {
+      await deleteSaveTree(rootId);
+      clearActiveSaveTreeMetaIfMatches({ rootId });
+      setDeletingRootId(null);
+      void refresh();
+      void refreshDesktopMirrorCount();
+    } catch (err) {
+      console.error('[storage-manager] delete tree failed', err);
+      alert(`删除整树失败：${err instanceof Error ? err.message : '存档树删除过程异常'}`);
+      await refresh();
+      setDeletingRootId(null);
+    }
   };
 
   const handleExport = async (id: number) => {
@@ -960,10 +999,13 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
                 key={selectedTree.rootId}
                 group={selectedTree}
                 loadingId={loadingId}
+                deletingId={deletingId}
+                deletingRootId={deletingRootId}
                 onLoad={handleLoad}
                 onExport={handleExport}
                 onExportTree={handleExportTree}
                 onDelete={handleDelete}
+                onDeleteTree={handleDeleteTree}
               />
             )}
           </div>
@@ -976,17 +1018,23 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
 function StorageSaveTreeGroup({
   group,
   loadingId,
+  deletingId,
+  deletingRootId,
   onLoad,
   onExport,
   onExportTree,
   onDelete,
+  onDeleteTree,
 }: {
   group: SaveTreeDisplayGroup;
   loadingId: number | null;
+  deletingId: number | null;
+  deletingRootId: string | null;
   onLoad: (id: number) => void;
   onExport: (id: number) => void;
   onExportTree: (rootId: string) => void;
   onDelete: (id: number) => void;
+  onDeleteTree: (rootId: string, nodeCount: number) => void;
 }) {
   return (
     <section
@@ -1019,19 +1067,35 @@ function StorageSaveTreeGroup({
         <div className="text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.82)' }}>
           第 {group.latestSave.turnCount} 回合
         </div>
-        <button
-          type="button"
-          disabled={loadingId !== null}
-          onClick={() => onExportTree(group.rootId)}
-          className="px-2.5 py-1 font-serif text-[11px] tracking-[0.14em] transition-all hover:opacity-90 disabled:opacity-50"
-          style={{
-            color: 'rgba(var(--tj-tech-cyan), 0.92)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28)',
-            clipPath: smallClip,
-          }}
-        >
-          导出整树
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={loadingId !== null || deletingRootId !== null || deletingId !== null}
+            onClick={() => onExportTree(group.rootId)}
+            className="px-2.5 py-1 font-serif text-[11px] tracking-[0.14em] transition-all hover:opacity-90 disabled:opacity-50"
+            style={{
+              color: 'rgba(var(--tj-tech-cyan), 0.92)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28)',
+              clipPath: smallClip,
+            }}
+          >
+            导出整树
+          </button>
+          <button
+            type="button"
+            disabled={loadingId !== null || deletingRootId !== null || deletingId !== null}
+            onClick={() => onDeleteTree(group.rootId, group.nodeCount)}
+            className="px-2.5 py-1 font-serif text-[11px] tracking-[0.14em] transition-all hover:opacity-90 disabled:opacity-50"
+            style={{
+              color: 'rgba(var(--tj-danger), 0.92)',
+              background: 'rgba(var(--tj-danger), 0.07)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.28)',
+              clipPath: smallClip,
+            }}
+          >
+            {deletingRootId === group.rootId ? '删除中' : '删除整树'}
+          </button>
+        </div>
       </div>
       <div className="relative space-y-2 pl-5">
         <span
@@ -1056,6 +1120,7 @@ function StorageSaveTreeGroup({
               <SaveCard
                 save={node.save}
                 loadingId={loadingId}
+                deletingId={deletingId}
                 onLoad={onLoad}
                 onExport={onExport}
                 onDelete={onDelete}
@@ -2202,6 +2267,7 @@ function PathLine({ label, value }: { label: string; value: string }) {
 function SaveCard({
   save,
   loadingId,
+  deletingId,
   onLoad,
   onExport,
   onDelete,
@@ -2210,6 +2276,7 @@ function SaveCard({
 }: {
   save: SaveListItemSummary;
   loadingId: number | null;
+  deletingId: number | null;
   onLoad: (id: number) => void;
   onExport: (id: number) => void;
   onDelete: (id: number) => void;
@@ -2280,11 +2347,11 @@ function SaveCard({
         )}
       </div>
       <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:items-center">
-        <ActionButton label={loadingId === save.id ? '读取中' : '读取'} disabled={loadingId !== null} onClick={() => onLoad(save.id)} />
-        <ActionButton label="导出" disabled={loadingId !== null} onClick={() => onExport(save.id)} />
+        <ActionButton label={loadingId === save.id ? '读取中' : '读取'} disabled={loadingId !== null || deletingId !== null} onClick={() => onLoad(save.id)} />
+        <ActionButton label="导出" disabled={loadingId !== null || deletingId !== null} onClick={() => onExport(save.id)} />
         <button
           type="button"
-          disabled={loadingId !== null}
+          disabled={loadingId !== null || deletingId !== null}
           onClick={() => onDelete(save.id)}
           className="w-full cursor-pointer px-3 py-2 text-[12px] font-serif tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           style={{
@@ -2293,7 +2360,7 @@ function SaveCard({
             clipPath: smallClip,
           }}
         >
-          删除
+          {deletingId === save.id ? '删除中' : '删除'}
         </button>
       </div>
     </div>

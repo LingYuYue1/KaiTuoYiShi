@@ -32,7 +32,11 @@ export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrati
   const parsed = message.parsedResponse;
 
   if (isUser) {
-    return <UserTurnBubble content={message.content} traveler={traveler} album={album} fontSize={visualTextSettings?.playerFontSize ?? 14} />;
+    return (
+      <div className="mb-4 animate-slide-up">
+        <UserTurnBubble content={message.content} traveler={traveler} album={album} fontSize={visualTextSettings?.playerFontSize ?? 14} />
+      </div>
+    );
   }
 
   return (
@@ -81,7 +85,7 @@ function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: 
             className="absolute top-3 -right-1.5 h-3 w-3 rotate-45"
             style={{
               background: bubbleBg,
-              boxShadow: '1px -1px 0 0 rgba(var(--tj-accent-primary), 0.46)',
+              boxShadow: '1px -1px 0 0 rgba(var(--tj-btn-primary-start), 0.46)',
             }}
           />
           <div
@@ -90,7 +94,7 @@ function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: 
               background: bubbleBg,
               color: 'rgba(var(--tj-chat-text), 0.98)',
               clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px rgba(var(--tj-accent-primary), 0.08)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.46), 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px rgba(var(--tj-btn-primary-start), 0.08)',
               fontWeight: 600,
               fontSize: `${fontSize}px`,
               lineHeight: 1.8,
@@ -114,9 +118,9 @@ function UserAvatarTile({ name, url }: { name: string; url?: string }) {
         style={{
           background: url
             ? 'rgba(var(--tj-surface-strong), 0.72)'
-            : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.22), rgba(var(--tj-chat-bubble), 0.92))',
+            : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.22), rgba(var(--tj-chat-bubble), 0.92))',
           boxShadow:
-            '0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 14px rgba(var(--tj-accent-primary), 0.24), 0 8px 16px rgba(var(--tj-shadow), 0.16), inset 0 0 0 1px rgba(var(--tj-text-primary), 0.18)',
+            '0 0 0 1px rgba(var(--tj-btn-primary-start), 0.58), 0 0 14px rgba(var(--tj-btn-primary-start), 0.24), 0 8px 16px rgba(var(--tj-shadow), 0.16), inset 0 0 0 1px rgba(var(--tj-text-primary), 0.18)',
         }}
       >
         {url ? (
@@ -134,11 +138,11 @@ function UserAvatarTile({ name, url }: { name: string; url?: string }) {
         className="max-w-[78px] px-2 py-0.5 text-center"
         style={{
           background: 'rgba(var(--tj-chat-bubble), 0.88)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52), 0 0 10px rgba(var(--tj-accent-primary), 0.12)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.52), 0 0 10px rgba(var(--tj-btn-primary-start), 0.12)',
           clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
         }}
       >
-        <span className="block truncate font-serif text-[11px] font-semibold tracking-[0.1em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.98)' }}>
+        <span className="block truncate font-serif text-[11px] font-semibold tracking-[0.1em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.98)' }}>
           {name}
         </span>
       </div>
@@ -169,6 +173,11 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
   const toggle = (key: ToolKey) => {
     setOpenTool((cur) => (cur === key ? null : key));
     if (key === 'edit') setDraft(parsed.body);
+  };
+
+  const handleEditSave = () => {
+    if (onEditBody) onEditBody(message.id, draft);
+    setOpenTool(null);
   };
 
   // 命途狭间消息识别:出题回合 awakenQuestions 非空,评判回合 awakenJudgement 非空。
@@ -250,8 +259,8 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
         <div
           className="mb-2 animate-fade-in"
           style={{
-            background: 'rgba(var(--tj-accent-primary), 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+            background: 'rgba(var(--tj-btn-primary-start), 0.04)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.28)',
             clipPath:
               'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
           }}
@@ -260,10 +269,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
             <EditBodyPanel
               draft={draft}
               setDraft={setDraft}
-              onSave={() => {
-                if (onEditBody) onEditBody(message.id, draft);
-                setOpenTool(null);
-              }}
+              onSave={handleEditSave}
               onCancel={() => {
                 setDraft(parsed.body);
                 setOpenTool(null);
@@ -303,13 +309,13 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
             visualTextSettings={visualTextSettings}
           />
         ) : (
-      <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={previousUserInput} visualTextSettings={visualTextSettings} />
+          <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={previousUserInput} visualTextSettings={visualTextSettings} />
         )}
 
         {isStreaming && (
           <span
             className="inline-block w-1.5 h-4 ml-1 animate-pulse-soft"
-            style={{ background: 'rgb(var(--tj-accent-primary))', boxShadow: '0 0 6px rgba(var(--tj-accent-primary), 0.6)' }}
+            style={{ background: 'rgb(var(--tj-btn-primary-start))', boxShadow: '0 0 6px rgba(var(--tj-btn-primary-start), 0.6)' }}
           />
         )}
       </div>
@@ -347,7 +353,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
         <span>
           {message.responseDurationSec != null ? (
             <>
-              <span style={{ color: 'rgba(var(--tj-accent-primary), 0.5)' }}>◆</span>
+              <span style={{ color: 'rgba(var(--tj-btn-primary-start), 0.5)' }}>◆</span>
               <span className="ml-1.5">{message.responseDurationSec}s</span>
             </>
           ) : (
@@ -356,7 +362,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
         </span>
         <span>
           <span className="mr-1.5">{[...parsed.body].length} 字</span>
-          <span style={{ color: 'rgba(var(--tj-accent-primary), 0.5)' }}>◆</span>
+          <span style={{ color: 'rgba(var(--tj-btn-primary-start), 0.5)' }}>◆</span>
         </span>
       </div>
     </div>
@@ -371,19 +377,19 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
       style={{
         // 暗紫红 + 微金,呼应虚境质感;主剧情是赤金,这里偏冷一点便于一眼区分
         background:
-          'linear-gradient(135deg, rgba(var(--tj-panel-bg-start),0.55) 0%, rgba(var(--tj-panel-bg-end),0.55) 60%, rgba(var(--tj-accent-secondary),0.55) 100%)',
+          'linear-gradient(135deg, rgba(var(--tj-panel-bg-start),0.55) 0%, rgba(var(--tj-panel-bg-end),0.55) 60%, rgba(var(--tj-btn-primary-end),0.55) 100%)',
         boxShadow:
-          'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.35), 0 0 26px rgba(var(--tj-accent-primary-deep),0.18)',
+          'inset 0 0 0 1px rgba(var(--tj-btn-primary-end),0.35), 0 0 26px rgba(var(--tj-accent-primary-deep),0.18)',
         clipPath:
           'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
       }}
     >
       <div
         className="mb-2 flex items-center justify-between text-[11px] font-serif tracking-[0.4em]"
-        style={{ color: 'rgba(var(--tj-accent-primary),0.85)' }}
+        style={{ color: 'rgba(var(--tj-btn-primary-start),0.85)' }}
       >
         <span>◇ 命 途 狭 间 · {awakeningKind}</span>
-        <span style={{ color: 'rgba(var(--tj-accent-secondary),0.6)' }}>虚 境 之 问</span>
+        <span style={{ color: 'rgba(var(--tj-btn-primary-end),0.6)' }}>虚 境 之 问</span>
       </div>
       {card}
     </div>
@@ -517,14 +523,14 @@ function AwakeningQuestionsBlock({ raw }: { raw: string }) {
       className="mt-2 p-3"
       style={{
         background: 'rgba(var(--tj-panel-bg-end),0.55)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.28)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end),0.28)',
         clipPath:
           'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
       }}
     >
       <div
         className="mb-2 text-[11px] tracking-[0.32em]"
-        style={{ color: 'rgba(var(--tj-accent-primary),0.85)' }}
+        style={{ color: 'rgba(var(--tj-btn-primary-start),0.85)' }}
       >
         ◆ 三 问 · {pathName || '命途意志'}
       </div>
@@ -533,7 +539,7 @@ function AwakeningQuestionsBlock({ raw }: { raw: string }) {
           <div key={i} className="flex gap-2 text-sm leading-relaxed">
             <span
               className="shrink-0 font-serif tracking-wider"
-              style={{ color: 'rgba(var(--tj-accent-primary),0.85)' }}
+              style={{ color: 'rgba(var(--tj-btn-primary-start),0.85)' }}
             >
               {q.label}
             </span>
@@ -543,7 +549,7 @@ function AwakeningQuestionsBlock({ raw }: { raw: string }) {
       </div>
       <div
         className="mt-2 text-[11px] leading-relaxed"
-        style={{ color: 'rgba(var(--tj-accent-secondary),0.7)' }}
+        style={{ color: 'rgba(var(--tj-btn-primary-end),0.7)' }}
       >
         在下方输入框中回答这三问,命途意志将据此评判你是否能跨入下一阶。
       </div>
@@ -558,9 +564,9 @@ function AwakeningJudgementBadge({ judgement }: { judgement: string }) {
 
   let label = j;
   let color = 'rgba(var(--tj-text-primary),0.95)';
-  let glow = 'rgba(var(--tj-accent-secondary),0.4)';
+  let glow = 'rgba(var(--tj-btn-primary-end),0.4)';
   let bg = 'rgba(var(--tj-panel-bg-start),0.55)';
-  let stroke = 'rgba(var(--tj-accent-secondary),0.45)';
+  let stroke = 'rgba(var(--tj-btn-primary-end),0.45)';
 
   if (isPromote) {
     label = '升 阶';
@@ -618,18 +624,18 @@ function AwakeningOracleBlock({
         background:
           'linear-gradient(180deg, rgba(var(--tj-panel-bg-end),0.45) 0%, rgba(var(--tj-panel-bg-start),0.45) 100%)',
         boxShadow:
-          'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.22), inset 0 0 32px rgba(var(--tj-accent-primary-deep),0.08)',
+          'inset 0 0 0 1px rgba(var(--tj-btn-primary-end),0.22), inset 0 0 32px rgba(var(--tj-accent-primary-deep),0.08)',
         clipPath:
           'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
     >
       <div
         className="mb-2 flex items-center justify-between text-[11px] tracking-[0.32em]"
-        style={{ color: 'rgba(var(--tj-accent-primary),0.8)' }}
+        style={{ color: 'rgba(var(--tj-btn-primary-start),0.8)' }}
       >
         <span>◆ 命途意志 · {subtitle}</span>
         {pathName && (
-          <span style={{ color: 'rgba(var(--tj-accent-secondary),0.6)' }}>{pathName}</span>
+          <span style={{ color: 'rgba(var(--tj-btn-primary-end),0.6)' }}>{pathName}</span>
         )}
       </div>
       <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} visualTextSettings={visualTextSettings} />
@@ -649,7 +655,7 @@ function AwakeningAftermathLine({
     <div className="mt-2 flex items-center justify-center px-3">
       <div
         className="font-serif text-[13px] leading-relaxed tracking-[0.12em] text-center"
-        style={{ color: 'rgba(var(--tj-text-primary),0.95)', textShadow: '0 0 18px rgba(var(--tj-accent-primary), 0.45)' }}
+        style={{ color: 'rgba(var(--tj-text-primary),0.95)', textShadow: '0 0 18px rgba(var(--tj-btn-primary-start), 0.45)' }}
       >
         你感觉到自己在「{label}」的路上,行进得更远了。
       </div>
@@ -678,16 +684,16 @@ function ToolButton({
       className="flex items-center gap-1.5 px-2.5 py-1 font-serif text-[11px] tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
         color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.85)',
-        background: active ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.04)',
+        background: active ? 'rgba(var(--tj-btn-primary-start), 0.14)' : 'rgba(var(--tj-btn-primary-start), 0.04)',
         boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.55)'
+          : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
         clipPath:
           'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
       }}
       title={label}
     >
-      <span className="text-xs" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary), 0.65)' }}>
+      <span className="text-xs" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-btn-primary-start), 0.65)' }}>
         {glyph}
       </span>
       <span>{label}</span>
@@ -702,8 +708,8 @@ function TurnBadge({ value }: { value: string }) {
       style={{
         color: 'rgb(var(--tj-accent-primary))',
         background:
-          'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-secondary), 0.08))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
+          'linear-gradient(180deg, rgba(var(--tj-btn-primary-start), 0.18), rgba(var(--tj-btn-primary-end), 0.08))',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.55)',
         clipPath:
           'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
       }}
@@ -718,7 +724,7 @@ function PanelText({ content, label }: { content: string; label: string }) {
     <div className="px-4 py-3">
       <div
         className="mb-1.5 font-serif text-[11px] tracking-[0.3em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
+        style={{ color: 'rgba(var(--tj-btn-primary-start), 0.7)' }}
       >
         ◆ {label}
       </div>
@@ -771,7 +777,7 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
         <div className="flex items-start gap-2">
           <span className="mt-0.5 font-serif text-[15px]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>◷</span>
           <div>
-            <div className="font-serif text-[13px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.95)' }}>
+            <div className="font-serif text-[13px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.95)' }}>
               第 {turn} 回合
             </div>
             <div className="mt-0.5 text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
@@ -804,7 +810,7 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
             </div>
             <div>
               <span style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>耗时</span>
-              <span className="ml-2 font-mono" style={{ color: 'rgba(var(--tj-accent-primary),0.9)' }}>
+              <span className="ml-2 font-mono" style={{ color: 'rgba(var(--tj-btn-primary-start),0.9)' }}>
                 {message.responseDurationSec != null ? `${message.responseDurationSec.toFixed(1)} 秒` : '未记录'}
               </span>
             </div>
@@ -836,11 +842,11 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
               className="mt-2 px-2 py-1.5 text-[11px] leading-relaxed"
               style={{
                 color: 'rgba(var(--tj-text-primary),0.86)',
-                background: 'rgba(var(--tj-accent-primary),0.08)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)',
+                background: 'rgba(var(--tj-btn-primary-start),0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.22)',
               }}
             >
-              <span style={{ color: 'rgba(var(--tj-accent-primary),0.92)' }}>缓存优化：</span>{cacheOptimizationHint}
+              <span style={{ color: 'rgba(var(--tj-btn-primary-start),0.92)' }}>缓存优化：</span>{cacheOptimizationHint}
             </div>
           )}
           {cachePrefixDiagnostics && (
@@ -866,13 +872,13 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
             </div>
           )}
           <div className="mt-2 grid gap-1.5 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
-            <div><span style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>模型：</span>{usage?.provider ?? '未记录'} / {usage?.model ?? '未记录'}</div>
-            <div><span style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>Usage格式：</span>{usageFormat} · {usagePath}</div>
-            <div><span style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>原始字段：</span>{rawUsageKeys || '未记录'}</div>
+            <div><span style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>模型：</span>{usage?.provider ?? '未记录'} / {usage?.model ?? '未记录'}</div>
+            <div><span style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>Usage格式：</span>{usageFormat} · {usagePath}</div>
+            <div><span style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>原始字段：</span>{rawUsageKeys || '未记录'}</div>
           </div>
           {usage?.rawUsage != null && (
             <details className="mt-2">
-              <summary className="cursor-pointer text-[11px]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>
+              <summary className="cursor-pointer text-[11px]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>
                 原始 usage 字段
               </summary>
               <pre
@@ -927,14 +933,14 @@ function UsageSection({ title, highlighted = false, children }: { title: string;
     <section
       className="px-3 py-2.5"
       style={{
-        background: highlighted ? 'rgba(var(--tj-accent-primary),0.08)' : 'rgba(var(--tj-bg-primary),0.22)',
+        background: highlighted ? 'rgba(var(--tj-btn-primary-start),0.08)' : 'rgba(var(--tj-bg-primary),0.22)',
         boxShadow: highlighted
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.34)'
+          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.34)'
           : 'inset 0 0 0 1px rgba(var(--tj-border),0.28)',
         clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
     >
-      <div className="mb-2 font-serif text-[10px] uppercase tracking-[0.28em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>
+      <div className="mb-2 font-serif text-[10px] uppercase tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>
         {title}
       </div>
       {children}
@@ -944,8 +950,8 @@ function UsageSection({ title, highlighted = false, children }: { title: string;
 
 function UsageMetric({ label, value, tone }: { label: string; value: string; tone: 'neutral' | 'primary' | 'gold' | 'green' | 'red' }) {
   const color =
-    tone === 'primary' ? 'rgba(var(--tj-accent-primary),0.95)'
-      : tone === 'gold' ? 'rgba(var(--tj-accent-primary),0.95)'
+    tone === 'primary' ? 'rgba(var(--tj-btn-primary-start),0.95)'
+      : tone === 'gold' ? 'rgba(var(--tj-btn-primary-start),0.95)'
       : tone === 'green' ? 'rgba(var(--tj-ui-success),0.95)'
       : tone === 'red' ? 'rgba(var(--tj-danger),0.95)'
       : 'rgba(var(--tj-text-primary),0.92)';
@@ -997,7 +1003,7 @@ function EditBodyPanel({
     <div className="px-4 py-3">
       <div
         className="mb-1.5 font-serif text-[11px] tracking-[0.3em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
+        style={{ color: 'rgba(var(--tj-btn-primary-start), 0.7)' }}
       >
         ◆ 修改正文
       </div>
@@ -1018,8 +1024,8 @@ function EditBodyPanel({
           className="px-4 py-1.5 font-serif text-xs tracking-[0.25em] transition-all hover:opacity-90"
           style={{
             color: 'rgba(var(--tj-text-primary), 0.9)',
-            background: 'rgba(var(--tj-accent-primary), 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+            background: 'rgba(var(--tj-btn-primary-start), 0.04)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.25)',
             clipPath:
               'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
           }}
@@ -1032,7 +1038,7 @@ function EditBodyPanel({
           className="px-4 py-1.5 font-serif text-xs tracking-[0.25em] transition-all hover:opacity-90"
           style={{
             color: 'rgb(var(--tj-on-accent))',
-            background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-secondary), 0.95))',
+            background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.95))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
             clipPath:
               'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
@@ -1072,8 +1078,8 @@ function NarrativeImageCard({
       <div
         className="flex items-center gap-2 px-3 py-2 text-xs"
         style={{
-          background: 'rgba(var(--tj-accent-primary), 0.06)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          background: 'rgba(var(--tj-btn-primary-start), 0.06)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.2)',
           color: 'rgba(var(--tj-text-secondary), 0.8)',
         }}
       >
@@ -1106,9 +1112,9 @@ function NarrativeImageCard({
             onClick={handleRegenerate}
             className="shrink-0 px-2 py-1 font-serif text-[11px] tracking-[0.12em] transition-all hover:opacity-85"
             style={{
-              color: 'rgba(var(--tj-accent-primary),0.95)',
-              background: 'rgba(var(--tj-accent-primary),0.06)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)',
+              color: 'rgba(var(--tj-btn-primary-start),0.95)',
+              background: 'rgba(var(--tj-btn-primary-start),0.06)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)',
               clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
             }}
           >
@@ -1122,8 +1128,8 @@ function NarrativeImageCard({
   return (
     <div
       style={{
-        background: 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+        background: 'rgba(var(--tj-btn-primary-start), 0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.2)',
       }}
     >
       {/* 标题栏：点击折叠/展开 */}
@@ -1151,9 +1157,9 @@ function NarrativeImageCard({
             }}
             className="px-2 py-1 font-serif text-[11px] tracking-[0.12em] transition-all hover:opacity-85"
             style={{
-              color: 'rgba(var(--tj-accent-primary),0.95)',
-              background: 'rgba(var(--tj-accent-primary),0.06)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
+              color: 'rgba(var(--tj-btn-primary-start),0.95)',
+              background: 'rgba(var(--tj-btn-primary-start),0.06)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24)',
               clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
             }}
           >
@@ -1199,8 +1205,8 @@ function NarrativeImageManualCard({
   return (
     <div
       style={{
-        background: 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        background: 'rgba(var(--tj-btn-primary-start), 0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
         clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
       }}
     >

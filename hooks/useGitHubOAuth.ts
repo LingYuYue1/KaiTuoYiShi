@@ -41,7 +41,7 @@ export function useGitHubOAuth(): GitHubOAuthResult {
       const configRes = await fetch('/api/auth/github-config');
       const config = await configRes.json() as GitHubOAuthConfigResponse;
       if (!configRes.ok || !config.clientId) {
-        throw new Error(config.error || 'GitHub OAuth Client ID 未配置。');
+        throw new Error(formatGitHubOAuthConfigError(config.error));
       }
 
       const state = createOAuthState();
@@ -124,6 +124,13 @@ export function useGitHubOAuth(): GitHubOAuthResult {
     startGitHubOAuth,
     consumeGitHubOAuthCallback,
   };
+}
+
+function formatGitHubOAuthConfigError(error?: string): string {
+  if (error?.includes('GITHUB_CLIENT_ID')) {
+    return 'GitHub 云存档 OAuth 未完成部署配置：Cloudflare Pages 环境变量缺少 GITHUB_CLIENT_ID。请站点部署者在 Cloudflare 项目中配置 GitHub OAuth App 的 Client ID。';
+  }
+  return error || 'GitHub OAuth Client ID 未配置。';
 }
 
 function createOAuthState(): string {

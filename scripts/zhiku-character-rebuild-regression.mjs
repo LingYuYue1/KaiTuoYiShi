@@ -1974,13 +1974,19 @@ assert(
   'zhiku model retrieval must preserve keyword recall instead of dropping all zhiku injection when the model returns no valid supplement indexes.',
 );
 assert(
+    model.includes('角色故事摘要?: string') &&
     retrieval.includes('formatCharacterZhikuInjectionEntry') &&
+    retrieval.includes('formatCharacterStorySummarySection(entry)') &&
     retrieval.includes("formatCharacterSourceSection(entry.原文, '语料层', 3600)") &&
+    retrieval.includes("formatCharacterSourceSection(entry.原文, '表现锚点层', 1800)") &&
     retrieval.includes('主剧情必须读取语料层作为口吻参考') &&
+    retrieval.includes('角色故事层优先读取预整理摘要') &&
     retrieval.includes('不得整句复读') &&
     retrieval.includes('extractMarkdownSection') &&
-    retrieval.includes('compactSectionText'),
-  'character zhiku entries must inject corpus, story rules, gates, and profile layers directly instead of relying on NPC performance cards or only a summary slice.',
+    retrieval.includes('compactSectionText') &&
+    !retrieval.includes("formatCharacterSourceSection(entry.原文, '角色故事层', 2600)") &&
+    !retrieval.includes("formatCharacterSourceSection(entry.原文, /^历史故事与.+层$/u, 2600)"),
+  'character zhiku entries must keep corpus/profile layers while replacing long story/history story injection with curated character story summary.',
 );
 assert(
   mainCot.includes('不使用“本回合 NPC 表演卡”摘要层') &&

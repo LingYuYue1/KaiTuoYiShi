@@ -8,6 +8,7 @@ import type { 智库软结构标签 } from '@/models/zhiku';
 import { 解析智库软结构标签, 获取智库人物名, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
 import { ZHIKU_COT_PROMPT as ZHIKU_LEGACY_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
 import type { 提示词模块 } from '@/models/prompts';
+import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 
 
 export interface 智库检索结果 {
@@ -39,6 +40,7 @@ export interface 智库召回诊断 {
   强相关资料: string[];
   弱相关资料: string[];
   已注入资料: string[];
+  角色故事层注入: string[];
   被门禁过滤: Array<{ 标题: string; 原因: string }>;
   检查项: string[];
 }
@@ -596,6 +598,7 @@ export async function retrieveZhikuContextWithModel(
         强相关资料: finalGroups.strongEntries.map((entry) => entry.标题),
         弱相关资料: finalGroups.weakEntries.map((entry) => entry.标题),
         已注入资料: finalPicked.map((entry) => entry.标题),
+        角色故事层注入: finalGroups.characterEntries.map(formatCharacterStoryInjectionDiagnostic),
         检查项: [
           ...keywordDiagnostics.检查项,
           `智库模型已按最近多回合正文窗口查缺补漏，仅追加 ${appliedSupplementEntries.length} 条未由关键词命中的资料；关键词召回结果已保底保留。`,
@@ -624,11 +627,7 @@ export function buildZhikuModelSystemPrompt(sceneHints: string[] = [], promptMod
 
 function buildZhikuPromptModulesSection(promptModules?: 提示词模块[]): string {
   if (!promptModules || promptModules.length === 0) return '';
-  const filtered = promptModules
-    .filter((m) => m.enabled && m.scope?.includes('calibration'))
-    .sort((a, b) => a.order - b.order);
-  if (filtered.length === 0) return '';
-  return filtered.map((m) => m.content).join('\n\n');
+  return buildIndependentPromptModulesSection(promptModules, 'zhiku');
 }
 
 export function buildZhikuModelUserPrompt(query: string, limit: number, candidateText: string, options: 智库模型用户提示词选项 = {}): string {
@@ -763,6 +762,9 @@ function buildZhikuDiagnostics(input: {
     input.groups.characterEntries.length
       ? `最终注入角色资料已按资料 ID 去重：${input.groups.characterEntries.map((entry) => entry.标题).join('、')}。`
       : '最终没有注入角色资料。',
+    input.groups.characterEntries.length
+      ? `角色故事层来源：${input.groups.characterEntries.map(formatCharacterStoryInjectionDiagnostic).join('；')}。`
+      : '角色故事层来源：无。',
     blocked.length
       ? `门禁过滤 ${blocked.length} 条候选资料。`
       : '本次候选没有被主剧情门禁过滤的高风险资料。',
@@ -785,6 +787,7 @@ function buildZhikuDiagnostics(input: {
     强相关资料: input.groups.strongEntries.map((entry) => entry.标题).slice(0, input.limit),
     弱相关资料: input.groups.weakEntries.map((entry) => entry.标题).slice(0, input.limit),
     已注入资料: mergeZhikuGroups(input.groups).map((entry) => entry.标题),
+    角色故事层注入: input.groups.characterEntries.map(formatCharacterStoryInjectionDiagnostic),
     被门禁过滤: blocked,
     检查项: checks,
   };
@@ -809,6 +812,7 @@ function buildEmptyZhikuDiagnostics(): 智库召回诊断 {
     强相关资料: [],
     弱相关资料: [],
     已注入资料: [],
+    角色故事层注入: [],
     被门禁过滤: [],
     检查项: ['智库未启用、无资料或本回合没有可检索输入。'],
   };
@@ -931,25 +935,49 @@ function formatCharacterZhikuInjectionEntry(entry: 智库条目, index: number):
   const title = entry.标题 || `第 ${index + 1} 条人物资料`;
   const keywords = entry.关键词.length ? `关键词：${entry.关键词.slice(0, 10).join('、')}` : '';
   const source = entry.来源 ? `来源：${entry.来源}` : '';
+  const storySummarySection = formatCharacterStorySummarySection(entry);
   const sections = [
     formatCharacterSourceSection(entry.原文, '基础识别', 1400),
     formatCharacterSourceSection(entry.原文, '常驻事实层', 1800),
-    formatCharacterSourceSection(entry.原文, '角色故事层', 2600),
+    storySummarySection,
     formatCharacterSourceSection(entry.原文, '表现锚点层', 1800),
     formatCharacterSourceSection(entry.原文, '语料层', 3600),
     formatCharacterSourceSection(entry.原文, '能力与职责模块', 1800),
-    formatCharacterSourceSection(entry.原文, /^历史故事与.+层$/u, 2600),
     formatCharacterSourceSection(entry.原文, '本回合注入建议', 1200),
   ].filter(Boolean);
   const fallback = entry.摘要 || entry.原文.slice(0, 600) || '无摘要';
   return [
     `${index + 1}. 【人物】${title}`,
     [source, keywords].filter(Boolean).join('；'),
-    '说明：这是被关键词召回或 AI 补充召回的人物档案。主剧情必须读取语料层作为口吻参考，但不得整句复读；阶段、门禁和未解锁内容只按当前剧情可用性使用。',
+    '说明：这是被关键词召回或 AI 补充召回的人物档案。主剧情必须读取语料层作为口吻参考，但不得整句复读；角色故事层优先读取预整理摘要，避免长篇经历复述；阶段、门禁和未解锁内容只按当前剧情可用性使用。',
     sections.length ? sections.join('\n\n') : `摘要：${fallback}${formatZhikuSoftMeta(entry)}`,
   ].filter(Boolean).join('\n');
 }
 
+function formatCharacterStoryInjectionDiagnostic(entry: 智库条目): string {
+  const title = entry.标题 || '未命名人物';
+  if (entry.角色故事摘要?.trim()) return `${title}：角色故事摘要`;
+  if (entry.摘要?.trim()) return `${title}：通用摘要兜底`;
+  if (extractMarkdownSection(entry.原文, '角色故事层') || extractMarkdownSection(entry.原文, /^历史故事与.+层$/u)) {
+    return `${title}：故事原文兜底`;
+  }
+  return `${title}：未注入故事层`;
+}
+
+function formatCharacterStorySummarySection(entry: 智库条目): string {
+  const curated = compactSectionText(entry.角色故事摘要 ?? '', 900);
+  if (curated) {
+    return `### 角色故事摘要\n${curated}\n（故事摘要由内置资料预整理，用于替代长篇角色故事层注入；不得把未解锁经历写成当前已发生事实。）`;
+  }
+  const summary = compactSectionText(entry.摘要 ?? '', 700);
+  if (summary) {
+    return `### 角色故事摘要（通用摘要兜底）\n${summary}\n（该角色尚未补齐专用角色故事摘要；只作为故事背景理解，不得扩写未解锁经历。）`;
+  }
+  const storySection = formatCharacterSourceSection(entry.原文, '角色故事层', 700)
+    || formatCharacterSourceSection(entry.原文, /^历史故事与.+层$/u, 700);
+  if (!storySection) return '';
+  return `${storySection}\n（该角色尚未补齐专用角色故事摘要；故事原文已按极小上限兜底截取。）`;
+}
 function formatCharacterSourceSection(source: string, heading: string | RegExp, limit: number): string {
   const section = extractMarkdownSection(source, heading);
   if (!section) return '';
@@ -1060,6 +1088,3 @@ function isStrongInjectionMatch(entry: 智库条目, query: string, sceneHints: 
   if (matched >= 2) return true;
   return sceneHints.length > 0 && sceneMatchesEntry(entry, sceneHints);
 }
-
-
-

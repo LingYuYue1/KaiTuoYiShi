@@ -64,6 +64,49 @@ function stripProtocolBlocksFromBody(body: string): string {
   return cleaned.trim();
 }
 
+function stripStSurfaceNoiseFromBody(body: string): string {
+  if (!body) return body;
+  let cleaned = body
+    .replace(/^\s*#{1,6}\s*(?:正文|故事正文|main\s*text|response)\s*$/gim, '')
+    .replace(/^\s*(?:正文|故事正文)\s*[:：]\s*$/gim, '')
+    .replace(/^\s*```(?:markdown|md|html|json|text)?\s*$/gim, '')
+    .replace(/^\s*```\s*$/gim, '');
+
+  const stHelperTags = [
+    'math',
+    'Q',
+    'WF',
+    'Prism',
+    'Prism_Deep',
+    'VariableCheck',
+    'current_event',
+    'progress',
+    'options',
+    'branches',
+    'snow',
+    'Shiosai',
+    'quote',
+    'meow_FM',
+    'konatan_planning~',
+    'konatan_chat',
+    'tucao',
+    'danmu',
+    'htmlcontent',
+    'guifan',
+    'disclaimer',
+    'details',
+  ].map(escapeRegExp).join('|');
+  cleaned = cleaned.replace(
+    new RegExp(`\\s*<\\s*(?:${stHelperTags})\\b[^>]*>[\\s\\S]*?<\\s*\\/\\s*(?:${stHelperTags})\\s*>`, 'gi'),
+    '',
+  );
+  cleaned = cleaned.replace(/\s*<!--\s*[\s\S]*?\s*-->/g, '');
+
+  return cleaned
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** 在 parseResponse 之前先跑一遍，修补常见的标签错误：
  *  - 同一标签开头被连写两次（`<正文><正文>` → `<正文>`）。
  *  - 段落末尾缺失闭合标签时，下一个开标签前补一个闭合标签。
@@ -252,7 +295,29 @@ export function parseResponse(rawText: string, options?: { repair?: boolean }): 
     result.actionOptions = parseActionOptionsBlock(result.actionOptions.join('\n'));
   }
 
-  result.body = stripProtocolBlocksFromBody(result.body);
+  result.body = stripStSurfaceNoiseFromBody(stripProtocolBlocksFromBody(result.body));
 
   return result;
+}
+
+/**
+ * 判断解析后的回复是否为"空响应"——body、thinking、所有协议标签全为空。
+ * 用于 sendWorkflow 的抗空回检测：
+ *  - 完全空（rawText 也空）→ 明显空响应
+ *  - 纯标签无正文（rawText 有内容但 body/thinking 都空）→ 模型只输出标签壳没输出实质内容
+ * 这两种情况都应触发自动重试。
+ */
+export function isEmptyResponse(parsed: 解析后回复): boolean {
+  const hasBody = Boolean(parsed.body?.trim());
+  const hasThinking = Boolean(parsed.thinking?.trim());
+  const hasMemory = Boolean(parsed.memory?.trim());
+  const hasWorldEvents = Array.isArray(parsed.worldEvents) && parsed.worldEvents.some((e) => e.trim());
+  const hasActionOptions = Array.isArray(parsed.actionOptions) && parsed.actionOptions.some((o) => o.trim());
+  const hasVariableDraft = Boolean(parsed.variableDraft?.trim());
+  const hasStoryPlan = Boolean(parsed.storyPlan?.trim());
+  const hasAwakenContent = Boolean(
+    parsed.awakenInvite?.trim() || parsed.awakenQuestions?.trim() || parsed.awakenJudgement?.trim(),
+  );
+  return !hasBody && !hasThinking && !hasMemory && !hasWorldEvents && !hasActionOptions
+    && !hasVariableDraft && !hasStoryPlan && !hasAwakenContent;
 }

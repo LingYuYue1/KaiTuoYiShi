@@ -41,7 +41,9 @@ import {
   归一化视觉文本设置,
 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
-import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID } from '@/models/prompts';
+import type { STPresetEntry } from '@/models/stTypes';
+import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID, getDefaultModuleFields } from '@/models/prompts';
+import { isSTImportedModule } from '@/utils/stPresetParser';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
@@ -83,15 +85,17 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
   const mergedBuiltins = builtins.map((b) => {
     const hit = saved.find((m) => m.id === b.id);
     if (hit) {
-      // 内置模块 content / title / description / scope / category 永远以源码为准(UI 上对内置为只读),
-      // 只保留用户可调的主剧情 enabled / order / 时间戳。否则 IndexedDB 里持久化的旧 content
-      // 会反向覆盖源码更新,导致改了源码但跑出旧 prompt。
+      // 内置模块 content / title / description / scope / category / order 永远以源码为准(UI 上对内置为只读),
+      // 只保留用户可调的主剧情 enabled / 时间戳。否则 IndexedDB 里持久化的旧 content / 旧 order
+      // 会反向覆盖源码更新,导致改了源码但跑出旧 prompt / 旧 order 区间。
       // calibration/独立模型模块只是服务层真实 prompt 的只读展示，不是 API 开关；旧存档里曾关闭也必须拉回展示状态。
+      //
+      // 方案 A 三层 order 区间迁移：旧存档 order 是 5-90 区间，新源码 order 是 5-1043（Tier 1: 1-99 / Tier 2: 100-999 ST / Tier 3: 1000+ 压轴）。
+      // 强制用 b.order（源码定义），旧存档自动迁移到新 order 区间。
       const isCalibrationBuiltin = b.scope?.includes('calibration');
       return {
         ...b,
         enabled: isCalibrationBuiltin ? true : hit.enabled,
-        order: hit.order,
         createdAt: hit.createdAt ?? b.createdAt,
         updatedAt: hit.updatedAt ?? b.updatedAt,
       };
@@ -115,10 +119,29 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
     return true;
   });
 
-  const hasLegacy = customs.some((m) => m.id === 'legacy_custom');
+  // 旧存档的自定义模块可能缺少 ST 预设兼容字段，用默认值兜底
+  // 方案 A 三层 order 区间迁移：ST 导入模块旧 order 是 50+，新区间是 100-999，需要 +50 偏移
+  const customsWithDefaults = customs.map((m) => {
+    const withDefaults = {
+      ...getDefaultModuleFields(),
+      source: 'user' as const,
+      replaceable: 'replaceable' as const,
+      ...m,
+    };
+    // ST 导入模块：旧 order < 100 时 +50 偏移，落入 Tier 2 区间（100-999）
+    if (isSTImportedModule(withDefaults) && withDefaults.order < 100) {
+      return { ...withDefaults, order: withDefaults.order + 50 };
+    }
+    return withDefaults;
+  });
+
+  const hasLegacy = customsWithDefaults.some((m) => m.id === 'legacy_custom');
   if (!hasLegacy && savedGame.customPrompt && savedGame.customPrompt.trim()) {
     const now = Date.now();
-    customs.push({
+    customsWithDefaults.push({
+      ...getDefaultModuleFields(),
+      source: 'user',
+      replaceable: 'replaceable',
       id: 'legacy_custom',
       title: '旧版自定义提示词',
       description: '自旧版「额外指示」迁移而来。可自由编辑或删除。',
@@ -133,7 +156,34 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
     });
   }
 
-  return [...mergedBuiltins, ...customs];
+  return [...mergedBuiltins, ...customsWithDefaults];
+}
+
+/** 方案 A 三层 order 区间迁移：把预设库里的 ST 模块 order 从 50+ 迁移到 100+。
+ *  - 旧版 ST 模块 order = 50 + array_index（与内置 CoT/worldbook 冲突）
+ *  - 新版 ST 模块 order = 100 + array_index（Tier 2 区间 100-999）
+ *  - order < 100 的 ST 模块 +50 偏移；order >= 100 的不动（已是新版或玩家手动调整过）
+ *  - 没有预设库或预设库为空时返回原值（保持字段缺省）
+ *
+ *  放在 useGameState.ts 与 migratePromptModules 并列，供初次 mount 加载路径和
+ *  saveLoadWorkflow 手动加载路径共用，避免两条加载路径迁移逻辑不一致。 */
+export function migrateStPresetOrders(stPresets: STPresetEntry[] | undefined): STPresetEntry[] | undefined {
+  if (!Array.isArray(stPresets) || stPresets.length === 0) return stPresets;
+  return stPresets.map((preset) => {
+    const needsMigration = preset.modules.some(
+      (m) => isSTImportedModule(m) && m.order < 100,
+    );
+    if (!needsMigration) return preset;
+    return {
+      ...preset,
+      modules: preset.modules.map((m) =>
+        isSTImportedModule(m) && m.order < 100
+          ? { ...m, order: m.order + 50 }
+          : m,
+      ),
+      updatedAt: Date.now(),
+    };
+  });
 }
 
 export interface UseGameStateReturn {
@@ -263,8 +313,13 @@ export function useGameState(): UseGameStateReturn {
           backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
           enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
           enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
+          enablePlayerSpeechExpansion: savedGame.enableNoControl === true ? false : savedGame.enablePlayerSpeechExpansion === true,
           visualTextSettings: 归一化视觉文本设置(savedGame.visualTextSettings),
           promptModules: migratePromptModules(savedGame),
+          // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移
+          // 与 saveLoadWorkflow.ts 手动加载路径保持一致，避免两条加载路径迁移逻辑不一致
+          stPresets: migrateStPresetOrders(savedGame.stPresets),
+          promptModuleOrderVersion: 1,
         };
         // 迁移后清空 legacy customPrompt，避免下次启动重复追加
         if (savedGame.customPrompt && merged.promptModules.some((m) => m.id === 'legacy_custom')) {

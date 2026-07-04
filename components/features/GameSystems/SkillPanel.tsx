@@ -2,8 +2,10 @@
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途ID } from '@/models/journey';
 import type { 命途进度, 命途阶段 } from '@/models/path';
+import type { API设置 } from '@/models/settings';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { getPath } from '@/data/journeyPresets';
+import { generateSkillDraft } from '@/services/ai/skillGenerator';
 import {
   NORMAL_SKILL_SLOT_COUNT,
   创建战技记录,
@@ -17,6 +19,7 @@ import {
 interface SkillPanelProps {
   traveler: 角色数据结构;
   onTravelerChange: React.Dispatch<React.SetStateAction<角色数据结构>>;
+  apiSettings: API设置;
 }
 
 type SlotKey = `normal:${number}` | `path:${命途ID}:${number}`;
@@ -46,7 +49,7 @@ const emptyDraft: SkillDraft = {
   备注: '',
 };
 
-export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
+export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPanelProps) {
   const pathRecords = traveler.命途列表 ?? [];
   const skillRecords = useMemo(
     () => (traveler.战技列表 ?? []).map(归一化战技记录).filter(isVisibleSkillRecord),
@@ -63,6 +66,9 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
   const [selectedPathId, setSelectedPathId] = useState<命途ID | ''>(defaultPath?.id ?? '');
   const [selectedSlotKey, setSelectedSlotKey] = useState<SlotKey>('normal:1');
   const [draft, setDraft] = useState<SkillDraft>(emptyDraft);
+  const [generationHint, setGenerationHint] = useState('');
+  const [generatingSkill, setGeneratingSkill] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
   const selectedPath = pathRecords.find((path) => path.id === selectedPathId) ?? defaultPath ?? null;
   const selectedSlot = resolveSlot(slotSummary, selectedSlotKey);
@@ -87,6 +93,12 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
   const pathSkillRecords = skillRecords
     .filter((skill) => skill.槽位类型 === 'path')
     .sort((a, b) => sortSkill(a, b));
+  const activeApiConfig = useMemo(() => {
+    if (apiSettings.activeConfigId) {
+      return apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+    }
+    return apiSettings.configs[0] ?? null;
+  }, [apiSettings.activeConfigId, apiSettings.configs]);
 
   const saveSkill = () => {
     if (!selectedSlot) return;
@@ -125,6 +137,50 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
         });
 
     upsertSkill(nextSkill);
+  };
+
+  const generateDraftWithAI = async () => {
+    if (!selectedSlot) return;
+    if (!activeApiConfig) {
+      setGenerationMessage({ kind: 'error', text: '请先在设置中配置主剧情 API，再生成战技草稿。' });
+      return;
+    }
+    setGeneratingSkill(true);
+    setGenerationMessage({ kind: 'info', text: '正在根据当前槽位生成小说化战技草稿……' });
+    try {
+      const generated = await generateSkillDraft(activeApiConfig, {
+        traveler,
+        slotKind: selectedSlot.kind,
+        slotIndex: selectedSlot.slotIndex,
+        pathId: selectedSlot.pathId,
+        pathStage: selectedSlot.pathStage,
+        existingSkillNames: skillRecords.map((skill) => skill.名称),
+        userHint: generationHint,
+        currentDraft: {
+          名称: draft.名称,
+          描述: draft.描述,
+          来源: draft.来源,
+          关键词: splitKeywords(draft.关键词),
+          消耗: draft.消耗,
+          冷却: draft.冷却,
+          备注: draft.备注,
+        },
+      });
+      setDraft({
+        名称: generated.名称,
+        描述: generated.描述,
+        来源: generated.来源 || (selectedSlot.kind === 'normal' ? 'AI 普通战技草稿' : 'AI 命途战技草稿'),
+        关键词: generated.关键词.join('、'),
+        消耗: generated.消耗,
+        冷却: generated.冷却,
+        备注: generated.备注,
+      });
+      setGenerationMessage({ kind: 'info', text: '已生成草稿。你可以继续修改，确认后再写入槽位。' });
+    } catch (error) {
+      setGenerationMessage({ kind: 'error', text: `生成失败：${error instanceof Error ? error.message : '未知错误'}` });
+    } finally {
+      setGeneratingSkill(false);
+    }
   };
 
   const upsertSkill = (nextSkill: 战技记录) => {
@@ -290,11 +346,27 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                   <button className="panel-btn danger" onClick={() => deleteSkill(selectedSkill.id)}>移除</button>
                 </>
               )}
-              <button className="panel-btn strong" disabled={!selectedSlot} onClick={saveSkill}>
+              <button className="panel-btn" disabled={!selectedSlot || generatingSkill} onClick={generateDraftWithAI}>
+                {generatingSkill ? '生成中…' : 'AI 生成'}
+              </button>
+              <button className="panel-btn strong" disabled={!selectedSlot || generatingSkill} onClick={saveSkill}>
                 {selectedSkill ? '保存战技' : '写入槽位'}
               </button>
             </div>
           </div>
+          {generationMessage && (
+            <div
+              className="mt-3 px-3 py-2 text-[12px] leading-relaxed"
+              style={{
+                color: generationMessage.kind === 'error' ? 'rgba(255, 135, 135, 0.95)' : 'rgba(var(--tj-text-secondary),0.88)',
+                background: generationMessage.kind === 'error' ? 'rgba(160, 40, 40, 0.12)' : 'rgba(var(--tj-tech-cyan), 0.055)',
+                boxShadow: generationMessage.kind === 'error' ? 'inset 0 0 0 1px rgba(255, 135, 135, 0.24)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
+                clipPath: smallClip,
+              }}
+            >
+              {generationMessage.text}
+            </div>
+          )}
         </section>
 
         <div className="grid min-h-0 flex-1 gap-3 overflow-visible md:overflow-hidden xl:grid-cols-[1fr_0.95fr]">
@@ -309,6 +381,16 @@ export function SkillPanel({ traveler, onTravelerChange }: SkillPanelProps) {
                     : '命途战技可以自由命名与描述。建议把命途特质、出手方式、限制与代价写清楚，正文会优先引用这些信息。'}
                   tone={selectedSlot.kind === 'normal' ? 'gold' : 'cyan'}
                 />
+                <Field label="生成提示词">
+                  <textarea
+                    value={generationHint}
+                    onChange={(e) => setGenerationHint(e.target.value)}
+                    rows={3}
+                    placeholder="可写灵感方向，例如：想要更像三月七会吐槽的技能名、带一点记忆命途的凝滞感、武器是长刀、不要太中二。这里只影响 AI 生成，不会保存进战技。"
+                    className="kaituo-input w-full px-2.5 py-1.5 text-[12px] leading-relaxed md:px-3 md:py-2 md:text-sm"
+                    style={{ clipPath: smallClip }}
+                  />
+                </Field>
                 <SkillEditor draft={draft} onChange={setDraft} selectedSlot={selectedSlot} selectedPath={selectedPath} />
               </>
             ) : (
@@ -415,7 +497,7 @@ function SkillEditor({
           <input
             value={draft.关键词}
             onChange={(e) => onChange({ ...draft, 关键词: e.target.value })}
-            placeholder="追击、单体、护盾"
+            placeholder="突进、牵制、制造破绽、短暂脱力"
             className="kaituo-input w-full px-2.5 py-1.5 text-[12px] md:px-3 md:py-2 md:text-sm"
             style={{ clipPath: smallClip }}
           />
