@@ -1,27 +1,29 @@
 import fs from 'node:fs';
 
-const source = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
-const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8').replace(/\r\n/g, '\n');
-const chatSource = fs.readFileSync('models/chat.ts', 'utf8');
-const turnItemSource = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
-const saveLoadSource = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
-const newsSource = fs.readFileSync('hooks/useGame/newsWorkflow.ts', 'utf8');
-const settingsSource = fs.readFileSync('models/settings.ts', 'utf8');
-const dbSource = fs.readFileSync('services/dbService.ts', 'utf8');
+function readSource(path) {
+  return fs.readFileSync(path, 'utf8').replace(/\r\n?/g, '\n');
+}
+
+const source = readSource('hooks/useGame/sendWorkflow.ts');
+const useGameSource = readSource('hooks/useGame.ts');
+const chatSource = readSource('models/chat.ts');
+const turnItemSource = readSource('components/features/Chat/TurnItem.tsx');
+const saveLoadSource = readSource('hooks/useGame/saveLoadWorkflow.ts');
+const newsSource = readSource('hooks/useGame/newsWorkflow.ts');
+const settingsSource = readSource('models/settings.ts');
+const dbSource = readSource('services/dbService.ts');
+const compactorSource = readSource('utils/saveRuntimeCompactor.ts');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-assert(source.includes('function cloneForSnapshot'), 'sendWorkflow 必须保留快照深拷贝函数。');
-assert(source.includes('structuredClone'), '快照应优先使用 structuredClone，避免引用污染。');
-assert(source.includes('旅人: cloneForSnapshot(state.旅人)'), 'preTurnSnapshot.旅人 必须深拷贝。');
-assert(source.includes('记忆: cloneForSnapshot(state.记忆)'), 'preTurnSnapshot.记忆 必须深拷贝。');
-assert(source.includes('忆庭: cloneForSnapshot(state.忆庭)'), 'preTurnSnapshot.忆庭 必须深拷贝。');
-assert(source.includes('手机: cloneForSnapshot(state.手机)'), 'preTurnSnapshot.手机 必须深拷贝。');
-assert(source.includes('新闻: cloneForSnapshot(state.新闻)'), 'preTurnSnapshot.新闻 必须深拷贝。');
-assert(source.includes('剧情编织: cloneForSnapshot(state.剧情编织)'), 'preTurnSnapshot.剧情编织 必须深拷贝。');
-assert(source.includes('variableBatches: cloneForSnapshot(state.variableBatches)'), 'preTurnSnapshot.variableBatches 必须深拷贝。');
+assert(source.includes('const preTurnSnapshot = compactPreTurnSnapshot({'), 'sendWorkflow 必须先构建轻量回滚快照。');
+assert(!source.includes('cloneForSnapshot(state.相册)'), 'sendWorkflow 不得在压缩前完整深拷贝相册图片。');
+assert(compactorSource.includes('new WeakMap<object, unknown>()'), '快照压缩必须使用 WeakMap 隔离重复对象引用。');
+assert(compactorSource.includes('const compacted = compactDataImages({'), '快照必须对整个初步状态递归移除大型运行数据。');
+assert(compactorSource.includes("typeof structuredClone === 'function'"), '轻量快照必须优先使用 structuredClone 深拷贝。');
+assert(compactorSource.includes('return cloneCompactedSnapshot(compacted);'), '快照必须在压缩完成后深拷贝，避免运行状态引用污染。');
 assert(!source.includes('state.setPendingVariable(false);\n\n      const npcSource'), '变量模型结束后不得提前解除后台结算锁。');
 assert(source.includes('const assertWorkflowActive = () =>'), '后台结算阶段必须有当前工作流闸门。');
 assert(source.includes('assertWorkflowActive();\n    mem = compression.memory'), '记忆压缩 await 后必须检查当前工作流，避免旧记忆写回。');

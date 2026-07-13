@@ -54,8 +54,9 @@ import {
   removeLegacyZhikuCharacterEntries,
   removeRetiredZhikuEntries,
 } from '@/data/zhikuPreset';
-import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
+import { loadWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { loadSetting, saveSetting, hasAnySave } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
@@ -246,6 +247,8 @@ export interface UseGameStateReturn {
   setTurnCount: React.Dispatch<React.SetStateAction<number>>;
   pendingOpeningTrigger: string | null;
   setPendingOpeningTrigger: React.Dispatch<React.SetStateAction<string | null>>;
+  interruptedWorkflow: WorkflowRecoveryJournal | null;
+  setInterruptedWorkflow: React.Dispatch<React.SetStateAction<WorkflowRecoveryJournal | null>>;
   abortControllerRef: React.RefObject<AbortController | null>;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -280,6 +283,7 @@ export function useGameState(): UseGameStateReturn {
   const [pendingVariable, setPendingVariable] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
+  const [interruptedWorkflow, setInterruptedWorkflow] = useState<WorkflowRecoveryJournal | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -287,6 +291,12 @@ export function useGameState(): UseGameStateReturn {
   // Load persisted settings on mount
   useEffect(() => {
     (async () => {
+      const recoveryJournal = await loadWorkflowRecoveryJournal();
+      if (recoveryJournal) {
+        setInterruptedWorkflow(recoveryJournal);
+        setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
+      }
+
       const savedTheme = await loadSetting<主题预设>('theme');
       if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
 
@@ -331,16 +341,17 @@ export function useGameState(): UseGameStateReturn {
       try {
         const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
         const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        const mergedStoryWeaving = mergeBundledStoryWeavingPresets(
-          savedStoryWeaving ? 归一化剧情编织系统(savedStoryWeaving) : null,
-          bundledStoryWeaving,
-        );
+        const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
         set剧情编织(mergedStoryWeaving);
-        await saveSetting('storyWeavingSystem', mergedStoryWeaving);
+        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
       } catch (err) {
         console.warn('[story-weaving] preset 加载失败，回退到本地已存剧情编织:', err);
         const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        if (savedStoryWeaving) set剧情编织(归一化剧情编织系统(savedStoryWeaving));
+        if (isSelfContainedStoryWeavingSystem(savedStoryWeaving)) {
+          set剧情编织(归一化剧情编织系统(savedStoryWeaving));
+        } else if (savedStoryWeaving) {
+          console.warn('[story-weaving] 本地状态是轻量缓存，缺少原著正文；等待下次启动重新加载内置资源。');
+        }
       }
 
       try {
@@ -498,6 +509,7 @@ export function useGameState(): UseGameStateReturn {
     pendingVariable, setPendingVariable,
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
+    interruptedWorkflow, setInterruptedWorkflow,
     abortControllerRef, scrollRef,
   };
 }

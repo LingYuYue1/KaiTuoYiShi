@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
@@ -288,28 +288,37 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const uploadReferenceImages = async (files: FileList | null, record: CharacterLibraryRecord | null) => {
     if (!files?.length || !record) return;
     const nextItems: ReturnType<typeof 创建相册图片条目>[] = [];
+    const failedFiles: string[] = [];
     for (const file of Array.from(files)) {
       if (!file.type.startsWith('image/')) continue;
-      const src = await fileToDataUrl(file);
-      nextItems.push(创建相册图片条目({
-        title: `${record.name} 参考图`,
-        src,
-        source: 'upload',
-        targetType: record.kind === 'traveler' ? 'traveler' : 'npc',
-        targetId: record.id,
-        slot: 'reference_image',
-        mimeType: file.type,
-        tags: ['参考图'],
-        note: '手动上传参考图',
-      }));
+      try {
+        const src = await fileToDataUrl(file);
+        nextItems.push(创建相册图片条目({
+          title: `${record.name} 参考图`,
+          src,
+          source: 'upload',
+          targetType: record.kind === 'traveler' ? 'traveler' : 'npc',
+          targetId: record.id,
+          slot: 'reference_image',
+          mimeType: file.type,
+          tags: ['参考图'],
+          note: '手动上传参考图',
+        }));
+      } catch {
+        failedFiles.push(file.name);
+      }
     }
     if (!nextItems.length) {
-      setMessage('没有找到可导入的图片文件。');
+      setMessage(failedFiles.length > 0
+        ? `导入失败：${failedFiles.length} 张图片未能读取或超过 12MB。`
+        : '没有找到可导入的图片文件。');
       return;
     }
     onAlbumChange((prev) => nextItems.reduce((next, item) => 添加图片到相册(next, item), prev));
     setActiveEntryId(nextItems[0]?.entry.id ?? null);
-    setMessage(`已导入 ${nextItems.length} 张参考图。`);
+    setMessage(failedFiles.length > 0
+      ? `已导入 ${nextItems.length} 张参考图，另有 ${failedFiles.length} 张失败。`
+      : `已导入 ${nextItems.length} 张参考图。`);
   };
 
   const patchImageRules = (patch: Partial<文生图规则中心设置>) => {

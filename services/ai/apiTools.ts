@@ -3,6 +3,7 @@ import { appendApiErrorReport } from './apiErrorReportService';
 import { withRetries } from './retry';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
+import { fetchOpenAICompatibleModels } from './openAICompatibleModels';
 
 export interface ConnectionTestResult {
   ok: boolean;
@@ -243,49 +244,6 @@ async function fetchArkModels(baseRaw: string, apiKey: string): Promise<string[]
   }
 }
 
-async function fetchOpenAICompatibleModels(baseRaw: string, apiKey: string): Promise<string[]> {
-  const base = baseRaw.replace(/\/+$/, '');
-  const normalized = base.replace(/\/v1$/i, '');
-  const candidates = Array.from(new Set([`${normalized}/v1/models`, `${normalized}/models`, `${base}/models`]));
-
-  const errors: string[] = [];
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        void appendApiErrorReport({
-          source: '模型列表',
-          config: { provider: 'openai_compatible', baseUrl: baseRaw, apiKey },
-          status: res.status,
-          requestUrl: url,
-          requestMode: 'models',
-          responseText: text,
-        });
-        errors.push(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
-        continue;
-      }
-      const data = await res.json();
-      if (data && Array.isArray(data.data)) {
-        const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
-        if (ids.length) return ids;
-      }
-    } catch (e) {
-      void appendApiErrorReport({
-        source: '模型列表',
-        config: { provider: 'openai_compatible', baseUrl: baseRaw, apiKey },
-        requestUrl: url,
-        requestMode: 'models',
-        error: e,
-      });
-      errors.push(`${url} -> ${(e as Error).message}`);
-    }
-  }
-  throw new Error(`获取模型列表失败：\n${errors.join('\n')}`);
-}
-
 async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise<string[]> {
   const base = baseRaw.replace(/\/+$/, '');
   const root = base.replace(/\/v[12](?:\/.*)?$/i, '');
@@ -429,14 +387,21 @@ export async function testConnection(config: any): Promise<ConnectionTestResult>
           systemPrompt: '你是连接测试。请只回答 OK。',
           maxTokens: 32,
           temperature: 0,
+          deepSeekRecovery: 'disabled',
         }),
       { retries: retryCount, label: '连接测试' },
     );
     const elapsed = Date.now() - startedAt;
     const body = (text || '').trim();
+    if (!body) {
+      return {
+        ok: false,
+        detail: `耗时：${elapsed} ms\n\n接口返回成功状态，但所选模型没有返回任何正文。`,
+      };
+    }
     return {
       ok: true,
-      detail: `耗时：${elapsed} ms\n\n${body.length ? body : '（无响应内容）'}`,
+      detail: `耗时：${elapsed} ms\n\n${body}`,
     };
   } catch (e) {
     const raw = (e as Error).message || String(e);

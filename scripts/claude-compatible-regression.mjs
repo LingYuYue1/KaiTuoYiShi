@@ -87,7 +87,7 @@ assert(client.includes("part?.type === 'text'"), 'Claude 非流式解析必须�
 assert(client.includes("parsed?.type === 'content_block_delta'"), 'OpenAI 兼容流式解析必须兼容 Claude/Anthropic content_block_delta。');
 assert(client.includes("deltaType === 'thinking_delta'"), 'OpenAI 兼容流式解析必须丢弃 thinking delta。');
 assert(client.includes('return parseOpenAICompatibleTextResponse(json);'), 'OpenAI 兼容非流式路径必须使用宽容正文解析。');
-assert(client.includes('mergePrefixResult(deepSeekPayload.prefix, parseOpenAICompatibleTextResponse(json))'), 'DeepSeek 非流式 prefix 合并前必须使用宽容正文解析。');
+assert(client.includes('const text = parseOpenAICompatibleTextResponse(json);') && client.includes('mergePrefixResult(deepSeekPayload.prefix, text)'), 'DeepSeek 非流式 prefix 合并前必须使用宽容正文解析。');
 assert(client.includes('formatClaudeError'), 'Claude 错误必须提供中文诊断提示。');
 assert(client.includes('/chat/completions'), 'OpenAI 兼容路径必须继续请求 /chat/completions。');
 

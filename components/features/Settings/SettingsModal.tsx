@@ -53,6 +53,7 @@ interface SettingsModalProps {
   剧情编织: 剧情编织系统;
   on剧情编织Change: React.Dispatch<React.SetStateAction<剧情编织系统>>;
   variableSetters: VariableSetters;
+  variableEditingLocked?: boolean;
   getContextSnapshot: (kind?: ContextSnapshotKind) => ContextSnapshot;
   initialTab?: Tab;
   /** Phase 7.2：世界书数组（用于 ST 预设导入时注入 ST 世界书条目）。 */
@@ -101,6 +102,7 @@ export function SettingsModal({
   剧情编织,
   on剧情编织Change,
   variableSetters,
+  variableEditingLocked = false,
   getContextSnapshot,
   initialTab = 'api',
   worldbooks,
@@ -190,6 +192,7 @@ export function SettingsModal({
             剧情编织={剧情编织}
             set剧情编织={on剧情编织Change}
             setters={variableSetters}
+            editingLocked={variableEditingLocked}
           />
         );
       case 'theme':

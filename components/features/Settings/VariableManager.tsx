@@ -15,6 +15,7 @@ interface Props {
   剧情编织: unknown;
   setters: VariableSetters;
   set剧情编织: Dispatch<SetStateAction<剧情编织系统>>;
+  editingLocked?: boolean;
 }
 
 const smallClip =
@@ -25,6 +26,7 @@ const cardClip =
 type SystemKey = 'traveler' | 'world' | 'memory' | 'yiting' | 'phone' | 'npc' | 'news' | 'zhiku' | 'storyWeaving';
 type EditMode = 'fields' | 'json';
 type WritePolicy = 'writable' | 'manual' | 'readonly';
+const ARRAY_RENDER_BATCH_SIZE = 40;
 
 interface SystemMeta {
   key: SystemKey;
@@ -292,7 +294,7 @@ export function VariableManagerTab(props: Props) {
   const [activeKey, setActiveKey] = useState<SystemKey>('traveler');
   const [mode, setMode] = useState<EditMode>('fields');
   const [draft, setDraft] = useState<unknown>(null);
-  const [jsonDraft, setJsonDraft] = useState('');
+  const [jsonDraft, setJsonDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   // 数组型系统（伙伴/周报）的二级导航状态。
@@ -323,24 +325,25 @@ export function VariableManagerTab(props: Props) {
       nextDraft = ordered;
     }
     setDraft(nextDraft);
-    setJsonDraft(toJson(nextDraft));
+    setJsonDraft((current) => current === null ? null : toJson(nextDraft));
     setError(null);
     setSavedFlash(false);
   }, [activeKey, visibleValue]);
 
   const updateDraft = (next: unknown) => {
+    if (props.editingLocked) return;
     setDraft(next);
-    setJsonDraft(toJson(next));
     setError(null);
   };
 
   const saveDraft = () => {
+    if (props.editingLocked) return;
     try {
-      const parsed = mode === 'json' ? JSON.parse(jsonDraft) : draft;
+      const parsed = mode === 'json' ? JSON.parse(jsonDraft ?? '') : draft;
       const next = mergeHiddenFields(activeSystem, originalValue, parsed);
       setSystemValue(props, activeKey, next);
       setDraft(deepClone(parsed));
-      setJsonDraft(toJson(parsed));
+      setJsonDraft(mode === 'json' ? toJson(parsed) : null);
       setError(null);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1400);
@@ -350,9 +353,21 @@ export function VariableManagerTab(props: Props) {
   };
 
   const resetDraft = () => {
+    if (props.editingLocked) return;
     const next = deepClone(visibleValue);
     setDraft(next);
-    setJsonDraft(toJson(next));
+    setJsonDraft(mode === 'json' ? toJson(next) : null);
+    setError(null);
+  };
+
+  const switchMode = (nextMode: EditMode) => {
+    if (nextMode === mode) return;
+    if (nextMode === 'json') {
+      setJsonDraft(toJson(draft));
+    } else {
+      setJsonDraft(null);
+    }
+    setMode(nextMode);
     setError(null);
   };
 
@@ -497,7 +512,7 @@ export function VariableManagerTab(props: Props) {
         <div className="flex flex-col items-stretch justify-between gap-2 sm:flex-row sm:items-center">
           <div className="flex gap-1">
             <button
-              onClick={() => setMode('fields')}
+              onClick={() => switchMode('fields')}
               className="px-4 py-1.5 text-sm font-serif tracking-wider"
               style={{
                 background: mode === 'fields' ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))' : 'transparent',
@@ -509,7 +524,7 @@ export function VariableManagerTab(props: Props) {
               逐条修改
             </button>
             <button
-              onClick={() => setMode('json')}
+              onClick={() => switchMode('json')}
               className="px-4 py-1.5 text-sm font-serif tracking-wider"
               style={{
                 background: mode === 'json' ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))' : 'transparent',
@@ -526,6 +541,7 @@ export function VariableManagerTab(props: Props) {
             <div className="flex gap-1">
               <button
                 onClick={resetDraft}
+                disabled={props.editingLocked}
                 className="px-3 py-1.5 text-sm font-serif tracking-wider"
                 style={{ color: 'rgba(var(--tj-text-secondary), 0.85)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)', clipPath: smallClip }}
               >
@@ -552,6 +568,7 @@ export function VariableManagerTab(props: Props) {
 
           <button
             onClick={saveDraft}
+            disabled={props.editingLocked}
             className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
             style={{
               background: savedFlash
@@ -566,6 +583,20 @@ export function VariableManagerTab(props: Props) {
           >
             {savedFlash ? '✓ 已 保 存' : '◆ 保 存 修 改'}
           </button>
+
+          {props.editingLocked && (
+            <div
+              className="px-3 py-2 text-xs"
+              style={{
+                color: 'rgba(var(--tj-accent-primary),0.92)',
+                background: 'rgba(var(--tj-accent-primary),0.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.2)',
+                clipPath: smallClip,
+              }}
+            >
+              本回合结算中，完成后可修改。当前仍可浏览变量内容。
+            </div>
+          )}
 
           {error && (
             <div
@@ -583,6 +614,10 @@ export function VariableManagerTab(props: Props) {
         </div>
         </div>
 
+        <fieldset
+          disabled={props.editingLocked}
+          className="min-w-0 border-0 p-0"
+        >
         <div
           className="p-4"
           style={{
@@ -612,7 +647,7 @@ export function VariableManagerTab(props: Props) {
             </div>
           ) : (
             <textarea
-              value={jsonDraft}
+              value={jsonDraft ?? ''}
               onChange={(e) => {
                 setJsonDraft(e.target.value);
                 setError(null);
@@ -624,6 +659,7 @@ export function VariableManagerTab(props: Props) {
             />
           )}
         </div>
+        </fieldset>
       </section>
     </div>
   );
@@ -644,6 +680,8 @@ function TreeNode({
 }) {
   const isArray = Array.isArray(value);
   const objectLike = isRecord(value);
+  const [expanded, setExpanded] = useState(depth === 0);
+  const [visibleArrayItems, setVisibleArrayItems] = useState(ARRAY_RENDER_BATCH_SIZE);
 
   if (!isArray && !objectLike) {
     return <LeafRow label={label} value={value} depth={depth} onChange={onChange} onDelete={onDelete} />;
@@ -656,25 +694,34 @@ function TreeNode({
     const enabled = archive.enabled === true;
     const fieldCount = Object.keys(archive).length;
     return (
-      <details className="mb-1">
+      <details
+        className="mb-1"
+        open={expanded}
+        onToggle={(event) => setExpanded(event.currentTarget.open)}
+      >
         <summary className="flex cursor-pointer select-none items-center gap-2 py-1.5">
           <span className="font-serif text-sm font-bold" style={{ color: nsfwAccent }}>NSFW 档案</span>
           <span className="font-mono text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>{`{${fieldCount}}`}</span>
           <span className="text-xs" style={{ color: enabled ? nsfwAccent : 'rgba(var(--tj-text-secondary),0.58)' }}>{enabled ? '已启用' : '预留'}</span>
           <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.5)' }}>（点击展开编辑）</span>
         </summary>
-        <div className="mt-1">
-          <NsfwArchiveEditor value={archive} onChange={onChange} />
-        </div>
+        {expanded && (
+          <div className="mt-1">
+            <NsfwArchiveEditor value={archive} onChange={onChange} />
+          </div>
+        )}
       </details>
     );
   }
 
-  const children = isArray ? value : Object.entries(value);
-
   return (
     <details
-      open={depth < 2}
+      open={expanded}
+      onToggle={(event) => {
+        const nextExpanded = event.currentTarget.open;
+        setExpanded(nextExpanded);
+        if (!nextExpanded && isArray) setVisibleArrayItems(ARRAY_RENDER_BATCH_SIZE);
+      }}
       className="mb-1.5"
       style={{
         marginLeft: depth === 0 ? 0 : 16,
@@ -728,9 +775,10 @@ function TreeNode({
         )}
       </summary>
 
+      {expanded && (
       <div className="space-y-0.5">
         {isArray
-          ? children.map((item, index) => (
+          ? value.slice(0, visibleArrayItems).map((item, index) => (
               <TreeNode
                 key={index}
                 label={`[${index}]`}
@@ -748,7 +796,7 @@ function TreeNode({
                 }}
               />
             ))
-          : (children as [string, unknown][]).map(([key, item]) => (
+          : Object.entries(value).map(([key, item]) => (
               <TreeNode
                 key={key}
                 label={key}
@@ -762,7 +810,22 @@ function TreeNode({
                 }}
               />
             ))}
+        {isArray && visibleArrayItems < value.length && (
+          <button
+            type="button"
+            onClick={() => setVisibleArrayItems((current) => Math.min(value.length, current + ARRAY_RENDER_BATCH_SIZE))}
+            className="ml-4 mt-2 px-3 py-1 text-xs"
+            style={{
+              color: 'rgba(var(--tj-accent-primary),0.92)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
+              clipPath: smallClip,
+            }}
+          >
+            继续显示（{Math.min(ARRAY_RENDER_BATCH_SIZE, value.length - visibleArrayItems)} / {value.length - visibleArrayItems}）
+          </button>
+        )}
       </div>
+      )}
     </details>
   );
 }

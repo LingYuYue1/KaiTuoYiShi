@@ -1,5 +1,6 @@
 ﻿import { useState, useRef, useCallback, useMemo } from 'react';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
+import { useEffect } from 'react';
 
 interface InputAreaProps {
   onSend: (text: string) => void;
@@ -21,6 +22,7 @@ interface InputAreaProps {
   onCancelWorkflow?: () => void;
   /** 上一条 AI 回复给出的可点选行动列表。点击后填入输入框待玩家微调。 */
   actionOptions?: string[];
+  recoveryDraft?: { workflowId: string; input: string } | null;
 }
 
 const btnClip =
@@ -47,15 +49,27 @@ export function InputArea({
   workflowRetrying = false,
   onCancelWorkflow,
   actionOptions = [],
+  recoveryDraft,
 }: InputAreaProps) {
   const [input, setInput] = useState('');
   const [rerollActionOptions, setRerollActionOptions] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSubmittedRef = useRef('');
+  const appliedRecoveryRef = useRef('');
   const visibleActionOptions = useMemo(() => {
     const source = actionOptions.length > 0 ? actionOptions : rerollActionOptions;
     return parseActionOptionsBlock(source.join('\n'));
   }, [actionOptions, rerollActionOptions]);
+
+  useEffect(() => {
+    if (!recoveryDraft || appliedRecoveryRef.current === recoveryDraft.workflowId) return;
+    appliedRecoveryRef.current = recoveryDraft.workflowId;
+    if (!input.trim()) {
+      setInput(recoveryDraft.input);
+      lastSubmittedRef.current = recoveryDraft.input;
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [input, recoveryDraft]);
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();

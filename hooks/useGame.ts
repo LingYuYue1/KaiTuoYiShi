@@ -11,7 +11,8 @@ import type { API配置项 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
 import { saveSetting } from '@/services/dbService';
-import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
+import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -55,6 +56,7 @@ export function useGame(): UseGameReturn {
 
   const handleSend = useCallback(
     async (text: string) => {
+      state.setInterruptedWorkflow(null);
       await executeSendWorkflow(text, {
         state,
         getActiveConfig,
@@ -73,8 +75,10 @@ export function useGame(): UseGameReturn {
   }, [state.abortControllerRef]);
 
   const handleNewGame = useCallback(() => {
+    void clearWorkflowRecoveryJournal(state.interruptedWorkflow?.workflowId);
+    state.setInterruptedWorkflow(null);
     state.setView('new_game');
-  }, [state.setView]);
+  }, [state.interruptedWorkflow?.workflowId, state.setInterruptedWorkflow, state.setView]);
 
   const handleContinue = useCallback(async (): Promise<boolean> => {
     return handleLoadLatest(state);
@@ -115,7 +119,7 @@ export function useGame(): UseGameReturn {
       state.setWorkflowHint(snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。');
       if (snapshot) {
         const nextStoryWeaving = restorePreTurnSnapshot(state, snapshot);
-        await saveSetting('storyWeavingSystem', nextStoryWeaving);
+        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
       } else {
         state.setTurnCount(Math.max(1, state.turnCount - 1));
       }
@@ -159,7 +163,7 @@ export function useGame(): UseGameReturn {
     state.setWorkflowHint(snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。');
     if (snapshot) {
       const nextStoryWeaving = restorePreTurnSnapshot(state, snapshot);
-      await saveSetting('storyWeavingSystem', nextStoryWeaving);
+      await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
     } else {
       // 老回复没 snapshot（迁移期 / 旧存档），只能粗略 turnCount -1，状态保持不变
       state.setTurnCount(Math.max(1, state.turnCount - 1));
@@ -200,7 +204,7 @@ export function useGame(): UseGameReturn {
     state.setQueueTasks([]);
     const nextStoryWeaving = alignStoryWeavingToOpeningArchive(state.剧情编织, restartOpeningArchive);
     state.set剧情编织(nextStoryWeaving);
-    saveSetting('storyWeavingSystem', nextStoryWeaving);
+    saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
 
     // worldState：保留创角时的 currentPeriod / difficulty / storyMode / startingScenarioId / customStartPrompt。
     // 重新开局时必须重建开局档案对应的已成立事实，否则非黑塔/自由开局会只剩字段，缺少后续注入锚点。

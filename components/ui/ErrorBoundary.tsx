@@ -1,4 +1,4 @@
-﻿import React, { Component, type ReactNode } from 'react';
+import React, { Component, type ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -76,6 +76,7 @@ export class ErrorBoundary extends Component<Props, State> {
               }}
             >
               {this.state.error.message}
+              {this.state.error.stack ? `\n\n${this.state.error.stack}` : ''}
             </pre>
             <button
               onClick={() => window.location.reload()}

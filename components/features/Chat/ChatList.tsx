@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -24,6 +24,22 @@ interface ChatListProps {
 export function ChatList({ messages, loading, streamingMessage, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, visualTextSettings }: ChatListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [nearBottom, setNearBottom] = useState(true);
+  const [renderLimit, setRenderLimit] = useState(80);
+  const historyIdentityRef = useRef<{ lastId?: string; length: number }>({ length: 0 });
+  const previousHistoryIdentity = historyIdentityRef.current;
+  const previousHistoryStillPresent = !previousHistoryIdentity.lastId
+    || messages.some((message) => message.id === previousHistoryIdentity.lastId);
+  const historyWasReplaced = previousHistoryIdentity.length > 0
+    && (messages.length < previousHistoryIdentity.length || !previousHistoryStillPresent);
+  const effectiveRenderLimit = historyWasReplaced ? 80 : renderLimit;
+
+  useEffect(() => {
+    historyIdentityRef.current = {
+      lastId: messages[messages.length - 1]?.id,
+      length: messages.length,
+    };
+    if (historyWasReplaced) setRenderLimit(80);
+  }, [historyWasReplaced, messages]);
 
   const isNearBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -47,9 +63,15 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
   }, []);
 
   // 隐藏 [系统] 触发消息——chatHistory 中仍存在便于调试，但 UI 不渲染。
-  const visibleMessages = messages.filter(
-    (m) => !(m.role === 'user' && m.content.startsWith('[系统]')),
+  const visibleMessages = useMemo(
+    () => messages.filter((message) => !(message.role === 'user' && message.content.startsWith('[系统]'))),
+    [messages],
   );
+  const renderedMessages = useMemo(
+    () => visibleMessages.slice(Math.max(0, visibleMessages.length - effectiveRenderLimit)),
+    [effectiveRenderLimit, visibleMessages],
+  );
+  const hasEarlierMessages = renderedMessages.length < visibleMessages.length;
 
   return (
     <div
@@ -58,6 +80,19 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
       className="relative flex-1 overflow-y-auto px-4 py-4 md:px-4"
     >
       <div className="pointer-events-none fixed left-0 right-0 top-0 z-10 h-16 bg-gradient-to-b from-[rgba(var(--tj-bg-primary),0.74)] to-transparent md:hidden" />
+
+      {hasEarlierMessages && (
+        <div className="flex justify-center pb-4">
+          <button
+            type="button"
+            onClick={() => setRenderLimit((current) => current + 80)}
+            className="px-3 py-1.5 text-xs"
+            style={{ color: 'rgba(var(--tj-accent-primary), 0.92)' }}
+          >
+            加载更早记录
+          </button>
+        </div>
+      )}
 
       {/* Empty state */}
       {visibleMessages.length === 0 && !loading && (
@@ -84,7 +119,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
       )}
 
       {/* Rendered messages */}
-      {visibleMessages.map((msg, idx) => {
+      {renderedMessages.map((msg, idx) => {
         // 兜底:历史评判消息若 awakenPathId 为空(早期生成时没存进去),
         // 向前找最近一条带 awakenPathId 的狭间消息,把命途 ID 传给 TurnItem 美化用。
         let fallbackPathId: string | undefined;
@@ -95,7 +130,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
           && !msg.parsedResponse.awakenPathId;
         if (needsFallback) {
           for (let i = idx - 1; i >= 0; i--) {
-            const prev = visibleMessages[i];
+            const prev = renderedMessages[i];
             const prevPid = prev?.parsedResponse?.awakenPathId;
             if (prevPid) {
               fallbackPathId = prevPid;
@@ -107,7 +142,7 @@ export function ChatList({ messages, loading, streamingMessage, scrollRef, onEdi
           msg.role === 'assistant'
             ? (() => {
                 for (let i = idx - 1; i >= 0; i--) {
-                  const prev = visibleMessages[i];
+                  const prev = renderedMessages[i];
                   if (prev?.role === 'user') return prev.content;
                 }
                 return undefined;

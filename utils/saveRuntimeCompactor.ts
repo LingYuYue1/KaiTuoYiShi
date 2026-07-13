@@ -1,8 +1,9 @@
 import type { 回合快照 } from '@/models/chat';
 import type { 相册系统 } from '@/models/imageGeneration';
-import type { 手机系统 } from '@/models/phone';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 创建相册资源引用 } from '@/utils/albumActions';
+import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 
 const DATA_IMAGE_RE = /^data:image\/[a-z0-9.+-]+;base64,/i;
 const LARGE_TEXT_LIMIT = 8000;
@@ -34,18 +35,18 @@ function stripAlbumAssetPayload(album?: 相册系统): 相册系统 | undefined 
   };
 }
 
-function compactPhoneImages(phone?: 手机系统, refs = new Map<string, string>()): 手机系统 | undefined {
-  if (!phone) return phone;
-  return compactDataImages(phone, refs) as 手机系统;
-}
-
-function compactDataImages(value: unknown, refs: Map<string, string>, seen = new WeakSet<object>()): unknown {
+function compactDataImages(value: unknown, refs: Map<string, string>, seen = new WeakMap<object, unknown>()): unknown {
   if (isDataImage(value)) return refs.get(value) ?? '[图片数据已从运行快照省略]';
   if (!value || typeof value !== 'object') return value;
-  if (seen.has(value)) return value;
-  seen.add(value);
-  if (Array.isArray(value)) return value.map((item) => compactDataImages(item, refs, seen));
+  if (seen.has(value)) return seen.get(value);
+  if (Array.isArray(value)) {
+    const next: unknown[] = [];
+    seen.set(value, next);
+    for (const item of value) next.push(compactDataImages(item, refs, seen));
+    return next;
+  }
   const next: Record<string, unknown> = {};
+  seen.set(value, next);
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     if (typeof child === 'string' && child.length > LARGE_TEXT_LIMIT && /raw|prompt|debug|system/i.test(key)) {
       next[key] = `${child.slice(0, LARGE_TEXT_LIMIT)}\n...[运行快照已截断 ${child.length - LARGE_TEXT_LIMIT} 字符]`;
@@ -54,6 +55,24 @@ function compactDataImages(value: unknown, refs: Map<string, string>, seen = new
     next[key] = compactDataImages(child, refs, seen);
   }
   return next;
+}
+
+function cloneCompactedSnapshot<T>(value: T): T {
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value);
+    } catch {
+      // Persisted game state is JSON-compatible; use the legacy fallback below.
+    }
+  }
+  try {
+    const json = JSON.stringify(value);
+    if (!json) throw new Error('序列化结果为空');
+    return JSON.parse(json) as T;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`无法创建独立的主剧情回滚快照：${reason}`);
+  }
 }
 
 function compactQueueTasks(tasks?: unknown[]): 队列任务记录[] | undefined {
@@ -70,12 +89,14 @@ function compactQueueTasks(tasks?: unknown[]): 队列任务记录[] | undefined 
 }
 
 export function compactPreTurnSnapshot(snapshot: 回合快照): 回合快照 {
-  const album = stripAlbumAssetPayload(snapshot.相册 as 相册系统 | undefined);
   const refs = collectAlbumDataUrls(snapshot.相册 as 相册系统 | undefined);
-  return {
+  const compacted = compactDataImages({
     ...snapshot,
-    相册: album,
-    手机: compactPhoneImages(snapshot.手机 as 手机系统 | undefined, refs),
+    相册: stripAlbumAssetPayload(snapshot.相册 as 相册系统 | undefined),
+    剧情编织: snapshot.剧情编织
+      ? buildPersistedStoryWeavingSystem(归一化剧情编织系统(snapshot.剧情编织))
+      : snapshot.剧情编织,
     queueTasks: compactQueueTasks(snapshot.queueTasks),
-  };
+  }, refs) as 回合快照;
+  return cloneCompactedSnapshot(compacted);
 }

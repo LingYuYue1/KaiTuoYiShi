@@ -3,6 +3,12 @@ import type { 聊天消息, 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
+import {
+  DEEPSEEK_FINAL_CONTENT_GUARD,
+  executeWithDeepSeekRecovery,
+  type DeepSeekAttemptDiagnostics,
+  type DeepSeekRecoverySummary,
+} from './deepSeekRecovery';
 
 export interface StreamCallbacks {
   onDelta: (delta: string) => void;
@@ -46,6 +52,11 @@ export interface ChatCompletionRequest {
   prefixMode?: boolean;
   /** Assistant prefill used when prefixMode is true. */
   prefixContent?: string;
+  /** Connection diagnostics can disable cross-model recovery. */
+  deepSeekRecovery?: 'auto' | 'disabled';
+  onDeepSeekRecovery?: (summary: DeepSeekRecoverySummary) => void;
+  /** Internal transport diagnostics consumed by the recovery coordinator. */
+  onResponseDiagnostics?: (diagnostics: DeepSeekAttemptDiagnostics) => void;
 }
 
 export type ChatCompletionUsage = Partial<Omit<回合Token消耗, 'source'>> & {
@@ -1192,7 +1203,21 @@ function parseClaudeTextResponse(json: unknown): string {
 
 type CompatibleStreamTextState = {
   currentBlockIsThinking: boolean;
+  sawReasoning: boolean;
 };
+
+function hasReasoningPayload(value: unknown, depth = 0): boolean {
+  if (depth > 8 || !value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some((item) => hasReasoningPayload(item, depth + 1));
+  const record = value as Record<string, unknown>;
+  const type = typeof record.type === 'string' ? record.type : '';
+  if (record.thought === true || /^(thinking|reasoning|thinking_delta|reasoning_delta)$/i.test(type)) return true;
+  for (const [key, child] of Object.entries(record)) {
+    if (/^(reasoning(?:_content)?|thinking(?:_content)?)$/i.test(key) && child != null && child !== '') return true;
+    if (hasReasoningPayload(child, depth + 1)) return true;
+  }
+  return false;
+}
 
 function readCompatibleTextContent(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -1215,6 +1240,7 @@ function readCompatibleTextContent(content: unknown): string {
 }
 
 function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTextState): string {
+  if (hasReasoningPayload(parsed)) state.sawReasoning = true;
   if (parsed?.type === 'content_block_start') {
     const blockType = parsed.content_block?.type;
     state.currentBlockIsThinking = blockType === 'thinking' || blockType === 'reasoning';
@@ -1302,7 +1328,79 @@ function parseOpenAICompatibleTextResponse(json: unknown): string {
   );
 }
 
+function reportOpenAICompatibleDiagnostics(
+  json: unknown,
+  text: string,
+  config: API配置项,
+  request: ChatCompletionRequest,
+): void {
+  request.onResponseDiagnostics?.({
+    sawReasoning: hasReasoningPayload(json),
+    sawVisibleContent: text.trim().length > 0,
+    finishReason: readFinishReason(json),
+    selectedModel: config.model,
+  });
+}
+
 export async function chatCompletion(
+  config: API配置项,
+  request: ChatCompletionRequest,
+  callbacks: StreamCallbacks,
+): Promise<string> {
+  const recovered = await executeWithDeepSeekRecovery(config, {
+    disabled: request.deepSeekRecovery === 'disabled',
+    maxTokens: request.maxTokens ?? config.maxTokens,
+    onSummary: request.onDeepSeekRecovery,
+    execute: async (attemptConfig, attemptOptions) => {
+      let reported = false;
+      let finishReason: string | undefined;
+      let diagnostics: DeepSeekAttemptDiagnostics = {
+        sawReasoning: false,
+        sawVisibleContent: false,
+        selectedModel: attemptConfig.model,
+      };
+      const messages = attemptOptions.appendRecoveryInstruction
+        ? [...request.messages, { role: 'user', content: DEEPSEEK_FINAL_CONTENT_GUARD }]
+        : request.messages;
+      const attemptRequest: ChatCompletionRequest = {
+        ...request,
+        messages,
+        maxTokens: attemptOptions.maxTokens,
+        deepSeekRecovery: 'disabled',
+        onResponseDiagnostics: (next) => {
+          reported = true;
+          diagnostics = next;
+        },
+      };
+      const text = await chatCompletionOnce(attemptConfig, attemptRequest, {
+        onDelta: callbacks.onDelta,
+        onDone: () => {},
+        onError: callbacks.onError,
+        onFinishReason: (reason) => { finishReason = reason; },
+      });
+      if (!reported) {
+        diagnostics = {
+          sawReasoning: false,
+          sawVisibleContent: text.trim().length > 0,
+          finishReason,
+          selectedModel: attemptConfig.model,
+        };
+      } else if (!diagnostics.finishReason && finishReason) {
+        diagnostics = { ...diagnostics, finishReason };
+      }
+      return { text, diagnostics };
+    },
+  });
+
+  if (recovered.diagnostics.finishReason) {
+    callbacks.onFinishReason?.(recovered.diagnostics.finishReason);
+  }
+  request.onResponseDiagnostics?.(recovered.diagnostics);
+  callbacks.onDone();
+  return recovered.text;
+}
+
+async function chatCompletionOnce(
   config: API配置项,
   request: ChatCompletionRequest,
   callbacks: StreamCallbacks,
@@ -1404,7 +1502,8 @@ async function streamOpenAICompatible(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
-  const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false };
+  let finishReason: string | undefined;
+  const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
 
   try {
     while (true) {
@@ -1433,7 +1532,10 @@ async function streamOpenAICompatible(
           }
           // 采集 finish_reason（用于抗截断检测）
           const fr = readFinishReason(parsed);
-          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
+          if (fr) {
+            finishReason = fr;
+            callbacks.onFinishReason?.(fr);
+          }
         } catch {
           // skip malformed SSE lines
         }
@@ -1443,6 +1545,12 @@ async function streamOpenAICompatible(
     reader.releaseLock();
   }
 
+  request.onResponseDiagnostics?.({
+    sawReasoning: compatibleStreamState.sawReasoning,
+    sawVisibleContent: fullText.trim().length > 0,
+    finishReason,
+    selectedModel: config.model,
+  });
   callbacks.onDone();
   return fullText;
 }
@@ -1760,7 +1868,8 @@ async function streamOpenCodeChat(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
-  const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false };
+  let finishReason: string | undefined;
+  const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
 
   try {
     while (true) {
@@ -1785,7 +1894,10 @@ async function streamOpenCodeChat(
           }
           // 采集 finish_reason（OpenCode Chat 兼容 OpenAI 格式）
           const fr = readFinishReason(parsed);
-          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
+          if (fr) {
+            finishReason = fr;
+            callbacks.onFinishReason?.(fr);
+          }
         } catch {
           // skip
         }
@@ -1795,6 +1907,12 @@ async function streamOpenCodeChat(
     reader.releaseLock();
   }
 
+  request.onResponseDiagnostics?.({
+    sawReasoning: compatibleStreamState.sawReasoning,
+    sawVisibleContent: fullText.trim().length > 0,
+    finishReason,
+    selectedModel: config.model,
+  });
   callbacks.onDone();
   return fullText;
 }
@@ -2261,6 +2379,48 @@ export async function chatCompletionNonStream(
   config: API配置项,
   request: ChatCompletionRequest,
 ): Promise<string> {
+  const recovered = await executeWithDeepSeekRecovery(config, {
+    disabled: request.deepSeekRecovery === 'disabled',
+    maxTokens: request.maxTokens ?? config.maxTokens,
+    onSummary: request.onDeepSeekRecovery,
+    execute: async (attemptConfig, attemptOptions) => {
+      let reported = false;
+      let diagnostics: DeepSeekAttemptDiagnostics = {
+        sawReasoning: false,
+        sawVisibleContent: false,
+        selectedModel: attemptConfig.model,
+      };
+      const messages = attemptOptions.appendRecoveryInstruction
+        ? [...request.messages, { role: 'user', content: DEEPSEEK_FINAL_CONTENT_GUARD }]
+        : request.messages;
+      const text = await chatCompletionNonStreamOnce(attemptConfig, {
+        ...request,
+        messages,
+        maxTokens: attemptOptions.maxTokens,
+        deepSeekRecovery: 'disabled',
+        onResponseDiagnostics: (next) => {
+          reported = true;
+          diagnostics = next;
+        },
+      });
+      if (!reported) {
+        diagnostics = {
+          sawReasoning: false,
+          sawVisibleContent: text.trim().length > 0,
+          selectedModel: attemptConfig.model,
+        };
+      }
+      return { text, diagnostics };
+    },
+  });
+  request.onResponseDiagnostics?.(recovered.diagnostics);
+  return recovered.text;
+}
+
+async function chatCompletionNonStreamOnce(
+  config: API配置项,
+  request: ChatCompletionRequest,
+): Promise<string> {
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
 
@@ -2290,7 +2450,9 @@ export async function chatCompletionNonStream(
 
     const json = await response.json();
     emitUsageFromResponse(json, config, request);
-    return parseOpenAICompatibleTextResponse(json);
+    const text = parseOpenAICompatibleTextResponse(json);
+    reportOpenAICompatibleDiagnostics(json, text, config, request);
+    return text;
   }
   if (provider === 'opencode') {
     return completionOpenCodeNonStream(config, msgs, request);
@@ -2301,7 +2463,7 @@ export async function chatCompletionNonStream(
   }
 
   if (provider === 'gemini') {
-    return chatCompletion(config, request, {
+    return chatCompletionOnce(config, request, {
       onDelta: () => {},
       onDone: () => {},
       onError: () => {},
@@ -2348,7 +2510,7 @@ export async function chatCompletionNonStream(
     const error = formatOpenAICompatibleError(deepSeekPayload.config, response.status, text);
     if (deepSeekPayload.prefix && isDeepSeekPrefixUnsupportedError(error)) {
       console.warn('[DeepSeek Prefix] 当前接口不支持 prefix，已自动降级为标准模式。', error);
-      return chatCompletionNonStream(config, {
+      return chatCompletionNonStreamOnce(config, {
         ...request,
         messages: request.messages,
         prefixMode: false,
@@ -2368,5 +2530,7 @@ export async function chatCompletionNonStream(
 
   const json = await response.json();
   emitUsageFromResponse(json, deepSeekPayload.config, request);
-  return mergePrefixResult(deepSeekPayload.prefix, parseOpenAICompatibleTextResponse(json));
+  const text = parseOpenAICompatibleTextResponse(json);
+  reportOpenAICompatibleDiagnostics(json, text, deepSeekPayload.config, request);
+  return mergePrefixResult(deepSeekPayload.prefix, text);
 }

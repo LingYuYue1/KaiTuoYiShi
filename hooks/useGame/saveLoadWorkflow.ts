@@ -26,6 +26,7 @@ import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
 import { loadSetting } from '@/services/dbService';
+import { clearWorkflowRecoveryJournal, isWorkflowRecoveryComplete } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
@@ -35,7 +36,7 @@ import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
-import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
+import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
 
@@ -327,6 +328,16 @@ async function applySaveToState(
   const safeTraveler = normalizeSavedTraveler(save.旅人, safeWorld.当前日期);
   const safeGameSettings = normalizeSavedGameSettings(save.gameSettings);
 
+  if (state.interruptedWorkflow) {
+    if (isWorkflowRecoveryComplete(state.interruptedWorkflow, safeChatHistory)) {
+      await clearWorkflowRecoveryJournal(state.interruptedWorkflow.workflowId);
+      state.setInterruptedWorkflow(null);
+      if (state.workflowHint.startsWith('上次生成被浏览器中断')) state.setWorkflowHint('');
+    } else {
+      state.setWorkflowHint('上次生成被浏览器中断，输入已恢复；请检查存档后重新发送。');
+    }
+  }
+
   state.set旅人(safeTraveler);
   state.set世界(safeWorld);
   state.setChatHistory(safeChatHistory);
@@ -365,7 +376,7 @@ async function applySaveToState(
   });
   const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
-  await saveSetting('storyWeavingSystem', nextStoryWeaving);
+  await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
   state.setVariableBatches(save.variableBatches ?? []); // 旧存档没有该字段，兜底空数组
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。
