@@ -92,7 +92,7 @@ export const generateTargets: Array<{
   { id: 'npc_portrait', label: '伙伴立绘', desc: '完整服饰与姿态，后续用于角色立绘槽位。', targetType: 'npc', slot: 'portrait', tokenizerMode: 'portrait' },
   { id: 'scene', label: '场景图', desc: '地点、剧情快照、新闻配图。', targetType: 'scene', slot: 'scene', tokenizerMode: 'scene', sceneApi: true },
   { id: 'phone_wallpaper', label: '手机背景', desc: '手机界面壁纸或聊天背景。', targetType: 'phone', slot: 'phone_wallpaper', tokenizerMode: 'scene', sceneApi: true },
-  { id: 'nsfw_reference', label: 'NSFW 参考图', desc: '只走 NSFW 独立接口，不进入普通生成。', targetType: 'nsfw_part', slot: 'nsfw_body_reference', tokenizerMode: 'portrait', nsfw: true },
+  { id: 'nsfw_reference', label: 'NSFW 参考图', desc: '用于角色 NSFW 体态与部位参考。', targetType: 'nsfw_part', slot: 'nsfw_body_reference', tokenizerMode: 'portrait', nsfw: true },
 ];
 
 export const imageGenerationTargets = generateTargets.filter((target) => target.id !== 'scene' && target.id !== 'phone_wallpaper');

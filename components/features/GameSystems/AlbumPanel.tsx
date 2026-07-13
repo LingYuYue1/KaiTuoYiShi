@@ -91,8 +91,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const [sizePreset, setSizePreset] = useState<'default' | '1:1' | '3:4' | '16:9' | 'custom'>('default');
   const [customSize, setCustomSize] = useState('');
   const [extraRequirement, setExtraRequirement] = useState('');
-  const [tokenizerNpcId, setTokenizerNpcId] = useState('');
-  const [tokenizerMode, setTokenizerMode] = useState<'avatar' | 'portrait' | 'scene'>('avatar');
+  const [selectedCharacterId, setSelectedCharacterId] = useState('');
   const [tokenizing, setTokenizing] = useState(false);
   const [sceneText, setSceneText] = useState('');
   const [sceneImageText, setSceneImageText] = useState('');
@@ -287,7 +286,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
 
   const currentTarget = generateTargets.find((item) => item.id === generateTarget) ?? generateTargets[0];
   const resolvedSize = resolveSize(sizePreset, customSize, currentTarget.slot);
-  const currentCanvasTargetId = resolveGenerationTargetId(currentTarget, undefined, tokenizerNpcId);
+  const currentCanvasTargetId = resolveGenerationTargetId(currentTarget, undefined, selectedCharacterId);
   const currentCanvasTask = useMemo(() => {
     const byLastTask = lastTaskId ? album.tasks.find((item) => item.id === lastTaskId) : undefined;
     const matchesCurrentTarget = (item: 图片生成任务) =>
@@ -300,17 +299,18 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const currentCanvasAsset = currentCanvasTask?.resultAssetId ? assetMap.get(currentCanvasTask.resultAssetId) : undefined;
   const currentCanvasSrc = currentCanvasAsset?.dataUrl || currentCanvasAsset?.url || currentCanvasAsset?.localRef || '';
 
-  const handleGenerate = async (nsfw = false, override?: GenerateOverride) => {
+  const handleGenerate = async (_requestedNsfw = false, override?: GenerateOverride) => {
     const target = override?.target ?? currentTarget;
+    const nsfw = target.nsfw === true;
     const targetSize = override?.size ?? (override?.target ? resolveSize(sizePreset, customSize, target.slot) : resolvedSize);
     let promptText = override?.prompt ?? prompt;
     let negativeText = override?.negativePrompt ?? negativePrompt;
     const titleText = override?.title ?? generateTitle;
-    const resolvedTargetId = resolveGenerationTargetId(target, override?.targetId, tokenizerNpcId);
+    const resolvedTargetId = resolveGenerationTargetId(target, override?.targetId, selectedCharacterId);
     const entryTags = override?.tags ?? defaultAlbumEntryTags(target);
     const entryNote = override?.note ?? defaultAlbumEntryNote(target);
     if (requiresCharacterTarget(target) && !resolvedTargetId) {
-      setMessage('请先选择对应伙伴，再生成伙伴图片。');
+      setMessage('请先选择角色，再生成图片。');
       return;
     }
     if (!imageSettings.enabled) {
@@ -825,11 +825,11 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       });
       return { prompt: refined.prompt, negative: refined.negative, anchorMode: anchorInfo.anchorMode, anchorSummary: anchorInfo.anchorSummary, sourcePrompt: built.prompt };
     }
-    if (target.targetType === 'traveler') {
+    if (target.targetType === 'traveler' || (target.nsfw && selectedCharacterId === 'traveler')) {
       const anchorInfo = getTravelerAnchorStatus(traveler);
       const built = buildTravelerImagePrompt({
         traveler,
-        mode: target.tokenizerMode === 'portrait' ? 'portrait' : 'avatar',
+        mode: target.nsfw ? 'nsfw' : target.tokenizerMode === 'portrait' ? 'portrait' : 'avatar',
         rules: imageSettings.rules,
         extraRequirement,
         size: resolvedSize,
@@ -845,7 +845,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       });
       return { prompt: refined.prompt, negative: refined.negative, anchorMode: anchorInfo.anchorMode, anchorSummary: anchorInfo.anchorSummary, sourcePrompt: built.prompt };
     }
-    const npc = npcs.find((item) => item.id === tokenizerNpcId);
+    const npc = npcs.find((item) => item.id === selectedCharacterId);
     if (!npc) {
       setMessage('请先选择一个伙伴。');
       return null;
@@ -879,10 +879,10 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setLastPromptMeta({ anchorMode: built.anchorMode, anchorSummary: built.anchorSummary, sourcePrompt: built.sourcePrompt });
     if (target.tokenizerMode === 'scene') {
       setGenerateTitle(sceneText.trim().slice(0, 16) || target.label);
-    } else if (target.targetType === 'traveler') {
+    } else if (target.targetType === 'traveler' || (target.nsfw && selectedCharacterId === 'traveler')) {
       setGenerateTitle(`${traveler.姓名 || '旅人'}${target.label}`);
     } else {
-      const npc = npcs.find((item) => item.id === tokenizerNpcId);
+      const npc = npcs.find((item) => item.id === selectedCharacterId);
       setGenerateTitle(`${npc?.姓名 || ''}${target.label}`);
     }
     setPromptEditorOpen(true);
@@ -1081,13 +1081,20 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   };
 
   const handleTargetChange = (next: GenerateTarget) => {
-    const target = generateTargets.find((item) => item.id === next) ?? generateTargets[0];
     setGenerateTarget(next);
-    setTokenizerMode(target.tokenizerMode);
     if (next === 'traveler_avatar' || next === 'npc_avatar') setSizePreset('1:1');
     if (next === 'traveler_portrait' || next === 'npc_portrait') setSizePreset((prev) => (prev === '1:1' ? '3:4' : prev));
     setGenerateTitle('');
     clearPromptDraft();
+  };
+
+  const handleManualTargetSelection = (purpose: 'avatar' | 'portrait' | 'nsfw', characterId: string) => {
+    setSelectedCharacterId(characterId);
+    if (purpose === 'nsfw') {
+      handleTargetChange('nsfw_reference');
+      return;
+    }
+    handleTargetChange(`${characterId === 'traveler' ? 'traveler' : 'npc'}_${purpose}` as GenerateTarget);
   };
 
   return (
@@ -1191,8 +1198,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
               <CreateWorkspace
                 imageEnabled={imageSettings.enabled}
                 currentTarget={currentTarget}
-                generateTarget={generateTarget}
-                setGenerateTarget={handleTargetChange}
                 sizePreset={sizePreset}
                 setSizePreset={setSizePreset}
                 customSize={customSize}
@@ -1210,12 +1215,9 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 generating={generating}
                 nsfwVisible={nsfwVisible}
                 companions={companions}
-                tokenizerNpcId={tokenizerNpcId}
-                setTokenizerNpcId={setTokenizerNpcId}
-                tokenizerMode={tokenizerMode}
-                setTokenizerMode={setTokenizerMode}
-                sceneText={sceneText}
-                setSceneText={setSceneText}
+                travelerName={traveler.姓名 || '主角'}
+                selectedCharacterId={currentTarget.targetType === 'traveler' ? 'traveler' : selectedCharacterId}
+                onSelectManualTarget={handleManualTargetSelection}
                 imageRules={imageSettings.rules}
                 onImageRulesChange={persistImageRulesPatch}
                 onBuildPrompt={handleBuildPrompt}

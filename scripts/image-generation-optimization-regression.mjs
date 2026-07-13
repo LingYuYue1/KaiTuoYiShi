@@ -11,7 +11,9 @@ const narrativeParser = fs.readFileSync('services/ai/narrativeImageParse.ts', 'u
 const anchorExtract = fs.readFileSync('services/ai/characterAnchorExtract.ts', 'utf8');
 const albumActions = fs.readFileSync('utils/albumActions.ts', 'utf8');
 const promptRules = fs.readFileSync('utils/imagePromptRules.ts', 'utf8');
-const albumPanel = fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8');
+const albumWorkspaces = fs.readFileSync('components/features/GameSystems/album/workspaces.tsx', 'utf8');
+const albumFoundation = fs.readFileSync('components/features/GameSystems/album/foundation.ts', 'utf8');
+const albumPanel = `${fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8')}\n${albumWorkspaces}\n${albumFoundation}`;
 const imageSettings = fs.readFileSync('components/features/Settings/ImageGenerationSettingsTab.tsx', 'utf8');
 const imageRuleEditor = fs.readFileSync('components/features/ImageGeneration/ImageRuleTemplateEditor.tsx', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
@@ -45,6 +47,8 @@ assert(narrativeParser.includes('const scene = parseSceneFromJson(parsed)'), '�
 assert(albumActions.includes('originalUrl?: string') && albumActions.includes('dataUrl: isDataUrl ? input.src : undefined'), '相册创建必须支持 dataUrl 优先和 originalUrl 保存。');
 
 assert(promptRules.includes('readTravelerCharacterAnchorPrompt'), '旅人生图 prompt 必须读取主控锚点。');
+assert(promptRules.includes("mode: Extract<生图Prompt模式, 'avatar' | 'portrait' | 'nsfw'>"), '旅人生图 prompt 必须支持 NSFW 模式。');
+assert(promptRules.includes("mode === 'nsfw' ? rules.nsfwIsolationRule") && promptRules.includes("mode === 'nsfw' ? rules.nsfwNegative"), '旅人 NSFW prompt 必须注入隔离规则和负面词。');
 assert(promptRules.includes('presentNpcs?: NPC记录[]'), '场景 prompt 必须接收在场 NPC。');
 assert(promptRules.includes('readSceneCharacterAnchors'), '场景 prompt 必须整合主控和在场角色锚点。');
 assert(promptRules.includes('sceneAnchors.negative'), '场景 prompt 的负面词必须合并角色锚点负面词。');
@@ -83,6 +87,14 @@ assert(albumPanel.includes('buildPresentSceneNpcs'), '场景生图必须收集�
 assert(albumPanel.includes('buildSceneSourceText'), '词组转化器 sourceText 必须包含场景和锚点资料。');
 assert(albumPanel.includes('originalUrl: result.originalUrl'), '生成结果入库必须保存原始 URL。');
 assert(albumPanel.includes('图片生成') && albumPanel.includes('生成工作室'), '相册必须以图片生成和生成工作室作为主入口。');
+assert(albumPanel.includes('const [selectedCharacterId, setSelectedCharacterId] = useState'), '手动生图必须保存统一的角色选择状态。');
+assert(albumPanel.includes('const handleManualTargetSelection') && albumPanel.includes("handleTargetChange('nsfw_reference')"), '用途和角色下拉必须映射回既有生成目标。');
+assert(albumPanel.includes('const nsfw = target.nsfw === true') && albumPanel.includes('imageSettings.NSFW接口'), '统一生成按钮必须按目标自动路由 NSFW 接口。');
+assert(albumPanel.includes("target.nsfw && selectedCharacterId === 'traveler'") && albumPanel.includes("mode: target.nsfw ? 'nsfw'"), '主角选择 NSFW 用途时必须走旅人锚点和 NSFW prompt。');
+assert(albumWorkspaces.includes('<Panel title="生成对象"') && albumWorkspaces.includes('选择用途') && albumWorkspaces.includes('选择伙伴'), '图片生成侧栏必须改为用途和伙伴两个下拉框。');
+assert(albumWorkspaces.includes('value="traveler">{props.travelerName}（主角）') && albumWorkspaces.includes('{props.companions.map'), '伙伴下拉必须把主角作为首个实体选项，并列出伙伴。');
+assert(albumWorkspaces.includes("{props.nsfwVisible && <option value=\"nsfw\">NSFW 参考</option>}") && albumFoundation.includes("id: 'nsfw_reference'"), 'NSFW 只在启用后作为第三个用途出现。');
+assert(albumWorkspaces.includes("{props.generating ? '生成中' : '生成'}") && albumWorkspaces.includes('onClick={props.onGenerate}'), '图片生成工作区必须使用统一生成按钮。');
 assert(albumPanel.includes('导出图片 ZIP') && albumPanel.includes('createZipBlob') && !albumPanel.includes('导出相册 JSON'), '相册整理页导出必须是图片 ZIP 包，不再导出相册 JSON。');
 assert(albumPanel.includes("sceneKind?: Exclude<SceneLibraryFilter, 'all'>") && albumPanel.includes("{ id: 'snapshot', title: '故事快照'"), '相册导入必须允许导入到故事快照分类。');
 assert(albumPanel.includes("const tag = sceneKind === 'snapshot' ? '故事快照'") && albumPanel.includes("note: entry.note || tag"), '导入故事快照必须写入故事快照标签和备注，避免落到普通场景图。');

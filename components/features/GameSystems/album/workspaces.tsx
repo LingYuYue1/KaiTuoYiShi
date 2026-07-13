@@ -39,7 +39,7 @@ import {
   cardClip, smallClip, albumGridLayer, albumGridSize, heroSurface, panelSurface, insetSurface,
   imageWellSurface, titleColor, bodyColor, mutedColor, faintColor, activeTextColor, accentColor,
   nsfwColor, activeAccentSurface, quietAccentSurface, cardSurface, heroGridBackgroundStyle,
-  tabs, generateTargets, imageGenerationTargets, navGroups, groupForTab,
+  tabs, generateTargets, navGroups, groupForTab,
 } from './foundation';
 import type {
   WorkTab, GenerateTarget, NsfwPartImageSlot, LibraryStatusFilter, PromptMeta, StorySnapshotSource,
@@ -1523,8 +1523,6 @@ export function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: {
 export function CreateWorkspace(props: {
   imageEnabled: boolean;
   currentTarget: typeof generateTargets[number];
-  generateTarget: GenerateTarget;
-  setGenerateTarget: (v: GenerateTarget) => void;
   sizePreset: 'default' | '1:1' | '3:4' | '16:9' | 'custom';
   setSizePreset: (v: 'default' | '1:1' | '3:4' | '16:9' | 'custom') => void;
   customSize: string;
@@ -1532,8 +1530,8 @@ export function CreateWorkspace(props: {
   resolvedSize: string;
   extraRequirement: string;
   setExtraRequirement: (v: string) => void;
-  prompt: string; setPrompt: (v: string) => void; negativePrompt: string; setNegativePrompt: (v: string) => void; generateTitle: string; setGenerateTitle: (v: string) => void; onGenerate: (nsfw?: boolean) => void; generating: boolean; nsfwVisible: boolean;
-  companions: NPC记录[]; tokenizerNpcId: string; setTokenizerNpcId: (v: string) => void; tokenizerMode: 'avatar' | 'portrait' | 'scene'; setTokenizerMode: (v: 'avatar' | 'portrait' | 'scene') => void; sceneText: string; setSceneText: (v: string) => void; onBuildPrompt: () => void | Promise<void>; tokenizing: boolean;
+  prompt: string; setPrompt: (v: string) => void; negativePrompt: string; setNegativePrompt: (v: string) => void; generateTitle: string; setGenerateTitle: (v: string) => void; onGenerate: () => void; generating: boolean; nsfwVisible: boolean;
+  companions: NPC记录[]; travelerName: string; selectedCharacterId: string; onSelectManualTarget: (purpose: 'avatar' | 'portrait' | 'nsfw', characterId: string) => void; onBuildPrompt: () => void | Promise<void>; tokenizing: boolean;
   imageRules: 文生图规则中心设置;
   onImageRulesChange: (patch: Partial<文生图规则中心设置>) => void;
   promptEditorOpen: boolean;
@@ -1550,9 +1548,16 @@ export function CreateWorkspace(props: {
         sourcePrompt: props.canvasTask.sourcePrompt,
       }
     : props.promptMeta;
+  const selectedPurpose = props.currentTarget.nsfw
+    ? 'nsfw'
+    : props.currentTarget.tokenizerMode === 'portrait' ? 'portrait' : 'avatar';
+  const selectedCharacterId = props.currentTarget.targetType === 'traveler' ? 'traveler' : props.selectedCharacterId;
+  const selectedCharacterLabel = selectedCharacterId === 'traveler'
+    ? `${props.travelerName}（主角）`
+    : props.companions.find((npc) => npc.id === selectedCharacterId)?.姓名 || '未选择伙伴';
   const parameterPanel = (
     <Panel title="生成参数">
-      {props.currentTarget.targetType === 'traveler' ? (
+      {props.currentTarget.targetType === 'traveler' || (props.currentTarget.nsfw && selectedCharacterId === 'traveler') ? (
         <TravelerGenerationParameters
           sizePreset={props.sizePreset}
           setSizePreset={props.setSizePreset}
@@ -1573,9 +1578,6 @@ export function CreateWorkspace(props: {
           targetId={props.currentTarget.id}
           imageRules={props.imageRules}
           onImageRulesChange={props.onImageRulesChange}
-          companions={props.companions}
-          tokenizerNpcId={props.tokenizerNpcId}
-          setTokenizerNpcId={props.setTokenizerNpcId}
           extraRequirement={props.extraRequirement}
           setExtraRequirement={props.setExtraRequirement}
         />
@@ -1585,39 +1587,35 @@ export function CreateWorkspace(props: {
   );
   return (
     <div className="space-y-4">
-      <StudioHero imageEnabled={props.imageEnabled} currentTarget={props.currentTarget} />
+      <StudioHero imageEnabled={props.imageEnabled} currentTarget={props.currentTarget} currentCharacterLabel={selectedCharacterLabel} />
       <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
         <div className="space-y-4">
-          <Panel title="生成用途" className="h-full" contentClassName="flex min-h-0 flex-1 flex-col">
-            <div className="flex h-full flex-col gap-2">
-              {imageGenerationTargets
-                .filter((target) => !target.nsfw || props.nsfwVisible)
-                .map((target) => (
-                  <button
-                    key={target.id}
-                    type="button"
-                    onClick={() => props.setGenerateTarget(target.id)}
-                    className="flex min-h-[76px] w-full flex-col justify-center px-3 py-3 text-left transition-all"
-                    style={{
-                      color: props.generateTarget === target.id ? 'rgb(var(--tj-ui-active-text))' : target.nsfw ? 'rgba(var(--tj-ui-nsfw),0.9)' : 'rgba(var(--tj-ui-muted),0.82)',
-                      background: props.generateTarget === target.id
-                        ? target.nsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), rgb(var(--tj-ui-nsfw)))' : activeAccentSurface
-                        : target.nsfw ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-ui-panel-strong),0.36)',
-                      boxShadow: props.generateTarget === target.id
-                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42), 0 0 12px rgba(var(--tj-btn-primary-start),0.1)'
-                        : target.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.24)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)',
-                      clipPath: smallClip,
-                    }}
-                  >
-                    <div className="font-serif text-sm font-bold tracking-[0.12em]">{target.label}</div>
-                    <div
-                      className="mt-1 overflow-hidden text-[11px] leading-relaxed opacity-72"
-                      style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}
-                    >
-                      {target.desc}
-                    </div>
-                  </button>
-                ))}
+          <Panel title="生成对象" className="h-full" contentClassName="flex min-h-0 flex-1 flex-col">
+            <div className="space-y-3">
+              <Field label="选择用途">
+                <select
+                  value={selectedPurpose}
+                  onChange={(event) => props.onSelectManualTarget(event.target.value as 'avatar' | 'portrait' | 'nsfw', selectedCharacterId)}
+                  className="kaituo-input w-full px-3 py-2 text-sm"
+                  style={{ clipPath: smallClip }}
+                >
+                  <option value="avatar">头像</option>
+                  <option value="portrait">立绘</option>
+                  {props.nsfwVisible && <option value="nsfw">NSFW 参考</option>}
+                </select>
+              </Field>
+              <Field label="选择伙伴">
+                <select
+                  value={selectedCharacterId}
+                  onChange={(event) => props.onSelectManualTarget(selectedPurpose, event.target.value)}
+                  className="kaituo-input w-full px-3 py-2 text-sm"
+                  style={{ clipPath: smallClip }}
+                >
+                  <option value="">选择伙伴</option>
+                  <option value="traveler">{props.travelerName}（主角）</option>
+                  {props.companions.map((npc) => <option key={npc.id} value={npc.id}>{npc.姓名}</option>)}
+                </select>
+              </Field>
             </div>
           </Panel>
         </div>
@@ -1632,18 +1630,13 @@ export function CreateWorkspace(props: {
               promptMeta={activePromptMeta}
               onRetry={() => props.onRetryTask(props.canvasTask)}
             />
-            <div className="grid gap-2 md:grid-cols-2">
+            <div className="grid gap-2">
               <DraftActionButton disabled={props.tokenizing} onClick={() => { void props.onBuildPrompt(); }}>
                 {props.tokenizing ? '整理中' : '生成提示词'}
               </DraftActionButton>
-              <DraftActionButton disabled={props.generating || props.currentTarget.nsfw === true} onClick={() => props.onGenerate(false)}>
-                {props.generating ? '生成中' : '普通生成'}
+              <DraftActionButton disabled={props.generating || (props.currentTarget.nsfw && !props.nsfwVisible)} onClick={props.onGenerate} tone={props.currentTarget.nsfw ? 'nsfw' : 'normal'}>
+                {props.generating ? '生成中' : '生成'}
               </DraftActionButton>
-              {props.nsfwVisible && (
-                <DraftActionButton disabled={props.generating || props.currentTarget.nsfw !== true} onClick={() => props.onGenerate(true)} tone="nsfw">
-                  NSFW 生成
-                </DraftActionButton>
-              )}
             </div>
             <div className="grid gap-2 md:grid-cols-2 md:items-stretch">
               <AnchorModeBadge promptMeta={activePromptMeta} />
@@ -2045,9 +2038,6 @@ export function NpcGenerationParameters(props: {
   targetId: GenerateTarget;
   imageRules: 文生图规则中心设置;
   onImageRulesChange: (patch: Partial<文生图规则中心设置>) => void;
-  companions: NPC记录[];
-  tokenizerNpcId: string;
-  setTokenizerNpcId: (v: string) => void;
   extraRequirement: string;
   setExtraRequirement: (v: string) => void;
 }) {
@@ -2063,12 +2053,6 @@ export function NpcGenerationParameters(props: {
   ];
   return (
     <div className="space-y-3">
-      <Field label="选择伙伴">
-        <select value={props.tokenizerNpcId} onChange={(e) => props.setTokenizerNpcId(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-          <option value="">选择伙伴</option>
-          {props.companions.map((npc) => <option key={npc.id} value={npc.id}>{npc.姓名}</option>)}
-        </select>
-      </Field>
       {!isAvatar && (
         <OptionButtonGroup
           label="构图预设"
@@ -2194,7 +2178,8 @@ export function pngStyleSourceLabel(source: PNG画风预设来源): string {
   return '通用风格';
 }
 
-export function StudioHero({ imageEnabled, currentTarget }: { imageEnabled: boolean; currentTarget: typeof generateTargets[number] }) {
+export function StudioHero({ imageEnabled, currentTarget, currentCharacterLabel }: { imageEnabled: boolean; currentTarget: typeof generateTargets[number]; currentCharacterLabel: string }) {
+  const purposeLabel = currentTarget.nsfw ? 'NSFW 参考' : currentTarget.tokenizerMode === 'portrait' ? '立绘' : '头像';
   return (
     <section className="px-4 py-3" style={{ background: heroSurface, ...heroGridBackgroundStyle, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.58), inset 3px 0 0 rgba(var(--tj-tech-cyan),0.36)', clipPath: cardClip }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2203,7 +2188,7 @@ export function StudioHero({ imageEnabled, currentTarget }: { imageEnabled: bool
         <div className="mt-1 font-serif text-xl font-bold tracking-[0.2em]" style={{ color: titleColor }}>图片生成</div>
         </div>
         <div className="px-3 py-2 text-xs" style={{ color: imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-          {imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{currentTarget.label}
+          {imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{currentCharacterLabel} · {purposeLabel}
         </div>
       </div>
         <p className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.76)' }}>
