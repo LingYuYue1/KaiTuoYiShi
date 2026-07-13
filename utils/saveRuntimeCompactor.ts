@@ -3,6 +3,8 @@ import type { 相册系统 } from '@/models/imageGeneration';
 import type { 手机系统 } from '@/models/phone';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 创建相册资源引用 } from '@/utils/albumActions';
+import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 
 const DATA_IMAGE_RE = /^data:image\/[a-z0-9.+-]+;base64,/i;
 const LARGE_TEXT_LIMIT = 8000;
@@ -76,6 +78,9 @@ export function compactPreTurnSnapshot(snapshot: 回合快照): 回合快照 {
     ...snapshot,
     相册: album,
     手机: compactPhoneImages(snapshot.手机 as 手机系统 | undefined, refs),
+    剧情编织: snapshot.剧情编织
+      ? buildPersistedStoryWeavingSystem(归一化剧情编织系统(snapshot.剧情编织))
+      : snapshot.剧情编织,
     queueTasks: compactQueueTasks(snapshot.queueTasks),
   };
 }

@@ -5,6 +5,8 @@ import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { 默认文生图规则中心, normalizeImageRules } from '@/utils/imagePromptRules';
 import type { 剧情编织API覆盖 } from './storyWeaving';
 import type { STWorldInfoEntry, STPresetEntry, STSamplingParams, STPresetEntryV2, TavernPostProcessMode } from './stTypes';
+import { resolveLegacyStarMapLocationId } from './starMap';
+import type { StarMapLocation, StarMapSceneAnchor, StarMapWaypoint } from './starMap';
 
 export interface API配置项 {
   id: string;
@@ -312,6 +314,31 @@ export interface 游戏设置 {
   enablePlayerSpeechExpansion: boolean;
   /** 额外功能：用于承载不属于核心叙事/API/系统面板的小型修复与玩法增强。 */
   额外功能: 额外功能设置;
+  /** 星轨航图：玩家扩展航点与地点。只作为本地地图叠加层，不注入主剧情。 */
+  星轨航图系统: 星轨航图系统设置;
+}
+
+export interface 星轨航图系统设置 {
+  customWaypoints: StarMapWaypoint[];
+  customLocations: StarMapLocation[];
+  installedPackages: 星轨航图地图包记录[];
+}
+
+export interface 星轨航图地图包记录 {
+  id: string;
+  packageId: string;
+  name: string;
+  version: string;
+  author?: string;
+  sourceKind?: 'local' | 'imported' | 'workshop' | 'system';
+  license?: string;
+  sourceUrl?: string;
+  coverAsset?: string;
+  tags?: string[];
+  installedAt: string;
+  enabled?: boolean;
+  waypointIds: string[];
+  locationIds: string[];
 }
 
 export interface 污染词清理设置 {
@@ -1135,6 +1162,7 @@ export function 创建默认游戏设置(): 游戏设置 {
     enableNoControl: true,
     enablePlayerSpeechExpansion: false,
     额外功能: 创建默认额外功能设置(),
+    星轨航图系统: 创建默认星轨航图系统设置(),
     // ST 预设兼容相关字段（可选，这里显式列默认值保持风格一致）
     cotLanguage: 'zh',
     enableStPreset: true,
@@ -1149,6 +1177,142 @@ export function 创建默认游戏设置(): 游戏设置 {
     currentStPresetIdV2: null,
     currentStCharacterId: null,
     stPostProcessMode: '未选择',
+  };
+}
+
+export function 创建默认星轨航图系统设置(): 星轨航图系统设置 {
+  return {
+    customWaypoints: [],
+    customLocations: [],
+    installedPackages: [],
+  };
+}
+
+function 归一化星轨坐标(value: unknown, fallback: number): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(6, Math.min(94, Math.round(numeric)));
+}
+
+function 归一化星轨文本数组(value: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(value)) return fallback;
+  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 24);
+}
+
+function 归一化星轨场景锚点(value: unknown): StarMapSceneAnchor[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item, index): StarMapSceneAnchor | null => {
+      if (!item || typeof item !== 'object') return null;
+      const raw = item as Partial<StarMapSceneAnchor>;
+      const name = String(raw.name || '').trim();
+      if (!name) return null;
+      return {
+        id: String(raw.id || `scene_anchor_${index}`).trim(),
+        name,
+        aliases: 归一化星轨文本数组(raw.aliases, [name]),
+        description: String(raw.description || '场景内的语义定位点。').trim(),
+        tags: 归一化星轨文本数组(raw.tags, ['场景锚点']),
+        mapPosition: {
+          x: 归一化星轨坐标(raw.mapPosition?.x, 50),
+          y: 归一化星轨坐标(raw.mapPosition?.y, 50),
+        },
+        legacyLocationIds: 归一化星轨文本数组(raw.legacyLocationIds, []),
+      };
+    })
+    .filter((item): item is StarMapSceneAnchor => Boolean(item))
+    .slice(0, 48);
+}
+
+export function 归一化星轨航图系统设置(input?: Partial<星轨航图系统设置>): 星轨航图系统设置 {
+  const defaults = 创建默认星轨航图系统设置();
+  const customWaypoints = Array.isArray(input?.customWaypoints)
+    ? input.customWaypoints
+        .map((item, index): StarMapWaypoint | null => {
+          if (!item || typeof item !== 'object') return null;
+          const name = String(item.name || '').trim();
+          if (!name) return null;
+          return {
+            id: String(item.id || `custom_waypoint_${index}`).trim(),
+            name,
+            shortName: String(item.shortName || name).trim().slice(0, 12) || name,
+            kind: item.kind || 'fan_world',
+            imageAsset: typeof item.imageAsset === 'string' ? item.imageAsset : undefined,
+            source: item.source || 'fan',
+            status: item.status || 'draft',
+            description: String(item.description || '玩家扩展航点。').trim(),
+            tags: 归一化星轨文本数组(item.tags, ['玩家扩展']),
+            position: {
+              x: 归一化星轨坐标(item.position?.x, 68),
+              y: 归一化星轨坐标(item.position?.y, 22),
+            },
+          };
+        })
+        .filter((item): item is StarMapWaypoint => Boolean(item))
+        .slice(0, 80)
+    : defaults.customWaypoints;
+  const waypointIds = new Set(customWaypoints.map((item) => item.id));
+  const customLocations = Array.isArray(input?.customLocations)
+    ? input.customLocations
+        .map((item, index): StarMapLocation | null => {
+          if (!item || typeof item !== 'object') return null;
+          const name = String(item.name || '').trim();
+          const waypointId = String(item.waypointId || '').trim();
+          if (!name || !waypointId) return null;
+          return {
+            id: String(item.id || `custom_location_${index}`).trim(),
+            waypointId,
+            parentId: resolveLegacyStarMapLocationId(typeof item.parentId === 'string' ? item.parentId : undefined),
+            name,
+            kind: item.kind || 'special',
+            source: item.source || 'fan',
+            status: item.status || 'known',
+            aliases: 归一化星轨文本数组(item.aliases, [name]),
+            description: String(item.description || '玩家从剧情地点收纳的扩展地点。').trim(),
+            tags: 归一化星轨文本数组(item.tags, ['玩家扩展']),
+            mapPosition: {
+              x: 归一化星轨坐标(item.mapPosition?.x, 50),
+              y: 归一化星轨坐标(item.mapPosition?.y, 50),
+            },
+            navigationMode: item.navigationMode === 'interior' ? 'interior' : 'terminal',
+            sceneAnchors: 归一化星轨场景锚点(item.sceneAnchors),
+          };
+        })
+        .filter((item): item is StarMapLocation => item !== null && (item.waypointId.startsWith('custom_') ? waypointIds.has(item.waypointId) : true))
+        .slice(0, 240)
+    : defaults.customLocations;
+  const installedPackages = Array.isArray(input?.installedPackages)
+    ? input.installedPackages
+        .map((item, index): 星轨航图地图包记录 | null => {
+          if (!item || typeof item !== 'object') return null;
+          const raw = item as Partial<星轨航图地图包记录>;
+          const name = String(raw.name || '').trim();
+          if (!name) return null;
+          return {
+            id: String(raw.id || `star_map_package_${index}`).trim(),
+            packageId: String(raw.packageId || raw.id || `star_map_package_${index}`).trim(),
+            name,
+            version: String(raw.version || '1.0.0').trim(),
+            author: typeof raw.author === 'string' ? raw.author.trim() : undefined,
+            sourceKind: raw.sourceKind === 'local' || raw.sourceKind === 'workshop' || raw.sourceKind === 'system' ? raw.sourceKind : 'imported',
+            license: typeof raw.license === 'string' ? raw.license.trim().slice(0, 80) : undefined,
+            sourceUrl: typeof raw.sourceUrl === 'string' ? raw.sourceUrl.trim().slice(0, 240) : undefined,
+            coverAsset: typeof raw.coverAsset === 'string' && raw.coverAsset.startsWith('/assets/') ? raw.coverAsset.trim().slice(0, 240) : undefined,
+            tags: 归一化星轨文本数组(raw.tags, []).slice(0, 12),
+            installedAt: String(raw.installedAt || new Date().toISOString()).trim(),
+            enabled: raw.enabled !== false,
+            waypointIds: 归一化星轨文本数组(raw.waypointIds, []),
+            locationIds: 归一化星轨文本数组(raw.locationIds, []),
+          };
+        })
+        .filter((item): item is 星轨航图地图包记录 => Boolean(item))
+        .slice(0, 80)
+    : defaults.installedPackages;
+
+  return {
+    customWaypoints,
+    customLocations,
+    installedPackages,
   };
 }
 

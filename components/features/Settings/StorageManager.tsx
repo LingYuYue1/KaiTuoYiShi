@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   backupDesktopStateBeforeOneTimeMigration,
   backupCurrentSavesToDesktop,
@@ -211,13 +211,18 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     const rebuildLoop = async () => {
       setRebuildingSummaries(true);
       try {
+        let changed = false;
         for (let guard = 0; guard < 200 && !cancelled; guard += 1) {
           const added = await rebuildSaveSummariesBatch(24);
           if (cancelled || added <= 0) break;
-          const list = await getSaveList();
-          if (!cancelled) setSaves(list);
-          await new Promise((resolve) => globalThis.setTimeout(resolve, 80));
+          changed = true;
+          if ((guard + 1) % 4 === 0) {
+            const list = await getSaveList();
+            if (!cancelled) setSaves(list);
+          }
+          await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
         }
+        if (changed && !cancelled) setSaves(await getSaveList());
       } catch (err) {
         console.warn('[storage-manager] background summary recovery failed', err);
       } finally {

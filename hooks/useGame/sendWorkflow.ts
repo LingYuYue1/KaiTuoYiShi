@@ -36,6 +36,7 @@ import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/m
 import { retrieveZhikuContext, retrieveZhikuContextWithModel, type 智库召回诊断 } from '@/services/zhikuRetrieval';
 import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
 import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
+import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { getBuiltinPresets } from '@/data/builtinPresets';
 import { retrieveYitingContextWithModel } from '@/services/yitingRetrieval';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
@@ -641,7 +642,7 @@ async function resolveStoryWeavingForBackgroundWrite(input: {
   proposed: 剧情编织系统;
 }): Promise<{ system: 剧情编织系统; concurrentChange: boolean }> {
   const latest = await loadSetting<剧情编织系统>('storyWeavingSystem');
-  const latestNormalized = latest ? 归一化剧情编织系统(latest) : null;
+  const latestNormalized = latest ? hydratePersistedStoryWeavingSystem(latest, input.workflowBase) : null;
   if (!latestNormalized) return { system: input.proposed, concurrentChange: false };
   const baseSignature = getStoryWeavingWriteSignature(归一化剧情编织系统(input.workflowBase));
   const latestSignature = getStoryWeavingWriteSignature(latestNormalized);
@@ -1086,10 +1087,6 @@ export interface SendWorkflowDeps {
   } | null;
 }
 
-function cloneForSnapshot<T>(value: T): T {
-  if (typeof structuredClone === 'function') return structuredClone(value);
-  return JSON.parse(JSON.stringify(value)) as T;
-}
 
 function compactForRerollInstruction(text: string): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
@@ -1696,25 +1693,24 @@ export async function executeSendWorkflow(
   try {
     // 0. 本回合 user 发送之前的全状态快照，留给 reroll 回滚用。
     //    避免重 roll 时上次的变量副作用堆叠（NPC / 新闻等都会双份）。
-    const fullPreTurnSnapshot: 回合快照 = {
-      旅人: cloneForSnapshot(state.旅人),
-      世界: cloneForSnapshot(effectiveWorld),
-      记忆: cloneForSnapshot(state.记忆),
-      忆庭: cloneForSnapshot(state.忆庭),
-      智库: cloneForSnapshot(state.智库),
-      手机: cloneForSnapshot(state.手机),
-      NPC: cloneForSnapshot(state.NPC),
-      相册: cloneForSnapshot(state.相册),
-      新闻: cloneForSnapshot(state.新闻),
-      剧情: cloneForSnapshot(state.剧情),
-      剧情编织: cloneForSnapshot(state.剧情编织),
-      variableBatches: cloneForSnapshot(state.variableBatches),
-      queueTasks: cloneForSnapshot(state.queueTasks),
+    const preTurnSnapshot = compactPreTurnSnapshot({
+      旅人: state.旅人,
+      世界: effectiveWorld,
+      记忆: state.记忆,
+      忆庭: state.忆庭,
+      智库: state.智库,
+      手机: state.手机,
+      NPC: state.NPC,
+      相册: state.相册,
+      新闻: state.新闻,
+      剧情: state.剧情,
+      剧情编织: state.剧情编织,
+      variableBatches: state.variableBatches,
+      queueTasks: state.queueTasks,
       turnCount: state.turnCount,
       pendingOpeningTrigger: state.pendingOpeningTrigger,
-    };
-    const preTurnSnapshot = compactPreTurnSnapshot(fullPreTurnSnapshot);
-    rollbackSnapshotOnAbort = fullPreTurnSnapshot;
+    });
+    rollbackSnapshotOnAbort = preTurnSnapshot;
 
     // 1. Add user message。同时把过往 assistant 上的 snapshot 全部清掉，只保留即将生成的最新一条，
     //    避免存档无限膨胀（snapshot 只服务"最近一次 reroll"，老的没用）。
@@ -2763,7 +2759,7 @@ export async function executeSendWorkflow(
         storyWeavingConcurrentChange = resolvedStory.concurrentChange;
         if (!storyWeavingConcurrentChange) {
           state.set剧情编织(storyWeavingForSave);
-          await saveSetting('storyWeavingSystem', storyWeavingForSave);
+          await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(storyWeavingForSave));
         } else {
           pushQueueTask(state, 'zhiku', 'success', {
             detail: '检测到剧情编织面板已有更新，本回合后台未覆盖最新导入/分解结果。',
@@ -3024,7 +3020,7 @@ export async function executeSendWorkflow(
       state.setChatHistory(rollbackHistoryOnAbort);
       if (rollbackSnapshotOnAbort) {
         const rollbackStoryWeaving = restorePreTurnSnapshot(state, rollbackSnapshotOnAbort);
-        await saveSetting('storyWeavingSystem', rollbackStoryWeaving);
+        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(rollbackStoryWeaving));
       }
       state.setWorkflowHint('已停止生成，本次输入已回到输入框，可修改后重新发送。');
       state.setWorkflowStatus('');

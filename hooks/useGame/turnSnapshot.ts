@@ -4,11 +4,13 @@ import { 归一化相册系统, type 相册系统 } from '@/models/imageGenerati
 import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化手机系统 } from '@/models/phone';
 import { 归一化新闻列表 } from '@/models/news';
+import { 归一化剧情节点列表 } from '@/models/plot';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
 import { 归一化智库系统 } from '@/models/zhiku';
+import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 
 export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回合快照): 剧情编织系统 {
   state.set旅人(snapshot.旅人 as Parameters<typeof state.set旅人>[0]);
@@ -20,8 +22,11 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
   state.setNPC(归一化NPC记录列表(snapshot.NPC as UseGameStateReturn['NPC']));
   state.set相册((current) => restoreAlbumSnapshot(snapshot.相册 as UseGameStateReturn['相册'], current));
   state.set新闻(归一化新闻列表(snapshot.新闻 as UseGameStateReturn['新闻']));
-  state.set剧情(snapshot.剧情 as Parameters<typeof state.set剧情>[0]);
-  const storyWeaving = 归一化剧情编织系统(snapshot.剧情编织 as UseGameStateReturn['剧情编织']);
+  state.set剧情(归一化剧情节点列表(snapshot.剧情));
+  const storyWeaving = hydratePersistedStoryWeavingSystem(
+    归一化剧情编织系统(snapshot.剧情编织 as UseGameStateReturn['剧情编织']),
+    state.剧情编织,
+  );
   state.set剧情编织(storyWeaving);
   state.setVariableBatches(snapshot.variableBatches as Parameters<typeof state.setVariableBatches>[0]);
   state.setQueueTasks((snapshot.queueTasks ?? []) as Parameters<typeof state.setQueueTasks>[0]);

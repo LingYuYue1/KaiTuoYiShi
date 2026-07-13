@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Jarilo VI waypoint">
+  <defs>
+    <radialGradient id="jariloCore" cx="32%" cy="24%" r="68%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.18" stop-color="#dceeff"/>
+      <stop offset="0.42" stop-color="#8fb9d3"/>
+      <stop offset="0.68" stop-color="#405d83"/>
+      <stop offset="1" stop-color="#132039"/>
+    </radialGradient>
+    <linearGradient id="jariloIce" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f5fbff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#7fb4d8" stop-opacity="0.25"/>
+    </linearGradient>
+    <filter id="jariloGlow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="22" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.47 0 0 0 0 0.75 0 0 0 0 0.94 0 0 0 0.82 0"/>
+      <feBlend in="SourceGraphic" mode="screen"/>
+    </filter>
+    <clipPath id="jariloClip"><circle cx="256" cy="256" r="178"/></clipPath>
+  </defs>
+  <circle cx="256" cy="256" r="216" fill="#7fc8f4" opacity="0.16" filter="url(#jariloGlow)"/>
+  <circle cx="256" cy="256" r="178" fill="url(#jariloCore)" filter="url(#jariloGlow)"/>
+  <g clip-path="url(#jariloClip)">
+    <path d="M63 235c80-44 118-9 176-33 63-26 127-89 216-29v63c-80-31-130 16-207 31-68 13-112-17-185 33z" fill="url(#jariloIce)" opacity="0.82"/>
+    <path d="M82 334c76-38 138 2 202-16 68-19 108-54 166-23v64c-81-29-119 28-200 33-73 4-119-30-168 8z" fill="#dff6ff" opacity="0.42"/>
+    <path d="M101 154c63 25 111 10 160-15 53-27 97-32 155-4" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round" opacity="0.34"/>
+    <path d="M111 198c45 13 80 9 118-8" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.36"/>
+    <circle cx="170" cy="150" r="34" fill="#ffffff" opacity="0.18"/>
+  </g>
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#e8f8ff" stroke-width="3" opacity="0.5"/>
+</svg>

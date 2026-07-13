@@ -16,6 +16,7 @@ import {
   归一化智库系统设置,
   归一化手机系统设置,
   归一化额外功能设置,
+  归一化星轨航图系统设置,
   归一化视觉文本设置,
 } from '@/models/settings';
 import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveSetting } from '@/services/dbService';
@@ -33,9 +34,10 @@ import { 归一化手机系统 } from '@/models/phone';
 import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
+import { 归一化剧情节点列表 } from '@/models/plot';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
-import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
+import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
 
@@ -95,6 +97,7 @@ export function buildSavePayload(
       文生图系统: 归一化文生图系统设置(state.gameSettings.文生图系统),
       记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统 ?? 创建默认记忆系统设置()),
       额外功能: 归一化额外功能设置(state.gameSettings.额外功能),
+      星轨航图系统: 归一化星轨航图系统设置(state.gameSettings.星轨航图系统),
       visualTextSettings: 归一化视觉文本设置(state.gameSettings.visualTextSettings),
     }),
     apiSettings: 创建空API设置(),
@@ -175,6 +178,7 @@ function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
     deepSeekMainMode: defaults.deepSeekMainMode,
     backgroundTaskMode: settings.backgroundTaskMode ?? defaults.backgroundTaskMode,
     visualTextSettings: 归一化视觉文本设置(settings.visualTextSettings),
+    星轨航图系统: 归一化星轨航图系统设置(settings.星轨航图系统),
     enableCacheDiagnostics: defaults.enableCacheDiagnostics,
     variableApi: defaults.variableApi,
     新闻系统: {
@@ -349,7 +353,7 @@ async function applySaveToState(
   state.setNPC(归一化NPC记录列表(save.NPC));   // 旧存档/AI 半成品对象统一兜底
   state.set相册(归一化相册系统(save.相册));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
-  state.set剧情(save.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
+  state.set剧情(归一化剧情节点列表(save.剧情)); // 旧存档与 AI 半成品对象统一兜底
   const normalizedStoryWeaving = alignStoryWeavingToOpeningArchive(
     归一化剧情编织系统(save.剧情编织),
     safeWorld.开局档案,
@@ -365,7 +369,7 @@ async function applySaveToState(
   });
   const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
-  await saveSetting('storyWeavingSystem', nextStoryWeaving);
+  await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
   state.setVariableBatches(save.variableBatches ?? []); // 旧存档没有该字段，兜底空数组
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。
@@ -381,6 +385,7 @@ async function applySaveToState(
     文生图系统: 归一化文生图系统设置(safeGameSettings.文生图系统),
     记忆系统: 归一化记忆系统设置(safeGameSettings.记忆系统),
     额外功能: 归一化额外功能设置(safeGameSettings.额外功能),
+    星轨航图系统: 归一化星轨航图系统设置(safeGameSettings.星轨航图系统),
     backgroundTaskMode: safeGameSettings.backgroundTaskMode ?? defaults.backgroundTaskMode,
     enableMaleNsfwArchive: safeGameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
     visualTextSettings: 归一化视觉文本设置(safeGameSettings.visualTextSettings),

@@ -224,6 +224,8 @@ export interface NPC记录 {
   id: string;
   姓名: string;
   别名?: string;
+  locationId?: string;                 // 星轨航图地点 id；缺省表示位置未知
+  anchorId?: string;                   // 四级地图场景锚点 id
   阶位: NPC阶位;                     // companion=进 AI prompt;extra=只存档
   好感度: number;                    // -100..100
   关系: NPC关系类型;
@@ -279,11 +281,15 @@ export function 创建NPC记录(input: {
   头像?: string;
   图像档案?: NPC记录['图像档案'];
   NSFW档案?: NPC记录['NSFW档案'];
+  locationId?: string;
+  anchorId?: string;
 }): NPC记录 {
   return {
     id: `npc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     姓名: input.姓名,
     别名: input.别名,
+    locationId: input.locationId,
+    anchorId: input.anchorId,
     阶位: input.阶位 ?? 'extra',
     好感度: 0,
     关系: 'stranger',
@@ -325,6 +331,8 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
   const rawAffinity = source.好感度 ?? source.affinity ?? source.favor ?? source.亲密度;
   const rawFirstTurn = source.初见回合 ?? source.firstSeenTurn ?? source.firstTurn;
   const rawRecentTurn = source.最近回合 ?? source.lastSeenTurn ?? source.recentTurn;
+  const rawLocationId = source.locationId ?? source.地图地点ID ?? source.地点ID;
+  const rawAnchorId = source.anchorId ?? source.地图锚点ID ?? source.锚点ID;
 
   const name = typeof rawName === 'string' && rawName.trim()
     ? rawName.trim()
@@ -365,6 +373,8 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
       : `npc-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
     姓名: name,
     别名: typeof rawAlias === 'string' ? rawAlias : undefined,
+    locationId: readNpcString(rawLocationId),
+    anchorId: readNpcString(rawAnchorId),
     阶位: shouldForceCompanion ? 'companion' : tier,
     好感度: Number.isFinite(affinity) ? Math.max(-100, Math.min(100, affinity)) : 0,
     关系: relation,
@@ -407,6 +417,8 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     ...preferred,
     姓名: 选择NPC显示姓名(base, incoming, preferred),
     别名: 选择NPC别名(base, incoming, preferred),
+    locationId: preferred.locationId ?? incoming.locationId ?? base.locationId,
+    anchorId: preferred.anchorId ?? incoming.anchorId ?? base.anchorId,
     阶位: base.阶位 === 'companion' || incoming.阶位 === 'companion' ? 'companion' : preferred.阶位,
     关系: 关系优先级更高(base.关系, incoming.关系),
     // 阶位代表重要程度，同行代表当前是否在场；原著角色/伙伴不能自动等于同行中。

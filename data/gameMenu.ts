@@ -7,6 +7,7 @@ export type GameSystemId =
   | 'inventory'
   | 'companion'
   | 'album'
+  | 'starMap'
   | 'news'
   | 'plot'
   | 'yiting'
@@ -27,6 +28,7 @@ export const GAME_MENU_ITEMS: GameMenuItem[] = [
   { id: 'inventory', label: '背包', subtitle: '背包系统', glyph: '◇' },
   { id: 'companion', label: '伙伴', subtitle: '社交系统', glyph: '✦' },
   { id: 'album', label: '相册', subtitle: '视觉资产', glyph: '▧' },
+  { id: 'starMap', label: '星轨航图', subtitle: '航点地图', glyph: '✧' },
   { id: 'news', label: '新闻', subtitle: '世界演变', glyph: '☉' },
   { id: 'plot', label: '剧情', subtitle: '剧情编织', glyph: '❖' },
   { id: 'memory', label: '记忆', subtitle: '长中短期', glyph: '◐' },

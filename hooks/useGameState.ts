@@ -38,6 +38,7 @@ import {
   归一化手机系统设置,
   归一化文生图系统设置,
   归一化额外功能设置,
+  归一化星轨航图系统设置,
   归一化视觉文本设置,
 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
@@ -54,7 +55,7 @@ import {
   removeLegacyZhikuCharacterEntries,
   removeRetiredZhikuEntries,
 } from '@/data/zhikuPreset';
-import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { loadSetting, saveSetting, hasAnySave } from '@/services/dbService';
@@ -307,6 +308,7 @@ export function useGameState(): UseGameStateReturn {
           文生图系统: 归一化文生图系统设置(savedGame.文生图系统),
           记忆系统: 归一化记忆系统设置(savedGame.记忆系统),
           额外功能: 归一化额外功能设置(savedGame.额外功能),
+          星轨航图系统: 归一化星轨航图系统设置(savedGame.星轨航图系统),
           variableApi: savedGame.variableApi ?? defaults.variableApi,
           enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
           deepSeekMainMode: savedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
@@ -331,16 +333,17 @@ export function useGameState(): UseGameStateReturn {
       try {
         const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
         const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        const mergedStoryWeaving = mergeBundledStoryWeavingPresets(
-          savedStoryWeaving ? 归一化剧情编织系统(savedStoryWeaving) : null,
-          bundledStoryWeaving,
-        );
+        const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
         set剧情编织(mergedStoryWeaving);
-        await saveSetting('storyWeavingSystem', mergedStoryWeaving);
+        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
       } catch (err) {
         console.warn('[story-weaving] preset 加载失败，回退到本地已存剧情编织:', err);
         const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        if (savedStoryWeaving) set剧情编织(归一化剧情编织系统(savedStoryWeaving));
+        if (isSelfContainedStoryWeavingSystem(savedStoryWeaving)) {
+          set剧情编织(归一化剧情编织系统(savedStoryWeaving));
+        } else if (savedStoryWeaving) {
+          console.warn('[story-weaving] 本地状态是轻量缓存，缺少原著正文；等待下次启动重新加载内置资源。');
+        }
       }
 
       try {
@@ -448,6 +451,7 @@ export function useGameState(): UseGameStateReturn {
             剧情编织系统: 归一化剧情编织系统设置(prev.剧情编织系统),
             文生图系统: 归一化文生图系统设置(prev.文生图系统),
             记忆系统: 归一化记忆系统设置(prev.记忆系统),
+            星轨航图系统: 归一化星轨航图系统设置(prev.星轨航图系统),
             enableClaudeMode: prev.enableClaudeMode ?? 创建默认游戏设置().enableClaudeMode,
             deepSeekMainMode: prev.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
             backgroundTaskMode: prev.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
@@ -460,6 +464,7 @@ export function useGameState(): UseGameStateReturn {
             剧情编织系统: 创建默认剧情编织系统设置(),
             文生图系统: 创建默认文生图系统设置(),
             记忆系统: 创建默认记忆系统设置(),
+            星轨航图系统: 创建默认游戏设置().星轨航图系统,
             enableClaudeMode: 创建默认游戏设置().enableClaudeMode,
             deepSeekMainMode: 创建默认游戏设置().deepSeekMainMode,
             backgroundTaskMode: 创建默认游戏设置().backgroundTaskMode,

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 768" role="img" aria-label="Amphoreus waypoint">
+  <defs>
+    <linearGradient id="amphoLoop" x1="93" y1="384" x2="675" y2="384" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16214b"/>
+      <stop offset="0.22" stop-color="#62eff1"/>
+      <stop offset="0.5" stop-color="#fff5b7"/>
+      <stop offset="0.76" stop-color="#72e7ff"/>
+      <stop offset="1" stop-color="#1a1d44"/>
+    </linearGradient>
+    <radialGradient id="amphoSun" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.28" stop-color="#fff2a8"/>
+      <stop offset="0.68" stop-color="#7ff5ff" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#7ff5ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="amphoGlow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.75 0 0 0 0 0.96 0 0 0 0 1 0 0 0 0.72 0"/>
+      <feBlend in="SourceGraphic" mode="screen"/>
+    </filter>
+  </defs>
+  <circle cx="384" cy="384" r="258" fill="#7ff2ff" opacity="0.08" filter="url(#amphoGlow)"/>
+  <path d="M111 384c71-143 192-143 273 0 81 143 202 143 273 0" fill="none" stroke="url(#amphoLoop)" stroke-width="84" stroke-linecap="round" filter="url(#amphoGlow)"/>
+  <path d="M111 384c71-143 192-143 273 0 81 143 202 143 273 0" fill="none" stroke="#fff4b2" stroke-width="11" stroke-linecap="round" opacity="0.68"/>
+  <path d="M111 384c71 143 192 143 273 0 81-143 202-143 273 0" fill="none" stroke="#1a2247" stroke-width="73" stroke-linecap="round" opacity="0.78"/>
+  <path d="M111 384c71 143 192 143 273 0 81-143 202-143 273 0" fill="none" stroke="#67f0ff" stroke-width="12" stroke-linecap="round" opacity="0.52"/>
+  <circle cx="384" cy="384" r="95" fill="url(#amphoSun)" filter="url(#amphoGlow)"/>
+  <path d="M384 235l25 82 86-2-71 49 29 81-69-51-69 51 29-81-71-49 86 2z" fill="#fff3a4" opacity="0.62"/>
+  <path d="M259 330c44-31 86-46 125-45 41 0 83 16 125 47" fill="none" stroke="#ffe5a1" stroke-width="8" stroke-linecap="round" opacity="0.34"/>
+  <path d="M236 468c93 40 201 39 296-2" fill="none" stroke="#7ff5ff" stroke-width="7" stroke-linecap="round" opacity="0.26"/>
+</svg>

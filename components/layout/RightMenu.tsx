@@ -1,4 +1,4 @@
-﻿import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
+import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 
 interface RightMenuProps {
   activeId: GameSystemId | null;
@@ -6,12 +6,12 @@ interface RightMenuProps {
   onSaveGame: () => void;
   onLoadGame: () => void;
   onSettings: () => void;
+  onReviewLab?: () => void;
 }
-
 const itemClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
-export function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettings }: RightMenuProps) {
+export function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettings, onReviewLab }: RightMenuProps) {
   return (
     <div className="kaituo-right-menu hidden md:flex md:w-[16%] min-w-[200px] max-w-[240px] flex-col">
       <div
@@ -48,6 +48,7 @@ export function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettin
       >
         <FooterButton label="保存存档" onClick={onSaveGame} />
         <FooterButton label="读取存档" onClick={onLoadGame} />
+        {onReviewLab && <FooterButton label="AI 审查" onClick={onReviewLab} />}
         <FooterButton label="设置" onClick={onSettings} />
       </div>
     </div>

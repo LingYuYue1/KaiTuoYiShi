@@ -227,7 +227,12 @@ export function 卸载旅人图片(traveler: 角色数据结构, params: { slot:
   };
 }
 
+const MAX_IMAGE_IMPORT_BYTES = 12 * 1024 * 1024;
+
 export function fileToDataUrl(file: File): Promise<string> {
+  if (file.size > MAX_IMAGE_IMPORT_BYTES) {
+    return Promise.reject(new Error('单张图片不能超过 12MB'));
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));

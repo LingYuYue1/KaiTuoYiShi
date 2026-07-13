@@ -466,6 +466,20 @@ function 格式化分钟(total: number): string {
   return `${Math.floor(safe / 60).toString().padStart(2, '0')}:${(safe % 60).toString().padStart(2, '0')}`;
 }
 
+function 生成下一天时间命令(
+  world: 世界状态 | undefined,
+  targetTime?: string,
+): 变量命令[] {
+  const nextDate = 推进琥珀日期(world?.当前日期 ?? '');
+  const aligned = 对齐世界日期与天数((world?.开拓天数 ?? 1) + 1, nextDate);
+  const commands: 变量命令[] = [
+    { action: 'set', key: '世界.开拓天数', value: aligned.开拓天数 },
+    { action: 'set', key: '世界.当前日期', value: aligned.当前日期 },
+  ];
+  if (targetTime) commands.push({ action: 'set', key: '世界.当前时间', value: targetTime });
+  return commands;
+}
+
 function 有跨日证据(text: string | undefined): boolean {
   return Boolean(text && /次日|第二天|翌日|隔天|跨日|跨夜|过夜|一夜|睡醒|醒来|凌晨|清晨/.test(text));
 }
@@ -727,8 +741,15 @@ export function factsToVariableCommands(
       if (fact.mode === 'no_change') continue;
       if (fact.mode === 'elapsed') {
         const delta = Math.max(1, Math.min(30, Math.trunc(fact.minutes ?? 3)));
-        if (current !== null) push({ action: 'set', key: '世界.当前时间', value: 格式化分钟(current + delta) });
-        else warnings.push('time(elapsed) 已忽略：当前时间不是 HH:mm，无法计算推进。');
+        if (current !== null) {
+          const nextTotal = current + delta;
+          const nextTime = 格式化分钟(nextTotal);
+          if (nextTotal >= 24 * 60) {
+            for (const command of 生成下一天时间命令(world, nextTime)) push(command);
+          } else {
+            push({ action: 'set', key: '世界.当前时间', value: nextTime });
+          }
+        } else warnings.push('time(elapsed) 已忽略：当前时间不是 HH:mm，无法计算推进。');
         continue;
       }
       if (fact.mode === 'set_time') {
@@ -738,11 +759,7 @@ export function factsToVariableCommands(
           continue;
         }
         if (next !== null && current !== null && next < current && 有跨日证据(fact.evidence)) {
-          const nextDate = 推进琥珀日期(world?.当前日期 ?? '');
-          const aligned = 对齐世界日期与天数((world?.开拓天数 ?? 1) + 1, nextDate);
-          push({ action: 'set', key: '世界.开拓天数', value: aligned.开拓天数 });
-          push({ action: 'set', key: '世界.当前日期', value: aligned.当前日期 });
-          push({ action: 'set', key: '世界.当前时间', value: fact.targetTime });
+          for (const command of 生成下一天时间命令(world, fact.targetTime)) push(command);
           continue;
         }
         if (current !== null && next < current) {
@@ -753,12 +770,8 @@ export function factsToVariableCommands(
         continue;
       }
       if (fact.mode === 'overnight' || fact.mode === 'next_day') {
-        const nextDate = 推进琥珀日期(world?.当前日期 ?? '');
-        const aligned = 对齐世界日期与天数((world?.开拓天数 ?? 1) + 1, nextDate);
-        push({ action: 'set', key: '世界.开拓天数', value: aligned.开拓天数 });
-        push({ action: 'set', key: '世界.当前日期', value: aligned.当前日期 });
-        if (fact.targetTime) push({ action: 'set', key: '世界.当前时间', value: fact.targetTime });
-        else warnings.push(`time(${fact.mode}) 缺少 targetTime：已推进日期和天数，但当前时间保持 ${world?.当前时间 ?? '未知'}。`);
+        for (const command of 生成下一天时间命令(world, fact.targetTime)) push(command);
+        if (!fact.targetTime) warnings.push(`time(${fact.mode}) 缺少 targetTime：已推进日期和天数，但当前时间保持 ${world?.当前时间 ?? '未知'}。`);
         continue;
       }
     }

@@ -18,6 +18,7 @@ import { 创建NPC记录, 归一化NPC记录列表 } from '@/models/npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
+import { 归一化剧情节点列表 } from '@/models/plot';
 import type { 命途ID } from '@/models/journey';
 import { 推进命途进度 } from '@/services/pathService';
 import { 获取物品, type 获取物品输入 } from './inventoryActions';
@@ -243,7 +244,7 @@ export function reduceVariableCommands(
     }
 
     if (root === '世界' && rest === '当前时间' && cmd.action === 'set') {
-      cursor = 补齐疑似跨夜时间(cursor, cmd);
+      cursor = 补齐疑似跨夜时间(cursor, cmd, initialState.世界 as 世界状态);
     }
 
     if (root === '旅人' && rest === '背包' && cmd.action === 'push' && !解析获取物品输入(cmd.value)) {
@@ -422,9 +423,14 @@ function 归一化变量世界状态(state: VariableState): VariableState {
   };
 }
 
-function 补齐疑似跨夜时间(state: VariableState, cmd: 变量命令): VariableState {
+function 补齐疑似跨夜时间(state: VariableState, cmd: 变量命令, baselineWorld?: 世界状态): VariableState {
   const world = state.世界 as 世界状态 | undefined;
   if (!world) return state;
+  const currentDay = Math.max(1, Math.trunc(Number(world.开拓天数) || 1));
+  const baselineDay = Math.max(1, Math.trunc(Number(baselineWorld?.开拓天数) || 1));
+  const currentDate = 解析琥珀日期序数(world.当前日期);
+  const baselineDate = 解析琥珀日期序数(baselineWorld?.当前日期);
+  if (currentDay > baselineDay || (currentDate !== null && baselineDate !== null && currentDate > baselineDate)) return state;
   const current = 解析分钟序数(world.当前时间);
   const next = 解析分钟序数(cmd.value);
   if (current === null || next === null) return state;
@@ -523,7 +529,7 @@ export function commitVariableState(
   if (state.手机 !== initialState.手机) setters.set手机(归一化手机系统(state.手机 as 手机系统));
   if (state.NPC !== initialState.NPC) setters.setNPC(归一化NPC记录列表(state.NPC));
   if (state.新闻 !== initialState.新闻) setters.set新闻(state.新闻 as 新闻条目[]);
-  if (state.剧情 !== initialState.剧情) setters.set剧情(state.剧情 as 剧情节点[]);
+  if (state.剧情 !== initialState.剧情) setters.set剧情(归一化剧情节点列表(state.剧情));
 }
 
 function 校验世界时间命令(

@@ -47,6 +47,7 @@ import {
 import { loadSetting, saveSetting } from '@/services/dbService';
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
+import { generateSkillDraft } from '@/services/ai/skillGenerator';
 
 interface NewGameWizardProps {
   onStart: (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords?: NPC记录[]) => void | Promise<void>;
@@ -357,6 +358,9 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
   const [openingSkillCooldownDraft, setOpeningSkillCooldownDraft] = useState('');
   const [openingSkillNoteDraft, setOpeningSkillNoteDraft] = useState('');
   const [openingSkillSlotKey, setOpeningSkillSlotKey] = useState<OpeningSkillSlotKey>('normal:1');
+  const [openingSkillGenerationHint, setOpeningSkillGenerationHint] = useState('');
+  const [openingSkillGenerating, setOpeningSkillGenerating] = useState(false);
+  const [openingSkillGenerationMessage, setOpeningSkillGenerationMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
   const [startingScenarioId, setStartingScenarioId] = useState<string>(
     startingScenarios[0]?.id ?? '',
@@ -739,6 +743,89 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     setOpeningSkillCostDraft('');
     setOpeningSkillCooldownDraft('');
     setOpeningSkillNoteDraft('');
+  };
+
+  const generateOpeningSkillWithAI = async () => {
+    if (!openingSelectedSlot) {
+      setOpeningSkillGenerationMessage({ kind: 'error', text: '请先选择一个战技槽位。' });
+      return;
+    }
+    if (!openingArchiveApiConfig) {
+      setOpeningSkillGenerationMessage({ kind: 'error', text: '请先在设置中配置主剧情 API，再生成开局战技草稿。' });
+      return;
+    }
+    setOpeningSkillGenerating(true);
+    setOpeningSkillGenerationMessage({ kind: 'info', text: '正在根据开局档案生成小说化战技草稿……' });
+    try {
+      const startingPaths =
+        pathId && pathId !== 'none'
+          ? [
+              {
+                ...创建命途进度(pathId, true, selectedOpeningTitle, `开局承载 · 初始阶段：${selectedPathStage.name}`),
+                阶段: pathStage,
+              },
+            ]
+          : [];
+      const finalIdentity = customIdentity.trim();
+      const factionIdentity = selectedFaction.id === 'none' ? '' : selectedFaction.name;
+      const traveler: 角色数据结构 = {
+        姓名: name.trim() || '无名开拓者',
+        别名: alias.trim(),
+        性别: gender.trim(),
+        年龄: age,
+        生日: birthday.trim(),
+        身高: '',
+        身份: [factionIdentity, finalIdentity].filter(Boolean).join(' · '),
+        外貌: appearance.trim(),
+        性格: personality.trim(),
+        背景: background.trim(),
+        专长知识: [],
+        头像: '',
+        图像档案: {},
+        属性: {
+          力量: 0,
+          智慧: 0,
+          敏捷: 0,
+          体质: 0,
+          运气: 0,
+        },
+        主命途: pathId,
+        命途列表: startingPaths,
+        能力: selectedAbilityNames,
+        背包: [],
+        战技列表: openingSkills.map((skill) => 归一化战技记录(skill)),
+      };
+      const generated = await generateSkillDraft(openingArchiveApiConfig, {
+        traveler,
+        slotKind: openingSelectedSlot.kind,
+        slotIndex: openingSelectedSlot.slotIndex,
+        pathId: openingSelectedSlot.pathId,
+        pathStage: openingSelectedSlot.pathStage,
+        existingSkillNames: openingSkills.map((skill) => skill.名称),
+        userHint: openingSkillGenerationHint,
+        currentDraft: {
+          名称: openingSkillNameDraft,
+          描述: openingSkillDescDraft,
+          来源: openingSkillSourceDraft,
+          关键词: splitOpeningSkillKeywords(openingSkillKeywordsDraft),
+          消耗: openingSkillCostDraft,
+          冷却: openingSkillCooldownDraft,
+          备注: openingSkillNoteDraft,
+        },
+      });
+      setOpeningSkillNameDraft(generated.名称);
+      setOpeningSkillDescDraft(generated.描述);
+      setOpeningSkillSourceDraft(generated.来源 || (openingSelectedSlot.kind === 'normal' ? 'AI 开局普通战技草稿' : 'AI 开局命途战技草稿'));
+      setOpeningSkillKeywordsDraft(generated.关键词.join('、'));
+      setOpeningSkillCostDraft(generated.消耗);
+      setOpeningSkillCooldownDraft(generated.冷却);
+      setOpeningSkillNoteDraft(generated.备注);
+      setOpeningSkillGenerationMessage({ kind: 'info', text: '已生成开局战技草稿。确认后点击“添加战技”写入槽位。' });
+    } catch (error) {
+      setOpeningSkillGenerationMessage({ kind: 'error', text: `生成失败：${error instanceof Error ? error.message : '未知错误'}` });
+    } finally {
+      setOpeningSkillGenerating(false);
+    }
   };
 
   const removeOpeningSkill = (skillId: string) => {
@@ -1390,6 +1477,9 @@ style={{
                 openingSkillCostDraft={openingSkillCostDraft}
                 openingSkillCooldownDraft={openingSkillCooldownDraft}
                 openingSkillNoteDraft={openingSkillNoteDraft}
+                openingSkillGenerationHint={openingSkillGenerationHint}
+                openingSkillGenerating={openingSkillGenerating}
+                openingSkillGenerationMessage={openingSkillGenerationMessage}
                 onSelectedSlotKey={setOpeningSkillSlotKey}
                 onOpeningSkillNameDraft={setOpeningSkillNameDraft}
                 onOpeningSkillDescDraft={setOpeningSkillDescDraft}
@@ -1398,6 +1488,8 @@ style={{
                 onOpeningSkillCostDraft={setOpeningSkillCostDraft}
                 onOpeningSkillCooldownDraft={setOpeningSkillCooldownDraft}
                 onOpeningSkillNoteDraft={setOpeningSkillNoteDraft}
+                onOpeningSkillGenerationHint={setOpeningSkillGenerationHint}
+                onGenerateOpeningSkill={generateOpeningSkillWithAI}
                 onAddOpeningSkill={addOpeningSkill}
                 onToggleOpeningSkill={toggleOpeningSkill}
                 onRemoveOpeningSkill={removeOpeningSkill}
@@ -2731,6 +2823,9 @@ function SkillCreationStep({
   openingSkillCostDraft,
   openingSkillCooldownDraft,
   openingSkillNoteDraft,
+  openingSkillGenerationHint,
+  openingSkillGenerating,
+  openingSkillGenerationMessage,
   onSelectedSlotKey,
   onOpeningSkillNameDraft,
   onOpeningSkillDescDraft,
@@ -2739,6 +2834,8 @@ function SkillCreationStep({
   onOpeningSkillCostDraft,
   onOpeningSkillCooldownDraft,
   onOpeningSkillNoteDraft,
+  onOpeningSkillGenerationHint,
+  onGenerateOpeningSkill,
   onAddOpeningSkill,
   onToggleOpeningSkill,
   onRemoveOpeningSkill,
@@ -2758,6 +2855,9 @@ function SkillCreationStep({
   openingSkillCostDraft: string;
   openingSkillCooldownDraft: string;
   openingSkillNoteDraft: string;
+  openingSkillGenerationHint: string;
+  openingSkillGenerating: boolean;
+  openingSkillGenerationMessage: { kind: 'info' | 'error'; text: string } | null;
   onSelectedSlotKey: (key: OpeningSkillSlotKey) => void;
   onOpeningSkillNameDraft: (v: string) => void;
   onOpeningSkillDescDraft: (v: string) => void;
@@ -2766,6 +2866,8 @@ function SkillCreationStep({
   onOpeningSkillCostDraft: (v: string) => void;
   onOpeningSkillCooldownDraft: (v: string) => void;
   onOpeningSkillNoteDraft: (v: string) => void;
+  onOpeningSkillGenerationHint: (v: string) => void;
+  onGenerateOpeningSkill: () => void;
   onAddOpeningSkill: () => void;
   onToggleOpeningSkill: (skillId: string) => void;
   onRemoveOpeningSkill: (skillId: string) => void;
@@ -2831,6 +2933,51 @@ function SkillCreationStep({
             />
           </div>
           <div className="grid gap-3">
+            <div
+              className="grid gap-3 p-3"
+              style={{
+                background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.09), rgba(var(--tj-bg-primary),0.48))',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                clipPath: smallClip,
+              }}
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <LabelField label="AI 草稿提示词">
+                  <input
+                    value={openingSkillGenerationHint}
+                    onChange={(e) => onOpeningSkillGenerationHint(e.target.value)}
+                    placeholder="可写武器、意象、战斗风格、限制，例如：冰属性短刀、保护同伴、别太数值化"
+                    className="kaituo-input w-full px-3 py-2 text-sm"
+                    style={{ clipPath: smallClip }}
+                    disabled={openingSkillGenerating}
+                  />
+                </LabelField>
+                <button
+                  type="button"
+                  onClick={onGenerateOpeningSkill}
+                  disabled={openingSkillGenerating || !selectedSlot}
+                  className="kaituo-btn kaituo-btn-secondary shrink-0 px-4 py-2.5 text-xs disabled:cursor-wait disabled:opacity-60"
+                >
+                  <span className="tracking-[0.18em]">{openingSkillGenerating ? '生成中...' : 'AI 生成战技'}</span>
+                </button>
+              </div>
+              <div className="text-[10px] leading-relaxed tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.66)' }}>
+                生成结果只会写入下方草稿，不会自动添加进槽位；确认后再点击“添加战技”。
+              </div>
+              {openingSkillGenerationMessage ? (
+                <div
+                  className="px-3 py-2 text-xs leading-relaxed"
+                  style={{
+                    background: openingSkillGenerationMessage.kind === 'error' ? 'rgba(var(--tj-danger),0.12)' : 'rgba(var(--tj-tech-cyan),0.10)',
+                    color: openingSkillGenerationMessage.kind === 'error' ? 'rgba(var(--tj-danger),0.94)' : 'rgba(var(--tj-tech-cyan),0.9)',
+                    boxShadow: `inset 0 0 0 1px ${openingSkillGenerationMessage.kind === 'error' ? 'rgba(var(--tj-danger),0.24)' : 'rgba(var(--tj-tech-cyan),0.22)'}`,
+                    clipPath: smallClip,
+                  }}
+                >
+                  {openingSkillGenerationMessage.text}
+                </div>
+              ) : null}
+            </div>
             <LabelField label="战技名称">
               <input
                 value={openingSkillNameDraft}

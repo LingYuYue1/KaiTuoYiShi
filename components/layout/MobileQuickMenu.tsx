@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 
 interface MobileQuickMenuProps {
@@ -6,11 +6,11 @@ interface MobileQuickMenuProps {
   onPhone: () => void;
   onSettings: () => void;
   onSave: () => void;
+  onReviewLab?: () => void;
   onHome: () => void;
   onSystemSelect: (id: GameSystemId) => void;
   phoneUnread?: number;
 }
-
 type MenuItem = {
   id: string;
   label: string;
@@ -27,6 +27,7 @@ export function MobileQuickMenu({
   onPhone,
   onSettings,
   onSave,
+  onReviewLab,
   onHome,
   onSystemSelect,
   phoneUnread = 0,
@@ -51,10 +52,11 @@ export function MobileQuickMenu({
         glyph: item.glyph,
         onClick: () => onSystemSelect(item.id),
       })),
+      ...(onReviewLab ? [{ id: 'review-lab', label: '审查', glyph: '审', onClick: onReviewLab }] : []),
       { id: 'settings', label: '设置', glyph: '设', onClick: onSettings },
       { id: 'home', label: '首页', glyph: '归', onClick: onHome },
     ],
-    [onHome, onSettings, onSystemSelect],
+    [onHome, onReviewLab, onSettings, onSystemSelect],
   );
 
   const handleItemClick = (item: MenuItem) => {
