@@ -1,9 +1,10 @@
 ﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { 图片是否参考角色, 读取图片参考目标 } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
-import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置, 文生图参考图设置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
+import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
 import type { 手机系统 } from '@/models/phone';
 import type { NPC记录, NPC头像槽位, NPC角色锚点档案 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
@@ -39,13 +40,13 @@ import type {
 
 import {
   buildAlbumResourceEntries, buildCharacterLibraryRecords, buildNpcSourceText, buildPresentSceneNpcs,
-  buildReferenceLibraryEntries, buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions,
+  buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions,
   buildTravelerSourceText, CharacterAnchorWorkspace, cleanupAlbumAssets, createTask,
   CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags, exportAlbum, extractStorySnapshot,
   formatStorySnapshotSceneText, getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
   importAlbum, isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot,
   mapImageSlotToTravelerSlot, NsfwVisibilityToggle,
-  PhoneBackgroundWorkspace, ReferenceImageWorkspace, requiresCharacterTarget,
+  PhoneBackgroundWorkspace, requiresCharacterTarget,
   resolveGenerationTargetId, resolveReferenceImagesForGeneration, resolveSize, RulesWorkspace, SceneImageWorkspace,
   slotLabel, StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
 } from './album/workspaces';
@@ -69,6 +70,21 @@ interface AlbumPanelProps {
   nsfwEnabled: boolean;
   nsfwImageEnabled: boolean;
   mainChatHistory?: 聊天消息[];
+}
+
+function setEntryReferenceTargets(entries: 相册条目[], entryId: string, characterId: string, enabled: boolean): 相册条目[] {
+  return entries.map((entry) => {
+    const targets = 读取图片参考目标(entry);
+    if (entry.id !== entryId) {
+      return enabled ? { ...entry, referenceTargets: targets.filter((targetId) => targetId !== characterId) } : entry;
+    }
+    return {
+      ...entry,
+      referenceTargets: enabled
+        ? Array.from(new Set([...targets, characterId]))
+        : targets.filter((targetId) => targetId !== characterId),
+    };
+  });
 }
 
 export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, phone, onPhoneChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [] }: AlbumPanelProps) {
@@ -160,50 +176,39 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setMessage(reason);
   };
 
-  const patchReferenceSettings = (patch: Partial<文生图参考图设置>) => {
-    const nextSettings: 游戏设置 = {
-      ...gameSettings,
-      文生图系统: {
-        ...imageSettings,
-        参考图: {
-          ...imageSettings.参考图,
-          ...patch,
-        },
-      },
-    };
-    persistGameSettingsChange(nextSettings);
-    if (patch.enabled === false) {
-      clearPromptDraft();
-      setPromptEditorOpen(false);
-      setMessage('参考图已关闭，已清空当前生成草稿。');
-    }
-  };
-
   const uploadReferenceImages = async (files: FileList | null, record: CharacterLibraryRecord | null) => {
     if (!files?.length || !record) return;
-    const nextItems: ReturnType<typeof 创建相册图片条目>[] = [];
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue;
-      const src = await fileToDataUrl(file);
-      nextItems.push(创建相册图片条目({
-        title: `${record.name} 参考图`,
-        src,
-        source: 'upload',
-        targetType: record.kind === 'traveler' ? 'traveler' : 'npc',
-        targetId: record.id,
-        slot: 'reference_image',
-        mimeType: file.type,
-        tags: ['参考图'],
-        note: '手动上传参考图',
-      }));
-    }
-    if (!nextItems.length) {
+    const file = Array.from(files).find((item) => item.type.startsWith('image/'));
+    if (!file) {
       setMessage('没有找到可导入的图片文件。');
       return;
     }
-    onAlbumChange((prev) => nextItems.reduce((next, item) => 添加图片到相册(next, item), prev));
-    setActiveEntryId(nextItems[0]?.entry.id ?? null);
-    setMessage(`已导入 ${nextItems.length} 张参考图。`);
+    const item = 创建相册图片条目({
+      title: `${record.name} 参考图`,
+      src: await fileToDataUrl(file),
+      source: 'upload',
+      targetType: record.kind === 'traveler' ? 'traveler' : 'npc',
+      targetId: record.id,
+      slot: 'misc',
+      mimeType: file.type,
+      tags: ['参考图'],
+      note: '手动上传参考图',
+      referenceTargets: [record.id],
+    });
+    onAlbumChange((prev) => {
+      const cleared = setEntryReferenceTargets(prev.entries, item.entry.id, record.id, true);
+      return 添加图片到相册({ ...prev, entries: cleared }, item);
+    });
+    setActiveEntryId(item.entry.id);
+    setMessage(`已导入并替换 ${record.name} 的参考图。`);
+  };
+
+  const setEntryReference = (entryId: string, record: CharacterLibraryRecord, enabled: boolean) => {
+    onAlbumChange((prev) => ({
+      ...prev,
+      entries: setEntryReferenceTargets(prev.entries, entryId, record.id, enabled),
+    }));
+    setMessage(enabled ? `已替换为 ${record.name} 的参考图。` : `已取消 ${record.name} 的参考图。`);
   };
 
   const patchImageRules = (patch: Partial<文生图规则中心设置>) => {
@@ -282,6 +287,11 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   }, [album.tasks, currentTarget.slot, currentTarget.targetType, currentCanvasTargetId, lastTaskId]);
   const currentCanvasAsset = currentCanvasTask?.resultAssetId ? assetMap.get(currentCanvasTask.resultAssetId) : undefined;
   const currentCanvasSrc = currentCanvasAsset?.dataUrl || currentCanvasAsset?.url || currentCanvasAsset?.localRef || '';
+  const currentCanvasEntry = currentCanvasTask?.resultAssetId ? album.entries.find((entry) => entry.assetId === currentCanvasTask.resultAssetId) : undefined;
+  const currentGenerationRecord = currentTarget.targetType === 'traveler'
+    ? libraryRecords.find((record) => record.kind === 'traveler') ?? null
+    : libraryRecords.find((record) => record.id === selectedCharacterId) ?? null;
+  const currentResultIsReference = Boolean(currentCanvasEntry && currentGenerationRecord && 图片是否参考角色(currentCanvasEntry, currentGenerationRecord.id));
 
   const handleGenerate = async (_requestedNsfw = false, override?: GenerateOverride) => {
     const target = override?.target ?? currentTarget;
@@ -565,6 +575,27 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       entryId: params.entryId,
       src,
       slot: params.slot,
+    });
+  };
+
+  const openCurrentResultInGallery = () => {
+    if (currentCanvasEntry) setActiveEntryId(currentCanvasEntry.id);
+    setActiveTab('gallery');
+  };
+
+  const setCurrentResultAsReference = () => {
+    if (!currentCanvasEntry || !currentGenerationRecord) return;
+    setEntryReference(currentCanvasEntry.id, currentGenerationRecord, true);
+  };
+
+  const mountCurrentResultToDefaultSlot = () => {
+    if (!currentCanvasEntry || !currentGenerationRecord || !currentCanvasSrc) return;
+    if (currentTarget.targetType !== 'traveler' && currentTarget.targetType !== 'npc') return;
+    setLibraryEntryToSlot({
+      record: currentGenerationRecord,
+      entryId: currentCanvasEntry.id,
+      src: currentCanvasSrc,
+      slot: currentTarget.slot,
     });
   };
 
@@ -1093,6 +1124,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 onSelectEntry={setActiveEntryId}
                 onDeleteEntries={deleteLibraryEntries}
                 onSetSlot={setLibraryEntryToSlot}
+                onUploadReference={(files, record) => void uploadReferenceImages(files, record)}
+                onSetReference={setEntryReference}
                 onExport={() => void exportAlbum(album)}
                 onImport={(file, target) => {
                   void importAlbum(file, target).then((next) => {
@@ -1129,24 +1162,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 onExtractAnchor={extractNpcAnchor}
               />
             )}
-            {activeTab === 'reference' && (
-              <ReferenceImageWorkspace
-                records={libraryRecords}
-                activeRecord={activeLibraryRecord}
-                entries={buildReferenceLibraryEntries(activeLibraryRecord, album, assetMap)}
-                activeEntryId={activeEntryId ?? undefined}
-                settings={imageSettings.参考图}
-                imageBackend={imageSettings.普通接口.backend}
-                onSettingsChange={patchReferenceSettings}
-                onSelectRecord={(id) => {
-                  setLibraryNpcId(id);
-                  setActiveEntryId(null);
-                }}
-                onSelectEntry={setActiveEntryId}
-                onUpload={(files) => void uploadReferenceImages(files, activeLibraryRecord)}
-                onDeleteEntries={deleteLibraryEntries}
-              />
-            )}
             {activeTab === 'manual' && (
               <CreateWorkspace
                 imageEnabled={imageSettings.enabled}
@@ -1181,6 +1196,10 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 canvasTask={currentCanvasTask}
                 canvasSrc={currentCanvasSrc}
                 onRetryTask={handleRetryTask}
+                onOpenGallery={openCurrentResultInGallery}
+                onSetResultReference={setCurrentResultAsReference}
+                onMountResultToSlot={mountCurrentResultToDefaultSlot}
+                resultIsReference={currentResultIsReference}
               />
             )}
             {activeTab === 'scene' && (
@@ -1220,6 +1239,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 canvasTask={currentCanvasTask}
                 canvasSrc={currentCanvasSrc}
                 onRetryTask={handleRetryStorySnapshotTask}
+                onOpenGallery={openCurrentResultInGallery}
               />
             )}
             {activeTab === 'sceneImage' && (
@@ -1251,6 +1271,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 canvasTask={currentCanvasTask}
                 canvasSrc={currentCanvasSrc}
                 onRetryTask={handleRetryTask}
+                onOpenGallery={openCurrentResultInGallery}
                 sceneSummary={sceneImageSummary}
                 analyzing={sceneImageAnalyzing}
                 onImportCurrentBody={importCurrentBodyText}
@@ -1285,6 +1306,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 canvasTask={currentCanvasTask}
                 canvasSrc={currentCanvasSrc}
                 onRetryTask={handleRetryTask}
+                onOpenGallery={openCurrentResultInGallery}
               />
             )}
             {activeTab === 'rules' && (

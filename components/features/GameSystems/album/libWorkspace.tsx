@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { 图片是否参考角色 } from '@/models/imageGeneration';
 import type { 图片槽位, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import { activeAccentSurface, cardClip, smallClip } from './foundation';
@@ -35,6 +36,8 @@ export function ImageLibraryWorkspace({
   onSelectEntry,
   onDeleteEntries,
   onSetSlot,
+  onUploadReference,
+  onSetReference,
   onExport,
   onImport,
 }: {
@@ -49,6 +52,8 @@ export function ImageLibraryWorkspace({
   onSelectEntry: (id: string) => void;
   onDeleteEntries: (entryIds: string[]) => void;
   onSetSlot: (params: { record: CharacterLibraryRecord | null; entryId: string; src: string; slot: 图片槽位 }) => void;
+  onUploadReference: (files: FileList | null, record: CharacterLibraryRecord | null) => void;
+  onSetReference: (entryId: string, record: CharacterLibraryRecord, enabled: boolean) => void;
   onExport: () => void;
   onImport: (file: File | null, target: AlbumImportTarget) => void;
 }) {
@@ -58,14 +63,20 @@ export function ImageLibraryWorkspace({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const referenceInputRef = useRef<HTMLInputElement | null>(null);
 
   const visibleItems = useMemo<GalleryItem[]>(() => {
     if (scope === 'character') {
-      return buildVisibleCharacterEntries(activeRecord, resourceEntries, album).map((character) => ({
+      const characters = buildVisibleCharacterEntries(activeRecord, resourceEntries, album).map((character) => ({
         entry: character.entry,
         src: character.src,
         character,
       }));
+      const assets = new Map(album.assets.map((asset) => [asset.id, asset]));
+      const references = activeRecord ? album.entries
+        .filter((entry) => 图片是否参考角色(entry, activeRecord.id))
+        .map((entry) => ({ entry, src: assets.get(entry.assetId)?.dataUrl || assets.get(entry.assetId)?.url || assets.get(entry.assetId)?.localRef || '', character: { entry, src: assets.get(entry.assetId)?.dataUrl || assets.get(entry.assetId)?.url || assets.get(entry.assetId)?.localRef || '' } })) : [];
+      return Array.from(new Map([...characters, ...references].map((item) => [item.entry.id, item])).values());
     }
     return sceneEntries
       .filter((scene) => scene.kind === scope)
@@ -101,6 +112,7 @@ export function ImageLibraryWorkspace({
     onSetSlot({ record: activeRecord, entryId: activeItemId, src: item.src, slot });
     setSlotPickerOpen(false);
   };
+  const activeItem = activeItemId ? visibleItems.find((candidate) => candidate.entry.id === activeItemId) : undefined;
   const filterOptions: Array<{ id: GalleryScope; label: string; count: number }> = [
     { id: 'character', label: '角色', count: totals.character },
     { id: 'scene', label: '场景图', count: totals.scene },
@@ -126,11 +138,12 @@ export function ImageLibraryWorkspace({
         <Panel title="图片工具" className="shrink-0" contentClassName="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>
-              {scope === 'character' ? `${activeRecord?.name || '未选择角色'} · 头像、立绘与已挂载资源` : `${galleryScopeLabel(scope)} · 统一归档与浏览`}
+              {scope === 'character' ? `${activeRecord?.name || '未选择角色'} · 头像、立绘与参考图统一管理` : `${galleryScopeLabel(scope)} · 统一归档与浏览`}
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setImportOpen(true)} className="px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.9)', background: 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24)', clipPath: smallClip }}>导入</button>
               <button type="button" onClick={onExport} className="px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.92)', background: 'rgba(var(--tj-tech-cyan),0.06)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>导出</button>
+              {scope === 'character' && <><input ref={referenceInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { onUploadReference(event.currentTarget.files, activeRecord); event.currentTarget.value = ''; }} /><button type="button" disabled={!activeRecord} onClick={() => referenceInputRef.current?.click()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, clipPath: smallClip }}>导入参考图</button></>}
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-4">
@@ -145,14 +158,14 @@ export function ImageLibraryWorkspace({
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2" style={{ borderColor: 'rgba(var(--tj-btn-primary-start),0.1)' }}><span className="font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.86)' }}>{galleryScopeLabel(scope)} · 当前图库</span><span className="text-[11px]" style={{ color: 'rgba(var(--tj-ui-faint),0.72)' }}>当前显示 {visibleItems.length} 项</span></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {visibleItems.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">{visibleItems.map((item) => item.character ? <CharacterGalleryCard key={item.entry.id} item={item.character} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} onClick={() => handleEntryClick(item.entry.id)} /> : <SceneGalleryCard key={item.entry.id} item={item.scene!} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} onClick={() => handleEntryClick(item.entry.id)} />)}</div> : <EmptyLibraryBox title="暂无可显示资源" desc={scope === 'character' ? '生成或导入头像、立绘后会归到当前角色名下。' : '生成或导入对应类型图片后会出现在这里。'} />}
+              {visibleItems.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">{visibleItems.map((item) => item.character ? <CharacterGalleryCard key={item.entry.id} item={item.character} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} reference={Boolean(activeRecord && 图片是否参考角色(item.entry, activeRecord.id))} onClick={() => handleEntryClick(item.entry.id)} /> : <SceneGalleryCard key={item.entry.id} item={item.scene!} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} onClick={() => handleEntryClick(item.entry.id)} />)}</div> : <EmptyLibraryBox title="暂无可显示资源" desc={scope === 'character' ? '生成、导入的角色图片与参考图都会显示在这里。' : '生成或导入对应类型图片后会出现在这里。'} />}
             </div>
           </div>
         </Panel>
       </div>
 
       <ImagePreviewModal open={previewOpen && Boolean(previewItem?.src)} src={previewItem?.src || ''} title={`图片预览 · ${previewItem?.entry.title || ''}`} onClose={() => setPreviewOpen(false)} />
-      <SlotPickerModal open={slotPickerOpen} recordName={activeRecord?.name || '角色'} entryTitle={previewItem?.entry.title || ''} recommendedSlot={previewItem?.entry.slot} onClose={() => setSlotPickerOpen(false)} onSelect={handleSetSlot} />
+      <SlotPickerModal open={slotPickerOpen} recordName={activeRecord?.name || '角色'} entryTitle={previewItem?.entry.title || ''} recommendedSlot={previewItem?.entry.slot} referenceEnabled={Boolean(activeRecord && activeItem && 图片是否参考角色(activeItem.entry, activeRecord.id))} onToggleReference={() => { if (activeRecord && activeItem) { onSetReference(activeItem.entry.id, activeRecord, !图片是否参考角色(activeItem.entry, activeRecord.id)); setSlotPickerOpen(false); } }} onClose={() => setSlotPickerOpen(false)} onSelect={handleSetSlot} />
       <LibraryImportDialog open={importOpen} onClose={() => setImportOpen(false)} scope={scope} record={activeRecord} traveler={traveler} onImport={onImport} />
     </div>
   );
@@ -168,8 +181,8 @@ function CharacterRecordButton({ record, active, onClick }: { record: CharacterL
   return <button type="button" onClick={onClick} className="block w-full min-w-0 px-3 py-2.5 text-left" style={{ background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.16), rgba(var(--tj-btn-primary-start),0.04))' : 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}><div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{record.name}</div><div className="mt-1 flex justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}><span>已装 {record.mountedCount}</span><span>资源 {record.resourceCount}</span></div></button>;
 }
 
-function CharacterGalleryCard({ item, active, batchMode, selected, onClick }: { item: CharacterLibraryEntry; active: boolean; batchMode: boolean; selected: boolean; onClick: () => void }) {
-  return <div className="relative overflow-hidden" style={{ background: selected ? 'rgba(var(--tj-tech-cyan),0.12)' : 'rgba(var(--tj-ui-panel),0.52)', boxShadow: active || selected ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.76), 0 0 18px rgba(var(--tj-btn-primary-start),0.1)' : item.entry.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.16)', clipPath: cardClip }}><button type="button" onClick={onClick} className="group block w-full text-left"><div className="aspect-[4/3]"><SafeAlbumImage src={item.src} alt={item.entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" emptyLabel="无图片" failedLabel="图片失效" /></div><div className="space-y-1 px-3 py-2"><div className="flex items-center justify-between gap-2"><span className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{item.entry.title}</span>{batchMode && <span className="shrink-0 text-[10px]" style={{ color: selected ? 'rgba(var(--tj-tech-cyan),0.96)' : 'rgba(var(--tj-ui-muted),0.6)' }}>{selected ? '已选择' : '点选'}</span>}</div><div className="flex justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}><span>{slotLabel(item.entry.slot)}</span>{item.entry.nsfw && <span style={{ color: 'rgb(var(--tj-ui-nsfw))' }}>NSFW</span>}</div></div></button></div>;
+function CharacterGalleryCard({ item, active, batchMode, selected, reference, onClick }: { item: CharacterLibraryEntry; active: boolean; batchMode: boolean; selected: boolean; reference: boolean; onClick: () => void }) {
+  return <div className="relative overflow-hidden" style={{ background: selected ? 'rgba(var(--tj-tech-cyan),0.12)' : 'rgba(var(--tj-ui-panel),0.52)', boxShadow: active || selected ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.76), 0 0 18px rgba(var(--tj-btn-primary-start),0.1)' : item.entry.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.16)', clipPath: cardClip }}><button type="button" onClick={onClick} className="group block w-full text-left"><div className="relative aspect-[4/3]"><SafeAlbumImage src={item.src} alt={item.entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" emptyLabel="无图片" failedLabel="图片失效" />{reference && <span className="absolute left-2 top-2 px-2 py-1 font-serif text-[10px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.96)', background: 'rgba(0,0,0,0.62)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.38)', clipPath: smallClip }}>参考图</span>}</div><div className="space-y-1 px-3 py-2"><div className="flex items-center justify-between gap-2"><span className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{item.entry.title}</span>{batchMode && <span className="shrink-0 text-[10px]" style={{ color: selected ? 'rgba(var(--tj-tech-cyan),0.96)' : 'rgba(var(--tj-ui-muted),0.6)' }}>{selected ? '已选择' : '点选'}</span>}</div><div className="flex justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}><span>{slotLabel(item.entry.slot)}</span>{item.entry.nsfw && <span style={{ color: 'rgb(var(--tj-ui-nsfw))' }}>NSFW</span>}</div></div></button></div>;
 }
 
 function SceneGalleryCard({ item, active, batchMode, selected, onClick }: { item: SceneLibraryEntry; active: boolean; batchMode: boolean; selected: boolean; onClick: () => void }) {

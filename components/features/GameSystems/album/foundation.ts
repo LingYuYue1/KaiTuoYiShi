@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { 图片槽位, 图片目标类型 } from '@/models/imageGeneration';
 import type { 文生图API配置 } from '@/models/settings';
 
-export type WorkTab = 'manual' | 'gallery' | 'anchor' | 'reference' | 'scene' | 'sceneImage' | 'phone' | 'rules' | 'queue' | 'settings';
+export type WorkTab = 'manual' | 'gallery' | 'anchor' | 'scene' | 'sceneImage' | 'phone' | 'rules' | 'queue' | 'settings';
 export type GenerateTarget = 'traveler_avatar' | 'traveler_portrait' | 'npc_avatar' | 'npc_portrait' | 'scene' | 'phone_wallpaper' | 'nsfw_reference';
 export type NsfwPartImageSlot = '女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考';
 export type LibraryStatusFilter = 'all' | 'ready' | 'empty';
@@ -66,7 +66,6 @@ export const tabs: { id: WorkTab; label: string; desc: string; group: 'create' |
   { id: 'sceneImage', label: '场景图', desc: '地点与新闻配图', group: 'create' },
   { id: 'phone', label: '手机背景', desc: '壁纸与聊天背景', group: 'create' },
   { id: 'anchor', label: '角色视觉', desc: '头像与立绘锚点', group: 'create' },
-  { id: 'reference', label: '参考图', desc: '手动启用与兼容', group: 'create' },
   { id: 'gallery', label: '图库', desc: '角色、场景与导入导出', group: 'manage' },
   { id: 'rules', label: '规则中心', desc: 'Prompt 规范', group: 'manage' },
   { id: 'queue', label: '生成任务', desc: '图片任务流与记录', group: 'manage' },
@@ -113,7 +112,7 @@ export type GenerateOverride = {
 export type NavGroupId = 'generate' | 'library' | 'tasks' | 'settings';
 
 export const navGroups: { id: NavGroupId; label: string; members: WorkTab[] }[] = [
-  { id: 'generate', label: '生成', members: ['manual', 'scene', 'sceneImage', 'phone', 'anchor', 'reference'] },
+  { id: 'generate', label: '生成', members: ['manual', 'scene', 'sceneImage', 'phone', 'anchor'] },
   { id: 'library', label: '图库', members: ['gallery'] },
   { id: 'tasks', label: '任务', members: ['queue'] },
   { id: 'settings', label: '设置', members: ['rules', 'settings'] },

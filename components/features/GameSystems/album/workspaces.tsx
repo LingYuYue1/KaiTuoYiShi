@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { 图片是否参考角色, 读取图片参考目标, 归一化相册系统 } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
@@ -380,231 +381,6 @@ export function CharacterAnchorWorkspace({
   );
 }
 
-export function ReferenceImageWorkspace({
-  records,
-  activeRecord,
-  entries,
-  activeEntryId,
-  settings,
-  imageBackend,
-  onSettingsChange,
-  onSelectRecord,
-  onSelectEntry,
-  onUpload,
-  onDeleteEntries,
-}: {
-  records: CharacterLibraryRecord[];
-  activeRecord: CharacterLibraryRecord | null;
-  entries: CharacterLibraryEntry[];
-  activeEntryId?: string;
-  settings: 文生图参考图设置;
-  imageBackend: 文生图API配置['backend'];
-  onSettingsChange: (patch: Partial<文生图参考图设置>) => void;
-  onSelectRecord: (id: string) => void;
-  onSelectEntry: (id: string) => void;
-  onUpload: (files: FileList | null) => void;
-  onDeleteEntries: (entryIds: string[]) => void;
-}) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [preview, setPreview] = useState<CharacterLibraryEntry | null>(null);
-  const selectedVisibleIds = selectedIds.filter((id) => entries.some((item) => item.entry.id === id));
-  const activeSupport = referenceBackendSupport(imageBackend, settings);
-  useEffect(() => {
-    setSelectedIds((current) => current.filter((id) => entries.some((item) => item.entry.id === id)));
-  }, [entries]);
-  return (
-    <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[190px_minmax(0,1fr)]">
-      <Panel title="参考对象" className="min-h-0" contentClassName="min-h-0 flex-1">
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto p-3 pr-2">
-            <div className="space-y-1.5">
-              {records.map((record) => (
-                <CharacterArchiveButton
-                  key={record.id}
-                  record={record}
-                  active={activeRecord?.id === record.id}
-                  onClick={() => onSelectRecord(record.id)}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="border-t px-3 py-3 text-[11px] leading-relaxed" style={{ borderColor: 'rgba(var(--tj-btn-primary-start),0.1)', color: 'rgba(var(--tj-ui-muted),0.72)' }}>
-            参考图按角色归档，开启后只在对应旅人或伙伴生成时尝试参与。
-          </div>
-        </div>
-      </Panel>
-
-      <div className="flex min-h-0 flex-col gap-4">
-        <Panel title="参考图控制" className="shrink-0">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
-            <div className="space-y-3">
-              <AnchorToggle
-                label="启用参考图"
-                desc="默认关闭；开启后才会尝试把本页素材传入生成接口"
-                checked={settings.enabled}
-                onChange={(enabled) => onSettingsChange({ enabled })}
-              />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <ReferenceCapabilityCard
-                  title="SD WebUI"
-                  status="已接入"
-                  desc="开启后使用 /sdapi/v1/img2img，并读取当前角色参考图。"
-                  active={imageBackend === 'sd_webui'}
-                />
-                <ReferenceCapabilityCard
-                  title="ComfyUI"
-                  status={settings.enableComfyWorkflowReference ? '需工作流' : '默认关闭'}
-                  desc="需要工作流显式预留 __REFERENCE_IMAGE__ 或 {{reference_image}}。"
-                  active={imageBackend === 'comfyui'}
-                />
-                <ReferenceCapabilityCard
-                  title="OpenAI 兼容"
-                  status="不保证"
-                  desc="/images/generations 多数中转不吃参考图；默认只保存素材。"
-                  active={imageBackend === 'openai_compatible'}
-                />
-                <ReferenceCapabilityCard
-                  title="NovelAI"
-                  status="待接入"
-                  desc="img2img / vibe transfer 参数差异大，当前不自动传图。"
-                  active={imageBackend === 'novelai'}
-                />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="px-3 py-3 text-xs leading-relaxed" style={{ color: activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.9)' : 'rgba(var(--tj-btn-primary-end),0.9)', background: activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.07)' : 'rgba(var(--tj-btn-primary-start),0.06)', boxShadow: `inset 0 0 0 1px ${activeSupport.usable ? 'rgba(var(--tj-tech-cyan),0.2)' : 'rgba(var(--tj-btn-primary-start),0.18)'}`, clipPath: smallClip }}>
-                当前统一接口：{backendLabel(imageBackend)}
-                <br />
-                {activeSupport.message}
-              </div>
-              <Field label="SD WebUI 参考强度">
-                <input
-                  type="range"
-                  min={0.05}
-                  max={0.95}
-                  step={0.05}
-                  value={settings.sdWebuiDenoisingStrength}
-                  onChange={(event) => onSettingsChange({ sdWebuiDenoisingStrength: Number(event.target.value) })}
-                  className="w-full"
-                />
-                <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>
-                  denoising strength：{settings.sdWebuiDenoisingStrength.toFixed(2)}
-                </div>
-              </Field>
-              <AnchorToggle
-                label="允许 ComfyUI 工作流参考图"
-                desc="仅在你确认工作流有参考图占位符时开启"
-                checked={settings.enableComfyWorkflowReference}
-                onChange={(enableComfyWorkflowReference) => onSettingsChange({ enableComfyWorkflowReference })}
-              />
-            </div>
-          </div>
-        </Panel>
-
-        <Panel title="参考图库" className="min-h-0 flex-1" contentClassName="min-h-0 flex-1">
-          <div className="flex h-full min-h-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>
-                当前对象：{activeRecord?.name || '未选择'} · {entries.length} 张参考图
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(event) => {
-                    onUpload(event.currentTarget.files);
-                    event.currentTarget.value = '';
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={!activeRecord}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 font-serif text-xs font-bold tracking-[0.14em] disabled:opacity-45"
-                  style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.38)', clipPath: smallClip }}
-                >
-                  导入参考图
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedVisibleIds.length}
-                  onClick={() => {
-                    onDeleteEntries(selectedVisibleIds);
-                    setSelectedIds([]);
-                  }}
-                  className="px-4 py-2 font-serif text-xs tracking-[0.14em] disabled:opacity-45"
-                  style={{ color: 'rgba(var(--tj-danger),0.92)', background: 'rgba(var(--tj-danger),0.16)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.2)', clipPath: smallClip }}
-                >
-                  删除选中
-                </button>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {entries.length ? (
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">
-                  {entries.map((item) => {
-                    const selected = selectedVisibleIds.includes(item.entry.id);
-                    return (
-                      <button
-                        key={item.entry.id}
-                        type="button"
-                        onClick={() => {
-                          onSelectEntry(item.entry.id);
-                          setSelectedIds((current) => current.includes(item.entry.id) ? current.filter((id) => id !== item.entry.id) : [...current, item.entry.id]);
-                        }}
-                        onDoubleClick={() => setPreview(item)}
-                        className="group overflow-hidden text-left transition-all"
-                        style={{ background: 'rgba(var(--tj-ui-panel),0.54)', boxShadow: selected ? 'inset 0 0 0 2px rgba(var(--tj-tech-cyan),0.9), 0 0 24px rgba(var(--tj-tech-cyan),0.16)' : activeEntryId === item.entry.id ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.72)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.16)', clipPath: cardClip }}
-                      >
-                        <div className="relative aspect-[4/3]">
-                          <SafeAlbumImage src={item.src} alt={item.entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" emptyLabel="无图片" failedLabel="图片失效" />
-                          {selected && (
-                            <div className="absolute right-2 top-2 px-2 py-1 font-serif text-[10px] font-bold tracking-[0.14em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, boxShadow: '0 0 16px rgba(var(--tj-tech-cyan),0.24)', clipPath: smallClip }}>
-                              已选
-                            </div>
-                          )}
-                        </div>
-                        <div className="px-3 py-2">
-                          <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{item.entry.title}</div>
-                          <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>双击预览 · {formatAlbumDate(item.entry.createdAt)}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyLibraryBox title="暂无参考图" desc="导入角色头像、立绘或风格参考后，开启参考图开关才会参与生成。" />
-              )}
-            </div>
-          </div>
-        </Panel>
-      </div>
-      <ImagePreviewModal
-        open={Boolean(preview?.src)}
-        src={preview?.src || ''}
-        title={`参考图预览 · ${activeRecord?.name || '角色'}`}
-        onClose={() => setPreview(null)}
-      />
-    </div>
-  );
-}
-
-export function ReferenceCapabilityCard({ title, status, desc, active }: { title: string; status: string; desc: string; active: boolean }) {
-  return (
-    <div className="px-3 py-3" style={{ background: active ? 'rgba(var(--tj-tech-cyan),0.08)' : 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="font-serif text-xs font-bold tracking-[0.16em]" style={{ color: active ? 'rgba(var(--tj-tech-cyan),0.95)' : 'rgb(var(--tj-ui-title))' }}>{title}</div>
-        <div className="text-[10px]" style={{ color: active ? 'rgba(var(--tj-tech-cyan),0.88)' : 'rgba(var(--tj-btn-primary-start),0.72)' }}>{status}</div>
-      </div>
-      <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>{desc}</div>
-    </div>
-  );
-}
-
 export function SafeAlbumImage({
   src,
   alt,
@@ -878,6 +654,10 @@ export function CreateWorkspace(props: {
   canvasTask?: 图片生成任务;
   canvasSrc: string;
   onRetryTask: (task?: 图片生成任务) => void;
+  onOpenGallery: () => void;
+  onSetResultReference: () => void;
+  onMountResultToSlot: () => void;
+  resultIsReference: boolean;
 }) {
   const activePromptMeta = props.canvasTask
     ? {
@@ -967,6 +747,10 @@ export function CreateWorkspace(props: {
               resultSrc={props.canvasSrc}
               promptMeta={activePromptMeta}
               onRetry={() => props.onRetryTask(props.canvasTask)}
+              onOpenGallery={props.onOpenGallery}
+              onSetReference={props.currentTarget.targetType === 'traveler' || props.currentTarget.targetType === 'npc' ? props.onSetResultReference : undefined}
+              onMountSlot={props.currentTarget.targetType === 'traveler' || props.currentTarget.targetType === 'npc' ? props.onMountResultToSlot : undefined}
+              referenceEnabled={props.resultIsReference}
             />
             <div className="grid gap-2">
               <DraftActionButton disabled={props.tokenizing} onClick={() => { void props.onBuildPrompt(); }}>
@@ -1020,6 +804,10 @@ export function DraftCanvasPreview({
   resultSrc,
   promptMeta,
   onRetry,
+  onOpenGallery,
+  onSetReference,
+  onMountSlot,
+  referenceEnabled = false,
 }: {
   target: typeof generateTargets[number];
   size: string;
@@ -1027,6 +815,10 @@ export function DraftCanvasPreview({
   resultSrc: string;
   promptMeta: PromptMeta | null;
   onRetry: () => void;
+  onOpenGallery?: () => void;
+  onSetReference?: () => void;
+  onMountSlot?: () => void;
+  referenceEnabled?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const displaySize = task?.dimensions ? task.dimensions.replace(/x/i, ' × ') : size ? size.replace(/x/i, ' × ') : '接口默认';
@@ -1104,11 +896,7 @@ export function DraftCanvasPreview({
               重新生成
             </button>
           )}
-          {isSuccess && (
-            <button type="button" onClick={() => setPreviewOpen(true)} className="mt-2 block px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>
-              完整预览
-            </button>
-          )}
+          {isSuccess && <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewOpen(true)} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>完整预览</button>{onOpenGallery && <button type="button" onClick={onOpenGallery} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.1)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>查看图库</button>}{onSetReference && <button type="button" disabled={referenceEnabled} onClick={onSetReference} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] disabled:opacity-55" style={{ color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.22)', clipPath: smallClip }}>{referenceEnabled ? '已设为当前角色参考图' : '设为参考图'}</button>}{onMountSlot && <button type="button" onClick={onMountSlot} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>按当前用途挂载</button>}</div>}
         </div>
         <div className="absolute bottom-4 left-4 max-w-[220px] truncate font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>{target.label}</div>
       </div>
@@ -1212,6 +1000,8 @@ export function SlotPickerModal({
   recordName,
   entryTitle,
   recommendedSlot,
+  referenceEnabled = false,
+  onToggleReference,
   onClose,
   onSelect,
 }: {
@@ -1219,6 +1009,8 @@ export function SlotPickerModal({
   recordName: string;
   entryTitle: string;
   recommendedSlot?: 图片槽位;
+  referenceEnabled?: boolean;
+  onToggleReference?: () => void;
   onClose: () => void;
   onSelect: (slot: 图片槽位) => void;
 }) {
@@ -1301,6 +1093,17 @@ export function SlotPickerModal({
             );
           })}
         </div>
+        {onToggleReference && (
+          <button
+            type="button"
+            onClick={onToggleReference}
+            className="mt-3 w-full px-4 py-3 text-left transition-all"
+            style={{ color: referenceEnabled ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.94)', background: referenceEnabled ? activeAccentSurface : 'rgba(var(--tj-tech-cyan),0.07)', boxShadow: referenceEnabled ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)', clipPath: smallClip }}
+          >
+            <div className="font-serif text-sm font-bold tracking-[0.14em]">{referenceEnabled ? '取消该角色参考图' : '替换为该角色参考图'}</div>
+            <div className="mt-1 text-xs leading-relaxed opacity-80">参考图不会改变当前挂载槽位；每个角色只保留一张当前参考图。</div>
+          </button>
+        )}
       </div>
     </div>,
     document.body,
@@ -1653,6 +1456,7 @@ export type SceneCreationWorkspaceProps = {
   canvasTask?: 图片生成任务;
   canvasSrc: string;
   onRetryTask: (task?: 图片生成任务) => void;
+  onOpenGallery?: () => void;
   sceneSummary?: SceneImageSummary | null;
   analyzing?: boolean;
   onImportCurrentBody?: () => void;
@@ -2016,6 +1820,7 @@ export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps &
               resultSrc={props.canvasSrc}
               promptMeta={activePromptMeta}
               onRetry={() => props.onRetryTask(props.canvasTask)}
+              onOpenGallery={props.onOpenGallery}
             />
             <div className="grid gap-2 md:grid-cols-2">
               <DraftActionButton disabled={props.busyWhen ?? props.tokenizing} onClick={() => { void props.onBuildPrompt(); }}>
@@ -2316,25 +2121,6 @@ export function buildAlbumResourceEntries(
     }));
 }
 
-export function buildReferenceLibraryEntries(
-  record: CharacterLibraryRecord | null,
-  album: 相册系统,
-  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
-): CharacterLibraryEntry[] {
-  if (!record) return [];
-  return album.entries
-    .filter((entry) => {
-      if (entry.slot !== 'reference_image') return false;
-      if (record.kind === 'traveler') return entry.targetType === 'traveler' || entry.targetId === 'traveler';
-      return entry.targetType === 'npc' && entry.targetId === record.id;
-    })
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map((entry) => ({
-      entry,
-      src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
-    }));
-}
-
 export function buildSceneLibraryEntries(
   album: 相册系统,
   assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
@@ -2434,10 +2220,6 @@ export function isCharacterLibrarySlot(slot: 图片槽位): boolean {
   return slot === 'avatar_profile' || slot === 'avatar_story' || slot === 'avatar_phone' || slot === 'portrait';
 }
 
-export function isReferenceLibrarySlot(slot: 图片槽位): boolean {
-  return slot === 'reference_image';
-}
-
 export function backendLabel(backend: 文生图API配置['backend'] | string): string {
   return {
     openai_compatible: 'OpenAI 兼容',
@@ -2514,6 +2296,7 @@ export function buildBuiltinAvatarEntries(npc: NPC记录): CharacterLibraryEntry
       nsfw: false,
       createdAt: 0,
       note: '随包内置头像',
+      referenceTargets: [],
     },
     src: candidate.src,
     sourceLabel: '内置',
@@ -2537,6 +2320,7 @@ export function buildTravelerBuiltinAvatarEntries(traveler: 角色数据结构, 
       nsfw: false,
       createdAt: 0,
       note: '随包内置头像',
+      referenceTargets: [],
     },
     src: avatar,
     sourceLabel: '内置',
@@ -2832,14 +2616,8 @@ export function resolveReferenceImagesForGeneration(params: {
   if (!support.usable) return { entries: [], images: [] };
   const targetId = params.target.targetType === 'traveler' ? 'traveler' : params.targetId;
   if (!targetId) return { entries: [], images: [] };
-  const entries = params.album.entries
-    .filter((entry) => {
-      if (!isReferenceLibrarySlot(entry.slot)) return false;
-      if (params.target.targetType === 'traveler') return entry.targetType === 'traveler' || entry.targetId === 'traveler';
-      return entry.targetType === 'npc' && entry.targetId === targetId;
-    })
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 1);
+  const referenceEntry = params.album.entries.find((entry) => 图片是否参考角色(entry, targetId));
+  const entries = referenceEntry ? [referenceEntry] : [];
   const images = entries
     .map((entry) => {
       const asset = params.assetMap.get(entry.assetId);
@@ -2905,6 +2683,7 @@ export async function exportAlbum(album: 相册系统) {
       targetId: entry.targetId,
       slot: entry.slot,
       tags: entry.tags,
+      referenceTargets: 读取图片参考目标(entry),
       nsfw: entry.nsfw,
       createdAt: entry.createdAt,
     });
@@ -2928,11 +2707,7 @@ export async function importAlbum(file: File | null, target?: AlbumImportTarget)
   if (!file) return null;
   const text = await file.text();
   const data = JSON.parse(text) as 相册系统;
-  const next: 相册系统 = {
-    assets: Array.isArray(data.assets) ? data.assets : [],
-    entries: Array.isArray(data.entries) ? data.entries : [],
-    tasks: Array.isArray(data.tasks) ? data.tasks : [],
-  };
+  const next = 归一化相册系统(data);
   return target ? applyImportTarget(next, target) : next;
 }
 

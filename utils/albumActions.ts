@@ -26,6 +26,7 @@ export function 创建相册图片条目(input: {
   backend?: string;
   tags?: string[];
   note?: string;
+  referenceTargets?: string[];
 }): { asset: 图片资源; entry: 相册条目 } {
   const now = Date.now();
   const isDataUrl = input.src.startsWith('data:');
@@ -63,6 +64,7 @@ export function 创建相册图片条目(input: {
     nsfw: input.nsfw === true,
     createdAt: now,
     note: input.note,
+    referenceTargets: Array.from(new Set((input.referenceTargets ?? []).map((id) => id.trim()).filter(Boolean))),
   };
   return { asset, entry };
 }

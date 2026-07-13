@@ -61,6 +61,8 @@ export interface 相册条目 {
   nsfw: boolean;
   createdAt: number;
   note?: string;
+  /** 可同时作为这些角色的生成参考，不改变图片原有归属或槽位。 */
+  referenceTargets: string[];
 }
 
 export type 图片生成任务状态 = 'queued' | 'running' | 'success' | 'failed' | 'cancelled';
@@ -111,6 +113,17 @@ function normalizeStringArray(value: unknown): string[] {
   return value.map((item) => String(item ?? '').trim()).filter(Boolean);
 }
 
+export function 读取图片参考目标(entry: Pick<相册条目, 'targetType' | 'targetId' | 'slot'> & { referenceTargets?: unknown }): string[] {
+  if (Array.isArray(entry.referenceTargets)) return normalizeStringArray(entry.referenceTargets);
+  if (entry.slot !== 'reference_image') return [];
+  const targetId = entry.targetType === 'traveler' ? 'traveler' : entry.targetId;
+  return targetId ? [targetId] : [];
+}
+
+export function 图片是否参考角色(entry: Pick<相册条目, 'targetType' | 'targetId' | 'slot'> & { referenceTargets?: unknown }, characterId: string): boolean {
+  return Boolean(characterId) && 读取图片参考目标(entry).includes(characterId);
+}
+
 export function 归一化相册系统(input?: Partial<相册系统> | null): 相册系统 {
   if (!input) return 创建空相册系统();
 
@@ -125,19 +138,31 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
       }))
     : [];
 
-  const entries = Array.isArray(input.entries)
-    ? input.entries.map((entry) => ({
-        ...entry,
-        id: String(entry.id || `album_${Date.now()}_${Math.random().toString(36).slice(2)}`),
-        assetId: String(entry.assetId || ''),
-        title: String(entry.title || '未命名图片'),
-        targetType: entry.targetType ?? 'misc',
-        slot: entry.slot ?? 'misc',
-        tags: normalizeStringArray(entry.tags),
-        nsfw: entry.nsfw === true,
-        createdAt: Number(entry.createdAt) || Date.now(),
-      })).filter((entry) => entry.assetId)
+  const rawEntries = Array.isArray(input.entries)
+    ? input.entries.map((entry) => {
+        const normalized = {
+          ...entry,
+          id: String(entry.id || `album_${Date.now()}_${Math.random().toString(36).slice(2)}`),
+          assetId: String(entry.assetId || ''),
+          title: String(entry.title || '未命名图片'),
+          targetType: entry.targetType ?? 'misc',
+          slot: entry.slot ?? 'misc',
+          tags: normalizeStringArray(entry.tags),
+          nsfw: entry.nsfw === true,
+          createdAt: Number(entry.createdAt) || Date.now(),
+        };
+        return { ...normalized, referenceTargets: 读取图片参考目标(normalized) };
+      }).filter((entry) => entry.assetId)
     : [];
+  const claimedReferenceTargets = new Set<string>();
+  const entries = rawEntries.map((entry) => ({
+    ...entry,
+    referenceTargets: entry.referenceTargets.filter((targetId) => {
+      if (claimedReferenceTargets.has(targetId)) return false;
+      claimedReferenceTargets.add(targetId);
+      return true;
+    }),
+  }));
 
   const tasks = Array.isArray(input.tasks)
     ? input.tasks.map((task) => ({

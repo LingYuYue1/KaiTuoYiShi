@@ -22,7 +22,7 @@ interface Props {
   apiSettings: API设置;
 }
 
-type Page = 'overview' | 'normal' | 'nsfw' | 'narrative' | 'tokenizer' | 'guide';
+type Page = 'overview' | 'normal' | 'nsfw' | 'reference' | 'narrative' | 'tokenizer' | 'guide';
 type ApiKey = '普通接口' | 'NSFW接口';
 
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -37,6 +37,7 @@ const pages: { id: Page; label: string; desc: string }[] = [
   { id: 'overview', label: '总览', desc: '开关与隔离状态' },
   { id: 'normal', label: '统一接口', desc: '头像、立绘、场景' },
   { id: 'nsfw', label: 'NSFW接口', desc: '成人内容隔离' },
+  { id: 'reference', label: '参考图', desc: '参与生成与后端能力' },
   { id: 'narrative', label: '正文插图', desc: '剧情插图生成' },
   { id: 'tokenizer', label: '转化器', desc: '档案转 prompt' },
   { id: 'guide', label: '接口说明', desc: '后端填写参考' },
@@ -143,6 +144,10 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
     });
   };
 
+  const patchReference = (patch: Partial<typeof image.参考图>) => {
+    patchSystem({ 参考图: { ...image.参考图, ...patch } });
+  };
+
   const tokenizerEffective = {
     provider: image.词组转化器API.provider || mainConfig?.provider || 'openai_compatible',
     baseUrl: image.词组转化器API.baseUrl.trim() || mainConfig?.baseUrl || '',
@@ -238,7 +243,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
         </div>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-7">
         {pages.map((page) => (
           <button
             key={page.id}
@@ -314,6 +319,28 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
           ) : (
             <Notice>NSFW 总开关或 NSFW 生图开关未开启，因此这里不会提交任何成人生图任务。</Notice>
           )}
+        </Panel>
+      )}
+
+        {activePage === 'reference' && (
+        <Panel title="参考图设置">
+          <Notice>
+            图片由图库中的“设为参考图”管理。开启后，角色生成会使用该角色当前指定的参考图片；关闭时素材会保留，但不会发送给图片接口。
+          </Notice>
+          <ToggleRow label="启用参考图" desc="仅在当前后端支持时把图库参考图片传入生成流程。" checked={image.参考图.enabled} onChange={(enabled) => patchReference({ enabled })} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="SD WebUI 参考强度">
+              <input type="range" min={0.05} max={0.95} step={0.05} value={image.参考图.sdWebuiDenoisingStrength} onChange={(event) => patchReference({ sdWebuiDenoisingStrength: Number(event.target.value) })} className="w-full" />
+              <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>denoising strength：{image.参考图.sdWebuiDenoisingStrength.toFixed(2)}</div>
+            </Field>
+            <ToggleRow label="允许 ComfyUI 工作流参考图" desc="仅在工作流包含 __REFERENCE_IMAGE__ 或 {{reference_image}} 占位符时开启。" checked={image.参考图.enableComfyWorkflowReference} onChange={(enableComfyWorkflowReference) => patchReference({ enableComfyWorkflowReference })} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <InfoLine label="SD WebUI" value="启用后使用 img2img 传入参考图。" />
+            <InfoLine label="ComfyUI" value={image.参考图.enableComfyWorkflowReference ? '已允许；工作流必须声明参考图占位符。' : '默认关闭；确认工作流后再开启。'} />
+            <InfoLine label="OpenAI 兼容" value="接口差异较大，当前只保存素材，不自动传图。" />
+            <InfoLine label="NovelAI" value="vibe transfer 尚未接入，当前只保存素材。" />
+          </div>
         </Panel>
       )}
 
