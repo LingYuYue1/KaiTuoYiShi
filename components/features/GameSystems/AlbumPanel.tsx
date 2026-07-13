@@ -49,13 +49,14 @@ import {
   buildTravelerSourceText, CharacterAnchorWorkspace, CharacterLibraryWorkspace, cleanupAlbumAssets, createTask,
   CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags, exportAlbum, extractStorySnapshot,
   formatStorySnapshotSceneText, getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
-  HistoryWorkspace, importAlbum, isNpcLibraryRecord, ManageWorkspace, mapImageSlotToNpcAvatarSlot,
+  importAlbum, isNpcLibraryRecord, ManageWorkspace, mapImageSlotToNpcAvatarSlot,
   mapImageSlotToTravelerSlot, mapMountedSlotToNpcAvatarSlot, mapMountedSlotToTravelerSlot, NsfwVisibilityToggle,
-  PhoneBackgroundWorkspace, QueueWorkspace, ReferenceImageWorkspace, requiresCharacterTarget,
+  PhoneBackgroundWorkspace, ReferenceImageWorkspace, requiresCharacterTarget,
   resolveGenerationTargetId, resolveReferenceImagesForGeneration, resolveSize, RulesWorkspace, SceneImageWorkspace,
   SceneLibraryWorkspace, slotLabel, StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
 } from './album/workspaces';
 import type { CharacterLibraryRecord, MountedImageSlot } from './album/workspaces';
+import { ImageTaskWorkspace } from './album/taskWorkspace';
 
 interface AlbumPanelProps {
   album: 相册系统;
@@ -1341,8 +1342,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 onSave={handleSaveRules}
               />
             )}
-            {activeTab === 'queue' && <QueueWorkspace tasks={album.tasks} onRetry={handleRetryTask} />}
-            {activeTab === 'history' && <HistoryWorkspace album={album} assetMap={assetMap} onSelect={setActiveEntryId} />}
+            {activeTab === 'queue' && <ImageTaskWorkspace album={album} includeNsfw={nsfwVisible && showNsfw} onSelectEntry={setActiveEntryId} onRetry={handleRetryTask} />}
             {activeTab === 'manage' && (
               <ManageWorkspace
                 traveler={traveler}

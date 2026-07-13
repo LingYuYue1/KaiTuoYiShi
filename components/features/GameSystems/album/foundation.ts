@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { 图片槽位, 图片目标类型 } from '@/models/imageGeneration';
 import type { 文生图API配置 } from '@/models/settings';
 
-export type WorkTab = 'manual' | 'library' | 'sceneLibrary' | 'anchor' | 'reference' | 'scene' | 'sceneImage' | 'phone' | 'rules' | 'queue' | 'history' | 'manage' | 'settings';
+export type WorkTab = 'manual' | 'library' | 'sceneLibrary' | 'anchor' | 'reference' | 'scene' | 'sceneImage' | 'phone' | 'rules' | 'queue' | 'manage' | 'settings';
 export type GenerateTarget = 'traveler_avatar' | 'traveler_portrait' | 'npc_avatar' | 'npc_portrait' | 'scene' | 'phone_wallpaper' | 'nsfw_reference';
 export type NsfwPartImageSlot = '女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考';
 export type LibraryStatusFilter = 'all' | 'ready' | 'empty';
@@ -70,8 +70,7 @@ export const tabs: { id: WorkTab; label: string; desc: string; group: 'create' |
   { id: 'library', label: '成品库', desc: '归档与挂载', group: 'manage' },
   { id: 'sceneLibrary', label: '场景库', desc: '场景与手机图库', group: 'manage' },
   { id: 'rules', label: '规则中心', desc: 'Prompt 规范', group: 'manage' },
-  { id: 'queue', label: '生成队列', desc: '状态与重试', group: 'manage' },
-  { id: 'history', label: '历史', desc: '生成记录', group: 'manage' },
+  { id: 'queue', label: '生成任务', desc: '图片任务流与记录', group: 'manage' },
   { id: 'manage', label: '整理', desc: '导入导出', group: 'manage' },
   { id: 'settings', label: '设置', desc: '接口与正文插图', group: 'manage' },
 ];
@@ -117,7 +116,7 @@ export type NavGroupId = 'generate' | 'library' | 'tasks' | 'settings';
 
 export const navGroups: { id: NavGroupId; label: string; members: WorkTab[] }[] = [
   { id: 'generate', label: '生成', members: ['manual', 'scene', 'sceneImage', 'phone', 'anchor', 'reference'] },
-  { id: 'library', label: '图库', members: ['library', 'sceneLibrary', 'history'] },
+  { id: 'library', label: '图库', members: ['library', 'sceneLibrary'] },
   { id: 'tasks', label: '任务', members: ['queue'] },
   { id: 'settings', label: '设置', members: ['rules', 'manage', 'settings'] },
 ];

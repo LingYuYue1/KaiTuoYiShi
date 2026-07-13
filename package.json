@@ -66,6 +66,7 @@
     "test:novelai-image": "node scripts/novelai-image-regression.mjs",
     "test:image-tokenizer-api": "node scripts/image-tokenizer-api-regression.mjs",
     "test:image-generation-optimization": "node scripts/image-generation-optimization-regression.mjs",
+    "test:image-task-feed": "node scripts/image-task-feed-regression.mjs",
     "test:phone-mobile": "node scripts/phone-mobile-layout-regression.mjs",
     "test:memory-mobile": "node scripts/memory-panel-mobile-regression.mjs",
     "test:memory-tier": "node scripts/memory-tier-regression.mjs",
