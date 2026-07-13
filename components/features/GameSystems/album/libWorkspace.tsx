@@ -109,8 +109,8 @@ export function ImageLibraryWorkspace({
   ];
 
   return (
-    <div className="grid min-h-0 gap-4 xl:grid-cols-[180px_minmax(0,1fr)]">
-      <Panel title="图库筛选" className="min-h-0" contentClassName="min-h-0 flex-1">
+    <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[180px_minmax(0,1fr)]">
+      <Panel title="图库筛选" className="h-full min-h-0" contentClassName="min-h-0 flex-1">
         <div className="flex h-full min-h-0 flex-col gap-3">
           <div className="space-y-1.5">
             {filterOptions.map((option) => {
@@ -122,7 +122,7 @@ export function ImageLibraryWorkspace({
         </div>
       </Panel>
 
-      <div className="flex min-h-0 flex-col gap-4">
+      <div className="flex h-full min-h-0 flex-col gap-4">
         <Panel title="图片工具" className="shrink-0" contentClassName="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>

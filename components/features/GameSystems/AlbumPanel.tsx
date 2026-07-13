@@ -1075,8 +1075,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
           <NsfwVisibilityToggle nsfwVisible={nsfwVisible} showNsfw={showNsfw} setShowNsfw={setShowNsfw} />
         </aside>
 
-        <section className="min-h-0 min-w-0 overflow-y-auto pr-1">
-          <main className="min-w-0">
+        <section className={`min-h-0 min-w-0 pr-1 ${activeTab === 'gallery' ? 'xl:overflow-hidden' : 'overflow-y-auto'}`}>
+          <main className={activeTab === 'gallery' ? 'h-full min-h-0 min-w-0' : 'min-w-0'}>
             {activeTab === 'gallery' && (
               <ImageLibraryWorkspace
                 records={libraryRecords}
