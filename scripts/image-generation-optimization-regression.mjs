@@ -12,8 +12,9 @@ const anchorExtract = fs.readFileSync('services/ai/characterAnchorExtract.ts', '
 const albumActions = fs.readFileSync('utils/albumActions.ts', 'utf8');
 const promptRules = fs.readFileSync('utils/imagePromptRules.ts', 'utf8');
 const albumWorkspaces = fs.readFileSync('components/features/GameSystems/album/workspaces.tsx', 'utf8');
+const albumLibrary = fs.readFileSync('components/features/GameSystems/album/libWorkspace.tsx', 'utf8');
 const albumFoundation = fs.readFileSync('components/features/GameSystems/album/foundation.ts', 'utf8');
-const albumPanel = `${fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8')}\n${albumWorkspaces}\n${albumFoundation}`;
+const albumPanel = `${fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8')}\n${albumWorkspaces}\n${albumLibrary}\n${albumFoundation}`;
 const imageSettings = fs.readFileSync('components/features/Settings/ImageGenerationSettingsTab.tsx', 'utf8');
 const imageRuleEditor = fs.readFileSync('components/features/ImageGeneration/ImageRuleTemplateEditor.tsx', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
@@ -64,16 +65,16 @@ assert(promptRules.includes('应用质量增强提示词') && promptRules.includ
 assert(promptRules.includes('stable hairstyle matching the character anchor') && promptRules.includes('extra hands, extra arms'), '质量增强内置预设必须覆盖发型稳定与多手/多臂问题。');
 assert(promptRules.includes('return 应用质量增强提示词(rules, prompt') && promptRules.includes('buildSceneImagePrompt'), '角色与场景 prompt 构建必须接入质量增强层。');
 
-assert(albumPanel.includes('成品库'), '相册必须显示成品库入口。');
+assert(albumFoundation.includes("id: 'gallery'") && !albumFoundation.includes("label: '成品库'") && !albumFoundation.includes("id: 'sceneLibrary'"), '相册必须以统一图库替代成品库入口。');
 assert(!albumPanel.includes('未归档图片'), '相册成品库不得再显示未归档图片入口。');
 assert(albumPanel.includes('isCharacterLibrarySlot'), '相册成品库必须只收纳旅人/伙伴头像和立绘槽位。');
 assert(!albumPanel.includes('LibraryResourceFilter'), '成品库不应再按旅人/伙伴做二级筛选。');
-assert(albumPanel.includes('buildVisibleCharacterEntries') && albumPanel.includes('当前图库'), '成品库必须按左侧选中的角色展示当前图库。');
+assert(albumLibrary.includes('ImageLibraryWorkspace') && albumLibrary.includes('buildVisibleCharacterEntries') && albumLibrary.includes('当前图库'), '统一图库必须按左侧选中的角色展示当前图库。');
 assert(albumPanel.includes('buildBuiltinAvatarEntries') && albumPanel.includes('buildTravelerBuiltinAvatarEntries'), '成品库当前图库必须包含内置头像。');
-assert(albumPanel.includes('图片预览') && albumPanel.includes('<ImagePreviewModal'), '成品库功能栏必须提供弹窗式图片预览。');
+assert(albumLibrary.includes('图片预览') && albumLibrary.includes('<ImagePreviewModal'), '统一图库功能栏必须提供弹窗式图片预览。');
 assert(albumPanel.includes('targetId: resolvedTargetId'), '文生图生成结果必须写入角色归属 targetId。');
 assert(albumPanel.includes('SafeAlbumImage') && albumPanel.includes('图片失效'), '相册图片加载失败必须显示明确失效提示。');
-assert(albumPanel.includes('ResourceEntryCard'), '相册成品库必须有独立资源卡片。');
+assert(albumLibrary.includes('CharacterGalleryCard') && albumLibrary.includes('SceneGalleryCard'), '统一图库必须提供角色和场景资源卡片。');
 assert(albumPanel.includes('主控锚点管理'), '相册锚点页必须显示主控锚点管理。');
 assert(albumPanel.includes("id: 'reference'") && albumPanel.indexOf("id: 'reference'") > albumPanel.indexOf("id: 'anchor'"), '相册必须在角色视觉下方提供参考图页面。');
 assert(albumPanel.includes('ReferenceImageWorkspace') && albumPanel.includes('参考图控制') && albumPanel.includes('参考图库'), '参考图页面必须包含控制区和参考图库。');
@@ -95,8 +96,8 @@ assert(albumWorkspaces.includes('<Panel title="生成对象"') && albumWorkspace
 assert(albumWorkspaces.includes('value="traveler">{props.travelerName}（主角）') && albumWorkspaces.includes('{props.companions.map'), '伙伴下拉必须把主角作为首个实体选项，并列出伙伴。');
 assert(albumWorkspaces.includes("{props.nsfwVisible && <option value=\"nsfw\">NSFW 参考</option>}") && albumFoundation.includes("id: 'nsfw_reference'"), 'NSFW 只在启用后作为第三个用途出现。');
 assert(albumWorkspaces.includes("{props.generating ? '生成中' : '生成'}") && albumWorkspaces.includes('onClick={props.onGenerate}'), '图片生成工作区必须使用统一生成按钮。');
-assert(albumPanel.includes('导出图片 ZIP') && albumPanel.includes('createZipBlob') && !albumPanel.includes('导出相册 JSON'), '相册整理页导出必须是图片 ZIP 包，不再导出相册 JSON。');
-assert(albumPanel.includes("sceneKind?: Exclude<SceneLibraryFilter, 'all'>") && albumPanel.includes("{ id: 'snapshot', title: '故事快照'"), '相册导入必须允许导入到故事快照分类。');
+assert(albumLibrary.includes('导出') && albumLibrary.includes('导入到当前图库') && !albumFoundation.includes("id: 'manage'"), '导入导出必须收进图库工具栏，不再保留整理页。');
+assert(albumPanel.includes("sceneKind?: Exclude<SceneLibraryFilter, 'all'>") && albumLibrary.includes("snapshot: '故事快照'"), '相册导入必须允许导入到故事快照分类。');
 assert(albumPanel.includes("const tag = sceneKind === 'snapshot' ? '故事快照'") && albumPanel.includes("note: entry.note || tag"), '导入故事快照必须写入故事快照标签和备注，避免落到普通场景图。');
 assert(albumPanel.includes("id: 'settings'") && albumPanel.includes("label: '设置'") && albumPanel.includes("desc: '接口与正文插图'"), '相册工作台必须提供文生图设置入口。');
 assert(albumPanel.includes('<ImageGenerationSettingsTab'), '文生图设置必须迁移进相册工作台。');

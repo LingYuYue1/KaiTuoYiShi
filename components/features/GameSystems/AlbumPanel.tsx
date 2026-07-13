@@ -17,10 +17,6 @@ import {
   挂载NPC立绘图片,
   挂载NPC_NSFW部位图片,
   挂载旅人图片,
-  卸载NPC头像图片,
-  卸载NPC立绘图片,
-  卸载NPC_NSFW部位图片,
-  卸载旅人图片,
   读取相册条目地址,
   解析相册资源引用,
 } from '@/utils/albumActions';
@@ -32,30 +28,29 @@ import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtra
 import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
-import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
-import { matchCanonical } from '@/data/canonicalCharacters';
 
 import {
   generateTargets, smallClip, groupForTab, navGroups, tabs,
 } from './album/foundation';
 import type {
-  AnchorSelection, GenerateOverride, GenerateTarget, LibraryStatusFilter, PromptMeta,
-  SceneImageSummary, SceneLibraryFilter, StorySnapshotSource, StorySnapshotSummary, WorkTab, NavGroupId,
+  AnchorSelection, GenerateOverride, GenerateTarget, PromptMeta,
+  SceneImageSummary, StorySnapshotSource, StorySnapshotSummary, WorkTab, NavGroupId,
 } from './album/foundation';
 
 import {
   buildAlbumResourceEntries, buildCharacterLibraryRecords, buildNpcSourceText, buildPresentSceneNpcs,
   buildReferenceLibraryEntries, buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions,
-  buildTravelerSourceText, CharacterAnchorWorkspace, CharacterLibraryWorkspace, cleanupAlbumAssets, createTask,
+  buildTravelerSourceText, CharacterAnchorWorkspace, cleanupAlbumAssets, createTask,
   CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags, exportAlbum, extractStorySnapshot,
   formatStorySnapshotSceneText, getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
-  importAlbum, isNpcLibraryRecord, ManageWorkspace, mapImageSlotToNpcAvatarSlot,
-  mapImageSlotToTravelerSlot, mapMountedSlotToNpcAvatarSlot, mapMountedSlotToTravelerSlot, NsfwVisibilityToggle,
+  importAlbum, isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot,
+  mapImageSlotToTravelerSlot, NsfwVisibilityToggle,
   PhoneBackgroundWorkspace, ReferenceImageWorkspace, requiresCharacterTarget,
   resolveGenerationTargetId, resolveReferenceImagesForGeneration, resolveSize, RulesWorkspace, SceneImageWorkspace,
-  SceneLibraryWorkspace, slotLabel, StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
+  slotLabel, StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
 } from './album/workspaces';
-import type { CharacterLibraryRecord, MountedImageSlot } from './album/workspaces';
+import type { CharacterLibraryRecord } from './album/workspaces';
+import { ImageLibraryWorkspace } from './album/libWorkspace';
 import { ImageTaskWorkspace } from './album/taskWorkspace';
 
 interface AlbumPanelProps {
@@ -102,10 +97,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const [storySnapshotDraft, setStorySnapshotDraft] = useState('');
   const [storySnapshotSummary, setStorySnapshotSummary] = useState<StorySnapshotSummary | null>(null);
   const [storySnapshotAnalyzing, setStorySnapshotAnalyzing] = useState(false);
-  const [libraryNameFilter, setLibraryNameFilter] = useState('');
-  const [libraryStatusFilter, setLibraryStatusFilter] = useState<LibraryStatusFilter>('all');
   const [libraryNpcId, setLibraryNpcId] = useState('');
-  const [sceneLibraryFilter, setSceneLibraryFilter] = useState<SceneLibraryFilter>('all');
   const [anchorSelection, setAnchorSelection] = useState<AnchorSelection>('traveler');
   const [anchorExtractingTarget, setAnchorExtractingTarget] = useState<AnchorSelection | null>(null);
   const [anchorBatchExtracting, setAnchorBatchExtracting] = useState(false);
@@ -143,16 +135,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     () => buildCharacterLibraryRecords(traveler, npcs, album, assetMap, nsfwVisible && showNsfw),
     [traveler, npcs, album, assetMap, nsfwVisible, showNsfw],
   );
-  const filteredLibraryRecords = useMemo(() => {
-    const query = libraryNameFilter.trim().toLowerCase();
-    return libraryRecords.filter((record) => {
-      if (query && !record.name.toLowerCase().includes(query) && !(record.alias ?? '').toLowerCase().includes(query)) return false;
-      if (libraryStatusFilter === 'ready' && record.imageCount <= 0) return false;
-      if (libraryStatusFilter === 'empty' && record.imageCount > 0) return false;
-      return true;
-    });
-  }, [libraryNameFilter, libraryRecords, libraryStatusFilter]);
-  const activeLibraryRecord = filteredLibraryRecords.find((record) => record.id === libraryNpcId) ?? filteredLibraryRecords[0] ?? null;
+  const activeLibraryRecord = libraryRecords.find((record) => record.id === libraryNpcId) ?? libraryRecords[0] ?? null;
   const persistGameSettingsChange = (next: 游戏设置) => {
     onGameSettingsChange(next);
     void saveSetting('gameSettings', next);
@@ -161,7 +144,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const addAlbumItem = (item: ReturnType<typeof 创建相册图片条目>) => {
     onAlbumChange((prev) => 添加图片到相册(prev, item));
     setActiveEntryId(item.entry.id);
-    setActiveTab('library');
+    setActiveTab('gallery');
     setMessage('图片已加入相册。');
   };
 
@@ -563,7 +546,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setMessage(`已删除 ${ids.length} 张图片。`);
   };
 
-  const setLibraryEntryToSlot = (params: { record: CharacterLibraryRecord | null; entryId: string; slot: 图片槽位 }) => {
+  const setLibraryEntryToSlot = (params: { record: CharacterLibraryRecord | null; entryId: string; src: string; slot: 图片槽位 }) => {
     const record = params.record;
     if (!record) {
       setMessage('请先选择一个角色。');
@@ -571,41 +554,18 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     }
     const scopedEntries = [...record.entries, ...resourceEntries];
     const item = scopedEntries.find((entry) => entry.entry.id === params.entryId);
-    if (!item?.src) {
+    const src = item?.src || params.src;
+    if (!src) {
       setMessage('请选择一张可用图片。');
       return;
     }
     mountSelectedToCharacter({
       targetKind: record.kind,
       targetId: record.id,
-      entryId: item.entry.id,
-      src: item.src,
+      entryId: params.entryId,
+      src,
       slot: params.slot,
     });
-  };
-
-  const unmountCharacterSlot = (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; slot: MountedImageSlot }) => {
-    if (params.targetKind === 'traveler') {
-      onTravelerChange((prev) => 卸载旅人图片(prev, { slot: mapMountedSlotToTravelerSlot(params.slot.key) }));
-      setMessage(`已卸下${params.slot.label}。`);
-      return;
-    }
-    if (params.slot.key === 'portrait') {
-      onNpcChange((prev) => 卸载NPC立绘图片(prev, { npcId: params.targetId }));
-    } else if (params.slot.key === 'nsfw-female-chest') {
-      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性胸部' }));
-    } else if (params.slot.key === 'nsfw-female-genital') {
-      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性私处' }));
-    } else if (params.slot.key === 'nsfw-male-genital') {
-      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '男性器' }));
-    } else if (params.slot.key === 'nsfw-rear') {
-      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '后庭' }));
-    } else if (params.slot.key === 'nsfw-body-reference') {
-      onNpcChange((prev) => 卸载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '体态参考' }));
-    } else {
-      onNpcChange((prev) => 卸载NPC头像图片(prev, { npcId: params.targetId, slot: mapMountedSlotToNpcAvatarSlot(params.slot.key) }));
-    }
-    setMessage(`已卸下${params.slot.label}。`);
   };
 
   const saveNpcAnchor = (npcId: string, patch: NonNullable<NPC记录['图像档案']>['角色锚点']) => {
@@ -1117,38 +1077,30 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
 
         <section className="min-h-0 min-w-0 overflow-y-auto pr-1">
           <main className="min-w-0">
-            {activeTab === 'library' && (
-              <CharacterLibraryWorkspace
-                records={filteredLibraryRecords}
+            {activeTab === 'gallery' && (
+              <ImageLibraryWorkspace
+                records={libraryRecords}
                 album={album}
                 activeRecord={activeLibraryRecord}
                 activeEntryId={activeEntryId ?? undefined}
                 resourceEntries={resourceEntries}
-                nameFilter={libraryNameFilter}
-                setNameFilter={setLibraryNameFilter}
-                statusFilter={libraryStatusFilter}
-                setStatusFilter={setLibraryStatusFilter}
-                onSelectNpc={(id) => {
+                sceneEntries={sceneLibraryEntries}
+                traveler={traveler}
+                onSelectRecord={(id) => {
                   setLibraryNpcId(id);
                   setActiveEntryId(null);
                 }}
                 onSelectEntry={setActiveEntryId}
-                onCreate={() => setActiveTab('manual')}
-                onMount={mountSelectedToCharacter}
-                onUnmount={unmountCharacterSlot}
                 onDeleteEntries={deleteLibraryEntries}
                 onSetSlot={setLibraryEntryToSlot}
-                maleNsfwEnabled={gameSettings.enableMaleNsfwArchive}
-              />
-            )}
-            {activeTab === 'sceneLibrary' && (
-              <SceneLibraryWorkspace
-                entries={sceneLibraryEntries}
-                activeEntryId={activeEntryId ?? undefined}
-                filter={sceneLibraryFilter}
-                setFilter={setSceneLibraryFilter}
-                onSelectEntry={setActiveEntryId}
-                onDeleteEntries={deleteLibraryEntries}
+                onExport={() => void exportAlbum(album)}
+                onImport={(file, target) => {
+                  void importAlbum(file, target).then((next) => {
+                    if (!next) return;
+                    onAlbumChange(next);
+                    setMessage('相册已导入。');
+                  }).catch((err) => setMessage(`导入失败：${err instanceof Error ? err.message : String(err)}`));
+                }}
               />
             )}
             {activeTab === 'anchor' && (
@@ -1159,7 +1111,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 onSaveTravelerAnchor={saveTravelerAnchor}
                 onDeleteTravelerAnchor={deleteTravelerAnchor}
                 onExtractTravelerAnchor={extractTravelerAnchor}
-                records={filteredLibraryRecords.filter(isNpcLibraryRecord)}
+                records={libraryRecords.filter(isNpcLibraryRecord)}
                 activeRecord={isNpcLibraryRecord(activeLibraryRecord) ? activeLibraryRecord : null}
                 activeSelection={anchorSelection}
                 anchorExtractingTarget={anchorExtractingTarget}
@@ -1343,20 +1295,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
               />
             )}
             {activeTab === 'queue' && <ImageTaskWorkspace album={album} includeNsfw={nsfwVisible && showNsfw} onSelectEntry={setActiveEntryId} onRetry={handleRetryTask} />}
-            {activeTab === 'manage' && (
-              <ManageWorkspace
-                traveler={traveler}
-                npcs={npcs}
-                onExport={() => void exportAlbum(album)}
-                onImport={(file, target) => {
-                  void importAlbum(file, target).then((next) => {
-                    if (!next) return;
-                    onAlbumChange(next);
-                    setMessage('相册已导入。');
-                  }).catch((err) => setMessage(`导入失败：${err instanceof Error ? err.message : String(err)}`));
-                }}
-              />
-            )}
             {activeTab === 'settings' && (
               <ImageGenerationSettingsTab
                 settings={gameSettings}
