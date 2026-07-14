@@ -4,6 +4,7 @@
   "version": "1.1.0",
   "description": "开拓轶事：一个以 React + TypeScript 构建的崩坏：星穹铁道同人叙事 Web 应用。",
   "license": "MIT",
+  "packageManager": "pnpm@10.15.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -90,8 +91,8 @@
     "test:skill-system": "node scripts/skill-system-regression.mjs",
     "test:zhiku-guinaifen": "node scripts/zhiku-guinaifen-regression.mjs",
     "validate:story-weaving-canon": "node scripts/validate-story-weaving-canon.mjs",
-    "deploy:cf": "npm run build && wrangler pages deploy dist --project-name=kaituoyishi --branch=main",
-    "deploy:cf:preview": "npm run build && wrangler pages deploy dist --project-name=kaituoyishi-preview --branch=main",
+    "deploy:cf": "pnpm build && wrangler pages deploy dist --project-name=kaituoyishi --branch=main",
+    "deploy:cf:preview": "pnpm build && wrangler pages deploy dist --project-name=kaituoyishi-preview --branch=main",
     "preview": "vite preview"
   },
   "dependencies": {
