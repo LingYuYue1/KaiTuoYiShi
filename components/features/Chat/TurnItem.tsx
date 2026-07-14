@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { memo, useState } from 'react';
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -27,7 +27,7 @@ interface TurnItemProps {
 
 type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
-export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
+function TurnItemImpl({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
 
@@ -71,6 +71,8 @@ export function TurnItem({ message, isStreaming, onEditBody, onRegenerateNarrati
     </div>
   );
 }
+
+export const TurnItem = memo(TurnItemImpl);
 
 function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: string; traveler?: 角色数据结构; album?: 相册系统; fontSize?: number }) {
   const name = traveler?.姓名?.trim() || traveler?.别名?.trim() || '旅人';

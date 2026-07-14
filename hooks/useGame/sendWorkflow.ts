@@ -40,6 +40,7 @@ import {
   createVisibilityBufferedPublisher,
   type VisibilityBufferedPublisher,
 } from '@/utils/visibilityBufferedPublisher';
+import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import type { 变量事实, 变量命令, 变量命令批次 } from '@/models/variableCommand';
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/services/pathService';
 import { 创建默认记忆系统设置 } from '@/models/settings';
@@ -1025,8 +1026,9 @@ async function revealStreamingPreview(
 ): Promise<void> {
   const chunks = splitStreamingReveal(text);
   if (!chunks.length) return;
+  const streamSetter = createRafCoalescedSetter(state.setStreamingMessage);
   if (isPageHidden()) {
-    state.setStreamingMessage(text.trim());
+    streamSetter.flush(text.trim());
     return;
   }
   const minChunks = options?.minChunks ?? 8;
@@ -1045,15 +1047,21 @@ async function revealStreamingPreview(
         })();
 
   let preview = '';
-  for (const chunk of revealChunks) {
-    if (signal?.aborted) return;
-    preview += chunk;
-    state.setStreamingMessage(preview);
-    await waitStreamingPreviewDelay(delayMs, signal);
-    if (isPageHidden()) {
-      state.setStreamingMessage(text.trim());
-      return;
+  try {
+    for (const chunk of revealChunks) {
+      if (signal?.aborted) return;
+      preview += chunk;
+      streamSetter.set(preview);
+      await waitStreamingPreviewDelay(delayMs, signal);
+      if (isPageHidden()) {
+        streamSetter.flush(text.trim());
+        return;
+      }
     }
+    // Ensure the final preview is committed before callers clear/replace it.
+    streamSetter.flush(preview);
+  } finally {
+    streamSetter.cancel();
   }
 }
 
@@ -1682,6 +1690,8 @@ export async function executeSendWorkflow(
   let rollbackHistoryOnAbort = state.chatHistory;
   let rollbackSnapshotOnAbort: 回合快照 | null = null;
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
+  // Declared outside the stream setup so finally can always cancel a pending rAF commit.
+  const streamMessageSetter = createRafCoalescedSetter(state.setStreamingMessage);
   let recoveryJournal = createWorkflowRecoveryJournal(userInput, state.turnCount);
 
   const startTime = Date.now();
@@ -2231,7 +2241,7 @@ export async function executeSendWorkflow(
           commit: (text) => {
             previewEpoch += 1;
             previewText = text;
-            state.setStreamingMessage(text);
+            streamMessageSetter.flush(text);
           },
         });
     let result: Awaited<ReturnType<typeof sendChatMessage>>;
@@ -2251,7 +2261,7 @@ export async function executeSendWorkflow(
       previewText = '';
       previewEpoch += 1;
       previewChain = Promise.resolve();
-      state.setStreamingMessage('');
+      streamMessageSetter.flush('');
       try {
         result = await sendChatMessage(mainStoryConfig, {
           messages: apiMessages,
@@ -2259,7 +2269,7 @@ export async function executeSendWorkflow(
           onDelta: (delta) => {
             streamedText += delta;
             if (!state.gameSettings.enableStreaming) {
-              state.setStreamingMessage(streamedText);
+              streamMessageSetter.set(streamedText);
               return;
             }
             if (visibilityPublisher?.bufferWhenHidden(streamedText)) {
@@ -2280,7 +2290,7 @@ export async function executeSendWorkflow(
                   return;
                 }
                 previewText += chunk;
-                state.setStreamingMessage(previewText);
+                streamMessageSetter.set(previewText);
                 await waitStreamingPreviewDelay(14, abortController.signal);
                 if (isPageHidden()) {
                   previewEpoch += 1;
@@ -2454,7 +2464,9 @@ export async function executeSendWorkflow(
           minChunks: 8,
         });
       }
-      state.setStreamingMessage('');
+      streamMessageSetter.flush('');
+    } else {
+      streamMessageSetter.cancel();
     }
     // 给狭间消息预先打上 awakenPathId 标签:出题/评判回合,此时 effectiveWorld.进行中狭间 还没清空,
     // 把命途 ID 写进 parsedResponse,让 TurnItem 在 进行中狭间 清空后仍能拿到命途名做美化。
@@ -2575,7 +2587,7 @@ export async function executeSendWorkflow(
     }
     state.setChatHistory(finalHistory);
     state.setTurnCount((prev) => prev + 1);
-    state.setStreamingMessage('');
+    streamMessageSetter.flush('');
     state.setLoading(false);
     state.setPendingVariable(true);
     pendingVariableStarted = true;
@@ -3088,6 +3100,7 @@ export async function executeSendWorkflow(
     }
   } finally {
     visibilityPublisher?.dispose();
+    streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
       state.setLoading(false);
       state.setStreamingMessage('');

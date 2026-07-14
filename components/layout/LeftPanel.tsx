@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { memo, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { getPath } from '@/data/journeyPresets';
@@ -18,7 +18,7 @@ interface LeftPanelProps {
   desktop?: boolean;
 }
 
-export function LeftPanel({
+export const LeftPanel = memo(function LeftPanel({
   traveler,
   onOpenProfile,
   onOpenPhone,
@@ -195,7 +195,7 @@ style={{
       </div>
     </div>
   );
-}
+});
 
 function RecallSummaryWindow({ content, fullContent }: { content: string; fullContent: string }) {
   const [expanded, setExpanded] = useState(false);
