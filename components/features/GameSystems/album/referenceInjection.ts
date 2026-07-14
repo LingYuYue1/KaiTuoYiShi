@@ -1,6 +1,7 @@
 import { 图片是否参考角色 } from '@/models/imageGeneration';
 import type { 图片资源, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 文生图API配置, 文生图参考图设置 } from '@/models/settings';
+import { pickAssetDisplayUrl } from '@/utils/albumObjectUrl';
 import type { generateTargets } from './foundation';
 
 type GenerationTarget = typeof generateTargets[number];
@@ -120,7 +121,7 @@ export function resolveReferenceImagesForGeneration(params: {
   }
 
   const asset = params.assetMap.get(decision.entry.assetId);
-  const src = asset?.dataUrl || asset?.url || asset?.localRef || '';
+  const src = pickAssetDisplayUrl(asset ?? {}) || '';
   if (!src) {
     return {
       status: status('unavailable', '已开启参考图 · 当前图片不可用'),

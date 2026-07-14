@@ -2,6 +2,7 @@ import type { 存档数据 } from '@/models/settings';
 import { 创建空API设置, 创建默认游戏设置 } from '@/models/settings';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
+import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
 
 const PACKAGE_VERSION = 2;
 const encoder = new TextEncoder();
@@ -70,14 +71,19 @@ type ZipEntryOutput = ZipEntryInput & {
 };
 
 export async function buildSavePackage(save: 存档数据): Promise<Blob> {
-  const entries = splitSaveIntoPackageEntries(sanitizeSaveForExport(compactDuplicatedSaveImages(save)));
+  const expanded = await expandSaveAssetPayloadForExport(save);
+  const entries = splitSaveIntoPackageEntries(sanitizeSaveForExport(compactDuplicatedSaveImages(expanded)));
   const bytes = await createZip(entries);
   return new Blob([bytes], { type: 'application/zip' });
 }
 
 export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob> {
-  const normalized = saves
-    .filter((save) => save && typeof save === 'object')
+  const expandedSaves = await Promise.all(
+    saves
+      .filter((save) => save && typeof save === 'object')
+      .map((save) => expandSaveAssetPayloadForExport(save)),
+  );
+  const normalized = expandedSaves
     .map((save) => sanitizeSaveForExport(compactDuplicatedSaveImages(save)))
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0) || (Number(a.id) || 0) - (Number(b.id) || 0));
   if (!normalized.length) {
@@ -143,6 +149,12 @@ export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
   stripEmbeddedApiSettings(sanitized);
   return sanitized;
+}
+
+/** Async export sanitizer that rehydrates Blob-backed album assets into portable dataUrls. */
+export async function sanitizeSaveForExportAsync(save: 存档数据): Promise<存档数据> {
+  const expanded = await expandSaveAssetPayloadForExport(save);
+  return sanitizeSaveForExport(expanded);
 }
 
 function stripEmbeddedApiSettings(sanitized: 存档数据): void {

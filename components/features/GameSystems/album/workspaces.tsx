@@ -24,7 +24,11 @@ import {
   卸载旅人图片,
   读取相册条目地址,
   解析相册资源引用,
+  解析相册资源地址,
 } from '@/utils/albumActions';
+import {
+  revokeAlbumAssets,
+} from '@/utils/albumObjectUrl';
 import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
@@ -597,7 +601,7 @@ export function EmptyLibraryBox({ title, desc }: { title: string; desc: string }
   );
 }
 
-export function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: { entries: 相册条目[]; assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>; activeId?: string; onSelect: (id: string) => void; onCreate: () => void }) {
+export function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: { entries: 相册条目[]; assetMap: Map<string, { id?: string; dataUrl?: string; url?: string; localRef?: string; originalUrl?: string }>; activeId?: string; onSelect: (id: string) => void; onCreate: () => void }) {
   if (entries.length === 0) {
     return (
       <div className="flex min-h-[360px] items-center justify-center px-4 py-16 text-center" style={{ color: 'rgba(var(--tj-ui-faint), 0.72)', background: 'linear-gradient(180deg, rgba(var(--tj-ui-panel),0.45), rgba(var(--tj-ui-panel-strong),0.62))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.15)', clipPath: cardClip }}>
@@ -615,7 +619,7 @@ export function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: {
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">
       {entries.map((entry) => {
         const asset = assetMap.get(entry.assetId);
-        const src = asset?.dataUrl || asset?.url || asset?.localRef || '';
+        const src = 解析相册资源地址(asset) || '';
         return (
           <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="group overflow-hidden text-left transition-all" style={{ background: 'rgba(var(--tj-ui-panel), 0.52)', boxShadow: activeId === entry.id ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.78), 0 0 18px rgba(var(--tj-btn-primary-start),0.1)' : entry.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.32)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)', clipPath: cardClip }}>
             <div className="aspect-[4/3] ">
@@ -2072,7 +2076,7 @@ export function buildCharacterLibraryRecords(
       const albumEntries = (entryIndex.get(npc.id) ?? [])
         .map((entry) => ({
           entry,
-          src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
+          src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
         }));
       const builtinEntries = buildBuiltinAvatarEntries(npc);
       const entries = [...builtinEntries, ...albumEntries];
@@ -2113,7 +2117,7 @@ export function buildTravelerLibraryRecord(
   const entries = albumEntries
     .map((entry) => ({
       entry,
-      src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
+      src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
     }));
   const mountedCount = slots.filter((slot) => Boolean(slot.src)).length;
   const resourceCount = entries.length;
@@ -2192,7 +2196,7 @@ export function buildAlbumResourceEntries(
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((entry) => ({
       entry,
-      src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
+      src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
     }));
 }
 
@@ -2206,7 +2210,7 @@ export function buildSceneLibraryEntries(
       if (!kind) return null;
       return {
         entry,
-        src: assetMap.get(entry.assetId)?.dataUrl || assetMap.get(entry.assetId)?.url || assetMap.get(entry.assetId)?.localRef || '',
+        src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
         kind,
         label: sceneLibraryKindLabel(kind),
       };
@@ -2676,6 +2680,8 @@ export function deleteAlbumEntry(album: 相册系统, entryId: string): 相册�
 
 export function cleanupAlbumAssets(album: 相册系统): 相册系统 {
   const used = new Set(album.entries.map((entry) => entry.assetId));
+  const removed = album.assets.filter((asset) => !used.has(asset.id)).map((asset) => asset.id);
+  if (removed.length) revokeAlbumAssets(removed);
   return {
     ...album,
     assets: album.assets.filter((asset) => used.has(asset.id)),

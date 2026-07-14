@@ -38,8 +38,6 @@ interface StarDot {
   x: number;
   y: number;
   size: number;
-  delay: number;
-  duration: number;
   opacity: number;
 }
 
@@ -73,13 +71,11 @@ export function DesktopHomeScreen({
 
   const stars = useMemo<StarDot[]>(() => {
     const list: StarDot[] = [];
-    for (let i = 0; i < 176; i++) {
+    for (let i = 0; i < 24; i++) {
       list.push({
         x: Math.random() * 100,
         y: Math.random() * 100,
         size: Math.random() < 0.12 ? 2 + Math.random() * 1.6 : 0.7 + Math.random() * 1.2,
-        delay: Math.random() * 4,
-        duration: 1.8 + Math.random() * 3.4,
         opacity: 0.16 + Math.random() * 0.5,
       });
     }
@@ -191,7 +187,6 @@ export function DesktopHomeScreen({
             opacity: star.opacity,
             background: 'rgba(var(--tj-accent-primary),0.95)',
             boxShadow: star.size > 1.8 ? '0 0 12px rgba(var(--tj-accent-primary),0.3)' : 'none',
-            animation: `star-twinkle ${star.duration}s ease-in-out ${star.delay}s infinite`,
           }}
         />
       ))}

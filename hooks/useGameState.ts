@@ -230,8 +230,6 @@ export interface UseGameStateReturn {
   setHasSave: React.Dispatch<React.SetStateAction<boolean>>;
   loading: boolean;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  streamingMessage: string;
-  setStreamingMessage: React.Dispatch<React.SetStateAction<string>>;
   workflowHint: string;
   setWorkflowHint: React.Dispatch<React.SetStateAction<string>>;
   workflowStatus: 'searching' | 'done' | '';
@@ -275,7 +273,6 @@ export function useGameState(): UseGameStateReturn {
   const [worldbooks, setWorldbooks] = useState<世界书[]>([]);
   const [hasSave, setHasSave] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [streamingMessage, setStreamingMessage] = useState('');
   const [workflowHint, setWorkflowHint] = useState('');
   const [workflowStatus, setWorkflowStatus] = useState<'searching' | 'done' | ''>('');
   const [liveRecallSummary, setLiveRecallSummary] = useState('');
@@ -501,7 +498,6 @@ export function useGameState(): UseGameStateReturn {
     worldbooks, setWorldbooks,
     hasSave, setHasSave,
     loading, setLoading,
-    streamingMessage, setStreamingMessage,
     workflowHint, setWorkflowHint,
     workflowStatus, setWorkflowStatus,
     liveRecallSummary, setLiveRecallSummary,

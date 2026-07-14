@@ -3221,7 +3221,7 @@ function AddCustomModuleModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(2px)' }}
       onClick={onCancel}
     >
       <div

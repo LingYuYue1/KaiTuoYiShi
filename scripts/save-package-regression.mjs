@@ -75,7 +75,10 @@ assert(dbService.includes('parseSavePackage(await file.arrayBuffer())'), '统一
 assert(dbService.includes('parseSaveTreePackage(await file.arrayBuffer())'), '多节点导入入口必须使用树包解析。');
 assert(dbService.includes('remapImportedSaveTree'), '导入树包必须重映射 rootId/nodeId，避免和本地已有树冲突。');
 assert(dbService.includes('nodeIdMap') && dbService.includes('parentNodeId: tree.parentNodeId ? nodeIdMap.get(tree.parentNodeId) : undefined'), '导入树包必须同步重映射父子节点关系。');
-assert(dbService.includes('sanitizeSaveForExport(save), null, 2'), '旧 JSON 导出入口也必须复用脱敏逻辑。');
+assert(
+  dbService.includes('sanitizeSaveForExportAsync(save)') || dbService.includes('sanitizeSaveForExport(save), null, 2'),
+  '旧 JSON 导出入口也必须复用脱敏逻辑。',
+);
 assert(dbService.includes('`.zip`') || dbService.includes('.zip`'), '导出文件后缀必须使用 .zip。');
 assert(dbService.includes("name.endsWith('.ktysave')"), '导入函数必须保留旧 .ktysave 兼容。');
 

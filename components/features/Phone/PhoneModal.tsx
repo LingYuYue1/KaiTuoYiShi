@@ -947,13 +947,16 @@ export function PhoneModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-start p-3 sm:p-4"
-      style={{ background: 'rgba(var(--tj-bg-primary), 0.72)', backdropFilter: 'blur(10px)' }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      className="fixed inset-0 z-50 overflow-auto p-3 sm:p-4"
+      style={{ background: 'rgba(var(--tj-bg-primary), 0.88)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+      role="presentation"
     >
-      <div className="flex h-full w-full flex-col items-start gap-3 overflow-auto xl:flex-row xl:items-start">
+      {/* Content stops propagation so only blank scrim dismisses (desktop click-outside). */}
+      <div
+        className="flex w-full flex-col items-start gap-3 xl:flex-row xl:items-start"
+        onClick={(e) => e.stopPropagation()}
+      >
         <section
           className={`${activeApp ? 'hidden xl:flex' : 'flex'} relative h-[min(84vh,760px)] w-full max-w-[340px] flex-shrink-0 overflow-hidden p-3 xl:w-[340px]`}
           style={{

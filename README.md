@@ -109,19 +109,19 @@
 安装依赖：
 
 ```bash
-npm install
+pnpm install
 ```
 
 启动开发服务：
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 构建生产版本：
 
 ```bash
-npm run build
+pnpm build
 ```
 
 项目不会自带任何 API Key。运行后需要在应用设置中配置自己的模型接口。

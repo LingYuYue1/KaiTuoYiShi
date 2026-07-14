@@ -21,6 +21,7 @@ import {
   挂载旅人图片,
   读取相册条目地址,
   解析相册资源引用,
+  解析相册资源地址,
 } from '@/utils/albumActions';
 import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
@@ -351,7 +352,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     return album.tasks.find(matchesCurrentTarget);
   }, [album.tasks, currentTarget.slot, currentTarget.targetType, currentCanvasTargetId, lastTaskId]);
   const currentCanvasAsset = currentCanvasTask?.resultAssetId ? assetMap.get(currentCanvasTask.resultAssetId) : undefined;
-  const currentCanvasSrc = currentCanvasAsset?.dataUrl || currentCanvasAsset?.url || currentCanvasAsset?.localRef || '';
+  const currentCanvasSrc = 解析相册资源地址(currentCanvasAsset) || '';
   const currentCanvasEntry = currentCanvasTask?.resultAssetId ? album.entries.find((entry) => entry.assetId === currentCanvasTask.resultAssetId) : undefined;
   const currentGenerationRecord = currentTarget.targetType === 'traveler'
     ? libraryRecords.find((record) => record.kind === 'traveler') ?? null

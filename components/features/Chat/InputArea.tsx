@@ -1,6 +1,5 @@
-﻿import { useState, useRef, useCallback, useMemo } from 'react';
+﻿import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
-import { useEffect } from 'react';
 
 interface InputAreaProps {
   onSend: (text: string) => void;
@@ -31,7 +30,7 @@ const btnClip =
 const iconClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
-export function InputArea({
+export const InputArea = memo(function InputArea({
   onSend,
   onAbort,
   loading,
@@ -319,7 +318,7 @@ export function InputArea({
       </div>
     </div>
   );
-}
+});
 
 function IconButton({
   glyph,

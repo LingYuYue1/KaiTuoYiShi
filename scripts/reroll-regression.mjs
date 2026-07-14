@@ -47,7 +47,11 @@ assert(turnItemSource.includes('重roll相似度') && turnItemSource.includes('�
 assert(useGameSource.includes('rerollContextRef'), 'useGame 必须保存一次性重roll上下文。');
 assert(useGameSource.includes('previousResponse'), 'reroll 必须记录上一版回复摘录供避重复。');
 assert(useGameSource.includes('onAfterSend: () => {\n          rerollContextRef.current = null;'), '重roll上下文必须在发送结束后清空。');
-assert(useGameSource.includes('state.loading || state.pendingVariable'), '重roll入口必须在后台结算期间硬阻止。');
+assert(
+  useGameSource.includes('state.loading || state.pendingVariable')
+  || useGameSource.includes('s.loading || s.pendingVariable'),
+  '重roll入口必须在后台结算期间硬阻止。',
+);
 assert(newsSource.includes('shouldCommit?: () => boolean'), '新闻子流程必须支持提交闸门。');
 assert(newsSource.includes('params.shouldCommit?.() === false'), '新闻子流程写入前必须检查提交闸门。');
 assert(settingsSource.includes('turnCount?: number'), '存档数据必须持久化真实 turnCount。');

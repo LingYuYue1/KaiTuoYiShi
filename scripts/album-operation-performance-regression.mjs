@@ -87,7 +87,12 @@ assert(archive.includes('bytes.subarray(dataOffset, dataEnd)'), 'ZIP 导入必�
 assert(archive.includes('parts.push(localHeader, nameBytes, file.data)'), 'ZIP 导出必须使用 Blob parts，不能把图片拼入连续副本');
 assert(worker.includes("case 'export:asset'") && worker.includes("case 'import:init'"), '相册重计算必须在专用 Worker 中执行');
 assert(client.includes("new Worker(new URL('./albumArchive.worker.ts', import.meta.url)"), '相册界面必须通过模块 Worker 执行归档');
-assert(client.includes("await requestWorker(worker, { type: 'export:asset', asset: album.assets[index] })"), '导出资源必须逐项发送，不能一次复制整本相册');
+assert(
+  client.includes("await requestWorker(worker, { type: 'export:asset', asset: exportAsset })")
+    || client.includes("await requestWorker(worker, { type: 'export:asset', asset: album.assets[index] })"),
+  '导出资源必须逐项发送，不能一次复制整本相册',
+);
+assert(client.includes('materializeAssetForWorkerExport'), '导出前必须从主线程 Blob 缓存补齐 worker 可用的二进制');
 assert(client.includes("[buffer]"), '导入 ZIP ArrayBuffer 必须转移给 Worker');
 assert(!content.includes('Promise.all(album.assets.map'), '旧资源哈希补算不得使用无上限 Promise.all');
 assert(panel.includes('startAlbumUpdate') && panel.includes('albumOperationBusy'), '删除和导入提交必须使用低优先级更新并锁定重操作');

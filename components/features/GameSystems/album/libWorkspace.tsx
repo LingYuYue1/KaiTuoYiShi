@@ -16,6 +16,7 @@ import {
 } from './workspaces';
 import type { CharacterLibraryEntry, CharacterLibraryRecord, SceneLibraryEntry } from './workspaces';
 import type { AlbumImportMode } from './albumArchive';
+import { 解析相册资源地址 } from '@/utils/albumActions';
 
 type GalleryScope = 'character' | Exclude<SceneLibraryFilter, 'all'>;
 type GalleryItem = {
@@ -80,7 +81,10 @@ export function ImageLibraryWorkspace({
       const assets = new Map(album.assets.map((asset) => [asset.id, asset]));
       const references = activeRecord ? album.entries
         .filter((entry) => 图片是否参考角色(entry, activeRecord.id))
-        .map((entry) => ({ entry, src: assets.get(entry.assetId)?.dataUrl || assets.get(entry.assetId)?.url || assets.get(entry.assetId)?.localRef || '', character: { entry, src: assets.get(entry.assetId)?.dataUrl || assets.get(entry.assetId)?.url || assets.get(entry.assetId)?.localRef || '' } })) : [];
+        .map((entry) => {
+          const src = 解析相册资源地址(assets.get(entry.assetId)) || '';
+          return { entry, src, character: { entry, src } };
+        }) : [];
       return Array.from(new Map([...characters, ...references].map((item) => [item.entry.id, item])).values());
     }
     return sceneEntries

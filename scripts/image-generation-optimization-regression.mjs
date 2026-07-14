@@ -51,7 +51,7 @@ assert(imageService.includes('__REFERENCE_IMAGE__') && imageService.includes('{{
 assert(imageService.includes('NOVELAI_IMAGE_MODELS'), 'NovelAI 生图接口必须提供内置模型列表。');
 assert(!narrativeParser.includes("preference === 'character_only'"), '正文生图解析不得再按角色偏好生成独立角色图。');
 assert(narrativeParser.includes('const scene = parseSceneFromJson(parsed)'), '正文生图解析必须固定提取故事快照场景图。');
-assert(albumActions.includes('originalUrl?: string') && albumActions.includes('dataUrl: isDataUrl ? input.src : undefined'), '相册创建必须支持 dataUrl 优先和 originalUrl 保存。');
+assert(albumActions.includes('originalUrl?: string') && (albumActions.includes('dataUrl: isDataUrl ? input.src : undefined') || albumActions.includes('rememberAlbumAssetFromDataUrl(assetId, input.src)')), '相册创建必须支持 dataUrl/Blob 优先和 originalUrl 保存。');
 
 assert(promptRules.includes('readTravelerCharacterAnchorPrompt'), '旅人生图 prompt 必须读取主控锚点。');
 assert(promptRules.includes("mode: Extract<生图Prompt模式, 'avatar' | 'portrait' | 'nsfw'>"), '旅人生图 prompt 必须支持 NSFW 模式。');
