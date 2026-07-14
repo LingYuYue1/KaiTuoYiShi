@@ -4,12 +4,12 @@ import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
 import type { VisualTextSettings } from '@/models/settings';
 import type { 相册系统 } from '@/models/imageGeneration';
+import { useStreamingMessage } from '@/utils/streamingMessageStore';
 import { TurnItem } from './TurnItem';
 
 interface ChatListProps {
   messages: 聊天消息[];
   loading: boolean;
-  streamingMessage: string;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onEditBody?: (id: string, newBody: string) => void;
   onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
@@ -109,7 +109,8 @@ function buildNeighborMeta(messages: 聊天消息[]): NeighborMeta[] {
   return meta;
 }
 
-export function ChatList({ messages, loading, streamingMessage, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, visualTextSettings }: ChatListProps) {
+export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, visualTextSettings }: ChatListProps) {
+  const streamingMessage = useStreamingMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [nearBottom, setNearBottom] = useState(true);
   const [renderLimit, setRenderLimit] = useState(80);

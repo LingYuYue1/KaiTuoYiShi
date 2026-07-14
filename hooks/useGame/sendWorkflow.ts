@@ -41,6 +41,7 @@ import {
   type VisibilityBufferedPublisher,
 } from '@/utils/visibilityBufferedPublisher';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
+import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import type { 变量事实, 变量命令, 变量命令批次 } from '@/models/variableCommand';
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/services/pathService';
 import { 创建默认记忆系统设置 } from '@/models/settings';
@@ -1026,7 +1027,7 @@ async function revealStreamingPreview(
 ): Promise<void> {
   const chunks = splitStreamingReveal(text);
   if (!chunks.length) return;
-  const streamSetter = createRafCoalescedSetter(state.setStreamingMessage);
+  const streamSetter = createRafCoalescedSetter(setStreamingMessage);
   if (isPageHidden()) {
     streamSetter.flush(text.trim());
     return;
@@ -1679,7 +1680,7 @@ export async function executeSendWorkflow(
 
   deps.onBeforeSend();
   state.setLoading(true);
-  state.setStreamingMessage('');
+  setStreamingMessage('');
   state.setWorkflowHint('忆庭召回 / 智库检索中');
   state.setWorkflowStatus('searching');
   state.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
@@ -1691,7 +1692,7 @@ export async function executeSendWorkflow(
   let rollbackSnapshotOnAbort: 回合快照 | null = null;
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
   // Declared outside the stream setup so finally can always cancel a pending rAF commit.
-  const streamMessageSetter = createRafCoalescedSetter(state.setStreamingMessage);
+  const streamMessageSetter = createRafCoalescedSetter(setStreamingMessage);
   let recoveryJournal = createWorkflowRecoveryJournal(userInput, state.turnCount);
 
   const startTime = Date.now();
@@ -3103,7 +3104,7 @@ export async function executeSendWorkflow(
     streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
       state.setLoading(false);
-      state.setStreamingMessage('');
+      setStreamingMessage('');
       if (!keepWorkflowHint) {
         state.setWorkflowHint('');
         state.setWorkflowStatus('');

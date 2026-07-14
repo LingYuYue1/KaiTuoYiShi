@@ -28,6 +28,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
+import { setStreamingMessage } from '@/utils/streamingMessageStore';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
 const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })));
@@ -377,14 +378,13 @@ export default function App() {
     ]);
     state.setPendingVariable(false);
     state.setLoading(false);
-    state.setStreamingMessage('');
+    setStreamingMessage('');
   }, [
     state.abortControllerRef,
     state.setQueueTasks,
     state.turnCount,
     state.setPendingVariable,
     state.setLoading,
-    state.setStreamingMessage,
   ]);
   const handlePathAwakeningTrigger = useCallback(() => {
     void actions.handleSend('[系统] 踏入命途狭间');
@@ -583,7 +583,6 @@ export default function App() {
       <ChatList
         messages={state.chatHistory}
         loading={state.loading}
-        streamingMessage={state.streamingMessage}
         scrollRef={state.scrollRef}
         npcRecords={state.NPC}
         traveler={state.旅人}

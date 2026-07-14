@@ -13,6 +13,7 @@ import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, �
 import { saveSetting } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { setStreamingMessage } from '@/utils/streamingMessageStore';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -124,7 +125,7 @@ export function useGame(): UseGameReturn {
       const snapshot = lastMsg.preTurnSnapshot;
       const trimmed = history.slice(0, -1);
       s.setChatHistory(trimmed);
-      s.setStreamingMessage('');
+      setStreamingMessage('');
       s.setWorkflowStatus('');
       s.setWorkflowHint(snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。');
       if (snapshot) {
@@ -168,7 +169,7 @@ export function useGame(): UseGameReturn {
     // 砍掉 user + ai；如果有 snapshot，把所有变量切片回滚到 user 发送前
     const trimmed = history.slice(0, lastUserIdx);
     s.setChatHistory(trimmed);
-    s.setStreamingMessage('');
+    setStreamingMessage('');
     s.setWorkflowStatus('');
     s.setWorkflowHint(snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。');
     if (snapshot) {
@@ -203,7 +204,7 @@ export function useGame(): UseGameReturn {
     s.set忆庭(创建空忆庭系统());
     s.set手机(创建空手机系统());
     s.setTurnCount(1);
-    s.setStreamingMessage('');
+    setStreamingMessage('');
 
     const restartOpeningArchive = 归一化开局档案(s.世界.开局档案, s.世界);
 
