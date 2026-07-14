@@ -7,6 +7,7 @@ import { NEWS_COT_PROMPT } from '@/prompts/cot/newsCot';
 import { NEWS_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';
 import { PHONE_COT_PROMPT } from '@/prompts/cot/phoneCot';
 import { PHONE_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/phoneOutputFormat';
+import { PHONE_STYLE_PROMPT } from '@/prompts/cot/phoneStyle';
 import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import { VARIABLE_COT_PROMPT } from '@/prompts/cot/variableCot';
 import { VARIABLE_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
@@ -687,6 +688,8 @@ const PHONE_WORLDBOOK_CONTENT = PHONE_WORLD_BOOK_PROMPT;
 
 const PHONE_OUTPUT_FORMAT_CONTENT = PHONE_OUTPUT_FORMAT_PROMPT;
 
+const PHONE_STYLE_CONTENT = PHONE_STYLE_PROMPT;
+
 const VARIABLE_COT_CONTENT = VARIABLE_COT_PROMPT;
 
 const VARIABLE_WORLDBOOK_CONTENT = VARIABLE_SYSTEM_WORLDBOOK_PROMPT;
@@ -861,7 +864,7 @@ export function createBuiltinPromptModules(): 提示词模块[] {
     makeBuiltin({
       id: 'builtin_phone_worldbook',
       title: '手机系统世界书',
-      description: '手机独立通讯系统的世界书：定义私聊/群聊节奏、联系人解锁、主动来信、本地记忆、摘要回写与系统边界。',
+      description: '手机独立通讯系统的世界书：定义角色知情白名单、私聊/群聊节奏、联系人解锁、主动来信、本地记忆与系统边界。',
       category: 'cot',
       content: PHONE_WORLDBOOK_CONTENT,
       enabled: true,
@@ -871,9 +874,21 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       updatedAt: now,
     }),
     makeBuiltin({
+      id: 'builtin_phone_style',
+      title: '手机通讯默认文风',
+      description: '手机系统的内置日常通讯文风：保留 NPC 角色底色，按场景调整即时语气与节奏，并防止固定套话和 OOC。',
+      category: 'style',
+      content: PHONE_STYLE_CONTENT,
+      enabled: true,
+      order: 60,
+      scope: ['calibration'],
+      createdAt: now,
+      updatedAt: now,
+    }),
+    makeBuiltin({
       id: 'builtin_phone_cot',
       title: '手机系统思维链',
-      description: '独立手机系统专用 CoT：整合主剧情记忆、NPC 档案、新闻、手机本地摘要与会话历史；区分私聊 3-6 条、群聊 12-20 条，并生成可回写的通讯摘要。仅供手机模型读取，默认不注入主叙事。',
+      description: '独立手机系统专用 CoT：整合当前角色自身资料、定向剧情片段、公开新闻、手机本地摘要与会话历史；区分私聊 4-8 条、群聊 12-30 条。',
       category: 'cot',
       content: PHONE_COT_CONTENT,
       enabled: true,
@@ -885,7 +900,7 @@ export function createBuiltinPromptModules(): 提示词模块[] {
     makeBuiltin({
       id: 'builtin_phone_output_format',
       title: '手机系统输出格式',
-      description: '手机系统的写法要求与 JSON 输出格式：私聊 3-6 条/群聊 12-20 条、严禁复读、记忆写回约束。',
+      description: '手机系统的写法要求与 JSON 输出格式：私聊 4-8 条/群聊 12-30 条、直接回应当前输入、严禁复读与空泛填充。',
       category: 'format',
       content: PHONE_OUTPUT_FORMAT_CONTENT,
       enabled: true,

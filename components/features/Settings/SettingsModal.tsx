@@ -1,5 +1,20 @@
 import type { ReactNode } from 'react';
 import { useCallback, useState } from 'react';
+import {
+  BookOpen,
+  Cable,
+  Database,
+  FileText,
+  HardDrive,
+  Import as ImportIcon,
+  Layers3,
+  Palette,
+  ShieldAlert,
+  TriangleAlert,
+  Type as TypeIcon,
+  WandSparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import { ApiSettingsTab } from './ApiSettings';
 import { ThemeSettingsTab } from './ThemeSettings';
 import { GameSettingsTab } from './GameSettings';
@@ -64,19 +79,19 @@ interface SettingsModalProps {
 
 type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage';
 
-const tabs: { key: Tab; label: string; icon: string; subtitle: string }[] = [
-  { key: 'visual', label: '视觉设置', icon: '◇', subtitle: '正文显示与字号' },
-  { key: 'game', label: '游戏设定', icon: '❖', subtitle: '叙述风格与人格' },
-  { key: 'api', label: 'API 接口', icon: '✦', subtitle: 'AI 模型、密钥与子功能接口' },
-  { key: 'apiErrors', label: '错误报告', icon: '!', subtitle: 'API 失败原因记录' },
-  { key: 'context', label: '上下文', icon: '▤', subtitle: '主剧情 Token 计数' },
-  { key: 'nsfw', label: 'NSFW', icon: '◇', subtitle: '成人内容与私密档案' },
-  { key: 'variables', label: '变量管理', icon: '◈', subtitle: '存档数据查看与调试' },
-  { key: 'prompts', label: '提示词模块', icon: '❘', subtitle: 'AI 系统级硬规则' },
-  { key: 'tavernPresets', label: '酒馆预设', icon: '◆', subtitle: 'ST 导入与消息链' },
-  { key: 'extra', label: '额外功能', icon: '✦', subtitle: '污染词清理与扩展功能' },
-  { key: 'theme', label: '主题风格', icon: '◇', subtitle: '配色与氛围' },
-  { key: 'storage', label: '存档管理', icon: '✧', subtitle: '本地存档与导入导出' },
+const tabs: { key: Tab; label: string; icon: string; navIcon: LucideIcon; subtitle: string }[] = [
+  { key: 'visual', label: '视觉设置', icon: '◇', navIcon: TypeIcon, subtitle: '正文显示与字号' },
+  { key: 'game', label: '游戏设定', icon: '❖', navIcon: BookOpen, subtitle: '叙述风格与人格' },
+  { key: 'api', label: 'API 接口', icon: '✦', navIcon: Cable, subtitle: 'AI 模型、密钥与子功能接口' },
+  { key: 'apiErrors', label: '错误报告', icon: '!', navIcon: TriangleAlert, subtitle: 'API 失败原因记录' },
+  { key: 'context', label: '上下文', icon: '▤', navIcon: Layers3, subtitle: '主剧情 Token 计数' },
+  { key: 'nsfw', label: 'NSFW', icon: '◇', navIcon: ShieldAlert, subtitle: '成人内容与私密档案' },
+  { key: 'variables', label: '变量管理', icon: '◈', navIcon: Database, subtitle: '存档数据查看与调试' },
+  { key: 'prompts', label: '提示词模块', icon: '❘', navIcon: FileText, subtitle: 'AI 系统级硬规则' },
+  { key: 'tavernPresets', label: '酒馆预设', icon: '◆', navIcon: ImportIcon, subtitle: 'ST 导入与消息链' },
+  { key: 'extra', label: '额外功能', icon: '✦', navIcon: WandSparkles, subtitle: '污染词清理与扩展功能' },
+  { key: 'theme', label: '主题风格', icon: '◇', navIcon: Palette, subtitle: '配色与氛围' },
+  { key: 'storage', label: '存档管理', icon: '✧', navIcon: HardDrive, subtitle: '本地存档与导入导出' },
 ];
 
 export function SettingsModal({
@@ -256,6 +271,7 @@ export function SettingsModal({
           <nav className="flex gap-2 overflow-x-auto px-3 py-2 md:block md:flex-1 md:overflow-x-hidden md:overflow-y-auto md:px-0 md:py-3">
             {tabs.map((t) => {
               const active = activeTab === t.key;
+              const NavIcon = t.navIcon;
               return (
                 <button
                   key={t.key}
@@ -266,20 +282,20 @@ export function SettingsModal({
                       ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.10), rgba(var(--tj-accent-primary), 0.03) 68%, transparent)'
                       : 'transparent',
                     borderLeft: active
-                      ? '2px solid linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))'
+                      ? '2px solid rgba(var(--tj-accent-primary), 0.96)'
                       : '2px solid transparent',
                     boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)' : 'none',
                     clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
                   }}
                 >
                   <span
-                    className="text-base transition-all md:text-lg"
+                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center transition-colors"
                     style={{
                       color: active ? 'rgba(var(--tj-accent-primary), 1)' : 'rgba(var(--tj-accent-primary), 0.5)',
                       textShadow: 'none',
                     }}
                   >
-                    {t.icon}
+                    <NavIcon aria-hidden="true" focusable="false" size={17} strokeWidth={1.8} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div

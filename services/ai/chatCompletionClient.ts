@@ -3,6 +3,7 @@ import type { 聊天消息, 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
+import { normalizeGeminiBaseUrl } from './geminiEndpointPolicy';
 import {
   DEEPSEEK_FINAL_CONTENT_GUARD,
   executeWithDeepSeekRecovery,
@@ -246,14 +247,6 @@ type UsagePayloadMatch = {
   usage: Record<string, any>;
   path: string;
 };
-
-function normalizeGeminiBaseUrl(baseUrl: string): string {
-  return baseUrl
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/openai(?:\/chat\/completions)?$/i, '')
-    .replace(/\/chat\/completions$/i, '');
-}
 
 function normalizeOpenCodeBaseUrl(baseUrl: string): string {
   let base = baseUrl.trim().replace(/\/+$/, '');

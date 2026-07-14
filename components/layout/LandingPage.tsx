@@ -319,9 +319,9 @@ export function LandingPage({
         className="absolute bottom-4 left-4 right-4 z-10 flex flex-col items-center gap-1 text-center text-xs opacity-60"
         style={{ color: 'rgb(var(--tj-text-secondary))' }}
       >
-        <p>开拓轶事 v1.0</p>
+        <p>开拓轶事 v1.1</p>
         <p className="text-[11px] leading-relaxed">
-          作者 Ling · 智库部分内容贡献者 11MOMO
+          作者：牢凌 · 贡献者：11MOMO，<strong className="font-semibold">Penna Mch</strong>
         </p>
       </div>
     </div>

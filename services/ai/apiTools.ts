@@ -4,6 +4,12 @@ import { withRetries } from './retry';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
 import { fetchOpenAICompatibleModels } from './openAICompatibleModels';
+import { normalizeGeminiBaseUrl } from './geminiEndpointPolicy';
+import {
+  createConnectionTestChallenge,
+  matchesConnectionTestChallenge,
+  normalizeConnectionTestResponse,
+} from './connectionTestPolicy';
 
 export interface ConnectionTestResult {
   ok: boolean;
@@ -294,7 +300,7 @@ async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise
 }
 
 async function fetchGeminiModels(baseRaw: string, apiKey: string): Promise<string[]> {
-  const base = baseRaw.replace(/\/+$/, '');
+  const base = normalizeGeminiBaseUrl(baseRaw);
   const url = `${base}/models?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url).catch((e) => {
     void appendApiErrorReport({
@@ -380,11 +386,12 @@ export async function testConnection(config: any): Promise<ConnectionTestResult>
 
   const startedAt = Date.now();
   try {
+    const challenge = createConnectionTestChallenge();
     const text = await withRetries(
       () =>
         chatCompletionNonStream(config, {
-          messages: [{ role: 'user', content: 'ping' }],
-          systemPrompt: '你是连接测试。请只回答 OK。',
+          messages: [{ role: 'user', content: `请只返回这个随机校验码：${challenge}` }],
+          systemPrompt: '你正在执行 API 连接测试。必须只返回用户提供的随机校验码，不得添加解释、标点或 Markdown。',
           maxTokens: 32,
           temperature: 0,
           deepSeekRecovery: 'disabled',
@@ -392,16 +399,19 @@ export async function testConnection(config: any): Promise<ConnectionTestResult>
       { retries: retryCount, label: '连接测试' },
     );
     const elapsed = Date.now() - startedAt;
-    const body = (text || '').trim();
-    if (!body) {
+    const body = normalizeConnectionTestResponse(text);
+    if (!matchesConnectionTestChallenge(body, challenge)) {
+      const responseDetail = body
+        ? `\n模型实际返回：${body.slice(0, 160)}${body.length > 160 ? '…' : ''}`
+        : '\n所选模型没有返回任何正文。';
       return {
         ok: false,
-        detail: `耗时：${elapsed} ms\n\n接口返回成功状态，但所选模型没有返回任何正文。`,
+        detail: `耗时：${elapsed} ms\n\n接口有响应，但未通过随机码校验。${responseDetail}`,
       };
     }
     return {
       ok: true,
-      detail: `耗时：${elapsed} ms\n\n${body}`,
+      detail: `耗时：${elapsed} ms\n\n模型已正确返回本次随机校验码。`,
     };
   } catch (e) {
     const raw = (e as Error).message || String(e);

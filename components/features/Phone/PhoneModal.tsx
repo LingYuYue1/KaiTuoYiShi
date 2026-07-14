@@ -755,8 +755,6 @@ export function PhoneModal({
       const reply = await generatePhoneReply(phoneApiConfig, {
         traveler,
         world,
-        memory,
-        yiting,
         npcRecords,
         news,
         turnCount,
@@ -765,7 +763,6 @@ export function PhoneModal({
         contact,
         userText: text,
         mainChatHistory,
-        storyWeaving,
         zhiku,
       }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
       await appendMessagesToChatSequentially(
@@ -886,8 +883,6 @@ export function PhoneModal({
       const reply = await generatePhoneReply(phoneApiConfig, {
         traveler,
         world,
-        memory,
-        yiting,
         npcRecords,
         news,
         turnCount,
@@ -896,7 +891,6 @@ export function PhoneModal({
         contact: seed.targetType === 'private' ? contact : undefined,
         seed,
         mainChatHistory,
-        storyWeaving,
         zhiku,
       }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
       onPhoneChange((prev) => {
