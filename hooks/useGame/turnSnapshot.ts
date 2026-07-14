@@ -41,8 +41,18 @@ function restoreAlbumSnapshot(snapshotAlbum: UseGameStateReturn['相册'], curre
     ...normalized,
     assets: normalized.assets.map((asset) => {
       const current = currentAssets.get(asset.id);
-      if (typeof asset.dataUrl === 'string' && asset.dataUrl.startsWith('asset:') && current?.dataUrl) {
-        return { ...asset, dataUrl: current.dataUrl, originalUrl: current.originalUrl };
+      // Snapshots store asset: refs only. Keep the ref; binary lives in the Blob cache.
+      // Prefer current metadata when the ref already points at a known asset.
+      if (typeof asset.dataUrl === 'string' && asset.dataUrl.startsWith('asset:') && current) {
+        return {
+          ...asset,
+          dataUrl: asset.dataUrl,
+          originalUrl: current.originalUrl ?? asset.originalUrl,
+          mimeType: current.mimeType ?? asset.mimeType,
+          size: current.size ?? asset.size,
+          width: current.width ?? asset.width,
+          height: current.height ?? asset.height,
+        };
       }
       return asset;
     }),

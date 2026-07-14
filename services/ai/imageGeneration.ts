@@ -447,6 +447,22 @@ function stripDataUrlPrefix(src: string): string {
   return src.startsWith('data:') ? src.slice(src.indexOf(',') + 1) : src;
 }
 
+/** Convert a display/reference src (data URL, blob URL, or remote) to raw base64 for API payloads. */
+async function referenceSrcToBase64(src: string, signal?: AbortSignal): Promise<string> {
+  const trimmed = src.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('data:')) return stripDataUrlPrefix(trimmed);
+  const blob = await loadReferenceImageBlob(trimmed, signal);
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + chunkSize)));
+  }
+  return btoa(binary);
+}
+
 function clampReferenceStrength(value?: number): number {
   if (!Number.isFinite(Number(value))) return 0.55;
   return Math.max(0.05, Math.min(0.95, Number(value)));
@@ -678,7 +694,9 @@ async function generateSdWebUIImage(config: 文生图API配置, request: ImageGe
     override_settings: config.model ? { sd_model_checkpoint: config.model } : undefined,
   };
   if (useImg2Img) {
-    payload.init_images = referenceImages.map((item) => stripDataUrlPrefix(item.src));
+    payload.init_images = await Promise.all(
+      referenceImages.map((item) => referenceSrcToBase64(item.src, request.signal)),
+    );
     payload.denoising_strength = clampReferenceStrength(request.referenceStrength);
     payload.resize_mode = 1;
   }
@@ -720,7 +738,9 @@ async function generateComfyUIImage(config: 文生图API配置, request: ImageGe
     ].join('\n'));
   }
   const referenceImages = normalizeReferenceImages(request.referenceImages);
-  const firstReferenceImage = referenceImages[0]?.src ? stripDataUrlPrefix(referenceImages[0].src) : '';
+  const firstReferenceImage = referenceImages[0]?.src
+    ? await referenceSrcToBase64(referenceImages[0].src, request.signal)
+    : '';
   const workflowText = config.comfyWorkflowJson
     .replaceAll('__PROMPT__', request.prompt.trim())
     .replaceAll('{{prompt}}', request.prompt.trim())

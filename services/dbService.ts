@@ -1,7 +1,8 @@
 import type { 存档数据, 存档类型 } from '@/models/settings';
-import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExport } from './savePackage';
+import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExport, sanitizeSaveForExportAsync } from './savePackage';
 import {
   extractSaveAssetRecords,
+  materializeSaveAssetRecords,
   restoreSaveAssetPayloadFromRecords,
   saveHasEmbeddedAssetPayload,
   stripSaveAssetPayloadForStorage,
@@ -146,7 +147,7 @@ export async function saveGame(data: 存档数据): Promise<number> {
   } else if (saveType === 'backup') {
     await pruneManagedSavesBeforeWrite(db, 'backup', MAX_BACKUP_SAVES - 1);
   }
-  const assetRecords = extractSaveAssetRecords(data);
+  const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(data));
   const storedData = stripSaveAssetPayloadForStorage(data);
   const deltaBase = await findAutoDeltaBase(db, storedData);
   const desktopSaveId = await reserveDesktopSaveIdSafely(db);
@@ -375,9 +376,13 @@ export async function loadSave(id: number): Promise<存档数据 | null> {
   }
   const assetIds = collectSaveAlbumAssetIds(saveForAssets);
   if (!assetIds.length) return saveForAssets;
-  const records = await loadSaveAssetRecords(db, assetIds);
+  const records = materializeSaveAssetRecords(await loadSaveAssetRecords(db, assetIds));
   const loadedIds = new Set(records.map((record) => record.id));
-  const desktopRecords = await loadDesktopAssetRecordsSafely(assetIds.filter((assetId) => !loadedIds.has(assetId)));
+  const desktopRecords = materializeSaveAssetRecords(
+    await loadDesktopAssetRecordsSafely(assetIds.filter((assetId) => !loadedIds.has(assetId))),
+  );
+  // Restore registers Blobs into the runtime cache and keeps asset: refs in album state
+  // (does not re-expand multi-MB base64 dataUrls into React state).
   return restoreSaveAssetPayloadFromRecords(saveForAssets, [...records, ...desktopRecords]);
 }
 
@@ -460,7 +465,7 @@ export async function replaceAllSaves(
       const save = nextSaves[index];
       const normalizedId = Number.isFinite(save.id) && save.id > 0 ? save.id : index + 1;
       const normalizedSave = { ...save, id: normalizedId };
-      const assetRecords = extractSaveAssetRecords(normalizedSave);
+      const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(normalizedSave));
       mirroredAssetRecords.push(...assetRecords);
       for (const record of assetRecords) assetStore.put(record);
       const storedSave = stripSaveAssetPayloadForStorage(normalizedSave);
@@ -777,7 +782,7 @@ async function loadSaveAssetRecords(db: IDBDatabase, assetIds: string[]): Promis
 }
 
 async function migrateLoadedSaveAssets(db: IDBDatabase, save: 存档数据): Promise<void> {
-  const records = extractSaveAssetRecords(save);
+  const records = materializeSaveAssetRecords(extractSaveAssetRecords(save));
   if (!records.length) return;
   const storedSave = stripSaveAssetPayloadForStorage(save);
   let migratedDelta: SaveNodeDeltaRecord | null = null;
@@ -946,7 +951,7 @@ async function loadDesktopSaveMirrorSaveFallbackSafely(id: number): Promise<存�
 async function restoreDesktopAssetPayloadSafely<T extends 存档数据>(save: T): Promise<T> {
   const assetIds = collectSaveAlbumAssetIds(save);
   if (!assetIds.length) return save;
-  const records = await loadDesktopAssetRecordsSafely(assetIds);
+  const records = materializeSaveAssetRecords(await loadDesktopAssetRecordsSafely(assetIds));
   return restoreSaveAssetPayloadFromRecords(save, records);
 }
 
@@ -1138,8 +1143,8 @@ function markSaveAsHiddenDeltaBase(saveStore: IDBObjectStore, saveId: number): v
 
 // ── Export / Import ──
 
-export function exportSaveJson(save: 存档数据): void {
-  const json = JSON.stringify(sanitizeSaveForExport(save), null, 2);
+export async function exportSaveJson(save: 存档数据): Promise<void> {
+  const json = JSON.stringify(await sanitizeSaveForExportAsync(save), null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

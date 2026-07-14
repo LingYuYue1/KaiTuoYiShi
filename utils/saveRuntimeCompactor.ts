@@ -2,21 +2,23 @@ import type { 回合快照 } from '@/models/chat';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 创建相册资源引用 } from '@/utils/albumActions';
+import { isDataImageUrl, rememberAlbumAssetFromDataUrl } from '@/utils/albumObjectUrl';
 import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 
-const DATA_IMAGE_RE = /^data:image\/[a-z0-9.+-]+;base64,/i;
 const LARGE_TEXT_LIMIT = 8000;
 const MAX_SNAPSHOT_QUEUE_TASKS = 12;
 
 function isDataImage(value: unknown): value is string {
-  return typeof value === 'string' && DATA_IMAGE_RE.test(value.trimStart());
+  return isDataImageUrl(value);
 }
 
 function collectAlbumDataUrls(album?: 相册系统): Map<string, string> {
   const map = new Map<string, string>();
   for (const asset of album?.assets ?? []) {
     if (asset.id && isDataImage(asset.dataUrl)) {
+      // Ensure binary is cached before stripping from snapshot state.
+      rememberAlbumAssetFromDataUrl(asset.id, asset.dataUrl);
       map.set(asset.dataUrl, 创建相册资源引用(asset.id));
     }
   }
@@ -29,7 +31,7 @@ function stripAlbumAssetPayload(album?: 相册系统): 相册系统 | undefined 
     ...album,
     assets: (album.assets ?? []).map((asset) => ({
       ...asset,
-      dataUrl: asset.dataUrl ? 创建相册资源引用(asset.id) : asset.dataUrl,
+      dataUrl: asset.id ? 创建相册资源引用(asset.id) : asset.dataUrl,
       originalUrl: isDataImage(asset.originalUrl) ? undefined : asset.originalUrl,
     })),
   };

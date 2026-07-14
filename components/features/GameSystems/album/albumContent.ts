@@ -1,5 +1,6 @@
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import type { 图片资源, 相册条目, 相册系统 } from '@/models/imageGeneration';
+import { getAlbumAssetBlob, isDataImageUrl, rememberAlbumAssetFromDataUrl } from '@/utils/albumObjectUrl';
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -53,10 +54,19 @@ export async function hydrateAlbumContentHashes(album: 相册系统): Promise<�
       assets.push(existing === asset.contentHash ? asset : { ...asset, contentHash: existing });
       continue;
     }
-    if (!asset.dataUrl) {
+    // Prefer Blob cache bytes for hashing when dataUrl is only an asset: ref.
+    const cached = asset.id ? getAlbumAssetBlob(asset.id) : undefined;
+    if (cached) {
+      const contentHash = await sha256Bytes(new Uint8Array(await cached.arrayBuffer()));
+      assets.push({ ...asset, contentHash });
+      if ((index + 1) % 4 === 0) await yieldAlbumWork();
+      continue;
+    }
+    if (!asset.dataUrl || !isDataImageUrl(asset.dataUrl)) {
       assets.push(asset);
       continue;
     }
+    if (asset.id) rememberAlbumAssetFromDataUrl(asset.id, asset.dataUrl);
     const contentHash = await hashDataUrl(asset.dataUrl);
     assets.push(contentHash ? { ...asset, contentHash } : asset);
     if ((index + 1) % 4 === 0) await yieldAlbumWork();
@@ -71,9 +81,10 @@ function yieldAlbumWork(): Promise<void> {
 export function assetContentKey(asset: 图片资源): string {
   const contentHash = normalizeContentHash(asset.contentHash);
   if (contentHash) return `sha256:${contentHash}`;
-  if (asset.dataUrl) return `data:${asset.dataUrl}`;
+  if (asset.dataUrl && isDataImageUrl(asset.dataUrl)) return `data:${asset.dataUrl}`;
   const remote = asset.url?.trim() || asset.originalUrl?.trim() || asset.localRef?.trim();
-  return remote ? `remote:${remote}` : `asset:${asset.id}`;
+  if (remote && !remote.startsWith('asset:')) return `remote:${remote}`;
+  return `asset:${asset.id}`;
 }
 
 export function findAssetByContent(album: 相册系统, contentHash: string, src?: string): 图片资源 | undefined {

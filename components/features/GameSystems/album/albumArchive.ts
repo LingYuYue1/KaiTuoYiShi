@@ -10,6 +10,9 @@ import {
   normalizeContentHash,
   sha256Bytes,
 } from './albumContent';
+import { getAlbumAssetBlob, materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
+
+export { materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
 
 export const ARCHIVE_FORMAT = 'kaituo-album-backup';
 export const ARCHIVE_VERSION = 2;
@@ -121,7 +124,7 @@ export async function completeAlbumImport(params: {
 }): Promise<AlbumImportResult> {
   const parsed = params.parsed;
   if (params.mode === 'replace') {
-    const album = await deduplicateAlbumContent(parsed.album);
+    const album = materializeAlbumRuntimePayload(await deduplicateAlbumContent(parsed.album));
     return {
       album,
       stats: {
@@ -136,7 +139,11 @@ export async function completeAlbumImport(params: {
   }
 
   const targeted = params.target ? applyImportTarget(parsed.album, params.target) : parsed.album;
-  return mergeAlbumsByContent(params.currentAlbum, targeted, parsed.warnings, parsed.skippedEntries);
+  const merged = await mergeAlbumsByContent(params.currentAlbum, targeted, parsed.warnings, parsed.skippedEntries);
+  return {
+    ...merged,
+    album: materializeAlbumRuntimePayload(merged.album),
+  };
 }
 
 export async function parseAlbumFile(file: File): Promise<ParsedAlbum> {
@@ -189,6 +196,8 @@ async function parseArchiveManifestV2(manifest: AlbumArchiveManifestV2, files: M
       const actualHash = await sha256Bytes(imageBytes);
       if (contentHash && actualHash !== contentHash) throw new Error(`图片 SHA-256 校验失败：${safeFile}`);
       contentHash = actualHash;
+      // Import results may run inside a Worker; keep dataUrl here and materialize
+      // into the main-thread Blob cache when the album is committed to runtime state.
       dataUrl = bytesToDataUrl(imageBytes, record.mimeType || mimeFromFileName(safeFile));
     }
     assets.push({
@@ -379,10 +388,30 @@ export function resolveImportTargetPatch(target: AlbumImportTarget, entry: 相�
   };
 }
 
-export async function loadAlbumAssetBytes(asset: Pick<图片资源, 'dataUrl' | 'url' | 'originalUrl' | 'localRef' | 'mimeType'>): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+export async function loadAlbumAssetBytes(asset: Pick<图片资源, 'id' | 'dataUrl' | 'url' | 'originalUrl' | 'localRef' | 'mimeType'>): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  // Prefer runtime Blob cache (Package 2) so export works without base64 in React state.
+  if (asset.id) {
+    const cached = getAlbumAssetBlob(asset.id);
+    if (cached) {
+      return {
+        bytes: new Uint8Array(await cached.arrayBuffer()),
+        mimeType: cached.type || asset.mimeType || 'image/png',
+      };
+    }
+  }
   if (asset.dataUrl) {
-    const decoded = dataUrlToBytes(asset.dataUrl);
-    if (decoded) return decoded;
+    if (asset.dataUrl.startsWith('asset:') && asset.id) {
+      const cached = getAlbumAssetBlob(asset.id);
+      if (cached) {
+        return {
+          bytes: new Uint8Array(await cached.arrayBuffer()),
+          mimeType: cached.type || asset.mimeType || 'image/png',
+        };
+      }
+    } else {
+      const decoded = dataUrlToBytes(asset.dataUrl);
+      if (decoded) return decoded;
+    }
   }
   const src = asset.url || asset.originalUrl || asset.localRef || '';
   if (!src) return null;

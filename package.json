@@ -73,6 +73,7 @@
     "test:image-task-feed": "node scripts/image-task-feed-regression.mjs",
     "test:reference-image-injection": "node scripts/reference-image-injection-control-regression.mjs",
     "test:album-archive": "node scripts/album-archive-content-dedup-regression.mjs",
+    "test:album-blob-runtime": "node scripts/album-blob-runtime-regression.mjs",
     "test:album-performance": "node scripts/album-operation-performance-regression.mjs",
     "test:phone-mobile": "node scripts/phone-mobile-layout-regression.mjs",
     "test:phone-knowledge": "node scripts/phone-knowledge-boundary-regression.mjs",
