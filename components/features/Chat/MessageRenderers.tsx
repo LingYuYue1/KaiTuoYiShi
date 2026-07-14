@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { memo, useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -288,10 +288,20 @@ function withAlpha(rgb: string, alpha: number): string {
   return rgb.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
 }
 
-// 名字 → NPC 档案查找（伙伴优先；找不到时返回 undefined，由 fallback 处理）
-function lookupNpc(name: string, records?: NPC记录[]): NPC记录 | undefined {
-  if (!records || !name) return undefined;
-  return records.find((n) => n.姓名 === name || n.别名 === name);
+// 名字/别名 → NPC 档案（BodyBlock 内建一次 Map，避免每行 linear find）
+function buildNpcLookupMap(records?: NPC记录[]): Map<string, NPC记录> {
+  const map = new Map<string, NPC记录>();
+  if (!records) return map;
+  for (const n of records) {
+    if (n.姓名 && !map.has(n.姓名)) map.set(n.姓名, n);
+    if (n.别名 && !map.has(n.别名)) map.set(n.别名, n);
+  }
+  return map;
+}
+
+function lookupNpc(name: string, map: Map<string, NPC记录>): NPC记录 | undefined {
+  if (!name) return undefined;
+  return map.get(name);
 }
 
 // 判断这一行的「角色」是不是主角自身（AI 可能写主角名字、也可能写「你」）
@@ -313,7 +323,7 @@ interface AvatarTileProps {
 }
 
 // 圆形头像 + 名牌：左上头像、下方一块小标签（fallback 用首字符）
-function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
+export const AvatarTile = memo(function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
   const dim = size === 'md' ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-11 h-11 sm:w-12 sm:h-12';
   const glow = withAlpha(color, 0.35);
   const labelColor = withAlpha(color, 0.98);
@@ -355,7 +365,7 @@ function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
       </div>
     </div>
   );
-}
+});
 
 interface DialogueBubbleProps {
   name: string;
@@ -364,7 +374,7 @@ interface DialogueBubbleProps {
   avatarUrl?: string;
 }
 
-function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtagonist = false }: DialogueBubbleProps & { fontSize?: number; isProtagonist?: boolean }) {
+export const DialogueBubble = memo(function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtagonist = false }: DialogueBubbleProps & { fontSize?: number; isProtagonist?: boolean }) {
   // 主角对话：淡底金边；NPC 对话：深底+角色色描边
   const bubbleBg = isProtagonist
     ? 'rgba(var(--tj-accent-primary), 0.08)'
@@ -407,7 +417,7 @@ function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtago
       </div>
     </div>
   );
-}
+});
 
 interface InnerVoiceBubbleProps {
   text: string;
@@ -460,7 +470,7 @@ function InnerVoiceBubble({ text, traveler, album, fontSize = 15 }: InnerVoiceBu
 }
 
 // 旁白：全宽容器 + 两侧金色竖条 + 顶部小符号点缀（无头像、无气泡）
-function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: number }) {
+export const NarrationLine = memo(function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: number }) {
   return (
     <div
       className="my-2.5 px-5 py-2.5 relative"
@@ -478,11 +488,12 @@ function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: numbe
       </p>
     </div>
   );
-}
+});
 
 export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings }: BodyBlockProps) {
   const lines = useMemo(() => (content ? parseBodyLines(content, traveler, userInput) : []), [content, traveler, userInput]);
   const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
+  const npcMap = useMemo(() => buildNpcLookupMap(npcRecords), [npcRecords]);
   if (!content) return null;
 
   return (
@@ -492,7 +503,7 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
           return <div key={i} className="h-1.5" />;
         }
         if (line.kind === 'dialogue') {
-          const npc = lookupNpc(line.name, npcRecords);
+          const npc = lookupNpc(line.name, npcMap);
           const protagonist = isProtagonist(line.name, traveler);
           const color = protagonist ? 'rgb(var(--tj-accent-primary))' : nameToColor(line.name);
           const avatarUrl = protagonist

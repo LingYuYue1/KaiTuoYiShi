@@ -12,11 +12,6 @@ import { ChatList } from '@/components/features/Chat/ChatList';
 import { InputArea } from '@/components/features/Chat/InputArea';
 import { VariableDrawer } from '@/components/features/Variable/VariableDrawer';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
-import { SkillPanel } from '@/components/features/GameSystems/SkillPanel';
-import { InventoryPanel } from '@/components/features/GameSystems/InventoryPanel';
-import { NewsPanel } from '@/components/features/GameSystems/NewsPanel';
-import { CompanionPanel } from '@/components/features/GameSystems/CompanionPanel';
-import { PathPanel } from '@/components/features/GameSystems/PathPanel';
 import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakeningInvitation';
 import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
@@ -43,6 +38,11 @@ const YitingPanel = lazyWithRetry(() => import('@/components/features/GameSystem
 const ZhikuPanel = lazyWithRetry(() => import('@/components/features/GameSystems/ZhikuPanel').then((module) => ({ default: module.ZhikuPanel })));
 const MemoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemoryPanel').then((module) => ({ default: module.MemoryPanel })));
 const AlbumPanel = lazyWithRetry(() => import('@/components/features/GameSystems/AlbumPanel').then((module) => ({ default: module.AlbumPanel })));
+const SkillPanel = lazyWithRetry(() => import('@/components/features/GameSystems/SkillPanel').then((module) => ({ default: module.SkillPanel })));
+const InventoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/InventoryPanel').then((module) => ({ default: module.InventoryPanel })));
+const NewsPanel = lazyWithRetry(() => import('@/components/features/GameSystems/NewsPanel').then((module) => ({ default: module.NewsPanel })));
+const CompanionPanel = lazyWithRetry(() => import('@/components/features/GameSystems/CompanionPanel').then((module) => ({ default: module.CompanionPanel })));
+const PathPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PathPanel').then((module) => ({ default: module.PathPanel })));
 
 function LazySurfaceFallback({ label = '系统载入中' }: { label?: string }) {
   return (
