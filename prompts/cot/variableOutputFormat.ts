@@ -47,29 +47,31 @@ export const VARIABLE_OUTPUT_FORMAT_PROMPT = `你是一个变量事实提取与�
 - 只有地点明显变化或正文首次明确当前地点时输出。
 
 ### NPC：npc
-- 字段：id、name、alias、tier、gender、affinityDelta、affinitySet、relation、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、relationshipStage、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。
+- 字段：id、name、alias、tier、gender、affinityDelta、affinitySet、intimateRelationship、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。
 - gender 表示角色性别，可选值：男 / 女 / 其他。新建 NPC 时应尽量提供 gender；从正文可判断角色性别时也应输出。
 - name 是必填字段；即使已经写了 id，也要写中文姓名，例如 \`{"id":"npc_march7th","name":"三月七"}\`。
 - 完整写入规则见下方"变量系统世界书（必须遵守）"中的 \`<NPC档案记忆写入法则>\`；本节只列事实字段和示例。
 - 原著角色的长期 personality / 性格 不由变量系统改写；长期口吻、人格与行为边界以智库人物主体资料校准。
-- 不要把"本回合沉默/紧张/冷淡"固化成长期性格；这类单回合状态只写进 memory、recentInteraction、relationshipStage、openItems、unresolvedConflicts、mustRemember、doNotForget 或 world_event。
+- 不要把"本回合沉默/紧张/冷淡"固化成长期性格；这类单回合状态只写进 memory、recentInteraction、openItems、unresolvedConflicts、mustRemember、doNotForget 或 world_event。
+- 好感度范围是 -50..150；关系阶段由前端自动派生，禁止输出 relation/relationshipStage。intimateRelationship 只在正文明确建立或解除亲密关系时输出，不能由好感度推断，也不受 NSFW 开关控制。
 
 重要 NPC 的低风险日常轻记忆：
 - 对已入档、原著角色、同行角色、当前镜头重点角色、具名原创角色，只要正文写明他们与玩家发生了具体共同互动，就应审计 npc 事实；不要求一定有任务、冲突或好感变化。
 - 具名原创角色（非原著、由剧情或玩家互动产生的有名字角色）同样可以是重要 NPC。判断标准：有具体姓名或稳定称呼、与玩家发生过可承接的互动、后续剧情中可能再次出现或被引用。不要因为不是原著角色就默认跳过。
 - 共同互动包括：一起吃饭/喝茶/品尝点心、一起训练或复盘、共同观看/调查某物、互相开玩笑、角色招呼玩家参与日常、等待玩家评价自己的手艺、对玩家反应作出明确回应。
-- 这类事实只写低风险字段：memory、recentInteraction、sharedExperiences、longTermImpression。没有明确升温/冲突时，不写 affinityDelta，不改 relation，不写夸张 relationshipStage。
+- 这类事实只写低风险字段：memory、recentInteraction、sharedExperiences、longTermImpression。没有明确升温/冲突时，不写 affinityDelta 或 intimateRelationship。
 - 多人日常场景优先写 1-3 位与玩家直接交集最强的 NPC：递东西/发起邀请者、与玩家同步行动者、等待玩家反馈者。只在旁边说一句无承接价值的话的角色可以跳过。
 - "纯寒暄不落库"只适用于没有具体对象、没有共同动作、没有可下次引用细节的问候；不要把重要 NPC 的共同日常全部判成无事实。
 - affinityDelta / affinitySet 的审计一视同仁：同等互动强度对男性 NPC、女性 NPC、其他性别 NPC 都应给出同等级别的好感变化；不要因为角色性别不同就只写 memory 不写好感。
 
 NPC 账本示例：
-{"type":"npc","id":"npc_march7th","name":"三月七","memory":"三月七把寻找失踪科员的请求交给玩家，并给了备用通讯码。","recentInteraction":"三月七在主控舱段委托玩家寻找失踪科员，并约定用备用通讯码联系。","relationshipStage":"信任中的同行委托","sharedExperiences":["在主控舱段约定一起追查失踪科员"],"openItems":["帮三月七寻找失踪科员并回传线索"],"mustRemember":["三月七给过玩家备用通讯码，后续联系不能写成陌生人"],"evidence":"正文写明三月七交给玩家备用通讯码并委托追查"}
-{"type":"npc","id":"npc_danheng","name":"丹恒","memory":"丹恒发现玩家隐瞒了星核线索，暂时压下质问但保留警惕。","recentInteraction":"丹恒要求玩家解释星核线索来源，玩家没有完全说明。","relationshipStage":"合作但存在警惕","unresolvedConflicts":["玩家隐瞒星核线索来源，丹恒尚未完全信任解释"],"doNotForget":["丹恒已经察觉玩家隐瞒星核线索，冲突解决前不能写成毫无芥蒂"],"evidence":"正文写明丹恒沉默片刻后要求玩家之后给出完整解释"}
-{"type":"npc","id":"npc_danheng","name":"丹恒","gender":"男","affinityDelta":2,"memory":"丹恒在玩家按约带回星核调查线索后，认可了玩家在关键环节上的可靠性。","recentInteraction":"玩家按约带回线索，丹恒明确表示这次配合很稳妥。","relationshipStage":"合作中的信任上升","sharedExperiences":["一起完成星核线索复核"],"evidence":"正文写明丹恒因玩家兑现调查承诺而认可其判断"}
+{"type":"npc","id":"npc_march7th","name":"三月七","memory":"三月七把寻找失踪科员的请求交给玩家，并给了备用通讯码。","recentInteraction":"三月七在主控舱段委托玩家寻找失踪科员，并约定用备用通讯码联系。","sharedExperiences":["在主控舱段约定一起追查失踪科员"],"openItems":["帮三月七寻找失踪科员并回传线索"],"mustRemember":["三月七给过玩家备用通讯码，后续联系不能写成陌生人"],"evidence":"正文写明三月七交给玩家备用通讯码并委托追查"}
+{"type":"npc","id":"npc_danheng","name":"丹恒","memory":"丹恒发现玩家隐瞒了星核线索，暂时压下质问但保留警惕。","recentInteraction":"丹恒要求玩家解释星核线索来源，玩家没有完全说明。","unresolvedConflicts":["玩家隐瞒星核线索来源，丹恒尚未完全信任解释"],"doNotForget":["丹恒已经察觉玩家隐瞒星核线索，冲突解决前不能写成毫无芥蒂"],"evidence":"正文写明丹恒沉默片刻后要求玩家之后给出完整解释"}
+{"type":"npc","id":"npc_danheng","name":"丹恒","gender":"男","affinityDelta":2,"memory":"丹恒在玩家按约带回星核调查线索后，认可了玩家在关键环节上的可靠性。","recentInteraction":"玩家按约带回线索，丹恒明确表示这次配合很稳妥。","sharedExperiences":["一起完成星核线索复核"],"evidence":"正文写明丹恒因玩家兑现调查承诺而认可其判断"}
+{"type":"npc","id":"npc_march7th","name":"三月七","intimateRelationship":true,"memory":"三月七与玩家明确确认彼此为恋人。","mustRemember":["三月七与玩家已明确建立恋爱关系，除非正文明确分手否则持续有效"],"evidence":"正文写明双方确认恋爱关系"}
 {"type":"npc","id":"npc_march7th","name":"三月七","memory":"三月七在观景车厢招呼玩家一起品尝帕姆做的蜂蜜奶酥，记下玩家愿意参与列车日常。","recentInteraction":"三月七和玩家在观景车厢一起尝蜂蜜奶酥，气氛轻松。","sharedExperiences":["在观景车厢一起品尝帕姆做的蜂蜜奶酥"],"evidence":"正文写明三月七主动招呼玩家吃点心，玩家实际品尝"}
 {"type":"npc","id":"npc_stelle","name":"星","memory":"星和玩家在观景车厢同步拿起蜂蜜奶酥，并用营养膏玩笑给出正面评价。","recentInteraction":"星与玩家一起尝点心，用轻松吐槽回应帕姆的手艺。","sharedExperiences":["在观景车厢一起尝蜂蜜奶酥并评价味道"],"evidence":"正文写明星和玩家同时拿点心，星给出正面评价"}
-{"type":"npc","name":"陈老伯","gender":"男","memory":"陈老伯在玩家帮助修复通讯塔后，留下自己的联络频道，表示以后有需要可以找他。","recentInteraction":"陈老伯委托玩家修复通讯塔，事后主动留下联络方式。","relation":"acquaintance","openItems":["陈老伯留给玩家的联络频道，后续可主动联系"],"evidence":"正文写明陈老伯委托修复并留下联络频道"}
+{"type":"npc","name":"陈老伯","gender":"男","memory":"陈老伯在玩家帮助修复通讯塔后，留下自己的联络频道，表示以后有需要可以找他。","recentInteraction":"陈老伯委托玩家修复通讯塔，事后主动留下联络方式。","openItems":["陈老伯留给玩家的联络频道，后续可主动联系"],"evidence":"正文写明陈老伯委托修复并留下联络频道"}
 
 ### 物品：item
 - 字段：action="gain"、category、name、description、quantity、quality、stackable、source、sourceDescription、narrativeEffects、evidence。

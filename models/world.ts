@@ -30,7 +30,7 @@ export interface 时段定义 {
 
 import type { 官方开局预设, 创意工坊开局模板, 创意工坊开局模板包, 难度ID, 剧情模式, 命途ID, 开局来源, 起始场景, 自由开局地点来源 } from './journey';
 import type { NPC记录 } from './npc';
-import { 创建NPC记录, 归一化NPC记录列表 } from './npc';
+import { 创建NPC记录, 获取NPC关系阶段, 获取NPC兼容关系, 归一化NPC记录列表 } from './npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import {
   getOfficialOpeningPreset,
@@ -477,6 +477,8 @@ export function 根据开局档案创建初始NPC记录(archive?: 开局档案):
       || customNpc?.与玩家关系
       || customNpc?.当前状态
       || `${name}：开局档案写明已认识玩家，具体关系以后续正文承接。`;
+    const openingAffinity = inferOpeningAffinity(openingSummary);
+    const openingIntimacy = inferOpeningIntimateRelationship(openingSummary);
     const record = 创建NPC记录({
       姓名: canonical?.name || name,
       别名: canonical && canonical.name !== name ? name : undefined,
@@ -498,10 +500,12 @@ export function 根据开局档案创建初始NPC记录(archive?: 开局档案):
     return {
       ...record,
       id: `opening-npc-${index}-${record.id}`,
-      关系: 'acquaintance' as const,
+      好感度: openingAffinity,
+      关系: 获取NPC兼容关系(openingAffinity),
+      亲密关系: openingIntimacy,
       同行: false,
       最近回合: 0,
-      当前关系阶段: '开局已认识（未必当前在场）',
+      当前关系阶段: 获取NPC关系阶段(openingAffinity),
       最近互动: `开局档案：${openingSummary}`,
       对玩家长期印象: '在开局设定中已经知道玩家，后续亲疏、信任和称呼必须以正文互动继续确认。',
       共同经历: [`开局设定：${openingSummary}`],
@@ -833,6 +837,19 @@ function findOpeningRelationHint(name: string, hints: string[]): string {
     const cleanHint = sanitizeText(hint);
     return cleanHint.startsWith(`${cleanName}：`) || cleanHint.startsWith(`${cleanName}:`) || cleanHint.includes(cleanName);
   }) ?? '';
+}
+
+function inferOpeningAffinity(summary: string): number {
+  if (/(敌对|仇敌|仇人|死敌)/.test(summary)) return -31;
+  if (/(陌生|不认识)/.test(summary)) return -1;
+  if (/(生死挚友|生死之交)/.test(summary)) return 101;
+  if (/(知己|挚友)/.test(summary)) return 50;
+  if (/(熟识|朋友|好友|认识|同伴|队友|恋人|伴侣|爱人|夫妻)/.test(summary)) return 20;
+  return 20;
+}
+
+function inferOpeningIntimateRelationship(summary: string): boolean {
+  return /(恋人|伴侣|爱人|夫妻|情侣|已交往)/.test(summary);
 }
 
 function isOpeningSource(value: unknown): value is 开局来源 {

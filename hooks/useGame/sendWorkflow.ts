@@ -64,6 +64,7 @@ import {
 } from './historyWindow';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import { restorePreTurnSnapshot } from './turnSnapshot';
+import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
 import { enrichNpcArchives, needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
@@ -548,7 +549,7 @@ function buildNpcLedgerUpdateDebug(input: {
     const factFields = [
       fact.recentInteraction ? '最近互动' : '',
       fact.longTermImpression ? '对玩家长期印象' : '',
-      fact.relationshipStage ? '当前关系阶段' : '',
+      fact.intimateRelationship !== undefined ? '亲密关系' : '',
       fact.sharedExperiences?.length ? '共同经历' : '',
       fact.openItems?.length ? '未完成事项' : '',
       fact.unresolvedConflicts?.length ? '未解决冲突' : '',
@@ -560,7 +561,7 @@ function buildNpcLedgerUpdateDebug(input: {
     if (fact.memory && !factFields.length) {
       pushUniqueText(warnings, `${name} 只写了 memory，没有同步 recentInteraction / mustRemember / openItems 等账本字段。`);
     }
-    if (factFields.length || fact.memory || fact.affinityDelta !== undefined || fact.affinitySet !== undefined || fact.relation || fact.following !== undefined) {
+    if (factFields.length || fact.memory || fact.affinityDelta !== undefined || fact.affinitySet !== undefined || fact.intimateRelationship !== undefined || fact.following !== undefined) {
       pushUniqueText(updatedNames, name);
     }
   }
@@ -876,12 +877,8 @@ function getNsfwBlockedCommandReason(command: 变量命令, npcs: NPC记录[]): 
     text.includes(item.姓名) ||
     Boolean(item.别名 && text.includes(item.别名)),
   );
-  const haystack = [text, npc?.姓名, npc?.别名, npc?.介绍, npc?.外貌, npc?.备注?.join(' ')].filter(Boolean).join(' ');
-  // NSFW 硬禁只针对智械/机械/非人形对象（帕姆、史瓦罗等），不再针对具体角色名或过宽类别词。
-  if (/(帕姆|Pom-Pom|Pom Pom|机械|机兵|虚卒|机器人|造物|傀儡|人偶|投影)/i.test(haystack)) {
-    return `NSFW 档案已阻止：${npc?.姓名 ?? (selectorValue || '目标')} 属于智械/机械/非人形对象。`;
-  }
-  return null;
+  const reason = getNsfwArchiveBlockReason(npc, selectorValue, text);
+  return reason ? `NSFW 档案已阻止：${reason}。` : null;
 }
 
 function pushQueueTask(

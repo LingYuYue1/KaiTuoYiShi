@@ -54,6 +54,7 @@
     "test:npc-profile-ledger": "node scripts/npc-profile-ledger-regression.mjs",
     "test:npc-ledger-facts": "node scripts/npc-ledger-variable-facts-behavior.mjs",
     "test:npc-archive": "node scripts/npc-archive-enrichment-regression.mjs",
+    "test:affinity-intimacy": "node scripts/affinity-intimacy-nsfw-regression.mjs",
     "test:phone-memory": "node scripts/phone-memory-seed-regression.mjs",
     "test:yiting-archive": "node scripts/yiting-archive-regression.mjs",
     "test:nsfw-archive": "node scripts/nsfw-archive-regression.mjs",

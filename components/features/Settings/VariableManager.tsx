@@ -2,6 +2,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { VariableSetters } from '@/utils/variableExecutor';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
+import { 归一化NPC记录列表 } from '@/models/npc';
 
 interface Props {
   旅人: unknown;
@@ -245,7 +246,7 @@ function setSystemValue(props: Props, key: SystemKey, value: unknown): void {
     case 'memory': props.setters.set记忆(value as never); break;
     case 'yiting': props.setters.set忆庭(value as never); break;
     case 'phone': props.setters.set手机(value as never); break;
-    case 'npc': props.setters.setNPC(value as never); break;
+    case 'npc': props.setters.setNPC(归一化NPC记录列表(value)); break;
     case 'news': props.setters.set新闻(value as never); break;
     case 'zhiku': props.setters.set智库(value as never); break;
     case 'storyWeaving': props.set剧情编织(value as SetStateAction<剧情编织系统>); break;

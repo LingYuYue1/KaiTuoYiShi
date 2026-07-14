@@ -72,6 +72,7 @@ export interface NPC变量事实 {
   affinityDelta?: number;
   affinitySet?: number;
   relation?: string;
+  intimateRelationship?: boolean;
   following?: boolean;
   appearance?: string;
   clothing?: string;

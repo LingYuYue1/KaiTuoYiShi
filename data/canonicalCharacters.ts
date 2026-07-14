@@ -61,7 +61,7 @@ export const CANONICAL_CHARACTERS: CanonicalCharacterDef[] = [
   },
   {
     name: '黑塔',
-    aliases: ['Herta'],
+    aliases: ['Herta', '大黑塔', 'The Herta'],
     gender: '女',
     appearance: '傀儡式天才少女形象，常见于人偶或投影。',
     personality: '高傲、好奇、兴趣导向。',
@@ -147,11 +147,11 @@ export const CANONICAL_CHARACTERS: CanonicalCharacterDef[] = [
 
 // 名称 + alias 模糊匹配。简单去空白比较，未来可扩展为 Levenshtein。
 export function matchCanonical(name: string): CanonicalCharacterDef | null {
-  const target = name.trim();
+  const target = name.replace(/\s+/g, '').trim();
   if (!target) return null;
   for (const ch of CANONICAL_CHARACTERS) {
-    if (ch.name === target) return ch;
-    if (ch.aliases?.some((a) => a === target)) return ch;
+    if (ch.name.replace(/\s+/g, '') === target) return ch;
+    if (ch.aliases?.some((a) => a.replace(/\s+/g, '') === target)) return ch;
   }
   return null;
 }

@@ -3,7 +3,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 手机会话, 手机联系人, 主动来信种子 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
-import { 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 聊天消息 } from '@/models/chat';
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
@@ -283,9 +283,9 @@ function formatPhoneNpcKnowledge(npc: NPC记录): string {
   return [
     `姓名：${npc.姓名}`,
     npc.别名 ? `别名：${npc.别名}` : '',
-    `关系：${npc.关系}，好感度：${npc.好感度}`,
-    npc.当前关系阶段 ? `当前关系阶段：${npc.当前关系阶段}` : '',
+    `关系：${格式化NPC关系(npc.好感度, Boolean(npc.亲密关系))}，好感度：${npc.好感度}`,
     npc.对玩家称呼 ? `对玩家称呼：${npc.对玩家称呼}` : '',
+    npc.外貌 ? `外貌：${npc.外貌}` : '',
     npc.性格 ? `${npc.原著角色 ? '临时/旧档案性格参考' : '性格'}：${npc.性格}${npc.原著角色 ? '（长期口吻以智库人物主体资料为准）' : ''}` : '',
     npc.说话方式 ? `说话方式：${npc.说话方式}` : '',
     npc.介绍 ? `介绍：${npc.介绍}` : '',

@@ -11,6 +11,7 @@ const companionPanel = fs.readFileSync('components/features/GameSystems/Companio
 const app = fs.readFileSync('App.tsx', 'utf8');
 const promptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
+const nsfwPolicy = fs.readFileSync('utils/nsfwArchivePolicy.ts', 'utf8');
 
 assert(enrichment.includes('export function enrichNpcArchives'), '必须导出伙伴档案补全器。');
 assert(enrichment.includes('CANONICAL_ARCHIVE_BASELINES'), '必须有原著角色公共档案补全基线。');
@@ -31,7 +32,9 @@ assert(enrichment.includes('未建立'), 'NSFW 基线必须保留亲密阶段空
 assert(enrichment.includes('基线档案只建一个干净空壳') && enrichment.includes('不再写「保守基线」'), 'NSFW 基线必须保持可更新空壳，不得恢复会阻塞后续补充的保守占位。');
 assert(enrichment.includes('return !bodyFilled && !hasPrefs && !hasSensitive && !hasExperiences'), 'NSFW 空壳档案必须仍被视为需要后续事实补充。');
 assert(!enrichment.includes('不代表已发生亲密剧情') && !enrichment.includes('未确认成人、明确同意与关系边界前，不写具体身体细节'), 'NSFW 基线不得写回旧版保守占位文案。');
-assert(enrichment.includes('帕姆') && enrichment.includes('佩佩') && enrichment.includes('白露') && enrichment.includes('机械') && enrichment.includes('人偶'), 'NSFW 基线必须屏蔽帕姆、佩佩、未成年/儿童外观、机械、人偶等对象。');
+assert(enrichment.includes('getNsfwArchiveBlockReason'), 'NSFW 基线必须使用集中资格策略。');
+assert(nsfwPolicy.includes('帕姆') && nsfwPolicy.includes('史瓦罗') && nsfwPolicy.includes('机械') && nsfwPolicy.includes('人偶'), '集中策略必须继续屏蔽帕姆、史瓦罗、机械和普通人偶。');
+assert(nsfwPolicy.includes('HERTA_IDENTITY_RE') && nsfwPolicy.includes("=== '黑塔'"), '集中策略必须显式放行黑塔身份。');
 
 assert(/import\s+\{[^}]*enrichNpcArchives[^}]*\}\s+from\s+['"]@\/utils\/npcArchiveEnrichment['"]/.test(sendWorkflow), 'sendWorkflow 必须引入伙伴档案补全器。');
 assert(sendWorkflow.includes('const archiveEnrichment = enrichNpcArchives(npcSource'), '变量校准后必须先补全伙伴档案。');
