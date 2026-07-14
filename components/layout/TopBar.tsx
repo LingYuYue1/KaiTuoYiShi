@@ -51,9 +51,9 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news, onOpenNew
           className="flex h-10 w-10 items-center justify-center text-sm transition-all"
           style={{
             color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
-            background: 'rgba(var(--tj-surface), 0.58)',
+            background: 'rgba(var(--tj-surface), 0.88)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34), 0 10px 28px rgba(var(--tj-shadow), 0.28)',
-            backdropFilter: 'blur(10px)',
+            backdropFilter: 'blur(4px)',
             clipPath: clip10,
           }}
           aria-label={mobileCollapsed ? '展开状态栏' : '收起状态栏'}
@@ -69,9 +69,9 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news, onOpenNew
               className="max-w-[calc(100vw-96px)] px-3 py-2 text-left transition-all"
               style={{
                 color: 'rgb(var(--tj-text-primary))',
-                background: 'rgba(var(--tj-surface), 0.62)',
+                background: 'rgba(var(--tj-surface), 0.90)',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3), 0 12px 30px rgba(var(--tj-shadow), 0.28)',
-                backdropFilter: 'blur(12px)',
+                backdropFilter: 'blur(5px)',
                 clipPath: clip10,
               }}
             >
@@ -93,9 +93,9 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news, onOpenNew
                 className="max-w-[min(78vw,320px)] space-y-2 px-3 py-3 text-xs"
                 style={{
                   color: 'rgba(var(--tj-text-primary), 0.92)',
-                  background: 'rgba(var(--tj-surface), 0.76)',
+                  background: 'rgba(var(--tj-surface), 0.94)',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.26), 0 16px 36px rgba(var(--tj-shadow), 0.32)',
-                  backdropFilter: 'blur(14px)',
+                  backdropFilter: 'blur(6px)',
                   clipPath: clip12,
                 }}
               >

@@ -325,22 +325,21 @@ interface AvatarTileProps {
 // 圆形头像 + 名牌：左上头像、下方一块小标签（fallback 用首字符）
 export const AvatarTile = memo(function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
   const dim = size === 'md' ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-11 h-11 sm:w-12 sm:h-12';
-  const glow = withAlpha(color, 0.35);
   const labelColor = withAlpha(color, 0.98);
   return (
     <div className="flex flex-col items-center gap-1.5 shrink-0">
       <div
-        className={`${dim} rounded-full flex items-center justify-center overflow-hidden relative transition-transform duration-300 group-hover:scale-105`}
+        className={`${dim} rounded-full flex items-center justify-center overflow-hidden relative`}
         style={{
           background: url ? 'rgba(var(--tj-surface-strong), 0.72)' : `linear-gradient(135deg, ${withAlpha(color, 0.22)}, rgba(var(--tj-chat-bubble), 0.92))`,
-          boxShadow: `0 0 0 1px ${withAlpha(color, 0.58)}, 0 0 14px ${glow}, 0 8px 16px rgba(var(--tj-shadow), 0.16), inset 0 0 0 1px rgba(var(--tj-text-primary), 0.16)`,
+          boxShadow: `0 0 0 1px ${withAlpha(color, 0.58)}`,
         }}
       >
         {url ? (
           <img src={url} alt={`${name} 头像`} className="w-full h-full object-cover" />
         ) : (
           <span
-            className="font-serif font-bold text-lg drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+            className="font-serif font-bold text-lg"
             style={{ color: withAlpha(color, 0.95) }}
           >
             {name.charAt(0) || '?'}
@@ -348,17 +347,15 @@ export const AvatarTile = memo(function AvatarTile({ name, url, color, size = 's
         )}
       </div>
       <div
-        className="px-2 py-0.5 max-w-[78px] text-center"
+        className="px-2 py-0.5 max-w-[78px] text-center rounded-sm"
         style={{
           background: 'rgba(var(--tj-chat-bubble), 0.88)',
-          boxShadow: `inset 0 0 0 1px ${withAlpha(color, 0.52)}, 0 0 10px ${withAlpha(color, 0.12)}`,
-          clipPath:
-            'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+          boxShadow: `inset 0 0 0 1px ${withAlpha(color, 0.52)}`,
         }}
       >
         <span
           className="block truncate font-serif text-[11px] font-semibold tracking-[0.1em]"
-          style={{ color: labelColor, textShadow: `0 0 8px ${withAlpha(color, 0.18)}` }}
+          style={{ color: labelColor }}
         >
           {name}
         </span>
@@ -382,9 +379,6 @@ export const DialogueBubble = memo(function DialogueBubble({ name, text, color, 
   const bubbleStroke = isProtagonist
     ? 'rgba(var(--tj-accent-primary), 0.55)'
     : withAlpha(color, 0.4);
-  const bubbleGlow = isProtagonist
-    ? 'rgba(var(--tj-accent-primary), 0.06)'
-    : withAlpha(color, 0.08);
   const textColor = isProtagonist
     ? 'rgba(var(--tj-text-primary), 0.96)'
     : 'rgba(var(--tj-chat-text), 0.96)';
@@ -392,22 +386,12 @@ export const DialogueBubble = memo(function DialogueBubble({ name, text, color, 
     <div className="group my-3 flex items-start justify-start gap-3">
       <AvatarTile name={name} url={avatarUrl} color={color} size="sm" />
       <div className="relative flex-1 min-w-0 mt-1">
-        {/* 气泡侧边小三角 */}
         <div
-          className="absolute top-3 -left-1.5 h-3 w-3 rotate-45"
-          style={{
-            background: bubbleBg,
-            boxShadow: `-1px 1px 0 0 ${bubbleStroke}`,
-          }}
-        />
-        <div
-          className="relative px-4 py-3"
+          className="relative rounded px-4 py-3"
           style={{
             background: bubbleBg,
             color: textColor,
-            boxShadow: `inset 0 0 0 1px ${bubbleStroke}, 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px ${bubbleGlow}`,
-            clipPath:
-              'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+            boxShadow: `inset 0 0 0 1px ${bubbleStroke}`,
           }}
         >
           <p className="whitespace-pre-wrap break-words" style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}>

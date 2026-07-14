@@ -297,9 +297,9 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
           className="fixed bottom-[calc(var(--app-safe-bottom,0px)+118px)] left-1/2 z-30 -translate-x-1/2 px-3 py-1.5 text-[11px] tracking-[0.16em] md:hidden"
           style={{
             color: 'rgba(var(--tj-accent-primary), 0.92)',
-            background: 'rgba(var(--tj-surface), 0.72)',
+            background: 'rgba(var(--tj-surface), 0.92)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34), 0 12px 28px rgba(var(--tj-shadow), 0.28)',
-            backdropFilter: 'blur(10px)',
+            backdropFilter: 'blur(4px)',
             clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
           }}
         >

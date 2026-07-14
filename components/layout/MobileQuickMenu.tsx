@@ -68,9 +68,9 @@ export function MobileQuickMenu({
         <div
           className="pointer-events-auto mx-auto mb-2 max-h-[min(42dvh,320px)] w-full max-w-[390px] overflow-hidden"
           style={{
-            background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.82), rgba(var(--tj-bg-primary), 0.88))',
+            background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.94), rgba(var(--tj-bg-primary), 0.96))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 16px 36px rgba(var(--tj-shadow), 0.3)',
-            backdropFilter: 'blur(14px)',
+            backdropFilter: 'blur(5px)',
             clipPath: 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
           }}
         >
@@ -93,9 +93,9 @@ export function MobileQuickMenu({
       <div
         className="pointer-events-auto mx-auto grid w-full max-w-[390px] grid-cols-5 gap-1.5 px-2 py-1.5"
         style={{
-          background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.76), rgba(var(--tj-bg-primary), 0.82))',
+          background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.92), rgba(var(--tj-bg-primary), 0.95))',
           boxShadow: 'inset 0 1px 0 rgba(var(--tj-accent-primary), 0.28), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 -10px 28px rgba(var(--tj-shadow), 0.32)',
-          backdropFilter: 'blur(12px)',
+          backdropFilter: 'blur(4px)',
           clipPath: 'polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px)',
         }}
       >
