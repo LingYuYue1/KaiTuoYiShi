@@ -51,3 +51,7 @@ THEME_ISSUES.md
 星际和平公司角色档案完善方案.md
 砂金档案完善草案.md
 本次主题重构摘要.txt
+
+# Local Claude notes and generated lockfile (not tracked)
+CLAUDE.md
+pnpm-lock.yaml
