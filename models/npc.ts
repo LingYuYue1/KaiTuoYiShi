@@ -17,6 +17,11 @@ export type NPC关系类型 =
   | 'rival'
   | 'enemy';
 
+export type NPC关系阶段 = '敌对' | '陌生' | '初见' | '熟识' | '知己' | '生死挚友';
+
+export const NPC_AFFINITY_MIN = -50;
+export const NPC_AFFINITY_MAX = 150;
+
 export type NPC同行记忆来源 = '正文' | '手机' | '新闻' | '变量' | '其他';
 export type NPC头像槽位 = '档案' | '正文' | '手机';
 export type NPC_NSFW年龄确认 = 'adult' | 'unknown' | 'minor_blocked';
@@ -45,6 +50,7 @@ export interface NPC记忆账本视图 {
   姓名: string;
   别名?: string;
   当前关系阶段: string;
+  亲密关系: boolean;
   好感度: number;
   同行: boolean;
   初见回合: number;
@@ -150,6 +156,36 @@ export const NPC_RELATION_LABELS: Record<NPC关系类型, string> = {
   enemy: '敌人',
 };
 
+export function 限制NPC好感度(value: unknown): number {
+  const affinity = Number(value);
+  if (!Number.isFinite(affinity)) return 0;
+  return Math.max(NPC_AFFINITY_MIN, Math.min(NPC_AFFINITY_MAX, Math.trunc(affinity)));
+}
+
+export function 获取NPC关系阶段(value: unknown): NPC关系阶段 {
+  const affinity = 限制NPC好感度(value);
+  if (affinity <= -31) return '敌对';
+  if (affinity <= -1) return '陌生';
+  if (affinity <= 19) return '初见';
+  if (affinity <= 49) return '熟识';
+  if (affinity <= 100) return '知己';
+  return '生死挚友';
+}
+
+export function 获取NPC兼容关系(value: unknown): NPC关系类型 {
+  const affinity = 限制NPC好感度(value);
+  if (affinity <= -31) return 'enemy';
+  if (affinity <= 19) return 'stranger';
+  if (affinity <= 49) return 'acquaintance';
+  if (affinity <= 100) return 'friend';
+  return 'close';
+}
+
+export function 格式化NPC关系(value: unknown, intimateRelationship = false): string {
+  const stage = 获取NPC关系阶段(value);
+  return intimateRelationship ? `${stage} · 亲密关系` : stage;
+}
+
 const NPC_NAME_PREFIXES = [
   '负伤的',
   '重伤的',
@@ -211,15 +247,6 @@ const NPC_GENERIC_SUFFIXES = [
   '裂界生物',
 ];
 
-const RELATION_RANK: Record<NPC关系类型, number> = {
-  enemy: 5,
-  rival: 4,
-  close: 3,
-  friend: 2,
-  acquaintance: 1,
-  stranger: 0,
-};
-
 export interface NPC记录 {
   id: string;
   姓名: string;
@@ -227,8 +254,9 @@ export interface NPC记录 {
   locationId?: string;                 // 星轨航图地点 id；缺省表示位置未知
   anchorId?: string;                   // 四级地图场景锚点 id
   阶位: NPC阶位;                     // companion=进 AI prompt;extra=只存档
-  好感度: number;                    // -100..100
-  关系: NPC关系类型;
+  好感度: number;                    // -50..150
+  关系: NPC关系类型;                 // 兼容字段，由好感度确定性派生
+  亲密关系?: boolean;                // 普通关系状态，不受 NSFW 开关控制
   同行: boolean;
   初见回合: number;
   最近回合: number;
@@ -292,7 +320,8 @@ export function 创建NPC记录(input: {
     anchorId: input.anchorId,
     阶位: input.阶位 ?? 'extra',
     好感度: 0,
-    关系: 'stranger',
+    关系: 获取NPC兼容关系(0),
+    亲密关系: false,
     同行: false,
     初见回合: input.初见回合,
     最近回合: input.初见回合,
@@ -327,7 +356,6 @@ export function 归一化NPC记录列表(raw: unknown): NPC记录[] {
 function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, unknown>, index: number): NPC记录 {
   const rawName = source.姓名 ?? source.name ?? source.名称 ?? source.名字;
   const rawTier = source.阶位 ?? source.tier ?? source.类型 ?? source.category;
-  const rawRelation = source.关系 ?? source.relation;
   const rawAffinity = source.好感度 ?? source.affinity ?? source.favor ?? source.亲密度;
   const rawFirstTurn = source.初见回合 ?? source.firstSeenTurn ?? source.firstTurn;
   const rawRecentTurn = source.最近回合 ?? source.lastSeenTurn ?? source.recentTurn;
@@ -342,11 +370,8 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     normalizedTierText === 'companion' || normalizedTierText === '伙伴' || normalizedTierText === '重要伙伴'
       ? 'companion'
       : 'extra';
-  const relation: NPC关系类型 =
-    typeof rawRelation === 'string' && rawRelation in NPC_RELATION_LABELS
-      ? rawRelation as NPC关系类型
-      : 'stranger';
-  const affinity = Number(rawAffinity);
+  const affinity = 限制NPC好感度(rawAffinity);
+  const intimateRelationship = readNpcBoolean(source.亲密关系 ?? source.intimateRelationship) ?? false;
   const firstTurn = Number(rawFirstTurn);
   const recentTurn = Number(rawRecentTurn);
   const rawAlias = source.别名 ?? source.alias;
@@ -376,8 +401,9 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     locationId: readNpcString(rawLocationId),
     anchorId: readNpcString(rawAnchorId),
     阶位: shouldForceCompanion ? 'companion' : tier,
-    好感度: Number.isFinite(affinity) ? Math.max(-100, Math.min(100, affinity)) : 0,
-    关系: relation,
+    好感度: affinity,
+    关系: 获取NPC兼容关系(affinity),
+    亲密关系: intimateRelationship,
     同行: Boolean(source.同行 ?? source.isTraveling ?? source.在场) && (shouldForceCompanion || tier === 'companion'),
     初见回合: Number.isFinite(firstTurn) ? firstTurn : 1,
     最近回合: Number.isFinite(recentTurn)
@@ -394,7 +420,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     同行记忆: 归一化同行记忆列表(rawMemories),
     最近互动: readNpcString(source.最近互动 ?? source.recentInteraction),
     对玩家长期印象: readNpcString(source.对玩家长期印象 ?? source.longTermImpression),
-    当前关系阶段: readNpcString(source.当前关系阶段 ?? source.relationshipStage),
+    当前关系阶段: 获取NPC关系阶段(affinity),
     共同经历: normalizeNpcTextList(source.共同经历 ?? source.sharedExperiences),
     未完成事项: normalizeNpcTextList(source.未完成事项 ?? source.openItems),
     未解决冲突: normalizeNpcTextList(source.未解决冲突 ?? source.unresolvedConflicts),
@@ -413,6 +439,8 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
 
 function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
   const preferred = 选择更完整的NPC记录(base, incoming);
+  const affinity = 限制NPC好感度(选择更可信的好感度(base, incoming, preferred));
+  const intimateRelationship = 选择较新的亲密关系(base, incoming, preferred);
   return {
     ...preferred,
     姓名: 选择NPC显示姓名(base, incoming, preferred),
@@ -420,16 +448,17 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     locationId: preferred.locationId ?? incoming.locationId ?? base.locationId,
     anchorId: preferred.anchorId ?? incoming.anchorId ?? base.anchorId,
     阶位: base.阶位 === 'companion' || incoming.阶位 === 'companion' ? 'companion' : preferred.阶位,
-    关系: 关系优先级更高(base.关系, incoming.关系),
+    关系: 获取NPC兼容关系(affinity),
+    亲密关系: intimateRelationship,
     // 阶位代表重要程度，同行代表当前是否在场；原著角色/伙伴不能自动等于同行中。
     同行: Boolean(base.同行 || incoming.同行),
     初见回合: Math.min(base.初见回合 ?? incoming.初见回合, incoming.初见回合 ?? base.初见回合),
     最近回合: Math.max(base.最近回合 ?? 0, incoming.最近回合 ?? 0),
-    好感度: 选择更可信的好感度(base, incoming, preferred),
+    好感度: affinity,
     同行记忆: 合并同行记忆(base.同行记忆 ?? [], incoming.同行记忆 ?? []),
     最近互动: preferred.最近互动 ?? base.最近互动 ?? incoming.最近互动,
     对玩家长期印象: preferred.对玩家长期印象 ?? base.对玩家长期印象 ?? incoming.对玩家长期印象,
-    当前关系阶段: preferred.当前关系阶段 ?? base.当前关系阶段 ?? incoming.当前关系阶段,
+    当前关系阶段: 获取NPC关系阶段(affinity),
     共同经历: 去重文本列表([...(base.共同经历 ?? []), ...(incoming.共同经历 ?? [])]),
     未完成事项: 去重文本列表([...(base.未完成事项 ?? []), ...(incoming.未完成事项 ?? [])]),
     未解决冲突: 去重文本列表([...(base.未解决冲突 ?? []), ...(incoming.未解决冲突 ?? [])]),
@@ -509,8 +538,11 @@ function 选择更可信的好感度(a: NPC记录, b: NPC记录, preferred: NPC�
   return Math.abs(b.好感度) > Math.abs(a.好感度) ? b.好感度 : a.好感度;
 }
 
-function 关系优先级更高(a: NPC关系类型, b: NPC关系类型): NPC关系类型 {
-  return RELATION_RANK[b] > RELATION_RANK[a] ? b : a;
+function 选择较新的亲密关系(base: NPC记录, incoming: NPC记录, preferred: NPC记录): boolean {
+  if (incoming.最近回合 > base.最近回合 && typeof incoming.亲密关系 === 'boolean') return incoming.亲密关系;
+  if (base.最近回合 > incoming.最近回合 && typeof base.亲密关系 === 'boolean') return base.亲密关系;
+  if (typeof preferred.亲密关系 === 'boolean') return preferred.亲密关系;
+  return Boolean(base.亲密关系 || incoming.亲密关系);
 }
 
 function 计算NPC身份键(record: NPC记录): string {
@@ -638,6 +670,13 @@ function 去重文本列表(lines: string[]): string[] {
 
 function readNpcString(raw: unknown): string | undefined {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+}
+
+function readNpcBoolean(raw: unknown): boolean | undefined {
+  if (typeof raw === 'boolean') return raw;
+  if (raw === 'true' || raw === '是' || raw === '已建立') return true;
+  if (raw === 'false' || raw === '否' || raw === '已解除') return false;
+  return undefined;
 }
 
 function normalizeNpcTextList(raw: unknown): string[] | undefined {
@@ -1046,6 +1085,7 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
     record.最近互动 ||
     record.对玩家长期印象 ||
     record.当前关系阶段 ||
+    record.亲密关系 ||
     record.共同经历?.length ||
     record.未完成事项?.length ||
     record.未解决冲突?.length ||
@@ -1058,8 +1098,9 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
     npcId: record.id,
     姓名: record.姓名,
     别名: record.别名,
-    当前关系阶段: record.当前关系阶段?.trim() || NPC_RELATION_LABELS[record.关系] || record.关系,
-    好感度: Number(record.好感度) || 0,
+    当前关系阶段: 格式化NPC关系(record.好感度, Boolean(record.亲密关系)),
+    亲密关系: Boolean(record.亲密关系),
+    好感度: 限制NPC好感度(record.好感度),
     同行: Boolean(record.同行),
     初见回合: Math.max(1, Number(record.初见回合 || 1)),
     最近回合: Math.max(1, Number(record.最近回合 || record.初见回合 || 1)),
@@ -1134,7 +1175,7 @@ export function selectNpcLedgersForTurn(params: {
       const isRecent = Number(npc.最近回合 || 0) >= recentCutoff;
       const hasProtectedItems = npcLedgerHasProtectedItems(ledger);
       const hasMemory = ledger.最近原始记忆.length > 0 || ledger.总结记忆.length > 0 || Boolean(ledger.最近互动);
-      const hasRelation = npc.关系 !== 'stranger' || Math.abs(Number(npc.好感度 || 0)) > 0;
+      const hasRelation = npc.关系 !== 'stranger' || npc.亲密关系 || Math.abs(Number(npc.好感度 || 0)) > 0;
       const shouldConsider = isExplicit || isScene || isRecalled || npc.同行 || isRecent || hasProtectedItems || hasMemory || hasRelation || npc.阶位 === 'companion';
       if (!shouldConsider) return null;
       const reasons = [
@@ -1217,7 +1258,7 @@ export function selectNpcLedgersForTurn(params: {
   for (const npc of records) {
     if (selectedIds.has(npc.id)) continue;
     if (candidates.some((item) => item.npc.id === npc.id)) continue;
-    if (npc.阶位 === 'companion' || npc.同行 || npc.关系 !== 'stranger' || 提取NPC同行记忆文本列表(npc).length > 0) {
+    if (npc.阶位 === 'companion' || npc.同行 || npc.关系 !== 'stranger' || npc.亲密关系 || 提取NPC同行记忆文本列表(npc).length > 0) {
       skipped.push({ name: npc.姓名, reason: '本回合没有点名、在场、近期出现、未完成事项或召回命中' });
     }
   }

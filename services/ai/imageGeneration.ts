@@ -353,6 +353,15 @@ function readOpenAICompatibleImagePath(config: 文生图API配置): string {
   return normalizeOpenAICompatibleImagePath(readPath(config));
 }
 
+function readOpenAICompatibleReferencePath(config: 文生图API配置): string {
+  const generationPath = readOpenAICompatibleImagePath(config);
+  if (/\/images\/edits(?:\?.*)?$/i.test(generationPath)) return generationPath;
+  if (/\/images\/generations(?:\?.*)?$/i.test(generationPath)) {
+    return generationPath.replace(/\/images\/generations(?=\?|$)/i, '/images/edits');
+  }
+  return '/images/edits';
+}
+
 function isOpenAICompatibleImageValidationResponse(status: number, text: string): boolean {
   if (status !== 400 && status !== 422) return false;
   const lower = text.toLowerCase();
@@ -438,6 +447,22 @@ function stripDataUrlPrefix(src: string): string {
   return src.startsWith('data:') ? src.slice(src.indexOf(',') + 1) : src;
 }
 
+/** Convert a display/reference src (data URL, blob URL, or remote) to raw base64 for API payloads. */
+async function referenceSrcToBase64(src: string, signal?: AbortSignal): Promise<string> {
+  const trimmed = src.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('data:')) return stripDataUrlPrefix(trimmed);
+  const blob = await loadReferenceImageBlob(trimmed, signal);
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + chunkSize)));
+  }
+  return btoa(binary);
+}
+
 function clampReferenceStrength(value?: number): number {
   if (!Number.isFinite(Number(value))) return 0.55;
   return Math.max(0.05, Math.min(0.95, Number(value)));
@@ -452,15 +477,17 @@ async function generateOpenAICompatibleImage(config: 文生图API配置, request
   if (!config.baseUrl.trim()) throw new Error('请填写图片接口 Base URL。');
   if (!config.apiKey.trim()) throw new Error('请填写图片接口 API Key。');
   if (!config.model.trim()) throw new Error('请填写图片模型。');
-  if (normalizeReferenceImages(request.referenceImages).length > 0) {
-    throw new Error('OpenAI 兼容的 /images/generations 路径不保证支持参考图。请改用支持参考图的图片编辑端点，或先关闭参考图参与生成。');
-  }
+  const referenceImages = normalizeReferenceImages(request.referenceImages);
 
-  const url = joinUrl(config.baseUrl, readOpenAICompatibleImagePath(config));
   const negative = mergeNegativePrompt(config, request);
   const prompt = negative
     ? `${request.prompt.trim()}\n\nNegative prompt: ${negative}`
     : request.prompt.trim();
+  if (referenceImages.length > 0) {
+    return generateOpenAICompatibleReferenceImage(config, request, prompt, referenceImages[0]);
+  }
+
+  const url = joinUrl(config.baseUrl, readOpenAICompatibleImagePath(config));
 
   const response = await fetch(url, {
     method: 'POST',
@@ -483,12 +510,62 @@ async function generateOpenAICompatibleImage(config: 文生图API配置, request
     throw new Error(formatOpenAICompatibleImageError(response.status, text || response.statusText));
   }
 
+  return readOpenAICompatibleImageResult(response, config, request.signal);
+}
+
+async function generateOpenAICompatibleReferenceImage(
+  config: 文生图API配置,
+  request: ImageGenerationRequest,
+  prompt: string,
+  reference: ImageReferenceInput,
+): Promise<ImageGenerationResult> {
+  const referenceBlob = await loadReferenceImageBlob(reference.src, request.signal);
+  const form = new FormData();
+  form.append('model', config.model);
+  form.append('prompt', prompt);
+  form.append('image', referenceBlob, `reference.${imageExtension(referenceBlob.type)}`);
+  form.append('size', normalizeOpenAICompatibleImageSize(request.size || config.defaultSize || '1024x1024'));
+  form.append('n', '1');
+
+  const response = await fetch(joinUrl(config.baseUrl, readOpenAICompatibleReferencePath(config)), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${config.apiKey}` },
+    body: form,
+    signal: request.signal,
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`${formatOpenAICompatibleImageError(response.status, text || response.statusText)}\n部分中转供应商不支持参考图，如参考图生成失败请关闭该开关。`);
+  }
+  return readOpenAICompatibleImageResult(response, config, request.signal);
+}
+
+async function loadReferenceImageBlob(src: string, signal?: AbortSignal): Promise<Blob> {
+  try {
+    const response = await fetch(src, { signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    if (!blob.size) throw new Error('图片内容为空');
+    return blob.type ? blob : new Blob([blob], { type: 'image/png' });
+  } catch (error) {
+    throw new Error(`参考图读取失败：${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function imageExtension(mimeType: string): string {
+  if (/jpe?g/i.test(mimeType)) return 'jpg';
+  if (/webp/i.test(mimeType)) return 'webp';
+  if (/gif/i.test(mimeType)) return 'gif';
+  return 'png';
+}
+
+async function readOpenAICompatibleImageResult(response: Response, config: 文生图API配置, signal?: AbortSignal): Promise<ImageGenerationResult> {
   const data = await readJsonResponse(response, 'OpenAI 兼容图片接口');
   const first = data?.data?.[0];
   if (!first) throw new Error('图片接口没有返回结果。');
 
   if (typeof first.url === 'string' && first.url.trim()) {
-    return persistRemoteImage(first.url.trim(), { model: config.model, backend: config.backend, signal: request.signal });
+    return persistRemoteImage(first.url.trim(), { model: config.model, backend: config.backend, signal });
   }
 
   if (typeof first.b64_json === 'string' && first.b64_json.trim()) {
@@ -617,7 +694,9 @@ async function generateSdWebUIImage(config: 文生图API配置, request: ImageGe
     override_settings: config.model ? { sd_model_checkpoint: config.model } : undefined,
   };
   if (useImg2Img) {
-    payload.init_images = referenceImages.map((item) => stripDataUrlPrefix(item.src));
+    payload.init_images = await Promise.all(
+      referenceImages.map((item) => referenceSrcToBase64(item.src, request.signal)),
+    );
     payload.denoising_strength = clampReferenceStrength(request.referenceStrength);
     payload.resize_mode = 1;
   }
@@ -659,7 +738,9 @@ async function generateComfyUIImage(config: 文生图API配置, request: ImageGe
     ].join('\n'));
   }
   const referenceImages = normalizeReferenceImages(request.referenceImages);
-  const firstReferenceImage = referenceImages[0]?.src ? stripDataUrlPrefix(referenceImages[0].src) : '';
+  const firstReferenceImage = referenceImages[0]?.src
+    ? await referenceSrcToBase64(referenceImages[0].src, request.signal)
+    : '';
   const workflowText = config.comfyWorkflowJson
     .replaceAll('__PROMPT__', request.prompt.trim())
     .replaceAll('{{prompt}}', request.prompt.trim())

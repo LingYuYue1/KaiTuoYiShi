@@ -18,16 +18,16 @@ assert(lazyRetry.includes('An idle preload must not reload the app'), 'idle prel
 const preloadBody = lazyRetry.split('component.preload = async () =>', 2)[1]?.split('return component;', 1)[0] ?? '';
 assert(!preloadBody.includes('clearReloadMarker()'), 'background preload must not clear another chunk retry marker');
 
-const assertPreloadBeforeDelay = (preload, delay, label) => {
+const assertPreloadBeforeTransition = (preload, transitionStart, label) => {
   const preloadIndex = app.indexOf(preload);
-  const delayIndex = app.indexOf(delay, preloadIndex);
+  const transitionIndex = app.indexOf(transitionStart, preloadIndex);
   assert(preloadIndex >= 0, `${label} must start preloading on click`);
-  assert(delayIndex > preloadIndex, `${label} must preload before waiting for its transition`);
+  assert(transitionIndex > preloadIndex, `${label} must preload before its transition timing starts`);
 };
 
-assertPreloadBeforeDelay('void NewGameWizard.preload();', 'await wait(getHomeJourneyDelay());', 'new game');
-assertPreloadBeforeDelay('void SaveLoadModal.preload();', 'await wait(getSaveLoadDelay());', 'save load');
-assertPreloadBeforeDelay('void WorldbookManagerModal.preload();', 'await wait(getBookOpenDelay());', 'worldbook');
+assertPreloadBeforeTransition('void NewGameWizard.preload();', 'setHomeJourneyTransitioning(true);', 'new game');
+assertPreloadBeforeTransition('void SaveLoadModal.preload();', 'setSaveLoadTransitioning(true);', 'save load');
+assertPreloadBeforeTransition('void WorldbookManagerModal.preload();', 'setBookOpenTransitioning(true);', 'worldbook');
 
 assert(app.includes("if (state.view !== 'home') return;"), 'idle preloading must only run on the home view');
 assert(app.includes('idleWindow.requestIdleCallback(preloadZhiku, { timeout: 1200 })'), 'zhiku must preload during browser idle time');

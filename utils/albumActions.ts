@@ -1,6 +1,12 @@
 import type { 相册系统, 相册条目, 图片资源, 图片目标类型, 图片槽位 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC头像槽位 } from '@/models/npc';
+import {
+  isDataImageUrl,
+  pickAssetDisplayUrl,
+  rememberAlbumAssetFromDataUrl,
+  resolveAlbumAssetDisplayUrl,
+} from '@/utils/albumObjectUrl';
 
 const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -14,6 +20,7 @@ export function 创建相册图片条目(input: {
   targetId?: string;
   slot?: 图片槽位;
   mimeType?: string;
+  contentHash?: string;
   prompt?: string;
   negativePrompt?: string;
   sourcePrompt?: string;
@@ -26,17 +33,24 @@ export function 创建相册图片条目(input: {
   backend?: string;
   tags?: string[];
   note?: string;
+  referenceTargets?: string[];
 }): { asset: 图片资源; entry: 相册条目 } {
   const now = Date.now();
   const isDataUrl = input.src.startsWith('data:');
   const assetId = makeId('asset');
   const entryId = makeId('album');
+  const originalUrl = input.originalUrl?.trim() || undefined;
+  const blob = isDataUrl ? rememberAlbumAssetFromDataUrl(assetId, input.src) : null;
+  const dataUrl = blob ? 创建相册资源引用(assetId) : (isDataUrl ? input.src : undefined);
+  const remoteOriginalUrl = isDataImageUrl(originalUrl) ? undefined : originalUrl;
   const asset: 图片资源 = {
     id: assetId,
-    url: input.originalUrl?.trim() || (!isDataUrl ? input.src : undefined),
-    originalUrl: input.originalUrl?.trim() || undefined,
-    dataUrl: isDataUrl ? input.src : undefined,
+    url: remoteOriginalUrl || (!isDataUrl ? input.src : undefined),
+    originalUrl: remoteOriginalUrl,
+    dataUrl,
     mimeType: input.mimeType,
+    contentHash: input.contentHash,
+    size: blob?.size,
     source: input.source,
     nsfw: input.nsfw === true,
     createdAt: now,
@@ -63,6 +77,7 @@ export function 创建相册图片条目(input: {
     nsfw: input.nsfw === true,
     createdAt: now,
     note: input.note,
+    referenceTargets: Array.from(new Set((input.referenceTargets ?? []).map((id) => id.trim()).filter(Boolean))),
   };
   return { asset, entry };
 }
@@ -79,20 +94,50 @@ export function 读取相册条目地址(album: 相册系统, entryId: string): 
   const entry = album.entries.find((item) => item.id === entryId);
   if (!entry) return undefined;
   const asset = album.assets.find((item) => item.id === entry.assetId);
-  return asset?.dataUrl || asset?.url || asset?.localRef || undefined;
+  return asset ? pickAssetDisplayUrl(asset) : undefined;
 }
 
 export function 创建相册资源引用(assetId: string): string {
   return assetId ? `asset:${assetId}` : '';
 }
 
+/**
+ * Resolve an album field (`asset:<id>`, remote URL, or legacy data URL) to a
+ * displayable URL. Prefers Blob cache object URLs over base64 expansion.
+ */
 export function 解析相册资源引用(album: 相册系统 | undefined, value: string | undefined): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
-  if (!trimmed.startsWith('asset:')) return trimmed;
-  const assetId = trimmed.slice('asset:'.length);
-  const asset = album?.assets.find((item) => item.id === assetId);
-  return asset?.dataUrl || asset?.url || asset?.localRef || undefined;
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('asset:')) {
+    const assetId = trimmed.slice('asset:'.length).trim();
+    if (!assetId) return undefined;
+    const objectUrl = resolveAlbumAssetDisplayUrl(assetId);
+    if (objectUrl) return objectUrl;
+    const asset = album?.assets.find((item) => item.id === assetId);
+    return asset ? pickAssetDisplayUrl(asset) : undefined;
+  }
+  // Legacy inline base64: try to migrate via album asset id if present.
+  if (isDataImageUrl(trimmed) && album) {
+    const asset = album.assets.find((item) => item.dataUrl === trimmed || item.id && resolveAlbumAssetDisplayUrl(item.id));
+    if (asset?.id) {
+      rememberAlbumAssetFromDataUrl(asset.id, trimmed);
+      return resolveAlbumAssetDisplayUrl(asset.id) ?? trimmed;
+    }
+  }
+  return trimmed;
+}
+
+/** Resolve a display URL for a concrete album asset (Blob cache → remote). */
+export function 解析相册资源地址(asset: {
+  id?: string;
+  dataUrl?: string;
+  url?: string;
+  localRef?: string;
+  originalUrl?: string;
+} | undefined): string | undefined {
+  if (!asset) return undefined;
+  return pickAssetDisplayUrl(asset);
 }
 
 export function 挂载NPC头像图片(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位; src: string; source?: '手动' | '原著' | '文生图' | '占位' }): NPC记录[] {

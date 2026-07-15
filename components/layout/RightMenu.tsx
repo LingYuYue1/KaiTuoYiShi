@@ -1,3 +1,4 @@
+﻿import { memo } from 'react';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 
 interface RightMenuProps {
@@ -8,10 +9,11 @@ interface RightMenuProps {
   onSettings: () => void;
   onReviewLab?: () => void;
 }
+
 const itemClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
-export function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettings, onReviewLab }: RightMenuProps) {
+export const RightMenu = memo(function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettings, onReviewLab }: RightMenuProps) {
   return (
     <div className="kaituo-right-menu hidden md:flex md:w-[16%] min-w-[200px] max-w-[240px] flex-col">
       <div
@@ -53,7 +55,7 @@ export function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettin
       </div>
     </div>
   );
-}
+});
 
 function SystemButton({
   glyph,

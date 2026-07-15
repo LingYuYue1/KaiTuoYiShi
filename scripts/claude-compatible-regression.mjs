@@ -35,7 +35,7 @@ assert(settings.includes('enableClaudeMode?: boolean'), 'API 配置项必须能�
 assert(settings.includes('enableClaudeMode: boolean'), '游戏设置必须保存 Claude 专用模式开关。');
 assert(settings.includes('enableClaudeMode: false'), 'Claude 专用模式默认必须关闭。');
 assert(gameState.includes('enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode'), '旧存档读取必须归一化 Claude 模式。');
-assert(useGame.includes('enableClaudeMode: state.gameSettings.enableClaudeMode === true'), '主 API 运行时配置必须注入 Claude 模式。');
+assert(/enableClaudeMode:\s*(?:state|s)\.gameSettings\.enableClaudeMode === true/.test(useGame), '主 API 运行时配置必须注入 Claude 模式。');
 
 assert(apiSettings.includes("value: 'claude_compatible'") && apiSettings.includes('Claude 兼容'), 'API 设置页必须提供 Claude 兼容选项。');
 assert(!apiSettings.includes('◆ Claude 专用模式'), 'API 设置页不得重复显示 Claude 专用模式开关。');
@@ -87,7 +87,7 @@ assert(client.includes("part?.type === 'text'"), 'Claude 非流式解析必须�
 assert(client.includes("parsed?.type === 'content_block_delta'"), 'OpenAI 兼容流式解析必须兼容 Claude/Anthropic content_block_delta。');
 assert(client.includes("deltaType === 'thinking_delta'"), 'OpenAI 兼容流式解析必须丢弃 thinking delta。');
 assert(client.includes('return parseOpenAICompatibleTextResponse(json);'), 'OpenAI 兼容非流式路径必须使用宽容正文解析。');
-assert(client.includes('mergePrefixResult(deepSeekPayload.prefix, parseOpenAICompatibleTextResponse(json))'), 'DeepSeek 非流式 prefix 合并前必须使用宽容正文解析。');
+assert(client.includes('const text = parseOpenAICompatibleTextResponse(json);') && client.includes('mergePrefixResult(deepSeekPayload.prefix, text)'), 'DeepSeek 非流式 prefix 合并前必须使用宽容正文解析。');
 assert(client.includes('formatClaudeError'), 'Claude 错误必须提供中文诊断提示。');
 assert(client.includes('/chat/completions'), 'OpenAI 兼容路径必须继续请求 /chat/completions。');
 

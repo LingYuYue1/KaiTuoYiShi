@@ -1046,7 +1046,7 @@ export function buildNpcImagePrompt(params: {
 
 export function buildTravelerImagePrompt(params: {
   traveler: 角色数据结构;
-  mode: Extract<生图Prompt模式, 'avatar' | 'portrait'>;
+  mode: Extract<生图Prompt模式, 'avatar' | 'portrait' | 'nsfw'>;
   rules: 文生图规则中心设置;
   extraRequirement?: string;
   size?: string;
@@ -1068,6 +1068,8 @@ export function buildTravelerImagePrompt(params: {
     hasAnchor ? template?.角色锚定模式提示词 : template?.无锚点回退提示词,
     template?.输出格式提示词,
     ruleForMode(mode, rules),
+    mode === 'nsfw' ? rules.nsfwIsolationRule : undefined,
+    mode === 'nsfw' ? rules.nsfwPartRule : undefined,
     `player character name: ${traveler.姓名 || 'Traveler'}`,
     traveler.性别 ? `gender: ${traveler.性别}` : undefined,
     traveler.年龄 ? `age: ${traveler.年龄}` : undefined,
@@ -1082,7 +1084,7 @@ export function buildTravelerImagePrompt(params: {
     extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
     anchorLock,
   ]);
-  return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative]));
+  return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative, mode === 'nsfw' ? rules.nsfwNegative : undefined]));
 }
 
 export function buildSceneImagePrompt(params: {

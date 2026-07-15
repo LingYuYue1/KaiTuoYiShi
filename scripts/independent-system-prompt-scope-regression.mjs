@@ -13,7 +13,9 @@ const assert = (condition, message) => {
 const scopeHelper = read('services/promptModuleScopes.ts');
 const expectedMatchers = {
   news: "news: [(id) => id.startsWith('builtin_news_')]",
-  phone: "phone: [(id) => id.startsWith('builtin_phone_')]",
+  phoneBuiltin: "(id) => id.startsWith('builtin_phone_')",
+  phoneCustom: "(id) => id.startsWith('custom_phone_')",
+  phoneImported: "(id) => id.startsWith('st_import_phone_')",
   variablePrefix: "(id) => id.startsWith('builtin_variable_')",
   variableCompanion: "(id) => id === 'builtin_companion_archive_worldbook'",
   zhiku: "zhiku: [(id) => id.startsWith('builtin_zhiku_')]",
@@ -67,7 +69,7 @@ const groups = {
 };
 
 assert(groups.news.length === 3, `news should have 3 modules, got ${groups.news.length}`);
-assert(groups.phone.length === 3, `phone should have 3 modules, got ${groups.phone.length}`);
+assert(groups.phone.length === 4, `phone should have 4 modules including the default style, got ${groups.phone.length}`);
 assert(groups.variable.length === 4, `variable should have 4 modules including companion archive, got ${groups.variable.length}`);
 assert(groups.zhiku.length === 2, `zhiku should have 2 modules, got ${groups.zhiku.length}`);
 assert(groups.yitingRecall.length === 1, `yiting recall should have 1 module, got ${groups.yitingRecall.length}`);

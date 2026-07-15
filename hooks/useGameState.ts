@@ -57,6 +57,7 @@ import {
 } from '@/data/zhikuPreset';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
+import { loadWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { loadSetting, saveSetting, hasAnySave } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
@@ -230,8 +231,6 @@ export interface UseGameStateReturn {
   setHasSave: React.Dispatch<React.SetStateAction<boolean>>;
   loading: boolean;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  streamingMessage: string;
-  setStreamingMessage: React.Dispatch<React.SetStateAction<string>>;
   workflowHint: string;
   setWorkflowHint: React.Dispatch<React.SetStateAction<string>>;
   workflowStatus: 'searching' | 'done' | '';
@@ -247,6 +246,8 @@ export interface UseGameStateReturn {
   setTurnCount: React.Dispatch<React.SetStateAction<number>>;
   pendingOpeningTrigger: string | null;
   setPendingOpeningTrigger: React.Dispatch<React.SetStateAction<string | null>>;
+  interruptedWorkflow: WorkflowRecoveryJournal | null;
+  setInterruptedWorkflow: React.Dispatch<React.SetStateAction<WorkflowRecoveryJournal | null>>;
   abortControllerRef: React.RefObject<AbortController | null>;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -273,7 +274,6 @@ export function useGameState(): UseGameStateReturn {
   const [worldbooks, setWorldbooks] = useState<世界书[]>([]);
   const [hasSave, setHasSave] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [streamingMessage, setStreamingMessage] = useState('');
   const [workflowHint, setWorkflowHint] = useState('');
   const [workflowStatus, setWorkflowStatus] = useState<'searching' | 'done' | ''>('');
   const [liveRecallSummary, setLiveRecallSummary] = useState('');
@@ -281,6 +281,7 @@ export function useGameState(): UseGameStateReturn {
   const [pendingVariable, setPendingVariable] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
+  const [interruptedWorkflow, setInterruptedWorkflow] = useState<WorkflowRecoveryJournal | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -288,6 +289,12 @@ export function useGameState(): UseGameStateReturn {
   // Load persisted settings on mount
   useEffect(() => {
     (async () => {
+      const recoveryJournal = await loadWorkflowRecoveryJournal();
+      if (recoveryJournal) {
+        setInterruptedWorkflow(recoveryJournal);
+        setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
+      }
+
       const savedTheme = await loadSetting<主题预设>('theme');
       if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
 
@@ -495,7 +502,6 @@ export function useGameState(): UseGameStateReturn {
     worldbooks, setWorldbooks,
     hasSave, setHasSave,
     loading, setLoading,
-    streamingMessage, setStreamingMessage,
     workflowHint, setWorkflowHint,
     workflowStatus, setWorkflowStatus,
     liveRecallSummary, setLiveRecallSummary,
@@ -503,6 +509,7 @@ export function useGameState(): UseGameStateReturn {
     pendingVariable, setPendingVariable,
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
+    interruptedWorkflow, setInterruptedWorkflow,
     abortControllerRef, scrollRef,
   };
 }

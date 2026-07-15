@@ -18,8 +18,14 @@ assert(
   'Update announcement button must sit next to the GitHub cloud save entry.',
 );
 assert(
-  landing.includes('开拓轶事 v1.0'),
+  landing.includes('开拓轶事 v1.1'),
   'Landing page must show the current version.',
+);
+assert(
+  landing.includes('作者：牢凌') &&
+    landing.includes('贡献者：11MOMO') &&
+    landing.includes('>Penna Mch</strong>'),
+  'Landing page must show the current author and contributor credits.',
 );
 assert(
   app.includes('ReleaseAnnouncementsModal') &&

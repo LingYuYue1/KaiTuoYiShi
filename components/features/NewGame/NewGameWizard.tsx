@@ -1199,7 +1199,6 @@ style={{
         style={{
           background:
             'linear-gradient(115deg, transparent 0 36%, rgba(var(--tj-btn-primary-start), 0.10) 38%, transparent 42% 100%), linear-gradient(70deg, transparent 0 58%, rgba(var(--tj-btn-primary-end), 0.09) 60%, transparent 64% 100%)',
-          filter: 'blur(0.2px)',
           transform: 'translate3d(-5%, 0, 0)',
           animation: 'openingLightDrift 9s ease-in-out infinite alternate',
         }}
@@ -1239,7 +1238,6 @@ style={{
         style={{
           background:
             'linear-gradient(180deg, transparent, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-btn-primary-end), 0.08), transparent)',
-          filter: 'blur(1px)',
           animation: 'openingSweep 7s linear infinite',
         }}
       />
@@ -1289,7 +1287,7 @@ style={{
             background:
               'linear-gradient(90deg, rgba(var(--tj-ui-panel), 0.90), rgba(var(--tj-panel-bg-start), 0.76)), linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), transparent 48%, rgba(var(--tj-btn-primary-end), 0.09))',
             boxShadow: openingPanelShadowStrong,
-            backdropFilter: 'blur(18px)',
+            backdropFilter: 'blur(5px)',
             clipPath: cardClip,
           }}
         >
@@ -1335,7 +1333,7 @@ style={{
             style={{
               background: openingTopPanelBackground,
               boxShadow: openingPanelShadowStrong,
-              backdropFilter: 'blur(16px)',
+              backdropFilter: 'blur(5px)',
               clipPath: cardClip,
             }}
           >
@@ -1798,7 +1796,7 @@ function OpeningLedger({
       style={{
         background: openingLedgerBackground,
         boxShadow: openingPanelShadow,
-        backdropFilter: 'blur(16px)',
+        backdropFilter: 'blur(5px)',
         clipPath: cardClip,
       }}
     >
@@ -2012,7 +2010,7 @@ function StepRail({
       style={{
         background: openingRailBackground,
         boxShadow: openingPanelShadow,
-        backdropFilter: 'blur(16px)',
+        backdropFilter: 'blur(5px)',
         clipPath: cardClip,
       }}
     >

@@ -603,9 +603,13 @@ export interface 正文生图设置 {
   imageApi: 文生图API配置;
 }
 
+export const 参考图注入选择加入版本 = 1;
+
 export interface 文生图参考图设置 {
   /** 总开关：关闭时参考图只作为相册素材保存，不参与生成。 */
   enabled: boolean;
+  /** 玩家已在对应版本明确选择是否启用；缺失时按关闭迁移一次。 */
+  injectionOptInVersion: number;
   /** SD WebUI 启用参考图时走 img2img，值越高越接近文字提示，越低越贴近参考图。 */
   sdWebuiDenoisingStrength: number;
   /** ComfyUI 需要工作流显式接收参考图占位符，默认不开启以免误导。 */
@@ -712,6 +716,7 @@ export function 创建默认文生图系统设置(): 文生图系统设置 {
 export function 创建默认文生图参考图设置(): 文生图参考图设置 {
   return {
     enabled: false,
+    injectionOptInVersion: 参考图注入选择加入版本,
     sdWebuiDenoisingStrength: 0.55,
     enableComfyWorkflowReference: false,
     enableOpenAICompatibleReference: false,
@@ -811,8 +816,11 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
 export function 归一化文生图参考图设置(input?: Partial<文生图参考图设置>): 文生图参考图设置 {
   const defaults = 创建默认文生图参考图设置();
   if (!input) return defaults;
+  const inputOptInVersion = Math.max(0, Math.floor(Number(input.injectionOptInVersion) || 0));
+  const hasCurrentOptIn = inputOptInVersion >= 参考图注入选择加入版本;
   return {
-    enabled: input.enabled === true,
+    enabled: hasCurrentOptIn && input.enabled === true,
+    injectionOptInVersion: 参考图注入选择加入版本,
     sdWebuiDenoisingStrength: Math.max(0.05, Math.min(0.95, Number(input.sdWebuiDenoisingStrength ?? defaults.sdWebuiDenoisingStrength) || defaults.sdWebuiDenoisingStrength)),
     enableComfyWorkflowReference: input.enableComfyWorkflowReference === true,
     enableOpenAICompatibleReference: input.enableOpenAICompatibleReference === true,

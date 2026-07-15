@@ -27,6 +27,7 @@ import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
 import { loadSetting } from '@/services/dbService';
+import { clearWorkflowRecoveryJournal, isWorkflowRecoveryComplete } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
@@ -38,6 +39,7 @@ import { 归一化剧情节点列表 } from '@/models/plot';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
 
@@ -331,6 +333,16 @@ async function applySaveToState(
   const safeTraveler = normalizeSavedTraveler(save.旅人, safeWorld.当前日期);
   const safeGameSettings = normalizeSavedGameSettings(save.gameSettings);
 
+  if (state.interruptedWorkflow) {
+    if (isWorkflowRecoveryComplete(state.interruptedWorkflow, safeChatHistory)) {
+      await clearWorkflowRecoveryJournal(state.interruptedWorkflow.workflowId);
+      state.setInterruptedWorkflow(null);
+      if (state.workflowHint.startsWith('上次生成被浏览器中断')) state.setWorkflowHint('');
+    } else {
+      state.setWorkflowHint('上次生成被浏览器中断，输入已恢复；请检查存档后重新发送。');
+    }
+  }
+
   state.set旅人(safeTraveler);
   state.set世界(safeWorld);
   state.setChatHistory(safeChatHistory);
@@ -351,7 +363,7 @@ async function applySaveToState(
   await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));
   state.setNPC(归一化NPC记录列表(save.NPC));   // 旧存档/AI 半成品对象统一兜底
-  state.set相册(归一化相册系统(save.相册));
+  state.set相册(materializeAlbumRuntimePayload(归一化相册系统(save.相册)));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(归一化剧情节点列表(save.剧情)); // 旧存档与 AI 半成品对象统一兜底
   const normalizedStoryWeaving = alignStoryWeavingToOpeningArchive(

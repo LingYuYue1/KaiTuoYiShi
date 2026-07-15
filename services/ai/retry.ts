@@ -1,3 +1,5 @@
+import { isNonRetryableAIError } from './deepSeekRecovery';
+
 export interface RetryOptions {
   retries?: number;
   label?: string;
@@ -6,7 +8,7 @@ export interface RetryOptions {
 }
 
 function shouldStopRetry(err: unknown, signal?: AbortSignal): boolean {
-  return (err as Error)?.name === 'AbortError' || signal?.aborted === true;
+  return isNonRetryableAIError(err) || (err as Error)?.name === 'AbortError' || signal?.aborted === true;
 }
 
 export async function withRetries<T>(task: () => Promise<T>, options: RetryOptions = {}): Promise<T> {

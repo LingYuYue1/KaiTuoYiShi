@@ -1,5 +1,13 @@
 import fs from 'node:fs';
 
+function normalizeSource(source) {
+  return source.replace(/\r\n?/g, '\n');
+}
+
+function readSource(path) {
+  return normalizeSource(fs.readFileSync(path, 'utf8'));
+}
+
 function assert(condition, message) {
   if (!condition) {
     console.error(`[save-delete-regression] ${message}`);
@@ -7,15 +15,17 @@ function assert(condition, message) {
   }
 }
 
-const dbService = fs.readFileSync('services/dbService.ts', 'utf8');
-const saveLoadWorkflow = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
-const saveModal = fs.readFileSync('components/features/SaveLoad/SaveLoadModal.tsx', 'utf8');
-const storageManager = fs.readFileSync('components/features/Settings/StorageManager.tsx', 'utf8');
+const dbService = readSource('services/dbService.ts');
+const saveLoadWorkflow = readSource('hooks/useGame/saveLoadWorkflow.ts');
+const saveModal = readSource('components/features/SaveLoad/SaveLoadModal.tsx');
+const storageManager = readSource('components/features/Settings/StorageManager.tsx');
 const loadLatestBody = dbService.match(/export async function loadLatestSave\(\): Promise<[^]+?\n}\n/)?.[0] ?? '';
 const saveModalDeleteBody = saveModal.match(/const handleDelete = async \(id: number\) => \{[^]+?\n  \};\n\n  const handleDeleteTree/)?.[0] ?? '';
 const saveModalDeleteTreeBody = saveModal.match(/const handleDeleteTree = async \(rootId: string, nodeCount: number\) => \{[^]+?\n  \};\n\n  const handleExport/)?.[0] ?? '';
 const storageDeleteBody = storageManager.match(/const handleDelete = async \(id: number\) => \{[^]+?\n  \};\n\n  const handleDeleteTree/)?.[0] ?? '';
 const storageDeleteTreeBody = storageManager.match(/const handleDeleteTree = async \(rootId: string, nodeCount: number\) => \{[^]+?\n  \};\n\n  const handleExport/)?.[0] ?? '';
+
+assert(normalizeSource('LF\nCRLF\r\nCR\r') === 'LF\nCRLF\nCR\n', 'source normalization must support LF, CRLF, and CR.');
 
 assert(dbService.includes('export async function deleteSaveTree(rootId: string)'), 'dbService must expose deleteSaveTree(rootId).');
 assert(dbService.includes('await ensureSaveSummaries(db, Infinity);'), 'deleteSaveTree must rebuild missing summaries before collecting tree nodes.');
