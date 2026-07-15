@@ -21,9 +21,15 @@ import { wrapLegacyAdvanceTurn, buildCommittedSessionView } from '@/src/kernel/a
 import { executeTurnIntent } from '@/src/ui/kernelClient';
 
 /**
- * Composition-root kernel mode (Phase 1).
+ * Composition-root kernel mode (Phase 2).
  * ONLY place that chooses legacy vs native. Rollback: keep `"legacy"`.
  * Do not move this flag into components, domain, or adapters.
+ *
+ * Production default stays `"legacy"` because full SessionRepository
+ * (IndexedDB game graph) is Phase 3. To exercise native AdvanceTurn:
+ * - tests: createKernel('native-turn', { native: { sessions, model } })
+ * - future flip: set KERNEL_MODE = 'native-turn' AND supply native ports
+ *   (real ModelGateway + host SessionRepository) in getKernel() — no dual-write.
  */
 const KERNEL_MODE: KernelMode = 'legacy';
 

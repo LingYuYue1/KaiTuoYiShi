@@ -1,11 +1,13 @@
 /**
- * Composition-root kernel factory (Phase 1).
+ * Composition-root kernel factory (Phase 2).
  *
  * Mode selection lives ONLY here (or at the single call site next to createKernel).
  * Components, hooks (except factory injection), domain, and adapters must not
  * branch on legacy vs native.
  *
  * Rollback: keep mode `"legacy"`.
+ * Production default remains `"legacy"` until Phase 3 SessionRepository
+ * owns full game state (IndexedDB). Tests construct `"native-turn"` directly.
  */
 
 import type { IKernel } from '@/src/kernel/contract';
@@ -13,18 +15,22 @@ import {
   LegacyKernelAdapter,
   type LegacyKernelDependencies,
 } from '@/src/kernel/adapters/legacy/LegacyKernelAdapter';
+import { NativeKernel, type NativeKernelDependencies } from '@/src/kernel/NativeKernel';
 
 export type KernelMode = 'legacy' | 'native-turn';
 
 export type KernelDependencies = Readonly<{
-  legacy: LegacyKernelDependencies;
+  /** Required for `"legacy"` mode. Optional transitional fallback for native non-advance. */
+  legacy?: LegacyKernelDependencies;
+  /** Required for `"native-turn"` mode. */
+  native?: NativeKernelDependencies;
 }>;
 
 /**
  * Create an IKernel for the given mode.
  *
  * - `"legacy"` → LegacyKernelAdapter (production default)
- * - `"native-turn"` → stub that rejects all executes (Phase 2 lands real native)
+ * - `"native-turn"` → NativeKernel owning AdvanceTurn via executeTurn
  *
  * Does not dual-write; only one authority is returned.
  */
@@ -33,10 +39,26 @@ export async function createKernel(
   dependencies: KernelDependencies,
 ): Promise<IKernel> {
   switch (mode) {
-    case 'legacy':
+    case 'legacy': {
+      if (!dependencies.legacy) {
+        throw new Error('createKernel("legacy") requires dependencies.legacy');
+      }
       return new LegacyKernelAdapter(dependencies.legacy);
-    case 'native-turn':
-      return new NativeTurnStubKernel();
+    }
+    case 'native-turn': {
+      if (!dependencies.native) {
+        throw new Error(
+          'createKernel("native-turn") requires dependencies.native ' +
+            '(sessions: SessionRepository, model: ModelGateway)',
+        );
+      }
+      return new NativeKernel({
+        sessions: dependencies.native.sessions,
+        model: dependencies.native.model,
+        // Optional transitional fallback for non-advance only.
+        legacy: dependencies.native.legacy ?? dependencies.legacy,
+      });
+    }
     default: {
       const _exhaustive: never = mode;
       throw new Error(`Unknown kernel mode: ${String(_exhaustive)}`);
@@ -44,27 +66,4 @@ export async function createKernel(
   }
 }
 
-/**
- * Phase 1 stub: native path is not implemented.
- * Explicitly rejects rather than silently falling back to legacy.
- */
-class NativeTurnStubKernel implements IKernel {
-  async *execute(command: import('@/src/kernel/contract').CommandEnvelope) {
-    yield {
-      type: 'rejected' as const,
-      commandId: command.commandId,
-      error: {
-        code: 'not_implemented' as const,
-        message:
-          'Native Kernel is not implemented in Phase 1. Use createKernel("legacy") at the composition root.',
-        details: { mode: 'native-turn' },
-      },
-    };
-  }
-
-  async read(): Promise<never> {
-    throw new Error(
-      'Native Kernel is not implemented in Phase 1. Use createKernel("legacy") at the composition root.',
-    );
-  }
-}
+export type { NativeKernelDependencies };
