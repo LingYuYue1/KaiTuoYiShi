@@ -1,7 +1,9 @@
 /**
- * IKernel command envelope contract (Phase 1 / Stage 5.1).
+ * IKernel command envelope contract (Phase 1 / Stage 5.1 / 5.3).
  * Must not import old models, services, hooks, or UI types.
  */
+
+import type { KernelNewsGenerationPatch } from '@/src/kernel/domain/news/types';
 
 export type CommandId = string & { readonly __brand: 'CommandId' };
 export type SessionId = string & { readonly __brand: 'SessionId' };
@@ -45,12 +47,45 @@ export type ApplyVariables = Readonly<{
   }>[];
 }>;
 
+/**
+ * Phone contact reply (Stage 5.3).
+ * Application: ensureThread → buildPhonePrompt → model.complete → appendPhoneReply → CAS.
+ */
+export type PhoneReply = Readonly<{
+  type: 'phone.reply';
+  contactId: string;
+  contactName: string;
+  userText: string;
+}>;
+
+/**
+ * Apply a pre-parsed news patch (Stage 5.3).
+ * Host / tests supply KernelNewsGenerationPatch; single CAS.
+ */
+export type NewsApply = Readonly<{
+  type: 'news.apply';
+  patch: KernelNewsGenerationPatch;
+}>;
+
+/**
+ * Generate news via model.complete → parse → applyNewsPatch → CAS (Stage 5.3).
+ */
+export type NewsGenerate = Readonly<{
+  type: 'news.generate';
+}>;
+
 export type CreateSession = Readonly<{
   type: 'session.create';
   presetId: string;
 }>;
 
-export type SessionCommand = AdvanceTurn | RerollTurn | ApplyVariables;
+export type SessionCommand =
+  | AdvanceTurn
+  | RerollTurn
+  | ApplyVariables
+  | PhoneReply
+  | NewsApply
+  | NewsGenerate;
 
 export type SessionCommandEnvelope = Readonly<{
   protocolVersion: 1;
@@ -78,4 +113,16 @@ export type RerollTurnEnvelope = SessionCommandEnvelope & {
 
 export type ApplyVariablesEnvelope = SessionCommandEnvelope & {
   readonly command: ApplyVariables;
+};
+
+export type PhoneReplyEnvelope = SessionCommandEnvelope & {
+  readonly command: PhoneReply;
+};
+
+export type NewsApplyEnvelope = SessionCommandEnvelope & {
+  readonly command: NewsApply;
+};
+
+export type NewsGenerateEnvelope = SessionCommandEnvelope & {
+  readonly command: NewsGenerate;
 };

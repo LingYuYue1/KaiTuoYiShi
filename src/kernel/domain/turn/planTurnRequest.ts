@@ -4,10 +4,13 @@
  * Phase 2 vertical slice uses a minimal prompt (not the full tavern chain).
  * Full systemPromptBuilder / tavernMessageChainBuilder migration is later.
  * Stage 5.1 includes traveler profile fields from formal variables.
+ * Stage 5.2 injects local yiting + story + unlocked zhiku via
+ * buildKnowledgeInjection (pure domain; no model-side yiting recall).
  */
 
 import type { ModelRequest } from '@/src/kernel/ports/ModelGateway';
 import type { GameState } from '@/src/kernel/domain/session/types';
+import { buildKnowledgeInjection } from '@/src/kernel/domain/knowledge';
 
 export type AdvanceTurnInput = Readonly<{
   text: string;
@@ -56,10 +59,18 @@ function buildMinimalPrompt(state: GameState, playerText: string): string {
     t.背景 ? `旅人背景: ${t.背景}` : '',
   ].filter((line) => line.length > 0);
 
+  const knowledgeBlock = buildKnowledgeInjection({
+    yiting: state.knowledge.yiting,
+    zhiku: state.knowledge.zhiku,
+    story: state.knowledge.story,
+    query: playerText,
+  });
+
   return [
     '你是叙事引擎。根据玩家输入推进一回合叙事。',
     `当前回合序号: ${state.turnCount}`,
     ...profileLines,
+    knowledgeBlock ? `知识上下文:\n${knowledgeBlock}` : '',
     historyBlock ? `近期对话:\n${historyBlock}` : '',
     `玩家: ${playerText}`,
     '输出纯叙事正文。如需变量，可附带 <变量更新>...</变量更新> 块。',

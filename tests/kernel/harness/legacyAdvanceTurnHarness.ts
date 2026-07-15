@@ -103,6 +103,14 @@ function toView(snapshot: SessionSnapshot): SessionView {
       背景: '',
       数值属性: {},
     },
+    knowledge: {
+      yitingEntryCount: 0,
+      zhikuEntryCount: 0,
+      storyArchiveCount: 0,
+      unlockedZhikuTitles: [],
+    },
+    phone: { threadCount: 0, messageCount: 0, lastMessages: [] },
+    news: { entryCount: 0, latestTitles: [] },
   };
 }
 

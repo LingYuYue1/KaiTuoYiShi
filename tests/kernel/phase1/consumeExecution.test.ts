@@ -11,6 +11,9 @@ import {
   type ExecutionFrame,
   type IKernel,
   type SessionView,
+  createEmptyKnowledgeView,
+  createEmptyNewsView,
+  createEmptyPhoneView,
   createTravelerVariablesView,
 } from '@/src/kernel/contract';
 import { consumeExecution, type ExecutionSink } from '@/src/ui/kernelClient';
@@ -27,6 +30,9 @@ function makeView(revision: number): SessionView {
     ],
     travelerName: '开拓者',
     travelerVariables: createTravelerVariablesView(),
+    knowledge: createEmptyKnowledgeView(),
+    phone: createEmptyPhoneView(),
+    news: createEmptyNewsView(),
   };
 }
 

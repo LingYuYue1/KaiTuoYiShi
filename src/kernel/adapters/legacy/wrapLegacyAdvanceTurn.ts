@@ -11,7 +11,12 @@ import type {
   KernelError,
   SessionView,
 } from '@/src/kernel/contract';
-import { asRevision } from '@/src/kernel/contract';
+import {
+  asRevision,
+  createEmptyKnowledgeView,
+  createEmptyNewsView,
+  createEmptyPhoneView,
+} from '@/src/kernel/contract';
 
 export type LegacyAdvanceTurnEvents = Readonly<{
   /**
@@ -182,6 +187,7 @@ async function* iterateLegacyAdvanceTurn(
  * revision is a linear formal-commit counter owned by the host for Phase 1.
  * Stage 5.1: travelerName / travelerVariables default for legacy hosts that
  * do not yet project the formal variable slice.
+ * Stage 5.2: knowledge defaults to empty counts (legacy hosts do not own formal knowledge yet).
  */
 export function buildCommittedSessionView(input: {
   sessionId: SessionView['sessionId'];
@@ -195,6 +201,7 @@ export function buildCommittedSessionView(input: {
   commandId: string;
   travelerName?: string;
   travelerVariables?: SessionView['travelerVariables'];
+  knowledge?: SessionView['knowledge'];
 }): SessionView {
   const turns =
     input.turns ??
@@ -214,6 +221,7 @@ export function buildCommittedSessionView(input: {
     背景: '',
     数值属性: {},
   };
+  const knowledge = input.knowledge ?? createEmptyKnowledgeView();
   return {
     sessionId: input.sessionId,
     revision: asRevision(input.revision),
@@ -222,6 +230,9 @@ export function buildCommittedSessionView(input: {
     messages: input.messages,
     travelerName,
     travelerVariables,
+    knowledge,
+    phone: createEmptyPhoneView(),
+    news: createEmptyNewsView(),
     ...(input.lastProgressTexts ? { lastProgressTexts: input.lastProgressTexts } : {}),
   };
 }

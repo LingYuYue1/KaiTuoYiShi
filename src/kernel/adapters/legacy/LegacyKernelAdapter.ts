@@ -5,7 +5,12 @@
  * Must NOT introduce new business rules; translation only.
  */
 
-import { createTravelerVariablesView } from '@/src/kernel/contract';
+import {
+  createEmptyKnowledgeView,
+  createEmptyNewsView,
+  createEmptyPhoneView,
+  createTravelerVariablesView,
+} from '@/src/kernel/contract';
 import type {
   AdvanceTurnEnvelope,
   CommandEnvelope,
@@ -150,6 +155,9 @@ export function sessionViewFromHost(input: {
     messages: input.messages,
     travelerName,
     travelerVariables: createTravelerVariablesView(travelerName),
+    knowledge: createEmptyKnowledgeView(),
+    phone: createEmptyPhoneView(),
+    news: createEmptyNewsView(),
     ...(input.lastProgressTexts ? { lastProgressTexts: input.lastProgressTexts } : {}),
   };
 }

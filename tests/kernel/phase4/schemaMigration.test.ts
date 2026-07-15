@@ -45,6 +45,15 @@ describe('session schema migration (Phase 4.3)', () => {
     expect(migrated.state.turnCount).toBe(3);
     expect(migrated.state.travelerName).toBe('开拓者');
     expect(migrated.state.turns[0]?.travelerNameBefore).toBeNull();
+    // Stage 5.2: missing knowledge defaults to empty slice
+    expect(migrated.state.knowledge.zhiku.entries).toEqual([]);
+    expect(migrated.state.knowledge.yiting.entries).toEqual([]);
+    expect(migrated.state.knowledge.story.archives).toEqual([]);
+    expect(migrated.state.knowledge.memory.recentSummaries).toEqual([]);
+    expect(migrated.state.turns[0]?.knowledgeBefore).toBeNull();
+    // Stage 5.3: missing phone/news defaults to empty systems
+    expect(migrated.state.phone.threads).toEqual([]);
+    expect(migrated.state.news.entries).toEqual([]);
   });
 
   it('current v1 package is identity-migrated', () => {
@@ -57,6 +66,7 @@ describe('session schema migration (Phase 4.3)', () => {
     const migrated = migrateSessionRecord(v1);
     expect(migrated.schemaVersion).toBe(1);
     expect(migrated.state.travelerName).toBe('星');
+    expect(migrated.state.knowledge.zhiku.entries).toEqual([]);
   });
 
   it('future schemaVersion is rejected clearly', () => {

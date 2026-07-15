@@ -1,5 +1,5 @@
 /**
- * Session persistence schema versioning (Phase 4 / Stage 5.1).
+ * Session persistence schema versioning (Phase 4 / Stage 5.1 / 5.2 / 5.3).
  *
  * - Every durable snapshot carries schemaVersion.
  * - Migration runs once at repository / import ingress.
@@ -7,10 +7,38 @@
  *   lossless when old code cannot read the new schema.
  * - Single schemaVersion on write — no indefinite dual-schema write.
  * - Stage 5.1: still schemaVersion 1; missing `variables` filled from travelerName.
+ * - Stage 5.2: still schemaVersion 1; missing `knowledge` filled with empty defaults.
+ * - Stage 5.3: still schemaVersion 1; missing `phone` / `news` filled with empty constructors.
  */
 
-import type { GameState } from './types';
-import { cloneGameState } from './types';
+import type { GameState, KernelKnowledge } from './types';
+import {
+  cloneGameState,
+  cloneKernelKnowledge,
+  createEmptyKernelKnowledge,
+} from './types';
+import type {
+  KernelStoryArchive,
+  KernelYitingEntry,
+  KernelZhikuEntry,
+} from '@/src/kernel/domain/knowledge/types';
+import type {
+  KernelNewsEntry,
+  KernelNewsSystem,
+} from '@/src/kernel/domain/news/types';
+import {
+  cloneKernelNews,
+  createEmptyKernelNews,
+} from '@/src/kernel/domain/news/types';
+import type {
+  KernelPhoneMessage,
+  KernelPhoneSystem,
+  KernelPhoneThread,
+} from '@/src/kernel/domain/phone/types';
+import {
+  cloneKernelPhone,
+  createEmptyKernelPhone,
+} from '@/src/kernel/domain/phone/types';
 import type { KernelVariables } from '@/src/kernel/domain/variables/types';
 import {
   cloneKernelVariables,
@@ -56,7 +84,7 @@ export function migrateSessionRecord(raw: unknown): MigratedSessionRecord {
     );
   }
 
-  // v0 (missing schemaVersion) and v1 share GameState; variables may be absent.
+  // v0 (missing schemaVersion) and v1 share GameState; variables/knowledge may be absent.
   const state = readGameState(record.state);
 
   return {
@@ -120,6 +148,9 @@ function readGameState(raw: unknown): GameState {
   const state = raw as Record<string, unknown>;
   const travelerName = requireString(state.travelerName, 'state.travelerName');
   const variables = readVariables(state.variables, travelerName);
+  const knowledge = readKnowledge(state.knowledge, 'state.knowledge');
+  const phone = readPhone(state.phone, 'state.phone');
+  const news = readNews(state.news, 'state.news');
 
   return cloneGameState(
     {
@@ -128,6 +159,9 @@ function readGameState(raw: unknown): GameState {
       turns: readTurns(state.turns),
       travelerName,
       variables,
+      knowledge,
+      phone,
+      news,
     },
   );
 }
@@ -180,6 +214,325 @@ function readVariables(raw: unknown, travelerName: string): KernelVariables {
   return withTravelerName(variables, travelerName);
 }
 
+function readKnowledge(raw: unknown, field: string): KernelKnowledge {
+  if (raw === undefined || raw === null) {
+    // Pre-Stage-5.2 rows: empty knowledge slice.
+    return createEmptyKernelKnowledge();
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object when present`,
+      { field },
+    );
+  }
+
+  const root = raw as Record<string, unknown>;
+  return createEmptyKernelKnowledge({
+    zhiku: { entries: readZhikuEntries(root.zhiku, `${field}.zhiku`) },
+    yiting: { entries: readYitingEntries(root.yiting, `${field}.yiting`) },
+    story: readStoryProgress(root.story, `${field}.story`),
+    memory: readMemoryTier(root.memory, `${field}.memory`),
+  });
+}
+
+function readZhikuEntries(raw: unknown, field: string): KernelZhikuEntry[] {
+  if (raw === undefined || raw === null) return [];
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object`,
+      { field },
+    );
+  }
+  const system = raw as Record<string, unknown>;
+  if (system.entries === undefined) return [];
+  if (!Array.isArray(system.entries)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field}.entries must be an array`,
+      { field: `${field}.entries` },
+    );
+  }
+  return system.entries.map((entry, index) => {
+    if (entry === null || typeof entry !== 'object') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}.entries[${index}] must be an object`,
+        { field: `${field}.entries[${index}]` },
+      );
+    }
+    const e = entry as Record<string, unknown>;
+    return {
+      id: requireString(e.id, `${field}.entries[${index}].id`),
+      title: requireString(e.title, `${field}.entries[${index}].title`),
+      category: requireString(e.category, `${field}.entries[${index}].category`),
+      unlockStatus: requireString(e.unlockStatus, `${field}.entries[${index}].unlockStatus`),
+      runtimeUnlockStatus: optionalStringOrUndefined(e.runtimeUnlockStatus),
+      runtimeUnlockNote: optionalStringOrUndefined(e.runtimeUnlockNote),
+      usableForLink: typeof e.usableForLink === 'boolean' ? e.usableForLink : undefined,
+      unlockCondition: optionalStringOrUndefined(e.unlockCondition),
+      relatedSegment: optionalStringOrUndefined(e.relatedSegment),
+      body: optionalStringOrUndefined(e.body),
+      keywords: readOptionalStringArray(e.keywords, `${field}.entries[${index}].keywords`),
+    };
+  });
+}
+
+function readYitingEntries(raw: unknown, field: string): KernelYitingEntry[] {
+  if (raw === undefined || raw === null) return [];
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object`,
+      { field },
+    );
+  }
+  const system = raw as Record<string, unknown>;
+  if (system.entries === undefined) return [];
+  if (!Array.isArray(system.entries)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field}.entries must be an array`,
+      { field: `${field}.entries` },
+    );
+  }
+  return system.entries.map((entry, index) => {
+    if (entry === null || typeof entry !== 'object') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}.entries[${index}] must be an object`,
+        { field: `${field}.entries[${index}]` },
+      );
+    }
+    const e = entry as Record<string, unknown>;
+    return {
+      id: requireString(e.id, `${field}.entries[${index}].id`),
+      name: requireString(e.name, `${field}.entries[${index}].name`),
+      turn: requireNonNegativeInt(e.turn, `${field}.entries[${index}].turn`),
+      summary: requireString(e.summary, `${field}.entries[${index}].summary`),
+      raw: optionalStringOrUndefined(e.raw),
+      keywords: readOptionalStringArray(e.keywords, `${field}.entries[${index}].keywords`),
+      type: optionalStringOrUndefined(e.type),
+    };
+  });
+}
+
+function readStoryProgress(
+  raw: unknown,
+  field: string,
+): KernelKnowledge['story'] {
+  if (raw === undefined || raw === null) return { archives: [] };
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object`,
+      { field },
+    );
+  }
+  const story = raw as Record<string, unknown>;
+  const archivesRaw = story.archives;
+  const archives: KernelStoryArchive[] = [];
+  if (archivesRaw !== undefined) {
+    if (!Array.isArray(archivesRaw)) {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}.archives must be an array`,
+        { field: `${field}.archives` },
+      );
+    }
+    for (let index = 0; index < archivesRaw.length; index += 1) {
+      const item = archivesRaw[index];
+      if (item === null || typeof item !== 'object') {
+        throw new SessionSchemaError(
+          'invalid_field',
+          `Session record.${field}.archives[${index}] must be an object`,
+          { field: `${field}.archives[${index}]` },
+        );
+      }
+      const a = item as Record<string, unknown>;
+      archives.push({
+        segmentTitle: requireString(a.segmentTitle, `${field}.archives[${index}].segmentTitle`),
+        summary: optionalStringOrUndefined(a.summary),
+        body: optionalStringOrUndefined(a.body),
+      });
+    }
+  }
+  return {
+    archives,
+    injectionHint: optionalStringOrUndefined(story.injectionHint),
+  };
+}
+
+function readMemoryTier(
+  raw: unknown,
+  field: string,
+): KernelKnowledge['memory'] {
+  if (raw === undefined || raw === null) return { recentSummaries: [] };
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object`,
+      { field },
+    );
+  }
+  const memory = raw as Record<string, unknown>;
+  return {
+    recentSummaries: readOptionalStringArray(memory.recentSummaries, `${field}.recentSummaries`) ?? [],
+  };
+}
+
+/**
+ * Stage 5.3 ingress: missing phone → empty system (one place only).
+ */
+function readPhone(raw: unknown, field: string): KernelPhoneSystem {
+  if (raw === undefined || raw === null) {
+    return createEmptyKernelPhone();
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object when present`,
+      { field },
+    );
+  }
+  const root = raw as Record<string, unknown>;
+  if (root.threads === undefined) {
+    return createEmptyKernelPhone();
+  }
+  if (!Array.isArray(root.threads)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field}.threads must be an array`,
+      { field: `${field}.threads` },
+    );
+  }
+  return cloneKernelPhone({
+    threads: root.threads.map((item, index) =>
+      readPhoneThread(item, `${field}.threads[${index}]`),
+    ),
+  });
+}
+
+function readPhoneThread(raw: unknown, field: string): KernelPhoneThread {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object`,
+      { field },
+    );
+  }
+  const thread = raw as Record<string, unknown>;
+  const messagesRaw = thread.messages;
+  if (!Array.isArray(messagesRaw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field}.messages must be an array`,
+      { field: `${field}.messages` },
+    );
+  }
+  return {
+    contactId: requireString(thread.contactId, `${field}.contactId`),
+    contactName: requireString(thread.contactName, `${field}.contactName`),
+    messages: messagesRaw.map((item, index) =>
+      readPhoneMessage(item, `${field}.messages[${index}]`),
+    ),
+  };
+}
+
+function readPhoneMessage(raw: unknown, field: string): KernelPhoneMessage {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object`,
+      { field },
+    );
+  }
+  const message = raw as Record<string, unknown>;
+  if (
+    message.role !== 'user'
+    && message.role !== 'contact'
+    && message.role !== 'system'
+  ) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field}.role must be "user", "contact", or "system"`,
+      { field: `${field}.role` },
+    );
+  }
+  return {
+    id: requireString(message.id, `${field}.id`),
+    role: message.role,
+    contactId: requireString(message.contactId, `${field}.contactId`),
+    content: requireString(message.content, `${field}.content`),
+    turn: requireNonNegativeInt(message.turn, `${field}.turn`),
+  };
+}
+
+/**
+ * Stage 5.3 ingress: missing news → empty system (one place only).
+ */
+function readNews(raw: unknown, field: string): KernelNewsSystem {
+  if (raw === undefined || raw === null) {
+    return createEmptyKernelNews();
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object when present`,
+      { field },
+    );
+  }
+  const root = raw as Record<string, unknown>;
+  if (root.entries === undefined) {
+    return createEmptyKernelNews();
+  }
+  if (!Array.isArray(root.entries)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field}.entries must be an array`,
+      { field: `${field}.entries` },
+    );
+  }
+  return cloneKernelNews({
+    entries: root.entries.map((item, index) =>
+      readNewsEntry(item, `${field}.entries[${index}]`),
+    ),
+  });
+}
+
+function readNewsEntry(raw: unknown, field: string): KernelNewsEntry {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object`,
+      { field },
+    );
+  }
+  const entry = raw as Record<string, unknown>;
+  return {
+    id: requireString(entry.id, `${field}.id`),
+    title: requireString(entry.title, `${field}.title`),
+    body: typeof entry.body === 'string'
+      ? entry.body
+      : requireString(entry.body, `${field}.body`),
+    issueNumber: requireNonNegativeInt(entry.issueNumber, `${field}.issueNumber`),
+    createdAtTurn: requireNonNegativeInt(entry.createdAtTurn, `${field}.createdAtTurn`),
+  };
+}
+
+function readOptionalStringArray(raw: unknown, field: string): string[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw) || raw.some((item) => typeof item !== 'string')) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be a string array`,
+      { field },
+    );
+  }
+  return raw;
+}
+
 function readNumericAttrs(raw: unknown): Readonly<Record<string, number>> {
   if (raw === null || raw === undefined) return {};
   if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -200,6 +553,10 @@ function readNumericAttrs(raw: unknown): Readonly<Record<string, number>> {
 
 function optionalString(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function optionalStringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function readMessages(value: unknown): GameState['messages'] {
@@ -246,6 +603,7 @@ function readTurns(value: unknown): GameState['turns'] {
       narrativeText: requireString(turn.narrativeText, `state.turns[${index}].narrativeText`),
       travelerNameBefore: readTravelerNameBefore(turn, index),
       variablesBefore: readVariablesBefore(turn, index),
+      knowledgeBefore: readKnowledgeBefore(turn, index),
     };
   });
 }
@@ -288,6 +646,21 @@ function readVariablesBefore(
   const nameHint =
     typeof turn.travelerNameBefore === 'string' ? turn.travelerNameBefore : '开拓者';
   return cloneKernelVariables(readVariables(turn.variablesBefore, nameHint));
+}
+
+function readKnowledgeBefore(
+  turn: Record<string, unknown>,
+  index: number,
+): KernelKnowledge | null {
+  if (!('knowledgeBefore' in turn) || turn.knowledgeBefore === undefined) {
+    return null;
+  }
+  if (turn.knowledgeBefore === null) {
+    return null;
+  }
+  return cloneKernelKnowledge(
+    readKnowledge(turn.knowledgeBefore, `state.turns[${index}].knowledgeBefore`),
+  );
 }
 
 function invalidMessage(index: number, reason: string): SessionSchemaError {

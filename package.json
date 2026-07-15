@@ -55,6 +55,8 @@
     "test:kernel:phase4": "vitest run tests/kernel/phase4",
     "test:kernel:phase5": "vitest run tests/kernel/phase5",
     "test:kernel:phase5.1": "vitest run tests/kernel/phase5",
+    "test:kernel:phase5.2": "vitest run tests/kernel/phase5/stage52 tests/kernel/phase5/knowledge tests/kernel/phase5/narrative",
+    "test:kernel:phase5.3": "vitest run tests/kernel/phase5/stage53",
     "test:settings-save": "node scripts/settings-save-regression.mjs",
     "test:extra-features": "node scripts/extra-features-regression.mjs",
     "test:action-options": "node scripts/action-options-cleanup-regression.mjs",

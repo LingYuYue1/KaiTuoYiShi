@@ -3,14 +3,18 @@
  *
  * Linear history only — no revision tree. Rerolling turn N discards
  * turns N+1…end (suffix truncate). Operates on formal GameState
- * (messages / turns / turnCount / travelerName / variables).
+ * (messages / turns / turnCount / travelerName / variables / knowledge).
  *
  * A migrated turn without a recorded base name cannot be rerolled: guessing
  * from the current suffix would retain discarded formal state.
  */
 
 import type { GameState, KernelTurn, SessionSnapshot } from '@/src/kernel/domain/session/types';
-import { cloneGameState } from '@/src/kernel/domain/session/types';
+import {
+  cloneGameState,
+  cloneKernelKnowledge,
+  createEmptyKernelKnowledge,
+} from '@/src/kernel/domain/session/types';
 import {
   cloneKernelVariables,
   createEmptyKernelVariables,
@@ -70,12 +74,20 @@ export function findTurnBaseSnapshot(
     : createEmptyKernelVariables({
       旅人: { 姓名: originalTurn.travelerNameBefore },
     });
+  // Pre-Stage-5.2 turns lack knowledgeBefore → empty knowledge baseline.
+  const baseKnowledge = originalTurn.knowledgeBefore
+    ? cloneKernelKnowledge(originalTurn.knowledgeBefore)
+    : createEmptyKernelKnowledge();
+  // Phone/news are not turn-scoped snapshots yet; keep current session values.
   const baseState: GameState = cloneGameState({
     turnCount: prefixTurns.length + 1,
     messages: prefixMessages,
     turns: prefixTurns,
     travelerName: originalTurn.travelerNameBefore,
     variables: baseVariables,
+    knowledge: baseKnowledge,
+    phone: snapshot.state.phone,
+    news: snapshot.state.news,
   });
 
   return {

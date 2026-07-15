@@ -35,6 +35,14 @@ function baseView(overrides?: Partial<SessionView>): SessionView {
       背景: '',
       数值属性: {},
     },
+    knowledge: overrides?.knowledge ?? {
+      yitingEntryCount: 0,
+      zhikuEntryCount: 0,
+      storyArchiveCount: 0,
+      unlockedZhikuTitles: [],
+    },
+    phone: overrides?.phone ?? { threadCount: 0, messageCount: 0, lastMessages: [] },
+    news: overrides?.news ?? { entryCount: 0, latestTitles: [] },
     ...overrides,
   };
 }

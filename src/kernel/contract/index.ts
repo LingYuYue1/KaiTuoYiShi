@@ -12,6 +12,12 @@ export type {
   CommandId,
   CreateSession,
   CreateSessionEnvelope,
+  NewsApply,
+  NewsApplyEnvelope,
+  NewsGenerate,
+  NewsGenerateEnvelope,
+  PhoneReply,
+  PhoneReplyEnvelope,
   Revision,
   RerollTurn,
   RerollTurnEnvelope,
@@ -34,6 +40,9 @@ export type { KernelError, KernelErrorCode } from './errors';
 export type { KernelQuery } from './queries';
 
 export type {
+  KnowledgeView,
+  NewsView,
+  PhoneView,
   QueryResult,
   SessionMessageView,
   SessionView,
@@ -41,6 +50,11 @@ export type {
   TravelerVariablesView,
   TurnView,
 } from './projections';
-export { createTravelerVariablesView } from './projections';
+export {
+  createEmptyKnowledgeView,
+  createEmptyNewsView,
+  createEmptyPhoneView,
+  createTravelerVariablesView,
+} from './projections';
 
 export type { IKernel } from './IKernel';

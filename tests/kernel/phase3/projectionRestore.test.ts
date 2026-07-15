@@ -164,6 +164,14 @@ describe('projection restore via kernel.read', () => {
         背景: '',
         数值属性: {},
       },
+      knowledge: {
+        yitingEntryCount: 0,
+        zhikuEntryCount: 0,
+        storyArchiveCount: 0,
+        unlockedZhikuTitles: [],
+      },
+      phone: { threadCount: 0, messageCount: 0, lastMessages: [] },
+      news: { entryCount: 0, latestTitles: [] },
     });
     projection = applyExecutionFrame(projection, {
       type: 'progress',
@@ -188,6 +196,14 @@ describe('projection restore via kernel.read', () => {
         背景: '',
         数值属性: {},
       },
+      knowledge: {
+        yitingEntryCount: 0,
+        zhikuEntryCount: 0,
+        storyArchiveCount: 0,
+        unlockedZhikuTitles: [],
+      },
+      phone: { threadCount: 0, messageCount: 0, lastMessages: [] },
+      news: { entryCount: 0, latestTitles: [] },
     };
     projection = commitProjectionView(projection, asCommandId('c'), view);
     expect(projection.progress).toBeNull();

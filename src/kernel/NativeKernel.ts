@@ -4,10 +4,12 @@
  * - turn.advance → executeTurn only (never legacy)
  * - turn.reroll → rerollTurn only (Phase 4; never legacy rewrite chain)
  * - variables.apply → applyVariables only (Stage 5.1; pure reduce + single CAS)
+ * - phone.reply → phoneReply only (Stage 5.3)
+ * - news.apply / news.generate → applyNews handlers (Stage 5.3)
  * - other commands: optional transitional legacy fallback, else not_implemented
  * - read → SessionRepository projection
  *
- * Transitional: legacy dependency is ONLY for non-advance/non-reroll/non-variables commands.
+ * Transitional: legacy dependency is ONLY for non-native commands.
  * Do not dual-write formal session.
  */
 
@@ -19,6 +21,9 @@ import type {
   ExecutionFrame,
   IKernel,
   KernelQuery,
+  NewsApplyEnvelope,
+  NewsGenerateEnvelope,
+  PhoneReplyEnvelope,
   QueryResult,
   RerollTurnEnvelope,
   SessionCommandEnvelope,
@@ -30,14 +35,16 @@ import { LegacyKernelAdapter } from '@/src/kernel/adapters/legacy/LegacyKernelAd
 import { executeTurn } from '@/src/kernel/application/executeTurn';
 import { rerollTurn } from '@/src/kernel/application/rerollTurn';
 import { applyVariables } from '@/src/kernel/application/applyVariables';
+import { phoneReply } from '@/src/kernel/application/phoneReply';
+import { applyNews, generateNews } from '@/src/kernel/application/applyNews';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
   model: ModelGateway;
   /**
-   * Transitional: non-advance/non-reroll/non-variables commands may route here.
-   * AdvanceTurn, RerollTurn, and ApplyVariables never use this.
+   * Transitional: non-native commands may route here.
+   * AdvanceTurn, RerollTurn, ApplyVariables, PhoneReply, News never use this.
    */
   legacy?: LegacyKernelDependencies;
 }>;
@@ -81,6 +88,26 @@ export class NativeKernel implements IKernel {
         // Native only (Stage 5.1) — pure reduce + single CAS; no React setters.
         yield* applyVariables(sessionEnvelope as ApplyVariablesEnvelope, {
           sessions: this.sessions,
+        });
+        return;
+      case 'phone.reply':
+        // Native only (Stage 5.3) — ensureThread + model.complete + append + CAS.
+        yield* phoneReply(sessionEnvelope as PhoneReplyEnvelope, {
+          sessions: this.sessions,
+          model: this.model,
+        });
+        return;
+      case 'news.apply':
+        // Native only (Stage 5.3) — pure patch + single CAS.
+        yield* applyNews(sessionEnvelope as NewsApplyEnvelope, {
+          sessions: this.sessions,
+        });
+        return;
+      case 'news.generate':
+        // Native only (Stage 5.3) — model.complete → parse → patch → CAS.
+        yield* generateNews(sessionEnvelope as NewsGenerateEnvelope, {
+          sessions: this.sessions,
+          model: this.model,
         });
         return;
       default: {

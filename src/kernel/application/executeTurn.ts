@@ -1,18 +1,19 @@
 /**
- * executeTurn — Native AdvanceTurn application use case (Phase 2 / Stage 5.1).
+ * executeTurn — Native AdvanceTurn application use case (Phase 2 / Stage 5.1 / 5.2).
  *
  * Pipeline:
  * 1. read base snapshot
  * 2. revision check → rejected on conflict
- * 3. plan request
+ * 3. plan request (includes buildKnowledgeInjection from formal knowledge)
  * 4. stream model frames → yield progress (no repo write)
  * 5. parse actions (narrative + candidate variable domain actions)
- * 6. reduceTurn (pure; variables via domain/variables/reduceVariables)
- * 7. compareAndSwap once — narrative + variables atomic
+ * 6. reduceTurn (pure; variables + zhiku runtime unlock)
+ * 7. compareAndSwap once — narrative + variables + knowledge unlock atomic
  * 8. yield committed OR rejected
  *
  * Error policy:
- * - model failure → rejected model_failure, state unchanged (vars unchanged)
+ * - model failure → rejected model_failure, state unchanged
+ *   (variables + knowledge unchanged)
  * - empty / illegal narrative parse → rejected (fail closed for empty narrative)
  * - illegal variable commands fail closed per command; narrative still commits
  * - CAS conflict → rejected revision_conflict
@@ -21,6 +22,7 @@
  * Variable model (services/ai/variableModel) is NOT called here — it remains
  * a host adapter that may produce candidate text. Application interprets
  * candidates via parseNarrativeActions → reduceTurn. Never writes SessionRepository.
+ * Knowledge unlock is pure and part of the same reduceTurn → one CAS.
  */
 
 import type {

@@ -19,6 +19,9 @@ import {
   asCommandId,
   asRevision,
   asSessionId,
+  createEmptyKnowledgeView,
+  createEmptyNewsView,
+  createEmptyPhoneView,
   createTravelerVariablesView,
 } from '@/src/kernel/contract';
 import { createKernel, type KernelMode } from '@/src/kernel/createKernel';
@@ -174,6 +177,9 @@ export function useGame(): UseGameReturn {
               messages,
               travelerName: s.旅人.姓名,
               travelerVariables: createTravelerVariablesView(s.旅人.姓名),
+              knowledge: createEmptyKnowledgeView(),
+              phone: createEmptyPhoneView(),
+              news: createEmptyNewsView(),
             };
             return view;
           },
@@ -207,6 +213,9 @@ export function useGame(): UseGameReturn {
             messages: [],
             travelerName: s.旅人.姓名,
             travelerVariables: createTravelerVariablesView(s.旅人.姓名),
+            knowledge: createEmptyKnowledgeView(),
+            phone: createEmptyPhoneView(),
+            news: createEmptyNewsView(),
           });
         }
       }
