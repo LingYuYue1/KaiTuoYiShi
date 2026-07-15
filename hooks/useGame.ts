@@ -14,6 +14,21 @@ import { saveSetting } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
+import type { IKernel, SessionView } from '@/src/kernel/contract';
+import { asRevision, asSessionId } from '@/src/kernel/contract';
+import { createKernel, type KernelMode } from '@/src/kernel/createKernel';
+import { wrapLegacyAdvanceTurn, buildCommittedSessionView } from '@/src/kernel/adapters/legacy/wrapLegacyAdvanceTurn';
+import { executeTurnIntent } from '@/src/ui/kernelClient';
+
+/**
+ * Composition-root kernel mode (Phase 1).
+ * ONLY place that chooses legacy vs native. Rollback: keep `"legacy"`.
+ * Do not move this flag into components, domain, or adapters.
+ */
+const KERNEL_MODE: KernelMode = 'legacy';
+
+/** Stable session id for the single-player local game (Phase 1 projection key). */
+const LOCAL_SESSION_ID = asSessionId('local-session');
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -40,6 +55,13 @@ export function useGame(): UseGameReturn {
     stateRef.current = state;
   }, [state]);
   const rerollContextRef = useRef<{ nonce: string; previousResponse: string } | null>(null);
+  /**
+   * Linear formal-commit counter for SessionView.revision (Phase 1 projection only).
+   * Production legacy path still owns React/IndexedDB state; this does not dual-write
+   * game fields — it only advances when a turn.advance command commits through IKernel.
+   */
+  const kernelRevisionRef = useRef(0);
+  const kernelPromiseRef = useRef<Promise<IKernel> | null>(null);
 
   const getActiveConfig = useCallback((): API配置项 | null => {
     const s = stateRef.current;
@@ -61,21 +83,111 @@ export function useGame(): UseGameReturn {
     } : null;
   }, []);
 
+  const getKernel = useCallback(async (): Promise<IKernel> => {
+    if (!kernelPromiseRef.current) {
+      // Single composition-root factory call — mode is KERNEL_MODE only.
+      kernelPromiseRef.current = createKernel(KERNEL_MODE, {
+        legacy: {
+          advanceTurn: wrapLegacyAdvanceTurn(async (envelope, events) => {
+            const s = stateRef.current;
+            const playerText = envelope.command.input.text;
+            const progressTexts: string[] = [];
+            // Capture turnCount before workflow so committed view can report post-turn identity.
+            const turnCountBefore = s.turnCount;
+
+            await executeSendWorkflow(playerText, {
+              state: s,
+              getActiveConfig,
+              onBeforeSend: () => {},
+              onAfterSend: () => {
+                rerollContextRef.current = null;
+              },
+              rerollContext: rerollContextRef.current,
+              onStreamProgress: (text) => {
+                if (!text) return;
+                progressTexts.push(text);
+                events.onProgress(text);
+              },
+              onWorkflowSettled: (result) => {
+                if (result.ok) {
+                  kernelRevisionRef.current += 1;
+                  const view = buildCommittedSessionView({
+                    sessionId: envelope.sessionId,
+                    revision: kernelRevisionRef.current,
+                    turnCount: result.turnCount,
+                    playerText,
+                    narrativeText: result.narrativeText,
+                    messages: result.messages,
+                    lastProgressTexts: progressTexts,
+                    commandId: envelope.commandId,
+                  });
+                  events.onCommitted(view);
+                } else {
+                  events.onRejected({
+                    code: result.cancelled ? 'cancelled' : 'model_failure',
+                    message: result.error.message,
+                  });
+                }
+              },
+            });
+          }, () => stateRef.current.abortControllerRef.current?.abort()),
+          readProjection: async (query) => {
+            if (query.type !== 'session.read') {
+              throw new Error(`Unsupported query: ${query.type}`);
+            }
+            const s = stateRef.current;
+            const messages = s.chatHistory
+              .filter((m) => m.role === 'user' || m.role === 'assistant')
+              .map((m) => ({
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+              }));
+            const view: SessionView = {
+              sessionId: query.sessionId,
+              revision: asRevision(kernelRevisionRef.current),
+              turnCount: s.turnCount,
+              turns: [],
+              messages,
+            };
+            return view;
+          },
+        },
+      });
+    }
+    return kernelPromiseRef.current;
+  }, [getActiveConfig]);
+
   const handleSend = useCallback(
     async (text: string) => {
       const s = stateRef.current;
       s.setInterruptedWorkflow(null);
-      await executeSendWorkflow(text, {
-        state: s,
-        getActiveConfig,
-        onBeforeSend: () => {},
-        onAfterSend: () => {
-          rerollContextRef.current = null;
+
+      // UI intent → IKernel.execute (via KernelClient). UI does not know legacy vs native.
+      const kernel = await getKernel();
+      await executeTurnIntent(kernel, {
+        text,
+        commandId: `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        sessionId: LOCAL_SESSION_ID,
+        expectedRevision: kernelRevisionRef.current,
+      }, {
+        // Temporary buffer only — formal chat state is still written by legacy workflow.
+        showProgress: (delta) => {
+          if (delta.kind === 'narrative') {
+            // Streaming store is also updated inside sendWorkflow; keep sink explicit for the seam.
+            setStreamingMessage(delta.text);
+          }
         },
-        rerollContext: rerollContextRef.current,
+        // Formal projection: legacy workflow already mutated React state; sink records projection only.
+        replaceProjection: (_view) => {
+          // Phase 1: formal game fields remain under legacy authority (executeSendWorkflow).
+          // No dual-write of chat/turnCount here.
+        },
+        showError: (_error) => {
+          // Workflow already surfaces workflowHint / alerts; avoid double UI noise in Phase 1.
+        },
       });
     },
-    [getActiveConfig],
+    [getKernel],
   );
 
   const handleAbort = useCallback(() => {

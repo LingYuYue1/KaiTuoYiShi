@@ -259,6 +259,9 @@ set 旅人.姓名 = "星核旅人"
       type: 'session.read',
       sessionId: harness.sessionId,
     });
+    // session.read returns SessionView (not SettingsView).
+    expect('messages' in reloaded).toBe(true);
+    if (!('messages' in reloaded)) throw new Error('expected SessionView');
     expect(reloaded.revision).toBe(saved.revision);
     expect(reloaded.messages).toEqual(saved.messages);
     expect(reloaded.turns).toEqual(saved.turns);

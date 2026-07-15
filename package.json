@@ -49,6 +49,7 @@
     "test:kernel": "vitest run",
     "test:kernel:contract": "vitest run tests/kernel/contract",
     "test:kernel:characterization": "vitest run tests/kernel/characterization",
+    "test:kernel:phase1": "vitest run tests/kernel/phase1",
     "test:settings-save": "node scripts/settings-save-regression.mjs",
     "test:extra-features": "node scripts/extra-features-regression.mjs",
     "test:action-options": "node scripts/action-options-cleanup-regression.mjs",

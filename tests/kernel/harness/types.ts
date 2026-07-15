@@ -1,118 +1,40 @@
 /**
- * Phase-0 provisional IKernel contract shapes.
+ * Phase-0 harness re-exports production IKernel contract (Phase 1 source of truth).
  *
- * These mirror IKernelRefac.md §6 for behavior tests only.
- * Production `src/kernel/contract/*` lands in Phase 1 — do not import this
- * module from App / composition root / production hooks.
+ * SessionSnapshot remains harness-only (repository shape for CAS tests).
+ * Do not import SessionSnapshot from App / composition root.
  */
 
-export type CommandId = string & { readonly __brand: 'CommandId' };
-export type SessionId = string & { readonly __brand: 'SessionId' };
-export type Revision = number & { readonly __brand: 'Revision' };
+export type {
+  AdvanceTurn,
+  CommandEnvelope,
+  CommandId,
+  ExecutionFrame,
+  IKernel,
+  KernelError,
+  KernelErrorCode,
+  KernelQuery,
+  QueryResult,
+  Revision,
+  SessionCommand,
+  SessionCommandEnvelope,
+  SessionId,
+  SessionView,
+  TurnView,
+} from '@/src/kernel/contract';
 
-export function asCommandId(value: string): CommandId {
-  return value as CommandId;
-}
+export {
+  asCommandId,
+  asRevision,
+  asSessionId,
+} from '@/src/kernel/contract';
 
-export function asSessionId(value: string): SessionId {
-  return value as SessionId;
-}
-
-export function asRevision(value: number): Revision {
-  return value as Revision;
-}
-
-export type AdvanceTurn = Readonly<{
-  type: 'turn.advance';
-  input: Readonly<{
-    text: string;
-  }>;
-}>;
-
-export type SessionCommand = AdvanceTurn;
-
-export type SessionCommandEnvelope = Readonly<{
-  protocolVersion: 1;
-  commandId: CommandId;
-  sessionId: SessionId;
-  expectedRevision: Revision;
-  command: SessionCommand;
-}>;
-
-export type CommandEnvelope = SessionCommandEnvelope;
-
-export type TurnView = Readonly<{
-  id: string;
-  playerText: string;
-  narrativeText: string;
-}>;
-
-export type SessionView = Readonly<{
-  sessionId: SessionId;
-  revision: Revision;
-  turns: readonly TurnView[];
-  /** Provisional: mirrors legacy turnCount for characterization. */
-  turnCount: number;
-  /** Observable chat lines after formal commit (user + assistant pairs). */
-  messages: readonly Readonly<{
-    role: 'user' | 'assistant';
-    content: string;
-  }>[];
-  /** Last progress texts observed during the most recent successful stream (not formal). */
-  lastProgressTexts?: readonly string[];
-}>;
-
-export type KernelErrorCode =
-  | 'revision_conflict'
-  | 'duplicate_command'
-  | 'model_failure'
-  | 'illegal_variable'
-  | 'cancelled'
-  | 'unknown';
-
-export type KernelError = Readonly<{
-  code: KernelErrorCode;
-  message: string;
-  details?: Readonly<Record<string, unknown>>;
-}>;
-
-export type ExecutionFrame =
-  | Readonly<{
-      type: 'progress';
-      commandId: CommandId;
-      delta: Readonly<{
-        kind: 'narrative';
-        text: string;
-      }>;
-    }>
-  | Readonly<{
-      type: 'committed';
-      commandId: CommandId;
-      revision: Revision;
-      view: SessionView;
-    }>
-  | Readonly<{
-      type: 'rejected';
-      commandId: CommandId;
-      error: KernelError;
-    }>;
-
-export type KernelQuery = Readonly<{
-  type: 'session.read';
-  sessionId: SessionId;
-}>;
-
-export type QueryResult = SessionView;
+import type { Revision, SessionId, TurnView } from '@/src/kernel/contract';
 
 /**
- * Provisional IKernel surface used by Phase-0 tests.
- * Production interface is Phase 1.
+ * Harness-only formal snapshot used by InMemorySessionRepository.
+ * Not part of the production IKernel projection surface.
  */
-export interface IKernel {
-  execute(command: CommandEnvelope): AsyncIterable<ExecutionFrame>;
-  read(query: KernelQuery): Promise<QueryResult>;
-}
-
 export type SessionSnapshot = Readonly<{
   sessionId: SessionId;
   revision: Revision;

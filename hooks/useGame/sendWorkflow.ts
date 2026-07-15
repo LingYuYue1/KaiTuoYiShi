@@ -1077,6 +1077,26 @@ function mergeYitingSystems(
   return { ...override, 回忆档案: merged };
 }
 
+/**
+ * Optional Phase-1 kernel bridge observers.
+ * Translation-only hooks for LegacyKernelAdapter — no new domain rules.
+ * Formal game state is still committed by this workflow (legacy authority).
+ */
+export type SendWorkflowSettlement =
+  | Readonly<{
+      ok: true;
+      /** Narrative body after formal assistant commit (empty if no assistant body). */
+      narrativeText: string;
+      /** Projection data captured at the legacy formal-commit boundary. */
+      messages: readonly Readonly<{ role: 'user' | 'assistant'; content: string }>[];
+      turnCount: number;
+    }>
+  | Readonly<{
+      ok: false;
+      error: Error;
+      cancelled: boolean;
+    }>;
+
 export interface SendWorkflowDeps {
   state: UseGameStateReturn;
   getActiveConfig: () => import('@/models/settings').API配置项 | null;
@@ -1086,6 +1106,16 @@ export interface SendWorkflowDeps {
     nonce: string;
     previousResponse: string;
   } | null;
+  /**
+   * Cumulative stream preview text (mirrors setStreamingMessage).
+   * Used by IKernel progress frames; must not formal-commit.
+   */
+  onStreamProgress?: (text: string) => void;
+  /**
+   * Exactly one settlement signal per workflow run (success or failure).
+   * Used by IKernel committed/rejected frames.
+   */
+  onWorkflowSettled?: (result: SendWorkflowSettlement) => void;
 }
 
 
@@ -1642,6 +1672,11 @@ export async function executeSendWorkflow(
   const rawConfig = deps.getActiveConfig();
   if (!rawConfig) {
     alert('请先在设置中配置API');
+    deps.onWorkflowSettled?.({
+      ok: false,
+      cancelled: false,
+      error: new Error('请先在设置中配置API'),
+    });
     return;
   }
   const config = rawConfig;
@@ -1678,6 +1713,7 @@ export async function executeSendWorkflow(
   deps.onBeforeSend();
   state.setLoading(true);
   setStreamingMessage('');
+  deps.onStreamProgress?.('');
   state.setWorkflowHint('忆庭召回 / 智库检索中');
   state.setWorkflowStatus('searching');
   state.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
@@ -1689,8 +1725,21 @@ export async function executeSendWorkflow(
   let rollbackSnapshotOnAbort: 回合快照 | null = null;
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
   // Declared outside the stream setup so finally can always cancel a pending rAF commit.
-  const streamMessageSetter = createRafCoalescedSetter(setStreamingMessage);
+  // Phase-1 kernel bridge: mirror stream previews to optional onStreamProgress (temp buffer only).
+  const streamMessageSetter = createRafCoalescedSetter((text: string) => {
+    setStreamingMessage(text);
+    deps.onStreamProgress?.(text);
+  });
   let recoveryJournal = createWorkflowRecoveryJournal(userInput, state.turnCount);
+  /** Phase-1: ensure onWorkflowSettled fires exactly once per run. */
+  let settlementReported = false;
+  const reportSettlement = (result: SendWorkflowSettlement) => {
+    if (settlementReported) return;
+    settlementReported = true;
+    deps.onWorkflowSettled?.(result);
+  };
+  /** Captured at the legacy formal-commit boundary for the committed projection. */
+  let committedProjection: Extract<SendWorkflowSettlement, { ok: true }> | null = null;
 
   const startTime = Date.now();
 
@@ -2585,6 +2634,17 @@ export async function executeSendWorkflow(
     }
     state.setChatHistory(finalHistory);
     state.setTurnCount((prev) => prev + 1);
+    committedProjection = {
+      ok: true,
+      narrativeText: displayText,
+      messages: finalHistory
+        .filter((message) => message.role === 'user' || message.role === 'assistant')
+        .map((message) => ({
+          role: message.role as 'user' | 'assistant',
+          content: message.content,
+        })),
+      turnCount: state.turnCount + 1,
+    };
     streamMessageSetter.flush('');
     state.setLoading(false);
     state.setPendingVariable(true);
@@ -3063,6 +3123,7 @@ export async function executeSendWorkflow(
     await saveSetting('gameSettings', state.gameSettings);
     await saveSetting('worldbooks', state.worldbooks);
     await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
+    reportSettlement(committedProjection);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
       state.setChatHistory(rollbackHistoryOnAbort);
@@ -3074,6 +3135,11 @@ export async function executeSendWorkflow(
       state.setWorkflowHint('已停止生成，本次输入已回到输入框，可修改后重新发送。');
       state.setWorkflowStatus('');
       keepWorkflowHint = true;
+      reportSettlement({
+        ok: false,
+        cancelled: true,
+        error: err instanceof Error ? err : new Error('Workflow aborted'),
+      });
     } else {
       console.error('Send workflow error:', err);
       keepWorkflowHint = true;
@@ -3095,6 +3161,13 @@ export async function executeSendWorkflow(
         detail,
         failCount: state.gameSettings.autoRetryOnError ? Math.max(1, state.gameSettings.autoRetryCount) : 1,
       });
+      reportSettlement(
+        committedProjection ?? {
+          ok: false,
+          cancelled: false,
+          error: err instanceof Error ? err : new Error(detail),
+        },
+      );
     }
   } finally {
     visibilityPublisher?.dispose();

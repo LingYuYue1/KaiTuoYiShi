@@ -1,4 +1,4 @@
-import type { ExecutionFrame } from '@/tests/kernel/harness/types';
+import type { ExecutionFrame } from '@/src/kernel/contract';
 
 /** Collect every frame from an IKernel.execute AsyncIterable. */
 export async function collectAsync(

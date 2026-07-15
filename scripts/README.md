@@ -29,7 +29,8 @@ For IKernel Phase Gates (see `IKernelRefac.md`):
 ```text
 tests/kernel/contract/           # IKernel frame semantics (progress / commit / reject)
 tests/kernel/characterization/   # Pure-module behavior plus provisional model checks
-tests/kernel/harness/            # Proposed IKernel semantics only; not legacy characterization
+tests/kernel/harness/            # Proposed IKernel semantics / Phase-0 CAS harness
+tests/kernel/phase1/             # Production contract, LegacyAdapter, KernelClient, createKernel
 ```
 
 Run with:
@@ -38,6 +39,7 @@ Run with:
 pnpm test:kernel
 pnpm test:kernel:contract
 pnpm test:kernel:characterization
+pnpm test:kernel:phase1
 ```
 
 ## Current Phase-0 limitation

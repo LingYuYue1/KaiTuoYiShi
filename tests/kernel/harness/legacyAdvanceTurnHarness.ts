@@ -30,6 +30,7 @@
 
 import { parseVariableCommands } from '@/utils/variableExecutor';
 import { InMemorySessionRepository } from './inMemorySessionRepository';
+import type { SessionCommandEnvelope } from '@/src/kernel/contract';
 import {
   asCommandId,
   asRevision,
@@ -186,42 +187,47 @@ export function createLegacyAdvanceTurnHarness(
         return;
       }
 
+      // Narrow CreateSession | Session envelope after command-type guard.
+      const sessionCommand = command as SessionCommandEnvelope & {
+        command: { type: 'turn.advance'; input: { text: string } };
+      };
+
       // Idempotent retry: same commandId that already committed returns prior snapshot
       // even if the client still holds the old expectedRevision (replay semantics).
-      const prior = await repository.findByCommandId(command.sessionId, command.commandId);
+      const prior = await repository.findByCommandId(sessionCommand.sessionId, sessionCommand.commandId);
       if (prior) {
         yield {
           type: 'committed',
-          commandId: command.commandId,
+          commandId: sessionCommand.commandId,
           revision: prior.revision,
           view: toView(prior),
         };
         return;
       }
 
-      const base = await repository.read(command.sessionId);
+      const base = await repository.read(sessionCommand.sessionId);
 
-      if (base.revision !== command.expectedRevision) {
+      if (base.revision !== sessionCommand.expectedRevision) {
         yield {
           type: 'rejected',
-          commandId: command.commandId,
+          commandId: sessionCommand.commandId,
           error: {
             code: 'revision_conflict',
-            message: `expectedRevision ${command.expectedRevision} != actual ${base.revision}`,
+            message: `expectedRevision ${sessionCommand.expectedRevision} != actual ${base.revision}`,
             details: { actualRevision: base.revision },
           },
         };
         return;
       }
 
-      const playerText = command.command.input.text;
+      const playerText = sessionCommand.command.input.text;
       let modelResult: ModelTurnResult;
       try {
         modelResult = await model.complete({ text: playerText, turnCount: base.turnCount });
       } catch (err) {
         yield {
           type: 'rejected',
-          commandId: command.commandId,
+          commandId: sessionCommand.commandId,
           error: {
             code: 'model_failure',
             message: err instanceof Error ? err.message : String(err),
@@ -234,14 +240,14 @@ export function createLegacyAdvanceTurnHarness(
         for (const chunk of modelResult.chunks ?? []) {
           yield {
             type: 'progress',
-            commandId: command.commandId,
+            commandId: sessionCommand.commandId,
             delta: { kind: 'narrative', text: chunk },
           };
         }
         // Formal state must remain unchanged (no repository write).
         yield {
           type: 'rejected',
-          commandId: command.commandId,
+          commandId: sessionCommand.commandId,
           error: {
             code: 'model_failure',
             message: modelResult.message,
@@ -258,7 +264,7 @@ export function createLegacyAdvanceTurnHarness(
         progressTexts.push(cumulative);
         yield {
           type: 'progress',
-          commandId: command.commandId,
+          commandId: sessionCommand.commandId,
           delta: { kind: 'narrative', text: cumulative },
         };
       }
@@ -268,7 +274,7 @@ export function createLegacyAdvanceTurnHarness(
       const { nextName } = applyLegalTravelerName(base.travelerName, modelResult.variableBlock);
 
       const turn: TurnView = {
-        id: makeTurnId(command.commandId),
+        id: makeTurnId(sessionCommand.commandId),
         playerText,
         narrativeText: modelResult.narrativeText,
       };
@@ -280,9 +286,9 @@ export function createLegacyAdvanceTurnHarness(
       ];
 
       const commit = await repository.compareAndSwap({
-        sessionId: command.sessionId,
-        expectedRevision: command.expectedRevision,
-        commandId: command.commandId,
+        sessionId: sessionCommand.sessionId,
+        expectedRevision: sessionCommand.expectedRevision,
+        commandId: sessionCommand.commandId,
         next: {
           turnCount: base.turnCount + 1,
           messages: nextMessages,
@@ -294,7 +300,7 @@ export function createLegacyAdvanceTurnHarness(
       if (commit.type === 'conflict') {
         yield {
           type: 'rejected',
-          commandId: command.commandId,
+          commandId: sessionCommand.commandId,
           error: {
             code: 'revision_conflict',
             message: `CAS conflict; actual revision ${commit.actualRevision}`,
@@ -308,7 +314,7 @@ export function createLegacyAdvanceTurnHarness(
         // Same commandId already committed: return prior committed view, no second revision bump.
         yield {
           type: 'committed',
-          commandId: command.commandId,
+          commandId: sessionCommand.commandId,
           revision: commit.snapshot.revision,
           view: toView(commit.snapshot),
         };
@@ -317,7 +323,7 @@ export function createLegacyAdvanceTurnHarness(
 
       yield {
         type: 'committed',
-        commandId: command.commandId,
+        commandId: sessionCommand.commandId,
         revision: commit.snapshot.revision,
         view: {
           ...toView(commit.snapshot),
