@@ -1,15 +1,22 @@
 /**
- * Session persistence schema versioning (Phase 4).
+ * Session persistence schema versioning (Phase 4 / Stage 5.1).
  *
  * - Every durable snapshot carries schemaVersion.
  * - Migration runs once at repository / import ingress.
  * - Irreversible bumps require backup; composition-flag rollback is not
  *   lossless when old code cannot read the new schema.
  * - Single schemaVersion on write — no indefinite dual-schema write.
+ * - Stage 5.1: still schemaVersion 1; missing `variables` filled from travelerName.
  */
 
 import type { GameState } from './types';
 import { cloneGameState } from './types';
+import type { KernelVariables } from '@/src/kernel/domain/variables/types';
+import {
+  cloneKernelVariables,
+  createEmptyKernelVariables,
+  withTravelerName,
+} from '@/src/kernel/domain/variables/types';
 
 /** Current formal session schema. Bump only with a migration path. */
 export const SESSION_SCHEMA_VERSION = 1 as const;
@@ -49,7 +56,7 @@ export function migrateSessionRecord(raw: unknown): MigratedSessionRecord {
     );
   }
 
-  // v0 (missing schemaVersion) and v1 share the same minimal GameState shape.
+  // v0 (missing schemaVersion) and v1 share GameState; variables may be absent.
   const state = readGameState(record.state);
 
   return {
@@ -111,14 +118,88 @@ function readGameState(raw: unknown): GameState {
   }
 
   const state = raw as Record<string, unknown>;
+  const travelerName = requireString(state.travelerName, 'state.travelerName');
+  const variables = readVariables(state.variables, travelerName);
+
   return cloneGameState(
     {
       turnCount: requireNonNegativeInt(state.turnCount, 'state.turnCount'),
       messages: readMessages(state.messages),
       turns: readTurns(state.turns),
-      travelerName: requireString(state.travelerName, 'state.travelerName'),
+      travelerName,
+      variables,
     },
   );
+}
+
+function readVariables(raw: unknown, travelerName: string): KernelVariables {
+  if (raw === undefined) {
+    // Pre-Stage-5.1 rows: synthesize traveler profile from travelerName only.
+    return createEmptyKernelVariables({ 旅人: { 姓名: travelerName } });
+  }
+  if (typeof raw !== 'object') {
+    throw new SessionSchemaError(
+      'invalid_field',
+      'Session record.state.variables must be an object when present',
+      { field: 'state.variables' },
+    );
+  }
+
+  const root = raw as Record<string, unknown>;
+  const travelerRaw = root.旅人;
+  if (travelerRaw === null || travelerRaw === undefined) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      'Session record.state.variables.旅人 must be an object when variables are present',
+      { field: 'state.variables.旅人' },
+    );
+  }
+  if (typeof travelerRaw !== 'object') {
+    throw new SessionSchemaError(
+      'invalid_field',
+      'Session record.state.variables.旅人 must be an object',
+      { field: 'state.variables.旅人' },
+    );
+  }
+
+  const t = travelerRaw as Record<string, unknown>;
+  const name =
+    typeof t.姓名 === 'string' && t.姓名.length > 0 ? t.姓名 : travelerName;
+  const variables = createEmptyKernelVariables({
+    旅人: {
+      姓名: name,
+      身份: optionalString(t.身份),
+      外貌: optionalString(t.外貌),
+      性格: optionalString(t.性格),
+      背景: optionalString(t.背景),
+      数值属性: readNumericAttrs(t.数值属性),
+    },
+  });
+  // Prefer explicit travelerName field as source of truth when both differ
+  // (older dual-field rows); mirror into variables.
+  return withTravelerName(variables, travelerName);
+}
+
+function readNumericAttrs(raw: unknown): Readonly<Record<string, number>> {
+  if (raw === null || raw === undefined) return {};
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      'Session record.state.variables.旅人.数值属性 must be an object',
+      { field: 'state.variables.旅人.数值属性' },
+    );
+  }
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function optionalString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
 
 function readMessages(value: unknown): GameState['messages'] {
@@ -164,6 +245,7 @@ function readTurns(value: unknown): GameState['turns'] {
       playerText: requireString(turn.playerText, `state.turns[${index}].playerText`),
       narrativeText: requireString(turn.narrativeText, `state.turns[${index}].narrativeText`),
       travelerNameBefore: readTravelerNameBefore(turn, index),
+      variablesBefore: readVariablesBefore(turn, index),
     };
   });
 }
@@ -183,6 +265,29 @@ function readTravelerNameBefore(
     turn.travelerNameBefore,
     `state.turns[${index}].travelerNameBefore`,
   );
+}
+
+function readVariablesBefore(
+  turn: Record<string, unknown>,
+  index: number,
+): KernelVariables | null {
+  if (!('variablesBefore' in turn) || turn.variablesBefore === undefined) {
+    return null;
+  }
+  if (turn.variablesBefore === null) {
+    return null;
+  }
+  if (typeof turn.variablesBefore !== 'object') {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.state.turns[${index}].variablesBefore must be an object or null`,
+      { field: `state.turns[${index}].variablesBefore` },
+    );
+  }
+  // Reuse variables reader; name fallback empty then filled by travelerNameBefore if needed.
+  const nameHint =
+    typeof turn.travelerNameBefore === 'string' ? turn.travelerNameBefore : '开拓者';
+  return cloneKernelVariables(readVariables(turn.variablesBefore, nameHint));
 }
 
 function invalidMessage(index: number, reason: string): SessionSchemaError {

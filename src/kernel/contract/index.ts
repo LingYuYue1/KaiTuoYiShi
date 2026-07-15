@@ -1,11 +1,13 @@
 /**
- * Production IKernel contract barrel (Phase 1).
+ * Production IKernel contract barrel (Phase 1 / Stage 5.1).
  * Source of truth for App / adapters / UI kernel client / tests.
  */
 
 export type {
   AdvanceTurn,
   AdvanceTurnEnvelope,
+  ApplyVariables,
+  ApplyVariablesEnvelope,
   CommandEnvelope,
   CommandId,
   CreateSession,
@@ -36,7 +38,9 @@ export type {
   SessionMessageView,
   SessionView,
   SettingsView,
+  TravelerVariablesView,
   TurnView,
 } from './projections';
+export { createTravelerVariablesView } from './projections';
 
 export type { IKernel } from './IKernel';

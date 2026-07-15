@@ -180,6 +180,8 @@ async function* iterateLegacyAdvanceTurn(
 /**
  * Build a provisional SessionView when the host tracks only turnCount + messages.
  * revision is a linear formal-commit counter owned by the host for Phase 1.
+ * Stage 5.1: travelerName / travelerVariables default for legacy hosts that
+ * do not yet project the formal variable slice.
  */
 export function buildCommittedSessionView(input: {
   sessionId: SessionView['sessionId'];
@@ -191,6 +193,8 @@ export function buildCommittedSessionView(input: {
   turns?: SessionView['turns'];
   lastProgressTexts?: readonly string[];
   commandId: string;
+  travelerName?: string;
+  travelerVariables?: SessionView['travelerVariables'];
 }): SessionView {
   const turns =
     input.turns ??
@@ -201,12 +205,23 @@ export function buildCommittedSessionView(input: {
         narrativeText: input.narrativeText,
       },
     ];
+  const travelerName = input.travelerName ?? '开拓者';
+  const travelerVariables = input.travelerVariables ?? {
+    姓名: travelerName,
+    身份: '',
+    外貌: '',
+    性格: '',
+    背景: '',
+    数值属性: {},
+  };
   return {
     sessionId: input.sessionId,
     revision: asRevision(input.revision),
     turnCount: input.turnCount,
     turns,
     messages: input.messages,
+    travelerName,
+    travelerVariables,
     ...(input.lastProgressTexts ? { lastProgressTexts: input.lastProgressTexts } : {}),
   };
 }

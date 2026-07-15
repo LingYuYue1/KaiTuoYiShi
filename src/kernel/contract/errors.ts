@@ -8,6 +8,7 @@ export type KernelErrorCode =
   | 'duplicate_command'
   | 'model_failure'
   | 'illegal_variable'
+  | 'no_changes'
   | 'cancelled'
   | 'unsupported_command'
   | 'not_implemented'

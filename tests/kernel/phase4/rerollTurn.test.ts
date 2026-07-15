@@ -91,6 +91,26 @@ async function commitTurn(
 }
 
 describe('rerollTurn (Phase 4.1)', () => {
+  it('reconstructs a Phase 4 name-only variable baseline', () => {
+    const snapshot = createSessionSnapshot({
+      sessionId: SESSION,
+      revision: asRevision(1),
+      state: {
+        travelerName: '后续名',
+        turns: [{
+          id: 'turn_phase4',
+          playerText: '旧输入',
+          narrativeText: '旧叙事',
+          travelerNameBefore: '旧名',
+          variablesBefore: null,
+        }],
+      },
+    });
+
+    expect(findTurnBaseSnapshot(snapshot, 'turn_phase4')?.state.variables.旅人.姓名)
+      .toBe('旧名');
+  });
+
   it('findTurnBaseSnapshot truncates suffix and keeps original player text', async () => {
     const sessions = seedEmpty();
     const model = new ScriptedModelGateway();

@@ -19,12 +19,22 @@ import {
 const SESSION = asSessionId('proj-session');
 
 function baseView(overrides?: Partial<SessionView>): SessionView {
+  const travelerName = overrides?.travelerName ?? '开拓者';
   return {
     sessionId: SESSION,
     revision: asRevision(0),
     turnCount: 1,
     turns: [],
     messages: [],
+    travelerName,
+    travelerVariables: overrides?.travelerVariables ?? {
+      姓名: travelerName,
+      身份: '',
+      外貌: '',
+      性格: '',
+      背景: '',
+      数值属性: {},
+    },
     ...overrides,
   };
 }

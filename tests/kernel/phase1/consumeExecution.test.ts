@@ -11,6 +11,7 @@ import {
   type ExecutionFrame,
   type IKernel,
   type SessionView,
+  createTravelerVariablesView,
 } from '@/src/kernel/contract';
 import { consumeExecution, type ExecutionSink } from '@/src/ui/kernelClient';
 
@@ -24,6 +25,8 @@ function makeView(revision: number): SessionView {
       { role: 'user', content: 'hi' },
       { role: 'assistant', content: 'hello' },
     ],
+    travelerName: '开拓者',
+    travelerVariables: createTravelerVariablesView(),
   };
 }
 

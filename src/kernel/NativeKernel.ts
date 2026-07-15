@@ -3,15 +3,17 @@
  *
  * - turn.advance → executeTurn only (never legacy)
  * - turn.reroll → rerollTurn only (Phase 4; never legacy rewrite chain)
+ * - variables.apply → applyVariables only (Stage 5.1; pure reduce + single CAS)
  * - other commands: optional transitional legacy fallback, else not_implemented
  * - read → SessionRepository projection
  *
- * Transitional: legacy dependency is ONLY for non-advance/non-reroll commands.
+ * Transitional: legacy dependency is ONLY for non-advance/non-reroll/non-variables commands.
  * Do not dual-write formal session.
  */
 
 import type {
   AdvanceTurnEnvelope,
+  ApplyVariablesEnvelope,
   CommandEnvelope,
   CreateSessionEnvelope,
   ExecutionFrame,
@@ -27,14 +29,15 @@ import type { LegacyKernelDependencies } from '@/src/kernel/adapters/legacy/Lega
 import { LegacyKernelAdapter } from '@/src/kernel/adapters/legacy/LegacyKernelAdapter';
 import { executeTurn } from '@/src/kernel/application/executeTurn';
 import { rerollTurn } from '@/src/kernel/application/rerollTurn';
+import { applyVariables } from '@/src/kernel/application/applyVariables';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
   model: ModelGateway;
   /**
-   * Transitional: non-advance/non-reroll commands may route here.
-   * AdvanceTurn and RerollTurn never use this.
+   * Transitional: non-advance/non-reroll/non-variables commands may route here.
+   * AdvanceTurn, RerollTurn, and ApplyVariables never use this.
    */
   legacy?: LegacyKernelDependencies;
 }>;
@@ -72,6 +75,12 @@ export class NativeKernel implements IKernel {
         yield* rerollTurn(sessionEnvelope as RerollTurnEnvelope, {
           sessions: this.sessions,
           model: this.model,
+        });
+        return;
+      case 'variables.apply':
+        // Native only (Stage 5.1) — pure reduce + single CAS; no React setters.
+        yield* applyVariables(sessionEnvelope as ApplyVariablesEnvelope, {
+          sessions: this.sessions,
         });
         return;
       default: {

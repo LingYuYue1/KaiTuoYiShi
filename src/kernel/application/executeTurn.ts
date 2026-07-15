@@ -1,22 +1,26 @@
 /**
- * executeTurn — Native AdvanceTurn application use case (Phase 2).
+ * executeTurn — Native AdvanceTurn application use case (Phase 2 / Stage 5.1).
  *
  * Pipeline:
  * 1. read base snapshot
  * 2. revision check → rejected on conflict
  * 3. plan request
  * 4. stream model frames → yield progress (no repo write)
- * 5. parse actions
- * 6. reduceTurn
- * 7. compareAndSwap once
+ * 5. parse actions (narrative + candidate variable domain actions)
+ * 6. reduceTurn (pure; variables via domain/variables/reduceVariables)
+ * 7. compareAndSwap once — narrative + variables atomic
  * 8. yield committed OR rejected
  *
  * Error policy:
- * - model failure → rejected model_failure, state unchanged
+ * - model failure → rejected model_failure, state unchanged (vars unchanged)
  * - empty / illegal narrative parse → rejected (fail closed for empty narrative)
- * - illegal variable blocks alone do not reject (legacy-compatible; see parse/reduce)
+ * - illegal variable commands fail closed per command; narrative still commits
  * - CAS conflict → rejected revision_conflict
  * - unexpected programming errors may throw (fail fast)
+ *
+ * Variable model (services/ai/variableModel) is NOT called here — it remains
+ * a host adapter that may produce candidate text. Application interprets
+ * candidates via parseNarrativeActions → reduceTurn. Never writes SessionRepository.
  */
 
 import type {

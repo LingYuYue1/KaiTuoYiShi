@@ -1,27 +1,30 @@
 /**
- * Pure: parse completed model text into narrative + optional variable actions.
+ * Pure: parse completed model text into narrative + variable domain actions.
  *
- * Phase 2 choice (documented):
+ * Stage 5.1:
  * - Extract narrative body by stripping a trailing/embedded <变量更新> block.
- * - Variable subset is minimal: only legal `set 旅人.姓名 = "..."` is applied.
- * - All other structured variable commands are intentionally ignored: the
- *   complete variable protocol belongs to a later phase.
+ * - Variable commands are full candidate domain actions from parseVariableBlock
+ *   (not formal commits). Illegal paths are filtered at reduce time (fail closed
+ *   per command); parse errors alone do not reject the turn.
+ * - Empty narrative still rejects (fail closed).
  */
+
+import {
+  parseVariableBlock,
+  stripVariableBlock,
+  type VariableDomainCommand,
+} from '@/src/kernel/domain/variables';
 
 export type ParsedNarrativeActions = Readonly<{
   narrativeText: string;
-  /** Parsed Phase-2 commands (only legal traveler-name updates). */
-  variableCommands: readonly ParsedVariableCommand[];
+  /** Candidate variable domain actions (not yet committed). */
+  variableCommands: readonly VariableDomainCommand[];
+  /** Non-fatal parse diagnostics for the variable block. */
+  variableParseErrors: readonly string[];
 }>;
 
-export type ParsedVariableCommand = Readonly<{
-  action: string;
-  key: string;
-  value: unknown;
-}>;
-
-const VARIABLE_BLOCK_RE = /<变量更新>[\s\S]*?<\/变量更新>/i;
-const TRAVELER_NAME_SET_RE = /^\s*set\s+旅人\.姓名\s*[=＝]\s*("(?:\\.|[^"\\])*")\s*$/gim;
+/** @deprecated Use VariableDomainCommand — kept for Phase 2 test import stability. */
+export type ParsedVariableCommand = VariableDomainCommand;
 
 /**
  * Parse completed model text into narrative + optional variable actions.
@@ -34,7 +37,7 @@ export function parseNarrativeActions(completedText: string): ParsedNarrativeAct
     throw new Error('parseNarrativeActions: completedText must be a string');
   }
 
-  const variableBlock = extractVariableBlock(completedText);
+  const variableParse = parseVariableBlock(completedText);
   const narrativeText = stripVariableBlock(completedText).trim();
 
   if (narrativeText.length === 0) {
@@ -46,7 +49,8 @@ export function parseNarrativeActions(completedText: string): ParsedNarrativeAct
 
   return {
     narrativeText,
-    variableCommands: variableBlock ? parseTravelerNameSets(variableBlock) : [],
+    variableCommands: variableParse.commands,
+    variableParseErrors: variableParse.parseErrors,
   };
 }
 
@@ -58,29 +62,4 @@ export class ParseNarrativeError extends Error {
     this.name = 'ParseNarrativeError';
     this.code = code;
   }
-}
-
-function extractVariableBlock(text: string): string | null {
-  const match = text.match(VARIABLE_BLOCK_RE);
-  return match ? match[0] : null;
-}
-
-function stripVariableBlock(text: string): string {
-  return text.replace(VARIABLE_BLOCK_RE, '');
-}
-
-function parseTravelerNameSets(variableBlock: string): ParsedVariableCommand[] {
-  const commands: ParsedVariableCommand[] = [];
-  for (const match of variableBlock.matchAll(TRAVELER_NAME_SET_RE)) {
-    try {
-      commands.push({
-        action: 'set',
-        key: '旅人.姓名',
-        value: JSON.parse(match[1]),
-      });
-    } catch {
-      // Invalid JSON is not a Phase 2 command and must not block narrative commit.
-    }
-  }
-  return commands;
 }

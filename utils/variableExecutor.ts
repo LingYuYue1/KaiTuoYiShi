@@ -2,8 +2,18 @@
 // 输入一个命令 + 当前精简 state + setters 集合，执行后返回结果。
 //
 // 设计：每个命令都独立调用对应 setter。多条命令按顺序执行；前一条不会影响下一条的校验（因为校验是用旧 state 做的，由 sendWorkflow 决定是否每条都重校验）。
+//
+// Stage 5.1 dual-path note (temporary):
+// - Native Kernel formal GameState variables (旅人 profile + 数值属性) live in
+//   src/kernel/domain/variables and commit only via executeTurn / variables.apply CAS.
+// - This module remains the LEGACY full-graph reducer for sendWorkflow + React setters
+//   (世界/NPC/背包/命途/…). Do not call reduceVariableCommands + commitVariableState
+//   from the native formal path.
+// - Deletion plan: as Stage 5.x migrates each root into kernel domain, remove the
+//   corresponding branch here and stop re-exporting parse/reduce for that root.
 
 import type { 变量命令, 变量命令结果 } from '@/models/variableCommand';
+import type { VariableSetters } from '@/models/variableSetters';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import { 对齐世界日期与天数, 解析琥珀日期序数, 格式化琥珀日期序数 } from '@/models/world';
@@ -27,18 +37,8 @@ import { 应用路径命令, 解析路径片段, 读取路径值 } from './varia
 import { extractRoot, validateCommand, type VariableState } from './variableRegistry';
 import { appendWorldEvents } from './worldEvents';
 
-/** 执行器需要的 setters 集合（与 useGameState 对齐）。 */
-export interface VariableSetters {
-  set旅人: React.Dispatch<React.SetStateAction<角色数据结构>>;
-  set世界: React.Dispatch<React.SetStateAction<世界状态>>;
-  set记忆: React.Dispatch<React.SetStateAction<记忆系统>>;
-  set忆庭: React.Dispatch<React.SetStateAction<忆庭系统>>;
-  set智库: React.Dispatch<React.SetStateAction<智库系统>>;
-  set手机: React.Dispatch<React.SetStateAction<手机系统>>;
-  setNPC: React.Dispatch<React.SetStateAction<NPC记录[]>>;
-  set新闻: React.Dispatch<React.SetStateAction<新闻条目[]>>;
-  set剧情: React.Dispatch<React.SetStateAction<剧情节点[]>>;
-}
+/** @deprecated Import from @/models/variableSetters — re-export for legacy call sites. */
+export type { VariableSetters } from '@/models/variableSetters';
 
 /** 把当前 state 拍扁成 VariableState（执行器/校验用）。 */
 export function snapshotVariableState(slices: {

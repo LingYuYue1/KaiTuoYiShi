@@ -5,6 +5,7 @@
  * Must NOT introduce new business rules; translation only.
  */
 
+import { createTravelerVariablesView } from '@/src/kernel/contract';
 import type {
   AdvanceTurnEnvelope,
   CommandEnvelope,
@@ -138,13 +139,17 @@ export function sessionViewFromHost(input: {
   turns?: SessionView['turns'];
   messages: SessionView['messages'];
   lastProgressTexts?: readonly string[];
+  travelerName?: string;
 }): SessionView {
+  const travelerName = input.travelerName ?? '开拓者';
   return {
     sessionId: input.sessionId,
     revision: input.revision,
     turnCount: input.turnCount,
     turns: input.turns ?? [],
     messages: input.messages,
+    travelerName,
+    travelerVariables: createTravelerVariablesView(travelerName),
     ...(input.lastProgressTexts ? { lastProgressTexts: input.lastProgressTexts } : {}),
   };
 }

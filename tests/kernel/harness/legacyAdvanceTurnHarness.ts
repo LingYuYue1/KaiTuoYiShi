@@ -87,12 +87,22 @@ export type ProvisionalAdvanceTurnHarness = IKernel & {
 };
 
 function toView(snapshot: SessionSnapshot): SessionView {
+  const travelerName = snapshot.travelerName;
   return {
     sessionId: snapshot.sessionId,
     revision: snapshot.revision,
     turnCount: snapshot.turnCount,
     turns: snapshot.turns,
     messages: snapshot.messages,
+    travelerName,
+    travelerVariables: {
+      姓名: travelerName,
+      身份: '',
+      外貌: '',
+      性格: '',
+      背景: '',
+      数值属性: {},
+    },
   };
 }
 

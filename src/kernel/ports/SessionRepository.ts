@@ -12,9 +12,10 @@
  *    without applying a second turn (idempotent).
  * 4. Stale expectedRevision yields conflict and leaves store unchanged.
  *
- * Phase 3 GameState remains the minimal formal slice (turnCount / messages /
- * turns / travelerName). Full 旅人/世界/NPC/记忆/手机 graphs stay in legacy
- * React+IndexedDB paths until later phases expand projection ownership.
+ * Stage 5.1 GameState formal slice: turnCount / messages / turns /
+ * travelerName / variables.旅人 (profile + 数值属性). Full 旅人 graph
+ * (背包/战技/命途), 世界, NPC, 记忆, 手机 stay in legacy React+IndexedDB
+ * until later stages expand projection ownership.
  */
 
 import type { CommandId, Revision, SessionId } from '@/src/kernel/contract';

@@ -2,14 +2,19 @@
  * Pure: locate the formal base state as of before a given turn committed.
  *
  * Linear history only — no revision tree. Rerolling turn N discards
- * turns N+1…end (suffix truncate). Operates on minimal GameState
- * (messages / turns / turnCount / travelerName). A migrated turn without its
- * recorded base name cannot be rerolled: guessing from the current suffix
- * would retain discarded formal state.
+ * turns N+1…end (suffix truncate). Operates on formal GameState
+ * (messages / turns / turnCount / travelerName / variables).
+ *
+ * A migrated turn without a recorded base name cannot be rerolled: guessing
+ * from the current suffix would retain discarded formal state.
  */
 
 import type { GameState, KernelTurn, SessionSnapshot } from '@/src/kernel/domain/session/types';
 import { cloneGameState } from '@/src/kernel/domain/session/types';
+import {
+  cloneKernelVariables,
+  createEmptyKernelVariables,
+} from '@/src/kernel/domain/variables';
 
 /** Messages per formal turn: one user + one assistant. */
 const MESSAGES_PER_TURN = 2;
@@ -29,7 +34,7 @@ export type TurnBaseSnapshot = Readonly<{
 
 /**
  * Find base formal state for `turnId`.
- * Returns null when the turn is not in the snapshot.
+ * Returns null when the turn is not in the snapshot or base is incomplete.
  */
 export function findTurnBaseSnapshot(
   snapshot: SessionSnapshot,
@@ -48,6 +53,7 @@ export function findTurnBaseSnapshot(
   if (originalTurn.travelerNameBefore === null) {
     return null;
   }
+
   const prefixTurns = snapshot.state.turns.slice(0, turnIndex);
   const prefixMessages = snapshot.state.messages.slice(
     0,
@@ -56,11 +62,20 @@ export function findTurnBaseSnapshot(
 
   // turnCount convention: empty session starts at 1; each commit increments.
   // After k turns, turnCount === k + 1. Base before index i has i turns.
+  // Phase 4 persisted only the name. That was the complete formal variable
+  // slice then, so migrate it into the Stage 5.1 baseline rather than making
+  // a previously valid reroll unavailable.
+  const baseVariables = originalTurn.variablesBefore
+    ? cloneKernelVariables(originalTurn.variablesBefore)
+    : createEmptyKernelVariables({
+      旅人: { 姓名: originalTurn.travelerNameBefore },
+    });
   const baseState: GameState = cloneGameState({
     turnCount: prefixTurns.length + 1,
     messages: prefixMessages,
     turns: prefixTurns,
     travelerName: originalTurn.travelerNameBefore,
+    variables: baseVariables,
   });
 
   return {

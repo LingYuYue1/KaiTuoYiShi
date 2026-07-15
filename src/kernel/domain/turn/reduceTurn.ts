@@ -2,13 +2,22 @@
  * Pure: reduce formal GameState by parsed narrative actions.
  *
  * No I/O. Returns nextState or a typed decision.
- * Variable subset: only `set 旅人.姓名` with a string value updates travelerName.
- * Illegal / unrecognized variable commands leave travelerName unchanged
- * (legacy-compatible: narrative still commits).
+ *
+ * Stage 5.1 Variable Engine:
+ * - Variable commands reduce via pure reduceVariables onto state.variables.
+ * - travelerName stays mirrored to variables.旅人.姓名.
+ * - Illegal / unrecognized variable commands fail closed per command
+ *   (legacy-compatible: narrative still commits).
+ * - All formal mutation is applied here so executeTurn can CAS once.
  */
 
 import type { GameState, KernelTurn } from '@/src/kernel/domain/session/types';
-import type { ParsedNarrativeActions, ParsedVariableCommand } from './parseNarrativeActions';
+import {
+  cloneKernelVariables,
+  reduceVariables,
+  travelerNameFromVariables,
+} from '@/src/kernel/domain/variables';
+import type { ParsedNarrativeActions } from './parseNarrativeActions';
 
 export type ReduceTurnDecision = Readonly<{
   kind: 'ok';
@@ -30,17 +39,19 @@ export function reduceTurn(
   state: GameState,
   input: ReduceTurnInput,
 ): ReduceTurnDecision {
+  const variablesBefore = cloneKernelVariables(state.variables);
+
   const turn: KernelTurn = {
     id: `turn_${input.commandId}`,
     playerText: input.playerText,
     narrativeText: input.actions.narrativeText,
     travelerNameBefore: state.travelerName,
+    variablesBefore,
   };
 
-  const nextName = applyTravelerName(
-    state.travelerName,
-    input.actions.variableCommands,
-  );
+  const reduced = reduceVariables(input.actions.variableCommands, state.variables);
+  const nextVariables = reduced.nextVariables;
+  const nextName = travelerNameFromVariables(nextVariables);
 
   const nextState: GameState = {
     turnCount: state.turnCount + 1,
@@ -51,30 +62,8 @@ export function reduceTurn(
     ],
     turns: [...state.turns, turn],
     travelerName: nextName,
+    variables: nextVariables,
   };
 
   return { kind: 'ok', nextState, turn };
-}
-
-/**
- * Apply only a legal `set 旅人.姓名 = <string>`.
- * Ignores parse noise / other keys (legacy-compatible domain isolation).
- */
-function applyTravelerName(
-  currentName: string,
-  commands: readonly ParsedVariableCommand[],
-): string {
-  for (let index = commands.length - 1; index >= 0; index -= 1) {
-    const command = commands[index];
-    if (isTravelerNameSet(command)) return command.value;
-  }
-  return currentName;
-}
-
-function isTravelerNameSet(
-  command: ParsedVariableCommand,
-): command is ParsedVariableCommand & Readonly<{ value: string }> {
-  return command.action === 'set'
-    && command.key === '旅人.姓名'
-    && typeof command.value === 'string';
 }

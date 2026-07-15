@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { VariableSetters } from '@/utils/variableExecutor';
+import type { VariableSetters } from '@/models/variableSetters';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化NPC记录列表 } from '@/models/npc';
 
@@ -14,6 +14,10 @@ interface Props {
   NPC: unknown[];
   新闻: unknown[];
   剧情编织: unknown;
+  /**
+   * Legacy production path: React setters from useGameState.
+   * Must not be used by NativeKernel formal writes.
+   */
   setters: VariableSetters;
   set剧情编织: Dispatch<SetStateAction<剧情编织系统>>;
   editingLocked?: boolean;
@@ -239,6 +243,12 @@ function getSystemValue(props: Props, key: SystemKey): unknown {
   }
 }
 
+/**
+ * Write path:
+ * - Legacy host: React VariableSetters (production KERNEL_MODE still).
+ * This legacy manager remains setter-backed until its entire traveler graph
+ * can move to a native projection in one cut.
+ */
 function setSystemValue(props: Props, key: SystemKey, value: unknown): void {
   switch (key) {
     case 'traveler': props.setters.set旅人(value as never); break;

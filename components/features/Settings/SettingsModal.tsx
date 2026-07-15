@@ -38,7 +38,7 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import type { VariableSetters } from '@/utils/variableExecutor';
+import type { VariableSetters } from '@/models/variableSetters';
 import { setPreference } from '@/src/ui/preferences';
 import type { 世界书 } from '@/models/worldbook';
 

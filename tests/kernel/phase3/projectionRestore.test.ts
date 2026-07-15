@@ -155,6 +155,15 @@ describe('projection restore via kernel.read', () => {
       turnCount: 1,
       turns: [],
       messages: [],
+      travelerName: '开拓者',
+      travelerVariables: {
+        姓名: '开拓者',
+        身份: '',
+        外貌: '',
+        性格: '',
+        背景: '',
+        数值属性: {},
+      },
     });
     projection = applyExecutionFrame(projection, {
       type: 'progress',
@@ -170,6 +179,15 @@ describe('projection restore via kernel.read', () => {
         { role: 'user', content: 'p' },
         { role: 'assistant', content: 'n' },
       ],
+      travelerName: '开拓者',
+      travelerVariables: {
+        姓名: '开拓者',
+        身份: '',
+        外貌: '',
+        性格: '',
+        背景: '',
+        数值属性: {},
+      },
     };
     projection = commitProjectionView(projection, asCommandId('c'), view);
     expect(projection.progress).toBeNull();

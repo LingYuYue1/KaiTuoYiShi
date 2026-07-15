@@ -1,5 +1,5 @@
 /**
- * IKernel command envelope contract (Phase 1).
+ * IKernel command envelope contract (Phase 1 / Stage 5.1).
  * Must not import old models, services, hooks, or UI types.
  */
 
@@ -31,12 +31,26 @@ export type RerollTurn = Readonly<{
   turnId: string;
 }>;
 
+/**
+ * Manual variable apply from UI Variable Manager (Stage 5.1).
+ * Candidates only in the command — formal commit is a single CAS.
+ * Does not go through the AI model.
+ */
+export type ApplyVariables = Readonly<{
+  type: 'variables.apply';
+  commands: readonly Readonly<{
+    action: 'set' | 'add' | 'sub' | 'push' | 'delete';
+    key: string;
+    value: unknown;
+  }>[];
+}>;
+
 export type CreateSession = Readonly<{
   type: 'session.create';
   presetId: string;
 }>;
 
-export type SessionCommand = AdvanceTurn | RerollTurn;
+export type SessionCommand = AdvanceTurn | RerollTurn | ApplyVariables;
 
 export type SessionCommandEnvelope = Readonly<{
   protocolVersion: 1;
@@ -60,4 +74,8 @@ export type AdvanceTurnEnvelope = SessionCommandEnvelope & {
 
 export type RerollTurnEnvelope = SessionCommandEnvelope & {
   readonly command: RerollTurn;
+};
+
+export type ApplyVariablesEnvelope = SessionCommandEnvelope & {
+  readonly command: ApplyVariables;
 };

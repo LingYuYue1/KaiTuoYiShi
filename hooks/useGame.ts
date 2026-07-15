@@ -15,7 +15,12 @@ import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import type { IKernel, SessionView } from '@/src/kernel/contract';
-import { asCommandId, asRevision, asSessionId } from '@/src/kernel/contract';
+import {
+  asCommandId,
+  asRevision,
+  asSessionId,
+  createTravelerVariablesView,
+} from '@/src/kernel/contract';
 import { createKernel, type KernelMode } from '@/src/kernel/createKernel';
 import { wrapLegacyAdvanceTurn, buildCommittedSessionView } from '@/src/kernel/adapters/legacy/wrapLegacyAdvanceTurn';
 import { executeTurnIntent } from '@/src/ui/kernelClient';
@@ -138,6 +143,7 @@ export function useGame(): UseGameReturn {
                     messages: result.messages,
                     lastProgressTexts: progressTexts,
                     commandId: envelope.commandId,
+                    travelerName: s.旅人.姓名,
                   });
                   events.onCommitted(view);
                 } else {
@@ -166,6 +172,8 @@ export function useGame(): UseGameReturn {
               turnCount: s.turnCount,
               turns: [],
               messages,
+              travelerName: s.旅人.姓名,
+              travelerVariables: createTravelerVariablesView(s.旅人.姓名),
             };
             return view;
           },
@@ -197,6 +205,8 @@ export function useGame(): UseGameReturn {
             turnCount: s.turnCount,
             turns: [],
             messages: [],
+            travelerName: s.旅人.姓名,
+            travelerVariables: createTravelerVariablesView(s.旅人.姓名),
           });
         }
       }

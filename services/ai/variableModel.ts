@@ -460,7 +460,14 @@ export function buildVariablePromptModulesSection(
   return base;
 }
 
-/** 调用变量模型，返回原始文本（待 parseVariableFacts / parseVariableCommands 解析）。 */
+/**
+ * 调用变量模型，返回原始候选文本（非正式提交）。
+ *
+ * Stage 5.1: This adapter must NOT write SessionRepository / React state.
+ * Host/application parses candidates (parseVariableFacts / parseVariableCommands
+ * or kernel parseVariableBlock) → domain actions → reduceTurn / reduceVariables
+ * → single CAS. AI output is candidate-only.
+ */
 export async function callVariableModel(
   config: API配置项,
   request: VariableModelRequest,
