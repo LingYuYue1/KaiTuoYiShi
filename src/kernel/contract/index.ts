@@ -6,12 +6,18 @@
 export type {
   AdvanceTurn,
   AdvanceTurnEnvelope,
+  AlbumBindSlot,
+  AlbumBindSlotEnvelope,
+  AlbumDelete,
+  AlbumDeleteEnvelope,
   ApplyVariables,
   ApplyVariablesEnvelope,
   CommandEnvelope,
   CommandId,
   CreateSession,
   CreateSessionEnvelope,
+  ImageGenerate,
+  ImageGenerateEnvelope,
   NewsApply,
   NewsApplyEnvelope,
   NewsGenerate,
@@ -40,6 +46,7 @@ export type { KernelError, KernelErrorCode } from './errors';
 export type { KernelQuery } from './queries';
 
 export type {
+  AlbumView,
   KnowledgeView,
   NewsView,
   PhoneView,
@@ -51,6 +58,7 @@ export type {
   TurnView,
 } from './projections';
 export {
+  createEmptyAlbumView,
   createEmptyKnowledgeView,
   createEmptyNewsView,
   createEmptyPhoneView,

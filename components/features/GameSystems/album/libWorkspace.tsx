@@ -117,8 +117,10 @@ export function ImageLibraryWorkspace({
   const handleSetSlot = (slot: 图片槽位) => {
     if (!activeItemId || scope !== 'character') return;
     const item = visibleItems.find((candidate) => candidate.entry.id === activeItemId);
-    if (!item?.src) return;
-    onSetSlot({ record: activeRecord, entryId: activeItemId, src: item.src, slot });
+    // Allow mount even when display src is temporarily empty (Blob cache miss).
+    // Mount path binds by entryId + AssetRef; display resolves after traveler/NPC update.
+    if (!item) return;
+    onSetSlot({ record: activeRecord, entryId: activeItemId, src: item.src || '', slot });
     setSlotPickerOpen(false);
   };
   const activeItem = activeItemId ? visibleItems.find((candidate) => candidate.entry.id === activeItemId) : undefined;
@@ -174,7 +176,7 @@ export function ImageLibraryWorkspace({
       </div>
 
       <ImagePreviewModal open={previewOpen && Boolean(previewItem?.src)} src={previewItem?.src || ''} title={`图片预览 · ${previewItem?.entry.title || ''}`} onClose={() => setPreviewOpen(false)} />
-      <SlotPickerModal open={slotPickerOpen} recordName={activeRecord?.name || '角色'} entryTitle={previewItem?.entry.title || ''} recommendedSlot={previewItem?.entry.slot} referenceEnabled={Boolean(activeRecord && activeItem && 图片是否参考角色(activeItem.entry, activeRecord.id))} onToggleReference={() => { if (activeRecord && activeItem) { onSetReference(activeItem.entry.id, activeRecord, !图片是否参考角色(activeItem.entry, activeRecord.id)); setSlotPickerOpen(false); } }} onClose={() => setSlotPickerOpen(false)} onSelect={handleSetSlot} />
+      <SlotPickerModal open={slotPickerOpen} recordName={activeRecord?.name || '角色'} entryTitle={previewItem?.entry.title || ''} recommendedSlot={previewItem?.entry.slot} slots={activeRecord?.slots ?? []} selectedSrc={activeItem?.src} referenceEnabled={Boolean(activeRecord && activeItem && 图片是否参考角色(activeItem.entry, activeRecord.id))} onToggleReference={() => { if (activeRecord && activeItem) { onSetReference(activeItem.entry.id, activeRecord, !图片是否参考角色(activeItem.entry, activeRecord.id)); setSlotPickerOpen(false); } }} onClose={() => setSlotPickerOpen(false)} onSelect={handleSetSlot} />
       <LibraryImportDialog open={importOpen} onClose={() => setImportOpen(false)} scope={scope} record={activeRecord} traveler={traveler} onImport={onImport} />
     </div>
   );

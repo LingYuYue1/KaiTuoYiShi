@@ -5,9 +5,11 @@
  * Stage 5.1 adds traveler variable slice for Variable Manager / display.
  * Stage 5.2 adds a narrow knowledge projection (counts + unlocked titles).
  * Stage 5.3 adds narrow phone / news projections.
+ * Stage 5.4 adds narrow album projection (counts + titles + slot ids).
  */
 
 import type {
+  AlbumView,
   KnowledgeView,
   NewsView,
   PhoneView,
@@ -44,6 +46,7 @@ export function projectSession(
     knowledge: projectKnowledge(snapshot),
     phone: projectPhone(snapshot),
     news: projectNews(snapshot),
+    album: projectAlbum(snapshot),
   };
 }
 
@@ -91,6 +94,27 @@ function projectNews(snapshot: SessionSnapshot): NewsView {
   return {
     entryCount: entries.length,
     latestTitles: entries.slice(0, 5).map((entry) => entry.title),
+  };
+}
+
+function projectAlbum(snapshot: SessionSnapshot): AlbumView {
+  const { assets, entries, tasks, slots } = snapshot.state.album;
+  return {
+    assetCount: assets.length,
+    entryCount: entries.length,
+    taskCount: tasks.length,
+    slotCount: slots.length,
+    recentTitles: entries
+      .slice(-5)
+      .map((entry) => entry.title)
+      .reverse(),
+    slots: slots.map((binding) => ({
+      targetType: binding.targetType,
+      targetId: binding.targetId,
+      slot: binding.slot,
+      assetId: binding.assetId,
+      entryId: binding.entryId,
+    })),
   };
 }
 

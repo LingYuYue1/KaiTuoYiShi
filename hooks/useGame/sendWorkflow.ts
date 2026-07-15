@@ -77,6 +77,7 @@ import { estimateTextTokens } from '@/utils/tokenEstimate';
 import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
+import { commitGeneratedOnAlbum } from '@/src/ui/album';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
@@ -1166,7 +1167,17 @@ function archiveNarrativeSnapshotToAlbum(
     tags: ['故事快照', '正文生图'],
     note: '故事快照',
   });
-  state.set相册((prev) => 添加图片到相册(prev, item));
+  // Stage 5.4 D: single formal commit via domain commitGeneratedAsset (no half asset).
+  // Object URL / dataUrl bytes stay in frontend cache; formal field is AssetRef.
+  state.set相册((prev) => {
+    const committed = commitGeneratedOnAlbum(prev, {
+      asset: item.asset,
+      entry: item.entry,
+      displayDataUrl: image.dataUrl?.startsWith('data:') ? image.dataUrl : undefined,
+    });
+    if (committed.ok) return committed.album;
+    return 添加图片到相册(prev, item);
+  });
   return {
     ...image,
     dataUrl: 创建相册资源引用(item.asset.id),

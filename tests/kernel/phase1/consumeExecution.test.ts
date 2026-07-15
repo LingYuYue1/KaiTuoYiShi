@@ -11,6 +11,7 @@ import {
   type ExecutionFrame,
   type IKernel,
   type SessionView,
+  createEmptyAlbumView,
   createEmptyKnowledgeView,
   createEmptyNewsView,
   createEmptyPhoneView,
@@ -33,6 +34,7 @@ function makeView(revision: number): SessionView {
     knowledge: createEmptyKnowledgeView(),
     phone: createEmptyPhoneView(),
     news: createEmptyNewsView(),
+    album: createEmptyAlbumView(),
   };
 }
 

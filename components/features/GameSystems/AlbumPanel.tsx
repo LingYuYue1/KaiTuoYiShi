@@ -23,6 +23,11 @@ import {
   解析相册资源引用,
   解析相册资源地址,
 } from '@/utils/albumActions';
+import {
+  bindSlotOnAlbum,
+  commitGeneratedOnAlbum,
+  deleteEntriesOnAlbum,
+} from '@/src/ui/album';
 import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
@@ -43,7 +48,7 @@ import type {
 import {
   buildAlbumResourceEntries, buildCharacterLibraryRecords, buildNpcSourceText, buildPresentSceneNpcs,
   buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions,
-  buildTravelerSourceText, CharacterAnchorWorkspace, cleanupAlbumAssets, createTask,
+  buildTravelerSourceText, CharacterAnchorWorkspace, createTask,
   CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags, extractStorySnapshot,
   formatStorySnapshotSceneText, getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
   isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot,
@@ -131,6 +136,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const [travelerAnchorRequirement, setTravelerAnchorRequirement] = useState('');
   const [anchorRequirement, setAnchorRequirement] = useState('');
   const [archiveProgress, setArchiveProgress] = useState<AlbumOperationProgress | null>(null);
+  /** Generation progress UI only — not formal album (Stage 5.4 D: no half assets). */
+  const [localGenerateTask, setLocalGenerateTask] = useState<图片生成任务 | null>(null);
   const [albumUpdatePending, startAlbumUpdate] = useTransition();
   const nsfwVisible = nsfwEnabled && nsfwImageEnabled;
   const albumOperationBusy = Boolean(archiveProgress) || albumUpdatePending;
@@ -343,14 +350,16 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const resolvedSize = resolveSize(sizePreset, customSize, currentTarget.slot);
   const currentCanvasTargetId = resolveGenerationTargetId(currentTarget, undefined, selectedCharacterId);
   const currentCanvasTask = useMemo(() => {
-    const byLastTask = lastTaskId ? album.tasks.find((item) => item.id === lastTaskId) : undefined;
     const matchesCurrentTarget = (item: 图片生成任务) =>
       item.slot === currentTarget.slot &&
       item.targetType === currentTarget.targetType &&
       (!currentCanvasTargetId || !item.targetId || item.targetId === currentCanvasTargetId);
+    // Prefer in-flight local task (progress UI) over formal album tasks.
+    if (localGenerateTask && matchesCurrentTarget(localGenerateTask)) return localGenerateTask;
+    const byLastTask = lastTaskId ? album.tasks.find((item) => item.id === lastTaskId) : undefined;
     if (byLastTask && matchesCurrentTarget(byLastTask)) return byLastTask;
     return album.tasks.find(matchesCurrentTarget);
-  }, [album.tasks, currentTarget.slot, currentTarget.targetType, currentCanvasTargetId, lastTaskId]);
+  }, [album.tasks, currentTarget.slot, currentTarget.targetType, currentCanvasTargetId, lastTaskId, localGenerateTask]);
   const currentCanvasAsset = currentCanvasTask?.resultAssetId ? assetMap.get(currentCanvasTask.resultAssetId) : undefined;
   const currentCanvasSrc = 解析相册资源地址(currentCanvasAsset) || '';
   const currentCanvasEntry = currentCanvasTask?.resultAssetId ? album.entries.find((entry) => entry.assetId === currentCanvasTask.resultAssetId) : undefined;
@@ -442,7 +451,9 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       referenceImageIds: referencePayload.entries.map((entry) => entry.id),
     });
     setLastTaskId(task.id);
-    onAlbumChange((prev) => ({ ...prev, tasks: [task, ...prev.tasks] }));
+    // Progress lives in component state only — formal album is written once on success
+    // (mirrors kernel image.generate: no half assets / no intermediate CAS).
+    setLocalGenerateTask({ ...task, status: 'running' });
     setGenerating(true);
     setMessage(override?.statusMessage || (nsfw ? '正在调用 NSFW 独立接口...' : '正在调用文生图接口...'));
     try {
@@ -458,27 +469,31 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         {
           maxRetries: api.retryCount,
           onAttempt: (attempt, total) => {
-            onAlbumChange((prev) => ({
-              ...prev,
-              tasks: prev.tasks.map((old) =>
-                old.id === task.id
-                  ? { ...old, status: 'running', retryCount: attempt - 1, error: attempt > 1 ? `正在重试：${attempt}/${total}` : undefined }
-                  : old,
-              ),
-            }));
+            setLocalGenerateTask((prev) =>
+              prev && prev.id === task.id
+                ? {
+                    ...prev,
+                    status: 'running',
+                    retryCount: attempt - 1,
+                    error: attempt > 1 ? `正在重试：${attempt}/${total}` : undefined,
+                  }
+                : prev,
+            );
             setMessage(referencePayload.images.length
               ? (total > 1 ? `正在参考图片生成（${attempt}/${total}）...` : '正在参考图片生成...')
               : (total > 1 ? `正在生成图片（${attempt}/${total}）...` : '正在生成图片...'));
           },
           onRetry: (attempt, total, errorMessage) => {
-            onAlbumChange((prev) => ({
-              ...prev,
-              tasks: prev.tasks.map((old) =>
-                old.id === task.id
-                  ? { ...old, status: 'running', retryCount: attempt, error: `第 ${attempt}/${total} 次失败：${errorMessage}` }
-                  : old,
-              ),
-            }));
+            setLocalGenerateTask((prev) =>
+              prev && prev.id === task.id
+                ? {
+                    ...prev,
+                    status: 'running',
+                    retryCount: attempt,
+                    error: `第 ${attempt}/${total} 次失败：${errorMessage}`,
+                  }
+                : prev,
+            );
             setMessage(`生成失败，正在自动重试（${attempt}/${total}）：${errorMessage}`);
           },
         },
@@ -506,18 +521,39 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
         tags: entryTags,
         note: entryNote,
       });
-      onAlbumChange((prev) => ({
-        ...添加图片到相册(prev, item),
-        tasks: prev.tasks.map((old) => old.id === task.id ? { ...old, status: 'success', resultAssetId: item.asset.id, finishedAt: Date.now() } : old),
-      }));
+      const successTask: 图片生成任务 = {
+        ...task,
+        status: 'success',
+        resultAssetId: item.asset.id,
+        finishedAt: Date.now(),
+      };
+      // Single formal write via domain commitGeneratedAsset (optional bindToSlot when targetId present).
+      // Functional updater avoids dropping concurrent album edits during async generate.
+      const shouldBind = Boolean(resolvedTargetId);
+      const displayDataUrl = result.src.startsWith('data:') ? result.src : undefined;
+      onAlbumChange((prev) => {
+        const committed = commitGeneratedOnAlbum(prev, {
+          asset: item.asset,
+          entry: item.entry,
+          task: successTask,
+          bindToSlot: shouldBind,
+          displayDataUrl,
+        });
+        if (committed.ok) return committed.album;
+        // Fallback: add entry without half task if pure commit rejects (e.g. race duplicate).
+        return 添加图片到相册(prev, item);
+      });
+      setLocalGenerateTask(successTask);
       setActiveEntryId(item.entry.id);
       setMessage('图片已生成并加入相册。');
     } catch (err) {
       const error = readImageError(err);
-      onAlbumChange((prev) => ({
-        ...prev,
-        tasks: prev.tasks.map((old) => old.id === task.id ? { ...old, status: 'failed', error, finishedAt: Date.now() } : old),
-      }));
+      // Failure: local UI only — formal album unchanged (no half asset).
+      setLocalGenerateTask((prev) =>
+        prev && prev.id === task.id
+          ? { ...prev, status: 'failed', error, finishedAt: Date.now() }
+          : prev,
+      );
       setMessage(`生成失败：${error}`);
     } finally {
       setGenerating(false);
@@ -525,7 +561,11 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   };
 
   const handleRetryTask = (task?: 图片生成任务) => {
-    const target = task ?? album.tasks.find((item) => item.id === lastTaskId) ?? album.tasks.find((item) => item.status === 'failed');
+    // Failed attempts stay in localGenerateTask only (formal album has no half/failed task).
+    const target = task
+      ?? (localGenerateTask?.status === 'failed' ? localGenerateTask : undefined)
+      ?? album.tasks.find((item) => item.id === lastTaskId)
+      ?? album.tasks.find((item) => item.status === 'failed');
     if (!target) {
       setMessage('没有可重试的失败任务。');
       return;
@@ -551,50 +591,99 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     });
   };
 
+  /**
+   * Mount / replace slot — single path through domain bindSlot (replace semantics).
+   * Character/NPC avatar fields store AssetRef only; display resolves at render time.
+   */
   const mountSelectedToCharacter = (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => {
     const entry = album.entries.find((item) => item.id === params.entryId);
     const isBuiltinEntry = params.entryId.startsWith('builtin-avatar:');
     if (!entry && !isBuiltinEntry) return;
     const sourceLabel = isBuiltinEntry ? '原著' : '文生图';
-    const mountedSrc = entry ? 创建相册资源引用(entry.assetId) : params.src;
-    if (params.targetKind === 'traveler') {
-      if (params.slot === 'portrait') {
-        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: '立绘', src: mountedSrc }));
-      } else if (params.slot.toString().startsWith('nsfw_')) {
-        setMessage('旅人档案暂不支持挂载 NSFW 部位图。');
+
+    // Builtin remote avatars are not formal album entries — character field only.
+    if (!entry) {
+      const mountedSrc = params.src;
+      if (params.targetKind === 'traveler') {
+        if (params.slot.toString().startsWith('nsfw_')) {
+          setMessage('旅人档案暂不支持挂载 NSFW 部位图。');
+          return;
+        }
+        if (params.slot === 'portrait') {
+          onTravelerChange((prev) => 挂载旅人图片(prev, { slot: '立绘', src: mountedSrc }));
+        } else {
+          onTravelerChange((prev) => 挂载旅人图片(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: mountedSrc }));
+        }
+        setMessage(`已挂载到 ${slotLabel(params.slot)}。`);
         return;
-      } else {
-        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: mountedSrc }));
       }
-      if (entry) {
-        onAlbumChange((prev) => ({
-          ...prev,
-          entries: prev.entries.map((item) =>
-            item.id === params.entryId
-              ? {
-                  ...item,
-                  targetType: 'traveler',
-                  targetId: params.targetId,
-                  slot: params.slot,
-                }
-              : item,
-          ),
-        }));
+      if (params.slot === 'portrait') {
+        onNpcChange((prev) => 挂载NPC立绘图片(prev, { npcId: params.targetId, src: mountedSrc, source: sourceLabel }));
+      } else if (params.slot === 'nsfw_female_chest') {
+        onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性胸部', src: mountedSrc }));
+      } else if (params.slot === 'nsfw_female_genital') {
+        onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性私处', src: mountedSrc }));
+      } else if (params.slot === 'nsfw_male_genital') {
+        if (!gameSettings.enableMaleNsfwArchive) {
+          setMessage('男性 NSFW 档案未开启，不能挂载男性器部位图。');
+          return;
+        }
+        onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '男性器', src: mountedSrc }));
+      } else if (params.slot === 'nsfw_rear') {
+        onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '后庭', src: mountedSrc }));
+      } else if (params.slot === 'nsfw_body_reference') {
+        onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '体态参考', src: mountedSrc }));
+      } else {
+        onNpcChange((prev) => 挂载NPC头像图片(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: mountedSrc, source: sourceLabel }));
       }
       setMessage(`已挂载到 ${slotLabel(params.slot)}。`);
       return;
     }
-    if (params.slot === 'portrait') {
+
+    if (params.targetKind === 'traveler' && params.slot.toString().startsWith('nsfw_')) {
+      setMessage('旅人档案暂不支持挂载 NSFW 部位图。');
+      return;
+    }
+    if (params.slot === 'nsfw_male_genital' && !gameSettings.enableMaleNsfwArchive) {
+      setMessage('男性 NSFW 档案未开启，不能挂载男性器部位图。');
+      return;
+    }
+
+    const albumTargetType: 图片目标类型 = params.targetKind === 'traveler'
+      ? 'traveler'
+      : params.slot.toString().startsWith('nsfw_')
+        ? 'nsfw_part'
+        : 'npc';
+    const albumTargetId = params.targetId || (params.targetKind === 'traveler' ? 'traveler' : params.targetId);
+
+    // Single authority: domain bindSlot (replace previous binding for this slot key).
+    const bound = bindSlotOnAlbum(album, {
+      entryId: params.entryId,
+      targetType: albumTargetType,
+      targetId: albumTargetId,
+      slot: params.slot,
+    });
+    if (!bound.ok) {
+      setMessage(`挂载失败：${bound.reason}`);
+      return;
+    }
+    onAlbumChange(bound.album);
+
+    // Formal AssetRef only on character/NPC fields — LeftPanel resolves via album + Blob cache.
+    const mountedSrc = bound.assetRef;
+    if (params.targetKind === 'traveler') {
+      if (params.slot === 'portrait') {
+        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: '立绘', src: mountedSrc }));
+      } else {
+        onTravelerChange((prev) => 挂载旅人图片(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: mountedSrc }));
+      }
+    } else if (params.slot === 'portrait') {
       onNpcChange((prev) => 挂载NPC立绘图片(prev, { npcId: params.targetId, src: mountedSrc, source: sourceLabel }));
     } else if (params.slot === 'nsfw_female_chest') {
       onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性胸部', src: mountedSrc }));
     } else if (params.slot === 'nsfw_female_genital') {
       onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '女性私处', src: mountedSrc }));
     } else if (params.slot === 'nsfw_male_genital') {
-      if (!gameSettings.enableMaleNsfwArchive) {
-        setMessage('男性 NSFW 档案未开启，不能挂载男性器部位图。');
-        return;
-      }
       onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '男性器', src: mountedSrc }));
     } else if (params.slot === 'nsfw_rear') {
       onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '后庭', src: mountedSrc }));
@@ -602,22 +691,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       onNpcChange((prev) => 挂载NPC_NSFW部位图片(prev, { npcId: params.targetId, slot: '体态参考', src: mountedSrc }));
     } else {
       onNpcChange((prev) => 挂载NPC头像图片(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: mountedSrc, source: sourceLabel }));
-    }
-    if (entry) {
-      onAlbumChange((prev) => ({
-        ...prev,
-        entries: prev.entries.map((item) =>
-          item.id === params.entryId
-            ? {
-                ...item,
-                targetType: params.slot.toString().startsWith('nsfw_') ? 'nsfw_part' : 'npc',
-                targetId: params.targetId,
-                slot: params.slot,
-                nsfw: item.nsfw || params.slot.toString().startsWith('nsfw_'),
-              }
-            : item,
-        ),
-      }));
     }
     setMessage(`已挂载到 ${slotLabel(params.slot)}。`);
   };
@@ -629,15 +702,17 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       setMessage('请先选择要删除的图片。');
       return;
     }
-    const idSet = new Set(ids);
     setMessage(`正在删除 ${ids.length} 张图片…`);
     startAlbumUpdate(() => {
-      onAlbumChange((prev) => cleanupAlbumAssets({
-        ...prev,
-        entries: prev.entries.filter((entry) => !idSet.has(entry.id)),
-      }));
-      setActiveEntryId((current) => (current && idSet.has(current) ? null : current));
-      setMessage(`已删除 ${ids.length} 张图片。`);
+      // Domain deleteEntries: drops slot bindings + orphan assets + revokes object URLs.
+      const deleted = deleteEntriesOnAlbum(album, ids);
+      if (!deleted.ok) {
+        setMessage(deleted.reason === 'none_found' ? '未找到要删除的图片。' : '删除失败：未选择条目。');
+        return;
+      }
+      onAlbumChange(deleted.album);
+      setActiveEntryId((current) => (current && ids.includes(current) ? null : current));
+      setMessage(`已删除 ${deleted.removedEntryIds.length} 张图片。`);
     });
   };
 
@@ -649,8 +724,14 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     }
     const scopedEntries = [...record.entries, ...resourceEntries];
     const item = scopedEntries.find((entry) => entry.entry.id === params.entryId);
-    const src = item?.src || params.src;
-    if (!src) {
+    // Formal album entry is enough to mount (AssetRef path). Display src may be
+    // empty when Blob cache is cold; do not block bind on resolved preview URL.
+    if (!item && !params.entryId.startsWith('builtin-avatar:')) {
+      setMessage('请选择一张可用图片。');
+      return;
+    }
+    const src = item?.src || params.src || '';
+    if (!item && !src) {
       setMessage('请选择一张可用图片。');
       return;
     }

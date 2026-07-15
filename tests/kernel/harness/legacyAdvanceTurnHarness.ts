@@ -111,6 +111,14 @@ function toView(snapshot: SessionSnapshot): SessionView {
     },
     phone: { threadCount: 0, messageCount: 0, lastMessages: [] },
     news: { entryCount: 0, latestTitles: [] },
+    album: {
+      assetCount: 0,
+      entryCount: 0,
+      taskCount: 0,
+      slotCount: 0,
+      recentTitles: [],
+      slots: [],
+    },
   };
 }
 

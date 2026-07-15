@@ -6,6 +6,7 @@
  * - variables.apply → applyVariables only (Stage 5.1; pure reduce + single CAS)
  * - phone.reply → phoneReply only (Stage 5.3)
  * - news.apply / news.generate → applyNews handlers (Stage 5.3)
+ * - image.generate / album.delete / album.bindSlot → album handlers (Stage 5.4)
  * - other commands: optional transitional legacy fallback, else not_implemented
  * - read → SessionRepository projection
  *
@@ -15,11 +16,14 @@
 
 import type {
   AdvanceTurnEnvelope,
+  AlbumBindSlotEnvelope,
+  AlbumDeleteEnvelope,
   ApplyVariablesEnvelope,
   CommandEnvelope,
   CreateSessionEnvelope,
   ExecutionFrame,
   IKernel,
+  ImageGenerateEnvelope,
   KernelQuery,
   NewsApplyEnvelope,
   NewsGenerateEnvelope,
@@ -28,6 +32,8 @@ import type {
   RerollTurnEnvelope,
   SessionCommandEnvelope,
 } from '@/src/kernel/contract';
+import type { AssetStore } from '@/src/kernel/ports/AssetStore';
+import type { ImageGenerator } from '@/src/kernel/ports/ImageGenerator';
 import type { ModelGateway } from '@/src/kernel/ports/ModelGateway';
 import type { SessionRepository } from '@/src/kernel/ports/SessionRepository';
 import type { LegacyKernelDependencies } from '@/src/kernel/adapters/legacy/LegacyKernelAdapter';
@@ -37,14 +43,28 @@ import { rerollTurn } from '@/src/kernel/application/rerollTurn';
 import { applyVariables } from '@/src/kernel/application/applyVariables';
 import { phoneReply } from '@/src/kernel/application/phoneReply';
 import { applyNews, generateNews } from '@/src/kernel/application/applyNews';
+import { generateImage } from '@/src/kernel/application/generateImage';
+import { deleteAlbumEntries } from '@/src/kernel/application/deleteAlbumEntries';
+import { bindAlbumSlot } from '@/src/kernel/application/bindAlbumSlot';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
   model: ModelGateway;
   /**
+   * Stage 5.4: required when executing image.generate / album.delete.
+   * Optional so phase2–5.3 tests keep constructing sessions+model only.
+   * Missing deps reject with unsupported_command when those commands run.
+   */
+  assets?: AssetStore;
+  /**
+   * Stage 5.4: required when executing image.generate.
+   * Optional for the same reason as assets.
+   */
+  images?: ImageGenerator;
+  /**
    * Transitional: non-native commands may route here.
-   * AdvanceTurn, RerollTurn, ApplyVariables, PhoneReply, News never use this.
+   * AdvanceTurn, RerollTurn, ApplyVariables, PhoneReply, News, Album never use this.
    */
   legacy?: LegacyKernelDependencies;
 }>;
@@ -52,11 +72,15 @@ export type NativeKernelDependencies = Readonly<{
 export class NativeKernel implements IKernel {
   private readonly sessions: SessionRepository;
   private readonly model: ModelGateway;
+  private readonly assets: AssetStore | null;
+  private readonly images: ImageGenerator | null;
   private readonly legacyAdapter: LegacyKernelAdapter | null;
 
   constructor(dependencies: NativeKernelDependencies) {
     this.sessions = dependencies.sessions;
     this.model = dependencies.model;
+    this.assets = dependencies.assets ?? null;
+    this.images = dependencies.images ?? null;
     this.legacyAdapter = dependencies.legacy
       ? new LegacyKernelAdapter(dependencies.legacy)
       : null;
@@ -108,6 +132,58 @@ export class NativeKernel implements IKernel {
         yield* generateNews(sessionEnvelope as NewsGenerateEnvelope, {
           sessions: this.sessions,
           model: this.model,
+        });
+        return;
+      case 'image.generate':
+        // Native only (Stage 5.4) — ImageGenerator + AssetStore + single CAS.
+        if (!this.assets || !this.images) {
+          yield {
+            type: 'rejected',
+            commandId: sessionEnvelope.commandId,
+            error: {
+              code: 'unsupported_command',
+              message:
+                'image.generate requires AssetStore and ImageGenerator on NativeKernel',
+              details: {
+                commandType: 'image.generate',
+                missing: [
+                  ...(this.assets ? [] : ['assets']),
+                  ...(this.images ? [] : ['images']),
+                ],
+              },
+            },
+          };
+          return;
+        }
+        yield* generateImage(sessionEnvelope as ImageGenerateEnvelope, {
+          sessions: this.sessions,
+          assets: this.assets,
+          images: this.images,
+        });
+        return;
+      case 'album.delete':
+        // Native only (Stage 5.4) — pure delete + CAS + best-effort AssetStore.remove.
+        if (!this.assets) {
+          yield {
+            type: 'rejected',
+            commandId: sessionEnvelope.commandId,
+            error: {
+              code: 'unsupported_command',
+              message: 'album.delete requires AssetStore on NativeKernel',
+              details: { commandType: 'album.delete', missing: ['assets'] },
+            },
+          };
+          return;
+        }
+        yield* deleteAlbumEntries(sessionEnvelope as AlbumDeleteEnvelope, {
+          sessions: this.sessions,
+          assets: this.assets,
+        });
+        return;
+      case 'album.bindSlot':
+        // Native only (Stage 5.4) — pure bindSlot + single CAS (no AssetStore).
+        yield* bindAlbumSlot(sessionEnvelope as AlbumBindSlotEnvelope, {
+          sessions: this.sessions,
         });
         return;
       default: {

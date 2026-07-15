@@ -13,6 +13,7 @@ import type {
 } from '@/src/kernel/contract';
 import {
   asRevision,
+  createEmptyAlbumView,
   createEmptyKnowledgeView,
   createEmptyNewsView,
   createEmptyPhoneView,
@@ -233,6 +234,7 @@ export function buildCommittedSessionView(input: {
     knowledge,
     phone: createEmptyPhoneView(),
     news: createEmptyNewsView(),
+    album: createEmptyAlbumView(),
     ...(input.lastProgressTexts ? { lastProgressTexts: input.lastProgressTexts } : {}),
   };
 }

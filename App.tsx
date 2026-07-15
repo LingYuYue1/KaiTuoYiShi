@@ -1147,6 +1147,7 @@ function renderSystemPanel(
         <StarMapPanel
           worldState={ctx.worldState}
           npcRecords={ctx.npcRecords}
+          album={ctx.album}
           plotNodes={ctx.plotNodes}
           gameSettings={ctx.gameSettings}
           onGameSettingsChange={ctx.onGameSettingsChange}

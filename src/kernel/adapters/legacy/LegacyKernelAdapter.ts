@@ -6,6 +6,7 @@
  */
 
 import {
+  createEmptyAlbumView,
   createEmptyKnowledgeView,
   createEmptyNewsView,
   createEmptyPhoneView,
@@ -158,6 +159,7 @@ export function sessionViewFromHost(input: {
     knowledge: createEmptyKnowledgeView(),
     phone: createEmptyPhoneView(),
     news: createEmptyNewsView(),
+    album: createEmptyAlbumView(),
     ...(input.lastProgressTexts ? { lastProgressTexts: input.lastProgressTexts } : {}),
   };
 }

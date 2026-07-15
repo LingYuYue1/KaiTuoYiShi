@@ -54,6 +54,11 @@ describe('session schema migration (Phase 4.3)', () => {
     // Stage 5.3: missing phone/news defaults to empty systems
     expect(migrated.state.phone.threads).toEqual([]);
     expect(migrated.state.news.entries).toEqual([]);
+    // Stage 5.4: missing album defaults to empty system
+    expect(migrated.state.album.assets).toEqual([]);
+    expect(migrated.state.album.entries).toEqual([]);
+    expect(migrated.state.album.tasks).toEqual([]);
+    expect(migrated.state.album.slots).toEqual([]);
   });
 
   it('current v1 package is identity-migrated', () => {

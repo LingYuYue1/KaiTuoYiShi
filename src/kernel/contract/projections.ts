@@ -1,5 +1,5 @@
 /**
- * IKernel projection contract (Phase 1 / Stage 5.1 / 5.2 / 5.3).
+ * IKernel projection contract (Phase 1 / Stage 5.1 / 5.2 / 5.3 / 5.4).
  * Narrow UI-facing views — not a dump of Kernel private state.
  * Must not import old models, services, hooks, or UI types.
  */
@@ -91,8 +91,40 @@ export function createEmptyNewsView(): NewsView {
 }
 
 /**
+ * Stage 5.4 narrow album projection — counts + recent titles + slot ids only.
+ * No bytes / object URLs / data URLs.
+ */
+export type AlbumView = Readonly<{
+  assetCount: number;
+  entryCount: number;
+  taskCount: number;
+  slotCount: number;
+  /** Recent entry titles (narrow) */
+  recentTitles: readonly string[];
+  /** Slot bindings as asset refs for UI (ids only) */
+  slots: readonly Readonly<{
+    targetType: string;
+    targetId: string;
+    slot: string;
+    assetId: string;
+    entryId: string;
+  }>[];
+}>;
+
+export function createEmptyAlbumView(): AlbumView {
+  return {
+    assetCount: 0,
+    entryCount: 0,
+    taskCount: 0,
+    slotCount: 0,
+    recentTitles: [],
+    slots: [],
+  };
+}
+
+/**
  * Session projection for UI / characterization.
- * turnCount + messages + traveler variables + knowledge/phone/news summary so
+ * turnCount + messages + traveler variables + knowledge/phone/news/album summary so
  * native UI can render without importing kernel domain reducers.
  */
 export type SessionView = Readonly<{
@@ -111,6 +143,8 @@ export type SessionView = Readonly<{
   phone: PhoneView;
   /** Stage 5.3 news summary projection. */
   news: NewsView;
+  /** Stage 5.4 album summary projection. */
+  album: AlbumView;
   /** Optional: last progress texts observed during a successful stream (not formal). */
   lastProgressTexts?: readonly string[];
 }>;

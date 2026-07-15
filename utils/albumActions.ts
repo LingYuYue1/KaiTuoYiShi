@@ -1,3 +1,13 @@
+/**
+ * Legacy album helpers + character field mount utilities.
+ *
+ * Stage 5.4 D:
+ * - Slot bind/replace/delete for formal album go through
+ *   `src/ui/album/slotOperations` (domain bindSlot / deleteEntries / commitGeneratedAsset).
+ * - Formal fields store `asset:<id>` (AssetRef) or remote URLs only.
+ * - Display URLs are resolved at render time via 解析相册资源引用 / albumObjectUrl.
+ * - Object URLs never enter formal 相册系统 / GameState.
+ */
 import type { 相册系统, 相册条目, 图片资源, 图片目标类型, 图片槽位 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC头像槽位 } from '@/models/npc';
@@ -112,14 +122,29 @@ export function 解析相册资源引用(album: 相册系统 | undefined, value:
   if (trimmed.startsWith('asset:')) {
     const assetId = trimmed.slice('asset:'.length).trim();
     if (!assetId) return undefined;
+    // Prefer runtime Blob cache (object URL). If missing, try album asset
+    // metadata (remote url / leftover dataUrl) and rehydrate cache when possible.
     const objectUrl = resolveAlbumAssetDisplayUrl(assetId);
     if (objectUrl) return objectUrl;
     const asset = album?.assets.find((item) => item.id === assetId);
-    return asset ? pickAssetDisplayUrl(asset) : undefined;
+    if (!asset) return undefined;
+    // Rehydrate cache from any inline base64 still present on the asset row.
+    for (const candidate of [asset.dataUrl, asset.originalUrl, asset.url]) {
+      if (candidate && isDataImageUrl(candidate)) {
+        rememberAlbumAssetFromDataUrl(assetId, candidate);
+        const hydrated = resolveAlbumAssetDisplayUrl(assetId);
+        if (hydrated) return hydrated;
+      }
+    }
+    return pickAssetDisplayUrl(asset);
   }
   // Legacy inline base64: try to migrate via album asset id if present.
   if (isDataImageUrl(trimmed) && album) {
-    const asset = album.assets.find((item) => item.dataUrl === trimmed || item.id && resolveAlbumAssetDisplayUrl(item.id));
+    const asset = album.assets.find(
+      (item) =>
+        item.dataUrl === trimmed
+        || (item.id && Boolean(resolveAlbumAssetDisplayUrl(item.id))),
+    );
     if (asset?.id) {
       rememberAlbumAssetFromDataUrl(asset.id, trimmed);
       return resolveAlbumAssetDisplayUrl(asset.id) ?? trimmed;

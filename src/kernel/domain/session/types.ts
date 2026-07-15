@@ -1,7 +1,7 @@
 /**
- * Formal session types for Native Kernel (Phase 3/4/5.1/5.2/5.3).
+ * Formal session types for Native Kernel (Phase 3/4/5.1/5.2/5.3/5.4).
  *
- * ## Ownership (Stage 5.3)
+ * ## Ownership (Stage 5.4)
  * SessionRepository owns this formal slice:
  * - turnCount, messages, turns
  * - travelerName (convenience mirror of variables.旅人.姓名)
@@ -9,39 +9,46 @@
  * - knowledge: zhiku / yiting / story / memory (Stage 5.2 Knowledge vertical slice)
  * - phone: contact threads + messages (Stage 5.3 Phone)
  * - news: news entries (Stage 5.3 News)
+ * - album: assets / entries / tasks / slots metadata + AssetRef ids (Stage 5.4 Album)
  *
  * Not yet formal SessionRepository state (still legacy React / full 存档):
  * - full 旅人 graph (背包/战技/命途…), 世界, NPC, full memory compression,
- *   Album, full story weaving gate matrix, worldbook chain, …
+ *   full story weaving gate matrix, worldbook chain, …
  * Expand GameState only when a native use case needs a field and the
  * CAS/snapshot/restore paths can own it end-to-end.
  *
- * ## Schema (Phase 4 / 5.1 / 5.2 / 5.3)
+ * ## Schema (Phase 4 / 5.1 / 5.2 / 5.3 / 5.4)
  * Durable rows carry schemaVersion (SESSION_SCHEMA_VERSION). Migration runs
  * at repository ingress. Irreversible bumps need backup; composition-flag
  * rollback is not lossless if old clients cannot read the new schema.
- * Stage 5.3 keeps schemaVersion=1 and fills missing `phone` / `news`
- * (and earlier `knowledge` / `variables`) at ingress with empty constructors.
+ * Stage 5.4 keeps schemaVersion=1 and fills missing `album` (and earlier
+ * `phone` / `news` / `knowledge` / `variables`) at ingress with empty constructors.
  *
  * ## Knowledge shape (Stage 5.2)
  * Nested under `state.knowledge` (not flatter top-level fields) so future
  * knowledge subsystems stay grouped and schema defaults stay one object.
  *
- * ## Phone / News (Stage 5.3)
+ * ## Phone / News (Stage 5.3) / Album (Stage 5.4)
  * Required top-level fields. Empty collections are valid formal state.
  * Schema ingress is the only place that synthesizes empty systems for old rows.
+ * Album formal state holds AssetRef metadata only — never bytes / object URLs.
  *
- * ## Reroll (Phase 4 / 5.1 / 5.2 / 5.3)
+ * ## Reroll (Phase 4 / 5.1 / 5.2 / 5.3 / 5.4)
  * Native reroll operates on formal GameState (Option B: fork + single CAS).
  * Every new formal turn records prior travelerName + variables + knowledge
  * so reroll can rebuild the complete formal base. Phase 4 turns without
  * variables use their recorded name as the Stage 5.1 baseline; turns without
- * knowledgeBefore restore empty knowledge. Phone/news are not turn-scoped
- * yet — reroll base keeps the current session phone/news (independent CAS
+ * knowledgeBefore restore empty knowledge. Phone/news/album are not turn-scoped
+ * yet — reroll base keeps the current session phone/news/album (independent CAS
  * paths). Turns without that name are deliberately not rerollable.
  */
 
 import type { Revision, SessionId } from '@/src/kernel/contract';
+import type { KernelAlbum } from '@/src/kernel/domain/album';
+import {
+  cloneKernelAlbum,
+  createEmptyKernelAlbum,
+} from '@/src/kernel/domain/album';
 import type {
   KernelMemoryTier,
   KernelStoryProgress,
@@ -122,6 +129,12 @@ export type GameState = Readonly<{
   phone: KernelPhoneSystem;
   /** Stage 5.3 News formal slice. Empty entries is valid. */
   news: KernelNewsSystem;
+  /**
+   * Stage 5.4 Album formal slice.
+   * Metadata + AssetRef ids only — no bytes / object URLs / data URLs.
+   * Empty collections are valid.
+   */
+  album: KernelAlbum;
 }>;
 
 /**
@@ -195,12 +208,13 @@ export function cloneKernelKnowledge(knowledge: KernelKnowledge): KernelKnowledg
 /** Create an empty session state for tests / new native sessions. */
 export function createEmptyGameState(
   overrides?: Partial<
-    Omit<GameState, 'turns' | 'variables' | 'messages' | 'knowledge' | 'phone' | 'news'>
+    Omit<GameState, 'turns' | 'variables' | 'messages' | 'knowledge' | 'phone' | 'news' | 'album'>
   > & {
     variables?: KernelVariables;
     knowledge?: KernelKnowledge;
     phone?: KernelPhoneSystem;
     news?: KernelNewsSystem;
+    album?: KernelAlbum;
     messages?: readonly KernelMessage[];
     turns?: readonly KernelTurnInput[];
   },
@@ -233,6 +247,9 @@ export function createEmptyGameState(
     news: overrides?.news
       ? cloneKernelNews(overrides.news)
       : createEmptyKernelNews(),
+    album: overrides?.album
+      ? cloneKernelAlbum(overrides.album)
+      : createEmptyKernelAlbum(),
   };
 }
 
@@ -270,6 +287,7 @@ export function cloneGameState(state: GameState): GameState {
     knowledge: cloneKernelKnowledge(state.knowledge),
     phone: cloneKernelPhone(state.phone),
     news: cloneKernelNews(state.news),
+    album: cloneKernelAlbum(state.album),
   };
 }
 

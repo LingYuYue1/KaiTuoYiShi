@@ -19,6 +19,7 @@ import {
   asCommandId,
   asRevision,
   asSessionId,
+  createEmptyAlbumView,
   createEmptyKnowledgeView,
   createEmptyNewsView,
   createEmptyPhoneView,
@@ -180,6 +181,7 @@ export function useGame(): UseGameReturn {
               knowledge: createEmptyKnowledgeView(),
               phone: createEmptyPhoneView(),
               news: createEmptyNewsView(),
+              album: createEmptyAlbumView(),
             };
             return view;
           },
@@ -216,6 +218,7 @@ export function useGame(): UseGameReturn {
             knowledge: createEmptyKnowledgeView(),
             phone: createEmptyPhoneView(),
             news: createEmptyNewsView(),
+            album: createEmptyAlbumView(),
           });
         }
       }

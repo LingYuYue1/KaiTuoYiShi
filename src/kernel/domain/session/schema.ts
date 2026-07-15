@@ -1,5 +1,5 @@
 /**
- * Session persistence schema versioning (Phase 4 / Stage 5.1 / 5.2 / 5.3).
+ * Session persistence schema versioning (Phase 4 / Stage 5.1 / 5.2 / 5.3 / 5.4).
  *
  * - Every durable snapshot carries schemaVersion.
  * - Migration runs once at repository / import ingress.
@@ -9,6 +9,7 @@
  * - Stage 5.1: still schemaVersion 1; missing `variables` filled from travelerName.
  * - Stage 5.2: still schemaVersion 1; missing `knowledge` filled with empty defaults.
  * - Stage 5.3: still schemaVersion 1; missing `phone` / `news` filled with empty constructors.
+ * - Stage 5.4: still schemaVersion 1; missing `album` filled with createEmptyKernelAlbum().
  */
 
 import type { GameState, KernelKnowledge } from './types';
@@ -17,6 +18,19 @@ import {
   cloneKernelKnowledge,
   createEmptyKernelKnowledge,
 } from './types';
+import type {
+  KernelAlbum,
+  KernelAlbumEntry,
+  KernelAsset,
+  KernelImageSlot,
+  KernelImageTargetType,
+  KernelImageTask,
+  KernelSlotBinding,
+} from '@/src/kernel/domain/album';
+import {
+  cloneKernelAlbum,
+  createEmptyKernelAlbum,
+} from '@/src/kernel/domain/album';
 import type {
   KernelStoryArchive,
   KernelYitingEntry,
@@ -151,6 +165,7 @@ function readGameState(raw: unknown): GameState {
   const knowledge = readKnowledge(state.knowledge, 'state.knowledge');
   const phone = readPhone(state.phone, 'state.phone');
   const news = readNews(state.news, 'state.news');
+  const album = readAlbum(state.album, 'state.album');
 
   return cloneGameState(
     {
@@ -162,6 +177,7 @@ function readGameState(raw: unknown): GameState {
       knowledge,
       phone,
       news,
+      album,
     },
   );
 }
@@ -519,6 +535,280 @@ function readNewsEntry(raw: unknown, field: string): KernelNewsEntry {
     issueNumber: requireNonNegativeInt(entry.issueNumber, `${field}.issueNumber`),
     createdAtTurn: requireNonNegativeInt(entry.createdAtTurn, `${field}.createdAtTurn`),
   };
+}
+
+/**
+ * Stage 5.4 ingress: missing album → empty system (one place only).
+ * Accepts empty/missing; minimal validation of arrays if present.
+ * Does not migrate legacy 相册系统 shapes.
+ */
+function readAlbum(raw: unknown, field: string): KernelAlbum {
+  if (raw === undefined || raw === null) {
+    return createEmptyKernelAlbum();
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an object when present`,
+      { field },
+    );
+  }
+  const root = raw as Record<string, unknown>;
+  // Empty shell without arrays → empty album.
+  if (
+    root.assets === undefined
+    && root.entries === undefined
+    && root.tasks === undefined
+    && root.slots === undefined
+  ) {
+    return createEmptyKernelAlbum();
+  }
+  return cloneKernelAlbum({
+    assets: readAlbumAssets(root.assets, `${field}.assets`),
+    entries: readAlbumEntries(root.entries, `${field}.entries`),
+    tasks: readAlbumTasks(root.tasks, `${field}.tasks`),
+    slots: readAlbumSlots(root.slots, `${field}.slots`),
+  });
+}
+
+function readAlbumAssets(raw: unknown, field: string): KernelAsset[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an array`,
+      { field },
+    );
+  }
+  return raw.map((item, index) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}] must be an object`,
+        { field: `${field}[${index}]` },
+      );
+    }
+    const asset = item as Record<string, unknown>;
+    const source = requireString(asset.source, `${field}[${index}].source`);
+    if (source !== 'generated' && source !== 'upload' && source !== 'remote') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}].source must be generated|upload|remote`,
+        { field: `${field}[${index}].source` },
+      );
+    }
+    const status = requireString(asset.status, `${field}[${index}].status`);
+    if (status !== 'ready' && status !== 'failed' && status !== 'pending') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}].status must be ready|failed|pending`,
+        { field: `${field}[${index}].status` },
+      );
+    }
+    if (typeof asset.nsfw !== 'boolean') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}].nsfw must be a boolean`,
+        { field: `${field}[${index}].nsfw` },
+      );
+    }
+    return {
+      id: requireString(asset.id, `${field}[${index}].id`),
+      source,
+      status,
+      nsfw: asset.nsfw,
+      createdAt: requireFiniteNumber(asset.createdAt, `${field}[${index}].createdAt`),
+      ...(typeof asset.mimeType === 'string' ? { mimeType: asset.mimeType } : {}),
+      ...(typeof asset.contentHash === 'string' ? { contentHash: asset.contentHash } : {}),
+      ...(typeof asset.width === 'number' && Number.isFinite(asset.width)
+        ? { width: asset.width }
+        : {}),
+      ...(typeof asset.height === 'number' && Number.isFinite(asset.height)
+        ? { height: asset.height }
+        : {}),
+      ...(typeof asset.size === 'number' && Number.isFinite(asset.size)
+        ? { size: asset.size }
+        : {}),
+      ...(typeof asset.prompt === 'string' ? { prompt: asset.prompt } : {}),
+      ...(typeof asset.negativePrompt === 'string'
+        ? { negativePrompt: asset.negativePrompt }
+        : {}),
+      ...(typeof asset.model === 'string' ? { model: asset.model } : {}),
+      ...(typeof asset.backend === 'string' ? { backend: asset.backend } : {}),
+      ...(typeof asset.remoteUrl === 'string' ? { remoteUrl: asset.remoteUrl } : {}),
+    };
+  });
+}
+
+function readAlbumEntries(raw: unknown, field: string): KernelAlbumEntry[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an array`,
+      { field },
+    );
+  }
+  return raw.map((item, index) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}] must be an object`,
+        { field: `${field}[${index}]` },
+      );
+    }
+    const entry = item as Record<string, unknown>;
+    if (typeof entry.nsfw !== 'boolean') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}].nsfw must be a boolean`,
+        { field: `${field}[${index}].nsfw` },
+      );
+    }
+    return {
+      id: requireString(entry.id, `${field}[${index}].id`),
+      assetId: requireString(entry.assetId, `${field}[${index}].assetId`),
+      title: requireString(entry.title, `${field}[${index}].title`),
+      targetType: requireString(
+        entry.targetType,
+        `${field}[${index}].targetType`,
+      ) as KernelImageTargetType,
+      ...(typeof entry.targetId === 'string' ? { targetId: entry.targetId } : {}),
+      slot: requireString(entry.slot, `${field}[${index}].slot`) as KernelImageSlot,
+      tags: readOptionalStringArray(entry.tags, `${field}[${index}].tags`) ?? [],
+      nsfw: entry.nsfw,
+      createdAt: requireFiniteNumber(entry.createdAt, `${field}[${index}].createdAt`),
+      ...(typeof entry.note === 'string' ? { note: entry.note } : {}),
+      referenceTargets:
+        readOptionalStringArray(
+          entry.referenceTargets,
+          `${field}[${index}].referenceTargets`,
+        ) ?? [],
+    };
+  });
+}
+
+function readAlbumTasks(raw: unknown, field: string): KernelImageTask[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an array`,
+      { field },
+    );
+  }
+  return raw.map((item, index) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}] must be an object`,
+        { field: `${field}[${index}]` },
+      );
+    }
+    const task = item as Record<string, unknown>;
+    if (typeof task.nsfw !== 'boolean') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}].nsfw must be a boolean`,
+        { field: `${field}[${index}].nsfw` },
+      );
+    }
+    const source = requireString(task.source, `${field}[${index}].source`);
+    if (source !== 'manual' && source !== 'auto' && source !== 'retry') {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}].source must be manual|auto|retry`,
+        { field: `${field}[${index}].source` },
+      );
+    }
+    const status = requireString(task.status, `${field}[${index}].status`);
+    if (
+      status !== 'queued'
+      && status !== 'running'
+      && status !== 'success'
+      && status !== 'failed'
+      && status !== 'cancelled'
+    ) {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}].status must be a KernelImageTaskStatus`,
+        { field: `${field}[${index}].status` },
+      );
+    }
+    return {
+      id: requireString(task.id, `${field}[${index}].id`),
+      targetType: requireString(
+        task.targetType,
+        `${field}[${index}].targetType`,
+      ) as KernelImageTargetType,
+      ...(typeof task.targetId === 'string' ? { targetId: task.targetId } : {}),
+      slot: requireString(task.slot, `${field}[${index}].slot`) as KernelImageSlot,
+      source,
+      status,
+      backend: requireString(task.backend, `${field}[${index}].backend`),
+      nsfw: task.nsfw,
+      prompt: typeof task.prompt === 'string'
+        ? task.prompt
+        : requireString(task.prompt, `${field}[${index}].prompt`),
+      ...(typeof task.negativePrompt === 'string'
+        ? { negativePrompt: task.negativePrompt }
+        : {}),
+      ...(typeof task.resultAssetId === 'string'
+        ? { resultAssetId: task.resultAssetId }
+        : {}),
+      ...(typeof task.error === 'string' ? { error: task.error } : {}),
+      retryCount: requireFiniteNumber(task.retryCount, `${field}[${index}].retryCount`),
+      createdAt: requireFiniteNumber(task.createdAt, `${field}[${index}].createdAt`),
+      ...(typeof task.startedAt === 'number' && Number.isFinite(task.startedAt)
+        ? { startedAt: task.startedAt }
+        : {}),
+      ...(typeof task.finishedAt === 'number' && Number.isFinite(task.finishedAt)
+        ? { finishedAt: task.finishedAt }
+        : {}),
+    };
+  });
+}
+
+function readAlbumSlots(raw: unknown, field: string): KernelSlotBinding[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be an array`,
+      { field },
+    );
+  }
+  return raw.map((item, index) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      throw new SessionSchemaError(
+        'invalid_field',
+        `Session record.${field}[${index}] must be an object`,
+        { field: `${field}[${index}]` },
+      );
+    }
+    const binding = item as Record<string, unknown>;
+    return {
+      targetType: requireString(
+        binding.targetType,
+        `${field}[${index}].targetType`,
+      ) as KernelImageTargetType,
+      targetId: requireString(binding.targetId, `${field}[${index}].targetId`),
+      slot: requireString(binding.slot, `${field}[${index}].slot`) as KernelImageSlot,
+      assetId: requireString(binding.assetId, `${field}[${index}].assetId`),
+      entryId: requireString(binding.entryId, `${field}[${index}].entryId`),
+    };
+  });
+}
+
+function requireFiniteNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new SessionSchemaError(
+      'invalid_field',
+      `Session record.${field} must be a finite number`,
+      { field, value },
+    );
+  }
+  return value;
 }
 
 function readOptionalStringArray(raw: unknown, field: string): string[] | undefined {

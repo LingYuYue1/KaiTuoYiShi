@@ -78,7 +78,7 @@ export function findTurnBaseSnapshot(
   const baseKnowledge = originalTurn.knowledgeBefore
     ? cloneKernelKnowledge(originalTurn.knowledgeBefore)
     : createEmptyKernelKnowledge();
-  // Phone/news are not turn-scoped snapshots yet; keep current session values.
+  // Phone/news/album are not turn-scoped snapshots yet; keep current session values.
   const baseState: GameState = cloneGameState({
     turnCount: prefixTurns.length + 1,
     messages: prefixMessages,
@@ -88,6 +88,7 @@ export function findTurnBaseSnapshot(
     knowledge: baseKnowledge,
     phone: snapshot.state.phone,
     news: snapshot.state.news,
+    album: snapshot.state.album,
   });
 
   return {

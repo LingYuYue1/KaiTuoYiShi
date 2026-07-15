@@ -1012,6 +1012,8 @@ export function SlotPickerModal({
   recordName,
   entryTitle,
   recommendedSlot,
+  slots,
+  selectedSrc,
   referenceEnabled = false,
   onToggleReference,
   onClose,
@@ -1021,6 +1023,8 @@ export function SlotPickerModal({
   recordName: string;
   entryTitle: string;
   recommendedSlot?: 图片槽位;
+  slots: MountedImageSlot[];
+  selectedSrc?: string;
   referenceEnabled?: boolean;
   onToggleReference?: () => void;
   onClose: () => void;
@@ -1041,7 +1045,7 @@ export function SlotPickerModal({
   }, [open, onClose]);
 
   if (!open) return null;
-  const slots: Array<{ slot: 图片槽位; title: string; desc: string }> = [
+  const slotOptions: Array<{ slot: 图片槽位; title: string; desc: string }> = [
     { slot: 'avatar_profile', title: '档案头像', desc: '用于角色档案、成品库代表图。' },
     { slot: 'avatar_story', title: '正文头像', desc: '用于剧情正文里的角色头像。' },
     { slot: 'avatar_phone', title: '手机头像', desc: '用于手机联系人、聊天头像。' },
@@ -1081,8 +1085,12 @@ export function SlotPickerModal({
           </button>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {slots.map((option) => {
-            const recommended = option.slot === recommendedSlot || (recommendedSlot?.startsWith('avatar_') && option.slot === 'avatar_profile');
+          {slotOptions.map((option) => {
+            const mountedSlot = slots.find((slot) => slot.key === option.slot);
+            const occupied = Boolean(mountedSlot?.src);
+            const current = Boolean(selectedSrc && mountedSlot?.src === selectedSrc);
+            const recommended = option.slot === recommendedSlot;
+            const stateLabel = current ? '当前图片' : occupied ? '已占用 · 点击替换' : '';
             return (
               <button
                 key={option.slot}
@@ -1090,15 +1098,18 @@ export function SlotPickerModal({
                 onClick={() => onSelect(option.slot)}
                 className="min-h-[92px] px-4 py-3 text-left transition-all"
                 style={{
-                  color: recommended ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-text-primary),0.92)',
-                  background: recommended ? 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))' : 'rgba(var(--tj-bg-secondary),0.78)',
-                  boxShadow: recommended ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.5), 0 0 18px rgba(var(--tj-btn-primary-start),0.12)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
+                  color: current ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-text-primary),0.92)',
+                  background: current ? activeAccentSurface : recommended ? 'rgba(var(--tj-btn-primary-start),0.12)' : 'rgba(var(--tj-bg-secondary),0.78)',
+                  boxShadow: current ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.5), 0 0 18px rgba(var(--tj-btn-primary-start),0.12)' : occupied ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.46)' : recommended ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
                   clipPath: smallClip,
                 }}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-serif text-sm font-bold tracking-[0.14em]">{option.title}</span>
-                  {recommended && <span className="text-[10px] tracking-[0.12em]">推荐</span>}
+                  <span className="flex items-center gap-1.5 text-[10px] tracking-[0.12em]">
+                    {recommended && <span>推荐</span>}
+                    {stateLabel && <span>{stateLabel}</span>}
+                  </span>
                 </div>
                 <div className="mt-2 text-xs leading-relaxed opacity-80">{option.desc}</div>
               </button>
@@ -2024,7 +2035,7 @@ export interface SceneLibraryEntry {
 }
 
 export interface MountedImageSlot {
-  key: string;
+  key: 图片槽位;
   label: string;
   src?: string;
   nsfw?: boolean;
@@ -2068,11 +2079,11 @@ export function buildCharacterLibraryRecords(
     .filter((npc) => npc.阶位 === 'companion' || npc.原著角色)
     .map((npc): NpcLibraryRecord => {
       const slots = [
-        { key: 'avatar-profile', label: '档案头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '档案')) },
-        { key: 'avatar-story', label: '正文头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '正文')) },
-        { key: 'avatar-phone', label: '手机头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '手机')) },
+        { key: 'avatar_profile', label: '档案头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.档案 || npc.图像档案?.头像 || npc.头像 || undefined) },
+        { key: 'avatar_story', label: '正文头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.正文) },
+        { key: 'avatar_phone', label: '手机头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.手机) },
         { key: 'portrait', label: '角色立绘', src: 解析相册资源引用(album, npc.图像档案?.立绘) },
-      ];
+      ] satisfies MountedImageSlot[];
       const albumEntries = (entryIndex.get(npc.id) ?? [])
         .map((entry) => ({
           entry,
@@ -2108,10 +2119,10 @@ export function buildTravelerLibraryRecord(
 ): TravelerLibraryRecord {
   const travelerId = 'traveler';
   const slots: MountedImageSlot[] = [
-    { key: 'traveler-avatar-profile', label: '档案头像', src: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined) },
-    { key: 'traveler-avatar-story', label: '正文头像', src: 解析相册资源引用(album, traveler.图像档案?.正文头像) },
-    { key: 'traveler-avatar-phone', label: '手机头像', src: 解析相册资源引用(album, traveler.图像档案?.手机头像) },
-    { key: 'traveler-portrait', label: '角色立绘', src: 解析相册资源引用(album, traveler.图像档案?.立绘) },
+    { key: 'avatar_profile', label: '档案头像', src: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined) },
+    { key: 'avatar_story', label: '正文头像', src: 解析相册资源引用(album, traveler.图像档案?.正文头像) },
+    { key: 'avatar_phone', label: '手机头像', src: 解析相册资源引用(album, traveler.图像档案?.手机头像) },
+    { key: 'portrait', label: '角色立绘', src: 解析相册资源引用(album, traveler.图像档案?.立绘) },
   ];
   const albumEntries = indexedEntries ?? buildCharacterAlbumEntryIndex(traveler, [], album, false).get(travelerId) ?? [];
   const entries = albumEntries
@@ -2406,19 +2417,6 @@ export function mapImageSlotToTravelerSlot(slot: 图片槽位): '头像' | '正�
   if (slot === 'avatar_story') return '正文头像';
   if (slot === 'avatar_phone') return '手机头像';
   if (slot === 'portrait') return '立绘';
-  return '头像';
-}
-
-export function mapMountedSlotToNpcAvatarSlot(key: string): NPC头像槽位 {
-  if (key === 'avatar-story') return '正文';
-  if (key === 'avatar-phone') return '手机';
-  return '档案';
-}
-
-export function mapMountedSlotToTravelerSlot(key: string): '头像' | '正文头像' | '手机头像' | '立绘' {
-  if (key === 'traveler-avatar-story') return '正文头像';
-  if (key === 'traveler-avatar-phone') return '手机头像';
-  if (key === 'traveler-portrait') return '立绘';
   return '头像';
 }
 

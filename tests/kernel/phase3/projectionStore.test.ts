@@ -43,6 +43,14 @@ function baseView(overrides?: Partial<SessionView>): SessionView {
     },
     phone: overrides?.phone ?? { threadCount: 0, messageCount: 0, lastMessages: [] },
     news: overrides?.news ?? { entryCount: 0, latestTitles: [] },
+    album: overrides?.album ?? {
+      assetCount: 0,
+      entryCount: 0,
+      taskCount: 0,
+      slotCount: 0,
+      recentTitles: [],
+      slots: [],
+    },
     ...overrides,
   };
 }

@@ -335,7 +335,7 @@ export function PhoneModal({
       id: `npc_${npc.id}`,
       npcId: npc.id,
       name: npc.姓名,
-      avatar: 读取NPC头像(npc, '手机'),
+      avatar: 解析相册资源引用(album, 读取NPC头像(npc, '手机')),
       organization: undefined,
       relationLabel: 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
       available: true,
@@ -529,7 +529,7 @@ export function PhoneModal({
         id: `npc_${byNpc.id}`,
         npcId: byNpc.id,
         name: byNpc.姓名,
-        avatar: 读取NPC头像(byNpc, '手机'),
+      avatar: 解析相册资源引用(album, 读取NPC头像(byNpc, '手机')),
         organization: undefined,
         relationLabel: 格式化NPC关系(byNpc.好感度, Boolean(byNpc.亲密关系)),
         available: true,
@@ -800,7 +800,7 @@ export function PhoneModal({
         id: `npc_${npc.id}`,
         npcId: npc.id,
         name: npc.姓名,
-        avatar: 读取NPC头像(npc, '手机'),
+        avatar: 解析相册资源引用(album, 读取NPC头像(npc, '手机')),
         organization: undefined,
         relationLabel: 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
         available: !hiddenEnemy,
@@ -1254,6 +1254,7 @@ export function PhoneModal({
                       <ChatSurface
                         chat={activeChat}
                         traveler={traveler}
+                        album={album}
                         contact={resolveContactForChat(activeChat)}
                         groupMembers={activeChat.type === 'group'
                           ? activeChat.participantIds
@@ -1931,6 +1932,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 function ChatSurface({
   chat,
   traveler,
+  album,
   contact,
   groupMembers,
   groupAddCandidates,
@@ -1945,6 +1947,7 @@ function ChatSurface({
 }: {
   chat: 手机会话;
   traveler: 角色数据结构;
+  album?: 相册系统;
   contact?: 手机联系人;
   groupMembers?: 手机联系人[];
   groupAddCandidates?: 手机联系人[];
@@ -2232,7 +2235,7 @@ function ChatSurface({
                     {msg.role !== 'player' && (
                       <Avatar
                         name={msg.senderName}
-                        src={msg.avatar || (contact && msg.senderId === contact.id ? contact.avatar : undefined)}
+                        src={解析相册资源引用(album, msg.avatar || (contact && msg.senderId === contact.id ? contact.avatar : undefined))}
                       />
                     )}
                     <div
@@ -2256,7 +2259,7 @@ function ChatSurface({
                       {msg.content}
                     </div>
                     {msg.role === 'player' && (
-                      <Avatar name={traveler.姓名 || '我'} src={traveler.图像档案?.手机头像 || traveler.头像 || undefined} />
+                      <Avatar name={traveler.姓名 || '我'} src={解析相册资源引用(album, traveler.图像档案?.手机头像 || traveler.头像 || undefined)} />
                     )}
                   </div>
                 </Fragment>

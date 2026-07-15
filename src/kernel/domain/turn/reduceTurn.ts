@@ -89,9 +89,10 @@ export function reduceTurn(
     travelerName: nextName,
     variables: nextVariables,
     knowledge: nextKnowledge,
-    // Stage 5.3: phone/news are independent formal fields; preserve across turns.
+    // Stage 5.3/5.4: phone/news/album are independent formal fields; preserve across turns.
     phone: state.phone,
     news: state.news,
+    album: state.album,
   };
 
   return { kind: 'ok', nextState, turn };

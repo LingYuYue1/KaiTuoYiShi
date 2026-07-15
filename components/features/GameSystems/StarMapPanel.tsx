@@ -2,16 +2,19 @@
 import type { CSSProperties, ReactNode, Dispatch, SetStateAction, ChangeEvent } from 'react';
 import type { 世界状态 } from '@/models/world';
 import { 读取NPC头像, type NPC记录 } from '@/models/npc';
+import type { 相册系统 } from '@/models/imageGeneration';
 import type { 剧情节点 } from '@/models/plot';
 import type { StarMapLocation, StarMapLocationKind, StarMapNavigationMode, StarMapSceneAnchor, StarMapSource, StarMapWaypoint, StarMapWaypointKind } from '@/models/starMap';
 import { STAR_MAP_MAX_LOCATION_DEPTH, canStarMapLocationAcceptPlayerChildren, findCurrentStarMapLocation, getStarMapLocationPath, normalizeStarMapLocationText } from '@/models/starMap';
 import type { 游戏设置, 星轨航图地图包记录, 星轨航图系统设置 } from '@/models/settings';
 import { STAR_MAP_LOCATIONS, STAR_MAP_WAYPOINTS } from '@/data/starMapPresets';
 import { setPreference } from '@/src/ui/preferences';
+import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface StarMapPanelProps {
   worldState: 世界状态;
   npcRecords: NPC记录[];
+  album: 相册系统;
   plotNodes: 剧情节点[];
   gameSettings: 游戏设置;
   onGameSettingsChange: Dispatch<SetStateAction<游戏设置>>;
@@ -285,7 +288,7 @@ function resolveCurrentMapNavigation(
   return { view: 'detail', localRootLocationId: null, interiorRootLocationId: null };
 }
 
-export function StarMapPanel({ worldState, npcRecords, plotNodes, gameSettings, onGameSettingsChange }: StarMapPanelProps) {
+export function StarMapPanel({ worldState, npcRecords, album, plotNodes, gameSettings, onGameSettingsChange }: StarMapPanelProps) {
   const starMapSettings = gameSettings.星轨航图系统 ?? { customWaypoints: [], customLocations: [], installedPackages: [] };
   const disabledPackageItemIds = useMemo(() => {
     const waypointIds = new Set<string>();
@@ -687,6 +690,7 @@ export function StarMapPanel({ worldState, npcRecords, plotNodes, gameSettings, 
               selectedLocation={selectedLocation}
               selectedAnchorId={selectedSceneAnchorId}
               npcRecords={npcRecords}
+              album={album}
               plotNodes={plotNodes}
               onOpenOverview={() => {
                 setLocalRootLocationId(null);
@@ -717,6 +721,7 @@ export function StarMapPanel({ worldState, npcRecords, plotNodes, gameSettings, 
               rootLocation={interiorRootLocation}
               selectedAnchorId={selectedSceneAnchorId}
               npcRecords={npcRecords}
+              album={album}
               plotNodes={plotNodes}
               onOpenOverview={() => {
                 setLocalRootLocationId(null);
@@ -1719,6 +1724,7 @@ function LocalMap({
   selectedLocation,
   selectedAnchorId,
   npcRecords,
+  album,
   plotNodes,
   onOpenOverview,
   onOpenDetail,
@@ -1733,6 +1739,7 @@ function LocalMap({
   selectedLocation: StarMapLocation | null;
   selectedAnchorId: string | null;
   npcRecords: NPC记录[];
+  album: 相册系统;
   plotNodes: 剧情节点[];
   onOpenOverview: () => void;
   onOpenDetail: () => void;
@@ -1814,6 +1821,7 @@ function LocalMap({
                 index={index}
                 selected={selectedSceneAnchor?.id === anchor.id}
                 current={currentMatch?.location.id === rootLocation?.id && currentMatch?.anchor?.id === anchor.id}
+                album={album}
                 tone="light"
                 onSelect={() => onSelectAnchor(anchor.id)}
               />
@@ -2110,6 +2118,7 @@ function InteriorMap({
   rootLocation,
   selectedAnchorId,
   npcRecords,
+  album,
   plotNodes,
   onOpenOverview,
   onOpenDetail,
@@ -2122,6 +2131,7 @@ function InteriorMap({
   rootLocation: StarMapLocation | null;
   selectedAnchorId: string | null;
   npcRecords: NPC记录[];
+  album: 相册系统;
   plotNodes: 剧情节点[];
   onOpenOverview: () => void;
   onOpenDetail: () => void;
@@ -2184,6 +2194,7 @@ function InteriorMap({
             selected={selectedInteriorAnchor?.id === anchor.id}
             current={currentMatch?.location.id === rootLocation?.id && currentMatch?.anchor?.id === anchor.id}
             npcRecords={roomNpcs.filter((npc) => npc.anchorId === anchor.id)}
+            album={album}
             plotCount={roomPlots.filter((plot) => plot.anchorId === anchor.id).length}
             tone="dark"
             onSelect={() => onSelectAnchor(anchor.id)}
@@ -2248,6 +2259,7 @@ function SceneAnchorNode({
   selected,
   current,
   npcRecords = [],
+  album,
   plotCount = 0,
   tone,
   onSelect,
@@ -2257,6 +2269,7 @@ function SceneAnchorNode({
   selected: boolean;
   current: boolean;
   npcRecords?: NPC记录[];
+  album: 相册系统;
   plotCount?: number;
   tone: 'light' | 'dark';
   onSelect: () => void;
@@ -2286,7 +2299,7 @@ function SceneAnchorNode({
       {visibleNpcRecords.length > 0 && (
         <span className="absolute right-2 top-1/2 flex -translate-y-1/2 -space-x-1.5" aria-label={`此处 NPC：${npcRecords.map((npc) => npc.姓名).join('、')}`}>
           {visibleNpcRecords.map((npc) => {
-            const avatar = 读取NPC头像(npc, '档案');
+            const avatar = 解析相册资源引用(album, 读取NPC头像(npc, '档案'));
             return avatar ? (
               <img
                 key={npc.id}

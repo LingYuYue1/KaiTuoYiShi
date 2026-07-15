@@ -60,6 +60,13 @@ export async function createKernel(
       return new NativeKernel({
         sessions: dependencies.native.sessions,
         model: dependencies.native.model,
+        // Stage 5.4 optional ports — required only when image/album commands run.
+        ...(dependencies.native.assets
+          ? { assets: dependencies.native.assets }
+          : {}),
+        ...(dependencies.native.images
+          ? { images: dependencies.native.images }
+          : {}),
         // Optional transitional fallback for non-advance only.
         legacy: dependencies.native.legacy ?? dependencies.legacy,
       });

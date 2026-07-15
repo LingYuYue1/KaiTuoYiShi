@@ -172,6 +172,14 @@ describe('projection restore via kernel.read', () => {
       },
       phone: { threadCount: 0, messageCount: 0, lastMessages: [] },
       news: { entryCount: 0, latestTitles: [] },
+      album: {
+        assetCount: 0,
+        entryCount: 0,
+        taskCount: 0,
+        slotCount: 0,
+        recentTitles: [],
+        slots: [],
+      },
     });
     projection = applyExecutionFrame(projection, {
       type: 'progress',
@@ -204,6 +212,14 @@ describe('projection restore via kernel.read', () => {
       },
       phone: { threadCount: 0, messageCount: 0, lastMessages: [] },
       news: { entryCount: 0, latestTitles: [] },
+      album: {
+        assetCount: 0,
+        entryCount: 0,
+        taskCount: 0,
+        slotCount: 0,
+        recentTitles: [],
+        slots: [],
+      },
     };
     projection = commitProjectionView(projection, asCommandId('c'), view);
     expect(projection.progress).toBeNull();
