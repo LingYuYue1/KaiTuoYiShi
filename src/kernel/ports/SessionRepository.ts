@@ -1,11 +1,20 @@
 /**
- * SessionRepository port (Phase 2).
+ * SessionRepository port (Phase 3).
  *
  * Sole formal-write authority for session state under Native Kernel.
- * Owns revision CAS for the Phase 2 formal state slice.
+ * Owns revision CAS and commandId idempotency for the formal GameState slice.
  *
- * Full game-state ownership (IndexedDB, all domain slices) is Phase 3+.
- * Phase 2 uses a minimal GameState sufficient for AdvanceTurn characterization.
+ * Guarantees (all adapters must uphold):
+ * 1. read returns an immutable snapshot clone (caller mutation does not affect store).
+ * 2. compareAndSwap is atomic for (revision bump + commandId record) —
+ *    never write next state without recording commandId in the same critical section.
+ * 3. Same (sessionId, commandId) retry returns the prior committed snapshot
+ *    without applying a second turn (idempotent).
+ * 4. Stale expectedRevision yields conflict and leaves store unchanged.
+ *
+ * Phase 3 GameState remains the minimal formal slice (turnCount / messages /
+ * turns / travelerName). Full 旅人/世界/NPC/记忆/手机 graphs stay in legacy
+ * React+IndexedDB paths until later phases expand projection ownership.
  */
 
 import type { CommandId, Revision, SessionId } from '@/src/kernel/contract';
@@ -20,7 +29,7 @@ export type CompareAndSwapInput = Readonly<{
 
 /**
  * CAS outcome.
- * - committed: new revision applied
+ * - committed: new revision applied (or prior commit for the same commandId)
  * - conflict: expectedRevision mismatched actual
  */
 export type CommitResult =
@@ -39,5 +48,9 @@ export interface SessionRepository {
     commandId: CommandId,
   ): Promise<SessionSnapshot | null>;
 
+  /**
+   * Atomically commit nextState when expectedRevision matches.
+   * Same commandId must return the prior successful snapshot (idempotent).
+   */
   compareAndSwap(input: CompareAndSwapInput): Promise<CommitResult>;
 }

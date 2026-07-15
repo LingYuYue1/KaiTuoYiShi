@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import { useGitHubOAuth } from '@/hooks/useGitHubOAuth';
-import { getSaveList, loadSave, loadSetting, replaceAllSaves, saveSetting } from '@/services/dbService';
+import { getSaveCatalog } from '@/src/ui/ports';
+import { getPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import {
   bindGitHubCloudAccount,
   createDefaultGitHubCloudConfig,
@@ -35,7 +36,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
   const { pending: oauthPending, error: oauthError, startGitHubOAuth, consumeGitHubOAuthCallback } = useGitHubOAuth();
 
   useEffect(() => {
-    loadSetting<GitHubCloudSaveConfig>('githubCloudSaveConfig')
+    getPreference<GitHubCloudSaveConfig>('githubCloudSaveConfig')
       .then((saved) => {
         if (!saved) return;
         const next = { ...createDefaultGitHubCloudConfig(), ...saved };
@@ -96,7 +97,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
       token: next.token.trim(),
     };
     setCloudConfig(clean);
-    await saveSetting('githubCloudSaveConfig', clean);
+    await setPreferenceAsync('githubCloudSaveConfig', clean);
     return clean;
   };
 
@@ -134,7 +135,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
     setAccount(null);
     setBindToken('');
     setCloudSaves([]);
-    await saveSetting('githubCloudSaveConfig', next);
+    await setPreferenceAsync('githubCloudSaveConfig', next);
     setCloudConfig(next);
     setCloudMessage('已解除本机 GitHub 云存档绑定。云端文件不会被删除。');
   });
@@ -148,20 +149,29 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
 
   const handleCloudSyncAll = () => runCloudTask(async () => {
     const config = await persistCloudConfig();
-    const summaries = await getSaveList();
+    const catalog = await getSaveCatalog();
+    const summaries = await catalog.getSaveList();
     if (summaries.length === 0) throw new Error('本地还没有可上传的存档。');
 
-    const saves = [];
+    const saves: Array<Record<string, unknown>> = [];
     for (const summary of summaries) {
-      const save = await loadSave(summary.id);
+      const save = await catalog.loadSave(summary.id);
       if (!save) continue;
-      saves.push({ ...save, id: summary.id, type: summary.type });
+      saves.push({
+        ...(save as Record<string, unknown>),
+        id: summary.id,
+        type: summary.type,
+      });
     }
 
     setCloudMessage(`正在同步本地存档：${saves.length} 条`);
-    const manifest = await uploadAllSavesToGitHubCloud(config, saves, (current, total, label) => {
-      setSyncProgress({ label: `上传 ${label}`, current, total });
-    });
+    const manifest = await uploadAllSavesToGitHubCloud(
+      config,
+      saves as never,
+      (current, total, label) => {
+        setSyncProgress({ label: `上传 ${label}`, current, total });
+      },
+    );
     setCloudSaves(manifest.saves);
     setCloudMessage(`已同步本地存档：${manifest.saves.length} 条。云端旧列表已由本次同步结果覆盖。`);
   });
@@ -198,7 +208,8 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
       });
     }
 
-    await replaceAllSaves(downloaded);
+    const catalog = await getSaveCatalog();
+    await catalog.replaceAllSaves(downloaded);
     setCloudSaves(manifest.saves);
     setCloudMessage(`已用云端存档覆盖本地存档列表：${downloaded.length}/${manifest.saves.length} 条。`);
   });

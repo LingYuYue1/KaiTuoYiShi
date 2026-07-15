@@ -1,5 +1,5 @@
 import type { 游戏设置 } from '@/models/settings';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 
 interface Props {
   settings: 游戏设置;
@@ -38,7 +38,7 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
   };
 
   const handleSave = async () => {
-    await saveSetting('gameSettings', settings);
+    await setPreferenceAsync('gameSettings', settings);
   };
 
   return (

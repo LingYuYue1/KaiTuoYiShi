@@ -2,7 +2,7 @@
 import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 
 interface Props {
   settings: 游戏设置;
@@ -124,7 +124,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
 
   const handleSave = async () => {
     try {
-      await saveSetting('gameSettings', settings);
+      await setPreferenceAsync('gameSettings', settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '记忆系统设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

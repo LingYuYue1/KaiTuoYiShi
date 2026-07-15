@@ -19,14 +19,14 @@ import {
   归一化星轨航图系统设置,
   归一化视觉文本设置,
 } from '@/models/settings';
-import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveSetting } from '@/services/dbService';
+import { getSaveCatalog } from '@/src/ui/ports';
+import { getPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import {
   buildPersistedZhikuSystem,
   loadAllBundledZhikuPresets,
   mergeBundledZhikuSystem,
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
-import { loadSetting } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal, isWorkflowRecoveryComplete } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
 import { 归一化世界状态 } from '@/models/world';
@@ -280,10 +280,11 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
 export async function handleLoadLatest(
   state: UseGameStateReturn,
 ): Promise<boolean> {
-  const save = await loadLatestSave();
+  const catalog = await getSaveCatalog();
+  const save = await catalog.loadLatestSave();
   if (!save) return false;
   await saveLoadBackupIfNeeded(state);
-  await applySaveToState(save, state);
+  await applySaveToState(save as 存档数据, state);
   return true;
 }
 
@@ -291,20 +292,23 @@ export async function handleLoadById(
   id: number,
   state: UseGameStateReturn,
 ): Promise<boolean> {
-  const save = await loadSave(id);
+  const catalog = await getSaveCatalog();
+  const save = await catalog.loadSave(id);
   if (!save) return false;
   await saveLoadBackupIfNeeded(state);
-  await applySaveToState(save, state);
+  await applySaveToState(save as 存档数据, state);
   return true;
 }
 
-export function handleManualSave(state: UseGameStateReturn): Promise<number> {
-  return saveGame(buildSavePayload(state, 'manual'));
+export async function handleManualSave(state: UseGameStateReturn): Promise<number> {
+  const catalog = await getSaveCatalog();
+  return catalog.saveGame(buildSavePayload(state, 'manual'));
 }
 
 export async function handleDeleteSave(id: number): Promise<void> {
-  const save = await loadSave(id);
-  await dbDeleteSave(id);
+  const catalog = await getSaveCatalog();
+  const save = await catalog.loadSave(id);
+  await catalog.deleteSave(id);
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
 }
 
@@ -316,7 +320,8 @@ async function saveLoadBackupIfNeeded(state: UseGameStateReturn): Promise<void> 
     Boolean(state.世界.当前地点?.trim());
   if (!hasProgress) return;
   try {
-    await saveGame(buildSavePayload(state, 'backup'));
+    const catalog = await getSaveCatalog();
+    await catalog.saveGame(buildSavePayload(state, 'backup'));
     state.setHasSave(true);
   } catch (error) {
     console.warn('[save-load] backup before loading failed; continue loading selected save', error);
@@ -353,14 +358,14 @@ async function applySaveToState(
       save.忆庭 ?? ({ 回忆档案: legacyArchives } as Partial<import('@/models/yiting').忆庭系统>),
     ),
   );
-  const savedZhikuMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+  const savedZhikuMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
   const zhikuMigrationAt = savedZhikuMigrationAt ?? Date.now();
   if (!savedZhikuMigrationAt) {
-    await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, zhikuMigrationAt);
+    await setPreferenceAsync(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, zhikuMigrationAt);
   }
   const nextZhiku = mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt);
   state.set智库(nextZhiku);
-  await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
+  await setPreferenceAsync('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));
   state.setNPC(归一化NPC记录列表(save.NPC));   // 旧存档/AI 半成品对象统一兜底
   state.set相册(materializeAlbumRuntimePayload(归一化相册系统(save.相册)));
@@ -381,7 +386,7 @@ async function applySaveToState(
   });
   const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
-  await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+  await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
   state.setVariableBatches(save.variableBatches ?? []); // 旧存档没有该字段，兜底空数组
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。

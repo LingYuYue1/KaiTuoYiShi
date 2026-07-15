@@ -39,7 +39,7 @@ import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { VariableSetters } from '@/utils/variableExecutor';
-import { saveSetting } from '@/services/dbService';
+import { setPreference } from '@/src/ui/preferences';
 import type { 世界书 } from '@/models/worldbook';
 
 export type SettingsTab = Tab;
@@ -127,12 +127,12 @@ export function SettingsModal({
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
   const persistGameSettingsChange = useCallback((next: 游戏设置) => {
     onGameSettingsChange(next);
-    void saveSetting('gameSettings', next);
+    void setPreference('gameSettings', next);
   }, [onGameSettingsChange]);
 
   const persistThemeChange = useCallback((next: 主题预设) => {
     onThemeChange(next);
-    void saveSetting('theme', next);
+    void setPreference('theme', next);
   }, [onThemeChange]);
 
   const renderTab = (): ReactNode => {

@@ -4,7 +4,7 @@ import type { 提示词模块 } from '@/models/prompts';
 import type { 世界状态 } from '@/models/world';
 import type { 剧情模式 } from '@/models/journey';
 import { storyModes } from '@/data/journeyPresets';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 
 interface Props {
   settings: 游戏设置;
@@ -92,8 +92,8 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
   const handleSave = async () => {
     try {
       await Promise.all([
-        saveSetting('gameSettings', settings),
-        saveSetting('worldState', worldState),
+        setPreferenceAsync('gameSettings', settings),
+        setPreferenceAsync('worldState', worldState),
       ]);
       setSaveMessage('游戏设定已保存。');
       setSavedFlash(true);

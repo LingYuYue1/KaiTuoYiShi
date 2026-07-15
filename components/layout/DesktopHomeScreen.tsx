@@ -1,5 +1,5 @@
 import  { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getSaveList, type SaveListItemSummary } from '@/services/dbService';
+import { getSaveCatalog, type SaveListItem } from '@/src/ui/ports';
 import {
   buildDesktopReleaseInfo,
   type DesktopReleaseInfo,
@@ -58,7 +58,7 @@ export function DesktopHomeScreen({
   onMysteryChat,
 }: DesktopHomeScreenProps) {
   const [desktopInfo, setDesktopInfo] = useState<DesktopAppInfo | null>(null);
-  const [saveList, setSaveList] = useState<SaveListItemSummary[]>([]);
+  const [saveList, setSaveList] = useState<SaveListItem[]>([]);
   const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateStatus | null>(null);
   const [desktopReleaseInfo, setDesktopReleaseInfo] = useState<DesktopReleaseInfo | null>(null);
   const [desktopProbe, setDesktopProbe] = useState<DesktopProbeResult | null>(null);
@@ -85,9 +85,11 @@ export function DesktopHomeScreen({
   const refreshOverview = useCallback(async () => {
     setLoadError('');
     try {
-      const [info, saves] = await Promise.all([getDesktopAppInfo(), getSaveList()]);
+      const catalog = await getSaveCatalog();
+      const [info, saves] = await Promise.all([getDesktopAppInfo(), catalog.getSaveList()]);
+      const saveRows = [...saves] as SaveListItem[];
       setDesktopInfo(info);
-      setSaveList(saves);
+      setSaveList(saveRows);
       setDesktopReleaseInfo(buildDesktopReleaseInfo(info, null));
     } catch (error) {
       console.error('[desktop-home] overview refresh failed', error);

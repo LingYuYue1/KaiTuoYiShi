@@ -1,25 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  backupDesktopStateBeforeOneTimeMigration,
-  backupCurrentSavesToDesktop,
-  cleanupUnreferencedDesktopAssets,
-  deleteSave,
-  deleteSaveTree,
-  exportSavePackage,
-  exportSaveTreePackage,
-  getSaveList,
-  importSaveFileAsMany,
-  loadSave,
-  loadSaveTree,
-  repairSaveDatabase,
-  rebuildSaveSummariesBatch,
-  previewDesktopStateBeforeOneTimeMigration,
-  restoreSavesFromDesktopBackup,
-  restoreSavesFromDesktopMirror,
-  saveGame,
-  summarizeDesktopAssets,
-  type SaveListItemSummary,
-} from '@/services/dbService';
+import { getSaveCatalog, type SaveListItem } from '@/src/ui/ports';
 import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
 import {
   checkForDesktopUpdate,
@@ -86,7 +66,7 @@ const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
-  const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
+  const [saves, setSaves] = useState<SaveListItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -142,7 +122,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const refresh = async () => {
     setLoadError('');
     try {
-      const list = await getSaveList();
+      const list = [...(await (await getSaveCatalog()).getSaveList())] as SaveListItem[];
       setSaves(list);
     } catch (err) {
       console.error('[storage-manager] save list failed', err);
@@ -172,7 +152,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
         if (!cancelled) setDesktopConfigCount(configKeys.length);
         const assetMirror = await listDesktopAssetMirror();
         if (!cancelled) setDesktopAssetCount(assetMirror.length);
-        const assetSummary = await summarizeDesktopAssets();
+        const assetSummary = await (await getSaveCatalog()).summarizeDesktopAssets() as DesktopAssetMaintenanceSummary;
         if (!cancelled) setDesktopAssetSummary(assetSummary);
         const saveMirrorHealth = await inspectDesktopSaveMirrorHealth();
         if (!cancelled) setDesktopSaveMirrorHealth(saveMirrorHealth);
@@ -182,7 +162,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
         if (!cancelled) setDesktopAssetMirrorHealth(assetMirrorHealth);
         const backups = await listDesktopSaveBackups();
         const migrationBackups = await listDesktopMigrationBackups();
-        const migrationPreview = await previewDesktopStateBeforeOneTimeMigration();
+        const migrationPreview = await (await getSaveCatalog()).previewDesktopStateBeforeOneTimeMigration() as DesktopMigrationBackupPreview | null;
         const reports = await listDesktopDiagnosticReports();
         if (!cancelled) {
           setDesktopBackupCount(backups.length);
@@ -213,16 +193,16 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       try {
         let changed = false;
         for (let guard = 0; guard < 200 && !cancelled; guard += 1) {
-          const added = await rebuildSaveSummariesBatch(24);
+          const added = await (await getSaveCatalog()).rebuildSaveSummariesBatch(24);
           if (cancelled || added <= 0) break;
           changed = true;
           if ((guard + 1) % 4 === 0) {
-            const list = await getSaveList();
+            const list = [...(await (await getSaveCatalog()).getSaveList())] as SaveListItem[];
             if (!cancelled) setSaves(list);
           }
           await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
         }
-        if (changed && !cancelled) setSaves(await getSaveList());
+        if (changed && !cancelled) setSaves([...(await (await getSaveCatalog()).getSaveList())] as SaveListItem[]);
       } catch (err) {
         console.warn('[storage-manager] background summary recovery failed', err);
       } finally {
@@ -239,7 +219,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setLoading(true);
     setLoadError('');
     try {
-      await repairSaveDatabase();
+      await (await getSaveCatalog()).repairSaveDatabase();
       await refresh();
     } catch (err) {
       console.error('[storage-manager] repair failed', err);
@@ -304,8 +284,8 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setSaving(true);
     try {
       const id = await onSave();
-      const save = await loadSave(id);
-      if (save) await exportSavePackage(save);
+      const save = await (await getSaveCatalog()).loadSave(id);
+      if (save) await (await getSaveCatalog()).exportSavePackage(save);
       await refresh();
       await refreshDesktopMirrorCount();
       setFilter('manual');
@@ -346,7 +326,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
     try {
-      await deleteSave(id);
+      await (await getSaveCatalog()).deleteSave(id);
       clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
       setDeletingId(null);
       void refresh();
@@ -364,7 +344,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDeletingRootId(rootId);
     setSaves((prev) => prev.filter((save) => save.saveTree?.rootId !== rootId));
     try {
-      await deleteSaveTree(rootId);
+      await (await getSaveCatalog()).deleteSaveTree(rootId);
       clearActiveSaveTreeMetaIfMatches({ rootId });
       setDeletingRootId(null);
       void refresh();
@@ -378,13 +358,13 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   };
 
   const handleExport = async (id: number) => {
-    const save = await loadSave(id);
-    if (save) await exportSavePackage(save);
+    const save = await (await getSaveCatalog()).loadSave(id);
+    if (save) await (await getSaveCatalog()).exportSavePackage(save);
   };
 
   const handleExportTree = async (rootId: string) => {
-    const treeSaves = await loadSaveTree(rootId);
-    if (treeSaves.length) await exportSaveTreePackage(treeSaves);
+    const treeSaves = await (await getSaveCatalog()).loadSaveTree(rootId);
+    if (treeSaves.length) await (await getSaveCatalog()).exportSaveTreePackage(treeSaves);
   };
 
   const handleImport = () => {
@@ -396,13 +376,14 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       if (!file) return;
       setImporting(true);
       try {
-        const imported = await importSaveFileAsMany(file);
+        const imported = await (await getSaveCatalog()).importSaveFileAsMany(file);
         const now = Date.now();
         for (const [index, data] of imported.entries()) {
-          data.id = 0;
-          data.type = 'imported';
-          data.timestamp = now + index;
-          await saveGame(data);
+          const row = data as { id: number; type: string; timestamp: number };
+          row.id = 0;
+          row.type = 'imported';
+          row.timestamp = now + index;
+          await (await getSaveCatalog()).saveGame(row);
         }
         await refresh();
         await refreshDesktopMirrorCount();
@@ -587,7 +568,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDesktopConfigCount(configKeys.length);
     const assetMirror = await listDesktopAssetMirror();
     setDesktopAssetCount(assetMirror.length);
-    const assetSummary = await summarizeDesktopAssets();
+    const assetSummary = await (await getSaveCatalog()).summarizeDesktopAssets() as DesktopAssetMaintenanceSummary;
     setDesktopAssetSummary(assetSummary);
     const saveMirrorHealth = await inspectDesktopSaveMirrorHealth();
     setDesktopSaveMirrorHealth(saveMirrorHealth);
@@ -603,7 +584,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDesktopMigrationBackupCount(migrationBackups.length);
     setUnreadableDesktopMigrationBackupCount(countUnreadableDesktopMigrationBackups(migrationBackups));
     setLatestDesktopMigrationBackup(findLatestVerifiedDesktopMigrationBackup(migrationBackups));
-    setDesktopMigrationBackupPreview(await previewDesktopStateBeforeOneTimeMigration());
+    setDesktopMigrationBackupPreview(await (await getSaveCatalog()).previewDesktopStateBeforeOneTimeMigration() as DesktopMigrationBackupPreview | null);
     const reports = await listDesktopDiagnosticReports();
     setDesktopDiagnosticReports(reports);
     setLatestDiagnosticReport(reports[0] ?? null);
@@ -614,7 +595,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setCleaningDesktopAssets(true);
     setDesktopError('');
     try {
-      const summary = await cleanupUnreferencedDesktopAssets();
+      const summary = await (await getSaveCatalog()).cleanupUnreferencedDesktopAssets() as DesktopAssetMaintenanceSummary;
       setDesktopAssetSummary(summary);
       await refreshDesktopMirrorCount();
     } catch (err) {
@@ -630,7 +611,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDesktopError('');
     setDesktopIndexRepairSummary('');
     try {
-      await backupCurrentSavesToDesktop('before-repair');
+      await (await getSaveCatalog()).backupCurrentSavesToDesktop('before-repair');
       const repairedSaves = await repairDesktopSaveMirrorIndex();
       const repairedTransactions = await repairUnresolvedDesktopSaveTransactions();
       const repairedDeltas = await repairDesktopSaveDeltaMirrorIndex();
@@ -649,7 +630,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setBackingUpDesktop(true);
     setDesktopError('');
     try {
-      const backup = await backupCurrentSavesToDesktop('manual');
+      const backup = await (await getSaveCatalog()).backupCurrentSavesToDesktop('manual') as DesktopSaveBackupSummary | null;
       if (backup) {
         setLatestDesktopBackup(backup);
         setSelectedDesktopBackupPath(backup.path);
@@ -668,7 +649,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setBackingUpDesktopMigration(true);
     setDesktopError('');
     try {
-      const backup = await backupDesktopStateBeforeOneTimeMigration();
+      const backup = await (await getSaveCatalog()).backupDesktopStateBeforeOneTimeMigration() as DesktopMigrationBackupSummary | null;
       if (backup) {
         setLatestDesktopMigrationBackup(backup);
       }
@@ -728,7 +709,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setRestoringDesktopMirror(true);
     setLoadError('');
     try {
-      const restored = await restoreSavesFromDesktopMirror();
+      const restored = await (await getSaveCatalog()).restoreSavesFromDesktopMirror();
       await refresh();
       await refreshDesktopMirrorCount();
       setFilter('all');
@@ -754,7 +735,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setRestoringDesktopBackup(true);
     setLoadError('');
     try {
-      const restored = await restoreSavesFromDesktopBackup(backup.path);
+      const restored = await (await getSaveCatalog()).restoreSavesFromDesktopBackup(backup.path);
       await refresh();
       await refreshDesktopMirrorCount();
       setFilter('all');
@@ -2279,7 +2260,7 @@ function SaveCard({
   treeLabel,
   isLatest = false,
 }: {
-  save: SaveListItemSummary;
+  save: SaveListItem;
   loadingId: number | null;
   deletingId: number | null;
   onLoad: (id: number) => void;
@@ -2372,14 +2353,14 @@ function SaveCard({
   );
 }
 
-function typeLabel(type: SaveListItemSummary['type']): string {
+function typeLabel(type: SaveListItem['type']): string {
   if (type === 'auto') return '自动';
   if (type === 'backup') return '保护';
   if (type === 'imported') return '导入';
   return '手动';
 }
 
-function typeColor(type: SaveListItemSummary['type']): string {
+function typeColor(type: SaveListItem['type']): string {
   if (type === 'auto') return 'rgba(var(--tj-tech-cyan), 0.86)';
   if (type === 'backup') return 'rgba(var(--tj-tech-cyan), 0.9)';
   if (type === 'imported') return 'rgba(var(--tj-ui-success), 0.9)';
@@ -2392,7 +2373,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function matchesSaveFilter(save: SaveListItemSummary, filter: Filter): boolean {
+function matchesSaveFilter(save: SaveListItem, filter: Filter): boolean {
   if (filter === 'all') return save.type !== 'auto';
   if (filter === 'manual') return save.type === 'manual';
   if (filter === 'auto') return save.type === 'auto';

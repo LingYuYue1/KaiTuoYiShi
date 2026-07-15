@@ -10,15 +10,21 @@ import { 创建空手机系统 } from '@/models/phone';
 import type { API配置项 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import type { IKernel, SessionView } from '@/src/kernel/contract';
-import { asRevision, asSessionId } from '@/src/kernel/contract';
+import { asCommandId, asRevision, asSessionId } from '@/src/kernel/contract';
 import { createKernel, type KernelMode } from '@/src/kernel/createKernel';
 import { wrapLegacyAdvanceTurn, buildCommittedSessionView } from '@/src/kernel/adapters/legacy/wrapLegacyAdvanceTurn';
 import { executeTurnIntent } from '@/src/ui/kernelClient';
+import {
+  applyExecutionFrame,
+  createProjectionState,
+  restoreProjectionFromKernel,
+  type ProjectionState,
+} from '@/src/ui/projections';
 
 /**
  * Composition-root kernel mode (Phase 2).
@@ -68,6 +74,12 @@ export function useGame(): UseGameReturn {
    */
   const kernelRevisionRef = useRef(0);
   const kernelPromiseRef = useRef<Promise<IKernel> | null>(null);
+  /**
+   * UI Projection Store (Phase 3 Stage 3.3).
+   * Holds SessionView + temporary progress buffer only.
+   * Progress never formal-commits React game domain state.
+   */
+  const projectionRef = useRef<ProjectionState | null>(null);
 
   const getActiveConfig = useCallback((): API配置项 | null => {
     const s = stateRef.current;
@@ -170,9 +182,28 @@ export function useGame(): UseGameReturn {
 
       // UI intent → IKernel.execute (via KernelClient). UI does not know legacy vs native.
       const kernel = await getKernel();
+      const commandId = `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const commandIdBrand = asCommandId(commandId);
+
+      // Seed projection from kernel.read when missing (restore path / first turn).
+      if (!projectionRef.current) {
+        if (KERNEL_MODE === 'native-turn') {
+          projectionRef.current = await restoreProjectionFromKernel(kernel, LOCAL_SESSION_ID);
+        } else {
+          // Legacy path has no formal repository session to restore yet.
+          projectionRef.current = createProjectionState({
+            sessionId: LOCAL_SESSION_ID,
+            revision: asRevision(kernelRevisionRef.current),
+            turnCount: s.turnCount,
+            turns: [],
+            messages: [],
+          });
+        }
+      }
+
       await executeTurnIntent(kernel, {
         text,
-        commandId: `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        commandId,
         sessionId: LOCAL_SESSION_ID,
         expectedRevision: kernelRevisionRef.current,
       }, {
@@ -182,14 +213,39 @@ export function useGame(): UseGameReturn {
             // Streaming store is also updated inside sendWorkflow; keep sink explicit for the seam.
             setStreamingMessage(delta.text);
           }
+          // Projection progress only — does NOT formal-commit game domain state.
+          if (projectionRef.current) {
+            projectionRef.current = applyExecutionFrame(projectionRef.current, {
+              type: 'progress',
+              commandId: commandIdBrand,
+              delta,
+            });
+          }
         },
-        // Formal projection: legacy workflow already mutated React state; sink records projection only.
-        replaceProjection: (_view) => {
-          // Phase 1: formal game fields remain under legacy authority (executeSendWorkflow).
-          // No dual-write of chat/turnCount here.
+        // Formal projection: session view from committed frame; no dual-write of chat/turnCount.
+        // Host may later call restoreProjectionFromKernel(kernel, sessionId) for a
+        // repository-backed refresh on the native path (see projectionRestore tests).
+        replaceProjection: (view) => {
+          if (projectionRef.current) {
+            projectionRef.current = applyExecutionFrame(projectionRef.current, {
+              type: 'committed',
+              commandId: commandIdBrand,
+              revision: view.revision,
+              view,
+            });
+          } else {
+            projectionRef.current = createProjectionState(view);
+          }
         },
-        showError: (_error) => {
-          // Workflow already surfaces workflowHint / alerts; avoid double UI noise in Phase 1.
+        showError: (error) => {
+          // Clear projection progress; keep last committed session. Workflow surfaces UI errors.
+          if (projectionRef.current) {
+            projectionRef.current = applyExecutionFrame(projectionRef.current, {
+              type: 'rejected',
+              commandId: commandIdBrand,
+              error,
+            });
+          }
         },
       });
     },
@@ -248,7 +304,7 @@ export function useGame(): UseGameReturn {
       s.setWorkflowHint(snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。');
       if (snapshot) {
         const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+        await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
       } else {
         s.setTurnCount(Math.max(1, s.turnCount - 1));
       }
@@ -292,7 +348,7 @@ export function useGame(): UseGameReturn {
     s.setWorkflowHint(snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。');
     if (snapshot) {
       const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
-      await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+      await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
     } else {
       // 老回复没 snapshot（迁移期 / 旧存档），只能粗略 turnCount -1，状态保持不变
       s.setTurnCount(Math.max(1, s.turnCount - 1));
@@ -334,7 +390,7 @@ export function useGame(): UseGameReturn {
     s.setQueueTasks([]);
     const nextStoryWeaving = alignStoryWeavingToOpeningArchive(s.剧情编织, restartOpeningArchive);
     s.set剧情编织(nextStoryWeaving);
-    saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+    setPreference('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
 
     // worldState：保留创角时的 currentPeriod / difficulty / storyMode / startingScenarioId / customStartPrompt。
     // 重新开局时必须重建开局档案对应的已成立事实，否则非黑塔/自由开局会只剩字段，缺少后续注入锚点。

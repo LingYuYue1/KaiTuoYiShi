@@ -59,7 +59,8 @@ import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, i
 import type { 世界书 } from '@/models/worldbook';
 import { loadWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
-import { loadSetting, saveSetting, hasAnySave } from '@/services/dbService';
+import { getPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import { getSaveCatalog } from '@/src/ui/ports';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
@@ -295,13 +296,13 @@ export function useGameState(): UseGameStateReturn {
         setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
       }
 
-      const savedTheme = await loadSetting<主题预设>('theme');
+      const savedTheme = await getPreference<主题预设>('theme');
       if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
 
-      const savedApi = await loadSetting<API设置>('apiSettings');
+      const savedApi = await getPreference<API设置>('apiSettings');
       if (savedApi) setApiSettings(savedApi);
 
-      const savedGame = await loadSetting<游戏设置>('gameSettings');
+      const savedGame = await getPreference<游戏设置>('gameSettings');
       if (savedGame) {
         // 兼容旧存档：variableApi 是新字段，缺失时用默认覆盖
         const defaults = 创建默认游戏设置();
@@ -339,13 +340,13 @@ export function useGameState(): UseGameStateReturn {
 
       try {
         const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
-        const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
+        const savedStoryWeaving = await getPreference<剧情编织系统>('storyWeavingSystem');
         const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
         set剧情编织(mergedStoryWeaving);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
+        await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
       } catch (err) {
         console.warn('[story-weaving] preset 加载失败，回退到本地已存剧情编织:', err);
-        const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
+        const savedStoryWeaving = await getPreference<剧情编织系统>('storyWeavingSystem');
         if (isSelfContainedStoryWeavingSystem(savedStoryWeaving)) {
           set剧情编织(归一化剧情编织系统(savedStoryWeaving));
         } else if (savedStoryWeaving) {
@@ -355,23 +356,23 @@ export function useGameState(): UseGameStateReturn {
 
       try {
         const preset = await loadAllBundledZhikuPresets();
-        const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
-        const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+        const savedZhiku = await getPreference<智库系统>('zhikuSystem');
+        const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
         const migrationAt = savedMigrationAt ?? Date.now();
         if (!savedMigrationAt) {
-          await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+          await setPreferenceAsync(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
         }
         const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
         set智库(mergedZhiku);
-        await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
+        await setPreferenceAsync('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
       } catch (err) {
         console.warn('[zhiku] preset 加载失败，回退到本地已存智库:', err);
-        const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
+        const savedZhiku = await getPreference<智库系统>('zhikuSystem');
         if (savedZhiku) {
-          const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+          const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
           const migrationAt = savedMigrationAt ?? Date.now();
           if (!savedMigrationAt) {
-            await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+            await setPreferenceAsync(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
           }
           set智库(归一化智库系统({
             条目: removeLegacyZhikuCharacterEntries(
@@ -386,7 +387,7 @@ export function useGameState(): UseGameStateReturn {
       // - savedWorldbooks === null   → 首次启动,把预设写入 IndexedDB(玩家之后可自由修改/删除)
       // - savedWorldbooks 是数组     → 玩家已与世界书交互过,完全尊重其状态,不再覆盖
       const builtins = createBuiltinWorldbooks();
-      const rawSavedWorldbooks = await loadSetting<世界书[]>(WORLDBOOK_STORAGE_KEY);
+      const rawSavedWorldbooks = await getPreference<世界书[]>(WORLDBOOK_STORAGE_KEY);
       // 旧版本只有 'builtin_core_config' 一本内置；现在已拆为 6 本，老用户库里这本要丢弃。
       // 同样：CoT 已从世界书迁移到提示词模块系统，旧的 'builtin_cot' 本也要丢弃。
       // 它里面的 'builtin_first_turn_rule' 条目已经被新的 'builtin_opening_rule' 本继承。
@@ -407,7 +408,7 @@ export function useGameState(): UseGameStateReturn {
           const presets = await loadAllBundledWorldbookPresets();
           const initial = [...builtins, ...presets];
           setWorldbooks(initial);
-          await saveSetting(WORLDBOOK_STORAGE_KEY, initial);
+          await setPreferenceAsync(WORLDBOOK_STORAGE_KEY, initial);
         } catch (err) {
           console.warn('[opening-worldbook] preset 加载失败,使用内置空集:', err);
           setWorldbooks(builtins);
@@ -431,13 +432,13 @@ export function useGameState(): UseGameStateReturn {
         });
         const nextWorldbooks = [...merged, ...userBooks];
         setWorldbooks(nextWorldbooks);
-        await saveSetting(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
+        await setPreferenceAsync(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
       } else {
         setWorldbooks(builtins);
-        await saveSetting(WORLDBOOK_STORAGE_KEY, builtins);
+        await setPreferenceAsync(WORLDBOOK_STORAGE_KEY, builtins);
       }
 
-      const saveExists = await hasAnySave();
+      const saveExists = await (await getSaveCatalog()).hasAnySave();
       setHasSave(saveExists);
     })();
   }, []);

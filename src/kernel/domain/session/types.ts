@@ -1,10 +1,14 @@
 /**
- * Minimal formal session types for the Phase 2 AdvanceTurn vertical slice.
+ * Formal session types for Native Kernel (Phase 3).
  *
- * Full game state ownership (旅人/世界/NPC/记忆/手机/…) is Phase 3+.
- * This slice mirrors the Phase 0 characterization harness surface so
- * legacy-vs-native projection comparison is meaningful without dumping
- * the entire React/IndexedDB model graph.
+ * ## Ownership gap (documented)
+ * SessionRepository owns only this minimal formal slice:
+ * - turnCount, messages, turns, travelerName (旅人.姓名 characterization)
+ *
+ * Not yet formal SessionRepository state (still legacy React / full 存档):
+ * - full 旅人 graph, 世界, NPC, 记忆, 手机, News, Album, story weaving, …
+ * Expand GameState only when a native use case needs a field and the
+ * CAS/snapshot/restore paths can own it end-to-end.
  */
 
 import type { Revision, SessionId } from '@/src/kernel/contract';
@@ -22,7 +26,7 @@ export type KernelTurn = Readonly<{
 
 /**
  * Formal domain state owned by SessionRepository under Native Kernel.
- * Intentionally narrow for Phase 2.
+ * Intentionally narrow until later phases expand projection ownership.
  */
 export type GameState = Readonly<{
   turnCount: number;
@@ -62,5 +66,24 @@ export function createSessionSnapshot(input: {
     sessionId: input.sessionId,
     revision: input.revision,
     state: createEmptyGameState(input.state),
+  };
+}
+
+/** Deep-clone GameState so repository callers cannot mutate storage. */
+export function cloneGameState(state: GameState): GameState {
+  return {
+    turnCount: state.turnCount,
+    travelerName: state.travelerName,
+    messages: state.messages.map((m) => ({ ...m })),
+    turns: state.turns.map((t) => ({ ...t })),
+  };
+}
+
+/** Deep-clone SessionSnapshot. */
+export function cloneSessionSnapshot(snapshot: SessionSnapshot): SessionSnapshot {
+  return {
+    sessionId: snapshot.sessionId,
+    revision: snapshot.revision,
+    state: cloneGameState(snapshot.state),
   };
 }

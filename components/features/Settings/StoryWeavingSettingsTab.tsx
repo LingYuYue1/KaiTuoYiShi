@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 
 interface Props {
   settings: 游戏设置;
@@ -86,7 +86,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
   };
 
   const handleSave = async () => {
-    await saveSetting('gameSettings', settings);
+    await setPreferenceAsync('gameSettings', settings);
     setSavedFlash(true);
     setMessage('剧情编织设置已保存。');
     window.setTimeout(() => setSavedFlash(false), 1600);

@@ -8,7 +8,7 @@ import {
 } from '@/models/storyWeaving';
 import { buildStoryWeavingApiConfig, decomposeStorySegment, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import { buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 
 interface PlotPanelProps {
@@ -233,7 +233,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const persist = async (next: 剧情编织系统) => {
     const clean = 归一化剧情编织系统(next);
     onStoryWeavingChange(clean);
-    await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(clean));
+    await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(clean));
   };
 
   const replaceSeries = async (nextSeries: 剧情编织系列, baseSystem = normalized) => {

@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API配置项, API设置, 游戏设置, 变量API覆盖 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 
 interface Props {
   gameSettings: 游戏设置;
@@ -102,7 +102,7 @@ export function VariableUpdateTab({
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await saveSetting('gameSettings', gameSettings);
+      await setPreferenceAsync('gameSettings', gameSettings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '变量更新设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

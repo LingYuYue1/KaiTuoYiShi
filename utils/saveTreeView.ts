@@ -1,7 +1,7 @@
-import type { SaveListItemSummary } from '@/services/dbService';
+import type { SaveListItem } from '@/src/ui/ports';
 
 export interface SaveTreeDisplayNode {
-  save: SaveListItemSummary;
+  save: SaveListItem;
   children: SaveTreeDisplayNode[];
   depth: number;
   isRoot: boolean;
@@ -10,8 +10,8 @@ export interface SaveTreeDisplayNode {
 
 export interface SaveTreeDisplayGroup {
   rootId: string;
-  rootSave: SaveListItemSummary;
-  latestSave: SaveListItemSummary;
+  rootSave: SaveListItem;
+  latestSave: SaveListItem;
   nodes: SaveTreeDisplayNode[];
   nodeCount: number;
   branchCount: number;
@@ -19,14 +19,14 @@ export interface SaveTreeDisplayGroup {
 }
 
 interface WorkingNode {
-  save: SaveListItemSummary;
+  save: SaveListItem;
   nodeId: string;
   parentNodeId?: string;
   children: WorkingNode[];
 }
 
-export function buildSaveTreeGroups(saves: SaveListItemSummary[]): SaveTreeDisplayGroup[] {
-  const buckets = new Map<string, SaveListItemSummary[]>();
+export function buildSaveTreeGroups(saves: SaveListItem[]): SaveTreeDisplayGroup[] {
+  const buckets = new Map<string, SaveListItem[]>();
   const legacyRootIds = buildLegacyRootIdMap(saves.filter((save) => !save.saveTree?.rootId));
   for (const save of saves) {
     const rootId = save.saveTree?.rootId || legacyRootIds.get(save.id) || `legacy-root-${save.id}`;
@@ -42,7 +42,7 @@ export function buildSaveTreeGroups(saves: SaveListItemSummary[]): SaveTreeDispl
 
 function buildSaveTreeGroup(
   rootId: string,
-  saves: SaveListItemSummary[],
+  saves: SaveListItem[],
   legacyRootIds: Map<number, string>,
 ): SaveTreeDisplayGroup {
   const nodeById = new Map<string, WorkingNode>();
@@ -110,9 +110,9 @@ function buildSaveTreeGroup(
   };
 }
 
-function buildLegacyRootIdMap(saves: SaveListItemSummary[]): Map<number, string> {
+function buildLegacyRootIdMap(saves: SaveListItem[]): Map<number, string> {
   const result = new Map<number, string>();
-  const byTraveler = new Map<string, SaveListItemSummary[]>();
+  const byTraveler = new Map<string, SaveListItem[]>();
   for (const save of saves) {
     const key = normalizeLegacyKey(save.travelerName || '未命名旅人');
     const bucket = byTraveler.get(key) ?? [];
@@ -123,7 +123,7 @@ function buildLegacyRootIdMap(saves: SaveListItemSummary[]): Map<number, string>
   for (const [key, bucket] of byTraveler.entries()) {
     const sorted = [...bucket].sort((a, b) => a.timestamp - b.timestamp || a.id - b.id);
     let segment = 0;
-    let previous: SaveListItemSummary | undefined;
+    let previous: SaveListItem | undefined;
     for (const save of sorted) {
       if (previous && save.turnCount <= previous.turnCount) segment += 1;
       result.set(save.id, `legacy-root-${key}-${segment}`);
@@ -134,7 +134,7 @@ function buildLegacyRootIdMap(saves: SaveListItemSummary[]): Map<number, string>
 }
 
 function buildLegacyNodeIdMap(
-  saves: SaveListItemSummary[],
+  saves: SaveListItem[],
   rootIds: Map<number, string>,
   currentRootId: string,
 ): Map<number, { nodeId: string; parentNodeId?: string }> {

@@ -7,7 +7,7 @@ import {
   type MaxOutputTier,
 } from '@/data/modelRecommendations';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
-import { loadSetting, saveSetting } from '@/services/dbService';
+import { getPreference, setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import { MemorySystemSettingsTab } from './MemorySystemSettings';
 import { YitingSettingsTab } from './YitingSettingsTab';
 import { NewsSystemSettingsTab } from './NewsSystemSettingsTab';
@@ -427,13 +427,13 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
   }, [selectedId]);
 
   useEffect(() => {
-    loadSetting<API方案槽位[]>(API_PROFILE_SLOTS_KEY)
+    getPreference<API方案槽位[]>(API_PROFILE_SLOTS_KEY)
       .then((slots) => setProfileSlots(Array.isArray(slots) ? slots : []))
       .catch(() => setProfileSlots([]));
   }, []);
 
   useEffect(() => {
-    loadSetting<Record<string, AuxApiProfileState>>(AUX_API_PROFILE_KEY)
+    getPreference<Record<string, AuxApiProfileState>>(AUX_API_PROFILE_KEY)
       .then((saved) => {
         if (!saved || typeof saved !== 'object') {
           setAuxProfilesByConfig({});
@@ -477,7 +477,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
       [selectedId]: nextForm,
     };
     setAuxProfilesByConfig(nextMap);
-    await saveSetting(AUX_API_PROFILE_KEY, nextMap);
+    await setPreferenceAsync(AUX_API_PROFILE_KEY, nextMap);
   };
 
   const updateConfig = (patch: Partial<API配置项>) => {
@@ -531,7 +531,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     };
     onChange(updated);
     try {
-      await saveSetting('apiSettings', updated);
+      await setPreferenceAsync('apiSettings', updated);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1800);
     } catch (e) {
@@ -572,13 +572,13 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     onChange(nextApiSettings);
     onGameSettingsChange(nextGameSettings);
     setSelectedId(nextApiSettings.activeConfigId ?? nextApiSettings.configs[0]?.id ?? null);
-    await saveSetting('apiSettings', nextApiSettings);
-    await saveSetting('gameSettings', nextGameSettings);
+    await setPreferenceAsync('apiSettings', nextApiSettings);
+    await setPreferenceAsync('gameSettings', nextGameSettings);
   };
 
   const persistProfileSlots = async (slots: API方案槽位[]) => {
     setProfileSlots(slots);
-    await saveSetting(API_PROFILE_SLOTS_KEY, slots);
+    await setPreferenceAsync(API_PROFILE_SLOTS_KEY, slots);
   };
 
   const handleSaveProfileSlot = async () => {
@@ -670,7 +670,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
       },
     };
     onGameSettingsChange(nextGameSettings);
-    await saveSetting('gameSettings', nextGameSettings);
+    await setPreferenceAsync('gameSettings', nextGameSettings);
     setMessage({ kind: 'info', text: `已把其他文本 API 统一套用为：${provider} / ${model}` });
   };
 

@@ -1,5 +1,5 @@
 /**
- * Kernel async ports barrel (Phase 2).
+ * Kernel async ports barrel (Phase 3).
  */
 
 export type { ModelFrame, ModelGateway, ModelRequest } from './ModelGateway';

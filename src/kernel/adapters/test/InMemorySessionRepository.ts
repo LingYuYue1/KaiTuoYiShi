@@ -1,14 +1,14 @@
 /**
- * In-memory SessionRepository with CAS.
+ * In-memory SessionRepository with CAS + commandId idempotency.
  *
  * CAS critical section is synchronous (no await between read and write) so
  * concurrent async callers still serialize correctly on the JS event loop.
+ * revision bump and commandId record are written in the same critical section.
  */
 
 import {
   asRevision,
   type CommandId,
-  type Revision,
   type SessionId,
 } from '@/src/kernel/contract';
 import type {
@@ -16,9 +16,10 @@ import type {
   CompareAndSwapInput,
   SessionRepository,
 } from '@/src/kernel/ports/SessionRepository';
-import type {
-  GameState,
-  SessionSnapshot,
+import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
+import {
+  cloneGameState,
+  cloneSessionSnapshot,
 } from '@/src/kernel/domain/session/types';
 
 export class InMemorySessionRepository implements SessionRepository {
@@ -26,7 +27,7 @@ export class InMemorySessionRepository implements SessionRepository {
   private readonly committedCommands = new Map<string, SessionSnapshot>();
 
   seed(snapshot: SessionSnapshot): void {
-    this.sessions.set(snapshot.sessionId, cloneSnapshot(snapshot));
+    this.sessions.set(snapshot.sessionId, cloneSessionSnapshot(snapshot));
   }
 
   async read(sessionId: SessionId): Promise<SessionSnapshot> {
@@ -38,7 +39,7 @@ export class InMemorySessionRepository implements SessionRepository {
     commandId: CommandId,
   ): Promise<SessionSnapshot | null> {
     const snapshot = this.committedCommands.get(commandKey(sessionId, commandId));
-    return snapshot ? cloneSnapshot(snapshot) : null;
+    return snapshot ? cloneSessionSnapshot(snapshot) : null;
   }
 
   async compareAndSwap(input: CompareAndSwapInput): Promise<CommitResult> {
@@ -50,14 +51,14 @@ export class InMemorySessionRepository implements SessionRepository {
     if (!current) {
       throw new Error(`Session not found: ${sessionId}`);
     }
-    return cloneSnapshot(current);
+    return cloneSessionSnapshot(current);
   }
 
   private compareAndSwapSync(input: CompareAndSwapInput): CommitResult {
     const key = commandKey(input.sessionId, input.commandId);
     const priorCommit = this.committedCommands.get(key);
     if (priorCommit) {
-      return { type: 'committed', snapshot: cloneSnapshot(priorCommit) };
+      return { type: 'committed', snapshot: cloneSessionSnapshot(priorCommit) };
     }
 
     const current = this.sessions.get(input.sessionId);
@@ -68,6 +69,7 @@ export class InMemorySessionRepository implements SessionRepository {
       return { type: 'conflict', actualRevision: current.revision };
     }
 
+    // Atomic: revision + commandId recorded together before any await.
     const nextRevision = asRevision(current.revision + 1);
     const snapshot: SessionSnapshot = {
       sessionId: input.sessionId,
@@ -76,27 +78,10 @@ export class InMemorySessionRepository implements SessionRepository {
     };
     this.sessions.set(input.sessionId, snapshot);
     this.committedCommands.set(key, snapshot);
-    return { type: 'committed', snapshot: cloneSnapshot(snapshot) };
+    return { type: 'committed', snapshot: cloneSessionSnapshot(snapshot) };
   }
 }
 
 function commandKey(sessionId: SessionId, commandId: CommandId): string {
   return `${sessionId}\u0000${commandId}`;
-}
-
-function cloneGameState(state: GameState): GameState {
-  return {
-    turnCount: state.turnCount,
-    travelerName: state.travelerName,
-    messages: state.messages.map((m) => ({ ...m })),
-    turns: state.turns.map((t) => ({ ...t })),
-  };
-}
-
-function cloneSnapshot(snapshot: SessionSnapshot): SessionSnapshot {
-  return {
-    sessionId: snapshot.sessionId,
-    revision: snapshot.revision as Revision,
-    state: cloneGameState(snapshot.state),
-  };
 }

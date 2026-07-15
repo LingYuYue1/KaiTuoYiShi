@@ -44,7 +44,7 @@ import {
   type 战技记录,
   type 战技槽位摘要,
 } from '@/models/skill';
-import { loadSetting, saveSetting } from '@/services/dbService';
+import { getPreference, setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
 import { generateSkillDraft } from '@/services/ai/skillGenerator';
@@ -411,7 +411,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    loadSetting<OpeningPlayerPreset[]>(OPENING_PLAYER_PRESETS_KEY)
+    getPreference<OpeningPlayerPreset[]>(OPENING_PLAYER_PRESETS_KEY)
       .then((saved) => {
         if (cancelled) return;
         const normalized = normalizeOpeningPresets(saved);
@@ -845,7 +845,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   const persistOpeningPresets = async (nextPresets: OpeningPlayerPreset[]) => {
     const normalized = normalizeOpeningPresets(nextPresets);
     setOpeningPresets(normalized);
-    await saveSetting(OPENING_PLAYER_PRESETS_KEY, normalized);
+    await setPreferenceAsync(OPENING_PLAYER_PRESETS_KEY, normalized);
   };
 
   const applyOpeningPreset = (presetId: string) => {

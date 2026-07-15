@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 原著约束强度 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 
 interface Props {
   settings: 游戏设置;
@@ -109,7 +109,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await saveSetting('gameSettings', settings);
+      await setPreferenceAsync('gameSettings', settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '智库设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

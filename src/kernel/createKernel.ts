@@ -6,8 +6,12 @@
  * branch on legacy vs native.
  *
  * Rollback: keep mode `"legacy"`.
- * Production default remains `"legacy"` until Phase 3 SessionRepository
- * owns full game state (IndexedDB). Tests construct `"native-turn"` directly.
+ * Production default remains `"legacy"` until SessionRepository owns the full
+ * game graph (Phase 3 provides durable minimal formal slice + CAS; full 旅人/NPC
+ * expansion is later). Tests construct `"native-turn"` directly.
+ *
+ * Native path: SessionRepository is the sole formal write for its GameState —
+ * do not dual-write formal session through React free-mutation AND repository.
  */
 
 import type { IKernel } from '@/src/kernel/contract';

@@ -16,7 +16,7 @@ import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakenin
 import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
 import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import type { 角色数据结构 } from '@/models/character';
@@ -716,7 +716,7 @@ export default function App() {
               worldbooks={state.worldbooks}
               onSave={(books) => {
                 state.setWorldbooks(books);
-                saveSetting('worldbooks', books);
+                setPreference('worldbooks', books);
               }}
               onClose={() => setShowWorldbookManager(false)}
             />
@@ -805,7 +805,7 @@ export default function App() {
 
                 state.setWorldbooks(books);
 
-                saveSetting('worldbooks', books);
+                setPreference('worldbooks', books);
 
               }}
               variableSetters={{
@@ -864,7 +864,7 @@ export default function App() {
           worldState.开局档案,
         );
         state.set剧情编织(nextStoryWeaving);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+        await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
       } catch (err) {
         console.warn('[story-weaving] 新开局加载内置原著剧情失败，保留当前剧情编织状态:', err);
       }
@@ -956,7 +956,7 @@ export default function App() {
             worldbooks={state.worldbooks}
             onWorldbooksChange={(books) => {
               state.setWorldbooks(books);
-              saveSetting('worldbooks', books);
+              setPreference('worldbooks', books);
             }}
             variableSetters={{
               set旅人: state.set旅人,
@@ -1014,7 +1014,7 @@ export default function App() {
             worldbooks={state.worldbooks}
             onSave={(books) => {
               state.setWorldbooks(books);
-              saveSetting('worldbooks', books);
+              setPreference('worldbooks', books);
             }}
             onClose={() => setShowWorldbookManager(false)}
           />

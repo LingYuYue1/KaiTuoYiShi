@@ -7,7 +7,7 @@ import type { StarMapLocation, StarMapLocationKind, StarMapNavigationMode, StarM
 import { STAR_MAP_MAX_LOCATION_DEPTH, canStarMapLocationAcceptPlayerChildren, findCurrentStarMapLocation, getStarMapLocationPath, normalizeStarMapLocationText } from '@/models/starMap';
 import type { 游戏设置, 星轨航图地图包记录, 星轨航图系统设置 } from '@/models/settings';
 import { STAR_MAP_LOCATIONS, STAR_MAP_WAYPOINTS } from '@/data/starMapPresets';
-import { saveSetting } from '@/services/dbService';
+import { setPreference } from '@/src/ui/preferences';
 
 interface StarMapPanelProps {
   worldState: 世界状态;
@@ -357,7 +357,7 @@ export function StarMapPanel({ worldState, npcRecords, plotNodes, gameSettings, 
       const current = prev.星轨航图系统 ?? { customWaypoints: [], customLocations: [], installedPackages: [] };
       const nextSystem = updater(current);
       const next = { ...prev, 星轨航图系统: nextSystem };
-      void saveSetting('gameSettings', next);
+      void setPreference('gameSettings', next);
       return next;
     });
   };

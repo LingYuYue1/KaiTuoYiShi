@@ -12,7 +12,7 @@ import type {
   文生图预设接口路径,
   文生图词组转化器API覆盖,
 } from '@/models/settings';
-import { saveSetting } from '@/services/dbService';
+import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
 import { fetchModels } from '@/services/ai/apiTools';
 import { fetchComfyWorkflowCandidates, fetchImageGenerationModels, testImageGenerationConnection, type ComfyWorkflowCandidate } from '@/services/ai/imageGeneration';
 
@@ -194,7 +194,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
 
   const handleSave = async () => {
     try {
-      await saveSetting('gameSettings', settings);
+      await setPreferenceAsync('gameSettings', settings);
       setMessage('文生图设置已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);

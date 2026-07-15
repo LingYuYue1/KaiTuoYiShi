@@ -8,7 +8,7 @@ import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置
 import type { 手机系统 } from '@/models/phone';
 import type { NPC记录, NPC头像槽位, NPC角色锚点档案 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
-import { saveSetting } from '@/services/dbService';
+import { setPreference } from '@/src/ui/preferences';
 import {
   添加图片到相册,
   创建相册图片条目,
