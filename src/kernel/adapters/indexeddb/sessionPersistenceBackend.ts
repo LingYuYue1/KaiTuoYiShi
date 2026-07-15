@@ -3,13 +3,18 @@
  *
  * Adapters implement runAtomic so revision + commandId are never split across
  * separate durable writes. Memory backend is for Node/tests; IndexedDB for web.
+ *
+ * Phase 4: StoredSessionRecord carries schemaVersion. Migration runs once at
+ * repository ingress (read / import). Writes always use SESSION_SCHEMA_VERSION.
  */
 
 import type { Revision, SessionId } from '@/src/kernel/contract';
 import type { GameState } from '@/src/kernel/domain/session/types';
+import { SESSION_SCHEMA_VERSION } from '@/src/kernel/domain/session/schema';
 
 /** Wire format stored under a session id. */
 export type StoredSessionRecord = Readonly<{
+  schemaVersion: number;
   sessionId: string;
   revision: number;
   state: GameState;
@@ -52,8 +57,10 @@ export function toStoredRecord(
   sessionId: SessionId,
   revision: Revision | number,
   state: GameState,
+  schemaVersion: number,
 ): StoredSessionRecord {
   return {
+    schemaVersion,
     sessionId: String(sessionId),
     revision: Number(revision),
     state,

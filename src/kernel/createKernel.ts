@@ -34,9 +34,10 @@ export type KernelDependencies = Readonly<{
  * Create an IKernel for the given mode.
  *
  * - `"legacy"` → LegacyKernelAdapter (production default)
- * - `"native-turn"` → NativeKernel owning AdvanceTurn via executeTurn
+ * - `"native-turn"` → NativeKernel owning AdvanceTurn + RerollTurn (Phase 4)
  *
  * Does not dual-write; only one authority is returned.
+ * Production default remains legacy until full game graph is native-owned.
  */
 export async function createKernel(
   mode: KernelMode,

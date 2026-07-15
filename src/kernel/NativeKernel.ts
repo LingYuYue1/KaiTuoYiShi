@@ -1,12 +1,13 @@
 /**
- * NativeKernel — Phase 2 vertical slice.
+ * NativeKernel — Phase 2+ vertical slice.
  *
  * - turn.advance → executeTurn only (never legacy)
+ * - turn.reroll → rerollTurn only (Phase 4; never legacy rewrite chain)
  * - other commands: optional transitional legacy fallback, else not_implemented
  * - read → SessionRepository projection
  *
- * Transitional: legacy dependency is ONLY for non-advance commands.
- * AdvanceTurn never falls back to legacy. Do not dual-write.
+ * Transitional: legacy dependency is ONLY for non-advance/non-reroll commands.
+ * Do not dual-write formal session.
  */
 
 import type {
@@ -25,14 +26,15 @@ import type { SessionRepository } from '@/src/kernel/ports/SessionRepository';
 import type { LegacyKernelDependencies } from '@/src/kernel/adapters/legacy/LegacyKernelAdapter';
 import { LegacyKernelAdapter } from '@/src/kernel/adapters/legacy/LegacyKernelAdapter';
 import { executeTurn } from '@/src/kernel/application/executeTurn';
+import { rerollTurn } from '@/src/kernel/application/rerollTurn';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
   model: ModelGateway;
   /**
-   * Transitional: non-advance commands may route here.
-   * AdvanceTurn never uses this. Remove when Phase 3+ owns remaining commands.
+   * Transitional: non-advance/non-reroll commands may route here.
+   * AdvanceTurn and RerollTurn never use this.
    */
   legacy?: LegacyKernelDependencies;
 }>;
@@ -66,7 +68,11 @@ export class NativeKernel implements IKernel {
         });
         return;
       case 'turn.reroll':
-        yield* this.executeReroll(sessionEnvelope as RerollTurnEnvelope);
+        // Native only (Phase 4) — Option B fork + single CAS; no UI rewrite chain.
+        yield* rerollTurn(sessionEnvelope as RerollTurnEnvelope, {
+          sessions: this.sessions,
+          model: this.model,
+        });
         return;
       default: {
         const unknownType = (sessionEnvelope.command as { type: string }).type;
@@ -97,25 +103,6 @@ export class NativeKernel implements IKernel {
     }
     const _exhaustive: never = query;
     throw new Error(`Unsupported query: ${String((_exhaustive as { type: string }).type)}`);
-  }
-
-  private async *executeReroll(
-    envelope: RerollTurnEnvelope,
-  ): AsyncIterable<ExecutionFrame> {
-    if (this.legacyAdapter) {
-      // Transitional fallback for non-advance only.
-      yield* this.legacyAdapter.execute(envelope);
-      return;
-    }
-    yield {
-      type: 'rejected',
-      commandId: envelope.commandId,
-      error: {
-        code: 'not_implemented',
-        message: 'turn.reroll is not implemented on NativeKernel (Phase 2)',
-        details: { turnId: envelope.command.turnId },
-      },
-    };
   }
 
   private async *executeCreateSession(

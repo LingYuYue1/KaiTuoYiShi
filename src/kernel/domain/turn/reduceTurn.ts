@@ -34,6 +34,7 @@ export function reduceTurn(
     id: `turn_${input.commandId}`,
     playerText: input.playerText,
     narrativeText: input.actions.narrativeText,
+    travelerNameBefore: state.travelerName,
   };
 
   const nextName = applyTravelerName(

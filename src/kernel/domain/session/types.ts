@@ -1,5 +1,5 @@
 /**
- * Formal session types for Native Kernel (Phase 3).
+ * Formal session types for Native Kernel (Phase 3/4).
  *
  * ## Ownership gap (documented)
  * SessionRepository owns only this minimal formal slice:
@@ -9,6 +9,17 @@
  * - full 旅人 graph, 世界, NPC, 记忆, 手机, News, Album, story weaving, …
  * Expand GameState only when a native use case needs a field and the
  * CAS/snapshot/restore paths can own it end-to-end.
+ *
+ * ## Schema (Phase 4)
+ * Durable rows carry schemaVersion (SESSION_SCHEMA_VERSION). Migration runs
+ * at repository ingress. Irreversible bumps need backup; composition-flag
+ * rollback is not lossless if old clients cannot read the new schema.
+ *
+ * ## Reroll (Phase 4)
+ * Native reroll operates only on this minimal GameState (Option B: fork +
+ * single CAS). Every new formal turn records its prior travelerName so reroll
+ * can rebuild the complete formal base. Migrated historical turns whose base
+ * name was never recorded are deliberately not rerollable.
  */
 
 import type { Revision, SessionId } from '@/src/kernel/contract';
@@ -22,6 +33,8 @@ export type KernelTurn = Readonly<{
   id: string;
   playerText: string;
   narrativeText: string;
+  /** Null only for legacy records that predate formal reroll base state. */
+  travelerNameBefore: string | null;
 }>;
 
 /**

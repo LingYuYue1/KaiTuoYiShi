@@ -74,7 +74,7 @@ for (const adapter of adapters) {
           { role: 'user', content: 'hi' },
           { role: 'assistant', content: 'ok' },
         ],
-        turns: [{ id: 'turn_c1', playerText: 'hi', narrativeText: 'ok' }],
+        turns: [{ id: 'turn_c1', playerText: 'hi', narrativeText: 'ok', travelerNameBefore: null }],
         travelerName: '开拓者',
       });
 
@@ -161,7 +161,7 @@ for (const adapter of adapters) {
       await seed(repo, 0, 1);
       const firstNext = createEmptyGameState({
         turnCount: 2,
-        turns: [{ id: 'turn_idem', playerText: 'a', narrativeText: 'A' }],
+        turns: [{ id: 'turn_idem', playerText: 'a', narrativeText: 'A', travelerNameBefore: null }],
         travelerName: '开拓者',
       });
       const first = await repo.compareAndSwap({

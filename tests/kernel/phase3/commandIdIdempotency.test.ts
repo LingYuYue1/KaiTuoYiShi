@@ -126,7 +126,7 @@ for (const factory of factories) {
         commandId: asCommandId('cas-idem'),
         nextState: createEmptyGameState({
           turnCount: 2,
-          turns: [{ id: 't1', playerText: 'x', narrativeText: 'y' }],
+          turns: [{ id: 't1', playerText: 'x', narrativeText: 'y', travelerNameBefore: null }],
         }),
       });
       expect(committed.type).toBe('committed');

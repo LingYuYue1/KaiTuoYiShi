@@ -116,7 +116,7 @@ describe('NativeKernel (Phase 2)', () => {
     }
   });
 
-  it('non-advance without legacy falls back to not_implemented', async () => {
+  it('turn.reroll without matching turnId is rejected by native path (not not_implemented)', async () => {
     const deps = makeNativeDeps();
     const kernel = new NativeKernel({
       sessions: deps.sessions,
@@ -129,6 +129,30 @@ describe('NativeKernel (Phase 2)', () => {
         sessionId: SESSION,
         expectedRevision: asRevision(0),
         command: { type: 'turn.reroll', turnId: 't1' },
+      }),
+    );
+    expect(frames).toEqual([
+      expect.objectContaining({
+        type: 'rejected',
+        error: expect.objectContaining({
+          code: 'unknown',
+          message: expect.stringMatching(/Unknown turnId/),
+        }),
+      }),
+    ]);
+  });
+
+  it('session.create without legacy falls back to not_implemented', async () => {
+    const deps = makeNativeDeps();
+    const kernel = new NativeKernel({
+      sessions: deps.sessions,
+      model: deps.model,
+    });
+    const frames = await collectAsync(
+      kernel.execute({
+        protocolVersion: 1,
+        commandId: asCommandId('create-1'),
+        command: { type: 'session.create', presetId: 'p1' },
       }),
     );
     expect(frames).toEqual([

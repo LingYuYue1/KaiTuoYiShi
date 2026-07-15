@@ -47,7 +47,7 @@ describe('SessionRepository (InMemory) Phase 2', () => {
         { role: 'user', content: 'hi' },
         { role: 'assistant', content: 'ok' },
       ],
-      turns: [{ id: 'turn_c1', playerText: 'hi', narrativeText: 'ok' }],
+      turns: [{ id: 'turn_c1', playerText: 'hi', narrativeText: 'ok', travelerNameBefore: null }],
       travelerName: '开拓者',
     });
 
