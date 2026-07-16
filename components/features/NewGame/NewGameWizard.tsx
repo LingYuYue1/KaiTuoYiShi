@@ -1406,6 +1406,8 @@ style={{
 
             {step === 'world' && (
               <OpeningAnchorStep
+                storyMode={storyMode}
+                onStoryMode={setStoryMode}
                 startingScenarioId={startingScenarioId}
                 onStartingScenarioId={setStartingScenarioId}
                 selectedRegionId={selectedRegionId}
@@ -2060,58 +2062,59 @@ function SectionTitle({ title, subtitle, compact = false }: { title: string; sub
   );
 }
 
-function WorldStep({
+function StoryModeSelector({
   storyMode,
   onStoryMode,
-  onNext,
 }: {
   storyMode: 剧情模式;
   onStoryMode: (mode: 剧情模式) => void;
-  onNext: () => void;
 }) {
   return (
-    <div>
-      <SectionTitle title="世界设定" subtitle="决定故事张力与叙述基调" />
-
-      <div>
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-            剧情模式
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {storyModes.map((item) => {
-              const active = storyMode === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onStoryMode(item.id)}
-                  className="w-full p-4 text-left transition-transform hover:-translate-y-0.5"
-                  style={{
-                    background: active
-                      ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.10), rgba(var(--tj-btn-primary-end), 0.04))'
-                      : 'rgba(var(--tj-panel-bg-end),0.58)',
-                    boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.5), 0 0 14px rgba(var(--tj-btn-primary-start), 0.12)'
-                      : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                    clipPath: tightClip,
-                  }}
-                >
-                  <div
-                    className="font-serif text-base font-bold tracking-[0.14em]"
-                    style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
-                  >
-                    {item.name}
-                  </div>
-                  <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
-                    {item.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+    <section
+      className="p-[13px]"
+      style={{
+        background: openingCardBackground,
+        boxShadow: openingCardBorder,
+        clipPath: smallClip,
+      }}
+    >
+      <div className="mb-3">
+        <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
+          剧情偏向
+        </div>
+        <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.76)' }}>
+          决定开场与后续主剧情的关系发展方向，不锁定具体角色或事件。
+        </div>
       </div>
-
-      <StepNav onNext={onNext} nextLabel="继续：填写角色" />
-    </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {storyModes.map((item) => {
+          const active = storyMode === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onStoryMode(item.id)}
+              className="w-full p-4 text-left transition-transform hover:-translate-y-0.5"
+              style={{
+                background: active ? openingActiveCardBackground : 'rgba(var(--tj-panel-bg-end),0.58)',
+                boxShadow: active ? openingCyanBorder : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+                clipPath: tightClip,
+              }}
+            >
+              <div
+                className="font-serif text-base font-bold tracking-[0.14em]"
+                style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
+              >
+                {item.name}
+              </div>
+              <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
+                {item.description}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -3057,6 +3060,8 @@ function SkillCreationStep({
 }
 
 function OpeningAnchorStep({
+  storyMode,
+  onStoryMode,
   startingScenarioId,
   onStartingScenarioId,
   selectedRegionId,
@@ -3078,6 +3083,8 @@ function OpeningAnchorStep({
   onNext,
   onBack,
 }: {
+  storyMode: 剧情模式;
+  onStoryMode: (mode: 剧情模式) => void;
   startingScenarioId: string;
   onStartingScenarioId: (id: string) => void;
   selectedRegionId: string;
@@ -3138,6 +3145,8 @@ function OpeningAnchorStep({
 
   return (
     <div className="space-y-4">
+      <StoryModeSelector storyMode={storyMode} onStoryMode={onStoryMode} />
+
       <div className="grid gap-3 md:grid-cols-2">
         {[
           { id: 'official_preset' as OpeningSource, title: '官方预设', text: '稳定章节背景，适合快速进入某个主线节点。' },

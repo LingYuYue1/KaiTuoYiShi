@@ -103,8 +103,8 @@ export function buildSystemPrompt(
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
-  // ── 世界书内置提示词（system_rule + 少量核心锚点）：为了可编辑放在世界书里，但按提示词注入与展示 ──
-  if (worldbooks && worldbookCtx) {
+  // ── 世界书稳定规则（system_rule + 少量核心锚点）：保留稳定位置，同时统一受世界书总开关控制 ──
+  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
     const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, worldbookCtx);
     if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
   }
@@ -294,7 +294,7 @@ export function buildOpeningSystemPrompt(
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
-  if (worldbooks && worldbookCtx) {
+  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
     const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, {
       ...worldbookCtx,
       currentScope: 'opening',

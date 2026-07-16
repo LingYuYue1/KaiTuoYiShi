@@ -735,7 +735,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
   };
 
   // 2. 主剧情（叙事铁律 + 文风模板）
-  //    叙事铁律 scope=['main']：开局已有专门规范，这里只覆盖正常回合；priority=225 略低于开局规范、略高于罗盘。
+  //    主剧情基础规则从第 0 回合开始生效；priority=225 略低于开局规范、略高于罗盘。
   //    文风条目默认 disabled，作为玩家自定义新文风的复制模板——默认文风由提示词模块「参考文风·日记体」承担。
   //    若玩家想换文风：复制本条目改写内容并启用 + 关掉提示词模块的默认文风。
   const narrativeGeneralBook: 世界书 = {
@@ -753,7 +753,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
         keywords: [],
         priority: 225,
         enabled: true,
-        scope: ['main'],
+        scope: ['main', 'opening'],
       }, now),
       entry({
         id: 'builtin_emotion_realism',
@@ -764,7 +764,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
         keywords: [],
         priority: 222,
         enabled: true,
-        scope: ['main'],
+        scope: ['main', 'opening'],
       }, now),
       entry({
         id: 'builtin_battle_narration',
@@ -775,7 +775,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
         keywords: [],
         priority: 220,
         enabled: true,
-        scope: ['main'],
+        scope: ['main', 'opening'],
       }, now),
     ],
     createdAt: now,

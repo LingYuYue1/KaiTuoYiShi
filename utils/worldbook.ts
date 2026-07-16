@@ -495,7 +495,7 @@ export function buildPromptLikeWorldbookInjection(
   books: 世界书[],
   ctx: FilterContext,
 ): string {
-  // Phase 7.2：提示词化条目不走深度插入（保持稳定位置），强制 injectAtDepth 过滤
+  // Phase 7.2：稳定规则条目不走深度插入（保持稳定位置），但仍保留世界书来源语义
   const selected = selectEntries(books, ctx).filter(
     ({ entry }) => isPromptLikeWorldbookEntry(entry) && !entry.injectAtDepth,
   );
@@ -503,8 +503,8 @@ export function buildPromptLikeWorldbookInjection(
 
   return selected
     .map(({ entry, bookTitle }) => [
-      `# 提示词｜${entry.title}`,
-      `来源：${bookTitle} / 世界书内置提示词 / 优先级 ${entry.priority}`,
+      `# 世界书｜${entry.title}`,
+      `来源：${bookTitle} / ${ENTRY_TYPE_LABELS[entry.type] ?? '世界书'} / 优先级 ${entry.priority}`,
       '',
       replaceWorldbookPlaceholders(entry.content, ctx),
     ].join('\n'))

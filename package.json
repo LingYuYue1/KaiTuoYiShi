@@ -30,6 +30,7 @@
     "test:desktop-edition": "node scripts/desktop-edition-regression.mjs",
     "test:story-weaving": "node scripts/story-weaving-regression.mjs",
     "test:story-weaving-ui": "node scripts/story-weaving-ui-regression.mjs",
+    "test:story-mode-worldbook": "node scripts/story-mode-worldbook-injection-regression.mjs",
     "test:reroll": "node scripts/reroll-regression.mjs",
     "test:reroll-snapshot": "node scripts/reroll-snapshot-isolation-regression.mjs",
     "test:save-isolation": "node scripts/save-isolation-regression.mjs",
