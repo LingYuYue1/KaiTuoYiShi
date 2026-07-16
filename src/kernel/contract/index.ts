@@ -6,25 +6,19 @@
 export type {
   AdvanceTurn,
   AdvanceTurnEnvelope,
-  AlbumBindSlot,
-  AlbumBindSlotEnvelope,
-  AlbumDelete,
-  AlbumDeleteEnvelope,
-  ApplyVariables,
-  ApplyVariablesEnvelope,
   CommandEnvelope,
+  CheckpointSession,
+  CheckpointSessionEnvelope,
   CommandId,
   CreateSession,
   CreateSessionEnvelope,
-  ImageGenerate,
-  ImageGenerateEnvelope,
-  NewsApply,
-  NewsApplyEnvelope,
-  NewsGenerate,
-  NewsGenerateEnvelope,
-  PhoneReply,
-  PhoneReplyEnvelope,
   Revision,
+  ResetSession,
+  ResetSessionEnvelope,
+  RegenerateNarrativeImage,
+  RegenerateNarrativeImageEnvelope,
+  RetryQueueTask,
+  RetryQueueTaskEnvelope,
   RerollTurn,
   RerollTurnEnvelope,
   SessionCommand,
@@ -43,26 +37,13 @@ export type {
 
 export type { KernelError, KernelErrorCode } from './errors';
 
-export type { KernelQuery } from './queries';
+export type { KernelQuery, SessionExistsQuery, SessionReadQuery } from './queries';
 
 export type {
-  AlbumView,
-  KnowledgeView,
-  NewsView,
-  PhoneView,
   QueryResult,
-  SessionMessageView,
+  SessionExistenceView,
   SessionView,
-  SettingsView,
-  TravelerVariablesView,
   TurnView,
-} from './projections';
-export {
-  createEmptyAlbumView,
-  createEmptyKnowledgeView,
-  createEmptyNewsView,
-  createEmptyPhoneView,
-  createTravelerVariablesView,
 } from './projections';
 
 export type { IKernel } from './IKernel';

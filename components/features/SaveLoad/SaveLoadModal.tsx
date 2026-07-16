@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getSaveCatalog, type SaveListItem } from '@/src/ui/ports';
-import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
+import { getSaveCatalog, type SaveListItem } from '@/src/adaptations/saveCatalog';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
@@ -27,7 +26,6 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<Tab>('manual');
-  const [showMobileHelp, setShowMobileHelp] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [rebuildingSummaries, setRebuildingSummaries] = useState(false);
   const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
@@ -139,12 +137,10 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    const target = saves.find((save) => save.id === id)?.saveTree;
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
     try {
       await (await getSaveCatalog()).deleteSave(id);
-      clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
       setDeletingId(null);
       void refresh();
     } catch (err) {
@@ -161,7 +157,6 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     setSaves((prev) => prev.filter((save) => save.saveTree?.rootId !== rootId));
     try {
       await (await getSaveCatalog()).deleteSaveTree(rootId);
-      clearActiveSaveTreeMetaIfMatches({ rootId });
       setDeletingRootId(null);
       void refresh();
     } catch (err) {
@@ -194,7 +189,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
         const imported = await (await getSaveCatalog()).importSaveFileAsMany(file);
         const now = Date.now();
         for (const [index, data] of imported.entries()) {
-          const row = data as { id: number; type: string; timestamp: number };
+          const row = data;
           row.id = 0;
           row.type = 'imported';
           row.timestamp = now + index;

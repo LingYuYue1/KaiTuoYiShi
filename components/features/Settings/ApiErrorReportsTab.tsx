@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  clearApiErrorReports,
-  loadApiErrorReports,
-  type ApiErrorReport,
-} from '@/services/ai/apiErrorReportService';
+import type { ApiErrorReport } from '@/services/ai/apiErrorReportService';
+import { getAdaptationServices } from '@/src/adaptations';
 
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -38,9 +35,9 @@ export function ApiErrorReportsTab() {
   const [message, setMessage] = useState('');
 
   const refresh = async () => {
-    const list = await loadApiErrorReports();
+    const list = await (await getAdaptationServices()).apiErrorReports.loadApiErrorReports();
     setReports(list);
-    setSelectedId((current) => (current && list.some((item) => item.id === current) ? current : list[0]?.id ?? ''));
+    setSelectedId((current) => (list.some((item) => item.id === current) ? current : ''));
   };
 
   useEffect(() => {
@@ -48,13 +45,13 @@ export function ApiErrorReportsTab() {
   }, []);
 
   const selected = useMemo(
-    () => reports.find((item) => item.id === selectedId) ?? reports[0] ?? null,
+    () => reports.find((item) => item.id === selectedId) ?? null,
     [reports, selectedId],
   );
 
   const handleClear = async () => {
     if (!window.confirm('确定清空所有 API 错误报告吗？')) return;
-    await clearApiErrorReports();
+    await (await getAdaptationServices()).apiErrorReports.clearApiErrorReports();
     setReports([]);
     setSelectedId('');
     setMessage('错误报告已清空。');

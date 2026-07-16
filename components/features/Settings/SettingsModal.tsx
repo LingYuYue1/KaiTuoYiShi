@@ -20,15 +20,15 @@ import { ThemeSettingsTab } from './ThemeSettings';
 import { GameSettingsTab } from './GameSettings';
 import { VisualSettingsTab } from './VisualSettingsTab';
 import { NsfwSettingsTab } from './NsfwSettingsTab';
-import { PromptModulesTab } from './PromptModulesTab';
-import { TavernPresetsSettingsTab } from './TavernPresetsSettingsTab';
+import { PromptSettingsSurface } from './PromptSettingsSurface';
+import { TavernPresetSettingsSurface } from './TavernPresetSettingsSurface';
 import { ExtraFeaturesSettingsTab } from './ExtraFeaturesSettingsTab';
 import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
-import { ContextViewerTab } from './ContextViewer';
+import { ContextInspectorTab } from './ContextInspector';
 import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
-import type { ContextSnapshot, ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
+import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/workflows/contextSnapshot';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
@@ -39,8 +39,7 @@ import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { VariableSetters } from '@/models/variableSetters';
-import { setPreference } from '@/src/ui/preferences';
-import type { 世界书 } from '@/models/worldbook';
+import { setPreference } from '@/src/adaptations/preferences';
 
 export type SettingsTab = Tab;
 
@@ -69,12 +68,8 @@ interface SettingsModalProps {
   on剧情编织Change: React.Dispatch<React.SetStateAction<剧情编织系统>>;
   variableSetters: VariableSetters;
   variableEditingLocked?: boolean;
-  getContextSnapshot: (kind?: ContextSnapshotKind) => ContextSnapshot;
+  getContextSnapshot: (kind?: ContextSnapshotKind) => Promise<ContextSnapshot>;
   initialTab?: Tab;
-  /** Phase 7.2：世界书数组（用于 ST 预设导入时注入 ST 世界书条目）。 */
-  worldbooks: 世界书[];
-  /** Phase 7.2：世界书变更回调（同时负责持久化到 IndexedDB）。 */
-  onWorldbooksChange: (books: 世界书[]) => void;
 }
 
 type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage';
@@ -120,11 +115,8 @@ export function SettingsModal({
   variableEditingLocked = false,
   getContextSnapshot,
   initialTab = 'api',
-  worldbooks,
-  onWorldbooksChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
-  const [contextRefreshKey, setContextRefreshKey] = useState(0);
   const persistGameSettingsChange = useCallback((next: 游戏设置) => {
     onGameSettingsChange(next);
     void setPreference('gameSettings', next);
@@ -160,35 +152,21 @@ export function SettingsModal({
       case 'visual':
         return <VisualSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'context':
-        void contextRefreshKey;
-        return (
-          <ContextViewerTab
-            getSnapshot={getContextSnapshot}
-            onRefresh={() => setContextRefreshKey((v) => v + 1)}
-          />
-        );
+        return <ContextInspectorTab getSnapshot={getContextSnapshot} />;
       case 'nsfw':
         return <NsfwSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
       case 'prompts':
         return (
-          <PromptModulesTab
+          <PromptSettingsSurface
             settings={gameSettings}
             onChange={persistGameSettingsChange}
-            worldbooks={worldbooks}
-            onWorldbooksChange={onWorldbooksChange}
-            apiSettings={apiSettings}
-            onApiSettingsChange={onApiSettingsChange}
           />
         );
       case 'tavernPresets':
         return (
-          <TavernPresetsSettingsTab
+          <TavernPresetSettingsSurface
             settings={gameSettings}
             onChange={persistGameSettingsChange}
-            worldbooks={worldbooks}
-            onWorldbooksChange={onWorldbooksChange}
-            apiSettings={apiSettings}
-            onApiSettingsChange={onApiSettingsChange}
           />
         );
       case 'extra':

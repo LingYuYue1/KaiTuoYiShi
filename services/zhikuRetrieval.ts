@@ -1,14 +1,15 @@
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
-import type { API配置项, 智库系统设置 } from '@/models/settings';
+import type { 智库系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { normalizeStructuredModelText } from '@/services/ai/structuredOutputRepair';
 import { ZHIKU_CATEGORY_LABELS, 搜索智库条目 } from '@/models/zhiku';
 import type { 智库软结构标签 } from '@/models/zhiku';
-import { 解析智库软结构标签, 获取智库人物名, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
+import { 解析智库软结构标签, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
 import { ZHIKU_COT_PROMPT as ZHIKU_LEGACY_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
 
 
 export interface 智库检索结果 {
@@ -126,10 +127,6 @@ function getMainStoryBlockReason(entry: 智库条目): string | null {
 
   const meta = 解析智库软结构标签(entry);
   return getMainStoryZhikuMetaBlockReason(meta);
-}
-
-function isMainStoryAllowedZhikuMeta(meta: 智库软结构标签): boolean {
-  return !getMainStoryZhikuMetaBlockReason(meta);
 }
 
 function getMainStoryZhikuMetaBlockReason(meta: 智库软结构标签): string | null {
@@ -491,7 +488,6 @@ export async function retrieveZhikuContextWithModel(
   query: string,
   limit: number,
   settings: 智库系统设置,
-  mainConfig: API配置项,
   signal?: AbortSignal,
   retryCount = 2,
   sceneContext?: 智库场景上下文,
@@ -502,10 +498,10 @@ export async function retrieveZhikuContextWithModel(
   }
 
   const keywordRecall = retrieveZhikuContext(system, query, limit, sceneContext);
-  const api = resolveZhikuRecallConfig(mainConfig, settings);
-  if (!api.baseUrl || !api.apiKey || !api.model) {
-    return keywordRecall;
-  }
+  const api = requireIndependentApiConfig('智库召回', settings.api, {
+    maxTokens: 384,
+    temperature: 0.1,
+  });
 
   const keywordGroups: 智库召回分组 = {
     characterEntries: keywordRecall.characterEntries ?? [],
@@ -540,8 +536,7 @@ export async function retrieveZhikuContextWithModel(
     aiSupplementHints: sceneContext?.aiSupplementHints,
   });
 
-  try {
-    const rawText = await withRetries(
+  const rawText = await withRetries(
       () =>
         chatCompletionNonStream(api, {
           messages: [{ role: 'user', content: userPrompt }],
@@ -551,7 +546,7 @@ export async function retrieveZhikuContextWithModel(
           temperature: api.temperature ?? 0.1,
         }),
       { retries: retryCount, signal, label: '智库召回' },
-    );
+  );
     const supplementGroups = parseZhikuIndexes(rawText, candidates, normalLimit);
     const supplementEntries = mergeZhikuGroups(supplementGroups);
     const finalGroups = mergeSupplementedZhikuGroups(keywordGroups, supplementGroups);
@@ -573,7 +568,7 @@ export async function retrieveZhikuContextWithModel(
           AI补充资料: [],
           检查项: [
             ...keywordDiagnostics.检查项,
-            '智库模型已按最近多回合正文窗口查缺补漏，但没有返回有效补充编号；已保留关键词召回结果。',
+            '智库模型已完成查缺补漏，本回合没有需要追加的资料。',
           ],
         },
       };
@@ -601,13 +596,10 @@ export async function retrieveZhikuContextWithModel(
         角色故事层注入: finalGroups.characterEntries.map(formatCharacterStoryInjectionDiagnostic),
         检查项: [
           ...keywordDiagnostics.检查项,
-          `智库模型已按最近多回合正文窗口查缺补漏，仅追加 ${appliedSupplementEntries.length} 条未由关键词命中的资料；关键词召回结果已保底保留。`,
+          `智库模型已按最近多回合正文窗口查缺补漏，追加 ${appliedSupplementEntries.length} 条未由关键词命中的资料。`,
         ],
       },
     };
-  } catch {
-    return keywordRecall;
-  }
 }
 
 export function buildZhikuModelSystemPrompt(sceneHints: string[] = [], promptModules?: 提示词模块[]): string {
@@ -647,20 +639,6 @@ export function buildZhikuModelUserPrompt(query: string, limit: number, candidat
     '未召回候选资料（只可从这里补缺）：',
     candidateText,
   ].join('\n');
-}
-
-function resolveZhikuRecallConfig(mainConfig: API配置项, settings: 智库系统设置): API配置项 {
-  const override = settings.api;
-  return {
-    ...mainConfig,
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: override.maxTokens ?? mainConfig.maxTokens,
-    temperature: override.temperature ?? mainConfig.temperature,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-  };
 }
 
 function buildRecallSupplementCandidates(system: 智库系统, query: string, limit: number, sceneContext?: 智库场景上下文, excludedEntries: 智库条目[] = []): 智库条目[] {

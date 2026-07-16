@@ -394,7 +394,6 @@ export async function testConnection(config: any): Promise<ConnectionTestResult>
           systemPrompt: '你正在执行 API 连接测试。必须只返回用户提供的随机校验码，不得添加解释、标点或 Markdown。',
           maxTokens: 32,
           temperature: 0,
-          deepSeekRecovery: 'disabled',
         }),
       { retries: retryCount, label: '连接测试' },
     );

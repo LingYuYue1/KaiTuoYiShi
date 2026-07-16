@@ -5,8 +5,6 @@
 export {
   PersistentSessionRepository,
   createIndexedDbSessionRepository,
-  createMemoryPersistentSessionRepository,
-  createMemoryPersistentSessionRepositoryWithBackend,
 } from './PersistentSessionRepository';
 export {
   IndexedDbSessionBackend,
@@ -15,7 +13,6 @@ export {
   SESSIONS_STORE,
   COMMAND_COMMITS_STORE,
 } from './indexedDbSessionBackend';
-export { MemorySessionBackend } from './memorySessionBackend';
 export type {
   SessionAtomicTx,
   SessionPersistenceBackend,

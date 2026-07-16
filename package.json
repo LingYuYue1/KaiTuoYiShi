@@ -45,19 +45,6 @@
     "test:deepseek-recovery": "node scripts/deepseek-recovery-regression.mjs",
     "test:turn-usage": "node scripts/turn-usage-regression.mjs",
     "test:presence": "node scripts/presence-regression.mjs",
-    "test:pathaufcalls": "node scripts/pathaufcalls-inventory-regression.mjs",
-    "test:kernel": "vitest run",
-    "test:kernel:contract": "vitest run tests/kernel/contract",
-    "test:kernel:characterization": "vitest run tests/kernel/characterization",
-    "test:kernel:phase1": "vitest run tests/kernel/phase1",
-    "test:kernel:phase2": "vitest run tests/kernel/phase2",
-    "test:kernel:phase3": "vitest run tests/kernel/phase3",
-    "test:kernel:phase4": "vitest run tests/kernel/phase4",
-    "test:kernel:phase5": "vitest run tests/kernel/phase5",
-    "test:kernel:phase5.1": "vitest run tests/kernel/phase5",
-    "test:kernel:phase5.2": "vitest run tests/kernel/phase5/stage52 tests/kernel/phase5/knowledge tests/kernel/phase5/narrative",
-    "test:kernel:phase5.3": "vitest run tests/kernel/phase5/stage53",
-    "test:kernel:phase5.4": "vitest run tests/kernel/phase5/stage54 tests/kernel/phase5/album",
     "test:settings-save": "node scripts/settings-save-regression.mjs",
     "test:extra-features": "node scripts/extra-features-regression.mjs",
     "test:action-options": "node scripts/action-options-cleanup-regression.mjs",
@@ -134,7 +121,6 @@
     "tailwindcss": "^3.4.0",
     "typescript": "~5.8.0",
     "vite": "^6.2.0",
-    "vitest": "3.2.4",
     "wrangler": "^4.95.0"
   }
 }

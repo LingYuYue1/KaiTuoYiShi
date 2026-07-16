@@ -3,7 +3,7 @@
  *
  * Stage 5.4 D:
  * - Slot bind/replace/delete for formal album go through
- *   `src/ui/album/slotOperations` (domain bindSlot / deleteEntries / commitGeneratedAsset).
+ *   `src/kernel/workflows/albumOperations` (strict bind / delete / commit).
  * - Formal fields store `asset:<id>` (AssetRef) or remote URLs only.
  * - Display URLs are resolved at render time via 解析相册资源引用 / albumObjectUrl.
  * - Object URLs never enter formal 相册系统 / GameState.
@@ -21,6 +21,8 @@ import {
 const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 export function 创建相册图片条目(input: {
+  assetId?: string;
+  entryId?: string;
   title: string;
   src: string;
   originalUrl?: string;
@@ -47,8 +49,8 @@ export function 创建相册图片条目(input: {
 }): { asset: 图片资源; entry: 相册条目 } {
   const now = Date.now();
   const isDataUrl = input.src.startsWith('data:');
-  const assetId = makeId('asset');
-  const entryId = makeId('album');
+  const assetId = input.assetId?.trim() || makeId('asset');
+  const entryId = input.entryId?.trim() || makeId('album');
   const originalUrl = input.originalUrl?.trim() || undefined;
   const blob = isDataUrl ? rememberAlbumAssetFromDataUrl(assetId, input.src) : null;
   const dataUrl = blob ? 创建相册资源引用(assetId) : (isDataUrl ? input.src : undefined);
@@ -165,7 +167,7 @@ export function 解析相册资源地址(asset: {
   return pickAssetDisplayUrl(asset);
 }
 
-export function 挂载NPC头像图片(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位; src: string; source?: '手动' | '原著' | '文生图' | '占位' }): NPC记录[] {
+export function 设置NPC头像当前显示(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位; src: string; source?: '手动' | '原著' | '文生图' | '占位' }): NPC记录[] {
   return npcs.map((npc) => {
     if (npc.id !== params.npcId) return npc;
     const avatarSlots = {
@@ -187,7 +189,7 @@ export function 挂载NPC头像图片(npcs: NPC记录[], params: { npcId: string
   });
 }
 
-export function 挂载NPC立绘图片(npcs: NPC记录[], params: { npcId: string; src: string; source?: '手动' | '原著' | '文生图' | '占位' }): NPC记录[] {
+export function 设置NPC立绘当前显示(npcs: NPC记录[], params: { npcId: string; src: string; source?: '手动' | '原著' | '文生图' | '占位' }): NPC记录[] {
   return npcs.map((npc) => {
     if (npc.id !== params.npcId) return npc;
     return {
@@ -202,7 +204,7 @@ export function 挂载NPC立绘图片(npcs: NPC记录[], params: { npcId: string
   });
 }
 
-export function 卸载NPC头像图片(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位 }): NPC记录[] {
+export function 清除NPC头像当前显示(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位 }): NPC记录[] {
   return npcs.map((npc) => {
     if (npc.id !== params.npcId) return npc;
     const avatarSlots = { ...(npc.图像档案?.头像槽位 ?? {}) };
@@ -220,7 +222,7 @@ export function 卸载NPC头像图片(npcs: NPC记录[], params: { npcId: string
   });
 }
 
-export function 卸载NPC立绘图片(npcs: NPC记录[], params: { npcId: string }): NPC记录[] {
+export function 清除NPC立绘当前显示(npcs: NPC记录[], params: { npcId: string }): NPC记录[] {
   return npcs.map((npc) => {
     if (npc.id !== params.npcId) return npc;
     return {
@@ -233,7 +235,7 @@ export function 卸载NPC立绘图片(npcs: NPC记录[], params: { npcId: string
   });
 }
 
-export function 挂载NPC_NSFW部位图片(
+export function 设置NPC_NSFW部位当前显示(
   npcs: NPC记录[],
   params: { npcId: string; slot: '女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考'; src: string },
 ): NPC记录[] {
@@ -253,7 +255,7 @@ export function 挂载NPC_NSFW部位图片(
   });
 }
 
-export function 卸载NPC_NSFW部位图片(
+export function 清除NPC_NSFW部位当前显示(
   npcs: NPC记录[],
   params: { npcId: string; slot: '女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考' },
 ): NPC记录[] {
@@ -271,7 +273,7 @@ export function 卸载NPC_NSFW部位图片(
   });
 }
 
-export function 挂载旅人图片(traveler: 角色数据结构, params: { slot: '头像' | '正文头像' | '手机头像' | '立绘'; src: string }): 角色数据结构 {
+export function 设置旅人图片当前显示(traveler: 角色数据结构, params: { slot: '头像' | '正文头像' | '手机头像' | '立绘'; src: string }): 角色数据结构 {
   const imageArchive = { ...(traveler.图像档案 ?? {}) };
   if (params.slot === '头像') imageArchive.头像 = params.src;
   if (params.slot === '正文头像') imageArchive.正文头像 = params.src;
@@ -284,7 +286,7 @@ export function 挂载旅人图片(traveler: 角色数据结构, params: { slot:
   };
 }
 
-export function 卸载旅人图片(traveler: 角色数据结构, params: { slot: '头像' | '正文头像' | '手机头像' | '立绘' }): 角色数据结构 {
+export function 清除旅人图片当前显示(traveler: 角色数据结构, params: { slot: '头像' | '正文头像' | '手机头像' | '立绘' }): 角色数据结构 {
   const imageArchive = { ...(traveler.图像档案 ?? {}) };
   if (params.slot === '头像') imageArchive.头像 = undefined;
   if (params.slot === '正文头像') imageArchive.正文头像 = undefined;

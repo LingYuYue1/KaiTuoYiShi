@@ -21,13 +21,11 @@ interface TurnItemProps {
   showInnerVoice?: boolean;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
-  // 历史评判消息若 awakenPathId 为空,由 ChatList 向前查找补一个 ID 进来。
-  fallbackPathId?: string;
 }
 
 type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
-function TurnItemImpl({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
+function TurnItemImpl({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, previousUserInput, visualTextSettings }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
 
@@ -53,7 +51,6 @@ function TurnItemImpl({ message, isStreaming, onEditBody, onRegenerateNarrativeI
           traveler={traveler}
           album={album}
           showInnerVoice={showInnerVoice}
-          fallbackPathId={fallbackPathId}
           previousUserInput={previousUserInput}
           visualTextSettings={visualTextSettings}
         />
@@ -163,12 +160,11 @@ interface AiTurnCardProps {
   traveler?: 角色数据结构;
   album?: 相册系统;
   showInnerVoice?: boolean;
-  fallbackPathId?: string;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, previousUserInput, visualTextSettings }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -189,7 +185,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
     : parsed.awakenJudgement?.trim() ? '评判'
     : null;
 
-  // 评判结果分类:当前版本只承认升阶；兼容旧历史消息时保留兜底渲染。
+  // 评判结果分类：当前协议只承认升阶。
   const judgementOutcome: '升阶' | null =
     awakeningKind === '评判'
       ? (() => {
@@ -201,8 +197,7 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
 
   // 命途名:落 aiMsg 时由 sendWorkflow 把 effectiveWorld.进行中狭间 写到 parsed.awakenPathId,
   // 评判落地后世界状态会清掉 进行中狭间,但消息里保留这个 ID,玩家回看历史也能看到正确命途名。
-  // 早期消息可能没存 awakenPathId,ChatList 会向前查找补 fallbackPathId 兜底。
-  const effectivePathId = parsed.awakenPathId || fallbackPathId || '';
+  const effectivePathId = parsed.awakenPathId ?? '';
   const pathName = effectivePathId ? getPath(effectivePathId)?.name ?? '' : '';
 
   const card = (
@@ -420,9 +415,7 @@ function formatDebugContext(message: 聊天消息): string {
     '【DeepSeek 主剧情诊断】',
     `主剧情请求模式：${debug.mainRequestMode ?? '未知'}`,
     `模式：${debug.deepSeekMainMode ?? 'off'}`,
-    debug.deepSeekMainOriginalModel && debug.deepSeekMainAdaptedModel
-      ? `主剧情模型适配：${debug.deepSeekMainOriginalModel} → ${debug.deepSeekMainAdaptedModel}`
-      : '主剧情模型适配：未触发',
+    `主剧情模型：${debug.deepSeekMainOriginalModel ?? '未记录'}`,
     `跳过 CoT 伪装历史：${debug.deepSeekCotFakeHistorySkipped ? '是' : '否'}`,
     `Prefix 锁格式：${debug.deepSeekPrefixMode ? '是' : '否'}`,
     debug.deepSeekProtocolIssues?.length

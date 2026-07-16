@@ -1,10 +1,11 @@
-import type { API配置项, 忆庭API覆盖, 记忆系统设置 } from '@/models/settings';
+import type { 记忆系统设置 } from '@/models/settings';
 import type { 回忆条目 } from '@/models/yiting';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { YITING_ARCHIVE_FORMAT_PROMPT as YITING_LEGACY_ARCHIVE_FORMAT_PROMPT } from '@/prompts/cot/yitingCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
 
 export interface YitingArchiveSource {
   turn: number;
@@ -20,29 +21,11 @@ export interface YitingArchiveSource {
 
 export interface YitingArchiveResult {
   entry: 回忆条目;
-  usedFallback: boolean;
-}
-
-export function resolveYitingArchiveConfig(
-  mainConfig: API配置项,
-  override: 忆庭API覆盖,
-): API配置项 {
-  return {
-    ...mainConfig,
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: override.maxTokens ?? mainConfig.maxTokens,
-    temperature: override.temperature ?? mainConfig.temperature,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-  };
 }
 
 export async function buildYitingArchiveEntry(
   source: YitingArchiveSource,
   settings: 记忆系统设置,
-  mainConfig: API配置项,
   signal?: AbortSignal,
   retryCount = 2,
   promptModules?: 提示词模块[],
@@ -56,15 +39,14 @@ export async function buildYitingArchiveEntry(
     source.memory?.trim() ? `正文小结：${source.memory.trim()}` : '',
   ].filter(Boolean).join('\n');
 
-  const fallback = createFallbackArchiveEntry(source);
   if (!settings.忆庭独立精炼) {
-    return { entry: fallback, usedFallback: true };
+    throw new Error('忆庭纪要入库要求开启独立精炼');
   }
 
-  const api = resolveYitingArchiveConfig(mainConfig, settings.忆庭精炼API);
-  if (!api.baseUrl || !api.apiKey || !api.model) {
-    return { entry: fallback, usedFallback: true };
-  }
+  const api = requireIndependentApiConfig('忆庭精炼', settings.忆庭精炼API, {
+    maxTokens: 1024,
+    temperature: 0.2,
+  });
 
   const archiveFormatSection = buildYitingArchiveFormatSection(promptModules);
   const systemPrompt = [
@@ -78,96 +60,45 @@ export async function buildYitingArchiveEntry(
     inputText,
   ].join('\n\n');
 
-  try {
-    const raw = await withRetries(
-      () =>
-        chatCompletionNonStream(api, {
-          messages: [{ role: 'user', content: userPrompt }],
-          systemPrompt,
-          signal,
-          maxTokens: api.maxTokens ?? 1024,
-          temperature: api.temperature ?? 0.2,
-        }),
-      { retries: retryCount, signal, label: '忆庭纪要精炼' },
-    );
-    const parsed = parseArchiveSections(raw);
-    const summary = buildFinalSummary(parsed.summary, parsed.body, fallback.摘要, formatSourceTime(source), source.location);
-    return {
-      entry: {
-        ...fallback,
-        摘要: summary,
-        // 原文层必须保留真实回合材料。AI 返回的 BODY 是详细纪要，不是原文，不能覆盖这里。
-        原文: fallback.原文,
-        检索关键词: mergeKeywords(fallback.检索关键词 ?? [], buildKeywordsFromText(summary, fallback.原文)),
-      },
-      usedFallback: false,
-    };
-  } catch {
-    return { entry: fallback, usedFallback: true };
+  const raw = await withRetries(
+    () =>
+      chatCompletionNonStream(api, {
+        messages: [{ role: 'user', content: userPrompt }],
+        systemPrompt,
+        signal,
+        maxTokens: api.maxTokens ?? 1024,
+        temperature: api.temperature ?? 0.2,
+      }),
+    { retries: retryCount, signal, label: '忆庭纪要精炼' },
+  );
+  const parsed = parseArchiveSections(raw);
+  const summaryLines = [...normalizeArchiveSummary(parsed.summary), ...normalizeArchiveSummary(parsed.body)];
+  if (summaryLines.length < 2) {
+    throw new Error('忆庭精炼模型返回的纪要内容不足');
   }
-}
-
-function createFallbackArchiveEntry(source: YitingArchiveSource): 回忆条目 {
-  const summary = buildFallbackSummary(source);
+  const summary = formatArchiveSummary(
+    formatSourceTime(source),
+    source.location,
+    dedupeLines(summaryLines).slice(0, 6),
+  );
+  const original = [
+    `玩家输入：${source.userInput.trim() || '（空）'}`,
+    `正文：${source.body.trim() || '（空）'}`,
+    source.memory?.trim() ? `回合小结：${source.memory.trim()}` : '',
+  ].filter(Boolean).join('\n');
   return {
-    id: `recall_turn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    名称: `【回合纪要 ${String(Math.max(1, source.turn)).padStart(3, '0')}】`,
-    类型: '精炼纪要',
-    摘要: summary,
-    原文: [
-      `玩家输入：${source.userInput.trim() || '（空）'}`,
-      `正文：${source.body.trim() || '（空）'}`,
-      source.memory?.trim() ? `回合小结：${summarizeBodyForFallback(source.memory, 420)}` : '',
-    ].filter(Boolean).join('\n'),
-    检索关键词: buildKeywordsFromText(source.userInput, summary, source.body),
-    来源回合: [source.turn],
-    回合: source.turn,
-    时间戳: new Date().toISOString(),
+    entry: {
+      id: `recall_turn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      名称: `【回合纪要 ${String(Math.max(1, source.turn)).padStart(3, '0')}】`,
+      类型: '精炼纪要',
+      摘要: summary,
+      原文: original,
+      检索关键词: buildKeywordsFromText(source.userInput, summary, original),
+      来源回合: [source.turn],
+      回合: source.turn,
+      时间戳: new Date().toISOString(),
+    },
   };
-}
-
-function normalizeMainStorySummary(memory?: string): string {
-  const cleaned = (memory || '').trim();
-  if (!cleaned) return '';
-  const lines = cleaned
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.replace(/^[-*•·]\s*/, '- '))
-    .map((line) => line.startsWith('- ') ? line : `- ${line}`)
-    .slice(0, 6);
-  return lines.join('\n');
-}
-
-function buildFallbackSummary(source: YitingArchiveSource): string {
-  const lines: string[] = [];
-  const memorySummary = normalizeMainStorySummary(source.memory);
-  if (memorySummary) {
-    lines.push(...memorySummary.split(/\r?\n/).filter(Boolean));
-  }
-  if (lines.length < 3) {
-    lines.push(`- 玩家输入：${shortenLine(source.userInput, 90)}`);
-    lines.push(`- 正文推进：${summarizeBodyForFallback(source.body, 180)}`);
-  }
-  return formatArchiveSummary(formatSourceTime(source), source.location, dedupeLines(lines).slice(0, 6));
-}
-
-function buildFinalSummary(summary: string, body: string, fallback: string, time?: string, location?: string): string {
-  const primaryLines = normalizeArchiveSummary(summary);
-  const detailLines = normalizeArchiveSummary(body);
-  const fallbackLines = normalizeArchiveSummary(fallback);
-  const primaryScore = primaryLines.reduce((score, line) => score + (line.includes('：') ? 2 : 1), 0);
-
-  if (primaryLines.length >= 3 || (primaryLines.length >= 2 && primaryScore >= 4)) {
-    return formatArchiveSummary(time, location, dedupeLines(primaryLines).slice(0, 6));
-  }
-
-  const merged = dedupeLines([
-    ...primaryLines,
-    ...detailLines.slice(0, 2),
-    ...fallbackLines,
-  ]);
-  return formatArchiveSummary(time, location, merged.slice(0, 6)) || fallback;
 }
 
 function formatArchiveSummary(time: string | undefined, location: string | undefined, lines: string[]): string {
@@ -254,24 +185,6 @@ function normalizeArchiveSummary(summary: string): string[] {
     .map((line) => `- ${line}`);
 }
 
-function shortenLine(text: string, limit: number): string {
-  const cleaned = (text || '').replace(/\s+/g, ' ').trim();
-  if (!cleaned) return '（空）';
-  return cleaned.length > limit ? `${cleaned.slice(0, limit)}…` : cleaned;
-}
-
-function summarizeBodyForFallback(text: string, limit: number): string {
-  const cleaned = (text || '').replace(/\s+/g, ' ').trim();
-  if (!cleaned) return '（空）';
-  const clauses = cleaned
-    .split(/[。！？!?；;]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-  const textOut = clauses.length ? `${clauses.join('。')}。` : cleaned;
-  return shortenLine(textOut, limit);
-}
-
 function buildKeywordsFromText(...parts: string[]): string[] {
   const words = new Set<string>();
   for (const part of parts) {
@@ -282,10 +195,6 @@ function buildKeywordsFromText(...parts: string[]): string[] {
     }
   }
   return Array.from(words).slice(0, 20);
-}
-
-function mergeKeywords(base: string[], extra: string[]): string[] {
-  return Array.from(new Set([...base, ...extra])).slice(0, 24);
 }
 
 function buildYitingArchiveFormatSection(promptModules?: 提示词模块[]): string {

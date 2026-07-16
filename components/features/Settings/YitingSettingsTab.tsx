@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import type { AI提供商, API设置, 游戏设置, 忆庭API覆盖 } from '@/models/settings';
+import type { AI提供商, 游戏设置, 忆庭API覆盖 } from '@/models/settings';
 import { 创建默认记忆系统设置 } from '@/models/settings';
-import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { ConnectionTestResult } from '@/services/ai/apiTools';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
-  apiSettings: API设置;
 }
 
 const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: string; defaultModel: string }[] = [
@@ -37,12 +37,8 @@ interface ResolvedApi {
   enableClaudeMode?: boolean;
 }
 
-export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function YitingSettingsTab({ settings, onChange }: Props) {
   const memory = settings.记忆系统 ?? 创建默认记忆系统设置();
-  const mainConfig = useMemo(
-    () => apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null,
-    [apiSettings.activeConfigId, apiSettings.configs],
-  );
 
   const [recallLoadingModels, setRecallLoadingModels] = useState(false);
   const [recallModelOptions, setRecallModelOptions] = useState<string[]>([]);
@@ -68,13 +64,13 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
   };
 
   const buildEffective = (api: 忆庭API覆盖): ResolvedApi => ({
-    provider: (api.provider || mainConfig?.provider || 'openai_compatible') as AI提供商,
-    baseUrl: api.baseUrl.trim() || mainConfig?.baseUrl || '',
-    apiKey: api.apiKey.trim() || mainConfig?.apiKey || '',
-    model: api.model.trim() || mainConfig?.model || '',
-    maxTokens: api.maxTokens ?? mainConfig?.maxTokens,
-    temperature: api.temperature ?? mainConfig?.temperature,
-    retryCount: api.retryCount ?? mainConfig?.retryCount ?? 2,
+    provider: (api.provider || 'openai_compatible') as AI提供商,
+    baseUrl: api.baseUrl.trim(),
+    apiKey: api.apiKey.trim(),
+    model: api.model.trim(),
+    maxTokens: api.maxTokens,
+    temperature: api.temperature,
+    retryCount: api.retryCount ?? 2,
     enableClaudeMode: settings.enableClaudeMode === true,
   });
 
@@ -112,16 +108,14 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
     if (!recallEffective.baseUrl || !recallEffective.apiKey) {
       setRecallMessage({
         kind: 'error',
-        text: mainConfig
-          ? '忆庭召回会回退主 API；如果主 API 也没配，请先补全。'
-          : '请先填写忆庭召回 API 的 Base URL 和 API Key，或先配置主 API。',
+        text: '请先补全忆庭召回独立 API 的 Base URL 和 API Key。',
       });
       return;
     }
     setRecallLoadingModels(true);
     setRecallMessage(null);
     try {
-      const list = await fetchModels({ ...recallEffective, name: '忆庭召回' });
+      const list = await (await getAdaptationServices()).apiTools.fetchModels({ ...recallEffective, name: '忆庭召回' });
       setRecallModelOptions(list);
       if (list.length > 0 && !list.includes(memory.忆庭召回API.model.trim())) {
         patchRecallApi({ model: list[0] });
@@ -140,7 +134,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
       return;
     }
     try {
-      const result = await testConnection({ ...recallEffective, name: '忆庭召回' });
+      const result = await (await getAdaptationServices()).apiTools.testConnection({ ...recallEffective, name: '忆庭召回' });
       setRecallTestResult(result);
     } catch (err) {
       setRecallTestResult({ ok: false, detail: err instanceof Error ? err.message : String(err) });
@@ -151,16 +145,14 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
     if (!archiveEffective.baseUrl || !archiveEffective.apiKey) {
       setArchiveMessage({
         kind: 'error',
-        text: mainConfig
-          ? '忆庭精炼会回退主 API；如果主 API 也没配，请先补全。'
-          : '请先填写忆庭精炼 API 的 Base URL 和 API Key，或先配置主 API。',
+        text: '请先补全忆庭精炼独立 API 的 Base URL 和 API Key。',
       });
       return;
     }
     setArchiveLoadingModels(true);
     setArchiveMessage(null);
     try {
-      const list = await fetchModels({ ...archiveEffective, name: '忆庭精炼' });
+      const list = await (await getAdaptationServices()).apiTools.fetchModels({ ...archiveEffective, name: '忆庭精炼' });
       setArchiveModelOptions(list);
       if (list.length > 0 && !list.includes(memory.忆庭精炼API.model.trim())) {
         patchArchiveApi({ model: list[0] });
@@ -179,7 +171,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
       return;
     }
     try {
-      const result = await testConnection({ ...archiveEffective, name: '忆庭精炼' });
+      const result = await (await getAdaptationServices()).apiTools.testConnection({ ...archiveEffective, name: '忆庭精炼' });
       setArchiveTestResult(result);
     } catch (err) {
       setArchiveTestResult({ ok: false, detail: err instanceof Error ? err.message : String(err) });
@@ -188,7 +180,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
 
   const handleSave = async () => {
     try {
-      await setPreferenceAsync('gameSettings', settings);
+      await setPreference('gameSettings', settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '忆庭设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -224,7 +216,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
         />
         <ToggleField
           label="启用独立精炼"
-          desc="开启后，忆庭入库会调用精炼 API 生成概要；关闭时使用主剧情小总结和本地格式兜底。"
+          desc="开启后，忆庭入库会调用独立精炼 API；关闭时不执行忆庭入库。"
           checked={memory.忆庭独立精炼 === true}
           onChange={(checked) => patchMemory({ 忆庭独立精炼: checked })}
         />
@@ -242,7 +234,6 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
         onPatch={patchRecallApi}
         onFetchModels={fetchRecallModels}
         onTest={testRecall}
-        mainConfig={mainConfig}
       />
 
       <ApiSection
@@ -257,7 +248,6 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
         onPatch={patchArchiveApi}
         onFetchModels={fetchArchiveModels}
         onTest={testArchive}
-        mainConfig={mainConfig}
       />
 
       <Section title="精炼规则">
@@ -375,7 +365,6 @@ function ApiSection({
   onPatch,
   onFetchModels,
   onTest,
-  mainConfig,
 }: {
   title: string;
   description: string;
@@ -388,7 +377,6 @@ function ApiSection({
   onPatch: (patch: Partial<忆庭API覆盖>) => void;
   onFetchModels: () => void;
   onTest: () => void;
-  mainConfig: { baseUrl?: string; apiKey?: string; model?: string } | null;
 }) {
   return (
     <Section title={title}>
@@ -455,8 +443,8 @@ function ApiSection({
             </select>
           )}
         </label>
-	        <InputField label="Base URL" value={api.baseUrl} onChange={(value) => onPatch({ baseUrl: value })} placeholder={mainConfig?.baseUrl ? '留空则使用主 API：' + mainConfig.baseUrl : 'https://...'} />
-	        <InputField label="API Key" value={api.apiKey} onChange={(value) => onPatch({ apiKey: value })} type="password" placeholder={mainConfig?.apiKey ? '留空则使用主 API 的 Key' : 'sk-...'} />
+	        <InputField label="Base URL" value={api.baseUrl} onChange={(value) => onPatch({ baseUrl: value })} placeholder="https://..." />
+	        <InputField label="API Key" value={api.apiKey} onChange={(value) => onPatch({ apiKey: value })} type="password" placeholder="sk-..." />
         <NumberField
           label="最大输出"
           value={api.maxTokens ?? 1024}

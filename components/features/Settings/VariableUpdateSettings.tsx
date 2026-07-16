@@ -1,12 +1,11 @@
 ﻿import { useState } from 'react';
-import type { AI提供商, API配置项, API设置, 游戏设置, 变量API覆盖 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { AI提供商, API配置项, 游戏设置, 变量API覆盖 } from '@/models/settings';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   gameSettings: 游戏设置;
   onGameSettingsChange: (s: 游戏设置) => void;
-  apiSettings: API设置;
 }
 
 const smallClip =
@@ -30,11 +29,9 @@ const providerOptions: { value: AI提供商; label: string }[] = [
 export function VariableUpdateTab({
   gameSettings,
   onGameSettingsChange,
-  apiSettings,
 }: Props) {
   const enabled = gameSettings.enableVariableUpdate;
   const override = gameSettings.variableApi;
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null;
 
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -49,29 +46,17 @@ export function VariableUpdateTab({
     });
   };
 
-  // 计算「实际生效」的字段（用于回退提示和拉取模型）。
   const effective = {
-    provider: override.provider || mainConfig?.provider || 'openai_compatible',
-    baseUrl: override.baseUrl.trim() || mainConfig?.baseUrl || '',
-    apiKey: override.apiKey.trim() || mainConfig?.apiKey || '',
-    model: override.model.trim() || mainConfig?.model || '',
+    provider: override.provider,
+    baseUrl: override.baseUrl.trim(),
+    apiKey: override.apiKey.trim(),
+    model: override.model.trim(),
     enableClaudeMode: gameSettings.enableClaudeMode === true,
   };
 
-  const usingMain = {
-    provider: !override.provider,
-    baseUrl: !override.baseUrl.trim(),
-    apiKey: !override.apiKey.trim(),
-    model: !override.model.trim(),
-  };
-
-  const noMainHint = !mainConfig
-    ? '主 API 也没有可用配置 — 请先到「API 接口」配置至少一条'
-    : null;
-
   const handleFetchModels = async () => {
     if (!effective.baseUrl || !effective.apiKey) {
-      setFetchMessage({ kind: 'error', text: '缺少 Base URL 或 API Key（含主 API 回退后仍为空）' });
+      setFetchMessage({ kind: 'error', text: '变量模型需要独立配置 Base URL 与 API Key。' });
       return;
     }
     setLoadingModels(true);
@@ -89,7 +74,7 @@ export function VariableUpdateTab({
         createdAt: 0,
         updatedAt: 0,
       };
-      const list = await fetchModels(tempConfig);
+      const list = await (await getAdaptationServices()).apiTools.fetchModels(tempConfig);
       setModelOptions(list);
       setFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型` });
     } catch (e) {
@@ -102,7 +87,7 @@ export function VariableUpdateTab({
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await setPreferenceAsync('gameSettings', gameSettings);
+      await setPreference('gameSettings', gameSettings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '变量更新设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -147,8 +132,7 @@ export function VariableUpdateTab({
             clipPath: smallClip,
           }}
         >
-          下方任一字段留空时，将自动回退到「主 API」的同名字段。
-          {noMainHint && <span style={{ color: 'rgba(220, 120, 120, 0.85)' }}>　{noMainHint}</span>}
+          变量模型使用独立连接配置。启用后，服务商、Base URL、API Key 与模型均为必填。
         </div>
 
         <Field label="◆ 服务商">
@@ -171,13 +155,10 @@ export function VariableUpdateTab({
             <input
               value={override.baseUrl}
               onChange={(e) => patchOverride({ baseUrl: e.target.value })}
-              placeholder={mainConfig ? `留空则用主 API：${mainConfig.baseUrl}` : 'https://...'}
+              placeholder="https://..."
               className="kaituo-input w-full px-3 py-1.5 text-sm font-mono"
               style={{ clipPath: smallClip }}
             />
-            {usingMain.baseUrl && mainConfig && (
-              <FallbackHint text={`将复用主 API：${mainConfig.baseUrl}`} />
-            )}
           </Field>
         </div>
 
@@ -187,13 +168,10 @@ export function VariableUpdateTab({
               type="password"
               value={override.apiKey}
               onChange={(e) => patchOverride({ apiKey: e.target.value })}
-              placeholder={mainConfig?.apiKey ? '留空则用主 API 的 Key' : 'sk-...'}
+              placeholder="sk-..."
               className="kaituo-input w-full px-3 py-1.5 text-sm font-mono"
               style={{ clipPath: smallClip }}
             />
-            {usingMain.apiKey && mainConfig?.apiKey && (
-              <FallbackHint text="将复用主 API 的 Key" />
-            )}
           </Field>
         </div>
 
@@ -203,7 +181,7 @@ export function VariableUpdateTab({
               <input
                 value={override.model}
                 onChange={(e) => patchOverride({ model: e.target.value })}
-                placeholder={mainConfig?.model ? `留空则用主 API：${mainConfig.model}` : '模型 ID'}
+                placeholder="模型 ID"
                 className="kaituo-input flex-1 px-2.5 py-1.5 text-sm font-mono"
                 style={{ clipPath: smallClip }}
               />
@@ -247,9 +225,6 @@ export function VariableUpdateTab({
               >
                 {fetchMessage.text}
               </div>
-            )}
-            {usingMain.model && mainConfig?.model && (
-              <FallbackHint text={`将复用主 API：${mainConfig.model}`} />
             )}
           </Field>
         </div>
@@ -341,14 +316,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         {label}
       </label>
       {children}
-    </div>
-  );
-}
-
-function FallbackHint({ text }: { text: string }) {
-  return (
-    <div className="mt-1.5 text-[11px]" style={{ color: 'rgba(160, 200, 160, 0.7)' }}>
-      ↳ {text}
     </div>
   );
 }

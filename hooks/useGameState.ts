@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空角色 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
@@ -9,25 +9,23 @@ import { 创建空记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
-import { 创建空智库系统, 归一化智库系统 } from '@/models/zhiku';
+import { 创建空智库系统 } from '@/models/zhiku';
 import type { 手机系统 } from '@/models/phone';
-import { 创建空手机系统, 归一化手机系统 } from '@/models/phone';
+import { 创建空手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
-import { 创建空相册系统, 归一化相册系统 } from '@/models/imageGeneration';
+import { 创建空相册系统 } from '@/models/imageGeneration';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import { 创建空剧情编织系统, 归一化剧情编织系统 } from '@/models/storyWeaving';
+import { 创建空剧情编织系统 } from '@/models/storyWeaving';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务记录 } from '@/models/queueTask';
 import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
 import {
   创建空API设置,
   创建默认游戏设置,
-  创建默认星际和平周报设置,
   创建默认记忆系统设置,
-  创建默认智库系统设置,
   创建默认剧情编织系统设置,
   创建默认手机系统设置,
   创建默认文生图系统设置,
@@ -42,25 +40,22 @@ import {
   归一化视觉文本设置,
 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
-import type { STPresetEntry } from '@/models/stTypes';
 import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID, getDefaultModuleFields } from '@/models/prompts';
 import { isSTImportedModule } from '@/utils/stPresetParser';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
   buildPersistedZhikuSystem,
-  isBundledZhikuDuplicate,
   loadAllBundledZhikuPresets,
   mergeBundledZhikuSystem,
-  removeLegacyZhikuCharacterEntries,
-  removeRetiredZhikuEntries,
 } from '@/data/zhikuPreset';
-import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
-import { loadWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import type { WorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
-import { getPreference, setPreferenceAsync } from '@/src/ui/preferences';
-import { getSaveCatalog } from '@/src/ui/ports';
+import { getPreference, setPreference } from '@/src/adaptations/preferences';
+import { getAdaptationServices } from '@/src/adaptations';
+import { APP_SESSION_ID, getAppKernel } from '@/src/kernel/appKernel';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
@@ -162,33 +157,6 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
   return [...mergedBuiltins, ...customsWithDefaults];
 }
 
-/** 方案 A 三层 order 区间迁移：把预设库里的 ST 模块 order 从 50+ 迁移到 100+。
- *  - 旧版 ST 模块 order = 50 + array_index（与内置 CoT/worldbook 冲突）
- *  - 新版 ST 模块 order = 100 + array_index（Tier 2 区间 100-999）
- *  - order < 100 的 ST 模块 +50 偏移；order >= 100 的不动（已是新版或玩家手动调整过）
- *  - 没有预设库或预设库为空时返回原值（保持字段缺省）
- *
- *  放在 useGameState.ts 与 migratePromptModules 并列，供初次 mount 加载路径和
- *  saveLoadWorkflow 手动加载路径共用，避免两条加载路径迁移逻辑不一致。 */
-export function migrateStPresetOrders(stPresets: STPresetEntry[] | undefined): STPresetEntry[] | undefined {
-  if (!Array.isArray(stPresets) || stPresets.length === 0) return stPresets;
-  return stPresets.map((preset) => {
-    const needsMigration = preset.modules.some(
-      (m) => isSTImportedModule(m) && m.order < 100,
-    );
-    if (!needsMigration) return preset;
-    return {
-      ...preset,
-      modules: preset.modules.map((m) =>
-        isSTImportedModule(m) && m.order < 100
-          ? { ...m, order: m.order + 50 }
-          : m,
-      ),
-      updatedAt: Date.now(),
-    };
-  });
-}
-
 export interface UseGameStateReturn {
   view: ViewState;
   setView: React.Dispatch<React.SetStateAction<ViewState>>;
@@ -253,6 +221,7 @@ export interface UseGameStateReturn {
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
 
+
 export function useGameState(): UseGameStateReturn {
   const [view, setView] = useState<ViewState>('home');
   const [旅人, set旅人] = useState<角色数据结构>(创建空角色);
@@ -290,7 +259,7 @@ export function useGameState(): UseGameStateReturn {
   // Load persisted settings on mount
   useEffect(() => {
     (async () => {
-      const recoveryJournal = await loadWorkflowRecoveryJournal();
+    const recoveryJournal = await (await getAdaptationServices()).workflowRecovery.loadWorkflowRecoveryJournal();
       if (recoveryJournal) {
         setInterruptedWorkflow(recoveryJournal);
         setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
@@ -326,9 +295,6 @@ export function useGameState(): UseGameStateReturn {
           enablePlayerSpeechExpansion: savedGame.enableNoControl === true ? false : savedGame.enablePlayerSpeechExpansion === true,
           visualTextSettings: 归一化视觉文本设置(savedGame.visualTextSettings),
           promptModules: migratePromptModules(savedGame),
-          // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移
-          // 与 saveLoadWorkflow.ts 手动加载路径保持一致，避免两条加载路径迁移逻辑不一致
-          stPresets: migrateStPresetOrders(savedGame.stPresets),
           promptModuleOrderVersion: 1,
         };
         // 迁移后清空 legacy customPrompt，避免下次启动重复追加
@@ -338,50 +304,22 @@ export function useGameState(): UseGameStateReturn {
         setGameSettings(merged);
       }
 
-      try {
-        const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
-        const savedStoryWeaving = await getPreference<剧情编织系统>('storyWeavingSystem');
-        const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
-        set剧情编织(mergedStoryWeaving);
-        await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
-      } catch (err) {
-        console.warn('[story-weaving] preset 加载失败，回退到本地已存剧情编织:', err);
-        const savedStoryWeaving = await getPreference<剧情编织系统>('storyWeavingSystem');
-        if (isSelfContainedStoryWeavingSystem(savedStoryWeaving)) {
-          set剧情编织(归一化剧情编织系统(savedStoryWeaving));
-        } else if (savedStoryWeaving) {
-          console.warn('[story-weaving] 本地状态是轻量缓存，缺少原著正文；等待下次启动重新加载内置资源。');
-        }
-      }
+      const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
+      const savedStoryWeaving = await getPreference<剧情编织系统>('storyWeavingSystem');
+      const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
+      set剧情编织(mergedStoryWeaving);
+      await setPreference('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
 
-      try {
-        const preset = await loadAllBundledZhikuPresets();
-        const savedZhiku = await getPreference<智库系统>('zhikuSystem');
-        const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-        const migrationAt = savedMigrationAt ?? Date.now();
-        if (!savedMigrationAt) {
-          await setPreferenceAsync(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-        }
-        const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
-        set智库(mergedZhiku);
-        await setPreferenceAsync('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
-      } catch (err) {
-        console.warn('[zhiku] preset 加载失败，回退到本地已存智库:', err);
-        const savedZhiku = await getPreference<智库系统>('zhikuSystem');
-        if (savedZhiku) {
-          const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-          const migrationAt = savedMigrationAt ?? Date.now();
-          if (!savedMigrationAt) {
-            await setPreferenceAsync(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-          }
-          set智库(归一化智库系统({
-            条目: removeLegacyZhikuCharacterEntries(
-              removeRetiredZhikuEntries(savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))),
-              migrationAt,
-            ),
-          }));
-        }
+      const preset = await loadAllBundledZhikuPresets();
+      const savedZhiku = await getPreference<智库系统>('zhikuSystem');
+      const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+      const migrationAt = savedMigrationAt ?? Date.now();
+      if (!savedMigrationAt) {
+        await setPreference(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
       }
+      const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
+      set智库(mergedZhiku);
+      await setPreference('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
 
       // Worldbooks 加载策略:
       // - savedWorldbooks === null   → 首次启动,把预设写入 IndexedDB(玩家之后可自由修改/删除)
@@ -404,15 +342,10 @@ export function useGameState(): UseGameStateReturn {
         : rawSavedWorldbooks;
 
       if (savedWorldbooks === null) {
-        try {
-          const presets = await loadAllBundledWorldbookPresets();
-          const initial = [...builtins, ...presets];
-          setWorldbooks(initial);
-          await setPreferenceAsync(WORLDBOOK_STORAGE_KEY, initial);
-        } catch (err) {
-          console.warn('[opening-worldbook] preset 加载失败,使用内置空集:', err);
-          setWorldbooks(builtins);
-        }
+        const presets = await loadAllBundledWorldbookPresets();
+        const initial = [...builtins, ...presets];
+        setWorldbooks(initial);
+        await setPreference(WORLDBOOK_STORAGE_KEY, initial);
       } else if (savedWorldbooks.length) {
         const builtinIds = new Set(builtins.map((b) => b.id));
         const userBooks = savedWorldbooks.filter((b) => !builtinIds.has(b.id));
@@ -432,15 +365,31 @@ export function useGameState(): UseGameStateReturn {
         });
         const nextWorldbooks = [...merged, ...userBooks];
         setWorldbooks(nextWorldbooks);
-        await setPreferenceAsync(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
+        await setPreference(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
       } else {
         setWorldbooks(builtins);
-        await setPreferenceAsync(WORLDBOOK_STORAGE_KEY, builtins);
+        await setPreference(WORLDBOOK_STORAGE_KEY, builtins);
       }
 
-      const saveExists = await (await getSaveCatalog()).hasAnySave();
-      setHasSave(saveExists);
-    })();
+      const session = await (await getAppKernel()).read({
+        type: 'session.exists',
+        sessionId: APP_SESSION_ID,
+      });
+      setHasSave(session.exists);
+    })().catch(async (error: unknown) => {
+      const detail = error instanceof Error ? error.message : String(error);
+      setWorkflowHint(`启动初始化失败：${detail}`);
+      try {
+        const session = await (await getAppKernel()).read({
+          type: 'session.exists',
+          sessionId: APP_SESSION_ID,
+        });
+        setHasSave(session.exists);
+      } catch (sessionError: unknown) {
+        const sessionDetail = sessionError instanceof Error ? sessionError.message : String(sessionError);
+        setWorkflowHint(`启动初始化失败：${detail}；会话检查失败：${sessionDetail}`);
+      }
+    });
   }, []);
 
   // Apply theme on change

@@ -1,11 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途ID } from '@/models/journey';
-import type { 命途进度, 命途阶段 } from '@/models/path';
+import type { 命途进度 } from '@/models/path';
 import type { API设置 } from '@/models/settings';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { getPath } from '@/data/journeyPresets';
-import { generateSkillDraft } from '@/services/ai/skillGenerator';
+import { getAdaptationServices } from '@/src/adaptations';
 import {
   NORMAL_SKILL_SLOT_COUNT,
   创建战技记录,
@@ -148,7 +148,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
     setGeneratingSkill(true);
     setGenerationMessage({ kind: 'info', text: '正在根据当前槽位生成小说化战技草稿……' });
     try {
-      const generated = await generateSkillDraft(activeApiConfig, {
+      const generated = await (await getAdaptationServices()).skillGenerator.generateSkillDraft(activeApiConfig, {
         traveler,
         slotKind: selectedSlot.kind,
         slotIndex: selectedSlot.slotIndex,

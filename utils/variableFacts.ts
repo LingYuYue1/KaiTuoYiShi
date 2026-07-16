@@ -519,10 +519,6 @@ function isCanonicalNpcPersonalityProtected(npc: NPC记录 | undefined, name: st
   return Boolean(npc?.原著角色 || matchCanonical(npc?.姓名 ?? name) || matchCanonical(name));
 }
 
-function 数组已有文本(value: unknown, text: string): boolean {
-  return Array.isArray(value) && value.some((item) => typeof item === 'string' && item.trim() === text.trim());
-}
-
 function mergeUniqueTexts(...groups: Array<string[] | undefined>): string[] | undefined {
   const seen = new Set<string>();
   const output: string[] = [];

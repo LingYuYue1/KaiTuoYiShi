@@ -9,7 +9,6 @@ interface TopBarProps {
   currentTheme: 主题预设;
   onHome: () => void;
   news: 新闻条目[];
-  onOpenNews?: () => void;
 }
 
 const clip10 =
@@ -18,7 +17,7 @@ const clip10 =
 const clip12 =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
 
-export const TopBar = memo(function TopBar({ worldState, onHome, news, onOpenNews }: TopBarProps) {
+export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarProps) {
   const [mobileCollapsed, setMobileCollapsed] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const dateText = worldState.当前日期?.trim() || '日期未设定';

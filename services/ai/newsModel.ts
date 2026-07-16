@@ -8,7 +8,7 @@ import { getNewsIssueNumber, 归一化新闻条目 } from '@/models/news';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
-import { getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
+import { getStoryWeavingInjectionDiagnostics } from '@/src/kernel/workflows/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { NEWS_WORLD_BOOK_PROMPT as NEWS_LEGACY_WORLD_BOOK_PROMPT } from '@/data/newsWorldbook';

@@ -314,8 +314,6 @@ const 是否疑似目录章节 = (title: string, content: string): boolean => {
   return false;
 };
 
-const 解析章节范围文本 = (start: number, end: number): string => (start === end ? `第${start}章` : `第${start}章-第${end}章`);
-
 const 规范化时间线事件 = (raw: Partial<剧情编织时间线事件>): 剧情编织时间线事件 => ({
   标题: 读文本(raw.标题).trim(),
   时间锚点: 读文本(raw.时间锚点).trim(),

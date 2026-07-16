@@ -7,14 +7,12 @@ import type { NPC记录, NPC同行记忆条目 } from '@/models/npc';
 import { 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 世界状态 } from '@/models/world';
-import type { API设置, 游戏设置 } from '@/models/settings';
-import type { 剧情编织系统 } from '@/models/storyWeaving';
+import type { 游戏设置 } from '@/models/settings';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { 创建手机会话, 创建手机会话本地摘要条目, 创建手机会话本地库, 创建手机消息, 计算手机未读, type 手机消息 } from '@/models/phone';
-import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
+import { getAdaptationServices } from '@/src/adaptations';
 import type { 忆庭系统 } from '@/models/yiting';
-import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import {
   BUILTIN_PHONE_WALLPAPERS,
   DEFAULT_PHONE_CHAT_WALLPAPER,
@@ -27,11 +25,8 @@ interface Props {
   traveler: 角色数据结构;
   world: 世界状态;
   memory: 记忆系统;
-  yiting: 忆庭系统;
   news: 新闻条目[];
-  storyWeaving: 剧情编织系统;
   zhiku: 智库系统;
-  apiSettings: API设置;
   gameSettings: 游戏设置;
   turnCount: number;
   mainChatHistory: 聊天消息[];
@@ -63,74 +58,13 @@ function toPhoneContactId(npcId: string): string {
   return npcId.startsWith('npc_') ? npcId : `npc_${npcId}`;
 }
 
-const FALLBACK_STORY_CONTACTS: Array<Pick<手机联系人, 'id' | 'name' | 'organization' | 'relationLabel' | 'avatar'> & { aliases: string[] }> = [
-  { id: 'canon_march_7th', name: '三月七', aliases: ['三月七', '三月'], organization: '星穹列车', relationLabel: '伙伴', avatar: '三' },
-  { id: 'canon_dan_heng', name: '丹恒', aliases: ['丹恒'], organization: '星穹列车', relationLabel: '伙伴', avatar: '丹' },
-  { id: 'canon_himeko', name: '姬子', aliases: ['姬子'], organization: '星穹列车', relationLabel: '列车组', avatar: '姬' },
-  { id: 'canon_welt', name: '瓦尔特', aliases: ['瓦尔特', '杨叔'], organization: '星穹列车', relationLabel: '列车组', avatar: '瓦' },
-  { id: 'canon_pompom', name: '帕姆', aliases: ['帕姆'], organization: '星穹列车', relationLabel: '列车长', avatar: '帕' },
-  { id: 'canon_asta', name: '艾丝妲', aliases: ['艾丝妲'], organization: '黑塔空间站', relationLabel: '已认识', avatar: '艾' },
-  { id: 'canon_arlan', name: '阿兰', aliases: ['阿兰'], organization: '黑塔空间站', relationLabel: '已认识', avatar: '阿' },
-  { id: 'canon_bronya', name: '布洛妮娅', aliases: ['布洛妮娅'], organization: '贝洛伯格', relationLabel: '已认识', avatar: '布' },
-  { id: 'canon_seele', name: '希儿', aliases: ['希儿'], organization: '地火', relationLabel: '已认识', avatar: '希' },
-  { id: 'canon_sampo', name: '桑博', aliases: ['桑博'], organization: '贝洛伯格', relationLabel: '已认识', avatar: '桑' },
-  { id: 'canon_natasha', name: '娜塔莎', aliases: ['娜塔莎'], organization: '地火', relationLabel: '已认识', avatar: '娜' },
-  { id: 'canon_gepard', name: '杰帕德', aliases: ['杰帕德'], organization: '银鬃铁卫', relationLabel: '已认识', avatar: '杰' },
-];
-
-function buildFallbackContactsFromStory(params: {
-  mainChatHistory: 聊天消息[];
-  world: 世界状态;
-  existingContacts: 手机联系人[];
-  turnCount: number;
-}): 手机联系人[] {
-  if (params.existingContacts.length > 0) return [];
-  const recentText = [
-    params.world.当前地点,
-    ...params.mainChatHistory
-      .slice(-18)
-      .map((message) => message.parsedResponse?.body || message.content),
-  ].join('\n');
-  const unlocked = FALLBACK_STORY_CONTACTS
-    .filter((contact) => contact.aliases.some((alias) => recentText.includes(alias)))
-    .slice(0, 8)
-    .map((contact) => ({
-      id: contact.id,
-      name: contact.name,
-      avatar: contact.avatar,
-      organization: contact.organization,
-      relationLabel: contact.relationLabel,
-      available: true,
-      status: 'available' as const,
-      unlockSource: 'story' as const,
-      lastActiveTurn: params.turnCount,
-    }));
-  if (unlocked.length) return unlocked;
-  return FALLBACK_STORY_CONTACTS
-    .slice(0, 2)
-    .map((contact) => ({
-      id: contact.id,
-      name: contact.name,
-      avatar: contact.avatar,
-      organization: contact.organization,
-      relationLabel: contact.relationLabel,
-      available: true,
-      status: 'available' as const,
-      unlockSource: 'system' as const,
-      lastActiveTurn: params.turnCount,
-    }));
-}
-
 export function PhoneModal({
   phone,
   traveler,
   world,
   memory,
-  yiting,
   news,
-  storyWeaving,
   zhiku,
-  apiSettings,
   gameSettings,
   turnCount,
   mainChatHistory,
@@ -143,8 +77,8 @@ export function PhoneModal({
   onClose,
 }: Props) {
   const [activeApp, setActiveApp] = useState<PhoneApp | null>(null);
-  const [activeChatId, setActiveChatId] = useState(phone.chats[0]?.id ?? '');
-  const [activeContactId, setActiveContactId] = useState(phone.contacts[0]?.id ?? '');
+  const [activeChatId, setActiveChatId] = useState('');
+  const [activeContactId, setActiveContactId] = useState('');
   const [draft, setDraft] = useState('');
   const [sendingChatId, setSendingChatId] = useState('');
   const [generatingSeedId, setGeneratingSeedId] = useState('');
@@ -158,10 +92,6 @@ export function PhoneModal({
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
   const [mobileView, setMobileView] = useState<MobilePhoneView>('list');
   const normalizedNpcRecords = useMemo(() => 归一化NPC记录列表(npcRecords), [npcRecords]);
-  const mainConfig = useMemo(
-    () => apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? null,
-    [apiSettings.activeConfigId, apiSettings.configs],
-  );
 
   const derivedContacts = useMemo(
     () =>
@@ -179,19 +109,8 @@ export function PhoneModal({
         })),
     [album, normalizedNpcRecords],
   );
-  const fallbackStoryContacts = useMemo(
-    () =>
-      buildFallbackContactsFromStory({
-        mainChatHistory,
-        world,
-        existingContacts: phone.contacts,
-        turnCount,
-      }),
-    [mainChatHistory, phone.contacts, turnCount, world],
-  );
-
   const contacts = useMemo(() => {
-    return [...phone.contacts, ...fallbackStoryContacts]
+    return phone.contacts
       .map((contact) => {
         const derived =
           derivedContacts.find((item) => item.id === contact.id) ??
@@ -215,7 +134,7 @@ export function PhoneModal({
         }
         return contact.available !== false;
       });
-  }, [album, derivedContacts, fallbackStoryContacts, normalizedNpcRecords, phone.contacts]);
+  }, [album, derivedContacts, normalizedNpcRecords, phone.contacts]);
   const addableNpcContacts = useMemo(
     () =>
       normalizedNpcRecords
@@ -235,8 +154,8 @@ export function PhoneModal({
         })),
     [normalizedNpcRecords, phone.contacts],
   );
-  const activeChat = phone.chats.find((chat) => chat.id === activeChatId) ?? phone.chats[0];
-  const activeContact = contacts.find((contact) => contact.id === activeContactId) ?? contacts[0];
+  const activeChat = phone.chats.find((chat) => chat.id === activeChatId);
+  const activeContact = contacts.find((contact) => contact.id === activeContactId);
   const getSeedCooldown = (seed: 主动来信种子) =>
     seed.targetType === 'group'
       ? gameSettings.手机系统.groupCooldownTurns
@@ -260,29 +179,20 @@ export function PhoneModal({
   const privateChats = useMemo(() => phone.chats.filter((chat) => chat.type !== 'group'), [phone.chats]);
   const groupChats = useMemo(() => phone.chats.filter((chat) => chat.type === 'group'), [phone.chats]);
   const visibleChats = messageListMode === 'group' ? groupChats : privateChats;
-  const phoneApiConfig = buildPhoneApiConfig(gameSettings, apiSettings);
   const phoneEnabled = gameSettings.手机系统.enabled;
+  const phoneApi = gameSettings.手机系统.api;
+  const phoneApiConfigured = Boolean(
+    phoneApi.provider && phoneApi.baseUrl.trim() && phoneApi.apiKey.trim() && phoneApi.model.trim(),
+  );
   const autoSeed = useMemo(() => {
-    if (!phoneEnabled || !gameSettings.手机系统.autoGenerateSeeds || !phoneApiConfig || generatingSeedId) return undefined;
+    if (!phoneEnabled || !gameSettings.手机系统.autoGenerateSeeds || !phoneApiConfigured || generatingSeedId) return undefined;
     return [...pendingSeeds]
       .filter((seed) => !isSeedCoolingDown(seed))
       .sort((a, b) => {
         const priorityRank = { urgent: 4, high: 3, normal: 2, low: 1 };
         return (priorityRank[b.priority] ?? 0) - (priorityRank[a.priority] ?? 0) || a.turn - b.turn;
       })[0];
-  }, [gameSettings.手机系统.autoGenerateSeeds, generatingSeedId, pendingSeeds, phoneApiConfig, phoneEnabled, turnCount]);
-
-  useEffect(() => {
-    if (!activeChatId && phone.chats[0]) {
-      setActiveChatId(phone.chats[0].id);
-    }
-  }, [activeChatId, phone.chats]);
-
-  useEffect(() => {
-    if (!activeContactId && contacts[0]) {
-      setActiveContactId(contacts[0].id);
-    }
-  }, [activeContactId, contacts]);
+  }, [gameSettings.手机系统.autoGenerateSeeds, generatingSeedId, pendingSeeds, phoneApiConfigured, phoneEnabled, turnCount]);
 
   useEffect(() => {
     if (!autoSeed || autoGeneratedSeedRef.current) return;
@@ -509,8 +419,7 @@ export function PhoneModal({
     contact?: 手机联系人,
     sourceSeedId?: string,
   ): 手机消息[] => {
-    const resolveGroupSpeaker = (speakerName?: string): 手机联系人 | undefined => {
-      if (!speakerName || chat.type !== 'group') return undefined;
+    const resolveGroupSpeaker = (speakerName: string): 手机联系人 => {
       const byContact = contacts.find(
         (item) => item.name === speakerName || item.name.includes(speakerName) || speakerName.includes(item.name),
       );
@@ -524,7 +433,9 @@ export function PhoneModal({
           speakerName.includes(npc.姓名) ||
           (npc.别名 && (npc.别名 === speakerName || npc.别名.includes(speakerName) || speakerName.includes(npc.别名))),
       );
-      if (!byNpc || byNpc.关系 === 'enemy') return undefined;
+      if (!byNpc || byNpc.关系 === 'enemy') {
+        throw new Error(`群聊回复无法解析发言人：${speakerName}`);
+      }
       return {
         id: `npc_${byNpc.id}`,
         npcId: byNpc.id,
@@ -533,24 +444,27 @@ export function PhoneModal({
         organization: undefined,
         relationLabel: 格式化NPC关系(byNpc.好感度, Boolean(byNpc.亲密关系)),
         available: true,
-        lastActiveTurn: byNpc.最近回合,
+          lastActiveTurn: byNpc.最近回合,
       };
     };
-    const fallbackGroupSpeakers = chat.type === 'group'
-      ? chat.participantIds
-          .map(resolveContactByParticipantId)
-          .filter((item): item is 手机联系人 => Boolean(item))
-      : [];
-    return contents.map((rawContent, index) => {
+    if (contents.length === 0) throw new Error('手机回复为空');
+    return contents.map((rawContent) => {
+      if (!rawContent.trim()) throw new Error('手机回复包含空消息');
       const groupMatch = chat.type === 'group' ? rawContent.match(/^([^：:]{1,18})[：:]\s*(.+)$/) : null;
       const speakerName = groupMatch?.[1]?.trim();
-      const content = groupMatch?.[2]?.trim() || rawContent;
-      const speaker = resolveGroupSpeaker(speakerName) ?? fallbackGroupSpeakers[index % Math.max(1, fallbackGroupSpeakers.length)];
+      if (chat.type === 'group' && (!speakerName || !groupMatch?.[2]?.trim())) {
+        throw new Error(`群聊回复缺少“姓名：内容”格式：${rawContent}`);
+      }
+      if (chat.type === 'private' && !contact) {
+        throw new Error(`私聊 ${chat.id} 缺少联系人身份`);
+      }
+      const content = chat.type === 'group' ? groupMatch![2].trim() : rawContent.trim();
+      const speaker = chat.type === 'group' ? resolveGroupSpeaker(speakerName!) : undefined;
       return 创建手机消息({
-        senderId: chat.type === 'private' ? contact?.id ?? chat.id : speaker?.id ?? chat.id,
-        senderName: chat.type === 'private' ? contact?.name ?? chat.title : speaker?.name ?? speakerName ?? chat.title,
+        senderId: chat.type === 'private' ? contact!.id : chat.type === 'group' ? speaker!.id : chat.id,
+        senderName: chat.type === 'private' ? contact!.name : chat.type === 'group' ? speaker!.name : chat.title,
         role: chat.type === 'system' ? 'system' : 'contact',
-        avatar: chat.type === 'private' ? contact?.avatar : speaker?.avatar,
+        avatar: chat.type === 'private' ? contact!.avatar : chat.type === 'group' ? speaker!.avatar : undefined,
         content,
         turn: turnCount,
         sourceSeedId,
@@ -612,12 +526,12 @@ export function PhoneModal({
       || (memory.中期记忆 ?? []).some((item) => item.includes(trimmed))
       || memory.长期记忆.some((item) => item.includes(trimmed));
     if (!options.force && alreadyInMemory) return;
-    const withImmediate = addImmediateMemory(memory, normalizedSummary, turnCount);
-    const compression = await autoCompressMemorySystemWithArchivesAsync(
+    const services = await getAdaptationServices();
+    const withImmediate = await services.memory.addImmediateMemory(memory, normalizedSummary, turnCount);
+    const compression = await services.memory.autoCompressMemorySystemWithArchivesAsync(
       withImmediate,
       turnCount,
       gameSettings.记忆系统,
-      mainConfig ?? apiSettings.configs[0] ?? { id: '', name: '', provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '', createdAt: 0, updatedAt: 0 },
     );
     onMemoryChange(compression.memory);
     if (compression.archives.length) {
@@ -627,8 +541,7 @@ export function PhoneModal({
       }));
     }
     if (contact?.npcId) {
-      onNpcRecordsChange((prev) =>
-        prev.map((npc) => {
+      const nextNpcRecords = await Promise.all(npcRecords.map(async (npc) => {
           if (npc.id !== contact.npcId) return npc;
           if (!options.force && 提取NPC同行记忆文本列表(npc).some((item) => item.includes(trimmed))) return npc;
           const nextEntry: NPC同行记忆条目 = {
@@ -638,7 +551,7 @@ export function PhoneModal({
             来源: '手机',
             关联NPCID: [npc.id],
           };
-          const ledgerCompression = compressNpcMemoryLedger({
+          const ledgerCompression = await services.memory.compressNpcMemoryLedger({
             npcId: npc.id,
             entries: [...(npc.同行记忆 ?? []), nextEntry],
             summaries: npc.总结记忆 ?? [],
@@ -656,8 +569,8 @@ export function PhoneModal({
             对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
             最近回合: turnCount,
           };
-        }),
-      );
+        }));
+      onNpcRecordsChange(nextNpcRecords);
     }
   };
 
@@ -724,8 +637,8 @@ export function PhoneModal({
       setPhoneError('主动来信已在设置中关闭。');
       return;
     }
-    if (!phoneApiConfig) {
-      setPhoneError('请先配置主 API，或在设置里填写手机系统 API。');
+    if (!phoneApiConfigured) {
+      setPhoneError('手机系统已启用，但独立 API 配置不完整。');
       return;
     }
     setPhoneError('');
@@ -749,8 +662,10 @@ export function PhoneModal({
     updateChatMessages(activeChat.id, () => chatAfterPlayer);
 
     try {
+      const phoneService = (await getAdaptationServices()).phone;
+      const phoneApiConfig = await phoneService.buildPhoneApiConfig(gameSettings);
       const contact = resolveContactForChat(activeChat);
-      const reply = await generatePhoneReply(phoneApiConfig, {
+      const reply = await phoneService.generatePhoneReply(phoneApiConfig, {
         traveler,
         world,
         npcRecords,
@@ -807,12 +722,7 @@ export function PhoneModal({
         lastActiveTurn: npc.最近回合,
       };
     }
-    return {
-      id: seed.targetId || `seed_${seed.id}`,
-      name: seed.title.replace(/注意到|发来|来信|提醒/g, '').trim() || '未知联系人',
-      available: true,
-      relationLabel: '联系人',
-    };
+    throw new Error(`主动来信目标不是已登记联系人：${seed.targetId}`);
   };
 
   const handleGenerateSeed = async (seed: 主动来信种子) => {
@@ -821,8 +731,8 @@ export function PhoneModal({
       setPhoneError('手机系统已在设置中关闭。');
       return;
     }
-    if (!phoneApiConfig) {
-      setPhoneError('请先配置主 API，或在设置里填写手机系统 API。');
+    if (!phoneApiConfigured) {
+      setPhoneError('请先完整配置手机系统独立 API。');
       return;
     }
     if (isSeedCoolingDown(seed)) {
@@ -833,28 +743,52 @@ export function PhoneModal({
     setPhoneError('');
     setGeneratingSeedId(seed.id);
 
-    const contact = resolveSeedContact(seed);
-    if (seed.targetType === 'private' && contact.available === false) {
+    let contact: 手机联系人 | undefined;
+    try {
+      contact = seed.targetType === 'private' ? resolveSeedContact(seed) : undefined;
+    } catch (error) {
+      setPhoneError(error instanceof Error ? error.message : String(error));
+      setGeneratingSeedId('');
+      return;
+    }
+    if (contact?.available === false) {
       setPhoneError('该对象尚未作为联系人解锁。');
       setGeneratingSeedId('');
       return;
     }
-    const groupParticipantIds = (seed.relatedNpcIds.length ? seed.relatedNpcIds : [seed.targetId])
-      .map(normalizeParticipantId)
-      .filter(Boolean);
+    if (seed.targetType === 'private' && !contact) {
+      setPhoneError(`主动来信目标不是已登记联系人：${seed.targetId}`);
+      setGeneratingSeedId('');
+      return;
+    }
+    const groupParticipantIds = seed.relatedNpcIds.map(normalizeParticipantId).filter(Boolean);
     const groupByTargetId = seed.targetType === 'group'
       ? phone.chats.find((item) => item.type === 'group' && item.id === seed.targetId)
       : undefined;
     const existingGroup = seed.targetType === 'group'
       ? groupByTargetId ?? findExistingGroupChat(groupParticipantIds, buildStandardGroupTitle(groupParticipantIds, seed.title))
       : undefined;
+    const missingGroupParticipants = groupParticipantIds.filter((id) => (
+      !contacts.some((item) => item.id === id || item.npcId === id)
+      && !normalizedNpcRecords.some((item) => item.id === id)
+    ));
+    if (seed.targetType === 'group' && missingGroupParticipants.length) {
+      setPhoneError(`群聊来信包含未登记参与者：${missingGroupParticipants.join('、')}`);
+      setGeneratingSeedId('');
+      return;
+    }
+    if (seed.targetType === 'group' && !existingGroup && groupParticipantIds.length < 2) {
+      setPhoneError(`群聊来信缺少至少两个已登记参与者：${seed.id}`);
+      setGeneratingSeedId('');
+      return;
+    }
     const chat = seed.targetType === 'group'
       ? existingGroup ?? 创建手机会话({
           type: 'group',
           title: buildStandardGroupTitle(groupParticipantIds, seed.title),
-          participantIds: groupParticipantIds.length >= 2 ? groupParticipantIds : [normalizeParticipantId(seed.targetId), ...groupParticipantIds].filter(Boolean),
+          participantIds: groupParticipantIds,
         })
-      : ensurePrivateChat(contact);
+      : ensurePrivateChat(contact!);
 
     if (seed.targetType === 'group') {
       chat.localArchive = {
@@ -878,7 +812,9 @@ export function PhoneModal({
     }
 
     try {
-      const reply = await generatePhoneReply(phoneApiConfig, {
+      const phoneService = (await getAdaptationServices()).phone;
+      const phoneApiConfig = await phoneService.buildPhoneApiConfig(gameSettings);
+      const reply = await phoneService.generatePhoneReply(phoneApiConfig, {
         traveler,
         world,
         npcRecords,
@@ -886,23 +822,23 @@ export function PhoneModal({
         turnCount,
         chat,
         contacts,
-        contact: seed.targetType === 'private' ? contact : undefined,
+        contact,
         seed,
         mainChatHistory,
         zhiku,
       }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
       onPhoneChange((prev) => {
-        const hasContact = prev.contacts.some((item) => item.id === contact.id);
+        const hasContact = contact ? prev.contacts.some((item) => item.id === contact.id) : false;
         const next = {
           ...prev,
-          contacts: seed.targetType === 'private' && !hasContact ? [...prev.contacts, contact] : prev.contacts,
+          contacts: seed.targetType === 'private' && contact && !hasContact ? [...prev.contacts, contact] : prev.contacts,
           messageSeeds: prev.messageSeeds.map((item) => (item.id === seed.id ? { ...item, status: 'generated' as const } : item)),
         };
         return recalc(next);
       });
       await appendMessagesToChatSequentially(
         chat.id,
-        createReplyMessages(chat, reply.messages, seed.targetType === 'private' ? contact : undefined, seed.id),
+        createReplyMessages(chat, reply.messages, contact, seed.id),
         0,
       );
       const flushedSummary = appendPhoneLocalSummary(
@@ -914,11 +850,11 @@ export function PhoneModal({
       );
       await commitPhoneMemory(
         `主动来信「${seed.title}」：${reply.summary ?? reply.messages.join(' / ')}`,
-        seed.targetType === 'private' ? contact : undefined,
+        contact,
         { force: true },
       );
       if (flushedSummary) {
-        await commitPhoneMemory(flushedSummary, seed.targetType === 'private' ? contact : undefined);
+        await commitPhoneMemory(flushedSummary, contact);
       }
       setActiveChatId(chat.id);
       setActiveApp('messages');

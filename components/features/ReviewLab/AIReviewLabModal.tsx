@@ -37,9 +37,7 @@ type ReviewMessage = {
     recallFullContent?: string;
     zhikuRecallPreview?: string;
     zhikuRecallInjection?: string;
-    stV2Attempted?: boolean;
     stV2Used?: boolean;
-    stV2FallbackReason?: string;
     deepSeekProtocolIssues?: string[];
     mainRequestMode?: string;
     rerollSimilarity?: number;
@@ -75,7 +73,8 @@ const smallClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 1
 export function AIReviewLabModal({ messages, loading = false, onClose }: AIReviewLabModalProps) {
   const [activeStepId, setActiveStepId] = useState('context');
   const report = useMemo(() => buildReviewReport(messages), [messages]);
-  const activeStep = report.steps.find((step) => step.id === activeStepId) ?? report.steps[0];
+  const activeStep = report.steps.find((step) => step.id === activeStepId);
+  if (!activeStep) throw new Error(`Unknown AI review step: ${activeStepId}`);
 
   return (
     <Modal onClose={onClose} title="AI 审查实验室" className="max-w-[min(1320px,96vw)]">
@@ -88,7 +87,7 @@ export function AIReviewLabModal({ messages, loading = false, onClose }: AIRevie
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
               <BadgeCard label="模式" value="只读复盘" tone="cyan" detail="不写存档 / 不拦截主流程" />
               <BadgeCard label="来源" value={report.latestAssistant ? '最近回合' : '暂无回合'} tone={report.latestAssistant ? 'green' : 'amber'} detail={report.latestAssistant?.gameTime || formatTime(report.latestAssistant?.timestamp)} />
-              <BadgeCard label="酒馆 V2" value={report.debugContext?.stV2Used ? '已叠加' : report.debugContext?.stV2Attempted ? '尝试失败' : '未启用'} tone={report.debugContext?.stV2Used ? 'cyan' : 'slate'} detail={report.debugContext?.stV2FallbackReason || '仅展示诊断'} />
+              <BadgeCard label="酒馆 V2" value={report.debugContext?.stV2Used ? '已使用' : '未启用'} tone={report.debugContext?.stV2Used ? 'cyan' : 'slate'} detail="启用时严格构建，不切换到其他消息链" />
             </div>
           </header>
 
@@ -315,7 +314,7 @@ function buildReviewReport(messages: ReviewMessage[]) {
   const recallText = [debugContext?.recallSummary, debugContext?.recallPreview, debugContext?.recallFullContent, debugContext?.zhikuRecallPreview, debugContext?.zhikuRecallInjection].filter(Boolean).join('\n\n');
   const requestDiagnostics = [
     debugContext?.mainRequestMode ? `请求模式：${debugContext.mainRequestMode}` : '',
-    debugContext?.stV2Attempted ? `酒馆 V2：${debugContext.stV2Used ? '已使用' : `未使用 ${debugContext.stV2FallbackReason ?? ''}`}` : '',
+    `酒馆 V2：${debugContext?.stV2Used ? '已使用' : '未启用'}`,
     debugContext?.rerollSimilarity !== undefined ? `重 roll 相似度：${debugContext.rerollSimilarity}` : '',
     debugContext?.deepSeekProtocolIssues?.length ? `DeepSeek 协议提示：${debugContext.deepSeekProtocolIssues.join(' / ')}` : '',
   ].filter(Boolean).join('\n');
@@ -394,8 +393,8 @@ function buildRisks({ latestAssistant, parsed, rawText, bodyText, contextText, e
     {
       id: 'tavern',
       label: '酒馆叠加',
-      level: debugContext?.stV2Attempted && !debugContext.stV2Used ? 'warn' : 'ok',
-      detail: debugContext?.stV2Used ? 'Tavern V2 已作为额外 messages 叠加。' : debugContext?.stV2Attempted ? `Tavern V2 尝试失败：${debugContext.stV2FallbackReason ?? '未知原因'}` : '本轮没有启用 Tavern V2。',
+      level: 'ok',
+      detail: debugContext?.stV2Used ? 'Tavern V2 已作为额外 messages 叠加。' : '本轮没有启用 Tavern V2。',
     },
     {
       id: 'writes',

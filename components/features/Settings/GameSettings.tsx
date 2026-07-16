@@ -4,7 +4,7 @@ import type { 提示词模块 } from '@/models/prompts';
 import type { 世界状态 } from '@/models/world';
 import type { 剧情模式 } from '@/models/journey';
 import { storyModes } from '@/data/journeyPresets';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   settings: 游戏设置;
@@ -92,8 +92,8 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
   const handleSave = async () => {
     try {
       await Promise.all([
-        setPreferenceAsync('gameSettings', settings),
-        setPreferenceAsync('worldState', worldState),
+        setPreference('gameSettings', settings),
+        setPreference('worldState', worldState),
       ]);
       setSaveMessage('游戏设定已保存。');
       setSavedFlash(true);
@@ -411,12 +411,6 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
         desc="开启后在「user:开始任务」之后注入一条伪装 assistant 历史消息，用于强化思考段输出习惯。"
         checked={settings.enableCotFakeHistory}
         onChange={(v) => onChange({ ...settings, enableCotFakeHistory: v })}
-      />
-      <ToggleRow
-        label="标签修复"
-        desc="开启后系统在解析前自动修复常见标签错误（重复开标签、缺失闭标签等）。"
-        checked={settings.enableTagRepair}
-        onChange={(v) => onChange({ ...settings, enableTagRepair: v })}
       />
       <ToggleRow
         label="生成失败自动重试"

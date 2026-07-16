@@ -625,7 +625,7 @@ function validateSchemaPushValue(root: VariableRootKey, rest: string, value: unk
 // 命途狭间状态机硬只读名单:这些字段只能由 服务层(踏入命途狭间 / 应用狭间结果 / 推进命途进度)写,
 // 变量模型一旦碰到必须拒绝——否则 AI 误判「踏入虚境」当成「狭间完成」,会清掉 进行中狭间,
 // 下一回合就退回主剧情 scope,AI 不知道是评判回合,直接卡死虚境。
-function isAwakeningProtectedPath(rawKey: string, action: 变量命令['action']): boolean {
+function isAwakeningProtectedPath(rawKey: string, _action: 变量命令['action']): boolean {
   const k = rawKey.trim();
   // 世界·狭间状态机字段:任何 action 都拒
   if (k === '世界.进行中狭间' || k === '世界.待触发狭间') return true;

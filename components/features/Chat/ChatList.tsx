@@ -22,7 +22,6 @@ interface ChatListProps {
 }
 
 interface NeighborMeta {
-  fallbackPathId?: string;
   previousUserInput?: string;
 }
 
@@ -67,7 +66,6 @@ const ChatHistoryList = memo(function ChatHistoryList({
             traveler={traveler}
             album={album}
             showInnerVoice={showInnerVoice}
-            fallbackPathId={meta.fallbackPathId}
             previousUserInput={meta.previousUserInput}
             visualTextSettings={visualTextSettings}
           />
@@ -77,33 +75,22 @@ const ChatHistoryList = memo(function ChatHistoryList({
   );
 });
 
-/** One forward pass for previous-user / path-fallback neighbor metadata. */
+/** One forward pass for previous-user neighbor metadata. */
 function buildNeighborMeta(messages: 聊天消息[]): NeighborMeta[] {
   let lastUserContent: string | undefined;
-  let lastPathId: string | undefined;
   const meta: NeighborMeta[] = new Array(messages.length);
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
-    let fallbackPathId: string | undefined;
     let previousUserInput: string | undefined;
 
     if (msg.role === 'user') {
       lastUserContent = msg.content;
     } else if (msg.role === 'assistant') {
       previousUserInput = lastUserContent;
-      const needsFallback =
-        !!msg.parsedResponse
-        && (msg.parsedResponse.awakenQuestions?.trim() || msg.parsedResponse.awakenJudgement?.trim())
-        && !msg.parsedResponse.awakenPathId;
-      if (needsFallback) {
-        fallbackPathId = lastPathId;
-      }
-      const pid = msg.parsedResponse?.awakenPathId;
-      if (pid) lastPathId = pid;
     }
 
-    meta[i] = { fallbackPathId, previousUserInput };
+    meta[i] = { previousUserInput };
   }
 
   return meta;

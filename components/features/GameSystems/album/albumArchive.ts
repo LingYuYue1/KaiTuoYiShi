@@ -329,6 +329,7 @@ export async function mergeAlbumsByContent(
     assets: [...addedAssets, ...current.assets],
     entries: [...addedEntries, ...entries.filter((entry) => !addedEntries.includes(entry))],
     tasks: current.tasks,
+    bindings: current.bindings,
   });
   return {
     album,

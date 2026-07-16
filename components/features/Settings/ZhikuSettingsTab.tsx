@@ -1,13 +1,12 @@
 ﻿import type { ReactNode } from 'react';
 import { useState } from 'react';
-import type { AI提供商, API设置, 游戏设置, 原著约束强度 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { AI提供商, 游戏设置, 原著约束强度 } from '@/models/settings';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
-  apiSettings: API设置;
 }
 
 const smallClip =
@@ -38,9 +37,8 @@ type ZhikuPatch = Partial<Omit<游戏设置['智库系统'], 'api'>> & {
   api?: Partial<游戏设置['智库系统']['api']>;
 };
 
-export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function ZhikuSettingsTab({ settings, onChange }: Props) {
   const zhiku = settings.智库系统;
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null;
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [fetchMessage, setFetchMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
@@ -62,10 +60,10 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
   };
 
   const effective = {
-    provider: zhiku.api.provider || mainConfig?.provider || 'openai_compatible',
-    baseUrl: zhiku.api.baseUrl.trim() || mainConfig?.baseUrl || '',
-    apiKey: zhiku.api.apiKey.trim() || mainConfig?.apiKey || '',
-    model: zhiku.api.model.trim() || mainConfig?.model || '',
+    provider: zhiku.api.provider || 'openai_compatible',
+    baseUrl: zhiku.api.baseUrl.trim(),
+    apiKey: zhiku.api.apiKey.trim(),
+    model: zhiku.api.model.trim(),
     enableClaudeMode: settings.enableClaudeMode === true,
   };
 
@@ -73,9 +71,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
     if (!effective.baseUrl || !effective.apiKey) {
       setFetchMessage({
         kind: 'error',
-        text: mainConfig
-          ? '智库当前使用主 API 回退；如主 API 也未配置，请先补全。'
-          : '请先填写智库 API 的 Base URL 和 API Key，或先配置主 API。',
+        text: '请先补全智库独立 API 的 Base URL 和 API Key。',
       });
       return;
     }
@@ -90,11 +86,11 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
         apiKey: effective.apiKey,
         model: effective.model,
         enableClaudeMode: effective.enableClaudeMode,
-        retryCount: zhiku.api.retryCount ?? mainConfig?.retryCount ?? 2,
+        retryCount: zhiku.api.retryCount ?? 2,
         createdAt: 0,
         updatedAt: 0,
       };
-      const list = await fetchModels(tempConfig);
+      const list = await (await getAdaptationServices()).apiTools.fetchModels(tempConfig);
       setModelOptions(list);
       setFetchMessage({ kind: 'info', text: '获取到 ' + list.length + ' 个模型' });
     } catch (err) {
@@ -109,7 +105,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await setPreferenceAsync('gameSettings', settings);
+      await setPreference('gameSettings', settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '智库设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -233,7 +229,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
           <input
             value={zhiku.api.baseUrl}
             onChange={(e) => patch({ api: { baseUrl: e.target.value } })}
-            placeholder={mainConfig?.baseUrl ? `留空则使用主 API：${mainConfig.baseUrl}` : 'https://...'}
+            placeholder="https://..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -244,7 +240,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
             type="password"
             value={zhiku.api.apiKey}
             onChange={(e) => patch({ api: { apiKey: e.target.value } })}
-            placeholder={mainConfig?.apiKey ? '留空则使用主 API 的 Key' : 'sk-...'}
+            placeholder="sk-..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -255,7 +251,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
             <input
               value={zhiku.api.model}
               onChange={(e) => patch({ api: { model: e.target.value } })}
-              placeholder={mainConfig?.model ? `留空则使用主 API：${mainConfig.model}` : '模型 ID'}
+              placeholder="模型 ID"
               className="kaituo-input flex-1 px-2.5 py-2 text-sm font-mono"
               style={{ clipPath: smallClip }}
             />

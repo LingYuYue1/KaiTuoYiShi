@@ -13,9 +13,7 @@ import {
 import type { SessionRepository } from '@/src/kernel/ports/SessionRepository';
 import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
 import { cloneGameState } from '@/src/kernel/domain/session/types';
-import {
-  migrateSessionRecord,
-} from '@/src/kernel/domain/session/schema';
+import { readSessionRecord } from '@/src/kernel/domain/session/schema';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 import { decodeSessionPackage } from './saveSession';
 
@@ -36,12 +34,12 @@ export async function importSession(
   sessions: SeedableSessionRepository,
 ): Promise<SessionView> {
   const raw = decodeSessionPackage(bytes);
-  const migrated = migrateSessionRecord(raw);
+  const exact = readSessionRecord(raw);
 
   const snapshot: SessionSnapshot = {
-    sessionId: asSessionId(migrated.sessionId),
-    revision: asRevision(migrated.revision),
-    state: cloneGameState(migrated.state),
+    sessionId: asSessionId(exact.sessionId),
+    revision: asRevision(exact.revision),
+    state: cloneGameState(exact.state),
   };
 
   await sessions.seed(snapshot);

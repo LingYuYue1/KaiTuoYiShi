@@ -8,7 +8,7 @@
 // 玩家点「暂缓」→ 纯前端 setWorld 清空 待触发狭间(命途进度仍满,等待下次邀请),不发请求。
 
 import type { 世界状态 } from '@/models/world';
-import { 拒绝命途狭间 } from '@/services/pathService';
+import { getAdaptationServices } from '@/src/adaptations';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_CORE_BELIEFS } from '@/models/path';
 
@@ -37,8 +37,8 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
     if (disabled) return;
     onTrigger();
   };
-  const handleDecline = () => {
-    setWorld((prev) => 拒绝命途狭间(prev));
+  const handleDecline = async () => {
+    setWorld(await (await getAdaptationServices()).path.拒绝命途狭间(world));
   };
 
   return (
@@ -94,7 +94,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
         </button>
         <button
           type="button"
-          onClick={handleDecline}
+          onClick={() => void handleDecline()}
           disabled={disabled}
           className="px-4 py-2 text-sm tracking-[0.2em] transition-all hover:opacity-90 disabled:opacity-40"
           style={{

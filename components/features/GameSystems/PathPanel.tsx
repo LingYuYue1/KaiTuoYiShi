@@ -9,7 +9,7 @@ import {
   STAGE_PROGRESS_MAX,
 } from '@/models/path';
 import { paths as ALL_PATHS } from '@/data/journeyPresets';
-import { setPrimaryPath } from '@/services/pathService';
+import { getAdaptationServices } from '@/src/adaptations';
 
 interface PathPanelProps {
   traveler: 角色数据结构;
@@ -34,14 +34,12 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
   const active = traveler.命途列表 ?? [];
   const cards = useMemo(() => ALL_PATHS.filter((p) => p.id !== 'none'), []);
 
-  const defaultSelected: 命途ID = useMemo(() => {
+  const defaultSelected = useMemo<命途ID | ''>(() => {
     const primary = active.find((p) => p.是否主命途);
-    if (primary) return primary.id;
-    if (active.length > 0) return active[0].id;
-    return cards[0]?.id ?? 'hunt';
-  }, [active, cards]);
+    return primary?.id ?? '';
+  }, [active]);
 
-  const [selectedId, setSelectedId] = useState<命途ID>(defaultSelected);
+  const [selectedId, setSelectedId] = useState<命途ID | ''>(defaultSelected);
 
   useEffect(() => {
     if (!cards.some((c) => c.id === selectedId)) {
@@ -49,14 +47,14 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
     }
   }, [cards, defaultSelected, selectedId]);
 
-  const selectedDef = cards.find((c) => c.id === selectedId) ?? cards[0];
+  const selectedDef = cards.find((c) => c.id === selectedId);
   const selectedRecord = active.find((a) => a.id === selectedId);
   const awakenedCount = active.length;
   const primaryRecord = active.find((p) => p.是否主命途);
   const primaryDef = cards.find((p) => p.id === primaryRecord?.id);
 
   const handleSetPrimary = async (pathId: 命途ID) => {
-    onTravelerChange(setPrimaryPath(traveler, pathId));
+    onTravelerChange(await (await getAdaptationServices()).path.setPrimaryPath(traveler, pathId));
   };
 
   return (

@@ -1,0 +1,2729 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { 游戏设置 } from '@/models/settings';
+import type { 提示词模块, 提示词模块类目, 提示词模块作用域 } from '@/models/prompts';
+import {
+  PROMPT_MODULE_CATEGORY_LABELS,
+  PROMPT_MODULE_SCOPE_LABELS,
+  isBuiltinPromptModule,
+  getDefaultModuleFields,
+} from '@/models/prompts';
+import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
+import {
+  parseSTPresetV2,
+  isSTImportedModule,
+} from '@/utils/stPresetParser';
+import { getCurrentSTPresetV2, normalizeSTPreset } from '@/utils/stSettingsNormalizer';
+import type { STPresetEntryV2, STRegexScript, STWorldInfoEntry } from '@/models/stTypes';
+import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/src/kernel/workflows/tavernRegexProcessor';
+import { getAdaptationServices } from '@/src/adaptations';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+const isMainPlotModule = (m: 提示词模块) => !m.scope?.includes('calibration');
+const isOtherSystemModule = (m: 提示词模块) => m.scope?.includes('calibration');
+const isNativePromptModule = (m: 提示词模块) =>
+  !isSTImportedModule(m) && !m.id.startsWith('adapted_');
+
+/** 独立系统分组映射：calibration 模块按子系统归类 */
+const CALIBRATION_SYSTEM_GROUPS: Record<string, { label: string; icon: string; emoji: string; match: (id: string) => boolean }> = {
+  news: { label: '新闻系统', icon: '◈', emoji: '🗞️', match: (id) => id === 'builtin_news_cot' || id === 'builtin_news_worldbook' || id === 'builtin_news_output_format' || id.startsWith('st_import_news_') || id.startsWith('custom_news_') },
+  phone: { label: '手机系统', icon: '◈', emoji: '📱', match: (id) => id === 'builtin_phone_cot' || id === 'builtin_phone_worldbook' || id === 'builtin_phone_output_format' || id.startsWith('st_import_phone_') || id.startsWith('custom_phone_') },
+  zhiku: { label: '智库系统', icon: '◈', emoji: '📚', match: (id) => id === 'builtin_zhiku_cot' || id === 'builtin_zhiku_output_format' || id.startsWith('st_import_zhiku_') || id.startsWith('custom_zhiku_') },
+  yiting: { label: '忆庭系统', icon: '◈', emoji: '🧠', match: (id) => id === 'builtin_yiting_recall' || id === 'builtin_yiting_archive_format' || id.startsWith('st_import_yiting_') || id.startsWith('custom_yiting_') },
+  variable: { label: '变量系统', icon: '◈', emoji: '⚙️', match: (id) => id === 'builtin_variable_cot' || id === 'builtin_variable_worldbook' || id === 'builtin_variable_output_format' || id.startsWith('st_import_variable_') || id.startsWith('custom_variable_') },
+  companionArchive: { label: '伙伴档案', icon: '◈', emoji: '👥', match: (id) => id === 'builtin_companion_archive_worldbook' || id.startsWith('st_import_companion_archive_') || id.startsWith('custom_companionArchive_') },
+  storyWeaving: { label: '剧情编织系统', icon: '◈', emoji: '📖', match: (id) => id === 'builtin_story_weaving_cot' || id === 'builtin_story_weaving_worldbook' || id === 'builtin_story_weaving_output_format' || id.startsWith('st_import_story_weaving_') || id.startsWith('custom_storyWeaving_') },
+};
+const CALIBRATION_GROUP_ORDER = ['news', 'phone', 'zhiku', 'yiting', 'variable', 'companionArchive', 'storyWeaving'] as const;
+
+/** 根据模块 id 获取所属的系统分组 key，不属于任何已知系统的归入 'other' */
+const getCalibrationGroupKey = (m: 提示词模块): string => {
+  for (const key of CALIBRATION_GROUP_ORDER) {
+    if (CALIBRATION_SYSTEM_GROUPS[key].match(m.id)) return key;
+  }
+  return 'other';
+};
+
+/** 文风模块互斥组：同一时间只能启用一个。ST 预设导入的文风（id 含 'st_import_' 前缀）也加入此组。 */
+const WRITING_STYLE_MODULE_IDS = new Set([
+  'builtin_writing_style',
+  'builtin_writing_style_hsr',
+  'builtin_writing_style_baimiao',
+  'builtin_writing_style_custom',
+]);
+const isWritingStyleModule = (m: 提示词模块) =>
+  WRITING_STYLE_MODULE_IDS.has(m.id) || m.id.startsWith('st_import_writing_style_');
+
+/** 判断模块是否为"原生预设提示词"(关闭时需弹窗确认)。
+ *  - source='builtin'：原生内置模块
+ *  - id 以 adapted_ 开头：二创成品融合模块
+ *  - 排除 adapted_placeholder_*：占位说明模块，无需弹窗
+ *  这两类模块若被关闭可能影响游戏体验，故关闭前给玩家一次确认机会。 */
+const isBuiltinPresetModule = (m: 提示词模块) => {
+  if (m.id.startsWith('adapted_placeholder_')) return false;
+  return m.source === 'builtin' || m.id.startsWith('adapted_');
+};
+
+// isSTImportedModule 从 stPresetParser 复用（systemPromptBuilder 也用同一份判断）
+
+
+/** 从 ST 导入模块的 id 解析它替换的内置模块类别（用于显示替换关系提示）。
+ *  命名约定：st_import_<category>_<timestamp>，例如 st_import_writing_style_1719400000000。 */
+const ST_IMPORT_CATEGORY_PREFIX = 'st_import_';
+const getSTImportTargetCategory = (m: 提示词模块): 提示词模块类目 | null => {
+  if (!isSTImportedModule(m)) return null;
+  // st_import_writing_style_xxx → style
+  // st_import_persona_xxx → persona
+  const rest = m.id.slice(ST_IMPORT_CATEGORY_PREFIX.length);
+  if (rest.startsWith('writing_style')) return 'style';
+  if (rest.startsWith('persona')) return 'persona';
+  if (rest.startsWith('cot')) return 'cot';
+  if (rest.startsWith('format')) return 'format';
+  if (rest.startsWith('devmode')) return 'devmode';
+  if (rest.startsWith('jailbreak')) return 'jailbreak';
+  return m.category;
+};
+
+/** 分类语义色：每个类目对应一个 CSS 变量（RGB 三元组），用于分组图标与类目标签着色。
+ *  - cot 思维链 → sage-soft 绿（思考/推理）
+ *  - format 输出格式 → accent-secondary 副色（结构化）
+ *  - persona 叙述人格 → amber-soft 琥珀（人格/温暖）
+ *  - devmode 开发模式 → danger 红（特殊/危险模式）
+ *  - jailbreak 越狱 → ui-nsfw 粉（NSFW/越狱解锁，ST 预设常见）
+ *  - style 文风 → accent-primary 主色（主轴）
+ *  - custom 自定义 → text-secondary 中性（用户自建）
+ */
+const CATEGORY_COLOR_VAR: Record<提示词模块类目, string> = {
+  cot: '--tj-sage-soft',
+  format: '--tj-accent-secondary',
+  persona: '--tj-amber-soft',
+  devmode: '--tj-danger',
+  jailbreak: '--tj-ui-nsfw',
+  style: '--tj-accent-primary',
+  custom: '--tj-text-secondary',
+};
+
+interface Props {
+  settings: 游戏设置;
+  onChange: (s: 游戏设置) => void;
+  mode?: 'modules' | 'tavern';
+}
+
+const smallClip =
+  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
+
+const TAVERN_RUNTIME_SLOT_IDS = new Set([
+  'worldInfoBefore',
+  'worldInfoAfter',
+  'chatHistory',
+  'personaDescription',
+  'userInput',
+  'user_input',
+  'latestUserInput',
+  'input',
+]);
+
+const ADVANCED_MACRO_RE = /\{\{\s*(?:setvar|setglobalvar|getvar|getglobalvar|if\b|else|\/if|random|pick|pick_var|roll:|[.$][^}]+|bias::|trim::|lower::|upper::)/gi;
+const BASIC_MACRO_RE = /\{\{\s*(?:char|user|time|date|datetime|model|messageCount|turnCount|lastMessage|lastUserMessage|lastCharMessage|newline|noop)\s*\}\}/gi;
+
+type TavernMacroLevel = 'none' | 'basic' | 'advanced';
+
+function detectTavernMacroInfo(content: string): { level: TavernMacroLevel; macros: string[] } {
+  const advanced = content.match(ADVANCED_MACRO_RE) ?? [];
+  if (advanced.length > 0) return { level: 'advanced', macros: Array.from(new Set(advanced)).slice(0, 8) };
+  const basic = content.match(BASIC_MACRO_RE) ?? [];
+  if (basic.length > 0) return { level: 'basic', macros: Array.from(new Set(basic)).slice(0, 8) };
+  return { level: 'none', macros: [] };
+}
+
+function getPresetWorldInfoEntries(worldInfo: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(worldInfo)) return worldInfo.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
+  if (worldInfo && typeof worldInfo === 'object') {
+    return Object.values(worldInfo).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
+  }
+  return [];
+}
+
+function getPresetWorldInfoViewEntries(worldInfo: unknown): Array<{ key: string; entry: Record<string, unknown> }> {
+  if (Array.isArray(worldInfo)) {
+    return worldInfo
+      .map((entry, index) => ({ key: String(index), entry }))
+      .filter((item): item is { key: string; entry: Record<string, unknown> } => Boolean(item.entry) && typeof item.entry === 'object');
+  }
+  if (worldInfo && typeof worldInfo === 'object') {
+    return Object.entries(worldInfo)
+      .map(([key, entry]) => ({ key, entry }))
+      .filter((item): item is { key: string; entry: Record<string, unknown> } => Boolean(item.entry) && typeof item.entry === 'object');
+  }
+  return [];
+}
+
+function readPresetWorldInfoText(value: unknown): string {
+  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+}
+
+function readPresetWorldInfoKeys(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => readPresetWorldInfoText(item).trim()).filter(Boolean)
+    : [];
+}
+
+function getPresetWorldInfoTitle(entry: Record<string, unknown>, index: number): string {
+  return readPresetWorldInfoText(entry.comment) || readPresetWorldInfoText(entry.title) || `world_info_${readPresetWorldInfoText(entry.uid) || index + 1}`;
+}
+
+function isPresetWorldInfoEnabled(entry: Record<string, unknown>): boolean {
+  return entry.enabled !== false && entry.disable !== true && entry.disabled !== true;
+}
+
+function isPresetWorldInfoConstant(entry: Record<string, unknown>): boolean {
+  return entry.constant === true || entry.constant === 1 || entry.constant === 'true';
+}
+
+const DEFAULT_TAVERN_REGEX_DRY_RUN_SAMPLE = `<正文>
+星在匹诺康尼的走廊停下脚步，望向梦境酒店尽头的光。
+</正文>
+<行动选项>
+1. 继续调查梦境酒店
+2. 询问同伴的看法
+</行动选项>`;
+
+function readPresetRegexText(value: unknown): string {
+  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+}
+
+function getPresetRegexTitle(script: Record<string, unknown>, index: number): string {
+  return (
+    readPresetRegexText(script.script_name).trim() ||
+    readPresetRegexText(script.scriptName).trim() ||
+    readPresetRegexText(script.name).trim() ||
+    readPresetRegexText(script.id).trim() ||
+    `regex_script_${index + 1}`
+  );
+}
+
+function getPresetRegexFindText(script: Record<string, unknown>): string {
+  return readPresetRegexText(script.find_regex) || readPresetRegexText(script.findRegex) || readPresetRegexText(script.find);
+}
+
+function getPresetRegexReplaceText(script: Record<string, unknown>): string {
+  return readPresetRegexText(script.replace_string) || readPresetRegexText(script.replaceString) || readPresetRegexText(script.replace);
+}
+
+function getPresetRegexKindLabel(kind: TavernRegexScriptSafety['kind']): string {
+  if (kind === 'prompt_preprocess') return '提示词预处理';
+  if (kind === 'output_postprocess') return '输出后处理';
+  if (kind === 'display_replace') return '显示层替换';
+  return '阻断';
+}
+
+function TogglePill({
+  checked,
+  disabled,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onChange(!checked);
+      }}
+      className="inline-flex items-center gap-2 text-xs transition-all disabled:cursor-not-allowed"
+      style={{ color: checked ? 'rgba(var(--tj-ui-nsfw), 0.92)' : 'rgba(var(--tj-text-secondary), 0.58)' }}
+    >
+      {label && <span>{label}</span>}
+      <span
+        className="relative inline-flex h-5 w-9 items-center"
+        style={{
+          background: checked ? 'rgba(var(--tj-ui-nsfw), 0.2)' : 'rgba(var(--tj-bg-primary), 0.42)',
+          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(var(--tj-ui-nsfw), 0.42)' : 'rgba(var(--tj-text-secondary), 0.18)'}`,
+          clipPath: smallClip,
+          opacity: disabled ? 0.62 : 1,
+        }}
+      >
+        <span
+          className="absolute top-1 h-3 w-3 transition-all"
+          style={{
+            left: checked ? 'calc(100% - 1rem)' : '0.25rem',
+            background: checked ? 'rgba(var(--tj-ui-nsfw), 0.95)' : 'rgba(var(--tj-text-secondary), 0.66)',
+            clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
+export function PromptSettingsSurface({ settings, onChange, mode = 'modules' }: Props) {
+  const isTavernMode = mode === 'tavern';
+  const modules = settings.promptModules;
+  const allPresetsV2 = useMemo<STPresetEntryV2[]>(
+    () => [...getBuiltinPresetsV2(), ...(settings.stPresetsV2 ?? [])],
+    [settings.stPresetsV2],
+  );
+  const currentV2Preset = useMemo(
+    () => getCurrentSTPresetV2(settings, allPresetsV2.filter((preset) => preset.isBuiltin)),
+    [settings, allPresetsV2],
+  );
+  const sorted = useMemo(
+    () => [...modules].sort((a, b) => a.order - b.order),
+    [modules],
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const nativeSorted = useMemo(
+    () => sorted.filter(isNativePromptModule),
+    [sorted],
+  );
+  const selectedPool = isTavernMode ? sorted : nativeSorted;
+  const selected = selectedPool.find((m) => m.id === selectedId);
+  // 系统切换：主剧情 / 独立模型
+  const [activeSystem, setActiveSystem] = useState<'main' | 'calibration'>('main');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const visibleModules = useMemo(
+    () => nativeSorted.filter(activeSystem === 'main' ? isMainPlotModule : isOtherSystemModule),
+    [nativeSorted, activeSystem],
+  );
+
+  const update = (next: 提示词模块[]) => {
+    onChange({ ...settings, promptModules: next });
+  };
+
+  const patch = (id: string, partial: Partial<提示词模块>) => {
+    // 文风互斥：启用某个文风模块时，关闭其他文风模块
+    if (partial.enabled === true) {
+      const target = modules.find((m) => m.id === id);
+      if (target && isWritingStyleModule(target)) {
+        const next = modules.map((m) =>
+          m.id === id
+            ? { ...m, ...partial, updatedAt: Date.now() }
+            : isWritingStyleModule(m) && m.enabled
+              ? { ...m, enabled: false, updatedAt: Date.now() }
+              : m,
+        );
+        update(next);
+        return;
+      }
+    }
+    update(
+      modules.map((m) =>
+        m.id === id ? { ...m, ...partial, updatedAt: Date.now() } : m,
+      ),
+    );
+  };
+
+  // 拖拽排序回调：按新顺序回写 modules，仅替换 order 变化的条目，避免不必要重渲染
+  const reorderModules = (reordered: 提示词模块[]) => {
+    const next = modules.map((m) => {
+      const updated = reordered.find((r) => r.id === m.id);
+      return updated && updated.order !== m.order ? updated : m;
+    });
+    update(next);
+  };
+
+  const addCustomModule = (
+    systemKey: string,
+    category: 提示词模块类目,
+    replaceMode: 'replace' | 'coexist',
+  ) => {
+    const now = Date.now();
+    const newId = `custom_${systemKey}_${category}_${now}`;
+    const isCal = systemKey !== 'main';
+    const scope: 提示词模块作用域[] = isCal ? ['calibration'] : ['all'];
+    const systemLabel = systemKey === 'main' ? '主剧情' : (CALIBRATION_SYSTEM_GROUPS[systemKey]?.label ?? systemKey);
+    const catLabel = PROMPT_MODULE_CATEGORY_LABELS[category];
+
+    const targetModules = isCal
+      ? modules.filter((m) => CALIBRATION_SYSTEM_GROUPS[systemKey]?.match(m.id))
+      : modules.filter(isMainPlotModule);
+    const nextOrder = (targetModules.length > 0 ? Math.max(...targetModules.map((m) => m.order)) : 0) + 10;
+
+    const created: 提示词模块 = {
+      ...getDefaultModuleFields(),
+      source: 'user',
+      replaceable: 'replaceable',
+      id: newId,
+      title: `${systemLabel} · ${catLabel}`,
+      description: `${replaceMode === 'replace' ? '替换' : '叠加'} · ${systemLabel} · ${catLabel}`,
+      category,
+      content: '',
+      enabled: true,
+      builtin: false,
+      order: nextOrder,
+      scope,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    let next = [...modules, created];
+    if (replaceMode === 'replace') {
+      next = next.map((m) => {
+        if (!isBuiltinPromptModule(m.id)) return m;
+        const sameSystem = isCal
+          ? !!CALIBRATION_SYSTEM_GROUPS[systemKey]?.match(m.id)
+          : isMainPlotModule(m);
+        const sameCategory = m.category === category;
+        if (sameSystem && sameCategory && m.enabled) {
+          return { ...m, enabled: false, updatedAt: now };
+        }
+        return m;
+      });
+    }
+
+    update(next);
+    setSelectedId(newId);
+    setShowAddModal(false);
+  };
+
+  const isCustomWritingStyleSlot = (id: string) => id === 'builtin_writing_style_custom';
+
+  const removeModule = (id: string) => {
+    if (isBuiltinPromptModule(id) || isCustomWritingStyleSlot(id)) return;
+    const target = modules.find((m) => m.id === id);
+    let next = modules.filter((m) => m.id !== id);
+    if (target && target.description?.startsWith('替换')) {
+      const isCal = target.scope?.includes('calibration');
+      next = next.map((m) => {
+        if (!isBuiltinPromptModule(m.id) || m.enabled) return m;
+        const sameSystem = isCal
+          ? !!Object.values(CALIBRATION_SYSTEM_GROUPS).find((g) => g.match(m.id) && g.match(id))
+          : isMainPlotModule(m) && isMainPlotModule(target);
+        const sameCategory = m.category === target.category;
+        if (sameSystem && sameCategory) {
+          return { ...m, enabled: true, updatedAt: Date.now() };
+        }
+        return m;
+      });
+    }
+    update(next);
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  const resetBuiltins = () => {
+    if (!confirm('确定将所有内置模块的内容/标题恢复为初始？\n（自定义模块不会被删除，玩家修改过的主剧情内置 enabled 状态会被保留；独立模型展示模块会保持展示状态）')) {
+      return;
+    }
+    const fresh = createBuiltinPromptModules();
+    const next = modules.map((m) => {
+      if (!isBuiltinPromptModule(m.id)) return m;
+      const def = fresh.find((f) => f.id === m.id);
+      if (!def) return m;
+      const isCalibrationBuiltin = def.scope?.includes('calibration');
+      // 保留玩家当前的主剧情 enabled，覆盖其它字段；独立模型展示模块不作为真实请求开关。
+      return {
+        ...def,
+        enabled: isCalibrationBuiltin ? true : m.enabled,
+        createdAt: m.createdAt,
+        updatedAt: Date.now(),
+      };
+    });
+    // 若某条 builtin 被异常删除，补回
+    for (const def of fresh) {
+      if (!next.find((m) => m.id === def.id)) next.push(def);
+    }
+    update(next);
+  };
+
+  const importSTPreset = () => {
+    // 导入只写入 Tavern 预设库；是否启用由 currentStPresetIdV2 唯一决定。
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const preset = parseSTPresetV2(text);
+
+        const now = Date.now();
+        const presetId = `stpreset_${now}_${Math.random().toString(36).slice(2, 8)}`;
+        const fileBaseName = file.name.replace(/\.json$/i, '').trim();
+        if (!fileBaseName) throw new Error('酒馆预设文件名不能为空');
+        const presetName = fileBaseName.slice(0, 60);
+        const newPresetV2: STPresetEntryV2 = {
+          id: presetId,
+          name: presetName,
+          preset,
+          importedAt: now,
+          updatedAt: now,
+          isBuiltin: false,
+        };
+        const importedWorldInfoCount = getPresetWorldInfoEntries(preset.world_info).length;
+        const importedRegexCount = await (await getAdaptationServices()).tavernRegex
+          .extractTavernRegexScripts(preset)
+          .then((scripts) => scripts.length);
+        onChange({
+          ...settings,
+          stPresetsV2: [...(settings.stPresetsV2 ?? []), newPresetV2],
+        });
+        console.info('[酒馆预设导入] 已按 Tavern 原结构存入预设库', {
+          presetId,
+          name: presetName,
+          promptCount: preset.prompts.length,
+          orderCount: preset.prompt_order[0]?.order.length ?? 0,
+          worldInfoCount: importedWorldInfoCount,
+          regexScriptCount: importedRegexCount,
+        });
+        alert(`已导入酒馆预设「${presetName}」。\n保留 ${preset.prompts.length} 个内容项 / ${preset.prompt_order[0]?.order.length ?? 0} 个顺序项。\n附带 world_info：${importedWorldInfoCount} 条；regex_scripts：${importedRegexCount} 条。\n不再生成提示词模块副本；当前选择保持不变。`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        alert(`ST 预设解析失败：${message}\n请确认文件是 SillyTavern 导出的预设 JSON（含 prompts + prompt_order 字段）。`);
+      }
+    };
+    input.click();
+  };
+
+  const switchPresetV2 = (presetId: string | null) => {
+    const target = presetId ? allPresetsV2.find((p) => p.id === presetId) : null;
+    if (presetId && !target) throw new Error(`酒馆预设不存在：${presetId}`);
+    if (target) normalizeSTPreset(target.preset);
+    onChange({
+      ...settings,
+      currentStPresetIdV2: target?.id ?? null,
+      currentStCharacterId: null,
+    });
+  };
+
+  const setV2CharacterId = (characterId: number | null) => {
+    if (!currentV2Preset) throw new Error('未选择酒馆预设，不能选择 prompt_order');
+    if (characterId === null && currentV2Preset.preset.prompt_order.length !== 1) {
+      throw new Error('酒馆预设包含多个 prompt_order，必须明确选择 character_id');
+    }
+    if (characterId !== null && !currentV2Preset.preset.prompt_order.some((order) => order.character_id === characterId)) {
+      throw new Error(`酒馆预设没有 character_id=${characterId} 的 prompt_order`);
+    }
+    onChange({ ...settings, currentStCharacterId: characterId });
+  };
+
+  const patchV2Preset = (presetId: string, preset: STPresetEntryV2['preset']) => {
+    const now = Date.now();
+    const editablePresets = settings.stPresetsV2 ?? [];
+    const target = allPresetsV2.find((entry) => entry.id === presetId);
+    if (!target) throw new Error(`酒馆预设不存在：${presetId}`);
+
+    if (target.isBuiltin) {
+      const overrideId = `builtin_override_${presetId}`;
+      const existingOverride = editablePresets.find((entry) => entry.id === overrideId);
+      const overrideEntry: STPresetEntryV2 = {
+        ...(existingOverride ?? {
+          id: overrideId,
+          name: `${target.name}（自定义配置）`,
+          preset: JSON.parse(JSON.stringify(target.preset)) as STPresetEntryV2['preset'],
+          importedAt: now,
+          updatedAt: now,
+          isBuiltin: false,
+        }),
+        preset,
+        updatedAt: now,
+      };
+      const nextPresets = existingOverride
+        ? editablePresets.map((entry) => entry.id === overrideId ? overrideEntry : entry)
+        : [...editablePresets, overrideEntry];
+      onChange({
+        ...settings,
+        stPresetsV2: nextPresets,
+        currentStPresetIdV2: overrideId,
+        currentStCharacterId: settings.currentStCharacterId ?? null,
+      });
+      return;
+    }
+
+    const nextPresets = editablePresets.map((entry) =>
+      entry.id === presetId
+        ? { ...entry, preset, updatedAt: now }
+        : entry,
+    );
+    onChange({ ...settings, stPresetsV2: nextPresets });
+  };
+
+  const exportV2Preset = (preset: STPresetEntryV2) => {
+    const blob = new Blob([JSON.stringify(preset.preset, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${preset.name || 'st-preset-v2'}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const deletePresetV2 = (presetId: string) => {
+    const target = (settings.stPresetsV2 ?? []).find((entry) => entry.id === presetId);
+    if (!target) throw new Error(`玩家酒馆预设不存在：${presetId}`);
+    if (target.isBuiltin) throw new Error(`内置酒馆预设不可删除：${presetId}`);
+    if (!confirm(`确定删除酒馆预设「${target.name}」？\n该操作只会删除玩家导入的预设，不会影响内置预设和原生提示词模块。`)) return;
+
+    const nextPresets = (settings.stPresetsV2 ?? []).filter((entry) => entry.id !== presetId);
+    const isCurrent = settings.currentStPresetIdV2 === presetId;
+    onChange({
+      ...settings,
+      stPresetsV2: nextPresets,
+      currentStPresetIdV2: isCurrent ? null : settings.currentStPresetIdV2,
+      currentStCharacterId: isCurrent ? null : settings.currentStCharacterId,
+    });
+  };
+
+  if (isTavernMode) {
+    const currentV2Order = currentV2Preset
+      ? settings.currentStCharacterId === null || settings.currentStCharacterId === undefined
+        ? currentV2Preset.preset.prompt_order.length === 1
+          ? currentV2Preset.preset.prompt_order[0]
+          : undefined
+        : currentV2Preset.preset.prompt_order.find((item) => item.character_id === settings.currentStCharacterId)
+      : undefined;
+    const currentV2EnabledSlots = currentV2Order?.order.filter((slot) => slot.enabled !== false).length ?? 0;
+    const tavernV2Enabled = Boolean(currentV2Preset);
+    const tavernV2Ready = Boolean(currentV2Preset);
+    return (
+      <div className="flex h-full min-w-0 flex-col gap-4 overflow-y-auto pr-1" style={{ minHeight: 0 }}>
+        <div
+          className="flex flex-col gap-3 p-3"
+          style={{
+            background: 'rgba(var(--tj-bg-secondary), 0.35)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+            clipPath: smallClip,
+          }}
+        >
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div
+                className="font-serif text-base font-bold tracking-[0.16em]"
+                style={{ color: 'rgba(var(--tj-ui-nsfw), 0.95)' }}
+              >
+                酒馆预设
+              </div>
+              <div className="mt-1 text-sm leading-6" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+                ST / Tavern 预设导入与酒馆消息链集中在这里；提示词模块页只保留开拓轶事原生底座。
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-serif tracking-wider"
+                title={tavernV2Enabled ? '已选择有效酒馆预设：主剧情使用该消息链' : '未选择酒馆预设：主剧情使用原生流程'}
+                style={{
+                  background: tavernV2Enabled
+                    ? 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.22), rgba(var(--tj-ui-nsfw), 0.1))'
+                    : 'rgba(var(--tj-bg-secondary), 0.5)',
+                  color: tavernV2Enabled
+                    ? 'rgba(var(--tj-ui-nsfw), 0.98)'
+                    : 'rgba(var(--tj-text-secondary), 0.7)',
+                  boxShadow: tavernV2Enabled
+                    ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.45)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
+                  clipPath: smallClip,
+                }}
+              >
+                {tavernV2Enabled ? '已选择酒馆预设' : '未选择酒馆预设'}
+              </span>
+              <button
+                onClick={importSTPreset}
+                className="px-3.5 py-1.5 text-sm font-serif tracking-wider transition-all hover:opacity-90"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.18), rgba(var(--tj-ui-nsfw), 0.08))',
+                  color: 'rgba(var(--tj-ui-nsfw), 0.95)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.35)',
+                  clipPath: smallClip,
+                }}
+                title="导入 SillyTavern 预设文件"
+              >
+                导入酒馆预设
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-3">
+            {[
+              {
+                label: '酒馆状态',
+                value: tavernV2Enabled ? '使用预设' : '已关闭',
+                detail: tavernV2Enabled ? '当前选中预设参与主剧情' : '主剧情使用原生流程',
+                active: tavernV2Enabled,
+              },
+              {
+                label: '酒馆预设',
+                value: currentV2Preset ? currentV2Preset.name : '未选择',
+                detail: currentV2Preset ? `${currentV2Preset.preset.prompts.length} 内容项 / ${currentV2Order?.order.length ?? 0} 顺序项` : '主剧情走原生流程',
+                active: Boolean(currentV2Preset),
+              },
+              {
+                label: '发送路径',
+                value: tavernV2Ready ? '酒馆消息链' : '原生主流程',
+                detail: currentV2Preset
+                  ? currentV2Order
+                    ? `${currentV2EnabledSlots} 条启用；构建失败会终止本回合`
+                    : '需要明确选择顺序槽位；发送会直接拒绝'
+                  : '未选择预设，酒馆已关闭',
+                active: tavernV2Ready,
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="min-w-0 px-3 py-2.5"
+                style={{
+                  background: item.active ? 'rgba(var(--tj-ui-nsfw), 0.08)' : 'rgba(var(--tj-bg-primary), 0.32)',
+                  boxShadow: `inset 0 0 0 1px ${item.active ? 'rgba(var(--tj-ui-nsfw), 0.26)' : 'rgba(var(--tj-accent-primary), 0.12)'}`,
+                  clipPath: smallClip,
+                }}
+              >
+                <div className="text-[11px] font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
+                  {item.label}
+                </div>
+                <div className="mt-1 truncate text-base font-semibold" style={{ color: item.active ? 'rgba(var(--tj-ui-nsfw), 0.96)' : 'rgb(var(--tj-text-primary))' }}>
+                  {item.value}
+                </div>
+                <div className="mt-0.5 truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}>
+                  {item.detail}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="flex min-w-0 flex-col gap-3">
+              <V2PresetSwitcher
+                presets={allPresetsV2}
+                currentId={currentV2Preset?.id ?? null}
+                currentCharacterId={settings.currentStCharacterId ?? null}
+                onSwitch={switchPresetV2}
+                onCharacterChange={setV2CharacterId}
+                onPresetChange={patchV2Preset}
+                onExport={exportV2Preset}
+                onDelete={deletePresetV2}
+              />
+            </div>
+            <div
+              className="min-w-0 p-4 text-sm leading-7"
+              style={{
+                background: 'rgba(var(--tj-bg-primary), 0.32)',
+                color: 'rgba(var(--tj-text-secondary), 0.74)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                clipPath: smallClip,
+              }}
+            >
+              <div className="font-serif text-base tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}>
+                运行诊断
+              </div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <div className="px-2 py-1.5" style={{ background: 'rgba(var(--tj-bg-secondary), 0.28)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)', clipPath: smallClip }}>
+                  <div className="text-xs font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>原始结构</div>
+                  <div className="mt-1 leading-5">酒馆预设保持 `prompts + prompt_order` 原结构，不再转译成提示词模块。</div>
+                </div>
+                <div className="px-2 py-1.5" style={{ background: 'rgba(var(--tj-bg-secondary), 0.28)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)', clipPath: smallClip }}>
+                  <div className="text-xs font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>消息链</div>
+                  <div className="mt-1 leading-5">选中有效预设时使用酒馆消息链；未选择时就是关闭状态，主剧情使用原生流程。</div>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-1.5 text-xs">
+                <div style={{ color: tavernV2Ready ? 'rgba(var(--tj-ui-nsfw), 0.88)' : 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                  当前路径：{tavernV2Ready ? '本回合严格使用酒馆消息链；构建失败会终止本回合。' : '当前仍走原生主流程。'}
+                </div>
+                <div>
+                  运行时槽位：`worldInfo*`、`chatHistory`、`userInput` 等由项目上下文注入，不一定有 prompt 正文。
+                </div>
+                <div>
+                  原生 CoT、回复格式、变量协议、行动选项、天气和独立系统提示词不在这里编辑。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-w-0 flex-col gap-4 md:flex-row" style={{ minHeight: 0 }}>
+      <div className="flex max-h-[34dvh] min-w-0 flex-shrink-0 flex-col gap-2 md:max-h-none md:w-[360px]">
+        <div className="flex gap-1 p-1" style={{
+          background: 'rgba(var(--tj-bg-secondary), 0.5)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          clipPath: smallClip,
+        }}>
+          {([
+            { key: 'main', label: '主剧情' },
+            { key: 'calibration', label: '独立系统' },
+          ] as const).map((sys) => {
+            const active = activeSystem === sys.key;
+            return (
+              <button
+                key={sys.key}
+                type="button"
+                onClick={() => setActiveSystem(sys.key)}
+                className="flex-1 px-3 py-1.5 text-sm font-serif tracking-[0.12em] transition-all"
+                style={{
+                  background: active
+                    ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))'
+                    : 'transparent',
+                  color: active ? 'rgb(var(--tj-on-accent))' : 'rgba(var(--tj-text-secondary), 0.7)',
+                  clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                  cursor: 'pointer',
+                }}
+              >
+                {sys.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between px-1">
+          <span
+            className="text-xs font-serif tracking-[0.2em]"
+            style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
+          >
+            模块列表
+          </span>
+          <span className="text-[10px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}>
+            {visibleModules.length} 条
+          </span>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <ModuleList
+            modules={visibleModules}
+            selected={selected}
+            onSelect={setSelectedId}
+            onToggle={(id) => {
+              const target = modules.find((m) => m.id === id);
+              if (!target || target.scope?.includes('calibration')) return;
+              const nextEnabled = !target.enabled;
+              if (isBuiltinPresetModule(target) && target.enabled && !nextEnabled) {
+                if (!window.confirm('该模块属于原生提示词底座，关闭可能影响输出稳定性。确定要关闭吗？')) {
+                  return;
+                }
+              }
+              patch(id, { enabled: nextEnabled });
+            }}
+            showModifyLayer={activeSystem === 'main'}
+            onReorder={reorderModules}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.18)' }}>
+          <button
+            onClick={resetBuiltins}
+            className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-80"
+            style={{
+              background: 'transparent',
+              color: 'rgba(var(--tj-text-secondary), 0.82)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+              clipPath: smallClip,
+            }}
+          >
+            重置内置模块
+          </button>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <span
+            className="text-xs font-serif tracking-[0.2em]"
+            style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
+          >
+            模块编辑
+          </span>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-3 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
+              color: 'rgb(var(--tj-on-accent))',
+              clipPath: smallClip,
+            }}
+          >
+            + 新增自定义模块
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          {selected ? (
+            <EditorPanel
+              module={selected}
+              onPatch={(p) => patch(selected.id, p)}
+              onDelete={() => removeModule(selected.id)}
+            />
+          ) : (
+            <div
+              className="flex flex-1 items-center justify-center text-sm"
+              style={{
+                color: 'rgba(var(--tj-text-secondary), 0.5)',
+                clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.06)',
+                background: 'radial-gradient(circle at 50% 40%, rgba(var(--tj-accent-primary), 0.018) 0%, transparent 60%)',
+                padding: '2rem 1rem',
+                textAlign: 'center',
+                letterSpacing: '0.2em',
+              }}
+            >
+              暂无模块。点击“新增自定义模块”开始。
+            </div>
+          )}
+        </div>
+      </div>
+      {showAddModal && (
+        <AddCustomModuleModal
+          onConfirm={addCustomModule}
+          onCancel={() => setShowAddModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function V2PresetSwitcher({
+  presets,
+  currentId,
+  currentCharacterId,
+  onSwitch,
+  onCharacterChange,
+  onPresetChange,
+  onExport,
+  onDelete,
+}: {
+  presets: STPresetEntryV2[];
+  currentId: string | null;
+  currentCharacterId: number | null;
+  onSwitch: (presetId: string | null) => void;
+  onCharacterChange: (characterId: number | null) => void;
+  onPresetChange: (presetId: string, preset: STPresetEntryV2['preset']) => void;
+  onExport: (preset: STPresetEntryV2) => void;
+  onDelete: (presetId: string) => void;
+}) {
+  const current = presets.find((p) => p.id === currentId) ?? null;
+  const characterIds = current?.preset.prompt_order.map((item) => item.character_id) ?? [];
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [slotFilter, setSlotFilter] = useState<'all' | 'enabled' | 'disabled' | 'runtime' | 'missing' | 'macro'>('all');
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [aiReviewOpen, setAiReviewOpen] = useState(false);
+  const [aiReviewText, setAiReviewText] = useState('');
+  const [selectedRegexIndex, setSelectedRegexIndex] = useState(0);
+  const [regexDryRunSample, setRegexDryRunSample] = useState(DEFAULT_TAVERN_REGEX_DRY_RUN_SAMPLE);
+  const [regexScripts, setRegexScripts] = useState<STRegexScript[]>([]);
+  const [regexScriptSafety, setRegexScriptSafety] = useState<TavernRegexScriptSafety[]>([]);
+  const [selectedRegexDryRun, setSelectedRegexDryRun] = useState<TavernRegexDryRunResult | null>(null);
+  const [regexError, setRegexError] = useState<Error | null>(null);
+  const selectedCharacterId = currentCharacterId ?? (current?.preset.prompt_order.length === 1 ? current.preset.prompt_order[0].character_id : null);
+  const selectedOrder = current
+    ? selectedCharacterId === null
+      ? undefined
+      : current.preset.prompt_order.find((item) => item.character_id === selectedCharacterId)
+    : undefined;
+  const selectedSlot = selectedOrder?.order.find((slot) => slot.identifier === selectedSlotId) ?? selectedOrder?.order[0];
+  const promptMap = new Map(current?.preset.prompts.map((prompt) => [prompt.identifier, prompt]) ?? []);
+  const selectedPrompt = selectedSlot ? promptMap.get(selectedSlot.identifier) : undefined;
+  const canEdit = Boolean(current && !current.isBuiltin);
+  const canToggleOrderSlot = Boolean(current);
+  const orderSlots = selectedOrder?.order ?? [];
+  const slotViewModels = orderSlots.map((slot, index) => {
+    const prompt = promptMap.get(slot.identifier);
+    const content = prompt?.content ?? '';
+    const macro = detectTavernMacroInfo(content);
+    const isRuntime = TAVERN_RUNTIME_SLOT_IDS.has(slot.identifier);
+    const isMissing = !isRuntime && !prompt;
+    return { slot, index, prompt, content, macro, isRuntime, isMissing };
+  });
+  const shownOrderSlots = slotViewModels.filter((item) => {
+    if (slotFilter === 'enabled') return item.slot.enabled !== false;
+    if (slotFilter === 'disabled') return item.slot.enabled === false;
+    if (slotFilter === 'runtime') return item.isRuntime;
+    if (slotFilter === 'missing') return item.isMissing;
+    if (slotFilter === 'macro') return item.macro.level !== 'none';
+    return true;
+  });
+  const enabledSlotCount = orderSlots.filter((slot) => slot.enabled !== false).length;
+  const runtimeSlotCount = slotViewModels.filter((item) => item.isRuntime).length;
+  const unmatchedSlotCount = slotViewModels.filter((item) => item.isMissing).length;
+  const macroSlotCount = slotViewModels.filter((item) => item.macro.level !== 'none').length;
+  const advancedMacroSlotCount = slotViewModels.filter((item) => item.macro.level === 'advanced').length;
+  const disabledRuntimeCount = slotViewModels.filter((item) => item.isRuntime && item.slot.enabled === false).length;
+  const duplicateIds = Array.from(new Set(orderSlots.map((slot) => slot.identifier).filter((id, index, arr) => arr.indexOf(id) !== index)));
+  const worldInfoEntries = getPresetWorldInfoEntries(current?.preset.world_info);
+  const worldInfoViewEntries = getPresetWorldInfoViewEntries(current?.preset.world_info);
+  const enabledWorldInfoCount = worldInfoEntries.filter(isPresetWorldInfoEnabled).length;
+  const constantWorldInfoCount = worldInfoEntries.filter((entry) => isPresetWorldInfoEnabled(entry) && isPresetWorldInfoConstant(entry)).length;
+  useEffect(() => {
+    let active = true;
+    setRegexScripts([]);
+    setRegexScriptSafety([]);
+    setSelectedRegexDryRun(null);
+    setRegexError(null);
+    void getAdaptationServices()
+      .then(async (services) => {
+        const scripts = await services.tavernRegex.extractTavernRegexScripts(current?.preset);
+        const safety = await Promise.all(
+          scripts.map((script) => services.tavernRegex.analyzeTavernRegexScript(script)),
+        );
+        return { scripts, safety };
+      })
+      .then(({ scripts, safety }) => {
+        if (!active) return;
+        setRegexScripts(scripts);
+        setRegexScriptSafety(safety);
+      })
+      .catch((error: unknown) => {
+        if (active) setRegexError(error instanceof Error ? error : new Error(String(error)));
+      });
+    return () => { active = false; };
+  }, [current?.id, current?.updatedAt]);
+  const enabledRegexScriptCount = regexScriptSafety.filter((item) => !item.disabled).length;
+  const riskyRegexScriptCount = regexScriptSafety.filter((item) => item.risky).length;
+  const enabledRiskyRegexScriptCount = regexScriptSafety.filter((item) => !item.disabled && item.risky).length;
+  const blockedRegexScriptCount = regexScriptSafety.filter((item) => item.kind === 'blocked').length;
+  const effectiveRegexIndex = regexScripts.length > 0 ? Math.min(selectedRegexIndex, regexScripts.length - 1) : 0;
+  const selectedRegexScript = regexScripts[effectiveRegexIndex];
+  const selectedRegexSafety = selectedRegexScript ? regexScriptSafety[effectiveRegexIndex] : null;
+  useEffect(() => {
+    let active = true;
+    setSelectedRegexDryRun(null);
+    if (!selectedRegexScript) return () => { active = false; };
+    void getAdaptationServices()
+      .then((services) => services.tavernRegex.dryRunTavernRegexScript(selectedRegexScript, regexDryRunSample))
+      .then((result) => {
+        if (active) setSelectedRegexDryRun(result);
+      })
+      .catch((error: unknown) => {
+        if (active) setRegexError(error instanceof Error ? error : new Error(String(error)));
+      });
+    return () => { active = false; };
+  }, [regexDryRunSample, selectedRegexScript]);
+  const scanIssues = [
+    unmatchedSlotCount > 0 ? `${unmatchedSlotCount} 个顺序项没有匹配内容` : '',
+    disabledRuntimeCount > 0 ? `${disabledRuntimeCount} 个运行时槽位被关闭` : '',
+    duplicateIds.length > 0 ? `${duplicateIds.length} 个重复 identifier` : '',
+    advancedMacroSlotCount > 0 ? `${advancedMacroSlotCount} 个条目含高级宏` : '',
+    enabledWorldInfoCount > 80 ? `${enabledWorldInfoCount} 个 world_info 已启用，可能挤占上下文` : '',
+    constantWorldInfoCount > 20 ? `${constantWorldInfoCount} 个 world_info 常驻条目，建议确认是否必要` : '',
+    regexScripts.length > 0 ? `${regexScripts.length} 个 regex_scripts 已保留；安全输出清理类会在主剧情后处理执行` : '',
+    enabledRiskyRegexScriptCount > 0 ? `${enabledRiskyRegexScriptCount} 个高风险 regex_scripts 处于启用状态（仍不会执行）` : '',
+  ].filter(Boolean);
+
+  const patchCurrentPreset = (nextPreset: STPresetEntryV2['preset']) => {
+    if (!current) return;
+    onPresetChange(current.id, nextPreset);
+  };
+
+  const patchOrderSlot = (identifier: string, partial: Partial<NonNullable<typeof selectedSlot>>) => {
+    if (!current || !selectedOrder) return;
+    patchCurrentPreset({
+      ...current.preset,
+      prompt_order: current.preset.prompt_order.map((order) =>
+        order.character_id === selectedOrder.character_id
+          ? {
+              ...order,
+              order: order.order.map((slot) =>
+                slot.identifier === identifier ? { ...slot, ...partial } : slot,
+              ),
+            }
+          : order,
+      ),
+    });
+  };
+
+  const patchSelectedSlot = (partial: Partial<NonNullable<typeof selectedSlot>>) => {
+    if (!selectedSlot) return;
+    patchOrderSlot(selectedSlot.identifier, partial);
+  };
+
+  const patchSelectedPrompt = (partial: Partial<NonNullable<typeof selectedPrompt>>) => {
+    if (!current || !selectedPrompt || current.isBuiltin) return;
+    patchCurrentPreset({
+      ...current.preset,
+      prompts: current.preset.prompts.map((prompt) =>
+        prompt.identifier === selectedPrompt.identifier ? { ...prompt, ...partial } : prompt,
+      ),
+    });
+  };
+
+  const patchWorldInfoEntry = (entryKey: string, partial: Partial<STWorldInfoEntry>) => {
+    if (!current || current.isBuiltin) return;
+    const raw = current.preset.world_info;
+    if (Array.isArray(raw)) {
+      const targetIndex = Number(entryKey);
+      patchCurrentPreset({
+        ...current.preset,
+        world_info: raw.map((entry, index) => index === targetIndex ? { ...entry, ...partial } : entry),
+      });
+      return;
+    }
+    if (raw && typeof raw === 'object') {
+      const nextWorldInfo: Record<string, STWorldInfoEntry> = {
+        ...raw,
+        [entryKey]: { ...raw[entryKey], ...partial },
+      };
+      patchCurrentPreset({
+        ...current.preset,
+        world_info: nextWorldInfo,
+      });
+    }
+  };
+
+  const buildLocalReviewText = () => {
+    const selectedName = current?.name ?? '未选择';
+    const lines = [
+      `预设：${selectedName}`,
+      `内容项：${current?.preset.prompts.length ?? 0}`,
+      `顺序项：${orderSlots.length}`,
+      `启用项：${enabledSlotCount}`,
+      `运行时槽位：${runtimeSlotCount}`,
+      `未匹配：${unmatchedSlotCount}`,
+      `宏条目：${macroSlotCount}（高级宏 ${advancedMacroSlotCount}）`,
+      `世界书：${worldInfoEntries.length}（启用 ${enabledWorldInfoCount}，常驻 ${constantWorldInfoCount}）`,
+      `正则脚本：${regexScripts.length}（未禁用 ${enabledRegexScriptCount}，高风险 ${riskyRegexScriptCount}）`,
+      '',
+      '本地扫描：',
+      ...(scanIssues.length > 0 ? scanIssues.map((item) => `- ${item}`) : ['- 暂未发现结构性问题']),
+      '',
+      '建议：',
+      disabledRuntimeCount > 0 ? '- 建议重新启用 chatHistory / userInput / worldInfo* 等运行时槽位。' : '- 运行时槽位状态正常。',
+      unmatchedSlotCount > 0 ? '- 未匹配项不会注入正文，建议确认是否为预设占位符。' : '- prompt_order 引用基本完整。',
+      advancedMacroSlotCount > 0 ? '- 高级宏集中条目不要轻易关闭，建议逐条查看右侧宏检测。' : '- 未发现高级宏集中风险。',
+      enabledWorldInfoCount > 0 ? '- world_info 会按关键词命中后进入主剧情酒馆消息链，不影响独立系统。' : '- 未检测到附带 world_info。',
+      regexScripts.length > 0 ? '- regex_scripts 仅放开安全输出清理类；HTML 注释、抗截断/抗空回占位等会在主剧情后处理清理，高风险脚本仍只展示和干跑。' : '- 未检测到附带 regex_scripts。',
+      '- 内核会在消息链末尾追加必需的行动选项协议；缺少 CoT、格式或运行时槽位时直接拒绝构建。',
+    ];
+    return lines.join('\n');
+  };
+
+  const runLocalReview = () => {
+    if (!current) return;
+    const localReport = buildLocalReviewText();
+    setAiReviewOpen(true);
+    setAiReviewText(`${localReport}\n\n说明：当前版本已移除外部 AI 审查，只保留本地结构扫描。后续可加入由项目内置规则维护的审查模型。`);
+  };
+  if (regexError) throw regexError;
+  return (
+    <div
+      className="flex flex-col gap-1.5 px-2 py-1.5"
+      style={{
+        background: 'rgba(var(--tj-accent-primary), 0.06)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span
+          className="text-base font-serif tracking-[0.14em]"
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.92)' }}
+        >
+          酒馆预设
+        </span>
+        <span className="text-xs" style={{ color: current ? 'rgba(var(--tj-ui-nsfw), 0.82)' : 'rgba(var(--tj-text-secondary), 0.58)' }}>
+          {current ? '已选择，酒馆消息链生效' : '未选择，酒馆已关闭'}
+        </span>
+        <span className="ml-auto text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+          {canEdit ? '导入预设可编辑' : '内置正文只读 · 条目可配置'}
+        </span>
+      </div>
+      <div className="grid gap-2 xl:grid-cols-[minmax(220px,1.3fr)_minmax(140px,0.7fr)_auto_auto_auto]">
+        <select
+          value={currentId ?? ''}
+          onChange={(e) => onSwitch(e.target.value || null)}
+          className="min-w-0 px-3 py-2 text-sm"
+          style={{
+            background: 'rgba(var(--tj-bg-primary), 0.6)',
+            color: 'rgb(var(--tj-text-primary))',
+            border: '1px solid rgba(var(--tj-accent-primary), 0.3)',
+            borderRadius: '2px',
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <option value="">不使用酒馆消息链</option>
+          {presets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} · {p.preset.prompts.length} 项
+            </option>
+          ))}
+        </select>
+        {current && (
+          <>
+            <select
+              value={selectedCharacterId ?? ''}
+              onChange={(e) => onCharacterChange(e.target.value ? Number(e.target.value) : null)}
+              className="min-w-0 px-3 py-2 text-sm"
+              style={{
+                background: 'rgba(var(--tj-bg-primary), 0.55)',
+                color: 'rgb(var(--tj-text-primary))',
+                border: '1px solid rgba(var(--tj-accent-primary), 0.22)',
+                borderRadius: '2px',
+                outline: 'none',
+              }}
+            >
+              {characterIds.map((id) => (
+                <option key={id} value={id}>
+                  顺序槽位 {id}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => onExport(current)}
+              className="px-3 py-2 text-xs transition-all hover:opacity-85"
+              style={{
+                background: 'rgba(var(--tj-bg-primary), 0.52)',
+                color: 'rgba(var(--tj-text-primary), 0.82)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                clipPath: smallClip,
+              }}
+            >
+              导出
+            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => onDelete(current.id)}
+                className="px-3 py-2 text-xs transition-all hover:opacity-85"
+                style={{
+                  background: 'rgba(var(--tj-danger), 0.08)',
+                  color: 'rgba(var(--tj-danger), 0.9)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.24)',
+                  clipPath: smallClip,
+                }}
+              >
+                删除
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={runLocalReview}
+              className="px-3 py-2 text-xs transition-all hover:opacity-85"
+              style={{
+                background: 'rgba(var(--tj-ui-nsfw), 0.12)',
+                color: 'rgba(var(--tj-ui-nsfw), 0.95)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.28)',
+                clipPath: smallClip,
+              }}
+            >
+              本地审查
+            </button>
+          </>
+        )}
+      </div>
+      {current && (
+        <>
+          <div
+            className="px-3 py-2 text-xs leading-6"
+            style={{
+              background: 'rgba(var(--tj-bg-primary), 0.32)',
+              color: 'rgba(var(--tj-text-secondary), 0.68)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+              clipPath: smallClip,
+            }}
+          >
+            {'{{char}}'} 已由项目内置兼容层接管：会被理解为当前剧情中的主要互动对象、出场 NPC 与 AI 负责扮演的角色集合，无需玩家手动填写。
+          </div>
+          <div className="text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+            酒馆预设只影响主剧情消息链；独立系统和内置模块保持原路径。
+          </div>
+          <div
+            className="grid h-[min(68vh,760px)] min-h-[520px] gap-3 overflow-hidden px-3 py-2.5 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.05fr)]"
+            style={{
+              background: 'rgba(var(--tj-bg-primary), 0.28)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+              clipPath: smallClip,
+            }}
+          >
+            <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.84)' }}>
+                  顺序项
+                </span>
+                <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                  启用 {enabledSlotCount}/{orderSlots.length}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+              {([
+                ['all', '全部'],
+                ['enabled', '启用'],
+                ['disabled', '关闭'],
+                ['runtime', '运行时'],
+                ['missing', '未匹配'],
+                ['macro', '含宏'],
+              ] as const).map(([key, label]) => {
+                const active = slotFilter === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSlotFilter(key)}
+                    className="px-2 py-1 text-xs transition-all"
+                    style={{
+                      color: active ? 'rgba(var(--tj-ui-nsfw), 0.95)' : 'rgba(var(--tj-text-secondary), 0.62)',
+                      background: active ? 'rgba(var(--tj-ui-nsfw), 0.12)' : 'rgba(var(--tj-bg-primary), 0.35)',
+                      boxShadow: `inset 0 0 0 1px ${active ? 'rgba(var(--tj-ui-nsfw), 0.3)' : 'rgba(var(--tj-accent-primary), 0.12)'}`,
+                      clipPath: smallClip,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-xs">
+              <div style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>运行时 {runtimeSlotCount}</div>
+              <div style={{ color: unmatchedSlotCount > 0 ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                未匹配 {unmatchedSlotCount}
+              </div>
+              <div style={{ color: macroSlotCount > 0 ? 'rgba(var(--tj-ui-nsfw), 0.82)' : 'rgba(var(--tj-text-secondary), 0.58)' }}>宏 {macroSlotCount}</div>
+              <div style={{ color: advancedMacroSlotCount > 0 ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-text-secondary), 0.58)' }}>高级 {advancedMacroSlotCount}</div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+              {shownOrderSlots.map(({ slot, index, prompt, macro, isRuntime, isMissing }) => {
+                const active = selectedSlot?.identifier === slot.identifier;
+                const contentPreview = prompt?.content?.replace(/\s+/g, ' ').trim().slice(0, 80);
+                return (
+                  <button
+                    key={`${slot.identifier}_${index}`}
+                    type="button"
+                    onClick={() => setSelectedSlotId(slot.identifier)}
+                    className="grid items-start gap-2 px-3 py-2 text-left text-sm transition-all"
+                    style={{
+                      gridTemplateColumns: '2.25rem minmax(0, 1fr) auto',
+                      background: active ? 'rgba(var(--tj-accent-primary), 0.12)' : 'transparent',
+                      color: slot.enabled === false ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
+                      clipPath: smallClip,
+                    }}
+                  >
+                    <span style={{ color: slot.enabled === false ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-ui-nsfw), 0.82)' }}>
+                      #{index + 1}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate" title={prompt?.name || slot.identifier}>
+                        {prompt?.name || slot.identifier}
+                      </span>
+                      <span className="mt-1 block truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }} title={slot.identifier}>
+                        {slot.identifier}
+                      </span>
+                      {contentPreview && (
+                        <span className="mt-1 block truncate text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.48)' }} title={contentPreview}>
+                          {contentPreview}
+                        </span>
+                      )}
+                      {macro.level !== 'none' && (
+                        <span className="mt-1 inline-flex px-1.5 py-0.5 text-xs" style={{
+                          color: macro.level === 'advanced' ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-ui-nsfw), 0.78)',
+                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+                          clipPath: smallClip,
+                        }}>
+                          {macro.level === 'advanced' ? '高级宏' : '基础宏'}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex flex-col items-end gap-1 text-xs">
+                      <span style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>
+                        {isRuntime ? 'runtime' : (isMissing ? 'missing' : (prompt?.role ?? 'system'))}
+                      </span>
+                      <TogglePill checked={slot.enabled !== false} disabled={!canToggleOrderSlot} onChange={(next) => patchOrderSlot(slot.identifier, { enabled: next })} />
+                    </span>
+                  </button>
+                );
+              })}
+              {shownOrderSlots.length === 0 && (
+                <div className="px-3 py-3 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                  当前筛选下没有顺序项。
+                </div>
+              )}
+              </div>
+            </div>
+            <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.84)' }}>
+                  详细预览
+                </span>
+                {selectedSlot && (
+                  <TogglePill
+                    checked={selectedSlot.enabled !== false}
+                    disabled={!canToggleOrderSlot}
+                    onChange={(next) => patchSelectedSlot({ enabled: next })}
+                    label={selectedSlot.enabled === false ? '已关闭' : '已启用'}
+                  />
+                )}
+              </div>
+            {selectedSlot ? (
+              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+                {selectedPrompt ? (
+                  <>
+                    <input
+                      value={selectedPrompt.name ?? ''}
+                      readOnly={!canEdit}
+                      onChange={(e) => patchSelectedPrompt({ name: e.target.value })}
+                      className="min-w-0 px-3 py-2 text-sm"
+                      style={{
+                        background: 'rgba(var(--tj-bg-primary), 0.5)',
+                        color: 'rgb(var(--tj-text-primary))',
+                        border: '1px solid rgba(var(--tj-accent-primary), 0.18)',
+                        borderRadius: '2px',
+                        outline: 'none',
+                        opacity: canEdit ? 1 : 0.72,
+                      }}
+                    />
+                    <select
+                      value={selectedPrompt.role}
+                      disabled={!canEdit}
+                      onChange={(e) => patchSelectedPrompt({ role: e.target.value as typeof selectedPrompt.role })}
+                      className="min-w-0 px-3 py-2 text-sm"
+                      style={{
+                        background: 'rgba(var(--tj-bg-primary), 0.5)',
+                        color: 'rgb(var(--tj-text-primary))',
+                        border: '1px solid rgba(var(--tj-accent-primary), 0.18)',
+                        borderRadius: '2px',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="system">system</option>
+                      <option value="user">user</option>
+                      <option value="assistant">assistant</option>
+                    </select>
+                    <textarea
+                      value={selectedPrompt.content}
+                      readOnly={!canEdit}
+                      onChange={(e) => patchSelectedPrompt({ content: e.target.value })}
+                      className="min-h-[280px] resize-y px-3 py-2 font-mono text-sm leading-6"
+                      style={{
+                        background: 'rgba(var(--tj-bg-primary), 0.5)',
+                        color: 'rgb(var(--tj-text-primary))',
+                        border: '1px solid rgba(var(--tj-accent-primary), 0.18)',
+                        borderRadius: '2px',
+                        outline: 'none',
+                        opacity: canEdit ? 1 : 0.72,
+                      }}
+                    />
+                    <MacroInspector content={selectedPrompt.content} />
+                  </>
+                ) : (
+                  <div className="text-sm leading-7" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                    {TAVERN_RUNTIME_SLOT_IDS.has(selectedSlot.identifier)
+                      ? '运行时槽位由项目上下文注入：聊天历史、世界书、角色描述或玩家输入会在发送时填充。'
+                      : '该顺序项未匹配到 prompts 内容，可能是预设占位符。'}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-6 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.08)', clipPath: smallClip }}>
+                从左侧选择一个顺序项查看正文和宏检测。
+              </div>
+            )}
+            </div>
+          </div>
+          {worldInfoViewEntries.length > 0 && (
+            <div
+              className="px-3 py-2"
+              style={{
+                background: 'rgba(var(--tj-bg-primary), 0.24)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                clipPath: smallClip,
+              }}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-serif text-sm tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.84)' }}>
+                  预设世界书
+                </span>
+                <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                  启用 {enabledWorldInfoCount}/{worldInfoViewEntries.length} · 常驻 {constantWorldInfoCount}
+                </span>
+              </div>
+              <div className="max-h-72 overflow-y-auto pr-1">
+                <div className="grid gap-2 md:grid-cols-2">
+                  {worldInfoViewEntries.map(({ key, entry }, index) => {
+                    const title = getPresetWorldInfoTitle(entry, index);
+                    const primaryKeys = readPresetWorldInfoKeys(entry.key);
+                    const secondaryKeys = readPresetWorldInfoKeys(entry.keysecondary);
+                    const content = readPresetWorldInfoText(entry.content).replace(/\s+/g, ' ').trim();
+                    const enabled = isPresetWorldInfoEnabled(entry);
+                    const constant = isPresetWorldInfoConstant(entry);
+                    const order = readPresetWorldInfoText(entry.order) || '100';
+                    const probability = readPresetWorldInfoText(entry.probability) || '100';
+                    return (
+                      <div
+                        key={key}
+                        className="grid gap-2 px-3 py-2 text-xs leading-5"
+                        style={{
+                          background: enabled ? 'rgba(var(--tj-bg-secondary), 0.26)' : 'rgba(var(--tj-bg-primary), 0.18)',
+                          color: enabled ? 'rgba(var(--tj-text-primary), 0.76)' : 'rgba(var(--tj-text-secondary), 0.45)',
+                          boxShadow: `inset 0 0 0 1px ${enabled ? 'rgba(var(--tj-accent-primary), 0.13)' : 'rgba(var(--tj-text-secondary), 0.08)'}`,
+                          clipPath: smallClip,
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate font-serif text-sm tracking-[0.08em]" title={title}>
+                              {title}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              <span style={{ color: constant ? 'rgba(var(--tj-ui-nsfw), 0.84)' : 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                                {constant ? '常驻' : '关键词'}
+                              </span>
+                              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>order {order}</span>
+                              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>概率 {probability}%</span>
+                            </div>
+                          </div>
+                          <TogglePill
+                            checked={enabled}
+                            disabled={!canEdit}
+                            onChange={(next) => patchWorldInfoEntry(key, { enabled: next })}
+                          />
+                        </div>
+                        <div className="grid gap-1" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                          <div className="truncate" title={primaryKeys.join(' / ') || '无主关键词'}>
+                            主关键词：{primaryKeys.length > 0 ? primaryKeys.join(' / ') : '无'}
+                          </div>
+                          {secondaryKeys.length > 0 && (
+                            <div className="truncate" title={secondaryKeys.join(' / ')}>
+                              次关键词：{secondaryKeys.join(' / ')}
+                            </div>
+                          )}
+                          <div className="line-clamp-2" title={content}>
+                            {content || '无正文'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="mt-2 text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.56)' }}>
+                world_info 只在主剧情酒馆消息链中按关键词触发，不写入全局世界书，也不影响独立系统。
+              </div>
+            </div>
+          )}
+          <div
+            data-tavern-regex-panel="true"
+            className="px-3 py-2"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--tj-bg-primary), 0.26), rgba(var(--tj-ui-nsfw), 0.045))',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.16)',
+              clipPath: smallClip,
+            }}
+          >
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-serif text-sm tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-nsfw), 0.88)' }}>
+                  预设正则脚本
+                </span>
+                <span className="px-2 py-0.5 text-xs" style={{
+                  color: 'rgba(var(--tj-text-secondary), 0.66)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+                  clipPath: smallClip,
+                }}>
+                  仅审查 / 干跑
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}>
+                <span>总数 {regexScripts.length}</span>
+                <span>未禁用 {enabledRegexScriptCount}</span>
+                <span style={{ color: riskyRegexScriptCount > 0 ? 'rgba(var(--tj-ui-nsfw), 0.86)' : 'rgba(var(--tj-text-secondary), 0.6)' }}>
+                  高风险 {riskyRegexScriptCount}
+                </span>
+                <span style={{ color: blockedRegexScriptCount > 0 ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-text-secondary), 0.6)' }}>
+                  阻断 {blockedRegexScriptCount}
+                </span>
+              </div>
+            </div>
+            {regexScripts.length === 0 ? (
+              <div
+                className="grid gap-2 px-3 py-4 text-sm leading-6"
+                style={{
+                  background: 'rgba(var(--tj-bg-primary), 0.22)',
+                  color: 'rgba(var(--tj-text-secondary), 0.66)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+                  clipPath: smallClip,
+                }}
+              >
+                <div className="font-serif tracking-[0.1em]" style={{ color: 'rgba(var(--tj-text-primary), 0.76)' }}>
+                  当前预设没有附带 regex_scripts
+                </div>
+                <div>
+                  如果导入的 ST 预设包含正则脚本，这里会显示脚本列表、风险类型、协议标签检查和干跑预览。主剧情只会执行安全输出清理类正则。
+                </div>
+              </div>
+            ) : (
+            <div
+              className="grid min-h-[360px] gap-3 overflow-hidden lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.1fr)]"
+            >
+                <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+                  <div className="text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
+                    regex_scripts 会被保留并分析风险；安全输出清理类会在主剧情后处理执行，高风险脚本仍不会改写正文输出。
+                  </div>
+                  <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+                    {regexScripts.map((script, index) => {
+                      const safety = regexScriptSafety[index];
+                      const active = effectiveRegexIndex === index;
+                      const title = getPresetRegexTitle(script, index);
+                      const findPreview = getPresetRegexFindText(script).replace(/\s+/g, ' ').trim();
+                      return (
+                        <button
+                          key={`${title}_${index}`}
+                          type="button"
+                          onClick={() => setSelectedRegexIndex(index)}
+                          className="grid gap-2 px-3 py-2 text-left text-xs transition-all"
+                          style={{
+                            background: active ? 'rgba(var(--tj-ui-nsfw), 0.1)' : 'rgba(var(--tj-bg-primary), 0.18)',
+                            color: safety.disabled ? 'rgba(var(--tj-text-secondary), 0.45)' : 'rgba(var(--tj-text-primary), 0.78)',
+                            boxShadow: `inset 0 0 0 1px ${active ? 'rgba(var(--tj-ui-nsfw), 0.28)' : 'rgba(var(--tj-accent-primary), 0.1)'}`,
+                            clipPath: smallClip,
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="min-w-0 truncate font-serif text-sm tracking-[0.06em]" title={title}>
+                              {title}
+                            </span>
+                            <span style={{ color: safety.disabled ? 'rgba(var(--tj-text-secondary), 0.52)' : 'rgba(var(--tj-ui-nsfw), 0.82)' }}>
+                              {safety.disabled ? '禁用' : '未禁用'}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="px-1.5 py-0.5" style={{
+                              color: safety.kind === 'blocked' ? 'rgba(var(--tj-danger), 0.92)' : safety.risky ? 'rgba(var(--tj-ui-nsfw), 0.9)' : 'rgba(var(--tj-accent-primary), 0.82)',
+                              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.16)',
+                              clipPath: smallClip,
+                            }}>
+                              {getPresetRegexKindLabel(safety.kind)}
+                            </span>
+                            {safety.blocksProtocolTags && (
+                              <span className="px-1.5 py-0.5" style={{
+                                color: 'rgba(var(--tj-danger), 0.9)',
+                                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.22)',
+                                clipPath: smallClip,
+                              }}>
+                                协议标签风险
+                              </span>
+                            )}
+                          </div>
+                          <div className="truncate font-mono" title={findPreview || 'find_regex 为空'} style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>
+                            {findPreview || 'find_regex 为空'}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+                  {selectedRegexScript && selectedRegexSafety && selectedRegexDryRun ? (
+                    <>
+                      <div className="grid gap-2 md:grid-cols-4">
+                        {[
+                          ['类型', getPresetRegexKindLabel(selectedRegexSafety.kind)],
+                          ['状态', selectedRegexSafety.disabled ? '禁用' : '未禁用'],
+                          ['风险', selectedRegexSafety.risky ? '高' : '低'],
+                          ['命中', `${selectedRegexDryRun.matches}`],
+                        ].map(([label, value]) => (
+                          <div key={label} className="px-2 py-1.5 text-xs" style={{
+                            background: 'rgba(var(--tj-bg-primary), 0.26)',
+                            color: 'rgba(var(--tj-text-primary), 0.74)',
+                            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+                            clipPath: smallClip,
+                          }}>
+                            <div style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>{label}</div>
+                            <div className="mt-1 truncate">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid min-h-0 flex-1 gap-2 overflow-hidden xl:grid-cols-2">
+                        <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+                          <div className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>脚本内容</div>
+                          <div className="grid gap-2 overflow-y-auto pr-1">
+                            <div>
+                              <div className="mb-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.54)' }}>find_regex</div>
+                              <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-5" style={{
+                                background: 'rgba(var(--tj-bg-primary), 0.36)',
+                                color: 'rgba(var(--tj-text-primary), 0.76)',
+                                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+                                clipPath: smallClip,
+                              }}>{getPresetRegexFindText(selectedRegexScript) || '空'}</pre>
+                            </div>
+                            <div>
+                              <div className="mb-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.54)' }}>replace_string</div>
+                              <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-5" style={{
+                                background: 'rgba(var(--tj-bg-primary), 0.36)',
+                                color: 'rgba(var(--tj-text-primary), 0.76)',
+                                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+                                clipPath: smallClip,
+                              }}>{getPresetRegexReplaceText(selectedRegexScript) || '空'}</pre>
+                            </div>
+                            <div className="text-xs leading-5" style={{ color: selectedRegexSafety.risky ? 'rgba(var(--tj-ui-nsfw), 0.82)' : 'rgba(var(--tj-text-secondary), 0.64)' }}>
+                              {selectedRegexSafety.reason}
+                            </div>
+                            {selectedRegexDryRun.warnings.length > 0 && (
+                              <div className="grid gap-1 text-xs leading-5" style={{ color: 'rgba(var(--tj-danger), 0.84)' }}>
+                                {selectedRegexDryRun.warnings.map((warning) => (
+                                  <div key={warning}>- {warning}</div>
+                                ))}
+                              </div>
+                            )}
+                            {selectedRegexDryRun.error && (
+                              <div className="text-xs leading-5" style={{ color: 'rgba(var(--tj-danger), 0.84)' }}>
+                                正则错误：{selectedRegexDryRun.error}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>干跑预览</span>
+                            <button
+                              type="button"
+                              onClick={() => setRegexDryRunSample(DEFAULT_TAVERN_REGEX_DRY_RUN_SAMPLE)}
+                              className="px-2 py-1 text-xs"
+                              style={{
+                                color: 'rgba(var(--tj-text-secondary), 0.65)',
+                                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                                clipPath: smallClip,
+                              }}
+                            >
+                              重置样例
+                            </button>
+                          </div>
+                          <textarea
+                            value={regexDryRunSample}
+                            onChange={(e) => setRegexDryRunSample(e.target.value)}
+                            className="min-h-[120px] resize-y px-3 py-2 font-mono text-xs leading-5"
+                            style={{
+                              background: 'rgba(var(--tj-bg-primary), 0.38)',
+                              color: 'rgba(var(--tj-text-primary), 0.76)',
+                              border: '1px solid rgba(var(--tj-accent-primary), 0.12)',
+                              borderRadius: '2px',
+                              outline: 'none',
+                            }}
+                          />
+                          <pre className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-5" style={{
+                            background: selectedRegexDryRun.ok ? 'rgba(var(--tj-accent-primary), 0.055)' : 'rgba(var(--tj-ui-nsfw), 0.06)',
+                            color: 'rgba(var(--tj-text-primary), 0.78)',
+                            boxShadow: `inset 0 0 0 1px ${selectedRegexDryRun.ok ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-ui-nsfw), 0.18)'}`,
+                            clipPath: smallClip,
+                          }}>
+                            {selectedRegexDryRun.after}
+                          </pre>
+                        </div>
+                      </div>
+                      <div className="text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.56)' }}>
+                    当前仅展示替换结果和风险判断，不会写入预设；真实运行只放开安全输出清理类正则。
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center p-6 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>
+                      从左侧选择一个正则脚本查看详情。
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div
+            className="px-3 py-2"
+            style={{
+              background: 'rgba(var(--tj-bg-primary), 0.24)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+              clipPath: smallClip,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setDiagnosticsOpen((value) => !value)}
+              className="flex w-full items-center justify-between gap-3 text-left text-sm"
+              style={{ color: 'rgba(var(--tj-text-primary), 0.82)' }}
+            >
+              <span className="font-serif tracking-[0.14em]">运行诊断</span>
+              <span className="text-xs" style={{ color: scanIssues.length > 0 ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                {scanIssues.length > 0 ? `${scanIssues.length} 项提示` : '结构正常'} · {diagnosticsOpen ? '收起' : '展开'}
+              </span>
+            </button>
+            {diagnosticsOpen && (
+              <div className="mt-2 grid gap-2 text-xs leading-6" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+                {(scanIssues.length > 0 ? scanIssues : ['暂未发现结构性问题']).map((item) => (
+                  <div key={item}>- {item}</div>
+                ))}
+                <div>- CoT、回复格式和行动选项都是必需协议；缺失时本回合直接失败。</div>
+                <div>- 高级宏条目建议先查看右侧宏检测，再决定是否关闭。</div>
+              </div>
+            )}
+          </div>
+          {aiReviewOpen && (
+            <div
+              className="px-3 py-2"
+              style={{
+                background: 'rgba(var(--tj-bg-primary), 0.3)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+                clipPath: smallClip,
+              }}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-serif text-sm tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-nsfw), 0.88)' }}>本地审查报告</span>
+                <button type="button" onClick={() => setAiReviewOpen(false)} className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>收起</button>
+              </div>
+              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap text-xs leading-6" style={{ color: 'rgba(var(--tj-text-primary), 0.78)' }}>
+                {aiReviewText || buildLocalReviewText()}
+              </pre>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function MacroInspector({ content }: { content: string }) {
+  const macro = detectTavernMacroInfo(content);
+  if (macro.level === 'none') {
+    return (
+      <div className="px-3 py-2 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.08)', clipPath: smallClip }}>
+        宏检测：未发现宏。
+      </div>
+    );
+  }
+  return (
+    <div
+      className="flex flex-col gap-2 px-3 py-2 text-xs"
+      style={{
+        color: 'rgba(var(--tj-text-secondary), 0.72)',
+        boxShadow: `inset 0 0 0 1px ${macro.level === 'advanced' ? 'rgba(var(--tj-danger), 0.22)' : 'rgba(var(--tj-ui-nsfw), 0.18)'}`,
+        clipPath: smallClip,
+      }}
+    >
+      <div className="font-serif tracking-[0.14em]" style={{ color: macro.level === 'advanced' ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-ui-nsfw), 0.82)' }}>
+        宏检测 · {macro.level === 'advanced' ? '高级宏' : '基础宏'}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {macro.macros.map((item) => (
+          <span key={item} className="px-1.5 py-0.5" style={{ color: 'rgba(var(--tj-text-primary), 0.72)', background: 'rgba(var(--tj-bg-primary), 0.36)', clipPath: smallClip }}>
+            {item}
+          </span>
+        ))}
+      </div>
+      {macro.level === 'advanced' && (
+        <div className="leading-5">
+          该条目可能承担变量赋值、条件分支或随机选择逻辑，建议审查后再关闭。
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 判断模块是否可修改：非内置 / 自定义文风槽 / ST导入 都可修改。
+ *  用于 ModuleItem 显示 ✓ 可修改 / 🔒 不可修改 标识。 */
+const isModifiableModule = (m: 提示词模块) =>
+  !isBuiltinPromptModule(m.id) || m.id === 'builtin_writing_style_custom' || isSTImportedModule(m);
+
+function ModuleList({
+  modules,
+  selected,
+  onSelect,
+  onToggle,
+  showModifyLayer,
+  onReorder,
+}: {
+  modules: 提示词模块[];
+  selected: 提示词模块 | undefined;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+  showModifyLayer: boolean;
+  onReorder?: (reorderedModules: 提示词模块[]) => void;
+}) {
+  if (!modules.length) return null;
+
+  if (!showModifyLayer) {
+    // 独立系统页面：按子系统分组，每组一个折叠标题 + 模块列表
+    const grouped: Record<string, 提示词模块[]> = {};
+    for (const m of modules) {
+      const key = getCalibrationGroupKey(m);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(m);
+    }
+
+    return (
+      <div className="mb-2 space-y-3">
+        {CALIBRATION_GROUP_ORDER.filter((k) => grouped[k]?.length).map((key) => {
+          const group = CALIBRATION_SYSTEM_GROUPS[key];
+          const items = grouped[key];
+          return (
+            <SystemGroupSection key={key} group={group} items={items} selected={selected} onSelect={onSelect} onToggle={onToggle} />
+          );
+        })}
+        {/* 未归类模块 */}
+        {grouped['other']?.length > 0 && (
+          <SystemGroupSection
+            group={{ label: '其他系统', icon: '◈', emoji: '⚡', match: () => false }}
+            items={grouped['other']}
+            selected={selected}
+            onSelect={onSelect}
+            onToggle={onToggle}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // 主剧情系统：统一为「提示词模块」单一列表，按 order 升序排列（不再区分内置 / 预设）。
+  return (
+    <div className="mb-2">
+      <ModifyLayer
+        title="提示词模块"
+        icon="▼"
+        defaultCollapsed={false}
+        modules={modules}
+        selected={selected}
+        onSelect={onSelect}
+        onToggle={onToggle}
+        onReorder={onReorder}
+      />
+    </div>
+  );
+}
+
+function SystemGroupSection({
+  group,
+  items,
+  selected,
+  onSelect,
+  onToggle,
+}: {
+  group: { label: string; icon: string; emoji: string; match: (id: string) => boolean };
+  items: 提示词模块[];
+  selected: 提示词模块 | undefined;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex w-full items-center gap-2 px-1 py-1.5 text-left transition-all"
+      >
+        <span
+          className="text-xs font-mono transition-transform"
+          style={{
+            color: 'rgba(var(--tj-accent-primary), 0.7)',
+            transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)',
+          }}
+        >
+          ▼
+        </span>
+        <span className="text-sm">{group.emoji}</span>
+        <span
+          className="text-sm font-serif tracking-[0.16em]"
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
+        >
+          {group.label}
+        </span>
+        <span
+          className="text-xs"
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}
+        >
+          {items.length} 条
+        </span>
+      </button>
+      {!collapsed && items.map((m) => (
+        <ModuleItem key={m.id} m={m} active={m.id === selected?.id} onSelect={onSelect} onToggle={onToggle} />
+      ))}
+    </div>
+  );
+}
+
+function ModifyLayer({
+  title,
+  icon,
+  defaultCollapsed,
+  modules,
+  selected,
+  onSelect,
+  onToggle,
+  onReorder,
+}: {
+  title: string;
+  icon: string;
+  defaultCollapsed: boolean;
+  modules: 提示词模块[];
+  selected: 提示词模块 | undefined;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+  onReorder?: (reorderedModules: 提示词模块[]) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
+  // 拖拽结束：按新顺序重算 order（间距 10），仅修改 order 值变化的模块
+  const handleDragEnd = (event: DragEndEvent) => {
+    if (!onReorder) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = modules.findIndex((m) => m.id === active.id);
+    const newIndex = modules.findIndex((m) => m.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(modules, oldIndex, newIndex);
+    const STEP = 10;
+    const updated = reordered.map((m, i) => ({
+      ...m,
+      order: STEP * (i + 1),
+      updatedAt: Date.now(),
+    }));
+    onReorder(updated);
+  };
+
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex w-full items-center gap-2 px-1 py-1.5 text-left transition-all"
+      >
+        <span
+          className="text-xs font-mono transition-transform"
+          style={{
+            color: 'rgba(var(--tj-accent-primary), 0.7)',
+            transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)',
+          }}
+        >
+          {icon}
+        </span>
+        <span
+          className="text-sm font-serif tracking-[0.16em]"
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
+        >
+          {title}
+        </span>
+        <span
+          className="text-xs"
+          style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}
+        >
+          {modules.length} 条
+        </span>
+        {onReorder && (
+          <span
+            className="text-[10px] font-serif tracking-[0.12em]"
+            style={{ color: 'rgba(var(--tj-accent-primary), 0.45)' }}
+          >
+            · 可拖拽
+          </span>
+        )}
+      </button>
+      {!collapsed && onReorder ? (
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+            {modules.map((m) => (
+              <SortableModuleItem key={m.id} m={m} active={m.id === selected?.id} onSelect={onSelect} onToggle={onToggle} />
+            ))}
+          </SortableContext>
+        </DndContext>
+      ) : !collapsed ? (
+        modules.map((m) => (
+          <ModuleItem key={m.id} m={m} active={m.id === selected?.id} onSelect={onSelect} onToggle={onToggle} />
+        ))
+      ) : null}
+    </div>
+  );
+}
+
+/** 拖拽手柄图标（六点双竖线） */
+const DRAG_HANDLE_ICON = '⠿';
+
+/** SortableModuleItem：在 ModuleItem 外层包裹 dnd-kit 的 sortable 能力。
+ *  - attributes 绑到外层 div（提供 a11y/role 等语义）
+ *  - listeners 只绑到内部的拖拽手柄 span，避免吃掉 ModuleItem 内部的 onSelect 点击 / onToggle 滑块开关事件
+ *  - 拖拽中：透明度 0.5 + 提升 z-index，避免被遮挡
+ */
+function SortableModuleItem({ m, active, onSelect, onToggle }: {
+  m: 提示词模块;
+  active: boolean;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: m.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="flex items-stretch"
+    >
+      <span
+        {...listeners}
+        title="拖拽以调整顺序"
+        aria-label="拖拽手柄"
+        className="flex w-4 flex-shrink-0 cursor-grab select-none items-center justify-center text-xs transition-colors active:cursor-grabbing"
+        style={{
+          color: 'rgba(var(--tj-accent-primary), 0.45)',
+        }}
+      >
+        {DRAG_HANDLE_ICON}
+      </span>
+      <div className="min-w-0 flex-1">
+        <ModuleItem m={m} active={active} onSelect={onSelect} onToggle={onToggle} />
+      </div>
+    </div>
+  );
+}
+
+function ModuleItem({
+  m,
+  active,
+  onSelect,
+  onToggle,
+}: {
+  m: 提示词模块;
+  active: boolean;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const isCal = m.scope?.includes('calibration');
+  const isSTImport = isSTImportedModule(m);
+  const isStyle = isWritingStyleModule(m);
+  // 开关禁用：独立模型展示模块（非真实开关）
+  const toggleDisabled = isCal;
+  // 身份标签：预设 > 内置 > 自定义
+  const badgeLabel = isSTImport ? '预设' : m.builtin ? '内置' : '自定义';
+  const badgeStyle = isSTImport
+    ? {
+        color: 'rgb(var(--tj-bg-primary))',
+        background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.88), rgba(var(--tj-ui-nsfw), 0.68))',
+      }
+    : m.builtin
+      ? {
+          color: 'rgb(var(--tj-bg-primary))',
+          background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
+        }
+      : {
+          color: 'rgba(var(--tj-accent-primary), 0.94)',
+          background: 'rgba(var(--tj-accent-primary), 0.12)',
+        };
+  return (
+    <button
+      onClick={() => onSelect(m.id)}
+      className="mb-1 w-full px-3 py-2 text-left transition-all"
+      style={{
+        background: active
+          ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-btn-primary-end), 0.04))'
+          : 'rgba(var(--tj-bg-secondary), 0.45)',
+        boxShadow: active
+          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55), 0 0 0 1px rgba(var(--tj-accent-primary), 0.06), 0 0 12px rgba(var(--tj-accent-glow), 0.04)'
+          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="text-[10px] px-1.5 py-0.5"
+          style={{
+            ...badgeStyle,
+            clipPath:
+              'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+          }}
+        >
+          {badgeLabel}
+        </span>
+        {/* 可修改性标识：✓ 可修改 / 🔒 不可修改 */}
+        <span
+          title={isModifiableModule(m) ? '可修改' : '只读不可改'}
+          className="text-[10px] px-1 py-0.5"
+          style={{
+            color: isModifiableModule(m)
+              ? 'rgba(var(--tj-sage-soft), 0.95)'
+              : 'rgba(var(--tj-text-secondary), 0.55)',
+            background: isModifiableModule(m)
+              ? 'rgba(var(--tj-sage-soft), 0.12)'
+              : 'rgba(var(--tj-bg-secondary), 0.5)',
+            boxShadow: `inset 0 0 0 1px ${
+              isModifiableModule(m)
+                ? 'rgba(var(--tj-sage-soft), 0.35)'
+                : 'rgba(var(--tj-text-secondary), 0.18)'
+            }`,
+            clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
+          }}
+        >
+          {isModifiableModule(m) ? '✓' : '🔒'}
+        </span>
+        <span
+          className="flex-1 truncate font-serif text-sm tracking-wider"
+          style={{ color: 'rgb(var(--tj-text-primary))' }}
+        >
+          {m.title}
+        </span>
+        {/* 右上角小徽章：文风互斥 */}
+        {isStyle && (
+          <span
+            className="text-[8px] font-serif tracking-[0.12em] px-1.5 py-0.5"
+            style={{
+              color: 'rgba(var(--tj-accent-secondary), 0.85)',
+              background: 'rgba(var(--tj-accent-secondary), 0.1)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.25)',
+              clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+            }}
+            title="文风模块为单选互斥：启用一个会自动关闭其他文风"
+          >
+            互斥
+          </span>
+        )}
+        {/* 滑块开关：独立模型模块禁用（不可切换） */}
+        <span
+          role="switch"
+          aria-checked={toggleDisabled || m.enabled}
+          title={toggleDisabled ? '独立模型展示模块不是真实请求开关' : m.enabled ? '已启用' : '已关闭'}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!toggleDisabled) onToggle(m.id);
+          }}
+          className="relative inline-flex h-4 w-7 flex-shrink-0 cursor-pointer items-center transition-all"
+          style={{
+            background: toggleDisabled || m.enabled
+              ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))'
+              : 'rgba(var(--tj-bg-secondary), 0.68)',
+            boxShadow: toggleDisabled || m.enabled
+              ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4)'
+              : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+            cursor: toggleDisabled ? 'not-allowed' : 'pointer',
+            opacity: toggleDisabled ? 0.6 : 1,
+          }}
+        >
+          <span
+            className="absolute top-0.5 h-3 w-3 transition-transform"
+            style={{
+              left: toggleDisabled || m.enabled ? 'calc(100% - 0.875rem)' : '0.125rem',
+              background: toggleDisabled || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
+              clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
+            }}
+          />
+        </span>
+      </div>
+      <div
+        className="mt-1 truncate text-xs"
+        style={{ color: 'rgba(var(--tj-text-secondary), 0.6)' }}
+      >
+        [<span style={{ color: `rgba(var(${CATEGORY_COLOR_VAR[m.category]}), 0.9)` }}>{PROMPT_MODULE_CATEGORY_LABELS[m.category]}</span> · order {m.order}] {m.description || '—'}
+      </div>
+    </button>
+  );
+}
+
+function EditorPanel({
+  module: m,
+  onPatch,
+  onDelete,
+}: {
+  module: 提示词模块;
+  onPatch: (p: Partial<提示词模块>) => void;
+  onDelete: () => void;
+}) {
+  const readonly = m.builtin && m.id !== 'builtin_writing_style_custom';
+  const isCalibrationModule = m.scope?.includes('calibration');
+  // 开关禁用：独立模型展示模块（非真实开关）
+  const toggleDisabled = isCalibrationModule;
+
+  // 分层信息：根据 order 区间映射 Layer
+  const layerLabel = m.order < 10 ? 'Layer 1 · 顶层' : m.order < 30 ? 'Layer 2 · 主体' : 'Layer 3 · 尾部';
+
+  // ST 导入替换关系提示
+  const isSTImport = isSTImportedModule(m);
+  const stTargetCategory = isSTImport ? getSTImportTargetCategory(m) : null;
+
+  return (
+    <div className="min-w-0 space-y-3">
+      {/* 分层标记 */}
+      <div
+        className="flex items-center gap-2 px-3 py-1.5 text-xs font-serif tracking-[0.16em]"
+        style={{
+          background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.06) 0%, transparent 100%)',
+          color: 'rgba(var(--tj-accent-primary), 0.7)',
+          clipPath:
+            'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+        }}
+      >
+        <span>{layerLabel}</span>
+        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.4)' }}>·</span>
+        <span style={{ color: `rgba(var(${CATEGORY_COLOR_VAR[m.category]}), 0.85)` }}>
+          {PROMPT_MODULE_CATEGORY_LABELS[m.category]}
+        </span>
+        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.4)' }}>·</span>
+        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.4)' }}>
+          order {m.order}
+        </span>
+        {m.builtin && (
+          <>
+            <span style={{ color: 'rgba(var(--tj-text-secondary), 0.4)' }}>·</span>
+            <span style={{ color: 'rgba(var(--tj-accent-primary), 0.45)' }}>内置</span>
+          </>
+        )}
+      </div>
+      {/* ST 导入替换关系提示条 */}
+      {isSTImport && stTargetCategory && (
+        <div
+          className="flex items-start gap-2 px-3 py-2 text-xs"
+          style={{
+            background: 'linear-gradient(90deg, rgba(var(--tj-ui-nsfw), 0.08) 0%, transparent 100%)',
+            boxShadow: 'inset 2px 0 0 rgba(var(--tj-ui-nsfw), 0.6), inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.15)',
+            clipPath:
+              'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+          }}
+        >
+          <span
+            className="font-serif tracking-[0.12em] flex-shrink-0"
+            style={{ color: 'rgba(var(--tj-ui-nsfw), 0.85)' }}
+          >
+            ◈ ST导入
+          </span>
+          <span style={{ color: 'rgba(var(--tj-text-secondary), 0.75)' }}>
+            此模块从 SillyTavern 预设导入，归类于
+            <span style={{ color: `rgba(var(${CATEGORY_COLOR_VAR[stTargetCategory]}), 0.9)`, margin: '0 0.25em' }}>
+              {PROMPT_MODULE_CATEGORY_LABELS[stTargetCategory]}
+            </span>
+            分类。启用后将替换同分类的内置模块内容；删除后该分类不再使用这个导入模块。
+          </span>
+        </div>
+      )}
+      {/* 启用开关 */}
+      <div
+        className="flex flex-col items-stretch gap-3 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+        style={{
+          background: 'rgba(var(--tj-bg-secondary), 0.45)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          clipPath:
+            'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+        }}
+      >
+        <div className="min-w-0 sm:mr-3">
+          <div
+            className="font-serif font-bold text-sm tracking-wider"
+            style={{ color: 'rgb(var(--tj-text-primary))' }}
+          >
+            {toggleDisabled ? '独立模型展示' : '启用此模块'}
+          </div>
+          <div className="text-xs mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>
+            {isCalibrationModule
+              ? '独立模型提示词展示：新闻、手机、智库、变量、剧情编织等真实请求由对应服务层共享 prompt 构建；可在“上下文”页核对实际发送内容。'
+              : isWritingStyleModule(m)
+                ? '文风模块为单选互斥：启用本模块会自动关闭其他文风模块。同一时间只能生效一个文风。'
+                : '关闭后，本模块的内容不会注入到当前作用域的 system prompt。'}
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={toggleDisabled}
+          aria-disabled={toggleDisabled}
+          title={toggleDisabled ? '独立模型展示模块不是真实请求开关' : undefined}
+          onClick={() => {
+            if (toggleDisabled) return;
+            onPatch({ enabled: !m.enabled });
+          }}
+          className="relative h-6 w-11 flex-shrink-0 transition-all"
+          style={{
+            background: toggleDisabled || m.enabled
+                  ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
+                  : 'rgba(var(--tj-bg-secondary), 0.68)',
+            boxShadow: toggleDisabled || m.enabled
+              ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
+              : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            clipPath: smallClip,
+            cursor: toggleDisabled ? 'not-allowed' : 'pointer',
+            opacity: toggleDisabled ? 0.82 : 1,
+          }}
+        >
+          <div
+            className="absolute top-0.5 h-5 w-5 transition-transform"
+            style={{
+              left: toggleDisabled || m.enabled ? 'calc(100% - 1.375rem)' : '0.125rem',
+              background: toggleDisabled || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
+              clipPath:
+                'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+            }}
+          />
+        </button>
+      </div>
+
+      {/* 标题 */}
+      <Field label={`◆ 标题${readonly ? '（内置，只读）' : ''}`}>
+        <input
+          type="text"
+          value={m.title}
+          readOnly={readonly}
+          onChange={(e) => onPatch({ title: e.target.value })}
+          className="kaituo-input w-full min-w-0 px-3 py-2 text-sm"
+          style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
+        />
+      </Field>
+
+      {/* 描述 */}
+      <Field label={`◆ 描述${readonly ? '（内置，只读）' : ''}`}>
+        <input
+          type="text"
+          value={m.description}
+          readOnly={readonly}
+          onChange={(e) => onPatch({ description: e.target.value })}
+          className="kaituo-input w-full min-w-0 px-3 py-2 text-sm"
+          style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
+        />
+      </Field>
+
+      {/* 分类 + order */}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Field label="◆ 分类">
+          <select
+            value={m.category}
+            disabled={readonly}
+            onChange={(e) =>
+              onPatch({ category: e.target.value as 提示词模块类目 })
+            }
+            className="kaituo-input w-full min-w-0 px-3 py-2 text-sm"
+            style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
+          >
+            {(Object.keys(PROMPT_MODULE_CATEGORY_LABELS) as 提示词模块类目[]).map((c) => (
+              <option key={c} value={c}>
+                {PROMPT_MODULE_CATEGORY_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="◆ 注入顺序（升序）">
+          <input
+            type="number"
+            value={m.order}
+            disabled={readonly}
+            onChange={(e) => onPatch({ order: Number(e.target.value) })}
+            className="kaituo-input w-full min-w-0 px-3 py-2 text-sm sm:w-24"
+            style={{ clipPath: smallClip, opacity: readonly ? 0.7 : 1 }}
+          />
+        </Field>
+      </div>
+      <div className="text-xs -mt-1" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+        order &lt; 30 注入到 system prompt 顶部；&ge; 30 注入到尾部。
+      </div>
+
+      {/* 注入场景（scope） */}
+      <Field label={`◆ 注入场景${readonly ? '（内置，只读）' : ''}`}>
+        <ScopeChips
+          value={m.scope?.length ? m.scope : ['all']}
+          readonly={readonly}
+          onChange={(next) => onPatch({ scope: next })}
+        />
+      </Field>
+      <div className="text-xs -mt-1" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+        {isCalibrationModule
+          ? '「独立模型」作用域用于展示独立 API / 校准模型提示词，不会进入主剧情 system prompt；真实调用以对应上下文页为准。'
+          : '勾选「任意」表示在所有场景注入；其他场景互斥于「任意」，选中具体场景将取消「任意」。'}
+      </div>
+
+      {/* 内容 */}
+      <Field label={`◆ 提示词正文${readonly ? '（内置，只读）' : ''}`}>
+        <textarea
+          value={m.content}
+          readOnly={readonly}
+          onChange={(e) => onPatch({ content: e.target.value })}
+          rows={16}
+          className="kaituo-input w-full min-w-0 resize-none px-3 py-2 font-mono text-xs"
+          style={{ clipPath: smallClip, opacity: readonly ? 0.8 : 1 }}
+        />
+      </Field>
+      <div className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+        可用占位符：<code>{'{wordCountTarget}'}</code>（最少字数）/ <code>{'{personLabel}'}</code>（叙述人称描述）。注入时按当前设置替换。
+      </div>
+
+      {/* 删除按钮（自定义模块） */}
+      {!readonly && !isBuiltinPromptModule(m.id) && m.id !== 'builtin_writing_style_custom' && (
+        <div className="pt-2" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}>
+          <button
+            onClick={() => {
+              if (confirm(`确定删除模块「${m.title}」？此操作不可撤销。`)) onDelete();
+            }}
+            className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-80"
+            style={{
+              background: 'transparent',
+              color: 'rgba(220, 100, 100, 0.85)',
+              boxShadow: 'inset 0 0 0 1px rgba(220, 100, 100, 0.4)',
+              clipPath: smallClip,
+            }}
+          >
+            ✕ 删除此模块
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label
+        className="mb-1.5 block text-xs font-serif tracking-[0.2em]"
+        style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
+      >
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const ADD_MODAL_SYSTEM_OPTIONS = [
+  { key: 'main', label: '◆ 主剧情', emoji: '🌟' },
+  ...CALIBRATION_GROUP_ORDER.map((key) => {
+    const g = CALIBRATION_SYSTEM_GROUPS[key];
+    return { key, label: `${g.emoji} ${g.label}`, emoji: g.emoji };
+  }),
+] as const;
+
+const MAIN_PLOT_CATEGORIES: 提示词模块类目[] = ['cot', 'format', 'persona', 'devmode', 'jailbreak', 'style', 'custom'];
+const CALIBRATION_CATEGORIES: 提示词模块类目[] = ['cot', 'format', 'custom'];
+
+function AddCustomModuleModal({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (systemKey: string, category: 提示词模块类目, replaceMode: 'replace' | 'coexist') => void;
+  onCancel: () => void;
+}) {
+  const [systemKey, setSystemKey] = useState<string>('main');
+  const [category, setCategory] = useState<提示词模块类目>('cot');
+  const [replaceMode, setReplaceMode] = useState<'replace' | 'coexist'>('replace');
+
+  const categories = systemKey === 'main' ? MAIN_PLOT_CATEGORIES : CALIBRATION_CATEGORIES;
+
+  const handleConfirm = () => {
+    onConfirm(systemKey, category, replaceMode);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(2px)' }}
+      onClick={onCancel}
+    >
+      <div
+        className="flex w-[360px] max-w-[90vw] flex-col gap-4 p-5"
+        style={{
+          background: 'rgb(var(--tj-bg-primary))',
+          boxShadow: '0 0 40px rgba(var(--tj-accent-primary), 0.12), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+          clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="text-sm font-serif tracking-[0.2em]"
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.9)' }}
+        >
+          + 新增自定义模块
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <div
+              className="mb-2 text-xs font-serif tracking-[0.16em]"
+              style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}
+            >
+              1 · 目标系统
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ADD_MODAL_SYSTEM_OPTIONS.map((opt) => {
+                const active = systemKey === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => {
+                      setSystemKey(opt.key);
+                      setCategory('cot');
+                    }}
+                    className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all"
+                    style={{
+                      background: active
+                        ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.88), rgba(var(--tj-btn-primary-end), 0.78))'
+                        : 'rgba(var(--tj-bg-secondary), 0.5)',
+                      color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
+                      boxShadow: active
+                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div
+              className="mb-2 text-xs font-serif tracking-[0.16em]"
+              style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}
+            >
+              2 · 模块分类
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map((cat) => {
+                const active = category === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all"
+                    style={{
+                      background: active
+                        ? `rgba(var(${CATEGORY_COLOR_VAR[cat]}), 0.8)`
+                        : 'rgba(var(--tj-bg-secondary), 0.5)',
+                      color: active ? 'rgb(var(--tj-bg-primary))' : `rgba(var(${CATEGORY_COLOR_VAR[cat]}), 0.85)`,
+                      boxShadow: active
+                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.35)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {PROMPT_MODULE_CATEGORY_LABELS[cat]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div
+              className="mb-2 text-xs font-serif tracking-[0.16em]"
+              style={{ color: 'rgba(var(--tj-accent-primary), 0.75)' }}
+            >
+              3 · 替换模式
+            </div>
+            <div className="flex gap-1.5">
+              {([
+                { key: 'replace' as const, label: '替换同分类内置', desc: '启用新模块，禁用同系统同分类内置' },
+                { key: 'coexist' as const, label: '叠加并存', desc: '新模块和内置模块独立并存' },
+              ]).map((opt) => {
+                const active = replaceMode === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setReplaceMode(opt.key)}
+                    className="flex-1 px-2.5 py-2 text-xs transition-all"
+                    style={{
+                      background: active
+                        ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.88), rgba(var(--tj-btn-primary-end), 0.78))'
+                        : 'rgba(var(--tj-bg-secondary), 0.5)',
+                      color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
+                      boxShadow: active
+                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div className="font-serif tracking-wider">{opt.label}</div>
+                    <div
+                      className="mt-0.5 text-[10px]"
+                      style={{ color: active ? 'rgba(var(--tj-bg-primary), 0.7)' : 'rgba(var(--tj-text-secondary), 0.55)' }}
+                    >
+                      {opt.desc}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-1" style={{ borderTop: '1px solid rgba(var(--tj-accent-primary), 0.15)' }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 px-3 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-80"
+            style={{
+              background: 'transparent',
+              color: 'rgba(var(--tj-text-secondary), 0.82)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+              clipPath: smallClip,
+              cursor: 'pointer',
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className="flex-1 px-3 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
+              color: 'rgb(var(--tj-on-accent))',
+              clipPath: smallClip,
+              cursor: 'pointer',
+            }}
+          >
+            确认创建
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SCOPE_OPTIONS: 提示词模块作用域[] = ['all', 'main', 'opening', 'battle', 'pathAwakening', 'calibration'];
+
+function ScopeChips({
+  value,
+  readonly,
+  onChange,
+}: {
+  value: 提示词模块作用域[];
+  readonly: boolean;
+  onChange: (next: 提示词模块作用域[]) => void;
+}) {
+  const toggle = (s: 提示词模块作用域) => {
+    if (readonly) return;
+    let next: 提示词模块作用域[];
+    if (s === 'all') {
+      next = value.includes('all') ? [] : ['all'];
+    } else if (value.includes(s)) {
+      next = value.filter((v) => v !== s);
+    } else {
+      next = [...value.filter((v) => v !== 'all'), s];
+    }
+    if (next.length === 0) next = ['all'];
+    onChange(next);
+  };
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {SCOPE_OPTIONS.map((s) => {
+        const active = value.includes(s);
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={() => toggle(s)}
+            disabled={readonly}
+            className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all"
+            style={{
+              background: active
+                ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.85), rgba(var(--tj-btn-primary-end), 0.78))'
+                : 'rgba(var(--tj-bg-secondary), 0.5)',
+              color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
+              boxShadow: active
+                ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
+                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+              clipPath:
+                'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+              opacity: readonly ? 0.7 : 1,
+              cursor: readonly ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {PROMPT_MODULE_SCOPE_LABELS[s]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

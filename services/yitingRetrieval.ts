@@ -1,10 +1,11 @@
 import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
-import type { API配置项, 记忆系统设置 } from '@/models/settings';
+import type { 记忆系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { YITING_RECALL_PROMPT as YITING_LEGACY_RECALL_PROMPT } from '@/prompts/cot/yitingCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
 
 export interface 忆庭召回结果 {
   entries: 回忆条目[];
@@ -50,7 +51,6 @@ export async function retrieveYitingContextWithModel(
   query: string,
   limit: number,
   settings: 记忆系统设置,
-  mainConfig: API配置项,
   signal?: AbortSignal,
   retryCount = 2,
   promptModules?: 提示词模块[],
@@ -59,14 +59,13 @@ export async function retrieveYitingContextWithModel(
     return { entries: [], injection: '', usedModel: false };
   }
 
-  const fallback = retrieveYitingContext(system, query, limit);
-  const api = resolveYitingRecallConfig(mainConfig, settings);
-  if (!api.baseUrl || !api.apiKey || !api.model) {
-    return fallback;
-  }
+  const api = requireIndependentApiConfig('忆庭召回', settings.忆庭召回API, {
+    maxTokens: 512,
+    temperature: 0.15,
+  });
 
   const candidates = buildRecallCandidates(system, query, 24, 6);
-  if (!candidates.length) return fallback;
+  if (!candidates.length) return { entries: [], injection: '', usedModel: true };
 
   const candidateText = candidates
     .map((candidate, index) => {
@@ -91,8 +90,7 @@ export async function retrieveYitingContextWithModel(
     candidateText,
   ].join('\n');
 
-  try {
-    const rawText = await withRetries(
+  const rawText = await withRetries(
       () =>
         chatCompletionNonStream(api, {
           messages: [{ role: 'user', content: userPrompt }],
@@ -102,29 +100,18 @@ export async function retrieveYitingContextWithModel(
           temperature: api.temperature ?? 0.15,
         }),
       { retries: retryCount, signal, label: '忆庭召回' },
-    );
-    const picked = parseRecallIndexes(rawText, candidates, limit);
-    if (!picked.strongEntries.length && !picked.weakEntries.length) {
-      return {
-        ...fallback,
-        usedModel: true,
-        rawText,
-        previewText: `${picked.previewText}\n（模型未命中，已使用本地预筛回退）`,
-      };
-    }
-    const entries = [...picked.strongEntries, ...picked.weakEntries];
-    return {
-      entries,
-      strongEntries: picked.strongEntries,
-      weakEntries: picked.weakEntries,
-      injection: buildYitingInjection(picked.strongEntries, picked.weakEntries),
-      usedModel: true,
-      rawText,
-      previewText: picked.previewText,
-    };
-  } catch {
-    return fallback;
-  }
+  );
+  const picked = parseRecallIndexes(rawText, candidates, limit);
+  const entries = [...picked.strongEntries, ...picked.weakEntries];
+  return {
+    entries,
+    strongEntries: picked.strongEntries,
+    weakEntries: picked.weakEntries,
+    injection: buildYitingInjection(picked.strongEntries, picked.weakEntries),
+    usedModel: true,
+    rawText,
+    previewText: picked.previewText,
+  };
 }
 
 export function buildYitingRecallSystemPrompt(promptModules?: 提示词模块[]): string {
@@ -136,34 +123,6 @@ export function buildYitingRecallSystemPrompt(promptModules?: 提示词模块[])
 function buildYitingRecallPromptModulesSection(promptModules?: 提示词模块[]): string {
   if (!promptModules || promptModules.length === 0) return '';
   return buildIndependentPromptModulesSection(promptModules, 'yitingRecall');
-}
-
-function buildRecallSystemPrompt(customPrompt: string): string {
-  const fallback = [
-    '你是“剧情回忆检索器”。',
-    '任务：根据玩家输入，在给定回忆库中向前检索最相关的回忆，区分强回忆与弱回忆。',
-    '- 强回忆：与当前输入高度相关，且需要保留原文细节。',
-    '- 弱回忆：存在关联，但用概括即可。',
-    '- 必须优先选择时间最近且语义最相关的回忆。',
-    '- 优先匹配：人物、地点、目标、未结事项、冲突对象、承诺、伤势、物品、判定结果。',
-    '- 强回忆数量不设固定 1-2 条上限；只要多条回忆都直接影响当前输入的理解、承接、人物判断或结果处置，就应一并列入强回忆。',
-    '- 不要为了精简而漏掉当前仍在生效的关键前因、承诺、旧伤、旧账、未结事项、上一轮明确结论或直接决定当前态度的互动证据。',
-  ].join('\n');
-  return customPrompt?.trim() || fallback;
-}
-
-function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系统设置): API配置项 {
-  const override = settings.忆庭召回API;
-  return {
-    ...mainConfig,
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: override.maxTokens ?? mainConfig.maxTokens,
-    temperature: override.temperature ?? mainConfig.temperature,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-  };
 }
 
 function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6): 剧情回忆候选[] {

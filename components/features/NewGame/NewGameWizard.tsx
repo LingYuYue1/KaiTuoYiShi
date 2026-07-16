@@ -1,10 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
 import type { 命途阶段, 命途进度 } from '@/models/path';
 import type { 世界状态 } from '@/models/world';
-import { 创建默认开局档案, 创建空世界状态, 根据官方开局预设创建开局档案, 根据开局档案创建初始NPC记录, 根据起始场景创建开局档案, 根据自由开局整理创建开局档案, 生成开局已成立事实 } from '@/models/world';
+import { 创建空世界状态, 根据官方开局预设创建开局档案, 根据开局档案创建初始NPC记录, 根据起始场景创建开局档案, 根据自由开局整理创建开局档案, 生成开局已成立事实 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
 import type { API配置项, 主题预设 } from '@/models/settings';
 import type {
@@ -44,10 +44,9 @@ import {
   type 战技记录,
   type 战技槽位摘要,
 } from '@/models/skill';
-import { getPreference, setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import { getPreference, setPreference } from '@/src/adaptations/preferences';
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
-import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
-import { generateSkillDraft } from '@/services/ai/skillGenerator';
+import { getAdaptationServices } from '@/src/adaptations';
 
 interface NewGameWizardProps {
   onStart: (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords?: NPC记录[]) => void | Promise<void>;
@@ -795,7 +794,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
         背包: [],
         战技列表: openingSkills.map((skill) => 归一化战技记录(skill)),
       };
-      const generated = await generateSkillDraft(openingArchiveApiConfig, {
+      const generated = await (await getAdaptationServices()).skillGenerator.generateSkillDraft(openingArchiveApiConfig, {
         traveler,
         slotKind: openingSelectedSlot.kind,
         slotIndex: openingSelectedSlot.slotIndex,
@@ -845,7 +844,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   const persistOpeningPresets = async (nextPresets: OpeningPlayerPreset[]) => {
     const normalized = normalizeOpeningPresets(nextPresets);
     setOpeningPresets(normalized);
-    await setPreferenceAsync(OPENING_PLAYER_PRESETS_KEY, normalized);
+    await setPreference(OPENING_PLAYER_PRESETS_KEY, normalized);
   };
 
   const applyOpeningPreset = (presetId: string) => {
@@ -1040,34 +1039,29 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
           mainlineEnabled: effectiveFreeMainlineEnabled,
           keyNpcs: scenarioPreset?.keyNpcs ?? scenarioBundle.preset?.keyNpcs ?? selectedScenarioDef?.openingHighlights ?? [],
         };
-        let parsedArchive;
-        if (openingArchiveApiConfig) {
-          setOpeningArchiveStatus('正在整理开局档案...');
-          try {
-            parsedArchive = await parseOpeningArchiveWithAI(
-              openingArchiveApiConfig,
-              {
-                regionName: freeOpeningInput.regionName,
-                chapterName: freeOpeningInput.chapterName,
-                chapterSummary: freeOpeningInput.chapterSummary,
-                playerText: freeOpeningInput.playerText,
-                defaultLocationHint: freeOpeningInput.defaultLocationHint,
-                defaultDateHint: freeOpeningInput.defaultDateHint,
-                defaultTimeHint: freeOpeningInput.defaultTimeHint,
-                priorStoryState: freeOpeningInput.priorStoryState,
-                planetSource: freeOpeningInput.planetSource,
-                mainlineEnabled: freeOpeningInput.mainlineEnabled,
-                keyNpcs: freeOpeningInput.keyNpcs,
-                sourceLabel: openingSource === 'workshop' ? '创意工坊开局' : '自由开局',
-              },
-              openingArchiveApiConfig.retryCount ?? 2,
-            );
-            setOpeningArchiveStatus('开局档案已整理。');
-          } catch (err) {
-            console.warn('[opening-archive] AI 开局整理失败，改用本地整理兜底:', err);
-            setOpeningArchiveStatus('开局整理失败，已改用本地兜底。');
-          }
+        if (!openingArchiveApiConfig) {
+          throw new Error('自由开局要求配置可用的开局档案 API');
         }
+        setOpeningArchiveStatus('正在整理开局档案...');
+        const parsedArchive = await (await getAdaptationServices()).openingArchive.parseOpeningArchiveWithAI(
+          openingArchiveApiConfig,
+          {
+            regionName: freeOpeningInput.regionName,
+            chapterName: freeOpeningInput.chapterName,
+            chapterSummary: freeOpeningInput.chapterSummary,
+            playerText: freeOpeningInput.playerText,
+            defaultLocationHint: freeOpeningInput.defaultLocationHint,
+            defaultDateHint: freeOpeningInput.defaultDateHint,
+            defaultTimeHint: freeOpeningInput.defaultTimeHint,
+            priorStoryState: freeOpeningInput.priorStoryState,
+            planetSource: freeOpeningInput.planetSource,
+            mainlineEnabled: freeOpeningInput.mainlineEnabled,
+            keyNpcs: freeOpeningInput.keyNpcs,
+            sourceLabel: openingSource === 'workshop' ? '创意工坊开局' : '自由开局',
+          },
+          openingArchiveApiConfig.retryCount ?? 2,
+        );
+        setOpeningArchiveStatus('开局档案已整理。');
         worldState.开局档案 = 根据自由开局整理创建开局档案({
           ...freeOpeningInput,
           整理档案: parsedArchive,
@@ -2148,61 +2142,6 @@ function SectionTitle({ title, subtitle, compact = false }: { title: string; sub
       >
         {title}
       </h3>
-    </div>
-  );
-}
-
-function WorldStep({
-  storyMode,
-  onStoryMode,
-  onNext,
-}: {
-  storyMode: 剧情模式;
-  onStoryMode: (mode: 剧情模式) => void;
-  onNext: () => void;
-}) {
-  return (
-    <div>
-      <SectionTitle title="世界设定" subtitle="决定故事张力与叙述基调" />
-
-      <div>
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-            剧情模式
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {storyModes.map((item) => {
-              const active = storyMode === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onStoryMode(item.id)}
-                  className="w-full p-4 text-left transition-transform hover:-translate-y-0.5"
-                  style={{
-                    background: active
-                      ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.10), rgba(var(--tj-btn-primary-end), 0.04))'
-                      : 'rgba(var(--tj-panel-bg-end),0.58)',
-                    boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.5), 0 0 14px rgba(var(--tj-btn-primary-start), 0.12)'
-                      : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                    clipPath: tightClip,
-                  }}
-                >
-                  <div
-                    className="font-serif text-base font-bold tracking-[0.14em]"
-                    style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.92)' }}
-                  >
-                    {item.name}
-                  </div>
-                  <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
-                    {item.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-      </div>
-
-      <StepNav onNext={onNext} nextLabel="继续：填写角色" />
     </div>
   );
 }
@@ -4820,11 +4759,4 @@ function mergeBirthday(month: string, day: string): string {
   if (m && d) return `${m}月${d}日`;
   if (m) return `${m}月`;
   return `${d}日`;
-}
-
-function splitLines(value: string): string[] {
-  return value
-    .split(/\n|；|;/g)
-    .map((item) => item.replace(/^[-*]\s*/, '').trim())
-    .filter(Boolean);
 }

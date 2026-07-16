@@ -14,7 +14,6 @@ import { CANONICAL_CHARACTERS } from '@/data/canonicalCharacters';
 import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT as VAR_LEGACY_COMPANION_ARCHIVE } from '@/data/companionArchiveWorldbook';
 import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT as VAR_LEGACY_WORLDBOOK_PROMPT, NSFW_ARCHIVE_SEPARATION_RULE } from '@/data/variableWorldbook';
 import { VARIABLE_COT_PROMPT as VAR_LEGACY_COT_PROMPT } from '@/prompts/cot/variableCot';
-import { VARIABLE_OUTPUT_FORMAT_PROMPT as VAR_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import { 获取地点可用天气, 天气列表, 天气名映射 } from '@/data/weatherRules';

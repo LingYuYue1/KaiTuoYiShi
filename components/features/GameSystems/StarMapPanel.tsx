@@ -5,10 +5,10 @@ import { 读取NPC头像, type NPC记录 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { 剧情节点 } from '@/models/plot';
 import type { StarMapLocation, StarMapLocationKind, StarMapNavigationMode, StarMapSceneAnchor, StarMapSource, StarMapWaypoint, StarMapWaypointKind } from '@/models/starMap';
-import { STAR_MAP_MAX_LOCATION_DEPTH, canStarMapLocationAcceptPlayerChildren, findCurrentStarMapLocation, getStarMapLocationPath, normalizeStarMapLocationText } from '@/models/starMap';
+import { STAR_MAP_MAX_LOCATION_DEPTH, canStarMapLocationAcceptPlayerChildren, findCurrentStarMapLocation, getStarMapLocationPath } from '@/models/starMap';
 import type { 游戏设置, 星轨航图地图包记录, 星轨航图系统设置 } from '@/models/settings';
 import { STAR_MAP_LOCATIONS, STAR_MAP_WAYPOINTS } from '@/data/starMapPresets';
-import { setPreference } from '@/src/ui/preferences';
+import { setPreference } from '@/src/adaptations/preferences';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface StarMapPanelProps {
@@ -344,10 +344,10 @@ export function StarMapPanel({ worldState, npcRecords, album, plotNodes, gameSet
     setInteriorRootLocationId(navigation.interiorRootLocationId);
   }, [currentLocationText]);
 
-  const selectedWaypoint = allWaypoints.find((item) => item.id === selectedWaypointId) ?? allWaypoints[0];
+  const selectedWaypoint = allWaypoints.find((item) => item.id === selectedWaypointId);
+  if (!selectedWaypoint) throw new Error(`Unknown star-map waypoint: ${selectedWaypointId}`);
   const selectedLocations = useMemo(() => allLocations.filter((location) => location.waypointId === selectedWaypoint.id), [allLocations, selectedWaypoint.id]);
-  const currentLocationInSelectedWaypoint = currentMatch?.waypoint.id === selectedWaypoint.id ? currentMatch.location : null;
-  const selectedLocation = selectedLocations.find((item) => item.id === selectedLocationId) ?? currentLocationInSelectedWaypoint ?? selectedLocations[0] ?? null;
+  const selectedLocation = selectedLocations.find((item) => item.id === selectedLocationId) ?? null;
   const selectedLocationParent = selectedLocation?.parentId
     ? selectedLocations.find((item) => item.id === selectedLocation.parentId) ?? null
     : null;
@@ -367,8 +367,7 @@ export function StarMapPanel({ worldState, npcRecords, album, plotNodes, gameSet
 
   const openWaypoint = (waypoint: StarMapWaypoint) => {
     setSelectedWaypointId(waypoint.id);
-    const locations = allLocations.filter((location) => location.waypointId === waypoint.id);
-    setSelectedLocationId(currentMatch?.waypoint.id === waypoint.id ? currentMatch.location.id : locations[0]?.id ?? null);
+    setSelectedLocationId(currentMatch?.waypoint.id === waypoint.id ? currentMatch.location.id : null);
     setSelectedSceneAnchorId(currentMatch?.waypoint.id === waypoint.id ? currentMatch.anchor?.id ?? null : null);
   };
 
@@ -674,7 +673,7 @@ export function StarMapPanel({ worldState, npcRecords, album, plotNodes, gameSet
                 setLocalRootLocationId(rootLocation.id);
                 setInteriorRootLocationId(null);
                 setSelectedLocationId(rootLocation.id);
-                setSelectedSceneAnchorId(rootLocation.sceneAnchors?.[0]?.id ?? null);
+                setSelectedSceneAnchorId(null);
                 setView('local');
               }}
               onSelectLocation={(location) => setSelectedLocationId(location.id)}
@@ -707,7 +706,7 @@ export function StarMapPanel({ worldState, npcRecords, album, plotNodes, gameSet
               onEnterInteriorMap={(location) => {
                 setInteriorRootLocationId(location.id);
                 setSelectedLocationId(location.id);
-                setSelectedSceneAnchorId(location.sceneAnchors?.[0]?.id ?? null);
+                setSelectedSceneAnchorId(null);
                 setView('interior');
               }}
               onSelectLocation={(location) => setSelectedLocationId(location.id)}
@@ -1767,17 +1766,12 @@ function LocalMap({
   const isTerminalMap = rootLocation?.navigationMode === 'terminal';
   const rootSceneAnchors = rootLocation?.sceneAnchors ?? [];
   const selectedSceneAnchor = rootSceneAnchors.find((anchor) => anchor.id === selectedAnchorId)
-    ?? (currentMatch?.location.id === rootLocation?.id ? currentMatch?.anchor : undefined)
-    ?? rootSceneAnchors[0]
     ?? null;
-  const defaultLocalLocation = rootLocation?.id === 'herta_master_control'
-    ? localLocations.find((location) => location.id === 'herta_master_core_passage') ?? localLocations[0] ?? null
-    : localLocations[0] ?? null;
   const selectedLocalLocation = isTerminalMap
     ? rootLocation
     : selectedLocation && rootLocation && selectedLocation.parentId === rootLocation.id
       ? selectedLocation
-      : defaultLocalLocation;
+      : null;
   const canEnterInterior = Boolean(
     !isTerminalMap
     && selectedLocalLocation
@@ -1785,7 +1779,6 @@ function LocalMap({
     && selectedLocalLocation.status !== 'locked',
   );
   const isTrainLocalMap = waypoint.kind === 'train';
-  const fallbackCompanionNpcs = npcRecords.filter((npc) => npc.同行 && !npc.locationId).slice(0, 6);
 
   return (
     <div className="grid h-full min-h-0 w-full gap-3 overflow-y-auto lg:overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(340px,0.34fr)] xl:grid-cols-[minmax(0,1fr)_minmax(390px,0.36fr)]">
@@ -1867,15 +1860,9 @@ function LocalMap({
             {localLocations.length > 0 ? (
               <div className="mt-4 grid min-h-0 flex-1 auto-rows-[minmax(154px,1fr)] grid-cols-1 gap-3 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-3">
                 {localLocations.map((location, index) => {
-                  const current = currentPathIds.has(location.id)
-                    || (currentMatch?.location.id === rootLocation?.id && location.id === defaultLocalLocation?.id);
-                  const relatedPlots = findLocationPlotNodes(location, rootLocation, plotNodes, location.id === defaultLocalLocation?.id);
-                  const locatedNpcs = findLocationNpcRecords(location.id, npcRecords);
-                  const cardNpcs = locatedNpcs.length > 0
-                    ? locatedNpcs
-                    : current
-                      ? fallbackCompanionNpcs
-                      : [];
+                  const current = currentPathIds.has(location.id);
+                  const relatedPlots = findLocationPlotNodes(location, plotNodes);
+                  const cardNpcs = findLocationNpcRecords(location.id, npcRecords);
                   return (
                     <LocationArchiveCard
                       key={location.id}
@@ -1980,8 +1967,8 @@ function LocalMap({
           <div className="grid gap-2 text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
             <div>当前位置：{rootLocation?.name ?? waypoint.name}</div>
             <div>出口：返回{waypoint.name}区域图</div>
-            <div>NPC：优先显示明确地点；未标注位置的同行角色跟随玩家当前地点。</div>
-            <div>剧情：优先使用地点 ID；旧节点继续使用名称与别名匹配。</div>
+            <div>NPC：只显示明确绑定当前地点 ID 的角色。</div>
+            <div>剧情：只显示明确绑定当前地点 ID 的节点。</div>
           </div>
         </InfoPanel>
       </aside>
@@ -1991,24 +1978,11 @@ function LocalMap({
 
 function findLocationPlotNodes(
   location: StarMapLocation,
-  rootLocation: StarMapLocation | null,
   plotNodes: 剧情节点[],
-  includeRootFallback: boolean,
 ): 剧情节点[] {
-  const locationKeys = [location.name, ...location.aliases]
-    .map(normalizeStarMapLocationText)
-    .filter((key) => key.length >= 2);
-  const rootKeys = includeRootFallback && rootLocation
-    ? [rootLocation.name, ...rootLocation.aliases].map(normalizeStarMapLocationText).filter((key) => key.length >= 2)
-    : [];
-
   return plotNodes
     .filter((plot) => plot.状态 === 'active' || plot.状态 === 'pending')
-    .filter((plot) => {
-      if (plot.locationId) return plot.locationId === location.id || (includeRootFallback && plot.locationId === rootLocation?.id);
-      const text = normalizeStarMapLocationText([plot.标题, plot.摘要, plot.AI引导 ?? ''].join(' '));
-      return locationKeys.some((key) => text.includes(key)) || rootKeys.some((key) => text.includes(key));
-    })
+    .filter((plot) => plot.locationId === location.id)
     .sort((left, right) => Number(right.状态 === 'active') - Number(left.状态 === 'active'))
     .slice(0, 2);
 }
@@ -2147,8 +2121,6 @@ function InteriorMap({
     [rootLocation],
   );
   const selectedInteriorAnchor = interiorAnchors.find((anchor) => anchor.id === selectedAnchorId)
-    ?? (currentMatch?.location.id === rootLocation?.id ? currentMatch?.anchor : undefined)
-    ?? interiorAnchors[0]
     ?? null;
   const parentLocation = rootLocation?.parentId
     ? locations.find((location) => location.id === rootLocation.parentId) ?? null
@@ -2874,7 +2846,6 @@ function PartyCarLocalBackdrop() {
 }
 
 function ConductorRoomLocalBackdrop() {
-  const frame = 'polygon(4% 0, 96% 0, 100% 10%, 100% 90%, 96% 100%, 4% 100%, 0 90%, 0 10%)';
   return (
     <LocalBackdropShell>
       <div className="absolute left-[8%] right-[8%] top-[24%] h-[55%] bg-[rgba(42,45,44,0.8)]" style={{ clipPath: 'polygon(0 0, 45% 0, 45% 18%, 100% 18%, 100% 100%, 0 100%)' }} />

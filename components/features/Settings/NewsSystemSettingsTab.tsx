@@ -1,13 +1,12 @@
 ﻿import type { ReactNode } from 'react';
 import { useState } from 'react';
-import type { AI提供商, API设置, 游戏设置, 新闻API覆盖 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { AI提供商, 游戏设置 } from '@/models/settings';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
-  apiSettings: API设置;
 }
 
 const smallClip =
@@ -28,9 +27,8 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'gemini', label: 'Gemini' },
 ];
 
-export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function NewsSystemSettingsTab({ settings, onChange }: Props) {
   const news = settings.新闻系统;
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null;
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [fetchMessage, setFetchMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
@@ -56,10 +54,10 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
   };
 
   const effectiveApi = {
-    provider: news.api.provider || mainConfig?.provider || 'openai_compatible',
-    baseUrl: news.api.baseUrl.trim() || mainConfig?.baseUrl || '',
-    apiKey: news.api.apiKey.trim() || mainConfig?.apiKey || '',
-    model: news.api.model.trim() || mainConfig?.model || '',
+    provider: news.api.provider || 'openai_compatible',
+    baseUrl: news.api.baseUrl.trim(),
+    apiKey: news.api.apiKey.trim(),
+    model: news.api.model.trim(),
     enableClaudeMode: settings.enableClaudeMode === true,
   };
 
@@ -67,9 +65,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
     if (!effectiveApi.baseUrl || !effectiveApi.apiKey) {
       setFetchMessage({
         kind: 'error',
-        text: mainConfig
-          ? '新闻系统当前为空，将自动回退主 API。若主 API 也未配置，请先到「API 接口」补全。'
-          : '请先填写新闻系统的 Base URL 和 API Key，或先配置主 API。',
+        text: '请先补全新闻系统独立 API 的 Base URL 和 API Key。',
       });
       return;
     }
@@ -84,11 +80,11 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
         apiKey: effectiveApi.apiKey,
         model: effectiveApi.model,
         enableClaudeMode: effectiveApi.enableClaudeMode,
-        retryCount: news.api.retryCount ?? mainConfig?.retryCount ?? 2,
+        retryCount: news.api.retryCount ?? 2,
         createdAt: 0,
         updatedAt: 0,
       };
-      const list = await fetchModels(tempConfig);
+      const list = await (await getAdaptationServices()).apiTools.fetchModels(tempConfig);
       setModelOptions(list);
       setFetchMessage({ kind: 'info', text: '获取到 ' + list.length + ' 个模型' });
     } catch (err) {
@@ -103,7 +99,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await setPreferenceAsync('gameSettings', settings);
+      await setPreference('gameSettings', settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '星际和平周报设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -212,7 +208,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
           <input
             value={news.api.baseUrl}
             onChange={(e) => patch({ api: { baseUrl: e.target.value } })}
-            placeholder={mainConfig?.baseUrl ? '留空则使用主 API：' + mainConfig.baseUrl : 'https://...'}
+            placeholder="https://..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -223,7 +219,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
             type="password"
             value={news.api.apiKey}
             onChange={(e) => patch({ api: { apiKey: e.target.value } })}
-            placeholder={mainConfig?.apiKey ? '留空则使用主 API 的 Key' : 'sk-...'}
+            placeholder="sk-..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -234,7 +230,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
             <input
               value={news.api.model}
               onChange={(e) => patch({ api: { model: e.target.value } })}
-              placeholder={mainConfig?.model ? '留空则使用主 API：' + mainConfig.model : '模型 ID'}
+              placeholder="模型 ID"
               className="kaituo-input flex-1 px-2.5 py-2 text-sm font-mono"
               style={{ clipPath: smallClip }}
             />
@@ -294,7 +290,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
         </Field>
 
         <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-          这套配置不会回退到变量系统，也不会借用变量系统的 API 覆盖。留空时，新闻系统会直接跳过生成。
+          新闻系统只使用这套独立配置；启用自动生成后，连接字段缺失会直接终止当前回合。
         </div>
       </div>
 

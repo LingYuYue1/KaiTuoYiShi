@@ -1,6 +1,7 @@
-import type { API配置项, 记忆系统设置, 忆庭API覆盖 } from '@/models/settings';
+import type { 记忆系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
+import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
 
 export type MemoryCompressionKind = 'short' | 'middle' | 'long';
 
@@ -13,35 +14,18 @@ export interface MemoryCompressionSource {
 
 export interface MemoryCompressionResult {
   summary: string;
-  usedFallback: boolean;
-}
-
-export function resolveMemoryCompressionConfig(mainConfig: API配置项, override: 忆庭API覆盖): API配置项 {
-  return {
-    ...mainConfig,
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: override.maxTokens ?? mainConfig.maxTokens,
-    temperature: override.temperature ?? mainConfig.temperature,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-  };
 }
 
 export async function summarizeMemoryBatch(
   source: MemoryCompressionSource,
   settings: 记忆系统设置,
-  mainConfig: API配置项,
   signal?: AbortSignal,
   retryCount = 2,
 ): Promise<MemoryCompressionResult> {
-  const fallback = buildFallbackSummary(source.items, source.turn, source.kind);
-  const api = resolveMemoryCompressionConfig(mainConfig, settings.记忆总结API);
-
-  if (!api.baseUrl || !api.apiKey || !api.model) {
-    return { summary: fallback, usedFallback: true };
-  }
+  const api = requireIndependentApiConfig('记忆总结', settings.记忆总结API, {
+    maxTokens: 1024,
+    temperature: 0.2,
+  });
 
   const systemPrompt = [
     source.prompt.trim(),
@@ -62,46 +46,26 @@ export async function summarizeMemoryBatch(
     source.items.map((item, index) => `${index + 1}. ${item}`).join('\n'),
   ].join('\n');
 
-  try {
-    const raw = await withRetries(
-      () =>
-        chatCompletionNonStream(api, {
-          messages: [{ role: 'user', content: userPrompt }],
-          systemPrompt,
-          signal,
-          maxTokens: api.maxTokens ?? 1024,
-          temperature: api.temperature ?? 0.2,
-        }),
-      {
-        retries: retryCount,
+  const raw = await withRetries(
+    () =>
+      chatCompletionNonStream(api, {
+        messages: [{ role: 'user', content: userPrompt }],
+        systemPrompt,
         signal,
-        label: source.kind === 'short' ? '即时记忆压缩' : source.kind === 'middle' ? '中期记忆压缩' : '长期记忆压缩',
-      },
-    );
-    const summary = normalizeSummaryOutput(raw);
-    return {
-      summary: summary || fallback,
-      usedFallback: !summary,
-    };
-  } catch {
-    return { summary: fallback, usedFallback: true };
+        maxTokens: api.maxTokens ?? 1024,
+        temperature: api.temperature ?? 0.2,
+      }),
+    {
+      retries: retryCount,
+      signal,
+      label: source.kind === 'short' ? '即时记忆压缩' : source.kind === 'middle' ? '中期记忆压缩' : '长期记忆压缩',
+    },
+  );
+  const summary = normalizeSummaryOutput(raw);
+  if (!summary) {
+    throw new Error('记忆总结模型返回空内容');
   }
-}
-
-function buildFallbackSummary(items: string[], turn: number, kind: MemoryCompressionKind): string {
-  const title = kind === 'short' ? '即时转短期' : kind === 'middle' ? '短期转中期' : '中期转长期';
-  const maxLines = kind === 'short' ? 6 : 8;
-  const lines = dedupeLines(
-    items
-      .map((item) => normalizeLine(item, kind === 'short' ? 96 : 120))
-      .filter(Boolean),
-  ).slice(0, maxLines);
-
-  if (!lines.length) {
-    return `【${title}·回合${turn}】\n- 空白`;
-  }
-
-  return [`【${title}·回合${turn}】`, ...lines.map((line) => (line.startsWith('- ') ? line : `- ${line}`))].join('\n');
+  return { summary };
 }
 
 function getCompressionLabel(kind: MemoryCompressionKind): string {
@@ -120,15 +84,6 @@ function normalizeSummaryOutput(raw: string): string {
     .map((line) => (line.startsWith('- ') ? line : `- ${line}`));
 
   return dedupeLines(lines).slice(0, 8).join('\n');
-}
-
-function normalizeLine(text: string, limit: number): string {
-  const cleaned = String(text || '')
-    .replace(/\s+/g, ' ')
-    .replace(/^[\d一二三四五六七八九十]+\s*[.、)]\s*/, '')
-    .trim();
-  if (!cleaned) return '';
-  return cleaned.length > limit ? `${cleaned.slice(0, limit)}…` : cleaned;
 }
 
 function dedupeLines(lines: string[]): string[] {

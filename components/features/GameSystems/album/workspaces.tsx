@@ -1,61 +1,39 @@
-﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+﻿import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { 读取图片参考目标 } from '@/models/imageGeneration';
+import { 读取图片参考目标, 归一化相册系统 } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
-import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
-import type { 手机系统 } from '@/models/phone';
+import type { PNG画风预设来源, 文生图规则中心设置 } from '@/models/settings';
 import type { NPC记录, NPC头像槽位, NPC角色锚点档案 } from '@/models/npc';
-import { 读取NPC头像 } from '@/models/npc';
-import { setPreference } from '@/src/ui/preferences';
 import {
-  添加图片到相册,
-  创建相册图片条目,
-  创建相册资源引用,
-  fileToDataUrl,
-  挂载NPC头像图片,
-  挂载NPC立绘图片,
-  挂载NPC_NSFW部位图片,
-  挂载旅人图片,
-  卸载NPC头像图片,
-  卸载NPC立绘图片,
-  卸载NPC_NSFW部位图片,
-  卸载旅人图片,
-  读取相册条目地址,
   解析相册资源引用,
   解析相册资源地址,
 } from '@/utils/albumActions';
 import {
   revokeAlbumAssets,
 } from '@/utils/albumObjectUrl';
-import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
-import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
-import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
-import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
-import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
-import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
-import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
 import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
 import { matchCanonical } from '@/data/canonicalCharacters';
 
 import {
-  cardClip, smallClip, albumGridLayer, albumGridSize, heroSurface, panelSurface, insetSurface,
-  imageWellSurface, titleColor, bodyColor, mutedColor, faintColor, activeTextColor, accentColor,
-  nsfwColor, activeAccentSurface, quietAccentSurface, cardSurface, heroGridBackgroundStyle,
+  cardClip, smallClip, heroSurface, panelSurface, insetSurface,
+  imageWellSurface, titleColor,
+  activeAccentSurface, cardSurface, heroGridBackgroundStyle,
   tabs, generateTargets, navGroups, groupForTab,
 } from './foundation';
 import type { ReferenceInjectionStatus } from './referenceInjection';
 import type {
-  WorkTab, GenerateTarget, NsfwPartImageSlot, LibraryStatusFilter, PromptMeta, StorySnapshotSource,
+  WorkTab, GenerateTarget, PromptMeta, StorySnapshotSource,
   AnchorSelection, SceneLibraryFilter, GenerationHistoryFilter, StorySnapshotSummary,
-  SceneImageSummary, StorySnapshotSourceOption, GenerateOverride, NavGroupId,
+  SceneImageSummary, StorySnapshotSourceOption,
 } from './foundation';
 
 export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab; setActiveTab: (tab: WorkTab) => void }) {
   const activeGroupId = groupForTab(activeTab);
-  const activeGroup = navGroups.find((group) => group.id === activeGroupId) ?? navGroups[0];
+  const activeGroup = navGroups.find((group) => group.id === activeGroupId);
+  if (!activeGroup) throw new Error(`Unknown album workspace group: ${activeGroupId}`);
   const subTabs = activeGroup.members
     .map((id) => tabs.find((tab) => tab.id === id))
     .filter((tab): tab is typeof tabs[number] => Boolean(tab));
@@ -137,29 +115,6 @@ export function NsfwVisibilityToggle({
   );
 }
 
-function CharacterArchiveButton({ record, active, onClick }: { record: CharacterLibraryRecord; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full min-w-0 px-3 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-btn-primary-start),0.07)]"
-      style={{
-        background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.16), rgba(var(--tj-btn-primary-start),0.04))' : 'rgba(var(--tj-ui-panel-strong),0.36)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="min-w-0">
-        <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{record.name}</div>
-        <div className="mt-1 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>
-          <span>已装 {record.mountedCount}</span>
-          <span>资源 {record.resourceCount}</span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export function CharacterAnchorWorkspace({
   traveler,
   travelerRequirement,
@@ -168,10 +123,8 @@ export function CharacterAnchorWorkspace({
   onDeleteTravelerAnchor,
   onExtractTravelerAnchor,
   records,
-  activeRecord,
   activeSelection,
   anchorExtractingTarget,
-  setAnchorExtractingTarget,
   anchorBatchExtracting,
   setAnchorBatchExtracting,
   onSelectAnchor,
@@ -188,10 +141,8 @@ export function CharacterAnchorWorkspace({
   onDeleteTravelerAnchor: () => void;
   onExtractTravelerAnchor: (requirement: string) => Promise<void>;
   records: NpcLibraryRecord[];
-  activeRecord: NpcLibraryRecord | null;
   activeSelection: AnchorSelection;
   anchorExtractingTarget: AnchorSelection | null;
-  setAnchorExtractingTarget: React.Dispatch<React.SetStateAction<AnchorSelection | null>>;
   anchorBatchExtracting: boolean;
   setAnchorBatchExtracting: React.Dispatch<React.SetStateAction<boolean>>;
   onSelectAnchor: (selection: AnchorSelection) => void;
@@ -208,7 +159,7 @@ export function CharacterAnchorWorkspace({
   const travelerHasAnchor = Boolean(travelerAnchor?.正面提示词 || travelerAnchor?.负面提示词);
   const activeNpcRecord = activeSelection === 'traveler'
     ? null
-    : records.find((record) => record.npc.id === activeSelection) ?? activeRecord;
+    : records.find((record) => record.npc.id === activeSelection) ?? null;
   const batchMissingCount = records.filter((record) => !(record.npc.图像档案?.角色锚点?.正面提示词 || record.npc.图像档案?.角色锚点?.负面提示词)).length + (travelerHasAnchor ? 0 : 1);
   const handleBatchExtract = () => {
     setAnchorBatchExtracting(true);
@@ -658,17 +609,17 @@ export function CreateWorkspace(props: {
   promptMeta: PromptMeta | null;
   canvasTask?: 图片生成任务;
   canvasSrc: string;
-  onRetryTask: (task?: 图片生成任务) => void;
+  onRetryTask: (task: 图片生成任务) => void;
   onOpenGallery: () => void;
   onSetResultReference: () => void;
-  onMountResultToSlot: () => void;
+  onShowResultInSlot: () => void;
   resultIsReference: boolean;
   referenceStatus: ReferenceInjectionStatus;
 }) {
   const activePromptMeta = props.canvasTask
     ? {
         anchorMode: props.canvasTask.anchorMode === true,
-        anchorSummary: props.canvasTask.anchorSummary || (props.canvasTask.anchorMode ? '角色锚点已参与本次生成' : '本次生成按档案回退'),
+        anchorSummary: props.canvasTask.anchorSummary || (props.canvasTask.anchorMode ? '角色锚点已参与本次生成' : '本次生成使用角色档案模式'),
         sourcePrompt: props.canvasTask.sourcePrompt,
       }
     : props.promptMeta;
@@ -752,10 +703,13 @@ export function CreateWorkspace(props: {
               task={props.canvasTask}
               resultSrc={props.canvasSrc}
               promptMeta={activePromptMeta}
-              onRetry={() => props.onRetryTask(props.canvasTask)}
+              onRetry={() => {
+                if (!props.canvasTask) throw new Error('Retry requires an explicit image generation task');
+                props.onRetryTask(props.canvasTask);
+              }}
               onOpenGallery={props.onOpenGallery}
               onSetReference={props.currentTarget.targetType === 'traveler' || props.currentTarget.targetType === 'npc' ? props.onSetResultReference : undefined}
-              onMountSlot={props.currentTarget.targetType === 'traveler' || props.currentTarget.targetType === 'npc' ? props.onMountResultToSlot : undefined}
+              onShowSlot={props.currentTarget.targetType === 'traveler' || props.currentTarget.targetType === 'npc' ? props.onShowResultInSlot : undefined}
               referenceEnabled={props.resultIsReference}
               referenceStatus={props.referenceStatus}
             />
@@ -813,7 +767,7 @@ export function DraftCanvasPreview({
   onRetry,
   onOpenGallery,
   onSetReference,
-  onMountSlot,
+  onShowSlot,
   referenceEnabled = false,
   referenceStatus,
 }: {
@@ -825,7 +779,7 @@ export function DraftCanvasPreview({
   onRetry: () => void;
   onOpenGallery?: () => void;
   onSetReference?: () => void;
-  onMountSlot?: () => void;
+  onShowSlot?: () => void;
   referenceEnabled?: boolean;
   referenceStatus: ReferenceInjectionStatus;
 }) {
@@ -884,7 +838,7 @@ export function DraftCanvasPreview({
               clipPath: smallClip,
             }}
           >
-            {promptMeta.anchorMode ? '锚点模式' : '档案回退'} · {promptMeta.anchorSummary}
+            {promptMeta.anchorMode ? '锚点模式' : '角色档案模式'} · {promptMeta.anchorSummary}
           </div>
         )}
         {isRunning && (
@@ -899,13 +853,13 @@ export function DraftCanvasPreview({
           </div>
         )}
         <div className="absolute bottom-4 right-4 max-w-[340px] px-3 py-2 text-[11px] leading-relaxed" style={{ color: isFailed ? 'rgba(var(--tj-danger),0.92)' : 'rgba(var(--tj-ui-body),0.86)', background: 'rgba(0,0,0,0.62)', boxShadow: `inset 0 0 0 1px ${isFailed ? 'rgba(255,170,170,0.28)' : 'rgba(var(--tj-btn-primary-start),0.22)'}`, clipPath: smallClip }}>
-          {isFailed ? (task?.error || '生成失败，参数已保留。') : isSuccess ? '图片已生成并加入成品库，可继续重试、改参数或前往成品库挂载。' : '生成失败时保留这个画布卡片，直接显示错误、参数和重新生成按钮，不需要重 roll 主剧情。'}
+          {isFailed ? (task?.error || '生成失败，参数已保留。') : isSuccess ? '图片已生成并加入成品库，当前显示不会自动改变。' : '生成失败时保留这个画布卡片，直接显示错误、参数和重新生成按钮，不需要重 roll 主剧情。'}
           {isFailed && (
             <button type="button" onClick={onRetry} className="mt-2 block px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>
               重新生成
             </button>
           )}
-          {isSuccess && <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewOpen(true)} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>完整预览</button>{onOpenGallery && <button type="button" onClick={onOpenGallery} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.1)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>查看图库</button>}{onSetReference && <button type="button" disabled={referenceEnabled} onClick={onSetReference} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] disabled:opacity-55" style={{ color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.22)', clipPath: smallClip }}>{referenceEnabled ? '已设为当前角色参考图' : '设为参考图'}</button>}{onMountSlot && <button type="button" onClick={onMountSlot} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>按当前用途挂载</button>}</div>}
+          {isSuccess && <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewOpen(true)} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>完整预览</button>{onOpenGallery && <button type="button" onClick={onOpenGallery} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.1)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>查看图库</button>}{onSetReference && <button type="button" disabled={referenceEnabled} onClick={onSetReference} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] disabled:opacity-55" style={{ color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.22)', clipPath: smallClip }}>{referenceEnabled ? '已设为当前角色参考图' : '设为参考图'}</button>}{onShowSlot && <button type="button" onClick={onShowSlot} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>设为当前显示</button>}</div>}
         </div>
         <div className="absolute bottom-[78px] left-4 right-4 flex min-w-0 items-center gap-3 md:bottom-4 md:right-[360px]">
           <span className="shrink-0 truncate font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>{target.label}</span>
@@ -1013,7 +967,7 @@ export function SlotPickerModal({
   entryTitle,
   recommendedSlot,
   slots,
-  selectedSrc,
+  selectedEntryId,
   referenceEnabled = false,
   onToggleReference,
   onClose,
@@ -1024,7 +978,7 @@ export function SlotPickerModal({
   entryTitle: string;
   recommendedSlot?: 图片槽位;
   slots: MountedImageSlot[];
-  selectedSrc?: string;
+  selectedEntryId?: string;
   referenceEnabled?: boolean;
   onToggleReference?: () => void;
   onClose: () => void;
@@ -1057,7 +1011,7 @@ export function SlotPickerModal({
       style={{ background: 'rgba(0,0,0,0.78)' }}
       role="dialog"
       aria-modal="true"
-      aria-label="设置到槽位"
+      aria-label="选择当前显示槽位"
       onClick={onClose}
     >
       <div
@@ -1071,7 +1025,7 @@ export function SlotPickerModal({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>设置到槽位</div>
+            <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>选择当前显示槽位</div>
             <div className="mt-1 truncate font-serif text-base font-bold" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{recordName}</div>
             <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>{entryTitle || '当前选中图片'}</div>
           </div>
@@ -1088,9 +1042,9 @@ export function SlotPickerModal({
           {slotOptions.map((option) => {
             const mountedSlot = slots.find((slot) => slot.key === option.slot);
             const occupied = Boolean(mountedSlot?.src);
-            const current = Boolean(selectedSrc && mountedSlot?.src === selectedSrc);
+            const current = Boolean(selectedEntryId && mountedSlot?.entryId === selectedEntryId);
             const recommended = option.slot === recommendedSlot;
-            const stateLabel = current ? '当前图片' : occupied ? '已占用 · 点击替换' : '';
+            const stateLabel = current ? '当前显示' : occupied ? '已有显示 · 点击更换' : '';
             return (
               <button
                 key={option.slot}
@@ -1124,7 +1078,7 @@ export function SlotPickerModal({
             style={{ color: referenceEnabled ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.94)', background: referenceEnabled ? activeAccentSurface : 'rgba(var(--tj-tech-cyan),0.07)', boxShadow: referenceEnabled ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)', clipPath: smallClip }}
           >
             <div className="font-serif text-sm font-bold tracking-[0.14em]">{referenceEnabled ? '取消该角色参考图' : '替换为该角色参考图'}</div>
-            <div className="mt-1 text-xs leading-relaxed opacity-80">参考图不会改变当前挂载槽位；每个角色只保留一张当前参考图。</div>
+            <div className="mt-1 text-xs leading-relaxed opacity-80">参考图不会改变任何显示槽位；每个角色只保留一张当前参考图。</div>
           </button>
         )}
       </div>
@@ -1507,7 +1461,7 @@ export type SceneCreationWorkspaceProps = {
   promptMeta: PromptMeta | null;
   canvasTask?: 图片生成任务;
   canvasSrc: string;
-  onRetryTask: (task?: 图片生成任务) => void;
+  onRetryTask: (task: 图片生成任务) => void;
   onOpenGallery?: () => void;
   sceneSummary?: SceneImageSummary | null;
   analyzing?: boolean;
@@ -1527,7 +1481,8 @@ export type StorySnapshotWorkspaceProps = SceneCreationWorkspaceProps & {
 };
 
 export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
-  const selectedOption = props.sourceOptions.find((option) => option.id === props.sourceMode) ?? props.sourceOptions[0];
+  const selectedOption = props.sourceOptions.find((option) => option.id === props.sourceMode);
+  if (!selectedOption) throw new Error(`Unknown story snapshot source: ${props.sourceMode}`);
   const applySource = (option: StorySnapshotSourceOption) => {
     props.setSourceMode(option.id);
     if (option.id !== 'manual') props.setSourceText(option.text);
@@ -1557,7 +1512,8 @@ export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
                 value={props.sourceMode}
                 options={props.sourceOptions.map((option) => ({ id: option.id, title: option.title, desc: option.desc }))}
                 onChange={(id) => {
-                  const option = props.sourceOptions.find((item) => item.id === id) ?? selectedOption;
+                  const option = props.sourceOptions.find((item) => item.id === id);
+                  if (!option) throw new Error(`Unknown story snapshot source: ${id}`);
                   applySource(option);
                 }}
               />
@@ -1844,7 +1800,7 @@ export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps &
   const activePromptMeta = props.canvasTask
     ? {
         anchorMode: props.canvasTask.anchorMode === true,
-        anchorSummary: props.canvasTask.anchorSummary || (props.canvasTask.anchorMode ? '角色锚点已参与本次生成' : '本次生成按档案回退'),
+        anchorSummary: props.canvasTask.anchorSummary ?? '',
         sourcePrompt: props.canvasTask.sourcePrompt,
       }
     : props.promptMeta;
@@ -1872,7 +1828,10 @@ export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps &
               task={props.canvasTask}
               resultSrc={props.canvasSrc}
               promptMeta={activePromptMeta}
-              onRetry={() => props.onRetryTask(props.canvasTask)}
+              onRetry={() => {
+                if (!props.canvasTask) throw new Error('Retry requires an explicit image generation task');
+                props.onRetryTask(props.canvasTask);
+              }}
               onOpenGallery={props.onOpenGallery}
               referenceStatus={props.referenceStatus}
             />
@@ -2038,6 +1997,7 @@ export interface MountedImageSlot {
   key: 图片槽位;
   label: string;
   src?: string;
+  entryId?: string;
   nsfw?: boolean;
 }
 
@@ -2073,18 +2033,19 @@ export function buildCharacterLibraryRecords(
   assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
   includeNsfw: boolean,
 ): CharacterLibraryRecord[] {
-  const entryIndex = buildCharacterAlbumEntryIndex(traveler, npcs, album, includeNsfw);
-  const travelerRecord = buildTravelerLibraryRecord(traveler, album, assetMap, entryIndex.get('traveler') ?? []);
+  const currentAlbum = 归一化相册系统(album);
+  const entryIndex = buildCharacterAlbumEntryIndex(npcs, currentAlbum, includeNsfw);
+  const travelerRecord = buildTravelerLibraryRecord(traveler, currentAlbum, assetMap, entryIndex.get('traveler')!);
   const npcRecords = npcs
     .filter((npc) => npc.阶位 === 'companion' || npc.原著角色)
     .map((npc): NpcLibraryRecord => {
       const slots = [
-        { key: 'avatar_profile', label: '档案头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.档案 || npc.图像档案?.头像 || npc.头像 || undefined) },
-        { key: 'avatar_story', label: '正文头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.正文) },
-        { key: 'avatar_phone', label: '手机头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.手机) },
-        { key: 'portrait', label: '角色立绘', src: 解析相册资源引用(album, npc.图像档案?.立绘) },
+        resolveDisplayedSlot(currentAlbum, assetMap, 'npc', npc.id, 'avatar_profile', '档案头像'),
+        resolveDisplayedSlot(currentAlbum, assetMap, 'npc', npc.id, 'avatar_story', '正文头像'),
+        resolveDisplayedSlot(currentAlbum, assetMap, 'npc', npc.id, 'avatar_phone', '手机头像'),
+        resolveDisplayedSlot(currentAlbum, assetMap, 'npc', npc.id, 'portrait', '角色立绘'),
       ] satisfies MountedImageSlot[];
-      const albumEntries = (entryIndex.get(npc.id) ?? [])
+      const albumEntries = entryIndex.get(npc.id)!
         .map((entry) => ({
           entry,
           src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
@@ -2098,7 +2059,7 @@ export function buildCharacterLibraryRecords(
         kind: 'npc',
         name: npc.姓名,
         alias: npc.别名,
-        avatar: 解析相册资源引用(album, 读取NPC头像(npc, '档案')),
+        avatar: slots[0].src,
         npc,
         entries,
         slots,
@@ -2115,17 +2076,17 @@ export function buildTravelerLibraryRecord(
   traveler: 角色数据结构,
   album: 相册系统,
   assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
-  indexedEntries?: 相册条目[],
+  indexedEntries: 相册条目[],
 ): TravelerLibraryRecord {
+  const currentAlbum = 归一化相册系统(album);
   const travelerId = 'traveler';
   const slots: MountedImageSlot[] = [
-    { key: 'avatar_profile', label: '档案头像', src: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined) },
-    { key: 'avatar_story', label: '正文头像', src: 解析相册资源引用(album, traveler.图像档案?.正文头像) },
-    { key: 'avatar_phone', label: '手机头像', src: 解析相册资源引用(album, traveler.图像档案?.手机头像) },
-    { key: 'portrait', label: '角色立绘', src: 解析相册资源引用(album, traveler.图像档案?.立绘) },
+    resolveDisplayedSlot(currentAlbum, assetMap, 'traveler', travelerId, 'avatar_profile', '档案头像'),
+    resolveDisplayedSlot(currentAlbum, assetMap, 'traveler', travelerId, 'avatar_story', '正文头像'),
+    resolveDisplayedSlot(currentAlbum, assetMap, 'traveler', travelerId, 'avatar_phone', '手机头像'),
+    resolveDisplayedSlot(currentAlbum, assetMap, 'traveler', travelerId, 'portrait', '角色立绘'),
   ];
-  const albumEntries = indexedEntries ?? buildCharacterAlbumEntryIndex(traveler, [], album, false).get(travelerId) ?? [];
-  const entries = albumEntries
+  const entries = indexedEntries
     .map((entry) => ({
       entry,
       src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
@@ -2137,7 +2098,7 @@ export function buildTravelerLibraryRecord(
     kind: 'traveler',
     name: traveler.姓名 || '旅人',
     alias: traveler.别名,
-    avatar: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined),
+    avatar: slots[0].src,
     traveler,
     entries,
     slots,
@@ -2147,8 +2108,33 @@ export function buildTravelerLibraryRecord(
   };
 }
 
+function resolveDisplayedSlot(
+  album: 相册系统,
+  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
+  targetType: 'traveler' | 'npc',
+  targetId: string,
+  slot: 图片槽位,
+  label: string,
+): MountedImageSlot {
+  const binding = album.bindings.find((candidate) => (
+    candidate.targetType === targetType
+    && candidate.targetId === targetId
+    && candidate.slot === slot
+  ));
+  if (!binding) return { key: slot, label };
+  const entry = album.entries.find((candidate) => candidate.id === binding.entryId);
+  if (!entry) throw new Error(`Album binding references missing entry: ${binding.entryId}`);
+  const asset = assetMap.get(entry.assetId);
+  if (!asset) throw new Error(`Album entry references missing asset: ${entry.assetId}`);
+  return {
+    key: slot,
+    label,
+    entryId: entry.id,
+    src: 解析相册资源地址(asset),
+  };
+}
+
 export function buildCharacterAlbumEntryIndex(
-  traveler: 角色数据结构,
   npcs: NPC记录[],
   album: 相册系统,
   includeNsfw: boolean,
@@ -2156,20 +2142,18 @@ export function buildCharacterAlbumEntryIndex(
   const index = new Map<string, 相册条目[]>();
   const indexedEntryIds = new Map<string, Set<string>>();
   const knownIds = new Set(['traveler', ...npcs.map((npc) => npc.id)]);
-  const npcNames = npcs.map((npc) => ({
-    id: npc.id,
-    names: [npc.姓名, npc.别名].map((name) => name?.trim()).filter((name): name is string => Boolean(name)),
-  }));
+  knownIds.forEach((id) => {
+    index.set(id, []);
+    indexedEntryIds.set(id, new Set());
+  });
 
   const add = (targetId: string, entry: 相册条目) => {
     if (!knownIds.has(targetId)) return;
-    const entryIds = indexedEntryIds.get(targetId) ?? new Set<string>();
+    const entryIds = indexedEntryIds.get(targetId)!;
     if (entryIds.has(entry.id)) return;
     entryIds.add(entry.id);
-    indexedEntryIds.set(targetId, entryIds);
-    const entries = index.get(targetId) ?? [];
+    const entries = index.get(targetId)!;
     entries.push(entry);
-    index.set(targetId, entries);
   };
 
   for (const entry of album.entries) {
@@ -2183,12 +2167,6 @@ export function buildCharacterAlbumEntryIndex(
     if (entry.targetType === 'traveler') targetIds.add('traveler');
     if (entry.targetType === 'npc' && entry.targetId) targetIds.add(entry.targetId);
 
-    if (targetIds.size === 0 && isCharacterLibrarySlot(entry.slot)) {
-      const title = entry.title || '';
-      if (title.includes(traveler.姓名 || '旅人') || title.includes('旅人')) targetIds.add('traveler');
-      const matchedNpc = npcNames.find((npc) => npc.names.some((name) => title.includes(name)));
-      if (matchedNpc) targetIds.add(matchedNpc.id);
-    }
     for (const targetId of targetIds) add(targetId, entry);
   }
   return index;
@@ -2436,7 +2414,7 @@ export function buildPresentSceneNpcs(npcs: NPC记录[], sceneText: string): NPC
 export function buildStorySnapshotSourceOptions(history: 聊天消息[]): StorySnapshotSourceOption[] {
   const assistantMessages = history.filter((message) => message.role === 'assistant' && message.content.trim());
   const latest = assistantMessages[assistantMessages.length - 1]?.content.trim() ?? '';
-  const previous = assistantMessages[assistantMessages.length - 2]?.content.trim() ?? latest;
+  const previous = assistantMessages[assistantMessages.length - 2]?.content.trim() ?? '';
   return [
     { id: 'latest_assistant', title: '最近正文', desc: latest ? '上一条回复' : '暂无正文', text: trimSnapshotSource(latest) },
     { id: 'previous_turn', title: '上一回合', desc: previous && previous !== latest ? '再前一条' : '可回退', text: trimSnapshotSource(previous) },

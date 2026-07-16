@@ -4,7 +4,8 @@ import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
 import { NPC_AFFINITY_MAX, NPC_AFFINITY_MIN, buildNpcMemoryLedgerView, 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { 智库系统 } from '@/models/zhiku';
-import { buildNpcRelationshipPlanning, type NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
+import type { NPC关系规划条目, NPC关系规划快照 } from '@/src/kernel/domain/npc/npcRelationshipPlanning';
+import { getAdaptationServices } from '@/src/adaptations';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 
@@ -36,7 +37,6 @@ const bodyColor = 'rgba(var(--tj-ui-body), 0.95)';
 const mutedColor = 'rgba(var(--tj-ui-muted), 0.82)';
 const faintColor = 'rgba(var(--tj-ui-faint), 0.74)';
 const accentColor = 'rgb(var(--tj-accent-primary))';
-const activeTextColor = 'rgb(var(--tj-ui-active-text))';
 const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
 const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
@@ -44,6 +44,8 @@ const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rg
 export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnabled, maleNsfwArchiveEnabled = false, zhikuSystem, devMode = false }: CompanionPanelProps) {
   const [tab, setTab] = useState<NPC阶位>('companion');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [relationshipPlanning, setRelationshipPlanning] = useState<NPC关系规划快照 | null>(null);
+  const [planningError, setPlanningError] = useState<Error | null>(null);
   const normalizedRecords = useMemo(() => {
     const normalized = 归一化NPC记录列表(npcRecords);
     return enrichNpcArchives(normalized, {
@@ -82,11 +84,26 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
   }, [selectedId, visible]);
 
   const selected = visible.find((n) => n.id === selectedId) ?? null;
-  const relationshipPlanning = useMemo(
-    () => buildNpcRelationshipPlanning(normalizedRecords, Math.max(...normalizedRecords.map((npc) => Number(npc.最近回合) || 0), 1)),
-    [normalizedRecords],
-  );
-  const selectedPlanning = selected ? relationshipPlanning.条目.find((item) => item.npcId === selected.id) : undefined;
+  useEffect(() => {
+    let active = true;
+    setPlanningError(null);
+    void getAdaptationServices()
+      .then((services) => services.npcRelationship.buildNpcRelationshipPlanning(
+        normalizedRecords,
+        Math.max(...normalizedRecords.map((npc) => Number(npc.最近回合) || 0), 1),
+      ))
+      .then((planning) => {
+        if (active) setRelationshipPlanning(planning);
+      })
+      .catch((error: unknown) => {
+        if (active) setPlanningError(error instanceof Error ? error : new Error(String(error)));
+      });
+    return () => { active = false; };
+  }, [normalizedRecords]);
+  if (planningError) throw planningError;
+  const selectedPlanning = selected && relationshipPlanning
+    ? relationshipPlanning.条目.find((item) => item.npcId === selected.id)
+    : undefined;
 
   const updateRecord = (id: string, patch: Partial<NPC记录>) => {
     onNpcRecordsChange((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch } : n)));
@@ -114,7 +131,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
               </div>
             </div>
             <div className="mt-3 text-[11px] leading-relaxed" style={{ color: mutedColor }}>
-              关系规划：{relationshipPlanning.总览}
+              关系规划：{relationshipPlanning?.总览 ?? 'IKernel 正在分析'}
             </div>
           </div>
         </div>
@@ -508,7 +525,7 @@ function NpcDetail({
         </>
       )}
 
-      {detailTab === 'memory' && <MemoryPanel npc={npc} devMode={devMode} />}
+      {detailTab === 'memory' && <CompanionMemoryView npc={npc} devMode={devMode} />}
 
       {nsfwEnabled && detailTab === 'nsfw' && <NSFWArchivePanel npc={npc} />}
     </div>
@@ -988,7 +1005,7 @@ function compactListText(value: string): string {
   return `${normalized.slice(0, 71)}…`;
 }
 
-function MemoryPanel({ npc, devMode = false }: { npc: NPC记录; devMode?: boolean }) {
+function CompanionMemoryView({ npc, devMode = false }: { npc: NPC记录; devMode?: boolean }) {
   const ledger = buildNpcMemoryLedgerView(npc, 8);
   const memories = 提取NPC同行记忆文本列表(npc).filter((item) => !item.startsWith('[压缩]'));
   const protectedCount =

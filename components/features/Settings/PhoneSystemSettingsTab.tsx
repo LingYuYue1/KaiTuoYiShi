@@ -1,12 +1,11 @@
 ﻿import { useState } from 'react';
-import type { AI提供商, API配置项, API设置, 游戏设置 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { AI提供商, API配置项, 游戏设置 } from '@/models/settings';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
-  apiSettings: API设置;
 }
 
 const smallClip =
@@ -27,9 +26,8 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'gemini', label: 'Gemini' },
 ];
 
-export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function PhoneSystemSettingsTab({ settings, onChange }: Props) {
   const phone = settings.手机系统;
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [fetchMessage, setFetchMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
@@ -53,16 +51,16 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
   };
 
   const effectiveApi = {
-    provider: phone.api.provider || mainConfig?.provider || 'openai_compatible',
-    baseUrl: phone.api.baseUrl.trim() || mainConfig?.baseUrl || '',
-    apiKey: phone.api.apiKey.trim() || mainConfig?.apiKey || '',
-    model: phone.api.model.trim() || mainConfig?.model || '',
+    provider: phone.api.provider || 'openai_compatible',
+    baseUrl: phone.api.baseUrl.trim(),
+    apiKey: phone.api.apiKey.trim(),
+    model: phone.api.model.trim(),
     enableClaudeMode: settings.enableClaudeMode === true,
   };
 
   const handleFetchModels = async () => {
     if (!effectiveApi.baseUrl || !effectiveApi.apiKey) {
-      setFetchMessage({ kind: 'error', text: '请填写手机 API，或先配置主 API 作为回退。' });
+      setFetchMessage({ kind: 'error', text: '请先补全手机系统独立 API 的 Base URL 和 API Key。' });
       return;
     }
     setLoadingModels(true);
@@ -76,11 +74,11 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
         apiKey: effectiveApi.apiKey,
         model: effectiveApi.model,
         enableClaudeMode: effectiveApi.enableClaudeMode,
-        retryCount: phone.api.retryCount ?? mainConfig?.retryCount ?? 2,
+        retryCount: phone.api.retryCount ?? 2,
         createdAt: 0,
         updatedAt: 0,
       };
-      const list = await fetchModels(tempConfig);
+      const list = await (await getAdaptationServices()).apiTools.fetchModels(tempConfig);
       setModelOptions(list);
       setFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型` });
     } catch (err) {
@@ -95,7 +93,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await setPreferenceAsync('gameSettings', settings);
+      await setPreference('gameSettings', settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '手机系统设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -232,7 +230,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
           <input
             value={phone.api.baseUrl}
             onChange={(e) => patch({ api: { baseUrl: e.target.value } })}
-            placeholder={mainConfig?.baseUrl ? `留空则使用主 API：${mainConfig.baseUrl}` : 'https://...'}
+            placeholder="https://..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -243,7 +241,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
             type="password"
             value={phone.api.apiKey}
             onChange={(e) => patch({ api: { apiKey: e.target.value } })}
-            placeholder={mainConfig?.apiKey ? '留空则使用主 API 的 Key' : 'sk-...'}
+            placeholder="sk-..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -254,7 +252,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
             <input
               value={phone.api.model}
               onChange={(e) => patch({ api: { model: e.target.value } })}
-              placeholder={mainConfig?.model ? `留空则使用主 API：${mainConfig.model}` : '模型 ID'}
+              placeholder="模型 ID"
               className="kaituo-input flex-1 px-2.5 py-2 text-sm font-mono"
               style={{ clipPath: smallClip }}
             />
@@ -315,7 +313,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
         </Field>
 
         <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-          字段留空时会回退主 API，方便用主模型先跑通；后续可以改成更便宜的通讯模型。
+          手机系统只使用这套独立配置；启用后连接字段缺失会直接拒绝发送或主动来信生成。
         </div>
       </div>
 

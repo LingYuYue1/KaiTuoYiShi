@@ -1,5 +1,3 @@
-import { isNonRetryableAIError } from './deepSeekRecovery';
-
 export interface RetryOptions {
   retries?: number;
   label?: string;
@@ -8,7 +6,7 @@ export interface RetryOptions {
 }
 
 function shouldStopRetry(err: unknown, signal?: AbortSignal): boolean {
-  return isNonRetryableAIError(err) || (err as Error)?.name === 'AbortError' || signal?.aborted === true;
+  return (err as Error)?.name === 'AbortError' || signal?.aborted === true;
 }
 
 export async function withRetries<T>(task: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
@@ -25,7 +23,7 @@ export async function withRetries<T>(task: () => Promise<T>, options: RetryOptio
         throw err;
       }
       if (delayMs > 0) {
-        await new Promise<void>((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
+        await waitForRetryDelay(delayMs * (attempt + 1), options.signal);
       }
     }
   }
@@ -35,4 +33,20 @@ export async function withRetries<T>(task: () => Promise<T>, options: RetryOptio
     throw new Error(`${options.label}失败（已重试 ${retries} 次）：${message}`);
   }
   throw lastErr instanceof Error ? lastErr : new Error('重试失败');
+}
+
+function waitForRetryDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException('Retry aborted', 'AbortError'));
+  return new Promise<void>((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, delayMs);
+    const abort = () => {
+      globalThis.clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      reject(new DOMException('Retry aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+  });
 }

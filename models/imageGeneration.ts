@@ -67,6 +67,18 @@ export interface 相册条目 {
   referenceTargets: string[];
 }
 
+/**
+ * A slot binding selects which durable album entry is currently displayed.
+ * Entries and assets remain independent library records when this pointer changes.
+ */
+export interface 图片槽位绑定 {
+  targetType: 图片目标类型;
+  targetId: string;
+  slot: 图片槽位;
+  entryId: string;
+  updatedAt: number;
+}
+
 export type 图片生成任务状态 = 'queued' | 'running' | 'success' | 'failed' | 'cancelled';
 export type 图片生成任务来源 = 'manual' | 'auto' | 'retry';
 
@@ -100,6 +112,7 @@ export interface 相册系统 {
   assets: 图片资源[];
   entries: 相册条目[];
   tasks: 图片生成任务[];
+  bindings: 图片槽位绑定[];
 }
 
 export function 创建空相册系统(): 相册系统 {
@@ -107,6 +120,7 @@ export function 创建空相册系统(): 相册系统 {
     assets: [],
     entries: [],
     tasks: [],
+    bindings: [],
   };
 }
 
@@ -187,5 +201,27 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
       }))
     : [];
 
-  return { assets, entries, tasks };
+  const entryIds = new Set(entries.map((entry) => entry.id));
+  const normalizedBindings = Array.isArray(input.bindings)
+    ? input.bindings
+      .map((binding) => ({
+        targetType: binding.targetType ?? 'misc',
+        targetId: String(binding.targetId ?? '').trim(),
+        slot: binding.slot ?? 'misc',
+        entryId: String(binding.entryId ?? '').trim(),
+        updatedAt: Number(binding.updatedAt) || Date.now(),
+      }))
+      .filter((binding) => binding.targetId && entryIds.has(binding.entryId))
+    : [];
+  const claimedSlots = new Set<string>();
+  const bindings = normalizedBindings
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .filter((binding) => {
+      const key = `${binding.targetType}\u0000${binding.targetId}\u0000${binding.slot}`;
+      if (claimedSlots.has(key)) return false;
+      claimedSlots.add(key);
+      return true;
+    });
+
+  return { assets, entries, tasks, bindings };
 }

@@ -146,7 +146,6 @@ export async function generateSkillDraft(
     onDelta: () => {},
     streaming: false,
     signal,
-    repairTags: false,
     topP: 0.88,
     maxContext: 6000,
   });

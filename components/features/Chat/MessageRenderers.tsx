@@ -75,8 +75,7 @@ function normalizeVisualTextSettings(input?: Partial<VisualTextSettings>): Visua
   };
 }
 
-// 三种行格式：【旁白】/【角色名】/【心声】。
-// 无前缀的行兜底为旁白渲染（容忍 AI 偶发不按格式输出）。
+// 三种行格式：【旁白】/【角色名】/【心声】。未标记行保留为协议错误。
 type ParsedBodyLine =
   | { kind: 'narration'; text: string }
   | { kind: 'dialogue'; name: string; text: string }
@@ -322,7 +321,7 @@ interface AvatarTileProps {
   size?: 'sm' | 'md'; // sm=对话；md=主角心声
 }
 
-// 圆形头像 + 名牌：左上头像、下方一块小标签（fallback 用首字符）
+// 圆形头像 + 名牌：左上头像、下方一块小标签。
 export const AvatarTile = memo(function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
   const dim = size === 'md' ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-11 h-11 sm:w-12 sm:h-12';
   const labelColor = withAlpha(color, 0.98);
@@ -512,7 +511,15 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
         if (line.kind === 'narration') {
           return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
         }
-        return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
+        return (
+          <div
+            key={i}
+            className="my-1 rounded border border-red-400/30 px-3 py-2 text-xs"
+            style={{ color: 'rgba(248, 113, 113, 0.9)', background: 'rgba(127, 29, 29, 0.12)' }}
+          >
+            未识别的正文格式：{line.text}
+          </div>
+        );
       })}
     </div>
   );

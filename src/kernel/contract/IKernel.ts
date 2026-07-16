@@ -4,10 +4,12 @@
  * Must not import old models, services, hooks, or UI types.
  */
 
-import type { CommandEnvelope } from './commands';
+import type { CommandEnvelope, CommandId } from './commands';
 import type { ExecutionFrame } from './frames';
-import type { QueryResult } from './projections';
-import type { KernelQuery } from './queries';
+import type { QueryResult, SessionExistenceView, SessionView } from './projections';
+import type { KernelQuery, SessionExistsQuery, SessionReadQuery } from './queries';
+import type { SaveCatalogPort } from '@/src/kernel/ports/SaveCatalog';
+import type { KernelServices } from '@/src/kernel/ports/KernelServices';
 
 /**
  * Implied contract:
@@ -20,6 +22,14 @@ import type { KernelQuery } from './queries';
  * 7. Same commandId retries must have explicit idempotency semantics (owned by kernel impl).
  */
 export interface IKernel {
+  readonly saves: SaveCatalogPort;
+  readonly services: KernelServices;
   execute(command: CommandEnvelope): AsyncIterable<ExecutionFrame>;
+  read(query: SessionExistsQuery): Promise<SessionExistenceView>;
+  read(query: SessionReadQuery): Promise<SessionView>;
   read(query: KernelQuery): Promise<QueryResult>;
+  cancel(commandId: CommandId): Promise<void>;
+  getPreference<T>(key: string): Promise<T | null>;
+  setPreference(key: string, value: unknown): Promise<void>;
+  deletePreference(key: string): Promise<void>;
 }

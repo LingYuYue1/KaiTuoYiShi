@@ -1,12 +1,11 @@
 ﻿import { useState } from 'react';
-import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { AI提供商, 游戏设置 } from '@/models/settings';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
-  apiSettings: API设置;
 }
 
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -25,9 +24,8 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'gemini', label: 'Gemini' },
 ];
 
-export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function StoryWeavingSettingsTab({ settings, onChange }: Props) {
   const story = settings.剧情编织系统;
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [message, setMessage] = useState('');
@@ -48,22 +46,22 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
   };
 
   const effectiveApi = {
-    provider: story.api.provider || mainConfig?.provider || 'openai_compatible',
-    baseUrl: story.api.baseUrl.trim() || mainConfig?.baseUrl || '',
-    apiKey: story.api.apiKey.trim() || mainConfig?.apiKey || '',
-    model: story.api.model.trim() || mainConfig?.model || '',
+    provider: story.api.provider || 'openai_compatible',
+    baseUrl: story.api.baseUrl.trim(),
+    apiKey: story.api.apiKey.trim(),
+    model: story.api.model.trim(),
     enableClaudeMode: settings.enableClaudeMode === true,
   };
 
   const handleFetchModels = async () => {
     if (!effectiveApi.baseUrl || !effectiveApi.apiKey) {
-      setMessage('请先填写剧情编织 API，或在 API 接口里配置主 API。');
+      setMessage('请先补全剧情编织独立 API 的 Base URL 和 API Key。');
       return;
     }
     setLoadingModels(true);
     setMessage('');
     try {
-      const list = await fetchModels({
+      const list = await (await getAdaptationServices()).apiTools.fetchModels({
         id: '__story_weaving__',
         name: '剧情编织',
         provider: effectiveApi.provider,
@@ -86,7 +84,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
   };
 
   const handleSave = async () => {
-    await setPreferenceAsync('gameSettings', settings);
+    await setPreference('gameSettings', settings);
     setSavedFlash(true);
     setMessage('剧情编织设置已保存。');
     window.setTimeout(() => setSavedFlash(false), 1600);
@@ -169,7 +167,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
           <input
             value={story.api.baseUrl}
             onChange={(e) => patch({ api: { baseUrl: e.target.value } })}
-            placeholder={mainConfig?.baseUrl ? `留空则使用主 API：${mainConfig.baseUrl}` : 'https://...'}
+            placeholder="https://..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -180,7 +178,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
             type="password"
             value={story.api.apiKey}
             onChange={(e) => patch({ api: { apiKey: e.target.value } })}
-            placeholder={mainConfig?.apiKey ? '留空则使用主 API 的 Key' : 'sk-...'}
+            placeholder="sk-..."
             className="kaituo-input w-full px-3 py-2 text-sm font-mono"
             style={{ clipPath: smallClip }}
           />
@@ -191,7 +189,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
             <input
               value={story.api.model}
               onChange={(e) => patch({ api: { model: e.target.value } })}
-              placeholder={mainConfig?.model ? `留空则使用主 API：${mainConfig.model}` : '模型 ID'}
+              placeholder="模型 ID"
               className="kaituo-input flex-1 px-2.5 py-2 text-sm font-mono"
               style={{ clipPath: smallClip }}
             />

@@ -5,12 +5,6 @@
 
 import type { SessionId } from './commands';
 
-export type KernelQuery =
-  | Readonly<{
-      type: 'session.read';
-      sessionId: SessionId;
-    }>
-  | Readonly<{
-      type: 'settings.read';
-      sessionId: SessionId;
-    }>;
+export type SessionExistsQuery = Readonly<{ type: 'session.exists'; sessionId: SessionId }>;
+export type SessionReadQuery = Readonly<{ type: 'session.read'; sessionId: SessionId }>;
+export type KernelQuery = SessionExistsQuery | SessionReadQuery;

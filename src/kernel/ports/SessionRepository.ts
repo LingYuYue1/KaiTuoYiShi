@@ -12,11 +12,8 @@
  *    without applying a second turn (idempotent).
  * 4. Stale expectedRevision yields conflict and leaves store unchanged.
  *
- * Stage 5.2 GameState formal slice: turnCount / messages / turns /
- * travelerName / variables.旅人 (profile + 数值属性) / knowledge
- * (zhiku + yiting + story + memory shell). Full 旅人 graph
- * (背包/战技/命途), 世界, NPC, full memory compression, 手机 stay in
- * legacy React+IndexedDB until later stages expand projection ownership.
+ * GameState contains the complete runtime graph; adapters must never maintain
+ * parallel feature-specific copies.
  */
 
 import type { CommandId, Revision, SessionId } from '@/src/kernel/contract';
@@ -29,6 +26,12 @@ export type CompareAndSwapInput = Readonly<{
   commandId: CommandId;
 }>;
 
+export type CreateSessionInput = Readonly<{
+  sessionId: SessionId;
+  commandId: CommandId;
+  initialState: GameState;
+}>;
+
 /**
  * CAS outcome.
  * - committed: new revision applied (or prior commit for the same commandId)
@@ -38,7 +41,15 @@ export type CommitResult =
   | Readonly<{ type: 'committed'; snapshot: SessionSnapshot }>
   | Readonly<{ type: 'conflict'; actualRevision: Revision }>;
 
+export type CreateSessionResult =
+  | Readonly<{ type: 'committed'; snapshot: SessionSnapshot }>
+  | Readonly<{ type: 'conflict'; actualRevision: Revision }>;
+
 export interface SessionRepository {
+  create(input: CreateSessionInput): Promise<CreateSessionResult>;
+
+  exists(sessionId: SessionId): Promise<boolean>;
+
   read(sessionId: SessionId): Promise<SessionSnapshot>;
 
   /**

@@ -1,5 +1,5 @@
 import type { 存档数据, 存档类型 } from '@/models/settings';
-import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExport, sanitizeSaveForExportAsync } from './savePackage';
+import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExportAsync } from './savePackage';
 import {
   extractSaveAssetRecords,
   materializeSaveAssetRecords,
@@ -442,12 +442,10 @@ export async function loadSaveTree(rootId: string): Promise<存档数据[]> {
 
 export async function replaceAllSaves(
   nextSaves: 存档数据[],
-  options: { skipDesktopBackup?: boolean; desktopBackupReason?: DesktopSaveBackupReason } = {},
+  desktopBackupReason: DesktopSaveBackupReason = 'before-replace',
 ): Promise<void> {
   const db = await openDB();
-  if (!options.skipDesktopBackup) {
-    await backupCurrentSavesToDesktop(options.desktopBackupReason ?? 'before-replace');
-  }
+  await backupCurrentSavesToDesktop(desktopBackupReason);
   const mirroredSaves: 存档数据[] = [];
   const mirroredAssetRecords: SaveAssetRecord[] = [];
   const mirroredDeltas: SaveNodeDeltaRecord[] = [];
@@ -489,9 +487,8 @@ export async function replaceAllSaves(
 export async function rebuildIndexedSaveCacheFromDesktopMirror(): Promise<number> {
   const mirroredSaves = await loadDesktopSaveMirrorSaves();
   if (!mirroredSaves.length) return 0;
-  await backupCurrentSavesToDesktop('before-restore');
   const restoredSaves = await restoreDesktopAssetPayloadForSavesSafely(mirroredSaves);
-  await replaceAllSaves(restoredSaves, { skipDesktopBackup: true });
+  await replaceAllSaves(restoredSaves, 'before-restore');
   return mirroredSaves.length;
 }
 
@@ -502,9 +499,8 @@ export async function restoreSavesFromDesktopMirror(): Promise<number> {
 export async function restoreSavesFromDesktopBackup(backupPath: string): Promise<number> {
   const backup = await loadDesktopSaveBackup(backupPath);
   if (!backup?.saves.length) return 0;
-  await backupCurrentSavesToDesktop('before-restore');
   const restoredSaves = await restoreDesktopAssetPayloadForSavesSafely(backup.saves);
-  await replaceAllSaves(restoredSaves, { skipDesktopBackup: true });
+  await replaceAllSaves(restoredSaves, 'before-restore');
   return backup.saves.length;
 }
 

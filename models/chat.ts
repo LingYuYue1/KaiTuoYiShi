@@ -46,10 +46,7 @@ export interface 聊天消息 {
     deepSeekPrefixMode?: boolean;
     deepSeekProtocolIssues?: string[];
     deepSeekMainOriginalModel?: string;
-    deepSeekMainAdaptedModel?: string;
-    stV2Attempted?: boolean;
     stV2Used?: boolean;
-    stV2FallbackReason?: string;
     rerollSimilarity?: number;
     rerollSimilarityRetried?: boolean;
     cachePrefixDiagnostics?: 缓存前缀诊断;

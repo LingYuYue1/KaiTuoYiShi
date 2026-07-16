@@ -15,7 +15,7 @@ import {
   智库分类计数,
 } from '@/models/zhiku';
 import type { 智库系统设置 } from '@/models/settings';
-import { getPreference, setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import { getPreference, setPreference } from '@/src/adaptations/preferences';
 import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
   buildPersistedZhikuSystem,
@@ -58,8 +58,8 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   const [bucket, setBucket] = useState<Bucket>('all');
   const [activeCategory, setActiveCategory] = useState<智库分类 | 'all'>('all');
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(normalized.条目[0]?.id ?? null);
-  const [showComposer, setShowComposer] = useState(customEntries.length === 0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showComposer, setShowComposer] = useState(false);
   const [saveFlash, setSaveFlash] = useState(false);
   const [devRefreshStatus, setDevRefreshStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [expandedSeriesIds, setExpandedSeriesIds] = useState<string[]>([]);
@@ -106,8 +106,8 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   const counts = useMemo(() => 智库分类计数({ 条目: bucket === 'builtin' ? builtinEntries : bucket === 'custom' ? customEntries : visibleEntries }), [bucket, builtinEntries, customEntries, visibleEntries]);
 
   const selected = selectedId
-    ? activeEntries.find((entry) => entry.id === selectedId) ?? activeEntries[0] ?? null
-    : activeEntries[0] ?? null;
+    ? activeEntries.find((entry) => entry.id === selectedId) ?? null
+    : null;
 
   const storyList = useMemo(
     () => buildStorySeries(activeEntries.filter((entry) => entry.分类 === 'story')),
@@ -124,11 +124,11 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   );
   const activeCharacterProfile = useMemo(() => {
     if (activeCategory !== 'character' || characterWorkspace.profiles.length === 0) return null;
-    return characterWorkspace.profiles.find((profile) => profile.entries.some((entry) => entry.id === selectedId)) ?? characterWorkspace.profiles[0];
+    return characterWorkspace.profiles.find((profile) => profile.entries.some((entry) => entry.id === selectedId)) ?? null;
   }, [activeCategory, characterWorkspace, selectedId]);
   const activeCharacterEntry = useMemo(() => {
     if (!activeCharacterProfile) return null;
-    return activeCharacterProfile.entries.find((entry) => entry.id === selectedId) ?? activeCharacterProfile.entries[0] ?? null;
+    return activeCharacterProfile.entries.find((entry) => entry.id === selectedId) ?? null;
   }, [activeCharacterProfile, selectedId]);
 
   useEffect(() => {
@@ -136,13 +136,6 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
     if (!selectedSeriesId) return;
     setExpandedSeriesIds((prev) => (prev.includes(selectedSeriesId) ? prev : [...prev, selectedSeriesId]));
   }, [selected?.id, selected?.分类, selected?.系列ID, selected?.系列标题]);
-
-  useEffect(() => {
-    if (storyList.groups.length === 0) return;
-    setExpandedSeriesIds((prev) =>
-      prev.some((id) => storyList.groups.some((group) => group.id === id)) ? prev : [storyList.groups[0].id],
-    );
-  }, [storyList.groups]);
 
   useEffect(() => {
     if (activeCategory !== 'character' || characterWorkspace.groups.length === 0) return;
@@ -162,7 +155,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   const persist = async (nextEntries: 智库条目[]) => {
     const next = 归一化智库系统({ 条目: nextEntries });
     onZhikuSystemChange(next);
-    await setPreferenceAsync('zhikuSystem', buildPersistedZhikuSystem(next));
+    await setPreference('zhikuSystem', buildPersistedZhikuSystem(next));
     setSaveFlash(true);
     window.setTimeout(() => setSaveFlash(false), 1200);
   };
@@ -175,12 +168,12 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
       const migrationAt = savedMigrationAt ?? Date.now();
       if (!savedMigrationAt) {
-        await setPreferenceAsync(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+        await setPreference(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
       }
       const next = mergeBundledZhikuSystem(bundled, normalized, migrationAt);
       onZhikuSystemChange(next);
-      await setPreferenceAsync('zhikuSystem', buildPersistedZhikuSystem(next));
-      setSelectedId((prev) => (prev && next.条目.some((entry) => entry.id === prev) ? prev : next.条目[0]?.id ?? null));
+      await setPreference('zhikuSystem', buildPersistedZhikuSystem(next));
+      setSelectedId((prev) => (prev && next.条目.some((entry) => entry.id === prev) ? prev : null));
       setSaveFlash(true);
       setDevRefreshStatus('done');
       window.setTimeout(() => setSaveFlash(false), 1200);
@@ -662,18 +655,6 @@ type CharacterGroup = {
   profiles: CharacterProfile[];
 };
 
-const characterGroupFallbacks: Array<{ label: string; kind: CharacterGroupKind; aliases: string[] }> = [
-  { label: '星穹列车', kind: '组织', aliases: ['星穹列车', '列车组', '无名客', '列车', '帕姆'] },
-  { label: '黑塔空间站', kind: '地区', aliases: ['黑塔空间站', '空间站', '防卫科', '主控舱段', '基座舱段', '收容舱段', '支援舱段'] },
-  { label: '雅利洛-VI', kind: '地区', aliases: ['雅利洛', '贝洛伯格', '下层区', '上层区', '磐岩镇', '地火', '史瓦罗'] },
-  { label: '仙舟罗浮', kind: '地区', aliases: ['仙舟', '罗浮', '云骑', '神策府', '长乐天', '金人巷', '鳞渊境'] },
-  { label: '匹诺康尼', kind: '资料大区', aliases: ['匹诺康尼', '家族', '梦境', '白日梦酒店', '黄金的时刻', '知更鸟', '星期日'] },
-  { label: '翁法罗斯', kind: '资料大区', aliases: ['翁法罗斯'] },
-  { label: '联动角色', kind: '资料大区', aliases: ['联动角色', 'Fate', 'UBW', 'Saber', 'Archer'] },
-  { label: '永火官邸', kind: '资料大区', aliases: ['永火官邸', '康士坦丝', '大丽花', '冥火大公', '泯灭帮'] },
-  { label: '星核猎手', kind: '阵营', aliases: ['星核猎手', '卡芙卡', '银狼', '刃', '萨姆'] },
-  { label: '天才俱乐部', kind: '阵营', aliases: ['天才俱乐部', '黑塔', '螺丝咕姆', '阮梅'] },
-];
 const characterGroupPriority: Record<CharacterGroupKind, number> = {
   组织: 1,
   地区: 2,
@@ -771,25 +752,14 @@ function getCharacterProfileNames(entry: 智库条目): string[] {
   const primary = getCharacterName(entry).trim();
   if (primary) return [primary];
   const names = getCharacterNames(entry).map((name) => name.trim()).filter(Boolean);
-  return names.length ? [names[0]] : [entry.标题];
+  if (names[0]) return [names[0]];
+  throw new Error(`Character knowledge entry ${entry.id} has no character name`);
 }
 
 function resolveCharacterGroup(entry: 智库条目, characterName = getCharacterName(entry)): { id: string; label: string; kind: CharacterGroupKind } {
   const explicit = getCharacterGroupFromTags(entry);
   if (explicit) return explicit;
-
-  if (characterName === '星' || characterName === '穹') {
-    return { id: 'fallback:星穹列车', label: '星穹列车', kind: '组织' };
-  }
-
-  const text = [entry.标题, entry.摘要, entry.来源 ?? '', entry.原文, ...(entry.关键词 ?? [])].join(' ');
-  for (const group of characterGroupFallbacks) {
-    if (group.aliases.some((alias) => text.includes(alias))) {
-      return { id: `fallback:${group.label}`, label: group.label, kind: group.kind };
-    }
-  }
-
-  return { id: 'ungrouped', label: '未分组 / 待整理', kind: '待整理' };
+  throw new Error(`Character knowledge entry ${entry.id} (${characterName}) has no explicit group tag`);
 }
 
 function getCharacterGroupFromTags(entry: 智库条目): { id: string; label: string; kind: CharacterGroupKind } | null {
@@ -1489,7 +1459,7 @@ function DetailPanel({
       </div>
 
       {entry.分类 === 'character' ? (
-        <CharacterProfileWorkspace entry={entry} editable={editable} onUpdate={onUpdate} />
+        <CharacterProfileWorkspace entry={entry} />
       ) : (
         <DetailMetadataForm entry={entry} editable={editable} characterMeta={characterMeta} onUpdate={onUpdate} />
       )}
@@ -1625,12 +1595,8 @@ function DetailMetadataForm({
 
 function CharacterProfileWorkspace({
   entry,
-  editable,
-  onUpdate,
 }: {
   entry: 智库条目;
-  editable: boolean;
-  onUpdate: (patch: Partial<智库条目>) => void;
 }) {
   const meta = 解析智库软结构标签(entry);
   const sections = parseZhikuMarkdownSections(entry.原文);
@@ -2807,4 +2773,3 @@ function EmptyNotice({ text }: { text: string }) {
     </div>
   );
 }
-

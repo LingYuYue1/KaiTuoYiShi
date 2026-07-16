@@ -1,54 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getSaveCatalog, type SaveListItem } from '@/src/ui/ports';
-import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
-import {
-  checkForDesktopUpdate,
-  downloadAndInstallDesktopUpdate,
-  getDesktopAppInfo,
-  openDesktopDataDir,
-  pickDesktopFolder,
-  setDesktopStorageRoots,
-  writeDesktopProbe,
-  type DesktopAppInfo,
-  type DesktopProbeResult,
-  type DesktopUpdateProgress,
-  type DesktopUpdateStatus,
-} from '@/services/desktop/desktopBridge';
-import {
-  deleteDesktopDiagnosticReport,
-  listDesktopDiagnosticReports,
-  loadDesktopDiagnosticReport,
-  writeDesktopDiagnosticReport,
-  type DesktopDiagnosticReport,
-  type DesktopDiagnosticReportResult,
-  type DesktopDiagnosticReportSummary,
-} from '@/services/desktop/desktopDiagnostics';
-import {
-  buildDesktopReleaseInfo,
-  type DesktopReleaseInfo,
-} from '@/services/desktop/desktopReleaseInfo';
-import { inspectDesktopAssetMirrorHealth, listDesktopAssetMirror, repairDesktopAssetMirrorIndex } from '@/services/desktop/desktopAssetMirror';
+import { getSaveCatalog, type SaveListItem } from '@/src/adaptations/saveCatalog';
+import type { DesktopAppInfo, DesktopProbeResult, DesktopUpdateProgress, DesktopUpdateStatus } from '@/services/desktop/desktopBridge';
+import type { DesktopDiagnosticReport, DesktopDiagnosticReportResult, DesktopDiagnosticReportSummary } from '@/services/desktop/desktopDiagnostics';
+import type { DesktopReleaseInfo } from '@/services/desktop/desktopReleaseInfo';
 import type { DesktopAssetMaintenanceSummary, DesktopAssetMirrorHealth } from '@/services/desktop/desktopAssetMirror';
-import {
-  deleteDesktopSaveBackup,
-  loadDesktopSaveBackup,
-  listDesktopSaveBackups,
-  type DesktopSaveBackupRecord,
-  type DesktopSaveBackupSummary,
-} from '@/services/desktop/desktopSaveBackup';
-import {
-  listDesktopMigrationBackups,
-  type DesktopMigrationBackupPreview,
-  type DesktopMigrationBackupSummary,
-} from '@/services/desktop/desktopMigrationBackup';
-import { inspectDesktopSaveDeltaMirrorHealth, repairDesktopSaveDeltaMirrorIndex } from '@/services/desktop/desktopSaveDeltaMirror';
+import type { DesktopSaveBackupRecord, DesktopSaveBackupSummary } from '@/services/desktop/desktopSaveBackup';
+import type { DesktopMigrationBackupPreview, DesktopMigrationBackupSummary } from '@/services/desktop/desktopMigrationBackup';
 import type { DesktopSaveDeltaMirrorHealth } from '@/services/desktop/desktopSaveDeltaMirror';
-import { inspectDesktopSaveMirrorHealth, listDesktopSaveMirror, repairDesktopSaveMirrorIndex, repairUnresolvedDesktopSaveTransactions } from '@/services/desktop/desktopSaveMirror';
 import type { DesktopSaveMirrorHealth } from '@/services/desktop/desktopSaveMirror';
-import {
-  listDesktopSettingsMirrorKeys,
-  listDesktopSpecialSettingMirrors,
-} from '@/services/desktop/desktopSettingsMirror';
+import { getAdaptationServices } from '@/src/adaptations';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 import { getRuntimePlatform, type RuntimePlatform } from '@/utils/platform/desktopRuntime';
 
@@ -139,31 +99,31 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     const loadDesktopInfo = async () => {
       setDesktopError('');
       try {
-        const info = await getDesktopAppInfo();
+        const info = await (await getAdaptationServices()).desktopBridge.getDesktopAppInfo();
         if (!cancelled) {
           setDesktopInfo(info);
           setSaveRootEdit(info?.saveDir ?? null);
           setBackupRootEdit(info?.backupDir ?? null);
         }
-        if (!cancelled) setDesktopReleaseInfo(buildDesktopReleaseInfo(info, null));
-        const mirror = await listDesktopSaveMirror();
+        if (!cancelled) setDesktopReleaseInfo(await (await getAdaptationServices()).desktopReleaseInfo.buildDesktopReleaseInfo(info, null));
+        const mirror = await (await getAdaptationServices()).desktopSaveMirror.listDesktopSaveMirror();
         if (!cancelled) setDesktopMirrorCount(mirror.length);
-        const configKeys = await listDesktopSettingsMirrorKeys();
+        const configKeys = await (await getAdaptationServices()).desktopSettingsMirror.listDesktopSettingsMirrorKeys();
         if (!cancelled) setDesktopConfigCount(configKeys.length);
-        const assetMirror = await listDesktopAssetMirror();
+        const assetMirror = await (await getAdaptationServices()).desktopAssetMirror.listDesktopAssetMirror();
         if (!cancelled) setDesktopAssetCount(assetMirror.length);
         const assetSummary = await (await getSaveCatalog()).summarizeDesktopAssets() as DesktopAssetMaintenanceSummary;
         if (!cancelled) setDesktopAssetSummary(assetSummary);
-        const saveMirrorHealth = await inspectDesktopSaveMirrorHealth();
+        const saveMirrorHealth = await (await getAdaptationServices()).desktopSaveMirror.inspectDesktopSaveMirrorHealth();
         if (!cancelled) setDesktopSaveMirrorHealth(saveMirrorHealth);
-        const saveDeltaMirrorHealth = await inspectDesktopSaveDeltaMirrorHealth();
+        const saveDeltaMirrorHealth = await (await getAdaptationServices()).desktopSaveDeltaMirror.inspectDesktopSaveDeltaMirrorHealth();
         if (!cancelled) setDesktopSaveDeltaMirrorHealth(saveDeltaMirrorHealth);
-        const assetMirrorHealth = await inspectDesktopAssetMirrorHealth();
+        const assetMirrorHealth = await (await getAdaptationServices()).desktopAssetMirror.inspectDesktopAssetMirrorHealth();
         if (!cancelled) setDesktopAssetMirrorHealth(assetMirrorHealth);
-        const backups = await listDesktopSaveBackups();
-        const migrationBackups = await listDesktopMigrationBackups();
+        const backups = await (await getAdaptationServices()).desktopSaveBackup.listDesktopSaveBackups();
+        const migrationBackups = await (await getAdaptationServices()).desktopMigrationBackup.listDesktopMigrationBackups();
         const migrationPreview = await (await getSaveCatalog()).previewDesktopStateBeforeOneTimeMigration() as DesktopMigrationBackupPreview | null;
-        const reports = await listDesktopDiagnosticReports();
+        const reports = await (await getAdaptationServices()).desktopDiagnostics.listDesktopDiagnosticReports();
         if (!cancelled) {
           setDesktopBackupCount(backups.length);
           setLatestDesktopBackup(findLatestRestorableDesktopBackup(backups));
@@ -322,12 +282,10 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    const target = saves.find((save) => save.id === id)?.saveTree;
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
     try {
       await (await getSaveCatalog()).deleteSave(id);
-      clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
       setDeletingId(null);
       void refresh();
       void refreshDesktopMirrorCount();
@@ -345,7 +303,6 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setSaves((prev) => prev.filter((save) => save.saveTree?.rootId !== rootId));
     try {
       await (await getSaveCatalog()).deleteSaveTree(rootId);
-      clearActiveSaveTreeMetaIfMatches({ rootId });
       setDeletingRootId(null);
       void refresh();
       void refreshDesktopMirrorCount();
@@ -379,7 +336,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
         const imported = await (await getSaveCatalog()).importSaveFileAsMany(file);
         const now = Date.now();
         for (const [index, data] of imported.entries()) {
-          const row = data as { id: number; type: string; timestamp: number };
+          const row = data;
           row.id = 0;
           row.type = 'imported';
           row.timestamp = now + index;
@@ -401,11 +358,11 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setCheckingDesktop(true);
     setDesktopError('');
     try {
-      const result = await writeDesktopProbe();
+      const result = await (await getAdaptationServices()).desktopBridge.writeDesktopProbe();
       setDesktopProbe(result);
-      const info = await getDesktopAppInfo();
+      const info = await (await getAdaptationServices()).desktopBridge.getDesktopAppInfo();
       setDesktopInfo(info);
-      setDesktopReleaseInfo(buildDesktopReleaseInfo(info, desktopUpdate));
+      setDesktopReleaseInfo(await (await getAdaptationServices()).desktopReleaseInfo.buildDesktopReleaseInfo(info, desktopUpdate));
       await refreshDesktopMirrorCount();
     } catch (err) {
       console.error('[storage-manager] desktop probe failed', err);
@@ -418,7 +375,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleOpenDesktopSaveDir = async () => {
     setDesktopError('');
     try {
-      await openDesktopDataDir('saves');
+      await (await getAdaptationServices()).desktopBridge.openDesktopDataDir('saves');
     } catch (err) {
       console.error('[storage-manager] open desktop save dir failed', err);
       setDesktopError(err instanceof Error ? err.message : '打开桌面存档目录失败');
@@ -428,7 +385,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleOpenDesktopConfigDir = async () => {
     setDesktopError('');
     try {
-      await openDesktopDataDir('config');
+      await (await getAdaptationServices()).desktopBridge.openDesktopDataDir('config');
     } catch (err) {
       console.error('[storage-manager] open desktop config dir failed', err);
       setDesktopError(err instanceof Error ? err.message : '打开桌面配置目录失败');
@@ -438,7 +395,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleOpenDesktopZhikuDir = async () => {
     setDesktopError('');
     try {
-      await openDesktopDataDir('zhiku');
+      await (await getAdaptationServices()).desktopBridge.openDesktopDataDir('zhiku');
     } catch (err) {
       console.error('[storage-manager] open desktop zhiku dir failed', err);
       setDesktopError(err instanceof Error ? err.message : '打开桌面智库目录失败');
@@ -448,7 +405,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleOpenDesktopWorldbookDir = async () => {
     setDesktopError('');
     try {
-      await openDesktopDataDir('worldbooks');
+      await (await getAdaptationServices()).desktopBridge.openDesktopDataDir('worldbooks');
     } catch (err) {
       console.error('[storage-manager] open desktop worldbook dir failed', err);
       setDesktopError(err instanceof Error ? err.message : '打开桌面世界书目录失败');
@@ -458,7 +415,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleOpenDesktopAssetDir = async () => {
     setDesktopError('');
     try {
-      await openDesktopDataDir('assets');
+      await (await getAdaptationServices()).desktopBridge.openDesktopDataDir('assets');
     } catch (err) {
       console.error('[storage-manager] open desktop asset dir failed', err);
       setDesktopError(err instanceof Error ? err.message : '打开桌面资源目录失败');
@@ -468,7 +425,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleOpenDesktopBackupDir = async () => {
     setDesktopError('');
     try {
-      await openDesktopDataDir('backups');
+      await (await getAdaptationServices()).desktopBridge.openDesktopDataDir('backups');
     } catch (err) {
       console.error('[storage-manager] open desktop backup dir failed', err);
       setDesktopError(err instanceof Error ? err.message : '打开桌面备份目录失败');
@@ -478,7 +435,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleChooseSaveRoot = async () => {
     setDesktopError('');
     try {
-      const folder = await pickDesktopFolder();
+      const folder = await (await getAdaptationServices()).desktopBridge.pickDesktopFolder();
       if (folder) setSaveRootEdit(folder);
     } catch (err) {
       console.error('[storage-manager] choose save root failed', err);
@@ -489,7 +446,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleChooseBackupRoot = async () => {
     setDesktopError('');
     try {
-      const folder = await pickDesktopFolder();
+      const folder = await (await getAdaptationServices()).desktopBridge.pickDesktopFolder();
       if (folder) setBackupRootEdit(folder);
     } catch (err) {
       console.error('[storage-manager] choose backup root failed', err);
@@ -508,7 +465,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleApplyStorageRoots = async () => {
     setDesktopError('');
     try {
-      const info = await setDesktopStorageRoots({
+      const info = await (await getAdaptationServices()).desktopBridge.setDesktopStorageRoots({
         saveDir: saveRootEdit?.trim() ? saveRootEdit.trim() : null,
         backupDir: backupRootEdit?.trim() ? backupRootEdit.trim() : null,
       });
@@ -524,7 +481,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const handleOpenDesktopLogDir = async () => {
     setDesktopError('');
     try {
-      await openDesktopDataDir('logs');
+      await (await getAdaptationServices()).desktopBridge.openDesktopDataDir('logs');
     } catch (err) {
       console.error('[storage-manager] open desktop log dir failed', err);
       setDesktopError(err instanceof Error ? err.message : '打开桌面日志目录失败');
@@ -536,9 +493,9 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setUpdateError('');
     setUpdateProgress(null);
     try {
-      const result = await checkForDesktopUpdate();
+      const result = await (await getAdaptationServices()).desktopBridge.checkForDesktopUpdate();
       setDesktopUpdate(result);
-      setDesktopReleaseInfo(buildDesktopReleaseInfo(desktopInfo, result));
+      setDesktopReleaseInfo(await (await getAdaptationServices()).desktopReleaseInfo.buildDesktopReleaseInfo(desktopInfo, result));
       if (result.error) setUpdateError(result.error);
     } catch (err) {
       console.error('[storage-manager] desktop update check failed', err);
@@ -552,7 +509,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setInstallingUpdate(true);
     setUpdateError('');
     try {
-      await downloadAndInstallDesktopUpdate(setUpdateProgress);
+      await (await getAdaptationServices()).desktopBridge.downloadAndInstallDesktopUpdate(setUpdateProgress);
     } catch (err) {
       console.error('[storage-manager] desktop update install failed', err);
       setUpdateError(err instanceof Error ? err.message : '桌面端更新安装失败');
@@ -562,30 +519,30 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   };
 
   const refreshDesktopMirrorCount = async () => {
-    const mirror = await listDesktopSaveMirror();
+    const mirror = await (await getAdaptationServices()).desktopSaveMirror.listDesktopSaveMirror();
     setDesktopMirrorCount(mirror.length);
-    const configKeys = await listDesktopSettingsMirrorKeys();
+    const configKeys = await (await getAdaptationServices()).desktopSettingsMirror.listDesktopSettingsMirrorKeys();
     setDesktopConfigCount(configKeys.length);
-    const assetMirror = await listDesktopAssetMirror();
+    const assetMirror = await (await getAdaptationServices()).desktopAssetMirror.listDesktopAssetMirror();
     setDesktopAssetCount(assetMirror.length);
     const assetSummary = await (await getSaveCatalog()).summarizeDesktopAssets() as DesktopAssetMaintenanceSummary;
     setDesktopAssetSummary(assetSummary);
-    const saveMirrorHealth = await inspectDesktopSaveMirrorHealth();
+    const saveMirrorHealth = await (await getAdaptationServices()).desktopSaveMirror.inspectDesktopSaveMirrorHealth();
     setDesktopSaveMirrorHealth(saveMirrorHealth);
-    const saveDeltaMirrorHealth = await inspectDesktopSaveDeltaMirrorHealth();
+    const saveDeltaMirrorHealth = await (await getAdaptationServices()).desktopSaveDeltaMirror.inspectDesktopSaveDeltaMirrorHealth();
     setDesktopSaveDeltaMirrorHealth(saveDeltaMirrorHealth);
-    const assetMirrorHealth = await inspectDesktopAssetMirrorHealth();
+    const assetMirrorHealth = await (await getAdaptationServices()).desktopAssetMirror.inspectDesktopAssetMirrorHealth();
     setDesktopAssetMirrorHealth(assetMirrorHealth);
-    const backups = await listDesktopSaveBackups();
+    const backups = await (await getAdaptationServices()).desktopSaveBackup.listDesktopSaveBackups();
     setDesktopBackupCount(backups.length);
     setLatestDesktopBackup(findLatestRestorableDesktopBackup(backups));
     setDesktopBackups(backups);
-    const migrationBackups = await listDesktopMigrationBackups();
+    const migrationBackups = await (await getAdaptationServices()).desktopMigrationBackup.listDesktopMigrationBackups();
     setDesktopMigrationBackupCount(migrationBackups.length);
     setUnreadableDesktopMigrationBackupCount(countUnreadableDesktopMigrationBackups(migrationBackups));
     setLatestDesktopMigrationBackup(findLatestVerifiedDesktopMigrationBackup(migrationBackups));
     setDesktopMigrationBackupPreview(await (await getSaveCatalog()).previewDesktopStateBeforeOneTimeMigration() as DesktopMigrationBackupPreview | null);
-    const reports = await listDesktopDiagnosticReports();
+    const reports = await (await getAdaptationServices()).desktopDiagnostics.listDesktopDiagnosticReports();
     setDesktopDiagnosticReports(reports);
     setLatestDiagnosticReport(reports[0] ?? null);
   };
@@ -612,10 +569,10 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDesktopIndexRepairSummary('');
     try {
       await (await getSaveCatalog()).backupCurrentSavesToDesktop('before-repair');
-      const repairedSaves = await repairDesktopSaveMirrorIndex();
-      const repairedTransactions = await repairUnresolvedDesktopSaveTransactions();
-      const repairedDeltas = await repairDesktopSaveDeltaMirrorIndex();
-      const repairedAssets = await repairDesktopAssetMirrorIndex();
+      const repairedSaves = await (await getAdaptationServices()).desktopSaveMirror.repairDesktopSaveMirrorIndex();
+      const repairedTransactions = await (await getAdaptationServices()).desktopSaveMirror.repairUnresolvedDesktopSaveTransactions();
+      const repairedDeltas = await (await getAdaptationServices()).desktopSaveDeltaMirror.repairDesktopSaveDeltaMirrorIndex();
+      const repairedAssets = await (await getAdaptationServices()).desktopAssetMirror.repairDesktopAssetMirrorIndex();
       setDesktopIndexRepairSummary(`已重建本地镜像索引（已先备份当前数据）：${repairedSaves.length} 个存档 / ${repairedDeltas.length} 个增量 / ${repairedAssets.length} 个资源 / 清理 ${repairedTransactions.removedTransactions} 个已完成事务 / 保留 ${repairedTransactions.retainedTransactions + repairedTransactions.unreadableTransactions} 个待排查事务`);
       await refreshDesktopMirrorCount();
     } catch (err) {
@@ -666,13 +623,13 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setExportingDiagnostic(true);
     setDesktopError('');
     try {
-      const info = desktopInfo ?? await getDesktopAppInfo();
+      const info = desktopInfo ?? await (await getAdaptationServices()).desktopBridge.getDesktopAppInfo();
       if (info) setDesktopInfo(info);
-      const specialSettingMirrors = await listDesktopSpecialSettingMirrors();
-      const saveMirrorHealth = await inspectDesktopSaveMirrorHealth();
-      const saveDeltaMirrorHealth = await inspectDesktopSaveDeltaMirrorHealth();
-      const assetMirrorHealth = await inspectDesktopAssetMirrorHealth();
-      const report = await writeDesktopDiagnosticReport({
+      const specialSettingMirrors = await (await getAdaptationServices()).desktopSettingsMirror.listDesktopSpecialSettingMirrors();
+      const saveMirrorHealth = await (await getAdaptationServices()).desktopSaveMirror.inspectDesktopSaveMirrorHealth();
+      const saveDeltaMirrorHealth = await (await getAdaptationServices()).desktopSaveDeltaMirror.inspectDesktopSaveDeltaMirrorHealth();
+      const assetMirrorHealth = await (await getAdaptationServices()).desktopAssetMirror.inspectDesktopAssetMirrorHealth();
+      const report = await (await getAdaptationServices()).desktopDiagnostics.writeDesktopDiagnosticReport({
         appInfo: info,
         saveCount: saves.length,
         desktopMirrorCount,
@@ -753,7 +710,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDeletingDesktopBackupPath(backup.path);
     setDesktopError('');
     try {
-      await deleteDesktopSaveBackup(backup.path);
+      await (await getAdaptationServices()).desktopSaveBackup.deleteDesktopSaveBackup(backup.path);
       if (selectedDesktopBackupPath === backup.path) {
         setSelectedDesktopBackupPath(null);
       }
@@ -770,7 +727,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setExportingDesktopBackupPath(backup.path);
     setDesktopError('');
     try {
-      const record = await loadDesktopSaveBackup(backup.path);
+      const record = await (await getAdaptationServices()).desktopSaveBackup.loadDesktopSaveBackup(backup.path);
       if (!record) {
         alert('这份桌面本地备份无法读取或格式不正确');
         return;
@@ -788,7 +745,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setExportingDiagnosticReportPath(report.path);
     setDesktopError('');
     try {
-      const payload = await loadDesktopDiagnosticReport(report.path);
+      const payload = await (await getAdaptationServices()).desktopDiagnostics.loadDesktopDiagnosticReport(report.path);
       if (!payload) {
         alert('这份桌面诊断报告无法读取或格式不正确');
         return;
@@ -807,7 +764,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     setDeletingDiagnosticReportPath(report.path);
     setDesktopError('');
     try {
-      await deleteDesktopDiagnosticReport(report.path);
+      await (await getAdaptationServices()).desktopDiagnostics.deleteDesktopDiagnosticReport(report.path);
       await refreshDesktopMirrorCount();
     } catch (err) {
       console.error('[storage-manager] desktop diagnostic report delete failed', err);

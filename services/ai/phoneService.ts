@@ -1,4 +1,4 @@
-import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+import type { API配置项, 游戏设置 } from '@/models/settings';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 手机会话, 手机联系人, 主动来信种子 } from '@/models/phone';
@@ -18,6 +18,7 @@ import { buildIndependentPromptModulesSection } from '@/services/promptModuleSco
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { extractJsonLikeText, normalizeStructuredModelText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
+import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
 
 export interface 手机回复上下文 {
   traveler: 角色数据结构;
@@ -62,30 +63,13 @@ function getPhoneReplyLimits(ctx: 手机回复上下文): 手机回复数量限�
   return ctx.chat.type === 'group' ? { min: 12, max: 30 } : { min: 4, max: 8 };
 }
 
-export function buildPhoneApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
-  const phoneApi = settings.手机系统.api;
-  const phoneFieldsEmpty = !phoneApi.baseUrl.trim() && !phoneApi.apiKey.trim() && !phoneApi.model.trim();
-  const provider = phoneFieldsEmpty ? mainConfig?.provider : phoneApi.provider || mainConfig?.provider;
-  const baseUrl = phoneApi.baseUrl.trim() || mainConfig?.baseUrl || '';
-  const apiKey = phoneApi.apiKey.trim() || mainConfig?.apiKey || '';
-  const model = phoneApi.model.trim() || mainConfig?.model || '';
-
-  if (!provider || !baseUrl || !apiKey || !model) return null;
-
+export function buildPhoneApiConfig(settings: 游戏设置): API配置项 {
   return {
-    id: '__phone_runtime__',
-    name: '手机系统',
-    provider,
-    baseUrl,
-    apiKey,
-    model,
-    maxTokens: phoneApi.maxTokens ?? mainConfig?.maxTokens ?? 900,
-    temperature: phoneApi.temperature ?? mainConfig?.temperature ?? 0.75,
-    retryCount: phoneApi.retryCount ?? mainConfig?.retryCount ?? 2,
+    ...requireIndependentApiConfig('手机系统', settings.手机系统.api, {
+      maxTokens: 900,
+      temperature: 0.75,
+    }),
     enableClaudeMode: settings.enableClaudeMode === true,
-    createdAt: 0,
-    updatedAt: Date.now(),
   };
 }
 
@@ -113,22 +97,8 @@ export async function generatePhoneReply(
   const raw = await request(messages, '手机系统');
   const first = evaluatePhoneReplyQuality(parsePhoneReply(raw, limits.max), safeCtx, limits);
   if (first.accepted) return first.reply;
-
-  const supplementRaw = await request(
-    buildPhoneQualitySupplementMessages(messages, first, safeCtx, limits),
-    '手机系统质量补充',
-  );
-  const supplement = parsePhoneReply(supplementRaw, limits.max);
-  const mergedMessages = [...first.reply.messages, ...supplement.messages];
-  const final = evaluatePhoneReplyQuality({
-    messages: mergedMessages,
-    summary: supplement.summary || first.reply.summary,
-    message: mergedMessages.join('\n'),
-  }, safeCtx, limits);
-  if (final.accepted) return final.reply;
-
   throw new PhoneReplyQualityError(
-    `手机回复质量校验失败：${final.reasons.join('；') || `未达到 ${limits.min}-${limits.max} 条有效短讯`}`,
+    `手机回复质量校验失败：${first.reasons.join('；') || `未达到 ${limits.min}-${limits.max} 条有效短讯`}`,
   );
 }
 
@@ -575,35 +545,6 @@ function evaluatePhoneReplyQuality(
     accepted: acceptedMessages.length >= limits.min,
     reasons: Array.from(reasons),
   };
-}
-
-function buildPhoneQualitySupplementMessages(
-  baseMessages: Array<{ role: string; content: string }>,
-  quality: 手机回复质量结果,
-  ctx: 手机回复上下文,
-  limits: 手机回复数量限制,
-): Array<{ role: string; content: string }> {
-  const missing = Math.max(1, limits.min - quality.reply.messages.length);
-  const available = Math.max(missing, limits.max - quality.reply.messages.length);
-  const acceptedJson = JSON.stringify({
-    messages: quality.reply.messages,
-    summary: quality.reply.summary || '',
-  });
-  return [
-    ...baseMessages,
-    { role: 'assistant', content: acceptedJson },
-    {
-      role: 'user',
-      content: [
-        '上一版未通过手机回复质量校验，请只补充缺少的有效短讯，不要改写或复述已保留内容。',
-        `任务锚点：继续严格回应本请求中已经提供的${ctx.seed ? '匹配主动来信种子' : '当前玩家消息'}。`,
-        `校验原因：${quality.reasons.join('；') || '有效消息不足'}`,
-        `已保留 ${quality.reply.messages.length} 条；本次补充 ${missing}-${available} 条，合并后总数必须为 ${limits.min}-${limits.max} 条。`,
-        ctx.chat.type === 'group' ? '群聊每条仍须使用“姓名：内容”格式，并自然补足不同参与者的发言。' : '私聊继续直接回应玩家当前内容并保持该 NPC 的角色底色。',
-        '严格只输出补充部分的 JSON：{"messages":["补充短讯"],"summary":"覆盖合并后完整通讯的一句话摘要"}',
-      ].join('\n'),
-    },
-  ];
 }
 
 function normalizePhoneMessageForComparison(text: string, group: boolean): string {

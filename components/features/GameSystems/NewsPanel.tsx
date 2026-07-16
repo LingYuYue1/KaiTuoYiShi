@@ -68,7 +68,7 @@ export function NewsPanel({ news, turnCount }: NewsPanelProps) {
   );
 
   const visible = tab === 'all' ? sorted : sorted.filter((item) => item.状态 === tab);
-  const featured = visible.find((item) => item.重要) ?? visible[0] ?? null;
+  const featured = visible.find((item) => item.重要) ?? null;
   const list = featured ? visible.filter((item) => item.id !== featured.id) : visible;
 
   return (

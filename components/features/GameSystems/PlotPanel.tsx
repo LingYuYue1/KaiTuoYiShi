@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { API设置, 游戏设置 } from '@/models/settings';
+import type { 游戏设置 } from '@/models/settings';
 import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
 import {
   创建剧情编织系列FromText,
   归一化剧情编织系统,
   重建剧情编织系列FromText,
 } from '@/models/storyWeaving';
-import { buildStoryWeavingApiConfig, decomposeStorySegment, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
-import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { 剧情编织注入诊断 } from '@/src/kernel/workflows/storyWeaving';
+import type { 剧情规划分析快照 } from '@/src/kernel/domain/story/storyPlanningAnalysis';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 import { buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 
 interface PlotPanelProps {
   storyWeaving: 剧情编织系统;
   onStoryWeavingChange: React.Dispatch<React.SetStateAction<剧情编织系统>>;
   gameSettings: 游戏设置;
-  apiSettings: API设置;
 }
 
 interface SegmentDraft {
@@ -166,7 +166,7 @@ function applyDraft(segment: 剧情编织分段, draft: SegmentDraft): 剧情编
   };
 }
 
-export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, apiSettings }: PlotPanelProps) {
+export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: PlotPanelProps) {
   const txtInputRef = useRef<HTMLInputElement | null>(null);
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
@@ -179,6 +179,9 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const [pasteText, setPasteText] = useState('');
   const [draft, setDraft] = useState<SegmentDraft | null>(null);
   const [trackTab, setTrackTab] = useState<TrackTab>('canon');
+  const [planningAnalysis, setPlanningAnalysis] = useState<剧情规划分析快照 | null>(null);
+  const [injectionDiagnostics, setInjectionDiagnostics] = useState<剧情编织注入诊断 | null>(null);
+  const [analysisError, setAnalysisError] = useState<Error | null>(null);
 
   const normalized = useMemo(() => 归一化剧情编织系统(storyWeaving), [storyWeaving]);
   const canonSeries = useMemo(() => normalized.系列列表.filter((series) => series.来源类型 === 'canon'), [normalized.系列列表]);
@@ -186,8 +189,24 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const visibleSeries = trackTab === 'canon' ? canonSeries : customSeries;
   const activeSeries = normalized.系列列表.find((s) => s.id === normalized.当前系列ID) ?? normalized.系列列表[0];
   const activeProgress = normalized.当前进度?.当前系列ID === activeSeries?.id ? normalized.当前进度 : undefined;
-  const planningAnalysis = useMemo(() => buildStoryPlanningAnalysis(normalized), [normalized]);
-  const injectionDiagnostics = useMemo(() => getStoryWeavingInjectionDiagnostics(normalized), [normalized]);
+  useEffect(() => {
+    let active = true;
+    setAnalysisError(null);
+    void getAdaptationServices()
+      .then((services) => Promise.all([
+        services.storyPlanning.buildStoryPlanningAnalysis(normalized),
+        services.storyWeaving.getStoryWeavingInjectionDiagnostics(normalized),
+      ]))
+      .then(([planning, diagnostics]) => {
+        if (!active) return;
+        setPlanningAnalysis(planning);
+        setInjectionDiagnostics(diagnostics);
+      })
+      .catch((error: unknown) => {
+        if (active) setAnalysisError(error instanceof Error ? error : new Error(String(error)));
+      });
+    return () => { active = false; };
+  }, [normalized]);
   const viewSeries = visibleSeries.find((s) => s.id === expandedSeriesId)
     ?? visibleSeries.find((s) => s.id === activeSeries?.id)
     ?? visibleSeries[0];
@@ -233,7 +252,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const persist = async (next: 剧情编织系统) => {
     const clean = 归一化剧情编织系统(next);
     onStoryWeavingChange(clean);
-    await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(clean));
+    await setPreference('storyWeavingSystem', buildPersistedStoryWeavingSystem(clean));
   };
 
   const replaceSeries = async (nextSeries: 剧情编织系列, baseSystem = normalized) => {
@@ -455,9 +474,10 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
       .sort((a, b) => b.组号 - a.组号)[0];
 
   const handleDecompose = async (series: 剧情编织系列, segment: 剧情编织分段) => {
-    const config = buildStoryWeavingApiConfig(gameSettings, apiSettings);
+    const storyService = (await getAdaptationServices()).storyWeaving;
+    const config = await storyService.buildStoryWeavingApiConfig(gameSettings);
     if (!config) {
-      window.alert('剧情编织 API 未配置。请先到设置 → 剧情编织 配置模型，或配置主 API 作为回退。');
+      window.alert('剧情编织 API 未配置。请先到设置 → 剧情编织 配置独立模型。');
       return;
     }
     setBusyId(segment.id);
@@ -468,7 +488,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
       updatedAt: Date.now(),
     }));
     try {
-      const parsed = await decomposeStorySegment({
+      const parsed = await storyService.decomposeStorySegment({
         config,
         series,
         segment,
@@ -496,9 +516,10 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   };
 
   const handleBatchDecompose = async (series: 剧情编织系列, mode: 'pending' | 'fromCurrent' | 'all') => {
-    const config = buildStoryWeavingApiConfig(gameSettings, apiSettings);
+    const storyService = (await getAdaptationServices()).storyWeaving;
+    const config = await storyService.buildStoryWeavingApiConfig(gameSettings);
     if (!config) {
-      window.alert('剧情编织 API 未配置。请先到设置 → 剧情编织 配置模型，或配置主 API 作为回退。');
+      window.alert('剧情编织 API 未配置。请先到设置 → 剧情编织 配置独立模型。');
       return;
     }
     const targets = series.分段列表.filter((segment) => {
@@ -533,7 +554,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
 
         try {
           const processingSegment = workingSeries.分段列表.find((item) => item.id === target.id) ?? target;
-          const parsed = await decomposeStorySegment({
+          const parsed = await storyService.decomposeStorySegment({
             config,
             series: workingSeries,
             segment: processingSegment,
@@ -580,6 +601,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     setExpandedSeriesId(rest[0]?.id ?? null);
   };
 
+  if (analysisError) throw analysisError;
   return (
     <div className="kaituo-options-scroll relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
       <div

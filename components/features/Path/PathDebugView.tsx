@@ -7,15 +7,9 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 命途ID } from '@/models/journey';
 import type { 命途阶段, 命途进度 } from '@/models/path';
-import { PATH_STAGE_DEFS, 创建命途进度, STAGE_PROGRESS_MAX } from '@/models/path';
+import { PATH_STAGE_DEFS, STAGE_PROGRESS_MAX } from '@/models/path';
 import { paths as PATH_DEFS, getPath } from '@/data/journeyPresets';
-import {
-  awakenPath,
-  setPrimaryPath,
-  应用狭间结果,
-  踏入命途狭间,
-  拒绝命途狭间,
-} from '@/services/pathService';
+import { getAdaptationServices } from '@/src/adaptations';
 
 interface Props {
   旅人: 角色数据结构;
@@ -65,12 +59,16 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
     });
   };
 
-  const 添加命途 = (id: 命途ID) => {
-    set旅人((prev) => awakenPath(prev, id, { awakenedAt: '手动添加', notes: '变量管理调试' }).traveler);
+  const 添加命途 = async (id: 命途ID) => {
+    const result = await (await getAdaptationServices()).path.awakenPath(旅人, id, {
+      awakenedAt: '手动添加',
+      notes: '变量管理调试',
+    });
+    set旅人(result.traveler);
   };
 
-  const 切换主命途 = (id: 命途ID) => {
-    set旅人((prev) => setPrimaryPath(prev, id));
+  const 切换主命途 = async (id: 命途ID) => {
+    set旅人(await (await getAdaptationServices()).path.setPrimaryPath(旅人, id));
   };
 
   // 狭间状态操作
@@ -80,10 +78,10 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
   const 设置进行中 = (id: 命途ID | '') => {
     set世界((prev) => ({ ...prev, 进行中狭间: id || undefined }));
   };
-  const 应用评判 = () => {
+  const 应用评判 = async () => {
     const pid = 世界.进行中狭间;
     if (!pid) return;
-    const res = 应用狭间结果(旅人, pid, '升阶');
+    const res = await (await getAdaptationServices()).path.应用狭间结果(旅人, pid, '升阶');
     if (!res.ok) {
       alert(res.reason ?? '评判应用失败');
       return;
@@ -136,7 +134,9 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
           {世界.待触发狭间 && (
             <>
               <button
-                onClick={() => set世界((prev) => 踏入命途狭间(prev))}
+                onClick={() => void getAdaptationServices()
+                  .then((services) => services.path.踏入命途狭间(世界))
+                  .then(set世界)}
                 className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
                   background:
@@ -148,7 +148,9 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                 踏入(→ 进行中)
               </button>
               <button
-                onClick={() => set世界((prev) => 拒绝命途狭间(prev))}
+                onClick={() => void getAdaptationServices()
+                  .then((services) => services.path.拒绝命途狭间(世界))
+                  .then(set世界)}
                 className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
                   color: 'rgba(var(--tj-text-secondary), 0.85)',

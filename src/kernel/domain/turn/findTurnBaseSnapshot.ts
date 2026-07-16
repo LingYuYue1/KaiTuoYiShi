@@ -1,101 +1,61 @@
-/**
- * Pure: locate the formal base state as of before a given turn committed.
- *
- * Linear history only — no revision tree. Rerolling turn N discards
- * turns N+1…end (suffix truncate). Operates on formal GameState
- * (messages / turns / turnCount / travelerName / variables / knowledge).
- *
- * A migrated turn without a recorded base name cannot be rerolled: guessing
- * from the current suffix would retain discarded formal state.
- */
-
-import type { GameState, KernelTurn, SessionSnapshot } from '@/src/kernel/domain/session/types';
-import {
-  cloneGameState,
-  cloneKernelKnowledge,
-  createEmptyKernelKnowledge,
-} from '@/src/kernel/domain/session/types';
-import {
-  cloneKernelVariables,
-  createEmptyKernelVariables,
-} from '@/src/kernel/domain/variables';
-
-/** Messages per formal turn: one user + one assistant. */
-const MESSAGES_PER_TURN = 2;
+import type { 回合快照 } from '@/models/chat';
+import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
+import { cloneRuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
+import type { RuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
 
 export type TurnBaseSnapshot = Readonly<{
-  /** Formal state before the target turn was applied. */
-  state: GameState;
-  /** Index of the target turn in current.turns. */
-  turnIndex: number;
-  /** Player text that originally drove the turn (re-sent on reroll). */
+  runtime: RuntimeGameState;
   originalPlayerText: string;
-  /** Turn being replaced. */
   turnId: string;
-  /** Original turn record (for diagnostics). */
-  originalTurn: KernelTurn;
 }>;
 
-/**
- * Find base formal state for `turnId`.
- * Returns null when the turn is not in the snapshot or base is incomplete.
- */
+/** Reroll is deliberately last-turn only; the runtime stores one compact pre-turn snapshot. */
 export function findTurnBaseSnapshot(
   snapshot: SessionSnapshot,
   turnId: string,
 ): TurnBaseSnapshot | null {
-  if (typeof turnId !== 'string' || turnId.length === 0) {
-    return null;
+  const assistantIndex = findLastAssistantIndex(snapshot.state.runtime.chatHistory);
+  const assistant = snapshot.state.runtime.chatHistory[assistantIndex]!;
+  if (`turn_${assistant.id}` !== turnId) throw new Error('Only the latest turn can be rerolled');
+  if (assistantIndex === 0 || snapshot.state.runtime.chatHistory[assistantIndex - 1]?.role !== 'user') {
+    throw new Error('Latest assistant message is not paired with a user message');
   }
-
-  const turnIndex = snapshot.state.turns.findIndex((turn) => turn.id === turnId);
-  if (turnIndex < 0) {
-    return null;
-  }
-
-  const originalTurn = snapshot.state.turns[turnIndex]!;
-  if (originalTurn.travelerNameBefore === null) {
-    return null;
-  }
-
-  const prefixTurns = snapshot.state.turns.slice(0, turnIndex);
-  const prefixMessages = snapshot.state.messages.slice(
-    0,
-    turnIndex * MESSAGES_PER_TURN,
-  );
-
-  // turnCount convention: empty session starts at 1; each commit increments.
-  // After k turns, turnCount === k + 1. Base before index i has i turns.
-  // Phase 4 persisted only the name. That was the complete formal variable
-  // slice then, so migrate it into the Stage 5.1 baseline rather than making
-  // a previously valid reroll unavailable.
-  const baseVariables = originalTurn.variablesBefore
-    ? cloneKernelVariables(originalTurn.variablesBefore)
-    : createEmptyKernelVariables({
-      旅人: { 姓名: originalTurn.travelerNameBefore },
-    });
-  // Pre-Stage-5.2 turns lack knowledgeBefore → empty knowledge baseline.
-  const baseKnowledge = originalTurn.knowledgeBefore
-    ? cloneKernelKnowledge(originalTurn.knowledgeBefore)
-    : createEmptyKernelKnowledge();
-  // Phone/news/album are not turn-scoped snapshots yet; keep current session values.
-  const baseState: GameState = cloneGameState({
-    turnCount: prefixTurns.length + 1,
-    messages: prefixMessages,
-    turns: prefixTurns,
-    travelerName: originalTurn.travelerNameBefore,
-    variables: baseVariables,
-    knowledge: baseKnowledge,
-    phone: snapshot.state.phone,
-    news: snapshot.state.news,
-    album: snapshot.state.album,
+  const originalPlayerText = snapshot.state.runtime.chatHistory[assistantIndex - 1]!.content;
+  const preTurn = requireCompletePreTurnSnapshot(assistant.preTurnSnapshot);
+  const chatHistory = snapshot.state.runtime.chatHistory.slice(0, assistantIndex - 1);
+  const runtime = cloneRuntimeGameState({
+    ...snapshot.state.runtime,
+    旅人: preTurn.旅人 as typeof snapshot.state.runtime.旅人,
+    世界: preTurn.世界 as typeof snapshot.state.runtime.世界,
+    chatHistory,
+    记忆: preTurn.记忆 as typeof snapshot.state.runtime.记忆,
+    忆庭: preTurn.忆庭 as typeof snapshot.state.runtime.忆庭,
+    智库: preTurn.智库 as typeof snapshot.state.runtime.智库,
+    手机: preTurn.手机 as typeof snapshot.state.runtime.手机,
+    NPC: preTurn.NPC as typeof snapshot.state.runtime.NPC,
+    相册: preTurn.相册 as typeof snapshot.state.runtime.相册,
+    新闻: preTurn.新闻 as typeof snapshot.state.runtime.新闻,
+    剧情: preTurn.剧情 as typeof snapshot.state.runtime.剧情,
+    剧情编织: preTurn.剧情编织 as typeof snapshot.state.runtime.剧情编织,
+    variableBatches: preTurn.variableBatches as typeof snapshot.state.runtime.variableBatches,
+    queueTasks: preTurn.queueTasks as typeof snapshot.state.runtime.queueTasks,
+    turnCount: preTurn.turnCount,
   });
+  return { runtime, originalPlayerText, turnId };
+}
 
-  return {
-    state: baseState,
-    turnIndex,
-    originalPlayerText: originalTurn.playerText,
-    turnId,
-    originalTurn,
-  };
+function findLastAssistantIndex(history: SessionSnapshot['state']['runtime']['chatHistory']): number {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index]?.role === 'assistant') return index;
+  }
+  throw new Error('Latest turn has no assistant message');
+}
+
+function requireCompletePreTurnSnapshot(value: 回合快照 | undefined): Required<回合快照> {
+  if (!value) throw new Error('Latest assistant message has no pre-turn snapshot');
+  const required = ['忆庭', '智库', '手机', '相册', '剧情编织', 'queueTasks'] as const;
+  for (const field of required) {
+    if (value[field] === undefined) throw new Error(`Pre-turn snapshot requires ${field}`);
+  }
+  return value as Required<回合快照>;
 }

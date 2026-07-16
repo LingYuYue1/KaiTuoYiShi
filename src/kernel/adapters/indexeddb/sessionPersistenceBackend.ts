@@ -10,7 +10,6 @@
 
 import type { Revision, SessionId } from '@/src/kernel/contract';
 import type { GameState } from '@/src/kernel/domain/session/types';
-import { SESSION_SCHEMA_VERSION } from '@/src/kernel/domain/session/schema';
 
 /** Wire format stored under a session id. */
 export type StoredSessionRecord = Readonly<{
@@ -25,6 +24,7 @@ export type StoredCommandRecord = Readonly<{
   id: string;
   sessionId: string;
   commandId: string;
+  committedRevision: number;
   snapshot: StoredSessionRecord;
 }>;
 

@@ -19,6 +19,8 @@ import {
 import type {
   CommitResult,
   CompareAndSwapInput,
+  CreateSessionInput,
+  CreateSessionResult,
   SessionRepository,
 } from '@/src/kernel/ports/SessionRepository';
 import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
@@ -27,22 +29,61 @@ import {
   cloneSessionSnapshot,
 } from '@/src/kernel/domain/session/types';
 import {
-  migrateSessionRecord,
+  readSessionRecord,
   SESSION_SCHEMA_VERSION,
 } from '@/src/kernel/domain/session/schema';
 import type {
   SessionPersistenceBackend,
+  StoredCommandRecord,
   StoredSessionRecord,
 } from './sessionPersistenceBackend';
 import {
   commandRecordId,
   toStoredRecord,
 } from './sessionPersistenceBackend';
-import { MemorySessionBackend } from './memorySessionBackend';
 import { IndexedDbSessionBackend } from './indexedDbSessionBackend';
 
 export class PersistentSessionRepository implements SessionRepository {
   constructor(private readonly backend: SessionPersistenceBackend) {}
+
+  async create(input: CreateSessionInput): Promise<CreateSessionResult> {
+    return this.backend.runAtomic(async (tx) => {
+      const sessionKey = String(input.sessionId);
+      const commandKey = String(input.commandId);
+      const prior = await tx.getCommand(sessionKey, commandKey);
+      if (prior) {
+        return { type: 'committed' as const, snapshot: fromCommandRecord(prior) };
+      }
+
+      const current = await tx.getSession(sessionKey);
+      if (current) {
+        return {
+          type: 'conflict' as const,
+          actualRevision: asRevision(readSessionRecord(current).revision),
+        };
+      }
+
+      const stored = toStoredRecord(
+        input.sessionId,
+        0,
+        cloneGameState(input.initialState),
+        SESSION_SCHEMA_VERSION,
+      );
+      tx.putSession(stored);
+      tx.putCommand({
+        id: commandRecordId(sessionKey, commandKey),
+        sessionId: sessionKey,
+        commandId: commandKey,
+        committedRevision: stored.revision,
+        snapshot: stored,
+      });
+      return { type: 'committed' as const, snapshot: fromStored(stored) };
+    });
+  }
+
+  async exists(sessionId: SessionId): Promise<boolean> {
+    return this.backend.runAtomic(async (tx) => Boolean(await tx.getSession(String(sessionId))));
+  }
 
   async read(sessionId: SessionId): Promise<SessionSnapshot> {
     const record = await this.backend.runAtomic((tx) =>
@@ -58,10 +99,11 @@ export class PersistentSessionRepository implements SessionRepository {
     sessionId: SessionId,
     commandId: CommandId,
   ): Promise<SessionSnapshot | null> {
-    const row = await this.backend.runAtomic((tx) =>
-      tx.getCommand(String(sessionId), String(commandId)),
-    );
-    return row ? fromStored(row.snapshot) : null;
+    return this.backend.runAtomic(async (tx) => {
+      const row = await tx.getCommand(String(sessionId), String(commandId));
+      if (!row) return null;
+      return fromCommandRecord(row);
+    });
   }
 
   async compareAndSwap(input: CompareAndSwapInput): Promise<CommitResult> {
@@ -73,7 +115,7 @@ export class PersistentSessionRepository implements SessionRepository {
       if (prior) {
         return {
           type: 'committed' as const,
-          snapshot: fromStored(prior.snapshot),
+          snapshot: fromCommandRecord(prior),
         };
       }
 
@@ -81,16 +123,15 @@ export class PersistentSessionRepository implements SessionRepository {
       if (!current) {
         throw new Error(`Session not found: ${input.sessionId}`);
       }
-      // Ingress migrate even inside CAS so revision compare uses current schema.
-      const currentMigrated = migrateSessionRecord(current);
-      if (currentMigrated.revision !== Number(input.expectedRevision)) {
+      const exactCurrent = readSessionRecord(current);
+      if (exactCurrent.revision !== Number(input.expectedRevision)) {
         return {
           type: 'conflict' as const,
-          actualRevision: asRevision(currentMigrated.revision),
+          actualRevision: asRevision(exactCurrent.revision),
         };
       }
 
-      const nextRevision = currentMigrated.revision + 1;
+      const nextRevision = exactCurrent.revision + 1;
       // Single schema write — always current SESSION_SCHEMA_VERSION.
       const stored = toStoredRecord(
         input.sessionId,
@@ -107,6 +148,7 @@ export class PersistentSessionRepository implements SessionRepository {
         id: commandRecordId(sessionKey, commandKey),
         sessionId: sessionKey,
         commandId: commandKey,
+        committedRevision: stored.revision,
         snapshot: stored,
       });
 
@@ -141,12 +183,22 @@ export class PersistentSessionRepository implements SessionRepository {
  * Identity for already-current schema; v0 rows gain schemaVersion on next write.
  */
 function fromStored(record: StoredSessionRecord): SessionSnapshot {
-  const migrated = migrateSessionRecord(record);
+  const exact = readSessionRecord(record);
   return cloneSessionSnapshot({
-    sessionId: asSessionId(migrated.sessionId),
-    revision: asRevision(migrated.revision),
-    state: migrated.state,
+    sessionId: asSessionId(exact.sessionId),
+    revision: asRevision(exact.revision),
+    state: exact.state,
   });
+}
+
+function fromCommandRecord(record: StoredCommandRecord): SessionSnapshot {
+  if (!record.snapshot) {
+    throw new Error(`Kernel command record has no committed snapshot: ${record.commandId}`);
+  }
+  if (record.snapshot.revision !== record.committedRevision) {
+    throw new Error(`Kernel command revision does not match its committed snapshot: ${record.commandId}`);
+  }
+  return fromStored(record.snapshot);
 }
 
 /** Browser / production: IndexedDB-backed formal sessions. */
@@ -154,24 +206,4 @@ export function createIndexedDbSessionRepository(
   dbName?: string,
 ): PersistentSessionRepository {
   return new PersistentSessionRepository(new IndexedDbSessionBackend(dbName));
-}
-
-/**
- * Production-logic repository with memory durability (Node tests, non-IDB hosts).
- * Same CAS + idempotency code path as IndexedDB adapter.
- */
-export function createMemoryPersistentSessionRepository(): PersistentSessionRepository {
-  return new PersistentSessionRepository(new MemorySessionBackend());
-}
-
-/** Expose memory backend for tests that need direct seed / crash control. */
-export function createMemoryPersistentSessionRepositoryWithBackend(): {
-  repository: PersistentSessionRepository;
-  backend: MemorySessionBackend;
-} {
-  const backend = new MemorySessionBackend();
-  return {
-    repository: new PersistentSessionRepository(backend),
-    backend,
-  };
 }

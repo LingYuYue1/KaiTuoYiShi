@@ -1,13 +1,13 @@
 ﻿import { useMemo, useState } from 'react';
-import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
+import type { AI提供商, 游戏设置 } from '@/models/settings';
 import { 创建默认记忆系统设置 } from '@/models/settings';
-import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
+import type { ConnectionTestResult } from '@/services/ai/apiTools';
+import { getAdaptationServices } from '@/src/adaptations';
+import { setPreference } from '@/src/adaptations/preferences';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
-  apiSettings: API设置;
 }
 
 const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: string; defaultModel: string }[] = [
@@ -26,12 +26,8 @@ const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: stri
 const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function MemorySystemSettingsTab({ settings, onChange }: Props) {
   const memory = settings.记忆系统 ?? 创建默认记忆系统设置();
-  const mainConfig = useMemo(
-    () => apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null,
-    [apiSettings.activeConfigId, apiSettings.configs],
-  );
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
@@ -50,13 +46,13 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
   };
 
   const effectiveApi = {
-    provider: memory.记忆总结API.provider || mainConfig?.provider || 'openai_compatible',
-    baseUrl: memory.记忆总结API.baseUrl.trim() || mainConfig?.baseUrl || '',
-    apiKey: memory.记忆总结API.apiKey.trim() || mainConfig?.apiKey || '',
-    model: memory.记忆总结API.model.trim() || mainConfig?.model || '',
-    maxTokens: memory.记忆总结API.maxTokens ?? mainConfig?.maxTokens,
-    temperature: memory.记忆总结API.temperature ?? mainConfig?.temperature,
-    retryCount: memory.记忆总结API.retryCount ?? mainConfig?.retryCount ?? 2,
+    provider: memory.记忆总结API.provider || 'openai_compatible',
+    baseUrl: memory.记忆总结API.baseUrl.trim(),
+    apiKey: memory.记忆总结API.apiKey.trim(),
+    model: memory.记忆总结API.model.trim(),
+    maxTokens: memory.记忆总结API.maxTokens,
+    temperature: memory.记忆总结API.temperature,
+    retryCount: memory.记忆总结API.retryCount ?? 2,
     enableClaudeMode: settings.enableClaudeMode === true,
   };
 
@@ -85,16 +81,14 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
     if (!effectiveApi.baseUrl || !effectiveApi.apiKey) {
       setMessage({
         kind: 'error',
-        text: mainConfig
-          ? '记忆总结 API 将回退主 API；如果主 API 也未配置，请先补全。'
-          : '请先填写记忆总结 API 的 Base URL 和 API Key，或先配置主 API。',
+        text: '请先补全记忆总结独立 API 的 Base URL 和 API Key。',
       });
       return;
     }
     setLoadingModels(true);
     setMessage(null);
     try {
-      const list = await fetchModels({ ...effectiveApi, name: '记忆总结' });
+      const list = await (await getAdaptationServices()).apiTools.fetchModels({ ...effectiveApi, name: '记忆总结' });
       setModelOptions(list);
       if (list.length > 0 && !list.includes(memory.记忆总结API.model.trim())) {
         patchApi({ model: list[0] });
@@ -114,7 +108,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
       return;
     }
     try {
-      const result = await testConnection({ ...effectiveApi, name: '记忆总结' });
+      const result = await (await getAdaptationServices()).apiTools.testConnection({ ...effectiveApi, name: '记忆总结' });
       setTestResult(result);
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err);
@@ -124,7 +118,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
 
   const handleSave = async () => {
     try {
-      await setPreferenceAsync('gameSettings', settings);
+      await setPreference('gameSettings', settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '记忆系统设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -216,14 +210,14 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
 	            label="Base URL"
 	            value={memory.记忆总结API.baseUrl}
 	            onChange={(value) => patchApi({ baseUrl: value })}
-	            placeholder={mainConfig?.baseUrl ? '留空则使用主 API：' + mainConfig.baseUrl : 'https://...'}
+	            placeholder="https://..."
 	          />
 	          <InputField
 	            label="API Key"
 	            value={memory.记忆总结API.apiKey}
 	            onChange={(value) => patchApi({ apiKey: value })}
 	            type="password"
-	            placeholder={mainConfig?.apiKey ? '留空则使用主 API 的 Key' : 'sk-...'}
+	            placeholder="sk-..."
 	          />
           <NumberField
             label="最大输出"

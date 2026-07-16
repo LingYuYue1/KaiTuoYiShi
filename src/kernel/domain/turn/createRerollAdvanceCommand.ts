@@ -27,7 +27,10 @@ export function createRerollAdvanceCommand(
     expectedRevision: envelope.expectedRevision,
     command: {
       type: 'turn.advance',
-      input: { text: base.originalPlayerText },
+      input: {
+        text: base.originalPlayerText,
+        createdAt: envelope.command.createdAt,
+      },
     },
   };
 }

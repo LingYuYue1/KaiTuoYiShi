@@ -1,4 +1,4 @@
-import type { SaveListItem } from '@/src/ui/ports';
+import type { SaveListItem } from '@/src/adaptations/saveCatalog';
 
 export interface SaveTreeDisplayNode {
   save: SaveListItem;

@@ -1,5 +1,5 @@
-import type { 世界书, 世界书条目, 世界书导出数据, 世界书条目类型, 世界书作用域 } from '@/models/worldbook';
-import { 创建空世界书, 创建空世界书条目, ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
+import type { 世界书, 世界书条目, 世界书导出数据, 世界书作用域 } from '@/models/worldbook';
+import { ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
 import type { 剧情模式, 开局来源 } from '@/models/journey';
 
 export const PROMPT_LIKE_WORLDBOOK_ENTRY_IDS = new Set([
@@ -108,7 +108,6 @@ export function importWorldbooks(data: unknown, existing: 世界书[]): 世界�
     throw new Error('无效的世界书文件');
   }
   const imported = normalizeWorldbooks(parsed.books);
-  const existingIds = new Set(existing.map((b) => b.id));
   const merged = [...existing];
   for (const book of imported) {
     const idx = merged.findIndex((b) => b.id === book.id);

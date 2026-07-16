@@ -162,6 +162,7 @@ export function buildDeltaOnlyStoredSave(save: 存档数据, baseSaveId: number)
       assets: [],
       entries: [],
       tasks: [],
+      bindings: [],
     },
     新闻: [],
     剧情: [],

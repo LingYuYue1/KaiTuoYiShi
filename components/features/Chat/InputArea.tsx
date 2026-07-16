@@ -1,9 +1,8 @@
-﻿import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
-import { parseActionOptionsBlock } from '@/services/ai/responseParser';
+﻿import { useState, useRef, useCallback, memo, useEffect } from 'react';
 
 interface InputAreaProps {
-  onSend: (text: string) => void;
-  onAbort: () => void;
+  onSend: (text: string) => Promise<void>;
+  onAbort: () => Promise<void>;
   loading: boolean;
   disabled?: boolean;
   // 平铺的快捷动作
@@ -51,14 +50,10 @@ export const InputArea = memo(function InputArea({
   recoveryDraft,
 }: InputAreaProps) {
   const [input, setInput] = useState('');
-  const [rerollActionOptions, setRerollActionOptions] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSubmittedRef = useRef('');
   const appliedRecoveryRef = useRef('');
-  const visibleActionOptions = useMemo(() => {
-    const source = actionOptions.length > 0 ? actionOptions : rerollActionOptions;
-    return parseActionOptionsBlock(source.join('\n'));
-  }, [actionOptions, rerollActionOptions]);
+  const visibleActionOptions = actionOptions;
 
   useEffect(() => {
     if (!recoveryDraft || appliedRecoveryRef.current === recoveryDraft.workflowId) return;
@@ -70,18 +65,17 @@ export const InputArea = memo(function InputArea({
     }
   }, [input, recoveryDraft]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
     lastSubmittedRef.current = trimmed;
-    onSend(trimmed);
+    await onSend(trimmed);
     setInput('');
-    setRerollActionOptions([]);
     inputRef.current?.focus();
   }, [input, loading, onSend]);
 
-  const handleAbortClick = useCallback(() => {
-    onAbort();
+  const handleAbortClick = useCallback(async () => {
+    await onAbort();
     if (lastSubmittedRef.current) {
       setInput(lastSubmittedRef.current);
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -107,13 +101,12 @@ export const InputArea = memo(function InputArea({
   const showOptions = !loading && !disabled && visibleActionOptions.length > 0;
 
   const handleRerollClick = useCallback(async () => {
-    setRerollActionOptions(actionOptions);
     const restoredInput = await onReroll?.();
     if (typeof restoredInput === 'string') {
       setInput(restoredInput);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [actionOptions, onReroll]);
+  }, [onReroll]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

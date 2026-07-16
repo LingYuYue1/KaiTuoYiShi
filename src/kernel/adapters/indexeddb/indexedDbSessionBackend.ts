@@ -82,7 +82,7 @@ export class IndexedDbSessionBackend implements SessionPersistenceBackend {
     if (typeof indexedDB === 'undefined') {
       return Promise.reject(
         new Error(
-          'IndexedDB is not available in this environment. Use MemorySessionBackend or InMemorySessionRepository.',
+          'IndexedDB is required by the browser kernel session adapter.',
         ),
       );
     }

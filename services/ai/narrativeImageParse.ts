@@ -333,23 +333,6 @@ function parseSceneFromJson(data: Record<string, unknown>): 叙事插图提示�
   };
 }
 
-function parseCharactersFromJson(data: Record<string, unknown>): 叙事插图提示词[] {
-  const characters = data.characters as Array<Record<string, unknown>> | undefined;
-  if (!Array.isArray(characters)) return [];
-  const results: 叙事插图提示词[] = [];
-  for (const c of characters) {
-    const prompt = typeof c.prompt === 'string' ? c.prompt.trim() : '';
-    if (!prompt) continue;
-    results.push({
-      type: 'character',
-      prompt,
-      negativePrompt: mergeNegativePrompt(typeof c.negativePrompt === 'string' ? c.negativePrompt : ''),
-      description: typeof c.description === 'string' ? c.description.trim() : '角色',
-    });
-  }
-  return results;
-}
-
 function readStringField(data: Record<string, unknown>, key: string, fallback = ''): string {
   const value = data[key];
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;

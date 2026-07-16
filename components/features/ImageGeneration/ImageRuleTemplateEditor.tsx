@@ -41,56 +41,58 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   });
 
   const normalizedRules = useMemo(() => normalizeImageRules(rules), [rules]);
-  const section = ruleSections.find((item) => item.id === activeSection) ?? ruleSections[0];
+  const section = ruleSections.find((item) => item.id === activeSection);
+  if (!section) throw new Error(`Unknown image rule section: ${activeSection}`);
   const presets = useMemo(() => 获取规则模板列表(normalizedRules, activeSection), [normalizedRules, activeSection]);
   const activeId = getActiveId(normalizedRules, activeSection);
-  const editorId = editorIds[activeSection] || activeId || presets[0]?.id || '';
-  const selectedPreset = presets.find((preset) => preset.id === editorId) ?? presets[0] ?? null;
+  const activePreset = activeId ? presets.find((preset) => preset.id === activeId) ?? null : null;
+  const editorId = editorIds[activeSection] || activePreset?.id || '';
+  const selectedPreset = presets.find((preset) => preset.id === editorId) ?? null;
   const activeModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.是否启用) ?? null;
-  const selectedModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.id === (modelEditorId || activeModelRule?.id)) ?? normalizedRules.模型词组转化器预设列表[0] ?? null;
+  const selectedModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.id === (modelEditorId || activeModelRule?.id)) ?? null;
   const scopedArtistPresets = normalizedRules.画师串预设列表.filter((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all');
   const activeArtistId = styleScope === 'scene' ? normalizedRules.当前场景画师串预设ID : normalizedRules.当前NPC画师串预设ID;
   const activeArtist = activeArtistId ? scopedArtistPresets.find((preset) => preset.id === activeArtistId) ?? null : null;
-  const selectedArtist = scopedArtistPresets.find((preset) => preset.id === (artistEditorId || activeArtistId)) ?? scopedArtistPresets[0] ?? null;
+  const selectedArtist = scopedArtistPresets.find((preset) => preset.id === (artistEditorId || activeArtistId)) ?? null;
   const scopedDetailStylePresets = normalizedRules.详细画风预设列表.filter((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all');
   const activeDetailStyleId = styleScope === 'scene' ? normalizedRules.当前场景详细画风预设ID : normalizedRules.当前NPC详细画风预设ID;
   const activeDetailStyle = activeDetailStyleId ? scopedDetailStylePresets.find((preset) => preset.id === activeDetailStyleId) ?? null : null;
-  const selectedDetailStyle = scopedDetailStylePresets.find((preset) => preset.id === (detailStyleEditorId || activeDetailStyleId)) ?? scopedDetailStylePresets[0] ?? null;
+  const selectedDetailStyle = scopedDetailStylePresets.find((preset) => preset.id === (detailStyleEditorId || activeDetailStyleId)) ?? null;
   const activeQualityId = normalizedRules.当前质量增强预设ID;
   const activeQuality = activeQualityId ? normalizedRules.质量增强预设列表.find((preset) => preset.id === activeQualityId) ?? null : null;
-  const selectedQuality = normalizedRules.质量增强预设列表.find((preset) => preset.id === (qualityEditorId || activeQualityId)) ?? normalizedRules.质量增强预设列表[0] ?? null;
+  const selectedQuality = normalizedRules.质量增强预设列表.find((preset) => preset.id === (qualityEditorId || activeQualityId)) ?? null;
   const activePngId = styleScope === 'scene' ? normalizedRules.当前场景PNG画风预设ID : normalizedRules.当前NPCPNG画风预设ID;
   const activePng = activePngId ? normalizedRules.PNG画风预设列表.find((preset) => preset.id === activePngId) ?? null : null;
-  const selectedPng = normalizedRules.PNG画风预设列表.find((preset) => preset.id === (pngEditorId || activePngId)) ?? normalizedRules.PNG画风预设列表[0] ?? null;
+  const selectedPng = normalizedRules.PNG画风预设列表.find((preset) => preset.id === (pngEditorId || activePngId)) ?? null;
 
   useEffect(() => {
     if (editorIds[activeSection] && presets.some((preset) => preset.id === editorIds[activeSection])) return;
-    setEditorIds((prev) => ({ ...prev, [activeSection]: activeId || presets[0]?.id || '' }));
-  }, [activeId, activeSection, editorIds, presets]);
+    setEditorIds((prev) => ({ ...prev, [activeSection]: activePreset?.id ?? '' }));
+  }, [activePreset?.id, activeSection, editorIds, presets]);
 
   useEffect(() => {
     if (modelEditorId && normalizedRules.模型词组转化器预设列表.some((preset) => preset.id === modelEditorId)) return;
-    setModelEditorId(activeModelRule?.id || normalizedRules.模型词组转化器预设列表[0]?.id || '');
+    setModelEditorId(activeModelRule?.id ?? '');
   }, [activeModelRule?.id, modelEditorId, normalizedRules.模型词组转化器预设列表]);
 
   useEffect(() => {
     if (artistEditorId && scopedArtistPresets.some((preset) => preset.id === artistEditorId)) return;
-    setArtistEditorId(activeArtistId || scopedArtistPresets[0]?.id || '');
+    setArtistEditorId(activeArtist?.id ?? '');
   }, [activeArtistId, artistEditorId, scopedArtistPresets]);
 
   useEffect(() => {
     if (detailStyleEditorId && scopedDetailStylePresets.some((preset) => preset.id === detailStyleEditorId)) return;
-    setDetailStyleEditorId(activeDetailStyleId || scopedDetailStylePresets[0]?.id || '');
+    setDetailStyleEditorId(activeDetailStyle?.id ?? '');
   }, [activeDetailStyleId, detailStyleEditorId, scopedDetailStylePresets]);
 
   useEffect(() => {
     if (qualityEditorId && normalizedRules.质量增强预设列表.some((preset) => preset.id === qualityEditorId)) return;
-    setQualityEditorId(activeQualityId || normalizedRules.质量增强预设列表[0]?.id || '');
+    setQualityEditorId(activeQuality?.id ?? '');
   }, [activeQualityId, normalizedRules.质量增强预设列表, qualityEditorId]);
 
   useEffect(() => {
     if (pngEditorId && normalizedRules.PNG画风预设列表.some((preset) => preset.id === pngEditorId)) return;
-    setPngEditorId(activePngId || normalizedRules.PNG画风预设列表[0]?.id || '');
+    setPngEditorId(activePng?.id ?? '');
   }, [activePngId, pngEditorId, normalizedRules.PNG画风预设列表]);
 
   const setActiveId = (id: string) => {
@@ -125,7 +127,6 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     };
     onChange({
       词组转化器提示词预设列表: [...normalizedRules.词组转化器提示词预设列表, next],
-      [activeIdKey(activeSection)]: getActiveId(normalizedRules, activeSection) || next.id,
     } as Partial<文生图规则中心设置>);
     setEditorId(next.id);
   };
@@ -133,12 +134,11 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const deletePreset = () => {
     if (!selectedPreset) return;
     const remaining = normalizedRules.词组转化器提示词预设列表.filter((preset) => preset.id !== selectedPreset.id);
-    const nextActive = remaining.find((preset) => preset.类型 === activeSection)?.id ?? '';
     onChange({
       词组转化器提示词预设列表: remaining,
-      [activeIdKey(activeSection)]: activeId === selectedPreset.id ? nextActive : activeId,
+      [activeIdKey(activeSection)]: activeId === selectedPreset.id ? '' : activeId,
     } as Partial<文生图规则中心设置>);
-    setEditorId(nextActive);
+    setEditorId('');
   };
 
   const updateModelRule = (id: string, updater: (preset: 文生图模型规则集) => 文生图模型规则集) => {
@@ -156,10 +156,10 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
       名称: '新建模型规则集',
       模型专属提示词: '',
       锚定模式模型提示词: '',
-      是否启用: normalizedRules.模型词组转化器预设列表.length === 0,
-      NPC词组转化器提示词预设ID: 获取规则模板列表(normalizedRules, 'npc')[0]?.id ?? '',
-      场景词组转化器提示词预设ID: 获取规则模板列表(normalizedRules, 'scene')[0]?.id ?? '',
-      场景判定提示词预设ID: normalizedRules.当前场景判定提示词预设ID || 获取规则模板列表(normalizedRules, 'scene_judge')[0]?.id || '',
+      是否启用: false,
+      NPC词组转化器提示词预设ID: '',
+      场景词组转化器提示词预设ID: '',
+      场景判定提示词预设ID: '',
       createdAt: now,
       updatedAt: now,
     };
@@ -170,8 +170,10 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const deleteModelRule = () => {
     if (!selectedModelRule) return;
     const remaining = normalizedRules.模型词组转化器预设列表.filter((preset) => preset.id !== selectedModelRule.id);
-    onChange({ 模型词组转化器预设列表: remaining });
-    setModelEditorId(remaining[0]?.id ?? '');
+    onChange({
+      模型词组转化器预设列表: remaining,
+    });
+    setModelEditorId('');
   };
 
   const setActiveModelRule = (id: string) => {
@@ -206,7 +208,6 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     };
     onChange({
       画师串预设列表: [...normalizedRules.画师串预设列表, next],
-      [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: activeArtistId || next.id,
     } as Partial<文生图规则中心设置>);
     setArtistEditorId(next.id);
   };
@@ -214,12 +215,11 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const deleteArtist = () => {
     if (!selectedArtist) return;
     const remaining = normalizedRules.画师串预设列表.filter((preset) => preset.id !== selectedArtist.id);
-    const nextId = remaining.find((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all')?.id ?? '';
     onChange({
       画师串预设列表: remaining,
-      [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: activeArtistId === selectedArtist.id ? nextId : activeArtistId,
+      [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: activeArtistId === selectedArtist.id ? '' : activeArtistId,
     } as Partial<文生图规则中心设置>);
-    setArtistEditorId(nextId);
+    setArtistEditorId('');
   };
 
   const updateDetailStyle = (id: string, updater: (preset: 文生图详细画风预设) => 文生图详细画风预设) => {
@@ -247,7 +247,6 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     };
     onChange({
       详细画风预设列表: [...normalizedRules.详细画风预设列表, next],
-      [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: activeDetailStyleId || next.id,
     } as Partial<文生图规则中心设置>);
     setDetailStyleEditorId(next.id);
   };
@@ -255,12 +254,11 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const deleteDetailStyle = () => {
     if (!selectedDetailStyle) return;
     const remaining = normalizedRules.详细画风预设列表.filter((preset) => preset.id !== selectedDetailStyle.id);
-    const nextId = remaining.find((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all')?.id ?? '';
     onChange({
       详细画风预设列表: remaining,
-      [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: activeDetailStyleId === selectedDetailStyle.id ? nextId : activeDetailStyleId,
+      [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: activeDetailStyleId === selectedDetailStyle.id ? '' : activeDetailStyleId,
     } as Partial<文生图规则中心设置>);
-    setDetailStyleEditorId(nextId);
+    setDetailStyleEditorId('');
   };
 
   const updateQuality = (id: string, updater: (preset: 文生图质量增强预设) => 文生图质量增强预设) => {
@@ -283,7 +281,6 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     };
     onChange({
       质量增强预设列表: [...normalizedRules.质量增强预设列表, next],
-      当前质量增强预设ID: activeQualityId || next.id,
     });
     setQualityEditorId(next.id);
   };
@@ -291,12 +288,11 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const deleteQuality = () => {
     if (!selectedQuality) return;
     const remaining = normalizedRules.质量增强预设列表.filter((preset) => preset.id !== selectedQuality.id);
-    const nextId = remaining[0]?.id ?? '';
     onChange({
       质量增强预设列表: remaining,
       当前质量增强预设ID: activeQualityId === selectedQuality.id ? '' : activeQualityId,
     });
-    setQualityEditorId(nextId);
+    setQualityEditorId('');
   };
 
   const updatePng = (id: string, updater: (preset: 文生图PNG画风预设) => 文生图PNG画风预设) => {
@@ -321,7 +317,6 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     };
     onChange({
       PNG画风预设列表: [...normalizedRules.PNG画风预设列表, next],
-      [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: activePngId || next.id,
     } as Partial<文生图规则中心设置>);
     setPngEditorId(next.id);
   };
@@ -329,13 +324,12 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const deletePng = () => {
     if (!selectedPng) return;
     const remaining = normalizedRules.PNG画风预设列表.filter((preset) => preset.id !== selectedPng.id);
-    const nextId = remaining[0]?.id ?? '';
     onChange({
       PNG画风预设列表: remaining,
-      当前NPCPNG画风预设ID: normalizedRules.当前NPCPNG画风预设ID === selectedPng.id ? nextId : normalizedRules.当前NPCPNG画风预设ID,
-      当前场景PNG画风预设ID: normalizedRules.当前场景PNG画风预设ID === selectedPng.id ? nextId : normalizedRules.当前场景PNG画风预设ID,
+      当前NPCPNG画风预设ID: normalizedRules.当前NPCPNG画风预设ID === selectedPng.id ? '' : normalizedRules.当前NPCPNG画风预设ID,
+      当前场景PNG画风预设ID: normalizedRules.当前场景PNG画风预设ID === selectedPng.id ? '' : normalizedRules.当前场景PNG画风预设ID,
     });
-    setPngEditorId(nextId);
+    setPngEditorId('');
   };
 
   return (
@@ -793,22 +787,6 @@ function QualitySelectField({ label, value, onChange, presets }: { label: string
         {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
       </select>
     </label>
-  );
-}
-
-function StylePaneTitle({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div
-      className="space-y-1 p-3"
-      style={{
-        background: 'rgba(var(--tj-accent-primary),0.045)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="font-serif text-xs font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>{title}</div>
-      <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>{desc}</div>
-    </div>
   );
 }
 

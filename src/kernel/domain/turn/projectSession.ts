@@ -8,118 +8,37 @@
  * Stage 5.4 adds narrow album projection (counts + titles + slot ids).
  */
 
-import type {
-  AlbumView,
-  KnowledgeView,
-  NewsView,
-  PhoneView,
-  SessionView,
-  TravelerVariablesView,
-} from '@/src/kernel/contract';
+import type { SessionView, TurnView } from '@/src/kernel/contract';
 import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
+import { cloneRuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
 
 export function projectSession(
   snapshot: SessionSnapshot,
 ): SessionView {
-  const traveler = snapshot.state.variables.旅人;
-  const travelerVariables: TravelerVariablesView = {
-    姓名: traveler.姓名,
-    身份: traveler.身份,
-    外貌: traveler.外貌,
-    性格: traveler.性格,
-    背景: traveler.背景,
-    数值属性: { ...traveler.数值属性 },
-  };
-
   return {
+    runtime: cloneRuntimeGameState(snapshot.state.runtime),
     sessionId: snapshot.sessionId,
     revision: snapshot.revision,
-    turnCount: snapshot.state.turnCount,
-    turns: snapshot.state.turns.map((t) => ({
-      id: t.id,
-      playerText: t.playerText,
-      narrativeText: t.narrativeText,
-    })),
-    messages: snapshot.state.messages,
-    travelerName: snapshot.state.travelerName,
-    travelerVariables,
-    knowledge: projectKnowledge(snapshot),
-    phone: projectPhone(snapshot),
-    news: projectNews(snapshot),
-    album: projectAlbum(snapshot),
+    turns: projectTurns(snapshot),
   };
 }
 
-function projectKnowledge(snapshot: SessionSnapshot): KnowledgeView {
-  const { zhiku, yiting, story } = snapshot.state.knowledge;
-  const unlockedTitles = zhiku.entries
-    .filter((entry) => isOpenUnlock(entry.runtimeUnlockStatus ?? entry.unlockStatus))
-    .map((entry) => entry.title);
-
-  return {
-    yitingEntryCount: yiting.entries.length,
-    zhikuEntryCount: zhiku.entries.length,
-    storyArchiveCount: story.archives.length,
-    unlockedZhikuTitles: unlockedTitles,
-  };
-}
-
-function projectPhone(snapshot: SessionSnapshot): PhoneView {
-  const { threads } = snapshot.state.phone;
-  let messageCount = 0;
-  const lastMessages: PhoneView['lastMessages'][number][] = [];
-
-  for (const thread of threads) {
-    messageCount += thread.messages.length;
-    const last = thread.messages[thread.messages.length - 1];
-    if (last) {
-      lastMessages.push({
-        contactId: thread.contactId,
-        contactName: thread.contactName,
-        content: last.content,
-        role: last.role,
-      });
+function projectTurns(snapshot: SessionSnapshot): TurnView[] {
+  const history = snapshot.state.runtime.chatHistory;
+  if (history.length % 2 !== 0) throw new Error('chatHistory requires complete user and assistant pairs');
+  const turns: TurnView[] = [];
+  for (let index = 0; index < history.length; index += 2) {
+    const user = history[index]!;
+    const assistant = history[index + 1]!;
+    if (user.role !== 'user' || assistant.role !== 'assistant' || !assistant.parsedResponse) {
+      throw new Error(`chatHistory pair ${index / 2} is invalid`);
     }
+    turns.push({
+      id: `turn_${assistant.id}`,
+      createdAt: assistant.timestamp,
+      playerText: user.content,
+      narrativeText: assistant.parsedResponse.body,
+    });
   }
-
-  return {
-    threadCount: threads.length,
-    messageCount,
-    lastMessages,
-  };
-}
-
-function projectNews(snapshot: SessionSnapshot): NewsView {
-  const { entries } = snapshot.state.news;
-  return {
-    entryCount: entries.length,
-    latestTitles: entries.slice(0, 5).map((entry) => entry.title),
-  };
-}
-
-function projectAlbum(snapshot: SessionSnapshot): AlbumView {
-  const { assets, entries, tasks, slots } = snapshot.state.album;
-  return {
-    assetCount: assets.length,
-    entryCount: entries.length,
-    taskCount: tasks.length,
-    slotCount: slots.length,
-    recentTitles: entries
-      .slice(-5)
-      .map((entry) => entry.title)
-      .reverse(),
-    slots: slots.map((binding) => ({
-      targetType: binding.targetType,
-      targetId: binding.targetId,
-      slot: binding.slot,
-      assetId: binding.assetId,
-      entryId: binding.entryId,
-    })),
-  };
-}
-
-function isOpenUnlock(status: string | undefined): boolean {
-  const text = (status ?? '').trim();
-  if (!text) return false;
-  return /默认可用|已解锁|可用|可预热/.test(text) && !/未解锁|锁定|只读/.test(text);
+  return turns;
 }

@@ -1,20 +1,13 @@
 import  { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getSaveCatalog, type SaveListItem } from '@/src/ui/ports';
-import {
-  buildDesktopReleaseInfo,
-  type DesktopReleaseInfo,
-} from '@/services/desktop/desktopReleaseInfo';
-import {
-  checkForDesktopUpdate,
-  downloadAndInstallDesktopUpdate,
-  getDesktopAppInfo,
-  openDesktopDataDir,
-  writeDesktopProbe,
-  type DesktopAppInfo,
-  type DesktopProbeResult,
-  type DesktopUpdateProgress,
-  type DesktopUpdateStatus,
+import { getSaveCatalog, type SaveListItem } from '@/src/adaptations/saveCatalog';
+import type { DesktopReleaseInfo } from '@/services/desktop/desktopReleaseInfo';
+import type {
+  DesktopAppInfo,
+  DesktopProbeResult,
+  DesktopUpdateProgress,
+  DesktopUpdateStatus,
 } from '@/services/desktop/desktopBridge';
+import { getAdaptationServices } from '@/src/adaptations';
 import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 
@@ -61,13 +54,12 @@ export function DesktopHomeScreen({
   const [saveList, setSaveList] = useState<SaveListItem[]>([]);
   const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateStatus | null>(null);
   const [desktopReleaseInfo, setDesktopReleaseInfo] = useState<DesktopReleaseInfo | null>(null);
-  const [desktopProbe, setDesktopProbe] = useState<DesktopProbeResult | null>(null);
+  const [, setDesktopProbe] = useState<DesktopProbeResult | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [, setInstallingUpdate] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<DesktopUpdateProgress | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [loadError, setLoadError] = useState('');
-  const [toolboxOpen, setToolboxOpen] = useState(true);
 
   const stars = useMemo<StarDot[]>(() => {
     const list: StarDot[] = [];
@@ -86,11 +78,15 @@ export function DesktopHomeScreen({
     setLoadError('');
     try {
       const catalog = await getSaveCatalog();
-      const [info, saves] = await Promise.all([getDesktopAppInfo(), catalog.getSaveList()]);
+      const services = await getAdaptationServices();
+      const [info, saves] = await Promise.all([
+        services.desktopBridge.getDesktopAppInfo(),
+        catalog.getSaveList(),
+      ]);
       const saveRows = [...saves] as SaveListItem[];
       setDesktopInfo(info);
       setSaveList(saveRows);
-      setDesktopReleaseInfo(buildDesktopReleaseInfo(info, null));
+      setDesktopReleaseInfo(await services.desktopReleaseInfo.buildDesktopReleaseInfo(info, null));
     } catch (error) {
       console.error('[desktop-home] overview refresh failed', error);
       setLoadError(error instanceof Error ? error.message : '桌面首页状态读取失败');
@@ -118,7 +114,7 @@ export function DesktopHomeScreen({
     : '当前没有可继续的存档。';
 
   const handleOpenDir = useCallback(async (target: DataDirTarget) => {
-    await openDesktopDataDir(target);
+    await (await getAdaptationServices()).desktopBridge.openDesktopDataDir(target);
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
@@ -126,9 +122,10 @@ export function DesktopHomeScreen({
     setStatusMessage('正在检查更新...');
     setLoadError('');
     try {
-      const result = await checkForDesktopUpdate();
+      const services = await getAdaptationServices();
+      const result = await services.desktopBridge.checkForDesktopUpdate();
       setDesktopUpdate(result);
-      setDesktopReleaseInfo(buildDesktopReleaseInfo(desktopInfo, result));
+      setDesktopReleaseInfo(await services.desktopReleaseInfo.buildDesktopReleaseInfo(desktopInfo, result));
       setStatusMessage(result.available
         ? `发现 Desktop Edition ${result.version ?? '新版本'}`
         : '当前已是最新版本');
@@ -148,7 +145,9 @@ export function DesktopHomeScreen({
     setStatusMessage('正在下载并安装更新...');
     setUpdateProgress(null);
     try {
-      await downloadAndInstallDesktopUpdate((progress) => setUpdateProgress(progress));
+      await (await getAdaptationServices()).desktopBridge.downloadAndInstallDesktopUpdate(
+        (progress) => setUpdateProgress(progress),
+      );
       setStatusMessage('更新已提交安装，应用将重启或由安装器继续完成。');
     } catch (error) {
       console.error('[desktop-home] install update failed', error);
@@ -163,7 +162,7 @@ export function DesktopHomeScreen({
   const handleWriteProbe = useCallback(async () => {
     setLoadError('');
     try {
-      const result = await writeDesktopProbe();
+      const result = await (await getAdaptationServices()).desktopBridge.writeDesktopProbe();
       setDesktopProbe(result);
       setStatusMessage(result?.ok ? `探针已写入 ${result.probeFile}` : '探针写入失败');
     } catch (error) {

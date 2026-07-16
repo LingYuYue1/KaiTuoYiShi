@@ -7,7 +7,6 @@ import {
   getAlbumAssetBlob,
   hasAlbumAssetBlob,
   isDataImageUrl,
-  pickAssetDisplayUrl,
   rememberAlbumAssetBlob,
   rememberAlbumAssetFromDataUrl,
 } from '@/utils/albumObjectUrl';

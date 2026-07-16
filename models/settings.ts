@@ -4,7 +4,7 @@ import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { 默认文生图规则中心, normalizeImageRules } from '@/utils/imagePromptRules';
 import type { 剧情编织API覆盖 } from './storyWeaving';
-import type { STWorldInfoEntry, STPresetEntry, STSamplingParams, STPresetEntryV2, TavernPostProcessMode } from './stTypes';
+import type { STPresetEntryV2 } from './stTypes';
 import { resolveLegacyStarMapLocationId } from './starMap';
 import type { StarMapLocation, StarMapSceneAnchor, StarMapWaypoint } from './starMap';
 
@@ -48,7 +48,7 @@ export function 创建空API设置(): API设置 {
   return { activeConfigId: null, configs: [] };
 }
 
-/** 变量模型独立 API 覆盖：任一字段留空都会回退到当前主 API 的同名字段。 */
+/** 变量模型独立 API。启用变量更新时所有连接字段都必须显式配置。 */
 export interface 变量API覆盖 {
   provider: AI提供商;
   baseUrl: string;
@@ -80,7 +80,7 @@ export interface 新闻API覆盖 {
   retryCount?: number;
 }
 
-/** 手机系统独立 API 覆盖：用于私聊、群聊、主动来信生成，留空字段回退主 API。 */
+/** 手机系统独立 API：用于私聊、群聊、主动来信生成。 */
 export interface 手机API覆盖 {
   provider: AI提供商;
   baseUrl: string;
@@ -144,7 +144,7 @@ export function 创建空剧情编织API覆盖(): 剧情编织API覆盖设置 {
   };
 }
 
-/** 忆庭独立 API 覆盖：用于回忆库检索或精炼，留空字段回退主 API。 */
+/** 忆庭独立 API。启用对应模型能力时所有连接字段都必须显式配置。 */
 export interface 忆庭API覆盖 {
   provider: AI提供商 | '';
   baseUrl: string;
@@ -165,7 +165,7 @@ export function 创建空忆庭API覆盖(): 忆庭API覆盖 {
   };
 }
 
-/** 文生图词组转化器 API 覆盖：用于角色锚点/档案到图片 prompt 的文本整理，留空字段回退主 API。 */
+/** 文生图词组转化器独立 API。启用转化器时所有连接字段都必须显式配置。 */
 export interface 文生图词组转化器API覆盖 {
   provider: AI提供商 | '';
   baseUrl: string;
@@ -231,7 +231,7 @@ export interface 游戏设置 {
   文生图系统: 文生图系统设置;
   /** 记忆系统管理：即时/短期/中期/长期与 NPC 同行记忆的压缩规则。 */
   记忆系统: 记忆系统设置;
-  /** 变量模型 API 覆盖：可独立填 baseUrl/apiKey/model，留空字段会回退到主 API。 */
+  /** 变量模型独立 API：baseUrl/apiKey/model 均为必需配置。 */
   variableApi: 变量API覆盖;
   /** 应用变量命令前是否需要玩家在面板中手动确认（默认 false，直接落地）。 */
   variableUpdateRequireConfirm: boolean;
@@ -241,21 +241,10 @@ export interface 游戏设置 {
   promptModules: 提示词模块[];
   /** ST 预设兼容：宏变量持久化。跨回合保留的全局变量。 */
   macroGlobalVars?: Record<string, string>;
-  /** ST 预设兼容：已保存的预设库。玩家可导入多套预设，通过下拉切换。 */
-  stPresets?: STPresetEntry[];
-  /** ST 预设兼容：当前激活的预设 id。null=未激活任何预设。 */
-  currentStPresetId?: string | null;
-  /** ST 预设兼容：总开关。关闭后所有 st_import_* 模块不注入 systemPrompt，但保留预设库数据。 */
-  enableStPreset?: boolean;
-  /** ST 预设参数同步：激活带 samplingParams 的预设前，当前 API 采样参数的原始备份。
-   *  切回无参数预设/null 时按此值恢复。null=当前无预设覆盖参数。 */
-  stPresetApiBackup?: STSamplingParams | null;
   /** 提示词模块 order 版本号（用于旧存档迁移）。
    *  - 0/缺省：旧版 order 区间（内置 5-90 + ST 50+，会冲突）
    *  - 1：方案 A 三层 order 区间（Tier 1: 1-99 / Tier 2: 100-999 ST / Tier 3: 1000+ 压轴） */
   promptModuleOrderVersion?: number;
-  /** ST 预设兼容：V1 预设迁移/旧存档保留的世界书条目。V2 预设的 world_info 保存在 stPresetsV2[].preset 中。 */
-  stWorldInfos?: STWorldInfoEntry[];
   /** 世界书条目触发状态表（Phase 7.1 升级，随存档持久化）。
    *  key = 条目 id，value = 最近触发回合（messageCount 值）。
    *  用于世界书条目的 delay / cooldown 判断。 */
@@ -272,22 +261,6 @@ export interface 游戏设置 {
   /** ST 预设兼容 V2：当前选中的 prompt_order.character_id 顺序槽位，不代表本项目角色卡。 */
   currentStCharacterId?: number | null;
 
-  /** ST 预设兼容 V2：消息角色后处理模式 */
-  stPostProcessMode?: TavernPostProcessMode;
-
-  // === 保留但标记废弃的旧字段 ===
-
-  /** @deprecated V1 转译式预设列表，迁移后不再使用 */
-  // stPresets?: STPresetEntry[];
-
-  /** @deprecated V1 当前激活预设 id */
-  // currentStPresetId?: string | null;  // 复用此字段，迁移后指向 V2 条目
-
-  /** @deprecated V1 总开关，V2 复用 */
-  // enableStPreset?: boolean;
-
-  /** @deprecated V1 采样参数备份，V2 复用 */
-  // stPresetApiBackup?: STSamplingParams | null;
   /** 思维链输出语言（参考 Izumi，P2 可选）。
    *  - 'zh'（默认）：中文思考段
    *  - 其他值：在主剧情思维链末尾追加"请用 X 语言输出 <think> 思考段"提示
@@ -295,8 +268,6 @@ export interface 游戏设置 {
   cotLanguage?: 'zh' | 'en' | 'ja' | 'fr' | 'ru' | 'de' | 'es' | 'it';
   /** CoT 伪装历史消息注入：在 `user:开始任务` 之后注入一条伪装 assistant 历史消息，用于强化思考段输出习惯。 */
   enableCotFakeHistory: boolean;
-  /** 标签修复：在解析 AI 回复前，自动修复常见标签错误（重复开标签、缺失闭标签等）。 */
-  enableTagRepair: boolean;
   /** 生成失败自动重试：API 报错或解析失败时自动重试，不弹错误确认弹窗。 */
   autoRetryOnError: boolean;
   /** 自动重试次数上限。 */
@@ -364,7 +335,7 @@ export interface 记忆系统设置 {
   /** @deprecated 旧版字段。新版本使用 短期转中期阈值 / 中期转长期阈值。 */
   短期转长期阈值: number;
   NPC记忆压缩阈值: number;
-  /** 记忆总结 API：用于即时/短期压缩，留空时回退主 API。 */
+  /** 记忆总结独立 API：用于即时/短期压缩。 */
   记忆总结API: 忆庭API覆盖;
   /** 忆庭召回总开关：仅控制是否检索并注入回忆档案，入库始终执行。 */
   忆庭启用: boolean;
@@ -1160,7 +1131,6 @@ export function 创建默认游戏设置(): 游戏设置 {
     customPrompt: '',
     promptModules: createBuiltinPromptModules(),
     enableCotFakeHistory: true,
-    enableTagRepair: true,
     autoRetryOnError: true,
     autoRetryCount: 2,
     enableAutoSaveEveryTurn: true,
@@ -1173,18 +1143,13 @@ export function 创建默认游戏设置(): 游戏设置 {
     星轨航图系统: 创建默认星轨航图系统设置(),
     // ST 预设兼容相关字段（可选，这里显式列默认值保持风格一致）
     cotLanguage: 'zh',
-    enableStPreset: true,
-    stPresets: [],
-    currentStPresetId: 'builtin_preset',
     promptModuleOrderVersion: 1,
-    stWorldInfos: [],
     macroGlobalVars: {},
     worldbookTriggerStates: {},
     // === 新增：保留式 ST 预设默认值 ===
     stPresetsV2: [],
     currentStPresetIdV2: null,
     currentStCharacterId: null,
-    stPostProcessMode: '未选择',
   };
 }
 
@@ -1392,7 +1357,7 @@ export interface 存档数据 {
   智库?: import('./zhiku').智库系统;                // 可选：兼容旧存档（智库资料库）
   手机?: import('./phone').手机系统;               // 可选：兼容旧存档（手机系统）
   NPC?: import('./npc').NPC记录[];                 // 可选：兼容旧存档（v1 加入）
-  相册?: import('./imageGeneration').相册系统;      // 可选：图片资产、挂载与生成任务
+  相册?: import('./imageGeneration').相册系统;      // 可选：图片资产、显示槽位绑定与生成任务
   /** @deprecated 旧独立战斗系统字段。当前版本不再读取或写入，仅允许旧存档携带后被忽略。 */
   战斗?: unknown;
   新闻?: import('./news').新闻条目[];               // 可选：兼容旧存档（v1 加入）

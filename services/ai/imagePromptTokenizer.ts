@@ -1,7 +1,8 @@
-import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+import type { API配置项, 游戏设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { 获取当前PNG画风预设, 获取当前模型规则集, 获取当前画师串预设, 获取当前规则模板, 获取当前详细画风预设 } from '@/utils/imagePromptRules';
+import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
 
 export interface ImagePromptTokenizerInput {
   title: string;
@@ -19,23 +20,15 @@ export interface ImagePromptTokenizerResult {
   negative: string;
 }
 
-export function buildImagePromptTokenizerConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
-  const mainConfig = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
-  if (!settings.文生图系统.enablePromptTokenizer || !mainConfig) return null;
-  const override = settings.文生图系统.词组转化器API;
+export function buildImagePromptTokenizerConfig(settings: 游戏设置): API配置项 | null {
+  if (!settings.文生图系统.enablePromptTokenizer) return null;
   return {
-    ...mainConfig,
-    id: '__image_prompt_tokenizer__',
-    name: '文生图词组转化器',
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: Math.min(override.maxTokens ?? mainConfig.maxTokens ?? 1600, 2400),
-    temperature: override.temperature ?? mainConfig.temperature ?? 0.45,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
+    ...requireIndependentApiConfig('文生图词组转化器', settings.文生图系统.词组转化器API, {
+      maxTokens: 1600,
+      temperature: 0.45,
+    }),
+    maxTokens: Math.min(settings.文生图系统.词组转化器API.maxTokens ?? 1600, 2400),
     enableClaudeMode: settings.enableClaudeMode === true,
-    updatedAt: Date.now(),
   };
 }
 
@@ -131,22 +124,17 @@ export async function tokenizeImagePrompt(
       }),
     { retries: retryCount, label: '文生图词组转化器' },
   );
-  return parseTokenizerJson(raw, input.basePrompt, input.baseNegative);
+  return parseTokenizerJson(raw);
 }
 
-function parseTokenizerJson(raw: string, fallbackPrompt: string, fallbackNegative: string): ImagePromptTokenizerResult {
+function parseTokenizerJson(raw: string): ImagePromptTokenizerResult {
   const text = raw.trim();
   const jsonText = text.match(/\{[\s\S]*\}/)?.[0] ?? text;
-  try {
-    const parsed = JSON.parse(jsonText) as Partial<ImagePromptTokenizerResult>;
-    return {
-      prompt: String(parsed.prompt || fallbackPrompt).trim(),
-      negative: String(parsed.negative || fallbackNegative).trim(),
-    };
-  } catch {
-    return {
-      prompt: fallbackPrompt,
-      negative: fallbackNegative,
-    };
+  const parsed = JSON.parse(jsonText) as Partial<ImagePromptTokenizerResult>;
+  const prompt = String(parsed.prompt ?? '').trim();
+  const negative = String(parsed.negative ?? '').trim();
+  if (!prompt || !negative) {
+    throw new Error('文生图词组转化器返回的 prompt 或 negative 为空');
   }
+  return { prompt, negative };
 }

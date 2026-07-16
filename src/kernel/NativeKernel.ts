@@ -1,237 +1,165 @@
-/**
- * NativeKernel — Phase 2+ vertical slice.
- *
- * - turn.advance → executeTurn only (never legacy)
- * - turn.reroll → rerollTurn only (Phase 4; never legacy rewrite chain)
- * - variables.apply → applyVariables only (Stage 5.1; pure reduce + single CAS)
- * - phone.reply → phoneReply only (Stage 5.3)
- * - news.apply / news.generate → applyNews handlers (Stage 5.3)
- * - image.generate / album.delete / album.bindSlot → album handlers (Stage 5.4)
- * - other commands: optional transitional legacy fallback, else not_implemented
- * - read → SessionRepository projection
- *
- * Transitional: legacy dependency is ONLY for non-native commands.
- * Do not dual-write formal session.
- */
-
 import type {
   AdvanceTurnEnvelope,
-  AlbumBindSlotEnvelope,
-  AlbumDeleteEnvelope,
-  ApplyVariablesEnvelope,
+  CommandId,
   CommandEnvelope,
+  CheckpointSessionEnvelope,
   CreateSessionEnvelope,
   ExecutionFrame,
   IKernel,
-  ImageGenerateEnvelope,
   KernelQuery,
-  NewsApplyEnvelope,
-  NewsGenerateEnvelope,
-  PhoneReplyEnvelope,
   QueryResult,
+  ResetSessionEnvelope,
+  RegenerateNarrativeImageEnvelope,
+  RetryQueueTaskEnvelope,
   RerollTurnEnvelope,
   SessionCommandEnvelope,
+  SessionExistenceView,
+  SessionExistsQuery,
+  SessionReadQuery,
+  SessionView,
 } from '@/src/kernel/contract';
-import type { AssetStore } from '@/src/kernel/ports/AssetStore';
-import type { ImageGenerator } from '@/src/kernel/ports/ImageGenerator';
-import type { ModelGateway } from '@/src/kernel/ports/ModelGateway';
-import type { SessionRepository } from '@/src/kernel/ports/SessionRepository';
-import type { LegacyKernelDependencies } from '@/src/kernel/adapters/legacy/LegacyKernelAdapter';
-import { LegacyKernelAdapter } from '@/src/kernel/adapters/legacy/LegacyKernelAdapter';
+import type { KernelServices, PreferenceStore, RuntimeActionEngine, SaveCatalogPort, SessionRepository, TurnEngine } from '@/src/kernel/ports';
 import { executeTurn } from '@/src/kernel/application/executeTurn';
 import { rerollTurn } from '@/src/kernel/application/rerollTurn';
-import { applyVariables } from '@/src/kernel/application/applyVariables';
-import { phoneReply } from '@/src/kernel/application/phoneReply';
-import { applyNews, generateNews } from '@/src/kernel/application/applyNews';
-import { generateImage } from '@/src/kernel/application/generateImage';
-import { deleteAlbumEntries } from '@/src/kernel/application/deleteAlbumEntries';
-import { bindAlbumSlot } from '@/src/kernel/application/bindAlbumSlot';
+import { resetSession } from '@/src/kernel/application/resetSession';
+import { regenerateNarrativeImage, retryRuntimeQueueTask } from '@/src/kernel/application/executeRuntimeAction';
+import { checkpointSession } from '@/src/kernel/application/checkpointSession';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
-  model: ModelGateway;
-  /**
-   * Stage 5.4: required when executing image.generate / album.delete.
-   * Optional so phase2–5.3 tests keep constructing sessions+model only.
-   * Missing deps reject with unsupported_command when those commands run.
-   */
-  assets?: AssetStore;
-  /**
-   * Stage 5.4: required when executing image.generate.
-   * Optional for the same reason as assets.
-   */
-  images?: ImageGenerator;
-  /**
-   * Transitional: non-native commands may route here.
-   * AdvanceTurn, RerollTurn, ApplyVariables, PhoneReply, News, Album never use this.
-   */
-  legacy?: LegacyKernelDependencies;
+  turns: TurnEngine;
+  actions: RuntimeActionEngine;
+  preferences: PreferenceStore;
+  saves: SaveCatalogPort;
+  services: KernelServices;
 }>;
 
+/** The only runtime kernel. Every dependency is mandatory and every call is async. */
 export class NativeKernel implements IKernel {
-  private readonly sessions: SessionRepository;
-  private readonly model: ModelGateway;
-  private readonly assets: AssetStore | null;
-  private readonly images: ImageGenerator | null;
-  private readonly legacyAdapter: LegacyKernelAdapter | null;
+  private readonly running = new Map<string, AbortController>();
 
-  constructor(dependencies: NativeKernelDependencies) {
-    this.sessions = dependencies.sessions;
-    this.model = dependencies.model;
-    this.assets = dependencies.assets ?? null;
-    this.images = dependencies.images ?? null;
-    this.legacyAdapter = dependencies.legacy
-      ? new LegacyKernelAdapter(dependencies.legacy)
-      : null;
+  constructor(private readonly dependencies: NativeKernelDependencies) {}
+
+  get saves(): SaveCatalogPort {
+    return this.dependencies.saves;
+  }
+
+  get services(): KernelServices {
+    return this.dependencies.services;
   }
 
   async *execute(envelope: CommandEnvelope): AsyncIterable<ExecutionFrame> {
-    if (envelope.command.type === 'session.create') {
-      yield* this.executeCreateSession(envelope as CreateSessionEnvelope);
-      return;
-    }
-
-    const sessionEnvelope = envelope as SessionCommandEnvelope;
-    switch (sessionEnvelope.command.type) {
-      case 'turn.advance':
-        // Native only — never legacy.
-        yield* executeTurn(sessionEnvelope as AdvanceTurnEnvelope, {
-          sessions: this.sessions,
-          model: this.model,
-        });
+    const controller = new AbortController();
+    const commandKey = String(envelope.commandId);
+    if (this.running.has(commandKey)) throw new Error(`Command is already running: ${commandKey}`);
+    this.running.set(commandKey, controller);
+    try {
+      if (envelope.command.type === 'session.create') {
+        yield await this.createSession(envelope as CreateSessionEnvelope);
         return;
-      case 'turn.reroll':
-        // Native only (Phase 4) — Option B fork + single CAS; no UI rewrite chain.
-        yield* rerollTurn(sessionEnvelope as RerollTurnEnvelope, {
-          sessions: this.sessions,
-          model: this.model,
-        });
-        return;
-      case 'variables.apply':
-        // Native only (Stage 5.1) — pure reduce + single CAS; no React setters.
-        yield* applyVariables(sessionEnvelope as ApplyVariablesEnvelope, {
-          sessions: this.sessions,
-        });
-        return;
-      case 'phone.reply':
-        // Native only (Stage 5.3) — ensureThread + model.complete + append + CAS.
-        yield* phoneReply(sessionEnvelope as PhoneReplyEnvelope, {
-          sessions: this.sessions,
-          model: this.model,
-        });
-        return;
-      case 'news.apply':
-        // Native only (Stage 5.3) — pure patch + single CAS.
-        yield* applyNews(sessionEnvelope as NewsApplyEnvelope, {
-          sessions: this.sessions,
-        });
-        return;
-      case 'news.generate':
-        // Native only (Stage 5.3) — model.complete → parse → patch → CAS.
-        yield* generateNews(sessionEnvelope as NewsGenerateEnvelope, {
-          sessions: this.sessions,
-          model: this.model,
-        });
-        return;
-      case 'image.generate':
-        // Native only (Stage 5.4) — ImageGenerator + AssetStore + single CAS.
-        if (!this.assets || !this.images) {
-          yield {
-            type: 'rejected',
-            commandId: sessionEnvelope.commandId,
-            error: {
-              code: 'unsupported_command',
-              message:
-                'image.generate requires AssetStore and ImageGenerator on NativeKernel',
-              details: {
-                commandType: 'image.generate',
-                missing: [
-                  ...(this.assets ? [] : ['assets']),
-                  ...(this.images ? [] : ['images']),
-                ],
-              },
-            },
-          };
-          return;
-        }
-        yield* generateImage(sessionEnvelope as ImageGenerateEnvelope, {
-          sessions: this.sessions,
-          assets: this.assets,
-          images: this.images,
-        });
-        return;
-      case 'album.delete':
-        // Native only (Stage 5.4) — pure delete + CAS + best-effort AssetStore.remove.
-        if (!this.assets) {
-          yield {
-            type: 'rejected',
-            commandId: sessionEnvelope.commandId,
-            error: {
-              code: 'unsupported_command',
-              message: 'album.delete requires AssetStore on NativeKernel',
-              details: { commandType: 'album.delete', missing: ['assets'] },
-            },
-          };
-          return;
-        }
-        yield* deleteAlbumEntries(sessionEnvelope as AlbumDeleteEnvelope, {
-          sessions: this.sessions,
-          assets: this.assets,
-        });
-        return;
-      case 'album.bindSlot':
-        // Native only (Stage 5.4) — pure bindSlot + single CAS (no AssetStore).
-        yield* bindAlbumSlot(sessionEnvelope as AlbumBindSlotEnvelope, {
-          sessions: this.sessions,
-        });
-        return;
-      default: {
-        const unknownType = (sessionEnvelope.command as { type: string }).type;
-        yield {
-          type: 'rejected',
-          commandId: sessionEnvelope.commandId,
-          error: {
-            code: 'unsupported_command',
-            message: `Unsupported command type: ${unknownType}`,
-            details: { commandType: unknownType },
-          },
-        };
       }
+
+      const command = envelope as SessionCommandEnvelope;
+      switch (command.command.type) {
+        case 'session.checkpoint':
+          yield* checkpointSession(command as CheckpointSessionEnvelope, this.dependencies.sessions);
+          return;
+        case 'session.reset':
+          yield* resetSession(command as ResetSessionEnvelope, this.dependencies.sessions);
+          return;
+        case 'message.image.regenerate':
+          yield* regenerateNarrativeImage(command as RegenerateNarrativeImageEnvelope, {
+            sessions: this.dependencies.sessions,
+            actions: this.dependencies.actions,
+            signal: controller.signal,
+          });
+          return;
+        case 'queue.retry':
+          yield* retryRuntimeQueueTask(command as RetryQueueTaskEnvelope, {
+            sessions: this.dependencies.sessions,
+            actions: this.dependencies.actions,
+            signal: controller.signal,
+          });
+          return;
+        case 'turn.advance':
+          yield* executeTurn(command as AdvanceTurnEnvelope, {
+            sessions: this.dependencies.sessions,
+            turns: this.dependencies.turns,
+            signal: controller.signal,
+          });
+          return;
+        case 'turn.reroll':
+          yield* rerollTurn(command as RerollTurnEnvelope, {
+            sessions: this.dependencies.sessions,
+            turns: this.dependencies.turns,
+            signal: controller.signal,
+          });
+          return;
+      }
+
+      const exhaustive: never = command.command;
+      throw new Error(`Unknown kernel command: ${String((exhaustive as { type: string }).type)}`);
+    } finally {
+      this.running.delete(commandKey);
     }
   }
 
+  async cancel(commandId: CommandId): Promise<void> {
+    const controller = this.running.get(String(commandId));
+    if (!controller) throw new Error(`Command is not running: ${commandId}`);
+    controller.abort();
+  }
+
+  getPreference<T>(key: string): Promise<T | null> {
+    return this.dependencies.preferences.get<T>(key);
+  }
+
+  setPreference(key: string, value: unknown): Promise<void> {
+    return this.dependencies.preferences.set(key, value);
+  }
+
+  deletePreference(key: string): Promise<void> {
+    return this.dependencies.preferences.delete(key);
+  }
+
+  read(query: SessionExistsQuery): Promise<SessionExistenceView>;
+  read(query: SessionReadQuery): Promise<SessionView>;
   async read(query: KernelQuery): Promise<QueryResult> {
-    if (query.type === 'session.read') {
-      const snapshot = await this.sessions.read(query.sessionId);
-      return projectSession(snapshot);
-    }
-    if (query.type === 'settings.read') {
-      const snapshot = await this.sessions.read(query.sessionId);
+    if (query.type === 'session.exists') {
       return {
-        sessionId: snapshot.sessionId,
-        revision: snapshot.revision,
+        sessionId: query.sessionId,
+        exists: await this.dependencies.sessions.exists(query.sessionId),
       };
     }
-    const _exhaustive: never = query;
-    throw new Error(`Unsupported query: ${String((_exhaustive as { type: string }).type)}`);
+    const snapshot = await this.dependencies.sessions.read(query.sessionId);
+    if (query.type === 'session.read') return projectSession(snapshot);
+    const exhaustive: never = query;
+    throw new Error(`Unknown kernel query: ${String((exhaustive as { type: string }).type)}`);
   }
 
-  private async *executeCreateSession(
-    envelope: CreateSessionEnvelope,
-  ): AsyncIterable<ExecutionFrame> {
-    if (this.legacyAdapter) {
-      yield* this.legacyAdapter.execute(envelope);
-      return;
-    }
-    yield {
-      type: 'rejected',
+  private async createSession(envelope: CreateSessionEnvelope): Promise<ExecutionFrame> {
+    const result = await this.dependencies.sessions.create({
+      sessionId: envelope.sessionId,
       commandId: envelope.commandId,
-      error: {
-        code: 'not_implemented',
-        message: 'session.create is not implemented on NativeKernel (Phase 2)',
-        details: { presetId: envelope.command.presetId },
-      },
+      initialState: { runtime: envelope.command.runtime },
+    });
+    if (result.type === 'conflict') {
+      return {
+        type: 'rejected',
+        commandId: envelope.commandId,
+        error: {
+          code: 'revision_conflict',
+          message: `Session already exists at revision ${result.actualRevision}`,
+          details: { actualRevision: result.actualRevision },
+        },
+      };
+    }
+    return {
+      type: 'committed',
+      commandId: envelope.commandId,
+      revision: result.snapshot.revision,
+      view: projectSession(result.snapshot),
     };
   }
 }

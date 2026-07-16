@@ -20,7 +20,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
   const [filter, setFilter] = useState<ArchiveFilter>('all');
   const [query, setQuery] = useState('');
   const archives = yitingSystem.回忆档案 ?? [];
-  const [selectedId, setSelectedId] = useState(archives[0]?.id ?? '');
+  const [selectedId, setSelectedId] = useState('');
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -45,7 +45,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
       .sort((a, b) => b.回合 - a.回合 || (b.时间戳 || '').localeCompare(a.时间戳 || ''));
   }, [archives, filter, query]);
 
-  const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0] ?? null;
+  const selected = filtered.find((item) => item.id === selectedId) ?? null;
   const stats = useMemo(() => {
     const turn = archives.filter((entry) => getArchiveKind(entry) === 'turn').length;
     const compressed = archives.filter((entry) => getArchiveKind(entry) === 'compressed').length;

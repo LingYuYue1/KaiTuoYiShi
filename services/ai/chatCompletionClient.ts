@@ -1,11 +1,10 @@
 import type { API配置项 } from '@/models/settings';
-import type { 聊天消息, 回合Token消耗 } from '@/models/chat';
+import type { 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
 import { normalizeGeminiBaseUrl } from './geminiEndpointPolicy';
 import {
-  DEEPSEEK_FINAL_CONTENT_GUARD,
   executeWithDeepSeekRecovery,
   type DeepSeekAttemptDiagnostics,
   type DeepSeekRecoverySummary,
@@ -53,8 +52,6 @@ export interface ChatCompletionRequest {
   prefixMode?: boolean;
   /** Assistant prefill used when prefixMode is true. */
   prefixContent?: string;
-  /** Connection diagnostics can disable cross-model recovery. */
-  deepSeekRecovery?: 'auto' | 'disabled';
   onDeepSeekRecovery?: (summary: DeepSeekRecoverySummary) => void;
   /** Internal transport diagnostics consumed by the recovery coordinator. */
   onResponseDiagnostics?: (diagnostics: DeepSeekAttemptDiagnostics) => void;
@@ -100,25 +97,12 @@ function buildMessages(
   return result;
 }
 
-function isDeepSeekConfig(config: API配置项): boolean {
-  return detectProvider(config) === 'deepseek' || /deepseek/i.test(config.model);
-}
-
-function isGeminiConfig(config: API配置项): boolean {
-  const url = config.baseUrl.toLowerCase();
-  return detectProvider(config) === 'gemini' || /gemini/i.test(config.model) || url.includes('googleapis');
-}
-
 function normalizeDeepSeekPrefixBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '');
   if (!trimmed || !/deepseek/i.test(trimmed)) return trimmed;
   if (/\/beta$/i.test(trimmed)) return trimmed;
   if (/\/v\d+$/i.test(trimmed)) return trimmed.replace(/\/v\d+$/i, '/beta');
   return `${trimmed}/beta`;
-}
-
-function shouldUseDeepSeekPrefix(config: API配置项, request: ChatCompletionRequest): boolean {
-  return request.prefixMode === true && isDeepSeekConfig(config);
 }
 
 /**
@@ -279,22 +263,6 @@ function withOpenCodeNormalizedConfig(config: API配置项): API配置项 {
     baseUrl: normalizeOpenCodeBaseUrl(config.baseUrl),
     model: normalizeOpenCodeModelId(config.model),
   };
-}
-
-function openCodeHeaders(config: API配置项, mode: 'openai' | 'anthropic' | 'gemini' = 'openai'): HeadersInit {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${config.apiKey}`,
-  };
-  if (mode === 'anthropic') {
-    headers['x-api-key'] = config.apiKey;
-    headers['anthropic-version'] = '2023-06-01';
-    headers['anthropic-dangerous-direct-browser-access'] = 'true';
-  }
-  if (mode === 'gemini') {
-    headers['x-goog-api-key'] = config.apiKey;
-  }
-  return headers;
 }
 
 function buildOpenCodeUrl(config: API配置项, endpoint: OpenCodeEndpoint): string {
@@ -1341,7 +1309,6 @@ export async function chatCompletion(
   callbacks: StreamCallbacks,
 ): Promise<string> {
   const recovered = await executeWithDeepSeekRecovery(config, {
-    disabled: request.deepSeekRecovery === 'disabled',
     maxTokens: request.maxTokens ?? config.maxTokens,
     onSummary: request.onDeepSeekRecovery,
     execute: async (attemptConfig, attemptOptions) => {
@@ -1352,14 +1319,10 @@ export async function chatCompletion(
         sawVisibleContent: false,
         selectedModel: attemptConfig.model,
       };
-      const messages = attemptOptions.appendRecoveryInstruction
-        ? [...request.messages, { role: 'user', content: DEEPSEEK_FINAL_CONTENT_GUARD }]
-        : request.messages;
       const attemptRequest: ChatCompletionRequest = {
         ...request,
-        messages,
+        messages: request.messages,
         maxTokens: attemptOptions.maxTokens,
-        deepSeekRecovery: 'disabled',
         onResponseDiagnostics: (next) => {
           reported = true;
           diagnostics = next;
@@ -2373,7 +2336,6 @@ export async function chatCompletionNonStream(
   request: ChatCompletionRequest,
 ): Promise<string> {
   const recovered = await executeWithDeepSeekRecovery(config, {
-    disabled: request.deepSeekRecovery === 'disabled',
     maxTokens: request.maxTokens ?? config.maxTokens,
     onSummary: request.onDeepSeekRecovery,
     execute: async (attemptConfig, attemptOptions) => {
@@ -2383,14 +2345,10 @@ export async function chatCompletionNonStream(
         sawVisibleContent: false,
         selectedModel: attemptConfig.model,
       };
-      const messages = attemptOptions.appendRecoveryInstruction
-        ? [...request.messages, { role: 'user', content: DEEPSEEK_FINAL_CONTENT_GUARD }]
-        : request.messages;
       const text = await chatCompletionNonStreamOnce(attemptConfig, {
         ...request,
-        messages,
+        messages: request.messages,
         maxTokens: attemptOptions.maxTokens,
-        deepSeekRecovery: 'disabled',
         onResponseDiagnostics: (next) => {
           reported = true;
           diagnostics = next;

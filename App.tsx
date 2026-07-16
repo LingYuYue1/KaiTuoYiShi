@@ -16,14 +16,12 @@ import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakenin
 import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
-import { setPreference, setPreferenceAsync } from '@/src/ui/preferences';
-import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
+import { setPreference } from '@/src/adaptations/preferences';
 import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
-import { setStreamingMessage } from '@/utils/streamingMessageStore';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
 const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })));
@@ -36,8 +34,8 @@ const ReleaseAnnouncementsModal = lazyWithRetry(() => import('@/components/featu
 const PlotPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PlotPanel').then((module) => ({ default: module.PlotPanel })));
 const YitingPanel = lazyWithRetry(() => import('@/components/features/GameSystems/YitingPanel').then((module) => ({ default: module.YitingPanel })));
 const ZhikuPanel = lazyWithRetry(() => import('@/components/features/GameSystems/ZhikuPanel').then((module) => ({ default: module.ZhikuPanel })));
-const MemoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemoryPanel').then((module) => ({ default: module.MemoryPanel })));
-const AlbumPanel = lazyWithRetry(() => import('@/components/features/GameSystems/AlbumPanel').then((module) => ({ default: module.AlbumPanel })));
+const MemorySystemPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemorySystemPanel').then((module) => ({ default: module.MemorySystemPanel })));
+const AlbumWorkspace = lazyWithRetry(() => import('@/components/features/GameSystems/AlbumWorkspace').then((module) => ({ default: module.AlbumWorkspace })));
 const SkillPanel = lazyWithRetry(() => import('@/components/features/GameSystems/SkillPanel').then((module) => ({ default: module.SkillPanel })));
 const InventoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/InventoryPanel').then((module) => ({ default: module.InventoryPanel })));
 const NewsPanel = lazyWithRetry(() => import('@/components/features/GameSystems/NewsPanel').then((module) => ({ default: module.NewsPanel })));
@@ -272,9 +270,9 @@ import type { 命途ID } from '@/models/journey';
 import type { 队列任务ID } from '@/models/queueTask';
 import { 创建空手机系统 } from '@/models/phone';
 import { 创建默认记忆系统设置 } from '@/models/settings';
-import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
-import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
-import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
+import { alignStoryWeavingToOpeningArchive, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
+import { getAdaptationServices } from '@/src/adaptations';
 
 const JOURNEY_LAUNCH_ANIMATION_MS = 1680;
 const HOME_JOURNEY_ANIMATION_MS = 1180;
@@ -337,7 +335,6 @@ export default function App() {
     setActiveSystem((current) => (current === id ? null : id));
   }, []);
 
-  const handleOpenNews = useCallback(() => setActiveSystem('news'), []);
   const handleOpenProfile = useCallback(() => setShowCharacter(true), []);
   const handleOpenPhone = useCallback(() => setShowPhone(true), []);
   const handleOpenSaveLoad = useCallback(() => setShowSaveLoad(true), []);
@@ -366,29 +363,29 @@ export default function App() {
   const handleCancelTask = useCallback((id: 队列任务ID) => {
     const title = CANCELLABLE_TASK_TITLES[id];
     if (!title) return;
-
-    state.abortControllerRef.current?.abort();
-    state.setQueueTasks((prev) => [
-      ...prev,
-      {
-        id,
-        title,
-        turn: state.turnCount,
-        timestamp: Date.now(),
-        status: 'cancelled',
-        detail: '玩家已取消本次任务。',
-        cancelled: true,
-      },
-    ]);
-    state.setPendingVariable(false);
-    state.setLoading(false);
-    setStreamingMessage('');
+    void actions.handleAbort()
+      .then(() => {
+        state.setQueueTasks((prev) => [
+          ...prev,
+          {
+            id,
+            title,
+            turn: state.turnCount,
+            timestamp: Date.now(),
+            status: 'cancelled',
+            detail: '玩家已取消本次任务。',
+            cancelled: true,
+          },
+        ]);
+      })
+      .catch((error: unknown) => {
+        state.setWorkflowHint(error instanceof Error ? error.message : String(error));
+      });
   }, [
-    state.abortControllerRef,
+    actions,
     state.setQueueTasks,
     state.turnCount,
-    state.setPendingVariable,
-    state.setLoading,
+    state.setWorkflowHint,
   ]);
   const handlePathAwakeningTrigger = useCallback(() => {
     void actions.handleSend('[系统] 踏入命途狭间');
@@ -442,8 +439,20 @@ export default function App() {
   const activeMenuItem = activeSystem
     ? GAME_MENU_ITEMS.find((item) => item.id === activeSystem) ?? null
     : null;
-  const currentStoryChapter = useMemo(() => {
-    return getCurrentStoryChapterLabel(state.剧情编织);
+  const [currentStoryChapter, setCurrentStoryChapter] = useState('');
+  const [storyChapterError, setStoryChapterError] = useState<Error | null>(null);
+  useEffect(() => {
+    let active = true;
+    setStoryChapterError(null);
+    void getAdaptationServices()
+      .then((services) => services.storyProgress.getCurrentStoryChapterLabel(state.剧情编织))
+      .then((label) => {
+        if (active) setCurrentStoryChapter(label);
+      })
+      .catch((error: unknown) => {
+        if (active) setStoryChapterError(error instanceof Error ? error : new Error(String(error)));
+      });
+    return () => { active = false; };
   }, [state.剧情编织]);
   const latestRecallSummary = useMemo(() => {
     if (state.loading && state.liveRecallSummary.trim()) return state.liveRecallSummary.trim();
@@ -548,7 +557,6 @@ export default function App() {
       currentTheme={state.currentTheme}
       onHome={actions.handleGoHome}
       news={state.新闻}
-      onOpenNews={handleOpenNews}
     />
   );
 
@@ -737,7 +745,7 @@ export default function App() {
             <SaveLoadModal
               onSave={actions.handleSave}
               onLoad={async (id) => {
-                const ok = await handleLoadById(id, state);
+                const ok = await actions.handleLoadSave(id);
                 if (ok) setShowSaveLoad(false);
                 return ok;
               }}
@@ -748,7 +756,6 @@ export default function App() {
         {showCloudSave && (
           <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
             <GitHubCloudSaveModal
-              onSave={actions.handleSave}
               onClose={() => setShowCloudSave(false)}
             />
           </Suspense>
@@ -784,7 +791,7 @@ export default function App() {
               onThemeChange={state.setCurrentTheme}
               onSave={actions.handleSave}
               onContinue={actions.handleContinue}
-              onLoadSave={(id) => handleLoadById(id, state)}
+              onLoadSave={actions.handleLoadSave}
               initialTab={settingsInitialTab}
               旅人={state.旅人}
               世界={state.世界}
@@ -799,15 +806,6 @@ export default function App() {
               on剧情编织Change={state.set剧情编织}
               getContextSnapshot={actions.getContextSnapshot}
 
-              worldbooks={state.worldbooks}
-
-              onWorldbooksChange={(books) => {
-
-                state.setWorldbooks(books);
-
-                setPreference('worldbooks', books);
-
-              }}
               variableSetters={{
                 set旅人: state.set旅人,
                 set世界: state.set世界,
@@ -830,23 +828,18 @@ export default function App() {
   // ── New Game Wizard ──
   if (state.view === 'new_game') {
     const getActiveApiConfig = () => {
-      if (state.apiSettings.activeConfigId) {
-        return state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs[0] ?? null;
-      }
-      return state.apiSettings.configs[0] ?? null;
+      if (!state.apiSettings.activeConfigId) return null;
+      return state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? null;
     };
     const handleGenerateTravelerTemplate = async (context: TravelerTemplateContext): Promise<TravelerTemplateDraft> => {
       const config = getActiveApiConfig();
       if (!config) throw new Error('请先在设置中配置至少一个 API 接口。');
-      return generateTravelerTemplate(config, context);
+      return (await getAdaptationServices()).travelerTemplate.generateTravelerTemplate(config, context);
     };
 
     const handleStartGame = async (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords: NPC记录[] = []) => {
       // 预检 API：configs 为空时给出明确提示，不切换 view，避免玩家被困在空白游戏页。
-      if (state.apiSettings.configs.length === 0) {
-        alert('请先在设置中配置至少一个 API 接口，再开始旅途。');
-        return;
-      }
+      if (!getActiveApiConfig()) throw new Error('请先选择有效的主 API 接口。');
       state.set旅人(traveler);
       state.set世界(worldState);
       state.setChatHistory([]);
@@ -858,16 +851,12 @@ export default function App() {
       state.set手机(创建空手机系统());
       state.set新闻([]);
       state.set剧情([]);
-      try {
-        const nextStoryWeaving = alignStoryWeavingToOpeningArchive(
-          await loadAllBundledStoryWeavingPresets(),
-          worldState.开局档案,
-        );
-        state.set剧情编织(nextStoryWeaving);
-        await setPreferenceAsync('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
-      } catch (err) {
-        console.warn('[story-weaving] 新开局加载内置原著剧情失败，保留当前剧情编织状态:', err);
-      }
+      const nextStoryWeaving = alignStoryWeavingToOpeningArchive(
+        await loadAllBundledStoryWeavingPresets(),
+        worldState.开局档案,
+      );
+      state.set剧情编织(nextStoryWeaving);
+      await actions.handleStartSession(traveler, worldState, initialNpcRecords, nextStoryWeaving);
       state.setPendingOpeningTrigger('[系统] 开启第 0 回合');
       setLaunchingJourney(true);
       await wait(getJourneyLaunchDelay());
@@ -893,6 +882,7 @@ export default function App() {
   }
 
   // ── Game ──
+  if (storyChapterError) throw storyChapterError;
   return (
     <>
       <GameView
@@ -939,7 +929,7 @@ export default function App() {
             onThemeChange={state.setCurrentTheme}
             onSave={actions.handleSave}
             onContinue={actions.handleContinue}
-            onLoadSave={(id) => handleLoadById(id, state)}
+            onLoadSave={actions.handleLoadSave}
             initialTab={settingsInitialTab}
             旅人={state.旅人}
             世界={state.世界}
@@ -953,11 +943,6 @@ export default function App() {
             剧情编织={state.剧情编织}
             on剧情编织Change={state.set剧情编织}
             getContextSnapshot={actions.getContextSnapshot}
-            worldbooks={state.worldbooks}
-            onWorldbooksChange={(books) => {
-              state.setWorldbooks(books);
-              setPreference('worldbooks', books);
-            }}
             variableSetters={{
               set旅人: state.set旅人,
               set世界: state.set世界,
@@ -989,11 +974,8 @@ export default function App() {
             traveler={state.旅人}
             world={state.世界}
             memory={state.记忆}
-            yiting={state.忆庭}
             news={state.新闻}
-            storyWeaving={state.剧情编织}
             zhiku={state.智库}
-            apiSettings={state.apiSettings}
             gameSettings={state.gameSettings}
             turnCount={state.turnCount}
             mainChatHistory={state.chatHistory}
@@ -1026,7 +1008,7 @@ export default function App() {
           <SaveLoadModal
             onSave={actions.handleSave}
             onLoad={async (id) => {
-              const ok = await handleLoadById(id, state);
+              const ok = await actions.handleLoadSave(id);
               if (ok) setShowSaveLoad(false);
               return ok;
             }}
@@ -1038,7 +1020,6 @@ export default function App() {
       {showCloudSave && (
         <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
           <GitHubCloudSaveModal
-            onSave={actions.handleSave}
             onClose={() => setShowCloudSave(false)}
           />
         </Suspense>
@@ -1116,16 +1097,13 @@ function renderSystemPanel(
       );
     case 'album':
       return (
-        <AlbumPanel
+        <AlbumWorkspace
           album={ctx.album}
           onAlbumChange={ctx.onAlbumChange}
           traveler={ctx.traveler}
           onTravelerChange={ctx.onTravelerChange}
-          phone={ctx.phone}
-          onPhoneChange={ctx.onPhoneChange}
           npcs={ctx.npcRecords}
           onNpcChange={ctx.onNpcRecordsChange}
-          apiSettings={ctx.apiSettings}
           gameSettings={ctx.gameSettings}
           onGameSettingsChange={ctx.onGameSettingsChange}
           imageSettings={ctx.gameSettings.文生图系统}
@@ -1159,7 +1137,6 @@ function renderSystemPanel(
           storyWeaving={ctx.storyWeaving}
           onStoryWeavingChange={ctx.onStoryWeavingChange}
           gameSettings={ctx.gameSettings}
-          apiSettings={ctx.apiSettings}
         />
       );
     case 'yiting':
@@ -1174,7 +1151,7 @@ function renderSystemPanel(
       );
     case 'memory':
       return (
-        <MemoryPanel
+        <MemorySystemPanel
           memorySystem={ctx.memorySystem}
           onMemorySystemChange={ctx.onMemorySystemChange}
           turnCount={ctx.turnCount}

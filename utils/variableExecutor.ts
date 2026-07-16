@@ -3,14 +3,8 @@
 //
 // 设计：每个命令都独立调用对应 setter。多条命令按顺序执行；前一条不会影响下一条的校验（因为校验是用旧 state 做的，由 sendWorkflow 决定是否每条都重校验）。
 //
-// Stage 5.1 dual-path note (temporary):
-// - Native Kernel formal GameState variables (旅人 profile + 数值属性) live in
-//   src/kernel/domain/variables and commit only via executeTurn / variables.apply CAS.
-// - This module remains the LEGACY full-graph reducer for sendWorkflow + React setters
-//   (世界/NPC/背包/命途/…). Do not call reduceVariableCommands + commitVariableState
-//   from the native formal path.
-// - Deletion plan: as Stage 5.x migrates each root into kernel domain, remove the
-//   corresponding branch here and stop re-exporting parse/reduce for that root.
+// This reducer operates on the kernel-owned runtime draft. Its result becomes visible
+// only after the enclosing IKernel command commits the complete runtime graph.
 
 import type { 变量命令, 变量命令结果 } from '@/models/variableCommand';
 import type { VariableSetters } from '@/models/variableSetters';
@@ -30,7 +24,7 @@ import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
 import { 归一化剧情节点列表 } from '@/models/plot';
 import type { 命途ID } from '@/models/journey';
-import { 推进命途进度 } from '@/services/pathService';
+import { 推进命途进度 } from '@/src/kernel/domain/path/pathOperations';
 import { 获取物品, type 获取物品输入 } from './inventoryActions';
 import type { 背包物品, 物品分类, 物品品质 } from '@/models/inventory';
 import { 应用路径命令, 解析路径片段, 读取路径值 } from './variablePath';

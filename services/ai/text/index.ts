@@ -1,7 +1,7 @@
 import type { API配置项 } from '@/models/settings';
 import type { 聊天消息 } from '@/models/chat';
 import { chatCompletion, chatCompletionNonStream, type ChatCompletionUsage, type StreamCallbacks } from '@/services/ai/chatCompletionClient';
-import { parseResponse } from '@/services/ai/responseParser';
+import { parseResponse } from '@/src/kernel/protocol/mainResponse';
 import type { 解析后回复 } from '@/models/chat';
 import type { DeepSeekRecoverySummary } from '@/services/ai/deepSeekRecovery';
 
@@ -11,8 +11,6 @@ export interface ChatRequest {
   onDelta: (delta: string) => void;
   signal?: AbortSignal;
   streaming?: boolean;
-  /** 是否启用标签修复（解析前先 repairTags）。默认 false。 */
-  repairTags?: boolean;
   /** DeepSeek 主剧情锁格式：只在 DeepSeek provider 下生效。 */
   prefixMode?: boolean;
   prefixContent?: string;
@@ -124,7 +122,7 @@ export async function sendChatMessage(
     });
   }
 
-  const parsed = parseResponse(fullText, { repair: request.repairTags === true });
+  const parsed = parseResponse(fullText);
   return { fullText, parsed, usage, finishReason, deepSeekRecovery };
 }
 
