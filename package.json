@@ -35,6 +35,7 @@
     "test:save-isolation": "node scripts/save-isolation-regression.mjs",
     "test:save-package": "node scripts/save-package-regression.mjs",
     "test:kernel-auto-save": "node scripts/kernel-auto-save-regression.mjs",
+    "test:ui-interaction-boundaries": "node scripts/ui-interaction-boundaries-regression.mjs",
     "test:api-profile": "node scripts/api-profile-regression.mjs",
     "test:api-connection": "node scripts/gemini-connection-regression.mjs",
     "test:settings-nav-icons": "node scripts/settings-navigation-icons-regression.mjs",

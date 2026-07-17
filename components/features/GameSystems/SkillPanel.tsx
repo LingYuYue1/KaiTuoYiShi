@@ -349,7 +349,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
               <button className="panel-btn" disabled={!selectedSlot || generatingSkill} onClick={generateDraftWithAI}>
                 {generatingSkill ? '生成中…' : 'AI 生成'}
               </button>
-              <button className="panel-btn strong" disabled={!selectedSlot || generatingSkill} onClick={saveSkill}>
+              <button className="panel-btn strong hidden md:inline-flex" disabled={!selectedSlot || generatingSkill} onClick={saveSkill}>
                 {selectedSkill ? '保存战技' : '写入槽位'}
               </button>
             </div>
@@ -392,6 +392,16 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
                   />
                 </Field>
                 <SkillEditor draft={draft} onChange={setDraft} selectedSlot={selectedSlot} selectedPath={selectedPath} />
+                <div className="mt-4 md:hidden">
+                  <button
+                    type="button"
+                    className="panel-btn strong flex min-h-[44px] w-full items-center justify-center px-4 py-3 text-sm"
+                    disabled={!selectedSlot || generatingSkill}
+                    onClick={saveSkill}
+                  >
+                    {selectedSkill ? '保存战技' : '写入槽位'}
+                  </button>
+                </div>
               </>
             ) : (
               <EmptyNotice text="先选择普通槽位或命途槽位创建战技。" />

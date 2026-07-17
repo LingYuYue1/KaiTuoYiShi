@@ -32,6 +32,7 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
           transform: open ? 'translateX(0)' : 'translateX(105%)',
         }}
         aria-hidden={!open}
+        inert={!open}
       >
         {/* 左侧中部圆形关闭按钮 —— 大抽屉下手最顺的关闭入口 */}
         <button

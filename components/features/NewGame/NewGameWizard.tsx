@@ -328,6 +328,7 @@ export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGene
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [presetNameDraft, setPresetNameDraft] = useState('');
   const [presetStatus, setPresetStatus] = useState('');
+  const [presetMutation, setPresetMutation] = useState<'save' | 'delete' | null>(null);
 
   const [storyMode, setStoryMode] = useState<剧情模式>('normal');
 
@@ -843,8 +844,8 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   const persistOpeningPresets = async (nextPresets: OpeningPlayerPreset[]) => {
     const normalized = normalizeOpeningPresets(nextPresets);
-    setOpeningPresets(normalized);
     await setPreference(OPENING_PLAYER_PRESETS_KEY, normalized);
+    setOpeningPresets(normalized);
   };
 
   const applyOpeningPreset = (presetId: string) => {
@@ -890,6 +891,8 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   };
 
   const saveCurrentOpeningPreset = async () => {
+    if (presetMutation) return;
+    setPresetMutation('save');
     const title = (presetNameDraft.trim() || name.trim() || alias.trim() || '未命名开局预设').slice(0, 32);
     const existingBySelected = openingPresets.find((item) => item.id === selectedPresetId);
     const existingByTitle = openingPresets.find((item) => item.title === title);
@@ -912,11 +915,14 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     } catch (err) {
       console.warn('[new-game] 开局预设保存失败:', err);
       setPresetStatus('保存失败，请稍后再试');
+    } finally {
+      setPresetMutation(null);
     }
   };
 
   const deleteSelectedOpeningPreset = async () => {
-    if (!selectedPresetId) return;
+    if (!selectedPresetId || presetMutation) return;
+    setPresetMutation('delete');
     const target = openingPresets.find((item) => item.id === selectedPresetId);
     const nextPresets = openingPresets.filter((item) => item.id !== selectedPresetId);
     try {
@@ -927,6 +933,8 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     } catch (err) {
       console.warn('[new-game] 开局预设删除失败:', err);
       setPresetStatus('删除失败，请稍后再试');
+    } finally {
+      setPresetMutation(null);
     }
   };
 
@@ -1390,6 +1398,7 @@ style={{
                     selectedPresetId={selectedPresetId}
                     presetNameDraft={presetNameDraft}
                     status={presetStatus}
+                    pendingMutation={presetMutation}
                     onPresetNameDraft={setPresetNameDraft}
                     onSelectPreset={setSelectedPresetId}
                     onApplyPreset={applyOpeningPreset}
@@ -1607,6 +1616,7 @@ function OpeningPresetControls({
   selectedPresetId,
   presetNameDraft,
   status,
+  pendingMutation,
   onPresetNameDraft,
   onSelectPreset,
   onApplyPreset,
@@ -1617,6 +1627,7 @@ function OpeningPresetControls({
   selectedPresetId: string;
   presetNameDraft: string;
   status: string;
+  pendingMutation: 'save' | 'delete' | null;
   onPresetNameDraft: (value: string) => void;
   onSelectPreset: (value: string) => void;
   onApplyPreset: (id: string) => void;
@@ -1675,9 +1686,10 @@ function OpeningPresetControls({
           <button
             type="button"
             onClick={onSavePreset}
-            className="kaituo-btn kaituo-btn-primary px-2 py-2 text-[11px]"
+            disabled={pendingMutation !== null}
+            className="kaituo-btn kaituo-btn-primary px-2 py-2 text-[11px] disabled:cursor-wait disabled:opacity-55"
           >
-            保存
+            {pendingMutation === 'save' ? '保存中…' : '保存'}
           </button>
           <button
             type="button"
@@ -1690,7 +1702,7 @@ function OpeningPresetControls({
           <button
             type="button"
             onClick={onDeletePreset}
-            disabled={!hasSelected}
+            disabled={!hasSelected || pendingMutation !== null}
             className="px-2 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
             style={{
               background: 'rgba(var(--tj-danger),0.12)',
@@ -1699,7 +1711,7 @@ function OpeningPresetControls({
               clipPath: smallClip,
             }}
           >
-            删除
+            {pendingMutation === 'delete' ? '删除中…' : '删除'}
           </button>
         </div>
       </div>
