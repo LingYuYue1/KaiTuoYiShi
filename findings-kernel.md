@@ -89,3 +89,45 @@
 **建议：** 接受 breaking change，直接把 `RuntimeGameState` 收窄为可存档的剧情状态；将 API 配置、主题及其他设备级开关拆到 `DevicePreferences`，将确属剧情语义的设置单独定义为 `StorySettings`。由 engine/workflow 的显式 execution context（或 preferences port）注入 live preferences，不再从 runtime state 读取。存档导入/迁移脚本负责从旧记录移除遗留设备字段，并只迁移仍属于剧情的字段；无需保留 RuntimeGameState 的兼容桥接层。
 
 **规模判断：** 这是一次中大型内核接口重构，而不是局部清理：涉及 runtime 类型、draft/snapshot、BrowserTurnEngine 与 runtime action engine、context 构建/API 解析、session hydration、存档导入导出及迁移脚本。以当前结构估计约 12–18 个生产文件，完成后可一并删除“读档后偏好覆盖 runtime”的过渡逻辑。
+
+## 补充发现：回合过程事件未投影，导致聊天与状态 UI 滞后
+
+### P1：用户输入已写入 draft，但 UI 直到最终 commit 才看到它
+
+- `src/kernel/workflows/sendWorkflow.ts:1597-1598` 在主模型调用前将 `userMsg` 加入 `updatedHistory` 并写入 draft。
+- `src/kernel/adapters/browser/BrowserTurnEngine.ts:49-65` 不会在该时点发送包含 draft 的 frame；它只转发 `onStreamProgress`，并在整个 workflow 完成后才 yield `completed` 的完整 runtime。
+- `src/kernel/application/executeTurn.ts:30-46` 只把 engine 的 `progress` 转成 narrative delta，随后直接提交最终 runtime。
+
+**可见表现：** 发送后，玩家消息不会立即出现在聊天列表；它会与最终模型消息一起，在回合正式提交后出现。
+
+### P1：召回、插入、错误与重试状态存在于 draft，但没有阶段事件
+
+- `src/kernel/workflows/sendWorkflow.ts:1530-1536` 将加载状态、`workflowHint` 和“智库/记忆召回中”写入 draft。
+- `src/kernel/workflows/sendWorkflow.ts:1768-1792` 在忆庭/智库完成后，将召回摘要、完整注入内容和“已注入”提示写入 draft。
+- `services/ai/retry.ts:15-36` 在独立模型调用内部重试，但不输出“本次失败 / 第 N 次重试 / 已恢复”的可消费事件。
+- `src/kernel/workflows/sendWorkflow.ts:2806-2828` 的最终失败/清理同样只影响 draft，随后才进入 command 的 rejected 或 committed 边界。
+
+**可见表现：**
+
+- 正常情况下，消息框上方状态栏不能在主模型回复前显示“检索中”及“已插入”的实时进展。
+- 召回模型的中间失败与自动重试对 UI 不可见；只有重试耗尽后的整回合失败可被上层捕获。
+- 上一回合遗留的错误提示可能在下一回合执行期间继续显示；即使新的召回在内部重试成功，UI 仍收不到“已恢复、已插入”的阶段状态。
+
+### P1：流式预览与正式 assistant 消息没有交接帧，产生完成瞬间的闪烁
+
+- `src/kernel/workflows/sendWorkflow.ts:2401-2419` 先在 draft 中加入正式 assistant 消息，随后立即 `streamMessageSetter.flush('')` 清空预览，并继续启动记忆等收尾工作。
+- `components/features/Chat/ChatList.tsx:235-275` 在 `streamingMessage` 为空而 React `loading` 仍为真时，显示“正在沉思……”。
+- 由于正式 assistant 消息仍要等待 `BrowserTurnEngine` 在 workflow 结束后输出 `completed`，UI 在此期间没有可以显示的最终消息。
+
+**可见表现：** 主模型正文生成完毕后会出现“流式正文消失 → 正在沉思…… → 正式消息出现”的短暂空窗与布局抖动。这不是模型继续生成，而是 UI 在等待最终 runtime 提交。
+
+### 建议：以过程 frame 取代“仅正文 progress + 最终 runtime”的协议
+
+为 `TurnEngine` / `IKernel` 增加显式、可取消且按 command 隔离的过程 frame，至少覆盖：
+
+1. `prepared`：立即投影用户消息与初始加载状态。
+2. `status`：召回、插入、主模型、后台结算的开始、成功、失败、重试与恢复。
+3. `assistant-ready`：正式 assistant 消息已经可显示，但后台记忆/变量/新闻任务仍可继续。
+4. `completed`：仅用于最终持久化状态提交；不得作为聊天内容首次可见的唯一时点。
+
+这样既能保持 kernel 的正式状态提交语义，也能让 UI 从 kernel 接收真实过程状态，而不是在 React 层猜测或乐观伪造。
