@@ -10,7 +10,7 @@ const skillModel = fs.readFileSync('models/skill.ts', 'utf8');
 const skillIndex = fs.readFileSync('models/index.ts', 'utf8');
 const skillPanel = fs.readFileSync('components/features/GameSystems/SkillPanel.tsx', 'utf8');
 const skillGenerator = fs.readFileSync('services/ai/skillGenerator.ts', 'utf8');
-const promptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
+const promptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
 assert(
@@ -83,5 +83,36 @@ assert(skillGenerator.includes('可以诗意、可以直白贴合技能、可以
 assert(skillGenerator.includes('不要每次都写成四字玄幻招式名'), '战技名称生成必须避免单一玄幻招式名。');
 assert(skillGenerator.includes('PATH_STYLE_GUIDE'), '战技生成必须按命途气质提供设计口径。');
 assert(skillGenerator.includes('parseJsonWithRepair'), '战技生成结果必须用 JSON 修复解析，兼容模型输出。');
+
+// Issue 9: JSON 工具响应与主剧情协议解析解耦
+const textIndex = fs.readFileSync('services/ai/text/index.ts', 'utf8');
+const sendWorkflow = fs.readFileSync('src/kernel/workflows/sendWorkflow.ts', 'utf8');
+
+assert(
+  textIndex.includes('export async function completeChatText') &&
+    textIndex.includes('export async function sendChatMessage'),
+  'text/index 必须同时导出 completeChatText（原始传输）与 sendChatMessage（协议解析）。',
+);
+assert(
+  textIndex.includes('const raw = await completeChatText') &&
+    textIndex.includes('parseResponse(raw.fullText)'),
+  'sendChatMessage 必须基于 completeChatText 并附加 parseResponse。',
+);
+assert(
+  skillGenerator.includes('completeChatText') &&
+    skillGenerator.includes("from '@/services/ai/text'"),
+  'skillGenerator 必须通过 completeChatText 走原始传输完成路径。',
+);
+assert(
+  !skillGenerator.includes('sendChatMessage') &&
+    !skillGenerator.includes('parseResponse') &&
+    !skillGenerator.includes('.parsed'),
+  'skillGenerator 不得依赖 sendChatMessage / parseResponse / parsed 字段。',
+);
+assert(
+  sendWorkflow.includes('sendChatMessage') &&
+    sendWorkflow.includes("from '@/services/ai/text'"),
+  'sendWorkflow 主故事路径必须继续使用 sendChatMessage。',
+);
 
 console.log('skill system regression passed');

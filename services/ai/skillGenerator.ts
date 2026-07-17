@@ -5,7 +5,7 @@ import type { 命途阶段 } from '@/models/path';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { 创建聊天消息 } from '@/models/chat';
 import { getPath } from '@/data/journeyPresets';
-import { sendChatMessage } from '@/services/ai/text';
+import { completeChatText } from '@/services/ai/text';
 import { parseJsonWithRepair } from '@/utils/jsonRepair';
 
 export interface 战技生成上下文 {
@@ -140,7 +140,7 @@ export async function generateSkillDraft(
   context: 战技生成上下文,
   signal?: AbortSignal,
 ): Promise<战技生成草稿> {
-  const result = await sendChatMessage(config, {
+  const result = await completeChatText(config, {
     systemPrompt: buildSkillGeneratorSystemPrompt(),
     messages: [创建聊天消息('user', buildSkillGeneratorUserPrompt(context))],
     onDelta: () => {},
