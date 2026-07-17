@@ -607,7 +607,8 @@ export function StreamingPreview({ content, npcRecords, traveler, album, showInn
 
   return (
     <div className="space-y-2">
-      <PathfindingIndicator />
+      {/* Pathfinding banner only until <正文> starts flowing — avoid sticky dual chrome. */}
+      {!bodyStarted && <PathfindingIndicator />}
       {bodyStarted && bodyText && (
         <div className="px-1 py-1">
           <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={userInput} visualTextSettings={fontSettings} />

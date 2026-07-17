@@ -14,6 +14,7 @@ import { VariableDrawer } from '@/components/features/Variable/VariableDrawer';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakeningInvitation';
 import { Modal } from '@/components/ui/Modal';
+import { APP_REPAIR_EVENT, reportAppError, type AppRepairAction } from '@/components/ui/AppErrorReporter';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { setPreference } from '@/src/adaptations/preferences';
@@ -21,6 +22,7 @@ import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
+import type { API配置项 } from '@/models/settings';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
@@ -307,6 +309,10 @@ const getSaveLoadViewSwitchDelay = () => prefersReducedMotion() ? SAVE_LOAD_REDU
 const getBookOpenDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_MOTION_MS : BOOK_OPEN_ANIMATION_MS;
 const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_VIEW_SWITCH_MS : BOOK_OPEN_VIEW_SWITCH_MS;
 
+function isCompleteMainApiConfig(config: API配置项 | null | undefined): config is API配置项 {
+  return Boolean(config?.provider && config.baseUrl.trim() && config.apiKey.trim() && config.model.trim());
+}
+
 export default function App() {
   const { state, actions } = useGame();
   const [showSettings, setShowSettings] = useState(false);
@@ -320,6 +326,7 @@ export default function App() {
   const [showCharacter, setShowCharacter] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
+  const [settingsReturnView, setSettingsReturnView] = useState<'new_game' | null>(null);
   const [activeSystem, setActiveSystem] = useState<GameSystemId | null>(null);
   const [launchingJourney, setLaunchingJourney] = useState(false);
   const [homeJourneyTransitioning, setHomeJourneyTransitioning] = useState(false);
@@ -338,7 +345,40 @@ export default function App() {
   const handleOpenProfile = useCallback(() => setShowCharacter(true), []);
   const handleOpenPhone = useCallback(() => setShowPhone(true), []);
   const handleOpenSaveLoad = useCallback(() => setShowSaveLoad(true), []);
-  const handleOpenSettings = useCallback(() => setShowSettings(true), []);
+  const openSettings = useCallback((tab: SettingsTab = 'api') => {
+    setSettingsReturnView(null);
+    setSettingsInitialTab(tab);
+    setShowSettings(true);
+  }, []);
+  const handleOpenSettings = useCallback(() => openSettings(), [openSettings]);
+  const openApiSettings = useCallback((returnTo?: 'new_game') => {
+    if (returnTo) {
+      setSettingsReturnView(returnTo);
+      state.setView('home');
+    } else {
+      setSettingsReturnView(null);
+    }
+    setSettingsInitialTab('api');
+    setShowSettings(true);
+  }, [state.setView]);
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false);
+    const returnTo = settingsReturnView;
+    setSettingsReturnView(null);
+    const activeConfig = state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId);
+    if (returnTo === 'new_game' && isCompleteMainApiConfig(activeConfig)) {
+      state.setView('new_game');
+    }
+  }, [settingsReturnView, state.apiSettings.activeConfigId, state.apiSettings.configs, state.setView]);
+
+  useEffect(() => {
+    const handleRepair = (event: Event) => {
+      const repair = (event as CustomEvent<AppRepairAction>).detail;
+      if (repair === 'open-api-settings') openApiSettings();
+    };
+    window.addEventListener(APP_REPAIR_EVENT, handleRepair);
+    return () => window.removeEventListener(APP_REPAIR_EVENT, handleRepair);
+  }, [openApiSettings]);
   const handleOpenReviewLab = useCallback(() => setShowAIReviewLab(true), []);
   const handleCloseSystemDrawer = useCallback(() => setActiveSystem(null), []);
   const handleToggleStreaming = useCallback(() => {
@@ -388,7 +428,7 @@ export default function App() {
     state.setWorkflowHint,
   ]);
   const handlePathAwakeningTrigger = useCallback(() => {
-    void actions.handleSend('[系统] 踏入命途狭间');
+    void actions.handleSend('[系统] 踏入命途狭间').catch(() => {});
   }, [actions]);
   const handleAwakenedNewPath = useCallback((id: 命途ID) => {
     // TODO: 这里以后接入命途狭间剧情触发。当前只 console。
@@ -397,6 +437,17 @@ export default function App() {
 
   const handleHomeNewGame = useCallback(async () => {
     if (homeJourneyTransitioning || saveLoadTransitioning || bookOpenTransitioning || launchingJourney) return;
+    const activeId = state.apiSettings.activeConfigId;
+    const activeConfig = activeId ? state.apiSettings.configs.find((item) => item.id === activeId) : null;
+    if (!isCompleteMainApiConfig(activeConfig)) {
+      reportAppError({
+        source: '新建档案',
+        error: new Error('请先配置有效的主 API 接口。'),
+        repair: 'open-api-settings',
+      });
+      openApiSettings('new_game');
+      return;
+    }
     void NewGameWizard.preload();
     setHomeJourneyTransitioning(true);
     const totalDelay = getHomeJourneyDelay();
@@ -405,7 +456,7 @@ export default function App() {
     actions.handleNewGame();
     await wait(Math.max(totalDelay - switchDelay, 0));
     setHomeJourneyTransitioning(false);
-  }, [actions, bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
+  }, [actions, bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, openApiSettings, saveLoadTransitioning, state.apiSettings]);
 
   const handleHomeLoadSave = useCallback(async () => {
     if (saveLoadTransitioning || homeJourneyTransitioning || bookOpenTransitioning || launchingJourney) return;
@@ -520,7 +571,7 @@ export default function App() {
     if (state.view === 'game' && state.pendingOpeningTrigger) {
       const text = state.pendingOpeningTrigger;
       state.setPendingOpeningTrigger(null);
-      void actions.handleSend(text);
+      void actions.handleSend(text).catch(() => {});
     }
   }, [state.view, state.pendingOpeningTrigger, state, actions]);
 
@@ -684,14 +735,8 @@ export default function App() {
             onNewGame={handleHomeNewGame}
             onLoadSave={handleHomeLoadSave}
             onContinue={actions.handleContinue}
-            onOpenSettings={(tab = 'api') => {
-              setSettingsInitialTab(tab);
-              setShowSettings(true);
-            }}
-            onOpenStorageManager={() => {
-              setSettingsInitialTab('storage');
-              setShowSettings(true);
-            }}
+            onOpenSettings={openSettings}
+            onOpenStorageManager={() => openSettings('storage')}
             onOpenWorldbookManager={handleHomeWorldbookManager}
             onOpenZhikuManager={() => setShowZhikuManager(true)}
             onOpenCloudSave={() => setShowCloudSave(true)}
@@ -703,10 +748,7 @@ export default function App() {
           <LandingPage
             onNewGame={handleHomeNewGame}
             onLoadSave={handleHomeLoadSave}
-            onSettings={() => {
-              setSettingsInitialTab('api');
-              setShowSettings(true);
-            }}
+            onSettings={openSettings}
             onWorldbookManager={handleHomeWorldbookManager}
             onZhikuManager={() => setShowZhikuManager(true)}
             onCloudSave={() => setShowCloudSave(true)}
@@ -782,7 +824,7 @@ export default function App() {
         {showSettings && (
           <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
             <SettingsModal
-              onClose={() => setShowSettings(false)}
+              onClose={handleCloseSettings}
               apiSettings={state.apiSettings}
               onApiSettingsChange={state.setApiSettings}
               gameSettings={state.gameSettings}
@@ -833,13 +875,21 @@ export default function App() {
     };
     const handleGenerateTravelerTemplate = async (context: TravelerTemplateContext): Promise<TravelerTemplateDraft> => {
       const config = getActiveApiConfig();
-      if (!config) throw new Error('请先在设置中配置至少一个 API 接口。');
+      if (!isCompleteMainApiConfig(config)) throw new Error('请先在设置中配置有效的主 API 接口。');
       return (await getAdaptationServices()).travelerTemplate.generateTravelerTemplate(config, context);
     };
 
     const handleStartGame = async (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords: NPC记录[] = []) => {
-      // 预检 API：configs 为空时给出明确提示，不切换 view，避免玩家被困在空白游戏页。
-      if (!getActiveApiConfig()) throw new Error('请先选择有效的主 API 接口。');
+      // Defensive invariant only: normal onboarding routes to Settings before the wizard opens.
+      if (!isCompleteMainApiConfig(getActiveApiConfig())) {
+        reportAppError({
+          source: '新建档案',
+          error: new Error('请先配置有效的主 API 接口。'),
+          repair: 'open-api-settings',
+        });
+        openApiSettings('new_game');
+        return;
+      }
       state.set旅人(traveler);
       state.set世界(worldState);
       state.setChatHistory([]);
@@ -871,7 +921,7 @@ export default function App() {
             onStart={handleStartGame}
             onBack={() => state.setView('home')}
             currentTheme={state.currentTheme}
-            openingArchiveApiConfig={getActiveApiConfig()}
+            openingArchiveApiConfig={isCompleteMainApiConfig(getActiveApiConfig()) ? getActiveApiConfig() : null}
             onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
           />
         </Suspense>
@@ -920,7 +970,7 @@ export default function App() {
       {showSettings && (
         <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
           <SettingsModal
-            onClose={() => setShowSettings(false)}
+            onClose={handleCloseSettings}
             apiSettings={state.apiSettings}
             onApiSettingsChange={state.setApiSettings}
             gameSettings={state.gameSettings}

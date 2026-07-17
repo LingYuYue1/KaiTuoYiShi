@@ -9,7 +9,7 @@ const tab = fs.readFileSync('components/features/Settings/ApiErrorReportsTab.tsx
 const modal = fs.readFileSync('components/features/Settings/SettingsModal.tsx', 'utf8');
 const client = fs.readFileSync('services/ai/chatCompletionClient.ts', 'utf8');
 const apiTools = fs.readFileSync('services/ai/apiTools.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = fs.readFileSync('src/kernel/workflows/sendWorkflow.ts', 'utf8');
 
 assert(service.includes("API_ERROR_REPORTS_KEY = 'apiErrorReports'"), 'API 错误报告必须有独立本地 settings key。');
 assert(service.includes('appendApiErrorReport'), '必须提供 API 错误报告写入函数。');
@@ -34,7 +34,7 @@ assert(apiTools.includes("source: '连接测试'"), '连接测试失败必须记
 assert(apiTools.includes("source: '百度千帆模型列表'"), '百度模型列表失败必须记录来源。');
 assert(sendWorkflow.includes('appendApiErrorReport'), '主剧情工作流判定失败必须写入 API 错误报告。');
 assert(sendWorkflow.includes("source: '主剧情工作流'"), '主剧情自动重试必须记录为主剧情工作流来源。');
-assert(sendWorkflow.includes('返回空响应，触发自动重试'), '主剧情空响应重试必须写入错误报告。');
+assert(sendWorkflow.includes('主剧情输出为空，正在重试。'), '主剧情空响应重试必须写入错误报告。');
 assert(sendWorkflow.includes('alreadyReportedByApiLayer'), '主剧情工作流不应重复覆盖底层 API 错误报告。');
 
 console.log('api error reports regression ok');

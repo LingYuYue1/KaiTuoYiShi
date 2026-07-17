@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { reportAppError } from './AppErrorReporter';
 
 interface Props {
   children: ReactNode;
@@ -6,13 +7,19 @@ interface Props {
 
 interface State {
   error: Error | null;
+  diagnosticId: string | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, diagnosticId: null };
 
   static getDerivedStateFromError(error: Error): State {
-    return { error };
+    return { error, diagnosticId: null };
+  }
+
+  componentDidCatch(error: Error): void {
+    const record = reportAppError({ source: '界面渲染', error });
+    this.setState({ diagnosticId: record.id });
   }
 
   render() {
@@ -75,8 +82,8 @@ export class ErrorBoundary extends Component<Props, State> {
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               }}
             >
-              {this.state.error.message}
-              {this.state.error.stack ? `\n\n${this.state.error.stack}` : ''}
+              异常已记录。请使用诊断 ID 在右上角错误列表中排查：
+              {'\n'}{this.state.diagnosticId?.slice(0, 8) ?? '记录中'}
             </pre>
             <button
               onClick={() => window.location.reload()}

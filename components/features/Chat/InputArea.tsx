@@ -29,6 +29,11 @@ const btnClip =
 const iconClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
+/** Command actions report their own failures; event handlers must not rethrow them globally. */
+function ignoreHandledAction(result: unknown): void {
+  void Promise.resolve(result).catch(() => {});
+}
+
 export const InputArea = memo(function InputArea({
   onSend,
   onAbort,
@@ -69,9 +74,18 @@ export const InputArea = memo(function InputArea({
     const trimmed = input.trim();
     if (!trimmed || loading) return;
     lastSubmittedRef.current = trimmed;
-    await onSend(trimmed);
+    // Clear on accept so protocol failures / rejects never leave stale input.
+    // Abort restores via handleAbortClick + lastSubmittedRef.
     setInput('');
-    inputRef.current?.focus();
+    try {
+      await onSend(trimmed);
+    } catch (error) {
+      // A rejected command was never committed; do not make the player retype it.
+      setInput((current) => current.trim() ? current : trimmed);
+      throw error;
+    } finally {
+      inputRef.current?.focus();
+    }
   }, [input, loading, onSend]);
 
   const handleAbortClick = useCallback(async () => {
@@ -112,7 +126,7 @@ export const InputArea = memo(function InputArea({
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        handleSend();
+        ignoreHandledAction(handleSend());
       }
     },
     [handleSend],
@@ -185,7 +199,7 @@ export const InputArea = memo(function InputArea({
           {workflowStatus !== 'done' && onCancelWorkflow && (
             <button
               type="button"
-              onClick={onCancelWorkflow}
+              onClick={() => ignoreHandledAction(onCancelWorkflow())}
               className="px-2 py-0.5 text-[10px] tracking-[0.16em]"
               style={{
                 color: 'rgba(var(--tj-text-primary),0.92)',
@@ -216,7 +230,7 @@ export const InputArea = memo(function InputArea({
           title="重roll"
           hint={canReroll ? undefined : '需先有回复'}
           disabled={!canReroll || loading || disabled}
-          onClick={handleRerollClick}
+          onClick={() => ignoreHandledAction(handleRerollClick())}
         />
         <IconButton
           glyph={streamingEnabled ? '⟿' : '◐'}
@@ -269,7 +283,7 @@ export const InputArea = memo(function InputArea({
         />
         {loading ? (
           <button
-            onClick={handleAbortClick}
+            onClick={() => ignoreHandledAction(handleAbortClick())}
             className="flex min-w-[58px] items-center justify-center gap-2 px-3 font-serif text-xs font-medium tracking-[0.14em] transition-all hover:opacity-90 md:min-w-[64px] md:px-5 md:text-sm md:tracking-[0.3em]"
             style={{
               background: 'linear-gradient(135deg, rgba(var(--tj-danger),0.9), rgba(var(--tj-danger),0.9))',
@@ -291,7 +305,7 @@ export const InputArea = memo(function InputArea({
           </button>
         ) : (
           <button
-            onClick={handleSend}
+            onClick={() => ignoreHandledAction(handleSend())}
             disabled={!input.trim() || disabled}
             className="kaituo-btn kaituo-btn-primary group min-w-[58px] px-3 text-xs md:min-w-[64px] md:px-6 md:text-sm"
           >
