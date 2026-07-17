@@ -1,16 +1,20 @@
 ﻿import { useEffect, useState } from 'react';
+import { useRef } from 'react';
 import { useGitHubOAuth } from '@/hooks/useGitHubOAuth';
-import { getSaveList, loadSave, loadSetting, replaceAllSaves, saveSetting } from '@/services/dbService';
+import { getSaveCatalogSnapshot, loadSaveForCloudTransfer, loadSetting, saveSetting } from '@/services/dbService';
+import { buildCompleteCloudBackup } from '@/services/cloudBackupBuilder';
+import { mergeDownloadedCloudBackup, mergeLegacyCloudBackup } from '@/services/cloudBackupMerge';
 import {
   bindGitHubCloudAccount,
   createDefaultGitHubCloudConfig,
-  downloadSaveFromGitHubCloud,
+  downloadCompleteBackupFromGitHub,
+  downloadLegacySaveFromGitHub,
   getGitHubAccountInfo,
-  listGitHubCloudSaves,
-  uploadAllSavesToGitHubCloud,
+  inspectGitHubCloudBackup,
+  uploadCompleteBackupToGitHub,
   type GitHubAccountInfo,
+  type GitHubCloudBackupListing,
   type GitHubCloudSaveConfig,
-  type GitHubCloudSaveItem,
 } from '@/services/githubCloudSave';
 
 interface Props {
@@ -24,14 +28,16 @@ const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
+  void onSave;
   const [cloudConfig, setCloudConfig] = useState<GitHubCloudSaveConfig>(createDefaultGitHubCloudConfig);
-  const [cloudSaves, setCloudSaves] = useState<GitHubCloudSaveItem[]>([]);
+  const [cloudBackup, setCloudBackup] = useState<GitHubCloudBackupListing | null>(null);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudMessage, setCloudMessage] = useState('');
   const [bindToken, setBindToken] = useState('');
   const [account, setAccount] = useState<GitHubAccountInfo | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ label: string; current: number; total: number } | null>(null);
+  const activeControllerRef = useRef<AbortController | null>(null);
   const { pending: oauthPending, error: oauthError, startGitHubOAuth, consumeGitHubOAuthCallback } = useGitHubOAuth();
 
   useEffect(() => {
@@ -45,8 +51,8 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
           getGitHubAccountInfo(next.token)
             .then(setAccount)
             .catch(() => {});
-          listGitHubCloudSaves(next)
-            .then((manifest) => setCloudSaves(manifest.saves))
+          inspectGitHubCloudBackup(next)
+            .then(setCloudBackup)
             .catch(() => {});
         }
       })
@@ -66,9 +72,9 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
         setAccount(result.account);
         setBindToken(result.config.token);
         await persistCloudConfig(result.config);
-        const manifest = await listGitHubCloudSaves(result.config);
+        const listing = await inspectGitHubCloudBackup(result.config);
         if (cancelled) return;
-        setCloudSaves(manifest.saves);
+        setCloudBackup(listing);
         setCloudMessage(`已绑定 GitHub：${result.account.login}。`);
       })
       .catch((err) => {
@@ -81,6 +87,10 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
       cancelled = true;
     };
   }, [consumeGitHubOAuthCallback]);
+
+  useEffect(() => () => {
+    activeControllerRef.current?.abort(new DOMException('云备份弹窗已关闭。', 'AbortError'));
+  }, []);
 
   const patchCloudConfig = (patch: Partial<GitHubCloudSaveConfig>) => {
     setCloudConfig((prev) => ({ ...prev, ...patch }));
@@ -100,28 +110,32 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
     return clean;
   };
 
-  const runCloudTask = async (task: () => Promise<void>) => {
+  const runCloudTask = async (task: (signal: AbortSignal) => Promise<void>) => {
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
     setCloudBusy(true);
     setCloudMessage('');
     setSyncProgress(null);
     try {
-      await task();
+      await task(controller.signal);
     } catch (err) {
-      setCloudMessage(err instanceof Error ? err.message : 'GitHub 云存档操作失败。');
+      if (controller.signal.aborted) setCloudMessage('云备份操作已取消，本地存档和当前有效云备份均未被覆盖。');
+      else setCloudMessage(err instanceof Error ? err.message : 'GitHub 云存档操作失败。');
     } finally {
+      if (activeControllerRef.current === controller) activeControllerRef.current = null;
       setCloudBusy(false);
       setSyncProgress(null);
     }
   };
 
-  const handleBindAccount = () => runCloudTask(async () => {
+  const handleBindAccount = () => runCloudTask(async (signal) => {
     const token = bindToken.trim() || cloudConfig.token.trim();
-    const result = await bindGitHubCloudAccount(token);
+    const result = await bindGitHubCloudAccount(token, signal);
     setAccount(result.account);
     setBindToken(result.config.token);
     await persistCloudConfig(result.config);
-    const manifest = await listGitHubCloudSaves(result.config);
-    setCloudSaves(manifest.saves);
+    const listing = await inspectGitHubCloudBackup(result.config, { signal });
+    setCloudBackup(listing);
     setCloudMessage(`已绑定 GitHub：${result.account.login}。`);
   });
 
@@ -133,81 +147,118 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
     const next = createDefaultGitHubCloudConfig();
     setAccount(null);
     setBindToken('');
-    setCloudSaves([]);
+    setCloudBackup(null);
     await saveSetting('githubCloudSaveConfig', next);
     setCloudConfig(next);
     setCloudMessage('已解除本机 GitHub 云存档绑定。云端文件不会被删除。');
   });
 
-  const handleCloudRefresh = () => runCloudTask(async () => {
+  const handleCloudRefresh = () => runCloudTask(async (signal) => {
     const config = await persistCloudConfig();
-    const manifest = await listGitHubCloudSaves(config);
-    setCloudSaves(manifest.saves);
-    setCloudMessage(`已刷新云端数据：${manifest.saves.length} 条。`);
+    const listing = await inspectGitHubCloudBackup(config, { signal });
+    setCloudBackup(listing);
+    setCloudMessage(listing.format === 'empty'
+      ? '云端还没有完整备份。'
+      : `已刷新云端备份：${listing.nodeCount} 个节点。`);
   });
 
-  const handleCloudSyncAll = () => runCloudTask(async () => {
+  const handleCloudSyncAll = () => runCloudTask(async (signal) => {
     const config = await persistCloudConfig();
-    const summaries = await getSaveList();
-    if (summaries.length === 0) throw new Error('本地还没有可上传的存档。');
-
-    const saves = [];
-    for (const summary of summaries) {
-      const save = await loadSave(summary.id);
-      if (!save) continue;
-      saves.push({ ...save, id: summary.id, type: summary.type });
-    }
-
-    setCloudMessage(`正在同步本地存档：${saves.length} 条`);
-    const manifest = await uploadAllSavesToGitHubCloud(config, saves, (current, total, label) => {
-      setSyncProgress({ label: `上传 ${label}`, current, total });
+    const snapshot = await getSaveCatalogSnapshot();
+    if (!snapshot.items.length && !snapshot.legacyBackups.length) throw new Error('本地还没有可上传的存档。');
+    const built = await buildCompleteCloudBackup({
+      summaries: snapshot.items,
+      legacyBackups: snapshot.legacyBackups,
+      catalogComplete: snapshot.catalogComplete,
+      pendingCount: snapshot.pendingIds.length,
+      unreadableCount: snapshot.unreadableIds.length,
+      loadSaveBundle: loadSaveForCloudTransfer,
+    }, {
+      signal,
+      onProgress: (progress) => setSyncProgress({
+        label: progress.label,
+        current: progress.current,
+        total: Math.max(1, progress.total),
+      }),
     });
-    setCloudSaves(manifest.saves);
-    setCloudMessage(`已同步本地存档：${manifest.saves.length} 条。云端旧列表已由本次同步结果覆盖。`);
+    setCloudMessage(`完整备份已打包为 ${built.pointer.parts.length} 个分卷，正在上传。`);
+    const pointer = await uploadCompleteBackupToGitHub(config, built.transferId, built.pointer, {
+      signal,
+      onProgress: (progress) => setSyncProgress({
+        label: progress.label,
+        current: progress.current,
+        total: Math.max(1, progress.total),
+      }),
+    });
+    setCloudBackup({
+      format: 'v2',
+      updatedAt: pointer.createdAt,
+      nodeCount: pointer.nodeCount,
+      treeCount: pointer.treeCount,
+      assetCount: pointer.assetCount,
+      totalBytes: pointer.totalBytes,
+      pointer,
+    });
+    setCloudMessage(`完整云备份已提交：${pointer.nodeCount} 个节点、${pointer.treeCount} 棵存档树、${pointer.parts.length} 个分卷。`);
   });
 
-  const handleCloudDownloadAll = () => runCloudTask(async () => {
+  const handleCloudDownloadAll = () => runCloudTask(async (signal) => {
+    const config = await persistCloudConfig();
+    const listing = await inspectGitHubCloudBackup(config, { signal });
+    if (listing.format === 'empty') throw new Error('云端还没有可下载的存档。');
     const confirmed = window.confirm(
-      '下载到本地会用 GitHub 云端存档直接覆盖当前本地存档列表。\n\n本地现有手动存档、自动存档和保护存档都会被云端版本替换。确定继续吗？',
+      `将下载云端的 ${listing.nodeCount} 个节点并与本地存档合并。\n\n相同节点和资源会跳过；发生 ID 冲突时保留本地，并把云端冲突树作为新副本导入。本地现有存档不会被清空。确定继续吗？`,
     );
     if (!confirmed) return;
 
-    const config = await persistCloudConfig();
-    const manifest = await listGitHubCloudSaves(config);
-    if (manifest.saves.length === 0) throw new Error('云端还没有可下载的存档。');
-
-    const downloaded = [];
-    for (let index = 0; index < manifest.saves.length; index += 1) {
-      const item = manifest.saves[index];
-      setSyncProgress({
-        label: `下载 ${item.travelerName || 'traveler'} · 第 ${item.turnCount} 回合`,
-        current: index,
-        total: manifest.saves.length,
-      });
-      const data = await downloadSaveFromGitHubCloud(config, item);
-      data.id = item.localSaveId ?? index + 1;
-      data.type = item.saveType === 'auto' || item.saveType === 'backup' || item.saveType === 'imported'
-        ? item.saveType
-        : 'manual';
-      data.timestamp = item.timestamp || data.timestamp || Date.now();
-      downloaded.push(data);
-      setSyncProgress({
-        label: `下载 ${item.travelerName || 'traveler'} · 第 ${item.turnCount} 回合`,
-        current: index + 1,
-        total: manifest.saves.length,
-      });
-    }
-
-    await replaceAllSaves(downloaded);
-    setCloudSaves(manifest.saves);
-    setCloudMessage(`已用云端存档覆盖本地存档列表：${downloaded.length}/${manifest.saves.length} 条。`);
+    const updateProgress = (progress: { label: string; current: number; total: number }) => setSyncProgress({
+      label: progress.label,
+      current: progress.current,
+      total: Math.max(1, progress.total),
+    });
+    const pointer = listing.pointer;
+    const result = listing.format === 'v2' && pointer
+      ? await (async () => {
+        const downloaded = await downloadCompleteBackupFromGitHub(config, pointer, {
+          signal,
+          onProgress: updateProgress,
+        });
+        return mergeDownloadedCloudBackup(downloaded.transferId, downloaded.pointer, {
+          signal,
+          onProgress: updateProgress,
+        });
+      })()
+      : await (async () => {
+        const legacyItems = listing.legacyManifest?.saves ?? [];
+        return mergeLegacyCloudBackup(legacyItems, async (_item, index, mergeSignal) => {
+          const cloudItem = legacyItems[index];
+          return downloadLegacySaveFromGitHub(config, cloudItem, {
+            signal: mergeSignal,
+            onProgress: updateProgress,
+          });
+        }, {
+          signal,
+          onProgress: updateProgress,
+        });
+      })();
+    setCloudBackup(listing);
+    setCloudMessage(`合并完成：新增 ${result.addedNodes} 个节点，跳过 ${result.skippedDuplicateNodes} 个重复节点，冲突树副本 ${result.remappedConflictTrees} 棵；新增资源 ${result.addedAssets} 个，复用 ${result.reusedAssets} 个。`);
   });
+
+  const handleCancel = () => {
+    activeControllerRef.current?.abort(new DOMException('用户取消了云备份操作。', 'AbortError'));
+  };
+
+  const handleClose = () => {
+    handleCancel();
+    onClose();
+  };
 
   return (
     <div
       className="kaituo-modal-overlay fixed inset-0 z-50 flex items-stretch justify-center p-0 md:items-center md:p-4"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) handleClose();
       }}
     >
       <div
@@ -224,10 +275,10 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
               GitHub 云存档
             </h2>
             <p className="mt-1 text-[12px] tracking-wider" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
-              手动上传和下载。上传会覆盖云端记录，下载会覆盖本地存档。
+              先打包一份完整备份再上传；下载后与本地合并去重，不会清空现有存档。
             </p>
           </div>
-          <button onClick={onClose} className="kaituo-close-btn" aria-label="关闭">
+          <button onClick={handleClose} className="kaituo-close-btn" aria-label="关闭">
             X
           </button>
         </div>
@@ -243,7 +294,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
                 clipPath: cardClip,
               }}
             >
-              绑定后会自动使用或创建私有仓库 <span className="font-mono">kaituoyishi-cloud-save</span>。上传会用本地存档覆盖云端记录；下载会弹出确认，并用云端存档覆盖本地存档列表。
+              绑定后会自动使用或创建私有仓库 <span className="font-mono">kaituoyishi-cloud-save</span>。上传会先在本机生成有界分卷，再以一次提交发布完整备份；下载只会合并新增内容，重复项自动跳过。
             </div>
 
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
@@ -312,9 +363,15 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
 
             <div className="grid gap-2 sm:grid-cols-3">
               <CloudButton label="刷新数据" disabled={cloudBusy || !cloudConfig.token} onClick={handleCloudRefresh} />
-              <CloudButton label="上传到云端" tone="primary" disabled={cloudBusy || !cloudConfig.token} onClick={handleCloudSyncAll} />
-              <CloudButton label="下载到本地" tone="primary" disabled={cloudBusy || !cloudConfig.token} onClick={handleCloudDownloadAll} />
+              <CloudButton label="生成并上传完整备份" tone="primary" disabled={cloudBusy || !cloudConfig.token} onClick={handleCloudSyncAll} />
+              <CloudButton label="下载并合并到本地" tone="primary" disabled={cloudBusy || !cloudConfig.token} onClick={handleCloudDownloadAll} />
             </div>
+
+            {cloudBusy && (
+              <div className="max-w-[240px]">
+                <CloudButton label="取消当前任务" onClick={handleCancel} />
+              </div>
+            )}
 
             {syncProgress && (
               <CloudProgress
@@ -330,7 +387,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
               </div>
             )}
 
-            <CloudRecordSummary saves={cloudSaves} />
+            <CloudRecordSummary backup={cloudBackup} />
           </section>
         </div>
       </div>
@@ -449,13 +506,7 @@ function CloudProgress({
   );
 }
 
-function CloudRecordSummary({ saves }: { saves: GitHubCloudSaveItem[] }) {
-  const latest = saves
-    .map((item) => item.uploadedAt || '')
-    .filter(Boolean)
-    .sort()
-    .at(-1);
-
+function CloudRecordSummary({ backup }: { backup: GitHubCloudBackupListing | null }) {
   return (
     <div
       className="grid gap-2 px-3 py-3 text-[12px] sm:grid-cols-[auto_1fr]"
@@ -469,8 +520,16 @@ function CloudRecordSummary({ saves }: { saves: GitHubCloudSaveItem[] }) {
         最近云端记录
       </div>
       <div style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
-        {latest ? new Date(latest).toLocaleString('zh-CN') : '暂无云端同步记录'}
+        {backup && backup.format !== 'empty'
+          ? `${new Date(backup.updatedAt).toLocaleString('zh-CN')} · ${backup.nodeCount} 个节点${backup.treeCount ? ` · ${backup.treeCount} 棵树` : ''} · ${formatCloudBytes(backup.totalBytes)}${backup.format === 'v1' ? ' · 旧版格式' : ''}`
+          : '暂无云端完整备份'}
       </div>
     </div>
   );
+}
+
+function formatCloudBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${Math.max(0, bytes)} B`;
 }

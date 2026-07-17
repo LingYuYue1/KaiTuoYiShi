@@ -15,12 +15,16 @@ const savePackage = read('services/savePackage.ts');
 const migrationBackup = read('services/desktop/desktopMigrationBackup.ts');
 const storageManager = read('components/features/Settings/StorageManager.tsx');
 const diagnostics = read('services/desktop/desktopDiagnostics.ts');
+const saveCatalogSection = dbService.slice(
+  dbService.indexOf('export async function getSaveCatalogSnapshot'),
+  dbService.indexOf('export async function loadSave'),
+);
 
 addCheck({
   status: 'desktop-first',
   label: 'save list reads',
   detail: 'getSaveList reads desktop save mirror summaries before IndexedDB summaries.',
-  ok: ordered(dbService, 'const desktopList = await loadDesktopSaveMirrorListFirstSafely()', 'let list = sortSaveSummaries(await readSaveSummaries(db))'),
+  ok: ordered(saveCatalogSection, 'const desktopList = await loadDesktopSaveMirrorListFirstSafely()', 'const db = await openDB()'),
 });
 
 addCheck({

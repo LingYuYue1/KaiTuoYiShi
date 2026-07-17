@@ -4,17 +4,21 @@ import { createAppStorageAdapter } from '@/services/storage/appStorageAdapter';
 import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import { stripSaveAssetPayloadForStorage } from '@/utils/saveAssetStorage';
 
+type DesktopSaveMirrorSummary = SaveListItemSummary & {
+  visibility?: 'visible' | 'hidden-delta-base';
+};
+
 interface DesktopSaveMirrorIndex {
   version: 1;
   updatedAt: number;
-  saves: SaveListItemSummary[];
+  saves: DesktopSaveMirrorSummary[];
 }
 
 interface DesktopSaveMirrorRecord {
   kind: 'kaituoyishi-desktop-save';
   version: 1;
   mirroredAt: number;
-  summary: SaveListItemSummary;
+  summary: DesktopSaveMirrorSummary;
   save: 存档数据;
 }
 
@@ -162,6 +166,44 @@ export async function removeSaveFromDesktopMirror(id: number): Promise<void> {
   await writeMirrorIndex(index.saves.filter((item) => item.id !== id));
 }
 
+export async function hideSaveInDesktopMirror(id: number): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  const adapter = createAppStorageAdapter();
+  const index = await readMirrorIndex();
+  const record = await adapter.readJson<DesktopSaveMirrorRecord>(savePath(id));
+  if (record?.kind !== 'kaituoyishi-desktop-save' || record.version !== 1 || !record.summary || !record.save) return;
+  const hiddenSummary: DesktopSaveMirrorSummary = {
+    ...record.summary,
+    id: Number(record.summary.id) || id,
+    visibility: 'hidden-delta-base',
+  };
+  const saveWithRuntimeMarker = {
+    ...record.save,
+    saveRuntime: {
+      ...((record.save as 存档数据 & { saveRuntime?: { hiddenDeltaBase?: boolean } }).saveRuntime ?? {}),
+      hiddenDeltaBase: true,
+    },
+  } as 存档数据;
+  await adapter.writeJson<DesktopSaveMirrorRecord>(savePath(id), {
+    ...record,
+    mirroredAt: Date.now(),
+    summary: hiddenSummary,
+    save: saveWithRuntimeMarker,
+  });
+  const nextSaves = [
+    hiddenSummary,
+    ...index.saves.filter((item) => item.id !== id),
+  ].sort((left, right) => right.timestamp - left.timestamp || right.id - left.id);
+  await writeMirrorIndex(nextSaves);
+}
+
+export async function listHiddenDesktopSaveMirrorIds(): Promise<number[]> {
+  if (!isDesktopRuntime()) return [];
+  return (await readMirrorIndex()).saves
+    .filter((item) => item.visibility === 'hidden-delta-base')
+    .map((item) => item.id);
+}
+
 export async function replaceDesktopSaveMirror(
   saves: Array<{ save: 存档数据; summary: SaveListItemSummary }>,
 ): Promise<void> {
@@ -191,14 +233,14 @@ export async function replaceDesktopSaveMirror(
 
 export async function listDesktopSaveMirror(): Promise<SaveListItemSummary[]> {
   if (!isDesktopRuntime()) return [];
-  return (await readMirrorIndex()).saves;
+  return (await readMirrorIndex()).saves.filter(isVisibleDesktopSaveSummary);
 }
 
 export async function repairDesktopSaveMirrorIndex(): Promise<SaveListItemSummary[]> {
   if (!isDesktopRuntime()) return [];
   const index = await rebuildMirrorIndexFromSaveFiles();
   await writeSaveSequence(getMaxSaveId(index.saves));
-  return index.saves;
+  return index.saves.filter(isVisibleDesktopSaveSummary);
 }
 
 export async function repairUnresolvedDesktopSaveTransactions(): Promise<DesktopSaveTransactionRepairSummary> {
@@ -322,7 +364,7 @@ export async function loadDesktopSaveMirrorSaves(): Promise<存档数据[]> {
   if (!isDesktopRuntime()) return [];
   const index = await readMirrorIndex();
   const saves: 存档数据[] = [];
-  for (const summary of index.saves) {
+  for (const summary of index.saves.filter(isVisibleDesktopSaveSummary)) {
     const save = await loadDesktopSaveMirrorSave(summary.id);
     if (save) saves.push(save);
   }
@@ -509,7 +551,7 @@ function deltaPath(nodeId: string): string {
 async function rebuildMirrorIndexFromSaveFiles(
   adapter = createAppStorageAdapter(),
 ): Promise<DesktopSaveMirrorIndex> {
-  const saves: SaveListItemSummary[] = [];
+  const saves: DesktopSaveMirrorSummary[] = [];
   const fileNames = await adapter.list('saves');
   for (const fileName of fileNames) {
     const match = fileName.match(SAVE_RECORD_RE);
@@ -533,4 +575,8 @@ async function rebuildMirrorIndexFromSaveFiles(
     await writeMirrorIndex(index.saves);
   }
   return index;
+}
+
+function isVisibleDesktopSaveSummary(summary: DesktopSaveMirrorSummary): summary is SaveListItemSummary {
+  return summary.visibility !== 'hidden-delta-base';
 }

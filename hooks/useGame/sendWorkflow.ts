@@ -31,7 +31,7 @@ import {
   persistWorkflowRecoveryJournal,
   updateWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
-import { buildSavePayload } from './saveLoadWorkflow';
+import { buildSavePayload, commitActiveSaveTreeMeta } from './saveLoadWorkflow';
 import { parseVariableCommands, snapshotVariableState, reduceVariableCommands, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
 import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
 import { isTravelerPlayerAuthoredVariablePath } from '@/utils/variableRegistry';
@@ -3053,6 +3053,7 @@ export async function executeSendWorkflow(
         });
         assertWorkflowActive();
         await saveGame(saveData);
+        commitActiveSaveTreeMeta(saveData);
         assertWorkflowActive();
         pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' });
         state.setHasSave(true);

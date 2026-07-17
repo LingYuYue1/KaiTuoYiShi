@@ -30,7 +30,7 @@ assert(dbService.includes('db.createObjectStore(SAVE_NODE_DELTAS_STORE'), 'DB �
 assert(dbService.includes('findAutoDeltaBase(db, storedData)'), '保存前必须尝试寻找自动存档 delta 基底。');
 assert(dbService.includes("if (save.type !== 'auto') return null"), '只有自动存档可以走 delta-only，手动/备份必须保持完整检查点。');
 assert(dbService.includes('MAX_DELTA_NODES_PER_CHECKPOINT'), '必须限制同一个 checkpoint 下连续 delta 节点数量。');
-assert(dbService.includes('loadDeltaBaseCandidateSummaries'), '自动存档 delta 基底候选必须合并 IndexedDB 摘要与桌面镜像摘要。');
+assert(dbService.includes('loadIndexedAndDesktopSaveSummaries'), '自动存档 delta 基底与节点轮转候选必须合并 IndexedDB 摘要和桌面镜像摘要。');
 assert(dbService.includes('const desktopSummaries = await loadDesktopSaveMirrorListFirstSafely()'), '自动存档 delta 基底候选必须能读取桌面存档镜像摘要。');
 assert(dbService.includes('loadDeltaBaseCandidateSave'), '自动存档 delta 基底读取必须经过可回落到桌面镜像的帮助函数。');
 assert(dbService.includes('return loadDesktopSaveMirrorSaveFallbackSafely(id)'), 'IndexedDB 缺失基底存档时必须回落到桌面存档镜像。');
@@ -50,7 +50,8 @@ assert(dbService.includes('markSaveAsHiddenDeltaBase'), '被引用基底从列�
 assert(dbService.includes("saveRuntime?.hiddenDeltaBase"), '孤儿清理只能删除显式隐藏基底，不能删除普通无摘要存档。');
 assert(dbService.includes('isHiddenDeltaBaseSave(save)'), '摘要补建必须跳过隐藏基底，避免隐藏依赖重新出现在存档列表。');
 assert(dbService.includes('isSaveReferencedAsDeltaBase(db, id)'), '手动删除存档前必须检查是否仍被 delta 节点引用。');
-assert(dbService.includes('if (!isReferencedBase)') && dbService.includes('tx.objectStore(SAVE_SUMMARIES_STORE).delete(id)'), '被引用的基底存档删除时只能从列表移除，不能破坏后续 delta 读档。');
+assert(dbService.includes('if (!isReferencedBase)') && dbService.includes('markSaveAsHiddenDeltaBase(saveStore, summaryStore, id)'), '被引用的基底存档删除时只能从主列表移除，不能破坏后续 delta 读档。');
+assert(dbService.includes('createHiddenDeltaBaseCatalogRecord'), '被引用基底隐藏后必须写入轻量目录标记，避免重复扫描完整存档。');
 assert(dbService.includes('buildSaveNodeDeltaRecord(storedSave, normalizedId)'), '批量替换存档必须重建节点增量记录。');
 assert(dbService.includes('buildSaveNodeDeltaRecord(storedSave, Number(storedSave.id) || 0)'), '旧档惰性迁移必须补写节点增量记录。');
 assert(dbService.includes('deleteDeltaBySaveId'), '删除与轮转必须清理对应节点增量记录。');

@@ -2,15 +2,19 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   deleteSave,
   deleteSaveTree,
+  deleteLegacyBackupSaves,
   exportSavePackage,
   exportSaveTreePackage,
-  getSaveList,
+  getSaveCatalogRepairState,
+  getSaveCatalogSnapshot,
   importSaveFileAsMany,
   loadSave,
   loadSaveTree,
   repairSaveDatabase,
-  rebuildSaveSummariesBatch,
   saveGame,
+  startSaveCatalogRepair,
+  subscribeSaveCatalogRepair,
+  type SaveCatalogRepairState,
   type SaveListItemSummary,
 } from '@/services/dbService';
 import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
@@ -22,7 +26,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'all' | 'manual' | 'auto' | 'protected';
+type Tab = 'all' | 'manual' | 'auto' | 'imported';
 
 const shellClip =
   'polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px)';
@@ -39,18 +43,28 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   const [deletingRootId, setDeletingRootId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [tab, setTab] = useState<Tab>('manual');
+  const [deletingLegacyBackups, setDeletingLegacyBackups] = useState(false);
+  const [tab, setTab] = useState<Tab>('all');
   const [showMobileHelp, setShowMobileHelp] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [rebuildingSummaries, setRebuildingSummaries] = useState(false);
+  const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
+  const [pendingSummaryCount, setPendingSummaryCount] = useState(0);
+  const [unreadableSummaryCount, setUnreadableSummaryCount] = useState(0);
+  const [catalogComplete, setCatalogComplete] = useState(true);
+  const [repairState, setRepairState] = useState<SaveCatalogRepairState>(() => getSaveCatalogRepairState());
   const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
 
   const refresh = async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const list = await getSaveList();
-      setSaves(list);
+      const snapshot = await getSaveCatalogSnapshot();
+      setSaves(snapshot.items);
+      setLegacyBackups(snapshot.legacyBackups);
+      setPendingSummaryCount(snapshot.pendingIds.length);
+      setUnreadableSummaryCount(snapshot.unreadableIds.length);
+      setCatalogComplete(snapshot.catalogComplete);
+      return snapshot;
     } catch (err) {
       console.error('[save-list] load failed', err);
       setLoadError(err instanceof Error ? err.message : '存档列表读取失败');
@@ -60,45 +74,37 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   };
 
   useEffect(() => {
-    void refresh();
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
-    const rebuildLoop = async () => {
-      setRebuildingSummaries(true);
+    const loadAndRepair = async () => {
       try {
-        let changed = false;
-        for (let guard = 0; guard < 200 && !cancelled; guard += 1) {
-          const added = await rebuildSaveSummariesBatch(24);
-          if (cancelled || added <= 0) break;
-          changed = true;
-          if ((guard + 1) % 4 === 0) {
-            const list = await getSaveList();
-            if (!cancelled) setSaves(list);
-          }
-          await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
+        const snapshot = await refresh();
+        if (!cancelled && snapshot?.pendingIds.length) {
+          await startSaveCatalogRepair('missing-only');
+          if (!cancelled) await refresh();
         }
-        if (changed && !cancelled) setSaves(await getSaveList());
       } catch (err) {
-        console.warn('[save-list] background summary recovery failed', err);
-      } finally {
-        if (!cancelled) setRebuildingSummaries(false);
+        console.warn('[save-list] background catalog recovery failed', err);
       }
     };
-    void rebuildLoop();
+    void loadAndRepair();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => subscribeSaveCatalogRepair((state) => {
+    setRepairState(state);
+    if (state.phase === 'completed' || state.phase === 'partial-failure') {
+      void refresh();
+    }
+  }), []);
 
   const handleRepairList = async () => {
     setLoading(true);
     setLoadError('');
     try {
       await repairSaveDatabase();
-      const list = await getSaveList();
-      setSaves(list);
+      await refresh();
     } catch (err) {
       console.error('[save-list] repair failed', err);
       setLoadError(err instanceof Error ? err.message : '存档摘要修复失败');
@@ -138,6 +144,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   };
 
   const handleLoad = async (id: number) => {
+    if (!confirm('读取这个存档会替换当前未保存的进度，是否继续？')) return;
     setLoadingId(id);
     try {
       const ok = await onLoad(id);
@@ -152,9 +159,10 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    const target = saves.find((save) => save.id === id)?.saveTree;
+    const target = [...saves, ...legacyBackups].find((save) => save.id === id)?.saveTree;
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
+    setLegacyBackups((prev) => prev.filter((save) => save.id !== id));
     try {
       await deleteSave(id);
       clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
@@ -165,6 +173,24 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
       alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
       await refresh();
       setDeletingId(null);
+    }
+  };
+
+  const handleDeleteLegacyBackups = async () => {
+    if (!legacyBackups.length || deletingLegacyBackups) return;
+    if (!confirm(`确定清理全部 ${legacyBackups.length} 个历史恢复点？此操作不可恢复。`)) return;
+    setDeletingLegacyBackups(true);
+    try {
+      await deleteLegacyBackupSaves();
+      for (const backup of legacyBackups) {
+        clearActiveSaveTreeMetaIfMatches(backup.saveTree ? { nodeId: backup.saveTree.nodeId } : null);
+      }
+      await refresh();
+    } catch (err) {
+      console.error('[save-delete-legacy-backups] failed', err);
+      alert(`历史恢复点清理失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
+    } finally {
+      setDeletingLegacyBackups(false);
     }
   };
 
@@ -213,7 +239,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
           await saveGame(data);
         }
         await refresh();
-        setTab('protected');
+        setTab('imported');
       } catch (err) {
         console.error('[save-import] failed', err);
         alert(`导入失败：${err instanceof Error ? err.message : '存档文件格式无效'}`);
@@ -229,13 +255,18 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     [deletingId, deletingRootId, saves],
   );
 
-  const { manualSaves, autoSaves, protectedSaves } = useMemo(() => {
+  const { manualSaves, autoSaves, importedSaves } = useMemo(() => {
     const manual = visibleSaves.filter((s) => s.type === 'manual');
     const auto = visibleSaves.filter((s) => s.type === 'auto');
-    const protectedItems = visibleSaves.filter((s) => s.type === 'backup' || s.type === 'imported');
-    return { manualSaves: manual, autoSaves: auto, protectedSaves: protectedItems };
+    const imported = visibleSaves.filter((s) => s.type === 'imported');
+    return { manualSaves: manual, autoSaves: auto, importedSaves: imported };
   }, [visibleSaves]);
-  const allVisibleSaves = useMemo(() => visibleSaves.filter((s) => s.type !== 'auto'), [visibleSaves]);
+  const repairingSummaries = pendingSummaryCount > 0 && (
+    repairState.phase === 'checking'
+    || repairState.phase === 'waiting-for-lease'
+    || repairState.phase === 'repairing'
+    || repairState.phase === 'paused-for-write'
+  );
 
   const allTreeGroups = useMemo(() => buildSaveTreeGroups(visibleSaves), [visibleSaves]);
   const visibleTreeGroups = useMemo(
@@ -255,6 +286,12 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     visibleTreeGroups.find((group) => group.rootId === selectedRootId) ??
     visibleTreeGroups[0] ??
     null;
+
+  useEffect(() => {
+    if (tab !== 'all' && visibleSaves.length > 0 && visibleTreeGroups.length === 0) {
+      setTab('all');
+    }
+  }, [tab, visibleSaves.length, visibleTreeGroups.length]);
 
   useEffect(() => {
     if (visibleTreeGroups.length === 0) {
@@ -324,7 +361,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
             <span style={{ color: 'rgba(var(--tj-text-primary), 0.66)' }}>
               {latestSave ? `最新节点 #${latestSave.id} / 第 ${latestSave.turnCount} 回合` : '暂无节点'}
             </span>
-            {rebuildingSummaries && <span style={{ color: 'rgba(var(--tj-accent-primary),0.9)' }}>索引恢复中</span>}
+            {repairingSummaries && <span style={{ color: 'rgba(var(--tj-accent-primary),0.9)' }}>索引恢复中</span>}
           </div>
           <button
             type="button"
@@ -370,7 +407,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                 <SaveMetric value={saves.length} label="总节点" />
                 <SaveMetric value={totalBranches} label="分支" />
                 <SaveMetric value={autoSaves.length} label="自动" />
-                <SaveMetric value={protectedSaves.length} label="保护" />
+                <SaveMetric value={importedSaves.length} label="导入" />
               </div>
 
               <div className="mt-4">
@@ -393,9 +430,10 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                 <div className="mb-1.5 text-[11px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-accent-primary),0.86)' }}>
                   存档策略
                 </div>
-                <div>手动节点最多保留 6 个，超出后清理最旧节点</div>
-                <div>自动存档最多保留 6 棵树，并优先使用差量存储</div>
-                <div>保护 / 导入存档不计入手动上限</div>
+                <div>存档树数量不限，不会因树数量清理旧存档</div>
+                <div>每棵树手动节点最多 5 个、自动节点最多 6 个</div>
+                <div>导入存档不计入手动上限</div>
+                <div>历史恢复点已停止新建，可在列表中手动清理</div>
                 <div>读取节点后继续保存会生成新分支</div>
                 <div>整树导出会带走当前旅程分叉</div>
               </div>
@@ -404,7 +442,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
 
               <div className="mt-4 text-center font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-text-primary),0.46)' }}>
                 共 {saves.length} 节点 / {allTreeGroups.length} 棵树
-                {rebuildingSummaries ? ' / 正在恢复旧存档索引' : ''}
+                {repairingSummaries ? ` / 正在恢复 ${pendingSummaryCount} 个节点目录` : ''}
               </div>
             </div>
           </aside>
@@ -489,10 +527,10 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
               style={{ borderBottom: '1px solid rgba(var(--tj-accent-primary),0.14)' }}
             >
               <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+                <TabButton label="全部" count={visibleSaves.length} active={tab === 'all'} onClick={() => setTab('all')} />
                 <TabButton label="手动" count={manualSaves.length} active={tab === 'manual'} onClick={() => setTab('manual')} />
                 <TabButton label="自动" count={autoSaves.length} active={tab === 'auto'} onClick={() => setTab('auto')} />
-                <TabButton label="保护" count={protectedSaves.length} active={tab === 'protected'} onClick={() => setTab('protected')} />
-                <TabButton label="全部" count={allVisibleSaves.length} active={tab === 'all'} onClick={() => setTab('all')} />
+                <TabButton label="导入" count={importedSaves.length} active={tab === 'imported'} onClick={() => setTab('imported')} />
               </div>
               <div className="font-serif text-[12px] tracking-[0.12em] md:block hidden" style={{ color: 'rgba(var(--tj-text-primary),0.58)' }}>
                 当前视图：{visibleTreeGroups.length} 棵树 / {visibleNodeCount} 节点
@@ -503,7 +541,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
             <div className="kaituo-options-scroll relative overflow-x-hidden px-4 py-4 pb-7 md:min-h-0 md:flex-1 md:overflow-y-auto md:px-5">
               {loading && saves.length === 0 && <EmptyState text="加载中..." />}
 
-              {rebuildingSummaries && saves.length > 0 && (
+              {repairingSummaries && (
                 <div
                   className="mb-3 px-3 py-2 text-center font-serif text-[12px] tracking-[0.14em]"
                   style={{
@@ -513,8 +551,38 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                     clipPath: smallClip,
                   }}
                 >
-                  正在恢复旧存档索引，存档数量可能继续增加
+                  {repairState.phase === 'paused-for-write'
+                    ? '索引恢复已暂停，正在优先保存或删除'
+                    : `正在恢复节点详情 ${repairState.processed} / ${Math.max(repairState.total, pendingSummaryCount)}`}
                 </div>
+              )}
+
+              {!repairingSummaries && unreadableSummaryCount > 0 && (
+                <div
+                  className="mb-3 px-3 py-2 text-center font-serif text-[12px] tracking-[0.12em]"
+                  style={{
+                    color: 'rgba(var(--tj-danger),0.9)',
+                    background: 'rgba(var(--tj-danger),0.08)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.2)',
+                    clipPath: smallClip,
+                  }}
+                >
+                  {unreadableSummaryCount} 个节点详情读取失败，可使用“修复存档索引”重试
+                </div>
+              )}
+
+              {legacyBackups.length > 0 && (
+                <LegacyBackupSection
+                  backups={legacyBackups}
+                  loadingId={loadingId}
+                  deletingId={deletingId}
+                  deletingAll={deletingLegacyBackups}
+                  onLoad={handleLoad}
+                  onDelete={handleDelete}
+                  onExport={handleExport}
+                  onDeleteAll={handleDeleteLegacyBackups}
+                  formatTime={formatTime}
+                />
               )}
 
               {!loading && loadError && (
@@ -548,8 +616,8 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                       ? '暂无手动存档'
                       : tab === 'auto'
                         ? '暂无自动存档'
-                        : tab === 'protected'
-                          ? '暂无保护存档'
+                        : tab === 'imported'
+                          ? '暂无导入存档'
                           : '暂无存档'
                   }
                   detail={
@@ -573,6 +641,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                     onExport={handleExport}
                     onExportTree={handleExportTree}
                     onDeleteTree={handleDeleteTree}
+                    catalogComplete={catalogComplete}
                     formatTime={formatTime}
                   />
                 </div>
@@ -852,6 +921,68 @@ function TabButton({
   );
 }
 
+function LegacyBackupSection({
+  backups,
+  loadingId,
+  deletingId,
+  deletingAll,
+  onLoad,
+  onDelete,
+  onExport,
+  onDeleteAll,
+  formatTime,
+}: {
+  backups: SaveListItemSummary[];
+  loadingId: number | null;
+  deletingId: number | null;
+  deletingAll: boolean;
+  onLoad: (id: number) => void;
+  onDelete: (id: number) => void;
+  onExport: (id: number) => void;
+  onDeleteAll: () => void;
+  formatTime: (ts: number) => string;
+}) {
+  return (
+    <details
+      className="mb-4 overflow-hidden"
+      style={{
+        background: 'rgba(var(--tj-accent-primary),0.045)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
+        clipPath: cardClip,
+      }}
+    >
+      <summary className="cursor-pointer px-4 py-3 font-serif text-[13px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-secondary),0.92)' }}>
+        历史恢复点 {backups.length} 个
+      </summary>
+      <div className="border-t px-3 pb-3 pt-3" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.12)' }}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary),0.6)' }}>
+          <span>这是旧版本读档前自动生成的恢复点。系统已停止新建，清理与否由你决定。</span>
+          <SaveActionButton danger onClick={onDeleteAll} disabled={deletingAll || loadingId !== null || deletingId !== null}>
+            {deletingAll ? '清理中' : '清理全部旧恢复点'}
+          </SaveActionButton>
+        </div>
+        <div className="space-y-3 pl-6">
+          {backups.map((backup, index) => (
+            <SaveRow
+              key={backup.id}
+              item={backup}
+              loadingId={loadingId}
+              deletingId={deletingId}
+              onLoad={onLoad}
+              onDelete={onDelete}
+              onExport={onExport}
+              formatTime={formatTime}
+              treeLabel="旧恢复点"
+              depth={0}
+              visualLevel={index}
+            />
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function SaveTreeGroup({
   group,
   loadingId,
@@ -862,6 +993,7 @@ function SaveTreeGroup({
   onExport,
   onExportTree,
   onDeleteTree,
+  catalogComplete,
   formatTime,
 }: {
   group: SaveTreeDisplayGroup;
@@ -873,6 +1005,7 @@ function SaveTreeGroup({
   onExport: (id: number) => void;
   onExportTree: (rootId: string) => void;
   onDeleteTree: (rootId: string, nodeCount: number) => void;
+  catalogComplete: boolean;
   formatTime: (ts: number) => string;
 }) {
   return (
@@ -908,8 +1041,8 @@ function SaveTreeGroup({
           <SaveActionButton onClick={() => onExportTree(group.rootId)} disabled={loadingId !== null || deletingRootId !== null || deletingId !== null}>
             导出整树
           </SaveActionButton>
-          <SaveActionButton onClick={() => onDeleteTree(group.rootId, group.nodeCount)} disabled={loadingId !== null || deletingRootId !== null || deletingId !== null} danger>
-            {deletingRootId === group.rootId ? '删除中' : '删除整树'}
+          <SaveActionButton onClick={() => onDeleteTree(group.rootId, group.nodeCount)} disabled={!catalogComplete || loadingId !== null || deletingRootId !== null || deletingId !== null} danger>
+            {deletingRootId === group.rootId ? '删除中' : catalogComplete ? '删除整树' : '目录恢复后可删'}
           </SaveActionButton>
         </div>
       </div>
@@ -1130,7 +1263,7 @@ function EmptyState({ text, detail }: { text: string; detail?: string }) {
 
 function typeLabel(type: SaveListItemSummary['type']): string {
   if (type === 'auto') return '自动';
-  if (type === 'backup') return '保护';
+  if (type === 'backup') return '恢复点';
   if (type === 'imported') return '导入';
   return '手动';
 }
@@ -1149,10 +1282,10 @@ function formatSize(bytes: number): string {
 }
 
 function matchesSaveTab(save: SaveListItemSummary, tab: Tab): boolean {
-  if (tab === 'all') return save.type !== 'auto';
+  if (tab === 'all') return true;
   if (tab === 'manual') return save.type === 'manual';
   if (tab === 'auto') return save.type === 'auto';
-  return save.type === 'backup' || save.type === 'imported';
+  return save.type === 'imported';
 }
 
 function buildVisibleSaveTreeGroup(group: SaveTreeDisplayGroup, tab: Tab): SaveTreeDisplayGroup | null {

@@ -110,8 +110,11 @@ export function buildSavePayload(
     type,
     timestamp,
   }));
-  activeSaveTreeMeta = getSaveTreeMeta(withTree);
   return compactDuplicatedSaveImages(withTree);
+}
+
+export function commitActiveSaveTreeMeta(save: 存档数据): void {
+  activeSaveTreeMeta = getSaveTreeMeta(save);
 }
 
 function stripRuntimeOnlyFieldsFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
@@ -278,7 +281,6 @@ export async function handleLoadLatest(
 ): Promise<boolean> {
   const save = await loadLatestSave();
   if (!save) return false;
-  await saveLoadBackupIfNeeded(state);
   await applySaveToState(save, state);
   return true;
 }
@@ -289,34 +291,21 @@ export async function handleLoadById(
 ): Promise<boolean> {
   const save = await loadSave(id);
   if (!save) return false;
-  await saveLoadBackupIfNeeded(state);
   await applySaveToState(save, state);
   return true;
 }
 
-export function handleManualSave(state: UseGameStateReturn): Promise<number> {
-  return saveGame(buildSavePayload(state, 'manual'));
+export async function handleManualSave(state: UseGameStateReturn): Promise<number> {
+  const payload = buildSavePayload(state, 'manual');
+  const id = await saveGame(payload);
+  commitActiveSaveTreeMeta(payload);
+  return id;
 }
 
 export async function handleDeleteSave(id: number): Promise<void> {
   const save = await loadSave(id);
   await dbDeleteSave(id);
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
-}
-
-async function saveLoadBackupIfNeeded(state: UseGameStateReturn): Promise<void> {
-  const hasProgress =
-    state.chatHistory.length > 0 ||
-    state.turnCount > 1 ||
-    Boolean(state.旅人.姓名?.trim()) ||
-    Boolean(state.世界.当前地点?.trim());
-  if (!hasProgress) return;
-  try {
-    await saveGame(buildSavePayload(state, 'backup'));
-    state.setHasSave(true);
-  } catch (error) {
-    console.warn('[save-load] backup before loading failed; continue loading selected save', error);
-  }
 }
 
 async function applySaveToState(

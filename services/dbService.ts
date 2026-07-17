@@ -18,6 +18,8 @@ import {
 import {
   beginDesktopSaveTransaction,
   finishDesktopSaveTransaction,
+  hideSaveInDesktopMirror,
+  listHiddenDesktopSaveMirrorIds,
   listDesktopSaveMirror,
   loadDesktopSaveMirrorSave,
   loadDesktopSaveMirrorSaves,
@@ -59,6 +61,30 @@ import {
   type DesktopMigrationBackupPreview,
 } from '@/services/desktop/desktopMigrationBackup';
 import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
+import {
+  buildSaveCatalogSnapshot,
+  createCatalogRecordFromSummary,
+  createHiddenDeltaBaseCatalogRecord,
+  createUnreadableSaveCatalogRecord,
+  normalizeSaveCatalogRecord,
+  type SaveCatalogRecord,
+  type SaveCatalogSnapshot,
+  type SaveListItemSummary,
+} from '@/services/storage/saveCatalog';
+import {
+  getSaveCatalogRepairState,
+  runWithSaveMutationPriority,
+  startSaveCatalogRepairTask,
+  subscribeSaveCatalogRepair,
+  type SaveCatalogRepairResult,
+  type SaveCatalogRepairScope,
+  type SaveCatalogRepairState,
+} from '@/services/storage/saveCatalogRepair';
+import { selectSaveNodeRotationCandidates } from '@/services/storage/saveRetention';
+
+export type { SaveCatalogSnapshot, SaveListItemSummary } from '@/services/storage/saveCatalog';
+export type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState } from '@/services/storage/saveCatalogRepair';
+export { getSaveCatalogRepairState, subscribeSaveCatalogRepair };
 
 const DB_NAME = 'TimeJourneyDB';
 const DB_VERSION = 5;
@@ -67,21 +93,34 @@ const SAVE_SUMMARIES_STORE = 'saveSummaries';
 const SAVE_ASSETS_STORE = 'saveAssets';
 const SAVE_NODE_DELTAS_STORE = 'saveNodeDeltas';
 const SETTINGS_STORE = 'settings';
-const MAX_MANUAL_SAVE_NODES = 6;
-const MAX_AUTO_SAVE_TREES = 6;
-const MAX_BACKUP_SAVES = 3;
 const MAX_DELTA_NODES_PER_CHECKPOINT = 6;
-const SUMMARY_REBUILD_BATCH_SIZE = 8;
+const SAVE_CATALOG_REPAIR_LEASE_KEY = 'internal.saveCatalogRepairLease.v2';
+const SAVE_CATALOG_REPAIR_LEASE_MS = 60_000;
+const SAVE_CATALOG_REPAIR_OWNER = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+  ? crypto.randomUUID()
+  : `catalog_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
 type StoredSaveMeta = 存档数据 & {
   saveRuntime?: {
     hiddenDeltaBase?: boolean;
+    cloudBackupOriginFingerprint?: string;
+    [key: string]: unknown;
   };
 };
 
 type SaveWithTree = 存档数据 & {
   saveTree?: import('@/utils/saveTree').存档树元信息;
 };
+
+export type CloudMergeStagedRecord =
+  | { kind: 'node'; createdAt: number; save: 存档数据 }
+  | { kind: 'raw-node'; createdAt: number; save: 存档数据 }
+  | { kind: 'asset'; createdAt: number; record: SaveAssetRecord };
+
+export interface CloudMergeCommitResult {
+  saveIds: number[];
+  assetIds: string[];
+}
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -138,15 +177,12 @@ function openDB(): Promise<IDBDatabase> {
 // ── Save operations ──
 
 export async function saveGame(data: 存档数据): Promise<number> {
+  return runWithSaveMutationPriority(() => saveGameInternal(data));
+}
+
+async function saveGameInternal(data: 存档数据): Promise<number> {
+  data = stripCloudBackupRestoreRuntime(data);
   const db = await openDB();
-  const saveType = normalizeSaveType(data.type);
-  if (saveType === 'manual') {
-    await pruneManagedSavesBeforeWrite(db, 'manual', MAX_MANUAL_SAVE_NODES - 1);
-  } else if (saveType === 'auto') {
-    await pruneAutoSaveTreesBeforeWrite(db, (data as SaveWithTree).saveTree?.rootId);
-  } else if (saveType === 'backup') {
-    await pruneManagedSavesBeforeWrite(db, 'backup', MAX_BACKUP_SAVES - 1);
-  }
   const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(data));
   const storedData = stripSaveAssetPayloadForStorage(data);
   const deltaBase = await findAutoDeltaBase(db, storedData);
@@ -204,18 +240,16 @@ export async function saveGame(data: 存档数据): Promise<number> {
         savedDelta = delta;
         deltaStore.put(delta);
       }
-      summaryStore.put(buildSaveSummary(savedForDelta));
+      summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(savedForDelta)));
     };
     request.onerror = () => reject(request.error);
-    tx.oncomplete = () => {
-      rotateManagedSaves(db).catch(() => {});
-      resolve({ id: savedId, save: { ...data, id: savedId } as 存档数据, delta: savedDelta });
-    };
+    tx.oncomplete = () => resolve({ id: savedId, save: { ...data, id: savedId } as 存档数据, delta: savedDelta });
     tx.onerror = () => reject(tx.error);
     });
   } catch (error) {
     if (desktopPrimaryWritten && desktopSaveId && desktopPrimarySave) {
       console.warn('[desktop-save-mirror] IndexedDB compatibility save failed after desktop primary write', error);
+      await rotateManagedSavesSafely(db);
       return desktopSaveId;
     }
     throw error;
@@ -225,67 +259,8 @@ export async function saveGame(data: 存档数据): Promise<number> {
     await mirrorDesktopSaveDeltaSafely(saved.delta);
     await mirrorDesktopAssetsSafely(assetRecords);
   }
+  await rotateManagedSavesSafely(db);
   return saved.id;
-}
-
-async function pruneManagedSavesBeforeWrite(db: IDBDatabase, type: 存档类型, keepCount: number): Promise<void> {
-  const summaries = await new Promise<SaveListItemSummary[]>((resolve, reject) => {
-    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readonly');
-    const req = tx.objectStore(SAVE_SUMMARIES_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as SaveListItemSummary[]);
-    req.onerror = () => reject(req.error);
-  });
-  const existing = summaries
-    .filter((item) => item.type === type)
-    .sort((a, b) => b.timestamp - a.timestamp);
-  const candidates = existing.slice(Math.max(0, keepCount));
-  await deleteManagedSaveItems(db, candidates);
-}
-
-async function pruneAutoSaveTreesBeforeWrite(db: IDBDatabase, incomingRootId?: string): Promise<void> {
-  const summaries = await readSaveSummaries(db);
-  const autoSaves = summaries.filter((item) => item.type === 'auto');
-  const incomingKnown = Boolean(
-    incomingRootId && autoSaves.some((item) => getSaveTreeRootKey(item) === incomingRootId),
-  );
-  const keepTreeCount = incomingKnown ? MAX_AUTO_SAVE_TREES : MAX_AUTO_SAVE_TREES - 1;
-  const candidates = getAutoSaveTreeRotationCandidates(autoSaves, incomingRootId, keepTreeCount);
-  await deleteManagedSaveItems(db, candidates);
-}
-
-function getSaveTreeRootKey(item: SaveListItemSummary): string {
-  return item.saveTree?.rootId || `legacy-auto-root-${item.id}`;
-}
-
-function getAutoSaveTreeRotationCandidates(
-  autoSaves: SaveListItemSummary[],
-  incomingRootId?: string,
-  keepTreeCount = MAX_AUTO_SAVE_TREES,
-): SaveListItemSummary[] {
-  const byRoot = new Map<string, SaveListItemSummary[]>();
-  for (const save of autoSaves) {
-    const rootId = getSaveTreeRootKey(save);
-    const bucket = byRoot.get(rootId) ?? [];
-    bucket.push(save);
-    byRoot.set(rootId, bucket);
-  }
-
-  const roots = Array.from(byRoot.entries())
-    .map(([rootId, nodes]) => ({
-      rootId,
-      nodes,
-      latestTimestamp: Math.max(...nodes.map((node) => node.timestamp || 0)),
-    }))
-    .sort((a, b) => b.latestTimestamp - a.latestTimestamp);
-
-  const protectedRootIds = new Set(
-    roots.slice(0, Math.max(0, keepTreeCount)).map((root) => root.rootId),
-  );
-  if (incomingRootId) protectedRootIds.add(incomingRootId);
-
-  return roots
-    .filter((root) => !protectedRootIds.has(root.rootId))
-    .flatMap((root) => root.nodes);
 }
 
 async function deleteManagedSaveItems(db: IDBDatabase, candidates: SaveListItemSummary[]): Promise<void> {
@@ -298,65 +273,51 @@ async function deleteManagedSaveItems(db: IDBDatabase, candidates: SaveListItemS
     for (const item of candidates) {
       if (!referencedBaseIds.has(item.id)) {
         saveStore.delete(item.id);
+        summaryStore.delete(item.id);
       } else {
-        markSaveAsHiddenDeltaBase(saveStore, item.id);
+        markSaveAsHiddenDeltaBase(saveStore, summaryStore, item.id);
       }
-      summaryStore.delete(item.id);
       deleteDeltaBySaveId(tx.objectStore(SAVE_NODE_DELTAS_STORE), item.id);
     }
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
-  await cleanupUnreferencedHiddenSaves(db);
   for (const item of candidates) {
-    await removeDesktopSaveMirrorSafely(item.id);
+    if (referencedBaseIds.has(item.id)) {
+      await hideDesktopSaveMirrorSafely(item.id);
+    } else {
+      await removeDesktopSaveMirrorSafely(item.id);
+    }
     await removeDesktopSaveDeltasBySaveIdSafely(item.id);
   }
+  await cleanupUnreferencedHiddenSaves(db);
 }
 
-async function collectSaveTreeSummaries(db: IDBDatabase, rootId: string): Promise<SaveListItemSummary[]> {
-  const summaries = await readSaveSummaries(db);
-  return summaries.filter((item) => item.saveTree?.rootId === rootId);
-}
-
-export interface SaveListItemSummary {
-  id: number;
-  type: 存档类型;
-  timestamp: number;
-  saveTree?: import('@/utils/saveTree').存档树元信息;
-  travelerName: string;
-  turnCount: number;       // 当前运行回合计数；旧存档缺失时按 chatHistory 兜底推算
-  worldPeriodName: string; // 当前世界期名，空字符串表示未设置
-  currentDate: string;
-  currentTime: string;
-  currentLocation: string;
-  lastSummary: string;
-  sizeBytes: number;
+async function collectSaveTreeSummaries(rootId: string): Promise<SaveListItemSummary[]> {
+  const snapshot = await getSaveCatalogSnapshot();
+  return snapshot.items.filter((item) => item.saveTree?.rootId === rootId);
 }
 
 export async function getSaveList(): Promise<SaveListItemSummary[]> {
+  return (await getSaveCatalogSnapshot()).items;
+}
+
+export async function getSaveCatalogSnapshot(): Promise<SaveCatalogSnapshot> {
   const desktopList = await loadDesktopSaveMirrorListFirstSafely();
   if (desktopList.length > 0) {
-    void openDB().then((db) => ensureSaveSummaries(db, SUMMARY_REBUILD_BATCH_SIZE)).catch((error) => {
-      console.warn('[save-list] background summary rebuild failed', error);
-    });
-    return desktopList;
+    return buildSaveCatalogSnapshot(
+      desktopList.map((summary) => createCatalogRecordFromSummary(summary)),
+      desktopList.map((summary) => summary.id),
+    );
   }
   const db = await openDB();
-  let list = sortSaveSummaries(await readSaveSummaries(db));
-  if (list.length > 0) {
-    void ensureSaveSummaries(db, SUMMARY_REBUILD_BATCH_SIZE).catch((error) => {
-      console.warn('[save-list] background summary rebuild failed', error);
-    });
-    return list;
-  }
-  await ensureSaveSummaries(db, SUMMARY_REBUILD_BATCH_SIZE);
-  list = sortSaveSummaries(await readSaveSummaries(db));
-  void ensureSaveSummaries(db, SUMMARY_REBUILD_BATCH_SIZE).catch((error) => {
-    console.warn('[save-list] background summary rebuild failed', error);
-  });
-  if (list.length > 0) return list;
-  return loadDesktopSaveMirrorListFallbackSafely();
+  const indexedSnapshot = await readIndexedSaveCatalogSnapshot(db);
+  if (indexedSnapshot.items.length > 0 || indexedSnapshot.totalStoredCount > 0) return indexedSnapshot;
+  const fallbackList = await loadDesktopSaveMirrorListFallbackSafely();
+  return buildSaveCatalogSnapshot(
+    fallbackList.map((summary) => createCatalogRecordFromSummary(summary)),
+    fallbackList.map((summary) => summary.id),
+  );
 }
 
 export async function loadSave(id: number): Promise<存档数据 | null> {
@@ -386,45 +347,116 @@ export async function loadSave(id: number): Promise<存档数据 | null> {
   return restoreSaveAssetPayloadFromRecords(saveForAssets, [...records, ...desktopRecords]);
 }
 
+export interface CloudTransferSaveBundle {
+  save: 存档数据;
+  assetRecords: SaveAssetRecord[];
+}
+
+export async function loadSaveForCloudTransfer(id: number): Promise<CloudTransferSaveBundle | null> {
+  const desktopSave = await loadDesktopSaveMirrorSaveFirstSafely(id);
+  if (desktopSave) {
+    const assetIds = collectSaveAlbumAssetIds(desktopSave);
+    return {
+      save: desktopSave,
+      assetRecords: await loadDesktopAssetRecordsSafely(assetIds),
+    };
+  }
+  const db = await openDB();
+  const raw = await loadRawSave(db, id);
+  const restored = raw ? await restoreDeltaSaveIfNeeded(db, raw) : null;
+  if (!restored) {
+    const fallback = await loadDesktopSaveMirrorSaveFallbackSafely(id);
+    if (!fallback) return null;
+    return {
+      save: fallback,
+      assetRecords: await loadDesktopAssetRecordsSafely(collectSaveAlbumAssetIds(fallback)),
+    };
+  }
+  const assetIds = collectSaveAlbumAssetIds(restored);
+  const indexedRecords = db.objectStoreNames.contains(SAVE_ASSETS_STORE)
+    ? await loadSaveAssetRecords(db, assetIds)
+    : [];
+  const loadedIds = new Set(indexedRecords.map((record) => record.id));
+  const desktopRecords = await loadDesktopAssetRecordsSafely(assetIds.filter((assetId) => !loadedIds.has(assetId)));
+  const embeddedRecords = saveHasEmbeddedAssetPayload(restored) ? extractSaveAssetRecords(restored) : [];
+  const records = new Map<string, SaveAssetRecord>();
+  for (const record of [...embeddedRecords, ...desktopRecords, ...indexedRecords]) {
+    if (record.id) records.set(record.id, record);
+  }
+  return { save: restored, assetRecords: Array.from(records.values()) };
+}
+
 export async function loadLatestSave(): Promise<存档数据 | null> {
-  const list = await getSaveList();
+  let snapshot = await getSaveCatalogSnapshot();
+  if (snapshot.items.length === 0 && snapshot.pendingIds.length > 0) {
+    await startSaveCatalogRepair('missing-only');
+    snapshot = await getSaveCatalogSnapshot();
+  }
+  const list = snapshot.items;
   if (list.length === 0) return null;
   const latestPlayable = list.find((item) => item.type === 'manual' || item.type === 'imported')
     ?? list.find((item) => item.type === 'auto')
-    ?? list.find((item) => item.type !== 'backup')
-    ?? list[0];
+    ?? list.find((item) => item.type !== 'backup');
+  if (!latestPlayable) return null;
   return loadSave(latestPlayable.id);
 }
 
 export async function deleteSave(id: number): Promise<void> {
+  return runWithSaveMutationPriority(() => deleteSaveInternal(id));
+}
+
+async function deleteSaveInternal(id: number): Promise<void> {
   const db = await openDB();
   const isReferencedBase = await isSaveReferencedAsDeltaBase(db, id);
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');
+    const saveStore = tx.objectStore(SAVES_STORE);
+    const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
     if (!isReferencedBase) {
-      tx.objectStore(SAVES_STORE).delete(id);
+      saveStore.delete(id);
+      summaryStore.delete(id);
     } else {
-      markSaveAsHiddenDeltaBase(tx.objectStore(SAVES_STORE), id);
+      markSaveAsHiddenDeltaBase(saveStore, summaryStore, id);
     }
-    tx.objectStore(SAVE_SUMMARIES_STORE).delete(id);
     deleteDeltaBySaveId(tx.objectStore(SAVE_NODE_DELTAS_STORE), id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
-  await cleanupUnreferencedHiddenSaves(db);
-  await removeDesktopSaveMirrorSafely(id);
+  if (isReferencedBase) {
+    await hideDesktopSaveMirrorSafely(id);
+  } else {
+    await removeDesktopSaveMirrorSafely(id);
+  }
   await removeDesktopSaveDeltasBySaveIdSafely(id);
+  await cleanupUnreferencedHiddenSaves(db);
 }
 
 export async function deleteSaveTree(rootId: string): Promise<number> {
+  return runWithSaveMutationPriority(() => deleteSaveTreeInternal(rootId));
+}
+
+async function deleteSaveTreeInternal(rootId: string): Promise<number> {
   const trimmedRootId = rootId.trim();
   if (!trimmedRootId) return 0;
   const db = await openDB();
-  await ensureSaveSummaries(db, Infinity);
-  const candidates = await collectSaveTreeSummaries(db, trimmedRootId);
+  const catalog = await getSaveCatalogSnapshot();
+  if (!catalog.catalogComplete) {
+    throw new Error(`仍有 ${catalog.pendingIds.length} 个节点目录待恢复，完成后才能删除整棵存档树。`);
+  }
+  const candidates = await collectSaveTreeSummaries(trimmedRootId);
   if (!candidates.length) return 0;
   await deleteManagedSaveItems(db, candidates);
   return candidates.length;
+}
+
+export async function deleteLegacyBackupSaves(): Promise<number> {
+  return runWithSaveMutationPriority(async () => {
+    const catalog = await getSaveCatalogSnapshot();
+    if (!catalog.legacyBackups.length) return 0;
+    const db = await openDB();
+    await deleteManagedSaveItems(db, catalog.legacyBackups);
+    return catalog.legacyBackups.length;
+  });
 }
 
 export async function loadSaveTree(rootId: string): Promise<存档数据[]> {
@@ -440,7 +472,176 @@ export async function loadSaveTree(rootId: string): Promise<存档数据[]> {
   return saves;
 }
 
+export async function stageCloudMergeRecord(
+  transferId: string,
+  recordKey: string,
+  value: CloudMergeStagedRecord,
+): Promise<void> {
+  const db = await openDB();
+  const key = cloudMergeStageKey(transferId, recordKey);
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    tx.objectStore(SETTINGS_STORE).put({ key, value });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('暂存云备份合并数据失败。'));
+    tx.onabort = () => reject(tx.error ?? new Error('暂存云备份合并数据已中止。'));
+  });
+}
+
+export async function deleteCloudMergeStagedRecord(
+  transferId: string,
+  recordKey: string,
+): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    tx.objectStore(SETTINGS_STORE).delete(cloudMergeStageKey(transferId, recordKey));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('清理云备份暂存条目失败。'));
+  });
+}
+
+export async function loadCloudMergeStagedRecord(
+  transferId: string,
+  recordKey: string,
+): Promise<CloudMergeStagedRecord | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readonly');
+    const request = tx.objectStore(SETTINGS_STORE).get(cloudMergeStageKey(transferId, recordKey));
+    request.onsuccess = () => resolve((request.result as { value?: CloudMergeStagedRecord } | undefined)?.value ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function clearCloudMergeStaging(transferId: string): Promise<void> {
+  const db = await openDB();
+  const prefix = cloudMergeStagePrefix(transferId);
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    const request = tx.objectStore(SETTINGS_STORE).openCursor(cloudMergeStageRange(prefix));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      cursor.delete();
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('清理云备份合并暂存区失败。'));
+  });
+}
+
+export async function commitCloudMergeStaging(transferId: string): Promise<CloudMergeCommitResult> {
+  await backupCurrentSavesToDesktop('before-restore');
+  return runWithSaveMutationPriority(async () => {
+    const db = await openDB();
+    const result = await commitCloudMergeStagingTransaction(db, transferId);
+    if (!isDesktopRuntime()) return result;
+    for (const id of result.saveIds) {
+      const bundle = await loadSaveForCloudTransfer(id);
+      if (!bundle) continue;
+      await mirrorDesktopSaveSafely(bundle.save);
+      await mirrorDesktopSaveDeltaSafely(buildSaveNodeDeltaRecord(stripSaveAssetPayloadForStorage(bundle.save), id));
+      if (bundle.assetRecords.length) await mirrorDesktopAssetsSafely(bundle.assetRecords);
+    }
+    return result;
+  });
+}
+
+async function commitCloudMergeStagingTransaction(
+  db: IDBDatabase,
+  transferId: string,
+): Promise<CloudMergeCommitResult> {
+  const prefix = cloudMergeStagePrefix(transferId);
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(
+      [SETTINGS_STORE, SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE],
+      'readwrite',
+    );
+    const settingsStore = tx.objectStore(SETTINGS_STORE);
+    const saveStore = tx.objectStore(SAVES_STORE);
+    const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
+    const assetStore = tx.objectStore(SAVE_ASSETS_STORE);
+    const deltaStore = tx.objectStore(SAVE_NODE_DELTAS_STORE);
+    const saveIds: number[] = [];
+    const assetIds: string[] = [];
+    const request = settingsStore.openCursor(cloudMergeStageRange(prefix));
+    let settled = false;
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      try { tx.abort(); } catch { /* transaction already inactive */ }
+      reject(error instanceof Error ? error : new Error('提交云备份合并事务失败。'));
+    };
+    request.onsuccess = () => {
+      if (settled) return;
+      const cursor = request.result;
+      if (!cursor) return;
+      const staged = (cursor.value as { value?: CloudMergeStagedRecord } | undefined)?.value;
+      if (!staged || (staged.kind !== 'node' && staged.kind !== 'asset')) {
+        fail(new Error(`云备份合并暂存条目无效：${String(cursor.key)}`));
+        return;
+      }
+      if (staged.kind === 'asset') {
+        if (!staged.record?.id) {
+          fail(new Error('云备份资源暂存条目缺少 ID。'));
+          return;
+        }
+        assetStore.put(staged.record);
+        assetIds.push(staged.record.id);
+        cursor.delete();
+        cursor.continue();
+        return;
+      }
+
+      try {
+        const normalized = stripSaveAssetPayloadForStorage({
+          ...staged.save,
+          type: normalizeSaveType(staged.save.type),
+        } as 存档数据);
+        const { id: _discardedId, ...withoutId } = normalized;
+        void _discardedId;
+        const addRequest = saveStore.add(withoutId as 存档数据);
+        addRequest.onsuccess = () => {
+          try {
+            const id = Number(addRequest.result);
+            if (!Number.isSafeInteger(id) || id <= 0) throw new Error('云备份节点没有获得有效的本地 ID。');
+            const saved = { ...normalized, id } as 存档数据;
+            summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(saved)));
+            const delta = buildSaveNodeDeltaRecord(saved, id);
+            if (delta) deltaStore.put(delta);
+            saveIds.push(id);
+            cursor.delete();
+            cursor.continue();
+          } catch (error) {
+            fail(error);
+          }
+        };
+        addRequest.onerror = () => fail(addRequest.error ?? new Error('写入云备份节点失败。'));
+      } catch (error) {
+        fail(error);
+      }
+    };
+    request.onerror = () => fail(request.error ?? new Error('读取云备份合并暂存区失败。'));
+    tx.oncomplete = () => {
+      if (settled) return;
+      settled = true;
+      resolve({ saveIds, assetIds });
+    };
+    tx.onerror = () => fail(tx.error ?? new Error('提交云备份合并事务失败。'));
+    tx.onabort = () => fail(tx.error ?? new Error('云备份合并事务已中止，本地存档没有改变。'));
+  });
+}
+
 export async function replaceAllSaves(
+  nextSaves: 存档数据[],
+  options: { skipDesktopBackup?: boolean; desktopBackupReason?: DesktopSaveBackupReason } = {},
+): Promise<void> {
+  return runWithSaveMutationPriority(() => replaceAllSavesInternal(nextSaves, options));
+}
+
+async function replaceAllSavesInternal(
   nextSaves: 存档数据[],
   options: { skipDesktopBackup?: boolean; desktopBackupReason?: DesktopSaveBackupReason } = {},
 ): Promise<void> {
@@ -470,7 +671,7 @@ export async function replaceAllSaves(
       for (const record of assetRecords) assetStore.put(record);
       const storedSave = stripSaveAssetPayloadForStorage(normalizedSave);
       store.put(storedSave);
-      summaryStore.put(buildSaveSummary(storedSave));
+      summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(storedSave)));
       mirroredSaves.push(normalizedSave);
       const delta = buildSaveNodeDeltaRecord(storedSave, normalizedId);
       if (delta) {
@@ -539,7 +740,8 @@ export async function cleanupUnreferencedDesktopAssets(): Promise<DesktopAssetMa
 }
 
 async function loadCurrentSavesForDesktopBackup(): Promise<存档数据[]> {
-  const list = await getSaveList();
+  const snapshot = await getSaveCatalogSnapshot();
+  const list = [...snapshot.items, ...snapshot.legacyBackups];
   const saves: 存档数据[] = [];
   for (const item of [...list].sort((left, right) => left.timestamp - right.timestamp || left.id - right.id)) {
     const save = await loadSave(item.id);
@@ -550,7 +752,8 @@ async function loadCurrentSavesForDesktopBackup(): Promise<存档数据[]> {
 
 async function collectReferencedDesktopAssetIds(): Promise<Set<string>> {
   if (!isDesktopRuntime()) return new Set();
-  const list = await getSaveList();
+  const snapshot = await getSaveCatalogSnapshot();
+  const list = [...snapshot.items, ...snapshot.legacyBackups];
   const ids = new Set<string>();
   let db: IDBDatabase | null = null;
   for (const item of list) {
@@ -571,8 +774,8 @@ async function collectReferencedDesktopAssetIds(): Promise<Set<string>> {
 }
 
 export async function hasAnySave(): Promise<boolean> {
-  const list = await getSaveList();
-  return list.length > 0;
+  const snapshot = await getSaveCatalogSnapshot();
+  return snapshot.items.length > 0 || snapshot.pendingIds.length > 0;
 }
 
 function deleteDeltaBySaveId(deltaStore: IDBObjectStore, saveId: number): void {
@@ -588,7 +791,7 @@ async function findAutoDeltaBase(db: IDBDatabase, save: 存档数据): Promise<{
   if (save.type !== 'auto') return null;
   const tree = (save as 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 }).saveTree;
   if (!tree?.parentNodeId) return null;
-  const summaries = await loadDeltaBaseCandidateSummaries(db);
+  const summaries = await loadIndexedAndDesktopSaveSummaries(db);
   const parentSummary = summaries.find((item) => item.saveTree?.nodeId === tree.parentNodeId);
   if (!parentSummary?.id) return null;
   const parentSave = await loadDeltaBaseCandidateSave(db, parentSummary.id);
@@ -604,13 +807,8 @@ async function findAutoDeltaBase(db: IDBDatabase, save: 存档数据): Promise<{
   return { baseSave, baseSaveId };
 }
 
-async function loadDeltaBaseCandidateSummaries(db: IDBDatabase): Promise<SaveListItemSummary[]> {
-  const indexedSummaries = await new Promise<SaveListItemSummary[]>((resolve, reject) => {
-    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readonly');
-    const req = tx.objectStore(SAVE_SUMMARIES_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as SaveListItemSummary[]);
-    req.onerror = () => reject(req.error);
-  });
+async function loadIndexedAndDesktopSaveSummaries(db: IDBDatabase): Promise<SaveListItemSummary[]> {
+  const indexedSummaries = await readSaveSummaries(db);
   const desktopSummaries = await loadDesktopSaveMirrorListFirstSafely();
   if (!desktopSummaries.length) return indexedSummaries;
   const byId = new Map<number, SaveListItemSummary>();
@@ -684,38 +882,37 @@ async function isSaveReferencedAsDeltaBase(db: IDBDatabase, saveId: number): Pro
 }
 
 async function cleanupUnreferencedHiddenSaves(db: IDBDatabase): Promise<void> {
-  const [summaries, deltas, saves] = await Promise.all([
-    new Promise<SaveListItemSummary[]>((resolve, reject) => {
-      const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readonly');
-      const req = tx.objectStore(SAVE_SUMMARIES_STORE).getAll();
-      req.onsuccess = () => resolve(req.result as SaveListItemSummary[]);
-      req.onerror = () => reject(req.error);
-    }),
+  const [records, deltas, desktopHiddenIds] = await Promise.all([
+    readSaveCatalogRecords(db),
     loadAllDeltaRecords(db),
-    new Promise<存档数据[]>((resolve, reject) => {
-      const tx = db.transaction(SAVES_STORE, 'readonly');
-      const req = tx.objectStore(SAVES_STORE).getAll();
-      req.onsuccess = () => resolve(req.result as 存档数据[]);
-      req.onerror = () => reject(req.error);
-    }),
+    loadHiddenDesktopSaveMirrorIdsSafely(),
   ]);
-  const visibleSaveIds = new Set(summaries.map((summary) => summary.id));
   const referencedBaseIds = new Set<number>();
   for (const delta of deltas) {
     if (delta.deltaPayload?.baseSaveId) referencedBaseIds.add(delta.deltaPayload.baseSaveId);
   }
-  const orphanIds = saves
-    .filter((save) => Boolean((save as StoredSaveMeta).saveRuntime?.hiddenDeltaBase))
-    .map((save) => Number(save.id) || 0)
-    .filter((id) => id > 0 && !visibleSaveIds.has(id) && !referencedBaseIds.has(id));
+  const orphanIds = Array.from(new Set([
+    ...records
+      .filter((record) => record.visibility === 'hidden-delta-base')
+      .map((record) => record.id),
+    ...desktopHiddenIds,
+  ]))
+    .filter((id) => !referencedBaseIds.has(id));
   if (!orphanIds.length) return;
   await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(SAVES_STORE, 'readwrite');
-    const store = tx.objectStore(SAVES_STORE);
-    for (const id of orphanIds) store.delete(id);
+    const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE], 'readwrite');
+    const saveStore = tx.objectStore(SAVES_STORE);
+    const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
+    for (const id of orphanIds) {
+      saveStore.delete(id);
+      summaryStore.delete(id);
+    }
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+  for (const id of orphanIds) {
+    await removeDesktopSaveMirrorSafely(id);
+  }
 }
 
 async function loadDeltaRecordByNodeId(db: IDBDatabase, nodeId: string): Promise<SaveNodeDeltaRecord | null> {
@@ -981,6 +1178,23 @@ async function removeDesktopSaveMirrorSafely(id: number): Promise<void> {
   }
 }
 
+async function hideDesktopSaveMirrorSafely(id: number): Promise<void> {
+  try {
+    await hideSaveInDesktopMirror(id);
+  } catch (error) {
+    console.warn('[desktop-save-mirror] hide delta base failed', error);
+  }
+}
+
+async function loadHiddenDesktopSaveMirrorIdsSafely(): Promise<number[]> {
+  try {
+    return await listHiddenDesktopSaveMirrorIds();
+  } catch (error) {
+    console.warn('[desktop-save-mirror] hidden delta base list failed', error);
+    return [];
+  }
+}
+
 async function replaceDesktopSaveMirrorSafely(saves: 存档数据[]): Promise<void> {
   try {
     await replaceDesktopSaveMirror(saves.map((save) => ({ save, summary: buildSaveSummary(save) })));
@@ -1099,34 +1313,27 @@ async function deleteIndexedSettingSafely(key: string): Promise<void> {
   }
 }
 
-// ── Auto-save rotation ──
+// ── Per-tree save-node rotation ──
 
 async function rotateManagedSaves(db: IDBDatabase): Promise<void> {
-  const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readonly');
-  const store = tx.objectStore(SAVE_SUMMARIES_STORE);
-  const all: SaveListItemSummary[] = await new Promise((resolve, reject) => {
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result as SaveListItemSummary[]);
-    req.onerror = () => reject(req.error);
-  });
-  const autoSaves = all
-    .filter((s) => s.type === 'auto')
-    .sort((a, b) => b.timestamp - a.timestamp);
-  const manualSaves = all
-    .filter((s) => s.type === 'manual')
-    .sort((a, b) => b.timestamp - a.timestamp);
-  const backupSaves = all
-    .filter((s) => s.type === 'backup')
-    .sort((a, b) => b.timestamp - a.timestamp);
-  const candidates = [
-    ...manualSaves.slice(MAX_MANUAL_SAVE_NODES),
-    ...getAutoSaveTreeRotationCandidates(autoSaves, undefined, MAX_AUTO_SAVE_TREES),
-    ...backupSaves.slice(MAX_BACKUP_SAVES),
-  ];
+  const all = await loadIndexedAndDesktopSaveSummaries(db);
+  const candidates = selectSaveNodeRotationCandidates(all);
   await deleteManagedSaveItems(db, candidates);
 }
 
-function markSaveAsHiddenDeltaBase(saveStore: IDBObjectStore, saveId: number): void {
+async function rotateManagedSavesSafely(db: IDBDatabase): Promise<void> {
+  try {
+    await rotateManagedSaves(db);
+  } catch (error) {
+    console.warn('[save-retention] post-save rotation failed', error);
+  }
+}
+
+function markSaveAsHiddenDeltaBase(
+  saveStore: IDBObjectStore,
+  summaryStore: IDBObjectStore,
+  saveId: number,
+): void {
   const req = saveStore.get(saveId);
   req.onsuccess = () => {
     const save = req.result as StoredSaveMeta | undefined;
@@ -1138,6 +1345,11 @@ function markSaveAsHiddenDeltaBase(saveStore: IDBObjectStore, saveId: number): v
         hiddenDeltaBase: true,
       },
     });
+    summaryStore.put(createHiddenDeltaBaseCatalogRecord({
+      id: saveId,
+      type: normalizeSaveType(save.type),
+      timestamp: Number(save.timestamp) || 0,
+    }));
   };
 }
 
@@ -1281,95 +1493,152 @@ function createImportId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function stripCloudBackupRestoreRuntime<T extends 存档数据>(save: T): T {
+  const source = save as T & { saveRuntime?: Record<string, unknown> };
+  if (!source.saveRuntime || !('cloudBackupOriginFingerprint' in source.saveRuntime)) return save;
+  const { cloudBackupOriginFingerprint: _origin, ...remainingRuntime } = source.saveRuntime;
+  void _origin;
+  return {
+    ...save,
+    ...(Object.keys(remainingRuntime).length ? { saveRuntime: remainingRuntime } : { saveRuntime: undefined }),
+  } as T;
+}
+
+function cloudMergeStagePrefix(transferId: string): string {
+  const safeTransferId = String(transferId || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 160);
+  if (!safeTransferId) throw new Error('云备份合并任务 ID 无效。');
+  return `internal.cloudMerge.${safeTransferId}.`;
+}
+
+function cloudMergeStageKey(transferId: string, recordKey: string): string {
+  const safeRecordKey = String(recordKey || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 220);
+  if (!safeRecordKey) throw new Error('云备份合并暂存键无效。');
+  return `${cloudMergeStagePrefix(transferId)}${safeRecordKey}`;
+}
+
+function cloudMergeStageRange(prefix: string): IDBKeyRange {
+  return IDBKeyRange.bound(prefix, `${prefix}\uffff`, false, false);
+}
+
 function normalizeSaveType(type: unknown): 存档类型 {
   return type === 'auto' || type === 'backup' || type === 'imported' ? type : 'manual';
 }
 
+function sortSaveSummaries(list: SaveListItemSummary[]): SaveListItemSummary[] {
+  return [...list].sort((a, b) => b.timestamp - a.timestamp || b.id - a.id);
+}
+
 async function readSaveSummaries(db: IDBDatabase): Promise<SaveListItemSummary[]> {
+  return (await readIndexedSaveCatalogSnapshot(db)).items;
+}
+
+async function readSaveCatalogRecords(db: IDBDatabase): Promise<SaveCatalogRecord[]> {
   if (!db.objectStoreNames.contains(SAVE_SUMMARIES_STORE)) return [];
   return new Promise((resolve, reject) => {
     const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readonly');
     const store = tx.objectStore(SAVE_SUMMARIES_STORE);
     const request = store.getAll();
     request.onsuccess = () => {
-      const list = (request.result as Array<SaveListItemSummary | 存档数据>)
-        .map((s) => isSaveListItemSummary(s) ? s : buildSaveSummary(s as 存档数据));
+      const list = (request.result as unknown[])
+        .map((value): SaveCatalogRecord | null => {
+          const normalized = normalizeSaveCatalogRecord(value);
+          if (normalized) return normalized;
+          if (value && typeof value === 'object' && 'chatHistory' in value) {
+            return createCatalogRecordFromSummary(buildSaveSummary(value as 存档数据));
+          }
+          return null;
+        })
+        .filter((record): record is SaveCatalogRecord => Boolean(record));
       resolve(list);
     };
     request.onerror = () => reject(request.error);
   });
 }
 
-function sortSaveSummaries(list: SaveListItemSummary[]): SaveListItemSummary[] {
-  return [...list].sort((a, b) => b.timestamp - a.timestamp);
-}
-
-async function ensureSaveSummaries(db: IDBDatabase, batchLimit = Infinity): Promise<void> {
-  if (!db.objectStoreNames.contains(SAVE_SUMMARIES_STORE)) return;
-  const summaries = await readSaveSummaries(db);
-  const summarizedIds = new Set(summaries.map((summary) => summary.id));
-  const missingVisibleSaves = await collectMissingVisibleSavesForSummary(db, summarizedIds, batchLimit);
-  if (!missingVisibleSaves.length) return;
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readwrite');
-    const store = tx.objectStore(SAVE_SUMMARIES_STORE);
-    for (const save of missingVisibleSaves) store.put(buildSaveSummary(save));
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function collectMissingVisibleSavesForSummary(
-  db: IDBDatabase,
-  summarizedIds: Set<number>,
-  batchLimit: number,
-): Promise<存档数据[]> {
-  if (batchLimit <= 0) return [];
-  const missing: 存档数据[] = [];
-  await new Promise<void>((resolve, reject) => {
+async function readIndexedSaveKeys(db: IDBDatabase): Promise<IDBValidKey[]> {
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(SAVES_STORE, 'readonly');
-    const store = tx.objectStore(SAVES_STORE);
-    const request = store.openCursor(null, 'prev');
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor || missing.length >= batchLimit) {
-        resolve();
-        return;
-      }
-      const save = cursor.value as 存档数据;
-      const id = Number(save.id) || 0;
-      if (id > 0 && !summarizedIds.has(id) && !isHiddenDeltaBaseSave(save)) {
-        missing.push(save);
-      }
-      cursor.continue();
-    };
+    const request = tx.objectStore(SAVES_STORE).getAllKeys();
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
-  return missing;
 }
 
-export async function rebuildSaveSummariesBatch(batchLimit = SUMMARY_REBUILD_BATCH_SIZE): Promise<number> {
+async function readIndexedSaveCatalogSnapshot(db: IDBDatabase): Promise<SaveCatalogSnapshot> {
+  const [records, keys] = await Promise.all([
+    readSaveCatalogRecords(db),
+    readIndexedSaveKeys(db),
+  ]);
+  return buildSaveCatalogSnapshot(records, keys);
+}
+
+export async function startSaveCatalogRepair(
+  scope: SaveCatalogRepairScope = 'missing-only',
+): Promise<SaveCatalogRepairResult> {
   const db = await openDB();
-  const before = await readSaveSummaries(db);
-  await ensureSaveSummaries(db, batchLimit);
-  const after = await readSaveSummaries(db);
-  return Math.max(0, after.length - before.length);
+  return startSaveCatalogRepairTask(scope, {
+    collectIds: async (requestedScope) => {
+      if (requestedScope === 'full-validation') {
+        return (await readIndexedSaveKeys(db))
+          .map((key) => Math.floor(Number(key)))
+          .filter((id) => Number.isFinite(id) && id > 0)
+          .sort((a, b) => b - a);
+      }
+      return (await readIndexedSaveCatalogSnapshot(db)).pendingIds;
+    },
+    repairOne: (id) => repairOneSaveCatalogRecord(db, id),
+    cleanupStaleRecords: () => cleanupStaleSaveCatalogRecords(db),
+    acquireLease: () => acquireSaveCatalogRepairLease(db),
+    renewLease: () => renewSaveCatalogRepairLease(db),
+    releaseLease: () => releaseSaveCatalogRepairLease(db),
+  });
 }
 
 export async function repairSaveDatabase(): Promise<void> {
-  dbPromise?.then((db) => db.close()).catch(() => {});
-  dbPromise = null;
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readwrite');
-    tx.objectStore(SAVE_SUMMARIES_STORE).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  for (let guard = 0; guard < 1000; guard += 1) {
-    const rebuilt = await rebuildSaveSummariesBatch(64);
-    if (rebuilt <= 0) break;
-    await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  const activeState = getSaveCatalogRepairState();
+  const fullValidationQueuedBehindBackground = (
+    activeState.scope === 'missing-only'
+    && activeState.phase !== 'idle'
+    && activeState.phase !== 'completed'
+    && activeState.phase !== 'partial-failure'
+  );
+  await startSaveCatalogRepair('full-validation');
+  if (fullValidationQueuedBehindBackground) {
+    await startSaveCatalogRepair('full-validation');
+  }
+}
+
+async function repairOneSaveCatalogRecord(db: IDBDatabase, id: number): Promise<void> {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE], 'readwrite');
+      const saveStore = tx.objectStore(SAVES_STORE);
+      const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
+      const request = saveStore.get(id);
+      request.onsuccess = () => {
+        const save = request.result as 存档数据 | undefined;
+        if (!save) {
+          summaryStore.delete(id);
+          return;
+        }
+        if (isHiddenDeltaBaseSave(save)) {
+          summaryStore.put(createHiddenDeltaBaseCatalogRecord({
+            id,
+            type: normalizeSaveType(save.type),
+            timestamp: Number(save.timestamp) || 0,
+          }));
+          return;
+        }
+        summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(save)));
+      };
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new Error('存档目录恢复事务已中止'));
+    });
+  } catch (error) {
+    await writeUnreadableSaveCatalogRecord(db, id, error).catch(() => {});
+    throw error;
   }
 }
 
@@ -1377,14 +1646,106 @@ function isHiddenDeltaBaseSave(save: 存档数据): boolean {
   return Boolean((save as StoredSaveMeta).saveRuntime?.hiddenDeltaBase);
 }
 
-function isSaveListItemSummary(value: unknown): value is SaveListItemSummary {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    typeof (value as SaveListItemSummary).id === 'number' &&
-    typeof (value as SaveListItemSummary).timestamp === 'number' &&
-    !('chatHistory' in (value as Record<string, unknown>)),
-  );
+async function writeUnreadableSaveCatalogRecord(
+  db: IDBDatabase,
+  id: number,
+  error: unknown,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readwrite');
+    const store = tx.objectStore(SAVE_SUMMARIES_STORE);
+    const getRequest = store.get(id);
+    getRequest.onsuccess = () => {
+      const current = normalizeSaveCatalogRecord(getRequest.result);
+      const retryCount = current?.visibility === 'unreadable' ? current.retryCount + 1 : 1;
+      store.put(createUnreadableSaveCatalogRecord({ id, error, retryCount }));
+    };
+    getRequest.onerror = () => reject(getRequest.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function cleanupStaleSaveCatalogRecords(db: IDBDatabase): Promise<void> {
+  const snapshot = await readIndexedSaveCatalogSnapshot(db);
+  if (!snapshot.staleCatalogIds.length) return;
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SAVE_SUMMARIES_STORE, 'readwrite');
+    const store = tx.objectStore(SAVE_SUMMARIES_STORE);
+    for (const id of snapshot.staleCatalogIds) store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function acquireSaveCatalogRepairLease(db: IDBDatabase): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    const store = tx.objectStore(SETTINGS_STORE);
+    const request = store.get(SAVE_CATALOG_REPAIR_LEASE_KEY);
+    let acquired = false;
+    request.onsuccess = () => {
+      const current = request.result as { key?: string; value?: { ownerId?: string; expiresAt?: number } } | undefined;
+      const ownerId = current?.value?.ownerId;
+      const expiresAt = Number(current?.value?.expiresAt) || 0;
+      if (!ownerId || ownerId === SAVE_CATALOG_REPAIR_OWNER || expiresAt <= Date.now()) {
+        acquired = true;
+        store.put({
+          key: SAVE_CATALOG_REPAIR_LEASE_KEY,
+          value: {
+            ownerId: SAVE_CATALOG_REPAIR_OWNER,
+            expiresAt: Date.now() + SAVE_CATALOG_REPAIR_LEASE_MS,
+          },
+        });
+      }
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(acquired);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function renewSaveCatalogRepairLease(db: IDBDatabase): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    const store = tx.objectStore(SETTINGS_STORE);
+    const request = store.get(SAVE_CATALOG_REPAIR_LEASE_KEY);
+    request.onsuccess = () => {
+      const current = request.result as { value?: { ownerId?: string } } | undefined;
+      if (current?.value?.ownerId !== SAVE_CATALOG_REPAIR_OWNER) {
+        tx.abort();
+        return;
+      }
+      store.put({
+        key: SAVE_CATALOG_REPAIR_LEASE_KEY,
+        value: {
+          ownerId: SAVE_CATALOG_REPAIR_OWNER,
+          expiresAt: Date.now() + SAVE_CATALOG_REPAIR_LEASE_MS,
+        },
+      });
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('存档目录恢复租约续期失败'));
+    tx.onabort = () => reject(new Error('存档目录恢复租约已由其他页面接管'));
+  });
+}
+
+async function releaseSaveCatalogRepairLease(db: IDBDatabase): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    const store = tx.objectStore(SETTINGS_STORE);
+    const request = store.get(SAVE_CATALOG_REPAIR_LEASE_KEY);
+    request.onsuccess = () => {
+      const current = request.result as { value?: { ownerId?: string } } | undefined;
+      if (current?.value?.ownerId === SAVE_CATALOG_REPAIR_OWNER) {
+        store.delete(SAVE_CATALOG_REPAIR_LEASE_KEY);
+      }
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 function buildSaveSummary(save: 存档数据): SaveListItemSummary {
