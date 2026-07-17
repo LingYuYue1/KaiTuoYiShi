@@ -267,6 +267,7 @@ export function useGame(): UseGameReturn {
           createdAt: Date.now(),
         }, createLiveSink(commandIdBrand));
         if (terminal.type === 'rejected') throw new Error(terminal.error.message);
+        await saveCompletedTurnAutomatically(kernel, terminal.view.runtime, s);
         s.setWorkflowStatus('');
       } catch (error) {
         recoverProjectionAfterCommandError();
@@ -389,6 +390,7 @@ export function useGame(): UseGameReturn {
         command: { type: 'turn.reroll', turnId: turn.id, createdAt: Date.now() },
       }, createLiveSink(runningCommandId));
       if (terminal.type === 'rejected') throw new Error(terminal.error.message);
+      await saveCompletedTurnAutomatically(kernel, terminal.view.runtime, s);
       s.setWorkflowStatus('');
     } catch (error) {
       recoverProjectionAfterCommandError();
@@ -626,6 +628,28 @@ function runtimeToSave(runtime: RuntimeGameState, type: 存档类型): 存档数
     variableBatches: runtime.variableBatches.slice(),
     queueTasks: runtime.queueTasks.slice(),
   };
+}
+
+/**
+ * Save only the committed kernel runtime. This keeps auto-save aligned with the
+ * same terminal state the player sees, including completed background work.
+ * A storage failure must not turn a successfully committed narrative turn into
+ * a failed command.
+ */
+async function saveCompletedTurnAutomatically(
+  kernel: IKernel,
+  runtime: RuntimeGameState,
+  state: UseGameStateReturn,
+): Promise<void> {
+  if (!runtime.gameSettings.enableAutoSaveEveryTurn) return;
+  try {
+    await kernel.saves.saveGame(runtimeToSave(runtime, 'auto'));
+    state.setHasSave(true);
+  } catch (error) {
+    console.error('Auto-save failed after committed turn:', error);
+    reportAppError({ source: '自动存档', error });
+    state.setWorkflowHint('本回合已完成，但自动存档失败；请手动存档后再继续。');
+  }
 }
 
 async function resolveZhikuMigrationAt(): Promise<number> {
