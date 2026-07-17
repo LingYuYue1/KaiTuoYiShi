@@ -13,6 +13,8 @@ import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApi
 
 
 export interface 智库检索结果 {
+  /** Explicit recall outcome; callers must not infer it from an empty string. */
+  status: 'not-run' | 'no-match' | 'injection';
   entries: 智库条目[];
   characterEntries?: 智库条目[];
   strongEntries?: 智库条目[];
@@ -431,7 +433,7 @@ function isNormalRecallEntry(entry: 智库条目): boolean {
 
 export function retrieveZhikuContext(system: 智库系统 | undefined, query: string, limit: number, sceneContext?: 智库场景上下文): 智库检索结果 {
   if (!system?.条目?.length || !query.trim()) {
-    return { entries: [], injection: '', diagnostics: buildEmptyZhikuDiagnostics() };
+    return { status: 'not-run', entries: [], injection: '', diagnostics: buildEmptyZhikuDiagnostics() };
   }
   const normalLimit = getNormalRelatedLimit(limit);
   const sceneHints = buildZhikuSceneHints(sceneContext);
@@ -471,9 +473,10 @@ export function retrieveZhikuContext(system: 智库系统 | undefined, query: st
     limit: normalLimit,
   });
   if (!selectedEntries.length) {
-    return { entries: [], injection: '', diagnostics };
+    return { status: 'no-match', entries: [], injection: '', diagnostics };
   }
   return {
+    status: 'injection',
     entries: selectedEntries,
     characterEntries: groups.characterEntries,
     strongEntries: groups.strongEntries,
@@ -494,10 +497,17 @@ export async function retrieveZhikuContextWithModel(
   promptModules?: 提示词模块[],
 ): Promise<智库检索结果> {
   if (!system?.条目?.length || !query.trim()) {
-    return { entries: [], injection: '', usedModel: false };
+    return { status: 'not-run', entries: [], injection: '', usedModel: false };
   }
 
   const keywordRecall = retrieveZhikuContext(system, query, limit, sceneContext);
+  const hasModelConfig = Boolean(
+    settings.api.provider
+    && settings.api.baseUrl.trim()
+    && settings.api.apiKey.trim()
+    && settings.api.model.trim(),
+  );
+  if (!hasModelConfig) return keywordRecall;
   const api = requireIndependentApiConfig('智库召回', settings.api, {
     maxTokens: 384,
     temperature: 0.1,
@@ -576,6 +586,7 @@ export async function retrieveZhikuContextWithModel(
     const keywordDiagnostics = keywordRecall.diagnostics ?? buildEmptyZhikuDiagnostics();
     return {
       entries: finalPicked,
+      status: finalPicked.length ? 'injection' : 'no-match',
       characterEntries: finalGroups.characterEntries,
       strongEntries: finalGroups.strongEntries,
       weakEntries: finalGroups.weakEntries,

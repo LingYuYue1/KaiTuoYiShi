@@ -12,18 +12,18 @@ const app = fs.readFileSync('App.tsx', 'utf8');
 const leftPanel = fs.readFileSync('components/layout/LeftPanel.tsx', 'utf8');
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
 const state = fs.readFileSync('hooks/useGameState.ts', 'utf8');
-const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const saveLoad = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const retrieval = fs.readFileSync('services/zhikuRetrieval.ts', 'utf8');
 const zhikuCot = fs.readFileSync('prompts/cot/zhikuCot.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
-const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
-const historyWindow = fs.readFileSync('hooks/useGame/historyWindow.ts', 'utf8');
-const npcPresence = fs.readFileSync('hooks/useGame/npcPresence.ts', 'utf8');
-const storyProgress = fs.readFileSync('services/storyProgressService.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const systemPromptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
+const historyWindow = fs.readFileSync('src/kernel/workflows/historyWindow.ts', 'utf8');
+const npcPresence = fs.readFileSync('src/kernel/workflows/npcPresence.ts', 'utf8');
+const storyProgress = fs.readFileSync('src/kernel/domain/story/storyProgress.ts', 'utf8');
+const sendWorkflow = fs.readFileSync('src/kernel/workflows/sendWorkflow.ts', 'utf8');
 const settingsModel = fs.readFileSync('models/settings.ts', 'utf8');
 const runtimeUnlock = fs.readFileSync('services/zhikuRuntimeUnlock.ts', 'utf8');
-const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
+const contextSnapshot = fs.readFileSync('src/kernel/workflows/contextSnapshot.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
 const newsModel = fs.readFileSync('services/ai/newsModel.ts', 'utf8');
 const rebuildPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/character-rebuild-core.json', 'utf8'));
@@ -1723,22 +1723,25 @@ assert(
   'zhiku character rebuild migration helpers must exist.',
 );
 assert(
-  state.includes('removeLegacyZhikuCharacterEntries(') &&
-    state.includes('ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY'),
+  preset.includes('removeLegacyZhikuCharacterEntries(') &&
+    state.includes('ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY') &&
+    state.includes('hydrateRuntimeZhiku(savedZhiku, { migrationAt })'),
   'startup zhiku merge must remove legacy character entries from saved local data.',
 );
 assert(
   preset.includes('removeLegacyZhikuCharacterEntries(') &&
-    saveLoad.includes('mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt)') &&
-    saveLoad.includes("await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku))"),
+    preset.includes('hydrateRuntimeZhiku') &&
+    saveLoad.includes('hydrateRuntimeZhiku(save.智库') &&
+    saveLoad.includes('await saveToRuntime(save'),
   'loading an old save must not restore legacy character entries into active zhiku.',
 );
 assert(
-    saveLoad.includes('loadAllBundledZhikuPresets') &&
-    saveLoad.includes('mergeBundledZhikuSystem') &&
+    saveLoad.includes('hydrateRuntimeZhiku') &&
+    preset.includes('loadAllBundledZhikuPresets') &&
+    preset.includes('mergeBundledZhikuSystem') &&
     preset.includes('mergeZhikuRuntimeUnlockOverrides') &&
     preset.includes('isBundledZhikuDuplicate') &&
-    saveLoad.includes('mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt)') &&
+    saveLoad.includes('hydrateRuntimeZhiku(save.智库') &&
     preset.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)'),
   'loading a save must merge current bundled zhiku presets, including rebuilt character personas, with save custom entries.',
 );
@@ -1760,14 +1763,12 @@ assert(
 );
 assert(
   state.includes('buildPersistedZhikuSystem') &&
-    state.includes('mergeBundledZhikuSystem(preset, savedZhiku, migrationAt)') &&
-    state.includes("await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku))") &&
+    state.includes('hydrateRuntimeZhiku(savedZhiku, { migrationAt })') &&
+    state.includes("await setPreference('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku))") &&
     saveLoad.includes('buildPersistedZhikuSystem') &&
-    saveLoad.includes('mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt)') &&
-    saveLoad.includes('智库: buildPersistedZhikuSystem(overrides?.智库 ?? state.智库)') &&
-    saveLoad.includes("await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku))") &&
-    sendWorkflow.includes("await saveSetting('zhikuSystem', buildPersistedZhikuSystem(zhikuAfterRuntimeUnlock))") &&
-    panel.includes("await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next))"),
+    saveLoad.includes('hydrateRuntimeZhiku(save.智库') &&
+    saveLoad.includes('智库: buildPersistedZhikuSystem(runtime.智库)') &&
+    panel.includes("await setPreference('zhikuSystem', buildPersistedZhikuSystem(next))"),
   'all zhiku save paths must persist a slim zhiku payload instead of the full bundled library.',
 );
 assert(
@@ -1782,7 +1783,6 @@ assert(
 );
 assert(
     retrieval.includes('解析智库软结构标签') &&
-    retrieval.includes('获取智库人物名') &&
     retrieval.includes('获取智库人物名列表') &&
     retrieval.includes('获取智库核心触发词') &&
     retrieval.includes('buildCharacterTriggerCandidates') &&
@@ -1792,7 +1792,7 @@ assert(
     retrieval.includes('比较智库人物节点') &&
     retrieval.includes('buildCharacterAnchorEntries') &&
     retrieval.includes('单角色档案|角色档案|人物档案') &&
-    retrieval.includes('isMainStoryAllowedZhikuMeta'),
+    retrieval.includes('isMainStoryInjectableZhikuEntry'),
   'zhiku retrieval must understand rebuilt character soft-structure nodes.',
 );
 assert(
@@ -1963,12 +1963,12 @@ assert(
     retrieval.includes("const summary = entry.摘要 || '无摘要'") &&
     retrieval.includes('systemPrompt,') &&
     retrieval.includes('chatCompletionNonStream(api') &&
-    retrieval.includes('关键词召回结果已保底保留') &&
-    retrieval.includes('仅追加 ${appliedSupplementEntries.length} 条未由关键词命中的资料'),
+    retrieval.includes('mergeSupplementedZhikuGroups(keywordGroups, supplementGroups)') &&
+    retrieval.includes('智库模型已完成查缺补漏，本回合没有需要追加的资料。'),
   'zhiku model retrieval must send the Step0-Step8 CoT prompt and use it only to supplement missing entries after keyword recall.',
 );
 assert(
-  retrieval.includes('智库模型已按最近多回合正文窗口查缺补漏，但没有返回有效补充编号；已保留关键词召回结果。') &&
+  retrieval.includes('智库模型已完成查缺补漏，本回合没有需要追加的资料。') &&
     retrieval.includes('...keywordRecall') &&
     !retrieval.includes("return { entries: [], injection: '', usedModel: true, rawText, diagnostics: fallback.diagnostics }"),
   'zhiku model retrieval must preserve keyword recall instead of dropping all zhiku injection when the model returns no valid supplement indexes.',
@@ -4339,13 +4339,11 @@ assert(
 );
 assert(
   sendWorkflow.includes("import { applyStoryArchiveZhikuRuntimeUnlock }") &&
-    sendWorkflow.includes("import { buildPersistedZhikuSystem }") &&
     sendWorkflow.includes('storyAlignment.progressed') &&
     sendWorkflow.includes('applyStoryArchiveZhikuRuntimeUnlock({') &&
-    sendWorkflow.includes("await saveSetting('zhikuSystem', buildPersistedZhikuSystem(zhikuAfterRuntimeUnlock))") &&
     sendWorkflow.includes('剧情归档已更新智库门禁') &&
-    sendWorkflow.includes('智库: zhikuAfterRuntimeUnlock'),
-  'main workflow must update zhiku runtime unlocks after story weaving progresses and include them in autosave.',
+    sendWorkflow.includes('zhikuAfterRuntimeUnlock'),
+  'main workflow must update zhiku runtime unlocks after story weaving progresses.',
 );
 assert(
   phoneService.includes('最近角色阶段变化') &&

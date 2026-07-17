@@ -7,7 +7,7 @@ function assert(condition, message) {
 
 const presetSource = fs.readFileSync('data/zhikuPreset.ts', 'utf8');
 const useGameStateSource = fs.readFileSync('hooks/useGameState.ts', 'utf8');
-const saveLoadSource = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8');
 
 const removedChapterFiles = [
   'herta-station-chapters.json',
@@ -44,15 +44,16 @@ assert(
 assert(
   presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
     presetSource.includes('mergeBundledZhikuSystem') &&
-    useGameStateSource.includes('mergeBundledZhikuSystem(preset, savedZhiku, migrationAt)') &&
-    useGameStateSource.includes('savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))'),
-  '启动加载时必须过滤旧存档残留的主线剧情智库条目',
+    presetSource.includes('hydrateRuntimeZhiku') &&
+    useGameStateSource.includes('hydrateRuntimeZhiku(savedZhiku, { migrationAt })'),
+  '启动加载时必须经 hydrateRuntimeZhiku 过滤旧存档残留的主线剧情智库条目',
 );
 
 assert(
   presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
-    saveLoadSource.includes('mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt)'),
-  '导入存档时必须过滤旧存档残留的主线剧情智库条目',
+    useGameSource.includes('hydrateRuntimeZhiku(save.智库') &&
+    useGameSource.includes('await saveToRuntime(save'),
+  '导入存档时必须经 hydrateRuntimeZhiku 过滤旧存档残留的主线剧情智库条目',
 );
 
 console.log('zhiku main story removal regression passed');

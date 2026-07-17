@@ -332,3 +332,16 @@ export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOption
     条目: systems.flatMap((system) => system.条目),
   });
 }
+
+/**
+ * Session-boundary hydration: re-merge bundled catalog with saved/current shells.
+ * Saves only store custom entries + builtin unlock deltas; full bodies come from the catalog.
+ * Callers should pass the stable ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY preference when available.
+ */
+export async function hydrateRuntimeZhiku(
+  savedOrCurrent: 智库系统 | null | undefined,
+  options: LoadBundledZhikuOptions & { migrationAt?: number } = {},
+): Promise<智库系统> {
+  const bundled = await loadAllBundledZhikuPresets(options);
+  return mergeBundledZhikuSystem(bundled, savedOrCurrent, options.migrationAt ?? Date.now());
+}
