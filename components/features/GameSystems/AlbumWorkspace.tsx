@@ -314,8 +314,15 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
   };
 
   const resolveImageAnalysisConfig = async () => {
+    // AI analysis (anchor extract / scene / story snapshot parse) requires tokenizer API.
     const config = await (await getAdaptationServices()).imageTokenizer.buildImagePromptTokenizerConfig(gameSettings);
-    if (!config) throw new Error('文生图词组转化器独立 API 未完整配置');
+    if (!config) {
+      throw new Error(
+        gameSettings.文生图系统.enablePromptTokenizer
+          ? '文生图词组转化器独立 API 未完整配置（需 provider / Base URL / API Key / 模型）'
+          : '请先在文生图设置中启用词组转化器并配置独立 API',
+      );
+    }
     return config;
   };
 
@@ -887,7 +894,10 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
     try {
       const services = await getAdaptationServices();
       const tokenizerConfig = await services.imageTokenizer.buildImagePromptTokenizerConfig(gameSettings);
-      if (!tokenizerConfig) throw new Error('文生图词组转化器独立 API 未完整配置');
+      // Disabled or incomplete tokenizer → keep local prompt (build prompt works offline).
+      if (!tokenizerConfig) {
+        return { prompt: input.prompt, negative: input.negative };
+      }
       const systemPrompt = await services.imageTokenizer.buildImagePromptTokenizerSystemPrompt(gameSettings, input.mode);
       const refined = await services.imageTokenizer.tokenizeImagePrompt(
         tokenizerConfig,

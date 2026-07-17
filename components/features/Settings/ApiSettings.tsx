@@ -668,10 +668,15 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
         忆庭召回API: { ...gameSettings.记忆系统.忆庭召回API, ...auxApiPatch },
         忆庭精炼API: { ...gameSettings.记忆系统.忆庭精炼API, ...auxApiPatch },
       },
+      // 词组转化器是文本模型 API，与其他辅助文本 API 同套；不覆盖文生图出图接口。
+      文生图系统: {
+        ...gameSettings.文生图系统,
+        词组转化器API: { ...gameSettings.文生图系统.词组转化器API, ...auxApiPatch },
+      },
     };
     onGameSettingsChange(nextGameSettings);
     await setPreference('gameSettings', nextGameSettings);
-    setMessage({ kind: 'info', text: `已把其他文本 API 统一套用为：${provider} / ${model}` });
+    setMessage({ kind: 'info', text: `已把其他文本 API（含词组转化器）统一套用为：${provider} / ${model}` });
   };
 
   const handleFetchAuxModels = async () => {
@@ -1184,7 +1189,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                 ◆ 其他 API 模型设置
               </div>
               <div className="leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-                正文继续使用上方主模型；这里可以批量修改变量、新闻、手机、智库、剧情编织、记忆与忆庭的供应商、Base URL、Key 和模型 ID，不影响文生图。
+                正文继续使用上方主模型；这里可以批量修改变量、新闻、手机、智库、剧情编织、记忆与忆庭、词组转化器等文本 API 的供应商、Base URL、Key 和模型 ID，不影响文生图出图接口。
               </div>
               <div
                 className="leading-relaxed"

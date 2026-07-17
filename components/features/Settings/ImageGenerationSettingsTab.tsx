@@ -343,10 +343,15 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
 
         {activePage === 'tokenizer' && (
         <Panel title="词组转化器">
-          <ToggleRow label="启用词组转化器" desc="开启后，相册会优先把档案整理成提示词草稿，玩家仍可手动编辑。" checked={image.enablePromptTokenizer} onChange={(v) => patchSystem({ enablePromptTokenizer: v })} />
+          <ToggleRow
+            label="启用词组转化器"
+            desc="开启后相册会优先用独立文本 API 整理提示词；API 未配齐时自动退回本地提示词。可在 API 设置页一键套用到词组转化器。"
+            checked={image.enablePromptTokenizer}
+            onChange={(v) => patchSystem({ enablePromptTokenizer: v })}
+          />
           <SubPanel title="词组转化器 API">
             <Notice>
-              这里负责角色锚点、伙伴档案、场景摘要到图片 Prompt 的文本整理，并只使用本页的独立 API 配置。
+              这里负责角色锚点、伙伴档案、场景摘要到图片 Prompt 的文本整理，并只使用本页的独立 API 配置（provider / Base URL / API Key / 模型均需填写后才生效）。
             </Notice>
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="服务商">

@@ -22,12 +22,17 @@ export interface ImagePromptTokenizerResult {
 
 export function buildImagePromptTokenizerConfig(settings: 游戏设置): API配置项 | null {
   if (!settings.文生图系统.enablePromptTokenizer) return null;
+  const api = settings.文生图系统.词组转化器API;
+  // Incomplete independent API is treated as disabled for runtime — keep local prompt.
+  if (!api.provider || !api.baseUrl.trim() || !api.apiKey.trim() || !api.model.trim()) {
+    return null;
+  }
   return {
-    ...requireIndependentApiConfig('文生图词组转化器', settings.文生图系统.词组转化器API, {
+    ...requireIndependentApiConfig('文生图词组转化器', api, {
       maxTokens: 1600,
       temperature: 0.45,
     }),
-    maxTokens: Math.min(settings.文生图系统.词组转化器API.maxTokens ?? 1600, 2400),
+    maxTokens: Math.min(api.maxTokens ?? 1600, 2400),
     enableClaudeMode: settings.enableClaudeMode === true,
   };
 }

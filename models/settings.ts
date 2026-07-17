@@ -658,7 +658,7 @@ export function 创建默认文生图系统设置(): 文生图系统设置 {
       defaultStyle: 'anime',
     },
     enableNsfwImageGeneration: false,
-    enablePromptTokenizer: true,
+    enablePromptTokenizer: false,
     词组转化器API: 创建空文生图词组转化器API覆盖(),
     promptTokenizerSystemPrompt: [
       '你是「开拓轶事」的图片提示词转化器。',
@@ -756,7 +756,7 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
       ...(input.NSFW接口 ? 归一化文生图API配置(input.NSFW接口) : {}),
     },
     enableNsfwImageGeneration: input.enableNsfwImageGeneration === true,
-    enablePromptTokenizer: input.enablePromptTokenizer !== false,
+    enablePromptTokenizer: input.enablePromptTokenizer === true,
     词组转化器API: {
       ...创建空文生图词组转化器API覆盖(),
       ...(input.词组转化器API ?? {}),
@@ -1367,7 +1367,19 @@ export interface 存档数据 {
   阵营?: unknown;
   variableBatches?: import('./variableCommand').变量命令批次[]; // 可选：兼容旧存档（v1 加入）
   queueTasks?: import('./queueTask').队列任务记录[]; // 可选：后台队列展示记录
-  gameSettings: 游戏设置;
-  apiSettings: API设置;
-  theme: 主题预设;
+  /** @deprecated Settings are device preferences as of the iKernel save boundary. */
+  gameSettings?: 游戏设置;
+  /** @deprecated API secrets never belong to new saves. */
+  apiSettings?: API设置;
+  /** @deprecated Theme is a device preference, not story state. */
+  theme?: 主题预设;
+}
+
+/** Canonical saves contain story state only; legacy device preferences are migration input. */
+export function stripDevicePreferencesFromSave<T extends 存档数据>(save: T): T {
+  const canonical = structuredClone(save) as T;
+  delete canonical.apiSettings;
+  delete canonical.gameSettings;
+  delete canonical.theme;
+  return canonical;
 }
