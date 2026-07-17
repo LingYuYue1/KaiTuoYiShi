@@ -9,7 +9,7 @@ function assert(condition, message) {
 
 const dbService = fs.readFileSync('services/dbService.ts', 'utf8');
 const assetStorage = fs.readFileSync('utils/saveAssetStorage.ts', 'utf8');
-const albumPanel = fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8');
+const albumPanel = fs.readFileSync('components/features/GameSystems/AlbumWorkspace.tsx', 'utf8');
 const albumWorkspaces = fs.readFileSync('components/features/GameSystems/album/workspaces.tsx', 'utf8');
 const albumLibraryWorkspace = fs.readFileSync('components/features/GameSystems/album/libWorkspace.tsx', 'utf8');
 const leftPanel = fs.readFileSync('components/layout/LeftPanel.tsx', 'utf8');
@@ -18,6 +18,7 @@ const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8'
 const messageRenderers = fs.readFileSync('components/features/Chat/MessageRenderers.tsx', 'utf8');
 const companionPanel = fs.readFileSync('components/features/GameSystems/CompanionPanel.tsx', 'utf8');
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
+const phoneWallpapers = fs.readFileSync('utils/phoneWallpapers.ts', 'utf8');
 const starMapPanel = fs.readFileSync('components/features/GameSystems/StarMapPanel.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
 const albumSurface = `${albumPanel}\n${albumWorkspaces}`;
@@ -50,20 +51,18 @@ assert(albumObjectUrl.includes('revokeAlbumAsset'), '删除资源时必须 revok
 assert(albumObjectUrl.includes('materializeAlbumRuntimePayload'), '必须提供运行时 dataUrl→Blob 物化入口。');
 assert(dbService.includes('materializeSaveAssetRecords'), 'dbService 读档/保存路径必须物化 Blob 资源。');
 
-assert(albumSurface.includes('const mountedSrc = entry ? 创建相册资源引用(entry.assetId) : params.src'), '从成品库挂载图片时必须写入 asset 引用，不能把 dataUrl 直接塞进变量。');
-assert(albumSurface.includes('挂载旅人图片(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: mountedSrc })'), '旅人头像槽位挂载必须使用 mountedSrc。');
-assert(albumSurface.includes('挂载NPC头像图片(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: mountedSrc'), 'NPC 头像槽位挂载必须使用 mountedSrc。');
+assert(albumSurface.includes('const mountedSrc = bound.assetRef'), '从成品库挂载图片时必须写入 asset 引用，不能把 dataUrl 直接塞进变量。');
+assert(albumSurface.includes('设置旅人图片当前显示(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: mountedSrc })'), '旅人头像槽位挂载必须使用 mountedSrc。');
+assert(albumSurface.includes('设置NPC头像当前显示(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: mountedSrc'), 'NPC 头像槽位挂载必须使用 mountedSrc。');
 assert(albumSurface.includes('if (rawAvatar.trim().startsWith(\'asset:\')) return []'), '旅人当前 asset 引用头像不能再作为内置候选循环挂载。');
-assert(albumSurface.includes('avatar: 解析相册资源引用(album, 读取NPC头像(npc, \'档案\'))'), '相册成品库 NPC 档案头像必须解析 asset 引用。');
-assert(albumSurface.includes('src: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined)'), '相册成品库旅人档案头像必须解析 asset 引用。');
 assert(albumWorkspaces.includes('key: 图片槽位;'), '角色已挂载槽位必须使用统一的图片槽位标识，不能使用展示专用 key。');
-assert(albumWorkspaces.includes("{ key: 'avatar_story', label: '正文头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.正文) }"), '正文槽位占用状态必须读取原始槽位，不能回退到档案头像。');
-assert(albumWorkspaces.includes("{ key: 'avatar_phone', label: '手机头像', src: 解析相册资源引用(album, npc.图像档案?.头像槽位?.手机) }"), '手机槽位占用状态必须读取原始槽位，不能回退到档案头像。');
+assert(albumWorkspaces.includes("resolveDisplayedSlot(currentAlbum, assetMap, 'npc', npc.id, 'avatar_story', '正文头像')"), '正文槽位占用状态必须读取原始槽位，不能回退到档案头像。');
+assert(albumWorkspaces.includes("resolveDisplayedSlot(currentAlbum, assetMap, 'npc', npc.id, 'avatar_phone', '手机头像')"), '手机槽位占用状态必须读取原始槽位，不能回退到档案头像。');
 assert(albumLibraryWorkspace.includes('slots={activeRecord?.slots ?? []}'), '槽位选择器必须读取角色档案中的真实已挂载槽位。');
-assert(albumLibraryWorkspace.includes('selectedSrc={activeItem?.src}'), '槽位选择器必须接收当前图片，以区分推荐槽位与图片实际所在槽位。');
+assert(albumLibraryWorkspace.includes('selectedEntryId={activeItem?.entry.id}'), '槽位选择器必须接收当前成品 ID，以区分推荐槽位与图片实际所在槽位。');
 assert(albumWorkspaces.includes('const recommended = option.slot === recommendedSlot;'), '推荐槽位必须精确匹配，正文或手机头像不能错误高亮档案头像。');
 assert(!albumWorkspaces.includes("recommendedSlot?.startsWith('avatar_')"), '推荐槽位不得把全部头像槽位折叠到档案头像。');
-assert(albumWorkspaces.includes("const stateLabel = current ? '当前图片' : occupied ? '已占用 · 点击替换' : '';"), '槽位选择器必须分别显示当前图片和已占用状态。');
+assert(albumWorkspaces.includes("const stateLabel = current ? '当前显示' : occupied ? '已有显示 · 点击更换' : '';"), '槽位选择器必须分别显示当前图片和已占用状态。');
 assert(!albumPanel.includes("targetType: 'traveler',\n                  targetId: params.targetId,\n                  slot: params.slot,"), '旅人挂载不得改写图片的推荐槽位。');
 assert(!albumPanel.includes("targetId: params.targetId,\n                slot: params.slot,\n                nsfw:"), 'NPC 挂载不得改写图片的推荐槽位。');
 
@@ -87,6 +86,11 @@ assert(phoneModal.includes('album?: 相册系统'), '手机必须接收相册以
 assert(phoneModal.includes('src={解析相册资源引用(album, msg.avatar || (contact && msg.senderId === contact.id ? contact.avatar : undefined))}'), '手机消息头像必须在渲染时解析 asset 引用。');
 assert(phoneModal.includes('src={解析相册资源引用(album, traveler.图像档案?.手机头像 || traveler.头像 || undefined)}'), '旅人手机头像必须解析 asset 引用。');
 assert(!phoneModal.includes("avatar: 读取NPC头像(npc, '手机')"), '手机回退联系人也必须解析 asset 引用。');
+assert(phoneModal.includes('列出手机相册壁纸') && phoneModal.includes('是当前手机壁纸'), '手机壁纸 UI 必须复用独立的相册壁纸选择模块。');
+assert(phoneWallpapers.includes("entry.slot !== 'phone_wallpaper' && entry.slot !== 'phone_chat_background'"), '壁纸菜单必须包含 phone_wallpaper / phone_chat_background 槽位。');
+assert(phoneModal.includes('onSetHome(wallpaper.assetRef)') && phoneWallpapers.includes('创建相册资源引用(asset.id)'), '相册壁纸设为桌面必须写入 asset: 引用。');
+assert(phoneModal.includes('onSetChat(wallpaper.assetRef)'), '相册壁纸设为短讯必须写入 asset: 引用。');
+assert(phoneModal.includes('相册中暂无手机背景，可在相册生成后在此选择'), '相册壁纸空状态文案必须保留。');
 assert(starMapPanel.includes('album: 相册系统;'), '星图必须接收相册以解析 NPC 槽位头像。');
 assert(starMapPanel.includes('const avatar = 解析相册资源引用(album, 读取NPC头像(npc, \'档案\'));'), '星图 NPC 头像必须解析 asset 引用。');
 assert(app.includes('<StarMapPanel') && app.includes('album={ctx.album}'), 'App 必须把相册传给星图。');

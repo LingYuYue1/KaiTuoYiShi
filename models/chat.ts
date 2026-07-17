@@ -45,6 +45,8 @@ export interface 聊天消息 {
     deepSeekCotFakeHistorySkipped?: boolean;
     deepSeekPrefixMode?: boolean;
     deepSeekProtocolIssues?: string[];
+    /** Soft protocol gaps accepted without main-loop retry (e.g. missing 短期记忆 when body is valid). */
+    softProtocolIssues?: string[];
     deepSeekMainOriginalModel?: string;
     stV2Used?: boolean;
     rerollSimilarity?: number;

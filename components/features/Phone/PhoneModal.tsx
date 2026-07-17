@@ -19,6 +19,7 @@ import {
   DEFAULT_PHONE_HOME_WALLPAPER,
 } from '@/data/builtinPhoneWallpapers';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import { 列出手机相册壁纸, 是当前手机壁纸 } from '@/utils/phoneWallpapers';
 
 interface Props {
   phone: 手机系统;
@@ -1324,8 +1325,11 @@ export function PhoneModal({
                 </div>
               ) : (
                 <WallpaperSurface
+                  album={album}
                   homeWallpaper={homeWallpaper}
                   chatWallpaper={解析相册资源引用(album, phone.wallpapers?.chat) || DEFAULT_PHONE_CHAT_WALLPAPER}
+                  homeWallpaperRef={phone.wallpapers?.home}
+                  chatWallpaperRef={phone.wallpapers?.chat}
                   onSetHome={(src) =>
                     onPhoneChange((prev) => ({
                       ...prev,
@@ -1645,20 +1649,28 @@ function AddContactPanel({
 }
 
 function WallpaperSurface({
+  album,
   homeWallpaper,
   chatWallpaper,
+  homeWallpaperRef,
+  chatWallpaperRef,
   onSetHome,
   onSetChat,
   onResetHome,
   onResetChat,
 }: {
+  album?: 相册系统;
   homeWallpaper: string;
   chatWallpaper: string;
+  homeWallpaperRef?: string;
+  chatWallpaperRef?: string;
   onSetHome: (src: string) => void;
   onSetChat: (src: string) => void;
   onResetHome: () => void;
   onResetChat: () => void;
 }) {
+  const albumWallpapers = useMemo(() => 列出手机相册壁纸(album), [album]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-5 lg:grid-cols-[220px_1fr]">
@@ -1671,67 +1683,139 @@ function WallpaperSurface({
           </div>
         </aside>
 
-        <main className="min-w-0">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
-                内置壁纸
+        <main className="min-w-0 space-y-6">
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+                  相册壁纸
+                </div>
+                <div className="mt-1 text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                  来自相册生成的手机背景，写入时保存为资源引用
+                </div>
               </div>
-              <div className="mt-1 text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-                选择后会写入手机存档，玩家自定义优先于默认壁纸
-              </div>
+              <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                {albumWallpapers.length}
+              </span>
             </div>
-            <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
-              {BUILTIN_PHONE_WALLPAPERS.length}
-            </span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {BUILTIN_PHONE_WALLPAPERS.map((wallpaper) => {
-              const isHome = homeWallpaper === wallpaper.src;
-              const isChat = chatWallpaper === wallpaper.src;
-              return (
-                <article
-                  key={wallpaper.id}
-                  className="overflow-hidden"
-                  style={{
-                    background: 'rgba(var(--tj-bg-primary), 0.48)',
-                    boxShadow: isHome || isChat
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
-                      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
-                    clipPath: cardClip,
-                  }}
-                >
-                  <div className="aspect-[9/16] max-h-[260px] w-full overflow-hidden">
-                    <img
-                      src={wallpaper.src}
-                      alt={wallpaper.title}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  <div className="space-y-2 px-3 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="truncate font-serif text-sm font-bold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-                        {wallpaper.title}
-                      </h3>
-                      {(isHome || isChat) && (
-                        <span className="shrink-0 text-[10px]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
-                          {isHome && isChat ? '桌面/短讯' : isHome ? '桌面' : '短讯'}
-                        </span>
-                      )}
+            {albumWallpapers.length === 0 ? (
+              <p className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                相册中暂无手机背景，可在相册生成后在此选择
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {albumWallpapers.map((wallpaper) => {
+                  const isHome = 是当前手机壁纸(homeWallpaperRef, homeWallpaper, wallpaper);
+                  const isChat = 是当前手机壁纸(chatWallpaperRef, chatWallpaper, wallpaper);
+                  const slotLabel = wallpaper.slot === 'phone_chat_background' ? '聊天背景' : '手机壁纸';
+                  return (
+                    <article
+                      key={wallpaper.entryId}
+                      className="overflow-hidden"
+                      style={{
+                        background: 'rgba(var(--tj-bg-primary), 0.48)',
+                        boxShadow: isHome || isChat
+                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
+                          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                        clipPath: cardClip,
+                      }}
+                    >
+                      <div className="aspect-[9/16] max-h-[260px] w-full overflow-hidden">
+                        <img
+                          src={wallpaper.src}
+                          alt={wallpaper.title}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="space-y-2 px-3 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="truncate font-serif text-sm font-bold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+                            {wallpaper.title}
+                          </h3>
+                          {(isHome || isChat) && (
+                            <span className="shrink-0 text-[10px]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
+                              {isHome && isChat ? '桌面/短讯' : isHome ? '桌面' : '短讯'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
+                          {slotLabel}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <PhoneSmallButton label="设为桌面" active={isHome} onClick={() => onSetHome(wallpaper.assetRef)} />
+                          <PhoneSmallButton label="设为短讯" active={isChat} onClick={() => onSetChat(wallpaper.assetRef)} />
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+                  内置壁纸
+                </div>
+                <div className="mt-1 text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+                  选择后会写入手机存档，玩家自定义优先于默认壁纸
+                </div>
+              </div>
+              <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                {BUILTIN_PHONE_WALLPAPERS.length}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {BUILTIN_PHONE_WALLPAPERS.map((wallpaper) => {
+                const isHome = storedHome === wallpaper.src || homeWallpaper === wallpaper.src;
+                const isChat = storedChat === wallpaper.src || chatWallpaper === wallpaper.src;
+                return (
+                  <article
+                    key={wallpaper.id}
+                    className="overflow-hidden"
+                    style={{
+                      background: 'rgba(var(--tj-bg-primary), 0.48)',
+                      boxShadow: isHome || isChat
+                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
+                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                      clipPath: cardClip,
+                    }}
+                  >
+                    <div className="aspect-[9/16] max-h-[260px] w-full overflow-hidden">
+                      <img
+                        src={wallpaper.src}
+                        alt={wallpaper.title}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
                     </div>
-                    <p className="line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
-                      {wallpaper.description}
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <PhoneSmallButton label="设为桌面" active={isHome} onClick={() => onSetHome(wallpaper.src)} />
-                      <PhoneSmallButton label="设为短讯" active={isChat} onClick={() => onSetChat(wallpaper.src)} />
+                    <div className="space-y-2 px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="truncate font-serif text-sm font-bold tracking-[0.12em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+                          {wallpaper.title}
+                        </h3>
+                        {(isHome || isChat) && (
+                          <span className="shrink-0 text-[10px]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
+                            {isHome && isChat ? '桌面/短讯' : isHome ? '桌面' : '短讯'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="line-clamp-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
+                        {wallpaper.description}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <PhoneSmallButton label="设为桌面" active={isHome} onClick={() => onSetHome(wallpaper.src)} />
+                        <PhoneSmallButton label="设为短讯" active={isChat} onClick={() => onSetChat(wallpaper.src)} />
+                      </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         </main>
       </div>
     </div>

@@ -6,7 +6,7 @@ function assert(condition, message) {
 
 const dbService = fs.readFileSync('services/dbService.ts', 'utf8');
 const savePackage = fs.readFileSync('services/savePackage.ts', 'utf8');
-const saveLoadWorkflow = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const saveModal = fs.readFileSync('components/features/SaveLoad/SaveLoadModal.tsx', 'utf8');
 const storageManager = fs.readFileSync('components/features/Settings/StorageManager.tsx', 'utf8');
 
@@ -43,25 +43,10 @@ assert(savePackage.includes('sanitizeSaveForExport'), '存档包导出必须先�
 assert(savePackage.includes('stripRuntimeDebugFromChatHistory'), '存档包导出必须清理聊天调试上下文，避免玩家包被 debug 撑大。');
 assert(savePackage.includes('delete clean.debugContext'), '存档包导出必须移除 chatHistory.debugContext。');
 assert(!savePackage.includes('delete clean.preTurnSnapshot'), '存档包导出不得移除 chatHistory.preTurnSnapshot，否则导入后立即重roll无法完整回滚。');
-assert(saveLoadWorkflow.includes('stripRuntimeOnlyFieldsFromChatHistory'), '本地持久化存档也必须清理运行期调试字段。');
-assert(saveLoadWorkflow.includes('delete clean.debugContext'), '本地持久化存档必须移除 chatHistory.debugContext。');
-assert(!saveLoadWorkflow.includes('delete clean.preTurnSnapshot'), '本地持久化存档不得移除 chatHistory.preTurnSnapshot，否则读档后立即重roll无法完整回滚。');
+assert(useGame.includes('runtimeToSave'), '本地持久化存档必须通过 kernel runtimeToSave 边界。');
 assert(savePackage.includes('apiKeysRemoved: true'), '存档包 manifest 必须声明 API Key 已移除。');
-assert(savePackage.includes('sanitized.apiSettings?.configs'), '主 API 配置列表的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.variableApi'), '变量 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.新闻系统?.api'), '新闻 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.手机系统?.api'), '手机 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.智库系统?.api'), '智库 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.剧情编织系统?.api'), '剧情编织 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.记忆系统?.记忆总结API'), '记忆总结 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.记忆系统?.忆庭召回API'), '忆庭召回 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.记忆系统?.忆庭精炼API'), '忆庭精炼 API 覆盖的 apiKey 必须清理。');
-assert(savePackage.includes('settings?.文生图系统?.普通接口'), '文生图普通接口 apiKey 必须清理。');
-assert(savePackage.includes('settings?.文生图系统?.场景接口'), '文生图场景接口 apiKey 必须清理。');
-assert(savePackage.includes('settings?.文生图系统?.NSFW接口'), '文生图 NSFW 接口 apiKey 必须清理。');
-assert(savePackage.includes('settings?.文生图系统?.词组转化器API'), '文生图词组转化器 API apiKey 必须清理。');
-assert(savePackage.includes('settings?.文生图系统?.正文生图?.parserApi'), '正文生图解析 API apiKey 必须清理。');
-assert(savePackage.includes('settings?.文生图系统?.正文生图?.imageApi'), '正文生图生图 API apiKey 必须清理。');
+assert(savePackage.includes('stripDevicePreferencesFromSave'), '导出存档包必须通过统一边界移除设备偏好与 API。');
+assert(dbService.includes('const data = stripDevicePreferencesFromSave(input)'), '写入 IndexedDB/桌面镜像前必须删除旧存档携带的设备偏好。');
 
 assert(dbService.includes('exportSavePackage'), 'dbService 必须导出新存档包导出函数。');
 assert(dbService.includes('export async function exportSavePackage'), '存档包导出必须是异步函数以等待压缩完成。');

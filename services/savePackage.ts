@@ -1,5 +1,4 @@
-import type { 存档数据 } from '@/models/settings';
-import { 创建空API设置, 创建默认游戏设置 } from '@/models/settings';
+import { stripDevicePreferencesFromSave, type 存档数据 } from '@/models/settings';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
@@ -145,9 +144,8 @@ export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob>
 }
 
 export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
-  const sanitized = JSON.parse(JSON.stringify(compactDuplicatedSaveImages(save))) as 存档数据;
+  const sanitized = stripDevicePreferencesFromSave(compactDuplicatedSaveImages(save));
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
-  stripEmbeddedApiSettings(sanitized);
   return sanitized;
 }
 
@@ -155,74 +153,6 @@ export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
 export async function sanitizeSaveForExportAsync(save: 存档数据): Promise<存档数据> {
   const expanded = await expandSaveAssetPayloadForExport(save);
   return sanitizeSaveForExport(expanded);
-}
-
-function stripEmbeddedApiSettings(sanitized: 存档数据): void {
-  const defaults = 创建默认游戏设置();
-  const settings = sanitized.gameSettings ?? defaults;
-  sanitized.gameSettings = settings;
-
-  for (const config of sanitized.apiSettings?.configs ?? []) {
-    clearApiKey(config);
-  }
-
-  clearApiKey(settings?.variableApi);
-  clearApiKey(settings?.新闻系统?.api);
-  clearApiKey(settings?.手机系统?.api);
-  clearApiKey(settings?.智库系统?.api);
-  clearApiKey(settings?.剧情编织系统?.api);
-  clearApiKey(settings?.记忆系统?.记忆总结API);
-  clearApiKey(settings?.记忆系统?.忆庭召回API);
-  clearApiKey(settings?.记忆系统?.忆庭精炼API);
-  clearApiKey(settings?.文生图系统?.普通接口);
-  clearApiKey(settings?.文生图系统?.场景接口);
-  clearApiKey(settings?.文生图系统?.NSFW接口);
-  clearApiKey(settings?.文生图系统?.词组转化器API);
-  clearApiKey(settings?.文生图系统?.正文生图?.parserApi);
-  clearApiKey(settings?.文生图系统?.正文生图?.imageApi);
-
-  sanitized.apiSettings = 创建空API设置();
-  sanitized.gameSettings = {
-    ...defaults,
-    ...settings,
-    enableClaudeMode: defaults.enableClaudeMode,
-    variableApi: defaults.variableApi,
-    新闻系统: {
-      ...(settings.新闻系统 ?? defaults.新闻系统),
-      api: defaults.新闻系统.api,
-    },
-    手机系统: {
-      ...(settings.手机系统 ?? defaults.手机系统),
-      api: defaults.手机系统.api,
-    },
-    智库系统: {
-      ...(settings.智库系统 ?? defaults.智库系统),
-      api: defaults.智库系统.api,
-    },
-    剧情编织系统: {
-      ...(settings.剧情编织系统 ?? defaults.剧情编织系统),
-      api: defaults.剧情编织系统.api,
-    },
-    记忆系统: {
-      ...(settings.记忆系统 ?? defaults.记忆系统),
-      记忆总结API: defaults.记忆系统.记忆总结API,
-      忆庭召回API: defaults.记忆系统.忆庭召回API,
-      忆庭精炼API: defaults.记忆系统.忆庭精炼API,
-    },
-    文生图系统: {
-      ...(settings.文生图系统 ?? defaults.文生图系统),
-      普通接口: defaults.文生图系统.普通接口,
-      场景接口: defaults.文生图系统.场景接口,
-      useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
-      NSFW接口: defaults.文生图系统.NSFW接口,
-      词组转化器API: defaults.文生图系统.词组转化器API,
-      正文生图: {
-        ...(settings.文生图系统?.正文生图 ?? defaults.文生图系统.正文生图),
-        parserApi: defaults.文生图系统.正文生图.parserApi,
-        imageApi: defaults.文生图系统.正文生图.imageApi,
-      },
-    },
-  };
 }
 
 function stripRuntimeDebugFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
@@ -371,11 +301,6 @@ function textEntry(name: string, value: unknown): ZipEntryInput {
     name,
     bytes: encoder.encode(JSON.stringify(value, null, 2)),
   };
-}
-
-function clearApiKey(config: { apiKey?: string } | null | undefined): void {
-  if (!config || typeof config !== 'object') return;
-  config.apiKey = '';
 }
 
 function validatePackageManifest(manifest: Partial<存档包清单>, files: Map<string, string>): void {

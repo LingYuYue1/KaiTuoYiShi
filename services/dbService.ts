@@ -1,4 +1,4 @@
-import type { 存档数据, 存档类型 } from '@/models/settings';
+import { stripDevicePreferencesFromSave, type 存档数据, type 存档类型 } from '@/models/settings';
 import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExportAsync } from './savePackage';
 import {
   extractSaveAssetRecords,
@@ -137,7 +137,8 @@ function openDB(): Promise<IDBDatabase> {
 
 // ── Save operations ──
 
-export async function saveGame(data: 存档数据): Promise<number> {
+export async function saveGame(input: 存档数据): Promise<number> {
+  const data = stripDevicePreferencesFromSave(input);
   const db = await openDB();
   const saveType = normalizeSaveType(data.type);
   if (saveType === 'manual') {
@@ -1191,9 +1192,6 @@ export function importSaveJson(json: string): 存档数据 {
   if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
     throw new Error('无效的存档文件');
   }
-  if (!data.gameSettings || !data.apiSettings || !data.theme) {
-    throw new Error('无效的存档文件');
-  }
   return data;
 }
 
@@ -1205,9 +1203,6 @@ export async function importSaveFile(file: File): Promise<存档数据> {
   if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
     const data = await parseSavePackage(await file.arrayBuffer());
     if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-      throw new Error('无效的存档包');
-    }
-    if (!data.gameSettings || !data.apiSettings || !data.theme) {
       throw new Error('无效的存档包');
     }
     return data;
@@ -1225,9 +1220,6 @@ export async function importSaveFileAsMany(file: File): Promise<存档数据[]> 
     const remapped = remapImportedSaveTree(saves);
     for (const data of remapped) {
       if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-        throw new Error('无效的存档包');
-      }
-      if (!data.gameSettings || !data.apiSettings || !data.theme) {
         throw new Error('无效的存档包');
       }
     }
