@@ -1,4 +1,6 @@
 ﻿import { useState, useRef, useCallback, memo, useEffect } from 'react';
+import { Dices, ListRestart, Radio, RadioOff } from 'lucide-react';
+import { IconButton } from '@/components/ui/IconButton';
 
 interface InputAreaProps {
   onSend: (text: string) => Promise<void>;
@@ -219,24 +221,28 @@ export const InputArea = memo(function InputArea({
       <div className="mb-1.5 flex items-center gap-1.5">
         {canRestartOpening && (
           <IconButton
-            glyph="↺"
-            title="重新开局"
+            icon={ListRestart}
+            label="重新开局"
+            description="回到初始开局并清除当前进度"
             disabled={loading || disabled}
             onClick={() => onRestartOpening?.()}
           />
         )}
         <IconButton
-          glyph="⟳"
-          title="重roll"
-          hint={canReroll ? undefined : '需先有回复'}
+          icon={Dices}
+          label="重写上一回复"
+          description="回滚上一回合并重新生成回复"
+          disabledReason={!canReroll ? '需要先完成一条回复' : undefined}
           disabled={!canReroll || loading || disabled}
           onClick={() => ignoreHandledAction(handleRerollClick())}
         />
         <IconButton
-          glyph={streamingEnabled ? '⟿' : '◐'}
-          title={streamingEnabled ? '流式：开' : '流式：关'}
+          icon={streamingEnabled ? Radio : RadioOff}
+          label={streamingEnabled ? '流式显示已开启' : '流式显示已关闭'}
+          description={streamingEnabled ? '回复生成时逐步显示正文' : '回复完成后一次显示正文'}
           active={streamingEnabled}
           disabled={loading}
+          pressed={streamingEnabled}
           onClick={() => onToggleStreaming?.()}
         />
       </div>
@@ -326,40 +332,3 @@ export const InputArea = memo(function InputArea({
     </div>
   );
 });
-
-function IconButton({
-  glyph,
-  title,
-  hint,
-  active,
-  disabled,
-  onClick,
-}: {
-  glyph: string;
-  title: string;
-  hint?: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  const tooltip = hint ? `${title}（${hint}）` : title;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={tooltip}
-      className="flex h-7 w-9 items-center justify-center font-serif text-base transition-all hover:bg-[rgba(var(--tj-accent-primary),0.14)] disabled:opacity-30 disabled:cursor-not-allowed"
-      style={{
-        color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary), 0.85)',
-        background: active ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.05)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
-        clipPath: iconClip,
-      }}
-    >
-      {glyph}
-    </button>
-  );
-}
