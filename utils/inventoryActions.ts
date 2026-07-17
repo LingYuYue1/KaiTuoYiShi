@@ -128,7 +128,6 @@ export function 使用物品(
   }
   const useCount = Math.max(1, Math.min(item.数量, Math.trunc(count)));
 
-  let next = { ...traveler };
   const applied: { 目标属性: 使用效果目标; 数值: number }[] = [];
   if (Array.isArray(item.使用效果)) {
     for (const eff of item.使用效果) {
@@ -154,7 +153,7 @@ export function 使用物品(
     : `使用 ${item.名称}${useCount > 1 ? ` ×${useCount}` : ''}`;
 
   return {
-    traveler: { ...next, 背包: nextInventory },
+    traveler: { ...traveler, 背包: nextInventory },
     ok: true,
     consumed: true,
     effects: applied,
@@ -164,10 +163,18 @@ export function 使用物品(
 
 // ── 丢弃物品 ──
 // count 不传或 Infinity 表示全丢。
+// 成功时附带 丢弃回执，供 UI 在短时窗口内「撤回」恢复。
+export interface 丢弃回执 {
+  item: 背包物品; // 被移除的堆叠副本（数量 = dropCount）
+  dropCount: number;
+  index: number; // 原背包下标，便于稳定插回
+}
+
 export interface 丢弃物品结果 {
   traveler: 角色数据结构;
   ok: boolean;
   message: string;
+  receipt?: 丢弃回执;
 }
 
 export function 丢弃物品(
@@ -193,9 +200,58 @@ export function 丢弃物品(
     nextInventory.splice(idx, 1);
   }
 
+  const receipt: 丢弃回执 = {
+    item: { ...item, 数量: drop },
+    dropCount: drop,
+    index: idx,
+  };
+
   return {
     traveler: { ...traveler, 背包: nextInventory },
     ok: true,
     message: drop > 1 ? `丢弃 ${item.名称} ×${drop}` : `丢弃 ${item.名称}`,
+    receipt,
+  };
+}
+
+// ── 恢复丢弃 ──
+// 同 id 仍在包内则加回数量；否则按回执插回（尽量落在原 index）。
+export function 恢复丢弃物品(
+  traveler: 角色数据结构,
+  receipt: 丢弃回执,
+): 丢弃物品结果 {
+  if (!receipt?.item?.id || !(receipt.dropCount > 0)) {
+    return { traveler, ok: false, message: '没有可撤回的丢弃记录' };
+  }
+
+  const inventory = traveler.背包 ?? [];
+  const restoreCount = Math.max(1, Math.trunc(receipt.dropCount));
+  const existIdx = inventory.findIndex((it) => it.id === receipt.item.id);
+
+  if (existIdx >= 0) {
+    const existing = inventory[existIdx];
+    const next: 背包物品 = { ...existing, 数量: existing.数量 + restoreCount };
+    const nextInventory = [...inventory];
+    nextInventory[existIdx] = next;
+    return {
+      traveler: { ...traveler, 背包: nextInventory },
+      ok: true,
+      message: restoreCount > 1
+        ? `已撤回：恢复 ${next.名称} ×${restoreCount}`
+        : `已撤回：恢复 ${next.名称}`,
+    };
+  }
+
+  const restored: 背包物品 = { ...receipt.item, 数量: restoreCount };
+  const nextInventory = [...inventory];
+  const insertAt = Math.max(0, Math.min(Math.trunc(receipt.index) || 0, nextInventory.length));
+  nextInventory.splice(insertAt, 0, restored);
+
+  return {
+    traveler: { ...traveler, 背包: nextInventory },
+    ok: true,
+    message: restoreCount > 1
+      ? `已撤回：恢复 ${restored.名称} ×${restoreCount}`
+      : `已撤回：恢复 ${restored.名称}`,
   };
 }

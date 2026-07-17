@@ -13,6 +13,8 @@ import {
 import {
   使用物品,
   丢弃物品,
+  恢复丢弃物品,
+  type 丢弃回执,
 } from '@/utils/inventoryActions';
 
 interface InventoryPanelProps {
@@ -51,12 +53,19 @@ const panelStyle = {
   clipPath: cardClip,
 };
 
+type FlashState = {
+  text: string;
+  /** 有回执时展示「撤回」；回执本体放 ref，避免过期闭包 */
+  canUndo?: boolean;
+};
+
 export function InventoryPanel({ traveler, onTravelerChange, turnCount }: InventoryPanelProps) {
   const inventory = traveler.背包 ?? [];
   const [tab, setTab] = useState<标签>('全部');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [flash, setFlash] = useState('');
+  const [flash, setFlash] = useState<FlashState | null>(null);
   const flashTimerRef = useRef<number | null>(null);
+  const lastDropReceiptRef = useRef<丢弃回执 | null>(null);
 
   const counts = useMemo(() => {
     const c: Record<物品分类, number> = {
@@ -107,36 +116,56 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
     }
   }, [inventory, selectedId]);
 
-  const showFlash = (msg: string) => {
+  const showFlash = (msg: string, receipt?: 丢弃回执) => {
     if (flashTimerRef.current != null) {
       window.clearTimeout(flashTimerRef.current);
     }
-    setFlash(msg);
+    lastDropReceiptRef.current = receipt ?? null;
+    setFlash({ text: msg, canUndo: Boolean(receipt) });
+    // 丢弃撤回窗口约 8s；普通提示仍用短时
+    const ttl = receipt ? 8000 : 2400;
     flashTimerRef.current = window.setTimeout(() => {
-      setFlash('');
+      setFlash(null);
+      lastDropReceiptRef.current = null;
       flashTimerRef.current = null;
-    }, 2400);
+    }, ttl);
   };
 
   const handleUse = (itemId: string) => {
-    onTravelerChange((prev) => {
-      const res = 使用物品(prev, itemId, 1);
-      showFlash(res.message);
-      return res.ok ? res.traveler : prev;
-    });
+    const result = 使用物品(traveler, itemId, 1);
+    if (!result.ok) {
+      showFlash(result.message);
+      return;
+    }
+    onTravelerChange(result.traveler);
+    showFlash(result.message);
   };
 
   const handleDrop = (itemId: string, count?: number) => {
     if (!confirm(count ? `确认丢弃 ${count} 件?` : '确认全部丢弃该物品?')) return;
-    let willEmpty = false;
-    onTravelerChange((prev) => {
-      const cur = (prev.背包 ?? []).find((it) => it.id === itemId);
-      if (cur && (count == null || count >= cur.数量)) willEmpty = true;
-      const res = 丢弃物品(prev, itemId, count);
-      showFlash(res.message);
-      return res.ok ? res.traveler : prev;
-    });
-    if (willEmpty) setSelectedId(null);
+    const item = inventory.find((entry) => entry.id === itemId);
+    const result = 丢弃物品(traveler, itemId, count);
+    if (!result.ok) {
+      showFlash(result.message);
+      return;
+    }
+    onTravelerChange(result.traveler);
+    showFlash(result.message, result.receipt);
+    if (item && (count == null || count >= item.数量)) setSelectedId(null);
+  };
+
+  const handleUndoDrop = () => {
+    const receipt = lastDropReceiptRef.current;
+    if (!receipt) return;
+    // Consume before scheduling React work: rapid double-clicks must not restore twice.
+    lastDropReceiptRef.current = null;
+    const result = 恢复丢弃物品(traveler, receipt);
+    if (!result.ok) {
+      showFlash(result.message);
+      return;
+    }
+    onTravelerChange(result.traveler);
+    showFlash(result.message);
   };
 
   const cellMinCount = 12;
@@ -234,15 +263,30 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
 
             {flash && (
               <div
-                className="mt-3 px-3 py-2 font-serif text-[12px] tracking-[0.14em]"
+                className="mt-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2 font-serif text-[12px] tracking-[0.14em]"
                 style={{
-                  color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
+                  color: 'rgb(var(--tj-accent-primary))',
                   background: 'rgba(var(--tj-accent-primary), 0.06)',
                   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
                   clipPath: smallClip,
                 }}
               >
-                {flash}
+                <span>{flash.text}</span>
+                {flash.canUndo && (
+                  <button
+                    type="button"
+                    onClick={handleUndoDrop}
+                    className="shrink-0 px-2 py-0.5 font-serif text-[12px] tracking-[0.16em] transition-opacity hover:opacity-90"
+                    style={{
+                      color: 'rgb(var(--tj-tech-cyan))',
+                      background: 'rgba(var(--tj-tech-cyan), 0.1)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.45)',
+                      clipPath: smallClip,
+                    }}
+                  >
+                    撤回
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -289,7 +289,13 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
     setSelectedSegmentId(series.分段列表[0]?.id ?? null);
     setExpandedSeriesId(series.id);
     await persist(next);
-    setMessage(`已导入 ${series.章节列表.length} 章，生成 ${series.分段列表.length} 个分段。`);
+    // 长度切片回落会把标题标成「片段 N」；有识别到的标题则提示数量。
+    const lengthSliced = series.章节列表.length > 0
+      && series.章节列表.every((chapter) => /^片段\s+\d+$/.test(chapter.标题));
+    const sliceHint = lengthSliced
+      ? '未识别标题，已按长度切片'
+      : `识别到 ${series.章节列表.length} 个章节标题`;
+    setMessage(`已导入 ${series.章节列表.length} 章，生成 ${series.分段列表.length} 个分段。${sliceHint}`);
   };
 
   const handleImportTxtFile = async (file?: File) => {
@@ -831,10 +837,17 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               rows={5}
-              placeholder="把 TXT 正文粘贴在这里。系统会先按章节标题切分，识别不到章节时会按长度自动切片。"
+              placeholder="把 TXT 正文粘贴在这里…"
               className="kaituo-input px-3 py-2 text-sm leading-relaxed"
               style={{ clipPath: smallClip }}
             />
+            <div
+              className="space-y-0.5 px-0.5 text-[11px] leading-relaxed"
+              style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}
+            >
+              <div>识别标题：第X章 / 卷 / 回、Chapter / Volume、序章 / 楔子 / 番外</div>
+              <div>未识别到章节标题时，会按正文长度自动切片为「片段 N」</div>
+            </div>
             <div className="flex justify-end gap-2">
               <button className="panel-btn" onClick={() => setPasteOpen(false)}>取消</button>
               <button className="panel-btn strong" onClick={() => void handleImportPasted()}>创建剧情系列</button>
