@@ -1,5 +1,15 @@
 # Findings: Player-Reported Bugs & UX Issues
 
+## Uncommitted-change review (2026-07-17)
+
+Scope: staged, unstaged, and untracked files in the current worktree. This review used static source/diff inspection; no build or dev server was run.
+
+1. **[P2] Closing an incomplete API-settings detour leaves a stale redirect.** `App.tsx:357-364` keeps `settingsReturnView` as `new_game` if settings closes before a valid main API is saved. A later, ordinary Settings visit that happens to complete the API config will then redirect into the new-game wizard unexpectedly. Clear the return marker when the routed settings flow is abandoned, or when Settings is opened normally.
+
+2. **[P2] Abort resolves before the command has settled.** `hooks/useGame.ts:285-289` still exposes `kernel.cancel()` even though this change introduces `cancelAndWait()`. The input/UI awaits `handleAbort`, restores the draft, and treats cancellation as complete while the old command can still emit its rejection/projection updates. Route this through `cancelActiveCommandAndWait()` (or await `cancelAndWait(commandId)`) so the public action resolves only at the terminal boundary.
+
+3. **[P2] A handled send failure creates two error records.** `hooks/useGame.ts:275` reports then rethrows a command failure. `InputArea` invokes that async handler directly (`components/features/Chat/InputArea.tsx:124,303`), so the rejection also reaches the new `unhandledrejection` listener in `index.tsx:15-18`. Expected API/protocol failures therefore produce duplicate error cards. Handle the event-handler promise locally or deduplicate reporting at one boundary.
+
 **Branch:** `refactor/ikernel`  
 **Date:** 2026-07-17  
 **Scope:** Code-backed investigation of reported defects after the iKernel / runtime-authority refactor. This document **acknowledges every reported item**, maps each to concrete code paths, and ranks likely root causes. It is an investigation report, not an implementation plan.
@@ -222,9 +232,10 @@ Both call `setStreamingMessage`. A late progress flush after UI clear can re-sti
 
 ### Fix direction (not implemented here)
 
-- On `turn.reroll` start: optimistically apply truncated history (or hide last assistant) in the React projection **before** streaming.
-- Single owner for stream store clear: always clear in `finally` of `handleSend` / `handleReroll` / `executeProjectedCommand`, regardless of success.
-- Optionally hide `PathfindingIndicator` once `bodyStarted`, or clear stream immediately when commit applies.
+- Do not optimistically truncate or hide history in React. On reroll start, the kernel should emit a command-scoped projection containing the pre-turn runtime; the UI renders that projection and never guesses domain state.
+- Remove `sendWorkflow` as a direct writer of the global streaming store. Keep one progress path only: kernel progress frame → projection store → streaming leaf.
+- Make projection terminal handling clear the transient progress exactly once for committed, rejected, cancelled, and replaced commands; do not scatter competing `setStreamingMessage('')` calls across workflow and UI layers.
+- `PathfindingIndicator` should derive from an explicit streaming phase, not merely from a non-empty text string.
 
 ---
 
@@ -279,7 +290,7 @@ Additionally:
 
 1. Auxiliary recall models (智库 / 忆庭 / “历史消息” style injection) appear skipped during send.
 2. Builtin 智库 content looks empty in-game.
-3. “自动审查” (review / diagnostics surface) does not show useful recall / review data for the turn — likely a **consequence** of (1)(2), not a separate random failure.
+3. “自动审查” (review / diagnostics surface) does not show useful recall / review data for the turn — **hypothesis only**; the current evidence does not establish that it is caused by (1)(2).
 
 ### Evidence
 
@@ -392,7 +403,7 @@ There is no separate automatic background “审查 AI” on every turn in the m
 - **本地审查** in prompt / ST settings — structure scan only.
 - Turn **debugContext** fields (`zhikuRecallPreview`, `yiting…`, protocol issues) populate review lab.
 
-If 智库/忆庭 never inject and protocol retries strip diagnostics, review lab looks empty — user-perceived “自动审查也坏了.”
+The review lab may look empty when recall/debug data is absent, but that causal link still needs a dedicated trace; do not treat it as confirmed.
 
 ### Root-cause ranking
 
@@ -400,12 +411,13 @@ If 智库/忆庭 never inject and protocol retries strip diagnostics, review lab
 2. **P0:** Empty-string injection override disables keyword fallback.
 3. **P1:** Independent 智库/忆庭 API not applied / incomplete → model recall fails or never configured.
 4. **P1:** 忆庭 earliest-turn gate (default 10).
-5. **P2:** Review lab is passive; empty debugContext looks like “审查 skipped.”
+5. **Hypothesis:** Review lab is passive and may surface empty debugContext; not yet proven to be caused by the recall failure.
 
 ### Required fix
 
 - Restore the old hydration semantics as a single `hydrateRuntimeZhiku` boundary used before **both** `session.create` and `session.reset`: merge the bundled catalog with only the save's custom entries/runtime unlock overrides.
 - Do not patch React after load. The kernel runtime must already contain the hydrated value before it is projected.
+- Model the bundled catalog separately from save-owned custom entries and unlock deltas; do not persist builtin source content as ordinary runtime data.
 - Retire or rewrite the stale `scripts/save-isolation-regression.mjs` assertion that reads the deleted `hooks/useGame/saveLoadWorkflow.ts`; it currently documents the right behavior but cannot guard the current implementation.
 - Use an explicit recall-result type (`not-run` / `no-match` / `injection`) instead of an empty-string override; only the intended states may fall back to keyword retrieval.
 
@@ -497,10 +509,10 @@ On total failure, queue task failCount is set from settings, not actual attempts
 
 ### Fix direction
 
-- Soften required tags for non-DeepSeek providers, or accept open-ended trailing body.
-- Do not count “retry” in user-facing copy when only similarity/protocol soft-repair runs without user action.
-- Prefer one stream bubble that is replaced in place per attempt (clear previous stream text).
-- Surface protocol issues inline, not only as generic “重试 n 次.”
+- Do not weaken tags by provider. Define one provider-neutral minimum commit protocol instead.
+- Fields that affect state settlement remain mandatory; genuinely auxiliary fields may be parsed into an explicit degraded state or repaired in a background task, never silently discarded.
+- Do not count a similarity rewrite or soft repair as a user-facing “failure retry.” Render one in-place attempt bubble and show the specific protocol state inline.
+- Provider adapters may normalize transport syntax into the canonical contract, but the acceptance policy must stay uniform.
 
 ---
 
@@ -600,9 +612,10 @@ This is a dead end, not onboarding: the player has already completed the wizard,
 
 ### Fix direction
 
-- Treat `apiSettings` (+ maybe aux API slices of `gameSettings`) as **preference plane**, not save plane.
-- On load: restore narrative runtime from save, then overlay current preferences (same as `handleContinue`).
-- Keep optional “pin API into save” only for export packs.
+- Split device preferences from story runtime: `apiSettings`, theme, and device-level feature switches must not be members of `RuntimeGameState` or a normal save.
+- Keep story choices in the save, with an explicit migration that strips embedded API credentials and other device-only fields.
+- A preference overlay during load is only a compatibility bridge; remove the possibility that later checkpointing can re-mix the two planes.
+- If reproducible export packs need API metadata, make that an explicit opt-in export format without secrets by default.
 
 ---
 
@@ -672,9 +685,16 @@ Also: if `enablePromptTokenizer` is true with empty API, build throws; Album doe
 
 ### Root-cause ranking
 
-1. **P1:** 一键套用 omit list is incomplete (tokenizer + image endpoints).
-2. **P1:** Album treats tokenizer failure as hard error instead of optional refine.
-3. **P2:** Copy does not explain that tokenizer is a separate independent API.
+1. **P1:** Default settings enable the tokenizer while its required API is empty — an invalid default state.
+2. **P1:** 一键套用 omits the tokenizer's text-model API.
+3. **P1:** Album treats tokenizer failure as a hard error instead of respecting an explicit disabled/unconfigured state.
+4. **P2:** Copy does not explain that tokenizer is a separate independent API.
+
+### Fix direction
+
+- Default `enablePromptTokenizer` to `false`, or reject enabling it until provider, base URL, key, and model are complete. Do not represent “enabled but invalid” as a normal settings state.
+- Include the tokenizer in the text-API “一键套用” action; do not overwrite normal/scene/NSFW image-generation endpoints, whose provider contract may differ.
+- When tokenizer use is intentionally disabled, keep the local prompt and continue; an explicitly enabled but invalid configuration should be prevented at settings validation time.
 
 ---
 
@@ -756,14 +776,13 @@ This also means Issue 1 ghosts **cannot** be healed by load-save alone.
 
 ### Fix direction
 
-On successful load (and ideally on reroll start / send start):
+On load, use one ordered session-transition operation:
 
-1. `setStreamingMessage('')`
-2. Clear workflow hint/status/live recall
-3. Cancel active kernel command if any
-4. Clear interrupted workflow journal
-5. Force InputArea reset (key={saveId} or imperative clear)
-6. Re-merge bundled 智库 into runtime after load
+1. Cancel and await any active command.
+2. Reset kernel session and projection from the hydrated save runtime.
+3. Clear the single transient projection state and delete the persisted recovery journal.
+4. Send an explicit input-reset signal to `InputArea`; do not remount it with `key={saveId}` as a substitute for lifecycle correctness.
+5. Hydrate builtin 智库 at the session boundary before projection (Issue 3), not by a React-side follow-up merge.
 
 ---
 
@@ -844,7 +863,7 @@ Current flow in `InventoryPanel`:
   };
 ```
 
-No snapshot of removed stack, no toast action, no kernel command for undo. A short-lived “撤回” should keep `{ item, count }` and re-`push` into 背包.
+No snapshot of removed stack, no toast action, no kernel command for undo. A short-lived “撤回” should keep a domain-level discard receipt and restore it through `restoreDiscardedItem`, not by the UI directly pushing an array element into `背包`.
 
 ### U2 — Over-explanatory copy
 
