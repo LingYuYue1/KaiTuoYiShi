@@ -32,9 +32,9 @@ export interface ChatRequest {
   maxContext?: number;
 }
 
-export interface ChatResult {
+/** 原始传输完成结果——不含主剧情协议解析。 */
+export interface ChatTextResult {
   fullText: string;
-  parsed: 解析后回复;
   usage?: ChatCompletionUsage;
   /** 结束原因：'stop'（正常结束）/ 'length' 或 'max_tokens'（被截断）/ 其他 provider 特有值。
    *  用于抗截断检测，sendWorkflow 据此触发续写重试。 */
@@ -42,10 +42,18 @@ export interface ChatResult {
   deepSeekRecovery?: DeepSeekRecoverySummary;
 }
 
-export async function sendChatMessage(
+export interface ChatResult extends ChatTextResult {
+  parsed: 解析后回复;
+}
+
+/**
+ * 原始传输完成层：只做 chatCompletion 流式/非流式请求，不解析主剧情标签协议。
+ * 供 JSON 工具调用（如战技生成）等非故事路径使用。
+ */
+export async function completeChatText(
   config: API配置项,
   request: ChatRequest,
-): Promise<ChatResult> {
+): Promise<ChatTextResult> {
   const useStream = request.streaming !== false;
   const apiMessages = request.messages.map((m) => ({ role: m.role, content: m.content }));
   let usage: ChatCompletionUsage | undefined;
@@ -122,8 +130,19 @@ export async function sendChatMessage(
     });
   }
 
-  const parsed = parseResponse(fullText);
-  return { fullText, parsed, usage, finishReason, deepSeekRecovery };
+  return { fullText, usage, finishReason, deepSeekRecovery };
+}
+
+/**
+ * 主剧情协议完成层：在原始传输之上附加 parseResponse。
+ * 仅供主故事路径（sendWorkflow）使用。
+ */
+export async function sendChatMessage(
+  config: API配置项,
+  request: ChatRequest,
+): Promise<ChatResult> {
+  const raw = await completeChatText(config, request);
+  return { ...raw, parsed: parseResponse(raw.fullText) };
 }
 
 function mergeRawUsage(previous: unknown, next: unknown): unknown {
