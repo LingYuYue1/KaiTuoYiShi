@@ -12,6 +12,13 @@ export type NarrativeProgressDelta = Readonly<{
   text: string;
 }>;
 
+/** Command-scoped display override before formal commit (e.g. pre-reroll truncated history). */
+export type PreparedFrame = Readonly<{
+  type: 'prepared';
+  commandId: CommandId;
+  view: SessionView;
+}>;
+
 export type ProgressFrame = Readonly<{
   type: 'progress';
   commandId: CommandId;
@@ -31,4 +38,4 @@ export type RejectedFrame = Readonly<{
   error: KernelError;
 }>;
 
-export type ExecutionFrame = ProgressFrame | CommittedFrame | RejectedFrame;
+export type ExecutionFrame = PreparedFrame | ProgressFrame | CommittedFrame | RejectedFrame;

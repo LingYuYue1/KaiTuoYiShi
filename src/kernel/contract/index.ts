@@ -31,6 +31,7 @@ export type {
   CommittedFrame,
   ExecutionFrame,
   NarrativeProgressDelta,
+  PreparedFrame,
   ProgressFrame,
   RejectedFrame,
 } from './frames';

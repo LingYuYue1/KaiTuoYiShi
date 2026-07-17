@@ -11,8 +11,14 @@ import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案, type 世界状态 } from '@/models/world';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
+import {
+  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
+  buildPersistedZhikuSystem,
+  hydrateRuntimeZhiku,
+} from '@/data/zhikuPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
-import type { IKernel, SessionCommand, SessionView } from '@/src/kernel/contract';
+import { reportAppError } from '@/components/ui/AppErrorReporter';
+import type { CommandId, ExecutionFrame, IKernel, SessionCommand, SessionView } from '@/src/kernel/contract';
 import {
   asCommandId,
 } from '@/src/kernel/contract';
@@ -20,10 +26,13 @@ import { APP_SESSION_ID, getAppKernel } from '@/src/kernel/appKernel';
 import type { RuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
 import { cloneRuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
 import type { 存档数据, 存档类型 } from '@/models/settings';
-import { consumeExecution, executeTurnIntent } from '@/src/adaptations/execution';
+import { getPreference } from '@/src/adaptations/preferences';
+import { consumeExecution, executeTurnIntent, type ExecutionSink } from '@/src/adaptations/execution';
 import {
   applyExecutionFrame,
+  clearProjectionEphemerals,
   createProjectionState,
+  displaySessionView,
   restoreProjectionFromKernel,
   type ProjectionState,
 } from '@/src/adaptations/projections';
@@ -63,7 +72,7 @@ export function useGame(): UseGameReturn {
   const activeCommandRef = useRef<ReturnType<typeof asCommandId> | null>(null);
   /**
    * UI Projection Store (Phase 3 Stage 3.3).
-   * Holds SessionView + temporary progress buffer only.
+   * Holds SessionView + optional draft + temporary progress buffer.
    * Progress never formal-commits React game domain state.
    */
   const projectionRef = useRef<ProjectionState | null>(null);
@@ -74,6 +83,64 @@ export function useGame(): UseGameReturn {
     }
     return kernelPromiseRef.current;
   }, []);
+
+  const cancelActiveCommandAndWait = useCallback(async (kernel: IKernel): Promise<void> => {
+    const commandId = activeCommandRef.current;
+    if (!commandId) return;
+    await kernel.cancelAndWait(commandId);
+    if (activeCommandRef.current === commandId) activeCommandRef.current = null;
+  }, []);
+
+  /** Single stream writer: projection.progress is the only source of stream text. */
+  const applyProjectionFrame = useCallback((frame: ExecutionFrame): ProjectionState => {
+    const next = applyExecutionFrame(requireProjection(projectionRef.current), frame);
+    projectionRef.current = next;
+    syncStreamFromProjection(next);
+    return next;
+  }, []);
+
+  /** Session transitions: drop draft/progress through projection (or empty stream if cold). */
+  const resetUiProjectionEphemerals = useCallback(() => {
+    if (!projectionRef.current) {
+      setStreamingMessage('');
+      return;
+    }
+    projectionRef.current = clearProjectionEphemerals(projectionRef.current);
+    syncStreamFromProjection(projectionRef.current);
+  }, []);
+
+  /**
+   * Safety net for non-terminal errors (checkpoint fail, throw mid-stream without rejected).
+   * Normal rejected terminals already clear via showError — this no-ops then.
+   */
+  const recoverProjectionAfterCommandError = useCallback(() => {
+    const proj = projectionRef.current;
+    if (!proj?.draft && !proj?.progress) return;
+    const session = proj.session;
+    projectionRef.current = clearProjectionEphemerals(proj);
+    syncStreamFromProjection(projectionRef.current);
+    applySessionView(stateRef.current, session);
+  }, []);
+
+  const createLiveSink = useCallback((commandId: CommandId): ExecutionSink => ({
+    showPrepared: (view) => {
+      applyProjectionFrame({ type: 'prepared', commandId, view });
+      // Kernel-emitted draft — apply immediately so chatHistory truncates without React optimism.
+      applySessionView(stateRef.current, view);
+    },
+    showProgress: (delta) => {
+      applyProjectionFrame({ type: 'progress', commandId, delta });
+    },
+    replaceProjection: (view) => {
+      applyProjectionFrame({ type: 'committed', commandId, revision: view.revision, view });
+      applySessionView(stateRef.current, view);
+    },
+    showError: (error) => {
+      const next = applyProjectionFrame({ type: 'rejected', commandId, error });
+      // Reject after prepared must restore last committed history (draft cleared).
+      applySessionView(stateRef.current, next.session);
+    },
+  }), [applyProjectionFrame]);
 
   const replaceSessionRuntime = useCallback(async (
     kernel: IKernel,
@@ -86,7 +153,7 @@ export function useGame(): UseGameReturn {
       ? {
           protocolVersion: 1 as const,
           commandId,
-    sessionId: APP_SESSION_ID,
+          sessionId: APP_SESSION_ID,
           expectedRevision: (await kernel.read({ type: 'session.read', sessionId: APP_SESSION_ID })).revision,
           command: { type: 'session.reset' as const, runtime },
         }
@@ -97,9 +164,11 @@ export function useGame(): UseGameReturn {
           command: { type: 'session.create' as const, runtime },
         };
     const terminal = await consumeExecution(kernel, envelope, {
+      showPrepared: () => {},
       showProgress: () => {},
       replaceProjection: (view) => {
         projectionRef.current = createProjectionState(view);
+        syncStreamFromProjection(projectionRef.current);
         applySessionView(stateRef.current, view);
         stateRef.current.setHasSave(true);
       },
@@ -116,6 +185,10 @@ export function useGame(): UseGameReturn {
     storyWeaving: 剧情编织系统,
   ): Promise<void> => {
     const current = stateRef.current;
+    clearEphemeralUi(current);
+    resetUiProjectionEphemerals();
+    // Session boundary: always rehydrate bundled 智库 so new games never start on shells/empty.
+    const 智库 = await hydrateRuntimeZhiku(current.智库, { migrationAt: await resolveZhikuMigrationAt() });
     const runtime = cloneRuntimeGameState({
       ...snapshotRuntimeState(current),
       旅人: traveler,
@@ -123,6 +196,7 @@ export function useGame(): UseGameReturn {
       chatHistory: [],
       记忆: 创建空记忆系统(),
       忆庭: 创建空忆庭系统(),
+      智库,
       手机: 创建空手机系统(),
       NPC: npc,
       相册: 创建空相册系统(),
@@ -134,24 +208,33 @@ export function useGame(): UseGameReturn {
       turnCount: 1,
     });
     await replaceSessionRuntime(await getKernel(), runtime);
-  }, [getKernel, replaceSessionRuntime]);
+  }, [getKernel, replaceSessionRuntime, resetUiProjectionEphemerals]);
 
-  const checkpointRuntime = useCallback(async (kernel: IKernel): Promise<SessionView> => {
+  const checkpointRuntime = useCallback(async (
+    kernel: IKernel,
+    lifecycle?: { onStart: (commandId: CommandId) => void; onFinish: (commandId: CommandId) => void },
+  ): Promise<SessionView> => {
     const projection = requireProjection(projectionRef.current);
     const commandId = asCommandId(crypto.randomUUID());
-    const terminal = await consumeExecution(kernel, {
-      protocolVersion: 1,
-      commandId,
-      sessionId: APP_SESSION_ID,
-      expectedRevision: projection.session.revision,
-      command: { type: 'session.checkpoint', runtime: snapshotRuntimeState(stateRef.current) },
-    }, {
-      showProgress: () => {},
-      replaceProjection: (view) => { projectionRef.current = createProjectionState(view); },
-      showError: () => {},
-    });
-    if (terminal.type === 'rejected') throw new Error(terminal.error.message);
-    return terminal.view;
+    lifecycle?.onStart(commandId);
+    try {
+      const terminal = await consumeExecution(kernel, {
+        protocolVersion: 1,
+        commandId,
+        sessionId: APP_SESSION_ID,
+        expectedRevision: projection.session.revision,
+        command: { type: 'session.checkpoint', runtime: snapshotRuntimeState(stateRef.current) },
+      }, {
+        showPrepared: () => {},
+        showProgress: () => {},
+        replaceProjection: (view) => { projectionRef.current = createProjectionState(view); },
+        showError: () => {},
+      });
+      if (terminal.type === 'rejected') throw new Error(terminal.error.message);
+      return terminal.view;
+    } finally {
+      lifecycle?.onFinish(commandId);
+    }
   }, []);
 
   const handleSend = useCallback(
@@ -168,52 +251,42 @@ export function useGame(): UseGameReturn {
       const commandIdBrand = asCommandId(commandId);
       activeCommandRef.current = commandIdBrand;
       try {
-        const checkpoint = await checkpointRuntime(kernel);
+        if (activeCommandRef.current !== commandIdBrand) throw new Error('Command cancelled before launch');
+        const checkpoint = await checkpointRuntime(kernel, {
+          onStart: (running) => { activeCommandRef.current = running; },
+          onFinish: (finished) => {
+            if (activeCommandRef.current === finished) activeCommandRef.current = null;
+          },
+        });
+        activeCommandRef.current = commandIdBrand;
         const terminal = await executeTurnIntent(kernel, {
           text,
           commandId,
           sessionId: APP_SESSION_ID,
           expectedRevision: checkpoint.revision,
           createdAt: Date.now(),
-        }, {
-          showProgress: (delta) => {
-            setStreamingMessage(delta.text);
-            projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-              type: 'progress', commandId: commandIdBrand, delta,
-            });
-          },
-          replaceProjection: (view) => {
-            projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-              type: 'committed', commandId: commandIdBrand, revision: view.revision, view,
-            });
-            applySessionView(stateRef.current, view);
-          },
-          showError: (error) => {
-            projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-              type: 'rejected', commandId: commandIdBrand, error,
-            });
-          },
-        });
+        }, createLiveSink(commandIdBrand));
         if (terminal.type === 'rejected') throw new Error(terminal.error.message);
-        setStreamingMessage('');
         s.setWorkflowStatus('');
       } catch (error) {
+        recoverProjectionAfterCommandError();
         s.setWorkflowStatus('');
         s.setWorkflowHint(error instanceof Error ? error.message : String(error));
+        reportAppError({ source: '主剧情命令', error });
         throw error;
       } finally {
         if (activeCommandRef.current === commandIdBrand) activeCommandRef.current = null;
         s.setLoading(false);
       }
     },
-    [checkpointRuntime, getKernel],
+    [checkpointRuntime, createLiveSink, getKernel, recoverProjectionAfterCommandError],
   );
 
   const handleAbort = useCallback(async () => {
     const commandId = activeCommandRef.current;
     if (!commandId) throw new Error('No kernel command is running');
-    await (await getKernel()).cancel(commandId);
-  }, [getKernel]);
+    await cancelActiveCommandAndWait(await getKernel());
+  }, [cancelActiveCommandAndWait, getKernel]);
 
   const handleNewGame = useCallback(() => {
     const s = stateRef.current;
@@ -223,6 +296,7 @@ export function useGame(): UseGameReturn {
 
   const handleContinue = useCallback(async (): Promise<boolean> => {
     const kernel = await getKernel();
+    await cancelActiveCommandAndWait(kernel);
     const existence = await kernel.read({ type: 'session.exists', sessionId: APP_SESSION_ID });
     if (!existence.exists) throw new Error('Kernel session does not exist');
     const livePreferences = {
@@ -231,22 +305,27 @@ export function useGame(): UseGameReturn {
       currentTheme: stateRef.current.currentTheme,
       worldbooks: stateRef.current.worldbooks,
     };
+    clearEphemeralUi(stateRef.current);
     projectionRef.current = await restoreProjectionFromKernel(kernel, APP_SESSION_ID);
-    applySessionView(stateRef.current, projectionRef.current.session);
+    // Fresh restore has no draft/progress; sync still owns the stream store.
+    syncStreamFromProjection(projectionRef.current);
+    applySessionView(stateRef.current, displaySessionView(projectionRef.current));
     stateRef.current.setApiSettings(livePreferences.apiSettings);
     stateRef.current.setGameSettings(livePreferences.gameSettings);
     stateRef.current.setCurrentTheme(livePreferences.currentTheme);
     stateRef.current.setWorldbooks(livePreferences.worldbooks);
     stateRef.current.setView('game');
     return true;
-  }, [getKernel]);
+  }, [cancelActiveCommandAndWait, getKernel]);
 
   const handleGoHome = useCallback(async () => {
     const kernel = await getKernel();
-    if (activeCommandRef.current) await kernel.cancel(activeCommandRef.current);
+    await cancelActiveCommandAndWait(kernel);
+    clearEphemeralUi(stateRef.current);
+    resetUiProjectionEphemerals();
     await checkpointRuntime(kernel);
     stateRef.current.setView('home');
-  }, [checkpointRuntime, getKernel]);
+  }, [cancelActiveCommandAndWait, checkpointRuntime, getKernel, resetUiProjectionEphemerals]);
 
   const handleSave = useCallback(async (): Promise<number> => {
     const kernel = await getKernel();
@@ -256,29 +335,51 @@ export function useGame(): UseGameReturn {
 
   const handleLoadSave = useCallback(async (id: number): Promise<boolean> => {
     const kernel = await getKernel();
+    await cancelActiveCommandAndWait(kernel);
+    clearEphemeralUi(stateRef.current);
+    resetUiProjectionEphemerals();
     const save = await kernel.saves.loadSave(id);
     if (!save) throw new Error(`Save not found: ${id}`);
-    const runtime = saveToRuntime(save, stateRef.current.worldbooks);
+    // Device preferences stay live (same plane as handleContinue). Story runtime comes from the save.
+    const livePreferences = {
+      apiSettings: stateRef.current.apiSettings,
+      gameSettings: stateRef.current.gameSettings,
+      currentTheme: stateRef.current.currentTheme,
+      worldbooks: stateRef.current.worldbooks,
+    };
+    // Hydrate before session.reset — saves hold shells/unlocks, not full builtin bodies.
+    const runtime = await saveToRuntime(save, livePreferences);
     await replaceSessionRuntime(kernel, runtime);
+    // Session projection may echo runtime prefs; reassert device plane after reset.
+    stateRef.current.setApiSettings(livePreferences.apiSettings);
+    stateRef.current.setGameSettings(livePreferences.gameSettings);
+    stateRef.current.setCurrentTheme(livePreferences.currentTheme);
+    stateRef.current.setWorldbooks(livePreferences.worldbooks);
     stateRef.current.setView('game');
     return true;
-  }, [getKernel, replaceSessionRuntime]);
+  }, [cancelActiveCommandAndWait, getKernel, replaceSessionRuntime, resetUiProjectionEphemerals]);
 
   const handleReroll = useCallback(async (): Promise<string | void> => {
     const s = stateRef.current;
     if (s.loading || s.pendingVariable) {
       throw new Error('Cannot reroll while another kernel command is running');
     }
-    let commandId: ReturnType<typeof asCommandId> | null = null;
+    const commandId = asCommandId(crypto.randomUUID());
+    activeCommandRef.current = commandId;
     s.setLoading(true);
     s.setWorkflowStatus('searching');
     try {
       const kernel = await getKernel();
-      const checkpoint = await checkpointRuntime(kernel);
+      if (activeCommandRef.current !== commandId) throw new Error('Command cancelled before launch');
+      const checkpoint = await checkpointRuntime(kernel, {
+        onStart: (running) => { activeCommandRef.current = running; },
+        onFinish: (finished) => {
+          if (activeCommandRef.current === finished) activeCommandRef.current = null;
+        },
+      });
       const turn = checkpoint.turns.at(-1);
       if (!turn) throw new Error('Cannot reroll an empty session');
-      const runningCommandId = asCommandId(crypto.randomUUID());
-      commandId = runningCommandId;
+      const runningCommandId = commandId;
       activeCommandRef.current = runningCommandId;
       const terminal = await consumeExecution(kernel, {
         protocolVersion: 1,
@@ -286,80 +387,55 @@ export function useGame(): UseGameReturn {
         sessionId: APP_SESSION_ID,
         expectedRevision: checkpoint.revision,
         command: { type: 'turn.reroll', turnId: turn.id, createdAt: Date.now() },
-      }, {
-        showProgress: (delta) => {
-          setStreamingMessage(delta.text);
-          projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-            type: 'progress', commandId: runningCommandId, delta,
-          });
-        },
-        replaceProjection: (view) => {
-          projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-            type: 'committed', commandId: runningCommandId, revision: view.revision, view,
-          });
-          applySessionView(stateRef.current, view);
-        },
-        showError: (error) => {
-          projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-            type: 'rejected', commandId: runningCommandId, error,
-          });
-        },
-      });
+      }, createLiveSink(runningCommandId));
       if (terminal.type === 'rejected') throw new Error(terminal.error.message);
-      setStreamingMessage('');
       s.setWorkflowStatus('');
     } catch (error) {
+      recoverProjectionAfterCommandError();
       s.setWorkflowStatus('');
       s.setWorkflowHint(error instanceof Error ? error.message : String(error));
+      reportAppError({ source: '重试命令', error });
       throw error;
     } finally {
-      if (commandId && activeCommandRef.current === commandId) activeCommandRef.current = null;
+      if (activeCommandRef.current === commandId) activeCommandRef.current = null;
       s.setLoading(false);
     }
-  }, [checkpointRuntime, getKernel]);
+  }, [checkpointRuntime, createLiveSink, getKernel, recoverProjectionAfterCommandError]);
 
   const executeProjectedCommand = useCallback(async (command: SessionCommand): Promise<void> => {
     const s = stateRef.current;
     if (s.loading) throw new Error('Another kernel command is running');
-    const kernel = await getKernel();
     const commandId = asCommandId(crypto.randomUUID());
     activeCommandRef.current = commandId;
     s.setLoading(true);
     try {
-      const checkpoint = await checkpointRuntime(kernel);
+      const kernel = await getKernel();
+      if (activeCommandRef.current !== commandId) throw new Error('Command cancelled before launch');
+      const checkpoint = await checkpointRuntime(kernel, {
+        onStart: (running) => { activeCommandRef.current = running; },
+        onFinish: (finished) => {
+          if (activeCommandRef.current === finished) activeCommandRef.current = null;
+        },
+      });
+      activeCommandRef.current = commandId;
       const terminal = await consumeExecution(kernel, {
         protocolVersion: 1,
         commandId,
         sessionId: APP_SESSION_ID,
         expectedRevision: checkpoint.revision,
         command,
-      }, {
-        showProgress: (delta) => {
-          setStreamingMessage(delta.text);
-          projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-            type: 'progress', commandId, delta,
-          });
-        },
-        replaceProjection: (view) => {
-          projectionRef.current = createProjectionState(view);
-          applySessionView(stateRef.current, view);
-        },
-        showError: (error) => {
-          projectionRef.current = applyExecutionFrame(requireProjection(projectionRef.current), {
-            type: 'rejected', commandId, error,
-          });
-        },
-      });
+      }, createLiveSink(commandId));
       if (terminal.type === 'rejected') throw new Error(terminal.error.message);
     } catch (error) {
+      recoverProjectionAfterCommandError();
       s.setWorkflowHint(error instanceof Error ? error.message : String(error));
+      reportAppError({ source: '游戏命令', error });
       throw error;
     } finally {
       if (activeCommandRef.current === commandId) activeCommandRef.current = null;
       s.setLoading(false);
-      setStreamingMessage('');
     }
-  }, [checkpointRuntime, getKernel]);
+  }, [checkpointRuntime, createLiveSink, getKernel, recoverProjectionAfterCommandError]);
 
   const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
     await executeProjectedCommand({
@@ -414,7 +490,6 @@ export function useGame(): UseGameReturn {
       根据开局档案创建初始NPC记录(restartOpeningArchive),
       nextStoryWeaving,
     );
-    setStreamingMessage('');
     s.setPendingOpeningTrigger('[系统] 开启第 0 回合');
   }, [handleStartSession]);
 
@@ -465,6 +540,21 @@ export function useGame(): UseGameReturn {
 function requireProjection(projection: ProjectionState | null): ProjectionState {
   if (!projection) throw new Error('Kernel projection is not initialized');
   return projection;
+}
+
+/** Single bridge: projection progress → streaming message store. */
+function syncStreamFromProjection(projection: ProjectionState): void {
+  setStreamingMessage(projection.progress?.narrativeText ?? '');
+}
+
+/** React chrome only — stream text is owned by projection + syncStreamFromProjection. */
+function clearEphemeralUi(state: UseGameStateReturn): void {
+  state.setLoading(false);
+  state.setWorkflowStatus('');
+  state.setWorkflowHint('');
+  state.setLiveRecallSummary('');
+  state.setLiveRecallFullContent('');
+  state.setInterruptedWorkflow(null);
 }
 
 function applySessionView(state: UseGameStateReturn, view: SessionView): void {
@@ -525,7 +615,8 @@ function runtimeToSave(runtime: RuntimeGameState, type: 存档类型): 存档数
     chatHistory: runtime.chatHistory.slice(),
     记忆: runtime.记忆,
     忆庭: runtime.忆庭,
-    智库: runtime.智库,
+    // Persist shells only: custom + builtin unlock deltas; load rehydrates from catalog.
+    智库: buildPersistedZhikuSystem(runtime.智库),
     手机: runtime.手机,
     NPC: runtime.NPC.slice(),
     相册: runtime.相册,
@@ -534,24 +625,35 @@ function runtimeToSave(runtime: RuntimeGameState, type: 存档类型): 存档数
     剧情编织: runtime.剧情编织,
     variableBatches: runtime.variableBatches.slice(),
     queueTasks: runtime.queueTasks.slice(),
-    gameSettings: runtime.gameSettings,
-    apiSettings: runtime.apiSettings,
-    theme: runtime.currentTheme,
   };
 }
 
-function saveToRuntime(save: 存档数据, worldbooks: UseGameStateReturn['worldbooks']): RuntimeGameState {
+async function resolveZhikuMigrationAt(): Promise<number> {
+  return (await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY)) ?? Date.now();
+}
+
+/** Device preference plane overlaid onto story runtime at load (not from save). */
+type LiveDevicePreferences = Readonly<{
+  apiSettings: UseGameStateReturn['apiSettings'];
+  gameSettings: UseGameStateReturn['gameSettings'];
+  currentTheme: UseGameStateReturn['currentTheme'];
+  worldbooks: UseGameStateReturn['worldbooks'];
+}>;
+
+async function saveToRuntime(save: 存档数据, live: LiveDevicePreferences): Promise<RuntimeGameState> {
   const required = ['turnCount', '忆庭', '智库', '手机', 'NPC', '相册', '新闻', '剧情', '剧情编织', 'variableBatches', 'queueTasks'] as const;
   for (const field of required) {
     if (save[field] === undefined) throw new Error(`Save requires ${field}`);
   }
+  // Never assign raw save.智库 shells into runtime — re-merge bundled catalog first.
+  const 智库 = await hydrateRuntimeZhiku(save.智库, { migrationAt: await resolveZhikuMigrationAt() });
   return cloneRuntimeGameState({
     旅人: save.旅人,
     世界: save.世界,
     chatHistory: save.chatHistory,
     记忆: save.记忆,
     忆庭: save.忆庭!,
-    智库: save.智库!,
+    智库,
     手机: save.手机!,
     NPC: save.NPC!,
     相册: save.相册!,
@@ -560,10 +662,11 @@ function saveToRuntime(save: 存档数据, worldbooks: UseGameStateReturn['world
     剧情编织: save.剧情编织!,
     variableBatches: save.variableBatches!,
     queueTasks: save.queueTasks!,
-    apiSettings: save.apiSettings,
-    gameSettings: save.gameSettings,
-    currentTheme: save.theme,
-    worldbooks,
+    // Device plane — never restore keys/endpoints/theme from save.
+    apiSettings: live.apiSettings,
+    gameSettings: live.gameSettings,
+    currentTheme: live.currentTheme,
+    worldbooks: live.worldbooks,
     turnCount: save.turnCount!,
   });
 }

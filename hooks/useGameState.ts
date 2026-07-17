@@ -46,8 +46,7 @@ import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
   buildPersistedZhikuSystem,
-  loadAllBundledZhikuPresets,
-  mergeBundledZhikuSystem,
+  hydrateRuntimeZhiku,
 } from '@/data/zhikuPreset';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
@@ -310,14 +309,14 @@ export function useGameState(): UseGameStateReturn {
       set剧情编织(mergedStoryWeaving);
       await setPreference('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
 
-      const preset = await loadAllBundledZhikuPresets();
       const savedZhiku = await getPreference<智库系统>('zhikuSystem');
       const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
       const migrationAt = savedMigrationAt ?? Date.now();
       if (!savedMigrationAt) {
         await setPreference(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
       }
-      const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
+      // Preference mount uses the same session-boundary hydrate as load/new-game.
+      const mergedZhiku = await hydrateRuntimeZhiku(savedZhiku, { migrationAt });
       set智库(mergedZhiku);
       await setPreference('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
 

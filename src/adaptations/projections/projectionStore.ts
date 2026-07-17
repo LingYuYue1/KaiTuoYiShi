@@ -4,9 +4,10 @@
  * Pure functions only — no React, no dbService, no formal writes.
  *
  * Rules:
+ * - prepared: draft display override only (e.g. pre-reroll truncated history)
  * - progress: temporary stream buffer only
- * - committed: replaces session projection; clears progress
- * - rejected: clears progress; keeps last committed session
+ * - committed: replaces session projection; clears draft + progress
+ * - rejected: clears draft + progress; keeps last committed session
  */
 
 import type {
@@ -21,12 +22,25 @@ export type ProjectionProgress = Readonly<{
 }>;
 
 export type ProjectionState = Readonly<{
+  /** Last formal committed view. */
   session: SessionView;
+  /** Command-scoped display override (e.g. pre-reroll truncated history). */
+  draft: SessionView | null;
   progress: ProjectionProgress | null;
 }>;
 
 export function createProjectionState(session: SessionView): ProjectionState {
-  return { session, progress: null };
+  return { session, draft: null, progress: null };
+}
+
+/** Drop command-scoped draft + progress; keep last formal session. */
+export function clearProjectionEphemerals(state: ProjectionState): ProjectionState {
+  return { session: state.session, draft: null, progress: null };
+}
+
+/** Chat / React display: draft overrides session while a command is in flight. */
+export function displaySessionView(state: ProjectionState): SessionView {
+  return state.draft ?? state.session;
 }
 
 /**
@@ -37,18 +51,20 @@ export function applyExecutionFrame(
   frame: ExecutionFrame,
 ): ProjectionState {
   switch (frame.type) {
+    case 'prepared':
+      return {
+        ...clearProjectionEphemerals(state),
+        draft: frame.view,
+      };
     case 'progress':
       return appendProgress(state, frame.commandId, frame.delta.text);
     case 'committed':
       return {
+        ...clearProjectionEphemerals(state),
         session: frame.view,
-        progress: null,
       };
     case 'rejected':
-      return {
-        ...state,
-        progress: null,
-      };
+      return clearProjectionEphemerals(state);
     default: {
       const _exhaustive: never = frame;
       throw new Error(`Unknown execution frame: ${String(_exhaustive)}`);

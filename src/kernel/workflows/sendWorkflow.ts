@@ -2,7 +2,7 @@ import type { RuntimeDraftState } from '@/src/kernel/domain/session/runtimeState
 import { 创建聊天消息, type 聊天消息, type 回合快照, type 回合Token消耗, type 解析后回复 } from '@/models/chat';
 import type { 新闻条目 } from '@/models/news';
 import { sendChatMessage } from '@/services/ai/text';
-import { isEmptyResponse, parseResponse } from '@/src/kernel/protocol/mainResponse';
+import { hasClosedResponseField, isEmptyResponse, parseResponse } from '@/src/kernel/protocol/mainResponse';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { callVariableModel, type NsfwBaselineCandidate } from '@/services/ai/variableModel';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
@@ -30,7 +30,6 @@ import {
   type VisibilityBufferedPublisher,
 } from '@/utils/visibilityBufferedPublisher';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
-import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import type { 变量事实, 变量命令, 变量命令批次 } from '@/models/variableCommand';
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/src/kernel/domain/path/pathOperations';
 import { 创建默认记忆系统设置 } from '@/models/settings';
@@ -81,37 +80,78 @@ function formatOriginalProtagonistForOpening(originalProtagonist: 世界状态['
   return '所选原著主角';
 }
 
-function hasClosedProtocolTag(rawText: string, tagNames: string[]): boolean {
-  return tagNames.some((tag) => {
-    const escaped = tag.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    return new RegExp(`<\\s*${escaped}\\s*>[\\s\\S]*?<\\s*\\/\\s*${escaped}\\s*>`, 'i').test(rawText);
-  });
-}
-
-function getMainProtocolIssues(parsed: 解析后回复, rawText: string, requireStepThinking: boolean): string[] {
+/**
+ * Hard protocol issues block turn commit and may trigger main-loop auto-retry.
+ * Only settlement-critical gaps belong here (empty/missing body; DeepSeek Step thinking).
+ */
+function getHardProtocolIssues(
+  parsed: 解析后回复,
+  rawText: string,
+  requireStepThinking: boolean,
+): string[] {
   const raw = rawText || parsed.rawText || '';
   const issues: string[] = [];
-  if (!hasClosedProtocolTag(raw, ['thinking']) || !parsed.thinking.trim()) {
-    issues.push('缺少 <thinking> 或 thinking 为空');
-  } else if (requireStepThinking && (
-    !/(?:^|\n)\s*(?:Step|Opening-Step|Awakening-Step|步骤)\s*0?\d/i.test(parsed.thinking) &&
-    !/Step(?:0|1|2|3|4|5|6|7|8|9|10|11|12|13|14)/i.test(parsed.thinking)
-  )) {
-    issues.push('<thinking> 未按 Step 思维链展开');
-  }
-  if (!hasClosedProtocolTag(raw, ['正文']) || !parsed.body.trim()) {
+  const bodyOk = hasClosedResponseField(raw, 'body') && Boolean(parsed.body.trim());
+  if (!bodyOk) {
     issues.push('缺少 <正文> 或正文为空');
   }
-  if (!hasClosedProtocolTag(raw, ['短期记忆'])) {
+  // Completely empty raw is also hard (body check usually covers this).
+  if (!raw.trim() && !parsed.body.trim()) {
+    if (!issues.includes('缺少 <正文> 或正文为空')) {
+      issues.push('响应完全为空');
+    }
+  }
+  if (requireStepThinking) {
+    if (!hasClosedResponseField(raw, 'thinking') || !parsed.thinking.trim()) {
+      issues.push('缺少 <thinking> 或 thinking 为空');
+    } else if (
+      !/(?:^|\n)\s*(?:Step|Opening-Step|Awakening-Step|步骤)\s*0?\d/i.test(parsed.thinking) &&
+      !/Step(?:0|1|2|3|4|5|6|7|8|9|10|11|12|13|14)/i.test(parsed.thinking)
+    ) {
+      issues.push('<thinking> 未按 Step 思维链展开');
+    }
+  }
+  return issues;
+}
+
+/**
+ * Soft protocol gaps: settlement can degrade (empty memory/world/variable draft).
+ * Do not force main-loop retry solely for these when body is valid.
+ */
+function getSoftProtocolIssues(parsed: 解析后回复, rawText: string): string[] {
+  const raw = rawText || parsed.rawText || '';
+  const issues: string[] = [];
+  const bodyOk = hasClosedResponseField(raw, 'body') && Boolean(parsed.body.trim());
+  if (!bodyOk) return issues;
+  if (!hasClosedResponseField(raw, 'thinking') || !parsed.thinking.trim()) {
+    issues.push('缺少 <thinking> 或 thinking 为空');
+  }
+  if (!hasClosedResponseField(raw, 'memory')) {
     issues.push('缺少 <短期记忆>');
   }
-  if (!hasClosedProtocolTag(raw, ['动态世界'])) {
+  if (!hasClosedResponseField(raw, 'worldEvents')) {
     issues.push('缺少 <动态世界>');
   }
-  if (!hasClosedProtocolTag(raw, ['变量草稿'])) {
+  if (!hasClosedResponseField(raw, 'variableDraft')) {
     issues.push('缺少 <变量草稿>');
   }
   return issues;
+}
+
+/** Combined issues for retry-guard messaging (hard first). */
+function getMainProtocolIssues(
+  parsed: 解析后回复,
+  rawText: string,
+  requireStepThinking: boolean,
+): string[] {
+  return [
+    ...getHardProtocolIssues(parsed, rawText, requireStepThinking),
+    ...getSoftProtocolIssues(parsed, rawText).filter((issue) => {
+      // Soft thinking is hard under requireStepThinking; avoid duplicate wording.
+      if (requireStepThinking && issue.includes('thinking')) return false;
+      return true;
+    }),
+  ];
 }
 
 function buildProtocolRetryGuard(issues: string[]): string {
@@ -847,12 +887,13 @@ function buildRecentTurnWindowForNews(history: 聊天消息[], currentUserInput:
 
 async function revealStreamingPreview(
   text: string,
+  onProgress: (text: string) => void,
   signal?: AbortSignal,
   options?: { delayMs?: number; minChunks?: number },
 ): Promise<void> {
   const chunks = splitStreamingReveal(text);
   if (!chunks.length) return;
-  const streamSetter = createRafCoalescedSetter(setStreamingMessage);
+  const streamSetter = createRafCoalescedSetter(onProgress);
   if (isPageHidden()) {
     streamSetter.flush(text.trim());
     return;
@@ -935,8 +976,9 @@ export interface SendWorkflowDeps {
     previousResponse: string;
   } | null;
   /**
-   * Cumulative stream preview text (mirrors setStreamingMessage).
-   * Used by IKernel progress frames; must not formal-commit.
+   * Cumulative stream preview text for IKernel progress frames.
+   * Workflow must not touch UI stores — only this callback.
+   * Must not formal-commit.
    */
   onStreamProgress?: (text: string) => void;
   /**
@@ -1486,7 +1528,6 @@ export async function executeSendWorkflow(
 
   deps.onBeforeSend();
   state.setLoading(true);
-  setStreamingMessage('');
   deps.onStreamProgress?.('');
   state.setWorkflowHint('忆庭召回 / 智库检索中');
   state.setWorkflowStatus('searching');
@@ -1495,13 +1536,14 @@ export async function executeSendWorkflow(
   pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true });
   let pendingVariableStarted = false;
   let keepWorkflowHint = false;
+  /** Actual hard-failure attempts for final failed queue task (not settings autoRetryCount). */
+  let hardFailCount = 0;
   let rollbackHistoryOnAbort = state.chatHistory;
   let rollbackSnapshotOnAbort: 回合快照 | null = null;
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
   // Declared outside the stream setup so finally can always cancel a pending rAF commit.
-  // Phase-1 kernel bridge: mirror stream previews to optional onStreamProgress (temp buffer only).
+  // Progress reaches UI only via onStreamProgress → TurnEngine progress frames → projection.
   const streamMessageSetter = createRafCoalescedSetter((text: string) => {
-    setStreamingMessage(text);
     deps.onStreamProgress?.(text);
   });
   /** Phase-1: ensure onWorkflowSettled fires exactly once per run. */
@@ -1820,7 +1862,15 @@ export async function executeSendWorkflow(
           state.手机,
           awakeningPhase,
           storyRecallInjection || (yitingRecallEnabled ? '' : undefined),
-          zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined,
+          // Only `not-run` delegates to the prompt builder's keyword fallback.
+          // A completed `no-match` is an explicit empty override, not a hidden retry path.
+          zhikuRecallEnabled
+            ? zhikuPreview?.status === 'injection'
+              ? zhikuPreview.injection
+              : zhikuPreview?.status === 'no-match'
+                ? ''
+                : undefined
+            : undefined,
           Boolean(yitingPreview?.injection),
           npcLedgerSelection,
           currentTriggerType,
@@ -1981,6 +2031,7 @@ export async function executeSendWorkflow(
     const maxAttempts = (deepSeekMainActive || deps.rerollContext) ? Math.max(2, configuredMaxAttempts) : configuredMaxAttempts;
     let lastErr: unknown = null;
     let deepSeekProtocolIssuesForTurn: string[] = [];
+    let softProtocolIssuesForTurn: string[] = [];
     let rerollSimilarityForTurn: number | undefined;
     let rerollSimilarityRetried = false;
     let retryInstruction: 聊天消息 | null = null;
@@ -2084,6 +2135,7 @@ export async function executeSendWorkflow(
         // 抗空回检测：完全空，或纯标签无正文（isEmptyResponse 判断所有协议字段都为空）
         const isBlankResponse = !candidateText || isEmptyResponse(result.parsed);
         if (isBlankResponse) {
+          hardFailCount = attempt;
           void appendApiErrorReport({
             source: '主剧情工作流',
             config: mainStoryConfig,
@@ -2092,6 +2144,12 @@ export async function executeSendWorkflow(
             responseText: result.fullText || streamedText || '（空响应）',
           });
           if (attempt < maxAttempts) {
+            pushQueueTask(state, 'main_story', 'pending', {
+              detail: `主剧情输出为空，正在重试。`,
+              failCount: hardFailCount,
+              retrying: true,
+              cancellable: true,
+            });
             console.warn(`[sendWorkflow] 第 ${attempt} 次返回空响应${isEmptyResponse(result.parsed) ? '（纯标签无正文）' : ''}，自动重试。`);
             continue;
           }
@@ -2119,43 +2177,60 @@ export async function executeSendWorkflow(
             'user',
             buildRerollSimilarityRetryGuard(deps.rerollContext.previousResponse, rerollSimilarity),
           );
+          // Similarity rewrite consumes an attempt but is not a user-facing "failure".
           pushQueueTask(state, 'main_story', 'pending', {
-            detail: '重roll结果与上一版过于相似，正在强制换写。',
-            failCount: attempt,
+            detail: '主剧情与上一版过于相似，正在换写',
             retrying: true,
             cancellable: true,
           });
           console.warn(`[sendWorkflow] 第 ${attempt}/${maxAttempts} 次重roll与上一版过于相似，自动换写，相似度：${rerollSimilarity.toFixed(3)}`);
           continue;
         }
-        const protocolIssues = getMainProtocolIssues(
+        const rawForProtocol = result.fullText || streamedText;
+        const hardProtocolIssues = getHardProtocolIssues(
           result.parsed,
-          result.fullText || streamedText,
+          rawForProtocol,
           deepSeekMainActive,
         );
-        if (protocolIssues.length) {
+        const softProtocolIssues = getSoftProtocolIssues(result.parsed, rawForProtocol);
+        if (hardProtocolIssues.length) {
+          hardFailCount = attempt;
+          const protocolIssues = getMainProtocolIssues(
+            result.parsed,
+            rawForProtocol,
+            deepSeekMainActive,
+          );
           if (deepSeekMainActive) deepSeekProtocolIssuesForTurn = protocolIssues;
           void appendApiErrorReport({
             source: '主剧情协议校验',
             config: mainStoryConfig,
             requestMode: mainRequestMode,
-            error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次输出协议不完整：${protocolIssues.join('；')}`),
-            responseText: result.fullText || streamedText || '（空响应）',
+            error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次输出协议不完整：${hardProtocolIssues.join('；')}`),
+            responseText: rawForProtocol || '（空响应）',
           });
           if (attempt < maxAttempts) {
-            retryInstruction = 创建聊天消息('user', buildProtocolRetryGuard(protocolIssues));
+            retryInstruction = 创建聊天消息('user', buildProtocolRetryGuard(hardProtocolIssues));
             pushQueueTask(state, 'main_story', 'pending', {
-              detail: `主剧情输出协议不完整，正在重试：${protocolIssues.join('；')}`,
-              failCount: attempt,
+              detail: `主剧情输出协议不完整，正在重试：${hardProtocolIssues.join('；')}`,
+              failCount: hardFailCount,
               retrying: true,
               cancellable: true,
             });
-            console.warn(`[sendWorkflow] 第 ${attempt}/${maxAttempts} 次输出协议不完整，自动重试：`, protocolIssues);
+            console.warn(`[sendWorkflow] 第 ${attempt}/${maxAttempts} 次硬协议不完整，自动重试：`, hardProtocolIssues);
             continue;
           }
-          throw new Error(`AI response protocol is invalid: ${protocolIssues.join('; ')}`);
-        } else if (deepSeekMainActive) {
-          deepSeekProtocolIssuesForTurn = [];
+          throw new Error(`AI response protocol is invalid: ${hardProtocolIssues.join('; ')}`);
+        }
+        // Soft-only gaps: accept the turn; settlement tolerates empty memory/world/variable draft.
+        softProtocolIssuesForTurn = softProtocolIssues;
+        if (deepSeekMainActive) {
+          deepSeekProtocolIssuesForTurn = softProtocolIssues.length ? softProtocolIssues : [];
+        }
+        if (softProtocolIssues.length) {
+          console.warn(
+            `[sendWorkflow] 第 ${attempt}/${maxAttempts} 次协议软缺失，按正文提交：`,
+            softProtocolIssues,
+          );
         }
         successfulRequestMessages = attemptMessages;
         lastErr = null;
@@ -2165,6 +2240,7 @@ export async function executeSendWorkflow(
           throw innerErr;
         }
         lastErr = innerErr;
+        hardFailCount = attempt;
         const innerMessage = innerErr instanceof Error ? innerErr.message : String(innerErr ?? '');
         const alreadyReportedByApiLayer =
           innerMessage.includes('API Error') ||
@@ -2181,8 +2257,8 @@ export async function executeSendWorkflow(
         }
         if (attempt >= maxAttempts) break;
         pushQueueTask(state, 'main_story', 'pending', {
-          detail: `主剧情生成失败 ${attempt} 次，正在自动重试。`,
-          failCount: attempt,
+          detail: `主剧情生成失败 ${hardFailCount} 次，正在自动重试。`,
+          failCount: hardFailCount,
           retrying: true,
           cancellable: true,
         });
@@ -2199,7 +2275,9 @@ export async function executeSendWorkflow(
     // 5. Build AI message
     const duration = (Date.now() - startTime) / 1000;
     pushQueueTask(state, 'main_story', 'success', {
-      detail: `正文生成完成，用时 ${Math.round(duration)}s。`,
+      detail: softProtocolIssuesForTurn.length
+        ? `正文生成完成，用时 ${Math.round(duration)}s。协议部分字段缺失，已按正文提交。`
+        : `正文生成完成，用时 ${Math.round(duration)}s。`,
     });
     const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
     const parsedBody = normalizePlayerSpeechInBody({
@@ -2218,10 +2296,15 @@ export async function executeSendWorkflow(
       if (streamEventCount > 0) {
         await previewChain;
       } else if (displayText.trim()) {
-        await revealStreamingPreview(displayText, abortController.signal, {
-          delayMs: 16,
-          minChunks: 8,
-        });
+        await revealStreamingPreview(
+          displayText,
+          (text) => { deps.onStreamProgress?.(text); },
+          abortController.signal,
+          {
+            delayMs: 16,
+            minChunks: 8,
+          },
+        );
       }
       streamMessageSetter.flush('');
     } else {
@@ -2277,6 +2360,7 @@ export async function executeSendWorkflow(
         deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory === true,
         deepSeekPrefixMode: deepSeekLockFormat,
         deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
+        softProtocolIssues: softProtocolIssuesForTurn,
         deepSeekMainOriginalModel: result.deepSeekRecovery?.model,
         stV2Used: tavernV2Enabled,
         rerollSimilarity: rerollSimilarityForTurn,
@@ -2721,9 +2805,12 @@ export async function executeSendWorkflow(
       }
       state.setWorkflowHint(`主流程失败：${detail}`);
       state.setWorkflowStatus('');
+      // Prefer actual hard-failure attempts over settings-only autoRetryCount.
+      // Settlement errors after a successful main generation report a single failure.
+      const finalFailCount = hardFailCount > 0 ? hardFailCount : 1;
       pushQueueTask(state, 'main_story', 'failed', {
         detail,
-        failCount: state.gameSettings.autoRetryOnError ? Math.max(1, state.gameSettings.autoRetryCount) : 1,
+        failCount: finalFailCount,
       });
       reportSettlement({
         ok: false,
@@ -2736,7 +2823,6 @@ export async function executeSendWorkflow(
     streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
       state.setLoading(false);
-      setStreamingMessage('');
       if (!keepWorkflowHint) {
         state.setWorkflowHint('');
         state.setWorkflowStatus('');

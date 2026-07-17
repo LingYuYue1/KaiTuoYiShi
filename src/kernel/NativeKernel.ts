@@ -37,7 +37,11 @@ export type NativeKernelDependencies = Readonly<{
 
 /** The only runtime kernel. Every dependency is mandatory and every call is async. */
 export class NativeKernel implements IKernel {
-  private readonly running = new Map<string, AbortController>();
+  private readonly running = new Map<string, {
+    controller: AbortController;
+    settled: Promise<void>;
+    resolveSettled: () => void;
+  }>();
 
   constructor(private readonly dependencies: NativeKernelDependencies) {}
 
@@ -53,7 +57,9 @@ export class NativeKernel implements IKernel {
     const controller = new AbortController();
     const commandKey = String(envelope.commandId);
     if (this.running.has(commandKey)) throw new Error(`Command is already running: ${commandKey}`);
-    this.running.set(commandKey, controller);
+    let resolveSettled!: () => void;
+    const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
+    this.running.set(commandKey, { controller, settled, resolveSettled });
     try {
       if (envelope.command.type === 'session.create') {
         yield await this.createSession(envelope as CreateSessionEnvelope);
@@ -102,13 +108,21 @@ export class NativeKernel implements IKernel {
       throw new Error(`Unknown kernel command: ${String((exhaustive as { type: string }).type)}`);
     } finally {
       this.running.delete(commandKey);
+      resolveSettled();
     }
   }
 
   async cancel(commandId: CommandId): Promise<void> {
-    const controller = this.running.get(String(commandId));
-    if (!controller) throw new Error(`Command is not running: ${commandId}`);
-    controller.abort();
+    const running = this.running.get(String(commandId));
+    if (!running) throw new Error(`Command is not running: ${commandId}`);
+    running.controller.abort();
+  }
+
+  async cancelAndWait(commandId: CommandId): Promise<void> {
+    const running = this.running.get(String(commandId));
+    if (!running) return;
+    running.controller.abort();
+    await running.settled;
   }
 
   getPreference<T>(key: string): Promise<T | null> {

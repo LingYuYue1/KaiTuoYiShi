@@ -1,6 +1,7 @@
 import type { ExecutionFrame, RerollTurnEnvelope } from '@/src/kernel/contract';
 import type { RuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
 import { findTurnBaseSnapshot } from '@/src/kernel/domain/turn/findTurnBaseSnapshot';
+import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 import type { SessionRepository, TurnEngine } from '@/src/kernel/ports';
 import {
   commitCommand,
@@ -39,6 +40,18 @@ export async function* rerollTurn(
     yield rejectedFrame(envelope, { code: 'unknown', message: `Unknown turnId: ${envelope.command.turnId}` });
     return;
   }
+
+  // Draft projection: truncated pre-reroll history before any stream text arrives.
+  // UI must not invent truncation — kernel emits prepared so chatHistory drops immediately.
+  yield {
+    type: 'prepared',
+    commandId: envelope.commandId,
+    view: projectSession({
+      sessionId: commandBase.snapshot.sessionId,
+      revision: commandBase.snapshot.revision,
+      state: { runtime: base.runtime },
+    }),
+  };
 
   let runtime: RuntimeGameState | null = null;
   try {

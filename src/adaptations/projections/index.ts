@@ -8,7 +8,9 @@ export type {
 } from './projectionStore';
 export {
   applyExecutionFrame,
+  clearProjectionEphemerals,
   createProjectionState,
+  displaySessionView,
   reduceExecutionFrames,
 } from './projectionStore';
 export {

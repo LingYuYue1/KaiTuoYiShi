@@ -5,7 +5,9 @@ export { getSaveCatalog } from './saveCatalog';
 export { getPreference, setPreference, deletePreference } from './preferences';
 export {
   applyExecutionFrame,
+  clearProjectionEphemerals,
   createProjectionState,
+  displaySessionView,
   reduceExecutionFrames,
   restoreProjectionFromKernel,
   commitProjectionView,

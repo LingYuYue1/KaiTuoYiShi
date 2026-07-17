@@ -29,6 +29,8 @@ export interface IKernel {
   read(query: SessionReadQuery): Promise<SessionView>;
   read(query: KernelQuery): Promise<QueryResult>;
   cancel(commandId: CommandId): Promise<void>;
+  /** Abort a command and wait until its execution stream has reached its terminal boundary. */
+  cancelAndWait(commandId: CommandId): Promise<void>;
   getPreference<T>(key: string): Promise<T | null>;
   setPreference(key: string, value: unknown): Promise<void>;
   deletePreference(key: string): Promise<void>;

@@ -44,8 +44,9 @@ publisher.flush();
 assert.equal(unsubscribeCount, 1, 'dispose must remove the visibility listener exactly once');
 assert.deepEqual(commits, ['chunk-100'], 'disposed publishers must never flush buffered content');
 
-const sendWorkflow = await fs.readFile(new URL('../hooks/useGame/sendWorkflow.ts', import.meta.url), 'utf8');
+const sendWorkflow = await fs.readFile(new URL('../src/kernel/workflows/sendWorkflow.ts', import.meta.url), 'utf8');
 assert(sendWorkflow.includes('deltaPreviewEpoch !== previewEpoch'), 'queued visible previews must be invalidated across hide/show transitions');
+assert(!sendWorkflow.includes('setStreamingMessage'), 'workflow must not write the streaming UI store directly');
 assert(!sendWorkflow.includes('if (isPageHidden()) {\n                  state.setStreamingMessage(streamedText);'), 'hidden preview queues must never commit React state');
 
 console.log('background stream regression ok');

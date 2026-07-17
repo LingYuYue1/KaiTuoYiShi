@@ -1,6 +1,7 @@
 /**
  * Async KernelClient — routes ExecutionFrames to a UI sink.
  *
+ * showPrepared → draft projection only (not formal commit)
  * showProgress → temporary buffer only
  * replaceProjection → formal projection / state
  * showError → error presentation
@@ -18,6 +19,8 @@ import type {
 } from '@/src/kernel/contract';
 
 export type ExecutionSink = Readonly<{
+  /** Command-scoped draft projection (e.g. pre-reroll truncated history). */
+  showPrepared: (view: SessionView) => void;
   /** Temporary stream buffer only — must not formal-commit game state. */
   showProgress: (delta: NarrativeProgressDelta) => void;
   /** Formal projection replacement after committed. */
@@ -62,6 +65,9 @@ export async function consumeExecution(
 
 function dispatchFrame(frame: ExecutionFrame, sink: ExecutionSink): void {
   switch (frame.type) {
+    case 'prepared':
+      sink.showPrepared(frame.view);
+      break;
     case 'progress':
       sink.showProgress(frame.delta);
       break;

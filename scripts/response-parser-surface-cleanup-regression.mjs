@@ -41,10 +41,10 @@ function transpileModule(sourcePath) {
 
 cleanTempDir();
 transpileModule('models/chat.ts');
-transpileModule('services/ai/responseParser.ts');
+transpileModule('src/kernel/protocol/mainResponse.ts');
 
-const parserUrl = pathToFileURL(path.join(tempDir, 'services/ai/responseParser.mjs')).href;
-const { parseResponse } = await import(parserUrl);
+const parserUrl = pathToFileURL(path.join(tempDir, 'src/kernel/protocol/mainResponse.mjs')).href;
+const { hasClosedResponseField, parseResponse } = await import(parserUrl);
 
 const stStyleOutput = `<thinking>
 - **【问题】非传统写作**: ST 预设思维链。
@@ -73,6 +73,29 @@ assert(!parsed.body.includes('满足动作改写'), 'HTML 元注释不得进入�
 assert(!parsed.body.includes('<math>'), '抗截断 math 占位不得进入正文。');
 assert(parsed.actionOptions.some((item) => item.includes('尝一口点心')), '行动选项应继续被解析。');
 assert(parsed.memory.includes('凌跟随三月七'), '短期记忆应继续被解析。');
+
+const geminiWrappedOutput = `当然，以下是本回合内容：
+<thinking>Step0: 读取上下文。</thinking>
+<正文>【旁白】舱门缓缓开启。</正文>
+<短期记忆>- 舱门开启。</短期记忆>
+<动态世界>- 无</动态世界>
+<变量草稿>- 无</变量草稿>
+祝游戏愉快。`;
+const geminiWrapped = parseResponse(geminiWrappedOutput);
+assert(geminiWrapped.body === '【旁白】舱门缓缓开启。', 'Gemini 在完整协议前后附加套话时，正文必须照常提交。');
+assert(geminiWrapped.thinking === 'Step0: 读取上下文。', 'Gemini 套话不得污染 canonical thinking。');
+
+const aliasedBody = parseResponse('<thinking>Step0: 读取上下文。</thinking><body>【旁白】别名正文。</body>');
+assert(aliasedBody.body === '【旁白】别名正文。', '正文别名必须与 canonical 正文一样被解析。');
+assert(hasClosedResponseField('<body>【旁白】别名正文。</body>', 'body'), '协议校验必须与正文别名解析共享同一标签定义。');
+
+const noBodyWithWrapperOnly = parseResponse(`<thinking>Step0: 读取上下文。</thinking>
+<短期记忆>- 没有正文。</短期记忆>
+模型附言不应成为正文。`);
+assert(noBodyWithWrapperOnly.body === '', '缺少 <正文> 时，协议块后的模型附言不得被防御性地伪装成正文。');
+
+const nonProtocolError = parseResponse('upstream gateway returned an error page');
+assert(nonProtocolError.body === '', '非模型协议内容不得被防御性地转换成正文。');
 
 const wrappedBody = parseResponse(`<正文>
 正文：
