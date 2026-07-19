@@ -216,7 +216,10 @@ async function saveGameInternal(data: 存档数据): Promise<number> {
     // Web keeps IndexedDB autoIncrement. Desktop reserves ids in saves/sequence.json first
     // so later file-primary save writes do not depend on browser-generated ids.
     for (const record of assetRecords) assetStore.put(record);
-    const { id: _ignoredId, ...rest } = storedData;
+    const initialStoredData = deltaBase
+      ? buildDeltaOnlyStoredSave(storedData, deltaBase.baseSaveId)
+      : storedData;
+    const { id: _ignoredId, ...rest } = initialStoredData;
     void _ignoredId;
     let savedId = 0;
     let savedDelta: SaveNodeDeltaRecord | null = null;
@@ -779,11 +782,13 @@ export async function hasAnySave(): Promise<boolean> {
 }
 
 function deleteDeltaBySaveId(deltaStore: IDBObjectStore, saveId: number): void {
-  const req = deltaStore.getAll();
-  req.onsuccess = () => {
-    for (const delta of req.result as SaveNodeDeltaRecord[]) {
-      if (delta.saveId === saveId) deltaStore.delete(delta.nodeId);
-    }
+  const request = deltaStore.openCursor();
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    const delta = cursor.value as SaveNodeDeltaRecord;
+    if (delta.saveId === saveId) cursor.delete();
+    cursor.continue();
   };
 }
 
@@ -796,13 +801,16 @@ async function findAutoDeltaBase(db: IDBDatabase, save: 存档数据): Promise<{
   if (!parentSummary?.id) return null;
   const parentSave = await loadDeltaBaseCandidateSave(db, parentSummary.id);
   if (!parentSave) return null;
-  const baseSaveId = isDeltaOnlyStoredSave(parentSave)
+  const parentIsDelta = isDeltaOnlyStoredSave(parentSave);
+  const baseSaveId = parentIsDelta
     ? await resolveDeltaBaseSaveId(db, parentSave)
     : parentSummary.id;
   if (!baseSaveId) return null;
   const deltaCount = await countDeltasUsingBase(db, baseSaveId);
   if (deltaCount >= MAX_DELTA_NODES_PER_CHECKPOINT) return null;
-  const baseSave = await loadDeltaBaseCandidateSave(db, baseSaveId);
+  const baseSave = !parentIsDelta && baseSaveId === parentSummary.id
+    ? parentSave
+    : await loadDeltaBaseCandidateSave(db, baseSaveId);
   if (!baseSave || isDeltaOnlyStoredSave(baseSave)) return null;
   return { baseSave, baseSaveId };
 }
@@ -856,7 +864,10 @@ async function restoreDeltaSaveIfNeeded(db: IDBDatabase, save: 存档数据, vis
 
 async function getReferencedDeltaBaseIds(db: IDBDatabase): Promise<Set<number>> {
   const referencedBaseIds = new Set<number>();
-  for (const delta of await loadAllDeltaRecords(db)) {
+  await scanIndexedDeltaRecords(db, (delta) => {
+    if (delta.deltaPayload?.baseSaveId) referencedBaseIds.add(delta.deltaPayload.baseSaveId);
+  });
+  for (const delta of await loadDesktopSaveNodeDeltasSafely()) {
     if (delta.deltaPayload?.baseSaveId) referencedBaseIds.add(delta.deltaPayload.baseSaveId);
   }
   return referencedBaseIds;
@@ -872,8 +883,18 @@ async function resolveDeltaBaseSaveId(db: IDBDatabase, save: 存档数据): Prom
 }
 
 async function countDeltasUsingBase(db: IDBDatabase, baseSaveId: number): Promise<number> {
-  const deltas = await loadAllDeltaRecords(db);
-  return deltas.filter((delta) => delta.deltaPayload?.baseSaveId === baseSaveId).length;
+  const matchingNodeIds = new Set<string>();
+  await scanIndexedDeltaRecords(db, (delta) => {
+    if (delta.deltaPayload?.baseSaveId === baseSaveId) {
+      matchingNodeIds.add(delta.nodeId || `save:${delta.saveId}`);
+    }
+  });
+  for (const delta of await loadDesktopSaveNodeDeltasSafely()) {
+    if (delta.deltaPayload?.baseSaveId === baseSaveId) {
+      matchingNodeIds.add(delta.nodeId || `save:${delta.saveId}`);
+    }
+  }
+  return matchingNodeIds.size;
 }
 
 async function isSaveReferencedAsDeltaBase(db: IDBDatabase, saveId: number): Promise<boolean> {
@@ -882,15 +903,11 @@ async function isSaveReferencedAsDeltaBase(db: IDBDatabase, saveId: number): Pro
 }
 
 async function cleanupUnreferencedHiddenSaves(db: IDBDatabase): Promise<void> {
-  const [records, deltas, desktopHiddenIds] = await Promise.all([
+  const [records, referencedBaseIds, desktopHiddenIds] = await Promise.all([
     readSaveCatalogRecords(db),
-    loadAllDeltaRecords(db),
+    getReferencedDeltaBaseIds(db),
     loadHiddenDesktopSaveMirrorIdsSafely(),
   ]);
-  const referencedBaseIds = new Set<number>();
-  for (const delta of deltas) {
-    if (delta.deltaPayload?.baseSaveId) referencedBaseIds.add(delta.deltaPayload.baseSaveId);
-  }
   const orphanIds = Array.from(new Set([
     ...records
       .filter((record) => record.visibility === 'hidden-delta-base')
@@ -927,25 +944,24 @@ async function loadDeltaRecordByNodeId(db: IDBDatabase, nodeId: string): Promise
   });
 }
 
-async function loadAllDeltaRecords(db: IDBDatabase): Promise<SaveNodeDeltaRecord[]> {
-  const indexedDeltas = db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)
-    ? await new Promise<SaveNodeDeltaRecord[]>((resolve, reject) => {
-        const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
-        const req = tx.objectStore(SAVE_NODE_DELTAS_STORE).getAll();
-        req.onsuccess = () => resolve(req.result as SaveNodeDeltaRecord[]);
-        req.onerror = () => reject(req.error);
-      })
-    : [];
-  const desktopDeltas = await loadDesktopSaveNodeDeltasSafely();
-  if (!desktopDeltas.length) return indexedDeltas;
-  const byNodeId = new Map<string, SaveNodeDeltaRecord>();
-  for (const delta of indexedDeltas) {
-    if (delta.nodeId) byNodeId.set(delta.nodeId, delta);
-  }
-  for (const delta of desktopDeltas) {
-    if (delta.nodeId) byNodeId.set(delta.nodeId, delta);
-  }
-  return Array.from(byNodeId.values());
+async function scanIndexedDeltaRecords(
+  db: IDBDatabase,
+  visitor: (delta: SaveNodeDeltaRecord) => void,
+): Promise<void> {
+  if (!db.objectStoreNames.contains(SAVE_NODE_DELTAS_STORE)) return;
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
+    const request = tx.objectStore(SAVE_NODE_DELTAS_STORE).openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      visitor(cursor.value as SaveNodeDeltaRecord);
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 function collectSaveAlbumAssetIds(save: 存档数据): string[] {

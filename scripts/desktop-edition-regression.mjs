@@ -472,7 +472,7 @@ assert(
 assert(dbService.includes('removeDesktopSaveDeltasBySaveIdSafely(item.id)'), 'managed save pruning must clean desktop delta mirrors');
 assert(dbService.includes('removeDesktopSaveDeltasBySaveIdSafely(id)'), 'deleteSave must clean desktop delta mirrors');
 assert(dbService.includes('replaceDesktopSaveDeltaMirrorSafely(mirroredDeltas)'), 'replaceAllSaves must rebuild desktop delta mirrors');
-assert(dbService.includes('loadAllDeltaRecords(db)'), 'delta base checks must merge IndexedDB and desktop delta records');
+assert(dbService.includes('scanIndexedDeltaRecords(db, (delta) =>') && dbService.includes('loadDesktopSaveNodeDeltasSafely()'), 'delta base checks must stream IndexedDB records and merge desktop delta records');
 assert(dbService.includes('const desktopList = await loadDesktopSaveMirrorListFirstSafely()'), 'getSaveList must prefer desktop mirror summaries in desktop runtime');
 assert(dbService.includes('if (desktopList.length > 0)'), 'getSaveList must use desktop mirror summaries before IndexedDB when available');
 const saveCatalogSection = dbService.slice(

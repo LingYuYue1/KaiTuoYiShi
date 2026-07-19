@@ -24,10 +24,15 @@ assert(delta.includes('counters: {'), '增量记录必须包含系统计数快�
 assert(delta.includes('contentHash'), '增量记录必须包含轻量校验 hash。');
 assert(delta.includes('CHAT_TAIL_LIMIT'), '增量记录必须限制聊天尾部长度。');
 assert(delta.includes("chatHistoryMode: 'append' | 'replace'"), '真实 delta 必须区分聊天追加与替换模式。');
+assert(delta.includes('jsonCompatibleEqual'), '大状态字段必须使用无字符串化的 JSON 兼容深比较。');
+assert(!delta.includes('JSON.stringify(a)') && !delta.includes('JSON.stringify(b)'), '大状态字段比较不得构造完整 JSON 字符串。');
 
 assert(dbService.includes("const SAVE_NODE_DELTAS_STORE = 'saveNodeDeltas'"), '必须定义 saveNodeDeltas 表。');
 assert(dbService.includes('db.createObjectStore(SAVE_NODE_DELTAS_STORE'), 'DB 升级必须创建 saveNodeDeltas 表。');
 assert(dbService.includes('findAutoDeltaBase(db, storedData)'), '保存前必须尝试寻找自动存档 delta 基底。');
+assert(dbService.includes('const initialStoredData = deltaBase') && dbService.includes('buildDeltaOnlyStoredSave(storedData, deltaBase.baseSaveId)'), '命中 delta 基底时首次 add 必须直接写轻量占位。');
+assert(!dbService.includes('loadAllDeltaRecords') && !dbService.includes('SAVE_NODE_DELTAS_STORE).getAll'), 'delta 维护不得一次性加载所有 payload。');
+assert(dbService.includes('scanIndexedDeltaRecords') && dbService.includes('openCursor()'), 'delta 计数和引用检查必须逐条游标扫描。');
 assert(dbService.includes("if (save.type !== 'auto') return null"), '只有自动存档可以走 delta-only，手动/备份必须保持完整检查点。');
 assert(dbService.includes('MAX_DELTA_NODES_PER_CHECKPOINT'), '必须限制同一个 checkpoint 下连续 delta 节点数量。');
 assert(dbService.includes('loadIndexedAndDesktopSaveSummaries'), '自动存档 delta 基底与节点轮转候选必须合并 IndexedDB 摘要和桌面镜像摘要。');

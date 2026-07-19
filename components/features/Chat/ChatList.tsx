@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -24,6 +24,19 @@ interface ChatListProps {
 interface NeighborMeta {
   fallbackPathId?: string;
   previousUserInput?: string;
+}
+
+const INITIAL_RENDER_TURNS = 20;
+const RENDER_TURN_INCREMENT = 20;
+
+function findHistoryWindowStart(messages: 聊天消息[], turnLimit: number): number {
+  let assistantTurns = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role !== 'assistant') continue;
+    assistantTurns += 1;
+    if (assistantTurns > turnLimit) return index + 1;
+  }
+  return 0;
 }
 
 interface ChatHistoryListProps {
@@ -60,6 +73,7 @@ const ChatHistoryList = memo(function ChatHistoryList({
           <TurnItem
             key={msg.id}
             message={msg}
+            deferOffscreen
             onEditBody={onEditBody}
             onRegenerateNarrativeImage={onRegenerateNarrativeImage}
             narrativeImageManualEnabled={narrativeImageManualEnabled}
@@ -113,26 +127,33 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
   const streamingMessage = useStreamingMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [nearBottom, setNearBottom] = useState(true);
-  const [renderLimit, setRenderLimit] = useState(80);
+  const nearBottomRef = useRef(true);
+  const [renderTurnLimit, setRenderTurnLimit] = useState(INITIAL_RENDER_TURNS);
   const historyIdentityRef = useRef<{ lastId?: string; length: number }>({ length: 0 });
   const scrollRafRef = useRef<number | null>(null);
+  const scrollStateRafRef = useRef<number | null>(null);
+  const pendingHistoryAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const previousHistoryIdentity = historyIdentityRef.current;
   const previousHistoryStillPresent = !previousHistoryIdentity.lastId
     || messages.some((message) => message.id === previousHistoryIdentity.lastId);
   const historyWasReplaced = previousHistoryIdentity.length > 0
     && (messages.length < previousHistoryIdentity.length || !previousHistoryStillPresent);
-  const effectiveRenderLimit = historyWasReplaced ? 80 : renderLimit;
+  const effectiveRenderTurnLimit = historyWasReplaced ? INITIAL_RENDER_TURNS : renderTurnLimit;
 
   useEffect(() => {
     historyIdentityRef.current = {
       lastId: messages[messages.length - 1]?.id,
       length: messages.length,
     };
-    if (historyWasReplaced) setRenderLimit(80);
+    if (historyWasReplaced) {
+      pendingHistoryAnchorRef.current = null;
+      setRenderTurnLimit(INITIAL_RENDER_TURNS);
+    }
   }, [historyWasReplaced, messages]);
 
   const isNearBottom = useCallback(() => {
-    const el = scrollRef.current!;
+    const el = scrollRef.current;
+    if (!el) return true;
     return el.scrollHeight - el.scrollTop - el.clientHeight < 140;
   }, [scrollRef]);
 
@@ -157,11 +178,26 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
   }, [messages, streamingMessage, nearBottom, scrollRef]);
 
   const handleScroll = useCallback(() => {
-    setNearBottom(isNearBottom());
+    if (scrollStateRafRef.current != null) return;
+    scrollStateRafRef.current = requestAnimationFrame(() => {
+      scrollStateRafRef.current = null;
+      const nextNearBottom = isNearBottom();
+      if (nearBottomRef.current === nextNearBottom) return;
+      nearBottomRef.current = nextNearBottom;
+      setNearBottom(nextNearBottom);
+    });
   }, [isNearBottom]);
+
+  useEffect(() => () => {
+    if (scrollStateRafRef.current != null) {
+      cancelAnimationFrame(scrollStateRafRef.current);
+      scrollStateRafRef.current = null;
+    }
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current!.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    nearBottomRef.current = true;
     setNearBottom(true);
   }, []);
 
@@ -170,20 +206,45 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
     () => messages.filter((message) => !(message.role === 'user' && message.content.startsWith('[系统]'))),
     [messages],
   );
-  const renderedMessages = useMemo(
-    () => visibleMessages.slice(Math.max(0, visibleMessages.length - effectiveRenderLimit)),
-    [effectiveRenderLimit, visibleMessages],
+  const renderedStartIndex = useMemo(
+    () => findHistoryWindowStart(visibleMessages, effectiveRenderTurnLimit),
+    [effectiveRenderTurnLimit, visibleMessages],
   );
-  const hasEarlierMessages = renderedMessages.length < visibleMessages.length;
+  const renderedMessages = useMemo(
+    () => visibleMessages.slice(renderedStartIndex),
+    [renderedStartIndex, visibleMessages],
+  );
+  const hasEarlierMessages = renderedStartIndex > 0;
 
+  const allNeighborMeta = useMemo(
+    () => buildNeighborMeta(visibleMessages),
+    [visibleMessages],
+  );
   const neighborMeta = useMemo(
-    () => buildNeighborMeta(renderedMessages),
-    [renderedMessages],
+    () => allNeighborMeta.slice(renderedStartIndex),
+    [allNeighborMeta, renderedStartIndex],
   );
 
   const handleLoadEarlier = useCallback(() => {
-    setRenderLimit((current) => current + 80);
-  }, []);
+    const el = scrollRef.current;
+    if (el) {
+      pendingHistoryAnchorRef.current = {
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+      };
+    }
+    setRenderTurnLimit((current) => current + RENDER_TURN_INCREMENT);
+  }, [scrollRef]);
+
+  useLayoutEffect(() => {
+    const anchor = pendingHistoryAnchorRef.current;
+    if (!anchor) return;
+    pendingHistoryAnchorRef.current = null;
+    if (historyWasReplaced) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = anchor.scrollTop + (el.scrollHeight - anchor.scrollHeight);
+  }, [historyWasReplaced, renderedStartIndex, scrollRef]);
 
   return (
     <div
@@ -201,7 +262,7 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
             className="px-3 py-1.5 text-xs"
             style={{ color: 'rgba(var(--tj-accent-primary), 0.92)' }}
           >
-            加载更早记录
+            继续渲染更早 20 回合
           </button>
         </div>
       )}

@@ -53,6 +53,11 @@ assert(dbService.includes('summaryStore.delete(id)'), '删除存档必须同步�
 assert(dbService.includes('deleteDeltaBySaveId'), '删除/轮转存档必须同步删除增量节点记录。');
 
 assert(compactor.includes('export function compactPreTurnSnapshot'), '必须提供运行快照瘦身函数。');
+const longSessionRetention = fs.readFileSync('utils/longSessionRetention.ts', 'utf8');
+assert(longSessionRetention.includes('DETAILED_CHAT_TURNS = 20'), '长期会话必须保留最近 20 个完整 AI 回合。');
+assert(longSessionRetention.includes('SUMMARY_VARIABLE_BATCHES = 80'), '变量批次必须保留最多 80 条轻量摘要。');
+assert(longSessionRetention.includes('MAX_BATCH_FAILURE_RESULTS'), '旧变量批次必须限制失败摘要数量。');
+assert(!dbService.includes('loadAllDeltaRecords') && !dbService.includes('SAVE_NODE_DELTAS_STORE).getAll'), 'delta 维护不得一次性加载所有 payload。');
 assert(compactor.includes('stripAlbumAssetPayload'), '运行快照必须剥离相册图片 payload。');
 assert(compactor.includes('dataUrl: asset.id ? 创建相册资源引用(asset.id) : asset.dataUrl'), '相册资源 dataUrl 必须变成 asset 引用。');
 assert(compactor.includes('compactDataImages'), '运行快照必须递归压缩手机等系统里的图片数据。');

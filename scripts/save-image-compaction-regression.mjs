@@ -13,7 +13,8 @@ const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', '
 const albumActions = fs.readFileSync('utils/albumActions.ts', 'utf8');
 
 assert(compactor.includes('export function compactDuplicatedSaveImages'), 'must export save image compactor.');
-assert(compactor.includes('delete (cloned as Partial<存档数据>).相册'), 'compactor must not replace album asset source data.');
+assert(compactor.includes('const { 相册: album, ...withoutAlbum } = save'), 'compactor must keep album asset source data out of the replacement clone.');
+assert(compactor.includes('new WeakMap()'), 'compactor must use a single-pass WeakMap clone.');
 assert(compactor.includes('refs.get(value) ?? value'), 'compactor must replace only data URLs already stored in album assets.');
 assert(albumActions.includes('export function 创建相册资源引用'), 'album actions must provide asset reference creation.');
 assert(albumActions.includes('export function 解析相册资源引用'), 'album actions must resolve asset references for display.');

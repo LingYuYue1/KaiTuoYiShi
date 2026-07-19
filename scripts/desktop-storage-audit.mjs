@@ -191,8 +191,8 @@ addCheck({
 addCheck({
   status: 'indexeddb-primary',
   label: 'delta node source of truth',
-  detail: 'legacy replacement and repair paths still keep IndexedDB saveNodeDeltas as a compatibility source while new saveGame deltas write desktop files first.',
-  ok: all(dbService, ["const SAVE_NODE_DELTAS_STORE = 'saveNodeDeltas'", 'db.createObjectStore(SAVE_NODE_DELTAS_STORE', 'tx.objectStore(SAVE_NODE_DELTAS_STORE)', 'loadAllDeltaRecords(db)']),
+  detail: 'legacy replacement and repair paths still keep IndexedDB saveNodeDeltas as a compatibility source, scanned by cursor to avoid loading every delta payload at once.',
+  ok: all(dbService, ["const SAVE_NODE_DELTAS_STORE = 'saveNodeDeltas'", 'db.createObjectStore(SAVE_NODE_DELTAS_STORE', 'tx.objectStore(SAVE_NODE_DELTAS_STORE)', 'scanIndexedDeltaRecords', 'openCursor()']),
 });
 
 addCheck({

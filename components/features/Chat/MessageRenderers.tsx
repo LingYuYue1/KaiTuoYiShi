@@ -55,7 +55,23 @@ interface BodyBlockProps {
   showInnerVoice?: boolean;
   userInput?: string;
   visualTextSettings?: VisualTextSettings;
+  deferOffscreen?: boolean;
 }
+
+const DEFERRED_NARRATION_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 96px',
+} as const;
+
+const DEFERRED_DIALOGUE_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 128px',
+} as const;
+
+const DEFERRED_INNER_VOICE_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 144px',
+} as const;
 
 const DEFAULT_VISUAL_TEXT_SETTINGS: VisualTextSettings = {
   narrationFontSize: 15,
@@ -369,9 +385,10 @@ interface DialogueBubbleProps {
   text: string;
   color: string;
   avatarUrl?: string;
+  deferOffscreen?: boolean;
 }
 
-export const DialogueBubble = memo(function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtagonist = false }: DialogueBubbleProps & { fontSize?: number; isProtagonist?: boolean }) {
+export const DialogueBubble = memo(function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtagonist = false, deferOffscreen = false }: DialogueBubbleProps & { fontSize?: number; isProtagonist?: boolean }) {
   // 主角对话：淡底金边；NPC 对话：深底+角色色描边
   const bubbleBg = isProtagonist
     ? 'rgba(var(--tj-accent-primary), 0.08)'
@@ -383,7 +400,7 @@ export const DialogueBubble = memo(function DialogueBubble({ name, text, color, 
     ? 'rgba(var(--tj-text-primary), 0.96)'
     : 'rgba(var(--tj-chat-text), 0.96)';
   return (
-    <div className="group my-3 flex items-start justify-start gap-3">
+    <div className="group my-3 flex items-start justify-start gap-3" style={deferOffscreen ? DEFERRED_DIALOGUE_STYLE : undefined}>
       <AvatarTile name={name} url={avatarUrl} color={color} size="sm" />
       <div className="relative flex-1 min-w-0 mt-1">
         <div
@@ -407,15 +424,16 @@ interface InnerVoiceBubbleProps {
   text: string;
   traveler?: 角色数据结构;
   album?: 相册系统;
+  deferOffscreen?: boolean;
 }
 
 // 主角心声：圆头像 + 顶部「·心绪·」标签 + 虚线边气泡 + 暖橘斜体
-function InnerVoiceBubble({ text, traveler, album, fontSize = 15 }: InnerVoiceBubbleProps & { fontSize?: number }) {
+function InnerVoiceBubble({ text, traveler, album, fontSize = 15, deferOffscreen = false }: InnerVoiceBubbleProps & { fontSize?: number }) {
   const PEACH = 'rgb(var(--tj-accent-secondary))';
   const name = traveler?.姓名?.trim() || '我';
   const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined;
   return (
-    <div className="group my-3 flex items-start gap-3">
+    <div className="group my-3 flex items-start gap-3" style={deferOffscreen ? DEFERRED_INNER_VOICE_STYLE : undefined}>
       <AvatarTile name={name} url={avatarUrl} color={PEACH} size="md" />
       <div className="relative flex-1 min-w-0 mt-1">
         {/* 顶部「·心绪·」标签 */}
@@ -454,11 +472,12 @@ function InnerVoiceBubble({ text, traveler, album, fontSize = 15 }: InnerVoiceBu
 }
 
 // 旁白：全宽容器 + 两侧金色竖条 + 顶部小符号点缀（无头像、无气泡）
-export const NarrationLine = memo(function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: number }) {
+export const NarrationLine = memo(function NarrationLine({ text, fontSize = 15, deferOffscreen = false }: { text: string; fontSize?: number; deferOffscreen?: boolean }) {
   return (
     <div
       className="my-2.5 px-5 py-2.5 relative"
       style={{
+        ...(deferOffscreen ? DEFERRED_NARRATION_STYLE : {}),
         background: 'rgba(var(--tj-accent-primary), 0.018)',
         borderLeft: '2px solid rgba(var(--tj-accent-primary), 0.34)',
         borderRight: '1px solid rgba(var(--tj-border), 0.24)',
@@ -474,7 +493,7 @@ export const NarrationLine = memo(function NarrationLine({ text, fontSize = 15 }
   );
 });
 
-export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings }: BodyBlockProps) {
+export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings, deferOffscreen = false }: BodyBlockProps) {
   const lines = useMemo(() => (content ? parseBodyLines(content, traveler, userInput) : []), [content, traveler, userInput]);
   const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
   const npcMap = useMemo(() => buildNpcLookupMap(npcRecords), [npcRecords]);
@@ -502,17 +521,18 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
               avatarUrl={avatarUrl}
               isProtagonist={protagonist}
               fontSize={protagonist ? fontSettings.playerFontSize : fontSettings.dialogueFontSize}
+              deferOffscreen={deferOffscreen}
             />
           );
         }
         if (line.kind === 'inner') {
           if (!showInnerVoice) return null;
-          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} album={album} fontSize={fontSettings.dialogueFontSize} />;
+          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} album={album} fontSize={fontSettings.dialogueFontSize} deferOffscreen={deferOffscreen} />;
         }
         if (line.kind === 'narration') {
-          return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
+          return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} deferOffscreen={deferOffscreen} />;
         }
-        return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
+        return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} deferOffscreen={deferOffscreen} />;
       })}
     </div>
   );

@@ -43,8 +43,8 @@ assert(savePackage.includes('sanitizeSaveForExport'), '存档包导出必须先�
 assert(savePackage.includes('stripRuntimeDebugFromChatHistory'), '存档包导出必须清理聊天调试上下文，避免玩家包被 debug 撑大。');
 assert(savePackage.includes('delete clean.debugContext'), '存档包导出必须移除 chatHistory.debugContext。');
 assert(!savePackage.includes('delete clean.preTurnSnapshot'), '存档包导出不得移除 chatHistory.preTurnSnapshot，否则导入后立即重roll无法完整回滚。');
-assert(saveLoadWorkflow.includes('stripRuntimeOnlyFieldsFromChatHistory'), '本地持久化存档也必须清理运行期调试字段。');
-assert(saveLoadWorkflow.includes('delete clean.debugContext'), '本地持久化存档必须移除 chatHistory.debugContext。');
+assert(saveLoadWorkflow.includes('compactChatHistoryForLongSession'), '本地持久化存档必须复用长期会话聊天归一化。');
+assert(saveLoadWorkflow.includes('compactVariableBatchHistory'), '本地持久化存档必须复用变量批次归一化。');
 assert(!saveLoadWorkflow.includes('delete clean.preTurnSnapshot'), '本地持久化存档不得移除 chatHistory.preTurnSnapshot，否则读档后立即重roll无法完整回滚。');
 assert(savePackage.includes('apiKeysRemoved: true'), '存档包 manifest 必须声明 API Key 已移除。');
 assert(savePackage.includes('sanitized.apiSettings?.configs'), '主 API 配置列表的 apiKey 必须清理。');

@@ -77,6 +77,7 @@ import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/util
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
+import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
 
@@ -1728,11 +1729,11 @@ export async function executeSendWorkflow(
     });
     recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { userMessageId: userMsg.id });
     await persistWorkflowRecoveryJournal(recoveryJournal);
-    const purgedHistory = state.chatHistory.map((m) =>
+    const purgedHistory = compactChatHistoryForLongSession(state.chatHistory.map((m) =>
       m.role === 'assistant' && m.preTurnSnapshot
         ? { ...m, preTurnSnapshot: undefined }
         : m,
-    );
+    ));
     rollbackHistoryOnAbort = purgedHistory;
     const updatedHistory = [...purgedHistory, userMsg];
     state.setChatHistory(updatedHistory);
@@ -2583,6 +2584,7 @@ export async function executeSendWorkflow(
     if (userMsgIdx >= 0 && finalHistory[userMsgIdx].preTurnSnapshot) {
       finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } : m);
     }
+    finalHistory = compactChatHistoryForLongSession(finalHistory);
     state.setChatHistory(finalHistory);
     state.setTurnCount((prev) => prev + 1);
     streamMessageSetter.flush('');
@@ -3032,9 +3034,9 @@ export async function executeSendWorkflow(
         recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { phase: 'autosave' });
         await persistWorkflowRecoveryJournal(recoveryJournal);
         pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' });
-        const variableBatchesForSave = variableOverrides?.batch
+        const variableBatchesForSave = compactVariableBatchHistory(variableOverrides?.batch
           ? [...state.variableBatches, variableOverrides.batch]
-          : state.variableBatches;
+          : state.variableBatches);
         const saveData = buildSavePayload(state, 'auto', {
           chatHistory: finalHistoryForSave,
           记忆: memoryAfterStoryProgress,
@@ -3292,7 +3294,7 @@ async function runVariableCalibrationStep(
       rawText,
     };
     if (params.shouldCommit?.() === false) return null;
-    state.setVariableBatches((prev) => [...prev, batch]);
+    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
 
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
@@ -3339,7 +3341,7 @@ async function runVariableCalibrationStep(
       }],
       rawText: err instanceof Error ? err.message : String(err ?? '变量模型调用失败'),
     };
-    state.setVariableBatches((prev) => [...prev, batch]);
+    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
     return {
       batch,
       npcLedgerUpdate: {
