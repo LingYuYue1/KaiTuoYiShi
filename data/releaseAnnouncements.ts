@@ -9,6 +9,26 @@ export interface ReleaseAnnouncement {
 
 export const RELEASE_ANNOUNCEMENTS: ReleaseAnnouncement[] = [
   {
+    version: 'v1.2.1',
+    date: '2026-07-19',
+    title: '移动端长会话与输入体验修复版',
+    summary:
+      '本次针对长期游玩中的移动端内存峰值、正文完成后白屏风险和多行输入体验进行收口，同时保持 v1.2 的存档树与完整 GitHub 云备份兼容。',
+    highlights: [
+      '回合快照压缩改为单次独立对象复制，移除压缩后的第二次深复制，降低长会话每回合开始时的瞬时内存峰值。',
+      '正文和天气落地后释放主模型原始响应、API 消息链、system prompt、流式缓冲和 Tavern V2 临时消息，减少变量结算与自动存档阶段的对象重叠。',
+      '读入新存档后清理不属于当前存档的 Blob/Object URL 运行时缓存，并增加缓存字节统计；不会删除 IndexedDB、桌面镜像、云备份或相册条目。',
+      '移动端 Enter 插入换行，点击发送按钮发送；桌面端继续使用 Enter 发送、Shift+Enter 换行，并增加中文输入法组合态保护。',
+      '用户气泡保留内部换行，并对长单词和长 URL 自动断行；正文仍采用最近 20 回合窗口，可按需继续渲染更早历史。',
+      'GitHub 云存档继续使用 v2 完整打包、分卷上传、原子发布和下载合并去重链路，存档格式与每树 5/6 节点规则保持不变。',
+    ],
+    notes: [
+      '本版本不包含地图分支内容。',
+      '计划、记忆和内部设计文件不随版本上传。',
+      '本地回归、TypeScript 和生产构建已通过；移动真机 Heap/Performance 复核仍需单独完成。',
+    ],
+  },
+  {
     version: 'v1.2',
     date: '2026-07-17',
     title: '存档树、目录恢复与 GitHub 完整云备份修复版',

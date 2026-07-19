@@ -2679,13 +2679,23 @@ export async function executeSendWorkflow(
     // 如果 AI 同回合切地点+换天气(如 黑塔空间站→罗浮 + 星海潮汐),用旧地点校验会误拒。
     // 因此只要天气 ID 合法(解析天气标签 已校验过中文→ID 映射)就直接接受,
     // 地点白名单仅作 prompt 引导,不强制校验。
-    const 天气 = 解析天气标签(result.fullText || displayText);
+    const rawResponseTextForTurn = result.fullText || displayText;
+    const 天气 = 解析天气标签(rawResponseTextForTurn);
     if (天气) {
       if (!验证天气合法性(天气, worldAfter.当前地点)) {
         console.info('[天气] 天气与当前地点白名单不匹配，仍接受（地点可能在本回合由变量模型更新）:', 天气, '| 旧地点:', worldAfter.当前地点);
       }
       worldAfter = { ...worldAfter, 当前天气: 天气 };
     }
+
+    result.fullText = '';
+    result.parsed = parseResponse('');
+    result.usage = undefined;
+    apiMessages.length = 0;
+    systemPrompt = '';
+    streamedText = '';
+    previewText = '';
+    tavernV2Messages = null;
 
     // 一次性 commit。直接传值不用 functional updater,因为 worldAfter / travelerAfter
     // 已基于 state.世界 / state.旅人 派生,React 批处理后效果等价。

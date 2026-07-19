@@ -30,6 +30,17 @@ const btnClip =
 const iconClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
+function isMobileTextInput() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+
+  const mobileNavigator = navigator as Navigator & {
+    userAgentData?: { mobile?: boolean };
+  };
+  if (mobileNavigator.userAgentData?.mobile === true) return true;
+
+  return window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
+}
+
 export const InputArea = memo(function InputArea({
   onSend,
   onAbort,
@@ -53,6 +64,7 @@ export const InputArea = memo(function InputArea({
   const [input, setInput] = useState('');
   const [rerollActionOptions, setRerollActionOptions] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isComposingRef = useRef(false);
   const lastSubmittedRef = useRef('');
   const appliedRecoveryRef = useRef('');
   const visibleActionOptions = useMemo(() => {
@@ -117,10 +129,12 @@ export const InputArea = memo(function InputArea({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
+      if (e.key !== 'Enter' || e.shiftKey) return;
+      if (isComposingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+      if (isMobileTextInput()) return;
+
+      e.preventDefault();
+      handleSend();
     },
     [handleSend],
   );
@@ -266,6 +280,12 @@ export const InputArea = memo(function InputArea({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           placeholder={loading ? '正在回应……' : '说点什么，或者描述你的动作...'}
           disabled={loading || disabled}
           rows={1}

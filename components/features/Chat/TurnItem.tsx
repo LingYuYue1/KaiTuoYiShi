@@ -100,7 +100,7 @@ function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: 
             }}
           />
           <div
-            className="relative px-4 py-2.5"
+            className="relative whitespace-pre-wrap break-words px-4 py-2.5"
             style={{
               background: bubbleBg,
               color: 'rgba(var(--tj-chat-text), 0.98)',

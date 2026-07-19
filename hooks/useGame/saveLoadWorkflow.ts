@@ -37,7 +37,7 @@ import { 归一化新闻列表 } from '@/models/news';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
-import { materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
+import { materializeAlbumRuntimePayload, pruneAlbumAssetCache } from '@/utils/albumObjectUrl';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
@@ -294,7 +294,9 @@ async function applySaveToState(
   await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));
   state.setNPC(归一化NPC记录列表(save.NPC));   // 旧存档/AI 半成品对象统一兜底
-  state.set相册(materializeAlbumRuntimePayload(归一化相册系统(save.相册)));
+  const nextAlbum = materializeAlbumRuntimePayload(归一化相册系统(save.相册));
+  state.set相册(nextAlbum);
+  pruneAlbumAssetCache(nextAlbum.assets.map((asset) => asset.id));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(save.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
   const normalizedStoryWeaving = alignStoryWeavingToOpeningArchive(

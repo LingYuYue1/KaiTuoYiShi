@@ -64,6 +64,9 @@ assert(compactor.includes('compactDataImages'), '运行快照必须递归压缩�
 assert(compactor.includes('MAX_SNAPSHOT_QUEUE_TASKS'), '运行快照必须限制队列历史数量。');
 assert(sendWorkflow.includes('const preTurnSnapshot = compactPreTurnSnapshot('), '持久化到聊天消息的快照必须瘦身。');
 assert(sendWorkflow.includes('rollbackSnapshotOnAbort = preTurnSnapshot'), '中断回滚必须使用已隔离的运行快照。');
+assert(sendWorkflow.includes("result.fullText = ''"), '正文落地后必须释放原始主模型响应工作集。');
+assert(sendWorkflow.includes('apiMessages.length = 0'), '正文落地后必须释放主剧情 API 消息工作集。');
+assert(sendWorkflow.includes("systemPrompt = ''"), '正文落地后必须释放主剧情 system prompt 工作集。');
 assert(turnSnapshot.includes('restoreAlbumSnapshot'), '读档后重 roll 恢复相册时必须处理瘦身相册。');
 assert(turnSnapshot.includes("asset.dataUrl.startsWith('asset:') && current"), '瘦身相册恢复时必须复用当前相册资源元数据。');
 const saveLoadWorkflow = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
