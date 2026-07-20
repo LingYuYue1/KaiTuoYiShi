@@ -1,7 +1,7 @@
 import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
 import type { PreparedTurnScope } from '@/src/kernel/application/turn/stages/prepareTurnScope';
 import type { 新闻条目 } from '@/models/news';
-import { pushQueueTask, formatOriginalProtagonistForOpening } from '@/src/kernel/workflows/sendWorkflow';
+import { pushQueueTask, formatOriginalProtagonistForOpening } from '@/src/kernel/workflows/turnHelpers';
 import { runNewsGenerationStep } from '@/src/kernel/workflows/newsWorkflow';
 
 export type OpeningNewsResult = Readonly<{
@@ -41,6 +41,7 @@ export async function resolveOpeningNews(
     `原著主角配置：${openingProtagonist}`,
   ].filter(Boolean).join('\n');
   const preNews = await runNewsGenerationStep({
+    gameSettings: scope.gameSettings,
     state,
     mainBody: openingNewsBody,
     userInput,

@@ -14,7 +14,7 @@ export function captureTurnSnapshot(story: StoryState): TurnSnapshot {
     剧情: story.plot.nodes,
     剧情编织: story.plot.weaving,
     variableBatches: story.systems.variableBatches,
-    jobs: story.jobs.records,
+    jobs: story.jobs.records, queueTasks: [],
     turnCount: story.conversation.turnCount,
     pendingOpeningTrigger: story.turn.pendingOpeningTrigger,
   });

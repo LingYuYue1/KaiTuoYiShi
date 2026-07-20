@@ -52,7 +52,7 @@ export type RuntimeStateUpdate<Value> = Value | ((previous: Value) => Value);
 export type RuntimeStateSetter<Value> = (update: RuntimeStateUpdate<Value>) => void;
 
 /** Mutable, non-React draft used only while one kernel command is executing. */
-export type RuntimeDraftState = MutableRuntimeGameState & {
+export type RuntimeDraftState = Omit<MutableRuntimeGameState, "gameSettings" | "worldbooks" | "apiSettings" | "currentTheme"> & {
   worldbookTriggerStates: Record<string, number>;
   hasSave: boolean;
   loading: boolean;

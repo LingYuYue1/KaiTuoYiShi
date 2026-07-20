@@ -1,8 +1,11 @@
-import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
+import type { RuntimeDraftState, MutableRuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
 import { 踏入命途狭间 } from '@/src/kernel/domain/path/pathOperations';
 
+/** Full turn execution state — authoritative for all command-scope reads. */
+export type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
+
 export type PreparedTurnScope = Readonly<{
-  effectiveWorld: TurnExecutionState['世界'];
+  effectiveWorld: RuntimeDraftState['世界'];
   isOpeningSystemTrigger: boolean;
   isAwakeningEnterTrigger: boolean;
   awakeningPathId?: string;
@@ -10,10 +13,13 @@ export type PreparedTurnScope = Readonly<{
   awakeningPhase?: 'question' | 'judgement';
   openingInstruction: string;
   awakeningInstruction: string;
+  gameSettings: NonNullable<MutableRuntimeGameState['gameSettings']>;
+  worldbooks: MutableRuntimeGameState['worldbooks'];
+  activeModelConfig: ReturnType<typeof import('@/src/kernel/domain/session/runtimeState').resolveActiveModelConfig>;
+  worldbookTriggerStates: Record<string, number>;
 }>;
 
-/** Pure classification of the command's story scope. No repository or draft writes. */
-export function prepareTurnScope(state: TurnExecutionState, userInput: string): PreparedTurnScope {
+export function prepareTurnScope(state: RuntimeDraftState, userInput: string): PreparedTurnScope {
   const isOpeningSystemTrigger = state.turnCount === 1 && userInput.startsWith('[系统]');
   const isAwakeningEnterTrigger = userInput === '[系统] 踏入命途狭间';
   const effectiveWorld = isAwakeningEnterTrigger && state.世界.待触发狭间
@@ -26,6 +32,7 @@ export function prepareTurnScope(state: TurnExecutionState, userInput: string): 
   const awakeningPhase = effectiveWorld.进行中狭间
     ? (isAwakeningEnterTrigger ? 'question' : 'judgement')
     : undefined;
+  const rawState = state as unknown as MutableRuntimeGameState;
   return {
     effectiveWorld,
     isOpeningSystemTrigger,
@@ -37,5 +44,9 @@ export function prepareTurnScope(state: TurnExecutionState, userInput: string): 
     awakeningInstruction: awakeningPathId
       ? `玩家选择踏入「命途狭间」(命途 ID: ${awakeningPathId})。请按 pathAwakening 流程生成第一道诘问,不要推进主剧情,不要等玩家再次发言。`
       : '',
+    gameSettings: rawState.gameSettings,
+    worldbooks: rawState.worldbooks,
+    activeModelConfig: (rawState as any).activeModelConfig,
+    worldbookTriggerStates: (rawState.gameSettings as any)?.worldbookTriggerStates ?? {},
   };
 }

@@ -1,4 +1,4 @@
-import { executeSendWorkflow } from '@/src/kernel/workflows/sendWorkflow';
+import { executeSendWorkflow } from './executeTurnWorkflow';
 import { resolveActiveModelConfig, storyFromTurnExecutionState, type TurnExecutionState } from './turnExecutionState';
 import type { MessageProjection, TurnStage } from '@/src/kernel/contract';
 import type { StoryState } from '@/src/kernel/domain/session/storyState';
@@ -32,6 +32,8 @@ export async function* runTurnPipeline(
 
   void executeSendWorkflow(request.text, {
     state: draft,
+    gameSettings: request.state.gameSettings,
+    worldbooks: request.state.worldbooks.slice(),
     onBeforeSend: () => {},
     onAfterSend: () => {},
     signal,

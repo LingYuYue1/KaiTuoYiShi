@@ -63,6 +63,9 @@ export interface 聊天消息 {
     npcLedgerSelectionRaw?: NPC账本选择结果;
   };
   /** 本回合的故事快照（由正文生图后台生成完成后填充） */
+
+  /** Reroll 回归快照，仅 assistant 角色消息携带。@deprecated Phase 3 — migrate to TurnJournal。 */
+  preTurnSnapshot?: 回合快照;
   narrativeImages?: 叙事插图[];
 }
 

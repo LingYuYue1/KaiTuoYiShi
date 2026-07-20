@@ -1,4 +1,4 @@
-import type { API设置, 游戏设置 } from '@/models/settings';
+import type { API设置, 游戏设置, API配置项 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import type { 世界书 } from '@/models/worldbook';
 import type { StoryState } from '@/src/kernel/domain/session/storyState';
@@ -27,10 +27,11 @@ export type TurnExecutionState = {
   pendingOpeningTrigger: string | null;
   turnCount: number;
   /** Transitional: required by legacy RuntimeDraftState consumers. Removed in Phase 4. */
-  currentTheme: any;
-  apiSettings: API设置;
   gameSettings: 游戏设置;
-  worldbooks: 世界书[];
+  /** Transitional: resolved once from execution context. Removed in Phase 4 — consumers should read from ExecutionContext directly. */
+  activeModelConfig: API配置项;
+  /** Transitional: worldbook metadata for prompt builders. Removed in Phase 4 — prompt builders should receive from overlay. */
+  worldbooks: readonly 世界书[];
 };
 
 export function createTurnExecutionState(
@@ -38,8 +39,8 @@ export function createTurnExecutionState(
   context: DeviceExecutionOverlay,
 ): TurnExecutionState {
   const gameSettings = resolveCommandSettings(story, context);
+  const activeModelConfig = resolveActiveModelConfigFromContext(context.apiSettings, gameSettings.enableClaudeMode);
   return structuredClone({
-    currentTheme: context.appearance.theme,
     旅人: story.traveler, 世界: story.world, chatHistory: story.conversation.history.slice(),
     记忆: story.memory.system, 忆庭: story.memory.yiting, 智库: story.content.zhikuRuntime,
     手机: story.phone, NPC: story.characters.npcs.slice(), 相册: story.album, 新闻: story.news.slice(),
@@ -49,7 +50,9 @@ export function createTurnExecutionState(
     worldbookTriggerStates: story.content.worldbookTriggerStates,
     pendingOpeningTrigger: story.turn.pendingOpeningTrigger,
     turnCount: story.conversation.turnCount,
-    apiSettings: context.apiSettings, gameSettings, worldbooks: context.worldbooks.slice(),
+    gameSettings,
+    activeModelConfig,
+    worldbooks: context.worldbooks.slice(),
   });
 }
 
@@ -62,6 +65,19 @@ export function resolveCommandSettings(story: StoryState, context: DeviceExecuti
     save: context.savePolicy,
     story: story.policy,
   });
+}
+
+/** Transitional: reads the pre-resolved active config from TurnExecutionState. Removed in Phase 4. */
+export function resolveActiveModelConfig(state: TurnExecutionState): API配置项 {
+  return state.activeModelConfig;
+}
+
+function resolveActiveModelConfigFromContext(apiSettings: API设置, enableClaudeMode: boolean): API配置项 {
+  const activeId = apiSettings.activeConfigId;
+  if (!activeId) throw new Error('Active API configuration is required');
+  const config = apiSettings.configs.find((candidate) => candidate.id === activeId);
+  if (!config) throw new Error(`Active API configuration not found: ${activeId}`);
+  return { ...config, enableClaudeMode };
 }
 
 export function storyFromTurnExecutionState(state: TurnExecutionState, base: StoryState): StoryState {
@@ -81,12 +97,4 @@ export function storyFromTurnExecutionState(state: TurnExecutionState, base: Sto
     content: { zhikuRuntime: state.智库, worldbookTriggerStates: state.worldbookTriggerStates },
     jobs: { records: state.durableJobs },
   });
-}
-
-export function resolveActiveModelConfig(state: TurnExecutionState): import('@/models/settings').API配置项 {
-  const activeId = state.apiSettings.activeConfigId;
-  if (!activeId) throw new Error('Active API configuration is required');
-  const config = state.apiSettings.configs.find((candidate) => candidate.id === activeId);
-  if (!config) throw new Error(`Active API configuration not found: ${activeId}`);
-  return { ...config, enableClaudeMode: state.gameSettings.enableClaudeMode === true };
 }

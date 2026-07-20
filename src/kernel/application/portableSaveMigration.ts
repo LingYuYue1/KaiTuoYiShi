@@ -175,7 +175,7 @@ function migrateTurnHistory(
     手机: fallback('手机', save.手机 ?? defaults.phone), NPC: fallback('NPC', save.NPC ?? []),
     相册: fallback('相册', save.相册 ?? defaults.album), 新闻: fallback('新闻', save.新闻 ?? []),
     剧情: fallback('剧情', save.剧情 ?? []), 剧情编织: fallback('剧情编织', save.剧情编织 ?? defaults.plot.weaving),
-    variableBatches: fallback('variableBatches', save.variableBatches ?? []), jobs: [],
+    variableBatches: fallback('variableBatches', save.variableBatches ?? []), jobs: [], queueTasks: [],
     turnCount: fallback('turnCount', Math.max(1, turnCount - 1)),
     pendingOpeningTrigger: fallback('pendingOpeningTrigger', null),
   } as TurnSnapshot;

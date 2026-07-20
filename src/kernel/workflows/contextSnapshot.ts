@@ -1,5 +1,6 @@
 import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
 import { 创建聊天消息, type 聊天消息 } from '@/models/chat';
+import type { 世界书 } from '@/models/worldbook';
 import { 创建手机会话 } from '@/models/phone';
 import { 创建默认智库系统设置, 创建默认记忆系统设置 } from '@/models/settings';
 import { buildNewsModelPrompt, buildNewsUserMessage } from '@/services/ai/newsModel';
@@ -588,7 +589,7 @@ function buildMainContextSnapshot(state: TurnExecutionState): ContextSnapshot {
         state.世界,
         state.gameSettings!,
         state.turnCount,
-        state.worldbooks,
+        state.worldbooks as 世界书[],
         worldbookCtx,
         state.新闻,
         isOpeningSystemTrigger ? 'opening' : 'normal',
@@ -600,7 +601,7 @@ function buildMainContextSnapshot(state: TurnExecutionState): ContextSnapshot {
         state.记忆,
         state.gameSettings!,
         state.turnCount,
-        state.worldbooks,
+        state.worldbooks as 世界书[],
         worldbookCtx,
         state.NPC,
         state.新闻,
@@ -866,7 +867,7 @@ function buildNewsContextSnapshot(state: TurnExecutionState): ContextSnapshot {
     .slice(-12)
     .map((msg) => `- ${msg.role === 'user' ? '玩家' : 'AI'}：${(msg.parsedResponse?.body || msg.content).slice(0, 420)}`);
   const request = {
-    config: state.apiSettings!.configs.find((item) => item.id === state.apiSettings!.activeConfigId) ?? state.apiSettings!.configs[0] ?? {
+    config: state.activeModelConfig ?? {
       id: '__preview__',
       name: '预览',
       provider: 'openai_compatible' as const,

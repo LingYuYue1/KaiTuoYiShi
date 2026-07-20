@@ -75,6 +75,8 @@ export interface TurnSnapshot {
   剧情编织: 剧情编织系统;
   variableBatches: readonly 变量命令批次[];
   jobs: readonly DurableJob[];
+  /** @deprecated Phase 3 — transition to DurableJob. */
+  queueTasks: readonly import("@/models/queueTask").队列任务记录[];
   turnCount: number;
   pendingOpeningTrigger: string | null;
 }

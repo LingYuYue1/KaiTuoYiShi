@@ -110,7 +110,7 @@ async function performJob(
   if (!assistant) throw new Error(`Durable job target message not found: ${payload.messageId}`);
   const body = assistant.parsedResponse?.body?.trim() || assistant.content.trim();
   if (payload.kind === 'news.generate') {
-    const result = await runNewsGenerationStep({ state, mainBody: body, userInput: payload.playerText, signal: dependencies.signal });
+    const result = await runNewsGenerationStep({ gameSettings: state.gameSettings, state: state as any, mainBody: body, userInput: payload.playerText, signal: dependencies.signal });
     if (!result) throw new Error('News generation policy disabled the queued job');
     return;
   }

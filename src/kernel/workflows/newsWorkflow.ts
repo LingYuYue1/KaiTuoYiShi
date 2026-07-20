@@ -1,4 +1,4 @@
-import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
+import type { RuntimeDraftState } from '@/src/kernel/domain/session/runtimeState';
 import { callNewsModel, applyNewsGenerationResult, hasNewsGenerationChanges } from '@/services/ai/newsModel';
 import type { 新闻条目 } from '@/models/news';
 import type { API配置项 } from '@/models/settings';
@@ -6,7 +6,8 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化世界状态 } from '@/models/world';
 
 interface NewsGenerationParams {
-  state: TurnExecutionState;
+  gameSettings: import("@/models/settings").游戏设置;
+  state: RuntimeDraftState;
   mainBody: string;
   userInput: string;
   recentTurns?: string[];
@@ -23,7 +24,7 @@ export interface NewsGenerationStepResult {
 
 export async function runNewsGenerationStep(params: NewsGenerationParams): Promise<NewsGenerationStepResult | null> {
   const { state } = params;
-  const newsSettings = state.gameSettings!.新闻系统;
+  const newsSettings = params.gameSettings!.新闻系统;
   if (!newsSettings?.enabled || !newsSettings.autoGenerate) return null;
 
   const api = newsSettings.api;
@@ -41,7 +42,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
     maxTokens: api.maxTokens,
     temperature: api.temperature,
     retryCount: api.retryCount,
-    enableClaudeMode: state.gameSettings!.enableClaudeMode === true,
+    enableClaudeMode: params.gameSettings!.enableClaudeMode === true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -59,7 +60,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
       plotNodes: state.剧情,
       storyWeaving: params.storyWeavingSnapshot ?? state.剧情编织,
       maxNewEntriesPerTurn: newsSettings.maxNewEntriesPerTurn,
-      promptModules: state.gameSettings!.promptModules,
+      promptModules: params.gameSettings!.promptModules,
       signal: params.signal,
       retryCount: newsSettings.api.retryCount ?? 2,
   });

@@ -119,7 +119,7 @@ function journalFromV2(raw: Record<string, unknown>, runtime: V2Runtime, committ
     忆庭: fallback('忆庭', runtime.忆庭), 智库: fallback('智库', runtime.智库), 手机: fallback('手机', runtime.手机),
     NPC: fallback('NPC', runtime.NPC), 相册: fallback('相册', runtime.相册), 新闻: fallback('新闻', runtime.新闻),
     剧情: fallback('剧情', runtime.剧情), 剧情编织: fallback('剧情编织', runtime.剧情编织),
-    variableBatches: fallback('variableBatches', runtime.variableBatches), jobs: [],
+    variableBatches: fallback('variableBatches', runtime.variableBatches), jobs: [], queueTasks: [],
     turnCount: fallback('turnCount', Math.max(1, runtime.turnCount - 1)),
     pendingOpeningTrigger: fallback('pendingOpeningTrigger', null),
   } as TurnSnapshot;
