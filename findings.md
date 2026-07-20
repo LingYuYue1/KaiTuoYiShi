@@ -1,14 +1,12 @@
 # Findings: Player-Reported Bugs & UX Issues
 
-## Uncommitted-change review (2026-07-17)
+## Uncommitted-change review resolution (2026-07-18)
 
-Scope: staged, unstaged, and untracked files in the current worktree. This review used static source/diff inspection; no build or dev server was run.
+The three former P2 notes were rechecked against the authoritative source and are resolved:
 
-1. **[P2] Closing an incomplete API-settings detour leaves a stale redirect.** `App.tsx:357-364` keeps `settingsReturnView` as `new_game` if settings closes before a valid main API is saved. A later, ordinary Settings visit that happens to complete the API config will then redirect into the new-game wizard unexpectedly. Clear the return marker when the routed settings flow is abandoned, or when Settings is opened normally.
-
-2. **[P2] Abort resolves before the command has settled.** `hooks/useGame.ts:285-289` still exposes `kernel.cancel()` even though this change introduces `cancelAndWait()`. The input/UI awaits `handleAbort`, restores the draft, and treats cancellation as complete while the old command can still emit its rejection/projection updates. Route this through `cancelActiveCommandAndWait()` (or await `cancelAndWait(commandId)`) so the public action resolves only at the terminal boundary.
-
-3. **[P2] A handled send failure creates two error records.** `hooks/useGame.ts:275` reports then rethrows a command failure. `InputArea` invokes that async handler directly (`components/features/Chat/InputArea.tsx:124,303`), so the rejection also reaches the new `unhandledrejection` listener in `index.tsx:15-18`. Expected API/protocol failures therefore produce duplicate error cards. Handle the event-handler promise locally or deduplicate reporting at one boundary.
+1. `openSettings`, the ordinary API-settings route, and `handleCloseSettings` all clear `settingsReturnView`; an abandoned new-game detour cannot affect a later Settings visit.
+2. `handleAbort` awaits the active `CommandHandle.cancelAndWait()` terminal result before the UI restores the draft.
+3. `InputArea` routes send, reroll, and abort promises through `ignoreHandledAction`; the command boundary records expected failures, while handled event promises cannot reach the global `unhandledrejection` reporter.
 
 **Branch:** `refactor/ikernel`  
 **Date:** 2026-07-17  
@@ -86,6 +84,21 @@ InputArea / ChatList / Phone / Album
         ▼
    RuntimeGameState (chatHistory, 智库, apiSettings, gameSettings, …)
 ```
+
+### Architecture verdict: command kernel skeleton, but not yet a rigorous application kernel
+
+The current `IKernel` has useful machinery worth preserving: commands enter through a unified dispatcher, revisions/CAS guard formal commits, and running commands have an explicit cancellation lifecycle. That does not make the overall boundary architecturally sound.
+
+At present it is better described as a **persistent runtime orchestrator with a kernel-shaped API** than a mature kernel with strict ownership and dependency boundaries:
+
+- React and the SessionRepository both write the complete runtime graph; `session.checkpoint` reconciles them by whole-graph replacement rather than by domain commands.
+- `RuntimeGameState` mixes story state with device preferences such as API configuration and theme.
+- Session projections can write those preferences back into React, so rollback/rejected paths can mutate configuration unrelated to the failed story command.
+- `IKernel` exposes command execution, saves, preferences, and a broad service locator instead of one focused application boundary.
+- Hooks reach the kernel composition root and internal runtime/workflow types directly, leaving the adaptation layer unable to enforce isolation.
+- The process-frame protocol is too weak to express important intermediate state, so React-side stores and patches still fill gaps outside the formal command model.
+
+This is not merely a naming or aesthetic objection. The API configuration rollback described in Issue 5, runtime/UI dual authority, and incomplete process projection are observable consequences of the same boundary failure. A breaking redesign of runtime ownership, execution-context injection, projection semantics, and the public `IKernel` surface is warranted; incremental live overlays cannot make the current model rigorous.
 
 Key files:
 
@@ -520,11 +533,11 @@ On total failure, queue task failCount is set from settings, not actual attempts
 
 ### Acknowledgement
 
-**Acknowledged.** After iKernel, `apiSettings` and `gameSettings` are fields of `RuntimeGameState` and are snapshotted into saves and session commits.
+**Acknowledged, with an important distinction.** New manual/auto game saves now omit device API settings, but `apiSettings` and `gameSettings` remain fields of `RuntimeGameState` and are persisted in the formal kernel Session. The kernel directly reads those Session fields when selecting request configuration.
 
 ### Evidence
 
-```493:514:hooks/useGame.ts
+```585:606:hooks/useGame.ts
 function snapshotRuntimeState(state) {
   return cloneRuntimeGameState({
     …
@@ -535,18 +548,18 @@ function snapshotRuntimeState(state) {
 }
 ```
 
-```517:540:hooks/useGame.ts
+```609:635:hooks/useGame.ts
 function runtimeToSave(runtime, type) {
   return {
     …
-    gameSettings: runtime.gameSettings,
-    apiSettings: runtime.apiSettings,
-    theme: runtime.currentTheme,
+    queueTasks: runtime.queueTasks.slice(),
   };
 }
 ```
 
-```470:490:hooks/useGame.ts
+`runtimeToSave` no longer writes API/settings/theme, and `stripDevicePreferencesFromSave` defensively deletes legacy copies. Therefore “ordinary game-save files currently contain API keys” is no longer accurate. The remaining problem is the durable kernel Session and its projection/rollback semantics.
+
+```562:582:hooks/useGame.ts
 function applySessionView(state, view) {
   …
   state.setApiSettings(runtime.apiSettings);
@@ -555,29 +568,24 @@ function applySessionView(state, view) {
 }
 ```
 
-`handleContinue` **intentionally** re-applies live preferences after restore:
+`handleContinue` and `handleLoadSave` intentionally preserve and re-apply live preferences after restoring a Session/story save. Every formal command also checkpoints the current React runtime first. These overlays express the desired device/story split, but only as timing-dependent patches while the underlying Session model still mixes both planes.
 
-```228:239:hooks/useGame.ts
-    const livePreferences = {
-      apiSettings: stateRef.current.apiSettings,
-      gameSettings: stateRef.current.gameSettings,
-      …
-    };
-    …
-    applySessionView(…);
-    stateRef.current.setApiSettings(livePreferences.apiSettings);
-    stateRef.current.setGameSettings(livePreferences.gameSettings);
-```
+### Confirmed hidden rollback scenario
 
-But `handleLoadSave` does **not** preserve live API/settings — it installs the save’s copies wholesale via `saveToRuntime` → `session.reset`.
+1. A turn starts with the old API configuration captured in the committed Session runtime.
+2. While that request is ongoing, applying a new API Profile writes the new configuration to React state and device preference, but it cannot change the already-running command snapshot.
+3. Cancelling the request enters the rejected recovery path, which restores the last committed Session projection.
+4. `applySessionView` then writes the old Session `apiSettings` and `gameSettings` over the current React state without any visible configuration-change event.
+5. The next pre-command checkpoint can commit that silently restored old configuration back into the kernel Session, while device preference may still contain the new configuration.
 
-Also `checkpointRuntime` writes **current** React API into the session before many commands, so mid-game settings edits and save contents intertwine.
+This leaves device preference, React state, and kernel Session with potentially different API versions. Which configuration wins depends on command, cancellation, restoration, and checkpoint timing.
 
 ### Product implication
 
-- Loading an old save can revive old keys/endpoints/models.
-- Starting play after changing API, then loading another save, can “lose” the new API until preferences are re-applied.
-- Users experience this as “API 和存档绑定.”
+- Cancelling or rejecting an unrelated story request can silently revert the visible/in-memory API selection.
+- A kernel entry point that does not perform the React checkpoint overlay may call an old Session endpoint/model.
+- API keys and endpoints remain inside durable Session CAS records and formal Session export packages even though normal game saves strip them.
+- The UI does not reveal when a Session projection has overwritten a newer live configuration.
 
 #### D. New-profile onboarding is blocked by the same coupling
 
@@ -608,12 +616,14 @@ This is a dead end, not onboarding: the player has already completed the wizard,
 
 ### Verdict
 
-**By design in current kernel model**, but **poorly separated** from user expectation that API keys are device/account preferences, not story progress. `handleContinue` shows the intended split for preferences; load-save path does not fully honor it.
+**Poorly separated by design in the current kernel model.** The normal save boundary has been corrected, but the runtime/Session boundary has not. Continue/load overlays reveal the intended device/story split while simultaneously demonstrating that the type and authority model still violates it.
 
 ### Fix direction
 
 - Split device preferences from story runtime: `apiSettings`, theme, and device-level feature switches must not be members of `RuntimeGameState` or a normal save.
 - Keep story choices in the save, with an explicit migration that strips embedded API credentials and other device-only fields.
+- Remove API/device preferences from Session projection, CAS snapshots, rollback, and Session export—not only from normal game saves.
+- Capture an immutable live execution configuration when each command begins; completing or rejecting that command must never write configuration back to the global preference authority.
 - A preference overlay during load is only a compatibility bridge; remove the possibility that later checkpointing can re-mix the two planes.
 - If reproducible export packs need API metadata, make that an explicit opt-in export format without secrets by default.
 

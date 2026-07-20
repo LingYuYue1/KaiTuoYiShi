@@ -1,13 +1,11 @@
 import type { 回合快照 } from '@/models/chat';
 import type { 相册系统 } from '@/models/imageGeneration';
-import type { 队列任务记录 } from '@/models/queueTask';
 import { 创建相册资源引用 } from '@/utils/albumActions';
 import { isDataImageUrl, rememberAlbumAssetFromDataUrl } from '@/utils/albumObjectUrl';
 import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 
 const LARGE_TEXT_LIMIT = 8000;
-const MAX_SNAPSHOT_QUEUE_TASKS = 12;
 
 function isDataImage(value: unknown): value is string {
   return isDataImageUrl(value);
@@ -77,19 +75,6 @@ function cloneCompactedSnapshot<T>(value: T): T {
   }
 }
 
-function compactQueueTasks(tasks?: unknown[]): 队列任务记录[] | undefined {
-  if (!Array.isArray(tasks)) return tasks as 队列任务记录[] | undefined;
-  return tasks.slice(-MAX_SNAPSHOT_QUEUE_TASKS).map((task) => {
-    const item = task as 队列任务记录;
-    return {
-      ...item,
-      rawText: item.rawText && item.rawText.length > LARGE_TEXT_LIMIT
-        ? `${item.rawText.slice(0, LARGE_TEXT_LIMIT)}\n...[运行快照已截断]`
-        : item.rawText,
-    };
-  });
-}
-
 export function compactPreTurnSnapshot(snapshot: 回合快照): 回合快照 {
   const refs = collectAlbumDataUrls(snapshot.相册 as 相册系统 | undefined);
   const compacted = compactDataImages({
@@ -98,7 +83,6 @@ export function compactPreTurnSnapshot(snapshot: 回合快照): 回合快照 {
     剧情编织: snapshot.剧情编织
       ? buildPersistedStoryWeavingSystem(归一化剧情编织系统(snapshot.剧情编织))
       : snapshot.剧情编织,
-    queueTasks: compactQueueTasks(snapshot.queueTasks),
   }, refs) as 回合快照;
   return cloneCompactedSnapshot(compacted);
 }

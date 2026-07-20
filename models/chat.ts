@@ -2,26 +2,7 @@ import type { NPC账本选择结果 } from './npc';
 
 export type 消息角色 = 'user' | 'assistant' | 'system';
 
-/** 「本回合 user 发送之前」的变量切片快照。挂在 assistant message 上，用于 reroll 时回滚。
- *  保留方式：只在最近一条 assistant message 上持久化，生成新 assistant 时清掉上一条的 snapshot，
- *  避免存档体积无限膨胀。所有切片都是引用拷贝（浅拷贝顶层数组对象足够，state 内部不可变）。 */
-export interface 回合快照 {
-  旅人: unknown;
-  世界: unknown;
-  记忆: unknown;
-  忆庭?: unknown;
-  智库?: unknown;
-  手机?: unknown;
-  NPC: unknown[];
-  相册?: unknown;
-  新闻: unknown[];
-  剧情: unknown[];
-  剧情编织?: unknown;
-  variableBatches: unknown[];
-  queueTasks?: unknown[];
-  turnCount: number;
-  pendingOpeningTrigger?: string | null;
-}
+export type 回合快照 = import('@/src/kernel/domain/session/storyState').TurnSnapshot;
 
 export interface 聊天消息 {
   id: string;
@@ -81,9 +62,6 @@ export interface 聊天消息 {
     };
     npcLedgerSelectionRaw?: NPC账本选择结果;
   };
-  /** 该 AI 回复对应的「user 发送前」状态快照，用于 reroll 回滚。
-   *  生成新 assistant message 时会清掉上一条的 snapshot，保证存档里至多只有最新一条带 snapshot。 */
-  preTurnSnapshot?: 回合快照;
   /** 本回合的故事快照（由正文生图后台生成完成后填充） */
   narrativeImages?: 叙事插图[];
 }

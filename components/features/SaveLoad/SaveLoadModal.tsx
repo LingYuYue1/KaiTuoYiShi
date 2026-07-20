@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getSaveCatalog, type SaveListItem } from '@/src/adaptations/saveCatalog';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import type { SaveSummary } from '@/src/kernel/contract/rootCapabilities';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
@@ -18,7 +19,7 @@ const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
-  const [saves, setSaves] = useState<SaveListItem[]>([]);
+  const [saves, setSaves] = useState<SaveSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -34,7 +35,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     setLoading(true);
     setLoadError('');
     try {
-      const list = [...(await (await getSaveCatalog()).getSaveList())] as SaveListItem[];
+      const list = [...(await (await getAppRoot()).saves.list())];
       setSaves(list);
     } catch (err) {
       console.error('[save-list] load failed', err);
@@ -55,16 +56,16 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
       try {
         let changed = false;
         for (let guard = 0; guard < 200 && !cancelled; guard += 1) {
-          const added = await (await getSaveCatalog()).rebuildSaveSummariesBatch(24);
+          const added = await (await getAppRoot()).saves.rebuildSummaries(24);
           if (cancelled || added <= 0) break;
           changed = true;
           if ((guard + 1) % 4 === 0) {
-            const list = [...(await (await getSaveCatalog()).getSaveList())] as SaveListItem[];
+            const list = [...(await (await getAppRoot()).saves.list())];
             if (!cancelled) setSaves(list);
           }
           await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
         }
-        if (changed && !cancelled) setSaves([...(await (await getSaveCatalog()).getSaveList())] as SaveListItem[]);
+        if (changed && !cancelled) setSaves([...(await (await getAppRoot()).saves.list())]);
       } catch (err) {
         console.warn('[save-list] background summary recovery failed', err);
       } finally {
@@ -81,8 +82,8 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     setLoading(true);
     setLoadError('');
     try {
-      await (await getSaveCatalog()).repairSaveDatabase();
-      const list = [...(await (await getSaveCatalog()).getSaveList())] as SaveListItem[];
+      await (await getAppRoot()).saves.repairCatalog();
+      const list = [...(await (await getAppRoot()).saves.list())];
       setSaves(list);
     } catch (err) {
       console.error('[save-list] repair failed', err);
@@ -110,8 +111,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     setSaving(true);
     try {
       const id = await onSave();
-      const save = await (await getSaveCatalog()).loadSave(id);
-      if (save) await (await getSaveCatalog()).exportSavePackage(save);
+      await (await getAppRoot()).saves.exportStory(id);
       await refresh();
       setTab('manual');
     } catch (err) {
@@ -140,7 +140,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
     try {
-      await (await getSaveCatalog()).deleteSave(id);
+      await (await getAppRoot()).saves.deleteStory(id);
       setDeletingId(null);
       void refresh();
     } catch (err) {
@@ -156,7 +156,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     setDeletingRootId(rootId);
     setSaves((prev) => prev.filter((save) => save.saveTree?.rootId !== rootId));
     try {
-      await (await getSaveCatalog()).deleteSaveTree(rootId);
+      await (await getAppRoot()).saves.deleteTree(rootId);
       setDeletingRootId(null);
       void refresh();
     } catch (err) {
@@ -168,13 +168,11 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
   };
 
   const handleExport = async (id: number) => {
-    const save = await (await getSaveCatalog()).loadSave(id);
-    if (save) await (await getSaveCatalog()).exportSavePackage(save);
+    await (await getAppRoot()).saves.exportStory(id);
   };
 
   const handleExportTree = async (rootId: string) => {
-    const treeSaves = await (await getSaveCatalog()).loadSaveTree(rootId);
-    if (treeSaves.length) await (await getSaveCatalog()).exportSaveTreePackage(treeSaves);
+    await (await getAppRoot()).saves.exportTree(rootId);
   };
 
   const handleImport = () => {
@@ -186,15 +184,7 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
       if (!file) return;
       setImporting(true);
       try {
-        const imported = await (await getSaveCatalog()).importSaveFileAsMany(file);
-        const now = Date.now();
-        for (const [index, data] of imported.entries()) {
-          const row = data;
-          row.id = 0;
-          row.type = 'imported';
-          row.timestamp = now + index;
-          await (await getSaveCatalog()).saveGame(row);
-        }
+        await (await getAppRoot()).saves.importAndPersist(file);
         await refresh();
         setTab('protected');
       } catch (err) {
@@ -937,7 +927,7 @@ function SaveRow({
   depth,
   visualLevel,
 }: {
-  item: SaveListItem;
+  item: SaveSummary;
   loadingId: number | null;
   deletingId: number | null;
   onLoad: (id: number) => void;
@@ -1111,14 +1101,14 @@ function EmptyState({ text, detail }: { text: string; detail?: string }) {
   );
 }
 
-function typeLabel(type: SaveListItem['type']): string {
+function typeLabel(type: SaveSummary['type']): string {
   if (type === 'auto') return '自动';
   if (type === 'backup') return '保护';
   if (type === 'imported') return '导入';
   return '手动';
 }
 
-function typeColor(type: SaveListItem['type']): string {
+function typeColor(type: SaveSummary['type']): string {
   if (type === 'auto') return 'rgba(var(--tj-accent-primary),0.86)';
   if (type === 'backup') return 'rgba(var(--tj-accent-secondary),0.9)';
   if (type === 'imported') return 'rgba(var(--tj-ui-success),0.9)';
@@ -1131,7 +1121,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function matchesSaveTab(save: SaveListItem, tab: Tab): boolean {
+function matchesSaveTab(save: SaveSummary, tab: Tab): boolean {
   if (tab === 'all') return save.type !== 'auto';
   if (tab === 'manual') return save.type === 'manual';
   if (tab === 'auto') return save.type === 'auto';

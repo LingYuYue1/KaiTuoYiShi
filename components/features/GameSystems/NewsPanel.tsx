@@ -1,5 +1,4 @@
 ﻿import { useMemo, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import type { 新闻条目, 新闻状态 } from '@/models/news';
 import {
   NEWS_CATEGORY_LABELS,
@@ -10,7 +9,6 @@ import {
 
 interface NewsPanelProps {
   news: 新闻条目[];
-  onNewsChange: Dispatch<SetStateAction<新闻条目[]>>;
   turnCount: number;
 }
 

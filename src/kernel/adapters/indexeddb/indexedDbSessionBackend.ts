@@ -18,9 +18,10 @@ import type {
 import { commandRecordId } from './sessionPersistenceBackend';
 
 export const KERNEL_SESSION_DB_NAME = 'KaiTuoYiShiKernelSessions';
-export const KERNEL_SESSION_DB_VERSION = 1;
+export const KERNEL_SESSION_DB_VERSION = 2;
 export const SESSIONS_STORE = 'sessions';
 export const COMMAND_COMMITS_STORE = 'commandCommits';
+export const SESSION_MIGRATION_BACKUPS_STORE = 'sessionMigrationBackups';
 
 export class IndexedDbSessionBackend implements SessionPersistenceBackend {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -95,6 +96,9 @@ export class IndexedDbSessionBackend implements SessionPersistenceBackend {
         }
         if (!db.objectStoreNames.contains(COMMAND_COMMITS_STORE)) {
           db.createObjectStore(COMMAND_COMMITS_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(SESSION_MIGRATION_BACKUPS_STORE)) {
+          db.createObjectStore(SESSION_MIGRATION_BACKUPS_STORE, { keyPath: 'sessionId' });
         }
       };
       request.onsuccess = () => {

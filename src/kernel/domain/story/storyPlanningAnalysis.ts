@@ -1,23 +1,8 @@
 import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统 } from '@/models/storyWeaving';
+import type { StoryPlanningAnalysis, StoryPlanningAnalysis as 剧情规划分析快照 } from '@/src/kernel/contract/storyWeaving';
+export type { StoryPlanningAnalysis as 剧情规划分析快照 } from '@/src/kernel/contract/storyWeaving';
 
-export interface 剧情规划分析快照 {
-  系列标题: string;
-  当前分段标题: string;
-  当前分段组号: number;
-  推进状态: string;
-  门禁结果: 'soft' | 'strong' | '未记录';
-  建议动作: '继续软参考' | '允许强承接' | '等待正文证据' | '可归档或切段' | '需要人工检查';
-  偏离风险: '低' | '中' | '高';
-  分析理由: string[];
-  关注事项: string[];
-  切段条件: string[];
-  待迁移事项: string[];
-  下一步调度: string[];
-  归档检查: string[];
-  历史摘要: string[];
-}
-
-export function buildStoryPlanningAnalysis(system?: 剧情编织系统): 剧情规划分析快照 | null {
+export function buildStoryPlanningAnalysis(system?: 剧情编织系统): StoryPlanningAnalysis | null {
   if (!system?.系列列表?.length) return null;
   const anchor = system.当前进度;
   const series = system.系列列表.find((item) => item.id === (anchor?.当前系列ID || system.当前系列ID))

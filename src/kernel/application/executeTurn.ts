@@ -1,11 +1,18 @@
-import type { AdvanceTurnEnvelope, ExecutionFrame } from '@/src/kernel/contract';
-import type { RuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
-import type { SessionRepository, TurnEngine } from '@/src/kernel/ports';
+import { asRevision, type AdvanceTurnEnvelope, type EnterPathAwakeningEnvelope, type ExecutionFrame } from '@/src/kernel/contract';
+import type { StoryState } from '@/src/kernel/domain/session/storyState';
+import type { SessionRepository } from '@/src/kernel/ports';
+import type { ExecutionContextProvider } from '@/src/kernel/ports/ExecutionContextProvider';
 import { commitCommand, loadCommandBase, rejectedFrame } from './executeSessionCommand';
+import { appendTurnJournalEntry, captureTurnSnapshot, countAssistantTurns } from '@/src/kernel/domain/turn/turnJournal';
+import { prepareTurnStory } from './turn/prepareTurn';
+import { projectSession } from '@/src/kernel/domain/turn/projectSession';
+import { runTurnPipeline } from './turn/runTurnPipeline';
+import { createTurnExecutionState, resolveCommandSettings } from './turn/turnExecutionState';
+import { planOptionalTurnJobs } from './turn/planOptionalTurnJobs';
 
 export type ExecuteTurnDependencies = Readonly<{
   sessions: SessionRepository;
-  turns: TurnEngine;
+  context: ExecutionContextProvider;
   signal: AbortSignal;
 }>;
 
@@ -14,27 +21,71 @@ export async function* executeTurn(
   envelope: AdvanceTurnEnvelope,
   dependencies: ExecuteTurnDependencies,
 ): AsyncIterable<ExecutionFrame> {
+  yield* executeTurnText(envelope, envelope.command.input.text, dependencies);
+}
+
+export async function* executeTurnText(
+  envelope: AdvanceTurnEnvelope | EnterPathAwakeningEnvelope,
+  sourceText: string,
+  dependencies: ExecuteTurnDependencies,
+): AsyncIterable<ExecutionFrame> {
   const base = await loadCommandBase(envelope, dependencies.sessions);
   if (base.type === 'terminal') {
     yield base.frame;
     return;
   }
-  const text = envelope.command.input.text.trim();
+  const text = sourceText.trim();
   if (!text) {
     yield rejectedFrame(envelope, { code: 'unknown', message: 'turn.advance requires text' });
     return;
   }
+  if (dependencies.signal.aborted) {
+    yield rejectedFrame(envelope, { code: 'cancelled', message: 'Command cancelled before execution' });
+    return;
+  }
+  const preTurnSnapshot = captureTurnSnapshot(base.snapshot.state.story);
+  const createdAt = envelope.command.type === 'turn.advance'
+    ? envelope.command.input.createdAt
+    : envelope.command.createdAt;
+  const preparedStory = prepareTurnStory({
+    story: base.snapshot.state.story,
+    commandId: envelope.commandId,
+    text,
+    createdAt,
+  });
+  yield {
+    type: 'prepared',
+    commandId: envelope.commandId,
+    view: projectSession({ ...base.snapshot, state: { story: preparedStory } }),
+  };
+  // Capture the immutable device context once, before the first model call.
+  // A mid-stream API/profile switch affects only the NEXT command.
+  const overlay = await dependencies.context.captureDeviceOverlay();
+  const settings = resolveCommandSettings(base.snapshot.state.story, overlay);
+  if (dependencies.signal.aborted) {
+    yield rejectedFrame(envelope, { code: 'cancelled', message: 'Command cancelled before model execution' });
+    return;
+  }
+  const executionState = createTurnExecutionState(preparedStory, overlay);
 
-  let nextRuntime: RuntimeGameState | null = null;
+  let nextStory: StoryState | null = null;
   try {
-    for await (const frame of dependencies.turns.advance({ state: base.snapshot.state.runtime, text }, dependencies.signal)) {
-      if (frame.type === 'progress') {
-        if (nextRuntime !== null) throw new Error('TurnEngine emitted progress after completed');
+    for await (const frame of runTurnPipeline({ state: executionState, baseStory: preparedStory, text }, dependencies.signal)) {
+      if (frame.type === 'narrative.delta') {
+        if (nextStory !== null) throw new Error('Turn pipeline emitted progress after completed');
         yield { type: 'progress', commandId: envelope.commandId, delta: { kind: 'narrative', text: frame.text } };
         continue;
       }
-      if (nextRuntime !== null) throw new Error('TurnEngine emitted multiple completed frames');
-      nextRuntime = frame.state;
+      if (frame.type === 'stage.changed' || frame.type === 'stage.retrying') {
+        yield { ...frame, commandId: envelope.commandId };
+        continue;
+      }
+      if (frame.type === 'assistant.ready') {
+        yield { type: 'assistant.ready', commandId: envelope.commandId, message: frame.message };
+        continue;
+      }
+      if (nextStory !== null) throw new Error('Turn pipeline emitted multiple completed frames');
+      nextStory = frame.story;
     }
   } catch (error) {
     yield rejectedFrame(envelope, {
@@ -43,14 +94,36 @@ export async function* executeTurn(
     });
     return;
   }
-  if (nextRuntime === null) {
-    yield rejectedFrame(envelope, { code: 'model_failure', message: 'TurnEngine completed without state' });
+  if (nextStory === null) {
+    yield rejectedFrame(envelope, { code: 'model_failure', message: 'Turn pipeline completed without state' });
     return;
   }
 
-  const runtime = nextRuntime;
-  const assistant = [...runtime.chatHistory].reverse().find((message) => message.role === 'assistant');
+  let story = appendTurnJournalEntry(nextStory, {
+    turnIndex: countAssistantTurns(nextStory),
+    committedRevision: Number(base.snapshot.revision) + 1,
+    committedAt: envelope.command.type === 'turn.advance'
+      ? envelope.command.input.createdAt
+      : envelope.command.createdAt,
+    preTurnSnapshot,
+  });
+  story = planOptionalTurnJobs({
+    story,
+    settings,
+    sessionId: envelope.sessionId,
+    sourceRevision: asRevision(Number(base.snapshot.revision) + 1),
+    commandId: envelope.commandId,
+    playerText: text,
+    createdAt,
+    openingNewsAlreadyGenerated: base.snapshot.state.story.conversation.turnCount === 1 && text.startsWith('[系统]'),
+  });
+  const assistant = [...story.conversation.history].reverse().find((message) => message.role === 'assistant');
   if (!assistant) throw new Error('Turn workflow committed without an assistant message');
   if (!assistant.parsedResponse) throw new Error('Turn workflow committed without parsed response');
-  yield await commitCommand(envelope, dependencies.sessions, { runtime });
+  if (dependencies.signal.aborted) {
+    yield rejectedFrame(envelope, { code: 'cancelled', message: 'Command cancelled before commit' });
+    return;
+  }
+  yield { type: 'stage.changed', commandId: envelope.commandId, stage: 'committing' };
+  yield await commitCommand(envelope, dependencies.sessions, { story });
 }

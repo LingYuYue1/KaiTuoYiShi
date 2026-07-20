@@ -1,7 +1,8 @@
 ﻿import { useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 
 interface Props {
   settings: 游戏设置;
@@ -21,7 +22,7 @@ export function NsfwSettingsTab({ settings, onChange }: Props) {
 
   const handleSave = async () => {
     try {
-      await setPreference('gameSettings', settings);
+      await persistSettingsPlanes(settings);
       setSaveMessage('NSFW 设置已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);

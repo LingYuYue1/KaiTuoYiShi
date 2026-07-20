@@ -1,6 +1,10 @@
 import type { 聊天消息 } from '@/models/chat';
 import type { 存档数据 } from '@/models/settings';
 import type { 存档树元信息 } from '@/utils/saveTree';
+import { 创建空忆庭系统 } from '@/models/yiting';
+import { 创建空智库系统 } from '@/models/zhiku';
+import { 创建空手机系统 } from '@/models/phone';
+import { 创建空剧情编织系统 } from '@/models/storyWeaving';
 
 export type SaveNodeBaseMode = 'checkpoint' | 'delta';
 
@@ -23,10 +27,11 @@ export interface SaveNodeDeltaPayload {
     | '剧情'
     | '剧情编织'
     | 'variableBatches'
-    | 'queueTasks'
-    | 'gameSettings'
-    | 'apiSettings'
-    | 'theme'
+    | 'jobs'
+    | 'policy'
+    | 'turnJournal'
+    | 'worldbookTriggerStates'
+    | 'pendingOpeningTrigger'
   >>;
 }
 
@@ -58,7 +63,7 @@ export interface SaveNodeDeltaRecord {
     newsItems: number;
     plotNodes: number;
     variableBatches: number;
-    queueTasks: number;
+    jobs: number;
   };
   contentHash: string;
   deltaPayload?: SaveNodeDeltaPayload;
@@ -88,10 +93,11 @@ const DELTA_FIELDS: Array<keyof SaveNodeDeltaPayload['fields']> = [
   '剧情',
   '剧情编织',
   'variableBatches',
-  'queueTasks',
-  'gameSettings',
-  'apiSettings',
-  'theme',
+  'jobs',
+  'policy',
+  'turnJournal',
+  'worldbookTriggerStates',
+  'pendingOpeningTrigger',
 ];
 
 export function buildSaveNodeDeltaRecord(
@@ -140,6 +146,7 @@ export function buildSaveNodeDeltaRecord(
 export function buildDeltaOnlyStoredSave(save: 存档数据, baseSaveId: number): 存档数据 {
   const tree = (save as SaveWithTree).saveTree;
   return {
+    portableSchemaVersion: save.portableSchemaVersion,
     id: save.id,
     type: save.type,
     timestamp: save.timestamp,
@@ -154,9 +161,9 @@ export function buildDeltaOnlyStoredSave(save: 存档数据, baseSaveId: number)
     },
     chatHistory: [],
     记忆: {} as 存档数据['记忆'],
-    忆庭: undefined,
-    智库: undefined,
-    手机: undefined,
+    忆庭: 创建空忆庭系统(),
+    智库: 创建空智库系统(),
+    手机: 创建空手机系统(),
     NPC: [],
     相册: {
       assets: [],
@@ -166,12 +173,13 @@ export function buildDeltaOnlyStoredSave(save: 存档数据, baseSaveId: number)
     },
     新闻: [],
     剧情: [],
-    剧情编织: undefined,
+    剧情编织: 创建空剧情编织系统(),
     variableBatches: [],
-    queueTasks: [],
-    gameSettings: save.gameSettings,
-    apiSettings: save.apiSettings,
-    theme: save.theme,
+    jobs: [],
+    policy: save.policy,
+    turnJournal: [],
+    worldbookTriggerStates: {},
+    pendingOpeningTrigger: null,
     saveTree: tree,
     saveStorage: {
       mode: 'delta',
@@ -210,14 +218,10 @@ function buildDeltaPayload(save: 存档数据, baseSave: 存档数据, baseSaveI
   const chatDelta = buildChatDelta(save.chatHistory ?? [], baseSave.chatHistory ?? []);
   const fields: SaveNodeDeltaPayload['fields'] = {};
   for (const key of DELTA_FIELDS) {
-    if (key === 'apiSettings') continue;
     if (!jsonEqual(save[key], baseSave[key])) {
       fields[key] = save[key] as never;
     }
   }
-  fields.apiSettings = save.apiSettings;
-  fields.gameSettings = save.gameSettings;
-  fields.theme = save.theme;
   return {
     baseSaveId,
     chatHistoryMode: chatDelta.mode,
@@ -268,7 +272,7 @@ function buildCounters(save: 存档数据, chatMessages: number): SaveNodeDeltaR
     newsItems: countArray(save.新闻),
     plotNodes: countArray(save.剧情),
     variableBatches: countArray(save.variableBatches),
-    queueTasks: countArray(save.queueTasks),
+    jobs: countArray(save.jobs),
   };
 }
 

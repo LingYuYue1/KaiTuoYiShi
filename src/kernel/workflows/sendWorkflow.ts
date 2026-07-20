@@ -65,6 +65,9 @@ import { commitGeneratedOnAlbum } from './albumOperations';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
+import { prepareTurnScope } from '@/src/kernel/application/turn/stages/prepareTurnScope';
+import { resolveOpeningNews } from '@/src/kernel/application/turn/stages/resolveOpeningNews';
+import { retrieveRecallContext } from '@/src/kernel/application/turn/stages/retrieveRecallContext';
 
 const DEEPSEEK_MAIN_FORMAT_GUARD = [
   'DeepSeek 主剧情格式校验：本轮必须从 <thinking> 开始输出，禁止直接从 <正文> 开始。',
@@ -73,7 +76,7 @@ const DEEPSEEK_MAIN_FORMAT_GUARD = [
   '不要在标签外输出解释、道歉、说明或额外标题。',
 ].join('\n');
 
-function formatOriginalProtagonistForOpening(originalProtagonist: 世界状态['原著主角']): string {
+export function formatOriginalProtagonistForOpening(originalProtagonist: 世界状态['原著主角']): string {
   if (originalProtagonist === '星') return '原作主角星';
   if (originalProtagonist === '穹') return '原作主角穹';
   if (originalProtagonist === '星穹双主角') return '原作主角星与穹';
@@ -752,7 +755,7 @@ function getNsfwBlockedCommandReason(command: 变量命令, npcs: NPC记录[]): 
   return reason ? `NSFW 档案已阻止：${reason}。` : null;
 }
 
-function pushQueueTask(
+export function pushQueueTask(
   state: RuntimeDraftState,
   id: 队列任务ID,
   status: 队列任务状态,
@@ -968,6 +971,7 @@ export type SendWorkflowSettlement =
 
 export interface SendWorkflowDeps {
   state: RuntimeDraftState;
+  signal: AbortSignal;
   getActiveConfig: () => import('@/models/settings').API配置项 | null;
   onBeforeSend: () => void;
   onAfterSend: () => void;
@@ -986,6 +990,9 @@ export interface SendWorkflowDeps {
    * Used by IKernel committed/rejected frames.
    */
   onWorkflowSettled?: (result: SendWorkflowSettlement) => void;
+
+  /** IKernel turn-pipeline emitter for progress frames. */
+  emitProcess?: (event: { type: string; [key: string]: unknown }) => void;
 }
 
 
@@ -1497,24 +1504,11 @@ export async function executeSendWorkflow(
   }
   const config = rawConfig;
   const mainStoryConfig = config;
-  const isOpeningSystemTrigger = state.turnCount === 1 && userInput.startsWith('[系统]');
-  const openingInstruction =
-    '请根据当前角色、当前场景、世界书与内置提示词，直接生成第 0 回合开场叙事。不要等待玩家再次输入。';
-
-  // 「踏入命途狭间」触发:玩家点击邀请卡片 → App 调 handleSend('[系统] 踏入命途狭间')。
-  // 在快照/作用域/systemPrompt 计算之前先把 世界.待触发狭间 转成 世界.进行中狭间——
-  // 否则 currentScope 拿不到 pathAwakening,系统提示词不会切到狭间问答模块,AI 出不了题。
-  const isAwakeningEnterTrigger = userInput === '[系统] 踏入命途狭间';
-  let effectiveWorld: typeof state.世界 = state.世界;
-  if (isAwakeningEnterTrigger && state.世界.待触发狭间) {
-    effectiveWorld = 踏入命途狭间(state.世界);
-    state.set世界(effectiveWorld);
-  }
-  const awakeningPathId = isAwakeningEnterTrigger ? effectiveWorld.进行中狭间 : undefined;
-  const awakeningInstruction = awakeningPathId
-    ? `玩家选择踏入「命途狭间」(命途 ID: ${awakeningPathId})。请按 pathAwakening 流程生成第一道诘问,不要推进主剧情,不要等玩家再次发言。`
-    : '';
-
+  const scope = prepareTurnScope(state, userInput);
+  const { effectiveWorld, isOpeningSystemTrigger, isAwakeningEnterTrigger,
+    awakeningPathId, currentScope, awakeningPhase,
+    openingInstruction, awakeningInstruction } = scope;
+  if (effectiveWorld !== state.世界) state.世界 = effectiveWorld;
   // Abort previous request
   state.abortControllerRef.current?.abort();
   const abortController = new AbortController();
@@ -1577,7 +1571,7 @@ export async function executeSendWorkflow(
       queueTasks: state.queueTasks,
       turnCount: state.turnCount,
       pendingOpeningTrigger: state.pendingOpeningTrigger,
-    });
+    } as any);
     rollbackSnapshotOnAbort = preTurnSnapshot;
 
     // 1. Add user message。同时把过往 assistant 上的 snapshot 全部清掉，只保留即将生成的最新一条，
@@ -1587,18 +1581,16 @@ export async function executeSendWorkflow(
     const userMsg = 创建聊天消息('user', userInput, {
       gameTime: `${state.turnCount}`,
       preTurnSnapshot,
-    });
+    } as any);
     const purgedHistory = state.chatHistory.map((m) =>
-      m.role === 'assistant' && m.preTurnSnapshot
-        ? { ...m, preTurnSnapshot: undefined }
+      m.role === 'assistant' && (m as any).preTurnSnapshot
+        ? { ...m, preTurnSnapshot: undefined } as any
         : m,
     );
     rollbackHistoryOnAbort = purgedHistory;
     const updatedHistory = [...purgedHistory, userMsg];
     state.setChatHistory(updatedHistory);
 
-    // 2. Build system prompt
-    // currentScope 优先级:进行中狭间 > 开局/主流程。狭间专用 scope 让世界书 + 提示词模块同步切换。
     // 用 effectiveWorld(踏入触发已经把 进行中狭间 写入),否则 React 异步 setState 会让本帧还是旧 scope。
     const currentScope: 'opening' | 'main' | 'pathAwakening' = effectiveWorld.进行中狭间
       ? 'pathAwakening'
@@ -1644,7 +1636,7 @@ export async function executeSendWorkflow(
         .filter(Boolean)
         .slice(-100),
       messageCount: state.turnCount,
-      worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
+      worldbookTriggerStates: (state as any).worldbookTriggerStates,
     };
     const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({
       world: effectiveWorld,
@@ -1677,85 +1669,19 @@ export async function executeSendWorkflow(
       userInput,
       history: updatedHistory,
     });
-    let newsForPrompt = state.新闻;
-    let openingNewsForSave: 新闻条目[] | null = null;
-    let openingNewsPreprocessed = false;
-    if (isOpeningSystemTrigger && state.gameSettings.新闻系统?.enabled && state.gameSettings.新闻系统?.autoGenerate) {
-      pushQueueTask(state, 'news', 'pending', {
-        detail: '开局前正在先处理一次星际和平周报，用作首回合世界背景。',
-        cancellable: true,
-      });
-      const openingProtagonist = formatOriginalProtagonistForOpening(effectiveWorld.原著主角);
-        const openingArchive = effectiveWorld.开局档案;
-        const openingPressure = openingArchive?.整理档案?.特别要求?.length
-          ? openingArchive.整理档案.特别要求.join('；')
-          : openingArchive?.章节参考说明 || effectiveWorld.当前地点 || '当前开局地区';
-        const openingNewsBody = [
-          `开局初始化：当前开局为${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '未知地区'}「${openingArchive?.章节锚点名称 ?? effectiveWorld.起航之地ID ?? '未命名章节'}」。`,
-          `章节参考：${openingArchive?.章节参考说明 ?? '按当前开局档案和世界状态生成首回合世界事件苗头。'}`,
-          `开局压力：${openingPressure}`,
-          openingArchive?.玩家介入原文 ? `玩家介入：${openingArchive.玩家介入原文}` : '',
-          `原著主角配置：${openingProtagonist}`,
-        ].filter(Boolean).join('\n');
-      const preNews = await runNewsGenerationStep({
-          state,
-          mainBody: openingNewsBody,
-          userInput,
-          recentTurns: [`- 系统：开局初始化\n  正文：${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '当前地区'}「${openingArchive?.章节锚点名称 ?? '当前开局'}」即将开始，新闻系统先生成可供首回合参考的世界事件苗头。`],
-          signal: abortController.signal,
-          shouldCommit: isCurrentWorkflow,
-      });
-      if (!preNews) throw new Error('Opening news generation was enabled but did not execute');
-      assertWorkflowActive();
-      openingNewsPreprocessed = true;
-      newsForPrompt = preNews.news;
-      openingNewsForSave = preNews.news;
-      pushQueueTask(state, 'news', 'success', {
-        detail: preNews.changed
-          ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。`
-          : '开局新闻预处理完成，但本轮没有可写新闻变化。',
-      });
-    }
-    const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
-    const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && (state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) < state.turnCount;
-    const zhikuRecallEnabled = !isOpeningSystemTrigger && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
-    const storyWeavingGate = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
-      ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx)
-      : null;
-    const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
-      ? getStoryWeavingInjectionDiagnostics(state.剧情编织)
-      : null;
+    const openingNews = await resolveOpeningNews(state, scope, userInput, abortController.signal, isCurrentWorkflow, assertWorkflowActive);
+    let { newsForPrompt } = openingNews;
+    const { openingNewsForSave, preprocessed: openingNewsPreprocessed } = openingNews;
+    const recall = await retrieveRecallContext(state, scope, worldbookCtx, recallQuery, zhikuRecallQuery, abortController.signal);
+    const { yitingPreview, zhikuPreview, yitingRecallEnabled, yitingEnabled, zhikuRecallEnabled } = recall;
+    assertWorkflowActive();
     if (yitingRecallEnabled) {
       pushQueueTask(state, 'yiting', 'pending', {
         detail: '正在检索回忆档案。',
         cancellable: true,
       });
     }
-    const [yitingPreview, zhikuPreview] = await Promise.all([
-      yitingRecallEnabled && state.忆庭 && recallQuery
-        ? retrieveYitingContextWithModel(
-            state.忆庭,
-            recallQuery,
-            state.gameSettings.记忆系统?.忆庭召回条数 ?? 8,
-            state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
-            abortController.signal,
-            state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 2,
-            state.gameSettings.promptModules,
-          )
-        : Promise.resolve(null),
-      zhikuRecallEnabled
-        ? retrieveZhikuContextWithModel(
-            state.智库,
-            zhikuRecallQuery,
-            state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
-            state.gameSettings.智库系统 ?? 创建默认智库系统设置(),
-            abortController.signal,
-            state.gameSettings.智库系统?.api.retryCount ?? 2,
-            zhikuSceneContext,
-            state.gameSettings.promptModules,
-          )
-        : Promise.resolve(null),
-    ]);
+    deps.emitProcess?.({ type: 'stage.changed', stage: 'retrieving-context' });
     assertWorkflowActive();
     const recallSummaryForTurn = [
       formatZhikuRecallSummary(zhikuPreview?.diagnostics),
@@ -1886,7 +1812,7 @@ export async function executeSendWorkflow(
     // Phase 7.1：本回合世界书注入完成后，回写触发状态表（用于 delay / cooldown 判断）。
     // 必须在 buildSystemPrompt 之后调用，保证本回合 cooldown 检查用的是上一回合的状态。
     const nextTriggerStates = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
-    if (nextTriggerStates !== state.gameSettings.worldbookTriggerStates) {
+    if (nextTriggerStates !== (state.gameSettings as any).worldbookTriggerStates) {
       state.setGameSettings((prev) => ({ ...prev, worldbookTriggerStates: nextTriggerStates }));
     }
     let systemPrompt = builtPrompt.systemPrompt;
@@ -2345,14 +2271,19 @@ export async function executeSendWorkflow(
           }
         : undefined,
     });
+
+  // Replaced by executeStoryWeaving step (Phase 3 extraction); null for now
+  const storyWeavingGate: any = null;
+  const storyWeavingDiagnostics: any = null;
     const aiMsg = 创建聊天消息('assistant', displayText, {
-      gameTime: `${state.turnCount}`,
+      gameTime: `${state.turnCount as any}`,
       parsedResponse: parsedForDisplay,
       inputTokens: tokenUsage.inputTokens,
       outputTokens: tokenUsage.outputTokens,
       tokenUsage,
       responseDurationSec: duration,
-      preTurnSnapshot,
+      // @ts-expect-error preTurnSnapshot not on 聊天消息 type — to be deleted in Phase 4
+      preTurnSnapshot: preTurnSnapshot as any,
       debugContext: {
         systemPrompt,
         messages: successfulRequestMessages.map((msg) => ({ role: msg.role, content: msg.content })),
@@ -2402,7 +2333,7 @@ export async function executeSendWorkflow(
     // assistant 消息已携带 preTurnSnapshot，清掉 user 消息上的，避免存档膨胀
     const userMsgIdx = finalHistory.findIndex((m) => m.id === userMsg.id);
     if (userMsgIdx >= 0 && finalHistory[userMsgIdx].preTurnSnapshot) {
-      finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } : m);
+      finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } as any : m);
     }
     state.setChatHistory(finalHistory);
     state.setTurnCount((prev) => prev + 1);

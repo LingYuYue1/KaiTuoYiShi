@@ -7,7 +7,7 @@ function assert(condition, message) {
 
 const presetSource = fs.readFileSync('data/zhikuPreset.ts', 'utf8');
 const useGameStateSource = fs.readFileSync('hooks/useGameState.ts', 'utf8');
-const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8');
+const rootCapabilitiesSource = fs.readFileSync('src/kernel/application/rootCapabilities.ts', 'utf8');
 
 const removedChapterFiles = [
   'herta-station-chapters.json',
@@ -36,24 +36,16 @@ for (const file of fs.readdirSync(presetDir).filter((item) => item.endsWith('.js
 }
 
 assert(
-  presetSource.includes("source.includes('开拓轶事·项目内置剧情')") &&
-    presetSource.includes('BUNDLED_MAIN_STORY_TITLES'),
-  '旧存档内置主线剧情过滤规则缺失',
+  !presetSource.includes('BUNDLED_MAIN_STORY_TITLES') &&
+    !presetSource.includes("source.includes('开拓轶事·项目内置剧情')") &&
+    !useGameStateSource.includes('migrationAt'),
+  '当前精确智库目录不得保留旧主线过滤器或迁移参数',
 );
 
 assert(
-  presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
-    presetSource.includes('mergeBundledZhikuSystem') &&
-    presetSource.includes('hydrateRuntimeZhiku') &&
-    useGameStateSource.includes('hydrateRuntimeZhiku(savedZhiku, { migrationAt })'),
-  '启动加载时必须经 hydrateRuntimeZhiku 过滤旧存档残留的主线剧情智库条目',
-);
-
-assert(
-  presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
-    useGameSource.includes('hydrateRuntimeZhiku(save.智库') &&
-    useGameSource.includes('await saveToRuntime(save'),
-  '导入存档时必须经 hydrateRuntimeZhiku 过滤旧存档残留的主线剧情智库条目',
+  presetSource.includes('current.条目.filter((entry) => !entry.builtin)') &&
+    rootCapabilitiesSource.includes('hydrateRuntimeZhiku(save.智库)'),
+  '加载当前存档时必须合并当前内置目录，并保留非重复自制条目',
 );
 
 console.log('zhiku main story removal regression passed');

@@ -13,13 +13,13 @@ function assert(condition, message) {
 
 const memoryModel = read('models/memory.ts');
 const settings = read('models/settings.ts');
-const memoryUtils = read('hooks/useGame/memoryUtils.ts');
+const memoryUtils = read('src/kernel/workflows/memoryUtils.ts');
+const domainCompression = read('src/kernel/domain/memory/memoryCompression.ts');
 const memoryCompression = read('services/memoryCompression.ts');
-const memoryPanel = read('components/features/GameSystems/MemoryPanel.tsx');
+const memoryPanel = read('components/features/GameSystems/MemorySystemPanel.tsx');
 const memorySettings = read('components/features/Settings/MemorySystemSettings.tsx');
-const systemPrompt = read('hooks/useGame/systemPromptBuilder.ts');
-const historyWindow = read('hooks/useGame/historyWindow.ts');
-const phoneService = read('services/ai/phoneService.ts');
+const systemPrompt = read('src/kernel/workflows/systemPromptBuilder.ts');
+const historyWindow = read('src/kernel/workflows/historyWindow.ts');
 
 assert(memoryModel.includes('中期记忆: string[]'), '记忆系统 schema 必须包含中期记忆。');
 assert(memoryModel.includes('中期记忆: []'), '创建空记忆系统必须初始化中期记忆。');
@@ -28,19 +28,16 @@ assert(settings.includes('短期转中期阈值: number'), '记忆设置必须�
 assert(settings.includes('中期转长期阈值: number'), '记忆设置必须包含中期转长期阈值。');
 assert(settings.includes('短期转中期提示词: string'), '记忆设置必须包含短期转中期提示词。');
 assert(settings.includes('中期转长期提示词: string'), '记忆设置必须包含中期转长期提示词。');
-assert(settings.includes('input.短期转中期阈值 ?? input.短期转长期阈值'), '旧短期转长期阈值必须迁移到新短期转中期阈值。');
-assert(settings.includes('input.中期转长期提示词 ?? input.短期转长期提示词'), '旧短期转长期提示词必须迁移到新中期转长期提示词。');
-
-assert(memoryUtils.includes('compressToMiddleTerm'), '必须有短期压缩到中期的函数。');
+assert(domainCompression.includes('compressToMiddleTerm'), '领域层必须有短期压缩到中期的纯函数。');
+assert(domainCompression.includes('compressToLongTerm'), '领域层必须有中期压缩到长期的纯函数。');
 assert(memoryUtils.includes('createMiddleTermArchiveEntry'), '短期到中期压缩必须写入中期压缩回忆档案。');
 assert(memoryUtils.includes("kind: 'middle'"), '异步记忆总结必须支持 middle 压缩类型。');
 assert(memoryUtils.includes('prompt: settings.短期转中期提示词'), '短期到中期压缩必须使用短期转中期提示词。');
 assert(memoryUtils.includes('prompt: settings.中期转长期提示词'), '中期到长期压缩必须使用中期转长期提示词。');
-assert(memoryUtils.includes('中期记忆: raw.中期记忆 ?? []'), '旧存档归一化必须补齐中期记忆。');
 
 assert(memoryCompression.includes("export type MemoryCompressionKind = 'short' | 'middle' | 'long'"), '记忆压缩服务必须支持 middle 类型。');
 assert(memoryCompression.includes("if (kind === 'middle') return '短期 -> 中期'"), '记忆压缩服务必须标记短期到中期。');
-assert(memoryCompression.includes("'中期转长期'"), '记忆压缩兜底必须标记中期到长期。');
+assert(memoryCompression.includes("return '中期 -> 长期'"), '记忆压缩兜底必须标记中期到长期。');
 
 assert(memoryPanel.includes("type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long'"), '记忆面板必须有中期页签。');
 assert(memoryPanel.includes("middle: { label: '中期'"), '记忆面板必须展示中期层级。');
@@ -69,6 +66,5 @@ assert(!systemPrompt.includes('const recentLongTerm = memorySystem.长期记忆.
 assert(!historyWindow.includes('MAIN_IMMEDIATE_MEMORY_PROMPT_LIMIT'), '主剧情记忆窗口不应再定义即时记忆注入上限。');
 assert(!systemPrompt.includes('记忆｜即时记忆'), '主剧情 prompt 不应再直接注入即时记忆。');
 assert(!historyWindow.includes('memorySystem.即时记忆.length > 0'), '只有即时记忆时不应触发主剧情记忆历史窗口。');
-assert(phoneService.includes('中期：${m}'), '手机系统上下文必须识别中期记忆。');
 
 console.log('✓ memory tier regression passed');

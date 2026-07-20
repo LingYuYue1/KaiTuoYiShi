@@ -1,10 +1,9 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { 智库系统, 智库分类, 智库条目 } from '@/models/zhiku';
+import type { 智库系统, 智库分类, 智库条目, 智库条目草稿 } from '@/models/zhiku';
 import {
   ZHIKU_CATEGORY_LABELS,
   isRetiredZhikuCategory,
   比较智库人物节点,
-  创建智库条目,
   获取智库人物名,
   获取智库人物名列表,
   获取智库核心触发词,
@@ -15,17 +14,13 @@ import {
   智库分类计数,
 } from '@/models/zhiku';
 import type { 智库系统设置 } from '@/models/settings';
-import { getPreference, setPreference } from '@/src/adaptations/preferences';
-import {
-  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
-  buildPersistedZhikuSystem,
-  loadAllBundledZhikuPresets,
-  mergeBundledZhikuSystem,
-} from '@/data/zhikuPreset';
 
 interface Props {
   zhikuSystem: 智库系统;
-  onZhikuSystemChange: React.Dispatch<React.SetStateAction<智库系统>>;
+  onCreateEntry: (draft: 智库条目草稿) => Promise<string>;
+  onUpdateEntry: (entryId: string, patch: Partial<Omit<智库条目, 'id' | 'builtin' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  onDeleteEntry: (entryId: string) => Promise<void>;
+  onRefreshBundled: () => Promise<void>;
   settings: 智库系统设置;
 }
 
@@ -50,7 +45,7 @@ const categories: 智库分类[] = ['story', 'character', 'location', 'faction',
 const zhikuScopeOptions = ['主剧情', '手机', '新闻', '变量参考', '剧情编织', '通用', '只读'];
 const isDevBuild = typeof import.meta !== 'undefined' && Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
-export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props) {
+export function ZhikuPanel({ zhikuSystem, onCreateEntry, onUpdateEntry, onDeleteEntry, onRefreshBundled, settings }: Props) {
   const normalized = useMemo(() => 归一化智库系统(zhikuSystem), [zhikuSystem]);
   const visibleEntries = useMemo(() => normalized.条目.filter((entry) => !isRetiredZhikuCategory(entry.分类)), [normalized]);
   const builtinEntries = useMemo(() => visibleEntries.filter((entry) => entry.builtin), [visibleEntries]);
@@ -152,28 +147,11 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
     });
   }, [activeCategory, characterWorkspace.groups, characterWorkspace.profiles, selectedId]);
 
-  const persist = async (nextEntries: 智库条目[]) => {
-    const next = 归一化智库系统({ 条目: nextEntries });
-    onZhikuSystemChange(next);
-    await setPreference('zhikuSystem', buildPersistedZhikuSystem(next));
-    setSaveFlash(true);
-    window.setTimeout(() => setSaveFlash(false), 1200);
-  };
-
   const handleDevRefreshBundled = async () => {
     if (!isDevBuild || devRefreshStatus === 'loading') return;
     setDevRefreshStatus('loading');
     try {
-      const bundled = await loadAllBundledZhikuPresets({ cacheBust: Date.now() });
-      const savedMigrationAt = await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-      const migrationAt = savedMigrationAt ?? Date.now();
-      if (!savedMigrationAt) {
-        await setPreference(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-      }
-      const next = mergeBundledZhikuSystem(bundled, normalized, migrationAt);
-      onZhikuSystemChange(next);
-      await setPreference('zhikuSystem', buildPersistedZhikuSystem(next));
-      setSelectedId((prev) => (prev && next.条目.some((entry) => entry.id === prev) ? prev : null));
+      await onRefreshBundled();
       setSaveFlash(true);
       setDevRefreshStatus('done');
       window.setTimeout(() => setSaveFlash(false), 1200);
@@ -186,7 +164,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   };
 
   const handleCreateCustom = async () => {
-    const entry = 创建智库条目({
+    const entryId = await onCreateEntry({
       标题: draft.标题,
       分类: draft.分类,
       来源: draft.来源,
@@ -210,9 +188,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       可用于联动: draft.可用于联动,
       builtin: false,
     });
-    const nextEntries = [entry, ...normalized.条目];
-    await persist(nextEntries);
-    setSelectedId(entry.id);
+    setSelectedId(entryId);
     setBucket('custom');
     setActiveCategory('all');
     setShowComposer(false);
@@ -250,17 +226,15 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
         }
       : patch;
     if (selected.builtin && Object.keys(allowedRuntimePatch).length === 0) return;
-    const nextEntries = normalized.条目.map((entry) =>
-      entry.id === selected.id ? { ...entry, ...allowedRuntimePatch, updatedAt: Date.now() } : entry,
-    );
-    await persist(nextEntries);
+    await onUpdateEntry(selected.id, allowedRuntimePatch);
+    setSaveFlash(true);
+    window.setTimeout(() => setSaveFlash(false), 1200);
   };
 
   const deleteSelected = async () => {
     if (!selected || selected.builtin) return;
-    const nextEntries = normalized.条目.filter((entry) => entry.id !== selected.id);
-    await persist(nextEntries);
-    setSelectedId(nextEntries[0]?.id ?? null);
+    await onDeleteEntry(selected.id);
+    setSelectedId(normalized.条目.find((entry) => entry.id !== selected.id)?.id ?? null);
   };
 
   const toggleStorySeries = (seriesId: string) => {

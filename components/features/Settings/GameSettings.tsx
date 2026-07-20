@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
-import type { 世界状态 } from '@/models/world';
 import type { 剧情模式 } from '@/models/journey';
 import { storyModes } from '@/data/journeyPresets';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
-  worldState: 世界状态;
-  onWorldStateChange: (s: 世界状态) => void;
+  storyMode: 剧情模式 | undefined;
+  onStoryModeChange: (mode: 剧情模式) => Promise<void>;
 }
 
 const smallClip =
@@ -84,17 +84,14 @@ const WRITING_STYLE_OPTIONS: { id: WritingStyleId | 'none'; label: string; desc:
   { id: 'none', label: '自定义', desc: '启用提示词模块里的「文风-自定义」槽位' },
 ];
 
-export function GameSettingsTab({ settings, onChange, worldState, onWorldStateChange }: Props) {
+export function GameSettingsTab({ settings, onChange, storyMode, onStoryModeChange }: Props) {
   const activeWritingStyle = getActiveWritingStyle(settings.promptModules);
   const [saveMessage, setSaveMessage] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
 
   const handleSave = async () => {
     try {
-      await Promise.all([
-        setPreference('gameSettings', settings),
-        setPreference('worldState', worldState),
-      ]);
+      await persistSettingsPlanes(settings);
       setSaveMessage('游戏设定已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);
@@ -263,11 +260,11 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
       <Field label="◆ 剧情偏向（可中途切换）">
         <div className="grid grid-cols-2 gap-2">
           {storyModes.map((mode) => {
-            const active = worldState.剧情模式 === mode.id;
+            const active = storyMode === mode.id;
             return (
               <button
                 key={mode.id}
-                onClick={() => onWorldStateChange({ ...worldState, 剧情模式: mode.id as 剧情模式 })}
+                onClick={() => void onStoryModeChange(mode.id as 剧情模式)}
                 className="px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
                   background: active

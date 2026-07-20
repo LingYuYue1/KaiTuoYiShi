@@ -4,14 +4,15 @@ import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
 import { NPC_AFFINITY_MAX, NPC_AFFINITY_MIN, buildNpcMemoryLedgerView, 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { 智库系统 } from '@/models/zhiku';
-import type { NPC关系规划条目, NPC关系规划快照 } from '@/src/kernel/domain/npc/npcRelationshipPlanning';
-import { getAdaptationServices } from '@/src/adaptations';
+import type { CompanionPlanningEntry, CompanionPlanningProjection } from '@/src/kernel/contract/session';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface CompanionPanelProps {
   npcRecords: NPC记录[];
-  onNpcRecordsChange: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+  loadPlanning: () => Promise<CompanionPlanningProjection>;
+  onSetTier: (npcId: string, tier: NPC阶位) => Promise<void>;
+  onSetTraveling: (npcId: string, traveling: boolean) => Promise<void>;
   album?: 相册系统;
   turnCount: number;
   nsfwEnabled: boolean;
@@ -41,10 +42,10 @@ const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
 const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
 
-export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnabled, maleNsfwArchiveEnabled = false, zhikuSystem, devMode = false }: CompanionPanelProps) {
+export function CompanionPanel({ npcRecords, loadPlanning, onSetTier, onSetTraveling, album, nsfwEnabled, maleNsfwArchiveEnabled = false, zhikuSystem, devMode = false }: CompanionPanelProps) {
   const [tab, setTab] = useState<NPC阶位>('companion');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [relationshipPlanning, setRelationshipPlanning] = useState<NPC关系规划快照 | null>(null);
+  const [relationshipPlanning, setRelationshipPlanning] = useState<CompanionPlanningProjection | null>(null);
   const [planningError, setPlanningError] = useState<Error | null>(null);
   const normalizedRecords = useMemo(() => {
     const normalized = 归一化NPC记录列表(npcRecords);
@@ -54,16 +55,6 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
       zhiku: zhikuSystem,
     }).records;
   }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled, zhikuSystem]);
-
-  useEffect(() => {
-    const normalized = 归一化NPC记录列表(npcRecords);
-    const enriched = enrichNpcArchives(normalized, {
-      nsfwEnabled,
-      maleNsfwArchiveEnabled,
-      zhiku: zhikuSystem,
-    });
-    if (enriched.changed) onNpcRecordsChange(enriched.records);
-  }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled, zhikuSystem, onNpcRecordsChange]);
 
   const companions = useMemo(
     () => sortNpcRecords(normalizedRecords.filter((n) => n.阶位 === 'companion')),
@@ -87,11 +78,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
   useEffect(() => {
     let active = true;
     setPlanningError(null);
-    void getAdaptationServices()
-      .then((services) => services.npcRelationship.buildNpcRelationshipPlanning(
-        normalizedRecords,
-        Math.max(...normalizedRecords.map((npc) => Number(npc.最近回合) || 0), 1),
-      ))
+    void loadPlanning()
       .then((planning) => {
         if (active) setRelationshipPlanning(planning);
       })
@@ -99,18 +86,11 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
         if (active) setPlanningError(error instanceof Error ? error : new Error(String(error)));
       });
     return () => { active = false; };
-  }, [normalizedRecords]);
+  }, [loadPlanning, normalizedRecords]);
   if (planningError) throw planningError;
   const selectedPlanning = selected && relationshipPlanning
-    ? relationshipPlanning.条目.find((item) => item.npcId === selected.id)
+    ? relationshipPlanning.entries.find((item) => item.npcId === selected.id)
     : undefined;
-
-  const updateRecord = (id: string, patch: Partial<NPC记录>) => {
-    onNpcRecordsChange((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch } : n)));
-  };
-
-  const promoteToCompanion = (id: string) => updateRecord(id, { 阶位: 'companion' });
-  const demoteToExtra = (id: string) => updateRecord(id, { 阶位: 'extra', 同行: false });
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
       <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[260px]">
@@ -131,7 +111,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
               </div>
             </div>
             <div className="mt-3 text-[11px] leading-relaxed" style={{ color: mutedColor }}>
-              关系规划：{relationshipPlanning?.总览 ?? 'IKernel 正在分析'}
+              关系规划：{relationshipPlanning?.summary ?? 'IKernel 正在分析'}
             </div>
           </div>
         </div>
@@ -170,9 +150,9 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
             npc={selected}
             album={album}
             nsfwEnabled={nsfwEnabled}
-            onPromote={() => promoteToCompanion(selected.id)}
-            onDemote={() => demoteToExtra(selected.id)}
-            onToggleTraveling={() => updateRecord(selected.id, { 同行: !selected.同行 })}
+            onPromote={() => void onSetTier(selected.id, 'companion')}
+            onDemote={() => void onSetTier(selected.id, 'extra')}
+            onToggleTraveling={() => void onSetTraveling(selected.id, !selected.同行)}
             planning={selectedPlanning}
             devMode={devMode}
           />
@@ -361,7 +341,7 @@ function NpcDetail({
   onDemote: () => void;
   onToggleTraveling: () => void;
   nsfwEnabled: boolean;
-  planning?: NPC关系规划条目;
+  planning?: CompanionPlanningEntry;
   devMode: boolean;
 }) {
   const isCompanion = npc.阶位 === 'companion';
@@ -477,12 +457,12 @@ function NpcDetail({
             关系规划
           </div>
           <div className="mt-2 flex flex-wrap gap-2" style={{ color: bodyColor }}>
-            <span>优先级：{planning.优先级}</span>
-            <span>建议：{planning.建议动作}</span>
+            <span>优先级：{planning.priority}</span>
+            <span>建议：{planning.suggestedAction}</span>
           </div>
           <div className="mt-2 grid gap-3 md:grid-cols-2">
-            <MiniList title="理由" items={planning.理由} />
-            <MiniList title="关注点" items={planning.关注点} />
+            <MiniList title="理由" items={planning.reasons} />
+            <MiniList title="关注点" items={planning.focusPoints} />
           </div>
         </section>
       )}
@@ -934,7 +914,7 @@ function Paragraph({ text, placeholder, italic = false }: { text?: string; place
   );
 }
 
-function MiniList({ title, items }: { title: string; items: string[] }) {
+function MiniList({ title, items }: { title: string; items: readonly string[] }) {
   return (
     <div>
       <div className="font-serif text-[11px] tracking-[0.18em]" style={{ color: accentColor }}>{title}</div>

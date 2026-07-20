@@ -319,7 +319,7 @@ function hashCloudSave(save: 存档数据): string {
       ? (save.记忆 as { longTermMemories?: unknown[] }).longTermMemories?.length ?? 0
       : 0,
     variableBatchCount: save.variableBatches?.length ?? 0,
-    queueTaskCount: save.queueTasks?.length ?? 0,
+    jobCount: save.jobs?.length ?? 0,
     saveTree: (save as 存档数据 & { saveTree?: unknown }).saveTree ?? null,
   });
   let hash = 2166136261;

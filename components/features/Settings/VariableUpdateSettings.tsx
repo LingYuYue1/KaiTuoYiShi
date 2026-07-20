@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API配置项, 游戏设置, 变量API覆盖 } from '@/models/settings';
-import { getAdaptationServices } from '@/src/adaptations';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 
 interface Props {
   gameSettings: 游戏设置;
@@ -74,7 +74,7 @@ export function VariableUpdateTab({
         createdAt: 0,
         updatedAt: 0,
       };
-      const list = await (await getAdaptationServices()).apiTools.fetchModels(tempConfig);
+      const list = await (await getAppRoot()).device.fetchModels(tempConfig);
       setModelOptions(list);
       setFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型` });
     } catch (e) {
@@ -87,7 +87,7 @@ export function VariableUpdateTab({
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await setPreference('gameSettings', gameSettings);
+      await persistSettingsPlanes(gameSettings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '变量更新设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

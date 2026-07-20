@@ -145,7 +145,6 @@ export const PROMPT_MODULE_SCOPE_LABELS: Record<提示词模块作用域, string
 };
 
 /** 旧版 builtin_cot id（已拆分为 builtin_opening_cot + builtin_main_plot_cot）。 */
-export const LEGACY_BUILTIN_COT_ID = 'builtin_cot';
 
 /** ST 预设兼容字段的默认值。用于旧存档迁移兜底、新建模块填充、运行时读取兜底。 */
 export function getDefaultModuleFields(): Pick<提示词模块, 'role' | 'injectionPosition' | 'injectionDepth' | 'injectionOrder' | 'injectionTrigger' | 'source' | 'replaceable'> {

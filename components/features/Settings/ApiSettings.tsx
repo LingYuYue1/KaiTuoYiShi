@@ -7,8 +7,9 @@ import {
   type MaxOutputTier,
 } from '@/data/modelRecommendations';
 import type { ConnectionTestResult } from '@/services/ai/apiTools';
-import { getAdaptationServices } from '@/src/adaptations';
-import { getPreference, setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
+import type { API配置包, API方案槽位, AuxApiProfileState } from '@/models/apiProfile';
 import { MemorySystemSettingsTab } from './MemorySystemSettings';
 import { YitingSettingsTab } from './YitingSettingsTab';
 import { NewsSystemSettingsTab } from './NewsSystemSettingsTab';
@@ -24,39 +25,6 @@ interface Props {
   onGameSettingsChange: (s: 游戏设置) => void;
 }
 
-interface API配置包 {
-  app: 'KaiTuoYiShi';
-  kind: 'api-profile';
-  version: 1;
-  exportedAt: string;
-  includeApiKeys: boolean;
-  enableClaudeMode?: boolean;
-  deepSeekMainMode?: 游戏设置['deepSeekMainMode'];
-  apiSettings: API设置;
-  routes: {
-    variableApi: 游戏设置['variableApi'];
-    新闻系统: 游戏设置['新闻系统']['api'];
-    手机系统: 游戏设置['手机系统']['api'];
-    智库系统: 游戏设置['智库系统']['api'];
-    剧情编织系统: 游戏设置['剧情编织系统']['api'];
-    记忆总结API: 游戏设置['记忆系统']['记忆总结API'];
-    忆庭召回API: 游戏设置['记忆系统']['忆庭召回API'];
-    忆庭精炼API: 游戏设置['记忆系统']['忆庭精炼API'];
-    文生图普通接口: 游戏设置['文生图系统']['普通接口'];
-    文生图场景接口: 游戏设置['文生图系统']['场景接口'];
-    文生图NSFW接口: 游戏设置['文生图系统']['NSFW接口'];
-    文生图词组转化器API: 游戏设置['文生图系统']['词组转化器API'];
-  };
-}
-
-interface API方案槽位 {
-  id: string;
-  name: string;
-  savedAt: number;
-  profile: API配置包;
-}
-
-const API_PROFILE_SLOTS_KEY = 'apiProfileSlots';
 
 const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: string; defaultModel: string }[] = [
   { value: 'openai_compatible', label: 'OpenAI 兼容', defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
@@ -89,14 +57,6 @@ const apiSubViews: { key: ApiSubview; label: string; hint: string }[] = [
   { key: 'phone', label: '手机', hint: '私聊与主动来信' },
 ];
 
-interface AuxApiProfileState {
-  provider: AI提供商;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-}
-
-const AUX_API_PROFILE_KEY = 'apiAuxProfileStates';
 
 function createDefaultAuxApiProfileState(provider: AI提供商 = 'gemini'): AuxApiProfileState {
   const meta = providerOptions.find((p) => p.value === provider);
@@ -432,28 +392,18 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
   }, [selectedId]);
 
   useEffect(() => {
-    getPreference<API方案槽位[]>(API_PROFILE_SLOTS_KEY)
-      .then((slots) => setProfileSlots(Array.isArray(slots) ? slots : []))
-      .catch((error: unknown) => {
-        setMessage({ kind: 'error', text: `读取本机 API 方案失败：${error instanceof Error ? error.message : String(error)}` });
-      });
-  }, []);
-
-  useEffect(() => {
-    getPreference<Record<string, AuxApiProfileState>>(AUX_API_PROFILE_KEY)
-      .then((saved) => {
-        if (!saved || typeof saved !== 'object') {
-          setAuxProfilesByConfig({});
-          return;
-        }
+    getAppRoot()
+      .then((kernel) => kernel.device.loadApiEditorProfiles())
+      .then(({ slots, auxiliaryByConfig }) => {
+        setProfileSlots([...slots]);
         const next: Record<string, AuxApiProfileState> = {};
-        for (const [configId, value] of Object.entries(saved)) {
+        for (const [configId, value] of Object.entries(auxiliaryByConfig)) {
           next[configId] = normalizeAuxApiProfileState(value);
         }
         setAuxProfilesByConfig(next);
       })
       .catch((error: unknown) => {
-        setMessage({ kind: 'error', text: `读取其他 API 配置失败：${error instanceof Error ? error.message : String(error)}` });
+        setMessage({ kind: 'error', text: `读取本机 API 编辑资料失败：${error instanceof Error ? error.message : String(error)}` });
       });
   }, []);
 
@@ -478,7 +428,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
       [selectedId]: nextForm,
     };
     setAuxProfilesByConfig(nextMap);
-    await setPreference(AUX_API_PROFILE_KEY, nextMap);
+    await (await getAppRoot()).device.replaceAuxiliaryApiProfiles(nextMap);
   };
 
   const updateConfig = (patch: Partial<API配置项>) => {
@@ -531,7 +481,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     };
     onChange(updated);
     try {
-      await setPreference('apiSettings', updated);
+      await (await getAppRoot()).device.replaceApiSettings(updated);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1800);
     } catch (e) {
@@ -572,13 +522,14 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     onChange(nextApiSettings);
     onGameSettingsChange(nextGameSettings);
     setSelectedId(nextApiSettings.activeConfigId ?? null);
-    await setPreference('apiSettings', nextApiSettings);
-    await setPreference('gameSettings', nextGameSettings);
+    const device = (await getAppRoot()).device;
+    await device.replaceApiSettings(nextApiSettings);
+    await persistSettingsPlanes(nextGameSettings);
   };
 
   const persistProfileSlots = async (slots: API方案槽位[]) => {
     setProfileSlots(slots);
-    await setPreference(API_PROFILE_SLOTS_KEY, slots);
+    await (await getAppRoot()).device.replaceApiProfileSlots(slots);
   };
 
   const handleSaveProfileSlot = async () => {
@@ -675,7 +626,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
       },
     };
     onGameSettingsChange(nextGameSettings);
-    await setPreference('gameSettings', nextGameSettings);
+    await persistSettingsPlanes(nextGameSettings);
     setMessage({ kind: 'info', text: `已把其他文本 API（含词组转化器）统一套用为：${provider} / ${model}` });
   };
 
@@ -689,7 +640,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     setLoadingAuxModels(true);
     setAuxFetchMessage(null);
     try {
-      const list = await (await getAdaptationServices()).apiTools.fetchModels({
+      const list = await (await getAppRoot()).device.fetchModels({
         id: 'aux-api-preview',
         name: '其他 API',
         provider: auxForm.provider,
@@ -715,7 +666,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     setLoadingModels(true);
     setMessage(null);
     try {
-      const list = await (await getAdaptationServices()).apiTools.fetchModels({
+      const list = await (await getAppRoot()).device.fetchModels({
         ...selectedConfig,
         enableClaudeMode: gameSettings.enableClaudeMode === true,
         retryCount: selectedConfig.retryCount ?? 2,
@@ -734,7 +685,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await (await getAdaptationServices()).apiTools.testConnection({
+      const result = await (await getAppRoot()).device.testConnection({
         ...selectedConfig,
         enableClaudeMode: gameSettings.enableClaudeMode === true,
         retryCount: selectedConfig.retryCount ?? 2,

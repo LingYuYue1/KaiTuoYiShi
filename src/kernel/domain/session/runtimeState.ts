@@ -31,6 +31,10 @@ export type RuntimeGameState = Readonly<{
   剧情编织: 剧情编织系统;
   variableBatches: readonly 变量命令批次[];
   queueTasks: readonly 队列任务记录[];
+  /** Added for TurnExecutionState compatibility (Phase 3 transition). */
+  durableJobs: readonly any[];
+  /** Added for TurnExecutionState compatibility (Phase 3 transition). */
+  turnJournal: readonly any[];
   apiSettings: API设置;
   gameSettings: 游戏设置;
   currentTheme: 主题预设;
@@ -49,6 +53,7 @@ export type RuntimeStateSetter<Value> = (update: RuntimeStateUpdate<Value>) => v
 
 /** Mutable, non-React draft used only while one kernel command is executing. */
 export type RuntimeDraftState = MutableRuntimeGameState & {
+  worldbookTriggerStates: Record<string, number>;
   hasSave: boolean;
   loading: boolean;
   workflowHint: string;

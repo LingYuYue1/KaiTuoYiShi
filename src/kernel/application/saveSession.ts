@@ -1,14 +1,13 @@
 /**
- * exportSession — Kernel-owned formal session package export (Phase 4).
+ * exportSession — kernel-owned formal session package export.
  *
  * Not a UI→db call. Reads the SessionRepository authority and encodes a
- * versioned package. Full 存档 catalog remains SaveCatalogPort (Phase 3 facade).
+ * versioned package.
  */
 
 import type { SessionId } from '@/src/kernel/contract';
 import type { SessionRepository } from '@/src/kernel/ports/SessionRepository';
 import type { GameState } from '@/src/kernel/domain/session/types';
-import { cloneGameState } from '@/src/kernel/domain/session/types';
 import { SESSION_SCHEMA_VERSION } from '@/src/kernel/domain/session/schema';
 
 /**
@@ -34,7 +33,7 @@ export async function exportSession(
     schemaVersion: SESSION_SCHEMA_VERSION,
     sessionId: String(snapshot.sessionId),
     revision: Number(snapshot.revision),
-    state: cloneGameState(snapshot.state),
+    state: structuredClone(snapshot.state),
   };
   const json = JSON.stringify(packageBody);
   return new TextEncoder().encode(json);

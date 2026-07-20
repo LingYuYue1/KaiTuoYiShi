@@ -1,5 +1,6 @@
 import type { 游戏设置 } from '@/models/settings';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 
 interface Props {
   settings: 游戏设置;
@@ -38,7 +39,7 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
   };
 
   const handleSave = async () => {
-    await setPreference('gameSettings', settings);
+    await persistSettingsPlanes(settings);
   };
 
   return (

@@ -1,4 +1,4 @@
-import type { MutableRuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
+import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
 import { 创建聊天消息, type 聊天消息 } from '@/models/chat';
 import { 创建手机会话 } from '@/models/phone';
 import { 创建默认智库系统设置, 创建默认记忆系统设置 } from '@/models/settings';
@@ -28,6 +28,8 @@ import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getAnticipatedNpcNamesForTurn, getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from '@/src/kernel/workflows/npcPresence';
 import { 格式化开局档案上下文 } from '@/models/world';
 import { createMacroContext } from '@/utils/macroEngine';
+import type { ContextSection, ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/contract/inspection';
+export type { ContextSection, ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/contract/inspection';
 
 const COT_FAKE_HISTORY_USER = '开始任务';
 const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
@@ -44,31 +46,6 @@ const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
 
 <动态世界>
 </动态世界>`;
-
-export interface ContextSection {
-  id: string;
-  title: string;
-  category: string;
-  order: number;
-  content: string;
-  estimatedTokens: number;
-  upload?: boolean;
-  diagnostic?: boolean;
-}
-
-export type ContextSnapshotKind = 'main' | 'variable' | 'phone' | 'news' | 'yiting' | 'zhiku';
-
-export interface ContextSnapshot {
-  kind: ContextSnapshotKind;
-  title: string;
-  sections: ContextSection[];
-  fullText: string;
-  estimatedTokens: number;
-  uploadEstimatedTokens: number;
-  diagnosticEstimatedTokens: number;
-  createdAt: number;
-  sourceInput: string;
-}
 
 function latestUserInput(history: 聊天消息[]): string {
   return [...history]
@@ -307,7 +284,7 @@ function categoryForPromptSection(title: string): string {
   return '系统';
 }
 
-function formatStoryWeavingProgressSnapshot(state: MutableRuntimeGameState): string {
+function formatStoryWeavingProgressSnapshot(state: TurnExecutionState): string {
   const story = state.剧情编织;
   const progress = story.当前进度;
   const diagnostics = getStoryWeavingInjectionDiagnostics(story);
@@ -344,7 +321,7 @@ function formatStoryWeavingProgressSnapshot(state: MutableRuntimeGameState): str
   ].filter(Boolean).join('\n');
 }
 
-function formatStoryWeavingGateSnapshot(state: MutableRuntimeGameState, ctx: {
+function formatStoryWeavingGateSnapshot(state: TurnExecutionState, ctx: {
   recentUserInput: string;
   recentAIResponse?: string;
   currentLocation?: string;
@@ -382,7 +359,7 @@ function formatStoryWeavingGateSnapshot(state: MutableRuntimeGameState, ctx: {
   ].filter(Boolean).join('\n');
 }
 
-function formatStoryPlanningAnalysisSnapshot(state: MutableRuntimeGameState): string {
+function formatStoryPlanningAnalysisSnapshot(state: TurnExecutionState): string {
   const analysis = buildStoryPlanningAnalysis(state.剧情编织);
   if (!analysis) return '当前没有可用的剧情规划分析。';
   return [
@@ -404,7 +381,7 @@ function formatStoryPlanningAnalysisSnapshot(state: MutableRuntimeGameState): st
   ].filter(Boolean).join('\n');
 }
 
-function formatNpcRelationshipPlanningSnapshot(state: MutableRuntimeGameState): string {
+function formatNpcRelationshipPlanningSnapshot(state: TurnExecutionState): string {
   const analysis = buildNpcRelationshipPlanning(state.NPC, state.turnCount);
   return [
     '# NPC 关系规划分析',
@@ -429,12 +406,12 @@ function buildApiMessages(
     awakeningPhase?: 'question' | 'judgement';
     awakeningPathId?: string;
     enableCotFakeHistory: boolean;
-    settings: MutableRuntimeGameState['gameSettings'];
-    memorySystem: MutableRuntimeGameState['记忆'];
+    settings: TurnExecutionState['gameSettings'];
+    memorySystem: TurnExecutionState['记忆'];
   },
 ): 聊天消息[] {
   const messages: 聊天消息[] = [];
-  const recentHistory = getMainHistoryWindow(history, options.settings, options.memorySystem);
+  const recentHistory = getMainHistoryWindow(history, options.settings!, options.memorySystem);
 
   for (const msg of recentHistory) {
     if (msg.role === 'user' && msg.content.startsWith('[系统]')) continue;
@@ -476,7 +453,7 @@ function buildApiMessages(
   return messages;
 }
 
-export function buildContextSnapshot(state: MutableRuntimeGameState, kind: ContextSnapshotKind = 'main'): ContextSnapshot {
+export function buildContextSnapshot(state: TurnExecutionState, kind: ContextSnapshotKind = 'main'): ContextSnapshot {
   switch (kind) {
     case 'variable':
       return buildVariableContextSnapshot(state);
@@ -494,7 +471,7 @@ export function buildContextSnapshot(state: MutableRuntimeGameState, kind: Conte
   }
 }
 
-function buildMainContextSnapshot(state: MutableRuntimeGameState): ContextSnapshot {
+function buildMainContextSnapshot(state: TurnExecutionState): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const recallHistory = historyThroughLatestUser(state.chatHistory);
   const isOpeningSystemTrigger = state.turnCount === 1 && sourceInput.startsWith('[系统]');
@@ -570,20 +547,20 @@ function buildMainContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
     history: recallHistory,
   });
 
-  const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
-  const yitingThreshold = state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10;
+  const yitingEnabled = state.gameSettings!.记忆系统?.忆庭启用 !== false;
+  const yitingThreshold = state.gameSettings!.记忆系统?.忆庭召回最早触发回合 ?? 10;
   const yitingPreview = yitingEnabled && recallQuery && state.turnCount > yitingThreshold
     ? retrieveYitingContext(
         state.忆庭,
         recallQuery,
-        state.gameSettings.记忆系统?.忆庭召回条数 ?? 创建默认记忆系统设置().忆庭召回条数,
+        state.gameSettings!.记忆系统?.忆庭召回条数 ?? 创建默认记忆系统设置().忆庭召回条数,
       )
     : null;
-  const zhikuPreview = state.gameSettings.智库系统?.enabled && sourceInput
+  const zhikuPreview = state.gameSettings!.智库系统?.enabled && sourceInput
     ? retrieveZhikuContext(
         state.智库,
         zhikuRecallQuery,
-        state.gameSettings.智库系统.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+        state.gameSettings!.智库系统.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
         zhikuSceneContext,
       )
     : null;
@@ -609,19 +586,19 @@ function buildMainContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
     ? buildOpeningSystemPrompt(
         state.旅人,
         state.世界,
-        state.gameSettings,
+        state.gameSettings!,
         state.turnCount,
         state.worldbooks,
         worldbookCtx,
         state.新闻,
         isOpeningSystemTrigger ? 'opening' : 'normal',
-        createMacroContext(state.gameSettings.macroGlobalVars),
+        createMacroContext(state.gameSettings!.macroGlobalVars),
       )
     : buildSystemPrompt(
         state.旅人,
         state.世界,
         state.记忆,
-        state.gameSettings,
+        state.gameSettings!,
         state.turnCount,
         state.worldbooks,
         worldbookCtx,
@@ -638,23 +615,23 @@ function buildMainContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
         Boolean(yitingPreview?.injection),
         npcLedgerSelection,
         isOpeningSystemTrigger ? 'opening' : 'normal',
-        createMacroContext(state.gameSettings.macroGlobalVars),
+        createMacroContext(state.gameSettings!.macroGlobalVars),
       );
   // V2 酒馆预设只额外发送 Tavern messages；原生 systemPrompt 仍由内核发送。
   // chatHistory 必须保留当前 user message，因为 ST 的 chatHistory 槽位就是发送边界。
   let systemPrompt = builtPrompt.systemPrompt;
   let systemPromptSections = splitPromptSections(systemPrompt);
-  const recentHistory = getMainHistoryWindow(state.chatHistory, state.gameSettings, state.记忆);
+  const recentHistory = getMainHistoryWindow(state.chatHistory, state.gameSettings!, state.记忆);
   let apiMessages = buildApiMessages(state.chatHistory, {
     isOpeningSystemTrigger,
     isAwakeningEnterTrigger,
     awakeningPhase,
     awakeningPathId,
-    enableCotFakeHistory: state.gameSettings.enableCotFakeHistory,
+    enableCotFakeHistory: state.gameSettings!.enableCotFakeHistory,
     settings: state.gameSettings,
     memorySystem: state.记忆,
   });
-  const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
+  const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings!, getBuiltinPresetsV2());
   const tavernV2Enabled = Boolean(currentPresetV2);
   const tavernStatus: Parameters<typeof formatMainRequestOrderOverview>[2] = {
     enabled: tavernV2Enabled,
@@ -674,12 +651,12 @@ function buildMainContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
         : sourceInput;
     apiMessages = buildTavernMessageChain({
       preset: currentPresetV2.preset,
-      characterId: state.gameSettings.currentStCharacterId ?? null,
+      characterId: state.gameSettings!.currentStCharacterId ?? null,
       chatHistory: recentHistory,
       latestUserInput: latestTavernInput,
       playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
       playerRole: state.旅人,
-      macroCtx: createMacroContext(state.gameSettings.macroGlobalVars),
+      macroCtx: createMacroContext(state.gameSettings!.macroGlobalVars),
     }).map((msg) => 创建聊天消息(msg.role, msg.content));
     if (!apiMessages.length) throw new Error('ST V2 message chain is empty');
     requestMessagesTitle = '酒馆预设消息链';
@@ -769,7 +746,7 @@ function buildMainContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
   return finalizeSnapshot('main', '主剧情当前 AI 上下文', sections, sourceInput);
 }
 
-function buildVariableContextSnapshot(state: MutableRuntimeGameState): ContextSnapshot {
+function buildVariableContextSnapshot(state: TurnExecutionState): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const lastAssistant = [...state.chatHistory].reverse().find((msg) => msg.role === 'assistant');
   const body = lastAssistant?.parsedResponse?.body || lastAssistant?.content || '（当前还没有主模型正文，变量模型暂无可校准内容。）';
@@ -803,9 +780,9 @@ function buildVariableContextSnapshot(state: MutableRuntimeGameState): ContextSn
     title: '变量模型系统提示词',
     category: '系统',
     content: buildVariableModelPrompt(variableState, {
-      enabled: state.gameSettings.enableNsfw,
-      maleArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-    }, state.gameSettings.promptModules),
+      enabled: state.gameSettings!.enableNsfw,
+      maleArchiveEnabled: state.gameSettings!.enableMaleNsfwArchive,
+    }, state.gameSettings!.promptModules),
   });
   addSection(sections, {
     id: 'variable_user',
@@ -832,7 +809,7 @@ function buildVariableContextSnapshot(state: MutableRuntimeGameState): ContextSn
   return finalizeSnapshot('variable', '变量模型上下文', sections, sourceInput);
 }
 
-function buildPhoneContextSnapshot(state: MutableRuntimeGameState): ContextSnapshot {
+function buildPhoneContextSnapshot(state: TurnExecutionState): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const chat = state.手机.chats[0] ?? 创建手机会话({
     type: 'private',
@@ -870,7 +847,7 @@ function buildPhoneContextSnapshot(state: MutableRuntimeGameState): ContextSnaps
     id: 'phone_system',
     title: '手机系统提示词',
     category: '系统',
-    content: buildPhonePromptModulesSection(state.gameSettings.promptModules) || buildPhoneSystemPrompt(ctx),
+    content: buildPhonePromptModulesSection(state.gameSettings!.promptModules) || buildPhoneSystemPrompt(ctx),
   });
   addSection(sections, {
     id: 'phone_messages',
@@ -881,7 +858,7 @@ function buildPhoneContextSnapshot(state: MutableRuntimeGameState): ContextSnaps
   return finalizeSnapshot('phone', '手机系统上下文', sections, sourceInput);
 }
 
-function buildNewsContextSnapshot(state: MutableRuntimeGameState): ContextSnapshot {
+function buildNewsContextSnapshot(state: TurnExecutionState): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const lastAssistant = [...state.chatHistory].reverse().find((msg) => msg.role === 'assistant');
   const body = lastAssistant?.parsedResponse?.body || lastAssistant?.content || '（当前还没有主回复正文。）';
@@ -889,7 +866,7 @@ function buildNewsContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
     .slice(-12)
     .map((msg) => `- ${msg.role === 'user' ? '玩家' : 'AI'}：${(msg.parsedResponse?.body || msg.content).slice(0, 420)}`);
   const request = {
-    config: state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs[0] ?? {
+    config: state.apiSettings!.configs.find((item) => item.id === state.apiSettings!.activeConfigId) ?? state.apiSettings!.configs[0] ?? {
       id: '__preview__',
       name: '预览',
       provider: 'openai_compatible' as const,
@@ -909,7 +886,7 @@ function buildNewsContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
     npcRecords: state.NPC,
     plotNodes: state.剧情,
     storyWeaving: state.剧情编织,
-    promptModules: state.gameSettings.promptModules,
+    promptModules: state.gameSettings!.promptModules,
   };
   const sections: ContextSection[] = [];
   addSection(sections, {
@@ -927,9 +904,9 @@ function buildNewsContextSnapshot(state: MutableRuntimeGameState): ContextSnapsh
   return finalizeSnapshot('news', '星际周报上下文', sections, sourceInput);
 }
 
-function buildYitingContextSnapshot(state: MutableRuntimeGameState): ContextSnapshot {
+function buildYitingContextSnapshot(state: TurnExecutionState): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
-  const settings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
+  const settings = state.gameSettings!.记忆系统 ?? 创建默认记忆系统设置();
   const recallQuery = buildMainRecallQuery({
     userInput: sourceInput,
     history: state.chatHistory,
@@ -957,7 +934,7 @@ function buildYitingContextSnapshot(state: MutableRuntimeGameState): ContextSnap
     id: 'yiting_system',
     title: '忆庭召回提示词',
     category: '系统',
-    content: buildYitingRecallSystemPrompt(state.gameSettings.promptModules),
+    content: buildYitingRecallSystemPrompt(state.gameSettings!.promptModules),
   });
   addSection(sections, {
     id: 'yiting_user',
@@ -981,7 +958,7 @@ function buildYitingContextSnapshot(state: MutableRuntimeGameState): ContextSnap
   return finalizeSnapshot('yiting', '忆庭召回上下文', sections, sourceInput);
 }
 
-function buildZhikuContextSnapshot(state: MutableRuntimeGameState): ContextSnapshot {
+function buildZhikuContextSnapshot(state: TurnExecutionState): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const recallHistory = historyThroughLatestUser(state.chatHistory);
   const presentZhikuNpcNames = getZhikuNpcNamesForTurn({
@@ -1015,7 +992,7 @@ function buildZhikuContextSnapshot(state: MutableRuntimeGameState): ContextSnaps
     userInput: sourceInput,
     history: recallHistory,
   });
-  const limit = state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries;
+  const limit = state.gameSettings!.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries;
   const fallback = retrieveZhikuContext(state.智库, recallQuery, limit, sceneContext);
   const actualYitingRecallPreview = latestAssistantYitingDebugRecall(state.chatHistory);
   const actualZhikuRecallPreview = latestAssistantZhikuDebugRecall(state.chatHistory);
@@ -1062,7 +1039,7 @@ function buildZhikuContextSnapshot(state: MutableRuntimeGameState): ContextSnaps
     id: 'zhiku_system',
     title: '智库召回提示词（Step0~Step8）',
     category: '系统',
-    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings.promptModules),
+    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings!.promptModules),
   });
   addSection(sections, {
     id: 'zhiku_user',

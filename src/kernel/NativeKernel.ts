@@ -1,104 +1,287 @@
 import type {
-  AdvanceTurnEnvelope,
   CommandId,
   CommandEnvelope,
-  CheckpointSessionEnvelope,
   CreateSessionEnvelope,
   ExecutionFrame,
-  IKernel,
   KernelQuery,
   QueryResult,
-  ResetSessionEnvelope,
-  RegenerateNarrativeImageEnvelope,
-  RetryQueueTaskEnvelope,
-  RerollTurnEnvelope,
   SessionCommandEnvelope,
+  SessionId,
   SessionExistenceView,
   SessionExistsQuery,
   SessionReadQuery,
   SessionView,
 } from '@/src/kernel/contract';
-import type { KernelServices, PreferenceStore, RuntimeActionEngine, SaveCatalogPort, SessionRepository, TurnEngine } from '@/src/kernel/ports';
-import { executeTurn } from '@/src/kernel/application/executeTurn';
+import type { CommandExecutor } from '@/src/kernel/application/CommandExecutor';
+import type { SessionRepository } from '@/src/kernel/ports';
+import type { ContentResolver } from '@/src/kernel/ports';
+import type { StoryWeavingProcessor } from '@/src/kernel/ports';
+import type { AlbumImageGenerator } from '@/src/kernel/ports';
+import type { AlbumAuthoring } from '@/src/kernel/ports';
+import type { PhoneReplyGenerator } from '@/src/kernel/ports';
+import type { Clock } from '@/src/kernel/ports/Clock';
+import type { IdGenerator } from '@/src/kernel/ports/IdGenerator';
+import type { ExecutionContextProvider } from '@/src/kernel/ports/ExecutionContextProvider';
+import { executeTurn, executeTurnText } from '@/src/kernel/application/executeTurn';
 import { rerollTurn } from '@/src/kernel/application/rerollTurn';
 import { resetSession } from '@/src/kernel/application/resetSession';
-import { regenerateNarrativeImage, retryRuntimeQueueTask } from '@/src/kernel/application/executeRuntimeAction';
-import { checkpointSession } from '@/src/kernel/application/checkpointSession';
+import { regenerateNarrativeImage } from '@/src/kernel/application/executeRuntimeAction';
+import { declineSessionPathAwakening, setSessionPrimaryPath } from '@/src/kernel/application/executePathCommand';
+import { editSessionMessageBody } from '@/src/kernel/application/editMessageBody';
+import { setCompanionTier, setCompanionTraveling } from '@/src/kernel/application/executeCompanionCommand';
+import { compressSessionMemory } from '@/src/kernel/application/compressSessionMemory';
+import { setSessionStoryMode } from '@/src/kernel/application/setStoryMode';
+import { deleteSessionSkill, saveSessionSkill, setSessionSkillEnabled } from '@/src/kernel/application/executeSkillCommand';
+import { dropSessionInventoryItem, undoSessionInventoryDrop, useSessionInventoryItem } from '@/src/kernel/application/executeInventoryCommand';
+import { createZhikuEntry, deleteZhikuEntry, refreshBundledZhiku, updateZhikuEntry } from '@/src/kernel/application/executeZhikuCommand';
+import { executePlotCommand } from '@/src/kernel/application/executePlotCommand';
+import { executeAlbumCommand } from '@/src/kernel/application/executeAlbumCommand';
+import { executePhoneCommand } from '@/src/kernel/application/executePhoneCommand';
+import { executeJobCommand } from '@/src/kernel/application/executeJobCommand';
+import { executeDurableJob, executeJobLifecycleCommand } from '@/src/kernel/application/executeDurableJob';
+import { replaceStoryPolicy } from '@/src/kernel/application/replaceStoryPolicy';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
+import { fingerprintCommand } from '@/src/kernel/domain/session/commandFingerprint';
+import type { CommittedProjection } from '@/src/kernel/application/CommandExecutor';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
-  turns: TurnEngine;
-  actions: RuntimeActionEngine;
-  preferences: PreferenceStore;
-  saves: SaveCatalogPort;
-  services: KernelServices;
+  context: ExecutionContextProvider;
+  content: ContentResolver;
+  storyWeaving: StoryWeavingProcessor;
+  albumAuthoring: AlbumAuthoring;
+  albumImages: AlbumImageGenerator;
+  phoneReplies: PhoneReplyGenerator;
+  clock: Clock;
+  ids: IdGenerator;
 }>;
 
 /** The only runtime kernel. Every dependency is mandatory and every call is async. */
-export class NativeKernel implements IKernel {
+export class NativeKernel implements CommandExecutor {
   private readonly running = new Map<string, {
     controller: AbortController;
     settled: Promise<void>;
     resolveSettled: () => void;
   }>();
+  private readonly activeSessionCommands = new Map<string, string>();
+  private readonly scheduledJobDrains = new Set<string>();
+  private readonly jobRunnerId: string;
+  private readonly commitListeners = new Set<(commit: CommittedProjection) => void>();
 
-  constructor(private readonly dependencies: NativeKernelDependencies) {}
-
-  get saves(): SaveCatalogPort {
-    return this.dependencies.saves;
-  }
-
-  get services(): KernelServices {
-    return this.dependencies.services;
+  constructor(private readonly dependencies: NativeKernelDependencies) {
+    this.jobRunnerId = dependencies.ids.next('job-runner');
   }
 
   async *execute(envelope: CommandEnvelope): AsyncIterable<ExecutionFrame> {
+    for await (const frame of this.executeLocked(envelope)) {
+      if (frame.type === 'committed') {
+        for (const listener of this.commitListeners) listener({ view: frame.view, cause: envelope.command.type });
+      }
+      yield frame;
+    }
+  }
+
+  subscribeCommitted(listener: (commit: CommittedProjection) => void): () => void {
+    this.commitListeners.add(listener);
+    return () => this.commitListeners.delete(listener);
+  }
+
+  private async *executeLocked(envelope: CommandEnvelope): AsyncIterable<ExecutionFrame> {
     const controller = new AbortController();
     const commandKey = String(envelope.commandId);
+    const sessionKey = String(envelope.sessionId);
     if (this.running.has(commandKey)) throw new Error(`Command is already running: ${commandKey}`);
+    const activeCommandId = this.activeSessionCommands.get(sessionKey);
+    if (activeCommandId) {
+      yield {
+        type: 'rejected',
+        commandId: envelope.commandId,
+        error: {
+          code: 'command_in_progress',
+          message: `Session already has an active command: ${activeCommandId}`,
+        },
+      };
+      return;
+    }
     let resolveSettled!: () => void;
     const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
     this.running.set(commandKey, { controller, settled, resolveSettled });
+    this.activeSessionCommands.set(sessionKey, commandKey);
     try {
-      if (envelope.command.type === 'session.create') {
-        yield await this.createSession(envelope as CreateSessionEnvelope);
+      yield { type: 'accepted', commandId: envelope.commandId };
+      if (!('expectedRevision' in envelope)) {
+        yield await this.createSession(envelope);
         return;
       }
 
-      const command = envelope as SessionCommandEnvelope;
+      const command: SessionCommandEnvelope = envelope;
       switch (command.command.type) {
-        case 'session.checkpoint':
-          yield* checkpointSession(command as CheckpointSessionEnvelope, this.dependencies.sessions);
-          return;
         case 'session.reset':
-          yield* resetSession(command as ResetSessionEnvelope, this.dependencies.sessions);
+          yield* resetSession({ ...command, command: command.command }, this.dependencies.sessions);
           return;
         case 'message.image.regenerate':
-          yield* regenerateNarrativeImage(command as RegenerateNarrativeImageEnvelope, {
+          yield* regenerateNarrativeImage({ ...command, command: command.command }, {
             sessions: this.dependencies.sessions,
-            actions: this.dependencies.actions,
+            clock: this.dependencies.clock,
+          });
+          return;
+        case 'job.retry':
+        case 'job.cancel':
+          yield* executeJobCommand({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'job.recover':
+        case 'job.claim-next':
+        case 'job.start':
+          yield* executeJobLifecycleCommand({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'job.execute':
+          yield* executeDurableJob({ ...command, command: command.command }, {
+            sessions: this.dependencies.sessions,
+            context: this.dependencies.context,
+            clock: this.dependencies.clock,
+            albumAuthoring: this.dependencies.albumAuthoring,
+            albumImages: this.dependencies.albumImages,
+            ids: this.dependencies.ids,
             signal: controller.signal,
           });
           return;
-        case 'queue.retry':
-          yield* retryRuntimeQueueTask(command as RetryQueueTaskEnvelope, {
+        case 'path.set-primary':
+          yield* setSessionPrimaryPath({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'path.awakening.decline':
+          yield* declineSessionPathAwakening({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'path.awakening.enter':
+          yield* executeTurnText(
+            { ...command, command: command.command },
+            '[系统] 踏入命途狭间',
+            {
+              sessions: this.dependencies.sessions,
+              context: this.dependencies.context,
+              signal: controller.signal,
+            },
+          );
+          return;
+        case 'message.edit-body':
+          yield* editSessionMessageBody({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'companion.set-tier':
+          yield* setCompanionTier({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'companion.set-traveling':
+          yield* setCompanionTraveling({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'memory.compress':
+          yield* compressSessionMemory(
+            { ...command, command: command.command },
+            this.dependencies.sessions,
+            this.dependencies.context,
+          );
+          return;
+        case 'world.set-story-mode':
+          yield* setSessionStoryMode({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'story-policy.replace':
+          yield* replaceStoryPolicy({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'skill.save':
+          yield* saveSessionSkill({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'skill.delete':
+          yield* deleteSessionSkill({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'skill.set-enabled':
+          yield* setSessionSkillEnabled({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'inventory.use':
+          yield* useSessionInventoryItem({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'inventory.drop':
+          yield* dropSessionInventoryItem({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'inventory.undo-drop':
+          yield* undoSessionInventoryDrop({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'zhiku.create':
+          yield* createZhikuEntry({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'zhiku.update':
+          yield* updateZhikuEntry({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'zhiku.delete':
+          yield* deleteZhikuEntry({ ...command, command: command.command }, this.dependencies.sessions);
+          return;
+        case 'zhiku.refresh-bundled':
+          yield* refreshBundledZhiku(
+            { ...command, command: command.command },
+            this.dependencies.sessions,
+            this.dependencies.content,
+          );
+          return;
+        case 'plot.import-text':
+        case 'plot.import-json':
+        case 'plot.restore-bundled':
+        case 'plot.rename-series':
+        case 'plot.rebuild-series':
+        case 'plot.toggle-series-injection':
+        case 'plot.set-current':
+        case 'plot.set-segment-status':
+        case 'plot.save-segment':
+        case 'plot.delete-series':
+        case 'plot.decompose':
+        case 'plot.decompose-batch':
+          yield* executePlotCommand({ ...command, command: command.command }, {
             sessions: this.dependencies.sessions,
-            actions: this.dependencies.actions,
+            content: this.dependencies.content,
+            context: this.dependencies.context,
+            processor: this.dependencies.storyWeaving,
             signal: controller.signal,
+          });
+          return;
+        case 'album.import-reference':
+        case 'album.set-reference':
+        case 'album.bind-slot':
+        case 'album.delete-entries':
+        case 'album.import-archive':
+        case 'album.set-character-anchor':
+        case 'album.generate':
+          yield* executeAlbumCommand({ ...command, command: command.command }, {
+            sessions: this.dependencies.sessions,
+            context: this.dependencies.context,
+            generator: this.dependencies.albumImages,
+            signal: controller.signal,
+            clock: this.dependencies.clock,
+          });
+          return;
+        case 'phone.dismiss-seed':
+        case 'phone.mark-read':
+        case 'phone.add-contact':
+        case 'phone.open-private-chat':
+        case 'phone.create-group':
+        case 'phone.rename-group':
+        case 'phone.add-group-member':
+        case 'phone.set-wallpaper':
+        case 'phone.send':
+        case 'phone.generate-seed':
+          yield* executePhoneCommand({ ...command, command: command.command }, {
+            sessions: this.dependencies.sessions,
+            context: this.dependencies.context,
+            replies: this.dependencies.phoneReplies,
+            signal: controller.signal,
+            clock: this.dependencies.clock,
           });
           return;
         case 'turn.advance':
-          yield* executeTurn(command as AdvanceTurnEnvelope, {
+          yield* executeTurn({ ...command, command: command.command }, {
             sessions: this.dependencies.sessions,
-            turns: this.dependencies.turns,
+            context: this.dependencies.context,
             signal: controller.signal,
           });
           return;
         case 'turn.reroll':
-          yield* rerollTurn(command as RerollTurnEnvelope, {
+          yield* rerollTurn({ ...command, command: command.command }, {
             sessions: this.dependencies.sessions,
-            turns: this.dependencies.turns,
+            context: this.dependencies.context,
             signal: controller.signal,
           });
           return;
@@ -108,7 +291,11 @@ export class NativeKernel implements IKernel {
       throw new Error(`Unknown kernel command: ${String((exhaustive as { type: string }).type)}`);
     } finally {
       this.running.delete(commandKey);
+      if (this.activeSessionCommands.get(sessionKey) === commandKey) {
+        this.activeSessionCommands.delete(sessionKey);
+      }
       resolveSettled();
+      if (!isInternalJobCommand(envelope)) this.scheduleJobDrain(envelope.sessionId);
     }
   }
 
@@ -125,18 +312,6 @@ export class NativeKernel implements IKernel {
     await running.settled;
   }
 
-  getPreference<T>(key: string): Promise<T | null> {
-    return this.dependencies.preferences.get<T>(key);
-  }
-
-  setPreference(key: string, value: unknown): Promise<void> {
-    return this.dependencies.preferences.set(key, value);
-  }
-
-  deletePreference(key: string): Promise<void> {
-    return this.dependencies.preferences.delete(key);
-  }
-
   read(query: SessionExistsQuery): Promise<SessionExistenceView>;
   read(query: SessionReadQuery): Promise<SessionView>;
   async read(query: KernelQuery): Promise<QueryResult> {
@@ -147,7 +322,11 @@ export class NativeKernel implements IKernel {
       };
     }
     const snapshot = await this.dependencies.sessions.read(query.sessionId);
-    if (query.type === 'session.read') return projectSession(snapshot);
+    if (query.type === 'session.read') {
+      const view = projectSession(snapshot);
+      this.scheduleJobDrain(query.sessionId);
+      return view;
+    }
     const exhaustive: never = query;
     throw new Error(`Unknown kernel query: ${String((exhaustive as { type: string }).type)}`);
   }
@@ -156,8 +335,20 @@ export class NativeKernel implements IKernel {
     const result = await this.dependencies.sessions.create({
       sessionId: envelope.sessionId,
       commandId: envelope.commandId,
-      initialState: { runtime: envelope.command.runtime },
+      fingerprint: fingerprintCommand(envelope.command),
+      initialState: { story: structuredClone(envelope.command.story) },
     });
+    if (result.type === 'duplicate_mismatch') {
+      return {
+        type: 'rejected',
+        commandId: envelope.commandId,
+        error: {
+          code: 'duplicate_command',
+          message: `Command id was reused with a different payload: ${envelope.commandId}`,
+          details: { kind: 'duplicate_command', commandId: String(envelope.commandId) },
+        },
+      };
+    }
     if (result.type === 'conflict') {
       return {
         type: 'rejected',
@@ -165,7 +356,7 @@ export class NativeKernel implements IKernel {
         error: {
           code: 'revision_conflict',
           message: `Session already exists at revision ${result.actualRevision}`,
-          details: { actualRevision: result.actualRevision },
+          details: { kind: 'revision_conflict', actualRevision: Number(result.actualRevision) },
         },
       };
     }
@@ -176,4 +367,78 @@ export class NativeKernel implements IKernel {
       view: projectSession(result.snapshot),
     };
   }
+
+  private scheduleJobDrain(sessionId: SessionId): void {
+    const key = String(sessionId);
+    if (this.scheduledJobDrains.has(key)) return;
+    this.scheduledJobDrains.add(key);
+    queueMicrotask(() => {
+      void this.drainJobs(sessionId).finally(() => this.scheduledJobDrains.delete(key));
+    });
+  }
+
+  private async drainJobs(sessionId: SessionId): Promise<void> {
+    await this.runInternalJobCommand(sessionId, {
+      type: 'job.recover', runnerId: this.jobRunnerId, recoveredAt: this.dependencies.clock.now(),
+    });
+    while (true) {
+      const claim = await this.runInternalJobCommand(sessionId, {
+        type: 'job.claim-next', runnerId: this.jobRunnerId, claimedAt: this.dependencies.clock.now(),
+      });
+      if (claim.type !== 'committed') {
+        await this.scheduleFutureRetry(sessionId);
+        return;
+      }
+      const claimed = [...claim.view.story.jobs.records].reverse().find((job) =>
+        job.state === 'claimed' && job.claimedBy === this.jobRunnerId,
+      );
+      if (!claimed) throw new Error('Committed job claim did not project the claimed job');
+      const started = await this.runInternalJobCommand(sessionId, {
+        type: 'job.start', jobId: claimed.id, runnerId: this.jobRunnerId, startedAt: this.dependencies.clock.now(),
+      });
+      if (started.type !== 'committed') return;
+      await this.runInternalJobCommand(sessionId, {
+        type: 'job.execute', jobId: claimed.id, runnerId: this.jobRunnerId,
+      });
+    }
+  }
+
+  private async runInternalJobCommand(
+    sessionId: SessionId,
+    command: Extract<SessionCommandEnvelope['command'], { type: 'job.recover' | 'job.claim-next' | 'job.start' | 'job.execute' }>,
+  ): Promise<Extract<ExecutionFrame, { type: 'committed' | 'rejected' }>> {
+    const snapshot = await this.dependencies.sessions.read(sessionId);
+    let terminal: Extract<ExecutionFrame, { type: 'committed' | 'rejected' }> | null = null;
+    for await (const frame of this.execute({
+      protocolVersion: 1,
+      commandId: this.dependencies.ids.next('job-command') as CommandId,
+      sessionId,
+      expectedRevision: snapshot.revision,
+      command,
+    })) {
+      if (frame.type === 'committed' || frame.type === 'rejected') terminal = frame;
+    }
+    if (!terminal) throw new Error('Internal durable job command emitted no terminal frame');
+    return terminal;
+  }
+
+  private async scheduleFutureRetry(sessionId: SessionId): Promise<void> {
+    const snapshot = await this.dependencies.sessions.read(sessionId);
+    const next = snapshot.state.story.jobs.records
+      .map((job) => job.state === 'queued' || job.state === 'retry'
+        ? job.availableAt
+        : job.state === 'claimed' || job.state === 'running'
+          ? job.leaseExpiresAt
+          : null)
+      .filter((time): time is number => time !== null)
+      .reduce<number | null>((earliest, time) => earliest === null ? time : Math.min(earliest, time), null);
+    if (next === null) return;
+    const delay = Math.max(0, next - this.dependencies.clock.now());
+    setTimeout(() => this.scheduleJobDrain(sessionId), delay);
+  }
+}
+
+function isInternalJobCommand(envelope: CommandEnvelope): boolean {
+  return 'expectedRevision' in envelope && envelope.command.type.startsWith('job.') &&
+    envelope.command.type !== 'job.retry' && envelope.command.type !== 'job.cancel';
 }

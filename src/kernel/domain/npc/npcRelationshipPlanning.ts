@@ -18,7 +18,7 @@ export interface NPC关系规划快照 {
   条目: NPC关系规划条目[];
 }
 
-export function buildNpcRelationshipPlanning(npcs: NPC记录[], turnCount: number): NPC关系规划快照 {
+export function buildNpcRelationshipPlanning(npcs: readonly NPC记录[], turnCount: number): NPC关系规划快照 {
   const entries = npcs
     .filter((npc) => npc.阶位 === 'companion' || npc.同行 || 提取NPC同行记忆文本列表(npc).length > 0 || npc.好感度 !== 0 || npc.亲密关系)
     .map((npc) => buildNpcRelationshipEntry(npc, turnCount))

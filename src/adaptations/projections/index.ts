@@ -2,19 +2,14 @@
  * UI projection ownership (Phase 3).
  */
 
-export type {
-  ProjectionProgress,
-  ProjectionState,
-} from './projectionStore';
+export type { ProjectionState } from './projectionStore';
 export {
   applyExecutionFrame,
   clearProjectionEphemerals,
   createProjectionState,
   displaySessionView,
+  projectionHasDraft,
+  projectionNarrativeText,
   reduceExecutionFrames,
+  SessionProjectionStore,
 } from './projectionStore';
-export {
-  restoreProjectionFromKernel,
-  commitProjectionView,
-  refreshProjectionAfterCommit,
-} from './restoreProjection';

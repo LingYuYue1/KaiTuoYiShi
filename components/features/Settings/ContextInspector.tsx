@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/workflows/contextSnapshot';
+import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/contract/inspection';
 import { formatTokenCount } from '@/utils/tokenEstimate';
 
 interface Props {

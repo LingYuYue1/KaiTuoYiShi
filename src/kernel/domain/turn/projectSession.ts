@@ -10,13 +10,12 @@
 
 import type { SessionView, TurnView } from '@/src/kernel/contract';
 import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
-import { cloneRuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
 
 export function projectSession(
   snapshot: SessionSnapshot,
 ): SessionView {
   return {
-    runtime: cloneRuntimeGameState(snapshot.state.runtime),
+    story: structuredClone(snapshot.state.story),
     sessionId: snapshot.sessionId,
     revision: snapshot.revision,
     turns: projectTurns(snapshot),
@@ -24,7 +23,7 @@ export function projectSession(
 }
 
 function projectTurns(snapshot: SessionSnapshot): TurnView[] {
-  const history = snapshot.state.runtime.chatHistory;
+  const history = snapshot.state.story.conversation.history;
   if (history.length % 2 !== 0) throw new Error('chatHistory requires complete user and assistant pairs');
   const turns: TurnView[] = [];
   for (let index = 0; index < history.length; index += 2) {

@@ -95,7 +95,7 @@ assert(referenceInjection.includes('const referenceEntry = targetId') && referen
 assert(referenceInjection.indexOf('if (!params.settings.enabled)') < referenceInjection.indexOf('params.album.entries.find'), '关闭参考图时必须在读取相册条目之前短路。');
 assert(referenceInjection.includes("target.targetType === 'nsfw_part'") && referenceInjection.includes("'not_applicable', '已开启参考图 · 当前任务不使用'"), '参考图只允许单角色与角色 NSFW 任务使用，其他任务必须显示不适用。');
 assert(albumWorkspaces.includes('referenceStatus={props.referenceStatus}') && albumWorkspaces.includes('<ReferenceInjectionHint status={referenceStatus} />') && albumPanel.includes('referenceStatus={nonCharacterReferenceStatus}'), '所有生图工作区必须在画布用途信息栏显示真实参考图状态。');
-assert(settingsModel.includes('参考图注入选择加入版本') && settingsModel.includes('hasCurrentOptIn && input.enabled === true'), '参考图注入必须经过一次默认关闭的选择加入迁移。');
+assert(!settingsModel.includes('injectionOptInVersion') && settingsModel.includes('enabled: input.enabled === true'), '参考图设置必须使用当前精确 schema，不得保留版本迁移字段。');
 assert(albumPanel.includes('openCurrentResultInGallery') && albumPanel.includes('currentResultIsReference') && albumWorkspaces.includes('已设为当前角色参考图') && albumWorkspaces.includes('onMountSlot'), '生成成功后必须保留就地设置参考图、挂槽位、查看图库与即时状态反馈。');
 assert(albumPanel.includes('buildPresentSceneNpcs'), '场景生图必须收集当前在场角色。');
 assert(albumPanel.includes('buildSceneSourceText'), '词组转化器 sourceText 必须包含场景和锚点资料。');

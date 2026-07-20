@@ -2,8 +2,8 @@
 import type { AI提供商, 游戏设置 } from '@/models/settings';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import type { ConnectionTestResult } from '@/services/ai/apiTools';
-import { getAdaptationServices } from '@/src/adaptations';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 
 interface Props {
   settings: 游戏设置;
@@ -88,7 +88,7 @@ export function MemorySystemSettingsTab({ settings, onChange }: Props) {
     setLoadingModels(true);
     setMessage(null);
     try {
-      const list = await (await getAdaptationServices()).apiTools.fetchModels({ ...effectiveApi, name: '记忆总结' });
+      const list = await (await getAppRoot()).device.fetchModels({ ...effectiveApi, name: '记忆总结' });
       setModelOptions(list);
       if (list.length > 0 && !list.includes(memory.记忆总结API.model.trim())) {
         patchApi({ model: list[0] });
@@ -108,7 +108,7 @@ export function MemorySystemSettingsTab({ settings, onChange }: Props) {
       return;
     }
     try {
-      const result = await (await getAdaptationServices()).apiTools.testConnection({ ...effectiveApi, name: '记忆总结' });
+      const result = await (await getAppRoot()).device.testConnection({ ...effectiveApi, name: '记忆总结' });
       setTestResult(result);
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err);
@@ -118,7 +118,7 @@ export function MemorySystemSettingsTab({ settings, onChange }: Props) {
 
   const handleSave = async () => {
     try {
-      await setPreference('gameSettings', settings);
+      await persistSettingsPlanes(settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '记忆系统设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -323,7 +323,7 @@ export function MemorySystemSettingsTab({ settings, onChange }: Props) {
             value={memory.短期转中期阈值}
             onChange={(value) => {
               const next = Math.max(1, Math.trunc(value));
-              patchMemory({ 短期转中期阈值: next, 短期转长期阈值: next });
+              patchMemory({ 短期转中期阈值: next });
             }}
             hint="达到这个条数时，系统会自动把短期记忆整理成阶段剧情链。"
           />
@@ -360,7 +360,7 @@ export function MemorySystemSettingsTab({ settings, onChange }: Props) {
         <TextareaField
           label="中期转长期"
           value={memory.中期转长期提示词}
-          onChange={(value) => patchMemory({ 中期转长期提示词: value, 短期转长期提示词: value })}
+          onChange={(value) => patchMemory({ 中期转长期提示词: value })}
           rows={7}
           hint="把阶段剧情链沉淀成稳定事实，保留主线转折、关系变化、不可逆后果与长期目标。"
         />

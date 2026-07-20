@@ -5,7 +5,6 @@ import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { 默认文生图规则中心, normalizeImageRules } from '@/utils/imagePromptRules';
 import type { 剧情编织API覆盖 } from './storyWeaving';
 import type { STPresetEntryV2 } from './stTypes';
-import { resolveLegacyStarMapLocationId } from './starMap';
 import type { StarMapLocation, StarMapSceneAnchor, StarMapWaypoint } from './starMap';
 
 export interface API配置项 {
@@ -235,20 +234,10 @@ export interface 游戏设置 {
   variableApi: 变量API覆盖;
   /** 应用变量命令前是否需要玩家在面板中手动确认（默认 false，直接落地）。 */
   variableUpdateRequireConfirm: boolean;
-  /** @deprecated 用 promptModules 替代。保留字段用于旧存档迁移。 */
-  customPrompt: string;
   /** 内置 + 玩家自定义的提示词模块。所有 enabled 模块都恒注入主流程 system prompt。 */
   promptModules: 提示词模块[];
   /** ST 预设兼容：宏变量持久化。跨回合保留的全局变量。 */
   macroGlobalVars?: Record<string, string>;
-  /** 提示词模块 order 版本号（用于旧存档迁移）。
-   *  - 0/缺省：旧版 order 区间（内置 5-90 + ST 50+，会冲突）
-   *  - 1：方案 A 三层 order 区间（Tier 1: 1-99 / Tier 2: 100-999 ST / Tier 3: 1000+ 压轴） */
-  promptModuleOrderVersion?: number;
-  /** 世界书条目触发状态表（Phase 7.1 升级，随存档持久化）。
-   *  key = 条目 id，value = 最近触发回合（messageCount 值）。
-   *  用于世界书条目的 delay / cooldown 判断。 */
-  worldbookTriggerStates?: Record<string, number>;
 
   // === 新增：保留式 ST 预设字段 ===
 
@@ -332,8 +321,6 @@ export interface 记忆系统设置 {
   即时转短期阈值: number;
   短期转中期阈值: number;
   中期转长期阈值: number;
-  /** @deprecated 旧版字段。新版本使用 短期转中期阈值 / 中期转长期阈值。 */
-  短期转长期阈值: number;
   NPC记忆压缩阈值: number;
   /** 记忆总结独立 API：用于即时/短期压缩。 */
   记忆总结API: 忆庭API覆盖;
@@ -343,8 +330,6 @@ export interface 记忆系统设置 {
   即时转短期提示词: string;
   短期转中期提示词: string;
   中期转长期提示词: string;
-  /** @deprecated 旧版字段。新版本使用 短期转中期提示词 / 中期转长期提示词。 */
-  短期转长期提示词: string;
   NPC记忆压缩提示词: string;
   忆庭召回API: 忆庭API覆盖;
   忆庭精炼API: 忆庭API覆盖;
@@ -564,8 +549,6 @@ export interface 正文生图设置 {
   mode: 'auto' | 'manual';
   /** 玩家出镜：关闭 / 正文在场时自动 / 强制尽量出镜 */
   playerAppearanceMode: 'off' | 'auto' | 'force';
-  /** @deprecated 正文生图固定为故事快照，仅保留字段兼容旧存档。 */
-  preference: 'scene_only' | 'character_only' | 'both';
   /** 生成时机：立即阻塞 / 回合内排队 / 纯异步 */
   timing: 'immediate' | 'queue_current' | 'queue_async';
   /** 提示词解析模型 API 配置（独立，不走主剧情模型） */
@@ -574,13 +557,9 @@ export interface 正文生图设置 {
   imageApi: 文生图API配置;
 }
 
-export const 参考图注入选择加入版本 = 1;
-
 export interface 文生图参考图设置 {
   /** 总开关：关闭时参考图只作为相册素材保存，不参与生成。 */
   enabled: boolean;
-  /** 玩家已在对应版本明确选择是否启用；缺失时按关闭迁移一次。 */
-  injectionOptInVersion: number;
   /** SD WebUI 启用参考图时走 img2img，值越高越接近文字提示，越低越贴近参考图。 */
   sdWebuiDenoisingStrength: number;
   /** ComfyUI 需要工作流显式接收参考图占位符，默认不开启以免误导。 */
@@ -687,7 +666,6 @@ export function 创建默认文生图系统设置(): 文生图系统设置 {
 export function 创建默认文生图参考图设置(): 文生图参考图设置 {
   return {
     enabled: false,
-    injectionOptInVersion: 参考图注入选择加入版本,
     sdWebuiDenoisingStrength: 0.55,
     enableComfyWorkflowReference: false,
     enableOpenAICompatibleReference: false,
@@ -700,7 +678,6 @@ export function 创建默认正文生图设置(): 正文生图设置 {
     enabled: false,
     mode: 'auto',
     playerAppearanceMode: 'auto',
-    preference: 'both',
     timing: 'queue_current',
     parserApi: {
       provider: '',
@@ -787,11 +764,8 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
 export function 归一化文生图参考图设置(input?: Partial<文生图参考图设置>): 文生图参考图设置 {
   const defaults = 创建默认文生图参考图设置();
   if (!input) return defaults;
-  const inputOptInVersion = Math.max(0, Math.floor(Number(input.injectionOptInVersion) || 0));
-  const hasCurrentOptIn = inputOptInVersion >= 参考图注入选择加入版本;
   return {
-    enabled: hasCurrentOptIn && input.enabled === true,
-    injectionOptInVersion: 参考图注入选择加入版本,
+    enabled: input.enabled === true,
     sdWebuiDenoisingStrength: Math.max(0.05, Math.min(0.95, Number(input.sdWebuiDenoisingStrength ?? defaults.sdWebuiDenoisingStrength) || defaults.sdWebuiDenoisingStrength)),
     enableComfyWorkflowReference: input.enableComfyWorkflowReference === true,
     enableOpenAICompatibleReference: input.enableOpenAICompatibleReference === true,
@@ -806,7 +780,6 @@ export function 归一化正文生图设置(input?: Partial<正文生图设置>)
     enabled: input.enabled === true,
     mode: input.mode === 'manual' ? 'manual' : 'auto',
     playerAppearanceMode: input.playerAppearanceMode === 'off' || input.playerAppearanceMode === 'force' ? input.playerAppearanceMode : 'auto',
-    preference: input.preference ?? defaults.preference,
     timing: input.timing ?? defaults.timing,
     parserApi: {
       provider: (input.parserApi?.provider ?? '') as AI提供商 | '',
@@ -828,7 +801,6 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
     即时转短期阈值: 25,
     短期转中期阈值: 20,
     中期转长期阈值: 10,
-    短期转长期阈值: 20,
     NPC记忆压缩阈值: 15,
     记忆总结API: {
       provider: '',
@@ -852,12 +824,6 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
       '原著角色的单回合沉默、紧张、冷淡、受伤、戒备或少话只能作为当时状态记录，不得压缩成长期人格；长期口吻与行为边界以智库人物主体资料为准。',
     ].join('\n'),
     中期转长期提示词: [
-      '你是叙事游戏的长期记忆管理员。请把多条「中期记忆」压缩为稳定、可长期注入 AI 上下文的「长期记忆」。',
-      '长期记忆只保留不应被遗忘的事实：主线转折、已确认设定、玩家身份与能力变化、重要承诺、组织关系、关键 NPC 关系、不可逆后果、长期目标和反复出现的伏笔。',
-      '请删除一次性场景细节、重复描述、临时情绪和已经解决的小事件。输出 4-8 条结构化要点，优先写清「事实」「影响」「后续牵引」。不要改写成小说段落，也不要添加没有依据的新设定。',
-      '不得把原著角色某几回合的临时沉默、紧张、冷淡、受伤或戒备归纳为长期性格改变；若确有关系变化，只写共同经历和当前关系事实。',
-    ].join('\n'),
-    短期转长期提示词: [
       '你是叙事游戏的长期记忆管理员。请把多条「中期记忆」压缩为稳定、可长期注入 AI 上下文的「长期记忆」。',
       '长期记忆只保留不应被遗忘的事实：主线转折、已确认设定、玩家身份与能力变化、重要承诺、组织关系、关键 NPC 关系、不可逆后果、长期目标和反复出现的伏笔。',
       '请删除一次性场景细节、重复描述、临时情绪和已经解决的小事件。输出 4-8 条结构化要点，优先写清「事实」「影响」「后续牵引」。不要改写成小说段落，也不要添加没有依据的新设定。',
@@ -1008,42 +974,27 @@ export function 归一化剧情编织系统设置(input?: Partial<剧情编织�
   };
 }
 
-const 旧版默认记忆系统提示词 = {
-  即时转短期提示词: '请把本批即时记忆整理成 1-2 条客观摘要，只保留发生了什么，不写感受。',
-  短期转长期提示词: '请把多条短期记忆归纳为更稳定的长期记忆，保留关系、转折和不可逆事实。',
-  NPC记忆压缩提示词: '请把与你同行的记忆整理得更凝练，保留称呼、约定、关系变化和关键事件。',
-};
-
-const 旧版NPC默认记忆压缩提示词 = [
-  '你是伙伴系统的同行记忆整理器。请把某一名 NPC 的「与你同行的记忆」压缩为更凝练但有情感连续性的记录。',
-  '必须保留：玩家与该 NPC 的初遇/关键共同经历、称呼变化、约定与亏欠、信任或冲突的原因、好感变化依据、对玩家的独特看法、正在等待兑现的承诺，以及会影响之后互动的私人细节。',
-  '删除重复寒暄和纯场景描写。输出 3-6 条要点，每条尽量说明「事件 -> NPC 对玩家的认知/关系影响」。不要把其他 NPC 的记忆混进来，不要让关系突然跳变。',
-].join('\n');
-
 export function 归一化记忆系统设置(input?: Partial<记忆系统设置>): 记忆系统设置 {
   const defaults = 创建默认记忆系统设置();
   if (!input) return defaults;
-  const oldShortToLongThreshold = Number(input.短期转长期阈值);
   const shortToMiddleThreshold = Math.max(
     1,
-    Math.trunc(Number(input.短期转中期阈值 ?? input.短期转长期阈值 ?? defaults.短期转中期阈值) || defaults.短期转中期阈值),
+    Math.trunc(Number(input.短期转中期阈值 ?? defaults.短期转中期阈值) || defaults.短期转中期阈值),
   );
   const middleToLongThreshold = Math.max(
     1,
     Math.trunc(Number(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值),
   );
   const shortToMiddlePrompt = input.短期转中期提示词 ?? defaults.短期转中期提示词;
-  const middleToLongPrompt = input.中期转长期提示词 ?? input.短期转长期提示词 ?? defaults.中期转长期提示词;
+  const middleToLongPrompt = input.中期转长期提示词 ?? defaults.中期转长期提示词;
 
   const merged: 记忆系统设置 = {
     ...defaults,
     ...input,
     短期转中期阈值: shortToMiddleThreshold,
     中期转长期阈值: middleToLongThreshold,
-    短期转长期阈值: shortToMiddleThreshold,
     短期转中期提示词: shortToMiddlePrompt,
     中期转长期提示词: middleToLongPrompt,
-    短期转长期提示词: middleToLongPrompt,
     记忆总结API: {
       ...defaults.记忆总结API,
       ...(input.记忆总结API ?? {}),
@@ -1067,39 +1018,6 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
       Math.trunc(Number(input.忆庭召回最早触发回合 ?? defaults.忆庭召回最早触发回合) || defaults.忆庭召回最早触发回合),
     ),
   };
-  const 使用旧版默认提示词 =
-    !input.即时转短期提示词 ||
-    (
-      input.即时转短期提示词 === 旧版默认记忆系统提示词.即时转短期提示词 &&
-      input.短期转长期提示词 === 旧版默认记忆系统提示词.短期转长期提示词 &&
-      input.NPC记忆压缩提示词 === 旧版默认记忆系统提示词.NPC记忆压缩提示词
-    );
-
-  if (使用旧版默认提示词) {
-    return {
-      ...defaults,
-      即时转短期阈值: input.即时转短期阈值 === 10 ? defaults.即时转短期阈值 : merged.即时转短期阈值,
-      短期转中期阈值: oldShortToLongThreshold === 10 ? defaults.短期转中期阈值 : merged.短期转中期阈值,
-      中期转长期阈值: merged.中期转长期阈值,
-      短期转长期阈值: oldShortToLongThreshold === 10 ? defaults.短期转长期阈值 : merged.短期转长期阈值,
-      NPC记忆压缩阈值: input.NPC记忆压缩阈值 === 10 ? defaults.NPC记忆压缩阈值 : merged.NPC记忆压缩阈值,
-      记忆总结API: merged.记忆总结API,
-      忆庭召回最早触发回合: merged.忆庭召回最早触发回合,
-      忆庭召回API: merged.忆庭召回API,
-      忆庭精炼API: merged.忆庭精炼API,
-      忆庭召回条数: merged.忆庭召回条数,
-      忆庭独立精炼: merged.忆庭独立精炼,
-      忆庭启用: merged.忆庭启用,
-    };
-  }
-
-  if (input.NPC记忆压缩提示词 === 旧版NPC默认记忆压缩提示词) {
-    return {
-      ...merged,
-      NPC记忆压缩提示词: defaults.NPC记忆压缩提示词,
-    };
-  }
-
   return merged;
 }
 
@@ -1128,7 +1046,6 @@ export function 创建默认游戏设置(): 游戏设置 {
     记忆系统: 创建默认记忆系统设置(),
     variableApi: 创建空变量API覆盖(),
     variableUpdateRequireConfirm: false,
-    customPrompt: '',
     promptModules: createBuiltinPromptModules(),
     enableCotFakeHistory: true,
     autoRetryOnError: true,
@@ -1143,9 +1060,7 @@ export function 创建默认游戏设置(): 游戏设置 {
     星轨航图系统: 创建默认星轨航图系统设置(),
     // ST 预设兼容相关字段（可选，这里显式列默认值保持风格一致）
     cotLanguage: 'zh',
-    promptModuleOrderVersion: 1,
     macroGlobalVars: {},
-    worldbookTriggerStates: {},
     // === 新增：保留式 ST 预设默认值 ===
     stPresetsV2: [],
     currentStPresetIdV2: null,
@@ -1190,7 +1105,6 @@ function 归一化星轨场景锚点(value: unknown): StarMapSceneAnchor[] {
           x: 归一化星轨坐标(raw.mapPosition?.x, 50),
           y: 归一化星轨坐标(raw.mapPosition?.y, 50),
         },
-        legacyLocationIds: 归一化星轨文本数组(raw.legacyLocationIds, []),
       };
     })
     .filter((item): item is StarMapSceneAnchor => Boolean(item))
@@ -1235,7 +1149,7 @@ export function 归一化星轨航图系统设置(input?: Partial<星轨航图�
           return {
             id: String(item.id || `custom_location_${index}`).trim(),
             waypointId,
-            parentId: resolveLegacyStarMapLocationId(typeof item.parentId === 'string' ? item.parentId : undefined),
+            parentId: typeof item.parentId === 'string' ? item.parentId : undefined,
             name,
             kind: item.kind || 'special',
             source: item.source || 'fan',
@@ -1342,44 +1256,32 @@ export function 归一化额外功能设置(input?: Partial<额外功能设置>)
 
 export type 主题预设 = 'deepspace' | 'starOceanCyan';
 export type 存档类型 = 'manual' | 'auto' | 'backup' | 'imported';
+export const PORTABLE_SAVE_SCHEMA_VERSION = 1 as const;
 
 export interface 存档数据 {
+  portableSchemaVersion: typeof PORTABLE_SAVE_SCHEMA_VERSION;
   id: number;
   type: 存档类型;
   timestamp: number;
-  /** 当前运行回合计数。旧存档没有该字段时，读档会按聊天记录兜底推算。 */
-  turnCount?: number;
+  turnCount: number;
   旅人: import('./character').角色数据结构;
   世界: import('./world').世界状态;
   chatHistory: import('./chat').聊天消息[];
   记忆: import('./memory').记忆系统;
-  忆庭?: import('./yiting').忆庭系统;               // 可选：兼容旧存档（忆庭系统独立化）
-  智库?: import('./zhiku').智库系统;                // 可选：兼容旧存档（智库资料库）
-  手机?: import('./phone').手机系统;               // 可选：兼容旧存档（手机系统）
-  NPC?: import('./npc').NPC记录[];                 // 可选：兼容旧存档（v1 加入）
-  相册?: import('./imageGeneration').相册系统;      // 可选：图片资产、显示槽位绑定与生成任务
-  /** @deprecated 旧独立战斗系统字段。当前版本不再读取或写入，仅允许旧存档携带后被忽略。 */
-  战斗?: unknown;
-  新闻?: import('./news').新闻条目[];               // 可选：兼容旧存档（v1 加入）
-  剧情?: import('./plot').剧情节点[];                // 可选：兼容旧存档（v1 加入）
-  剧情编织?: import('./storyWeaving').剧情编织系统;   // 可选：自定义剧情编织系统
-  /** @deprecated 旧独立阵营系统字段。当前版本不再读取或写入，仅允许旧存档携带后被忽略。 */
-  阵营?: unknown;
-  variableBatches?: import('./variableCommand').变量命令批次[]; // 可选：兼容旧存档（v1 加入）
-  queueTasks?: import('./queueTask').队列任务记录[]; // 可选：后台队列展示记录
-  /** @deprecated Settings are device preferences as of the iKernel save boundary. */
-  gameSettings?: 游戏设置;
-  /** @deprecated API secrets never belong to new saves. */
-  apiSettings?: API设置;
-  /** @deprecated Theme is a device preference, not story state. */
-  theme?: 主题预设;
-}
-
-/** Canonical saves contain story state only; legacy device preferences are migration input. */
-export function stripDevicePreferencesFromSave<T extends 存档数据>(save: T): T {
-  const canonical = structuredClone(save) as T;
-  delete canonical.apiSettings;
-  delete canonical.gameSettings;
-  delete canonical.theme;
-  return canonical;
+  忆庭: import('./yiting').忆庭系统;
+  智库: import('./zhiku').智库系统;
+  手机: import('./phone').手机系统;
+  NPC: import('./npc').NPC记录[];
+  相册: import('./imageGeneration').相册系统;
+  新闻: import('./news').新闻条目[];
+  剧情: import('./plot').剧情节点[];
+  剧情编织: import('./storyWeaving').剧情编织系统;
+  variableBatches: import('./variableCommand').变量命令批次[];
+  jobs: import('@/src/kernel/domain/jobs/durableJob').DurableJob[];
+  policy: import('./settingsPlanes').StoryPolicy;
+  turnJournal: import('@/src/kernel/domain/session/storyState').TurnJournalEntry[];
+  /** 剧情面世界书触发/冷却历史。 */
+  worldbookTriggerStates: Record<string, number>;
+  /** 剧情面待触发开局事件。 */
+  pendingOpeningTrigger: string | null;
 }

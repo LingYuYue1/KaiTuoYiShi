@@ -1,18 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
-import type { 聊天消息 } from '@/models/chat';
-import type { 记忆系统 } from '@/models/memory';
 import type { 手机联系人, 手机会话, 手机系统, 主动来信种子 } from '@/models/phone';
-import type { NPC记录, NPC同行记忆条目 } from '@/models/npc';
-import { 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
+import type { NPC记录 } from '@/models/npc';
+import { 格式化NPC关系, 归一化NPC记录列表, 读取NPC头像 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
-import type { 世界状态 } from '@/models/world';
 import type { 游戏设置 } from '@/models/settings';
-import type { 智库系统 } from '@/models/zhiku';
 import type { 相册系统 } from '@/models/imageGeneration';
-import { 创建手机会话, 创建手机会话本地摘要条目, 创建手机会话本地库, 创建手机消息, 计算手机未读, type 手机消息 } from '@/models/phone';
-import { getAdaptationServices } from '@/src/adaptations';
-import type { 忆庭系统 } from '@/models/yiting';
 import {
   BUILTIN_PHONE_WALLPAPERS,
   DEFAULT_PHONE_CHAT_WALLPAPER,
@@ -24,20 +17,26 @@ import { 列出手机相册壁纸, 是当前手机壁纸 } from '@/utils/phoneWa
 interface Props {
   phone: 手机系统;
   traveler: 角色数据结构;
-  world: 世界状态;
-  memory: 记忆系统;
   news: 新闻条目[];
-  zhiku: 智库系统;
   gameSettings: 游戏设置;
   turnCount: number;
-  mainChatHistory: 聊天消息[];
   npcRecords: NPC记录[];
   album?: 相册系统;
-  onPhoneChange: React.Dispatch<React.SetStateAction<手机系统>>;
-  onMemoryChange: React.Dispatch<React.SetStateAction<记忆系统>>;
-  onYitingChange: React.Dispatch<React.SetStateAction<忆庭系统>>;
-  onNpcRecordsChange: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+  actions: PhoneModalActions;
   onClose: () => void;
+}
+
+export interface PhoneModalActions {
+  dismissSeed(seedId: string): Promise<void>;
+  markRead(chatId: string): Promise<void>;
+  addContact(npcId: string): Promise<void>;
+  openPrivateChat(npcId: string): Promise<string>;
+  createGroup(npcIds: readonly string[], title: string): Promise<string>;
+  renameGroup(chatId: string, title: string): Promise<void>;
+  addGroupMember(chatId: string, npcId: string): Promise<void>;
+  setWallpaper(slot: 'home' | 'chat', assetRef?: string): Promise<void>;
+  send(chatId: string, text: string): Promise<void>;
+  generateSeed(seedId: string): Promise<string>;
 }
 
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -62,19 +61,12 @@ function toPhoneContactId(npcId: string): string {
 export function PhoneModal({
   phone,
   traveler,
-  world,
-  memory,
   news,
-  zhiku,
   gameSettings,
   turnCount,
-  mainChatHistory,
   npcRecords,
   album,
-  onPhoneChange,
-  onMemoryChange,
-  onYitingChange,
-  onNpcRecordsChange,
+  actions,
   onClose,
 }: Props) {
   const [activeApp, setActiveApp] = useState<PhoneApp | null>(null);
@@ -205,30 +197,12 @@ export function PhoneModal({
     setMobileView('list');
   }, [activeApp]);
 
-  const recalc = (next: 手机系统): 手机系统 => ({
-    ...next,
-    unreadTotal: 计算手机未读(next),
-  });
-
-  const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
   const dismissSeed = (seed: 主动来信种子) => {
-    onPhoneChange((prev) =>
-      recalc({
-        ...prev,
-        messageSeeds: prev.messageSeeds.map((item) => (item.id === seed.id ? { ...item, status: 'dismissed' } : item)),
-      }),
-    );
+    void actions.dismissSeed(seed.id).catch((error) => setPhoneError(error instanceof Error ? error.message : String(error)));
   };
 
   const markChatRead = (chatId: string) => {
-    onPhoneChange((prev) => {
-      const next = {
-        ...prev,
-        chats: prev.chats.map((chat) => (chat.id === chatId ? { ...chat, unread: 0 } : chat)),
-      };
-      return recalc(next);
-    });
+    void actions.markRead(chatId).catch((error) => setPhoneError(error instanceof Error ? error.message : String(error)));
   };
 
   const resolveContactForChat = (chat: 手机会话 | undefined): 手机联系人 | undefined => {
@@ -254,62 +228,33 @@ export function PhoneModal({
     };
   };
 
-  const ensurePrivateChat = (contact: 手机联系人): 手机会话 => {
+  const ensurePrivateChat = async (contact: 手机联系人): Promise<string> => {
     const existing = phone.chats.find((chat) => chat.type === 'private' && chat.participantIds.includes(contact.id));
     if (existing) {
       setActiveChatId(existing.id);
       setActiveApp('messages');
       setMobileView('chat');
       markChatRead(existing.id);
-      return existing;
+      return existing.id;
     }
-
-    const newChat = 创建手机会话({
-      type: 'private',
-      title: contact.name,
-      participantIds: [contact.id],
-    });
-    newChat.localArchive = {
-      ...(newChat.localArchive ?? 创建手机会话本地库('private')),
-      threshold: gameSettings.手机系统.privateArchiveThreshold,
-    };
-    onPhoneChange((prev) => {
-      const hasContact = prev.contacts.some((item) => item.id === contact.id);
-      const next = {
-        ...prev,
-        contacts: hasContact ? prev.contacts : [...prev.contacts, contact],
-        chats: [newChat, ...prev.chats],
-      };
-      return recalc(next);
-    });
-    setActiveChatId(newChat.id);
+    if (!contact.npcId) throw new Error('联系人缺少 NPC 身份。');
+    const chatId = await actions.openPrivateChat(contact.npcId);
+    setActiveChatId(chatId);
     setActiveApp('messages');
     setMobileView('chat');
-    return newChat;
+    return chatId;
   };
 
-  const handleAddContact = (contact: 手机联系人) => {
-    onPhoneChange((prev) => {
-      if (prev.contacts.some((item) => item.id === contact.id || (contact.npcId && item.npcId === contact.npcId))) {
-        return prev;
-      }
-      return recalc({
-        ...prev,
-        contacts: [
-          {
-            ...contact,
-            available: true,
-            status: 'available',
-            unlockSource: 'manual',
-            lastActiveTurn: contact.lastActiveTurn ?? turnCount,
-          },
-          ...prev.contacts,
-        ],
-      });
-    });
-    setActiveContactId(contact.id);
-    setShowAddContact(false);
-    setPhoneError('');
+  const handleAddContact = async (contact: 手机联系人) => {
+    if (!contact.npcId) return;
+    try {
+      await actions.addContact(contact.npcId);
+      setActiveContactId(contact.id);
+      setShowAddContact(false);
+      setPhoneError('');
+    } catch (error) {
+      setPhoneError(error instanceof Error ? error.message : String(error));
+    }
   };
 
   const normalizeParticipantId = (id: string) => {
@@ -353,225 +298,23 @@ export function PhoneModal({
     return '临时频道';
   };
 
-  const handleCreateGroupChat = () => {
+  const handleCreateGroupChat = async () => {
     const selectedContacts = contacts.filter((contact) => groupMemberIds.includes(contact.id) && contact.available !== false);
     if (selectedContacts.length < 2) {
       setPhoneError('创建群聊至少需要选择 2 位可联系对象。');
       return;
     }
     const title = groupNameDraft.trim() || buildStandardGroupTitle(selectedContacts.map((item) => item.id));
-    const groupChat = 创建手机会话({
-      type: 'group',
-      title,
-      participantIds: selectedContacts.map((item) => item.id),
-    });
-    groupChat.localArchive = {
-      ...(groupChat.localArchive ?? 创建手机会话本地库('group')),
-      threshold: gameSettings.手机系统.groupArchiveThreshold,
-    };
-    onPhoneChange((prev) => recalc({ ...prev, chats: [groupChat, ...prev.chats] }));
-    setActiveChatId(groupChat.id);
-    setActiveApp('messages');
-    setShowCreateGroup(false);
-    setGroupNameDraft('');
-    setGroupMemberIds([]);
-    setPhoneError('');
-  };
-
-  const updateChatMessages = (chatId: string, updater: (chat: 手机会话) => 手机会话) => {
-    onPhoneChange((prev) => {
-      const next = {
-        ...prev,
-        chats: prev.chats.map((chat) => (chat.id === chatId ? updater(chat) : chat)),
-      };
-      return recalc(next);
-    });
-  };
-
-  const appendMessagesToChat = (chatId: string, messages: 手机消息[], unread = 0) => {
-    onPhoneChange((prev) => {
-      const next = {
-        ...prev,
-        chats: prev.chats.map((chat) =>
-          chat.id === chatId
-            ? {
-                ...chat,
-                messages: [...chat.messages, ...messages],
-                unread: Math.max(0, unread),
-                updatedAt: Date.now(),
-              }
-            : chat,
-        ),
-      };
-      return recalc(next);
-    });
-  };
-
-  const appendMessagesToChatSequentially = async (chatId: string, messages: 手机消息[], unread = 0) => {
-    for (let index = 0; index < messages.length; index += 1) {
-      if (index > 0) await wait(620);
-      appendMessagesToChat(chatId, [messages[index]], index === messages.length - 1 ? unread : 0);
-    }
-  };
-
-  const createReplyMessages = (
-    chat: 手机会话,
-    contents: string[],
-    contact?: 手机联系人,
-    sourceSeedId?: string,
-  ): 手机消息[] => {
-    const resolveGroupSpeaker = (speakerName: string): 手机联系人 => {
-      const byContact = contacts.find(
-        (item) => item.name === speakerName || item.name.includes(speakerName) || speakerName.includes(item.name),
-      );
-      if (byContact) return byContact;
-      const byNpc = normalizedNpcRecords.find(
-        (npc) =>
-          chat.participantIds.includes(npc.id) ||
-          chat.participantIds.includes(`npc_${npc.id}`) ||
-          npc.姓名 === speakerName ||
-          npc.姓名.includes(speakerName) ||
-          speakerName.includes(npc.姓名) ||
-          (npc.别名 && (npc.别名 === speakerName || npc.别名.includes(speakerName) || speakerName.includes(npc.别名))),
-      );
-      if (!byNpc || byNpc.关系 === 'enemy') {
-        throw new Error(`群聊回复无法解析发言人：${speakerName}`);
-      }
-      return {
-        id: `npc_${byNpc.id}`,
-        npcId: byNpc.id,
-        name: byNpc.姓名,
-      avatar: 解析相册资源引用(album, 读取NPC头像(byNpc, '手机')),
-        organization: undefined,
-        relationLabel: 格式化NPC关系(byNpc.好感度, Boolean(byNpc.亲密关系)),
-        available: true,
-          lastActiveTurn: byNpc.最近回合,
-      };
-    };
-    if (contents.length === 0) throw new Error('手机回复为空');
-    return contents.map((rawContent) => {
-      if (!rawContent.trim()) throw new Error('手机回复包含空消息');
-      const groupMatch = chat.type === 'group' ? rawContent.match(/^([^：:]{1,18})[：:]\s*(.+)$/) : null;
-      const speakerName = groupMatch?.[1]?.trim();
-      if (chat.type === 'group' && (!speakerName || !groupMatch?.[2]?.trim())) {
-        throw new Error(`群聊回复缺少“姓名：内容”格式：${rawContent}`);
-      }
-      if (chat.type === 'private' && !contact) {
-        throw new Error(`私聊 ${chat.id} 缺少联系人身份`);
-      }
-      const content = chat.type === 'group' ? groupMatch![2].trim() : rawContent.trim();
-      const speaker = chat.type === 'group' ? resolveGroupSpeaker(speakerName!) : undefined;
-      return 创建手机消息({
-        senderId: chat.type === 'private' ? contact!.id : chat.type === 'group' ? speaker!.id : chat.id,
-        senderName: chat.type === 'private' ? contact!.name : chat.type === 'group' ? speaker!.name : chat.title,
-        role: chat.type === 'system' ? 'system' : 'contact',
-        avatar: chat.type === 'private' ? contact!.avatar : chat.type === 'group' ? speaker!.avatar : undefined,
-        content,
-        turn: turnCount,
-        sourceSeedId,
-      });
-    });
-  };
-
-  const appendPhoneLocalSummary = (
-    chat: 手机会话,
-    summary: string,
-    source: 'private' | 'group' | 'system',
-    messageCount: number,
-    seedId?: string,
-  ): string => {
-    const entry = 创建手机会话本地摘要条目({
-      turn: turnCount,
-      summary,
-      source,
-      messageCount,
-      sourceSeedId: seedId,
-    });
-    let shouldFlush = false;
-    let flushedSummary = '';
-    updateChatMessages(chat.id, (currentChat) => {
-      const defaultArchive = 创建手机会话本地库(currentChat.type);
-      const archive = {
-        ...defaultArchive,
-        ...(currentChat.localArchive ?? {}),
-        threshold:
-          currentChat.type === 'group'
-            ? gameSettings.手机系统.groupArchiveThreshold
-            : currentChat.type === 'private'
-              ? gameSettings.手机系统.privateArchiveThreshold
-              : defaultArchive.threshold,
-      };
-      const entries = [...archive.entries, entry];
-      shouldFlush = entries.length >= archive.threshold;
-      flushedSummary = entries.map((item) => item.summary).join('；');
-      return {
-        ...currentChat,
-        localArchive: {
-          ...archive,
-          entries: shouldFlush ? [] : entries,
-          compressedSummaries: shouldFlush ? [...archive.compressedSummaries, flushedSummary] : archive.compressedSummaries,
-          lastCompressedTurn: shouldFlush ? turnCount : archive.lastCompressedTurn,
-        },
-      };
-    });
-
-    return shouldFlush ? flushedSummary : '';
-  };
-
-  const commitPhoneMemory = async (summary: string, contact?: 手机联系人, options: { force?: boolean } = {}) => {
-    const trimmed = summary.trim();
-    if (!trimmed) return;
-    const normalizedSummary = trimmed.startsWith('【手机】') ? trimmed : `【手机】${trimmed}`;
-    const alreadyInMemory = memory.即时记忆.some((item) => item.includes(trimmed))
-      || memory.短期记忆.some((item) => item.includes(trimmed))
-      || (memory.中期记忆 ?? []).some((item) => item.includes(trimmed))
-      || memory.长期记忆.some((item) => item.includes(trimmed));
-    if (!options.force && alreadyInMemory) return;
-    const services = await getAdaptationServices();
-    const withImmediate = await services.memory.addImmediateMemory(memory, normalizedSummary, turnCount);
-    const compression = await services.memory.autoCompressMemorySystemWithArchivesAsync(
-      withImmediate,
-      turnCount,
-      gameSettings.记忆系统,
-    );
-    onMemoryChange(compression.memory);
-    if (compression.archives.length) {
-      onYitingChange((prevYiting) => ({
-        ...prevYiting,
-        回忆档案: [...prevYiting.回忆档案, ...compression.archives],
-      }));
-    }
-    if (contact?.npcId) {
-      const nextNpcRecords = await Promise.all(npcRecords.map(async (npc) => {
-          if (npc.id !== contact.npcId) return npc;
-          if (!options.force && 提取NPC同行记忆文本列表(npc).some((item) => item.includes(trimmed))) return npc;
-          const nextEntry: NPC同行记忆条目 = {
-            id: `npc_mem_phone_${turnCount}_${Math.random().toString(36).slice(2, 6)}`,
-            回合: turnCount,
-            摘要: trimmed,
-            来源: '手机',
-            关联NPCID: [npc.id],
-          };
-          const ledgerCompression = await services.memory.compressNpcMemoryLedger({
-            npcId: npc.id,
-            entries: [...(npc.同行记忆 ?? []), nextEntry],
-            summaries: npc.总结记忆 ?? [],
-            threshold: gameSettings.记忆系统.NPC记忆压缩阈值,
-            prompt: gameSettings.记忆系统.NPC记忆压缩提示词,
-            turn: turnCount,
-            source: '手机',
-          });
-          return {
-            ...npc,
-            同行记忆: ledgerCompression.memories,
-            总结记忆: ledgerCompression.summaries,
-            最近互动: trimmed,
-            共同经历: [...new Set([...(npc.共同经历 ?? []), trimmed])].slice(-8),
-            对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
-            最近回合: turnCount,
-          };
-        }));
-      onNpcRecordsChange(nextNpcRecords);
+    try {
+      const chatId = await actions.createGroup(selectedContacts.flatMap((item) => item.npcId ? [item.npcId] : []), title);
+      setActiveChatId(chatId);
+      setActiveApp('messages');
+      setShowCreateGroup(false);
+      setGroupNameDraft('');
+      setGroupMemberIds([]);
+      setPhoneError('');
+    } catch (error) {
+      setPhoneError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -581,292 +324,62 @@ export function PhoneModal({
     setMobileView('chat');
   };
 
-  const handleRenameGroupChat = (chatId: string, title: string) => {
-    const nextTitle = title.trim().slice(0, 24);
-    if (!nextTitle) {
-      setPhoneError('群聊名称不能为空。');
-      return;
+  const handleRenameGroupChat = async (chatId: string, title: string) => {
+    try {
+      await actions.renameGroup(chatId, title);
+      setPhoneError('');
+    } catch (error) {
+      setPhoneError(error instanceof Error ? error.message : String(error));
     }
-    updateChatMessages(chatId, (chat) =>
-      chat.type === 'group'
-        ? {
-            ...chat,
-            title: nextTitle,
-            updatedAt: Date.now(),
-          }
-        : chat,
-    );
-    setPhoneError('');
   };
 
-  const handleAddGroupMember = (chatId: string, contact: 手机联系人) => {
-    updateChatMessages(chatId, (chat) => {
-      if (chat.type !== 'group') return chat;
-      const alreadyInGroup = chat.participantIds.some((participantId) => {
-        const normalized = normalizeParticipantId(participantId);
-        return (
-          participantId === contact.id ||
-          participantId === contact.npcId ||
-          normalized === contact.id ||
-          (contact.npcId ? normalized === normalizeParticipantId(contact.npcId) : false)
-        );
-      });
-      if (alreadyInGroup) return chat;
-      return {
-        ...chat,
-        participantIds: [...chat.participantIds, contact.id],
-        updatedAt: Date.now(),
-      };
-    });
-    setPhoneError('');
+  const handleAddGroupMember = async (chatId: string, contact: 手机联系人) => {
+    if (!contact.npcId) return;
+    try {
+      await actions.addGroupMember(chatId, contact.npcId);
+      setPhoneError('');
+    } catch (error) {
+      setPhoneError(error instanceof Error ? error.message : String(error));
+    }
   };
 
   const handleStartChat = (contact: 手机联系人) => {
     setActiveContactId(contact.id);
-    ensurePrivateChat(contact);
+    void ensurePrivateChat(contact).catch((error) => setPhoneError(error instanceof Error ? error.message : String(error)));
     setMobileView('chat');
   };
 
   const handleSendPhoneMessage = async () => {
     const text = draft.trim();
     if (!text || !activeChat || sendingChatId) return;
-    if (!phoneEnabled) {
-      setPhoneError('手机系统已在设置中关闭。');
-      return;
-    }
-    if (!gameSettings.手机系统.autoGenerateSeeds) {
-      setPhoneError('主动来信已在设置中关闭。');
-      return;
-    }
-    if (!phoneApiConfigured) {
-      setPhoneError('手机系统已启用，但独立 API 配置不完整。');
-      return;
-    }
     setPhoneError('');
     setDraft('');
     setSendingChatId(activeChat.id);
-
-    const playerMessage = 创建手机消息({
-      senderId: 'player',
-      senderName: traveler.姓名 || '我',
-      role: 'player',
-      avatar: traveler.图像档案?.手机头像 || traveler.头像 || undefined,
-      content: text,
-      turn: turnCount,
-    });
-    const chatAfterPlayer: 手机会话 = {
-      ...activeChat,
-      messages: [...activeChat.messages, playerMessage],
-      unread: 0,
-      updatedAt: Date.now(),
-    };
-    updateChatMessages(activeChat.id, () => chatAfterPlayer);
-
     try {
-      const phoneService = (await getAdaptationServices()).phone;
-      const phoneApiConfig = await phoneService.buildPhoneApiConfig(gameSettings);
-      const contact = resolveContactForChat(activeChat);
-      const reply = await phoneService.generatePhoneReply(phoneApiConfig, {
-        traveler,
-        world,
-        npcRecords,
-        news,
-        turnCount,
-        chat: chatAfterPlayer,
-        contacts,
-        contact,
-        userText: text,
-        mainChatHistory,
-        zhiku,
-      }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
-      await appendMessagesToChatSequentially(
-        activeChat.id,
-        createReplyMessages(activeChat, reply.messages, contact),
-        0,
-      );
-      const flushedSummary = appendPhoneLocalSummary(
-        chatAfterPlayer,
-        reply.summary ?? reply.messages.join(' / '),
-        activeChat.type === 'group' ? 'group' : 'private',
-        reply.messages.length,
-      );
-      await commitPhoneMemory(
-        `手机${activeChat.type === 'group' ? `群聊「${activeChat.title}」` : contact ? `私聊「${contact.name}」` : '私聊'}：${reply.summary ?? reply.messages.join(' / ')}`,
-        contact,
-        { force: true },
-      );
-      if (flushedSummary) {
-        await commitPhoneMemory(flushedSummary, contact);
-      }
-    } catch (err) {
-      setPhoneError(`发送失败：${(err as Error).message}`);
+      await actions.send(activeChat.id, text);
+    } catch (error) {
+      setDraft(text);
+      setPhoneError(`发送失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSendingChatId('');
     }
   };
 
-  const resolveSeedContact = (seed: 主动来信种子): 手机联系人 => {
-    const ids = [seed.targetId, ...seed.relatedNpcIds].filter(Boolean);
-    const existing = contacts.find((contact) => ids.includes(contact.id) || (contact.npcId && ids.includes(contact.npcId)));
-    if (existing) return existing;
-    const npc = normalizedNpcRecords.find((item) => ids.includes(item.id));
-    if (npc) {
-      const hiddenEnemy = npc.关系 === 'enemy';
-      return {
-        id: `npc_${npc.id}`,
-        npcId: npc.id,
-        name: npc.姓名,
-        avatar: 解析相册资源引用(album, 读取NPC头像(npc, '手机')),
-        organization: undefined,
-        relationLabel: 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
-        available: !hiddenEnemy,
-        lastActiveTurn: npc.最近回合,
-      };
-    }
-    throw new Error(`主动来信目标不是已登记联系人：${seed.targetId}`);
-  };
-
   const handleGenerateSeed = async (seed: 主动来信种子) => {
     if (generatingSeedId) return;
-    if (!phoneEnabled) {
-      setPhoneError('手机系统已在设置中关闭。');
-      return;
-    }
-    if (!phoneApiConfigured) {
-      setPhoneError('请先完整配置手机系统独立 API。');
-      return;
-    }
-    if (isSeedCoolingDown(seed)) {
-      const cooldown = getSeedCooldown(seed);
-      setPhoneError(`该来信仍在冷却中（${cooldown} 回合）。可以稍后再打开，紧急来信会自动绕过冷却。`);
-      return;
-    }
     setPhoneError('');
     setGeneratingSeedId(seed.id);
-
-    let contact: 手机联系人 | undefined;
     try {
-      contact = seed.targetType === 'private' ? resolveSeedContact(seed) : undefined;
+      const chatId = await actions.generateSeed(seed.id);
+      setActiveChatId(chatId);
+      setActiveApp('messages');
+      setMobileView('chat');
     } catch (error) {
-      setPhoneError(error instanceof Error ? error.message : String(error));
-      setGeneratingSeedId('');
-      return;
-    }
-    if (contact?.available === false) {
-      setPhoneError('该对象尚未作为联系人解锁。');
-      setGeneratingSeedId('');
-      return;
-    }
-    if (seed.targetType === 'private' && !contact) {
-      setPhoneError(`主动来信目标不是已登记联系人：${seed.targetId}`);
-      setGeneratingSeedId('');
-      return;
-    }
-    const groupParticipantIds = seed.relatedNpcIds.map(normalizeParticipantId).filter(Boolean);
-    const groupByTargetId = seed.targetType === 'group'
-      ? phone.chats.find((item) => item.type === 'group' && item.id === seed.targetId)
-      : undefined;
-    const existingGroup = seed.targetType === 'group'
-      ? groupByTargetId ?? findExistingGroupChat(groupParticipantIds, buildStandardGroupTitle(groupParticipantIds, seed.title))
-      : undefined;
-    const missingGroupParticipants = groupParticipantIds.filter((id) => (
-      !contacts.some((item) => item.id === id || item.npcId === id)
-      && !normalizedNpcRecords.some((item) => item.id === id)
-    ));
-    if (seed.targetType === 'group' && missingGroupParticipants.length) {
-      setPhoneError(`群聊来信包含未登记参与者：${missingGroupParticipants.join('、')}`);
-      setGeneratingSeedId('');
-      return;
-    }
-    if (seed.targetType === 'group' && !existingGroup && groupParticipantIds.length < 2) {
-      setPhoneError(`群聊来信缺少至少两个已登记参与者：${seed.id}`);
-      setGeneratingSeedId('');
-      return;
-    }
-    const chat = seed.targetType === 'group'
-      ? existingGroup ?? 创建手机会话({
-          type: 'group',
-          title: buildStandardGroupTitle(groupParticipantIds, seed.title),
-          participantIds: groupParticipantIds,
-        })
-      : ensurePrivateChat(contact!);
-
-    if (seed.targetType === 'group') {
-      chat.localArchive = {
-        ...(chat.localArchive ?? 创建手机会话本地库('group')),
-        threshold: gameSettings.手机系统.groupArchiveThreshold,
-      };
-    }
-
-    if (seed.targetType === 'group') {
-      onPhoneChange((prev) => {
-        const exists = prev.chats.find((item) => item.id === chat.id);
-        const next = {
-          ...prev,
-          chats: exists ? prev.chats : [chat, ...prev.chats],
-        };
-        return recalc(next);
-      });
-      setActiveChatId(chat.id);
-      setActiveApp('messages');
-      setMobileView('chat');
-    }
-
-    try {
-      const phoneService = (await getAdaptationServices()).phone;
-      const phoneApiConfig = await phoneService.buildPhoneApiConfig(gameSettings);
-      const reply = await phoneService.generatePhoneReply(phoneApiConfig, {
-        traveler,
-        world,
-        npcRecords,
-        news,
-        turnCount,
-        chat,
-        contacts,
-        contact,
-        seed,
-        mainChatHistory,
-        zhiku,
-      }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
-      onPhoneChange((prev) => {
-        const hasContact = contact ? prev.contacts.some((item) => item.id === contact.id) : false;
-        const next = {
-          ...prev,
-          contacts: seed.targetType === 'private' && contact && !hasContact ? [...prev.contacts, contact] : prev.contacts,
-          messageSeeds: prev.messageSeeds.map((item) => (item.id === seed.id ? { ...item, status: 'generated' as const } : item)),
-        };
-        return recalc(next);
-      });
-      await appendMessagesToChatSequentially(
-        chat.id,
-        createReplyMessages(chat, reply.messages, contact, seed.id),
-        0,
-      );
-      const flushedSummary = appendPhoneLocalSummary(
-        chat,
-        reply.summary ?? reply.messages.join(' / '),
-        seed.targetType === 'group' ? 'group' : seed.targetType === 'private' ? 'private' : 'system',
-        reply.messages.length,
-        seed.id,
-      );
-      await commitPhoneMemory(
-        `主动来信「${seed.title}」：${reply.summary ?? reply.messages.join(' / ')}`,
-        contact,
-        { force: true },
-      );
-      if (flushedSummary) {
-        await commitPhoneMemory(flushedSummary, contact);
-      }
-      setActiveChatId(chat.id);
-      setActiveApp('messages');
-      setMobileView('chat');
-    } catch (err) {
-      setPhoneError(`生成来信失败：${(err as Error).message}`);
+      setPhoneError(`生成来信失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setGeneratingSeedId('');
     }
   };
-
   const activeAppTitle =
     activeApp === 'messages' ? '短讯'
     : activeApp === 'contacts' ? '通讯录'
@@ -1330,30 +843,10 @@ export function PhoneModal({
                   chatWallpaper={解析相册资源引用(album, phone.wallpapers?.chat) || DEFAULT_PHONE_CHAT_WALLPAPER}
                   homeWallpaperRef={phone.wallpapers?.home}
                   chatWallpaperRef={phone.wallpapers?.chat}
-                  onSetHome={(src) =>
-                    onPhoneChange((prev) => ({
-                      ...prev,
-                      wallpapers: { ...(prev.wallpapers ?? {}), home: src },
-                    }))
-                  }
-                  onSetChat={(src) =>
-                    onPhoneChange((prev) => ({
-                      ...prev,
-                      wallpapers: { ...(prev.wallpapers ?? {}), chat: src },
-                    }))
-                  }
-                  onResetHome={() =>
-                    onPhoneChange((prev) => ({
-                      ...prev,
-                      wallpapers: { ...(prev.wallpapers ?? {}), home: undefined },
-                    }))
-                  }
-                  onResetChat={() =>
-                    onPhoneChange((prev) => ({
-                      ...prev,
-                      wallpapers: { ...(prev.wallpapers ?? {}), chat: undefined },
-                    }))
-                  }
+                  onSetHome={(src) => { void actions.setWallpaper('home', src); }}
+                  onSetChat={(src) => { void actions.setWallpaper('chat', src); }}
+                  onResetHome={() => { void actions.setWallpaper('home'); }}
+                  onResetChat={() => { void actions.setWallpaper('chat'); }}
                 />
               )}
             </div>
@@ -1770,8 +1263,8 @@ function WallpaperSurface({
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {BUILTIN_PHONE_WALLPAPERS.map((wallpaper) => {
-                const isHome = storedHome === wallpaper.src || homeWallpaper === wallpaper.src;
-                const isChat = storedChat === wallpaper.src || chatWallpaper === wallpaper.src;
+                const isHome = homeWallpaperRef === wallpaper.src || homeWallpaper === wallpaper.src;
+                const isChat = chatWallpaperRef === wallpaper.src || chatWallpaper === wallpaper.src;
                 return (
                   <article
                     key={wallpaper.id}

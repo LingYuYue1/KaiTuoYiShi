@@ -10,17 +10,14 @@ import {
   ITEM_CATEGORY_ORDER,
   ITEM_QUALITY_COLORS,
 } from '@/models/inventory';
-import {
-  使用物品,
-  丢弃物品,
-  恢复丢弃物品,
-  type 丢弃回执,
-} from '@/utils/inventoryActions';
+import type { CommandId } from '@/src/kernel/contract';
 
 interface InventoryPanelProps {
   traveler: 角色数据结构;
-  onTravelerChange: React.Dispatch<React.SetStateAction<角色数据结构>>;
   turnCount: number;
+  onUseItem: (itemId: string, count?: number) => Promise<void>;
+  onDropItem: (itemId: string, count?: number) => Promise<CommandId>;
+  onUndoDrop: (dropCommandId: CommandId) => Promise<void>;
 }
 
 type 标签 = 物品分类 | '全部';
@@ -59,13 +56,13 @@ type FlashState = {
   canUndo?: boolean;
 };
 
-export function InventoryPanel({ traveler, onTravelerChange, turnCount }: InventoryPanelProps) {
+export function InventoryPanel({ traveler, turnCount, onUseItem, onDropItem, onUndoDrop }: InventoryPanelProps) {
   const inventory = traveler.背包 ?? [];
   const [tab, setTab] = useState<标签>('全部');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [flash, setFlash] = useState<FlashState | null>(null);
   const flashTimerRef = useRef<number | null>(null);
-  const lastDropReceiptRef = useRef<丢弃回执 | null>(null);
+  const lastDropReceiptRef = useRef<CommandId | null>(null);
 
   const counts = useMemo(() => {
     const c: Record<物品分类, number> = {
@@ -116,7 +113,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
     }
   }, [inventory, selectedId]);
 
-  const showFlash = (msg: string, receipt?: 丢弃回执) => {
+  const showFlash = (msg: string, receipt?: CommandId) => {
     if (flashTimerRef.current != null) {
       window.clearTimeout(flashTimerRef.current);
     }
@@ -131,41 +128,40 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
     }, ttl);
   };
 
-  const handleUse = (itemId: string) => {
-    const result = 使用物品(traveler, itemId, 1);
-    if (!result.ok) {
-      showFlash(result.message);
-      return;
+  const handleUse = async (itemId: string) => {
+    const item = inventory.find((entry) => entry.id === itemId);
+    try {
+      await onUseItem(itemId, 1);
+      showFlash(item ? `使用 ${item.名称}` : '物品已使用');
+    } catch (error) {
+      showFlash(error instanceof Error ? error.message : String(error));
     }
-    onTravelerChange(result.traveler);
-    showFlash(result.message);
   };
 
-  const handleDrop = (itemId: string, count?: number) => {
+  const handleDrop = async (itemId: string, count?: number) => {
     if (!confirm(count ? `确认丢弃 ${count} 件?` : '确认全部丢弃该物品?')) return;
     const item = inventory.find((entry) => entry.id === itemId);
-    const result = 丢弃物品(traveler, itemId, count);
-    if (!result.ok) {
-      showFlash(result.message);
-      return;
+    try {
+      const receipt = await onDropItem(itemId, count);
+      const dropped = count == null ? item?.数量 : Math.min(count, item?.数量 ?? count);
+      showFlash(item ? `丢弃 ${item.名称}${dropped && dropped > 1 ? ` ×${dropped}` : ''}` : '物品已丢弃', receipt);
+      if (item && (count == null || count >= item.数量)) setSelectedId(null);
+    } catch (error) {
+      showFlash(error instanceof Error ? error.message : String(error));
     }
-    onTravelerChange(result.traveler);
-    showFlash(result.message, result.receipt);
-    if (item && (count == null || count >= item.数量)) setSelectedId(null);
   };
 
-  const handleUndoDrop = () => {
+  const handleUndoDrop = async () => {
     const receipt = lastDropReceiptRef.current;
     if (!receipt) return;
     // Consume before scheduling React work: rapid double-clicks must not restore twice.
     lastDropReceiptRef.current = null;
-    const result = 恢复丢弃物品(traveler, receipt);
-    if (!result.ok) {
-      showFlash(result.message);
-      return;
+    try {
+      await onUndoDrop(receipt);
+      showFlash('已撤回丢弃');
+    } catch (error) {
+      showFlash(error instanceof Error ? error.message : String(error));
     }
-    onTravelerChange(result.traveler);
-    showFlash(result.message);
   };
 
   const cellMinCount = 12;

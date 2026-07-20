@@ -15,6 +15,8 @@ import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import type { FilterContext } from '@/utils/worldbook';
 import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
+import type { StoryWeavingInjectionDiagnostics, StoryWeavingInjectionDiagnostics as 剧情编织注入诊断 } from '@/src/kernel/contract/storyWeaving';
+export type { StoryWeavingInjectionDiagnostics as 剧情编织注入诊断 } from '@/src/kernel/contract/storyWeaving';
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
 const 文本数组 = (value: unknown): string[] => (
@@ -128,23 +130,6 @@ export interface 剧情编织门禁快照 {
   reasons: string[];
 }
 
-export interface 剧情编织注入诊断 {
-  系列ID: string;
-  系列标题: string;
-  健康状态: '正常' | '已跳过归档锚点' | '需要检查';
-  检查项: string[];
-  当前分段ID: string;
-  当前分段组号: number;
-  当前分段标题: string;
-  当前分段运行状态: 剧情编织分段['运行状态'];
-  归档锚点分段ID?: string;
-  归档锚点组号?: number;
-  归档锚点标题?: string;
-  前一分段标题?: string;
-  下一分段标题?: string;
-  可注入分段数: number;
-}
-
 export function evaluateStoryWeavingGate(
   system?: 剧情编织系统,
   ctx?: StoryWeavingRuntimeContext,
@@ -162,7 +147,7 @@ export function evaluateStoryWeavingGate(
   };
 }
 
-export function getStoryWeavingInjectionDiagnostics(system?: 剧情编织系统): 剧情编织注入诊断 | null {
+export function getStoryWeavingInjectionDiagnostics(system?: 剧情编织系统): StoryWeavingInjectionDiagnostics | null {
   const resolved = resolveInjectionWindow(system);
   if (!resolved) return null;
   const { series, completed, current, archivedAnchor } = resolved;

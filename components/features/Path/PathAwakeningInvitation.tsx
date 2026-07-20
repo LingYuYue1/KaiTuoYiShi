@@ -1,20 +1,18 @@
 ﻿// 「命途狭间之引」邀请卡片。
 //
 // AI 发出 <触发狭间>命途ID</触发狭间> → sendWorkflow 写入 世界.待触发狭间 → 本组件渲染。
-// 玩家点「踏入」→ App 调用 actions.handleSend('[系统] 踏入命途狭间')。
+// 玩家点「踏入」→ App 调用 session.paths.enterAwakening()。
 //   sendWorkflow 内部统一处理:① 把 待触发狭间 转成 进行中狭间 ② 发请求让 AI 出第一道诘问。
-//   不让组件内部直接 setWorld + 外部再 handleSend——React 异步 setState 会让 handleSend
-//   闭包里读到的还是旧的 state.世界,scope 切不到 pathAwakening,prompt 走错。
-// 玩家点「暂缓」→ 纯前端 setWorld 清空 待触发狭间(命途进度仍满,等待下次邀请),不发请求。
+//   邀请状态由 SessionRepository 独占，组件只发送语义 intent。
+// 玩家点「暂缓」→ session.paths.declineAwakening() 原子提交世界状态。
 
 import type { 世界状态 } from '@/models/world';
-import { getAdaptationServices } from '@/src/adaptations';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_CORE_BELIEFS } from '@/models/path';
 
 interface Props {
   world: 世界状态;
-  setWorld: React.Dispatch<React.SetStateAction<世界状态>>;
+  onDecline: () => Promise<void>;
   /** 玩家点「踏入」时调用。App 那一层接 actions.handleSend('[系统] 踏入命途狭间')。 */
   onTrigger: () => void;
   disabled?: boolean;
@@ -26,7 +24,7 @@ const cardClip =
 const btnClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
-export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }: Props) {
+export function PathAwakeningInvitation({ world, onDecline, onTrigger, disabled }: Props) {
   if (!world.待触发狭间) return null;
   const pathId = world.待触发狭间;
   const def = getPath(pathId);
@@ -38,7 +36,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
     onTrigger();
   };
   const handleDecline = async () => {
-    setWorld(await (await getAdaptationServices()).path.拒绝命途狭间(world));
+    await onDecline();
   };
 
   return (

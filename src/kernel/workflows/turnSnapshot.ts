@@ -1,4 +1,4 @@
-import type { RuntimeDraftState } from '@/src/kernel/domain/session/runtimeState';
+import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
 import type { 回合快照 } from '@/models/chat';
 import { 归一化相册系统, type 相册系统 } from '@/models/imageGeneration';
 import { 归一化NPC记录列表 } from '@/models/npc';
@@ -12,30 +12,30 @@ import { 归一化忆庭系统 } from '@/models/yiting';
 import { 归一化智库系统 } from '@/models/zhiku';
 import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 
-export function restorePreTurnSnapshot(state: RuntimeDraftState, snapshot: 回合快照): 剧情编织系统 {
-  state.set旅人(snapshot.旅人 as Parameters<typeof state.set旅人>[0]);
-  state.set世界(归一化世界状态(snapshot.世界 as RuntimeDraftState['世界']));
-  state.set记忆(snapshot.记忆 as Parameters<typeof state.set记忆>[0]);
-  state.set忆庭(归一化忆庭系统(snapshot.忆庭 as RuntimeDraftState['忆庭']));
-  state.set智库(归一化智库系统(snapshot.智库 as RuntimeDraftState['智库']));
-  state.set手机(归一化手机系统(snapshot.手机 as RuntimeDraftState['手机']));
-  state.setNPC(归一化NPC记录列表(snapshot.NPC as RuntimeDraftState['NPC']));
-  state.set相册((current) => restoreAlbumSnapshot(snapshot.相册 as RuntimeDraftState['相册'], current));
-  state.set新闻(归一化新闻列表(snapshot.新闻 as RuntimeDraftState['新闻']));
-  state.set剧情(归一化剧情节点列表(snapshot.剧情));
+export function restorePreTurnSnapshot(state: TurnExecutionState, snapshot: 回合快照): 剧情编织系统 {
+  state.旅人 = snapshot.旅人;
+  state.世界 = 归一化世界状态(snapshot.世界 as TurnExecutionState['世界']);
+  state.记忆 = snapshot.记忆;
+  state.忆庭 = 归一化忆庭系统(snapshot.忆庭 as TurnExecutionState['忆庭']);
+  state.智库 = 归一化智库系统(snapshot.智库 as TurnExecutionState['智库']);
+  state.手机 = 归一化手机系统(snapshot.手机 as TurnExecutionState['手机']);
+  state.NPC = 归一化NPC记录列表(snapshot.NPC as TurnExecutionState['NPC']);
+  state.相册 = restoreAlbumSnapshot(snapshot.相册 as TurnExecutionState['相册'], state.相册);
+  state.新闻 = 归一化新闻列表(snapshot.新闻 as TurnExecutionState['新闻']);
+  state.剧情 = 归一化剧情节点列表(snapshot.剧情);
   const storyWeaving = hydratePersistedStoryWeavingSystem(
-    归一化剧情编织系统(snapshot.剧情编织 as RuntimeDraftState['剧情编织']),
+    归一化剧情编织系统(snapshot.剧情编织 as TurnExecutionState['剧情编织']),
     state.剧情编织,
   );
-  state.set剧情编织(storyWeaving);
-  state.setVariableBatches(snapshot.variableBatches as Parameters<typeof state.setVariableBatches>[0]);
-  state.setQueueTasks((snapshot.queueTasks ?? []) as Parameters<typeof state.setQueueTasks>[0]);
-  state.setTurnCount(snapshot.turnCount);
-  state.setPendingOpeningTrigger(snapshot.pendingOpeningTrigger ?? null);
+  state.剧情编织 = storyWeaving;
+  state.variableBatches = [...snapshot.variableBatches];
+  state.durableJobs = [...snapshot.jobs];
+  state.turnCount = snapshot.turnCount;
+  state.pendingOpeningTrigger = snapshot.pendingOpeningTrigger ?? null;
   return storyWeaving;
 }
 
-function restoreAlbumSnapshot(snapshotAlbum: RuntimeDraftState['相册'], currentAlbum: 相册系统): 相册系统 {
+function restoreAlbumSnapshot(snapshotAlbum: TurnExecutionState['相册'], currentAlbum: 相册系统): 相册系统 {
   const normalized = 归一化相册系统(snapshotAlbum);
   const currentAssets = new Map((currentAlbum.assets ?? []).map((asset) => [asset.id, asset]));
   return {

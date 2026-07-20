@@ -1,9 +1,9 @@
-import { stripDevicePreferencesFromSave, type 存档数据 } from '@/models/settings';
+import type { 存档数据 } from '@/models/settings';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
 
-const PACKAGE_VERSION = 2;
+const PACKAGE_VERSION = 3;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const PACKAGE_CORE_FILES = ['manifest.json', 'save.json'] as const;
@@ -18,7 +18,7 @@ const SYSTEM_ENTRY_PATHS = [
   'systems/plot.json',
   'systems/story-weaving.json',
   'systems/variable-batches.json',
-  'systems/queue-tasks.json',
+  'systems/jobs.json',
 ] as const;
 const TREE_NODE_DELTA_PATH = 'tree/node-delta.json';
 const TREE_MANIFEST_PATH = 'tree/tree-manifest.json';
@@ -144,7 +144,7 @@ export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob>
 }
 
 export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
-  const sanitized = stripDevicePreferencesFromSave(compactDuplicatedSaveImages(save));
+  const sanitized = compactDuplicatedSaveImages(save);
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
   return sanitized;
 }
@@ -201,7 +201,7 @@ export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数�
     剧情: read<存档数据['剧情']>('systems/plot.json') ?? save.剧情,
     剧情编织: read<存档数据['剧情编织']>('systems/story-weaving.json') ?? save.剧情编织,
     variableBatches: read<存档数据['variableBatches']>('systems/variable-batches.json') ?? save.variableBatches,
-    queueTasks: read<存档数据['queueTasks']>('systems/queue-tasks.json') ?? save.queueTasks,
+    jobs: read<存档数据['jobs']>('systems/jobs.json') ?? save.jobs,
   };
 }
 
@@ -256,7 +256,7 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     剧情,
     剧情编织,
     variableBatches,
-    queueTasks,
+    jobs,
     ...core
   } = save;
   const files = ([
@@ -271,7 +271,7 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     [SYSTEM_ENTRY_PATHS[7], 剧情],
     [SYSTEM_ENTRY_PATHS[8], 剧情编织],
     [SYSTEM_ENTRY_PATHS[9], variableBatches],
-    [SYSTEM_ENTRY_PATHS[10], queueTasks],
+    [SYSTEM_ENTRY_PATHS[10], jobs],
     [TREE_NODE_DELTA_PATH, buildSaveNodeDeltaRecord(save, Number(save.id) || 0)],
   ] satisfies Array<[string, unknown]>).filter(([, value]) => value !== undefined);
 
@@ -310,11 +310,8 @@ function validatePackageManifest(manifest: Partial<存档包清单>, files: Map<
   if (manifest.format !== 'ktysave') {
     throw new Error('存档包格式标记异常');
   }
-  if (!Number.isInteger(manifest.packageVersion) || (manifest.packageVersion ?? 0) < 1) {
-    throw new Error('存档包版本异常');
-  }
-  if ((manifest.packageVersion ?? 0) > PACKAGE_VERSION) {
-    throw new Error('存档包版本过高，请更新客户端后再导入');
+  if (manifest.packageVersion !== PACKAGE_VERSION) {
+    throw new Error(`存档包版本不兼容：需要 ${PACKAGE_VERSION}，实际 ${String(manifest.packageVersion)}`);
   }
   if (!Array.isArray(manifest.files)) {
     throw new Error('存档包清单缺少文件列表');

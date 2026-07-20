@@ -10,6 +10,8 @@
 
 import type { Revision, SessionId } from '@/src/kernel/contract';
 import type { GameState } from '@/src/kernel/domain/session/types';
+import type { CommandReceipt } from '@/src/kernel/domain/session/commandReceipt';
+import type { CommandFingerprint } from '@/src/kernel/domain/session/commandFingerprint';
 
 /** Wire format stored under a session id. */
 export type StoredSessionRecord = Readonly<{
@@ -24,8 +26,11 @@ export type StoredCommandRecord = Readonly<{
   id: string;
   sessionId: string;
   commandId: string;
+  fingerprint: CommandFingerprint;
   committedRevision: number;
   snapshot: StoredSessionRecord;
+  receipt?: CommandReceipt;
+  receiptConsumedBy?: string;
 }>;
 
 /**

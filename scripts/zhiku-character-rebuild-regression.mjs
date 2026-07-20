@@ -13,6 +13,7 @@ const leftPanel = fs.readFileSync('components/layout/LeftPanel.tsx', 'utf8');
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
 const state = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const saveLoad = fs.readFileSync('hooks/useGame.ts', 'utf8');
+const rootCapabilities = fs.readFileSync('src/kernel/application/rootCapabilities.ts', 'utf8');
 const retrieval = fs.readFileSync('services/zhikuRetrieval.ts', 'utf8');
 const zhikuCot = fs.readFileSync('prompts/cot/zhikuCot.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
@@ -1717,38 +1718,25 @@ assert(
   'zhiku model must expose structured character fields while keeping soft tag parsing fallback.',
 );
 assert(
-  preset.includes('shouldRemoveLegacyZhikuCharacterEntry') &&
-    preset.includes('removeLegacyZhikuCharacterEntries') &&
-    preset.includes('ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY'),
-  'zhiku character rebuild migration helpers must exist.',
-);
-assert(
-  preset.includes('removeLegacyZhikuCharacterEntries(') &&
-    state.includes('ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY') &&
-    state.includes('hydrateRuntimeZhiku(savedZhiku, { migrationAt })'),
-  'startup zhiku merge must remove legacy character entries from saved local data.',
-);
-assert(
-  preset.includes('removeLegacyZhikuCharacterEntries(') &&
-    preset.includes('hydrateRuntimeZhiku') &&
-    saveLoad.includes('hydrateRuntimeZhiku(save.智库') &&
-    saveLoad.includes('await saveToRuntime(save'),
-  'loading an old save must not restore legacy character entries into active zhiku.',
+  !preset.includes('shouldRemoveLegacyZhikuCharacterEntry') &&
+    !preset.includes('removeLegacyZhikuCharacterEntries') &&
+    !preset.includes('ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY') &&
+    !state.includes('migrationAt'),
+  'current zhiku catalog must not retain character-rebuild migration machinery.',
 );
 assert(
     saveLoad.includes('hydrateRuntimeZhiku') &&
     preset.includes('loadAllBundledZhikuPresets') &&
     preset.includes('mergeBundledZhikuSystem') &&
     preset.includes('mergeZhikuRuntimeUnlockOverrides') &&
-    preset.includes('isBundledZhikuDuplicate') &&
-    saveLoad.includes('hydrateRuntimeZhiku(save.智库') &&
-    preset.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)'),
+    rootCapabilities.includes('hydrateRuntimeZhiku(save.智库)') &&
+    preset.includes('current.条目.filter((entry) => !entry.builtin)'),
   'loading a save must merge current bundled zhiku presets, including rebuilt character personas, with save custom entries.',
 );
 assert(
   preset.includes('mergeZhikuRuntimeUnlockOverrides') &&
     preset.includes('mergeBundledZhikuSystem') &&
-    preset.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
+    preset.includes('current.条目.filter((entry) => !entry.builtin)') &&
     preset.includes('运行时解锁状态') &&
     preset.includes('运行时解锁备注'),
   'bundled zhiku merge must preserve runtime unlock overrides and custom entries from local saves.',
@@ -1763,12 +1751,12 @@ assert(
 );
 assert(
   state.includes('buildPersistedZhikuSystem') &&
-    state.includes('hydrateRuntimeZhiku(savedZhiku, { migrationAt })') &&
+    state.includes('hydrateRuntimeZhiku(savedZhiku)') &&
     state.includes("await setPreference('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku))") &&
     saveLoad.includes('buildPersistedZhikuSystem') &&
-    saveLoad.includes('hydrateRuntimeZhiku(save.智库') &&
+    rootCapabilities.includes('hydrateRuntimeZhiku(save.智库)') &&
     saveLoad.includes('智库: buildPersistedZhikuSystem(runtime.智库)') &&
-    panel.includes("await setPreference('zhikuSystem', buildPersistedZhikuSystem(next))"),
+    panel.includes('content.replaceZhikuSystem(next)'),
   'all zhiku save paths must persist a slim zhiku payload instead of the full bundled library.',
 );
 assert(
@@ -1776,7 +1764,7 @@ assert(
     panel.includes('DEV 刷新内置智库') &&
     panel.includes('handleDevRefreshBundled') &&
     panel.includes('loadAllBundledZhikuPresets({ cacheBust: Date.now() })') &&
-    panel.includes('mergeBundledZhikuSystem(bundled, normalized, migrationAt)') &&
+    panel.includes('mergeBundledZhikuSystem(bundled, normalized)') &&
     panel.includes('setDevRefreshStatus') &&
     panel.includes('保留自制条目与运行时解锁备注'),
   'Zhiku panel must expose a dev-only bundled preset refresh button that preserves custom entries and runtime unlock notes.',

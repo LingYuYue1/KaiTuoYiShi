@@ -11,6 +11,9 @@ function countOccurrences(source, token) {
 const systemDrawer = fs.readFileSync('components/layout/SystemDrawer.tsx', 'utf8');
 const newGameWizard = fs.readFileSync('components/features/NewGame/NewGameWizard.tsx', 'utf8');
 const skillPanel = fs.readFileSync('components/features/GameSystems/SkillPanel.tsx', 'utf8');
+const app = fs.readFileSync('App.tsx', 'utf8');
+const inputArea = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
+const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
 assert(
@@ -26,7 +29,7 @@ const persistenceStart = newGameWizard.indexOf('const persistOpeningPresets');
 const persistenceEnd = newGameWizard.indexOf('const applyOpeningPreset', persistenceStart);
 const persistenceBlock = newGameWizard.slice(persistenceStart, persistenceEnd);
 assert(persistenceStart >= 0 && persistenceEnd > persistenceStart, '必须保留开局预设持久化边界。');
-const preferenceWriteIndex = persistenceBlock.indexOf('await setPreference(');
+const preferenceWriteIndex = persistenceBlock.indexOf('await (await getAppRoot()).onboarding.replaceOpeningPresets(normalized)');
 const statePublishIndex = persistenceBlock.indexOf('setOpeningPresets(normalized)');
 assert(preferenceWriteIndex >= 0 && statePublishIndex >= 0, '开局预设持久化边界必须包含落盘和界面发布。');
 assert(
@@ -53,6 +56,36 @@ assert(
   skillPanel.includes('className="mt-4 md:hidden"') &&
     countOccurrences(skillPanel, 'onClick={saveSkill}') === 2,
   '移动端必须在表单末尾提供复用 saveSkill 的唯一可见保存动作。',
+);
+
+const ordinarySettingsRoute = app.slice(
+  app.indexOf('const openSettings = useCallback'),
+  app.indexOf('const handleOpenSettings', app.indexOf('const openSettings = useCallback')),
+);
+const settingsCloseRoute = app.slice(
+  app.indexOf('const handleCloseSettings = useCallback'),
+  app.indexOf('const handleReplaceWorldbooks', app.indexOf('const handleCloseSettings = useCallback')),
+);
+assert(
+  ordinarySettingsRoute.includes('setSettingsReturnView(null)') &&
+    settingsCloseRoute.includes('setSettingsReturnView(null)'),
+  '普通设置入口与关闭入口都必须清除新游戏返回标记。',
+);
+
+const abortBoundary = useGame.slice(
+  useGame.indexOf('const handleAbort = useCallback'),
+  useGame.indexOf('const handleNewGame', useGame.indexOf('const handleAbort = useCallback')),
+);
+assert(
+  abortBoundary.includes('await cancelActiveCommandAndWait()') &&
+    !abortBoundary.includes('.cancel('),
+  '停止动作必须等待命令终态，不能只发出取消请求。',
+);
+assert(
+  inputArea.includes('function ignoreHandledAction') &&
+    inputArea.includes('ignoreHandledAction(handleSend())') &&
+    inputArea.includes('ignoreHandledAction(handleAbortClick())'),
+  '输入区必须消费已在命令边界报告的异步失败，避免重复进入全局错误报告。',
 );
 
 assert(

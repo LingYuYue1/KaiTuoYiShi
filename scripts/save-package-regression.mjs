@@ -7,6 +7,7 @@ function assert(condition, message) {
 const dbService = fs.readFileSync('services/dbService.ts', 'utf8');
 const savePackage = fs.readFileSync('services/savePackage.ts', 'utf8');
 const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
+const portableSave = fs.readFileSync('src/kernel/application/portableSave.ts', 'utf8');
 const saveModal = fs.readFileSync('components/features/SaveLoad/SaveLoadModal.tsx', 'utf8');
 const storageManager = fs.readFileSync('components/features/Settings/StorageManager.tsx', 'utf8');
 
@@ -33,7 +34,7 @@ assert(savePackage.includes('deflateRawIfAvailable'), 'ZIP 写入必须在不支
 assert(savePackage.includes('compression !== 0 && compression !== 8'), 'ZIP 读取必须同时兼容 store 和 deflate 方法。');
 assert(savePackage.includes('当前浏览器不支持压缩存档包解压'), '压缩包读取失败时必须给出浏览器兼容提示。');
 assert(savePackage.includes('validatePackageManifest'), '导入存档包必须校验 manifest。');
-assert(savePackage.includes('存档包版本过高，请更新客户端后再导入'), '导入存档包必须拒绝高版本包。');
+assert(savePackage.includes('存档包版本不兼容'), '导入存档包必须只接受精确当前版本。');
 assert(savePackage.includes('存档包清单包含非法路径'), '导入存档包必须拒绝非法路径。');
 assert(savePackage.includes('存档包缺少清单文件'), '导入存档包必须校验清单文件存在。');
 assert(savePackage.includes('PACKAGE_CORE_FILES'), '导入存档包必须校验核心文件。');
@@ -43,10 +44,10 @@ assert(savePackage.includes('sanitizeSaveForExport'), '存档包导出必须先�
 assert(savePackage.includes('stripRuntimeDebugFromChatHistory'), '存档包导出必须清理聊天调试上下文，避免玩家包被 debug 撑大。');
 assert(savePackage.includes('delete clean.debugContext'), '存档包导出必须移除 chatHistory.debugContext。');
 assert(!savePackage.includes('delete clean.preTurnSnapshot'), '存档包导出不得移除 chatHistory.preTurnSnapshot，否则导入后立即重roll无法完整回滚。');
-assert(useGame.includes('runtimeToSave'), '本地持久化存档必须通过 kernel runtimeToSave 边界。');
+assert(portableSave.includes('createPortableSave') && useGame.includes("saveSession(APP_SESSION_ID, 'manual')"), '本地持久化存档必须通过 story-only 边界。');
 assert(savePackage.includes('apiKeysRemoved: true'), '存档包 manifest 必须声明 API Key 已移除。');
-assert(savePackage.includes('stripDevicePreferencesFromSave'), '导出存档包必须通过统一边界移除设备偏好与 API。');
-assert(dbService.includes('const data = stripDevicePreferencesFromSave(input)'), '写入 IndexedDB/桌面镜像前必须删除旧存档携带的设备偏好。');
+assert(!savePackage.includes('stripDevicePreferencesFromSave'), '导出存档包不得依赖旧设备字段清洗层。');
+assert(!dbService.includes('stripDevicePreferencesFromSave'), '存档写入不得依赖旧设备字段清洗层。');
 
 assert(dbService.includes('exportSavePackage'), 'dbService 必须导出新存档包导出函数。');
 assert(dbService.includes('export async function exportSavePackage'), '存档包导出必须是异步函数以等待压缩完成。');
@@ -55,7 +56,7 @@ assert(dbService.includes('export async function exportSaveTreePackage'), '整�
 assert(dbService.includes('loadSaveTree'), 'dbService 必须能按 rootId 收集整棵存档树。');
 assert(dbService.includes('importSaveFile'), 'dbService 必须导出统一导入函数。');
 assert(dbService.includes('importSaveFileAsMany'), 'dbService 必须导出可导入多节点树包的入口。');
-assert(dbService.includes('importSaveJson(await file.text())'), '统一导入函数必须保留旧 JSON 兼容。');
+assert(dbService.includes('importSaveJson(await file.text())'), '统一导入函数必须校验当前 JSON 存档。');
 assert(dbService.includes('parseSavePackage(await file.arrayBuffer())'), '统一导入函数必须支持存档包。');
 assert(dbService.includes('parseSaveTreePackage(await file.arrayBuffer())'), '多节点导入入口必须使用树包解析。');
 assert(dbService.includes('remapImportedSaveTree'), '导入树包必须重映射 rootId/nodeId，避免和本地已有树冲突。');
@@ -67,14 +68,14 @@ assert(
 assert(dbService.includes('`.zip`') || dbService.includes('.zip`'), '导出文件后缀必须使用 .zip。');
 assert(dbService.includes("name.endsWith('.ktysave')"), '导入函数必须保留旧 .ktysave 兼容。');
 
-assert(saveModal.includes('exportSavePackage') && saveModal.includes('importSaveFileAsMany'), '游戏存档弹窗必须使用存档包导入导出。');
-assert(saveModal.includes('exportSaveTreePackage') && saveModal.includes('loadSaveTree'), '游戏存档弹窗必须提供整树导出入口。');
+assert(saveModal.includes('saves.exportStory') && saveModal.includes('saves.importAndPersist'), '游戏存档弹窗必须使用存档包导入导出。');
+assert(saveModal.includes('saves.exportTree'), '游戏存档弹窗必须提供整树导出入口。');
 assert(saveModal.includes('导出整树'), '游戏存档弹窗必须显示导出整树按钮。');
 assert(saveModal.includes('.ktysave,.zip,.json'), '游戏存档弹窗必须同时接受新包和旧 JSON。');
 assert(saveModal.includes('导入存档包'), '游戏存档弹窗 UI 文案必须更新为存档包。');
 
-assert(storageManager.includes('exportSavePackage') && storageManager.includes('importSaveFileAsMany'), '设置页存档管理必须使用存档包导入导出。');
-assert(storageManager.includes('exportSaveTreePackage') && storageManager.includes('loadSaveTree'), '设置页存档管理必须提供整树导出入口。');
+assert(storageManager.includes('saves.exportStory') && storageManager.includes('saves.importAndPersist'), '设置页存档管理必须使用存档包导入导出。');
+assert(storageManager.includes('saves.exportTree'), '设置页存档管理必须提供整树导出入口。');
 assert(storageManager.includes('导出整树'), '设置页存档管理必须显示导出整树按钮。');
 assert(storageManager.includes('.ktysave,.zip,.json'), '设置页存档管理必须同时接受新包和旧 JSON。');
 assert(storageManager.includes('导入存档包'), '设置页存档管理 UI 文案必须更新为存档包。');

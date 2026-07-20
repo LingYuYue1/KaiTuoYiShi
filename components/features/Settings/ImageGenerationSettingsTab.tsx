@@ -11,9 +11,9 @@ import type {
   文生图预设接口路径,
   文生图词组转化器API覆盖,
 } from '@/models/settings';
-import { setPreference } from '@/src/adaptations/preferences';
-import type { ComfyWorkflowCandidate } from '@/services/ai/imageGeneration';
-import { getAdaptationServices } from '@/src/adaptations';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
+import type { ImageWorkflowCandidate } from '@/src/kernel/contract/device';
 
 interface Props {
   settings: 游戏设置;
@@ -171,7 +171,7 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
         createdAt: 0,
         updatedAt: 0,
       };
-      const list = await (await getAdaptationServices()).apiTools.fetchModels(tempConfig);
+      const list = await (await getAppRoot()).device.fetchModels(tempConfig);
       setTokenizerModels(list);
       setTokenizerModelMessage(`获取到 ${list.length} 个模型。`);
     } catch (err) {
@@ -190,7 +190,7 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
 
   const handleSave = async () => {
     try {
-      await setPreference('gameSettings', settings);
+      await persistSettingsPlanes(settings);
       setMessage('文生图设置已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);
@@ -203,7 +203,7 @@ export function ImageGenerationSettingsTab({ settings, onChange }: Props) {
     setTestingKey(key);
     setTestMessages((prev) => ({ ...prev, [key]: '正在测试连接...' }));
     try {
-      const result = await (await getAdaptationServices()).imageGeneration.testImageGenerationConnection(api);
+      const result = await (await getAppRoot()).device.testImageConnection(api);
       setTestMessages((prev) => ({ ...prev, [key]: result }));
     } catch (err) {
       setTestMessages((prev) => ({ ...prev, [key]: `连接失败：${err instanceof Error ? err.message : String(err)}` }));
@@ -476,7 +476,7 @@ function ApiBlock({
   const [modelLoading, setModelLoading] = useState(false);
   const [modelMessage, setModelMessage] = useState('');
   const [workflowLoading, setWorkflowLoading] = useState<'queue' | 'history' | null>(null);
-  const [workflowCandidates, setWorkflowCandidates] = useState<ComfyWorkflowCandidate[]>([]);
+  const [workflowCandidates, setWorkflowCandidates] = useState<ImageWorkflowCandidate[]>([]);
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowImportStatus>({ tone: 'idle', text: '' });
   const workflowFileRef = useRef<HTMLInputElement | null>(null);
   const suggestions = fetchedModels.length ? fetchedModels : modelSuggestions[api.backend];
@@ -484,7 +484,7 @@ function ApiBlock({
     setModelLoading(true);
     setModelMessage(api.backend === 'novelai' ? '正在载入 NovelAI 图片模型列表...' : '正在读取生图模型列表...');
     try {
-      const models = await (await getAdaptationServices()).imageGeneration.fetchImageGenerationModels(api);
+      const models = await (await getAppRoot()).device.fetchImageModels(api);
       setFetchedModels(models);
       if (models.length) {
         setModelMessage(`已读取 ${models.length} 个模型。`);
@@ -521,7 +521,7 @@ function ApiBlock({
     setWorkflowLoading(source);
     setWorkflowStatus({ tone: 'idle', text: source === 'queue' ? '正在读取当前队列工作流...' : '正在读取最近历史工作流...' });
     try {
-      const list = await (await getAdaptationServices()).imageGeneration.fetchComfyWorkflowCandidates(api, source);
+      const list = await (await getAppRoot()).device.fetchImageWorkflows(api, source);
       setWorkflowCandidates(list);
       if (list.length) {
         setWorkflowStatus({ tone: 'ok', text: `已读取 ${list.length} 条${source === 'queue' ? '队列' : '历史'}工作流，可直接导入。` });
@@ -535,7 +535,7 @@ function ApiBlock({
     }
   };
 
-  const handleSelectWorkflowCandidate = (candidate: ComfyWorkflowCandidate) => {
+  const handleSelectWorkflowCandidate = (candidate: ImageWorkflowCandidate) => {
     onChange({ comfyWorkflowJson: candidate.workflowJson, useDefaultComfyWorkflow: false });
     setWorkflowStatus({ tone: 'ok', text: `已导入${candidate.source === 'queue' ? '队列' : '历史'}工作流：${candidate.title}` });
   };

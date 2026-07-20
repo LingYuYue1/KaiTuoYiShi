@@ -52,6 +52,7 @@ export class PersistentSessionRepository implements SessionRepository {
       const commandKey = String(input.commandId);
       const prior = await tx.getCommand(sessionKey, commandKey);
       if (prior) {
+        if (prior.fingerprint !== input.fingerprint) return { type: 'duplicate_mismatch' as const };
         return { type: 'committed' as const, snapshot: fromCommandRecord(prior) };
       }
 
@@ -74,6 +75,7 @@ export class PersistentSessionRepository implements SessionRepository {
         id: commandRecordId(sessionKey, commandKey),
         sessionId: sessionKey,
         commandId: commandKey,
+        fingerprint: input.fingerprint,
         committedRevision: stored.revision,
         snapshot: stored,
       });
@@ -98,11 +100,22 @@ export class PersistentSessionRepository implements SessionRepository {
   async findByCommandId(
     sessionId: SessionId,
     commandId: CommandId,
-  ): Promise<SessionSnapshot | null> {
+  ) {
     return this.backend.runAtomic(async (tx) => {
       const row = await tx.getCommand(String(sessionId), String(commandId));
       if (!row) return null;
-      return fromCommandRecord(row);
+      return { snapshot: fromCommandRecord(row), fingerprint: row.fingerprint };
+    });
+  }
+
+  async findCommandReceipt(sessionId: SessionId, commandId: CommandId) {
+    return this.backend.runAtomic(async (tx) => {
+      const row = await tx.getCommand(String(sessionId), String(commandId));
+      if (!row?.receipt) return null;
+      return {
+        receipt: structuredClone(row.receipt),
+        consumedBy: row.receiptConsumedBy ? (row.receiptConsumedBy as CommandId) : null,
+      };
     });
   }
 
@@ -113,6 +126,7 @@ export class PersistentSessionRepository implements SessionRepository {
 
       const prior = await tx.getCommand(sessionKey, commandKey);
       if (prior) {
+        if (prior.fingerprint !== input.fingerprint) return { type: 'duplicate_mismatch' as const };
         return {
           type: 'committed' as const,
           snapshot: fromCommandRecord(prior),
@@ -131,8 +145,20 @@ export class PersistentSessionRepository implements SessionRepository {
         };
       }
 
+      let consumedReceiptRecord: StoredCommandRecord | null = null;
+      if (input.consumeReceiptFromCommandId) {
+        consumedReceiptRecord = await tx.getCommand(sessionKey, String(input.consumeReceiptFromCommandId));
+        if (!consumedReceiptRecord?.receipt) {
+          return { type: 'receipt_unavailable' as const, message: 'Drop receipt does not exist' };
+        }
+        if (consumedReceiptRecord.receiptConsumedBy) {
+          return { type: 'receipt_unavailable' as const, message: 'Drop receipt was already consumed' };
+        }
+      }
+
       const nextRevision = exactCurrent.revision + 1;
       // Single schema write — always current SESSION_SCHEMA_VERSION.
+      // V3 stored records never contain device-plane fields.
       const stored = toStoredRecord(
         input.sessionId,
         nextRevision,
@@ -144,12 +170,17 @@ export class PersistentSessionRepository implements SessionRepository {
       // Crash between putSession and putCommand is backend-dependent; Memory
       // throws before putSession when armed (crash-before-CAS tests).
       tx.putSession(stored);
+      if (consumedReceiptRecord) {
+        tx.putCommand({ ...consumedReceiptRecord, receiptConsumedBy: commandKey });
+      }
       tx.putCommand({
         id: commandRecordId(sessionKey, commandKey),
         sessionId: sessionKey,
         commandId: commandKey,
+        fingerprint: input.fingerprint,
         committedRevision: stored.revision,
         snapshot: stored,
+        receipt: input.receipt ? structuredClone(input.receipt) : undefined,
       });
 
       return {

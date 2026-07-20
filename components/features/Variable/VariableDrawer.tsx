@@ -1,14 +1,14 @@
 ﻿import { useMemo, useState } from 'react';
 import type { 变量命令批次, 变量命令结果, 变量命令动作 } from '@/models/variableCommand';
-import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
+import type { DurableJob, JobKind } from '@/src/kernel/domain/jobs/durableJob';
 
 interface Props {
   batches: 变量命令批次[];
-  tasks: 队列任务记录[];
+  jobs: DurableJob[];
   /** 变量模型正在跑（主回复已落地，变量结算中）。 */
   pending?: boolean;
-  onCancelTask?: (id: 队列任务ID) => void;
-  onRetryTask?: (task: 队列任务记录, mode: 'retry' | 'reroll') => void | Promise<void>;
+  onCancelJob?: (id: string) => void;
+  onRetryJob?: (job: DurableJob) => void | Promise<void>;
 }
 
 const smallClip =
@@ -23,17 +23,17 @@ const ACTION_STYLE: Record<变量命令动作, { bg: string; border: string; col
   delete: { bg: 'rgba(176, 72, 68, 0.12)', border: 'rgba(176, 72, 68, 0.38)', color: 'rgb(150, 54, 52)', label: 'DEL' },
 };
 
-type TaskStatus = 队列任务状态;
+type TaskStatus = 'pending' | 'success' | 'failed' | 'idle' | 'cancelled';
 
-export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryTask }: Props) {
+export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob }: Props) {
   const [open, setOpen] = useState(false);
 
   const latest = batches.length > 0 ? batches[batches.length - 1] : null;
-  const latestTaskById = useMemo(() => {
-    const map = new Map<队列任务ID, 队列任务记录>();
-    for (const task of tasks) map.set(task.id, task);
+  const latestJobByKind = useMemo(() => {
+    const map = new Map<JobKind, DurableJob>();
+    for (const job of jobs) map.set(job.payload.kind, job);
     return map;
-  }, [tasks]);
+  }, [jobs]);
 
   const variableStatus: TaskStatus = pending
     ? 'pending'
@@ -41,14 +41,14 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
       ? latest.results.some((r) => !r.ok)
         ? 'failed'
         : 'success'
-      : latestTaskById.get('variable')?.status ?? 'idle';
+      : jobStatus(latestJobByKind.get('variable.calibrate'));
 
   const queueRows = [
-    latestTaskById.get('variable') ?? createIdleTask('variable', '变量生成', '解析正文并落地变量命令'),
-    latestTaskById.get('narrative_image_parse') ?? createIdleTask('narrative_image_parse', '故事快照解析', '从正文提取故事快照提示词'),
-    latestTaskById.get('narrative_image_generate') ?? createIdleTask('narrative_image_generate', '故事快照生成', '调用生图 API 生成故事快照'),
-    latestTaskById.get('news') ?? createIdleTask('news', '星际和平周报', '独立 API 推演新闻与后台事件'),
-    latestTaskById.get('phone') ?? createIdleTask('phone', '手机来信', '主动来信种子与通讯入口'),
+    createJobRow('variable.calibrate', '变量生成', '解析正文并落地变量命令', latestJobByKind),
+    createJobRow('narrative-image.generate', '故事快照生成', '从正文解析并生成故事快照', latestJobByKind),
+    createJobRow('news.generate', '星际和平周报', '独立 API 推演新闻与后台事件', latestJobByKind),
+    createJobRow('yiting.archive', '忆庭归档', '将已提交回合归档到忆庭', latestJobByKind),
+    createJobRow('memory.compress', '记忆整理', '压缩已提交的剧情记忆', latestJobByKind),
   ];
 
   return (
@@ -184,15 +184,15 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
         <div className="flex flex-1 min-h-0 flex-col overflow-y-auto px-4 py-4 space-y-3">
           {queueRows.map((task, index) => (
             <TaskRow
-              key={`${task.id}_${task.timestamp}_${index}`}
+              key={`${task.kind}_${task.job?.id ?? 'idle'}_${index}`}
               index={index + 1}
               title={task.title}
               subtitle={task.subtitle}
-              status={task.id === 'variable' ? variableStatus : task.status}
-              batch={task.id === 'variable' ? latest ?? undefined : undefined}
-              task={task}
-              onCancel={onCancelTask}
-              onRetry={onRetryTask}
+              status={task.kind === 'variable.calibrate' ? variableStatus : jobStatus(task.job)}
+              batch={task.kind === 'variable.calibrate' ? latest ?? undefined : undefined}
+              job={task.job}
+              onCancel={onCancelJob}
+              onRetry={onRetryJob}
             />
           ))}
         </div>
@@ -201,8 +201,16 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
   );
 }
 
-function createIdleTask(id: 队列任务ID, title: string, subtitle: string): 队列任务记录 {
-  return { id, title, subtitle, turn: 0, timestamp: 0, status: 'idle' };
+function createJobRow(kind: JobKind, title: string, subtitle: string, jobs: ReadonlyMap<JobKind, DurableJob>) {
+  return { kind, title, subtitle, job: jobs.get(kind) };
+}
+
+function jobStatus(job?: DurableJob): TaskStatus {
+  if (!job) return 'idle';
+  if (job.state === 'succeeded') return 'success';
+  if (job.state === 'failed') return 'failed';
+  if (job.state === 'cancelled') return 'cancelled';
+  return 'pending';
 }
 
 // ── 任务行 ──
@@ -213,33 +221,29 @@ interface TaskRowProps {
   subtitle?: string;
   status: TaskStatus;
   batch?: 变量命令批次;
-  task?: 队列任务记录;
-  onCancel?: (id: 队列任务ID) => void;
-  onRetry?: (task: 队列任务记录, mode: 'retry' | 'reroll') => void | Promise<void>;
+  job?: DurableJob;
+  onCancel?: (id: string) => void;
+  onRetry?: (job: DurableJob) => void | Promise<void>;
 }
 
-function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetry }: TaskRowProps) {
+function TaskRow({ index, title, subtitle, status, batch, job, onCancel, onRetry }: TaskRowProps) {
   // 默认折叠；用户点「查看原始信息 / 查看变量」才展开。
   const [view, setView] = useState<'raw' | 'commands' | null>(null);
 
-  const canViewRaw = !!batch?.rawText || !!task?.rawText;
+  const canViewRaw = !!batch?.rawText || Boolean(job && 'error' in job && job.error);
   const canViewCommands = !!batch && batch.results.length > 0;
 
-  const turnLabel = batch ? `第 ${batch.turn} 回合` : task?.turn ? `第 ${task.turn} 回合` : '尚未运行';
+  const turnLabel = batch ? `第 ${batch.turn} 回合` : job ? `尝试 ${job.attempt}/${job.maxAttempts}` : '尚未运行';
   const summary = batch
     ? (() => {
         const ok = batch.results.filter((r) => r.ok).length;
         const fail = batch.results.length - ok;
         return `${batch.results.length} 条 · ✓ ${ok}${fail > 0 ? ` · ✗ ${fail}` : ''}`;
       })()
-    : task?.detail ?? '';
-  const retrySummary = task?.retrying && task.failCount
-    ? `失败 ${task.failCount} 次，正在重试`
-    : task?.failCount
-      ? `失败 ${task.failCount} 次`
-      : '';
-  const canCancel = status === 'pending' && !!task?.cancellable && !!onCancel;
-  const canRetry = status === 'failed' && !!task && isRetryableQueueTask(task.id) && !!onRetry;
+    : job && 'error' in job ? job.error : '';
+  const retrySummary = job?.state === 'retry' ? `第 ${job.attempt} 次失败，等待重试` : '';
+  const canCancel = status === 'pending' && !!job && !!onCancel;
+  const canRetry = (status === 'failed' || status === 'cancelled') && !!job && !!onRetry;
 
   return (
     <div
@@ -293,7 +297,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
             </div>
           )}
           {retrySummary && (
-            <div className="mt-0.5 text-[10px]" style={{ color: task?.retrying ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' : 'rgba(255, 180, 180, 0.86)' }}>
+            <div className="mt-0.5 text-[10px]" style={{ color: job?.state === 'retry' ? 'rgba(var(--tj-accent-primary),0.92)' : 'rgba(255, 180, 180, 0.86)' }}>
               {retrySummary}
             </div>
           )}
@@ -301,16 +305,13 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
 
         {/* 状态图标 */}
         <div className="flex shrink-0 items-center gap-2">
-          {canRetry && task && (
-            <div className="flex items-center gap-1">
-              <QueueActionButton label="重试" onClick={() => void onRetry?.(task, 'retry')} />
-              <QueueActionButton label="重生成" onClick={() => void onRetry?.(task, 'reroll')} />
-            </div>
+          {canRetry && job && (
+            <QueueActionButton label="重试" onClick={() => void onRetry?.(job)} />
           )}
-          {canCancel && task && (
+          {canCancel && job && (
             <button
               type="button"
-              onClick={() => onCancel(task.id)}
+              onClick={() => onCancel(job.id)}
               className="px-2 py-1 text-[10px] font-serif tracking-[0.16em] transition-all hover:opacity-90"
               style={{
                 color: 'rgba(var(--tj-accent-secondary),0.96)',
@@ -347,14 +348,10 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
 
       {/* 展开区 */}
       {view === 'raw' && batch?.rawText && <RawTextPanel raw={batch.rawText} />}
-      {view === 'raw' && !batch?.rawText && task?.rawText && <RawTextPanel raw={task.rawText} />}
+      {view === 'raw' && !batch?.rawText && job && 'error' in job && <RawTextPanel raw={job.error} />}
       {view === 'commands' && batch && <CommandsPanel batch={batch} />}
     </div>
   );
-}
-
-function isRetryableQueueTask(id: 队列任务ID): boolean {
-  return id === 'variable' || id === 'news' || id === 'narrative_image_parse' || id === 'narrative_image_generate';
 }
 
 function QueueActionButton({ label, onClick }: { label: string; onClick: () => void }) {
@@ -414,21 +411,6 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         }}
       >
         ✗
-      </span>
-    );
-  }
-  if (status === 'skipped') {
-    return (
-      <span
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
-        title="已跳过"
-        style={{
-          color: 'rgba(var(--tj-text-secondary), 0.72)',
-          background: 'rgba(var(--tj-accent-primary), 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
-        }}
-      >
-        -
       </span>
     );
   }

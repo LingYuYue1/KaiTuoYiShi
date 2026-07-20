@@ -4,8 +4,27 @@ import type { 记忆系统设置 } from '@/models/settings';
 import type { NPC同行记忆来源, NPC同行记忆条目, NPC总结记忆条目 } from '@/models/npc';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
+import {
+  buildArchiveSummary,
+  checkCompressionThreshold,
+  checkLongTermThreshold,
+  checkMiddleTermThreshold,
+  collectSummaryLines,
+  compressToLongTerm,
+  compressToMiddleTerm,
+  compressToShortTerm,
+  normalizeMemorySnippet,
+  requirePositiveInteger,
+} from '@/src/kernel/domain/memory/memoryCompression';
+export {
+  checkCompressionThreshold,
+  checkLongTermThreshold,
+  checkMiddleTermThreshold,
+  compressToLongTerm,
+  compressToMiddleTerm,
+  compressToShortTerm,
+} from '@/src/kernel/domain/memory/memoryCompression';
 
-const MEMORY_SNIPPET_LIMIT = 84;
 const NPC_MEMORY_SUMMARY_LIMIT = 160;
 const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
   /剧情编织进度/,
@@ -26,28 +45,6 @@ export function buildImmediateMemory(userInput: string, aiResponse: string): str
   return [`玩家输入：${input || '（空）'}`, `剧情回应：${response || '（空）'}`].join('\n');
 }
 
-function normalizeMemorySnippet(text: string): string {
-  return (text || '')
-    .replace(/\s+/g, ' ')
-    .replace(/^【\s*[\d:.\-\s]+\s*】\s*/, '')
-    .replace(/^[\-\u2022•·\d一二三四五六七八九十]+[\.、\)]\s*/, '')
-    .trim();
-}
-
-function collectSummaryLines(items: string[], limit = 4): string[] {
-  const seen = new Set<string>();
-  const lines: string[] = [];
-  for (const item of items) {
-    const snippet = normalizeMemorySnippet(item);
-    if (!snippet) continue;
-    const key = snippet.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    lines.push(snippet.length > MEMORY_SNIPPET_LIMIT ? `${snippet.slice(0, MEMORY_SNIPPET_LIMIT)}…` : snippet);
-    if (lines.length >= limit) break;
-  }
-  return lines;
-}
 
 function isNpcMemorySystemNoise(text: string): boolean {
   return NPC_MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
@@ -94,14 +91,6 @@ function limitSummaryLine(text: string, limit: number): string {
   return cleaned.length > limit ? `${cleaned.slice(0, limit)}…` : cleaned;
 }
 
-function buildArchiveSummary(items: string[], turn: number, kind: 'short' | 'middle' | 'long'): string {
-  const lines = collectSummaryLines(items, kind === 'long' ? 5 : 4);
-  const fallback = items.map(normalizeMemorySnippet).filter(Boolean).join('；');
-  const body = lines.length ? lines.join('；') : fallback;
-  const content = lines.length ? lines.map((line) => `- ${line}`) : [`- ${body || '空白'}`];
-  const label = kind === 'long' ? '长期纪要' : kind === 'middle' ? '中期纪要' : '短期纪要';
-  return [`【${label}·回合${turn}】`, ...content].join('\n');
-}
 
 function buildKeywords(items: string[]): string[] {
   return collectSummaryLines(items, 8)
@@ -132,29 +121,6 @@ export function addImmediateMemory(system: 记忆系统, memory: string, _turn: 
   return { ...system, 即时记忆: trimmed };
 }
 
-function requirePositiveInteger(value: number, label: string): number {
-  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
-    throw new Error(`${label} must be a positive integer`);
-  }
-  return value;
-}
-
-export function checkCompressionThreshold(system: 记忆系统, threshold: number): boolean {
-  return system.即时记忆.length >= requirePositiveInteger(threshold, 'Immediate memory threshold');
-}
-
-export function compressToShortTerm(system: 记忆系统, turn: number, batchSize: number): 记忆系统 {
-  const size = requirePositiveInteger(batchSize, 'Immediate memory batch size');
-  if (system.即时记忆.length < size) throw new Error('Immediate memory batch is incomplete');
-  const recentRaw = system.即时记忆.slice(0, size);
-  const summary = buildArchiveSummary(recentRaw, turn, 'short');
-
-  return {
-    ...system,
-    即时记忆: system.即时记忆.slice(size),
-    短期记忆: [...system.短期记忆, summary],
-  };
-}
 
 export function createShortTermArchiveEntry(rawMemories: string[], turn: number, summaryOverride?: string): 回忆条目 {
   return {
@@ -170,21 +136,6 @@ export function createShortTermArchiveEntry(rawMemories: string[], turn: number,
   };
 }
 
-export function checkMiddleTermThreshold(system: 记忆系统, threshold: number): boolean {
-  return system.短期记忆.length >= requirePositiveInteger(threshold, 'Short memory threshold');
-}
-
-export function compressToMiddleTerm(system: 记忆系统, turn: number, batchSize: number): 记忆系统 {
-  const size = requirePositiveInteger(batchSize, 'Short memory batch size');
-  if (system.短期记忆.length < size) throw new Error('Short memory batch is incomplete');
-  const oldest = system.短期记忆.slice(0, size);
-  const compressed = buildArchiveSummary(oldest, turn, 'middle');
-  return {
-    ...system,
-    短期记忆: system.短期记忆.slice(size),
-    中期记忆: [...(system.中期记忆 ?? []), compressed],
-  };
-}
 
 export function createMiddleTermArchiveEntry(shortMemories: string[], turn: number, summaryOverride?: string): 回忆条目 {
   return {
@@ -200,22 +151,6 @@ export function createMiddleTermArchiveEntry(shortMemories: string[], turn: numb
   };
 }
 
-export function checkLongTermThreshold(system: 记忆系统, threshold: number): boolean {
-  return (system.中期记忆 ?? []).length >= requirePositiveInteger(threshold, 'Middle memory threshold');
-}
-
-export function compressToLongTerm(system: 记忆系统, turn: number, batchSize: number): 记忆系统 {
-  const size = requirePositiveInteger(batchSize, 'Middle memory batch size');
-  const middle = system.中期记忆 ?? [];
-  if (middle.length < size) throw new Error('Middle memory batch is incomplete');
-  const oldest = middle.slice(0, size);
-  const compressed = buildArchiveSummary(oldest, turn, 'long');
-  return {
-    ...system,
-    中期记忆: middle.slice(size),
-    长期记忆: [...system.长期记忆, compressed],
-  };
-}
 
 export function createLongTermArchiveEntry(shortMemories: string[], turn: number, summaryOverride?: string): 回忆条目 {
   return {
@@ -301,7 +236,7 @@ export function upsertRecallEntry(system: { 回忆档案: 回忆条目[] }, entr
 export function autoCompressMemorySystem(
   system: 记忆系统,
   turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
+  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
 ): 记忆系统 {
   let next = system;
   const immediateThreshold = requirePositiveInteger(settings.即时转短期阈值, 'Immediate memory threshold');
@@ -323,7 +258,7 @@ export function autoCompressMemorySystem(
 export function autoCompressMemorySystemWithArchives(
   system: 记忆系统,
   turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
+  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
 ): { memory: 记忆系统; archives: 回忆条目[] } {
   let next = system;
   const archives: 回忆条目[] = [];

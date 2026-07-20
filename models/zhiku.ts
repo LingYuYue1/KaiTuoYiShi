@@ -87,7 +87,7 @@ export function 创建空智库系统(): 智库系统 {
   return { 条目: [] };
 }
 
-export function 创建智库条目(input: {
+export interface 智库条目草稿 {
   标题: string;
   分类?: 智库分类;
   摘要?: string;
@@ -123,10 +123,18 @@ export function 创建智库条目(input: {
   系列序号?: number;
   章节序号?: number;
   builtin?: boolean;
-}): 智库条目 {
-  const now = Date.now();
+}
+
+export function 创建智库条目(
+  input: 智库条目草稿,
+  identity: Readonly<{ id: string; now: number }> = {
+    id: `zhiku_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    now: Date.now(),
+  },
+): 智库条目 {
+  const now = identity.now;
   return {
-    id: `zhiku_${now}_${Math.random().toString(36).slice(2, 7)}`,
+    id: identity.id,
     标题: input.标题.trim() || '未命名资料',
     分类: input.分类 ?? 'story',
     摘要: input.摘要?.trim() ?? '',

@@ -90,6 +90,29 @@
 
 **规模判断：** 这是一次中大型内核接口重构，而不是局部清理：涉及 runtime 类型、draft/snapshot、BrowserTurnEngine 与 runtime action engine、context 构建/API 解析、session hydration、存档导入导出及迁移脚本。以当前结构估计约 12–18 个生产文件，完成后可一并删除“读档后偏好覆盖 runtime”的过渡逻辑。
 
+### P1：API 配置的设备权威与可回滚 Session 权威分离不清
+
+`API Profile` 槽位本身由 preference 保存，但方案应用后的 `apiSettings` 及各独立系统 API 路由会进入 React state；随后 `snapshotRuntimeState` 又把它们作为完整 `RuntimeGameState` 的一部分，通过 `session.checkpoint` 写入持久化 kernel Session。内核发起请求时直接从该 Session runtime 的 `state.apiSettings` / `state.gameSettings` 解析模型配置。因此，设备 preference 与 kernel Session 同时持有可影响请求的 API 配置，二者都可能成为实际权威。
+
+现有逻辑依赖 live overlay 缓解冲突：Continue/Load Save 会先保留 React 中的设备偏好，应用 kernel projection 后再调用 setter 覆盖回来；每次正式命令前又以当前 React state checkpoint 整个 runtime。这只是时序上的临时 patch，并没有从状态模型中消除双权威。
+
+**可稳定复现的隐式回滚：**
+
+1. 一个请求开始运行，kernel command 使用启动时 Session runtime 中的旧 API 配置。
+2. 请求尚未结束时，User 在设置页应用新的 API Profile；新配置写入 React state 和 preference，但正在运行的 command 仍持有旧 runtime。
+3. User 中断请求；rejected 恢复路径将最后一次 committed Session projection 交给 `applySessionView`。
+4. `applySessionView` 无差别执行 `setApiSettings(runtime.apiSettings)` 与 `setGameSettings(runtime.gameSettings)`，于是旧配置在没有任何提示的情况下覆盖当前 React 状态。
+5. 下一次命令前的 checkpoint 还可能把这个已回滚的旧配置再次写入 kernel Session。此时 preference 可能仍是新配置，形成磁盘 preference、React state 与 Session runtime 三者不一致。
+
+**影响：**
+
+- API 切换会受到命令成功、失败、中断、恢复和 projection 应用时序影响，而不是只由设置操作决定；
+- API Key、endpoint 和模型选择被纳入 Session 的 CAS、回滚与导出语义，存在不必要的秘密持久化和导出风险；
+- 任何绕过“命令前 checkpoint”的内核调用，都可能读取旧 Session API；
+- 当前 UI 没有显示配置被旧 projection 覆盖，问题表现为下一次请求悄然使用错误模型或 endpoint。
+
+**建议：** API 配置及其他设备偏好必须只有一个独立于 Session 的权威源。将它们从 `RuntimeGameState`、Session projection、CAS snapshot、回滚和 Session export 中彻底移除；在 command 开始时把不可变的 live execution configuration 显式注入该次执行。请求一旦开始，该 command 使用其捕获的配置直到完成或取消，但 command 的 projection/rejected 恢复绝不能回写全局设备配置。
+
 ## 补充发现：回合过程事件未投影，导致聊天与状态 UI 滞后
 
 ### P1：用户输入已写入 draft，但 UI 直到最终 commit 才看到它

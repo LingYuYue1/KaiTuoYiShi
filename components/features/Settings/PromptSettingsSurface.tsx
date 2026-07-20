@@ -15,8 +15,8 @@ import {
 import { getCurrentSTPresetV2, normalizeSTPreset } from '@/utils/stSettingsNormalizer';
 import type { STPresetEntryV2, STRegexScript, STWorldInfoEntry } from '@/models/stTypes';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
-import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/src/kernel/workflows/tavernRegexProcessor';
-import { getAdaptationServices } from '@/src/adaptations';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/src/kernel/contract/rootCapabilities';
+import { getAppRoot } from '@/src/adaptations/kernel';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -461,9 +461,7 @@ export function PromptSettingsSurface({ settings, onChange, mode = 'modules' }: 
           isBuiltin: false,
         };
         const importedWorldInfoCount = getPresetWorldInfoEntries(preset.world_info).length;
-        const importedRegexCount = await (await getAdaptationServices()).tavernRegex
-          .extractTavernRegexScripts(preset)
-          .then((scripts) => scripts.length);
+        const importedRegexCount = (await (await getAppRoot()).content.extractRegexScripts(preset)).length;
         onChange({
           ...settings,
           stPresetsV2: [...(settings.stPresetsV2 ?? []), newPresetV2],
@@ -956,17 +954,17 @@ function V2PresetSwitcher({
     setRegexScriptSafety([]);
     setSelectedRegexDryRun(null);
     setRegexError(null);
-    void getAdaptationServices()
-      .then(async (services) => {
-        const scripts = await services.tavernRegex.extractTavernRegexScripts(current?.preset);
+    void getAppRoot()
+      .then(async (root) => {
+        const scripts = await root.content.extractRegexScripts(current?.preset);
         const safety = await Promise.all(
-          scripts.map((script) => services.tavernRegex.analyzeTavernRegexScript(script)),
+          scripts.map((script) => root.content.analyzeRegexScript(script)),
         );
         return { scripts, safety };
       })
       .then(({ scripts, safety }) => {
         if (!active) return;
-        setRegexScripts(scripts);
+        setRegexScripts([...scripts]);
         setRegexScriptSafety(safety);
       })
       .catch((error: unknown) => {
@@ -985,8 +983,8 @@ function V2PresetSwitcher({
     let active = true;
     setSelectedRegexDryRun(null);
     if (!selectedRegexScript) return () => { active = false; };
-    void getAdaptationServices()
-      .then((services) => services.tavernRegex.dryRunTavernRegexScript(selectedRegexScript, regexDryRunSample))
+    void getAppRoot()
+      .then((root) => root.content.dryRunRegexScript(selectedRegexScript, regexDryRunSample))
       .then((result) => {
         if (active) setSelectedRegexDryRun(result);
       })

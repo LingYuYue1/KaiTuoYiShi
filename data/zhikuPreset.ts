@@ -13,7 +13,6 @@ export interface LoadBundledZhikuOptions {
   cacheBust?: string | number;
 }
 
-export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
 export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_';
 
 export const bundledZhikuPresets: BundledZhikuPreset[] = [
@@ -111,54 +110,6 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
   },
 ];
 
-const BUNDLED_MAIN_STORY_TITLES = new Set([
-  '第一章 混乱行至深处',
-  '第二章 漩涡止于中心',
-  '第三章 宇宙安宁片刻',
-  '第四章 阴影从未离去',
-  '第四章支线 模拟宇宙',
-  '第五章 旅途正在继续',
-  '第一章 激「冻」人心的大冒险',
-  '第二章 如果在冬夜，一群旅人',
-  '第三章 永冬城之夜',
-  '第四章 躲得过初一，躲不过十五',
-  '第五章 捉迷藏',
-  '第六章 第八条、也是最后一条规则',
-  '第七章 她等待刀尖已经太久',
-  '第八章 他们有多少人已掉进深渊',
-  '第九章 相会在日落时分',
-  '第十章 已故去的必如雪崩再来',
-  '第十一章 躺在铁锈中',
-  '第十二章 腐烂或燃烧',
-  '第十三章 我们不擅长告别',
-  '第一章 在屋外的黑暗中洗涤',
-  '第二章 不可制造偶像',
-  '第三章 青年近卫军',
-  '第四章 兵士们默默无言',
-  '第五章 星星是冰冷的玩具',
-  '第六章 过去早已无路可通',
-  '第七章 回归',
-  '第八章 从凶险和泥泞的沼泽中',
-  '第九章 时不我待，我的朋友',
-  '第十章 静静的星河',
-  '第一章 旅进青霄，不速之邀',
-  '第二章 行遏流云，身入魔阴',
-  '第三章 紫府通谒，将军定策',
-  '第四章 旧影婆娑，追思错落',
-  '第五章 犬迹追从，谛听狐踪',
-  '第六章 迴星周旋，未卜知先',
-  '第六章 长乐新朋，青鸟候风',
-  '第七章极数问玄，历事穷观',
-  '第八章 神木重萌，掣转天衡',
-  '第九章茸客鸣呦，玉角盘虬',
-  '第一章：金鼎灵树，穷途梼杌',
-  '第二章上：螣蛇无穴，旧梦亡阙',
-  '第二章（下）：得其雨露，安其壤土',
-  '第三章：有龙矫矫，其渊渺渺',
-  '第四章：仙骸成空，大劫有终',
-  '第一章：安灵布奠，天清路远',
-]);
-
 const LINKABLE_MIGRATED_LORE_PRESET_IDS = new Set([
   'zhiku_paths_core',
   'zhiku_aeons_core',
@@ -179,41 +130,12 @@ function normalizeMigratedLoreEntry(entry: 智库条目, preset: BundledZhikuPre
   };
 }
 
-export function isBundledZhikuDuplicate(entry: Partial<智库条目>): boolean {
-  if (entry.builtin) return false;
-  if (entry.分类 !== 'story') return false;
-
-  const title = typeof entry.标题 === 'string' ? entry.标题.trim() : '';
-  const source = typeof entry.来源 === 'string' ? entry.来源 : '';
-  const raw = typeof entry.原文 === 'string' ? entry.原文 : '';
-
-  if (source.includes('开拓轶事·项目内置剧情')) return true;
-  if (BUNDLED_MAIN_STORY_TITLES.has(title)) return true;
-  if (source.includes('剧情-黑塔空间站')) return true;
-  return title.includes('黑塔空间站') && raw.includes('今天是昨天的明天');
-}
-
 export function shouldRemoveRetiredZhikuEntry(entry: Partial<智库条目>): boolean {
   return Boolean(entry.分类 && isRetiredZhikuCategory(entry.分类));
 }
 
 export function removeRetiredZhikuEntries(entries: 智库条目[] | undefined): 智库条目[] {
   return (entries ?? []).filter((entry) => !shouldRemoveRetiredZhikuEntry(entry));
-}
-
-export function shouldRemoveLegacyZhikuCharacterEntry(entry: Partial<智库条目>, migrationAt: number): boolean {
-  if (entry.分类 !== 'character') return false;
-  if (isRebuiltZhikuCharacterEntry(entry)) return false;
-  if (entry.builtin) return true;
-  const changedAt = Math.max(Number(entry.createdAt) || 0, Number(entry.updatedAt) || 0);
-  return migrationAt <= 0 || changedAt <= migrationAt;
-}
-
-export function removeLegacyZhikuCharacterEntries(
-  entries: 智库条目[] | undefined,
-  migrationAt: number,
-): 智库条目[] {
-  return (entries ?? []).filter((entry) => !shouldRemoveLegacyZhikuCharacterEntry(entry, migrationAt));
 }
 
 export function isRebuiltZhikuCharacterEntry(entry: Partial<智库条目>): boolean {
@@ -243,14 +165,10 @@ export function mergeZhikuRuntimeUnlockOverrides(
 export function mergeBundledZhikuSystem(
   bundledSystem: 智库系统,
   currentSystem: 智库系统 | null | undefined,
-  migrationAt: number,
 ): 智库系统 {
   const current = 归一化智库系统(currentSystem);
-  const customEntries = removeLegacyZhikuCharacterEntries(
-    removeRetiredZhikuEntries(
-      current.条目.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)),
-    ),
-    migrationAt,
+  const customEntries = removeRetiredZhikuEntries(
+    current.条目.filter((entry) => !entry.builtin),
   );
   return 归一化智库系统({
     条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, current.条目), ...customEntries],
@@ -336,12 +254,11 @@ export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOption
 /**
  * Session-boundary hydration: re-merge bundled catalog with saved/current shells.
  * Saves only store custom entries + builtin unlock deltas; full bodies come from the catalog.
- * Callers should pass the stable ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY preference when available.
  */
 export async function hydrateRuntimeZhiku(
   savedOrCurrent: 智库系统 | null | undefined,
-  options: LoadBundledZhikuOptions & { migrationAt?: number } = {},
+  options: LoadBundledZhikuOptions = {},
 ): Promise<智库系统> {
   const bundled = await loadAllBundledZhikuPresets(options);
-  return mergeBundledZhikuSystem(bundled, savedOrCurrent, options.migrationAt ?? Date.now());
+  return mergeBundledZhikuSystem(bundled, savedOrCurrent);
 }

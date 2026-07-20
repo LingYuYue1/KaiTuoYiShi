@@ -2,20 +2,30 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
 import {
-  创建剧情编织系列FromText,
   归一化剧情编织系统,
-  重建剧情编织系列FromText,
 } from '@/models/storyWeaving';
-import type { 剧情编织注入诊断 } from '@/src/kernel/workflows/storyWeaving';
-import type { 剧情规划分析快照 } from '@/src/kernel/domain/story/storyPlanningAnalysis';
-import { getAdaptationServices } from '@/src/adaptations';
-import { setPreference } from '@/src/adaptations/preferences';
-import { buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import type { StoryPlanningAnalysis, StoryWeavingInjectionDiagnostics } from '@/src/kernel/contract/storyWeaving';
+import { getAppRoot } from '@/src/adaptations/kernel';
 
 interface PlotPanelProps {
   storyWeaving: 剧情编织系统;
-  onStoryWeavingChange: React.Dispatch<React.SetStateAction<剧情编织系统>>;
   gameSettings: 游戏设置;
+  actions: PlotPanelActions;
+}
+
+export interface PlotPanelActions {
+  importText(input: { text: string; title: string; fileName?: string; chaptersPerSegment: number }): Promise<void>;
+  importJson(json: string): Promise<void>;
+  restoreBundled(): Promise<void>;
+  renameSeries(seriesId: string, title: string): Promise<void>;
+  rebuildSeries(seriesId: string, chaptersPerSegment: number): Promise<void>;
+  toggleSeriesInjection(seriesId: string): Promise<void>;
+  setCurrent(seriesId: string, group: number): Promise<void>;
+  setSegmentStatus(seriesId: string, segmentId: string, status: 剧情编织运行状态): Promise<void>;
+  saveSegment(seriesId: string, segmentId: string, draft: import('@/src/kernel/contract').StorySegmentDraftInput): Promise<void>;
+  deleteSeries(seriesId: string): Promise<void>;
+  decompose(seriesId: string, segmentId: string): Promise<void>;
+  decomposeBatch(seriesId: string, mode: 'pending' | 'from-current' | 'all'): Promise<void>;
 }
 
 interface SegmentDraft {
@@ -149,24 +159,7 @@ function draftFromSegment(segment: 剧情编织分段): SegmentDraft {
   };
 }
 
-function applyDraft(segment: 剧情编织分段, draft: SegmentDraft): 剧情编织分段 {
-  return {
-    ...segment,
-    标题: draft.标题.trim() || segment.标题,
-    章节范围: draft.章节范围.trim() || segment.章节范围,
-    启用注入: draft.启用注入,
-    本段概括: draft.本段概括.trim(),
-    前段延续事实: splitList(draft.前段延续事实),
-    本段结束状态: splitList(draft.本段结束状态),
-    给后续参考: splitList(draft.给后续参考),
-    登场角色: splitList(draft.登场角色),
-    涉及地点: splitList(draft.涉及地点),
-    涉及派系: splitList(draft.涉及派系),
-    updatedAt: Date.now(),
-  };
-}
-
-export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: PlotPanelProps) {
+export function PlotPanel({ storyWeaving, gameSettings, actions }: PlotPanelProps) {
   const txtInputRef = useRef<HTMLInputElement | null>(null);
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
@@ -179,8 +172,8 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
   const [pasteText, setPasteText] = useState('');
   const [draft, setDraft] = useState<SegmentDraft | null>(null);
   const [trackTab, setTrackTab] = useState<TrackTab>('canon');
-  const [planningAnalysis, setPlanningAnalysis] = useState<剧情规划分析快照 | null>(null);
-  const [injectionDiagnostics, setInjectionDiagnostics] = useState<剧情编织注入诊断 | null>(null);
+  const [planningAnalysis, setPlanningAnalysis] = useState<StoryPlanningAnalysis | null>(null);
+  const [injectionDiagnostics, setInjectionDiagnostics] = useState<StoryWeavingInjectionDiagnostics | null>(null);
   const [analysisError, setAnalysisError] = useState<Error | null>(null);
 
   const normalized = useMemo(() => 归一化剧情编织系统(storyWeaving), [storyWeaving]);
@@ -192,12 +185,9 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
   useEffect(() => {
     let active = true;
     setAnalysisError(null);
-    void getAdaptationServices()
-      .then((services) => Promise.all([
-        services.storyPlanning.buildStoryPlanningAnalysis(normalized),
-        services.storyWeaving.getStoryWeavingInjectionDiagnostics(normalized),
-      ]))
-      .then(([planning, diagnostics]) => {
+    void getAppRoot()
+      .then((root) => root.content.analyzeStoryWeaving(normalized))
+      .then(({ planning, diagnostics }) => {
         if (!active) return;
         setPlanningAnalysis(planning);
         setInjectionDiagnostics(diagnostics);
@@ -249,53 +239,22 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
     setDraft(selectedSegment ? draftFromSegment(selectedSegment) : null);
   }, [selectedSegment?.id, selectedSegment?.updatedAt]);
 
-  const persist = async (next: 剧情编织系统) => {
-    const clean = 归一化剧情编织系统(next);
-    onStoryWeavingChange(clean);
-    await setPreference('storyWeavingSystem', buildPersistedStoryWeavingSystem(clean));
-  };
-
-  const replaceSeries = async (nextSeries: 剧情编织系列, baseSystem = normalized) => {
-    await persist({
-      ...baseSystem,
-      系列列表: baseSystem.系列列表.map((series) => series.id === nextSeries.id ? nextSeries : series),
-      当前系列ID: nextSeries.id,
-    });
-  };
-
-  const updateSeries = async (seriesId: string, updater: (series: 剧情编织系列) => 剧情编织系列) => {
-    const source = normalized.系列列表.find((series) => series.id === seriesId);
-    if (!source) return;
-    await replaceSeries(updater(source));
-  };
-
   const handleImportText = async (text: string, title: string, fileName?: string) => {
     const source = text.trim();
     if (!source) {
       setMessage('没有可导入的文本。');
       return;
     }
-    const series = 创建剧情编织系列FromText({
+    await actions.importText({
+      text: source,
       title: title.trim() || fileName?.replace(/\.[^.]+$/, '') || `自定义剧情 ${normalized.系列列表.length + 1}`,
       fileName,
-      text: source,
       chaptersPerSegment: gameSettings.剧情编织系统.chaptersPerSegment,
     });
-    const next = {
-      系列列表: [...normalized.系列列表, series],
-      当前系列ID: series.id,
-      当前进度: buildSeriesProgressAnchor(normalized.当前进度, series, `导入剧情系列：${series.标题}`),
-    };
-    setSelectedSegmentId(series.分段列表[0]?.id ?? null);
-    setExpandedSeriesId(series.id);
-    await persist(next);
+    setSelectedSegmentId(null);
+    setExpandedSeriesId(null);
     // 长度切片回落会把标题标成「片段 N」；有识别到的标题则提示数量。
-    const lengthSliced = series.章节列表.length > 0
-      && series.章节列表.every((chapter) => /^片段\s+\d+$/.test(chapter.标题));
-    const sliceHint = lengthSliced
-      ? '未识别标题，已按长度切片'
-      : `识别到 ${series.章节列表.length} 个章节标题`;
-    setMessage(`已导入 ${series.章节列表.length} 章，生成 ${series.分段列表.length} 个分段。${sliceHint}`);
+    setMessage('剧情文本已导入并建立分段。');
   };
 
   const handleImportTxtFile = async (file?: File) => {
@@ -308,26 +267,10 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
     if (!file) return;
     try {
       const raw = await file.text();
-      const parsed = JSON.parse(raw) as 剧情编织系统 | 剧情编织系列;
-      const system = '系列列表' in parsed
-        ? 归一化剧情编织系统(parsed)
-        : 归一化剧情编织系统({ 系列列表: [parsed], 当前系列ID: parsed.id });
-      const customOnly = system.系列列表.length > 0 && system.系列列表.every((series) => series.来源类型 !== 'canon');
-      const next = customOnly
-        ? 归一化剧情编织系统({
-          ...normalized,
-          系列列表: [
-            ...normalized.系列列表.filter((series) => !system.系列列表.some((incoming) => incoming.id === series.id)),
-            ...system.系列列表,
-          ],
-          当前系列ID: system.当前系列ID ?? system.系列列表[0]?.id ?? normalized.当前系列ID,
-          当前进度: system.当前进度 ?? normalized.当前进度,
-        })
-        : system;
-      await persist(next);
-      setSelectedSegmentId(system.系列列表[0]?.分段列表[0]?.id ?? null);
-      setExpandedSeriesId(system.当前系列ID ?? system.系列列表[0]?.id ?? null);
-      setMessage(`已导入剧情编织 JSON：${system.系列列表.length} 个系列${customOnly ? '（已并入自制轨道）' : ''}。`);
+      await actions.importJson(raw);
+      setSelectedSegmentId(null);
+      setExpandedSeriesId(null);
+      setMessage('剧情编织 JSON 已导入。');
     } catch (err) {
       const text = (err as Error).message;
       setMessage(`JSON 导入失败：${text}`);
@@ -376,17 +319,10 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
 
   const handleRestoreCanonPresets = async () => {
     try {
-      const bundled = await loadAllBundledStoryWeavingPresets();
-      const merged = mergeBundledStoryWeavingPresets(normalized, bundled);
-      const current = merged.系列列表.find((series) => series.id === merged.当前系列ID) ?? merged.系列列表[0];
-      setSelectedSegmentId(merged.系列列表[0]?.分段列表[0]?.id ?? null);
-      setExpandedSeriesId(merged.系列列表[0]?.id ?? null);
-      await persist({
-        ...merged,
-        当前系列ID: current?.id,
-        当前进度: buildSeriesProgressAnchor(merged.当前进度, current, '恢复内置原著剧情后同步当前锚点'),
-      });
-      setMessage(`已恢复内置原著剧情：${bundled.系列列表.length} 个轨道。`);
+      await actions.restoreBundled();
+      setSelectedSegmentId(null);
+      setExpandedSeriesId(null);
+      setMessage('已恢复内置原著剧情。');
     } catch (err) {
       const text = (err as Error).message;
       setMessage(`恢复内置原著剧情失败：${text}`);
@@ -397,7 +333,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
   const handleRenameSeries = async (series: 剧情编织系列) => {
     const title = window.prompt('新的剧情系列名称', series.标题);
     if (!title || !title.trim()) return;
-    await replaceSeries({ ...series, 标题: title.trim(), 作品名: title.trim(), updatedAt: Date.now() });
+    await actions.renameSeries(series.id, title.trim());
   };
 
   const handleRebuildSeries = async (series: 剧情编织系列) => {
@@ -409,111 +345,48 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
     if (!nextSize) return;
     const size = Math.max(1, Math.trunc(Number(nextSize) || 1));
     if (!window.confirm('重新分段会保留原始 TXT，但会清空该系列已有的 AI 分解结果。确认继续？')) return;
-    const rebuilt = 重建剧情编织系列FromText(series, size);
-    setSelectedSegmentId(rebuilt.分段列表[0]?.id ?? null);
-    await replaceSeries(rebuilt);
-    setMessage(`已重新分段：${rebuilt.章节列表.length} 章 / ${rebuilt.分段列表.length} 段。`);
+    await actions.rebuildSeries(series.id, size);
+    setSelectedSegmentId(null);
+    setMessage('已重新分段。');
   };
 
   const handleToggleSeriesInjection = async (series: 剧情编织系列) => {
-    await replaceSeries({ ...series, 激活注入: !series.激活注入, updatedAt: Date.now() });
+    await actions.toggleSeriesInjection(series.id);
   };
 
   const handleSetCurrent = async (series: 剧情编织系列, group: number) => {
-    const target = series.分段列表.find((item) => item.组号 === group);
-    if (!target) return;
-    const now = Date.now();
-    const nextSeries: 剧情编织系列 = {
-      ...series,
-      当前分段组号: group,
-      分段列表: series.分段列表.map((item) => ({
-        ...item,
-        运行状态: item.组号 === group ? '当前' : item.运行状态 === '当前' ? '未开始' : item.运行状态,
-        updatedAt: item.组号 === group || item.运行状态 === '当前' ? now : item.updatedAt,
-      })),
-      updatedAt: now,
-    };
-    await persist({
-      ...normalized,
-      当前系列ID: series.id,
-      系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
-      当前进度: buildManualProgressAnchor(normalized.当前进度, nextSeries, { ...target, 运行状态: '当前', updatedAt: now }, `手动设为当前：${target.标题}`),
-    });
+    await actions.setCurrent(series.id, group);
   };
 
   const handleSetRuntimeStatus = async (series: 剧情编织系列, segment: 剧情编织分段, status: 剧情编织运行状态) => {
-    if (status === '当前') {
-      await handleSetCurrent(series, segment.组号);
-      return;
-    }
-    const now = Date.now();
-    const nextSeries: 剧情编织系列 = {
-      ...series,
-      分段列表: series.分段列表.map((item) => item.id === segment.id ? { ...item, 运行状态: status, updatedAt: now } : item),
-      updatedAt: now,
-    };
-    const nextSegment = { ...segment, 运行状态: status, updatedAt: now };
-    const nextProgress = normalized.当前进度?.当前分段ID === segment.id
-      ? buildManualProgressAnchor(normalized.当前进度, nextSeries, nextSegment, `手动标记为${status}：${segment.标题}`)
-      : normalized.当前进度;
-    await persist({
-      ...normalized,
-      系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
-      当前进度: nextProgress,
-    });
+    await actions.setSegmentStatus(series.id, segment.id, status);
   };
 
   const handleSaveDraft = async (series: 剧情编织系列, segment: 剧情编织分段) => {
     if (!draft) return;
-    const updated = applyDraft(segment, draft);
-    await updateSeries(series.id, (s) => ({
-      ...s,
-      分段列表: s.分段列表.map((item) => item.id === segment.id ? updated : item),
-      updatedAt: Date.now(),
-    }));
-    setMessage(`已保存分段：${updated.标题}`);
+    await actions.saveSegment(series.id, segment.id, {
+      title: draft.标题,
+      chapterRange: draft.章节范围,
+      injectionEnabled: draft.启用注入,
+      summary: draft.本段概括,
+      priorFacts: splitList(draft.前段延续事实),
+      endingState: splitList(draft.本段结束状态),
+      futureReferences: splitList(draft.给后续参考),
+      characters: splitList(draft.登场角色),
+      locations: splitList(draft.涉及地点),
+      factions: splitList(draft.涉及派系),
+    });
+    setMessage(`已保存分段：${draft.标题.trim() || segment.标题}`);
   };
 
-  const getPreviousCompleted = (series: 剧情编织系列, segment: 剧情编织分段) =>
-    series.分段列表
-      .filter((item) => item.组号 < segment.组号 && item.处理状态 === '已完成')
-      .sort((a, b) => b.组号 - a.组号)[0];
-
   const handleDecompose = async (series: 剧情编织系列, segment: 剧情编织分段) => {
-    const storyService = (await getAdaptationServices()).storyWeaving;
-    const config = await storyService.buildStoryWeavingApiConfig(gameSettings);
-    if (!config) {
-      window.alert('剧情编织 API 未配置。请先到设置 → 剧情编织 配置独立模型。');
-      return;
-    }
     setBusyId(segment.id);
     setMessage(`正在分解：${segment.标题}`);
-    await updateSeries(series.id, (s) => ({
-      ...s,
-      分段列表: s.分段列表.map((item) => item.id === segment.id ? { ...item, 处理状态: '处理中', 最近错误: '', updatedAt: Date.now() } : item),
-      updatedAt: Date.now(),
-    }));
     try {
-      const parsed = await storyService.decomposeStorySegment({
-        config,
-        series,
-        segment,
-        previousSegment: getPreviousCompleted(series, segment),
-        promptModules: gameSettings.promptModules,
-      });
-      await updateSeries(series.id, (s) => ({
-        ...s,
-        分段列表: s.分段列表.map((item) => item.id === segment.id ? parsed : item),
-        updatedAt: Date.now(),
-      }));
+      await actions.decompose(series.id, segment.id);
       setMessage(`分解完成：${segment.标题}`);
     } catch (err) {
       const text = (err as Error).message;
-      await updateSeries(series.id, (s) => ({
-        ...s,
-        分段列表: s.分段列表.map((item) => item.id === segment.id ? { ...item, 处理状态: '失败', 最近错误: text, updatedAt: Date.now() } : item),
-        updatedAt: Date.now(),
-      }));
       setMessage(`分解失败：${text}`);
       window.alert(`剧情编织分解失败：${text}`);
     } finally {
@@ -522,12 +395,6 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
   };
 
   const handleBatchDecompose = async (series: 剧情编织系列, mode: 'pending' | 'fromCurrent' | 'all') => {
-    const storyService = (await getAdaptationServices()).storyWeaving;
-    const config = await storyService.buildStoryWeavingApiConfig(gameSettings);
-    if (!config) {
-      window.alert('剧情编织 API 未配置。请先到设置 → 剧情编织 配置独立模型。');
-      return;
-    }
     const targets = series.分段列表.filter((segment) => {
       if (mode === 'pending') return segment.处理状态 !== '已完成';
       if (mode === 'fromCurrent') return segment.组号 >= series.当前分段组号;
@@ -540,49 +407,9 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
     const label = mode === 'pending' ? '待处理分段' : mode === 'fromCurrent' ? '当前以后分段' : '全部分段';
     if (mode === 'all' && !window.confirm('确认重新分解全部分段？已有分解结果会被覆盖。')) return;
 
-    let workingSystem = normalized;
-    let workingSeries = series;
     setBusyBatch(label);
     try {
-      for (let index = 0; index < targets.length; index += 1) {
-        const target = workingSeries.分段列表.find((item) => item.id === targets[index].id);
-        if (!target) continue;
-        setBusyId(target.id);
-        setMessage(`批量分解 ${index + 1}/${targets.length}：${target.标题}`);
-
-        workingSeries = {
-          ...workingSeries,
-          分段列表: workingSeries.分段列表.map((item) => item.id === target.id ? { ...item, 处理状态: '处理中', 最近错误: '', updatedAt: Date.now() } : item),
-          updatedAt: Date.now(),
-        };
-        workingSystem = { ...workingSystem, 系列列表: workingSystem.系列列表.map((item) => item.id === workingSeries.id ? workingSeries : item), 当前系列ID: workingSeries.id };
-        await persist(workingSystem);
-
-        try {
-          const processingSegment = workingSeries.分段列表.find((item) => item.id === target.id) ?? target;
-          const parsed = await storyService.decomposeStorySegment({
-            config,
-            series: workingSeries,
-            segment: processingSegment,
-            previousSegment: getPreviousCompleted(workingSeries, processingSegment),
-            promptModules: gameSettings.promptModules,
-          });
-          workingSeries = {
-            ...workingSeries,
-            分段列表: workingSeries.分段列表.map((item) => item.id === target.id ? parsed : item),
-            updatedAt: Date.now(),
-          };
-        } catch (err) {
-          const text = (err as Error).message;
-          workingSeries = {
-            ...workingSeries,
-            分段列表: workingSeries.分段列表.map((item) => item.id === target.id ? { ...item, 处理状态: '失败', 最近错误: text, updatedAt: Date.now() } : item),
-            updatedAt: Date.now(),
-          };
-        }
-        workingSystem = { ...workingSystem, 系列列表: workingSystem.系列列表.map((item) => item.id === workingSeries.id ? workingSeries : item), 当前系列ID: workingSeries.id };
-        await persist(workingSystem);
-      }
+      await actions.decomposeBatch(series.id, mode === 'fromCurrent' ? 'from-current' : mode);
       setMessage(`批量分解结束：${label}`);
     } finally {
       setBusyId(null);
@@ -597,14 +424,9 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings }: 
       return;
     }
     if (!window.confirm('确认删除这个剧情系列？')) return;
-    const rest = normalized.系列列表.filter((s) => s.id !== seriesId);
-    await persist({
-      系列列表: rest,
-      当前系列ID: rest[0]?.id,
-      当前进度: buildSeriesProgressAnchor(normalized.当前进度, rest[0], '删除剧情系列后同步当前锚点'),
-    });
-    setSelectedSegmentId(rest[0]?.分段列表[0]?.id ?? null);
-    setExpandedSeriesId(rest[0]?.id ?? null);
+    await actions.deleteSeries(seriesId);
+    setSelectedSegmentId(null);
+    setExpandedSeriesId(null);
   };
 
   if (analysisError) throw analysisError;

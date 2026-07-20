@@ -4,12 +4,10 @@
 import { useState } from 'react';
 import type { 记忆系统 } from '@/models/memory';
 import type { 记忆系统设置 } from '@/models/settings';
-import { getAdaptationServices } from '@/src/adaptations';
 
 interface MemorySystemPanelProps {
   memorySystem: 记忆系统;
-  onMemorySystemChange: React.Dispatch<React.SetStateAction<记忆系统>>;
-  turnCount: number;
+  onCompress: (layer: Exclude<MemoryLayer, 'long'>, force: boolean) => Promise<void>;
   settings: 记忆系统设置;
 }
 
@@ -35,7 +33,7 @@ const layerMeta: Record<MemoryLayer, { label: string; subtitle: string; accent: 
   long: { label: '长期', subtitle: '不可忘却的稳定记忆', accent: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' },
 };
 
-export function MemorySystemPanel({ memorySystem, onMemorySystemChange, turnCount, settings }: MemorySystemPanelProps) {
+export function MemorySystemPanel({ memorySystem, onCompress, settings }: MemorySystemPanelProps) {
   const [activeLayer, setActiveLayer] = useState<MemoryLayer>('immediate');
   const [compressingLayer, setCompressingLayer] = useState<MemoryLayer | null>(null);
   const [compressionError, setCompressionError] = useState('');
@@ -54,31 +52,30 @@ export function MemorySystemPanel({ memorySystem, onMemorySystemChange, turnCoun
     setCompressingLayer(layer);
     setCompressionError('');
     try {
-      const memory = (await getAdaptationServices()).memory;
       if (layer === 'immediate') {
         const threshold = settings.即时转短期阈值;
         const count = memorySystem.即时记忆.length;
         if (count === 0) throw new Error('即时记忆为空，无法压缩');
-        const reached = await memory.checkCompressionThreshold(memorySystem, threshold);
+        const reached = count >= threshold;
         if (!reached && !confirm(`即时记忆不足 ${threshold} 条，仍要压缩当前 ${count} 条到短期？`)) return;
-        onMemorySystemChange(await memory.compressToShortTerm(memorySystem, turnCount, Math.min(count, threshold)));
+        await onCompress(layer, !reached);
         return;
       }
       if (layer === 'short') {
         const threshold = settings.短期转中期阈值;
         const count = memorySystem.短期记忆.length;
         if (count === 0) throw new Error('短期记忆为空，无法压缩');
-        const reached = await memory.checkMiddleTermThreshold(memorySystem, threshold);
+        const reached = count >= threshold;
         if (!reached && !confirm(`短期记忆不足 ${threshold} 条，仍要压缩当前 ${count} 条到中期？`)) return;
-        onMemorySystemChange(await memory.compressToMiddleTerm(memorySystem, turnCount, Math.min(count, threshold)));
+        await onCompress(layer, !reached);
         return;
       }
       const threshold = settings.中期转长期阈值;
       const count = (memorySystem.中期记忆 ?? []).length;
       if (count === 0) throw new Error('中期记忆为空，无法压缩');
-      const reached = await memory.checkLongTermThreshold(memorySystem, threshold);
+      const reached = count >= threshold;
       if (!reached && !confirm(`中期记忆不足 ${threshold} 条，仍要压缩当前 ${count} 条到长期？`)) return;
-      onMemorySystemChange(await memory.compressToLongTerm(memorySystem, turnCount, Math.min(count, threshold)));
+      await onCompress(layer, !reached);
     } catch (error) {
       setCompressionError(error instanceof Error ? error.message : String(error));
     } finally {

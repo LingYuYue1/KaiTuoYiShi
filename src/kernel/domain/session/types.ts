@@ -1,11 +1,10 @@
-/** The repository owns one complete runtime graph. No mirrored domain slices exist. */
+/** The repository owns one nested StoryState. */
 
 import type { Revision, SessionId } from '@/src/kernel/contract';
-import type { RuntimeGameState } from './runtimeState';
-import { cloneRuntimeGameState } from './runtimeState';
+import type { StoryState } from './storyState';
 
 export type GameState = Readonly<{
-  runtime: RuntimeGameState;
+  story: StoryState;
 }>;
 
 /** Immutable identity, revision and complete state. */
@@ -18,7 +17,7 @@ export type SessionSnapshot = Readonly<{
 /** Deep-clone GameState so repository callers cannot mutate storage. */
 export function cloneGameState(state: GameState): GameState {
   return {
-    runtime: cloneRuntimeGameState(state.runtime),
+    story: structuredClone(state.story),
   };
 }
 

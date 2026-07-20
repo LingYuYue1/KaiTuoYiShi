@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import type { AI提供商, 游戏设置, 忆庭API覆盖 } from '@/models/settings';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import type { ConnectionTestResult } from '@/services/ai/apiTools';
-import { getAdaptationServices } from '@/src/adaptations';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 
 interface Props {
   settings: 游戏设置;
@@ -115,7 +115,7 @@ export function YitingSettingsTab({ settings, onChange }: Props) {
     setRecallLoadingModels(true);
     setRecallMessage(null);
     try {
-      const list = await (await getAdaptationServices()).apiTools.fetchModels({ ...recallEffective, name: '忆庭召回' });
+      const list = await (await getAppRoot()).device.fetchModels({ ...recallEffective, name: '忆庭召回' });
       setRecallModelOptions(list);
       if (list.length > 0 && !list.includes(memory.忆庭召回API.model.trim())) {
         patchRecallApi({ model: list[0] });
@@ -134,7 +134,7 @@ export function YitingSettingsTab({ settings, onChange }: Props) {
       return;
     }
     try {
-      const result = await (await getAdaptationServices()).apiTools.testConnection({ ...recallEffective, name: '忆庭召回' });
+      const result = await (await getAppRoot()).device.testConnection({ ...recallEffective, name: '忆庭召回' });
       setRecallTestResult(result);
     } catch (err) {
       setRecallTestResult({ ok: false, detail: err instanceof Error ? err.message : String(err) });
@@ -152,7 +152,7 @@ export function YitingSettingsTab({ settings, onChange }: Props) {
     setArchiveLoadingModels(true);
     setArchiveMessage(null);
     try {
-      const list = await (await getAdaptationServices()).apiTools.fetchModels({ ...archiveEffective, name: '忆庭精炼' });
+      const list = await (await getAppRoot()).device.fetchModels({ ...archiveEffective, name: '忆庭精炼' });
       setArchiveModelOptions(list);
       if (list.length > 0 && !list.includes(memory.忆庭精炼API.model.trim())) {
         patchArchiveApi({ model: list[0] });
@@ -171,7 +171,7 @@ export function YitingSettingsTab({ settings, onChange }: Props) {
       return;
     }
     try {
-      const result = await (await getAdaptationServices()).apiTools.testConnection({ ...archiveEffective, name: '忆庭精炼' });
+      const result = await (await getAppRoot()).device.testConnection({ ...archiveEffective, name: '忆庭精炼' });
       setArchiveTestResult(result);
     } catch (err) {
       setArchiveTestResult({ ok: false, detail: err instanceof Error ? err.message : String(err) });
@@ -180,7 +180,7 @@ export function YitingSettingsTab({ settings, onChange }: Props) {
 
   const handleSave = async () => {
     try {
-      await setPreference('gameSettings', settings);
+      await persistSettingsPlanes(settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '忆庭设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

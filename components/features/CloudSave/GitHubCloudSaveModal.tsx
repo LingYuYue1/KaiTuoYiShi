@@ -1,10 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import { useGitHubOAuth } from '@/hooks/useGitHubOAuth';
-import { getSaveCatalog } from '@/src/adaptations/saveCatalog';
-import { getPreference, setPreference } from '@/src/adaptations/preferences';
-import type { GitHubAccountInfo, GitHubCloudSaveConfig, GitHubCloudSaveItem } from '@/services/githubCloudSave';
-import type { 存档数据 } from '@/models/settings';
-import { getAdaptationServices } from '@/src/adaptations';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import type { CloudAccountProjection, CloudSaveConfiguration, CloudSaveItem } from '@/src/kernel/contract/rootCapabilities';
 
 interface Props {
   onClose: () => void;
@@ -14,7 +11,7 @@ const cardClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
-const createDefaultGitHubCloudConfig = (): GitHubCloudSaveConfig => ({
+const createDefaultGitHubCloudConfig = (): CloudSaveConfiguration => ({
   owner: '',
   repo: '',
   branch: 'main',
@@ -23,31 +20,31 @@ const createDefaultGitHubCloudConfig = (): GitHubCloudSaveConfig => ({
 });
 
 export function GitHubCloudSaveModal({ onClose }: Props) {
-  const [cloudConfig, setCloudConfig] = useState<GitHubCloudSaveConfig>(createDefaultGitHubCloudConfig);
-  const [cloudSaves, setCloudSaves] = useState<GitHubCloudSaveItem[]>([]);
+  const [cloudConfig, setCloudConfig] = useState<CloudSaveConfiguration>(createDefaultGitHubCloudConfig);
+  const [cloudSaves, setCloudSaves] = useState<CloudSaveItem[]>([]);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudMessage, setCloudMessage] = useState('');
   const [bindToken, setBindToken] = useState('');
-  const [account, setAccount] = useState<GitHubAccountInfo | null>(null);
+  const [account, setAccount] = useState<CloudAccountProjection | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ label: string; current: number; total: number } | null>(null);
   const { pending: oauthPending, error: oauthError, startGitHubOAuth, consumeGitHubOAuthCallback } = useGitHubOAuth();
 
   useEffect(() => {
     void (async () => {
-      const saved = await getPreference<GitHubCloudSaveConfig>('githubCloudSaveConfig');
+      const saved = await (await getAppRoot()).cloud.configurationForEditor();
       if (!saved) return;
       const next = { ...createDefaultGitHubCloudConfig(), ...saved };
       setCloudConfig(next);
       setBindToken(next.token);
       if (!next.token) return;
-      const cloud = (await getAdaptationServices()).githubCloudSave;
+      const cloud = (await getAppRoot()).cloud;
       const [accountInfo, manifest] = await Promise.all([
-        cloud.getGitHubAccountInfo(next.token),
-        cloud.listGitHubCloudSaves(next),
+        cloud.account(next.token),
+        cloud.list(next),
       ]);
       setAccount(accountInfo);
-      setCloudSaves(manifest.saves);
+      setCloudSaves([...manifest.saves]);
     })().catch((error) => {
       setCloudMessage(error instanceof Error ? error.message : String(error));
     });
@@ -61,14 +58,14 @@ export function GitHubCloudSaveModal({ onClose }: Props) {
     consumeGitHubOAuthCallback()
       .then(async (token) => {
         if (!token || cancelled) return;
-        const result = await (await getAdaptationServices()).githubCloudSave.bindGitHubCloudAccount(token);
+        const result = await (await getAppRoot()).cloud.bind(token);
         if (cancelled) return;
         setAccount(result.account);
         setBindToken(result.config.token);
         await persistCloudConfig(result.config);
-        const manifest = await (await getAdaptationServices()).githubCloudSave.listGitHubCloudSaves(result.config);
+        const manifest = await (await getAppRoot()).cloud.list(result.config);
         if (cancelled) return;
-        setCloudSaves(manifest.saves);
+        setCloudSaves([...manifest.saves]);
         setCloudMessage(`已绑定 GitHub：${result.account.login}。`);
       })
       .catch((err) => {
@@ -82,7 +79,7 @@ export function GitHubCloudSaveModal({ onClose }: Props) {
     };
   }, [consumeGitHubOAuthCallback]);
 
-  const patchCloudConfig = (patch: Partial<GitHubCloudSaveConfig>) => {
+  const patchCloudConfig = (patch: Partial<CloudSaveConfiguration>) => {
     setCloudConfig((prev) => ({ ...prev, ...patch }));
   };
 
@@ -96,7 +93,7 @@ export function GitHubCloudSaveModal({ onClose }: Props) {
       token: next.token.trim(),
     };
     setCloudConfig(clean);
-    await setPreference('githubCloudSaveConfig', clean);
+    await (await getAppRoot()).cloud.updateConfiguration(clean);
     return clean;
   };
 
@@ -116,12 +113,12 @@ export function GitHubCloudSaveModal({ onClose }: Props) {
 
   const handleBindAccount = () => runCloudTask(async () => {
     const token = bindToken.trim() || cloudConfig.token.trim();
-    const result = await (await getAdaptationServices()).githubCloudSave.bindGitHubCloudAccount(token);
+    const result = await (await getAppRoot()).cloud.bind(token);
     setAccount(result.account);
     setBindToken(result.config.token);
     await persistCloudConfig(result.config);
-    const manifest = await (await getAdaptationServices()).githubCloudSave.listGitHubCloudSaves(result.config);
-    setCloudSaves(manifest.saves);
+    const manifest = await (await getAppRoot()).cloud.list(result.config);
+    setCloudSaves([...manifest.saves]);
     setCloudMessage(`已绑定 GitHub：${result.account.login}。`);
   });
 
@@ -134,44 +131,28 @@ export function GitHubCloudSaveModal({ onClose }: Props) {
     setAccount(null);
     setBindToken('');
     setCloudSaves([]);
-    await setPreference('githubCloudSaveConfig', next);
+    await (await getAppRoot()).cloud.updateConfiguration(next);
     setCloudConfig(next);
     setCloudMessage('已解除本机 GitHub 云存档绑定。云端文件不会被删除。');
   });
 
   const handleCloudRefresh = () => runCloudTask(async () => {
     const config = await persistCloudConfig();
-    const manifest = await (await getAdaptationServices()).githubCloudSave.listGitHubCloudSaves(config);
-    setCloudSaves(manifest.saves);
+    const manifest = await (await getAppRoot()).cloud.list(config);
+    setCloudSaves([...manifest.saves]);
     setCloudMessage(`已刷新云端数据：${manifest.saves.length} 条。`);
   });
 
   const handleCloudSyncAll = () => runCloudTask(async () => {
     const config = await persistCloudConfig();
-    const catalog = await getSaveCatalog();
-    const summaries = await catalog.getSaveList();
-    if (summaries.length === 0) throw new Error('本地还没有可上传的存档。');
-
-    const saves: 存档数据[] = [];
-    for (const summary of summaries) {
-      const save = await catalog.loadSave(summary.id);
-      if (!save) throw new Error(`本地存档目录与内容不一致：${summary.id}`);
-      saves.push({
-        ...save,
-        id: summary.id,
-        type: summary.type,
-      });
-    }
-
-    setCloudMessage(`正在同步本地存档：${saves.length} 条`);
-    const manifest = await (await getAdaptationServices()).githubCloudSave.uploadAllSavesToGitHubCloud(
+    setCloudMessage('正在同步本地存档');
+    const manifest = await (await getAppRoot()).cloud.syncAllLocal(
       config,
-      saves,
-      (current, total, label) => {
+      ({ current, total, label }) => {
         setSyncProgress({ label: `上传 ${label}`, current, total });
       },
     );
-    setCloudSaves(manifest.saves);
+    setCloudSaves([...manifest.saves]);
     setCloudMessage(`已同步本地存档：${manifest.saves.length} 条。云端旧列表已由本次同步结果覆盖。`);
   });
 
@@ -182,35 +163,12 @@ export function GitHubCloudSaveModal({ onClose }: Props) {
     if (!confirmed) return;
 
     const config = await persistCloudConfig();
-    const manifest = await (await getAdaptationServices()).githubCloudSave.listGitHubCloudSaves(config);
-    if (manifest.saves.length === 0) throw new Error('云端还没有可下载的存档。');
-
-    const downloaded = [];
-    for (let index = 0; index < manifest.saves.length; index += 1) {
-      const item = manifest.saves[index];
-      setSyncProgress({
-        label: `下载 ${item.travelerName || 'traveler'} · 第 ${item.turnCount} 回合`,
-        current: index,
-        total: manifest.saves.length,
-      });
-      const data = await (await getAdaptationServices()).githubCloudSave.downloadSaveFromGitHubCloud(config, item);
-      data.id = item.localSaveId ?? index + 1;
-      data.type = item.saveType === 'auto' || item.saveType === 'backup' || item.saveType === 'imported'
-        ? item.saveType
-        : 'manual';
-      data.timestamp = item.timestamp || data.timestamp || Date.now();
-      downloaded.push(data);
-      setSyncProgress({
-        label: `下载 ${item.travelerName || 'traveler'} · 第 ${item.turnCount} 回合`,
-        current: index + 1,
-        total: manifest.saves.length,
-      });
-    }
-
-    const catalog = await getSaveCatalog();
-    await catalog.replaceAllSaves(downloaded);
-    setCloudSaves(manifest.saves);
-    setCloudMessage(`已用云端存档覆盖本地存档列表：${downloaded.length}/${manifest.saves.length} 条。`);
+    const result = await (await getAppRoot()).cloud.replaceLocalFromCloud(
+      config,
+      ({ current, total, label }) => setSyncProgress({ label: `下载 ${label}`, current, total }),
+    );
+    setCloudSaves([...result.manifest.saves]);
+    setCloudMessage(`已用云端存档覆盖本地存档列表：${result.restoredCount}/${result.manifest.saves.length} 条。`);
   });
 
   return (
@@ -459,7 +417,7 @@ function CloudProgress({
   );
 }
 
-function CloudRecordSummary({ saves }: { saves: GitHubCloudSaveItem[] }) {
+function CloudRecordSummary({ saves }: { saves: CloudSaveItem[] }) {
   const latest = saves
     .map((item) => item.uploadedAt || '')
     .filter(Boolean)

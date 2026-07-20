@@ -9,12 +9,10 @@ import {
   STAGE_PROGRESS_MAX,
 } from '@/models/path';
 import { paths as ALL_PATHS } from '@/data/journeyPresets';
-import { getAdaptationServices } from '@/src/adaptations';
 
 interface PathPanelProps {
   traveler: 角色数据结构;
-  onTravelerChange: (next: 角色数据结构) => void;
-  onAwakenedNewPath?: (pathId: 命途ID) => void;
+  onSetPrimary: (pathId: 命途ID) => Promise<void>;
 }
 
 const cardClip =
@@ -30,7 +28,7 @@ const panelStyle = {
   clipPath: cardClip,
 };
 
-export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
+export function PathPanel({ traveler, onSetPrimary }: PathPanelProps) {
   const active = traveler.命途列表 ?? [];
   const cards = useMemo(() => ALL_PATHS.filter((p) => p.id !== 'none'), []);
 
@@ -54,7 +52,7 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
   const primaryDef = cards.find((p) => p.id === primaryRecord?.id);
 
   const handleSetPrimary = async (pathId: 命途ID) => {
-    onTravelerChange(await (await getAdaptationServices()).path.setPrimaryPath(traveler, pathId));
+    await onSetPrimary(pathId);
   };
 
   return (

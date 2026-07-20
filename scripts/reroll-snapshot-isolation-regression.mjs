@@ -35,11 +35,10 @@ const input = {
   剧情: { current: { title: 'before' } },
   剧情编织: undefined,
   variableBatches: [{ id: 'batch-1', commands: [{ path: '旅人.等级', value: 10 }] }],
-  queueTasks: Array.from({ length: 15 }, (_, index) => ({
-    id: `task-${index}`,
-    type: 'main_story',
-    status: 'success',
-    rawText: longDebugText,
+  jobs: Array.from({ length: 15 }, (_, index) => ({
+    id: `job-${index}`, sessionId: 'session', sourceRevision: 1,
+    payload: { kind: 'news.generate', messageId: `message-${index}`, playerText: 'input' },
+    maxAttempts: 3, createdAt: index, state: 'queued', attempt: 0, availableAt: index,
   })),
   turnCount: 12,
   pendingOpeningTrigger: null,
@@ -77,8 +76,7 @@ assert.equal(snapshot.手机.wallpaper, 'asset:album-1');
 assert.equal(snapshot.手机.draftImage, '[图片数据已从运行快照省略]');
 assert(snapshot.记忆.debugPrompt.length < longDebugText.length);
 assert.match(snapshot.记忆.debugPrompt, /运行快照已截断/);
-assert.equal(snapshot.queueTasks.length, 12);
-assert.equal(snapshot.queueTasks[0].id, 'task-3');
-assert(snapshot.queueTasks.every((task) => task.rawText.length < longDebugText.length));
+assert.equal(snapshot.jobs.length, 15);
+assert.equal(snapshot.jobs[0].id, 'job-0');
 
 console.log('[reroll-snapshot-isolation] ok');

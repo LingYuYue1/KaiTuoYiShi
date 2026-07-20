@@ -8,13 +8,20 @@ import type {
 import type { GameState, SessionSnapshot } from '@/src/kernel/domain/session/types';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 import type { SessionRepository } from '@/src/kernel/ports/SessionRepository';
+import type { CommandReceipt } from '@/src/kernel/domain/session/commandReceipt';
+import { fingerprintCommand } from '@/src/kernel/domain/session/commandFingerprint';
 
 export type CommandBase =
   | Readonly<{ type: 'ready'; snapshot: SessionSnapshot }>
   | Readonly<{ type: 'terminal'; frame: CommittedFrame | RejectedFrame }>;
 
 export type StateReduction =
-  | Readonly<{ type: 'next'; state: GameState }>
+  | Readonly<{
+      type: 'next';
+      state: GameState;
+      receipt?: CommandReceipt;
+      consumeReceiptFromCommandId?: import('@/src/kernel/contract').CommandId;
+    }>
   | Readonly<{ type: 'rejected'; error: KernelError }>;
 
 export async function loadCommandBase(
@@ -26,10 +33,21 @@ export async function loadCommandBase(
     envelope.commandId,
   );
   if (priorCommit) {
-    if (Number(priorCommit.revision) !== Number(envelope.expectedRevision) + 1) {
+    const fingerprint = fingerprintCommand(envelope.command);
+    if (priorCommit.fingerprint !== fingerprint) {
+      return {
+        type: 'terminal',
+        frame: rejectedFrame(envelope, {
+          code: 'duplicate_command',
+          message: `Command id was reused with a different payload: ${envelope.commandId}`,
+          details: { kind: 'duplicate_command', commandId: String(envelope.commandId) },
+        }),
+      };
+    }
+    if (Number(priorCommit.snapshot.revision) !== Number(envelope.expectedRevision) + 1) {
       throw new Error(`Command id was reused with a different expected revision: ${envelope.commandId}`);
     }
-    return { type: 'terminal', frame: committedFrame(envelope, priorCommit) };
+    return { type: 'terminal', frame: committedFrame(envelope, priorCommit.snapshot) };
   }
 
   const snapshot = await sessions.read(envelope.sessionId);
@@ -39,7 +57,7 @@ export async function loadCommandBase(
       frame: rejectedFrame(envelope, {
         code: 'revision_conflict',
         message: `expectedRevision ${envelope.expectedRevision} != actual ${snapshot.revision}`,
-        details: { actualRevision: snapshot.revision },
+        details: { kind: 'revision_conflict', actualRevision: Number(snapshot.revision) },
       }),
     };
   }
@@ -51,19 +69,36 @@ export async function commitCommand(
   envelope: SessionCommandEnvelope,
   sessions: SessionRepository,
   nextState: GameState,
+  options: Readonly<{
+    receipt?: CommandReceipt;
+    consumeReceiptFromCommandId?: import('@/src/kernel/contract').CommandId;
+  }> = {},
 ): Promise<CommittedFrame | RejectedFrame> {
   const commit = await sessions.compareAndSwap({
     sessionId: envelope.sessionId,
     expectedRevision: envelope.expectedRevision,
     nextState,
     commandId: envelope.commandId,
+    fingerprint: fingerprintCommand(envelope.command),
+    receipt: options.receipt,
+    consumeReceiptFromCommandId: options.consumeReceiptFromCommandId,
   });
 
   if (commit.type === 'conflict') {
     return rejectedFrame(envelope, {
       code: 'revision_conflict',
       message: `expectedRevision ${envelope.expectedRevision} != actual ${commit.actualRevision}`,
-      details: { actualRevision: commit.actualRevision },
+      details: { kind: 'revision_conflict', actualRevision: Number(commit.actualRevision) },
+    });
+  }
+  if (commit.type === 'receipt_unavailable') {
+    return rejectedFrame(envelope, { code: 'no_changes', message: commit.message });
+  }
+  if (commit.type === 'duplicate_mismatch') {
+    return rejectedFrame(envelope, {
+      code: 'duplicate_command',
+      message: `Command id was reused with a different payload: ${envelope.commandId}`,
+      details: { kind: 'duplicate_command', commandId: String(envelope.commandId) },
     });
   }
 
@@ -87,7 +122,10 @@ export async function* executeSessionCommand(
     return;
   }
 
-  yield await commitCommand(envelope, sessions, reduction.state);
+  yield await commitCommand(envelope, sessions, reduction.state, {
+    receipt: reduction.receipt,
+    consumeReceiptFromCommandId: reduction.consumeReceiptFromCommandId,
+  });
 }
 
 export function rejectedFrame(

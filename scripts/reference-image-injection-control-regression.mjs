@@ -24,7 +24,6 @@ const imageService = await importBundled('services/ai/imageGeneration.ts');
 const normalApi = (backend = 'sd_webui', enabled = true) => ({ enabled, backend });
 const referenceSettings = (enabled, extra = {}) => ({
   enabled,
-  injectionOptInVersion: 1,
   sdWebuiDenoisingStrength: 0.55,
   enableComfyWorkflowReference: false,
   enableOpenAICompatibleReference: false,
@@ -141,11 +140,8 @@ const unavailable = reference.resolveReferenceImagesForGeneration({
 assert.equal(unavailable.status.code, 'unavailable');
 assert.deepEqual(unavailable.entries, []);
 
-const migrated = settingsModel.归一化文生图参考图设置({ enabled: true });
-assert.equal(migrated.enabled, false, '未选择加入的旧配置必须迁移为关闭');
-assert.equal(migrated.injectionOptInVersion, settingsModel.参考图注入选择加入版本);
-const optedIn = settingsModel.归一化文生图参考图设置({ ...migrated, enabled: true });
-assert.equal(optedIn.enabled, true, '玩家迁移后手动开启的选择必须保留');
+const normalized = settingsModel.归一化文生图参考图设置({ enabled: true });
+assert.equal(normalized.enabled, true, '当前参考图设置必须精确保留明确启用状态');
 
 const warning = '部分中转供应商不支持参考图，如参考图生成失败请关闭该开关。';
 const referenceWorkspace = fs.readFileSync('components/features/GameSystems/album/referenceWorkspace.tsx', 'utf8');

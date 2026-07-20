@@ -1,41 +1,38 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
-import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/workflows/contextSnapshot';
-import { 创建空记忆系统 } from '@/models/memory';
-import { 创建空忆庭系统 } from '@/models/yiting';
-import { 创建空手机系统 } from '@/models/phone';
-import { 创建空相册系统 } from '@/models/imageGeneration';
+import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/contract/inspection';
 import type { 角色数据结构 } from '@/models/character';
-import type { NPC记录 } from '@/models/npc';
-import type { 队列任务记录 } from '@/models/queueTask';
+import type { NPC记录, NPC阶位 } from '@/models/npc';
+import type { DurableJob } from '@/src/kernel/domain/jobs/durableJob';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案, type 世界状态 } from '@/models/world';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
+import type { 命途ID } from '@/models/journey';
+import type { 剧情模式 } from '@/models/journey';
 import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
-import {
-  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
-  buildPersistedZhikuSystem,
-  hydrateRuntimeZhiku,
-} from '@/data/zhikuPreset';
+import { hydrateRuntimeZhiku } from '@/data/zhikuPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { reportAppError } from '@/components/ui/AppErrorReporter';
-import type { CommandId, ExecutionFrame, IKernel, SessionCommand, SessionView } from '@/src/kernel/contract';
-import {
-  asCommandId,
-} from '@/src/kernel/contract';
-import { APP_SESSION_ID, getAppKernel } from '@/src/kernel/appKernel';
-import type { RuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
-import { cloneRuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
-import type { 存档数据, 存档类型 } from '@/models/settings';
+import type { CommandId, ExecutionFrame, KernelError, MessageProjection, NarrativeProgressDelta, SessionView, TurnStage } from '@/src/kernel/contract';
+import type {
+  CommandHandle,
+  CommandTerminal,
+  CompanionPlanningProjection,
+  GameEvent,
+  ISession,
+  GeneratedSkillDraft,
+  SkillDraftGenerationInput,
+  SessionCommit,
+  SkillSaveInput,
+  TurnCommit,
+} from '@/src/kernel/contract/session';
+import { APP_SESSION_ID, getAppRoot } from '@/src/adaptations/kernel';
+import type { 智库条目, 智库条目草稿 } from '@/models/zhiku';
+import type { StorySegmentDraftInput } from '@/src/kernel/contract';
+import type { 剧情编织运行状态 } from '@/models/storyWeaving';
+import type { AlbumCommand } from '@/src/kernel/contract';
 import { getPreference } from '@/src/adaptations/preferences';
-import { consumeExecution, executeTurnIntent, type ExecutionSink } from '@/src/adaptations/execution';
-import {
-  applyExecutionFrame,
-  clearProjectionEphemerals,
-  createProjectionState,
-  displaySessionView,
-  restoreProjectionFromKernel,
-  type ProjectionState,
-} from '@/src/adaptations/projections';
+import { projectionHasDraft, projectionNarrativeText, type ProjectionState } from '@/src/adaptations/projections';
+import { splitSettings } from '@/models/settingsPlanes';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -49,17 +46,83 @@ export interface UseGameReturn {
     handleLoadSave: (id: number) => Promise<boolean>;
     handleReroll: () => Promise<string | void>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
-    handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
+    handleRetryJob: (job: DurableJob) => Promise<void>;
+    handleCancelJob: (jobId: string) => Promise<void>;
+    handleSetPrimaryPath: (pathId: 命途ID) => Promise<void>;
+    handleDeclinePathAwakening: () => Promise<void>;
+    handleEnterPathAwakening: () => Promise<void>;
+    handleEditMessageBody: (messageId: string, body: string) => Promise<void>;
+    getCompanionPlanning: () => Promise<CompanionPlanningProjection>;
+    handleSetCompanionTier: (npcId: string, tier: NPC阶位) => Promise<void>;
+    handleSetCompanionTraveling: (npcId: string, traveling: boolean) => Promise<void>;
+    handleCompressMemory: (layer: 'immediate' | 'short' | 'middle', force: boolean) => Promise<void>;
+    handleSetStoryMode: (mode: 剧情模式) => Promise<void>;
+    handleSaveSkill: (input: SkillSaveInput) => Promise<void>;
+    handleGenerateSkillDraft: (input: SkillDraftGenerationInput) => Promise<GeneratedSkillDraft>;
+    handleDeleteSkill: (skillId: string) => Promise<void>;
+    handleSetSkillEnabled: (skillId: string, enabled: boolean) => Promise<void>;
+    handleUseInventoryItem: (itemId: string, count?: number) => Promise<void>;
+    handleDropInventoryItem: (itemId: string, count?: number) => Promise<CommandId>;
+    handleUndoInventoryDrop: (dropCommandId: CommandId) => Promise<void>;
+    handleCreateZhikuEntry: (draft: 智库条目草稿) => Promise<string>;
+    handleUpdateZhikuEntry: (entryId: string, patch: Partial<Omit<智库条目, 'id' | 'builtin' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+    handleDeleteZhikuEntry: (entryId: string) => Promise<void>;
+    handleRefreshBundledZhiku: () => Promise<void>;
+    handlePlotImportText: (input: { text: string; title: string; fileName?: string; chaptersPerSegment: number }) => Promise<void>;
+    handlePlotImportJson: (json: string) => Promise<void>;
+    handlePlotRestoreBundled: () => Promise<void>;
+    handlePlotRenameSeries: (seriesId: string, title: string) => Promise<void>;
+    handlePlotRebuildSeries: (seriesId: string, chaptersPerSegment: number) => Promise<void>;
+    handlePlotToggleSeriesInjection: (seriesId: string) => Promise<void>;
+    handlePlotSetCurrent: (seriesId: string, group: number) => Promise<void>;
+    handlePlotSetSegmentStatus: (seriesId: string, segmentId: string, status: 剧情编织运行状态) => Promise<void>;
+    handlePlotSaveSegment: (seriesId: string, segmentId: string, draft: StorySegmentDraftInput) => Promise<void>;
+    handlePlotDeleteSeries: (seriesId: string) => Promise<void>;
+    handlePlotDecompose: (seriesId: string, segmentId: string) => Promise<void>;
+    handlePlotDecomposeBatch: (seriesId: string, mode: 'pending' | 'from-current' | 'all') => Promise<void>;
+    handleAlbumImportReference: (input: Omit<Extract<AlbumCommand, { type: 'album.import-reference' }>, 'type' | 'createdAt'>) => Promise<string>;
+    handleAlbumSetReference: (entryId: string, characterId: string, enabled: boolean) => Promise<void>;
+    handleAlbumGenerate: (input: Omit<Extract<AlbumCommand, { type: 'album.generate' }>, 'type' | 'createdAt'>) => Promise<{ entryId: string; task: import('@/models/imageGeneration').图片生成任务 }>;
+    handleAlbumBindSlot: (input: Omit<Extract<AlbumCommand, { type: 'album.bind-slot' }>, 'type'>) => Promise<void>;
+    handleAlbumDeleteEntries: (entryIds: readonly string[]) => Promise<void>;
+    handleAlbumImportArchive: (album: import('@/models/imageGeneration').相册系统) => Promise<void>;
+    handleAlbumSetCharacterAnchor: (input: Omit<Extract<AlbumCommand, { type: 'album.set-character-anchor' }>, 'type' | 'updatedAt'>) => Promise<void>;
+    handleAlbumExtractCharacterAnchor: ISession['album']['extractCharacterAnchor'];
+    handleAlbumTokenizePrompt: ISession['album']['tokenizePrompt'];
+    handleAlbumParseScene: ISession['album']['parseScene'];
+    handleAlbumParseStorySnapshot: ISession['album']['parseStorySnapshot'];
+    handlePhoneDismissSeed: (seedId: string) => Promise<void>;
+    handlePhoneMarkRead: (chatId: string) => Promise<void>;
+    handlePhoneAddContact: (npcId: string) => Promise<void>;
+    handlePhoneOpenPrivateChat: (npcId: string) => Promise<string>;
+    handlePhoneCreateGroup: (npcIds: readonly string[], title: string) => Promise<string>;
+    handlePhoneRenameGroup: (chatId: string, title: string) => Promise<void>;
+    handlePhoneAddGroupMember: (chatId: string, npcId: string) => Promise<void>;
+    handlePhoneSetWallpaper: (slot: 'home' | 'chat', assetRef?: string) => Promise<void>;
+    handlePhoneSend: (chatId: string, text: string) => Promise<void>;
+    handlePhoneGenerateSeed: (seedId: string) => Promise<string>;
     handleRestartOpening: () => Promise<void>;
     handleStartSession: (
       traveler: 角色数据结构,
       world: 世界状态,
       npc: NPC记录[],
       storyWeaving: 剧情编织系统,
+      pendingOpeningTrigger?: string | null,
     ) => Promise<void>;
     getContextSnapshot: (kind?: ContextSnapshotKind) => Promise<ContextSnapshot>;
   };
 }
+
+type ExecutionSink = Readonly<{
+  applyEvent?(event: GameEvent): void;
+  showPrepared(view: SessionView): void;
+  showStage(stage: TurnStage): void;
+  showRetry(stage: TurnStage, attempt: number, limit: number): void;
+  showProgress(delta: NarrativeProgressDelta): void;
+  showAssistant(message: MessageProjection): void;
+  replaceProjection(view: SessionView): void;
+  showError(error: KernelError): void;
+}>;
 
 export function useGame(): UseGameReturn {
   const state = useGameState();
@@ -68,174 +131,152 @@ export function useGame(): UseGameReturn {
   useLayoutEffect(() => {
     stateRef.current = state;
   }, [state]);
-  const kernelPromiseRef = useRef<Promise<IKernel> | null>(null);
-  const activeCommandRef = useRef<ReturnType<typeof asCommandId> | null>(null);
-  /**
-   * UI Projection Store (Phase 3 Stage 3.3).
-   * Holds SessionView + optional draft + temporary progress buffer.
-   * Progress never formal-commits React game domain state.
-   */
-  const projectionRef = useRef<ProjectionState | null>(null);
+  const sessionPromiseRef = useRef<Promise<ISession> | null>(null);
+  const autosaveUnsubscribeRef = useRef<(() => void) | null>(null);
+  const projectionUnsubscribeRef = useRef<(() => void) | null>(null);
+  const activeCommandRef = useRef<CommandHandle<GameEvent, SessionCommit | TurnCommit> | null>(null);
+  const resyncPromiseRef = useRef<Promise<void> | null>(null);
+  const projectionStore = state.projectionStore;
 
-  const getKernel = useCallback(async (): Promise<IKernel> => {
-    if (!kernelPromiseRef.current) {
-      kernelPromiseRef.current = getAppKernel();
+  const connectSession = useCallback(async (): Promise<ISession> => {
+    const root = await getAppRoot();
+    const session = await root.sessions.open(APP_SESSION_ID);
+    autosaveUnsubscribeRef.current?.();
+    projectionUnsubscribeRef.current?.();
+    autosaveUnsubscribeRef.current = await root.saves.followAutosave(session);
+    projectionUnsubscribeRef.current = session.projection.subscribe((commit) => {
+      syncStreamFromProjection(projectionStore.followCommitted(commit.view));
+    });
+    sessionPromiseRef.current = Promise.resolve(session);
+    return session;
+  }, [projectionStore]);
+
+  const getSession = useCallback(async (): Promise<ISession> => {
+    if (!sessionPromiseRef.current) {
+      sessionPromiseRef.current = connectSession();
     }
-    return kernelPromiseRef.current;
+    return sessionPromiseRef.current;
+  }, [connectSession]);
+
+  useLayoutEffect(() => () => {
+    autosaveUnsubscribeRef.current?.();
+    autosaveUnsubscribeRef.current = null;
+    projectionUnsubscribeRef.current?.();
+    projectionUnsubscribeRef.current = null;
   }, []);
 
-  const cancelActiveCommandAndWait = useCallback(async (kernel: IKernel): Promise<void> => {
-    const commandId = activeCommandRef.current;
-    if (!commandId) return;
-    await kernel.cancelAndWait(commandId);
-    if (activeCommandRef.current === commandId) activeCommandRef.current = null;
+  const cancelActiveCommandAndWait = useCallback(async (): Promise<void> => {
+    const handle = activeCommandRef.current;
+    if (!handle) return;
+    await handle.cancelAndWait();
+    if (activeCommandRef.current === handle) activeCommandRef.current = null;
   }, []);
 
   /** Single stream writer: projection.progress is the only source of stream text. */
   const applyProjectionFrame = useCallback((frame: ExecutionFrame): ProjectionState => {
-    const next = applyExecutionFrame(requireProjection(projectionRef.current), frame);
-    projectionRef.current = next;
+    const next = projectionStore.apply(frame);
     syncStreamFromProjection(next);
     return next;
-  }, []);
+  }, [projectionStore]);
+
+  const applyProjectionEvent = useCallback((event: GameEvent): void => {
+    const next = projectionStore.applyEvent(event);
+    syncStreamFromProjection(next);
+    if (next.phase !== 'resyncing' || resyncPromiseRef.current) return;
+    resyncPromiseRef.current = getSession()
+      .then((session) => session.projection.resync())
+      .then((view) => { syncStreamFromProjection(projectionStore.initialize(view)); })
+      .finally(() => { resyncPromiseRef.current = null; });
+  }, [getSession, projectionStore]);
 
   /** Session transitions: drop draft/progress through projection (or empty stream if cold). */
   const resetUiProjectionEphemerals = useCallback(() => {
-    if (!projectionRef.current) {
+    const current = projectionStore.current();
+    if (!current) {
       setStreamingMessage('');
       return;
     }
-    projectionRef.current = clearProjectionEphemerals(projectionRef.current);
-    syncStreamFromProjection(projectionRef.current);
-  }, []);
+    const next = projectionStore.clearEphemerals();
+    if (next) syncStreamFromProjection(next);
+  }, [projectionStore]);
 
   /**
    * Safety net for non-terminal errors (checkpoint fail, throw mid-stream without rejected).
    * Normal rejected terminals already clear via showError — this no-ops then.
    */
   const recoverProjectionAfterCommandError = useCallback(() => {
-    const proj = projectionRef.current;
-    if (!proj?.draft && !proj?.progress) return;
-    const session = proj.session;
-    projectionRef.current = clearProjectionEphemerals(proj);
-    syncStreamFromProjection(projectionRef.current);
-    applySessionView(stateRef.current, session);
-  }, []);
+    const proj = projectionStore.current();
+    if (!proj || !projectionHasDraft(proj)) return;
+    const next = projectionStore.clearEphemerals();
+    if (next) syncStreamFromProjection(next);
+  }, [projectionStore]);
 
   const createLiveSink = useCallback((commandId: CommandId): ExecutionSink => ({
+    applyEvent: applyProjectionEvent,
     showPrepared: (view) => {
       applyProjectionFrame({ type: 'prepared', commandId, view });
-      // Kernel-emitted draft — apply immediately so chatHistory truncates without React optimism.
-      applySessionView(stateRef.current, view);
+    },
+    showStage: (stage) => {
+      applyProjectionFrame({ type: 'stage.changed', commandId, stage });
+    },
+    showRetry: (stage, attempt, limit) => {
+      applyProjectionFrame({ type: 'stage.retrying', commandId, stage, attempt, limit });
     },
     showProgress: (delta) => {
       applyProjectionFrame({ type: 'progress', commandId, delta });
     },
+    showAssistant: (message) => {
+      applyProjectionFrame({ type: 'assistant.ready', commandId, message });
+    },
     replaceProjection: (view) => {
       applyProjectionFrame({ type: 'committed', commandId, revision: view.revision, view });
-      applySessionView(stateRef.current, view);
     },
     showError: (error) => {
-      const next = applyProjectionFrame({ type: 'rejected', commandId, error });
-      // Reject after prepared must restore last committed history (draft cleared).
-      applySessionView(stateRef.current, next.session);
+      applyProjectionFrame({ type: 'rejected', commandId, error });
     },
-  }), [applyProjectionFrame]);
-
-  const replaceSessionRuntime = useCallback(async (
-    kernel: IKernel,
-    runtime: RuntimeGameState,
-  ): Promise<SessionView> => {
-    if (!runtime.旅人.姓名.trim()) throw new Error('Traveler name is required to create a kernel session');
-    const existence = await kernel.read({ type: 'session.exists', sessionId: APP_SESSION_ID });
-    const commandId = asCommandId(crypto.randomUUID());
-    const envelope = existence.exists
-      ? {
-          protocolVersion: 1 as const,
-          commandId,
-          sessionId: APP_SESSION_ID,
-          expectedRevision: (await kernel.read({ type: 'session.read', sessionId: APP_SESSION_ID })).revision,
-          command: { type: 'session.reset' as const, runtime },
-        }
-      : {
-          protocolVersion: 1 as const,
-          commandId,
-          sessionId: APP_SESSION_ID,
-          command: { type: 'session.create' as const, runtime },
-        };
-    const terminal = await consumeExecution(kernel, envelope, {
-      showPrepared: () => {},
-      showProgress: () => {},
-      replaceProjection: (view) => {
-        projectionRef.current = createProjectionState(view);
-        syncStreamFromProjection(projectionRef.current);
-        applySessionView(stateRef.current, view);
-        stateRef.current.setHasSave(true);
-      },
-      showError: () => {},
-    });
-    if (terminal.type === 'rejected') throw new Error(terminal.error.message);
-    return terminal.view;
-  }, []);
+  }), [applyProjectionEvent, applyProjectionFrame]);
 
   const handleStartSession = useCallback(async (
     traveler: 角色数据结构,
     world: 世界状态,
     npc: NPC记录[],
     storyWeaving: 剧情编织系统,
+    pendingOpeningTrigger: string | null = null,
   ): Promise<void> => {
     const current = stateRef.current;
     clearEphemeralUi(current);
     resetUiProjectionEphemerals();
     // Session boundary: always rehydrate bundled 智库 so new games never start on shells/empty.
-    const 智库 = await hydrateRuntimeZhiku(current.智库, { migrationAt: await resolveZhikuMigrationAt() });
-    const runtime = cloneRuntimeGameState({
-      ...snapshotRuntimeState(current),
-      旅人: traveler,
-      世界: world,
-      chatHistory: [],
-      记忆: 创建空记忆系统(),
-      忆庭: 创建空忆庭系统(),
-      智库,
-      手机: 创建空手机系统(),
-      NPC: npc,
-      相册: 创建空相册系统(),
-      新闻: [],
-      剧情: [],
-      剧情编织: storyWeaving,
-      variableBatches: [],
-      queueTasks: [],
-      turnCount: 1,
+    const 智库 = await hydrateRuntimeZhiku(current.智库);
+    const seed = {
+      traveler,
+      world,
+      initialNpcRecords: npc,
+      zhikuRuntime: 智库,
+      storyWeaving,
+      pendingOpeningTrigger,
+      policy: splitSettings(current.gameSettings, current.apiSettings, current.currentTheme).story,
+    };
+    const root = await getAppRoot();
+    const handle = await root.sessions.exists(APP_SESSION_ID)
+      ? (await root.sessions.open(APP_SESSION_ID)).lifecycle.restart(seed)
+      : root.sessions.create(APP_SESSION_ID, seed);
+    activeCommandRef.current = handle;
+    const terminal = await consumeSessionHandle(handle, {
+      showPrepared: () => {},
+      showStage: () => {},
+      showRetry: () => {},
+      showProgress: () => {},
+      showAssistant: () => {},
+      replaceProjection: (view) => {
+        syncStreamFromProjection(projectionStore.initialize(view));
+      },
+      showError: () => {},
     });
-    await replaceSessionRuntime(await getKernel(), runtime);
-  }, [getKernel, replaceSessionRuntime, resetUiProjectionEphemerals]);
-
-  const checkpointRuntime = useCallback(async (
-    kernel: IKernel,
-    lifecycle?: { onStart: (commandId: CommandId) => void; onFinish: (commandId: CommandId) => void },
-  ): Promise<SessionView> => {
-    const projection = requireProjection(projectionRef.current);
-    const commandId = asCommandId(crypto.randomUUID());
-    lifecycle?.onStart(commandId);
-    try {
-      const terminal = await consumeExecution(kernel, {
-        protocolVersion: 1,
-        commandId,
-        sessionId: APP_SESSION_ID,
-        expectedRevision: projection.session.revision,
-        command: { type: 'session.checkpoint', runtime: snapshotRuntimeState(stateRef.current) },
-      }, {
-        showPrepared: () => {},
-        showProgress: () => {},
-        replaceProjection: (view) => { projectionRef.current = createProjectionState(view); },
-        showError: () => {},
-      });
-      if (terminal.type === 'rejected') throw new Error(terminal.error.message);
-      return terminal.view;
-    } finally {
-      lifecycle?.onFinish(commandId);
-    }
-  }, []);
+    if (activeCommandRef.current === handle) activeCommandRef.current = null;
+    if (terminal.outcome === 'rejected') throw new Error(terminal.error.message);
+    await connectSession();
+  }, [connectSession, projectionStore, resetUiProjectionEphemerals]);
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -244,50 +285,27 @@ export function useGame(): UseGameReturn {
         throw new Error('Another kernel command is running');
       }
       s.setInterruptedWorkflow(null);
-      s.setLoading(true);
-      s.setWorkflowStatus('searching');
-      const kernel = await getKernel();
-      const commandId = crypto.randomUUID();
-      const commandIdBrand = asCommandId(commandId);
-      activeCommandRef.current = commandIdBrand;
+      let handle: CommandHandle<GameEvent, TurnCommit> | null = null;
       try {
-        if (activeCommandRef.current !== commandIdBrand) throw new Error('Command cancelled before launch');
-        const checkpoint = await checkpointRuntime(kernel, {
-          onStart: (running) => { activeCommandRef.current = running; },
-          onFinish: (finished) => {
-            if (activeCommandRef.current === finished) activeCommandRef.current = null;
-          },
-        });
-        activeCommandRef.current = commandIdBrand;
-        const terminal = await executeTurnIntent(kernel, {
-          text,
-          commandId,
-          sessionId: APP_SESSION_ID,
-          expectedRevision: checkpoint.revision,
-          createdAt: Date.now(),
-        }, createLiveSink(commandIdBrand));
-        if (terminal.type === 'rejected') throw new Error(terminal.error.message);
-        await saveCompletedTurnAutomatically(kernel, terminal.view.runtime, s);
-        s.setWorkflowStatus('');
+        handle = (await getSession()).turns.advance({ text });
+        activeCommandRef.current = handle;
+        const terminal = await consumeSessionHandle(handle, createLiveSink(handle.commandId));
+        if (terminal.outcome === 'rejected') throw new Error(terminal.error.message);
       } catch (error) {
         recoverProjectionAfterCommandError();
-        s.setWorkflowStatus('');
-        s.setWorkflowHint(error instanceof Error ? error.message : String(error));
         reportAppError({ source: '主剧情命令', error });
         throw error;
       } finally {
-        if (activeCommandRef.current === commandIdBrand) activeCommandRef.current = null;
-        s.setLoading(false);
+        if (activeCommandRef.current === handle) activeCommandRef.current = null;
       }
     },
-    [checkpointRuntime, createLiveSink, getKernel, recoverProjectionAfterCommandError],
+    [createLiveSink, getSession, recoverProjectionAfterCommandError],
   );
 
   const handleAbort = useCallback(async () => {
-    const commandId = activeCommandRef.current;
-    if (!commandId) throw new Error('No kernel command is running');
-    await cancelActiveCommandAndWait(await getKernel());
-  }, [cancelActiveCommandAndWait, getKernel]);
+    if (!activeCommandRef.current) throw new Error('No kernel command is running');
+    await cancelActiveCommandAndWait();
+  }, [cancelActiveCommandAndWait]);
 
   const handleNewGame = useCallback(() => {
     const s = stateRef.current;
@@ -296,163 +314,308 @@ export function useGame(): UseGameReturn {
   }, []);
 
   const handleContinue = useCallback(async (): Promise<boolean> => {
-    const kernel = await getKernel();
-    await cancelActiveCommandAndWait(kernel);
-    const existence = await kernel.read({ type: 'session.exists', sessionId: APP_SESSION_ID });
-    if (!existence.exists) throw new Error('Kernel session does not exist');
-    const livePreferences = {
-      apiSettings: stateRef.current.apiSettings,
-      gameSettings: stateRef.current.gameSettings,
-      currentTheme: stateRef.current.currentTheme,
-      worldbooks: stateRef.current.worldbooks,
-    };
+    await cancelActiveCommandAndWait();
+    const root = await getAppRoot();
+    if (!await root.sessions.exists(APP_SESSION_ID)) throw new Error('Kernel session does not exist');
+    const session = await connectSession();
+    const view = await session.projection.current();
     clearEphemeralUi(stateRef.current);
-    projectionRef.current = await restoreProjectionFromKernel(kernel, APP_SESSION_ID);
-    // Fresh restore has no draft/progress; sync still owns the stream store.
-    syncStreamFromProjection(projectionRef.current);
-    applySessionView(stateRef.current, displaySessionView(projectionRef.current));
-    stateRef.current.setApiSettings(livePreferences.apiSettings);
-    stateRef.current.setGameSettings(livePreferences.gameSettings);
-    stateRef.current.setCurrentTheme(livePreferences.currentTheme);
-    stateRef.current.setWorldbooks(livePreferences.worldbooks);
+    syncStreamFromProjection(projectionStore.initialize(view));
     stateRef.current.setView('game');
     return true;
-  }, [cancelActiveCommandAndWait, getKernel]);
+  }, [cancelActiveCommandAndWait, connectSession, projectionStore]);
 
   const handleGoHome = useCallback(async () => {
-    const kernel = await getKernel();
-    await cancelActiveCommandAndWait(kernel);
+    await cancelActiveCommandAndWait();
     clearEphemeralUi(stateRef.current);
     resetUiProjectionEphemerals();
-    await checkpointRuntime(kernel);
     stateRef.current.setView('home');
-  }, [cancelActiveCommandAndWait, checkpointRuntime, getKernel, resetUiProjectionEphemerals]);
+  }, [cancelActiveCommandAndWait, resetUiProjectionEphemerals]);
 
   const handleSave = useCallback(async (): Promise<number> => {
-    const kernel = await getKernel();
-    const checkpoint = await checkpointRuntime(kernel);
-    return kernel.saves.saveGame(runtimeToSave(checkpoint.runtime, 'manual'));
-  }, [checkpointRuntime, getKernel]);
+    await getSession();
+    return (await getAppRoot()).saves.saveSession(APP_SESSION_ID, 'manual');
+  }, [getSession]);
 
   const handleLoadSave = useCallback(async (id: number): Promise<boolean> => {
-    const kernel = await getKernel();
-    await cancelActiveCommandAndWait(kernel);
+    await cancelActiveCommandAndWait();
     clearEphemeralUi(stateRef.current);
     resetUiProjectionEphemerals();
-    const save = await kernel.saves.loadSave(id);
-    if (!save) throw new Error(`Save not found: ${id}`);
-    // Device preferences stay live (same plane as handleContinue). Story runtime comes from the save.
-    const livePreferences = {
-      apiSettings: stateRef.current.apiSettings,
-      gameSettings: stateRef.current.gameSettings,
-      currentTheme: stateRef.current.currentTheme,
-      worldbooks: stateRef.current.worldbooks,
-    };
-    // Hydrate before session.reset — saves hold shells/unlocks, not full builtin bodies.
-    const runtime = await saveToRuntime(save, livePreferences);
-    await replaceSessionRuntime(kernel, runtime);
-    // Session projection may echo runtime prefs; reassert device plane after reset.
-    stateRef.current.setApiSettings(livePreferences.apiSettings);
-    stateRef.current.setGameSettings(livePreferences.gameSettings);
-    stateRef.current.setCurrentTheme(livePreferences.currentTheme);
-    stateRef.current.setWorldbooks(livePreferences.worldbooks);
+    const root = await getAppRoot();
+    const handle = await root.saves.restoreIntoSession(id, APP_SESSION_ID);
+    activeCommandRef.current = handle;
+    const terminal = await consumeSessionHandle(handle, {
+      showPrepared: () => {},
+      showStage: () => {},
+      showRetry: () => {},
+      showProgress: () => {},
+      showAssistant: () => {},
+      replaceProjection: (view) => {
+        syncStreamFromProjection(projectionStore.initialize(view));
+      },
+      showError: () => {},
+    });
+    if (activeCommandRef.current === handle) activeCommandRef.current = null;
+    if (terminal.outcome === 'rejected') throw new Error(terminal.error.message);
+    await connectSession();
     stateRef.current.setView('game');
     return true;
-  }, [cancelActiveCommandAndWait, getKernel, replaceSessionRuntime, resetUiProjectionEphemerals]);
+  }, [cancelActiveCommandAndWait, connectSession, projectionStore, resetUiProjectionEphemerals]);
 
   const handleReroll = useCallback(async (): Promise<string | void> => {
     const s = stateRef.current;
-    if (s.loading || s.pendingVariable) {
+    if (activeCommandRef.current || s.loading) {
       throw new Error('Cannot reroll while another kernel command is running');
     }
-    const commandId = asCommandId(crypto.randomUUID());
-    activeCommandRef.current = commandId;
-    s.setLoading(true);
-    s.setWorkflowStatus('searching');
+    let handle: CommandHandle<GameEvent, TurnCommit> | null = null;
     try {
-      const kernel = await getKernel();
-      if (activeCommandRef.current !== commandId) throw new Error('Command cancelled before launch');
-      const checkpoint = await checkpointRuntime(kernel, {
-        onStart: (running) => { activeCommandRef.current = running; },
-        onFinish: (finished) => {
-          if (activeCommandRef.current === finished) activeCommandRef.current = null;
-        },
-      });
-      const turn = checkpoint.turns.at(-1);
+      const session = await getSession();
+      const view = await session.projection.current();
+      const turn = view.turns.at(-1);
       if (!turn) throw new Error('Cannot reroll an empty session');
-      const runningCommandId = commandId;
-      activeCommandRef.current = runningCommandId;
-      const terminal = await consumeExecution(kernel, {
-        protocolVersion: 1,
-        commandId: runningCommandId,
-        sessionId: APP_SESSION_ID,
-        expectedRevision: checkpoint.revision,
-        command: { type: 'turn.reroll', turnId: turn.id, createdAt: Date.now() },
-      }, createLiveSink(runningCommandId));
-      if (terminal.type === 'rejected') throw new Error(terminal.error.message);
-      await saveCompletedTurnAutomatically(kernel, terminal.view.runtime, s);
-      s.setWorkflowStatus('');
+      handle = session.turns.reroll({ turnId: turn.id });
+      activeCommandRef.current = handle;
+      const terminal = await consumeSessionHandle(handle, createLiveSink(handle.commandId));
+      if (terminal.outcome === 'rejected') throw new Error(terminal.error.message);
     } catch (error) {
       recoverProjectionAfterCommandError();
-      s.setWorkflowStatus('');
-      s.setWorkflowHint(error instanceof Error ? error.message : String(error));
       reportAppError({ source: '重试命令', error });
       throw error;
     } finally {
-      if (activeCommandRef.current === commandId) activeCommandRef.current = null;
-      s.setLoading(false);
+      if (activeCommandRef.current === handle) activeCommandRef.current = null;
     }
-  }, [checkpointRuntime, createLiveSink, getKernel, recoverProjectionAfterCommandError]);
+  }, [createLiveSink, getSession, recoverProjectionAfterCommandError]);
 
-  const executeProjectedCommand = useCallback(async (command: SessionCommand): Promise<void> => {
+  const executeProjectedCommand = useCallback(async (
+    start: (session: ISession) => CommandHandle<GameEvent, SessionCommit>,
+  ): Promise<CommandId> => {
     const s = stateRef.current;
-    if (s.loading) throw new Error('Another kernel command is running');
-    const commandId = asCommandId(crypto.randomUUID());
-    activeCommandRef.current = commandId;
-    s.setLoading(true);
+    if (activeCommandRef.current || s.loading) throw new Error('Another kernel command is running');
+    let handle: CommandHandle<GameEvent, SessionCommit> | null = null;
     try {
-      const kernel = await getKernel();
-      if (activeCommandRef.current !== commandId) throw new Error('Command cancelled before launch');
-      const checkpoint = await checkpointRuntime(kernel, {
-        onStart: (running) => { activeCommandRef.current = running; },
-        onFinish: (finished) => {
-          if (activeCommandRef.current === finished) activeCommandRef.current = null;
-        },
-      });
-      activeCommandRef.current = commandId;
-      const terminal = await consumeExecution(kernel, {
-        protocolVersion: 1,
-        commandId,
-        sessionId: APP_SESSION_ID,
-        expectedRevision: checkpoint.revision,
-        command,
-      }, createLiveSink(commandId));
-      if (terminal.type === 'rejected') throw new Error(terminal.error.message);
+      handle = start(await getSession());
+      activeCommandRef.current = handle;
+      const terminal = await consumeSessionHandle(handle, createLiveSink(handle.commandId));
+      if (terminal.outcome === 'rejected') throw new Error(terminal.error.message);
+      return handle.commandId;
     } catch (error) {
       recoverProjectionAfterCommandError();
-      s.setWorkflowHint(error instanceof Error ? error.message : String(error));
       reportAppError({ source: '游戏命令', error });
       throw error;
     } finally {
-      if (activeCommandRef.current === commandId) activeCommandRef.current = null;
-      s.setLoading(false);
+      if (activeCommandRef.current === handle) activeCommandRef.current = null;
     }
-  }, [checkpointRuntime, createLiveSink, getKernel, recoverProjectionAfterCommandError]);
+  }, [createLiveSink, getSession, recoverProjectionAfterCommandError]);
 
   const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
-    await executeProjectedCommand({
-      type: 'message.image.regenerate',
-      messageId,
-    });
+    await executeProjectedCommand((session) => session.media.regenerateNarrativeImage({ messageId }));
   }, [executeProjectedCommand]);
 
-  const handleRetryQueueTask = useCallback(async (task: 队列任务记录, mode: 'retry' | 'reroll' = 'retry') => {
-    await executeProjectedCommand({
-      type: 'queue.retry',
-      taskId: task.id,
-      mode,
-    });
+  const handleRetryJob = useCallback(async (job: DurableJob) => {
+    await executeProjectedCommand((session) => session.jobs.retry({ jobId: job.id }));
   }, [executeProjectedCommand]);
+
+  const handleCancelJob = useCallback(async (jobId: string) => {
+    await executeProjectedCommand((session) => session.jobs.cancel({ jobId }));
+  }, [executeProjectedCommand]);
+
+  const handleSetPrimaryPath = useCallback(async (pathId: 命途ID) => {
+    await executeProjectedCommand((session) => session.paths.setPrimary({ pathId }));
+  }, [executeProjectedCommand]);
+
+  const handleDeclinePathAwakening = useCallback(async () => {
+    await executeProjectedCommand((session) => session.paths.declineAwakening());
+  }, [executeProjectedCommand]);
+
+  const handleEnterPathAwakening = useCallback(async () => {
+    await executeProjectedCommand((session) => session.paths.enterAwakening());
+  }, [executeProjectedCommand]);
+
+  const handleEditMessageBody = useCallback(async (messageId: string, body: string) => {
+    await executeProjectedCommand((session) => session.messages.editBody({ messageId, body }));
+  }, [executeProjectedCommand]);
+
+  const getCompanionPlanning = useCallback(async () => (await getSession()).companions.planning(), [getSession]);
+
+  const handleSetCompanionTier = useCallback(async (npcId: string, tier: NPC阶位) => {
+    await executeProjectedCommand((session) => session.companions.setTier({ npcId, tier }));
+  }, [executeProjectedCommand]);
+
+  const handleSetCompanionTraveling = useCallback(async (npcId: string, traveling: boolean) => {
+    await executeProjectedCommand((session) => session.companions.setTraveling({ npcId, traveling }));
+  }, [executeProjectedCommand]);
+
+  const handleCompressMemory = useCallback(async (
+    layer: 'immediate' | 'short' | 'middle',
+    force: boolean,
+  ) => {
+    await executeProjectedCommand((session) => session.memory.compress({ layer, force }));
+  }, [executeProjectedCommand]);
+
+  const handleSetStoryMode = useCallback(async (mode: 剧情模式) => {
+    await executeProjectedCommand((session) => session.world.setStoryMode({ mode }));
+  }, [executeProjectedCommand]);
+
+  const handleSaveSkill = useCallback(async (input: SkillSaveInput) => {
+    await executeProjectedCommand((session) => session.skills.save(input));
+  }, [executeProjectedCommand]);
+
+  const handleGenerateSkillDraft = useCallback(async (input: SkillDraftGenerationInput) => {
+    return (await getSession()).skills.generateDraft(input);
+  }, [getSession]);
+
+  const handleDeleteSkill = useCallback(async (skillId: string) => {
+    await executeProjectedCommand((session) => session.skills.delete({ skillId }));
+  }, [executeProjectedCommand]);
+
+  const handleSetSkillEnabled = useCallback(async (skillId: string, enabled: boolean) => {
+    await executeProjectedCommand((session) => session.skills.setEnabled({ skillId, enabled }));
+  }, [executeProjectedCommand]);
+
+  const handleUseInventoryItem = useCallback(async (itemId: string, count = 1) => {
+    await executeProjectedCommand((session) => session.inventory.use({ itemId, count }));
+  }, [executeProjectedCommand]);
+
+  const handleDropInventoryItem = useCallback((itemId: string, count?: number) =>
+    executeProjectedCommand((session) => session.inventory.drop({ itemId, count })),
+  [executeProjectedCommand]);
+
+  const handleUndoInventoryDrop = useCallback(async (dropCommandId: CommandId) => {
+    await executeProjectedCommand((session) => session.inventory.undoDrop({ dropCommandId }));
+  }, [executeProjectedCommand]);
+
+  const handleCreateZhikuEntry = useCallback(async (draft: 智库条目草稿) => {
+    const commandId = await executeProjectedCommand((session) => session.zhiku.create({ draft }));
+    return `zhiku_${commandId}`;
+  }, [executeProjectedCommand]);
+
+  const handleUpdateZhikuEntry = useCallback(async (
+    entryId: string,
+    patch: Partial<Omit<智库条目, 'id' | 'builtin' | 'createdAt' | 'updatedAt'>>,
+  ) => {
+    await executeProjectedCommand((session) => session.zhiku.update({ entryId, patch }));
+  }, [executeProjectedCommand]);
+
+  const handleDeleteZhikuEntry = useCallback(async (entryId: string) => {
+    await executeProjectedCommand((session) => session.zhiku.delete({ entryId }));
+  }, [executeProjectedCommand]);
+
+  const handleRefreshBundledZhiku = useCallback(async () => {
+    await executeProjectedCommand((session) => session.zhiku.refreshBundled());
+  }, [executeProjectedCommand]);
+
+  const handlePlotImportText = useCallback(async (input: { text: string; title: string; fileName?: string; chaptersPerSegment: number }) => {
+    await executeProjectedCommand((session) => session.plot.importText(input));
+  }, [executeProjectedCommand]);
+  const handlePlotImportJson = useCallback(async (json: string) => {
+    await executeProjectedCommand((session) => session.plot.importJson({ json }));
+  }, [executeProjectedCommand]);
+  const handlePlotRestoreBundled = useCallback(async () => {
+    await executeProjectedCommand((session) => session.plot.restoreBundled());
+  }, [executeProjectedCommand]);
+  const handlePlotRenameSeries = useCallback(async (seriesId: string, title: string) => {
+    await executeProjectedCommand((session) => session.plot.renameSeries({ seriesId, title }));
+  }, [executeProjectedCommand]);
+  const handlePlotRebuildSeries = useCallback(async (seriesId: string, chaptersPerSegment: number) => {
+    await executeProjectedCommand((session) => session.plot.rebuildSeries({ seriesId, chaptersPerSegment }));
+  }, [executeProjectedCommand]);
+  const handlePlotToggleSeriesInjection = useCallback(async (seriesId: string) => {
+    await executeProjectedCommand((session) => session.plot.toggleSeriesInjection({ seriesId }));
+  }, [executeProjectedCommand]);
+  const handlePlotSetCurrent = useCallback(async (seriesId: string, group: number) => {
+    await executeProjectedCommand((session) => session.plot.setCurrent({ seriesId, group }));
+  }, [executeProjectedCommand]);
+  const handlePlotSetSegmentStatus = useCallback(async (seriesId: string, segmentId: string, status: 剧情编织运行状态) => {
+    await executeProjectedCommand((session) => session.plot.setSegmentStatus({ seriesId, segmentId, status }));
+  }, [executeProjectedCommand]);
+  const handlePlotSaveSegment = useCallback(async (seriesId: string, segmentId: string, draft: StorySegmentDraftInput) => {
+    await executeProjectedCommand((session) => session.plot.saveSegment({ seriesId, segmentId, draft }));
+  }, [executeProjectedCommand]);
+  const handlePlotDeleteSeries = useCallback(async (seriesId: string) => {
+    await executeProjectedCommand((session) => session.plot.deleteSeries({ seriesId }));
+  }, [executeProjectedCommand]);
+  const handlePlotDecompose = useCallback(async (seriesId: string, segmentId: string) => {
+    await executeProjectedCommand((session) => session.plot.decompose({ seriesId, segmentId }));
+  }, [executeProjectedCommand]);
+  const handlePlotDecomposeBatch = useCallback(async (seriesId: string, mode: 'pending' | 'from-current' | 'all') => {
+    await executeProjectedCommand((session) => session.plot.decomposeBatch({ seriesId, mode }));
+  }, [executeProjectedCommand]);
+
+  const handleAlbumImportReference = useCallback(async (input: Omit<Extract<AlbumCommand, { type: 'album.import-reference' }>, 'type' | 'createdAt'>) => {
+    const commandId = await executeProjectedCommand((session) => session.album.importReference(input));
+    const view = await (await getSession()).projection.current();
+    const assetIds = new Set(view.story.album.assets
+      .filter((asset) => asset.contentHash === input.contentHash || asset.dataUrl === input.src || asset.url === input.src || asset.originalUrl === input.src)
+      .map((asset) => asset.id));
+    return view.story.album.entries.find((entry) =>
+      assetIds.has(entry.assetId)
+      && entry.targetType === (input.targetKind === 'traveler' ? 'traveler' : 'npc')
+      && entry.targetId === input.targetId
+      && entry.slot === 'misc')?.id ?? `album_${commandId}`;
+  }, [executeProjectedCommand, getSession]);
+  const handleAlbumSetReference = useCallback(async (entryId: string, characterId: string, enabled: boolean) => {
+    await executeProjectedCommand((session) => session.album.setReference({ entryId, characterId, enabled }));
+  }, [executeProjectedCommand]);
+  const handleAlbumGenerate = useCallback(async (input: Omit<Extract<AlbumCommand, { type: 'album.generate' }>, 'type' | 'createdAt'>) => {
+    const commandId = await executeProjectedCommand((session) => session.album.generate(input));
+    const view = await (await getSession()).projection.current();
+    const entryId = `album_${commandId}`;
+    const taskId = `img_task_${commandId}`;
+    const task = view.story.album.tasks.find((candidate) => candidate.id === taskId);
+    if (!view.story.album.entries.some((entry) => entry.id === entryId) || !task) {
+      throw new Error('图片生成已提交，但相册投影缺少生成结果。');
+    }
+    return { entryId, task };
+  }, [executeProjectedCommand, getSession]);
+  const handleAlbumBindSlot = useCallback(async (input: Omit<Extract<AlbumCommand, { type: 'album.bind-slot' }>, 'type'>) => {
+    await executeProjectedCommand((session) => session.album.bindSlot(input));
+  }, [executeProjectedCommand]);
+  const handleAlbumDeleteEntries = useCallback(async (entryIds: readonly string[]) => {
+    await executeProjectedCommand((session) => session.album.deleteEntries({ entryIds }));
+  }, [executeProjectedCommand]);
+  const handleAlbumImportArchive = useCallback(async (album: import('@/models/imageGeneration').相册系统) => {
+    await executeProjectedCommand((session) => session.album.importArchive({ album }));
+  }, [executeProjectedCommand]);
+  const handleAlbumSetCharacterAnchor = useCallback(async (input: Omit<Extract<AlbumCommand, { type: 'album.set-character-anchor' }>, 'type' | 'updatedAt'>) => {
+    await executeProjectedCommand((session) => session.album.setCharacterAnchor(input));
+  }, [executeProjectedCommand]);
+  const handleAlbumExtractCharacterAnchor = useCallback(async (input: Parameters<ISession['album']['extractCharacterAnchor']>[0]) => {
+    return (await getSession()).album.extractCharacterAnchor(input);
+  }, [getSession]);
+  const handleAlbumTokenizePrompt = useCallback(async (input: Parameters<ISession['album']['tokenizePrompt']>[0]) => {
+    return (await getSession()).album.tokenizePrompt(input);
+  }, [getSession]);
+  const handleAlbumParseScene = useCallback(async (input: Parameters<ISession['album']['parseScene']>[0]) => {
+    return (await getSession()).album.parseScene(input);
+  }, [getSession]);
+  const handleAlbumParseStorySnapshot = useCallback(async (input: Parameters<ISession['album']['parseStorySnapshot']>[0]) => {
+    return (await getSession()).album.parseStorySnapshot(input);
+  }, [getSession]);
+  const handlePhoneDismissSeed = useCallback(async (seedId: string) => { await executeProjectedCommand((session) => session.phone.dismissSeed({ seedId })); }, [executeProjectedCommand]);
+  const handlePhoneMarkRead = useCallback(async (chatId: string) => { await executeProjectedCommand((session) => session.phone.markRead({ chatId })); }, [executeProjectedCommand]);
+  const handlePhoneAddContact = useCallback(async (npcId: string) => { await executeProjectedCommand((session) => session.phone.addContact({ npcId })); }, [executeProjectedCommand]);
+  const handlePhoneOpenPrivateChat = useCallback(async (npcId: string) => {
+    const commandId = await executeProjectedCommand((session) => session.phone.openPrivateChat({ npcId }));
+    const phone = (await (await getSession()).projection.current()).story.phone;
+    return phone.chats.find((chat) => chat.type === 'private' && chat.participantIds.some((id) => id === npcId || id === `npc_${npcId}`))?.id ?? `phone_chat_${commandId}`;
+  }, [executeProjectedCommand, getSession]);
+  const handlePhoneCreateGroup = useCallback(async (npcIds: readonly string[], title: string) => {
+    const commandId = await executeProjectedCommand((session) => session.phone.createGroup({ npcIds, title }));
+    return `phone_chat_${commandId}`;
+  }, [executeProjectedCommand]);
+  const handlePhoneRenameGroup = useCallback(async (chatId: string, title: string) => { await executeProjectedCommand((session) => session.phone.renameGroup({ chatId, title })); }, [executeProjectedCommand]);
+  const handlePhoneAddGroupMember = useCallback(async (chatId: string, npcId: string) => { await executeProjectedCommand((session) => session.phone.addGroupMember({ chatId, npcId })); }, [executeProjectedCommand]);
+  const handlePhoneSetWallpaper = useCallback(async (slot: 'home' | 'chat', assetRef?: string) => { await executeProjectedCommand((session) => session.phone.setWallpaper({ slot, assetRef })); }, [executeProjectedCommand]);
+  const handlePhoneSend = useCallback(async (chatId: string, text: string) => { await executeProjectedCommand((session) => session.phone.send({ chatId, text })); }, [executeProjectedCommand]);
+  const handlePhoneGenerateSeed = useCallback(async (seedId: string) => {
+    const commandId = await executeProjectedCommand((session) => session.phone.generateSeed({ seedId }));
+    const phone = (await (await getSession()).projection.current()).story.phone;
+    const seed = phone.messageSeeds.find((candidate) => candidate.id === seedId);
+    if (!seed) throw new Error('主动来信提交后无法读取种子。');
+    if (seed.targetType === 'group') return phone.chats.find((chat) => chat.id === seed.targetId)?.id ?? `phone_chat_${commandId}`;
+    const npcId = seed.relatedNpcIds[0] ?? seed.targetId.replace(/^npc_/, '');
+    return phone.chats.find((chat) => chat.type === 'private' && chat.participantIds.some((id) => id === npcId || id === `npc_${npcId}`))?.id ?? `phone_chat_${commandId}`;
+  }, [executeProjectedCommand, getSession]);
 
   const handleRestartOpening = useCallback(async () => {
     const s = stateRef.current;
@@ -491,17 +654,13 @@ export function useGame(): UseGameReturn {
       nextWorld,
       根据开局档案创建初始NPC记录(restartOpeningArchive),
       nextStoryWeaving,
+      '[系统] 开启第 0 回合',
     );
-    s.setPendingOpeningTrigger('[系统] 开启第 0 回合');
   }, [handleStartSession]);
 
   const getContextSnapshot = useCallback(async (kind?: ContextSnapshotKind): Promise<ContextSnapshot> => {
-    const kernel = await getKernel();
-    return kernel.services.contextSnapshot.buildContextSnapshot(
-      cloneRuntimeGameState(snapshotRuntimeState(stateRef.current)),
-      kind,
-    );
-  }, [getKernel]);
+    return (await getSession()).inspection.contextSnapshot(kind);
+  }, [getSession]);
 
   const actions = useMemo(() => ({
     handleSend,
@@ -513,7 +672,61 @@ export function useGame(): UseGameReturn {
     handleLoadSave,
     handleReroll,
     handleRegenerateNarrativeImage,
-    handleRetryQueueTask,
+    handleRetryJob,
+    handleCancelJob,
+    handleSetPrimaryPath,
+    handleDeclinePathAwakening,
+    handleEnterPathAwakening,
+    handleEditMessageBody,
+    getCompanionPlanning,
+    handleSetCompanionTier,
+    handleSetCompanionTraveling,
+    handleCompressMemory,
+    handleSetStoryMode,
+    handleSaveSkill,
+    handleGenerateSkillDraft,
+    handleDeleteSkill,
+    handleSetSkillEnabled,
+    handleUseInventoryItem,
+    handleDropInventoryItem,
+    handleUndoInventoryDrop,
+    handleCreateZhikuEntry,
+    handleUpdateZhikuEntry,
+    handleDeleteZhikuEntry,
+    handleRefreshBundledZhiku,
+    handlePlotImportText,
+    handlePlotImportJson,
+    handlePlotRestoreBundled,
+    handlePlotRenameSeries,
+    handlePlotRebuildSeries,
+    handlePlotToggleSeriesInjection,
+    handlePlotSetCurrent,
+    handlePlotSetSegmentStatus,
+    handlePlotSaveSegment,
+    handlePlotDeleteSeries,
+    handlePlotDecompose,
+    handlePlotDecomposeBatch,
+    handleAlbumImportReference,
+    handleAlbumSetReference,
+    handleAlbumGenerate,
+    handleAlbumBindSlot,
+    handleAlbumDeleteEntries,
+    handleAlbumImportArchive,
+    handleAlbumSetCharacterAnchor,
+    handleAlbumExtractCharacterAnchor,
+    handleAlbumTokenizePrompt,
+    handleAlbumParseScene,
+    handleAlbumParseStorySnapshot,
+    handlePhoneDismissSeed,
+    handlePhoneMarkRead,
+    handlePhoneAddContact,
+    handlePhoneOpenPrivateChat,
+    handlePhoneCreateGroup,
+    handlePhoneRenameGroup,
+    handlePhoneAddGroupMember,
+    handlePhoneSetWallpaper,
+    handlePhoneSend,
+    handlePhoneGenerateSeed,
     handleRestartOpening,
     handleStartSession,
     getContextSnapshot,
@@ -527,7 +740,61 @@ export function useGame(): UseGameReturn {
     handleLoadSave,
     handleReroll,
     handleRegenerateNarrativeImage,
-    handleRetryQueueTask,
+    handleRetryJob,
+    handleCancelJob,
+    handleSetPrimaryPath,
+    handleDeclinePathAwakening,
+    handleEnterPathAwakening,
+    handleEditMessageBody,
+    getCompanionPlanning,
+    handleSetCompanionTier,
+    handleSetCompanionTraveling,
+    handleCompressMemory,
+    handleSetStoryMode,
+    handleSaveSkill,
+    handleGenerateSkillDraft,
+    handleDeleteSkill,
+    handleSetSkillEnabled,
+    handleUseInventoryItem,
+    handleDropInventoryItem,
+    handleUndoInventoryDrop,
+    handleCreateZhikuEntry,
+    handleUpdateZhikuEntry,
+    handleDeleteZhikuEntry,
+    handleRefreshBundledZhiku,
+    handlePlotImportText,
+    handlePlotImportJson,
+    handlePlotRestoreBundled,
+    handlePlotRenameSeries,
+    handlePlotRebuildSeries,
+    handlePlotToggleSeriesInjection,
+    handlePlotSetCurrent,
+    handlePlotSetSegmentStatus,
+    handlePlotSaveSegment,
+    handlePlotDeleteSeries,
+    handlePlotDecompose,
+    handlePlotDecomposeBatch,
+    handleAlbumImportReference,
+    handleAlbumSetReference,
+    handleAlbumGenerate,
+    handleAlbumBindSlot,
+    handleAlbumDeleteEntries,
+    handleAlbumImportArchive,
+    handleAlbumSetCharacterAnchor,
+    handleAlbumExtractCharacterAnchor,
+    handleAlbumTokenizePrompt,
+    handleAlbumParseScene,
+    handleAlbumParseStorySnapshot,
+    handlePhoneDismissSeed,
+    handlePhoneMarkRead,
+    handlePhoneAddContact,
+    handlePhoneOpenPrivateChat,
+    handlePhoneCreateGroup,
+    handlePhoneRenameGroup,
+    handlePhoneAddGroupMember,
+    handlePhoneSetWallpaper,
+    handlePhoneSend,
+    handlePhoneGenerateSeed,
     handleRestartOpening,
     handleStartSession,
     getContextSnapshot,
@@ -539,158 +806,58 @@ export function useGame(): UseGameReturn {
   };
 }
 
-function requireProjection(projection: ProjectionState | null): ProjectionState {
-  if (!projection) throw new Error('Kernel projection is not initialized');
-  return projection;
+async function consumeSessionHandle<Result>(
+  handle: CommandHandle<GameEvent, Result>,
+  sink: ExecutionSink,
+): Promise<CommandTerminal<Result>> {
+  const unsubscribe = handle.events.subscribe((event) => {
+    if (sink.applyEvent) {
+      sink.applyEvent(event);
+      return;
+    }
+    switch (event.type) {
+      case 'command.accepted':
+        return;
+      case 'turn.prepared':
+        sink.showPrepared(event.view);
+        return;
+      case 'stage.changed':
+        sink.showStage(event.stage);
+        return;
+      case 'stage.retrying':
+        sink.showRetry(event.stage, event.attempt, event.limit);
+        return;
+      case 'assistant.ready':
+        sink.showAssistant(event.message);
+        return;
+      case 'narrative.delta':
+        sink.showProgress({ kind: 'narrative', text: event.text });
+        return;
+      case 'command.committed':
+        sink.replaceProjection(event.view);
+        return;
+      case 'command.rejected':
+        sink.showError(event.error);
+        return;
+      default: {
+        const exhaustive: never = event;
+        throw new Error(`Unknown session event: ${String((exhaustive as { type: string }).type)}`);
+      }
+    }
+  });
+  try {
+    return await handle.result;
+  } finally {
+    unsubscribe();
+  }
 }
 
 /** Single bridge: projection progress → streaming message store. */
 function syncStreamFromProjection(projection: ProjectionState): void {
-  setStreamingMessage(projection.progress?.narrativeText ?? '');
+  setStreamingMessage(projectionNarrativeText(projection));
 }
 
 /** React chrome only — stream text is owned by projection + syncStreamFromProjection. */
 function clearEphemeralUi(state: UseGameStateReturn): void {
-  state.setLoading(false);
-  state.setWorkflowStatus('');
-  state.setWorkflowHint('');
-  state.setLiveRecallSummary('');
-  state.setLiveRecallFullContent('');
   state.setInterruptedWorkflow(null);
-}
-
-function applySessionView(state: UseGameStateReturn, view: SessionView): void {
-  const runtime = cloneRuntimeGameState(view.runtime);
-  state.set旅人(runtime.旅人);
-  state.set世界(runtime.世界);
-  state.setChatHistory(runtime.chatHistory.slice());
-  state.set记忆(runtime.记忆);
-  state.set忆庭(runtime.忆庭);
-  state.set智库(runtime.智库);
-  state.set手机(runtime.手机);
-  state.setNPC(runtime.NPC.slice());
-  state.set相册(runtime.相册);
-  state.set新闻(runtime.新闻.slice());
-  state.set剧情(runtime.剧情.slice());
-  state.set剧情编织(runtime.剧情编织);
-  state.setVariableBatches(runtime.variableBatches.slice());
-  state.setQueueTasks(runtime.queueTasks.slice());
-  state.setApiSettings(runtime.apiSettings);
-  state.setGameSettings(runtime.gameSettings);
-  state.setCurrentTheme(runtime.currentTheme);
-  state.setWorldbooks(runtime.worldbooks.slice());
-  state.setTurnCount(runtime.turnCount);
-}
-
-function snapshotRuntimeState(state: UseGameStateReturn): RuntimeGameState {
-  return cloneRuntimeGameState({
-    旅人: state.旅人,
-    世界: state.世界,
-    chatHistory: state.chatHistory,
-    记忆: state.记忆,
-    忆庭: state.忆庭,
-    智库: state.智库,
-    手机: state.手机,
-    NPC: state.NPC,
-    相册: state.相册,
-    新闻: state.新闻,
-    剧情: state.剧情,
-    剧情编织: state.剧情编织,
-    variableBatches: state.variableBatches,
-    queueTasks: state.queueTasks,
-    apiSettings: state.apiSettings,
-    gameSettings: state.gameSettings,
-    currentTheme: state.currentTheme,
-    worldbooks: state.worldbooks,
-    turnCount: state.turnCount,
-  });
-}
-
-function runtimeToSave(runtime: RuntimeGameState, type: 存档类型): 存档数据 {
-  return {
-    id: 0,
-    type,
-    timestamp: Date.now(),
-    turnCount: runtime.turnCount,
-    旅人: runtime.旅人,
-    世界: runtime.世界,
-    chatHistory: runtime.chatHistory.slice(),
-    记忆: runtime.记忆,
-    忆庭: runtime.忆庭,
-    // Persist shells only: custom + builtin unlock deltas; load rehydrates from catalog.
-    智库: buildPersistedZhikuSystem(runtime.智库),
-    手机: runtime.手机,
-    NPC: runtime.NPC.slice(),
-    相册: runtime.相册,
-    新闻: runtime.新闻.slice(),
-    剧情: runtime.剧情.slice(),
-    剧情编织: runtime.剧情编织,
-    variableBatches: runtime.variableBatches.slice(),
-    queueTasks: runtime.queueTasks.slice(),
-  };
-}
-
-/**
- * Save only the committed kernel runtime. This keeps auto-save aligned with the
- * same terminal state the player sees, including completed background work.
- * A storage failure must not turn a successfully committed narrative turn into
- * a failed command.
- */
-async function saveCompletedTurnAutomatically(
-  kernel: IKernel,
-  runtime: RuntimeGameState,
-  state: UseGameStateReturn,
-): Promise<void> {
-  if (!runtime.gameSettings.enableAutoSaveEveryTurn) return;
-  try {
-    await kernel.saves.saveGame(runtimeToSave(runtime, 'auto'));
-    state.setHasSave(true);
-  } catch (error) {
-    console.error('Auto-save failed after committed turn:', error);
-    reportAppError({ source: '自动存档', error });
-    state.setWorkflowHint('本回合已完成，但自动存档失败；请手动存档后再继续。');
-  }
-}
-
-async function resolveZhikuMigrationAt(): Promise<number> {
-  return (await getPreference<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY)) ?? Date.now();
-}
-
-/** Device preference plane overlaid onto story runtime at load (not from save). */
-type LiveDevicePreferences = Readonly<{
-  apiSettings: UseGameStateReturn['apiSettings'];
-  gameSettings: UseGameStateReturn['gameSettings'];
-  currentTheme: UseGameStateReturn['currentTheme'];
-  worldbooks: UseGameStateReturn['worldbooks'];
-}>;
-
-async function saveToRuntime(save: 存档数据, live: LiveDevicePreferences): Promise<RuntimeGameState> {
-  const required = ['turnCount', '忆庭', '智库', '手机', 'NPC', '相册', '新闻', '剧情', '剧情编织', 'variableBatches', 'queueTasks'] as const;
-  for (const field of required) {
-    if (save[field] === undefined) throw new Error(`Save requires ${field}`);
-  }
-  // Never assign raw save.智库 shells into runtime — re-merge bundled catalog first.
-  const 智库 = await hydrateRuntimeZhiku(save.智库, { migrationAt: await resolveZhikuMigrationAt() });
-  return cloneRuntimeGameState({
-    旅人: save.旅人,
-    世界: save.世界,
-    chatHistory: save.chatHistory,
-    记忆: save.记忆,
-    忆庭: save.忆庭!,
-    智库,
-    手机: save.手机!,
-    NPC: save.NPC!,
-    相册: save.相册!,
-    新闻: save.新闻!,
-    剧情: save.剧情!,
-    剧情编织: save.剧情编织!,
-    variableBatches: save.variableBatches!,
-    queueTasks: save.queueTasks!,
-    // Device plane — never restore keys/endpoints/theme from save.
-    apiSettings: live.apiSettings,
-    gameSettings: live.gameSettings,
-    currentTheme: live.currentTheme,
-    worldbooks: live.worldbooks,
-    turnCount: save.turnCount!,
-  });
 }

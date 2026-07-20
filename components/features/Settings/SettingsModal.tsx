@@ -28,9 +28,10 @@ import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
 import { ContextInspectorTab } from './ContextInspector';
 import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
-import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/workflows/contextSnapshot';
+import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/contract/inspection';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
+import type { 剧情模式 } from '@/models/journey';
 import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
@@ -38,8 +39,9 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import type { VariableSetters } from '@/models/variableSetters';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
+import { reportAppError } from '@/components/ui/AppErrorReporter';
 
 export type SettingsTab = Tab;
 
@@ -57,7 +59,7 @@ interface SettingsModalProps {
   // 变量管理需要的 state 切片
   旅人: 角色数据结构;
   世界: 世界状态;
-  on世界Change: (s: 世界状态) => void;
+  onStoryModeChange: (mode: 剧情模式) => Promise<void>;
   记忆: 记忆系统;
   忆庭: 忆庭系统;
   智库: 智库系统;
@@ -65,9 +67,6 @@ interface SettingsModalProps {
   NPC: NPC记录[];
   新闻: 新闻条目[];
   剧情编织: 剧情编织系统;
-  on剧情编织Change: React.Dispatch<React.SetStateAction<剧情编织系统>>;
-  variableSetters: VariableSetters;
-  variableEditingLocked?: boolean;
   getContextSnapshot: (kind?: ContextSnapshotKind) => Promise<ContextSnapshot>;
   initialTab?: Tab;
 }
@@ -102,7 +101,7 @@ export function SettingsModal({
   onLoadSave,
   旅人,
   世界,
-  on世界Change,
+  onStoryModeChange,
   记忆,
   忆庭,
   智库,
@@ -110,21 +109,20 @@ export function SettingsModal({
   NPC,
   新闻,
   剧情编织,
-  on剧情编织Change,
-  variableSetters,
-  variableEditingLocked = false,
   getContextSnapshot,
   initialTab = 'api',
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const persistGameSettingsChange = useCallback((next: 游戏设置) => {
     onGameSettingsChange(next);
-    void setPreference('gameSettings', next);
+    void persistSettingsPlanes(next);
   }, [onGameSettingsChange]);
 
   const persistThemeChange = useCallback((next: 主题预设) => {
-    onThemeChange(next);
-    void setPreference('theme', next);
+    void getAppRoot()
+      .then((root) => root.device.updateTheme(next))
+      .then(() => onThemeChange(next))
+      .catch((error: unknown) => reportAppError({ source: '主题设置', error }));
   }, [onThemeChange]);
 
   const renderTab = (): ReactNode => {
@@ -145,8 +143,8 @@ export function SettingsModal({
           <GameSettingsTab
             settings={gameSettings}
             onChange={persistGameSettingsChange}
-            worldState={世界}
-            onWorldStateChange={on世界Change}
+            storyMode={世界.剧情模式}
+            onStoryModeChange={onStoryModeChange}
           />
         );
       case 'visual':
@@ -183,9 +181,6 @@ export function SettingsModal({
             NPC={NPC}
             新闻={新闻}
             剧情编织={剧情编织}
-            set剧情编织={on剧情编织Change}
-            setters={variableSetters}
-            editingLocked={variableEditingLocked}
           />
         );
       case 'theme':

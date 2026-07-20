@@ -44,9 +44,9 @@ import {
   type 战技记录,
   type 战技槽位摘要,
 } from '@/models/skill';
-import { getPreference, setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import type { FreeOpeningCustomNpc, FreeOpeningWorkshopDraft, OpeningPlayerPreset, OpeningPresetDraft } from '@/models/openingPreset';
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
-import { getAdaptationServices } from '@/src/adaptations';
 
 interface NewGameWizardProps {
   onStart: (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords?: NPC记录[]) => void | Promise<void>;
@@ -65,67 +65,8 @@ type OpeningSource = 开局来源;
 type FreeOpeningPlanetSource = 自由开局地点来源;
 type OpeningSkillSlotKey = `normal:${number}` | `path:${命途ID}:${number}`;
 
-interface OpeningPresetDraft {
-  openingSource: OpeningSource;
-  freeOpeningMainlineEnabled: boolean;
-  freeOpeningPlanetSource: FreeOpeningPlanetSource;
-  freeOpeningWorkshop: FreeOpeningWorkshopDraft;
-  storyMode: 剧情模式;
-  name: string;
-  alias: string;
-  gender: string;
-  age: number;
-  birthday: string;
-  appearance: string;
-  personality: string;
-  background: string;
-  pathId: 命途ID;
-  pathStage: 命途阶段;
-  factionId: 阵营ID;
-  customIdentity: string;
-  selectedAbilityIds: string[];
-  customAbilities: string[];
-  openingSkills: 战技记录[];
-  startingScenarioId: string;
-  selectedWorkshopTemplateId: string;
-  canonicalTrailblazer: CanonicalTrailblazer;
-  customStartPrompt: string;
-}
-
-interface FreeOpeningWorkshopDraft {
-  planet: string;
-  location: string;
-  planetIntro: string;
-  npcDetails: string;
-  customNpcName: string;
-  customNpcBackground: string;
-  customNpcPathstrider: string;
-  customNpcAbility: string;
-  customNpcs: FreeOpeningCustomNpc[];
-  currentGoal: string;
-  localConflict: string;
-  factions: string;
-  worldRules: string;
-  tone: string;
-}
-
-interface FreeOpeningCustomNpc {
-  id: string;
-  name: string;
-  background: string;
-  pathstrider: string;
-  ability: string;
-}
-
-interface OpeningPlayerPreset {
-  id: string;
-  title: string;
-  updatedAt: number;
-  draft: OpeningPresetDraft;
-}
 
 const STEPS: Step[] = ['character', 'path', 'skill', 'historian', 'world', 'overview'];
-const OPENING_PLAYER_PRESETS_KEY = 'openingPlayerPresets';
 const MAX_OPENING_PLAYER_PRESETS = 20;
 
 const STEP_META: Record<Step, { title: string; subtitle: string }> = {
@@ -411,7 +352,8 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    getPreference<OpeningPlayerPreset[]>(OPENING_PLAYER_PRESETS_KEY)
+    getAppRoot()
+      .then((kernel) => kernel.onboarding.loadOpeningPresets())
       .then((saved) => {
         if (cancelled) return;
         const normalized = normalizeOpeningPresets(saved);
@@ -795,7 +737,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
         背包: [],
         战技列表: openingSkills.map((skill) => 归一化战技记录(skill)),
       };
-      const generated = await (await getAdaptationServices()).skillGenerator.generateSkillDraft(openingArchiveApiConfig, {
+      const generated = await (await getAppRoot()).onboarding.generateSkillDraft(openingArchiveApiConfig, {
         traveler,
         slotKind: openingSelectedSlot.kind,
         slotIndex: openingSelectedSlot.slotIndex,
@@ -844,7 +786,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   const persistOpeningPresets = async (nextPresets: OpeningPlayerPreset[]) => {
     const normalized = normalizeOpeningPresets(nextPresets);
-    await setPreference(OPENING_PLAYER_PRESETS_KEY, normalized);
+    await (await getAppRoot()).onboarding.replaceOpeningPresets(normalized);
     setOpeningPresets(normalized);
   };
 
@@ -1051,7 +993,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
           throw new Error('自由开局要求配置可用的开局档案 API');
         }
         setOpeningArchiveStatus('正在整理开局档案...');
-        const parsedArchive = await (await getAdaptationServices()).openingArchive.parseOpeningArchiveWithAI(
+        const parsedArchive = await (await getAppRoot()).onboarding.parseOpeningArchive(
           openingArchiveApiConfig,
           {
             regionName: freeOpeningInput.regionName,

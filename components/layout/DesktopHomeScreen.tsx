@@ -1,5 +1,5 @@
 import  { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getSaveCatalog, type SaveListItem } from '@/src/adaptations/saveCatalog';
+import type { SaveSummary } from '@/src/kernel/contract/rootCapabilities';
 import type { DesktopReleaseInfo } from '@/services/desktop/desktopReleaseInfo';
 import type {
   DesktopAppInfo,
@@ -7,7 +7,7 @@ import type {
   DesktopUpdateProgress,
   DesktopUpdateStatus,
 } from '@/services/desktop/desktopBridge';
-import { getAdaptationServices } from '@/src/adaptations';
+import { getAppRoot } from '@/src/adaptations/kernel';
 import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 
@@ -51,7 +51,7 @@ export function DesktopHomeScreen({
   onMysteryChat,
 }: DesktopHomeScreenProps) {
   const [desktopInfo, setDesktopInfo] = useState<DesktopAppInfo | null>(null);
-  const [saveList, setSaveList] = useState<SaveListItem[]>([]);
+  const [saveList, setSaveList] = useState<SaveSummary[]>([]);
   const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateStatus | null>(null);
   const [desktopReleaseInfo, setDesktopReleaseInfo] = useState<DesktopReleaseInfo | null>(null);
   const [, setDesktopProbe] = useState<DesktopProbeResult | null>(null);
@@ -77,16 +77,16 @@ export function DesktopHomeScreen({
   const refreshOverview = useCallback(async () => {
     setLoadError('');
     try {
-      const catalog = await getSaveCatalog();
-      const services = await getAdaptationServices();
+      const root = await getAppRoot();
+      const host = root.host;
       const [info, saves] = await Promise.all([
-        services.desktopBridge.getDesktopAppInfo(),
-        catalog.getSaveList(),
+        host.getDesktopAppInfo(),
+        root.saves.list(),
       ]);
-      const saveRows = [...saves] as SaveListItem[];
+      const saveRows = [...saves];
       setDesktopInfo(info);
       setSaveList(saveRows);
-      setDesktopReleaseInfo(await services.desktopReleaseInfo.buildDesktopReleaseInfo(info, null));
+      setDesktopReleaseInfo(host.buildDesktopReleaseInfo(info, null));
     } catch (error) {
       console.error('[desktop-home] overview refresh failed', error);
       setLoadError(error instanceof Error ? error.message : '桌面首页状态读取失败');
@@ -114,7 +114,7 @@ export function DesktopHomeScreen({
     : '当前没有可继续的存档。';
 
   const handleOpenDir = useCallback(async (target: DataDirTarget) => {
-    await (await getAdaptationServices()).desktopBridge.openDesktopDataDir(target);
+    await (await getAppRoot()).host.openDesktopDataDir(target);
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
@@ -122,10 +122,10 @@ export function DesktopHomeScreen({
     setStatusMessage('正在检查更新...');
     setLoadError('');
     try {
-      const services = await getAdaptationServices();
-      const result = await services.desktopBridge.checkForDesktopUpdate();
+      const host = (await getAppRoot()).host;
+      const result = await host.checkForDesktopUpdate();
       setDesktopUpdate(result);
-      setDesktopReleaseInfo(await services.desktopReleaseInfo.buildDesktopReleaseInfo(desktopInfo, result));
+      setDesktopReleaseInfo(host.buildDesktopReleaseInfo(desktopInfo, result));
       setStatusMessage(result.available
         ? `发现 Desktop Edition ${result.version ?? '新版本'}`
         : '当前已是最新版本');
@@ -145,7 +145,7 @@ export function DesktopHomeScreen({
     setStatusMessage('正在下载并安装更新...');
     setUpdateProgress(null);
     try {
-      await (await getAdaptationServices()).desktopBridge.downloadAndInstallDesktopUpdate(
+      await (await getAppRoot()).host.downloadAndInstallDesktopUpdate(
         (progress) => setUpdateProgress(progress),
       );
       setStatusMessage('更新已提交安装，应用将重启或由安装器继续完成。');
@@ -162,7 +162,7 @@ export function DesktopHomeScreen({
   const handleWriteProbe = useCallback(async () => {
     setLoadError('');
     try {
-      const result = await (await getAdaptationServices()).desktopBridge.writeDesktopProbe();
+      const result = await (await getAppRoot()).host.writeDesktopProbe();
       setDesktopProbe(result);
       setStatusMessage(result?.ok ? `探针已写入 ${result.probeFile}` : '探针写入失败');
     } catch (error) {

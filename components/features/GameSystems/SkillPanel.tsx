@@ -2,24 +2,24 @@
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途ID } from '@/models/journey';
 import type { 命途进度 } from '@/models/path';
-import type { API设置 } from '@/models/settings';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { getPath } from '@/data/journeyPresets';
-import { getAdaptationServices } from '@/src/adaptations';
 import {
   NORMAL_SKILL_SLOT_COUNT,
-  创建战技记录,
   生成战技槽位摘要,
   计算命途战技槽位数,
   归一化战技记录,
   type 战技记录,
   type 战技槽位摘要,
 } from '@/models/skill';
+import type { GeneratedSkillDraft, SkillDraftGenerationInput, SkillSaveInput } from '@/src/kernel/contract/session';
 
 interface SkillPanelProps {
   traveler: 角色数据结构;
-  onTravelerChange: React.Dispatch<React.SetStateAction<角色数据结构>>;
-  apiSettings: API设置;
+  onGenerateSkillDraft: (input: SkillDraftGenerationInput) => Promise<GeneratedSkillDraft>;
+  onSaveSkill: (input: SkillSaveInput) => Promise<void>;
+  onDeleteSkill: (skillId: string) => Promise<void>;
+  onSetSkillEnabled: (skillId: string, enabled: boolean) => Promise<void>;
 }
 
 type SlotKey = `normal:${number}` | `path:${命途ID}:${number}`;
@@ -49,7 +49,7 @@ const emptyDraft: SkillDraft = {
   备注: '',
 };
 
-export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPanelProps) {
+export function SkillPanel({ traveler, onGenerateSkillDraft, onSaveSkill, onDeleteSkill, onSetSkillEnabled }: SkillPanelProps) {
   const pathRecords = traveler.命途列表 ?? [];
   const skillRecords = useMemo(
     () => (traveler.战技列表 ?? []).map(归一化战技记录).filter(isVisibleSkillRecord),
@@ -93,14 +93,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
   const pathSkillRecords = skillRecords
     .filter((skill) => skill.槽位类型 === 'path')
     .sort((a, b) => sortSkill(a, b));
-  const activeApiConfig = useMemo(() => {
-    if (apiSettings.activeConfigId) {
-      return apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
-    }
-    return apiSettings.configs[0] ?? null;
-  }, [apiSettings.activeConfigId, apiSettings.configs]);
-
-  const saveSkill = () => {
+  const saveSkill = async () => {
     if (!selectedSlot) return;
     const name = draft.名称.trim();
     const description = draft.描述.trim();
@@ -109,71 +102,58 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
       return;
     }
 
-    const nextSkill = selectedSkill
-      ? {
-          ...selectedSkill,
-          名称: name,
-          描述: description,
-          来源: draft.来源.trim() || selectedSkill.来源,
-          关键词: splitKeywords(draft.关键词),
-          消耗: draft.消耗.trim(),
-          冷却: draft.冷却.trim(),
-          备注: draft.备注.trim(),
-          更新时间: Date.now(),
-        }
-      : 创建战技记录({
-          名称: name,
-          类别: selectedSlot.kind === 'normal' ? '普通' : '命途',
-          槽位类型: selectedSlot.kind,
-          槽位序号: selectedSlot.slotIndex,
-          描述: description,
-          来源: draft.来源.trim() || (selectedSlot.kind === 'normal' ? '普通战技自制' : '命途战技自定义'),
-          关联命途: selectedSlot.pathId,
-          关联阶段: selectedSlot.pathStage,
-          关键词: splitKeywords(draft.关键词),
-          消耗: draft.消耗,
-          冷却: draft.冷却,
-          备注: draft.备注,
-        });
-
-    upsertSkill(nextSkill);
+    await onSaveSkill({
+      skillId: selectedSkill?.id,
+      slot: {
+        kind: selectedSlot.kind,
+        index: selectedSlot.slotIndex,
+        pathId: selectedSlot.pathId,
+        pathStage: selectedSlot.pathStage,
+      },
+      draft: {
+        name,
+        description,
+        source: draft.来源.trim() || selectedSkill?.来源 || (selectedSlot.kind === 'normal' ? '普通战技自制' : '命途战技自定义'),
+        keywords: splitKeywords(draft.关键词),
+        cost: draft.消耗.trim(),
+        cooldown: draft.冷却.trim(),
+        notes: draft.备注.trim(),
+      },
+    });
   };
 
   const generateDraftWithAI = async () => {
     if (!selectedSlot) return;
-    if (!activeApiConfig) {
-      setGenerationMessage({ kind: 'error', text: '请先在设置中配置主剧情 API，再生成战技草稿。' });
-      return;
-    }
     setGeneratingSkill(true);
     setGenerationMessage({ kind: 'info', text: '正在根据当前槽位生成小说化战技草稿……' });
     try {
-      const generated = await (await getAdaptationServices()).skillGenerator.generateSkillDraft(activeApiConfig, {
-        traveler,
-        slotKind: selectedSlot.kind,
-        slotIndex: selectedSlot.slotIndex,
-        pathId: selectedSlot.pathId,
-        pathStage: selectedSlot.pathStage,
+      const generated = await onGenerateSkillDraft({
+        slot: {
+          kind: selectedSlot.kind,
+          index: selectedSlot.slotIndex,
+          pathId: selectedSlot.pathId,
+          pathStage: selectedSlot.pathStage,
+        },
         existingSkillNames: skillRecords.map((skill) => skill.名称),
         userHint: generationHint,
         currentDraft: {
-          名称: draft.名称,
-          描述: draft.描述,
-          来源: draft.来源,
-          关键词: splitKeywords(draft.关键词),
-          消耗: draft.消耗,
-          冷却: draft.冷却,
-          备注: draft.备注,
+          name: draft.名称,
+          description: draft.描述,
+          source: draft.来源,
+          keywords: splitKeywords(draft.关键词),
+          cost: draft.消耗,
+          cooldown: draft.冷却,
+          notes: draft.备注,
         },
       });
       setDraft({
-        名称: generated.名称,
-        描述: generated.描述,
-        来源: generated.来源 || (selectedSlot.kind === 'normal' ? 'AI 普通战技草稿' : 'AI 命途战技草稿'),
-        关键词: generated.关键词.join('、'),
-        消耗: generated.消耗,
-        冷却: generated.冷却,
-        备注: generated.备注,
+        名称: generated.name,
+        描述: generated.description,
+        来源: generated.source || (selectedSlot.kind === 'normal' ? 'AI 普通战技草稿' : 'AI 命途战技草稿'),
+        关键词: generated.keywords.join('、'),
+        消耗: generated.cost,
+        冷却: generated.cooldown,
+        备注: generated.notes,
       });
       setGenerationMessage({ kind: 'info', text: '已生成草稿。你可以继续修改，确认后再写入槽位。' });
     } catch (error) {
@@ -183,34 +163,15 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
     }
   };
 
-  const upsertSkill = (nextSkill: 战技记录) => {
-    onTravelerChange((prev) => {
-      const oldSkills = prev.战技列表 ?? [];
-      const withoutSameSlot = oldSkills.filter(
-        (skill) => skill.id !== nextSkill.id && !sameSlot(skill, nextSkill),
-      );
-      return {
-        ...prev,
-        战技列表: [...withoutSameSlot, nextSkill],
-      };
-    });
-  };
-
-  const deleteSkill = (skillId: string) => {
+  const deleteSkill = async (skillId: string) => {
     if (!window.confirm('确认移除此战技？槽位会恢复为空。')) return;
-    onTravelerChange((prev) => ({
-      ...prev,
-      战技列表: (prev.战技列表 ?? []).filter((skill) => skill.id !== skillId),
-    }));
+    await onDeleteSkill(skillId);
   };
 
-  const toggleSkill = (skillId: string) => {
-    onTravelerChange((prev) => ({
-      ...prev,
-      战技列表: (prev.战技列表 ?? []).map((skill) =>
-        skill.id === skillId ? { ...skill, 已启用: skill.已启用 === false, 更新时间: Date.now() } : skill,
-      ),
-    }));
+  const toggleSkill = async (skillId: string) => {
+    const skill = skillRecords.find((entry) => entry.id === skillId);
+    if (!skill) return;
+    await onSetSkillEnabled(skillId, skill.已启用 === false);
   };
 
   return (
@@ -848,14 +809,6 @@ function splitKeywords(value: string): string[] {
 
 function isVisibleSkillRecord(skill: 战技记录): boolean {
   return skill.槽位类型 !== 'normal' || (skill.槽位序号 >= 1 && skill.槽位序号 <= NORMAL_SKILL_SLOT_COUNT);
-}
-
-function sameSlot(a: 战技记录, b: 战技记录): boolean {
-  if (a.id === b.id) return false;
-  if (a.槽位类型 !== b.槽位类型) return false;
-  if (a.槽位序号 !== b.槽位序号) return false;
-  if (a.槽位类型 === 'normal') return true;
-  return a.关联命途 === b.关联命途;
 }
 
 function sortSkill(a: 战技记录, b: 战技记录): number {

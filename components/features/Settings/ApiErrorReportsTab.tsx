@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ApiErrorReport } from '@/services/ai/apiErrorReportService';
-import { getAdaptationServices } from '@/src/adaptations';
+import type { ApiErrorReportProjection } from '@/src/kernel/contract/rootCapabilities';
+import { getAppRoot } from '@/src/adaptations/kernel';
 
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -11,7 +11,7 @@ function formatTime(iso: string): string {
   return date.toLocaleString();
 }
 
-function formatReport(report: ApiErrorReport): string {
+function formatReport(report: ApiErrorReportProjection): string {
   return [
     `时间: ${formatTime(report.createdAt)}`,
     `模块: ${report.source}`,
@@ -30,12 +30,12 @@ function formatReport(report: ApiErrorReport): string {
 }
 
 export function ApiErrorReportsTab() {
-  const [reports, setReports] = useState<ApiErrorReport[]>([]);
+  const [reports, setReports] = useState<readonly ApiErrorReportProjection[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [message, setMessage] = useState('');
 
   const refresh = async () => {
-    const list = await (await getAdaptationServices()).apiErrorReports.loadApiErrorReports();
+    const list = await (await getAppRoot()).diagnostics.listApiErrorReports();
     setReports(list);
     setSelectedId((current) => (list.some((item) => item.id === current) ? current : ''));
   };
@@ -51,7 +51,7 @@ export function ApiErrorReportsTab() {
 
   const handleClear = async () => {
     if (!window.confirm('确定清空所有 API 错误报告吗？')) return;
-    await (await getAdaptationServices()).apiErrorReports.clearApiErrorReports();
+    await (await getAppRoot()).diagnostics.clearApiErrorReports();
     setReports([]);
     setSelectedId('');
     setMessage('错误报告已清空。');

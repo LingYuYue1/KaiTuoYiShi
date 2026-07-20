@@ -1,4 +1,5 @@
-import { stripDevicePreferencesFromSave, type 存档数据, type 存档类型 } from '@/models/settings';
+import type { 存档数据, 存档类型 } from '@/models/settings';
+import { readPortableSave } from '@/src/kernel/application/portableSave';
 import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExportAsync } from './savePackage';
 import {
   extractSaveAssetRecords,
@@ -138,7 +139,7 @@ function openDB(): Promise<IDBDatabase> {
 // ── Save operations ──
 
 export async function saveGame(input: 存档数据): Promise<number> {
-  const data = stripDevicePreferencesFromSave(input);
+  const data = readPortableSave(input);
   const db = await openDB();
   const saveType = normalizeSaveType(data.type);
   if (saveType === 'manual') {
@@ -361,6 +362,11 @@ export async function getSaveList(): Promise<SaveListItemSummary[]> {
 }
 
 export async function loadSave(id: number): Promise<存档数据 | null> {
+  const save = await loadSaveForExplicitMigration(id);
+  return save ? readPortableSave(save) : null;
+}
+
+async function loadSaveForExplicitMigration(id: number): Promise<存档数据 | null> {
   const desktopSave = await loadDesktopSaveMirrorSaveFirstSafely(id);
   if (desktopSave) return restoreDesktopAssetPayloadSafely(desktopSave);
   const db = await openDB();
@@ -395,6 +401,18 @@ export async function loadLatestSave(): Promise<存档数据 | null> {
     ?? list.find((item) => item.type !== 'backup')
     ?? list[0];
   return loadSave(latestPlayable.id);
+}
+
+/** Migration-only enumeration. Normal load/import paths never call this legacy-shaped boundary. */
+export async function loadAllSavesForExplicitMigration(): Promise<unknown[]> {
+  const list = await getSaveList();
+  const saves: unknown[] = [];
+  for (const item of list) {
+    const save = await loadSaveForExplicitMigration(item.id);
+    if (!save) throw new Error(`迁移读取存档失败：${item.id}`);
+    saves.push(save);
+  }
+  return saves;
 }
 
 export async function deleteSave(id: number): Promise<void> {
@@ -461,7 +479,7 @@ export async function replaceAllSaves(
     assetStore.clear();
     deltaStore.clear();
     for (let index = 0; index < nextSaves.length; index += 1) {
-      const save = nextSaves[index];
+      const save = readPortableSave(nextSaves[index]);
       const normalizedId = Number.isFinite(save.id) && save.id > 0 ? save.id : index + 1;
       const normalizedSave = { ...save, id: normalizedId };
       const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(normalizedSave));
@@ -1188,11 +1206,7 @@ export async function exportSaveTreePackage(saves: 存档数据[]): Promise<void
 }
 
 export function importSaveJson(json: string): 存档数据 {
-  const data = JSON.parse(json) as 存档数据;
-  if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-    throw new Error('无效的存档文件');
-  }
-  return data;
+  return validateImportedSave(JSON.parse(json));
 }
 
 export async function importSaveFile(file: File): Promise<存档数据> {
@@ -1201,13 +1215,9 @@ export async function importSaveFile(file: File): Promise<存档数据> {
     return importSaveJson(await file.text());
   }
   if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
-    const data = await parseSavePackage(await file.arrayBuffer());
-    if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-      throw new Error('无效的存档包');
-    }
-    return data;
+    return validateImportedSave(await parseSavePackage(await file.arrayBuffer()));
   }
-  throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
+  throw new Error('不支持的存档格式，请选择当前版本的 .json、.zip 或 .ktysave');
 }
 
 export async function importSaveFileAsMany(file: File): Promise<存档数据[]> {
@@ -1216,16 +1226,15 @@ export async function importSaveFileAsMany(file: File): Promise<存档数据[]> 
     return [importSaveJson(await file.text())];
   }
   if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
-    const saves = await parseSaveTreePackage(await file.arrayBuffer());
-    const remapped = remapImportedSaveTree(saves);
-    for (const data of remapped) {
-      if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-        throw new Error('无效的存档包');
-      }
-    }
-    return remapped;
+    const saves = (await parseSaveTreePackage(await file.arrayBuffer())).map(validateImportedSave);
+    return remapImportedSaveTree(saves);
   }
-  throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
+  throw new Error('不支持的存档格式，请选择当前版本的 .json、.zip 或 .ktysave');
+}
+
+/** Accept only the exact current portable-save shape. */
+function validateImportedSave(value: unknown): 存档数据 {
+  return readPortableSave(value);
 }
 
 function remapImportedSaveTree(saves: 存档数据[]): 存档数据[] {
@@ -1414,14 +1423,13 @@ function estimateSaveSize(save: 存档数据): number {
     if (declaredSize > 0) return sum + declaredSize;
     return sum + String(asset.dataUrl ?? '').length + String(asset.originalUrl ?? '').length;
   }, 0);
-  const queueBytes = (save.queueTasks ?? []).reduce((sum, task) => {
+  const jobBytes = (save.jobs ?? []).reduce((sum, job) => {
     return sum +
-      String(task.title ?? '').length +
-      String(task.subtitle ?? '').length +
-      String(task.detail ?? '').length +
-      String(task.retryHint ?? '').length;
+      String(job.id).length +
+      String(job.payload.kind).length +
+      ('error' in job ? job.error.length : 0);
   }, 0);
-  return Math.max(1024, chatBytes * 2 + albumBytes + queueBytes * 2 + 48_000);
+  return Math.max(1024, chatBytes * 2 + albumBytes + jobBytes * 2 + 48_000);
 }
 
 function sanitizeFilename(name: string): string {

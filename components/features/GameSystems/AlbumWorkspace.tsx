@@ -1,29 +1,21 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useTransition } from 'react';
 import { 图片是否参考角色, 读取图片参考目标 } from '@/models/imageGeneration';
-import type { 图片槽位, 图片槽位绑定, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
+import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
 import type { 游戏设置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 import {
   创建相册图片条目,
   fileToDataUrl,
-  设置NPC头像当前显示,
-  设置NPC立绘当前显示,
-  设置NPC_NSFW部位当前显示,
-  设置旅人图片当前显示,
-  清除NPC头像当前显示,
-  清除NPC立绘当前显示,
-  清除NPC_NSFW部位当前显示,
-  清除旅人图片当前显示,
   解析相册资源地址,
 } from '@/utils/albumActions';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
 import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
-import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
-import { getAdaptationServices } from '@/src/adaptations';
+import { readImageError } from '@/utils/imageGenerationRetry';
 
 import { generateTargets, smallClip } from './album/foundation';
 import type {
@@ -34,11 +26,10 @@ import type {
 import {
   buildAlbumResourceEntries, buildCharacterLibraryRecords, buildNpcSourceText, buildPresentSceneNpcs,
   buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions,
-  buildTravelerSourceText, CharacterAnchorWorkspace, createTask,
+  buildTravelerSourceText, CharacterAnchorWorkspace,
   CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags,
   getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
-  isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot,
-  mapImageSlotToTravelerSlot, NsfwVisibilityToggle,
+  isNpcLibraryRecord, NsfwVisibilityToggle,
   PhoneBackgroundWorkspace, requiresCharacterTarget,
   resolveGenerationTargetId, resolveSize, RulesWorkspace, SceneImageWorkspace,
   slotLabel, StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
@@ -46,7 +37,7 @@ import {
 import type { CharacterLibraryRecord } from './album/workspaces';
 import { ImageLibraryWorkspace } from './album/libWorkspace';
 import { ImageTaskWorkspace } from './album/taskWorkspace';
-import { evaluateReferenceInjection, resolveReferenceImagesForGeneration } from './album/referenceInjection';
+import { evaluateReferenceInjection } from './album/referenceInjection';
 import { ReferenceInjectionWorkspace } from './album/referenceWorkspace';
 import {
   albumOperationStageLabel,
@@ -54,7 +45,7 @@ import {
   importAlbumInWorker,
   type AlbumOperationProgress,
 } from './album/albumArchiveWorkerClient';
-import { addOrReuseAlbumImage, dataUrlToBytes, hydrateAlbumContentHashes, sha256Bytes } from './album/albumContent';
+import { dataUrlToBytes, sha256Bytes } from './album/albumContent';
 
 type GenerationTargetDefinition = (typeof generateTargets)[number];
 
@@ -72,17 +63,29 @@ function findGenerationTarget(targetType: 图片目标类型, slot: 图片槽位
 
 interface AlbumWorkspaceProps {
   album: 相册系统;
-  onAlbumChange: React.Dispatch<React.SetStateAction<相册系统>>;
   traveler: 角色数据结构;
-  onTravelerChange: React.Dispatch<React.SetStateAction<角色数据结构>>;
   npcs: NPC记录[];
-  onNpcChange: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+  actions: AlbumWorkspaceActions;
   gameSettings: 游戏设置;
   onGameSettingsChange: React.Dispatch<React.SetStateAction<游戏设置>>;
   imageSettings: 文生图系统设置;
   nsfwEnabled: boolean;
   nsfwImageEnabled: boolean;
   mainChatHistory?: 聊天消息[];
+}
+
+export interface AlbumWorkspaceActions {
+  importReference(input: Omit<Extract<import('@/src/kernel/contract').AlbumCommand, { type: 'album.import-reference' }>, 'type' | 'createdAt'>): Promise<string>;
+  setReference(entryId: string, characterId: string, enabled: boolean): Promise<void>;
+  generate(input: Omit<Extract<import('@/src/kernel/contract').AlbumCommand, { type: 'album.generate' }>, 'type' | 'createdAt'>): Promise<{ entryId: string; task: 图片生成任务 }>;
+  bindSlot(input: Omit<Extract<import('@/src/kernel/contract').AlbumCommand, { type: 'album.bind-slot' }>, 'type'>): Promise<void>;
+  deleteEntries(entryIds: readonly string[]): Promise<void>;
+  importArchive(album: 相册系统): Promise<void>;
+  setCharacterAnchor(input: Omit<Extract<import('@/src/kernel/contract').AlbumCommand, { type: 'album.set-character-anchor' }>, 'type' | 'updatedAt'>): Promise<void>;
+  extractCharacterAnchor(input: import('@/services/ai/characterAnchorExtract').CharacterAnchorExtractInput): Promise<NPC角色锚点档案>;
+  tokenizePrompt(input: import('@/services/ai/imagePromptTokenizer').ImagePromptTokenizerInput): Promise<import('@/services/ai/imagePromptTokenizer').ImagePromptTokenizerResult | null>;
+  parseScene(input: import('@/services/ai/narrativeImageParse').解析上下文): Promise<import('@/services/ai/narrativeImageParse').场景图解析结果>;
+  parseStorySnapshot(input: import('@/services/ai/narrativeImageParse').解析上下文): Promise<import('@/services/ai/narrativeImageParse').故事快照解析结果>;
 }
 
 function setEntryReferenceTargets(entries: 相册条目[], entryId: string, characterId: string, enabled: boolean): 相册条目[] {
@@ -100,7 +103,7 @@ function setEntryReferenceTargets(entries: 相册条目[], entryId: string, char
   });
 }
 
-export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [] }: AlbumWorkspaceProps) {
+export function AlbumWorkspace({ album, traveler, npcs, actions, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [] }: AlbumWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<WorkTab>('manual');
   const [showNsfw, setShowNsfw] = useState(false);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
@@ -176,7 +179,7 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
   const activeLibraryRecord = libraryRecords.find((record) => record.id === libraryNpcId) ?? null;
   const persistGameSettingsChange = (next: 游戏设置) => {
     onGameSettingsChange(next);
-    void setPreference('gameSettings', next);
+    void persistSettingsPlanes(next);
   };
 
   const setReferenceInjectionEnabled = (enabled: boolean) => {
@@ -240,36 +243,20 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
       return;
     }
 
-    const preparedAlbum = await hydrateAlbumContentHashes(album);
-    const item = 创建相册图片条目({
-      title: `${record.name} 参考图`,
-      src,
-      source: 'upload',
-      targetType: record.kind === 'traveler' ? 'traveler' : 'npc',
+    const entryId = await actions.importReference({
+      targetKind: record.kind,
       targetId: record.id,
-      slot: 'misc',
+      name: record.name,
+      src,
       mimeType: file.type,
       contentHash,
-      tags: ['参考图'],
-      note: '手动上传参考图',
-      referenceTargets: [record.id],
     });
-    const upserted = addOrReuseAlbumImage(preparedAlbum, item, contentHash, src);
-    onAlbumChange({
-      ...upserted.album,
-      entries: setEntryReferenceTargets(upserted.album.entries, upserted.entry.id, record.id, true),
-    });
-    setActiveEntryId(upserted.entry.id);
-    setMessage(upserted.reused
-      ? `已复用图库中的相同图片并设为 ${record.name} 的参考图。`
-      : `已导入并替换 ${record.name} 的参考图。`);
+    setActiveEntryId(entryId);
+    setMessage(`已导入并设为 ${record.name} 的参考图。`);
   };
 
   const setEntryReference = (entryId: string, record: CharacterLibraryRecord, enabled: boolean) => {
-    onAlbumChange((prev) => ({
-      ...prev,
-      entries: setEntryReferenceTargets(prev.entries, entryId, record.id, enabled),
-    }));
+    void actions.setReference(entryId, record.id, enabled);
     setMessage(enabled ? `已替换为 ${record.name} 的参考图。` : `已取消 ${record.name} 的参考图。`);
   };
 
@@ -306,24 +293,11 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
       文生图系统: imageSettings,
     };
     try {
-      await setPreference('gameSettings', nextSettings);
+      await persistSettingsPlanes(nextSettings);
       setMessage('规则中心已保存。');
     } catch (err) {
       setMessage(`规则中心保存失败：${err instanceof Error ? err.message : String(err)}`);
     }
-  };
-
-  const resolveImageAnalysisConfig = async () => {
-    // AI analysis (anchor extract / scene / story snapshot parse) requires tokenizer API.
-    const config = await (await getAdaptationServices()).imageTokenizer.buildImagePromptTokenizerConfig(gameSettings);
-    if (!config) {
-      throw new Error(
-        gameSettings.文生图系统.enablePromptTokenizer
-          ? '文生图词组转化器独立 API 未完整配置（需 provider / Base URL / API Key / 模型）'
-          : '请先在文生图设置中启用词组转化器并配置独立 API',
-      );
-    }
-    return config;
   };
 
   const currentTarget = generateTargets.find((item) => item.id === generateTarget);
@@ -406,16 +380,15 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
       setMessage(override?.disabledMessage || '当前文生图接口未启用。');
       return;
     }
-    const referencePayload = resolveReferenceImagesForGeneration({
-      target,
+    const task: 图片生成任务 = {
+      id: `ui_img_task_${Date.now()}`,
+      targetType: target.targetType,
       targetId: resolvedTargetId,
-      api,
-      settings: imageSettings.参考图,
-      album,
-      assetMap,
-    });
-    const task = createTask({
+      slot: target.slot,
       source: override?.source ?? 'manual',
+      status: 'running',
+      backend: api.backend,
+      nsfw,
       prompt: promptText,
       negativePrompt: negativeText,
       sourcePrompt,
@@ -423,14 +396,12 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
       finalNegativePrompt: negativeText,
       anchorMode: taskAnchorMode,
       anchorSummary: taskAnchorSummary,
-      nsfw,
-      backend: api.backend,
-      slot: target.slot,
-      targetType: target.targetType,
-      targetId: resolvedTargetId,
       dimensions: targetSize,
-      referenceImageIds: referencePayload.entries.map((entry) => entry.id),
-    });
+      referenceImageIds: [],
+      retryCount: 0,
+      createdAt: Date.now(),
+      startedAt: Date.now(),
+    };
     setLastTaskId(task.id);
     // Progress lives in component state only — formal album is written once on success
     // (mirrors kernel image.generate: no half assets / no intermediate CAS).
@@ -438,56 +409,9 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
     setGenerating(true);
     setMessage(override?.statusMessage || (nsfw ? '正在调用 NSFW 独立接口...' : '正在调用文生图接口...'));
     try {
-      const imageService = (await getAdaptationServices()).imageGeneration;
-      const result = await runImageGenerationWithRetry(
-        () => imageService.generateImage(api, {
-          prompt: promptText,
-          negativePrompt: negativeText,
-          nsfw,
-          size: targetSize,
-          referenceImages: referencePayload.images,
-          referenceStrength: imageSettings.参考图.sdWebuiDenoisingStrength,
-        }),
-        {
-          maxRetries: api.retryCount,
-          onAttempt: (attempt, total) => {
-            setLocalGenerateTask((prev) =>
-              prev && prev.id === task.id
-                ? {
-                    ...prev,
-                    status: 'running',
-                    retryCount: attempt - 1,
-                    error: attempt > 1 ? `正在重试：${attempt}/${total}` : undefined,
-                  }
-                : prev,
-            );
-            setMessage(referencePayload.images.length
-              ? (total > 1 ? `正在参考图片生成（${attempt}/${total}）...` : '正在参考图片生成...')
-              : (total > 1 ? `正在生成图片（${attempt}/${total}）...` : '正在生成图片...'));
-          },
-          onRetry: (attempt, total, errorMessage) => {
-            setLocalGenerateTask((prev) =>
-              prev && prev.id === task.id
-                ? {
-                    ...prev,
-                    status: 'running',
-                    retryCount: attempt,
-                    error: `第 ${attempt}/${total} 次失败：${errorMessage}`,
-                  }
-                : prev,
-            );
-            setMessage(`生成失败，正在自动重试（${attempt}/${total}）：${errorMessage}`);
-          },
-        },
-      );
-      const item = 创建相册图片条目({
+      const generated = await actions.generate({
         title: titleText || target.label,
-        src: result.src,
-        source: 'generated',
-        nsfw,
-        targetType: target.targetType,
-        targetId: resolvedTargetId,
-        slot: target.slot,
+        source: override?.source ?? 'manual',
         prompt: promptText,
         negativePrompt: negativeText,
         sourcePrompt,
@@ -495,31 +419,16 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
         finalNegativePrompt: negativeText,
         anchorMode: taskAnchorMode,
         anchorSummary: taskAnchorSummary,
+        nsfw,
+        targetType: target.targetType,
+        targetId: resolvedTargetId,
+        slot: target.slot,
         dimensions: targetSize,
-        model: result.model,
-        backend: result.backend,
-        mimeType: result.mimeType,
-        originalUrl: result.originalUrl,
         tags: entryTags,
         note: entryNote,
       });
-      const successTask: 图片生成任务 = {
-        ...task,
-        status: 'success',
-        resultAssetId: item.asset.id,
-        finishedAt: Date.now(),
-      };
-      // Generation creates a durable library entry only. Display selection is explicit.
-      const displayDataUrl = result.src.startsWith('data:') ? result.src : undefined;
-      const committed = await (await getAdaptationServices()).album.commitGeneratedOnAlbum(album, {
-        asset: item.asset,
-        entry: item.entry,
-        task: successTask,
-        displayDataUrl,
-      });
-      onAlbumChange(committed.album);
-      setLocalGenerateTask(successTask);
-      setActiveEntryId(item.entry.id);
+      setLocalGenerateTask(generated.task);
+      setActiveEntryId(generated.entryId);
       setMessage('图片已生成并加入相册；当前显示图片未改变。');
     } catch (err) {
       const error = readImageError(err);
@@ -560,8 +469,9 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
   /** Select an existing durable entry for display without mutating or deleting library history. */
   const showEntryInCharacterSlot = async (params: { targetKind: CharacterLibraryRecord['kind']; targetId: string; entryId: string; src: string; slot: 图片槽位 }) => {
     const isBuiltinEntry = params.entryId.startsWith('builtin-avatar:');
-    let currentAlbum = album;
+    const currentAlbum = album;
     let entry = currentAlbum.entries.find((item) => item.id === params.entryId);
+    let builtinItem: ReturnType<typeof 创建相册图片条目> | undefined;
     if (!entry && !isBuiltinEntry) return;
     const sourceLabel = isBuiltinEntry ? '原著' : '文生图';
 
@@ -583,8 +493,7 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
         tags: ['内置图片'],
         note: '随包内置图片',
       });
-      const committed = await (await getAdaptationServices()).album.commitGeneratedOnAlbum(currentAlbum, builtin);
-      currentAlbum = committed.album;
+      builtinItem = builtin;
       entry = builtin.entry;
     }
 
@@ -604,67 +513,16 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
         : 'npc';
     const albumTargetId = params.targetId || (params.targetKind === 'traveler' ? 'traveler' : params.targetId);
 
-    const bound = await (await getAdaptationServices()).album.bindSlotOnAlbum(currentAlbum, {
+    await actions.bindSlot({
       entryId: params.entryId,
+      targetKind: params.targetKind,
       targetType: albumTargetType,
       targetId: albumTargetId,
       slot: params.slot,
+      source: sourceLabel,
+      builtin: builtinItem,
     });
-    onAlbumChange(bound.album);
-
-    // Formal AssetRef only on character/NPC fields — LeftPanel resolves via album + Blob cache.
-    const mountedSrc = bound.assetRef;
-    if (params.targetKind === 'traveler') {
-      if (params.slot === 'portrait') {
-        onTravelerChange((prev) => 设置旅人图片当前显示(prev, { slot: '立绘', src: mountedSrc }));
-      } else {
-        onTravelerChange((prev) => 设置旅人图片当前显示(prev, { slot: mapImageSlotToTravelerSlot(params.slot), src: mountedSrc }));
-      }
-    } else if (params.slot === 'portrait') {
-      onNpcChange((prev) => 设置NPC立绘当前显示(prev, { npcId: params.targetId, src: mountedSrc, source: sourceLabel }));
-    } else if (params.slot === 'nsfw_female_chest') {
-      onNpcChange((prev) => 设置NPC_NSFW部位当前显示(prev, { npcId: params.targetId, slot: '女性胸部', src: mountedSrc }));
-    } else if (params.slot === 'nsfw_female_genital') {
-      onNpcChange((prev) => 设置NPC_NSFW部位当前显示(prev, { npcId: params.targetId, slot: '女性私处', src: mountedSrc }));
-    } else if (params.slot === 'nsfw_male_genital') {
-      onNpcChange((prev) => 设置NPC_NSFW部位当前显示(prev, { npcId: params.targetId, slot: '男性器', src: mountedSrc }));
-    } else if (params.slot === 'nsfw_rear') {
-      onNpcChange((prev) => 设置NPC_NSFW部位当前显示(prev, { npcId: params.targetId, slot: '后庭', src: mountedSrc }));
-    } else if (params.slot === 'nsfw_body_reference') {
-      onNpcChange((prev) => 设置NPC_NSFW部位当前显示(prev, { npcId: params.targetId, slot: '体态参考', src: mountedSrc }));
-    } else {
-      onNpcChange((prev) => 设置NPC头像当前显示(prev, { npcId: params.targetId, slot: mapImageSlotToNpcAvatarSlot(params.slot), src: mountedSrc, source: sourceLabel }));
-    }
-    setMessage(bound.previousEntryId && bound.previousEntryId !== params.entryId
-      ? `已更新 ${slotLabel(params.slot)} 的当前显示；上一张图片仍保留在图库。`
-      : `已设为 ${slotLabel(params.slot)} 的当前显示。`);
-  };
-
-  const clearBindingProjection = (binding: 图片槽位绑定) => {
-    if (binding.targetType === 'traveler') {
-      if (binding.slot === 'portrait') {
-        onTravelerChange((prev) => 清除旅人图片当前显示(prev, { slot: '立绘' }));
-      } else if (!binding.slot.toString().startsWith('nsfw_')) {
-        onTravelerChange((prev) => 清除旅人图片当前显示(prev, { slot: mapImageSlotToTravelerSlot(binding.slot) }));
-      }
-      return;
-    }
-    if (!binding.targetId) return;
-    if (binding.slot === 'portrait') {
-      onNpcChange((prev) => 清除NPC立绘当前显示(prev, { npcId: binding.targetId }));
-    } else if (binding.slot === 'nsfw_female_chest') {
-      onNpcChange((prev) => 清除NPC_NSFW部位当前显示(prev, { npcId: binding.targetId, slot: '女性胸部' }));
-    } else if (binding.slot === 'nsfw_female_genital') {
-      onNpcChange((prev) => 清除NPC_NSFW部位当前显示(prev, { npcId: binding.targetId, slot: '女性私处' }));
-    } else if (binding.slot === 'nsfw_male_genital') {
-      onNpcChange((prev) => 清除NPC_NSFW部位当前显示(prev, { npcId: binding.targetId, slot: '男性器' }));
-    } else if (binding.slot === 'nsfw_rear') {
-      onNpcChange((prev) => 清除NPC_NSFW部位当前显示(prev, { npcId: binding.targetId, slot: '后庭' }));
-    } else if (binding.slot === 'nsfw_body_reference') {
-      onNpcChange((prev) => 清除NPC_NSFW部位当前显示(prev, { npcId: binding.targetId, slot: '体态参考' }));
-    } else {
-      onNpcChange((prev) => 清除NPC头像当前显示(prev, { npcId: binding.targetId, slot: mapImageSlotToNpcAvatarSlot(binding.slot) }));
-    }
+    setMessage(`已设为 ${slotLabel(params.slot)} 的当前显示。`);
   };
 
   const deleteLibraryEntries = async (entryIds: string[]) => {
@@ -675,12 +533,10 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
       return;
     }
     setMessage(`正在删除 ${ids.length} 张图片…`);
-    const deleted = await (await getAdaptationServices()).album.deleteEntriesOnAlbum(album, ids);
+    await actions.deleteEntries(ids);
     startAlbumUpdate(() => {
-      deleted.removedBindings.forEach(clearBindingProjection);
-      onAlbumChange(deleted.album);
       setActiveEntryId((current) => (current && ids.includes(current) ? null : current));
-      setMessage(`已删除 ${deleted.removedEntryIds.length} 张图片。`);
+      setMessage(`已删除 ${ids.length} 张图片。`);
     });
   };
 
@@ -734,38 +590,12 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
   };
 
   const saveNpcAnchor = (npcId: string, patch: NonNullable<NPC记录['图像档案']>['角色锚点']) => {
-    onNpcChange((prev) => prev.map((npc) => {
-      if (npc.id !== npcId) return npc;
-      return {
-        ...npc,
-        图像档案: {
-          ...(npc.图像档案 ?? {}),
-          角色锚点: {
-            ...(npc.图像档案?.角色锚点 ?? {}),
-            ...(patch ?? {}),
-            id: patch?.id || npc.图像档案?.角色锚点?.id || `anchor_${npcId}_${Date.now()}`,
-            名称: patch?.名称 || npc.图像档案?.角色锚点?.名称 || npc.姓名,
-            来源: patch?.来源 || npc.图像档案?.角色锚点?.来源 || 'manual',
-            createdAt: npc.图像档案?.角色锚点?.createdAt || Date.now(),
-            updatedAt: Date.now(),
-          },
-        },
-      };
-    }));
+    void actions.setCharacterAnchor({ targetKind: 'npc', targetId: npcId, anchor: patch });
     invalidatePromptDraft('角色锚点已保存，当前生成草稿已清空，请重新生成。');
   };
 
   const deleteNpcAnchor = (npcId: string) => {
-    onNpcChange((prev) => prev.map((npc) => {
-      if (npc.id !== npcId) return npc;
-      return {
-        ...npc,
-        图像档案: {
-          ...(npc.图像档案 ?? {}),
-          角色锚点: undefined,
-        },
-      };
-    }));
+    void actions.setCharacterAnchor({ targetKind: 'npc', targetId: npcId, anchor: undefined });
     invalidatePromptDraft('角色锚点已删除，当前生成草稿已清空，请重新生成。');
   };
 
@@ -775,8 +605,7 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
     setAnchorExtractingTarget(npcId);
     setMessage(`正在 AI 提取 ${npc.姓名} 的角色锚点...`);
     try {
-      const config = await resolveImageAnalysisConfig();
-      const anchor = await (await getAdaptationServices()).characterAnchor.extractCharacterAnchorWithAI(config, {
+      const anchor = await actions.extractCharacterAnchor({
         name: npc.姓名,
         kind: 'npc',
         sourceText: [npc.外貌, npc.穿着, npc.装备摘要, npc.图像档案?.头像提示词, npc.图像档案?.立绘提示词].filter(Boolean).join('\n'),
@@ -792,32 +621,12 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
   };
 
   const saveTravelerAnchor = (patch: NPC角色锚点档案 | undefined) => {
-    onTravelerChange((prev) => ({
-      ...prev,
-      图像档案: {
-        ...(prev.图像档案 ?? {}),
-        角色锚点: {
-          ...(prev.图像档案?.角色锚点 ?? {}),
-          ...(patch ?? {}),
-          id: patch?.id || prev.图像档案?.角色锚点?.id || `anchor_traveler_${Date.now()}`,
-          名称: patch?.名称 || prev.图像档案?.角色锚点?.名称 || prev.姓名 || '旅人',
-          来源: patch?.来源 || prev.图像档案?.角色锚点?.来源 || 'manual',
-          createdAt: prev.图像档案?.角色锚点?.createdAt || Date.now(),
-          updatedAt: Date.now(),
-        },
-      },
-    }));
+    if (patch) void actions.setCharacterAnchor({ targetKind: 'traveler', anchor: patch });
     invalidatePromptDraft('主控锚点已保存，当前生成草稿已清空，请重新生成。');
   };
 
   const deleteTravelerAnchor = () => {
-    onTravelerChange((prev) => ({
-      ...prev,
-      图像档案: {
-        ...(prev.图像档案 ?? {}),
-        角色锚点: undefined,
-      },
-    }));
+    void actions.setCharacterAnchor({ targetKind: 'traveler', anchor: undefined });
     invalidatePromptDraft('主控锚点已删除，当前生成草稿已清空，请重新生成。');
   };
 
@@ -825,8 +634,7 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
     setAnchorExtractingTarget('traveler');
     setMessage('正在 AI 提取主控锚点...');
     try {
-      const config = await resolveImageAnalysisConfig();
-      const anchor = await (await getAdaptationServices()).characterAnchor.extractCharacterAnchorWithAI(config, {
+      const anchor = await actions.extractCharacterAnchor({
         name: traveler.姓名 || '旅人',
         kind: 'traveler',
         sourceText: [traveler.性别, traveler.年龄 ? `${traveler.年龄}` : '', traveler.身高, traveler.身份, traveler.外貌, traveler.主命途, ...(traveler.能力 ?? [])].filter(Boolean).join('\n'),
@@ -892,28 +700,19 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
   }) => {
     setTokenizing(true);
     try {
-      const services = await getAdaptationServices();
-      const tokenizerConfig = await services.imageTokenizer.buildImagePromptTokenizerConfig(gameSettings);
-      // Disabled or incomplete tokenizer → keep local prompt (build prompt works offline).
-      if (!tokenizerConfig) {
+      const refined = await actions.tokenizePrompt({
+        title: input.title,
+        mode: input.mode,
+        sourceText: input.sourceText,
+        basePrompt: input.prompt,
+        baseNegative: input.negative,
+        extraRequirement,
+        anchorMode: input.anchorMode,
+        anchorSummary: input.anchorSummary,
+      });
+      if (!refined) {
         return { prompt: input.prompt, negative: input.negative };
       }
-      const systemPrompt = await services.imageTokenizer.buildImagePromptTokenizerSystemPrompt(gameSettings, input.mode);
-      const refined = await services.imageTokenizer.tokenizeImagePrompt(
-        tokenizerConfig,
-        systemPrompt,
-        {
-          title: input.title,
-          mode: input.mode,
-          sourceText: input.sourceText,
-          basePrompt: input.prompt,
-          baseNegative: input.negative,
-          extraRequirement,
-          anchorMode: input.anchorMode,
-          anchorSummary: input.anchorSummary,
-        },
-        tokenizerConfig.retryCount ?? 2,
-      );
       setMessage('已通过词组转化器整理最终提示词。');
       return { ...input, prompt: refined.prompt, negative: refined.negative };
     } finally {
@@ -1021,10 +820,9 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
     setSceneImageSummary(null);
     setMessage('正在解析场景画面...');
     try {
-      const parserConfig = await resolveImageAnalysisConfig();
       const presentNpcs = buildPresentSceneNpcs(npcs, sourceText);
       const anchorInfo = getSceneAnchorStatus(traveler, presentNpcs);
-      const parsed = await (await getAdaptationServices()).narrativeImage.parseSceneImagePrompt(parserConfig, {
+      const parsed = await actions.parseScene({
         body: sourceText,
         traveler: {
           name: traveler.姓名 || traveler.别名 || '玩家角色',
@@ -1079,10 +877,9 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
     setStorySnapshotSummary(null);
     setMessage('正在解析正文画面...');
     try {
-      const parserConfig = await resolveImageAnalysisConfig();
       const presentNpcs = buildPresentSceneNpcs(npcs, sourceText);
       const anchorInfo = getSceneAnchorStatus(traveler, presentNpcs);
-      const parsed = await (await getAdaptationServices()).narrativeImage.parseStorySnapshotPrompt(parserConfig, {
+      const parsed = await actions.parseStorySnapshot({
         body: sourceText,
         traveler: {
           name: traveler.姓名 || traveler.别名 || '玩家角色',
@@ -1216,7 +1013,7 @@ export function AlbumWorkspace({ album, onAlbumChange, traveler, onTravelerChang
                     setMessage(albumOperationStageLabel(progress));
                   } }).then((result) => {
                     if (!result) return;
-                    startAlbumUpdate(() => onAlbumChange(result.album));
+                    void actions.importArchive(result.album);
                     const stats = result.stats;
                     setMessage(mode === 'replace'
                       ? `相册已覆盖恢复：${stats.addedAssets} 个资源，${stats.addedEntries} 个条目。`

@@ -3,7 +3,7 @@
  */
 
 import type { Revision, SessionId } from './commands';
-import type { RuntimeGameState } from '@/src/kernel/domain/session/runtimeState';
+import type { StoryState } from '@/src/kernel/domain/session/storyState';
 
 export type TurnView = Readonly<{
   id: string;
@@ -12,9 +12,17 @@ export type TurnView = Readonly<{
   narrativeText: string;
 }>;
 
+export type MessageProjection = Readonly<{
+  id: string;
+  role: 'assistant';
+  content: string;
+  timestamp: number;
+  gameTime?: string;
+}>;
+
 /** One committed projection: the runtime graph and its derived turn identities. */
 export type SessionView = Readonly<{
-  runtime: RuntimeGameState;
+  story: StoryState;
   sessionId: SessionId;
   revision: Revision;
   turns: readonly TurnView[];

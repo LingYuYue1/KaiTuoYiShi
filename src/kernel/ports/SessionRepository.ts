@@ -18,17 +18,23 @@
 
 import type { CommandId, Revision, SessionId } from '@/src/kernel/contract';
 import type { GameState, SessionSnapshot } from '@/src/kernel/domain/session/types';
+import type { CommandReceipt } from '@/src/kernel/domain/session/commandReceipt';
+import type { CommandFingerprint } from '@/src/kernel/domain/session/commandFingerprint';
 
 export type CompareAndSwapInput = Readonly<{
   sessionId: SessionId;
   expectedRevision: Revision;
   nextState: GameState;
   commandId: CommandId;
+  fingerprint: CommandFingerprint;
+  receipt?: CommandReceipt;
+  consumeReceiptFromCommandId?: CommandId;
 }>;
 
 export type CreateSessionInput = Readonly<{
   sessionId: SessionId;
   commandId: CommandId;
+  fingerprint: CommandFingerprint;
   initialState: GameState;
 }>;
 
@@ -39,10 +45,13 @@ export type CreateSessionInput = Readonly<{
  */
 export type CommitResult =
   | Readonly<{ type: 'committed'; snapshot: SessionSnapshot }>
-  | Readonly<{ type: 'conflict'; actualRevision: Revision }>;
+  | Readonly<{ type: 'conflict'; actualRevision: Revision }>
+  | Readonly<{ type: 'duplicate_mismatch' }>
+  | Readonly<{ type: 'receipt_unavailable'; message: string }>;
 
 export type CreateSessionResult =
   | Readonly<{ type: 'committed'; snapshot: SessionSnapshot }>
+  | Readonly<{ type: 'duplicate_mismatch' }>
   | Readonly<{ type: 'conflict'; actualRevision: Revision }>;
 
 export interface SessionRepository {
@@ -59,7 +68,12 @@ export interface SessionRepository {
   findByCommandId(
     sessionId: SessionId,
     commandId: CommandId,
-  ): Promise<SessionSnapshot | null>;
+  ): Promise<Readonly<{ snapshot: SessionSnapshot; fingerprint: CommandFingerprint }> | null>;
+
+  findCommandReceipt(
+    sessionId: SessionId,
+    commandId: CommandId,
+  ): Promise<Readonly<{ receipt: CommandReceipt; consumedBy: CommandId | null }> | null>;
 
   /**
    * Atomically commit nextState when expectedRevision matches.

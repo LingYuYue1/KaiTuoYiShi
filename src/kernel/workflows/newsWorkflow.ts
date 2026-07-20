@@ -1,4 +1,4 @@
-import type { RuntimeDraftState } from '@/src/kernel/domain/session/runtimeState';
+import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
 import { callNewsModel, applyNewsGenerationResult, hasNewsGenerationChanges } from '@/services/ai/newsModel';
 import type { 新闻条目 } from '@/models/news';
 import type { API配置项 } from '@/models/settings';
@@ -6,7 +6,7 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化世界状态 } from '@/models/world';
 
 interface NewsGenerationParams {
-  state: RuntimeDraftState;
+  state: TurnExecutionState;
   mainBody: string;
   userInput: string;
   recentTurns?: string[];
@@ -23,7 +23,7 @@ export interface NewsGenerationStepResult {
 
 export async function runNewsGenerationStep(params: NewsGenerationParams): Promise<NewsGenerationStepResult | null> {
   const { state } = params;
-  const newsSettings = state.gameSettings.新闻系统;
+  const newsSettings = state.gameSettings!.新闻系统;
   if (!newsSettings?.enabled || !newsSettings.autoGenerate) return null;
 
   const api = newsSettings.api;
@@ -41,7 +41,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
     maxTokens: api.maxTokens,
     temperature: api.temperature,
     retryCount: api.retryCount,
-    enableClaudeMode: state.gameSettings.enableClaudeMode === true,
+    enableClaudeMode: state.gameSettings!.enableClaudeMode === true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -59,7 +59,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
       plotNodes: state.剧情,
       storyWeaving: params.storyWeavingSnapshot ?? state.剧情编织,
       maxNewEntriesPerTurn: newsSettings.maxNewEntriesPerTurn,
-      promptModules: state.gameSettings.promptModules,
+      promptModules: state.gameSettings!.promptModules,
       signal: params.signal,
       retryCount: newsSettings.api.retryCount ?? 2,
   });
@@ -70,7 +70,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
   const nextNews = applyNewsGenerationResult(state.新闻, result.parsed);
   const changed = hasNewsGenerationChanges(result.parsed) && !areNewsListsEquivalent(state.新闻, nextNews);
   if (changed) {
-    state.set新闻(nextNews);
+    state.新闻 = nextNews;
   }
   return { news: nextNews, changed, summary: result.parsed.说明 };
 }

@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, 游戏设置 } from '@/models/settings';
-import { getAdaptationServices } from '@/src/adaptations';
-import { setPreference } from '@/src/adaptations/preferences';
+import { getAppRoot } from '@/src/adaptations/kernel';
+import { persistSettingsPlanes } from '@/src/adaptations/preferences/persistSettingsPlanes';
 
 interface Props {
   settings: 游戏设置;
@@ -61,7 +61,7 @@ export function StoryWeavingSettingsTab({ settings, onChange }: Props) {
     setLoadingModels(true);
     setMessage('');
     try {
-      const list = await (await getAdaptationServices()).apiTools.fetchModels({
+      const list = await (await getAppRoot()).device.fetchModels({
         id: '__story_weaving__',
         name: '剧情编织',
         provider: effectiveApi.provider,
@@ -84,7 +84,7 @@ export function StoryWeavingSettingsTab({ settings, onChange }: Props) {
   };
 
   const handleSave = async () => {
-    await setPreference('gameSettings', settings);
+    await persistSettingsPlanes(settings);
     setSavedFlash(true);
     setMessage('剧情编织设置已保存。');
     window.setTimeout(() => setSavedFlash(false), 1600);

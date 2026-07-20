@@ -4,7 +4,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const panel = fs.readFileSync('components/features/GameSystems/MemoryPanel.tsx', 'utf8');
+const panel = fs.readFileSync('components/features/GameSystems/MemorySystemPanel.tsx', 'utf8');
 
 assert(panel.includes('flex-col') && panel.includes('md:flex-row'), 'MemoryPanel must stack on mobile and return to two columns on desktop.');
 assert(panel.includes('overflow-x-hidden'), 'MemoryPanel mobile layout must prevent horizontal overflow.');
