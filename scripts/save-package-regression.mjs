@@ -43,7 +43,7 @@ assert(savePackage.includes('SYSTEM_ENTRY_PATHS'), '系统文件路径必须集�
 assert(savePackage.includes('sanitizeSaveForExport'), '存档包导出必须先走脱敏副本。');
 assert(savePackage.includes('stripRuntimeDebugFromChatHistory'), '存档包导出必须清理聊天调试上下文，避免玩家包被 debug 撑大。');
 assert(savePackage.includes('delete clean.debugContext'), '存档包导出必须移除 chatHistory.debugContext。');
-assert(!savePackage.includes('delete clean.preTurnSnapshot'), '存档包导出不得移除 chatHistory.preTurnSnapshot，否则导入后立即重roll无法完整回滚。');
+assert(!savePackage.includes('preTurnSnapshot'), '存档包清理不得再处理聊天消息回滚快照。');
 assert(portableSave.includes('createPortableSave') && useGame.includes("saveSession(APP_SESSION_ID, 'manual')"), '本地持久化存档必须通过 story-only 边界。');
 assert(savePackage.includes('apiKeysRemoved: true'), '存档包 manifest 必须声明 API Key 已移除。');
 assert(!savePackage.includes('stripDevicePreferencesFromSave'), '导出存档包不得依赖旧设备字段清洗层。');

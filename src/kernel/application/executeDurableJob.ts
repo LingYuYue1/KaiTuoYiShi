@@ -103,14 +103,11 @@ async function performJob(
     });
     return;
   }
-  if (payload.kind !== 'news.generate' && payload.kind !== 'yiting.archive') {
-    throw new Error(`No durable executor for ${payload.kind}`);
-  }
   const assistant = state.chatHistory.find((message) => message.id === payload.messageId && message.role === 'assistant');
   if (!assistant) throw new Error(`Durable job target message not found: ${payload.messageId}`);
   const body = assistant.parsedResponse?.body?.trim() || assistant.content.trim();
   if (payload.kind === 'news.generate') {
-    const result = await runNewsGenerationStep({ gameSettings: state.gameSettings, state: state as any, mainBody: body, userInput: payload.playerText, signal: dependencies.signal });
+    const result = await runNewsGenerationStep({ gameSettings: state.gameSettings, state, mainBody: body, userInput: payload.playerText, signal: dependencies.signal });
     if (!result) throw new Error('News generation policy disabled the queued job');
     return;
   }

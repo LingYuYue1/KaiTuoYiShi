@@ -107,65 +107,54 @@ async function generateImage(
   );
   if (dependencies.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
+  return commitAlbumGeneration({
+    base,
+    command,
+    result,
+    referenceEntry,
+    assetId,
+    entryId,
+    taskId,
+    finishedAt: dependencies.clock.now(),
+  });
+}
+
+function commitAlbumGeneration(input: Readonly<{
+  base: SessionSnapshot;
+  command: Extract<AlbumCommandEnvelope['command'], { type: 'album.generate' }>;
+  result: Awaited<ReturnType<AlbumImageGenerator['generate']>>;
+  referenceEntry?: 相册条目;
+  assetId: string;
+  entryId: string;
+  taskId: string;
+  finishedAt: number;
+}>): StateReduction {
+  const { base, command, result, referenceEntry, assetId, entryId, taskId } = input;
   const asset: import('@/models/imageGeneration').图片资源 = {
-    id: assetId,
-    url: result.url,
-    originalUrl: result.originalUrl,
-    dataUrl: result.dataUrl,
-    size: result.size,
-    mimeType: result.mimeType,
-    source: 'generated',
-    nsfw: command.nsfw,
-    createdAt: command.createdAt,
-    prompt: command.prompt,
-    negativePrompt: command.negativePrompt,
-    sourcePrompt: command.sourcePrompt,
-    finalPrompt: command.finalPrompt ?? command.prompt,
+    id: assetId, url: result.url, originalUrl: result.originalUrl, dataUrl: result.dataUrl,
+    size: result.size, mimeType: result.mimeType, source: 'generated', nsfw: command.nsfw,
+    createdAt: command.createdAt, prompt: command.prompt, negativePrompt: command.negativePrompt,
+    sourcePrompt: command.sourcePrompt, finalPrompt: command.finalPrompt ?? command.prompt,
     finalNegativePrompt: command.finalNegativePrompt ?? command.negativePrompt,
-    anchorMode: command.anchorMode,
-    anchorSummary: command.anchorSummary,
-    referenceImageIds: referenceEntry ? [referenceEntry.id] : [],
-    dimensions: command.dimensions,
-    model: result.model,
-    backend: result.backend,
-    status: 'ready',
+    anchorMode: command.anchorMode, anchorSummary: command.anchorSummary,
+    referenceImageIds: referenceEntry ? [referenceEntry.id] : [], dimensions: command.dimensions,
+    model: result.model, backend: result.backend, status: 'ready',
   };
   const entry: 相册条目 = {
-    id: entryId,
-    assetId,
-    title: command.title.trim() || '未命名图片',
-    targetType: command.targetType,
-    targetId: command.targetId,
-    slot: command.slot,
-    tags: [...command.tags],
-    nsfw: command.nsfw,
-    createdAt: command.createdAt,
-    note: command.note,
-    referenceTargets: [],
+    id: entryId, assetId, title: command.title.trim() || '未命名图片', targetType: command.targetType,
+    targetId: command.targetId, slot: command.slot, tags: [...command.tags], nsfw: command.nsfw,
+    createdAt: command.createdAt, note: command.note, referenceTargets: [],
   };
   const task: import('@/models/imageGeneration').图片生成任务 = {
-    id: taskId,
-    targetType: command.targetType,
-    targetId: command.targetId,
-    slot: command.slot,
-    source: command.source,
-    status: 'success',
-    backend: result.backend,
-    nsfw: command.nsfw,
-    prompt: command.prompt,
-    negativePrompt: command.negativePrompt,
-    sourcePrompt: command.sourcePrompt,
+    id: taskId, targetType: command.targetType, targetId: command.targetId, slot: command.slot,
+    source: command.source, status: 'success', backend: result.backend, nsfw: command.nsfw,
+    prompt: command.prompt, negativePrompt: command.negativePrompt, sourcePrompt: command.sourcePrompt,
     finalPrompt: command.finalPrompt ?? command.prompt,
     finalNegativePrompt: command.finalNegativePrompt ?? command.negativePrompt,
-    anchorMode: command.anchorMode,
-    anchorSummary: command.anchorSummary,
-    referenceImageIds: referenceEntry ? [referenceEntry.id] : [],
-    dimensions: command.dimensions,
-    resultAssetId: assetId,
-    retryCount: result.retryCount,
-    createdAt: command.createdAt,
-    startedAt: command.createdAt,
-    finishedAt: dependencies.clock.now(),
+    anchorMode: command.anchorMode, anchorSummary: command.anchorSummary,
+    referenceImageIds: referenceEntry ? [referenceEntry.id] : [], dimensions: command.dimensions,
+    resultAssetId: assetId, retryCount: result.retryCount, createdAt: command.createdAt,
+    startedAt: command.createdAt, finishedAt: input.finishedAt,
   };
   return replaceAlbum(base, commitGeneratedOnAlbum(base.state.story.album, { asset, entry, task }).album);
 }

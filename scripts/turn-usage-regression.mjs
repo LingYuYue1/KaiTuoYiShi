@@ -12,9 +12,19 @@ function assert(condition, message) {
 }
 
 const chatModel = read('models/chat.ts');
-const client = read('services/ai/chatCompletionClient.ts');
+const client = [
+  read('services/ai/chatCompletionClient.ts'),
+  read('services/ai/geminiEndpointPolicy.ts'),
+  read('services/ai/deepSeekModelPolicy.ts'),
+].join('\n');
 const textService = read('services/ai/text/index.ts');
-const sendWorkflow = read('hooks/useGame/sendWorkflow.ts');
+const sendWorkflow = [
+  read('src/kernel/application/turn/executeTurnWorkflow.ts'),
+  read('src/kernel/application/turn/stages/turnUsage.ts'),
+  read('src/kernel/application/turn/stages/finalizeAssistantMessage.ts'),
+].join('\n');
+const turnPipeline = read('src/kernel/application/turn/runTurnPipeline.ts');
+const turnSettlement = read('src/kernel/application/turn/stages/reduceAndSettleTurn.ts');
 const turnItem = read('components/features/Chat/TurnItem.tsx');
 const settings = read('models/settings.ts');
 const gameSettings = read('components/features/Settings/GameSettings.tsx');
@@ -56,8 +66,8 @@ assert(client.includes('cache_hit_rate') && client.includes('cacheHitRate'), 'ca
 assert(client.includes('function normalizeGeminiBaseUrl') && client.includes("replace(/\\/openai(?:\\/chat\\/completions)?$/i, '')"), 'Gemini native requests must normalize OpenAI-compatible URL suffixes.');
 assert(client.includes('cacheDiagnostic: buildCacheDiagnostic'), 'usage parser must persist a concrete cache diagnostic reason.');
 assert(client.includes('explicitUncachedTokens ??') && client.includes('typeof normalizedInput === \'number\' && typeof cachedTokens === \'number\''), 'cache miss may only be derived from API token totals, not local estimates.');
-assert(client.includes('/deepseek/i.test(config.model)'), 'DeepSeek stream usage should be requested when the model name reveals DeepSeek under an OpenAI-compatible provider.');
-assert(client.includes('function isGeminiConfig') && client.includes('/gemini/i.test(config.model)'), 'Gemini model names must be able to request streaming usage under compatible providers.');
+assert(client.includes('if (stream && includeUsage && request.onUsage)'), 'OpenAI-compatible streams with a usage consumer must request stream usage, including DeepSeek model aliases.');
+assert(client.includes('if (stream && includeUsage && request.onUsage)'), 'Compatible streaming providers, including Gemini aliases, must request usage whenever a usage consumer is attached.');
 
 assert(textService.includes('usage?: ChatCompletionUsage'), 'text service result must return usage.');
 assert(textService.includes('Object.fromEntries(Object.entries(nextUsage).filter'), 'streaming usage callbacks must merge partial usage fields without wiping prior values.');
@@ -69,12 +79,15 @@ assert(sendWorkflow.includes('estimateTextTokens'), 'send workflow must keep a l
 assert(sendWorkflow.includes('function buildTurnTokenUsage'), 'send workflow must normalize API or estimated token usage for each turn.');
 assert(sendWorkflow.includes("source: apiHasCoreUsage ? 'api' : apiHasAnyUsage ? 'mixed' : 'estimate'"), 'turn usage source must distinguish API, mixed, and estimate paths.');
 assert(sendWorkflow.includes('uncachedTokens = typeof input.apiUsage?.uncachedTokens === \'number\''), 'send workflow must not infer cache miss from locally estimated input tokens.');
-assert(sendWorkflow.includes('inputTokens: tokenUsage.inputTokens'), 'assistant message must preserve input token count.');
-assert(sendWorkflow.includes('outputTokens: tokenUsage.outputTokens'), 'assistant message must preserve output token count.');
-assert(sendWorkflow.includes('tokenUsage,'), 'assistant message must persist the detailed token usage object.');
+assert(sendWorkflow.includes('inputTokens: usage.inputTokens'), 'assistant message must preserve input token count.');
+assert(sendWorkflow.includes('outputTokens: usage.outputTokens'), 'assistant message must preserve output token count.');
+assert(sendWorkflow.includes('tokenUsage: usage'), 'assistant message must persist the detailed token usage object.');
 assert(sendWorkflow.includes('rawUsage: input.apiUsage?.rawUsage'), 'raw API usage must be persisted for cache-field diagnostics.');
 assert(sendWorkflow.includes('cacheDiagnostic: input.apiUsage?.cacheDiagnostic'), 'send workflow must persist cache diagnostics on the assistant turn.');
-assert(sendWorkflow.includes('function buildCachePrefixDiagnostics') && sendWorkflow.includes('state.gameSettings.enableCacheDiagnostics === true'), 'send workflow must compute prefix cache diagnostics only when the setting is enabled.');
+assert(sendWorkflow.includes('function buildCachePrefixDiagnostics') && sendWorkflow.includes('input.settings.enableCacheDiagnostics === true'), 'send workflow must compute prefix cache diagnostics only when the captured setting is enabled.');
+assert(turnPipeline.includes('TurnProcessEvent[]') && !turnPipeline.includes('processEvents: any[]'), 'turn process events must remain a typed protocol.');
+assert(turnPipeline.includes("event.type === 'assistant.ready'") && turnPipeline.includes("type: 'narrative.delta', text: event.text"), 'synthetic preview deltas must not be mistaken for assistant-ready handoff.');
+assert(turnSettlement.includes('turn: state.turnCount - 1') && turnSettlement.includes('turnAfter: input.state.turnCount'), 'direct draft mutation must preserve completed-turn numbering after incrementing turnCount.');
 
 assert(turnItem.includes("type ToolKey = 'edit' | 'thinking' | 'usage'"), 'turn toolbar must use usage as a first-class tool panel.');
 assert(turnItem.includes('label="响应详情"'), 'the old variable-record toolbar slot must be replaced by the response details entry.');

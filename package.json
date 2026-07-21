@@ -36,7 +36,6 @@
     "test:save-package": "node scripts/save-package-regression.mjs",
     "test:kernel-auto-save": "node scripts/kernel-auto-save-regression.mjs",
     "test:session-schema": "node scripts/session-schema-v3-regression.mjs",
-    "test:session-v2-migration": "node scripts/session-v2-migration-regression.mjs",
     "test:no-legacy-boundary": "node scripts/no-legacy-boundary-regression.mjs",
     "test:session-facade": "node scripts/session-facade-regression.mjs",
     "test:inventory-command": "node scripts/inventory-command-regression.mjs",

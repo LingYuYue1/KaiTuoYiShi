@@ -1,5 +1,5 @@
 /**
- * importSession — Kernel-owned formal session package import (Phase 4).
+ * importSession — kernel-owned formal session package import.
  *
  * Decode → migrate at ingress → seed repository → return SessionView projection.
  * Import revision policy: preserve package revision (roundtrip fidelity).

@@ -1,75 +1,13 @@
-import { 创建聊天消息, type 聊天消息, type 回合快照, type 回合Token消耗, type 解析后回复 } from '@/models/chat';
-import type { 新闻条目 } from '@/models/news';
-import { sendChatMessage } from '@/services/ai/text';
-import { hasClosedResponseField, isEmptyResponse, parseResponse } from '@/src/kernel/protocol/mainResponse';
-import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
-import { callVariableModel, type NsfwBaselineCandidate } from '@/services/ai/variableModel';
-import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
-import { buildTavernMessageChain } from './tavernMessageChainBuilder';
-import { applyTavernOutputRegexScripts } from './tavernRegexProcessor';
-import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
-import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
-import { 构建天气Prompt片段, 解析天气标签, 验证天气合法性 } from '@/data/weatherRules';
-import {
-  buildImmediateMemory,
-  addImmediateMemory,
-  autoCompressMemorySystemWithArchivesAsync,
-  compressNpcMemoryLedger,
-  upsertRecallEntry,
-} from './memoryUtils';
-import { runNewsGenerationStep } from './newsWorkflow';
-import { autoAlignCanonStoryProgress } from '@/src/kernel/domain/story/storyProgress';
-import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/src/kernel/workflows/storyWeaving';
-import { 归一化世界状态, 格式化开局档案上下文, type 世界状态 } from '@/models/world';
-import { snapshotVariableState, reduceVariableCommands, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
-import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
-import {
-  createDocumentVisibilitySource,
-  createVisibilityBufferedPublisher,
-  type VisibilityBufferedPublisher,
-} from '@/utils/visibilityBufferedPublisher';
-import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
-import type { 变量事实, 变量命令, 变量命令批次 } from '@/models/variableCommand';
-import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/src/kernel/domain/path/pathOperations';
-import { 创建默认记忆系统设置 } from '@/models/settings';
-import type { API配置项, 文生图API配置 } from '@/models/settings';
-import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
-import { retrieveZhikuContextWithModel, type 智库召回诊断 } from '@/services/zhikuRetrieval';
-import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
-import { retrieveYitingContextWithModel } from '@/services/yitingRetrieval';
-import { buildYitingArchiveEntry } from '@/services/yitingArchive';
-import { 创建默认智库系统设置 } from '@/models/settings';
-import { selectNpcLedgersForTurn, 提取NPC同行记忆文本列表, type NPC记录, type NPC账本选择结果 } from '@/models/npc';
-import {
-  buildImmediateStoryReview,
-  buildZhikuKeywordRecallQuery,
-  buildLeanAssistantHistoryContent,
-  buildMainRecallQuery,
-  getMainHistoryWindow,
-} from './historyWindow';
-import { type 剧情编织系统 } from '@/models/storyWeaving';
-import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
-import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
-import { enrichNpcArchives, needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
-import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
-import { appendWorldEvents } from '@/utils/worldEvents';
-import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
-import { estimateTextTokens } from '@/utils/tokenEstimate';
-import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
-import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
-import { requireIndependentApiConfig } from '@/services/ai/requireIndependentApiConfig';
-import { 创建相册图片条目, 创建相册资源引用 } from '@/utils/albumActions';
-import { commitGeneratedOnAlbum } from './albumOperations';
-import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
-import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
-import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
-
-
+import type { 解析后回复 } from '@/models/chat';
+import { 提取NPC同行记忆文本列表, type NPC记录 } from '@/models/npc';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
+import type { 世界状态 } from '@/models/world';
+import type { 智库召回诊断 } from '@/services/zhikuRetrieval';
+import { hasClosedResponseField } from '@/src/kernel/protocol/mainResponse';
 
 // ── 主剧情协议 & 格式 / recall 预览 ──
 
-export const DEEPSEEK_MAIN_FORMAT_GUARD
- = [
+export const DEEPSEEK_MAIN_FORMAT_GUARD = [
   'DeepSeek 主剧情格式校验：本轮必须从 <thinking> 开始输出，禁止直接从 <正文> 开始。',
   '必须完整输出 <thinking>、<正文>、<短期记忆>、<动态世界>、<变量草稿>；如本回合存在后续承接价值，再输出 <剧情规划>。',
   '<thinking> 内必须按当前生效的思维链 Step 标题，用中文逐步写出实际判断；不允许只写正文，不允许省略 thinking，不允许只写"已思考"。',
@@ -235,12 +173,13 @@ export function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编�
     const cleanSummary = matched.length > 120 ? `${matched.slice(0, 118)}…` : matched;
     if (existing.some((item) => item.includes(cleanSummary))) return npc;
     changed = true;
+    const memoryId = `npc_story_progress_${npc.id}_${turn}_${existing.length}`;
     return {
       ...npc,
       同行记忆: [
         ...(npc.同行记忆 ?? []),
         {
-          id: `npc_story_progress_${npc.id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
+          id: memoryId,
           回合: turn,
           摘要: cleanSummary,
           来源: '其他' as const,

@@ -5,8 +5,7 @@
  * CAS critical path (find command → check revision → put session + command)
  * runs entirely inside backend.runAtomic so revision and commandId are atomic.
  *
- * Phase 4: schemaVersion on every write; migrate at read / command ingress.
- * Gap: GameState is still the Phase 2/3 minimal slice — not full 旅人/NPC graph.
+ * schemaVersion is written every time; migration runs at read or command ingress.
  * See domain/session/types.ts.
  */
 

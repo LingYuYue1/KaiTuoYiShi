@@ -14,12 +14,8 @@ import {
   BrowserPhoneReplyGenerator,
   RandomIdGenerator,
   SystemClock,
-  DbPortableSaveMigrationStorage,
 } from '@/src/kernel/adapters/browser';
 import { PreferenceExecutionContextProvider } from '@/src/kernel/adapters/browser/PreferenceExecutionContextProvider';
-import { IndexedDbSessionMigrationStorage } from '@/src/kernel/adapters/indexeddb/IndexedDbSessionMigrationStorage';
-import { SessionMigrationUseCases } from '@/src/kernel/application/sessionMigration';
-import { PortableSaveMigrationUseCases } from '@/src/kernel/application/portableSaveMigration';
 import { KernelSessionDirectory } from '@/src/kernel/application/sessionDirectory';
 import { PreferenceDeviceUseCases } from '@/src/kernel/application/deviceUseCases';
 import {
@@ -67,8 +63,6 @@ export function getAppRoot(): Promise<IKernel> {
         createDbServiceSaveCatalog(),
       ]);
       const context = new PreferenceExecutionContextProvider(preferences);
-      const sessionMigration = new SessionMigrationUseCases(new IndexedDbSessionMigrationStorage(), preferences);
-      const portableMigration = new PortableSaveMigrationUseCases(new DbPortableSaveMigrationStorage(), preferences);
       const sessions = new KernelSessionDirectory(
         kernel,
         context,
@@ -82,12 +76,6 @@ export function getAppRoot(): Promise<IKernel> {
         sessions,
         device: new PreferenceDeviceUseCases(preferences),
         saves: createSavesUseCases(saves, sessions, preferences, clock),
-        migration: {
-          inspect: (sessionId) => sessionMigration.inspect(sessionId),
-          migrateV2: (sessionId, options) => sessionMigration.migrateV2(sessionId, options),
-          inspectPortableSaves: () => portableMigration.inspect(),
-          migratePortableSaves: (options) => portableMigration.migrate(options),
-        },
         content: createContentUseCases(preferences),
         onboarding: createOnboardingUseCases(preferences),
         diagnostics: createDiagnosticsUseCases(),

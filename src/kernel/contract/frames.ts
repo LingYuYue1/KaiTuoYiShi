@@ -1,5 +1,5 @@
 /**
- * IKernel execution frame contract (Phase 1).
+ * IKernel execution frame contract.
  * Must not import old models, services, hooks, or UI types.
  */
 

@@ -16,8 +16,8 @@ assert.match(
 );
 assert.match(
   saves,
-  /catalog\.saveGame\(createPortableSave\(commit\.view\.story, 'auto', clock\.now\(\)\)\)/,
-  'autosave must persist the exact story-only portable DTO',
+  /catalog\.saveGame\(createPortableSave\(await sessions\.readStory\(session\.id\), 'auto', clock\.now\(\)\)\)/,
+  'autosave must read the repository-owned story rather than persisting a presentation projection',
 );
 assert.match(
   useGame,

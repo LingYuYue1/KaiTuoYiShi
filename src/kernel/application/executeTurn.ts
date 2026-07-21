@@ -6,7 +6,7 @@ import { commitCommand, loadCommandBase, rejectedFrame } from './executeSessionC
 import { appendTurnJournalEntry, captureTurnSnapshot, countAssistantTurns } from '@/src/kernel/domain/turn/turnJournal';
 import { prepareTurnStory } from './turn/prepareTurn';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
-import { runTurnPipeline } from './turn/runTurnPipeline';
+import { forwardTurnPipeline } from './turn/forwardTurnPipeline';
 import { createTurnExecutionState, resolveCommandSettings } from './turn/turnExecutionState';
 import { planOptionalTurnJobs } from './turn/planOptionalTurnJobs';
 
@@ -58,8 +58,6 @@ export async function* executeTurnText(
     commandId: envelope.commandId,
     view: projectSession({ ...base.snapshot, state: { story: preparedStory } }),
   };
-  // Capture the immutable device context once, before the first model call.
-  // A mid-stream API/profile switch affects only the NEXT command.
   const overlay = await dependencies.context.captureDeviceOverlay();
   const settings = resolveCommandSettings(base.snapshot.state.story, overlay);
   if (dependencies.signal.aborted) {
@@ -67,26 +65,11 @@ export async function* executeTurnText(
     return;
   }
   const executionState = createTurnExecutionState(preparedStory, overlay);
-
-  let nextStory: StoryState | null = null;
+  let nextStory: StoryState;
   try {
-    for await (const frame of runTurnPipeline({ state: executionState, baseStory: preparedStory, text }, dependencies.signal)) {
-      if (frame.type === 'narrative.delta') {
-        if (nextStory !== null) throw new Error('Turn pipeline emitted progress after completed');
-        yield { type: 'progress', commandId: envelope.commandId, delta: { kind: 'narrative', text: frame.text } };
-        continue;
-      }
-      if (frame.type === 'stage.changed' || frame.type === 'stage.retrying') {
-        yield { ...frame, commandId: envelope.commandId };
-        continue;
-      }
-      if (frame.type === 'assistant.ready') {
-        yield { type: 'assistant.ready', commandId: envelope.commandId, message: frame.message };
-        continue;
-      }
-      if (nextStory !== null) throw new Error('Turn pipeline emitted multiple completed frames');
-      nextStory = frame.story;
-    }
+    nextStory = yield* forwardTurnPipeline({
+      state: executionState, baseStory: preparedStory, text, signal: dependencies.signal, commandId: envelope.commandId,
+    });
   } catch (error) {
     yield rejectedFrame(envelope, {
       code: dependencies.signal.aborted ? 'cancelled' : 'model_failure',
@@ -94,11 +77,6 @@ export async function* executeTurnText(
     });
     return;
   }
-  if (nextStory === null) {
-    yield rejectedFrame(envelope, { code: 'model_failure', message: 'Turn pipeline completed without state' });
-    return;
-  }
-
   let story = appendTurnJournalEntry(nextStory, {
     turnIndex: countAssistantTurns(nextStory),
     committedRevision: Number(base.snapshot.revision) + 1,

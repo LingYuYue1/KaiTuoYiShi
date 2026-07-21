@@ -58,8 +58,7 @@ export interface TurnJournalEntry {
 
 /**
  * Snapshot of all story fields that a turn may mutate.
- * Field set matches the active turn transaction boundary
- * (models/chat.ts 回合快照 contract).
+ * Field set matches the active turn transaction boundary.
  */
 export interface TurnSnapshot {
   旅人: 角色数据结构;
@@ -75,8 +74,6 @@ export interface TurnSnapshot {
   剧情编织: 剧情编织系统;
   variableBatches: readonly 变量命令批次[];
   jobs: readonly DurableJob[];
-  /** @deprecated Phase 3 — transition to DurableJob. */
-  queueTasks: readonly import("@/models/queueTask").队列任务记录[];
   turnCount: number;
   pendingOpeningTrigger: string | null;
 }

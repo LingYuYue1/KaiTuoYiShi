@@ -1,5 +1,5 @@
 /**
- * Kernel async ports barrel (Phase 3 / Stage 5.4).
+ * Kernel asynchronous ports barrel.
  */
 
 export type {

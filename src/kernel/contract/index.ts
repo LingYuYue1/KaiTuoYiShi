@@ -1,5 +1,5 @@
 /**
- * Production IKernel contract barrel (Phase 1 / Stage 5.1).
+ * Production IKernel contract barrel.
  * Source of truth for App / adapters / UI kernel client / tests.
  */
 
@@ -89,6 +89,9 @@ export type {
   SessionExistenceView,
   SessionView,
   MessageProjection,
+  JobKind,
+  JobProjection,
+  GameProjection,
   TurnView,
 } from './projections';
 

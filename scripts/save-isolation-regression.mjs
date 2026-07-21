@@ -7,7 +7,11 @@ const savePackageSource = fs.readFileSync('services/savePackage.ts', 'utf8');
 const settingsSource = fs.readFileSync('models/settings.ts', 'utf8');
 const rootCapabilitiesSource = fs.readFileSync('src/kernel/application/rootCapabilities.ts', 'utf8');
 const portableSaveSource = fs.readFileSync('src/kernel/application/portableSave.ts', 'utf8');
-const sendWorkflowSource = fs.readFileSync('src/kernel/workflows/sendWorkflow.ts', 'utf8');
+const sendWorkflowSource = [
+  fs.readFileSync('src/kernel/application/turn/executeTurnWorkflow.ts', 'utf8'),
+  fs.readFileSync('src/kernel/application/turn/stages/prepareTurnContext.ts', 'utf8'),
+  fs.readFileSync('src/kernel/application/turn/stages/buildTurnPromptPlan.ts', 'utf8'),
+].join('\n');
 const allSources = [
   appSource,
   useGameSource,
@@ -71,7 +75,7 @@ assert(
   '世界书触发状态只能读取剧情面字段，不得回退设备覆盖。',
 );
 assert(
-  sendWorkflowSource.includes('state.worldbookTriggerStates = nextTriggerStates ?? {}') &&
+  sendWorkflowSource.includes('input.state.worldbookTriggerStates = updateTriggerStatesAfterTurn') &&
     !sendWorkflowSource.includes('state.gameSettings.worldbookTriggerStates'),
   '世界书触发状态必须写入命令候选剧情面，不得写入 gameSettings。',
 );

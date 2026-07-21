@@ -2,8 +2,6 @@ import type { NPC账本选择结果 } from './npc';
 
 export type 消息角色 = 'user' | 'assistant' | 'system';
 
-export type 回合快照 = import('@/src/kernel/domain/session/storyState').TurnSnapshot;
-
 export interface 聊天消息 {
   id: string;
   role: 消息角色;
@@ -64,8 +62,6 @@ export interface 聊天消息 {
   };
   /** 本回合的故事快照（由正文生图后台生成完成后填充） */
 
-  /** Reroll 回归快照，仅 assistant 角色消息携带。@deprecated Phase 3 — migrate to TurnJournal。 */
-  preTurnSnapshot?: 回合快照;
   narrativeImages?: 叙事插图[];
 }
 

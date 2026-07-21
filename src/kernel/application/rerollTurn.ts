@@ -1,5 +1,6 @@
 import { asRevision, type ExecutionFrame, type RerollTurnEnvelope } from '@/src/kernel/contract';
 import type { StoryState } from '@/src/kernel/domain/session/storyState';
+import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
 import { findTurnBaseSnapshot } from '@/src/kernel/domain/turn/findTurnBaseSnapshot';
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 import type { SessionRepository } from '@/src/kernel/ports';
@@ -11,7 +12,7 @@ import {
 } from './executeSessionCommand';
 import { appendTurnJournalEntry } from '@/src/kernel/domain/turn/turnJournal';
 import { prepareTurnStory } from './turn/prepareTurn';
-import { runTurnPipeline } from './turn/runTurnPipeline';
+import { forwardTurnPipeline } from './turn/forwardTurnPipeline';
 import { createTurnExecutionState, resolveCommandSettings } from './turn/turnExecutionState';
 import { planOptionalTurnJobs } from './turn/planOptionalTurnJobs';
 
@@ -32,20 +33,12 @@ export async function* rerollTurn(
     return;
   }
 
-  let base;
-  try {
-    base = findTurnBaseSnapshot(commandBase.snapshot, envelope.command.turnId);
-  } catch (error) {
-    yield rejectedFrame(envelope, {
-      code: 'unknown',
-      message: error instanceof Error ? error.message : String(error),
-    });
+  const resolvedBase = resolveRerollBase(commandBase.snapshot, envelope.command.turnId);
+  if (!resolvedBase.ok) {
+    yield rejectedFrame(envelope, { code: 'unknown', message: resolvedBase.error });
     return;
   }
-  if (!base) {
-    yield rejectedFrame(envelope, { code: 'unknown', message: `Unknown turnId: ${envelope.command.turnId}` });
-    return;
-  }
+  const { base } = resolvedBase;
   if (dependencies.signal.aborted) {
     yield rejectedFrame(envelope, { code: 'cancelled', message: 'Reroll cancelled before execution' });
     return;
@@ -78,32 +71,15 @@ export async function* rerollTurn(
   }
   const executionState = createTurnExecutionState(preparedStory, overlay);
 
-  let story: StoryState | null = null;
+  let story: StoryState;
   try {
-    for await (const frame of runTurnPipeline(
-      { state: executionState, baseStory: preparedStory, text: base.originalPlayerText },
-      dependencies.signal,
-    )) {
-      if (frame.type === 'narrative.delta') {
-        if (story) throw new Error('Turn pipeline emitted progress after completed');
-        yield {
-          type: 'progress',
-          commandId: envelope.commandId,
-          delta: { kind: 'narrative', text: frame.text },
-        };
-        continue;
-      }
-      if (frame.type === 'stage.changed' || frame.type === 'stage.retrying') {
-        yield { ...frame, commandId: envelope.commandId };
-        continue;
-      }
-      if (frame.type === 'assistant.ready') {
-        yield { type: 'assistant.ready', commandId: envelope.commandId, message: frame.message };
-        continue;
-      }
-      if (story) throw new Error('Turn pipeline emitted multiple completed frames');
-      story = frame.story;
-    }
+    story = yield* forwardTurnPipeline({
+      state: executionState,
+      baseStory: preparedStory,
+      text: base.originalPlayerText,
+      signal: dependencies.signal,
+      commandId: envelope.commandId,
+    });
   } catch (error) {
     yield rejectedFrame(envelope, {
       code: dependencies.signal.aborted ? 'cancelled' : 'model_failure',
@@ -112,10 +88,6 @@ export async function* rerollTurn(
     return;
   }
 
-  if (!story) {
-    yield rejectedFrame(envelope, { code: 'model_failure', message: 'Turn pipeline completed without state' });
-    return;
-  }
   const assistant = story.conversation.history.at(-1);
   if (assistant?.role !== 'assistant' || !assistant.parsedResponse) {
     yield rejectedFrame(envelope, { code: 'model_failure', message: 'Reroll completed without parsed assistant output' });
@@ -143,4 +115,15 @@ export async function* rerollTurn(
   }
   yield { type: 'stage.changed', commandId: envelope.commandId, stage: 'committing' };
   yield await commitCommand(envelope, dependencies.sessions, { story: committedStory });
+}
+
+function resolveRerollBase(snapshot: SessionSnapshot, turnId: string):
+  | { ok: true; base: NonNullable<ReturnType<typeof findTurnBaseSnapshot>> }
+  | { ok: false; error: string } {
+  try {
+    const base = findTurnBaseSnapshot(snapshot, turnId);
+    return base ? { ok: true, base } : { ok: false, error: `Unknown turnId: ${turnId}` };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }

@@ -1,7 +1,8 @@
 import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
 import type { PreparedTurnScope } from '@/src/kernel/application/turn/stages/prepareTurnScope';
 import type { 新闻条目 } from '@/models/news';
-import { pushQueueTask, formatOriginalProtagonistForOpening } from '@/src/kernel/workflows/turnHelpers';
+import { pushQueueTask } from './turnRuntime';
+import { formatOriginalProtagonistForOpening } from '@/src/kernel/workflows/turnProtocol';
 import { runNewsGenerationStep } from '@/src/kernel/workflows/newsWorkflow';
 
 export type OpeningNewsResult = Readonly<{
@@ -12,11 +13,11 @@ export type OpeningNewsResult = Readonly<{
 
 /** Must be called inside the try block that owns state mutable view and abort checks. */
 export async function resolveOpeningNews(
-  state: any,
+  state: TurnExecutionState,
   scope: PreparedTurnScope,
   userInput: string,
   signal: AbortSignal,
-  isCurrentWorkflow: () => boolean,
+  isWorkflowActive: () => boolean,
   assertWorkflowActive: () => void,
 ): Promise<OpeningNewsResult> {
   if (!scope.isOpeningSystemTrigger) return { newsForPrompt: state.新闻, openingNewsForSave: null, preprocessed: false };
@@ -47,7 +48,7 @@ export async function resolveOpeningNews(
     userInput,
     recentTurns: [`- 系统：开局初始化\n  正文：${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '当前地区'}「${openingArchive?.章节锚点名称 ?? '当前开局'}」即将开始，新闻系统先生成可供首回合参考的世界事件苗头。`],
     signal,
-    shouldCommit: isCurrentWorkflow,
+      shouldCommit: isWorkflowActive,
   });
   if (!preNews) throw new Error('Opening news generation was enabled but did not execute');
   assertWorkflowActive();

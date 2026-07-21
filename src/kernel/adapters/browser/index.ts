@@ -1,6 +1,5 @@
 export { createIndexedDbPreferenceStore } from './IndexedDbPreferenceStore';
 export { createDbServiceSaveCatalog } from './DbSaveCatalog';
-export { DbPortableSaveMigrationStorage } from './DbPortableSaveMigrationStorage';
 export { BrowserSkillDraftGenerator } from './BrowserSkillDraftGenerator';
 export { BrowserContextSnapshotBuilder } from './BrowserContextSnapshotBuilder';
 export { BrowserContentResolver } from './BrowserContentResolver';

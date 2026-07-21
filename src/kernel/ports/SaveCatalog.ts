@@ -1,11 +1,7 @@
 /**
  * Asynchronous save-catalog kernel submodule.
  *
- * NOT Phase 4 SavePackage use case — only facades so presentation code can
- * remove direct dbService imports from SaveLoad/CloudSave/StorageManager.
- *
- * Full save/load package, tree prune, export/import ownership stays behind
- * the dbService adapter until Phase 4 Kernel application use cases own them.
+ * Save catalog operations exposed through focused application use cases.
  */
 
 import type { 存档数据, 存档类型 } from '@/models/settings';

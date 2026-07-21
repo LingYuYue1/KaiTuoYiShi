@@ -64,8 +64,19 @@ export type DeviceProjection = Readonly<{
 
 export type DeviceProjectionListener = (projection: DeviceProjection) => void;
 
+export type DeviceSettingsSnapshot = Readonly<{
+  apiSettings: API设置;
+  execution: ExecutionPolicy;
+  appearance: AppearancePreferences;
+  content: ContentLibrary;
+  contentInitialized: boolean;
+  save: SavePolicy;
+}>;
+
 export interface DeviceUseCases {
   projection(): Promise<DeviceProjection>;
+  /** Explicit editor/hydration read; credentials never enter DeviceProjection. */
+  loadSettings(): Promise<DeviceSettingsSnapshot>;
   subscribe(listener: DeviceProjectionListener): () => void;
   /** Switch the active API profile. Affects only commands captured AFTER this call. */
   applyApiProfile(configId: string): Promise<DeviceProjection>;

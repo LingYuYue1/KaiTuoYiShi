@@ -1,14 +1,14 @@
 ﻿import { useMemo, useState } from 'react';
 import type { 变量命令批次, 变量命令结果, 变量命令动作 } from '@/models/variableCommand';
-import type { DurableJob, JobKind } from '@/src/kernel/domain/jobs/durableJob';
+import type { JobKind, JobProjection } from '@/src/kernel/contract';
 
 interface Props {
   batches: 变量命令批次[];
-  jobs: DurableJob[];
+  jobs: JobProjection[];
   /** 变量模型正在跑（主回复已落地，变量结算中）。 */
   pending?: boolean;
   onCancelJob?: (id: string) => void;
-  onRetryJob?: (job: DurableJob) => void | Promise<void>;
+  onRetryJob?: (job: JobProjection) => void | Promise<void>;
 }
 
 const smallClip =
@@ -30,8 +30,8 @@ export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob
 
   const latest = batches.length > 0 ? batches[batches.length - 1] : null;
   const latestJobByKind = useMemo(() => {
-    const map = new Map<JobKind, DurableJob>();
-    for (const job of jobs) map.set(job.payload.kind, job);
+    const map = new Map<JobKind, JobProjection>();
+    for (const job of jobs) map.set(job.kind, job);
     return map;
   }, [jobs]);
 
@@ -41,14 +41,13 @@ export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob
       ? latest.results.some((r) => !r.ok)
         ? 'failed'
         : 'success'
-      : jobStatus(latestJobByKind.get('variable.calibrate'));
+      : 'idle';
 
   const queueRows = [
-    createJobRow('variable.calibrate', '变量生成', '解析正文并落地变量命令', latestJobByKind),
+    { kind: 'variable' as const, title: '变量生成', subtitle: '解析正文并落地变量命令', job: undefined },
     createJobRow('narrative-image.generate', '故事快照生成', '从正文解析并生成故事快照', latestJobByKind),
     createJobRow('news.generate', '星际和平周报', '独立 API 推演新闻与后台事件', latestJobByKind),
     createJobRow('yiting.archive', '忆庭归档', '将已提交回合归档到忆庭', latestJobByKind),
-    createJobRow('memory.compress', '记忆整理', '压缩已提交的剧情记忆', latestJobByKind),
   ];
 
   return (
@@ -188,8 +187,8 @@ export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob
               index={index + 1}
               title={task.title}
               subtitle={task.subtitle}
-              status={task.kind === 'variable.calibrate' ? variableStatus : jobStatus(task.job)}
-              batch={task.kind === 'variable.calibrate' ? latest ?? undefined : undefined}
+              status={task.kind === 'variable' ? variableStatus : jobStatus(task.job)}
+              batch={task.kind === 'variable' ? latest ?? undefined : undefined}
               job={task.job}
               onCancel={onCancelJob}
               onRetry={onRetryJob}
@@ -201,11 +200,11 @@ export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob
   );
 }
 
-function createJobRow(kind: JobKind, title: string, subtitle: string, jobs: ReadonlyMap<JobKind, DurableJob>) {
+function createJobRow(kind: JobKind, title: string, subtitle: string, jobs: ReadonlyMap<JobKind, JobProjection>) {
   return { kind, title, subtitle, job: jobs.get(kind) };
 }
 
-function jobStatus(job?: DurableJob): TaskStatus {
+function jobStatus(job?: JobProjection): TaskStatus {
   if (!job) return 'idle';
   if (job.state === 'succeeded') return 'success';
   if (job.state === 'failed') return 'failed';
@@ -221,9 +220,9 @@ interface TaskRowProps {
   subtitle?: string;
   status: TaskStatus;
   batch?: 变量命令批次;
-  job?: DurableJob;
+  job?: JobProjection;
   onCancel?: (id: string) => void;
-  onRetry?: (job: DurableJob) => void | Promise<void>;
+  onRetry?: (job: JobProjection) => void | Promise<void>;
 }
 
 function TaskRow({ index, title, subtitle, status, batch, job, onCancel, onRetry }: TaskRowProps) {
@@ -348,7 +347,7 @@ function TaskRow({ index, title, subtitle, status, batch, job, onCancel, onRetry
 
       {/* 展开区 */}
       {view === 'raw' && batch?.rawText && <RawTextPanel raw={batch.rawText} />}
-      {view === 'raw' && !batch?.rawText && job && 'error' in job && <RawTextPanel raw={job.error} />}
+      {view === 'raw' && !batch?.rawText && job?.error && <RawTextPanel raw={job.error} />}
       {view === 'commands' && batch && <CommandsPanel batch={batch} />}
     </div>
   );

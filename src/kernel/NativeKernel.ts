@@ -68,6 +68,10 @@ export class NativeKernel implements CommandExecutor {
   private readonly jobRunnerId: string;
   private readonly commitListeners = new Set<(commit: CommittedProjection) => void>();
 
+  async readStory(sessionId: SessionId) {
+    return structuredClone((await this.dependencies.sessions.read(sessionId)).state.story);
+  }
+
   constructor(private readonly dependencies: NativeKernelDependencies) {
     this.jobRunnerId = dependencies.ids.next('job-runner');
   }
@@ -389,7 +393,8 @@ export class NativeKernel implements CommandExecutor {
         await this.scheduleFutureRetry(sessionId);
         return;
       }
-      const claimed = [...claim.view.story.jobs.records].reverse().find((job) =>
+      const claimedStory = await this.readStory(sessionId);
+      const claimed = [...claimedStory.jobs.records].reverse().find((job) =>
         job.state === 'claimed' && job.claimedBy === this.jobRunnerId,
       );
       if (!claimed) throw new Error('Committed job claim did not project the claimed job');

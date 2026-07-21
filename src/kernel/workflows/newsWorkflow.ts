@@ -1,4 +1,4 @@
-import type { RuntimeDraftState } from '@/src/kernel/domain/session/runtimeState';
+import type { TurnExecutionState } from '@/src/kernel/application/turn/turnExecutionState';
 import { callNewsModel, applyNewsGenerationResult, hasNewsGenerationChanges } from '@/services/ai/newsModel';
 import type { 新闻条目 } from '@/models/news';
 import type { API配置项 } from '@/models/settings';
@@ -7,7 +7,7 @@ import { 归一化世界状态 } from '@/models/world';
 
 interface NewsGenerationParams {
   gameSettings: import("@/models/settings").游戏设置;
-  state: RuntimeDraftState;
+  state: TurnExecutionState;
   mainBody: string;
   userInput: string;
   recentTurns?: string[];

@@ -863,7 +863,7 @@ function EntryEditor({
               clipPath: cardClip,
             }}
           >
-            <span>◆ 高级触发控制（Phase 7.1 / 7.2 / 7.3）</span>
+            <span>◆ 高级触发控制</span>
             <span className="text-[10px] tracking-wider transition-transform duration-200" style={{ color: 'rgba(var(--tj-text-secondary), 0.75)' }}>
               {advancedOpen ? '收起 ▲' : '展开 ▼'}
             </span>
@@ -963,7 +963,7 @@ function EntryEditor({
                 <br />· 次要关键词仅在主关键词命中后才会做 AND 检查；正则匹配时请确保表达式合法（非法会被忽略）。
               </p>
 
-              {/* Phase 7.2：深度插入 + 分组召回 + 条目互斥 */}
+              {/* 深度插入 + 分组召回 + 条目互斥 */}
               <div
                 className="mt-4 border-t border-[rgba(var(--tj-accent-primary),0.15)] pt-3"
               >
@@ -975,7 +975,7 @@ function EntryEditor({
                     clipPath: smallClip,
                   }}
                 >
-                  ◆ Phase 7.2 · 深度插入 / 分组 / 互斥
+                  ◆ 深度插入 / 分组 / 互斥
                 </div>
               </div>
 
@@ -1056,7 +1056,7 @@ function EntryEditor({
                 <br />· 互斥：本条目触发后，列表中的条目会被禁用（按 id 匹配，支持 stwi_ / adapted_ / 自建 id）。
               </p>
 
-              {/* Phase 7.3：递归触发 + 逻辑门 */}
+              {/* 递归触发 + 逻辑门 */}
               <div
                 className="mt-4 border-t border-[rgba(var(--tj-accent-primary),0.15)] pt-3"
               >
@@ -1068,7 +1068,7 @@ function EntryEditor({
                     clipPath: smallClip,
                   }}
                 >
-                  ◆ Phase 7.3 · 递归触发 / 逻辑门
+                  ◆ 递归触发 / 逻辑门
                 </div>
               </div>
 

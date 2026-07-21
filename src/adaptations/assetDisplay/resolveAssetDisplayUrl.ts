@@ -1,5 +1,5 @@
 /**
- * Frontend-only AssetRef → display URL resolution (Stage 5.4 D).
+ * Frontend-only AssetRef → display URL resolution.
  *
  * Formal album / GameState store AssetRef ids (`asset:<id>` or bare asset id)
  * and remote URLs only — never blob: object URLs or long-lived base64 data URLs.

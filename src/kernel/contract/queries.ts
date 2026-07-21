@@ -1,5 +1,5 @@
 /**
- * IKernel query contract (Phase 1).
+ * IKernel query contract.
  * Must not import old models, services, hooks, or UI types.
  */
 

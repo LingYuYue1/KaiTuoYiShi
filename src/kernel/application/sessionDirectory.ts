@@ -78,6 +78,10 @@ export class KernelSessionDirectory implements SessionDirectory {
       .then((view) => view.exists);
   }
 
+  readStory(sessionId: SessionId): Promise<StoryState> {
+    return this.kernel.readStory(sessionId);
+  }
+
   async open(sessionId: SessionId): Promise<ISession> {
     const existence = await this.kernel.read({ type: 'session.exists', sessionId });
     if (!existence.exists) throw new Error(`Session not found: ${sessionId}`);
@@ -195,15 +199,7 @@ class KernelSession implements ISession {
     };
 
     this.jobs = {
-      list: async () => (await this.projection.current()).story.jobs.records.map((job) => ({
-        id: job.id,
-        kind: job.payload.kind,
-        state: job.state,
-        attempt: job.attempt,
-        maxAttempts: job.maxAttempts,
-        createdAt: job.createdAt,
-        ...('error' in job ? { error: job.error } : {}),
-      })),
+      list: async () => (await this.projection.current()).jobs,
       retry: (input) => this.track(this.sessionCommand<SessionCommit>({
         type: 'job.retry',
         jobId: input.jobId,
@@ -426,11 +422,11 @@ class KernelSession implements ISession {
 
     this.inspection = {
       contextSnapshot: async (kind) => {
-        const [view, overlay] = await Promise.all([
-          this.projection.current(),
+        const [story, overlay] = await Promise.all([
+          this.kernel.readStory(this.id),
           this.context.captureDeviceOverlay(),
         ]);
-        return this.contextSnapshotBuilder.build(view.story, overlay, kind);
+        return this.contextSnapshotBuilder.build(story, overlay, kind);
       },
     };
   }
@@ -445,8 +441,8 @@ class KernelSession implements ISession {
   }
 
   private async commandSettings() {
-    const [view, overlay] = await Promise.all([this.projection.current(), this.context.captureDeviceOverlay()]);
-    return resolveCommandSettings(view.story, overlay);
+    const [story, overlay] = await Promise.all([this.kernel.readStory(this.id), this.context.captureDeviceOverlay()]);
+    return resolveCommandSettings(story, overlay);
   }
 
   /** Build a session-scoped envelope with fresh command identity + revision. */

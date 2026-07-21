@@ -1,5 +1,5 @@
 /**
- * Kernel IndexedDB / durable session adapters (Phase 3).
+ * Kernel IndexedDB and durable session adapters.
  */
 
 export {

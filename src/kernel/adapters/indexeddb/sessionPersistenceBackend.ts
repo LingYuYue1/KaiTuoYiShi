@@ -4,7 +4,7 @@
  * Adapters implement runAtomic so revision + commandId are never split across
  * separate durable writes. Memory backend is for Node/tests; IndexedDB for web.
  *
- * Phase 4: StoredSessionRecord carries schemaVersion. Migration runs once at
+ * StoredSessionRecord carries schemaVersion. Migration runs once at
  * repository ingress (read / import). Writes always use SESSION_SCHEMA_VERSION.
  */
 

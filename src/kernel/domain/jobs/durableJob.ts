@@ -1,15 +1,11 @@
 import type { Revision, SessionId } from '@/src/kernel/contract';
 
 export type JobKind =
-  | 'memory.compress'
-  | 'variable.calibrate'
   | 'news.generate'
   | 'yiting.archive'
   | 'narrative-image.generate';
 
 export type JobPayload =
-  | Readonly<{ kind: 'memory.compress'; turn: number }>
-  | Readonly<{ kind: 'variable.calibrate'; messageId: string; playerText: string }>
   | Readonly<{ kind: 'news.generate'; messageId: string; playerText: string }>
   | Readonly<{ kind: 'yiting.archive'; messageId: string; playerText: string }>
   | Readonly<{ kind: 'narrative-image.generate'; messageId: string }>;
@@ -53,8 +49,6 @@ export function assertDurableJob(value: unknown): asserts value is DurableJob {
 }
 
 const JOB_KINDS: ReadonlySet<JobKind> = new Set([
-  'memory.compress',
-  'variable.calibrate',
   'news.generate',
   'yiting.archive',
   'narrative-image.generate',
@@ -102,10 +96,6 @@ export function cancelJob(job: DurableJob, reason: string, now: number): Durable
 
 function assertPayload(payload: Record<string, unknown>): void {
   switch (payload.kind) {
-    case 'memory.compress':
-      if (!Number.isSafeInteger(payload.turn) || Number(payload.turn) < 0) throw new Error('Memory job requires turn');
-      return;
-    case 'variable.calibrate':
     case 'news.generate':
     case 'yiting.archive':
       if (typeof payload.messageId !== 'string' || typeof payload.playerText !== 'string') throw new Error(`${payload.kind} job payload is invalid`);

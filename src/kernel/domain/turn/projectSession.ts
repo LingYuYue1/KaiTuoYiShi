@@ -2,10 +2,7 @@
  * Pure: project formal SessionSnapshot → UI SessionView.
  *
  * Projection is narrow — not a full GameState dump.
- * Stage 5.1 adds traveler variable slice for Variable Manager / display.
- * Stage 5.2 adds a narrow knowledge projection (counts + unlocked titles).
- * Stage 5.3 adds narrow phone / news projections.
- * Stage 5.4 adds narrow album projection (counts + titles + slot ids).
+ * The projection exposes narrow feature DTOs rather than the durable story graph.
  */
 
 import type { SessionView, TurnView } from '@/src/kernel/contract';
@@ -14,11 +11,35 @@ import type { SessionSnapshot } from '@/src/kernel/domain/session/types';
 export function projectSession(
   snapshot: SessionSnapshot,
 ): SessionView {
+  const story = snapshot.state.story;
   return {
-    story: structuredClone(snapshot.state.story),
+    story: structuredClone({
+      traveler: story.traveler,
+      world: story.world,
+      conversation: { history: story.conversation.history, turnCount: story.conversation.turnCount },
+      memory: story.memory,
+      characters: story.characters,
+      phone: story.phone,
+      album: story.album,
+      news: story.news,
+      plot: story.plot,
+      systems: story.systems,
+      policy: story.policy,
+      content: { zhikuRuntime: story.content.zhikuRuntime },
+      turn: story.turn,
+    }),
     sessionId: snapshot.sessionId,
     revision: snapshot.revision,
     turns: projectTurns(snapshot),
+    jobs: snapshot.state.story.jobs.records.map((job) => ({
+      id: job.id,
+      kind: job.payload.kind,
+      state: job.state,
+      attempt: job.attempt,
+      maxAttempts: job.maxAttempts,
+      createdAt: job.createdAt,
+      ...('error' in job ? { error: job.error } : {}),
+    })),
   };
 }
 

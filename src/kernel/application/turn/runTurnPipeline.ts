@@ -3,6 +3,7 @@ import { resolveActiveModelConfig, storyFromTurnExecutionState, type TurnExecuti
 import type { MessageProjection, TurnStage } from '@/src/kernel/contract';
 import type { StoryState } from '@/src/kernel/domain/session/storyState';
 import { reduceTurnMachine, type TurnMachine } from '@/src/kernel/domain/turn/turnMachine';
+import type { TurnProcessEvent } from './turnWorkflowTypes';
 
 export type TurnPipelineFrame =
   | Readonly<{ type: 'stage.changed'; stage: Exclude<TurnStage, 'committing'> }>
@@ -16,10 +17,10 @@ export async function* runTurnPipeline(
   signal: AbortSignal,
 ): AsyncIterable<TurnPipelineFrame> {
   if (signal.aborted) throw new DOMException('Turn aborted before execution', 'AbortError');
-  const draft = structuredClone(request.state) as any;
+  const draft: TurnExecutionState = structuredClone(request.state);
   let pendingText = '';
   let pending = false;
-  const processEvents: any[] = [];
+  const processEvents: TurnProcessEvent[] = [];
   let result: TurnExecutionState | null = null;
   let failure: Error | null = null;
   let finished = false;
@@ -34,11 +35,9 @@ export async function* runTurnPipeline(
     state: draft,
     gameSettings: request.state.gameSettings,
     worldbooks: request.state.worldbooks.slice(),
-    onBeforeSend: () => {},
-    onAfterSend: () => {},
     signal,
     getActiveConfig: () => resolveActiveModelConfig(request.state),
-    emitProcess: (event: unknown) => {
+    emitProcess: (event) => {
       processEvents.push(event);
       notify();
     },
@@ -48,7 +47,7 @@ export async function* runTurnPipeline(
       notify();
     },
   }).then(
-    () => { finished = true; notify(); },
+    (completed) => { result = completed; finished = true; notify(); },
     (error: unknown) => {
       failure = error instanceof Error ? error : new Error(String(error));
       finished = true;
@@ -59,12 +58,20 @@ export async function* runTurnPipeline(
   while (!finished || pending || processEvents.length > 0) {
     const event = processEvents.shift();
     if (event) {
-      machine = event.type === 'stage.changed'
-        ? reduceTurnMachine(machine, { type: 'stage', stage: event.stage })
-        : event.type === 'stage.retrying'
-          ? reduceTurnMachine(machine, { type: 'retry', stage: event.stage, attempt: event.attempt, limit: event.limit })
-          : reduceTurnMachine(machine, { type: 'stage', stage: 'assistant-ready' });
-      yield event;
+      if (event.type === 'stage.changed') {
+        machine = reduceTurnMachine(machine, { type: 'stage', stage: event.stage });
+        yield event;
+      } else if (event.type === 'stage.retrying') {
+        machine = reduceTurnMachine(machine, {
+          type: 'retry', stage: event.stage, attempt: event.attempt, limit: event.limit,
+        });
+        yield event;
+      } else if (event.type === 'assistant.ready') {
+        machine = reduceTurnMachine(machine, { type: 'stage', stage: 'assistant-ready' });
+        yield event;
+      } else {
+        yield { type: 'narrative.delta', text: event.text };
+      }
     } else if (pending) {
       pending = false;
       yield { type: 'narrative.delta', text: pendingText };

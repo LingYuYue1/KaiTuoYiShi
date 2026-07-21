@@ -26,7 +26,6 @@ import type { CompanionPlanningProjection, SkillSaveInput } from '@/src/kernel/c
 import type { API配置项 } from '@/models/settings';
 import type { 世界书 } from '@/models/worldbook';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
-import { SessionMigrationGate } from '@/components/features/Migration/SessionMigrationGate';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
 const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })));
@@ -1035,7 +1034,7 @@ function AppContent() {
 }
 
 export default function App() {
-  return <SessionMigrationGate><AppContent /></SessionMigrationGate>;
+  return <AppContent />;
 }
 
 // ── Inline character editor ──

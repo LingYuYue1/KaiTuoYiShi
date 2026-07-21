@@ -1,5 +1,5 @@
 /**
- * UI projection ownership (Phase 3).
+ * UI projection ownership.
  */
 
 export type { ProjectionState } from './projectionStore';

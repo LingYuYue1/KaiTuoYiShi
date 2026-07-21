@@ -26,11 +26,11 @@ export type TurnExecutionState = {
   worldbookTriggerStates: Record<string, number>;
   pendingOpeningTrigger: string | null;
   turnCount: number;
-  /** Transitional: required by legacy RuntimeDraftState consumers. Removed in Phase 4. */
+  /** Immutable execution configuration captured when the command starts. */
   gameSettings: 游戏设置;
-  /** Transitional: resolved once from execution context. Removed in Phase 4 — consumers should read from ExecutionContext directly. */
+  /** Active route resolved once from the captured execution context. */
   activeModelConfig: API配置项;
-  /** Transitional: worldbook metadata for prompt builders. Removed in Phase 4 — prompt builders should receive from overlay. */
+  /** Content snapshot captured for this command. */
   worldbooks: readonly 世界书[];
 };
 
@@ -67,7 +67,6 @@ export function resolveCommandSettings(story: StoryState, context: DeviceExecuti
   });
 }
 
-/** Transitional: reads the pre-resolved active config from TurnExecutionState. Removed in Phase 4. */
 export function resolveActiveModelConfig(state: TurnExecutionState): API配置项 {
   return state.activeModelConfig;
 }

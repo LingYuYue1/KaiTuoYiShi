@@ -3,7 +3,6 @@ import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import type { ContextSnapshot, ContextSnapshotKind } from '@/src/kernel/contract/inspection';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC阶位 } from '@/models/npc';
-import type { DurableJob } from '@/src/kernel/domain/jobs/durableJob';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案, type 世界状态 } from '@/models/world';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 命途ID } from '@/models/journey';
@@ -12,7 +11,7 @@ import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
 import { hydrateRuntimeZhiku } from '@/data/zhikuPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { reportAppError } from '@/components/ui/AppErrorReporter';
-import type { CommandId, ExecutionFrame, KernelError, MessageProjection, NarrativeProgressDelta, SessionView, TurnStage } from '@/src/kernel/contract';
+import type { CommandId, ExecutionFrame, JobProjection, KernelError, MessageProjection, NarrativeProgressDelta, SessionView, TurnStage } from '@/src/kernel/contract';
 import type {
   CommandHandle,
   CommandTerminal,
@@ -30,7 +29,6 @@ import type { 智库条目, 智库条目草稿 } from '@/models/zhiku';
 import type { StorySegmentDraftInput } from '@/src/kernel/contract';
 import type { 剧情编织运行状态 } from '@/models/storyWeaving';
 import type { AlbumCommand } from '@/src/kernel/contract';
-import { getPreference } from '@/src/adaptations/preferences';
 import { projectionHasDraft, projectionNarrativeText, type ProjectionState } from '@/src/adaptations/projections';
 import { splitSettings } from '@/models/settingsPlanes';
 
@@ -46,7 +44,7 @@ export interface UseGameReturn {
     handleLoadSave: (id: number) => Promise<boolean>;
     handleReroll: () => Promise<string | void>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
-    handleRetryJob: (job: DurableJob) => Promise<void>;
+    handleRetryJob: (job: JobProjection) => Promise<void>;
     handleCancelJob: (jobId: string) => Promise<void>;
     handleSetPrimaryPath: (pathId: 命途ID) => Promise<void>;
     handleDeclinePathAwakening: () => Promise<void>;
@@ -411,7 +409,7 @@ export function useGame(): UseGameReturn {
     await executeProjectedCommand((session) => session.media.regenerateNarrativeImage({ messageId }));
   }, [executeProjectedCommand]);
 
-  const handleRetryJob = useCallback(async (job: DurableJob) => {
+  const handleRetryJob = useCallback(async (job: JobProjection) => {
     await executeProjectedCommand((session) => session.jobs.retry({ jobId: job.id }));
   }, [executeProjectedCommand]);
 

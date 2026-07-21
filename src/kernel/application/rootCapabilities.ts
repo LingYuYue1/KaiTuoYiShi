@@ -36,8 +36,7 @@ export function createSavesUseCases(catalog: SaveCatalogPort, sessions: KernelSe
     },
     saveStory: (save: 存档数据) => catalog.saveGame(save),
     async saveSession(sessionId, type) {
-      const session = await sessions.open(sessionId);
-      return catalog.saveGame(createPortableSave((await session.projection.current()).story, type, clock.now()));
+      return catalog.saveGame(createPortableSave(await sessions.readStory(sessionId), type, clock.now()));
     },
     async followAutosave(session) {
       let pending = Promise.resolve();
@@ -47,7 +46,7 @@ export function createSavesUseCases(catalog: SaveCatalogPort, sessions: KernelSe
         pending = pending.then(async () => {
           const policy = (await preferences.get<SavePolicy>(SAVE_POLICY_KEY)) ?? createDefaultSettingsPlanes().save;
           if (!policy.autosaveOnTurn) return;
-          await catalog.saveGame(createPortableSave(commit.view.story, 'auto', clock.now()));
+          await catalog.saveGame(createPortableSave(await sessions.readStory(session.id), 'auto', clock.now()));
         }).catch((error: unknown) => {
           console.error('Autosave subscriber failed:', error);
         });
@@ -68,7 +67,7 @@ export function createSavesUseCases(catalog: SaveCatalogPort, sessions: KernelSe
     },
     async importAndPersist(file) {
       const imported = await catalog.importSaveFileAsMany(file);
-      const now = Date.now();
+      const now = clock.now();
       for (let index = 0; index < imported.length; index += 1) {
         await catalog.saveGame({
           ...imported[index],

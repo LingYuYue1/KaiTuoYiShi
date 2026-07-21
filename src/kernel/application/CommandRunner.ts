@@ -119,83 +119,15 @@ export class CommandRunner {
     const started = new Promise<void>((resolve) => { markStarted = resolve; });
     let cancelRequested = false;
 
-    // Eager consumption: runs regardless of event subscribers.
-    void (async () => {
-      let terminal: CommandTerminal<Result> | null = null;
-      try {
-        const iterator = this.kernel.execute(envelope)[Symbol.asyncIterator]();
-        let nextFrame = iterator.next();
-        markStarted();
-        if (cancelRequested) void this.kernel.cancelAndWait(envelope.commandId);
-
-        for (let item = await nextFrame; !item.done; item = await iterator.next()) {
-          const frame = item.value;
-          if (frame.type === 'accepted') {
-            emit({ type: 'command.accepted' } as GameEvent);
-            continue;
-          }
-          if (frame.type === 'prepared') {
-            emit({ type: 'turn.prepared', view: frame.view } as GameEvent);
-            continue;
-          }
-          if (frame.type === 'stage.changed') {
-            emit({ type: 'stage.changed', stage: frame.stage } as GameEvent);
-            continue;
-          }
-          if (frame.type === 'stage.retrying') {
-            emit({ type: 'stage.retrying', stage: frame.stage, attempt: frame.attempt, limit: frame.limit } as GameEvent);
-            continue;
-          }
-          if (frame.type === 'progress') {
-            emit({ type: 'narrative.delta', text: frame.delta.text } as GameEvent);
-            continue;
-          }
-          if (frame.type === 'assistant.ready') {
-            emit({ type: 'assistant.ready', message: frame.message } as GameEvent);
-            continue;
-          }
-          if (frame.type === 'committed') {
-            terminal = { outcome: 'committed', result: mapResult(frame.view, Number(frame.revision)) };
-            emit({ type: 'command.committed', revision: frame.revision, view: frame.view } as GameEvent);
-            // Exactly one terminal: stop consuming — a malformed second
-            // terminal from the kernel must not reach subscribers.
-            break;
-          }
-          if (frame.type === 'rejected') {
-            terminal = { outcome: 'rejected', error: frame.error };
-            emit({ type: 'command.rejected', error: frame.error } as GameEvent);
-            break;
-          }
-          const exhaustive: never = frame;
-          throw new Error(`Unknown execution frame: ${String((exhaustive as { type: string }).type)}`);
-        }
-        if (!terminal) {
-          terminal = {
-            outcome: 'rejected',
-            error: { code: 'unknown', message: 'Command stream ended without a terminal frame' },
-          };
-          emit({ type: 'command.rejected', error: terminal.error } as GameEvent);
-        }
-      } catch (error) {
-        // A throw after the terminal was emitted must not produce a second one.
-        if (!terminal) {
-          terminal = {
-            outcome: 'rejected',
-            error: {
-              code: 'unknown',
-              message: error instanceof Error ? error.message : String(error),
-            },
-          };
-          emit({ type: 'command.rejected', error: terminal.error } as GameEvent);
-        }
-      } finally {
-        stream.endAll();
-        settle(terminal ?? {
-          outcome: 'rejected',
-          error: { code: 'unknown', message: 'Command settled without terminal' },
-        });
-      }
-    })();
+    void consumeCommand({
+      kernel: this.kernel,
+      envelope,
+      mapResult,
+      stream,
+      emit,
+      markStarted,
+      isCancelRequested: () => cancelRequested,
+    }).then(settle);
 
     const kernel = this.kernel;
     return {
@@ -213,4 +145,58 @@ export class CommandRunner {
       },
     };
   }
+}
+
+type EmitGameEvent = (event: Omit<GameEvent, 'sequence' | 'commandId'> & { type: GameEvent['type'] }) => void;
+
+async function consumeCommand<Result>(input: Readonly<{
+  kernel: CommandExecutor;
+  envelope: CommandEnvelope;
+  mapResult(view: SessionView, revision: number): Result;
+  stream: HotEventStream<GameEvent>;
+  emit: EmitGameEvent;
+  markStarted(): void;
+  isCancelRequested(): boolean;
+}>): Promise<CommandTerminal<Result>> {
+  let terminal: CommandTerminal<Result> | null = null;
+  try {
+    const iterator = input.kernel.execute(input.envelope)[Symbol.asyncIterator]();
+    let item = iterator.next();
+    input.markStarted();
+    if (input.isCancelRequested()) void input.kernel.cancelAndWait(input.envelope.commandId);
+    for (let next = await item; !next.done; next = await iterator.next()) {
+      const frame = next.value;
+      if (frame.type === 'accepted') input.emit({ type: 'command.accepted' } as GameEvent);
+      else if (frame.type === 'prepared') input.emit({ type: 'turn.prepared', view: frame.view } as GameEvent);
+      else if (frame.type === 'stage.changed') input.emit({ type: 'stage.changed', stage: frame.stage } as GameEvent);
+      else if (frame.type === 'stage.retrying') {
+        input.emit({ type: 'stage.retrying', stage: frame.stage, attempt: frame.attempt, limit: frame.limit } as GameEvent);
+      } else if (frame.type === 'progress') input.emit({ type: 'narrative.delta', text: frame.delta.text } as GameEvent);
+      else if (frame.type === 'assistant.ready') input.emit({ type: 'assistant.ready', message: frame.message } as GameEvent);
+      else if (frame.type === 'committed') {
+        terminal = { outcome: 'committed', result: input.mapResult(frame.view, Number(frame.revision)) };
+        input.emit({ type: 'command.committed', revision: frame.revision, view: frame.view } as GameEvent);
+        break;
+      } else if (frame.type === 'rejected') {
+        terminal = { outcome: 'rejected', error: frame.error };
+        input.emit({ type: 'command.rejected', error: frame.error } as GameEvent);
+        break;
+      } else {
+        const exhaustive: never = frame;
+        throw new Error(`Unknown execution frame: ${String((exhaustive as { type: string }).type)}`);
+      }
+    }
+    if (!terminal) {
+      terminal = { outcome: 'rejected', error: { code: 'unknown', message: 'Command stream ended without a terminal frame' } };
+      input.emit({ type: 'command.rejected', error: terminal.error } as GameEvent);
+    }
+  } catch (error) {
+    if (!terminal) {
+      terminal = { outcome: 'rejected', error: { code: 'unknown', message: error instanceof Error ? error.message : String(error) } };
+      input.emit({ type: 'command.rejected', error: terminal.error } as GameEvent);
+    }
+  } finally {
+    input.stream.endAll();
+  }
+  return terminal ?? { outcome: 'rejected', error: { code: 'unknown', message: 'Command settled without terminal' } };
 }

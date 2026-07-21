@@ -1,4 +1,4 @@
-import type { SaveListItem } from '@/src/adaptations/saveCatalog';
+import type { SaveSummary as SaveListItem } from '@/src/kernel/contract/rootCapabilities';
 
 export interface SaveTreeDisplayNode {
   save: SaveListItem;

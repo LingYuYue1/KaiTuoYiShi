@@ -1,5 +1,5 @@
 /**
- * SessionRepository port (Phase 3).
+ * SessionRepository port.
  *
  * Sole formal-write authority for session state under Native Kernel.
  * Owns revision CAS and commandId idempotency for the formal GameState slice.

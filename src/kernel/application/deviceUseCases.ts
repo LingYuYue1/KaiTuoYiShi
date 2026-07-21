@@ -6,7 +6,7 @@
  * presentation code; they never touch StoryState or the session repository.
  */
 
-import type { ApiConnectionDraft, DeviceProjection, DeviceProjectionListener, DeviceUseCases } from '@/src/kernel/contract/device';
+import type { ApiConnectionDraft, DeviceProjection, DeviceProjectionListener, DeviceSettingsSnapshot, DeviceUseCases } from '@/src/kernel/contract/device';
 import type { PreferenceStore } from '@/src/kernel/ports/PreferenceStore';
 import type { API设置, 主题预设, 文生图API配置 } from '@/models/settings';
 import { 创建空API设置 } from '@/models/settings';
@@ -20,6 +20,11 @@ export class PreferenceDeviceUseCases implements DeviceUseCases {
   constructor(private readonly preferences: PreferenceStore) {}
 
   async projection(): Promise<DeviceProjection> {
+    const settings = await this.loadSettings();
+    return buildProjection(settings.apiSettings, settings.execution, settings.appearance, settings.content, settings.save);
+  }
+
+  async loadSettings(): Promise<DeviceSettingsSnapshot> {
     const defaults = createDefaultSettingsPlanes();
     const [api, execution, appearance, content, save] = await Promise.all([
       this.preferences.get<API设置>('apiSettings'),
@@ -28,13 +33,14 @@ export class PreferenceDeviceUseCases implements DeviceUseCases {
       this.preferences.get<ContentLibrary>(CONTENT_LIBRARY_KEY),
       this.preferences.get<SavePolicy>(SAVE_POLICY_KEY),
     ]);
-    return buildProjection(
-      api ?? 创建空API设置(),
-      execution ?? defaults.execution,
-      appearance ?? defaults.appearance,
-      content ?? defaults.content,
-      save ?? defaults.save,
-    );
+    return structuredClone({
+      apiSettings: api ?? 创建空API设置(),
+      execution: execution ?? defaults.execution,
+      appearance: appearance ?? defaults.appearance,
+      content: content ?? defaults.content,
+      contentInitialized: content !== null,
+      save: save ?? defaults.save,
+    });
   }
 
   subscribe(listener: DeviceProjectionListener): () => void {

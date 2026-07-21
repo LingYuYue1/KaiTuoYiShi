@@ -25,7 +25,7 @@ import type { 剧情模式 } from '@/models/journey';
 import type { SessionCommand, SkillDraftInput } from './commands';
 import type { 命途阶段 } from '@/models/path';
 import type { ContextSnapshot, ContextSnapshotKind } from './inspection';
-import type { MessageProjection } from './projections';
+import type { JobProjection, MessageProjection } from './projections';
 import type { TurnStage } from './frames';
 import type { StoryPolicy } from '@/models/settingsPlanes';
 
@@ -97,15 +97,7 @@ export interface MediaUseCases {
   regenerateNarrativeImage(input: Readonly<{ messageId: string }>): CommandHandle<GameEvent, SessionCommit>;
 }
 
-export type JobProjection = Readonly<{
-  id: string;
-  kind: import('@/src/kernel/domain/jobs/durableJob').JobKind;
-  state: import('@/src/kernel/domain/jobs/durableJob').DurableJob['state'];
-  attempt: number;
-  maxAttempts: number;
-  createdAt: number;
-  error?: string;
-}>;
+export type { JobProjection } from './projections';
 
 export interface SessionJobUseCases {
   list(): Promise<readonly JobProjection[]>;

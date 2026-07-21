@@ -3,7 +3,7 @@
  * Must not import old models, services, hooks, or UI types.
  *
  * `details` is a discriminated payload keyed by the error code — no untyped
- * bag (Phase 2 exit requirement).
+ * bag.
  */
 
 export type KernelErrorCode =

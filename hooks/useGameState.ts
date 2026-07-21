@@ -20,7 +20,6 @@ import type { 剧情节点 } from '@/models/plot';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空剧情编织系统 } from '@/models/storyWeaving';
 import type { 变量命令批次 } from '@/models/variableCommand';
-import type { DurableJob } from '@/src/kernel/domain/jobs/durableJob';
 import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
 import {
   创建空API设置,
@@ -45,15 +44,13 @@ import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import type { 世界书 } from '@/models/worldbook';
 import type { WorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
-import { getPreference } from '@/src/adaptations/preferences';
 import { APP_SESSION_ID, getAppRoot } from '@/src/adaptations/kernel';
 import { normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
 import { displaySessionView, SessionProjectionStore } from '@/src/adaptations/projections';
-import type { SessionView } from '@/src/kernel/contract';
-import { composeSettings, createDefaultSettingsPlanes, type AppearancePreferences, type ContentLibrary, type ExecutionPolicy, type SavePolicy } from '@/models/settingsPlanes';
-import { APPEARANCE_PREFERENCES_KEY, CONTENT_LIBRARY_KEY, EXECUTION_POLICY_KEY, SAVE_POLICY_KEY } from '@/src/kernel/adapters/browser/PreferenceExecutionContextProvider';
+import type { JobProjection, SessionView } from '@/src/kernel/contract';
+import { composeSettings, createDefaultSettingsPlanes } from '@/models/settingsPlanes';
 
 type StoryProjection = {
   旅人: 角色数据结构;
@@ -69,14 +66,13 @@ type StoryProjection = {
   剧情: 剧情节点[];
   剧情编织: 剧情编织系统;
   variableBatches: 变量命令批次[];
-  jobs: DurableJob[];
-  turnJournal: SessionView['story']['conversation']['turnJournal'];
-  worldbookTriggerStates: SessionView['story']['content']['worldbookTriggerStates'];
+  jobs: JobProjection[];
   pendingOpeningTrigger: string | null;
   turnCount: number;
 };
 
-function projectStoryForUi(story: SessionView['story']): StoryProjection {
+function projectStoryForUi(view: SessionView): StoryProjection {
+  const story = view.story;
   return {
     旅人: story.traveler,
     世界: story.world,
@@ -91,9 +87,7 @@ function projectStoryForUi(story: SessionView['story']): StoryProjection {
     剧情: story.plot.nodes.slice(),
     剧情编织: story.plot.weaving,
     variableBatches: story.systems.variableBatches.slice(),
-    jobs: story.jobs.records.slice(),
-    turnJournal: story.conversation.turnJournal,
-    worldbookTriggerStates: story.content.worldbookTriggerStates,
+    jobs: view.jobs.slice(),
     pendingOpeningTrigger: story.turn.pendingOpeningTrigger,
     turnCount: story.conversation.turnCount,
   };
@@ -160,7 +154,7 @@ export interface UseGameStateReturn {
   剧情: 剧情节点[];
   剧情编织: 剧情编织系统;
   variableBatches: 变量命令批次[];
-  jobs: DurableJob[];
+  jobs: JobProjection[];
   projectionStore: SessionProjectionStore;
   apiSettings: API设置;
   setApiSettings: React.Dispatch<React.SetStateAction<API设置>>;
@@ -203,8 +197,6 @@ export function useGameState(): UseGameStateReturn {
     剧情编织: 创建空剧情编织系统(),
     variableBatches: [],
     jobs: [],
-    turnJournal: [],
-    worldbookTriggerStates: {},
     pendingOpeningTrigger: null,
     turnCount: 1,
   });
@@ -217,7 +209,7 @@ export function useGameState(): UseGameStateReturn {
     () => projectionStore.current(),
   );
   const sessionProjection = projectionState
-    ? projectStoryForUi(displaySessionView(projectionState).story)
+    ? projectStoryForUi(displaySessionView(projectionState))
     : emptyProjectionRef.current;
   const [apiSettings, setApiSettings] = useState<API设置>(创建空API设置);
   const [gameSettings, setGameSettings] = useState<游戏设置>(创建默认游戏设置);
@@ -247,35 +239,32 @@ export function useGameState(): UseGameStateReturn {
   // Load persisted settings on mount
   useEffect(() => {
     (async () => {
-    const recoveryJournal = await (await getAppRoot()).host.loadWorkflowRecoveryJournal();
+      const root = await getAppRoot();
+      const recoveryJournal = await root.host.loadWorkflowRecoveryJournal();
       if (recoveryJournal) {
         setInterruptedWorkflow(recoveryJournal);
         setStartupError('上次生成被浏览器中断，请检查存档后重新发送。');
       }
 
-      const savedApi = await getPreference<API设置>('apiSettings');
-      if (savedApi) setApiSettings(savedApi);
+      const deviceSettings = await root.device.loadSettings();
+      const savedApi = deviceSettings.apiSettings;
+      setApiSettings(savedApi);
       const defaults = createDefaultSettingsPlanes();
-      const [execution, appearance, savedContent, savePolicy, sessionExists] = await Promise.all([
-        getPreference<ExecutionPolicy>(EXECUTION_POLICY_KEY),
-        getPreference<AppearancePreferences>(APPEARANCE_PREFERENCES_KEY),
-        getPreference<ContentLibrary>(CONTENT_LIBRARY_KEY),
-        getPreference<SavePolicy>(SAVE_POLICY_KEY),
-        (await getAppRoot()).sessions.exists(APP_SESSION_ID),
-      ]);
-      const content = savedContent ?? defaults.content;
+      const { execution, appearance, content: savedContent, contentInitialized, save: savePolicy } = deviceSettings;
+      const sessionExists = await root.sessions.exists(APP_SESSION_ID);
+      const content = savedContent;
       const resolvedContent = { ...content, promptModules: resolvePromptModules(content.promptModules) };
       const storyPolicy = sessionExists
-        ? (await (await (await getAppRoot()).sessions.open(APP_SESSION_ID)).projection.current()).story.policy
+        ? (await (await root.sessions.open(APP_SESSION_ID)).projection.current()).story.policy
         : defaults.story;
-      const resolvedAppearance = appearance ?? defaults.appearance;
+      const resolvedAppearance = appearance;
       setCurrentTheme(normalizeThemeId(resolvedAppearance.theme) as 主题预设);
       setGameSettings(composeSettings({
-        apiProfiles: savedApi ?? 创建空API设置(),
-        execution: execution ?? defaults.execution,
+        apiProfiles: savedApi,
+        execution,
         appearance: resolvedAppearance,
         content: resolvedContent,
-        save: savePolicy ?? defaults.save,
+        save: savePolicy,
         story: storyPolicy,
       }));
 
@@ -283,7 +272,7 @@ export function useGameState(): UseGameStateReturn {
       // - savedWorldbooks === null   → 首次启动,把预设写入 IndexedDB(玩家之后可自由修改/删除)
       // - savedWorldbooks 是数组     → 玩家已与世界书交互过,完全尊重其状态,不再覆盖
       const builtins = createBuiltinWorldbooks();
-      const rawSavedWorldbooks = savedContent?.worldbooks ?? null;
+      const rawSavedWorldbooks = contentInitialized ? savedContent.worldbooks : null;
       const savedWorldbooks = rawSavedWorldbooks ? normalizeWorldbooks([...rawSavedWorldbooks]) : rawSavedWorldbooks;
 
       if (savedWorldbooks === null) {

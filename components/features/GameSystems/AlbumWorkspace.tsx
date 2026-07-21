@@ -136,7 +136,7 @@ export function AlbumWorkspace({ album, traveler, npcs, actions, gameSettings, o
   const [travelerAnchorRequirement, setTravelerAnchorRequirement] = useState('');
   const [anchorRequirement, setAnchorRequirement] = useState('');
   const [archiveProgress, setArchiveProgress] = useState<AlbumOperationProgress | null>(null);
-  /** Generation progress UI only — not formal album (Stage 5.4 D: no half assets). */
+  /** Generation progress UI only; incomplete assets never enter the formal album. */
   const [localGenerateTask, setLocalGenerateTask] = useState<图片生成任务 | null>(null);
   const [albumUpdatePending, startAlbumUpdate] = useTransition();
   const nsfwVisible = nsfwEnabled && nsfwImageEnabled;

@@ -10,6 +10,7 @@ import type {
   SessionView,
 } from '@/src/kernel/contract';
 import type { SessionCommand } from '@/src/kernel/contract/commands';
+import type { StoryState } from '@/src/kernel/domain/session/storyState';
 
 export type CommittedProjection = Readonly<{
   view: SessionView;
@@ -23,5 +24,6 @@ export interface CommandExecutor {
   read(query: SessionExistsQuery): Promise<SessionExistenceView>;
   read(query: SessionReadQuery): Promise<SessionView>;
   read(query: KernelQuery): Promise<QueryResult>;
+  readStory(sessionId: import('@/src/kernel/contract').SessionId): Promise<StoryState>;
   cancelAndWait(commandId: CommandId): Promise<void>;
 }

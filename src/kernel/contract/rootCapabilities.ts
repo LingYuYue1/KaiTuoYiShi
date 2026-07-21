@@ -54,18 +54,6 @@ export interface SavesUseCases {
   restoreIntoSession(id: number, sessionId: SessionId): Promise<CommandHandle<GameEvent, SessionCommit>>;
 }
 
-export interface MigrationUseCases {
-  inspect(sessionId: string): Promise<import('@/src/kernel/application/sessionMigration').SessionMigrationInspection>;
-  inspectPortableSaves(): Promise<import('@/src/kernel/application/portableSaveMigration').PortableSaveMigrationInspection>;
-  migrateV2(
-    sessionId: string,
-    options?: Readonly<{ recoverDevicePreferences: boolean }>,
-  ): Promise<Readonly<{ warnings: readonly string[] }>>;
-  migratePortableSaves(
-    options: Readonly<{ recoverDevicePreferences: boolean }>,
-  ): Promise<Readonly<{ warnings: readonly string[] }>>;
-}
-
 // ── Onboarding ──
 
 export interface OnboardingUseCases {
@@ -239,7 +227,6 @@ export interface IKernel {
   readonly sessions: SessionDirectory;
   readonly device: DeviceUseCases;
   readonly saves: SavesUseCases;
-  readonly migration: MigrationUseCases;
   readonly content: ContentUseCases;
   readonly onboarding: OnboardingUseCases;
   readonly diagnostics: DiagnosticsUseCases;

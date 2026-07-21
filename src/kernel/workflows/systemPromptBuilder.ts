@@ -165,7 +165,7 @@ export function buildSystemPrompt(
     if (injection) {
       parts.push(injection);
     }
-    // Phase 7.2：世界书深度插入条目转 ChatModuleMessage（注入到聊天历史指定 depth）
+    // 世界书深度插入条目转 ChatModuleMessage（注入到聊天历史指定 depth）
     const worldbookDepthMessages = buildWorldbookChatModuleMessages(worldbooks, worldbookCtx);
     if (worldbookDepthMessages.length > 0) {
       allChatMessages.push(...worldbookDepthMessages);
@@ -334,7 +334,7 @@ export function buildOpeningSystemPrompt(
     };
     const injection = buildWorldbookInjection(worldbooks, openingWorldbookCtx);
     if (injection) parts.push(injection);
-    // Phase 7.2：世界书深度插入条目（开局流程同样支持）
+    // 世界书深度插入条目（开局流程同样支持）
     const worldbookDepthMessages = buildWorldbookChatModuleMessages(worldbooks, openingWorldbookCtx);
     if (worldbookDepthMessages.length > 0) {
       allChatMessages.push(...worldbookDepthMessages);
@@ -424,7 +424,7 @@ interface PromptModuleInjectionCtx {
   macroCtx?: MacroContext;
 }
 
-/** 非 system 角色的提示词模块消息。带元数据字段供 Phase 4 depth 注入使用。 */
+/** 非 system 角色的提示词模块消息，带元数据字段供 depth 注入使用。 */
 export interface ChatModuleMessage {
   role: string;
   content: string;
@@ -549,7 +549,7 @@ function injectPromptModules(
   if (filtered.length === 0) return { systemSection: '', chatModuleMessages: [] };
 
   // ST 预设兼容：role 分流。system 角色拼接到 systemSection，
-  // user/assistant 角色加入 chatModuleMessages（Phase 4 用于 depth 注入）。
+  // user/assistant 角色加入 chatModuleMessages，用于 depth 注入。
   const systemParts: string[] = [];
   const chatMessages: ChatModuleMessage[] = [];
   for (const m of filtered) {
