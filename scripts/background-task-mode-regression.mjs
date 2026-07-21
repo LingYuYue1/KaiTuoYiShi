@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function read(path) {
   return fs.readFileSync(path, 'utf8');
@@ -13,9 +14,9 @@ function assert(condition, message) {
 
 const settings = read('models/settings.ts');
 const gameSettings = read('components/features/Settings/GameSettings.tsx');
-const sendWorkflow = read('hooks/useGame/sendWorkflow.ts');
+const sendWorkflow = readTurnWorkflowSource();
 const gameState = read('hooks/useGameState.ts');
-const saveLoad = read('hooks/useGame/saveLoadWorkflow.ts');
+const saveLoad = read('hooks/useGame.ts');
 
 assert(settings.includes("export type 后台任务模式 = 'sequential' | 'parallel'"), 'settings must define sequential/parallel background task mode.');
 assert(settings.includes('backgroundTaskMode: 后台任务模式'), 'game settings must persist backgroundTaskMode.');

@@ -35,7 +35,7 @@ const files = {
   zhiku: 'services/zhikuRetrieval.ts',
   yitingRecall: 'services/yitingRetrieval.ts',
   yitingArchive: 'services/yitingArchive.ts',
-  storyWeaving: 'services/storyWeaving.ts',
+  storyWeaving: 'src/kernel/workflows/storyWeaving.ts',
 };
 
 for (const [target, file] of Object.entries(files)) {

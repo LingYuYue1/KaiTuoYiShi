@@ -20,7 +20,7 @@ function assert(condition, message) {
 }
 
 const foundation = fs.readFileSync('components/features/GameSystems/album/foundation.ts', 'utf8');
-const panel = fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8');
+const panel = fs.readFileSync('components/features/GameSystems/AlbumWorkspace.tsx', 'utf8');
 const taskWorkspace = fs.readFileSync('components/features/GameSystems/album/taskWorkspace.tsx', 'utf8');
 const workspacesSource = fs.readFileSync('components/features/GameSystems/album/workspaces.tsx', 'utf8');
 const workspaces = await importBundled('components/features/GameSystems/album/workspaces.tsx');

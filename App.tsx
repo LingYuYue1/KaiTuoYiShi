@@ -597,7 +597,6 @@ function AppContent() {
       <VariableDrawer
         batches={state.variableBatches}
         jobs={state.jobs}
-        pending={state.pendingVariable}
         onRetryJob={actions.handleRetryJob}
         onCancelJob={handleCancelJob}
       />
@@ -618,13 +617,12 @@ function AppContent() {
         world={state.世界}
         onDecline={actions.handleDeclinePathAwakening}
         onTrigger={() => void actions.handleEnterPathAwakening()}
-        disabled={state.loading || state.pendingVariable}
+        disabled={state.loading}
       />
       <InputArea
         onSend={actions.handleSend}
         onAbort={actions.handleAbort}
         loading={state.loading}
-        disabled={state.pendingVariable}
         canRestartOpening={state.turnCount <= 5}
         canReroll={canReroll}
         onRestartOpening={actions.handleRestartOpening}

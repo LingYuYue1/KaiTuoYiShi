@@ -6,10 +6,12 @@ function assert(condition, message) {
 
 const apiSettings = fs.readFileSync('components/features/Settings/ApiSettings.tsx', 'utf8');
 const settingsModal = fs.readFileSync('components/features/Settings/SettingsModal.tsx', 'utf8');
+const apiProfileModel = fs.readFileSync('models/apiProfile.ts', 'utf8');
+const deviceUseCases = fs.readFileSync('src/kernel/application/deviceUseCases.ts', 'utf8');
 
 assert(apiSettings.includes("kind: 'api-profile'"), 'API 配置包必须有独立 kind 标识。');
-assert(apiSettings.includes("const API_PROFILE_SLOTS_KEY = 'apiProfileSlots'"), '本机 API 方案槽位必须有独立 settings key。');
-assert(apiSettings.includes('interface API方案槽位'), '必须定义本机 API 方案槽位结构。');
+assert(apiProfileModel.includes("API_PROFILE_SLOTS_KEY = 'apiProfileSlots'"), '本机 API 方案槽位必须有独立 preference key。');
+assert(apiProfileModel.includes('interface API方案槽位'), '必须定义本机 API 方案槽位结构。');
 assert(apiSettings.includes('includeApiKeys'), 'API 配置包必须标记是否包含 API Key。');
 assert(apiSettings.includes('enableClaudeMode: gameSettings.enableClaudeMode === true'), 'API 配置包必须保存 Claude 专用模式开关。');
 assert(apiSettings.includes('enableClaudeMode: profile.enableClaudeMode'), '导入 API 配置包必须恢复 Claude 专用模式开关。');
@@ -17,7 +19,7 @@ assert(apiSettings.includes('cloneWithoutKeys'), '安全导出必须走清理 AP
 assert(apiSettings.includes("(target as { apiKey?: string }).apiKey = ''"), '安全导出必须清空 apiKey。');
 assert(apiSettings.includes('window.confirm'), '私人 API 配置包导出必须二次确认。');
 assert(apiSettings.includes('请勿分享') || apiSettings.includes('不要发给别人'), '私人 API 配置包必须提示不要分享。');
-assert(apiSettings.includes('loadSetting<API方案槽位[]>'), 'API 页必须读取本机 API 方案槽位。');
+assert(apiSettings.includes('device.loadApiEditorProfiles()'), 'API 页必须通过 device capability 读取本机 API 方案槽位。');
 assert(apiSettings.includes('handleSaveProfileSlot'), 'API 页必须能保存当前方案到本机槽位。');
 assert(apiSettings.includes('handleLoadProfileSlot'), 'API 页必须能一键读取本机方案。');
 assert(apiSettings.includes('handleDeleteProfileSlot'), 'API 页必须能删除本机方案。');
@@ -65,9 +67,9 @@ for (const key of [
 assert(apiSettings.includes('文生图场景接口'), 'API 配置包可保留文生图场景接口字段用于旧包兼容。');
 assert(!apiSettings.includes('场景接口: profile.routes.文生图场景接口'), '导入 API 配置包不得再用场景接口覆盖运行配置。');
 
-assert(apiSettings.includes("await saveSetting('apiSettings', nextApiSettings)"), '导入 API 配置包必须持久化主 API 设置。');
-assert(apiSettings.includes("await saveSetting('gameSettings', nextGameSettings)"), '导入 API 配置包必须持久化独立系统 API 设置。');
-assert(apiSettings.includes('await saveSetting(API_PROFILE_SLOTS_KEY, slots)'), '本机 API 方案槽位必须持久化。');
+assert(apiSettings.includes('device.replaceApiSettings(nextApiSettings)'), '导入 API 配置包必须通过 device capability 持久化主 API 设置。');
+assert(apiSettings.includes('persistSettingsPlanes(nextGameSettings)'), '导入 API 配置包必须持久化独立设置平面。');
+assert(apiSettings.includes('device.replaceApiProfileSlots(slots)') || deviceUseCases.includes('replaceApiProfileSlots'), '本机 API 方案槽位必须通过 device capability 持久化。');
 assert(settingsModal.includes('gameSettings={gameSettings}') && settingsModal.includes('onGameSettingsChange={persistGameSettingsChange}'), '设置弹窗必须把 gameSettings 和统一持久化入口传给 API 页。');
 
 console.log('api profile regression ok');

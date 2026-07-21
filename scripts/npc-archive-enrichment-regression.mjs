@@ -1,15 +1,16 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 const enrichment = fs.readFileSync('utils/npcArchiveEnrichment.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const canonicalCharacters = fs.readFileSync('data/canonicalCharacters.ts', 'utf8');
 const companionPanel = fs.readFileSync('components/features/GameSystems/CompanionPanel.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
-const promptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
+const promptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
 const nsfwPolicy = fs.readFileSync('utils/nsfwArchivePolicy.ts', 'utf8');
 
@@ -37,14 +38,14 @@ assert(nsfwPolicy.includes('帕姆') && nsfwPolicy.includes('史瓦罗') && nsfw
 assert(nsfwPolicy.includes('HERTA_IDENTITY_RE') && nsfwPolicy.includes("=== '黑塔'"), '集中策略必须显式放行黑塔身份。');
 
 assert(/import\s+\{[^}]*enrichNpcArchives[^}]*\}\s+from\s+['"]@\/utils\/npcArchiveEnrichment['"]/.test(sendWorkflow), 'sendWorkflow 必须引入伙伴档案补全器。');
-assert(sendWorkflow.includes('const archiveEnrichment = enrichNpcArchives(npcSource'), '变量校准后必须先补全伙伴档案。');
+assert(sendWorkflow.includes('const enrichment = enrichNpcArchives(npcSource'), '变量校准后必须先补全伙伴档案。');
 assert(sendWorkflow.includes('zhiku: state.智库'), '后台补档必须接入智库结构化人物资料。');
-assert(sendWorkflow.includes('const npcSourceForCompression = archiveEnrichment.records'), 'NPC 记忆压缩必须使用补全后的伙伴档案。');
-assert(sendWorkflow.includes('archiveEnrichment.changed'), '补全产生变化时必须写回 NPC state。');
+assert(sendWorkflow.includes('let npcRecords = enrichment.records.map'), 'NPC 记忆压缩必须使用补全后的伙伴档案。');
+assert(sendWorkflow.includes('const npcChanged = enrichment.changed'), '补全产生变化时必须写回 NPC state。');
 assert(companionPanel.includes('enrichNpcArchives(normalized'), '伙伴面板展示前也必须补全旧档案，避免旧存档空字段一直显示为空。');
 assert(companionPanel.includes('zhikuSystem?: 智库系统'), '伙伴面板补档必须接收智库系统。');
 assert(companionPanel.includes('zhiku: zhikuSystem'), '伙伴面板展示/写回补档必须使用智库资料。');
-assert(companionPanel.includes('onNpcRecordsChange(enriched.records)'), '伙伴面板发现旧档案可补全时必须写回 state。');
+assert(!companionPanel.includes('onNpcRecordsChange(enriched.records)'), '伙伴面板不得在渲染时旁路写回 NPC state。');
 assert(app.includes('maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}'), '伙伴面板必须遵守男性 NSFW 档案开关。');
 assert(app.includes('zhikuSystem={ctx.zhikuSystem}'), 'App 必须把智库传给伙伴面板。');
 assert(promptBuilder.includes('说话方式：${n.说话方式}') && promptBuilder.includes('穿着：${n.穿着}'), '主剧情伙伴注入必须包含说话方式和穿着。');

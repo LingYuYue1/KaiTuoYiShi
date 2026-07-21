@@ -7,6 +7,7 @@ function assert(condition, message) {
 const service = fs.readFileSync('services/ai/travelerTemplate.ts', 'utf8');
 const wizard = fs.readFileSync('components/features/NewGame/NewGameWizard.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
+const onboarding = fs.readFileSync('src/kernel/application/rootCapabilities.ts', 'utf8');
 
 assert(service.includes('generateTravelerTemplate'), '必须保留旅人模板生成服务。');
 assert(service.includes('chatCompletionNonStream'), '旅人模板必须走主 API 的非流式调用。');
@@ -34,6 +35,6 @@ assert(wizard.includes('onPersonality(draft.personality)'), '模板生成必须�
 assert(wizard.includes('onBackground(draft.background)'), '模板生成必须填入背景。');
 
 assert(app.includes('generateTravelerTemplate'), 'App 必须把主 API 模板生成服务传给 NewGameWizard。');
-assert(app.includes('请先在设置中配置至少一个 API 接口'), '未配置 API 时必须给玩家明确提示。');
+assert(onboarding.includes('请先在设置中选择主剧情 API'), '未配置 API 时 onboarding capability 必须给玩家明确提示。');
 
 console.log('traveler template regression ok');

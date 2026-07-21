@@ -14,8 +14,8 @@ const dbService = fs.readFileSync('services/dbService.ts', 'utf8');
 const workspaces = fs.readFileSync('components/features/GameSystems/album/workspaces.tsx', 'utf8');
 const albumArchive = fs.readFileSync('components/features/GameSystems/album/albumArchive.ts', 'utf8');
 const workerClient = fs.readFileSync('components/features/GameSystems/album/albumArchiveWorkerClient.ts', 'utf8');
-const turnSnapshot = fs.readFileSync('hooks/useGame/turnSnapshot.ts', 'utf8');
-const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const turnSnapshot = fs.readFileSync('src/kernel/domain/turn/turnJournal.ts', 'utf8');
+const saveLoad = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const desktopMirror = fs.readFileSync('services/desktop/desktopAssetMirror.ts', 'utf8');
 const imageGen = fs.readFileSync('services/ai/imageGeneration.ts', 'utf8');
 const savePackage = fs.readFileSync('services/savePackage.ts', 'utf8');
@@ -37,14 +37,14 @@ assert(albumObjectUrl.includes('URL.revokeObjectURL'), 'object URL 必须在资�
 assert(workspaces.includes('revokeAlbumAssets(removed)'), '删除相册资源时必须 revoke 缓存。');
 
 // Snapshots / reroll
-assert(turnSnapshot.includes('// Snapshots store asset: refs only'), '回合快照还原必须保持 asset: 引用。');
-assert(turnSnapshot.includes('dataUrl: asset.dataUrl'), '快照还原不得把 current 的大 payload 回填。');
+assert(turnSnapshot.includes('相册: story.album'), '回合快照必须从正式 StoryState 捕获相册引用。');
+assert(turnSnapshot.includes('structuredClone'), '回合快照必须与后续相册状态隔离。');
 
 // Import / export
 assert(albumArchive.includes('materializeAlbumRuntimePayload'), '相册导入提交前必须物化 runtime payload。');
 assert(workerClient.includes('materializeAssetForWorkerExport'), 'Worker 导出必须从主线程 Blob 缓存补齐二进制。');
 assert(savePackage.includes('expandSaveAssetPayloadForExport'), '存档包导出必须展开 Blob 为 portable dataUrl。');
-assert(saveLoad.includes('materializeAlbumRuntimePayload(归一化相册系统(save.相册))'), '读档应用状态前必须物化相册 payload。');
+assert(dbService.includes('restoreSaveAssetPayloadFromRecords'), '读档边界必须在交给 kernel 前物化相册 payload。');
 
 // Desktop mirror + API boundary
 assert(desktopMirror.includes('resolveRecordBase64Payload'), '桌面镜像必须支持 Blob→base64 写入。');

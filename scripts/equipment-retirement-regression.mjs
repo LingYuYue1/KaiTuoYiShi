@@ -8,13 +8,12 @@ function assert(condition, message) {
 
 const app = fs.readFileSync('App.tsx', 'utf8');
 const menu = fs.readFileSync('data/gameMenu.ts', 'utf8');
-const promptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
+const promptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
 const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
 const inventoryPanel = fs.readFileSync('components/features/GameSystems/InventoryPanel.tsx', 'utf8');
-const systemPanels = fs.readFileSync('components/features/GameSystems/SystemPanels.tsx', 'utf8');
 const inventoryActions = fs.readFileSync('utils/inventoryActions.ts', 'utf8');
 const inventoryModel = fs.readFileSync('models/inventory.ts', 'utf8');
 const characterModel = fs.readFileSync('models/character.ts', 'utf8');
@@ -28,7 +27,6 @@ assert(!menu.includes("id: 'equipment'"), '右侧系统菜单不应再显示装�
 assert(!app.includes('EquipmentPanel'), 'App 不应再导入或渲染玩家装备面板。');
 assert(!app.includes("case 'equipment'"), 'App 不应再保留 equipment 渲染分支。');
 assert(!fs.existsSync('components/features/GameSystems/EquipmentPanel.tsx'), '未引用的装备面板文件应已删除。');
-assert(!systemPanels.includes('export function EquipmentPanel'), '系统占位面板不应再保留 EquipmentPanel。');
 assert(!fs.existsSync('models/equipment.ts'), '装备模型文件应已删除，新模型不应再声明旧装备槽位。');
 
 assert(!promptBuilder.includes('buildEquipmentSection'), '主剧情 prompt 不应再构建装备注入段。');

@@ -9,8 +9,10 @@ const tokenizer = fs.readFileSync('services/ai/imagePromptTokenizer.ts', 'utf8')
 const imageSettings = fs.readFileSync('components/features/Settings/ImageGenerationSettingsTab.tsx', 'utf8');
 const settingsModal = fs.readFileSync('components/features/Settings/SettingsModal.tsx', 'utf8');
 const albumWorkspace = fs.readFileSync('components/features/GameSystems/AlbumWorkspace.tsx', 'utf8');
+const albumAuthoring = fs.readFileSync('src/kernel/adapters/browser/BrowserAlbumAuthoring.ts', 'utf8');
 const apiSettings = fs.readFileSync('components/features/Settings/ApiSettings.tsx', 'utf8');
 const savePackage = fs.readFileSync('services/savePackage.ts', 'utf8');
+const portableSave = fs.readFileSync('src/kernel/application/portableSave.ts', 'utf8');
 const requireIndependent = fs.readFileSync('services/ai/requireIndependentApiConfig.ts', 'utf8');
 
 // --- Schema & defaults ---
@@ -62,18 +64,18 @@ assert(applyBody.includes('词组转化器API:'), '一键套用函数体必须�
 
 // --- Album soft-skip when tokenizer unavailable ---
 assert(
-  albumWorkspace.includes('if (!tokenizerConfig)') && albumWorkspace.includes('return { prompt: input.prompt, negative: input.negative }'),
+  albumWorkspace.includes('if (!refined)') && albumWorkspace.includes('return { prompt: input.prompt, negative: input.negative }'),
   'applyTokenizerIfAvailable 在 config 为 null 时必须保留本地提示词。',
 );
 assert(
-  !albumWorkspace.includes("if (!tokenizerConfig) throw new Error('文生图词组转化器独立 API 未完整配置')"),
+  !albumWorkspace.includes("throw new Error('文生图词组转化器独立 API 未完整配置')"),
   'applyTokenizerIfAvailable 不得再因 config null 抛错阻断本地提示词。',
 );
 // Analysis features still need tokenizer and should surface a clear error.
-assert(albumWorkspace.includes('resolveImageAnalysisConfig'), '相册分析路径必须保留 resolveImageAnalysisConfig。');
+assert(albumAuthoring.includes('requireAnalysisConfig(settings)'), '相册分析路径必须通过 adapter 要求完整分析配置。');
 assert(
-  albumWorkspace.includes('请先在文生图设置中启用词组转化器')
-    || albumWorkspace.includes('文生图词组转化器独立 API 未完整配置'),
+  albumAuthoring.includes('请先在文生图设置中启用词组转化器')
+    || albumAuthoring.includes('文生图词组转化器独立 API 未完整配置'),
   '依赖转化器的分析功能必须给出明确错误提示。',
 );
 
@@ -83,6 +85,6 @@ assert(imageSettings.includes('handleFetchTokenizerModels'), '文生图设置页
 assert(imageSettings.includes('patchTokenizerApi'), '文生图设置页必须能修改词组转化器 API。');
 assert(albumWorkspace.includes('<ImageGenerationSettingsTab'), '相册工作台必须渲染文生图设置页。');
 assert(!settingsModal.includes('<ImageGenerationSettingsTab'), '设置弹窗不应再渲染文生图设置页。');
-assert(savePackage.includes('stripDevicePreferencesFromSave'), '导出存档包必须移除包含词组转化器密钥的整个设备设置平面。');
+assert(portableSave.includes("for (const forbidden of ['apiSettings', 'gameSettings', 'theme', 'currentTheme', 'worldbooks'])"), '导出存档包 schema 必须拒绝包含词组转化器密钥的设备设置平面。');
 
 console.log('image tokenizer api regression ok');

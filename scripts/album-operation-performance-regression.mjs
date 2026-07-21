@@ -79,7 +79,7 @@ assert.equal(album.assets.length, 2, '角色计数不得复制底层图片资源
 const archive = fs.readFileSync('components/features/GameSystems/album/albumArchive.ts', 'utf8');
 const worker = fs.readFileSync('components/features/GameSystems/album/albumArchive.worker.ts', 'utf8');
 const client = fs.readFileSync('components/features/GameSystems/album/albumArchiveWorkerClient.ts', 'utf8');
-const panel = fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8');
+const panel = fs.readFileSync('components/features/GameSystems/AlbumWorkspace.tsx', 'utf8');
 const library = fs.readFileSync('components/features/GameSystems/album/libWorkspace.tsx', 'utf8');
 const content = fs.readFileSync('components/features/GameSystems/album/albumContent.ts', 'utf8');
 

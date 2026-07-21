@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) {
@@ -9,6 +10,7 @@ function assert(condition, message) {
 const skillModel = fs.readFileSync('models/skill.ts', 'utf8');
 const skillIndex = fs.readFileSync('models/index.ts', 'utf8');
 const skillPanel = fs.readFileSync('components/features/GameSystems/SkillPanel.tsx', 'utf8');
+const skillCommands = fs.readFileSync('src/kernel/application/executeSkillCommand.ts', 'utf8');
 const skillGenerator = fs.readFileSync('services/ai/skillGenerator.ts', 'utf8');
 const promptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -40,7 +42,7 @@ for (const source of [skillPanel, promptBuilder]) {
 assert(!skillPanel.includes('function NormalSkillReadonly'), '普通战技不应再使用只读展示组件。');
 assert(!skillPanel.includes('applyPreset'), '普通战技不应再有预设写入逻辑。');
 assert(
-  skillPanel.includes("类别: selectedSlot.kind === 'normal' ? '普通' : '命途'") &&
+  skillCommands.includes("类别: slot.kind === 'normal' ? '普通' : '命途'") &&
     skillPanel.includes("selectedSlot.kind === 'normal' ? '普通战技自制' : '命途战技自定义'"),
   '保存战技时必须按槽位类型创建普通自制或命途自定义记录。',
 );
@@ -72,7 +74,7 @@ assert(
   'package.json 必须提供 test:skill-system 回归脚本。',
 );
 
-assert(skillPanel.includes('generateSkillDraft(activeApiConfig'), '战技面板必须复用当前主剧情 API 生成 AI 草稿。');
+assert(skillPanel.includes('await onGenerateSkillDraft({'), '战技面板必须通过 session capability 复用当前主剧情 API 生成 AI 草稿。');
 assert(skillPanel.includes('AI 生成') && skillPanel.includes('生成中…'), '战技面板必须提供 AI 生成按钮与加载态。');
 assert(skillPanel.includes('生成提示词') && skillPanel.includes('userHint: generationHint'), '战技 AI 生成必须允许玩家填写额外提示词。');
 assert(skillPanel.includes('已生成草稿。你可以继续修改，确认后再写入槽位。'), 'AI 生成战技必须只填入草稿，不得自动写入槽位。');
@@ -86,7 +88,7 @@ assert(skillGenerator.includes('parseJsonWithRepair'), '战技生成结果必须
 
 // Issue 9: JSON 工具响应与主剧情协议解析解耦
 const textIndex = fs.readFileSync('services/ai/text/index.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('src/kernel/workflows/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 
 assert(
   textIndex.includes('export async function completeChatText') &&

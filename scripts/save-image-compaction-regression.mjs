@@ -1,13 +1,14 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 const compactor = fs.readFileSync('utils/saveImageCompactor.ts', 'utf8');
-const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const saveLoad = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const savePackage = fs.readFileSync('services/savePackage.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
 const albumActions = fs.readFileSync('utils/albumActions.ts', 'utf8');

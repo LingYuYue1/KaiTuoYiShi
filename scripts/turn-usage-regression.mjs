@@ -14,8 +14,10 @@ function assert(condition, message) {
 const chatModel = read('models/chat.ts');
 const client = [
   read('services/ai/chatCompletionClient.ts'),
+  read('services/ai/chatCompletionProtocol.ts'),
+  read('services/ai/chatCompletionTransportHelpers.ts'),
+  read('services/ai/chatCompletionUsage.ts'),
   read('services/ai/geminiEndpointPolicy.ts'),
-  read('services/ai/deepSeekModelPolicy.ts'),
 ].join('\n');
 const textService = read('services/ai/text/index.ts');
 const sendWorkflow = [
@@ -41,9 +43,8 @@ assert(gameSettings.includes('缓存前缀诊断') && gameSettings.includes('ena
 
 assert(client.includes('onUsage?: (usage: ChatCompletionUsage) => void'), 'chat completion request must expose an onUsage callback.');
 assert(client.includes('stream_options') && client.includes('include_usage'), 'OpenAI-compatible streaming requests must ask for usage when supported.');
-assert(client.includes('function isStreamUsageOptionUnsupported'), 'unsupported include_usage errors must be detected for fallback retries.');
-assert(client.includes('streamOpenAICompatible(config, messages, request, callbacks, false)'), 'OpenAI-compatible streams must retry without include_usage when unsupported.');
-assert(client.includes('streamOpenCodeChat(config, messages, request, callbacks, false)'), 'OpenCode chat streams must retry without include_usage when unsupported.');
+assert(!client.includes('isStreamUsageOptionUnsupported'), 'unsupported include_usage errors must surface without a hidden resend.');
+assert(!client.includes('callbacks, false)'), 'streaming clients must not silently resend with changed usage semantics.');
 assert(client.includes('emitUsageFromResponse(parsed, config, request)'), 'streaming chunks must be inspected for usage payloads.');
 assert(client.includes('emitUsageFromResponse(json,') && client.includes('response.json()'), 'non-streaming responses must be inspected for usage payloads.');
 assert(client.includes('usage.promptTokens') && client.includes('usage.inputTokens'), 'camelCase input token aliases must be parsed.');

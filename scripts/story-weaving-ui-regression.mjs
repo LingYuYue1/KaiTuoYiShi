@@ -1,11 +1,13 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 const plotPanel = fs.readFileSync('components/features/GameSystems/PlotPanel.tsx', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const plotCommands = fs.readFileSync('src/kernel/application/executePlotCommand.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 
 assert(plotPanel.includes('const handlePreviewSeries = (series: 剧情编织系列) =>'), '剧情编织顶部轨道卡片应使用只读预览函数。');
 assert(!plotPanel.includes('const handleSelectSeries = async'), '顶部/左侧系列选择不得再使用会保存当前轨道的 handleSelectSeries。');
@@ -20,11 +22,10 @@ assert(plotPanel.includes('handleExportCustomJson'), '剧情编织必须提供�
 assert(plotPanel.includes("series.来源类型 !== 'canon'"), '自制轨道导出必须排除内置原著 canon 轨道。');
 assert(plotPanel.includes('handleExportAllJson'), '完整系统备份必须使用单独导出入口。');
 assert(plotPanel.includes('导出自制') && plotPanel.includes('导出全部备份'), 'UI 必须区分自制导出和完整备份导出。');
-assert(plotPanel.includes('customOnly') && plotPanel.includes('已并入自制轨道'), '导入自制轨道 JSON 时必须并入现有系统，而不是覆盖内置原著。');
+assert(plotCommands.includes('const customOnly =') && plotCommands.includes('...current.系列列表.filter'), '导入自制轨道 JSON 时必须由 kernel 并入现有系统，而不是覆盖内置原著。');
 
-assert(sendWorkflow.includes("loadSetting<剧情编织系统>('storyWeavingSystem')"), '后台写剧情编织前必须读取最新本地剧情编织，避免旧回合快照覆盖面板导入/分解。');
-assert(sendWorkflow.includes('resolveStoryWeavingForBackgroundWrite'), 'sendWorkflow 必须通过并发保护解析剧情编织写入。');
-assert(sendWorkflow.includes('storyWeavingConcurrentChange'), '检测到面板并发更新时必须跳过后台覆盖。');
-assert(sendWorkflow.includes('本回合后台未覆盖最新导入/分解结果'), '并发保护应给出队列提示，方便排查自制轨道消失问题。');
+assert(plotCommands.includes('executeSessionCommand(envelope, dependencies.sessions'), '剧情编织写入必须走统一 kernel CAS 命令。');
+assert(!sendWorkflow.includes("loadSetting<剧情编织系统>('storyWeavingSystem')"), '回合工作流不得从偏好存储旁路读取剧情编织。');
+assert(plotCommands.includes('base.state.story.plot.weaving'), '剧情编织命令必须从当前 session revision 读取正式状态。');
 
 console.log('story weaving ui regression ok');

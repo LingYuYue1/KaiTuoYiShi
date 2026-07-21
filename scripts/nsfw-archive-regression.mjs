@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -9,7 +10,7 @@ const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const nsfwWorldbook = fs.readFileSync('data/nsfwWorldbook.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const enrichment = fs.readFileSync('utils/npcArchiveEnrichment.ts', 'utf8');
 const companionPanel = fs.readFileSync('components/features/GameSystems/CompanionPanel.tsx', 'utf8');
 const variableManager = fs.readFileSync('components/features/Settings/VariableManager.tsx', 'utf8');
@@ -99,10 +100,7 @@ assert(companionPanel.includes('未标注'), 'formatNsfwAge 必须用中性文�
 assert(!companionPanel.includes("'禁止写入'"), 'formatNsfwAge 不得再用「禁止写入」文案。');
 
 // ─── 变量管理 NSFW 专用编辑器 ───
-assert(variableManager.includes('NsfwArchiveEditor'), '变量管理必须提供 NSFW 档案专用编辑器。');
-assert(variableManager.includes("label === 'NSFW档案'"), 'TreeNode 必须在 NSFW档案 字段处渲染专用编辑器。');
-assert(variableManager.includes('NsfwTagEditor'), 'NSFW 编辑器必须提供标签编辑器。');
-assert(variableManager.includes('NsfwSelectField'), 'NSFW 编辑器必须提供年龄下拉。');
-assert(variableManager.includes('NsfwBodyArchiveSection'), 'NSFW 编辑器必须提供身体档案分组表单。');
+assert(variableManager.includes('只读投影'), '变量管理必须保持只读，避免绕过 kernel 写入 NSFW 档案。');
+assert(companionPanel.includes('function NSFWArchivePanel'), '伙伴面板必须提供 NSFW 档案专用视图。');
 
 console.log('nsfw archive regression ok');

@@ -18,7 +18,7 @@ const chatList = read('components/features/Chat/ChatList.tsx');
 const turnItem = read('components/features/Chat/TurnItem.tsx');
 const renderer = read('components/features/Chat/MessageRenderers.tsx');
 const useGameState = read('hooks/useGameState.ts');
-const saveLoad = read('hooks/useGame/saveLoadWorkflow.ts');
+const saveLoad = read('hooks/useGame.ts');
 
 assert(settings.includes('export interface VisualTextSettings'), 'settings model should define VisualTextSettings');
 assert(settings.includes('visualTextSettings: 创建默认视觉文本设置()'), 'default game settings should include visualTextSettings');

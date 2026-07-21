@@ -5,8 +5,6 @@ import type { JobKind, JobProjection } from '@/src/kernel/contract';
 interface Props {
   batches: 变量命令批次[];
   jobs: JobProjection[];
-  /** 变量模型正在跑（主回复已落地，变量结算中）。 */
-  pending?: boolean;
   onCancelJob?: (id: string) => void;
   onRetryJob?: (job: JobProjection) => void | Promise<void>;
 }
@@ -25,7 +23,7 @@ const ACTION_STYLE: Record<变量命令动作, { bg: string; border: string; col
 
 type TaskStatus = 'pending' | 'success' | 'failed' | 'idle' | 'cancelled';
 
-export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob }: Props) {
+export function VariableDrawer({ batches, jobs, onCancelJob, onRetryJob }: Props) {
   const [open, setOpen] = useState(false);
 
   const latest = batches.length > 0 ? batches[batches.length - 1] : null;
@@ -35,13 +33,11 @@ export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob
     return map;
   }, [jobs]);
 
-  const variableStatus: TaskStatus = pending
-    ? 'pending'
-    : latest
-      ? latest.results.some((r) => !r.ok)
-        ? 'failed'
-        : 'success'
-      : 'idle';
+  const variableStatus: TaskStatus = latest
+    ? latest.results.some((r) => !r.ok)
+      ? 'failed'
+      : 'success'
+    : 'idle';
 
   const queueRows = [
     { kind: 'variable' as const, title: '变量生成', subtitle: '解析正文并落地变量命令', job: undefined },
@@ -59,7 +55,7 @@ export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob
         style={{
           left: 0,
           width: '24px',
-          height: pending ? 112 : 88,
+          height: 88,
           background: open
             ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
             : 'linear-gradient(180deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
@@ -77,13 +73,7 @@ export function VariableDrawer({ batches, jobs, pending, onCancelJob, onRetryJob
         }}
         title={open ? '收起队列' : '展开队列'}
       >
-        {pending ? '变量正在处理' : '处理队列'}
-        {pending && (
-          <span
-            className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full animate-pulse"
-            style={{ background: 'rgb(var(--tj-accent-primary))', boxShadow: '0 0 6px rgba(var(--tj-accent-primary), 0.8)' }}
-          />
-        )}
+        处理队列
       </button>
 
       {/* 背景遮罩：与 SystemDrawer 对称，点击关闭 */}

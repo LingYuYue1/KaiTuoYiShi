@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -9,7 +10,7 @@ const tab = fs.readFileSync('components/features/Settings/ApiErrorReportsTab.tsx
 const modal = fs.readFileSync('components/features/Settings/SettingsModal.tsx', 'utf8');
 const client = fs.readFileSync('services/ai/chatCompletionClient.ts', 'utf8');
 const apiTools = fs.readFileSync('services/ai/apiTools.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('src/kernel/workflows/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 
 assert(service.includes("API_ERROR_REPORTS_KEY = 'apiErrorReports'"), 'API 错误报告必须有独立本地 settings key。');
 assert(service.includes('appendApiErrorReport'), '必须提供 API 错误报告写入函数。');

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -6,8 +7,8 @@ function assert(condition, message) {
 
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableRegistry = fs.readFileSync('utils/variableRegistry.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
-const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
+const systemPromptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
 const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
@@ -58,9 +59,9 @@ assert(variableRegistry.includes("path !== '旅人' && !isTravelerPlayerAuthored
 assert(variableRegistry.includes('旅人根对象包含玩家手写核心档案'), 'set 旅人 整根必须被拒绝，避免绕过字段保护。');
 assert(variableRegistry.includes("path: '旅人.背包'"), '旅人背包 schema 仍必须保留，运行时物品不能被误伤。');
 assert(variableRegistry.includes("path: '旅人.战技列表'"), '旅人战技 schema 仍必须保留，玩家确认后的战技不能被误伤。');
-assert(sendWorkflow.includes('isTravelerPlayerAuthoredVariablePath'), '变量执行前必须过滤旅人核心档案旧命令。');
-assert(sendWorkflow.includes('skippedTravelerProfileLegacyCount'), '变量批次报告必须统计被静默忽略的旅人核心档案旧命令。');
-assert(sendWorkflow.includes('已静默忽略旅人核心档案旧命令'), '变量批次报告必须说明旧旅人档案命令已静默忽略。');
+assert(variableFacts.includes("if (fact.type === 'traveler_profile')"), '事实归约必须拒绝旅人核心档案写入。');
+assert(variableFacts.includes('已静默忽略 traveler_profile'), '变量报告必须说明旅人档案事实未被执行。');
+assert(!sendWorkflow.includes('skippedTravelerProfileLegacyCount'), '主流程不得保留旧命令专用计数状态。');
 
 assert(variableModel.includes('不得输出 traveler_profile') || variableOutputFormat.includes('不得输出 traveler_profile'), '变量模型提示词必须禁止 traveler_profile。');
 assert(variableModel.includes('旅人核心档案由玩家手写维护') || variableOutputFormat.includes('旅人核心档案由玩家手写维护'), '变量模型提示词必须说明旅人核心档案由玩家维护。');

@@ -6,8 +6,13 @@ function assert(condition, message) {
 
 const settings = fs.readFileSync('models/settings.ts', 'utf8');
 const gameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
+const settingsPlanes = fs.readFileSync('models/settingsPlanes.ts', 'utf8');
 const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
-const client = fs.readFileSync('services/ai/chatCompletionClient.ts', 'utf8');
+const client = [
+  'services/ai/chatCompletionClient.ts',
+  'services/ai/chatCompletionProtocol.ts',
+  'services/ai/chatCompletionTransportHelpers.ts',
+].map((file) => fs.readFileSync(file, 'utf8')).join('\n');
 const apiTools = fs.readFileSync('services/ai/apiTools.ts', 'utf8');
 const apiSettings = fs.readFileSync('components/features/Settings/ApiSettings.tsx', 'utf8');
 const gameSettings = fs.readFileSync('components/features/Settings/GameSettings.tsx', 'utf8');
@@ -23,19 +28,19 @@ const settingTabs = [
   'components/features/Settings/ZhikuSettingsTab.tsx',
 ];
 const runtimeBuilders = [
-  'hooks/useGame.ts',
-  'hooks/useGame/newsWorkflow.ts',
+  'src/kernel/application/turn/turnExecutionState.ts',
+  'src/kernel/workflows/newsWorkflow.ts',
   'services/ai/imagePromptTokenizer.ts',
   'services/ai/phoneService.ts',
-  'services/storyWeaving.ts',
+  'src/kernel/workflows/storyWeaving.ts',
 ];
 
 assert(settings.includes("'claude_compatible'"), 'AI 提供商必须包含 claude_compatible。');
 assert(settings.includes('enableClaudeMode?: boolean'), 'API 配置项必须能携带运行时 Claude 模式。');
 assert(settings.includes('enableClaudeMode: boolean'), '游戏设置必须保存 Claude 专用模式开关。');
 assert(settings.includes('enableClaudeMode: false'), 'Claude 专用模式默认必须关闭。');
-assert(gameState.includes('enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode'), '旧存档读取必须归一化 Claude 模式。');
-assert(/enableClaudeMode:\s*(?:state|s)\.gameSettings\.enableClaudeMode === true/.test(useGame), '主 API 运行时配置必须注入 Claude 模式。');
+assert(settingsPlanes.includes('enableClaudeMode: execution.enableClaudeMode'), '设备执行策略必须还原 Claude 模式。');
+assert(gameState.includes('deviceSettings') && gameState.includes('composeSettings'), '启动必须从 typed device settings 合并 Claude 模式。');
 
 assert(apiSettings.includes("value: 'claude_compatible'") && apiSettings.includes('Claude 兼容'), 'API 设置页必须提供 Claude 兼容选项。');
 assert(!apiSettings.includes('◆ Claude 专用模式'), 'API 设置页不得重复显示 Claude 专用模式开关。');

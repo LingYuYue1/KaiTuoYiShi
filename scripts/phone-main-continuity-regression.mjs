@@ -5,7 +5,7 @@ function assert(condition, message) {
 }
 
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
-const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
+const systemPromptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
 
 assert(!phoneModal.includes("关系: npc.关系 === 'stranger' ? 'acquaintance' : npc.关系"), '手机私聊不得绕过好感度规则手动抬升旧关系枚举。');
 assert(!phoneModal.includes("当前关系阶段: npc.当前关系阶段 || '已通过手机建立私聊联系'"), '手机私聊不得写入自由文本关系阶段。');

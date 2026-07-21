@@ -3,7 +3,7 @@ import type { 聊天消息 } from '@/models/chat';
 import { chatCompletion, chatCompletionNonStream, type ChatCompletionUsage, type StreamCallbacks } from '@/services/ai/chatCompletionClient';
 import { parseResponse } from '@/src/kernel/protocol/mainResponse';
 import type { 解析后回复 } from '@/models/chat';
-import type { DeepSeekRecoverySummary } from '@/services/ai/deepSeekRecovery';
+import type { DeepSeekDiagnosticsSummary } from '@/services/ai/deepSeekDiagnostics';
 
 export interface ChatRequest {
   messages: 聊天消息[];
@@ -39,7 +39,7 @@ export interface ChatTextResult {
   /** 结束原因：'stop'（正常结束）/ 'length' 或 'max_tokens'（被截断）/ 其他 provider 特有值。
    *  用于抗截断检测，sendWorkflow 据此触发续写重试。 */
   finishReason?: string;
-  deepSeekRecovery?: DeepSeekRecoverySummary;
+  deepSeekDiagnostics?: DeepSeekDiagnosticsSummary;
 }
 
 export interface ChatResult extends ChatTextResult {
@@ -81,7 +81,7 @@ export async function completeChatText(
 
   let fullText: string;
   let finishReason: string | undefined;
-  let deepSeekRecovery: DeepSeekRecoverySummary | undefined;
+  let deepSeekDiagnostics: DeepSeekDiagnosticsSummary | undefined;
   if (useStream) {
     const callbacks: StreamCallbacks = {
       onDelta: request.onDelta,
@@ -106,7 +106,7 @@ export async function completeChatText(
         frequencyPenalty: request.frequencyPenalty,
         presencePenalty: request.presencePenalty,
         maxContext: request.maxContext,
-        onDeepSeekRecovery: (summary) => { deepSeekRecovery = summary; },
+        onDeepSeekDiagnostics: (summary) => { deepSeekDiagnostics = summary; },
       },
       callbacks,
     );
@@ -126,11 +126,11 @@ export async function completeChatText(
       frequencyPenalty: request.frequencyPenalty,
       presencePenalty: request.presencePenalty,
       maxContext: request.maxContext,
-      onDeepSeekRecovery: (summary) => { deepSeekRecovery = summary; },
+      onDeepSeekDiagnostics: (summary) => { deepSeekDiagnostics = summary; },
     });
   }
 
-  return { fullText, usage, finishReason, deepSeekRecovery };
+  return { fullText, usage, finishReason, deepSeekDiagnostics };
 }
 
 /**

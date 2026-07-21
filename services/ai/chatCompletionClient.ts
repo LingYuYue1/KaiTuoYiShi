@@ -1,14 +1,33 @@
 import type { API配置项 } from '@/models/settings';
 import type { 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
-import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
-import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
+import { normalizePioneerBaseUrl } from './pioneerProxyCore';
+import { buildArkProxyBody, normalizeArkBaseUrl } from './arkProxyCore';
 import { normalizeGeminiBaseUrl } from './geminiEndpointPolicy';
 import {
-  executeWithDeepSeekRecovery,
+  executeWithDeepSeekDiagnostics,
   type DeepSeekAttemptDiagnostics,
-  type DeepSeekRecoverySummary,
-} from './deepSeekRecovery';
+  type DeepSeekDiagnosticsSummary,
+} from './deepSeekDiagnostics';
+import { emitUsageFromResponse } from './chatCompletionUsage';
+import {
+  buildMessages,
+  buildOpenAICompatibleChatUrl,
+  detectProvider,
+  mergePrefixResult,
+  normalizeClaudeBaseUrl,
+  normalizeDeepSeekPrefixBaseUrl,
+  shouldUseClaudeMessagesApi,
+  withPrefixMessages,
+  type ChatMessagePayload,
+} from './chatCompletionProtocol';
+import {
+  buildClaudeRequestBody, buildMimoAuthHeaders, buildOpenAICompatibleRequestBody,
+  buildPioneerProxyBody, buildQianfanProxyBody, claudeHeaders, fetchWithApiErrorReport,
+  formatClaudeError, formatOpenAICompatibleError, isArkConfig, isBaiduQianfanConfig,
+  isMimoConfig, isPioneerConfig, normalizeMimoBaseUrl,
+  parseClaudeTextResponse,
+} from './chatCompletionTransportHelpers';
 
 export interface StreamCallbacks {
   onDelta: (delta: string) => void;
@@ -22,8 +41,6 @@ export interface StreamCallbacks {
 /** 丢弃模型的 reasoning_content / extended thinking / Gemini thought parts。
  *  这类「reasoning summary」是厂商内置格式（英文 **Header** 段），不受 system prompt 控制，
  *  会跳过我们设计的 Step0-Step10 CoT。统一只接收正式 content 流。 */
-
-type ChatMessagePayload = { role: string; content: string; prefix?: boolean };
 
 export interface ChatCompletionRequest {
   messages: ChatMessagePayload[];
@@ -52,7 +69,7 @@ export interface ChatCompletionRequest {
   prefixMode?: boolean;
   /** Assistant prefill used when prefixMode is true. */
   prefixContent?: string;
-  onDeepSeekRecovery?: (summary: DeepSeekRecoverySummary) => void;
+  onDeepSeekDiagnostics?: (summary: DeepSeekDiagnosticsSummary) => void;
   /** Internal transport diagnostics consumed by the recovery coordinator. */
   onResponseDiagnostics?: (diagnostics: DeepSeekAttemptDiagnostics) => void;
 }
@@ -61,176 +78,9 @@ export type ChatCompletionUsage = Partial<Omit<回合Token消耗, 'source'>> & {
   source: 'api';
 };
 
-function detectProvider(config: API配置项): string {
-  const url = config.baseUrl.toLowerCase();
-  if (config.provider === 'mimo' || /xiaomimimo|mimo\.mi/i.test(url)) return 'mimo';
-  if (config.provider === 'ark' || isArkBaseUrl(config.baseUrl)) return 'ark';
-  if (config.provider === 'opencode' || /opencode\.ai\/zen\/v1/i.test(url)) return 'opencode';
-  if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
-  if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
-  if (shouldUseClaudeMessagesApi(config)) {
-    return 'claude';
-  }
-  return 'openai_compatible';
-}
-
-function isLikelyClaudeModel(model: string): boolean {
-  return /(^|[\/:._\-\s])(claude|opus|sonnet|haiku)([\/:._\-\s]|$)/i.test(model.trim());
-}
-
-function shouldUseClaudeMessagesApi(config: API配置项): boolean {
-  if (config.provider === 'claude') return true;
-  if (config.provider !== 'claude_compatible') return false;
-  if (config.enableClaudeMode !== true) return false;
-  return isLikelyClaudeModel(config.model);
-}
-
-function buildMessages(
-  systemPrompt: string | undefined,
-  messages: ChatMessagePayload[],
-): ChatMessagePayload[] {
-  const result: ChatMessagePayload[] = [];
-  if (systemPrompt) {
-    result.push({ role: 'system', content: systemPrompt });
-  }
-  result.push(...messages);
-  return result;
-}
-
-function normalizeDeepSeekPrefixBaseUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, '');
-  if (!trimmed || !/deepseek/i.test(trimmed)) return trimmed;
-  if (/\/beta$/i.test(trimmed)) return trimmed;
-  if (/\/v\d+$/i.test(trimmed)) return trimmed.replace(/\/v\d+$/i, '/beta');
-  return `${trimmed}/beta`;
-}
-
-/**
- * Phase 4：通用化 assistant prefill。
- *
- * 按 provider 分流到不同的 prefill 实现：
- * - DeepSeek：baseUrl 改 /beta + { role: 'assistant', content: prefix, prefix: true }（DeepSeek beta 特性）
- * - Claude：末尾追加 { role: 'assistant', content: prefix }（Claude 原生支持 prefill）
- * - Gemini：末尾追加 { role: 'model', content: prefix }（Gemini 原生支持 prefill）
- * - OpenAI 兼容：末尾追加 { role: 'assistant', content: prefix }（部分中转商支持）
- *
- * 不支持的 provider（如 mimo）静默降级，不 prefill。
- * prefix 内容优先从 request.prefixContent 读取，默认 '<thinking>\n'。
- */
-function withPrefixMessages(
-  config: API配置项,
-  messages: ChatMessagePayload[],
-  request: ChatCompletionRequest,
-): { config: API配置项; messages: ChatMessagePayload[]; prefix: string } {
-  if (request.prefixMode !== true) return { config, messages, prefix: '' };
-  const prefix = request.prefixContent ?? '<thinking>\n';
-  if (!prefix) return { config, messages, prefix: '' };
-
-  const provider = detectProvider(config);
-  const withoutOldPrefix = messages.filter((msg) => msg.prefix !== true);
-
-  // DeepSeek：走 /beta + prefix: true 标记
-  if (provider === 'deepseek') {
-    return {
-      config: {
-        ...config,
-        baseUrl: normalizeDeepSeekPrefixBaseUrl(config.baseUrl),
-      },
-      messages: [
-        ...withoutOldPrefix,
-        { role: 'assistant', content: prefix, prefix: true },
-      ],
-      prefix,
-    };
-  }
-
-  // Claude：末尾追加 assistant 消息（Claude 原生支持 prefill）
-  // 注意：normalizeClaudeMessages 会强制末条 user，但 prefill assistant 会在它之前插入
-  if (provider === 'claude') {
-    return {
-      config,
-      messages: [
-        ...withoutOldPrefix,
-        { role: 'assistant', content: prefix, prefix: true },
-      ],
-      prefix,
-    };
-  }
-
-  // Gemini：末尾追加 model 消息（Gemini 原生支持 prefill，角色名是 model）
-  if (provider === 'gemini') {
-    return {
-      config,
-      messages: [
-        ...withoutOldPrefix,
-        { role: 'model', content: prefix, prefix: true },
-      ],
-      prefix,
-    };
-  }
-
-  // OpenAI 兼容 / OpenCode / Ark / Pioneer 等：末尾追加 assistant 消息
-  // 部分中转商支持，不支持的会报错（由上层 try-catch 降级）
-  if (provider === 'openai_compatible' || provider === 'opencode' || provider === 'ark' || provider === 'mimo') {
-    return {
-      config,
-      messages: [
-        ...withoutOldPrefix,
-        { role: 'assistant', content: prefix, prefix: true },
-      ],
-      prefix,
-    };
-  }
-
-  // 未知 provider 静默降级
-  return { config, messages, prefix: '' };
-}
-
-// 兼容旧调用：保留 withDeepSeekPrefixMessages 作为 withPrefixMessages 的别名
-function withDeepSeekPrefixMessages(
-  config: API配置项,
-  messages: ChatMessagePayload[],
-  request: ChatCompletionRequest,
-): { config: API配置项; messages: ChatMessagePayload[]; prefix: string } {
-  return withPrefixMessages(config, messages, request);
-}
-
-function stripDeepSeekPrefixMessages(messages: ChatMessagePayload[]): ChatMessagePayload[] {
-  return messages
-    .filter((msg) => msg.prefix !== true)
-    .map((msg) => {
-      const { prefix: _prefix, ...rest } = msg;
-      return rest;
-    });
-}
-
-function mergePrefixResult(prefix: string, text: string): string {
-  if (!prefix) return text;
-  return text.startsWith(prefix) ? text : `${prefix}${text}`;
-}
-
-function isDeepSeekPrefixUnsupportedError(error: unknown): boolean {
-  const text = error instanceof Error ? error.message : String(error ?? '');
-  return /prefix/i.test(text) && /(unsupported|not support|不支持|invalid|beta|400|422)/i.test(text);
-}
-
-function normalizeClaudeBaseUrl(baseUrl: string): string {
-  const base = baseUrl.replace(/\/+$/, '');
-  return base.endsWith('/v1') ? base : `${base}/v1`;
-}
-
-function buildOpenAICompatibleChatUrl(baseUrl: string): string {
-  const base = baseUrl.replace(/\/+$/, '');
-  if (/\/chat\/completions$/i.test(base)) return base;
-  return `${base}/chat/completions`;
-}
 
 type OpenCodeEndpoint = 'responses' | 'messages' | 'gemini' | 'chat';
 
-type UsagePayloadMatch = {
-  usage: Record<string, any>;
-  path: string;
-};
 
 function normalizeOpenCodeBaseUrl(baseUrl: string): string {
   let base = baseUrl.trim().replace(/\/+$/, '');
@@ -310,856 +160,6 @@ function formatOpenCodeError(config: API配置项, endpoint: OpenCodeEndpoint, s
     return '请检查 OpenCode Zen Base URL、模型 ID、Key、余额和模型权限。';
   })();
   return new Error(`OpenCode Zen API Error ${status}: ${hint}\n${text}`);
-}
-
-function buildQianfanProxyBody(config: API配置项, body: Record<string, unknown>): string {
-  return JSON.stringify({
-    kind: 'chat',
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    body,
-  });
-}
-
-function buildPioneerProxyBody(config: API配置项, body: Record<string, unknown>): string {
-  return JSON.stringify({
-    kind: 'chat',
-    baseUrl: normalizePioneerBaseUrl(config.baseUrl),
-    apiKey: config.apiKey,
-    body,
-  });
-}
-
-function isArkConfig(config: API配置项): boolean {
-  return config.provider === 'ark' || isArkBaseUrl(config.baseUrl);
-}
-
-function isBaiduQianfanConfig(config: API配置项): boolean {
-  return config.provider === 'baidu' || /qianfan\.baidubce\.com/i.test(config.baseUrl);
-}
-
-function isPioneerConfig(config: API配置项): boolean {
-  return isPioneerBaseUrl(config.baseUrl);
-}
-
-function isMimoConfig(config: API配置项): boolean {
-  return detectProvider(config) === 'mimo';
-}
-
-function normalizeOpenAICompatibleModel(config: API配置项): string {
-  const model = config.model.trim();
-  if (isBaiduQianfanConfig(config) && /^glm[-_\s]?5\.1$/i.test(model)) {
-    return 'glm-5.1';
-  }
-  return model;
-}
-
-function normalizeMimoBaseUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, '');
-  if (!trimmed) return trimmed;
-  if (/\/v1$/i.test(trimmed)) return trimmed;
-  return `${trimmed}/v1`;
-}
-
-function buildMimoAuthHeaders(apiKey: string): Record<string, string> {
-  return {
-    'Content-Type': 'application/json',
-    'api-key': apiKey,
-  };
-}
-
-function buildOpenAICompatibleRequestBody(
-  config: API配置项,
-  messages: ChatMessagePayload[],
-  request: ChatCompletionRequest,
-  stream: boolean,
-  includeUsage: boolean = true,
-): Record<string, unknown> {
-  const isMimo = isMimoConfig(config);
-  const body: Record<string, unknown> = {
-    model: normalizeOpenAICompatibleModel(config),
-    messages,
-    stream,
-  };
-  if (isMimo) {
-    body.max_completion_tokens = request.maxTokens ?? config.maxTokens ?? 2048;
-    body.thinking = { type: 'disabled' };
-  } else {
-    body.max_tokens = request.maxTokens ?? config.maxTokens ?? 2048;
-    body.temperature = request.temperature ?? config.temperature ?? 0.8;
-    // Phase 3：采样参数贯通（OpenAI 兼容 / DeepSeek / Ark / Pioneer 等）
-    // top_p / frequency_penalty / presence_penalty / repetition_penalty 大多数 OpenAI 兼容端点支持
-    const topP = request.topP ?? config.topP;
-    if (typeof topP === 'number') body.top_p = topP;
-    const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
-    if (typeof freqPenalty === 'number') body.frequency_penalty = freqPenalty;
-    const presPenalty = request.presencePenalty ?? config.presencePenalty;
-    if (typeof presPenalty === 'number') body.presence_penalty = presPenalty;
-    const repPenalty = request.repetitionPenalty ?? config.repetitionPenalty;
-    if (typeof repPenalty === 'number') body.repetition_penalty = repPenalty;
-    // max_context：OpenAI 兼容端点通常不支持显式字段，但 OpenRouter 等支持 max_context_tokens
-    const maxCtx = request.maxContext ?? config.maxContext;
-    if (typeof maxCtx === 'number') body.max_context_tokens = maxCtx;
-  }
-  if (stream && includeUsage && request.onUsage) {
-    body.stream_options = { include_usage: true };
-  }
-  return body;
-}
-
-function isStreamUsageOptionUnsupported(status: number, text: string): boolean {
-  if (![400, 404, 422].includes(status)) return false;
-  const lower = text.toLowerCase();
-  return (
-    lower.includes('stream_options') ||
-    lower.includes('stream options') ||
-    lower.includes('include_usage') ||
-    lower.includes('include usage') ||
-    lower.includes('unsupported parameter') ||
-    lower.includes('unknown parameter') ||
-    lower.includes('unrecognized parameter') ||
-    lower.includes('invalid parameter') ||
-    lower.includes('extra_forbidden') ||
-    lower.includes('not support')
-  );
-}
-
-function emitUsageFromResponse(raw: unknown, config: API配置项, request: ChatCompletionRequest): void {
-  if (!request.onUsage) return;
-  const usage = extractUsage(raw, config);
-  if (usage) request.onUsage(usage);
-}
-
-function extractUsage(raw: unknown, config: API配置项): ChatCompletionUsage | null {
-  const matched = findUsagePayload(raw);
-  if (!matched) return null;
-  const { usage, path: usagePath } = matched;
-
-  const inputTokens = firstNumber(
-    usage.prompt_tokens,
-    usage.promptTokens,
-    usage.input_tokens,
-    usage.inputTokens,
-    usage.input_token_count,
-    usage.inputTokenCount,
-    usage.promptTokenCount,
-    usage.prompt_tokens_count,
-    usage.input_tokens_count,
-    usage.prompt_eval_count,
-    usage.promptEvalCount,
-    usage.input_text_tokens,
-    usage.inputTextTokens,
-    usage.totalPromptTokens,
-    usage.total_prompt_tokens,
-    usage.tokens?.input_tokens,
-    usage.tokens?.inputTokens,
-    usage.metrics?.input_tokens,
-    usage.metrics?.inputTokens,
-    usage.billed_units?.input_tokens,
-    usage.billedUnits?.inputTokens,
-  );
-  const outputTokens = firstNumber(
-    usage.completion_tokens,
-    usage.completionTokens,
-    usage.output_tokens,
-    usage.outputTokens,
-    usage.output_token_count,
-    usage.outputTokenCount,
-    usage.candidatesTokenCount,
-    usage.completion_tokens_count,
-    usage.output_tokens_count,
-    usage.eval_count,
-    usage.evalCount,
-    usage.output_text_tokens,
-    usage.outputTextTokens,
-    usage.totalCompletionTokens,
-    usage.total_completion_tokens,
-    usage.tokens?.output_tokens,
-    usage.tokens?.outputTokens,
-    usage.metrics?.output_tokens,
-    usage.metrics?.outputTokens,
-    usage.billed_units?.output_tokens,
-    usage.billedUnits?.outputTokens,
-  );
-  const totalTokens = firstNumber(
-    usage.total_tokens,
-    usage.totalTokens,
-    usage.totalTokenCount,
-    usage.total_token_count,
-    usage.total_tokens_count,
-    usage.token_count,
-    usage.tokenCount,
-    usage.tokens?.total_tokens,
-    usage.tokens?.totalTokens,
-    usage.metrics?.total_tokens,
-    usage.metrics?.totalTokens,
-    typeof inputTokens === 'number' && typeof outputTokens === 'number' ? inputTokens + outputTokens : undefined,
-  );
-  const cachedTokens = firstNumber(
-    usage.prompt_tokens_details?.cached_tokens,
-    usage.prompt_tokens_details?.cachedTokens,
-    usage.promptTokensDetails?.cached_tokens,
-    usage.promptTokensDetails?.cachedTokens,
-    usage.input_tokens_details?.cached_tokens,
-    usage.input_tokens_details?.cachedTokens,
-    usage.inputTokensDetails?.cached_tokens,
-    usage.inputTokensDetails?.cachedTokens,
-    usage.input_token_details?.cached_tokens,
-    usage.input_token_details?.cachedTokens,
-    usage.input_token_details?.cache_read,
-    usage.input_token_details?.cacheRead,
-    usage.input_token_details?.cache_read_input_tokens,
-    usage.input_token_details?.cacheReadInputTokens,
-    usage.inputTokenDetails?.cached_tokens,
-    usage.inputTokenDetails?.cachedTokens,
-    usage.inputTokenDetails?.cache_read,
-    usage.inputTokenDetails?.cacheRead,
-    usage.inputTokenDetails?.cacheReadInputTokens,
-    usage.prompt_cache_hit_tokens,
-    usage.promptCacheHitTokens,
-    usage.prompt_cache_read_tokens,
-    usage.promptCacheReadTokens,
-    usage.prompt_cache_tokens,
-    usage.promptCacheTokens,
-    usage.cache_read_input_tokens,
-    usage.cacheReadInputTokens,
-    usage.cache_read_input_token_count,
-    usage.cacheReadInputTokenCount,
-    usage.cache_read_tokens,
-    usage.cacheReadTokens,
-    usage.cache_hit_tokens,
-    usage.cacheHitTokens,
-    usage.cache_hit_input_tokens,
-    usage.cacheHitInputTokens,
-    usage.cached_prompt_tokens,
-    usage.cachedPromptTokens,
-    usage.cached_input_tokens,
-    usage.cachedInputTokens,
-    usage.input_cached_tokens,
-    usage.inputCachedTokens,
-    usage.prompt_cached_tokens,
-    usage.promptCachedTokens,
-    usage.cache_tokens,
-    usage.cacheTokens,
-    usage.cached_tokens,
-    usage.cachedTokens,
-    usage.cachedContentTokenCount,
-    usage.cached_content_token_count,
-    usage.cachedContentTokens,
-    usage.cache?.read_tokens,
-    usage.cache?.readTokens,
-    usage.cache?.read_input_tokens,
-    usage.cache?.readInputTokens,
-    usage.cache?.hit_tokens,
-    usage.cache?.hitTokens,
-    usage.cache?.hit_input_tokens,
-    usage.cache?.hitInputTokens,
-    usage.cache?.cached_tokens,
-    usage.cache?.cachedTokens,
-  );
-  const explicitUncachedTokens = firstNumber(
-    usage.prompt_cache_miss_tokens,
-    usage.promptCacheMissTokens,
-    usage.uncached_tokens,
-    usage.uncachedTokens,
-    usage.uncached_input_tokens,
-    usage.uncachedInputTokens,
-    usage.cache_miss_input_tokens,
-    usage.cacheMissInputTokens,
-    usage.cache_miss_tokens,
-    usage.cacheMissTokens,
-    usage.cache_creation_input_tokens,
-    usage.cacheCreationInputTokens,
-    usage.cache_creation_input_token_count,
-    usage.cacheCreationInputTokenCount,
-    usage.cache_write_input_tokens,
-    usage.cacheWriteInputTokens,
-    usage.cache_write_input_token_count,
-    usage.cacheWriteInputTokenCount,
-    usage.cache_write_tokens,
-    usage.cacheWriteTokens,
-    usage.prompt_cache_write_tokens,
-    usage.promptCacheWriteTokens,
-    usage.cache?.miss_tokens,
-    usage.cache?.missTokens,
-    usage.cache?.miss_input_tokens,
-    usage.cache?.missInputTokens,
-    usage.cache?.write_tokens,
-    usage.cache?.writeTokens,
-    usage.cache?.write_input_tokens,
-    usage.cache?.writeInputTokens,
-    usage.cache?.creation_tokens,
-    usage.cache?.creationTokens,
-    usage.cache?.creation_input_tokens,
-    usage.cache?.creationInputTokens,
-  );
-  const explicitCacheHitRate = normalizeCacheHitRate(firstNumber(
-    usage.cache_hit_rate,
-    usage.cacheHitRate,
-    usage.cache_hit_ratio,
-    usage.cacheHitRatio,
-    usage.cache?.hit_rate,
-    usage.cache?.hitRate,
-    usage.cache?.hit_ratio,
-    usage.cache?.hitRatio,
-  ));
-  const normalizedInput = inputTokens ?? (typeof totalTokens === 'number' && typeof outputTokens === 'number' ? Math.max(0, totalTokens - outputTokens) : undefined);
-  const normalizedOutput = outputTokens ?? (typeof totalTokens === 'number' && typeof normalizedInput === 'number' ? Math.max(0, totalTokens - normalizedInput) : undefined);
-  const normalizedTotal = totalTokens ?? (
-    typeof normalizedInput === 'number' || typeof normalizedOutput === 'number'
-      ? (normalizedInput ?? 0) + (normalizedOutput ?? 0)
-      : undefined
-  );
-  const uncachedTokens = explicitUncachedTokens ?? (
-    typeof normalizedInput === 'number' && typeof cachedTokens === 'number'
-      ? Math.max(0, normalizedInput - cachedTokens)
-      : undefined
-  );
-
-  if (
-    normalizedInput === undefined &&
-    normalizedOutput === undefined &&
-    normalizedTotal === undefined &&
-    cachedTokens === undefined &&
-    explicitUncachedTokens === undefined
-  ) {
-    return null;
-  }
-
-  return {
-    inputTokens: normalizedInput,
-    outputTokens: normalizedOutput,
-    totalTokens: normalizedTotal,
-    cachedTokens,
-    uncachedTokens,
-    cacheHitRate: explicitCacheHitRate ?? (typeof cachedTokens === 'number' && typeof normalizedInput === 'number' && normalizedInput > 0
-      ? cachedTokens / normalizedInput
-      : undefined),
-    provider: config.provider,
-    model: config.model,
-    usageFormat: inferUsageFormat(usage, usagePath),
-    usagePath,
-    rawUsageKeys: collectUsageKeys(usage),
-    cacheDiagnostic: buildCacheDiagnostic({
-      usage,
-      usagePath,
-      config,
-      cachedTokens,
-      explicitUncachedTokens,
-      cacheHitRate: explicitCacheHitRate,
-    }),
-    rawUsage: usage,
-    source: 'api',
-  };
-}
-
-function findUsagePayload(raw: unknown): UsagePayloadMatch | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const data = raw as Record<string, any>;
-  const candidates = [
-    mergeUsageCandidate(data.usage, data, 'usage'),
-    mergeUsageCandidate(data.usageMetadata, data, 'usageMetadata'),
-    mergeUsageCandidate(data.usage_metadata, data, 'usage_metadata'),
-    mergeUsageCandidate(data.tokenUsage, data, 'tokenUsage'),
-    mergeUsageCandidate(data.token_usage, data, 'token_usage'),
-    mergeUsageCandidate(data.response?.usage, data.response, 'response.usage'),
-    mergeUsageCandidate(data.response?.usageMetadata, data.response, 'response.usageMetadata'),
-    mergeUsageCandidate(data.response?.usage_metadata, data.response, 'response.usage_metadata'),
-    mergeUsageCandidate(data.responseMetadata?.usage, data.responseMetadata, 'responseMetadata.usage'),
-    mergeUsageCandidate(data.response_metadata?.usage, data.response_metadata, 'response_metadata.usage'),
-    mergeUsageCandidate(data.message?.usage, data.message, 'message.usage'),
-    mergeUsageCandidate(data.message?.usageMetadata, data.message, 'message.usageMetadata'),
-    mergeUsageCandidate(data.choices?.[0]?.usage, data.choices?.[0], 'choices[0].usage'),
-    mergeUsageCandidate(data.output?.usage, data.output, 'output.usage'),
-    mergeUsageCandidate(data.result?.usage, data.result, 'result.usage'),
-    mergeUsageCandidate(data.data?.usage, data.data, 'data.usage'),
-    mergeUsageCandidate(data.meta?.usage, data.meta, 'meta.usage'),
-    mergeUsageCandidate(data.meta?.tokens, data.meta, 'meta.tokens'),
-    mergeUsageCandidate(data.meta?.billed_units, data.meta, 'meta.billed_units'),
-    mergeUsageCandidate(data.meta?.billedUnits, data.meta, 'meta.billedUnits'),
-    mergeUsageCandidate(data.metrics?.usage, data.metrics, 'metrics.usage'),
-    mergeUsageCandidate(data.metrics?.tokens, data.metrics, 'metrics.tokens'),
-    mergeUsageCandidate(data, undefined, 'top_level'),
-  ];
-
-  return selectBestUsagePayload(candidates);
-}
-
-function mergeUsageCandidate(candidate: unknown, parent: unknown, path: string): UsagePayloadMatch | null {
-  if (!candidate || typeof candidate !== 'object') return null;
-  const usage = { ...(candidate as Record<string, any>) };
-  if (parent && typeof parent === 'object') {
-    for (const [key, value] of Object.entries(parent as Record<string, any>)) {
-      if (key in usage || shouldSkipUsageSiblingKey(key)) continue;
-      if (isUsageSiblingField(key, value)) usage[key] = value;
-    }
-  }
-  return { usage, path };
-}
-
-function selectBestUsagePayload(candidates: Array<UsagePayloadMatch | null>): UsagePayloadMatch | null {
-  const valid = candidates.filter((candidate): candidate is UsagePayloadMatch =>
-    Boolean(candidate && isUsagePayload(candidate.usage)),
-  );
-  if (!valid.length) return null;
-
-  const best = valid.reduce((winner, candidate) =>
-    scoreUsagePayload(candidate) > scoreUsagePayload(winner) ? candidate : winner,
-  );
-  const usage = { ...best.usage };
-  const paths = [best.path];
-
-  for (const candidate of valid) {
-    if (candidate === best) continue;
-    let merged = false;
-    for (const [key, value] of Object.entries(candidate.usage)) {
-      if (key in usage || shouldSkipUsageSiblingKey(key)) continue;
-      if (isUsageSiblingField(key, value)) {
-        usage[key] = value;
-        merged = true;
-      }
-    }
-    if (merged) paths.push(candidate.path);
-  }
-
-  return { usage, path: Array.from(new Set(paths)).join('+') };
-}
-
-function scoreUsagePayload(candidate: UsagePayloadMatch): number {
-  const usage = candidate.usage;
-  return (
-    (hasCacheUsageSignal(usage) ? 1000 : 0) +
-    (hasCoreUsageSignal(usage) ? 100 : 0) +
-    (candidate.path === 'top_level' ? 0 : 10) +
-    Math.min(25, collectUsageKeys(usage).filter((key) => isUsageSiblingField(key, usage[key])).length)
-  );
-}
-
-function shouldSkipUsageSiblingKey(key: string): boolean {
-  return [
-    'choices',
-    'content',
-    'created',
-    'delta',
-    'error',
-    'id',
-    'message',
-    'model',
-    'object',
-    'response',
-    'responseMetadata',
-    'response_metadata',
-    'result',
-    'usage',
-    'usageMetadata',
-    'usage_metadata',
-  ].includes(key);
-}
-
-function isUsageSiblingField(key: string, value: unknown): boolean {
-  if (/token|usage|cache|cached|billed|prompt|completion|input|output/i.test(key)) return true;
-  return isUsagePayload(value);
-}
-
-function hasCoreUsageSignal(usage: Record<string, any>): boolean {
-  return firstNumber(
-    usage.prompt_tokens,
-    usage.promptTokens,
-    usage.input_tokens,
-    usage.inputTokens,
-    usage.input_token_count,
-    usage.inputTokenCount,
-    usage.promptTokenCount,
-    usage.completion_tokens,
-    usage.completionTokens,
-    usage.output_tokens,
-    usage.outputTokens,
-    usage.output_token_count,
-    usage.outputTokenCount,
-    usage.candidatesTokenCount,
-    usage.total_tokens,
-    usage.totalTokens,
-    usage.totalTokenCount,
-    usage.total_token_count,
-    usage.token_count,
-    usage.tokenCount,
-    usage.tokens?.input_tokens,
-    usage.tokens?.inputTokens,
-    usage.billed_units?.input_tokens,
-    usage.billedUnits?.inputTokens,
-  ) !== undefined;
-}
-
-function hasCacheUsageSignal(usage: Record<string, any>): boolean {
-  return firstNumber(
-    usage.prompt_tokens_details?.cached_tokens,
-    usage.prompt_tokens_details?.cachedTokens,
-    usage.promptTokensDetails?.cached_tokens,
-    usage.promptTokensDetails?.cachedTokens,
-    usage.input_tokens_details?.cached_tokens,
-    usage.input_tokens_details?.cachedTokens,
-    usage.inputTokensDetails?.cached_tokens,
-    usage.inputTokensDetails?.cachedTokens,
-    usage.input_token_details?.cached_tokens,
-    usage.input_token_details?.cachedTokens,
-    usage.inputTokenDetails?.cached_tokens,
-    usage.inputTokenDetails?.cachedTokens,
-    usage.prompt_cache_hit_tokens,
-    usage.promptCacheHitTokens,
-    usage.prompt_cache_read_tokens,
-    usage.promptCacheReadTokens,
-    usage.prompt_cache_tokens,
-    usage.promptCacheTokens,
-    usage.cache_read_input_tokens,
-    usage.cacheReadInputTokens,
-    usage.cache_read_tokens,
-    usage.cacheReadTokens,
-    usage.cache_hit_tokens,
-    usage.cacheHitTokens,
-    usage.cache_hit_input_tokens,
-    usage.cacheHitInputTokens,
-    usage.cached_prompt_tokens,
-    usage.cachedPromptTokens,
-    usage.cached_input_tokens,
-    usage.cachedInputTokens,
-    usage.input_cached_tokens,
-    usage.inputCachedTokens,
-    usage.prompt_cached_tokens,
-    usage.promptCachedTokens,
-    usage.cache_tokens,
-    usage.cacheTokens,
-    usage.cached_tokens,
-    usage.cachedTokens,
-    usage.cachedContentTokenCount,
-    usage.cached_content_token_count,
-    usage.cachedContentTokens,
-    usage.prompt_cache_miss_tokens,
-    usage.promptCacheMissTokens,
-    usage.cache_miss_input_tokens,
-    usage.cacheMissInputTokens,
-    usage.cache_miss_tokens,
-    usage.cacheMissTokens,
-    usage.cache_creation_input_tokens,
-    usage.cacheCreationInputTokens,
-    usage.cache_write_input_tokens,
-    usage.cacheWriteInputTokens,
-    usage.prompt_cache_write_tokens,
-    usage.promptCacheWriteTokens,
-    usage.cache_hit_rate,
-    usage.cacheHitRate,
-    usage.cache_hit_ratio,
-    usage.cacheHitRatio,
-    usage.cache?.read_tokens,
-    usage.cache?.readTokens,
-    usage.cache?.hit_tokens,
-    usage.cache?.hitTokens,
-    usage.cache?.cached_tokens,
-    usage.cache?.cachedTokens,
-    usage.cache?.miss_tokens,
-    usage.cache?.missTokens,
-    usage.cache?.write_tokens,
-    usage.cache?.writeTokens,
-    usage.cache?.hit_rate,
-    usage.cache?.hitRate,
-  ) !== undefined;
-}
-
-function inferUsageFormat(usage: Record<string, any>, usagePath: string): string {
-  if (
-    usagePath.includes('usageMetadata') ||
-    usagePath.includes('usage_metadata') ||
-    'promptTokenCount' in usage ||
-    'candidatesTokenCount' in usage ||
-    'cachedContentTokenCount' in usage ||
-    'cached_content_token_count' in usage
-  ) {
-    return 'gemini_native';
-  }
-  if ('input_tokens' in usage || 'output_tokens' in usage || 'cache_read_input_tokens' in usage) {
-    return 'anthropic_or_compatible';
-  }
-  if ('prompt_tokens' in usage || 'completion_tokens' in usage || 'total_tokens' in usage || 'prompt_tokens_details' in usage) {
-    return 'openai_compatible';
-  }
-  return 'unknown';
-}
-
-function collectUsageKeys(usage: Record<string, any>): string[] {
-  return Object.keys(usage).sort();
-}
-
-function hasOnlyOpenAICoreUsage(usage: Record<string, any>): boolean {
-  const keys = collectUsageKeys(usage);
-  return keys.length > 0 && keys.every((key) => ['completion_tokens', 'prompt_tokens', 'total_tokens'].includes(key));
-}
-
-function buildCacheDiagnostic(input: {
-  usage: Record<string, any>;
-  usagePath: string;
-  config: API配置项;
-  cachedTokens?: number;
-  explicitUncachedTokens?: number;
-  cacheHitRate?: number;
-}): string {
-  const { usage, usagePath, config, cachedTokens, explicitUncachedTokens, cacheHitRate } = input;
-  const cacheReturned =
-    typeof cachedTokens === 'number' ||
-    typeof explicitUncachedTokens === 'number' ||
-    typeof cacheHitRate === 'number';
-  if (cacheReturned) {
-    return `缓存统计已由 API 返回（usage 路径：${usagePath}）。`;
-  }
-  if (hasOnlyOpenAICoreUsage(usage)) {
-    const modelHint = /gemini/i.test(config.model)
-      ? '当前模型名包含 Gemini，但响应是 OpenAI 兼容三项基础 usage；这通常说明当前接口或中转没有透传 Gemini 原生缓存字段。若要看 Gemini 缓存命中，请优先使用供应商 Gemini 与原生 Base URL。'
-      : '当前响应只有 OpenAI 兼容三项基础 usage，接口没有提供 prompt_tokens_details.cached_tokens 或任何 cache hit/miss 字段。';
-    return modelHint;
-  }
-  if (/gemini/i.test(config.model) || config.provider === 'gemini') {
-    return '未在 usage 中发现 Gemini 缓存字段 cachedContentTokenCount / cached_content_token_count；这表示本次响应未返回缓存统计，不能在前端推断命中。';
-  }
-  return 'API usage 中未发现缓存命中字段；这不是命中 0，而是接口未返回可判定字段。';
-}
-
-function isUsagePayload(candidate: unknown): candidate is Record<string, any> {
-  if (!candidate || typeof candidate !== 'object') return false;
-  const usage = candidate as Record<string, any>;
-  return firstNumber(
-    usage.prompt_tokens,
-    usage.promptTokens,
-    usage.input_tokens,
-    usage.inputTokens,
-    usage.input_token_count,
-    usage.inputTokenCount,
-    usage.promptTokenCount,
-    usage.completion_tokens,
-    usage.completionTokens,
-    usage.output_tokens,
-    usage.outputTokens,
-    usage.output_token_count,
-    usage.outputTokenCount,
-    usage.candidatesTokenCount,
-    usage.total_tokens,
-    usage.totalTokens,
-    usage.totalTokenCount,
-    usage.total_token_count,
-    usage.token_count,
-    usage.tokenCount,
-    usage.prompt_cache_hit_tokens,
-    usage.promptCacheHitTokens,
-    usage.prompt_cache_miss_tokens,
-    usage.promptCacheMissTokens,
-    usage.prompt_cache_tokens,
-    usage.promptCacheTokens,
-    usage.input_cached_tokens,
-    usage.inputCachedTokens,
-    usage.prompt_cached_tokens,
-    usage.promptCachedTokens,
-    usage.cache_tokens,
-    usage.cacheTokens,
-    usage.cached_tokens,
-    usage.cachedTokens,
-    usage.cachedContentTokenCount,
-    usage.cached_content_token_count,
-    usage.cache_read_input_tokens,
-    usage.cacheReadInputTokens,
-    usage.cache_creation_input_tokens,
-    usage.cacheCreationInputTokens,
-    usage.cache_hit_rate,
-    usage.cacheHitRate,
-    usage.tokens?.input_tokens,
-    usage.tokens?.inputTokens,
-    usage.billed_units?.input_tokens,
-    usage.billedUnits?.inputTokens,
-  ) !== undefined;
-}
-
-function normalizeCacheHitRate(value: number | undefined): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  if (value < 0) return undefined;
-  if (value > 1) return Math.min(1, value / 100);
-  return value;
-}
-
-function firstNumber(...values: unknown[]): number | undefined {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
-  }
-  return undefined;
-}
-
-function formatOpenAICompatibleError(config: API配置项, status: number, text: string): Error {
-  if (isArkConfig(config)) {
-    const lower = text.toLowerCase();
-    const hint = (() => {
-      if (lower.includes('modelnotopen') || lower.includes('model not open')) {
-        return '火山方舟模型服务未开通，请到火山方舟控制台开通对应模型后再试。';
-      }
-      if (status === 401 || status === 403) return '请检查火山方舟 API Key、访问权限和模型服务是否已开通。';
-      if (status === 404) return '请检查火山方舟模型 ID、Base URL 是否为 https://ark.cn-beijing.volces.com/api/v3。';
-      return '请检查火山方舟 Base URL、模型 ID、API Key、余额和模型服务开通状态。';
-    })();
-    return new Error(`火山方舟 API Error ${status}: ${hint}\n${text}`);
-  }
-  if (isBaiduQianfanConfig(config)) {
-    const model = config.model.trim();
-    const normalized = normalizeOpenAICompatibleModel(config);
-    const aliasHint = model && model !== normalized
-      ? `已将模型名 ${model} 按百度千帆兼容规则归一为 ${normalized}；`
-      : '';
-    const lower = text.toLowerCase();
-    const hint = (() => {
-      if (status === 401 || status === 403) return '请检查百度千帆 API Key、账号权限和 Coding Plan 模型权限；如果错误码是 coding_plan_api_key_not_allowed，说明某个独立 API 仍在用 /v2，代理会自动补试 /v2/coding。';
-      if (status === 404) return `${aliasHint}官方 GLM-5.1 的 model 参数接入点 ID 是 glm-5.1；Coding Plan Key 必须继续使用 /v2/coding，系统只会在该路径下尝试大小写别名。若仍 404，请检查该 API Key 的千帆模型列表是否实际包含 glm-5.1，或账号是否开通该模型。`;
-      if (status === 400 && (lower.includes('model') || lower.includes('parameter') || lower.includes('1210'))) {
-        return `${aliasHint}请优先确认模型 ID 填 glm-5.1；如果仍失败，说明当前千帆账号或 Coding Plan 对该模型/参数未开放。`;
-      }
-      return `${aliasHint}请检查百度千帆 Base URL、模型 ID、Key 与账号权限。`;
-    })();
-    return new Error(`百度千帆 API Error ${status}: ${hint}\n${text}`);
-  }
-  return new Error(`API Error ${status}: ${text}`);
-}
-
-async function fetchWithApiErrorReport(
-  config: API配置项,
-  source: string,
-  url: string,
-  requestMode: 'stream' | 'non-stream' | 'models' | 'test' | 'unknown',
-  init: RequestInit,
-): Promise<Response> {
-  try {
-    return await fetch(url, init);
-  } catch (error) {
-    if (error && typeof error === 'object') {
-      (error as Error & { alreadyReportedByApiLayer?: boolean }).alreadyReportedByApiLayer = true;
-    }
-    void appendApiErrorReport({
-      source,
-      config,
-      requestUrl: url,
-      requestMode,
-      error,
-    });
-    throw error;
-  }
-}
-
-function normalizeClaudeMessages(
-  messages: Array<{ role: string; content: string }>,
-): { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
-  const system = messages
-    .filter((m) => m.role === 'system' && m.content.trim())
-    .map((m) => m.content.trim())
-    .join('\n\n');
-  const normalized: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-
-  for (const msg of messages) {
-    if (msg.role === 'system') continue;
-    const content = msg.content.trim();
-    if (!content) continue;
-    const role: 'user' | 'assistant' = msg.role === 'assistant' ? 'assistant' : 'user';
-    const last = normalized[normalized.length - 1];
-    if (last?.role === role) {
-      last.content = `${last.content}\n\n${content}`;
-    } else {
-      normalized.push({ role, content });
-    }
-  }
-
-  if (normalized.length === 0 || normalized[0].role !== 'user') {
-    normalized.unshift({ role: 'user', content: '请开始本轮回应。' });
-  }
-  if (normalized[normalized.length - 1]?.role !== 'user') {
-    normalized.push({ role: 'user', content: '请继续并完成当前请求。' });
-  }
-
-  return { system, messages: normalized };
-}
-
-function buildClaudeTextBlocks(text: string): Array<{ type: 'text'; text: string }> {
-  const content = text.trim();
-  return content ? [{ type: 'text', text: content }] : [{ type: 'text', text: ' ' }];
-}
-
-function buildClaudeRequestBody(
-  config: API配置项,
-  messages: Array<{ role: string; content: string }>,
-  request: ChatCompletionRequest,
-  stream: boolean,
-): Record<string, unknown> {
-  const claudePayload = normalizeClaudeMessages(messages);
-  const bodyObj: Record<string, unknown> = {
-    model: config.model,
-    max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
-    messages: claudePayload.messages.map((message) => ({
-      role: message.role,
-      content: buildClaudeTextBlocks(message.content),
-    })),
-    stream,
-  };
-  if (claudePayload.system) {
-    bodyObj.system = buildClaudeTextBlocks(claudePayload.system);
-  }
-  // Phase 3：Claude 仅支持 max_context（通过 max_tokens 间接控制），
-  // 其他采样参数 Claude 故意不上传（参考 ST 行为，避免冲突）
-  // max_context 不直接发给 Claude，但可用于客户端侧裁剪历史（暂未实现）
-  return bodyObj;
-}
-
-function claudeHeaders(config: API配置项): HeadersInit {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'x-api-key': config.apiKey,
-    'anthropic-version': '2023-06-01',
-    'anthropic-dangerous-direct-browser-access': 'true',
-  };
-  if (config.provider === 'claude_compatible') {
-    headers['anthropic-client-name'] = 'claude-code';
-    headers['anthropic-client-version'] = '1.0.0';
-    headers['x-claude-code-attribution'] = '1';
-    headers['x-claude-code-client'] = 'claude-code';
-  }
-  return headers;
-}
-
-function formatClaudeError(status: number, text: string): Error {
-  const lower = text.toLowerCase();
-  const hint = (() => {
-    if (status === 401) return 'API Key 无效或未授权。';
-    if (status === 403) return '账号权限、模型权限、地区限制或浏览器直连权限被拒绝。';
-    if (status === 404) return 'Base URL、/v1 路径或模型名可能不正确。';
-    if (status === 400 && (lower.includes('final') || lower.includes('role'))) {
-      return '消息角色格式不符合 Claude 要求；客户端已自动尝试保证最后一条为用户内容。';
-    }
-    if (status === 400 && lower.includes('system') && (lower.includes('数组') || lower.includes('array'))) {
-      return '当前 Claude 专用模式会使用根级 system 数组；如果仍报错，请检查中转是否裁剪了请求体或要求 Claude Code 专属字段。';
-    }
-    if (
-      status === 400 &&
-      (lower.includes('unsupported parameter') ||
-        lower.includes('temperature') ||
-        lower.includes('top_p') ||
-        lower.includes('top_k') ||
-        lower.includes('thinking'))
-    ) {
-      return 'Claude 模型拒绝了可选参数；当前客户端默认不会上传 temperature / top_p / top_k / thinking。';
-    }
-    if (lower.includes('failed to fetch') || lower.includes('cors')) {
-      return '浏览器直连或 CORS 被拦截，请检查代理是否允许浏览器访问。';
-    }
-    return '请检查 Claude 专用模式、供应商类型、Base URL、模型名和 Key。';
-  })();
-  return new Error(`Claude API Error ${status}: ${hint}\n${text}`);
-}
-
-function parseClaudeTextResponse(json: unknown): string {
-  const data = json as { content?: Array<{ type?: string; text?: string }> };
-  return (data.content ?? [])
-    .filter((part) => part?.type === 'text' && typeof part.text === 'string')
-    .map((part) => part.text ?? '')
-    .join('');
 }
 
 type CompatibleStreamTextState = {
@@ -1308,9 +308,9 @@ export async function chatCompletion(
   request: ChatCompletionRequest,
   callbacks: StreamCallbacks,
 ): Promise<string> {
-  const recovered = await executeWithDeepSeekRecovery(config, {
+  const recovered = await executeWithDeepSeekDiagnostics(config, {
     maxTokens: request.maxTokens ?? config.maxTokens,
-    onSummary: request.onDeepSeekRecovery,
+    onSummary: request.onDeepSeekDiagnostics,
     execute: async (attemptConfig, attemptOptions) => {
       let reported = false;
       let finishReason: string | undefined;
@@ -1371,17 +371,9 @@ async function chatCompletionOnce(
     return streamOpenCode(config, msgs, request, callbacks);
   }
   if (provider === 'deepseek') {
-    const payload = withDeepSeekPrefixMessages(config, msgs, request);
-    try {
-      const text = await streamOpenAICompatible(payload.config, payload.messages, request, callbacks);
-      return mergePrefixResult(payload.prefix, text);
-    } catch (error) {
-      if (payload.prefix && isDeepSeekPrefixUnsupportedError(error)) {
-        console.warn('[DeepSeek Prefix] 当前接口不支持 prefix，已自动降级为标准模式。', error);
-        return streamOpenAICompatible(config, stripDeepSeekPrefixMessages(msgs), { ...request, prefixMode: false }, callbacks);
-      }
-      throw error;
-    }
+    const payload = withPrefixMessages(config, msgs, request);
+    const text = await streamOpenAICompatible(payload.config, payload.messages, request, callbacks);
+    return mergePrefixResult(payload.prefix, text);
   }
   if (provider === 'claude') {
     return streamClaude(config, msgs, request, callbacks);
@@ -1399,7 +391,6 @@ async function streamOpenAICompatible(
   messages: Array<{ role: string; content: string }>,
   request: ChatCompletionRequest,
   callbacks: StreamCallbacks,
-  includeUsage: boolean = true,
 ): Promise<string> {
   const upstreamBaseUrl = isArkConfig(config)
     ? normalizeArkBaseUrl(config.baseUrl)
@@ -1407,7 +398,7 @@ async function streamOpenAICompatible(
       ? normalizePioneerBaseUrl(config.baseUrl)
       : config.baseUrl;
   const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
-  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true, includeUsage);
+  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true);
   const url = isArkConfig(config)
     ? '/api/ark'
     : isBaiduQianfanConfig(config)
@@ -1437,10 +428,6 @@ async function streamOpenAICompatible(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    if (includeUsage && isStreamUsageOptionUnsupported(response.status, text)) {
-      console.warn('[token-usage] 当前流式接口不支持 stream_options.include_usage，已自动降级为不请求 usage 的流式请求。');
-      return streamOpenAICompatible(config, messages, request, callbacks, false);
-    }
     void appendApiErrorReport({
       source: '聊天补全',
       config,
@@ -1789,11 +776,10 @@ async function streamOpenCodeChat(
   messages: Array<{ role: string; content: string }>,
   request: ChatCompletionRequest,
   callbacks: StreamCallbacks,
-  includeUsage: boolean = true,
 ): Promise<string> {
   const endpoint: OpenCodeEndpoint = 'chat';
   const upstreamUrl = buildOpenCodeUrl(config, endpoint);
-  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true, includeUsage);
+  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true);
   const response = await fetchWithApiErrorReport(config, 'OpenCode Zen Chat 补全', '/api/opencode', 'stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1803,10 +789,6 @@ async function streamOpenCodeChat(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    if (includeUsage && isStreamUsageOptionUnsupported(response.status, text)) {
-      console.warn('[token-usage] OpenCode Chat 流式接口不支持 stream_options.include_usage，已自动降级为不请求 usage 的流式请求。');
-      return streamOpenCodeChat(config, messages, request, callbacks, false);
-    }
     void appendApiErrorReport({
       source: 'OpenCode Zen Chat 补全',
       config,
@@ -2335,9 +1317,9 @@ export async function chatCompletionNonStream(
   config: API配置项,
   request: ChatCompletionRequest,
 ): Promise<string> {
-  const recovered = await executeWithDeepSeekRecovery(config, {
+  const recovered = await executeWithDeepSeekDiagnostics(config, {
     maxTokens: request.maxTokens ?? config.maxTokens,
-    onSummary: request.onDeepSeekRecovery,
+    onSummary: request.onDeepSeekDiagnostics,
     execute: async (attemptConfig, attemptOptions) => {
       let reported = false;
       let diagnostics: DeepSeekAttemptDiagnostics = {
@@ -2422,7 +1404,7 @@ async function chatCompletionNonStreamOnce(
   }
 
   const deepSeekPayload = provider === 'deepseek'
-    ? withDeepSeekPrefixMessages(config, msgs, request)
+    ? withPrefixMessages(config, msgs, request)
     : { config, messages: msgs, prefix: '' };
 
   const upstreamBaseUrl = isArkConfig(deepSeekPayload.config)
@@ -2459,15 +1441,6 @@ async function chatCompletionNonStreamOnce(
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     const error = formatOpenAICompatibleError(deepSeekPayload.config, response.status, text);
-    if (deepSeekPayload.prefix && isDeepSeekPrefixUnsupportedError(error)) {
-      console.warn('[DeepSeek Prefix] 当前接口不支持 prefix，已自动降级为标准模式。', error);
-      return chatCompletionNonStreamOnce(config, {
-        ...request,
-        messages: request.messages,
-        prefixMode: false,
-        prefixContent: undefined,
-      });
-    }
     void appendApiErrorReport({
       source: '非流式补全',
       config: deepSeekPayload.config,

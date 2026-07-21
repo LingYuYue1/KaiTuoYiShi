@@ -6,7 +6,8 @@ function assert(condition, message) {
 
 const settingsModal = fs.readFileSync('components/features/Settings/SettingsModal.tsx', 'utf8');
 const apiSettings = fs.readFileSync('components/features/Settings/ApiSettings.tsx', 'utf8');
-const albumPanel = fs.readFileSync('components/features/GameSystems/AlbumPanel.tsx', 'utf8');
+const albumPanel = fs.readFileSync('components/features/GameSystems/AlbumWorkspace.tsx', 'utf8');
+const persistence = fs.readFileSync('src/adaptations/preferences/persistSettingsPlanes.ts', 'utf8');
 const independentTabs = [
   'MemorySystemSettings.tsx',
   'YitingSettingsTab.tsx',
@@ -18,7 +19,8 @@ const independentTabs = [
 ];
 
 assert(settingsModal.includes('persistGameSettingsChange'), '设置弹窗必须统一持久化游戏设置变更。');
-assert(settingsModal.includes("saveSetting('gameSettings', next)"), '设置弹窗变更游戏设置时必须立即写入 IndexedDB。');
+assert(settingsModal.includes('persistSettingsPlanes(next)'), '设置弹窗变更游戏设置时必须立即写入 typed preference planes。');
+assert(persistence.includes('root.device.replaceExecutionPolicy') && persistence.includes('root.device.replaceContentLibrary'), '设置持久化必须通过 device capabilities 写入独立平面。');
 for (const tab of [
   'MemorySystemSettingsTab',
   'YitingSettingsTab',
@@ -38,13 +40,13 @@ assert(albumPanel.includes('onChange={persistGameSettingsChange}'), '相册文�
 for (const file of independentTabs) {
   const source = fs.readFileSync(`components/features/Settings/${file}`, 'utf8');
   assert(source.includes('handleSave'), `${file} 必须保留保存按钮处理函数。`);
-  assert(source.includes("saveSetting('gameSettings'"), `${file} 的保存按钮必须写入 gameSettings。`);
+  assert(source.includes('persistSettingsPlanes'), `${file} 的保存按钮必须写入 typed settings planes。`);
   assert(source.includes('onClick={handleSave}'), `${file} 的保存按钮必须绑定 handleSave。`);
 }
 
 const imageSettings = fs.readFileSync('components/features/Settings/ImageGenerationSettingsTab.tsx', 'utf8');
 assert(imageSettings.includes('handleSave'), 'ImageGenerationSettingsTab.tsx 必须保留保存按钮处理函数。');
-assert(imageSettings.includes("saveSetting('gameSettings'"), 'ImageGenerationSettingsTab.tsx 的保存按钮必须写入 gameSettings。');
+assert(imageSettings.includes('persistSettingsPlanes'), 'ImageGenerationSettingsTab.tsx 的保存按钮必须写入 typed settings planes。');
 assert(imageSettings.includes('onClick={handleSave}'), 'ImageGenerationSettingsTab.tsx 的保存按钮必须绑定 handleSave。');
 
 console.log('settings save regression ok');

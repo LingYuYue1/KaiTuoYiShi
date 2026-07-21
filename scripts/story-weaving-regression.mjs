@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 import path from 'node:path';
 import ts from 'typescript';
 import { pathToFileURL } from 'node:url';
@@ -39,7 +40,7 @@ function transpileModule(sourcePath) {
       skipLibCheck: true,
     },
   }).outputText
-    .replace(/@\/(data|models|services|prompts|utils|hooks)\//g, (_match, folder) => {
+    .replace(/@\/(data|models|services|prompts|utils|hooks|src)\//g, (_match, folder) => {
       let relative = path.posix.relative(sourceDir, folder);
       if (!relative.startsWith('.')) relative = `./${relative}`;
       return `${relative}/`;
@@ -141,15 +142,16 @@ for (const sourcePath of [
   'models/storyWeaving.ts',
   'models/news.ts',
   'models/zhiku.ts',
-  'services/storyWeaving.ts',
+  'src/kernel/workflows/storyWeaving.ts',
   'services/promptModuleScopes.ts',
-  'services/storyProgressService.ts',
-  'services/storyPlanningAnalysis.ts',
+  'src/kernel/domain/story/storyProgress.ts',
+  'src/kernel/domain/story/storyPlanningAnalysis.ts',
   'models/npc.ts',
-  'services/npcRelationshipPlanning.ts',
+  'src/kernel/domain/npc/npcRelationshipPlanning.ts',
   'services/ai/newsModel.ts',
   'services/ai/phoneService.ts',
   'services/ai/structuredOutputRepair.ts',
+  'services/ai/requireIndependentApiConfig.ts',
   'services/ai/variableModel.ts',
 ]) {
   transpileModule(sourcePath);
@@ -161,6 +163,8 @@ writeStub('prompts/cot/storyWeavingOutputFormat.mjs', 'export const STORY_WEAVIN
 writeStub('data/storyWeavingWorldbook.mjs', 'export const STORY_WEAVING_WORLD_BOOK_PROMPT = "";\n');
 writeStub('prompts/cot/newsCot.mjs', 'export const NEWS_COT_PROMPT = "";\n');
 writeStub('prompts/cot/phoneCot.mjs', 'export const PHONE_COT_PROMPT = "";\n');
+writeStub('prompts/cot/phoneOutputFormat.mjs', 'export const PHONE_OUTPUT_FORMAT_PROMPT = "";\n');
+writeStub('prompts/cot/phoneStyle.mjs', 'export const PHONE_STYLE_PROMPT = "";\n');
 writeStub('prompts/cot/variableCot.mjs', 'export const VARIABLE_COT_PROMPT = "";\n');
 writeStub('prompts/cot/variableOutputFormat.mjs', 'export const VARIABLE_OUTPUT_FORMAT_PROMPT = "";\n');
 writeStub('data/newsWorldbook.mjs', 'export const NEWS_WORLD_BOOK_PROMPT = "";\n');
@@ -177,10 +181,10 @@ writeStub('data/canonicalCharacters.mjs', 'export const CANONICAL_CHARACTERS = [
 writeStub('data/builtinAvatars.mjs', 'export function getDefaultBuiltinAvatar() { return undefined; }\n');
 writeStub('utils/npcMemorySanitizer.mjs', 'export function 清理NPC同行记忆摘要(value) { return typeof value === "string" ? value.trim() : ""; }\n');
 
-const storyWeaving = await import(pathToFileURL(path.join(tempDir, 'services/storyWeaving.mjs')).href);
-const storyProgress = await import(pathToFileURL(path.join(tempDir, 'services/storyProgressService.mjs')).href);
-const storyPlanning = await import(pathToFileURL(path.join(tempDir, 'services/storyPlanningAnalysis.mjs')).href);
-const npcRelationshipPlanning = await import(pathToFileURL(path.join(tempDir, 'services/npcRelationshipPlanning.mjs')).href);
+const storyWeaving = await import(pathToFileURL(path.join(tempDir, 'src/kernel/workflows/storyWeaving.mjs')).href);
+const storyProgress = await import(pathToFileURL(path.join(tempDir, 'src/kernel/domain/story/storyProgress.mjs')).href);
+const storyPlanning = await import(pathToFileURL(path.join(tempDir, 'src/kernel/domain/story/storyPlanningAnalysis.mjs')).href);
+const npcRelationshipPlanning = await import(pathToFileURL(path.join(tempDir, 'src/kernel/domain/npc/npcRelationshipPlanning.mjs')).href);
 const newsModel = await import(pathToFileURL(path.join(tempDir, 'services/ai/newsModel.mjs')).href);
 const phoneService = await import(pathToFileURL(path.join(tempDir, 'services/ai/phoneService.mjs')).href);
 const variableModel = await import(pathToFileURL(path.join(tempDir, 'services/ai/variableModel.mjs')).href);
@@ -504,8 +508,8 @@ assert(ambiguousPlanning, '泛收束词场景应生成剧情规划分析。');
 assert(ambiguousPlanning.建议动作 === '等待正文证据', `泛收束词场景应建议等待正文证据，得到 ${ambiguousPlanning.建议动作}`);
 assert(ambiguousPlanning.偏离风险 === '中', `缺少明确收束证据时偏离/错位风险应为中，得到 ${ambiguousPlanning.偏离风险}`);
 
-const storyProgressSourceForHighConfidence = fs.readFileSync(path.join(root, 'services/storyProgressService.ts'), 'utf8');
-const sendWorkflowSourceForStoryAlignment = fs.readFileSync(path.join(root, 'hooks/useGame/sendWorkflow.ts'), 'utf8');
+const storyProgressSourceForHighConfidence = fs.readFileSync(path.join(root, 'src/kernel/domain/story/storyProgress.ts'), 'utf8');
+const sendWorkflowSourceForStoryAlignment = readTurnWorkflowSource(root);
 assert(
   storyProgressSourceForHighConfidence.includes('decideSegmentAlignment') &&
     storyProgressSourceForHighConfidence.includes('强证据跨两段纠偏') &&
@@ -517,7 +521,7 @@ assert(storyProgressSourceForHighConfidence.includes('scoreCanonSeriesPresence')
 assert(storyProgressSourceForHighConfidence.includes('跨系列纠偏：近期正文/地点强命中'), '跨系列纠偏必须在进度理由里留下可诊断说明。');
 assert(storyProgressSourceForHighConfidence.includes('currentLocation?: string'), '剧情编织纠偏必须允许当前地点参与判断。');
 assert(
-  sendWorkflowSourceForStoryAlignment.includes('const storyAlignment = isOpeningSystemTrigger') &&
+  sendWorkflowSourceForStoryAlignment.includes('const alignment = input.opening') &&
     sendWorkflowSourceForStoryAlignment.includes('? { system: state.剧情编织, changed: false, progressed: false }') &&
     sendWorkflowSourceForStoryAlignment.includes(': autoAlignCanonStoryProgress({'),
   '开局第 0 回合不得执行剧情编织自动对齐，避免首回合被后台误切到贝洛伯格/支线轨道。',
@@ -533,15 +537,8 @@ assert(
     storyProgressSourceForHighConfidence.includes('params.turnCount >= 4'),
   '跨系列纠偏不得在开局前几回合运行，避免空间站开局被公共角色或泛背景词带偏。',
 );
-const saveLoadWorkflowSource = fs.readFileSync(path.join(root, 'hooks/useGame/saveLoadWorkflow.ts'), 'utf8');
-assert(saveLoadWorkflowSource.includes('autoAlignCanonStoryProgress'), '读档时必须尝试修复旧存档剧情编织锚点。');
-assert(saveLoadWorkflowSource.includes('alignStoryWeavingToOpeningArchive') && saveLoadWorkflowSource.includes('safeWorld.开局档案'), '读档时必须先按开局档案对齐剧情编织锚点，避免罗浮/匹诺康尼旧档继续显示黑塔。');
-assert(saveLoadWorkflowSource.includes('recentAssistant?.parsedResponse?.body'), '读档修复必须使用最近正文作为纠偏证据。');
-assert(
-  saveLoadWorkflowSource.includes('currentLocation: save.世界?.当前地点') ||
-    saveLoadWorkflowSource.includes('currentLocation: safeWorld.当前地点'),
-  '读档修复必须使用存档当前地点作为纠偏证据。',
-);
+const saveLoadWorkflowSource = fs.readFileSync(path.join(root, 'hooks/useGame.ts'), 'utf8');
+assert(!saveLoadWorkflowSource.includes('autoAlignCanonStoryProgress'), '当前版本读档不得运行旧存档剧情锚点修复旁路。');
 assert(
   ambiguousPlanning.切段条件.some((item) => item.includes('异常信号源已经定位并完成封存')),
   '规划分析应保留明确切段条件。',
@@ -1048,7 +1045,7 @@ assert(variablePrompt.includes('只记录正文和变量草稿能相互印证的
 assert(variablePrompt.includes('剧情编织滑窗、智库资料、新闻苗头、即时剧情回顾和剧情回忆') || variableOutputFormat.includes('剧情编织滑窗、智库资料、新闻苗头、即时剧情回顾和剧情回忆'), '变量模型提示词必须明确参考材料不等于变量事实。');
 assert(variablePrompt.includes('不要把剧情编织当前段、后续段、原著分段结果') || variableOutputFormat.includes('不要把剧情编织当前段、后续段、原著分段结果'), '变量模型提示词必须禁止把剧情编织分段直接落库。');
 
-const storyWeavingSource = fs.readFileSync(path.join(root, 'services/storyWeaving.ts'), 'utf8');
+const storyWeavingSource = fs.readFileSync(path.join(root, 'src/kernel/workflows/storyWeaving.ts'), 'utf8');
 const variableOutputFormat = fs.readFileSync(path.join(root, 'prompts/cot/variableOutputFormat.ts'), 'utf8');
 const storyWeavingOutputFormat = fs.readFileSync(path.join(root, 'prompts/cot/storyWeavingOutputFormat.ts'), 'utf8');
 assert(storyWeavingSource.includes('本段结束状态必须写成可判定的完成条件或阶段落点') || storyWeavingOutputFormat.includes('本段结束状态必须写成可判定的完成条件或阶段落点'), 'AI 分解提示词必须要求本段结束状态是可判定完成条件。');

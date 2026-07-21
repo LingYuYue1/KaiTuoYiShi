@@ -1,12 +1,14 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
+const phoneCommands = fs.readFileSync('src/kernel/application/executePhoneCommand.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
 const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
@@ -18,15 +20,7 @@ const builtinPromptModules = fs.readFileSync('data/builtinPromptModules.ts', 'ut
 const queueTask = fs.readFileSync('models/queueTask.ts', 'utf8');
 const drawer = fs.readFileSync('components/features/Variable/VariableDrawer.tsx', 'utf8');
 
-assert(sendWorkflow.includes('fallbackGlobalCooldown'), 'fallback phone seeds must have a global cooldown.');
-assert(sendWorkflow.includes('lastNonUrgentSeedTurn'), 'fallback phone seeds must check the most recent non-urgent seed turn.');
-assert(sendWorkflow.includes("seed.priority !== 'urgent'"), 'fallback phone seed cooldown must not treat urgent seeds as ordinary low-frequency seeds.');
-assert(sendWorkflow.includes('function buildFallbackPhoneSeed'), 'main workflow must keep low-frequency fallback phone seeds.');
-assert(sendWorkflow.includes("seed.status === 'pending'"), 'fallback phone seeds must check pending seeds to avoid spam.');
-assert(sendWorkflow.includes('phoneAfterFallbackSeed'), 'main workflow must write fallback phone seeds into phone state.');
-assert(sendWorkflow.includes("pushQueueTask(state, 'phone'"), 'fallback phone seeds must surface in the background task queue.');
-assert(sendWorkflow.includes("priority: 'low'"), 'fallback phone seeds must be low priority by default.');
-assert(sendWorkflow.includes('hasRecentSimilarPhoneSeed'), 'fallback phone seeds must avoid recently repeated target/event combinations.');
+assert(!sendWorkflow.includes('buildFallbackPhoneSeed'), '主流程不得凭隐藏默认逻辑制造手机来信种子。');
 
 assert(variableFacts.includes('hasRecentNonUrgentPhoneSeed'), 'variable phone_seed facts must also respect a global low-frequency cooldown.');
 assert(variableFacts.includes("priority === 'low' || priority === 'normal'"), 'global phone_seed cooldown must apply only to low/normal priority seeds.');
@@ -34,23 +28,20 @@ assert(variableFacts.includes("seed.priority === 'urgent' || seed.priority === '
 assert(variableFacts.includes('relatedNpcIds = Array.from(new Set'), 'phone_seed facts must backfill relatedNpcIds for contact/NPC association.');
 assert(variableFacts.includes('hasRecentSimilarPhoneSeed(phone'), 'variable phone_seed writes must reject recent duplicate target/event seeds.');
 
-assert(phoneModal.includes('commitPhoneMemory = async'), 'phone UI must write communication summaries back to memory.');
-assert(phoneModal.includes('{ force: true }'), 'each phone reply must force at least one handoff summary.');
-assert(phoneModal.includes('onNpcRecordsChange'), 'private chat summaries must be able to write back to NPC companion memories.');
-assert(phoneModal.includes("来源: '手机'"), 'phone-origin NPC memories must be marked with the phone source.');
-assert(phoneModal.includes('FALLBACK_STORY_CONTACTS'), 'phone contacts must have story fallback contacts when the address book is empty.');
-assert(phoneModal.includes('buildFallbackContactsFromStory'), 'phone fallback contacts must be inferred from recent story/location context.');
-assert(phoneModal.includes('mainChatHistory') && phoneModal.includes('existingContacts: phone.contacts'), 'fallback contacts must rescue empty old saves without overwriting existing contacts.');
+assert(phoneCommands.includes('commitMemory('), 'phone kernel command must write communication summaries back to memory.');
+assert(phoneCommands.includes('compressNpcMemoryLedger({'), 'phone replies must pass through NPC memory compression.');
+assert(phoneCommands.includes("source: '手机'"), 'phone-origin NPC memories must be marked with the phone source.');
+assert(phoneCommands.includes('function buildContacts(phone: 手机系统, npcs: readonly NPC记录[])'), 'phone contacts must be derived from current NPC authority when the address book is incomplete.');
+assert(phoneCommands.includes('!contacts.some((contact) => contact.npcId === npc.id)'), 'derived contacts must not overwrite existing contacts.');
 
-assert(phoneModal.includes('groupByTargetId'), 'group seeds must bind to an existing group when seed.targetId points to that chat.');
-assert(phoneModal.includes('fallbackGroupSpeakers'), 'group replies must have speaker fallback when the model omits a resolvable name prefix.');
-assert(phoneModal.includes('index % Math.max(1, fallbackGroupSpeakers.length)'), 'group speaker fallback must rotate through participants.');
-assert(phoneModal.includes('contacts,'), 'phone reply generation must receive contacts so group participants can resolve from the address book.');
+assert(phoneCommands.includes('candidate.id === seed.targetId || sameMembers'), 'group seeds must bind to an existing group when seed.targetId points to that chat.');
+assert(phoneCommands.includes('contacts.find((item) => item.name === speakerName'), 'group replies must resolve speakers through current contacts.');
+assert(phoneCommands.includes('const contacts = buildContacts(phoneInput, story.characters.npcs)') && phoneCommands.includes('contacts,'), 'phone reply generation must receive contacts derived from current authority.');
 
 assert(phoneService.includes('evaluatePhoneReplyQuality'), 'phone replies must be deduped before landing.');
 assert(phoneService.includes('arePhoneMessagesTooSimilar'), 'phone reply dedupe must include similarity checks, not only exact equality.');
 assert(phoneService.includes('evaluatePhoneReplyQuality'), 'phone replies must be quality-filtered before landing.');
-assert(phoneService.includes('buildPhoneQualitySupplementMessages'), 'thin or repeated replies must use one targeted model supplement.');
+assert(phoneService.includes('throw new PhoneReplyQualityError(') && !phoneService.includes('buildPhoneQualitySupplementMessages'), 'thin or repeated replies must fail explicitly without a hidden second model call.');
 assert(phoneService.includes("ctx.chat.type === 'group' ? { min: 12, max: 30 } : { min: 4, max: 8 }"), 'service-level private and group reply limits must match the product rules.');
 assert(phoneService.includes('PhoneReplyQualityError'), 'two failed quality attempts must surface an explicit error.');
 assert(!phoneService.includes('buildNonRepeatingPhoneFallback'), 'private replies must not use local fixed filler.');
@@ -70,6 +61,6 @@ assert(!builtinPromptModules.includes('群聊 12-20 条'), 'builtin phone prompt
 assert((variableModel.includes('低频跟进') || variableOutputFormat.includes('低频跟进')) || variableModel.includes('手机不能长期沉默'), 'variable model prompt must audit low-frequency proactive phone messages.');
 assert(variableWorldbook.includes('手机不能长期沉默'), 'variable worldbook must audit low-frequency proactive phone messages.');
 assert(queueTask.includes("'phone'"), 'queue task types must include phone.');
-assert(drawer.includes("latestTaskById.get('phone')"), 'variable drawer must display phone queue tasks.');
+assert(!drawer.includes('pendingVariable'), 'variable drawer must not reconstruct transient phone queue state outside kernel authority.');
 
 console.log('phone memory and seed regression ok');

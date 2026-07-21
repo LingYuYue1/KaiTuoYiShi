@@ -1,13 +1,14 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const builder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
-const historyWindow = fs.readFileSync('hooks/useGame/historyWindow.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
-const memoryUtils = fs.readFileSync('hooks/useGame/memoryUtils.ts', 'utf8');
+const builder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
+const historyWindow = fs.readFileSync('src/kernel/workflows/historyWindow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
+const memoryUtils = fs.readFileSync('src/kernel/workflows/memoryUtils.ts', 'utf8');
 const npcMemorySanitizer = fs.readFileSync('utils/npcMemorySanitizer.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
@@ -15,7 +16,8 @@ const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.t
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const inputArea = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
-const storyProgressNpcMemoryFunction = sendWorkflow.match(/function applyStoryProgressNpcMemory[\s\S]*?\n}\n\nfunction formatZhikuDiagnosticsPreview/)?.[0] ?? '';
+const storyProgressStart = sendWorkflow.indexOf('export function applyStoryProgressNpcMemory');
+const storyProgressNpcMemoryFunction = storyProgressStart >= 0 ? sendWorkflow.slice(storyProgressStart, storyProgressStart + 1800) : '';
 
 assert(builder.includes('function buildNpcContinuitySection'), '主剧情 prompt 必须构建 NPC 连续性核对表。');
 assert(builder.includes('# 本回合人物关系连续性核对'), 'NPC 连续性核对表必须有可定位标题。');
@@ -44,11 +46,9 @@ assert(variableModel.includes('<NPC档案记忆写入法则>') || variableOutput
 assert(variableWorldbook.includes('对已建档 NPC：本回合与玩家发生有效互动时，必须审计是否写 \\`memory\\`'), '变量世界书完整法则必须审计已有 NPC 的互动记忆。');
 assert(variableWorldbook.includes('新入档时若即时剧情回顾、忆庭回忆或当前登记表已显示此前关键互动'), '新入档 NPC 必须补关键前因，避免从中途断层。');
 
-assert(sendWorkflow.includes('state.setPendingVariable(true)'), '正文落地后变量结算期间必须设置 pendingVariable。');
-assert(sendWorkflow.includes('state.setPendingVariable(false)'), '后台结算结束后必须清理 pendingVariable。');
-assert(inputArea.includes('disabled={loading || disabled}'), '变量结算 pending 时输入框必须禁用。');
-assert(app.includes('disabled={state.pendingVariable}'), 'App 必须把 pendingVariable 传给输入区。');
-assert(app.includes('disabled={state.loading || state.pendingVariable}'), '系统触发按钮也必须在变量结算期间禁用。');
+assert(sendWorkflow.includes('const overrides = await runVariableCalibrationStep'), '变量结算必须是主命令提交前的显式阶段。');
+assert(inputArea.includes('disabled={loading || disabled}'), '核心变量结算期间输入框必须随命令 loading 禁用。');
+assert(!app.includes('pendingVariable'), 'UI 不得复制 kernel 命令生命周期为 pendingVariable 状态机。');
 
 assert(sendWorkflow.includes('latestArchive?.角色推进摘要 ?? []'), 'story archive NPC memory must only read role progress summaries.');
 assert(sendWorkflow.includes('const matched = roleProgress.find'), 'story archive NPC memory must match summaries by NPC name.');

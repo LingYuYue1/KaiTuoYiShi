@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -8,10 +9,10 @@ const archive = fs.readFileSync('services/yitingArchive.ts', 'utf8');
 const retrieval = fs.readFileSync('services/yitingRetrieval.ts', 'utf8');
 const yitingCot = fs.readFileSync('prompts/cot/yitingCot.ts', 'utf8');
 const chatModel = fs.readFileSync('models/chat.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
-const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
-const workflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const contextSnapshot = fs.readFileSync('src/kernel/workflows/contextSnapshot.ts', 'utf8');
+const workflow = sendWorkflow;
 const pkg = fs.readFileSync('package.json', 'utf8');
 
 assert(archive.includes('gameClock?: string'), '忆庭纪要来源必须包含小时分钟字段。');
@@ -25,7 +26,7 @@ assert(yitingCot.includes('禁止把"动态世界""行动选项""后续选项"')
 assert(!archive.includes('source.worldEvents?.length ? `动态世界'), '忆庭纪要原文层不得拼入动态世界系统材料。');
 assert(!archive.includes('source.actionOptions?.length ? `行动选项'), '忆庭纪要原文层不得拼入行动选项系统材料。');
 assert(!archive.includes('source.actionOptions?.length ? `后续选项'), '忆庭纪要兜底摘要不得拼入后续选项系统材料。');
-assert(workflow.includes('gameClock: effectiveWorld?.当前时间'), '忆庭入库必须传入当前小时分钟。');
+assert(workflow.includes('gameClock: state.世界.当前时间'), '忆庭 durable job 必须传入当前小时分钟。');
 
 assert(retrieval.includes('这里注入的是概要层纪要，不是正文原文'), '忆庭召回注入必须说明只注入概要层。');
 assert(retrieval.includes('buildBriefFromRaw'), '忆庭召回必须有旧档原文摘要兜底。');
@@ -33,9 +34,9 @@ assert(!retrieval.includes('entry.原文 || entry.摘要 ||'), '忆庭召回不�
 assert(!retrieval.includes('强回忆用于恢复原文细节'), '忆庭召回口径不得再鼓励恢复正文原文。');
 assert(chatModel.includes('yitingRecallRawText?: string'), '聊天 debugContext 必须保存忆庭模型原始返回。');
 assert(chatModel.includes('yitingRecallUsedModel?: boolean'), '聊天 debugContext 必须保存忆庭是否调用模型。');
-assert(sendWorkflow.includes('yitingRecallPreview: yitingPreview?.previewText ??'), '主流程必须保存忆庭召回预览。');
-assert(sendWorkflow.includes('yitingRecallRawText: yitingPreview?.rawText ??'), '主流程必须保存忆庭模型 rawText。');
-assert(sendWorkflow.includes('yitingRecallUsedModel: yitingPreview?.usedModel === true'), '主流程必须保存忆庭模型是否被调用。');
+assert(sendWorkflow.includes('yitingRecallPreview: recall.yitingPreview?.previewText ??'), '主流程必须保存忆庭召回预览。');
+assert(sendWorkflow.includes('yitingRecallRawText: recall.yitingPreview?.rawText ??'), '主流程必须保存忆庭模型 rawText。');
+assert(sendWorkflow.includes('yitingRecallUsedModel: recall.yitingPreview?.usedModel === true'), '主流程必须保存忆庭模型是否被调用。');
 assert(turnItem.includes('【忆庭模型原始返回】'), '聊天请求上下文必须单独显示忆庭模型原始返回。');
 assert(turnItem.includes('本回合未调用忆庭模型，使用本地摘要检索'), '聊天请求上下文必须说明忆庭未调用模型时走本地摘要检索或未触发。');
 assert(contextSnapshot.includes('latestAssistantYitingDebugRecall'), '上下文页必须读取上一回合保存的忆庭 rawText。');

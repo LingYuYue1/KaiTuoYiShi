@@ -132,7 +132,7 @@ function buildDebugContext(
     deepSeekPrefixMode: request.deepSeekLockFormat,
     deepSeekProtocolIssues: generation.deepSeekProtocolIssues,
     softProtocolIssues: generation.softProtocolIssues,
-    deepSeekMainOriginalModel: generation.result.deepSeekRecovery?.model,
+    deepSeekMainOriginalModel: generation.result.deepSeekDiagnostics?.model,
     stV2Used: input.tavernV2Enabled,
     rerollSimilarity: generation.rerollSimilarity,
     rerollSimilarityRetried: generation.rerollSimilarityRetried,

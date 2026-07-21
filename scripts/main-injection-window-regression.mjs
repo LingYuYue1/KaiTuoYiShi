@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function read(path) {
   return fs.readFileSync(path, 'utf8');
@@ -11,10 +12,10 @@ function assert(condition, message) {
   }
 }
 
-const historyWindow = read('hooks/useGame/historyWindow.ts');
-const sendWorkflow = read('hooks/useGame/sendWorkflow.ts');
-const contextSnapshot = read('hooks/useGame/contextSnapshot.ts');
-const systemPromptBuilder = read('hooks/useGame/systemPromptBuilder.ts');
+const historyWindow = read('src/kernel/workflows/historyWindow.ts');
+const sendWorkflow = readTurnWorkflowSource();
+const contextSnapshot = read('src/kernel/workflows/contextSnapshot.ts');
+const systemPromptBuilder = read('src/kernel/workflows/systemPromptBuilder.ts');
 
 assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITH_MEMORY = 20'), '有短中长期记忆时原始 messages 窗口应接近墨色 10 回合，即约 20 条消息。');
 assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20'), '无短中长期记忆时原始 messages 窗口也应保留约 10 回合承接。');
@@ -38,16 +39,16 @@ assert(historyWindow.includes('needsBodyFallback ? 260 : 180'), '即时剧情回
 assert(!historyWindow.includes('const body = needsBodyFallback ?'), '即时剧情回顾不得只在兜底时才读取正文。');
 assert(!historyWindow.includes('正文：${compactText(body, 320)}'), '即时剧情回顾不得继续默认重复上传 assistant 正文。');
 
-assert(sendWorkflow.includes('buildImmediateStoryReview(updatedHistory)'), '主剧情真实请求必须使用默认即时剧情回顾窗口。');
-assert(!sendWorkflow.includes('buildImmediateStoryReview(updatedHistory, 12)'), '主剧情真实请求不得继续固定 12 条即时剧情回顾。');
-assert(sendWorkflow.includes('buildLeanAssistantHistoryContent(msg)'), '主剧情原始 assistant messages 必须先瘦身，避免和即时剧情回顾重复。');
+assert(sendWorkflow.includes('buildImmediateStoryReview(history)'), '主剧情真实请求必须使用默认即时剧情回顾窗口。');
+assert(!sendWorkflow.includes('buildImmediateStoryReview(history, 12)'), '主剧情真实请求不得继续固定 12 条即时剧情回顾。');
+assert(sendWorkflow.includes('buildLeanAssistantHistoryContent(message)'), '主剧情原始 assistant messages 必须先瘦身，避免和即时剧情回顾重复。');
 assert(!sendWorkflow.includes("创建聊天消息('assistant', msg.content)"), '主剧情不得继续直接上传 assistant raw content。');
 assert(sendWorkflow.includes('stripLeakedHistoryMetaFromBody'), '主剧情落库前必须清理模型照抄的历史元标签。');
 assert(sendWorkflow.includes("tag === '历史时间'"), '模型照抄【历史时间】时必须从正文中移除。');
 assert(contextSnapshot.includes('buildImmediateStoryReview(state.chatHistory)'), '上下文预览必须使用同一即时剧情回顾窗口。');
 assert(!contextSnapshot.includes('buildImmediateStoryReview(state.chatHistory, 12)'), '上下文预览不得继续固定 12 条即时剧情回顾。');
 
-assert(sendWorkflow.includes('getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆)'), '主剧情 messages 必须继续经过统一历史窗口函数。');
+assert(sendWorkflow.includes('getMainHistoryWindow(input.context.history, input.scope.gameSettings, input.state.记忆)'), '主剧情 messages 必须继续经过统一历史窗口函数。');
 assert(systemPromptBuilder.includes('# 即时剧情回顾') || sendWorkflow.includes('# 即时剧情回顾'), '主剧情必须保留即时剧情回顾注入。');
 assert(!systemPromptBuilder.includes('记忆｜即时记忆'), '主剧情不得重新注入即时记忆。');
 

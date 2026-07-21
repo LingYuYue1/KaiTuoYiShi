@@ -16,7 +16,7 @@ function assert(condition, message) {
 }
 
 const dbService = readSource('services/dbService.ts');
-const saveLoadWorkflow = readSource('hooks/useGame/saveLoadWorkflow.ts');
+const saveLoadWorkflow = readSource('hooks/useGame.ts');
 const saveModal = readSource('components/features/SaveLoad/SaveLoadModal.tsx');
 const storageManager = readSource('components/features/Settings/StorageManager.tsx');
 const loadLatestBody = dbService.match(/export async function loadLatestSave\(\): Promise<[^]+?\n}\n/)?.[0] ?? '';

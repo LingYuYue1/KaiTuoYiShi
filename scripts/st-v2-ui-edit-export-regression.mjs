@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const tab = fs.readFileSync('components/features/Settings/PromptModulesTab.tsx', 'utf8');
+const tab = fs.readFileSync('components/features/Settings/PromptSettingsSurface.tsx', 'utf8');
 const guard = fs.readFileSync('hooks/useGame/tavernFormatGuard.ts', 'utf8');
 const builder = fs.readFileSync('hooks/useGame/tavernMessageChainBuilder.ts', 'utf8');
 const settings = fs.readFileSync('models/settings.ts', 'utf8');

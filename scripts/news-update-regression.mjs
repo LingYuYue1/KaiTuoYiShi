@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) {
@@ -8,8 +9,8 @@ function assert(condition, message) {
 }
 
 const newsModel = fs.readFileSync('services/ai/newsModel.ts', 'utf8');
-const newsWorkflow = fs.readFileSync('hooks/useGame/newsWorkflow.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const newsWorkflow = fs.readFileSync('src/kernel/workflows/newsWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const newsPanel = fs.readFileSync('components/features/GameSystems/NewsPanel.tsx', 'utf8');
 const newsTypes = fs.readFileSync('models/news.ts', 'utf8');
 

@@ -171,7 +171,6 @@ export interface UseGameStateReturn {
   workflowStatus: 'searching' | 'done' | '';
   liveRecallSummary: string;
   liveRecallFullContent: string;
-  pendingVariable: boolean;
   turnCount: number;
   pendingOpeningTrigger: string | null;
   interruptedWorkflow: WorkflowRecoveryJournal | null;
@@ -234,7 +233,6 @@ export function useGameState(): UseGameStateReturn {
     : activeStage ? formatTurnStage(activeStage) : startupError;
   const liveRecallSummary = '';
   const liveRecallFullContent = '';
-  const pendingVariable = false;
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -336,7 +334,6 @@ export function useGameState(): UseGameStateReturn {
     workflowStatus,
     liveRecallSummary,
     liveRecallFullContent,
-    pendingVariable,
     interruptedWorkflow, setInterruptedWorkflow,
     scrollRef,
   };

@@ -1,14 +1,15 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
-const builder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
-const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
+const builder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
+const contextSnapshot = fs.readFileSync('src/kernel/workflows/contextSnapshot.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const variableExecutor = fs.readFileSync('utils/variableExecutor.ts', 'utf8');
 const worldEvents = fs.readFileSync('utils/worldEvents.ts', 'utf8');
 const promptModel = fs.readFileSync('models/prompts.ts', 'utf8');
 const worldbookModel = fs.readFileSync('models/worldbook.ts', 'utf8');
-const promptModulesTab = fs.readFileSync('components/features/Settings/PromptModulesTab.tsx', 'utf8');
+const promptModulesTab = fs.readFileSync('components/features/Settings/PromptSettingsSurface.tsx', 'utf8');
 const worldbookManager = fs.readFileSync('components/features/Worldbook/WorldbookManagerModal.tsx', 'utf8');
 const gameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const builtinPromptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
@@ -55,9 +56,9 @@ assert(builder.includes('normalizeWorldEventFingerprint'), '近期事件必须�
 assert(!builder.includes('worldState.全局事件.map((e) => `- ${e}`).join'), '近期事件不得继续全量注入世界全局事件。');
 assert(worldEvents.includes('WORLD_EVENT_STORAGE_LIMIT = 30'), '世界全局事件存档层必须默认只保留最近 30 条。');
 assert(worldEvents.includes('function compactWorldEvents'), '世界全局事件必须有统一压缩/去重函数。');
-assert(sendWorkflow.includes('appendWorldEvents(worldAfter.全局事件, parsedForDisplay.worldEvents)'), '正文动态世界事件追加必须走 30 条存档上限。');
+assert(sendWorkflow.includes('appendWorldEvents(world.全局事件, input.parsed.worldEvents)'), '正文动态世界事件追加必须走 30 条存档上限。');
 assert(variableExecutor.includes("root === '世界' && rest === '全局事件' && cmd.action === 'push'"), '变量命令 push 世界.全局事件 也必须走 30 条存档上限。');
-assert(!sendWorkflow.includes('全局事件: [...worldAfter.全局事件, ...parsedForDisplay.worldEvents]'), '正文动态世界事件不得继续无限追加进存档。');
+assert(!sendWorkflow.includes('全局事件: [...'), '正文动态世界事件不得继续无限追加进存档。');
 
 const calls = [...builder.matchAll(/buildResponseLengthSection\(settings\)/g)];
 assert(calls.length >= 2, '主剧情和开局 prompt 都必须注入正文字数硬约束。');

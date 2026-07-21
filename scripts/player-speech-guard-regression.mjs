@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
@@ -136,10 +137,10 @@ assert(
   'rawText 含协议标签但缺 <正文> 时，不能把原始消息压成清洗后的纯正文。',
 );
 
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const renderers = fs.readFileSync('components/features/Chat/MessageRenderers.tsx', 'utf8');
 const chatList = fs.readFileSync('components/features/Chat/ChatList.tsx', 'utf8');
-const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
+const systemPromptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
 const builtinPromptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
 const builtinWorldbookConfig = fs.readFileSync('data/builtinWorldbookConfig.ts', 'utf8');
 const worldbookUtils = fs.readFileSync('utils/worldbook.ts', 'utf8');

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) {
@@ -7,10 +8,12 @@ function assert(condition, message) {
 }
 
 const wizard = fs.readFileSync('components/features/NewGame/NewGameWizard.tsx', 'utf8');
+const onboarding = fs.readFileSync('src/kernel/application/rootCapabilities.ts', 'utf8');
+const openingPresetModel = fs.readFileSync('models/openingPreset.ts', 'utf8');
 const journeyModel = fs.readFileSync('models/journey.ts', 'utf8');
 const journeyPresets = fs.readFileSync('data/journeyPresets.ts', 'utf8');
-const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const systemPromptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const openingCot = fs.readFileSync('prompts/cot/openingCot.ts', 'utf8');
 const builtinWorldbook = fs.readFileSync('data/builtinWorldbookConfig.ts', 'utf8');
 const openingCoreLore = fs.readFileSync('data/lore/openingCoreLore.json', 'utf8');
@@ -18,23 +21,22 @@ const openingCorePreset = fs.readFileSync('public/worldbook-presets/opening-core
 const worldbookUtil = fs.readFileSync('utils/worldbook.ts', 'utf8');
 const worldModel = fs.readFileSync('models/world.ts', 'utf8');
 const openingArchiveService = fs.readFileSync('services/ai/openingArchive.ts', 'utf8');
-const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
+const contextSnapshot = fs.readFileSync('src/kernel/workflows/contextSnapshot.ts', 'utf8');
 const zhikuRetrieval = fs.readFileSync('services/zhikuRetrieval.ts', 'utf8');
-const storyWeaving = fs.readFileSync('services/storyWeaving.ts', 'utf8');
+const storyWeaving = fs.readFileSync('src/kernel/workflows/storyWeaving.ts', 'utf8');
 const storyWeavingPreset = fs.readFileSync('data/storyWeavingPreset.ts', 'utf8');
 const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
 const travelerTemplate = fs.readFileSync('services/ai/travelerTemplate.ts', 'utf8');
 const newsModel = fs.readFileSync('services/ai/newsModel.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
-const systemPanels = fs.readFileSync('components/features/GameSystems/SystemPanels.tsx', 'utf8');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
 assert(
-  wizard.includes("OPENING_PLAYER_PRESETS_KEY = 'openingPlayerPresets'") &&
-    wizard.includes('loadSetting<OpeningPlayerPreset[]>') &&
-    wizard.includes('saveSetting(OPENING_PLAYER_PRESETS_KEY'),
-  '开局预设必须保存到 settings，而不是游戏存档。',
+    openingPresetModel.includes("OPENING_PLAYER_PRESETS_KEY = 'openingPlayerPresets'") &&
+    onboarding.includes('loadOpeningPresets()') &&
+    onboarding.includes('preferences.set(OPENING_PLAYER_PRESETS_KEY'),
+  '开局预设必须通过 onboarding capability 保存到 preference，而不是游戏存档。',
 );
 
 assert(
@@ -261,13 +263,13 @@ assert(
 );
 
 assert(
-  wizard.includes('interface OpeningPresetDraft') &&
-    wizard.includes('openingSource: OpeningSource') &&
-    wizard.includes('selectedWorkshopTemplateId: string') &&
-    wizard.includes('storyMode: 剧情模式') &&
-    wizard.includes('customStartPrompt: string') &&
-    wizard.includes('canonicalTrailblazer: CanonicalTrailblazer') &&
-    wizard.includes('selectedAbilityIds: string[]'),
+  openingPresetModel.includes('interface OpeningPresetDraft') &&
+    openingPresetModel.includes('openingSource: 开局来源') &&
+    openingPresetModel.includes('selectedWorkshopTemplateId: string') &&
+    openingPresetModel.includes('storyMode: 剧情模式') &&
+    openingPresetModel.includes('customStartPrompt: string') &&
+    openingPresetModel.includes("canonicalTrailblazer: 'stelle' | 'caelus' | 'both'") &&
+    openingPresetModel.includes('selectedAbilityIds: string[]'),
   '开局预设必须覆盖世界模式、角色、命途能力、原著主角和切入说明。',
 );
 
@@ -302,18 +304,16 @@ assert(
 
 assert(
   useGame.includes('handleRestartOpening') &&
-    useGame.includes('生成开局已成立事实(openingArchive') &&
-    useGame.includes('根据开局档案创建初始NPC记录') &&
-    useGame.includes('const restartOpeningArchive = 归一化开局档案(state.世界.开局档案, state.世界)') &&
-    useGame.includes('state.setNPC(根据开局档案创建初始NPC记录(restartOpeningArchive))') &&
-    useGame.includes('state.set世界((prev) => {') &&
-    useGame.includes('alignStoryWeavingToOpeningArchive(state.剧情编织, restartOpeningArchive)') &&
-    useGame.includes("saveSetting('storyWeavingSystem', nextStoryWeaving)") &&
-    useGame.includes('开局档案: openingArchive') &&
+    useGame.includes('生成开局已成立事实(restartOpeningArchive') &&
+    useGame.includes('根据开局档案创建初始NPC记录(restartOpeningArchive)') &&
+    useGame.includes('const restartOpeningArchive = 归一化开局档案(s.世界.开局档案, s.世界)') &&
+    useGame.includes('alignStoryWeavingToOpeningArchive(s.剧情编织, restartOpeningArchive)') &&
+    useGame.includes('await handleStartSession(') &&
+    useGame.includes('开局档案: restartOpeningArchive') &&
     useGame.includes('openingSummary?.初始日期参考') &&
     useGame.includes('openingSummary?.初始时间参考') &&
     useGame.includes('当前日期: nextDate') &&
-    useGame.includes('全局事件: 生成开局已成立事实(openingArchive'),
+    useGame.includes('全局事件: 生成开局已成立事实(restartOpeningArchive'),
   '重新开局必须保留并重建开局档案事实与初始 NPC 关系种子，不能只清空运行时数据。',
 );
 
@@ -349,16 +349,16 @@ assert(
     wizard.includes('战技列表: openingSkills.map') &&
     wizard.includes('openingSkills={openingSkills}') &&
     wizard.includes('开局战技：${skills?.length') &&
-    wizard.includes('创建默认开局档案'),
+    wizard.includes('skills: openingSkills'),
   '开局向导必须能把命途与能力页里的战技写入旅人、总览和开局摘要。',
 );
 
 assert(
-  worldModel.includes('export function 根据开局档案创建初始NPC记录') &&
+    worldModel.includes('export function 根据开局档案创建初始NPC记录') &&
     worldModel.includes('archive.来源 === \'official_preset\' && relationHints.length === 0') &&
-    worldModel.includes('关系: \'acquaintance\' as const') &&
-    worldModel.includes('当前关系阶段: \'开局已认识（未必当前在场）\'') &&
-    worldModel.includes('代表长期关系参考，不代表当前镜头在场') &&
+    worldModel.includes('const openingAffinity = inferOpeningAffinity(openingSummary)') &&
+    worldModel.includes('当前关系阶段: 获取NPC关系阶段(openingAffinity)') &&
+    worldModel.includes('同行: false') &&
     worldModel.includes('OPENING_NON_PERSON_NAMES') &&
     worldModel.includes('isValidOpeningInitialNpcName') &&
     worldModel.includes('OPENING_NON_PERSON_NAMES.has(text)') &&
@@ -368,7 +368,8 @@ assert(
     wizard.includes('根据开局档案创建初始NPC记录(worldState.开局档案)') &&
     wizard.includes('await onStart(traveler, worldState, initialNpcRecords)') &&
     app.includes('initialNpcRecords: NPC记录[] = []') &&
-    app.includes('state.setNPC(initialNpcRecords)'),
+    app.includes('initialNpcRecords,') &&
+    useGame.includes('initialNpcRecords: npc'),
   '自由/工坊开局的明确初始关系与自制 NPC 必须写入 NPC 账本，但不能把官方预设关键 NPC 或组织群体误当成当前在场。',
 );
 
@@ -420,18 +421,18 @@ assert(
     openingArchiveService.includes('初始时间参考：${[input.defaultDateHint, input.defaultTimeHint]') &&
     openingArchiveService.includes('normalizeOpeningArchive') &&
     openingArchiveService.includes('chatCompletionNonStream'),
-  '开局整理必须有独立 AI 服务骨架，能结构化解析自制 NPC 和初始关系；失败时仍可回落本地整理。',
+  '开局整理必须有独立 AI 服务骨架，能结构化解析自制 NPC 和初始关系。',
 );
 
 assert(
-    wizard.includes('parseOpeningArchiveWithAI(') &&
+    wizard.includes('onboarding.parseOpeningArchive(') &&
     wizard.includes('openingArchiveApiConfig') &&
     wizard.includes('正在整理开局档案...') &&
-    wizard.includes('开局整理失败，已改用本地兜底。') &&
+    wizard.includes("throw new Error('自由开局要求配置可用的开局档案 API')") &&
     wizard.includes('defaultDateHint: selectedOpeningDate') &&
     wizard.includes('defaultTimeHint: selectedOpeningTime') &&
     wizard.includes('整理档案: parsedArchive'),
-  '自由/工坊开局必须优先尝试 AI 整理并在失败时回落本地整理。',
+  '自由/工坊开局必须要求 AI 整理成功，不得静默回落到另一条语义路径。',
 );
 
 assert(
@@ -511,12 +512,12 @@ assert(
 );
 
 assert(
-  sendWorkflow.includes('openingRegionName: effectiveWorld.开局档案?.地区名称') &&
-    sendWorkflow.includes('openingChapterName: effectiveWorld.开局档案?.章节锚点名称') &&
-    sendWorkflow.includes('openingEntryText: effectiveWorld.开局档案?.玩家介入原文') &&
-    sendWorkflow.includes('openingSource: effectiveWorld.开局档案?.来源') &&
+  sendWorkflow.includes('openingRegionName: world.开局档案?.地区名称') &&
+    sendWorkflow.includes('openingChapterName: world.开局档案?.章节锚点名称') &&
+    sendWorkflow.includes('openingEntryText: world.开局档案?.玩家介入原文') &&
+    sendWorkflow.includes('openingSource: world.开局档案?.来源') &&
     sendWorkflow.includes('openingArchiveText') &&
-    sendWorkflow.includes('startSceneName: effectiveWorld.开局档案?.章节锚点名称 ?? effectiveWorld.当前地点') &&
+    sendWorkflow.includes('startSceneName: world.开局档案?.章节锚点名称 ?? world.当前地点') &&
     sendWorkflow.includes('const openingNewsBody = [') &&
     sendWorkflow.includes('当前开局为${openingArchive?.地区名称') &&
     sendWorkflow.includes('章节参考：${openingArchive?.章节参考说明') &&
@@ -555,7 +556,7 @@ assert(
   builtinWorldbook.includes('开局切入说明') &&
     builtinWorldbook.includes('黑塔空间站') &&
     builtinWorldbook.includes('黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼和自由 / 创意工坊开局都可以成为当前起点') &&
-    builtinWorldbook.includes('只有黑塔空间站序章、空间站危机复盘或正文明确触发时') &&
+    builtinWorldbook.includes('只有开局档案或当前剧情明确处于空间站危机时') &&
     !builtinWorldbook.includes('当前游戏内仅有「黑塔空间站·反物质入侵」一条线') &&
     !builtinWorldbook.includes('本作目前只做「登上星穹列车」这一条线') &&
     !builtinWorldbook.includes('开局时已抵达黑塔空间站'),
@@ -632,12 +633,6 @@ assert(
 assert(
   wizard.includes('只保存开局表单，不保存 API key 或存档进度。'),
   '预设 UI 必须说明不会保存 API key 或存档进度。',
-);
-
-assert(
-  systemPanels.includes('黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼和自由开局的章节锚点') &&
-    !systemPanels.includes('第一阶段聚焦「登上星穹列车」一条线'),
-  '剧情编织占位文案不得再宣称只做登上星穹列车一条线。',
 );
 
 assert(

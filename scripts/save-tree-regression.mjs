@@ -5,7 +5,7 @@ function assert(condition, message) {
 }
 
 const saveTree = fs.readFileSync('utils/saveTree.ts', 'utf8');
-const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+const saveLoad = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const dbService = fs.readFileSync('services/dbService.ts', 'utf8');
 
 assert(saveTree.includes('export interface 存档树元信息'), '必须定义存档树元信息。');

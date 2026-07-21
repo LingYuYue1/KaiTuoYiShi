@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const source = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
+const phoneCommands = fs.readFileSync('src/kernel/application/executePhoneCommand.ts', 'utf8');
 
 const checks = [
   {
@@ -75,7 +76,8 @@ const checks = [
       source.includes('拉人入群') &&
       source.includes('列车组频道') &&
       source.includes('临时频道') &&
-      source.includes('title: buildStandardGroupTitle(groupParticipantIds, seed.title)'),
+      source.includes('buildStandardGroupTitle(selectedContacts.map((item) => item.id))') &&
+      phoneCommands.includes("seed.title.trim() || '临时频道'"),
   },
   {
     label: 'group chat title can be renamed from chat surface',
@@ -84,7 +86,8 @@ const checks = [
       source.includes('onRenameGroup') &&
       source.includes('setRenamingGroup(true)') &&
       source.includes("chat.type === 'group' && !renamingGroup") &&
-      source.includes('title: nextTitle'),
+      source.includes('actions.renameGroup(chatId, title)') &&
+      phoneCommands.includes("case 'phone.rename-group'"),
   },
   {
     label: 'group chat members can be viewed from chat surface',
@@ -100,7 +103,7 @@ const checks = [
     label: 'group chat members panel can add contacts to the group',
     ok:
       source.includes('handleAddGroupMember') &&
-      source.includes('participantIds: [...chat.participantIds, contact.id]') &&
+      phoneCommands.includes('participantIds: [...chat.participantIds, contact.id]') &&
       source.includes('groupAddCandidates={activeChat.type ===') &&
       source.includes('const [showAddMembers, setShowAddMembers]') &&
       source.includes('aria-label="拉人入群"') &&

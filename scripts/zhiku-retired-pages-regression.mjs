@@ -27,6 +27,7 @@ const zhikuModel = fs.readFileSync('models/zhiku.ts', 'utf8');
 const zhikuPanel = fs.readFileSync('components/features/GameSystems/ZhikuPanel.tsx', 'utf8');
 const useGameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
+const rootCapabilities = fs.readFileSync('src/kernel/application/rootCapabilities.ts', 'utf8');
 
 for (const file of retiredPresetFiles) {
   assert(!fs.existsSync(path.join(presetDir, file)), `退役智库预设文件不应存在：${file}`);
@@ -54,8 +55,8 @@ assert(
   presetSource.includes('mergeBundledZhikuSystem') &&
     presetSource.includes('removeRetiredZhikuEntries(') &&
     presetSource.includes('hydrateRuntimeZhiku') &&
-    useGameState.includes('hydrateRuntimeZhiku') &&
-    useGame.includes('hydrateRuntimeZhiku'),
+    rootCapabilities.includes('hydrateRuntimeZhiku(save.智库)') &&
+    useGame.includes('hydrateRuntimeZhiku(current.智库)'),
   '启动加载与读档流程必须通过 hydrateRuntimeZhiku / mergeBundledZhikuSystem 清理旧存档残留的退役智库页条目。',
 );
 

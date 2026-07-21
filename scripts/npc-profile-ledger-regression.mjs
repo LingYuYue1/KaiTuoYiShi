@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readTurnWorkflowSource } from './lib/turn-workflow-source.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -13,13 +14,14 @@ const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const builtinPromptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
 const promptModel = fs.readFileSync('models/prompts.ts', 'utf8');
 const variableRegistry = fs.readFileSync('utils/variableRegistry.ts', 'utf8');
-const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
-const memoryUtils = fs.readFileSync('hooks/useGame/memoryUtils.ts', 'utf8');
-const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const systemPromptBuilder = fs.readFileSync('src/kernel/workflows/systemPromptBuilder.ts', 'utf8');
+const memoryUtils = fs.readFileSync('src/kernel/workflows/memoryUtils.ts', 'utf8');
+const sendWorkflow = readTurnWorkflowSource();
 const chatModel = fs.readFileSync('models/chat.ts', 'utf8');
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
-const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
+const contextSnapshot = fs.readFileSync('src/kernel/workflows/contextSnapshot.ts', 'utf8');
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
+const phoneCommands = fs.readFileSync('src/kernel/application/executePhoneCommand.ts', 'utf8');
 const companionPanel = fs.readFileSync('components/features/GameSystems/CompanionPanel.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
 const packageJson = fs.readFileSync('package.json', 'utf8');
@@ -125,18 +127,18 @@ assert(memoryUtils.includes('总结记忆') || memoryUtils.includes('NPC总结�
 
 assert(chatModel.includes('npcLedgerInjection?:'), 'debugContext 必须保存 NPC 账本注入诊断。');
 assert(chatModel.includes('npcLedgerUpdate?:'), 'debugContext 必须预留 NPC 账本更新诊断。');
-assert(sendWorkflow.includes('const npcLedgerSelection = !isOpeningSystemTrigger'), '真实请求必须构建 NPC 账本选择结果。');
-assert(sendWorkflow.includes('npcLedgerInjection: buildNpcLedgerDebug(npcLedgerSelection)'), 'AI 回复落库必须保存 NPC 账本注入诊断。');
-assert(sendWorkflow.includes('formatNpcLedgerPreview(npcLedgerSelection)'), '请求上下文预览摘要必须包含 NPC 账本诊断。');
+assert(sendWorkflow.includes('npcLedgers: selectNpcLedgers(input.state, input.scope, worldbook)'), '真实请求必须构建 NPC 账本选择结果。');
+assert(sendWorkflow.includes('npcLedgerInjection: buildNpcLedgerDebug(input.npcLedgers)'), 'AI 回复落库必须保存 NPC 账本注入诊断。');
+assert(sendWorkflow.includes('formatNpcLedgerPreview(input.npcLedgers)'), '请求上下文预览摘要必须包含 NPC 账本诊断。');
 assert(sendWorkflow.includes('compressNpcMemoryLedger({'), '主剧情 NPC 记忆压缩必须使用账本压缩工具。');
-assert(sendWorkflow.includes('总结记忆: ledgerCompression.summaries'), '主剧情 NPC 压缩必须写入独立总结记忆。');
+assert(sendWorkflow.includes('总结记忆: compression.summaries'), '主剧情 NPC 压缩必须写入独立总结记忆。');
 assert(!sendWorkflow.includes('compressNpcMemories('), '主剧情不应再把 compressNpcMemories 结果直接写回同行记忆。');
-assert(sendWorkflow.includes('function buildNpcLedgerUpdateDebug'), '主流程必须构建 NPC 账本更新诊断。');
+assert(sendWorkflow.includes('export function buildNpcLedgerUpdateDebug'), '主流程必须构建 NPC 账本更新诊断。');
 assert(sendWorkflow.includes('const npcNameById = new Map<string, string>()'), 'NPC 账本更新诊断必须把内部 NPC id 映射回中文姓名。');
 assert(sendWorkflow.includes('npcNameById.get(commandName) ?? commandName'), 'NPC 账本更新诊断命令侧必须优先显示中文姓名。');
-assert(sendWorkflow.includes('attachNpcLedgerUpdateDebug(finalHistory, aiMsg.id, npcLedgerUpdateDebug)'), '主流程必须把 NPC 账本更新诊断回写到当前 assistant 消息。');
+assert(sendWorkflow.includes('attachNpcLedgerUpdateDebug(history, input.assistantMessageId, ledgerDebug)'), '主流程必须把 NPC 账本更新诊断回写到当前 assistant 消息。');
 assert(sendWorkflow.includes('summaryTriggered: ['), 'NPC 总结记忆压缩触发必须进入更新诊断。');
-assert(sendWorkflow.includes('chatHistory: finalHistory'), '自动存档必须使用带 NPC 账本更新诊断的 finalHistory。');
+assert(sendWorkflow.includes('state.chatHistory = history'), '提交候选必须使用带 NPC 账本更新诊断的 history。');
 assert(sendWorkflow.includes("key !== 'batch' && key !== 'npcLedgerUpdate'"), 'NPC 账本更新诊断不能被误判为变量命令已落地。');
 assert(turnItem.includes('【NPC账本注入诊断】'), 'TurnItem 请求上下文必须显示 NPC 账本诊断。');
 assert(turnItem.includes('【NPC账本更新诊断】'), 'TurnItem 请求上下文必须显示 NPC 账本更新诊断。');
@@ -146,19 +148,19 @@ assert(contextSnapshot.includes('本回合 NPC 账本预期注入'), '上下文�
 assert(contextSnapshot.includes('NPC_MEMORY_WRITE_RULE_PROMPT'), '上下文页必须单独引用完整 NPC 写入法则，方便玩家核对。');
 assert(contextSnapshot.includes('variable_npc_memory_rule'), '变量模型上下文必须有 NPC 写入法则独立区块。');
 assert(contextSnapshot.includes('NPC档案记忆写入法则（完整）'), '变量模型上下文必须显示完整 NPC 写入法则标题。');
-assert(phoneModal.includes('compressNpcMemoryLedger({'), '手机 NPC 记忆写入必须使用账本压缩工具。');
-assert(phoneModal.includes('总结记忆: ledgerCompression.summaries'), '手机 NPC 记忆写入必须保存总结记忆。');
-assert(phoneModal.includes('最近互动: trimmed'), '手机 NPC 记忆写入必须同步最近互动。');
+assert(phoneCommands.includes('compressNpcMemoryLedger({'), '手机 NPC 记忆写入必须由 kernel 使用账本压缩工具。');
+assert(phoneCommands.includes('总结记忆: compressed.summaries'), '手机 NPC 记忆写入必须保存总结记忆。');
+assert(phoneCommands.includes('最近互动: raw'), '手机 NPC 记忆写入必须同步最近互动。');
 assert(companionPanel.includes('buildNpcMemoryLedgerView'), '与你同行面板必须读取 NPC 记忆账本视图。');
 assert(companionPanel.includes("devMode ? '记忆账本' : '同行记忆'"), '与你同行面板普通模式必须显示同行记忆，开发者模式才显示记忆账本。');
-assert(companionPanel.includes('<MemoryPanel npc={npc} devMode={devMode} />'), '与你同行面板必须把开发者模式传给记忆页。');
+assert(companionPanel.includes('<CompanionMemoryView npc={npc} devMode={devMode} />'), '与你同行面板必须把开发者模式传给记忆页。');
 assert(app.includes('devMode={ctx.gameSettings.devMode}'), 'App 必须把游戏设置里的开发者模式传入与你同行面板。');
 assert(companionPanel.includes('function LedgerListCard'), '记忆账本 UI 必须使用固定高度的账本列表卡，避免保护事项累积后撑爆布局。');
 assert(companionPanel.includes('h-[214px]'), 'NPC 账本保护事项卡片必须有稳定高度。');
 assert(companionPanel.includes('overflow-y-auto overflow-x-hidden'), 'NPC 账本保护事项卡片必须内部滚动。');
 assert(companionPanel.includes('长期保护事项 {protectedCount} 条'), '必须承接区必须显示保护事项总数。');
 assert(companionPanel.includes("<LedgerListCard title=\"禁止遗忘\" items={ledger.禁止遗忘} tone=\"danger\" />"), '禁止遗忘必须使用高风险账本卡样式。');
-assert(companionPanel.includes("function MemoryPanel({ npc, devMode = false }"), '记忆页必须显式接收开发者模式开关。');
+assert(companionPanel.includes("function CompanionMemoryView({ npc, devMode = false }"), '记忆页必须显式接收开发者模式开关。');
 assert(companionPanel.includes("<DetailBlock title={devMode ? '原始同行记忆' : '同行记忆'}>"), '普通玩家只能看到同行记忆标题，开发者模式才显示原始同行记忆。');
 for (const text of ['总结记忆', '同行记忆']) {
   assert(companionPanel.includes(text), `普通玩家记忆页必须保留 ${text}。`);

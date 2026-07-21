@@ -5,7 +5,7 @@ function assert(condition, message) {
 }
 
 const settings = fs.readFileSync('models/settings.ts', 'utf8');
-const client = fs.readFileSync('services/ai/chatCompletionClient.ts', 'utf8');
+const client = `${fs.readFileSync('services/ai/chatCompletionClient.ts', 'utf8')}\n${fs.readFileSync('services/ai/chatCompletionProtocol.ts', 'utf8')}`;
 const apiTools = fs.readFileSync('services/ai/apiTools.ts', 'utf8');
 const apiSettings = fs.readFileSync('components/features/Settings/ApiSettings.tsx', 'utf8');
 const opencodeProxy = fs.readFileSync('functions/api/opencode.ts', 'utf8');
@@ -53,8 +53,8 @@ assert(client.includes("fetchWithApiErrorReport(config, 'OpenCode Zen Gemini 补
 assert(client.includes('OpenCode Zen API Error'), 'OpenCode Zen 失败时必须提供专用错误诊断。');
 assert(client.includes('OpenCode Zen 工作区余额不足'), 'OpenCode Zen 余额不足必须给出直白错误提示。');
 assert(client.includes('GPT 走 /responses，Claude/Qwen 走 /messages，Gemini 走 /models/{model}:generateContent，其余模型走 /chat/completions'), 'OpenCode Zen 错误提示必须说明路由规则。');
-assert(client.includes('openCodeHeaders'), 'OpenCode Zen 必须使用自己的请求头构造。');
-assert(client.includes('Authorization: `Bearer ${config.apiKey}`'), 'OpenCode Zen 必须支持 Bearer Key。');
+assert(client.includes('function buildOpenCodeProxyBody(') && client.includes('apiKey: config.apiKey'), 'OpenCode Zen 必须把凭据封装进专用同源代理请求。');
+assert(opencodeProxyCore.includes('Authorization: `Bearer ${apiKey}`'), 'OpenCode Zen 代理必须支持 Bearer Key。');
 assert(!client.includes("if (provider === 'opencode') {\n    return streamOpenAICompatible"), 'OpenCode Zen 不得直接退回 OpenAI 兼容请求分支。');
 
 assert(apiTools.includes("config.provider === 'opencode'"), '模型列表必须支持 OpenCode Zen provider。');

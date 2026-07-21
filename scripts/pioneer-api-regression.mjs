@@ -5,7 +5,10 @@ function assert(condition, message) {
 }
 
 const settings = fs.readFileSync('models/settings.ts', 'utf8');
-const client = fs.readFileSync('services/ai/chatCompletionClient.ts', 'utf8');
+const client = [
+  'services/ai/chatCompletionClient.ts',
+  'services/ai/chatCompletionTransportHelpers.ts',
+].map((path) => fs.readFileSync(path, 'utf8')).join('\n');
 const apiTools = fs.readFileSync('services/ai/apiTools.ts', 'utf8');
 const pioneerProxy = fs.readFileSync('functions/api/pioneer.ts', 'utf8');
 const pioneerProxyCore = fs.readFileSync('services/ai/pioneerProxyCore.ts', 'utf8');

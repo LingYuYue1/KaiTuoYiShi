@@ -11,15 +11,15 @@ export interface DeepSeekAttemptOptions {
   maxTokens?: number;
 }
 
-export interface DeepSeekRecoverySummary {
+export interface DeepSeekDiagnosticsSummary {
   model: string;
   sawReasoning: boolean;
   attempts: number;
 }
 
-export interface DeepSeekRecoveryOptions {
+export interface DeepSeekDiagnosticsOptions {
   maxTokens?: number;
-  onSummary?: (summary: DeepSeekRecoverySummary) => void;
+  onSummary?: (summary: DeepSeekDiagnosticsSummary) => void;
   execute: (
     config: API配置项,
     options: DeepSeekAttemptOptions,
@@ -30,18 +30,21 @@ export interface DeepSeekRecoveryOptions {
  * DeepSeek uses the exact configured model. This coordinator records transport
  * diagnostics only; model substitution and hidden recovery prompts do not exist.
  */
-export async function executeWithDeepSeekRecovery(
+export async function executeWithDeepSeekDiagnostics(
   config: API配置项,
-  options: DeepSeekRecoveryOptions,
-): Promise<{ text: string; diagnostics: DeepSeekAttemptDiagnostics; summary: DeepSeekRecoverySummary }> {
+  options: DeepSeekDiagnosticsOptions,
+): Promise<{ text: string; diagnostics: DeepSeekAttemptDiagnostics; summary: DeepSeekDiagnosticsSummary }> {
   const result = await options.execute(config, { maxTokens: options.maxTokens });
-  const summary: DeepSeekRecoverySummary = {
+  const summary: DeepSeekDiagnosticsSummary = {
     model: config.model,
     sawReasoning: result.diagnostics.sawReasoning,
     attempts: 1,
   };
   options.onSummary?.(summary);
-  if (!result.diagnostics.sawVisibleContent) {
+  const explicitDeepSeek = config.provider === 'deepseek'
+    || /deepseek/i.test(config.baseUrl)
+    || /deepseek/i.test(config.model);
+  if (explicitDeepSeek && !result.diagnostics.sawVisibleContent) {
     throw new Error(`DeepSeek model ${config.model} returned no visible content`);
   }
   return { ...result, summary };

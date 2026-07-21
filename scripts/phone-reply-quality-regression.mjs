@@ -134,22 +134,21 @@ const partialSecond = [
   '你想先看空间站拍的那一组吗？',
   '还是我直接把全部原图发给你？',
 ];
-mockResponses(jsonReply(partialFirst, '首轮摘要'), jsonReply(partialSecond, '合并摘要'));
-const supplemented = await phoneService.generatePhoneReply(config, createPrivateContext(), 0, []);
-assert.equal(globalThis.__phoneTestCalls.length, 2, 'a thin or repeated reply must trigger exactly one quality supplement call');
-assert.deepEqual(supplemented.messages, [partialFirst[1], partialFirst[2], ...partialSecond], 'valid first-pass messages must be preserved and supplemented');
-assert.ok(!supplemented.messages.includes('OLD_PHONE_REPLY_SENTINEL'), 'recent history duplicates must not land again');
-assert.ok(globalThis.__phoneTestCalls[1].messages.at(-1).content.includes('只补充缺少的有效短讯'), 'the second call must be a targeted supplement');
-const supplementRequestText = globalThis.__phoneTestCalls[1].messages.map((message) => message.content).join('\n');
-assert.equal(supplementRequestText.split('PLAYER_INPUT_SENTINEL').length - 1, 1, 'the quality supplement request must not duplicate the current player message');
-
-mockResponses(jsonReply(['只返回一句']), jsonReply(['只返回一句']));
+mockResponses(jsonReply(partialFirst, '首轮摘要'), jsonReply(partialSecond, '不会被读取'));
 await assert.rejects(
   () => phoneService.generatePhoneReply(config, createPrivateContext(), 0, []),
   (error) => error?.name === 'PhoneReplyQualityError',
-  'two insufficient quality results must fail instead of generating local filler',
+  'a thin or repeated reply must fail explicitly without a hidden supplement request',
 );
-assert.equal(globalThis.__phoneTestCalls.length, 2, 'quality recovery must stop after one supplement call');
+assert.equal(globalThis.__phoneTestCalls.length, 1, 'quality validation must not trigger a hidden model call');
+
+mockResponses(jsonReply(['只返回一句']), jsonReply(['不会被读取']));
+await assert.rejects(
+  () => phoneService.generatePhoneReply(config, createPrivateContext(), 0, []),
+  (error) => error?.name === 'PhoneReplyQualityError',
+  'an insufficient quality result must fail instead of generating local filler',
+);
+assert.equal(globalThis.__phoneTestCalls.length, 1, 'quality validation must not retry outside the configurable transport retry');
 
 const groupContext = {
   ...createPrivateContext(),

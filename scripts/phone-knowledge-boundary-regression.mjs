@@ -201,7 +201,7 @@ const systemPrompt = phoneService.buildPhoneSystemPrompt(baseContext, modules);
 assert(systemPrompt.includes('CUSTOM_PHONE_SENTINEL'));
 assert(systemPrompt.includes('知情边界'));
 
-const phoneModalSource = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
-assert((phoneModalSource.match(/gameSettings\.promptModules/g) ?? []).length >= 2, '主动聊天和自动来信必须共用玩家手机提示词模块');
+const phoneAdapterSource = fs.readFileSync('src/kernel/adapters/browser/BrowserPhoneReplyGenerator.ts', 'utf8');
+assert(phoneAdapterSource.includes('settings.promptModules'), '主动聊天和自动来信必须经统一 PhoneReplyGenerator 使用玩家手机提示词模块');
 
 console.log('phone prompt and knowledge boundary regression ok');
