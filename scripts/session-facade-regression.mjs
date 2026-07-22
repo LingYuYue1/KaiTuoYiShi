@@ -295,6 +295,27 @@ console.error('\n── CommandHandle semantics ──\n');
 }
 
 {
+  // A terminal result must dispose the executor iterator so kernel ownership
+  // is released before the next command is admitted.
+  let released = false;
+  const kernel = makeStubKernel();
+  kernel.execute = async function* (envelope) {
+    try {
+      yield { type: 'accepted', commandId: envelope.commandId };
+      yield {
+        type: 'committed', commandId: envelope.commandId, revision: 42,
+        view: { sessionId: envelope.sessionId, revision: 42, runtime: { turnCount: 2 }, turns: [] },
+      };
+    } finally {
+      released = true;
+    }
+  };
+  const session = await makeDirectory(kernel).open('s1');
+  await session.turns.advance({ text: '前进' }).result;
+  assert(released, 'terminal result disposes the executor iterator and releases command ownership');
+}
+
+{
   // cancelAndWait during an unresolved revision read still routes cancellation
   const kernel = makeStubKernel();
   const slowRead = kernel.read;

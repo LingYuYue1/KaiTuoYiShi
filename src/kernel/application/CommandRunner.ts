@@ -159,8 +159,9 @@ async function consumeCommand<Result>(input: Readonly<{
   isCancelRequested(): boolean;
 }>): Promise<CommandTerminal<Result>> {
   let terminal: CommandTerminal<Result> | null = null;
+  let iterator: AsyncIterator<ExecutionFrame> | null = null;
   try {
-    const iterator = input.kernel.execute(input.envelope)[Symbol.asyncIterator]();
+    iterator = input.kernel.execute(input.envelope)[Symbol.asyncIterator]();
     let item = iterator.next();
     input.markStarted();
     if (input.isCancelRequested()) void input.kernel.cancelAndWait(input.envelope.commandId);
@@ -202,6 +203,13 @@ async function consumeCommand<Result>(input: Readonly<{
       input.emit({ type: 'command.rejected', error: terminal.error } as GameEvent);
     }
   } finally {
+    // A terminal frame is yielded before an async generator runs its finally.
+    // Explicit disposal releases kernel ownership before result settles.
+    try {
+      await iterator?.return?.();
+    } catch {
+      // The terminal above remains authoritative even if iterator cleanup fails.
+    }
     input.stream.endAll();
   }
   return terminal ?? { outcome: 'rejected', error: { code: 'unknown', message: 'Command settled without terminal' } };
