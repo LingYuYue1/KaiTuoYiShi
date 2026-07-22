@@ -675,8 +675,6 @@ export function useGame(): UseGameReturn {
 
   const handleRestartOpening = useCallback(async () => {
     const s = stateRef.current;
-    if (s.loading) throw new Error('Cannot restart while a kernel command is running');
-
     const restartOpeningArchive = 归一化开局档案(s.世界.开局档案, s.世界);
     const nextStoryWeaving = alignStoryWeavingToOpeningArchive(s.剧情编织, restartOpeningArchive);
     const openingSummary = restartOpeningArchive.整理档案;

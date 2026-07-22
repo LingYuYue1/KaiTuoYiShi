@@ -44,6 +44,7 @@ import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 import { fingerprintCommand } from '@/src/kernel/domain/session/commandFingerprint';
 import type { CommittedProjection } from '@/src/kernel/application/CommandExecutor';
 import type { KernelLogger } from '@/src/kernel/ports/KernelLogger';
+import { PAIRED_COMMAND_CANCELLATION } from '@/src/kernel/application/commandCancellation';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
@@ -114,19 +115,32 @@ export class NativeKernel implements CommandExecutor {
     const owner = commandOwner(envelope);
     const activeOwner = this.activeSessionCommands.get(sessionKey);
     if (activeOwner) {
-      if (canPreempt(envelope, activeOwner)) {
+      const preemption = preemptionPolicy(envelope, activeOwner);
+      if (preemption) {
         this.logger.write({
-          level: 'info', scope: 'kernel.durable-job', event: 'cancel.requested',
-          data: { jobId: activeOwner.jobId, commandId: String(activeOwner.commandId) },
+          level: 'info', scope: 'kernel.command', event: 'command.preempting',
+          data: {
+            commandId: commandKey, command: envelope.command.type,
+            activeCommandId: String(activeOwner.commandId), activeCommand: activeOwner.command,
+            reason: preemption,
+          },
         });
         this.activeSessionCommands.set(sessionKey, owner);
         try {
-          await this.cancelAndWait(activeOwner.commandId);
+          await this.abortAndWait(activeOwner.commandId, PAIRED_COMMAND_CANCELLATION);
         } catch (error) {
           if (this.activeSessionCommands.get(sessionKey) === owner) this.activeSessionCommands.delete(sessionKey);
           throw error;
         }
       } else {
+        this.logger.write({
+          level: 'warn', scope: 'kernel.command', event: 'command.blocked',
+          data: {
+            commandId: commandKey, command: envelope.command.type,
+            activeCommandId: String(activeOwner.commandId), activeCommand: activeOwner.command,
+            activeOwner: activeOwner.kind,
+          },
+        });
         yield {
           type: 'rejected',
           commandId: envelope.commandId,
@@ -142,6 +156,10 @@ export class NativeKernel implements CommandExecutor {
     const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
     this.running.set(commandKey, { controller, settled, resolveSettled });
     this.activeSessionCommands.set(sessionKey, owner);
+    this.logger.write({
+      level: 'info', scope: 'kernel.command', event: 'command.admitted',
+      data: { commandId: commandKey, sessionId: sessionKey, command: envelope.command.type, owner: owner.kind },
+    });
     try {
       yield { type: 'accepted', commandId: envelope.commandId };
       if (!('expectedRevision' in envelope)) {
@@ -330,6 +348,10 @@ export class NativeKernel implements CommandExecutor {
       if (this.activeSessionCommands.get(sessionKey) === owner) {
         this.activeSessionCommands.delete(sessionKey);
       }
+      this.logger.write({
+        level: 'info', scope: 'kernel.command', event: 'command.released',
+        data: { commandId: commandKey, sessionId: sessionKey, command: envelope.command.type, owner: owner.kind, aborted: controller.signal.aborted },
+      });
       resolveSettled();
       if (!isInternalJobCommand(envelope)) this.scheduleJobDrain(envelope.sessionId);
     }
@@ -346,7 +368,13 @@ export class NativeKernel implements CommandExecutor {
     const running = this.running.get(String(commandId));
     if (!running) return;
     this.logger.write({ level: 'info', scope: 'kernel.command', event: 'cancel.requested', data: { commandId: String(commandId) } });
-    running.controller.abort();
+    await this.abortAndWait(commandId);
+  }
+
+  private async abortAndWait(commandId: CommandId, reason?: unknown): Promise<void> {
+    const running = this.running.get(String(commandId));
+    if (!running) return;
+    running.controller.abort(reason);
     await running.settled;
   }
 
@@ -479,20 +507,22 @@ export class NativeKernel implements CommandExecutor {
 }
 
 type ActiveCommandOwner =
-  | Readonly<{ kind: 'foreground'; commandId: CommandId }>
-  | Readonly<{ kind: 'durable-job'; commandId: CommandId; jobId: string }>;
+  | Readonly<{ kind: 'foreground'; commandId: CommandId; command: CommandEnvelope['command']['type'] }>
+  | Readonly<{ kind: 'durable-job'; commandId: CommandId; command: 'job.execute'; jobId: string }>;
 
 function commandOwner(envelope: CommandEnvelope): ActiveCommandOwner {
   return 'expectedRevision' in envelope && envelope.command.type === 'job.execute'
-    ? { kind: 'durable-job', commandId: envelope.commandId, jobId: envelope.command.jobId }
-    : { kind: 'foreground', commandId: envelope.commandId };
+    ? { kind: 'durable-job', commandId: envelope.commandId, command: envelope.command.type, jobId: envelope.command.jobId }
+    : { kind: 'foreground', commandId: envelope.commandId, command: envelope.command.type };
 }
 
-function canPreempt(envelope: CommandEnvelope, owner: ActiveCommandOwner): owner is Extract<ActiveCommandOwner, { kind: 'durable-job' }> {
-  return owner.kind === 'durable-job' &&
-    'expectedRevision' in envelope &&
-    envelope.command.type === 'job.cancel' &&
-    envelope.command.jobId === owner.jobId;
+function preemptionPolicy(envelope: CommandEnvelope, owner: ActiveCommandOwner): 'session-replacement' | 'durable-job-cancellation' | null {
+  if ('expectedRevision' in envelope && envelope.command.type === 'session.reset') return 'session-replacement';
+  if (owner.kind === 'durable-job' && 'expectedRevision' in envelope &&
+    envelope.command.type === 'job.cancel' && envelope.command.jobId === owner.jobId) {
+    return 'durable-job-cancellation';
+  }
+  return null;
 }
 
 function isInternalJobCommand(envelope: CommandEnvelope): boolean {

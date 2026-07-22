@@ -1,6 +1,6 @@
 import type { ExecutionFrame } from '@/src/kernel/contract';
 import type { InternalJobEnvelope } from '@/src/kernel/contract/commands';
-import { claimJob, retryJob, startJob, succeedJob, type DurableJob } from '@/src/kernel/domain/jobs/durableJob';
+import { cancelJob, claimJob, retryJob, startJob, succeedJob, type DurableJob } from '@/src/kernel/domain/jobs/durableJob';
 import type { SessionRepository } from '@/src/kernel/ports';
 import type { Clock } from '@/src/kernel/ports/Clock';
 import type { ExecutionContextProvider } from '@/src/kernel/ports/ExecutionContextProvider';
@@ -14,6 +14,7 @@ import { executeNarrativeImageJob } from './executeNarrativeImageJob';
 import { runNewsGenerationStep } from '@/src/kernel/workflows/newsWorkflow';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { upsertRecallEntry } from '@/src/kernel/workflows/memoryUtils';
+import { hasPairedCancellation } from './commandCancellation';
 
 const JOB_LEASE_MS = 5 * 60_000;
 
@@ -76,19 +77,32 @@ export async function* executeDurableJob(
   }
   const now = dependencies.clock.now();
   try {
+    throwIfAborted(dependencies.signal);
     const overlay = await dependencies.context.captureDeviceOverlay();
     const state = createTurnExecutionState(base.snapshot.state.story, overlay);
     await performJob(job, state, dependencies);
+    throwIfAborted(dependencies.signal);
     const story = storyFromTurnExecutionState(state, base.snapshot.state.story);
     const completed = succeedJob(job, String(envelope.commandId), dependencies.clock.now());
     yield await commitCommand(envelope, dependencies.sessions, { story: replaceJob(story, completed) });
   } catch (error) {
-    if (dependencies.signal.aborted || isAbortError(error)) {
+    if (hasPairedCancellation(dependencies.signal)) {
       dependencies.logger.write({
         level: 'info', scope: 'kernel.durable-job', event: 'execution.cancelled',
         data: { jobId: job.id, kind: job.payload.kind, attempt: job.attempt },
       });
       yield rejectedFrame(envelope, { code: 'cancelled', message: errorMessage(error) });
+      return;
+    }
+    if (dependencies.signal.aborted || isAbortError(error)) {
+      const cancelled = cancelJob(job, errorMessage(error), dependencies.clock.now());
+      dependencies.logger.write({
+        level: 'info', scope: 'kernel.durable-job', event: 'cancelled',
+        data: { jobId: job.id, kind: job.payload.kind, attempt: job.attempt },
+      });
+      yield await commitCommand(envelope, dependencies.sessions, {
+        story: replaceJob(base.snapshot.state.story, cancelled),
+      });
       return;
     }
     const failed = retryJob(job, errorMessage(error), now + retryDelay(job.attempt));
@@ -188,4 +202,8 @@ function errorMessage(error: unknown): string {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw new DOMException('Durable job aborted', 'AbortError');
 }

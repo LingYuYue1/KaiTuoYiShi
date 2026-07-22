@@ -62,18 +62,19 @@ let sequence = 0;
 let markGeneratorStarted;
 const generatorStarted = new Promise((resolve) => { markGeneratorStarted = resolve; });
 const logs = [];
-const kernel = new NativeKernel({
-  sessions: repository,
+const createKernel = (sessions, generate, entries) => new NativeKernel({
+  sessions,
   context: { captureDeviceOverlay: async () => ({ apiSettings: planes.apiProfiles, executionPolicy: planes.execution, appearance: planes.appearance, content: planes.content, savePolicy: planes.save, worldbooks: [] }) },
   content: {}, storyWeaving: {}, phoneReplies: {},
   albumAuthoring: { parseStorySnapshot: async () => ({ prompt: 'scene', negativePrompt: '', title: 'scene' }) },
-  albumImages: { generate: async (_settings, _request, signal) => {
+  albumImages: { generate },
+  clock: { now: () => ++sequence }, ids: { next: (prefix) => `${prefix}-${++sequence}` },
+  logger: { write: (entry) => entries.push(entry) },
+});
+const kernel = createKernel(repository, async (_settings, _request, signal) => {
     markGeneratorStarted();
     await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('User cancelled job', 'AbortError')), { once: true }));
-  } },
-  clock: { now: () => ++sequence }, ids: { next: (prefix) => `${prefix}-${++sequence}` },
-  logger: { write: (entry) => logs.push(entry) },
-});
+  }, logs);
 
 await kernel.read({ type: 'session.read', sessionId: 'cancel-session' });
 await generatorStarted;
@@ -86,12 +87,60 @@ for await (const frame of kernel.execute({
 
 assert.equal(frames.at(-1)?.type, 'committed', 'User job.cancel must commit instead of losing to the session lock');
 assert.equal((await repository.read('cancel-session')).state.story.jobs.records[0].state, 'cancelled', 'User cancellation must persist the durable cancelled state');
-assert(logs.some((entry) => entry.scope === 'kernel.durable-job' && entry.event === 'cancel.requested'), 'job owner must log the cancellation request');
+assert(logs.some((entry) => entry.scope === 'kernel.command' && entry.event === 'command.preempting'), 'job owner must log the cancellation request');
 assert(logs.some((entry) => entry.scope === 'kernel.durable-job' && entry.event === 'execution.cancelled'), 'job executor must log its cancelled exit');
 assert(logs.some((entry) => entry.scope === 'kernel.durable-job' && entry.event === 'cancelled'), 'persisted job cancellation must be logged');
 
+const standaloneRepository = new PersistentSessionRepository(new MemoryBackend());
+const standaloneStory = structuredClone(story);
+standaloneStory.jobs.records[0] = { ...standaloneStory.jobs.records[0], id: 'job-standalone', sessionId: 'standalone-session' };
+await standaloneRepository.create({ sessionId: 'standalone-session', commandId: 'create-standalone', fingerprint: 'create', initialState: { story: standaloneStory } });
+const standaloneLogs = [];
+const standaloneKernel = createKernel(standaloneRepository, async () => {
+  throw new DOMException('Provider aborted independently', 'AbortError');
+}, standaloneLogs);
+await standaloneKernel.read({ type: 'session.read', sessionId: 'standalone-session' });
+for (let attempt = 0; attempt < 100; attempt++) {
+  if ((await standaloneRepository.read('standalone-session')).state.story.jobs.records[0].state === 'cancelled') break;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+assert.equal((await standaloneRepository.read('standalone-session')).state.story.jobs.records[0].state, 'cancelled', 'unpaired AbortError must persist a terminal durable state');
+assert(standaloneLogs.some((entry) => entry.scope === 'kernel.durable-job' && entry.event === 'cancelled'), 'standalone abort persistence must be logged');
+
+const resetRepository = new PersistentSessionRepository(new MemoryBackend());
+const resetStory = structuredClone(story);
+resetStory.jobs.records[0] = { ...resetStory.jobs.records[0], id: 'job-before-reset', sessionId: 'reset-session' };
+await resetRepository.create({ sessionId: 'reset-session', commandId: 'create-reset', fingerprint: 'create', initialState: { story: resetStory } });
+let markResetJobStarted;
+const resetJobStarted = new Promise((resolve) => { markResetJobStarted = resolve; });
+const resetLogs = [];
+const resetKernel = createKernel(resetRepository, async (_settings, _request, signal) => {
+  markResetJobStarted();
+  await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('Reset replaced job', 'AbortError')), { once: true }));
+}, resetLogs);
+await resetKernel.read({ type: 'session.read', sessionId: 'reset-session' });
+await resetJobStarted;
+const beforeReset = await resetRepository.read('reset-session');
+const replacementStory = structuredClone(resetStory);
+replacementStory.jobs.records = [];
+const resetFrames = [];
+for await (const frame of resetKernel.execute({
+  protocolVersion: 1, commandId: 'user-reset', sessionId: 'reset-session', expectedRevision: beforeReset.revision,
+  command: { type: 'session.reset', story: replacementStory },
+})) resetFrames.push(frame);
+assert.equal(resetFrames.at(-1)?.type, 'committed', 'session.reset must replace an existing active owner');
+assert.equal((await resetRepository.read('reset-session')).state.story.jobs.records.length, 0, 'session reset must commit the replacement story after preemption');
+assert(resetLogs.some((entry) => entry.event === 'command.preempting' && entry.data?.reason === 'session-replacement'), 'session replacement preemption must be logged');
+
 const nativeKernelSource = fs.readFileSync('src/kernel/NativeKernel.ts', 'utf8');
+const useGameSource = fs.readFileSync('hooks/useGame.ts', 'utf8');
+const inputAreaSource = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
 assert(nativeKernelSource.includes('logger: KernelLogger;'), 'NativeKernel logger must remain mandatory');
 assert(!nativeKernelSource.includes('dependencies.logger ??'), 'NativeKernel must not hide missing logger composition');
+assert(nativeKernelSource.includes("envelope.command.type === 'session.reset'"), 'session reset must have explicit preemption policy');
+assert(nativeKernelSource.includes("event: 'command.admitted'"), 'kernel must log command admission');
+assert(nativeKernelSource.includes("event: 'command.released'"), 'kernel must log command release');
+assert(!useGameSource.includes('if (s.loading) throw new Error(\'Cannot restart while a kernel command is running\')'), 'restart must be allowed to replace a stuck command');
+assert(inputAreaSource.includes('ignoreHandledAction(onRestartOpening?.())'), 'restart click must consume async failures');
 
-console.log('cancellation terminal normalization regression ok');
+console.log('command preemption and cancellation regression ok');

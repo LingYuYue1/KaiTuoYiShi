@@ -10,7 +10,7 @@ interface InputAreaProps {
   // 平铺的快捷动作
   canRestartOpening?: boolean;
   canReroll?: boolean;
-  onRestartOpening?: () => void;
+  onRestartOpening?: () => Promise<void>;
   onReroll?: () => string | void | Promise<string | void>;
   streamingEnabled?: boolean;
   onToggleStreaming?: () => void;
@@ -224,8 +224,8 @@ export const InputArea = memo(function InputArea({
             icon={ListRestart}
             label="重新开局"
             description="回到初始开局并清除当前进度"
-            disabled={loading || disabled}
-            onClick={() => onRestartOpening?.()}
+            disabled={disabled}
+            onClick={() => ignoreHandledAction(onRestartOpening?.())}
           />
         )}
         <IconButton
