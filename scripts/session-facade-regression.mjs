@@ -104,6 +104,7 @@ function makeDirectory(kernel) {
     },
     { now: () => 1_700_000_000_000 },
     { next: (scope) => `${scope}_test_${++nextId}` },
+    { write() {} },
   );
 }
 
