@@ -55,6 +55,7 @@ function getCommandKernel(): Promise<CommandExecutor> {
         phoneReplies: new BrowserPhoneReplyGenerator(),
         clock,
         ids,
+        logger: kernelLogger,
       });
     });
   }

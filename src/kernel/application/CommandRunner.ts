@@ -192,11 +192,21 @@ async function consumeCommand<Result>(input: Readonly<{
     }
   } catch (error) {
     if (!terminal) {
-      terminal = { outcome: 'rejected', error: { code: 'unknown', message: error instanceof Error ? error.message : String(error) } };
+      terminal = {
+        outcome: 'rejected',
+        error: {
+          code: isAbortError(error) || input.isCancelRequested() ? 'cancelled' : 'unknown',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      };
       input.emit({ type: 'command.rejected', error: terminal.error } as GameEvent);
     }
   } finally {
     input.stream.endAll();
   }
   return terminal ?? { outcome: 'rejected', error: { code: 'unknown', message: 'Command settled without terminal' } };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }

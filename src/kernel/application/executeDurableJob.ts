@@ -1,12 +1,13 @@
 import type { ExecutionFrame } from '@/src/kernel/contract';
 import type { InternalJobEnvelope } from '@/src/kernel/contract/commands';
-import { claimJob, retryJob, startJob, succeedJob, type DurableJob } from '@/src/kernel/domain/jobs/durableJob';
+import { cancelJob, claimJob, retryJob, startJob, succeedJob, type DurableJob } from '@/src/kernel/domain/jobs/durableJob';
 import type { SessionRepository } from '@/src/kernel/ports';
 import type { Clock } from '@/src/kernel/ports/Clock';
 import type { ExecutionContextProvider } from '@/src/kernel/ports/ExecutionContextProvider';
 import type { AlbumAuthoring } from '@/src/kernel/ports/AlbumAuthoring';
 import type { AlbumImageGenerator } from '@/src/kernel/ports/AlbumImageGenerator';
 import type { IdGenerator } from '@/src/kernel/ports/IdGenerator';
+import type { KernelLogger } from '@/src/kernel/ports/KernelLogger';
 import { executeSessionCommand, loadCommandBase, commitCommand } from './executeSessionCommand';
 import { createTurnExecutionState, storyFromTurnExecutionState } from './turn/turnExecutionState';
 import { executeNarrativeImageJob } from './executeNarrativeImageJob';
@@ -24,6 +25,7 @@ export type DurableJobDependencies = Readonly<{
   albumImages: AlbumImageGenerator;
   ids: IdGenerator;
   signal: AbortSignal;
+  logger: KernelLogger;
 }>;
 
 export async function* executeJobLifecycleCommand(
@@ -81,7 +83,23 @@ export async function* executeDurableJob(
     const completed = succeedJob(job, String(envelope.commandId), dependencies.clock.now());
     yield await commitCommand(envelope, dependencies.sessions, { story: replaceJob(story, completed) });
   } catch (error) {
+    if (dependencies.signal.aborted || isAbortError(error)) {
+      const cancelled = cancelJob(job, errorMessage(error), dependencies.clock.now());
+      dependencies.logger.write({
+        level: 'info', scope: 'kernel.durable-job', event: 'cancelled',
+        data: { jobId: job.id, kind: job.payload.kind, attempt: job.attempt },
+      });
+      yield await commitCommand(envelope, dependencies.sessions, {
+        story: replaceJob(base.snapshot.state.story, cancelled),
+      });
+      return;
+    }
     const failed = retryJob(job, errorMessage(error), now + retryDelay(job.attempt));
+    dependencies.logger.write({
+      level: failed.state === 'failed' ? 'error' : 'warn',
+      scope: 'kernel.durable-job', event: failed.state === 'failed' ? 'failed' : 'retry.scheduled',
+      data: { jobId: job.id, kind: job.payload.kind, attempt: job.attempt }, error,
+    });
     yield await commitCommand(envelope, dependencies.sessions, {
       story: replaceJob(base.snapshot.state.story, failed),
     });
@@ -169,4 +187,8 @@ function retryDelay(attempt: number): number {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }

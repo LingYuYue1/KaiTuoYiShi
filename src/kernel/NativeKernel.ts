@@ -43,6 +43,7 @@ import { replaceStoryPolicy } from '@/src/kernel/application/replaceStoryPolicy'
 import { projectSession } from '@/src/kernel/domain/turn/projectSession';
 import { fingerprintCommand } from '@/src/kernel/domain/session/commandFingerprint';
 import type { CommittedProjection } from '@/src/kernel/application/CommandExecutor';
+import type { KernelLogger } from '@/src/kernel/ports/KernelLogger';
 
 export type NativeKernelDependencies = Readonly<{
   sessions: SessionRepository;
@@ -54,6 +55,7 @@ export type NativeKernelDependencies = Readonly<{
   phoneReplies: PhoneReplyGenerator;
   clock: Clock;
   ids: IdGenerator;
+  logger?: KernelLogger;
 }>;
 
 /** The only runtime kernel. Every dependency is mandatory and every call is async. */
@@ -67,6 +69,7 @@ export class NativeKernel implements CommandExecutor {
   private readonly scheduledJobDrains = new Set<string>();
   private readonly jobRunnerId: string;
   private readonly commitListeners = new Set<(commit: CommittedProjection) => void>();
+  private readonly logger: KernelLogger;
 
   async readStory(sessionId: SessionId) {
     return structuredClone((await this.dependencies.sessions.read(sessionId)).state.story);
@@ -74,12 +77,19 @@ export class NativeKernel implements CommandExecutor {
 
   constructor(private readonly dependencies: NativeKernelDependencies) {
     this.jobRunnerId = dependencies.ids.next('job-runner');
+    this.logger = dependencies.logger ?? { write() {} };
   }
 
   async *execute(envelope: CommandEnvelope): AsyncIterable<ExecutionFrame> {
     for await (const frame of this.executeLocked(envelope)) {
       if (frame.type === 'committed') {
         for (const listener of this.commitListeners) listener({ view: frame.view, cause: envelope.command.type });
+      }
+      if (frame.type === 'rejected' && frame.error.code === 'cancelled') {
+        this.logger.write({
+          level: 'info', scope: 'kernel.command', event: 'cancelled',
+          data: { commandId: String(envelope.commandId), sessionId: String(envelope.sessionId), command: envelope.command.type },
+        });
       }
       yield frame;
     }
@@ -147,6 +157,7 @@ export class NativeKernel implements CommandExecutor {
             albumImages: this.dependencies.albumImages,
             ids: this.dependencies.ids,
             signal: controller.signal,
+            logger: this.logger,
           });
           return;
         case 'path.set-primary':
@@ -306,12 +317,14 @@ export class NativeKernel implements CommandExecutor {
   async cancel(commandId: CommandId): Promise<void> {
     const running = this.running.get(String(commandId));
     if (!running) throw new Error(`Command is not running: ${commandId}`);
+    this.logger.write({ level: 'info', scope: 'kernel.command', event: 'cancel.requested', data: { commandId: String(commandId) } });
     running.controller.abort();
   }
 
   async cancelAndWait(commandId: CommandId): Promise<void> {
     const running = this.running.get(String(commandId));
     if (!running) return;
+    this.logger.write({ level: 'info', scope: 'kernel.command', event: 'cancel.requested', data: { commandId: String(commandId) } });
     running.controller.abort();
     await running.settled;
   }
