@@ -34,12 +34,8 @@ export type AdvanceTurn = Readonly<{
   input: Readonly<{
     text: string;
     createdAt: number;
+    openingTrigger?: string;
   }>;
-}>;
-
-export type ConsumeOpeningTrigger = Readonly<{
-  type: 'turn.opening.consume';
-  trigger: string;
 }>;
 
 export type RerollTurn = Readonly<{
@@ -297,7 +293,6 @@ export type SessionCommand =
   | AlbumCommand
   | PhoneCommand
   | AdvanceTurn
-  | ConsumeOpeningTrigger
   | RerollTurn;
 
 export type SessionCommandEnvelope = Readonly<{
@@ -319,10 +314,6 @@ export type CommandEnvelope = CreateSessionEnvelope | SessionCommandEnvelope;
 
 export type AdvanceTurnEnvelope = SessionCommandEnvelope & {
   readonly command: AdvanceTurn;
-};
-
-export type ConsumeOpeningTriggerEnvelope = SessionCommandEnvelope & {
-  readonly command: ConsumeOpeningTrigger;
 };
 
 export type RerollTurnEnvelope = SessionCommandEnvelope & {

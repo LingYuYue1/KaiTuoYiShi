@@ -44,15 +44,25 @@ export async function* executeTurnText(
     return;
   }
   const preTurnSnapshot = captureTurnSnapshot(base.snapshot.state.story);
+  const openingTrigger = envelope.command.type === 'turn.advance'
+    ? envelope.command.input.openingTrigger
+    : undefined;
+  if (openingTrigger !== undefined && base.snapshot.state.story.turn.pendingOpeningTrigger !== openingTrigger) {
+    yield rejectedFrame(envelope, { code: 'no_changes', message: 'Opening trigger is no longer pending' });
+    return;
+  }
   const createdAt = envelope.command.type === 'turn.advance'
     ? envelope.command.input.createdAt
     : envelope.command.createdAt;
-  const preparedStory = prepareTurnStory({
+  const preparedStoryBase = prepareTurnStory({
     story: base.snapshot.state.story,
     commandId: envelope.commandId,
     text,
     createdAt,
   });
+  const preparedStory = openingTrigger === undefined
+    ? preparedStoryBase
+    : { ...preparedStoryBase, turn: { pendingOpeningTrigger: null } };
   yield {
     type: 'prepared',
     commandId: envelope.commandId,

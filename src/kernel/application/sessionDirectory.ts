@@ -195,24 +195,21 @@ class KernelSession implements ISession {
     };
 
     this.turns = {
-      advance: (input) => this.track(this.sessionCommand<TurnCommit>({
-        type: 'turn.advance',
-        input: { text: input.text, createdAt: this.clock.now() },
-      })),
-      consumeOpening: (input) => {
-        const handle = this.track(this.sessionCommand<SessionCommit>({
-          type: 'turn.opening.consume',
-          trigger: input.trigger,
+      advance: (input) => {
+        const handle = this.track(this.sessionCommand<TurnCommit>({
+          type: 'turn.advance',
+          input: { text: input.text, createdAt: this.clock.now(), openingTrigger: input.openingTrigger },
         }));
+        if (!input.openingTrigger) return handle;
         this.logger.write({
-          level: 'info', scope: 'kernel.opening-trigger', event: 'opening.claim.requested',
-          data: { sessionId: String(this.id), triggerLength: input.trigger.length },
+          level: 'info', scope: 'kernel.opening-trigger', event: 'opening.started',
+          data: { sessionId: String(this.id), triggerLength: input.openingTrigger.length },
         });
         void handle.result.then((terminal) => {
           this.logger.write({
             level: terminal.outcome === 'committed' ? 'info' : 'warn',
             scope: 'kernel.opening-trigger',
-            event: terminal.outcome === 'committed' ? 'opening.claimed' : 'opening.claim.rejected',
+            event: terminal.outcome === 'committed' ? 'opening.completed' : 'opening.failed',
             data: terminal.outcome === 'committed'
               ? { sessionId: String(this.id) }
               : { sessionId: String(this.id), code: terminal.error.code },
@@ -484,8 +481,7 @@ class KernelSession implements ISession {
   /** Build a session-scoped envelope with fresh command identity + revision. */
   private sessionCommand<Result extends { revision: Revision; view: SessionView }>(
     command:
-      | { type: 'turn.advance'; input: { text: string; createdAt: number } }
-      | { type: 'turn.opening.consume'; trigger: string }
+      | { type: 'turn.advance'; input: { text: string; createdAt: number; openingTrigger?: string } }
       | { type: 'turn.reroll'; turnId: string; createdAt: number }
       | { type: 'session.reset'; story: StoryState }
       | { type: 'message.image.regenerate'; messageId: string }

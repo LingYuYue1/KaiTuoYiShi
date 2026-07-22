@@ -320,7 +320,7 @@ export function useGame(): UseGameReturn {
   }, [connectSession, projectionStore, resetUiProjectionEphemerals]);
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, openingTrigger?: string) => {
       const s = stateRef.current;
       if (activeCommandRef.current || s.loading) {
         throw new Error('Another kernel command is running');
@@ -328,7 +328,7 @@ export function useGame(): UseGameReturn {
       s.setInterruptedWorkflow(null);
       let handle: CommandHandle<GameEvent, TurnCommit> | null = null;
       try {
-        handle = (await getSession()).turns.advance({ text });
+        handle = (await getSession()).turns.advance({ text, openingTrigger });
         activeCommandRef.current = handle;
         const terminal = await consumeSessionHandle(handle, createLiveSink(handle.commandId));
         if (terminal.outcome === 'rejected') throw new Error(terminal.error.message);
@@ -348,27 +348,15 @@ export function useGame(): UseGameReturn {
     const log = (input: Omit<Parameters<typeof root.diagnostics.recordKernelLog>[0], 'scope'>) => {
       root.diagnostics.recordKernelLog({ ...input, scope: 'ui.opening-trigger' });
     };
-    log({ level: 'info', event: 'claim.requested', data: { triggerLength: text.length } });
-    const handle = (await getSession()).turns.consumeOpening({ trigger: text });
-    activeCommandRef.current = handle;
+    log({ level: 'info', event: 'opening.started', data: { triggerLength: text.length } });
     try {
-      const terminal = await consumeSessionHandle(handle, createLiveSink(handle.commandId));
-      if (terminal.outcome === 'rejected') {
-        log({ level: 'warn', event: 'claim.rejected', data: { code: terminal.error.code }, error: terminal.error });
-        throw new Error(terminal.error.message);
-      }
-      log({ level: 'info', event: 'claim.committed' });
-    } finally {
-      if (activeCommandRef.current === handle) activeCommandRef.current = null;
-    }
-    try {
-      await handleSend(text);
-      log({ level: 'info', event: 'turn.completed' });
+      await handleSend(text, text);
+      log({ level: 'info', event: 'opening.completed' });
     } catch (error) {
-      log({ level: 'error', event: 'turn.failed', error });
+      log({ level: 'warn', event: 'opening.failed', error });
       throw error;
     }
-  }, [createLiveSink, getSession, handleSend]);
+  }, [handleSend]);
 
   const handleAbort = useCallback(async () => {
     if (!activeCommandRef.current) throw new Error('No kernel command is running');

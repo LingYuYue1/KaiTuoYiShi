@@ -23,7 +23,6 @@ import type { Clock } from '@/src/kernel/ports/Clock';
 import type { IdGenerator } from '@/src/kernel/ports/IdGenerator';
 import type { ExecutionContextProvider } from '@/src/kernel/ports/ExecutionContextProvider';
 import { executeTurn, executeTurnText } from '@/src/kernel/application/executeTurn';
-import { consumePendingOpeningTrigger } from '@/src/kernel/application/consumePendingOpeningTrigger';
 import { rerollTurn } from '@/src/kernel/application/rerollTurn';
 import { resetSession } from '@/src/kernel/application/resetSession';
 import { regenerateNarrativeImage } from '@/src/kernel/application/executeRuntimeAction';
@@ -282,9 +281,6 @@ export class NativeKernel implements CommandExecutor {
             context: this.dependencies.context,
             signal: controller.signal,
           });
-          return;
-        case 'turn.opening.consume':
-          yield* consumePendingOpeningTrigger({ ...command, command: command.command }, this.dependencies.sessions);
           return;
         case 'turn.reroll':
           yield* rerollTurn({ ...command, command: command.command }, {
