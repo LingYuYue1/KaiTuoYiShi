@@ -36,6 +36,7 @@ export interface UseGameReturn {
   state: UseGameStateReturn;
   actions: {
     handleSend: (text: string) => Promise<void>;
+    handleOpeningTrigger: (text: string) => Promise<void>;
     handleAbort: () => Promise<void>;
     handleNewGame: () => void;
     handleContinue: () => Promise<boolean>;
@@ -341,6 +342,33 @@ export function useGame(): UseGameReturn {
     },
     [createLiveSink, getSession, recoverProjectionAfterCommandError],
   );
+
+  const handleOpeningTrigger = useCallback(async (text: string): Promise<void> => {
+    const root = await getAppRoot();
+    const log = (input: Omit<Parameters<typeof root.diagnostics.recordKernelLog>[0], 'scope'>) => {
+      root.diagnostics.recordKernelLog({ ...input, scope: 'ui.opening-trigger' });
+    };
+    log({ level: 'info', event: 'claim.requested', data: { triggerLength: text.length } });
+    const handle = (await getSession()).turns.consumeOpening({ trigger: text });
+    activeCommandRef.current = handle;
+    try {
+      const terminal = await consumeSessionHandle(handle, createLiveSink(handle.commandId));
+      if (terminal.outcome === 'rejected') {
+        log({ level: 'warn', event: 'claim.rejected', data: { code: terminal.error.code }, error: terminal.error });
+        throw new Error(terminal.error.message);
+      }
+      log({ level: 'info', event: 'claim.committed' });
+    } finally {
+      if (activeCommandRef.current === handle) activeCommandRef.current = null;
+    }
+    try {
+      await handleSend(text);
+      log({ level: 'info', event: 'turn.completed' });
+    } catch (error) {
+      log({ level: 'error', event: 'turn.failed', error });
+      throw error;
+    }
+  }, [createLiveSink, getSession, handleSend]);
 
   const handleAbort = useCallback(async () => {
     if (!activeCommandRef.current) throw new Error('No kernel command is running');
@@ -704,6 +732,7 @@ export function useGame(): UseGameReturn {
 
   const actions = useMemo(() => ({
     handleSend,
+    handleOpeningTrigger,
     handleAbort,
     handleNewGame,
     handleContinue,
@@ -772,6 +801,7 @@ export function useGame(): UseGameReturn {
     getContextSnapshot,
   }), [
     handleSend,
+    handleOpeningTrigger,
     handleAbort,
     handleNewGame,
     handleContinue,

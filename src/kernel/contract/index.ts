@@ -7,6 +7,8 @@ export type {
   AdvanceTurn,
   AdvanceTurnEnvelope,
   CommandEnvelope,
+  ConsumeOpeningTrigger,
+  ConsumeOpeningTriggerEnvelope,
   CompressMemory,
   CompressMemoryEnvelope,
   CommandId,

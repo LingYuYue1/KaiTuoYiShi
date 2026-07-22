@@ -519,16 +519,18 @@ function AppContent() {
     } : null
   ), [state.interruptedWorkflow]);
 
-  // 自动触发第 0 回合：handleStartGame 把触发文本写入 pendingOpeningTrigger，
-  // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
-  // 注意：先清空再 send，避免 React 18 StrictMode 下重复触发。
+  // 第 0 回合先由 kernel 消费 durable trigger，再开始模型命令。
   const openingTriggerSentRef = useRef<string | null>(null);
   useEffect(() => {
-    if (state.view === 'game' && state.pendingOpeningTrigger) {
+    if (!state.pendingOpeningTrigger) {
+      openingTriggerSentRef.current = null;
+      return;
+    }
+    if (state.view === 'game') {
       const text = state.pendingOpeningTrigger;
       if (openingTriggerSentRef.current === text) return;
       openingTriggerSentRef.current = text;
-      void actions.handleSend(text).catch(() => { openingTriggerSentRef.current = null; });
+      void actions.handleOpeningTrigger(text).catch(() => {});
     }
   }, [state.view, state.pendingOpeningTrigger, state, actions]);
 

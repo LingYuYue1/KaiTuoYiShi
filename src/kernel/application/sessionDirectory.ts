@@ -99,7 +99,7 @@ export class KernelSessionDirectory implements SessionDirectory {
       throw new Error(`Session not found: ${sessionId}`);
     }
     this.logger.write({ level: 'debug', scope: 'kernel.session-directory', event: 'session.opened', data: { sessionId: String(sessionId) } });
-    return new KernelSession(sessionId, this.kernel, this.runner, this.context, this.skillDraftGenerator, this.contextSnapshotBuilder, this.albumAuthoring, this.clock, this.ids, this.projections);
+    return new KernelSession(sessionId, this.kernel, this.runner, this.context, this.skillDraftGenerator, this.contextSnapshotBuilder, this.albumAuthoring, this.clock, this.ids, this.projections, this.logger);
   }
 
   create(sessionId: SessionId, seed: NewStorySeed): CommandHandle<GameEvent, SessionCommit> {
@@ -186,6 +186,7 @@ class KernelSession implements ISession {
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
     private readonly projections: SessionProjectionHub,
+    private readonly logger: KernelLogger,
   ) {
     this.projection = {
       current: () => this.kernel.read({ type: 'session.read', sessionId: this.id }),
@@ -198,6 +199,27 @@ class KernelSession implements ISession {
         type: 'turn.advance',
         input: { text: input.text, createdAt: this.clock.now() },
       })),
+      consumeOpening: (input) => {
+        const handle = this.track(this.sessionCommand<SessionCommit>({
+          type: 'turn.opening.consume',
+          trigger: input.trigger,
+        }));
+        this.logger.write({
+          level: 'info', scope: 'kernel.opening-trigger', event: 'opening.claim.requested',
+          data: { sessionId: String(this.id), triggerLength: input.trigger.length },
+        });
+        void handle.result.then((terminal) => {
+          this.logger.write({
+            level: terminal.outcome === 'committed' ? 'info' : 'warn',
+            scope: 'kernel.opening-trigger',
+            event: terminal.outcome === 'committed' ? 'opening.claimed' : 'opening.claim.rejected',
+            data: terminal.outcome === 'committed'
+              ? { sessionId: String(this.id) }
+              : { sessionId: String(this.id), code: terminal.error.code },
+          });
+        });
+        return handle;
+      },
       reroll: (input) => this.track(this.sessionCommand<TurnCommit>({
         type: 'turn.reroll',
         turnId: input.turnId,
@@ -463,6 +485,7 @@ class KernelSession implements ISession {
   private sessionCommand<Result extends { revision: Revision; view: SessionView }>(
     command:
       | { type: 'turn.advance'; input: { text: string; createdAt: number } }
+      | { type: 'turn.opening.consume'; trigger: string }
       | { type: 'turn.reroll'; turnId: string; createdAt: number }
       | { type: 'session.reset'; story: StoryState }
       | { type: 'message.image.regenerate'; messageId: string }

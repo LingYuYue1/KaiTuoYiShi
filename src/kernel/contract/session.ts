@@ -90,6 +90,7 @@ export interface SessionProjectionReader {
 
 export interface TurnUseCases {
   advance(input: Readonly<{ text: string }>): CommandHandle<GameEvent, TurnCommit>;
+  consumeOpening(input: Readonly<{ trigger: string }>): CommandHandle<GameEvent, SessionCommit>;
   reroll(input: Readonly<{ turnId: string }>): CommandHandle<GameEvent, TurnCommit>;
 }
 
