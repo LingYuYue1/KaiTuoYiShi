@@ -27,12 +27,14 @@ export class SessionProjectionStore {
   private value: ProjectionState | null = null;
   private readonly listeners = new Set<() => void>();
   private activeSequence: Readonly<{ commandId: CommandId; sequence: number }> | null = null;
+  private readonly supersededCommands = new Set<CommandId>();
 
   current(): ProjectionState | null { return this.value; }
 
   initialize(session: SessionView): ProjectionState {
     this.value = createProjectionState(session);
     this.activeSequence = null;
+    this.supersededCommands.clear();
     this.emit();
     return this.value;
   }
@@ -46,11 +48,18 @@ export class SessionProjectionStore {
 
   applyEvent(event: GameEvent): ProjectionState {
     if (!this.value) throw new Error('Kernel projection is not initialized');
-    if (event.type === 'command.accepted') {
-      if (event.sequence !== 0 || this.activeSequence) return this.enterResync();
+    if (event.type === 'command.submitted') {
+      if (event.sequence !== 0) return this.enterResync();
+      if (this.activeSequence) this.supersededCommands.add(this.activeSequence.commandId);
       this.activeSequence = { commandId: event.commandId, sequence: 0 };
       this.value = { phase: 'command-running', session: this.value.session, commandId: event.commandId };
       this.emit();
+      return this.value;
+    }
+    if (this.supersededCommands.has(event.commandId)) {
+      if (event.type === 'command.committed' || event.type === 'command.rejected') {
+        this.supersededCommands.delete(event.commandId);
+      }
       return this.value;
     }
     const active = this.activeSequence;
@@ -58,7 +67,9 @@ export class SessionProjectionStore {
     if (event.sequence <= active.sequence) return this.value;
     if (event.sequence !== active.sequence + 1) return this.enterResync();
     this.activeSequence = { commandId: active.commandId, sequence: event.sequence };
-    this.value = applyExecutionFrame(this.value, eventToFrame(event));
+    if (event.type !== 'command.accepted') {
+      this.value = applyExecutionFrame(this.value, eventToFrame(event));
+    }
     if (event.type === 'command.committed' || event.type === 'command.rejected') this.activeSequence = null;
     this.emit();
     return this.value;
@@ -198,7 +209,7 @@ function mapActive(
   return update(state);
 }
 
-function eventToFrame(event: Exclude<GameEvent, { type: 'command.accepted' }>): ExecutionFrame {
+function eventToFrame(event: Exclude<GameEvent, { type: 'command.submitted' | 'command.accepted' }>): ExecutionFrame {
   switch (event.type) {
     case 'turn.prepared': return { type: 'prepared', commandId: event.commandId, view: event.view };
     case 'stage.changed': return { type: 'stage.changed', commandId: event.commandId, stage: event.stage };

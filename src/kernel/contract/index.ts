@@ -27,6 +27,7 @@ export type {
   RerollTurnEnvelope,
   SessionCommand,
   SessionCommandEnvelope,
+  SessionCommandRequestEnvelope,
   SessionId,
   SetPrimaryPath,
   SetPrimaryPathEnvelope,

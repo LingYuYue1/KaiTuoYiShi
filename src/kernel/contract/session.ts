@@ -13,7 +13,7 @@
  *   - multiple subscribers observe the same ordered sequence;
  *   - detaching from the event iterator never cancels the command;
  *   - cancellation happens only through cancelAndWait();
- *   - the event stream is hot; late subscribers resync via projection.
+ *   - the event stream replays this handle's ordered lifecycle to late subscribers.
  */
 
 import type { SessionId, CommandId, Revision, SessionView } from './index';
@@ -37,6 +37,7 @@ export type EventMeta = Readonly<{
 }>;
 
 export type GameEvent = EventMeta & (
+  | { type: 'command.submitted' }
   | { type: 'command.accepted' }
   | { type: 'turn.prepared'; view: SessionView }
   | { type: 'stage.changed'; stage: TurnStage }

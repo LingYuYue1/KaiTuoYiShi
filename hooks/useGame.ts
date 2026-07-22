@@ -303,7 +303,16 @@ export function useGame(): UseGameReturn {
       ? (await root.sessions.open(APP_SESSION_ID)).lifecycle.restart(seed)
       : root.sessions.create(APP_SESSION_ID, seed);
     activeCommandRef.current = handle;
-    const terminal = await consumeSessionHandle(handle, {
+    const lifecycleSink: ExecutionSink = projectionStore.current() ? {
+      applyEvent: applyProjectionEvent,
+      showPrepared: () => {},
+      showStage: () => {},
+      showRetry: () => {},
+      showProgress: () => {},
+      showAssistant: () => {},
+      replaceProjection: () => {},
+      showError: () => {},
+    } : {
       showPrepared: () => {},
       showStage: () => {},
       showRetry: () => {},
@@ -313,11 +322,12 @@ export function useGame(): UseGameReturn {
         syncStreamFromProjection(projectionStore.initialize(view));
       },
       showError: () => {},
-    });
+    };
+    const terminal = await consumeSessionHandle(handle, lifecycleSink);
     if (activeCommandRef.current === handle) activeCommandRef.current = null;
     if (terminal.outcome === 'rejected') throw new Error(terminal.error.message);
     await connectSession();
-  }, [connectSession, projectionStore, resetUiProjectionEphemerals]);
+  }, [applyProjectionEvent, connectSession, projectionStore, resetUiProjectionEphemerals]);
 
   const handleSend = useCallback(
     async (text: string, openingTrigger?: string) => {
@@ -872,6 +882,7 @@ async function consumeSessionHandle<Result>(
       return;
     }
     switch (event.type) {
+      case 'command.submitted':
       case 'command.accepted':
         return;
       case 'turn.prepared':

@@ -303,6 +303,19 @@ export type SessionCommandEnvelope = Readonly<{
   command: SessionCommand;
 }>;
 
+/**
+ * Application-facade request. `latest` keeps revision capture inside the
+ * kernel's admitted session-command boundary, so background maintenance
+ * cannot commit between a facade read and command admission.
+ */
+export type SessionCommandRequestEnvelope = Readonly<{
+  protocolVersion: 1;
+  commandId: CommandId;
+  sessionId: SessionId;
+  expectedRevision: Revision | 'latest';
+  command: SessionCommand;
+}>;
+
 export type CreateSessionEnvelope = Readonly<{
   protocolVersion: 1;
   commandId: CommandId;
@@ -310,7 +323,7 @@ export type CreateSessionEnvelope = Readonly<{
   command: CreateSession;
 }>;
 
-export type CommandEnvelope = CreateSessionEnvelope | SessionCommandEnvelope;
+export type CommandEnvelope = CreateSessionEnvelope | SessionCommandRequestEnvelope;
 
 export type AdvanceTurnEnvelope = SessionCommandEnvelope & {
   readonly command: AdvanceTurn;

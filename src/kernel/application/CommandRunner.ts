@@ -8,10 +8,9 @@
  * public GameEvent protocol:
  *
  *   - eager start (execution begins before any subscriber attaches);
- *   - monotonic per-command sequence starting at 0 with command.accepted;
+ *   - monotonic per-command sequence starting at 0 with command.submitted;
  *   - exactly one terminal event; result settles exactly once;
- *   - hot multicast stream (no history replay — late consumers resync
- *     through session.projection);
+ *   - replayed multicast lifecycle so eager execution cannot outrun presentation;
  *   - cancellation only through cancelAndWait().
  */
 
@@ -29,12 +28,14 @@ import type {
   Unsubscribe,
 } from '@/src/kernel/contract/session';
 
-class HotEventStream<Event> implements MulticastEventStream<Event> {
+class CommandEventStream<Event> implements MulticastEventStream<Event> {
   private readonly listeners = new Set<(event: Event) => void>();
+  private readonly history: Event[] = [];
   private ended = false;
 
   emit(event: Event): void {
     if (this.ended) return;
+    this.history.push(event);
     for (const listener of [...this.listeners]) {
       try {
         listener(event);
@@ -50,19 +51,23 @@ class HotEventStream<Event> implements MulticastEventStream<Event> {
   }
 
   subscribe(listener: (event: Event) => void): Unsubscribe {
+    for (const event of this.history) {
+      try {
+        listener(event);
+      } catch (error) {
+        console.error('Command event subscriber failed', error);
+      }
+    }
     if (this.ended) return () => {};
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
   [Symbol.asyncIterator](): AsyncIterator<Event> {
-    const queue: Event[] = [];
+    let cursor = 0;
     let wake: (() => void) | null = null;
     let done = this.ended;
-    const unsubscribe = this.subscribe((event) => {
-      queue.push(event);
-      wake?.();
-    });
+    const unsubscribe = this.subscribe(() => wake?.());
     const finish = () => {
       done = true;
       unsubscribe();
@@ -72,8 +77,7 @@ class HotEventStream<Event> implements MulticastEventStream<Event> {
     return {
       next: async (): Promise<IteratorResult<Event>> => {
         for (;;) {
-          const item = queue.shift();
-          if (item !== undefined) return { value: item, done: false };
+          if (cursor < this.history.length) return { value: this.history[cursor++], done: false };
           if (done || this.ended) return { value: undefined, done: true };
           await new Promise<void>((resolve) => { wake = resolve; });
           wake = null;
@@ -107,7 +111,7 @@ export class CommandRunner {
     envelope: CommandEnvelope,
     mapResult: (view: SessionView, revision: number) => Result,
   ): CommandHandle<GameEvent, Result> {
-    const stream = new HotEventStream<GameEvent>();
+    const stream = new CommandEventStream<GameEvent>();
     let sequence = 0;
     const emit = (event: Omit<GameEvent, 'sequence' | 'commandId'> & { type: GameEvent['type'] }): void => {
       stream.emit({ ...(event as object), commandId: envelope.commandId, sequence: sequence++ } as GameEvent);
@@ -119,6 +123,7 @@ export class CommandRunner {
     const started = new Promise<void>((resolve) => { markStarted = resolve; });
     let cancelRequested = false;
 
+    emit({ type: 'command.submitted' } as GameEvent);
     void consumeCommand({
       kernel: this.kernel,
       envelope,
@@ -153,7 +158,7 @@ async function consumeCommand<Result>(input: Readonly<{
   kernel: CommandExecutor;
   envelope: CommandEnvelope;
   mapResult(view: SessionView, revision: number): Result;
-  stream: HotEventStream<GameEvent>;
+  stream: CommandEventStream<GameEvent>;
   emit: EmitGameEvent;
   markStarted(): void;
   isCancelRequested(): boolean;
@@ -203,8 +208,8 @@ async function consumeCommand<Result>(input: Readonly<{
       input.emit({ type: 'command.rejected', error: terminal.error } as GameEvent);
     }
   } finally {
-    // A terminal frame is yielded before an async generator runs its finally.
-    // Explicit disposal releases kernel ownership before result settles.
+    // Close the transport after its terminal. NativeKernel has already
+    // released session ownership before publishing that terminal.
     try {
       await iterator?.return?.();
     } catch {

@@ -4,6 +4,7 @@ import type { MessageProjection, TurnStage } from '@/src/kernel/contract';
 import type { StoryState } from '@/src/kernel/domain/session/storyState';
 import { reduceTurnMachine, type TurnMachine } from '@/src/kernel/domain/turn/turnMachine';
 import type { TurnProcessEvent } from './turnWorkflowTypes';
+import { awaitWithAbort } from '../awaitWithAbort';
 
 export type TurnPipelineFrame =
   | Readonly<{ type: 'stage.changed'; stage: Exclude<TurnStage, 'committing'> }>
@@ -31,22 +32,26 @@ export async function* runTurnPipeline(
     wake = createWakeSignal();
   };
 
-  void executeSendWorkflow(request.text, {
-    state: draft,
-    gameSettings: request.state.gameSettings,
-    worldbooks: request.state.worldbooks.slice(),
+  void awaitWithAbort(
+    executeSendWorkflow(request.text, {
+      state: draft,
+      gameSettings: request.state.gameSettings,
+      worldbooks: request.state.worldbooks.slice(),
+      signal,
+      getActiveConfig: () => resolveActiveModelConfig(request.state),
+      emitProcess: (event) => {
+        processEvents.push(event);
+        notify();
+      },
+      onStreamProgress: (text) => {
+        pendingText = text;
+        pending = true;
+        notify();
+      },
+    }),
     signal,
-    getActiveConfig: () => resolveActiveModelConfig(request.state),
-    emitProcess: (event) => {
-      processEvents.push(event);
-      notify();
-    },
-    onStreamProgress: (text) => {
-      pendingText = text;
-      pending = true;
-      notify();
-    },
-  }).then(
+    'Turn execution aborted',
+  ).then(
     (completed) => { result = completed; finished = true; notify(); },
     (error: unknown) => {
       failure = error instanceof Error ? error : new Error(String(error));
@@ -56,6 +61,7 @@ export async function* runTurnPipeline(
   );
 
   while (!finished || pending || processEvents.length > 0) {
+    if (failure && signal.aborted) throw failure;
     const event = processEvents.shift();
     if (event) {
       if (event.type === 'stage.changed') {

@@ -116,20 +116,15 @@ export class KernelSessionDirectory implements SessionDirectory {
   }
 
   private replace(sessionId: SessionId, story: StoryState): CommandHandle<GameEvent, SessionCommit> {
-    return deferredHandle(
-      () => this.commandId(),
-      () => this.kernel.read({ type: 'session.read', sessionId }).then((view) => view.revision),
-      (expectedRevision, commandId) =>
-        this.runner.run(
-          {
-            protocolVersion: 1,
-            commandId,
-            sessionId,
-            expectedRevision,
-            command: { type: 'session.reset', story },
-          },
-          (view, revision) => ({ revision: revision as Revision, view }),
-        ),
+    return this.runner.run(
+      {
+        protocolVersion: 1,
+        commandId: this.commandId(),
+        sessionId,
+        expectedRevision: 'latest',
+        command: { type: 'session.reset', story },
+      },
+      (view, revision) => ({ revision: revision as Revision, view }),
     );
   }
 
@@ -478,7 +473,7 @@ class KernelSession implements ISession {
     return resolveCommandSettings(story, overlay);
   }
 
-  /** Build a session-scoped envelope with fresh command identity + revision. */
+  /** Build a session-scoped intent; the kernel captures revision after admission. */
   private sessionCommand<Result extends { revision: Revision; view: SessionView }>(
     command:
       | { type: 'turn.advance'; input: { text: string; createdAt: number; openingTrigger?: string } }
@@ -510,20 +505,15 @@ class KernelSession implements ISession {
       | import('@/src/kernel/contract').AlbumCommand
       | import('@/src/kernel/contract').PhoneCommand,
   ): CommandHandle<GameEvent, Result> {
-    return deferredHandle(
-      () => asCommandId(this.ids.next('command')),
-      () => this.kernel.read({ type: 'session.read', sessionId: this.id }).then((view) => view.revision),
-      (expectedRevision, commandId) =>
-        this.runner.run(
-          {
-            protocolVersion: 1,
-            commandId,
-            sessionId: this.id,
-            expectedRevision,
-            command,
-          },
-          (view, revision) => ({ revision: revision as Revision, view } as Result),
-        ),
+    return this.runner.run(
+      {
+        protocolVersion: 1,
+        commandId: asCommandId(this.ids.next('command')),
+        sessionId: this.id,
+        expectedRevision: 'latest',
+        command,
+      },
+      (view, revision) => ({ revision: revision as Revision, view } as Result),
     );
   }
 
@@ -556,95 +546,3 @@ class SessionProjectionHub {
 }
 
 type ProjectionCommit = Parameters<Parameters<CommandExecutor['subscribeCommitted']>[0]>[0];
-
-// ── Helpers ──
-
-/**
- * Wrap an async prologue (revision read) into an eager CommandHandle.
- *
- * Identity is allocated ONCE before the prologue and used for both the public
- * handle and the kernel envelope — consumers never observe two IDs for one
- * command. cancelAndWait before the prologue resolves records intent and
- * cancels the real command the moment it starts.
- */
-function deferredHandle<Result>(
-  allocateId: () => CommandId,
-  prologue: () => Promise<Revision>,
-  start: (expectedRevision: Revision, commandId: CommandId) => CommandHandle<GameEvent, Result>,
-): CommandHandle<GameEvent, Result> {
-  const commandId = allocateId();
-  const listeners = new Set<(event: GameEvent) => void>();
-  let inner: CommandHandle<GameEvent, Result> | null = null;
-  let cancelRequested = false;
-
-  const result = (async (): Promise<Awaited<CommandHandle<GameEvent, Result>['result']>> => {
-    try {
-      const revision = await prologue();
-      const handle = start(revision, commandId);
-      inner = handle;
-      for (const listener of listeners) handle.events.subscribe(listener);
-      listeners.clear();
-      if (cancelRequested) {
-        return await handle.cancelAndWait();
-      }
-      return await handle.result;
-    } catch (error) {
-      return {
-        outcome: 'rejected' as const,
-        error: { code: 'unknown' as const, message: error instanceof Error ? error.message : String(error) },
-      };
-    }
-  })();
-
-  return {
-    commandId,
-    events: {
-      subscribe(listener) {
-        if (inner) return inner.events.subscribe(listener);
-        listeners.add(listener);
-        return () => {
-          listeners.delete(listener);
-        };
-      },
-      async *[Symbol.asyncIterator]() {
-        // Bridge through a subscription so pre-start attachment works and
-        // detaching (return) never cancels the command.
-        const queue: GameEvent[] = [];
-        let wake: (() => void) | null = null;
-        let ended = false;
-        const unsubscribe = (inner ?? { events: { subscribe: (l: (event: GameEvent) => void) => { listeners.add(l); return () => listeners.delete(l); } } }).events.subscribe((event: GameEvent) => {
-          queue.push(event);
-          wake?.();
-        });
-        void result.finally(() => {
-          ended = true;
-          wake?.();
-        });
-        try {
-          for (;;) {
-            const item = queue.shift();
-            if (item !== undefined) {
-              yield item;
-              continue;
-            }
-            if (ended) return;
-            await new Promise<void>((resolve) => {
-              wake = resolve;
-            });
-            wake = null;
-          }
-        } finally {
-          unsubscribe();
-        }
-      },
-    },
-    result,
-    cancelAndWait: async () => {
-      cancelRequested = true;
-      if (inner) return inner.cancelAndWait();
-      // Prologue still running: the flag routes cancellation the moment the
-      // real command starts; result settles with the cancelled terminal.
-      return result;
-    },
-  };
-}

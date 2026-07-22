@@ -8,15 +8,20 @@ import type { AlbumAuthoring } from '@/src/kernel/ports/AlbumAuthoring';
 import type { AlbumImageGenerator } from '@/src/kernel/ports/AlbumImageGenerator';
 import type { IdGenerator } from '@/src/kernel/ports/IdGenerator';
 import type { KernelLogger } from '@/src/kernel/ports/KernelLogger';
-import { executeSessionCommand, loadCommandBase, commitCommand, rejectedFrame } from './executeSessionCommand';
+import { committedFrame, executeSessionCommand, loadCommandBase, commitCommand, rejectedFrame } from './executeSessionCommand';
 import { createTurnExecutionState, storyFromTurnExecutionState } from './turn/turnExecutionState';
 import { executeNarrativeImageJob } from './executeNarrativeImageJob';
 import { runNewsGenerationStep } from '@/src/kernel/workflows/newsWorkflow';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { upsertRecallEntry } from '@/src/kernel/workflows/memoryUtils';
 import { hasPairedCancellation } from './commandCancellation';
+import { awaitWithAbort } from './awaitWithAbort';
 
 const JOB_LEASE_MS = 5 * 60_000;
+
+type JobExecuteEnvelope = InternalJobEnvelope & {
+  readonly command: Extract<InternalJobEnvelope['command'], { type: 'job.execute' }>;
+};
 
 export type DurableJobDependencies = Readonly<{
   sessions: SessionRepository;
@@ -62,7 +67,7 @@ export async function* executeJobLifecycleCommand(
 }
 
 export async function* executeDurableJob(
-  envelope: InternalJobEnvelope & { readonly command: Extract<InternalJobEnvelope['command'], { type: 'job.execute' }> },
+  envelope: JobExecuteEnvelope,
   dependencies: DurableJobDependencies,
 ): AsyncIterable<ExecutionFrame> {
   const base = await loadCommandBase(envelope, dependencies.sessions);
@@ -80,11 +85,17 @@ export async function* executeDurableJob(
     throwIfAborted(dependencies.signal);
     const overlay = await dependencies.context.captureDeviceOverlay();
     const state = createTurnExecutionState(base.snapshot.state.story, overlay);
-    await performJob(job, state, dependencies);
+    await awaitWithAbort(
+      performJob(job, state, dependencies),
+      dependencies.signal,
+      'Durable job aborted',
+    );
     throwIfAborted(dependencies.signal);
-    const story = storyFromTurnExecutionState(state, base.snapshot.state.story);
-    const completed = succeedJob(job, String(envelope.commandId), dependencies.clock.now());
-    yield await commitCommand(envelope, dependencies.sessions, { story: replaceJob(story, completed) });
+    const resultStory = storyFromTurnExecutionState(state, base.snapshot.state.story);
+    yield await commitDurableResult(envelope, dependencies.sessions, (latest, current) => {
+      const completed = succeedJob(current, String(envelope.commandId), dependencies.clock.now());
+      return replaceJob(mergeJobOutput(latest, base.snapshot.state.story, resultStory, job), completed);
+    });
   } catch (error) {
     if (hasPairedCancellation(dependencies.signal)) {
       dependencies.logger.write({
@@ -95,14 +106,13 @@ export async function* executeDurableJob(
       return;
     }
     if (dependencies.signal.aborted || isAbortError(error)) {
-      const cancelled = cancelJob(job, errorMessage(error), dependencies.clock.now());
       dependencies.logger.write({
         level: 'info', scope: 'kernel.durable-job', event: 'cancelled',
         data: { jobId: job.id, kind: job.payload.kind, attempt: job.attempt },
       });
-      yield await commitCommand(envelope, dependencies.sessions, {
-        story: replaceJob(base.snapshot.state.story, cancelled),
-      });
+      yield await commitDurableResult(envelope, dependencies.sessions, (latest, current) =>
+        replaceJob(latest, cancelJob(current, errorMessage(error), dependencies.clock.now())),
+      );
       return;
     }
     const failed = retryJob(job, errorMessage(error), now + retryDelay(job.attempt));
@@ -111,10 +121,106 @@ export async function* executeDurableJob(
       scope: 'kernel.durable-job', event: failed.state === 'failed' ? 'failed' : 'retry.scheduled',
       data: { jobId: job.id, kind: job.payload.kind, attempt: job.attempt }, error,
     });
-    yield await commitCommand(envelope, dependencies.sessions, {
-      story: replaceJob(base.snapshot.state.story, failed),
-    });
+    yield await commitDurableResult(envelope, dependencies.sessions, (latest, current) =>
+      replaceJob(latest, retryJob(current, errorMessage(error), now + retryDelay(current.attempt))),
+    );
   }
+}
+
+async function commitDurableResult(
+  envelope: JobExecuteEnvelope,
+  sessions: SessionRepository,
+  update: (latest: Parameters<typeof replaceJob>[0], current: Extract<DurableJob, { state: 'running' }>) => Parameters<typeof replaceJob>[0],
+): Promise<ExecutionFrame> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const prior = await sessions.findByCommandId(envelope.sessionId, envelope.commandId);
+    if (prior) return committedFrame(envelope, prior.snapshot);
+    const latest = await sessions.read(envelope.sessionId);
+    const current = latest.state.story.jobs.records.find((candidate) => candidate.id === envelope.command.jobId);
+    if (!current || current.state !== 'running' || current.runnerId !== envelope.command.runnerId) {
+      return rejectedFrame(envelope, { code: 'no_changes', message: 'Durable job no longer owns execution' });
+    }
+    const frame = await commitCommand(
+      { ...envelope, expectedRevision: latest.revision },
+      sessions,
+      { story: update(latest.state.story, current) },
+    );
+    if (frame.type !== 'rejected' || frame.error.code !== 'revision_conflict') return frame;
+  }
+  return rejectedFrame(envelope, { code: 'revision_conflict', message: 'Durable job could not rebase after concurrent commits' });
+}
+
+function mergeJobOutput(
+  latest: Parameters<typeof replaceJob>[0],
+  base: Parameters<typeof replaceJob>[0],
+  result: Parameters<typeof replaceJob>[0],
+  job: DurableJob,
+): Parameters<typeof replaceJob>[0] {
+  if (job.payload.kind === 'narrative-image.generate') {
+    const resultMessage = result.conversation.history.find((message) => message.id === job.payload.messageId);
+    return {
+      ...latest,
+      album: mergeAlbum(latest.album, base.album, result.album),
+      conversation: resultMessage ? {
+        ...latest.conversation,
+        history: latest.conversation.history.map((message) => message.id === resultMessage.id
+          ? { ...message, narrativeImages: resultMessage.narrativeImages }
+          : message),
+      } : latest.conversation,
+    };
+  }
+  if (job.payload.kind === 'news.generate') {
+    return { ...latest, news: mergeRecords(latest.news, base.news, result.news, (item) => item.id) };
+  }
+  return {
+    ...latest,
+    memory: {
+      ...latest.memory,
+      yiting: {
+        回忆档案: mergeRecords(
+          latest.memory.yiting.回忆档案,
+          base.memory.yiting.回忆档案,
+          result.memory.yiting.回忆档案,
+          (item) => item.id,
+        ),
+      },
+    },
+  };
+}
+
+function mergeAlbum(
+  latest: Parameters<typeof replaceJob>[0]['album'],
+  base: Parameters<typeof replaceJob>[0]['album'],
+  result: Parameters<typeof replaceJob>[0]['album'],
+): Parameters<typeof replaceJob>[0]['album'] {
+  return {
+    assets: mergeRecords(latest.assets, base.assets, result.assets, (item) => item.id),
+    entries: mergeRecords(latest.entries, base.entries, result.entries, (item) => item.id),
+    tasks: mergeRecords(latest.tasks, base.tasks, result.tasks, (item) => item.id),
+    bindings: mergeRecords(
+      latest.bindings,
+      base.bindings,
+      result.bindings,
+      (item) => `${item.targetType}\0${item.targetId}\0${item.slot}`,
+    ),
+  };
+}
+
+function mergeRecords<Item>(
+  latest: readonly Item[],
+  base: readonly Item[],
+  result: readonly Item[],
+  keyOf: (item: Item) => string,
+): Item[] {
+  const baseById = new Map(base.map((item) => [keyOf(item), item]));
+  const resultById = new Map(result.map((item) => [keyOf(item), item]));
+  const removed = new Set(base.filter((item) => !resultById.has(keyOf(item))).map(keyOf));
+  const changed = result.filter((item) => JSON.stringify(item) !== JSON.stringify(baseById.get(keyOf(item))));
+  const changedIds = new Set(changed.map(keyOf));
+  return [
+    ...latest.filter((item) => !removed.has(keyOf(item)) && !changedIds.has(keyOf(item))),
+    ...changed,
+  ];
 }
 
 async function performJob(

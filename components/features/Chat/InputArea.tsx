@@ -76,7 +76,7 @@ export const InputArea = memo(function InputArea({
     const trimmed = input.trim();
     if (!trimmed || loading) return;
     lastSubmittedRef.current = trimmed;
-    // Clear on accept so protocol failures / rejects never leave stale input.
+    // Clear on submission; a rejected terminal restores the uncommitted draft.
     // Abort restores via handleAbortClick + lastSubmittedRef.
     setInput('');
     try {

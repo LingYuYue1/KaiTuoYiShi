@@ -66,7 +66,8 @@ export class NativeKernel implements CommandExecutor {
     settled: Promise<void>;
     resolveSettled: () => void;
   }>();
-  private readonly activeSessionCommands = new Map<string, ActiveCommandOwner>();
+  private readonly activeSessionCommands = new Map<string, SessionCommandOwner>();
+  private readonly activeDurableJobCommands = new Map<string, DurableJobOwner>();
   private readonly scheduledJobDrains = new Set<string>();
   private readonly jobRunnerId: string;
   private readonly commitListeners = new Set<(commit: CommittedProjection) => void>();
@@ -108,31 +109,74 @@ export class NativeKernel implements CommandExecutor {
   }
 
   private async *executeLocked(envelope: CommandEnvelope): AsyncIterable<ExecutionFrame> {
+    const iterator = this.executeOwned(envelope)[Symbol.asyncIterator]();
+    let terminal: Extract<ExecutionFrame, { type: 'committed' | 'rejected' }> | null = null;
+    try {
+      for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
+        if (next.value.type === 'committed' || next.value.type === 'rejected') {
+          terminal = next.value;
+          break;
+        }
+        yield next.value;
+      }
+    } finally {
+      // Ownership belongs to execution, not to transport consumption. Closing
+      // the owned stream runs its release path before a terminal is observable.
+      await iterator.return?.();
+    }
+    if (terminal) yield terminal;
+  }
+
+  private async *executeOwned(envelope: CommandEnvelope): AsyncIterable<ExecutionFrame> {
     const controller = new AbortController();
     const commandKey = String(envelope.commandId);
     const sessionKey = String(envelope.sessionId);
     if (this.running.has(commandKey)) throw new Error(`Command is already running: ${commandKey}`);
+    let resolveSettled!: () => void;
+    const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
+    this.running.set(commandKey, { controller, settled, resolveSettled });
     const owner = commandOwner(envelope);
-    const activeOwner = this.activeSessionCommands.get(sessionKey);
-    if (activeOwner) {
-      const preemption = preemptionPolicy(envelope, activeOwner);
-      if (preemption) {
-        this.logger.write({
-          level: 'info', scope: 'kernel.command', event: 'command.preempting',
-          data: {
-            commandId: commandKey, command: envelope.command.type,
-            activeCommandId: String(activeOwner.commandId), activeCommand: activeOwner.command,
-            reason: preemption,
-          },
-        });
-        this.activeSessionCommands.set(sessionKey, owner);
-        try {
-          await this.abortAndWait(activeOwner.commandId, PAIRED_COMMAND_CANCELLATION);
-        } catch (error) {
-          if (this.activeSessionCommands.get(sessionKey) === owner) this.activeSessionCommands.delete(sessionKey);
-          throw error;
+    let admitted = false;
+    try {
+      for (;;) {
+        if (controller.signal.aborted) {
+          yield cancelledFrame(envelope, 'Command was cancelled before admission');
+          return;
         }
-      } else {
+        const activeOwner = this.activeSessionCommands.get(sessionKey);
+        if (!activeOwner) {
+          if (owner.kind === 'durable-job') this.activeDurableJobCommands.set(commandKey, owner);
+          else this.activeSessionCommands.set(sessionKey, owner);
+          admitted = true;
+          break;
+        }
+        const preemption = owner.kind === 'durable-job' ? null : preemptionPolicy(envelope, activeOwner);
+        if (preemption && owner.kind !== 'durable-job') {
+          this.logger.write({
+            level: 'info', scope: 'kernel.command', event: 'command.preempting',
+            data: {
+              commandId: commandKey, command: envelope.command.type,
+              activeCommandId: String(activeOwner.commandId), activeCommand: activeOwner.command,
+              reason: preemption,
+            },
+          });
+          this.activeSessionCommands.set(sessionKey, owner);
+          admitted = true;
+          await this.abortAndWait(activeOwner.commandId, PAIRED_COMMAND_CANCELLATION);
+          break;
+        }
+        if (owner.kind === 'durable-job' || (owner.kind === 'foreground' && activeOwner.kind === 'maintenance')) {
+          this.logger.write({
+            level: 'debug', scope: 'kernel.command', event: 'command.waiting',
+            data: {
+              commandId: commandKey, command: envelope.command.type,
+              activeCommandId: String(activeOwner.commandId), activeCommand: activeOwner.command,
+              activeOwner: activeOwner.kind,
+            },
+          });
+          await this.waitForOwnerOrCancellation(activeOwner, controller.signal);
+          continue;
+        }
         this.logger.write({
           level: 'warn', scope: 'kernel.command', event: 'command.blocked',
           data: {
@@ -151,23 +195,19 @@ export class NativeKernel implements CommandExecutor {
         };
         return;
       }
-    }
-    let resolveSettled!: () => void;
-    const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
-    this.running.set(commandKey, { controller, settled, resolveSettled });
-    this.activeSessionCommands.set(sessionKey, owner);
-    this.logger.write({
-      level: 'info', scope: 'kernel.command', event: 'command.admitted',
-      data: { commandId: commandKey, sessionId: sessionKey, command: envelope.command.type, owner: owner.kind },
-    });
-    try {
+      this.logger.write({
+        level: 'info', scope: 'kernel.command', event: 'command.admitted',
+        data: { commandId: commandKey, sessionId: sessionKey, command: envelope.command.type, owner: owner.kind },
+      });
+      await this.preemptDurableJobs(envelope);
       yield { type: 'accepted', commandId: envelope.commandId };
-      if (!('expectedRevision' in envelope)) {
-        yield await this.createSession(envelope);
+      const admittedEnvelope = await this.resolveRevision(envelope);
+      if (!('expectedRevision' in admittedEnvelope)) {
+        yield await this.createSession(admittedEnvelope);
         return;
       }
 
-      const command: SessionCommandEnvelope = envelope;
+      const command: SessionCommandEnvelope = admittedEnvelope;
       switch (command.command.type) {
         case 'session.reset':
           yield* resetSession({ ...command, command: command.command }, this.dependencies.sessions);
@@ -345,15 +385,68 @@ export class NativeKernel implements CommandExecutor {
       throw new Error(`Unknown kernel command: ${String((exhaustive as { type: string }).type)}`);
     } finally {
       this.running.delete(commandKey);
-      if (this.activeSessionCommands.get(sessionKey) === owner) {
-        this.activeSessionCommands.delete(sessionKey);
+      if (admitted) {
+        if (owner.kind === 'durable-job') this.activeDurableJobCommands.delete(commandKey);
+        else if (this.activeSessionCommands.get(sessionKey) === owner) this.activeSessionCommands.delete(sessionKey);
       }
-      this.logger.write({
-        level: 'info', scope: 'kernel.command', event: 'command.released',
-        data: { commandId: commandKey, sessionId: sessionKey, command: envelope.command.type, owner: owner.kind, aborted: controller.signal.aborted },
-      });
+      if (admitted) {
+        this.logger.write({
+          level: 'info', scope: 'kernel.command', event: 'command.released',
+          data: { commandId: commandKey, sessionId: sessionKey, command: envelope.command.type, owner: owner.kind, aborted: controller.signal.aborted },
+        });
+      }
       resolveSettled();
-      if (!isInternalJobCommand(envelope)) this.scheduleJobDrain(envelope.sessionId);
+      if (admitted && !isInternalJobCommand(envelope)) this.scheduleJobDrain(envelope.sessionId);
+    }
+  }
+
+  private async resolveRevision(
+    envelope: CommandEnvelope,
+  ): Promise<CreateSessionEnvelope | SessionCommandEnvelope> {
+    if (!('expectedRevision' in envelope)) return envelope;
+    if (envelope.expectedRevision !== 'latest') {
+      return { ...envelope, expectedRevision: envelope.expectedRevision };
+    }
+    const snapshot = await this.dependencies.sessions.read(envelope.sessionId);
+    return { ...envelope, expectedRevision: snapshot.revision };
+  }
+
+  private async waitForOwnerOrCancellation(owner: ActiveCommandOwner, signal: AbortSignal): Promise<void> {
+    const active = this.running.get(String(owner.commandId));
+    if (!active) {
+      if (this.activeSessionCommands.get(String(owner.sessionId)) === owner) {
+        this.activeSessionCommands.delete(String(owner.sessionId));
+      }
+      return;
+    }
+    if (signal.aborted) return;
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        signal.removeEventListener('abort', finish);
+        resolve();
+      };
+      signal.addEventListener('abort', finish, { once: true });
+      void active.settled.then(finish);
+    });
+  }
+
+  private async preemptDurableJobs(envelope: CommandEnvelope): Promise<void> {
+    if (!('expectedRevision' in envelope)) return;
+    const owners = [...this.activeDurableJobCommands.values()].filter((owner) =>
+      owner.sessionId === envelope.sessionId &&
+      (envelope.command.type === 'session.reset' ||
+        (envelope.command.type === 'job.cancel' && envelope.command.jobId === owner.jobId)),
+    );
+    for (const owner of owners) {
+      this.logger.write({
+        level: 'info', scope: 'kernel.command', event: 'command.preempting',
+        data: {
+          commandId: String(envelope.commandId), command: envelope.command.type,
+          activeCommandId: String(owner.commandId), activeCommand: owner.command,
+          reason: envelope.command.type === 'session.reset' ? 'session-replacement' : 'durable-job-cancellation',
+        },
+      });
+      await this.abortAndWait(owner.commandId, PAIRED_COMMAND_CANCELLATION);
     }
   }
 
@@ -474,14 +567,13 @@ export class NativeKernel implements CommandExecutor {
     sessionId: SessionId,
     command: Extract<SessionCommandEnvelope['command'], { type: 'job.recover' | 'job.claim-next' | 'job.start' | 'job.execute' }>,
   ): Promise<Extract<ExecutionFrame, { type: 'committed' | 'rejected' }>> {
-    const snapshot = await this.dependencies.sessions.read(sessionId);
     const commandId = this.dependencies.ids.next('job-command') as CommandId;
     let terminal: Extract<ExecutionFrame, { type: 'committed' | 'rejected' }> | null = null;
     for await (const frame of this.execute({
       protocolVersion: 1,
       commandId,
       sessionId,
-      expectedRevision: snapshot.revision,
+      expectedRevision: 'latest',
       command,
     })) {
       if (frame.type === 'committed' || frame.type === 'rejected') terminal = frame;
@@ -506,26 +598,53 @@ export class NativeKernel implements CommandExecutor {
   }
 }
 
-type ActiveCommandOwner =
-  | Readonly<{ kind: 'foreground'; commandId: CommandId; command: CommandEnvelope['command']['type'] }>
-  | Readonly<{ kind: 'durable-job'; commandId: CommandId; command: 'job.execute'; jobId: string }>;
+type ForegroundOwner = Readonly<{
+  kind: 'foreground';
+  sessionId: SessionId;
+  commandId: CommandId;
+  command: CommandEnvelope['command']['type'];
+}>;
+type MaintenanceOwner = Readonly<{
+  kind: 'maintenance';
+  sessionId: SessionId;
+  commandId: CommandId;
+  command: 'job.recover' | 'job.claim-next' | 'job.start';
+}>;
+type DurableJobOwner = Readonly<{
+  kind: 'durable-job';
+  sessionId: SessionId;
+  commandId: CommandId;
+  command: 'job.execute';
+  jobId: string;
+}>;
+type SessionCommandOwner = ForegroundOwner | MaintenanceOwner;
+type ActiveCommandOwner = SessionCommandOwner | DurableJobOwner;
 
 function commandOwner(envelope: CommandEnvelope): ActiveCommandOwner {
-  return 'expectedRevision' in envelope && envelope.command.type === 'job.execute'
-    ? { kind: 'durable-job', commandId: envelope.commandId, command: envelope.command.type, jobId: envelope.command.jobId }
-    : { kind: 'foreground', commandId: envelope.commandId, command: envelope.command.type };
+  if ('expectedRevision' in envelope && envelope.command.type === 'job.execute') {
+    return { kind: 'durable-job', sessionId: envelope.sessionId, commandId: envelope.commandId, command: envelope.command.type, jobId: envelope.command.jobId };
+  }
+  if ('expectedRevision' in envelope &&
+    (envelope.command.type === 'job.recover' || envelope.command.type === 'job.claim-next' || envelope.command.type === 'job.start')) {
+    return { kind: 'maintenance', sessionId: envelope.sessionId, commandId: envelope.commandId, command: envelope.command.type };
+  }
+  return { kind: 'foreground', sessionId: envelope.sessionId, commandId: envelope.commandId, command: envelope.command.type };
 }
 
-function preemptionPolicy(envelope: CommandEnvelope, owner: ActiveCommandOwner): 'session-replacement' | 'durable-job-cancellation' | null {
+function preemptionPolicy(envelope: CommandEnvelope, _owner: SessionCommandOwner): 'session-replacement' | null {
   if ('expectedRevision' in envelope && envelope.command.type === 'session.reset') return 'session-replacement';
-  if (owner.kind === 'durable-job' && 'expectedRevision' in envelope &&
-    envelope.command.type === 'job.cancel' && envelope.command.jobId === owner.jobId) {
-    return 'durable-job-cancellation';
-  }
   return null;
 }
 
 function isInternalJobCommand(envelope: CommandEnvelope): boolean {
   return 'expectedRevision' in envelope && envelope.command.type.startsWith('job.') &&
     envelope.command.type !== 'job.retry' && envelope.command.type !== 'job.cancel';
+}
+
+function cancelledFrame(envelope: CommandEnvelope, message: string): ExecutionFrame {
+  return {
+    type: 'rejected',
+    commandId: envelope.commandId,
+    error: { code: 'cancelled', message },
+  };
 }
