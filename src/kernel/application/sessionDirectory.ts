@@ -53,6 +53,7 @@ import type { ContextSnapshotBuilder } from '@/src/kernel/ports/ContextSnapshotB
 import type { AlbumAuthoring } from '@/src/kernel/ports/AlbumAuthoring';
 import type { Clock } from '@/src/kernel/ports/Clock';
 import type { IdGenerator } from '@/src/kernel/ports/IdGenerator';
+import type { KernelLogger } from '@/src/kernel/ports/KernelLogger';
 import { resolveCommandSettings } from './turn/turnExecutionState';
 
 export class KernelSessionDirectory implements SessionDirectory {
@@ -67,9 +68,18 @@ export class KernelSessionDirectory implements SessionDirectory {
     private readonly albumAuthoring: AlbumAuthoring,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
+    private readonly logger: KernelLogger,
   ) {
     this.runner = new CommandRunner(kernel);
-    kernel.subscribeCommitted((commit) => this.projections.publish(commit));
+    kernel.subscribeCommitted((commit) => {
+      this.logger.write({
+        level: 'debug',
+        scope: 'kernel.session-directory',
+        event: 'projection.commit.published',
+        data: { sessionId: String(commit.view.sessionId), cause: commit.cause, revision: Number(commit.view.revision) },
+      });
+      this.projections.publish(commit);
+    });
   }
 
   exists(sessionId: SessionId): Promise<boolean> {
@@ -84,7 +94,11 @@ export class KernelSessionDirectory implements SessionDirectory {
 
   async open(sessionId: SessionId): Promise<ISession> {
     const existence = await this.kernel.read({ type: 'session.exists', sessionId });
-    if (!existence.exists) throw new Error(`Session not found: ${sessionId}`);
+    if (!existence.exists) {
+      this.logger.write({ level: 'warn', scope: 'kernel.session-directory', event: 'session.open.missing', data: { sessionId: String(sessionId) } });
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    this.logger.write({ level: 'debug', scope: 'kernel.session-directory', event: 'session.opened', data: { sessionId: String(sessionId) } });
     return new KernelSession(sessionId, this.kernel, this.runner, this.context, this.skillDraftGenerator, this.contextSnapshotBuilder, this.albumAuthoring, this.clock, this.ids, this.projections);
   }
 

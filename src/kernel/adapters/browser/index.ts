@@ -9,3 +9,4 @@ export { BrowserAlbumImageGenerator } from './BrowserAlbumImageGenerator';
 export { BrowserPhoneReplyGenerator } from './BrowserPhoneReplyGenerator';
 export { SystemClock } from './SystemClock';
 export { RandomIdGenerator } from './RandomIdGenerator';
+export { BrowserConsoleLogTarget } from './BrowserConsoleLogTarget';

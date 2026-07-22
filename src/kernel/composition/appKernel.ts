@@ -12,9 +12,11 @@ import {
   BrowserAlbumAuthoring,
   BrowserAlbumImageGenerator,
   BrowserPhoneReplyGenerator,
+  BrowserConsoleLogTarget,
   RandomIdGenerator,
   SystemClock,
 } from '@/src/kernel/adapters/browser';
+import { BoundedKernelLogTarget, createKernelLogger } from '@/src/kernel/observability/kernelLogger';
 import { PreferenceExecutionContextProvider } from '@/src/kernel/adapters/browser/PreferenceExecutionContextProvider';
 import { KernelSessionDirectory } from '@/src/kernel/application/sessionDirectory';
 import { PreferenceDeviceUseCases } from '@/src/kernel/application/deviceUseCases';
@@ -31,6 +33,11 @@ let commandKernelPromise: Promise<CommandExecutor> | null = null;
 let rootPromise: Promise<IKernel> | null = null;
 const clock = new SystemClock();
 const ids = new RandomIdGenerator();
+const kernelLogBuffer = new BoundedKernelLogTarget(500);
+const kernelLogger = createKernelLogger(
+  () => clock.now(),
+  [new BrowserConsoleLogTarget(), kernelLogBuffer],
+);
 
 export const APP_SESSION_ID = asSessionId('local-session');
 
@@ -71,6 +78,7 @@ export function getAppRoot(): Promise<IKernel> {
         new BrowserAlbumAuthoring(),
         clock,
         ids,
+        kernelLogger,
       );
       return {
         sessions,
@@ -78,7 +86,7 @@ export function getAppRoot(): Promise<IKernel> {
         saves: createSavesUseCases(saves, sessions, preferences, clock),
         content: createContentUseCases(preferences),
         onboarding: createOnboardingUseCases(preferences),
-        diagnostics: createDiagnosticsUseCases(),
+        diagnostics: createDiagnosticsUseCases(kernelLogger, kernelLogBuffer),
         cloud: createCloudUseCases(preferences, saves),
         host: createHostUseCases(),
       } satisfies IKernel;

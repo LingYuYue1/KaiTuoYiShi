@@ -138,15 +138,57 @@ export function useGame(): UseGameReturn {
 
   const connectSession = useCallback(async (): Promise<ISession> => {
     const root = await getAppRoot();
-    const session = await root.sessions.open(APP_SESSION_ID);
+    type ConnectionLog = Omit<Parameters<typeof root.diagnostics.recordKernelLog>[0], 'scope'>;
+    const log = (input: ConnectionLog) => {
+      root.diagnostics.recordKernelLog({ ...input, scope: 'ui.session-connection' });
+    };
+    log({ level: 'debug', event: 'open.started', data: { sessionId: APP_SESSION_ID } });
     autosaveUnsubscribeRef.current?.();
+    autosaveUnsubscribeRef.current = null;
     projectionUnsubscribeRef.current?.();
-    autosaveUnsubscribeRef.current = await root.saves.followAutosave(session);
-    projectionUnsubscribeRef.current = session.projection.subscribe((commit) => {
-      syncStreamFromProjection(projectionStore.followCommitted(commit.view));
-    });
-    sessionPromiseRef.current = Promise.resolve(session);
-    return session;
+    projectionUnsubscribeRef.current = null;
+    try {
+      const session = await root.sessions.open(APP_SESSION_ID);
+
+      // Establish a usable projection before any commit can reach the listener.
+      const initialView = await session.projection.current();
+      syncStreamFromProjection(projectionStore.initialize(initialView));
+      log({
+        level: 'info',
+        event: 'projection.initialized',
+        data: { sessionId: APP_SESSION_ID, revision: Number(initialView.revision) },
+      });
+
+      projectionUnsubscribeRef.current = session.projection.subscribe((commit) => {
+        log({
+          level: 'debug',
+          event: 'projection.commit.received',
+          data: { cause: commit.cause, revision: Number(commit.view.revision) },
+        });
+        syncStreamFromProjection(projectionStore.followCommitted(commit.view));
+      });
+      autosaveUnsubscribeRef.current = await root.saves.followAutosave(session);
+
+      // Close the read -> subscribe race: a commit may have landed between the
+      // initial read and listener registration.
+      const synchronizedView = await session.projection.resync();
+      syncStreamFromProjection(projectionStore.followCommitted(synchronizedView));
+      log({
+        level: 'debug',
+        event: 'projection.resynchronized',
+        data: { sessionId: APP_SESSION_ID, revision: Number(synchronizedView.revision) },
+      });
+      sessionPromiseRef.current = Promise.resolve(session);
+      log({ level: 'info', event: 'open.completed', data: { sessionId: APP_SESSION_ID } });
+      return session;
+    } catch (error) {
+      autosaveUnsubscribeRef.current?.();
+      autosaveUnsubscribeRef.current = null;
+      projectionUnsubscribeRef.current?.();
+      projectionUnsubscribeRef.current = null;
+      log({ level: 'error', event: 'open.failed', error });
+      throw error;
+    }
   }, [projectionStore]);
 
   const getSession = useCallback(async (): Promise<ISession> => {

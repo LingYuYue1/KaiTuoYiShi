@@ -38,6 +38,7 @@
     "test:session-schema": "node scripts/session-schema-v3-regression.mjs",
     "test:no-legacy-boundary": "node scripts/no-legacy-boundary-regression.mjs",
     "test:session-facade": "node scripts/session-facade-regression.mjs",
+    "test:kernel-logging-projection": "node scripts/kernel-logging-projection-regression.mjs",
     "test:inventory-command": "node scripts/inventory-command-regression.mjs",
     "test:plot-command": "node scripts/plot-command-regression.mjs",
     "test:album-command": "node scripts/album-command-regression.mjs",

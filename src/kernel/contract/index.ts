@@ -85,6 +85,14 @@ export type { KernelError, KernelErrorCode } from './errors';
 export type { KernelQuery, SessionExistsQuery, SessionReadQuery } from './queries';
 
 export type {
+  KernelLogEntry,
+  KernelLogInput,
+  KernelLogLevel,
+  KernelLogProjection,
+  KernelLogValue,
+} from './logging';
+
+export type {
   QueryResult,
   SessionExistenceView,
   SessionView,

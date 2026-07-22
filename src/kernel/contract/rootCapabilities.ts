@@ -12,6 +12,7 @@ import type { SessionDirectory } from './session';
 import type { CommandHandle, GameEvent, ISession, SessionCommit, Unsubscribe } from './session';
 import type { SessionId } from './commands';
 import type { DeviceUseCases } from './device';
+import type { KernelLogEntry, KernelLogInput, KernelLogProjection } from './logging';
 
 // ── Saves ──
 
@@ -96,6 +97,11 @@ export type ApiErrorReportProjection = Readonly<{
 export interface DiagnosticsUseCases {
   listApiErrorReports(): Promise<readonly ApiErrorReportProjection[]>;
   clearApiErrorReports(): Promise<void>;
+  /** Structured runtime diagnostics; safe for future UI log viewers. */
+  recordKernelLog(input: KernelLogInput): void;
+  listKernelLogs(): readonly KernelLogEntry[];
+  subscribeKernelLogs(listener: (entry: KernelLogEntry) => void): import('./session').Unsubscribe;
+  clearKernelLogs(): void;
 }
 
 // ── Content ──

@@ -24,6 +24,8 @@ import { createDefaultSettingsPlanes, type ContentLibrary } from '@/models/setti
 import { OPENING_PLAYER_PRESETS_KEY, type OpeningPlayerPreset } from '@/models/openingPreset';
 import { buildDesktopReleaseInfo } from '@/services/desktop/desktopReleaseInfo';
 import type { Clock } from '@/src/kernel/ports/Clock';
+import type { KernelLogger } from '@/src/kernel/ports/KernelLogger';
+import type { KernelLogProjection } from '@/src/kernel/contract/logging';
 import { SAVE_POLICY_KEY } from '@/src/kernel/adapters/browser/PreferenceExecutionContextProvider';
 import type { SavePolicy } from '@/models/settingsPlanes';
 import { createPortableSave } from './portableSave';
@@ -163,7 +165,7 @@ export function createOnboardingUseCases(preferences: PreferenceStore): Onboardi
   };
 }
 
-export function createDiagnosticsUseCases(): DiagnosticsUseCases {
+export function createDiagnosticsUseCases(logger: KernelLogger, logs: KernelLogProjection): DiagnosticsUseCases {
   return {
     async listApiErrorReports() {
       const module = await import('@/services/ai/apiErrorReportService');
@@ -172,6 +174,18 @@ export function createDiagnosticsUseCases(): DiagnosticsUseCases {
     async clearApiErrorReports(): Promise<void> {
       const module = await import('@/services/ai/apiErrorReportService');
       await module.clearApiErrorReports();
+    },
+    recordKernelLog(input) {
+      logger.write(input);
+    },
+    listKernelLogs() {
+      return logs.list();
+    },
+    subscribeKernelLogs(listener) {
+      return logs.subscribe(listener);
+    },
+    clearKernelLogs() {
+      logs.clear();
     },
   };
 }

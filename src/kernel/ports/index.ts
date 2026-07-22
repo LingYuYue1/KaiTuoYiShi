@@ -26,3 +26,4 @@ export type {
 export type { Clock } from './Clock';
 export type { IdGenerator } from './IdGenerator';
 export type { JobRepository } from './JobRepository';
+export type { KernelLogger } from './KernelLogger';
