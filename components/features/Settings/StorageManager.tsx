@@ -264,7 +264,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
 
       {repairing && (
         <div className="text-xs" style={{ color: 'rgba(var(--tj-accent-primary),0.84)' }}>
-          正在修复存档索引：{repairState.completed}/{repairState.total}
+          正在修复存档索引：{repairState.processed}/{repairState.total}
         </div>
       )}
 
