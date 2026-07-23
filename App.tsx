@@ -1,7 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
 import { LandingPage } from '@/components/layout/LandingPage';
-import { DesktopHomeScreen } from '@/components/layout/DesktopHomeScreen';
 import { GameView } from '@/components/layout/GameView';
 import { TopBar } from '@/components/layout/TopBar';
 import { LeftPanel } from '@/components/layout/LeftPanel';
@@ -18,7 +17,6 @@ import { TravelerProfileModal } from '@/components/features/Character/TravelerPr
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/dbService';
 import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
-import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
@@ -665,42 +663,20 @@ export default function App() {
   if (state.view === 'home') {
     return (
       <>
-        {isDesktopRuntime() ? (
-          <DesktopHomeScreen
-            onNewGame={handleHomeNewGame}
-            onLoadSave={handleHomeLoadSave}
-            onContinue={actions.handleContinue}
-            onOpenSettings={(tab = 'api') => {
-              setSettingsInitialTab(tab);
-              setShowSettings(true);
-            }}
-            onOpenStorageManager={() => {
-              setSettingsInitialTab('storage');
-              setShowSettings(true);
-            }}
-            onOpenWorldbookManager={handleHomeWorldbookManager}
-            onOpenZhikuManager={() => setShowZhikuManager(true)}
-            onOpenCloudSave={() => setShowCloudSave(true)}
-            onOpenReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
-            onDiscordPost={() => window.open('https://discord.com/channels/1380075940285124724/1509136913792241704', '_blank', 'noopener,noreferrer')}
-            onMysteryChat={handleHomeMysteryChat}
-          />
-        ) : (
-          <LandingPage
-            onNewGame={handleHomeNewGame}
-            onLoadSave={handleHomeLoadSave}
-            onSettings={() => {
-              setSettingsInitialTab('api');
-              setShowSettings(true);
-            }}
-            onWorldbookManager={handleHomeWorldbookManager}
-            onZhikuManager={() => setShowZhikuManager(true)}
-            onCloudSave={() => setShowCloudSave(true)}
-            onReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
-            onDiscordPost={() => window.open('https://discord.com/channels/1380075940285124724/1509136913792241704', '_blank', 'noopener,noreferrer')}
-            onMysteryChat={handleHomeMysteryChat}
-          />
-        )}
+        <LandingPage
+          onNewGame={handleHomeNewGame}
+          onLoadSave={handleHomeLoadSave}
+          onSettings={() => {
+            setSettingsInitialTab('api');
+            setShowSettings(true);
+          }}
+          onWorldbookManager={handleHomeWorldbookManager}
+          onZhikuManager={() => setShowZhikuManager(true)}
+          onCloudSave={() => setShowCloudSave(true)}
+          onReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
+          onDiscordPost={() => window.open('https://discord.com/channels/1380075940285124724/1509136913792241704', '_blank', 'noopener,noreferrer')}
+          onMysteryChat={handleHomeMysteryChat}
+        />
         {homeJourneyTransitioning ? <HomeJourneyOverlay /> : null}
         {saveLoadTransitioning ? <SaveLoadOverlay /> : null}
         {bookOpenTransitioning ? <BookOpenOverlay /> : null}
