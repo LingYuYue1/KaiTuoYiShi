@@ -23,6 +23,11 @@ Thumbs.db
 .idea/
 .vscode/
 
+# IDE / tool clutter
+.claude-plugin/
+.reasonix/
+.trae/
+
 # Local assistant memory / private planning notes
 .claude/
 .superpowers/
