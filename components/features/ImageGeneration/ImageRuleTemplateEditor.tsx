@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
+import type { NovelAIContentMode } from '@/models/imageGeneration';
+import type { NovelAI模型族, PNG画风预设来源, 故事快照解析规则预设, 文生图NAI规则预设, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
 import { normalizeImageRules, 获取规则模板列表 } from '@/utils/imagePromptRules';
 
 interface Props {
@@ -16,13 +17,22 @@ const ruleSections: { id: VisibleRuleSection; label: string; desc: string }[] = 
   { id: 'scene', label: '场景生成规则', desc: '场景图、故事快照和手机背景都会读取这里；有角色锚点时只注入在场人物。' },
 ];
 
-type RuleCenterTab = 'model' | 'style' | 'template';
+type RuleCenterTab = 'model' | 'style' | 'template' | 'novelai' | 'snapshot';
 type StyleLayerTab = 'artist' | 'detail' | 'quality' | 'png';
 
 const ruleCenterTabs: { id: RuleCenterTab; label: string; desc: string }[] = [
   { id: 'template', label: '规则模板', desc: '角色 / 场景' },
   { id: 'model', label: '模型规则集', desc: '绑定规则与模型' },
   { id: 'style', label: '风格预设', desc: '画师串 / PNG' },
+  { id: 'novelai', label: 'NAI 规则', desc: 'Quality / UC / 提示词层' },
+  { id: 'snapshot', label: '快照解析', desc: '故事画面语义规则' },
+];
+
+const novelAIContentModes: { id: NovelAIContentMode; label: string }[] = [
+  { id: 'official', label: '使用官方默认' },
+  { id: 'append', label: '官方默认 + 自定义追加' },
+  { id: 'replace', label: '仅使用自定义内容' },
+  { id: 'off', label: '关闭此层' },
 ];
 
 export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
@@ -35,6 +45,8 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const [detailStyleEditorId, setDetailStyleEditorId] = useState('');
   const [qualityEditorId, setQualityEditorId] = useState('');
   const [pngEditorId, setPngEditorId] = useState('');
+  const [novelAIEditorId, setNovelAIEditorId] = useState('');
+  const [snapshotEditorId, setSnapshotEditorId] = useState('');
   const [editorIds, setEditorIds] = useState<Record<VisibleRuleSection, string>>({
     npc: '',
     scene: '',
@@ -62,6 +74,12 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const activePngId = styleScope === 'scene' ? normalizedRules.当前场景PNG画风预设ID : normalizedRules.当前NPCPNG画风预设ID;
   const activePng = activePngId ? normalizedRules.PNG画风预设列表.find((preset) => preset.id === activePngId) ?? null : null;
   const selectedPng = normalizedRules.PNG画风预设列表.find((preset) => preset.id === (pngEditorId || activePngId)) ?? normalizedRules.PNG画风预设列表[0] ?? null;
+  const activeNovelAIId = normalizedRules.当前NAI规则预设ID;
+  const activeNovelAI = normalizedRules.NAI规则预设列表.find((preset) => preset.id === activeNovelAIId) ?? normalizedRules.NAI规则预设列表[0] ?? null;
+  const selectedNovelAI = normalizedRules.NAI规则预设列表.find((preset) => preset.id === (novelAIEditorId || activeNovelAI?.id)) ?? normalizedRules.NAI规则预设列表[0] ?? null;
+  const activeSnapshotId = normalizedRules.当前故事快照解析规则预设ID;
+  const activeSnapshot = normalizedRules.故事快照解析规则预设列表.find((preset) => preset.id === activeSnapshotId) ?? normalizedRules.故事快照解析规则预设列表[0] ?? null;
+  const selectedSnapshot = normalizedRules.故事快照解析规则预设列表.find((preset) => preset.id === (snapshotEditorId || activeSnapshot?.id)) ?? normalizedRules.故事快照解析规则预设列表[0] ?? null;
 
   useEffect(() => {
     if (editorIds[activeSection] && presets.some((preset) => preset.id === editorIds[activeSection])) return;
@@ -92,6 +110,16 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     if (pngEditorId && normalizedRules.PNG画风预设列表.some((preset) => preset.id === pngEditorId)) return;
     setPngEditorId(activePngId || normalizedRules.PNG画风预设列表[0]?.id || '');
   }, [activePngId, pngEditorId, normalizedRules.PNG画风预设列表]);
+
+  useEffect(() => {
+    if (novelAIEditorId && normalizedRules.NAI规则预设列表.some((preset) => preset.id === novelAIEditorId)) return;
+    setNovelAIEditorId(activeNovelAI?.id || normalizedRules.NAI规则预设列表[0]?.id || '');
+  }, [activeNovelAI?.id, novelAIEditorId, normalizedRules.NAI规则预设列表]);
+
+  useEffect(() => {
+    if (snapshotEditorId && normalizedRules.故事快照解析规则预设列表.some((preset) => preset.id === snapshotEditorId)) return;
+    setSnapshotEditorId(activeSnapshot?.id || normalizedRules.故事快照解析规则预设列表[0]?.id || '');
+  }, [activeSnapshot?.id, normalizedRules.故事快照解析规则预设列表, snapshotEditorId]);
 
   const setActiveId = (id: string) => {
     onChange({ [activeIdKey(activeSection)]: id } as Partial<文生图规则中心设置>);
@@ -338,10 +366,127 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     setPngEditorId(nextId);
   };
 
+  const updateNovelAIRule = (id: string, updater: (preset: 文生图NAI规则预设) => 文生图NAI规则预设) => {
+    const target = normalizedRules.NAI规则预设列表.find((preset) => preset.id === id);
+    if (!target || target.isBuiltin) return;
+    onChange({
+      NAI规则预设列表: normalizedRules.NAI规则预设列表.map((preset) => (
+        preset.id === id ? updater(preset) : preset
+      )),
+    });
+  };
+
+  const addNovelAIRule = () => {
+    const now = Date.now();
+    const next: 文生图NAI规则预设 = {
+      id: `nai_rule_custom_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      名称: '新建 NAI 规则',
+      模型族: 'all',
+      isBuiltin: false,
+      qualityMode: 'official',
+      qualityText: '',
+      ucMode: 'official',
+      ucText: '',
+      basePromptPrefix: '',
+      basePromptSuffix: '',
+      characterPromptPrefix: '',
+      characterPromptSuffix: '',
+      negativePromptAppend: '',
+      createdAt: now,
+      updatedAt: now,
+    };
+    onChange({ NAI规则预设列表: [...normalizedRules.NAI规则预设列表, next] });
+    setNovelAIEditorId(next.id);
+  };
+
+  const copyNovelAIRuleAsCustom = () => {
+    const source = selectedNovelAI
+      ?? normalizedRules.NAI规则预设列表.find((preset) => preset.isBuiltin)
+      ?? normalizedRules.NAI规则预设列表[0];
+    if (!source) return;
+    const now = Date.now();
+    const next: 文生图NAI规则预设 = {
+      ...source,
+      id: `nai_rule_custom_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      名称: `${source.名称} · 自定义副本`,
+      isBuiltin: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    onChange({ NAI规则预设列表: [...normalizedRules.NAI规则预设列表, next] });
+    setNovelAIEditorId(next.id);
+  };
+
+  const deleteNovelAIRule = () => {
+    if (!selectedNovelAI || selectedNovelAI.isBuiltin) return;
+    const remaining = normalizedRules.NAI规则预设列表.filter((preset) => preset.id !== selectedNovelAI.id);
+    const fallbackId = remaining.find((preset) => preset.isBuiltin)?.id ?? remaining[0]?.id ?? '';
+    onChange({
+      NAI规则预设列表: remaining,
+      当前NAI规则预设ID: activeNovelAIId === selectedNovelAI.id ? fallbackId : activeNovelAIId,
+    });
+    setNovelAIEditorId(fallbackId);
+  };
+
+  const updateSnapshotRule = (id: string, updater: (preset: 故事快照解析规则预设) => 故事快照解析规则预设) => {
+    const target = normalizedRules.故事快照解析规则预设列表.find((preset) => preset.id === id);
+    if (!target || target.isBuiltin) return;
+    onChange({
+      故事快照解析规则预设列表: normalizedRules.故事快照解析规则预设列表.map((preset) => (
+        preset.id === id ? updater(preset) : preset
+      )),
+    });
+  };
+
+  const addSnapshotRule = () => {
+    const baseline = normalizedRules.故事快照解析规则预设列表.find((preset) => preset.isBuiltin)
+      ?? normalizedRules.故事快照解析规则预设列表[0];
+    const now = Date.now();
+    const next: 故事快照解析规则预设 = {
+      id: `story_snapshot_rule_custom_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      名称: '新建快照解析规则',
+      语义规则: baseline?.语义规则 ?? '',
+      isBuiltin: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    onChange({ 故事快照解析规则预设列表: [...normalizedRules.故事快照解析规则预设列表, next] });
+    setSnapshotEditorId(next.id);
+  };
+
+  const copySnapshotRuleAsCustom = () => {
+    const source = selectedSnapshot
+      ?? normalizedRules.故事快照解析规则预设列表.find((preset) => preset.isBuiltin)
+      ?? normalizedRules.故事快照解析规则预设列表[0];
+    if (!source) return;
+    const now = Date.now();
+    const next: 故事快照解析规则预设 = {
+      ...source,
+      id: `story_snapshot_rule_custom_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      名称: `${source.名称} · 自定义副本`,
+      isBuiltin: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    onChange({ 故事快照解析规则预设列表: [...normalizedRules.故事快照解析规则预设列表, next] });
+    setSnapshotEditorId(next.id);
+  };
+
+  const deleteSnapshotRule = () => {
+    if (!selectedSnapshot || selectedSnapshot.isBuiltin) return;
+    const remaining = normalizedRules.故事快照解析规则预设列表.filter((preset) => preset.id !== selectedSnapshot.id);
+    const fallbackId = remaining.find((preset) => preset.isBuiltin)?.id ?? remaining[0]?.id ?? '';
+    onChange({
+      故事快照解析规则预设列表: remaining,
+      当前故事快照解析规则预设ID: activeSnapshotId === selectedSnapshot.id ? fallbackId : activeSnapshotId,
+    });
+    setSnapshotEditorId(fallbackId);
+  };
+
   return (
     <div className="space-y-4">
       <div
-        className="grid gap-2 md:grid-cols-3"
+        className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
         style={{
           background: 'rgba(0,0,0,0.18)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
@@ -371,6 +516,180 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
           </button>
         ))}
       </div>
+
+      {activeRuleTab === 'novelai' && (
+        <TemplateCard
+          eyebrow="NovelAI Prompt Compiler"
+          title="NAI 规则预设"
+          desc="系统基线保持只读；新建或复制为自定义规则后，可编辑 NAI 模型族、Quality、UC 与提示词层。"
+          actions={
+            <>
+              <TemplateButton onClick={addNovelAIRule}>新建规则</TemplateButton>
+              <TemplateButton onClick={copyNovelAIRuleAsCustom}>复制为自定义</TemplateButton>
+              {selectedNovelAI && (
+                <TemplateButton
+                  onClick={() => onChange({ 当前NAI规则预设ID: selectedNovelAI.id })}
+                  disabled={activeNovelAIId === selectedNovelAI.id}
+                >设为当前生效</TemplateButton>
+              )}
+              <TemplateButton onClick={deleteNovelAIRule} disabled={!selectedNovelAI || selectedNovelAI.isBuiltin} danger>删除自定义</TemplateButton>
+            </>
+          }
+        >
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-3">
+              <PresetSelectField
+                label="当前生效"
+                value={activeNovelAI?.id ?? ''}
+                onChange={(value) => onChange({ 当前NAI规则预设ID: value })}
+                presets={normalizedRules.NAI规则预设列表}
+              />
+              <PresetSelectField
+                label="当前编辑"
+                value={selectedNovelAI?.id ?? ''}
+                onChange={setNovelAIEditorId}
+                presets={normalizedRules.NAI规则预设列表}
+              />
+              <BuiltinPresetState isBuiltin={Boolean(selectedNovelAI?.isBuiltin)} />
+            </div>
+
+            {selectedNovelAI ? (
+              <div className="min-w-0 space-y-4">
+                <TextInput
+                  label="预设名称"
+                  value={selectedNovelAI.名称}
+                  disabled={selectedNovelAI.isBuiltin}
+                  onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, 名称: value, updatedAt: Date.now() }))}
+                />
+
+                <label className="block min-w-0 space-y-2">
+                  <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>适用模型族</span>
+                  <select
+                    value={selectedNovelAI.模型族}
+                    disabled={selectedNovelAI.isBuiltin}
+                    onChange={(e) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, 模型族: e.target.value as NovelAI模型族, updatedAt: Date.now() }))}
+                    className="kaituo-input w-full min-w-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+                    style={{ clipPath: smallClip }}
+                  >
+                    <option value="all">全部模型</option>
+                    <option value="v3">V3</option>
+                    <option value="v4">V4</option>
+                    <option value="v4.5">V4.5</option>
+                  </select>
+                </label>
+
+                <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                  <div className="min-w-0 space-y-3 border-t pt-3" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.12)' }}>
+                    <NovelAIContentModeField
+                      label="Quality Tags 模式"
+                      value={selectedNovelAI.qualityMode}
+                      disabled={selectedNovelAI.isBuiltin}
+                      onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, qualityMode: value, updatedAt: Date.now() }))}
+                    />
+                    <TemplateTextarea
+                      label="Quality Tags 自定义字符串"
+                      value={selectedNovelAI.qualityText}
+                      rows={5}
+                      disabled={selectedNovelAI.isBuiltin}
+                      onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, qualityText: value, updatedAt: Date.now() }))}
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-3 border-t pt-3" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.12)' }}>
+                    <NovelAIContentModeField
+                      label="Undesired Content 模式"
+                      value={selectedNovelAI.ucMode}
+                      disabled={selectedNovelAI.isBuiltin}
+                      onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, ucMode: value, updatedAt: Date.now() }))}
+                    />
+                    <TemplateTextarea
+                      label="Undesired Content 自定义字符串"
+                      value={selectedNovelAI.ucText}
+                      rows={5}
+                      disabled={selectedNovelAI.isBuiltin}
+                      onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, ucText: value, updatedAt: Date.now() }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid min-w-0 gap-4 md:grid-cols-2">
+                  <TemplateTextarea label="Base Prompt 前缀" value={selectedNovelAI.basePromptPrefix} rows={4} disabled={selectedNovelAI.isBuiltin} onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, basePromptPrefix: value, updatedAt: Date.now() }))} />
+                  <TemplateTextarea label="Base Prompt 后缀" value={selectedNovelAI.basePromptSuffix} rows={4} disabled={selectedNovelAI.isBuiltin} onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, basePromptSuffix: value, updatedAt: Date.now() }))} />
+                  <TemplateTextarea label="Character Prompt 前缀" value={selectedNovelAI.characterPromptPrefix} rows={4} disabled={selectedNovelAI.isBuiltin} onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, characterPromptPrefix: value, updatedAt: Date.now() }))} />
+                  <TemplateTextarea label="Character Prompt 后缀" value={selectedNovelAI.characterPromptSuffix} rows={4} disabled={selectedNovelAI.isBuiltin} onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, characterPromptSuffix: value, updatedAt: Date.now() }))} />
+                </div>
+                <TemplateTextarea
+                  label="Negative Prompt 追加"
+                  value={selectedNovelAI.negativePromptAppend}
+                  rows={5}
+                  disabled={selectedNovelAI.isBuiltin}
+                  onChange={(value) => updateNovelAIRule(selectedNovelAI.id, (preset) => ({ ...preset, negativePromptAppend: value, updatedAt: Date.now() }))}
+                />
+              </div>
+            ) : (
+              <EmptyBox>暂无 NAI 规则预设。</EmptyBox>
+            )}
+          </div>
+        </TemplateCard>
+      )}
+
+      {activeRuleTab === 'snapshot' && (
+        <TemplateCard
+          eyebrow="Story Snapshot Parser"
+          title="故事快照解析规则"
+          desc="系统基线保持只读；新建或复制为自定义规则后，可编辑画面理解语义，输出 Schema 与安全契约仍由系统固定。"
+          actions={
+            <>
+              <TemplateButton onClick={addSnapshotRule}>新建规则</TemplateButton>
+              <TemplateButton onClick={copySnapshotRuleAsCustom}>复制为自定义</TemplateButton>
+              {selectedSnapshot && (
+                <TemplateButton
+                  onClick={() => onChange({ 当前故事快照解析规则预设ID: selectedSnapshot.id })}
+                  disabled={activeSnapshotId === selectedSnapshot.id}
+                >设为当前生效</TemplateButton>
+              )}
+              <TemplateButton onClick={deleteSnapshotRule} disabled={!selectedSnapshot || selectedSnapshot.isBuiltin} danger>删除自定义</TemplateButton>
+            </>
+          }
+        >
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-3">
+              <PresetSelectField
+                label="当前生效"
+                value={activeSnapshot?.id ?? ''}
+                onChange={(value) => onChange({ 当前故事快照解析规则预设ID: value })}
+                presets={normalizedRules.故事快照解析规则预设列表}
+              />
+              <PresetSelectField
+                label="当前编辑"
+                value={selectedSnapshot?.id ?? ''}
+                onChange={setSnapshotEditorId}
+                presets={normalizedRules.故事快照解析规则预设列表}
+              />
+              <BuiltinPresetState isBuiltin={Boolean(selectedSnapshot?.isBuiltin)} />
+            </div>
+
+            {selectedSnapshot ? (
+              <div className="min-w-0 space-y-4">
+                <TextInput
+                  label="预设名称"
+                  value={selectedSnapshot.名称}
+                  disabled={selectedSnapshot.isBuiltin}
+                  onChange={(value) => updateSnapshotRule(selectedSnapshot.id, (preset) => ({ ...preset, 名称: value, updatedAt: Date.now() }))}
+                />
+                <TemplateTextarea
+                  label="语义规则"
+                  value={selectedSnapshot.语义规则}
+                  rows={18}
+                  disabled={selectedSnapshot.isBuiltin}
+                  onChange={(value) => updateSnapshotRule(selectedSnapshot.id, (preset) => ({ ...preset, 语义规则: value, updatedAt: Date.now() }))}
+                />
+              </div>
+            ) : (
+              <EmptyBox>暂无故事快照解析规则。</EmptyBox>
+            )}
+          </div>
+        </TemplateCard>
+      )}
 
       {activeRuleTab === 'model' && (
       <TemplateCard
@@ -736,6 +1055,72 @@ function SelectField({ label, value, onChange, presets }: { label: string; value
   );
 }
 
+function PresetSelectField({
+  label,
+  value,
+  onChange,
+  presets,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  presets: { id: string; 名称: string; isBuiltin: boolean }[];
+}) {
+  return (
+    <label className="block min-w-0 space-y-2">
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full min-w-0 px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+        {presets.map((preset) => (
+          <option key={preset.id} value={preset.id}>{preset.isBuiltin ? '◆ ' : ''}{preset.名称}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function NovelAIContentModeField({
+  label,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  value: NovelAIContentMode;
+  onChange: (value: NovelAIContentMode) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="block min-w-0 space-y-2">
+      <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value as NovelAIContentMode)}
+        className="kaituo-input w-full min-w-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ clipPath: smallClip }}
+      >
+        {novelAIContentModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function BuiltinPresetState({ isBuiltin }: { isBuiltin: boolean }) {
+  return (
+    <div
+      className="px-3 py-2 text-[11px] font-serif tracking-[0.12em]"
+      style={{
+        color: isBuiltin ? 'rgba(var(--tj-accent-primary),0.82)' : 'rgba(var(--tj-text-secondary),0.62)',
+        background: isBuiltin ? 'rgba(var(--tj-accent-primary),0.07)' : 'rgba(255,255,255,0.035)',
+        boxShadow: isBuiltin ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.20)' : 'inset 0 0 0 1px rgba(var(--tj-text-secondary),0.10)',
+        clipPath: smallClip,
+      }}
+    >
+      {isBuiltin ? '◆ 系统内置 · 只读 · 复制后可编辑' : '自定义预设 · 可编辑'}
+    </div>
+  );
+}
+
 function ModelSelectField({ label, value, onChange, presets, emptyLabel }: { label: string; value: string; onChange: (value: string) => void; presets: 文生图模型规则集[]; emptyLabel: string }) {
   return (
     <label className="block space-y-2">
@@ -874,24 +1259,25 @@ function StylePaneTitleWithState({
   );
 }
 
-function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TextInput({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
   return (
     <label className="block space-y-2">
       <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+      <input value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50" style={{ clipPath: smallClip }} />
     </label>
   );
 }
 
-function TemplateTextarea({ label, value, onChange, rows }: { label: string; value: string; onChange: (value: string) => void; rows: number }) {
+function TemplateTextarea({ label, value, onChange, rows, disabled = false }: { label: string; value: string; onChange: (value: string) => void; rows: number; disabled?: boolean }) {
   return (
     <label className="block space-y-2">
       <span className="block text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.66)' }}>{label}</span>
       <textarea
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
-        className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs leading-relaxed"
+        className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs leading-relaxed disabled:cursor-not-allowed disabled:opacity-50"
         style={{ clipPath: smallClip }}
       />
     </label>

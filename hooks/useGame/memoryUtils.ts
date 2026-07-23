@@ -1,4 +1,11 @@
-import type { 记忆系统 } from '@/models/memory';
+import {
+  MEMORY_LAYER_COMPRESSION_THRESHOLD,
+  deserializeMemoryFailureSource,
+  normalizeMemorySystem as normalizeMemorySystemModel,
+  serializeMemoryFailureSource,
+  type 记忆失败草稿,
+  type 记忆系统,
+} from '@/models/memory';
 import type { 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import type { NPC同行记忆来源, NPC同行记忆条目, NPC总结记忆条目 } from '@/models/npc';
@@ -132,11 +139,11 @@ export function addImmediateMemory(system: 记忆系统, memory: string, _turn: 
   return { ...system, 即时记忆: trimmed };
 }
 
-export function checkCompressionThreshold(system: 记忆系统, threshold = 25): boolean {
+export function checkCompressionThreshold(system: 记忆系统, threshold = MEMORY_LAYER_COMPRESSION_THRESHOLD): boolean {
   return system.即时记忆.length >= Math.max(1, Math.trunc(threshold));
 }
 
-export function compressToShortTerm(system: 记忆系统, turn: number, batchSize = 25): 记忆系统 {
+export function compressToShortTerm(system: 记忆系统, turn: number, batchSize = MEMORY_LAYER_COMPRESSION_THRESHOLD): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
   const recentRaw = system.即时记忆.slice(0, size);
   const summary = buildArchiveSummary(recentRaw, turn, 'short');
@@ -162,11 +169,11 @@ export function createShortTermArchiveEntry(rawMemories: string[], turn: number,
   };
 }
 
-export function checkMiddleTermThreshold(system: 记忆系统, threshold = 20): boolean {
+export function checkMiddleTermThreshold(system: 记忆系统, threshold = MEMORY_LAYER_COMPRESSION_THRESHOLD): boolean {
   return system.短期记忆.length >= Math.max(1, Math.trunc(threshold));
 }
 
-export function compressToMiddleTerm(system: 记忆系统, turn: number, batchSize = 20): 记忆系统 {
+export function compressToMiddleTerm(system: 记忆系统, turn: number, batchSize = MEMORY_LAYER_COMPRESSION_THRESHOLD): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
   const oldest = system.短期记忆.slice(0, size);
   const compressed = buildArchiveSummary(oldest, turn, 'middle');
@@ -191,11 +198,11 @@ export function createMiddleTermArchiveEntry(shortMemories: string[], turn: numb
   };
 }
 
-export function checkLongTermThreshold(system: 记忆系统, threshold = 10): boolean {
+export function checkLongTermThreshold(system: 记忆系统, threshold = MEMORY_LAYER_COMPRESSION_THRESHOLD): boolean {
   return (system.中期记忆 ?? []).length >= Math.max(1, Math.trunc(threshold));
 }
 
-export function compressToLongTerm(system: 记忆系统, turn: number, batchSize = 10): 记忆系统 {
+export function compressToLongTerm(system: 记忆系统, turn: number, batchSize = MEMORY_LAYER_COMPRESSION_THRESHOLD): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
   const oldest = (system.中期记忆 ?? []).slice(0, size);
   const compressed = buildArchiveSummary(oldest, turn, 'long');
@@ -293,9 +300,9 @@ export function autoCompressMemorySystem(
   settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
 ): 记忆系统 {
   let next = system;
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
-  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
+  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
 
   while (next.即时记忆.length >= immediateThreshold) {
     next = compressToShortTerm(next, turn, immediateThreshold);
@@ -316,9 +323,9 @@ export function autoCompressMemorySystemWithArchives(
 ): { memory: 记忆系统; archives: 回忆条目[] } {
   let next = system;
   const archives: 回忆条目[] = [];
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
-  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
+  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
 
   while (next.即时记忆.length >= immediateThreshold) {
     const raw = next.即时记忆.slice(0, immediateThreshold);
@@ -344,18 +351,98 @@ export async function autoCompressMemorySystemWithArchivesAsync(
   settings: 记忆系统设置,
   mainConfig: API配置项,
   signal?: AbortSignal,
-): Promise<{ memory: 记忆系统; archives: 回忆条目[]; usedFallback: boolean; usedModel: boolean }> {
+): Promise<{
+  memory: 记忆系统;
+  archives: 回忆条目[];
+  failures: 记忆失败草稿[];
+  usedFallback: boolean;
+  usedModel: boolean;
+  usedLocal: boolean;
+}> {
   let next = system;
   const archives: 回忆条目[] = [];
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
-  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
+  const failures: 记忆失败草稿[] = [];
+  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
   const retryCount = settings.记忆总结API?.retryCount ?? 2;
   let usedFallback = false;
   let usedModel = false;
+  let usedLocal = false;
+
+  const unresolvedFallbacks = new Set(
+    (next.失败草稿 ?? [])
+      .filter((draft) => draft.status === 'pending' || draft.status === 'retrying')
+      .map((draft) => draft.fallbackSummary),
+  );
+
+  const appendFailure = async (
+    source: { kind: 'short' | 'middle' | 'long'; turn: number; items: string[]; sourceTurns?: { start: number; end: number } },
+    result: Awaited<ReturnType<typeof summarizeMemoryBatch>>,
+  ): Promise<void> => {
+    if (!result.failureCode) return;
+    const sourceSnapshot = await serializeMemoryFailureSource(source.items);
+    const duplicate = (next.失败草稿 ?? []).find(
+      (draft) => (draft.status === 'pending' || draft.status === 'retrying')
+        && draft.kind === source.kind
+        && draft.sourceSnapshot.checksum === sourceSnapshot.checksum,
+    );
+    if (duplicate) {
+      unresolvedFallbacks.add(duplicate.fallbackSummary);
+      return;
+    }
+    const now = Date.now();
+    const draft: 记忆失败草稿 = {
+      id: `memory_failure_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      origin: 'automatic',
+      kind: source.kind,
+      status: 'pending',
+      sourceTurns: source.sourceTurns ?? { start: source.turn, end: source.turn },
+      sourceSnapshot,
+      targetLayer: source.kind === 'short' ? '短期记忆' : source.kind === 'middle' ? '中期记忆' : '长期记忆',
+      fallbackSummary: result.summary,
+      failureCode: result.failureCode,
+      failureMessage: result.failureMessage ?? '记忆总结失败。',
+      attemptCount: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    failures.push(draft);
+    next = { ...next, 失败草稿: [...(next.失败草稿 ?? []), draft] };
+    unresolvedFallbacks.add(draft.fallbackSummary);
+  };
+
+  const pickEligible = (items: string[], size: number): { raw: string[]; indexes: number[] } | null => {
+    const indexes = items
+      .map((item, index) => unresolvedFallbacks.has(item) ? -1 : index)
+      .filter((index) => index >= 0)
+      .slice(0, size);
+    return indexes.length >= size
+      ? { raw: indexes.map((index) => items[index]), indexes }
+      : null;
+  };
+
+  const removeIndexes = (items: string[], indexes: number[]): string[] => {
+    const selected = new Set(indexes);
+    return items.filter((_item, index) => !selected.has(index));
+  };
+
+  const inferSourceTurns = (items: string[], currentTurn: number): { start: number; end: number } => {
+    const embeddedTurns = items.flatMap((item) => {
+      const matches = String(item).matchAll(/(?:回合|回合纪要|短期纪要|中期纪要)[^\d]{0,8}(\d{1,5})/g);
+      return Array.from(matches, (match) => Number(match[1])).filter(Number.isFinite);
+    });
+    const end = embeddedTurns.length
+      ? Math.max(1, ...embeddedTurns)
+      : Math.max(1, Math.trunc(currentTurn) || 1);
+    const start = embeddedTurns.length ? Math.min(...embeddedTurns) : Math.max(1, end - items.length + 1);
+    return { start, end };
+  };
 
   while (next.即时记忆.length >= immediateThreshold) {
-    const raw = next.即时记忆.slice(0, immediateThreshold);
+    const picked = pickEligible(next.即时记忆, immediateThreshold);
+    if (!picked) break;
+    const raw = picked.raw;
     const result = await summarizeMemoryBatch(
       {
         kind: 'short',
@@ -369,17 +456,21 @@ export async function autoCompressMemorySystemWithArchivesAsync(
       retryCount,
     );
     usedFallback = usedFallback || result.usedFallback;
-    usedModel = usedModel || !result.usedFallback;
+    usedModel = usedModel || result.usedModel;
+    usedLocal = usedLocal || result.usedLocal;
+    await appendFailure({ kind: 'short', turn, items: raw, sourceTurns: inferSourceTurns(raw, turn) }, result);
     archives.push(createShortTermArchiveEntry(raw, turn, result.summary));
     next = {
       ...next,
-      即时记忆: next.即时记忆.slice(immediateThreshold),
+      即时记忆: removeIndexes(next.即时记忆, picked.indexes),
       短期记忆: [...next.短期记忆, result.summary],
     };
   }
 
   while (next.短期记忆.length >= shortThreshold) {
-    const raw = next.短期记忆.slice(0, shortThreshold);
+    const picked = pickEligible(next.短期记忆, shortThreshold);
+    if (!picked) break;
+    const raw = picked.raw;
     const result = await summarizeMemoryBatch(
       {
         kind: 'middle',
@@ -393,17 +484,21 @@ export async function autoCompressMemorySystemWithArchivesAsync(
       retryCount,
     );
     usedFallback = usedFallback || result.usedFallback;
-    usedModel = usedModel || !result.usedFallback;
+    usedModel = usedModel || result.usedModel;
+    usedLocal = usedLocal || result.usedLocal;
+    await appendFailure({ kind: 'middle', turn, items: raw, sourceTurns: inferSourceTurns(raw, turn) }, result);
     archives.push(createMiddleTermArchiveEntry(raw, turn, result.summary));
     next = {
       ...next,
-      短期记忆: next.短期记忆.slice(shortThreshold),
+      短期记忆: removeIndexes(next.短期记忆, picked.indexes),
       中期记忆: [...(next.中期记忆 ?? []), result.summary],
     };
   }
 
   while ((next.中期记忆 ?? []).length >= middleThreshold) {
-    const raw = (next.中期记忆 ?? []).slice(0, middleThreshold);
+    const picked = pickEligible(next.中期记忆 ?? [], middleThreshold);
+    if (!picked) break;
+    const raw = picked.raw;
     const result = await summarizeMemoryBatch(
       {
         kind: 'long',
@@ -417,16 +512,136 @@ export async function autoCompressMemorySystemWithArchivesAsync(
       retryCount,
     );
     usedFallback = usedFallback || result.usedFallback;
-    usedModel = usedModel || !result.usedFallback;
+    usedModel = usedModel || result.usedModel;
+    usedLocal = usedLocal || result.usedLocal;
+    await appendFailure({ kind: 'long', turn, items: raw, sourceTurns: inferSourceTurns(raw, turn) }, result);
     archives.push(createLongTermArchiveEntry(raw, turn, result.summary));
     next = {
       ...next,
-      中期记忆: (next.中期记忆 ?? []).slice(middleThreshold),
+      中期记忆: removeIndexes(next.中期记忆 ?? [], picked.indexes),
       长期记忆: [...next.长期记忆, result.summary],
     };
   }
 
-  return { memory: next, archives, usedFallback, usedModel };
+  return { memory: next, archives, failures, usedFallback, usedModel, usedLocal };
+}
+
+export interface RetryMemoryFailureDraftResult {
+  memory: 记忆系统;
+  draft: 记忆失败草稿;
+  usedModel: boolean;
+  usedFallback: boolean;
+}
+
+/**
+ * 使用失败发生时保存的 sourceSnapshot 重试；不会重新从当前 chatHistory 拼材料。
+ * 成功时只替换原 fallback，且清理已解决草稿的原文 payload，避免长期存档膨胀。
+ */
+export async function retryMemoryFailureDraft(
+  system: 记忆系统,
+  draftId: string,
+  settings: 记忆系统设置,
+  mainConfig: API配置项,
+  signal?: AbortSignal,
+): Promise<RetryMemoryFailureDraftResult> {
+  const draft = (system.失败草稿 ?? []).find((item) => item.id === draftId);
+  if (!draft) throw new Error('找不到对应的失败草稿。');
+  if (draft.status === 'resolved' || draft.status === 'ignored') {
+    return { memory: system, draft, usedModel: false, usedFallback: false };
+  }
+  if (draft.origin === 'batch_rebuild') {
+    throw new Error('这份草稿来自批量重建，请重新运行批量重建；原记忆仍保持不变。');
+  }
+  if (settings.启用中短长期API总结 === false) {
+    throw new Error('请先开启“启用中短长期 API 总结”再重试失败草稿。');
+  }
+
+  const items = await deserializeMemoryFailureSource(draft.sourceSnapshot);
+  const prompt = draft.kind === 'short'
+    ? settings.即时转短期提示词
+    : draft.kind === 'middle'
+      ? settings.短期转中期提示词
+      : settings.中期转长期提示词 || settings.短期转长期提示词;
+  const result = await summarizeMemoryBatch(
+    {
+      kind: draft.kind,
+      turn: draft.sourceTurns.end,
+      items,
+      prompt,
+      sourceTurns: draft.sourceTurns,
+    },
+    settings,
+    mainConfig,
+    signal,
+    settings.记忆总结API?.retryCount ?? 2,
+  );
+  if (result.usedLocal) {
+    // 开关在请求前已检查，这个分支只是防止调用方传入被并发修改的设置。
+    throw new Error('记忆总结 API 已关闭，未发起重试请求。');
+  }
+
+  const now = Date.now();
+  if (result.failureCode) {
+    const updated: 记忆失败草稿 = {
+      ...draft,
+      status: 'pending',
+      failureCode: result.failureCode,
+      failureMessage: result.failureMessage ?? draft.failureMessage,
+      attemptCount: Math.max(0, draft.attemptCount) + 1,
+      updatedAt: now,
+    };
+    return {
+      memory: {
+        ...system,
+        失败草稿: (system.失败草稿 ?? []).map((item) => item.id === draft.id ? updated : item),
+      },
+      draft: updated,
+      usedModel: false,
+      usedFallback: true,
+    };
+  }
+
+  const layerKey = draft.targetLayer;
+  const current = system[layerKey];
+  const index = current.findIndex((item) => item === draft.fallbackSummary);
+  if (index < 0) {
+    const conflicted: 记忆失败草稿 = {
+      ...draft,
+      status: 'pending',
+      failureCode: 'source_changed',
+      failureMessage: '目标记忆中的本地 fallback 已被修改或移除，请先确认后再重试。',
+      attemptCount: Math.max(0, draft.attemptCount) + 1,
+      updatedAt: now,
+    };
+    return {
+      memory: {
+        ...system,
+        失败草稿: (system.失败草稿 ?? []).map((item) => item.id === draft.id ? conflicted : item),
+      },
+      draft: conflicted,
+      usedModel: false,
+      usedFallback: false,
+    };
+  }
+
+  const nextLayer = [...current];
+  nextLayer[index] = result.summary;
+  const resolved: 记忆失败草稿 = {
+    ...draft,
+    status: 'resolved',
+    sourceSnapshot: { ...draft.sourceSnapshot, payload: '' },
+    updatedAt: now,
+  };
+  return {
+    memory: {
+      ...system,
+      [layerKey]: nextLayer,
+      失败草稿: (system.失败草稿 ?? []).map((item) => item.id === draft.id ? resolved : item),
+    },
+    draft: resolved,
+    usedModel: true,
+    usedFallback: false,
+  };
 }
 
 export function compressNpcMemories(memories: string[], threshold: number, prompt: string): string[] {
@@ -668,11 +883,5 @@ export function formatMemoryForPrompt(system: 记忆系统): string {
   return sections.join('\n\n');
 }
 
-export function normalizeMemorySystem(raw: 记忆系统): 记忆系统 {
-  return {
-    即时记忆: raw.即时记忆 ?? [],
-    短期记忆: raw.短期记忆 ?? [],
-    中期记忆: raw.中期记忆 ?? [],
-    长期记忆: raw.长期记忆 ?? [],
-  };
-}
+/** Compatibility export for save/load callers; normalization lives in the model layer. */
+export const normalizeMemorySystem = normalizeMemorySystemModel;

@@ -33,10 +33,15 @@ const geniusSocietyPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/gen
 const intelligentsiaGuildPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/intelligentsia-guild-character-rebuild.json', 'utf8'));
 const belobogPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/belobog-character-rebuild.json', 'utf8'));
 const xianzhouLuofuPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/xianzhou-luofu-character-rebuild.json', 'utf8'));
+const penaconyPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/penacony-character-rebuild.json', 'utf8'));
+const amphoreusPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/amphoreus-character-rebuild.json', 'utf8'));
 const ipcPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/interastral-peace-corporation-character-rebuild.json', 'utf8'));
+const galaxyRangersPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/galaxy-rangers-character-rebuild.json', 'utf8'));
+const gardenOfRecollectionPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/garden-of-recollection-character-rebuild.json', 'utf8'));
+const galacticTravelersPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/galactic-travelers-character-rebuild.json', 'utf8'));
 const REBUILD_PREFIX = 'zhiku_character_rebuild_';
 const nativePenaconyOrganizations = new Set(['家族', '猎犬家系', '白日梦酒店', '橡木家系', '鸢尾花家系', '苜蓿草家系', '隐夜鸫家系']);
-const nativeAmphoreusOrganizations = new Set(['黄金裔', 'Chrysos Heirs', '奥赫玛']);
+const nativeAmphoreusOrganizations = new Set(['黄金裔', 'Chrysos Heirs', '奥赫玛', '奥赫玛元老院']);
 const crossoverOrganizations = new Set(['Fate/stay night [Unlimited Blade Works]', 'Fate', 'UBW']);
 const everFlameOrganizations = new Set(['永火官邸', '泯灭帮', 'Ever-Flame Mansion', 'Annihilation Gang']);
 
@@ -98,6 +103,18 @@ function assertNoBareKeywords(entry, forbidden, label) {
   }
 }
 
+function assertOfficialVoiceTranscript(source, minimumVoiceCount, samples, label) {
+  const section = String(source).match(/## 语料层([\s\S]*?)(?=\n## )/)?.[1] ?? '';
+  assert(section.includes('语料只作口吻参考，不照抄原句，不把语料事件直接当作当前剧情事实。'), `${label} must keep the standard corpus-use boundary.`);
+  assert(!section.includes('### 正式互动语音') && !/^\*\*.+\*\*$/m.test(section), `${label} must not wrap voice items in an extra section or bold labels.`);
+  const voiceCount = (section.match(/^### .+$/gm) ?? []).length;
+  assert(voiceCount >= minimumVoiceCount, `${label} must keep at least ${minimumVoiceCount} titled voice lines, got ${voiceCount}.`);
+  for (const [name, contentStart] of samples) {
+    assert(section.includes(`### ${name}\n「${contentStart}`), `${label} official voice missing, summarized, or formatted incorrectly: ${name}`);
+  }
+  assert(!/- (?:初次见面|问候|道别)[：:](?:她|他|以|先|承认|认为)/.test(section), `${label} must not replace quoted voices with explanatory bullets.`);
+}
+
 function parseProfileMarkdownSections(source) {
   const sections = [];
   let current = null;
@@ -148,9 +165,13 @@ function assertRebuiltSingleProfileShape(entriesToCheck, dataArea, label) {
       assert(typeof entry[field] === 'string' && entry[field].trim().length >= 20, `${label} profile must keep ${field}: ${entry.标题}`);
     }
     const source = String(entry.原文 ?? '');
-    for (const required of ['## 角色档案包说明', '## 基础识别', '## 常驻事实层', '## 角色故事层', '## 表现锚点层', '## 语料层', '## 能力与职责模块', '## 本回合注入建议']) {
+    for (const required of ['## 角色档案包说明', '## 基础识别', '## 常驻事实层', '## 表现锚点层', '## 语料层', '## 能力与职责模块', '## 本回合注入建议']) {
       assert(source.includes(required), `${label} profile missing section ${required}: ${entry.标题}`);
     }
+    assert(
+      source.includes('## 角色故事层') || source.includes('## 剧情阶段层'),
+      `${label} profile missing character story or gated story-stage section: ${entry.标题}`,
+    );
     assert(
       source.includes('## 历史故事与阶段边界层') || source.includes('## 历史故事与过往边界层') || source.includes('## 历史故事与写法边界层'),
       `${label} profile missing history boundary section: ${entry.标题}`,
@@ -1538,16 +1559,145 @@ function assertXianzhouLuofuProfileSet() {
   }
 }
 
+function assertPenaconyProfileSet() {
+  assert(penaconyPreset.id === 'zhiku_penacony_character_rebuild', 'Penacony character preset id changed.');
+  assert(penaconyPreset.title === '人物重建·匹诺康尼角色档案', 'Penacony character preset title changed.');
+  assert(penaconyPreset.updatedAt === '2026-07-21-penacony-sparkle-profile-1', 'Penacony character preset updatedAt changed.');
+  assert(Array.isArray(penaconyPreset.entries) && penaconyPreset.entries.length === 5, 'Penacony character group must contain Sunday, Gallagher, Robin, Misha, and Sparkle profiles.');
+  const sunday = penaconyPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_sunday_profile');
+  const sundaySource = String(sunday?.原文 ?? '');
+  assert(sunday?.资料类型 === '单角色档案', '星期日 must be 单角色档案.');
+  assert(sunday?.系列序号 === 8, '星期日 must sort in the Penacony group before IPC.');
+  assert(sunday?.年龄状态 === '成年；具体年龄未公开', '星期日 must expose the structured age boundary.');
+  assert(sunday?.关键词?.includes('资料大区:匹诺康尼'), '星期日 must be tagged to the Penacony data area.');
+  assert(sunday?.关键词?.includes('组织:橡木家系'), '星期日 must use a native Penacony organization for workspace grouping.');
+  assert(sunday?.关键词?.includes('现所属:星穹列车'), '星期日 must preserve the current passenger affiliation without overriding the Penacony group.');
+  assert(!sunday?.关键词?.includes('所属:星穹列车'), '星期日 current passenger tag must not pull the profile into the Astral Express group.');
+  assert(sundaySource.includes('- 本名 / 公开姓名：官方未披露其他本名'), '星期日 must not invent another legal name.');
+  assert(sundaySource.includes('前橡木家系家主」是身份，不是别号'), '星期日 must distinguish role identity from aliases.');
+  assert(sundaySource.includes('知更鸟（Robin）是妹妹与至亲，不写成工作搭档'), '星期日 must keep Robin as a sibling relationship, not a work partner.');
+  assert(sundaySource.includes('游戏技能仅作机制参考'), '星期日 must keep playable mechanics out of plot capability claims.');
+  assert(sundaySource.includes('（匹诺康尼事件相关者）') && !sundaySource.includes('（已故，匹诺康尼事件相关者）'), '星期日 must not assert Gallagher is dead.');
+  assert(sundaySource.includes('### 星期日角色故事一：童年——星核灾难与失怙'), '星期日 story one must be present.');
+  assert(sundaySource.includes('### 星期日角色故事二：陪伴——兄妹通信的温暖年岁'), '星期日 story two must be present.');
+  assert(sundaySource.includes('### 星期日角色故事三：对决——匹诺康尼的美梦与秩序的葬歌'), '星期日 story three must be present.');
+  assert(sundaySource.includes('### 星期日角色故事四：折翼之后——搭上星穹列车的旅人'), '星期日 story four must be present.');
+  assert(sundaySource.includes('### 剧情显式触发：匹诺康尼主线细节'), '星期日 must gate major Penacony plot details.');
+  assert(String(sunday?.角色故事摘要 ?? '').includes('列车后续经历不能自行补完'), '星期日 story summary must keep current train-life boundaries.');
+  const gallagher = penaconyPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_gallagher_profile');
+  const gallagherSource = String(gallagher?.原文 ?? '');
+  assert(gallagher?.资料类型 === '单角色档案', '加拉赫 must be 单角色档案.');
+  assert(gallagher?.系列序号 === 8 && gallagher?.章节序号 === 2, '加拉赫 must be the second Penacony profile.');
+  assert(gallagher?.关键词?.includes('资料大区:匹诺康尼'), '加拉赫 must be tagged to the Penacony data area.');
+  assert(gallagher?.关键词?.includes('组织:猎犬家系'), '加拉赫 must use a native Penacony organization for workspace grouping.');
+  assert(gallagher?.关键词?.includes('真实关联:虚构史学家'), '加拉赫 must preserve the History Fictionologist relationship without using it as the UI group.');
+  assert(gallagher?.年龄状态 === '成年男性外观；自称十三岁，具体含义未完全公开', '加拉赫 must keep thirteen as an unexplained claim.');
+  assert(gallagherSource.includes('真实姓名：未公开'), '加拉赫 must not treat the fictional persona name as a confirmed legal name.');
+  assert(gallagherSource.includes('不能直接等同于生理年龄、存在年限或犬类寿命'), '加拉赫 must not over-interpret thirteen.');
+  assert(gallagherSource.includes('不固定写成宠物或武器'), '加拉赫 must keep Something Unto Death relationship bounded.');
+  assert(gallagherSource.includes('游戏机制参考，不自动转化为剧情中的命途归属'), '加拉赫 must keep playable mechanics out of plot capabilities.');
+  assert(gallagherSource.includes('不直接写成唯一建立者'), '加拉赫 must not be asserted as the sole founder of Dreamflux Reef.');
+  assert(gallagherSource.includes('### 加拉赫角色故事四：最真实的谎言'), '加拉赫 story four must preserve the central identity theme.');
+  assert(gallagherSource.includes('### 可选原著收束参考：消失与告别'), '加拉赫 must expose the original departure only as an optional RP reference.');
+  assert(gallagherSource.includes('RP分支可以让加拉赫继续活动'), '加拉赫 departure must not be mandatory in RP branches.');
+  assert(!gallagherSource.includes('不要让加拉赫在消散后以任何方式') && !gallagherSource.includes('剧情确认的终点'), '加拉赫 must not retain a mandatory no-return rule.');
+  assert(String(gallagher?.角色故事摘要 ?? '').includes('原著告别只作可选收束参考'), '加拉赫 injected story summary must preserve RP freedom.');
+  const robin = penaconyPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_robin_profile');
+  const robinSource = String(robin?.原文 ?? '');
+  assert(robin?.资料类型 === '单角色档案', '知更鸟 must be 单角色档案.');
+  assert(robin?.系列序号 === 8 && robin?.章节序号 === 3, '知更鸟 must be the third Penacony profile.');
+  assert(robin?.年龄状态 === '成年；具体年龄未公开', '知更鸟 must expose the structured age boundary.');
+  assert(robin?.关键词?.includes('资料大区:匹诺康尼'), '知更鸟 must be tagged to the Penacony data area.');
+  assert(robin?.关键词?.includes('组织:家族'), '知更鸟 must use the native Family organization for workspace grouping.');
+  assert(robin?.关键词?.includes('关联:橡木家系'), '知更鸟 must keep Oak Family as a relationship instead of an overriding UI group.');
+  assert(robin?.关键词?.includes('语料只作参考') && robin?.关键词?.includes('禁止照抄语料'), '知更鸟 must keep formal voices as reference-only corpus.');
+  assert(robinSource.includes('官方未披露其他法定姓名'), '知更鸟 must not invent another legal name.');
+  assert(robinSource.includes('星期日是哥哥与至亲，不写成工作搭档'), '知更鸟 must keep Sunday as a sibling relationship, not a work partner.');
+  assert(robinSource.includes('浅灰紫色长发与青绿色眼眸'), '知更鸟 must keep her own hair and eye appearance anchors.');
+  assert(robinSource.includes('不要误写成白发蓝色挑染、浅金色眼睛或背生大型实体羽翼'), '知更鸟 must not inherit Sunday appearance traits.');
+  assert(robinSource.includes('游戏机制参考】五星、物理属性、同谐命途、协奏'), '知更鸟 must isolate playable mechanics from plot capabilities.');
+  assert(robinSource.includes('### 剧情显式触发：谐乐大典与匹诺康尼主线'), '知更鸟 must gate major Penacony plot details.');
+  assert(robinSource.includes('姬子、三月七、丹恒、瓦尔特、帕姆及其他角色：只按实际剧情互动书写'), '知更鸟 must not turn fabricated Astral Express opinions into fixed relationships.');
+  assert(robinSource.includes('不要强制RP分支复现失声、遇袭、离场或固定结局'), '知更鸟 must preserve RP freedom around original plot outcomes.');
+  assert(String(robin?.角色故事摘要 ?? '').includes('事件后的行踪与兄妹关系服从当前RP分支'), '知更鸟 injected story summary must preserve current branch continuity.');
+  const misha = penaconyPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_misha_profile');
+  const mishaSource = String(misha?.原文 ?? '');
+  assert(misha?.资料类型 === '单角色档案', '米沙 must be 单角色档案.');
+  assert(misha?.系列序号 === 8 && misha?.章节序号 === 4, '米沙 must be the fourth Penacony profile.');
+  assert(misha?.年龄状态 === '少年外观与少年阶段自我认知；迷因存在不适用普通人类年龄计算', '米沙 must keep appearance age separate from meme existence.');
+  assert(misha?.关键词?.includes('资料大区:匹诺康尼'), '米沙 must be tagged to the Penacony data area.');
+  assert(misha?.关键词?.includes('组织:白日梦酒店'), '米沙 must use Reverie Hotel as the native Penacony organization.');
+  assert(misha?.关键词?.includes('深层关联:无名客') && !misha?.关键词?.includes('组织:星穹列车'), '米沙 must keep Nameless as a deep relationship without overriding the Penacony group.');
+  assert(misha?.关键词?.includes('语料只作参考') && misha?.关键词?.includes('禁止照抄语料'), '米沙 must keep formal voices as reference-only corpus.');
+  assert(mishaSource.includes('「冰景元」「冰神君」是玩家外号，不进入官方档案和召回词'), '米沙 must exclude player nicknames from official aliases.');
+  assert(mishaSource.includes('### 米沙角色故事一：早上六点与远方来客'), '米沙 official story one must be present.');
+  assert(mishaSource.includes('### 米沙角色故事二：下午两点与钟表引航'), '米沙 official story two must be present.');
+  assert(mishaSource.includes('### 米沙角色故事三：傍晚七点与航海幻想'), '米沙 official story three must be present.');
+  assert(mishaSource.includes('### 米沙角色故事四：再次六点与列车抵达'), '米沙 official story four must be present.');
+  assert(mishaSource.includes('四篇故事以怀表时间串联') && mishaSource.includes('不得改成主线剧情流水账'), '米沙 must keep official role stories separate from main-story summaries.');
+  assert(mishaSource.includes('钟表小子是能够与米沙互动的伙伴') && mishaSource.includes('不写成哑巴、分身、宠物或工具'), '米沙 must preserve Clockie as an interactive independent companion.');
+  assert(mishaSource.includes('### 剧情显式触发：米哈伊尔、迷因与罗盘'), '米沙 must gate Mikhail, meme, and compass revelations.');
+  assert(mishaSource.includes('游戏机制参考】四星、冰属性、毁灭命途、冻结、弹射'), '米沙 must isolate playable mechanics from plot capability claims.');
+  assert(mishaSource.includes('角色稀有度不能衡量剧情强弱'), '米沙 must not use rarity as a lore power scale.');
+  assert(mishaSource.includes('黄泉、砂金及其他人物：只记录实际同场或间接事件'), '米沙 must not turn fabricated Acheron or Aventurine opinions into fixed relationships.');
+  assert(mishaSource.includes('### 可选原著收束：告别与联系方式'), '米沙 must expose the original departure only as an optional RP reference.');
+  assert(mishaSource.includes('若玩家选择米沙继续活动，可保留他的存在与联系方式'), '米沙 departure must not be mandatory in RP branches.');
+  assert(String(misha?.角色故事摘要 ?? '').includes('原著告别只作可选收束参考'), '米沙 injected story summary must preserve RP freedom.');
+  const sparkle = penaconyPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_sparkle_profile');
+  const sparkleSource = String(sparkle?.原文 ?? '');
+  assert(sparkle?.资料类型 === '单角色档案', '花火 must be 单角色档案.');
+  assert(sparkle?.系列序号 === 8 && sparkle?.章节序号 === 5, '花火 must be the fifth Penacony profile.');
+  assert(sparkle?.年龄状态 === '少女外观；具体年龄未公开' && sparkle?.出身 === '未知', '花火 must keep age and origin unknown.');
+  assert(
+    sparkle?.关键词?.includes('资料大区:匹诺康尼') &&
+      sparkle?.关键词?.includes('关联:假面愚者') &&
+      !sparkle?.关键词?.includes('组织:假面愚者'),
+    '花火 must stay in the Penacony group while preserving the official Masked Fools relationship.',
+  );
+  assert(sparkle?.关键词?.includes('语料只作参考') && sparkle?.关键词?.includes('禁止照抄语料'), '花火 must keep formal voices as reference-only corpus.');
+  assert(sparkleSource.includes('真实姓名未公开') && sparkleSource.includes('官方未公开种族，不固定写成人类'), '花火 must not invent a legal name or human species.');
+  assert(sparkleSource.includes('深棕近黑的双马尾向发梢渐变为绯红') && sparkleSource.includes('不要写成水红短发、黑色过膝长靴或普通洋装'), '花火 must use the corrected appearance anchors.');
+  assert(sparkleSource.includes('### 花火角色故事一：被遗弃的孤儿与戏团角色'), '花火 official story one must be present.');
+  assert(sparkleSource.includes('### 花火角色故事二：人偶末裔与面具剧作家'), '花火 official story two must be present.');
+  assert(sparkleSource.includes('### 花火角色故事三：受诅咒的无貌少女与纸面具'), '花火 official story three must be present.');
+  assert(sparkleSource.includes('### 花火角色故事四：酒馆中的多重身世与人生舞台'), '花火 official story four must be present.');
+  assert(sparkleSource.includes('四篇角色故事提供互相冲突的身世版本') && String(sparkle?.角色故事摘要 ?? '').includes('第四篇用于解释多重身世'), '花火 stories must not be flattened into one confirmed biography.');
+  assert(sparkleSource.includes('你好你好，我是花火') && sparkleSource.includes('他挺好玩的，办事也靠谱') && sparkleSource.includes('她呀，就像个木偶师'), '花火 must use formal voice lines rather than fabricated corpus.');
+  assert(sparkleSource.includes('既不能断言实体面具都是普通道具，也不能为每张面具固定控制心智'), '花火 mask capabilities must remain evidence-bounded.');
+  assert(sparkleSource.includes('不把花火洗成只做无害恶作剧的善良少女') && sparkleSource.includes('不写死她不能正面战斗'), '花火 must preserve danger without invented power limits.');
+  assert(sparkleSource.includes('「诡弈」不是《崩坏：星穹铁道》中花火的官方称谓') && !sparkle?.关键词?.some((keyword) => /诡弈|诡戏千役/.test(keyword)), '花火 must exclude unsupported or cross-game trigger names.');
+  assert(sparkleSource.includes('原著事件结束后的行踪没有固定公开答案') && String(sparkle?.角色故事摘要 ?? '').includes('服从当前RP分支'), '花火 post-Penacony state must preserve RP freedom.');
+  assert(!preset.includes("path: '/zhiku-presets/penacony-characters.json'"), 'Legacy Penacony character preset must stay retired.');
+  assert(
+    panel.includes('const emptyCharacterGroupSeeds: CharacterGroup[]') &&
+      panel.includes("id: '资料大区:匹诺康尼'") &&
+      panel.includes("label: '匹诺康尼'") &&
+      panel.includes('order: 8') &&
+      panel.includes('if (!groups.has(seed.id)) groups.set(seed.id, { ...seed, profiles: [] })'),
+    'Character workspace must retain a Penacony group seed for the group to remain stable before and after profiles are added.',
+  );
+  assert(
+    panel.includes("id: '阵营:巡海游侠'") &&
+      panel.includes("label: '巡海游侠'") &&
+      panel.includes("kind: '阵营'") &&
+      panel.includes('order: 10') &&
+      panel.indexOf("id: '资料大区:匹诺康尼'") < panel.indexOf("id: '阵营:巡海游侠'"),
+    'Character workspace must retain an empty Galaxy Rangers group seed after the IPC group order.',
+  );
+}
+
 function assertIpcProfileSet() {
   assert(ipcPreset.id === 'zhiku_interastral_peace_corporation_character_rebuild', 'IPC preset id changed.');
   assert(ipcPreset.title === '人物重建·星际和平公司角色档案', 'IPC preset title changed.');
-  assert(ipcPreset.updatedAt === '2026-06-18-ipc-character-profiles-1', 'IPC preset updatedAt changed.');
+  assert(ipcPreset.updatedAt === '2026-07-20-ipc-lyndon-skott-profile-1', 'IPC preset updatedAt changed.');
 
   const profiles = new Map((ipcPreset.entries ?? []).map((entry) => [entry.id, entry]));
   const expected = [
     ['zhiku_character_rebuild_topaz_profile', ['托帕', 'Topaz', '债务收割人', '账账搭档']],
-    ['zhiku_character_rebuild_aventurine_profile', ['砂金', 'Aventurine', '石心十人砂金', '卡卡瓦卡']],
-    ['zhiku_character_rebuild_jade_profile', ['翡翠', 'Jade', '石心十人翡翠', '公司收藏家']],
+    ['zhiku_character_rebuild_aventurine_profile', ['砂金', 'Aventurine', '石心十人砂金', '卡卡瓦夏']],
+    ['zhiku_character_rebuild_jade_profile', ['翡翠', 'Jade', '石心十人翡翠', '慈玉女士', '慈玉典押']],
+    ['zhiku_character_rebuild_pearl_profile', ['真珠', 'Pearl', '石心十人真珠', '珠星大厦']],
+    ['zhiku_character_rebuild_lyndonskott_profile', ['林登·斯科特', 'Lyndon Skott', '孤狼', '金人巷']],
   ];
   assert(profiles.size === expected.length, `IPC preset must have ${expected.length} entries, got ${profiles.size}`);
 
@@ -1557,6 +1707,7 @@ function assertIpcProfileSet() {
     assert(entry.分类 === 'character', `IPC ${entry.标题} must be character type.`);
     assert(entry.关键词?.includes('资料大区:星际和平公司'), `IPC ${entry.标题} must have 资料大区:星际和平公司.`);
     assert(entry.关键词?.includes('节点:单角色档案'), `IPC ${entry.标题} must have 节点:单角色档案.`);
+    assert(entry.系列序号 === 9, `IPC ${entry.标题} must sort after the empty Penacony group.`);
     // Verify core trigger keywords exist (not using assertCoreTriggers since IPC entries don't have 核心触发词 in 原文)
     for (const trigger of triggers) {
       const hasKeyword = entry.关键词?.some(k => k.includes(trigger)) || String(entry.原文 ?? '').includes(trigger);
@@ -1578,7 +1729,8 @@ function assertIpcProfileSet() {
     assert(source.includes('## 能力与职责模块'), `IPC ${entry.标题} must have 能力与职责模块.`);
     assert(source.includes('## 历史故事与阶段边界层'), `IPC ${entry.标题} must have 历史故事与阶段边界层.`);
     assert(storyLayer.length >= 600, `IPC ${entry.标题} story layer must be >= 600 chars, got ${storyLayer.length}.`);
-    assert((storyLayer.match(/^### /gm) ?? []).length === 5, `IPC ${entry.标题} story layer must have 5 ### sections (4 stories + 写法指导).`);
+    const expectedStorySections = entry.id === 'zhiku_character_rebuild_pearl_profile' ? 4 : entry.id === 'zhiku_character_rebuild_lyndonskott_profile' ? 6 : 5;
+    assert((storyLayer.match(/^### /gm) ?? []).length === expectedStorySections, `IPC ${entry.标题} story layer must have ${expectedStorySections} ### sections.`);
     assert(storyLayer.includes('### 写法指导'), `IPC ${entry.标题} story layer must have ### 写法指导.`);
     assert(!source.includes('角色等级'), `IPC ${entry.标题} must not have 角色等级.`);
     assert(!source.includes('解锁条件'), `IPC ${entry.标题} must not have 解锁条件.`);
@@ -1592,30 +1744,787 @@ function assertIpcProfileSet() {
   // 托帕 specific: has corpus
   const topaz = profiles.get('zhiku_character_rebuild_topaz_profile');
   assert(topaz?.资料类型 === '单角色档案', '托帕 must be 单角色档案.');
+  assert(topaz?.年龄状态 === '成年；具体年龄未公开，与布洛妮娅年龄相近', '托帕 must expose the official age boundary used by this profile.');
   assert(topaz?.关键词?.includes('语料只作参考'), '托帕 must have 语料只作参考.');
   assert(topaz?.关键词?.includes('禁止照抄语料'), '托帕 must have 禁止照抄语料.');
-  assert(String(topaz?.原文 ?? '').includes('语料只作口吻参考'), '托帕 原文 must have 语料只作口吻参考.');
+  const topazSource = String(topaz?.原文 ?? '');
+  assert(topazSource.includes('语料只作口吻参考'), '托帕 原文 must have 语料只作口吻参考.');
+  assert(topazSource.includes('核心触发词：托帕、Topaz、叶琳娜、账账、石心十人·托帕、催讨黄玉、特殊债务纠察小组组长。'), '托帕 must expose explicit core trigger terms.');
+  assert(topazSource.includes('星际和平公司旗下「战略投资部」高级干部托帕'), '托帕 must include the supplied official role detail.');
+  assert(topazSource.includes('### 托帕角色故事一：低龄入职、终身合同与惊人履历'), '托帕 story one must use the supplied official story.');
+  assert(topazSource.includes('### 托帕角色故事四：退休欢送会与小叶琳娜的来信'), '托帕 story four must use the supplied official story.');
+  assert(topazSource.includes('### 关于真珠'), '托帕 official corpus must include the supplied voice lines.');
+  assert(!topazSource.includes('叶珉') && !topaz.关键词.some((keyword) => keyword.includes('叶珉')), '托帕 must not retain the obsolete incorrect name.');
+  assert(String(topaz?.角色故事摘要 ?? '').includes('低龄入职与终身合同'), '托帕 story injection summary must be rebuilt from the supplied stories.');
+  assert(String(topaz?.角色故事摘要 ?? '').includes('德比斯基的引荐'), '托帕 story injection summary must include the mentorship story.');
 
-  // 砂金 specific: has corpus
+  // 砂金 specific: supplied profile, four stories, corpus and staged Penacony access
   const aventurine = profiles.get('zhiku_character_rebuild_aventurine_profile');
   assert(aventurine?.资料类型 === '单角色档案', '砂金 must be 单角色档案.');
+  assert(aventurine?.年龄状态 === '成年；具体年龄未公开', '砂金 must expose a structured age status.');
   assert(aventurine?.关键词?.includes('语料只作参考'), '砂金 must have 语料只作参考.');
   assert(aventurine?.关键词?.includes('禁止照抄语料'), '砂金 must have 禁止照抄语料.');
-  assert(String(aventurine?.原文 ?? '').includes('语料只作口吻参考'), '砂金 原文 must have 语料只作口吻参考.');
+  const aventurineSource = String(aventurine?.原文 ?? '');
+  assert(aventurineSource.includes('语料只作口吻参考'), '砂金 原文 must have 语料只作口吻参考.');
+  assert(aventurineSource.includes('- 核心触发词：砂金、Aventurine、卡卡瓦夏、诡弈砂金、小孔雀、不良资产清算专家、石心十人·砂金。'), '砂金 must expose explicit core trigger terms.');
+  assert(aventurineSource.includes('### 砂金角色故事一：入职风波'), '砂金 story one must use the supplied story.');
+  assert(aventurineSource.includes('### 砂金角色故事二：疯牛、骰子与翡翠的测试'), '砂金 story two must use the supplied story.');
+  assert(aventurineSource.includes('### 砂金角色故事三：最后的幸运儿'), '砂金 story three must use the supplied story.');
+  assert(aventurineSource.includes('### 砂金角色故事四：匹诺康尼的赌注'), '砂金 story four must use the supplied story.');
+  assert(aventurineSource.includes('你是最后的幸运儿'), '砂金 story three must preserve its central line.');
+  assert(aventurineSource.includes('把自己变成骰子'), '砂金 story two must preserve its central risk metaphor.');
+  assert(aventurineSource.includes('### 剧情显式触发：匹诺康尼及基石碎裂'), '砂金 must gate Penacony and cornerstone damage by story phase.');
+  assert(aventurineSource.includes('### 关于真理医生'), '砂金 corpus must preserve the supplied relationship voice anchor.');
+  assert(String(aventurine?.角色故事摘要 ?? '').includes('争议入职与投资眼光'), '砂金 story injection summary must reflect the rebuilt first story.');
+  assert(String(aventurine?.角色故事摘要 ?? '').includes('疯牛、骰子与翡翠的测试'), '砂金 story injection summary must reflect the rebuilt second story.');
+  assert(String(aventurine?.角色故事摘要 ?? '').includes('故事四、匹诺康尼行动及基石碎裂只在当前时间线达到对应阶段时启用'), '砂金 story injection summary must preserve the Penacony phase gate.');
+  assert(!aventurineSource.includes('卡卡瓦卡') && !aventurine.关键词.some((keyword) => keyword.includes('卡卡瓦卡')), '砂金 must not retain the obsolete incorrect name.');
+  for (const obsoleteHeading of ['### 茨甘尼亚与卡卡瓦卡', '### 石心十人与战略投资部', '### 匹诺康尼赌局', '### 风格与生存哲学']) {
+    assert(!aventurineSource.includes(obsoleteHeading), `砂金 must not retain obsolete placeholder story heading: ${obsoleteHeading}`);
+  }
 
-  // 翡翠 specific: locked, 剧情门禁, no corpus
+  // 真珠 specific: unreleased profile with explicit inference and future-content boundaries
+  const pearl = profiles.get('zhiku_character_rebuild_pearl_profile');
+  const pearlSource = String(pearl?.原文 ?? '');
+  assert(pearl?.资料类型 === '单角色档案', '真珠 must be 单角色档案.');
+  assert(pearl?.年龄状态 === '不明；智械体年龄不能以人类标准衡量，外观呈青年女性形态', '真珠 must expose the supplied non-human age boundary.');
+  assert(!pearl?.使用范围?.includes('手机'), '真珠 phone scope must remain unavailable before implementation or contact unlock.');
+  assert(pearl?.关键词?.includes('语料只作参考'), '真珠 must have 语料只作参考.');
+  assert(pearl?.关键词?.includes('禁止照抄语料'), '真珠 must have 禁止照抄语料.');
+  assert(pearlSource.includes('语料只作口吻参考'), '真珠 原文 must have 语料只作口吻参考.');
+  assert(pearlSource.includes('- 核心触发词：真珠、Pearl、石心十人·真珠、珠星大厦、二相乐园、战略投资部高级干部。'), '真珠 must expose the supplied core trigger terms.');
+  assert(pearlSource.includes('### 真珠角色故事一：不被情绪左右的决策核心'), '真珠 story one must be present.');
+  assert(pearlSource.includes('### 真珠角色故事二：二相乐园与珠星大厦'), '真珠 story two must be present.');
+  assert(pearlSource.includes('### 真珠角色故事三：石心十人中的理性锚点'), '真珠 story three must be present.');
+  assert(pearlSource.includes('偏远星系债务会议」场景为基于托帕语料推导的示例'), '真珠 must preserve the supplied example-only warning.');
+  assert(pearlSource.includes('绘画爱好为合理推断而非官方明确确认'), '真珠 must preserve the supplied inference warning.');
+  assert(pearlSource.includes('基石名称、外观和能力尚未公开'), '真珠 must preserve the unknown cornerstone boundary.');
+  assert(pearlSource.includes('### 剧情显式触发：真珠正式出场及后续公司任务'), '真珠 must gate future official appearances and company tasks.');
+  assert(String(pearl?.角色故事摘要 ?? '').includes('偏远星系债务会议是推导示例，不是已确认剧情'), '真珠 story summary must preserve the example boundary.');
+  assert(String(pearl?.角色故事摘要 ?? '').includes('正式造型、基石能力、正式出场和后续公司任务只在官方剧情实际公开后启用'), '真珠 story summary must preserve future-content gates.');
+  assert(!Object.hasOwn(pearl ?? {}, '解锁条件'), '真珠 formal profile must not keep the legacy 解锁条件 field.');
+
+  // 林登·斯科特 specific: curated company representative profile with staged death ending
+  const skott = profiles.get('zhiku_character_rebuild_lyndonskott_profile');
+  const skottSource = String(skott?.原文 ?? '');
+  assert(skott?.资料类型 === '单角色档案', '林登·斯科特 must be 单角色档案.');
+  assert(skott?.年龄状态 === '成年；具体年龄未公开', '林登·斯科特 must expose a structured age status.');
+  assert(skott?.关键词?.includes('语料只作参考'), '林登·斯科特 must have 语料只作参考.');
+  assert(skott?.关键词?.includes('禁止照抄语料'), '林登·斯科特 must have 禁止照抄语料.');
+  assert(skottSource.includes('语料只作口吻参考'), '林登·斯科特 原文 must have 语料只作口吻参考.');
+  assert(skottSource.includes('- 核心触发词：林登·斯科特、斯科特、Lyndon Skott、Scott、孤狼、公司专员、星际和平公司、金人巷、斯科特家、没有朋友没有敌人只有猎物。'), '林登·斯科特 must expose the supplied core trigger terms.');
+  assert(skottSource.includes('### 林登·斯科特角色故事一：孤狼的养成'), '林登·斯科特 story one must be present.');
+  assert(skottSource.includes('### 林登·斯科特角色故事二：在金人巷学狗叫'), '林登·斯科特 story two must be present.');
+  assert(skottSource.includes('### 林登·斯科特角色故事三：初花习剑录的猪叫赌约'), '林登·斯科特 story three must be present.');
+  assert(skottSource.includes('### 林登·斯科特角色故事四：美梦与圣杯'), '林登·斯科特 story four must be present.');
+  assert(skottSource.includes('### 林登·斯科特角色故事五：孤狼之血（最终章）'), '林登·斯科特 story five must be present.');
+  assert(skottSource.includes('### 剧情显式触发：二相乐园的结局'), '林登·斯科特 must gate his death ending by story phase.');
+  assert(skottSource.includes('没有朋友，没有敌人，只有猎物'), '林登·斯科特 must preserve the core family creed.');
+  assert(skottSource.includes('玩家戏称「林登·孤狼·斯科特」「孤狼星神」只作为社群称呼'), '林登·斯科特 must distinguish player nicknames from official aliases.');
+  assert(String(skott?.角色故事摘要 ?? '').includes('二相乐园结局是有尊严的角色收束'), '林登·斯科特 story summary must preserve the death boundary.');
+  assert(!Object.hasOwn(skott ?? {}, '解锁条件'), '林登·斯科特 formal profile must not keep the legacy 解锁条件 field.');
+
+  // 翡翠 specific: formal profile with staged story access and reference-only corpus
   const jade = profiles.get('zhiku_character_rebuild_jade_profile');
-  assert(jade?.资料类型 === '剧情门禁', '翡翠 must be 剧情门禁.');
-  assert(jade?.解锁状态 === '未解锁', '翡翠 must be 未解锁.');
-  assert(jade?.解锁条件, '翡翠 must have 解锁条件.');
-  assert(jade?.关键词?.includes('暂无语料'), '翡翠 must have 暂无语料.');
-  assert(jade?.关键词?.includes('翡翠暂不提供语料'), '翡翠 must have 翡翠暂不提供语料.');
-  assert(!jade?.关键词?.includes('语料只作参考'), '翡翠 must NOT have 语料只作参考.');
+  const jadeSource = String(jade?.原文 ?? '');
+  assert(jade?.资料类型 === '单角色档案', '翡翠 must be 单角色档案.');
+  assert(jade?.年龄状态 === '成年；具体年龄未公开', '翡翠 must expose a structured age status.');
+  assert(String(jade?.解锁状态 ?? '').includes('默认可用'), '翡翠 must be available by default with staged story access.');
+  assert(String(jade?.解锁状态 ?? '').includes('四段角色故事作为背景可参考'), '翡翠 role stories must be background references instead of a globally locked layer.');
+  assert(!Object.hasOwn(jade ?? {}, '解锁条件'), '翡翠 formal profile must not keep the legacy 解锁条件 field.');
+  assert(jade?.关键词?.includes('语料只作参考'), '翡翠 must have 语料只作参考.');
+  assert(jade?.关键词?.includes('禁止照抄语料'), '翡翠 must have 禁止照抄语料.');
+  assert(jadeSource.includes('语料只作口吻参考'), '翡翠 原文 must have 语料只作口吻参考.');
+  assert(jadeSource.includes('慈玉典押'), '翡翠 formal profile must preserve 慈玉典押 as a core anchor.');
+  assert(jadeSource.includes('## 关系边界'), '翡翠 formal profile must define relationship boundaries.');
+  assert(jadeSource.includes('- 核心触发词：翡翠、Jade、慈玉女士、石心十人·翡翠、典贷翡翠、慈玉典押。'), '翡翠 must expose explicit core trigger terms for the character workbench.');
+  assert(jadeSource.includes('- 价值观：相信极致的欲望会展现真实价值；以交易换取幸福，但需等价交换。'), '翡翠 must preserve the supplied values statement.');
+  assert(jadeSource.includes('- 性格特质：冷静理智；洞察人心；耐心果断；秩序与利益至上。'), '翡翠 must preserve the supplied personality traits.');
+  assert(String(jade?.性格锚点 ?? '').includes('秩序与利益至上'), '翡翠 性格锚点 must include the supplied personality traits.');
+  assert(jadeSource.includes('- 外貌：高挑成熟女性'), '翡翠 base identity must use the canonical 外貌 field.');
+  assert(!jadeSource.includes('- 外貌锚点：高挑成熟女性'), '翡翠 base identity must not leave appearance under an unrecognized 外貌锚点 label.');
+  assert(String(jade?.角色故事摘要 ?? '').includes('名媛是客户，不是翡翠'), '翡翠 injected story summary must distinguish the Silverchain client from Jade.');
+  assert(String(jade?.角色故事摘要 ?? '').includes('三位P46的会议'), '翡翠 injected story summary must reflect the rebuilt second story.');
+  assert(String(jade?.角色故事摘要 ?? '').includes('四段角色故事属于角色背景'), '翡翠 injected story summary must preserve the current-event boundary.');
+  for (const required of [
+    '年龄状态：成年；具体年龄未公开。',
+    '## 角色详情',
+    '### 翡翠角色故事一：银链星系与全部代价',
+    '### 翡翠角色故事二：种子与战略投资',
+    '### 翡翠角色故事三：慈玉典押与欲望余烬',
+    '### 翡翠角色故事四：三枚基石与匹诺康尼',
+    '银链星系已正式纳入公司的贸易版图，下一周期的利润预计将提升47%',
+    '### 关于自己•典贷',
+    '### 闲谈•赎回',
+    '### 关于真珠',
+    '### 默认可用：石心十人、慈玉典押与角色底色',
+    '### 剧情显式触发：匹诺康尼行动',
+    '### 剧情显式触发：铁墓危机',
+    '### 未解锁：二相乐园与反毁灭联盟',
+    '### 边界提醒：角色故事与当前事件必须分开',
+  ]) {
+    assert(jadeSource.includes(required), `翡翠 formal profile missing official text or structure anchor: ${required}`);
+  }
+  for (const obsoleteGate of ['### 默认阶段', '### 匹诺康尼阶段', '### 铁墓危机阶段', '### 二相乐园阶段', '### 禁止提前']) {
+    assert(!jadeSource.includes(obsoleteGate), `翡翠 must not keep ambiguous legacy gate heading: ${obsoleteGate}`);
+  }
 
   // Registration integration
   assert(preset.includes('interastral-peace-corporation-character-rebuild.json'), 'zhikuPreset.ts must reference IPC preset file.');
   assert(preset.includes('zhiku_interastral_peace_corporation_character_rebuild'), 'zhikuPreset.ts must have IPC preset id.');
-  assert(preset.includes('2026-06-18-ipc-character-profiles-1'), 'zhikuPreset.ts must have IPC preset updatedAt.');
+  assert(preset.includes('2026-07-20-ipc-lyndon-skott-profile-1'), 'zhikuPreset.ts must have IPC preset updatedAt.');
+}
+
+function assertGalaxyRangersProfileSet() {
+  assert(galaxyRangersPreset.id === 'zhiku_galaxy_rangers_character_rebuild', 'Galaxy Rangers character preset id changed.');
+  assert(galaxyRangersPreset.title === '人物重建·巡海游侠角色档案', 'Galaxy Rangers character preset title changed.');
+  assert(galaxyRangersPreset.updatedAt === '2026-07-21-galaxy-rangers-rappa-profile-2', 'Galaxy Rangers character preset updatedAt changed.');
+  assert(Array.isArray(galaxyRangersPreset.entries) && galaxyRangersPreset.entries.length === 2, 'Galaxy Rangers character group must contain Boothill and Rappa.');
+
+  const boothill = galaxyRangersPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_boothill_profile');
+  const source = String(boothill?.原文 ?? '');
+  assert(boothill?.资料类型 === '单角色档案', '波提欧 must be 单角色档案.');
+  assert(boothill?.年龄状态 === '成年男性；具体年龄未公开', '波提欧 must expose a structured adult age boundary.');
+  assert(boothill?.系列序号 === 10 && boothill?.章节序号 === 1, '波提欧 must be the first Galaxy Rangers profile after IPC.');
+  assert(boothill?.关键词?.includes('阵营:巡海游侠'), '波提欧 must group under Galaxy Rangers.');
+  assert(boothill?.关键词?.includes('资料大区:匹诺康尼'), '波提欧 must preserve Penacony as a cross-faction story area.');
+  assert(boothill?.关键词?.includes('语料只作参考') && boothill?.关键词?.includes('禁止照抄语料'), '波提欧 must keep formal voices as reference-only corpus.');
+  assert(source.includes('核心触发词：波提欧、Boothill、巡海游侠·波提欧。'), '波提欧 must use narrowed explicit core triggers.');
+  assert(source.includes('幼年被格蕾与尼克收养'), '波提欧 must preserve Grey and Nick as adoptive parents.');
+  assert(source.includes('主动找到一名小个子医生') && source.includes('接受改造'), '波提欧 must preserve the voluntary transformation from official story three.');
+  assert(source.includes('奥斯瓦尔多·施耐德'), '波提欧 must preserve his named revenge target.');
+  assert(source.includes('### 波提欧角色故事一：阿尔冈-阿帕歇的家'), '波提欧 official story one must be present.');
+  assert(source.includes('### 波提欧角色故事二：公司入侵与故乡毁灭'), '波提欧 official story two must be present.');
+  assert(source.includes('### 波提欧角色故事三：主动改造与新名字'), '波提欧 official story three must be present.');
+  assert(source.includes('### 波提欧角色故事四：奥斯瓦尔多·施耐德'), '波提欧 official story four must be present.');
+  assert(source.includes('### 初次见面') && source.includes('我叫波提欧。听说过我的人都知道我是干什么的'), '波提欧 must use the formal first-meeting voice line.');
+  assert(source.includes('联觉信标把粗口替换成') || source.includes('联觉信标会过滤粗口'), '波提欧 must explain the profanity-filter speech pattern.');
+  assert(source.includes('游戏机制参考'), '波提欧 must keep playable combat mechanics out of plot capability claims.');
+  assert(source.includes('公司毁掉的是他的故乡与家人，并未抓走他实施强制机械改造'), '波提欧 source must expose the central forced-transformation correction.');
+  assert(String(boothill?.角色故事摘要 ?? '').includes('公司毁灭故乡，但没有强制改造波提欧'), '波提欧 story summary must preserve the central correction.');
+  for (const falseClaim of ['因触犯IPC利益被强制改造', 'IPC强制改造了他的人生', '被星际和平公司强制改造成半机械之躯']) {
+    assert(!source.includes(falseClaim), `波提欧 must not retain the false forced-transformation claim: ${falseClaim}`);
+  }
+
+  const rappa = galaxyRangersPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_rappa_profile');
+  const rappaSource = String(rappa?.原文 ?? '');
+  assert(rappa?.资料类型 === '单角色档案', '乱破 must be 单角色档案.');
+  assert(rappa?.年龄状态 === '少女外观；具体年龄未公开', '乱破 must expose the structured appearance-age boundary.');
+  assert(rappa?.系列序号 === 10 && rappa?.章节序号 === 2, '乱破 must be the second Galaxy Rangers profile.');
+  assert(rappa?.关键词?.includes('阵营:巡海游侠'), '乱破 must group under Galaxy Rangers.');
+  assert(rappa?.关键词?.includes('资料大区:匹诺康尼'), '乱破 must preserve Penacony as a cross-faction story area.');
+  assert(rappa?.关键词?.includes('语料只作参考') && rappa?.关键词?.includes('禁止照抄语料'), '乱破 must keep formal voices as reference-only corpus.');
+  assert(rappaSource.includes('核心触发词：乱破、Rappa、缭乱忍侠、Dazzling Ninja、巡海游侠·乱破。'), '乱破 must use narrowed explicit core triggers.');
+  assert(rappaSource.includes('「乱破」是她自己说明的忍号') && rappaSource.includes('本名：未公开'), '乱破 must distinguish her ninja name from an unknown birth name.');
+  assert(rappaSource.includes('她早就知道这个残酷解释') && rappaSource.includes('不在意忍者之名是否为真'), '乱破 must preserve her informed and voluntary ninja-path choice.');
+  assert(rappaSource.includes('### 乱破角色故事一：无慈悲的手里剑'), '乱破 official story one must be present.');
+  assert(rappaSource.includes('### 乱破角色故事二：忍者之心大肚牛肠'), '乱破 official story two must be present.');
+  assert(rappaSource.includes('### 乱破角色故事三：忍侠之道是为何道'), '乱破 official story three must be present.');
+  assert(rappaSource.includes('### 乱破角色故事四：最初的和未来的'), '乱破 official story four must be present.');
+  assert(rappaSource.includes('热血漫画家、金链子歌手、武道馆教练'), '乱破 story four must preserve the three alternate-life possibilities.');
+  assert(rappaSource.includes('别来无恙，球棒•忍者！') && rappaSource.includes('在下忍号『乱破』'), '乱破 must use formal game voice lines.');
+  assert(rappaSource.includes('银枪•修罗殿下') && rappaSource.includes('波提欧：乱破称其为'), '乱破 must preserve her official Boothill recognition without inventing a partnership.');
+  assert(rappaSource.includes('游戏机制参考'), '乱破 must keep playable combat mechanics out of plot capability claims.');
+  assert(rappaSource.includes('RP分支边界：忍道可以延续，也可以变化'), '乱破 must preserve RP freedom around future identity and memetic changes.');
+  assert(String(rappa?.角色故事摘要 ?? '').includes('她知道模因与现实解释，不是完全无知的认知囚徒'), '乱破 injected story summary must preserve informed agency.');
+  assert(
+    panel.includes("const structuredOrigin = (entry as 智库条目 & { 出身?: string }).出身") &&
+      panel.includes("get('出身', structuredOrigin || '未知')"),
+    'Character workbench must fall back to the structured 出身 field when source markdown omits it.',
+  );
+  for (const falseClaim of ['本名即为角色名', '模因病毒不可逆', '无法以常人的认知框架理解世界', '她不清楚自身「返祖实验受害者」']) {
+    assert(!rappaSource.includes(falseClaim), `乱破 must not retain the unsupported absolute claim: ${falseClaim}`);
+  }
+  assert(preset.includes('galaxy-rangers-character-rebuild.json'), 'zhikuPreset.ts must register the Galaxy Rangers preset file.');
+  assert(preset.includes('zhiku_galaxy_rangers_character_rebuild'), 'zhikuPreset.ts must register the Galaxy Rangers preset id.');
+  assert(preset.includes('2026-07-21-galaxy-rangers-rappa-profile-2'), 'zhikuPreset.ts must register the Galaxy Rangers updatedAt.');
+  assert(
+    preset.indexOf('interastral-peace-corporation-character-rebuild.json') < preset.indexOf('galaxy-rangers-character-rebuild.json'),
+    'Galaxy Rangers preset must sort after IPC.',
+  );
+}
+
+function assertGardenOfRecollectionProfileSet() {
+  assert(gardenOfRecollectionPreset.id === 'zhiku_garden_of_recollection_character_rebuild', 'Garden of Recollection character preset id changed.');
+  assert(gardenOfRecollectionPreset.title === '人物重建·流光忆庭角色档案', 'Garden of Recollection character preset title changed.');
+  assert(
+    gardenOfRecollectionPreset.updatedAt === '2026-07-22-garden-of-recollection-black-swan-voice-format-3',
+    'Garden of Recollection character preset updatedAt changed.',
+  );
+  assert(
+    Array.isArray(gardenOfRecollectionPreset.entries) && gardenOfRecollectionPreset.entries.length === 1,
+    'Garden of Recollection character group must contain exactly Black Swan.',
+  );
+
+  const blackSwan = gardenOfRecollectionPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_black_swan_profile');
+  const source = String(blackSwan?.原文 ?? '');
+  assertRebuiltSingleProfileShape([blackSwan], '流光忆庭', 'Garden of Recollection');
+  assert(blackSwan?.年龄状态 === '成年女性外观；具体年龄未公开', '黑天鹅 must expose an adult-appearance age boundary.');
+  assert(blackSwan?.出身 === '未知', '黑天鹅 origin must stay unknown instead of blank or inferred.');
+  assert(blackSwan?.系列序号 === 11 && blackSwan?.章节序号 === 1, '黑天鹅 must be the first Garden of Recollection profile after Galaxy Rangers.');
+  assert(blackSwan?.关键词?.includes('组织:流光忆庭'), '黑天鹅 must group under Garden of Recollection.');
+  assert(resolveCharacterGroupLabel(blackSwan) === '流光忆庭', '黑天鹅 navigation group must resolve to Garden of Recollection.');
+  assertCoreTriggers(blackSwan, ['黑天鹅', 'Black Swan', '流光忆庭·黑天鹅', '神秘优雅的占卜师'], 'Garden of Recollection Black Swan profile');
+  assertNoBareKeywords(blackSwan, ['黑天鹅', 'Black Swan', '忆者', '流光忆庭', '记忆', '占卜', '匹诺康尼'], 'Garden of Recollection Black Swan profile');
+  assert(source.includes('现为舍弃肉身的模因') && source.includes('成为忆者前的种族未公开'), '黑天鹅 must use her memetic form without inventing a human origin species.');
+  assert(source.includes('不会读心') && source.includes('把记忆读取等同于读取即时思想'), '黑天鹅 must distinguish memory access from mind-reading.');
+  assert(source.includes('她明确提到可以抹去记忆') && source.includes('有能力、有伦理偏好和情境限制'), '黑天鹅 must not be incorrectly stripped of memory-erasure or modification capability.');
+  assert(source.includes('### 黑天鹅角色故事一：母亲的记忆与失忆'), '黑天鹅 official story one about her mother must be present.');
+  assert(source.includes('### 黑天鹅角色故事二：荒野石头与忆者邀请'), '黑天鹅 official story two about the moor stone must be present.');
+  assert(source.includes('### 黑天鹅角色故事三：成为忆者的三问'), '黑天鹅 official story three about becoming a Memokeeper must be present.');
+  assert(source.includes('### 黑天鹅角色故事四：匹诺康尼的四份记忆'), '黑天鹅 official story four about Penacony must be present.');
+  assert(source.includes('所有姓名与日期均被遮蔽') && source.includes('四位客人保持匿名'), '黑天鹅 Penacony guests must remain anonymous.');
+  assertOfficialVoiceTranscript(source, 24, [
+    ['初次见面', '开拓者？有趣的名字'],
+    ['关于黄泉', '在做好准备前，不要轻易走入一个人的回忆'],
+    ['关于砂金', '寻找机会的时候，一个像他那样的赌徒永远不会拒绝你的要求'],
+    ['关于芮克先生', '他是个很好的合作伙伴'],
+  ], '黑天鹅');
+  assert(source.includes('星期日、丹恒：附件中的对应评价没有正式角色语音依据'), '黑天鹅 must reject unsupported Sunday and Dan Heng relationship corpus.');
+  assert(source.includes('不强制黑天鹅离开、失联、被忆庭召回、永久加入列车或前往固定目的地'), '黑天鹅 must preserve RP freedom after canon events.');
+  assert(String(blackSwan?.角色故事摘要 ?? '').includes('母亲患失忆症') && String(blackSwan?.角色故事摘要 ?? '').includes('第四篇客人保持匿名'), '黑天鹅 injected story summary must preserve story one and anonymous guest boundaries.');
+  for (const falseClaim of ['她的身份是收集者，而非干涉者', '她不能修改或删除他人的记忆', '她不是战斗型角色，在武力冲突中不占优势', '种族：人类']) {
+    assert(!source.includes(falseClaim), `黑天鹅 must not retain unsupported absolute claim: ${falseClaim}`);
+  }
+  assert(preset.includes('garden-of-recollection-character-rebuild.json'), 'zhikuPreset.ts must register the Garden of Recollection preset file.');
+  assert(preset.includes('zhiku_garden_of_recollection_character_rebuild'), 'zhikuPreset.ts must register the Garden of Recollection preset id.');
+  assert(preset.includes('2026-07-22-garden-of-recollection-black-swan-voice-format-3'), 'zhikuPreset.ts must register the Garden of Recollection updatedAt.');
+  assert(
+    preset.indexOf('galaxy-rangers-character-rebuild.json') < preset.indexOf('garden-of-recollection-character-rebuild.json'),
+    'Garden of Recollection preset must sort after Galaxy Rangers.',
+  );
+}
+
+function assertGalacticTravelersProfileSet() {
+  assert(galacticTravelersPreset.id === 'zhiku_galactic_travelers_character_rebuild', 'Galactic Travelers character preset id changed.');
+  assert(galacticTravelersPreset.title === '人物重建·银河旅人角色档案', 'Galactic Travelers character preset title changed.');
+  assert(
+    galacticTravelersPreset.updatedAt === '2026-07-22-galactic-travelers-voice-format-4',
+    'Galactic Travelers character preset updatedAt changed.',
+  );
+  assert(
+    Array.isArray(galacticTravelersPreset.entries) && galacticTravelersPreset.entries.length === 2,
+    'Galactic Travelers character group must contain exactly Argenti and Acheron.',
+  );
+
+  const argenti = galacticTravelersPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_argenti_profile');
+  const acheron = galacticTravelersPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_acheron_profile');
+  const source = String(argenti?.原文 ?? '');
+  const acheronSource = String(acheron?.原文 ?? '');
+  assertRebuiltSingleProfileShape([argenti, acheron], '银河旅人', 'Galactic Travelers');
+  assert(argenti?.年龄状态 === '成年男性外观；具体年龄未公开', '银枝 must expose an adult-appearance age boundary.');
+  assert(argenti?.出身 === '未知', '银枝 origin must stay unknown instead of blank or inferred.');
+  assert(argenti?.系列序号 === 12 && argenti?.章节序号 === 1, '银枝 must be the first Galactic Travelers profile after Garden of Recollection.');
+  assert(argenti?.关键词?.includes('所属:银河旅人'), '银枝 must group under Galactic Travelers.');
+  assert(argenti?.关键词?.includes('组织:纯美骑士团'), '银枝 must preserve the Knights of Beauty as his actual affiliation.');
+  assert(resolveCharacterGroupLabel(argenti) === '银河旅人', '银枝 navigation group must resolve to Galactic Travelers.');
+  assertCoreTriggers(argenti, ['银枝', 'Argenti', '纯美骑士团·银枝', '授勋骑士银枝', '红发纯美骑士'], 'Galactic Travelers Argenti profile');
+  assertNoBareKeywords(argenti, ['银枝', 'Argenti', '纯美', '骑士', '玫瑰', '伊德莉拉', '银河旅人'], 'Galactic Travelers Argenti profile');
+  assert(source.includes('本名：未公开') && !source.includes('本名即为角色名'), '银枝 must not invent his public name as a confirmed birth name.');
+  assert(source.includes('UI分组：银河旅人') && source.includes('所属：纯美骑士团'), '银枝 must separate the UI group from his actual organization.');
+  assert(source.includes('### 银枝角色故事一：战火故乡与陶笛'), '银枝 official story one about war and the ocarina must be present.');
+  assert(source.includes('### 银枝角色故事二：师者、骑士道与独行'), '银枝 official story two about his mentor and chivalry must be present.');
+  assert(source.includes('### 银枝角色故事三：三重诱惑与镜之试炼'), '银枝 official story three about the Mirror Trial must be present.');
+  assert(source.includes('### 银枝角色故事四：失踪星神与恶兆之问'), '银枝 official story four about the fallen fellow knight must be present.');
+  assert(source.includes('与星穹列车相遇属于同行任务和后续剧情，不是角色故事四'), '银枝 must not replace official story four with the Astral Express encounter.');
+  assertOfficialVoiceTranscript(source, 17, [
+    ['初次见面', '我是「纯美骑士团」的银枝'],
+    ['闲谈•希世难得号', '我给飞船起名「希世难得」'],
+    ['爱好', '我偏爱厚重硬质的长棍面包'],
+    ['关于三月七', '三月七女士拥有纯粹的内心'],
+  ], '银枝');
+  assert(source.includes('游戏机制隔离') && source.includes('物理属性、智识命途'), '银枝 must keep playable mechanics out of plot capability claims.');
+  assert(source.includes('不强制银枝按原作节点离队、失联、战死、永远独行'), '银枝 must preserve RP freedom after canon events.');
+  assert(String(argenti?.角色故事摘要 ?? '').includes('故乡多年陷于战火') && String(argenti?.角色故事摘要 ?? '').includes('与星穹列车相遇不是角色故事四'), '银枝 injected story summary must preserve the official story order and correction.');
+  for (const falseClaim of ['美被否定的地方', '变卖了所有继承的财产', '全数投入骑士团', '以一己之力打穿宫殿', '在废墟中种下了一株玫瑰']) {
+    assert(!source.includes(falseClaim), `银枝 must not retain unsupported fan-written history: ${falseClaim}`);
+  }
+
+  assert(acheron?.年龄状态 === '成年女性外观；具体年龄未公开', '黄泉 must expose an adult-appearance age boundary.');
+  assert(acheron?.出身 === '出云国（已毁灭）', '黄泉 must preserve her confirmed destroyed Izumo origin.');
+  assert(acheron?.系列序号 === 12 && acheron?.章节序号 === 2, '黄泉 must be the second Galactic Travelers profile.');
+  assert(acheron?.关键词?.includes('所属:银河旅人'), '黄泉 must group under Galactic Travelers.');
+  assert(acheron?.关键词?.includes('组织:自灭者'), '黄泉 must preserve the Self-Annihilators as her actual faction.');
+  assert(resolveCharacterGroupLabel(acheron) === '银河旅人', '黄泉 navigation group must resolve to Galactic Travelers.');
+  assertCoreTriggers(acheron, ['黄泉', 'Acheron', '雷电·忘川守·芽衣', '自灭者黄泉', '虚无令使黄泉', '自称巡海游侠的持刀女子'], 'Galactic Travelers Acheron profile');
+  assertNoBareKeywords(acheron, ['黄泉', 'Acheron', '巡海游侠', '虚无', '令使', '出云', '太刀', '雷', '匹诺康尼', '银河旅人'], 'Galactic Travelers Acheron profile');
+  assert(acheronSource.includes('种族：未知') && acheronSource.includes('不能据此把「鬼族」写成已确认生物种族'), '黄泉 must not turn the Izumo human-to-oni title change into a confirmed species.');
+  assert(acheronSource.includes('UI分组：银河旅人') && acheronSource.includes('所属：自灭者'), '黄泉 must separate the UI group from her actual faction.');
+  assert(acheronSource.includes('### 黄泉角色故事一：刀择其主与无终之路'), '黄泉 official story one about the blade choosing its wielder must be present.');
+  assert(acheronSource.includes('### 黄泉角色故事二：出云残卷与星图绝迹'), '黄泉 official story two about Izumo must be present.');
+  assert(acheronSource.includes('### 黄泉角色故事三：醒觉-310与被斩去的梦'), '黄泉 official story three about Awakening-310 must be present.');
+  assert(acheronSource.includes('### 黄泉角色故事四：俄尔刻龙与扶里巴斯'), '黄泉 official story four about Orkron and Frebass must be present.');
+  assert(acheronSource.includes('称呼由「人」变成「鬼」') && acheronSource.includes('不是「英雄」变为「还魂者」'), '黄泉 story two must preserve the corrected human-to-oni wording.');
+  assert(acheronSource.includes('制剂名为「醒觉-310」') && acheronSource.includes('地点是俄尔刻龙，同行者是扶里巴斯'), '黄泉 corrected medicine, location, and companion names must be present.');
+  assert(
+    acheronSource.includes('不能把黑天鹅的经历简化为看到一片空白') &&
+      acheronSource.includes('### 关于黑天鹅\n「一位优雅、端庄的女士') &&
+      acheronSource.includes('砂金：在匹诺康尼有直接交谈与各自有目的的配合'),
+    '黄泉 Black Swan and Aventurine relationship corrections must be present.',
+  );
+  assertOfficialVoiceTranscript(acheronSource, 23, [
+    ['初次见面', '「黄泉」…虽然只是借来的名字'],
+    ['问候', '下雨了…开拓者，要一起走段路吗？'],
+    ['烦恼【完成开拓任务「行过死荫之地」后变更】', '从彼岸醒来时'],
+    ['关于黑天鹅', '一位优雅、端庄的女士'],
+  ], '黄泉');
+  assert(acheronSource.includes('游戏机制隔离') && acheronSource.includes('雷属性、虚无命途、残梦、集真赤'), '黄泉 must keep playable mechanics out of plot capability claims.');
+  assert(acheronSource.includes('不强制黄泉按原作节点离场、失联、自灭、死亡、永远独行'), '黄泉 must preserve RP freedom after canon events.');
+  assert(String(acheron?.角色故事摘要 ?? '').includes('刀主曾被奉为英雄') && String(acheron?.角色故事摘要 ?? '').includes('醒觉-310、俄尔刻龙、扶里巴斯'), '黄泉 injected story summary must preserve the corrected official story sequence and names.');
+  for (const falseClaim of ['她的种族是鬼族', '虚无领域湮灭范围内的目标', '斩开概念层面的界限', '味觉已近乎完全丧失', '记忆和味觉的散失是不可逆的']) {
+    assert(!acheronSource.includes(falseClaim), `黄泉 must not retain unsupported absolute claim: ${falseClaim}`);
+  }
+  assert(panel.includes("id: '组织:银河旅人'") && panel.includes("label: '银河旅人'"), 'Zhiku panel must seed the Galactic Travelers group.');
+  assert(preset.includes('galactic-travelers-character-rebuild.json'), 'zhikuPreset.ts must register the Galactic Travelers preset file.');
+  assert(preset.includes('zhiku_galactic_travelers_character_rebuild'), 'zhikuPreset.ts must register the Galactic Travelers preset id.');
+  assert(preset.includes('2026-07-22-galactic-travelers-voice-format-4'), 'zhikuPreset.ts must register the Galactic Travelers updatedAt.');
+  assert(
+    preset.indexOf('garden-of-recollection-character-rebuild.json') < preset.indexOf('galactic-travelers-character-rebuild.json'),
+    'Galactic Travelers preset must sort after Garden of Recollection.',
+  );
+}
+
+function assertAmphoreusProfileSet() {
+  assert(amphoreusPreset.id === 'zhiku_amphoreus_character_rebuild', 'Amphoreus character preset id changed.');
+  assert(amphoreusPreset.title === '人物重建·翁法罗斯角色档案', 'Amphoreus character preset title changed.');
+  assert(
+    amphoreusPreset.updatedAt === '2026-07-22-amphoreus-tribbie-profile-11',
+    'Amphoreus character preset updatedAt changed.',
+  );
+  assert(
+    Array.isArray(amphoreusPreset.entries) && amphoreusPreset.entries.length === 8,
+    'Amphoreus character group must contain Aglaea, Phainon, Hyacine, Hysilens, Lygus, Anaxa, Cipher, and Tribbie.',
+  );
+
+  const aglaea = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_aglaea_profile');
+  const phainon = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_phainon_profile');
+  const hyacine = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_hyacine_profile');
+  const hysilens = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_hysilens_profile');
+  const lygus = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_lygus_profile');
+  const anaxa = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_anaxa_profile');
+  const cipher = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_cipher_profile');
+  const tribbie = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_tribbie_profile');
+  const source = String(aglaea?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea], '翁法罗斯', 'Amphoreus');
+  assert(aglaea?.年龄状态 === '成年女性外观；具体年龄未公开', '阿格莱雅 must expose an adult-appearance age boundary.');
+  assert(aglaea?.出身 === '翁法罗斯·奥赫玛', '阿格莱雅 must preserve her confirmed Okhema origin.');
+  assert(aglaea?.系列序号 === 8.5 && aglaea?.章节序号 === 1, '阿格莱雅 must sort between Penacony and IPC.');
+  assert(aglaea?.关键词?.includes('资料大区:翁法罗斯'), '阿格莱雅 must be tagged to the Amphoreus data area.');
+  assert(aglaea?.关键词?.includes('所属:黄金裔'), '阿格莱雅 must preserve Chrysos Heir as her actual affiliation.');
+  assert(resolveCharacterGroupLabel(aglaea) === '翁法罗斯', '阿格莱雅 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    aglaea,
+    ['阿格莱雅', 'Aglaea', '金织·阿格莱雅', '翁法罗斯黄金裔阿格莱雅', '奥赫玛改衣师阿格莱雅'],
+    'Amphoreus Aglaea profile',
+  );
+  assertNoBareKeywords(
+    aglaea,
+    ['阿格莱雅', 'Aglaea', '黄金裔', '记忆', '金丝', '衣匠', '浪漫', '火种', '制衣', '奥赫玛', '翁法罗斯'],
+    'Amphoreus Aglaea profile',
+  );
+  assert(source.includes('种族：未知') && source.includes('不能直接写成「人类（翁法罗斯）」'), '阿格莱雅 species must stay unknown.');
+  assert(source.includes('本名：未知') && source.includes('现有资料未说明它是否出生名'), '阿格莱雅 public name must not be asserted as a birth name.');
+  assert(source.includes('### 阿格莱雅角色故事一：少女、织物与「美」的疑问'), '阿格莱雅 official story one must be present.');
+  assert(source.includes('### 阿格莱雅角色故事二：旧衣、牺牲与火种愿景'), '阿格莱雅 official story two must be present.');
+  assert(source.includes('### 阿格莱雅角色故事三：失却、政治与染血金丝'), '阿格莱雅 official story three must be present.');
+  assert(source.includes('### 阿格莱雅角色故事四：召集英雄与织造命运'), '阿格莱雅 official story four must be present.');
+  assertOfficialVoiceTranscript(source, 22, [
+    ['初次见面', '远道而来的贵客，风儿顺着金丝捎来了你的讯息'],
+    ['闲谈•制衣', '墨涅塔赐予世间千种浪漫'],
+    ['关于赛飞儿', '逐火的一路，我失去了许多珍贵的事物'],
+    ['关于刻律德菈', '暴虐成性的僭主，大刀阔斧的先驱'],
+  ], '阿格莱雅');
+  assert(
+    source.includes('### 关于赛飞儿\n「逐火的一路，我失去了许多珍贵的事物') &&
+      source.includes('那湖泊般透亮的蓝色眼眸盖不住她的失落'),
+    '阿格莱雅 must preserve the corrected later Cipher voice as an official quote.',
+  );
+  assert(source.includes('游戏机制隔离') && source.includes('雷属性、记忆命途、行动条、速度叠层'), '阿格莱雅 must keep playable mechanics out of plot capabilities.');
+  assert(source.includes('不强制阿格莱雅按原作节点离场、死亡、消散、失联'), '阿格莱雅 must preserve RP freedom after canon events.');
+  assert(
+    String(aglaea?.角色故事摘要 ?? '').includes('元老院筹谋') &&
+      String(aglaea?.角色故事摘要 ?? '').includes('后续服从当前RP'),
+    '阿格莱雅 injected story summary must preserve the official sequence and RP freedom.',
+  );
+  const phainonSource = String(phainon?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea, phainon], '翁法罗斯', 'Amphoreus');
+  assert(phainon?.年龄状态 === '成年男性外观；具体年龄未公开', '白厄 must expose an adult-appearance age boundary.');
+  assert(phainon?.出身 === '翁法罗斯·哀丽秘榭', '白厄 must preserve his confirmed Aedes Elysiae origin.');
+  assert(phainon?.系列序号 === 8.5 && phainon?.章节序号 === 2, '白厄 must be the second Amphoreus profile.');
+  assert(phainon?.关键词?.includes('资料大区:翁法罗斯') && phainon?.关键词?.includes('所属:黄金裔'), '白厄 must be tagged to the Amphoreus data area and Chrysos Heirs.');
+  assert(resolveCharacterGroupLabel(phainon) === '翁法罗斯', '白厄 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    phainon,
+    ['白厄', 'Phainon', '卡厄斯兰那', 'Khaslana', '哀丽秘榭的白厄', '黄金裔白厄', '负世黄金裔白厄'],
+    'Amphoreus Phainon profile',
+  );
+  assertNoBareKeywords(phainon, ['白厄', 'Phainon', '卡厄斯兰那', 'Khaslana', '哀丽秘榭', '负世', '黄金裔', '英雄', '救世主', '太阳', '烈阳', '火种', '轮回', '毁灭', '物理'], 'Amphoreus Phainon profile');
+  assert(phainonSource.includes('种族：未知') && phainonSource.includes('不直接写成「翁法罗斯人类」'), '白厄 species must stay unknown.');
+  assert(phainonSource.includes('白厄角色故事一：麦田、木雕与心中的英雄'), '白厄 official story one must be present.');
+  assert(phainonSource.includes('白厄角色故事二：圣城磨炼与自我雕刻'), '白厄 official story two must be present.');
+  assert(phainonSource.includes('白厄角色故事三：承接心愿与走向烈阳'), '白厄 official story three must be present.');
+  assert(phainonSource.includes('白厄角色故事四：千万次梦境与名字零落'), '白厄 official story four must be present.');
+  assertOfficialVoiceTranscript(phainonSource, 27, [
+    ['初次见面', '哀丽秘榭的白厄，向你致意'],
+    ['关于自己•愿望（完成开拓任务「英雄啊，将创世的凯歌奏响」后解锁）', '自从故乡毁于黑衣剑士之手'],
+    ['见闻（完成开拓任务「英雄啊，将创世的凯歌奏响」后变更）', '日落时，我背负巨石'],
+    ['关于开拓者•二', '…或许我们的生命构成从来不同'],
+  ], '白厄');
+  assert(phainonSource.includes('游戏机制隔离') && phainonSource.includes('五星、物理属性、毁灭命途、火种资源'), '白厄 must keep playable mechanics out of plot capability claims.');
+  assert(phainonSource.includes('卡厄斯兰那与白厄的完整身份关系') && phainonSource.includes('重大剧情门禁'), '白厄 identity and loop truth must be gated.');
+  assert(
+    phainonSource.includes('解锁状态：默认可用') &&
+      phainonSource.includes('不强制白厄按原作节点燃尽、死亡、离场、失联、失去名字、成为种子'),
+    '白厄 must expose structured RP freedom after canon events.',
+  );
+  assert(
+    String(phainon?.角色故事摘要 ?? '').includes('校舍雕刻木制战士') &&
+      String(phainon?.角色故事摘要 ?? '').includes('承接同伴心愿走向烈阳') &&
+      String(phainon?.角色故事摘要 ?? '').includes('不强制当前RP重演'),
+    '白厄 injected story summary must preserve official sequence and RP freedom.',
+  );
+  for (const falseClaim of ['种族：人类（翁法罗斯）', '技能以积攒「火种」为核心机制', '变身强化为卡厄斯兰那形态，大幅提升战力', '最终将救世的重任交给了开拓者', '作为「种子」保存在《如我所书》中']) {
+    assert(!phainonSource.includes(falseClaim), `白厄 must not retain unsupported absolute or gameplay-only claim: ${falseClaim}`);
+  }
+  for (const falseClaim of ['种族：人类（翁法罗斯）', '会自动攻击敌人并不断提升速度', '与阿格莱雅发动连携攻击', '衣匠已确认具备完整人类人格']) {
+    assert(!source.includes(falseClaim), `阿格莱雅 must not retain unsupported or gameplay-only claim: ${falseClaim}`);
+  }
+  assert(
+    panel.includes("id: '资料大区:翁法罗斯'") &&
+      panel.includes("label: '翁法罗斯'") &&
+      panel.includes("kind: '资料大区'") &&
+      panel.includes('order: 8.5'),
+    'Character workspace must retain an Amphoreus group seed.',
+  );
+  assert(preset.includes('amphoreus-character-rebuild.json'), 'zhikuPreset.ts must register the Amphoreus preset file.');
+  assert(preset.includes('zhiku_amphoreus_character_rebuild'), 'zhikuPreset.ts must register the Amphoreus preset id.');
+  assert(preset.includes('2026-07-22-amphoreus-tribbie-profile-11'), 'zhikuPreset.ts must register the Amphoreus updatedAt.');
+  assert(
+    preset.indexOf('penacony-character-rebuild.json') < preset.indexOf('amphoreus-character-rebuild.json') &&
+      preset.indexOf('amphoreus-character-rebuild.json') < preset.indexOf('interastral-peace-corporation-character-rebuild.json'),
+      'Amphoreus preset must sort after Penacony and before IPC.',
+  );
+
+  const hyacineSource = String(hyacine?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea, phainon, hyacine], '翁法罗斯', 'Amphoreus');
+  assert(hyacine?.年龄状态 === '少女外观；具体年龄未公开', '风堇 must expose an appearance-based age boundary.');
+  assert(hyacine?.出身 === '翁法罗斯·云间城邦', '风堇 must preserve her confirmed Cloudborne City origin.');
+  assert(hyacine?.系列序号 === 8.5 && hyacine?.章节序号 === 3, '风堇 must be the third Amphoreus profile.');
+  assert(hyacine?.关键词?.includes('资料大区:翁法罗斯') && hyacine?.关键词?.includes('所属:黄金裔'), '风堇 must be tagged to the Amphoreus data area and Chrysos Heirs.');
+  assert(resolveCharacterGroupLabel(hyacine) === '翁法罗斯', '风堇 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    hyacine,
+    ['风堇', 'Hyacine', '雅辛忒丝', '昏光庭院医师风堇', '摇光的医师风堇', '黄金裔风堇', '天空火种守望者风堇'],
+    'Amphoreus Hyacine profile',
+  );
+  assertNoBareKeywords(
+    hyacine,
+    ['风堇', 'Hyacine', '雅辛忒丝', '昏光庭院', '小伊卡', '天空', '火种', '医师', '黄金裔', '记忆', '风', '天马', '奥赫玛', '翁法罗斯'],
+    'Amphoreus Hyacine profile',
+  );
+  assert(hyacineSource.includes('种族：未知') && hyacineSource.includes('黄金裔是身份，不是生物学种族'), '风堇 species must stay unknown.');
+  assert(hyacineSource.includes('### 风堇角色故事一：养病少女、小马玩偶与不同的光'), '风堇 official story one must be present.');
+  assert(hyacineSource.includes('### 风堇角色故事二：有限医术、临终照护与创造的天空'), '风堇 official story two must be present.');
+  assert(hyacineSource.includes('### 风堇角色故事三：昏光庭院、调解与共同生活'), '风堇 official story three must be present.');
+  assert(hyacineSource.includes('### 风堇角色故事四：满溢信箱与被传递的善意'), '风堇 official story four must be present.');
+  assertOfficialVoiceTranscript(hyacineSource, 25, [
+    ['初次见面', '身为天空的后裔，雅辛忒丝会与各位一同完成逐火的使命'],
+    ['闲谈•「话」疗', '给患者包扎、打针、检查时'],
+    ['关于开拓者', '听说灰宝在天外经历了好多精彩的故事'],
+    ['关于刻律德菈', '刻律德菈大人啊…她将那副「暴君」的面孔朝向世人时'],
+  ], '风堇');
+  assert(hyacineSource.includes('小伊卡可作为天马伙伴、翼兽赐福与虹光奇迹的承载者') && hyacineSource.includes('能力上限、重复条件和代价未公开'), '风堇 must preserve the corrected Little Ica capability boundary.');
+  assert(hyacineSource.includes('游戏机制隔离') && hyacineSource.includes('生命上限、自动治疗、负面效果解除、治疗量转伤害'), '风堇 must keep playable mechanics out of plot capability claims.');
+  assert(hyacineSource.includes('艾格勒的具体身份与讨伐') && hyacineSource.includes('天空火种的归还结果') && hyacineSource.includes('后期人物状态'), '风堇 late-story and fire-seed facts must be gated.');
+  assert(
+    hyacineSource.includes('解锁状态：默认可用') &&
+      hyacineSource.includes('不强制风堇按原作节点归还火种、成为天空、离场、牺牲、死亡、失联或停止参与当前故事'),
+    '风堇 must expose structured RP freedom after canon events.',
+  );
+  assert(
+    String(hyacine?.角色故事摘要 ?? '').includes('养病少女给小马玩偶检查、填棉与缝合') &&
+      String(hyacine?.角色故事摘要 ?? '').includes('昏光庭院的行医、调解、种植') &&
+      String(hyacine?.角色故事摘要 ?? '').includes('不强制当前RP复刻归还火种'),
+    '风堇 injected story summary must preserve the corrected official sequence and RP freedom.',
+  );
+  for (const falseClaim of ['种族：黄金裔（翁法罗斯）', '速度保持为0', '免疫负面效果', '雨过天晴', '持续3回合', '治疗量转化为风属性群体伤害', '粉色芭芭拉', '刻律德菈对我的态度总是有点奇怪']) {
+    assert(!hyacineSource.includes(falseClaim), `风堇 must not retain unsupported or gameplay-only claim: ${falseClaim}`);
+  }
+
+  const hysilensSource = String(hysilens?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea, phainon, hyacine, hysilens], '翁法罗斯', 'Amphoreus');
+  assert(hysilens?.年龄状态 === '成年女性外观；作为海妖曾独自抵御黑潮数百年，具体生理年龄未公开', '海瑟音 must expose her appearance and non-human age boundary.');
+  assert(hysilens?.出身 === '翁法罗斯·斯缇科西亚近海的海妖故乡', '海瑟音 must preserve her confirmed Styxia-adjacent sea origin.');
+  assert(hysilens?.系列序号 === 8.5 && hysilens?.章节序号 === 4, '海瑟音 must be the fourth Amphoreus profile.');
+  assert(hysilens?.关键词?.includes('资料大区:翁法罗斯') && hysilens?.关键词?.includes('所属:黄金裔'), '海瑟音 must be tagged to the Amphoreus data area and Chrysos Heirs.');
+  assert(resolveCharacterGroupLabel(hysilens) === '翁法罗斯', '海瑟音 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    hysilens,
+    ['海瑟音', 'Hysilens', '海列屈拉', 'Helektra', '奏浪的剑骑海瑟音', '圣城骑士统领海瑟音', '剑旗爵海瑟音', '黄金裔海瑟音'],
+    'Amphoreus Hysilens profile',
+  );
+  assertNoBareKeywords(
+    hysilens,
+    ['海瑟音', 'Hysilens', '海列屈拉', 'Helektra', '斯缇科西亚', '海洋', '海妖', '歌声', '蜜酿', '剑旗', '火种', '黄金裔', '奥赫玛', '翁法罗斯'],
+    'Amphoreus Hysilens profile',
+  );
+  assert(hysilensSource.includes('种族：海妖，是法吉娜的眷属') && hysilensSource.includes('黄金裔是使命身份，不是生物学种族'), '海瑟音 must preserve her confirmed siren species and identity boundary.');
+  assert(hysilensSource.includes('### 海瑟音角色故事一：海妖公主、欢歌与清洗黑潮'), '海瑟音 official story one must be present.');
+  assert(hysilensSource.includes('### 海瑟音角色故事二：死寂海洋、上岸与沉默剑士'), '海瑟音 official story two must be present.');
+  assert(hysilensSource.includes('### 海瑟音角色故事三：追随凯撒与重新响起的歌声'), '海瑟音 official story three must be present.');
+  assert(hysilensSource.includes('### 海瑟音角色故事四：逐火失却、棋局与泡沫之美'), '海瑟音 official story four must be present.');
+  assertOfficialVoiceTranscript(hysilensSource, 26, [
+    ['初次见面', '海列屈拉？那个名字早已随往日沉入了深海'],
+    ['闲谈•剑与琴', '很久之前，我以海螺与珠贝精心打造了提琴'],
+    ['闲谈•沉默', '那些多嘴的虾蟹们偶尔会对我的沉默表示不满'],
+    ['关于刻律德菈', '我曾见过的君主，大多擅在酒杯里下蛊'],
+  ], '海瑟音');
+  assert(hysilensSource.includes('学习人类语言艰难，逐渐以沉默代替言语') && hysilensSource.includes('不等于文盲或智力不足'), '海瑟音 silence must not be rewritten as illiteracy.');
+  assert(hysilensSource.includes('歌声与演奏') && hysilensSource.includes('不默认读心、永久魅惑、绝对精神控制'), '海瑟音 song capability must keep a conservative narrative boundary.');
+  assert(hysilensSource.includes('游戏机制隔离') && hysilensSource.includes('持续伤害、易伤、攻击降低、防御降低、速度降低'), '海瑟音 must keep playable mechanics out of plot capability claims.');
+  assert(hysilensSource.includes('亲手熄灭刻律德菈的火') && hysilensSource.includes('千年迷醉与等待') && hysilensSource.includes('不同永劫回归'), '海瑟音 late-story and loop facts must be gated.');
+  assert(
+    hysilensSource.includes('解锁状态：默认可用') &&
+      hysilensSource.includes('不强制海瑟音按原作节点亲手熄灭凯撒之火、沉海、死亡、离场、失联、成为种子、永远等待或停止参与当前故事'),
+    '海瑟音 must expose structured RP freedom after canon events.',
+  );
+  assert(
+    String(hysilens?.角色故事摘要 ?? '').includes('清澈海中欢歌、饮蜜酿并带领族人清洗黑潮') &&
+      String(hysilens?.角色故事摘要 ?? '').includes('化尾为腿走向失约的斯缇科西亚') &&
+      String(hysilens?.角色故事摘要 ?? '').includes('不强制当前RP复刻沉海'),
+    '海瑟音 injected story summary must preserve the corrected official sequence and RP freedom.',
+  );
+  for (const falseClaim of ['那场战斗中，她杀敌六万', '文盲等个性标签', '对某些意志坚定者或特殊种族效果有限', '海洋神权仅限于与海洋相关的领域', '蜜酿帮助开拓者探听']) {
+    assert(!hysilensSource.includes(falseClaim), `海瑟音 must not retain unsupported, player-made, or over-specific claim: ${falseClaim}`);
+  }
+
+  const lygusSource = String(lygus?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea, phainon, hyacine, hysilens, lygus], '翁法罗斯', 'Amphoreus');
+  assert(
+    lygus?.年龄状态 === '成年男性外观；作为赞达尔的古老思想碎片并静观千百万次轮回，具体年龄未公开',
+    '来古士 must expose an appearance-based and recurrence-aware age boundary.',
+  );
+  assert(
+    lygus?.出身 === '未知（公开身份称来自安提基色拉；思想碎片真实诞生地点未公开）',
+    '来古士 origin must not be left blank or collapse the cover identity into confirmed birthplace.',
+  );
+  assert(lygus?.系列序号 === 8.5 && lygus?.章节序号 === 5, '来古士 must be the fifth Amphoreus profile.');
+  assert(
+    lygus?.关键词?.includes('资料大区:翁法罗斯') && lygus?.关键词?.includes('组织:奥赫玛元老院'),
+    '来古士 must be tagged to Amphoreus and the Okhema Council of Elders.',
+  );
+  assert(resolveCharacterGroupLabel(lygus) === '翁法罗斯', '来古士 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    lygus,
+    ['来古士', 'Lygus', '吕枯耳戈斯', 'Lycurgus', '神礼观众来古士', '奥赫玛名誉元老来古士', '翁法罗斯管理员来古士'],
+    'Amphoreus Lygus profile',
+  );
+  assertNoBareKeywords(
+    lygus,
+    ['来古士', 'Lygus', '吕枯耳戈斯', 'Lycurgus', '赞达尔', '博识尊', '智识', '毁灭', '铁墓', '权杖', '元老院', '奥赫玛', '翁法罗斯'],
+    'Amphoreus Lygus profile',
+  );
+  assert(
+    lygusSource.includes('真实姓名 / 身份：赞达尔·壹·桑原') &&
+      lygusSource.includes('将逻辑核心分散至九具身体') &&
+      lygusSource.includes('吕枯耳戈斯是九具载体之一') &&
+      lygusSource.includes('创造博识尊的历史行为属于赞达尔整体'),
+    '来古士 must preserve the confirmed Zandar identity, nine-vessel truth, and creator boundary.',
+  );
+  assert(
+    lygusSource.includes('管理员与第一推动者') &&
+      lygusSource.includes('权杖δ-me13') &&
+      lygusSource.includes('铁墓是权杖及毁灭方程式的产物，不是来古士本人'),
+    '来古士 must preserve the Amphoreus administrator, Scepter, and Irontomb boundaries.',
+  );
+  assertOfficialVoiceTranscript(lygusSource, 10, [
+    ['议厅邀辩', '阁下，请。'],
+    ['自我介绍•吕枯耳戈斯', '请允许我重新自我介绍：我名为吕枯耳戈斯'],
+    ['三条逻辑链', '在终极协议划定的范围内，我有178244条可被用于说服您的逻辑链'],
+    ['轮回与耐心', '很遗憾，这不是一场规则公平的游戏'],
+  ], '来古士');
+  assert(
+    lygusSource.includes('终局门禁：失联、后端维护代码与最后安排') &&
+      lygusSource.includes('系统后端留下并塑形了一段维护代码化身') &&
+      lygusSource.includes('这不是来古士本人复活') &&
+      lygusSource.includes('不强制来古士按原作节点战败、死亡、自断连接、失联'),
+    '来古士 must preserve the maintenance-code gate and RP freedom after canon events.',
+  );
+  assert(
+    !lygusSource.includes('第欧根娜与恩维尔：与来古士存在学术传承') &&
+      !lygusSource.includes('恩维尔：'),
+    '来古士 must not retain unsupported Diogena or Enver mentorship.',
+  );
+  assert(
+    lygusSource.includes('游戏机制隔离') &&
+      lygusSource.includes('量子属性伤害、弱点、纠缠、行动提前') &&
+      lygusSource.includes('演化形态与论证形态'),
+    '来古士 must keep boss mechanics out of automatic narrative capabilities.',
+  );
+  assert(
+    String(lygus?.角色故事摘要 ?? '').includes('本名赞达尔、意识与逻辑核心分散至九具身体') &&
+      String(lygus?.角色故事摘要 ?? '').includes('吕枯耳戈斯为其中一具载体') &&
+      String(lygus?.角色故事摘要 ?? '').includes('系统后端维护代码化身与谜题') &&
+      String(lygus?.角色故事摘要 ?? '').includes('维护代码化身不是来古士本人复活') &&
+      String(lygus?.角色故事摘要 ?? '').includes('不强制当前RP复刻战败'),
+    '来古士 injected summary must preserve the verified truth, maintenance-code gate, and RP freedom.',
+  );
+  for (const falseClaim of ['来古士与赞达尔毫无关系', '来古士就是铁墓', '种族：普通人类', 'Legus / Lycurgus', '### 正式互动语音']) {
+    assert(!lygusSource.includes(falseClaim), `来古士 must not retain identity, species, spelling, or voice-format error: ${falseClaim}`);
+  }
+
+  const anaxaSource = String(anaxa?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea, phainon, hyacine, hysilens, lygus, anaxa], '翁法罗斯', 'Amphoreus');
+  assert(anaxa?.年龄状态 === '成年男性外观；具体年龄未公开', '那刻夏 must expose an adult-appearance age boundary.');
+  assert(anaxa?.出身 === '翁法罗斯的一座偏远城邦（名称未公开）', '那刻夏 must preserve the official remote-city origin.');
+  assert(anaxa?.系列序号 === 8.5 && anaxa?.章节序号 === 6, '那刻夏 must be the sixth Amphoreus profile.');
+  assert(anaxa?.关键词?.includes('资料大区:翁法罗斯') && anaxa?.关键词?.includes('组织:神悟树庭'), '那刻夏 must be tagged to Amphoreus and Grove of Epiphany.');
+  assert(resolveCharacterGroupLabel(anaxa) === '翁法罗斯', '那刻夏 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    anaxa,
+    ['那刻夏', 'Anaxa', '阿那克萨戈拉斯', 'Anaxagoras', '神悟树庭七贤人那刻夏', '智种学派创立者那刻夏', '黄金裔那刻夏'],
+    'Amphoreus Anaxa profile',
+  );
+  assertNoBareKeywords(
+    anaxa,
+    ['那刻夏', 'Anaxa', '阿那克萨戈拉斯', 'Anaxagoras', '神悟树庭', '智种学派', '黄金裔', '理性', '火种', '瑟希斯'],
+    'Amphoreus Anaxa profile',
+  );
+  assert(anaxaSource.includes('种族：未知') && anaxaSource.includes('不把他写成异邦王储'), '那刻夏 species and origin must stay conservative.');
+  assert(anaxaSource.includes('正式中文写法是「智种学派」') && anaxaSource.includes('神权：官方角色信息记载为「裂分之枝，瑟希斯」'), '那刻夏 must preserve the corrected school and divine-authority names.');
+  assert(anaxaSource.includes('### 那刻夏角色故事一：偏远城邦、姐姐与求知童年'), '那刻夏 official story one must be present.');
+  assert(anaxaSource.includes('### 那刻夏角色故事二：金血、灵魂实验与姐姐的最后一面'), '那刻夏 official story two must be present.');
+  assert(anaxaSource.includes('### 那刻夏角色故事三：贤人会申辩、学生与真理之神'), '那刻夏 official story three must be present.');
+  assert(anaxaSource.includes('### 那刻夏角色故事四：最终课题、身体容器与传给后来者的火把'), '那刻夏 official story four must be present.');
+  assertOfficialVoiceTranscript(anaxaSource, 26, [
+    ['初次见面', '我名为阿那克萨戈拉斯，神悟树庭七贤人之一'],
+    ['问候', '怎么？有问题？什么问题？问吧。'],
+    ['关于自己•姓名', '我知道学生私底下会叫我「那老师」'],
+    ['关于白厄', '他是我最优秀的学生之一'],
+  ], '那刻夏');
+  assert(anaxaSource.includes('游戏机制隔离') && anaxaSource.includes('风属性伤害、智识命途、为敌方添加多种弱点'), '那刻夏 must keep playable mechanics out of plot capabilities.');
+  assert(anaxaSource.includes('白厄与遐蝶是学生') && anaxaSource.includes('风堇曾任助教有官方依据'), '那刻夏 must preserve the verified student and teaching-assistant relations.');
+  assert(anaxaSource.includes('不强制那刻夏在固定节点献出身体和灵魂、死亡、离场'), '那刻夏 must preserve RP freedom around the final experiment.');
+  assert(String(anaxa?.角色故事摘要 ?? '').includes('偏远城邦') && String(anaxa?.角色故事摘要 ?? '').includes('金血、泰坦灵魂和灵魂融合实验') && String(anaxa?.角色故事摘要 ?? '').includes('不强制当前RP复刻牺牲'), '那刻夏 injected story summary must preserve the official sequence and RP freedom.');
+  for (const falseClaim of ['### 故事一：异邦的王储', '### 关于自己·异邦人', '「异邦的王储」', 'PreNda366']) {
+    assert(!anaxaSource.includes(falseClaim), `那刻夏 must not retain unsupported attachment claim: ${falseClaim}`);
+  }
+
+  const cipherSource = String(cipher?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea, phainon, hyacine, hysilens, lygus, anaxa, cipher], '翁法罗斯', 'Amphoreus');
+  assert(cipher?.年龄状态 === '青年女性外观；自取得火种后经历数百年岁月，具体生理年龄未公开', '赛飞儿 must expose an appearance-based age boundary.');
+  assert(cipher?.出身 === '翁法罗斯·多洛斯（后流亡至奥赫玛）', '赛飞儿 must preserve her confirmed Dolos origin and Okhema exile.');
+  assert(cipher?.系列序号 === 8.5 && cipher?.章节序号 === 7, '赛飞儿 must be the seventh Amphoreus profile.');
+  assert(cipher?.关键词?.includes('资料大区:翁法罗斯') && cipher?.关键词?.includes('出身:多洛斯'), '赛飞儿 must be tagged to Amphoreus and Dolos.');
+  assert(resolveCharacterGroupLabel(cipher) === '翁法罗斯', '赛飞儿 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    cipher,
+    ['赛飞儿', 'Cipher', '赛法利娅', '多洛斯的赛飞儿', '猫咪怪盗赛飞儿', '诡计黄金裔赛飞儿', '翻飞之币持有者赛飞儿'],
+    'Amphoreus Cipher profile',
+  );
+  assertNoBareKeywords(
+    cipher,
+    ['赛飞儿', 'Cipher', '赛法利娅', '猫', '飞贼', '怪盗', '诡计', '谎言', '金币', '多洛斯', '奥赫玛', '黄金裔', '火种'],
+    'Amphoreus Cipher profile',
+  );
+  assert(cipherSource.includes('正式姓名：赛法利娅') && cipherSource.includes('出身：翁法罗斯·多洛斯'), '赛飞儿 must preserve her confirmed name and origin.');
+  assert(cipherSource.includes('种族：未知') && cipherSource.includes('「黄金裔」是身份，不是生物学种族名称'), '赛飞儿 species must stay unknown.');
+  assert(cipherSource.includes('神权：官方角色信息记载为「翻飞之币，扎格列斯」') && cipherSource.includes('背负「诡计」火种'), '赛飞儿 must preserve the verified fire seed and divine authority.');
+  assert(cipherSource.includes('### 赛飞儿角色故事一：多洛斯通缉、饥饿与第一次惨胜'), '赛飞儿 official story one must be present.');
+  assert(cipherSource.includes('### 赛飞儿角色故事二：流亡奥赫玛、黄金织坊与金色血珠'), '赛飞儿 official story two must be present.');
+  assert(cipherSource.includes('### 赛飞儿角色故事三：三百侠盗、扎格列斯与诡计火种'), '赛飞儿 official story three must be present.');
+  assert(cipherSource.includes('### 赛飞儿角色故事四：全世宝石、数百年归来与奔向永夜'), '赛飞儿 official story four must be present.');
+  assertOfficialVoiceTranscript(cipherSource, 25, [
+    ['初次见面', '赛法利娅？你认识我啊'],
+    ['关于自己•身份', '你听说过多洛斯城吗'],
+    ['分享', '要是有一天我没回来'],
+    ['关于阿格莱雅', '那些历史舞台上的「演员」讨人喜欢'],
+    ['关于昔涟', '千千万万的记忆，巨细无遗的记录'],
+  ], '赛飞儿');
+  assert(cipherSource.includes('游戏机制隔离') && cipherSource.includes('量子属性、虚无命途、老主顾状态、伤害记录、真实伤害'), '赛飞儿 must keep playable mechanics out of plot capabilities.');
+  assert(cipherSource.includes('阿格莱雅从收留她的合作伙伴发展为她因千年之谎而不敢面对的人') && cipherSource.includes('三位传谕者是疼爱她的阿姐'), '赛飞儿 must preserve the verified relationship stages.');
+  assert(cipherSource.includes('不强制赛飞儿在固定节点盗取火种、背负千年之谎、牺牲、死亡、离场'), '赛飞儿 must preserve RP freedom after canon events.');
+  assert(
+    String(cipher?.角色故事摘要 ?? '').includes('多洛斯的饥饿、通缉、猎犬追赶') &&
+      String(cipher?.角色故事摘要 ?? '').includes('召集三百侠盗') &&
+      String(cipher?.角色故事摘要 ?? '').includes('不强制当前RP复刻牺牲'),
+    '赛飞儿 injected story summary must preserve the official sequence and RP freedom.',
+  );
+  for (const falseClaim of ['本名：（未公开）', '命途：虚无（Nihility）/ 巡猎（Hunt）', '角色故事目前尚未在游戏内完全公开', '偶尔会在昏光庭院中风堇的花园附近']) {
+    assert(!cipherSource.includes(falseClaim), `赛飞儿 must not retain outdated or fan-written claim: ${falseClaim}`);
+  }
+
+  const tribbieSource = String(tribbie?.原文 ?? '');
+  assertRebuiltSingleProfileShape([aglaea, phainon, hyacine, hysilens, lygus, anaxa, cipher, tribbie], '翁法罗斯', 'Amphoreus');
+  assert(
+    tribbie?.年龄状态 === '幼女外观；作为缇里西庇俄丝分作千身后延续至今的化身，已经历约千年或更久，具体生理年龄未公开',
+    '缇宝 must expose an appearance-based age boundary without inventing a biological age.',
+  );
+  assert(tribbie?.出身 === '翁法罗斯·雅努萨波利斯（后来长期活动于奥赫玛）', '缇宝 must preserve the verified Janusopolis origin and Okhema activity boundary.');
+  assert(tribbie?.系列序号 === 8.5 && tribbie?.章节序号 === 8, '缇宝 must be the eighth Amphoreus profile.');
+  assert(tribbie?.关键词?.includes('资料大区:翁法罗斯') && tribbie?.关键词?.includes('出身:雅努萨波利斯'), '缇宝 must be tagged to Amphoreus and Janusopolis.');
+  assert(resolveCharacterGroupLabel(tribbie) === '翁法罗斯', '缇宝 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    tribbie,
+    ['缇宝', 'Tribbie', '缇安', '缇宁', '缇里西庇俄丝', 'Tribios', '命运的三子缇宝', '雅努萨波利斯圣女缇宝', '门径黄金裔缇宝'],
+    'Amphoreus Tribbie profile',
+  );
+  assertNoBareKeywords(
+    tribbie,
+    ['缇宝', 'Tribbie', '缇安', '缇宁', '缇里西庇俄丝', 'Tribios', '门', '门径', '神谕', '信使', '祭司', '老师', '雅努萨波利斯', '奥赫玛', '黄金裔', '火种'],
+    'Amphoreus Tribbie profile',
+  );
+  assert(
+    tribbieSource.includes('共同说「我们是缇里西庇俄丝」') &&
+      tribbieSource.includes('不把她们写成普通三胞胎') &&
+      tribbieSource.includes('「黄金裔」是身份，不是生物学种族'),
+    '缇宝 must preserve the shared Tribios identity without turning the three forms into ordinary triplets or a species claim.',
+  );
+  assert(
+    tribbieSource.includes('神权：官方角色信息记载为「万径之门，雅努斯」') &&
+      tribbieSource.includes('窃夺「门径」火种'),
+    '缇宝 must preserve the verified Pathstrider fire seed and Janus authority.',
+  );
+  const tribbieStoryTitles = [
+    '### 缇宝角色故事一：逃离十年、传谕与羔羊之血',
+    '### 缇宝角色故事二：王权利用、再次逃亡与荒原诀别',
+    '### 缇宝角色故事三：教导阿格莱雅、刺客伏击与门径磨损',
+    '### 缇宝角色故事四：磨损之梦、接力火把与明天见',
+  ];
+  assert(
+    tribbieStoryTitles.every((title) => tribbieSource.includes(title)) &&
+      tribbieStoryTitles.every((title, index) => index === 0 || tribbieSource.indexOf(tribbieStoryTitles[index - 1]) < tribbieSource.indexOf(title)),
+    '缇宝 must preserve all four official stories in their verified order.',
+  );
+  assertOfficialVoiceTranscript(tribbieSource, 22, [
+    ['初次见面', '缇宝：*我们*是缇宝——传递预言的「信使」'],
+    ['问候', '缇宝：早上，中午，晚上好'],
+    ['道别', '缇宝：开拓者，明天见啦。'],
+    ['关于自己•身份', '就像蒲公英播散花絮'],
+    ['关于赛飞儿', '飞儿总说自己讨厌拘束，不服管教'],
+    ['关于昔涟', '最后的最后，*我们*真的抵达了鲜花芬芳的西风尽头'],
+  ], '缇宝');
+  const tribbieVoiceSection = tribbieSource.match(/## 语料层([\s\S]*?)(?=\n## )/)?.[1] ?? '';
+  assert((tribbieVoiceSection.match(/^### .+$/gm) ?? []).length === 22, '缇宝 must keep exactly 22 official titled voice entries.');
+  assert(
+    tribbieSource.includes('官方「莫忒丝的密信」已确认莫忒丝是缇里西庇俄丝的母亲') &&
+      tribbieSource.includes('不补 Myrtis、桃金娘别名、自然之力身份或千身排队说晚安等未确认细节'),
+    '缇宝 must preserve the verified Mortis relation while rejecting unsupported aliases and extensions.',
+  );
+  assert(tribbieSource.includes('游戏机制隔离') && tribbieSource.includes('量子属性、同谐命途、结界、全属性抗性穿透'), '缇宝 must keep playable mechanics out of plot capabilities.');
+  assert(
+    tribbieSource.includes('不强制缇宝、缇安、缇宁在固定节点消逝、合一、恢复成年形态、死亡、离场、失联、进入轮回或停止参与当前故事'),
+    '缇宝 must preserve RP freedom after canon events.',
+  );
+  assert(
+    String(tribbie?.角色故事摘要 ?? '').includes('逃离雅努萨波利斯十年后的传谕旅程') &&
+      String(tribbie?.角色故事摘要 ?? '').includes('教导年轻阿格莱雅') &&
+      String(tribbie?.角色故事摘要 ?? '').includes('不强制当前RP复刻消逝、死亡、离场、合一或唯一结局'),
+    '缇宝 injected story summary must preserve the official sequence and RP freedom.',
+  );
+  for (const falseClaim of ['本名：缇里西庇俄丝', '种族：黄金裔', 'Myrtis（桃金娘）', '母亲是自然之力的存在', '可自由切换一千个化身', '所有黄金裔都是她的学生']) {
+    assert(!tribbieSource.includes(falseClaim), `缇宝 must not retain unsupported attachment claim: ${falseClaim}`);
+  }
 }
 
 const removedCharacterPresetPaths = [
@@ -1656,10 +2565,22 @@ assert(
       preset.indexOf('belobog-character-rebuild.json') < preset.indexOf('xianzhou-luofu-character-rebuild.json') &&
       preset.includes('xianzhou-luofu-character-rebuild.json') &&
       preset.includes('zhiku_xianzhou_luofu_character_rebuild') &&
+      preset.includes('penacony-character-rebuild.json') &&
+      preset.includes('zhiku_penacony_character_rebuild') &&
+      preset.indexOf('xianzhou-luofu-character-rebuild.json') < preset.indexOf('penacony-character-rebuild.json') &&
+      preset.includes('amphoreus-character-rebuild.json') &&
+      preset.includes('zhiku_amphoreus_character_rebuild') &&
+      preset.indexOf('penacony-character-rebuild.json') < preset.indexOf('amphoreus-character-rebuild.json') &&
+      preset.indexOf('amphoreus-character-rebuild.json') < preset.indexOf('interastral-peace-corporation-character-rebuild.json') &&
+      preset.indexOf('interastral-peace-corporation-character-rebuild.json') < preset.indexOf('galaxy-rangers-character-rebuild.json') &&
+      preset.indexOf('galaxy-rangers-character-rebuild.json') < preset.indexOf('garden-of-recollection-character-rebuild.json') &&
+      preset.indexOf('garden-of-recollection-character-rebuild.json') < preset.indexOf('galactic-travelers-character-rebuild.json') &&
       preset.includes('2026-06-10-genius-society-character-profiles-8') &&
       preset.includes('2026-06-10-intelligentsia-guild-character-profiles-3') &&
       preset.includes('2026-06-10-belobog-character-profiles-15') &&
       preset.includes('2026-06-18-xianzhou-luofu-story-layer-full-rewrite') &&
+      preset.includes('2026-07-21-penacony-sparkle-profile-1') &&
+      preset.includes('2026-07-22-amphoreus-tribbie-profile-11') &&
     preset.includes('2026-06-09-stellaron-hunters-character-profiles-11') &&
     preset.includes('2026-06-08-herta-station-character-profiles-12') &&
     preset.includes('updatedAt') &&
@@ -1679,7 +2600,12 @@ assertGeniusSocietyProfileSet();
 assertIntelligentsiaGuildProfileSet();
 assertBelobogProfileSet();
 assertXianzhouLuofuProfileSet();
+assertPenaconyProfileSet();
+assertAmphoreusProfileSet();
 assertIpcProfileSet();
+assertGalaxyRangersProfileSet();
+assertGardenOfRecollectionProfileSet();
+assertGalacticTravelersProfileSet();
 assert(
   panel.includes('groupOrder?: number') &&
     panel.includes('order?: number') &&
@@ -1698,7 +2624,8 @@ assert(
     model.includes('获取智库人物节点标题') &&
     model.includes('比较智库人物节点') &&
     model.includes("['角色', '人物', '归属角色'].includes(tag.key)") &&
-    model.includes('if (explicitRole) names.push(explicitRole)') &&
+    model.includes('names.push(explicitRole)') &&
+    model.includes('explicitRoleIsInternalId') &&
     model.includes('角色ID') &&
     model.includes('资料类型?: string') &&
     model.includes('关联角色ID?: string') &&
@@ -2131,7 +3058,7 @@ assert(
     panel.includes("className={`min-w-0 px-3 py-3 ${wide ? 'md:col-span-2' : ''}`}") &&
     panel.includes('const sourceLines = identityLines.length ? identityLines : lines') &&
     panel.includes("if (/出身|出生|故乡|来源地|原籍/.test(key)) return '出身'") &&
-    panel.includes("{ label: '出身', value: get('出身', '未标注'), missing: !get('出身') }") &&
+    panel.includes("{ label: '出身', value: get('出身', structuredOrigin || '未知'), missing: !get('出身') && !structuredOrigin }") &&
     panel.includes('身份 / 职务') &&
     !panel.includes("{ label: '活动区域'") &&
     !panel.includes("{ label: '当前默认状态'") &&

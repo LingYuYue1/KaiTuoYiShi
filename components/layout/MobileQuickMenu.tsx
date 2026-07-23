@@ -9,6 +9,8 @@ interface MobileQuickMenuProps {
   onHome: () => void;
   onSystemSelect: (id: GameSystemId) => void;
   phoneUnread?: number;
+  /** 未处理的记忆失败草稿数量；打开菜单不会自动清除。 */
+  memoryUnread?: number;
 }
 
 type MenuItem = {
@@ -30,6 +32,7 @@ export function MobileQuickMenu({
   onHome,
   onSystemSelect,
   phoneUnread = 0,
+  memoryUnread = 0,
 }: MobileQuickMenuProps) {
   const [showMore, setShowMore] = useState(false);
 
@@ -50,11 +53,12 @@ export function MobileQuickMenu({
         label: item.label,
         glyph: item.glyph,
         onClick: () => onSystemSelect(item.id),
+        badge: item.id === 'memory' ? memoryUnread : 0,
       })),
       { id: 'settings', label: '设置', glyph: '设', onClick: onSettings },
       { id: 'home', label: '首页', glyph: '归', onClick: onHome },
     ],
-    [onHome, onSettings, onSystemSelect],
+    [memoryUnread, onHome, onSettings, onSystemSelect],
   );
 
   const handleItemClick = (item: MenuItem) => {

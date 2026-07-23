@@ -1,8 +1,8 @@
 ﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTransition } from 'react';
-import { 图片是否参考角色, 读取图片参考目标 } from '@/models/imageGeneration';
-import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
+import { normalizeStorySnapshotRenderContext, 图片是否参考角色, 读取图片参考目标 } from '@/models/imageGeneration';
+import type { NovelAITaskOverrides, StorySnapshotRenderContext, 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
 import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
@@ -23,12 +23,13 @@ import {
   解析相册资源引用,
   解析相册资源地址,
 } from '@/utils/albumActions';
-import { generateImage } from '@/services/ai/imageGeneration';
+import { buildNovelAIRequestPayload, generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
-import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
+import { parseSceneImagePrompt } from '@/services/ai/narrativeImageParse';
+import { resolveStorySnapshot, trimStorySnapshotSource } from '@/services/ai/storySnapshotPipeline';
 import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
-import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
+import { applyNovelAIRulePreset, buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
 
@@ -44,13 +45,13 @@ import {
   buildAlbumResourceEntries, buildCharacterLibraryRecords, buildNpcSourceText, buildPresentSceneNpcs,
   buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions,
   buildTravelerSourceText, CharacterAnchorWorkspace, cleanupAlbumAssets, createTask,
-  CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags, extractStorySnapshot,
-  formatStorySnapshotSceneText, getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
+  CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags,
+  getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
   isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot,
   mapImageSlotToTravelerSlot, NsfwVisibilityToggle,
   PhoneBackgroundWorkspace, requiresCharacterTarget,
   resolveGenerationTargetId, resolveSize, RulesWorkspace, SceneImageWorkspace,
-  slotLabel, StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
+  slotLabel, StorySnapshotWorkspace, WorkspaceTabs,
 } from './album/workspaces';
 import type { CharacterLibraryRecord } from './album/workspaces';
 import { ImageLibraryWorkspace } from './album/libWorkspace';
@@ -123,6 +124,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const [storySnapshotSource, setStorySnapshotSource] = useState<StorySnapshotSource>('latest_assistant');
   const [storySnapshotDraft, setStorySnapshotDraft] = useState('');
   const [storySnapshotSummary, setStorySnapshotSummary] = useState<StorySnapshotSummary | null>(null);
+  const [storySnapshotContext, setStorySnapshotContext] = useState<StorySnapshotRenderContext | null>(null);
+  const [novelAIOverrides, setNovelAIOverrides] = useState<NovelAITaskOverrides>({});
   const [storySnapshotAnalyzing, setStorySnapshotAnalyzing] = useState(false);
   const [libraryNpcId, setLibraryNpcId] = useState('');
   const [anchorSelection, setAnchorSelection] = useState<AnchorSelection>('traveler');
@@ -153,7 +156,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     const latestAssistant = [...mainChatHistory]
       .reverse()
       .find((message) => message.role === 'assistant' && message.content.trim());
-    const text = trimSnapshotSource(latestAssistant?.content ?? '');
+    const text = trimStorySnapshotSource(latestAssistant?.content ?? '');
     if (!text) {
       setMessage('暂无可导入正文。');
       return;
@@ -217,6 +220,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setPrompt('');
     setNegativePrompt('');
     setLastPromptMeta(null);
+    setStorySnapshotContext(null);
+    setNovelAIOverrides({});
   };
 
   const invalidatePromptDraft = (reason: string) => {
@@ -371,6 +376,17 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     settings: imageSettings.参考图,
     album,
   }).status;
+  const storySnapshotCompiledPayload = useMemo(() => {
+    const api = applyNovelAIRulePreset(imageSettings.普通接口, imageSettings.rules);
+    if (api.backend !== 'novelai' || !storySnapshotContext || !prompt.trim()) return null;
+    return buildNovelAIRequestPayload(api, {
+      prompt,
+      negativePrompt,
+      size: resolveSize(sizePreset, customSize, 'scene'),
+      storySnapshotContext,
+      novelAIOverrides,
+    }, 0);
+  }, [customSize, imageSettings.普通接口, imageSettings.rules, negativePrompt, novelAIOverrides, prompt, sizePreset, storySnapshotContext]);
 
   const handleGenerate = async (_requestedNsfw = false, override?: GenerateOverride) => {
     const target = override?.target ?? currentTarget;
@@ -409,9 +425,10 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       setNegativePrompt((prev) => prev || built.negative);
       setLastPromptMeta({ anchorMode: built.anchorMode, anchorSummary: built.anchorSummary, sourcePrompt: built.sourcePrompt });
     }
-    const api = override?.imageApi ?? (nsfw
+    const rawApi = override?.imageApi ?? (nsfw
       ? imageSettings.NSFW接口
       : imageSettings.普通接口);
+    const api = applyNovelAIRulePreset(rawApi, imageSettings.rules);
     if (!api.enabled) {
       setMessage(override?.disabledMessage || '当前文生图接口未启用。');
       return;
@@ -440,6 +457,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       targetId: resolvedTargetId,
       dimensions: targetSize,
       referenceImageIds: referencePayload.entries.map((entry) => entry.id),
+      storySnapshotContext: override?.storySnapshotContext,
+      novelAIOverrides: override?.novelAIOverrides,
     });
     setLastTaskId(task.id);
     onAlbumChange((prev) => ({ ...prev, tasks: [task, ...prev.tasks] }));
@@ -454,6 +473,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
           size: targetSize,
           referenceImages: referencePayload.images,
           referenceStrength: imageSettings.参考图.sdWebuiDenoisingStrength,
+          storySnapshotContext: override?.storySnapshotContext,
+          novelAIOverrides: override?.novelAIOverrides,
         }),
         {
           maxRetries: api.retryCount,
@@ -548,6 +569,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       anchorMode: target.anchorMode,
       anchorSummary: target.anchorSummary,
       sourcePrompt: target.sourcePrompt,
+      storySnapshotContext: target.storySnapshotContext,
+      novelAIOverrides: target.novelAIOverrides,
     });
   };
 
@@ -811,6 +834,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       note: '故事快照',
       statusMessage: '正在调用主文生图接口...',
       disabledMessage: '请先在文生图设置中启用统一接口。',
+      storySnapshotContext: override?.storySnapshotContext ?? storySnapshotContext ?? undefined,
+      novelAIOverrides: override?.novelAIOverrides ?? novelAIOverrides,
     });
   };
 
@@ -823,6 +848,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setPrompt(target.prompt);
     setNegativePrompt(target.negativePrompt ?? '');
     setGenerateTitle('重试生成');
+    setStorySnapshotContext(target.storySnapshotContext ?? null);
+    setNovelAIOverrides(target.novelAIOverrides ?? {});
     setLastPromptMeta({
       anchorMode: target.anchorMode === true,
       anchorSummary: target.anchorSummary || (target.anchorMode ? '沿用上次角色锚点' : '沿用上次档案回退结果'),
@@ -837,6 +864,8 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       anchorSummary: target.anchorSummary,
       sourcePrompt: target.sourcePrompt,
       size: target.dimensions || resolveSize(sizePreset, customSize, 'scene'),
+      storySnapshotContext: target.storySnapshotContext,
+      novelAIOverrides: target.novelAIOverrides,
     });
   };
 
@@ -1058,102 +1087,41 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     }
     setStorySnapshotAnalyzing(true);
     setStorySnapshotSummary(null);
+    setStorySnapshotContext(null);
+    setNovelAIOverrides({});
     setMessage('正在解析正文画面...');
     try {
       const target = generateTargets.find((item) => item.id === 'scene') ?? currentTarget;
       const parserConfig = resolveStorySnapshotParserConfig();
       const presentNpcs = buildPresentSceneNpcs(npcs, sourceText);
       const anchorInfo = getSceneAnchorStatus(traveler, presentNpcs);
-      let parsed: Awaited<ReturnType<typeof parseStorySnapshotPrompt>> | null = null;
-      let usedLocalFallback = false;
-      if (parserConfig) {
-        try {
-          parsed = await parseStorySnapshotPrompt(parserConfig, {
-            body: sourceText,
-            traveler: {
-              name: traveler.姓名 || traveler.别名 || '玩家角色',
-              gender: traveler.性别 || undefined,
-              appearance: traveler.外貌 || undefined,
-              identity: traveler.身份 || undefined,
-              anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
-            },
-            playerAppearanceMode: 'auto',
-            presentNpcs: presentNpcs.map((npc) => ({
-              name: npc.姓名,
-              appearance: npc.外貌,
-              clothing: npc.穿着,
-            })),
-          });
-        } catch (error) {
-          usedLocalFallback = true;
-          const reason = error instanceof Error ? error.message : String(error);
-          setMessage(`故事快照模型解析失败，已改用本地草稿兜底：${reason}`);
-        }
-      } else {
-        usedLocalFallback = true;
-      }
-      const summary = parsed
-        ? {
-            title: parsed.title,
-            characters: parsed.characters,
-            location: parsed.location,
-            atmosphere: parsed.atmosphere,
-            action: parsed.action,
-            camera: parsed.camera,
-            avoid: parsed.avoid,
-          }
-        : extractStorySnapshot(sourceText, traveler, npcs);
-      const nextSceneText = parsed
-        ? [
-            `画面标题：${summary.title}`,
-            `出场人物：${summary.characters.length ? summary.characters.join('、') : '按正文片段决定'}`,
-            `地点：${summary.location}`,
-            `氛围：${summary.atmosphere}`,
-            `关键动作：${summary.action}`,
-            `镜头构图：${summary.camera}`,
-            `不要出现：${summary.avoid}`,
-          ].join('\n')
-        : formatStorySnapshotSceneText(summary);
+      const resolution = await resolveStorySnapshot({
+        apiConfig: parserConfig,
+        body: sourceText,
+        traveler,
+        presentNpcs,
+        playerAppearanceMode: 'auto',
+        rules: imageSettings.rules,
+        extraRequirement,
+        size: resolvedSize,
+        slot: target.slot,
+      });
       setSceneText('');
-      setGenerateTitle(summary.title);
-
-      let promptRefined: { prompt: string; negative: string };
-      if (parsed) {
-        const lockedPrompt = 应用场景角色锚点锁({
-          prompt: parsed.prompt,
-          negative: parsed.negativePrompt,
-          traveler,
-          presentNpcs,
-        });
-        promptRefined = 应用质量增强提示词(imageSettings.rules, lockedPrompt.prompt, lockedPrompt.negative);
-      } else {
-        const built = buildSceneImagePrompt({
-          text: nextSceneText,
-          mode: 'scene',
-          rules: imageSettings.rules,
-          traveler,
-          presentNpcs,
-          extraRequirement,
-          size: resolvedSize,
-          slot: target.slot,
-        });
-        promptRefined = await applyTokenizerIfAvailable({
-            title: target.label,
-            mode: target.id,
-            sourceText: buildSceneSourceText(nextSceneText, traveler, presentNpcs),
-            prompt: built.prompt,
-            negative: built.negative,
-            anchorMode: anchorInfo.anchorMode,
-            anchorSummary: anchorInfo.anchorSummary,
-          });
-      }
-      setStorySnapshotSummary(summary);
-      setSceneText(nextSceneText);
-      setPrompt(promptRefined.prompt);
-      setNegativePrompt(promptRefined.negative);
-      setLastPromptMeta({ anchorMode: anchorInfo.anchorMode, anchorSummary: anchorInfo.anchorSummary, sourcePrompt: promptRefined.prompt });
+      setGenerateTitle(resolution.summary.title);
+      setStorySnapshotSummary(resolution.summary);
+      setStorySnapshotContext(resolution.renderContext);
+      setSceneText(resolution.sceneText);
+      setPrompt(resolution.prompt);
+      setNegativePrompt(resolution.negativePrompt);
+      setLastPromptMeta({
+        anchorMode: anchorInfo.anchorMode,
+        anchorSummary: anchorInfo.anchorSummary,
+        sourcePrompt: resolution.sourcePrompt,
+      });
       setPromptEditorOpen(false);
-      setMessage(usedLocalFallback ? '已用本地兜底草稿整理故事快照，可直接普通生成。' : '已完成故事快照解析和提示词整理，可直接普通生成。');
+      setMessage(resolution.source === 'local'
+        ? `模型解析未完成，已用本地草稿整理故事快照，可直接普通生成。${resolution.warning ? ` 原因：${resolution.warning.slice(0, 160)}` : ''}`
+        : '已完成故事快照解析和提示词整理，可直接普通生成。');
     } finally {
       setStorySnapshotAnalyzing(false);
     }
@@ -1335,9 +1303,17 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 sceneText={sceneText}
                 setSceneText={setSceneText}
                 sourceMode={storySnapshotSource}
-                setSourceMode={setStorySnapshotSource}
+                setSourceMode={(value) => {
+                  setStorySnapshotSource(value);
+                  setStorySnapshotContext(null);
+                  setNovelAIOverrides({});
+                }}
                 sourceText={storySnapshotDraft}
-                setSourceText={setStorySnapshotDraft}
+                setSourceText={(value) => {
+                  setStorySnapshotDraft(value);
+                  setStorySnapshotContext(null);
+                  setNovelAIOverrides({});
+                }}
                 sourceOptions={storySnapshotSourceOptions}
                 summary={storySnapshotSummary}
                 analyzing={storySnapshotAnalyzing}
@@ -1352,6 +1328,12 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 onRetryTask={handleRetryStorySnapshotTask}
                 onOpenGallery={openCurrentResultInGallery}
                 referenceStatus={nonCharacterReferenceStatus}
+                backend={imageSettings.普通接口.backend}
+                storySnapshotContext={storySnapshotContext}
+                onStorySnapshotContextChange={(value) => setStorySnapshotContext(normalizeStorySnapshotRenderContext(value) ?? null)}
+                novelAIOverrides={novelAIOverrides}
+                onNovelAIOverridesChange={setNovelAIOverrides}
+                compiledNovelAIPreview={storySnapshotCompiledPayload}
               />
             )}
             {activeTab === 'sceneImage' && (

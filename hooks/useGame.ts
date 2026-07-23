@@ -2,15 +2,35 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow, regenerateNarrativeImagesForMessage, retryQueueTask } from '@/hooks/useGame/sendWorkflow';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
-import { handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
+import {
+  buildSavePayload,
+  commitActiveSaveTreeMeta,
+  handleLoadLatest,
+  handleManualSave,
+} from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
-import { 创建空记忆系统 } from '@/models/memory';
+import {
+  创建空记忆系统,
+  serializeMemoryFailureSource,
+  type 记忆失败草稿,
+  type 记忆系统,
+} from '@/models/memory';
+import { retryMemoryFailureDraft } from '@/hooks/useGame/memoryUtils';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
-import type { API配置项 } from '@/models/settings';
+import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
-import { saveSetting } from '@/services/dbService';
+import { saveGame, saveSetting } from '@/services/dbService';
+import { summarizeMemoryBatch } from '@/services/memoryCompression';
+import {
+  commitMemoryRebuildTask,
+  createMemoryRebuildTask,
+  runMemoryRebuildTask,
+  type MemoryRebuildProgress,
+  type MemoryRebuildRange,
+  type MemoryRebuildTask,
+} from '@/services/memoryRebuild';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
@@ -27,6 +47,14 @@ export interface UseGameReturn {
     handleReroll: () => Promise<string | void>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
+    handleRetryMemoryFailureDraft: (draftId: string) => Promise<void>;
+    handleIgnoreMemoryFailureDraft: (draftId: string) => Promise<void>;
+    handleBatchMemoryRebuild: (options: {
+      batchSize: number;
+      range?: MemoryRebuildRange;
+      task?: MemoryRebuildTask;
+      onProgress?: (progress: MemoryRebuildProgress) => void;
+    }) => Promise<MemoryRebuildTask>;
     handleRestartOpening: () => void;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
   };
@@ -191,6 +219,262 @@ export function useGame(): UseGameReturn {
     await retryQueueTask(stateRef.current, getActiveConfig, task, mode);
   }, [getActiveConfig]);
 
+  const persistMemorySnapshot = useCallback(async (memory: 记忆系统): Promise<void> => {
+    const s = stateRef.current;
+    const payload = buildSavePayload(s, 'auto', { 记忆: memory });
+    await saveGame(payload);
+    commitActiveSaveTreeMeta(payload);
+    s.setHasSave(true);
+  }, []);
+
+  const getMemoryCompressionConfig = useCallback((settings: 记忆系统设置): API配置项 | null => {
+    const active = getActiveConfig();
+    if (active) return active;
+    const override = settings.记忆总结API;
+    if (!override.baseUrl.trim() || !override.apiKey.trim() || !override.model.trim()) return null;
+    const now = Date.now();
+    return {
+      id: 'memory-compression-only',
+      name: '记忆总结 API',
+      provider: override.provider || 'openai_compatible',
+      baseUrl: override.baseUrl.trim(),
+      apiKey: override.apiKey.trim(),
+      model: override.model.trim(),
+      maxTokens: override.maxTokens,
+      temperature: override.temperature,
+      retryCount: override.retryCount ?? 2,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }, [getActiveConfig]);
+
+  const handleRetryMemoryFailureDraft = useCallback(async (draftId: string): Promise<void> => {
+    const s = stateRef.current;
+    const settings = s.gameSettings.记忆系统;
+    if (settings.启用中短长期API总结 === false) {
+      s.setWorkflowHint('中短长期 API 总结已关闭，开启后才能重新总结失败草稿。');
+      return;
+    }
+    const config = getMemoryCompressionConfig(settings);
+    if (!config) {
+      s.setWorkflowHint('请先配置主 API 或记忆总结 API，再重新总结失败草稿。');
+      return;
+    }
+
+    const memory = s.记忆;
+    const target = (memory.失败草稿 ?? []).find((draft) => draft.id === draftId);
+    if (!target || target.status === 'resolved' || target.status === 'ignored') return;
+    const retryingMemory: 记忆系统 = {
+      ...memory,
+      失败草稿: (memory.失败草稿 ?? []).map((draft) => draft.id === draftId
+        ? { ...draft, status: 'retrying', updatedAt: Date.now() }
+        : draft),
+    };
+    s.set记忆(retryingMemory);
+    s.setWorkflowHint(`正在重新总结第 ${target.sourceTurns.start}-${target.sourceTurns.end} 回合的失败草稿。`);
+
+    try {
+      const result = await retryMemoryFailureDraft(retryingMemory, draftId, settings, config);
+      s.set记忆(result.memory);
+      try {
+        await persistMemorySnapshot(result.memory);
+      } catch (persistError) {
+        s.setWorkflowHint(`记忆已在当前页面更新，但自动保存失败：${persistError instanceof Error ? persistError.message : String(persistError)}`);
+        return;
+      }
+      s.setWorkflowHint(result.draft.status === 'resolved'
+        ? '失败草稿已重新总结并精确替换原本地摘要。'
+        : `重新总结仍未成功：${result.draft.failureMessage}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '重新总结失败。';
+      const failedMemory: 记忆系统 = {
+        ...retryingMemory,
+        失败草稿: (retryingMemory.失败草稿 ?? []).map((draft) => draft.id === draftId
+          ? {
+              ...draft,
+              status: 'pending',
+              failureMessage: message,
+              attemptCount: Math.max(0, draft.attemptCount) + 1,
+              updatedAt: Date.now(),
+            }
+          : draft),
+      };
+      s.set记忆(failedMemory);
+      s.setWorkflowHint(message);
+    }
+  }, [getMemoryCompressionConfig, persistMemorySnapshot]);
+
+  const handleIgnoreMemoryFailureDraft = useCallback(async (draftId: string): Promise<void> => {
+    const s = stateRef.current;
+    const now = Date.now();
+    const memory: 记忆系统 = {
+      ...s.记忆,
+      失败草稿: (s.记忆.失败草稿 ?? []).map((draft) => draft.id === draftId
+        ? {
+            ...draft,
+            status: 'ignored',
+            sourceSnapshot: { ...draft.sourceSnapshot, payload: '' },
+            updatedAt: now,
+          }
+        : draft),
+    };
+    s.set记忆(memory);
+    try {
+      await persistMemorySnapshot(memory);
+    } catch (error) {
+      s.setWorkflowHint(`失败草稿已在当前页面忽略，但自动保存失败：${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    s.setWorkflowHint('失败草稿已忽略，本地 fallback 仍保留在记忆中。');
+  }, [persistMemorySnapshot]);
+
+  const handleBatchMemoryRebuild = useCallback(async (options: {
+    batchSize: number;
+    range?: MemoryRebuildRange;
+    task?: MemoryRebuildTask;
+    onProgress?: (progress: MemoryRebuildProgress) => void;
+  }): Promise<MemoryRebuildTask> => {
+    const s = stateRef.current;
+    const settings = s.gameSettings.记忆系统;
+    const config = getMemoryCompressionConfig(settings);
+    const rebuildSettings = {
+      apiEnabled: settings.启用中短长期API总结 !== false,
+      compressionThreshold: settings.即时转短期阈值,
+      prompts: {
+        short: settings.即时转短期提示词,
+        middle: settings.短期转中期提示词,
+        long: settings.中期转长期提示词 || settings.短期转长期提示词,
+      },
+    };
+    const task = options.task ?? createMemoryRebuildTask({
+        chatHistory: s.chatHistory,
+        batchSize: options.batchSize,
+        range: options.range,
+        settings: rebuildSettings,
+      });
+    if (s.loading || s.pendingVariable) {
+      task.status = 'blocked';
+      task.blockedReason = '正文或变量结算仍在运行，请等待本回合完成后再重建记忆。';
+      return task;
+    }
+    if (task.turns.length === 0) {
+      task.status = 'blocked';
+      task.blockedReason = '所选范围内没有可配对的玩家输入与正文，原记忆未改动。';
+      return task;
+    }
+    if (!config) {
+      task.status = 'blocked';
+      task.blockedReason = '请先配置主 API 或记忆总结 API。';
+      return task;
+    }
+
+    const controller = new AbortController();
+    s.abortControllerRef.current?.abort();
+    s.abortControllerRef.current = controller;
+    s.setWorkflowHint(`正在按每 ${task.batchSize} 回合一批重建记忆。`);
+
+    const completedTask = await runMemoryRebuildTask(task, {
+      settings: rebuildSettings,
+      signal: controller.signal,
+      onProgress: options.onProgress,
+      summarizer: (source, context) => summarizeMemoryBatch(
+        source,
+        settings,
+        config,
+        context.signal,
+        settings.记忆总结API.retryCount ?? 2,
+      ),
+    });
+    if (s.abortControllerRef.current === controller) s.abortControllerRef.current = null;
+
+    if (completedTask.status === 'ready') {
+      const committed = commitMemoryRebuildTask(completedTask);
+      if (committed) {
+        const now = Date.now();
+        const memory: 记忆系统 = {
+          ...committed,
+          失败草稿: (s.记忆.失败草稿 ?? []).map((draft) =>
+            draft.origin === 'batch_rebuild'
+            && draft.status !== 'resolved'
+            && draft.status !== 'ignored'
+            && draft.sourceTurns.start >= completedTask.range.start
+            && draft.sourceTurns.end <= completedTask.range.end
+              ? {
+                  ...draft,
+                  status: 'resolved',
+                  sourceSnapshot: { ...draft.sourceSnapshot, payload: '' },
+                  updatedAt: now,
+                }
+              : draft),
+        };
+        s.set记忆(memory);
+        await persistMemorySnapshot(memory);
+        s.setWorkflowHint(`记忆重建完成，已原子替换第 ${completedTask.range.start}-${completedTask.range.end} 回合对应的四层记忆。`);
+      }
+      return completedTask;
+    }
+
+    if (completedTask.status === 'paused_failed' && completedTask.failedBatch) {
+      const failed = completedTask.failedBatch;
+      const sourceSnapshot = await serializeMemoryFailureSource(failed.items);
+      const now = Date.now();
+      const duplicate = (s.记忆.失败草稿 ?? []).find((draft) =>
+        (draft.status === 'pending' || draft.status === 'retrying')
+        && draft.kind === failed.kind
+        && draft.sourceSnapshot.checksum === sourceSnapshot.checksum,
+      );
+      if (!duplicate) {
+        const draft: 记忆失败草稿 = {
+          id: `memory_rebuild_failure_${now}_${Math.random().toString(36).slice(2, 8)}`,
+          origin: 'batch_rebuild',
+          kind: failed.kind,
+          status: 'pending',
+          sourceTurns: failed.sourceTurns,
+          sourceSnapshot,
+          targetLayer: failed.kind === 'short' ? '短期记忆' : failed.kind === 'middle' ? '中期记忆' : '长期记忆',
+          fallbackSummary: failed.fallbackSummary,
+          failureCode: failed.code === 'empty_output' || failed.code === 'unconfigured' || failed.code === 'source_changed'
+            ? failed.code
+            : 'request_failed',
+          failureMessage: failed.message,
+          attemptCount: failed.attemptCount,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const memory: 记忆系统 = {
+          ...s.记忆,
+          失败草稿: [...(s.记忆.失败草稿 ?? []), draft],
+        };
+        s.set记忆(memory);
+        await persistMemorySnapshot(memory);
+      } else {
+        const memory: 记忆系统 = {
+          ...s.记忆,
+          失败草稿: (s.记忆.失败草稿 ?? []).map((draft) => draft.id === duplicate.id
+            ? {
+                ...draft,
+                status: 'pending',
+                failureCode: failed.code === 'empty_output' || failed.code === 'unconfigured' || failed.code === 'source_changed'
+                  ? failed.code
+                  : 'request_failed',
+                failureMessage: failed.message,
+                attemptCount: Math.max(0, draft.attemptCount) + 1,
+                updatedAt: now,
+              }
+            : draft),
+        };
+        s.set记忆(memory);
+        await persistMemorySnapshot(memory);
+      }
+      s.setWorkflowHint(`批量重建在第 ${failed.sourceTurns.start}-${failed.sourceTurns.end} 回合暂停，原记忆未改动，失败批次已保留。`);
+    } else if (completedTask.status === 'blocked') {
+      s.setWorkflowHint(completedTask.blockedReason ?? '批量重建当前不可用。');
+    } else if (completedTask.status === 'cancelled') {
+      s.setWorkflowHint('批量重建已取消，原记忆未改动。');
+    }
+    return completedTask;
+  }, [getMemoryCompressionConfig, persistMemorySnapshot]);
+
   // 重新开局：清掉所有运行时累积的变量切片，保留创角设定（名字 / 命途 / 世界周期 等）。
   // 不这样做的话，老的 NPC / 新闻 / 剧情节点 / variableBatches / 全局事件
   // 会留在状态里和新开局叠加，下次重开就是双份甚至 N 份数据。
@@ -274,6 +558,9 @@ export function useGame(): UseGameReturn {
     handleReroll,
     handleRegenerateNarrativeImage,
     handleRetryQueueTask,
+    handleRetryMemoryFailureDraft,
+    handleIgnoreMemoryFailureDraft,
+    handleBatchMemoryRebuild,
     handleRestartOpening,
     getContextSnapshot,
   }), [
@@ -286,6 +573,9 @@ export function useGame(): UseGameReturn {
     handleReroll,
     handleRegenerateNarrativeImage,
     handleRetryQueueTask,
+    handleRetryMemoryFailureDraft,
+    handleIgnoreMemoryFailureDraft,
+    handleBatchMemoryRebuild,
     handleRestartOpening,
     getContextSnapshot,
   ]);

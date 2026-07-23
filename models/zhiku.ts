@@ -268,15 +268,16 @@ export function 获取智库人物名(entry: 智库条目): string {
 export function 获取智库人物名列表(entry: Pick<智库条目, '标题' | '关键词'> & Partial<Pick<智库条目, '关联角色ID'>>): string[] {
   const names: string[] = [];
   const explicitRole = normalizeOptionalText(entry.关联角色ID);
-  if (explicitRole) names.push(explicitRole);
-
-  names.push(
-    ...(entry.关键词 ?? [])
+  const taggedNames = (entry.关键词 ?? [])
     .map((keyword) => parseKeywordTag(keyword))
-      .filter((tag): tag is { key: string; value: string } => !!tag && ['角色', '人物', '归属角色'].includes(tag.key))
+    .filter((tag): tag is { key: string; value: string } => !!tag && ['角色', '人物', '归属角色'].includes(tag.key))
     .map((tag) => tag.value.trim())
-      .filter(Boolean),
-  );
+    .filter(Boolean);
+
+  const explicitRoleIsInternalId = !!explicitRole && /^[a-z][a-z0-9_-]*$/u.test(explicitRole);
+  if (explicitRole && !explicitRoleIsInternalId) names.push(explicitRole);
+  names.push(...taggedNames);
+  if (explicitRole && !names.includes(explicitRole)) names.push(explicitRole);
   if (names.length) return Array.from(new Set(names));
 
   return entry.标题

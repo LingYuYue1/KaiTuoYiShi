@@ -4,7 +4,9 @@ import type {
   API配置项,
   API设置,
   游戏设置,
+  NovelAIUcPreset,
   NovelAI噪点表,
+  NovelAI参数模式,
   NovelAI采样器,
   文生图API配置,
   文生图后端类型,
@@ -12,6 +14,7 @@ import type {
   文生图预设接口路径,
   文生图词组转化器API覆盖,
 } from '@/models/settings';
+import type { NovelAIContentMode } from '@/models/imageGeneration';
 import { saveSetting } from '@/services/dbService';
 import { fetchModels } from '@/services/ai/apiTools';
 import { fetchComfyWorkflowCandidates, fetchImageGenerationModels, testImageGenerationConnection, type ComfyWorkflowCandidate } from '@/services/ai/imageGeneration';
@@ -92,6 +95,40 @@ const noiseOptions: { value: NovelAI噪点表; label: string }[] = [
   { value: 'exponential', label: 'Exponential' },
   { value: 'polyexponential', label: 'Polyexponential' },
 ];
+
+const novelAIUcPresetOptions: { value: NovelAIUcPreset; label: string }[] = [
+  { value: 'recommended', label: '推荐（跟随模型）' },
+  { value: 'heavy', label: 'Heavy' },
+  { value: 'light', label: 'Light' },
+  { value: 'furry_focus', label: 'Furry Focus' },
+  { value: 'human_focus', label: 'Human Focus' },
+  { value: 'none', label: 'None' },
+];
+
+const novelAIContentModeOptions: { value: NovelAIContentMode; label: string }[] = [
+  { value: 'official', label: '官方' },
+  { value: 'append', label: '官方 + 自定义' },
+  { value: 'replace', label: '替换为自定义' },
+  { value: 'off', label: '关闭' },
+];
+
+const novelAIParameterModeOptions: { value: NovelAI参数模式; label: string; desc: string }[] = [
+  { value: 'model_default', label: '模型推荐', desc: '自动使用当前模型的推荐步数与 CFG' },
+  { value: 'custom', label: '自定义', desc: '使用下方手动设置的步数与 CFG' },
+];
+
+const novelAIOfficialAdvancedDefaults: 文生图API配置['novelAIAdvanced'] = {
+  qualityMode: 'official',
+  qualityText: '',
+  ucMode: 'official',
+  ucText: '',
+  basePromptPrefix: '',
+  basePromptSuffix: '',
+  characterPromptPrefix: '',
+  characterPromptSuffix: '',
+  negativePromptAppend: '',
+  activeRulePresetId: '',
+};
 
 const modelSuggestions: Record<文生图后端类型, string[]> = {
   openai_compatible: ['gpt-image-2', 'gpt-image-1'],
@@ -291,6 +328,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
           desc="用于头像、立绘、场景图、手机背景和故事快照等所有非成人视觉资源。"
           apiKey="普通接口"
           api={image.普通接口}
+          naiRules={image.rules.NAI规则预设列表}
           onChange={(p) => patchApi('普通接口', p)}
           onTest={() => handleTest('普通接口', image.普通接口)}
           testMessage={testMessages.普通接口}
@@ -310,6 +348,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
               desc="用于 NSFW 档案部位图。推荐 NovelAI、SD WebUI 或 ComfyUI，并使用单独模型或工作流。"
               apiKey="NSFW接口"
               api={image.NSFW接口}
+              naiRules={image.rules.NAI规则预设列表}
               onChange={(p) => patchApi('NSFW接口', p)}
               onTest={() => handleTest('NSFW接口', image.NSFW接口)}
               testMessage={testMessages.NSFW接口}
@@ -458,6 +497,7 @@ function ApiBlock({
   desc,
   apiKey,
   api,
+  naiRules,
   onChange,
   onTest,
   testMessage,
@@ -468,6 +508,7 @@ function ApiBlock({
   desc: string;
   apiKey: ApiKey;
   api: 文生图API配置;
+  naiRules: import('@/models/settings').文生图NAI规则预设[];
   onChange: (p: Partial<文生图API配置>) => void;
   onTest: () => void;
   testMessage: string;
@@ -483,6 +524,34 @@ function ApiBlock({
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowImportStatus>({ tone: 'idle', text: '' });
   const workflowFileRef = useRef<HTMLInputElement | null>(null);
   const suggestions = fetchedModels.length ? fetchedModels : modelSuggestions[api.backend];
+  const patchNovelAIAdvanced = (patch: Partial<文生图API配置['novelAIAdvanced']>) => {
+    onChange({ novelAIAdvanced: { ...api.novelAIAdvanced, ...patch } });
+  };
+  const resetNovelAIAdvanced = () => {
+    onChange({
+      novelAIUcPreset: 'recommended',
+      novelAIParameterMode: 'model_default',
+      novelAIAdvanced: { ...novelAIOfficialAdvancedDefaults, activeRulePresetId: 'nai_rule_official_baseline' },
+    });
+  };
+  const selectNovelAIRule = (id: string) => {
+    const preset = naiRules.find((item) => item.id === id);
+    if (!preset) return;
+    onChange({
+      novelAIAdvanced: {
+        qualityMode: preset.qualityMode,
+        qualityText: preset.qualityText,
+        ucMode: preset.ucMode,
+        ucText: preset.ucText,
+        basePromptPrefix: preset.basePromptPrefix,
+        basePromptSuffix: preset.basePromptSuffix,
+        characterPromptPrefix: preset.characterPromptPrefix,
+        characterPromptSuffix: preset.characterPromptSuffix,
+        negativePromptAppend: preset.negativePromptAppend,
+        activeRulePresetId: preset.id,
+      },
+    });
+  };
   const handleFetchImageModels = async () => {
     setModelLoading(true);
     setModelMessage(api.backend === 'novelai' ? '正在载入 NovelAI 图片模型列表...' : '正在读取生图模型列表...');
@@ -631,12 +700,21 @@ function ApiBlock({
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <Field label="步数">
-              <input type="number" min={1} max={80} value={api.steps} onChange={(e) => onChange({ steps: Math.max(1, Number(e.target.value) || 1) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
-            </Field>
-            <Field label="CFG">
-              <input type="number" min={0} max={30} step={0.5} value={api.cfgScale} onChange={(e) => onChange({ cfgScale: Math.max(0, Number(e.target.value) || 0) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
-            </Field>
+            {api.backend === 'novelai' && api.novelAIParameterMode === 'model_default' ? (
+              <>
+                <ReadOnlyValue label="步数" value="由模型决定" />
+                <ReadOnlyValue label="CFG" value="由模型决定" />
+              </>
+            ) : (
+              <>
+                <Field label="步数">
+                  <input type="number" min={1} max={80} value={api.steps} onChange={(e) => onChange({ steps: Math.max(1, Number(e.target.value) || 1) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+                </Field>
+                <Field label="CFG">
+                  <input type="number" min={0} max={30} step={0.5} value={api.cfgScale} onChange={(e) => onChange({ cfgScale: Math.max(0, Number(e.target.value) || 0) })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+                </Field>
+              </>
+            )}
             <Field label="Seed">
               <input type="number" value={api.seed} onChange={(e) => onChange({ seed: Number(e.target.value) || -1 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
             </Field>
@@ -667,18 +745,131 @@ function ApiBlock({
       </div>
 
       {api.backend === 'novelai' && (
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="NovelAI 采样器">
-            <select value={api.sampler} onChange={(e) => onChange({ sampler: e.target.value as NovelAI采样器 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-              {samplerOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </select>
-          </Field>
-          <Field label="噪点表">
-            <select value={api.noiseSchedule} onChange={(e) => onChange({ noiseSchedule: e.target.value as NovelAI噪点表 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-              {noiseOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </select>
-          </Field>
-        </div>
+        <details
+          className="group min-w-0 overflow-hidden"
+          style={{ background: 'rgba(var(--tj-bg-primary),0.34)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: cardClip }}
+        >
+          <summary className="flex min-w-0 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0">
+              <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>NovelAI 高级设置</div>
+              <div className="mt-1 truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.64)' }}>
+                {api.novelAIParameterMode === 'model_default' ? '模型推荐参数' : '自定义参数'} · UC {novelAIUcPresetOptions.find((item) => item.value === api.novelAIUcPreset)?.label ?? api.novelAIUcPreset}
+              </div>
+            </div>
+            <span className="flex-shrink-0 text-xs transition-transform group-open:rotate-90" aria-hidden="true" style={{ color: 'rgba(var(--tj-accent-primary),0.76)' }}>▶</span>
+          </summary>
+
+          <div className="min-w-0 space-y-5 px-4 pb-4 pt-1">
+            <section className="min-w-0 space-y-3 border-t pt-4" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.14)' }}>
+              <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>参数模式</div>
+              <Field label="NAI 规则预设">
+                <select value={api.novelAIAdvanced.activeRulePresetId || 'nai_rule_official_baseline'} onChange={(event) => selectNovelAIRule(event.target.value)} className="kaituo-input w-full min-w-0 px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                  {naiRules.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
+                </select>
+              </Field>
+              <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+                {novelAIParameterModeOptions.map((option) => {
+                  const active = api.novelAIParameterMode === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => onChange({ novelAIParameterMode: option.value })}
+                      className="min-w-0 px-3 py-2 text-left transition-all"
+                      style={{
+                        color: active ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.82)',
+                        background: active ? 'rgba(var(--tj-accent-primary),0.16)' : 'rgba(var(--tj-bg-secondary),0.42)',
+                        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+                        clipPath: smallClip,
+                      }}
+                    >
+                      <span className="block font-serif text-xs font-bold tracking-[0.12em]">{option.label}</span>
+                      <span className="mt-1 block text-[11px] leading-relaxed opacity-70">{option.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid min-w-0 gap-3 md:grid-cols-3">
+                <Field label="NovelAI 采样器">
+                  <select value={api.sampler} onChange={(e) => onChange({ sampler: e.target.value as NovelAI采样器 })} className="kaituo-input w-full min-w-0 px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                    {samplerOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="噪点表">
+                  <select value={api.noiseSchedule} onChange={(e) => onChange({ noiseSchedule: e.target.value as NovelAI噪点表 })} className="kaituo-input w-full min-w-0 px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                    {noiseOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="UC Preset">
+                  <select value={api.novelAIUcPreset} onChange={(e) => onChange({ novelAIUcPreset: e.target.value as NovelAIUcPreset })} className="kaituo-input w-full min-w-0 px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                    {novelAIUcPresetOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+            </section>
+
+            <section className="min-w-0 space-y-3 border-t pt-4" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.14)' }}>
+              <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>Quality 与 UC</div>
+              <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                <div className="min-w-0 space-y-3">
+                  <Field label="Quality Tags 模式">
+                    <select value={api.novelAIAdvanced.qualityMode} onChange={(e) => patchNovelAIAdvanced({ qualityMode: e.target.value as NovelAIContentMode })} className="kaituo-input w-full min-w-0 px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                      {novelAIContentModeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Quality Tags 自定义字符串">
+                    <textarea
+                      value={api.novelAIAdvanced.qualityText}
+                      onChange={(e) => patchNovelAIAdvanced({ qualityText: e.target.value })}
+                      rows={4}
+                      className="kaituo-input w-full min-w-0 resize-y px-3 py-2 text-xs"
+                      style={{ clipPath: smallClip }}
+                    />
+                  </Field>
+                </div>
+                <div className="min-w-0 space-y-3">
+                  <Field label="UC 模式">
+                    <select value={api.novelAIAdvanced.ucMode} onChange={(e) => patchNovelAIAdvanced({ ucMode: e.target.value as NovelAIContentMode })} className="kaituo-input w-full min-w-0 px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                      {novelAIContentModeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="UC 自定义字符串">
+                    <textarea
+                      value={api.novelAIAdvanced.ucText}
+                      onChange={(e) => patchNovelAIAdvanced({ ucText: e.target.value })}
+                      rows={4}
+                      className="kaituo-input w-full min-w-0 resize-y px-3 py-2 text-xs"
+                      style={{ clipPath: smallClip }}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </section>
+
+            <section className="min-w-0 space-y-3 border-t pt-4" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.14)' }}>
+              <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>提示词拼接</div>
+              <div className="grid min-w-0 gap-3 md:grid-cols-2">
+                <PromptTextArea label="Base Prompt 前缀" value={api.novelAIAdvanced.basePromptPrefix} onChange={(value) => patchNovelAIAdvanced({ basePromptPrefix: value })} />
+                <PromptTextArea label="Base Prompt 后缀" value={api.novelAIAdvanced.basePromptSuffix} onChange={(value) => patchNovelAIAdvanced({ basePromptSuffix: value })} />
+                <PromptTextArea label="Character Prompt 前缀" value={api.novelAIAdvanced.characterPromptPrefix} onChange={(value) => patchNovelAIAdvanced({ characterPromptPrefix: value })} />
+                <PromptTextArea label="Character Prompt 后缀" value={api.novelAIAdvanced.characterPromptSuffix} onChange={(value) => patchNovelAIAdvanced({ characterPromptSuffix: value })} />
+              </div>
+              <PromptTextArea label="Negative Prompt 追加" value={api.novelAIAdvanced.negativePromptAppend} onChange={(value) => patchNovelAIAdvanced({ negativePromptAppend: value })} rows={3} />
+            </section>
+
+            <div className="flex min-w-0 flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'rgba(var(--tj-accent-primary),0.14)' }}>
+              <button
+                type="button"
+                onClick={resetNovelAIAdvanced}
+                className="max-w-full px-3 py-2 text-xs font-serif tracking-[0.12em]"
+                style={{ color: 'rgba(var(--tj-accent-primary),0.9)', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)', clipPath: smallClip }}
+              >
+                恢复 NovelAI 官方默认
+              </button>
+            </div>
+          </div>
+        </details>
       )}
 
       <Field label="默认负面提示词">
@@ -750,6 +941,30 @@ function GuidePage() {
         <GuideCard title="ComfyUI" desc="Base URL 通常是 http://127.0.0.1:8188，路径 /prompt。必须提供 Workflow JSON；模型名要填写本机 ckpt_name，采样器和调度器会从设置自动映射。" />
       </div>
     </Panel>
+  );
+}
+
+function PromptTextArea({ label, value, onChange, rows = 2 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) {
+  return (
+    <Field label={label}>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={rows}
+        className="kaituo-input w-full min-w-0 resize-y px-3 py-2 text-xs"
+        style={{ clipPath: smallClip }}
+      />
+    </Field>
+  );
+}
+
+function ReadOnlyValue({ label, value }: { label: string; value: string }) {
+  return (
+    <Field label={label}>
+      <div className="kaituo-input w-full px-3 py-2 text-sm" style={{ color: 'rgba(var(--tj-text-secondary),0.68)', clipPath: smallClip }}>
+        {value}
+      </div>
+    </Field>
   );
 }
 

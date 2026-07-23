@@ -1,6 +1,8 @@
 import type { 文生图API配置 } from '@/models/settings';
 import type { 叙事插图 } from '@/models/chat';
+import type { NovelAITaskOverrides, StorySnapshotRenderContext } from '@/models/imageGeneration';
 import { fetchModels } from '@/services/ai/apiTools';
+import { compileNovelAIPrompt, resolveNovelAIModelProfile } from './novelaiPromptCompiler';
 
 export interface ImageGenerationRequest {
   prompt: string;
@@ -9,6 +11,8 @@ export interface ImageGenerationRequest {
   size?: string;
   referenceImages?: ImageReferenceInput[];
   referenceStrength?: number;
+  storySnapshotContext?: StorySnapshotRenderContext;
+  novelAIOverrides?: NovelAITaskOverrides;
   signal?: AbortSignal;
 }
 
@@ -66,6 +70,7 @@ export async function generateImage(config: 文生图API配置, request: ImageGe
  * @param type 图片类型
  * @param description 中文描述
  * @param imageId 图片 ID
+ * @param storySnapshotContext 故事快照的紧凑分层上下文
  * @param signal 中断信号
  */
 export async function generateNarrativeImage(
@@ -75,6 +80,7 @@ export async function generateNarrativeImage(
   type: 'scene' | 'character',
   description: string,
   imageId: string,
+  storySnapshotContext?: StorySnapshotRenderContext,
   signal?: AbortSignal,
 ): Promise<叙事插图> {
   try {
@@ -82,6 +88,7 @@ export async function generateNarrativeImage(
       prompt,
       negativePrompt: negativePrompt || undefined,
       size: type === 'scene' ? '1280x720' : '1024x1024',
+      storySnapshotContext,
       signal,
     });
     return {
@@ -580,26 +587,64 @@ async function readOpenAICompatibleImageResult(response: Response, config: 文�
   throw new Error('图片接口返回格式无法识别。');
 }
 
-async function generateNovelAIImage(config: 文生图API配置, request: ImageGenerationRequest): Promise<ImageGenerationResult> {
-  if (!config.baseUrl.trim()) throw new Error('请填写 NovelAI Base URL。');
-  if (!config.apiKey.trim()) throw new Error('请填写 NovelAI Token。');
-  if (!config.model.trim()) throw new Error('请填写 NovelAI 模型。');
-  if (normalizeReferenceImages(request.referenceImages).length > 0) {
-    throw new Error('当前 NovelAI 生图链路尚未接入 img2img / vibe transfer 参考图参数。请先关闭参考图参与生成。');
-  }
-  const { width, height } = normalizeNovelAISize(request.size || config.defaultSize);
-  const prompt = request.prompt.trim();
-  const negativePrompt = mergeNegativePrompt(config, request);
+export interface NovelAIRequestPayload {
+  action: 'generate';
+  input: string;
+  model: string;
+  parameters: Record<string, any>;
+}
+
+function resolveNovelAIUcPresetIndex(
+  profile: ReturnType<typeof resolveNovelAIModelProfile>,
+  preset: 文生图API配置['novelAIUcPreset'] | undefined,
+): number {
+  if (!preset || preset === 'recommended' || preset === 'heavy') return 0;
+  const expectedName = {
+    light: 'Light',
+    furry_focus: 'Furry Focus',
+    human_focus: 'Human Focus',
+    none: 'None',
+  }[preset];
+  const index = profile.ucPresets.findIndex((item) => item.name === expectedName);
+  return index >= 0 ? index : profile.ucPresets.length - 1;
+}
+
+export function buildNovelAIRequestPayload(
+  config: 文生图API配置,
+  request: ImageGenerationRequest,
+  seed: number,
+): NovelAIRequestPayload {
   const model = config.model.trim();
-  const parameters: Record<string, unknown> = {
+  const profile = resolveNovelAIModelProfile(model);
+  const { width, height } = normalizeNovelAISize(request.size || config.defaultSize);
+  const compiled = compileNovelAIPrompt({
+    model,
+    prompt: request.prompt,
+    negativePrompt: request.negativePrompt,
+    advanced: config.novelAIAdvanced,
+    taskOverrides: request.novelAIOverrides,
+    storySnapshotContext: request.storySnapshotContext,
+    ucPreset: resolveNovelAIUcPresetIndex(profile, config.novelAIUcPreset),
+  });
+  const useCustomParameters = config.novelAIParameterMode === 'custom';
+  const characterPrompts = profile.supportsCharacterPrompts
+    ? compiled.characterPrompts.map((character) => ({
+        prompt: character.prompt,
+        uc: character.negativePrompt,
+        center: character.center,
+        enabled: true,
+      }))
+    : [];
+  const parameters: Record<string, any> = {
     width,
     height,
-    scale: config.cfgScale,
+    scale: useCustomParameters ? config.cfgScale : profile.recommendedCfgScale,
     sampler: config.sampler,
-    steps: config.steps,
-    seed: config.seed >= 0 ? config.seed : Math.floor(Math.random() * 2147483647),
+    steps: useCustomParameters ? config.steps : profile.recommendedSteps,
+    seed,
     n_samples: 1,
-    ucPreset: 0,
+    ucPreset: compiled.ucPreset,
+    uc: compiled.uc,
     cfg_rescale: 0,
     controlnet_strength: 1,
     dynamic_thresholding: false,
@@ -607,29 +652,57 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
     legacy: false,
     legacy_uc: false,
     legacy_v3_extend: false,
-    negative_prompt: negativePrompt,
+    negative_prompt: compiled.uc,
     noise_schedule: config.noiseSchedule,
-    qualityToggle: true,
+    qualityToggle: Boolean(compiled.qualityTags),
     sm: false,
     sm_dyn: false,
     add_original_image: true,
-    characterPrompts: [],
+    characterPrompts,
     use_coords: false,
     deliberate_euler_ancestral_bug: false,
     prefer_brownian: true,
   };
 
-  if (model.startsWith('nai-diffusion-4')) {
+  if (profile.supportsCharacterPrompts) {
     parameters.v4_prompt = {
-      caption: { base_caption: prompt, char_captions: [] },
+      caption: {
+        base_caption: compiled.basePrompt,
+        char_captions: characterPrompts.map((character) => ({
+          char_caption: character.prompt,
+          centers: [character.center],
+        })),
+      },
       use_coords: false,
       use_order: true,
     };
     parameters.v4_negative_prompt = {
-      caption: { base_caption: negativePrompt, char_captions: [] },
+      caption: {
+        base_caption: compiled.uc,
+        char_captions: characterPrompts.map((character) => ({
+          char_caption: character.uc,
+          centers: [character.center],
+        })),
+      },
       legacy_uc: false,
     };
   }
+
+  return { action: 'generate', input: compiled.basePrompt, model, parameters };
+}
+
+async function generateNovelAIImage(config: 文生图API配置, request: ImageGenerationRequest): Promise<ImageGenerationResult> {
+  if (!config.baseUrl.trim()) throw new Error('请填写 NovelAI Base URL。');
+  if (!config.apiKey.trim()) throw new Error('请填写 NovelAI Token。');
+  if (!config.model.trim()) throw new Error('请填写 NovelAI 模型。');
+  if (normalizeReferenceImages(request.referenceImages).length > 0) {
+    throw new Error('当前 NovelAI 生图链路尚未接入 img2img / vibe transfer 参考图参数。请先关闭参考图参与生成。');
+  }
+  const payload = buildNovelAIRequestPayload(config, {
+    ...request,
+    negativePrompt: mergeNegativePrompt(config, request),
+  }, config.seed >= 0 ? config.seed : Math.floor(Math.random() * 2147483647));
+  const model = config.model.trim();
 
   const response = await fetch(joinUrl(config.baseUrl.replace(/^https:\/\/novelai\.net/i, 'https://image.novelai.net'), readPath(config)), {
     method: 'POST',
@@ -637,12 +710,7 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,
     },
-    body: JSON.stringify({
-      input: prompt,
-      model,
-      action: 'generate',
-      parameters,
-    }),
+    body: JSON.stringify(payload),
     signal: request.signal,
   });
   if (!response.ok) {

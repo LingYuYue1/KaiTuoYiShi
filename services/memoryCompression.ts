@@ -9,11 +9,18 @@ export interface MemoryCompressionSource {
   turn: number;
   items: string[];
   prompt: string;
+  sourceTurns?: { start: number; end: number };
 }
+
+export type MemoryCompressionFailureCode = 'unconfigured' | 'request_failed' | 'empty_output' | 'source_changed';
 
 export interface MemoryCompressionResult {
   summary: string;
   usedFallback: boolean;
+  usedModel: boolean;
+  usedLocal: boolean;
+  failureCode?: MemoryCompressionFailureCode;
+  failureMessage?: string;
 }
 
 export function resolveMemoryCompressionConfig(mainConfig: API配置项, override: 忆庭API覆盖): API配置项 {
@@ -37,10 +44,23 @@ export async function summarizeMemoryBatch(
   retryCount = 2,
 ): Promise<MemoryCompressionResult> {
   const fallback = buildFallbackSummary(source.items, source.turn, source.kind);
+
+  // 这是玩家主动选择的本地模式，必须在解析 API 配置前短路，避免任何回退主 API 或重试器调用。
+  if (settings.启用中短长期API总结 === false) {
+    return { summary: fallback, usedFallback: false, usedModel: false, usedLocal: true };
+  }
+
   const api = resolveMemoryCompressionConfig(mainConfig, settings.记忆总结API);
 
   if (!api.baseUrl || !api.apiKey || !api.model) {
-    return { summary: fallback, usedFallback: true };
+    return {
+      summary: fallback,
+      usedFallback: true,
+      usedModel: false,
+      usedLocal: false,
+      failureCode: 'unconfigured',
+      failureMessage: '记忆总结 API 未配置完整。',
+    };
   }
 
   const systemPrompt = [
@@ -79,13 +99,46 @@ export async function summarizeMemoryBatch(
       },
     );
     const summary = normalizeSummaryOutput(raw);
+    if (!summary) {
+      return {
+        summary: fallback,
+        usedFallback: true,
+        usedModel: false,
+        usedLocal: false,
+        failureCode: 'empty_output',
+        failureMessage: '记忆总结 API 返回了空内容。',
+      };
+    }
     return {
-      summary: summary || fallback,
-      usedFallback: !summary,
+      summary,
+      usedFallback: false,
+      usedModel: true,
+      usedLocal: false,
     };
-  } catch {
-    return { summary: fallback, usedFallback: true };
+  } catch (error) {
+    if (isAbortError(error) || signal?.aborted) throw error;
+    return {
+      summary: fallback,
+      usedFallback: true,
+      usedModel: false,
+      usedLocal: false,
+      failureCode: 'request_failed',
+      failureMessage: sanitizeFailureMessage(error, [api.apiKey, settings.记忆总结API.apiKey, mainConfig.apiKey]),
+    };
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return (error as { name?: string } | null)?.name === 'AbortError';
+}
+
+function sanitizeFailureMessage(error: unknown, secrets: string[]): string {
+  let message = error instanceof Error ? error.message : String(error || '未知错误');
+  for (const secret of secrets) {
+    if (secret) message = message.split(secret).join('[redacted]');
+  }
+  message = message.replace(/authorization\s*:\s*[^,\s]+/gi, 'authorization: [redacted]');
+  return message.slice(0, 240) || '记忆总结请求失败。';
 }
 
 function buildFallbackSummary(items: string[], turn: number, kind: MemoryCompressionKind): string {
