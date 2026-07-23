@@ -1,6 +1,8 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
-import { executeSendWorkflow, regenerateNarrativeImagesForMessage, retryQueueTask } from '@/hooks/useGame/sendWorkflow';
+import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
+import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeImageWorkflow';
+import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
