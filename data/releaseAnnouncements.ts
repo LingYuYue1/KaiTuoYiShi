@@ -9,7 +9,7 @@ export interface ReleaseAnnouncement {
 
 export const RELEASE_ANNOUNCEMENTS: ReleaseAnnouncement[] = [
   {
-    version: 'v1.21',
+    version: 'v1.2.2',
     date: '2026-07-23',
     title: '智库角色扩充、记忆恢复与 NAI 生图修复版',
     summary:

@@ -1,6 +1,6 @@
 [package]
 name = "kaituoyishi-desktop"
-version = "1.21.0"
+version = "1.2.2"
 description = "开拓轶事 Desktop Edition"
 authors = ["KaiTuoYiShi"]
 edition = "2021"
