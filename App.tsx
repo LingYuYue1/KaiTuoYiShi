@@ -305,7 +305,7 @@ const getSaveLoadViewSwitchDelay = () => prefersReducedMotion() ? SAVE_LOAD_REDU
 const getBookOpenDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_MOTION_MS : BOOK_OPEN_ANIMATION_MS;
 const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_VIEW_SWITCH_MS : BOOK_OPEN_VIEW_SWITCH_MS;
 
-export default function App() {
+export function App() {
   const { state, actions } = useGame();
   const [showSettings, setShowSettings] = useState(false);
   const [showWorldbookManager, setShowWorldbookManager] = useState(false);

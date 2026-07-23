@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import App from '@/App';
+import { App } from '@/App';
 import '@/styles/tailwind.css';
 import '@/styles/root-theme.css';
 import '@/styles/global.css';

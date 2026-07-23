@@ -1,0 +1,83 @@
+// ESLint flat config — 内核重写验收关卡（ideal_design.md §12）。
+// 定位：最严规则集 + bulk suppressions 棘轮。存量违规封存在
+// eslint-suppressions.json，新增违规即 error；删改代码后用
+// `pnpm lint -- --prune-suppressions` 清理过期条目。
+import js from '@eslint/js';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
+
+export default tseslint.config(
+  {
+    ignores: [
+      'dist/**',
+      'public/**',
+      'node_modules/**',
+      'backups/**',
+      '.tmp/**',
+      'workers/**/*.worker.ts', // worker 全局环境与主线程不同，暂不纳入类型感知检查
+    ],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.strictTypeChecked,
+  {
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    plugins: {
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      // ---- A 档：禁绝易滥用 TS/JS 特性（现状为零或近零）----
+      'no-restricted-syntax': [
+        'error',
+        { selector: 'ClassDeclaration', message: '禁止 class（ErrorBoundary 等存量除外），用工厂函数 + 对象字面量。' },
+        { selector: 'TSEnumDeclaration', message: '禁止 enum，用 union type 或 const object。' },
+        { selector: 'TSModuleDeclaration', message: '禁止 namespace。' },
+        { selector: 'Decorator', message: '禁止装饰器。' },
+        { selector: 'TSParameterProperty', message: '禁止构造函数参数属性。' },
+        { selector: 'TSConditionalType', message: '禁止条件类型体操，类型应保持直白。' },
+        { selector: 'ExportDefaultDeclaration', message: '禁止 default export（vite.config.ts 除外），具名导出保证 import 关系可 grep（戒律 3）。' },
+      ],
+      'no-var': 'error',
+      eqeqeq: 'error',
+      'prefer-const': 'error',
+      'guard-for-in': 'error',
+      // 戒律 8 的 lint 化身：reduce 路径禁止原地修改入参
+      'no-param-reassign': ['error', { props: true }],
+
+      // ---- 显式收紧的 typescript-eslint 规则（as 断言不在此列，见 §12）----
+      '@typescript-eslint/ban-ts-comment': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/no-explicit-any': 'error',
+
+      // ---- 关闭与项目约定冲突的风格型规则 ----
+      '@typescript-eslint/consistent-type-definitions': 'off',
+      '@typescript-eslint/consistent-indexed-object-style': 'off',
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true, allowBoolean: true }],
+
+      // ---- React Hooks 规则（请对照 eslint-plugin-react-hooks v7 的 recommended-latest 基准）----
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/refs': 'error',
+      'react-hooks/set-state-in-render': 'error',
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/void-use-memo': 'error',
+      'react-hooks/unsupported-syntax': 'warn',
+    },
+  },
+  {
+    // vite.config.ts 是工具链入口，default export 为其约定
+    files: ['vite.config.ts'],
+    rules: { 'no-restricted-syntax': 'off' },
+  },
+  {
+    files: ['**/*.js'],
+    ...tseslint.configs.disableTypeChecked,
+  },
+);
