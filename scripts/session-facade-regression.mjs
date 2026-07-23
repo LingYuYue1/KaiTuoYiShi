@@ -120,7 +120,7 @@ console.error('\n── CommandHandle semantics ──\n');
   assert(terminal.outcome === 'committed', 'result settles committed with zero event consumers');
   assert(terminal.result.revision === 42, 'terminal carries committed revision');
   assert(kernel.executed.length === 1, 'execution started eagerly');
-  assert(kernel.executed[0].expectedRevision === 41, 'ISession supplied expectedRevision from projection read');
+  assert(kernel.executed[0].expectedRevision === 'latest', 'ISession leaves revision capture inside kernel admission');
   assert(kernel.executed[0].command.type === 'turn.advance', 'typed use case built the envelope');
   assert(typeof kernel.executed[0].commandId === 'string' && kernel.executed[0].commandId.length > 10, 'ISession generated command identity');
 }
@@ -295,8 +295,8 @@ console.error('\n── CommandHandle semantics ──\n');
 }
 
 {
-  // A terminal result must dispose the executor iterator so kernel ownership
-  // is released before the next command is admitted.
+  // A terminal result still disposes the executor transport. Kernel ownership
+  // release itself is covered at the real NativeKernel boundary.
   let released = false;
   const kernel = makeStubKernel();
   kernel.execute = async function* (envelope) {
@@ -312,23 +312,7 @@ console.error('\n── CommandHandle semantics ──\n');
   };
   const session = await makeDirectory(kernel).open('s1');
   await session.turns.advance({ text: '前进' }).result;
-  assert(released, 'terminal result disposes the executor iterator and releases command ownership');
-}
-
-{
-  // cancelAndWait during an unresolved revision read still routes cancellation
-  const kernel = makeStubKernel();
-  const slowRead = kernel.read;
-  kernel.read = async (query) => {
-    if (query.type === 'session.read') await sleep(30); // stall the prologue
-    return slowRead(query);
-  };
-  const directory = makeDirectory(kernel);
-  const session = await directory.open('s1');
-  const handle = session.turns.advance({ text: '前进' });
-  const terminal = await handle.cancelAndWait(); // called before the read resolves
-  assert(terminal.outcome === 'rejected' && terminal.error.code === 'cancelled',
-    'early cancelAndWait cancels the command as soon as it starts');
+  assert(released, 'terminal result disposes the executor transport');
 }
 
 {
