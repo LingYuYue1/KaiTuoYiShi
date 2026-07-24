@@ -5,6 +5,8 @@
 import { matchCanonical } from '@/data/canonicalCharacters';
 import { getDefaultBuiltinAvatar } from '@/data/builtinAvatars';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
+import type { VariableExecContext } from '@/utils/variableExecContext';
+import { DEFAULT_EXEC_CTX } from '@/utils/variableExecContext';
 export type NPC阶位 = 'companion' | 'extra';
 
 export type NPC性别 = '男' | '女' | '其他';
@@ -307,9 +309,10 @@ export function 创建NPC记录(input: {
   头像?: string;
   图像档案?: NPC记录['图像档案'];
   NSFW档案?: NPC记录['NSFW档案'];
-}): NPC记录 {
+}, ctx?: VariableExecContext): NPC记录 {
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
   return {
-    id: `npc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `npc-${eff.now()}-${eff.randomString(5)}`,
     姓名: input.姓名,
     别名: input.别名,
     阶位: input.阶位 ?? 'extra',
@@ -333,12 +336,12 @@ export function 创建NPC记录(input: {
   };
 }
 
-export function 归一化NPC记录列表(raw: unknown): NPC记录[] {
+export function 归一化NPC记录列表(raw: unknown, ctx?: VariableExecContext): NPC记录[] {
   if (!Array.isArray(raw)) return [];
   const merged = new Map<string, NPC记录>();
   raw.forEach((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-    const record = 归一化单个NPC记录(item as Partial<NPC记录> & Record<string, unknown>, index);
+    const record = 归一化单个NPC记录(item as Partial<NPC记录> & Record<string, unknown>, index, ctx);
     if (shouldIgnoreNpcRecord(record)) return;
     const key = 查找可合并NPC身份键(record, merged) ?? 计算NPC身份键(record);
     const current = merged.get(key);
@@ -347,7 +350,7 @@ export function 归一化NPC记录列表(raw: unknown): NPC记录[] {
   return [...merged.values()];
 }
 
-function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, unknown>, index: number): NPC记录 {
+function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, unknown>, index: number, ctx?: VariableExecContext): NPC记录 {
   const rawName = source.姓名 ?? source.name ?? source.名称 ?? source.名字;
   const rawTier = source.阶位 ?? source.tier ?? source.类型 ?? source.category;
   const rawAffinity = source.好感度 ?? source.affinity ?? source.favor ?? source.亲密度;
@@ -383,11 +386,12 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
   const rawImage = source.图像档案 ?? source.image ?? source.images;
   const canonical = 匹配NPC原著角色(name, typeof rawAlias === 'string' ? rawAlias : undefined);
   const shouldForceCompanion = Boolean(canonical || source.原著角色 || source.canonical);
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
 
   return {
     id: typeof source.id === 'string' && source.id.trim()
       ? source.id
-      : `npc-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+      : `npc-${eff.now()}-${index}-${eff.randomString(5)}`,
     姓名: name,
     别名: typeof rawAlias === 'string' ? rawAlias : undefined,
     阶位: shouldForceCompanion ? 'companion' : tier,
@@ -407,7 +411,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     性格: typeof rawPersonality === 'string' ? rawPersonality : undefined,
     介绍: typeof rawIntro === 'string' ? rawIntro : undefined,
     装备摘要: typeof rawEquipment === 'string' ? rawEquipment : undefined,
-    同行记忆: 归一化同行记忆列表(rawMemories),
+    同行记忆: 归一化同行记忆列表(rawMemories, ctx),
     最近互动: readNpcString(source.最近互动 ?? source.recentInteraction),
     对玩家长期印象: readNpcString(source.对玩家长期印象 ?? source.longTermImpression),
     当前关系阶段: 获取NPC关系阶段(affinity),
@@ -416,7 +420,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     未解决冲突: normalizeNpcTextList(source.未解决冲突 ?? source.unresolvedConflicts),
     必须记得: normalizeNpcTextList(source.必须记得 ?? source.mustRemember),
     禁止遗忘: normalizeNpcTextList(source.禁止遗忘 ?? source.doNotForget),
-    总结记忆: 归一化NPC总结记忆列表(rawSummaryMemories),
+    总结记忆: 归一化NPC总结记忆列表(rawSummaryMemories, ctx),
     备注: Array.isArray(rawNotes)
       ? rawNotes.filter((note): note is string => typeof note === 'string')
       : [],
@@ -699,15 +703,16 @@ function 合并NPC总结记忆(a: NPC总结记忆条目[], b: NPC总结记忆条
   return output;
 }
 
-function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
+function 归一化同行记忆列表(raw: unknown, ctx?: VariableExecContext): NPC同行记忆条目[] {
   if (!Array.isArray(raw)) return [];
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
   return raw
     .map((item, index) => {
       if (typeof item === 'string') {
         const text = item.trim();
         if (!text) return null;
         return {
-          id: `npc_mem_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+          id: `npc_mem_${eff.now()}_${index}_${eff.randomString(4)}`,
           回合: 0,
           摘要: text,
           来源: '变量' as const,
@@ -731,7 +736,7 @@ function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
       return {
         id: typeof obj.id === 'string' && obj.id.trim()
           ? obj.id.trim()
-          : `npc_mem_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+          : `npc_mem_${eff.now()}_${index}_${eff.randomString(4)}`,
         回合: Number.isFinite(turn) ? turn : 0,
         摘要: summary,
         原文: typeof obj.原文 === 'string' ? obj.原文.trim() : undefined,
@@ -747,15 +752,16 @@ function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
     }, []);
 }
 
-function 归一化NPC总结记忆列表(raw: unknown): NPC总结记忆条目[] {
+function 归一化NPC总结记忆列表(raw: unknown, ctx?: VariableExecContext): NPC总结记忆条目[] {
   if (!Array.isArray(raw)) return [];
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
   return raw
     .map((item, index): NPC总结记忆条目 | null => {
       if (typeof item === 'string') {
         const summary = 清理NPC同行记忆摘要(item);
         if (!summary) return null;
         return {
-          id: `npc_summary_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+          id: `npc_summary_${eff.now()}_${index}_${eff.randomString(4)}`,
           摘要: summary,
         };
       }
@@ -765,7 +771,7 @@ function 归一化NPC总结记忆列表(raw: unknown): NPC总结记忆条目[] {
       if (!summary) return null;
       const count = Number(obj.条数 ?? obj.count);
       return {
-        id: readNpcString(obj.id) ?? `npc_summary_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+        id: readNpcString(obj.id) ?? `npc_summary_${eff.now()}_${index}_${eff.randomString(4)}`,
         回合范围: readNpcString(obj.回合范围 ?? obj.turnRange),
         条数: Number.isFinite(count) ? count : undefined,
         摘要: 清理NPC同行记忆摘要(summary),

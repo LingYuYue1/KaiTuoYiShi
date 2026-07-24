@@ -1,3 +1,6 @@
+import type { VariableExecContext } from '@/utils/variableExecContext';
+import { DEFAULT_EXEC_CTX } from '@/utils/variableExecContext';
+
 export type 智库分类 = 'story' | 'character' | 'npc' | 'location' | 'item' | 'faction' | 'term' | 'event' | 'system';
 
 export const RETIRED_ZHIKU_CATEGORIES = ['npc', 'item', 'system'] as const satisfies readonly 智库分类[];
@@ -123,10 +126,11 @@ export function 创建智库条目(input: {
   系列序号?: number;
   章节序号?: number;
   builtin?: boolean;
-}): 智库条目 {
-  const now = Date.now();
+}, ctx?: VariableExecContext): 智库条目 {
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
+  const now = eff.now();
   return {
-    id: `zhiku_${now}_${Math.random().toString(36).slice(2, 7)}`,
+    id: `zhiku_${now}_${eff.randomString(5)}`,
     标题: input.标题.trim() || '未命名资料',
     分类: input.分类 ?? 'story',
     摘要: input.摘要?.trim() ?? '',
@@ -168,13 +172,13 @@ export function 创建智库条目(input: {
   };
 }
 
-export function 归一化智库系统(input?: Partial<智库系统> | null): 智库系统 {
+export function 归一化智库系统(input?: Partial<智库系统> | null, ctx?: VariableExecContext): 智库系统 {
   if (!input || !Array.isArray(input.条目)) return 创建空智库系统();
   const seen = new Set<string>();
   return {
     条目: input.条目
       .filter((entry) => !!entry && typeof entry === 'object')
-      .map((entry) => normalizeEntry(entry))
+      .map((entry) => normalizeEntry(entry, ctx))
       .filter((entry) => {
         if (seen.has(entry.id)) return false;
         seen.add(entry.id);
@@ -329,11 +333,12 @@ export function 比较智库人物节点(a: 智库条目, b: 智库条目): numb
   return b.updatedAt - a.updatedAt || a.标题.localeCompare(b.标题, 'zh-Hans-CN');
 }
 
-function normalizeEntry(entry: Partial<智库条目>): 智库条目 {
-  const now = Date.now();
+function normalizeEntry(entry: Partial<智库条目>, ctx?: VariableExecContext): 智库条目 {
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
+  const now = eff.now();
   const category = isZhikuCategory(entry.分类) ? entry.分类 : 'story';
   return {
-    id: typeof entry.id === 'string' && entry.id ? entry.id : `zhiku_${now}_${Math.random().toString(36).slice(2, 7)}`,
+    id: typeof entry.id === 'string' && entry.id ? entry.id : `zhiku_${now}_${eff.randomString(5)}`,
     标题: typeof entry.标题 === 'string' && entry.标题.trim() ? entry.标题.trim() : '未命名资料',
     分类: category,
     摘要: typeof entry.摘要 === 'string' ? entry.摘要 : '',

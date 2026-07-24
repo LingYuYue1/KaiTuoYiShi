@@ -50,10 +50,11 @@ export default tseslint.config(
       // 戒律 8 的 lint 化身：reduce 路径禁止原地修改入参
       'no-param-reassign': ['error', { props: true }],
 
-      // ---- 显式收紧的 typescript-eslint 规则（as 断言不在此列，见 §12）----
+      // ---- 显式收紧的 typescript-eslint 规则 ----
       '@typescript-eslint/ban-ts-comment': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
 
       // ---- 关闭与项目约定冲突的风格型规则 ----
       '@typescript-eslint/consistent-type-definitions': 'off',

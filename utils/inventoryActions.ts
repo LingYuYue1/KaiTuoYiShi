@@ -15,6 +15,7 @@ import {
   defaultStackable,
   NARRATIVE_ITEM_CATEGORIES,
 } from '@/models/inventory';
+import type { VariableExecContext } from './variableExecContext';
 
 // ── 获取物品 ──
 // 同名同类且双方都「可堆叠」时合并数量;否则作为新条目 push。
@@ -45,6 +46,7 @@ export function 获取物品(
   traveler: 角色数据结构,
   input: 获取物品输入,
   options: { 获得回合: number } = { 获得回合: 0 },
+  ctx?: VariableExecContext,
 ): 获取物品结果 {
   const inventory = traveler.背包 ?? [];
   const requested = Math.max(1, Math.trunc(input.数量 ?? 1));
@@ -57,7 +59,7 @@ export function 获取物品(
       数量: requested,
       可堆叠: false,
       获得回合: options.获得回合,
-    });
+    }, ctx);
     return {
       traveler: { ...traveler, 背包: [...inventory, item] },
       item,
@@ -89,7 +91,7 @@ export function 获取物品(
     数量: requested,
     可堆叠: true,
     获得回合: options.获得回合,
-  });
+  }, ctx);
   return {
     traveler: { ...traveler, 背包: [...inventory, item] },
     item,

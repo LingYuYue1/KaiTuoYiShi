@@ -85,6 +85,9 @@ export interface 背包物品 {
   获得时间?: string; // in-fiction 日期
 }
 
+import type { VariableExecContext } from '@/utils/variableExecContext';
+import { DEFAULT_EXEC_CTX } from '@/utils/variableExecContext';
+
 export function 创建背包物品(input: {
   类别: 物品分类;
   名称: string;
@@ -99,9 +102,10 @@ export function 创建背包物品(input: {
   来源?: 物品来源;
   来源描述?: string;
   获得时间?: string;
-}): 背包物品 {
+}, ctx?: VariableExecContext): 背包物品 {
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
   return {
-    id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    id: `item_${eff.now()}_${eff.randomString(5)}`,
     类别: input.类别,
     名称: input.名称,
     描述: input.描述 ?? '',

@@ -25,8 +25,13 @@ import type { 背包物品, 物品分类, 物品品质 } from '@/models/inventor
 import { 应用路径命令, 解析路径片段, 读取路径值 } from './variablePath';
 import { extractRoot, validateCommand, type VariableState } from './variableRegistry';
 import { appendWorldEvents } from './worldEvents';
+import type { VariableExecContext } from './variableExecContext';
+export type { VariableExecContext } from './variableExecContext';
+export { DEFAULT_EXEC_CTX } from './variableExecContext';
 
-/** 执行器需要的 setters 集合（与 useGameState 对齐）。 */
+/** 执行器需要的 setters 集合（与 useGameState 对齐）。
+ *  @deprecated 管线已统一走 reduceVariableCommands + commitVariableState，
+ *  此接口仅被 Settings 组件引用。 */
 export interface VariableSetters {
   set旅人: React.Dispatch<React.SetStateAction<角色数据结构>>;
   set世界: React.Dispatch<React.SetStateAction<世界状态>>;
@@ -64,111 +69,7 @@ export function snapshotVariableState(slices: {
   };
 }
 
-/** 单条命令执行：先校验 → 在 setter 内部用 functional updater 计算新值。 */
-export function applyVariableCommand(
-  cmd: 变量命令,
-  state: VariableState,
-  setters: VariableSetters,
-): 变量命令结果 {
-  cmd = 规范化世界时间命令(cmd);
-  let effectiveState = state;
-  const parsedForEnsure = extractRoot(cmd.key);
-  if (parsedForEnsure?.root === 'NPC') {
-    const ensuredNpc = 确保NPC目标存在(state.NPC as NPC记录[], parsedForEnsure.rest, cmd);
-    if (ensuredNpc) {
-      effectiveState = { ...state, NPC: ensuredNpc };
-      setters.setNPC(ensuredNpc);
-    }
-  }
-  if (parsedForEnsure?.root === '旅人') {
-    const backpackQuantityChange = 应用背包数量扣减命令(effectiveState.旅人 as 角色数据结构, parsedForEnsure.rest, cmd);
-    if (backpackQuantityChange.matched) {
-      if (backpackQuantityChange.nextTraveler) setters.set旅人(backpackQuantityChange.nextTraveler);
-      return { command: cmd, ok: true, reason: backpackQuantityChange.reason };
-    }
-  }
-  const validation = validateCommand(cmd, effectiveState);
-  if (!validation.allowed) {
-    return { command: cmd, ok: false, reason: validation.reason };
-  }
-  const { root, rest } = validation;
-  if (!root || rest === undefined) {
-    return { command: cmd, ok: false, reason: '内部错误：校验通过但未提取到根路径' };
-  }
-
-  if (root === '世界') {
-    const timeGuardReason = 校验世界时间命令(cmd, rest, effectiveState.世界 as 世界状态, effectiveState.世界 as 世界状态);
-    if (timeGuardReason) {
-      return { command: cmd, ok: false, reason: timeGuardReason };
-    }
-  }
-
-  let applyError: string | undefined;
-
-  const isMalformedBackpackPush =
-    root === '旅人' &&
-    rest === '背包' &&
-    cmd.action === 'push' &&
-    !解析获取物品输入(cmd.value);
-  if (isMalformedBackpackPush) {
-    if (isPlaceholderBackpackObject(cmd.value)) {
-      return { command: cmd, ok: true, reason: '已忽略背包占位符命令' };
-    }
-    return { command: cmd, ok: false, reason: '背包 push 值格式错误：请提供完整的物品对象' };
-  }
-
-  const runUpdate = <T,>(setter: React.Dispatch<React.SetStateAction<T>>): void => {
-    setter((prev) => {
-      if (root === '世界' && rest === '全局事件' && cmd.action === 'push') {
-        return {
-          ...(prev as 世界状态),
-          全局事件: appendWorldEvents((prev as 世界状态).全局事件 ?? [], [cmd.value]),
-        } as T;
-      }
-      const result = 应用路径命令(prev, rest, cmd.action, cmd.value);
-      if (!result.ok) {
-        applyError = result.reason ?? '应用失败';
-        return prev;
-      }
-      // 整根删除：拒绝（避免把整个数组/对象置 undefined 破坏类型）
-      if (rest.length === 0 && cmd.action === 'delete') {
-        applyError = '禁止 delete 根路径';
-        return prev;
-      }
-      return result.nextRootValue as T;
-    });
-  };
-
-  switch (root) {
-    case '旅人': runUpdate(setters.set旅人); break;
-    case '世界': runUpdate(setters.set世界); break;
-    case '记忆': runUpdate(setters.set记忆); break;
-    case '忆庭': runUpdate(setters.set忆庭); break;
-    case '智库':
-      runUpdate(setters.set智库);
-      setters.set智库((prev) => 归一化智库系统(prev));
-      break;
-    case '手机':
-      runUpdate(setters.set手机);
-      setters.set手机((prev) => 归一化手机系统(prev));
-      break;
-    case 'NPC': runUpdate(setters.setNPC); break;
-    case '新闻': runUpdate(setters.set新闻); break;
-    case '剧情': runUpdate(setters.set剧情); break;
-  }
-
-  if (applyError) return { command: cmd, ok: false, reason: applyError };
-  return { command: cmd, ok: true };
-}
-
-/** 批量执行：依次跑每条命令，收集每条的结果。 */
-export function applyVariableCommands(
-  commands: 变量命令[],
-  state: VariableState,
-  setters: VariableSetters,
-): 变量命令结果[] {
-  return commands.map((cmd) => applyVariableCommand(cmd, state, setters));
-}
+// applyVariableCommand / applyVariableCommands 已删除（片 3 A3：无外部调用方，统一走 reduceVariableCommands + commitVariableState）。
 
 /** 把 VariableState 拆回 8 个具名切片，方便组件/工作流消费。 */
 export function unpackVariableState(state: VariableState) {
@@ -187,20 +88,24 @@ export function unpackVariableState(state: VariableState) {
 
 /** 纯函数批处理：在内存里累计推进 state，不接 setter。
  *  返回最终的新 state 与每条命令的结果（含失败原因）。
- *  适合 sendWorkflow —— 一次性算完，再用 setters 一次性提交，避免连续 setState 的中间状态。 */
+ *  适合 sendWorkflow —— 一次性算完，再用 setters 一次性提交，避免连续 setState 的中间状态。
+ *  @param ctx 可选执行上下文；不传则使用 DEFAULT_EXEC_CTX 默认行为（生产环境）。 */
 export function reduceVariableCommands(
   commands: 变量命令[],
   initialState: VariableState,
+  ctx?: VariableExecContext,
 ): { results: 变量命令结果[]; nextState: VariableState } {
   let cursor = { ...initialState };
   const results: 变量命令结果[] = [];
   const normalizedCommands = commands.map(规范化世界时间命令);
   const batchTimePlan = 分析批次时间计划(normalizedCommands, initialState.世界 as 世界状态);
 
-  for (const cmd of normalizedCommands) {
+  for (const rawCmd of normalizedCommands) {
+    // A1: cmd 可被 timeGuard 修正值替换（新对象），但 rawCmd 是调用方入参引用永不修改。
+    let cmd = rawCmd;
     const parsedRoot = extractRoot(cmd.key);
     const preEnsuredNpc = parsedRoot?.root === 'NPC'
-      ? 确保NPC目标存在(cursor.NPC as NPC记录[], parsedRoot.rest, cmd)
+      ? 确保NPC目标存在(cursor.NPC as NPC记录[], parsedRoot.rest, cmd, ctx)
       : null;
     if (preEnsuredNpc) {
       cursor = { ...cursor, NPC: preEnsuredNpc };
@@ -209,49 +114,55 @@ export function reduceVariableCommands(
       const backpackQuantityChange = 应用背包数量扣减命令(cursor.旅人 as 角色数据结构, parsedRoot.rest, cmd);
       if (backpackQuantityChange.matched) {
         if (backpackQuantityChange.nextTraveler) cursor = { ...cursor, 旅人: backpackQuantityChange.nextTraveler };
-        results.push({ command: cmd, ok: true, reason: backpackQuantityChange.reason });
+        results.push({ command: rawCmd, ok: true, reason: backpackQuantityChange.reason });
         continue;
       }
     }
     const validation = validateCommand(cmd, cursor);
     if (!validation.allowed) {
-      results.push({ command: cmd, ok: false, reason: validation.reason });
+      results.push({ command: rawCmd, ok: false, reason: validation.reason });
       continue;
     }
     const { root, rest } = validation;
     if (!root || rest === undefined) {
-      results.push({ command: cmd, ok: false, reason: '内部错误：校验通过但未提取到根路径' });
+      results.push({ command: rawCmd, ok: false, reason: '内部错误：校验通过但未提取到根路径' });
       continue;
     }
     if (rest.length === 0 && cmd.action === 'delete') {
-      results.push({ command: cmd, ok: false, reason: '禁止 delete 根路径' });
+      results.push({ command: rawCmd, ok: false, reason: '禁止 delete 根路径' });
       continue;
     }
 
     if (root === '世界') {
-      const timeGuardReason = 校验世界时间命令(
-        cmd,
+      const timeGuard = 校验世界时间命令(
         rest,
+        cmd.action,
+        cmd.value,
         cursor.世界 as 世界状态,
         initialState.世界 as 世界状态,
         batchTimePlan,
       );
-      if (timeGuardReason) {
-        results.push({ command: cmd, ok: false, reason: timeGuardReason });
+      if (timeGuard.reason) {
+        results.push({ command: rawCmd, ok: false, reason: timeGuard.reason });
         continue;
+      }
+      if (timeGuard.correctedValue !== undefined) {
+        // A1: 产生新命令对象，rawCmd 原引用不变
+        cmd = { ...rawCmd, value: timeGuard.correctedValue };
       }
     }
 
     if (root === '世界' && rest === '当前时间' && cmd.action === 'set') {
-      cursor = 补齐疑似跨夜时间(cursor, cmd);
+      // 补齐疑似跨夜时间 需要读当前 cmd.value（可能已被 timeGuard 修正）
+      cursor = 补齐疑似跨夜时间(cursor, { action: 'set', key: rawCmd.key, value: cmd.value });
     }
 
     if (root === '旅人' && rest === '背包' && cmd.action === 'push' && !解析获取物品输入(cmd.value)) {
       if (isPlaceholderBackpackObject(cmd.value)) {
-        results.push({ command: cmd, ok: true, reason: '已忽略背包占位符命令' });
+        results.push({ command: rawCmd, ok: true, reason: '已忽略背包占位符命令' });
         continue;
       }
-      results.push({ command: cmd, ok: false, reason: '背包 push 值格式错误：请提供完整的物品对象' });
+      results.push({ command: rawCmd, ok: false, reason: '背包 push 值格式错误：请提供完整的物品对象' });
       continue;
     }
 
@@ -260,9 +171,9 @@ export function reduceVariableCommands(
       const 旅人 = cursor['旅人'] as 角色数据结构;
       const parsed = 解析获取物品输入(cmd.value);
       if (parsed) {
-        const res = 获取物品(旅人, parsed, { 获得回合: 0 });
+        const res = 获取物品(旅人, parsed, { 获得回合: 0 }, ctx);
         cursor = { ...cursor, 旅人: res.traveler };
-        results.push({ command: cmd, ok: true, reason: res.message });
+        results.push({ command: rawCmd, ok: true, reason: res.message });
         continue;
       }
     }
@@ -288,7 +199,7 @@ export function reduceVariableCommands(
         const res = 推进命途进度(旅人, pathId, delta, currentDate);
         cursor = { ...cursor, 旅人: res.traveler };
         results.push({
-          command: cmd,
+          command: rawCmd,
           ok: true,
           reason: res.message,
         });
@@ -305,7 +216,7 @@ export function reduceVariableCommands(
           全局事件: appendWorldEvents(world.全局事件 ?? [], [cmd.value]),
         },
       };
-      results.push({ command: cmd, ok: true });
+      results.push({ command: rawCmd, ok: true });
       continue;
     }
 
@@ -321,7 +232,7 @@ export function reduceVariableCommands(
           (incomingName && c.name === incomingName),
         );
         if (duplicate) {
-          results.push({ command: cmd, ok: true, reason: `联系人 ${incomingName || incomingId} 已存在，跳过重复添加` });
+          results.push({ command: rawCmd, ok: true, reason: `联系人 ${incomingName || incomingId} 已存在，跳过重复添加` });
           continue;
         }
       }
@@ -329,11 +240,11 @@ export function reduceVariableCommands(
 
     const applied = 应用路径命令(cursor[root], rest, cmd.action, cmd.value);
     if (!applied.ok) {
-      results.push({ command: cmd, ok: false, reason: applied.reason ?? '应用失败' });
+      results.push({ command: rawCmd, ok: false, reason: applied.reason ?? '应用失败' });
       continue;
     }
     cursor = { ...cursor, [root]: applied.nextRootValue };
-    results.push({ command: cmd, ok: true });
+    results.push({ command: rawCmd, ok: true });
   }
 
   cursor = 归一化变量世界状态(cursor);
@@ -526,31 +437,32 @@ export function commitVariableState(
   if (state.剧情 !== initialState.剧情) setters.set剧情(state.剧情 as 剧情节点[]);
 }
 
+// A1: 校验世界时间命令不再接收 & 修改 cmd，改为接收拆解后的参数并返回 { reason, correctedValue }。
 function 校验世界时间命令(
-  cmd: 变量命令,
   rest: string,
+  action: 变量命令['action'],
+  value: unknown,
   currentWorld: 世界状态,
   baselineWorld?: 世界状态,
   batchTimePlan?: 批次时间计划,
-): string | null {
+): { reason: string | null; correctedValue?: unknown } {
   if (rest === '当前日期') {
-    if (cmd.action !== 'set') return '世界.当前日期 只能使用 set 写入完整日期';
-    const next = 解析琥珀日期序数(cmd.value);
-    if (next === null) return '当前日期必须使用“琥珀纪 YYYY.MM.DD”，禁止写现实日期或其他纪年';
+    if (action !== 'set') return { reason: '世界.当前日期 只能使用 set 写入完整日期' };
+    const next = 解析琥珀日期序数(value);
+    if (next === null) return { reason: '当前日期必须使用"琥珀纪 YYYY.MM.DD"，禁止写现实日期或其他纪年' };
     const current = 解析琥珀日期序数(currentWorld?.当前日期);
-    if (current !== null && next < current) return '拒绝时间回退：世界.当前日期 不能早于当前日期';
+    if (current !== null && next < current) return { reason: '拒绝时间回退：世界.当前日期 不能早于当前日期' };
     const baseline = 解析琥珀日期序数(baselineWorld?.当前日期);
     if (baseline !== null && next > baseline + 1) {
-      cmd.value = 格式化琥珀日期序数(baseline + 1);
-      return null;
+      return { reason: null, correctedValue: 格式化琥珀日期序数(baseline + 1) };
     }
-    return null;
+    return { reason: null };
   }
 
   if (rest === '当前时间') {
-    if (cmd.action !== 'set') return '世界.当前时间 只能使用 set 写入 HH:mm';
-    const next = 解析分钟序数(cmd.value);
-    if (next === null) return '当前时间必须使用 24 小时制 HH:mm，禁止写时段词或场景名';
+    if (action !== 'set') return { reason: '世界.当前时间 只能使用 set 写入 HH:mm' };
+    const next = 解析分钟序数(value);
+    if (next === null) return { reason: '当前时间必须使用 24 小时制 HH:mm，禁止写时段词或场景名' };
     const current = 解析分钟序数(currentWorld?.当前时间);
     const currentDate = 解析琥珀日期序数(currentWorld?.当前日期);
     const baselineDate = 解析琥珀日期序数(baselineWorld?.当前日期);
@@ -558,41 +470,40 @@ function 校验世界时间命令(
     const dateAlreadyAdvanced = currentDate !== null && baselineDate !== null && currentDate > baselineDate;
     const dateWillAdvanceInBatch = batchTimePlan?.dateAdvances === true && batchTimePlan?.dayAdvances === true;
     if (!dateAlreadyAdvanced && current !== null && next < current) {
-      if (current >= 20 * 60 && next <= 6 * 60) return null;
-      if (dateWillAdvanceInBatch) return null;
-      return `已忽略疑似时间回退：同一日期内 世界.当前时间 不能早于当前时间（当前 ${currentWorld?.当前时间 || '未知'}，尝试写入 ${String(cmd.value)}）；若剧情已跨日，请同批写入 世界.当前日期 的下一天`;
+      if (current >= 20 * 60 && next <= 6 * 60) return { reason: null };
+      if (dateWillAdvanceInBatch) return { reason: null };
+      return { reason: `已忽略疑似时间回退：同一日期内 世界.当前时间 不能早于当前时间（当前 ${currentWorld?.当前时间 || '未知'}，尝试写入 ${String(value)}）；若剧情已跨日，请同批写入 世界.当前日期 的下一天` };
     }
     if (!dateAlreadyAdvanced && !dateWillAdvanceInBatch && baselineTime !== null && next - baselineTime > 60) {
       const capped = Math.min(23 * 60 + 59, baselineTime + 30);
-      cmd.value = 格式化分钟序数(capped);
-      return null;
+      return { reason: null, correctedValue: 格式化分钟序数(capped) };
     }
-    return null;
+    return { reason: null };
   }
 
   if (rest === '开拓天数') {
     const current = Math.max(1, Math.trunc(Number(currentWorld?.开拓天数) || 1));
-    if (cmd.action !== 'add' && cmd.action !== 'set' && cmd.action !== 'sub') {
-      return '世界.开拓天数 只能使用 add 或 set';
+    if (action !== 'add' && action !== 'set' && action !== 'sub') {
+      return { reason: '世界.开拓天数 只能使用 add 或 set' };
     }
-    if (cmd.action === 'sub') return '拒绝时间回退：世界.开拓天数 不允许使用 sub';
-    if (cmd.action === 'add') {
-      const delta = Number(cmd.value);
-      if (!Number.isFinite(delta)) return '开拓天数 add 必须是数字';
-      if (delta < 0) return '拒绝时间回退：世界.开拓天数 不能减少';
-      if (delta > 1) cmd.value = 1;
-      return null;
+    if (action === 'sub') return { reason: '拒绝时间回退：世界.开拓天数 不允许使用 sub' };
+    if (action === 'add') {
+      const delta = Number(value);
+      if (!Number.isFinite(delta)) return { reason: '开拓天数 add 必须是数字' };
+      if (delta < 0) return { reason: '拒绝时间回退：世界.开拓天数 不能减少' };
+      if (delta > 1) return { reason: null, correctedValue: 1 };
+      return { reason: null };
     }
-    if (cmd.action === 'set') {
-      const next = Number(cmd.value);
-      if (!Number.isFinite(next)) return '开拓天数 set 必须是数字';
-      if (next < current) return '拒绝时间回退：世界.开拓天数 不能小于当前值';
-      if (next < 1) return '开拓天数不能小于 1';
-      if (next > current + 1) cmd.value = current + 1;
+    if (action === 'set') {
+      const next = Number(value);
+      if (!Number.isFinite(next)) return { reason: '开拓天数 set 必须是数字' };
+      if (next < current) return { reason: '拒绝时间回退：世界.开拓天数 不能小于当前值' };
+      if (next < 1) return { reason: '开拓天数不能小于 1' };
+      if (next > current + 1) return { reason: null, correctedValue: current + 1 };
     }
   }
 
-  return null;
+  return { reason: null };
 }
 
 interface 批次时间计划 {
@@ -621,7 +532,7 @@ function 分析批次时间计划(commands: 变量命令[], baselineWorld: 世�
   return { dateAdvances, dayAdvances };
 }
 
-function 确保NPC目标存在(records: NPC记录[], rest: string, cmd: 变量命令): NPC记录[] | null {
+function 确保NPC目标存在(records: NPC记录[], rest: string, cmd: 变量命令, ctx?: VariableExecContext): NPC记录[] | null {
   if (cmd.action === 'push' && !rest) return null;
   const match = rest.match(/^\[([^\]]+)\]/);
   if (!match) return null;
@@ -662,7 +573,7 @@ function 确保NPC目标存在(records: NPC记录[], rest: string, cmd: 变量�
     外貌: canonical.appearance,
     性格: canonical.personality,
     介绍: `${canonical.name}是当前剧情中出现的原著角色。`,
-    }),
+    }, ctx),
     id: stableId,
     关系: 'acquaintance' as const,
     备注: ['原著角色自动建档'],

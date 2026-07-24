@@ -10,6 +10,8 @@ import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import { 天气列表 } from '@/data/weatherRules';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
+import type { VariableExecContext } from './variableExecContext';
+import { DEFAULT_EXEC_CTX } from './variableExecContext';
 
 const ITEM_CATEGORIES = new Set<物品分类>(['food', 'consumable', 'lightcone', 'weapon', 'clothing', 'accessory', 'memento', 'key']);
 const ITEM_QUALITIES = new Set<物品品质>(['蓝', '紫', '金']);
@@ -687,6 +689,7 @@ export function factsToVariableCommands(
     phoneSeedsEnabled?: boolean;
     maxPhoneSeedsPerTurn?: number;
   } = {},
+  ctx?: VariableExecContext,
 ): { commands: 变量命令[]; notes: string[]; warnings: string[] } {
   const commands: 变量命令[] = [];
   const notes: string[] = [];
@@ -696,6 +699,7 @@ export function factsToVariableCommands(
   const phone = state.手机 as 手机系统 | undefined;
   const phoneSeedsEnabled = options.phoneSeedsEnabled !== false;
   const maxPhoneSeedsPerTurn = Math.max(0, Math.trunc(options.maxPhoneSeedsPerTurn ?? 2));
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
   let phoneSeedsWritten = 0;
 
   const push = (command: 变量命令) => commands.push(command);
@@ -791,7 +795,7 @@ export function factsToVariableCommands(
             性格: canonical?.personality ?? fact.personality,
             介绍: fact.intro ?? (canonical ? `${canonical.name}是当前剧情中出现的原著角色。` : ''),
             同行记忆: fact.memory ? [{
-              id: `npc_mem_${id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
+              id: `npc_mem_${id}_${turn}_${eff.randomString(4)}`,
               回合: turn,
               摘要: fact.memory,
               来源: '变量',
@@ -840,7 +844,7 @@ export function factsToVariableCommands(
           action: 'push',
           key: `${key}.同行记忆`,
           value: {
-            id: `npc_mem_${existing.id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
+            id: `npc_mem_${existing.id}_${turn}_${eff.randomString(4)}`,
             回合: turn,
             摘要: fact.memory,
             来源: '变量',
@@ -952,7 +956,7 @@ export function factsToVariableCommands(
         action: 'push',
         key: '手机.messageSeeds',
         value: {
-          id: `phone_seed_${turn}_${Math.random().toString(36).slice(2, 8)}`,
+          id: `phone_seed_${turn}_${eff.randomString(6)}`,
           turn,
           source: 'main_story',
           triggerType: fact.triggerType ?? 'custom',
