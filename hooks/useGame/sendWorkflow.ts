@@ -76,7 +76,6 @@ import { estimateTextTokens } from '@/utils/tokenEstimate';
 import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
-import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
@@ -115,6 +114,7 @@ import {
   formatZhikuDiagnosticsPreview,
   formatZhikuRecallSummary,
 } from './recallDiagnostics';
+import { stage1_turnStart } from './stage1_turnStart';
 
 
 
@@ -193,45 +193,15 @@ export async function executeSendWorkflow(
   try {
     await persistWorkflowRecoveryJournal(recoveryJournal);
 
-    // 0. 本回合 user 发送之前的全状态快照，留给 reroll 回滚用。
-    //    避免重 roll 时上次的变量副作用堆叠（NPC / 新闻等都会双份）。
-    const preTurnSnapshot = compactPreTurnSnapshot({
-      旅人: state.旅人,
-      世界: effectiveWorld,
-      记忆: state.记忆,
-      忆庭: state.忆庭,
-      智库: state.智库,
-      手机: state.手机,
-      NPC: state.NPC,
-      相册: state.相册,
-      新闻: state.新闻,
-      剧情: state.剧情,
-      剧情编织: state.剧情编织,
-      variableBatches: state.variableBatches,
-      queueTasks: state.queueTasks,
-      turnCount: state.turnCount,
-      pendingOpeningTrigger: state.pendingOpeningTrigger,
-    });
+    // 阶段 1：回合开始（快照 + 用户消息 + 历史清理）
+    const s1 = await stage1_turnStart(state, userInput, effectiveWorld, recoveryJournal);
+    const preTurnSnapshot = s1.preTurnSnapshot;
+    const userMsg = s1.userMsg;
+    const purgedHistory = s1.purgedHistory;
+    recoveryJournal = s1.recoveryJournal;
     rollbackSnapshotOnAbort = preTurnSnapshot;
-
-    // 1. Add user message。同时把过往 assistant 上的 snapshot 全部清掉，只保留即将生成的最新一条，
-    //    避免存档无限膨胀（snapshot 只服务"最近一次 reroll"，老的没用）。
-    //    同时把 preTurnSnapshot 也挂到 user 消息上，这样主剧情生成失败（没有 assistant 消息）时，
-    //    重roll 仍能找到快照回滚，不会误回退到上一回合。
-    const userMsg = 创建聊天消息('user', userInput, {
-      gameTime: `${state.turnCount}`,
-      preTurnSnapshot,
-    });
-    recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { userMessageId: userMsg.id });
-    await persistWorkflowRecoveryJournal(recoveryJournal);
-    const purgedHistory = compactChatHistoryForLongSession(state.chatHistory.map((m) =>
-      m.role === 'assistant' && m.preTurnSnapshot
-        ? { ...m, preTurnSnapshot: undefined }
-        : m,
-    ));
     rollbackHistoryOnAbort = purgedHistory;
-    const updatedHistory = [...purgedHistory, userMsg];
-    state.setChatHistory(updatedHistory);
+    const updatedHistory = s1.updatedHistory;
 
     // 2. Build system prompt
     // currentScope 优先级:进行中狭间 > 开局/主流程。狭间专用 scope 让世界书 + 提示词模块同步切换。
