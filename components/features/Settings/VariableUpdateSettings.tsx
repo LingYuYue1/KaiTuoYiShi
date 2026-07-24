@@ -55,7 +55,7 @@ export function VariableUpdateTab({
     baseUrl: override.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: override.apiKey.trim() || mainConfig?.apiKey || '',
     model: override.model.trim() || mainConfig?.model || '',
-    enableClaudeMode: gameSettings.enableClaudeMode === true,
+    enableClaudeMode: gameSettings.enableClaudeMode,
   };
 
   const usingMain = {
@@ -81,7 +81,7 @@ export function VariableUpdateTab({
       const tempConfig: API配置项 = {
         id: '__variable_override__',
         name: '变量模型',
-        provider: effective.provider as AI提供商,
+        provider: effective.provider,
         baseUrl: effective.baseUrl,
         apiKey: effective.apiKey,
         model: effective.model,

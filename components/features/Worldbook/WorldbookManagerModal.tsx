@@ -21,7 +21,7 @@ const builtinIds: readonly string[] = BUILTIN_BOOK_IDS;
 const storyModeIds: readonly string[] = STORY_MODE_BOOK_IDS;
 const isBuiltinBook = (book: 世界书) => builtinIds.includes(book.id) || storyModeIds.includes(book.id);
 const isStoryModeBook = (book: 世界书) => storyModeIds.includes(book.id);
-const isCalibrationEntry = (entry: 世界书条目) => entry.scope?.includes('calibration') === true;
+const isCalibrationEntry = (entry: 世界书条目) => entry.scope?.includes('calibration');
 const isCalibrationBook = (book: 世界书) => book.entries.some(isCalibrationEntry);
 
 export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {

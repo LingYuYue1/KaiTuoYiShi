@@ -52,7 +52,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
     baseUrl: story.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: story.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: story.api.model.trim() || mainConfig?.model || '',
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   };
 
   const handleFetchModels = async () => {

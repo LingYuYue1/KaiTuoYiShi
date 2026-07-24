@@ -41,7 +41,7 @@ export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: 
     maxTokens: api.maxTokens ?? mainConfig.maxTokens ?? 4096,
     temperature: api.temperature ?? mainConfig.temperature ?? 0.25,
     retryCount: api.retryCount ?? mainConfig.retryCount ?? 2,
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   };
 }
 
@@ -236,9 +236,9 @@ function resolveInjectionWindow(system?: 剧情编织系统): {
   const sourceSystem = system;
   if (!sourceSystem?.系列列表?.length) return null;
   const series = sourceSystem.系列列表.find((item) => item.id === sourceSystem.当前系列ID) ?? sourceSystem.系列列表[0];
-  if (!series || series.激活注入 === false) return null;
+  if (!series || !series.激活注入) return null;
   const completed = series.分段列表
-    .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成')
+    .filter((segment) => segment.启用注入 && segment.处理状态 === '已完成')
     .sort((a, b) => a.组号 - b.组号);
   if (!completed.length) return null;
 
@@ -277,7 +277,7 @@ function relocateCurrentSegmentByOpeningArchive(
 
   const currentScore = scoreSegmentAgainstOpening(resolved.current, openingText);
   const candidate = resolved.completed
-    .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成' && !ARCHIVED_RUNTIME_STATUSES.has(segment.运行状态))
+    .filter((segment) => segment.启用注入 && segment.处理状态 === '已完成' && !ARCHIVED_RUNTIME_STATUSES.has(segment.运行状态))
     .map((segment) => ({ segment, score: scoreSegmentAgainstOpening(segment, openingText) }))
     .filter((item) => item.score >= 6)
     .sort((a, b) => b.score - a.score || a.segment.组号 - b.segment.组号)[0];

@@ -572,7 +572,7 @@ function stripPortableAssetPayload<T extends 存档数据>(save: T): T {
         originalUrl: String(asset.originalUrl || '').startsWith('data:') ? undefined : asset.originalUrl,
       })),
     },
-  } as T;
+  };
 }
 
 function resolveRecordBlob(record: SaveAssetRecord): Blob | null {

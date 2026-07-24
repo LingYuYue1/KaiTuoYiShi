@@ -154,11 +154,11 @@ async function saveGameInternal(data: 存档数据): Promise<number> {
     void _ignoredId;
     let savedId = 0;
     let savedDelta: SaveNodeDeltaRecord | null = null;
-    const request = store.add(rest as 存档数据);
+    const request = store.add(rest);
     request.onsuccess = () => {
       const id = request.result as number;
       savedId = id;
-      const savedForDelta = { ...storedData, id } as 存档数据;
+      const savedForDelta = { ...storedData, id };
       if (deltaBase) {
         store.put(buildDeltaOnlyStoredSave(savedForDelta, deltaBase.baseSaveId));
       }
@@ -176,7 +176,7 @@ async function saveGameInternal(data: 存档数据): Promise<number> {
       summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(savedForDelta)));
     };
     request.onerror = () => reject(request.error);
-    tx.oncomplete = () => resolve({ id: savedId, save: { ...data, id: savedId } as 存档数据, delta: savedDelta });
+    tx.oncomplete = () => resolve({ id: savedId, save: { ...data, id: savedId }, delta: savedDelta });
     tx.onerror = () => reject(tx.error);
   });
   await rotateManagedSavesSafely(db);
@@ -456,15 +456,15 @@ async function commitCloudMergeStagingTransaction(
         const normalized = stripSaveAssetPayloadForStorage({
           ...staged.save,
           type: normalizeSaveType(staged.save.type),
-        } as 存档数据);
+        });
         const { id: _discardedId, ...withoutId } = normalized;
         void _discardedId;
-        const addRequest = saveStore.add(withoutId as 存档数据);
+        const addRequest = saveStore.add(withoutId);
         addRequest.onsuccess = () => {
           try {
             const id = Number(addRequest.result);
             if (!Number.isSafeInteger(id) || id <= 0) throw new Error('云备份节点没有获得有效的本地 ID。');
-            const saved = { ...normalized, id } as 存档数据;
+            const saved = { ...normalized, id };
             summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(saved)));
             const delta = buildSaveNodeDeltaRecord(saved, id);
             if (delta) deltaStore.put(delta);
@@ -970,7 +970,7 @@ function stripCloudBackupRestoreRuntime<T extends 存档数据>(save: T): T {
   return {
     ...save,
     ...(Object.keys(remainingRuntime).length ? { saveRuntime: remainingRuntime } : { saveRuntime: undefined }),
-  } as T;
+  };
 }
 
 function cloudMergeStagePrefix(transferId: string): string {

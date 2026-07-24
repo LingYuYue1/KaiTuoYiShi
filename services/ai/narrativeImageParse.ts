@@ -419,7 +419,7 @@ export async function parseNarrativeImagePrompts(
   const config: import('@/models/settings').API配置项 = {
     id: 'narrative_image_parser',
     name: '正文插图解析模型',
-    provider: (apiConfig.provider || 'openai_compatible') as import('@/models/settings').AI提供商,
+    provider: (apiConfig.provider || 'openai_compatible'),
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
     model: apiConfig.model,
@@ -465,7 +465,7 @@ export async function parseStorySnapshotPrompt(
   const config: import('@/models/settings').API配置项 = {
     id: 'story_snapshot_parser',
     name: '故事快照解析模型',
-    provider: (apiConfig.provider || 'openai_compatible') as import('@/models/settings').AI提供商,
+    provider: (apiConfig.provider || 'openai_compatible'),
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
     model: apiConfig.model,
@@ -504,7 +504,7 @@ export async function parseSceneImagePrompt(
   const config: import('@/models/settings').API配置项 = {
     id: 'scene_image_parser',
     name: '场景图解析模型',
-    provider: (apiConfig.provider || 'openai_compatible') as import('@/models/settings').AI提供商,
+    provider: (apiConfig.provider || 'openai_compatible'),
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
     model: apiConfig.model,

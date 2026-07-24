@@ -312,7 +312,7 @@ function formatStoryWeavingProgressSnapshot(state: UseGameStateReturn): string {
   const progress = story.当前进度;
   const diagnostics = getStoryWeavingInjectionDiagnostics(story);
   const series = story.系列列表.find((item) => item.id === (progress?.当前系列ID || story.当前系列ID))
-    ?? story.系列列表.find((item) => item.激活注入 !== false)
+    ?? story.系列列表.find((item) => item.激活注入)
     ?? story.系列列表[0];
   const current = series?.分段列表.find((segment) => segment.id === progress?.当前分段ID)
     ?? series?.分段列表.find((segment) => segment.组号 === progress?.当前分段组号)
@@ -570,7 +570,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     history: recallHistory,
   });
 
-  const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
+  const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用;
   const yitingThreshold = state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10;
   const yitingPreview = yitingEnabled && recallQuery && state.turnCount > yitingThreshold
     ? retrieveYitingContext(
@@ -642,8 +642,8 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       );
   // 上下文快照需要跟真实发送路径对齐：V2 酒馆预设只额外发送 Tavern messages，
   // 原生 systemPrompt 仍完整发送，因此 Tavern 链路不重复塞原生底座和当前用户输入。
-  let systemPrompt = builtPrompt.systemPrompt;
-  let systemPromptSections = splitPromptSections(systemPrompt);
+  const systemPrompt = builtPrompt.systemPrompt;
+  const systemPromptSections = splitPromptSections(systemPrompt);
   const recentHistory = getMainHistoryWindow(state.chatHistory, state.gameSettings, state.记忆);
   const tavernHistory = recentHistory.filter((msg, index) => {
     if (msg.role !== 'user') return true;

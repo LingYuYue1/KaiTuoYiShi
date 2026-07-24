@@ -468,7 +468,7 @@ function 校验世界时间命令(
     const baselineDate = 解析琥珀日期序数(baselineWorld?.当前日期);
     const baselineTime = 解析分钟序数(baselineWorld?.当前时间);
     const dateAlreadyAdvanced = currentDate !== null && baselineDate !== null && currentDate > baselineDate;
-    const dateWillAdvanceInBatch = batchTimePlan?.dateAdvances === true && batchTimePlan?.dayAdvances === true;
+    const dateWillAdvanceInBatch = batchTimePlan?.dateAdvances === true && (batchTimePlan?.dayAdvances);
     if (!dateAlreadyAdvanced && current !== null && next < current) {
       if (current >= 20 * 60 && next <= 6 * 60) return { reason: null };
       if (dateWillAdvanceInBatch) return { reason: null };
@@ -569,7 +569,7 @@ function 确保NPC目标存在(records: NPC记录[], rest: string, cmd: 变量�
     阶位: 'companion',
     初见回合: nowTurn,
     原著角色: true,
-    性别: canonical.gender as import('@/models/npc').NPC性别 | undefined,
+    性别: canonical.gender,
     外貌: canonical.appearance,
     性格: canonical.personality,
     介绍: `${canonical.name}是当前剧情中出现的原著角色。`,

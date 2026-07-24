@@ -27,7 +27,7 @@ const DEFAULT_MAX_DEPTH = 8;
 const DEFAULT_MAX_ARRAY_LENGTH = 120;
 
 export function sanitizePromptPayload<T>(value: T, options: PromptPayloadSanitizerOptions = {}): T {
-  const seen = new WeakSet<object>();
+  const seen = new WeakSet();
   return sanitizeValue(value, {
     maxStringLength: Math.max(200, options.maxStringLength ?? DEFAULT_MAX_STRING_LENGTH),
     maxDepth: Math.max(1, options.maxDepth ?? DEFAULT_MAX_DEPTH),

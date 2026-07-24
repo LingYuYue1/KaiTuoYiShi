@@ -334,7 +334,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       maxTokens: override.maxTokens ?? mainApi.maxTokens ?? 1600,
       temperature: override.temperature ?? mainApi.temperature ?? 0.35,
       retryCount: override.retryCount ?? mainApi.retryCount ?? 1,
-      enableClaudeMode: gameSettings.enableClaudeMode === true,
+      enableClaudeMode: gameSettings.enableClaudeMode,
       updatedAt: Date.now(),
     };
   };

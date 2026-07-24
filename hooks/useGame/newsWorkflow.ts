@@ -41,7 +41,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
     maxTokens: api.maxTokens ?? mainConfig?.maxTokens,
     temperature: api.temperature ?? mainConfig?.temperature,
     retryCount: api.retryCount ?? mainConfig?.retryCount ?? 2,
-    enableClaudeMode: state.gameSettings.enableClaudeMode === true,
+    enableClaudeMode: state.gameSettings.enableClaudeMode,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

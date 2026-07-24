@@ -206,7 +206,7 @@ async function parseArchiveManifestV2(manifest: AlbumArchiveManifestV2, files: M
       dataUrl,
       contentHash,
       source: record.source || 'upload',
-      nsfw: record.nsfw === true,
+      nsfw: record.nsfw,
       createdAt: Number(record.createdAt) || Date.now(),
       status: record.status || 'ready',
     });

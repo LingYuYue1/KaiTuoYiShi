@@ -769,7 +769,7 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
   const rawUsageKeys = usage?.rawUsageKeys?.length
     ? usage.rawUsageKeys.join(', ')
     : usage?.rawUsage && typeof usage.rawUsage === 'object'
-      ? Object.keys(usage.rawUsage as Record<string, unknown>).sort().join(', ')
+      ? Object.keys(usage.rawUsage).sort().join(', ')
       : '未记录';
   const cacheDiagnostic = usage?.cacheDiagnostic
     ?? (usage?.rawUsage != null

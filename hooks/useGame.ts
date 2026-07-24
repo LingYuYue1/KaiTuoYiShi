@@ -51,7 +51,7 @@ export function useGame(): UseGameReturn {
         s.setApiSettings((prev) => ({ ...prev, activeConfigId: first.id }));
         return {
           ...first,
-          enableClaudeMode: s.gameSettings.enableClaudeMode === true,
+          enableClaudeMode: s.gameSettings.enableClaudeMode,
         };
       }
       return null;
@@ -59,7 +59,7 @@ export function useGame(): UseGameReturn {
     const config = s.apiSettings.configs.find((c) => c.id === s.apiSettings.activeConfigId) ?? null;
     return config ? {
       ...config,
-      enableClaudeMode: s.gameSettings.enableClaudeMode === true,
+      enableClaudeMode: s.gameSettings.enableClaudeMode,
     } : null;
   }, []);
 

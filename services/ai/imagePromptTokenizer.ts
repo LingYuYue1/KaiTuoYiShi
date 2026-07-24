@@ -34,7 +34,7 @@ export function buildImagePromptTokenizerConfig(settings: 游戏设置, apiSetti
     maxTokens: Math.min(override.maxTokens ?? mainConfig.maxTokens ?? 1600, 2400),
     temperature: override.temperature ?? mainConfig.temperature ?? 0.45,
     retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
     updatedAt: Date.now(),
   };
 }

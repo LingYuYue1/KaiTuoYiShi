@@ -124,7 +124,7 @@ export function stripSaveAssetPayloadForStorage<T extends 存档数据>(save: T)
   return {
     ...save,
     相册: stripAlbumAssetPayload(save.相册),
-  } as T;
+  };
 }
 
 /**
@@ -145,7 +145,7 @@ export function restoreSaveAssetPayloadFromRecords<T extends 存档数据>(
       ...save.相册,
       assets: save.相册.assets.map((asset) => restoreAssetPayload(asset, byId)),
     },
-  } as T;
+  };
 }
 
 /**
@@ -281,5 +281,5 @@ export async function expandSaveAssetPayloadForExport<T extends 存档数据>(sa
       ...save.相册,
       assets,
     },
-  } as T;
+  };
 }

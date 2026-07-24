@@ -220,7 +220,7 @@ function buildApiProfile(settings: API设置, gameSettings: 游戏设置, includ
     version: 1,
     exportedAt: new Date().toISOString(),
     includeApiKeys,
-    enableClaudeMode: gameSettings.enableClaudeMode === true,
+    enableClaudeMode: gameSettings.enableClaudeMode,
     deepSeekMainMode: gameSettings.deepSeekMainMode ?? 'off',
     apiSettings: settings,
     routes: {
@@ -691,7 +691,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
         baseUrl,
         apiKey,
         model: auxForm.model.trim(),
-        enableClaudeMode: gameSettings.enableClaudeMode === true,
+        enableClaudeMode: gameSettings.enableClaudeMode,
         retryCount: 2,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -712,7 +712,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     try {
       const list = await fetchModels({
         ...selectedConfig,
-        enableClaudeMode: gameSettings.enableClaudeMode === true,
+        enableClaudeMode: gameSettings.enableClaudeMode,
         retryCount: selectedConfig.retryCount ?? 2,
       });
       setModelOptions(list);
@@ -731,7 +731,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     try {
       const result = await testConnection({
         ...selectedConfig,
-        enableClaudeMode: gameSettings.enableClaudeMode === true,
+        enableClaudeMode: gameSettings.enableClaudeMode,
         retryCount: selectedConfig.retryCount ?? 2,
       });
       setTestResult(result);

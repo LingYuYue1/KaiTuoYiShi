@@ -596,7 +596,7 @@ function CommandRow({ result }: { result: 变量命令结果 }) {
     if (typeof v === 'number' || typeof v === 'boolean') return String(v);
     if (Array.isArray(v)) return `[数组×${v.length}]`;
     if (typeof v === 'object') {
-      const keys = Object.keys(v as Record<string, unknown>);
+      const keys = Object.keys(v);
       return `{${keys.slice(0, 3).join(',')}${keys.length > 3 ? ',...' : ''}}`;
     }
     return String(v);

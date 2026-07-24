@@ -94,7 +94,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   }, [activePngId, pngEditorId, normalizedRules.PNG画风预设列表]);
 
   const setActiveId = (id: string) => {
-    onChange({ [activeIdKey(activeSection)]: id } as Partial<文生图规则中心设置>);
+    onChange({ [activeIdKey(activeSection)]: id });
   };
 
   const setEditorId = (id: string) => {
@@ -126,7 +126,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     onChange({
       词组转化器提示词预设列表: [...normalizedRules.词组转化器提示词预设列表, next],
       [activeIdKey(activeSection)]: getActiveId(normalizedRules, activeSection) || next.id,
-    } as Partial<文生图规则中心设置>);
+    });
     setEditorId(next.id);
   };
 
@@ -137,7 +137,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     onChange({
       词组转化器提示词预设列表: remaining,
       [activeIdKey(activeSection)]: activeId === selectedPreset.id ? nextActive : activeId,
-    } as Partial<文生图规则中心设置>);
+    });
     setEditorId(nextActive);
   };
 
@@ -207,7 +207,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     onChange({
       画师串预设列表: [...normalizedRules.画师串预设列表, next],
       [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: activeArtistId || next.id,
-    } as Partial<文生图规则中心设置>);
+    });
     setArtistEditorId(next.id);
   };
 
@@ -218,7 +218,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     onChange({
       画师串预设列表: remaining,
       [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: activeArtistId === selectedArtist.id ? nextId : activeArtistId,
-    } as Partial<文生图规则中心设置>);
+    });
     setArtistEditorId(nextId);
   };
 
@@ -248,7 +248,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     onChange({
       详细画风预设列表: [...normalizedRules.详细画风预设列表, next],
       [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: activeDetailStyleId || next.id,
-    } as Partial<文生图规则中心设置>);
+    });
     setDetailStyleEditorId(next.id);
   };
 
@@ -259,7 +259,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     onChange({
       详细画风预设列表: remaining,
       [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: activeDetailStyleId === selectedDetailStyle.id ? nextId : activeDetailStyleId,
-    } as Partial<文生图规则中心设置>);
+    });
     setDetailStyleEditorId(nextId);
   };
 
@@ -322,7 +322,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
     onChange({
       PNG画风预设列表: [...normalizedRules.PNG画风预设列表, next],
       [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: activePngId || next.id,
-    } as Partial<文生图规则中心设置>);
+    });
     setPngEditorId(next.id);
   };
 
@@ -444,8 +444,8 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                 activeName={activeArtist?.名称}
                 activeTag={activeArtistId ? '启用中' : '已禁用'}
                 active={Boolean(activeArtistId)}
-                onEnable={() => selectedArtist && onChange({ [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: selectedArtist.id } as Partial<文生图规则中心设置>)}
-                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: '' } as Partial<文生图规则中心设置>)}
+                onEnable={() => selectedArtist && onChange({ [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: selectedArtist.id })}
+                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景画师串预设ID' : '当前NPC画师串预设ID']: '' })}
                 enableDisabled={!selectedArtist || selectedArtist.id === activeArtistId}
                 disableDisabled={!activeArtistId}
                 onAdd={addArtist}
@@ -479,8 +479,8 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                 activeName={activeDetailStyle?.名称}
                 activeTag={activeDetailStyleId ? '启用中' : '已禁用'}
                 active={Boolean(activeDetailStyleId)}
-                onEnable={() => selectedDetailStyle && onChange({ [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: selectedDetailStyle.id } as Partial<文生图规则中心设置>)}
-                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: '' } as Partial<文生图规则中心设置>)}
+                onEnable={() => selectedDetailStyle && onChange({ [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: selectedDetailStyle.id })}
+                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景详细画风预设ID' : '当前NPC详细画风预设ID']: '' })}
                 enableDisabled={!selectedDetailStyle || selectedDetailStyle.id === activeDetailStyleId}
                 disableDisabled={!activeDetailStyleId}
                 onAdd={addDetailStyle}
@@ -548,8 +548,8 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                 activeName={activePng?.名称}
                 activeTag={activePngId ? '启用中' : '已禁用'}
                 active={Boolean(activePngId)}
-                onEnable={() => selectedPng && onChange({ [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: selectedPng.id } as Partial<文生图规则中心设置>)}
-                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: '' } as Partial<文生图规则中心设置>)}
+                onEnable={() => selectedPng && onChange({ [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: selectedPng.id })}
+                onDisable={() => onChange({ [styleScope === 'scene' ? '当前场景PNG画风预设ID' : '当前NPCPNG画风预设ID']: '' })}
                 enableDisabled={!selectedPng || selectedPng.id === activePngId}
                 disableDisabled={!activePngId}
                 onAdd={addPng}

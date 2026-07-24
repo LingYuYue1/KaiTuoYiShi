@@ -22,7 +22,7 @@ const 是对象 = (v: unknown): v is Record<string, unknown> =>
 const 深合并对象 = (left: unknown, right: unknown): unknown => {
   if (Array.isArray(right)) return 深拷贝(right);
   if (!是对象(right)) return 深拷贝(right);
-  const seed: Record<string, unknown> = 是对象(left) ? 深拷贝(left as Record<string, unknown>) : {};
+  const seed: Record<string, unknown> = 是对象(left) ? 深拷贝(left) : {};
   Object.entries(right).forEach(([k, v]) => {
     seed[k] = 深合并对象(seed[k], v);
   });
@@ -152,7 +152,7 @@ export function 应用路径命令(
       cursor = cursor[t];
     } else {
       if (!是对象(cursor)) return { ok: false, nextRootValue: rootValue, reason: `路径 ${rawPath} 在 .${t} 处不是对象` };
-      const c = cursor as Record<string, unknown>;
+      const c = cursor;
       if (c[t] === undefined || c[t] === null || typeof c[t] !== 'object') {
         c[t] = typeof next === 'number' ? [] : {};
       }
@@ -189,7 +189,7 @@ export function 应用路径命令(
 
   // 处理 string last（对象字段）
   if (!是对象(cursor)) return { ok: false, nextRootValue: rootValue, reason: `路径 ${rawPath} 末端父节点不是对象` };
-  const obj = cursor as Record<string, unknown>;
+  const obj = cursor;
   if (action === 'delete') {
     delete obj[last];
     return { ok: true, nextRootValue: draft };

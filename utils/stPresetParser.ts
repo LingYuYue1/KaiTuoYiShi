@@ -155,7 +155,7 @@ export interface STPresetV2ParseResult {
  * 不转译为 promptModules，不修改内置模块，不产生 st_import_*。
  */
 export function parseSTPresetV2(jsonText: string): STPresetV2ParseResult {
-  const parsed = parseJsonWithRepair<unknown>(jsonText);
+  const parsed = parseJsonWithRepair(jsonText);
   if (parsed.value === null) {
     return {
       preset: null,
@@ -309,7 +309,7 @@ function parseSTPrompt(raw: STPromptRaw, now: number): 提示词模块 | null {
     order: 100, // 临时占位，由 prompt_order 覆盖
     scope: ['all'], // ST 无 scope 概念
     role,
-    injectionPosition: (raw.injection_position === 1 ? 1 : 0) as 0 | 1,
+    injectionPosition: (raw.injection_position === 1 ? 1 : 0),
     injectionDepth: typeof raw.injection_depth === 'number' ? raw.injection_depth : 4,
     injectionOrder: typeof raw.injection_order === 'number' ? raw.injection_order : 100,
     injectionTrigger: normalizeTrigger(raw.injection_trigger),
@@ -358,7 +358,7 @@ export function parseSTPreset(jsonText: string): 提示词模块[] {
     const sanitizedId = `st_import_${sanitizeIdentifier(entry.identifier)}`;
     const mod = moduleMap.get(sanitizedId);
     if (mod) {
-      mod.enabled = entry.enabled !== false;
+      mod.enabled = entry.enabled;
       orderedIds.push(sanitizedId);
     }
   }
@@ -540,7 +540,7 @@ export function parseSTWorldInfoEntries(data: STPresetRaw): 世界书条目[] {
   return data.world_info
     .filter((raw) => raw && typeof raw === 'object'
       && (raw.content ?? '').trim().length > 0
-      && raw.enabled !== false)
+      && raw.enabled)
     .map((raw): 世界书条目 => {
       const uid = raw.uid ?? 0;
       const id = `stwi_${uid}`;
@@ -550,7 +550,7 @@ export function parseSTWorldInfoEntries(data: STPresetRaw): 世界书条目[] {
       // ST constant=true 表示无关键词也注入，等价我们的 injectMode='always'
       // ST selective=true 表示关键词匹配触发，等价 injectMode='keyword_match'
       // 两者都不设时默认 keyword_match（与 ST 行为一致）
-      const injectMode = raw.constant === true ? 'always' : 'keyword_match';
+      const injectMode = raw.constant ? 'always' : 'keyword_match';
 
       return {
         id,
@@ -582,7 +582,7 @@ export function parseSTWorldInfoEntries(data: STPresetRaw): 世界书条目[] {
         recurseDepth: raw.recursionDepth ?? 1,
         // 通用字段
         priority: raw.order ?? 100,
-        enabled: raw.enabled !== false,
+        enabled: raw.enabled,
         scope: ['all'], // ST 无 scope 概念，对所有场景生效
         createdAt: now,
         updatedAt: now,

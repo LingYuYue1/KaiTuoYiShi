@@ -1944,7 +1944,7 @@ function StepRail({
         {STEP_RAIL_ITEMS.map((item, index) => {
           const active = item.key === step;
           const done = index < visualIdx;
-          const ready = stepReady[item.key as Step];
+          const ready = stepReady[item.key];
           return (
             <button
               key={item.key}

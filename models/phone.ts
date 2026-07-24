@@ -267,7 +267,7 @@ export function 归一化手机系统(input?: Partial<手机系统> | null, ctx?
           available: Boolean(contact.available),
           status:
             contact.status ??
-            (contact.available === false ? 'unavailable' : contact.npcId ? 'available' : 'known_locked'),
+            (!contact.available ? 'unavailable' : contact.npcId ? 'available' : 'known_locked'),
           unlockSource: contact.unlockSource,
         }))
       : [],

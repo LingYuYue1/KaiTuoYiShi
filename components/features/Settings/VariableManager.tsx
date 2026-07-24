@@ -98,7 +98,7 @@ function summarizeValue(value: unknown): string {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (Array.isArray(value)) return `数组 ${value.length}`;
   if (typeof value === 'object') {
-    const keys = Object.keys(value as Record<string, unknown>);
+    const keys = Object.keys(value);
     return `字段 ${keys.length}`;
   }
   return String(value);
@@ -119,7 +119,7 @@ function summarizeArrayItemLabel(item: unknown): string {
 
 function readStrKey(obj: Record<string, unknown>, keys: string[]): string {
   for (const k of keys) {
-    if (typeof obj[k] === 'string' && (obj[k] as string).trim()) return (obj[k] as string).trim();
+    if (typeof obj[k] === 'string' && (obj[k]).trim()) return (obj[k]).trim();
   }
   return '';
 }
@@ -313,7 +313,7 @@ export function VariableManagerTab(props: Props) {
     let nextDraft = deepClone(visibleValue);
     // 确保「当前天气」紧跟「当前地点」
     if (activeSystem.key === 'world' && isRecord(nextDraft)) {
-      const rec = nextDraft as Record<string, unknown>;
+      const rec = nextDraft;
       const weather = '当前天气' in rec ? rec['当前天气'] : '';
       const ordered: Record<string, unknown> = {};
       for (const key of Object.keys(rec)) {
@@ -691,7 +691,7 @@ function TreeNode({
   // NSFW 档案渲染专用编辑面板（中文标签 + 下拉 + 标签编辑器），而非通用树形展开。
   // 用 <details> 包裹并默认折叠，避免占用大量纵向位置；点击 summary 展开。
   if (!isArray && objectLike && label === 'NSFW档案') {
-    const archive = value as Record<string, unknown>;
+    const archive = value;
     const enabled = archive.enabled === true;
     const fieldCount = Object.keys(archive).length;
     return (
@@ -883,7 +883,7 @@ function LeafRow({
       ) : type === 'number' ? (
         <input
           type="number"
-          value={Number.isFinite(value as number) ? (value as number) : 0}
+          value={Number.isFinite(value) ? (value as number) : 0}
           onChange={(event) => onChange(event.target.value === '' ? 0 : Number(event.target.value))}
           className="kaituo-input w-full min-w-0 flex-1 px-2 py-1 font-mono text-[13px]"
           style={{ clipPath: smallClip }}

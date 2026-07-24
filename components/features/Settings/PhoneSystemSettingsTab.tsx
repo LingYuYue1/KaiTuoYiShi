@@ -57,7 +57,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
     baseUrl: phone.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: phone.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: phone.api.model.trim() || mainConfig?.model || '',
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   };
 
   const handleFetchModels = async () => {

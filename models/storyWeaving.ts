@@ -358,7 +358,7 @@ const 归一化地点档案 = (raw: Partial<剧情编织地点档案>): 剧情�
 });
 
 const 聚合剧情编织系列信息 = (series: 剧情编织系列): 剧情编织系列 => {
-  const completed = series.分段列表.filter((segment) => segment.处理状态 === '已完成' && segment.启用注入 !== false);
+  const completed = series.分段列表.filter((segment) => segment.处理状态 === '已完成' && segment.启用注入);
   const mainlineCompleted = completed.filter((segment) => !['已跳过', '已偏离', '暂停'].includes(segment.运行状态));
   const indexSource = mainlineCompleted.length ? mainlineCompleted : completed;
   const recent = indexSource.slice(-3);
@@ -444,7 +444,7 @@ export function 归一化剧情编织进度锚点(
   当前系列ID?: string,
 ): 剧情编织进度锚点 | undefined {
   const series = 系列列表.find((item) => item.id === (raw?.当前系列ID || 当前系列ID))
-    ?? 系列列表.find((item) => item.激活注入 !== false)
+    ?? 系列列表.find((item) => item.激活注入)
     ?? 系列列表[0];
   if (!series) return undefined;
   const requestedById = series.分段列表.find((segment) => segment.id === raw?.当前分段ID);

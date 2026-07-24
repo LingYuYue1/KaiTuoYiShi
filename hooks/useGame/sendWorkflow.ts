@@ -360,7 +360,7 @@ export async function executeSendWorkflow(
         });
       }
     }
-    const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
+    const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用;
     const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && (state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) < state.turnCount;
     const zhikuRecallEnabled = !isOpeningSystemTrigger && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
     const storyWeavingGate = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
@@ -943,7 +943,7 @@ export async function executeSendWorkflow(
       playerName: state.旅人.姓名 || state.旅人.别名 || '你',
       userInput,
     });
-    let finalBody = stripLeakedHistoryMetaFromBody(sanitizeContaminatedText(parsedBody, state.gameSettings.额外功能));
+    const finalBody = stripLeakedHistoryMetaFromBody(sanitizeContaminatedText(parsedBody, state.gameSettings.额外功能));
     const sanitizedRawText = replaceBodyInRawResponse(
       cleanedParsed.rawText || result.fullText || streamedText,
       finalBody,
@@ -1000,7 +1000,7 @@ export async function executeSendWorkflow(
       .reverse()
       .find((msg) => msg.role === 'assistant' && msg.debugContext?.systemPrompt)?.debugContext;
     const cachePrefixDiagnostics = buildCachePrefixDiagnostics({
-      enabled: state.gameSettings.enableCacheDiagnostics === true,
+      enabled: state.gameSettings.enableCacheDiagnostics,
       systemPrompt,
       messages: apiMessages,
       previous: previousDebugContext
@@ -1022,7 +1022,7 @@ export async function executeSendWorkflow(
         systemPrompt,
         messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
         deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : 'off',
-        deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory === true,
+        deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory,
         deepSeekPrefixMode: deepSeekLockFormat,
         deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
         deepSeekMainOriginalModel: result.deepSeekRecovery?.originalModel,

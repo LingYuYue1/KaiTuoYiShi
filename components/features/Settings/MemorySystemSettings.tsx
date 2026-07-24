@@ -57,7 +57,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
     maxTokens: memory.记忆总结API.maxTokens ?? mainConfig?.maxTokens,
     temperature: memory.记忆总结API.temperature ?? mainConfig?.temperature,
     retryCount: memory.记忆总结API.retryCount ?? mainConfig?.retryCount ?? 2,
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   };
 
   const modelChoices = useMemo(() => {

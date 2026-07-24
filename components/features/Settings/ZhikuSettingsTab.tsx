@@ -66,7 +66,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
     baseUrl: zhiku.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: zhiku.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: zhiku.api.model.trim() || mainConfig?.model || '',
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   };
 
   const handleFetchModels = async () => {

@@ -56,7 +56,7 @@ export function buildTavernMessageChain(params: TavernChainParams): TavernMessag
 
   // 3. 过滤启用的 slot：enabled !== false
   const enabledOrderSlots = (Array.isArray(selectedOrder.order) ? selectedOrder.order : [])
-    .filter((slot) => Boolean(slot) && slot.enabled !== false);
+    .filter((slot) => Boolean(slot) && slot.enabled);
 
   // 4. 探测占位符和冲突规则
   const useCotVariableInjection = enabledOrderSlots.some((slot) => {
@@ -305,7 +305,7 @@ function getPresetWorldInfoEntries(preset: STPreset): STWorldInfoEntry[] {
 function shouldInjectPresetWorldInfoEntry(entry: STWorldInfoEntry, haystack: string): boolean {
   const content = readString(entry.content).trim();
   if (!content) return false;
-  if (entry.enabled === false) return false;
+  if (!entry.enabled) return false;
   if (readBool(entry.constant)) return passesPresetWorldInfoProbability(entry, haystack);
 
   const primaryKeys = readStringArray(entry.key);
@@ -567,7 +567,7 @@ function replaceTavernVariables(params: {
 function presetContainsNoControl(preset: STPreset, selectedOrder: STPresetOrder): boolean {
   const noControlKeywords = /NoControl|防止说话|防抢话|禁止代写|不得代写|不代写玩家|不替玩家|绝不控制|禁止控制玩家|不控制玩家|玩家的台词|玩家言行|代替玩家发言/iu;
   const enabledIds = new Set(selectedOrder.order
-    .filter(slot => slot.enabled !== false)
+    .filter(slot => slot.enabled)
     .map(slot => slot.identifier));
   
   return (Array.isArray(preset.prompts) ? preset.prompts : []).some(prompt => {
@@ -579,7 +579,7 @@ function presetContainsNoControl(preset: STPreset, selectedOrder: STPresetOrder)
 function presetContainsPlayerSpeechExpansion(preset: STPreset, selectedOrder: STPresetOrder): boolean {
   const speechExpansionKeywords = /抢话|嘴替|代写玩家对白|代替玩家说话|玩家对白扩写|扩写玩家|加强复述|扩写后推进|主动替玩家|user 的嘴替/iu;
   const enabledIds = new Set(selectedOrder.order
-    .filter(slot => slot.enabled !== false)
+    .filter(slot => slot.enabled)
     .map(slot => slot.identifier));
 
   return (Array.isArray(preset.prompts) ? preset.prompts : []).some(prompt => {

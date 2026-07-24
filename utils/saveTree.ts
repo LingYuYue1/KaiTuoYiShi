@@ -53,7 +53,7 @@ export function attachSaveTreeMeta<T extends 存档数据>(save: T, meta: 存档
   return {
     ...save,
     saveTree: meta,
-  } as T;
+  };
 }
 
 export function getSaveTreeMeta(save: 存档数据): 存档树元信息 {

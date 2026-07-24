@@ -420,7 +420,7 @@ async function ensureCloudRepository(config: GitHubCloudSaveConfig, signal?: Abo
 }
 
 async function getRepository(config: GitHubCloudSaveConfig, signal?: AbortSignal): Promise<GitHubRepoResponse | null> {
-  const response = await githubRequest(`${repoApi(config)}`, {
+  const response = await githubRequest(repoApi(config), {
     headers: githubHeaders(config),
     phase: '读取 GitHub 仓库',
     signal,
@@ -467,7 +467,7 @@ async function readManifest(
     kind: 'github-cloud-save',
     version: 1,
     updatedAt: String(manifest.updatedAt || ''),
-    saves: Array.isArray(manifest.saves) ? manifest.saves as GitHubCloudSaveItem[] : [],
+    saves: Array.isArray(manifest.saves) ? manifest.saves : [],
   };
 }
 

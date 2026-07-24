@@ -153,7 +153,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
     baseUrl: image.词组转化器API.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: image.词组转化器API.apiKey.trim() || mainConfig?.apiKey || '',
     model: image.词组转化器API.model.trim() || mainConfig?.model || '',
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   };
 
   const handleFetchTokenizerModels = async () => {
@@ -167,7 +167,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
       const tempConfig: API配置项 = {
         id: '__image_prompt_tokenizer_models__',
         name: '文生图词组转化器',
-        provider: tokenizerEffective.provider as AI提供商,
+        provider: tokenizerEffective.provider,
         baseUrl: tokenizerEffective.baseUrl,
         apiKey: tokenizerEffective.apiKey,
         model: tokenizerEffective.model,

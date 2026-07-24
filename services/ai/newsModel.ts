@@ -377,12 +377,12 @@ function normalizePatch(patch: Partial<新闻条目补丁>): 新闻条目补丁 
 function buildStoryWeavingNewsBrief(system?: 剧情编织系统): string {
   if (!system?.系列列表?.length) return '';
   const activeSeries = system.系列列表.find((item) => item.id === system.当前系列ID)
-    ?? system.系列列表.find((item) => item.激活注入 !== false)
+    ?? system.系列列表.find((item) => item.激活注入)
     ?? system.系列列表[0];
-  if (!activeSeries || activeSeries.激活注入 === false) return '';
+  if (!activeSeries || !activeSeries.激活注入) return '';
 
   const sideSeries = system.系列列表
-    .filter((item) => item.id !== activeSeries.id && item.激活注入 !== false)
+    .filter((item) => item.id !== activeSeries.id && item.激活注入)
     .filter((item) => item.来源类型 !== activeSeries.来源类型)
     .slice(0, 2);
 

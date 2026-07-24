@@ -18,7 +18,7 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
   state.set忆庭(归一化忆庭系统(snapshot.忆庭 as UseGameStateReturn['忆庭']));
   state.set智库(归一化智库系统(snapshot.智库 as UseGameStateReturn['智库']));
   state.set手机(归一化手机系统(snapshot.手机 as UseGameStateReturn['手机']));
-  state.setNPC(归一化NPC记录列表(snapshot.NPC as UseGameStateReturn['NPC']));
+  state.setNPC(归一化NPC记录列表(snapshot.NPC));
   state.set相册((current) => restoreAlbumSnapshot(snapshot.相册 as UseGameStateReturn['相册'], current));
   state.set新闻(归一化新闻列表(snapshot.新闻 as UseGameStateReturn['新闻']));
   state.set剧情(snapshot.剧情 as Parameters<typeof state.set剧情>[0]);

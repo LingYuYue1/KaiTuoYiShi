@@ -130,7 +130,7 @@ export function 使用物品(
   }
   const useCount = Math.max(1, Math.min(item.数量, Math.trunc(count)));
 
-  let next = { ...traveler };
+  const next = { ...traveler };
   const applied: { 目标属性: 使用效果目标; 数值: number }[] = [];
   if (Array.isArray(item.使用效果)) {
     for (const eff of item.使用效果) {

@@ -749,7 +749,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
       // target 非空且非 native（adapted 二创成品 / imported 玩家导入）
       // 二创成品融合路径：预设自带 adapted_* 模块（完整替代对应 builtin_*）
       // adapted_* 模块的 id 模式：adapted_<builtin_id>（如 adapted_main_plot_cot → builtin_main_plot_cot）
-      const adaptedModules = target!.modules.filter((m) => m.id.startsWith('adapted_'));
+      const adaptedModules = target.modules.filter((m) => m.id.startsWith('adapted_'));
       let builtinAdjusted = preserved;
       if (adaptedModules.length > 0) {
         // 二创成品：从 preserved 中移除被 adapted_* 完整替代的 builtin_* 模块
@@ -758,7 +758,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
         );
         builtinAdjusted = preserved.filter((m) => !replacedBuiltinIds.has(m.id));
         // ST 模块里若仍含其他 CoT/Format（未被 adapted_* 替代的），关闭 ST 侧冲突项（保留内置不动）
-        const remainingStForConflict = target!.modules.filter(
+        const remainingStForConflict = target.modules.filter(
           (m) => !m.id.startsWith('adapted_') && isSTImportedModule(m),
         );
         const tags: string[] = [];
@@ -771,36 +771,36 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
             ...detectSTFormatModules(remainingStForConflict),
           ]);
           // 关闭 ST 侧冲突模块，内置模块保持启用
-          const stModulesAdjusted = target!.modules.map((m) => {
+          const stModulesAdjusted = target.modules.map((m) => {
             if (conflictStIds.has(m.id) && m.enabled) {
               return { ...m, enabled: false, updatedAt: now2 };
             }
             return m;
           });
-          target!.modules = stModulesAdjusted;
+          target.modules = stModulesAdjusted;
           conflictNote = `\n\n检测到二创预设的 ST 模块含${tags.join(' / ')}，已自动关闭 ST 侧冲突项（内置核心协议保持启用）。`;
         } else {
           conflictNote = `\n\n已启用二创融合模式：内置主剧情模块已与预设精华融合，游戏系统（变量/记忆/新闻）正常工作。`;
         }
       } else {
         // 无 adapted_*：玩家导入预设，冲突时关闭导入预设的冲突项（保留内置不动）
-        const { adjusted, conflictNote: note } = handleSTCoTFormatConflict(target!.modules, preserved);
-        target!.modules = adjusted;
+        const { adjusted, conflictNote: note } = handleSTCoTFormatConflict(target.modules, preserved);
+        target.modules = adjusted;
         builtinAdjusted = preserved;
         conflictNote = note;
       }
-      nextModules = [...builtinAdjusted, ...target!.modules];
+      nextModules = [...builtinAdjusted, ...target.modules];
       // Phase 7.2：注入目标预设的世界书条目（如有）
-      if (target!.worldbookEntries && target!.worldbookEntries.length > 0) {
+      if (target.worldbookEntries && target.worldbookEntries.length > 0) {
         const now = Date.now();
         nextWorldbooks = [
           ...nextWorldbooks,
           {
-            id: `stwb_${target!.id}`,
-            title: `${target!.name} · ST 导入世界书`,
-            description: `从 ST 预设「${target!.name}」导入的世界书条目`,
+            id: `stwb_${target.id}`,
+            title: `${target.name} · ST 导入世界书`,
+            description: `从 ST 预设「${target.name}」导入的世界书条目`,
             enabled: true,
-            entries: target!.worldbookEntries,
+            entries: target.worldbookEntries,
             createdAt: now,
             updatedAt: now,
           },
@@ -961,7 +961,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
       currentV2Preset?.preset.prompt_order.find((item) => item.character_id === (settings.currentStCharacterId ?? currentV2Preset.characterId ?? null)) ??
       currentV2Preset?.preset.prompt_order.find((item) => item.character_id === 100001) ??
       currentV2Preset?.preset.prompt_order[0];
-    const currentV2EnabledSlots = currentV2Order?.order.filter((slot) => slot.enabled !== false).length ?? 0;
+    const currentV2EnabledSlots = currentV2Order?.order.filter((slot) => slot.enabled).length ?? 0;
     const tavernV2Ready = (settings.enableStPreset ?? true) && Boolean(currentV2Preset && currentV2Order);
     return (
       <div className="flex h-full min-w-0 flex-col gap-4 overflow-y-auto pr-1" style={{ minHeight: 0 }}>
@@ -1444,7 +1444,7 @@ function PresetSwitcher({
 function V1PresetEntriesPanel({ preset }: { preset: STPresetEntry | null }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const modules = preset?.modules ?? [];
-  const enabledCount = modules.filter((module) => module.enabled !== false).length;
+  const enabledCount = modules.filter((module) => module.enabled).length;
   const groupedSummary = modules.reduce<Record<string, number>>((acc, module) => {
     acc[module.category] = (acc[module.category] ?? 0) + 1;
     return acc;
@@ -1498,7 +1498,7 @@ function V1PresetEntriesPanel({ preset }: { preset: STPresetEntry | null }) {
                   className="min-w-0 px-3 py-2 text-left text-sm transition-all hover:opacity-90"
                   style={{
                     background: expanded ? 'rgba(var(--tj-ui-nsfw), 0.1)' : 'rgba(var(--tj-bg-primary), 0.22)',
-                    color: module.enabled === false ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
+                    color: !module.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
                     boxShadow: `inset 0 0 0 1px ${expanded ? 'rgba(var(--tj-ui-nsfw), 0.28)' : 'rgba(var(--tj-accent-primary), 0.1)'}`,
                     clipPath: smallClip,
                   }}
@@ -1520,8 +1520,8 @@ function V1PresetEntriesPanel({ preset }: { preset: STPresetEntry | null }) {
                       <span style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>
                         {module.role ?? 'system'}
                       </span>
-                      <span style={{ color: module.enabled === false ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-ui-nsfw), 0.78)' }}>
-                        {module.enabled === false ? 'off' : 'on'}
+                      <span style={{ color: !module.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-ui-nsfw), 0.78)' }}>
+                        {!module.enabled ? 'off' : 'on'}
                       </span>
                     </span>
                   </span>
@@ -1613,19 +1613,19 @@ function V2PresetSwitcher({
     return { slot, index, prompt, content, macro, isRuntime, isMissing };
   });
   const shownOrderSlots = slotViewModels.filter((item) => {
-    if (slotFilter === 'enabled') return item.slot.enabled !== false;
-    if (slotFilter === 'disabled') return item.slot.enabled === false;
+    if (slotFilter === 'enabled') return item.slot.enabled;
+    if (slotFilter === 'disabled') return !item.slot.enabled;
     if (slotFilter === 'runtime') return item.isRuntime;
     if (slotFilter === 'missing') return item.isMissing;
     if (slotFilter === 'macro') return item.macro.level !== 'none';
     return true;
   });
-  const enabledSlotCount = orderSlots.filter((slot) => slot.enabled !== false).length;
+  const enabledSlotCount = orderSlots.filter((slot) => slot.enabled).length;
   const runtimeSlotCount = slotViewModels.filter((item) => item.isRuntime).length;
   const unmatchedSlotCount = slotViewModels.filter((item) => item.isMissing).length;
   const macroSlotCount = slotViewModels.filter((item) => item.macro.level !== 'none').length;
   const advancedMacroSlotCount = slotViewModels.filter((item) => item.macro.level === 'advanced').length;
-  const disabledRuntimeCount = slotViewModels.filter((item) => item.isRuntime && item.slot.enabled === false).length;
+  const disabledRuntimeCount = slotViewModels.filter((item) => item.isRuntime && !item.slot.enabled).length;
   const duplicateIds = Array.from(new Set(orderSlots.map((slot) => slot.identifier).filter((id, index, arr) => arr.indexOf(id) !== index)));
   const worldInfoEntries = getPresetWorldInfoEntries(current?.preset.world_info);
   const worldInfoViewEntries = getPresetWorldInfoViewEntries(current?.preset.world_info);
@@ -1952,11 +1952,11 @@ function V2PresetSwitcher({
                     style={{
                       gridTemplateColumns: '2.25rem minmax(0, 1fr) auto',
                       background: active ? 'rgba(var(--tj-accent-primary), 0.12)' : 'transparent',
-                      color: slot.enabled === false ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
+                      color: !slot.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
                       clipPath: smallClip,
                     }}
                   >
-                    <span style={{ color: slot.enabled === false ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-ui-nsfw), 0.82)' }}>
+                    <span style={{ color: !slot.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-ui-nsfw), 0.82)' }}>
                       #{index + 1}
                     </span>
                     <span className="min-w-0">
@@ -1985,7 +1985,7 @@ function V2PresetSwitcher({
                       <span style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>
                         {isRuntime ? 'runtime' : (isMissing ? 'missing' : (prompt?.role ?? 'system'))}
                       </span>
-                      <TogglePill checked={slot.enabled !== false} disabled={!canToggleOrderSlot} onChange={(next) => patchOrderSlot(slot.identifier, { enabled: next })} />
+                      <TogglePill checked={slot.enabled} disabled={!canToggleOrderSlot} onChange={(next) => patchOrderSlot(slot.identifier, { enabled: next })} />
                     </span>
                   </button>
                 );
@@ -2004,10 +2004,10 @@ function V2PresetSwitcher({
                 </span>
                 {selectedSlot && (
                   <TogglePill
-                    checked={selectedSlot.enabled !== false}
+                    checked={selectedSlot.enabled}
                     disabled={!canToggleOrderSlot}
                     onChange={(next) => patchSelectedSlot({ enabled: next })}
-                    label={selectedSlot.enabled === false ? '已关闭' : '已启用'}
+                    label={!selectedSlot.enabled ? '已关闭' : '已启用'}
                   />
                 )}
               </div>
@@ -2468,11 +2468,11 @@ function V2PresetStructurePreview({ preset, characterId }: { preset: STPresetEnt
               className="grid items-center gap-2 px-2 py-1.5 text-xs"
               style={{
                 gridTemplateColumns: '1.5rem minmax(0, 1fr) auto',
-                color: slot.enabled === false ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
+                color: !slot.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
               }}
             >
               <span style={{ color: isSystemSlot ? 'rgba(var(--tj-accent-primary), 0.9)' : 'rgba(var(--tj-text-secondary), 0.55)' }}>
-                {slot.enabled === false ? '○' : isSystemSlot ? '◆' : '◇'}
+                {!slot.enabled ? '○' : isSystemSlot ? '◆' : '◇'}
               </span>
               <span className="truncate" title={prompt?.name || slot.identifier}>
                 {prompt?.name || slot.identifier}
@@ -2486,7 +2486,7 @@ function V2PresetStructurePreview({ preset, characterId }: { preset: STPresetEnt
       </div>
       {(selectedOrder?.order.length ?? 0) > rows.length && (
         <div className="text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>
-          其余 {selectedOrder!.order.length - rows.length} 项已折叠
+          其余 {selectedOrder.order.length - rows.length} 项已折叠
         </div>
       )}
     </div>

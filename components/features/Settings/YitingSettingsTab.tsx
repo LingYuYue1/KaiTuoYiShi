@@ -68,14 +68,14 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
   };
 
   const buildEffective = (api: 忆庭API覆盖): ResolvedApi => ({
-    provider: (api.provider || mainConfig?.provider || 'openai_compatible') as AI提供商,
+    provider: (api.provider || mainConfig?.provider || 'openai_compatible'),
     baseUrl: api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: api.apiKey.trim() || mainConfig?.apiKey || '',
     model: api.model.trim() || mainConfig?.model || '',
     maxTokens: api.maxTokens ?? mainConfig?.maxTokens,
     temperature: api.temperature ?? mainConfig?.temperature,
     retryCount: api.retryCount ?? mainConfig?.retryCount ?? 2,
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   });
 
   const recallEffective = buildEffective(memory.忆庭召回API);
@@ -219,13 +219,13 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
         <ToggleField
           label="启用忆庭召回"
           desc="开启后，达到触发回合后会检索回忆档案并注入主剧情。关闭只停止召回，回合纪要仍会入库，方便之后重新开启。"
-          checked={memory.忆庭启用 !== false}
+          checked={memory.忆庭启用}
           onChange={(checked) => patchMemory({ 忆庭启用: checked })}
         />
         <ToggleField
           label="启用独立精炼"
           desc="开启后，忆庭入库会调用精炼 API 生成概要；关闭时使用主剧情小总结和本地格式兜底。"
-          checked={memory.忆庭独立精炼 === true}
+          checked={memory.忆庭独立精炼}
           onChange={(checked) => patchMemory({ 忆庭独立精炼: checked })}
         />
       </Section>

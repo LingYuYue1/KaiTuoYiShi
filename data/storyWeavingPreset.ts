@@ -397,7 +397,7 @@ async function loadDecomposedCanonSeries(presetId: string): Promise<剧情编织
     ...series,
     来源类型: 'canon',
     内置预设ID: presetId,
-    激活注入: series.激活注入 !== false,
+    激活注入: series.激活注入,
   });
 }
 

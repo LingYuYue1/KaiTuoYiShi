@@ -134,7 +134,7 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
         ...asset,
         id: String(asset.id || `asset_${Date.now()}_${Math.random().toString(36).slice(2)}`),
         source: asset.source ?? 'generated',
-        nsfw: asset.nsfw === true,
+        nsfw: asset.nsfw,
         createdAt: Number(asset.createdAt) || Date.now(),
         status: asset.status ?? 'ready',
         contentHash: typeof asset.contentHash === 'string' && /^[a-f0-9]{64}$/i.test(asset.contentHash.trim())
@@ -153,7 +153,7 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
           targetType: entry.targetType ?? 'misc',
           slot: entry.slot ?? 'misc',
           tags: normalizeStringArray(entry.tags),
-          nsfw: entry.nsfw === true,
+          nsfw: entry.nsfw,
           createdAt: Number(entry.createdAt) || Date.now(),
         };
         return { ...normalized, referenceTargets: 读取图片参考目标(normalized) };
@@ -178,7 +178,7 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
         source: task.source ?? 'manual',
         status: task.status ?? 'queued',
         backend: task.backend || 'openai_compatible',
-        nsfw: task.nsfw === true,
+        nsfw: task.nsfw,
         prompt: String(task.prompt || ''),
         referenceImageIds: normalizeStringArray(task.referenceImageIds),
         dimensions: typeof task.dimensions === 'string' ? task.dimensions : undefined,

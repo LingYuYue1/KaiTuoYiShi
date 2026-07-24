@@ -60,7 +60,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
     baseUrl: news.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: news.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: news.api.model.trim() || mainConfig?.model || '',
-    enableClaudeMode: settings.enableClaudeMode === true,
+    enableClaudeMode: settings.enableClaudeMode,
   };
 
   const handleFetchModels = async () => {

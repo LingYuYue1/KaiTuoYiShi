@@ -21,7 +21,7 @@ export function buildStoryPlanningAnalysis(system?: 剧情编织系统): 剧情�
   if (!system?.系列列表?.length) return null;
   const anchor = system.当前进度;
   const series = system.系列列表.find((item) => item.id === (anchor?.当前系列ID || system.当前系列ID))
-    ?? system.系列列表.find((item) => item.激活注入 !== false)
+    ?? system.系列列表.find((item) => item.激活注入)
     ?? system.系列列表[0];
   if (!series) return null;
   const current = resolveCurrentSegment(series, anchor);
@@ -55,7 +55,7 @@ export function buildStoryPlanningAnalysis(system?: 剧情编织系统): 剧情�
 function resolveNextSegment(series: 剧情编织系列, current: 剧情编织分段): 剧情编织分段 | undefined {
   return [...series.分段列表]
     .sort((a, b) => a.组号 - b.组号)
-    .find((segment) => segment.组号 > current.组号 && segment.启用注入 !== false && !['已经历', '已跳过', '已偏离', '暂停'].includes(segment.运行状态));
+    .find((segment) => segment.组号 > current.组号 && segment.启用注入 && !['已经历', '已跳过', '已偏离', '暂停'].includes(segment.运行状态));
 }
 
 function resolveCurrentSegment(series: 剧情编织系列, anchor?: 剧情编织进度锚点): 剧情编织分段 | undefined {

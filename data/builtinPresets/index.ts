@@ -55,7 +55,7 @@ function toV2PromptIdentifier(moduleId: string, index: number): string {
 function convertBuiltinPresetToV2(entry: STPresetEntry): STPresetEntryV2 | null {
   if (entry.presetType === 'native' || entry.modules.length === 0) return null;
   const prompts: STPresetPrompt[] = entry.modules
-    .filter((module) => module.enabled !== false)
+    .filter((module) => module.enabled)
     .filter((module) => typeof module.content === 'string' && module.content.trim())
     .map((module, index) => ({
       identifier: toV2PromptIdentifier(module.id, index),

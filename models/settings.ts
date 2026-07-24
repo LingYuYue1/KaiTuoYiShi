@@ -811,7 +811,7 @@ export function 归一化正文生图设置(input?: Partial<正文生图设置>)
     preference: input.preference ?? defaults.preference,
     timing: input.timing ?? defaults.timing,
     parserApi: {
-      provider: (input.parserApi?.provider ?? '') as AI提供商 | '',
+      provider: (input.parserApi?.provider ?? ''),
       baseUrl: String(input.parserApi?.baseUrl ?? ''),
       apiKey: String(input.parserApi?.apiKey ?? ''),
       model: String(input.parserApi?.model ?? ''),

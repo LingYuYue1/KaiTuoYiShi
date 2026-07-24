@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import type { 世界状态 } from '@/models/world';
-import type { 剧情模式 } from '@/models/journey';
 import { storyModes } from '@/data/journeyPresets';
 import { saveSetting } from '@/services/dbService';
 
@@ -267,7 +266,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
             return (
               <button
                 key={mode.id}
-                onClick={() => onWorldStateChange({ ...worldState, 剧情模式: mode.id as 剧情模式 })}
+                onClick={() => onWorldStateChange({ ...worldState, 剧情模式: mode.id })}
                 className="px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
                   background: active
@@ -392,7 +391,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
       <ToggleRow
         label="抢话 / 适度代写玩家对白"
         desc="允许 AI 少量扩写玩家话语或轻动作，避免主角完全沉默；不允许代替玩家做关键决定、长篇独白或深层心理。"
-        checked={settings.enablePlayerSpeechExpansion === true}
+        checked={settings.enablePlayerSpeechExpansion}
         onChange={(v) =>
           onChange({
             ...settings,

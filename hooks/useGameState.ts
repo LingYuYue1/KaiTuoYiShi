@@ -320,7 +320,7 @@ export function useGameState(): UseGameStateReturn {
           backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
           enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
           enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
-          enablePlayerSpeechExpansion: savedGame.enableNoControl === true ? false : savedGame.enablePlayerSpeechExpansion === true,
+          enablePlayerSpeechExpansion: savedGame.enableNoControl ? false : savedGame.enablePlayerSpeechExpansion,
           visualTextSettings: 归一化视觉文本设置(savedGame.visualTextSettings),
           promptModules: migratePromptModules(savedGame),
           // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移

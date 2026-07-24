@@ -61,7 +61,7 @@ function compactDataImages(value: unknown, refs: Map<string, string>, seen = new
 }
 
 function compactQueueTasks(tasks?: unknown[]): 队列任务记录[] | undefined {
-  if (!Array.isArray(tasks)) return tasks as 队列任务记录[] | undefined;
+  if (!Array.isArray(tasks)) return tasks;
   return tasks.slice(-MAX_SNAPSHOT_QUEUE_TASKS).map((task) => {
     const item = task as 队列任务记录;
     return {

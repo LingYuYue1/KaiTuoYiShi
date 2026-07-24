@@ -51,7 +51,7 @@ function decideRuntimeUnlock(
   archives: 剧情编织历史归档[],
 ): { status: string; reason: string } | null {
   if (entry.分类 === 'story') return null;
-  if (entry.可用于联动 === false) return null;
+  if (!entry.可用于联动) return null;
   const meta = 解析智库软结构标签(entry);
   if (!isRuntimeUnlockableZhikuEntry(entry, meta)) return null;
   const currentUnlock = normalizeText(entry.运行时解锁状态 ?? entry.解锁状态 ?? meta.解锁状态);

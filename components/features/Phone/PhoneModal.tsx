@@ -213,7 +213,7 @@ export function PhoneModal({
           const npc = normalizedNpcRecords.find((item) => item.id === contact.npcId);
           if (npc?.关系 === 'enemy') return false;
         }
-        return contact.available !== false;
+        return contact.available;
       });
   }, [album, derivedContacts, fallbackStoryContacts, normalizedNpcRecords, phone.contacts]);
   const addableNpcContacts = useMemo(
@@ -443,7 +443,7 @@ export function PhoneModal({
   };
 
   const handleCreateGroupChat = () => {
-    const selectedContacts = contacts.filter((contact) => groupMemberIds.includes(contact.id) && contact.available !== false);
+    const selectedContacts = contacts.filter((contact) => groupMemberIds.includes(contact.id) && contact.available);
     if (selectedContacts.length < 2) {
       setPhoneError('创建群聊至少需要选择 2 位可联系对象。');
       return;
@@ -834,7 +834,7 @@ export function PhoneModal({
     setGeneratingSeedId(seed.id);
 
     const contact = resolveSeedContact(seed);
-    if (seed.targetType === 'private' && contact.available === false) {
+    if (seed.targetType === 'private' && !contact.available) {
       setPhoneError('该对象尚未作为联系人解锁。');
       setGeneratingSeedId('');
       return;
@@ -1262,7 +1262,7 @@ export function PhoneModal({
                           : []}
                         groupAddCandidates={activeChat.type === 'group'
                           ? contacts.filter((contact) => {
-                              if (contact.available === false) return false;
+                              if (!contact.available) return false;
                               return !activeChat.participantIds.some((participantId) => {
                                 const normalized = normalizeParticipantId(participantId);
                                 return (

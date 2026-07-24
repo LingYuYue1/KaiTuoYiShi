@@ -178,7 +178,7 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
 
   return {
     ...nextFromSave,
-    enableClaudeMode: localSettings.enableClaudeMode === true,
+    enableClaudeMode: localSettings.enableClaudeMode,
     deepSeekMainMode: localSettings.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
     backgroundTaskMode: localSettings.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
     enableCacheDiagnostics: localSettings.enableCacheDiagnostics ?? 创建默认游戏设置().enableCacheDiagnostics,

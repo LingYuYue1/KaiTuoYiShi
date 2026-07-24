@@ -296,7 +296,7 @@ function 收集路径(value: unknown, prefix: string, result: string[], depth: n
     return;
   }
 
-  Object.keys(value as Record<string, unknown>)
+  Object.keys(value)
     .sort((a, b) => a.localeCompare(b, 'zh-CN'))
     .forEach((k) => {
       收集路径((value as Record<string, unknown>)[k], `${prefix}.${k}`, result, depth - 1);

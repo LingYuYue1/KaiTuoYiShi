@@ -188,7 +188,7 @@ export function buildSystemPrompt(
   if (sceneFromWorldbook) parts.push(sceneFromWorldbook);
 
   // ── 忆庭（仅控制召回；入库始终执行，不等同于短期/长期记忆） ──
-  const yitingEnabled = settings.记忆系统?.忆庭启用 !== false;
+  const yitingEnabled = settings.记忆系统?.忆庭启用;
   const yitingThreshold = settings.记忆系统?.忆庭召回最早触发回合 ?? 10;
   if (yitingInjectionOverride !== undefined) {
     if (yitingInjectionOverride.trim()) parts.push(yitingInjectionOverride.trim());
@@ -284,7 +284,7 @@ export function buildOpeningSystemPrompt(
     wordCountTarget: settings.wordCountTarget,
     personLabel,
     playerName: getPromptPlayerName(traveler),
-    currentScope: 'opening' as 提示词模块作用域,
+    currentScope: 'opening',
     openingSource: worldState.开局档案?.来源,
     triggerType,
     macroCtx,

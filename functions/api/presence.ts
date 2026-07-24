@@ -76,8 +76,8 @@ function getClientIp(request: Request): string {
 }
 
 function getBucket(env: PagesContextLike['env']): R2BucketLike | null {
-  const candidate = (env as Record<string, unknown>)?.ONLINE_SESSIONS_R2
-    ?? (env as Record<string, unknown>)?.CNB_SYNC_R2;
+  const candidate = (env)?.ONLINE_SESSIONS_R2
+    ?? (env)?.CNB_SYNC_R2;
   if (
     candidate &&
     typeof candidate === 'object' &&
@@ -90,7 +90,7 @@ function getBucket(env: PagesContextLike['env']): R2BucketLike | null {
 }
 
 function getKvNamespace(env: PagesContextLike['env']): KvNamespaceLike | null {
-  const candidate = (env as Record<string, unknown>)?.ONLINE_SESSIONS_KV;
+  const candidate = (env)?.ONLINE_SESSIONS_KV;
   if (
     candidate &&
     typeof candidate === 'object' &&

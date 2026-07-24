@@ -138,7 +138,7 @@ export async function buildCompleteCloudBackup(
           ? await source.loadSave(summary.id).then((save) => save ? ({ save, assetRecords: extractSaveAssetRecords(save) }) : null)
           : null;
       if (!bundle) throw new Error(`读取本地存档 #${summary.id} 失败，无法生成完整云备份。`);
-      const save = { ...bundle.save, id: summary.id, type: summary.type } as 存档数据;
+      const save = { ...bundle.save, id: summary.id, type: summary.type };
       const records = new Map(bundle.assetRecords.map((record) => [record.id, record]));
       for (const asset of save.相册?.assets ?? []) {
         if (!asset.id || assetByOriginalId.has(asset.id)) continue;

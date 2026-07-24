@@ -163,7 +163,7 @@ function buildZhikuArchiveBaseline(npc: NPC记录, zhiku?: 智库系统): Canoni
   const entries = zhiku?.条目 ?? [];
   if (!entries.length) return undefined;
   const matched = entries
-    .filter((entry) => entry.分类 === 'character' && entry.可用于联动 !== false)
+    .filter((entry) => entry.分类 === 'character' && entry.可用于联动)
     .filter((entry) => {
       const names = 获取智库人物名列表(entry);
       return names.some((name) => namesLikelySame(name, npc.姓名) || namesLikelySame(name, npc.别名));
@@ -295,7 +295,7 @@ export function enrichNpcArchives(
       const hasPlaceholder = nsfw.标签?.length || nsfw.备注 || nsfw.长期事实?.length;
       if (hasPlaceholder) {
         const { 标签, 备注, 长期事实, ...rest } = nsfw as NPC记录['NSFW档案'] & { 标签?: unknown; 备注?: unknown; 长期事实?: unknown };
-        updated = { ...updated, NSFW档案: rest as NPC记录['NSFW档案'] };
+        updated = { ...updated, NSFW档案: rest };
       }
     }
 

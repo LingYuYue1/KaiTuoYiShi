@@ -5,7 +5,7 @@ import type { 剧情编织门禁快照 } from '@/services/storyWeaving';
 export function getCurrentStoryChapterLabel(system: 剧情编织系统): string {
   const normalized = 归一化剧情编织系统(system);
   const series = getActiveSeries(normalized);
-  if (!series || series.激活注入 === false) return '';
+  if (!series || !series.激活注入) return '';
   const current = getCurrentSegment(series, normalized.当前进度);
   if (!current) return `${series.标题} · 未选择章节`;
   const chapter = current.章节标题?.length ? current.章节标题.join(' / ') : current.标题;
@@ -22,11 +22,11 @@ export function autoAlignCanonStoryProgress(params: {
 }): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
   const series = getActiveSeries(normalized);
-  if (!series || series.激活注入 === false) {
+  if (!series || !series.激活注入) {
     return { system: normalized, changed: false, progressed: false };
   }
   const segments = [...series.分段列表]
-    .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成')
+    .filter((segment) => segment.启用注入 && segment.处理状态 === '已完成')
     .sort((a, b) => a.组号 - b.组号);
   const rawCurrent = getCurrentSegment(series, normalized.当前进度);
   if (rawCurrent && ['已经历', '已跳过', '已偏离', '暂停'].includes(rawCurrent.运行状态)) {
@@ -178,7 +178,7 @@ export function autoAlignCanonStoryProgress(params: {
 
 function getActiveSeries(system: 剧情编织系统): 剧情编织系列 | undefined {
   return system.系列列表.find((item) => item.id === system.当前系列ID)
-    ?? system.系列列表.find((item) => item.激活注入 !== false);
+    ?? system.系列列表.find((item) => item.激活注入);
 }
 
 function getCurrentSegment(series: 剧情编织系列, anchor?: 剧情编织进度锚点): 剧情编织分段 | undefined {
@@ -201,13 +201,13 @@ function findCrossSeriesCanonAlignment(
     .filter((series) =>
       series.id !== activeSeries.id &&
       series.来源类型 === 'canon' &&
-      series.激活注入 !== false &&
+      series.激活注入 &&
       !isSideCanonSeries(series)
     )
     .map((series) => {
       const score = scoreCanonSeriesPresence(series, source);
       const completedSegments = series.分段列表
-        .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成')
+        .filter((segment) => segment.启用注入 && segment.处理状态 === '已完成')
         .sort((a, b) => a.组号 - b.组号);
       const segmentScores = completedSegments
         .map((segment) => ({ segment, score: scoreSegmentPresence(segment, source) }))

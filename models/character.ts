@@ -84,7 +84,7 @@ export function 确保命途列表(t: 角色数据结构, awakenedAt = ''): 角�
   if (t.主命途 && t.主命途 !== 'none') {
     return {
       ...t,
-      命途列表: [创建命途进度(t.主命途 as 命途ID, true, awakenedAt, '开局承载')],
+      命途列表: [创建命途进度(t.主命途, true, awakenedAt, '开局承载')],
     };
   }
   return { ...t, 命途列表: [] };

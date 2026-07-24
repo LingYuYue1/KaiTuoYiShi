@@ -81,7 +81,7 @@ function compactCommandValue(value: unknown): unknown {
   }
   if (Array.isArray(value)) return `[旧数组值已省略，共 ${value.length} 项]`;
   if (value && typeof value === 'object') {
-    return `[旧对象值已省略，共 ${Object.keys(value as Record<string, unknown>).length} 个字段]`;
+    return `[旧对象值已省略，共 ${Object.keys(value).length} 个字段]`;
   }
   return value;
 }

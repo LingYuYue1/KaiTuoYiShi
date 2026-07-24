@@ -412,7 +412,7 @@ export function buildVariableModelPrompt(
       '- 年龄门禁已解除：ageConfirm 只作展示信息（adult / unknown / minor_blocked），不再限制身体档案、偏好、敏感点或经历的写入。unknown 也能正常写入完整档案。',
       '- 亲密事实/偏好/敏感点/身体档案必须来自本回合正文证据或已成立的关系基础，不凭空编造。',
       '- femaleBodyArchive 字段使用中文 key：胸部、女性私处、后庭、体态、体味。maleBodyArchive 字段使用：男性器、后庭、体态、体味。',
-      maleArchiveEnabled === false ? '- 男性 NSFW 档案开关关闭时，不写 maleBodyArchive 或男性私密长期事实。' : '',
+      !maleArchiveEnabled ? '- 男性 NSFW 档案开关关闭时，不写 maleBodyArchive 或男性私密长期事实。' : '',
       '- 帕姆、史瓦罗等智械/机械/非人形对象禁止写 nsfw_archive；其余角色（包括年龄未标注的）按 NSFW 总开关正常处理。',
       '- 黑塔 / 大黑塔 / Herta / The Herta 是同一身份并明确允许建档；她的身体档案描述大黑塔的真实身体，不描述空间站傀儡、人偶或投影。',
       `- 示例：{"type":"nsfw_archive","npcName":"三月七","enabled":true,"ageConfirm":"unknown","intimacyStage":"暧昧试探","boundaries":"需要明确同意，不接受公开场合越界。","longTermFacts":["第12回合与玩家确认亲近前先确认边界。"],"tags":["慢热"],"evidence":"正文写明双方确认边界"}`,

@@ -25,7 +25,7 @@ function migrateWorldbookEntries(entry: STPresetEntry): STWorldInfoEntry[] | und
       constant: item.injectMode === 'always',
       vectorized: false,
       selective: Array.isArray(item.keySecondary) && item.keySecondary.length > 0,
-      enabled: item.enabled !== false,
+      enabled: item.enabled,
       order: typeof item.priority === 'number' ? item.priority : index + 1,
       probability: typeof item.probability === 'number' ? item.probability : 100,
       depth: typeof item.depth === 'number' ? item.depth : 0,

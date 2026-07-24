@@ -222,7 +222,7 @@ function 归一化事实类型(value: unknown): 变量事实['type'] | '' {
 
 function 归一化物品分类(value: unknown): 物品分类 | '' {
   const text = 读字符串(value);
-  return (ITEM_CATEGORY_ALIASES[text] ?? text) as 物品分类 | '';
+  return (ITEM_CATEGORY_ALIASES[text] ?? text);
 }
 
 function 归一化物品动作(value: unknown): 'gain' | '' {
@@ -232,12 +232,12 @@ function 归一化物品动作(value: unknown): 'gain' | '' {
 
 function 归一化触发类型(value: unknown): 主动来信类型 | '' {
   const text = 读字符串(value);
-  return (PHONE_TRIGGER_ALIASES[text] ?? text) as 主动来信类型 | '';
+  return (PHONE_TRIGGER_ALIASES[text] ?? text);
 }
 
 function 归一化优先级(value: unknown): 主动来信优先级 | '' {
   const text = 读字符串(value);
-  return (PHONE_PRIORITY_ALIASES[text] ?? text) as 主动来信优先级 | '';
+  return (PHONE_PRIORITY_ALIASES[text] ?? text);
 }
 
 function 归一化事实(raw: unknown): 变量事实 | null {
@@ -342,14 +342,14 @@ function 归一化事实(raw: unknown): 变量事实 | null {
     const category = 归一化物品分类(raw.category || raw.类别);
     const name = 读字符串(raw.name || raw.名称);
     if (action !== 'gain' || !category || !name) return null;
-    if (!ITEM_CATEGORIES.has(category as 物品分类)) return null;
+    if (!ITEM_CATEGORIES.has(category)) return null;
     const quality = 读字符串(raw.quality || raw.品质);
     const source = 读字符串(raw.source || raw.来源);
     const narrativeEffectsRaw = raw.narrativeEffects ?? raw.叙事效果;
     return {
       type: 'item',
       action: 'gain',
-      category: category as 物品分类,
+      category: category,
       name,
       description: 读字符串(raw.description || raw.描述) || undefined,
       quantity: 数字(raw.quantity ?? raw.数量),
@@ -788,7 +788,7 @@ export function factsToVariableCommands(
             初见回合: turn,
             最近回合: turn,
             对玩家称呼: fact.playerAddress,
-            性别: fact.gender ?? (canonical?.gender as import('@/models/npc').NPC性别 | undefined),
+            性别: fact.gender ?? (canonical?.gender),
             外貌: fact.appearance ?? canonical?.appearance,
             穿着: fact.clothing,
             说话方式: fact.speechStyle,

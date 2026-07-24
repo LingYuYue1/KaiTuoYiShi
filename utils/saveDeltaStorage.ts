@@ -314,8 +314,8 @@ function jsonCompatibleEqual(
   if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
   if (Array.isArray(left) !== Array.isArray(right)) return false;
 
-  const leftObject = left as object;
-  const rightObject = right as object;
+  const leftObject = left;
+  const rightObject = right;
   const paired = seen.get(leftObject);
   if (paired?.has(rightObject)) return true;
   if (paired) paired.add(rightObject);
