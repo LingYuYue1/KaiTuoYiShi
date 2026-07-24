@@ -114,7 +114,11 @@ import {
   formatZhikuDiagnosticsPreview,
   formatZhikuRecallSummary,
 } from './recallDiagnostics';
+import type { TurnContext, TurnDeltas } from './turnTypes';
 import { stage1_turnStart } from './stage1_turnStart';
+import { stage2_preModel } from './stage2_preModel';
+import { stage4_aiRequest } from './stage4_aiRequest';
+import { stage5_replyLanding } from './stage5_replyLanding';
 
 
 
@@ -190,6 +194,26 @@ export async function executeSendWorkflow(
 
   const startTime = Date.now();
 
+  const d: TurnDeltas = {};
+  const ctx: TurnContext = {
+    state, userInput,
+    deps,
+    config, mainStoryConfig: config,
+    isOpeningSystemTrigger,
+    isAwakeningEnterTrigger,
+    awakeningPathId,
+    awakeningInstruction,
+    openingInstruction,
+    effectiveWorld,
+    abortController,
+    isCurrentWorkflow,
+    assertWorkflowActive,
+    streamMessageSetter,
+    recoveryJournal,
+    rollbackHistoryOnAbort,
+    rollbackSnapshotOnAbort,
+  };
+
   try {
     await persistWorkflowRecoveryJournal(recoveryJournal);
 
@@ -203,313 +227,34 @@ export async function executeSendWorkflow(
     rollbackHistoryOnAbort = purgedHistory;
     const updatedHistory = s1.updatedHistory;
 
-    // 2. Build system prompt
-    // currentScope 优先级:进行中狭间 > 开局/主流程。狭间专用 scope 让世界书 + 提示词模块同步切换。
-    // 用 effectiveWorld(踏入触发已经把 进行中狭间 写入),否则 React 异步 setState 会让本帧还是旧 scope。
-    const currentScope: 'opening' | 'main' | 'pathAwakening' = effectiveWorld.进行中狭间
-      ? 'pathAwakening'
-      : state.turnCount === 1
-        ? 'opening'
-        : 'main';
-    // 命途狭间阶段:出题 vs 评判。
-    //   - 玩家本回合刚点踏入 → 出题回合,AI 应该出 3 题
-    //   - 进行中狭间 != null 且 不是踏入触发 → 评判回合,AI 必须落 <狭间评判> 标签
-    //   - 不在狭间流程里 → undefined
-    const awakeningPhase: 'question' | 'judgement' | undefined = effectiveWorld.进行中狭间
-      ? (isAwakeningEnterTrigger ? 'question' : 'judgement')
-      : undefined;
-    const openingArchiveText = 格式化开局档案上下文(effectiveWorld.开局档案);
-    const worldbookCtx = {
-      recentUserInput: userInput,
-      recentAIResponse: '',
-      worldName: effectiveWorld.当前时段?.名称 ?? '',
-      travelerName: state.旅人.姓名,
-      turnCount: state.turnCount,
-      startScenarioId: effectiveWorld.起航之地ID,
-      startSceneName: effectiveWorld.开局档案?.章节锚点名称 ?? effectiveWorld.当前地点,
-      currentLocation: effectiveWorld.当前地点,
-      openingRegionName: effectiveWorld.开局档案?.地区名称,
-      openingChapterName: effectiveWorld.开局档案?.章节锚点名称,
-      openingEntryText: effectiveWorld.开局档案?.玩家介入原文,
-      openingSource: effectiveWorld.开局档案?.来源,
-      openingArchiveText,
-      npcNames: getZhikuNpcNamesForTurn({
-        world: effectiveWorld,
-        npcs: state.NPC,
-        history: updatedHistory,
-        userInput,
-        turnCount: state.turnCount,
-      }),
-      originalProtagonist: effectiveWorld.原著主角,
-      currentScope,
-      // 当前剧情模式，用于按 storyModeGate 过滤主线世界书（4 选 1）
-      storyMode: effectiveWorld.剧情模式,
-      // Phase 7.1：世界书扫描扩展（消息历史 + 触发状态）
-      recentMessages: updatedHistory
-        .map((m) => (typeof m.content === 'string' ? m.content : ''))
-        .filter(Boolean)
-        .slice(-100),
-      messageCount: state.turnCount,
-      worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
-    };
-    const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({
-      world: effectiveWorld,
-      history: updatedHistory,
-      userInput,
-    });
-    const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
-    const zhikuSceneContext = {
-      ...worldbookCtx,
-      startScenarioId: undefined,
-      startSceneName: undefined,
-      currentLocation: undefined,
-      npcNames: [],
-      presentNpcNamesForFallback: worldbookCtx.npcNames,
-      anticipatedNpcNames: anticipatedZhikuNpcNames,
-      aiSupplementHints: {
-        currentLocation: effectiveWorld.当前地点,
-        presentNpcNames: worldbookCtx.npcNames,
-        immediateStoryReview: immediateStoryReviewForZhiku,
-        openingArchiveText,
-      },
-    };
-    const recallQuery = buildMainRecallQuery({
-      userInput,
-      history: updatedHistory,
-      currentLocation: effectiveWorld.当前地点,
-      npcNames: worldbookCtx.npcNames,
-    });
-    const zhikuRecallQuery = buildZhikuKeywordRecallQuery({
-      userInput,
-      history: updatedHistory,
-    });
-    let newsForPrompt = state.新闻;
-    let openingNewsForSave: 新闻条目[] | null = null;
-    let openingNewsPreprocessed = false;
-    if (isOpeningSystemTrigger && state.gameSettings.新闻系统?.enabled && state.gameSettings.新闻系统?.autoGenerate) {
-      pushQueueTask(state, 'news', 'pending', {
-        detail: '开局前正在先处理一次星际和平周报，用作首回合世界背景。',
-        cancellable: true,
-      });
-      try {
-        const openingProtagonist = formatOriginalProtagonistForOpening(effectiveWorld.原著主角);
-        const openingArchive = effectiveWorld.开局档案;
-        const openingPressure = openingArchive?.整理档案?.特别要求?.length
-          ? openingArchive.整理档案.特别要求.join('；')
-          : openingArchive?.章节参考说明 || effectiveWorld.当前地点 || '当前开局地区';
-        const openingNewsBody = [
-          `开局初始化：当前开局为${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '未知地区'}「${openingArchive?.章节锚点名称 ?? effectiveWorld.起航之地ID ?? '未命名章节'}」。`,
-          `章节参考：${openingArchive?.章节参考说明 ?? '按当前开局档案和世界状态生成首回合世界事件苗头。'}`,
-          `开局压力：${openingPressure}`,
-          openingArchive?.玩家介入原文 ? `玩家介入：${openingArchive.玩家介入原文}` : '',
-          `原著主角配置：${openingProtagonist}`,
-        ].filter(Boolean).join('\n');
-        const preNews = await runNewsGenerationStep({
-          state,
-          mainBody: openingNewsBody,
-          userInput,
-          recentTurns: [`- 系统：开局初始化\n  正文：${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '当前地区'}「${openingArchive?.章节锚点名称 ?? '当前开局'}」即将开始，新闻系统先生成可供首回合参考的世界事件苗头。`],
-          signal: abortController.signal,
-          shouldCommit: isCurrentWorkflow,
-        });
-        assertWorkflowActive();
-        openingNewsPreprocessed = true;
-        newsForPrompt = preNews?.news ?? state.新闻;
-        openingNewsForSave = preNews?.news ?? null;
-        pushQueueTask(state, 'news', 'success', {
-          detail: preNews?.changed
-            ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。`
-            : preNews
-              ? '开局新闻预处理完成，但本轮没有可写新闻变化。'
-              : '开局新闻预处理未生成可用结果。',
-        });
-      } catch (err) {
-        pushQueueTask(state, 'news', 'failed', {
-          detail: err instanceof Error ? err.message : '开局新闻预处理失败。',
-          failCount: state.gameSettings.新闻系统?.api.retryCount ?? 1,
-        });
-      }
-    }
-    const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用;
-    const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && (state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) < state.turnCount;
-    const zhikuRecallEnabled = !isOpeningSystemTrigger && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
-    const storyWeavingGate = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
-      ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx)
-      : null;
-    const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
-      ? getStoryWeavingInjectionDiagnostics(state.剧情编织)
-      : null;
-    pushQueueTask(state, 'yiting', yitingRecallEnabled ? 'pending' : 'skipped', {
-      detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。',
-      cancellable: yitingRecallEnabled,
-    });
-    const [yitingPreview, zhikuPreview] = await Promise.all([
-      yitingRecallEnabled && state.忆庭 && recallQuery
-        ? retrieveYitingContextWithModel(
-            state.忆庭,
-            recallQuery,
-            state.gameSettings.记忆系统?.忆庭召回条数 ?? 8,
-            state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
-            config,
-            abortController.signal,
-            state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 2,
-            state.gameSettings.promptModules,
-          ).catch((err: unknown) => {
-            pushQueueTask(state, 'yiting', 'failed', {
-              detail: err instanceof Error ? err.message : '忆庭召回失败。',
-              failCount: state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 1,
-            });
-            return null;
-          })
-        : Promise.resolve(null),
-      zhikuRecallEnabled
-        ? retrieveZhikuContextWithModel(
-            state.智库,
-            zhikuRecallQuery,
-            state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
-            state.gameSettings.智库系统 ?? 创建默认智库系统设置(),
-            config,
-            abortController.signal,
-            state.gameSettings.智库系统?.api.retryCount ?? 2,
-            zhikuSceneContext,
-            state.gameSettings.promptModules,
-          ).catch((err) => {
-            console.warn('[zhiku-retrieval] 智库检索失败：', err);
-            return null;
-          })
-        : Promise.resolve(null),
-    ]);
-    assertWorkflowActive();
-    const recallSummaryForTurn = [
-      formatZhikuRecallSummary(zhikuPreview?.diagnostics),
-      formatYitingRecallSummary(yitingPreview?.previewText),
-    ].join('\n');
-    const recallFullContentForTurn = [
-      zhikuPreview?.injection ? ['【智库完整召回】', zhikuPreview.injection].join('\n') : '',
-      yitingPreview?.injection ? ['【记忆完整召回】', yitingPreview.injection].join('\n') : '',
-    ].filter(Boolean).join('\n\n');
-    state.setLiveRecallSummary(recallSummaryForTurn);
-    state.setLiveRecallFullContent(recallFullContentForTurn);
-    const memoryHint = isOpeningSystemTrigger
-      ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
-      : yitingPreview?.injection
-      ? `剧情回忆已命中，已暂停普通短中长期记忆注入：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
-      : state.gameSettings.enableMemoryInjection
-      ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(state.记忆.中期记忆 ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
-      : '记忆上下文已跳过';
-    const yitingHint = !yitingEnabled
-      ? '忆庭召回已关闭'
-      : yitingPreview?.entries.length
-      ? `剧情回忆已召回：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
-      : yitingRecallEnabled
-        ? `忆庭已召回：${state.忆庭?.回忆档案?.length ? '无相关档案' : '当前还没有可召回档案'}`
-        : `忆庭已召回：未到第${(state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) + 1}回合`;
-    const zhikuHint = state.gameSettings.智库系统?.enabled
-      ? `智库内容已注入：${
-          zhikuPreview?.entries.length
-            ? zhikuPreview.entries.slice(0, 2).map((entry) => entry.标题).join('、')
-            : '无相关条目'
-        }`
-      : '智库已跳过';
-    state.setWorkflowHint(isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}`);
-    state.setWorkflowStatus('done');
-    const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
-    const storyRecallInjection = [
-      immediateStoryReview
-        ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n')
-        : '',
-      yitingPreview?.injection ?? '',
-    ].filter((item) => item.trim()).join('\n\n');
-    const npcLedgerSelection = !isOpeningSystemTrigger
-      ? selectNpcLedgersForTurn({
-          records: state.NPC,
-          turnCount: state.turnCount,
-          explicitNames: worldbookCtx.npcNames,
-          sceneNames: effectiveWorld.当前时段?.人物?.map((npc) => npc.姓名),
-          recalledNames: worldbookCtx.npcNames,
-        })
-      : undefined;
-    const currentTriggerType = deps.rerollContext
-      ? 'swipe'
-      : isOpeningSystemTrigger
-        ? 'opening'
-        : 'normal';
+    // 阶段 1 → d
+    Object.assign(d, { preTurnSnapshot, userMsg, purgedHistory, updatedHistory });
 
-    // ST 预设兼容：宏引擎上下文。
-    // local 每回合重置；global 从 settings 读取副本（避免直接 mutate state）。
-    // 处理完后若 global 变化，回写到 settings.macroGlobalVars 实现跨会话持久化。
-    const prevGlobalSnapshot = state.gameSettings.macroGlobalVars ?? {};
-    // 组装游戏状态快照供 ST 标准宏使用（{{char}}/{{user}}/{{lastMessage}} 等）
-    const lastMsg = updatedHistory[updatedHistory.length - 1];
-    const lastUserMsg = [...updatedHistory].reverse().find((m) => m.role === 'user');
-    const lastAssistantMsg = [...updatedHistory].reverse().find((m) => m.role === 'assistant');
-    const macroGameState: MacroGameState = {
-      charName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
-      userName: state.旅人.姓名 || '开拓者',
-      lastMessage: lastMsg?.content ?? '',
-      lastUserMessage: lastUserMsg?.content ?? '',
-      lastCharMessage: lastAssistantMsg?.content ?? '',
-      messageCount: updatedHistory.length,
-      turnCount: state.turnCount,
-      modelName: mainStoryConfig.model,
-      maxContext: mainStoryConfig.maxContext,
-    };
-    const macroCtx: MacroContext = createMacroContext(prevGlobalSnapshot, macroGameState);
+    // 阶段 2：主模型前置
+    Object.assign(d, await stage2_preModel(ctx, d));
 
-    const builtPrompt = isOpeningSystemTrigger
-      ? buildOpeningSystemPrompt(
-          state.旅人,
-          effectiveWorld,
-          state.gameSettings,
-          state.turnCount,
-          state.worldbooks,
-          worldbookCtx,
-          newsForPrompt,
-          currentTriggerType,
-          macroCtx,
-        )
-      : buildSystemPrompt(
-          state.旅人,
-          effectiveWorld,
-          state.记忆,
-          state.gameSettings,
-          state.turnCount,
-          state.worldbooks,
-          worldbookCtx,
-          state.NPC,
-          state.新闻,
-          state.剧情,
-          state.剧情编织,
-          state.智库,
-          state.忆庭,
-          state.手机,
-          awakeningPhase,
-          storyRecallInjection || (yitingRecallEnabled ? '' : undefined),
-          zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined,
-          Boolean(yitingPreview?.injection),
-          npcLedgerSelection,
-          currentTriggerType,
-          macroCtx,
-        );
+    // 解构到局部变量，保持下游代码不变
+    const currentTriggerType = d.currentTriggerType!;
+    const awakeningPhase = d.awakeningPhase!;
+    const yitingPreview = d.yitingPreview as Record<string, any>;
+    const zhikuPreview = d.zhikuPreview as Record<string, any>;
+    const yitingRecallEnabled = d.yitingRecallEnabled!;
+    const zhikuRecallEnabled = d.zhikuRecallEnabled!;
+    const npcLedgerSelection = d.npcLedgerSelection;
+    const macroCtx = d.macroCtx!;
+    const openingNewsPreprocessed = d.openingNewsPreprocessed!;
+    const openingNewsForSave = d.openingNewsForSave!;
+    const yitingEnabled = d.yitingEnabled!;
+    const storyWeavingGate = d.storyWeavingGate as any;
+    const storyWeavingDiagnostics = d.storyWeavingDiagnostics as any;
+    const recallSummaryForTurn = d.recallSummaryForTurn!;
+    const recallFullContentForTurn = d.recallFullContentForTurn!;
+    let systemPrompt = d.systemPrompt!;
 
-    // 宏引擎处理后回写 globalVars（仅当 global 变化时）
-    if (Object.keys(macroCtx.global).length !== Object.keys(prevGlobalSnapshot).length
-      || Object.entries(macroCtx.global).some(([k, v]) => prevGlobalSnapshot[k] !== v)) {
-      state.setGameSettings((prev) => ({ ...prev, macroGlobalVars: { ...macroCtx.global } }));
-    }
+    // ── stage2_preModel 已提取，上方解构提供局部变量 ──
 
-    // Phase 7.1：本回合世界书注入完成后，回写触发状态表（用于 delay / cooldown 判断）。
-    // 必须在 buildSystemPrompt 之后调用，保证本回合 cooldown 检查用的是上一回合的状态。
-    const nextTriggerStates = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
-    if (nextTriggerStates !== state.gameSettings.worldbookTriggerStates) {
-      state.setGameSettings((prev) => ({ ...prev, worldbookTriggerStates: nextTriggerStates }));
-    }
-    let systemPrompt = builtPrompt.systemPrompt;
-    // 天气判断 prompt 注入
-    const 天气片断 = 构建天气Prompt片段(effectiveWorld.当前地点, effectiveWorld.当前天气);
-    systemPrompt = systemPrompt + '\n\n' + 天气片断;
-    // Phase 4: In-Chat depth 注入。非 system 角色的模块消息按 depth 插入聊天历史。
-    const moduleChatMessages = builtPrompt.chatModuleMessages;
+    // Phase 4: In-Chat depth 注入（moduleChatMessages 来自 stage2）
+    const moduleChatMessages = (d.chatModuleMessages as Array<{ role: string; content: string; _injectionPosition?: number; _injectionDepth?: number; _injectionOrder?: number }>) ?? [];
     const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
     const shouldTryTavernV2 =
       state.gameSettings.enableStPreset !== false &&
@@ -689,373 +434,54 @@ export async function executeSendWorkflow(
       }
     }
 
+    // S3→S4 bridge: populate computed values into d for stage4+5 consumption
     const shouldStreamMainRequest = state.gameSettings.enableStreaming && !isPageHidden();
-    const mainRequestMode: 'stream' | 'non-stream' = shouldStreamMainRequest ? 'stream' : 'non-stream';
+    Object.assign(d, {
+      apiMessages,
+      systemPrompt,
+      deepSeekMainActive,
+      deepSeekLockFormat,
+      deepSeekMainMode,
+      shouldTryTavernV2,
+      tavernV2Error,
+      effectivePrefixMode,
+      effectivePrefixContent,
+      mainRequestMode: (shouldStreamMainRequest ? 'stream' : 'non-stream') as 'stream' | 'non-stream',
+      tavernV2Messages,
+      currentPresetV2ForStage: currentPresetV2,
+    });
 
-    // 4. Stream AI response（含自动重试循环）
-    let streamedText = '';
-    let streamEventCount = 0;
-    let previewText = '';
-    let previewEpoch = 0;
-    let previewChain: Promise<void> = Promise.resolve();
-    visibilityPublisher = typeof document === 'undefined'
-      ? null
-      : createVisibilityBufferedPublisher({
-          source: createDocumentVisibilitySource(document),
-          commit: (text) => {
-            previewEpoch += 1;
-            previewText = text;
-            streamMessageSetter.flush(text);
-          },
-        });
-    let result: Awaited<ReturnType<typeof sendChatMessage>>;
-    const configuredMaxAttempts = state.gameSettings.autoRetryOnError
-      ? Math.max(1, state.gameSettings.autoRetryCount) + 1
-      : 1;
-    const maxAttempts = (deepSeekMainActive || deps.rerollContext) ? Math.max(2, configuredMaxAttempts) : configuredMaxAttempts;
-    let lastErr: unknown = null;
-    let deepSeekProtocolIssuesForTurn: string[] = [];
-    let rerollSimilarityForTurn: number | undefined;
-    let rerollSimilarityRetried = false;
-    let attempt = 0;
-    while (attempt < maxAttempts) {
-      attempt++;
-      streamedText = '';
-      streamEventCount = 0;
-      previewText = '';
-      previewEpoch += 1;
-      previewChain = Promise.resolve();
-      streamMessageSetter.flush('');
-      try {
-        result = await sendChatMessage(mainStoryConfig, {
-          messages: apiMessages,
-          systemPrompt,
-          onDelta: (delta) => {
-            streamedText += delta;
-            if (!state.gameSettings.enableStreaming) {
-              streamMessageSetter.set(streamedText);
-              return;
-            }
-            if (visibilityPublisher?.bufferWhenHidden(streamedText)) {
-              previewEpoch += 1;
-              previewText = streamedText;
-              return;
-            }
-            streamEventCount += 1;
-            const deltaPreviewEpoch = previewEpoch;
-            previewChain = previewChain.then(async () => {
-              const chunks = splitStreamingReveal(delta);
-              for (const chunk of chunks) {
-                if (abortController.signal.aborted || deltaPreviewEpoch !== previewEpoch) return;
-                if (isPageHidden()) {
-                  previewEpoch += 1;
-                  previewText = streamedText;
-                  visibilityPublisher?.bufferWhenHidden(streamedText);
-                  return;
-                }
-                previewText += chunk;
-                streamMessageSetter.set(previewText);
-                await waitStreamingPreviewDelay(14, abortController.signal);
-                if (isPageHidden()) {
-                  previewEpoch += 1;
-                  previewText = streamedText;
-                  visibilityPublisher?.bufferWhenHidden(streamedText);
-                  return;
-                }
-              }
-            });
-          },
-          signal: abortController.signal,
-          streaming: shouldStreamMainRequest,
-          repairTags: state.gameSettings.enableTagRepair,
-          prefixMode: effectivePrefixMode,
-          prefixContent: effectivePrefixContent,
-          // Phase 3：透传 API 配置的采样参数（支持 ST 预设同步过来的高级参数）
-          topP: mainStoryConfig.topP,
-          topK: mainStoryConfig.topK,
-          topA: mainStoryConfig.topA,
-          minP: mainStoryConfig.minP,
-          repetitionPenalty: mainStoryConfig.repetitionPenalty,
-          frequencyPenalty: mainStoryConfig.frequencyPenalty,
-          presencePenalty: mainStoryConfig.presencePenalty,
-          maxContext: mainStoryConfig.maxContext,
-        });
-        if (tavernV2Messages && currentPresetV2) {
-          const regexCleanup = applyTavernOutputRegexScripts(result.fullText || streamedText, currentPresetV2.preset);
-          if (regexCleanup.applied.length > 0 && regexCleanup.text !== result.fullText) {
-            result = {
-              ...result,
-              fullText: regexCleanup.text,
-              parsed: parseResponse(regexCleanup.text, { repair: state.gameSettings.enableTagRepair }),
-            };
-            streamedText = regexCleanup.text;
-            console.info('[ST V2] 已执行安全输出正则清理:', regexCleanup.applied);
-          }
-        }
-        const candidateText = (result.parsed.body?.trim() || result.fullText.trim() || streamedText.trim());
-        // 抗空回检测：完全空，或纯标签无正文（isEmptyResponse 判断所有协议字段都为空）
-        const isBlankResponse = !candidateText || isEmptyResponse(result.parsed);
-        if (isBlankResponse) {
-          void appendApiErrorReport({
-            source: '主剧情工作流',
-            config: mainStoryConfig,
-            requestMode: mainRequestMode,
-            error: new Error(`返回空响应，触发自动重试。主剧情第 ${attempt}/${maxAttempts} 次${isEmptyResponse(result.parsed) ? '（纯标签无正文）' : ''}。`),
-            responseText: result.fullText || streamedText || '（空响应）',
-          });
-          if (attempt < Math.max(2, maxAttempts)) {
-            console.warn(`[sendWorkflow] 第 ${attempt} 次返回空响应${isEmptyResponse(result.parsed) ? '（纯标签无正文）' : ''}，自动重试。`);
-            continue;
-          }
-          throw new Error('AI response was empty');
-        }
-        // 主剧情不再执行“截断续写”自动重试。
-        // 兼容模型常省略闭合标签，误判后续写会把完整上文回填进历史并污染下一轮。
-        // 缺失标签统一交给 parseResponse/repairTags/sanitizeParsedResponse 兜底处理。
-        const rerollSimilarity = deps.rerollContext
-          ? calculateRerollSimilarity(candidateText, deps.rerollContext.previousResponse)
-          : 0;
-        if (deps.rerollContext) {
-          rerollSimilarityForTurn = rerollSimilarity;
-        }
-        if (deps.rerollContext && rerollSimilarity >= 0.86 && attempt < maxAttempts) {
-          rerollSimilarityRetried = true;
-          void appendApiErrorReport({
-            source: '重roll相似度校验',
-            config: mainStoryConfig,
-            requestMode: mainRequestMode,
-            error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次重roll结果与上一版过于相似，相似度 ${Math.round(rerollSimilarity * 100)}%。`),
-            responseText: result.fullText || streamedText || candidateText,
-          });
-          apiMessages.push(创建聊天消息('user', buildRerollSimilarityRetryGuard(deps.rerollContext.previousResponse, rerollSimilarity)));
-          pushQueueTask(state, 'main_story', 'pending', {
-            detail: '重roll结果与上一版过于相似，正在强制换写。',
-            failCount: attempt,
-            retrying: true,
-            cancellable: true,
-          });
-          console.warn(`[sendWorkflow] 第 ${attempt}/${maxAttempts} 次重roll与上一版过于相似，自动换写，相似度：${rerollSimilarity.toFixed(3)}`);
-          continue;
-        }
-        const protocolIssues = deepSeekMainActive
-          ? getDeepSeekMainProtocolIssues(result.parsed, result.fullText || streamedText)
-          : [];
-        if (protocolIssues.length) {
-          deepSeekProtocolIssuesForTurn = protocolIssues;
-          void appendApiErrorReport({
-            source: 'DeepSeek 主剧情协议校验',
-            config: mainStoryConfig,
-            requestMode: mainRequestMode,
-            error: new Error(`主剧情第 ${attempt}/${maxAttempts} 次输出协议不完整：${protocolIssues.join('；')}`),
-            responseText: result.fullText || streamedText || '（空响应）',
-          });
-          if (attempt < maxAttempts) {
-            apiMessages.push(创建聊天消息('user', buildDeepSeekProtocolRetryGuard(protocolIssues)));
-            pushQueueTask(state, 'main_story', 'pending', {
-              detail: `DeepSeek 输出协议不完整，正在重试：${protocolIssues.join('；')}`,
-              failCount: attempt,
-              retrying: true,
-              cancellable: true,
-            });
-            console.warn(`[sendWorkflow] DeepSeek 第 ${attempt}/${maxAttempts} 次输出协议不完整，自动重试：`, protocolIssues);
-            continue;
-          }
-        } else if (deepSeekMainActive) {
-          deepSeekProtocolIssuesForTurn = [];
-        }
-        lastErr = null;
-        break;
-      } catch (innerErr) {
-        if ((innerErr as Error).name === 'AbortError' || abortController.signal.aborted) {
-          throw innerErr;
-        }
-        lastErr = innerErr;
-        const innerMessage = innerErr instanceof Error ? innerErr.message : String(innerErr ?? '');
-        const alreadyReportedByApiLayer =
-          innerMessage.includes('API Error') ||
-          innerMessage.includes('Failed to fetch') ||
-          innerMessage.includes('No response body');
-        if (!alreadyReportedByApiLayer) {
-          void appendApiErrorReport({
-            source: '主剧情工作流',
-          config: mainStoryConfig,
-            requestMode: mainRequestMode,
-            error: innerErr,
-            responseText: streamedText || previewText || '',
-          });
-        }
-        if (isNonRetryableAIError(innerErr) || attempt >= maxAttempts) break;
-        pushQueueTask(state, 'main_story', 'pending', {
-          detail: `主剧情生成失败 ${attempt} 次，正在自动重试。`,
-          failCount: attempt,
-          retrying: true,
-          cancellable: true,
-        });
-        console.warn(`[sendWorkflow] 第 ${attempt}/${maxAttempts} 次尝试失败，自动重试：`, innerErr);
-      }
-    }
-    if (lastErr) throw lastErr;
-    // 进入下面流程：result 一定已被赋值（lastErr 为空意味着 break 出循环）
-    result = result!;
+    // 阶段 4：AI 请求与响应（while 重试循环整块移动）
+    const s4 = await stage4_aiRequest(ctx, d, visibilityPublisher);
+    Object.assign(d, s4.deltas);
+    visibilityPublisher = s4.visibilityPublisher;
+    let streamedText = s4.streamedText;
+    let previewText = s4.previewText;
+    const { result, streamEventCount, previewChain: s4PreviewChain } = s4;
+    const previewChain = s4PreviewChain;
+
+    // 阶段 4 → d 的字段也需要部分局部解构供诊断代码用
+    const deepSeekProtocolIssuesForTurn = d.deepSeekProtocolIssuesForTurn!;
+    const rerollSimilarityForTurn = d.rerollSimilarityForTurn;
+    const rerollSimilarityRetried = d.rerollSimilarityRetried!;
+    const mainRequestMode = (d.mainRequestMode ?? 'non-stream') as 'stream' | 'non-stream';
 
     visibilityPublisher?.flush();
 
     if (abortController.signal.aborted || !isCurrentWorkflow()) return;
 
-    // 5. Build AI message
-    const duration = (Date.now() - startTime) / 1000;
-    pushQueueTask(state, 'main_story', 'success', {
-      detail: `正文生成完成，用时 ${Math.round(duration)}s。`,
-    });
-    const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
-    const parsedBody = normalizePlayerSpeechInBody({
-      body: cleanedParsed.body?.trim() ?? '',
-      playerName: state.旅人.姓名 || state.旅人.别名 || '你',
-      userInput,
-    });
-    const finalBody = stripLeakedHistoryMetaFromBody(sanitizeContaminatedText(parsedBody, state.gameSettings.额外功能));
-    const sanitizedRawText = replaceBodyInRawResponse(
-      cleanedParsed.rawText || result.fullText || streamedText,
-      finalBody,
-    );
-    const displayText = finalBody || sanitizeContaminatedText(result.fullText || streamedText, state.gameSettings.额外功能);
-    if (state.gameSettings.enableStreaming) {
-      if (streamEventCount > 0) {
-        await previewChain;
-      } else if (displayText.trim()) {
-        await revealStreamingPreview(state, displayText, abortController.signal, {
-          delayMs: 16,
-          minChunks: 8,
-        });
-      }
-      streamMessageSetter.flush('');
-    } else {
-      streamMessageSetter.cancel();
-    }
-    // 给狭间消息预先打上 awakenPathId 标签:出题/评判回合,此时 effectiveWorld.进行中狭间 还没清空,
-    // 把命途 ID 写进 parsedResponse,让 TurnItem 在 进行中狭间 清空后仍能拿到命途名做美化。
-    // 兜底:如果 effectiveWorld 当前帧没拿到(罕见 race),从 chatHistory 向前找最近一条出题消息
-    // 取它的 awakenPathId,确保评判消息一定拿得到命途名。
-    const isAwakeningTurn =
-      !!(cleanedParsed.awakenQuestions?.trim() || cleanedParsed.awakenJudgement?.trim());
-    let awakenPathId = '';
-    if (isAwakeningTurn) {
-      awakenPathId = effectiveWorld.进行中狭间 ?? '';
-      if (!awakenPathId) {
-        for (let i = updatedHistory.length - 1; i >= 0; i--) {
-          const prev = updatedHistory[i];
-          const prevPid = prev?.parsedResponse?.awakenPathId;
-          if (prevPid) {
-            awakenPathId = prevPid;
-            break;
-          }
-        }
-      }
-    }
-    const baseParsed = finalBody
-      ? { ...cleanedParsed, body: finalBody, rawText: sanitizedRawText }
-      : { ...cleanedParsed, body: displayText, rawText: sanitizedRawText };
-    const parsedForDisplay = awakenPathId
-      ? { ...baseParsed, awakenPathId }
-      : baseParsed;
-    const tokenUsage = buildTurnTokenUsage({
-      apiUsage: result.usage,
-      systemPrompt,
-      messages: apiMessages,
-      outputText: result.fullText || displayText,
-      provider: config.provider,
-      model: config.model,
-    });
-    const previousDebugContext = [...updatedHistory]
-      .reverse()
-      .find((msg) => msg.role === 'assistant' && msg.debugContext?.systemPrompt)?.debugContext;
-    const cachePrefixDiagnostics = buildCachePrefixDiagnostics({
-      enabled: state.gameSettings.enableCacheDiagnostics,
-      systemPrompt,
-      messages: apiMessages,
-      previous: previousDebugContext
-        ? {
-            systemPrompt: previousDebugContext.systemPrompt,
-            messages: previousDebugContext.messages,
-          }
-        : undefined,
-    });
-    const aiMsg = 创建聊天消息('assistant', displayText, {
-      gameTime: `${state.turnCount}`,
-      parsedResponse: parsedForDisplay,
-      inputTokens: tokenUsage.inputTokens,
-      outputTokens: tokenUsage.outputTokens,
-      tokenUsage,
-      responseDurationSec: duration,
-      preTurnSnapshot,
-      debugContext: {
-        systemPrompt,
-        messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
-        deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : 'off',
-        deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory,
-        deepSeekPrefixMode: deepSeekLockFormat,
-        deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
-        deepSeekMainOriginalModel: result.deepSeekRecovery?.originalModel,
-        deepSeekMainAdaptedModel: result.deepSeekRecovery?.fallbackModel
-          ?? (result.deepSeekRecovery?.initialModel !== result.deepSeekRecovery?.originalModel
-            ? result.deepSeekRecovery?.initialModel
-            : undefined),
-        stV2Attempted: shouldTryTavernV2,
-        stV2Used: Boolean(tavernV2Messages),
-        stV2FallbackReason: tavernV2Error instanceof Error ? tavernV2Error.message : tavernV2Error ? String(tavernV2Error) : undefined,
-        rerollSimilarity: rerollSimilarityForTurn,
-        rerollSimilarityRetried,
-        cachePrefixDiagnostics,
-        mainRequestMode,
-        recallSummary: recallSummaryForTurn,
-        recallFullContent: recallFullContentForTurn,
-        yitingRecallPreview: yitingPreview?.previewText ?? '',
-        yitingRecallRawText: yitingPreview?.rawText ?? '',
-        yitingRecallUsedModel: yitingPreview?.usedModel === true,
-        zhikuRecallPreview: formatZhikuDiagnosticsPreview(zhikuPreview?.diagnostics),
-        zhikuRecallInjection: zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : '',
-        zhikuRecallRawText: zhikuPreview?.rawText ?? '',
-        zhikuRecallUsedModel: zhikuPreview?.usedModel === true,
-        npcLedgerInjection: buildNpcLedgerDebug(npcLedgerSelection),
-        npcLedgerSelectionRaw: npcLedgerSelection,
-        recallPreview: [
-          yitingPreview?.previewText ?? '',
-          storyWeavingGate
-            ? `剧情编织门禁：${storyWeavingGate.mode}｜第 ${storyWeavingGate.分段组号 ?? '?'} 段｜${storyWeavingGate.reasons.join('；') || '无命中理由'}`
-            : '',
-          storyWeavingDiagnostics
-            ? [
-              `剧情编织注入健康：${storyWeavingDiagnostics.健康状态}`,
-              `剧情编织实际注入：第 ${storyWeavingDiagnostics.当前分段组号} 段「${storyWeavingDiagnostics.当前分段标题}」｜${storyWeavingDiagnostics.当前分段运行状态}`,
-              storyWeavingDiagnostics.归档锚点标题 ? `已跳过归档锚点：第 ${storyWeavingDiagnostics.归档锚点组号} 段「${storyWeavingDiagnostics.归档锚点标题}」` : '',
-              storyWeavingDiagnostics.前一分段标题 ? `历史承接段：${storyWeavingDiagnostics.前一分段标题}` : '',
-              storyWeavingDiagnostics.下一分段标题 ? `下一段预热：${storyWeavingDiagnostics.下一分段标题}` : '',
-              storyWeavingDiagnostics.检查项.length ? `注入检查：${storyWeavingDiagnostics.检查项.join('；')}` : '',
-            ].filter(Boolean).join('\n')
-            : '',
-          formatZhikuDiagnosticsPreview(zhikuPreview?.diagnostics),
-          formatNpcLedgerPreview(npcLedgerSelection),
-        ].filter(Boolean).join('\n\n'),
-      },
-    });
-    recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, {
-      phase: 'variable_settlement',
-      assistantMessageId: aiMsg.id,
-    });
-    await persistWorkflowRecoveryJournal(recoveryJournal);
-    let finalHistory = [...updatedHistory, aiMsg];
-    // assistant 消息已携带 preTurnSnapshot，清掉 user 消息上的，避免存档膨胀
-    const userMsgIdx = finalHistory.findIndex((m) => m.id === userMsg.id);
-    if (userMsgIdx >= 0 && finalHistory[userMsgIdx].preTurnSnapshot) {
-      finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } : m);
-    }
-    finalHistory = compactChatHistoryForLongSession(finalHistory);
-    state.setChatHistory(finalHistory);
-    state.setTurnCount((prev) => prev + 1);
-    streamMessageSetter.flush('');
-    state.setLoading(false);
-    state.setPendingVariable(true);
-    pendingVariableStarted = true;
+    // 阶段 5：回复落地
+    /* 读 d: updatedHistory,userMsg,preTurnSnapshot,systemPrompt,apiMessages,
+       deepSeek*,shouldTryTavernV2,tavernV2*,yiting/zhikuPreview,zhikuRecallEnabled,
+       npcLedgerSelection,storyWeavingGate/Diagnostics,recallSummary/FullContentForTurn
+       写 d: aiMsg,finalHistory,parsedForDisplay,displayText,pendingVariableStarted,recoveryJournal */
+    Object.assign(d, await stage5_replyLanding(ctx, d, result, streamedText, streamEventCount, previewChain, startTime));
+    recoveryJournal = (d as any).recoveryJournal ?? recoveryJournal;
+    const aiMsg = d.aiMsg!;
+    let finalHistory = d.finalHistory!;
+    const parsedForDisplay = d.parsedForDisplay!;
+    const displayText = d.displayText!;
+    const pendingVariableStarted = d.pendingVariableStarted!;
 
     // 6. Update memory
     pushQueueTask(state, 'memory', 'pending', { detail: '正在写入即时记忆并检查压缩阈值。' });
