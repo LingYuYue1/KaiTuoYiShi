@@ -69,7 +69,7 @@ for (const k of scopeOrder) {
 push('## 第二部分：内置世界书条目');
 push('');
 for (const book of worldbooks) {
-  push(`### 《${book.name}》（id: \`${book.id}\`，${book.entries.length} 条${(book as any).storyModeGate ? `，storyModeGate: ${JSON.stringify((book as any).storyModeGate)}` : ''}）`);
+  push(`### 《${(book as any).title ?? book.id}》（id: \`${book.id}\`，${book.entries.length} 条${(book as any).storyModeGate ? `，storyModeGate: ${JSON.stringify((book as any).storyModeGate)}` : ''}）`);
   push('');
   for (const e of book.entries) {
     const anyE = e as any;

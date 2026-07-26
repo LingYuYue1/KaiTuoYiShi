@@ -2957,9 +2957,9 @@ assert(
     retrieval.includes('return accepted.size < AI_SUPPLEMENT_ENTRY_LIMIT') &&
     retrieval.includes('trimAiSupplementGroups') &&
     retrieval.includes('buildZhikuInjection(groups') &&
-    retrieval.includes("formatGroup('角色相关资料', groups.characterEntries)") &&
-    retrieval.includes("formatGroup('强相关资料', groups.strongEntries)") &&
-    retrieval.includes("formatGroup('弱相关资料', groups.weakEntries)"),
+    retrieval.includes("formatGroup('在场角色档案（必须遵守）', groups.characterEntries)") &&
+    retrieval.includes("formatGroup('强相关背景', groups.strongEntries)") &&
+    retrieval.includes("formatGroup('弱相关背景', groups.weakEntries)"),
     'zhiku recall must keep character keyword, normal keyword, and AI supplement limits in separate slots.',
 );
 assert(
