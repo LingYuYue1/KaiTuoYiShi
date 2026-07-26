@@ -8,6 +8,7 @@ import {
   createWorkflowRecoveryJournal,
   persistWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
+import { devLogError } from '@/utils/devLog';
 import { type VisibilityBufferedPublisher } from '@/utils/visibilityBufferedPublisher';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
@@ -257,7 +258,7 @@ export async function executeSendWorkflow(
       state.setWorkflowStatus('');
       keepWorkflowHint = true;
     } else {
-      console.error('Send workflow error:', err);
+      devLogError('turn', 'executeSendWorkflow.catch', err);
       keepWorkflowHint = true;
       const detail = err instanceof Error ? err.message : '主流程调用失败。';
       const alreadyReportedByApiLayer = Boolean(
