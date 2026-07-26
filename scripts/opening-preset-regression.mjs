@@ -304,11 +304,11 @@ assert(
   useGame.includes('handleRestartOpening') &&
     useGame.includes('生成开局已成立事实(openingArchive') &&
     useGame.includes('根据开局档案创建初始NPC记录') &&
-    useGame.includes('const restartOpeningArchive = 归一化开局档案(state.世界.开局档案, state.世界)') &&
-    useGame.includes('state.setNPC(根据开局档案创建初始NPC记录(restartOpeningArchive))') &&
-    useGame.includes('state.set世界((prev) => {') &&
-    useGame.includes('alignStoryWeavingToOpeningArchive(state.剧情编织, restartOpeningArchive)') &&
-    useGame.includes("saveSetting('storyWeavingSystem', nextStoryWeaving)") &&
+    useGame.includes('const restartOpeningArchive = 归一化开局档案(s.世界.开局档案, s.世界)') &&
+    useGame.includes('s.setNPC(根据开局档案创建初始NPC记录(restartOpeningArchive))') &&
+    useGame.includes('s.set世界((prev) => {') &&
+    useGame.includes('alignStoryWeavingToOpeningArchive(s.剧情编织, restartOpeningArchive)') &&
+    useGame.includes("saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving))") &&
     useGame.includes('开局档案: openingArchive') &&
     useGame.includes('openingSummary?.初始日期参考') &&
     useGame.includes('openingSummary?.初始时间参考') &&
@@ -356,8 +356,9 @@ assert(
 assert(
   worldModel.includes('export function 根据开局档案创建初始NPC记录') &&
     worldModel.includes('archive.来源 === \'official_preset\' && relationHints.length === 0') &&
-    worldModel.includes('关系: \'acquaintance\' as const') &&
-    worldModel.includes('当前关系阶段: \'开局已认识（未必当前在场）\'') &&
+    worldModel.includes('关系: 获取NPC兼容关系(openingAffinity)') &&
+    worldModel.includes('当前关系阶段: 获取NPC关系阶段(openingAffinity)') &&
+    worldModel.includes('同行: false') &&
     worldModel.includes('代表长期关系参考，不代表当前镜头在场') &&
     worldModel.includes('OPENING_NON_PERSON_NAMES') &&
     worldModel.includes('isValidOpeningInitialNpcName') &&
