@@ -51,6 +51,7 @@ export async function stage1_turnStart(
   ));
 
   const updatedHistory = [...purgedHistory, userMsg];
+  // 投影点（裁决 S02 保留）：玩家消息须立即可见；存档只认 d，此 setter 仅刷新 UI
   state.setChatHistory(updatedHistory);
 
   return { preTurnSnapshot, userMsg, purgedHistory, recoveryJournal: rj, updatedHistory };

@@ -140,7 +140,6 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
   p.assertWorkflowActive();
   const turnRecallEntry = turnRecallEntryResult.entry;
   const yitingAfterTurnRecall = upsertRecallEntry(p.yitingBase, turnRecallEntry);
-  p.state.set忆庭(yitingAfterTurnRecall);
   pushQueueTask(p.state, 'memory', 'success', {
     detail: turnRecallEntryResult.usedFallback ? '忆庭纪要已使用主回复小总结入库。' : '忆庭纪要已由独立模型压缩并入库。',
   });
@@ -182,7 +181,6 @@ async function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
         messageSeeds: [...phone.messageSeeds, fallbackSeed],
         unreadTotal: phone.unreadTotal + 1,
       };
-      p.state.set手机(phone);
       pushQueueTask(p.state, 'phone', 'success', {
         detail: `已补充低频主动来信种子：${fallbackSeed.title}。`,
       });

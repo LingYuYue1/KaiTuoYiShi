@@ -78,7 +78,6 @@ export async function stage10_storyZhiku(
     assertWorkflowActive();
     if (storyProgressMemoryLine && !storyWeavingConcurrentChange) {
       memoryAfterStoryProgress = addImmediateMemory(memoryAfterStoryProgress, storyProgressMemoryLine, state.turnCount + 1);
-      state.set记忆(memoryAfterStoryProgress);
       const npcAfterStoryProgress = applyStoryProgressNpcMemory(
         npcAfterCompression,
         storyWeavingForSave,

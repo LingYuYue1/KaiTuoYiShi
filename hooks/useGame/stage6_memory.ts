@@ -35,7 +35,6 @@ export async function stage6_memory(
   );
   assertWorkflowActive();
   mem = compression.memory;
-  state.set记忆(mem);
 
   pushQueueTask(state, 'memory', 'success', {
     detail: compression.usedModel

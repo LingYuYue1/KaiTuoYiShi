@@ -181,6 +181,7 @@ export async function stage5_replyLanding(
     finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } : m);
   }
   finalHistory = compactChatHistoryForLongSession(finalHistory);
+  // 投影点（裁决 S06 保留）：助手正文须立即可见；存档只认 d，此 setter 仅刷新 UI
   state.setChatHistory(finalHistory);
   state.setTurnCount((prev) => prev + 1);
   streamMessageSetter.flush('');

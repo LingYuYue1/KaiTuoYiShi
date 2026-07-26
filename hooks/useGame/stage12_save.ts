@@ -27,13 +27,21 @@ import { pushQueueTask } from './workflowTaskRuntime';
 export async function stage12_save(
   ctx: TurnContext,
   d: TurnDeltas,
+  finalValues: {
+    finalHistoryForSave: TurnDeltas['finalHistoryForSave'];
+    memoryAfterStoryProgress: Exclude<TurnDeltas['memoryAfterStoryProgress'], null>;
+    yitingAfterTurnRecall: TurnDeltas['yitingAfterTurnRecall'];
+    phoneAfterFallbackSeed: TurnDeltas['phoneAfterFallbackSeed'];
+  },
 ): Promise<Partial<TurnDeltas>> {
   const { state, assertWorkflowActive } = ctx;
   const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
-  const finalHistoryForSave = d.finalHistoryForSave!;
-  const memoryAfterStoryProgress = (d as any).memoryAfterStoryProgress as typeof state.记忆;
-  const yitingAfterTurnRecall = d.yitingAfterTurnRecall!;
-  const phoneAfterFallbackSeed = d.phoneAfterFallbackSeed!;
+  const {
+    finalHistoryForSave,
+    memoryAfterStoryProgress,
+    yitingAfterTurnRecall,
+    phoneAfterFallbackSeed,
+  } = finalValues;
   const npcAfterCompression = (d as any).npcAfterCompression as typeof state.NPC;
   const newsAfterGeneration = d.newsAfterGeneration as any;
   const storyWeavingForSave = (d as any).storyWeavingForSave as typeof state.剧情编织;

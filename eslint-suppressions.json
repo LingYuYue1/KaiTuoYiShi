@@ -809,7 +809,7 @@
       "count": 2
     },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 5
@@ -858,16 +858,13 @@
   },
   "hooks/useGame/stage12_save.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 6
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
+      "count": 5
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 5
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
+      "count": 3
     }
   },
   "hooks/useGame/stage2_preModel.ts": {

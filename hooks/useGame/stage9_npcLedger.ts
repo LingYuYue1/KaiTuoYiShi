@@ -79,7 +79,6 @@ export function stage9_npcLedger(
   let updatedFinalHistory = finalHistory;
   if (npcLedgerUpdateDebug) {
     updatedFinalHistory = attachNpcLedgerUpdateDebug(finalHistory, aiMsg.id, npcLedgerUpdateDebug);
-    state.setChatHistory(updatedFinalHistory);
   }
 
   return { npcAfterCompression, finalHistory: updatedFinalHistory };

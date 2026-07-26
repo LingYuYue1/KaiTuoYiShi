@@ -219,13 +219,28 @@ export async function executeSendWorkflow(
        写 d: newsAfterGeneration, yitingAfterTurnRecall, phoneAfterFallbackSeed, finalHistoryForSave */
     Object.assign(d, await stage11_backgroundJobs(ctx, d));
 
+    const finalHistoryForSave = d.finalHistoryForSave;
+    const memoryAfterStoryProgress = d.memoryAfterStoryProgress ?? undefined;
+    const yitingAfterTurnRecall = d.yitingAfterTurnRecall;
+    const phoneAfterFallbackSeed = d.phoneAfterFallbackSeed;
+
+    if (memoryAfterStoryProgress) state.set记忆(memoryAfterStoryProgress);
+    if (yitingAfterTurnRecall) state.set忆庭(yitingAfterTurnRecall);
+    if (phoneAfterFallbackSeed) state.set手机(phoneAfterFallbackSeed);
+    if (finalHistoryForSave && finalHistoryForSave !== state.chatHistory) state.setChatHistory(finalHistoryForSave);
+
     // 阶段 12：保存 / 收尾
     /* 读 d: variableOverrides(S8), finalHistoryForSave(S11),
        memoryAfterStoryProgress(S10), yitingAfterTurnRecall(S11), phoneAfterFallbackSeed(S11),
        npcAfterCompression(S9), newsAfterGeneration(S11), storyWeavingForSave(S10),
        zhikuAfterRuntimeUnlock(S10)
        写 d: 无 */
-    Object.assign(d, await stage12_save(ctx, d));
+    Object.assign(d, await stage12_save(ctx, d, {
+      finalHistoryForSave,
+      memoryAfterStoryProgress,
+      yitingAfterTurnRecall,
+      phoneAfterFallbackSeed,
+    }));
 
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
