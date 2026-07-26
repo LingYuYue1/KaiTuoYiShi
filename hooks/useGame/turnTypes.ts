@@ -40,6 +40,7 @@ export interface TurnContext {
   awakeningInstruction: string;
   openingInstruction: string;
   effectiveWorld: 世界状态;
+  turnCountAtStart: number;
 
   // 生命周期工具
   abortController: AbortController;

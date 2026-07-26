@@ -33,7 +33,7 @@ export async function stage5_replyLanding(
   previewChain: Promise<void>,
   startTime: number,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, config, recoveryJournal, abortController, streamMessageSetter } = ctx;
+  const { state, userInput, config, recoveryJournal, abortController, streamMessageSetter, turnCountAtStart } = ctx;
   const {
     updatedHistory, userMsg, preTurnSnapshot, systemPrompt, apiMessages,
     deepSeekMainActive, deepSeekLockFormat, deepSeekMainMode,
@@ -46,7 +46,7 @@ export async function stage5_replyLanding(
 
   const effectiveWorld = ctx.effectiveWorld;
   const duration = (Date.now() - startTime) / 1000;
-  pushQueueTask(state, 'main_story', 'success', { detail: `正文生成完成，用时 ${Math.round(duration)}s。` });
+  pushQueueTask(state, 'main_story', 'success', { detail: `正文生成完成，用时 ${Math.round(duration)}s。` }, turnCountAtStart);
 
   const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
   const parsedBody = normalizePlayerSpeechInBody({
@@ -183,6 +183,7 @@ export async function stage5_replyLanding(
   finalHistory = compactChatHistoryForLongSession(finalHistory);
   // 投影点（裁决 S06 保留）：助手正文须立即可见；存档只认 d，此 setter 仅刷新 UI
   state.setChatHistory(finalHistory);
+  // 投影点（B2 定性）：回合数须立即刷新 UI；管线读 ctx，不回读此 state
   state.setTurnCount((prev) => prev + 1);
   streamMessageSetter.flush('');
   state.setLoading(false);

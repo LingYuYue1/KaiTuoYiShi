@@ -22,7 +22,7 @@ export async function stage8_variable(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, config, abortController, assertWorkflowActive, isCurrentWorkflow } = ctx;
+  const { state, userInput, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart } = ctx;
   const {
     parsedForDisplay,
     displayText,
@@ -34,7 +34,7 @@ export async function stage8_variable(
 
   pushQueueTask(state, 'variable', state.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
     detail: state.gameSettings.enableVariableUpdate ? '正在调用变量模型校准正文。' : '变量更新未启用，已跳过。',
-  });
+  }, turnCountAtStart);
 
   const variableOverrides = await runVariableCalibrationStep({
     state,
@@ -42,7 +42,7 @@ export async function stage8_variable(
     userInput,
     body: displayText!,
     variableDraft: (parsedForDisplay as any)?.variableDraft,
-    turnAfter: state.turnCount + 1,
+    turnAfter: turnCountAtStart + 1,
     memorySystemSnapshot: mem!,
     travelerSnapshot: travelerAfter as any,
     worldSnapshot: worldAfter as any,
@@ -58,7 +58,7 @@ export async function stage8_variable(
     ));
     pushQueueTask(state, 'variable', 'success', {
       detail: variableApplied ? '变量命令已落地。' : '本回合没有可落地的变量命令，已记录变量报告。',
-    });
+    }, turnCountAtStart);
   }
 
   return { variableOverrides: variableOverrides as Record<string, unknown> | null };

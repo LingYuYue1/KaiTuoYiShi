@@ -22,6 +22,7 @@ export function pushQueueTask(
     cancellable?: boolean;
     cancelled?: boolean;
   },
+  turn?: number,
 ) {
   const titleMap: Record<队列任务ID, string> = {
     main_story: '主剧情生成',
@@ -55,7 +56,7 @@ export function pushQueueTask(
       id,
       title: patch?.title ?? titleMap[id],
       subtitle: patch?.subtitle ?? subtitleMap[id],
-      turn: patch?.turn ?? state.turnCount,
+      turn: turn ?? patch?.turn ?? state.turnCount,
       timestamp: Date.now(),
       status,
       detail: patch?.detail,
@@ -197,5 +198,4 @@ export function mergeYitingSystems(
   }
   return { ...override, 回忆档案: merged };
 }
-
 

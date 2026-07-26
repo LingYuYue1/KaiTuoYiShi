@@ -18,7 +18,7 @@ export function stage9_npcLedger(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Partial<TurnDeltas> {
-  const { state } = ctx;
+  const { state, turnCountAtStart } = ctx;
   const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
   const finalHistory = d.finalHistory!;
   const aiMsg = d.aiMsg!;
@@ -42,7 +42,7 @@ export function stage9_npcLedger(
       summaries: npc.总结记忆 ?? [],
       threshold: memorySettings.NPC记忆压缩阈值,
       prompt: memorySettings.NPC记忆压缩提示词,
-      turn: state.turnCount,
+      turn: turnCountAtStart,
       source: '变量',
     });
     if (!ledgerCompression.changed) {

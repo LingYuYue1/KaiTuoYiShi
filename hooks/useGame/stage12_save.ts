@@ -34,7 +34,7 @@ export async function stage12_save(
     phoneAfterFallbackSeed: TurnDeltas['phoneAfterFallbackSeed'];
   },
 ): Promise<Partial<TurnDeltas>> {
-  const { state, assertWorkflowActive } = ctx;
+  const { state, assertWorkflowActive, turnCountAtStart } = ctx;
   const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
   const {
     finalHistoryForSave,
@@ -52,7 +52,7 @@ export async function stage12_save(
   if (state.gameSettings.enableAutoSaveEveryTurn) {
     recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { phase: 'autosave' });
     await persistWorkflowRecoveryJournal(recoveryJournal);
-    pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' });
+    pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' }, turnCountAtStart);
     const variableBatchesForSave = compactVariableBatchHistory(variableOverrides?.batch
       ? [...state.variableBatches, variableOverrides.batch]
       : state.variableBatches);
@@ -70,13 +70,13 @@ export async function stage12_save(
       智库: zhikuAfterRuntimeUnlock,
       variableBatches: variableBatchesForSave,
       queueTasks: state.queueTasks,
-      turnCount: state.turnCount + 1,
+      turnCount: turnCountAtStart + 1,
     });
     assertWorkflowActive();
     await saveGame(saveData);
     commitActiveSaveTreeMeta(saveData);
     assertWorkflowActive();
-    pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' });
+    pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' }, turnCountAtStart);
     state.setHasSave(true);
   }
 

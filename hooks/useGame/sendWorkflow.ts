@@ -46,13 +46,14 @@ export async function executeSendWorkflow(
   deps: SendWorkflowDeps,
 ): Promise<void> {
   const { state } = deps;
+  const turnCountAtStart = state.turnCount;
   const rawConfig = deps.getActiveConfig();
   if (!rawConfig) {
     alert('请先在设置中配置API');
     return;
   }
   const config = rawConfig;
-  const isOpeningSystemTrigger = state.turnCount === 1 && userInput.startsWith('[系统]');
+  const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
   const openingInstruction =
     '请根据当前角色、当前场景、世界书与内置提示词，直接生成第 0 回合开场叙事。不要等待玩家再次输入。';
 
@@ -88,7 +89,7 @@ export async function executeSendWorkflow(
   state.setWorkflowStatus('searching');
   state.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
   state.setLiveRecallFullContent('');
-  pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true });
+  pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true }, turnCountAtStart);
   let pendingVariableStarted = false;
   let keepWorkflowHint = false;
   let rollbackHistoryOnAbort = state.chatHistory;
@@ -96,7 +97,7 @@ export async function executeSendWorkflow(
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
   // Declared outside the stream setup so finally can always cancel a pending rAF commit.
   const streamMessageSetter = createRafCoalescedSetter(setStreamingMessage);
-  let recoveryJournal = createWorkflowRecoveryJournal(userInput, state.turnCount);
+  let recoveryJournal = createWorkflowRecoveryJournal(userInput, turnCountAtStart);
 
   const startTime = Date.now();
 
@@ -110,7 +111,7 @@ export async function executeSendWorkflow(
     awakeningPathId,
     awakeningInstruction,
     openingInstruction,
-    effectiveWorld,
+    effectiveWorld, turnCountAtStart,
     abortController,
     isCurrentWorkflow,
     assertWorkflowActive,

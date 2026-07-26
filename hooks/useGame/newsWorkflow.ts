@@ -7,6 +7,7 @@ import { 归一化世界状态 } from '@/models/world';
 
 interface NewsGenerationParams {
   state: UseGameStateReturn;
+  turnCountAtStart: number;
   mainBody: string;
   userInput: string;
   recentTurns?: string[];
@@ -49,7 +50,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
   try {
     const result = await callNewsModel({
       config,
-      turnCount: state.turnCount + 1,
+      turnCount: params.turnCountAtStart + 1,
       userInput: params.userInput,
       body: params.mainBody,
       recentTurns: params.recentTurns,

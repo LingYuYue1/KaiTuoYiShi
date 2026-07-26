@@ -85,6 +85,7 @@ async function retryNewsQueueTask(
   try {
     const result = await runNewsGenerationStep({
       state,
+      turnCountAtStart: state.turnCount,
       mainBody: body,
       userInput,
       recentTurns: buildRecentTurnWindowForNews(state.chatHistory, userInput, body, interval),
@@ -285,4 +286,3 @@ export function buildRerollSimilarityRetryGuard(previousResponse: string, simila
       : '',
   ].filter(Boolean).join('\n');
 }
-

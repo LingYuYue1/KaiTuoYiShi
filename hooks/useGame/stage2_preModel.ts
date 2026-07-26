@@ -32,7 +32,7 @@ export async function stage2_preModel(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, effectiveWorld, isOpeningSystemTrigger, isAwakeningEnterTrigger,
+  const { state, userInput, effectiveWorld, isOpeningSystemTrigger, isAwakeningEnterTrigger, turnCountAtStart,
     abortController, isCurrentWorkflow, assertWorkflowActive, config, mainStoryConfig, deps } = ctx;
   if (!d.updatedHistory) throw new Error('stage2_preModel: d.updatedHistory must be set by stage1');
   const updatedHistory = d.updatedHistory;
@@ -78,7 +78,7 @@ export async function stage2_preModel(
   let openingNewsForSave: 新闻条目[] | null = null;
   let openingNewsPreprocessed = false;
   if (isOpeningSystemTrigger && state.gameSettings.新闻系统?.enabled && state.gameSettings.新闻系统?.autoGenerate) {
-    pushQueueTask(state, 'news', 'pending', { detail: '开局前正在先处理一次星际和平周报，用作首回合世界背景。', cancellable: true });
+    pushQueueTask(state, 'news', 'pending', { detail: '开局前正在先处理一次星际和平周报，用作首回合世界背景。', cancellable: true }, turnCountAtStart);
     try {
       const openingProtagonist = formatOriginalProtagonistForOpening(effectiveWorld.原著主角);
       const openingArchive = effectiveWorld.开局档案;
@@ -93,7 +93,7 @@ export async function stage2_preModel(
         `原著主角配置：${openingProtagonist}`,
       ].filter(Boolean).join('\n');
       const preNews = await runNewsGenerationStep({
-        state, mainBody: openingNewsBody, userInput,
+        state, turnCountAtStart, mainBody: openingNewsBody, userInput,
         recentTurns: [`- 系统：开局初始化\n  正文：${openingArchive?.地区名称 ?? effectiveWorld.当前地点 ?? '当前地区'}「${openingArchive?.章节锚点名称 ?? '当前开局'}」即将开始，新闻系统先生成可供首回合参考的世界事件苗头。`],
         signal: abortController.signal, shouldCommit: isCurrentWorkflow,
       });
@@ -101,7 +101,7 @@ export async function stage2_preModel(
       openingNewsPreprocessed = true;
       newsForPrompt = preNews?.news ?? state.新闻;
       openingNewsForSave = preNews?.news ?? null;
-      pushQueueTask(state, 'news', 'success', { detail: preNews?.changed ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。` : preNews ? '开局新闻预处理完成，但本轮没有可写新闻变化。' : '开局新闻预处理未生成可用结果。' });
+      pushQueueTask(state, 'news', 'success', { detail: preNews?.changed ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。` : preNews ? '开局新闻预处理完成，但本轮没有可写新闻变化。' : '开局新闻预处理未生成可用结果。' }, turnCountAtStart);
     } catch (err) {
       pushQueueTask(state, 'news', 'failed', { detail: err instanceof Error ? err.message : '开局新闻预处理失败。', failCount: state.gameSettings.新闻系统?.api.retryCount ?? 1 });
     }
@@ -114,7 +114,7 @@ export async function stage2_preModel(
     ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx) : null;
   const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
     ? getStoryWeavingInjectionDiagnostics(state.剧情编织) : null;
-  pushQueueTask(state, 'yiting', yitingRecallEnabled ? 'pending' : 'skipped', { detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。', cancellable: yitingRecallEnabled });
+  pushQueueTask(state, 'yiting', yitingRecallEnabled ? 'pending' : 'skipped', { detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。', cancellable: yitingRecallEnabled }, turnCountAtStart);
 
   const [yitingPreview, zhikuPreview] = await Promise.all([
     yitingRecallEnabled && state.忆庭 && recallQuery

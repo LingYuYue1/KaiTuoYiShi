@@ -33,7 +33,7 @@ export async function stage10_storyZhiku(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, effectiveWorld, assertWorkflowActive } = ctx;
+  const { state, userInput, effectiveWorld, assertWorkflowActive, turnCountAtStart } = ctx;
   const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
   const displayText = d.displayText!;
   const worldAfter = (d as any).worldAfter as typeof state.世界 | undefined;
@@ -41,14 +41,14 @@ export async function stage10_storyZhiku(
   let npcAfterCompression = (d as any).npcAfterCompression as typeof state.NPC;
   const mem = d.mem!;
 
-  const isOpeningSystemTrigger = state.turnCount === 1 && userInput.startsWith('[系统]');
+  const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
 
   let memoryAfterStoryProgress = variableOverrides?.记忆 ?? mem;
   const storyAlignment = isOpeningSystemTrigger
     ? { system: state.剧情编织, changed: false, progressed: false }
     : autoAlignCanonStoryProgress({
         storyWeaving: state.剧情编织,
-        turnCount: state.turnCount + 1,
+        turnCount: turnCountAtStart + 1,
         userInput,
         body: displayText,
         currentLocation: variableOverrides?.世界?.当前地点 ?? worldAfter?.当前地点 ?? effectiveWorld.当前地点,
@@ -73,16 +73,16 @@ export async function stage10_storyZhiku(
     } else {
       pushQueueTask(state, 'zhiku', 'success', {
         detail: '检测到剧情编织面板已有更新，本回合后台未覆盖最新导入/分解结果。',
-      });
+      }, turnCountAtStart);
     }
     assertWorkflowActive();
     if (storyProgressMemoryLine && !storyWeavingConcurrentChange) {
-      memoryAfterStoryProgress = addImmediateMemory(memoryAfterStoryProgress, storyProgressMemoryLine, state.turnCount + 1);
+      memoryAfterStoryProgress = addImmediateMemory(memoryAfterStoryProgress, storyProgressMemoryLine, turnCountAtStart + 1);
       const npcAfterStoryProgress = applyStoryProgressNpcMemory(
         npcAfterCompression,
         storyWeavingForSave,
         storyProgressMemoryLine,
-        state.turnCount + 1,
+        turnCountAtStart + 1,
       );
       if (npcAfterStoryProgress !== npcAfterCompression) {
         npcAfterCompression = npcAfterStoryProgress;
@@ -104,7 +104,7 @@ export async function stage10_storyZhiku(
       assertWorkflowActive();
       pushQueueTask(state, 'zhiku', 'success', {
         detail: `剧情归档已更新智库门禁：${zhikuUnlock.unlocked.slice(0, 3).map((item) => `${item.title}→${item.status}`).join('、')}${zhikuUnlock.unlocked.length > 3 ? ` 等 ${zhikuUnlock.unlocked.length} 项` : ''}。`,
-      });
+      }, turnCountAtStart);
     }
   }
 
