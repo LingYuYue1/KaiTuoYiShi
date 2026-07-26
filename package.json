@@ -4,7 +4,7 @@
   "version": "1.2.1",
   "description": "开拓轶事：一个以 React + TypeScript 构建的崩坏：星穹铁道同人叙事 Web 应用。",
   "license": "MIT",
-  "packageManager": "pnpm@10.15.0",
+  "packageManager": "pnpm@11.15.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -33,6 +33,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.0",
+    "esbuild": "0.28.1",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",
