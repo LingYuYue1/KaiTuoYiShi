@@ -22,7 +22,7 @@ export async function stage8_variable(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart } = ctx;
+  const { state, userInput, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart, queueTasksMirror } = ctx;
   const {
     parsedForDisplay,
     displayText,
@@ -34,7 +34,7 @@ export async function stage8_variable(
 
   pushQueueTask(state, 'variable', state.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
     detail: state.gameSettings.enableVariableUpdate ? '正在调用变量模型校准正文。' : '变量更新未启用，已跳过。',
-  }, turnCountAtStart);
+  }, turnCountAtStart, queueTasksMirror);
 
   const variableOverrides = await runVariableCalibrationStep({
     state,
@@ -49,17 +49,21 @@ export async function stage8_variable(
     signal: abortController.signal,
     allowYiting: Boolean(yitingEnabled),
     shouldCommit: isCurrentWorkflow,
+    queueTasksMirror,
   });
   assertWorkflowActive();
 
   if (state.gameSettings.enableVariableUpdate) {
     const variableApplied = Boolean(variableOverrides && Object.keys(variableOverrides).some(
-      (key) => key !== 'batch' && key !== 'npcLedgerUpdate',
+      (key) => key !== 'batch' && key !== 'failedBatch' && key !== 'npcLedgerUpdate',
     ));
     pushQueueTask(state, 'variable', 'success', {
       detail: variableApplied ? '变量命令已落地。' : '本回合没有可落地的变量命令，已记录变量报告。',
-    }, turnCountAtStart);
+    }, turnCountAtStart, queueTasksMirror);
   }
 
-  return { variableOverrides: variableOverrides as Record<string, unknown> | null };
+  return {
+    variableOverrides: variableOverrides as Record<string, unknown> | null,
+    failedVariableBatch: variableOverrides?.failedBatch,
+  };
 }

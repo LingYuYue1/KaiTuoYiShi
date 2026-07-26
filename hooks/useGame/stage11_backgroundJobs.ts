@@ -49,6 +49,7 @@ interface NewsJobParams {
   isCurrentWorkflow: () => boolean;
   assertWorkflowActive: () => void;
   turnCountAtStart: number;
+  queueTasksMirror: TurnContext['queueTasksMirror'];
 }
 interface NewsJobResult { newsAfterGeneration: 新闻条目[] | null; }
 
@@ -64,6 +65,7 @@ interface YitingJobParams {
   yitingRecallEnabled: boolean;
   assertWorkflowActive: () => void;
   turnCountAtStart: number;
+  queueTasksMirror: TurnContext['queueTasksMirror'];
 }
 interface YitingJobResult { yitingAfterTurnRecall: 忆庭系统; }
 
@@ -74,6 +76,7 @@ interface PhoneJobParams {
   userInput: string;
   displayText: string;
   turnCountAtStart: number;
+  queueTasksMirror: TurnContext['queueTasksMirror'];
 }
 interface PhoneJobResult { phoneAfterFallbackSeed: 手机系统; }
 
@@ -86,6 +89,7 @@ interface NarrativeJobParams {
   finalHistory: any[];
   assertWorkflowActive: () => void;
   turnCountAtStart: number;
+  queueTasksMirror: TurnContext['queueTasksMirror'];
 }
 interface NarrativeJobResult { finalHistoryForSave: any[]; }
 
@@ -95,13 +99,13 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
   if (!p.newsSettings?.enabled || !p.newsSettings?.autoGenerate) {
     pushQueueTask(p.state, 'news', 'skipped', {
       detail: '星际和平周报未开启，已跳过。',
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
     return { newsAfterGeneration: null };
   }
   if (!p.shouldRunNews) {
     pushQueueTask(p.state, 'news', 'skipped', {
       detail: `未到新闻触发间隔（每 ${p.newsInterval} 回合一次），已跳过。`,
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
     return { newsAfterGeneration: null };
   }
   pushQueueTask(p.state, 'news', 'pending', {
@@ -109,7 +113,7 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
       ? '开局首回合正在先处理一次星际和平周报。'
       : `正在调用星际和平周报独立 API（读取最近 ${p.newsInterval} 回合）。`,
     cancellable: true,
-  }, p.turnCountAtStart);
+  }, p.turnCountAtStart, p.queueTasksMirror);
   const newsGenerationResult = await runNewsGenerationStep({
     state: p.state,
     turnCountAtStart: p.turnCountAtStart,
@@ -128,7 +132,7 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
       : newsGenerationResult
         ? '星际和平周报本回合没有可写新闻变化。'
         : '星际和平周报未生成有效结果。',
-  }, p.turnCountAtStart);
+  }, p.turnCountAtStart, p.queueTasksMirror);
   return { newsAfterGeneration };
 }
 
@@ -147,23 +151,23 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
   const yitingAfterTurnRecall = upsertRecallEntry(p.yitingBase, turnRecallEntry);
   pushQueueTask(p.state, 'memory', 'success', {
     detail: turnRecallEntryResult.usedFallback ? '忆庭纪要已使用主回复小总结入库。' : '忆庭纪要已由独立模型压缩并入库。',
-  }, p.turnCountAtStart);
+  }, p.turnCountAtStart, p.queueTasksMirror);
   if (!p.yitingEnabled) {
     pushQueueTask(p.state, 'yiting', 'skipped', {
       detail: '忆庭召回已关闭，但入库仍已执行。',
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
   } else if (!p.yitingRecallEnabled) {
     pushQueueTask(p.state, 'yiting', 'skipped', {
       detail: `未到第${(p.memorySettings.忆庭召回最早触发回合 ?? 10) + 1}回合，忆庭召回已跳过。`,
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
   } else if (p.yitingPreview?.entries.length) {
     pushQueueTask(p.state, 'yiting', 'success', {
       detail: p.yitingPreview.usedModel ? '忆庭召回已由独立模型完成。' : '忆庭召回已由本地摘要检索完成。',
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
   } else {
     pushQueueTask(p.state, 'yiting', 'success', {
       detail: '忆庭已检索，本回合没有命中相关档案。',
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
   }
   return { yitingAfterTurnRecall };
 }
@@ -188,7 +192,7 @@ async function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
       };
       pushQueueTask(p.state, 'phone', 'success', {
         detail: `已补充低频主动来信种子：${fallbackSeed.title}。`,
-      }, p.turnCountAtStart);
+      }, p.turnCountAtStart, p.queueTasksMirror);
     }
   }
   return { phoneAfterFallbackSeed: phone };
@@ -205,14 +209,14 @@ async function runNarrativeImageJob(p: NarrativeJobParams): Promise<NarrativeJob
     pushQueueTask(p.state, 'narrative_image_parse', 'failed', {
       detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
       targetMessageId,
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
     return { finalHistoryForSave: fh };
   }
   if (!imageApiConfig) {
     pushQueueTask(p.state, 'narrative_image_generate', 'failed', {
       detail: '正文生图主文生图接口未启用，无法生成故事快照。',
       targetMessageId,
-    }, p.turnCountAtStart);
+    }, p.turnCountAtStart, p.queueTasksMirror);
     return { finalHistoryForSave: fh };
   }
   const generatedImages = await generateNarrativeImagesForMessage({
@@ -244,7 +248,7 @@ export async function stage11_backgroundJobs(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, effectiveWorld, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart } = ctx;
+  const { state, userInput, effectiveWorld, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart, queueTasksMirror } = ctx;
   const displayText = d.displayText!;
   const finalHistory = d.finalHistory!;
   const npcAfterCompression = (d as any).npcAfterCompression as typeof state.NPC;
@@ -294,19 +298,19 @@ export async function stage11_backgroundJobs(
   const newsParams: NewsJobParams = {
     newsSettings, shouldRunNews, newsInterval, shouldRunOpeningNews,
     state, displayText: displayText!, userInput, finalHistory,
-    storyWeavingForSave, abortController, isCurrentWorkflow, assertWorkflowActive, turnCountAtStart,
+    storyWeavingForSave, abortController, isCurrentWorkflow, assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
   const yitingParams: YitingJobParams = {
     turnRecallSource, memorySettings, config, abortController, state,
     yitingBase, yitingPreview, yitingEnabled: Boolean(yitingEnabled),
-    yitingRecallEnabled: Boolean(yitingRecallEnabled), assertWorkflowActive, turnCountAtStart,
+    yitingRecallEnabled: Boolean(yitingRecallEnabled), assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
   const phoneParams: PhoneJobParams = {
-    state, phoneAfterFallbackSeed, npcAfterCompression, userInput, displayText: displayText!, turnCountAtStart,
+    state, phoneAfterFallbackSeed, npcAfterCompression, userInput, displayText: displayText!, turnCountAtStart, queueTasksMirror,
   };
   const narrativeParams: NarrativeJobParams = {
     state, aiMsg, displayText: displayText!, config, abortController, finalHistory,
-    assertWorkflowActive, turnCountAtStart,
+    assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
 
   if ((state.gameSettings.backgroundTaskMode ?? 'sequential') === 'parallel') {

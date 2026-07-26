@@ -23,6 +23,7 @@ export function pushQueueTask(
     cancelled?: boolean;
   },
   turn?: number,
+  queueTasksMirror?: UseGameStateReturn['queueTasks'],
 ) {
   const titleMap: Record<队列任务ID, string> = {
     main_story: '主剧情生成',
@@ -50,26 +51,28 @@ export function pushQueueTask(
     phone: '主动来信种子与通讯入口',
     autosave: '写入最近自动存档',
   };
-  state.setQueueTasks((prev) => [
-    ...prev.slice(-24),
-    {
-      id,
-      title: patch?.title ?? titleMap[id],
-      subtitle: patch?.subtitle ?? subtitleMap[id],
-      turn: turn ?? patch?.turn ?? state.turnCount,
-      timestamp: Date.now(),
-      status,
-      detail: patch?.detail,
-      rawText: patch?.rawText,
-      targetMessageId: patch?.targetMessageId,
-      targetBatchId: patch?.targetBatchId,
-      retryHint: patch?.retryHint,
-      failCount: patch?.failCount,
-      retrying: patch?.retrying,
-      cancellable: patch?.cancellable,
-      cancelled: patch?.cancelled,
-    },
-  ]);
+  const task: UseGameStateReturn['queueTasks'][number] = {
+    id,
+    title: patch?.title ?? titleMap[id],
+    subtitle: patch?.subtitle ?? subtitleMap[id],
+    turn: turn ?? patch?.turn ?? state.turnCount,
+    timestamp: Date.now(),
+    status,
+    detail: patch?.detail,
+    rawText: patch?.rawText,
+    targetMessageId: patch?.targetMessageId,
+    targetBatchId: patch?.targetBatchId,
+    retryHint: patch?.retryHint,
+    failCount: patch?.failCount,
+    retrying: patch?.retrying,
+    cancellable: patch?.cancellable,
+    cancelled: patch?.cancelled,
+  };
+  state.setQueueTasks((prev) => [...prev.slice(-24), task]);
+  if (queueTasksMirror) {
+    queueTasksMirror.splice(0, Math.max(0, queueTasksMirror.length - 24));
+    queueTasksMirror.push(task);
+  }
 }
 
 export function splitStreamingReveal(text: string): string[] {
@@ -198,4 +201,3 @@ export function mergeYitingSystems(
   }
   return { ...override, 回忆档案: merged };
 }
-

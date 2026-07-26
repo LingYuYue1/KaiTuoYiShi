@@ -33,7 +33,7 @@ export async function stage5_replyLanding(
   previewChain: Promise<void>,
   startTime: number,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, config, recoveryJournal, abortController, streamMessageSetter, turnCountAtStart } = ctx;
+  const { state, userInput, config, recoveryJournal, abortController, streamMessageSetter, turnCountAtStart, queueTasksMirror } = ctx;
   const {
     updatedHistory, userMsg, preTurnSnapshot, systemPrompt, apiMessages,
     deepSeekMainActive, deepSeekLockFormat, deepSeekMainMode,
@@ -46,7 +46,7 @@ export async function stage5_replyLanding(
 
   const effectiveWorld = ctx.effectiveWorld;
   const duration = (Date.now() - startTime) / 1000;
-  pushQueueTask(state, 'main_story', 'success', { detail: `正文生成完成，用时 ${Math.round(duration)}s。` }, turnCountAtStart);
+  pushQueueTask(state, 'main_story', 'success', { detail: `正文生成完成，用时 ${Math.round(duration)}s。` }, turnCountAtStart, queueTasksMirror);
 
   const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
   const parsedBody = normalizePlayerSpeechInBody({

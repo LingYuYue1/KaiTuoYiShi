@@ -53,7 +53,7 @@ export async function stage4_aiRequest(
   d: TurnDeltas,
   visibilityPublisher: VisibilityBufferedPublisher | null,
 ): Promise<Stage4Output> {
-  const { state, deps, abortController, mainStoryConfig, streamMessageSetter, turnCountAtStart } = ctx;
+  const { state, deps, abortController, mainStoryConfig, streamMessageSetter, turnCountAtStart, queueTasksMirror } = ctx;
   const { apiMessages, systemPrompt, tavernV2Messages,
     deepSeekMainActive, effectivePrefixMode, effectivePrefixContent,
     mainRequestMode, maxAttempts, currentPresetV2ForStage } = d;
@@ -207,7 +207,7 @@ export async function stage4_aiRequest(
         pushQueueTask(state, 'main_story', 'pending', {
           detail: '重roll结果与上一版过于相似，正在强制换写。',
           failCount: attempt, retrying: true, cancellable: true,
-        }, turnCountAtStart);
+        }, turnCountAtStart, queueTasksMirror);
         console.warn(`[sendWorkflow] 第 ${attempt}/${calcMaxAttempts} 次重roll与上一版过于相似，自动换写，相似度：${rerollSimilarity.toFixed(3)}`);
         continue;
       }
@@ -229,7 +229,7 @@ export async function stage4_aiRequest(
           pushQueueTask(state, 'main_story', 'pending', {
             detail: `DeepSeek 输出协议不完整，正在重试：${protocolIssues.join('；')}`,
             failCount: attempt, retrying: true, cancellable: true,
-          }, turnCountAtStart);
+          }, turnCountAtStart, queueTasksMirror);
           console.warn(`[sendWorkflow] DeepSeek 第 ${attempt}/${calcMaxAttempts} 次输出协议不完整，自动重试：`, protocolIssues);
           continue;
         }
@@ -261,7 +261,7 @@ export async function stage4_aiRequest(
       pushQueueTask(state, 'main_story', 'pending', {
         detail: `主剧情生成失败 ${attempt} 次，正在自动重试。`,
         failCount: attempt, retrying: true, cancellable: true,
-      });
+      }, turnCountAtStart, queueTasksMirror);
       console.warn(`[sendWorkflow] 第 ${attempt}/${calcMaxAttempts} 次尝试失败，自动重试：`, innerErr);
     }
   }

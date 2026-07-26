@@ -33,7 +33,7 @@ export async function stage2_preModel(
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
   const { state, userInput, effectiveWorld, isOpeningSystemTrigger, isAwakeningEnterTrigger, turnCountAtStart,
-    abortController, isCurrentWorkflow, assertWorkflowActive, config, mainStoryConfig, deps } = ctx;
+    queueTasksMirror, abortController, isCurrentWorkflow, assertWorkflowActive, config, mainStoryConfig, deps } = ctx;
   if (!d.updatedHistory) throw new Error('stage2_preModel: d.updatedHistory must be set by stage1');
   const updatedHistory = d.updatedHistory;
 
@@ -78,7 +78,7 @@ export async function stage2_preModel(
   let openingNewsForSave: 新闻条目[] | null = null;
   let openingNewsPreprocessed = false;
   if (isOpeningSystemTrigger && state.gameSettings.新闻系统?.enabled && state.gameSettings.新闻系统?.autoGenerate) {
-    pushQueueTask(state, 'news', 'pending', { detail: '开局前正在先处理一次星际和平周报，用作首回合世界背景。', cancellable: true }, turnCountAtStart);
+    pushQueueTask(state, 'news', 'pending', { detail: '开局前正在先处理一次星际和平周报，用作首回合世界背景。', cancellable: true }, turnCountAtStart, queueTasksMirror);
     try {
       const openingProtagonist = formatOriginalProtagonistForOpening(effectiveWorld.原著主角);
       const openingArchive = effectiveWorld.开局档案;
@@ -101,9 +101,9 @@ export async function stage2_preModel(
       openingNewsPreprocessed = true;
       newsForPrompt = preNews?.news ?? state.新闻;
       openingNewsForSave = preNews?.news ?? null;
-      pushQueueTask(state, 'news', 'success', { detail: preNews?.changed ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。` : preNews ? '开局新闻预处理完成，但本轮没有可写新闻变化。' : '开局新闻预处理未生成可用结果。' }, turnCountAtStart);
+      pushQueueTask(state, 'news', 'success', { detail: preNews?.changed ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。` : preNews ? '开局新闻预处理完成，但本轮没有可写新闻变化。' : '开局新闻预处理未生成可用结果。' }, turnCountAtStart, queueTasksMirror);
     } catch (err) {
-      pushQueueTask(state, 'news', 'failed', { detail: err instanceof Error ? err.message : '开局新闻预处理失败。', failCount: state.gameSettings.新闻系统?.api.retryCount ?? 1 });
+      pushQueueTask(state, 'news', 'failed', { detail: err instanceof Error ? err.message : '开局新闻预处理失败。', failCount: state.gameSettings.新闻系统?.api.retryCount ?? 1 }, turnCountAtStart, queueTasksMirror);
     }
   }
 
@@ -114,12 +114,12 @@ export async function stage2_preModel(
     ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx) : null;
   const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
     ? getStoryWeavingInjectionDiagnostics(state.剧情编织) : null;
-  pushQueueTask(state, 'yiting', yitingRecallEnabled ? 'pending' : 'skipped', { detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。', cancellable: yitingRecallEnabled }, turnCountAtStart);
+  pushQueueTask(state, 'yiting', yitingRecallEnabled ? 'pending' : 'skipped', { detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。', cancellable: yitingRecallEnabled }, turnCountAtStart, queueTasksMirror);
 
   const [yitingPreview, zhikuPreview] = await Promise.all([
     yitingRecallEnabled && state.忆庭 && recallQuery
       ? retrieveYitingContextWithModel(state.忆庭, recallQuery, state.gameSettings.记忆系统?.忆庭召回条数 ?? 8, state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(), config, abortController.signal, state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 2, state.gameSettings.promptModules)
-          .catch((err) => { pushQueueTask(state, 'yiting', 'failed', { detail: err instanceof Error ? err.message : '忆庭召回失败。', failCount: state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 1 }); return null; })
+          .catch((err) => { pushQueueTask(state, 'yiting', 'failed', { detail: err instanceof Error ? err.message : '忆庭召回失败。', failCount: state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 1 }, turnCountAtStart, queueTasksMirror); return null; })
       : Promise.resolve(null),
     zhikuRecallEnabled
       ? retrieveZhikuContextWithModel(state.智库, zhikuRecallQuery, state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries, state.gameSettings.智库系统 ?? 创建默认智库系统设置(), config, abortController.signal, state.gameSettings.智库系统?.api.retryCount ?? 2, zhikuSceneContext, state.gameSettings.promptModules)

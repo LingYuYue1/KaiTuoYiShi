@@ -17,6 +17,7 @@ import type { NPC记录, NPC账本选择结果 } from '@/models/npc';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 解析后回复 } from '@/models/chat';
+import type { 变量命令批次 } from '@/models/variableCommand';
 import type { MacroContext } from '@/utils/macroEngine';
 import { createWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 export type WorkflowRecoveryJournal = ReturnType<typeof createWorkflowRecoveryJournal>;
@@ -41,6 +42,8 @@ export interface TurnContext {
   openingInstruction: string;
   effectiveWorld: 世界状态;
   turnCountAtStart: number;
+  variableBatchesAtStart: UseGameStateReturn['variableBatches'];
+  queueTasksMirror: UseGameStateReturn['queueTasks'];
 
   // 生命周期工具
   abortController: AbortController;
@@ -126,6 +129,7 @@ export interface TurnDeltas {
 
   // S8: 变量结算
   variableOverrides?: Record<string, unknown> | null;
+  failedVariableBatch?: 变量命令批次;
   pendingVariableStarted?: boolean;
 
   // S9: NPC

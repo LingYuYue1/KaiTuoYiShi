@@ -15,11 +15,11 @@ export async function stage6_memory(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, config, abortController, assertWorkflowActive, turnCountAtStart } = ctx;
+  const { state, userInput, config, abortController, assertWorkflowActive, turnCountAtStart, queueTasksMirror } = ctx;
   const parsedForDisplay = d.parsedForDisplay!;
   const displayText = d.displayText!;
 
-  pushQueueTask(state, 'memory', 'pending', { detail: '正在写入即时记忆并检查压缩阈值。' }, turnCountAtStart);
+  pushQueueTask(state, 'memory', 'pending', { detail: '正在写入即时记忆并检查压缩阈值。' }, turnCountAtStart, queueTasksMirror);
 
   const rawMemory = buildImmediateMemory(userInput, [
     parsedForDisplay.memory?.trim() ? `本回合小结：${parsedForDisplay.memory.trim()}` : '',
@@ -40,7 +40,7 @@ export async function stage6_memory(
     detail: compression.usedModel
       ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
       : '即时/短期/中期/长期记忆已使用本地摘要完成整理。',
-  }, turnCountAtStart);
+  }, turnCountAtStart, queueTasksMirror);
 
   return { mem, yitingWithCompression: state.忆庭 };
 }

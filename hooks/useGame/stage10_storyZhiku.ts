@@ -33,7 +33,7 @@ export async function stage10_storyZhiku(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, effectiveWorld, assertWorkflowActive, turnCountAtStart } = ctx;
+  const { state, userInput, effectiveWorld, assertWorkflowActive, turnCountAtStart, queueTasksMirror } = ctx;
   const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
   const displayText = d.displayText!;
   const worldAfter = (d as any).worldAfter as typeof state.世界 | undefined;
@@ -73,7 +73,7 @@ export async function stage10_storyZhiku(
     } else {
       pushQueueTask(state, 'zhiku', 'success', {
         detail: '检测到剧情编织面板已有更新，本回合后台未覆盖最新导入/分解结果。',
-      }, turnCountAtStart);
+      }, turnCountAtStart, queueTasksMirror);
     }
     assertWorkflowActive();
     if (storyProgressMemoryLine && !storyWeavingConcurrentChange) {
@@ -104,7 +104,7 @@ export async function stage10_storyZhiku(
       assertWorkflowActive();
       pushQueueTask(state, 'zhiku', 'success', {
         detail: `剧情归档已更新智库门禁：${zhikuUnlock.unlocked.slice(0, 3).map((item) => `${item.title}→${item.status}`).join('、')}${zhikuUnlock.unlocked.length > 3 ? ` 等 ${zhikuUnlock.unlocked.length} 项` : ''}。`,
-      }, turnCountAtStart);
+      }, turnCountAtStart, queueTasksMirror);
     }
   }
 

@@ -47,6 +47,8 @@ export async function executeSendWorkflow(
 ): Promise<void> {
   const { state } = deps;
   const turnCountAtStart = state.turnCount;
+  const variableBatchesAtStart = state.variableBatches;
+  const queueTasksMirror = [...state.queueTasks];
   const rawConfig = deps.getActiveConfig();
   if (!rawConfig) {
     alert('请先在设置中配置API');
@@ -89,7 +91,7 @@ export async function executeSendWorkflow(
   state.setWorkflowStatus('searching');
   state.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
   state.setLiveRecallFullContent('');
-  pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true }, turnCountAtStart);
+  pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true }, turnCountAtStart, queueTasksMirror);
   let pendingVariableStarted = false;
   let keepWorkflowHint = false;
   let rollbackHistoryOnAbort = state.chatHistory;
@@ -111,7 +113,7 @@ export async function executeSendWorkflow(
     awakeningPathId,
     awakeningInstruction,
     openingInstruction,
-    effectiveWorld, turnCountAtStart,
+    effectiveWorld, turnCountAtStart, variableBatchesAtStart, queueTasksMirror,
     abortController,
     isCurrentWorkflow,
     assertWorkflowActive,

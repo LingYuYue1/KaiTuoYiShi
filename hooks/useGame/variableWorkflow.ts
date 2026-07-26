@@ -103,6 +103,7 @@ interface VariableCalibrationParams {
   signal?: AbortSignal;
   allowYiting?: boolean;
   shouldCommit?: () => boolean;
+  queueTasksMirror?: UseGameStateReturn['queueTasks'];
 }
 
 interface VariableCalibrationOverrides {
@@ -116,6 +117,7 @@ interface VariableCalibrationOverrides {
   新闻?: import('@/models/news').新闻条目[];
   剧情?: import('@/models/plot').剧情节点[];
   batch?: 变量命令批次;
+  failedBatch?: 变量命令批次;
   npcLedgerUpdate?: NpcLedgerUpdateDebug;
 }
 
@@ -289,7 +291,7 @@ export async function runVariableCalibrationStep(
     console.warn('[variable-model] 校准失败：', err);
     pushQueueTask(state, 'variable', 'failed', {
       detail: (err as Error).message ?? '变量模型校准失败。',
-    });
+    }, undefined, params.queueTasksMirror);
     // 失败也记一条 batch 让玩家知道
     const batch: 变量命令批次 = {
       id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -307,6 +309,7 @@ export async function runVariableCalibrationStep(
     state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
     return {
       batch,
+      failedBatch: batch,
       npcLedgerUpdate: {
         updatedNames: [],
         memoryAppended: [],
@@ -317,5 +320,3 @@ export async function runVariableCalibrationStep(
     };
   }
 }
-
-
