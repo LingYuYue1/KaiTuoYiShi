@@ -57,3 +57,10 @@ THEME_ISSUES.md
 
 # Local Claude notes
 CLAUDE.md
+
+# Agent-harness workspace debris (craft-agent / orchestration)
+.pnpm-store/
+config.json
+events.jsonl
+labels/
+statuses/
