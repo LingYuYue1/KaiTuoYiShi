@@ -79,8 +79,10 @@ assert(variableModel.includes('不要把"本回合沉默/紧张/冷淡"固化成
 assert(variableWorldbook.includes('原著角色的长期 \\`性格\\` 由智库人物主体资料校准'), '变量世界书必须说明原著 NPC 性格由智库主体资料校准。');
 assert(canonicalCharacters.includes('熟悉同伴后会自然吐槽和接梗'), '星的原著兜底性格不能继续固化为长期沉默。');
 assert(canonicalCharacters.includes('不应被写成空白沉默工具人'), '穹的原著兜底性格不能继续固化为长期沉默。');
-assert(promptModules.includes('星/穹刚苏醒时可短暂观察，但不能连续数回合沉默旁观'), '主提示词必须明确星/穹不能被长期写成沉默旁观。');
-assert(promptModules.includes('熟悉同伴后应主动吐槽、接梗、提问或用行动回应'), '主提示词必须给星/穹明确的主动表达方式。');
+// 批次1(2026-07-26): 静态角色性格清单压缩为原则句,具体锚点改由智库人物资料动态提供(D7);
+// 世界书副本(下一条断言)保留至批次5,过渡期规则无真空。
+assert(promptModules.includes('原著角色必须保留原作性格与职责；具体性格、口吻与行为锚点以本回合注入的智库人物资料为准'), '主提示词必须把原著角色锚点指向智库人物资料。');
+assert(promptModules.includes('不得临时脑补或写成沉默工具人'), '主提示词必须禁止把原著角色写成沉默工具人。');
 assert(worldbookConfig.includes('星/穹刚苏醒时可短暂观察,但不能连续数回合沉默旁观'), '默认世界书必须明确星/穹不能被长期写成沉默旁观。');
 assert(systemPromptBuilder.includes('智库人物主体人格优先校准长期口吻与行为边界'), '主提示词必须声明原著角色长期人格以智库主体资料为准。');
 assert(systemPromptBuilder.includes('临时/旧档案性格参考') && systemPromptBuilder.includes('长期人格以智库人物主体资料为准'), '主提示词中原著 NPC 档案性格必须降级为临时/旧档案参考。');
