@@ -58,12 +58,11 @@ assert(!phoneService.includes('buildGroupFallbackPhoneMessages'), 'group replies
 assert(phoneOutputFormat.includes('两人群聊应体现双方') && phoneOutputFormat.includes('三人及以上群聊通常至少出现 3 位不同发言者'), 'group phone prompt must adapt speaker diversity to participant count.');
 assert(phoneService.includes('12-30 条'), 'group phone user prompt must require 12-30 messages.');
 assert(phoneService.includes('formatPhoneGroupParticipant'), 'group phone context must list participants from NPC records or contacts.');
-assert(phoneCot.includes('整个群聊总量必须为 12-30 条'), 'phone CoT must match the runtime group-chat 12-30 message rule.');
-assert(phoneCot.includes('两人群聊应体现双方') && phoneCot.includes('三人及以上群聊通常至少出现 3 位不同发言者'), 'phone CoT must adapt speaker diversity to participant count.');
-assert(!phoneCot.includes('整个群聊总量必须为 12-20 条'), 'phone CoT must not keep the retired 12-20 group-chat rule.');
-assert(phoneWorldbook.includes('整个群聊本轮总回复量必须为 12-30 条'), 'phone worldbook must match the runtime group-chat 12-30 message rule.');
-assert(phoneWorldbook.includes('两人群聊应体现双方') && phoneWorldbook.includes('三人及以上群聊通常至少出现 3 位不同发言者'), 'phone worldbook must adapt speaker diversity to participant count.');
-assert(!phoneWorldbook.includes('整个群聊本轮总回复量必须为 12-20 条'), 'phone worldbook must not keep the retired 12-20 group-chat rule.');
+// 批次6(2026-07-26): 条数规则三处复写收敛为 phoneOutputFormat 单一权威;cot/worldbook 改引用行。
+assert(phoneCot.includes('以「手机系统输出格式」模块为唯一权威') || phoneCot.includes('按「手机系统输出格式」模块'), 'phone CoT must defer count rules to the output-format authority.');
+assert(!phoneCot.includes('12-30 条') && !phoneCot.includes('12-20 条'), 'phone CoT must not duplicate the group-chat count rule.');
+assert(phoneWorldbook.includes('以「手机系统输出格式」模块为唯一权威') || phoneWorldbook.includes('按「手机系统输出格式」模块'), 'phone worldbook must defer count rules to the output-format authority.');
+assert(!phoneWorldbook.includes('12-30 条') && !phoneWorldbook.includes('12-20 条'), 'phone worldbook must not duplicate the group-chat count rule.');
 assert(builtinPromptModules.includes('群聊 12-30 条'), 'builtin phone prompt module description must match the runtime group-chat 12-30 rule.');
 assert(!builtinPromptModules.includes('群聊 12-20 条'), 'builtin phone prompt module description must not keep the retired 12-20 group-chat rule.');
 
