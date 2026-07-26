@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { memo, useState, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -55,7 +55,23 @@ interface BodyBlockProps {
   showInnerVoice?: boolean;
   userInput?: string;
   visualTextSettings?: VisualTextSettings;
+  deferOffscreen?: boolean;
 }
+
+const DEFERRED_NARRATION_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 96px',
+} as const;
+
+const DEFERRED_DIALOGUE_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 128px',
+} as const;
+
+const DEFERRED_INNER_VOICE_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 144px',
+} as const;
 
 const DEFAULT_VISUAL_TEXT_SETTINGS: VisualTextSettings = {
   narrationFontSize: 15,
@@ -288,10 +304,20 @@ function withAlpha(rgb: string, alpha: number): string {
   return rgb.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
 }
 
-// 名字 → NPC 档案查找（伙伴优先；找不到时返回 undefined，由 fallback 处理）
-function lookupNpc(name: string, records?: NPC记录[]): NPC记录 | undefined {
-  if (!records || !name) return undefined;
-  return records.find((n) => n.姓名 === name || n.别名 === name);
+// 名字/别名 → NPC 档案（BodyBlock 内建一次 Map，避免每行 linear find）
+function buildNpcLookupMap(records?: NPC记录[]): Map<string, NPC记录> {
+  const map = new Map<string, NPC记录>();
+  if (!records) return map;
+  for (const n of records) {
+    if (n.姓名 && !map.has(n.姓名)) map.set(n.姓名, n);
+    if (n.别名 && !map.has(n.别名)) map.set(n.别名, n);
+  }
+  return map;
+}
+
+function lookupNpc(name: string, map: Map<string, NPC记录>): NPC记录 | undefined {
+  if (!name) return undefined;
+  return map.get(name);
 }
 
 // 判断这一行的「角色」是不是主角自身（AI 可能写主角名字、也可能写「你」）
@@ -313,24 +339,23 @@ interface AvatarTileProps {
 }
 
 // 圆形头像 + 名牌：左上头像、下方一块小标签（fallback 用首字符）
-function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
+export const AvatarTile = memo(function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
   const dim = size === 'md' ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-11 h-11 sm:w-12 sm:h-12';
-  const glow = withAlpha(color, 0.35);
   const labelColor = withAlpha(color, 0.98);
   return (
     <div className="flex flex-col items-center gap-1.5 shrink-0">
       <div
-        className={`${dim} rounded-full flex items-center justify-center overflow-hidden relative transition-transform duration-300 group-hover:scale-105`}
+        className={`${dim} rounded-full flex items-center justify-center overflow-hidden relative`}
         style={{
           background: url ? 'rgba(var(--tj-surface-strong), 0.72)' : `linear-gradient(135deg, ${withAlpha(color, 0.22)}, rgba(var(--tj-chat-bubble), 0.92))`,
-          boxShadow: `0 0 0 1px ${withAlpha(color, 0.58)}, 0 0 14px ${glow}, 0 8px 16px rgba(var(--tj-shadow), 0.16), inset 0 0 0 1px rgba(var(--tj-text-primary), 0.16)`,
+          boxShadow: `0 0 0 1px ${withAlpha(color, 0.58)}`,
         }}
       >
         {url ? (
           <img src={url} alt={`${name} 头像`} className="w-full h-full object-cover" />
         ) : (
           <span
-            className="font-serif font-bold text-lg drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+            className="font-serif font-bold text-lg"
             style={{ color: withAlpha(color, 0.95) }}
           >
             {name.charAt(0) || '?'}
@@ -338,33 +363,32 @@ function AvatarTile({ name, url, color, size = 'sm' }: AvatarTileProps) {
         )}
       </div>
       <div
-        className="px-2 py-0.5 max-w-[78px] text-center"
+        className="px-2 py-0.5 max-w-[78px] text-center rounded-sm"
         style={{
           background: 'rgba(var(--tj-chat-bubble), 0.88)',
-          boxShadow: `inset 0 0 0 1px ${withAlpha(color, 0.52)}, 0 0 10px ${withAlpha(color, 0.12)}`,
-          clipPath:
-            'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+          boxShadow: `inset 0 0 0 1px ${withAlpha(color, 0.52)}`,
         }}
       >
         <span
           className="block truncate font-serif text-[11px] font-semibold tracking-[0.1em]"
-          style={{ color: labelColor, textShadow: `0 0 8px ${withAlpha(color, 0.18)}` }}
+          style={{ color: labelColor }}
         >
           {name}
         </span>
       </div>
     </div>
   );
-}
+});
 
 interface DialogueBubbleProps {
   name: string;
   text: string;
   color: string;
   avatarUrl?: string;
+  deferOffscreen?: boolean;
 }
 
-function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtagonist = false }: DialogueBubbleProps & { fontSize?: number; isProtagonist?: boolean }) {
+export const DialogueBubble = memo(function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtagonist = false, deferOffscreen = false }: DialogueBubbleProps & { fontSize?: number; isProtagonist?: boolean }) {
   // 主角对话：淡底金边；NPC 对话：深底+角色色描边
   const bubbleBg = isProtagonist
     ? 'rgba(var(--tj-accent-primary), 0.08)'
@@ -372,32 +396,19 @@ function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtago
   const bubbleStroke = isProtagonist
     ? 'rgba(var(--tj-accent-primary), 0.55)'
     : withAlpha(color, 0.4);
-  const bubbleGlow = isProtagonist
-    ? 'rgba(var(--tj-accent-primary), 0.06)'
-    : withAlpha(color, 0.08);
   const textColor = isProtagonist
     ? 'rgba(var(--tj-text-primary), 0.96)'
     : 'rgba(var(--tj-chat-text), 0.96)';
   return (
-    <div className="group my-3 flex items-start justify-start gap-3">
+    <div className="group my-3 flex items-start justify-start gap-3" style={deferOffscreen ? DEFERRED_DIALOGUE_STYLE : undefined}>
       <AvatarTile name={name} url={avatarUrl} color={color} size="sm" />
       <div className="relative flex-1 min-w-0 mt-1">
-        {/* 气泡侧边小三角 */}
         <div
-          className="absolute top-3 -left-1.5 h-3 w-3 rotate-45"
-          style={{
-            background: bubbleBg,
-            boxShadow: `-1px 1px 0 0 ${bubbleStroke}`,
-          }}
-        />
-        <div
-          className="relative px-4 py-3"
+          className="relative rounded px-4 py-3"
           style={{
             background: bubbleBg,
             color: textColor,
-            boxShadow: `inset 0 0 0 1px ${bubbleStroke}, 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px ${bubbleGlow}`,
-            clipPath:
-              'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+            boxShadow: `inset 0 0 0 1px ${bubbleStroke}`,
           }}
         >
           <p className="whitespace-pre-wrap break-words" style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}>
@@ -407,21 +418,22 @@ function DialogueBubble({ name, text, color, avatarUrl, fontSize = 15, isProtago
       </div>
     </div>
   );
-}
+});
 
 interface InnerVoiceBubbleProps {
   text: string;
   traveler?: 角色数据结构;
   album?: 相册系统;
+  deferOffscreen?: boolean;
 }
 
 // 主角心声：圆头像 + 顶部「·心绪·」标签 + 虚线边气泡 + 暖橘斜体
-function InnerVoiceBubble({ text, traveler, album, fontSize = 15 }: InnerVoiceBubbleProps & { fontSize?: number }) {
+function InnerVoiceBubble({ text, traveler, album, fontSize = 15, deferOffscreen = false }: InnerVoiceBubbleProps & { fontSize?: number }) {
   const PEACH = 'rgb(var(--tj-accent-secondary))';
   const name = traveler?.姓名?.trim() || '我';
   const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined;
   return (
-    <div className="group my-3 flex items-start gap-3">
+    <div className="group my-3 flex items-start gap-3" style={deferOffscreen ? DEFERRED_INNER_VOICE_STYLE : undefined}>
       <AvatarTile name={name} url={avatarUrl} color={PEACH} size="md" />
       <div className="relative flex-1 min-w-0 mt-1">
         {/* 顶部「·心绪·」标签 */}
@@ -460,11 +472,12 @@ function InnerVoiceBubble({ text, traveler, album, fontSize = 15 }: InnerVoiceBu
 }
 
 // 旁白：全宽容器 + 两侧金色竖条 + 顶部小符号点缀（无头像、无气泡）
-function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: number }) {
+export const NarrationLine = memo(function NarrationLine({ text, fontSize = 15, deferOffscreen = false }: { text: string; fontSize?: number; deferOffscreen?: boolean }) {
   return (
     <div
       className="my-2.5 px-5 py-2.5 relative"
       style={{
+        ...(deferOffscreen ? DEFERRED_NARRATION_STYLE : {}),
         background: 'rgba(var(--tj-accent-primary), 0.018)',
         borderLeft: '2px solid rgba(var(--tj-accent-primary), 0.34)',
         borderRight: '1px solid rgba(var(--tj-border), 0.24)',
@@ -478,11 +491,12 @@ function NarrationLine({ text, fontSize = 15 }: { text: string; fontSize?: numbe
       </p>
     </div>
   );
-}
+});
 
-export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings }: BodyBlockProps) {
+export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings, deferOffscreen = false }: BodyBlockProps) {
   const lines = useMemo(() => (content ? parseBodyLines(content, traveler, userInput) : []), [content, traveler, userInput]);
   const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
+  const npcMap = useMemo(() => buildNpcLookupMap(npcRecords), [npcRecords]);
   if (!content) return null;
 
   return (
@@ -492,7 +506,7 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
           return <div key={i} className="h-1.5" />;
         }
         if (line.kind === 'dialogue') {
-          const npc = lookupNpc(line.name, npcRecords);
+          const npc = lookupNpc(line.name, npcMap);
           const protagonist = isProtagonist(line.name, traveler);
           const color = protagonist ? 'rgb(var(--tj-accent-primary))' : nameToColor(line.name);
           const avatarUrl = protagonist
@@ -507,17 +521,18 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
               avatarUrl={avatarUrl}
               isProtagonist={protagonist}
               fontSize={protagonist ? fontSettings.playerFontSize : fontSettings.dialogueFontSize}
+              deferOffscreen={deferOffscreen}
             />
           );
         }
         if (line.kind === 'inner') {
           if (!showInnerVoice) return null;
-          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} album={album} fontSize={fontSettings.dialogueFontSize} />;
+          return <InnerVoiceBubble key={i} text={line.text} traveler={traveler} album={album} fontSize={fontSettings.dialogueFontSize} deferOffscreen={deferOffscreen} />;
         }
         if (line.kind === 'narration') {
-          return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
+          return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} deferOffscreen={deferOffscreen} />;
         }
-        return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} />;
+        return <NarrationLine key={i} text={line.text} fontSize={fontSettings.narrationFontSize} deferOffscreen={deferOffscreen} />;
       })}
     </div>
   );

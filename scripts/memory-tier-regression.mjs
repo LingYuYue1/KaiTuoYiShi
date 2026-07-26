@@ -36,13 +36,13 @@ assert(memoryUtils.includes('createMiddleTermArchiveEntry'), '短期到中期压
 assert(memoryUtils.includes("kind: 'middle'"), '异步记忆总结必须支持 middle 压缩类型。');
 assert(memoryUtils.includes('prompt: settings.短期转中期提示词'), '短期到中期压缩必须使用短期转中期提示词。');
 assert(memoryUtils.includes('prompt: settings.中期转长期提示词'), '中期到长期压缩必须使用中期转长期提示词。');
-assert(memoryUtils.includes('中期记忆: raw.中期记忆 ?? []'), '旧存档归一化必须补齐中期记忆。');
+assert(memoryModel.includes('中期记忆: Array.isArray(raw?.中期记忆) ? raw!.中期记忆 : []'), '旧存档归一化必须补齐中期记忆。');
 
 assert(memoryCompression.includes("export type MemoryCompressionKind = 'short' | 'middle' | 'long'"), '记忆压缩服务必须支持 middle 类型。');
 assert(memoryCompression.includes("if (kind === 'middle') return '短期 -> 中期'"), '记忆压缩服务必须标记短期到中期。');
 assert(memoryCompression.includes("'中期转长期'"), '记忆压缩兜底必须标记中期到长期。');
 
-assert(memoryPanel.includes("type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long'"), '记忆面板必须有中期页签。');
+assert(memoryPanel.includes("type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long' | 'failed'"), '记忆面板必须有中期与失败草稿页签。');
 assert(memoryPanel.includes("middle: { label: '中期'"), '记忆面板必须展示中期层级。');
 assert(memoryPanel.includes('压缩到中期'), '记忆面板必须提供短期压缩到中期按钮。');
 assert(memoryPanel.includes('压缩到长期'), '记忆面板必须提供中期压缩到长期按钮。');
@@ -69,6 +69,7 @@ assert(!systemPrompt.includes('const recentLongTerm = memorySystem.长期记忆.
 assert(!historyWindow.includes('MAIN_IMMEDIATE_MEMORY_PROMPT_LIMIT'), '主剧情记忆窗口不应再定义即时记忆注入上限。');
 assert(!systemPrompt.includes('记忆｜即时记忆'), '主剧情 prompt 不应再直接注入即时记忆。');
 assert(!historyWindow.includes('memorySystem.即时记忆.length > 0'), '只有即时记忆时不应触发主剧情记忆历史窗口。');
-assert(phoneService.includes('中期：${m}'), '手机系统上下文必须识别中期记忆。');
+assert(phoneService.includes('不得声称读取全局记忆'), '手机系统必须继续隔离全局短中长期记忆，避免联系人越权读取主线。');
+assert(!phoneService.includes('中期：${m}'), '手机系统不得把主线中期记忆直接注入联系人上下文。');
 
 console.log('✓ memory tier regression passed');

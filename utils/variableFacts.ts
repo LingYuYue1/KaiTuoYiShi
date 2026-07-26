@@ -3,11 +3,13 @@ import type { VariableState } from './variableRegistry';
 import type { 世界状态 } from '@/models/world';
 import { 对齐世界日期与天数, 推进琥珀日期 } from '@/models/world';
 import type { NPC记录, NPC关系类型 } from '@/models/npc';
+import { 获取NPC关系阶段, 获取NPC兼容关系, 限制NPC好感度 } from '@/models/npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
 import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/models/phone';
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import { 天气列表 } from '@/data/weatherRules';
+import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 
 const ITEM_CATEGORIES = new Set<物品分类>(['food', 'consumable', 'lightcone', 'weapon', 'clothing', 'accessory', 'memento', 'key']);
 const ITEM_QUALITIES = new Set<物品品质>(['蓝', '紫', '金']);
@@ -15,10 +17,6 @@ const NPC_RELATIONS = new Set<NPC关系类型>(['stranger', 'acquaintance', 'fri
 const PHONE_TRIGGER_TYPES = new Set<主动来信类型>(['injury', 'victory', 'defeat', 'location_change', 'important_item', 'relationship', 'news', 'quest', 'time', 'custom']);
 const PHONE_PRIORITIES = new Set<主动来信优先级>(['low', 'normal', 'high', 'urgent']);
 const NSFW_AGE_VALUES = new Set(['adult', 'unknown', 'minor_blocked']);
-// NSFW 硬禁名单：智械/机械/非人形对象（帕姆、佩佩、史瓦罗）+ 怪物/裂界生物。
-// 白露、彦卿、虎克、克拉拉已从硬禁移除（年龄门禁解除），按 NSFW 总开关正常处理。
-const NSFW_BLOCKED_CANONICAL_NAMES = new Set(['帕姆', '佩佩']);
-const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|Pepper|史瓦罗|Svarog|机械|机兵|虚卒|机器人|造物|傀儡|人偶|投影|怪物|裂界生物)/i;
 const FACT_TYPE_ALIASES: Record<string, 变量事实['type']> = {
   旅人: 'traveler_profile',
   旅人档案: 'traveler_profile',
@@ -308,6 +306,11 @@ function 归一化事实(raw: unknown): 变量事实 | null {
       affinityDelta: 数字(raw.affinityDelta ?? raw.好感变化),
       affinitySet: 数字(raw.affinitySet ?? raw.好感度),
       relation: NPC_RELATIONS.has(relation as NPC关系类型) ? relation : undefined,
+      intimateRelationship: typeof raw.intimateRelationship === 'boolean'
+        ? raw.intimateRelationship
+        : typeof raw.亲密关系 === 'boolean'
+          ? raw.亲密关系
+          : undefined,
       following: typeof raw.following === 'boolean' ? raw.following : typeof raw.同行 === 'boolean' ? raw.同行 : undefined,
       gender: raw.gender === '男' || raw.gender === '女' || raw.gender === '其他'
         ? raw.gender
@@ -502,25 +505,6 @@ function isCanonicalNpcPersonalityProtected(npc: NPC记录 | undefined, name: st
   return Boolean(npc?.原著角色 || matchCanonical(npc?.姓名 ?? name) || matchCanonical(name));
 }
 
-function isNsfwBlockedNpc(npc: NPC记录 | undefined, name: string): string | null {
-  const canonicalName = matchCanonical(npc?.姓名 ?? name)?.name ?? matchCanonical(name)?.name;
-  const haystack = [
-    name,
-    npc?.姓名,
-    npc?.别名,
-    npc?.介绍,
-    npc?.外貌,
-    npc?.备注?.join(' '),
-  ].filter(Boolean).join(' ');
-  if (canonicalName && NSFW_BLOCKED_CANONICAL_NAMES.has(canonicalName)) {
-    return `${canonicalName} 属于智械/机械/非人形对象，禁止写入 NSFW 档案`;
-  }
-  if (NSFW_BLOCKED_NAME_RE.test(haystack)) {
-    return `${name} 命中智械/机械/非人形等屏蔽词，禁止写入 NSFW 档案`;
-  }
-  return null;
-}
-
 function 数组已有文本(value: unknown, text: string): boolean {
   return Array.isArray(value) && value.some((item) => typeof item === 'string' && item.trim() === text.trim());
 }
@@ -553,7 +537,7 @@ function buildNsfwArchiveUpdate(existing: NPC记录, fact: Extract<变量事实,
   // 落库改为字段级合并（existing 优先，fact 补充），不再强制塞入保守基线占位文案。
   archive.enabled = fact.enabled ?? current.enabled ?? true;
   archive.年龄确认 = fact.ageConfirm ?? current.年龄确认 ?? 'unknown';
-  archive.亲密阶段 = fact.intimacyStage ?? current.亲密阶段 ?? '未建立';
+  archive.亲密阶段 = fact.intimacyStage ?? current.亲密阶段 ?? (existing.亲密关系 ? '已建立亲密关系（私密细节未记录）' : '未建立');
   // 边界/备注只在 fact 或 existing 有值时写入，不再写保守基线默认长文。
   if (fact.boundaries) archive.边界 = fact.boundaries;
   else if (current.边界) archive.边界 = current.边界;
@@ -784,6 +768,7 @@ export function factsToVariableCommands(
       const existing = findNpc(npcs, id, fact.name);
       if (!existing) {
         const canonical = matchCanonical(fact.name);
+        const initialAffinity = 限制NPC好感度(fact.affinitySet ?? fact.affinityDelta ?? 0);
         push({
           action: 'push',
           key: 'NPC',
@@ -792,8 +777,9 @@ export function factsToVariableCommands(
             姓名: canonical?.name ?? fact.name,
             别名: fact.alias,
             阶位: inferNpcTier(fact, canonical),
-            好感度: Math.max(-100, Math.min(100, Math.trunc(fact.affinitySet ?? fact.affinityDelta ?? 0))),
-            关系: fact.relation ?? 'acquaintance',
+            好感度: initialAffinity,
+            关系: 获取NPC兼容关系(initialAffinity),
+            亲密关系: fact.intimateRelationship ?? false,
             同行: fact.following ?? false,
             初见回合: turn,
             最近回合: turn,
@@ -813,7 +799,7 @@ export function factsToVariableCommands(
             }] : [],
             最近互动: fact.recentInteraction ?? fact.memory,
             对玩家长期印象: fact.longTermImpression,
-            当前关系阶段: fact.relationshipStage,
+            当前关系阶段: 获取NPC关系阶段(initialAffinity),
             共同经历: fact.sharedExperiences,
             未完成事项: fact.openItems,
             未解决冲突: fact.unresolvedConflicts,
@@ -828,7 +814,7 @@ export function factsToVariableCommands(
         push({ action: 'set', key: `${key}.最近回合`, value: turn });
         if (typeof fact.affinitySet === 'number') push({ action: 'set', key: `${key}.好感度`, value: fact.affinitySet });
         else if (typeof fact.affinityDelta === 'number') push({ action: 'add', key: `${key}.好感度`, value: fact.affinityDelta });
-        if (fact.relation) push({ action: 'set', key: `${key}.关系`, value: fact.relation });
+        if (typeof fact.intimateRelationship === 'boolean') push({ action: 'set', key: `${key}.亲密关系`, value: fact.intimateRelationship });
         if (typeof fact.following === 'boolean') push({ action: 'set', key: `${key}.同行`, value: fact.following });
         if (fact.gender) push({ action: 'set', key: `${key}.性别`, value: fact.gender });
         if (fact.appearance) push({ action: 'set', key: `${key}.外貌`, value: fact.appearance });
@@ -845,7 +831,6 @@ export function factsToVariableCommands(
         if (fact.playerAddress) push({ action: 'set', key: `${key}.对玩家称呼`, value: fact.playerAddress });
         if (fact.recentInteraction || fact.memory) push({ action: 'set', key: `${key}.最近互动`, value: fact.recentInteraction ?? fact.memory });
         if (fact.longTermImpression) push({ action: 'set', key: `${key}.对玩家长期印象`, value: fact.longTermImpression });
-        if (fact.relationshipStage) push({ action: 'set', key: `${key}.当前关系阶段`, value: fact.relationshipStage });
         pushNpcLedgerListCommands(push, key, '共同经历', fact.sharedExperiences, existing.共同经历);
         pushNpcLedgerListCommands(push, key, '未完成事项', fact.openItems, existing.未完成事项);
         pushNpcLedgerListCommands(push, key, '未解决冲突', fact.unresolvedConflicts, existing.未解决冲突);
@@ -873,7 +858,7 @@ export function factsToVariableCommands(
         warnings.push(`nsfw_archive 已忽略：找不到 NPC ${fact.npcName}，NSFW 档案只更新已入档 NPC。`);
         continue;
       }
-      const blockedReason = isNsfwBlockedNpc(existing, fact.npcName);
+      const blockedReason = getNsfwArchiveBlockReason(existing, fact.npcName);
       if (blockedReason) {
         warnings.push(`nsfw_archive 已忽略：${blockedReason}。`);
         continue;

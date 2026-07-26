@@ -13,6 +13,7 @@ const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const enrichment = fs.readFileSync('utils/npcArchiveEnrichment.ts', 'utf8');
 const companionPanel = fs.readFileSync('components/features/GameSystems/CompanionPanel.tsx', 'utf8');
 const variableManager = fs.readFileSync('components/features/Settings/VariableManager.tsx', 'utf8');
+const nsfwPolicy = fs.readFileSync('utils/nsfwArchivePolicy.ts', 'utf8');
 
 // ─── 基础事实类型与字段 ───
 assert(variableCommand.includes("'nsfw_archive'"), '变量事实类型必须包含 nsfw_archive。');
@@ -25,22 +26,15 @@ assert(variableFacts.includes('男性身体档案'), 'nsfw_archive 必须支持�
 assert(variableFacts.includes('女性身体档案'), 'nsfw_archive 必须支持女性身体档案字段。');
 
 // ─── 硬禁名单：只保留智械/机械/非人形（帕姆、史瓦罗等） ───
-assert(variableFacts.includes('isNsfwBlockedNpc'), '事实层必须屏蔽智械/机械/非人形 NSFW 目标。');
-assert(variableFacts.includes('NSFW_BLOCKED_CANONICAL_NAMES'), '必须有原著名屏蔽名单。');
-assert(variableFacts.includes('帕姆'), '屏蔽名单必须覆盖帕姆。');
-// 白露/彦卿/虎克/克拉拉/佩佩 已从硬禁移除，断言不得再强制要求它们在屏蔽名单里。
-assert(!/NSFW_BLOCKED_CANONICAL_NAMES\s*=\s*new Set\(\[[^\]]*白露/.test(variableFacts), '白露不得再出现在 canonical 屏蔽名单。');
-assert(!/NSFW_BLOCKED_CANONICAL_NAMES\s*=\s*new Set\(\[[^\]]*彦卿/.test(variableFacts), '彦卿不得再出现在 canonical 屏蔽名单。');
-// 正则不得再含角色名（白露/彦卿），但允许怪物/裂界生物（用户要求禁止）。
-assert(!/NSFW_BLOCKED_NAME_RE\s*=.*白露/.test(variableFacts), 'variableFacts 硬禁正则不得再含白露。');
-assert(!/NSFW_BLOCKED_NAME_RE\s*=.*彦卿/.test(variableFacts), 'variableFacts 硬禁正则不得再含彦卿。');
-assert(variableFacts.includes('怪物') && variableFacts.includes('裂界生物'), 'variableFacts 硬禁正则必须包含怪物/裂界生物（用户要求禁止）。');
-assert(variableFacts.includes('佩佩'), 'variableFacts 硬禁正则必须包含佩佩（用户要求禁止）。');
-assert(variableFacts.includes('机械') && variableFacts.includes('机器人'), 'variableFacts 硬禁正则必须保留机械/机器人等智械类词。');
-assert(!enrichment.match(/NSFW_BLOCKED_NAME_RE\s*=.*白露/), 'enrichment 硬禁正则不得再含白露。');
-assert(enrichment.includes('怪物') && enrichment.includes('裂界生物'), 'enrichment 硬禁正则必须包含怪物/裂界生物（用户要求禁止）。');
-assert(enrichment.includes('佩佩'), 'enrichment 硬禁正则必须包含佩佩（用户要求禁止）。');
-assert(enrichment.includes('机械'), 'enrichment 硬禁正则必须保留机械类词。');
+assert(variableFacts.includes('getNsfwArchiveBlockReason'), '事实层必须调用集中 NSFW 资格策略。');
+assert(enrichment.includes('getNsfwArchiveBlockReason'), '补档层必须调用集中 NSFW 资格策略。');
+assert(sendWorkflow.includes('getNsfwArchiveBlockReason'), '旧命令层必须调用集中 NSFW 资格策略。');
+assert(nsfwPolicy.includes('BLOCKED_CANONICAL_NAMES'), '集中策略必须维护原著名屏蔽名单。');
+assert(nsfwPolicy.includes('帕姆') && nsfwPolicy.includes('佩佩') && nsfwPolicy.includes('史瓦罗'), '集中策略必须覆盖帕姆、佩佩和史瓦罗。');
+assert(nsfwPolicy.includes('怪物') && nsfwPolicy.includes('裂界生物'), '集中策略必须屏蔽怪物和裂界生物。');
+assert(nsfwPolicy.includes('机械') && nsfwPolicy.includes('机器人') && nsfwPolicy.includes('人偶'), '集中策略必须屏蔽机械、机器人和普通人偶。');
+assert(nsfwPolicy.includes('isHertaIdentity') && nsfwPolicy.includes("=== '黑塔'"), '集中策略必须显式放行黑塔。');
+assert(!nsfwPolicy.includes('白露') && !nsfwPolicy.includes('彦卿'), '集中策略不得重新加入白露或彦卿角色名门禁。');
 
 // ─── 年龄门禁解除 ───
 // buildConservativeNsfwArchive 已改名为 buildNsfwArchiveUpdate，不再写保守基线。
@@ -75,7 +69,7 @@ assert(variableModel.includes('帕姆'), '变量模型提示词必须禁止帕�
 assert(variableModel.includes('史瓦罗'), '变量模型提示词必须禁止史瓦罗等智械。');
 assert(variableModel.includes('年龄门禁已解除'), '变量模型提示词必须标注年龄门禁已解除。');
 assert(!/不是 adult 时不要写身体档案/.test(variableModel), '变量模型提示词不得再限制只有 adult 才写身体档案。');
-assert(!variableModel.includes('佩佩') || variableModel.includes('帕姆、史瓦罗'), '变量模型提示词不得再把佩佩列入硬禁。');
+assert(variableModel.includes('黑塔 / 大黑塔 / Herta / The Herta'), '变量模型必须说明黑塔真实身体档案例外。');
 
 // ─── NSFW 空档案复审 ───
 assert(variableModel.includes('NSFW_INTERACTION_CUE_RE'), '必须定义 NSFW 成人互动线索正则用于空档案复审。');
@@ -86,6 +80,7 @@ assert(variableModel.includes('NSFW 总开关已开启且正文命中成人互�
 assert(nsfwWorldbook.includes('帕姆'), 'NSFW 世界书必须禁止帕姆。');
 assert(nsfwWorldbook.includes('史瓦罗'), 'NSFW 世界书必须禁止史瓦罗等智械。');
 assert(!nsfwWorldbook.includes('佩佩、白露'), 'NSFW 世界书不得再列佩佩/白露等已解禁角色。');
+assert(nsfwWorldbook.includes('黑塔 / 大黑塔 / Herta / The Herta'), 'NSFW 世界书必须声明黑塔例外。');
 
 // ─── 变量世界书：NSFW 规则同步 ───
 assert(variableWorldbook.includes('NSFW'), '变量世界书必须保留 NSFW 隔离规则。');
@@ -96,7 +91,7 @@ assert(enrichment.includes('shouldCreateNsfwBaseline'), '必须保留 NSFW 基�
 
 // ─── 旧命令屏蔽 ───
 assert(sendWorkflow.includes('getNsfwBlockedCommandReason'), '旧 NSFW 变量命令也必须经过目标屏蔽。');
-assert(sendWorkflow.includes('智械') || sendWorkflow.includes('机械'), '旧命令屏蔽原因必须覆盖智械/机械。');
+assert(nsfwPolicy.includes('智械、机械或非人形对象'), '集中策略的旧命令屏蔽原因必须覆盖智械/机械。');
 assert(!sendWorkflow.includes('非人/生物形态/怪物/机械'), '旧命令屏蔽文案不得再引用过宽词。');
 
 // ─── 显示层文案中性化 ───

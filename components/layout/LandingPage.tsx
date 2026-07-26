@@ -17,8 +17,6 @@ interface TwinkleStar {
   y: number;
   size: number;
   opacity: number;
-  delay: number;
-  duration: number;
   color: string;
 }
 
@@ -35,7 +33,7 @@ export function LandingPage({
 }: LandingPageProps) {
   const stars: TwinkleStar[] = useMemo(() => {
     const list: TwinkleStar[] = [];
-    for (let i = 0; i < 280; i++) {
+    for (let i = 0; i < 24; i++) {
       const isBright = Math.random() < 0.12;
       const isWarm = Math.random() < 0.08;
 
@@ -44,8 +42,6 @@ export function LandingPage({
         y: Math.random() * 100,
         size: isBright ? 2 + Math.random() * 2 : 0.5 + Math.random() * 1.5,
         opacity: isBright ? 0.5 + Math.random() * 0.5 : 0.15 + Math.random() * 0.45,
-        delay: Math.random() * 5,
-        duration: isBright ? 1.5 + Math.random() * 2 : 2 + Math.random() * 4,
         color: isWarm
           ? `rgba(255, ${200 + Math.floor(Math.random() * 55)}, ${150 + Math.floor(Math.random() * 50)}, OPACITY)`
           : `rgba(${180 + Math.floor(Math.random() * 60)}, ${210 + Math.floor(Math.random() * 35)}, ${240 + Math.floor(Math.random() * 15)}, OPACITY)`,
@@ -73,7 +69,6 @@ export function LandingPage({
             boxShadow: s.size > 2
               ? `0 0 ${s.size * 3}px ${s.size * 0.8}px ${s.color.replace('OPACITY', String(s.opacity * 0.6))}`
               : 'none',
-            animation: `star-twinkle ${s.duration}s ease-in-out ${s.delay}s infinite`,
           }}
         />
       ))}
@@ -319,9 +314,9 @@ export function LandingPage({
         className="absolute bottom-4 left-4 right-4 z-10 flex flex-col items-center gap-1 text-center text-xs opacity-60"
         style={{ color: 'rgb(var(--tj-text-secondary))' }}
       >
-        <p>开拓轶事 v1.0</p>
+        <p>开拓轶事 v1.2.2</p>
         <p className="text-[11px] leading-relaxed">
-          作者 Ling · 智库部分内容贡献者 11MOMO
+          作者：牢凌 · 贡献者：11MOMO，<strong className="font-semibold">Penna Mch</strong>
         </p>
       </div>
     </div>

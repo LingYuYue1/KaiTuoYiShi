@@ -2,6 +2,7 @@ import { matchCanonical } from '@/data/canonicalCharacters';
 import type { NPC记录, NPC性别, NPC_NSFW档案 } from '@/models/npc';
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import { 获取智库人物名列表, 解析智库软结构标签, 比较智库人物节点 } from '@/models/zhiku';
+import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 
 export type CanonicalArchiveBaseline = {
   性别?: NPC性别;
@@ -128,9 +129,6 @@ const CANONICAL_ARCHIVE_BASELINES: Record<string, CanonicalArchiveBaseline> = {
   },
 };
 
-// NSFW 硬禁名单：智械/机械/非人形对象（帕姆、佩佩、史瓦罗）+ 怪物/裂界生物。
-const NSFW_BLOCKED_NAME_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|Pepper|史瓦罗|Svarog|机械|机兵|虚卒|机器人|造物|傀儡|人偶|投影|怪物|裂界生物)/i;
-
 function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -152,18 +150,6 @@ function shouldPatchArchiveField(current: unknown, incoming: unknown): incoming 
   const currentText = current.trim();
   const incomingText = incoming.trim();
   return isWeakArchiveText(currentText) && incomingText.length >= currentText.length + 6;
-}
-
-function isNsfwBlockedNpc(npc: NPC记录, canonicalName?: string): boolean {
-  const haystack = [
-    canonicalName,
-    npc.姓名,
-    npc.别名,
-    npc.外貌,
-    npc.介绍,
-    npc.备注?.join(' '),
-  ].filter(Boolean).join(' ');
-  return NSFW_BLOCKED_NAME_RE.test(haystack);
 }
 
 function namesLikelySame(a: string | undefined, b: string | undefined): boolean {
@@ -215,7 +201,7 @@ function shouldCreateNsfwBaseline(
   options: { nsfwEnabled: boolean; maleNsfwArchiveEnabled: boolean },
 ): boolean {
   if (!options.nsfwEnabled) return false;
-  if (isNsfwBlockedNpc(npc, npc.姓名)) return false;
+  if (getNsfwArchiveBlockReason(npc, npc.姓名)) return false;
   const gender = baseline?.性别 ?? npc.性别;
   if (gender === '男' && !options.maleNsfwArchiveEnabled) return false;
   return npc.阶位 === 'companion' || npc.同行 || npc.原著角色 === true;
@@ -231,7 +217,7 @@ function buildNsfwBaseline(npc: NPC记录, baseline?: CanonicalArchiveBaseline):
     ...existing,
     enabled: true,
     年龄确认: age,
-    亲密阶段: existing.亲密阶段 ?? '未建立',
+    亲密阶段: existing.亲密阶段 ?? (npc.亲密关系 ? '已建立亲密关系（私密细节未记录）' : '未建立'),
   };
 }
 
@@ -272,8 +258,7 @@ export function enrichNpcArchives(
   const next = records.map((npc) => {
     const canonical = matchCanonical(npc.姓名) ?? (npc.别名 ? matchCanonical(npc.别名) : null);
     const zhikuBaseline = buildZhikuArchiveBaseline(npc, options.zhiku);
-    if (!canonical && !zhikuBaseline) return npc;
-    const baseline = {
+    const baseline: CanonicalArchiveBaseline = {
       ...(canonical ? {
         外貌: canonical.appearance,
         性格: canonical.personality,

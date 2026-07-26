@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
-import { NPC_RELATION_LABELS, buildNpcMemoryLedgerView, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
+import { NPC_AFFINITY_MAX, NPC_AFFINITY_MIN, buildNpcMemoryLedgerView, 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { 智库系统 } from '@/models/zhiku';
 import { buildNpcRelationshipPlanning, type NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
@@ -217,7 +217,7 @@ function NpcListItem({
   selected: boolean;
   onClick: () => void;
 }) {
-  const relation = NPC_RELATION_LABELS[npc.关系] ?? npc.关系;
+  const relation = 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系));
   return (
     <button
       type="button"
@@ -396,7 +396,7 @@ function NpcDetail({
 
             <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
               <InfoPill label="性别" value={npc.性别 || '未知'} />
-              <InfoPill label="关系" value={NPC_RELATION_LABELS[npc.关系] ?? npc.关系} />
+              <InfoPill label="关系" value={格式化NPC关系(npc.好感度, Boolean(npc.亲密关系))} />
               <InfoPill label="最近" value={`第 ${npc.最近回合} 回合`} />
             </div>
 
@@ -826,7 +826,7 @@ function AffinityBadge({ value }: { value: number }) {
 
 function AffinityMeter({ value, compact = false }: { value: number; compact?: boolean }) {
   const tone = getAffinityTone(value);
-  const percent = Math.max(0, Math.min(100, (value + 100) / 2));
+  const percent = Math.max(0, Math.min(100, ((value - NPC_AFFINITY_MIN) / (NPC_AFFINITY_MAX - NPC_AFFINITY_MIN)) * 100));
   return (
     <div className={compact ? 'mt-1.5 flex items-center gap-2' : 'mt-2 flex items-center gap-2'}>
       <span className="font-serif text-[12px]" style={{ color: tone.color }}>

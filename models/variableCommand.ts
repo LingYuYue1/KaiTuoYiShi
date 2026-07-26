@@ -72,6 +72,7 @@ export interface NPC变量事实 {
   affinityDelta?: number;
   affinitySet?: number;
   relation?: string;
+  intimateRelationship?: boolean;
   following?: boolean;
   appearance?: string;
   clothing?: string;
@@ -195,4 +196,11 @@ export interface 变量命令批次 {
   report?: string;
   /** 变量模型返回的原始文本，供「查看原始信息」面板展示。失败回执时为空。 */
   rawText?: string;
+  /** 长期会话中的旧批次轻量摘要标记；用于避免每回合重复压缩同一批历史。 */
+  retentionSummary?: {
+    totalResults: number;
+    succeededResults: number;
+    diagnosticResults: number;
+    omittedDiagnosticResults: number;
+  };
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
 import { LandingPage } from '@/components/layout/LandingPage';
 import { DesktopHomeScreen } from '@/components/layout/DesktopHomeScreen';
@@ -11,28 +11,10 @@ import { MobileQuickMenu } from '@/components/layout/MobileQuickMenu';
 import { ChatList } from '@/components/features/Chat/ChatList';
 import { InputArea } from '@/components/features/Chat/InputArea';
 import { VariableDrawer } from '@/components/features/Variable/VariableDrawer';
-import { NewGameWizard } from '@/components/features/NewGame/NewGameWizard';
-import { SettingsModal } from '@/components/features/Settings/SettingsModal';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
-import { WorldbookManagerModal } from '@/components/features/Worldbook/WorldbookManagerModal';
-import { ZhikuManagerModal } from '@/components/features/GameSystems/ZhikuManagerModal';
-import { SaveLoadModal } from '@/components/features/SaveLoad/SaveLoadModal';
-import { GitHubCloudSaveModal } from '@/components/features/CloudSave/GitHubCloudSaveModal';
-import { ReleaseAnnouncementsModal } from '@/components/features/Release/ReleaseAnnouncementsModal';
-import { SkillPanel } from '@/components/features/GameSystems/SkillPanel';
-import { InventoryPanel } from '@/components/features/GameSystems/InventoryPanel';
-import { NewsPanel } from '@/components/features/GameSystems/NewsPanel';
-import { PlotPanel } from '@/components/features/GameSystems/PlotPanel';
-import { YitingPanel } from '@/components/features/GameSystems/YitingPanel';
-import { ZhikuPanel } from '@/components/features/GameSystems/ZhikuPanel';
-import { CompanionPanel } from '@/components/features/GameSystems/CompanionPanel';
-import { MemoryPanel } from '@/components/features/GameSystems/MemoryPanel';
-import { PathPanel } from '@/components/features/GameSystems/PathPanel';
-import { AlbumPanel } from '@/components/features/GameSystems/AlbumPanel';
 import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakeningInvitation';
 import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
-import { PhoneModal } from '@/components/features/Phone/PhoneModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/dbService';
 import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
@@ -40,6 +22,197 @@ import { isDesktopRuntime } from '@/utils/platform/desktopRuntime';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
+import type { 记忆失败草稿 } from '@/models/memory';
+import type { MemoryRebuildProgress, MemoryRebuildTask } from '@/services/memoryRebuild';
+import { lazyWithRetry } from '@/utils/lazyWithRetry';
+import { setStreamingMessage } from '@/utils/streamingMessageStore';
+
+const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
+const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })));
+const SaveLoadModal = lazyWithRetry(() => import('@/components/features/SaveLoad/SaveLoadModal').then((module) => ({ default: module.SaveLoadModal })));
+const PhoneModal = lazyWithRetry(() => import('@/components/features/Phone/PhoneModal').then((module) => ({ default: module.PhoneModal })));
+const WorldbookManagerModal = lazyWithRetry(() => import('@/components/features/Worldbook/WorldbookManagerModal').then((module) => ({ default: module.WorldbookManagerModal })));
+const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/GameSystems/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
+const GitHubCloudSaveModal = lazyWithRetry(() => import('@/components/features/CloudSave/GitHubCloudSaveModal').then((module) => ({ default: module.GitHubCloudSaveModal })));
+const ReleaseAnnouncementsModal = lazyWithRetry(() => import('@/components/features/Release/ReleaseAnnouncementsModal').then((module) => ({ default: module.ReleaseAnnouncementsModal })));
+const PlotPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PlotPanel').then((module) => ({ default: module.PlotPanel })));
+const YitingPanel = lazyWithRetry(() => import('@/components/features/GameSystems/YitingPanel').then((module) => ({ default: module.YitingPanel })));
+const ZhikuPanel = lazyWithRetry(() => import('@/components/features/GameSystems/ZhikuPanel').then((module) => ({ default: module.ZhikuPanel })));
+const MemoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemoryPanel').then((module) => ({ default: module.MemoryPanel })));
+const AlbumPanel = lazyWithRetry(() => import('@/components/features/GameSystems/AlbumPanel').then((module) => ({ default: module.AlbumPanel })));
+const SkillPanel = lazyWithRetry(() => import('@/components/features/GameSystems/SkillPanel').then((module) => ({ default: module.SkillPanel })));
+const InventoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/InventoryPanel').then((module) => ({ default: module.InventoryPanel })));
+const NewsPanel = lazyWithRetry(() => import('@/components/features/GameSystems/NewsPanel').then((module) => ({ default: module.NewsPanel })));
+const CompanionPanel = lazyWithRetry(() => import('@/components/features/GameSystems/CompanionPanel').then((module) => ({ default: module.CompanionPanel })));
+const PathPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PathPanel').then((module) => ({ default: module.PathPanel })));
+
+const memoryRebuildPanelStyle = {
+  background: 'rgba(var(--tj-surface-strong),0.72)',
+  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.55)',
+};
+
+function LazySurfaceFallback({ label = '系统载入中' }: { label?: string }) {
+  return (
+    <div className="flex min-h-[180px] items-center justify-center p-6 text-sm" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
+      {label}
+    </div>
+  );
+}
+
+function MemoryRebuildModal({
+  defaultEnd,
+  onClose,
+  onAbort,
+  onRun,
+}: {
+  defaultEnd: number;
+  onClose: () => void;
+  onAbort: () => void;
+  onRun: (options: {
+    batchSize: number;
+    range: { start: number; end: number };
+    task?: MemoryRebuildTask;
+    onProgress: (progress: MemoryRebuildProgress) => void;
+  }) => Promise<MemoryRebuildTask>;
+}) {
+  const [start, setStart] = useState(1);
+  const [end, setEnd] = useState(Math.max(1, defaultEnd));
+  const [batchSize, setBatchSize] = useState(15);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<MemoryRebuildProgress | null>(null);
+  const [result, setResult] = useState<MemoryRebuildTask | null>(null);
+  const [error, setError] = useState('');
+
+  const handleRun = async () => {
+    setRunning(true);
+    setResult(null);
+    setError('');
+    try {
+      const task = await onRun({
+        batchSize: Math.max(1, Math.min(100, Math.trunc(batchSize) || 15)),
+        range: {
+          start: Math.max(1, Math.trunc(start) || 1),
+          end: Math.max(1, Math.trunc(end) || Math.max(1, defaultEnd)),
+        },
+        task: result?.status === 'paused_failed' ? result : undefined,
+        onProgress: setProgress,
+      });
+      setResult(task);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '批量重建失败。');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (running) onAbort();
+    onClose();
+  };
+  const statusText = result?.status === 'committed'
+    ? `已重建 ${result.progress.processedTurns} 回合，四层记忆已一次性替换并自动保存。`
+    : result?.status === 'paused_failed'
+      ? `在第 ${result.failedBatch?.sourceTurns.start ?? '?'}-${result.failedBatch?.sourceTurns.end ?? '?'} 回合暂停；原记忆未改动，失败批次已保存到失败草稿。`
+      : result?.status === 'blocked'
+        ? result.blockedReason ?? '当前设置不允许批量重建。'
+        : result?.status === 'cancelled'
+          ? '重建已取消，原记忆未改动。'
+          : '';
+
+  return (
+    <Modal title="批量重建记忆" onClose={handleClose} className="max-w-xl">
+      <div className="grid gap-4">
+        <div className="px-3 py-3 text-[13px] leading-relaxed" style={{ ...memoryRebuildPanelStyle, color: 'rgba(var(--tj-text-secondary),0.86)' }}>
+          系统会从存档中的历史正文按回合顺序重新总结。处理中只写入临时 staging；全部批次成功后才替换即时、短期、中期、长期记忆，失败或取消都不会覆盖原记忆。
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <NumberField label="开始回合" value={start} min={1} max={Math.max(1, defaultEnd)} disabled={running || result?.status === 'paused_failed'} onChange={setStart} />
+          <NumberField label="结束回合" value={end} min={1} max={Math.max(1, defaultEnd)} disabled={running || result?.status === 'paused_failed'} onChange={setEnd} />
+          <NumberField label="每批回合" value={batchSize} min={1} max={100} disabled={running || result?.status === 'paused_failed'} onChange={setBatchSize} />
+        </div>
+        {progress && (
+          <div className="px-3 py-3" style={memoryRebuildPanelStyle}>
+            <div className="flex items-center justify-between gap-3 text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.84)' }}>
+              <span>{running ? '正在重建' : '处理结果'}</span>
+              <span>{progress.completedBatches}/{progress.totalBatches} 批 · {progress.processedTurns}/{progress.totalTurns} 回合</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden bg-[rgba(var(--tj-text-secondary),0.12)]">
+              <div
+                className="h-full bg-[rgb(var(--tj-accent-primary))] transition-[width] duration-200"
+                style={{ width: `${progress.totalBatches ? Math.round(progress.completedBatches / progress.totalBatches * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+        {(statusText || error) && (
+          <div className="px-3 py-3 text-[13px] leading-relaxed" style={{ ...memoryRebuildPanelStyle, color: error || result?.status === 'paused_failed' || result?.status === 'blocked' ? 'rgba(var(--tj-danger),0.95)' : 'rgba(var(--tj-ui-success),0.95)' }}>
+            {error || statusText}
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          {!running && result?.status === 'paused_failed' && (
+            <button
+              type="button"
+              onClick={() => {
+                setResult(null);
+                setProgress(null);
+              }}
+              className="kaituo-close-btn px-4 py-2 text-sm"
+            >
+              放弃本次进度
+            </button>
+          )}
+          {running ? (
+            <button type="button" onClick={onAbort} className="kaituo-close-btn px-4 py-2 text-sm">取消重建</button>
+          ) : (
+            <button type="button" onClick={handleClose} className="kaituo-close-btn px-4 py-2 text-sm">关闭</button>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleRun()}
+            disabled={running}
+            className="px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-45"
+            style={{ color: 'rgb(var(--tj-text-primary))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.5)', background: 'rgba(var(--tj-accent-primary),0.12)' }}
+          >
+            {running ? '重建中...' : result?.status === 'paused_failed' ? '从失败批次继续' : '开始重建'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="grid min-w-0 gap-1.5 text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
+      <span>{label}</span>
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        disabled={disabled}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="min-w-0 bg-[rgba(var(--tj-bg-primary),0.55)] px-3 py-2 outline-none disabled:opacity-50"
+        style={{ color: 'rgb(var(--tj-text-primary))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.6)' }}
+      />
+    </label>
+  );
+}
 
 function JourneyLaunchOverlay() {
   const starSeeds = useMemo(
@@ -256,9 +429,10 @@ import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
+import type { 队列任务ID } from '@/models/queueTask';
 import { 创建空手机系统 } from '@/models/phone';
 import { 创建默认记忆系统设置 } from '@/models/settings';
-import { alignStoryWeavingToOpeningArchive, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
 
@@ -268,6 +442,15 @@ const HOME_JOURNEY_VIEW_SWITCH_MS = 520;
 const SAVE_LOAD_ANIMATION_MS = 1040;
 const SAVE_LOAD_VIEW_SWITCH_MS = 430;
 const BOOK_OPEN_ANIMATION_MS = 1080;
+const CANCELLABLE_TASK_TITLES: Partial<Record<队列任务ID, string>> = {
+  main_story: '主剧情生成',
+  memory: '记忆整理',
+  variable: '变量生成',
+  news: '星际和平周报',
+  yiting: '忆庭召回',
+  zhiku: '智库检索',
+  phone: '手机来信',
+};
 const BOOK_OPEN_VIEW_SWITCH_MS = 460;
 const JOURNEY_LAUNCH_REDUCED_MOTION_MS = 320;
 const HOME_JOURNEY_REDUCED_MOTION_MS = 260;
@@ -288,6 +471,9 @@ const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDU
 
 export default function App() {
   const { state, actions } = useGame();
+  const pendingMemoryDraftCount = (state.记忆.失败草稿 ?? []).filter(
+    (draft) => draft.status === 'pending' || draft.status === 'retrying',
+  ).length;
   const [showSettings, setShowSettings] = useState(false);
   const [showWorldbookManager, setShowWorldbookManager] = useState(false);
   const [showZhikuManager, setShowZhikuManager] = useState(false);
@@ -297,6 +483,7 @@ export default function App() {
   const [showMysteryChat, setShowMysteryChat] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
+  const [showMemoryRebuild, setShowMemoryRebuild] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
   const [activeSystem, setActiveSystem] = useState<GameSystemId | null>(null);
   const [launchingJourney, setLaunchingJourney] = useState(false);
@@ -304,17 +491,79 @@ export default function App() {
   const [saveLoadTransitioning, setSaveLoadTransitioning] = useState(false);
   const [bookOpenTransitioning, setBookOpenTransitioning] = useState(false);
 
-  const handleMenuSelect = (id: GameSystemId) => {
+  const handleMenuSelect = useCallback((id: GameSystemId) => {
     if (id === 'worldbook') {
       setActiveSystem(null);
       setShowWorldbookManager(true);
       return;
     }
     setActiveSystem((current) => (current === id ? null : id));
-  };
+  }, []);
+
+  const handleOpenNews = useCallback(() => setActiveSystem('news'), []);
+  const handleOpenProfile = useCallback(() => setShowCharacter(true), []);
+  const handleOpenPhone = useCallback(() => setShowPhone(true), []);
+  const handleOpenMemoryRebuild = useCallback(() => setShowMemoryRebuild(true), []);
+  const handleOpenSaveLoad = useCallback(() => setShowSaveLoad(true), []);
+  const handleOpenSettings = useCallback(() => setShowSettings(true), []);
+  const handleCloseSystemDrawer = useCallback(() => setActiveSystem(null), []);
+  const handleToggleStreaming = useCallback(() => {
+    state.setGameSettings((prev) => ({
+      ...prev,
+      enableStreaming: !prev.enableStreaming,
+    }));
+  }, [state.setGameSettings]);
+  const handleEditBody = useCallback((id: string, newBody: string) => {
+    state.setChatHistory((prev) =>
+      prev.map((m) =>
+        m.id === id && m.parsedResponse
+          ? {
+              ...m,
+              content: newBody,
+              parsedResponse: { ...m.parsedResponse, body: newBody },
+            }
+          : m,
+      ),
+    );
+  }, [state.setChatHistory]);
+  const handleCancelTask = useCallback((id: 队列任务ID) => {
+    const title = CANCELLABLE_TASK_TITLES[id];
+    if (!title) return;
+
+    state.abortControllerRef.current?.abort();
+    state.setQueueTasks((prev) => [
+      ...prev,
+      {
+        id,
+        title,
+        turn: state.turnCount,
+        timestamp: Date.now(),
+        status: 'cancelled',
+        detail: '玩家已取消本次任务。',
+        cancelled: true,
+      },
+    ]);
+    state.setPendingVariable(false);
+    state.setLoading(false);
+    setStreamingMessage('');
+  }, [
+    state.abortControllerRef,
+    state.setQueueTasks,
+    state.turnCount,
+    state.setPendingVariable,
+    state.setLoading,
+  ]);
+  const handlePathAwakeningTrigger = useCallback(() => {
+    void actions.handleSend('[系统] 踏入命途狭间');
+  }, [actions]);
+  const handleAwakenedNewPath = useCallback((id: 命途ID) => {
+    // TODO: 这里以后接入命途狭间剧情触发。当前只 console。
+    console.info('[path] 命途狭间触发:', id);
+  }, []);
 
   const handleHomeNewGame = useCallback(async () => {
     if (homeJourneyTransitioning || saveLoadTransitioning || bookOpenTransitioning || launchingJourney) return;
+    void NewGameWizard.preload();
     setHomeJourneyTransitioning(true);
     const totalDelay = getHomeJourneyDelay();
     const switchDelay = Math.min(getHomeJourneyViewSwitchDelay(), totalDelay);
@@ -326,6 +575,7 @@ export default function App() {
 
   const handleHomeLoadSave = useCallback(async () => {
     if (saveLoadTransitioning || homeJourneyTransitioning || bookOpenTransitioning || launchingJourney) return;
+    void SaveLoadModal.preload();
     setSaveLoadTransitioning(true);
     const totalDelay = getSaveLoadDelay();
     const switchDelay = Math.min(getSaveLoadViewSwitchDelay(), totalDelay);
@@ -337,6 +587,7 @@ export default function App() {
 
   const handleHomeWorldbookManager = useCallback(async () => {
     if (bookOpenTransitioning || saveLoadTransitioning || homeJourneyTransitioning || launchingJourney) return;
+    void WorldbookManagerModal.preload();
     setBookOpenTransitioning(true);
     const totalDelay = getBookOpenDelay();
     const switchDelay = Math.min(getBookOpenViewSwitchDelay(), totalDelay);
@@ -387,9 +638,34 @@ export default function App() {
       || latest?.debugContext?.zhikuRecallInjection?.trim()
       || '';
   }, [state.chatHistory, state.liveRecallFullContent, state.loading]);
-  const latestActiveTask = [...state.queueTasks].reverse().find((task) =>
-    ['main_story', 'memory', 'variable', 'news', 'yiting', 'zhiku'].includes(task.id),
+  const latestActiveTask = useMemo(() => (
+    [...state.queueTasks].reverse().find((task) =>
+      ['main_story', 'memory', 'variable', 'news', 'yiting', 'zhiku'].includes(task.id),
+    )
+  ), [state.queueTasks]);
+
+  const actionOptions = useMemo(() => (
+    [...state.chatHistory]
+      .reverse()
+      .find((m) => m.role === 'assistant')?.parsedResponse?.actionOptions ?? []
+  ), [state.chatHistory]);
+
+  const canReroll = useMemo(
+    () => state.chatHistory.some((m) => m.role === 'assistant'),
+    [state.chatHistory],
   );
+
+  const narrativeImageManualEnabled = Boolean(
+    state.gameSettings.文生图系统?.正文生图?.enabled
+    && state.gameSettings.文生图系统.正文生图.mode === 'manual',
+  );
+
+  const recoveryDraft = useMemo(() => (
+    state.interruptedWorkflow ? {
+      workflowId: state.interruptedWorkflow.workflowId,
+      input: state.interruptedWorkflow.input,
+    } : null
+  ), [state.interruptedWorkflow]);
 
   // 自动触发第 0 回合：handleStartGame 把触发文本写入 pendingOpeningTrigger，
   // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
@@ -407,6 +683,155 @@ export default function App() {
       setShowCloudSave(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (state.view !== 'home') return;
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const preloadZhiku = () => {
+      void ZhikuManagerModal.preload();
+    };
+
+    if (idleWindow.requestIdleCallback) {
+      const idleHandle = idleWindow.requestIdleCallback(preloadZhiku, { timeout: 1200 });
+      return () => idleWindow.cancelIdleCallback?.(idleHandle);
+    }
+
+    const timer = window.setTimeout(preloadZhiku, 300);
+    return () => window.clearTimeout(timer);
+  }, [state.view]);
+
+  // ── Game shell slots ──
+  const topBar = (
+    <TopBar
+      worldState={state.世界}
+      currentTheme={state.currentTheme}
+      onHome={actions.handleGoHome}
+      news={state.新闻}
+      onOpenNews={handleOpenNews}
+    />
+  );
+
+  const leftPanel = (
+    <LeftPanel
+      traveler={state.旅人}
+      album={state.相册}
+      onOpenProfile={handleOpenProfile}
+      onOpenPhone={handleOpenPhone}
+      phoneUnread={state.手机.unreadTotal}
+      currentStoryChapter={currentStoryChapter}
+      recallSummary={latestRecallSummary}
+      recallFullContent={latestRecallFullContent}
+    />
+  );
+
+  const rightPanel = (
+    <RightMenu
+      activeId={activeSystem}
+      onSelect={handleMenuSelect}
+      onSaveGame={handleOpenSaveLoad}
+      onLoadGame={handleOpenSaveLoad}
+      onSettings={handleOpenSettings}
+      memoryUnread={pendingMemoryDraftCount}
+    />
+  );
+
+  const chatArea = (
+    <>
+      <VariableDrawer
+        batches={state.variableBatches}
+        tasks={state.queueTasks}
+        pending={state.pendingVariable}
+        onRetryTask={actions.handleRetryQueueTask}
+        onCancelTask={handleCancelTask}
+      />
+      <ChatList
+        messages={state.chatHistory}
+        loading={state.loading}
+        scrollRef={state.scrollRef}
+        npcRecords={state.NPC}
+        traveler={state.旅人}
+        album={state.相册}
+        showInnerVoice={state.gameSettings.enableInnerVoice}
+        visualTextSettings={state.gameSettings.visualTextSettings}
+        onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
+        narrativeImageManualEnabled={narrativeImageManualEnabled}
+        onEditBody={handleEditBody}
+      />
+      <PathAwakeningInvitation
+        world={state.世界}
+        setWorld={state.set世界}
+        onTrigger={handlePathAwakeningTrigger}
+        disabled={state.loading || state.pendingVariable}
+      />
+      <InputArea
+        onSend={actions.handleSend}
+        onAbort={actions.handleAbort}
+        loading={state.loading}
+        disabled={state.pendingVariable}
+        canRestartOpening={state.turnCount <= 5}
+        canReroll={canReroll}
+        onRestartOpening={actions.handleRestartOpening}
+        onReroll={actions.handleReroll}
+        streamingEnabled={state.gameSettings.enableStreaming}
+        onToggleStreaming={handleToggleStreaming}
+        workflowHint={state.workflowHint}
+        workflowStatus={state.workflowStatus}
+        workflowFailed={latestActiveTask?.status === 'failed'}
+        workflowFailCount={latestActiveTask?.failCount ?? (latestActiveTask?.status === 'failed' ? 1 : 0)}
+        workflowRetrying={latestActiveTask?.retrying === true}
+        onCancelWorkflow={actions.handleAbort}
+        actionOptions={actionOptions}
+        recoveryDraft={recoveryDraft}
+      />
+      <SystemDrawer
+        open={activeSystem !== null}
+        title={activeMenuItem?.label ?? ''}
+        subtitle={activeMenuItem?.subtitle}
+        glyph={activeMenuItem?.glyph}
+        onClose={handleCloseSystemDrawer}
+      >
+        <Suspense fallback={<LazySurfaceFallback label="系统面板载入中" />}>
+          {renderSystemPanel(activeSystem, {
+            traveler: state.旅人,
+            onTravelerChange: state.set旅人,
+            onAwakenedNewPath: handleAwakenedNewPath,
+            npcRecords: state.NPC,
+            onNpcRecordsChange: state.setNPC,
+            album: state.相册,
+            onAlbumChange: state.set相册,
+            phone: state.手机,
+            onPhoneChange: state.set手机,
+            memorySystem: state.记忆,
+            onMemorySystemChange: state.set记忆,
+            failedDrafts: state.记忆.失败草稿 ?? [],
+            onRetryFailedDraft: (draft) => void actions.handleRetryMemoryFailureDraft(draft.id),
+            onIgnoreFailedDraft: (draft) => void actions.handleIgnoreMemoryFailureDraft(draft.id),
+            onOpenMemoryRebuild: handleOpenMemoryRebuild,
+            yitingSystem: state.忆庭,
+            zhikuSystem: state.智库,
+            onZhikuSystemChange: state.set智库,
+            zhikuSettings: state.gameSettings.智库系统,
+            memorySettings: state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
+            news: state.新闻,
+            onNewsChange: state.set新闻,
+            plotNodes: state.剧情,
+            onPlotNodesChange: state.set剧情,
+            storyWeaving: state.剧情编织,
+            onStoryWeavingChange: state.set剧情编织,
+            gameSettings: state.gameSettings,
+            onGameSettingsChange: state.setGameSettings,
+            apiSettings: state.apiSettings,
+            turnCount: state.turnCount,
+            mainChatHistory: state.chatHistory,
+          })}
+        </Suspense>
+      </SystemDrawer>
+    </>
+  );
 
   // ── Home ──
   if (state.view === 'home') {
@@ -452,95 +877,108 @@ export default function App() {
         {saveLoadTransitioning ? <SaveLoadOverlay /> : null}
         {bookOpenTransitioning ? <BookOpenOverlay /> : null}
         {showWorldbookManager && (
-          <WorldbookManagerModal
-            worldbooks={state.worldbooks}
-            onSave={(books) => {
-              state.setWorldbooks(books);
-              saveSetting('worldbooks', books);
-            }}
-            onClose={() => setShowWorldbookManager(false)}
-          />
+          <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
+            <WorldbookManagerModal
+              worldbooks={state.worldbooks}
+              onSave={(books) => {
+                state.setWorldbooks(books);
+                saveSetting('worldbooks', books);
+              }}
+              onClose={() => setShowWorldbookManager(false)}
+            />
+          </Suspense>
         )}
         {showZhikuManager && (
-          <ZhikuManagerModal
-            zhikuSystem={state.智库}
-            onZhikuSystemChange={state.set智库}
-            settings={state.gameSettings.智库系统}
-            onClose={() => setShowZhikuManager(false)}
-          />
+          <Suspense fallback={<LazySurfaceFallback label="智库载入中" />}>
+            <ZhikuManagerModal
+              zhikuSystem={state.智库}
+              onZhikuSystemChange={state.set智库}
+              settings={state.gameSettings.智库系统}
+              onClose={() => setShowZhikuManager(false)}
+            />
+          </Suspense>
         )}
         {showSaveLoad && (
-          <SaveLoadModal
-            onSave={actions.handleSave}
-            onLoad={async (id) => {
-              const ok = await handleLoadById(id, state);
-              if (ok) setShowSaveLoad(false);
-              return ok;
-            }}
-            onClose={() => setShowSaveLoad(false)}
-          />
+          <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
+            <SaveLoadModal
+              onSave={actions.handleSave}
+              onLoad={async (id) => {
+                const ok = await handleLoadById(id, state);
+                if (ok) setShowSaveLoad(false);
+                return ok;
+              }}
+              onClose={() => setShowSaveLoad(false)}
+            />
+          </Suspense>
         )}
         {showCloudSave && (
-          <GitHubCloudSaveModal
-            onSave={actions.handleSave}
-            onClose={() => setShowCloudSave(false)}
-          />
+          <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
+            <GitHubCloudSaveModal
+              onSave={actions.handleSave}
+              onClose={() => setShowCloudSave(false)}
+            />
+          </Suspense>
         )}
         {showReleaseAnnouncements && (
-          <ReleaseAnnouncementsModal
-            onClose={() => setShowReleaseAnnouncements(false)}
-          />
+          <Suspense fallback={<LazySurfaceFallback label="公告载入中" />}>
+            <ReleaseAnnouncementsModal
+              onClose={() => setShowReleaseAnnouncements(false)}
+            />
+          </Suspense>
         )}
         {showMysteryChat && (
           <MysteryChatModal onClose={() => setShowMysteryChat(false)} />
         )}
         {showSettings && (
-          <SettingsModal
-            onClose={() => setShowSettings(false)}
-            apiSettings={state.apiSettings}
-            onApiSettingsChange={state.setApiSettings}
-            gameSettings={state.gameSettings}
-            onGameSettingsChange={state.setGameSettings}
-            currentTheme={state.currentTheme}
-            onThemeChange={state.setCurrentTheme}
-            onSave={actions.handleSave}
-            onContinue={actions.handleContinue}
-            onLoadSave={(id) => handleLoadById(id, state)}
-            initialTab={settingsInitialTab}
-            旅人={state.旅人}
-            世界={state.世界}
-            on世界Change={state.set世界}
-            记忆={state.记忆}
-            忆庭={state.忆庭}
-            智库={state.智库}
-            手机={state.手机}
-            NPC={state.NPC}
-            新闻={state.新闻}
-            剧情编织={state.剧情编织}
-            on剧情编织Change={state.set剧情编织}
-            getContextSnapshot={actions.getContextSnapshot}
+          <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
+            <SettingsModal
+              onClose={() => setShowSettings(false)}
+              apiSettings={state.apiSettings}
+              onApiSettingsChange={state.setApiSettings}
+              gameSettings={state.gameSettings}
+              onGameSettingsChange={state.setGameSettings}
+              currentTheme={state.currentTheme}
+              onThemeChange={state.setCurrentTheme}
+              onSave={actions.handleSave}
+              onContinue={actions.handleContinue}
+              onLoadSave={(id) => handleLoadById(id, state)}
+              initialTab={settingsInitialTab}
+              旅人={state.旅人}
+              世界={state.世界}
+              on世界Change={state.set世界}
+              记忆={state.记忆}
+              忆庭={state.忆庭}
+              智库={state.智库}
+              手机={state.手机}
+              NPC={state.NPC}
+              新闻={state.新闻}
+              剧情编织={state.剧情编织}
+              on剧情编织Change={state.set剧情编织}
+              getContextSnapshot={actions.getContextSnapshot}
 
-            worldbooks={state.worldbooks}
+              worldbooks={state.worldbooks}
 
-            onWorldbooksChange={(books) => {
+              onWorldbooksChange={(books) => {
 
-              state.setWorldbooks(books);
+                state.setWorldbooks(books);
 
-              saveSetting('worldbooks', books);
+                saveSetting('worldbooks', books);
 
-            }}
-            variableSetters={{
-              set旅人: state.set旅人,
-              set世界: state.set世界,
-              set记忆: state.set记忆,
-              set忆庭: state.set忆庭,
-              set智库: state.set智库,
-              set手机: state.set手机,
-              setNPC: state.setNPC,
-              set新闻: state.set新闻,
-              set剧情: state.set剧情,
-            }}
-          />
+              }}
+              variableSetters={{
+                set旅人: state.set旅人,
+                set世界: state.set世界,
+                set记忆: state.set记忆,
+                set忆庭: state.set忆庭,
+                set智库: state.set智库,
+                set手机: state.set手机,
+                setNPC: state.setNPC,
+                set新闻: state.set新闻,
+                set剧情: state.set剧情,
+              }}
+              variableEditingLocked={state.loading || state.pendingVariable}
+            />
+          </Suspense>
         )}
       </>
     );
@@ -583,7 +1021,7 @@ export default function App() {
           worldState.开局档案,
         );
         state.set剧情编织(nextStoryWeaving);
-        await saveSetting('storyWeavingSystem', nextStoryWeaving);
+        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
       } catch (err) {
         console.warn('[story-weaving] 新开局加载内置原著剧情失败，保留当前剧情编织状态:', err);
       }
@@ -596,13 +1034,15 @@ export default function App() {
 
     return (
       <>
-        <NewGameWizard
-          onStart={handleStartGame}
-          onBack={() => state.setView('home')}
-          currentTheme={state.currentTheme}
-          openingArchiveApiConfig={getActiveApiConfig()}
-          onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
-        />
+        <Suspense fallback={<LazySurfaceFallback label="开局档案载入中" />}>
+          <NewGameWizard
+            onStart={handleStartGame}
+            onBack={() => state.setView('home')}
+            currentTheme={state.currentTheme}
+            openingArchiveApiConfig={getActiveApiConfig()}
+            onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
+          />
+        </Suspense>
         {homeJourneyTransitioning ? <HomeJourneyOverlay /> : null}
         {launchingJourney ? <JourneyLaunchOverlay /> : null}
       </>
@@ -614,233 +1054,72 @@ export default function App() {
     <>
       <GameView
         weatherId={state.世界.当前天气}
-        topBar={
-          <TopBar
-            worldState={state.世界}
-            currentTheme={state.currentTheme}
-            onHome={actions.handleGoHome}
-
-            news={state.新闻}
-
-            onOpenNews={() => setActiveSystem('news')}
-          />
-        }
-        leftPanel={
-          <LeftPanel
-            traveler={state.旅人}
-            album={state.相册}
-            onOpenProfile={() => setShowCharacter(true)}
-            onOpenPhone={() => setShowPhone(true)}
-            phoneUnread={state.手机.unreadTotal}
-            currentStoryChapter={currentStoryChapter}
-            recallSummary={latestRecallSummary}
-            recallFullContent={latestRecallFullContent}
-          />
-        }
-        rightPanel={
-          <RightMenu
-            activeId={activeSystem}
-            onSelect={handleMenuSelect}
-            onSaveGame={() => setShowSaveLoad(true)}
-            onLoadGame={() => setShowSaveLoad(true)}
-            onSettings={() => setShowSettings(true)}
-          />
-        }
-        chatArea={
-          <>
-            <VariableDrawer
-              batches={state.variableBatches}
-              tasks={state.queueTasks}
-              pending={state.pendingVariable}
-              onRetryTask={(task, mode) => {
-                void actions.handleRetryQueueTask(task, mode);
-              }}
-              onCancelTask={(id) => {
-                if (id === 'main_story' || id === 'variable' || id === 'news' || id === 'phone' || id === 'yiting' || id === 'zhiku' || id === 'memory') {
-                  state.abortControllerRef.current?.abort();
-                  state.setQueueTasks((prev) => [
-                    ...prev,
-                    {
-                      id,
-                      title: id === 'news' ? '星际和平周报' : id === 'phone' ? '手机来信' : id === 'variable' ? '变量生成' : id === 'yiting' ? '忆庭召回' : id === 'zhiku' ? '智库检索' : id === 'memory' ? '记忆整理' : '主剧情生成',
-                      turn: state.turnCount,
-                      timestamp: Date.now(),
-                      status: 'cancelled',
-                      detail: '玩家已取消本次任务。',
-                      cancelled: true,
-                    },
-                  ]);
-                  state.setPendingVariable(false);
-                  state.setLoading(false);
-                  state.setStreamingMessage('');
-                }
-              }}
-            />
-            <ChatList
-              messages={state.chatHistory}
-              loading={state.loading}
-              streamingMessage={state.streamingMessage}
-              scrollRef={state.scrollRef}
-              npcRecords={state.NPC}
-              traveler={state.旅人}
-              album={state.相册}
-              showInnerVoice={state.gameSettings.enableInnerVoice}
-              visualTextSettings={state.gameSettings.visualTextSettings}
-              onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
-              narrativeImageManualEnabled={Boolean(
-                state.gameSettings.文生图系统?.正文生图?.enabled
-                && state.gameSettings.文生图系统.正文生图.mode === 'manual',
-              )}
-              onEditBody={(id, newBody) => {
-                state.setChatHistory((prev) =>
-                  prev.map((m) =>
-                    m.id === id && m.parsedResponse
-                      ? {
-                          ...m,
-                          content: newBody,
-                          parsedResponse: { ...m.parsedResponse, body: newBody },
-                        }
-                      : m,
-                  ),
-                );
-              }}
-            />
-            <PathAwakeningInvitation
-              world={state.世界}
-              setWorld={state.set世界}
-              onTrigger={() => {
-                void actions.handleSend('[系统] 踏入命途狭间');
-              }}
-              disabled={state.loading || state.pendingVariable}
-            />
-            <InputArea
-              onSend={actions.handleSend}
-              onAbort={actions.handleAbort}
-              loading={state.loading}
-              disabled={state.pendingVariable}
-              canRestartOpening={state.turnCount <= 5}
-              canReroll={state.chatHistory.some((m) => m.role === 'assistant')}
-              onRestartOpening={actions.handleRestartOpening}
-              onReroll={actions.handleReroll}
-              streamingEnabled={state.gameSettings.enableStreaming}
-              onToggleStreaming={() =>
-                state.setGameSettings((prev) => ({
-                  ...prev,
-                  enableStreaming: !prev.enableStreaming,
-                }))
-              }
-              workflowHint={state.workflowHint}
-              workflowStatus={state.workflowStatus}
-              workflowFailed={latestActiveTask?.status === 'failed'}
-              workflowFailCount={latestActiveTask?.failCount ?? (latestActiveTask?.status === 'failed' ? 1 : 0)}
-              workflowRetrying={latestActiveTask?.retrying === true}
-              onCancelWorkflow={() => actions.handleAbort()}
-              actionOptions={
-                [...state.chatHistory]
-                  .reverse()
-                  .find((m) => m.role === 'assistant')?.parsedResponse?.actionOptions ?? []
-              }
-            />
-            <SystemDrawer
-              open={activeSystem !== null}
-              title={activeMenuItem?.label ?? ''}
-              subtitle={activeMenuItem?.subtitle}
-              glyph={activeMenuItem?.glyph}
-              onClose={() => setActiveSystem(null)}
-            >
-              {renderSystemPanel(activeSystem, {
-                traveler: state.旅人,
-                onTravelerChange: state.set旅人,
-                onAwakenedNewPath: (id) => {
-                  // TODO: 这里以后接入命途狭间剧情触发。当前只 console。
-                  console.info('[path] 命途狭间触发:', id);
-                },
-                npcRecords: state.NPC,
-                onNpcRecordsChange: state.setNPC,
-                album: state.相册,
-                onAlbumChange: state.set相册,
-                phone: state.手机,
-                onPhoneChange: state.set手机,
-                memorySystem: state.记忆,
-                onMemorySystemChange: state.set记忆,
-                yitingSystem: state.忆庭,
-                zhikuSystem: state.智库,
-                onZhikuSystemChange: state.set智库,
-                zhikuSettings: state.gameSettings.智库系统,
-                memorySettings: state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
-                news: state.新闻,
-                onNewsChange: state.set新闻,
-                plotNodes: state.剧情,
-                onPlotNodesChange: state.set剧情,
-                storyWeaving: state.剧情编织,
-                onStoryWeavingChange: state.set剧情编织,
-                gameSettings: state.gameSettings,
-                onGameSettingsChange: state.setGameSettings,
-                apiSettings: state.apiSettings,
-                turnCount: state.turnCount,
-                mainChatHistory: state.chatHistory,
-              })}
-            </SystemDrawer>
-          </>
-        }
+        topBar={topBar}
+        leftPanel={leftPanel}
+        rightPanel={rightPanel}
+        chatArea={chatArea}
       />
 
       {/* Mobile bottom menu */}
-      {!activeSystem && !showSettings && !showWorldbookManager && !showZhikuManager && !showSaveLoad && !showCharacter && !showPhone && (
+      {!activeSystem && !showSettings && !showWorldbookManager && !showZhikuManager && !showSaveLoad && !showCharacter && !showPhone && !showMemoryRebuild && (
         <MobileQuickMenu
           onHome={actions.handleGoHome}
-          onCharacter={() => setShowCharacter(true)}
-          onPhone={() => setShowPhone(true)}
-          onSettings={() => setShowSettings(true)}
-          onSave={() => setShowSaveLoad(true)}
+          onCharacter={handleOpenProfile}
+          onPhone={handleOpenPhone}
+          onSettings={handleOpenSettings}
+          onSave={handleOpenSaveLoad}
           onSystemSelect={handleMenuSelect}
           phoneUnread={state.手机.unreadTotal}
+          memoryUnread={pendingMemoryDraftCount}
         />
       )}
 
       {/* Modals */}
       {showSettings && (
-        <SettingsModal
-          onClose={() => setShowSettings(false)}
-          apiSettings={state.apiSettings}
-          onApiSettingsChange={state.setApiSettings}
-          gameSettings={state.gameSettings}
-          onGameSettingsChange={state.setGameSettings}
-          currentTheme={state.currentTheme}
-          onThemeChange={state.setCurrentTheme}
-          onSave={actions.handleSave}
-          onContinue={actions.handleContinue}
-          onLoadSave={(id) => handleLoadById(id, state)}
-          initialTab={settingsInitialTab}
-          旅人={state.旅人}
-          世界={state.世界}
-          on世界Change={state.set世界}
-          记忆={state.记忆}
-          忆庭={state.忆庭}
-          智库={state.智库}
-          手机={state.手机}
-          NPC={state.NPC}
-          新闻={state.新闻}
-          剧情编织={state.剧情编织}
-          on剧情编织Change={state.set剧情编织}
-          getContextSnapshot={actions.getContextSnapshot}
-          worldbooks={state.worldbooks}
-          onWorldbooksChange={(books) => {
-            state.setWorldbooks(books);
-            saveSetting('worldbooks', books);
-          }}
-          variableSetters={{
-            set旅人: state.set旅人,
-            set世界: state.set世界,
-            set记忆: state.set记忆,
-            set忆庭: state.set忆庭,
-            set智库: state.set智库,
-            set手机: state.set手机,
-            setNPC: state.setNPC,
-            set新闻: state.set新闻,
-            set剧情: state.set剧情,
-          }}
-        />
+        <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
+          <SettingsModal
+            onClose={() => setShowSettings(false)}
+            apiSettings={state.apiSettings}
+            onApiSettingsChange={state.setApiSettings}
+            gameSettings={state.gameSettings}
+            onGameSettingsChange={state.setGameSettings}
+            currentTheme={state.currentTheme}
+            onThemeChange={state.setCurrentTheme}
+            onSave={actions.handleSave}
+            onContinue={actions.handleContinue}
+            onLoadSave={(id) => handleLoadById(id, state)}
+            initialTab={settingsInitialTab}
+            旅人={state.旅人}
+            世界={state.世界}
+            on世界Change={state.set世界}
+            记忆={state.记忆}
+            忆庭={state.忆庭}
+            智库={state.智库}
+            手机={state.手机}
+            NPC={state.NPC}
+            新闻={state.新闻}
+            剧情编织={state.剧情编织}
+            on剧情编织Change={state.set剧情编织}
+            getContextSnapshot={actions.getContextSnapshot}
+            worldbooks={state.worldbooks}
+            onWorldbooksChange={(books) => {
+              state.setWorldbooks(books);
+              saveSetting('worldbooks', books);
+            }}
+            variableSetters={{
+              set旅人: state.set旅人,
+              set世界: state.set世界,
+              set记忆: state.set记忆,
+              set忆庭: state.set忆庭,
+              set智库: state.set智库,
+              set手机: state.set手机,
+              setNPC: state.setNPC,
+              set新闻: state.set新闻,
+              set剧情: state.set剧情,
+            }}
+            variableEditingLocked={state.loading || state.pendingVariable}
+          />
+        </Suspense>
       )}
 
       {showCharacter && (
@@ -852,57 +1131,74 @@ export default function App() {
       )}
 
       {showPhone && (
-        <PhoneModal
-          phone={state.手机}
-          traveler={state.旅人}
-          world={state.世界}
-          memory={state.记忆}
-          yiting={state.忆庭}
-          news={state.新闻}
-          storyWeaving={state.剧情编织}
-          zhiku={state.智库}
-          apiSettings={state.apiSettings}
-          gameSettings={state.gameSettings}
-          turnCount={state.turnCount}
-          mainChatHistory={state.chatHistory}
-          npcRecords={state.NPC}
-          album={state.相册}
-          onPhoneChange={state.set手机}
-          onMemoryChange={state.set记忆}
-          onYitingChange={state.set忆庭}
-          onNpcRecordsChange={state.setNPC}
-          onClose={() => setShowPhone(false)}
+        <Suspense fallback={<LazySurfaceFallback label="手机载入中" />}>
+          <PhoneModal
+            phone={state.手机}
+            traveler={state.旅人}
+            world={state.世界}
+            memory={state.记忆}
+            yiting={state.忆庭}
+            news={state.新闻}
+            storyWeaving={state.剧情编织}
+            zhiku={state.智库}
+            apiSettings={state.apiSettings}
+            gameSettings={state.gameSettings}
+            turnCount={state.turnCount}
+            mainChatHistory={state.chatHistory}
+            npcRecords={state.NPC}
+            album={state.相册}
+            onPhoneChange={state.set手机}
+            onMemoryChange={state.set记忆}
+            onYitingChange={state.set忆庭}
+            onNpcRecordsChange={state.setNPC}
+            onClose={() => setShowPhone(false)}
+          />
+        </Suspense>
+      )}
+
+      {showMemoryRebuild && (
+        <MemoryRebuildModal
+          defaultEnd={Math.max(1, state.turnCount - 1)}
+          onClose={() => setShowMemoryRebuild(false)}
+          onAbort={actions.handleAbort}
+          onRun={actions.handleBatchMemoryRebuild}
         />
       )}
 
       {showWorldbookManager && (
-        <WorldbookManagerModal
-          worldbooks={state.worldbooks}
-          onSave={(books) => {
-            state.setWorldbooks(books);
-            saveSetting('worldbooks', books);
-          }}
-          onClose={() => setShowWorldbookManager(false)}
-        />
+        <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
+          <WorldbookManagerModal
+            worldbooks={state.worldbooks}
+            onSave={(books) => {
+              state.setWorldbooks(books);
+              saveSetting('worldbooks', books);
+            }}
+            onClose={() => setShowWorldbookManager(false)}
+          />
+        </Suspense>
       )}
 
       {showSaveLoad && (
-        <SaveLoadModal
-          onSave={actions.handleSave}
-          onLoad={async (id) => {
-            const ok = await handleLoadById(id, state);
-            if (ok) setShowSaveLoad(false);
-            return ok;
-          }}
-          onClose={() => setShowSaveLoad(false)}
-        />
+        <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
+          <SaveLoadModal
+            onSave={actions.handleSave}
+            onLoad={async (id) => {
+              const ok = await handleLoadById(id, state);
+              if (ok) setShowSaveLoad(false);
+              return ok;
+            }}
+            onClose={() => setShowSaveLoad(false)}
+          />
+        </Suspense>
       )}
 
       {showCloudSave && (
-        <GitHubCloudSaveModal
-          onSave={actions.handleSave}
-          onClose={() => setShowCloudSave(false)}
-        />
+        <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
+          <GitHubCloudSaveModal
+            onSave={actions.handleSave}
+            onClose={() => setShowCloudSave(false)}
+          />
+        </Suspense>
       )}
     </>
   );
@@ -924,6 +1220,10 @@ function renderSystemPanel(
     onPhoneChange: React.Dispatch<React.SetStateAction<import('@/models/phone').手机系统>>;
     memorySystem: 记忆系统;
     onMemorySystemChange: React.Dispatch<React.SetStateAction<记忆系统>>;
+    failedDrafts?: 记忆失败草稿[];
+    onRetryFailedDraft?: (draft: 记忆失败草稿) => void;
+    onIgnoreFailedDraft?: (draft: 记忆失败草稿) => void;
+    onOpenMemoryRebuild?: () => void;
     yitingSystem: 忆庭系统;
     zhikuSystem: 智库系统;
     onZhikuSystemChange: React.Dispatch<React.SetStateAction<智库系统>>;
@@ -1028,6 +1328,10 @@ function renderSystemPanel(
           onMemorySystemChange={ctx.onMemorySystemChange}
           turnCount={ctx.turnCount}
           settings={ctx.memorySettings}
+          failedDrafts={ctx.failedDrafts}
+          onRetryFailedDraft={ctx.onRetryFailedDraft}
+          onIgnoreFailedDraft={ctx.onIgnoreFailedDraft}
+          onOpenBatchRebuild={ctx.onOpenMemoryRebuild}
         />
       );
     default:

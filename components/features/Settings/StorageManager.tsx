@@ -1,23 +1,27 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   backupDesktopStateBeforeOneTimeMigration,
   backupCurrentSavesToDesktop,
   cleanupUnreferencedDesktopAssets,
+  deleteLegacyBackupSaves,
   deleteSave,
   deleteSaveTree,
   exportSavePackage,
   exportSaveTreePackage,
-  getSaveList,
+  getSaveCatalogRepairState,
+  getSaveCatalogSnapshot,
   importSaveFileAsMany,
   loadSave,
   loadSaveTree,
   repairSaveDatabase,
-  rebuildSaveSummariesBatch,
   previewDesktopStateBeforeOneTimeMigration,
   restoreSavesFromDesktopBackup,
   restoreSavesFromDesktopMirror,
   saveGame,
+  startSaveCatalogRepair,
+  subscribeSaveCatalogRepair,
   summarizeDesktopAssets,
+  type SaveCatalogRepairState,
   type SaveListItemSummary,
 } from '@/services/dbService';
 import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
@@ -78,7 +82,7 @@ interface Props {
   onLoadSave: (id: number) => Promise<boolean>;
 }
 
-type Filter = 'all' | 'manual' | 'auto' | 'protected';
+type Filter = 'all' | 'manual' | 'auto' | 'imported';
 
 const cardClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
@@ -92,10 +96,15 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deletingRootId, setDeletingRootId] = useState<string | null>(null);
+  const [deletingLegacyBackups, setDeletingLegacyBackups] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [filter, setFilter] = useState<Filter>('manual');
+  const [filter, setFilter] = useState<Filter>('all');
   const [loadError, setLoadError] = useState('');
-  const [rebuildingSummaries, setRebuildingSummaries] = useState(false);
+  const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
+  const [pendingSummaryCount, setPendingSummaryCount] = useState(0);
+  const [unreadableSummaryCount, setUnreadableSummaryCount] = useState(0);
+  const [catalogComplete, setCatalogComplete] = useState(true);
+  const [repairState, setRepairState] = useState<SaveCatalogRepairState>(() => getSaveCatalogRepairState());
   const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
   const [desktopInfo, setDesktopInfo] = useState<DesktopAppInfo | null>(null);
   const [desktopReleaseInfo, setDesktopReleaseInfo] = useState<DesktopReleaseInfo | null>(null);
@@ -142,8 +151,13 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const refresh = async () => {
     setLoadError('');
     try {
-      const list = await getSaveList();
-      setSaves(list);
+      const snapshot = await getSaveCatalogSnapshot();
+      setSaves(snapshot.items);
+      setLegacyBackups(snapshot.legacyBackups);
+      setPendingSummaryCount(snapshot.pendingIds.length);
+      setUnreadableSummaryCount(snapshot.unreadableIds.length);
+      setCatalogComplete(snapshot.catalogComplete);
+      return snapshot;
     } catch (err) {
       console.error('[storage-manager] save list failed', err);
       setLoadError(err instanceof Error ? err.message : '存档列表读取失败');
@@ -151,8 +165,30 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   };
 
   useEffect(() => {
-    void refresh();
+    let cancelled = false;
+    const loadAndRepair = async () => {
+      try {
+        const snapshot = await refresh();
+        if (!cancelled && snapshot?.pendingIds.length) {
+          await startSaveCatalogRepair('missing-only');
+          if (!cancelled) await refresh();
+        }
+      } catch (err) {
+        console.warn('[storage-manager] background catalog recovery failed', err);
+      }
+    };
+    void loadAndRepair();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => subscribeSaveCatalogRepair((state) => {
+    setRepairState(state);
+    if (state.phase === 'completed' || state.phase === 'partial-failure') {
+      void refresh();
+    }
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,30 +242,6 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const rebuildLoop = async () => {
-      setRebuildingSummaries(true);
-      try {
-        for (let guard = 0; guard < 200 && !cancelled; guard += 1) {
-          const added = await rebuildSaveSummariesBatch(24);
-          if (cancelled || added <= 0) break;
-          const list = await getSaveList();
-          if (!cancelled) setSaves(list);
-          await new Promise((resolve) => globalThis.setTimeout(resolve, 80));
-        }
-      } catch (err) {
-        console.warn('[storage-manager] background summary recovery failed', err);
-      } finally {
-        if (!cancelled) setRebuildingSummaries(false);
-      }
-    };
-    void rebuildLoop();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const handleRepairList = async () => {
     setLoading(true);
     setLoadError('');
@@ -252,10 +264,15 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   const grouped = useMemo(() => {
     const manual = visibleSaves.filter((s) => s.type === 'manual');
     const auto = visibleSaves.filter((s) => s.type === 'auto');
-    const protectedItems = visibleSaves.filter((s) => s.type === 'backup' || s.type === 'imported');
-    return { manual, auto, protectedItems };
+    const imported = visibleSaves.filter((s) => s.type === 'imported');
+    return { manual, auto, imported };
   }, [visibleSaves]);
-  const allVisibleSaves = useMemo(() => visibleSaves.filter((s) => s.type !== 'auto'), [visibleSaves]);
+  const repairingSummaries = pendingSummaryCount > 0 && (
+    repairState.phase === 'checking'
+    || repairState.phase === 'waiting-for-lease'
+    || repairState.phase === 'repairing'
+    || repairState.phase === 'paused-for-write'
+  );
 
   const allTreeGroups = useMemo(() => buildSaveTreeGroups(visibleSaves), [visibleSaves]);
   const visibleTreeGroups = useMemo(
@@ -272,6 +289,12 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     () => desktopBackups.find((backup) => backup.path === selectedDesktopBackupPath) ?? desktopBackups[0] ?? null,
     [desktopBackups, selectedDesktopBackupPath],
   );
+
+  useEffect(() => {
+    if (filter !== 'all' && visibleSaves.length > 0 && visibleTreeGroups.length === 0) {
+      setFilter('all');
+    }
+  }, [filter, visibleSaves.length, visibleTreeGroups.length]);
 
   useEffect(() => {
     if (visibleTreeGroups.length === 0) {
@@ -323,6 +346,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
   };
 
   const handleLoad = async (id: number) => {
+    if (!confirm('读取这个存档会替换当前未保存的进度，是否继续？')) return;
     setLoadingId(id);
     try {
       const ok = await onLoadSave(id);
@@ -337,9 +361,10 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    const target = saves.find((save) => save.id === id)?.saveTree;
+    const target = [...saves, ...legacyBackups].find((save) => save.id === id)?.saveTree;
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
+    setLegacyBackups((prev) => prev.filter((save) => save.id !== id));
     try {
       await deleteSave(id);
       clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
@@ -351,6 +376,25 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
       await refresh();
       setDeletingId(null);
+    }
+  };
+
+  const handleDeleteLegacyBackups = async () => {
+    if (!legacyBackups.length || deletingLegacyBackups) return;
+    if (!confirm(`确定清理全部 ${legacyBackups.length} 个历史恢复点？此操作不可恢复。`)) return;
+    setDeletingLegacyBackups(true);
+    try {
+      await deleteLegacyBackupSaves();
+      for (const backup of legacyBackups) {
+        clearActiveSaveTreeMetaIfMatches(backup.saveTree ? { nodeId: backup.saveTree.nodeId } : null);
+      }
+      await refresh();
+      await refreshDesktopMirrorCount();
+    } catch (err) {
+      console.error('[storage-manager] legacy backup cleanup failed', err);
+      alert(`历史恢复点清理失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
+    } finally {
+      setDeletingLegacyBackups(false);
     }
   };
 
@@ -401,7 +445,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
         }
         await refresh();
         await refreshDesktopMirrorCount();
-        setFilter('protected');
+        setFilter('imported');
       } catch (err) {
         alert(`导入失败：${err instanceof Error ? err.message : '存档文件格式无效'}`);
       } finally {
@@ -848,10 +892,10 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
           <ActionButton label="导出当前" disabled={saving} onClick={handleExportCurrent} />
         </div>
         <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <FilterButton label="全部" count={visibleSaves.length} active={filter === 'all'} onClick={() => setFilter('all')} />
           <FilterButton label="手动" count={grouped.manual.length} active={filter === 'manual'} onClick={() => setFilter('manual')} />
           <FilterButton label="自动" count={grouped.auto.length} active={filter === 'auto'} onClick={() => setFilter('auto')} />
-          <FilterButton label="全部" count={allVisibleSaves.length} active={filter === 'all'} onClick={() => setFilter('all')} />
-          <FilterButton label="保护存档" count={grouped.protectedItems.length} active={filter === 'protected'} onClick={() => setFilter('protected')} />
+          <FilterButton label="导入存档" count={grouped.imported.length} active={filter === 'imported'} onClick={() => setFilter('imported')} />
         </div>
       </div>
 
@@ -866,7 +910,7 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       >
         <Metric label="手动" value={grouped.manual.length} />
         <Metric label="自动" value={grouped.auto.length} />
-        <Metric label="保护存档" value={grouped.protectedItems.length} />
+        <Metric label="导入存档" value={grouped.imported.length} />
         <Metric label="总计" value={saves.length} />
       </div>
 
@@ -879,8 +923,13 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
           clipPath: cardClip,
         }}
       >
-        导出存档包默认不包含 API Key / API 配置；导入存档包 / 旧 JSON 会放入保护存档分区。
-        {rebuildingSummaries ? ' 正在恢复旧存档索引，存档数量可能继续增加。' : ''}
+        导出存档包默认不包含 API Key / API 配置；导入存档包 / 旧 JSON 会放入导入存档分区。
+        {repairingSummaries
+          ? repairState.phase === 'paused-for-write'
+            ? ' 索引恢复已暂停，正在优先保存或删除。'
+            : ` 正在恢复节点详情 ${repairState.processed}/${Math.max(repairState.total, pendingSummaryCount)}。`
+          : ''}
+        {!repairingSummaries && unreadableSummaryCount > 0 ? ` ${unreadableSummaryCount} 个节点详情读取失败，可使用修复摘要重试。` : ''}
       </div>
 
       <DesktopStorageStatus
@@ -956,6 +1005,18 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
       />
 
       <div className="kaituo-options-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden pb-5 pr-1">
+        {legacyBackups.length > 0 && (
+          <StorageLegacyBackupSection
+            backups={legacyBackups}
+            loadingId={loadingId}
+            deletingId={deletingId}
+            deletingAll={deletingLegacyBackups}
+            onLoad={handleLoad}
+            onExport={handleExport}
+            onDelete={handleDelete}
+            onDeleteAll={handleDeleteLegacyBackups}
+          />
+        )}
         {loadError ? (
           <div
             className="p-5 text-center font-serif"
@@ -1006,12 +1067,70 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
                 onExportTree={handleExportTree}
                 onDelete={handleDelete}
                 onDeleteTree={handleDeleteTree}
+                catalogComplete={catalogComplete}
               />
             )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function StorageLegacyBackupSection({
+  backups,
+  loadingId,
+  deletingId,
+  deletingAll,
+  onLoad,
+  onExport,
+  onDelete,
+  onDeleteAll,
+}: {
+  backups: SaveListItemSummary[];
+  loadingId: number | null;
+  deletingId: number | null;
+  deletingAll: boolean;
+  onLoad: (id: number) => void;
+  onExport: (id: number) => void;
+  onDelete: (id: number) => void;
+  onDeleteAll: () => void;
+}) {
+  return (
+    <details
+      className="mb-3 overflow-hidden"
+      style={{
+        background: 'rgba(var(--tj-tech-cyan),0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.15)',
+        clipPath: cardClip,
+      }}
+    >
+      <summary className="cursor-pointer px-4 py-3 font-serif text-[13px] tracking-[0.16em]" style={{ color: 'rgb(var(--tj-accent-secondary))' }}>
+        历史恢复点 {backups.length} 个
+      </summary>
+      <div className="space-y-3 border-t px-3 pb-3 pt-3" style={{ borderColor: 'rgba(var(--tj-tech-cyan),0.12)' }}>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] leading-relaxed tracking-wider" style={{ color: 'rgba(var(--tj-text-primary),0.62)' }}>
+          <span>旧版本读档前自动创建的恢复点已停止新增，可按需读取、导出或清理。</span>
+          <ActionButton
+            label={deletingAll ? '清理中' : '清理全部旧恢复点'}
+            disabled={deletingAll || loadingId !== null || deletingId !== null}
+            onClick={onDeleteAll}
+          />
+        </div>
+        {backups.map((backup) => (
+          <SaveCard
+            key={backup.id}
+            save={backup}
+            loadingId={loadingId}
+            deletingId={deletingId}
+            onLoad={onLoad}
+            onExport={onExport}
+            onDelete={onDelete}
+            treeLabel="旧恢复点"
+          />
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -1025,6 +1144,7 @@ function StorageSaveTreeGroup({
   onExportTree,
   onDelete,
   onDeleteTree,
+  catalogComplete,
 }: {
   group: SaveTreeDisplayGroup;
   loadingId: number | null;
@@ -1035,6 +1155,7 @@ function StorageSaveTreeGroup({
   onExportTree: (rootId: string) => void;
   onDelete: (id: number) => void;
   onDeleteTree: (rootId: string, nodeCount: number) => void;
+  catalogComplete: boolean;
 }) {
   return (
     <section
@@ -1070,7 +1191,7 @@ function StorageSaveTreeGroup({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={loadingId !== null || deletingRootId !== null || deletingId !== null}
+            disabled={!catalogComplete || loadingId !== null || deletingRootId !== null || deletingId !== null}
             onClick={() => onExportTree(group.rootId)}
             className="px-2.5 py-1 font-serif text-[11px] tracking-[0.14em] transition-all hover:opacity-90 disabled:opacity-50"
             style={{
@@ -1083,7 +1204,7 @@ function StorageSaveTreeGroup({
           </button>
           <button
             type="button"
-            disabled={loadingId !== null || deletingRootId !== null || deletingId !== null}
+            disabled={!catalogComplete || loadingId !== null || deletingRootId !== null || deletingId !== null}
             onClick={() => onDeleteTree(group.rootId, group.nodeCount)}
             className="px-2.5 py-1 font-serif text-[11px] tracking-[0.14em] transition-all hover:opacity-90 disabled:opacity-50"
             style={{
@@ -1093,7 +1214,7 @@ function StorageSaveTreeGroup({
               clipPath: smallClip,
             }}
           >
-            {deletingRootId === group.rootId ? '删除中' : '删除整树'}
+            {deletingRootId === group.rootId ? '删除中' : catalogComplete ? '删除整树' : '目录恢复后可删'}
           </button>
         </div>
       </div>
@@ -2369,7 +2490,7 @@ function SaveCard({
 
 function typeLabel(type: SaveListItemSummary['type']): string {
   if (type === 'auto') return '自动';
-  if (type === 'backup') return '保护';
+  if (type === 'backup') return '恢复点';
   if (type === 'imported') return '导入';
   return '手动';
 }
@@ -2388,10 +2509,10 @@ function formatSize(bytes: number): string {
 }
 
 function matchesSaveFilter(save: SaveListItemSummary, filter: Filter): boolean {
-  if (filter === 'all') return save.type !== 'auto';
+  if (filter === 'all') return true;
   if (filter === 'manual') return save.type === 'manual';
   if (filter === 'auto') return save.type === 'auto';
-  return save.type === 'backup' || save.type === 'imported';
+  return save.type === 'imported';
 }
 
 function buildVisibleSaveTreeGroup(group: SaveTreeDisplayGroup, filter: Filter): SaveTreeDisplayGroup | null {

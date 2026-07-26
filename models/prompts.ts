@@ -69,6 +69,7 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_yiting_recall',
   'builtin_yiting_archive_format',
   'builtin_phone_worldbook',
+  'builtin_phone_style',
   'builtin_phone_cot',
   'builtin_phone_output_format',
   'builtin_story_weaving_worldbook',

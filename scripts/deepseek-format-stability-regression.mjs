@@ -16,6 +16,9 @@ const gameSettings = read('components/features/Settings/GameSettings.tsx');
 const sendWorkflow = read('hooks/useGame/sendWorkflow.ts');
 const textService = read('services/ai/text/index.ts');
 const client = read('services/ai/chatCompletionClient.ts');
+const recovery = read('services/ai/deepSeekRecovery.ts');
+const modelPolicy = read('services/ai/deepSeekModelPolicy.ts');
+const modelCatalog = read('services/ai/openAICompatibleModels.ts');
 const repair = read('services/ai/structuredOutputRepair.ts');
 const variableFacts = read('utils/variableFacts.ts');
 const phoneService = read('services/ai/phoneService.ts');
@@ -45,9 +48,8 @@ assert(gameSettings.includes('锁定 <thinking>'), 'DeepSeek 锁格式 UI 必须
 assert(gameSettings.includes('仅当主 API 供应商或 Base URL 命中 DeepSeek 时生效'), 'DeepSeek 模式 UI 必须说明只影响 DeepSeek 主 API。');
 
 assert(sendWorkflow.includes('isDeepSeekMainConfig'), '主剧情必须有 DeepSeek 主 API 检测。');
-assert(sendWorkflow.includes('resolveMainStoryConfig') && sendWorkflow.includes("model: 'deepseek-chat'"), '主剧情必须把 DeepSeek reasoner 临时适配为 deepseek-chat，避免 reasoning-only 空响应。');
-assert(sendWorkflow.includes('const mainStoryConfig = mainStoryConfigResolution.config'), '主剧情必须使用适配后的实际请求配置。');
-assert(sendWorkflow.includes('sendChatMessage(mainStoryConfig'), '主剧情发送必须使用适配后的 DeepSeek 配置。');
+assert(!sendWorkflow.includes('resolveMainStoryConfig'), 'DeepSeek reasoner 适配不得继续局限在主剧情局部逻辑。');
+assert(sendWorkflow.includes('sendChatMessage(mainStoryConfig'), '主剧情发送必须使用共享请求层。');
 assert(sendWorkflow.includes('!deepSeekMainActive'), 'DeepSeek 专用模式必须跳过 CoT 伪装历史。');
 assert(sendWorkflow.includes('const usePresetPrefill = Boolean(presetAssistantPrefill) && !deepSeekLockFormat'), 'DeepSeek 锁格式下预设 assistantPrefill 不得覆盖 thinking 起点。');
 assert(sendWorkflow.includes("const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\\n' : presetAssistantPrefill"), 'DeepSeek 锁格式必须从 thinking 起点续写。');
@@ -59,7 +61,8 @@ assert(sendWorkflow.includes('getDeepSeekMainProtocolIssues'), 'DeepSeek 主剧�
 assert(sendWorkflow.includes('buildDeepSeekProtocolRetryGuard'), 'DeepSeek 协议失败时必须追加重试守卫。');
 assert(sendWorkflow.includes('Math.max(2, configuredMaxAttempts)'), 'DeepSeek 专用模式至少要保留一次协议失败重试。');
 assert(sendWorkflow.includes('deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : \'off\''), 'debugContext 必须记录本轮 DeepSeek 模式。');
-assert(sendWorkflow.includes('deepSeekMainOriginalModel: mainStoryConfigResolution.originalModel') && sendWorkflow.includes('deepSeekMainAdaptedModel: mainStoryConfigResolution.adaptedModel'), 'debugContext 必须记录 DeepSeek reasoner 到 chat 的主剧情模型适配。');
+assert(sendWorkflow.includes('result.deepSeekRecovery?.originalModel') && sendWorkflow.includes('result.deepSeekRecovery?.fallbackModel'), 'debugContext 必须记录共享 DeepSeek 恢复的原模型和回退模型。');
+assert(sendWorkflow.includes('isNonRetryableAIError(innerErr)'), '共享恢复耗尽后主剧情不得重新运行完整恢复链。');
 assert(sendWorkflow.includes('deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn'), 'debugContext 必须记录 DeepSeek 协议校验失败项。');
 assert(sendWorkflow.includes('const shouldStreamMainRequest = state.gameSettings.enableStreaming && !isPageHidden()'), '主剧情真实请求是否流式只能由流式设置和页面可见性决定。');
 assert(sendWorkflow.includes('streaming: shouldStreamMainRequest'), '主剧情必须把真实流式开关传给 text service。');
@@ -76,6 +79,16 @@ assert(client.includes("request.prefixContent ?? '<thinking>\\n'"), 'DeepSeek pr
 assert(client.includes('isDeepSeekPrefixUnsupportedError'), 'DeepSeek prefix 不支持时必须可识别并降级。');
 assert(client.includes('prefixMode === true && isDeepSeekConfig(config)'), 'prefixMode 必须只作用于 DeepSeek。');
 assert(client.includes('已自动降级为标准模式'), 'DeepSeek prefix 不支持时必须自动降级标准模式。');
+assert(client.includes('executeWithDeepSeekRecovery'), '流式和非流式客户端必须接入共享 DeepSeek 恢复协调器。');
+assert(client.includes('hasReasoningPayload') && client.includes('sawReasoning'), 'OpenAI 兼容解析必须记录 reasoning 活动而不展示内容。');
+assert(recovery.includes('DEEPSEEK_FINAL_CONTENT_GUARD'), 'DeepSeek 空正文必须有定向最终正文守卫。');
+assert(recovery.includes('Math.max(options.maxTokens ?? config.maxTokens ?? 2048, 8192)'), 'Reasoner 推理耗尽重试必须保留至少 8192 输出预算。');
+assert(recovery.includes('fetchOpenAICompatibleModelsCached') && recovery.includes('selectDeepSeekFallbackModel'), '连续空正文必须查询同接口并选择非推理 DeepSeek 模型。');
+assert(recovery.includes('DeepSeekRecoveryExhaustedError') && recovery.includes('readonly nonRetryable = true'), '恢复耗尽必须抛出不可重复执行的类型化错误。');
+assert(modelPolicy.includes('DeepSeekConfidence') && modelPolicy.includes('DeepSeekCapability'), '共享策略必须区分 DeepSeek 证据和模型能力。');
+assert(modelPolicy.includes("? 'strong' : reasoning ? 'weak' : 'none'"), 'R1 弱别名不得在没有响应证据时被当作强 DeepSeek。');
+assert(modelPolicy.includes("normalized === 'deepseek-chat'") && modelPolicy.includes("return 1;"), '回退候选必须优先 DeepSeek Chat/V3。');
+assert(modelCatalog.includes('MODEL_CACHE_TTL_MS = 5 * 60 * 1000'), '模型目录必须使用五分钟内存缓存。');
 assert(chatModel.includes('deepSeekProtocolIssues?: string[]'), '聊天 debugContext 类型必须保存 DeepSeek 协议失败项。');
 assert(chatModel.includes('deepSeekMainOriginalModel?: string') && chatModel.includes('deepSeekMainAdaptedModel?: string'), '聊天 debugContext 类型必须保存 DeepSeek 主剧情模型适配信息。');
 assert(turnItem.includes('【DeepSeek 主剧情诊断】') && turnItem.includes('协议校验失败项'), '请求上下文必须展示 DeepSeek 主剧情诊断。');

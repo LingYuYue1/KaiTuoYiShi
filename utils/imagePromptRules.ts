@@ -1,7 +1,7 @@
-import type { 图片槽位 } from '@/models/imageGeneration';
+import type { NovelAIContentMode, 图片槽位 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
-import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
+import type { NovelAI模型族, PNG画风预设来源, 故事快照解析规则预设, 文生图API配置, 文生图NAI规则预设, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
 
 export type 生图Prompt模式 = 'avatar' | 'portrait' | 'scene' | 'phone_wallpaper' | 'nsfw';
 
@@ -393,7 +393,47 @@ export const 默认文生图模型规则集列表: 文生图模型规则集[] = 
   },
 ];
 
+export const 默认NAI规则预设列表: 文生图NAI规则预设[] = [{
+  id: 'nai_rule_official_baseline',
+  名称: 'NAI 官方基线',
+  模型族: 'all',
+  isBuiltin: true,
+  qualityMode: 'official',
+  qualityText: '',
+  ucMode: 'official',
+  ucText: '',
+  basePromptPrefix: '',
+  basePromptSuffix: '',
+  characterPromptPrefix: '',
+  characterPromptSuffix: '',
+  negativePromptAppend: '',
+  createdAt: seedTime + 40,
+  updatedAt: seedTime + 40,
+}];
+
+export const 默认故事快照解析语义规则 = [
+  '严格依据正文选择一个明确、可视化且适合绘制的瞬间，不补写未出现的人物、地点、服装或事件。',
+  '人物列表只包含画面中实际出镜的人物；旁白提到、同行但不在镜头中的人物不得加入。',
+  'Base Prompt 只写人数、地点、环境、构图、光线和人物互动关系。',
+  '每个角色分别输出英文外貌、服装、姿态、表情和角色专属负面词，不在角色块中写数字人数。',
+  '动作要具体可见，镜头要说明景别、视角、焦点和构图，避免项要指出正文冲突。',
+  '英文提示词采用 anime illustration, sci-fi fantasy, cinematic lighting, clean rendering, detailed environment, atmospheric depth；避免写实照片、3D 渲染、现代摄影棚和无关角色。',
+].join('\n');
+
+export const 默认故事快照解析规则预设列表: 故事快照解析规则预设[] = [{
+  id: 'story_snapshot_semantic_baseline',
+  名称: '故事快照系统基线',
+  语义规则: 默认故事快照解析语义规则,
+  isBuiltin: true,
+  createdAt: seedTime + 41,
+  updatedAt: seedTime + 41,
+}];
+
 export const 默认文生图规则中心: 文生图规则中心设置 = {
+  NAI规则预设列表: 默认NAI规则预设列表,
+  当前NAI规则预设ID: 'nai_rule_official_baseline',
+  故事快照解析规则预设列表: 默认故事快照解析规则预设列表,
+  当前故事快照解析规则预设ID: 'story_snapshot_semantic_baseline',
   画师串预设列表: 默认文生图画师串预设列表,
   当前NPC画师串预设ID: 'artist_hsr_character_default',
   当前场景画师串预设ID: 'artist_hsr_scene_default',
@@ -535,7 +575,17 @@ export function normalizeImageRules(input?: Partial<文生图规则中心设置>
   const pngPresets = normalizePngStylePresets(input.PNG画风预设列表);
   const presets = normalizeRuleTemplates(input.词组转化器提示词预设列表);
   const modelRules = normalizeModelRuleSets(input.模型词组转化器预设列表, presets);
+  const naiRules = normalizeNAIRulePresets(input.NAI规则预设列表);
+  const storySnapshotRules = normalizeStorySnapshotRulePresets(input.故事快照解析规则预设列表);
   return {
+    NAI规则预设列表: naiRules,
+    当前NAI规则预设ID: naiRules.some((preset) => preset.id === input.当前NAI规则预设ID)
+      ? String(input.当前NAI规则预设ID)
+      : defaults.当前NAI规则预设ID,
+    故事快照解析规则预设列表: storySnapshotRules,
+    当前故事快照解析规则预设ID: storySnapshotRules.some((preset) => preset.id === input.当前故事快照解析规则预设ID)
+      ? String(input.当前故事快照解析规则预设ID)
+      : defaults.当前故事快照解析规则预设ID,
     画师串预设列表: artistPresets,
     当前NPC画师串预设ID: resolveArtistPresetId(input.当前NPC画师串预设ID, artistPresets, 'npc'),
     当前场景画师串预设ID: resolveArtistPresetId(input.当前场景画师串预设ID, artistPresets, 'scene'),
@@ -641,6 +691,100 @@ export function 应用质量增强提示词(rules: 文生图规则中心设置, 
   return {
     prompt: compactJoin([prompt, 质量增强正面提示词(rules)]),
     negative: compactJoin([negative, 质量增强负面提示词(rules)]),
+  };
+}
+
+function normalizeNovelAIContentMode(value: unknown, fallback: NovelAIContentMode): NovelAIContentMode {
+  return value === 'official' || value === 'append' || value === 'replace' || value === 'off' ? value : fallback;
+}
+
+function normalizeNovelAIModelFamily(value: unknown): NovelAI模型族 {
+  return value === 'v3' || value === 'v4' || value === 'v4.5' ? value : 'all';
+}
+
+function normalizeNAIRulePresets(input: unknown): 文生图NAI规则预设[] {
+  const builtinIds = new Set(默认NAI规则预设列表.map((preset) => preset.id));
+  const custom = Array.isArray(input)
+    ? input.flatMap((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const source = item as Partial<文生图NAI规则预设>;
+        const id = String(source.id || `nai_rule_custom_${Date.now()}_${index}`);
+        if (builtinIds.has(id)) return [];
+        const limit = (value: unknown, max = 1600) => String(value ?? '').trim().slice(0, max);
+        return [{
+          id,
+          名称: limit(source.名称, 80) || '自定义 NAI 规则',
+          模型族: normalizeNovelAIModelFamily(source.模型族),
+          isBuiltin: false,
+          qualityMode: normalizeNovelAIContentMode(source.qualityMode, 'official'),
+          qualityText: limit(source.qualityText),
+          ucMode: normalizeNovelAIContentMode(source.ucMode, 'official'),
+          ucText: limit(source.ucText),
+          basePromptPrefix: limit(source.basePromptPrefix),
+          basePromptSuffix: limit(source.basePromptSuffix),
+          characterPromptPrefix: limit(source.characterPromptPrefix, 800),
+          characterPromptSuffix: limit(source.characterPromptSuffix, 800),
+          negativePromptAppend: limit(source.negativePromptAppend),
+          createdAt: Number(source.createdAt) || Date.now(),
+          updatedAt: Number(source.updatedAt) || Date.now(),
+        } satisfies 文生图NAI规则预设];
+      })
+    : [];
+  return [...默认NAI规则预设列表.map((preset) => ({ ...preset })), ...custom];
+}
+
+function normalizeStorySnapshotRulePresets(input: unknown): 故事快照解析规则预设[] {
+  const builtinIds = new Set(默认故事快照解析规则预设列表.map((preset) => preset.id));
+  const custom = Array.isArray(input)
+    ? input.flatMap((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const source = item as Partial<故事快照解析规则预设>;
+        const id = String(source.id || `story_snapshot_rule_custom_${Date.now()}_${index}`);
+        if (builtinIds.has(id)) return [];
+        const semanticRules = String(source.语义规则 ?? '').trim().slice(0, 6000);
+        return [{
+          id,
+          名称: String(source.名称 || '自定义故事快照规则').trim().slice(0, 80),
+          语义规则: semanticRules || 默认故事快照解析语义规则,
+          isBuiltin: false,
+          createdAt: Number(source.createdAt) || Date.now(),
+          updatedAt: Number(source.updatedAt) || Date.now(),
+        } satisfies 故事快照解析规则预设];
+      })
+    : [];
+  return [...默认故事快照解析规则预设列表.map((preset) => ({ ...preset })), ...custom];
+}
+
+export function 获取当前故事快照解析规则(rules: 文生图规则中心设置): 故事快照解析规则预设 {
+  return rules.故事快照解析规则预设列表.find((preset) => preset.id === rules.当前故事快照解析规则预设ID)
+    ?? 默认故事快照解析规则预设列表[0];
+}
+
+export function applyNovelAIRulePreset(
+  api: 文生图API配置,
+  rules: 文生图规则中心设置,
+): 文生图API配置 {
+  if (api.backend !== 'novelai') return api;
+  const presetId = api.novelAIAdvanced.activeRulePresetId || rules.当前NAI规则预设ID;
+  const preset = rules.NAI规则预设列表.find((item) => item.id === presetId)
+    ?? 默认NAI规则预设列表[0];
+  const apiAdvanced = api.novelAIAdvanced;
+  const apiQualityIsDefault = apiAdvanced.qualityMode === 'official' && !apiAdvanced.qualityText.trim();
+  const apiUcIsDefault = apiAdvanced.ucMode === 'official' && !apiAdvanced.ucText.trim();
+  return {
+    ...api,
+    novelAIAdvanced: {
+      qualityMode: apiQualityIsDefault ? preset.qualityMode : apiAdvanced.qualityMode,
+      qualityText: apiQualityIsDefault ? preset.qualityText : apiAdvanced.qualityText,
+      ucMode: apiUcIsDefault ? preset.ucMode : apiAdvanced.ucMode,
+      ucText: apiUcIsDefault ? preset.ucText : apiAdvanced.ucText,
+      basePromptPrefix: apiAdvanced.basePromptPrefix || preset.basePromptPrefix,
+      basePromptSuffix: apiAdvanced.basePromptSuffix || preset.basePromptSuffix,
+      characterPromptPrefix: apiAdvanced.characterPromptPrefix || preset.characterPromptPrefix,
+      characterPromptSuffix: apiAdvanced.characterPromptSuffix || preset.characterPromptSuffix,
+      negativePromptAppend: apiAdvanced.negativePromptAppend || preset.negativePromptAppend,
+      activeRulePresetId: preset.id,
+    },
   };
 }
 
@@ -1046,7 +1190,7 @@ export function buildNpcImagePrompt(params: {
 
 export function buildTravelerImagePrompt(params: {
   traveler: 角色数据结构;
-  mode: Extract<生图Prompt模式, 'avatar' | 'portrait'>;
+  mode: Extract<生图Prompt模式, 'avatar' | 'portrait' | 'nsfw'>;
   rules: 文生图规则中心设置;
   extraRequirement?: string;
   size?: string;
@@ -1068,6 +1212,8 @@ export function buildTravelerImagePrompt(params: {
     hasAnchor ? template?.角色锚定模式提示词 : template?.无锚点回退提示词,
     template?.输出格式提示词,
     ruleForMode(mode, rules),
+    mode === 'nsfw' ? rules.nsfwIsolationRule : undefined,
+    mode === 'nsfw' ? rules.nsfwPartRule : undefined,
     `player character name: ${traveler.姓名 || 'Traveler'}`,
     traveler.性别 ? `gender: ${traveler.性别}` : undefined,
     traveler.年龄 ? `age: ${traveler.年龄}` : undefined,
@@ -1082,7 +1228,7 @@ export function buildTravelerImagePrompt(params: {
     extraRequirement ? `extra requirement: ${extraRequirement}` : undefined,
     anchorLock,
   ]);
-  return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative]));
+  return 应用质量增强提示词(rules, prompt, compactJoin([rules.artistPresetNegative, ...styleNegativeParts(rules, 'npc'), anchorNegative, rules.commonNegative, mode === 'nsfw' ? rules.nsfwNegative : undefined]));
 }
 
 export function buildSceneImagePrompt(params: {

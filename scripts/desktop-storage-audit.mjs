@@ -15,12 +15,16 @@ const savePackage = read('services/savePackage.ts');
 const migrationBackup = read('services/desktop/desktopMigrationBackup.ts');
 const storageManager = read('components/features/Settings/StorageManager.tsx');
 const diagnostics = read('services/desktop/desktopDiagnostics.ts');
+const saveCatalogSection = dbService.slice(
+  dbService.indexOf('export async function getSaveCatalogSnapshot'),
+  dbService.indexOf('export async function loadSave'),
+);
 
 addCheck({
   status: 'desktop-first',
   label: 'save list reads',
   detail: 'getSaveList reads desktop save mirror summaries before IndexedDB summaries.',
-  ok: ordered(dbService, 'const desktopList = await loadDesktopSaveMirrorListFirstSafely()', 'let list = sortSaveSummaries(await readSaveSummaries(db))'),
+  ok: ordered(saveCatalogSection, 'const desktopList = await loadDesktopSaveMirrorListFirstSafely()', 'const db = await openDB()'),
 });
 
 addCheck({
@@ -187,8 +191,8 @@ addCheck({
 addCheck({
   status: 'indexeddb-primary',
   label: 'delta node source of truth',
-  detail: 'legacy replacement and repair paths still keep IndexedDB saveNodeDeltas as a compatibility source while new saveGame deltas write desktop files first.',
-  ok: all(dbService, ["const SAVE_NODE_DELTAS_STORE = 'saveNodeDeltas'", 'db.createObjectStore(SAVE_NODE_DELTAS_STORE', 'tx.objectStore(SAVE_NODE_DELTAS_STORE)', 'loadAllDeltaRecords(db)']),
+  detail: 'legacy replacement and repair paths still keep IndexedDB saveNodeDeltas as a compatibility source, scanned by cursor to avoid loading every delta payload at once.',
+  ok: all(dbService, ["const SAVE_NODE_DELTAS_STORE = 'saveNodeDeltas'", 'db.createObjectStore(SAVE_NODE_DELTAS_STORE', 'tx.objectStore(SAVE_NODE_DELTAS_STORE)', 'scanIndexedDeltaRecords', 'openCursor()']),
 });
 
 addCheck({

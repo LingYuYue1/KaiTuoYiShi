@@ -3,6 +3,7 @@ import type { 聊天消息 } from '@/models/chat';
 import { chatCompletion, chatCompletionNonStream, type ChatCompletionUsage, type StreamCallbacks } from '@/services/ai/chatCompletionClient';
 import { parseResponse } from '@/services/ai/responseParser';
 import type { 解析后回复 } from '@/models/chat';
+import type { DeepSeekRecoverySummary } from '@/services/ai/deepSeekRecovery';
 
 export interface ChatRequest {
   messages: 聊天消息[];
@@ -40,6 +41,7 @@ export interface ChatResult {
   /** 结束原因：'stop'（正常结束）/ 'length' 或 'max_tokens'（被截断）/ 其他 provider 特有值。
    *  用于抗截断检测，sendWorkflow 据此触发续写重试。 */
   finishReason?: string;
+  deepSeekRecovery?: DeepSeekRecoverySummary;
 }
 
 export async function sendChatMessage(
@@ -73,6 +75,7 @@ export async function sendChatMessage(
 
   let fullText: string;
   let finishReason: string | undefined;
+  let deepSeekRecovery: DeepSeekRecoverySummary | undefined;
   if (useStream) {
     const callbacks: StreamCallbacks = {
       onDelta: request.onDelta,
@@ -97,6 +100,7 @@ export async function sendChatMessage(
         frequencyPenalty: request.frequencyPenalty,
         presencePenalty: request.presencePenalty,
         maxContext: request.maxContext,
+        onDeepSeekRecovery: (summary) => { deepSeekRecovery = summary; },
       },
       callbacks,
     );
@@ -116,11 +120,12 @@ export async function sendChatMessage(
       frequencyPenalty: request.frequencyPenalty,
       presencePenalty: request.presencePenalty,
       maxContext: request.maxContext,
+      onDeepSeekRecovery: (summary) => { deepSeekRecovery = summary; },
     });
   }
 
   const parsed = parseResponse(fullText, { repair: request.repairTags === true });
-  return { fullText, parsed, usage, finishReason };
+  return { fullText, parsed, usage, finishReason, deepSeekRecovery };
 }
 
 function mergeRawUsage(previous: unknown, next: unknown): unknown {

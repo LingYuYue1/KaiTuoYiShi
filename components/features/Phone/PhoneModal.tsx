@@ -4,7 +4,7 @@ import type { 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
 import type { 手机联系人, 手机会话, 手机系统, 主动来信种子 } from '@/models/phone';
 import type { NPC记录, NPC同行记忆条目 } from '@/models/npc';
-import { 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
+import { 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 世界状态 } from '@/models/world';
 import type { API设置, 游戏设置 } from '@/models/settings';
@@ -173,7 +173,7 @@ export function PhoneModal({
           name: npc.姓名,
           avatar: 解析相册资源引用(album, 读取NPC头像(npc, '手机')),
           organization: undefined,
-          relationLabel: npc.阶位 === 'companion' ? '伙伴' : '路人',
+          relationLabel: 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
           available: true,
           lastActiveTurn: npc.最近回合,
         })),
@@ -201,7 +201,7 @@ export function PhoneModal({
           ...contact,
           avatar: 解析相册资源引用(album, contact.avatar || derived?.avatar),
           organization: contact.organization || (contact as { faction?: string }).faction || derived?.organization,
-          relationLabel: contact.relationLabel || derived?.relationLabel,
+          relationLabel: derived?.relationLabel || contact.relationLabel,
           available: contact.available ?? derived?.available ?? true,
           lastActiveTurn: contact.lastActiveTurn ?? derived?.lastActiveTurn,
         };
@@ -227,7 +227,7 @@ export function PhoneModal({
           name: npc.姓名,
           avatar: 解析相册资源引用(album, 读取NPC头像(npc, '手机')),
           organization: undefined,
-          relationLabel: npc.阶位 === 'companion' ? '伙伴' : '已认识',
+          relationLabel: 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
           available: true,
           status: 'available' as const,
           unlockSource: 'manual' as const,
@@ -337,7 +337,7 @@ export function PhoneModal({
       name: npc.姓名,
       avatar: 读取NPC头像(npc, '手机'),
       organization: undefined,
-      relationLabel: npc.阶位 === 'companion' ? '伙伴' : '路人',
+      relationLabel: 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
       available: true,
       lastActiveTurn: npc.最近回合,
     };
@@ -531,7 +531,7 @@ export function PhoneModal({
         name: byNpc.姓名,
         avatar: 读取NPC头像(byNpc, '手机'),
         organization: undefined,
-        relationLabel: byNpc.阶位 === 'companion' ? '伙伴' : '路人',
+        relationLabel: 格式化NPC关系(byNpc.好感度, Boolean(byNpc.亲密关系)),
         available: true,
         lastActiveTurn: byNpc.最近回合,
       };
@@ -652,8 +652,6 @@ export function PhoneModal({
             同行记忆: ledgerCompression.memories,
             总结记忆: ledgerCompression.summaries,
             最近互动: trimmed,
-            关系: npc.关系 === 'stranger' ? 'acquaintance' : npc.关系,
-            当前关系阶段: npc.当前关系阶段 || '已通过手机建立私聊联系',
             共同经历: [...new Set([...(npc.共同经历 ?? []), trimmed])].slice(-8),
             对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
             最近回合: turnCount,
@@ -755,8 +753,6 @@ export function PhoneModal({
       const reply = await generatePhoneReply(phoneApiConfig, {
         traveler,
         world,
-        memory,
-        yiting,
         npcRecords,
         news,
         turnCount,
@@ -765,7 +761,6 @@ export function PhoneModal({
         contact,
         userText: text,
         mainChatHistory,
-        storyWeaving,
         zhiku,
       }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
       await appendMessagesToChatSequentially(
@@ -807,7 +802,7 @@ export function PhoneModal({
         name: npc.姓名,
         avatar: 读取NPC头像(npc, '手机'),
         organization: undefined,
-        relationLabel: hiddenEnemy ? '敌对' : npc.阶位 === 'companion' ? '伙伴' : '路人',
+        relationLabel: 格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
         available: !hiddenEnemy,
         lastActiveTurn: npc.最近回合,
       };
@@ -886,8 +881,6 @@ export function PhoneModal({
       const reply = await generatePhoneReply(phoneApiConfig, {
         traveler,
         world,
-        memory,
-        yiting,
         npcRecords,
         news,
         turnCount,
@@ -896,7 +889,6 @@ export function PhoneModal({
         contact: seed.targetType === 'private' ? contact : undefined,
         seed,
         mainChatHistory,
-        storyWeaving,
         zhiku,
       }, phoneApiConfig.retryCount ?? 2, gameSettings.promptModules);
       onPhoneChange((prev) => {
@@ -955,13 +947,16 @@ export function PhoneModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-start p-3 sm:p-4"
-      style={{ background: 'rgba(var(--tj-bg-primary), 0.72)', backdropFilter: 'blur(10px)' }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      className="fixed inset-0 z-50 overflow-auto p-3 sm:p-4"
+      style={{ background: 'rgba(var(--tj-bg-primary), 0.88)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+      role="presentation"
     >
-      <div className="flex h-full w-full flex-col items-start gap-3 overflow-auto xl:flex-row xl:items-start">
+      {/* Content stops propagation so only blank scrim dismisses (desktop click-outside). */}
+      <div
+        className="flex w-full flex-col items-start gap-3 xl:flex-row xl:items-start"
+        onClick={(e) => e.stopPropagation()}
+      >
         <section
           className={`${activeApp ? 'hidden xl:flex' : 'flex'} relative h-[min(84vh,760px)] w-full max-w-[340px] flex-shrink-0 overflow-hidden p-3 xl:w-[340px]`}
           style={{

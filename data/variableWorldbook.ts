@@ -37,13 +37,14 @@ export const NPC_MEMORY_WRITE_RULE_PROMPT = `<NPC档案记忆写入法则>
 - 关系、承诺、冲突、称呼、同行、阵营态度或未完成事项发生变化时，不能只写 \`memory\`；必须同步审计账本字段。
 - \`recentInteraction\`：最近一次会影响后续态度的互动。
 - \`longTermImpression\`：NPC 对玩家的稳定印象。
-- \`relationshipStage\`：比 \`relation\` 枚举更具体的当前关系阶段。
+- \`relationshipStage\` 由前端根据好感度自动派生，变量模型不要输出或改写。
+- \`intimateRelationship\`：普通关系层的亲密关系状态。只有双方明确确立关系或发生明确自愿的亲密行为时写 \`true\`；只有明确分手、解除关系或双方否认关系时写 \`false\`。不得由好感度推断，也不得因争吵或好感下降自动清除。
 - \`sharedExperiences\`：稳定共同经历。
 - \`openItems\`：玩家/NPC 仍需要完成的承诺、任务和待办。
 - \`unresolvedConflicts\`：尚未化解的误会、敌意、隐瞒或冲突。
 - \`mustRemember\`：后续正文必须承接的关系事实。
 - \`doNotForget\`：解决前绝不能被覆盖、遗忘或改写为空的保护事实。
-- 保护事项在解决前不要删除或改写为空。若正文明确解决了承诺或冲突，应写新的 \`memory/recentInteraction/relationshipStage\` 说明“已解决后的状态”，不要静默抹掉旧账本事实。
+- 保护事项在解决前不要删除或改写为空。若正文明确解决了承诺或冲突，应写新的 \`memory/recentInteraction\` 说明“已解决后的状态”，不要静默抹掉旧账本事实。
 
 ## 7. NPC 账本审计触发词
 - 正文出现“约定、承诺、委托、欠下、保密、联系方式、备用通讯码、下次见、等我消息、误会、隐瞒、冲突、背叛、怀疑、称呼改变、同行、离队、分头行动、任务进展”时，必须检查是否写 \`openItems\`、\`unresolvedConflicts\`、\`mustRemember\` 或 \`doNotForget\`。
@@ -55,15 +56,16 @@ export const NPC_MEMORY_WRITE_RULE_PROMPT = `<NPC档案记忆写入法则>
 
 ## 9. 档案字段刷新
 - 长间隔重登场时要审计档案刷新需求，但只能写入现有 schema。
-- 外貌变化写 \`appearance/外貌\`；穿着变化写 \`clothing/穿着\`；称呼变化写 \`playerAddress/对玩家称呼\`；关系态度写 \`relation/affinityDelta/relationshipStage\`；是否同行写 \`following\`。
+- 外貌变化写 \`appearance/外貌\`；穿着变化写 \`clothing/穿着\`；称呼变化写 \`playerAddress/对玩家称呼\`；关系态度写 \`affinityDelta\` 和账本事实；明确建立或解除亲密关系写 \`intimateRelationship\`；是否同行写 \`following\`。
 - 身份、所属势力、当前位置、伤势等没有独立 NPC 字段的长期状态，优先并入 \`intro\`、\`memory\`、NPC 账本字段或 \`world_event\`；没有正文证据则保持旧值。
 - 是否在场不是 NPC 长期字段，不要为了“本回合出现过”而写入永久档案。
 
 ## 10. 好感、关系与性格保护
-- NPC 好感字段正式名称是 \`好感度\`，范围 -100 到 100。禁止写 \`好感\`、\`亲密\`、\`favor\`。
+- NPC 好感字段正式名称是 \`好感度\`，范围 -50 到 150。禁止写 \`好感\`、\`亲密\`、\`favor\`。
 - 好感度变化只看本回合互动证据与关系基础，不看玩家性别、NPC 性别、同性/异性线路或 NSFW 开关；同等互动强度必须同等审计 \`affinityDelta\`。
 - 好感度变化必须有明确互动依据：轻微正向互动一般 +1 到 +3；共同承担危险、互相信任或完成承诺可 +4 到 +8；冲突、欺骗、伤害或背叛才降低。男性 NPC 的感谢、信任、并肩作战、兑现承诺、主动袒露等正向证据，和女性 NPC 同权重；不要只写 memory 却漏掉 \`affinityDelta\`。
-- 关系字段使用：\`stranger\` / \`acquaintance\` / \`friend\` / \`close\` / \`rival\` / \`enemy\`。
+- 关系阶段由前端按好感度确定性派生：-50..-31 敌对、-30..-1 陌生、0..19 初见、20..49 熟识、50..100 知己、101..150 生死挚友。不要输出 \`relation\` 或 \`relationshipStage\`；敌对不锁定好感度，后续正向互动仍可正常提升。
+- \`intimateRelationship\` 与阶段独立且不受 NSFW 开关控制。它表示已明确建立的亲密关系，不等于 NSFW 档案，也不能仅凭高好感自动设为 true。
 - 原著角色的长期 \`personality/性格\` 由智库人物主体资料校准，不由变量系统根据单回合表现改写。
 - 原著角色的长期 \`性格\` 由智库人物主体资料校准；变量模型只能记录本回合经历、关系变化、称呼变化和临时状态。
 - 临时沉默、紧张、冷淡、受伤、戒备等状态只能写入 \`memory\`、关系变化、账本字段或 \`world_event\`，不得覆盖原著角色长期性格。

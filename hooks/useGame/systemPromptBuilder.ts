@@ -7,7 +7,7 @@ import { PROMPT_MODULE_TOP_THRESHOLD } from '@/models/prompts';
 import type { 开局来源 } from '@/models/journey';
 import type { 世界书 } from '@/models/worldbook';
 import type { NPC记录, NPC账本选择结果, NPC同行记忆条目 } from '@/models/npc';
-import { formatNpcLedgerForPrompt, NPC_RELATION_LABELS, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { formatNpcLedgerForPrompt, 格式化NPC关系, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
 import { 计算命途战技槽位数, NORMAL_SKILL_SLOT_COUNT } from '@/models/skill';
 import type { 新闻条目 } from '@/models/news';
 import { NEWS_CATEGORY_LABELS } from '@/models/news';
@@ -103,8 +103,8 @@ export function buildSystemPrompt(
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
-  // ── 世界书内置提示词（system_rule + 少量核心锚点）：为了可编辑放在世界书里，但按提示词注入与展示 ──
-  if (worldbooks && worldbookCtx) {
+  // ── 世界书稳定规则（system_rule + 少量核心锚点）：保留稳定位置，同时统一受世界书总开关控制 ──
+  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
     const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, worldbookCtx);
     if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
   }
@@ -294,7 +294,7 @@ export function buildOpeningSystemPrompt(
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
-  if (worldbooks && worldbookCtx) {
+  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
     const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, {
       ...worldbookCtx,
       currentScope: 'opening',
@@ -995,6 +995,7 @@ function buildNpcContinuitySection(
         isSceneNpc ||
         memories.length > 0 ||
         npc.关系 !== 'stranger' ||
+        npc.亲密关系 ||
         npc.好感度 !== 0;
       if (!hasContinuity) return null;
       const score =
@@ -1003,7 +1004,7 @@ function buildNpcContinuitySection(
         (npc.同行 ? 80 : 0) +
         (isRecent ? 50 : 0) +
         Math.min(memories.length, 6) * 8 +
-        (npc.关系 !== 'stranger' ? 12 : 0) +
+        (npc.关系 !== 'stranger' || npc.亲密关系 ? 12 : 0) +
         Math.min(Math.abs(npc.好感度), 20);
       return { npc, memories, isRecent, isSceneNpc, score };
     })
@@ -1035,7 +1036,7 @@ function buildNpcContinuitySection(
   lines.push('', '关系表：');
   for (const { npc, memories, isRecent, isSceneNpc } of candidates) {
     const tags = [
-      NPC_RELATION_LABELS[npc.关系],
+      格式化NPC关系(npc.好感度, Boolean(npc.亲密关系)),
       npc.同行 ? '同行中' : '',
       isSceneNpc ? '当前场景人物' : '',
       isRecent ? '近期见过' : '',
@@ -1088,7 +1089,7 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
   });
 
   const formatNpc = (n: NPC记录) => {
-    const tags: string[] = [NPC_RELATION_LABELS[n.关系]];
+    const tags: string[] = [格式化NPC关系(n.好感度, Boolean(n.亲密关系))];
     if (n.同行) tags.push('同行中');
     if (n.原著角色) tags.push('原著角色');
     const desc: string[] = [];

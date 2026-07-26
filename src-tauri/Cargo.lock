@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "kaituoyishi-desktop"
-version = "0.8.1"
+version = "1.2.2"
 dependencies = [
  "base64 0.22.1",
  "rfd",

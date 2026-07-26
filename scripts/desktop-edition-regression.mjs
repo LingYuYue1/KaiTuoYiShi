@@ -455,10 +455,15 @@ assert(dbService.includes('mirrorDesktopSaveSafely(saved.save)'), 'saveGame must
 assert(dbService.includes('mirrorDesktopSaveDeltaSafely(saved.delta)'), 'saveGame must still mirror save node deltas on fallback paths');
 assert(dbService.includes('loadDesktopSaveNodeDeltaSafely(nodeId)'), 'delta restore must read desktop delta mirrors before IndexedDB');
 assert(dbService.includes('loadDesktopSaveNodeDeltasSafely'), 'dbService must read desktop delta lists for base reference checks');
-assert(dbService.includes('loadDeltaBaseCandidateSummaries'), 'auto-save delta base selection must merge IndexedDB and desktop mirror summaries');
+assert(dbService.includes('loadIndexedAndDesktopSaveSummaries'), 'auto-save delta base and retention selection must merge IndexedDB and desktop mirror summaries');
 assert(dbService.includes('const desktopSummaries = await loadDesktopSaveMirrorListFirstSafely()'), 'auto-save delta base selection must use desktop mirror summaries');
 assert(dbService.includes('loadDeltaBaseCandidateSave'), 'auto-save delta base selection must load base saves through a desktop fallback helper');
 assert(dbService.includes('return loadDesktopSaveMirrorSaveFallbackSafely(id)'), 'auto-save delta base selection must fall back to desktop mirrored saves when IndexedDB misses a candidate');
+assert(saveMirror.includes('export async function hideSaveInDesktopMirror'), 'desktop retention must hide referenced delta bases without deleting their payload files');
+assert(saveMirror.includes("visibility: 'hidden-delta-base'"), 'desktop save index must mark hidden delta bases explicitly');
+assert(saveMirror.includes('.filter(isVisibleDesktopSaveSummary)'), 'desktop visible save lists must exclude hidden delta bases');
+assert(dbService.includes('await hideDesktopSaveMirrorSafely(item.id)'), 'managed rotation must hide referenced desktop delta bases');
+assert(dbService.includes('loadHiddenDesktopSaveMirrorIdsSafely'), 'orphan cleanup must include hidden desktop delta bases');
 assert(dbService.includes('const rawBase = await loadDeltaBaseCandidateSave(db, baseSaveId)'), 'delta-only save restore must load base saves through the desktop fallback helper');
 assert(
   dbService.indexOf('const rawBase = await loadDeltaBaseCandidateSave(db, baseSaveId)') < dbService.indexOf('return restoreSaveFromDelta(base, save, delta)'),
@@ -467,14 +472,18 @@ assert(
 assert(dbService.includes('removeDesktopSaveDeltasBySaveIdSafely(item.id)'), 'managed save pruning must clean desktop delta mirrors');
 assert(dbService.includes('removeDesktopSaveDeltasBySaveIdSafely(id)'), 'deleteSave must clean desktop delta mirrors');
 assert(dbService.includes('replaceDesktopSaveDeltaMirrorSafely(mirroredDeltas)'), 'replaceAllSaves must rebuild desktop delta mirrors');
-assert(dbService.includes('loadAllDeltaRecords(db)'), 'delta base checks must merge IndexedDB and desktop delta records');
+assert(dbService.includes('scanIndexedDeltaRecords(db, (delta) =>') && dbService.includes('loadDesktopSaveNodeDeltasSafely()'), 'delta base checks must stream IndexedDB records and merge desktop delta records');
 assert(dbService.includes('const desktopList = await loadDesktopSaveMirrorListFirstSafely()'), 'getSaveList must prefer desktop mirror summaries in desktop runtime');
 assert(dbService.includes('if (desktopList.length > 0)'), 'getSaveList must use desktop mirror summaries before IndexedDB when available');
+const saveCatalogSection = dbService.slice(
+  dbService.indexOf('export async function getSaveCatalogSnapshot'),
+  dbService.indexOf('export async function loadSave'),
+);
 assert(
-  dbService.indexOf('const desktopList = await loadDesktopSaveMirrorListFirstSafely()') < dbService.indexOf('let list = sortSaveSummaries(await readSaveSummaries(db))'),
+  saveCatalogSection.indexOf('const desktopList = await loadDesktopSaveMirrorListFirstSafely()') < saveCatalogSection.indexOf('const db = await openDB()'),
   'getSaveList must try the desktop save mirror before reading IndexedDB summaries',
 );
-assert(dbService.includes('return loadDesktopSaveMirrorListFallbackSafely()'), 'getSaveList must still fall back to desktop mirror summaries when IndexedDB summaries are empty');
+assert(saveCatalogSection.includes('const fallbackList = await loadDesktopSaveMirrorListFallbackSafely()'), 'getSaveList must still fall back to desktop mirror summaries when IndexedDB summaries are empty');
 assert(dbService.includes('const desktopSave = await loadDesktopSaveMirrorSaveFirstSafely(id)'), 'loadSave must prefer a desktop mirrored save in desktop runtime');
 assert(dbService.includes('if (desktopSave) return restoreDesktopAssetPayloadSafely(desktopSave)'), 'loadSave must restore local desktop asset payloads before returning mirrored saves');
 assert(

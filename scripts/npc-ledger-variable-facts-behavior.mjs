@@ -87,7 +87,7 @@ const rawText = `<变量事实>
       "name": "三月七",
       "memory": "三月七把寻找失踪科员的请求交给玩家，并给了备用通讯码。",
       "recentInteraction": "三月七在主控舱段委托玩家寻找失踪科员，并约定用备用通讯码联系。",
-      "relationshipStage": "信任中的同行委托",
+      "intimateRelationship": true,
       "sharedExperiences": ["在主控舱段约定一起追查失踪科员"],
       "openItems": ["帮三月七寻找失踪科员并回传线索"],
       "mustRemember": ["三月七给过玩家备用通讯码，后续联系不能写成陌生人"],
@@ -99,7 +99,6 @@ const rawText = `<变量事实>
       "name": "丹恒",
       "memory": "丹恒发现玩家隐瞒了星核线索，暂时压下质问但保留警惕。",
       "recentInteraction": "丹恒要求玩家解释星核线索来源，玩家没有完全说明。",
-      "relationshipStage": "合作但存在警惕",
       "unresolvedConflicts": ["玩家隐瞒星核线索来源，丹恒尚未完全信任解释"],
       "doNotForget": ["丹恒已经察觉玩家隐瞒星核线索，冲突解决前不能写成毫无芥蒂"],
       "evidence": "正文写明丹恒沉默片刻后要求玩家之后给出完整解释"
@@ -150,13 +149,12 @@ const keys = result.commands.map((command) => command.key);
 
 for (const key of [
   'NPC[id=npc_march7th].最近互动',
-  'NPC[id=npc_march7th].当前关系阶段',
+  'NPC[id=npc_march7th].亲密关系',
   'NPC[id=npc_march7th].共同经历',
   'NPC[id=npc_march7th].未完成事项',
   'NPC[id=npc_march7th].必须记得',
   'NPC[id=npc_march7th].同行记忆',
   'NPC[id=npc_danheng].最近互动',
-  'NPC[id=npc_danheng].当前关系阶段',
   'NPC[id=npc_danheng].未解决冲突',
   'NPC[id=npc_danheng].禁止遗忘',
   'NPC[id=npc_danheng].同行记忆',

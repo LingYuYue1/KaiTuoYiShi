@@ -582,11 +582,8 @@ assert(
 );
 
 assert(
-  phoneService.includes('formatPhoneOpeningArchive') &&
-    phoneService.includes('formatPhoneOpeningArchive(ctx.world.开局档案)') &&
-    phoneService.includes('章节锚点：${archive.章节锚点名称') &&
-    phoneService.includes('主线启用：${archive.主线启用 === false'),
-  '手机系统必须显式读取结构化开局档案，避免非黑塔/自由开局通讯语境回落旧默认线。',
+  !phoneService.includes('formatPhoneOpeningArchive') && !phoneService.includes('ctx.world.开局档案'),
+  '手机联系人不得读取玩家开局介入和初始关系等私有档案。',
 );
 
 assert(

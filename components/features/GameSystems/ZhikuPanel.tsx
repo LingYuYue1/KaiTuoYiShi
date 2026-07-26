@@ -662,17 +662,50 @@ type CharacterGroup = {
   profiles: CharacterProfile[];
 };
 
+const emptyCharacterGroupSeeds: CharacterGroup[] = [
+  {
+    id: '资料大区:匹诺康尼',
+    label: '匹诺康尼',
+    kind: '资料大区',
+    order: 8,
+    profiles: [],
+  },
+  {
+    id: '资料大区:翁法罗斯',
+    label: '翁法罗斯',
+    kind: '资料大区',
+    order: 8.5,
+    profiles: [],
+  },
+  {
+    id: '阵营:巡海游侠',
+    label: '巡海游侠',
+    kind: '阵营',
+    order: 10,
+    profiles: [],
+  },
+  {
+    id: '组织:银河旅人',
+    label: '银河旅人',
+    kind: '组织',
+    order: 12,
+    profiles: [],
+  },
+];
+
 const characterGroupFallbacks: Array<{ label: string; kind: CharacterGroupKind; aliases: string[] }> = [
   { label: '星穹列车', kind: '组织', aliases: ['星穹列车', '列车组', '无名客', '列车', '帕姆'] },
   { label: '黑塔空间站', kind: '地区', aliases: ['黑塔空间站', '空间站', '防卫科', '主控舱段', '基座舱段', '收容舱段', '支援舱段'] },
   { label: '雅利洛-VI', kind: '地区', aliases: ['雅利洛', '贝洛伯格', '下层区', '上层区', '磐岩镇', '地火', '史瓦罗'] },
   { label: '仙舟罗浮', kind: '地区', aliases: ['仙舟', '罗浮', '云骑', '神策府', '长乐天', '金人巷', '鳞渊境'] },
   { label: '匹诺康尼', kind: '资料大区', aliases: ['匹诺康尼', '家族', '梦境', '白日梦酒店', '黄金的时刻', '知更鸟', '星期日'] },
-  { label: '翁法罗斯', kind: '资料大区', aliases: ['翁法罗斯'] },
+  { label: '翁法罗斯', kind: '资料大区', aliases: ['翁法罗斯', 'Amphoreus', '奥赫玛', '黄金裔', '阿格莱雅'] },
   { label: '联动角色', kind: '资料大区', aliases: ['联动角色', 'Fate', 'UBW', 'Saber', 'Archer'] },
   { label: '永火官邸', kind: '资料大区', aliases: ['永火官邸', '康士坦丝', '大丽花', '冥火大公', '泯灭帮'] },
   { label: '星核猎手', kind: '阵营', aliases: ['星核猎手', '卡芙卡', '银狼', '刃', '萨姆'] },
   { label: '天才俱乐部', kind: '阵营', aliases: ['天才俱乐部', '黑塔', '螺丝咕姆', '阮梅'] },
+  { label: '巡海游侠', kind: '阵营', aliases: ['巡海游侠', 'Galaxy Rangers', 'Galaxy Ranger', '波提欧', '乱破'] },
+  { label: '银河旅人', kind: '组织', aliases: ['银河旅人', 'Galactic Travelers', 'Galactic Traveler', '银枝'] },
 ];
 const characterGroupPriority: Record<CharacterGroupKind, number> = {
   组织: 1,
@@ -691,7 +724,7 @@ const nativePenaconyOrganizations = new Set([
   '苜蓿草家系',
   '隐夜鸫家系',
 ]);
-const nativeAmphoreusOrganizations = new Set(['黄金裔', 'Chrysos Heirs', '奥赫玛']);
+const nativeAmphoreusOrganizations = new Set(['黄金裔', 'Chrysos Heirs', '奥赫玛', '奥赫玛元老院']);
 const crossoverOrganizations = new Set(['Fate/stay night [Unlimited Blade Works]', 'Fate', 'UBW']);
 const everFlameOrganizations = new Set(['永火官邸', '泯灭帮', 'Ever-Flame Mansion', 'Annihilation Gang']);
 
@@ -739,6 +772,9 @@ function buildCharacterWorkspace(entries: 智库条目[]): { profiles: Character
       order: profile.groupOrder,
       profiles: [profile],
     });
+  }
+  for (const seed of emptyCharacterGroupSeeds) {
+    if (!groups.has(seed.id)) groups.set(seed.id, { ...seed, profiles: [] });
   }
 
   return {
@@ -2330,8 +2366,9 @@ function buildCharacterIdentityRows(
   identityMap: Map<string, string>,
 ): CharacterIdentityRow[] {
   const get = (key: string, fallback = '') => identityMap.get(key) || fallback;
-  const roleName = meta.角色名 || entry.关联角色ID || 获取智库人物名(entry);
+  const roleName = meta.角色名 || 获取智库人物名(entry);
   const appearance = get('外貌', get('存在形态', entry.外貌锚点 ?? inferExistenceForm(entry) ?? ''));
+  const structuredOrigin = (entry as 智库条目 & { 出身?: string }).出身;
   return [
     { label: '角色ID', value: get('角色ID', getRoleIdFromKeywords(entry) || '未标注'), missing: !get('角色ID') && !getRoleIdFromKeywords(entry) },
     { label: '名称', value: get('名称', roleName || entry.标题), missing: !get('名称') && !roleName },
@@ -2341,7 +2378,7 @@ function buildCharacterIdentityRows(
     { label: '外貌', value: appearance || '未标注', missing: !appearance, wide: true },
     { label: '形态', value: get('形态', meta.形态 || '未标注'), missing: !get('形态') && !meta.形态 },
     { label: '所属 / 组织', value: get('所属', inferOrganization(entry) || '未标注'), missing: !get('所属') && !inferOrganization(entry) },
-    { label: '出身', value: get('出身', '未标注'), missing: !get('出身') },
+    { label: '出身', value: get('出身', structuredOrigin || '未知'), missing: !get('出身') && !structuredOrigin },
     { label: '身份 / 职务', value: get('身份', inferCharacterRole(entry) || '未标注'), missing: !get('身份') && !inferCharacterRole(entry) },
     { label: '当前信息域', value: get('当前信息域', '按当前剧情阶段与玩家已知事实执行'), missing: false },
   ];
@@ -2476,7 +2513,7 @@ function getRoleIdFromKeywords(entry: 智库条目): string {
 }
 
 function inferAliases(entry: 智库条目): string {
-  const roleName = entry.关联角色ID || 获取智库人物名(entry);
+  const roleName = 获取智库人物名(entry);
   const keywords = (entry.关键词 ?? []).filter((keyword) => !parseCharacterTag(keyword));
   return keywords.filter((keyword) => keyword !== roleName && keyword.length <= 18).slice(0, 6).join('、');
 }

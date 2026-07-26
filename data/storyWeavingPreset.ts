@@ -246,63 +246,152 @@ export async function loadBundledStoryWeavingPreset(preset: BundledStoryWeavingP
 }
 
 export async function loadAllBundledStoryWeavingPresets(): Promise<剧情编织系统> {
-  const series = await Promise.all(bundledStoryWeavingPresets.map(loadBundledStoryWeavingPreset));
+  const series: 剧情编织系列[] = [];
+  for (const preset of bundledStoryWeavingPresets) {
+    const loaded = await loadBundledStoryWeavingPreset(preset);
+    if (loaded) series.push(loaded);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  if (series.length !== bundledStoryWeavingPresets.length) {
+    throw new Error(`内置原著剧情资源不完整：${series.length}/${bundledStoryWeavingPresets.length}`);
+  }
   return 归一化剧情编织系统({
-    系列列表: series.filter((item): item is 剧情编织系列 => Boolean(item)),
+    系列列表: series,
     当前系列ID: CANON_START_SERIES_ID,
   });
 }
 
+type PersistedStoryWeavingSystem = 剧情编织系统 & { persistenceVersion?: number };
+
 export function mergeBundledStoryWeavingPresets(saved: 剧情编织系统 | null | undefined, bundled: 剧情编织系统): 剧情编织系统 {
   if (!saved?.系列列表?.length) return bundled;
-  const savedById = new Map(saved.系列列表.map((series) => [series.id, series]));
-  const customSeries = saved.系列列表.filter((series) => series.来源类型 !== 'canon' || !series.内置预设ID);
+  const persistenceVersion = Number((saved as PersistedStoryWeavingSystem).persistenceVersion) || 0;
+  const normalizedSaved = 归一化剧情编织系统(saved);
+  const savedById = new Map(normalizedSaved.系列列表.map((series) => [series.id, series]));
+  const customSeries = normalizedSaved.系列列表.filter((series) => series.来源类型 !== 'canon' || !series.内置预设ID);
   const mergedCanon = bundled.系列列表.map((presetSeries) => {
     const savedSeries = savedById.get(presetSeries.id);
     if (!savedSeries) return presetSeries;
     const savedSegments = new Map(savedSeries.分段列表.map((segment) => [segment.id, segment]));
+    const mergedSegments = presetSeries.分段列表.map((segment) => {
+      const savedSegment = savedSegments.get(segment.id);
+      if (!savedSegment) return segment;
+      if (persistenceVersion === 2) {
+        return {
+          ...segment,
+          启用注入: savedSegment.启用注入,
+          处理状态: savedSegment.处理状态,
+          运行状态: savedSegment.运行状态,
+          updatedAt: savedSegment.updatedAt,
+        };
+      }
+      return {
+        ...segment,
+        ...savedSegment,
+        原文内容: segment.原文内容,
+        字数: segment.字数,
+      };
+    });
+    if (persistenceVersion === 2) {
+      return 归一化剧情编织系列({
+        ...presetSeries,
+        激活注入: savedSeries.激活注入,
+        当前分段组号: savedSeries.当前分段组号,
+        当前阶段概括: savedSeries.当前阶段概括,
+        分段列表: mergedSegments,
+        createdAt: savedSeries.createdAt,
+        updatedAt: Math.max(savedSeries.updatedAt, presetSeries.updatedAt),
+      });
+    }
     return 归一化剧情编织系列({
       ...presetSeries,
-      激活注入: savedSeries.激活注入,
-      当前分段组号: savedSeries.当前分段组号,
-      分段列表: presetSeries.分段列表.map((segment) => {
-        const savedSegment = savedSegments.get(segment.id);
-        return savedSegment
-          ? {
-              ...segment,
-              启用注入: savedSegment.启用注入,
-              运行状态: savedSegment.运行状态,
-              updatedAt: savedSegment.updatedAt,
-            }
-          : segment;
-      }),
-      createdAt: savedSeries.createdAt,
+      ...savedSeries,
+      来源智库条目ID: presetSeries.来源智库条目ID,
+      来源文件名: presetSeries.来源文件名,
+      原始文本: presetSeries.原始文本,
+      章节列表: presetSeries.章节列表,
+      分段列表: mergedSegments,
       updatedAt: Math.max(savedSeries.updatedAt, presetSeries.updatedAt),
     });
   });
   return 归一化剧情编织系统({
     系列列表: [...mergedCanon, ...customSeries],
-    当前系列ID: saved.当前系列ID || bundled.当前系列ID,
+    当前系列ID: normalizedSaved.当前系列ID || bundled.当前系列ID,
+    当前进度: normalizedSaved.当前进度 ?? bundled.当前进度,
   });
 }
 
-let decomposedCanonSystemCache: 剧情编织系统 | null | undefined;
+export function buildPersistedStoryWeavingSystem(system: 剧情编织系统): 剧情编织系统 {
+  const normalized = 归一化剧情编织系统(system);
+  return {
+    persistenceVersion: 3,
+    系列列表: normalized.系列列表.map((series) => {
+      if (series.来源类型 !== 'canon') return series;
+      return {
+        ...series,
+        来源智库条目ID: [],
+        原始文本: undefined,
+        章节列表: [],
+        分段列表: series.分段列表.map((segment) => {
+          const { 原文内容: _originalContent, ...persistedSegment } = segment;
+          return persistedSegment;
+        }),
+      } as unknown as 剧情编织系列;
+    }),
+    当前系列ID: normalized.当前系列ID,
+    当前进度: normalized.当前进度,
+  } as 剧情编织系统;
+}
 
-async function loadDecomposedCanonSystem(): Promise<剧情编织系统 | null> {
-  if (decomposedCanonSystemCache !== undefined) return decomposedCanonSystemCache;
-  try {
-    const module = await import('@/data/storyWeavingCanonDecomposed.json');
-    decomposedCanonSystemCache = module.default as unknown as 剧情编织系统;
-  } catch {
-    decomposedCanonSystemCache = null;
+export function hydratePersistedStoryWeavingSystem(
+  saved: 剧情编织系统 | null | undefined,
+  bundled: 剧情编织系统,
+): 剧情编织系统 {
+  if (!saved?.系列列表?.length) return bundled;
+  const canonBaseline = 归一化剧情编织系统({
+    ...bundled,
+    系列列表: bundled.系列列表.filter((series) => series.来源类型 === 'canon'),
+  });
+  return mergeBundledStoryWeavingPresets(saved, canonBaseline);
+}
+
+export function isSelfContainedStoryWeavingSystem(system: 剧情编织系统 | null | undefined): boolean {
+  if (!system?.系列列表?.length) return false;
+  const normalized = 归一化剧情编织系统(system);
+  return normalized.系列列表.every((series) => series.来源类型 !== 'canon' || (
+    series.章节列表.length > 0
+    && series.分段列表.length > 0
+    && series.分段列表.every((segment) => segment.原文内容.trim().length > 0)
+  ));
+}
+
+function getCanonResourceUrl(presetId: string): string {
+  const relativePath = `data/story-weaving-canon/${presetId}.json`;
+  if (typeof document !== 'undefined') {
+    const moduleScriptUrl = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
+    if (moduleScriptUrl) return new URL(`../${relativePath}`, moduleScriptUrl).toString();
+    return new URL(`/${relativePath}`, document.location.origin).toString();
   }
-  return decomposedCanonSystemCache;
+  return `/${relativePath}`;
+}
+
+async function fetchDecomposedCanonSeries(presetId: string): Promise<剧情编织系列 | null> {
+  let lastError: unknown;
+  for (const cache of ['force-cache', 'reload'] as const) {
+    try {
+      const response = await fetch(getCanonResourceUrl(presetId), { cache });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json() as 剧情编织系列;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  console.warn(`[story-weaving] 内置原著资源加载失败：${presetId}`, lastError);
+  return null;
 }
 
 async function loadDecomposedCanonSeries(presetId: string): Promise<剧情编织系列 | null> {
-  const system = await loadDecomposedCanonSystem();
-  if (!system) return null;
-  const series = system.系列列表?.find((item) => item.id === presetId || item.内置预设ID === presetId);
+  const series = await fetchDecomposedCanonSeries(presetId);
   if (!series) return null;
   return 归一化剧情编织系列({
     ...series,

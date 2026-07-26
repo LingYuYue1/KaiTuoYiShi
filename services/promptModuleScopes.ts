@@ -11,7 +11,11 @@ type 独立系统提示词目标 =
 
 const TARGET_ID_MATCHERS: Record<独立系统提示词目标, readonly ((id: string) => boolean)[]> = {
   news: [(id) => id.startsWith('builtin_news_')],
-  phone: [(id) => id.startsWith('builtin_phone_')],
+  phone: [
+    (id) => id.startsWith('builtin_phone_'),
+    (id) => id.startsWith('custom_phone_'),
+    (id) => id.startsWith('st_import_phone_'),
+  ],
   variable: [
     (id) => id.startsWith('builtin_variable_'),
     (id) => id === 'builtin_companion_archive_worldbook',

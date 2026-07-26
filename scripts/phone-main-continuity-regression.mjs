@@ -7,8 +7,9 @@ function assert(condition, message) {
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
 const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 
-assert(phoneModal.includes("关系: npc.关系 === 'stranger' ? 'acquaintance' : npc.关系"), '手机私聊写回 NPC 时必须把陌生关系抬到点头之交。');
-assert(phoneModal.includes("当前关系阶段: npc.当前关系阶段 || '已通过手机建立私聊联系'"), '手机私聊写回 NPC 时必须补当前关系阶段。');
+assert(!phoneModal.includes("关系: npc.关系 === 'stranger' ? 'acquaintance' : npc.关系"), '手机私聊不得绕过好感度规则手动抬升旧关系枚举。');
+assert(!phoneModal.includes("当前关系阶段: npc.当前关系阶段 || '已通过手机建立私聊联系'"), '手机私聊不得写入自由文本关系阶段。');
+assert(phoneModal.includes('格式化NPC关系(npc.好感度, Boolean(npc.亲密关系))'), '手机联系人必须显示统一派生的关系阶段。');
 assert(phoneModal.includes("共同经历: [...new Set([...(npc.共同经历 ?? []), trimmed])].slice(-8)"), '手机私聊写回 NPC 时必须补共同经历。');
 assert(phoneModal.includes('与玩家保持手机联系，已形成可承接的私下互动。'), '手机私聊写回 NPC 时必须补长期印象兜底。');
 

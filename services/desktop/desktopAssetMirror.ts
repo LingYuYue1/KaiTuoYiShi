@@ -61,8 +61,8 @@ export async function mirrorAssetRecordsToDesktop(records: SaveAssetRecord[]): P
   const index = await readAssetIndex();
   const byId = new Map(index.assets.map((asset) => [asset.id, asset]));
   for (const record of records) {
-    if (!record.id || (!record.dataUrl && !record.originalUrl)) continue;
-    const payload = parseDataImage(record.dataUrl ?? record.originalUrl);
+    if (!record.id) continue;
+    const payload = await resolveRecordBase64Payload(record);
     if (!payload) continue;
     const path = assetFilePath(record.id, payload.mimeType);
     const metadataPath = assetMetadataPath(record.id);
@@ -80,7 +80,7 @@ export async function mirrorAssetRecordsToDesktop(records: SaveAssetRecord[]): P
         height: record.height,
         size: estimateAssetSize(record, payload.base64Content),
         updatedAt: record.updatedAt,
-        hasDataUrl: Boolean(record.dataUrl),
+        hasDataUrl: Boolean(record.blob || record.dataUrl),
         hasOriginalUrl: Boolean(record.originalUrl),
       },
     };
@@ -369,6 +369,25 @@ function parseDataImage(value?: string): { mimeType: string; base64Content: stri
   const match = value.trim().match(DATA_URL_RE);
   if (!match) return null;
   return { mimeType: match[1].toLowerCase(), base64Content: match[2] };
+}
+
+async function resolveRecordBase64Payload(
+  record: SaveAssetRecord,
+): Promise<{ mimeType: string; base64Content: string } | null> {
+  if (record.blob instanceof Blob) {
+    const buffer = await record.blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + chunkSize)));
+    }
+    return {
+      mimeType: (record.mimeType || record.blob.type || 'image/png').toLowerCase(),
+      base64Content: btoa(binary),
+    };
+  }
+  return parseDataImage(record.dataUrl ?? record.originalUrl);
 }
 
 function extensionForMimeType(mimeType: string): string {

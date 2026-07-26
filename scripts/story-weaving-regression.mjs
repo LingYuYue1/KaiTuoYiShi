@@ -953,10 +953,10 @@ const phoneMessages = phoneService.buildPhoneMessages({
   }),
 });
 const phoneContext = phoneMessages.map((message) => message.content).join('\n');
-assert(phoneContext.includes('注入窗口健康'), '手机上下文应包含剧情编织注入窗口诊断。');
-assert(phoneContext.includes('手机下一当前段'), '手机上下文应使用实际注入段作为当前段。');
-assert(phoneContext.includes('已跳过归档锚点'), '手机上下文应提示已跳过归档旧锚点。');
-assert(!phoneContext.includes('当前段：1｜手机旧归档段'), '手机不得把已归档旧段标记为当前段。');
+assert(!phoneContext.includes('注入窗口健康'), '手机联系人不得读取剧情编织诊断。');
+assert(!phoneContext.includes('手机下一当前段'), '手机联系人不得提前读取剧情编织当前段。');
+assert(!phoneContext.includes('已跳过归档锚点'), '手机联系人不得读取剧情编织归档信息。');
+assert(!phoneContext.includes('当前段：1｜手机旧归档段'), '手机联系人不得读取剧情编织旧锚点。');
 
 const stageSummaryExperienced = segment({
   id: 'seg_stage_summary_experienced',

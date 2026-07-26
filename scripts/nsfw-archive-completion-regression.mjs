@@ -23,6 +23,6 @@ assert(variableFacts.includes('if (pruneEmptyObject(maleArchive)) archive.男性
 
 assert(variableModel.includes('身体档案、经历'), 'NSFW 基线补建提示必须要求经历字段。');
 assert(variableModel.includes('女性身体档案尽量补齐：胸部、女性私处、后庭、体态、体味'), 'NSFW 基线补建提示必须要求补齐女性身体档案。');
-assert(variableModel.includes('经历只写“暂无亲密经历记录”这类中性基线'), 'NSFW 基线经历不得被写成已发生关系。');
+assert(variableModel.includes('没有正文证据时不写经历、边界、偏好、敏感点、标签或占位文案'), 'NSFW 基线不得要求模型编造占位经历。');
 
 console.log('nsfw-archive-completion regression passed.');
