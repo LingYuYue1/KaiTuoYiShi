@@ -303,20 +303,23 @@ function NPC数据丰富度(npc: NPC记录): number {
 
 function 规范化世界时间命令(cmd: 变量命令): 变量命令 {
   const parsed = extractRoot(cmd.key);
-  if (parsed?.root !== '世界') return cmd;
+  if (parsed?.root !== '世界') return { ...cmd };
 
-  if ((parsed.rest === '当前时间' || parsed.rest === '当前日期') && cmd.action !== 'set' && cmd.action !== 'delete') {
-    cmd = { ...cmd, action: 'set' };
-  }
+  const normalized = {
+    ...cmd,
+    action: (parsed.rest === '当前时间' || parsed.rest === '当前日期') && cmd.action !== 'set' && cmd.action !== 'delete'
+      ? 'set'
+      : cmd.action,
+  };
 
-  if (parsed.rest === '当前时间' && typeof cmd.value === 'string') {
-    const minutes = 解析分钟序数(cmd.value);
+  if (parsed.rest === '当前时间' && typeof normalized.value === 'string') {
+    const minutes = 解析分钟序数(normalized.value);
     if (minutes !== null) {
-      return { ...cmd, value: 格式化分钟序数(minutes) };
+      return { ...normalized, value: 格式化分钟序数(minutes) };
     }
   }
 
-  return cmd;
+  return normalized;
 }
 
 function 归一化变量世界状态(state: VariableState): VariableState {
