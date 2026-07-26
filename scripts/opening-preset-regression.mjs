@@ -245,7 +245,7 @@ assert(
     journeyPresets.includes('officialChapterPhase') &&
     journeyPresets.includes('priorStoryState') &&
     worldModel.includes('buildOpeningPriorStoryRule') &&
-    systemPromptBuilder.includes('开局锚点之前的原作主线不得被自动补演或转跳推进') &&
+    systemPromptBuilder.includes('锚点之前的主线只作既成背景/资料参考，不得作为正文自动跳转、补演或推进目标') &&
     storyWeaving.includes('章节锚点之前的主线段落视为前置背景'),
   '官方开局必须保留章节锚点；自由开局必须改为主线进度坐标，并把前置剧情作为既成背景，禁止正文补演或转跳推进。',
 );

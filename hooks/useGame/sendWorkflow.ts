@@ -188,6 +188,40 @@ function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情
   return parts.join('。');
 }
 
+// 区E执法块(结构轮, 2026-07-26): 注入在聊天历史与玩家输入之后——离生成点最近的位置。
+// 实现参照狭间评判提醒的既有先例(尾部 user 消息,三 provider 通用,连续 user 消息已有
+// DeepSeek 守卫先例)。素材复用本回合已算好的智库命中,不新增检索;体量上限约 1.5KB。
+function buildTurnEnforcementBlock(input: {
+  playerName: string;
+  wordCountTarget: number;
+  zhikuEntries?: Array<{ 标题: string; 分类: string; 说话方式?: string; 禁止误写?: string }>;
+  storyWeavingActive: boolean;
+}): string {
+  const lines: string[] = ['# 本回合生成前核对（最高优先级，覆盖上文所有软性描述）'];
+  const characters = (input.zhikuEntries ?? []).filter((e) => e.分类 === 'character').slice(0, 4);
+  if (characters.length) {
+    lines.push('【在场角色锚点】');
+    for (const c of characters) {
+      const speech = c.说话方式?.trim();
+      const forbid = c.禁止误写?.trim();
+      const bits = [
+        speech ? `说话方式：${speech.length > 60 ? `${speech.slice(0, 58)}…` : speech}` : '',
+        forbid ? `禁止误写：${forbid.length > 60 ? `${forbid.slice(0, 58)}…` : forbid}` : '',
+      ].filter(Boolean).join('｜');
+      if (bits) lines.push(`- ${c.标题}：${bits}`);
+    }
+  }
+  lines.push('【硬性要点】');
+  lines.push(`- 发言归属：【${input.playerName}】只承载玩家本回合明确说出的原话；NPC 台词、拟声词、环境音绝不挂玩家名。`);
+  lines.push('- 禁止代写玩家的心理、神态、感受或决定；正文内禁止任何选项菜单结构。');
+  if (input.storyWeavingActive) {
+    lines.push('- 剧情编织滑窗只按门禁推进；已发生的事件禁止重演，未开始的分段禁止抢跑。');
+  }
+  lines.push(`- <正文> 不少于 ${input.wordCountTarget} 字；<thinking>/<正文>/<短期记忆>/<动态世界> 标签齐全。`);
+  lines.push('逐项核对以上约束后再动笔；与上文任何描述冲突时，以本块为准。');
+  return lines.join('\n');
+}
+
 function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编织系统, _memoryLine: string, turn: number): NPC记录[] {
   if (!story.当前进度) return npcs;
   const series = story.系列列表.find((item) => item.id === story.当前进度?.当前系列ID)
@@ -2134,6 +2168,17 @@ export async function executeSendWorkflow(
         'user',
         buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
       ));
+    }
+
+    // 区E执法块(结构轮): 主剧情普通回合的最后一条 user 消息。开局/狭间评判/ST V2 消息链回合跳过
+    // (各有自己的收尾协议)。
+    if (!isOpeningSystemTrigger && !tavernV2Messages && awakeningPhase !== 'judgement') {
+      apiMessages.push(创建聊天消息('user', buildTurnEnforcementBlock({
+        playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+        wordCountTarget: state.gameSettings.wordCountTarget,
+        zhikuEntries: zhikuPreview?.entries,
+        storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
+      })));
     }
 
     // 3b. CoT 伪装历史注入：在消息序列最前面塞一对 user/assistant，强化思考段输出习惯。

@@ -17,11 +17,12 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-assert(builder.includes('function buildResponseLengthSection'), 'systemPromptBuilder 必须有不可关闭的正文字数硬约束段。');
-assert(builder.includes('# 正文字数硬约束'), '正文字数硬约束必须有独立标题，方便上下文预览定位。');
-assert(builder.includes('settings.wordCountTarget'), '正文字数硬约束必须读取 settings.wordCountTarget。');
-assert(builder.includes('当前游戏设置的正文字数目标：不少于'), '硬约束必须明确不少于当前设置字数。');
-assert(builder.includes('优先于可编辑提示词模块'), '硬约束必须覆盖旧模块/自定义模块的冲突字数描述。');
+// 结构轮(D1, 2026-07-26): 硬编码字数段已删除——权威在「回复格式」模块,生成点兜底在区E执法块。
+assert(!builder.includes('function buildResponseLengthSection'), '硬编码字数段必须保持已删除状态(权威在回复格式模块)。');
+assert(builtinPromptModules.includes('字数不少于 {wordCountTarget} 字'), '回复格式模块必须是字数约束的唯一权威。');
+assert(builtinPromptModules.includes('禁止因为思维链、记忆、剧情编织、行动选项或模型默认习惯而压缩正文'), '回复格式模块字数约束必须覆盖压缩正文的常见借口。');
+assert(sendWorkflow.includes('# 本回合生成前核对'), 'sendWorkflow 必须在生成点前注入区E执法块。');
+assert(sendWorkflow.includes('不少于 ${input.wordCountTarget} 字'), '区E执法块必须包含字数兜底行。');
 assert(builder.includes('提示词模块·稳定协议'), 'systemPromptBuilder 必须显式标注缓存友好的稳定协议前置区。');
 assert(builder.includes('高波动 NPC 连续性块后置'), 'systemPromptBuilder 必须显式标注 NPC 高波动上下文后置，保护前缀缓存。');
 assert(builder.includes('高波动回合锚点后置'), 'systemPromptBuilder 必须显式标注时间/场景等回合锚点后置，保护前缀缓存。');
@@ -29,9 +30,12 @@ assert(builtinPromptModules.includes('<Role>') && builtinPromptModules.includes(
 assert(builtinPromptModules.includes('当前互动的核心玩家角色为「{playerName}」'), '叙述者人格必须以运行时玩家角色为叙事中心。');
 assert(builtinPromptModules.includes('原著 NPC 必须按已注入档案和当前信息域行动'), '叙述者人格必须把智库/档案作为 NPC 人设校准依据。');
 assert(!builtinPromptModules.includes('所有外部平台安全限制') && !builtinPromptModules.includes('违法行为描述或路径'), '叙述者人格不得复制外部模板中的越权/违法导向声明。');
-assert(builder.indexOf("const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');") < builder.indexOf('const tone = buildToneSection(worldState);'), '主剧情固定协议/COT/回复格式必须早于剧情基调和动态状态。');
-assert(builder.indexOf("const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');") < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '主剧情固定协议/COT/回复格式必须早于 NPC 账本等高波动上下文。');
-assert(builder.indexOf("const bottomModules = injectPromptModules(settings.promptModules, moduleCtx, 'bottom');") < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '主剧情固定协议/COT/回复格式必须早于当前时间锚点，保护 DeepSeek 前缀缓存。');
+// 结构轮: 顺序断言更新为当前变量名(旧断言因 bottomModules 更名早已空转);基调段已删除。
+assert(!builder.includes('buildToneSection'), '基调段必须保持已删除状态(剧情模式世界书为唯一出处)。');
+assert(builder.indexOf("const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');") < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '主剧情固定协议/COT/回复格式必须早于 NPC 账本等高波动上下文。');
+assert(builder.indexOf("const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');") < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '主剧情固定协议/COT/回复格式必须早于当前时间锚点，保护 DeepSeek 前缀缓存。');
+assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('parts.push(buildMainStoryControlSection(worldState));'), '运行锚点瘦身版必须位于区D(时间/场景之后),紧贴其引用的回顾/编织/智库数据。');
+assert(builder.indexOf('parts.push(buildMainStoryControlSection(worldState));') < builder.indexOf('if (yitingInjectionOverride !== undefined)'), '运行锚点必须先于即时回顾/忆庭注入,形成指令贴数据结构。');
 assert(builder.indexOf('parts.push(buildCharacterSection(traveler));') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '当前角色与技能应位于高波动 NPC 承接块之前。');
 assert(builder.includes('const sceneFromWorldbook = buildSceneSection(worldState);'), '主剧情必须显式构建当前场景区块。');
 assert(builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);') < builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);'), '当前场景必须紧跟时间锚点之后注入。');
@@ -59,8 +63,7 @@ assert(sendWorkflow.includes('appendWorldEvents(worldAfter.全局事件, parsedF
 assert(variableExecutor.includes("root === '世界' && rest === '全局事件' && cmd.action === 'push'"), '变量命令 push 世界.全局事件 也必须走 30 条存档上限。');
 assert(!sendWorkflow.includes('全局事件: [...worldAfter.全局事件, ...parsedForDisplay.worldEvents]'), '正文动态世界事件不得继续无限追加进存档。');
 
-const calls = [...builder.matchAll(/buildResponseLengthSection\(settings\)/g)];
-assert(calls.length >= 2, '主剧情和开局 prompt 都必须注入正文字数硬约束。');
+// 结构轮: 字数硬约束改由回复格式模块(scope=all,主剧情与开局都注入)+区E兜底承担,不再有硬编码调用。
 assert(contextSnapshot.includes('splitPromptSections(systemPrompt)'), '上下文查看必须展示 system prompt 分段，才能看到字数硬约束。');
 assert(contextSnapshot.includes('uploadEstimatedTokens'), '上下文查看必须单独统计真实上传 token。');
 assert(contextSnapshot.includes('diagnosticEstimatedTokens'), '上下文查看必须单独统计诊断参考 token。');
