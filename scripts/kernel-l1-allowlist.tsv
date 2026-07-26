@@ -21,6 +21,8 @@ components/features/Settings/YitingSettingsTab.tsx	1
 components/features/Settings/ZhikuSettingsTab.tsx	1
 hooks/useGame.ts	3
 hooks/useGame/saveLoadWorkflow.ts	4
-hooks/useGame/sendWorkflow.ts	8
+hooks/useGame/sendWorkflow.ts	1
+hooks/useGame/stage10_storyZhiku.ts	2
+hooks/useGame/stage12_save.ts	5
 hooks/useGameState.ts	7
 services/ai/apiErrorReportService.ts	2

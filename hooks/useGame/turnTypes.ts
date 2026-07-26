@@ -19,7 +19,7 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 解析后回复 } from '@/models/chat';
 import type { MacroContext } from '@/utils/macroEngine';
 import { createWorkflowRecoveryJournal } from '@/services/workflowRecovery';
-type WorkflowRecoveryJournal = ReturnType<typeof createWorkflowRecoveryJournal>;
+export type WorkflowRecoveryJournal = ReturnType<typeof createWorkflowRecoveryJournal>;
 
 /** 不可变输入 + 回合生命周期工具。 */
 export interface TurnContext {
@@ -61,21 +61,17 @@ export interface TurnContext {
  */
 export interface TurnDeltas {
   // S1: 回合开始
+  recoveryJournal?: WorkflowRecoveryJournal;
   preTurnSnapshot?: 回合快照;
   userMsg?: 聊天消息;
-  purgedHistory?: 聊天消息[];
   updatedHistory?: 聊天消息[];
 
   // S2: 主模型前置
-  currentScope?: 'opening' | 'main' | 'pathAwakening';
   awakeningPhase?: 'question' | 'judgement' | undefined;
   currentTriggerType?: string;
-  worldbookCtx?: Record<string, unknown>;
   macroCtx?: MacroContext;
-  storyRecallInjection?: string;
   openingNewsPreprocessed?: boolean;
   openingNewsForSave?: 新闻条目[] | null;
-  newsForPrompt?: 新闻条目[];
   yitingPreview?: unknown;
   zhikuPreview?: unknown;
   yitingEnabled?: boolean;
@@ -84,8 +80,6 @@ export interface TurnDeltas {
   storyWeavingGate?: unknown;
   storyWeavingDiagnostics?: unknown;
   npcLedgerSelection?: NPC账本选择结果;
-  yitingRecallDiagnostics?: unknown;
-  zhikuDiagnostics?: unknown;
   recallSummaryForTurn?: string;
   recallFullContentForTurn?: string;
 
@@ -110,13 +104,12 @@ export interface TurnDeltas {
   currentPresetV2ForStage?: unknown;
 
   // S4: AI 请求 + 响应解析
+  rawFullText?: string;  // S4 产出：AI 响应原文，供 S7 天气解析用
   displayText?: string;
   parsedForDisplay?: 解析后回复 | null;
   deepSeekProtocolIssuesForTurn?: string[];
   rerollSimilarityForTurn?: number | undefined;
   rerollSimilarityRetried?: boolean;
-  streamedTextLocal?: string;
-  previewTextLocal?: string;
 
   // S5: 回复落地
   aiMsg?: 聊天消息;
@@ -136,12 +129,11 @@ export interface TurnDeltas {
 
   // S9: NPC
   npcAfterCompression?: NPC记录[];
-  npcChanged?: boolean;
 
   // S10: 剧情/智库
   storyWeavingForSave?: 剧情编织系统 | null;
-  storyWeavingConcurrentChange?: boolean;
   memoryAfterStoryProgress?: 记忆系统 | null;
+  storyProgressMemoryLine?: string;
   zhikuAfterRuntimeUnlock?: 智库系统 | null;
 
   // S11: 后台闭包
@@ -150,7 +142,4 @@ export interface TurnDeltas {
   phoneAfterFallbackSeed?: 手机系统;
   finalHistoryForSave?: 聊天消息[];
 
-  // 杂项
-  keepWorkflowHint?: boolean;
-  visibilityPublisher?: unknown;
 }

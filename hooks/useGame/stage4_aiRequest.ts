@@ -4,6 +4,12 @@
  *
  * 红线：while 循环整体移动不拆散；streamMessageSetter 在 ctx 中不新建；
  * streamedText/previewText 不进 TurnDeltas，通过返回值传递。
+ *
+ * 读 d 字段: apiMessages, systemPrompt, tavernV2Messages, deepSeekMainActive,
+ *   effectivePrefixMode, effectivePrefixContent, mainRequestMode, maxAttempts,
+ *   currentPresetV2ForStage
+ * 写 d 字段: deepSeekProtocolIssuesForTurn, rerollSimilarityForTurn,
+ *   rerollSimilarityRetried（经 Stage4Output.deltas 返回）
  */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { 创建聊天消息 } from '@/models/chat';

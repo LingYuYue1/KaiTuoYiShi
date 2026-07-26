@@ -1,6 +1,14 @@
 /**
  * 阶段 5：回复落地 —— 文本净化、AI 消息构建、历史追加、turnCount 推进。
- * 读/写清单见调用点注释。
+ * 读 d 字段: updatedHistory, userMsg, preTurnSnapshot, systemPrompt, apiMessages,
+ *   deepSeekMainActive, deepSeekLockFormat, deepSeekMainMode,
+ *   deepSeekProtocolIssuesForTurn, rerollSimilarityForTurn, rerollSimilarityRetried,
+ *   mainRequestMode, shouldTryTavernV2, tavernV2Messages, tavernV2Error,
+ *   yitingPreview, zhikuPreview, zhikuRecallEnabled, npcLedgerSelection,
+ *   storyWeavingGate, storyWeavingDiagnostics, recallSummaryForTurn,
+ *   recallFullContentForTurn
+ * 写 d 字段: aiMsg, finalHistory, parsedForDisplay, displayText,
+ *   pendingVariableStarted, recoveryJournal
  */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { 创建聊天消息, type 聊天消息 } from '@/models/chat';

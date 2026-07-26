@@ -1,6 +1,13 @@
 /**
  * 阶段 2：主模型前置 —— worldbook 上下文、忆庭/智库召回、NPC 账本、宏引擎、System Prompt 构建。
  * 返回 TurnDeltas 的子集，调用方用 Object.assign(d, await stage2_preModel(ctx, d)) 合并。
+ *
+ * 读 d 字段: updatedHistory
+ * 写 d 字段: awakeningPhase, currentTriggerType, macroCtx,
+ *   openingNewsPreprocessed, openingNewsForSave, yitingPreview, zhikuPreview,
+ *   yitingEnabled, yitingRecallEnabled, zhikuRecallEnabled, storyWeavingGate,
+ *   storyWeavingDiagnostics, npcLedgerSelection, systemPrompt, chatModuleMessages,
+ *   recallSummaryForTurn, recallFullContentForTurn
  */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import type { 新闻条目 } from '@/models/news';
@@ -177,8 +184,8 @@ export async function stage2_preModel(
   systemPrompt = systemPrompt + '\n\n' + 天气片断;
 
   return {
-    currentScope, awakeningPhase, worldbookCtx, currentTriggerType, macroCtx,
-    storyRecallInjection, openingNewsPreprocessed, openingNewsForSave, newsForPrompt,
+    awakeningPhase, currentTriggerType, macroCtx,
+    openingNewsPreprocessed, openingNewsForSave,
     yitingPreview: yitingPreview as unknown,
     zhikuPreview: zhikuPreview as unknown,
     yitingEnabled, yitingRecallEnabled, zhikuRecallEnabled,
