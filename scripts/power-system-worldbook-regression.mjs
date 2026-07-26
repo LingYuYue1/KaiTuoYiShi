@@ -1,34 +1,43 @@
 import fs from 'node:fs';
 
+// 批次5(D10, 2026-07-26): 力量体系总览由内置世界书迁移为提示词模块 builtin_rule_power_system。
+// 本回归改为守卫迁移后的形态:内容常量仍在 builtinWorldbookConfig.ts,模块定义在 builtinPromptModules.ts,
+// 旧世界书 id 必须进入清理黑名单且不再出现在内置书白名单。
+
 const source = fs.readFileSync('data/builtinWorldbookConfig.ts', 'utf8');
+const modules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
+const gameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
+const promptModel = fs.readFileSync('models/prompts.ts', 'utf8');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 assert(
-  source.includes("'builtin_power_system_overview'"),
-  'BUILTIN_BOOK_IDS must include the built-in power system worldbook.',
+  source.includes('export const POWER_SYSTEM_OVERVIEW_CONTENT = `## 力量体系总览'),
+  'Power system overview must remain a single exported content block in builtinWorldbookConfig.',
 );
 assert(
-  source.includes('const POWER_SYSTEM_OVERVIEW_CONTENT = `## 力量体系总览'),
-  'Power system overview must be a single built-in content block.',
+  !source.includes("id: 'builtin_power_system_overview_scale'") && !source.includes('powerSystemOverviewBook'),
+  'Power system overview must no longer be generated as a worldbook (migrated to prompt module).',
 );
 assert(
-  source.includes("id: 'builtin_power_system_overview'") &&
-    source.includes("title: '力量体系总览'"),
-  'Power system overview book must be created as its own built-in worldbook.',
+  modules.includes("id: 'builtin_rule_power_system'") &&
+    modules.includes('content: POWER_SYSTEM_OVERVIEW_CONTENT') &&
+    modules.includes("title: '力量体系总览'"),
+  'Power system overview must be defined as builtin prompt module builtin_rule_power_system.',
 );
 assert(
-  source.includes("id: 'builtin_power_system_overview_scale'") &&
-    source.includes('content: POWER_SYSTEM_OVERVIEW_CONTENT'),
-  'Power system overview book must contain the scale entry backed by the shared content block.',
+  /id: 'builtin_rule_power_system'[\s\S]{0,400}scope: \['main', 'pathAwakening'\]/.test(modules.replace(/\r\n/g, '\n')),
+  'Power system module must keep scope main + pathAwakening.',
 );
 assert(
-  source.includes("type: 'system_rule'") &&
-    source.includes("injectMode: 'always'") &&
-    source.includes("scope: ['main', 'pathAwakening']"),
-  'Power system overview must be an always-injected system rule for main story and path awakening.',
+  promptModel.includes("'builtin_rule_power_system'"),
+  'builtin_rule_power_system must be whitelisted in BUILTIN_PROMPT_MODULE_IDS.',
+);
+assert(
+  gameState.includes("'builtin_power_system_overview'"),
+  'Legacy power system worldbook id must be listed in REMOVED_LEGACY_WORLDBOOK_IDS for old-save cleanup.',
 );
 assert(
   source.includes('一人敌百 / 敌百 / 小型舰队 / 编队 / 城市军力') &&
@@ -46,10 +55,6 @@ assert(
     source.includes('深诣') &&
     source.includes('伪令使'),
   'Power system overview must preserve the four Pathstrider tiers.',
-);
-assert(
-  source.includes('powerSystemOverviewBook'),
-  'Power system overview book must be returned in builtin worldbook config.',
 );
 
 console.log('power system worldbook regression ok');

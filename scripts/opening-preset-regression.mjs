@@ -556,7 +556,7 @@ assert(
   builtinWorldbook.includes('开局切入说明') &&
     builtinWorldbook.includes('黑塔空间站') &&
     builtinWorldbook.includes('黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼和自由 / 创意工坊开局都可以成为当前起点') &&
-    builtinWorldbook.includes('只有黑塔空间站序章、空间站危机复盘或正文明确触发时') &&
+    builtinWorldbook.includes('只有「# 开局档案」明确显示当前开局是黑塔空间站主线苏醒前夕') &&
     !builtinWorldbook.includes('当前游戏内仅有「黑塔空间站·反物质入侵」一条线') &&
     !builtinWorldbook.includes('本作目前只做「登上星穹列车」这一条线') &&
     !builtinWorldbook.includes('开局时已抵达黑塔空间站'),

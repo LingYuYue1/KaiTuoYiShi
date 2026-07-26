@@ -25,7 +25,7 @@ import {
   getStoryMode,
 } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, PATH_CORE_BELIEFS } from '@/models/path';
-import { buildPromptLikeWorldbookInjection, buildWorldbookChatModuleMessages, buildWorldbookInjection, type FilterContext } from '@/utils/worldbook';
+import { buildPromptLikeWorldbookInjection, buildWorldbookChatModuleMessages, buildWorldbookInjection, replaceWorldbookPlaceholders, type FilterContext } from '@/utils/worldbook';
 import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
@@ -96,6 +96,7 @@ export function buildSystemPrompt(
     openingSource: worldState.开局档案?.来源,
     triggerType,
     macroCtx,
+    worldbookCtx,
   };
 
   // ── 提示词模块·顶部（order < 30：开发者模式、叙述者人格等） ──
@@ -288,6 +289,7 @@ export function buildOpeningSystemPrompt(
     openingSource: worldState.开局档案?.来源,
     triggerType,
     macroCtx,
+    worldbookCtx,
   };
 
   const topResult = injectPromptModules(effectiveModules, moduleCtx, 'top');
@@ -434,6 +436,9 @@ interface PromptModuleInjectionCtx {
   triggerType?: string;
   /** ST 预设兼容：宏变量上下文。不传=不执行宏处理（旧行为）。 */
   macroCtx?: MacroContext;
+  /** 批次5(D10)：迁移自世界书的规则模块含 {originalProtagonistSubject} 等世界书占位符,
+   *  传入时复用世界书替换管线；不传=仅做模块自有三占位符替换（旧行为）。 */
+  worldbookCtx?: FilterContext;
 }
 
 /** 非 system 角色的提示词模块消息。带元数据字段供 Phase 4 depth 注入使用。 */
@@ -565,10 +570,12 @@ function injectPromptModules(
   const systemParts: string[] = [];
   const chatMessages: ChatModuleMessage[] = [];
   for (const m of filtered) {
-    const replaced = m.content
+    const baseReplaced = m.content
       .replace(/\{wordCountTarget\}/g, String(ctx.wordCountTarget))
       .replace(/\{personLabel\}/g, ctx.personLabel)
       .replace(/\{playerName\}/g, ctx.playerName);
+    // 批次5(D10): 迁移规则模块复用世界书占位符管线({originalProtagonistSubject}/{openingArchiveText} 等)
+    const replaced = ctx.worldbookCtx ? replaceWorldbookPlaceholders(baseReplaced, ctx.worldbookCtx) : baseReplaced;
     // ST 预设兼容：宏预处理（setvar/getvar/if 等）。不传 macroCtx = 旧行为（不处理）。
     const content = ctx.macroCtx ? processMacros(replaced, ctx.macroCtx) : replaced;
     const role = m.role ?? 'system';

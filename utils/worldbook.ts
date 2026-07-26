@@ -553,7 +553,9 @@ export function buildWorldbookChatModuleMessages(
     });
 }
 
-function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
+// 批次5(2026-07-26)导出:迁移到提示词模块体系的原世界书规则条目仍含 {originalProtagonistSubject}
+// 等世界书占位符,模块注入管线(injectPromptModules)在有 worldbookCtx 时复用本函数替换。
+export function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
   const playerName = ctx.travelerName?.trim() || '无名开拓者';
   const originalProtagonistName = formatOriginalProtagonistName(ctx.originalProtagonist);
   const originalProtagonistSubject = formatOriginalProtagonistSubject(ctx.originalProtagonist);

@@ -67,6 +67,11 @@ const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
   'builtin_locations',
   'opening_core',
+  // 批次5(D10, 2026-07-26): 四本规则书整体迁移为提示词模块 builtin_rule_* 系列,清理旧存档残留
+  'builtin_opening_rule',
+  'builtin_narrative_general',
+  'builtin_forbidden_phrases',
+  'builtin_power_system_overview',
 ]);
 
 function isCalibrationWorldbook(book: 世界书): boolean {
@@ -423,7 +428,13 @@ export function useGameState(): UseGameStateReturn {
           const savedEntries = saved.entries || [];
           const entries = builtin.entries.map((entry) => {
             const savedEntry = savedEntries.find((item) => item.id === entry.id);
-            return savedEntry ? { ...savedEntry, title: entry.title } : entry;
+            if (!savedEntry) return entry;
+            // D12(2026-07-26): 源码条目声明了更高 contentVersion 时强制刷新内容,只保留用户开关。
+            // 修复"内置世界书条目内容对老用户永不更新"的漂移缺陷。
+            if ((entry.contentVersion ?? 0) > (savedEntry.contentVersion ?? 0)) {
+              return { ...entry, enabled: savedEntry.enabled };
+            }
+            return { ...savedEntry, title: entry.title };
           });
           return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
         });

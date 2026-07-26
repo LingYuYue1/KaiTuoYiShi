@@ -58,12 +58,14 @@ try {
     import(pathToFileURL(path.join(tempDir, 'utils/worldbook.mjs')).href),
   ]);
 
+  // 批次5(D10, 2026-07-26): 叙事铁律书已迁移为提示词模块 builtin_rule_narrative_general。
   const narrativeBook = createBuiltinConfigWorldbooks().find((book) => book.id === 'builtin_narrative_general');
-  assert(narrativeBook, 'The built-in main-story worldbook must exist.');
-  for (const entry of narrativeBook.entries) {
-    assert(entry.scope.includes('opening'), `${entry.title} must apply to the opening turn.`);
-    assert(entry.scope.includes('main'), `${entry.title} must continue to apply to main turns.`);
-  }
+  assert(!narrativeBook, 'The legacy main-story worldbook must be fully migrated to prompt modules.');
+  const builtinModulesSource = fs.readFileSync(path.join(root, 'data/builtinPromptModules.ts'), 'utf8').replace(/\r\n/g, '\n');
+  assert(
+    /id: 'builtin_rule_narrative_general'[\s\S]{0,600}scope: \['main', 'opening'\]/.test(builtinModulesSource),
+    'Narrative general rules must exist as a main+opening prompt module after migration.',
+  );
 
   const storyModeBooks = createStoryModeWorldbooks();
   for (const book of storyModeBooks) {

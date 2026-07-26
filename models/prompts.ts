@@ -95,6 +95,15 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_nsfw',
   'builtin_emotion_protocol',
   'builtin_cognitive_isolation',
+  // 批次5(D10, 2026-07-26): 由内置世界书迁移而来的规则模块(order 40-47,底部区最前,紧随世界书稳定规则)
+  'builtin_rule_first_turn',
+  'builtin_rule_narrative_general',
+  'builtin_rule_forbidden_phrases',
+  'builtin_rule_emotion_realism',
+  'builtin_rule_battle_narration',
+  'builtin_rule_time_progression',
+  'builtin_rule_power_system',
+  'builtin_rule_awakening_interrogation',
 ] as const;
 
 export type 内置提示词模块ID = (typeof BUILTIN_PROMPT_MODULE_IDS)[number];
