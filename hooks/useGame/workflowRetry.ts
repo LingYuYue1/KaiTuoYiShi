@@ -6,8 +6,8 @@ import type { 队列任务记录 } from '@/models/queueTask';
 import { runVariableCalibrationStep } from './variableWorkflow';
 import { regenerateNarrativeImagesForMessage } from './narrativeImageWorkflow';
 import { buildRecentTurnWindowForNews, pushQueueTask } from './workflowTaskRuntime';
-import { buildNpcLedgerUpdateDebug, type NpcLedgerUpdateDebug } from './npcLedgerWorkflow';
 import { runNewsGenerationStep } from './newsWorkflow';
+import { devLogError } from '@/utils/devLog';
 
 export function compactForRerollInstruction(text: string): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
@@ -64,7 +64,7 @@ async function retryNewsQueueTask(
     return;
   }
   const userInput = findPreviousUserInput(state.chatHistory, assistant.id);
-  const body = assistant.parsedResponse?.body?.trim() || assistant.content.trim();
+  const body = assistant.parsedResponse?.body.trim() || assistant.content.trim();
   if (!body) {
     pushQueueTask(state, 'news', 'failed', {
       detail: '当前正文为空，无法重试新闻生成。',
@@ -73,7 +73,7 @@ async function retryNewsQueueTask(
     return;
   }
   const newsSettings = state.gameSettings.新闻系统;
-  const interval = Math.max(5, Math.min(10, Math.trunc(newsSettings?.generateIntervalTurns ?? 5) || 5));
+  const interval = Math.max(5, Math.min(10, Math.trunc(newsSettings.generateIntervalTurns) || 5));
   const abortController = new AbortController();
   pushQueueTask(state, 'news', 'pending', {
     detail: mode === 'reroll' ? '正在重生成星际和平周报，本次不受回合间隔限制。' : '正在重试星际和平周报，本次不受回合间隔限制。',
@@ -85,6 +85,12 @@ async function retryNewsQueueTask(
   try {
     const result = await runNewsGenerationStep({
       state,
+      traveler: state.旅人,
+      world: state.世界,
+      news: state.新闻,
+      npcRecords: state.NPC,
+      plotNodes: state.剧情,
+      storyWeaving: state.剧情编织,
       turnCountAtStart: state.turnCount,
       mainBody: body,
       userInput,
@@ -92,6 +98,8 @@ async function retryNewsQueueTask(
       storyWeavingSnapshot: state.剧情编织,
       signal: abortController.signal,
     });
+    // 投影点（B2-c）：原 newsWorkflow 内部 setter 的等价复刻
+    if (result?.changed) state.set新闻(result.news);
     pushQueueTask(state, 'news', result ? 'success' : 'failed', {
       detail: result
         ? result.changed
@@ -103,6 +111,11 @@ async function retryNewsQueueTask(
       targetMessageId: assistant.id,
     });
   } catch (err) {
+    devLogError('retry', 'retryNewsQueueTask.catch', err, {
+      taskId: task.id,
+      mode,
+      turn: task.turn,
+    });
     pushQueueTask(state, 'news', 'failed', {
       detail: `星际和平周报重试失败：${(err as Error).message}`,
       turn: Number(assistant.gameTime) || task.turn || state.turnCount,
@@ -143,7 +156,7 @@ async function retryVariableQueueTask(
     });
     return;
   }
-  const body = assistant.parsedResponse?.body?.trim() || assistant.content.trim();
+  const body = assistant.parsedResponse?.body.trim() || assistant.content.trim();
   if (!body) {
     pushQueueTask(state, 'variable', 'failed', {
       detail: '当前正文为空，无法重试变量结算。',
@@ -228,7 +241,7 @@ function findRetryableVariableBatch(batches: 变量命令批次[], targetBatchId
 function normalizeRerollCompareText(text: string): string {
   return text
     .replace(/<[^>]+>/g, '')
-    .replace(/[【】「」『』“”"'‘’（）()\[\]{}<>《》,，.。!！?？:：;；、\s]/g, '')
+    .replace(/[【】「」『』“”"'‘’（）()\u005B\u005D{}<>《》,，.。!！?？:：;；、\s]/g, '')
     .toLowerCase()
     .slice(0, 6000);
 }

@@ -764,11 +764,6 @@
       "count": 7
     }
   },
-  "hooks/useGame/newsWorkflow.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 11
-    }
-  },
   "hooks/useGame/npcPresence.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 5
@@ -816,55 +811,6 @@
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 3
-    }
-  },
-  "hooks/useGame/stage11_backgroundJobs.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 15
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-plus-operands": {
-      "count": 1
-    },
-    "no-useless-assignment": {
-      "count": 2
-    }
-  },
-  "hooks/useGame/stage2_preModel.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 34
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
-      "count": 2
     }
   },
   "hooks/useGame/stage3_promptAssembly.ts": {
@@ -1053,17 +999,6 @@
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 8
-    }
-  },
-  "hooks/useGame/workflowRetry.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    },
-    "no-useless-escape": {
-      "count": 1
     }
   },
   "hooks/useGame/workflowTaskRuntime.ts": {

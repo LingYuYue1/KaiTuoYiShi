@@ -4,9 +4,16 @@ import type { 新闻条目 } from '@/models/news';
 import type { API配置项 } from '@/models/settings';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化世界状态 } from '@/models/world';
+import { devLog, devLogError } from '@/utils/devLog';
 
 interface NewsGenerationParams {
   state: UseGameStateReturn;
+  traveler: UseGameStateReturn['旅人'];
+  world: UseGameStateReturn['世界'];
+  news: UseGameStateReturn['新闻'];
+  npcRecords: UseGameStateReturn['NPC'];
+  plotNodes: UseGameStateReturn['剧情'];
+  storyWeaving: 剧情编织系统;
   turnCountAtStart: number;
   mainBody: string;
   userInput: string;
@@ -16,6 +23,10 @@ interface NewsGenerationParams {
   shouldCommit?: () => boolean;
 }
 
+type RuntimeNewsApiOverride = Omit<UseGameStateReturn['gameSettings']['新闻系统']['api'], 'provider'> & {
+  provider: UseGameStateReturn['gameSettings']['新闻系统']['api']['provider'] | '';
+};
+
 export interface NewsGenerationStepResult {
   news: 新闻条目[];
   changed: boolean;
@@ -24,12 +35,12 @@ export interface NewsGenerationStepResult {
 
 export async function runNewsGenerationStep(params: NewsGenerationParams): Promise<NewsGenerationStepResult | null> {
   const { state } = params;
-  const newsSettings = state.gameSettings.新闻系统;
+  const newsSettings = state.gameSettings.新闻系统 as typeof state.gameSettings.新闻系统 | undefined;
   if (!newsSettings?.enabled || !newsSettings.autoGenerate) return null;
 
-  const api = newsSettings.api;
+  const api = newsSettings.api as RuntimeNewsApiOverride;
   const mainConfig = state.apiSettings.configs.find((c) => c.id === state.apiSettings.activeConfigId)
-    ?? state.apiSettings.configs[0];
+    ?? state.apiSettings.configs.at(0);
   if (!mainConfig && (!api.baseUrl.trim() || !api.apiKey.trim() || !api.model.trim())) return null;
 
   const config: API配置项 = {
@@ -48,30 +59,37 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
   };
 
   try {
+    const requestStartedAt = Date.now();
+    devLog('net', 'runNewsGenerationStep.request', {
+      model: config.model,
+      mode: 'generation',
+      turn: params.turnCountAtStart + 1,
+    });
     const result = await callNewsModel({
       config,
       turnCount: params.turnCountAtStart + 1,
       userInput: params.userInput,
       body: params.mainBody,
       recentTurns: params.recentTurns,
-      traveler: state.旅人,
-      world: 归一化世界状态(state.世界),
-      news: state.新闻,
-      npcRecords: state.NPC,
-      plotNodes: state.剧情,
-      storyWeaving: params.storyWeavingSnapshot ?? state.剧情编织,
+      traveler: params.traveler,
+      world: 归一化世界状态(params.world),
+      news: params.news,
+      npcRecords: params.npcRecords,
+      plotNodes: params.plotNodes,
+      storyWeaving: params.storyWeavingSnapshot ?? params.storyWeaving,
       maxNewEntriesPerTurn: newsSettings.maxNewEntriesPerTurn,
       promptModules: state.gameSettings.promptModules,
       signal: params.signal,
       retryCount: newsSettings.api.retryCount ?? 2,
     });
+    devLog('net', 'runNewsGenerationStep.response', {
+      durationMs: Date.now() - requestStartedAt,
+      ok: true,
+    });
 
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
-    const nextNews = applyNewsGenerationResult(state.新闻, result.parsed);
-    const changed = hasNewsGenerationChanges(result.parsed) && !areNewsListsEquivalent(state.新闻, nextNews);
-    if (changed && !params.signal?.aborted && params.shouldCommit?.() !== false) {
-      state.set新闻(nextNews);
-    }
+    const nextNews = applyNewsGenerationResult(params.news, result.parsed);
+    const changed = hasNewsGenerationChanges(result.parsed) && !areNewsListsEquivalent(params.news, nextNews);
     return {
       news: nextNews,
       changed,
@@ -79,7 +97,11 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
     };
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {
-      console.warn('[news-model] 生成失败：', err);
+      devLogError('net', 'runNewsGenerationStep.catch', err, {
+        source: 'news-model',
+        message: '生成失败',
+        turn: params.turnCountAtStart + 1,
+      });
     }
     return null;
   }

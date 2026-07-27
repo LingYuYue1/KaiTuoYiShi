@@ -22,9 +22,13 @@
  *   phoneAfterFallbackSeed, finalHistoryForSave
  */
 import type { TurnContext, TurnDeltas } from './turnTypes';
+import type { 聊天消息 } from '@/models/chat';
 import type { 新闻条目 } from '@/models/news';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 手机系统 } from '@/models/phone';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
+import type { 记忆系统设置, 星际和平周报设置, 文生图系统设置 } from '@/models/settings';
+import type { YitingArchiveSource } from '@/services/yitingArchive';
 import { runNewsGenerationStep } from './newsWorkflow';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { buildFallbackPhoneSeed } from './phoneWorkflow';
@@ -32,19 +36,30 @@ import { resolveNarrativeImageTokenizerConfig, resolveNarrativeImageGenerationAp
 import { buildRecentTurnWindowForNews, mergeYitingSystems, pushQueueTask } from './workflowTaskRuntime';
 import { upsertRecallEntry } from './memoryUtils';
 import { 创建默认记忆系统设置 } from '@/models/settings';
+import { devLog } from '@/utils/devLog';
 
 // ---- 参数/结果类型 ----
 
+interface YitingPreviewForBackground {
+  entries: unknown[];
+  usedModel: boolean;
+}
+
+interface VariableOverridesForBackground {
+  忆庭?: 忆庭系统;
+  手机?: 手机系统;
+}
+
 interface NewsJobParams {
-  newsSettings: any;
+  newsSettings: 星际和平周报设置 | undefined;
   shouldRunNews: boolean;
   newsInterval: number;
   shouldRunOpeningNews: boolean;
   state: TurnContext['state'];
   displayText: string;
   userInput: string;
-  finalHistory: any[];
-  storyWeavingForSave: any;
+  finalHistory: 聊天消息[];
+  storyWeavingForSave: 剧情编织系统;
   abortController: AbortController;
   isCurrentWorkflow: () => boolean;
   assertWorkflowActive: () => void;
@@ -54,13 +69,13 @@ interface NewsJobParams {
 interface NewsJobResult { newsAfterGeneration: 新闻条目[] | null; }
 
 interface YitingJobParams {
-  turnRecallSource: Record<string, unknown>;
-  memorySettings: any;
+  turnRecallSource: YitingArchiveSource;
+  memorySettings: 记忆系统设置;
   config: TurnContext['config'];
   abortController: AbortController;
   state: TurnContext['state'];
   yitingBase: 忆庭系统;
-  yitingPreview: any;
+  yitingPreview: YitingPreviewForBackground | null;
   yitingEnabled: boolean;
   yitingRecallEnabled: boolean;
   assertWorkflowActive: () => void;
@@ -72,7 +87,7 @@ interface YitingJobResult { yitingAfterTurnRecall: 忆庭系统; }
 interface PhoneJobParams {
   state: TurnContext['state'];
   phoneAfterFallbackSeed: 手机系统;
-  npcAfterCompression: any;
+  npcAfterCompression: NonNullable<TurnDeltas['npcAfterCompression']>;
   userInput: string;
   displayText: string;
   turnCountAtStart: number;
@@ -82,21 +97,21 @@ interface PhoneJobResult { phoneAfterFallbackSeed: 手机系统; }
 
 interface NarrativeJobParams {
   state: TurnContext['state'];
-  aiMsg: any;
+  aiMsg: 聊天消息;
   displayText: string;
   config: TurnContext['config'];
   abortController: AbortController;
-  finalHistory: any[];
+  finalHistory: 聊天消息[];
   assertWorkflowActive: () => void;
   turnCountAtStart: number;
   queueTasksMirror: TurnContext['queueTasksMirror'];
 }
-interface NarrativeJobResult { finalHistoryForSave: any[]; }
+interface NarrativeJobResult { finalHistoryForSave: 聊天消息[]; }
 
 // ---- 四个参数化闭包（函数体逻辑一字不改）----
 
 async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
-  if (!p.newsSettings?.enabled || !p.newsSettings?.autoGenerate) {
+  if (!p.newsSettings?.enabled || !p.newsSettings.autoGenerate) {
     pushQueueTask(p.state, 'news', 'skipped', {
       detail: '星际和平周报未开启，已跳过。',
     }, p.turnCountAtStart, p.queueTasksMirror);
@@ -116,6 +131,12 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
   }, p.turnCountAtStart, p.queueTasksMirror);
   const newsGenerationResult = await runNewsGenerationStep({
     state: p.state,
+    traveler: p.state.旅人,
+    world: p.state.世界,
+    news: p.state.新闻,
+    npcRecords: p.state.NPC,
+    plotNodes: p.state.剧情,
+    storyWeaving: p.state.剧情编织,
     turnCountAtStart: p.turnCountAtStart,
     mainBody: p.displayText,
     userInput: p.userInput,
@@ -124,6 +145,8 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
     signal: p.abortController.signal,
     shouldCommit: p.isCurrentWorkflow,
   });
+  // 投影点（B2-c）：原 newsWorkflow 内部 setter 的等价复刻
+  if (newsGenerationResult?.changed) p.state.set新闻(newsGenerationResult.news);
   p.assertWorkflowActive();
   const newsAfterGeneration = newsGenerationResult?.news ?? p.state.新闻;
   pushQueueTask(p.state, 'news', 'success', {
@@ -139,7 +162,7 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
 async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult> {
   // 忆庭入库始终执行；这里的开关只控制"是否召回并注入正文"。
   const turnRecallEntryResult = await buildYitingArchiveEntry(
-    p.turnRecallSource as any,
+    p.turnRecallSource,
     p.memorySettings,
     p.config,
     p.abortController.signal,
@@ -158,7 +181,7 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
     }, p.turnCountAtStart, p.queueTasksMirror);
   } else if (!p.yitingRecallEnabled) {
     pushQueueTask(p.state, 'yiting', 'skipped', {
-      detail: `未到第${(p.memorySettings.忆庭召回最早触发回合 ?? 10) + 1}回合，忆庭召回已跳过。`,
+      detail: `未到第${p.memorySettings.忆庭召回最早触发回合 + 1}回合，忆庭召回已跳过。`,
     }, p.turnCountAtStart, p.queueTasksMirror);
   } else if (p.yitingPreview?.entries.length) {
     pushQueueTask(p.state, 'yiting', 'success', {
@@ -172,7 +195,7 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
   return { yitingAfterTurnRecall };
 }
 
-async function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
+function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
   let phone = p.phoneAfterFallbackSeed;
   if (p.state.gameSettings.手机系统.enabled && p.state.gameSettings.手机系统.autoGenerateSeeds) {
     const fallbackSeed = buildFallbackPhoneSeed({
@@ -195,12 +218,13 @@ async function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
       }, p.turnCountAtStart, p.queueTasksMirror);
     }
   }
-  return { phoneAfterFallbackSeed: phone };
+  return Promise.resolve({ phoneAfterFallbackSeed: phone });
 }
 
 async function runNarrativeImageJob(p: NarrativeJobParams): Promise<NarrativeJobResult> {
   let fh = p.finalHistory;
-  const 正文生图设置 = p.state.gameSettings.文生图系统?.正文生图;
+  const 文生图系统 = p.state.gameSettings.文生图系统 as 文生图系统设置 | undefined;
+  const 正文生图设置 = 文生图系统?.正文生图;
   if (!正文生图设置?.enabled || 正文生图设置.mode !== 'auto') return { finalHistoryForSave: fh };
   const targetMessageId = p.aiMsg.id;
   const tokenizerConfig = resolveNarrativeImageTokenizerConfig(p.state, p.config);
@@ -249,26 +273,27 @@ export async function stage11_backgroundJobs(
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
   const { state, userInput, effectiveWorld, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart, queueTasksMirror } = ctx;
-  const displayText = d.displayText!;
-  const finalHistory = d.finalHistory!;
-  const npcAfterCompression = (d as any).npcAfterCompression as typeof state.NPC;
-  const yitingWithCompression = d.yitingWithCompression!;
-  const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
-  const storyWeavingForSave = (d as any).storyWeavingForSave as typeof state.剧情编织;
-  const aiMsg = d.aiMsg!;
-  const parsedForDisplay = d.parsedForDisplay!;
-  const openingNewsPreprocessed = d.openingNewsPreprocessed!;
-  const openingNewsForSave = d.openingNewsForSave!;
-  const yitingPreview = d.yitingPreview as any;
-  const yitingEnabled = d.yitingEnabled!;
-  const yitingRecallEnabled = d.yitingRecallEnabled!;
-  const storyProgressMemoryLine = (d as any).storyProgressMemoryLine as string;
+  devLog('stage', 'stage11_backgroundJobs.enter', { turn: turnCountAtStart });
+  const displayText = d.displayText as string;
+  const finalHistory = d.finalHistory as 聊天消息[];
+  const npcAfterCompression = d.npcAfterCompression as NonNullable<TurnDeltas['npcAfterCompression']>;
+  const yitingWithCompression = d.yitingWithCompression as 忆庭系统;
+  const variableOverrides = d.variableOverrides as VariableOverridesForBackground | null | undefined;
+  const storyWeavingForSave = d.storyWeavingForSave ?? state.剧情编织;
+  const aiMsg = d.aiMsg as 聊天消息;
+  const parsedForDisplay = d.parsedForDisplay as NonNullable<TurnDeltas['parsedForDisplay']>;
+  const openingNewsPreprocessed = d.openingNewsPreprocessed ?? false;
+  const openingNewsForSave = d.openingNewsForSave ?? null;
+  const yitingPreview = d.yitingPreview as YitingPreviewForBackground | null | undefined;
+  const yitingEnabled = d.yitingEnabled ?? false;
+  const yitingRecallEnabled = d.yitingRecallEnabled ?? false;
+  const storyProgressMemoryLine = d.storyProgressMemoryLine ?? '';
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
-  const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
+  const memorySettings = (state.gameSettings.记忆系统 as 记忆系统设置 | undefined) ?? 创建默认记忆系统设置();
 
   // 阶段 11 前置计算
-  const newsSettings = state.gameSettings.新闻系统;
-  const newsEnabled = Boolean(newsSettings?.enabled && newsSettings?.autoGenerate);
+  const newsSettings = state.gameSettings.新闻系统 as 星际和平周报设置 | undefined;
+  const newsEnabled = Boolean(newsSettings?.enabled && newsSettings.autoGenerate);
   const newsInterval = Math.max(5, Math.min(10, Math.trunc(newsSettings?.generateIntervalTurns ?? 5) || 5));
   const newsTurn = turnCountAtStart + 1;
   const shouldRunOpeningNews = isOpeningSystemTrigger && newsEnabled;
@@ -283,50 +308,51 @@ export async function stage11_backgroundJobs(
       ? [...parsedForDisplay.worldEvents, storyProgressMemoryLine]
       : parsedForDisplay.worldEvents,
     actionOptions: parsedForDisplay.actionOptions,
-    gameTime: effectiveWorld?.当前日期 || undefined,
-    gameClock: effectiveWorld?.当前时间 || undefined,
-    location: effectiveWorld?.当前地点 || undefined,
+    gameTime: effectiveWorld.当前日期 || undefined,
+    gameClock: effectiveWorld.当前时间 || undefined,
+    location: effectiveWorld.当前地点 || undefined,
   };
 
-  // 初始值
-  let newsAfterGeneration: 新闻条目[] | null = openingNewsForSave as 新闻条目[] | null;
-  let yitingAfterTurnRecall = yitingBase;
-  let phoneAfterFallbackSeed = variableOverrides?.手机 ?? state.手机;
-  let finalHistoryForSave = finalHistory;
+  const phoneAfterFallbackSeedBase = variableOverrides?.手机 ?? state.手机;
 
   // 四个参数化任务
   const newsParams: NewsJobParams = {
     newsSettings, shouldRunNews, newsInterval, shouldRunOpeningNews,
-    state, displayText: displayText!, userInput, finalHistory,
+    state, displayText, userInput, finalHistory,
     storyWeavingForSave, abortController, isCurrentWorkflow, assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
   const yitingParams: YitingJobParams = {
     turnRecallSource, memorySettings, config, abortController, state,
-    yitingBase, yitingPreview, yitingEnabled: Boolean(yitingEnabled),
-    yitingRecallEnabled: Boolean(yitingRecallEnabled), assertWorkflowActive, turnCountAtStart, queueTasksMirror,
+    yitingBase, yitingPreview: yitingPreview ?? null, yitingEnabled,
+    yitingRecallEnabled, assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
   const phoneParams: PhoneJobParams = {
-    state, phoneAfterFallbackSeed, npcAfterCompression, userInput, displayText: displayText!, turnCountAtStart, queueTasksMirror,
+    state, phoneAfterFallbackSeed: phoneAfterFallbackSeedBase, npcAfterCompression, userInput, displayText, turnCountAtStart, queueTasksMirror,
   };
   const narrativeParams: NarrativeJobParams = {
-    state, aiMsg, displayText: displayText!, config, abortController, finalHistory,
+    state, aiMsg, displayText, config, abortController, finalHistory,
     assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
 
-  if ((state.gameSettings.backgroundTaskMode ?? 'sequential') === 'parallel') {
+  const backgroundTaskMode = state.gameSettings.backgroundTaskMode as TurnContext['state']['gameSettings']['backgroundTaskMode'] | undefined;
+  let newsAfterGeneration: 新闻条目[] | null;
+  let yitingAfterTurnRecall: 忆庭系统;
+  let phoneAfterFallbackSeed: 手机系统;
+  let finalHistoryForSave: 聊天消息[];
+  if ((backgroundTaskMode ?? 'sequential') === 'parallel') {
     const [newsRes, yitingRes, phoneRes, narrativeRes] = await Promise.all([
       runNewsBackgroundJob(newsParams),
       runYitingArchiveJob(yitingParams),
       runPhoneFallbackJob(phoneParams),
       runNarrativeImageJob(narrativeParams),
     ]);
-    newsAfterGeneration = newsRes.newsAfterGeneration ?? newsAfterGeneration;
+    newsAfterGeneration = newsRes.newsAfterGeneration ?? openingNewsForSave;
     yitingAfterTurnRecall = yitingRes.yitingAfterTurnRecall;
     phoneAfterFallbackSeed = phoneRes.phoneAfterFallbackSeed;
     finalHistoryForSave = narrativeRes.finalHistoryForSave;
   } else {
     const newsRes = await runNewsBackgroundJob(newsParams);
-    newsAfterGeneration = newsRes.newsAfterGeneration ?? newsAfterGeneration;
+    newsAfterGeneration = newsRes.newsAfterGeneration ?? openingNewsForSave;
     const yitingRes = await runYitingArchiveJob(yitingParams);
     yitingAfterTurnRecall = yitingRes.yitingAfterTurnRecall;
     const phoneRes = await runPhoneFallbackJob(phoneParams);
@@ -335,6 +361,10 @@ export async function stage11_backgroundJobs(
     finalHistoryForSave = narrativeRes.finalHistoryForSave;
   }
 
+  devLog('stage', 'stage11_backgroundJobs.exit', {
+    turn: turnCountAtStart,
+    outputs: ['newsAfterGeneration', 'yitingAfterTurnRecall', 'phoneAfterFallbackSeed', 'finalHistoryForSave'],
+  });
   return {
     newsAfterGeneration,
     yitingAfterTurnRecall,
