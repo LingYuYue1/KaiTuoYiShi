@@ -68,6 +68,7 @@ export function pushQueueTask(
     cancellable: patch?.cancellable,
     cancelled: patch?.cancelled,
   };
+  // 投影点（B2 定性，S32）：处理队列即时刷新；管线与存档只认 ctx/d，不回读此 state
   state.setQueueTasks((prev) => [...prev.slice(-24), task]);
   if (queueTasksMirror) {
     queueTasksMirror.splice(0, Math.max(0, queueTasksMirror.length - 24));

@@ -259,6 +259,7 @@ export async function runVariableCalibrationStep(
       rawText,
     };
     if (params.shouldCommit?.() === false) return null;
+    // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
     state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
 
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
@@ -272,6 +273,7 @@ export async function runVariableCalibrationStep(
     // 一次性提交所有切片到 React state。传 stateSnapshot 作 initialState,
     // commitVariableState 内部用引用相等过滤——变量模型没改的 root 不会 setState,
     // 避免覆盖玩家在校准这几秒里在 UI 上做的交互(比如点了「踏入命途狭间」)。
+    // 投影点（B2 定性，S13–S21）：变量切片即时刷新各面板；管线与存档只认 ctx/d，不回读此 state
     commitVariableState(nextState, stateSnapshot, {
       set旅人: state.set旅人,
       set世界: state.set世界,
@@ -306,6 +308,7 @@ export async function runVariableCalibrationStep(
       }],
       rawText: err instanceof Error ? err.message : String(err ?? '变量模型调用失败'),
     };
+    // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
     state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
     return {
       batch,

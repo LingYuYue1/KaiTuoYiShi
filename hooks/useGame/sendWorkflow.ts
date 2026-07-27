@@ -67,6 +67,7 @@ export async function executeSendWorkflow(
   let effectiveWorld: typeof state.世界 = state.世界;
   if (isAwakeningEnterTrigger && state.世界.待触发狭间) {
     effectiveWorld = 踏入命途狭间(state.世界);
+    // 投影点（B2 定性，S01）：踏入狭间即时可见；管线与存档只认 ctx/d，不回读此 state
     state.set世界(effectiveWorld);
   }
   const awakeningPathId = isAwakeningEnterTrigger ? effectiveWorld.进行中狭间 : undefined;
@@ -198,6 +199,7 @@ export async function executeSendWorkflow(
     streamedText = '';
 
     // 一次性 commit
+    // 投影点（B2 定性，S09/S10）：顶部世界栏/左侧旅人即时刷新；管线与存档只认 ctx/d，不回读此 state
     if (worldAfter !== ctx.worldAtStart) state.set世界(worldAfter);
     if (travelerAfter !== ctx.travelerAtStart) state.set旅人(travelerAfter);
 
@@ -232,6 +234,7 @@ export async function executeSendWorkflow(
     const yitingAfterTurnRecall = d.yitingAfterTurnRecall;
     const phoneAfterFallbackSeed = d.phoneAfterFallbackSeed;
 
+    // 投影点（B2 定性，S08/S25/S28/S29）：B1 定型的统一回合末投影；管线与存档只认 ctx/d，不回读此 state
     if (memoryAfterStoryProgress) state.set记忆(memoryAfterStoryProgress);
     if (yitingAfterTurnRecall) state.set忆庭(yitingAfterTurnRecall);
     if (phoneAfterFallbackSeed) state.set手机(phoneAfterFallbackSeed);

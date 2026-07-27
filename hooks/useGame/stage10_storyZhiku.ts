@@ -79,6 +79,7 @@ export async function stage10_storyZhiku(
     storyWeavingForSave = resolvedStory.system;
     storyWeavingConcurrentChange = resolvedStory.concurrentChange;
     if (!storyWeavingConcurrentChange) {
+      // 投影点（B2 定性，S24）：章节摘要/剧情面板即时刷新；管线与存档只认 ctx/d，不回读此 state
       state.set剧情编织(storyWeavingForSave);
       await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(storyWeavingForSave));
     } else {
@@ -97,6 +98,7 @@ export async function stage10_storyZhiku(
       );
       if (npcAfterStoryProgress !== npcAfterCompression) {
         npcAfterCompression = npcAfterStoryProgress;
+        // 投影点（B2 定性，S26）：聊天 NPC/伙伴面板即时刷新；管线与存档只认 ctx/d，不回读此 state
         state.setNPC(npcAfterCompression);
       }
     }
@@ -110,6 +112,7 @@ export async function stage10_storyZhiku(
     if (zhikuUnlock.changed) {
       assertWorkflowActive();
       zhikuAfterRuntimeUnlock = zhikuUnlock.system;
+      // 投影点（B2 定性，S27）：智库面板即时刷新；管线与存档只认 ctx/d，不回读此 state
       state.set智库(zhikuAfterRuntimeUnlock);
       await saveSetting('zhikuSystem', buildPersistedZhikuSystem(zhikuAfterRuntimeUnlock));
       assertWorkflowActive();
