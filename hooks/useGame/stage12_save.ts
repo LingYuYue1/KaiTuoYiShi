@@ -23,6 +23,7 @@ import {
 import { buildSavePayload, commitActiveSaveTreeMeta } from './saveLoadWorkflow';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { pushQueueTask } from './workflowTaskRuntime';
+import { devLog } from '@/utils/devLog';
 
 type VariableOverridesForSave = {
   batch?: import('@/models/variableCommand').变量命令批次;
@@ -61,6 +62,7 @@ export async function stage12_save(
   const storyWeavingForSave = d.storyWeavingForSave as typeof state.剧情编织;
   const zhikuAfterRuntimeUnlock = d.zhikuAfterRuntimeUnlock as typeof state.智库;
   let recoveryJournal = ctx.recoveryJournal;
+  devLog('stage', 'stage12_save.enter', { turn: turnCountAtStart });
 
   // 10. Auto-save —— 每回合只在后台队列收尾写一次，避免正文/变量阶段重复生成多条自动存档。
   if (state.gameSettings.enableAutoSaveEveryTurn) {
@@ -97,9 +99,14 @@ export async function stage12_save(
 
   await saveSetting('theme', state.currentTheme);
   await saveSetting('apiSettings', state.apiSettings);
-  await saveSetting('gameSettings', state.gameSettings);
+  await saveSetting('gameSettings', {
+    ...state.gameSettings,
+    macroGlobalVars: d.macroGlobalVarsAfterTurn ?? state.gameSettings.macroGlobalVars,
+    worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? state.gameSettings.worldbookTriggerStates,
+  });
   await saveSetting('worldbooks', state.worldbooks);
   await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
 
+  devLog('stage', 'stage12_save.exit', { turn: turnCountAtStart, outputs: [] });
   return {};
 }

@@ -796,23 +796,6 @@
       "count": 11
     }
   },
-  "hooks/useGame/stage10_storyZhiku.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
   "hooks/useGame/stage3_promptAssembly.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6

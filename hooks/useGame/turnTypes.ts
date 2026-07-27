@@ -41,6 +41,10 @@ export interface TurnContext {
   awakeningInstruction: string;
   openingInstruction: string;
   effectiveWorld: 世界状态;
+  worldAtStart: 世界状态;
+  travelerAtStart: 角色数据结构;
+  zhikuAtStart: 智库系统;
+  phoneAtStart: 手机系统;
   turnCountAtStart: number;
   variableBatchesAtStart: UseGameStateReturn['variableBatches'];
   queueTasksMirror: UseGameStateReturn['queueTasks'];
@@ -74,6 +78,8 @@ export interface TurnDeltas {
   awakeningPhase?: 'question' | 'judgement' | undefined;
   currentTriggerType?: string;
   macroCtx?: MacroContext;
+  macroGlobalVarsAfterTurn?: Record<string, string>;
+  worldbookTriggerStatesAfterTurn?: Record<string, number>;
   openingNewsPreprocessed?: boolean;
   openingNewsForSave?: 新闻条目[] | null;
   yitingPreview?: unknown;

@@ -193,12 +193,15 @@ export async function stage2_preModel(
     ? buildOpeningSystemPrompt(state.旅人, effectiveWorld, state.gameSettings, state.turnCount, state.worldbooks, worldbookCtx, newsForPrompt, currentTriggerType, macroCtx)
     : buildSystemPrompt(state.旅人, effectiveWorld, state.记忆, state.gameSettings, state.turnCount, state.worldbooks, worldbookCtx, state.NPC, state.新闻, state.剧情, state.剧情编织, state.智库, state.忆庭, state.手机, awakeningPhase, storyRecallInjection || (yitingRecallEnabled ? '' : undefined), zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined, Boolean(yitingPreview?.injection), npcLedgerSelection, currentTriggerType, macroCtx);
 
-  if (Object.keys(macroCtx.global).length !== Object.keys(prevGlobalSnapshot).length || Object.entries(macroCtx.global).some(([k, v]) => prevGlobalSnapshot[k] !== v)) {
+  const macroGlobalVarsChanged = Object.keys(macroCtx.global).length !== Object.keys(prevGlobalSnapshot).length || Object.entries(macroCtx.global).some(([k, v]) => prevGlobalSnapshot[k] !== v);
+  if (macroGlobalVarsChanged) {
+    // 投影点（B2 定性）：刷新订阅 gameSettings 的 UI；存档组装只认 d，不回读此 state
     state.setGameSettings((prev) => ({ ...prev, macroGlobalVars: { ...macroCtx.global } }));
   }
 
   const nextTriggerStates = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
   if (nextTriggerStates !== state.gameSettings.worldbookTriggerStates) {
+    // 投影点（B2 定性）：刷新订阅 gameSettings 的 UI；存档组装只认 d，不回读此 state
     state.setGameSettings((prev) => ({ ...prev, worldbookTriggerStates: nextTriggerStates }));
   }
 
@@ -209,10 +212,12 @@ export async function stage2_preModel(
 
   devLog('stage', 'stage2_preModel.exit', {
     turn: turnCountAtStart,
-    outputs: ['awakeningPhase', 'currentTriggerType', 'macroCtx', 'openingNewsPreprocessed', 'openingNewsForSave', 'yitingPreview', 'zhikuPreview', 'yitingEnabled', 'yitingRecallEnabled', 'zhikuRecallEnabled', 'storyWeavingGate', 'storyWeavingDiagnostics', 'npcLedgerSelection', 'systemPrompt', 'chatModuleMessages', 'recallSummaryForTurn', 'recallFullContentForTurn'],
+    outputs: ['awakeningPhase', 'currentTriggerType', 'macroCtx', 'macroGlobalVarsAfterTurn', 'worldbookTriggerStatesAfterTurn', 'openingNewsPreprocessed', 'openingNewsForSave', 'yitingPreview', 'zhikuPreview', 'yitingEnabled', 'yitingRecallEnabled', 'zhikuRecallEnabled', 'storyWeavingGate', 'storyWeavingDiagnostics', 'npcLedgerSelection', 'systemPrompt', 'chatModuleMessages', 'recallSummaryForTurn', 'recallFullContentForTurn'],
   });
   return {
     awakeningPhase, currentTriggerType, macroCtx,
+    macroGlobalVarsAfterTurn: macroGlobalVarsChanged ? { ...macroCtx.global } : undefined,
+    worldbookTriggerStatesAfterTurn: nextTriggerStates ?? undefined,
     openingNewsPreprocessed, openingNewsForSave,
     yitingPreview: yitingPreview as unknown,
     zhikuPreview: zhikuPreview as unknown,

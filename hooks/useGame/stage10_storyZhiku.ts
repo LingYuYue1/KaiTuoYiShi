@@ -23,23 +23,34 @@ import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { addImmediateMemory } from './memoryUtils';
 import { saveSetting } from '@/services/dbService';
 import { pushQueueTask } from './workflowTaskRuntime';
+import { devLog } from '@/utils/devLog';
+import type { 记忆系统 } from '@/models/memory';
+import type { 世界状态 } from '@/models/world';
+import type { NPC记录 } from '@/models/npc';
+import type { 剧情编织门禁快照 } from '@/services/storyWeaving';
 import {
   applyStoryProgressNpcMemory,
   buildStoryProgressMemoryLine,
   resolveStoryWeavingForBackgroundWrite,
 } from './storyWeavingWorkflow';
 
+type VariableOverridesForStoryZhiku = {
+  记忆?: 记忆系统;
+  世界?: 世界状态;
+};
+
 export async function stage10_storyZhiku(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, effectiveWorld, assertWorkflowActive, turnCountAtStart, queueTasksMirror } = ctx;
-  const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
-  const displayText = d.displayText!;
-  const worldAfter = (d as any).worldAfter as typeof state.世界 | undefined;
-  const storyWeavingGate = d.storyWeavingGate as any;
-  let npcAfterCompression = (d as any).npcAfterCompression as typeof state.NPC;
-  const mem = d.mem!;
+  const { state, userInput, effectiveWorld, assertWorkflowActive, turnCountAtStart, queueTasksMirror, zhikuAtStart } = ctx;
+  devLog('stage', 'stage10_storyZhiku.enter', { turn: turnCountAtStart });
+  const variableOverrides = d.variableOverrides as VariableOverridesForStoryZhiku | null | undefined;
+  const displayText = d.displayText as string;
+  const worldAfter = d.worldAfter;
+  const storyWeavingGate = d.storyWeavingGate as 剧情编织门禁快照 | undefined;
+  let npcAfterCompression = d.npcAfterCompression as NPC记录[];
+  const mem = d.mem as 记忆系统;
 
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
 
@@ -90,10 +101,10 @@ export async function stage10_storyZhiku(
       }
     }
   }
-  let zhikuAfterRuntimeUnlock = state.智库;
+  let zhikuAfterRuntimeUnlock = zhikuAtStart;
   if (storyAlignment.progressed && !storyWeavingConcurrentChange) {
     const zhikuUnlock = applyStoryArchiveZhikuRuntimeUnlock({
-      zhiku: state.智库,
+      zhiku: zhikuAtStart,
       storyWeaving: storyWeavingForSave,
     });
     if (zhikuUnlock.changed) {
@@ -108,6 +119,10 @@ export async function stage10_storyZhiku(
     }
   }
 
+  devLog('stage', 'stage10_storyZhiku.exit', {
+    turn: turnCountAtStart,
+    outputs: ['storyWeavingForSave', 'memoryAfterStoryProgress', 'zhikuAfterRuntimeUnlock', 'npcAfterCompression', 'storyProgressMemoryLine'],
+  });
   return {
     storyWeavingForSave,
     memoryAfterStoryProgress,

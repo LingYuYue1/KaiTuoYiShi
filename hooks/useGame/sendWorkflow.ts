@@ -115,6 +115,10 @@ export async function executeSendWorkflow(
     awakeningInstruction,
     openingInstruction,
     effectiveWorld, turnCountAtStart, variableBatchesAtStart, queueTasksMirror,
+    worldAtStart: state.世界,
+    travelerAtStart: state.旅人,
+    zhikuAtStart: state.智库,
+    phoneAtStart: state.手机,
     abortController,
     isCurrentWorkflow,
     assertWorkflowActive,
@@ -194,8 +198,8 @@ export async function executeSendWorkflow(
     streamedText = '';
 
     // 一次性 commit
-    if (worldAfter !== state.世界) state.set世界(worldAfter);
-    if (travelerAfter !== state.旅人) state.set旅人(travelerAfter);
+    if (worldAfter !== ctx.worldAtStart) state.set世界(worldAfter);
+    if (travelerAfter !== ctx.travelerAtStart) state.set旅人(travelerAfter);
 
     // 阶段 8：变量模型校准（切点：variableOverrides 产出后交还 S9+ 读取）
     /* 读 d: parsedForDisplay(S5), displayText(S5), mem(S6), worldAfter(S7, 调用方已桥接),

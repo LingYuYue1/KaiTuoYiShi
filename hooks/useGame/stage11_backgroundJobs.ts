@@ -272,7 +272,7 @@ export async function stage11_backgroundJobs(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, effectiveWorld, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart, queueTasksMirror } = ctx;
+  const { state, userInput, effectiveWorld, config, abortController, assertWorkflowActive, isCurrentWorkflow, turnCountAtStart, queueTasksMirror, phoneAtStart } = ctx;
   devLog('stage', 'stage11_backgroundJobs.enter', { turn: turnCountAtStart });
   const displayText = d.displayText as string;
   const finalHistory = d.finalHistory as 聊天消息[];
@@ -313,7 +313,7 @@ export async function stage11_backgroundJobs(
     location: effectiveWorld.当前地点 || undefined,
   };
 
-  const phoneAfterFallbackSeedBase = variableOverrides?.手机 ?? state.手机;
+  const phoneAfterFallbackSeedBase = variableOverrides?.手机 ?? phoneAtStart;
 
   // 四个参数化任务
   const newsParams: NewsJobParams = {
