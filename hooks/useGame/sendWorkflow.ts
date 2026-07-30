@@ -73,6 +73,7 @@ import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSa
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
+import type { 智库条目 } from '@/models/zhiku';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
 import { applyNovelAIRulePreset } from '@/utils/imagePromptRules';
 import { resolveStorySnapshot, selectPresentStorySnapshotNpcs } from '@/services/ai/storySnapshotPipeline';
@@ -190,20 +191,23 @@ function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情
 
 // 区E执法块(结构轮, 2026-07-26): 注入在聊天历史与玩家输入之后——离生成点最近的位置。
 // 实现参照狭间评判提醒的既有先例(尾部 user 消息,三 provider 通用,连续 user 消息已有
-// DeepSeek 守卫先例)。素材复用本回合已算好的智库命中,不新增检索;体量上限约 1.5KB。
+// DeepSeek 守卫先例)。素材复用本回合已算好的智库命中,不新增检索。
 function buildTurnEnforcementBlock(input: {
   playerName: string;
   wordCountTarget: number;
-  zhikuEntries?: Array<{ 标题: string; 分类: string; 说话方式?: string; 禁止误写?: string }>;
+  zhikuEntries?: 智库条目[];
   storyWeavingActive: boolean;
 }): string {
   const lines: string[] = ['# 本回合生成前核对（最高优先级，覆盖上文所有软性描述）'];
-  const characters = (input.zhikuEntries ?? []).filter((e) => e.分类 === 'character').slice(0, 4);
+  const characters = (input.zhikuEntries ?? []).filter((entry) => (
+    entry.分类 === 'character' && entry.注入内容?.类型 === 'character'
+  ));
   if (characters.length) {
     lines.push('【在场角色锚点】');
     for (const c of characters) {
-      const speech = c.说话方式?.trim();
-      const forbid = c.禁止误写?.trim();
+      if (c.注入内容?.类型 !== 'character') continue;
+      const speech = c.注入内容.说话方式.trim();
+      const forbid = c.注入内容.演绎红线.trim();
       const bits = [
         speech ? `说话方式：${speech.length > 60 ? `${speech.slice(0, 58)}…` : speech}` : '',
         forbid ? `禁止误写：${forbid.length > 60 ? `${forbid.slice(0, 58)}…` : forbid}` : '',
@@ -273,11 +277,25 @@ function formatZhikuDiagnosticsPreview(diagnostics?: 智库召回诊断): string
     `AI检索补充弱资料：${diagnostics.AI检索补充弱资料.join('、') || '无'}`,
     `候选资料：${diagnostics.候选资料.join('、') || '无'}`,
     `AI候选资料：${diagnostics.AI候选资料.join('、') || '无'}`,
+    `AI候选索引：${diagnostics.AI候选索引.join('；') || '无'}`,
+    `AI形态修正：${diagnostics.AI形态修正.join('；') || '无'}`,
+    `AI拒绝选择：${diagnostics.AI拒绝选择.join('；') || '无'}`,
+    `AI未选择原因：${diagnostics.AI未选择原因 || '无'}`,
     `最终注入角色资料（已去重）：${diagnostics.角色相关资料.join('、') || '无'}`,
     `最终注入强资料：${diagnostics.强相关资料.join('、') || '无'}`,
     `最终注入弱资料：${diagnostics.弱相关资料.join('、') || '无'}`,
     `已注入资料：${diagnostics.已注入资料.join('、') || '无'}`,
     `角色故事层注入：${diagnostics.角色故事层注入?.join('；') || '无'}`,
+    `静态注入体量：${diagnostics.静态注入字符数} 字符 / 约 ${diagnostics.静态注入估算Token} tokens`,
+    diagnostics.单条静态注入体量.length
+      ? `单条体量：${diagnostics.单条静态注入体量.map((item) => `${item.标题} ${item.字符数}字/${item.估算Token}t（${item.保留优先级}）`).join('；')}`
+      : '单条体量：无',
+    `动态状态来源：${diagnostics.动态状态来源.join('；') || '无'}`,
+    `去重记录：${diagnostics.去重记录.join('；') || '无'}`,
+    diagnostics.删减记录.length
+      ? `删减记录：${diagnostics.删减记录.map((item) => `${item.标题}（${item.原优先级}：${item.原因}）`).join('；')}`
+      : '删减记录：无',
+    `体量预警：${diagnostics.体量预警.join('；') || '无'}`,
     diagnostics.被门禁过滤.length
       ? `门禁过滤：${diagnostics.被门禁过滤.map((item) => `${item.标题}（${item.原因}）`).join('；')}`
       : '门禁过滤：无',
@@ -1797,6 +1815,13 @@ export async function executeSendWorkflow(
       userInput,
     });
     const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
+    const latestZhikuStoryPlan = [...updatedHistory]
+      .reverse()
+      .find((message) => message.role === 'assistant' && message.parsedResponse?.storyPlan?.trim())
+      ?.parsedResponse?.storyPlan?.trim();
+    const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
+      ? getStoryWeavingInjectionDiagnostics(state.剧情编织)
+      : null;
     const zhikuSceneContext = {
       ...worldbookCtx,
       startScenarioId: undefined,
@@ -1809,6 +1834,12 @@ export async function executeSendWorkflow(
         currentLocation: effectiveWorld.当前地点,
         presentNpcNames: worldbookCtx.npcNames,
         immediateStoryReview: immediateStoryReviewForZhiku,
+        storyPlan: [
+          latestZhikuStoryPlan,
+          storyWeavingDiagnostics
+            ? `当前剧情段：${storyWeavingDiagnostics.当前分段标题}；下一段预热：${storyWeavingDiagnostics.下一分段标题 || '无'}`
+            : '',
+        ].filter(Boolean).join('\n'),
         openingArchiveText,
       },
     };
@@ -1872,11 +1903,9 @@ export async function executeSendWorkflow(
     const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
     const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && (state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) < state.turnCount;
     const zhikuRecallEnabled = !isOpeningSystemTrigger && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
+    const zhikuAiSupplementEnabled = zhikuRecallEnabled && state.gameSettings.智库系统?.enableAiSupplement === true;
     const storyWeavingGate = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
       ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx)
-      : null;
-    const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
-      ? getStoryWeavingInjectionDiagnostics(state.剧情编织)
       : null;
     pushQueueTask(state, 'yiting', yitingRecallEnabled ? 'pending' : 'skipped', {
       detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。',
@@ -1901,7 +1930,9 @@ export async function executeSendWorkflow(
             return null;
           })
         : Promise.resolve(null),
-      zhikuRecallEnabled
+      !zhikuRecallEnabled
+        ? Promise.resolve(null)
+        : zhikuAiSupplementEnabled
         ? retrieveZhikuContextWithModel(
             state.智库,
             zhikuRecallQuery,
@@ -1916,7 +1947,12 @@ export async function executeSendWorkflow(
             console.warn('[zhiku-retrieval] 智库检索失败：', err);
             return null;
           })
-        : Promise.resolve(null),
+        : Promise.resolve(retrieveZhikuContext(
+            state.智库,
+            zhikuRecallQuery,
+            state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+            zhikuSceneContext,
+          )),
     ]);
     assertWorkflowActive();
     const recallSummaryForTurn = [
@@ -1944,7 +1980,7 @@ export async function executeSendWorkflow(
         ? `忆庭已召回：${state.忆庭?.回忆档案?.length ? '无相关档案' : '当前还没有可召回档案'}`
         : `忆庭已召回：未到第${(state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) + 1}回合`;
     const zhikuHint = state.gameSettings.智库系统?.enabled
-      ? `智库内容已注入：${
+      ? `智库内容已注入（${zhikuAiSupplementEnabled ? '关键词 + AI 补充' : '仅正文关键词'}）：${
           zhikuPreview?.entries.length
             ? zhikuPreview.entries.slice(0, 2).map((entry) => entry.标题).join('、')
             : '无相关条目'

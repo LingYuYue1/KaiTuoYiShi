@@ -382,6 +382,8 @@ export interface 手机系统设置 {
 
 export interface 智库系统设置 {
   enabled: boolean;
+  /** AI 主动补充为独立可选能力；关闭时只执行正文关键词检索，不调用额外 API。 */
+  enableAiSupplement: boolean;
   api: 智库API覆盖;
   原著约束: 原著约束强度;
   maxRelatedEntries: number;
@@ -1011,6 +1013,7 @@ export function 创建默认手机系统设置(): 手机系统设置 {
 export function 创建默认智库系统设置(): 智库系统设置 {
   return {
     enabled: true,
+    enableAiSupplement: false,
     api: 创建空智库API覆盖(),
     原著约束: 'standard',
     maxRelatedEntries: 5,
@@ -1068,6 +1071,7 @@ export function 归一化智库系统设置(input?: Partial<智库系统设置>)
   return {
     ...defaults,
     ...input,
+    enableAiSupplement: input.enableAiSupplement === true,
     api: {
       ...defaults.api,
       ...(input.api ?? {}),

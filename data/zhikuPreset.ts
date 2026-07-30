@@ -1,5 +1,15 @@
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
-import { isRetiredZhikuCategory, 归一化智库系统 } from '@/models/zhiku';
+import {
+  isRetiredZhikuCategory,
+  获取智库条目身份ID,
+  归一化智库系统,
+} from '@/models/zhiku';
+import {
+  ZHIKU_CUSTOM_SCHEMA_VERSION,
+  获取下一个自制智库序号,
+  迁移自制智库条目,
+} from './zhikuCustomGovernance';
+import { resolveBundledZhikuIdentity } from './zhikuIdentityRegistry';
 
 export interface BundledZhikuPreset {
   id: string;
@@ -15,28 +25,41 @@ export interface LoadBundledZhikuOptions {
 
 export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
 export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_';
+export const ZHIKU_CHARACTER_EXPANSION_ENTRY_ID_PREFIX = 'zhiku_character_expansion_';
+export const RETIRED_V1_CHARACTER_ENTRY_ID_PREFIXES = [
+  'zhiku_amphoreus_characters_',
+  'zhiku_express_characters_',
+  'zhiku_express_support_characters_',
+  'zhiku_faction_characters_',
+  'zhiku_genius_society_characters_',
+  'zhiku_herta_station_characters_',
+  'zhiku_jarilo_vi_characters_',
+  'zhiku_penacony_characters_',
+  'zhiku_xianzhou_alliance_characters_',
+  'zhiku_xianzhou_luofu_characters_',
+] as const;
 
 export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
     id: 'zhiku_character_rebuild_core',
     title: '人物重建·星穹列车角色档案',
-    description: '星穹列车角色重构预设：以一个角色一个档案包的方式维护正式角色资料，当前包含星、穹、三月七、丹恒、瓦尔特·杨、姬子与帕姆，并在档案内部承载语料、能力、命途阶段、形态 / 人格边界与过往边界。语料只作口吻参考，禁止照抄或原句搬运。',
+    description: '星穹列车角色重构预设：当前包含星、穹、三月七、丹恒、瓦尔特·杨、姬子与帕姆。星与穹的命途阶段属于同一主体能力路线，不拆分形态；三月七常态 / 巡猎 / 长夜月、丹恒常态 / 饮月 / 腾荒与姬子常态 / 启行均按同一人物主体下的完整独立注入资料维护，其中长夜月（兼容别名“长月夜”）可按本作设定作为三月七体内的另一人格提前显现，完整外显与后期能力继续服从剧情边界。语料只作口吻参考，禁止照抄或原句搬运。',
     path: '/zhiku-presets/character-rebuild-core.json',
-    updatedAt: '2026-06-10-astral-express-character-profiles-37',
+    updatedAt: '2026-07-30-evernight-early-persona-1',
   },
   {
     id: 'zhiku_stellaron_hunters_character_rebuild',
     title: '人物重建·星核猎手角色档案',
-    description: '星核猎手角色重构预设：以一个角色一个档案包的方式维护卡芙卡、刃、银狼、流萤与艾利欧。档案内部承载常驻事实、角色故事、表现锚点、语料 / 暂无语料边界、能力职责和阶段 / 过往边界；有语料者只作口吻参考，禁止照抄或原句搬运，艾利欧暂不提供语料。',
+    description: '星核猎手角色重构预设：维护卡芙卡、刃、银狼、流萤与艾利欧；刃 / 千冶•刃与银狼 / 银狼LV.999按同一人物主体下的完整独立形态资料维护，流萤与萨姆继续作为驾驶者与机甲保留在同一资料中。',
     path: '/zhiku-presets/stellaron-hunters-character-rebuild.json',
-    updatedAt: '2026-06-09-stellaron-hunters-character-profiles-11',
+    updatedAt: '2026-07-30-multiform-character-variants-1',
   },
   {
     id: 'zhiku_herta_station_character_rebuild',
     title: '人物重建·黑塔空间站角色档案',
     description: '黑塔空间站角色重构预设：以一个角色一个档案包的方式维护黑塔、艾丝妲与阿兰。档案内部承载常驻事实、角色故事、表现锚点、语料、职责模块和阶段边界；语料只作口吻参考，禁止照抄或原句搬运。',
     path: '/zhiku-presets/herta-station-character-rebuild.json',
-    updatedAt: '2026-06-08-herta-station-character-profiles-12',
+    updatedAt: '2026-07-30-arlan-injection-natural-profile-1',
   },
   {
     id: 'zhiku_genius_society_character_rebuild',
@@ -62,23 +85,23 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
     id: 'zhiku_xianzhou_luofu_character_rebuild',
     title: '人物重建·罗浮仙舟角色档案',
-    description: '罗浮仙舟角色重构预设：以一个角色一个档案包的方式维护景元、彦卿、符玄、白露、停云、灵砂、驭空、青雀、罗刹、镜流、桂乃芬、素裳、藿藿、寒鸦与雪衣；全员已完成语料层与故事层重写，保留官方叙事与对话，其他仙舟归属角色不放入本分组。',
+    description: '罗浮仙舟角色重构预设：维护景元、彦卿、符玄、白露、停云、灵砂、驭空、青雀、罗刹、镜流、桂乃芬、素裳、藿藿、寒鸦与雪衣；停云常态与忘归人按同一人物主体下的完整独立形态资料维护。',
     path: '/zhiku-presets/xianzhou-luofu-character-rebuild.json',
-    updatedAt: '2026-06-18-xianzhou-luofu-story-layer-full-rewrite',
+    updatedAt: '2026-07-30-multiform-character-variants-1',
   },
   {
     id: 'zhiku_penacony_character_rebuild',
     title: '人物重建·匹诺康尼角色档案',
-    description: '匹诺康尼角色重构预设：以一个角色一个档案包的方式维护星期日、加拉赫、知更鸟、米沙与花火；花火已按假面愚者身份、官方四篇身世版本、正式语音、匹诺康尼剧情门禁和 RP 后续自由完成首批修正。',
+    description: '匹诺康尼角色重构预设：以一个角色一个档案包的方式维护星期日、加拉赫、知更鸟、米沙、花火与大丽花；大丽花已按官方角色信息、四篇角色故事和 15 条非战斗语音完成一手资料核验。',
     path: '/zhiku-presets/penacony-character-rebuild.json',
-    updatedAt: '2026-07-21-penacony-sparkle-profile-1',
+    updatedAt: '2026-07-28-penacony-dahlia-official-audit-2',
   },
   {
     id: 'zhiku_amphoreus_character_rebuild',
     title: '人物重建·翁法罗斯角色档案',
-    description: '翁法罗斯角色重构预设：当前维护阿格莱雅、白厄、风堇、海瑟音、来古士、那刻夏、赛飞儿与缇宝。可玩角色按正式角色故事与互动语音维护，复杂角色按剧情阶段、玩法隔离与 RP 后续自由分层。',
+    description: '翁法罗斯角色重构预设：维护阿格莱雅、白厄、风堇、海瑟音、来古士、那刻夏、赛飞儿、缇宝、刻律德菈、万敌、昔涟与遐蝶；白厄常态与卡厄斯兰那按同一人物主体下的完整独立形态资料维护。',
     path: '/zhiku-presets/amphoreus-character-rebuild.json',
-    updatedAt: '2026-07-22-amphoreus-tribbie-profile-11',
+    updatedAt: '2026-07-30-multiform-character-variants-1',
   },
   {
     id: 'zhiku_interastral_peace_corporation_character_rebuild',
@@ -107,6 +130,34 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
     description: '银河旅人角色重构预设：当前以一个角色一个档案包的方式维护银枝与黄泉；分别按真实阵营、官方角色故事、能力边界、剧情门禁与 RP 后续自由完成修正。语料层保留米游社官方中文互动语音原句，并按剧情阶段使用。',
     path: '/zhiku-presets/galactic-travelers-character-rebuild.json',
     updatedAt: '2026-07-22-galactic-travelers-voice-format-4',
+  },
+  {
+    id: 'zhiku_xianzhou_alliance_character_expansion',
+    title: '人物扩展·仙舟联盟官方档案',
+    description: '经官方一手资料审计后的仙舟联盟人物扩展档案，包含飞霄、椒丘、云璃、貊泽与爻光。',
+    path: '/zhiku-presets/xianzhou-alliance-character-expansion.json',
+    updatedAt: '2026-07-30-official-backlog-audit-1',
+  },
+  {
+    id: 'zhiku_planarcadia_character_expansion',
+    title: '人物扩展·二相乐园官方档案',
+    description: '经官方一手资料审计后的二相乐园人物扩展档案，包含火花、绯英、不死途与虚照。',
+    path: '/zhiku-presets/planarcadia-character-expansion.json',
+    updatedAt: '2026-07-30-official-backlog-audit-1',
+  },
+  {
+    id: 'zhiku_fate_collaboration_character_expansion',
+    title: '人物扩展·Fate 联动官方档案',
+    description: '经官方联动角色页与中文语音审计后的 Fate 联动人物档案，包含 Archer、Saber、远坂凛与吉尔伽美什。',
+    path: '/zhiku-presets/fate-collaboration-character-expansion.json',
+    updatedAt: '2026-07-30-official-backlog-audit-1',
+  },
+  {
+    id: 'zhiku_planarcadia_enemy_expansion',
+    title: '敌对生物·二相乐园首领档案',
+    description: '经官方一手资料审计后的敌对首领档案，首批收录绝灭大君归寂。',
+    path: '/zhiku-presets/planarcadia-enemy-expansion.json',
+    updatedAt: '2026-07-30-official-backlog-audit-1',
   },
   {
     id: 'zhiku_location_core',
@@ -240,8 +291,9 @@ export function shouldRemoveLegacyZhikuCharacterEntry(entry: Partial<智库条�
   if (entry.分类 !== 'character') return false;
   if (isRebuiltZhikuCharacterEntry(entry)) return false;
   if (entry.builtin) return true;
-  const changedAt = Math.max(Number(entry.createdAt) || 0, Number(entry.updatedAt) || 0);
-  return migrationAt <= 0 || changedAt <= migrationAt;
+  void migrationAt;
+  return 获取智库条目身份ID(entry as Pick<智库条目, 'id' | '兼容ID'>)
+    .some((id) => RETIRED_V1_CHARACTER_ENTRY_ID_PREFIXES.some((prefix) => id.startsWith(prefix)));
 }
 
 export function removeLegacyZhikuCharacterEntries(
@@ -252,20 +304,49 @@ export function removeLegacyZhikuCharacterEntries(
 }
 
 export function isRebuiltZhikuCharacterEntry(entry: Partial<智库条目>): boolean {
-  return typeof entry.id === 'string' && entry.id.startsWith(ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX);
+  return 获取智库条目身份ID(entry as Pick<智库条目, 'id' | '兼容ID'>)
+    .some((id) => (
+      id.startsWith(ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX)
+      || id.startsWith(ZHIKU_CHARACTER_EXPANSION_ENTRY_ID_PREFIX)
+    ));
+}
+
+function normalizeZhikuEntriesIndividually(entries: readonly Partial<智库条目>[]): 智库条目[] {
+  return entries.flatMap((entry) => 归一化智库系统({ 条目: [entry as 智库条目] }).条目);
+}
+
+export function 升级自制智库系统(system: 智库系统 | null | undefined): 智库系统 {
+  const entries = normalizeZhikuEntriesIndividually(system?.条目 ?? []);
+  const reservedEntries = entries.filter((entry) => entry.builtin);
+  const migrated = 迁移自制智库条目(
+    entries.filter((entry) => !entry.builtin),
+    reservedEntries,
+  ).entries;
+  let customIndex = 0;
+  const nextSequence = 获取下一个自制智库序号(
+    migrated,
+    system?.自制资料下一个序号 ?? 0,
+  );
+  return 归一化智库系统({
+    自制资料契约版本: ZHIKU_CUSTOM_SCHEMA_VERSION,
+    自制资料下一个序号: nextSequence,
+    条目: entries.map((entry) => (entry.builtin ? entry : migrated[customIndex++])),
+  });
 }
 
 export function mergeZhikuRuntimeUnlockOverrides(
   bundledEntries: 智库条目[],
   savedEntries: 智库条目[] | undefined,
 ): 智库条目[] {
-  const savedById = new Map(
-    (savedEntries ?? [])
-      .filter((entry) => entry.id && (entry.运行时解锁状态 || entry.运行时解锁备注))
-      .map((entry) => [entry.id, entry]),
-  );
+  const savedById = new Map<string, 智库条目>();
+  for (const entry of savedEntries ?? []) {
+    if (!entry.id || (!entry.运行时解锁状态 && !entry.运行时解锁备注)) continue;
+    for (const id of 获取智库条目身份ID(entry)) savedById.set(id, entry);
+  }
   return bundledEntries.map((entry) => {
-    const saved = savedById.get(entry.id);
+    const saved = 获取智库条目身份ID(entry)
+      .map((id) => savedById.get(id))
+      .find((candidate): candidate is 智库条目 => Boolean(candidate));
     if (!saved) return entry;
     return {
       ...entry,
@@ -280,21 +361,26 @@ export function mergeBundledZhikuSystem(
   currentSystem: 智库系统 | null | undefined,
   migrationAt: number,
 ): 智库系统 {
-  const current = 归一化智库系统(currentSystem);
-  const customEntries = removeLegacyZhikuCharacterEntries(
+  const currentEntries = normalizeZhikuEntriesIndividually(currentSystem?.条目 ?? []);
+  const customEntriesBeforeIdentityMigration = removeLegacyZhikuCharacterEntries(
     removeRetiredZhikuEntries(
-      current.条目.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)),
+      currentEntries.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)),
     ),
     migrationAt,
   );
-  return 归一化智库系统({
-    条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, current.条目), ...customEntries],
+  const customEntries = 迁移自制智库条目(customEntriesBeforeIdentityMigration, bundledSystem.条目).entries;
+  return 升级自制智库系统({
+    自制资料契约版本: currentSystem?.自制资料契约版本,
+    自制资料下一个序号: currentSystem?.自制资料下一个序号,
+    条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, currentEntries), ...customEntries],
   });
 }
 
 export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智库系统 {
-  const source = 归一化智库系统(system);
+  const source = 升级自制智库系统(system);
   return 归一化智库系统({
+    自制资料契约版本: source.自制资料契约版本,
+    自制资料下一个序号: source.自制资料下一个序号,
     条目: source.条目
       .filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))
       .filter((entry) => !entry.builtin || Boolean(entry.运行时解锁状态 || entry.运行时解锁备注))
@@ -302,6 +388,14 @@ export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智
         if (!entry.builtin) return entry;
         return {
           id: entry.id,
+          兼容ID: entry.兼容ID,
+          治理分类: entry.治理分类,
+          资料所有者: entry.资料所有者,
+          来源预设ID: entry.来源预设ID,
+          来源文件: entry.来源文件,
+          来源序号: entry.来源序号,
+          资料版本: entry.资料版本,
+          辅助字段版本: entry.辅助字段版本,
           标题: entry.标题,
           分类: entry.分类,
           摘要: '',
@@ -336,28 +430,40 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options
     条目: entries
       .filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))
       .filter((entry) => entry.分类 !== 'character' || isRebuiltZhikuCharacterEntry(entry))
-      .map((entry, index) => ({
-        ...entry,
-        ...(isLinkableMigratedLore
-          ? normalizeMigratedLoreEntry(entry, preset, index)
-          : {}),
-        id: entry.id || `${preset.id}_${index + 1}`,
-        ...(entry.分类 === 'story'
-          ? {
-              系列ID: entry.系列ID || preset.id,
-              系列标题: entry.系列标题 || preset.title,
-              系列序号: entry.系列序号 || seriesOrder,
-              章节序号: entry.章节序号 || index + 1,
-            }
-          : entry.分类 === 'character'
+      .map((entry, index) => {
+        const legacyId = entry.id || `${preset.id}_${index + 1}`;
+        const identity = resolveBundledZhikuIdentity(preset.id, index, entry.id, entry.标题);
+        return {
+          ...entry,
+          ...(isLinkableMigratedLore
+            ? normalizeMigratedLoreEntry(entry, preset, index)
+            : {}),
+          id: identity?.id ?? legacyId,
+          兼容ID: identity
+            ? [...new Set([...(entry.兼容ID ?? []), identity.legacyId])]
+            : entry.兼容ID,
+          治理分类: identity?.category ?? entry.治理分类,
+          资料所有者: 'builtin-json' as const,
+          来源预设ID: preset.id,
+          来源文件: identity?.sourceFile ?? preset.path.replace(/^\/zhiku-presets\//u, ''),
+          来源序号: index,
+          ...(entry.分类 === 'story'
             ? {
                 系列ID: entry.系列ID || preset.id,
                 系列标题: entry.系列标题 || preset.title,
                 系列序号: entry.系列序号 || seriesOrder,
+                章节序号: entry.章节序号 || index + 1,
               }
-            : {}),
-        builtin: true,
-      })),
+            : entry.分类 === 'character'
+              ? {
+                  系列ID: entry.系列ID || preset.id,
+                  系列标题: entry.系列标题 || preset.title,
+                  系列序号: entry.系列序号 || seriesOrder,
+                }
+              : {}),
+          builtin: true,
+        };
+      }),
   });
 }
 

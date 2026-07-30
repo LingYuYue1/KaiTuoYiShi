@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320">
+  <defs>
+    <path
+      id="aeon-cutout"
+      d="M160 70C143 71 132 82 133 96C134 108 144 117 157 125C157 110 162 99 171 90C180 80 174 70 160 70Z"
+    />
+    <mask id="aeon-negative-space">
+      <rect width="320" height="320" fill="white" />
+      <g fill="black">
+        <use href="#aeon-cutout" />
+        <use href="#aeon-cutout" transform="rotate(45 160 160)" />
+        <use href="#aeon-cutout" transform="rotate(90 160 160)" />
+        <use href="#aeon-cutout" transform="rotate(135 160 160)" />
+        <use href="#aeon-cutout" transform="rotate(180 160 160)" />
+        <use href="#aeon-cutout" transform="rotate(225 160 160)" />
+        <use href="#aeon-cutout" transform="rotate(270 160 160)" />
+        <use href="#aeon-cutout" transform="rotate(315 160 160)" />
+        <circle cx="160" cy="160" r="24" />
+      </g>
+    </mask>
+  </defs>
+
+  <g fill="currentColor" mask="url(#aeon-negative-space)">
+    <path d="M160 14L169 57C178 53 187 43 192 30L201 62C213 61 226 55 238 45L231 77C245 80 258 78 275 68L260 98C274 105 287 107 304 103L280 130C292 139 300 148 306 160C300 172 292 181 280 190L304 217C287 213 274 215 260 222L275 252C258 242 245 240 231 243L238 275C226 265 213 259 201 258L192 290C187 277 178 267 169 263L160 306L151 263C142 267 133 277 128 290L119 258C107 259 94 265 82 275L89 243C75 240 62 242 45 252L60 222C46 215 33 213 16 217L40 190C28 181 20 172 14 160C20 148 28 139 40 130L16 103C33 107 46 105 60 98L45 68C62 78 75 80 89 77L82 45C94 55 107 61 119 62L128 30C133 43 142 53 151 57L160 14Z" />
+    <path d="M160 28L176 129L214 105L191 143L292 160L191 177L214 215L176 191L160 292L144 191L106 215L129 177L28 160L129 143L106 105L144 129L160 28Z" />
+    <path d="M160 111L219 160L160 209L101 160L160 111ZM160 127L120 160L160 193L200 160L160 127Z" fill-rule="evenodd" />
+  </g>
+</svg>

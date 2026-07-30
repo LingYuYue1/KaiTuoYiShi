@@ -9,7 +9,7 @@ import { 创建空记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
-import { 创建空智库系统, 归一化智库系统 } from '@/models/zhiku';
+import { 创建空智库系统 } from '@/models/zhiku';
 import type { 手机系统 } from '@/models/phone';
 import { 创建空手机系统, 归一化手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
@@ -53,6 +53,7 @@ import {
   mergeBundledZhikuSystem,
   removeLegacyZhikuCharacterEntries,
   removeRetiredZhikuEntries,
+  升级自制智库系统,
 } from '@/data/zhikuPreset';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
@@ -376,7 +377,7 @@ export function useGameState(): UseGameStateReturn {
           if (!savedMigrationAt) {
             await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
           }
-          set智库(归一化智库系统({
+          set智库(升级自制智库系统({
             条目: removeLegacyZhikuCharacterEntries(
               removeRetiredZhikuEntries(savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))),
               migrationAt,

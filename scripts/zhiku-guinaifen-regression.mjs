@@ -777,23 +777,21 @@ if (isAstralExpressCharacterProfileSet) {
   );
   assert(
     source.includes('三月七·巡猎') &&
-      source.includes('长夜月 / Evernight（第二人格 / 数据世界具象形态）') &&
-      source.includes('剧情显式触发') &&
-      source.includes('本质上属于三月七的人格之一') &&
-      source.includes('不自动继承三月七主体人格') &&
-      source.includes('当前分支事实') &&
-      source.includes('不需要额外 UI 开关') &&
-      source.includes('翁法罗斯等数据世界 / 特殊意识环境中') &&
-      source.includes('外部现实场景中，默认以内心声音、意识对话、梦境或保护性人格反应显现') &&
-      source.includes('会保护三月七') &&
+      source.includes('可提前显现：长夜月 / Evernight（体内另一人格 / 记忆之影）') &&
+      source.includes('同源并寄居于她体内') &&
+      source.includes('正式名称为“长夜月”，“长月夜”作为本作兼容别名') &&
+      source.includes('无需进入翁法罗斯') &&
+      source.includes('不要求三月七先陷入致命危险或玩家先明确点名') &&
+      source.includes('主动开口和回应') &&
+      source.includes('不因人格提前出现而一并解锁') &&
+      source.includes('玩家切换注入预览形态不会触发长夜月') &&
       source.includes('### 长夜月语料说明') &&
-      source.includes('长夜月有时会在句尾加上 ♭') &&
+      source.includes('提前显现时她可以主动回应') &&
       source.includes('禁止每句都加') &&
       source.includes('记忆之影') &&
       source.includes('### 长夜月 / 危险中的内心回响') &&
-      source.includes('不等于长夜月已经正式苏醒、实体化或接管身体') &&
-      source.includes('黑白暗色系礼服式装束') &&
-      source.includes('可携带黑伞'),
+      source.includes('不能因此直接拥有稳定外部实体、完整神权、全部记忆或自由接管身体的能力') &&
+      source.includes('不得自动公开翁法罗斯完整经历与后期真相'),
     'March profile must keep form gates and associated-persona gates distinct.',
   );
   assert(

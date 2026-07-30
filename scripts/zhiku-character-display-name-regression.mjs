@@ -13,6 +13,10 @@ for (const id of [
   'zhiku_character_rebuild_anaxa_profile',
   'zhiku_character_rebuild_cipher_profile',
   'zhiku_character_rebuild_tribbie_profile',
+  'zhiku_character_rebuild_cerydra_profile',
+  'zhiku_character_rebuild_mydei_profile',
+  'zhiku_character_rebuild_cyrene_profile',
+  'zhiku_character_rebuild_castorice_profile',
 ]) {
   const entry = amphoreusPreset.entries.find((item) => item.id === id);
   assert(entry, `missing regression fixture: ${id}`);

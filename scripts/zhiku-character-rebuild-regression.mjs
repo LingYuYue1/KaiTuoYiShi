@@ -14,6 +14,7 @@ const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8'
 const state = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
 const retrieval = fs.readFileSync('services/zhikuRetrieval.ts', 'utf8');
+const aiRetrievalIndex = fs.readFileSync('services/zhikuAiRetrievalIndex.ts', 'utf8');
 const zhikuCot = fs.readFileSync('prompts/cot/zhikuCot.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
 const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
@@ -184,7 +185,7 @@ function assertRebuiltSingleProfileShape(entriesToCheck, dataArea, label) {
 function assertStellaronHuntersProfileSet() {
   assert(stellaronHuntersPreset.id === 'zhiku_stellaron_hunters_character_rebuild', 'Stellaron Hunters character preset id changed.');
   assert(stellaronHuntersPreset.title === '人物重建·星核猎手角色档案', 'Stellaron Hunters character preset title changed.');
-  assert(stellaronHuntersPreset.updatedAt === '2026-06-09-stellaron-hunters-character-profiles-11', 'Stellaron Hunters character preset updatedAt changed.');
+  assert(stellaronHuntersPreset.updatedAt === '2026-07-30-multiform-character-variants-1', 'Stellaron Hunters character preset updatedAt changed.');
 
   const profiles = new Map((stellaronHuntersPreset.entries ?? []).map((entry) => [entry.id, entry]));
   const kafka = profiles.get('zhiku_character_rebuild_kafka_profile');
@@ -192,7 +193,9 @@ function assertStellaronHuntersProfileSet() {
   const silverWolf = profiles.get('zhiku_character_rebuild_silver_wolf_profile');
   const firefly = profiles.get('zhiku_character_rebuild_firefly_profile');
   const elio = profiles.get('zhiku_character_rebuild_elio_profile');
-  assert(kafka && blade && silverWolf && firefly && elio && profiles.size === 5, 'Stellaron Hunters preset must contain exactly Kafka, Blade, Silver Wolf, Firefly, and Elio profiles.');
+  const chiyeBlade = profiles.get('zhiku_character_rebuild_chiye_blade_profile');
+  const silverWolf999 = profiles.get('zhiku_character_rebuild_silver_wolf_lv999_profile');
+  assert(kafka && blade && silverWolf && firefly && elio && chiyeBlade && silverWolf999 && profiles.size === 7, 'Stellaron Hunters preset must contain five subjects plus the confirmed Blade and Silver Wolf form entries.');
 
   assertRebuiltSingleProfileShape([kafka, blade, silverWolf, firefly, elio], '星核猎手', 'Stellaron Hunters');
 
@@ -1330,7 +1333,7 @@ function assertBelobogProfileSet() {
 function assertXianzhouLuofuProfileSet() {
   assert(xianzhouLuofuPreset.id === 'zhiku_xianzhou_luofu_character_rebuild', 'Xianzhou Luofu character preset id changed.');
   assert(xianzhouLuofuPreset.title === '人物重建·罗浮仙舟角色档案', 'Xianzhou Luofu character preset title changed.');
-  assert(xianzhouLuofuPreset.updatedAt === '2026-06-18-xianzhou-luofu-story-layer-full-rewrite', 'Xianzhou Luofu character preset updatedAt changed.');
+  assert(xianzhouLuofuPreset.updatedAt === '2026-07-30-multiform-character-variants-1', 'Xianzhou Luofu character preset updatedAt changed.');
 
   const profiles = new Map((xianzhouLuofuPreset.entries ?? []).map((entry) => [entry.id, entry]));
   const expected = [
@@ -1350,7 +1353,7 @@ function assertXianzhouLuofuProfileSet() {
     ['zhiku_character_rebuild_hanya_profile', ['寒鸦', 'Hanya', '寒鸦十王司判官', '雪衣妹妹']],
     ['zhiku_character_rebuild_xueyi_profile', ['雪衣', 'Xueyi', '雪衣十王司判官', '寒鸦姐姐']],
   ];
-  assert(profiles.size === expected.length, 'Xianzhou Luofu preset must contain exactly the first-pass Luofu profiles.');
+  assert(profiles.size === expected.length + 1 && profiles.has('zhiku_character_rebuild_fugue_profile'), 'Xianzhou Luofu preset must retain the original profiles and add the confirmed Fugue form entry.');
   for (const [id, triggers] of expected) {
     const entry = profiles.get(id);
     assert(entry, `Xianzhou Luofu profile missing: ${id}`);
@@ -1407,7 +1410,7 @@ function assertXianzhouLuofuProfileSet() {
       !serializedAppearance.includes('外貌锚点：粉发、小巧身形'),
     'Xianzhou Luofu profiles-8 appearance anchors must not regress to short or inaccurate tag labels.',
   );
-  for (const entry of xianzhouLuofuPreset.entries ?? []) {
+  for (const entry of expected.map(([id]) => profiles.get(id))) {
     assertNoBareKeywords(
       entry,
       ['罗浮仙舟', '仙舟联盟', '云骑军', '太卜司', '天舶司', '十王司', '丹鼎司', '持明族', '狐人', '学宫', '将军', '判官', '剑士', '医生', '医者', '行商', '摸鱼', '罗浮杂俎'],
@@ -1562,8 +1565,8 @@ function assertXianzhouLuofuProfileSet() {
 function assertPenaconyProfileSet() {
   assert(penaconyPreset.id === 'zhiku_penacony_character_rebuild', 'Penacony character preset id changed.');
   assert(penaconyPreset.title === '人物重建·匹诺康尼角色档案', 'Penacony character preset title changed.');
-  assert(penaconyPreset.updatedAt === '2026-07-21-penacony-sparkle-profile-1', 'Penacony character preset updatedAt changed.');
-  assert(Array.isArray(penaconyPreset.entries) && penaconyPreset.entries.length === 5, 'Penacony character group must contain Sunday, Gallagher, Robin, Misha, and Sparkle profiles.');
+  assert(penaconyPreset.updatedAt === '2026-07-28-penacony-dahlia-official-audit-2', 'Penacony character preset updatedAt changed.');
+  assert(Array.isArray(penaconyPreset.entries) && penaconyPreset.entries.length === 6, 'Penacony character group must contain Sunday, Gallagher, Robin, Misha, Sparkle, and Dahlia profiles.');
   const sunday = penaconyPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_sunday_profile');
   const sundaySource = String(sunday?.原文 ?? '');
   assert(sunday?.资料类型 === '单角色档案', '星期日 must be 单角色档案.');
@@ -1667,6 +1670,85 @@ function assertPenaconyProfileSet() {
   assert(sparkleSource.includes('不把花火洗成只做无害恶作剧的善良少女') && sparkleSource.includes('不写死她不能正面战斗'), '花火 must preserve danger without invented power limits.');
   assert(sparkleSource.includes('「诡弈」不是《崩坏：星穹铁道》中花火的官方称谓') && !sparkle?.关键词?.some((keyword) => /诡弈|诡戏千役/.test(keyword)), '花火 must exclude unsupported or cross-game trigger names.');
   assert(sparkleSource.includes('原著事件结束后的行踪没有固定公开答案') && String(sparkle?.角色故事摘要 ?? '').includes('服从当前RP分支'), '花火 post-Penacony state must preserve RP freedom.');
+  const dahlia = penaconyPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_the_dahlia_profile');
+  const dahliaSource = String(dahlia?.原文 ?? '');
+  assertRebuiltSingleProfileShape([dahlia], '匹诺康尼', 'Penacony Dahlia');
+  assert(dahlia?.系列序号 === 8 && dahlia?.章节序号 === 6, '大丽花 must be the sixth Penacony profile.');
+  assert(
+    dahlia?.关键词?.includes('资料大区:匹诺康尼') &&
+      dahlia?.关键词?.includes('关联:焚化工') &&
+      dahlia?.关键词?.includes('关联:永火官邸') &&
+      !dahlia?.关键词?.some((keyword) => /^(所属|组织|阵营):/.test(keyword)),
+    '大丽花 must stay in the Penacony group while preserving Ever-Flame Mansion and Cremator relationships.',
+  );
+  assert(resolveCharacterGroupLabel(dahlia) === '匹诺康尼', '大丽花 navigation group must resolve to Penacony.');
+  assertCoreTriggers(
+    dahlia,
+    ['大丽花', 'The Dahlia', '康士坦丝', 'Constance', '焚化工·大丽花'],
+    'Penacony Dahlia profile',
+  );
+  assertNoBareKeywords(
+    dahlia,
+    ['大丽花', 'The Dahlia', '康士坦丝', 'Constance', '焚化工', '永火官邸', '冥火大公', '忆者', '记忆', '泯灭帮'],
+    'Penacony Dahlia profile',
+  );
+  for (const storyTitle of ['### 角色故事·其一', '### 角色故事·其二', '### 角色故事·其三', '### 角色故事·其四']) {
+    assert(dahliaSource.includes(storyTitle), `大丽花 official story missing: ${storyTitle}`);
+  }
+  assert(
+    dahliaSource.includes('故事四署名仅为「剧本的批注」，批注者身份未公开') &&
+      String(dahlia?.角色故事摘要 ?? '').includes('该分支不能写成当前事实'),
+    '大丽花 must keep the Xuyu branch hypothetical rather than current fact.',
+  );
+  assert(
+    dahlia?.关键词?.includes('大丽花两次叛离') &&
+      !dahlia?.关键词?.includes('大丽花三次叛离') &&
+      dahliaSource.includes('明确叛离次数：两次') &&
+      dahliaSource.includes('不能概括为三次叛离或背叛三个归宿'),
+    '大丽花 must keep two confirmed betrayals instead of inventing a third.',
+  );
+  assert(
+    dahliaSource.includes('来自某位星核猎手，一段受到扭曲的记忆') &&
+      dahliaSource.includes('不得推测或指定为流萤、萨姆或其他具体成员') &&
+      !dahliaSource.includes('故事三的叙述者是一位星核猎手（从上下文推测'),
+    '大丽花 story three must keep the Stellaron Hunter narrator anonymous.',
+  );
+  assert(
+    dahliaSource.includes('成为模因前的具体存在形态未公开') &&
+      !dahliaSource.includes('曾为人类，后转化为模因') &&
+      !dahliaSource.includes('知道冥火大公的死因和永火官邸覆灭的真相'),
+    '大丽花 must not invent a human origin or complete Mansion truth knowledge.',
+  );
+  assert(
+    !dahliaSource.includes('可以穿行于记忆、梦境和意识之间') &&
+      !dahliaSource.includes('几乎不可能被物理手段捕获或囚禁') &&
+      !dahliaSource.includes('她的焚忆之火对星神级别的存在无效') &&
+      !dahliaSource.includes('她不能无中生有地创造记忆') &&
+      !dahliaSource.includes('她无法背叛自己的本质') &&
+      dahliaSource.includes('影响对象、发动条件、持续时间、可逆性和上限均未完整公开'),
+    '大丽花 abilities must stay within the official story evidence.',
+  );
+  const dahliaCorpus = dahliaSource.slice(dahliaSource.indexOf('## 语料层'), dahliaSource.indexOf('## 能力与职责模块'));
+  const dahliaCorpusHeadings = dahliaCorpus.match(/^### .+$/gm) ?? [];
+  assert(
+    dahliaSource.includes('语料只作口吻参考，不照抄原句，不把语料事件直接当作当前剧情事实') &&
+      dahliaCorpusHeadings.length === 15 &&
+      dahliaCorpus.includes('### 烦恼') &&
+      dahliaCorpus.includes('### 分享') &&
+      dahliaCorpus.includes('### 见闻·记忆美学') &&
+      dahliaCorpus.includes('### 关于冥火大公') &&
+      dahliaCorpus.includes('那恩主纳努克的目光也从未降临') &&
+      !dahliaCorpus.includes('### 关于自己·三度叛离') &&
+      !dahliaCorpus.includes('### 关于自己·模因之躯') &&
+      !dahliaCorpus.includes('### 关于星期日'),
+    '大丽花 must preserve exactly the 15 official non-combat voice entries without fabricated lines.',
+  );
+  assert(
+    String(dahlia?.来源 ?? '').includes('content_id=6025') &&
+      dahliaSource.includes('这是项目检索与展示分组，不代表官方阵营或出身') &&
+      dahliaSource.includes('当前中文官方页不能单独证明官方英文拼写'),
+    '大丽花 must record the official source and separate project grouping or search aliases from official facts.',
+  );
   assert(!preset.includes("path: '/zhiku-presets/penacony-characters.json'"), 'Legacy Penacony character preset must stay retired.');
   assert(
     panel.includes('const emptyCharacterGroupSeeds: CharacterGroup[]') &&
@@ -2088,12 +2170,12 @@ function assertAmphoreusProfileSet() {
   assert(amphoreusPreset.id === 'zhiku_amphoreus_character_rebuild', 'Amphoreus character preset id changed.');
   assert(amphoreusPreset.title === '人物重建·翁法罗斯角色档案', 'Amphoreus character preset title changed.');
   assert(
-    amphoreusPreset.updatedAt === '2026-07-22-amphoreus-tribbie-profile-11',
+    amphoreusPreset.updatedAt === '2026-07-30-multiform-character-variants-1',
     'Amphoreus character preset updatedAt changed.',
   );
   assert(
-    Array.isArray(amphoreusPreset.entries) && amphoreusPreset.entries.length === 8,
-    'Amphoreus character group must contain Aglaea, Phainon, Hyacine, Hysilens, Lygus, Anaxa, Cipher, and Tribbie.',
+    Array.isArray(amphoreusPreset.entries) && amphoreusPreset.entries.length === 13,
+    'Amphoreus character group must retain twelve subjects and add the confirmed Khaslana form entry.',
   );
 
   const aglaea = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_aglaea_profile');
@@ -2104,6 +2186,10 @@ function assertAmphoreusProfileSet() {
   const anaxa = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_anaxa_profile');
   const cipher = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_cipher_profile');
   const tribbie = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_tribbie_profile');
+  const cerydra = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_cerydra_profile');
+  const mydei = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_mydei_profile');
+  const cyrene = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_cyrene_profile');
+  const castorice = amphoreusPreset.entries.find((entry) => entry.id === 'zhiku_character_rebuild_castorice_profile');
   const source = String(aglaea?.原文 ?? '');
   assertRebuiltSingleProfileShape([aglaea], '翁法罗斯', 'Amphoreus');
   assert(aglaea?.年龄状态 === '成年女性外观；具体年龄未公开', '阿格莱雅 must expose an adult-appearance age boundary.');
@@ -2198,7 +2284,7 @@ function assertAmphoreusProfileSet() {
   );
   assert(preset.includes('amphoreus-character-rebuild.json'), 'zhikuPreset.ts must register the Amphoreus preset file.');
   assert(preset.includes('zhiku_amphoreus_character_rebuild'), 'zhikuPreset.ts must register the Amphoreus preset id.');
-  assert(preset.includes('2026-07-22-amphoreus-tribbie-profile-11'), 'zhikuPreset.ts must register the Amphoreus updatedAt.');
+  assert(preset.includes('2026-07-30-multiform-character-variants-1'), 'zhikuPreset.ts must register the Amphoreus updatedAt.');
   assert(
     preset.indexOf('penacony-character-rebuild.json') < preset.indexOf('amphoreus-character-rebuild.json') &&
       preset.indexOf('amphoreus-character-rebuild.json') < preset.indexOf('interastral-peace-corporation-character-rebuild.json'),
@@ -2525,6 +2611,405 @@ function assertAmphoreusProfileSet() {
   for (const falseClaim of ['本名：缇里西庇俄丝', '种族：黄金裔', 'Myrtis（桃金娘）', '母亲是自然之力的存在', '可自由切换一千个化身', '所有黄金裔都是她的学生']) {
     assert(!tribbieSource.includes(falseClaim), `缇宝 must not retain unsupported attachment claim: ${falseClaim}`);
   }
+
+  const cerydraSource = String(cerydra?.原文 ?? '');
+  assertRebuiltSingleProfileShape(
+    [aglaea, phainon, hyacine, hysilens, lygus, anaxa, cipher, tribbie, cerydra],
+    '翁法罗斯',
+    'Amphoreus',
+  );
+  assert(
+    cerydra?.年龄状态 === '幼年女性外观；以永驻幼年为代价取得「律法」力量，实际经历长期统治与征战，具体年龄未公开',
+    '刻律德菈 must preserve her permanent-childhood curse without inventing a numerical age.',
+  );
+  assert(
+    cerydra?.出身 === '翁法罗斯·北境帝国许珀耳（幼年曾是失去家园的难民）',
+    '刻律德菈 must preserve her confirmed Xupeer refugee origin.',
+  );
+  assert(cerydra?.系列序号 === 8.5 && cerydra?.章节序号 === 9, '刻律德菈 must be the ninth Amphoreus profile.');
+  assert(
+    cerydra?.关键词?.includes('资料大区:翁法罗斯') &&
+      cerydra?.关键词?.includes('所属:黄金裔') &&
+      cerydra?.关键词?.includes('出身:许珀耳'),
+    '刻律德菈 must be tagged to Amphoreus, the Chrysos Heirs, and Xupeer.',
+  );
+  assert(resolveCharacterGroupLabel(cerydra) === '翁法罗斯', '刻律德菈 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    cerydra,
+    ['刻律德菈', 'Cerydra', '燃冕者刻律德菈', '凯撒刻律德菈', '北境君主刻律德菈', '律法黄金裔刻律德菈'],
+    'Amphoreus Cerydra profile',
+  );
+  assertNoBareKeywords(
+    cerydra,
+    ['刻律德菈', 'Cerydra', '燃冕者', '凯撒', '北境君主', '律法', '许珀耳', '黄金裔', '奥赫玛', '逐火', '棋局'],
+    'Amphoreus Cerydra profile',
+  );
+  assert(
+    cerydraSource.includes('本名：未公开。「刻律德菈」是贵族将她包装成流浪王女时强加的名字') &&
+      cerydraSource.includes('种族：未知。「黄金裔」是使命与身份，不是生物学种族名称'),
+    '刻律德菈 must preserve the assigned-name and unknown-species boundaries.',
+  );
+  const cerydraStoryTitles = [
+    '### 刻律德菈角色故事一：难民、假王女与自保棋局',
+    '### 刻律德菈角色故事二：宫廷棋路、外征与燃烧冠冕',
+    '### 刻律德菈角色故事三：逐火制度、海洋战役与牺牲艺术',
+    '### 刻律德菈角色故事四：剑旗问答、继任者与征服不公',
+  ];
+  assert(
+    cerydraStoryTitles.every((title) => cerydraSource.includes(title)) &&
+      cerydraStoryTitles.every((title, index) => index === 0 || cerydraSource.indexOf(cerydraStoryTitles[index - 1]) < cerydraSource.indexOf(title)),
+    '刻律德菈 must preserve all four official stories in their verified order.',
+  );
+  assertOfficialVoiceTranscript(cerydraSource, 24, [
+    ['初次见面', '「燃冕者」、「独裁官」、「女皇」、「总帅」、「凯撒」'],
+    ['问候', '免礼。天光甚好，对弈一局如何？'],
+    ['关于自己•诅咒', '意欲取「律法」的力量，注定要付出同等的代价'],
+    ['爱好', '下棋虽有助于推衍战局'],
+    ['关于海瑟音', '她循着光与热游向这里'],
+    ['关于三月七', '多亏了岁月爵的努力'],
+  ], '刻律德菈');
+  const cerydraVoiceSection = cerydraSource.match(/## 语料层([\s\S]*?)(?=\n## )/)?.[1] ?? '';
+  assert((cerydraVoiceSection.match(/^### .+$/gm) ?? []).length === 24, '刻律德菈 must keep exactly 24 official titled voice entries.');
+  assert(
+    cerydraSource.includes('神权：角色信息记载为「公正之秤，塔兰顿」') &&
+      cerydraSource.includes('以燃烧之痛与永驻幼年的代价取得力量') &&
+      cerydraSource.includes('完整能力、作用范围和归还条件不得自行补齐'),
+    '刻律德菈 must preserve the verified Talanthon authority and conservative power boundary.',
+  );
+  assert(
+    cerydraSource.includes('海瑟音是她最信任的臣子与锋刃') &&
+      cerydraSource.includes('阿格莱雅是能接过逐火重任的最佳人选') &&
+      cerydraSource.includes('曾把缇宝三人作为统合神谕的质子'),
+    '刻律德菈 must preserve the verified Hysilens, Aglaea, and Tribbie relationship facts.',
+  );
+  assert(
+    cerydraSource.includes('游戏机制隔离') &&
+      cerydraSource.includes('五星、风属性、同谐命途、战技复制'),
+    '刻律德菈 must keep playable mechanics out of plot capabilities.',
+  );
+  assert(
+    cerydraSource.includes('不强制刻律德菈按原作节点命令海瑟音弑君、自我抹去、死亡、离场、失联、重新出现、留下王棋或停止参与当前故事'),
+    '刻律德菈 must preserve RP freedom after canon events.',
+  );
+  assert(
+    String(cerydra?.角色故事摘要 ?? '').includes('难民女孩因蓝发和金血被包装成王女') &&
+      String(cerydra?.角色故事摘要 ?? '').includes('奥赫玛的议事与知识改革') &&
+      String(cerydra?.角色故事摘要 ?? '').includes('不强制当前RP复刻死亡、离场或唯一结局'),
+    '刻律德菈 injected story summary must preserve the official sequence and RP freedom.',
+  );
+  for (const falseClaim of [
+    '本名：（未公开；「刻律德菈」即其本名）',
+    '种族：黄金裔（翁法罗斯）',
+    '出身于统治寒冷疆域的君主家族',
+    '黄金战争的终结者',
+    '归还了六枚火种',
+    '原本贤明的刻律德菈性情大变',
+    '与来古士之间存在某种秘密协定',
+    '她的旗帜不属于任何城邦',
+    '杀敌六万',
+  ]) {
+    assert(!cerydraSource.includes(falseClaim), `刻律德菈 must not retain unsupported attachment claim: ${falseClaim}`);
+  }
+
+  const mydeiSource = String(mydei?.原文 ?? '');
+  assertRebuiltSingleProfileShape(
+    [aglaea, phainon, hyacine, hysilens, lygus, anaxa, cipher, tribbie, cerydra, mydei],
+    '翁法罗斯',
+    'Amphoreus',
+  );
+  assert(
+    mydei?.年龄状态 === '成年男性外观；幼年被投入冥海并经历九个冬天，此后率军长期迁徙与征战，具体年龄未公开',
+    '万敌 must preserve his adult appearance and nine-winter history without inventing a numerical age.',
+  );
+  assert(
+    mydei?.出身 === '翁法罗斯·悬锋城（先王欧利庞与王后歌耳戈之子）',
+    '万敌 must preserve his confirmed Kremnos and royal-family origin.',
+  );
+  assert(mydei?.系列序号 === 8.5 && mydei?.章节序号 === 10, '万敌 must be the tenth Amphoreus profile.');
+  assert(
+    mydei?.关键词?.includes('资料大区:翁法罗斯') &&
+      mydei?.关键词?.includes('所属:黄金裔') &&
+      mydei?.关键词?.includes('出身:悬锋城'),
+    '万敌 must be tagged to Amphoreus, the Chrysos Heirs, and Kremnos.',
+  );
+  assert(resolveCharacterGroupLabel(mydei) === '翁法罗斯', '万敌 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    mydei,
+    ['万敌', 'Mydeimos', 'Mydei', '迈德漠斯', '悬锋王储迈德漠斯', '奥赫玛战士万敌', '纷争黄金裔万敌'],
+    'Amphoreus Mydei profile',
+  );
+  assertNoBareKeywords(
+    mydei,
+    ['万敌', 'Mydeimos', 'Mydei', '迈德漠斯', '悬锋', '纷争', '战争', '不死', '王储', '长枪', '黑潮', '火种', '逐火'],
+    'Amphoreus Mydei profile',
+  );
+  assert(
+    mydeiSource.includes('本名：迈德漠斯（Mydeimos）') &&
+      mydeiSource.includes('种族：未知。歌耳戈称他为纯血悬锋人') &&
+      mydeiSource.includes('不足以确认生物学种族为普通人类'),
+    '万敌 must preserve the Mydeimos name and conservative species boundary.',
+  );
+  assert(
+    mydeiSource.includes('神权：角色信息记载为「天谴之矛，尼卡多利」') &&
+      mydeiSource.includes('逐猎「纷争」火种，但不能提前写成已经取得或占有火种'),
+    '万敌 must preserve the verified Nikadori authority and fire-seed acquisition boundary.',
+  );
+  const mydeiStoryTitles = [
+    '### 万敌角色故事一：冥海海王传说与九年重生',
+    '### 万敌角色故事二：染血孤军、迁徙与被记住的姓名',
+    '### 万敌角色故事三：弑王拒冠、逐火同行与继续迁移',
+    '### 万敌角色故事四：奥赫玛净土、黑潮前线与归乡使命',
+  ];
+  assert(
+    mydeiStoryTitles.every((title) => mydeiSource.includes(title)) &&
+      mydeiStoryTitles.every((title, index) => index === 0 || mydeiSource.indexOf(mydeiStoryTitles[index - 1]) < mydeiSource.indexOf(title)),
+    '万敌 must preserve all four official stories in their verified order.',
+  );
+  assertOfficialVoiceTranscript(mydeiSource, 24, [
+    ['初次见面', '我是悬锋的王储「迈德漠斯」亦是奥赫玛的战士「万敌」'],
+    ['问候', '嗯。'],
+    ['关于自己•过去', '我最初的记忆，是在深渊中与黑暗搏杀'],
+    ['爱好•营养', '强健的体魄、健康的精神'],
+    ['关于白厄', '我曾与他几番交手'],
+    ['关于刻律德菈', '为了城邦和子民，我们都做过极其困难的选择'],
+  ], '万敌');
+  const mydeiVoiceSection = mydeiSource.match(/## 语料层([\s\S]*?)(?=\n## )/)?.[1] ?? '';
+  assert((mydeiVoiceSection.match(/^### .+$/gm) ?? []).length === 24, '万敌 must keep exactly 24 official titled voice entries.');
+  assert(
+    mydeiSource.includes('歌耳戈的遗信确认她是其母、欧利庞是其父') &&
+      mydeiSource.includes('把王师克拉特鲁斯托付给他') &&
+      mydeiSource.includes('她允许儿子依自己的意志选择是否追逐王冠'),
+    '万敌 must preserve the verified Gorgo letter and Kratylus trust boundary.',
+  );
+  assert(
+    mydeiSource.includes('弑杀先王、完成复仇，却拒绝戴上王冠') &&
+      mydeiSource.includes('只在决议上留下简短批示：「继续迁移。」'),
+    '万敌 must preserve the verified regicide, crown refusal, and migration decision.',
+  );
+  assert(
+    mydeiSource.includes('游戏机制隔离') &&
+      mydeiSource.includes('五星、虚数属性、毁灭命途、消耗生命、蓄能、血仇状态'),
+    '万敌 must keep playable mechanics out of plot capabilities.',
+  );
+  assert(
+    mydeiSource.includes('不强制万敌按原作节点取得或拒绝火种、托付固定弱点、战死、离场、进入轮回、成为种子、永久镇守悬锋或停止参与当前故事'),
+    '万敌 must preserve RP freedom after canon events.',
+  );
+  assert(
+    String(mydei?.角色故事摘要 ?? '').includes('冥海幼童、九年重生与海王传说') &&
+      String(mydei?.角色故事摘要 ?? '').includes('弑杀先王后拒绝王冠') &&
+      String(mydei?.角色故事摘要 ?? '').includes('不强制当前RP复刻死亡、离场、种子或唯一结局'),
+    '万敌 injected story summary must preserve the official sequence and RP freedom.',
+  );
+  for (const falseClaim of [
+    '种族：人类（翁法罗斯·悬锋城）',
+    '不死之身（黄金裔赐福',
+    '长矛（主力武器',
+    '【HKS】',
+    '传奇耐咬王',
+    '万敌的弱点是第十节胸椎',
+    '通过损失生命值积累充能',
+    '推动了黄金蜜饼的流行',
+    '最终是「作为『种子』保存在《如我所书》中」',
+  ]) {
+    assert(!mydeiSource.includes(falseClaim), `万敌 must not retain unsupported attachment claim: ${falseClaim}`);
+  }
+
+  const cyreneSource = String(cyrene?.原文 ?? '');
+  assertRebuiltSingleProfileShape(
+    [aglaea, phainon, hyacine, hysilens, lygus, anaxa, cipher, tribbie, cerydra, mydei, cyrene],
+    '翁法罗斯',
+    'Amphoreus',
+  );
+  assert(
+    cyrene?.年龄状态 === '年轻女性外观；角色故事横跨大量重复故事与漫长记忆，具体年龄未公开，不能以轮回数量换算生理年龄',
+    '昔涟 must preserve her young appearance and non-numeric age boundary.',
+  );
+  assert(
+    cyrene?.出身 === '翁法罗斯·哀丽秘榭（官方城邦栏保留「哀丽秘榭，？」）',
+    '昔涟 must preserve her confirmed Aedes Elysiae origin and the official city uncertainty.',
+  );
+  assert(cyrene?.系列序号 === 8.5 && cyrene?.章节序号 === 11, '昔涟 must be the eleventh Amphoreus profile.');
+  assert(
+    cyrene?.关键词?.includes('资料大区:翁法罗斯') &&
+      cyrene?.关键词?.includes('所属:黄金裔') &&
+      cyrene?.关键词?.includes('出身:哀丽秘榭'),
+    '昔涟 must be tagged to Amphoreus, the Chrysos Heirs, and Aedes Elysiae.',
+  );
+  assert(resolveCharacterGroupLabel(cyrene) === '翁法罗斯', '昔涟 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    cyrene,
+    ['昔涟', 'Cyrene', '迷迷', 'Mem', '德谬歌', 'PhiLia093', '哀丽秘榭的女儿', '往昔的涟漪', '哺育真我的黄金裔昔涟'],
+    'Amphoreus Cyrene profile',
+  );
+  assertNoBareKeywords(
+    cyrene,
+    ['昔涟', 'Cyrene', '迷迷', 'Mem', '德谬歌', 'PhiLia093', '记忆', '冰', '粉色', '花朵', '涟漪', '浪漫', '爱', '黄金裔', '翁法罗斯'],
+    'Amphoreus Cyrene profile',
+  );
+  assert(
+    cyreneSource.includes('现有角色页没有说明它是否为出生名或法定本名') &&
+      cyreneSource.includes('种族：未知') &&
+      cyreneSource.includes('不直接写死为忆灵或普通人类') &&
+      cyreneSource.includes('神权：官方角色信息记载为「……？」'),
+    '昔涟 must preserve the official name, species, and authority uncertainty.',
+  );
+  const cyreneStoryTitles = [
+    '### 昔涟角色故事一：PhiLia093、桃子与第496000次记录',
+    '### 昔涟角色故事二：第33550335个故事与追逐流星',
+    '### 昔涟角色故事三：共同写下逐火、再创世与不同结局',
+    '### 昔涟角色故事四：留待未来的空白诗篇',
+  ];
+  assert(
+    cyreneStoryTitles.every((title) => cyreneSource.includes(title)) &&
+      cyreneStoryTitles.every((title, index) => index === 0 || cyreneSource.indexOf(cyreneStoryTitles[index - 1]) < cyreneSource.indexOf(title)),
+    '昔涟 must preserve all four official stories in their verified order.',
+  );
+  assertOfficialVoiceTranscript(cyreneSource, 28, [
+    ['初次见面', '这是命运的邂逅吗，还是…久别重逢呢'],
+    ['关于自己•存在', '从天真无邪的「迷迷」，到青春活泼的「昔涟」'],
+    ['爱好•秋千', '开拓者喜欢荡秋千吗'],
+    ['见闻', '三千万篇相似而不相同的故事'],
+    ['关于白厄', '那在哀丽秘榭的田野中奔跑的'],
+    ['关于「昔涟」', '就像花儿留下种子，种子又盛开了花'],
+  ], '昔涟');
+  const cyreneVoiceSection = cyreneSource.match(/## 语料层([\s\S]*?)(?=\n## )/)?.[1] ?? '';
+  assert((cyreneVoiceSection.match(/^### .+$/gm) ?? []).length === 28, '昔涟 must keep exactly 28 official titled voice entries.');
+  assert(
+    cyreneSource.includes('第496000次记录') &&
+      cyreneSource.includes('第33550335个故事') &&
+      cyreneSource.includes('故事四是明确的未来幻想，不可写成'),
+    '昔涟 must preserve official story numbers and keep the future story hypothetical.',
+  );
+  assert(
+    cyreneSource.includes('游戏机制隔离') &&
+      cyreneSource.includes('五星、冰属性、记忆命途、召唤忆灵「德谬歌」、辅助定位'),
+    '昔涟 must keep playable mechanics out of plot capabilities.',
+  );
+  assert(
+    cyreneSource.includes('不强制昔涟按原作节点失忆、破碎、化光、离场、消失、成为种子、固定转化为某种形态或停止参与当前故事'),
+    '昔涟 must preserve RP freedom after canon events.',
+  );
+  assert(
+    String(cyrene?.角色故事摘要 ?? '').includes('PhiLia093以感官碎片理解桃子、世界与第496000次等待') &&
+      String(cyrene?.角色故事摘要 ?? '').includes('第33550335个故事仍走向铁墓') &&
+      String(cyrene?.角色故事摘要 ?? '').includes('不强制当前RP复刻失忆、破碎、离场、种子或唯一结局'),
+    '昔涟 injected story summary must preserve the official sequence and RP freedom.',
+  );
+  for (const falseClaim of [
+    '本名：昔涟。此为角色本名',
+    '种族：忆灵（Memospirit）',
+    '神权：岁月',
+    '预计2026年',
+    '爱莉希雅作为「另一个世界的她」',
+    '米哈游知名演员',
+    '今天想听什么样的故事呢',
+    '如果我告诉孩子们要勇敢、要战斗',
+    '她的战斗能力有限',
+  ]) {
+    assert(!cyreneSource.includes(falseClaim), `昔涟 must not retain unsupported attachment claim: ${falseClaim}`);
+  }
+
+  const castoriceSource = String(castorice?.原文 ?? '');
+  assertRebuiltSingleProfileShape(
+    [aglaea, phainon, hyacine, hysilens, lygus, anaxa, cipher, tribbie, cerydra, mydei, cyrene, castorice],
+    '翁法罗斯',
+    'Amphoreus',
+  );
+  assert(
+    castorice?.年龄状态 === '年轻女性外观；自幼承担哀地里亚圣女职责，具体年龄未公开',
+    '遐蝶 must preserve her young appearance and non-numeric age boundary.',
+  );
+  assert(
+    castorice?.出身 === '翁法罗斯·哀地里亚（官方城邦另列斯缇科西亚与奥赫玛）',
+    '遐蝶 must preserve her confirmed Aidonia origin and all official city associations.',
+  );
+  assert(castorice?.系列序号 === 8.5 && castorice?.章节序号 === 12, '遐蝶 must be the twelfth Amphoreus profile.');
+  assert(
+    castorice?.关键词?.includes('资料大区:翁法罗斯') &&
+      castorice?.关键词?.includes('所属:黄金裔') &&
+      castorice?.关键词?.includes('出身:哀地里亚'),
+    '遐蝶 must be tagged to Amphoreus, the Chrysos Heirs, and Aidonia.',
+  );
+  assert(resolveCharacterGroupLabel(castorice) === '翁法罗斯', '遐蝶 navigation group must resolve to Amphoreus.');
+  assertCoreTriggers(
+    castorice,
+    ['遐蝶', 'Castorice', '死荫的侍女', '冥河的女儿', '死亡黄金裔遐蝶', '哀地里亚圣女遐蝶', '灰黯之手塞纳托斯', '死龙·玻吕刻斯'],
+    'Amphoreus Castorice profile',
+  );
+  assertNoBareKeywords(
+    castorice,
+    ['遐蝶', 'Castorice', '翁法罗斯', '黄金裔', '死亡', '雪', '蝴蝶', '冥界', '火种', '奥赫玛', '逐火'],
+    'Amphoreus Castorice profile',
+  );
+  assert(
+    castoriceSource.includes('现有角色页没有说明它是否为出生名或法定本名') &&
+      castoriceSource.includes('种族：未知') &&
+      castoriceSource.includes('「黄金裔」是使命与身份') &&
+      castoriceSource.includes('神权：角色信息记载为「灰黯之手，塞纳托斯」'),
+    '遐蝶 must preserve the official name, species, and Thanatos authority boundaries.',
+  );
+  const castoriceStoryTitles = [
+    '### 遐蝶角色故事一：哀地里亚风雪、圣女与失落姓名',
+    '### 遐蝶角色故事二：觐见塞纳托斯之路与奥赫玛第二人生',
+    '### 遐蝶角色故事三：逐火温暖、死亡噩梦与守护决心',
+    '### 遐蝶角色故事四：前往冥界前的最后一日与拥抱心愿',
+  ];
+  assert(
+    castoriceStoryTitles.every((title) => castoriceSource.includes(title)) &&
+      castoriceStoryTitles.every((title, index) => index === 0 || castoriceSource.indexOf(castoriceStoryTitles[index - 1]) < castoriceSource.indexOf(title)),
+    '遐蝶 must preserve all four official stories in their verified order.',
+  );
+  assertOfficialVoiceTranscript(castoriceSource, 25, [
+    ['初次见面', '欢迎来到奥赫玛，我是遐蝶'],
+    ['关于自己·职责', '为牺牲的黄金裔和泰坦送上告慰'],
+    ['爱好', '每次看见可爱的事物，我总想把它们做成小玩偶'],
+    ['关于玻吕茜亚', '如今我知晓了，妹妹曾经不忍心见到花瓣凋零'],
+    ['关于风堇', '纵然经历了这么多生离死别'],
+    ['关于昔涟', '如果可以，我也想为她手作一朵绚烂的水晶花'],
+  ], '遐蝶');
+  const castoriceVoiceSection = castoriceSource.match(/## 语料层([\s\S]*?)(?=\n## )/)?.[1] ?? '';
+  assert((castoriceVoiceSection.match(/^### .+$/gm) ?? []).length === 25, '遐蝶 must keep exactly 25 official titled voice entries.');
+  assert(
+    castoriceSource.includes('妹妹玻吕茜亚曾为她留下生的机会') &&
+      castoriceSource.includes('妹妹玻吕茜亚与玩法召唤物「死龙·玻吕刻斯」名称相近') &&
+      castoriceSource.includes('不得与「死龙•玻吕刻斯」仅因译名相近而合并'),
+    '遐蝶 must preserve the distinction between Polyxia and the Dead Dragon Pollux.',
+  );
+  assert(
+    castoriceSource.includes('故事三大量死亡场景属于噩梦和恐惧') &&
+      castoriceSource.includes('故事四发生在启程前，不能证明她已永久定居冥界或完成拥抱'),
+    '遐蝶 must keep nightmare deaths and the pre-underworld wish in their official narrative frames.',
+  );
+  assert(
+    castoriceSource.includes('游戏机制隔离') &&
+      castoriceSource.includes('五星、量子属性、记忆命途、输出定位、召唤「死龙•玻吕刻斯」'),
+    '遐蝶 must keep playable mechanics out of plot capabilities.',
+  );
+  assert(
+    castoriceSource.includes('不强制遐蝶按原作节点取得或归还火种、进入或永居冥界、失去同伴、完成拥抱、死亡、离场、成为种子或停止参与当前故事'),
+    '遐蝶 must preserve RP freedom after canon events.',
+  );
+  assert(
+    String(castorice?.角色故事摘要 ?? '').includes('哀地里亚风雪、高塔圣女与被她记住的失落姓名') &&
+      String(castorice?.角色故事摘要 ?? '').includes('前往冥界前重访浴池、花园、纪念碑和初见之地') &&
+      String(castorice?.角色故事摘要 ?? '').includes('不强制当前RP复刻永居冥界、死亡、离场、种子或唯一结局'),
+    '遐蝶 injected story summary must preserve the official sequence and RP freedom.',
+  );
+  for (const falseClaim of [
+    '本名：遐蝶（本名即为角色名）',
+    '种族：黄金裔（翁法罗斯）',
+    '触碰她的人也会在数日内逐渐衰竭而死',
+    '死亡之触并非来自死龙，而是源于「死亡」权柄的分裂',
+    '如今的她永居冥界',
+    '她的战斗方式围绕生命消耗展开',
+    '月茧之庇',
+    '命运不可更改，但可以选择如何看待它',
+    '你今天……还活着。很好',
+    '她的战斗力高度依赖我方队伍',
+  ]) {
+    assert(!castoriceSource.includes(falseClaim), `遐蝶 must not retain unsupported attachment claim: ${falseClaim}`);
+  }
 }
 
 const removedCharacterPresetPaths = [
@@ -2540,8 +3025,9 @@ const removedCharacterPresetPaths = [
   'genius-society-characters.json',
 ];
 
-for (const path of removedCharacterPresetPaths) {
-  assert(!preset.includes(path), `legacy character preset must not be bundled: ${path}`);
+for (const fileName of removedCharacterPresetPaths) {
+  assert(!preset.includes(fileName), `legacy character preset must not be bundled: ${fileName}`);
+  assert(!fs.existsSync(`public/zhiku-presets/${fileName}`), `legacy V1 character source must stay deleted: ${fileName}`);
 }
 
 assert(
@@ -2578,10 +3064,10 @@ assert(
       preset.includes('2026-06-10-genius-society-character-profiles-8') &&
       preset.includes('2026-06-10-intelligentsia-guild-character-profiles-3') &&
       preset.includes('2026-06-10-belobog-character-profiles-15') &&
-      preset.includes('2026-06-18-xianzhou-luofu-story-layer-full-rewrite') &&
-      preset.includes('2026-07-21-penacony-sparkle-profile-1') &&
-      preset.includes('2026-07-22-amphoreus-tribbie-profile-11') &&
-    preset.includes('2026-06-09-stellaron-hunters-character-profiles-11') &&
+      preset.includes('2026-07-30-multiform-character-variants-1') &&
+      preset.includes('2026-07-28-penacony-dahlia-official-audit-2') &&
+      preset.includes('2026-07-30-multiform-character-variants-1') &&
+    preset.includes('2026-07-30-multiform-character-variants-1') &&
     preset.includes('2026-06-08-herta-station-character-profiles-12') &&
     preset.includes('updatedAt') &&
     preset.includes('encodeURIComponent(preset.updatedAt ?? preset.id)') &&
@@ -2709,26 +3195,20 @@ assert(
 );
 assert(
     retrieval.includes('解析智库软结构标签') &&
-    retrieval.includes('获取智库人物名') &&
     retrieval.includes('获取智库人物名列表') &&
-    retrieval.includes('获取智库核心触发词') &&
-    retrieval.includes('buildCharacterTriggerCandidates') &&
-    retrieval.includes('const aliasTriggers = extractCharacterAliasTriggers(entry)') &&
-    retrieval.includes('const coreTriggers = 获取智库核心触发词(entry)') &&
-    retrieval.includes('...coreTriggers') &&
-    retrieval.includes('比较智库人物节点') &&
-    retrieval.includes('buildCharacterAnchorEntries') &&
-    retrieval.includes('单角色档案|角色档案|人物档案') &&
-    retrieval.includes('isMainStoryAllowedZhikuMeta'),
-  'zhiku retrieval must understand rebuilt character soft-structure nodes.',
+    retrieval.includes('匹配智库关键词') &&
+    retrieval.includes('选择智库关键词互斥结果') &&
+    retrieval.includes('allKeywordMatches') &&
+    retrieval.includes('blockedKeywordMatches') &&
+    retrieval.includes('isMainStoryAllowedZhikuMeta') &&
+    !retrieval.includes('buildCharacterTriggerCandidates') &&
+    !retrieval.includes('extractCharacterAliasTriggers'),
+  'zhiku retrieval must use explicit keyword matching while retaining rebuilt character metadata gates.',
 );
 assert(
-  retrieval.includes('sceneContext?.npcNames') &&
-    !retrieval.includes('ZHIKU_SCENE_CHARACTER_HINTS') &&
-    retrieval.includes('buildCharacterDetectionText') &&
-    retrieval.includes('当前地点|当前相关人物|最近玩家输入|剧情规划|事件|小结') &&
-    retrieval.includes('黑塔空间站') &&
-    retrieval.includes('空间站[「“"]?黑塔') &&
+  !retrieval.includes('buildCharacterDetectionText') &&
+    !retrieval.includes('calibrationText.includes(q)') &&
+    !retrieval.includes('calibrationText.includes(term)') &&
     retrieval.includes('主体|OOC|风险') &&
     retrieval.includes('人物主体人格用于校准口吻与行为边界') &&
     retrieval.includes('外貌、性格、说话方式、行为习惯、关系边界与禁止误写字段是角色表现的优先锚点') &&
@@ -2737,13 +3217,11 @@ assert(
     retrieval.includes('该通道不参与关键词触发') &&
     retrieval.includes('最终会与关键词命中角色按资料 ID 去重') &&
     retrieval.includes('getZhikuCharacterCalibrationText(entry)') &&
-    retrieval.includes('formatZhikuCharacterCalibrationBrief(entry') &&
-    retrieval.includes('calibrationText.includes(q)') &&
-    retrieval.includes('calibrationText.includes(term)') &&
-    retrieval.includes('性格锚点：') &&
+    retrieval.includes('renderZhikuEntryStaticInjection') &&
+    retrieval.includes('独立人格与行为：') &&
     retrieval.includes('说话方式：') &&
-    ['外貌：', '性格：', '口吻：', '行为：', '关系边界：', '禁止误写：'].every((label) => retrieval.includes(label)),
-  'zhiku retrieval must prioritize explicit in-scene character persona anchors without using scene-default character fallback.',
+    retrieval.includes('演绎红线：'),
+  'zhiku retrieval must keep explicit in-scene fallback and persona formatting separate from automatic keyword matching.',
 );
 assert(
   systemPromptBuilder.includes('# 角色在场状态') &&
@@ -2821,22 +3299,26 @@ assert(
     contextSnapshot.includes('immediateStoryReviewForZhiku') &&
     !sendWorkflow.includes('includeRecentUserInputs: false') &&
     !contextSnapshot.includes('includeRecentUserInputs: false'),
-  'main zhiku keyword recall query must scan only current player input and latest 5 assistant body turns, while location/present-role/story-review hints stay in the AI supplement-only channel.',
+  'main zhiku keyword recall query must scan only current player input and latest 3 assistant body turns, while location/present-role/story-review hints stay in the AI supplement-only channel.',
 );
 assert(
-  retrieval.includes('extractCharacterAliasTriggers') &&
-    retrieval.includes('isBroadCharacterTrigger') &&
-    retrieval.includes('星穹列车|列车组|无名客|黑塔空间站|空间站|贝洛伯格|雅利洛-?VI|上层区|下层区|地火|银鬃铁卫|星核猎手') &&
-    retrieval.includes('当前地点|当前相关人物|最近玩家输入|剧情规划|事件|小结') &&
+  model.includes('export function 获取智库显式触发词') &&
+    model.includes('const explicit = normalizeTextList(entry.触发关键词)') &&
+    model.includes('if (explicit.length) return explicit') &&
+    model.includes('const coreTriggers = 获取智库核心触发词(entry)') &&
+    model.includes('if (coreTriggers.length) return coreTriggers') &&
+    model.includes('isRecallTriggerTag(parsed.key, entry.分类)') &&
+    model.includes("if (entry.分类 === 'character' && tagged.length) return dedupeTextList(tagged)") &&
     retrieval.includes('元信息不得触发关键词'),
-  'character keyword recall must use narrow character names/aliases and ignore broad organization/location/metainfo triggers.',
+  'character keyword recall must prioritize explicit names/aliases, preserve legacy core triggers, and exclude metadata labels.',
 );
 assert(
-  retrieval.includes('const characterCandidates = mergeZhikuEntries(') &&
-    retrieval.includes('rankZhikuEntries(anticipatedCharacters, sceneHints)') &&
-    !retrieval.includes("rankZhikuEntries(scored.filter((entry) => entry.分类 === 'character'") &&
-    !retrieval.includes('rankZhikuEntries(characterPool, sceneHints).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT)'),
-  'AI character supplement candidates must come from anticipated character names, not broad organization/location keyword hits.',
+  aiRetrievalIndex.includes('addCharacterParticipants(input.context.presentCharacters') &&
+    aiRetrievalIndex.includes('addCharacterParticipants(input.context.expectedCharacters') &&
+    aiRetrievalIndex.includes("entry.分类 === 'character' && subjectId && participantSubjects.has(subjectId)") &&
+    aiRetrievalIndex.includes("addEntry(entry, 'SUBJECT_FORM')") &&
+    !retrieval.includes('buildRecallSupplementCandidates'),
+  'AI character candidates must come from explicit participants and expand only their unlocked subject forms.',
 );
 assert(
   /maxRelatedEntries:\s*5/.test(settingsModel) &&
@@ -2844,76 +3326,56 @@ assert(
   'default zhiku non-character keyword recall count should be 5 and old saves must be clamped to 5.',
 );
 assert(
-    zhikuCot.includes('关键词召回已完成') &&
-    zhikuCot.includes('AI 检索补充模块') &&
-    zhikuCot.includes('不负责重筛、删除、替换或否定关键词召回结果') &&
-    zhikuCot.includes('元信息不得触发关键词') &&
-    zhikuCot.includes('当前地点、即时剧情回顾、在场角色分析') &&
-    zhikuCot.includes('AI 查缺补漏线索') &&
-    zhikuCot.includes('已关键词召回资料只作为排除表') &&
-    zhikuCot.includes('未召回候选资料') &&
-    zhikuCot.includes('Step0: 关键词结果与正文窗口确认') &&
-    zhikuCot.includes('Step1: AI 补充线索校准') &&
-    zhikuCot.includes('即时剧情回顾') &&
-    zhikuCot.includes('Step2: 在场角色与被提及角色分析') &&
-    zhikuCot.includes('谁明确在场、谁只是被提及、谁近期相关但不在场') &&
-    zhikuCot.includes('Step3: 预期登场预测') &&
-    zhikuCot.includes('合理登场路径') &&
-    zhikuCot.includes('Step4: 场景资料缺口分析') &&
-    zhikuCot.includes('必须补充') &&
-    zhikuCot.includes('Step5: 资料与角色召回门禁') &&
-    zhikuCot.includes('智库本身不决定角色出场、不推进剧情、不让资料自动变成正文事实') &&
-    zhikuCot.includes('背景资料不等于 NPC 全知') &&
-    zhikuCot.includes('Step6: 查缺补漏整理与相关性判断') &&
-    zhikuCot.includes('强相关是当前镜头必须知道') &&
-    zhikuCot.includes('Step7: 确认最终 AI 补充内容') &&
-    zhikuCot.includes('Step8: 自检并输出') &&
-    zhikuCot.includes('若某类为空，写“无”'),
-  'zhiku CoT must use the current keyword-first, AI supplement-only Step0-Step8 workflow.',
+    zhikuCot.includes('智库运行时召回编译器') &&
+    zhikuCot.includes('玩家当前输入 + 最近 3 条 assistant 正文') &&
+    zhikuCot.includes('关键词结果默认保底保留') &&
+    zhikuCot.includes('FORM_OVERRIDE') &&
+    zhikuCot.includes('同一主体、同一互斥组') &&
+    zhikuCot.includes('不创作正文、不推进剧情、不扮演角色') &&
+    zhikuCot.includes('不得使用模型自身知识') &&
+    zhikuCot.includes('"selections"') &&
+    zhikuCot.includes('"noSelectionReason"') &&
+    zhikuCot.includes('不输出内部思考'),
+  'zhiku AI prompt must use the fixed runtime compiler identity and strict JSON contract.',
 );
 assert(
-  retrieval.includes('ZHIKU_COT_PROMPT') &&
+    retrieval.includes('ZHIKU_COT_PROMPT') &&
     retrieval.includes('const systemPrompt = buildZhikuModelSystemPrompt(sceneHints, promptModules)') &&
     retrieval.includes('export function buildZhikuModelSystemPrompt') &&
-    retrieval.includes('ZHIKU_LEGACY_COT_PROMPT,') &&
     retrieval.includes('export function buildZhikuModelUserPrompt') &&
-    retrieval.includes('buildRecallSupplementCandidates') &&
-    retrieval.includes('AI 查缺补漏线索（只用于判断是否缺少必要资料，不属于关键词扫描正文窗口）') &&
-    retrieval.includes('formatAiSupplementHints(options.aiSupplementHints)') &&
-    retrieval.includes('buildAiSupplementHintQuery(sceneContext?.aiSupplementHints)') &&
-    zhikuCot.includes('召回扫描正文窗口是唯一关键词触发来源') &&
-    retrieval.includes('当前地点、当前相关人物、剧情规划、小结、动态事件、即时剧情回顾和在场角色分析等元信息不得触发关键词') &&
-    retrieval.includes('已关键词召回资料（只作为排除表，不含档案正文）') &&
-    retrieval.includes('未召回候选资料（只可从这里补缺）') &&
-    zhikuCot.includes('不负责重筛、删除、替换或否定关键词召回结果') &&
-    zhikuCot.includes('只补充上下文确实需要但第一层没有命中的角色') &&
-    retrieval.includes("const summary = entry.摘要 || '无摘要'") &&
+    retrieval.includes('buildZhikuAiRequestForTurn') &&
+    retrieval.includes('buildZhikuModelUserPrompt(candidateIndex.request)') &&
+    retrieval.includes('parseZhikuAiOutput(rawText)') &&
+    retrieval.includes('compileZhikuAiSelection(candidateIndex.request') &&
+    aiRetrievalIndex.includes('buildCandidateSummary') &&
+    aiRetrievalIndex.includes('meta.性格锚点') &&
+    aiRetrievalIndex.includes('meta.说话方式') &&
+    aiRetrievalIndex.includes('meta.禁止误写') &&
+    !aiRetrievalIndex.includes('entry.原文') &&
     retrieval.includes('systemPrompt,') &&
     retrieval.includes('chatCompletionNonStream(api') &&
-    retrieval.includes('关键词召回结果已保底保留') &&
-    retrieval.includes('仅追加 ${appliedSupplementEntries.length} 条未由关键词命中的资料'),
-  'zhiku model retrieval must send the Step0-Step8 CoT prompt and use it only to supplement missing entries after keyword recall.',
+    retrieval.includes('关键词证据保留') &&
+    retrieval.includes('合法同主体形态修正'),
+  'zhiku model retrieval must send a controlled candidate index and compile strict JSON locally without leaking full source text.',
 );
 assert(
-  retrieval.includes('智库模型已按最近多回合正文窗口查缺补漏，但没有返回有效补充编号；已保留关键词召回结果。') &&
+  retrieval.includes('AI 主动补充失败，已回退到关键词结果') &&
     retrieval.includes('...keywordRecall') &&
-    !retrieval.includes("return { entries: [], injection: '', usedModel: true, rawText, diagnostics: fallback.diagnostics }"),
-  'zhiku model retrieval must preserve keyword recall instead of dropping all zhiku injection when the model returns no valid supplement indexes.',
+    !retrieval.includes('parseZhikuIndexes') &&
+    !retrieval.includes('buildRecallSupplementCandidates'),
+  'zhiku model retrieval must preserve keyword recall on failure and remove the legacy numbered-index path.',
 );
 assert(
-    model.includes('角色故事摘要?: string') &&
-    retrieval.includes('formatCharacterZhikuInjectionEntry') &&
-    retrieval.includes('formatCharacterStorySummarySection(entry)') &&
-    retrieval.includes("formatCharacterSourceSection(entry.原文, '语料层', 3600)") &&
-    retrieval.includes("formatCharacterSourceSection(entry.原文, '表现锚点层', 1800)") &&
-    retrieval.includes('主剧情必须读取语料层作为口吻参考') &&
-    retrieval.includes('角色故事层优先读取预整理摘要') &&
-    retrieval.includes('不得整句复读') &&
-    retrieval.includes('extractMarkdownSection') &&
-    retrieval.includes('compactSectionText') &&
-    !retrieval.includes("formatCharacterSourceSection(entry.原文, '角色故事层', 2600)") &&
-    !retrieval.includes("formatCharacterSourceSection(entry.原文, /^历史故事与.+层$/u, 2600)"),
-  'character zhiku entries must keep corpus/profile layers while replacing long story/history story injection with curated character story summary.',
+    model.includes('export interface 智库人物注入内容') &&
+    model.includes('注入内容?: 智库注入内容') &&
+    retrieval.includes('export function renderZhikuEntryStaticInjection') &&
+    retrieval.includes('return renderZhikuEntryStaticInjection(entry);') &&
+    ['核心身份与阵营：', '独立人格与行为：', '说话方式：', '台词语料：', '外貌锚点：', '当前形态与能力边界：', '精简角色故事：', '演绎红线：'].every((label) => retrieval.includes(label)) &&
+    !retrieval.includes('formatCharacterZhikuInjectionEntry') &&
+    !retrieval.includes('formatCharacterSourceSection') &&
+    !retrieval.includes('extractMarkdownSection') &&
+    !retrieval.includes('compactSectionText'),
+  'character zhiku injection must use the explicit structured injection contract without source-text fallback formatters.',
 );
 assert(
   mainCot.includes('不使用“本回合 NPC 表演卡”摘要层') &&
@@ -2935,32 +3397,29 @@ assert(
     retrieval.includes('function getNormalRelatedLimit') &&
     retrieval.includes('function isNormalRecallEntry') &&
     retrieval.includes("entry.分类 !== 'character' && entry.分类 !== 'story'") &&
-    zhikuCot.includes('推荐写成【编号：候选标题】') &&
-    zhikuCot.includes('角色相关资料：【编号：候选标题】|【编号：候选标题】|【编号：候选标题】') &&
-    retrieval.includes('function findZhikuCandidateIndexesByName') &&
-    zhikuCot.includes('输出格式必须严格为三行') &&
-    zhikuCot.includes('角色相关资料只挑') &&
-    zhikuCot.includes('多人同场时，角色相关资料优先覆盖每个正文窗口明确出现、在场分析确认或预期登场角色的主体人格与 OOC 风险') &&
-    retrieval.includes('召回扫描正文窗口') &&
-    zhikuCot.includes('弱相关资料只在能补充当前场景链路、人物关系链或机制理解时少量保留') &&
-    zhikuCot.includes('不要把 character 条目放进强/弱相关') &&
+    zhikuCot.includes('"operation": "ADD"') &&
+    zhikuCot.includes('CHARACTER_CORE | CHARACTER_FORM | SETTING_REQUIRED | BACKGROUND_OPTIONAL') &&
+    zhikuCot.includes('ADD | FORM_OVERRIDE') &&
+    aiRetrievalIndex.includes("USAGE_CATEGORY_MISMATCH") &&
+    aiRetrievalIndex.includes('FORM_CONFLICT_REQUIRES_OVERRIDE') &&
+    aiRetrievalIndex.includes('SUBJECT_MISMATCH') &&
+    aiRetrievalIndex.includes('GROUP_MISMATCH') &&
+    aiRetrievalIndex.includes('LIMIT_EXCEEDED') &&
+    aiRetrievalIndex.includes('candidateReason') &&
     retrieval.includes('characterEntries: mergeZhikuEntries(characterAnchors, presentFallbackAnchors)') &&
     retrieval.includes('strongEntries: primaryEntries') &&
-    retrieval.includes('weakEntries: weakSource.slice(0, Math.max(0, normalLimit - primaryEntries.length))') &&
+    retrieval.includes('weakEntries: []') &&
     retrieval.includes('const keywordGroups: 智库召回分组') &&
-    retrieval.includes('mergeSupplementedZhikuGroups(keywordGroups, supplementGroups)') &&
-    retrieval.includes('const supplementGroups = parseZhikuIndexes(rawText, candidates, normalLimit)') &&
+    retrieval.includes('buildCompiledZhikuGroups(keywordGroups, candidateIndex, compilation)') &&
     retrieval.includes('anticipatedNpcNames?: string[]') &&
-    retrieval.includes('aiSupplementHints?: 智库AI补充线索') &&
-    retrieval.includes('预期登场人物（只用于 AI 查缺补漏，不视为关键词已命中）') &&
-    retrieval.includes('关键词召回上限：角色档案 ${CHARACTER_KEYWORD_RECALL_LIMIT} 条，非角色资料 ${getNormalRelatedLimit(limit)} 条；AI 补充上限') &&
-    retrieval.includes('return accepted.size < AI_SUPPLEMENT_ENTRY_LIMIT') &&
-    retrieval.includes('trimAiSupplementGroups') &&
+    retrieval.includes('aiSupplementHints?: {') &&
+    retrieval.includes('compileZhikuAiSelection(candidateIndex.request, aiOutput, AI_SUPPLEMENT_ENTRY_LIMIT)') &&
+    aiRetrievalIndex.includes('accepted.length >= maxAiSelections') &&
     retrieval.includes('buildZhikuInjection(groups') &&
     retrieval.includes("formatGroup('在场角色档案（必须遵守）', groups.characterEntries)") &&
     retrieval.includes("formatGroup('强相关背景', groups.strongEntries)") &&
     retrieval.includes("formatGroup('弱相关背景', groups.weakEntries)"),
-    'zhiku recall must keep character keyword, normal keyword, and AI supplement limits in separate slots.',
+    'zhiku recall must keep keyword limits and locally compiled AI selection limits in separate slots.',
 );
 assert(
   !retrieval.includes('NPC表演卡') &&
@@ -2979,7 +3438,11 @@ assert(
     contextSnapshot.includes('buildMainRecallQuery({') &&
     contextSnapshot.includes('buildZhikuModelSystemPrompt') &&
     contextSnapshot.includes('buildZhikuModelUserPrompt') &&
-    contextSnapshot.includes('智库召回提示词（Step0~Step8）') &&
+    contextSnapshot.includes('buildZhikuAiRequestForTurn') &&
+    contextSnapshot.includes("aiSupplementEnabled = state.gameSettings.智库系统?.enableAiSupplement === true") &&
+    contextSnapshot.includes('智库 AI 召回编译器提示词') &&
+    contextSnapshot.includes('AI 主动补充未开启') &&
+    contextSnapshot.includes('不会发送智库补充 API 请求') &&
     contextSnapshot.includes('anticipatedZhikuNpcNames') &&
     contextSnapshot.includes('originalProtagonist: state.世界.原著主角') &&
     contextSnapshot.includes('zhikuDiagnostics.被门禁过滤') &&
@@ -2995,9 +3458,10 @@ assert(
     contextSnapshot.includes('zhikuDiagnostics.AI检索补充强资料') &&
     contextSnapshot.includes('zhikuDiagnostics.AI检索补充弱资料') &&
     contextSnapshot.includes('zhikuDiagnostics.AI候选资料') &&
-    contextSnapshot.includes('keywordRecallTitles: zhikuDiagnostics?.关键词召回资料 ?? []') &&
-    contextSnapshot.includes('anticipatedNpcNames: anticipatedZhikuNpcNames') &&
-    contextSnapshot.includes('aiSupplementHints: sceneContext.aiSupplementHints') &&
+    contextSnapshot.includes('buildZhikuModelUserPrompt(aiCandidateIndex.request)') &&
+    contextSnapshot.includes('AI候选索引') &&
+    contextSnapshot.includes('AI形态修正') &&
+    contextSnapshot.includes('AI拒绝选择') &&
     contextSnapshot.includes('zhikuDiagnostics.角色相关资料') &&
     contextSnapshot.includes('zhikuDiagnostics.强相关资料') &&
     contextSnapshot.includes('zhikuDiagnostics.弱相关资料') &&
@@ -3006,7 +3470,7 @@ assert(
     contextSnapshot.includes('最终注入强资料：') &&
     contextSnapshot.includes('最终注入弱资料：') &&
     !contextSnapshot.includes('你是原著资料中枢「智库」的召回模型。你的任务不是写正文，而是从候选资料中挑出最相关条目'),
-  'zhiku request context must reuse the real Step0-Step8 model prompt and show local retrieval diagnostics for OOC/gate debugging.',
+  'zhiku request context must preview the real controlled candidate JSON and local compiler diagnostics.',
 );
 assert(
   panel.includes("activeCategory === 'character'") &&
@@ -3406,13 +3870,13 @@ if (isAstralExpressCharacterProfileSet) {
   for (const field of ['外貌锚点', '性格锚点', '说话方式', '行为习惯', '关系边界', '禁止误写']) {
     assert(typeof profile[field] === 'string' && profile[field].trim().length >= 20, `March profile must keep ${field}.`);
   }
-  assert(profile.外貌锚点.includes('只作普通形态短视觉触发'), 'March profile appearance anchor must stay a short visual trigger, not a repeated full appearance profile.');
-  assert(profile.外貌锚点.includes('完整外貌以基础身份层为准'), 'March profile appearance anchor must point full appearance back to base identity.');
+  assert(profile.外貌锚点.includes('粉色渐变短发') && profile.外貌锚点.includes('这是常态外貌'), 'March profile appearance anchor must stay limited to the normal form.');
+  assert(profile.外貌锚点.includes('不混入仙舟双剑装束') && profile.外貌锚点.includes('长夜月黑白礼服'), 'March profile appearance anchor must exclude both special variants.');
   assert(profile.性格锚点.includes('好奇心强') && profile.性格锚点.includes('珍惜当下同伴'), 'March profile personality anchor must keep curiosity and companion baseline.');
-  assert(profile.说话方式.includes('口语感强') && profile.说话方式.includes('不要写成全程吵闹或突然神秘化'), 'March profile speech anchor must keep casual tone and anti-miswrite rule.');
-  assert(profile.行为习惯.includes('把照片当作保存当下与寻找过去的方式') && profile.行为习惯.includes('用六相冰争取空间'), 'March profile behavior anchor must connect camera habits and protective action.');
-  assert(profile.关系边界.includes('不能替玩家做关键决定') && profile.关系边界.includes('不能把所有场景都转成玩笑'), 'March profile relationship boundary must protect player agency and serious scenes.');
-  assert(profile.禁止误写.includes('不要提前使用未解锁形态或长夜月人格'), 'March profile forbidden anchor must gate locked forms and Evernight persona.');
+  assert(profile.说话方式.includes('口语感强') && profile.说话方式.includes('不写成全程吵闹') && profile.说话方式.includes('突然神秘化'), 'March profile speech anchor must keep casual tone and anti-miswrite rule.');
+  assert(profile.行为习惯.includes('把旅途记录当作保存当下、抵抗遗忘的方式') && profile.行为习惯.includes('保护同伴'), 'March profile behavior anchor must connect camera habits and protective action.');
+  assert(profile.关系边界.includes('不能替玩家做关键决定') && profile.关系边界.includes('不能压过他人的严肃判断'), 'March profile relationship boundary must protect player agency and serious scenes.');
+  assert(profile.禁止误写.includes('常态不混入巡猎双剑') && profile.禁止误写.includes('长夜月口吻'), 'March profile forbidden anchor must isolate the normal form from both special variants.');
   for (const required of [
     '## 基础识别',
     '性别 / 性别表达：女性',
@@ -3535,11 +3999,12 @@ if (isAstralExpressCharacterProfileSet) {
     '### 严肃记忆与放轻声音',
     '### 吐槽与缓和气氛',
     '### 长夜月语料说明',
-    '参考长夜月语音特征重新整理',
-    '以下语料只在长夜月已标准解锁或被玩家正文显式触发后使用',
+    '长夜月可按本作设定作为三月七体内的另一人格提前显现',
+    '以下语料只在她实际参与当前场景时使用',
     '不得覆盖三月七常态语料',
-    '不得让长夜月在未触发时主动抢话',
-    '长夜月有时会在句尾加上 ♭',
+    '提前显现时她可以主动回应',
+    '不能无理由持续压过三月七的常态对话',
+    '句尾 ♭ 只是一种带音乐感的轻微上扬 / 收束标记',
     '带音乐感的轻微上扬 / 收束标记',
     '禁止每句都加',
     '禁止把 ♭ 当作技能、魔法符号或强制人格标记',
@@ -3588,61 +4053,21 @@ if (isAstralExpressCharacterProfileSet) {
     '不需要额外 UI 开关',
     '继承三月七主体人格、称呼习惯、相机、吐槽、好奇、伙伴意识和失忆底色',
     '不能把它写成另一个人格',
-    '剧情显式触发：长夜月 / Evernight（第二人格 / 数据世界具象形态）',
-    '同源人格 / 第二人格 / 保护性另一面',
-    '本质上属于三月七的人格之一，不是敌人，也不是外部夺舍者',
-    '翁法罗斯长夜月相关剧情',
-    '依赖翁法罗斯数据世界与对应剧情',
-    '以具象外貌、性格特征和行动主体出现',
-    '默认不主动登场',
-    '当玩家正文明确要求长夜月出现、苏醒、对话、提前登场',
-    '剧情明确进入翁法罗斯长夜月相关段落时',
-    '视为当前分支事实触发',
-    '在翁法罗斯等数据世界 / 特殊意识环境中，长夜月可以具象为独立外貌与行动主体',
-    '外部现实场景中，默认以内心声音、意识对话、梦境或保护性人格反应显现',
-    '三月七遭遇致命危险、意识震荡、记忆刺痛或保护本能被强烈触发',
-    '只代表内心回响 / 保护性人格反应，不等于长夜月已经正式苏醒、实体化或接管身体',
-    '若当前场景明确出现三月七遇险、濒临受伤、意识被冲击或记忆裂隙被触动',
-    '该回响不能推进真相、不能替三月七行动、不能让旁人无理由听见',
-    '翁法罗斯剧情中可写独立形态、外貌、行动和对三月七的保护',
-    '外部场景中优先写内心 / 意识层互动',
-    '长夜月有独立外貌和气质',
-    '不沿用三月七常态的粉蓝、蓝白冰晶装束',
-    '黑白暗色系礼服式装束',
-    '低双马尾',
-    '红色眼睛',
-    '黑色半外套与层叠黑白裙装',
-    '黑色翻折短靴',
-    '可携带黑伞',
-    '伞内侧可带红色花纹意象',
-    '会保护三月七',
-    '被遗忘的过去、陪伴三月七的长夜和替三月七承担残酷往事的记忆之影',
-    '照片、粉色头发、命运般邂逅',
-    '纯粹冷酷无情的黑化人格',
-    '常用「她」「记忆」「岁月」「忘却」',
-    '句尾 ♭ 只作少量音调装饰',
-    '不能被写成敌对人格、外部入侵者、完全陌生的独立角色',
-    '长夜月可知道与自身、保护三月七、被遗忘的过去、翁法罗斯机制或岁月狭间相关的信息',
-    '可把忘却视为减轻伤痕、保护三月七未来的一种可能',
-    '玩家提前触发只代表当前分支事实，不自动改写原著进度',
-    '不让其他角色无理由知道后续真相',
-    '外部现实场景提前触发时优先写内心显现',
-    '不自动继承三月七主体人格、口吻、行为习惯或当前记忆连续性',
-    '遇险时的脑海声音',
-    '危险回响可以写成一句短促提醒、伞影般的保护直觉或三月七下意识避险的内心触动',
-    '不能写成长夜月稳定登场',
-    '不要把长夜月写成普通换装、命途阶段、敌对人格、外部夺舍者、完全独立陌生人',
-    '不要把危险中的内心回响写成已经苏醒、实体化或接管身体',
-    '不要把玩家显式触发误当作既定剧情进度已经发生',
-    '若巡猎阶段或长夜月未达到标准解锁，也未被玩家正文显式触发',
-    '若三月七在危险中濒临受伤、意识震荡或保护本能被强烈触发',
-    '可写成长夜月在她脑海中响起一句短促提醒',
-    '不能被其他角色无理由听见，也不能替三月七行动或解释真相',
-    '若剧情进入翁法罗斯长夜月相关段落，可按数据世界具象形态承接长夜月',
-    '若玩家在外部现实场景提前触发，则优先写成三月七内心 / 意识层显现',
-    '无论哪种触发，都必须保留原著进度边界、说话主体区分和记忆连续性规则',
-    '不得整句复读',
-    '2-4 条语料参考',
+    '可提前显现：长夜月 / Evernight（体内另一人格 / 记忆之影）',
+    '体内人格默认可用；完整外显、神权与翁法罗斯真相分阶段开放',
+    '同源并寄居于她体内',
+    '正式名称为“长夜月”，“长月夜”作为本作兼容别名',
+    '无需进入翁法罗斯',
+    '不要求三月七先陷入致命危险或玩家先明确点名',
+    '主动开口和回应',
+    '不能因此直接拥有稳定外部实体、完整神权、全部记忆或自由接管身体的能力',
+    '普通外部现实优先保持意识层或短暂表层显现',
+    '不因人格提前出现而一并解锁',
+    '不得自动公开翁法罗斯完整经历与后期真相',
+    '不能写成纯粹冷酷的黑化人格、敌对人格或完全陌生的新人物',
+    '不能无理由长期压过三月七、替她决定人生、抹掉她的声音',
+    '玩家切换注入预览形态不会触发长夜月',
+    '实际出现仍由正文关键词与可选 AI 主动补充根据当前剧情决定',
   ]) {
     assert(text.includes(required), `March profile missing required section or rule: ${required}`);
   }
@@ -3664,7 +4089,11 @@ if (isAstralExpressCharacterProfileSet) {
     'March profile text should not expose source-trace wording inside the character file.',
   );
   assert(!text.includes('- 初次见面：') && !text.includes('- 关于自己・名字：'), 'March profile corpus quote lines should not keep voice-label prefixes outside relation labels.');
-  assert(!entries.some((entry) => entry.id !== profile.id && entry.关键词?.includes('角色:三月七')), 'March 7th must not be split into multiple active character entries in profile-set mode.');
+  const marchVariants = entries.filter((entry) => entry.关联角色ID === '三月七');
+  assert(marchVariants.length === 3, 'March 7th must expose normal, Hunt, and Evernight injection entries.');
+  assert(marchVariants.every((entry) => entry.互斥组ID === 'character:march-7th:form'), 'March 7th variants must share one exclusivity group.');
+  assert(marchVariants.map((entry) => entry.关联形态ID).join(',') === '常态,巡猎,长夜月', 'March 7th variant order or labels changed.');
+  assert(marchVariants.every((entry) => entry.注入内容?.类型 === 'character'), 'Every March 7th variant must contain structured character injection content.');
   const weltText = [welt.摘要, welt.原文, ...(welt.关键词 ?? [])].filter(Boolean).join('\n');
   assert(entries.length >= 4, 'Astral Express profile set must contain at least March 7th, Dan Heng, Welt Yang, and Himeko profiles.');
   assert(welt.分类 === 'character', 'Welt profile must stay in character category.');
@@ -4164,7 +4593,20 @@ if (isAstralExpressCharacterProfileSet) {
   assert(!danhengBaseIdentity.includes('饮月形态可出现') && !danhengBaseIdentity.includes('腾荒形态可出现') && !danhengBaseIdentity.includes('龙角') && !danhengBaseIdentity.includes('水龙意象') && !danhengBaseIdentity.includes('龙形守护'), 'Dan Heng base identity must not mix alternate-form appearance cues into normal appearance.');
   assert(!danhengText.includes('## 状态 / 形态 / 门禁层'), 'Dan Heng profile should use stage-boundary wording instead of a generic form-gate section.');
   assert(!/当前战斗表现中是|属性角色|巡猎命途 \/ 风属性|风属性巡猎/.test(danhengText), 'Dan Heng ability wording should stay narrative instead of game-card style.');
-  assert(!entries.some((entry) => entry.id !== danheng.id && entry.关键词?.includes('角色:丹恒')), 'Dan Heng must not be split into multiple active character entries in current profile-set mode.');
+  const danhengForms = entries.filter((entry) => entry.关联角色ID === '丹恒');
+  assert(danhengForms.length === 3, 'Dan Heng must expose ordinary, Imbibitor Lunae, and Souldragon as complete form entries.');
+  assert(
+    danhengForms.map((entry) => entry.关联形态ID).sort().join(',') === '常态,腾荒,饮月',
+    'Dan Heng form identities must remain explicit and complete.',
+  );
+  assert(
+    danhengForms.every((entry) => entry.互斥组ID === 'character:danheng:form'),
+    'Dan Heng forms must share one exclusion group.',
+  );
+  assert(
+    danhengForms.every((entry) => entry.注入内容?.类型 === 'character'),
+    'Every Dan Heng form must carry a complete character injection payload.',
+  );
   const himekoText = [himeko.摘要, himeko.原文, ...(himeko.关键词 ?? [])].filter(Boolean).join('\n');
   assert(himeko.分类 === 'character', 'Himeko profile must stay in character category.');
   assert(himeko.id.startsWith(REBUILD_PREFIX), 'Himeko profile id must keep rebuild prefix.');
@@ -4302,7 +4744,7 @@ if (isAstralExpressCharacterProfileSet) {
     '以轨道炮或卫星火力压制区域',
     '不要默认写成毁灭一切的终极炮击',
     '## 历史故事与阶段边界层',
-    '姬子常态下没有需要拆成独立角色的多形态',
+    '姬子常态与姬子•启行按同一人物的独立形态档案维护',
     '默认底色：修复列车与领航梦想（可轻度使用）',
     '阶段边界：姬子·启行 / 新阶段航路（按需展开）',
     '默认处理：不主动展开',
@@ -4318,7 +4760,8 @@ if (isAstralExpressCharacterProfileSet) {
   assert(!himekoText.includes('轨道炮 / 卫星火力意象作为场景视觉锚点'), 'Himeko base appearance should not use firepower as a default visual anchor.');
   assert(!himekoText.includes('## 状态 / 形态 / 门禁层'), 'Himeko profile should use stage-boundary wording instead of a generic form-gate section.');
   assert(!/当前战斗表现中是|属性角色|智识命途 \/ 火属性角色|火属性智识/.test(himekoText), 'Himeko ability wording should stay narrative instead of game-card style.');
-  assert(!entries.some((entry) => entry.id !== himeko.id && entry.关键词?.includes('角色:姬子')), 'Himeko must not be split into multiple active character entries in current profile-set mode.');
+  const himekoForms = entries.filter((entry) => entry.关联角色ID === '姬子');
+  assert(himekoForms.length === 2 && himekoForms.some((entry) => entry.关联形态ID === '启行'), 'Himeko must expose normal and Qixing forms under one subject.');
   const pompomText = [pompom.摘要, pompom.原文, ...(pompom.关键词 ?? [])].filter(Boolean).join('\n');
   assert(pompom.分类 === 'character', 'Pom-Pom profile must stay in character category.');
   assert(pompom.id.startsWith(REBUILD_PREFIX), 'Pom-Pom profile id must keep rebuild prefix.');
@@ -4736,13 +5179,22 @@ assert(
 );
 assert(
   entries.some((entry) =>
+    entry.id === 'zhiku_character_rebuild_evernight_profile' &&
     entry.关键词?.includes('角色:三月七') &&
     entry.关键词?.includes('形态:长夜月') &&
     entry.关键词?.includes('资料大区:翁法罗斯') &&
-    entry.关键词?.includes('资料类型:角色形态') &&
-    entry.解锁状态 === '未解锁',
+    entry.关键词?.includes('资料类型:角色形态档案') &&
+    entry.关联角色ID === '三月七' &&
+    entry.关联形态ID === '长夜月' &&
+    entry.互斥组ID === 'character:march-7th:form' &&
+    entry.辅助关键词逻辑 === 'AND_ANY' &&
+    entry.触发关键词?.includes('长月夜') &&
+    entry.解锁状态?.includes('默认可用（体内人格）') &&
+    entry.解锁条件?.includes('体内人格显现无需进入翁法罗斯') &&
+    entry.注入内容?.核心身份与阵营?.includes('寄居于三月七体内的另一人格') &&
+    entry.注入内容?.当前形态与能力边界?.includes('无需等待翁法罗斯正式剧情'),
   ),
-  'Evernight must be a locked March 7th associated-persona gate, not a separate active persona.',
+  'Evernight must be an independently injectable March 7th associated-persona variant.',
 );
 assert(
   entries.some((entry) =>
@@ -4754,7 +5206,7 @@ assert(
   ),
   'Permansor Terrae must be a locked Dan Heng form gate, not a separate active persona.',
 );
-for (const aliasOnly of ['长夜月', '丹恒·腾荒', '腾荒']) {
+for (const aliasOnly of ['长夜月', '长月夜', '丹恒·腾荒', '腾荒']) {
   assert(
     !entries.some((entry) => entry.关键词?.includes(`角色:${aliasOnly}`)),
     `future form name should not become an independent important-character profile: ${aliasOnly}`,
@@ -4912,22 +5364,21 @@ assert(
     panel.includes("dataArea === '联动角色'"),
   'character left-side big groups must include a 联动角色 fallback group and fold Fate organizations under it.',
 );
-const constance = findRoleEntry('康士坦丝');
-assert(constance, 'Constance / The Dahlia must exist as an Ever-Flame Mansion gate.');
+const constance = penaconyPreset.entries.find((entry) => entry.关键词?.includes('角色:康士坦丝'));
+assert(constance, 'Constance / The Dahlia must exist as a full Penacony profile.');
 assert(
-  constance.关键词?.includes('资料大区:永火官邸') &&
-    constance.关键词?.includes('组织:永火官邸') &&
-    constance.关键词?.includes('阵营:泯灭帮') &&
-    constance.关键词?.includes('资料类型:剧情门禁') &&
-    constance.关键词?.includes('节点:大丽花门禁') &&
-    constance.解锁状态 === '未解锁' &&
-    /翁法罗斯|记忆改写/.test(constance.解锁条件 ?? '') &&
-    /不得主动进入/.test(constance.原文),
-  'Constance must stay as a locked Ever-Flame Mansion / Dahlia spoiler gate.',
+  constance.关键词?.includes('资料大区:匹诺康尼') &&
+    constance.关键词?.includes('关联:永火官邸') &&
+    constance.关键词?.includes('关联:焚化工') &&
+    constance.关键词?.includes('资料类型:单角色档案') &&
+    constance.关键词?.includes('节点:单角色档案') &&
+    constance.关键词?.includes('大丽花完整档案') &&
+    constance.解锁状态 !== '未解锁',
+  'Constance must stay as a full Dahlia profile in the Penacony group.',
 );
 assert(
-  resolveCharacterGroupLabel(constance) === '永火官邸',
-  'Constance should resolve to 永火官邸 left-side group rather than 泯灭帮.',
+  resolveCharacterGroupLabel(constance) === '匹诺康尼',
+  'Constance should resolve to 匹诺康尼 while preserving Ever-Flame Mansion relationships.',
 );
 assert(
   panel.includes('永火官邸') &&

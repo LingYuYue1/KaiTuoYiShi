@@ -2,13 +2,28 @@ import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import type { API配置项, 智库系统设置 } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
-import { normalizeStructuredModelText } from '@/services/ai/structuredOutputRepair';
-import { ZHIKU_CATEGORY_LABELS, 搜索智库条目 } from '@/models/zhiku';
+import {
+  ZHIKU_CATEGORY_LABELS,
+  匹配智库关键词,
+  获取智库注入内容缺失字段,
+  智库条目注入内容完整,
+  选择智库关键词互斥结果,
+} from '@/models/zhiku';
 import type { 智库软结构标签 } from '@/models/zhiku';
-import { 解析智库软结构标签, 获取智库人物名, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
-import { ZHIKU_COT_PROMPT as ZHIKU_LEGACY_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
+import { 解析智库软结构标签, 获取智库人物名列表, 比较智库人物节点 } from '@/models/zhiku';
+import { ZHIKU_CATEGORY_POLICIES } from '@/models/zhikuGovernance';
+import { ZHIKU_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+import { estimateTextTokens } from '@/utils/tokenEstimate';
+import {
+  buildZhikuAiCandidateIndex,
+  compileZhikuAiSelection,
+  parseZhikuAiOutput,
+  type ZhikuAiCandidateIndex,
+  type ZhikuAiCompilationResult,
+  type ZhikuAiRequest,
+} from '@/services/zhikuAiRetrievalIndex';
 
 
 export interface 智库检索结果 {
@@ -35,12 +50,30 @@ export interface 智库召回诊断 {
   关键词召回资料: string[];
   候选资料: string[];
   AI候选资料: string[];
+  AI候选索引: string[];
   AI补充资料: string[];
+  AI形态修正: string[];
+  AI拒绝选择: string[];
+  AI未选择原因: string;
   角色相关资料: string[];
   强相关资料: string[];
   弱相关资料: string[];
   已注入资料: string[];
   角色故事层注入: string[];
+  静态注入字符数: number;
+  静态注入估算Token: number;
+  单条静态注入体量: Array<{
+    id: string;
+    标题: string;
+    分类: string;
+    字符数: number;
+    估算Token: number;
+    保留优先级: '必须人物' | '强相关背景' | '弱相关背景';
+  }>;
+  动态状态来源: string[];
+  去重记录: string[];
+  删减记录: Array<{ 标题: string; 原因: string; 原优先级: string }>;
+  体量预警: string[];
   被门禁过滤: Array<{ 标题: string; 原因: string }>;
   检查项: string[];
 }
@@ -51,7 +84,7 @@ interface 智库召回分组 {
   weakEntries: 智库条目[];
 }
 
-interface 智库场景上下文 {
+export interface 智库场景上下文 {
   startScenarioId?: string;
   startSceneName?: string;
   currentLocation?: string;
@@ -73,22 +106,9 @@ interface 智库场景上下文 {
   originalProtagonist?: '星' | '穹' | '星穹双主角';
 }
 
-interface 智库AI补充线索 {
-  currentLocation?: string;
-  presentNpcNames?: string[];
-  immediateStoryReview?: string;
-  recentStoryContext?: string;
-  storyPlan?: string;
-  openingArchiveText?: string;
-}
-
-export interface 智库模型用户提示词选项 {
-  keywordRecallTitles?: string[];
-  anticipatedNpcNames?: string[];
-  aiSupplementHints?: 智库AI补充线索;
-}
-
 const CHARACTER_ANCHOR_ENTRIES_PER_ROLE = 2;
+const ZHIKU_ENTRY_VOLUME_WARNING_TOKENS = 2000;
+const ZHIKU_TOTAL_VOLUME_WARNING_TOKENS = 16000;
 
 const ZHIKU_SCENE_HINTS: Record<string, string[]> = {
   heita_station_incident: ['黑塔空间站', '黑塔', '空间站', '主控舱段', '基座舱段', '收容舱段', '支援舱段', '防卫科'],
@@ -107,14 +127,6 @@ const ZHIKU_SCENE_HINTS: Record<string, string[]> = {
   penacony_reverie_crisis: ['匹诺康尼', '美梦崩塌', '谐乐大典', '匹诺康尼大剧院', '家族真相', '星期日', '知更鸟', '黄泉'],
 };
 
-const ZHIKU_STOP_WORDS = new Set([
-  '我', '你', '他', '她', '它', '我们', '你们', '他们', '她们',
-  '这个', '那个', '这些', '那些', '什么', '怎么', '如何', '可以', '能够', '会', '想', '要',
-  '问题', '内容', '资料', '原著', '智库', '记忆', '剧情', '角色', '人物', '地点', '事件',
-  '相关', '看看', '看看吧', '继续', '一下', '一下子', '这边', '那边', '这里', '那里',
-  '当前', '现在', '本回合', '回合', '系统', '模块', '条目',
-]);
-
 function isMainStoryInjectableZhikuEntry(entry: 智库条目): boolean {
   return !getMainStoryBlockReason(entry);
 }
@@ -123,6 +135,9 @@ function getMainStoryBlockReason(entry: 智库条目): string | null {
   if (!entry.可用于联动) return '该资料标记为不可联动。';
   if (entry.分类 === 'story') return '原著剧情正文由剧情编织管理，不走智库普通召回。';
   if (entry.可否主剧情注入 === false) return '该资料标记为不可主剧情注入。';
+  if (!智库条目注入内容完整(entry)) {
+    return `结构化注入内容不完整（缺少：${获取智库注入内容缺失字段(entry).join('、')}）。`;
+  }
 
   const meta = 解析智库软结构标签(entry);
   return getMainStoryZhikuMetaBlockReason(meta);
@@ -187,11 +202,6 @@ function getNormalRelatedLimit(limit: number): number {
   return Math.min(Math.max(1, Math.trunc(Number(limit) || NORMAL_KEYWORD_RECALL_LIMIT)), NORMAL_KEYWORD_RECALL_LIMIT);
 }
 
-function augmentZhikuQuery(query: string, sceneHints: string[]): string {
-  const parts = [query.trim(), ...sceneHints.slice(0, 8)];
-  return parts.filter(Boolean).join(' ').trim();
-}
-
 function sceneMatchesEntry(entry: 智库条目, sceneHints: string[]): boolean {
   if (!sceneHints.length) return false;
   const text = [entry.标题, entry.摘要, entry.来源 ?? '', entry.原文, ...entry.关键词, getZhikuCharacterCalibrationText(entry)]
@@ -202,133 +212,18 @@ function sceneMatchesEntry(entry: 智库条目, sceneHints: string[]): boolean {
 
 function rankZhikuEntries(entries: 智库条目[], sceneHints: string[]): 智库条目[] {
   if (!sceneHints.length || entries.length <= 1) return [...entries];
+  const sourceOrder = new Map(entries.map((entry, index) => [entry.id, index]));
   return [...entries].sort((a, b) => {
     const sceneDiff = Number(sceneMatchesEntry(b, sceneHints)) - Number(sceneMatchesEntry(a, sceneHints));
     if (sceneDiff !== 0) return sceneDiff;
-    return b.updatedAt - a.updatedAt;
+    return (sourceOrder.get(a.id) ?? 0) - (sourceOrder.get(b.id) ?? 0);
   });
-}
-
-function buildRelevantCharacterNames(system: 智库系统, query: string, sceneContext?: 智库场景上下文): string[] {
-  const characterTriggers = buildCharacterTriggerCandidates(system, sceneContext);
-  if (!characterTriggers.length) return [];
-
-  const explicitNames = new Set<string>();
-  const joinedText = [
-    buildCharacterDetectionText(query),
-    ...(sceneContext?.npcNames ?? []),
-  ].filter(Boolean).join(' ');
-  for (const { name, trigger } of characterTriggers) {
-    if (sceneContext?.npcNames?.some((npcName) => namesLikelySame(npcName, name) || namesLikelySame(npcName, trigger)) || nameAppearsInText(trigger, joinedText)) {
-      explicitNames.add(name);
-    }
-  }
-  if (explicitNames.size > 0) return Array.from(explicitNames);
-
-  return [];
-}
-
-function buildCharacterTriggerCandidates(system: 智库系统, sceneContext?: 智库场景上下文): Array<{ name: string; trigger: string }> {
-  const candidates: Array<{ name: string; trigger: string }> = [];
-  const seen = new Set<string>();
-  for (const entry of system.条目 ?? []) {
-    if (entry.分类 !== 'character') continue;
-    const names = 获取智库人物名列表(entry)
-      .filter((name) => isAllowedOriginalProtagonistName(name, sceneContext?.originalProtagonist))
-      .filter(Boolean);
-    if (!names.length) continue;
-    const canonical = names[0];
-    const aliasTriggers = extractCharacterAliasTriggers(entry).filter((trigger) => !isBroadCharacterTrigger(trigger));
-    const coreTriggers = 获取智库核心触发词(entry)
-      .filter((trigger) => !isBroadCharacterTrigger(trigger))
-      .filter((trigger) => [...names, ...aliasTriggers].some((name) => namesLikelySame(name, trigger)));
-    const triggers = [entry.标题, ...names, ...aliasTriggers, ...coreTriggers].filter(Boolean);
-    for (const trigger of triggers) {
-      const key = `${canonical}::${trigger}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      candidates.push({ name: canonical, trigger });
-    }
-  }
-  return candidates.sort((a, b) => b.trigger.length - a.trigger.length);
-}
-
-function extractCharacterAliasTriggers(entry: 智库条目): string[] {
-  const triggers: string[] = [];
-  const source = String(entry.原文 ?? '');
-  for (const match of source.matchAll(/^\s*-?\s*(?:名称|姓名|别名|昵称\s*\/\s*外号|全名\s*\/\s*本名)[:：]\s*([^\n]+)/gmu)) {
-    for (const item of match[1].split(/[、，,；;]/u)) {
-      const cleaned = item.replace(/[。.\s]+$/u, '').trim();
-      if (cleaned) triggers.push(cleaned);
-    }
-  }
-  return Array.from(new Set(triggers));
-}
-
-function isBroadCharacterTrigger(trigger: string): boolean {
-  const clean = trigger.trim();
-  if (!clean) return true;
-  if (/^(?:主剧情|智库|变量参考|手机|新闻|语料|角色故事|历史故事|阶段边界|OOC防护|禁止照抄语料|禁止原句搬运)$/u.test(clean)) return true;
-  if (/^(?:星穹列车|列车组|无名客|黑塔空间站|空间站|贝洛伯格|雅利洛-?VI|上层区|下层区|地火|银鬃铁卫|星核猎手)$/u.test(clean)) return true;
-  if (/^(?:观景车厢|派对车厢|客房车厢|列车规则|列车广播|乘客安全|车厢打扫|跃迁)$/u.test(clean)) return true;
-  return false;
 }
 
 function namesLikelySame(a: string, b: string): boolean {
   const left = a.trim();
   const right = b.trim();
   return !!left && !!right && (left === right || left.includes(right) || right.includes(left));
-}
-
-function nameAppearsInText(name: string, text: string): boolean {
-  const cleanName = name.trim();
-  if (!cleanName || !text.trim()) return false;
-  const semanticText = cleanName === '黑塔'
-    ? text.replace(/空间站[「“"]?黑塔[」”"]?|黑塔空间站/g, '')
-    : text;
-  if (cleanName.length <= 1) {
-    const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|[\\s，。！？、：；“”"'（）()《》【】])${escaped}($|[\\s，。！？、：；“”"'（）()《》【】])`).test(semanticText);
-  }
-  return semanticText.includes(cleanName);
-}
-
-function buildCharacterDetectionText(query: string): string {
-  return query
-    .split(/\r?\n/)
-    .filter((line) => !/^(当前地点|当前相关人物|最近玩家输入|剧情规划|事件|小结)[:：]/.test(line.trim()))
-    .join('\n');
-}
-
-function buildCharacterAnchorEntries(system: 智库系统, query: string, limit: number, sceneContext?: 智库场景上下文): 智库条目[] {
-  const relevantNames = buildRelevantCharacterNames(system, query, sceneContext);
-  if (!relevantNames.length) return [];
-
-  const anchorLimit = getCharacterAnchorLimit(limit);
-  const entriesByName = new Map<string, 智库条目[]>();
-  for (const entry of system.条目 ?? []) {
-    if (entry.分类 !== 'character' || !isMainStoryInjectableZhikuEntry(entry)) continue;
-    const characterNames = 获取智库人物名列表(entry);
-    if (!isAllowedOriginalProtagonistEntry(characterNames, sceneContext?.originalProtagonist)) continue;
-    const matchedName = relevantNames.find((name) => characterNames.some((characterName) => namesLikelySame(characterName, name)));
-    if (!matchedName) continue;
-    const current = entriesByName.get(matchedName) ?? [];
-    current.push(entry);
-    entriesByName.set(matchedName, current);
-  }
-
-  const anchors: 智库条目[] = [];
-  for (const name of relevantNames) {
-    const pickedForRole = (entriesByName.get(name) ?? [])
-      .sort(比较智库人物节点)
-      .filter(isCharacterAnchorNode)
-      .slice(0, CHARACTER_ANCHOR_ENTRIES_PER_ROLE);
-    for (const entry of pickedForRole) {
-      if (!anchors.some((item) => item.id === entry.id)) anchors.push(entry);
-      if (anchors.length >= anchorLimit) return anchors;
-    }
-  }
-  return anchors;
 }
 
 function buildPresentCharacterFallbackEntries(system: 智库系统, npcNames: string[] | undefined, sceneContext?: 智库场景上下文): 智库条目[] {
@@ -349,9 +244,17 @@ function buildPresentCharacterFallbackEntries(system: 智库系统, npcNames: st
 
   const anchors: 智库条目[] = [];
   for (const name of presentNames) {
+    const seenExclusionGroups = new Set<string>();
     const pickedForRole = (entriesByName.get(name) ?? [])
       .sort(比较智库人物节点)
       .filter(isCharacterAnchorNode)
+      .filter((entry) => {
+        const groupId = entry.互斥组ID?.trim();
+        if (!groupId) return true;
+        if (seenExclusionGroups.has(groupId)) return false;
+        seenExclusionGroups.add(groupId);
+        return true;
+      })
       .slice(0, CHARACTER_ANCHOR_ENTRIES_PER_ROLE);
     for (const entry of pickedForRole) {
       if (!anchors.some((item) => item.id === entry.id)) anchors.push(entry);
@@ -410,64 +313,90 @@ function mergeZhikuGroups(groups: 智库召回分组): 智库条目[] {
   return mergeZhikuEntries(groups.characterEntries, groups.strongEntries, groups.weakEntries);
 }
 
-function trimAiSupplementGroups(groups: 智库召回分组): 智库召回分组 {
-  const characterEntries = groups.characterEntries.slice(0, AI_SUPPLEMENT_ENTRY_LIMIT);
-  const strongLimit = Math.max(0, AI_SUPPLEMENT_ENTRY_LIMIT - characterEntries.length);
-  const strongEntries = groups.strongEntries.slice(0, strongLimit);
-  const weakLimit = Math.max(0, AI_SUPPLEMENT_ENTRY_LIMIT - characterEntries.length - strongEntries.length);
-  const weakEntries = groups.weakEntries.slice(0, weakLimit);
-  return { characterEntries, strongEntries, weakEntries };
-}
-
-function mergeSupplementedZhikuGroups(keywordGroups: 智库召回分组, supplementGroups: 智库召回分组): 智库召回分组 {
-  const limitedSupplement = trimAiSupplementGroups(supplementGroups);
-  const characterEntries = mergeZhikuEntries(keywordGroups.characterEntries, limitedSupplement.characterEntries);
-  const strongEntries = mergeZhikuEntries(keywordGroups.strongEntries, limitedSupplement.strongEntries);
-  const weakEntries = mergeZhikuEntries(keywordGroups.weakEntries, limitedSupplement.weakEntries)
-    .filter((entry) => !strongEntries.some((strong) => strong.id === entry.id));
-  return { characterEntries, strongEntries, weakEntries };
-}
-
 function isNormalRecallEntry(entry: 智库条目): boolean {
   return entry.分类 !== 'character' && entry.分类 !== 'story';
 }
 
+function buildCompiledZhikuGroups(
+  keywordGroups: 智库召回分组,
+  candidateIndex: ZhikuAiCandidateIndex,
+  compilation: ZhikuAiCompilationResult,
+): 智库召回分组 {
+  const keywordStrongIds = new Set(keywordGroups.strongEntries.map((entry) => entry.id));
+  const keywordWeakIds = new Set(keywordGroups.weakEntries.map((entry) => entry.id));
+  const characterEntries: 智库条目[] = [];
+  const strongEntries: 智库条目[] = [];
+  const weakEntries: 智库条目[] = [];
+
+  for (const selection of compilation.finalSelections) {
+    const entry = candidateIndex.entriesById.get(selection.entryId);
+    if (!entry) continue;
+    if (entry.分类 === 'character') {
+      characterEntries.push(entry);
+      continue;
+    }
+    const isWeak = selection.source === 'AI'
+      ? selection.usage === 'BACKGROUND_OPTIONAL'
+      : keywordWeakIds.has(entry.id) && !keywordStrongIds.has(entry.id);
+    (isWeak ? weakEntries : strongEntries).push(entry);
+  }
+
+  return {
+    characterEntries: mergeZhikuEntries(characterEntries),
+    strongEntries: mergeZhikuEntries(strongEntries),
+    weakEntries: mergeZhikuEntries(weakEntries).filter((entry) => !strongEntries.some((strong) => strong.id === entry.id)),
+  };
+}
+
+export function buildZhikuRecallCandidateSystem(system: 智库系统 | undefined): 智库系统 {
+  return {
+    条目: (system?.条目 ?? []).filter((entry) => {
+      if (entry.治理分类) return ZHIKU_CATEGORY_POLICIES[entry.治理分类].participatesInRecall;
+      return entry.分类 !== 'story' || ZHIKU_CATEGORY_POLICIES.story.participatesInRecall;
+    }),
+  };
+}
+
 export function retrieveZhikuContext(system: 智库系统 | undefined, query: string, limit: number, sceneContext?: 智库场景上下文): 智库检索结果 {
-  if (!system?.条目?.length || !query.trim()) {
+  const candidateSystem = buildZhikuRecallCandidateSystem(system);
+  if (!candidateSystem.条目.length || !query.trim()) {
     return { entries: [], injection: '', diagnostics: buildEmptyZhikuDiagnostics() };
   }
   const normalLimit = getNormalRelatedLimit(limit);
   const sceneHints = buildZhikuSceneHints(sceneContext);
-  const relevantNames = buildRelevantCharacterNames(system, query, sceneContext);
-  const searchQuery = augmentZhikuQuery(query, sceneHints);
-  const characterAnchors = buildCharacterAnchorEntries(system, query, limit, sceneContext);
-  const presentFallbackAnchors = buildPresentCharacterFallbackEntries(system, sceneContext?.presentNpcNamesForFallback, sceneContext);
-  const rankedEntries = 搜索智库条目(system, searchQuery, Math.max(normalLimit * 3, normalLimit))
-    .filter(isMainStoryInjectableZhikuEntry);
-  const normalRankedEntries = rankedEntries.filter(isNormalRecallEntry);
-  const primaryEntries = rankZhikuEntries(
-    normalRankedEntries.filter((entry) => isStrongInjectionMatch(entry, query, sceneHints)),
-    sceneHints,
-  ).slice(0, normalLimit);
-  const weakSource = rankZhikuEntries(
-    normalRankedEntries.filter((entry) => !primaryEntries.some((item) => item.id === entry.id) && (sceneMatchesEntry(entry, sceneHints) || primaryEntries.length === 0)),
-    sceneHints,
+  const allKeywordMatches = candidateSystem.条目
+    .map((entry) => 匹配智库关键词(entry, query))
+    .filter((match): match is NonNullable<typeof match> => Boolean(match));
+  const blockedKeywordMatches = allKeywordMatches
+    .filter((match) => !isMainStoryInjectableZhikuEntry(match.entry));
+  const keywordMatches = 选择智库关键词互斥结果(
+    allKeywordMatches.filter((match) => isMainStoryInjectableZhikuEntry(match.entry)),
   );
+  const keywordMatchedEntries = keywordMatches.map((match) => match.entry);
+  const characterAnchors = keywordMatchedEntries
+    .filter((entry) => entry.分类 === 'character')
+    .filter((entry) => isAllowedOriginalProtagonistEntry(获取智库人物名列表(entry), sceneContext?.originalProtagonist))
+    .slice(0, getCharacterAnchorLimit(limit));
+  const relevantNames = Array.from(new Set(characterAnchors.flatMap((entry) => 获取智库人物名列表(entry))));
+  const presentFallbackAnchors = buildPresentCharacterFallbackEntries(candidateSystem, sceneContext?.presentNpcNamesForFallback, sceneContext);
+  const rankedEntries = keywordMatchedEntries;
+  const normalRankedEntries = rankedEntries.filter(isNormalRecallEntry);
+  const primaryEntries = rankZhikuEntries(normalRankedEntries, sceneHints).slice(0, normalLimit);
   const groups: 智库召回分组 = {
     characterEntries: mergeZhikuEntries(characterAnchors, presentFallbackAnchors),
     strongEntries: primaryEntries,
-    weakEntries: weakSource.slice(0, Math.max(0, normalLimit - primaryEntries.length)),
+    weakEntries: [],
   };
   const selectedEntries = mergeZhikuGroups(groups);
+  const selectedKeywordEntries = mergeZhikuEntries(characterAnchors, primaryEntries);
   const diagnostics = buildZhikuDiagnostics({
-    system,
-    query: searchQuery,
     sceneHints,
     relevantNames,
     characterAnchors,
     presentFallbackAnchors,
     candidates: rankedEntries,
-    keywordEntries: selectedEntries,
+    keywordEntries: selectedKeywordEntries,
+    blockedKeywordEntries: blockedKeywordMatches.map((match) => match.entry),
     modelCandidates: [],
     aiSupplementEntries: [],
     groups,
@@ -497,11 +426,15 @@ export async function retrieveZhikuContextWithModel(
   sceneContext?: 智库场景上下文,
   promptModules?: 提示词模块[],
 ): Promise<智库检索结果> {
-  if (!system?.条目?.length || !query.trim()) {
+  const candidateSystem = buildZhikuRecallCandidateSystem(system);
+  if (!candidateSystem.条目.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
   }
 
-  const keywordRecall = retrieveZhikuContext(system, query, limit, sceneContext);
+  const keywordRecall = retrieveZhikuContext(candidateSystem, query, limit, sceneContext);
+  if (settings.enableAiSupplement !== true) {
+    return keywordRecall;
+  }
   const api = resolveZhikuRecallConfig(mainConfig, settings);
   if (!api.baseUrl || !api.apiKey || !api.model) {
     return keywordRecall;
@@ -513,32 +446,13 @@ export async function retrieveZhikuContextWithModel(
     weakEntries: keywordRecall.weakEntries ?? [],
   };
   const keywordEntries = mergeZhikuGroups(keywordGroups);
-  const normalLimit = getNormalRelatedLimit(limit);
-  const candidates = buildRecallSupplementCandidates(system, query, Math.max(normalLimit * 3, 18), sceneContext, keywordEntries);
-  if (!candidates.length) return keywordRecall;
-
   const sceneHints = buildZhikuSceneHints(sceneContext);
-  const candidateText = candidates
-    .map((entry, index) => {
-      const keywords = entry.关键词.length ? `｜关键词：${entry.关键词.slice(0, 8).join('、')}` : '';
-      const source = entry.来源 ? `｜来源：${entry.来源}` : '';
-      const meta = formatZhikuSoftMeta(entry, '｜');
-      const calibration = formatZhikuCharacterCalibrationBrief(entry, '｜');
-      const summary = entry.摘要 || '无摘要';
-      return [
-        `${index + 1}. ${entry.标题}`,
-        `类别：${ZHIKU_CATEGORY_LABELS[entry.分类]}｜重要度：${entry.重要度}${source}${keywords}${meta}`,
-        `摘要：${summary}${calibration}`,
-      ].join('\n');
-    })
-    .join('\n\n');
-
+  const injectableCandidateSystem: 智库系统 = {
+    条目: candidateSystem.条目.filter(isMainStoryInjectableZhikuEntry),
+  };
+  const candidateIndex = buildZhikuAiRequestForTurn(injectableCandidateSystem, query, keywordEntries, sceneContext);
   const systemPrompt = buildZhikuModelSystemPrompt(sceneHints, promptModules);
-  const userPrompt = buildZhikuModelUserPrompt(query, normalLimit, candidateText, {
-    keywordRecallTitles: keywordEntries.map((entry) => entry.标题),
-    anticipatedNpcNames: sceneContext?.anticipatedNpcNames ?? [],
-    aiSupplementHints: sceneContext?.aiSupplementHints,
-  });
+  const userPrompt = buildZhikuModelUserPrompt(candidateIndex.request);
 
   try {
     const rawText = await withRetries(
@@ -547,50 +461,46 @@ export async function retrieveZhikuContextWithModel(
           messages: [{ role: 'user', content: userPrompt }],
           systemPrompt,
           signal,
-          maxTokens: api.maxTokens ?? 384,
+          maxTokens: Math.min(1600, Math.max(640, api.maxTokens ?? 960)),
           temperature: api.temperature ?? 0.1,
         }),
       { retries: retryCount, signal, label: '智库召回' },
     );
-    const supplementGroups = parseZhikuIndexes(rawText, candidates, normalLimit);
-    const supplementEntries = mergeZhikuGroups(supplementGroups);
-    const finalGroups = mergeSupplementedZhikuGroups(keywordGroups, supplementGroups);
+    const aiOutput = parseZhikuAiOutput(rawText);
+    const compilation = compileZhikuAiSelection(candidateIndex.request, aiOutput, AI_SUPPLEMENT_ENTRY_LIMIT);
+    const finalGroups = buildCompiledZhikuGroups(keywordGroups, candidateIndex, compilation);
     const finalPicked = mergeZhikuGroups(finalGroups);
-    const appliedSupplementEntries = finalPicked.filter((entry) => supplementEntries.some((item) => item.id === entry.id));
-    const appliedSupplementIds = new Set(appliedSupplementEntries.map((entry) => entry.id));
-    const aiCharacterSupplement = supplementGroups.characterEntries.filter((entry) => appliedSupplementIds.has(entry.id));
-    const aiStrongSupplement = supplementGroups.strongEntries.filter((entry) => appliedSupplementIds.has(entry.id));
-    const aiWeakSupplement = supplementGroups.weakEntries.filter((entry) => appliedSupplementIds.has(entry.id));
-    if (!supplementEntries.length) {
-      const keywordDiagnostics = keywordRecall.diagnostics ?? buildEmptyZhikuDiagnostics();
-      return {
-        ...keywordRecall,
-        usedModel: true,
-        rawText,
-        diagnostics: {
-          ...keywordDiagnostics,
-          AI候选资料: candidates.map((entry) => entry.标题).slice(0, Math.max(AI_SUPPLEMENT_ENTRY_LIMIT, normalLimit)),
-          AI补充资料: [],
-          检查项: [
-            ...keywordDiagnostics.检查项,
-            '智库模型已按最近多回合正文窗口查缺补漏，但没有返回有效补充编号；已保留关键词召回结果。',
-          ],
-        },
-      };
-    }
+    const acceptedIds = new Set(compilation.accepted.map((selection) => selection.entryId));
+    const appliedSupplementEntries = finalPicked.filter((entry) => acceptedIds.has(entry.id));
+    const aiCharacterSupplement = appliedSupplementEntries.filter((entry) => entry.分类 === 'character');
+    const aiStrongSupplement = finalGroups.strongEntries.filter((entry) => acceptedIds.has(entry.id));
+    const aiWeakSupplement = finalGroups.weakEntries.filter((entry) => acceptedIds.has(entry.id));
+    const formOverrides = compilation.accepted
+      .filter((selection) => selection.operation === 'FORM_OVERRIDE')
+      .map((selection) => {
+        const before = selection.replaceEntryId ? candidateIndex.entriesById.get(selection.replaceEntryId)?.标题 : undefined;
+        const after = candidateIndex.entriesById.get(selection.entryId)?.标题 ?? selection.entryId;
+        return `${before ?? selection.replaceEntryId ?? '未知形态'} → ${after}`;
+      });
     const keywordDiagnostics = keywordRecall.diagnostics ?? buildEmptyZhikuDiagnostics();
+    const finalInjection = buildZhikuInjection(finalGroups, sceneHints);
+    const finalVolume = buildZhikuInjectionVolume(finalGroups, finalInjection);
     return {
       entries: finalPicked,
       characterEntries: finalGroups.characterEntries,
       strongEntries: finalGroups.strongEntries,
       weakEntries: finalGroups.weakEntries,
-      injection: buildZhikuInjection(finalGroups, sceneHints),
+      injection: finalInjection,
       usedModel: true,
       rawText,
       diagnostics: {
         ...keywordDiagnostics,
-        AI候选资料: candidates.map((entry) => entry.标题).slice(0, Math.max(AI_SUPPLEMENT_ENTRY_LIMIT, normalLimit)),
+        AI候选资料: candidateIndex.request.candidates.map((candidate) => `${candidate.entryId}｜${candidate.title}`),
+        AI候选索引: candidateIndex.request.candidates.map((candidate) => `${candidate.entryId}｜${candidate.title}｜${candidate.candidateReason.join('+') || 'UNKNOWN'}`),
         AI补充资料: appliedSupplementEntries.map((entry) => entry.标题),
+        AI形态修正: formOverrides,
+        AI拒绝选择: compilation.rejected.map((item) => `${item.entryId}｜${item.code}｜${item.detail}`),
+        AI未选择原因: aiOutput.noSelectionReason,
         AI检索补充: aiCharacterSupplement.map((entry) => entry.标题),
         AI检索补充强资料: aiStrongSupplement.map((entry) => entry.标题),
         AI检索补充弱资料: aiWeakSupplement.map((entry) => entry.标题),
@@ -599,30 +509,42 @@ export async function retrieveZhikuContextWithModel(
         弱相关资料: finalGroups.weakEntries.map((entry) => entry.标题),
         已注入资料: finalPicked.map((entry) => entry.标题),
         角色故事层注入: finalGroups.characterEntries.map(formatCharacterStoryInjectionDiagnostic),
+        ...finalVolume,
         检查项: [
           ...keywordDiagnostics.检查项,
-          `智库模型已按最近多回合正文窗口查缺补漏，仅追加 ${appliedSupplementEntries.length} 条未由关键词命中的资料；关键词召回结果已保底保留。`,
+          `AI 主动补充已执行：受控候选 ${candidateIndex.request.candidates.length} 条，接受 ${compilation.accepted.length} 条，拒绝 ${compilation.rejected.length} 条；关键词证据保留，只有合法同主体形态修正会改变最终条目。`,
         ],
       },
     };
-  } catch {
-    return keywordRecall;
+  } catch (error) {
+    const keywordDiagnostics = keywordRecall.diagnostics ?? buildEmptyZhikuDiagnostics();
+    return {
+      ...keywordRecall,
+      usedModel: true,
+      diagnostics: {
+        ...keywordDiagnostics,
+        AI候选资料: candidateIndex.request.candidates.map((candidate) => `${candidate.entryId}｜${candidate.title}`),
+        AI候选索引: candidateIndex.request.candidates.map((candidate) => `${candidate.entryId}｜${candidate.title}｜${candidate.candidateReason.join('+') || 'UNKNOWN'}`),
+        检查项: [
+          ...keywordDiagnostics.检查项,
+          `AI 主动补充失败，已回退到关键词结果：${error instanceof Error ? error.message : '未知错误'}`,
+        ],
+      },
+    };
   }
 }
 
 export function buildZhikuModelSystemPrompt(sceneHints: string[] = [], promptModules?: 提示词模块[]): string {
   const sceneHintsLine = sceneHints.length ? `关键词层场景锚点：${sceneHints.slice(0, 8).join('、')}` : '关键词层场景锚点：无';
   const modulesSection = buildZhikuPromptModulesSection(promptModules);
-  if (modulesSection) {
-    return [modulesSection, sceneHintsLine].join('\n');
-  }
-  // legacy 回退：未传 promptModules 时使用源文件 import
   return [
-    ZHIKU_LEGACY_COT_PROMPT,
+    modulesSection ? `# 玩家启用的智库附加规则\n${modulesSection}` : '',
+    '# 固定运行时身份与安全契约（优先级最高）',
+    ZHIKU_COT_PROMPT,
     '',
     ZHIKU_OUTPUT_FORMAT_PROMPT,
     sceneHintsLine,
-  ].join('\n');
+  ].filter(Boolean).join('\n\n');
 }
 
 function buildZhikuPromptModulesSection(promptModules?: 提示词模块[]): string {
@@ -630,23 +552,38 @@ function buildZhikuPromptModulesSection(promptModules?: 提示词模块[]): stri
   return buildIndependentPromptModulesSection(promptModules, 'zhiku');
 }
 
-export function buildZhikuModelUserPrompt(query: string, limit: number, candidateText: string, options: 智库模型用户提示词选项 = {}): string {
-  const keywordRecallTitles = options.keywordRecallTitles ?? [];
-  const anticipated = (options.anticipatedNpcNames ?? []).map((name) => name.trim()).filter(Boolean);
+export function buildZhikuModelUserPrompt(request: ZhikuAiRequest): string {
   return [
-    `召回扫描正文窗口：${query.trim()}`,
-    '说明：关键词召回只读取当前玩家输入与最近 5 条 assistant 正文内容；当前地点、当前相关人物、剧情规划、小结、动态事件、即时剧情回顾和在场角色分析等元信息不得触发关键词。',
+    '以下 JSON 是本回合唯一可使用的剧情状态、关键词证据与受控候选索引。',
+    '关键词窗口仍只来自当前玩家输入与最近 3 条 assistant 正文；当前地点、人物状态、剧情计划等元信息不得触发关键词，只能帮助 AI 判断是否补漏。',
+    `AI 最多接受 ${AI_SUPPLEMENT_ENTRY_LIMIT} 条选择。候选原文未发送，不得使用模型自身知识补全候选。`,
     '',
-    'AI 查缺补漏线索（只用于判断是否缺少必要资料，不属于关键词扫描正文窗口）：',
-    formatAiSupplementHints(options.aiSupplementHints),
-    anticipated.length ? `预期登场人物（只用于 AI 查缺补漏，不视为关键词已命中）：${anticipated.slice(0, AI_SUPPLEMENT_ENTRY_LIMIT).join('、')}` : '预期登场人物：无',
-    `关键词召回上限：角色档案 ${CHARACTER_KEYWORD_RECALL_LIMIT} 条，非角色资料 ${getNormalRelatedLimit(limit)} 条；AI 补充上限：最多 ${AI_SUPPLEMENT_ENTRY_LIMIT} 条，且只追加未被关键词召回的候选。`,
-    '',
-    `已关键词召回资料（只作为排除表，不含档案正文）：${keywordRecallTitles.length ? keywordRecallTitles.join('、') : '无'}`,
-    '',
-    '未召回候选资料（只可从这里补缺）：',
-    candidateText,
+    JSON.stringify(request, null, 2),
   ].join('\n');
+}
+
+export function buildZhikuAiRequestForTurn(
+  system: 智库系统,
+  keywordScanText: string,
+  keywordEntries: 智库条目[],
+  sceneContext?: 智库场景上下文,
+): ZhikuAiCandidateIndex {
+  const hints = sceneContext?.aiSupplementHints;
+  return buildZhikuAiCandidateIndex({
+    system,
+    keywordScanText,
+    keywordEntries,
+    context: {
+      currentLocation: hints?.currentLocation,
+      presentCharacters: hints?.presentNpcNames ?? sceneContext?.presentNpcNamesForFallback ?? [],
+      expectedCharacters: sceneContext?.anticipatedNpcNames ?? [],
+      immediateStoryReview: hints?.immediateStoryReview,
+      recentStoryContext: hints?.recentStoryContext,
+      storyPlan: hints?.storyPlan,
+      openingArchiveText: hints?.openingArchiveText ?? sceneContext?.openingArchiveText,
+    },
+    getBlockReason: getMainStoryBlockReason,
+  });
 }
 
 function resolveZhikuRecallConfig(mainConfig: API配置项, settings: 智库系统设置): API配置项 {
@@ -663,88 +600,20 @@ function resolveZhikuRecallConfig(mainConfig: API配置项, settings: 智库系�
   };
 }
 
-function buildRecallSupplementCandidates(system: 智库系统, query: string, limit: number, sceneContext?: 智库场景上下文, excludedEntries: 智库条目[] = []): 智库条目[] {
-  const sceneHints = buildZhikuSceneHints(sceneContext);
-  const excludedIds = new Set(excludedEntries.map((entry) => entry.id));
-  const isAvailableSupplement = (entry: 智库条目) => !excludedIds.has(entry.id) && isMainStoryInjectableZhikuEntry(entry) && entry.分类 !== 'story';
-  const scored = 搜索智库条目(system, augmentZhikuQuery(query, sceneHints), Math.max(limit * 3, limit))
-    .filter(isAvailableSupplement);
-  const aiSupplementHintQuery = buildAiSupplementHintQuery(sceneContext?.aiSupplementHints);
-  const hinted = aiSupplementHintQuery
-    ? 搜索智库条目(system, aiSupplementHintQuery, Math.max(limit * 2, limit))
-      .filter(isAvailableSupplement)
-    : [];
-  const characterPool = [...(system.条目 ?? [])]
-    .filter(isAvailableSupplement)
-    .filter((entry) => entry.分类 === 'character')
-    .filter(isCharacterAnchorNode);
-  const anticipatedCharacters = characterPool.filter((entry) => {
-    const names = 获取智库人物名列表(entry);
-    return (sceneContext?.anticipatedNpcNames ?? []).some((name) => names.some((characterName) => namesLikelySame(characterName, name)));
-  });
-  const recent = [...(system.条目 ?? [])]
-    .filter(isAvailableSupplement)
-    .filter(isNormalRecallEntry)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, Math.min(10, limit));
-  const characterCandidates = mergeZhikuEntries(
-    rankZhikuEntries(anticipatedCharacters, sceneHints),
-  ).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT);
-  const normalCandidates = mergeZhikuEntries(
-    rankZhikuEntries(scored.filter(isNormalRecallEntry), sceneHints),
-    rankZhikuEntries(hinted.filter(isNormalRecallEntry), sceneHints),
-    rankZhikuEntries(recent, sceneHints),
-  ).slice(0, limit);
-  return mergeZhikuEntries(characterCandidates, normalCandidates).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT + normalCandidates.length);
-}
-
-function buildAiSupplementHintQuery(hints?: 智库AI补充线索): string {
-  if (!hints) return '';
-  const parts = [
-    hints.currentLocation,
-    ...(hints.presentNpcNames ?? []),
-    hints.openingArchiveText,
-    hints.immediateStoryReview,
-    hints.recentStoryContext,
-    hints.storyPlan,
-  ];
-  return parts.map((item) => item?.trim()).filter(Boolean).join('\n').slice(0, 1600);
-}
-
-function formatAiSupplementHints(hints?: 智库AI补充线索): string {
-  if (!hints) return '无';
-  const lines = [
-    hints.currentLocation?.trim() ? `当前地点：${compactPromptText(hints.currentLocation, 80)}` : '',
-    hints.presentNpcNames?.length ? `在场角色分析：${hints.presentNpcNames.map((name) => name.trim()).filter(Boolean).slice(0, 12).join('、')}` : '',
-    hints.openingArchiveText?.trim() ? `开局档案：${compactPromptText(hints.openingArchiveText, 700)}` : '',
-    hints.immediateStoryReview?.trim() ? `即时剧情回顾：${compactPromptText(hints.immediateStoryReview, 700)}` : '',
-    hints.recentStoryContext?.trim() ? `最近剧情承接：${compactPromptText(hints.recentStoryContext, 500)}` : '',
-    hints.storyPlan?.trim() ? `剧情规划：${compactPromptText(hints.storyPlan, 300)}` : '',
-  ].filter(Boolean);
-  return lines.length ? lines.join('\n') : '无';
-}
-
-function compactPromptText(value: string, limit: number): string {
-  const cleaned = value.replace(/\s+/g, ' ').trim();
-  if (!cleaned) return '';
-  return cleaned.length > limit ? `${cleaned.slice(0, Math.max(0, limit - 3))}...` : cleaned;
-}
-
 function buildZhikuDiagnostics(input: {
-  system: 智库系统;
-  query: string;
   sceneHints: string[];
   relevantNames: string[];
   characterAnchors: 智库条目[];
   presentFallbackAnchors: 智库条目[];
   candidates: 智库条目[];
   keywordEntries: 智库条目[];
+  blockedKeywordEntries: 智库条目[];
   modelCandidates: 智库条目[];
   aiSupplementEntries: 智库条目[];
   groups: 智库召回分组;
   limit: number;
 }): 智库召回诊断 {
-  const blocked = 搜索智库条目(input.system, input.query, Math.max(input.limit * 4, 16))
+  const blocked = input.blockedKeywordEntries
     .map((entry) => ({ entry, reason: getMainStoryBlockReason(entry) }))
     .filter((item): item is { entry: 智库条目; reason: string } => Boolean(item.reason))
     .slice(0, 8)
@@ -769,6 +638,33 @@ function buildZhikuDiagnostics(input: {
       ? `门禁过滤 ${blocked.length} 条候选资料。`
       : '本次候选没有被主剧情门禁过滤的高风险资料。',
   ];
+  const injectedEntries = mergeZhikuGroups(input.groups);
+  const injection = buildZhikuInjection(input.groups, input.sceneHints);
+  const injectedIds = new Set(injectedEntries.map((entry) => entry.id));
+  const blockedIds = new Set(input.blockedKeywordEntries.map((entry) => entry.id));
+  const trimmed = input.candidates
+    .filter((entry) => !injectedIds.has(entry.id) && !blockedIds.has(entry.id))
+    .map((entry) => ({
+      标题: entry.标题,
+      原因: entry.分类 === 'character'
+        ? `未进入最终人物分组；人物召回上限为 ${getCharacterAnchorLimit(input.limit)} 条。`
+        : `超出普通资料最大相关条目数 ${input.limit} 条。`,
+      原优先级: entry.分类 === 'character' ? '人物候选' : '普通相关资料',
+    }));
+  const rawSelectedEntries = [
+    ...input.characterAnchors,
+    ...input.presentFallbackAnchors,
+    ...input.groups.strongEntries,
+    ...input.groups.weakEntries,
+  ];
+  const rawSelectedCounts = new Map<string, { entry: 智库条目; count: number }>();
+  for (const entry of rawSelectedEntries) {
+    const current = rawSelectedCounts.get(entry.id);
+    rawSelectedCounts.set(entry.id, { entry, count: (current?.count ?? 0) + 1 });
+  }
+  const deduped = Array.from(rawSelectedCounts.values())
+    .filter(({ count }) => count > 1)
+    .map(({ entry, count }) => `${entry.标题}（${entry.id}）由 ${count} 个召回通道命中，按资料 ID 保留 1 份。`);
   return {
     场景锚点: input.sceneHints.slice(0, 12),
     相关角色: input.relevantNames.slice(0, 12),
@@ -777,7 +673,11 @@ function buildZhikuDiagnostics(input: {
     关键词召回资料: input.keywordEntries.map((entry) => entry.标题).slice(0, CHARACTER_KEYWORD_RECALL_LIMIT + NORMAL_KEYWORD_RECALL_LIMIT),
     候选资料: input.candidates.map((entry) => entry.标题).slice(0, Math.max(input.limit, 8)),
     AI候选资料: input.modelCandidates.map((entry) => entry.标题).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT),
+    AI候选索引: [],
     AI补充资料: input.aiSupplementEntries.map((entry) => entry.标题).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT),
+    AI形态修正: [],
+    AI拒绝选择: [],
+    AI未选择原因: '',
     关键词召回: input.characterAnchors.map((entry) => entry.标题).slice(0, CHARACTER_KEYWORD_RECALL_LIMIT),
     AI检索补充: input.aiSupplementEntries.filter((entry) => entry.分类 === 'character').map((entry) => entry.标题).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT),
     关键词资料召回: mergeZhikuEntries(input.groups.strongEntries, input.groups.weakEntries).map((entry) => entry.标题).slice(0, NORMAL_KEYWORD_RECALL_LIMIT),
@@ -786,10 +686,17 @@ function buildZhikuDiagnostics(input: {
     角色相关资料: input.groups.characterEntries.map((entry) => entry.标题),
     强相关资料: input.groups.strongEntries.map((entry) => entry.标题).slice(0, input.limit),
     弱相关资料: input.groups.weakEntries.map((entry) => entry.标题).slice(0, input.limit),
-    已注入资料: mergeZhikuGroups(input.groups).map((entry) => entry.标题),
+    已注入资料: injectedEntries.map((entry) => entry.标题),
     角色故事层注入: input.groups.characterEntries.map(formatCharacterStoryInjectionDiagnostic),
+    ...buildZhikuInjectionVolume(input.groups, injection),
+    去重记录: deduped,
+    删减记录: trimmed,
     被门禁过滤: blocked,
-    检查项: checks,
+    检查项: [
+      ...checks,
+      trimmed.length ? `相关性上限未保留 ${trimmed.length} 条候选；详情见删减记录。` : '没有因相关性条目上限删减候选。',
+      deduped.length ? `已合并 ${deduped.length} 组重复召回。` : '没有检测到跨召回通道重复资料。',
+    ],
   };
 }
 
@@ -807,94 +714,38 @@ function buildEmptyZhikuDiagnostics(): 智库召回诊断 {
     关键词召回资料: [],
     候选资料: [],
     AI候选资料: [],
+    AI候选索引: [],
     AI补充资料: [],
+    AI形态修正: [],
+    AI拒绝选择: [],
+    AI未选择原因: '',
     角色相关资料: [],
     强相关资料: [],
     弱相关资料: [],
     已注入资料: [],
     角色故事层注入: [],
+    静态注入字符数: 0,
+    静态注入估算Token: 0,
+    单条静态注入体量: [],
+    动态状态来源: [
+      '世界状态 / 当前位置',
+      'NPC 账本 / 关系与承诺',
+      '即时剧情回顾 / 伤势与情绪',
+    ],
+    去重记录: [],
+    删减记录: [],
+    体量预警: [],
     被门禁过滤: [],
     检查项: ['智库未启用、无资料或本回合没有可检索输入。'],
   };
 }
-function parseZhikuIndexes(
-  raw: string,
-  candidates: 智库条目[],
-  _limit: number,
-): 智库召回分组 {
-  const character: number[] = [];
-  const strong: number[] = [];
-  const weak: number[] = [];
-  const accepted = new Set<number>();
-  const canAccept = (index: number) => {
-    if (accepted.has(index)) return false;
-    return accepted.size < AI_SUPPLEMENT_ENTRY_LIMIT;
-  };
-  const accept = (bucket: number[], index: number) => {
-    if (!canAccept(index)) return;
-    bucket.push(index);
-    accepted.add(index);
-  };
-  const text = normalizeStructuredModelText(raw);
-  for (const line of text.split(/\r?\n/)) {
-    const isCharacter = /角色相关资料|人物相关资料|角色资料|人物资料/i.test(line);
-    const isStrong = /强相关资料|强回忆/i.test(line);
-    const isWeak = /弱相关资料|弱回忆/i.test(line);
-    if (!isCharacter && !isStrong && !isWeak) continue;
-    const content = line.split(/[:：]/).slice(1).join(':').trim();
-    if (!content || /无|none|null/i.test(content)) continue;
-    const matches = content.match(/\d+/g) ?? [];
-    for (const match of matches) {
-      const index = Number(match) - 1;
-      if (!Number.isInteger(index) || index < 0 || index >= candidates.length) continue;
-      const entry = candidates[index];
-      if (isCharacter && entry.分类 === 'character' && !character.includes(index)) accept(character, index);
-      if (isStrong && isNormalRecallEntry(entry) && !strong.includes(index)) accept(strong, index);
-      if (isWeak && isNormalRecallEntry(entry) && !weak.includes(index) && !strong.includes(index)) accept(weak, index);
-    }
-    if (!matches.length) {
-      const namedIndexes = findZhikuCandidateIndexesByName(content, candidates);
-      for (const index of namedIndexes) {
-        const entry = candidates[index];
-        if (isCharacter && entry.分类 === 'character' && !character.includes(index)) accept(character, index);
-        if (isStrong && isNormalRecallEntry(entry) && !strong.includes(index)) accept(strong, index);
-        if (isWeak && isNormalRecallEntry(entry) && !weak.includes(index) && !strong.includes(index)) accept(weak, index);
-      }
-    }
-  }
-  const characterEntries = mergeZhikuEntries(character.map((index) => candidates[index]))
-    .slice(0, AI_SUPPLEMENT_ENTRY_LIMIT);
-  return {
-    characterEntries,
-    strongEntries: strong.map((index) => candidates[index]).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT),
-    weakEntries: weak.map((index) => candidates[index]).slice(0, AI_SUPPLEMENT_ENTRY_LIMIT),
-  };
-}
-
-function findZhikuCandidateIndexesByName(content: string, candidates: 智库条目[]): number[] {
-  const parts = content
-    .split(/[|｜,，、]/)
-    .map((item) => item.replace(/[【】\[\]\s]/g, '').trim())
-    .filter(Boolean);
-  const indexes: number[] = [];
-  for (const part of parts) {
-    const index = candidates.findIndex((entry) => {
-      const title = entry.标题.replace(/\s+/g, '');
-      const characterNames = 获取智库人物名列表(entry).map((name) => name.replace(/\s+/g, ''));
-      return title === part || title.includes(part) || part.includes(title) || characterNames.some((name) => name === part);
-    });
-    if (index >= 0 && !indexes.includes(index)) indexes.push(index);
-  }
-  return indexes;
-}
-
 function buildZhikuInjection(groups: 智库召回分组, sceneHints: string[] = []): string {
   if (!mergeZhikuGroups(groups).length) return '';
   const formatGroup = (title: string, entries: 智库条目[]): string[] => {
     if (!entries.length) return [];
     return [
       `## ${title}`,
-      ...entries.map((entry, index) => formatZhikuInjectionEntry(entry, index)),
+      ...entries.map(renderZhikuEntryStaticInjection).filter(Boolean),
     ];
   };
   return [
@@ -922,122 +773,79 @@ function buildZhikuInjection(groups: 智库召回分组, sceneHints: string[] = 
   ].filter((line, index, lines) => line.trim() || lines[index - 1]?.trim()).join('\n').trim();
 }
 
-function formatZhikuInjectionEntry(entry: 智库条目, index: number): string {
-    if (entry.分类 === 'character') return formatCharacterZhikuInjectionEntry(entry, index);
-    const title = entry.标题 || `第 ${index + 1} 条资料`;
-    const summary = entry.摘要 || entry.原文.slice(0, 220) || '无摘要';
-    const keywords = entry.关键词.length ? `；关键词：${entry.关键词.slice(0, 8).join('、')}` : '';
-    const source = entry.来源 ? `；来源：${entry.来源}` : '';
-    const meta = formatZhikuSoftMeta(entry);
-    return `${index + 1}. 【${ZHIKU_CATEGORY_LABELS[entry.分类]}】${title}：${summary}${meta}${keywords}${source}`;
+export function buildZhikuEntryInjectionPreview(entry: 智库条目): string {
+  return renderZhikuEntryStaticInjection(entry);
 }
 
-function formatCharacterZhikuInjectionEntry(entry: 智库条目, index: number): string {
-  const title = entry.标题 || `第 ${index + 1} 条人物资料`;
-  const keywords = entry.关键词.length ? `关键词：${entry.关键词.slice(0, 10).join('、')}` : '';
-  const source = entry.来源 ? `来源：${entry.来源}` : '';
-  const storySummarySection = formatCharacterStorySummarySection(entry);
-  const sections = [
-    formatCharacterSourceSection(entry.原文, '基础识别', 1400),
-    formatCharacterSourceSection(entry.原文, '常驻事实层', 1800),
-    storySummarySection,
-    formatCharacterSourceSection(entry.原文, '表现锚点层', 1800),
-    formatCharacterSourceSection(entry.原文, '语料层', 3600),
-    formatCharacterSourceSection(entry.原文, '能力与职责模块', 1800),
-    formatCharacterSourceSection(entry.原文, '本回合注入建议', 1200),
-  ].filter(Boolean);
-  const fallback = entry.摘要 || entry.原文.slice(0, 600) || '无摘要';
+export function renderZhikuEntryStaticInjection(entry: 智库条目): string {
+  if (!智库条目注入内容完整(entry) || !entry.注入内容) return '';
+  const content = entry.注入内容;
+  if (content.类型 === 'character') {
+    return [
+      `【人物：${entry.标题}】`,
+      `核心身份与阵营：${content.核心身份与阵营}`,
+      `独立人格与行为：${content.独立人格与行为}`,
+      `说话方式：${content.说话方式}`,
+      `台词语料：\n${content.台词语料}`,
+      `外貌锚点：${content.外貌锚点}`,
+      `当前形态与能力边界：${content.当前形态与能力边界}`,
+      `精简角色故事：${content.精简角色故事}`,
+      `演绎红线：${content.演绎红线}`,
+    ].join('\n');
+  }
   return [
-    `${index + 1}. 【人物】${title}`,
-    [source, keywords].filter(Boolean).join('；'),
-    '说明：这是被关键词召回或 AI 补充召回的人物档案。主剧情必须读取语料层作为口吻参考，但不得整句复读；角色故事层优先读取预整理摘要，避免长篇经历复述；阶段、门禁和未解锁内容只按当前剧情可用性使用。',
-    sections.length ? sections.join('\n\n') : `摘要：${fallback}${formatZhikuSoftMeta(entry)}`,
-  ].filter(Boolean).join('\n');
+    `【${ZHIKU_CATEGORY_LABELS[entry.分类]}：${entry.标题}】`,
+    `核心定义：${content.核心定义}`,
+    `关键事实：${content.关键事实}`,
+    `叙事用途：${content.叙事用途}`,
+    `演绎边界：${content.演绎边界}`,
+  ].join('\n');
+}
+
+function buildZhikuInjectionVolume(groups: 智库召回分组, injection: string) {
+  const entries = mergeZhikuGroups(groups);
+  const characterIds = new Set(groups.characterEntries.map((entry) => entry.id));
+  const strongIds = new Set(groups.strongEntries.map((entry) => entry.id));
+  const detail = entries.map((entry) => {
+    const text = renderZhikuEntryStaticInjection(entry);
+    return {
+      id: entry.id,
+      标题: entry.标题,
+      分类: entry.分类,
+      字符数: text.length,
+      估算Token: estimateTextTokens(text),
+      保留优先级: characterIds.has(entry.id)
+        ? '必须人物' as const
+        : strongIds.has(entry.id)
+          ? '强相关背景' as const
+          : '弱相关背景' as const,
+    };
+  });
+  const totalTokens = estimateTextTokens(injection);
+  const warnings = detail
+    .filter((item) => item.估算Token > ZHIKU_ENTRY_VOLUME_WARNING_TOKENS)
+    .map((item) => `${item.标题} 单条静态注入约 ${item.估算Token} tokens，超过 ${ZHIKU_ENTRY_VOLUME_WARNING_TOKENS} tokens 诊断线；系统未自动截断。`);
+  if (totalTokens > ZHIKU_TOTAL_VOLUME_WARNING_TOKENS) {
+    warnings.push(`智库静态注入合计约 ${totalTokens} tokens，超过 ${ZHIKU_TOTAL_VOLUME_WARNING_TOKENS} tokens 诊断线；请结合当前供应商上下文上限检查，系统未删除重要人物。`);
+  }
+  return {
+    静态注入字符数: injection.length,
+    静态注入估算Token: totalTokens,
+    单条静态注入体量: detail,
+    动态状态来源: [
+      '世界状态 / 当前位置',
+      'NPC 账本 / 关系与承诺',
+      '即时剧情回顾 / 伤势与情绪',
+    ],
+    体量预警: warnings,
+  };
 }
 
 function formatCharacterStoryInjectionDiagnostic(entry: 智库条目): string {
   const title = entry.标题 || '未命名人物';
-  if (entry.角色故事摘要?.trim()) return `${title}：角色故事摘要`;
-  if (entry.摘要?.trim()) return `${title}：通用摘要兜底`;
-  if (extractMarkdownSection(entry.原文, '角色故事层') || extractMarkdownSection(entry.原文, /^历史故事与.+层$/u)) {
-    return `${title}：故事原文兜底`;
-  }
-  return `${title}：未注入故事层`;
-}
-
-function formatCharacterStorySummarySection(entry: 智库条目): string {
-  const curated = compactSectionText(entry.角色故事摘要 ?? '', 900);
-  if (curated) {
-    return `### 角色故事摘要\n${curated}\n（故事摘要由内置资料预整理，用于替代长篇角色故事层注入；不得把未解锁经历写成当前已发生事实。）`;
-  }
-  const summary = compactSectionText(entry.摘要 ?? '', 700);
-  if (summary) {
-    return `### 角色故事摘要（通用摘要兜底）\n${summary}\n（该角色尚未补齐专用角色故事摘要；只作为故事背景理解，不得扩写未解锁经历。）`;
-  }
-  const storySection = formatCharacterSourceSection(entry.原文, '角色故事层', 700)
-    || formatCharacterSourceSection(entry.原文, /^历史故事与.+层$/u, 700);
-  if (!storySection) return '';
-  return `${storySection}\n（该角色尚未补齐专用角色故事摘要；故事原文已按极小上限兜底截取。）`;
-}
-function formatCharacterSourceSection(source: string, heading: string | RegExp, limit: number): string {
-  const section = extractMarkdownSection(source, heading);
-  if (!section) return '';
-  return `### ${section.title}\n${compactSectionText(section.body, limit)}`;
-}
-
-function extractMarkdownSection(source: string, heading: string | RegExp): { title: string; body: string } | null {
-  const text = String(source || '');
-  if (!text.trim()) return null;
-  const headings = Array.from(text.matchAll(/^##\s+(.+?)\s*$/gmu));
-  for (let index = 0; index < headings.length; index += 1) {
-    const match = headings[index];
-    const title = match[1]?.trim() ?? '';
-    const matchesHeading = typeof heading === 'string' ? title === heading : heading.test(title);
-    if (!matchesHeading || match.index === undefined) continue;
-    const start = match.index + match[0].length;
-    const end = headings[index + 1]?.index ?? text.length;
-    const body = text.slice(start, end).trim();
-    if (!body) return null;
-    return { title, body };
-  }
-  return null;
-}
-
-function compactSectionText(value: string, limit: number): string {
-  const cleaned = value.trim();
-  if (cleaned.length <= limit) return cleaned;
-  return `${cleaned.slice(0, limit).trim()}\n...（本层内容较长，已按注入上限截断；使用时只取当前剧情需要的锚点，不得补完未解锁事实。）`;
-}
-
-function formatZhikuSoftMeta(entry: 智库条目, separator = '；'): string {
-  if (entry.分类 !== 'character') return '';
-  const meta = 解析智库软结构标签(entry);
-  const parts = [
-    meta.资料类型 ? `资料类型：${meta.资料类型}` : '',
-    meta.节点 ? `节点：${meta.节点}` : '',
-    meta.解锁状态 ? `解锁：${meta.解锁状态}` : '',
-    meta.剧透等级 ? `剧透：${meta.剧透等级}` : '',
-    meta.使用范围.length ? `范围：${meta.使用范围.join('/')}` : '',
-    compact(meta.外貌锚点) ? `外貌：${compact(meta.外貌锚点)}` : '',
-    compact(meta.性格锚点) ? `性格：${compact(meta.性格锚点)}` : '',
-    compact(meta.说话方式) ? `口吻：${compact(meta.说话方式)}` : '',
-    compact(meta.行为习惯) ? `行为：${compact(meta.行为习惯)}` : '',
-    compact(meta.关系边界) ? `关系边界：${compact(meta.关系边界)}` : '',
-    compact(meta.禁止误写) ? `禁止误写：${compact(meta.禁止误写)}` : '',
-  ].filter(Boolean);
-  return parts.length ? `${separator}${parts.join(separator)}` : '';
-}
-
-function formatZhikuCharacterCalibrationBrief(entry: 智库条目, separator = '；'): string {
-  if (entry.分类 !== 'character') return '';
-  const meta = 解析智库软结构标签(entry);
-  const parts = [
-    compact(meta.性格锚点) ? `性格锚点：${compact(meta.性格锚点)}` : '',
-    compact(meta.说话方式) ? `说话方式：${compact(meta.说话方式)}` : '',
-    compact(meta.关系边界) ? `关系边界：${compact(meta.关系边界)}` : '',
-    compact(meta.禁止误写) ? `禁止误写：${compact(meta.禁止误写)}` : '',
-  ].filter(Boolean);
-  return parts.length ? `${separator}${parts.join(separator)}` : '';
+  return entry.注入内容?.类型 === 'character' && entry.注入内容.精简角色故事.trim()
+    ? `${title}：显式精简角色故事`
+    : `${title}：注入内容不完整`;
 }
 
 function getZhikuCharacterCalibrationText(entry: 智库条目): string {
@@ -1056,36 +864,4 @@ function getZhikuCharacterCalibrationText(entry: 智库条目): string {
 function compact(value?: string): string {
   if (!value) return '';
   return value.length > 120 ? `${value.slice(0, 118)}...` : value;
-}
-
-function isStrongInjectionMatch(entry: 智库条目, query: string, sceneHints: string[] = []): boolean {
-  const q = query.trim().toLowerCase();
-  const terms = q
-    .split(/[\s,.;/]+/)
-    .map((item) => item.trim())
-    .filter((item) => item.length >= 2 && !ZHIKU_STOP_WORDS.has(item));
-  const title = entry.标题.toLowerCase();
-  const summary = entry.摘要.toLowerCase();
-  const keywords = entry.关键词.map((k) => k.toLowerCase());
-  const calibrationText = getZhikuCharacterCalibrationText(entry).toLowerCase();
-  const exactHit =
-    title.includes(q) ||
-    summary.includes(q) ||
-    keywords.some((k) => k.includes(q) || q.includes(k)) ||
-    calibrationText.includes(q);
-  if (exactHit) return true;
-
-  let matched = 0;
-  for (const term of terms) {
-    if (
-      title.includes(term) ||
-      summary.includes(term) ||
-      keywords.some((k) => k.includes(term) || term.includes(k)) ||
-      calibrationText.includes(term)
-    ) {
-      matched += 1;
-    }
-  }
-  if (matched >= 2) return true;
-  return sceneHints.length > 0 && sceneMatchesEntry(entry, sceneHints);
 }

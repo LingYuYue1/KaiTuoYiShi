@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "prototype:zhiku-ai-retrieval": "node scripts/prototypes/zhiku-ai-retrieval-prototype.mjs",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:build:updater": "tauri build --config src-tauri/tauri.updater.conf.json",
@@ -96,6 +97,10 @@
     "test:zhiku-character-mobile": "node scripts/zhiku-character-mobile-regression.mjs",
     "test:zhiku-character-rebuild": "node scripts/zhiku-character-rebuild-regression.mjs",
     "test:zhiku-knowledge-migration": "node scripts/zhiku-knowledge-migration-regression.mjs",
+    "test:zhiku-stage2-data-contract": "node scripts/zhiku-stage2-data-contract-regression.mjs",
+    "test:zhiku-stage3-ai-retrieval": "node scripts/zhiku-stage3-ai-retrieval-index-regression.mjs",
+    "test:zhiku-multiform": "node scripts/zhiku-multiform-character-regression.mjs",
+    "test:zhiku-official-backlog": "node scripts/zhiku-official-backlog-expansion-regression.mjs",
     "test:zhiku-main-story-removal": "node scripts/zhiku-main-story-removal-regression.mjs",
     "test:zhiku-retired-pages": "node scripts/zhiku-retired-pages-regression.mjs",
     "test:skill-system": "node scripts/skill-system-regression.mjs",

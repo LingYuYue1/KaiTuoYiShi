@@ -1,10 +1,21 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { 智库系统, 智库分类, 智库条目 } from '@/models/zhiku';
+import type {
+  智库人物注入内容,
+  智库系统,
+  智库分类,
+  智库条目,
+  智库注入内容,
+  智库设定注入内容,
+  智库辅助关键词逻辑,
+} from '@/models/zhiku';
 import {
+  ZHIKU_CHARACTER_INJECTION_FIELDS,
   ZHIKU_CATEGORY_LABELS,
+  ZHIKU_LORE_INJECTION_FIELDS,
+  创建空智库注入内容,
+  获取智库注入内容缺失字段,
   isRetiredZhikuCategory,
   比较智库人物节点,
-  创建智库条目,
   获取智库人物名,
   获取智库人物名列表,
   获取智库核心触发词,
@@ -21,7 +32,15 @@ import {
   buildPersistedZhikuSystem,
   loadAllBundledZhikuPresets,
   mergeBundledZhikuSystem,
+  升级自制智库系统,
 } from '@/data/zhikuPreset';
+import {
+  ZHIKU_CUSTOM_SCHEMA_VERSION,
+  ZHIKU_CUSTOM_ID_PATTERN,
+  ZHIKU_AUXILIARY_FIELDS_VERSION,
+  创建自制智库条目,
+  诊断智库条目健康度,
+} from '@/data/zhikuCustomGovernance';
 
 interface Props {
   zhikuSystem: 智库系统;
@@ -43,10 +62,11 @@ const categoryDescriptions: Record<智库分类, string> = {
   faction: '组织 / 立场 / 动向',
   term: '命途 / 星神 / 专有名词',
   event: '事件 / 历史 / 新闻苗头',
+  enemy: '敌对首领 / 敌对单位 / 战斗边界',
   system: '项目规则 / 调用规范',
 };
 
-const categories: 智库分类[] = ['story', 'character', 'location', 'faction', 'term', 'event'];
+const categories: 智库分类[] = ['character', 'location', 'faction', 'term', 'event', 'enemy'];
 const zhikuScopeOptions = ['主剧情', '手机', '新闻', '变量参考', '剧情编织', '通用', '只读'];
 const isDevBuild = typeof import.meta !== 'undefined' && Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
@@ -61,14 +81,19 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   const [selectedId, setSelectedId] = useState<string | null>(normalized.条目[0]?.id ?? null);
   const [showComposer, setShowComposer] = useState(customEntries.length === 0);
   const [saveFlash, setSaveFlash] = useState(false);
+  const [saveValidationError, setSaveValidationError] = useState('');
   const [devRefreshStatus, setDevRefreshStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [expandedSeriesIds, setExpandedSeriesIds] = useState<string[]>([]);
   const [expandedCharacterGroupIds, setExpandedCharacterGroupIds] = useState<string[]>([]);
   const [draft, setDraft] = useState({
     标题: '',
-    分类: 'story' as 智库分类,
+    分类: 'term' as 智库分类,
     来源: '',
     关键词: '',
+    触发关键词: '',
+    辅助关键词: '',
+    辅助关键词逻辑: 'AND_ANY' as 智库辅助关键词逻辑,
+    互斥组ID: '',
     资料类型: '',
     关联角色ID: '',
     关联形态ID: '',
@@ -83,6 +108,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
     禁止误写: '',
     摘要: '',
     原文: '',
+    注入内容: 创建空智库注入内容('term') as 智库注入内容 | undefined,
     角色故事摘要: '',
     重要度: 3,
     可用于联动: true,
@@ -160,7 +186,10 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   }, [activeCategory, characterWorkspace.groups, characterWorkspace.profiles, selectedId]);
 
   const persist = async (nextEntries: 智库条目[]) => {
-    const next = 归一化智库系统({ 条目: nextEntries });
+    const next = 升级自制智库系统({
+      ...normalized,
+      条目: nextEntries,
+    });
     onZhikuSystemChange(next);
     await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
     setSaveFlash(true);
@@ -193,11 +222,15 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   };
 
   const handleCreateCustom = async () => {
-    const entry = 创建智库条目({
+    const entry = 创建自制智库条目(normalized.条目, {
       标题: draft.标题,
       分类: draft.分类,
       来源: draft.来源,
       关键词: draft.关键词.split(/[,，、\n]/),
+      触发关键词: draft.触发关键词.split(/[,，、\n]/),
+      辅助关键词: draft.辅助关键词.split(/[,，、\n]/),
+      辅助关键词逻辑: draft.辅助关键词逻辑,
+      互斥组ID: draft.互斥组ID,
       资料类型: draft.资料类型,
       关联角色ID: draft.关联角色ID,
       关联形态ID: draft.关联形态ID,
@@ -212,11 +245,12 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       禁止误写: draft.禁止误写,
       摘要: draft.摘要 || draft.原文.slice(0, 220),
       原文: draft.原文,
+      注入内容: draft.注入内容,
       角色故事摘要: draft.角色故事摘要,
       重要度: draft.重要度,
       可用于联动: draft.可用于联动,
       builtin: false,
-    });
+    }, normalized.自制资料下一个序号);
     const nextEntries = [entry, ...normalized.条目];
     await persist(nextEntries);
     setSelectedId(entry.id);
@@ -228,6 +262,10 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       分类: draft.分类,
       来源: '',
       关键词: '',
+      触发关键词: '',
+      辅助关键词: '',
+      辅助关键词逻辑: 'AND_ANY',
+      互斥组ID: '',
       资料类型: '',
       关联角色ID: '',
       关联形态ID: '',
@@ -242,6 +280,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
       禁止误写: '',
       摘要: '',
       原文: '',
+      注入内容: 创建空智库注入内容(draft.分类),
       角色故事摘要: '',
       重要度: 3,
       可用于联动: true,
@@ -260,6 +299,20 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
     const nextEntries = normalized.条目.map((entry) =>
       entry.id === selected.id ? { ...entry, ...allowedRuntimePatch, updatedAt: Date.now() } : entry,
     );
+    const candidate = nextEntries.find((entry) => entry.id === selected.id);
+    if (candidate && !candidate.builtin) {
+      const missing = 获取智库注入内容缺失字段(candidate);
+      if (!candidate.原文.trim() || missing.length) {
+        onZhikuSystemChange({ ...normalized, 条目: nextEntries });
+        setSaveValidationError(
+          !candidate.原文.trim()
+            ? '档案原文不能为空；当前修改只保留在编辑状态，尚未写入正式资料库。'
+            : `注入内容缺少：${missing.join('、')}。当前修改尚未写入正式资料库。`,
+        );
+        return;
+      }
+    }
+    setSaveValidationError('');
     await persist(nextEntries);
   };
 
@@ -367,6 +420,21 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
         </div>
       </section>
 
+      {saveValidationError && (
+        <div
+          role="alert"
+          className="min-w-0 px-3 py-2 text-xs leading-relaxed md:px-4"
+          style={{
+            color: 'rgba(220, 92, 92, 0.94)',
+            background: 'rgba(120, 34, 34, 0.12)',
+            boxShadow: 'inset 0 0 0 1px rgba(220, 92, 92, 0.28)',
+            clipPath: smallClip,
+          }}
+        >
+          {saveValidationError}
+        </div>
+      )}
+
       {bucket === 'custom' && (
         <section
           className="min-w-0 px-3 py-4 md:px-4"
@@ -406,7 +474,15 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                 </Field>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Field label="分类">
-                    <select value={draft.分类} onChange={(e) => setDraft({ ...draft, 分类: e.target.value as 智库分类 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                    <select
+                      value={draft.分类}
+                      onChange={(e) => {
+                        const 分类 = e.target.value as 智库分类;
+                        setDraft({ ...draft, 分类, 注入内容: 创建空智库注入内容(分类) });
+                      }}
+                      className="kaituo-input w-full px-3 py-2 text-sm"
+                      style={{ clipPath: smallClip }}
+                    >
                       {categories.map((cat) => <option key={cat} value={cat}>{ZHIKU_CATEGORY_LABELS[cat]}</option>)}
                     </select>
                   </Field>
@@ -417,8 +493,24 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                 <Field label="来源">
                   <input value={draft.来源} onChange={(e) => setDraft({ ...draft, 来源: e.target.value })} placeholder="例如：BiliWiki / 自整理" className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
                 </Field>
-                <Field label="关键词">
-                  <input value={draft.关键词} onChange={(e) => setDraft({ ...draft, 关键词: e.target.value })} placeholder="用逗号、顿号或空格分隔" className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+                <Field label="资料关键词 / 标签">
+                  <input value={draft.关键词} onChange={(e) => setDraft({ ...draft, 关键词: e.target.value })} placeholder="用于维护与浏览搜索" className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+                </Field>
+                <Field label="触发关键词 / 别名">
+                  <input value={draft.触发关键词} onChange={(e) => setDraft({ ...draft, 触发关键词: e.target.value })} placeholder="只有这里登记的词可以自动召回" className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+                </Field>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Field label="辅助关键词">
+                    <input value={draft.辅助关键词} onChange={(e) => setDraft({ ...draft, 辅助关键词: e.target.value })} placeholder="用于形态或上下文过滤" className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+                  </Field>
+                  <Field label="辅助逻辑">
+                    <select value={draft.辅助关键词逻辑} onChange={(e) => setDraft({ ...draft, 辅助关键词逻辑: e.target.value as 智库辅助关键词逻辑 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                      {(['AND_ANY', 'AND_ALL', 'NOT_ANY', 'NOT_ALL'] as 智库辅助关键词逻辑[]).map((logic) => <option key={logic} value={logic}>{logic}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="多形态互斥组">
+                  <input value={draft.互斥组ID} onChange={(e) => setDraft({ ...draft, 互斥组ID: e.target.value })} placeholder="只给同一人物或同一主体的互斥形态填写" className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
                 </Field>
                 {draft.分类 === 'character' && (
                   <section
@@ -506,14 +598,24 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                   <textarea value={draft.摘要} onChange={(e) => setDraft({ ...draft, 摘要: e.target.value })} rows={4} placeholder="建议写成可检索的短摘要，留空会自动截原文前 220 字。" className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed" style={{ clipPath: smallClip }} />
                 </Field>
                 <Field label="角色故事摘要">
-                  <textarea value={draft.角色故事摘要} onChange={(e) => setDraft({ ...draft, 角色故事摘要: e.target.value })} rows={5} placeholder="只压缩角色故事层 / 历史故事层；语料、表现锚点和常驻事实仍从原文结构正常注入。" className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed" style={{ clipPath: smallClip }} />
+                  <textarea value={draft.角色故事摘要} onChange={(e) => setDraft({ ...draft, 角色故事摘要: e.target.value })} rows={5} placeholder="兼容旧资料的维护摘要；生产注入只读取下方结构化注入内容。" className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed" style={{ clipPath: smallClip }} />
                 </Field>
                 <Field label="原文">
                   <textarea value={draft.原文} onChange={(e) => setDraft({ ...draft, 原文: e.target.value })} rows={7} placeholder="把原文或整理好的内容贴进来。" className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed" style={{ clipPath: smallClip }} />
                 </Field>
+                <InjectionContentFields
+                  category={draft.分类}
+                  content={draft.注入内容}
+                  editable
+                  onChange={(注入内容) => setDraft({ ...draft, 注入内容 })}
+                />
                 <button
                   onClick={handleCreateCustom}
-                  disabled={!draft.标题.trim() && !draft.原文.trim()}
+                  disabled={
+                    !draft.标题.trim()
+                    || !draft.原文.trim()
+                    || 获取智库注入内容缺失字段({ 分类: draft.分类, 注入内容: draft.注入内容 }).length > 0
+                  }
                   className="w-full py-2.5 text-sm font-mono tracking-[0.34em] transition-all disabled:opacity-50"
                   style={{
                     color: 'rgb(var(--tj-on-accent))',
@@ -1584,7 +1686,7 @@ function DetailMetadataForm({
           style={{ clipPath: smallClip }}
         />
       </Field>
-      <Field label="关键词">
+      <Field label="资料关键词 / 标签">
         <input
           value={entry.关键词.join('、')}
           onChange={(e) =>
@@ -1595,6 +1697,49 @@ function DetailMetadataForm({
                 .filter(Boolean),
             })
           }
+          readOnly={!editable}
+          className="kaituo-input w-full px-3 py-2 text-sm"
+          style={{ clipPath: smallClip }}
+        />
+      </Field>
+      <Field label="触发关键词 / 别名">
+        <input
+          value={(entry.触发关键词 ?? []).join('、')}
+          onChange={(e) => onUpdate({ 触发关键词: splitKeywordText(e.target.value) })}
+          placeholder="留空时兼容读取现有核心触发词"
+          readOnly={!editable}
+          className="kaituo-input w-full px-3 py-2 text-sm"
+          style={{ clipPath: smallClip }}
+        />
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="辅助关键词">
+          <input
+            value={(entry.辅助关键词 ?? []).join('、')}
+            onChange={(e) => onUpdate({ 辅助关键词: splitKeywordText(e.target.value) })}
+            placeholder="用于形态或上下文过滤"
+            readOnly={!editable}
+            className="kaituo-input w-full px-3 py-2 text-sm"
+            style={{ clipPath: smallClip }}
+          />
+        </Field>
+        <Field label="辅助逻辑">
+          <select
+            value={entry.辅助关键词逻辑 ?? 'AND_ANY'}
+            onChange={(e) => onUpdate({ 辅助关键词逻辑: e.target.value as 智库辅助关键词逻辑 })}
+            disabled={!editable}
+            className="kaituo-input w-full px-3 py-2 text-sm"
+            style={{ clipPath: smallClip }}
+          >
+            {(['AND_ANY', 'AND_ALL', 'NOT_ANY', 'NOT_ALL'] as 智库辅助关键词逻辑[]).map((logic) => <option key={logic} value={logic}>{logic}</option>)}
+          </select>
+        </Field>
+      </div>
+      <Field label="多形态互斥组">
+        <input
+          value={entry.互斥组ID ?? ''}
+          onChange={(e) => onUpdate({ 互斥组ID: e.target.value })}
+          placeholder="只给同一人物或同一主体的互斥形态填写"
           readOnly={!editable}
           className="kaituo-input w-full px-3 py-2 text-sm"
           style={{ clipPath: smallClip }}
@@ -1636,12 +1781,12 @@ function DetailMetadataForm({
             onChange={(e) => onUpdate({ 角色故事摘要: e.target.value })}
             readOnly={!editable}
             rows={7}
-            placeholder="摘要1-4 写在这里；多形态 / 阶段角色在末尾单独写多形态/阶段摘要。主剧情只用这里替代长篇角色故事层。"
+            placeholder="兼容旧资料的维护摘要；生产请求不会读取该字段。"
             className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed"
             style={{ clipPath: smallClip }}
           />
           <div className="mt-1.5 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-            主剧情注入时只用这块替代角色故事层 / 历史故事层；语料层、表现锚点层和常驻事实层仍从原文读取。
+            这是旧资料兼容字段；生产请求不会读取它，也不会从档案原文派生注入内容。
           </div>
         </Field>
       )}
@@ -1655,6 +1800,14 @@ function DetailMetadataForm({
           style={{ clipPath: smallClip }}
         />
       </Field>
+      {entry.分类 !== 'story' && (
+        <InjectionContentFields
+          category={entry.分类}
+          content={entry.注入内容}
+          editable={editable}
+          onChange={(注入内容) => onUpdate({ 注入内容 })}
+        />
+      )}
     </>
   );
 }
@@ -1673,6 +1826,7 @@ function CharacterProfileWorkspace({
   const identity = sections.find((section) => /基础|身份|识别/.test(section.title));
   const facts = sections.find((section) => /常驻|事实/.test(section.title));
   const story = sections.find((section) => /角色故事|故事层|经历脉络/.test(section.title));
+  const injectedStory = entry.注入内容?.类型 === 'character' ? entry.注入内容.精简角色故事 : '';
   const corpus = sections.find((section) => section.title.includes('语料'));
   const ability = sections.find((section) => /能力|职责/.test(section.title));
   const gates = findCharacterGateSection(sections);
@@ -1686,8 +1840,21 @@ function CharacterProfileWorkspace({
   const identityMissing = identityRows.filter((row) => row.missing).map((row) => row.label);
   const anchorRows = buildCharacterAnchorRows(entry);
   const keywordBuckets = buildCharacterKeywordBuckets(entry, identityMap);
+  const governanceHealth = 诊断智库条目健康度(entry);
   const [activeSection, setActiveSection] = useState<CharacterProfileSectionKey>('identity');
   const healthItems = [
+    { label: '机器 ID', value: entry.id, attention: !entry.builtin && !ZHIKU_CUSTOM_ID_PATTERN.test(entry.id) },
+    {
+      label: '资料版本',
+      value: `${governanceHealth.schemaVersion}/${ZHIKU_CUSTOM_SCHEMA_VERSION}`,
+      attention: !governanceHealth.schemaCurrent,
+    },
+    {
+      label: '辅助字段',
+      value: `${governanceHealth.auxiliaryFieldsVersion}/${ZHIKU_AUXILIARY_FIELDS_VERSION}`,
+      attention: !governanceHealth.auxiliaryFieldsCurrent,
+    },
+    { label: '健康评分', value: String(governanceHealth.score), attention: governanceHealth.status !== 'healthy' },
     { label: '身份完整', value: `${identityRows.length - identityMissing.length}/${identityRows.length}` },
     { label: '表现锚点', value: `${anchorRows.length}/6` },
     { label: '故事段', value: String(storyGroups.length || (story ? 1 : 0)) },
@@ -1791,7 +1958,7 @@ function CharacterProfileWorkspace({
                     key={item.label}
                     label={item.label}
                     value={item.value}
-                    attention={(item.label === '身份完整' && identityMissing.length > 0) || (item.label === '关键词触发' && keywordBuckets.triggerTerms.length === 0)}
+                    attention={item.attention || (item.label === '身份完整' && identityMissing.length > 0) || (item.label === '关键词触发' && keywordBuckets.triggerTerms.length === 0)}
                   />
                 ))}
               </div>
@@ -1821,6 +1988,37 @@ function CharacterProfileWorkspace({
                   </div>
                 )}
               </div>
+              <div className="mt-3">
+                <div className="mb-1.5 text-[11px] font-mono tracking-[0.2em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.86), rgba(var(--tj-btn-primary-end), 0.82))' }}>
+                  数据治理诊断
+                </div>
+                {governanceHealth.issues.length ? (
+                  <div className="grid gap-1.5">
+                    {governanceHealth.issues.map((issue) => (
+                      <div
+                        key={issue.code}
+                        className="min-w-0 break-words px-2.5 py-2 text-xs leading-relaxed"
+                        style={{
+                          color: issue.level === 'info' ? 'rgba(var(--tj-text-secondary), 0.82)' : 'rgba(255, 178, 112, 0.92)',
+                          background: issue.level === 'info' ? 'rgba(var(--tj-bg-primary), 0.18)' : 'rgba(128, 70, 34, 0.11)',
+                          boxShadow: issue.level === 'info'
+                            ? 'inset 0 0 0 1px rgba(var(--tj-border), 0.26)'
+                            : 'inset 0 0 0 1px rgba(255, 178, 112, 0.16)',
+                          clipPath: smallClip,
+                        }}
+                      >
+                        <span className="font-mono">{issue.field}</span>
+                        <span className="mx-1.5">/</span>
+                        {issue.message}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.78)' }}>
+                    ID、资料版本、辅助字段版本与基础内容检查均已通过。
+                  </div>
+                )}
+              </div>
             </CharacterWorkbenchSection>
           )}
 
@@ -1841,11 +2039,11 @@ function CharacterProfileWorkspace({
                 }}
               >
                 <div className="mb-1 text-[11px] font-mono tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.92)' }}>
-                  角色故事摘要 / 实际注入
+                  精简角色故事 / 实际注入
                 </div>
-                <CharacterTextBlock body={entry.角色故事摘要 || '暂无角色故事摘要'} compact />
+                <CharacterTextBlock body={injectedStory || '暂无精简角色故事注入内容'} compact />
                 <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-                  下方原故事用于人工查看；主剧情注入优先使用这里的摘要，避免长篇故事层吃掉上下文。
+                  这里直接展示结构化注入字段；下方完整故事只供人工查阅，不进入主剧情请求。
                 </div>
               </div>
               {storyGroups.length ? (
@@ -1992,7 +2190,7 @@ function CharacterWorkbenchSection({
 
 function CharacterTextBlock({ body, compact = false }: { body: string; compact?: boolean }) {
   return (
-    <div className={`whitespace-pre-wrap text-xs leading-relaxed ${compact ? 'max-h-44 overflow-y-auto pr-1' : ''}`} style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}>
+    <div className={`whitespace-pre-wrap break-words text-xs leading-relaxed ${compact ? 'max-h-44 overflow-y-auto pr-1' : ''}`} style={{ color: 'rgba(var(--tj-text-primary), 0.86)' }}>
       {body.trim() || '暂无内容'}
     </div>
   );
@@ -2086,7 +2284,7 @@ function CharacterIdentityCell({ label, value, missing, wide }: CharacterIdentit
       <div className="text-[11px] font-mono tracking-[0.18em]" style={{ color: missing ? 'rgba(255, 190, 120, 0.9)' : 'rgba(var(--tj-btn-primary-start), 0.84)' }}>
         {label}
       </div>
-      <div className="mt-1 text-xs leading-relaxed" style={{ color: missing ? 'rgba(var(--tj-text-secondary), 0.72)' : 'rgba(var(--tj-text-primary), 0.88)' }}>
+      <div className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed" style={{ color: missing ? 'rgba(var(--tj-text-secondary), 0.72)' : 'rgba(var(--tj-text-primary), 0.88)' }}>
         {value}
       </div>
     </div>
@@ -2226,7 +2424,7 @@ function CharacterGateRow({ label, value, block = false, danger = false }: { lab
       <div className="text-[10px] font-mono tracking-[0.16em]" style={{ color: danger ? 'rgba(255, 165, 150, 0.86)' : 'rgba(var(--tj-text-secondary), 0.72)' }}>
         {label}
       </div>
-      <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.84)' }}>
+      <div className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.84)' }}>
         {value}
       </div>
     </div>
@@ -2247,7 +2445,7 @@ function CharacterInjectionTile({ label, value, tone }: { label: string; value: 
       <div className="text-[11px] font-mono tracking-[0.18em]" style={{ color }}>
         {label}
       </div>
-      <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.84)' }}>
+      <div className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary), 0.84)' }}>
         {value || '暂无'}
       </div>
     </div>
@@ -2722,7 +2920,7 @@ function StructuredCharacterFields({
       <div className="mt-4">
         <PerformanceTextarea label="角色故事摘要" value={entry.角色故事摘要 ?? ''} editable={editable} onChange={(value) => onUpdate({ 角色故事摘要: value })} />
         <div className="mt-1.5 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-          仅替代角色故事层 / 历史故事层注入；语料层、表现锚点层和常驻事实层仍按原文正常读取。
+          这是旧资料兼容字段；实际注入只读取下方八项结构化内容。
         </div>
       </div>
 
@@ -2739,6 +2937,72 @@ function StructuredCharacterFields({
           <PerformanceTextarea label="关系边界" value={entry.关系边界 ?? ''} editable={editable} onChange={(value) => onUpdate({ 关系边界: value })} />
           <PerformanceTextarea label="禁止误写" value={entry.禁止误写 ?? ''} editable={editable} onChange={(value) => onUpdate({ 禁止误写: value })} />
         </div>
+      </div>
+      <InjectionContentFields
+        category={entry.分类}
+        content={entry.注入内容}
+        editable={editable}
+        onChange={(注入内容) => onUpdate({ 注入内容 })}
+      />
+    </section>
+  );
+}
+
+function InjectionContentFields({
+  category,
+  content,
+  editable,
+  onChange,
+}: {
+  category: 智库分类;
+  content?: 智库注入内容;
+  editable: boolean;
+  onChange: (content: 智库注入内容) => void;
+}) {
+  if (category === 'story') return null;
+  const isCharacter = category === 'character';
+  const current = (
+    isCharacter
+      ? content?.类型 === 'character' ? content : 创建空智库注入内容('character')
+      : content?.类型 === 'lore' ? content : 创建空智库注入内容(category)
+  );
+  if (!current) return null;
+
+  return (
+    <section
+      className="mt-4 px-3 py-3"
+      style={{
+        background: 'rgba(var(--tj-btn-primary-start), 0.045)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.2)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="font-serif text-[13px] tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+        注入内容
+      </div>
+      <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
+        此处内容会进入模型；档案原文只供玩家预览。全部字段非空后才会写入正式资料库。
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {current.类型 === 'character'
+          ? ZHIKU_CHARACTER_INJECTION_FIELDS.map((field) => (
+              <PerformanceTextarea
+                key={field}
+                label={field}
+                value={current[field]}
+                editable={editable}
+                onChange={(value) => onChange({ ...current, [field]: value } as 智库人物注入内容)}
+              />
+            ))
+          : ZHIKU_LORE_INJECTION_FIELDS.map((field) => (
+              <PerformanceTextarea
+                key={field}
+                label={field}
+                value={current[field]}
+                editable={editable}
+                onChange={(value) => onChange({ ...current, [field]: value } as 智库设定注入内容)}
+              />
+            ))}
       </div>
     </section>
   );

@@ -706,7 +706,7 @@ const VARIABLE_OUTPUT_FORMAT_CONTENT = VARIABLE_OUTPUT_FORMAT_PROMPT;
 
 const COMPANION_ARCHIVE_CONTENT = COMPANION_ARCHIVE_WORLDBOOK_CONTENT;
 
-const ZHIKU_COT_CONTENT = `# 智库思维链
+const ZHIKU_COT_CONTENT = `# 智库 AI 召回编译规则
 
 ${ZHIKU_COT_PROMPT}`;
 
@@ -921,8 +921,8 @@ export function createBuiltinPromptModules(): 提示词模块[] {
     }),
     makeBuiltin({
       id: 'builtin_zhiku_cot',
-      title: '智库思维链',
-      description: '原著资料中枢专用 CoT：负责检索、压缩、摘要与召回，不输出正文叙事。',
+      title: '智库 AI 召回编译规则',
+      description: '原著资料中枢的固定身份与补漏规则：只从受控候选选择，不输出正文或内部思考。',
       category: 'cot',
       content: ZHIKU_COT_CONTENT,
       enabled: true,
@@ -933,8 +933,8 @@ export function createBuiltinPromptModules(): 提示词模块[] {
     }),
     makeBuiltin({
       id: 'builtin_zhiku_output_format',
-      title: '智库输出与筛选规则',
-      description: '智库查缺补漏模型的输出格式与筛选硬规则：关键词召回上限、AI 补充上限、三行输出格式定义。',
+      title: '智库 JSON 输出契约',
+      description: '智库召回编译器的严格 JSON 契约、操作枚举、用途枚举和形态替换边界。',
       category: 'format',
       content: ZHIKU_OUTPUT_FORMAT_CONTENT,
       enabled: true,

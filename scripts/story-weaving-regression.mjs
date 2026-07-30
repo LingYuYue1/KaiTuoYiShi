@@ -141,6 +141,7 @@ for (const sourcePath of [
   'models/storyWeaving.ts',
   'models/news.ts',
   'models/zhiku.ts',
+  'models/zhikuGovernance.ts',
   'services/storyWeaving.ts',
   'services/promptModuleScopes.ts',
   'services/storyProgressService.ts',
