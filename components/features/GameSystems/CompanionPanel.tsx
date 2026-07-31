@@ -7,6 +7,7 @@ import type { 智库系统 } from '@/models/zhiku';
 import { buildNpcRelationshipPlanning, type NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 
 interface CompanionPanelProps {
   npcRecords: NPC记录[];
@@ -284,7 +285,7 @@ function Avatar({
   if (src) {
     return (
       <span className="relative shrink-0" style={{ width: size, height: size }}>
-        <img
+        <ResilientImage
           src={src}
           alt={npc.姓名}
           className="h-full w-full object-cover"

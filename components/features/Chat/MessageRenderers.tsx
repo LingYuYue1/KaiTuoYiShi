@@ -6,6 +6,7 @@ import type { 相册系统 } from '@/models/imageGeneration';
 import type { VisualTextSettings } from '@/models/settings';
 import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 
 interface ThinkingBlockProps {
   content: string;
@@ -352,7 +353,7 @@ export const AvatarTile = memo(function AvatarTile({ name, url, color, size = 's
         }}
       >
         {url ? (
-          <img src={url} alt={`${name} 头像`} className="w-full h-full object-cover" />
+          <ResilientImage src={url} alt={`${name} 头像`} className="w-full h-full object-cover" />
         ) : (
           <span
             className="font-serif font-bold text-lg"

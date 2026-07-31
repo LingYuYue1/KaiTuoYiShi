@@ -21,6 +21,7 @@ import {
   DEFAULT_PHONE_HOME_WALLPAPER,
 } from '@/data/builtinPhoneWallpapers';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 
 interface Props {
   phone: 手机系统;
@@ -2471,7 +2472,7 @@ function Avatar({ name, src }: { name: string; src?: string }) {
           : '0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
       }}
     >
-      {src ? <img src={src} alt={name} className="h-full w-full object-cover" /> : name[0] ?? '?'}
+      {src ? <ResilientImage src={src} alt={name} className="h-full w-full object-cover" /> : name[0] ?? '?'}
       <span
         className="pointer-events-none absolute inset-[5px] rounded-full"
         style={{ boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)' }}

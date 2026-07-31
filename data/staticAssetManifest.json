@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "assetBaseUrl": "https://lingkvault.cc.cd",
+  "assets": {
+    "avatar:caelus:01": {
+      "path": "/static/8c78f63569206d0de5abc9ff93aa0f85e5c8189a972947038bd5550471e05e61.webp",
+      "sha256": "8c78f63569206d0de5abc9ff93aa0f85e5c8189a972947038bd5550471e05e61",
+      "width": 768,
+      "height": 768,
+      "bytes": 64636,
+      "contentType": "image/webp"
+    },
+    "avatar:bronya:02": {
+      "path": "/static/8a4ebaf7444c64222c7e024baf71743a207c91be38248b290a2c38eceb6159db.webp",
+      "sha256": "8a4ebaf7444c64222c7e024baf71743a207c91be38248b290a2c38eceb6159db",
+      "width": 768,
+      "height": 768,
+      "bytes": 107444,
+      "contentType": "image/webp"
+    },
+    "avatar:asta:03": {
+      "path": "/static/2f695b5ce54b34c7d6d8af5c04d30008cccba84cb9e698361c26ed67aa4cb070.webp",
+      "sha256": "2f695b5ce54b34c7d6d8af5c04d30008cccba84cb9e698361c26ed67aa4cb070",
+      "width": 768,
+      "height": 768,
+      "bytes": 118754,
+      "contentType": "image/webp"
+    }
+  }
+}

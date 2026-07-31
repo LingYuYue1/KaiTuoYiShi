@@ -8,6 +8,7 @@ import { BodyBlock, StreamingPreview } from './MessageRenderers';
 import { getPath } from '@/data/journeyPresets';
 import { formatTokenCount } from '@/utils/tokenEstimate';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 
 interface TurnItemProps {
   message: 聊天消息;
@@ -135,7 +136,7 @@ function UserAvatarTile({ name, url }: { name: string; url?: string }) {
         }}
       >
         {url ? (
-          <img src={url} alt={`${name} 头像`} className="h-full w-full object-cover" />
+          <ResilientImage src={url} alt={`${name} 头像`} className="h-full w-full object-cover" />
         ) : (
           <span
             className="font-serif text-lg font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]"

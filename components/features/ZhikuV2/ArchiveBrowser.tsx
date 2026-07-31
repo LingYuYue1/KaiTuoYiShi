@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { 智库辅助关键词逻辑 } from '@/models/zhiku';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 import type { ZhikuDesignCategory } from './types';
 import { ReaderFontSizeControl } from './ReaderFontSizeControl';
 import { buildZhikuReaderStyle, ZHIKU_READER_FONT_SIZE_DEFAULT } from './readerFontSize';
@@ -303,7 +304,7 @@ export function ArchiveBrowser({
                     {showItemVisual && (
                       <span className="zhiku-v2-browser__avatar" data-fallback={item.avatarSrc ? 'false' : 'true'}>
                         {item.avatarSrc ? (
-                          <img
+                          <ResilientImage
                             src={item.avatarSrc}
                             alt={item.avatarAlt ?? `${item.title}头像`}
                             loading={index < 8 ? 'eager' : 'lazy'}

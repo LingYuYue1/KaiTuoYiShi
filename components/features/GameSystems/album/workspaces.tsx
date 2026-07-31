@@ -33,6 +33,7 @@ import {
 import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 import { parseSceneImagePrompt } from '@/services/ai/narrativeImageParse';
 import {
   selectPresentStorySnapshotNpcs,
@@ -418,7 +419,7 @@ export function SafeAlbumImage({
       </div>
     );
   }
-  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={className} />;
+  return <ResilientImage src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={className} />;
 }
 
 export function AnchorStat({ label, value }: { label: string; value: number }) {
@@ -1004,7 +1005,7 @@ export function ImagePreviewModal({ open, src, title, onClose }: { open: boolean
           {title}
         </div>
         <div className="flex h-full w-full items-center justify-center overflow-auto px-2 py-2">
-          <img src={src} alt={title} className="max-h-full max-w-full object-contain" />
+          <ResilientImage src={src} alt={title} className="max-h-full max-w-full object-contain" />
         </div>
       </div>
     </div>,
@@ -2119,6 +2120,7 @@ export function Spinner() {
 export interface CharacterLibraryEntry {
   entry: 相册条目;
   src: string;
+  mountSrc?: string;
   sourceLabel?: string;
 }
 
@@ -2462,6 +2464,7 @@ export function buildBuiltinAvatarEntries(npc: NPC记录): CharacterLibraryEntry
       referenceTargets: [],
     },
     src: candidate.src,
+    mountSrc: candidate.reference,
     sourceLabel: '内置',
   }));
 }

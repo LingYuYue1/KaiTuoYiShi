@@ -1,7 +1,15 @@
+import {
+  createStaticAssetReference,
+  isRemoteStaticAssetUrl,
+  resolveStaticAssetOrLocal,
+  resolveStaticAssetReference,
+} from '@/utils/staticAssets';
+
 export interface BuiltinAvatarCandidate {
   id: string;
   title: string;
   src: string;
+  reference?: string;
 }
 
 export interface BuiltinAvatarSet {
@@ -10,6 +18,18 @@ export interface BuiltinAvatarSet {
 }
 
 const BASE = '/assets/builtin-avatars/candidates';
+
+function avatarSource(id: string): string {
+  const local = `${BASE}/${id}.png`;
+  return resolveStaticAssetOrLocal(`avatar:${id.replace(/-(\d+)$/, ':$1')}`, local);
+}
+
+function avatarReference(id: string): string | undefined {
+  const logicalId = `avatar:${id.replace(/-(\d+)$/, ':$1')}`;
+  return resolveStaticAssetReference(logicalId)
+    ? createStaticAssetReference(logicalId)
+    : undefined;
+}
 
 const BUILTIN_AVATAR_CANONICAL_ALIASES: Record<string, string> = {
   '丹恒·饮月': '丹恒',
@@ -73,7 +93,7 @@ export const BUILTIN_AVATAR_SETS: BuiltinAvatarSet[] = [
     candidates: [
       { id: 'asta-01', title: '艾丝妲 01', src: `${BASE}/asta-01.png` },
       { id: 'asta-02', title: '艾丝妲 02', src: `${BASE}/asta-02.png` },
-      { id: 'asta-03', title: '艾丝妲 03', src: `${BASE}/asta-03.png` },
+      { id: 'asta-03', title: '艾丝妲 03', src: avatarSource('asta-03'), reference: avatarReference('asta-03') },
     ],
   },
   {
@@ -95,7 +115,7 @@ export const BUILTIN_AVATAR_SETS: BuiltinAvatarSet[] = [
   {
     canonicalName: '穹',
     candidates: [
-      { id: 'caelus-01', title: '穹 01', src: `${BASE}/caelus-01.png` },
+      { id: 'caelus-01', title: '穹 01', src: avatarSource('caelus-01'), reference: avatarReference('caelus-01') },
       { id: 'caelus-02', title: '穹 02', src: `${BASE}/caelus-02.png` },
       { id: 'caelus-03', title: '穹 03', src: `${BASE}/caelus-03.png` },
     ],
@@ -104,7 +124,7 @@ export const BUILTIN_AVATAR_SETS: BuiltinAvatarSet[] = [
     canonicalName: '布洛妮娅',
     candidates: [
       { id: 'bronya-01', title: '布洛妮娅 01', src: `${BASE}/bronya-01.png` },
-      { id: 'bronya-02', title: '布洛妮娅 02', src: `${BASE}/bronya-02.png` },
+      { id: 'bronya-02', title: '布洛妮娅 02', src: avatarSource('bronya-02'), reference: avatarReference('bronya-02') },
       { id: 'bronya-03', title: '布洛妮娅 03', src: `${BASE}/bronya-03.png` },
     ],
   },
@@ -117,5 +137,6 @@ export function getBuiltinAvatarSet(canonicalName: string | undefined): BuiltinA
 }
 
 export function getDefaultBuiltinAvatar(canonicalName: string | undefined): string | undefined {
-  return getBuiltinAvatarSet(canonicalName)?.candidates[0]?.src;
+  const candidates = getBuiltinAvatarSet(canonicalName)?.candidates;
+  return candidates?.find((candidate) => isRemoteStaticAssetUrl(candidate.src))?.src ?? candidates?.[0]?.src;
 }

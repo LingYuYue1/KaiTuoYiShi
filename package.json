@@ -73,6 +73,7 @@
     "test:power-system-worldbook": "node scripts/power-system-worldbook-regression.mjs",
     "test:release-announcements": "node scripts/release-announcements-regression.mjs",
     "test:builtin-avatars": "node scripts/builtin-avatar-regression.mjs",
+    "test:static-avatar-canary": "node scripts/static-avatar-canary-regression.mjs",
     "test:inventory-variable": "node scripts/inventory-variable-regression.mjs",
     "test:novelai-image": "node scripts/novelai-image-regression.mjs",
     "test:novelai-prompt-compiler": "node scripts/novelai-prompt-compiler-regression.mjs",
