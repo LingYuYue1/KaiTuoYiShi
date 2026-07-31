@@ -90,10 +90,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
 
   const handleSave = async () => {
     try {
-      await Promise.all([
-        saveSetting('gameSettings', settings),
-        saveSetting('worldState', worldState),
-      ]);
+      await saveSetting('gameSettings', settings);
       setSaveMessage('游戏设定已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);
@@ -307,7 +304,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
             { value: 'standard' as const, label: '标准', desc: '直发并追加 DS 格式校验' },
             { value: 'lock_format' as const, label: '锁格式', desc: '尝试 prefix 锁定 <thinking>' },
           ]).map((opt) => {
-            const active = (settings.deepSeekMainMode ?? 'off') === opt.value;
+            const active = settings.deepSeekMainMode === opt.value;
             return (
               <button
                 key={opt.value}
@@ -338,7 +335,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
       <ToggleRow
         label="缓存前缀诊断"
         desc="开启后，新回合的响应详情会显示请求与上一回合从哪里开始变化、公共前缀估算 tokens 和变化后较大的请求块。只用于排查缓存命中，默认关闭。"
-        checked={settings.enableCacheDiagnostics ?? false}
+        checked={settings.enableCacheDiagnostics}
         onChange={(v) => onChange({ ...settings, enableCacheDiagnostics: v })}
       />
       <ToggleRow
@@ -456,7 +453,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
             { value: 'sequential' as const, label: '稳序', desc: '变量落库后按顺序处理后台任务，接口压力最低' },
             { value: 'parallel' as const, label: '并行', desc: '变量落库后同时启动新闻、忆庭入库、手机种子和正文插图' },
           ]).map((opt) => {
-            const active = (settings.backgroundTaskMode ?? 'sequential') === opt.value;
+            const active = settings.backgroundTaskMode === opt.value;
             return (
               <button
                 key={opt.value}
@@ -518,7 +515,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
         )}
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="relative w-full overflow-hidden py-3 font-serif text-sm font-bold tracking-[0.32em] transition-all hover:opacity-95"
           style={{
             color: 'rgb(var(--tj-on-accent))',

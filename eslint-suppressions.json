@@ -420,14 +420,6 @@
       "count": 7
     }
   },
-  "components/features/Settings/GameSettings.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
-    }
-  },
   "components/features/Settings/ImageGenerationSettingsTab.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 7
@@ -789,11 +781,6 @@
     },
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 2
-    }
-  },
-  "hooks/useGame/saveLoadWorkflow.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 11
     }
   },
   "hooks/useGame/stage3_promptAssembly.ts": {

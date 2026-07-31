@@ -7,7 +7,7 @@ components/features/NewGame/NewGameWizard.tsx	1
 components/features/SaveLoad/SaveLoadModal.tsx	1
 components/features/Settings/ApiSettings.tsx	6
 components/features/Settings/ExtraFeaturesSettingsTab.tsx	1
-components/features/Settings/GameSettings.tsx	2
+components/features/Settings/GameSettings.tsx	1
 components/features/Settings/ImageGenerationSettingsTab.tsx	1
 components/features/Settings/MemorySystemSettings.tsx	1
 components/features/Settings/NewsSystemSettingsTab.tsx	1

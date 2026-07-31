@@ -7,8 +7,6 @@ import type { 角色数据结构 } from '@/models/character';
 import {
   创建空API设置,
   创建默认游戏设置,
-  创建默认记忆系统设置,
-  创建默认手机系统设置,
   归一化文生图系统设置,
   归一化剧情编织系统设置,
   归一化记忆系统设置,
@@ -92,11 +90,11 @@ export function buildSavePayload(
     gameSettings: buildSaveGameSettingsSnapshot({
       ...state.gameSettings,
       新闻系统: 归一化星际和平周报设置(state.gameSettings.新闻系统),
-      手机系统: 归一化手机系统设置(state.gameSettings.手机系统 ?? 创建默认手机系统设置()),
+      手机系统: 归一化手机系统设置(state.gameSettings.手机系统),
       智库系统: 归一化智库系统设置(state.gameSettings.智库系统),
       剧情编织系统: 归一化剧情编织系统设置(state.gameSettings.剧情编织系统),
       文生图系统: 归一化文生图系统设置(state.gameSettings.文生图系统),
-      记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统 ?? 创建默认记忆系统设置()),
+      记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统),
       额外功能: 归一化额外功能设置(state.gameSettings.额外功能),
       visualTextSettings: 归一化视觉文本设置(state.gameSettings.visualTextSettings),
     }),
@@ -124,7 +122,7 @@ function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
     ...settings,
     enableClaudeMode: defaults.enableClaudeMode,
     deepSeekMainMode: defaults.deepSeekMainMode,
-    backgroundTaskMode: settings.backgroundTaskMode ?? defaults.backgroundTaskMode,
+    backgroundTaskMode: settings.backgroundTaskMode,
     visualTextSettings: 归一化视觉文本设置(settings.visualTextSettings),
     enableCacheDiagnostics: defaults.enableCacheDiagnostics,
     variableApi: defaults.variableApi,
@@ -169,19 +167,19 @@ function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
 function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings: 游戏设置): 游戏设置 {
   const local = {
     新闻系统: 归一化星际和平周报设置(localSettings.新闻系统),
-    手机系统: 归一化手机系统设置(localSettings.手机系统 ?? 创建默认手机系统设置()),
+    手机系统: 归一化手机系统设置(localSettings.手机系统),
     智库系统: 归一化智库系统设置(localSettings.智库系统),
     剧情编织系统: 归一化剧情编织系统设置(localSettings.剧情编织系统),
     文生图系统: 归一化文生图系统设置(localSettings.文生图系统),
-    记忆系统: 归一化记忆系统设置(localSettings.记忆系统 ?? 创建默认记忆系统设置()),
+    记忆系统: 归一化记忆系统设置(localSettings.记忆系统),
   };
 
   return {
     ...nextFromSave,
     enableClaudeMode: localSettings.enableClaudeMode,
-    deepSeekMainMode: localSettings.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
-    backgroundTaskMode: localSettings.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
-    enableCacheDiagnostics: localSettings.enableCacheDiagnostics ?? 创建默认游戏设置().enableCacheDiagnostics,
+    deepSeekMainMode: localSettings.deepSeekMainMode,
+    backgroundTaskMode: localSettings.backgroundTaskMode,
+    enableCacheDiagnostics: localSettings.enableCacheDiagnostics,
     visualTextSettings: 归一化视觉文本设置(nextFromSave.visualTextSettings),
     variableApi: localSettings.variableApi,
     新闻系统: {
@@ -227,6 +225,9 @@ export async function handleLoadLatest(
 ): Promise<boolean> {
   const save = await loadLatestSave();
   if (!save) return false;
+  const abortControllerRef = state.abortControllerRef;
+  abortControllerRef.current?.abort();
+  abortControllerRef.current = null;
   await applySaveToState(save, state);
   return true;
 }
@@ -237,6 +238,9 @@ export async function handleLoadById(
 ): Promise<boolean> {
   const save = await loadSave(id);
   if (!save) return false;
+  const abortControllerRef = state.abortControllerRef;
+  abortControllerRef.current?.abort();
+  abortControllerRef.current = null;
   await applySaveToState(save, state);
   return true;
 }
@@ -278,7 +282,7 @@ async function applySaveToState(
   state.set世界(safeWorld);
   state.setChatHistory(safeChatHistory);
   state.set记忆(normalizeMemorySystem(save.记忆));   // 老存档缺 longTermMemories 时兜底
-  const legacyArchives = (save.记忆 as unknown as { 回忆档案?: unknown[] })?.回忆档案 ?? [];
+  const legacyArchives = (save.记忆 as unknown as { 回忆档案?: unknown[] }).回忆档案 ?? [];
   state.set忆庭(
     归一化忆庭系统(
       save.忆庭 ?? ({ 回忆档案: legacyArchives } as Partial<import('@/models/yiting').忆庭系统>),
@@ -330,8 +334,8 @@ async function applySaveToState(
     文生图系统: 归一化文生图系统设置(safeGameSettings.文生图系统),
     记忆系统: 归一化记忆系统设置(safeGameSettings.记忆系统),
     额外功能: 归一化额外功能设置(safeGameSettings.额外功能),
-    backgroundTaskMode: safeGameSettings.backgroundTaskMode ?? defaults.backgroundTaskMode,
-    enableMaleNsfwArchive: safeGameSettings.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
+    backgroundTaskMode: safeGameSettings.backgroundTaskMode,
+    enableMaleNsfwArchive: safeGameSettings.enableMaleNsfwArchive,
     visualTextSettings: 归一化视觉文本设置(safeGameSettings.visualTextSettings),
     promptModules: migratePromptModules(safeGameSettings),
     // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移

@@ -255,6 +255,10 @@ export async function executeSendWorkflow(
 
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
+      if (!isCurrentWorkflow()) {
+        await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
+        return;
+      }
       state.setChatHistory(rollbackHistoryOnAbort);
       if (rollbackSnapshotOnAbort) {
         const rollbackStoryWeaving = restorePreTurnSnapshot(state, rollbackSnapshotOnAbort);
