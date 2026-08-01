@@ -16,6 +16,7 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录, NPC账本选择结果 } from '@/models/npc';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
+import type { 相册系统 } from '@/models/imageGeneration';
 import type { 解析后回复 } from '@/models/chat';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { MacroContext } from '@/utils/macroEngine';
@@ -152,5 +153,7 @@ export interface TurnDeltas {
   yitingAfterTurnRecall?: 忆庭系统;
   phoneAfterFallbackSeed?: 手机系统;
   finalHistoryForSave?: 聊天消息[];
+  /** 片 5a-2（题外发现 #1）：背景任务 narrativeImageWorkflow 直写 state 的相册结果的捕获值，供 S11 边界写 newest。 */
+  相册After?: 相册系统;
 
 }

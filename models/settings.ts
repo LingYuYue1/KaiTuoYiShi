@@ -237,7 +237,7 @@ export interface 游戏设置 {
   customPrompt: string;
   /** 内置 + 玩家自定义的提示词模块。所有 enabled 模块都恒注入主流程 system prompt。 */
   promptModules: 提示词模块[];
-  /** ST 预设兼容：宏变量持久化。跨回合保留的全局变量。 */
+  /** @deprecated 运行态字段已迁至 `存档数据` 顶层（片 5a-2 D3）。保留读取用于旧数据兼容，新写入不再携带。 */
   macroGlobalVars?: Record<string, string>;
   /** ST 预设兼容：已保存的预设库。玩家可导入多套预设，通过下拉切换。 */
   stPresets?: STPresetEntry[];
@@ -254,7 +254,8 @@ export interface 游戏设置 {
   promptModuleOrderVersion?: number;
   /** ST 预设兼容：V1 预设迁移/旧存档保留的世界书条目。V2 预设的 world_info 保存在 stPresetsV2[].preset 中。 */
   stWorldInfos?: STWorldInfoEntry[];
-  /** 世界书条目触发状态表（Phase 7.1 升级，随存档持久化）。
+  /** @deprecated 运行态字段已迁至 `存档数据` 顶层（片 5a-2 D3）。保留读取用于旧数据兼容，新写入不再携带。
+   *  世界书条目触发状态表（Phase 7.1 升级，随存档持久化）。
    *  key = 条目 id，value = 最近触发回合（messageCount 值）。
    *  用于世界书条目的 delay / cooldown 判断。 */
   worldbookTriggerStates?: Record<string, number>;
@@ -1241,4 +1242,56 @@ export interface 存档数据 {
   gameSettings: 游戏设置;
   apiSettings: API设置;
   theme: 主题预设;
+  /** 片 5a-2 D3 迁入顶层：宏变量持久化（跨回合保留的全局变量）。随 newest/checkpoint 提交，不再走 settings 通道。 */
+  macroGlobalVars?: Record<string, string>;
+  /** 片 5a-2 D3 迁入顶层：世界书条目触发状态表。随 newest/checkpoint 提交，不再走 settings 通道。 */
+  worldbookTriggerStates?: Record<string, number>;
+  /** 片 5a-2 新增顶层：开场触发器消息。由 E-1 新局边界写入，回合管线不产出。 */
+  pendingOpeningTrigger?: string | null;
+}
+
+/**
+ * D3 保留读取（与 customPrompt 同例）：读取 gameSettings 中仍残留的两运行态键，
+ * 不改内存对象。经独立结构类型访问以避免触发废弃成员读取检查，供管线边界/存档组装使用。
+ */
+export function 取游戏设置运行态键(settings: 游戏设置): {
+  macroGlobalVars: Record<string, string>;
+  worldbookTriggerStates: Record<string, number>;
+} {
+  const 残留 = settings as {
+    macroGlobalVars?: Record<string, string>;
+    worldbookTriggerStates?: Record<string, number>;
+  };
+  const 残留宏变量 = 残留.macroGlobalVars;
+  const 残留触发态 = 残留.worldbookTriggerStates;
+  return {
+    macroGlobalVars: 残留宏变量 && typeof 残留宏变量 === 'object' ? 残留宏变量 : {},
+    worldbookTriggerStates: 残留触发态 && typeof 残留触发态 === 'object' ? 残留触发态 : {},
+  };
+}
+
+/**
+ * 读取侧迁移（片 5a-2 D3）：`存档数据` 顶层两运行态键优先；仅当顶层缺省时
+ * 从 `gameSettings` 残留读取（旧档），并在返回值里置空原键。纯函数，不改存储，不回写旧档。
+ */
+export function 迁移存档运行态键(save: 存档数据): {
+  save: 存档数据;
+  macroGlobalVars: Record<string, string>;
+  worldbookTriggerStates: Record<string, number>;
+} {
+  const { macroGlobalVars: 残留宏变量, worldbookTriggerStates: 残留触发态 } = 取游戏设置运行态键(save.gameSettings);
+  const 顶层宏变量 = save.macroGlobalVars;
+  const 顶层触发态 = save.worldbookTriggerStates;
+  return {
+    save: {
+      ...save,
+      gameSettings: {
+        ...save.gameSettings,
+        macroGlobalVars: undefined,
+        worldbookTriggerStates: undefined,
+      },
+    },
+    macroGlobalVars: 顶层宏变量 && typeof 顶层宏变量 === 'object' ? 顶层宏变量 : 残留宏变量,
+    worldbookTriggerStates: 顶层触发态 && typeof 顶层触发态 === 'object' ? 顶层触发态 : 残留触发态,
+  };
 }

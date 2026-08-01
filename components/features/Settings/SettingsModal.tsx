@@ -213,7 +213,7 @@ export function SettingsModal({
       case 'theme':
         return <ThemeSettingsTab current={currentTheme} onChange={persistThemeChange} />;
       case 'storage':
-        return <StorageManagerTab onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} />;
+        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} />;
     }
   };
 

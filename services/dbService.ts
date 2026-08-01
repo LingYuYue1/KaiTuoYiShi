@@ -1,5 +1,7 @@
 import type { 存档数据, 存档类型 } from '@/models/settings';
-import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExport, sanitizeSaveForExportAsync } from './savePackage';
+import { 归一化NewestStory记录, NEWEST_STORY_STORE_KEY, type NewestStory记录 } from '@/models/newestStory';
+import { devLog, devLogError } from '@/utils/devLog';
+import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExportAsync } from './savePackage';
 import {
   extractSaveAssetRecords,
   materializeSaveAssetRecords,
@@ -32,7 +34,6 @@ import {
   subscribeSaveCatalogRepair,
   type SaveCatalogRepairResult,
   type SaveCatalogRepairScope,
-  type SaveCatalogRepairState,
 } from '@/services/storage/saveCatalogRepair';
 import { selectSaveNodeRotationCandidates } from '@/services/storage/saveRetention';
 
@@ -41,12 +42,13 @@ export type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepair
 export { getSaveCatalogRepairState, subscribeSaveCatalogRepair };
 
 const DB_NAME = 'TimeJourneyDB';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const SAVES_STORE = 'saves';
 const SAVE_SUMMARIES_STORE = 'saveSummaries';
 const SAVE_ASSETS_STORE = 'saveAssets';
 const SAVE_NODE_DELTAS_STORE = 'saveNodeDeltas';
 const SETTINGS_STORE = 'settings';
+const NEWEST_STORY_STORE = 'newestStory';
 const MAX_DELTA_NODES_PER_CHECKPOINT = 6;
 const SAVE_CATALOG_REPAIR_LEASE_KEY = 'internal.saveCatalogRepairLease.v2';
 const SAVE_CATALOG_REPAIR_LEASE_MS = 60_000;
@@ -78,6 +80,10 @@ export interface CloudMergeCommitResult {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+function toError(error: unknown, fallback = '存档数据库操作失败。'): Error {
+  return error instanceof Error ? error : new Error(fallback);
+}
+
 function openDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
@@ -86,8 +92,9 @@ function openDB(): Promise<IDBDatabase> {
       if (settled) return;
       settled = true;
       globalThis.clearTimeout(timeoutId);
-      db.onversionchange = () => {
-        db.close();
+      const connection = db;
+      connection.onversionchange = () => {
+        connection.close();
         dbPromise = null;
       };
       resolve(db);
@@ -97,7 +104,7 @@ function openDB(): Promise<IDBDatabase> {
       settled = true;
       globalThis.clearTimeout(timeoutId);
       dbPromise = null;
-      reject(error);
+      reject(toError(error));
     };
     const timeoutId = globalThis.setTimeout(() => {
       fail(new Error('存档数据库打开超时。请关闭其他开拓轶事页面或刷新后重试。'));
@@ -120,6 +127,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
         db.createObjectStore(SETTINGS_STORE, { keyPath: 'key' });
       }
+      if (!db.objectStoreNames.contains(NEWEST_STORY_STORE)) {
+        db.createObjectStore(NEWEST_STORY_STORE, { keyPath: 'key' });
+      }
     };
     request.onsuccess = () => finish(request.result);
     request.onerror = () => fail(request.error);
@@ -131,14 +141,25 @@ function openDB(): Promise<IDBDatabase> {
 // ── Save operations ──
 
 export async function saveGame(data: 存档数据): Promise<number> {
-  return runWithSaveMutationPriority(() => saveGameInternal(data));
+  try {
+    return await runWithSaveMutationPriority(() => saveGameInternal(data));
+  } catch (error) {
+    if (data.type === 'imported') {
+      const tree = (data as SaveWithTree).saveTree;
+      devLogError('save', 'import-save-persist-failed', error, {
+        rootId: tree?.rootId,
+        nodeId: tree?.nodeId,
+      });
+    }
+    throw error;
+  }
 }
 
 async function saveGameInternal(data: 存档数据): Promise<number> {
-  data = stripCloudBackupRestoreRuntime(data);
+  const sourceData = stripCloudBackupRestoreRuntime(data);
   const db = await openDB();
-  const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(data));
-  const storedData = stripSaveAssetPayloadForStorage(data);
+  const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(sourceData));
+  const storedData = stripSaveAssetPayloadForStorage(sourceData);
   const deltaBase = await findAutoDeltaBase(db, storedData);
   const saved = await new Promise<{ id: number; save: 存档数据; delta: SaveNodeDeltaRecord | null }>((resolve, reject) => {
     const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');
@@ -175,9 +196,9 @@ async function saveGameInternal(data: 存档数据): Promise<number> {
       }
       summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(savedForDelta)));
     };
-    request.onerror = () => reject(request.error);
-    tx.oncomplete = () => resolve({ id: savedId, save: { ...data, id: savedId }, delta: savedDelta });
-    tx.onerror = () => reject(tx.error);
+    request.onerror = () => reject(toError(request.error));
+    tx.oncomplete = () => resolve({ id: savedId, save: { ...sourceData, id: savedId }, delta: savedDelta });
+    tx.onerror = () => reject(toError(tx.error));
   });
   await rotateManagedSavesSafely(db);
   return saved.id;
@@ -200,7 +221,7 @@ async function deleteManagedSaveItems(db: IDBDatabase, candidates: SaveListItemS
       deleteDeltaBySaveId(tx.objectStore(SAVE_NODE_DELTAS_STORE), item.id);
     }
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
   await cleanupUnreferencedHiddenSaves(db);
 }
@@ -293,7 +314,7 @@ async function deleteSaveInternal(id: number): Promise<void> {
     }
     deleteDeltaBySaveId(tx.objectStore(SAVE_NODE_DELTAS_STORE), id);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
   await cleanupUnreferencedHiddenSaves(db);
 }
@@ -377,7 +398,7 @@ export async function loadCloudMergeStagedRecord(
     const tx = db.transaction(SETTINGS_STORE, 'readonly');
     const request = tx.objectStore(SETTINGS_STORE).get(cloudMergeStageKey(transferId, recordKey));
     request.onsuccess = () => resolve((request.result as { value?: CloudMergeStagedRecord } | undefined)?.value ?? null);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
   });
 }
 
@@ -393,7 +414,7 @@ export async function clearCloudMergeStaging(transferId: string): Promise<void> 
       cursor.delete();
       cursor.continue();
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error('清理云备份合并暂存区失败。'));
   });
@@ -437,11 +458,11 @@ async function commitCloudMergeStagingTransaction(
       if (!cursor) return;
       const staged = (cursor.value as { value?: CloudMergeStagedRecord } | undefined)?.value;
       if (!staged || (staged.kind !== 'node' && staged.kind !== 'asset')) {
-        fail(new Error(`云备份合并暂存条目无效：${String(cursor.key)}`));
+        fail(new Error(`云备份合并暂存条目无效：${JSON.stringify(cursor.key)}`));
         return;
       }
       if (staged.kind === 'asset') {
-        if (!staged.record?.id) {
+        if (!staged.record.id) {
           fail(new Error('云备份资源暂存条目缺少 ID。'));
           return;
         }
@@ -524,7 +545,7 @@ async function replaceAllSavesInternal(nextSaves: 存档数据[]): Promise<void>
       }
     }
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
@@ -576,14 +597,17 @@ async function loadRawSave(db: IDBDatabase, id: number): Promise<存档数据 | 
     const tx = db.transaction(SAVES_STORE, 'readonly');
     const store = tx.objectStore(SAVES_STORE);
     const request = store.get(id);
-    request.onsuccess = () => resolve((request.result as 存档数据) ?? null);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const result = request.result as 存档数据 | undefined;
+      resolve(result ?? null);
+    };
+    request.onerror = () => reject(toError(request.error));
   });
 }
 
 async function restoreDeltaSaveIfNeeded(db: IDBDatabase, save: 存档数据, visited = new Set<number>()): Promise<存档数据> {
   if (!isDeltaOnlyStoredSave(save)) return save;
-  const saveId = Number(save.id) || 0;
+  const saveId = save.id || 0;
   if (visited.has(saveId)) return save;
   visited.add(saveId);
   const tree = (save as 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 }).saveTree;
@@ -651,7 +675,7 @@ async function cleanupUnreferencedHiddenSaves(db: IDBDatabase): Promise<void> {
       summaryStore.delete(id);
     }
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
@@ -660,8 +684,11 @@ async function loadDeltaRecordByNodeId(db: IDBDatabase, nodeId: string): Promise
   return new Promise((resolve, reject) => {
     const tx = db.transaction(SAVE_NODE_DELTAS_STORE, 'readonly');
     const req = tx.objectStore(SAVE_NODE_DELTAS_STORE).get(nodeId);
-    req.onsuccess = () => resolve((req.result as SaveNodeDeltaRecord) ?? null);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const result = req.result as SaveNodeDeltaRecord | undefined;
+      resolve(result ?? null);
+    };
+    req.onerror = () => reject(toError(req.error));
   });
 }
 
@@ -679,9 +706,9 @@ async function scanIndexedDeltaRecords(
       visitor(cursor.value as SaveNodeDeltaRecord);
       cursor.continue();
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
@@ -710,7 +737,7 @@ async function loadSaveAssetRecords(db: IDBDatabase, assetIds: string[]): Promis
         if (req.result) records.push(req.result as SaveAssetRecord);
         finish();
       };
-      req.onerror = () => reject(req.error);
+      req.onerror = () => reject(toError(req.error));
     }
   });
 }
@@ -728,12 +755,40 @@ async function migrateLoadedSaveAssets(db: IDBDatabase, save: 存档数据): Pro
     for (const record of records) assetStore.put(record);
     saveStore.put(storedSave);
     summaryStore.put(buildSaveSummary(storedSave));
-    const delta = buildSaveNodeDeltaRecord(storedSave, Number(storedSave.id) || 0);
+    const delta = buildSaveNodeDeltaRecord(storedSave, storedSave.id || 0);
     if (delta) {
       deltaStore.put(delta);
     }
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
+  });
+}
+
+// ── NewestStory（两层存储工作区槽，片 5a-2 D1-A）──
+
+export async function loadNewestStory(): Promise<NewestStory记录> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(NEWEST_STORY_STORE, 'readonly');
+    const request = tx.objectStore(NEWEST_STORY_STORE).get(NEWEST_STORY_STORE_KEY);
+    request.onsuccess = () => resolve(归一化NewestStory记录(request.result));
+    request.onerror = () => {
+      const error = request.error;
+      reject(error instanceof Error ? error : new Error('读取 newestStory 记录失败。'));
+    };
+  });
+}
+
+export async function saveNewestStory(record: NewestStory记录): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(NEWEST_STORY_STORE, 'readwrite');
+    tx.objectStore(NEWEST_STORY_STORE).put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => {
+      const error = tx.error;
+      reject(error instanceof Error ? error : new Error('写入 newestStory 记录失败。'));
+    };
   });
 }
 
@@ -749,10 +804,10 @@ export async function loadSetting<T>(key: string): Promise<T | null> {
     const tx = db.transaction(SETTINGS_STORE, 'readonly');
     const request = tx.objectStore(SETTINGS_STORE).get(key);
     request.onsuccess = () => {
-      const result = request.result;
-      resolve(result ? (result.value as T) : null);
+      const result = request.result as { value?: T } | undefined;
+      resolve(result?.value ?? null);
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
   });
 }
 
@@ -761,14 +816,27 @@ export async function deleteSetting(key: string): Promise<void> {
 }
 
 async function writeIndexedSetting(key: string, value: unknown): Promise<void> {
+  const storedValue = 剥离游戏设置运行态键(key, value);
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(SETTINGS_STORE, 'readwrite');
     const store = tx.objectStore(SETTINGS_STORE);
-    store.put({ key, value });
+    store.put({ key, value: storedValue });
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
+}
+
+/** 单点剥离（片 5a-2 D3）：gameSettings 落盘时剔除两运行态键，内存 state.gameSettings 不动。 */
+function 剥离游戏设置运行态键(key: string, value: unknown): unknown {
+  if (key !== 'gameSettings') return value;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const source = value as Record<string, unknown>;
+  if (!('macroGlobalVars' in source) && !('worldbookTriggerStates' in source)) return value;
+  const { macroGlobalVars: _macro, worldbookTriggerStates: _trigger, ...rest } = source;
+  void _macro;
+  void _trigger;
+  return rest;
 }
 
 async function deleteIndexedSetting(key: string): Promise<void> {
@@ -778,7 +846,7 @@ async function deleteIndexedSetting(key: string): Promise<void> {
     const store = tx.objectStore(SETTINGS_STORE);
     store.delete(key);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
@@ -817,7 +885,7 @@ function markSaveAsHiddenDeltaBase(
     summaryStore.put(createHiddenDeltaBaseCatalogRecord({
       id: saveId,
       type: normalizeSaveType(save.type),
-      timestamp: Number(save.timestamp) || 0,
+      timestamp: save.timestamp || 0,
     }));
   };
 }
@@ -830,8 +898,8 @@ export async function exportSaveJson(save: 存档数据): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const travelerName = sanitizeFilename(save.旅人?.姓名 || 'traveler');
-  const turnCount = save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1);
+  const travelerName = sanitizeFilename(save.旅人.姓名 || 'traveler');
+  const turnCount = save.turnCount;
   const stamp = new Date(save.timestamp || Date.now())
     .toISOString()
     .replace(/[:.]/g, '-');
@@ -845,8 +913,8 @@ export async function exportSavePackage(save: 存档数据): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const travelerName = sanitizeFilename(save.旅人?.姓名 || 'traveler');
-  const turnCount = save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1);
+  const travelerName = sanitizeFilename(save.旅人.姓名 || 'traveler');
+  const turnCount = save.turnCount;
   const stamp = new Date(save.timestamp || Date.now())
     .toISOString()
     .replace(/[:.]/g, '-');
@@ -856,13 +924,14 @@ export async function exportSavePackage(save: 存档数据): Promise<void> {
 }
 
 export async function exportSaveTreePackage(saves: 存档数据[]): Promise<void> {
+  if (!saves.length) return;
   const blob = await buildSaveTreePackage(saves);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const latest = [...saves].sort((left, right) => (right.timestamp || 0) - (left.timestamp || 0))[0];
-  const travelerName = sanitizeFilename(latest?.旅人?.姓名 || 'traveler');
-  const turnCount = latest?.turnCount ?? ((latest?.chatHistory?.length ?? 0) + 1);
-  const stamp = new Date(latest?.timestamp || Date.now())
+  const travelerName = sanitizeFilename(latest.旅人.姓名 || 'traveler');
+  const turnCount = latest.turnCount;
+  const stamp = new Date(latest.timestamp || Date.now())
     .toISOString()
     .replace(/[:.]/g, '-');
   a.href = url;
@@ -872,13 +941,8 @@ export async function exportSaveTreePackage(saves: 存档数据[]): Promise<void
 }
 
 export function importSaveJson(json: string): 存档数据 {
-  const data = JSON.parse(json) as 存档数据;
-  if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-    throw new Error('无效的存档文件');
-  }
-  if (!data.gameSettings || !data.apiSettings || !data.theme) {
-    throw new Error('无效的存档文件');
-  }
+  const data: unknown = JSON.parse(json);
+  if (!isImportableSave(data)) throw new Error('无效的存档文件');
   return data;
 }
 
@@ -888,13 +952,8 @@ export async function importSaveFile(file: File): Promise<存档数据> {
     return importSaveJson(await file.text());
   }
   if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
-    const data = await parseSavePackage(await file.arrayBuffer());
-    if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-      throw new Error('无效的存档包');
-    }
-    if (!data.gameSettings || !data.apiSettings || !data.theme) {
-      throw new Error('无效的存档包');
-    }
+    const data: unknown = await parseSavePackage(await file.arrayBuffer());
+    if (!isImportableSave(data)) throw new Error('无效的存档包');
     return data;
   }
   throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
@@ -903,26 +962,36 @@ export async function importSaveFile(file: File): Promise<存档数据> {
 export async function importSaveFileAsMany(file: File): Promise<存档数据[]> {
   const name = file.name.toLowerCase();
   if (name.endsWith('.json') || file.type === 'application/json') {
-    return [importSaveJson(await file.text())];
+    const saves = [importSaveJson(await file.text())];
+    devLog('save', 'import-save-parsed', { nodeCount: saves.length });
+    return saves;
   }
   if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
     const saves = await parseSaveTreePackage(await file.arrayBuffer());
     const remapped = remapImportedSaveTree(saves);
-    for (const data of remapped) {
-      if (!data || typeof data !== 'object' || !data.旅人 || !data.世界 || !Array.isArray(data.chatHistory)) {
-        throw new Error('无效的存档包');
-      }
-      if (!data.gameSettings || !data.apiSettings || !data.theme) {
-        throw new Error('无效的存档包');
-      }
-    }
+    if (!remapped.every(isImportableSave)) throw new Error('无效的存档包');
+    devLog('save', 'import-save-parsed', { nodeCount: saves.length });
+    const rootId = (remapped[0] as SaveWithTree | undefined)?.saveTree?.rootId;
+    devLog('save', 'import-save-tree-remapped', { nodeCount: remapped.length, rootId });
     return remapped;
   }
   throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
 }
 
+function isImportableSave(value: unknown): value is 存档数据 {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const raw = value as Record<string, unknown>;
+  return Boolean(
+    raw.旅人
+    && raw.世界
+    && Array.isArray(raw.chatHistory)
+    && raw.gameSettings
+    && raw.apiSettings
+    && raw.theme,
+  );
+}
+
 function remapImportedSaveTree(saves: 存档数据[]): 存档数据[] {
-  if (saves.length <= 1) return saves;
   const rootId = createImportId('save_root_import');
   const nodeIdMap = new Map<string, string>();
   for (const save of saves) {
@@ -974,13 +1043,13 @@ function stripCloudBackupRestoreRuntime<T extends 存档数据>(save: T): T {
 }
 
 function cloudMergeStagePrefix(transferId: string): string {
-  const safeTransferId = String(transferId || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 160);
+  const safeTransferId = transferId.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 160);
   if (!safeTransferId) throw new Error('云备份合并任务 ID 无效。');
   return `internal.cloudMerge.${safeTransferId}.`;
 }
 
 function cloudMergeStageKey(transferId: string, recordKey: string): string {
-  const safeRecordKey = String(recordKey || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 220);
+  const safeRecordKey = recordKey.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 220);
   if (!safeRecordKey) throw new Error('云备份合并暂存键无效。');
   return `${cloudMergeStagePrefix(transferId)}${safeRecordKey}`;
 }
@@ -1016,7 +1085,7 @@ async function readSaveCatalogRecords(db: IDBDatabase): Promise<SaveCatalogRecor
         .filter((record): record is SaveCatalogRecord => Boolean(record));
       resolve(list);
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
   });
 }
 
@@ -1025,7 +1094,7 @@ async function readIndexedSaveKeys(db: IDBDatabase): Promise<IDBValidKey[]> {
     const tx = db.transaction(SAVES_STORE, 'readonly');
     const request = tx.objectStore(SAVES_STORE).getAllKeys();
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
   });
 }
 
@@ -1090,15 +1159,15 @@ async function repairOneSaveCatalogRecord(db: IDBDatabase, id: number): Promise<
           summaryStore.put(createHiddenDeltaBaseCatalogRecord({
             id,
             type: normalizeSaveType(save.type),
-            timestamp: Number(save.timestamp) || 0,
+      timestamp: save.timestamp || 0,
           }));
           return;
         }
         summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(save)));
       };
-      request.onerror = () => reject(request.error);
+      request.onerror = () => reject(toError(request.error));
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(toError(tx.error));
       tx.onabort = () => reject(tx.error ?? new Error('存档目录恢复事务已中止'));
     });
   } catch (error) {
@@ -1125,9 +1194,9 @@ async function writeUnreadableSaveCatalogRecord(
       const retryCount = current?.visibility === 'unreadable' ? current.retryCount + 1 : 1;
       store.put(createUnreadableSaveCatalogRecord({ id, error, retryCount }));
     };
-    getRequest.onerror = () => reject(getRequest.error);
+    getRequest.onerror = () => reject(toError(getRequest.error));
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
@@ -1139,7 +1208,7 @@ async function cleanupStaleSaveCatalogRecords(db: IDBDatabase): Promise<void> {
     const store = tx.objectStore(SAVE_SUMMARIES_STORE);
     for (const id of snapshot.staleCatalogIds) store.delete(id);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
@@ -1164,9 +1233,9 @@ async function acquireSaveCatalogRepairLease(db: IDBDatabase): Promise<boolean> 
         });
       }
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
     tx.oncomplete = () => resolve(acquired);
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
@@ -1189,7 +1258,7 @@ async function renewSaveCatalogRepairLease(db: IDBDatabase): Promise<void> {
         },
       });
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error('存档目录恢复租约续期失败'));
     tx.onabort = () => reject(new Error('存档目录恢复租约已由其他页面接管'));
@@ -1207,31 +1276,31 @@ async function releaseSaveCatalogRepairLease(db: IDBDatabase): Promise<void> {
         store.delete(SAVE_CATALOG_REPAIR_LEASE_KEY);
       }
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error));
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(toError(tx.error));
   });
 }
 
 function buildSaveSummary(save: 存档数据): SaveListItemSummary {
   return {
-    id: Number(save.id) || 0,
+    id: save.id,
     type: normalizeSaveType(save.type),
-    timestamp: Number(save.timestamp) || Date.now(),
+    timestamp: save.timestamp,
     saveTree: (save as 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 }).saveTree,
-    travelerName: save.旅人?.姓名 ?? '',
-    turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1),
-    worldPeriodName: save.世界?.当前时段?.名称 ?? '',
-    currentDate: save.世界?.当前日期 ?? '',
-    currentTime: save.世界?.当前时间 ?? '',
-    currentLocation: save.世界?.当前地点 ?? '',
+    travelerName: save.旅人.姓名,
+    turnCount: save.turnCount ?? (save.chatHistory.length + 1),
+    worldPeriodName: save.世界.当前时段.名称,
+    currentDate: save.世界.当前日期,
+    currentTime: save.世界.当前时间,
+    currentLocation: save.世界.当前地点,
     lastSummary: summarizeSave(save),
     sizeBytes: estimateSaveSize(save),
   };
 }
 
 function summarizeSave(save: 存档数据): string {
-  const latestAssistant = [...(save.chatHistory ?? [])]
+  const latestAssistant = [...save.chatHistory]
     .reverse()
     .find((msg) => msg.role === 'assistant');
   const text = latestAssistant?.parsedResponse?.body || latestAssistant?.content || '';
@@ -1243,21 +1312,21 @@ function summarizeSave(save: 存档数据): string {
 }
 
 function estimateSaveSize(save: 存档数据): number {
-  const chatBytes = (save.chatHistory ?? []).reduce((sum, message) => {
-    return sum + String(message.content ?? '').length + String(message.parsedResponse?.body ?? '').length;
+  const chatBytes = save.chatHistory.reduce((sum, message) => {
+    return sum + message.content.length + (message.parsedResponse?.body.length ?? 0);
   }, 0);
   const albumAssets = save.相册?.assets ?? [];
   const albumBytes = albumAssets.reduce((sum, asset) => {
-    const declaredSize = Number(asset.size) || 0;
+    const declaredSize = asset.size || 0;
     if (declaredSize > 0) return sum + declaredSize;
-    return sum + String(asset.dataUrl ?? '').length + String(asset.originalUrl ?? '').length;
+    return sum + (asset.dataUrl?.length ?? 0) + (asset.originalUrl?.length ?? 0);
   }, 0);
   const queueBytes = (save.queueTasks ?? []).reduce((sum, task) => {
     return sum +
-      String(task.title ?? '').length +
-      String(task.subtitle ?? '').length +
-      String(task.detail ?? '').length +
-      String(task.retryHint ?? '').length;
+      task.title.length +
+      (task.subtitle?.length ?? 0) +
+      (task.detail?.length ?? 0) +
+      (task.retryHint?.length ?? 0);
   }, 0);
   return Math.max(1024, chatBytes * 2 + albumBytes + queueBytes * 2 + 48_000);
 }

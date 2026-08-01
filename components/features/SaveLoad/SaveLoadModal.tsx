@@ -21,6 +21,7 @@ import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkfl
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
+  showAutoArchives: boolean;
   onSave: () => Promise<number>;
   onLoad: (id: number) => Promise<boolean>;
   onClose: () => void;
@@ -35,7 +36,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
+export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -250,9 +251,13 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     input.click();
   };
 
+  const displaySaves = useMemo(
+    () => showAutoArchives ? saves : saves.filter((save) => save.type !== 'auto'),
+    [saves, showAutoArchives],
+  );
   const visibleSaves = useMemo(
-    () => saves.filter((save) => save.id !== deletingId && save.saveTree?.rootId !== deletingRootId),
-    [deletingId, deletingRootId, saves],
+    () => displaySaves.filter((save) => save.id !== deletingId && save.saveTree?.rootId !== deletingRootId),
+    [deletingId, deletingRootId, displaySaves],
   );
 
   const { manualSaves, autoSaves, importedSaves } = useMemo(() => {
@@ -404,7 +409,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <SaveMetric value={saves.length} label="总节点" />
+                <SaveMetric value={displaySaves.length} label="总节点" />
                 <SaveMetric value={totalBranches} label="分支" />
                 <SaveMetric value={autoSaves.length} label="自动" />
                 <SaveMetric value={importedSaves.length} label="导入" />
@@ -412,7 +417,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
 
               <div className="mt-4">
                 <MiniSaveTreeMap
-                  nodeCount={saves.length}
+                  nodeCount={displaySaves.length}
                   branchCount={totalBranches}
                   sizeText={formatSize(totalSizeBytes)}
                 />
@@ -441,7 +446,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
               <div className="flex-1" />
 
               <div className="mt-4 text-center font-serif text-[12px] tracking-[0.22em]" style={{ color: 'rgba(var(--tj-text-primary),0.46)' }}>
-                共 {saves.length} 节点 / {allTreeGroups.length} 棵树
+                共 {displaySaves.length} 节点 / {allTreeGroups.length} 棵树
                 {repairingSummaries ? ` / 正在恢复 ${pendingSummaryCount} 个节点目录` : ''}
               </div>
             </div>
@@ -539,7 +544,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
             </div>
 
             <div className="kaituo-options-scroll relative overflow-x-hidden px-4 py-4 pb-7 md:min-h-0 md:flex-1 md:overflow-y-auto md:px-5">
-              {loading && saves.length === 0 && <EmptyState text="加载中..." />}
+              {loading && displaySaves.length === 0 && <EmptyState text="加载中..." />}
 
               {repairingSummaries && (
                 <div

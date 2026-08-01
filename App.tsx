@@ -705,6 +705,7 @@ export function App() {
         {showSaveLoad && (
           <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
             <SaveLoadModal
+              showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
               onSave={actions.handleSave}
               onLoad={async (id) => {
                 const ok = await handleLoadById(id, state);
@@ -975,6 +976,7 @@ export function App() {
       {showSaveLoad && (
         <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
           <SaveLoadModal
+            showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
             onSave={actions.handleSave}
             onLoad={async (id) => {
               const ok = await handleLoadById(id, state);

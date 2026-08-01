@@ -18,10 +18,7 @@
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
-import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
-import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { addImmediateMemory } from './memoryUtils';
-import { saveSetting } from '@/services/dbService';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { devLog } from '@/utils/devLog';
 import type { 记忆系统 } from '@/models/memory';
@@ -81,7 +78,7 @@ export async function stage10_storyZhiku(
     if (!storyWeavingConcurrentChange) {
       // 投影点（B2 定性，S24）：章节摘要/剧情面板即时刷新；管线与存档只认 ctx/d，不回读此 state
       state.set剧情编织(storyWeavingForSave);
-      await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(storyWeavingForSave));
+      // 片 5a-2：剧情编织 newest 覆盖集由 S11 阶段边界统一写（报告 c 节「二选一」选项 2）
     } else {
       pushQueueTask(state, 'zhiku', 'success', {
         detail: '检测到剧情编织面板已有更新，本回合后台未覆盖最新导入/分解结果。',
@@ -114,7 +111,7 @@ export async function stage10_storyZhiku(
       zhikuAfterRuntimeUnlock = zhikuUnlock.system;
       // 投影点（B2 定性，S27）：智库面板即时刷新；管线与存档只认 ctx/d，不回读此 state
       state.set智库(zhikuAfterRuntimeUnlock);
-      await saveSetting('zhikuSystem', buildPersistedZhikuSystem(zhikuAfterRuntimeUnlock));
+      // 片 5a-2：智库 newest 覆盖集由 S11 阶段边界统一写（报告 c 节「二选一」选项 2）
       assertWorkflowActive();
       pushQueueTask(state, 'zhiku', 'success', {
         detail: `剧情归档已更新智库门禁：${zhikuUnlock.unlocked.slice(0, 3).map((item) => `${item.title}→${item.status}`).join('、')}${zhikuUnlock.unlocked.length > 3 ? ` 等 ${zhikuUnlock.unlocked.length} 项` : ''}。`,

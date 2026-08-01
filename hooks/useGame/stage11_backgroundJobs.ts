@@ -26,6 +26,7 @@ import type { 聊天消息 } from '@/models/chat';
 import type { 新闻条目 } from '@/models/news';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 手机系统 } from '@/models/phone';
+import type { 相册系统 } from '@/models/imageGeneration';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 记忆系统设置, 星际和平周报设置, 文生图系统设置 } from '@/models/settings';
 import type { YitingArchiveSource } from '@/services/yitingArchive';
@@ -106,7 +107,7 @@ interface NarrativeJobParams {
   turnCountAtStart: number;
   queueTasksMirror: TurnContext['queueTasksMirror'];
 }
-interface NarrativeJobResult { finalHistoryForSave: 聊天消息[]; }
+interface NarrativeJobResult { finalHistoryForSave: 聊天消息[]; 相册After?: 相册系统; }
 
 // ---- 四个参数化闭包（函数体逻辑一字不改）----
 
@@ -243,7 +244,7 @@ async function runNarrativeImageJob(p: NarrativeJobParams): Promise<NarrativeJob
     }, p.turnCountAtStart, p.queueTasksMirror);
     return { finalHistoryForSave: fh };
   }
-  const generatedImages = await generateNarrativeImagesForMessage({
+  const generatedImagesResult = await generateNarrativeImagesForMessage({
     state: p.state,
     messageId: targetMessageId,
     body: p.displayText,
@@ -253,6 +254,7 @@ async function runNarrativeImageJob(p: NarrativeJobParams): Promise<NarrativeJob
     signal: p.abortController.signal,
   });
   p.assertWorkflowActive();
+  const generatedImages = generatedImagesResult.images;
   if (generatedImages?.length) {
     fh = p.finalHistory.map((msg) =>
       msg.id === targetMessageId && msg.role === 'assistant'
@@ -263,7 +265,7 @@ async function runNarrativeImageJob(p: NarrativeJobParams): Promise<NarrativeJob
         : msg,
     );
   }
-  return { finalHistoryForSave: fh };
+  return { finalHistoryForSave: fh, 相册After: generatedImagesResult.相册 };
 }
 
 // ---- 主阶段函数 ----
@@ -339,6 +341,7 @@ export async function stage11_backgroundJobs(
   let yitingAfterTurnRecall: 忆庭系统;
   let phoneAfterFallbackSeed: 手机系统;
   let finalHistoryForSave: 聊天消息[];
+  let 相册After: 相册系统 | undefined;
   if ((backgroundTaskMode ?? 'sequential') === 'parallel') {
     const [newsRes, yitingRes, phoneRes, narrativeRes] = await Promise.all([
       runNewsBackgroundJob(newsParams),
@@ -350,6 +353,7 @@ export async function stage11_backgroundJobs(
     yitingAfterTurnRecall = yitingRes.yitingAfterTurnRecall;
     phoneAfterFallbackSeed = phoneRes.phoneAfterFallbackSeed;
     finalHistoryForSave = narrativeRes.finalHistoryForSave;
+    相册After = narrativeRes.相册After;
   } else {
     const newsRes = await runNewsBackgroundJob(newsParams);
     newsAfterGeneration = newsRes.newsAfterGeneration ?? openingNewsForSave;
@@ -359,16 +363,18 @@ export async function stage11_backgroundJobs(
     phoneAfterFallbackSeed = phoneRes.phoneAfterFallbackSeed;
     const narrativeRes = await runNarrativeImageJob(narrativeParams);
     finalHistoryForSave = narrativeRes.finalHistoryForSave;
+    相册After = narrativeRes.相册After;
   }
 
   devLog('stage', 'stage11_backgroundJobs.exit', {
     turn: turnCountAtStart,
-    outputs: ['newsAfterGeneration', 'yitingAfterTurnRecall', 'phoneAfterFallbackSeed', 'finalHistoryForSave'],
+    outputs: ['newsAfterGeneration', 'yitingAfterTurnRecall', 'phoneAfterFallbackSeed', 'finalHistoryForSave', '相册After'],
   });
   return {
     newsAfterGeneration,
     yitingAfterTurnRecall,
     phoneAfterFallbackSeed,
     finalHistoryForSave,
+    相册After,
   };
 }

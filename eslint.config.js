@@ -73,6 +73,21 @@ export default tseslint.config(
     },
   },
   {
+    // L1 模块边界（片 5a-2 D5）：checkpoint 表只被 commitTurn 写入。
+    // 管线模块（stage*.ts / sendWorkflow.ts）不可从 dbService import saveGame；
+    // saveSetting 等其余导出不禁；手动存档/导入走 saveLoadWorkflow 不受限。
+    files: ['hooks/useGame/stage*.ts', 'hooks/useGame/sendWorkflow.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: [{
+          name: '@/services/dbService',
+          importNames: ['saveGame'],
+          message: 'L1 边界：checkpoint 表只被 commitTurn（hooks/useGame/commitTurn.ts）写入，管线模块不得 import saveGame。',
+        }],
+      }],
+    },
+  },
+  {
     // vite.config.ts 是工具链入口，default export 为其约定
     files: ['vite.config.ts'],
     rules: { 'no-restricted-syntax': 'off' },

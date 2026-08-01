@@ -21,7 +21,7 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空剧情编织系统, 归一化剧情编织系统 } from '@/models/storyWeaving';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务记录 } from '@/models/queueTask';
-import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
+import type { API设置, 存档数据, 游戏设置, 主题预设 } from '@/models/settings';
 import {
   创建空API设置,
   创建默认游戏设置,
@@ -39,6 +39,7 @@ import {
   归一化文生图系统设置,
   归一化额外功能设置,
   归一化视觉文本设置,
+  迁移存档运行态键,
 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import type { STPresetEntry } from '@/models/stTypes';
@@ -304,9 +305,13 @@ export function useGameState(): UseGameStateReturn {
       if (savedGame) {
         // 兼容旧存档：variableApi 是新字段，缺失时用默认覆盖
         const defaults = 创建默认游戏设置();
+        // 片 5a-2 D3：剥离生效前的旧 settings 数据可能残留两运行态键，同样迁移并入内存（不回写）。
+        const 迁移运行态 = 迁移存档运行态键({ gameSettings: savedGame } as 存档数据);
         const merged: 游戏设置 = {
           ...defaults,
           ...savedGame,
+          macroGlobalVars: 迁移运行态.macroGlobalVars,
+          worldbookTriggerStates: 迁移运行态.worldbookTriggerStates,
           新闻系统: 归一化星际和平周报设置(savedGame.新闻系统),
           手机系统: 归一化手机系统设置(savedGame.手机系统),
           智库系统: 归一化智库系统设置(savedGame.智库系统),

@@ -21,6 +21,7 @@ import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkfl
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
+  showAutoArchives: boolean;
   onSave: () => Promise<number>;
   onContinue: () => Promise<boolean>;
   onLoadSave: (id: number) => Promise<boolean>;
@@ -33,7 +34,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
+export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoadSave }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -78,9 +79,13 @@ export function StorageManagerTab({ onSave, onContinue, onLoadSave }: Props) {
     if (state.phase === 'completed' || state.phase === 'partial-failure') void refresh();
   }), []);
 
+  const displaySaves = useMemo(
+    () => showAutoArchives ? saves : saves.filter((save) => save.type !== 'auto'),
+    [saves, showAutoArchives],
+  );
   const visibleSaves = useMemo(
-    () => saves.filter((save) => filter === 'all' || save.type === filter),
-    [filter, saves],
+    () => displaySaves.filter((save) => filter === 'all' || save.type === filter),
+    [displaySaves, filter],
   );
   const treeGroups = useMemo(() => buildSaveTreeGroups(visibleSaves), [visibleSaves]);
   const selectedTree = treeGroups.find((group) => group.rootId === selectedRootId) ?? treeGroups[0] ?? null;

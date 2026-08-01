@@ -1,5 +1,6 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
+import type { 相册系统 } from '@/models/imageGeneration';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
@@ -29,8 +30,8 @@ function archiveNarrativeSnapshotToAlbum(
     size: string;
     sourcePrompt: string;
   },
-): import('@/models/chat').叙事插图 {
-  if (image.status !== 'done' || !image.dataUrl) return image;
+): { image: import('@/models/chat').叙事插图; 相册: 相册系统 } {
+  if (image.status !== 'done' || !image.dataUrl) return { image, 相册: state.相册 };
   const item = 创建相册图片条目({
     title: params.title || image.description || '故事快照',
     src: image.dataUrl,
@@ -46,11 +47,19 @@ function archiveNarrativeSnapshotToAlbum(
     tags: ['故事快照', '正文生图'],
     note: '故事快照',
   });
-  state.set相册((prev) => 添加图片到相册(prev, item));
+  // 投影点（B2 定性，S22）：相册面板即时刷新；同时捕获提交后的相册值供 d.相册After（片 5a-2 题外发现 #1）。
+  let 相册After = state.相册;
+  state.set相册((prev) => {
+    相册After = 添加图片到相册(prev, item);
+    return 相册After;
+  });
   return {
-    ...image,
-    dataUrl: 创建相册资源引用(item.asset.id),
-    assetId: item.asset.id,
+    image: {
+      ...image,
+      dataUrl: 创建相册资源引用(item.asset.id),
+      assetId: item.asset.id,
+    },
+    相册: 相册After,
   };
 }
 
@@ -63,7 +72,7 @@ export async function generateNarrativeImagesForMessage(params: {
   turn: number;
   signal?: AbortSignal;
   replaceExisting?: boolean;
-}): Promise<import('@/models/chat').叙事插图[] | null> {
+}): Promise<{ images: import('@/models/chat').叙事插图[] | null; 相册: 相册系统 }> {
   const { state, messageId, body, tokenizerConfig, imageApiConfig, turn, signal, replaceExisting = false } = params;
   const failMessage = (error: string) => {
     if (!replaceExisting) return;
@@ -94,8 +103,8 @@ export async function generateNarrativeImagesForMessage(params: {
   try {
     const { parseStorySnapshotPrompt } = await import('@/services/ai/narrativeImageParse');
     const { generateNarrativeImage } = await import('@/services/ai/imageGeneration');
-    const playerAppearanceMode = state.gameSettings.文生图系统?.正文生图?.playerAppearanceMode ?? 'auto';
-    const presentNpcRecords = (state.NPC ?? [])
+    const playerAppearanceMode = state.gameSettings.文生图系统.正文生图.playerAppearanceMode;
+    const presentNpcRecords = state.NPC
       .filter((npc: import('@/models/npc').NPC记录) => npc.阶位 === 'companion' && (npc.外貌 || npc.穿着))
       .slice(0, 8);
     const traveler = state.旅人;
@@ -158,7 +167,7 @@ export async function generateNarrativeImagesForMessage(params: {
       size: '1280x720',
       sourcePrompt: body,
     });
-    generatedImages.push(archivedResult);
+    generatedImages.push(archivedResult.image);
     pushQueueTask(state, 'narrative_image_generate', result.status === 'done' ? 'success' : 'failed', {
       detail: result.status === 'done'
         ? `${parsedSnapshot.title || '故事快照'} 故事快照生成完成。`
@@ -182,7 +191,10 @@ export async function generateNarrativeImagesForMessage(params: {
         return updated;
       });
     }
-    return generatedImages;
+    return {
+      images: generatedImages.length > 0 ? generatedImages : null,
+      相册: archivedResult.相册,
+    };
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {
       failMessage((err as Error).message);
@@ -192,7 +204,7 @@ export async function generateNarrativeImagesForMessage(params: {
         targetMessageId: messageId,
       });
     }
-    return null;
+    return { images: null, 相册: state.相册 };
   }
 }
 
@@ -203,10 +215,10 @@ export async function regenerateNarrativeImagesForMessage(
 ): Promise<void> {
   const message = state.chatHistory.find((item) => item.id === messageId);
   if (!message || message.role !== 'assistant') return;
-  const body = message.parsedResponse?.body?.trim() || message.content.trim();
+  const body = message.parsedResponse?.body.trim() || message.content.trim();
   if (!body) return;
-  const narrative = state.gameSettings.文生图系统?.正文生图;
-  if (!narrative?.enabled) {
+  const narrative = state.gameSettings.文生图系统.正文生图;
+  if (!narrative.enabled) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '正文生图未启用，无法重新生成故事快照。',
       turn: Number(message.gameTime) || state.turnCount,

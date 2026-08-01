@@ -711,6 +711,9 @@
     }
   },
   "hooks/useGame/contextSnapshot.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 3
+    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 32
     },
@@ -751,11 +754,6 @@
       "count": 3
     }
   },
-  "hooks/useGame/narrativeImageWorkflow.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 7
-    }
-  },
   "hooks/useGame/npcPresence.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 5
@@ -781,6 +779,11 @@
     },
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 2
+    }
+  },
+  "hooks/useGame/stage2_preModel.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 3
     }
   },
   "hooks/useGame/stage3_promptAssembly.ts": {
@@ -1379,32 +1382,6 @@
       "count": 1
     }
   },
-  "services/dbService.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 51
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 16
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    },
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 30
-    },
-    "no-param-reassign": {
-      "count": 2
-    }
-  },
   "services/githubCloudSave.ts": {
     "@typescript-eslint/no-misused-spread": {
       "count": 1
@@ -1649,14 +1626,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 3
-    }
-  },
-  "utils/nsfwArchivePolicy.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "no-useless-escape": {
-      "count": 1
     }
   },
   "utils/playerSpeechGuard.ts": {

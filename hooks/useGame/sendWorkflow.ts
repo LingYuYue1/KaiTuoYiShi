@@ -2,7 +2,7 @@ import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { type 回合快照 } from '@/models/chat';
 import { parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
-import { saveSetting } from '@/services/dbService';
+import { saveSetting, loadNewestStory, saveNewestStory } from '@/services/dbService';
 import {
   clearWorkflowRecoveryJournal,
   createWorkflowRecoveryJournal,
@@ -17,6 +17,9 @@ import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnContext, TurnDeltas } from './turnTypes';
+import { mergeNewestStory, type NewestStory字段集 } from '@/models/newestStory';
+import { 取游戏设置运行态键 } from '@/models/settings';
+import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { stage1_turnStart } from './stage1_turnStart';
 import { stage2_preModel } from './stage2_preModel';
 import { stage3_promptAssembly } from './stage3_promptAssembly';
@@ -39,6 +42,23 @@ export interface SendWorkflowDeps {
     nonce: string;
     previousResponse: string;
   } | null;
+}
+
+type VariableOverridesForNewest = {
+  batch?: import('@/models/variableCommand').变量命令批次;
+  旅人?: TurnContext['state']['旅人'];
+  世界?: TurnContext['state']['世界'];
+  新闻?: TurnContext['state']['新闻'];
+  剧情?: TurnContext['state']['剧情'];
+};
+
+/** 过滤 undefined 的 newest 覆盖集（mergeNewestStory 的 patch 不允许 undefined 值，缺省 = 与 checkpoint 一致）。 */
+function 边界覆盖集(patch: Partial<NewestStory字段集>): Partial<NewestStory字段集> {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (typeof value !== 'undefined') cleaned[key] = value;
+  }
+  return cleaned;
 }
 
 
@@ -132,6 +152,9 @@ export async function executeSendWorkflow(
   try {
     await persistWorkflowRecoveryJournal(recoveryJournal);
 
+    // newest 槽（工作区）：回合开始载入；阶段边界 merge + 落盘（L2：只在阶段边界写）。
+    let newest = await loadNewestStory();
+
     // 阶段 1：回合开始（快照 + 用户消息 + 历史清理）
     const s1 = await stage1_turnStart(state, userInput, effectiveWorld, recoveryJournal);
     const preTurnSnapshot = s1.preTurnSnapshot;
@@ -173,6 +196,19 @@ export async function executeSendWorkflow(
     Object.assign(d, await stage5_replyLanding(ctx, d, result, streamedText, streamEventCount, previewChain, startTime));
     if (d.pendingVariableStarted) pendingVariableStarted = true;
     recoveryJournal = d.recoveryJournal ?? recoveryJournal;
+
+    // 阶段边界写 newest（片 5a-2：S5 后 —— chatHistory / turnCount / S2 两运行态键）
+    {
+      const 运行态键 = 取游戏设置运行态键(state.gameSettings);
+      assertWorkflowActive();
+      newest = mergeNewestStory(newest, 边界覆盖集({
+        chatHistory: d.finalHistory,
+        turnCount: turnCountAtStart + 1,
+        macroGlobalVars: d.macroGlobalVarsAfterTurn ?? 运行态键.macroGlobalVars,
+        worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? 运行态键.worldbookTriggerStates,
+      }));
+      await saveNewestStory(newest);
+    }
 
     // 阶段 6：记忆处理
     /* 读 d: parsedForDisplay (S5), displayText (S5)
@@ -221,6 +257,28 @@ export async function executeSendWorkflow(
        npcAfterCompression (写回) */
     Object.assign(d, await stage10_storyZhiku(ctx, d));
 
+    // 阶段边界写 newest（片 5a-2：S6/S7/S8/S9 产出 + queueTasks；NPC 取 S10 剧情记忆注入后的写回值）
+    {
+      const variableOverrides = d.variableOverrides as VariableOverridesForNewest | null | undefined;
+      const variableBatchForSave = d.failedVariableBatch ?? variableOverrides?.batch;
+      const variableBatchesForSave = compactVariableBatchHistory(variableBatchForSave
+        ? [...ctx.variableBatchesAtStart, variableBatchForSave]
+        : ctx.variableBatchesAtStart);
+      assertWorkflowActive();
+      newest = mergeNewestStory(newest, 边界覆盖集({
+        记忆: d.memoryAfterStoryProgress ?? d.mem,
+        忆庭: d.yitingWithCompression,
+        世界: variableOverrides?.世界 ?? d.worldAfter,
+        旅人: variableOverrides?.旅人 ?? d.travelerAfter,
+        新闻: variableOverrides?.新闻,
+        剧情: variableOverrides?.剧情,
+        NPC: d.npcAfterCompression,
+        variableBatches: variableBatchesForSave,
+        queueTasks: ctx.queueTasksMirror,
+      }));
+      await saveNewestStory(newest);
+    }
+
     // 阶段 11：后台任务（新闻/忆庭/手机 Fallback/正文插图）
     /* 读 d: displayText(S5), finalHistory(S5), npcAfterCompression(S9), yitingWithCompression(S6),
        variableOverrides(S8), storyWeavingForSave(S10), aiMsg(S5), parsedForDisplay(S5),
@@ -228,6 +286,20 @@ export async function executeSendWorkflow(
        yitingEnabled(S2), yitingRecallEnabled(S2), storyProgressMemoryLine(S10)
        写 d: newsAfterGeneration, yitingAfterTurnRecall, phoneAfterFallbackSeed, finalHistoryForSave */
     Object.assign(d, await stage11_backgroundJobs(ctx, d));
+
+    // 阶段边界写 newest（片 5a-2：S11 后 —— S10/S11 产出 + 相册After）
+    assertWorkflowActive();
+    newest = mergeNewestStory(newest, 边界覆盖集({
+      剧情编织: d.storyWeavingForSave ?? undefined,
+      智库: d.zhikuAfterRuntimeUnlock ?? undefined,
+      手机: d.phoneAfterFallbackSeed,
+      新闻: d.newsAfterGeneration ?? (d.variableOverrides as VariableOverridesForNewest | null | undefined)?.新闻,
+      记忆: d.memoryAfterStoryProgress ?? undefined,
+      忆庭: d.yitingAfterTurnRecall,
+      chatHistory: d.finalHistoryForSave,
+      相册: d.相册After,
+    }));
+    await saveNewestStory(newest);
 
     const finalHistoryForSave = d.finalHistoryForSave;
     const memoryAfterStoryProgress = d.memoryAfterStoryProgress ?? undefined;
@@ -251,6 +323,7 @@ export async function executeSendWorkflow(
       memoryAfterStoryProgress,
       yitingAfterTurnRecall,
       phoneAfterFallbackSeed,
+      newest,
     }));
 
   } catch (err: unknown) {
