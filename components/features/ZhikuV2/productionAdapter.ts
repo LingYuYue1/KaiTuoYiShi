@@ -103,6 +103,7 @@ function toInjectionVariant(entry: 智库条目): ZhikuArchiveInjectionVariant {
   return {
     id: entry.id,
     label: entry.关联形态ID?.trim() || getCharacterDisplayName(entry),
+    body: entry.原文?.trim() || entry.摘要?.trim() || '',
     triggerKeywords: 获取智库显式触发词(entry),
     secondaryKeywords: entry.辅助关键词 ?? [],
     secondaryKeywordLogic: entry.辅助关键词逻辑,

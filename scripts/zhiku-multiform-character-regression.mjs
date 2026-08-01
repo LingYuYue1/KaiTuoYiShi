@@ -99,11 +99,10 @@ try {
   const api = await import(`${pathToFileURL(bundlePath).href}?v=${Date.now()}`);
   const system = await api.loadAllBundledZhikuPresets();
   const characters = system.条目.filter((entry) => entry.分类 === 'character');
-  assert(characters.length === 98, `expected 98 character source entries, got ${characters.length}`);
+  assert(characters.length === 100, `expected 100 character source entries (98 + Guiji + Herta forms), got ${characters.length}`);
 
   const archiveItems = api.buildZhikuArchiveItems(system);
   assert(archiveItems.character.length === 90, `89 character subjects plus Guiji must produce 90 character archive rows, got ${archiveItems.character.length}`);
-
   const pairs = [];
   for (const group of formGroups) {
     const entries = characters.filter((entry) => entry.关联角色ID === group.subject);

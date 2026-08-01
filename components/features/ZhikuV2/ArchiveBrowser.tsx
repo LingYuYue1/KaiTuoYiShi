@@ -10,6 +10,8 @@ import {
 import type { 智库辅助关键词逻辑 } from '@/models/zhiku';
 import type { ZhikuDesignCategory } from './types';
 import { ReaderFontSizeControl } from './ReaderFontSizeControl';
+import type { ReaderRefreshStatus } from './ReaderFontSizeControl';
+import { formatArchiveParagraphLine } from './archiveDocumentFormatting';
 import { buildZhikuReaderStyle, ZHIKU_READER_FONT_SIZE_DEFAULT } from './readerFontSize';
 import { ZhikuPageFrame } from './ZhikuPageFrame';
 import './zhiku-v2.css';
@@ -21,6 +23,7 @@ export type ZhikuArchiveView = 'archive' | 'injection';
 export interface ZhikuArchiveInjectionVariant {
   id: string;
   label: string;
+  body?: string;
   triggerKeywords: string[];
   secondaryKeywords: string[];
   secondaryKeywordLogic?: 智库辅助关键词逻辑;
@@ -50,6 +53,8 @@ interface ArchiveBrowserProps {
   readerFontSize?: number;
   onDecreaseReaderFontSize?: () => void;
   onIncreaseReaderFontSize?: () => void;
+  onRefreshBundled?: () => void;
+  refreshStatus?: ReaderRefreshStatus;
   reducedMotion?: boolean;
   onBack?: () => void;
   onClose?: () => void;
@@ -100,7 +105,7 @@ function getArchiveHeading(line: string): { level: 3 | 4; text: string } | null 
 
 function renderArchiveParagraph(lines: string[], key: string): ReactNode {
   const normalized = lines
-    .map((line) => line.replace(/^#{3,4}\s+/u, '').trim())
+    .map(formatArchiveParagraphLine)
     .filter(Boolean);
   if (normalized.length === 0) return null;
   return (
@@ -188,6 +193,8 @@ export function ArchiveBrowser({
   readerFontSize = ZHIKU_READER_FONT_SIZE_DEFAULT,
   onDecreaseReaderFontSize,
   onIncreaseReaderFontSize,
+  onRefreshBundled,
+  refreshStatus,
   reducedMotion = false,
   onBack,
   onClose,
@@ -332,6 +339,8 @@ export function ArchiveBrowser({
               value={readerFontSize}
               onDecrease={onDecreaseReaderFontSize}
               onIncrease={onIncreaseReaderFontSize}
+              onRefresh={onRefreshBundled}
+              refreshStatus={refreshStatus}
             />
           )}
           <button
@@ -396,7 +405,28 @@ export function ArchiveBrowser({
                   aria-labelledby={archiveTabId}
                   tabIndex={0}
                 >
-                  {renderArchiveDocument(selectedItem.body)}
+                  {injectionVariants.length > 1 && (
+                    <div className="zhiku-v2-browser__form-preview" role="tablist" aria-label="选择档案形态">
+                      <span>形态档案</span>
+                      <div>
+                        {injectionVariants.map((variant) => {
+                          const active = variant.id === selectedInjectionVariant?.id;
+                          return (
+                            <button
+                              key={variant.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              onClick={() => setSelectedInjectionVariantId(variant.id)}
+                            >
+                              {variant.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {renderArchiveDocument(selectedInjectionVariant?.body || selectedItem.body)}
                 </article>
               ) : (
                 <article

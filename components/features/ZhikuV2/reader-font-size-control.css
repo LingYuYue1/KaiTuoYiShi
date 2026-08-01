@@ -17,6 +17,11 @@
   backdrop-filter: blur(8px);
 }
 
+.zhiku-v2-reader-font-control[data-has-refresh='true'] {
+  width: 146px;
+  grid-template-columns: 25px 30px 31px 30px 30px;
+}
+
 .zhiku-v2-reader-font-control__type {
   justify-self: center;
   color: rgba(var(--zhiku-gold), 0.7);
@@ -47,6 +52,22 @@
 .zhiku-v2-reader-font-control button:disabled {
   color: rgba(var(--zhiku-blue), 0.28);
   cursor: not-allowed;
+}
+
+.zhiku-v2-reader-font-control__refresh[data-refresh-status='loading'] svg {
+  animation: zhiku-v2-reader-refresh-spin 0.8s linear infinite;
+}
+
+.zhiku-v2-reader-font-control__refresh[data-refresh-status='done'] {
+  color: rgba(154, 232, 178, 0.96);
+}
+
+.zhiku-v2-reader-font-control__refresh[data-refresh-status='error'] {
+  color: rgba(255, 156, 132, 0.96);
+}
+
+@keyframes zhiku-v2-reader-refresh-spin {
+  to { transform: rotate(360deg); }
 }
 
 .zhiku-v2-reader-font-control output {
@@ -82,5 +103,10 @@
 
   .zhiku-v2-reader-font-control__type {
     display: none;
+  }
+
+  .zhiku-v2-reader-font-control[data-has-refresh='true'] {
+    width: 121px;
+    grid-template-columns: 30px 31px 30px 30px;
   }
 }

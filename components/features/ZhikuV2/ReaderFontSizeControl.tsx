@@ -1,4 +1,4 @@
-import { Minus, Plus, Type } from 'lucide-react';
+import { Minus, Plus, RefreshCw, Type } from 'lucide-react';
 import {
   ZHIKU_READER_FONT_SIZE_MAX,
   ZHIKU_READER_FONT_SIZE_MIN,
@@ -9,16 +9,32 @@ interface ReaderFontSizeControlProps {
   value: number;
   onDecrease: () => void;
   onIncrease: () => void;
+  onRefresh?: () => void;
+  refreshStatus?: ReaderRefreshStatus;
 }
+
+export type ReaderRefreshStatus = 'idle' | 'loading' | 'done' | 'error';
+
+const REFRESH_STATUS_LABELS: Record<ReaderRefreshStatus, string> = {
+  idle: '刷新内置智库',
+  loading: '正在刷新内置智库',
+  done: '内置智库已刷新',
+  error: '内置智库刷新失败，请重试',
+};
 
 export function ReaderFontSizeControl({
   value,
   onDecrease,
   onIncrease,
+  onRefresh,
+  refreshStatus = 'idle',
 }: ReaderFontSizeControlProps) {
+  const refreshLabel = REFRESH_STATUS_LABELS[refreshStatus];
+
   return (
     <div
       className="zhiku-v2-reader-font-control"
+      data-has-refresh={onRefresh ? 'true' : 'false'}
       role="group"
       aria-label={`档案阅读字号，当前 ${value} 像素`}
     >
@@ -42,6 +58,20 @@ export function ReaderFontSizeControl({
       >
         <Plus size={14} strokeWidth={1.8} aria-hidden="true" />
       </button>
+      {onRefresh && (
+        <button
+          type="button"
+          className="zhiku-v2-reader-font-control__refresh"
+          data-refresh-status={refreshStatus}
+          onClick={onRefresh}
+          disabled={refreshStatus === 'loading'}
+          aria-label={refreshLabel}
+          aria-busy={refreshStatus === 'loading'}
+          title={refreshLabel}
+        >
+          <RefreshCw size={14} strokeWidth={1.7} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

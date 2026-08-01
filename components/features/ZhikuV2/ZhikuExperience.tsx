@@ -4,8 +4,16 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 智库系统设置 } from '@/models/settings';
 import { ZhikuPanel } from '@/components/features/GameSystems/ZhikuPanel';
+import { loadSetting, saveSetting } from '@/services/dbService';
+import {
+  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
+  buildPersistedZhikuSystem,
+  loadAllBundledZhikuPresets,
+  mergeBundledZhikuSystem,
+} from '@/data/zhikuPreset';
 import { ArchiveBrowser } from './ArchiveBrowser';
 import { buildZhikuProductionData } from './productionAdapter';
+import type { ReaderRefreshStatus } from './ReaderFontSizeControl';
 import { StoryArchiveReader } from './StoryArchiveReader';
 import { useZhikuReaderFontSize } from './readerFontSize';
 import {
@@ -16,6 +24,9 @@ import { ZhikuHeader } from './ZhikuHeader';
 import { ZhikuPageFrame } from './ZhikuPageFrame';
 import { ZhikuScreen } from './ZhikuScreen';
 import './zhiku-v2.css';
+
+const isDevBuild = typeof import.meta !== 'undefined'
+  && Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 interface ZhikuExperienceProps {
   zhikuSystem: 智库系统;
@@ -40,6 +51,7 @@ export function ZhikuExperience({
     initialCategoryId ?? null,
   );
   const [showMaintenance, setShowMaintenance] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState<ReaderRefreshStatus>('idle');
   const {
     fontSize: readerFontSize,
     decreaseFontSize: decreaseReaderFontSize,
@@ -76,6 +88,28 @@ export function ZhikuExperience({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, selectedCategoryId, showMaintenance]);
 
+  const handleRefreshBundled = async () => {
+    if (!isDevBuild || refreshStatus === 'loading') return;
+    setRefreshStatus('loading');
+    try {
+      const bundled = await loadAllBundledZhikuPresets({ cacheBust: Date.now() });
+      const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+      const migrationAt = savedMigrationAt ?? Date.now();
+      if (!savedMigrationAt) {
+        await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+      }
+      const next = mergeBundledZhikuSystem(bundled, zhikuSystem, migrationAt);
+      onZhikuSystemChange(next);
+      await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
+      setRefreshStatus('done');
+      window.setTimeout(() => setRefreshStatus('idle'), 1600);
+    } catch (error) {
+      console.warn('[zhiku-v3] refresh bundled presets failed:', error);
+      setRefreshStatus('error');
+      window.setTimeout(() => setRefreshStatus('idle'), 2400);
+    }
+  };
+
   if (showMaintenance) {
     return (
       <section
@@ -108,6 +142,8 @@ export function ZhikuExperience({
         readerFontSize={readerFontSize}
         onDecreaseReaderFontSize={decreaseReaderFontSize}
         onIncreaseReaderFontSize={increaseReaderFontSize}
+        onRefreshBundled={isDevBuild ? handleRefreshBundled : undefined}
+        refreshStatus={refreshStatus}
         reducedMotion={reducedMotion}
         onBack={() => setSelectedCategoryId(null)}
         onClose={onClose}
@@ -123,6 +159,8 @@ export function ZhikuExperience({
         readerFontSize={readerFontSize}
         onDecreaseReaderFontSize={decreaseReaderFontSize}
         onIncreaseReaderFontSize={increaseReaderFontSize}
+        onRefreshBundled={isDevBuild ? handleRefreshBundled : undefined}
+        refreshStatus={refreshStatus}
         reducedMotion={reducedMotion}
         onBack={() => setSelectedCategoryId(null)}
         onClose={onClose}

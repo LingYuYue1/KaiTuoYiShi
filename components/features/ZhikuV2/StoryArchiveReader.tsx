@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { ZHIKU_CATEGORY_POLICIES } from '@/models/zhikuGovernance';
 import { ReaderFontSizeControl } from './ReaderFontSizeControl';
+import type { ReaderRefreshStatus } from './ReaderFontSizeControl';
 import { buildZhikuReaderStyle, ZHIKU_READER_FONT_SIZE_DEFAULT } from './readerFontSize';
 import { ZHIKU_DESIGN_CATEGORIES } from './types';
 import { ZhikuPageFrame } from './ZhikuPageFrame';
@@ -43,6 +44,8 @@ interface StoryArchiveReaderProps {
   readerFontSize?: number;
   onDecreaseReaderFontSize?: () => void;
   onIncreaseReaderFontSize?: () => void;
+  onRefreshBundled?: () => void;
+  refreshStatus?: ReaderRefreshStatus;
   reducedMotion?: boolean;
   onBack?: () => void;
   onClose?: () => void;
@@ -80,6 +83,8 @@ export function StoryArchiveReader({
   readerFontSize = ZHIKU_READER_FONT_SIZE_DEFAULT,
   onDecreaseReaderFontSize,
   onIncreaseReaderFontSize,
+  onRefreshBundled,
+  refreshStatus,
   reducedMotion = false,
   onBack,
   onClose,
@@ -246,6 +251,8 @@ export function StoryArchiveReader({
               value={readerFontSize}
               onDecrease={onDecreaseReaderFontSize}
               onIncrease={onIncreaseReaderFontSize}
+              onRefresh={onRefreshBundled}
+              refreshStatus={refreshStatus}
             />
           )}
           <button
