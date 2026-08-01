@@ -5,8 +5,9 @@ import path from 'node:path';
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const manifest = JSON.parse(read('data/staticAssetManifest.json'));
+const avatarInventory = JSON.parse(read('public/assets/builtin-avatars/candidates/avatar-candidates.json'));
 
-const expected = {
+const preservedCanaries = {
   'avatar:caelus:01': {
     digest: '8c78f63569206d0de5abc9ff93aa0f85e5c8189a972947038bd5550471e05e61',
     bytes: 64636,
@@ -21,19 +22,42 @@ const expected = {
   },
 };
 
-assert.equal(manifest.schemaVersion, 1, 'static asset manifest schema must remain version 1');
-assert.equal(manifest.assetBaseUrl, 'https://lingkvault.cc.cd', 'canary must use the custom K-Vault domain');
-assert.deepEqual(Object.keys(manifest.assets).sort(), Object.keys(expected).sort(), 'only three canary avatars may be remote');
+const expectedLogicalIds = avatarInventory.characters.flatMap((character) => (
+  character.variants.map((variant) => {
+    const candidateId = path.basename(variant, '.png');
+    const match = /^(.+)-(\d+)$/.exec(candidateId);
+    assert.ok(match, `invalid avatar candidate id: ${candidateId}`);
+    return `avatar:${match[1]}:${match[2]}`;
+  })
+)).sort();
 
-for (const [logicalId, contract] of Object.entries(expected)) {
+assert.equal(manifest.schemaVersion, 1, 'static asset manifest schema must remain version 1');
+assert.equal(manifest.assetBaseUrl, 'https://lingkvault.cc.cd', 'avatars must use the custom K-Vault domain');
+assert.ok(!Number.isNaN(Date.parse(manifest.generatedAt)), 'stage 4 manifest must record its generation time');
+assert.equal(expectedLogicalIds.length, 33, 'avatar inventory must contain exactly 33 candidates');
+assert.deepEqual(Object.keys(manifest.assets).sort(), expectedLogicalIds, 'all 33 avatar candidates must be remote');
+
+const remotePaths = new Set();
+const remoteDigests = new Set();
+for (const logicalId of expectedLogicalIds) {
   const asset = manifest.assets[logicalId];
   assert.ok(asset, `missing manifest asset ${logicalId}`);
-  assert.equal(asset.sha256, contract.digest, `${logicalId} digest mismatch`);
-  assert.equal(asset.path, `/static/${contract.digest}.webp`, `${logicalId} must use a content-addressed WebP path`);
-  assert.equal(asset.bytes, contract.bytes, `${logicalId} byte length mismatch`);
+  assert.match(asset.sha256, /^[0-9a-f]{64}$/, `${logicalId} digest must be lowercase SHA-256`);
+  assert.equal(asset.path, `/static/${asset.sha256}.webp`, `${logicalId} must use a content-addressed WebP path`);
+  assert.ok(Number.isSafeInteger(asset.bytes) && asset.bytes > 0, `${logicalId} byte length must be positive`);
   assert.equal(asset.width, 768, `${logicalId} width mismatch`);
   assert.equal(asset.height, 768, `${logicalId} height mismatch`);
   assert.equal(asset.contentType, 'image/webp', `${logicalId} content type mismatch`);
+  assert.ok(!remotePaths.has(asset.path), `${logicalId} duplicates remote path ${asset.path}`);
+  assert.ok(!remoteDigests.has(asset.sha256), `${logicalId} duplicates digest ${asset.sha256}`);
+  remotePaths.add(asset.path);
+  remoteDigests.add(asset.sha256);
+}
+
+for (const [logicalId, contract] of Object.entries(preservedCanaries)) {
+  const asset = manifest.assets[logicalId];
+  assert.equal(asset.sha256, contract.digest, `${logicalId} canary digest must be reused`);
+  assert.equal(asset.bytes, contract.bytes, `${logicalId} canary byte length must be reused`);
 }
 
 const serializedManifest = JSON.stringify(manifest);
@@ -43,8 +67,8 @@ for (const forbidden of ['sourceKey', 'telegram', 'TG_', 'Bot_Token', 'api_token
 
 const candidateDir = path.join(root, 'public/assets/builtin-avatars/candidates');
 const localPngs = fs.readdirSync(candidateDir).filter((name) => name.endsWith('.png'));
-assert.equal(localPngs.length, 33, 'stage 3 must retain all 33 local PNG avatars');
-for (const logicalId of Object.keys(expected)) {
+assert.equal(localPngs.length, 33, 'stage 4 must retain all 33 local PNG avatars');
+for (const logicalId of expectedLogicalIds) {
   const [, owner, variant] = logicalId.split(':');
   assert.ok(fs.existsSync(path.join(candidateDir, `${owner}-${variant}.png`)), `${logicalId} local rollback source is missing`);
 }
@@ -56,7 +80,7 @@ assert.equal(placeholder.subarray(0, 4).toString('ascii'), 'RIFF', 'placeholder 
 assert.equal(placeholder.subarray(8, 12).toString('ascii'), 'WEBP', 'placeholder must be a WebP image');
 
 const resolver = read('utils/staticAssets.ts');
-for (const contract of Object.values(expected)) {
+for (const contract of Object.values(preservedCanaries)) {
   assert.ok(serializedManifest.includes(contract.digest), `resolver manifest must retain ${contract.digest}`);
 }
 assert.ok(resolver.includes("STATIC_ASSET_FALLBACK_AVATAR = '/assets/static-fallback/avatar-placeholder.webp'"), 'resolver must expose the local placeholder');
@@ -65,12 +89,14 @@ assert.ok(resolver.includes('entry.path.includes(entry.sha256)'), 'resolver must
 assert.ok(resolver.includes("url.origin === base.origin"), 'remote static URL detection must stay on the manifest origin');
 
 const builtin = read('data/builtinAvatars.ts');
-for (const id of ['caelus-01', 'bronya-02', 'asta-03']) {
+for (const logicalId of expectedLogicalIds) {
+  const [, owner, variant] = logicalId.split(':');
+  const id = `${owner}-${variant}`;
   assert.ok(builtin.includes(`src: avatarSource('${id}')`), `${id} must resolve through the static manifest`);
   assert.ok(builtin.includes(`reference: avatarReference('${id}')`), `${id} must preserve a logical mount reference`);
 }
-assert.ok(builtin.includes('isRemoteStaticAssetUrl(candidate.src)'), 'default surfaces must deliberately exercise migrated canary avatars');
-assert.ok(builtin.includes('candidates?.[0]?.src'), 'non-canary characters must retain their original local default');
+assert.ok(builtin.includes('isRemoteStaticAssetUrl(candidate.src)'), 'default surfaces must deliberately exercise migrated avatars');
+assert.ok(builtin.includes('candidates?.[0]?.src'), 'manifest lookup failures must retain the first candidate fallback');
 
 const resilientImage = read('components/ui/ResilientImage.tsx');
 assert.ok(resilientImage.includes('resolveStaticAssetReference(src) ?? src'), 'image component must resolve saved static references');
@@ -104,4 +130,4 @@ for (const file of resilientSurfaces) {
   assert.ok(source.includes('<ResilientImage'), `${file} must render the shared resilient image`);
 }
 
-console.log('Static avatar canary regression passed: 3 remote avatars, 33 local rollback PNGs, shared fallback coverage.');
+console.log('Static avatar regression passed: 33 remote avatars, 33 local rollback PNGs, shared fallback coverage.');

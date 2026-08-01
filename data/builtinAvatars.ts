@@ -43,89 +43,89 @@ export const BUILTIN_AVATAR_SETS: BuiltinAvatarSet[] = [
   {
     canonicalName: '三月七',
     candidates: [
-      { id: 'march7th-01', title: '三月七 01', src: `${BASE}/march7th-01.png` },
-      { id: 'march7th-02', title: '三月七 02', src: `${BASE}/march7th-02.png` },
-      { id: 'march7th-03', title: '三月七 03', src: `${BASE}/march7th-03.png` },
+      { id: 'march7th-01', title: '三月七 01', src: avatarSource('march7th-01'), reference: avatarReference('march7th-01') },
+      { id: 'march7th-02', title: '三月七 02', src: avatarSource('march7th-02'), reference: avatarReference('march7th-02') },
+      { id: 'march7th-03', title: '三月七 03', src: avatarSource('march7th-03'), reference: avatarReference('march7th-03') },
     ],
   },
   {
     canonicalName: '丹恒',
     candidates: [
-      { id: 'danheng-01', title: '丹恒 01', src: `${BASE}/danheng-01.png` },
-      { id: 'danheng-02', title: '丹恒 02', src: `${BASE}/danheng-02.png` },
-      { id: 'danheng-03', title: '丹恒 03', src: `${BASE}/danheng-03.png` },
+      { id: 'danheng-01', title: '丹恒 01', src: avatarSource('danheng-01'), reference: avatarReference('danheng-01') },
+      { id: 'danheng-02', title: '丹恒 02', src: avatarSource('danheng-02'), reference: avatarReference('danheng-02') },
+      { id: 'danheng-03', title: '丹恒 03', src: avatarSource('danheng-03'), reference: avatarReference('danheng-03') },
     ],
   },
   {
     canonicalName: '姬子',
     candidates: [
-      { id: 'himeko-01', title: '姬子 01', src: `${BASE}/himeko-01.png` },
-      { id: 'himeko-02', title: '姬子 02', src: `${BASE}/himeko-02.png` },
-      { id: 'himeko-03', title: '姬子 03', src: `${BASE}/himeko-03.png` },
+      { id: 'himeko-01', title: '姬子 01', src: avatarSource('himeko-01'), reference: avatarReference('himeko-01') },
+      { id: 'himeko-02', title: '姬子 02', src: avatarSource('himeko-02'), reference: avatarReference('himeko-02') },
+      { id: 'himeko-03', title: '姬子 03', src: avatarSource('himeko-03'), reference: avatarReference('himeko-03') },
     ],
   },
   {
     canonicalName: '瓦尔特',
     candidates: [
-      { id: 'welt-01', title: '瓦尔特 01', src: `${BASE}/welt-01.png` },
-      { id: 'welt-02', title: '瓦尔特 02', src: `${BASE}/welt-02.png` },
-      { id: 'welt-03', title: '瓦尔特 03', src: `${BASE}/welt-03.png` },
+      { id: 'welt-01', title: '瓦尔特 01', src: avatarSource('welt-01'), reference: avatarReference('welt-01') },
+      { id: 'welt-02', title: '瓦尔特 02', src: avatarSource('welt-02'), reference: avatarReference('welt-02') },
+      { id: 'welt-03', title: '瓦尔特 03', src: avatarSource('welt-03'), reference: avatarReference('welt-03') },
     ],
   },
   {
     canonicalName: '帕姆',
     candidates: [
-      { id: 'pom-pom-01', title: '帕姆 01', src: `${BASE}/pom-pom-01.png` },
-      { id: 'pom-pom-02', title: '帕姆 02', src: `${BASE}/pom-pom-02.png` },
-      { id: 'pom-pom-03', title: '帕姆 03', src: `${BASE}/pom-pom-03.png` },
+      { id: 'pom-pom-01', title: '帕姆 01', src: avatarSource('pom-pom-01'), reference: avatarReference('pom-pom-01') },
+      { id: 'pom-pom-02', title: '帕姆 02', src: avatarSource('pom-pom-02'), reference: avatarReference('pom-pom-02') },
+      { id: 'pom-pom-03', title: '帕姆 03', src: avatarSource('pom-pom-03'), reference: avatarReference('pom-pom-03') },
     ],
   },
   {
     canonicalName: '黑塔',
     candidates: [
-      { id: 'herta-01', title: '黑塔 01', src: `${BASE}/herta-01.png` },
-      { id: 'herta-02', title: '黑塔 02', src: `${BASE}/herta-02.png` },
-      { id: 'herta-03', title: '黑塔 03', src: `${BASE}/herta-03.png` },
+      { id: 'herta-01', title: '黑塔 01', src: avatarSource('herta-01'), reference: avatarReference('herta-01') },
+      { id: 'herta-02', title: '黑塔 02', src: avatarSource('herta-02'), reference: avatarReference('herta-02') },
+      { id: 'herta-03', title: '黑塔 03', src: avatarSource('herta-03'), reference: avatarReference('herta-03') },
     ],
   },
   {
     canonicalName: '艾丝妲',
     candidates: [
-      { id: 'asta-01', title: '艾丝妲 01', src: `${BASE}/asta-01.png` },
-      { id: 'asta-02', title: '艾丝妲 02', src: `${BASE}/asta-02.png` },
+      { id: 'asta-01', title: '艾丝妲 01', src: avatarSource('asta-01'), reference: avatarReference('asta-01') },
+      { id: 'asta-02', title: '艾丝妲 02', src: avatarSource('asta-02'), reference: avatarReference('asta-02') },
       { id: 'asta-03', title: '艾丝妲 03', src: avatarSource('asta-03'), reference: avatarReference('asta-03') },
     ],
   },
   {
     canonicalName: '阿兰',
     candidates: [
-      { id: 'arlan-01', title: '阿兰 01', src: `${BASE}/arlan-01.png` },
-      { id: 'arlan-02', title: '阿兰 02', src: `${BASE}/arlan-02.png` },
-      { id: 'arlan-03', title: '阿兰 03', src: `${BASE}/arlan-03.png` },
+      { id: 'arlan-01', title: '阿兰 01', src: avatarSource('arlan-01'), reference: avatarReference('arlan-01') },
+      { id: 'arlan-02', title: '阿兰 02', src: avatarSource('arlan-02'), reference: avatarReference('arlan-02') },
+      { id: 'arlan-03', title: '阿兰 03', src: avatarSource('arlan-03'), reference: avatarReference('arlan-03') },
     ],
   },
   {
     canonicalName: '星',
     candidates: [
-      { id: 'stelle-01', title: '星 01', src: `${BASE}/stelle-01.png` },
-      { id: 'stelle-02', title: '星 02', src: `${BASE}/stelle-02.png` },
-      { id: 'stelle-03', title: '星 03', src: `${BASE}/stelle-03.png` },
+      { id: 'stelle-01', title: '星 01', src: avatarSource('stelle-01'), reference: avatarReference('stelle-01') },
+      { id: 'stelle-02', title: '星 02', src: avatarSource('stelle-02'), reference: avatarReference('stelle-02') },
+      { id: 'stelle-03', title: '星 03', src: avatarSource('stelle-03'), reference: avatarReference('stelle-03') },
     ],
   },
   {
     canonicalName: '穹',
     candidates: [
       { id: 'caelus-01', title: '穹 01', src: avatarSource('caelus-01'), reference: avatarReference('caelus-01') },
-      { id: 'caelus-02', title: '穹 02', src: `${BASE}/caelus-02.png` },
-      { id: 'caelus-03', title: '穹 03', src: `${BASE}/caelus-03.png` },
+      { id: 'caelus-02', title: '穹 02', src: avatarSource('caelus-02'), reference: avatarReference('caelus-02') },
+      { id: 'caelus-03', title: '穹 03', src: avatarSource('caelus-03'), reference: avatarReference('caelus-03') },
     ],
   },
   {
     canonicalName: '布洛妮娅',
     candidates: [
-      { id: 'bronya-01', title: '布洛妮娅 01', src: `${BASE}/bronya-01.png` },
+      { id: 'bronya-01', title: '布洛妮娅 01', src: avatarSource('bronya-01'), reference: avatarReference('bronya-01') },
       { id: 'bronya-02', title: '布洛妮娅 02', src: avatarSource('bronya-02'), reference: avatarReference('bronya-02') },
-      { id: 'bronya-03', title: '布洛妮娅 03', src: `${BASE}/bronya-03.png` },
+      { id: 'bronya-03', title: '布洛妮娅 03', src: avatarSource('bronya-03'), reference: avatarReference('bronya-03') },
     ],
   },
 ];
