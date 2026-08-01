@@ -36,8 +36,11 @@ assert(
     panel.includes('sectionTabs.map') &&
     panel.includes('setActiveSection(item.key)') &&
     panel.includes('text-[12px] font-mono font-semibold') &&
-    panel.includes('lg:text-[13px]') &&
-    panel.includes("{ key: 'story', label: '故事', available: Boolean(story) }") &&
+    panel.includes('lg:text-[13px]'),
+  'New character profile workbench must stay vertically readable on mobile and only become a right-detail sub-workbench at lg+.',
+);
+assert(
+  panel.includes("{ key: 'story', label: '故事', available: Boolean(story) }") &&
     panel.includes("visibleSection === 'story'") &&
     panel.includes('角色档案工作台') &&
     panel.includes('基础身份层') &&
@@ -47,7 +50,8 @@ assert(
     panel.includes("{ label: '外貌', value: appearance || '未标注', missing: !appearance, wide: true }") &&
     panel.includes('md:col-span-2') &&
     panel.includes("{ label: '形态', value: get('形态', meta.形态 || '未标注'), missing: !get('形态') && !meta.形态 }") &&
-    panel.includes("{ label: '出身', value: get('出身', '未标注'), missing: !get('出身') }") &&
+    panel.includes("const structuredOrigin = (entry as 智库条目 & { 出身?: string }).出身;") &&
+    panel.includes("{ label: '出身', value: get('出身', structuredOrigin || '未知'), missing: !get('出身') && !structuredOrigin }") &&
     panel.includes('身份 / 职务') &&
     !panel.includes("{ label: '活动区域'") &&
     !panel.includes("{ label: '当前默认状态'") &&
@@ -63,7 +67,7 @@ assert(
     panel.includes('继承规则') &&
     panel.includes('记忆规则') &&
     panel.includes('提前启用边界'),
-  'New character profile workbench must stay vertically readable on mobile and only become a right-detail sub-workbench at lg+.',
+  'Character profile workbench must preserve its identity, story, keyword, and gate content contract.',
 );
 
 console.log('zhiku character mobile regression ok');

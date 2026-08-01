@@ -25,7 +25,7 @@ assert(dbService.includes("const SAVE_ASSETS_STORE = 'saveAssets'"), '必须定�
 assert(dbService.includes('db.createObjectStore(SAVE_ASSETS_STORE'), '升级流程必须创建 saveAssets 表。');
 assert(dbService.includes('extractSaveAssetRecords(data)'), '保存时必须抽取相册图片资源。');
 assert(dbService.includes('stripSaveAssetPayloadForStorage(data)'), '保存时必须剥离存档内相册图片 payload。');
-assert(dbService.includes('restoreSaveAssetPayloadFromRecords(saveForAssets, [...records, ...desktopRecords])'), '读档时必须从资源表还原图片 payload（合并 IndexedDB 与 desktop 镜像）。');
+assert(dbService.includes('restoreSaveAssetPayloadFromRecords(saveForAssets, records)'), '读档时必须只从 IndexedDB 资源表还原图片 payload。');
 assert(dbService.includes('saveHasEmbeddedAssetPayload(saveForAssets)'), '读到旧存档时必须检测内嵌图片 payload。');
 assert(dbService.includes('migrateLoadedSaveAssets(db, saveForAssets)'), '读到旧存档后必须惰性迁移图片资源，避免旧档一直巨大。');
 assert(dbService.includes('loadSaveAssetRecords(db, assetIds)'), '读档时必须按 assetId 批量读取资源表。');

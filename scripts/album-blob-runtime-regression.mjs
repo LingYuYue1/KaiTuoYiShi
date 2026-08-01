@@ -16,7 +16,6 @@ const albumArchive = fs.readFileSync('components/features/GameSystems/album/albu
 const workerClient = fs.readFileSync('components/features/GameSystems/album/albumArchiveWorkerClient.ts', 'utf8');
 const turnSnapshot = fs.readFileSync('hooks/useGame/turnSnapshot.ts', 'utf8');
 const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
-const desktopMirror = fs.readFileSync('services/desktop/desktopAssetMirror.ts', 'utf8');
 const imageGen = fs.readFileSync('services/ai/imageGeneration.ts', 'utf8');
 const savePackage = fs.readFileSync('services/savePackage.ts', 'utf8');
 
@@ -46,8 +45,7 @@ assert(workerClient.includes('materializeAssetForWorkerExport'), 'Worker 导出�
 assert(savePackage.includes('expandSaveAssetPayloadForExport'), '存档包导出必须展开 Blob 为 portable dataUrl。');
 assert(saveLoad.includes('materializeAlbumRuntimePayload(归一化相册系统(save.相册))'), '读档应用状态前必须物化相册 payload。');
 
-// Desktop mirror + API boundary
-assert(desktopMirror.includes('resolveRecordBase64Payload'), '桌面镜像必须支持 Blob→base64 写入。');
+// API boundary
 assert(imageGen.includes('referenceSrcToBase64'), '生图 API 边界必须按需把参考图转 base64。');
 
 console.log('[album-blob-runtime-regression] ok');

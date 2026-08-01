@@ -46,7 +46,7 @@ assert(!dbService.includes('getAutoSaveTreeRotationCandidates'), '不得继续�
 assert(dbService.includes('const candidates = selectSaveNodeRotationCandidates(all)'), '后台整理必须按单树、单类型选择超额节点。');
 assert(dbService.includes('await rotateManagedSavesSafely(db);'), '新节点主存储成功后必须执行安全轮转。');
 assert(dbService.includes("console.warn('[save-retention] post-save rotation failed'"), '轮转失败不得把已经成功保存的新节点报告为失败。');
-assert(dbService.includes('loadIndexedAndDesktopSaveSummaries'), '浏览器目录和桌面文件目录必须共同参与轮转候选计算。');
+assert(dbService.includes('const all = await readSaveSummaries(db)'), '轮转候选必须只读取 IndexedDB 摘要。');
 assert(dbService.includes('deleteManagedSaveItems'), '自动存档轮转和显式删除必须复用同一套 delta-base 安全删除逻辑。');
 assert(!dbService.includes('pruneManagedSavesBeforeWrite(db, \'backup\''), '系统不得继续自动创建和轮转读档前保护节点。');
 assert(dbService.includes('summaryStore.delete(id)'), '删除存档必须同步删除摘要。');

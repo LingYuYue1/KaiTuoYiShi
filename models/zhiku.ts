@@ -6,9 +6,9 @@ export type 智库辅助关键词逻辑 = 'AND_ANY' | 'AND_ALL' | 'NOT_ANY' | 'N
 export const ZHIKU_CHARACTER_INJECTION_FIELDS = [
   '核心身份与阵营',
   '独立人格与行为',
+  '外貌锚点',
   '说话方式',
   '台词语料',
-  '外貌锚点',
   '当前形态与能力边界',
   '精简角色故事',
   '演绎红线',
@@ -25,9 +25,9 @@ export interface 智库人物注入内容 {
   类型: 'character';
   核心身份与阵营: string;
   独立人格与行为: string;
+  外貌锚点: string;
   说话方式: string;
   台词语料: string;
-  外貌锚点: string;
   当前形态与能力边界: string;
   精简角色故事: string;
   演绎红线: string;

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -18,12 +19,17 @@ const story = read('stories/ZhikuArchiveBrowser.stories.tsx');
 const referenceStory = read('stories/ZhikuReferenceArchive.stories.tsx');
 const retrieval = read('services/zhikuRetrieval.ts');
 const plan = read('docs/superpowers/specs/2026-07-27-zhiku-v2-heavy-optimization-plan.md');
+const formattingModuleUrl = pathToFileURL(
+  path.join(root, 'components/features/ZhikuV2/archiveDocumentFormatting.ts'),
+).href;
+const { formatArchiveParagraphLine } = await import(formattingModuleUrl);
 
 requireText(browser, 'export function ArchiveBrowser', 'shared archive browser component');
 requireText(browser, 'items: ZhikuArchiveItem[]', 'flat archive item contract');
 requireText(browser, 'items = []', 'runtime-safe empty item fallback');
 requireText(browser, 'setSelectedItemId(item.id)', 'same-page item selection');
-requireText(browser, 'renderArchiveDocument(selectedItem.body)', 'same-page document rendering');
+requireText(browser, 'renderArchiveDocument(selectedInjectionVariant?.body || selectedItem.body)', 'same-page document rendering with multi-form preview');
+requireText(browser, '.map(formatArchiveParagraphLine)', 'voice corpus display formatting');
 requireText(browser, 'zhiku-v2-browser__catalog', 'left character catalog');
 requireText(browser, 'zhiku-v2-browser__detail', 'right archive detail');
 requireText(browser, 'category.id.toUpperCase()', 'category-specific archive kicker');
@@ -172,6 +178,18 @@ if (browser.includes('onSearch') || browser.includes('搜索智库') || header.i
 }
 if (browser.includes('ZhikuPanel') || story.includes('ZhikuPanel')) {
   throw new Error('Zhiku V2 secondary page must not reuse the legacy ZhikuPanel.');
+}
+
+const aglaeaGreeting = '### 初次见面 「远道而来的贵客，风儿顺着金丝捎来了你的讯息。我名阿格莱雅，奥赫玛的改衣师，翁法罗斯的黄金裔之一。愿我们坦诚相待。」';
+const formattedAglaeaGreeting = '初次见面 ：「远道而来的贵客，风儿顺着金丝捎来了你的讯息。我名阿格莱雅，奥赫玛的改衣师，翁法罗斯的黄金裔之一。愿我们坦诚相待。」';
+if (formatArchiveParagraphLine(aglaeaGreeting) !== formattedAglaeaGreeting) {
+  throw new Error('Aglaea greeting must display a colon between the corpus label and the official voice line.');
+}
+if (formatArchiveParagraphLine(formattedAglaeaGreeting) !== formattedAglaeaGreeting) {
+  throw new Error('Already formatted voice lines must remain stable.');
+}
+if (formatArchiveParagraphLine('她停下脚步 「请稍等。」') !== '她停下脚步 「请稍等。」') {
+  throw new Error('Narrative prose must not receive voice-corpus punctuation.');
 }
 
 console.log('ZHIKU_ARCHIVE_BROWSER_REGRESSION_OK');

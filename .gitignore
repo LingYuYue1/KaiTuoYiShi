@@ -9,9 +9,7 @@ dist/
 .tmp-*
 .tmp-regression/
 .tmp-story-weaving-regression/
-.desktop-release/
 .wrangler/
-src-tauri/target/
 backups/
 
 # Local environment

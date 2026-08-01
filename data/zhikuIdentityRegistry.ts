@@ -47,6 +47,7 @@ const RAW_IDENTITY_GROUPS: readonly RawIdentityGroup[] = [
   ]],
   ['zhiku_herta_station_character_rebuild', 'herta-station-character-rebuild.json', [
     ['JS-012', 'zhiku_character_rebuild_herta_profile', '黑塔'],
+    ['JS-012B', 'zhiku_character_rebuild_the_herta_profile', '大黑塔'],
     ['JS-013', 'zhiku_character_rebuild_asta_profile', '艾丝妲'],
     ['JS-014', 'zhiku_character_rebuild_arlan_profile', '阿兰'],
   ]],
@@ -153,7 +154,7 @@ const RAW_IDENTITY_GROUPS: readonly RawIdentityGroup[] = [
     ['JS-097', 'zhiku_character_expansion_gilgamesh_profile', '吉尔伽美什'],
   ]],
   ['zhiku_planarcadia_enemy_expansion', 'planarcadia-enemy-expansion.json', [
-    ['DS-000', 'zhiku_enemy_expansion_guiji_profile', '归寂'],
+    ['JS-098', 'zhiku_character_expansion_guiji_profile', '归寂'],
   ]],
   ['zhiku_location_core', 'location-core.json', [
     ['DD-000', 'zhiku_location_core_1', '主控舱段'],
