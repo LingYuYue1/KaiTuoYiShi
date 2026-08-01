@@ -36,6 +36,7 @@
     "test:reroll-snapshot": "node scripts/reroll-snapshot-isolation-regression.mjs",
     "test:save-isolation": "node scripts/save-isolation-regression.mjs",
     "test:save-package": "node scripts/save-package-regression.mjs",
+    "test:web-storage-contract": "node scripts/web-storage-contract-regression.mjs",
     "test:api-profile": "node scripts/api-profile-regression.mjs",
     "test:api-connection": "node scripts/gemini-connection-regression.mjs",
     "test:settings-nav-icons": "node scripts/settings-navigation-icons-regression.mjs",
