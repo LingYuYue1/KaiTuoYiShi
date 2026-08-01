@@ -28,12 +28,14 @@ const storageDeleteTreeBody = storageManager.match(/const handleDeleteTree = asy
 assert(normalizeSource('LF\nCRLF\r\nCR\r') === 'LF\nCRLF\nCR\n', 'source normalization must support LF, CRLF, and CR.');
 
 assert(dbService.includes('export async function deleteSaveTree(rootId: string)'), 'dbService must expose deleteSaveTree(rootId).');
-assert(dbService.includes('await ensureSaveSummaries(db, Infinity);'), 'deleteSaveTree must rebuild missing summaries before collecting tree nodes.');
-assert(dbService.includes('collectSaveTreeSummaries(db, trimmedRootId)'), 'deleteSaveTree must collect tree nodes through summaries.');
+assert(!dbService.includes('await ensureSaveSummaries(db, Infinity);'), 'deleteSaveTree must never rebuild the complete index before deletion.');
+assert(dbService.includes('catalogComplete'), 'deleteSaveTree must refuse whole-tree deletion while the lightweight catalog is incomplete.');
+assert(dbService.includes('collectSaveTreeSummaries(trimmedRootId)'), 'deleteSaveTree must collect tree nodes through summaries.');
 assert(dbService.includes('await deleteManagedSaveItems(db, candidates);'), 'deleteSaveTree must reuse managed save deletion cleanup.');
 assert(dbService.includes('item.saveTree?.rootId === rootId'), 'tree deletion must match explicit saveTree.rootId only.');
 
 assert(saveLoadWorkflow.includes('export function clearActiveSaveTreeMetaIfMatches'), 'saveLoadWorkflow must expose active save tree cleanup after deletion.');
+assert(!saveLoadWorkflow.includes('saveLoadBackupIfNeeded'), 'loading a save must not create an implicit backup node.');
 assert(saveLoadWorkflow.includes('activeSaveTreeMeta.rootId === target.rootId'), 'active tree cleanup must support root deletion.');
 assert(saveLoadWorkflow.includes('activeSaveTreeMeta.nodeId === target.nodeId'), 'active tree cleanup must support node deletion.');
 
@@ -56,6 +58,7 @@ assert(storageManager.includes('deleteSaveTree') && storageManager.includes('han
 assert(storageManager.includes('clearActiveSaveTreeMetaIfMatches'), 'StorageManager must clear stale active save tree metadata after deletion.');
 assert(storageManager.includes('onDeleteTree={handleDeleteTree}'), 'StorageManager must pass delete tree handler into StorageSaveTreeGroup.');
 assert(storageManager.includes('删除整树'), 'StorageManager must render delete tree action.');
+assert(dbService.includes('deleteLegacyBackupSaves'), 'dbService must expose explicit legacy recovery-point cleanup.');
 
 assert(saveModal.includes('const [deletingId, setDeletingId]') && saveModal.includes('const [deletingRootId, setDeletingRootId]'), 'SaveLoadModal must track deleting node/tree state.');
 assert(saveModal.includes('const visibleSaves = useMemo(') && saveModal.includes('save.id !== deletingId') && saveModal.includes('save.saveTree?.rootId !== deletingRootId'), 'SaveLoadModal must filter deleting items from display while async deletion is pending.');

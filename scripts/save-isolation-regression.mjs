@@ -33,7 +33,7 @@ assert(
 assert(!saveLoadSource.includes('save.智库 ?? state.智库'), '读档不得用当前运行态智库兜底。');
 assert(saveLoadSource.includes('state.setNPC(归一化NPC记录列表(save.NPC))'), '读档 NPC 必须来自目标存档或空列表兜底。');
 assert(saveLoadSource.includes('state.set新闻(归一化新闻列表(save.新闻))'), '读档新闻必须来自目标存档或空列表兜底。');
-assert(saveLoadSource.includes('state.setVariableBatches(save.variableBatches ?? [])'), '读档变量批次必须来自目标存档或空列表兜底。');
+assert(saveLoadSource.includes('state.setVariableBatches(compactVariableBatchHistory(save.variableBatches ?? []))'), '读档变量批次必须来自目标存档、空列表兜底并执行长期会话归一化。');
 assert(saveLoadSource.includes('state.setQueueTasks(save.queueTasks ?? [])'), '读档后台队列必须来自目标存档或空列表兜底。');
 assert(saveLoadSource.includes('normalizeSavedGameSettings(save.gameSettings)'), '读档必须允许旧存档缺失 gameSettings，并用默认游戏设置兜底。');
 assert(saveLoadSource.includes('if (!value || typeof value !== \'object\' || Array.isArray(value)) return defaults'), '旧存档 gameSettings 为空或异常时必须回落默认设置。');

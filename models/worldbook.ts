@@ -34,6 +34,9 @@ export interface 世界书条目 {
   enabled: boolean;
   /** 该条目允许注入的场景；空数组等价于 ['all']（迁移期兼容）。 */
   scope: 世界书作用域[];
+  /** 内置条目内容版本号。源码版本高于用户存档版本时,加载合并会强制刷新条目内容(仅保留用户 enabled)。
+   *  修复"内置世界书条目内容对老用户永不更新"的漂移缺陷(D12,2026-07-26)。自定义条目不使用。 */
+  contentVersion?: number;
   /** @deprecated 已迁移到 scope，仅旧存档读入时仍可能存在；normalize 后会被移除。 */
   turnGuard?: WorldbookTurnGuard;
   createdAt: number;

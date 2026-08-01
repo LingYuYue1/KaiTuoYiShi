@@ -1,12 +1,14 @@
 export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'opencode' | 'mimo' | 'ark' | 'openai_compatible';
 
 import type { 提示词模块 } from './prompts';
+import type { NovelAIAdvancedSettings } from './imageGeneration';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { 默认文生图规则中心, normalizeImageRules } from '@/utils/imagePromptRules';
 import type { 剧情编织API覆盖 } from './storyWeaving';
 import type { STWorldInfoEntry, STPresetEntry, STSamplingParams, STPresetEntryV2, TavernPostProcessMode } from './stTypes';
 import { resolveLegacyStarMapLocationId } from './starMap';
 import type { StarMapLocation, StarMapSceneAnchor, StarMapWaypoint } from './starMap';
+import { MEMORY_LAYER_COMPRESSION_THRESHOLD } from './memory';
 
 export interface API配置项 {
   id: string;
@@ -358,6 +360,8 @@ export interface 额外功能设置 {
 }
 
 export interface 记忆系统设置 {
+  /** 普通即时/短期/中期/长期压缩是否调用总结 API；关闭时严格使用本地摘要。 */
+  启用中短长期API总结: boolean;
   即时转短期阈值: number;
   短期转中期阈值: number;
   中期转长期阈值: number;
@@ -405,6 +409,8 @@ export interface 手机系统设置 {
 
 export interface 智库系统设置 {
   enabled: boolean;
+  /** AI 主动补充为独立可选能力；关闭时只执行正文关键词检索，不调用额外 API。 */
+  enableAiSupplement: boolean;
   api: 智库API覆盖;
   原著约束: 原著约束强度;
   maxRelatedEntries: number;
@@ -435,6 +441,32 @@ export type 文生图预设接口路径 =
   | 'comfyui_prompt';
 export type NovelAI采样器 = 'k_euler' | 'k_euler_ancestral' | 'k_dpmpp_2m' | 'k_dpmpp_2s_ancestral' | 'k_dpmpp_sde' | 'k_dpmpp_2m_sde';
 export type NovelAI噪点表 = 'native' | 'karras' | 'exponential' | 'polyexponential';
+export type NovelAI参数模式 = 'model_default' | 'custom';
+export type NovelAIUcPreset = 'recommended' | 'heavy' | 'light' | 'furry_focus' | 'human_focus' | 'none';
+
+export interface NovelAI高级设置 extends NovelAIAdvancedSettings {
+  activeRulePresetId: string;
+}
+
+export type NovelAI模型族 = 'v3' | 'v4' | 'v4.5' | 'all';
+
+export interface 文生图NAI规则预设 extends NovelAIAdvancedSettings {
+  id: string;
+  名称: string;
+  模型族: NovelAI模型族;
+  isBuiltin: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface 故事快照解析规则预设 {
+  id: string;
+  名称: string;
+  语义规则: string;
+  isBuiltin: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export interface 文生图API配置 {
   enabled: boolean;
@@ -458,9 +490,16 @@ export interface 文生图API配置 {
   comfyWorkflowJson: string;
   negativePrompt: string;
   retryCount: number;
+  novelAIUcPreset: NovelAIUcPreset;
+  novelAIParameterMode: NovelAI参数模式;
+  novelAIAdvanced: NovelAI高级设置;
 }
 
 export interface 文生图规则中心设置 {
+  NAI规则预设列表: 文生图NAI规则预设[];
+  当前NAI规则预设ID: string;
+  故事快照解析规则预设列表: 故事快照解析规则预设[];
+  当前故事快照解析规则预设ID: string;
   画师串预设列表: 文生图画师串预设[];
   当前NPC画师串预设ID: string;
   当前场景画师串预设ID: string;
@@ -671,6 +710,20 @@ export function 创建默认文生图API配置(): 文生图API配置 {
     comfyWorkflowJson: '',
     negativePrompt: '',
     retryCount: 2,
+    novelAIUcPreset: 'recommended',
+    novelAIParameterMode: 'model_default',
+    novelAIAdvanced: {
+      qualityMode: 'official',
+      qualityText: '',
+      ucMode: 'official',
+      ucText: '',
+      basePromptPrefix: '',
+      basePromptSuffix: '',
+      characterPromptPrefix: '',
+      characterPromptSuffix: '',
+      negativePromptAppend: '',
+      activeRulePresetId: '',
+    },
   };
 }
 
@@ -747,19 +800,28 @@ export function 创建默认正文生图设置(): 正文生图设置 {
 export function 归一化文生图API配置(input?: Partial<文生图API配置>): 文生图API配置 {
   const defaults = 创建默认文生图API配置();
   if (!input) return defaults;
+  const backend = input.backend ?? defaults.backend;
+  const steps = Math.max(1, Math.min(80, Math.trunc(Number(input.steps ?? defaults.steps) || defaults.steps)));
+  const cfgScale = Math.max(0, Math.min(30, Number(input.cfgScale ?? defaults.cfgScale) || defaults.cfgScale));
+  const inferredParameterMode: NovelAI参数模式 = backend === 'novelai' && (steps !== 28 || cfgScale !== 7)
+    ? 'custom'
+    : 'model_default';
+  const advancedInput = input.novelAIAdvanced;
+  const contentModes = new Set(['official', 'append', 'replace', 'off']);
+  const limitAdvancedString = (value: unknown, limit = 1600) => String(value ?? '').trim().slice(0, limit);
   return {
     ...defaults,
     ...input,
     enabled: input.enabled === true,
-    backend: input.backend ?? defaults.backend,
+    backend,
     responseFormat: input.responseFormat ?? defaults.responseFormat,
     defaultSize: String(input.defaultSize || defaults.defaultSize),
     defaultStyle: input.defaultStyle ?? defaults.defaultStyle,
     pathMode: input.pathMode === 'custom' ? 'custom' : 'preset',
     presetPath: input.presetPath ?? defaults.presetPath,
     customPath: String(input.customPath ?? defaults.customPath),
-    steps: Math.max(1, Math.min(80, Math.trunc(Number(input.steps ?? defaults.steps) || defaults.steps))),
-    cfgScale: Math.max(0, Math.min(30, Number(input.cfgScale ?? defaults.cfgScale) || defaults.cfgScale)),
+    steps,
+    cfgScale,
     seed: Number.isFinite(Number(input.seed)) ? Math.trunc(Number(input.seed)) : defaults.seed,
     sampler: input.sampler ?? defaults.sampler,
     noiseSchedule: input.noiseSchedule ?? defaults.noiseSchedule,
@@ -767,6 +829,28 @@ export function 归一化文生图API配置(input?: Partial<文生图API配置>)
     comfyWorkflowJson: String(input.comfyWorkflowJson ?? ''),
     negativePrompt: String(input.negativePrompt ?? ''),
     retryCount: Math.max(0, Math.trunc(Number(input.retryCount ?? defaults.retryCount) || 0)),
+    novelAIUcPreset: ['recommended', 'heavy', 'light', 'furry_focus', 'human_focus', 'none'].includes(String(input.novelAIUcPreset))
+      ? input.novelAIUcPreset as NovelAIUcPreset
+      : defaults.novelAIUcPreset,
+    novelAIParameterMode: input.novelAIParameterMode === 'custom' || input.novelAIParameterMode === 'model_default'
+      ? input.novelAIParameterMode
+      : inferredParameterMode,
+    novelAIAdvanced: {
+      qualityMode: contentModes.has(String(advancedInput?.qualityMode))
+        ? advancedInput!.qualityMode
+        : defaults.novelAIAdvanced.qualityMode,
+      qualityText: limitAdvancedString(advancedInput?.qualityText),
+      ucMode: contentModes.has(String(advancedInput?.ucMode))
+        ? advancedInput!.ucMode
+        : defaults.novelAIAdvanced.ucMode,
+      ucText: limitAdvancedString(advancedInput?.ucText),
+      basePromptPrefix: limitAdvancedString(advancedInput?.basePromptPrefix),
+      basePromptSuffix: limitAdvancedString(advancedInput?.basePromptSuffix),
+      characterPromptPrefix: limitAdvancedString(advancedInput?.characterPromptPrefix, 800),
+      characterPromptSuffix: limitAdvancedString(advancedInput?.characterPromptSuffix, 800),
+      negativePromptAppend: limitAdvancedString(advancedInput?.negativePromptAppend),
+      activeRulePresetId: limitAdvancedString(advancedInput?.activeRulePresetId, 120),
+    },
   };
 }
 
@@ -854,10 +938,11 @@ export function 归一化正文生图设置(input?: Partial<正文生图设置>)
 
 export function 创建默认记忆系统设置(): 记忆系统设置 {
   return {
-    即时转短期阈值: 25,
-    短期转中期阈值: 20,
-    中期转长期阈值: 10,
-    短期转长期阈值: 20,
+    启用中短长期API总结: true,
+    即时转短期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
+    短期转中期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
+    中期转长期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
+    短期转长期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
     NPC记忆压缩阈值: 15,
     记忆总结API: {
       provider: '',
@@ -955,6 +1040,7 @@ export function 创建默认手机系统设置(): 手机系统设置 {
 export function 创建默认智库系统设置(): 智库系统设置 {
   return {
     enabled: true,
+    enableAiSupplement: false,
     api: 创建空智库API覆盖(),
     原著约束: 'standard',
     maxRelatedEntries: 5,
@@ -1012,6 +1098,7 @@ export function 归一化智库系统设置(input?: Partial<智库系统设置>)
   return {
     ...defaults,
     ...input,
+    enableAiSupplement: input.enableAiSupplement === true,
     api: {
       ...defaults.api,
       ...(input.api ?? {}),
@@ -1053,20 +1140,32 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
   const defaults = 创建默认记忆系统设置();
   if (!input) return defaults;
   const oldShortToLongThreshold = Number(input.短期转长期阈值);
-  const shortToMiddleThreshold = Math.max(
+  const rawImmediateThreshold = Math.max(
+    1,
+    Math.trunc(Number(input.即时转短期阈值 ?? defaults.即时转短期阈值) || defaults.即时转短期阈值),
+  );
+  const rawShortToMiddleThreshold = Math.max(
     1,
     Math.trunc(Number(input.短期转中期阈值 ?? input.短期转长期阈值 ?? defaults.短期转中期阈值) || defaults.短期转中期阈值),
   );
-  const middleToLongThreshold = Math.max(
+  const rawMiddleToLongThreshold = Math.max(
     1,
     Math.trunc(Number(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值),
   );
+  const usesPreviousLayerDefaults = rawImmediateThreshold === 25
+    && rawShortToMiddleThreshold === 20
+    && rawMiddleToLongThreshold === 10;
+  const immediateThreshold = usesPreviousLayerDefaults ? MEMORY_LAYER_COMPRESSION_THRESHOLD : rawImmediateThreshold;
+  const shortToMiddleThreshold = usesPreviousLayerDefaults ? MEMORY_LAYER_COMPRESSION_THRESHOLD : rawShortToMiddleThreshold;
+  const middleToLongThreshold = usesPreviousLayerDefaults ? MEMORY_LAYER_COMPRESSION_THRESHOLD : rawMiddleToLongThreshold;
   const shortToMiddlePrompt = input.短期转中期提示词 ?? defaults.短期转中期提示词;
   const middleToLongPrompt = input.中期转长期提示词 ?? input.短期转长期提示词 ?? defaults.中期转长期提示词;
 
   const merged: 记忆系统设置 = {
     ...defaults,
     ...input,
+    启用中短长期API总结: input.启用中短长期API总结 !== false,
+    即时转短期阈值: immediateThreshold,
     短期转中期阈值: shortToMiddleThreshold,
     中期转长期阈值: middleToLongThreshold,
     短期转长期阈值: shortToMiddleThreshold,
@@ -1107,6 +1206,7 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
   if (使用旧版默认提示词) {
     return {
       ...defaults,
+      启用中短长期API总结: merged.启用中短长期API总结,
       即时转短期阈值: input.即时转短期阈值 === 10 ? defaults.即时转短期阈值 : merged.即时转短期阈值,
       短期转中期阈值: oldShortToLongThreshold === 10 ? defaults.短期转中期阈值 : merged.短期转中期阈值,
       中期转长期阈值: merged.中期转长期阈值,

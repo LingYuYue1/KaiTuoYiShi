@@ -106,6 +106,13 @@ export function revokeAlbumAssets(assetIds: Iterable<string>): void {
   for (const id of assetIds) revokeAlbumAsset(id);
 }
 
+export function pruneAlbumAssetCache(retainedAssetIds: Iterable<string>): void {
+  const retained = new Set(Array.from(retainedAssetIds, (id) => id.trim()).filter(Boolean));
+  for (const id of assetCache.keys()) {
+    if (!retained.has(id)) revokeAlbumAsset(id);
+  }
+}
+
 /** Test / full teardown helper. */
 export function clearAlbumAssetObjectUrlCache(): void {
   for (const entry of assetCache.values()) {
@@ -114,12 +121,14 @@ export function clearAlbumAssetObjectUrlCache(): void {
   assetCache.clear();
 }
 
-export function getAlbumAssetCacheStats(): { size: number; objectUrls: number } {
+export function getAlbumAssetCacheStats(): { size: number; objectUrls: number; totalBytes: number } {
   let objectUrls = 0;
+  let totalBytes = 0;
   for (const entry of assetCache.values()) {
     if (entry.objectUrl) objectUrls += 1;
+    totalBytes += entry.blob.size;
   }
-  return { size: assetCache.size, objectUrls };
+  return { size: assetCache.size, objectUrls, totalBytes };
 }
 
 /**

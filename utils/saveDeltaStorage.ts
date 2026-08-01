@@ -210,7 +210,7 @@ function buildDeltaPayload(save: 存档数据, baseSave: 存档数据, baseSaveI
   const fields: SaveNodeDeltaPayload['fields'] = {};
   for (const key of DELTA_FIELDS) {
     if (key === 'apiSettings') continue;
-    if (!jsonEqual(save[key], baseSave[key])) {
+    if (!jsonCompatibleEqual(save[key], baseSave[key])) {
       fields[key] = save[key] as never;
     }
   }
@@ -305,11 +305,38 @@ function hashSaveCheckpoint(save: 存档数据): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-function jsonEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  try {
-    return JSON.stringify(a) === JSON.stringify(b);
-  } catch {
-    return false;
+function jsonCompatibleEqual(
+  left: unknown,
+  right: unknown,
+  seen = new WeakMap<object, WeakSet<object>>(),
+): boolean {
+  if (Object.is(left, right)) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+
+  const leftObject = left as object;
+  const rightObject = right as object;
+  const paired = seen.get(leftObject);
+  if (paired?.has(rightObject)) return true;
+  if (paired) paired.add(rightObject);
+  else seen.set(leftObject, new WeakSet([rightObject]));
+
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (!jsonCompatibleEqual(left[index], right[index], seen)) return false;
+    }
+    return true;
   }
+
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (const key of leftKeys) {
+    if (!Object.prototype.hasOwnProperty.call(rightRecord, key)) return false;
+    if (!jsonCompatibleEqual(leftRecord[key], rightRecord[key], seen)) return false;
+  }
+  return true;
 }

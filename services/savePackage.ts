@@ -145,7 +145,12 @@ export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob>
 }
 
 export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
-  const sanitized = JSON.parse(JSON.stringify(compactDuplicatedSaveImages(save))) as 存档数据;
+  const sanitized = JSON.parse(JSON.stringify(compactDuplicatedSaveImages(save))) as 存档数据 & {
+    saveRuntime?: unknown;
+    debugContext?: unknown;
+  };
+  delete sanitized.saveRuntime;
+  delete sanitized.debugContext;
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
   stripEmbeddedApiSettings(sanitized);
   return sanitized;

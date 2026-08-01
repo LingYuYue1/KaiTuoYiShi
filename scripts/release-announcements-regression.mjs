@@ -18,7 +18,7 @@ assert(
   'Update announcement button must sit next to the GitHub cloud save entry.',
 );
 assert(
-  landing.includes('开拓轶事 v1.1'),
+  landing.includes('开拓轶事 v1.2.2'),
   'Landing page must show the current version.',
 );
 assert(
@@ -40,6 +40,25 @@ assert(
 assert(
   !modal.includes('CHANGELOG') && !data.includes('CHANGELOG'),
   'In-game announcements must not read CHANGELOG.md directly.',
+);
+assert(
+  data.includes("version: 'v1.2.2'") &&
+    data.indexOf("version: 'v1.2.2'") < data.indexOf("version: 'v1.2.1'") &&
+    data.includes('失败草稿') &&
+    data.includes('批量记忆重建') &&
+    data.includes('NovelAI') &&
+    data.includes('阿格莱雅') &&
+    data.includes('星期日'),
+  'Release announcement data must include the current v1.2.2 stability, NAI, and Zhiku notice.',
+);
+assert(
+  data.includes("version: 'v1.2'") &&
+    data.indexOf("version: 'v1.2'") < data.indexOf("version: 'v1.1'") &&
+    data.includes('完整云备份') &&
+    data.includes('合并去重') &&
+    data.includes('每棵存档树') &&
+    data.includes('本版本不包含地图分支内容'),
+  'Release announcement data must include the current v1.2 save stability notice.',
 );
 assert(
   data.includes("version: 'v1.0'") &&

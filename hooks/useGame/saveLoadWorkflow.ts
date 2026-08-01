@@ -39,9 +39,10 @@ import { 归一化剧情节点列表 } from '@/models/plot';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
-import { materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
+import { materializeAlbumRuntimePayload, pruneAlbumAssetCache } from '@/utils/albumObjectUrl';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
+import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
@@ -67,8 +68,8 @@ export function buildSavePayload(
   type: 存档类型,
   overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
 ): 存档数据 {
-  const persistedChatHistory = compactOldChatMessages(
-    stripRuntimeOnlyFieldsFromChatHistory(overrides?.chatHistory ?? state.chatHistory),
+  const persistedChatHistory = compactChatHistoryForLongSession(
+    overrides?.chatHistory ?? state.chatHistory,
   );
   const timestamp = Date.now();
   const baseSave = {
@@ -88,7 +89,7 @@ export function buildSavePayload(
     新闻: overrides?.新闻 ?? state.新闻,
     剧情: overrides?.剧情 ?? state.剧情,
     剧情编织: 归一化剧情编织系统(overrides?.剧情编织 ?? state.剧情编织),
-    variableBatches: overrides?.variableBatches ?? state.variableBatches,
+    variableBatches: compactVariableBatchHistory(overrides?.variableBatches ?? state.variableBatches),
     queueTasks: overrides?.queueTasks ?? state.queueTasks,
     gameSettings: buildSaveGameSettingsSnapshot({
       ...state.gameSettings,
@@ -113,63 +114,11 @@ export function buildSavePayload(
     type,
     timestamp,
   }));
-  activeSaveTreeMeta = getSaveTreeMeta(withTree);
   return compactDuplicatedSaveImages(withTree);
 }
 
-function stripRuntimeOnlyFieldsFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
-  if (!Array.isArray(chatHistory)) return [];
-  return chatHistory.map((message) => {
-    const clean = { ...message } as typeof message & {
-      debugContext?: unknown;
-    };
-    delete clean.debugContext;
-    return clean;
-  });
-}
-
-/**
- * 存档瘦身：最近 N 轮完整保留，更早的 assistant 消息只保留正文。
- * 不影响 user 消息、不影响聊天显示、不影响重 Roll。
- *
- * 「轮」= 一对 user + assistant 消息（2 条）。
- * 默认保留最近 5 轮（10 条消息）。
- */
-function compactOldChatMessages(chatHistory: 聊天消息[], keepRounds = 5): 聊天消息[] {
-  const keepCount = keepRounds * 2; // user + assistant per round
-  const cutoff = Math.max(0, chatHistory.length - keepCount);
-
-  return chatHistory.map((msg, i) => {
-    // 最近的消息完整保留
-    if (i >= cutoff) return msg;
-    // user 消息本来就没有 parsedResponse，不动
-    if (msg.role !== 'assistant' || !msg.parsedResponse) return msg;
-
-    // 早期 assistant 消息：只保留 body（正文），其余字段清空以节省存储
-    return {
-      ...msg,
-      parsedResponse: {
-        ...msg.parsedResponse,
-        rawText: '',
-        thinking: '',
-        memory: '',
-        commands: {},
-        worldEvents: [],
-        actionOptions: [],
-        variableDraft: '',
-        storyPlan: '',
-        awakenInvite: '',
-        awakenQuestions: '',
-        awakenJudgement: '',
-        awakenPathId: '',
-      },
-      // 这些调试/统计字段在大回合数下也很可观，早期消息不需要
-      inputTokens: undefined,
-      outputTokens: undefined,
-      tokenUsage: undefined,
-      responseDurationSec: undefined,
-    };
-  });
+export function commitActiveSaveTreeMeta(save: 存档数据): void {
+  activeSaveTreeMeta = getSaveTreeMeta(save);
 }
 
 function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
@@ -282,7 +231,6 @@ export async function handleLoadLatest(
 ): Promise<boolean> {
   const save = await loadLatestSave();
   if (!save) return false;
-  await saveLoadBackupIfNeeded(state);
   await applySaveToState(save, state);
   return true;
 }
@@ -293,13 +241,15 @@ export async function handleLoadById(
 ): Promise<boolean> {
   const save = await loadSave(id);
   if (!save) return false;
-  await saveLoadBackupIfNeeded(state);
   await applySaveToState(save, state);
   return true;
 }
 
-export function handleManualSave(state: UseGameStateReturn): Promise<number> {
-  return saveGame(buildSavePayload(state, 'manual'));
+export async function handleManualSave(state: UseGameStateReturn): Promise<number> {
+  const payload = buildSavePayload(state, 'manual');
+  const id = await saveGame(payload);
+  commitActiveSaveTreeMeta(payload);
+  return id;
 }
 
 export async function handleDeleteSave(id: number): Promise<void> {
@@ -308,27 +258,12 @@ export async function handleDeleteSave(id: number): Promise<void> {
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
 }
 
-async function saveLoadBackupIfNeeded(state: UseGameStateReturn): Promise<void> {
-  const hasProgress =
-    state.chatHistory.length > 0 ||
-    state.turnCount > 1 ||
-    Boolean(state.旅人.姓名?.trim()) ||
-    Boolean(state.世界.当前地点?.trim());
-  if (!hasProgress) return;
-  try {
-    await saveGame(buildSavePayload(state, 'backup'));
-    state.setHasSave(true);
-  } catch (error) {
-    console.warn('[save-load] backup before loading failed; continue loading selected save', error);
-  }
-}
-
 async function applySaveToState(
   save: 存档数据,
   state: UseGameStateReturn,
 ): Promise<void> {
   activeSaveTreeMeta = getSaveTreeMeta(save);
-  const safeChatHistory = normalizeSaveChatHistory(save.chatHistory);
+  const safeChatHistory = compactChatHistoryForLongSession(normalizeSaveChatHistory(save.chatHistory));
   const safeWorld = 归一化世界状态(save.世界);
   const safeTraveler = normalizeSavedTraveler(save.旅人, safeWorld.当前日期);
   const safeGameSettings = normalizeSavedGameSettings(save.gameSettings);
@@ -363,7 +298,9 @@ async function applySaveToState(
   await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));
   state.setNPC(归一化NPC记录列表(save.NPC));   // 旧存档/AI 半成品对象统一兜底
-  state.set相册(materializeAlbumRuntimePayload(归一化相册系统(save.相册)));
+  const nextAlbum = materializeAlbumRuntimePayload(归一化相册系统(save.相册));
+  state.set相册(nextAlbum);
+  pruneAlbumAssetCache(nextAlbum.assets.map((asset) => asset.id));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(归一化剧情节点列表(save.剧情)); // 旧存档与 AI 半成品对象统一兜底
   const normalizedStoryWeaving = alignStoryWeavingToOpeningArchive(
@@ -382,7 +319,7 @@ async function applySaveToState(
   const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
   await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
-  state.setVariableBatches(save.variableBatches ?? []); // 旧存档没有该字段，兜底空数组
+  state.setVariableBatches(compactVariableBatchHistory(save.variableBatches ?? []));
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。
   // API 配置属于本机设置，不跟随存档读取；否则旧档/导入档会把当前可用 API 覆盖成空值。

@@ -152,13 +152,16 @@ assert(renderers.includes('normalizeInlineSpeakerTags'), '渲染层必须复用�
 assert(!renderers.includes('该行未识别为 【旁白】/【角色名】/【心声】 任一格式'), '无前缀正文应按普通旁白显示，不应在玩家界面用暗色警告。');
 assert(!renderers.includes('dimmed'), '无前缀正文渲染不得继续使用 dimmed 旁白色差。');
 assert(chatList.includes('previousUserInput'), 'ChatList 必须把 AI 回复对应的上一条玩家输入传给渲染层。');
-assert(systemPromptBuilder.includes('buildSpeakerAttributionSection(traveler)'), '发言归属硬约束必须读取当前角色并注入真实玩家名。');
-assert(systemPromptBuilder.includes('const playerTag = `【${playerName}】`;'), '发言归属硬约束必须构造真实玩家名标签。');
-assert(!systemPromptBuilder.includes('【玩家角色名】'), '发言归属硬约束不得继续暴露输出形状的玩家角色名占位。');
-assert(systemPromptBuilder.includes('不要生成任何包含“玩家角色名”的发言标签'), '发言归属硬约束必须禁止玩家角色名占位泄漏。');
-assert(systemPromptBuilder.includes('${playerTag} 只允许承载玩家本回合输入中明确说出口的原话'), '发言归属硬约束必须把玩家原话绑定到真实玩家名标签。');
-assert(systemPromptBuilder.includes('不要写成【旁白】你说'), '发言归属硬约束必须明确禁止旁白吞掉玩家原话。');
-assert(systemPromptBuilder.includes('动作写进【旁白】，原话单独写成 ${playerTag}'), '发言归属硬约束必须明确动作与原话拆分。');
+// 结构轮(D1, 2026-07-26): 硬编码发言归属段已删除——唯一权威在「回复格式」模块行格式段,
+// 生成点兜底在 sendWorkflow 区E执法块。以下断言守卫新形态:
+assert(!systemPromptBuilder.includes('buildSpeakerAttributionSection'), '硬编码发言归属段必须保持已删除状态(权威在回复格式模块)。');
+assert(!systemPromptBuilder.includes('【玩家角色名】'), 'systemPromptBuilder 不得暴露输出形状的玩家角色名占位。');
+assert(builtinPromptModules.includes('禁止把说明词“玩家角色名”当成角色标签输出'), '回复格式模块必须禁止玩家角色名占位泄漏。');
+assert(builtinPromptModules.includes('若玩家本回合明确输入了亲口对白、问句、短促回应或自我介绍，必须用【{playerName}】原话内容'), '回复格式模块必须把玩家原话绑定到真实玩家名标签。');
+assert(builtinPromptModules.includes('不要写成【旁白】"玩家原话"'), '回复格式模块必须明确禁止旁白吞掉玩家原话。');
+assert(builtinPromptModules.includes('动作写进【旁白】，原话单独写成【{playerName}】行'), '回复格式模块必须明确动作与原话拆分。');
+assert(sendWorkflow.includes('# 本回合生成前核对'), 'sendWorkflow 必须在生成点前注入区E执法块。');
+assert(sendWorkflow.includes('只承载玩家本回合明确说出的原话'), '区E执法块必须包含发言归属兜底行。');
 assert(!systemPromptBuilder.includes('.replace(/玩家姓名/g'), '提示词模块注入不能把说明性“玩家姓名”替换成真实玩家名。');
 assert(!systemPromptBuilder.includes('.replace(/主角姓名/g'), '提示词模块注入不能把说明性“主角姓名”替换成真实玩家名。');
 assert(!worldbookUtils.includes('.replace(/玩家姓名/g'), '世界书占位替换不能把说明性“玩家姓名”替换成真实玩家名。');

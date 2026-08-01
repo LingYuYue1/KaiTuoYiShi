@@ -9,7 +9,7 @@ import { 创建空记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
-import { 创建空智库系统, 归一化智库系统 } from '@/models/zhiku';
+import { 创建空智库系统 } from '@/models/zhiku';
 import type { 手机系统 } from '@/models/phone';
 import { 创建空手机系统, 归一化手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
@@ -54,6 +54,7 @@ import {
   mergeBundledZhikuSystem,
   removeLegacyZhikuCharacterEntries,
   removeRetiredZhikuEntries,
+  升级自制智库系统,
 } from '@/data/zhikuPreset';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
@@ -68,6 +69,11 @@ const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
   'builtin_locations',
   'opening_core',
+  // 批次5(D10, 2026-07-26): 四本规则书整体迁移为提示词模块 builtin_rule_* 系列,清理旧存档残留
+  'builtin_opening_rule',
+  'builtin_narrative_general',
+  'builtin_forbidden_phrases',
+  'builtin_power_system_overview',
 ]);
 
 function isCalibrationWorldbook(book: 世界书): boolean {
@@ -373,7 +379,7 @@ export function useGameState(): UseGameStateReturn {
           if (!savedMigrationAt) {
             await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
           }
-          set智库(归一化智库系统({
+          set智库(升级自制智库系统({
             条目: removeLegacyZhikuCharacterEntries(
               removeRetiredZhikuEntries(savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))),
               migrationAt,
@@ -425,7 +431,13 @@ export function useGameState(): UseGameStateReturn {
           const savedEntries = saved.entries || [];
           const entries = builtin.entries.map((entry) => {
             const savedEntry = savedEntries.find((item) => item.id === entry.id);
-            return savedEntry ? { ...savedEntry, title: entry.title } : entry;
+            if (!savedEntry) return entry;
+            // D12(2026-07-26): 源码条目声明了更高 contentVersion 时强制刷新内容,只保留用户开关。
+            // 修复"内置世界书条目内容对老用户永不更新"的漂移缺陷。
+            if ((entry.contentVersion ?? 0) > (savedEntry.contentVersion ?? 0)) {
+              return { ...entry, enabled: savedEntry.enabled };
+            }
+            return { ...savedEntry, title: entry.title };
           });
           return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
         });

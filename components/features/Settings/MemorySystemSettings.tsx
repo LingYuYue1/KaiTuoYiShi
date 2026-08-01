@@ -28,6 +28,8 @@ const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px
 
 export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Props) {
   const memory = settings.记忆系统 ?? 创建默认记忆系统设置();
+  // 该字段由记忆系统模型统一迁移；这里保留对旧存档的兼容读取。
+  const apiSummaryEnabled = (memory as typeof memory & { 启用中短长期API总结?: boolean }).启用中短长期API总结 !== false;
   const mainConfig = useMemo(
     () => apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null,
     [apiSettings.activeConfigId, apiSettings.configs],
@@ -154,10 +156,22 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
       <Section title="系统开关">
         <ToggleField
           label="启用记忆注入"
-          desc="开启后，主剧情生成前会注入短期 / 中期 / 长期记忆；即时记忆只作为内部缓存和压缩入口。关闭后仍保留记忆入库和压缩，方便之后重新开启。"
+          desc="开启后，主剧情生成前会注入短期 / 中期 / 长期记忆；即时记忆只作为内部缓存和压缩入口。关闭后仍保留记忆入库和压缩。若下方 API 总结仍开启，达到阈值时仍会消耗 API 调用次数。"
           checked={settings.enableMemoryInjection}
           onChange={(checked) => onChange({ ...settings, enableMemoryInjection: checked })}
         />
+        <div className="mt-2">
+          <ToggleField
+            label="启用中短长期 API 总结"
+            desc="开启后，达到压缩阈值时调用记忆总结 API，生成质量更高的短期、中期和长期摘要。关闭后完全不调用记忆总结 API，改用本地摘要继续整理，不产生 API 调用次数。"
+            checked={apiSummaryEnabled}
+            onChange={(checked) =>
+              patchMemory({
+                启用中短长期API总结: checked,
+              } as Partial<typeof memory>)
+            }
+          />
+        </div>
       </Section>
 
       <Section title="记忆总结 API">

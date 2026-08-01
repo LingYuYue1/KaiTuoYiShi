@@ -145,6 +145,15 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
         />
       </Field>
 
+      <Field label="检索方式">
+        <ToggleRow
+          label="AI 主动补充"
+          desc="默认关闭。关闭时只按正文关键词检索，不会额外调用 API；开启后 AI 只补充关键词漏项。"
+          checked={zhiku.enableAiSupplement === true}
+          onChange={(v) => patch({ enableAiSupplement: v })}
+        />
+      </Field>
+
       <div className="grid gap-3 md:grid-cols-3">
         {constraintOptions.map((opt) => (
           <button
@@ -185,7 +194,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
             style={{ clipPath: smallClip }}
           />
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-            仅控制关键词召回的非角色资料上限；角色档案关键词上限固定 15 条，AI 另可补充最多 8 条。
+            仅控制关键词召回的非角色资料上限；角色档案关键词上限固定 15 条。开启 AI 主动补充后，AI 另可补充最多 8 条。
           </p>
         </Field>
 

@@ -22,8 +22,8 @@ assert(source.includes('const preTurnSnapshot = compactPreTurnSnapshot({'), 'sen
 assert(!source.includes('cloneForSnapshot(state.相册)'), 'sendWorkflow 不得在压缩前完整深拷贝相册图片。');
 assert(compactorSource.includes('new WeakMap<object, unknown>()'), '快照压缩必须使用 WeakMap 隔离重复对象引用。');
 assert(compactorSource.includes('const compacted = compactDataImages({'), '快照必须对整个初步状态递归移除大型运行数据。');
-assert(compactorSource.includes("typeof structuredClone === 'function'"), '轻量快照必须优先使用 structuredClone 深拷贝。');
-assert(compactorSource.includes('return cloneCompactedSnapshot(compacted);'), '快照必须在压缩完成后深拷贝，避免运行状态引用污染。');
+assert(!compactorSource.includes('structuredClone'), '快照压缩不得在递归独立复制后再次深拷贝。');
+assert(compactorSource.includes('return compacted;'), '快照压缩必须直接返回一次性独立复制结果。');
 assert(!source.includes('state.setPendingVariable(false);\n\n      const npcSource'), '变量模型结束后不得提前解除后台结算锁。');
 assert(source.includes('const assertWorkflowActive = () =>'), '后台结算阶段必须有当前工作流闸门。');
 assert(source.includes('assertWorkflowActive();\n    mem = compression.memory'), '记忆压缩 await 后必须检查当前工作流，避免旧记忆写回。');

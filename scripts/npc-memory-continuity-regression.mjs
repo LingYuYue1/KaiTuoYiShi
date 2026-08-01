@@ -15,7 +15,8 @@ const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.t
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const inputArea = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
-const storyProgressNpcMemoryFunction = sendWorkflow.match(/function applyStoryProgressNpcMemory[\s\S]*?\n}\n\nfunction formatZhikuDiagnosticsPreview/)?.[0] ?? '';
+// CRLF 环境下 \n}\n\n 匹配不到，先归一化行尾再提取
+const storyProgressNpcMemoryFunction = sendWorkflow.replace(/\r\n/g, '\n').match(/function applyStoryProgressNpcMemory[\s\S]*?\n}\n\nfunction formatZhikuDiagnosticsPreview/)?.[0] ?? '';
 
 assert(builder.includes('function buildNpcContinuitySection'), '主剧情 prompt 必须构建 NPC 连续性核对表。');
 assert(builder.includes('# 本回合人物关系连续性核对'), 'NPC 连续性核对表必须有可定位标题。');

@@ -7,7 +7,7 @@ import { buildPhoneMessages, buildPhoneSystemPrompt, buildPhonePromptModulesSect
 import { buildVariableModelPrompt } from '@/services/ai/variableModel';
 import { NPC_MEMORY_WRITE_RULE_PROMPT } from '@/data/variableWorldbook';
 import { retrieveYitingContext, buildYitingRecallSystemPrompt } from '@/services/yitingRetrieval';
-import { buildZhikuModelSystemPrompt, buildZhikuModelUserPrompt, retrieveZhikuContext } from '@/services/zhikuRetrieval';
+import { buildZhikuAiRequestForTurn, buildZhikuModelSystemPrompt, buildZhikuModelUserPrompt, retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { buildNpcRelationshipPlanning } from '@/services/npcRelationshipPlanning';
@@ -104,7 +104,7 @@ function latestAssistantZhikuDebugRecall(history: 聊天消息[]): string {
   return [
     debug.zhikuRecallUsedModel
       ? `智库模型原始返回：\n${debug.zhikuRecallRawText?.trim() || '（智库模型已调用，但没有保存到原始返回文本。）'}`
-      : '智库模型原始返回：\n（本回合未调用智库模型，使用本地规则召回；本地规则不会执行 Step0~Step8 模型思维链。）',
+      : '智库模型原始返回：\n（本回合只使用本地关键词召回，没有运行 AI 召回编译器。）',
     '',
     debug.zhikuRecallPreview?.trim() || '智库召回诊断：无',
   ].join('\n').trim();
@@ -1019,6 +1019,13 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     userInput: sourceInput,
   });
   const immediateStoryReview = buildImmediateStoryReview(state.chatHistory);
+  const latestStoryPlan = [...state.chatHistory]
+    .reverse()
+    .find((message) => message.role === 'assistant' && message.parsedResponse?.storyPlan?.trim())
+    ?.parsedResponse?.storyPlan?.trim();
+  const storyWeavingForZhiku = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
+    ? getStoryWeavingInjectionDiagnostics(state.剧情编织)
+    : null;
   const sceneContext = {
     startScenarioId: undefined,
     startSceneName: undefined,
@@ -1030,6 +1037,12 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       currentLocation: state.世界.当前地点,
       presentNpcNames: presentZhikuNpcNames,
       immediateStoryReview,
+      storyPlan: [
+        latestStoryPlan,
+        storyWeavingForZhiku
+          ? `当前剧情段：${storyWeavingForZhiku.当前分段标题}；下一段预热：${storyWeavingForZhiku.下一分段标题 || '无'}`
+          : '',
+      ].filter(Boolean).join('\n'),
     },
     originalProtagonist: state.世界.原著主角,
   };
@@ -1038,11 +1051,10 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     history: recallHistory,
   });
   const limit = state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries;
+  const aiSupplementEnabled = state.gameSettings.智库系统?.enableAiSupplement === true;
   const fallback = retrieveZhikuContext(state.智库, recallQuery, limit, sceneContext);
+  const aiCandidateIndex = buildZhikuAiRequestForTurn(state.智库, recallQuery, fallback.entries, sceneContext);
   const actualRecallPreview = latestAssistantZhikuDebugRecall(state.chatHistory);
-  const candidateText = fallback.entries.length
-    ? fallback.entries.map((entry, index) => `${index + 1}. ${entry.标题}\n摘要：${entry.摘要 || entry.原文.slice(0, 220) || '无摘要'}`).join('\n\n')
-    : '（当前没有命中候选资料）';
   const zhikuDiagnostics = fallback.diagnostics;
   const diagnosticText = zhikuDiagnostics
     ? [
@@ -1056,10 +1068,24 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         `AI检索补充弱资料：${zhikuDiagnostics.AI检索补充弱资料.join('、') || '无'}`,
         `候选资料：${zhikuDiagnostics.候选资料.join('、') || '无'}`,
         `AI候选资料：${zhikuDiagnostics.AI候选资料.join('、') || '无'}`,
+        `AI候选索引：${zhikuDiagnostics.AI候选索引.join('；') || '无'}`,
+        `AI形态修正：${zhikuDiagnostics.AI形态修正.join('；') || '无'}`,
+        `AI拒绝选择：${zhikuDiagnostics.AI拒绝选择.join('；') || '无'}`,
+        `AI未选择原因：${zhikuDiagnostics.AI未选择原因 || '无'}`,
         `最终注入角色资料（已去重）：${zhikuDiagnostics.角色相关资料.join('、') || '无'}`,
         `最终注入强资料：${zhikuDiagnostics.强相关资料.join('、') || '无'}`,
         `最终注入弱资料：${zhikuDiagnostics.弱相关资料.join('、') || '无'}`,
         `已注入资料：${zhikuDiagnostics.已注入资料.join('、') || '无'}`,
+        `静态注入体量：${zhikuDiagnostics.静态注入字符数} 字符 / 约 ${zhikuDiagnostics.静态注入估算Token} tokens`,
+        zhikuDiagnostics.单条静态注入体量.length
+          ? `单条体量：${zhikuDiagnostics.单条静态注入体量.map((item) => `${item.标题} ${item.字符数}字/${item.估算Token}t（${item.保留优先级}）`).join('；')}`
+          : '单条体量：无',
+        `动态状态来源：${zhikuDiagnostics.动态状态来源.join('；') || '无'}`,
+        `去重记录：${zhikuDiagnostics.去重记录.join('；') || '无'}`,
+        zhikuDiagnostics.删减记录.length
+          ? `删减记录：${zhikuDiagnostics.删减记录.map((item) => `${item.标题}（${item.原优先级}：${item.原因}）`).join('；')}`
+          : '删减记录：无',
+        `体量预警：${zhikuDiagnostics.体量预警.join('；') || '无'}`,
         zhikuDiagnostics.被门禁过滤.length
           ? `门禁过滤：${zhikuDiagnostics.被门禁过滤.map((item) => `${item.标题}（${item.原因}）`).join('；')}`
           : '门禁过滤：无',
@@ -1081,29 +1107,37 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   });
   addSection(sections, {
     id: 'zhiku_system',
-    title: '智库召回提示词（Step0~Step8）',
+    title: aiSupplementEnabled ? '智库 AI 召回编译器提示词' : '智库 AI 补充状态',
     category: '系统',
-    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings.promptModules),
+    content: aiSupplementEnabled
+      ? buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings.promptModules)
+      : 'AI 主动补充未开启。本回合只执行正文关键词检索，不会发送智库补充 API 请求。',
   });
   addSection(sections, {
     id: 'zhiku_user',
-    title: '智库召回用户消息',
+    title: aiSupplementEnabled ? '智库 AI 补充用户消息' : '正文关键词检索预览',
     category: '用户',
-    content: [
-      `玩家当前输入：${sourceInput || '（无）'}`,
-      '',
-      buildZhikuModelUserPrompt(recallQuery, limit, candidateText, {
-        keywordRecallTitles: zhikuDiagnostics?.关键词召回资料 ?? [],
-        anticipatedNpcNames: anticipatedZhikuNpcNames,
-        aiSupplementHints: sceneContext.aiSupplementHints,
-      }),
-      '',
-      '本地召回诊断：',
-      diagnosticText,
-      '',
-      '本地注入预览：',
-      fallback.injection || '（未命中）',
-    ].join('\n'),
+    content: aiSupplementEnabled
+      ? [
+          `玩家当前输入：${sourceInput || '（无）'}`,
+          '',
+          buildZhikuModelUserPrompt(aiCandidateIndex.request),
+          '',
+          '本地召回诊断：',
+          diagnosticText,
+          '',
+          '本地注入预览：',
+          fallback.injection || '（未命中）',
+        ].join('\n')
+      : [
+          `正文关键词窗口：${recallQuery || '（无）'}`,
+          '',
+          '本地召回诊断：',
+          diagnosticText,
+          '',
+          '本地注入预览：',
+          fallback.injection || '（未命中）',
+        ].join('\n'),
   });
   return finalizeSnapshot('zhiku', '智库召回上下文', sections, sourceInput);
 }

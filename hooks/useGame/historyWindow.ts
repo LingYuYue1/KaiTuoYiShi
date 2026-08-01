@@ -9,6 +9,7 @@ export const MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 12;
 export const MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT = 10;
 export const MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 12;
 export const MAIN_RECALL_ASSISTANT_BODY_WINDOW = 5;
+export const ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW = 3;
 
 export function hasInjectableMemory(memorySystem: 记忆系统): boolean {
   return (
@@ -157,10 +158,10 @@ export function buildZhikuKeywordRecallQuery(input: {
 
   const recentBodies = input.history
     .filter((msg) => msg.role === 'assistant')
-    .slice(-MAIN_RECALL_ASSISTANT_BODY_WINDOW)
+    .slice(-ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW)
     .map((msg) => compactText(extractAssistantBodyText(msg), 260))
     .filter(Boolean);
-  if (recentBodies.length) lines.push(`最近${MAIN_RECALL_ASSISTANT_BODY_WINDOW}条正文承接：${recentBodies.join('\n')}`);
+  if (recentBodies.length) lines.push(`最近${ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW}条正文承接：${recentBodies.join('\n')}`);
 
   return lines.join('\n').trim() || userInput;
 }

@@ -8,12 +8,14 @@ interface RightMenuProps {
   onLoadGame: () => void;
   onSettings: () => void;
   onReviewLab?: () => void;
+  /** 未处理的记忆失败草稿数量；只用于入口提醒，不在打开面板时自动清除。 */
+  memoryUnread?: number;
 }
 
 const itemClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
-export const RightMenu = memo(function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettings, onReviewLab }: RightMenuProps) {
+export const RightMenu = memo(function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettings, onReviewLab, memoryUnread = 0 }: RightMenuProps) {
   return (
     <div className="kaituo-right-menu hidden md:flex md:w-[16%] min-w-[200px] max-w-[240px] flex-col">
       <div
@@ -37,6 +39,7 @@ export const RightMenu = memo(function RightMenu({ activeId, onSelect, onSaveGam
             subtitle={item.subtitle}
             active={activeId === item.id}
             onClick={() => onSelect(item.id)}
+            badge={item.id === 'memory' ? memoryUnread : 0}
           />
         ))}
       </div>
@@ -63,12 +66,14 @@ function SystemButton({
   subtitle,
   active,
   onClick,
+  badge = 0,
 }: {
   glyph: string;
   label: string;
   subtitle: string;
   active: boolean;
   onClick: () => void;
+  badge?: number;
 }) {
   return (
     <button
@@ -109,7 +114,25 @@ function SystemButton({
           {subtitle}
         </span>
       </span>
+      {badge > 0 && <UnreadDot count={badge} />}
     </button>
+  );
+}
+
+function UnreadDot({ count }: { count: number }) {
+  return (
+    <span
+      className="relative ml-auto flex h-4 min-w-4 items-center justify-center px-1 text-[9px] font-bold leading-none"
+      title={`有 ${count} 份失败记忆草稿待处理`}
+      aria-label={`有 ${count} 份失败记忆草稿待处理`}
+      style={{
+        color: 'rgb(var(--tj-text-primary))',
+        background: 'rgba(var(--tj-danger), 0.92)',
+        borderRadius: 999,
+      }}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
   );
 }
 

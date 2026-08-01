@@ -455,8 +455,15 @@ function buildPhoneZhikuPersonaBrief(ctx: 手机回复上下文): string {
       meta.剧透等级 ? `剧透:${meta.剧透等级}` : '',
       meta.使用范围.length ? `范围:${meta.使用范围.join('/')}` : '',
     ].filter(Boolean).join('；');
-    const summary = entry.摘要 || entry.原文.slice(0, 180) || '无摘要';
-    return `- ${entry.标题}${metaLine ? `（${metaLine}）` : ''}：${summary}`;
+    const injection = entry.注入内容;
+    if (injection?.类型 !== 'character') return '';
+    return [
+      `- ${entry.标题}${metaLine ? `（${metaLine}）` : ''}`,
+      `  核心身份与阵营：${injection.核心身份与阵营}`,
+      `  独立人格与行为：${injection.独立人格与行为}`,
+      `  说话方式：${injection.说话方式}`,
+      `  演绎红线：${injection.演绎红线}`,
+    ].join('\n');
   });
   lines.push('边界：这里只提供聊天对象的主体人格、OOC 风险或手机语气锚点；未解锁形态、重大剧透和只读资料不得在手机里提前表现。');
   return lines.join('\n');

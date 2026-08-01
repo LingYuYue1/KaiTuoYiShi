@@ -5,7 +5,7 @@ import type { 世界书, 世界书条目 } from '@/models/worldbook';
 // 设计要点:
 // - 总约束已经吃掉「去神话化 / 去魅主 / 去发情化 / 去权谋化 ...」等 8 条铁律,本组世界书不再重复。
 //   本组只负责「情感线落到哪个方向上、推进力度、笔触侧重」,与总约束错位互补。
-// - scope 统一为 ['main']:首回合开局规范已经吃掉,剧情模式不在第 0 回合起作用。
+// - scope 统一为 ['main', 'opening']：玩家选择从第 0 回合开场起生效。
 // - injectMode 都用 always:选了哪种就是哪种,不需要关键词触发。
 // - priority 都设为 210,略低于命途/地点/列车(180+),略高于普通条目(100),保证它出现在 system 顶部附近。
 // - 留 storyModeGate 字段做硬筛:只有玩家 worldState.storyMode 命中时本书才生效。
@@ -138,7 +138,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
         keywords: [],
         priority: 210,
         enabled: true,
-        scope: ['main'],
+        scope: ['main', 'opening'],
       }, now),
     ],
     createdAt: now,
@@ -161,7 +161,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
         keywords: [],
         priority: 210,
         enabled: true,
-        scope: ['main'],
+        scope: ['main', 'opening'],
       }, now),
     ],
     createdAt: now,
@@ -184,7 +184,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
         keywords: [],
         priority: 210,
         enabled: true,
-        scope: ['main'],
+        scope: ['main', 'opening'],
       }, now),
     ],
     createdAt: now,
@@ -207,7 +207,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
         keywords: [],
         priority: 210,
         enabled: true,
-        scope: ['main'],
+        scope: ['main', 'opening'],
       }, now),
     ],
     createdAt: now,

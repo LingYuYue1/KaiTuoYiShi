@@ -17,7 +17,7 @@ const variableExecutor = read('utils/variableExecutor.ts');
 const hertaBlueprintAsset = path.join(root, 'public/assets/star-map/herta-station-architectural-blueprint.webp');
 
 const hertaInteriorIds = presets
-  .split(/\n  \{\n    id: /)
+  .split(/\r?\n  \{\r?\n    id: /)
   .filter((block) => block.startsWith("'herta_") && block.includes("navigationMode: 'interior'"))
   .map((block) => block.match(/^'([^']+)'/)?.[1])
   .filter(Boolean);

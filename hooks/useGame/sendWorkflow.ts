@@ -31,7 +31,7 @@ import {
   persistWorkflowRecoveryJournal,
   updateWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
-import { buildSavePayload } from './saveLoadWorkflow';
+import { buildSavePayload, commitActiveSaveTreeMeta } from './saveLoadWorkflow';
 import { parseVariableCommands, snapshotVariableState, reduceVariableCommands, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
 import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
 import { isTravelerPlayerAuthoredVariablePath } from '@/utils/variableRegistry';
@@ -73,10 +73,13 @@ import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSa
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
-import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
+import type { 智库条目 } from '@/models/zhiku';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
+import { applyNovelAIRulePreset } from '@/utils/imagePromptRules';
+import { resolveStorySnapshot, selectPresentStorySnapshotNpcs } from '@/services/ai/storySnapshotPipeline';
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
+import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
 
@@ -186,6 +189,43 @@ function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情
   return parts.join('。');
 }
 
+// 区E执法块(结构轮, 2026-07-26): 注入在聊天历史与玩家输入之后——离生成点最近的位置。
+// 实现参照狭间评判提醒的既有先例(尾部 user 消息,三 provider 通用,连续 user 消息已有
+// DeepSeek 守卫先例)。素材复用本回合已算好的智库命中,不新增检索。
+function buildTurnEnforcementBlock(input: {
+  playerName: string;
+  wordCountTarget: number;
+  zhikuEntries?: 智库条目[];
+  storyWeavingActive: boolean;
+}): string {
+  const lines: string[] = ['# 本回合生成前核对（最高优先级，覆盖上文所有软性描述）'];
+  const characters = (input.zhikuEntries ?? []).filter((entry) => (
+    entry.分类 === 'character' && entry.注入内容?.类型 === 'character'
+  ));
+  if (characters.length) {
+    lines.push('【在场角色锚点】');
+    for (const c of characters) {
+      if (c.注入内容?.类型 !== 'character') continue;
+      const speech = c.注入内容.说话方式.trim();
+      const forbid = c.注入内容.演绎红线.trim();
+      const bits = [
+        speech ? `说话方式：${speech.length > 60 ? `${speech.slice(0, 58)}…` : speech}` : '',
+        forbid ? `禁止误写：${forbid.length > 60 ? `${forbid.slice(0, 58)}…` : forbid}` : '',
+      ].filter(Boolean).join('｜');
+      if (bits) lines.push(`- ${c.标题}：${bits}`);
+    }
+  }
+  lines.push('【硬性要点】');
+  lines.push(`- 发言归属：【${input.playerName}】只承载玩家本回合明确说出的原话；NPC 台词、拟声词、环境音绝不挂玩家名。`);
+  lines.push('- 禁止代写玩家的心理、神态、感受或决定；正文内禁止任何选项菜单结构。');
+  if (input.storyWeavingActive) {
+    lines.push('- 剧情编织滑窗只按门禁推进；已发生的事件禁止重演，未开始的分段禁止抢跑。');
+  }
+  lines.push(`- <正文> 不少于 ${input.wordCountTarget} 字；<thinking>/<正文>/<短期记忆>/<动态世界> 标签齐全。`);
+  lines.push('逐项核对以上约束后再动笔；与上文任何描述冲突时，以本块为准。');
+  return lines.join('\n');
+}
+
 function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编织系统, _memoryLine: string, turn: number): NPC记录[] {
   if (!story.当前进度) return npcs;
   const series = story.系列列表.find((item) => item.id === story.当前进度?.当前系列ID)
@@ -237,11 +277,25 @@ function formatZhikuDiagnosticsPreview(diagnostics?: 智库召回诊断): string
     `AI检索补充弱资料：${diagnostics.AI检索补充弱资料.join('、') || '无'}`,
     `候选资料：${diagnostics.候选资料.join('、') || '无'}`,
     `AI候选资料：${diagnostics.AI候选资料.join('、') || '无'}`,
+    `AI候选索引：${diagnostics.AI候选索引.join('；') || '无'}`,
+    `AI形态修正：${diagnostics.AI形态修正.join('；') || '无'}`,
+    `AI拒绝选择：${diagnostics.AI拒绝选择.join('；') || '无'}`,
+    `AI未选择原因：${diagnostics.AI未选择原因 || '无'}`,
     `最终注入角色资料（已去重）：${diagnostics.角色相关资料.join('、') || '无'}`,
     `最终注入强资料：${diagnostics.强相关资料.join('、') || '无'}`,
     `最终注入弱资料：${diagnostics.弱相关资料.join('、') || '无'}`,
     `已注入资料：${diagnostics.已注入资料.join('、') || '无'}`,
     `角色故事层注入：${diagnostics.角色故事层注入?.join('；') || '无'}`,
+    `静态注入体量：${diagnostics.静态注入字符数} 字符 / 约 ${diagnostics.静态注入估算Token} tokens`,
+    diagnostics.单条静态注入体量.length
+      ? `单条体量：${diagnostics.单条静态注入体量.map((item) => `${item.标题} ${item.字符数}字/${item.估算Token}t（${item.保留优先级}）`).join('；')}`
+      : '单条体量：无',
+    `动态状态来源：${diagnostics.动态状态来源.join('；') || '无'}`,
+    `去重记录：${diagnostics.去重记录.join('；') || '无'}`,
+    diagnostics.删减记录.length
+      ? `删减记录：${diagnostics.删减记录.map((item) => `${item.标题}（${item.原优先级}：${item.原因}）`).join('；')}`
+      : '删减记录：无',
+    `体量预警：${diagnostics.体量预警.join('；') || '无'}`,
     diagnostics.被门禁过滤.length
       ? `门禁过滤：${diagnostics.被门禁过滤.map((item) => `${item.标题}（${item.原因}）`).join('；')}`
       : '门禁过滤：无',
@@ -1101,13 +1155,16 @@ function buildSingleApiSettings(config: API配置项): API设置 {
   };
 }
 
-function resolveNarrativeImageTokenizerConfig(state: UseGameStateReturn, mainConfig: API配置项): API配置项 | null {
+function resolveNarrativeImageTokenizerConfig(state: UseGameStateReturn, mainConfig: API配置项 | null): API配置项 | null {
+  if (!mainConfig) return null;
   return buildImagePromptTokenizerConfig(state.gameSettings, buildSingleApiSettings(mainConfig));
 }
 
 function resolveNarrativeImageGenerationApi(state: UseGameStateReturn): 文生图API配置 | null {
   const imageSettings = state.gameSettings.文生图系统;
-  return imageSettings.普通接口.enabled ? imageSettings.普通接口 : null;
+  return imageSettings.普通接口.enabled
+    ? applyNovelAIRulePreset(imageSettings.普通接口, imageSettings.rules)
+    : null;
 }
 
 function archiveNarrativeSnapshotToAlbum(
@@ -1147,7 +1204,7 @@ async function generateNarrativeImagesForMessage(params: {
   state: UseGameStateReturn;
   messageId: string;
   body: string;
-  tokenizerConfig: API配置项;
+  tokenizerConfig: API配置项 | null;
   imageApiConfig: 文生图API配置;
   turn: number;
   signal?: AbortSignal;
@@ -1181,77 +1238,59 @@ async function generateNarrativeImagesForMessage(params: {
     targetMessageId: messageId,
   });
   try {
-    const { parseStorySnapshotPrompt } = await import('@/services/ai/narrativeImageParse');
     const { generateNarrativeImage } = await import('@/services/ai/imageGeneration');
     const playerAppearanceMode = state.gameSettings.文生图系统?.正文生图?.playerAppearanceMode ?? 'auto';
-    const presentNpcRecords = (state.NPC ?? [])
-      .filter((npc: import('@/models/npc').NPC记录) => npc.阶位 === 'companion' && (npc.外貌 || npc.穿着))
-      .slice(0, 8);
+    const presentNpcRecords = selectPresentStorySnapshotNpcs(state.NPC ?? [], body);
     const traveler = state.旅人;
-    const presentNpcs = presentNpcRecords
-      .map((npc: import('@/models/npc').NPC记录) => ({
-        name: npc.姓名,
-        appearance: typeof npc.外貌 === 'string' ? npc.外貌 : undefined,
-        clothing: typeof npc.穿着 === 'string' ? npc.穿着 : undefined,
-      }));
-    const parsedSnapshot = await parseStorySnapshotPrompt(tokenizerConfig, {
+    const snapshot = await resolveStorySnapshot({
+      apiConfig: tokenizerConfig,
       body,
-      traveler: playerAppearanceMode === 'off' ? undefined : {
-        name: traveler.姓名 || traveler.别名 || '玩家角色',
-        gender: traveler.性别 || undefined,
-        appearance: traveler.外貌 || undefined,
-        identity: traveler.身份 || undefined,
-        anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
-      },
+      traveler,
       playerAppearanceMode,
-      presentNpcs,
-    }, signal);
+      presentNpcs: presentNpcRecords,
+      rules: state.gameSettings.文生图系统.rules,
+      size: '1280x720',
+      slot: 'scene',
+      signal,
+    });
     pushQueueTask(state, 'narrative_image_parse', 'success', {
-      detail: `已解析故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
+      detail: snapshot.source === 'local'
+        ? `模型解析未完成，已使用本地草稿：${snapshot.summary.title || '剧情瞬间'}。${snapshot.warning ? ` ${snapshot.warning}` : ''}`
+        : `已解析故事快照：${snapshot.summary.title || '剧情瞬间'}。`,
+      rawText: snapshot.diagnosticRawText,
       turn,
       targetMessageId: messageId,
     });
     const generatedImages: import('@/models/chat').叙事插图[] = [];
     pushQueueTask(state, 'narrative_image_generate', 'pending', {
-      detail: `正在生成故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
+      detail: `正在生成故事快照：${snapshot.summary.title || '剧情瞬间'}。`,
       turn,
       targetMessageId: messageId,
     });
     const imageId = `narrative_${turn}_snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const lockedPrompt = 应用场景角色锚点锁({
-      prompt: parsedSnapshot.prompt,
-      negative: parsedSnapshot.negativePrompt,
-      traveler: playerAppearanceMode === 'off' ? undefined : traveler,
-      forceTravelerVisible: playerAppearanceMode === 'force',
-      presentNpcs: presentNpcRecords,
-    });
-    const promptRefined = 应用质量增强提示词(
-      state.gameSettings.文生图系统.rules,
-      lockedPrompt.prompt,
-      lockedPrompt.negative,
-    );
     const result = await generateNarrativeImage(
       imageApiConfig,
-      promptRefined.prompt,
-      promptRefined.negative,
+      snapshot.prompt,
+      snapshot.negativePrompt,
       'scene',
-      parsedSnapshot.title || '故事快照',
+      snapshot.summary.title || '故事快照',
       imageId,
+      snapshot.renderContext,
       signal,
     );
     if (result.status === 'done' || result.status === 'failed') {
       result.kind = 'snapshot';
     }
     const archivedResult = archiveNarrativeSnapshotToAlbum(state, result, {
-      title: parsedSnapshot.title || '故事快照',
+      title: snapshot.summary.title || '故事快照',
       size: '1280x720',
       sourcePrompt: body,
     });
     generatedImages.push(archivedResult);
     pushQueueTask(state, 'narrative_image_generate', result.status === 'done' ? 'success' : 'failed', {
       detail: result.status === 'done'
-        ? `${parsedSnapshot.title || '故事快照'} 故事快照生成完成。`
-        : `${parsedSnapshot.title || '故事快照'} 故事快照生成失败：${result.error}`,
+        ? `${snapshot.summary.title || '故事快照'} 故事快照生成完成。`
+        : `${snapshot.summary.title || '故事快照'} 故事快照生成失败：${result.error}`,
       turn,
       targetMessageId: messageId,
     });
@@ -1304,23 +1343,7 @@ export async function regenerateNarrativeImagesForMessage(
     return;
   }
   const mainConfig = getActiveConfig();
-  if (!mainConfig) {
-    pushQueueTask(state, 'narrative_image_parse', 'failed', {
-      detail: '未配置主 API，无法解析故事快照提示词。',
-      turn: Number(message.gameTime) || state.turnCount,
-      targetMessageId: messageId,
-    });
-    return;
-  }
   const tokenizerConfig = resolveNarrativeImageTokenizerConfig(state, mainConfig);
-  if (!tokenizerConfig) {
-    pushQueueTask(state, 'narrative_image_parse', 'failed', {
-      detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
-      turn: Number(message.gameTime) || state.turnCount,
-      targetMessageId: messageId,
-    });
-    return;
-  }
   const imageApiConfig = resolveNarrativeImageGenerationApi(state);
   if (!imageApiConfig) {
     pushQueueTask(state, 'narrative_image_generate', 'failed', {
@@ -1728,11 +1751,11 @@ export async function executeSendWorkflow(
     });
     recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { userMessageId: userMsg.id });
     await persistWorkflowRecoveryJournal(recoveryJournal);
-    const purgedHistory = state.chatHistory.map((m) =>
+    const purgedHistory = compactChatHistoryForLongSession(state.chatHistory.map((m) =>
       m.role === 'assistant' && m.preTurnSnapshot
         ? { ...m, preTurnSnapshot: undefined }
         : m,
-    );
+    ));
     rollbackHistoryOnAbort = purgedHistory;
     const updatedHistory = [...purgedHistory, userMsg];
     state.setChatHistory(updatedHistory);
@@ -1792,6 +1815,13 @@ export async function executeSendWorkflow(
       userInput,
     });
     const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
+    const latestZhikuStoryPlan = [...updatedHistory]
+      .reverse()
+      .find((message) => message.role === 'assistant' && message.parsedResponse?.storyPlan?.trim())
+      ?.parsedResponse?.storyPlan?.trim();
+    const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
+      ? getStoryWeavingInjectionDiagnostics(state.剧情编织)
+      : null;
     const zhikuSceneContext = {
       ...worldbookCtx,
       startScenarioId: undefined,
@@ -1804,6 +1834,12 @@ export async function executeSendWorkflow(
         currentLocation: effectiveWorld.当前地点,
         presentNpcNames: worldbookCtx.npcNames,
         immediateStoryReview: immediateStoryReviewForZhiku,
+        storyPlan: [
+          latestZhikuStoryPlan,
+          storyWeavingDiagnostics
+            ? `当前剧情段：${storyWeavingDiagnostics.当前分段标题}；下一段预热：${storyWeavingDiagnostics.下一分段标题 || '无'}`
+            : '',
+        ].filter(Boolean).join('\n'),
         openingArchiveText,
       },
     };
@@ -1867,11 +1903,9 @@ export async function executeSendWorkflow(
     const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
     const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && (state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) < state.turnCount;
     const zhikuRecallEnabled = !isOpeningSystemTrigger && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
+    const zhikuAiSupplementEnabled = zhikuRecallEnabled && state.gameSettings.智库系统?.enableAiSupplement === true;
     const storyWeavingGate = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
       ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx)
-      : null;
-    const storyWeavingDiagnostics = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
-      ? getStoryWeavingInjectionDiagnostics(state.剧情编织)
       : null;
     pushQueueTask(state, 'yiting', yitingRecallEnabled ? 'pending' : 'skipped', {
       detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。',
@@ -1896,7 +1930,9 @@ export async function executeSendWorkflow(
             return null;
           })
         : Promise.resolve(null),
-      zhikuRecallEnabled
+      !zhikuRecallEnabled
+        ? Promise.resolve(null)
+        : zhikuAiSupplementEnabled
         ? retrieveZhikuContextWithModel(
             state.智库,
             zhikuRecallQuery,
@@ -1911,7 +1947,12 @@ export async function executeSendWorkflow(
             console.warn('[zhiku-retrieval] 智库检索失败：', err);
             return null;
           })
-        : Promise.resolve(null),
+        : Promise.resolve(retrieveZhikuContext(
+            state.智库,
+            zhikuRecallQuery,
+            state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+            zhikuSceneContext,
+          )),
     ]);
     assertWorkflowActive();
     const recallSummaryForTurn = [
@@ -1939,7 +1980,7 @@ export async function executeSendWorkflow(
         ? `忆庭已召回：${state.忆庭?.回忆档案?.length ? '无相关档案' : '当前还没有可召回档案'}`
         : `忆庭已召回：未到第${(state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) + 1}回合`;
     const zhikuHint = state.gameSettings.智库系统?.enabled
-      ? `智库内容已注入：${
+      ? `智库内容已注入（${zhikuAiSupplementEnabled ? '关键词 + AI 补充' : '仅正文关键词'}）：${
           zhikuPreview?.entries.length
             ? zhikuPreview.entries.slice(0, 2).map((entry) => entry.标题).join('、')
             : '无相关条目'
@@ -2163,6 +2204,17 @@ export async function executeSendWorkflow(
         'user',
         buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
       ));
+    }
+
+    // 区E执法块(结构轮): 主剧情普通回合的最后一条 user 消息。开局/狭间评判/ST V2 消息链回合跳过
+    // (各有自己的收尾协议)。
+    if (!isOpeningSystemTrigger && !tavernV2Messages && awakeningPhase !== 'judgement') {
+      apiMessages.push(创建聊天消息('user', buildTurnEnforcementBlock({
+        playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+        wordCountTarget: state.gameSettings.wordCountTarget,
+        zhikuEntries: zhikuPreview?.entries,
+        storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
+      })));
     }
 
     // 3b. CoT 伪装历史注入：在消息序列最前面塞一对 user/assistant，强化思考段输出习惯。
@@ -2583,6 +2635,7 @@ export async function executeSendWorkflow(
     if (userMsgIdx >= 0 && finalHistory[userMsgIdx].preTurnSnapshot) {
       finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } : m);
     }
+    finalHistory = compactChatHistoryForLongSession(finalHistory);
     state.setChatHistory(finalHistory);
     state.setTurnCount((prev) => prev + 1);
     streamMessageSetter.flush('');
@@ -2608,10 +2661,15 @@ export async function executeSendWorkflow(
     mem = compression.memory;
     state.set记忆(mem);
     const yitingWithCompression = state.忆庭;
-    pushQueueTask(state, 'memory', 'success', {
-      detail: compression.usedModel
+    const compressionDetail = compression.failures.length
+      ? `记忆总结有 ${compression.failures.length} 批 API 失败，已保留完整失败草稿；当前回合继续使用本地 fallback。`
+      : compression.usedModel
         ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
-        : '即时/短期/中期/长期记忆已使用本地摘要完成整理。',
+        : '即时/短期/中期/长期记忆已使用本地摘要完成整理。';
+    pushQueueTask(state, 'memory', compression.failures.length ? 'failed' : 'success', {
+      detail: compressionDetail,
+      failCount: compression.failures.length || undefined,
+      retryHint: compression.failures.length ? '打开记忆系统的“失败草稿”页重新总结。' : undefined,
     });
 
     // 7 / 7a / 7b. 世界 + 旅人 的本回合修改全部累计到本地变量,最后一次性 set。
@@ -2677,13 +2735,23 @@ export async function executeSendWorkflow(
     // 如果 AI 同回合切地点+换天气(如 黑塔空间站→罗浮 + 星海潮汐),用旧地点校验会误拒。
     // 因此只要天气 ID 合法(解析天气标签 已校验过中文→ID 映射)就直接接受,
     // 地点白名单仅作 prompt 引导,不强制校验。
-    const 天气 = 解析天气标签(result.fullText || displayText);
+    const rawResponseTextForTurn = result.fullText || displayText;
+    const 天气 = 解析天气标签(rawResponseTextForTurn);
     if (天气) {
       if (!验证天气合法性(天气, worldAfter.当前地点)) {
         console.info('[天气] 天气与当前地点白名单不匹配，仍接受（地点可能在本回合由变量模型更新）:', 天气, '| 旧地点:', worldAfter.当前地点);
       }
       worldAfter = { ...worldAfter, 当前天气: 天气 };
     }
+
+    result.fullText = '';
+    result.parsed = parseResponse('');
+    result.usage = undefined;
+    apiMessages.length = 0;
+    systemPrompt = '';
+    streamedText = '';
+    previewText = '';
+    tavernV2Messages = null;
 
     // 一次性 commit。直接传值不用 functional updater,因为 worldAfter / travelerAfter
     // 已基于 state.世界 / state.旅人 派生,React 批处理后效果等价。
@@ -2975,14 +3043,6 @@ export async function executeSendWorkflow(
         const targetMessageId = aiMsg.id;
         const tokenizerConfig = resolveNarrativeImageTokenizerConfig(state, config);
         const imageApiConfig = resolveNarrativeImageGenerationApi(state);
-        if (!tokenizerConfig) {
-    pushQueueTask(state, 'narrative_image_parse', 'failed', {
-      detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
-      turn: state.turnCount,
-      targetMessageId,
-    });
-          return;
-        }
         if (!imageApiConfig) {
           pushQueueTask(state, 'narrative_image_generate', 'failed', {
             detail: '正文生图主文生图接口未启用，无法生成故事快照。',
@@ -3032,9 +3092,9 @@ export async function executeSendWorkflow(
         recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { phase: 'autosave' });
         await persistWorkflowRecoveryJournal(recoveryJournal);
         pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' });
-        const variableBatchesForSave = variableOverrides?.batch
+        const variableBatchesForSave = compactVariableBatchHistory(variableOverrides?.batch
           ? [...state.variableBatches, variableOverrides.batch]
-          : state.variableBatches;
+          : state.variableBatches);
         const saveData = buildSavePayload(state, 'auto', {
           chatHistory: finalHistoryForSave,
           记忆: memoryAfterStoryProgress,
@@ -3053,6 +3113,7 @@ export async function executeSendWorkflow(
         });
         assertWorkflowActive();
         await saveGame(saveData);
+        commitActiveSaveTreeMeta(saveData);
         assertWorkflowActive();
         pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' });
         state.setHasSave(true);
@@ -3291,7 +3352,7 @@ async function runVariableCalibrationStep(
       rawText,
     };
     if (params.shouldCommit?.() === false) return null;
-    state.setVariableBatches((prev) => [...prev, batch]);
+    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
 
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
@@ -3338,7 +3399,7 @@ async function runVariableCalibrationStep(
       }],
       rawText: err instanceof Error ? err.message : String(err ?? '变量模型调用失败'),
     };
-    state.setVariableBatches((prev) => [...prev, batch]);
+    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
     return {
       batch,
       npcLedgerUpdate: {

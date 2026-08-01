@@ -18,17 +18,20 @@ function collectAlbumDataUrls(album?: 相册系统): Map<string, string> {
   return map;
 }
 
-function compactValue(value: unknown, refs: Map<string, string>, seen: WeakSet<object>): unknown {
+function compactValue(value: unknown, refs: Map<string, string>, seen: WeakMap<object, unknown>): unknown {
   if (isDataImage(value)) return refs.get(value) ?? value;
   if (!value || typeof value !== 'object') return value;
-  if (seen.has(value)) return value;
-  seen.add(value);
+  if (seen.has(value)) return seen.get(value);
 
   if (Array.isArray(value)) {
-    return value.map((item) => compactValue(item, refs, seen));
+    const next: unknown[] = [];
+    seen.set(value, next);
+    for (const item of value) next.push(compactValue(item, refs, seen));
+    return next;
   }
 
   const next: Record<string, unknown> = {};
+  seen.set(value, next);
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     next[key] = compactValue(child, refs, seen);
   }
@@ -38,13 +41,9 @@ function compactValue(value: unknown, refs: Map<string, string>, seen: WeakSet<o
 export function compactDuplicatedSaveImages<T extends 存档数据>(save: T): T {
   const refs = collectAlbumDataUrls(save.相册);
   if (!refs.size) return save;
-  const cloned = JSON.parse(JSON.stringify(save)) as T;
-  const seen = new WeakSet<object>();
-
+  const { 相册: album, ...withoutAlbum } = save;
+  const compacted = compactValue(withoutAlbum, refs, new WeakMap()) as T;
   // 相册 assets 是原始图片仓库，不能替换，否则引用无法还原。
-  const album = cloned.相册;
-  delete (cloned as Partial<存档数据>).相册;
-  const compacted = compactValue(cloned, refs, seen) as T;
   compacted.相册 = album;
   return compacted;
 }

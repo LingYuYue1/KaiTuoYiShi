@@ -22,10 +22,9 @@ import { ITEM_CATEGORY_LABELS } from '@/models/inventory';
 import {
   getPath,
   getStartingScenario,
-  getStoryMode,
 } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, PATH_CORE_BELIEFS } from '@/models/path';
-import { buildPromptLikeWorldbookInjection, buildWorldbookChatModuleMessages, buildWorldbookInjection, type FilterContext } from '@/utils/worldbook';
+import { buildPromptLikeWorldbookInjection, buildWorldbookChatModuleMessages, buildWorldbookInjection, replaceWorldbookPlaceholders, type FilterContext } from '@/utils/worldbook';
 import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
@@ -96,6 +95,7 @@ export function buildSystemPrompt(
     openingSource: worldState.开局档案?.来源,
     triggerType,
     macroCtx,
+    worldbookCtx,
   };
 
   // ── 提示词模块·顶部（order < 30：开发者模式、叙述者人格等） ──
@@ -103,8 +103,8 @@ export function buildSystemPrompt(
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
-  // ── 世界书内置提示词（system_rule + 少量核心锚点）：为了可编辑放在世界书里，但按提示词注入与展示 ──
-  if (worldbooks && worldbookCtx) {
+  // ── 世界书稳定规则（system_rule + 少量核心锚点）：保留稳定位置，同时统一受世界书总开关控制 ──
+  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
     const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, worldbookCtx);
     if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
   }
@@ -122,22 +122,11 @@ export function buildSystemPrompt(
   const cotLanguageSection = buildCotLanguageSection(settings, currentScope);
   if (cotLanguageSection) parts.push(cotLanguageSection);
 
-  // ── 故事基调（剧情模式）──
-  const tone = buildToneSection(worldState);
-  if (tone) parts.push(tone);
-
+  // ── 结构轮(D1/D2, 2026-07-26)：基调行删除(剧情模式世界书为唯一出处)；字数/发言归属硬编码段删除
+  //    (唯一权威=「回复格式」模块,生成点兜底=sendWorkflow 区E执法块)；运行锚点瘦身并后移至
+  //    区D(紧贴即时回顾/编织/智库数据,见下方 storyWeaving 之前)。──
   const innerVoiceSection = buildInnerVoiceSection(settings);
   if (innerVoiceSection) parts.push(innerVoiceSection);
-
-  const responseLengthSection = buildResponseLengthSection(settings);
-  if (responseLengthSection) parts.push(responseLengthSection);
-
-  const speakerAttributionSection = buildSpeakerAttributionSection(traveler);
-  if (speakerAttributionSection) parts.push(speakerAttributionSection);
-
-  if (currentScope === 'main') {
-    parts.push(buildMainStoryControlSection(worldState));
-  }
 
   const openingArchiveSection = buildOpeningArchiveSection(worldState, currentScope === 'opening');
   if (openingArchiveSection) parts.push(openingArchiveSection);
@@ -186,6 +175,12 @@ export function buildSystemPrompt(
   // ── 当前场景：仍紧跟时间锚点，确保地点 / 环境优先于后续回忆与角色承接块被读取 ──
   const sceneFromWorldbook = buildSceneSection(worldState);
   if (sceneFromWorldbook) parts.push(sceneFromWorldbook);
+
+  // ── 区D(结构轮)：剧情与知识——运行锚点瘦身版先声明数据使用优先级,随后紧跟被它引用的
+  //    即时回顾/编织滑窗/智库数据块,消除"指令与数据相隔11段"的失效因素。──
+  if (currentScope === 'main') {
+    parts.push(buildMainStoryControlSection(worldState));
+  }
 
   // ── 忆庭（仅控制召回；入库始终执行，不等同于短期/长期记忆） ──
   const yitingEnabled = settings.记忆系统?.忆庭启用 !== false;
@@ -288,13 +283,14 @@ export function buildOpeningSystemPrompt(
     openingSource: worldState.开局档案?.来源,
     triggerType,
     macroCtx,
+    worldbookCtx,
   };
 
   const topResult = injectPromptModules(effectiveModules, moduleCtx, 'top');
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
-  if (worldbooks && worldbookCtx) {
+  if (settings.enableWorldbookInjection && worldbooks && worldbookCtx) {
     const promptLikeWorldbook = buildPromptLikeWorldbookInjection(worldbooks, {
       ...worldbookCtx,
       currentScope: 'opening',
@@ -307,17 +303,9 @@ export function buildOpeningSystemPrompt(
   if (bottomResult.systemSection) parts.push(bottomResult.systemSection);
   allChatMessages.push(...bottomResult.chatModuleMessages);
 
-  const tone = buildToneSection(worldState);
-  if (tone) parts.push(tone);
-
+  // 结构轮(D1): 基调/字数/归属硬编码段删除,与主剧情 builder 同步(唯一权威=「回复格式」模块)。
   const innerVoiceSection = buildInnerVoiceSection(settings);
   if (innerVoiceSection) parts.push(innerVoiceSection);
-
-  const responseLengthSection = buildResponseLengthSection(settings);
-  if (responseLengthSection) parts.push(responseLengthSection);
-
-  const speakerAttributionSection = buildSpeakerAttributionSection(traveler);
-  if (speakerAttributionSection) parts.push(speakerAttributionSection);
 
   parts.push(buildCharacterSection(traveler));
 
@@ -434,6 +422,9 @@ interface PromptModuleInjectionCtx {
   triggerType?: string;
   /** ST 预设兼容：宏变量上下文。不传=不执行宏处理（旧行为）。 */
   macroCtx?: MacroContext;
+  /** 批次5(D10)：迁移自世界书的规则模块含 {originalProtagonistSubject} 等世界书占位符,
+   *  传入时复用世界书替换管线；不传=仅做模块自有三占位符替换（旧行为）。 */
+  worldbookCtx?: FilterContext;
 }
 
 /** 非 system 角色的提示词模块消息。带元数据字段供 Phase 4 depth 注入使用。 */
@@ -493,42 +484,9 @@ function buildInnerVoiceSection(settings: 游戏设置): string {
     : '# 心声开关\n\n- 当前设置：心声输出关闭。正文只保留【旁白】与【角色名】，不要输出【心声】段，也不要用内心独白替代旁白。';
 }
 
-function buildResponseLengthSection(settings: 游戏设置): string {
-  const target = Math.max(100, Math.trunc(Number(settings.wordCountTarget) || 500));
-  const softUpper = Math.ceil(target * 1.35);
-  const paragraphHint =
-    target >= 1200
-      ? '正文应拆成多个自然段，保留充足动作、环境、对话和承接余波。'
-      : target >= 700
-        ? '正文应有完整场景推进，避免只用短对白或摘要带过。'
-        : '正文可以紧凑，但不能低于目标字数。';
-  return [
-    '# 正文字数硬约束',
-    '',
-    `- 当前游戏设置的正文字数目标：不少于 ${target} 个中文字符。`,
-    `- <正文> 标签内的可见正文必须按这个目标展开，建议区间约 ${target}-${softUpper} 字；不要因为思维链、记忆、剧情编织、行动选项或模型默认习惯而缩短正文。`,
-    `- ${paragraphHint}`,
-    '- 本约束优先于可编辑提示词模块中的旧字数描述；若其他模块出现不同字数要求，以本段为准。',
-  ].join('\n');
-}
-
-function buildSpeakerAttributionSection(traveler: 角色数据结构): string {
-  const playerName = getPromptPlayerName(traveler);
-  const playerTag = `【${playerName}】`;
-  return [
-    '# 发言归属硬约束',
-    '',
-    `- 当前玩家角色的发言标签固定为 ${playerTag}；玩家已明确说出口的原话，只能使用这个真实标签承载。`,
-    '- 禁止把说明词“玩家角色名”当成角色标签输出；正文中不要生成任何包含“玩家角色名”的发言标签。',
-    `- ${playerTag} 只允许承载玩家本回合输入中明确说出口的原话，或玩家明确要求转述为自己说出的话。`,
-    `- 玩家本回合明确输入了引号原话、冒号后发言、问句、命令短句、自我介绍或短促回应时，正文必须拆出一行 ${playerTag} + 原话；不要写成【旁白】你说……，也不要让旁白把玩家原话吞成概括。`,
-    `- 玩家输入同时包含动作与原话时：动作写进【旁白】，原话单独写成 ${playerTag}；不要把两者合并到同一条旁白或同一条玩家气泡。`,
-    '- 玩家只是行动、观察、沉默、看向某人、移动或心理活动时，不要把旁白、环境反应、拟声词、怪物吼叫或 NPC 台词写到玩家名下。',
-    '- NPC 说话必须使用对应 NPC 名牌，例如【三月七】、【丹恒】；不知道说话者时使用【旁白】，不要用玩家名代替。',
-    `- 环境音效、生物吼叫、爆炸声、机械声、脚步声、广播声等只能写成【旁白】描述，禁止写到 ${playerTag} 下。`,
-    '- 可以在【旁白】中转述“你听见……”“她说……”，但转述内容不能冒充玩家发言；除非玩家输入明确包含这句话。', 
-  ].join('\n');
-}
+// 结构轮(D1, 2026-07-26): 字数与发言归属两个硬编码段构建函数已删除——
+// 唯一权威在「回复格式」模块(migratePromptModules 强刷保证触达),
+// 生成点兜底在 sendWorkflow 的区E执法块(本回合生成前核对)。
 
 function injectPromptModules(
   modules: 提示词模块[] | undefined,
@@ -565,10 +523,12 @@ function injectPromptModules(
   const systemParts: string[] = [];
   const chatMessages: ChatModuleMessage[] = [];
   for (const m of filtered) {
-    const replaced = m.content
+    const baseReplaced = m.content
       .replace(/\{wordCountTarget\}/g, String(ctx.wordCountTarget))
       .replace(/\{personLabel\}/g, ctx.personLabel)
       .replace(/\{playerName\}/g, ctx.playerName);
+    // 批次5(D10): 迁移规则模块复用世界书占位符管线({originalProtagonistSubject}/{openingArchiveText} 等)
+    const replaced = ctx.worldbookCtx ? replaceWorldbookPlaceholders(baseReplaced, ctx.worldbookCtx) : baseReplaced;
     // ST 预设兼容：宏预处理（setvar/getvar/if 等）。不传 macroCtx = 旧行为（不处理）。
     const content = ctx.macroCtx ? processMacros(replaced, ctx.macroCtx) : replaced;
     const role = m.role ?? 'system';
@@ -590,30 +550,17 @@ function injectPromptModules(
   };
 }
 
-function buildToneSection(worldState: 世界状态): string {
-  const lines: string[] = [];
-  if (worldState.剧情模式) {
-    const m = getStoryMode(worldState.剧情模式);
-    if (m) lines.push(`- 剧情模式偏向：${m.name}——${m.description}`);
-  }
-  if (!lines.length) return '';
-  return `# 故事基调\n\n${lines.join('\n')}`;
-}
+// 结构轮: 基调段构建函数已删除——剧情模式的唯一注入出处是 4 选 1 的剧情模式世界书条目。
 
 function buildMainStoryControlSection(worldState: 世界状态): string {
+  // 结构轮(D2)瘦身: 世界观级规则(新闻露出/战斗定位/命途表达/时间戳/编织描述)已归
+  // builtin_rule_* 模块与批次3注入头部,此处只保留"数据使用优先级+承接铁则+原著主角配置"。
   const lines: string[] = [];
   lines.push('- 本回合属于主剧情正文，不是开局校准、命途狭间、新闻后台、手机聊天或智库检索回合。');
   lines.push('- 主剧情优先级：玩家本回合输入 > 当前场景与上一回合钩子 > 即时剧情回顾 > 剧情回忆（强回忆优先） > 当前剧情事实 > 剧情编织滑窗（仅作门禁素材） > 智库注入 > 新闻苗头 > 普通背景资料。');
   lines.push('- 若 system 中存在「# 即时剧情回顾」或「【剧情回忆】」，正文必须先承接其中的人物、地点、上一动作、未结问题和强回忆事实；不得假装角色不认识刚刚或过去已见过的人。');
   lines.push('- 如果强回忆或即时剧情回顾显示某 NPC 已与玩家见过、同行、约定或发生冲突，本回合必须沿用该关系状态；除非正文明确失忆/伪装/信息隔离，不得重新写成陌生人初见。');
-  lines.push('- 智库只提供原著资料、人物、地点、道具、组织等事实锚点；剧情方向不能只靠智库百科硬推。');
-  lines.push('- 对原著角色而言，智库人物主体人格优先校准长期口吻与行为边界；NPC 档案主要提供与玩家的关系、称呼、共同经历和临时状态。若两者冲突，不要用 NPC 档案里的旧性格覆盖智库主体人格。');
-  lines.push('- 剧情编织负责提供章节素材和防抢跑边界，不是强制脚本。只有滑窗门禁明确写“已满足强承接条件”时，才可把当前段目标和未结事项推到正文前台；未满足时只用作氛围、人物关系、伏笔和防重复参考。');
-  lines.push('- 若即时剧情回顾、剧情回忆、短期记忆或当前状态显示某事件已经完成、敌人已经被击退、危机已经解除，正文禁止因为剧情编织仍停在该段而重新生成同一事件或同一敌人。');
-  lines.push('- 新闻系统是世界演变与事件压力，不是强制主线脚本；只在与当前地点、人物或玩家目标有关时自然露出。');
-  lines.push('- 战斗不作为独立玩法抢占主剧情。发生冲突时以正文里的动作链、角色气质、战技表现和代价推进。');
-  lines.push('- 命途只允许少量落在评语、气质、动作风格或代价上，不要写成巡猎直觉、毁灭本能、自动预警或身体反射。');
-  lines.push('- 时间交给变量系统维护。正文只在开场、转场或时间变化确实重要时点出一次，不要反复出现“舰内时间 XX:XX”这类时间戳。');
+  lines.push('- 智库人物主体人格优先校准长期口吻与行为边界；NPC 档案主要提供与玩家的关系、称呼、共同经历和临时状态。若两者冲突，不要用 NPC 档案里的旧性格覆盖智库主体人格。');
   lines.push('- 玩家不是星 / 穹，也不是星穹列车既定成员；原著主角信息只作为原著线索和时间锚点，不要覆盖玩家身份。');
   if (worldState.原著主角 === '星穹双主角') {
     lines.push('- 当前原著主角配置为“星穹双主角”：星与穹是两个并列存在的独立个体，主剧情中继续保持分离，不混写成同一人；若镜头暂时只写其中一位，也必须保留另一位的独立存在，不得默认只选星。');
@@ -624,12 +571,7 @@ function buildMainStoryControlSection(worldState: 世界状态): string {
   } else if (worldState.原著主角) {
     lines.push(`- 当前原著主角配置：${worldState.原著主角}。另一性别主角不自动登场，除非后续剧情或玩家设定明确引入。`);
   }
-  const archive = worldState.开局档案;
-  if (archive) {
-    lines.push(`- 当前开局档案：${archive.来源 === 'free' ? '自由开局' : archive.来源 === 'workshop' ? '创意工坊' : '官方预设'} / ${archive.地区名称} / ${archive.章节锚点名称}。`);
-    lines.push('- 后续回合必须承接开局档案和当前地点，不能无理由回到默认黑塔空间站开局，也不能重播首回合入场。');
-    lines.push('- 开局锚点之前的原作主线不得被自动补演或转跳推进；若提及，只能作为既成背景、回忆、资料、新闻或旁人简述。');
-  }
+  // 开局档案的承接铁则由「# 开局档案（长期锚点）」段（含 D4 精简版）承担,此处不再复述。
   return `# 主剧情运行锚点\n\n${lines.join('\n')}`;
 }
 
@@ -637,6 +579,14 @@ function buildOpeningArchiveSection(worldState: 世界状态, isOpeningTurn: boo
   const archive = worldState.开局档案;
   if (!archive) return '';
   const summary = archive.整理档案;
+  // D4(结构轮): 非开局回合降级为摘要——全量档案只在开局回合注入,后续回合保留身份/地点/承接铁则。
+  if (!isOpeningTurn) {
+    const slim: string[] = [];
+    slim.push(`- 开局：${archive.来源 === 'free' ? '自由开局' : archive.来源 === 'workshop' ? '创意工坊' : '官方预设'} / ${archive.地区名称} / ${archive.章节锚点名称}（锚点之前的主线只作既成背景，不得补演）`);
+    if (summary?.玩家身份 || summary?.当前目标) slim.push(`- 玩家身份与目标：${[summary?.玩家身份, summary?.当前目标].filter(Boolean).join('；')}`);
+    slim.push('- 后续回合必须承接开局档案和当前地点，不能无理由回到默认黑塔空间站开局，也不得把玩家强行拉回导入章节的默认入口。');
+    return `# 开局档案（长期锚点）\n\n${slim.join('\n')}`;
+  }
   const lines: string[] = [];
   lines.push(`- 当前开局模式：${archive.来源 === 'free' ? '自由开局' : archive.来源 === 'workshop' ? '创意工坊' : '官方预设'}`);
   lines.push(`- 来源：${archive.来源 === 'free' ? '自由开局' : archive.来源 === 'workshop' ? '创意工坊' : '官方预设'}`);

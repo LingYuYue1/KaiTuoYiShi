@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { 图片槽位, 图片生成任务来源, 图片目标类型 } from '@/models/imageGeneration';
+import type { NovelAITaskOverrides, StorySnapshotRenderContext, 图片槽位, 图片生成任务来源, 图片目标类型 } from '@/models/imageGeneration';
 import type { 文生图API配置 } from '@/models/settings';
 
 export type WorkTab = 'manual' | 'gallery' | 'anchor' | 'scene' | 'sceneImage' | 'phone' | 'reference' | 'rules' | 'queue' | 'settings';
@@ -17,15 +17,7 @@ export type AlbumImportTarget = {
   targetId?: string;
   sceneKind?: Exclude<SceneLibraryFilter, 'all'>;
 };
-export type StorySnapshotSummary = {
-  title: string;
-  characters: string[];
-  location: string;
-  atmosphere: string;
-  action: string;
-  camera: string;
-  avoid: string;
-};
+export type { StorySnapshotSummary } from '@/services/ai/storySnapshotPipeline';
 export type SceneImageSummary = {
   title: string;
   location: string;
@@ -109,6 +101,8 @@ export type GenerateOverride = {
   note?: string;
   statusMessage?: string;
   disabledMessage?: string;
+  storySnapshotContext?: StorySnapshotRenderContext;
+  novelAIOverrides?: NovelAITaskOverrides;
 };
 
 export type NavGroupId = 'generate' | 'library' | 'tasks' | 'settings';

@@ -1,7 +1,8 @@
 ﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { 读取图片参考目标 } from '@/models/imageGeneration';
-import type { 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
+import { normalizeNovelAITaskOverrides, normalizeStorySnapshotRenderContext, 读取图片参考目标 } from '@/models/imageGeneration';
+import type { NovelAITaskOverrides, StorySnapshotRenderContext, 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
+import type { NovelAIRequestPayload } from '@/services/ai/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
 import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
@@ -32,7 +33,11 @@ import {
 import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
-import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
+import { parseSceneImagePrompt } from '@/services/ai/narrativeImageParse';
+import {
+  selectPresentStorySnapshotNpcs,
+  trimStorySnapshotSource,
+} from '@/services/ai/storySnapshotPipeline';
 import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
 import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
@@ -1513,7 +1518,97 @@ export type StorySnapshotWorkspaceProps = SceneCreationWorkspaceProps & {
   summary: StorySnapshotSummary | null;
   analyzing: boolean;
   onBuildSnapshotPrompt: () => void | Promise<void>;
+  backend: string;
+  storySnapshotContext: StorySnapshotRenderContext | null;
+  onStorySnapshotContextChange: (value: StorySnapshotRenderContext) => void;
+  novelAIOverrides: NovelAITaskOverrides;
+  onNovelAIOverridesChange: (value: NovelAITaskOverrides) => void;
+  compiledNovelAIPreview: NovelAIRequestPayload | null;
 };
+
+function NovelAIStorySnapshotEditor(props: Pick<StorySnapshotWorkspaceProps,
+  | 'storySnapshotContext'
+  | 'onStorySnapshotContextChange'
+  | 'novelAIOverrides'
+  | 'onNovelAIOverridesChange'
+  | 'compiledNovelAIPreview'
+>) {
+  const context = props.storySnapshotContext;
+  if (!context) return null;
+  const patchContext = (patch: Partial<StorySnapshotRenderContext>) => {
+    props.onStorySnapshotContextChange({ ...context, ...patch });
+  };
+  const patchOverride = (patch: NovelAITaskOverrides) => {
+    props.onNovelAIOverridesChange({ ...props.novelAIOverrides, ...patch });
+  };
+  const parameters = props.compiledNovelAIPreview?.parameters;
+  const v4Prompt = parameters?.v4_prompt?.caption;
+  const v4Negative = parameters?.v4_negative_prompt?.caption;
+  return (
+    <Panel title="NAI 分层提示词">
+      <div className="space-y-4">
+        <div className="grid gap-3 lg:grid-cols-2">
+          <Field label="Base Prompt">
+            <textarea rows={5} value={context.scenePrompt} onChange={(event) => patchContext({ scenePrompt: event.target.value })} className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs" style={{ clipPath: smallClip }} />
+          </Field>
+          <Field label="Base Negative">
+            <textarea rows={5} value={context.sceneNegativePrompt} onChange={(event) => patchContext({ sceneNegativePrompt: event.target.value })} className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs" style={{ clipPath: smallClip }} />
+          </Field>
+        </div>
+        <div className="grid gap-3 xl:grid-cols-2">
+          {context.characters.map((character, index) => (
+            <div key={`${character.name}-${index}`} className="space-y-3 p-3" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.32)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.14)', clipPath: smallClip }}>
+              <label className="flex items-center gap-2 text-xs" style={{ color: titleColor }}>
+                <input
+                  type="checkbox"
+                  checked={character.enabled !== false}
+                  onChange={(event) => patchContext({
+                    characters: context.characters.map((item, characterIndex) => characterIndex === index ? { ...item, enabled: event.target.checked } : item),
+                  })}
+                />
+                <span className="font-serif font-bold">{character.name}</span>
+              </label>
+              <Field label="Character Prompt">
+                <textarea rows={4} value={character.visualPrompt} onChange={(event) => patchContext({ characters: context.characters.map((item, characterIndex) => characterIndex === index ? { ...item, visualPrompt: event.target.value } : item) })} className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs" style={{ clipPath: smallClip }} />
+              </Field>
+              <Field label="Character Negative">
+                <textarea rows={3} value={character.negativePrompt} onChange={(event) => patchContext({ characters: context.characters.map((item, characterIndex) => characterIndex === index ? { ...item, negativePrompt: event.target.value } : item) })} className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs" style={{ clipPath: smallClip }} />
+              </Field>
+            </div>
+          ))}
+        </div>
+        <details className="p-3" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.24)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
+          <summary className="cursor-pointer font-serif text-xs font-bold tracking-[0.12em]" style={{ color: titleColor }}>本次 NAI 覆盖</summary>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Field label="Quality 模式">
+              <select value={props.novelAIOverrides.qualityMode ?? ''} onChange={(event) => patchOverride({ qualityMode: (event.target.value || undefined) as NovelAITaskOverrides['qualityMode'] })} className="kaituo-input w-full px-3 py-2 text-sm">
+                <option value="">沿用接口设置</option><option value="official">官方</option><option value="append">追加</option><option value="replace">替换</option><option value="off">关闭</option>
+              </select>
+            </Field>
+            <Field label="UC 模式">
+              <select value={props.novelAIOverrides.ucMode ?? ''} onChange={(event) => patchOverride({ ucMode: (event.target.value || undefined) as NovelAITaskOverrides['ucMode'] })} className="kaituo-input w-full px-3 py-2 text-sm">
+                <option value="">沿用接口设置</option><option value="official">官方</option><option value="append">追加</option><option value="replace">替换</option><option value="off">关闭</option>
+              </select>
+            </Field>
+            <Field label="Quality 字符串"><textarea rows={3} value={props.novelAIOverrides.qualityText ?? ''} onChange={(event) => patchOverride({ qualityText: event.target.value })} className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs" /></Field>
+            <Field label="UC 字符串"><textarea rows={3} value={props.novelAIOverrides.ucText ?? ''} onChange={(event) => patchOverride({ ucText: event.target.value })} className="kaituo-input w-full resize-y px-3 py-2 font-mono text-xs" /></Field>
+          </div>
+        </details>
+        {props.compiledNovelAIPreview && (
+          <details className="p-3" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.24)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
+            <summary className="cursor-pointer font-serif text-xs font-bold tracking-[0.12em]" style={{ color: titleColor }}>最终编译预览</summary>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <Field label="base_caption"><pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs" style={{ background: 'rgba(var(--tj-bg-primary),0.48)', color: bodyColor }}>{v4Prompt?.base_caption ?? props.compiledNovelAIPreview.input}</pre></Field>
+              <Field label="UC"><pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs" style={{ background: 'rgba(var(--tj-bg-primary),0.48)', color: bodyColor }}>{parameters?.uc ?? ''}</pre></Field>
+              <Field label="Positive char_captions"><pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs" style={{ background: 'rgba(var(--tj-bg-primary),0.48)', color: bodyColor }}>{JSON.stringify(v4Prompt?.char_captions ?? [], null, 2)}</pre></Field>
+              <Field label="Negative char_captions"><pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs" style={{ background: 'rgba(var(--tj-bg-primary),0.48)', color: bodyColor }}>{JSON.stringify(v4Negative?.char_captions ?? [], null, 2)}</pre></Field>
+            </div>
+          </details>
+        )}
+      </div>
+    </Panel>
+  );
+}
 
 export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
   const selectedOption = props.sourceOptions.find((option) => option.id === props.sourceMode) ?? props.sourceOptions[0];
@@ -1535,9 +1630,19 @@ export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
       promptButtonLabel="生成快照提示词"
       busyLabel="解析中"
       busyWhen={props.tokenizing || props.analyzing}
-      hideAdvancedPrompt
+      hideAdvancedPrompt={props.backend === 'novelai'}
       lowerContent={(
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-4">
+          {props.backend === 'novelai' && (
+            <NovelAIStorySnapshotEditor
+              storySnapshotContext={props.storySnapshotContext}
+              onStorySnapshotContextChange={props.onStorySnapshotContextChange}
+              novelAIOverrides={props.novelAIOverrides}
+              onNovelAIOverridesChange={props.onNovelAIOverridesChange}
+              compiledNovelAIPreview={props.compiledNovelAIPreview}
+            />
+          )}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <Panel title="快照与提示词">
             <div className="space-y-4">
               <OptionButtonGroup
@@ -1602,6 +1707,7 @@ export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
               <div className="mt-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>故事快照默认更适合横图；如果想做竖向海报可改为自定义。</div>
               <GenerationSummary target={props.currentTarget} size={props.resolvedSize} />
             </Panel>
+          </div>
           </div>
         </div>
       )}
@@ -2423,16 +2529,7 @@ export function mapMountedSlotToTravelerSlot(key: string): '头像' | '正文头
 }
 
 export function buildPresentSceneNpcs(npcs: NPC记录[], sceneText: string): NPC记录[] {
-  const text = sceneText.trim();
-  return npcs
-    .map((npc) => ({
-      npc,
-      score: (text && (text.includes(npc.姓名) || Boolean(npc.别名 && text.includes(npc.别名))) ? 100 : 0) + (npc.同行 ? 80 : 0) + (npc.图像档案?.角色锚点?.正面提示词 ? 20 : 0),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || b.npc.最近回合 - a.npc.最近回合)
-    .map((item) => item.npc)
-    .slice(0, 4);
+  return selectPresentStorySnapshotNpcs(npcs, sceneText);
 }
 
 export function buildStorySnapshotSourceOptions(history: 聊天消息[]): StorySnapshotSourceOption[] {
@@ -2440,8 +2537,8 @@ export function buildStorySnapshotSourceOptions(history: 聊天消息[]): StoryS
   const latest = assistantMessages[assistantMessages.length - 1]?.content.trim() ?? '';
   const previous = assistantMessages[assistantMessages.length - 2]?.content.trim() ?? latest;
   return [
-    { id: 'latest_assistant', title: '最近正文', desc: latest ? '上一条回复' : '暂无正文', text: trimSnapshotSource(latest) },
-    { id: 'previous_turn', title: '上一回合', desc: previous && previous !== latest ? '再前一条' : '可回退', text: trimSnapshotSource(previous) },
+    { id: 'latest_assistant', title: '最近正文', desc: latest ? '上一条回复' : '暂无正文', text: trimStorySnapshotSource(latest) },
+    { id: 'previous_turn', title: '上一回合', desc: previous && previous !== latest ? '再前一条' : '可回退', text: trimStorySnapshotSource(previous) },
     { id: 'manual', title: '手动片段', desc: '自行粘贴', text: '' },
   ];
 }
@@ -2454,70 +2551,6 @@ export function characterAnchorHasPersistentContent(anchor?: NPC角色锚点档�
     anchor.负面提示词?.trim() ||
     Object.values(anchor.结构化特征 ?? {}).some((list) => Array.isArray(list) && list.some((item) => String(item ?? '').trim())),
   );
-}
-
-export function trimSnapshotSource(text: string): string {
-  return text
-    .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
-    .replace(/<变量事实>[\s\S]*?<\/变量事实>/g, '')
-    .replace(/<变量更新>[\s\S]*?<\/变量更新>/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 1800);
-}
-
-export function extractStorySnapshot(text: string, traveler: 角色数据结构, npcs: NPC记录[]): StorySnapshotSummary {
-  const source = trimSnapshotSource(text);
-  const compact = source.replace(/\s+/g, ' ').trim();
-  const names = [traveler.姓名 || '旅人', ...npcs.map((npc) => npc.姓名), ...npcs.flatMap((npc) => npc.别名 ? [npc.别名] : [])]
-    .filter(Boolean)
-    .filter((name, index, list) => list.indexOf(name) === index);
-  const characters = names.filter((name) => compact.includes(name)).slice(0, 5);
-  const locationMatch = compact.match(/(?:在|于|来到|抵达|走进|进入)([^，。！？；]{2,18}(?:车厢|房间|大厅|街道|广场|港口|空间站|列车|仙舟|实验室|走廊|庭院|舱室|店|馆|城|镇|星球|裂界))/);
-  const location = locationMatch?.[1]?.trim() || '当前剧情发生地点';
-  const actionSentence = pickSentence(compact, ['走', '看', '握', '站', '坐', '伸', '转', '推', '接', '递', '笑', '沉默', '望', '靠近', '离开']) || compact.slice(0, 80) || '角色在当前情境中形成一个可视化瞬间';
-  const atmosphere = inferSnapshotAtmosphere(compact);
-  const title = buildSnapshotTitle(location, actionSentence);
-  return {
-    title,
-    characters,
-    location,
-    atmosphere,
-    action: actionSentence,
-    camera: characters.length >= 2 ? '中景，保留人物站位关系与环境线索' : '中远景，先交代环境，再突出主体动作',
-    avoid: '避免无关角色、现代摄影棚感、过度拥挤构图、与正文矛盾的服装或地点',
-  };
-}
-
-export function pickSentence(text: string, keywords: string[]): string {
-  const sentences = text.split(/[。！？!?]/).map((item) => item.trim()).filter(Boolean);
-  return sentences.find((sentence) => keywords.some((keyword) => sentence.includes(keyword))) || sentences[0] || '';
-}
-
-export function inferSnapshotAtmosphere(text: string): string {
-  if (/紧张|警惕|危险|压迫|战斗|爆炸|追逐|枪|刃|血/.test(text)) return '紧张、压迫、带有行动前后的张力';
-  if (/温暖|笑|点心|午后|柔和|安静|闲聊|放松/.test(text)) return '温暖、安静、日常感';
-  if (/雨|夜|霓虹|阴影|沉默|低声|秘密/.test(text)) return '低调、潮湿、带一点悬疑感';
-  if (/实验|数据|屏幕|机械|空间站|装置/.test(text)) return '冷光、科技感、理性而克制';
-  return '贴合正文情绪，保留剧情现场感';
-}
-
-export function buildSnapshotTitle(location: string, action: string): string {
-  const subject = location.replace(/^当前剧情发生/, '').slice(0, 10) || '故事瞬间';
-  const actionHint = action.replace(/[“”"']/g, '').slice(0, 12);
-  return `${subject}${actionHint ? ` · ${actionHint}` : ''}`;
-}
-
-export function formatStorySnapshotSceneText(summary: StorySnapshotSummary): string {
-  return [
-    `画面标题：${summary.title}`,
-    `出场人物：${summary.characters.length ? summary.characters.join('、') : '按正文片段决定'}`,
-    `地点：${summary.location}`,
-    `氛围：${summary.atmosphere}`,
-    `关键动作：${summary.action}`,
-    `镜头构图：${summary.camera}`,
-    `不要出现：${summary.avoid}`,
-  ].join('\n');
 }
 
 export function buildSceneSourceText(text: string, traveler: 角色数据结构, presentNpcs: NPC记录[]): string {
@@ -2635,6 +2668,8 @@ export function createTask(input: {
   targetId?: string;
   dimensions?: string;
   referenceImageIds?: string[];
+  storySnapshotContext?: import('@/models/imageGeneration').StorySnapshotRenderContext;
+  novelAIOverrides?: import('@/models/imageGeneration').NovelAITaskOverrides;
 }): 图片生成任务 {
   return {
     id: `img_task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -2654,6 +2689,8 @@ export function createTask(input: {
     anchorSummary: input.anchorSummary,
     referenceImageIds: input.referenceImageIds ?? [],
     dimensions: input.dimensions,
+    storySnapshotContext: normalizeStorySnapshotRenderContext(input.storySnapshotContext),
+    novelAIOverrides: normalizeNovelAITaskOverrides(input.novelAIOverrides),
     retryCount: 0,
     createdAt: Date.now(),
     startedAt: Date.now(),

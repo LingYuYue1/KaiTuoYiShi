@@ -1,0 +1,62 @@
+import { ArrowLeft, Wrench, X } from 'lucide-react';
+import type { CSSProperties } from 'react';
+
+interface ZhikuHeaderProps {
+  title?: string;
+  subtitle?: string;
+  emblemSrc?: string;
+  onBack?: () => void;
+  onOpenMaintenance?: () => void;
+  onClose?: () => void;
+}
+
+export function ZhikuHeader({
+  title = '智库',
+  subtitle = '星海档案',
+  emblemSrc,
+  onBack,
+  onOpenMaintenance,
+  onClose,
+}: ZhikuHeaderProps) {
+  const emblemStyle = emblemSrc
+    ? ({ '--zhiku-header-emblem': `url("${emblemSrc}")` } as CSSProperties)
+    : undefined;
+
+  return (
+    <header className="zhiku-v2-header">
+      <div className="zhiku-v2-header__left">
+        {onBack && (
+          <button type="button" className="zhiku-v2-header__back" onClick={onBack} aria-label="返回分类大厅" title="返回分类大厅">
+            <ArrowLeft size={21} strokeWidth={1.6} />
+          </button>
+        )}
+        <div className="zhiku-v2-header__identity">
+          <span
+            className="zhiku-v2-header__mark"
+            data-emblem={emblemSrc ? 'true' : 'false'}
+            style={emblemStyle}
+            aria-hidden="true"
+          >
+            <span />
+          </span>
+          <div>
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+        </div>
+      </div>
+      <div className="zhiku-v2-header__actions">
+        {onOpenMaintenance && (
+          <button type="button" onClick={onOpenMaintenance} aria-label="维护智库" title="维护智库">
+            <Wrench size={19} strokeWidth={1.5} />
+          </button>
+        )}
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label="关闭智库" title="关闭智库">
+            <X size={23} strokeWidth={1.5} />
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}

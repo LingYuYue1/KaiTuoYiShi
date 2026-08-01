@@ -1,7 +1,6 @@
-// 已废弃：内容已迁移到 builtinPromptModules.ts 的 builtin_news_worldbook 模块。
-// 保留此文件作为历史参考；newsModel.ts 已不再直接 import 此常量，
-// 而是从 settings.promptModules 中读取对应模块内容。
-// 若未来需要回退，可重新启用此导出并恢复 newsModel.ts 的旧调用路径。
+// 注意：此文件【仍在生效】——builtinPromptModules.ts import 本常量包装为
+// builtin_news_worldbook 模块（新闻系统从 settings.promptModules 读取）。
+// 旧注释误标"已废弃"曾造成误导，2026-07-26 批次6 修正：本文件是该模块内容的唯一源。
 export const NEWS_WORLD_BOOK_PROMPT = `# 世界书：星际和平周报
 
 ## 系统定位

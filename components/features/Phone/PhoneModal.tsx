@@ -1041,7 +1041,7 @@ export function PhoneModal({
               {activeApp === 'messages' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
                   <aside
-                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col overflow-hidden xl:w-[292px]`}
+                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-1 flex-col overflow-hidden xl:w-[292px] xl:flex-none`}
                     style={{
                       borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
                       background: 'rgba(var(--tj-bubble), 0.86)',
@@ -1293,7 +1293,7 @@ export function PhoneModal({
               ) : activeApp === 'contacts' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
                   <aside
-                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-shrink-0 flex-col overflow-hidden xl:w-[280px]`}
+                    className={`${mobileView === 'list' ? 'flex' : 'hidden xl:flex'} min-h-0 w-full flex-1 flex-col overflow-hidden xl:w-[280px] xl:flex-none`}
                     style={{
                       borderRight: '1px solid rgba(var(--tj-accent-primary), 0.22)',
                       background: 'rgba(var(--tj-bubble), 0.86)',

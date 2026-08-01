@@ -12,6 +12,7 @@ import { 解析相册资源引用 } from '@/utils/albumActions';
 interface TurnItemProps {
   message: 聊天消息;
   isStreaming?: boolean;
+  deferOffscreen?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
   onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
   narrativeImageManualEnabled?: boolean;
@@ -27,25 +28,33 @@ interface TurnItemProps {
 
 type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
 
-function TurnItemImpl({ message, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
+const HISTORY_TURN_VISIBILITY_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 640px',
+} as const;
+
+function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
+  const shouldDeferOffscreen = deferOffscreen && !isStreaming && !message.isStreaming;
+  const visibilityStyle = shouldDeferOffscreen ? HISTORY_TURN_VISIBILITY_STYLE : undefined;
 
   if (isUser) {
     return (
-      <div className="mb-4 animate-slide-up">
+      <div className="mb-4 animate-slide-up" style={visibilityStyle}>
         <UserTurnBubble content={message.content} traveler={traveler} album={album} fontSize={visualTextSettings?.playerFontSize ?? 14} />
       </div>
     );
   }
 
   return (
-    <div className="mb-4 animate-slide-up">
+    <div className="mb-4 animate-slide-up" style={visibilityStyle}>
       {parsed ? (
         <AiTurnCard
           message={message}
           parsed={parsed}
           isStreaming={isStreaming}
+          deferOffscreen={shouldDeferOffscreen}
           onEditBody={onEditBody}
           onRegenerateNarrativeImage={onRegenerateNarrativeImage}
           narrativeImageManualEnabled={narrativeImageManualEnabled}
@@ -91,7 +100,7 @@ function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: 
             }}
           />
           <div
-            className="relative px-4 py-2.5"
+            className="relative whitespace-pre-wrap break-words px-4 py-2.5"
             style={{
               background: bubbleBg,
               color: 'rgba(var(--tj-chat-text), 0.98)',
@@ -156,6 +165,7 @@ interface AiTurnCardProps {
   message: 聊天消息;
   parsed: NonNullable<聊天消息['parsedResponse']>;
   isStreaming?: boolean;
+  deferOffscreen?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
   onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
   narrativeImageManualEnabled?: boolean;
@@ -168,7 +178,7 @@ interface AiTurnCardProps {
   visualTextSettings?: VisualTextSettings;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -308,10 +318,11 @@ function AiTurnCard({ message, parsed, isStreaming, onEditBody, onRegenerateNarr
             traveler={traveler}
             album={album}
             showInnerVoice={showInnerVoice}
+            deferOffscreen={deferOffscreen}
             visualTextSettings={visualTextSettings}
           />
         ) : (
-          <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={previousUserInput} visualTextSettings={visualTextSettings} />
+          <BodyBlock content={parsed.body} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={previousUserInput} visualTextSettings={visualTextSettings} deferOffscreen={deferOffscreen} />
         )}
 
         {isStreaming && (
@@ -606,6 +617,7 @@ function AwakeningOracleBlock({
   traveler,
   album,
   showInnerVoice = true,
+  deferOffscreen = false,
   visualTextSettings,
 }: {
   content: string;
@@ -615,6 +627,7 @@ function AwakeningOracleBlock({
   traveler?: 角色数据结构;
   album?: 相册系统;
   showInnerVoice?: boolean;
+  deferOffscreen?: boolean;
   visualTextSettings?: VisualTextSettings;
 }) {
   if (!content?.trim()) return null;
@@ -640,7 +653,7 @@ function AwakeningOracleBlock({
           <span style={{ color: 'rgba(var(--tj-btn-primary-end),0.6)' }}>{pathName}</span>
         )}
       </div>
-      <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} visualTextSettings={visualTextSettings} />
+      <BodyBlock content={content} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} visualTextSettings={visualTextSettings} deferOffscreen={deferOffscreen} />
     </div>
   );
 }

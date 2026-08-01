@@ -141,6 +141,7 @@ for (const sourcePath of [
   'models/storyWeaving.ts',
   'models/news.ts',
   'models/zhiku.ts',
+  'models/zhikuGovernance.ts',
   'services/storyWeaving.ts',
   'services/promptModuleScopes.ts',
   'services/storyProgressService.ts',
@@ -161,6 +162,8 @@ writeStub('prompts/cot/storyWeavingOutputFormat.mjs', 'export const STORY_WEAVIN
 writeStub('data/storyWeavingWorldbook.mjs', 'export const STORY_WEAVING_WORLD_BOOK_PROMPT = "";\n');
 writeStub('prompts/cot/newsCot.mjs', 'export const NEWS_COT_PROMPT = "";\n');
 writeStub('prompts/cot/phoneCot.mjs', 'export const PHONE_COT_PROMPT = "";\n');
+writeStub('prompts/cot/phoneOutputFormat.mjs', 'export const PHONE_OUTPUT_FORMAT_PROMPT = "";\n');
+writeStub('prompts/cot/phoneStyle.mjs', 'export const PHONE_STYLE_PROMPT = "";\n');
 writeStub('prompts/cot/variableCot.mjs', 'export const VARIABLE_COT_PROMPT = "";\n');
 writeStub('prompts/cot/variableOutputFormat.mjs', 'export const VARIABLE_OUTPUT_FORMAT_PROMPT = "";\n');
 writeStub('data/newsWorldbook.mjs', 'export const NEWS_WORLD_BOOK_PROMPT = "";\n');
