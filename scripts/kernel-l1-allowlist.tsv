@@ -20,7 +20,7 @@ components/features/Settings/VariableUpdateSettings.tsx	1
 components/features/Settings/YitingSettingsTab.tsx	1
 components/features/Settings/ZhikuSettingsTab.tsx	1
 hooks/useGame.ts	3
-hooks/useGame/commitTurn.ts	1
+hooks/useGame/commitTurn.ts	2
 hooks/useGame/saveLoadWorkflow.ts	4
 hooks/useGame/sendWorkflow.ts	1
 hooks/useGameState.ts	7

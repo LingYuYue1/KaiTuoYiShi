@@ -699,17 +699,6 @@
       "count": 1
     }
   },
-  "hooks/useGame.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-invalid-void-type": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    }
-  },
   "hooks/useGame/contextSnapshot.ts": {
     "@typescript-eslint/no-deprecated": {
       "count": 3

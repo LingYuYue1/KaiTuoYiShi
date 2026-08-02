@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
+import { 初始化新局checkpoint } from '@/hooks/useGame/commitTurn';
 import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeImageWorkflow';
 import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
@@ -9,13 +10,16 @@ import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
+import { 取游戏设置运行态键 } from '@/models/settings';
 import type { API配置项 } from '@/models/settings';
+import type { NewestStory字段集 } from '@/models/newestStory';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
 import { saveSetting } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
+import { devLog } from '@/utils/devLog';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -26,10 +30,10 @@ export interface UseGameReturn {
     handleContinue: () => Promise<boolean>;
     handleGoHome: () => void;
     handleSave: () => Promise<number>;
-    handleReroll: () => Promise<string | void>;
+    handleReroll: () => Promise<string | undefined>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
-    handleRestartOpening: () => void;
+    handleRestartOpening: () => Promise<void>;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
   };
 }
@@ -108,7 +112,7 @@ export function useGame(): UseGameReturn {
   // 重roll：找到最后一条 user → AI 对，回滚状态，并把 user 输入交还给输入框。
   // 关键：用 aiMsg.preTurnSnapshot 把所有变量切片回滚到「该 user 发送前」的状态，
   // 防止重 roll 后上一次的 NPC / 新闻等副作用与新一次的叠加。
-  const handleReroll = useCallback(async (): Promise<string | void> => {
+  const handleReroll = useCallback(async (): Promise<string | undefined> => {
     const s = stateRef.current;
     if (s.loading || s.pendingVariable) {
       s.setWorkflowHint('后台结算尚未完成，稍等完成后再重roll，避免记忆/忆庭/变量写入错位。');
@@ -120,7 +124,7 @@ export function useGame(): UseGameReturn {
 
     // 特殊情况：最后一条是 user 且没有对应的 assistant，说明本回合主剧情生成失败了。
     // 此时只回退这条孤立的 user 消息，不应回退到上一回合。
-    const lastMsg = history[history.length - 1];
+    const lastMsg = history.at(-1);
     if (lastMsg && lastMsg.role === 'user') {
       // 孤立 user：主剧情生成失败，只砍掉这条 user
       const userInput = lastMsg.content;
@@ -196,38 +200,50 @@ export function useGame(): UseGameReturn {
   // 重新开局：清掉所有运行时累积的变量切片，保留创角设定（名字 / 命途 / 世界周期 等）。
   // 不这样做的话，老的 NPC / 新闻 / 剧情节点 / variableBatches / 全局事件
   // 会留在状态里和新开局叠加，下次重开就是双份甚至 N 份数据。
-  const handleRestartOpening = useCallback(() => {
+  const handleRestartOpening = useCallback(async () => {
     const s = stateRef.current;
+    devLog('save', 'new-game-initialize-start', { entry: 'restart' });
     if (s.loading) {
       s.abortControllerRef.current?.abort();
+      s.abortControllerRef.current = null;
     }
-    s.setChatHistory([]);
-    s.set记忆(创建空记忆系统());
-    s.set忆庭(创建空忆庭系统());
-    s.set手机(创建空手机系统());
+    const initialChatHistory: NewestStory字段集['chatHistory'] = [];
+    const initialMemory = 创建空记忆系统();
+    const initialYiting = 创建空忆庭系统();
+    const initialPhone = 创建空手机系统();
+    const initialNews: NewestStory字段集['新闻'] = [];
+    const initialPlot: NewestStory字段集['剧情'] = [];
+    const initialVariableBatches: NewestStory字段集['variableBatches'] = [];
+    const initialQueueTasks: NewestStory字段集['queueTasks'] = [];
+    s.setChatHistory(initialChatHistory);
+    s.set记忆(initialMemory);
+    s.set忆庭(initialYiting);
+    s.set手机(initialPhone);
     s.setTurnCount(1);
     setStreamingMessage('');
 
     const restartOpeningArchive = 归一化开局档案(s.世界.开局档案, s.世界);
+    const nextNPC = 根据开局档案创建初始NPC记录(restartOpeningArchive);
 
     // 清空所有运行时累积的独立切片，再按开局档案恢复初始关系种子
-    s.setNPC(根据开局档案创建初始NPC记录(restartOpeningArchive));
-    s.set新闻([]);
-    s.set剧情([]);
-    s.setVariableBatches([]);
-    s.setQueueTasks([]);
+    s.setNPC(nextNPC);
+    s.set新闻(initialNews);
+    s.set剧情(initialPlot);
+    s.setVariableBatches(initialVariableBatches);
+    s.setQueueTasks(initialQueueTasks);
     const nextStoryWeaving = alignStoryWeavingToOpeningArchive(s.剧情编织, restartOpeningArchive);
     s.set剧情编织(nextStoryWeaving);
-    saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+    void saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
 
     // worldState：保留创角时的 currentPeriod / difficulty / storyMode / startingScenarioId / customStartPrompt。
     // 重新开局时必须重建开局档案对应的已成立事实，否则非黑塔/自由开局会只剩字段，缺少后续注入锚点。
-    s.set世界((prev) => {
+    const nextWorld = (() => {
+      const prev = s.世界;
       const openingArchive = restartOpeningArchive;
       const openingSummary = openingArchive.整理档案;
       const nextLocation =
         openingSummary?.初始地点参考?.trim()
-        || prev.当前地点?.trim()
+        || prev.当前地点.trim()
         || openingArchive.地区名称;
       const nextDate = openingSummary?.初始日期参考?.trim() || prev.当前日期;
       const nextTime = openingSummary?.初始时间参考?.trim() || prev.当前时间 || '06:40';
@@ -251,15 +267,44 @@ export function useGame(): UseGameReturn {
         活跃人物: [],
         氛围变化: '',
       };
-    });
+    })();
+    s.set世界(nextWorld);
 
     // traveler：保留创角时的所有静态字段，把道具运行时累积重置回开局态
-    s.set旅人((prev) => ({
-      ...prev,
+    const nextTraveler = {
+      ...s.旅人,
       背包: [],
-    }));
+    };
+    s.set旅人(nextTraveler);
 
-    s.setPendingOpeningTrigger('[系统] 开启第 0 回合');
+    const pendingOpeningTrigger = '[系统] 开启第 0 回合';
+    s.setPendingOpeningTrigger(pendingOpeningTrigger);
+    const { macroGlobalVars, worldbookTriggerStates } = 取游戏设置运行态键(s.gameSettings);
+    const initialFields: NewestStory字段集 = {
+      旅人: nextTraveler,
+      世界: nextWorld,
+      chatHistory: initialChatHistory,
+      记忆: initialMemory,
+      忆庭: initialYiting,
+      智库: s.智库,
+      手机: initialPhone,
+      NPC: nextNPC,
+      相册: s.相册,
+      新闻: initialNews,
+      剧情: initialPlot,
+      剧情编织: nextStoryWeaving,
+      variableBatches: initialVariableBatches,
+      queueTasks: initialQueueTasks,
+      turnCount: 1,
+      macroGlobalVars,
+      worldbookTriggerStates,
+      pendingOpeningTrigger,
+    };
+    await 初始化新局checkpoint(initialFields, {
+      gameSettings: s.gameSettings,
+      apiSettings: s.apiSettings,
+      theme: s.currentTheme,
+    });
   }, []);
 
   const getContextSnapshot = useCallback((kind?: ContextSnapshotKind) => {

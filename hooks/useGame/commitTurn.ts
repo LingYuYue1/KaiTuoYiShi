@@ -17,13 +17,14 @@
  * 不受限）。checkpoint 表四 store = saves / saveSummaries / saveAssets /
  * saveNodeDeltas（settings / newestStory 非 checkpoint 表）。
  */
-import { 迁移存档运行态键, type 存档数据 } from '@/models/settings';
+import { 迁移存档运行态键, type API设置, type 存档数据, type 游戏设置, type 主题预设 } from '@/models/settings';
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { loadSave, saveGame, saveNewestStory } from '@/services/dbService';
-import { 清空NewestStory记录, type NewestStory记录, type NewestStory字段集 } from '@/models/newestStory';
+import { 创建空NewestStory记录, 清空NewestStory记录, type NewestStory记录, type NewestStory字段集 } from '@/models/newestStory';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
 import { buildSaveGameSettingsSnapshot, commitActiveSaveTreeMeta, buildSavePayload } from './saveLoadWorkflow';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta } from '@/utils/saveTree';
+import { devLog, devLogError } from '@/utils/devLog';
 import type { TurnContext, TurnDeltas } from './turnTypes';
 
 type SaveWithTree = 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 };
@@ -96,6 +97,39 @@ function 组装Checkpoint值(base: 存档数据, state: UseGameStateReturn, newe
 /** 基值缺失（新局/升级首回合）时的兜底组装：走现有 buildSavePayload（state + 覆盖集），与剥离前行为一致。 */
 function 组装Checkpoint值从状态(state: UseGameStateReturn, newest: NewestStory记录): 存档数据 {
   return buildSavePayload(state, 'auto', 取Story覆盖字段(newest.story));
+}
+
+/** 新局边界：新增 auto 树根节点，并让 newest 从该初始 checkpoint 开始。 */
+export async function 初始化新局checkpoint(
+  fields: NewestStory字段集,
+  device: { gameSettings: 游戏设置; apiSettings: API设置; theme: 主题预设 },
+): Promise<{ checkpointId: number }> {
+  try {
+    const timestamp = Date.now();
+    const payload = attachSaveTreeMeta({
+      id: 0,
+      type: 'auto' as const,
+      timestamp,
+      ...fields,
+      gameSettings: buildSaveGameSettingsSnapshot(device.gameSettings),
+      apiSettings: device.apiSettings,
+      theme: device.theme,
+    }, buildNextSaveTreeMeta({
+      previous: null,
+      type: 'auto',
+      timestamp,
+    }));
+
+    const checkpointId = await saveGame(payload);
+    devLog('save', 'new-game-checkpoint-written', { checkpointId });
+    await saveNewestStory(清空NewestStory记录(创建空NewestStory记录(), checkpointId));
+    devLog('save', 'new-game-newest-cleared', { checkpointId });
+    commitActiveSaveTreeMeta(payload);
+    return { checkpointId };
+  } catch (error) {
+    devLogError('save', 'new-game-checkpoint-failed', error);
+    throw error;
+  }
 }
 
 /**
