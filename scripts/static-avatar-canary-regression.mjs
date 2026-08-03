@@ -21,21 +21,45 @@ const preservedCanaries = {
     bytes: 118754,
   },
 };
+const rejectedArlanDigest = '55c7e74be88c0697af5efa17f12d27b1e8265a80d33938da294125374ef7a122';
 
-const expectedLogicalIds = avatarInventory.characters.flatMap((character) => (
-  character.variants.map((variant) => {
-    const candidateId = path.basename(variant, '.png');
-    const match = /^(.+)-(\d+)$/.exec(candidateId);
-    assert.ok(match, `invalid avatar candidate id: ${candidateId}`);
-    return `avatar:${match[1]}:${match[2]}`;
-  })
-)).sort();
+function parseInventoryVariant(character, variant) {
+  if (variant.startsWith('static:')) {
+    const logicalId = variant.slice('static:'.length);
+    const match = /^avatar:([^:]+):(\d+)$/.exec(logicalId);
+    assert.ok(match, `invalid static avatar reference: ${variant}`);
+    assert.equal(match[1], character.id, `${variant} owner must match ${character.id}`);
+    return {
+      logicalId,
+      candidateId: `${match[1]}-${match[2]}`,
+      localPath: null,
+    };
+  }
+
+  const localPath = variant.replace(/^public[\\/]/, 'public/');
+  const candidateId = path.basename(localPath, '.png');
+  const match = /^(.+)-(\d+)$/.exec(candidateId);
+  assert.ok(match, `invalid local avatar candidate id: ${candidateId}`);
+  assert.equal(match[1], character.id, `${variant} owner must match ${character.id}`);
+  return {
+    logicalId: `avatar:${match[1]}:${match[2]}`,
+    candidateId,
+    localPath,
+  };
+}
+
+const inventoryVariants = avatarInventory.characters.flatMap((character) => (
+  character.variants.map((variant) => parseInventoryVariant(character, variant))
+));
+const expectedLogicalIds = inventoryVariants.map((variant) => variant.logicalId).sort();
 
 assert.equal(manifest.schemaVersion, 1, 'static asset manifest schema must remain version 1');
 assert.equal(manifest.assetBaseUrl, 'https://lingkvault.cc.cd', 'avatars must use the custom K-Vault domain');
-assert.ok(!Number.isNaN(Date.parse(manifest.generatedAt)), 'stage 4 manifest must record its generation time');
-assert.equal(expectedLogicalIds.length, 33, 'avatar inventory must contain exactly 33 candidates');
-assert.deepEqual(Object.keys(manifest.assets).sort(), expectedLogicalIds, 'all 33 avatar candidates must be remote');
+assert.ok(!Number.isNaN(Date.parse(manifest.generatedAt)), 'bulk avatar manifest must record its generation time');
+assert.equal(avatarInventory.characters.length, 89, 'avatar inventory must contain 89 characters');
+assert.equal(expectedLogicalIds.length, 113, 'avatar inventory must contain 113 candidates');
+assert.equal(new Set(expectedLogicalIds).size, 113, 'avatar inventory logical IDs must be unique');
+assert.deepEqual(Object.keys(manifest.assets).sort(), expectedLogicalIds, 'all 113 avatar candidates must be remote');
 
 const remotePaths = new Set();
 const remoteDigests = new Set();
@@ -59,6 +83,8 @@ for (const [logicalId, contract] of Object.entries(preservedCanaries)) {
   assert.equal(asset.sha256, contract.digest, `${logicalId} canary digest must be reused`);
   assert.equal(asset.bytes, contract.bytes, `${logicalId} canary byte length must be reused`);
 }
+assert.equal(manifest.assets['avatar:arlan:01'].sha256, '5aa8a592848f1134222e16ee2d1652052061a4de6dbc7a734ddeff9c2f8b921b', 'approved Arlan 01 must remain production');
+assert.ok(!remoteDigests.has(rejectedArlanDigest), 'rejected Arlan batch digest must stay out of the production manifest');
 
 const serializedManifest = JSON.stringify(manifest);
 for (const forbidden of ['sourceKey', 'telegram', 'TG_', 'Bot_Token', 'api_token', 'KVAULT_API_TOKEN']) {
@@ -67,10 +93,11 @@ for (const forbidden of ['sourceKey', 'telegram', 'TG_', 'Bot_Token', 'api_token
 
 const candidateDir = path.join(root, 'public/assets/builtin-avatars/candidates');
 const localPngs = fs.readdirSync(candidateDir).filter((name) => name.endsWith('.png'));
-assert.equal(localPngs.length, 33, 'stage 4 must retain all 33 local PNG avatars');
-for (const logicalId of expectedLogicalIds) {
-  const [, owner, variant] = logicalId.split(':');
-  assert.ok(fs.existsSync(path.join(candidateDir, `${owner}-${variant}.png`)), `${logicalId} local rollback source is missing`);
+const localInventoryVariants = inventoryVariants.filter((variant) => variant.localPath);
+assert.equal(localPngs.length, 33, 'bulk migration must retain all 33 repository-local PNG avatars');
+assert.equal(localInventoryVariants.length, 33, 'inventory must identify the 33 repository-local rollback variants');
+for (const variant of localInventoryVariants) {
+  assert.ok(fs.existsSync(path.join(root, variant.localPath)), `${variant.logicalId} local rollback source is missing`);
 }
 
 const placeholderPath = path.join(root, 'public/assets/static-fallback/avatar-placeholder.webp');
@@ -86,21 +113,21 @@ for (const contract of Object.values(preservedCanaries)) {
 assert.ok(resolver.includes("STATIC_ASSET_FALLBACK_AVATAR = '/assets/static-fallback/avatar-placeholder.webp'"), 'resolver must expose the local placeholder');
 assert.ok(resolver.includes("const STATIC_ASSET_LOGICAL_ID_PREFIX = 'static:'"), 'resolver must support logical static references');
 assert.ok(resolver.includes('entry.path.includes(entry.sha256)'), 'resolver must reject path/digest mismatches');
-assert.ok(resolver.includes("url.origin === base.origin"), 'remote static URL detection must stay on the manifest origin');
+assert.ok(resolver.includes('url.origin === base.origin'), 'remote static URL detection must stay on the manifest origin');
 
 const builtin = read('data/builtinAvatars.ts');
-for (const logicalId of expectedLogicalIds) {
-  const [, owner, variant] = logicalId.split(':');
-  const id = `${owner}-${variant}`;
-  assert.ok(builtin.includes(`src: avatarSource('${id}')`), `${id} must resolve through the static manifest`);
-  assert.ok(builtin.includes(`reference: avatarReference('${id}')`), `${id} must preserve a logical mount reference`);
+for (const variant of inventoryVariants) {
+  assert.ok(builtin.includes(`src: avatarSource('${variant.candidateId}')`), `${variant.candidateId} must resolve through the static manifest`);
+  assert.ok(builtin.includes(`reference: avatarReference('${variant.candidateId}')`), `${variant.candidateId} must preserve a logical mount reference`);
 }
+assert.ok(builtin.includes('LOCAL_AVATAR_CANDIDATE_IDS.has(id)'), 'built-in avatar sources must distinguish local rollback candidates');
+assert.ok(builtin.includes(': STATIC_ASSET_FALLBACK_AVATAR'), 'remote-only avatars must use the shared local placeholder as fallback');
 assert.ok(builtin.includes('isRemoteStaticAssetUrl(candidate.src)'), 'default surfaces must deliberately exercise migrated avatars');
 assert.ok(builtin.includes('candidates?.[0]?.src'), 'manifest lookup failures must retain the first candidate fallback');
 
 const resilientImage = read('components/ui/ResilientImage.tsx');
 assert.ok(resilientImage.includes('resolveStaticAssetReference(src) ?? src'), 'image component must resolve saved static references');
-assert.ok(resilientImage.includes("displaySrc !== fallbackSrc"), 'image fallback must stop after one substitution');
+assert.ok(resilientImage.includes('displaySrc !== fallbackSrc'), 'image fallback must stop after one substitution');
 assert.ok(resilientImage.includes("data-static-asset-fallback={displaySrc === fallbackSrc ? 'true' : 'false'}"), 'fallback state must be observable in UI verification');
 
 const albumActions = read('utils/albumActions.ts');
@@ -111,7 +138,7 @@ assert.ok(albumActions.includes('return trimmed'), 'legacy local paths and remot
 const albumWorkspace = read('components/features/GameSystems/album/workspaces.tsx');
 const albumPanel = read('components/features/GameSystems/AlbumPanel.tsx');
 assert.ok(albumWorkspace.includes('mountSrc?: string'), 'character library entries must separate display URLs from persisted references');
-assert.ok(albumWorkspace.includes('mountSrc: candidate.reference'), 'built-in canary entries must expose their logical mount reference');
+assert.ok(albumWorkspace.includes('mountSrc: candidate.reference'), 'built-in avatar entries must expose their logical mount reference');
 assert.ok(albumPanel.includes('item?.mountSrc || item?.src || params.src'), 'mounting must prefer the logical reference');
 
 const resilientSurfaces = [
@@ -126,8 +153,8 @@ const resilientSurfaces = [
 ];
 for (const file of resilientSurfaces) {
   const source = read(file);
-  assert.ok(source.includes("@/components/ui/ResilientImage"), `${file} must import the shared resilient image`);
+  assert.ok(source.includes('@/components/ui/ResilientImage'), `${file} must import the shared resilient image`);
   assert.ok(source.includes('<ResilientImage'), `${file} must render the shared resilient image`);
 }
 
-console.log('Static avatar regression passed: 33 remote avatars, 33 local rollback PNGs, shared fallback coverage.');
+console.log('Static avatar regression passed: 113 remote avatars across 89 characters, 33 repository-local rollback PNGs, shared fallback coverage.');

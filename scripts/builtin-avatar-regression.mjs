@@ -2,56 +2,119 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const avatarTs = fs.readFileSync(path.join(root, 'data/builtinAvatars.ts'), 'utf8');
-const manifestPath = path.join(root, 'public/assets/builtin-avatars/candidates/avatar-candidates.json');
-const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-
-const requiredIds = [
-  'march7th',
-  'danheng',
-  'himeko',
-  'welt',
-  'pom-pom',
-  'herta',
-  'asta',
-  'arlan',
-  'stelle',
-  'caelus',
-  'bronya',
-];
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const avatarTs = read('data/builtinAvatars.ts');
+const staticManifest = JSON.parse(read('data/staticAssetManifest.json'));
+const inventory = JSON.parse(read('public/assets/builtin-avatars/candidates/avatar-candidates.json'));
 
 const errors = [];
-const characters = Array.isArray(manifest.characters) ? manifest.characters : [];
+const characters = Array.isArray(inventory.characters) ? inventory.characters : [];
+const characterIds = new Set();
+const characterNames = new Set();
+const logicalIds = new Set();
+let localVariantCount = 0;
 
-for (const id of requiredIds) {
-  const item = characters.find((character) => character.id === id);
-  if (!item) {
-    errors.push(`avatar-candidates.json missing character id: ${id}`);
+function parseVariant(character, variant) {
+  if (typeof variant !== 'string' || !variant.trim()) {
+    return { error: `${character.id} has an empty avatar variant` };
+  }
+
+  if (variant.startsWith('static:')) {
+    const logicalId = variant.slice('static:'.length);
+    const match = /^avatar:([^:]+):(\d+)$/.exec(logicalId);
+    if (!match || match[1] !== character.id) {
+      return { error: `${character.id} has an invalid static variant: ${variant}` };
+    }
+    return {
+      candidateId: `${match[1]}-${match[2]}`,
+      logicalId,
+      localPath: null,
+    };
+  }
+
+  const localPath = variant.replace(/^public[\\/]/, 'public/');
+  const candidateId = path.basename(localPath, '.png');
+  const match = /^(.+)-(\d+)$/.exec(candidateId);
+  if (!match || match[1] !== character.id || !localPath.endsWith('.png')) {
+    return { error: `${character.id} has an invalid local variant: ${variant}` };
+  }
+  return {
+    candidateId,
+    logicalId: `avatar:${match[1]}:${match[2]}`,
+    localPath,
+  };
+}
+
+for (const character of characters) {
+  if (!character?.id || !character?.name) {
+    errors.push('avatar inventory characters must have non-empty id and name fields');
     continue;
   }
-  if (!Array.isArray(item.variants) || item.variants.length !== 3) {
-    errors.push(`${id} should have exactly 3 avatar variants`);
+  if (characterIds.has(character.id)) errors.push(`duplicate avatar character id: ${character.id}`);
+  if (characterNames.has(character.name)) errors.push(`duplicate avatar character name: ${character.name}`);
+  if (character.name.includes('?')) errors.push(`${character.id} display name contains ?: ${character.name}`);
+  characterIds.add(character.id);
+  characterNames.add(character.name);
+
+  const canonicalNameEntry = `canonicalName: '${character.name}'`;
+  if (!avatarTs.includes(canonicalNameEntry)) {
+    errors.push(`builtinAvatars.ts missing canonical display name ${canonicalNameEntry}`);
+  }
+
+  if (!Array.isArray(character.variants) || character.variants.length === 0) {
+    errors.push(`${character.id} must have at least one avatar variant`);
     continue;
   }
-  for (const variant of item.variants) {
-    const filePath = path.join(root, variant.replace(/^public[\\/]/, 'public/'));
-    if (!fs.existsSync(filePath)) errors.push(`${id} manifest variant does not exist: ${variant}`);
+
+  for (const variant of character.variants) {
+    const parsed = parseVariant(character, variant);
+    if (parsed.error) {
+      errors.push(parsed.error);
+      continue;
+    }
+    if (logicalIds.has(parsed.logicalId)) errors.push(`duplicate avatar logical id: ${parsed.logicalId}`);
+    logicalIds.add(parsed.logicalId);
+
+    if (!staticManifest.assets[parsed.logicalId]) {
+      errors.push(`${parsed.logicalId} is missing from data/staticAssetManifest.json`);
+    }
+    if (parsed.localPath) {
+      localVariantCount += 1;
+      if (!fs.existsSync(path.join(root, parsed.localPath))) {
+        errors.push(`${character.id} local rollback variant does not exist: ${parsed.localPath}`);
+      }
+    }
+    if (!avatarTs.includes(`src: avatarSource('${parsed.candidateId}')`)) {
+      errors.push(`builtinAvatars.ts missing ${parsed.candidateId} source`);
+    }
+    if (!avatarTs.includes(`reference: avatarReference('${parsed.candidateId}')`)) {
+      errors.push(`builtinAvatars.ts missing ${parsed.candidateId} logical reference`);
+    }
+    const variantNumber = parsed.candidateId.match(/-(\d+)$/)?.[1];
+    const titleEntry = `title: '${character.name} ${variantNumber}'`;
+    if (!avatarTs.includes(titleEntry)) {
+      errors.push(`builtinAvatars.ts missing display title ${titleEntry}`);
+    }
+  }
+
+  for (const alias of character.aliases ?? []) {
+    if (alias.includes('?')) errors.push(`${character.id} alias contains ?: ${alias}`);
+    const aliasEntry = `'${alias}': '${character.name}'`;
+    if (!avatarTs.includes(aliasEntry)) errors.push(`builtinAvatars.ts missing alias ${aliasEntry}`);
   }
 }
 
-const aliasChecks = [
-  [`'丹恒·饮月': '丹恒'`, '丹恒·饮月 should reuse 丹恒 built-in avatars'],
-  [`'三月七·巡猎': '三月七'`, '三月七·巡猎 should reuse 三月七 built-in avatars'],
-  ['BUILTIN_AVATAR_CANONICAL_ALIASES[canonicalName] ?? canonicalName', 'getBuiltinAvatarSet should resolve avatar owner aliases'],
-];
-
-for (const [needle, message] of aliasChecks) {
-  if (!avatarTs.includes(needle)) errors.push(message);
+if (characters.length !== 89) errors.push(`avatar inventory should contain 89 characters, got ${characters.length}`);
+if (logicalIds.size !== 113) errors.push(`avatar inventory should contain 113 variants, got ${logicalIds.size}`);
+if (localVariantCount !== 33) errors.push(`avatar inventory should retain 33 repository-local PNG variants, got ${localVariantCount}`);
+if (!avatarTs.includes('LOCAL_AVATAR_CANDIDATE_IDS.has(id)')) {
+  errors.push('builtinAvatars.ts must distinguish repository-local rollback candidates');
 }
-
-for (const id of requiredIds) {
-  const prefix = id === 'pom-pom' ? 'pom-pom' : id;
-  if (!avatarTs.includes(`${prefix}-01`)) errors.push(`builtinAvatars.ts missing ${prefix}-01`);
+if (!avatarTs.includes(': STATIC_ASSET_FALLBACK_AVATAR')) {
+  errors.push('remote-only avatars must fall back to the shared local placeholder');
+}
+if (!avatarTs.includes('BUILTIN_AVATAR_CANONICAL_ALIASES[canonicalName] ?? canonicalName')) {
+  errors.push('getBuiltinAvatarSet should resolve avatar owner aliases');
 }
 
 if (errors.length) {
@@ -59,4 +122,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Builtin avatar regression passed: ${requiredIds.length} characters, 3 variants each.`);
+console.log(`Builtin avatar regression passed: ${characters.length} characters, ${logicalIds.size} remote variants, ${localVariantCount} repository-local rollbacks.`);
