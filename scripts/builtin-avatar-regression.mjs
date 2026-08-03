@@ -113,8 +113,11 @@ if (!avatarTs.includes('LOCAL_AVATAR_CANDIDATE_IDS.has(id)')) {
 if (!avatarTs.includes(': STATIC_ASSET_FALLBACK_AVATAR')) {
   errors.push('remote-only avatars must fall back to the shared local placeholder');
 }
-if (!avatarTs.includes('BUILTIN_AVATAR_CANONICAL_ALIASES[canonicalName] ?? canonicalName')) {
+if (!avatarTs.includes('BUILTIN_AVATAR_CANONICAL_ALIASES[normalizedName] ?? normalizedName')) {
   errors.push('getBuiltinAvatarSet should resolve avatar owner aliases');
+}
+if (!avatarTs.includes('export function getBuiltinAvatarSetForNames')) {
+  errors.push('expanded avatar lookup must support NPC display names and saved aliases');
 }
 
 if (errors.length) {

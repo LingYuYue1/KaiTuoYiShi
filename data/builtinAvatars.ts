@@ -657,11 +657,37 @@ export const BUILTIN_AVATAR_SETS: BuiltinAvatarSet[] = [
 
 export function getBuiltinAvatarSet(canonicalName: string | undefined): BuiltinAvatarSet | undefined {
   if (!canonicalName) return undefined;
-  const ownerName = BUILTIN_AVATAR_CANONICAL_ALIASES[canonicalName] ?? canonicalName;
+  const normalizedName = canonicalName.trim();
+  if (!normalizedName) return undefined;
+  const ownerName = BUILTIN_AVATAR_CANONICAL_ALIASES[normalizedName] ?? normalizedName;
   return BUILTIN_AVATAR_SETS.find((set) => set.canonicalName === ownerName);
+}
+
+export function getBuiltinAvatarSetForNames(...names: Array<string | undefined>): BuiltinAvatarSet | undefined {
+  const candidates = new Set<string>();
+  for (const rawName of names) {
+    const name = rawName?.trim();
+    if (!name) continue;
+    candidates.add(name);
+    for (const part of name.split(/[\/／|｜、,，;；\n]+/u)) {
+      const candidate = part.trim();
+      if (candidate) candidates.add(candidate);
+    }
+  }
+
+  for (const candidate of candidates) {
+    const set = getBuiltinAvatarSet(candidate);
+    if (set) return set;
+  }
+  return undefined;
 }
 
 export function getDefaultBuiltinAvatar(canonicalName: string | undefined): string | undefined {
   const candidates = getBuiltinAvatarSet(canonicalName)?.candidates;
+  return candidates?.find((candidate) => isRemoteStaticAssetUrl(candidate.src))?.src ?? candidates?.[0]?.src;
+}
+
+export function getDefaultBuiltinAvatarForNames(...names: Array<string | undefined>): string | undefined {
+  const candidates = getBuiltinAvatarSetForNames(...names)?.candidates;
   return candidates?.find((candidate) => isRemoteStaticAssetUrl(candidate.src))?.src ?? candidates?.[0]?.src;
 }

@@ -43,7 +43,7 @@ import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtra
 import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
 import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
-import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
+import { getBuiltinAvatarSet, getBuiltinAvatarSetForNames } from '@/data/builtinAvatars';
 import { matchCanonical } from '@/data/canonicalCharacters';
 
 import {
@@ -2494,6 +2494,9 @@ export function buildTravelerBuiltinAvatarEntries(traveler: 角色数据结构, 
 }
 
 export function findNpcCanonicalName(npc: NPC记录): string | undefined {
+  const avatarSet = getBuiltinAvatarSetForNames(npc.姓名, npc.别名);
+  if (avatarSet) return avatarSet.canonicalName;
+
   const names = [npc.姓名, npc.别名]
     .flatMap((item) => (item ?? '').split(/[\/／|、,，]/))
     .map((item) => item.trim())

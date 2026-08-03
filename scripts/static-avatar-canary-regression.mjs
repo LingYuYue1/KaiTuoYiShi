@@ -131,8 +131,9 @@ assert.ok(resilientImage.includes('displaySrc !== fallbackSrc'), 'image fallback
 assert.ok(resilientImage.includes("data-static-asset-fallback={displaySrc === fallbackSrc ? 'true' : 'false'}"), 'fallback state must be observable in UI verification');
 
 const albumActions = read('utils/albumActions.ts');
-assert.ok(albumActions.includes("if (trimmed.startsWith('static:'))"), 'album resolver must recognize static logical references');
-assert.ok(albumActions.includes('return resolveStaticAssetReference(trimmed)'), 'album resolver must map static references through the manifest');
+assert.ok(albumActions.includes('const resolvedStatic = resolveStaticAssetReference(trimmed)'), 'album resolver must check logical and legacy static references');
+assert.ok(albumActions.includes('if (resolvedStatic) return resolvedStatic'), 'album resolver must map recognized references through the manifest');
+assert.ok(albumActions.includes("if (trimmed.startsWith('static:')) return undefined"), 'invalid static references must not be rendered as literal URLs');
 assert.ok(albumActions.includes('return trimmed'), 'legacy local paths and remote URLs must remain compatible');
 
 const albumWorkspace = read('components/features/GameSystems/album/workspaces.tsx');
