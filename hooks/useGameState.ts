@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空角色 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
@@ -11,10 +11,10 @@ import { 创建空忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
 import { 创建空智库系统, 归一化智库系统 } from '@/models/zhiku';
 import type { 手机系统 } from '@/models/phone';
-import { 创建空手机系统, 归一化手机系统 } from '@/models/phone';
+import { 创建空手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
-import { 创建空相册系统, 归一化相册系统 } from '@/models/imageGeneration';
+import { 创建空相册系统 } from '@/models/imageGeneration';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
@@ -25,12 +25,6 @@ import type { API设置, 存档数据, 游戏设置, 主题预设 } from '@/mode
 import {
   创建空API设置,
   创建默认游戏设置,
-  创建默认星际和平周报设置,
-  创建默认记忆系统设置,
-  创建默认智库系统设置,
-  创建默认剧情编织系统设置,
-  创建默认手机系统设置,
-  创建默认文生图系统设置,
   归一化记忆系统设置,
   归一化星际和平周报设置,
   归一化智库系统设置,
@@ -40,9 +34,10 @@ import {
   归一化额外功能设置,
   归一化视觉文本设置,
   迁移存档运行态键,
+  LAST_VIEW_STORAGE_KEY,
 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
-import type { STPresetEntry } from '@/models/stTypes';
+import type { STPresetEntryV1 } from '@/models/stTypes';
 import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID, getDefaultModuleFields } from '@/models/prompts';
 import { isSTImportedModule } from '@/utils/stPresetParser';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
@@ -59,10 +54,12 @@ import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, i
 import type { 世界书 } from '@/models/worldbook';
 import { loadWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
-import { loadSetting, saveSetting, hasAnySave } from '@/services/dbService';
+import { deleteSetting, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
+import { devLogError } from '@/utils/devLog';
+import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
 
 const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
@@ -71,7 +68,7 @@ const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
 ]);
 
 function isCalibrationWorldbook(book: 世界书): boolean {
-  return book.entries.some((entry) => entry.scope?.includes('calibration'));
+  return book.entries.some((entry) => entry.scope.includes('calibration'));
 }
 
 export type ViewState = 'home' | 'new_game' | 'game';
@@ -94,12 +91,12 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
       //
       // 方案 A 三层 order 区间迁移：旧存档 order 是 5-90 区间，新源码 order 是 5-1043（Tier 1: 1-99 / Tier 2: 100-999 ST / Tier 3: 1000+ 压轴）。
       // 强制用 b.order（源码定义），旧存档自动迁移到新 order 区间。
-      const isCalibrationBuiltin = b.scope?.includes('calibration');
+      const isCalibrationBuiltin = b.scope.includes('calibration');
       return {
         ...b,
         enabled: isCalibrationBuiltin ? true : hit.enabled,
-        createdAt: hit.createdAt ?? b.createdAt,
-        updatedAt: hit.updatedAt ?? b.updatedAt,
+        createdAt: hit.createdAt,
+        updatedAt: hit.updatedAt,
       };
     }
     // 没存档命中但有 legacy_cot：把它的 enabled 借给两个新 CoT
@@ -138,7 +135,8 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
   });
 
   const hasLegacy = customsWithDefaults.some((m) => m.id === 'legacy_custom');
-  if (!hasLegacy && savedGame.customPrompt && savedGame.customPrompt.trim()) {
+  const legacyCustomPrompt = (savedGame as { customPrompt?: string }).customPrompt;
+  if (!hasLegacy && legacyCustomPrompt?.trim()) {
     const now = Date.now();
     customsWithDefaults.push({
       ...getDefaultModuleFields(),
@@ -148,7 +146,7 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
       title: '旧版自定义提示词',
       description: '自旧版「额外指示」迁移而来。可自由编辑或删除。',
       category: 'custom',
-      content: savedGame.customPrompt,
+      content: legacyCustomPrompt,
       enabled: true,
       builtin: false,
       order: 900,
@@ -169,7 +167,7 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
  *
  *  放在 useGameState.ts 与 migratePromptModules 并列，供初次 mount 加载路径和
  *  saveLoadWorkflow 手动加载路径共用，避免两条加载路径迁移逻辑不一致。 */
-export function migrateStPresetOrders(stPresets: STPresetEntry[] | undefined): STPresetEntry[] | undefined {
+export function migrateStPresetOrders(stPresets: STPresetEntryV1[] | undefined): STPresetEntryV1[] | undefined {
   if (!Array.isArray(stPresets) || stPresets.length === 0) return stPresets;
   return stPresets.map((preset) => {
     const needsMigration = preset.modules.some(
@@ -285,15 +283,55 @@ export function useGameState(): UseGameStateReturn {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const bootReadyRef = useRef(false);
+  const stateRef = useRef<UseGameStateReturn | null>(null);
+
+  const state: UseGameStateReturn = {
+    view, setView,
+    旅人, set旅人,
+    世界, set世界,
+    chatHistory, setChatHistory,
+    记忆, set记忆,
+    忆庭, set忆庭,
+    智库, set智库,
+    手机, set手机,
+    NPC, setNPC,
+    相册, set相册,
+    新闻, set新闻,
+    剧情, set剧情,
+    剧情编织, set剧情编织,
+    variableBatches, setVariableBatches,
+    queueTasks, setQueueTasks,
+    apiSettings, setApiSettings,
+    gameSettings, setGameSettings,
+    currentTheme, setCurrentTheme,
+    worldbooks, setWorldbooks,
+    hasSave, setHasSave,
+    loading, setLoading,
+    workflowHint, setWorkflowHint,
+    workflowStatus, setWorkflowStatus,
+    liveRecallSummary, setLiveRecallSummary,
+    liveRecallFullContent, setLiveRecallFullContent,
+    pendingVariable, setPendingVariable,
+    turnCount, setTurnCount,
+    pendingOpeningTrigger, setPendingOpeningTrigger,
+    interruptedWorkflow, setInterruptedWorkflow,
+    abortControllerRef, scrollRef,
+  };
+
+  useLayoutEffect(() => {
+    stateRef.current = state;
+  });
 
   // Load persisted settings on mount
   useEffect(() => {
-    (async () => {
+    void (async () => {
       const recoveryJournal = await loadWorkflowRecoveryJournal();
       if (recoveryJournal) {
         setInterruptedWorkflow(recoveryJournal);
         setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
       }
+      const lastView = await loadSetting<string>(LAST_VIEW_STORAGE_KEY);
 
       const savedTheme = await loadSetting<主题预设>('theme');
       if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
@@ -307,6 +345,7 @@ export function useGameState(): UseGameStateReturn {
         const defaults = 创建默认游戏设置();
         // 片 5a-2 D3：剥离生效前的旧 settings 数据可能残留两运行态键，同样迁移并入内存（不回写）。
         const 迁移运行态 = 迁移存档运行态键({ gameSettings: savedGame } as 存档数据);
+        const partialSavedGame = savedGame as Partial<游戏设置>;
         const merged: 游戏设置 = {
           ...defaults,
           ...savedGame,
@@ -319,12 +358,12 @@ export function useGameState(): UseGameStateReturn {
           文生图系统: 归一化文生图系统设置(savedGame.文生图系统),
           记忆系统: 归一化记忆系统设置(savedGame.记忆系统),
           额外功能: 归一化额外功能设置(savedGame.额外功能),
-          variableApi: savedGame.variableApi ?? defaults.variableApi,
-          enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
-          deepSeekMainMode: savedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
-          backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
-          enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
-          enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
+          variableApi: partialSavedGame.variableApi ?? defaults.variableApi,
+          enableClaudeMode: partialSavedGame.enableClaudeMode ?? defaults.enableClaudeMode,
+          deepSeekMainMode: partialSavedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
+          backgroundTaskMode: partialSavedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
+          enableCacheDiagnostics: partialSavedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
+          enableMaleNsfwArchive: partialSavedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
           enablePlayerSpeechExpansion: savedGame.enableNoControl ? false : savedGame.enablePlayerSpeechExpansion,
           visualTextSettings: 归一化视觉文本设置(savedGame.visualTextSettings),
           promptModules: migratePromptModules(savedGame),
@@ -334,8 +373,9 @@ export function useGameState(): UseGameStateReturn {
           promptModuleOrderVersion: 1,
         };
         // 迁移后清空 legacy customPrompt，避免下次启动重复追加
-        if (savedGame.customPrompt && merged.promptModules.some((m) => m.id === 'legacy_custom')) {
-          merged.customPrompt = '';
+        const legacyCustomPrompt = (savedGame as { customPrompt?: string }).customPrompt;
+        if (legacyCustomPrompt && merged.promptModules.some((m) => m.id === 'legacy_custom')) {
+          (merged as { customPrompt?: string }).customPrompt = '';
         }
         setGameSettings(merged);
       }
@@ -425,7 +465,7 @@ export function useGameState(): UseGameStateReturn {
           // 新闻/手机/变量等服务层直接 import 源码常量，旧存档里的编辑/关闭不会影响真实 API；
           // 因此这里必须回到源码最新版，避免 UI 展示与真实请求再次分叉。
           if (isCalibrationWorldbook(builtin)) return builtin;
-          const savedEntries = saved.entries || [];
+          const savedEntries = saved.entries;
           const entries = builtin.entries.map((entry) => {
             const savedEntry = savedEntries.find((item) => item.id === entry.id);
             return savedEntry ? { ...savedEntry, title: entry.title } : entry;
@@ -442,75 +482,54 @@ export function useGameState(): UseGameStateReturn {
 
       const saveExists = await hasAnySave();
       setHasSave(saveExists);
+
+      let shouldClearLastView = false;
+      if (lastView === 'game' && !recoveryJournal) {
+        let restored = false;
+        try {
+          const currentState = stateRef.current;
+          if (currentState) {
+            restored = await bootRestoreFromNewest(currentState);
+          }
+        } catch (error) {
+          devLogError('recover', 'useGameState.boot-restore-import-failed', error);
+        }
+        if (!restored) {
+          shouldClearLastView = true;
+        }
+      }
+
+      bootReadyRef.current = true;
+      const currentView = stateRef.current?.view;
+      if (shouldClearLastView) {
+        try {
+          await deleteSetting(LAST_VIEW_STORAGE_KEY);
+        } catch (error) {
+          devLogError('recover', 'useGameState.last-view-clear-failed', error);
+        }
+      } else if (currentView === 'game') {
+        void saveUiSetting(LAST_VIEW_STORAGE_KEY, 'game').catch((error: unknown) => {
+          devLogError('recover', 'useGameState.last-view-save-failed', error);
+        });
+      }
     })();
   }, []);
+
+  // Persist the last active UI view after boot has finished reading it.
+  useEffect(() => {
+    if (!bootReadyRef.current) return;
+    const persist = view === 'game'
+      ? saveUiSetting(LAST_VIEW_STORAGE_KEY, 'game')
+      : deleteSetting(LAST_VIEW_STORAGE_KEY);
+    void persist.catch((error: unknown) => {
+      devLogError('recover', 'last-view-persist-failed', error, { view });
+    });
+  }, [view]);
 
   // Apply theme on change
   useEffect(() => {
     applyTheme(currentTheme);
   }, [currentTheme]);
 
-  useEffect(() => {
-    setGameSettings((prev) =>
-      prev.记忆系统
-        ? {
-            ...prev,
-            新闻系统: 归一化星际和平周报设置(prev.新闻系统),
-            手机系统: 归一化手机系统设置(prev.手机系统),
-            智库系统: 归一化智库系统设置(prev.智库系统),
-            剧情编织系统: 归一化剧情编织系统设置(prev.剧情编织系统),
-            文生图系统: 归一化文生图系统设置(prev.文生图系统),
-            记忆系统: 归一化记忆系统设置(prev.记忆系统),
-            enableClaudeMode: prev.enableClaudeMode ?? 创建默认游戏设置().enableClaudeMode,
-            deepSeekMainMode: prev.deepSeekMainMode ?? 创建默认游戏设置().deepSeekMainMode,
-            backgroundTaskMode: prev.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode,
-            visualTextSettings: 归一化视觉文本设置(prev.visualTextSettings),
-          }
-        : {
-            ...prev,
-            新闻系统: 创建默认游戏设置().新闻系统,
-            手机系统: 创建默认手机系统设置(),
-            剧情编织系统: 创建默认剧情编织系统设置(),
-            文生图系统: 创建默认文生图系统设置(),
-            记忆系统: 创建默认记忆系统设置(),
-            enableClaudeMode: 创建默认游戏设置().enableClaudeMode,
-            deepSeekMainMode: 创建默认游戏设置().deepSeekMainMode,
-            backgroundTaskMode: 创建默认游戏设置().backgroundTaskMode,
-            visualTextSettings: 归一化视觉文本设置(prev.visualTextSettings),
-          },
-    );
-  }, []);
-
-  return {
-    view, setView,
-    旅人, set旅人,
-    世界, set世界,
-    chatHistory, setChatHistory,
-    记忆, set记忆,
-    忆庭, set忆庭,
-    智库, set智库,
-    手机, set手机,
-    NPC, setNPC,
-    相册, set相册,
-    新闻, set新闻,
-    剧情, set剧情,
-    剧情编织, set剧情编织,
-    variableBatches, setVariableBatches,
-    queueTasks, setQueueTasks,
-    apiSettings, setApiSettings,
-    gameSettings, setGameSettings,
-    currentTheme, setCurrentTheme,
-    worldbooks, setWorldbooks,
-    hasSave, setHasSave,
-    loading, setLoading,
-    workflowHint, setWorkflowHint,
-    workflowStatus, setWorkflowStatus,
-    liveRecallSummary, setLiveRecallSummary,
-    liveRecallFullContent, setLiveRecallFullContent,
-    pendingVariable, setPendingVariable,
-    turnCount, setTurnCount,
-    pendingOpeningTrigger, setPendingOpeningTrigger,
-    interruptedWorkflow, setInterruptedWorkflow,
-    abortControllerRef, scrollRef,
-  };
+  return state;
 }

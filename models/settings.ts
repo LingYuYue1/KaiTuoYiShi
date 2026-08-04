@@ -1215,6 +1215,9 @@ export function 归一化额外功能设置(input?: Partial<额外功能设置>)
 export type 主题预设 = 'deepspace' | 'starOceanCyan';
 export type 存档类型 = 'manual' | 'auto' | 'backup' | 'imported';
 
+/** 上次离开页面时的 UI 视图，仅用于 boot 路由，不进入存档或 newest。 */
+export const LAST_VIEW_STORAGE_KEY = 'lastView';
+
 export interface 存档数据 {
   id: number;
   type: 存档类型;

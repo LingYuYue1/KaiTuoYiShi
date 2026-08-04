@@ -18,7 +18,7 @@ import {
   迁移存档运行态键,
   取游戏设置运行态键,
 } from '@/models/settings';
-import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveNewestStory, saveSetting } from '@/services/dbService';
+import { loadLatestSave, loadSave, loadNewestStory, deleteSave as dbDeleteSave, saveGame, saveNewestStory, saveSetting } from '@/services/dbService';
 import {
   buildPersistedZhikuSystem,
   loadAllBundledZhikuPresets,
@@ -42,6 +42,7 @@ import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { 创建空NewestStory记录, 清空NewestStory记录 } from '@/models/newestStory';
+import { devLog, devLogError } from '@/utils/devLog';
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
@@ -259,6 +260,45 @@ export async function handleLoadById(
   return true;
 }
 
+/**
+ * boot 专用恢复：先读取 newest 的原始覆盖集，再应用其 base checkpoint，最后逐字段回放。
+ * applySaveToState 会清空 newest，因此回放后必须把原记录原样写回，继续保留工作区。
+ */
+export async function bootRestoreFromNewest(
+  state: UseGameStateReturn,
+): Promise<boolean> {
+  let baseCheckpointId: number | null = null;
+  try {
+    const newest = await loadNewestStory();
+    baseCheckpointId = newest.baseCheckpointId;
+    if (!baseCheckpointId) {
+      devLog('recover', 'boot-restore-fallback', { reason: 'no-newest' });
+      return false;
+    }
+
+    devLog('recover', 'boot-restore-start', { baseCheckpointId });
+    const base = await loadSave(baseCheckpointId);
+    if (!base) {
+      devLog('recover', 'boot-restore-fallback', { reason: 'base-missing', baseCheckpointId });
+      return false;
+    }
+
+    const newestStory = newest.story;
+    await applySaveToState(base, state);
+    const replayedFields = replayNewestStory(newestStory, state);
+    await saveNewestStory(newest);
+    devLog('recover', 'boot-restore-complete', {
+      baseCheckpointId,
+      fields: replayedFields,
+    });
+    return true;
+  } catch (error) {
+    state.setView('home');
+    devLogError('recover', 'boot-restore-failed', error, { baseCheckpointId });
+    return false;
+  }
+}
+
 export async function handleManualSave(state: UseGameStateReturn): Promise<number> {
   const payload = buildSavePayload(state, 'manual');
   const id = await saveGame(payload);
@@ -373,6 +413,89 @@ async function applySaveToState(
   // 片 5a-2b：读档后 newest 指向新 checkpoint——abort/崩溃残留的跨局覆盖集
   // 不得进入下一回合的 commitTurn（否则新局数据会被提交进旧局 auto 存档）。
   await saveNewestStory(清空NewestStory记录(创建空NewestStory记录(), save.id));
+}
+
+function replayNewestStory(
+  story: Partial<import('@/models/newestStory').NewestStory字段集>,
+  state: UseGameStateReturn,
+): string[] {
+  const replayedFields: string[] = [];
+  if (story.chatHistory !== undefined) {
+    state.setChatHistory(story.chatHistory);
+    replayedFields.push('chatHistory');
+  }
+  if (story.记忆 !== undefined) {
+    state.set记忆(story.记忆);
+    replayedFields.push('记忆');
+  }
+  if (story.忆庭 !== undefined) {
+    state.set忆庭(story.忆庭);
+    replayedFields.push('忆庭');
+  }
+  if (story.智库 !== undefined) {
+    state.set智库(story.智库);
+    replayedFields.push('智库');
+  }
+  if (story.手机 !== undefined) {
+    state.set手机(story.手机);
+    replayedFields.push('手机');
+  }
+  if (story.NPC !== undefined) {
+    state.setNPC(story.NPC);
+    replayedFields.push('NPC');
+  }
+  if (story.相册 !== undefined) {
+    state.set相册(story.相册);
+    replayedFields.push('相册');
+  }
+  if (story.新闻 !== undefined) {
+    state.set新闻(story.新闻);
+    replayedFields.push('新闻');
+  }
+  if (story.剧情 !== undefined) {
+    state.set剧情(story.剧情);
+    replayedFields.push('剧情');
+  }
+  if (story.剧情编织 !== undefined) {
+    state.set剧情编织(story.剧情编织);
+    replayedFields.push('剧情编织');
+  }
+  if (story.variableBatches !== undefined) {
+    state.setVariableBatches(story.variableBatches);
+    replayedFields.push('variableBatches');
+  }
+  if (story.queueTasks !== undefined) {
+    state.setQueueTasks(story.queueTasks);
+    replayedFields.push('queueTasks');
+  }
+  if (story.turnCount !== undefined) {
+    state.setTurnCount(story.turnCount);
+    replayedFields.push('turnCount');
+  }
+  if (story.世界 !== undefined) {
+    state.set世界(story.世界);
+    replayedFields.push('世界');
+  }
+  if (story.旅人 !== undefined) {
+    state.set旅人(story.旅人);
+    replayedFields.push('旅人');
+  }
+  if (story.macroGlobalVars !== undefined || story.worldbookTriggerStates !== undefined) {
+    state.setGameSettings((previous) => ({
+      ...previous,
+      ...(story.macroGlobalVars !== undefined ? { macroGlobalVars: story.macroGlobalVars } : {}),
+      ...(story.worldbookTriggerStates !== undefined
+        ? { worldbookTriggerStates: story.worldbookTriggerStates }
+        : {}),
+    }));
+    if (story.macroGlobalVars !== undefined) replayedFields.push('macroGlobalVars');
+    if (story.worldbookTriggerStates !== undefined) replayedFields.push('worldbookTriggerStates');
+  }
+  if (story.pendingOpeningTrigger !== undefined) {
+    state.setPendingOpeningTrigger(story.pendingOpeningTrigger);
+    replayedFields.push('pendingOpeningTrigger');
+  }
+  return replayedFields;
 }
 
 function normalizeSaveChatHistory(value: unknown): 聊天消息[] {
