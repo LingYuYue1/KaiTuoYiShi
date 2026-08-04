@@ -14,6 +14,8 @@ export interface SaveListItemSummary {
   type: 存档类型;
   timestamp: number;
   saveTree?: 存档树元信息;
+  /** true 表示未封版草稿行：不得作为 delta 基准，也不得参与自动滚动删除。 */
+  unsealedHead?: boolean;
   travelerName: string;
   turnCount: number;
   worldPeriodName: string;
@@ -179,7 +181,7 @@ export function buildSaveCatalogSnapshot(
     if (record.visibility === 'visible') items.push(stripCatalogMetadata(record));
     else if (record.visibility === 'legacy-backup') legacyBackups.push(stripCatalogMetadata(record));
     else if (record.visibility === 'hidden-delta-base') hiddenBaseCount += 1;
-    else if (record.visibility === 'unreadable') unreadableIds.push(id);
+    else unreadableIds.push(id);
   }
 
   const pendingIds = saveIds.filter((id) => !byId.has(id)).sort((a, b) => b - a);
@@ -227,6 +229,7 @@ function normalizeSaveListItemSummary(raw: Record<string, unknown>): SaveListIte
     type: normalizeSaveType(raw.type),
     timestamp,
     ...(saveTree ? { saveTree } : {}),
+    ...(raw.unsealedHead === true ? { unsealedHead: true } : {}),
     travelerName: normalizeText(raw.travelerName),
     turnCount: Math.max(0, Math.floor(Number(raw.turnCount) || 0)),
     worldPeriodName: normalizeText(raw.worldPeriodName),

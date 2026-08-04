@@ -8,12 +8,14 @@ interface SaveRetentionItem {
   saveTree?: {
     rootId?: string;
   };
+  unsealedHead?: boolean;
 }
 
 export function selectSaveNodeRotationCandidates<T extends SaveRetentionItem>(items: readonly T[]): T[] {
   const buckets = new Map<string, T[]>();
 
   for (const item of items) {
+    if (item.unsealedHead === true) continue;
     if (item.type !== 'manual' && item.type !== 'auto') continue;
     const rootId = item.saveTree?.rootId?.trim();
     const rootKey = rootId || `legacy-isolated-${item.type}-${item.id}`;

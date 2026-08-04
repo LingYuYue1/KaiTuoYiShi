@@ -42,7 +42,7 @@ export type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepair
 export { getSaveCatalogRepairState, subscribeSaveCatalogRepair };
 
 const DB_NAME = 'TimeJourneyDB';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const SAVES_STORE = 'saves';
 const SAVE_SUMMARIES_STORE = 'saveSummaries';
 const SAVE_ASSETS_STORE = 'saveAssets';
@@ -59,6 +59,7 @@ const SAVE_CATALOG_REPAIR_OWNER = typeof crypto !== 'undefined' && typeof crypto
 type StoredSaveMeta = 存档数据 & {
   saveRuntime?: {
     hiddenDeltaBase?: boolean;
+    unsealedHead?: boolean;
     cloudBackupOriginFingerprint?: string;
     [key: string]: unknown;
   };
@@ -110,7 +111,7 @@ function openDB(): Promise<IDBDatabase> {
       fail(new Error('存档数据库打开超时。请关闭其他开拓轶事页面或刷新后重试。'));
     }, 8000);
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
       if (!db.objectStoreNames.contains(SAVES_STORE)) {
         db.createObjectStore(SAVES_STORE, { keyPath: 'id', autoIncrement: true });
@@ -130,12 +131,51 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(NEWEST_STORY_STORE)) {
         db.createObjectStore(NEWEST_STORY_STORE, { keyPath: 'key' });
       }
+      if (event.oldVersion < 7 && request.transaction) {
+        migrateNewestStoryHeadNodeId(request.transaction);
+      }
     };
     request.onsuccess = () => finish(request.result);
     request.onerror = () => fail(request.error);
     request.onblocked = () => fail(new Error('存档数据库升级被其他页面占用。请关闭其他开拓轶事页面或刷新后重试。'));
   });
   return dbPromise;
+}
+
+function migrateNewestStoryHeadNodeId(transaction: IDBTransaction): void {
+  const newestStore = transaction.objectStore(NEWEST_STORY_STORE);
+  const savesStore = transaction.objectStore(SAVES_STORE);
+  const newestRequest = newestStore.get(NEWEST_STORY_STORE_KEY);
+  newestRequest.onsuccess = () => {
+    const newest: unknown = newestRequest.result;
+    if (!isPlainRecord(newest) || 'headNodeId' in newest) return;
+
+    const baseCheckpointId = normalizeSaveId(newest.baseCheckpointId);
+    if (!baseCheckpointId) {
+      newestStore.put({ ...newest, headNodeId: null });
+      devLog('save', 'newest-head-migration', { outcome: 'no-base-checkpoint' });
+      return;
+    }
+
+    const saveRequest = savesStore.get(baseCheckpointId);
+    saveRequest.onsuccess = () => {
+      const save = saveRequest.result as SaveWithTree | undefined;
+      const headNodeId = normalizeNodeId(save?.saveTree?.nodeId);
+      newestStore.put({ ...newest, headNodeId });
+      if (headNodeId) {
+        devLog('save', 'newest-head-migration', { outcome: 'backfilled', baseCheckpointId, headNodeId });
+      } else {
+        devLog('save', 'newest-head-migration', { outcome: 'base-node-missing', baseCheckpointId });
+      }
+    };
+    saveRequest.onerror = () => {
+      newestStore.put({ ...newest, headNodeId: null });
+      devLogError('save', 'newest-head-migration-read-failed', saveRequest.error, { baseCheckpointId });
+    };
+  };
+  newestRequest.onerror = () => {
+    devLogError('save', 'newest-head-migration-read-failed', newestRequest.error);
+  };
 }
 
 // ── Save operations ──
@@ -238,6 +278,66 @@ export async function getSaveList(): Promise<SaveListItemSummary[]> {
 export async function getSaveCatalogSnapshot(): Promise<SaveCatalogSnapshot> {
   const db = await openDB();
   return readIndexedSaveCatalogSnapshot(db);
+}
+
+/** 通过轻量目录反查 saveTree 节点对应的 IndexedDB 数字主键。 */
+export async function loadSaveIdByNodeId(nodeId: string): Promise<number | null> {
+  const normalizedNodeId = normalizeNodeId(nodeId);
+  if (!normalizedNodeId) return null;
+  const db = await openDB();
+  const summaries = await readSaveSummaries(db);
+  return summaries.find((item) => item.saveTree?.nodeId === normalizedNodeId)?.id ?? null;
+}
+
+/**
+ * 对当前未封版 head 行做轻量原地写入；不会经过资产抽取、delta、rotation 或 saveGameInternal。
+ * 已封版的历史行一律拒绝改写。
+ */
+export async function putHeadRow(saveId: number, patch: Partial<存档数据>): Promise<void> {
+  const startedAt = Date.now();
+  const { id: _ignoredId, ...patchWithoutId } = patch;
+  void _ignoredId;
+  const patchKeys = Object.keys(patchWithoutId);
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE], 'readwrite');
+    const saveStore = tx.objectStore(SAVES_STORE);
+    const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
+    const getRequest = saveStore.get(saveId);
+    let wrote = false;
+    getRequest.onsuccess = () => {
+      const current = getRequest.result as StoredSaveMeta | undefined;
+      if (!current) {
+        const error = new Error('未找到要写入的草稿存档。');
+        devLogError('save', 'puthead-rejected-missing', error, { saveId });
+        reject(error);
+        return;
+      }
+      if (!isUnsealedHeadSave(current)) {
+        const error = new Error('已封版历史节点不可通过 putHeadRow 改写。');
+        devLogError('save', 'puthead-rejected-sealed', error, { saveId });
+        reject(error);
+        return;
+      }
+      const next: StoredSaveMeta = { ...current, ...patchWithoutId, id: saveId };
+      saveStore.put(next);
+      summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(next)));
+      wrote = true;
+    };
+    getRequest.onerror = () => reject(toError(getRequest.error));
+    tx.oncomplete = () => {
+      if (wrote) {
+        devLog('save', 'puthead', {
+          saveId,
+          fieldCount: patchKeys.length,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      resolve();
+    };
+    tx.onerror = () => reject(toError(tx.error));
+    tx.onabort = () => reject(tx.error ?? new Error('草稿存档写入事务已中止。'));
+  });
 }
 
 export async function loadSave(id: number): Promise<存档数据 | null> {
@@ -574,6 +674,10 @@ async function findAutoDeltaBase(db: IDBDatabase, save: 存档数据): Promise<{
   if (!parentSummary?.id) return null;
   const parentSave = await loadDeltaBaseCandidateSave(db, parentSummary.id);
   if (!parentSave) return null;
+  if (parentSummary.unsealedHead === true || isUnsealedHeadSave(parentSave)) {
+    devLog('save', 'delta-base-skipped-unsealed-head', { saveId: parentSummary.id, nodeId: tree.parentNodeId });
+    return null;
+  }
   const parentIsDelta = isDeltaOnlyStoredSave(parentSave);
   const baseSaveId = parentIsDelta
     ? await resolveDeltaBaseSaveId(db, parentSave)
@@ -1180,6 +1284,10 @@ function isHiddenDeltaBaseSave(save: 存档数据): boolean {
   return Boolean((save as StoredSaveMeta).saveRuntime?.hiddenDeltaBase);
 }
 
+function isUnsealedHeadSave(save: 存档数据): boolean {
+  return (save as StoredSaveMeta).saveRuntime?.unsealedHead === true;
+}
+
 async function writeUnreadableSaveCatalogRecord(
   db: IDBDatabase,
   id: number,
@@ -1288,6 +1396,7 @@ function buildSaveSummary(save: 存档数据): SaveListItemSummary {
     type: normalizeSaveType(save.type),
     timestamp: save.timestamp,
     saveTree: (save as 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 }).saveTree,
+    ...(isUnsealedHeadSave(save) ? { unsealedHead: true } : {}),
     travelerName: save.旅人.姓名,
     turnCount: save.turnCount ?? (save.chatHistory.length + 1),
     worldPeriodName: save.世界.当前时段.名称,
@@ -1297,6 +1406,19 @@ function buildSaveSummary(save: 存档数据): SaveListItemSummary {
     lastSummary: summarizeSave(save),
     sizeBytes: estimateSaveSize(save),
   };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeSaveId(value: unknown): number | null {
+  const id = Math.floor(Number(value));
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function normalizeNodeId(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function summarizeSave(save: 存档数据): string {
