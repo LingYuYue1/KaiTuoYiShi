@@ -1,14 +1,14 @@
 {
-  "updatedAt": "2026-08-03",
-  "notes": "Built-in avatar inventory for KaiTuoYiShi. The original 33 candidates keep repository-local PNG rollback files; later entries use static logical references while their source PNGs remain outside the Web deployment for rollback.",
+  "updatedAt": "2026-08-04",
+  "notes": "All built-in avatar variants use static logical references resolved through the K-Vault manifest. Repository-local character avatar PNGs have been removed; the shared placeholder remains local for failure fallback.",
   "characters": [
     {
       "id": "march7th",
       "name": "三月七",
       "variants": [
-        "public/assets/builtin-avatars/candidates/march7th-01.png",
-        "public/assets/builtin-avatars/candidates/march7th-02.png",
-        "public/assets/builtin-avatars/candidates/march7th-03.png"
+        "static:avatar:march7th:01",
+        "static:avatar:march7th:02",
+        "static:avatar:march7th:03"
       ],
       "aliases": [
         "三月七·巡猎",
@@ -20,9 +20,9 @@
       "id": "danheng",
       "name": "丹恒",
       "variants": [
-        "public/assets/builtin-avatars/candidates/danheng-01.png",
-        "public/assets/builtin-avatars/candidates/danheng-02.png",
-        "public/assets/builtin-avatars/candidates/danheng-03.png"
+        "static:avatar:danheng:01",
+        "static:avatar:danheng:02",
+        "static:avatar:danheng:03"
       ],
       "aliases": [
         "丹恒·饮月",
@@ -35,9 +35,9 @@
       "id": "himeko",
       "name": "姬子",
       "variants": [
-        "public/assets/builtin-avatars/candidates/himeko-01.png",
-        "public/assets/builtin-avatars/candidates/himeko-02.png",
-        "public/assets/builtin-avatars/candidates/himeko-03.png"
+        "static:avatar:himeko:01",
+        "static:avatar:himeko:02",
+        "static:avatar:himeko:03"
       ],
       "aliases": [
         "姬子•启行",
@@ -48,9 +48,9 @@
       "id": "welt",
       "name": "瓦尔特",
       "variants": [
-        "public/assets/builtin-avatars/candidates/welt-01.png",
-        "public/assets/builtin-avatars/candidates/welt-02.png",
-        "public/assets/builtin-avatars/candidates/welt-03.png"
+        "static:avatar:welt:01",
+        "static:avatar:welt:02",
+        "static:avatar:welt:03"
       ],
       "aliases": [
         "瓦尔特·杨"
@@ -60,63 +60,63 @@
       "id": "pom-pom",
       "name": "帕姆",
       "variants": [
-        "public/assets/builtin-avatars/candidates/pom-pom-01.png",
-        "public/assets/builtin-avatars/candidates/pom-pom-02.png",
-        "public/assets/builtin-avatars/candidates/pom-pom-03.png"
+        "static:avatar:pom-pom:01",
+        "static:avatar:pom-pom:02",
+        "static:avatar:pom-pom:03"
       ]
     },
     {
       "id": "herta",
       "name": "黑塔",
       "variants": [
-        "public/assets/builtin-avatars/candidates/herta-01.png",
-        "public/assets/builtin-avatars/candidates/herta-02.png",
-        "public/assets/builtin-avatars/candidates/herta-03.png"
+        "static:avatar:herta:01",
+        "static:avatar:herta:02",
+        "static:avatar:herta:03"
       ]
     },
     {
       "id": "asta",
       "name": "艾丝妲",
       "variants": [
-        "public/assets/builtin-avatars/candidates/asta-01.png",
-        "public/assets/builtin-avatars/candidates/asta-02.png",
-        "public/assets/builtin-avatars/candidates/asta-03.png"
+        "static:avatar:asta:01",
+        "static:avatar:asta:02",
+        "static:avatar:asta:03"
       ]
     },
     {
       "id": "arlan",
       "name": "阿兰",
       "variants": [
-        "public/assets/builtin-avatars/candidates/arlan-01.png",
-        "public/assets/builtin-avatars/candidates/arlan-02.png",
-        "public/assets/builtin-avatars/candidates/arlan-03.png"
+        "static:avatar:arlan:01",
+        "static:avatar:arlan:02",
+        "static:avatar:arlan:03"
       ]
     },
     {
       "id": "stelle",
       "name": "星",
       "variants": [
-        "public/assets/builtin-avatars/candidates/stelle-01.png",
-        "public/assets/builtin-avatars/candidates/stelle-02.png",
-        "public/assets/builtin-avatars/candidates/stelle-03.png"
+        "static:avatar:stelle:01",
+        "static:avatar:stelle:02",
+        "static:avatar:stelle:03"
       ]
     },
     {
       "id": "caelus",
       "name": "穹",
       "variants": [
-        "public/assets/builtin-avatars/candidates/caelus-01.png",
-        "public/assets/builtin-avatars/candidates/caelus-02.png",
-        "public/assets/builtin-avatars/candidates/caelus-03.png"
+        "static:avatar:caelus:01",
+        "static:avatar:caelus:02",
+        "static:avatar:caelus:03"
       ]
     },
     {
       "id": "bronya",
       "name": "布洛妮娅",
       "variants": [
-        "public/assets/builtin-avatars/candidates/bronya-01.png",
-        "public/assets/builtin-avatars/candidates/bronya-02.png",
-        "public/assets/builtin-avatars/candidates/bronya-03.png"
+        "static:avatar:bronya:01",
+        "static:avatar:bronya:02",
+        "static:avatar:bronya:03"
       ]
     },
     {

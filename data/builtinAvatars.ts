@@ -18,52 +18,12 @@ export interface BuiltinAvatarSet {
   candidates: BuiltinAvatarCandidate[];
 }
 
-const BASE = '/assets/builtin-avatars/candidates';
-const LOCAL_AVATAR_CANDIDATE_IDS = new Set([
-  'march7th-01',
-  'march7th-02',
-  'march7th-03',
-  'danheng-01',
-  'danheng-02',
-  'danheng-03',
-  'himeko-01',
-  'himeko-02',
-  'himeko-03',
-  'welt-01',
-  'welt-02',
-  'welt-03',
-  'pom-pom-01',
-  'pom-pom-02',
-  'pom-pom-03',
-  'herta-01',
-  'herta-02',
-  'herta-03',
-  'asta-01',
-  'asta-02',
-  'asta-03',
-  'arlan-01',
-  'arlan-02',
-  'arlan-03',
-  'stelle-01',
-  'stelle-02',
-  'stelle-03',
-  'caelus-01',
-  'caelus-02',
-  'caelus-03',
-  'bronya-01',
-  'bronya-02',
-  'bronya-03',
-]);
-
 function avatarLogicalId(id: string): string {
   return 'avatar:' + id.replace(/-(\d+)$/, ':$1');
 }
 
 function avatarSource(id: string): string {
-  const local = LOCAL_AVATAR_CANDIDATE_IDS.has(id)
-    ? BASE + '/' + id + '.png'
-    : STATIC_ASSET_FALLBACK_AVATAR;
-  return resolveStaticAssetOrLocal(avatarLogicalId(id), local);
+  return resolveStaticAssetOrLocal(avatarLogicalId(id), STATIC_ASSET_FALLBACK_AVATAR);
 }
 
 function avatarReference(id: string): string | undefined {

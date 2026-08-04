@@ -24,27 +24,14 @@ const preservedCanaries = {
 const rejectedArlanDigest = '55c7e74be88c0697af5efa17f12d27b1e8265a80d33938da294125374ef7a122';
 
 function parseInventoryVariant(character, variant) {
-  if (variant.startsWith('static:')) {
-    const logicalId = variant.slice('static:'.length);
-    const match = /^avatar:([^:]+):(\d+)$/.exec(logicalId);
-    assert.ok(match, `invalid static avatar reference: ${variant}`);
-    assert.equal(match[1], character.id, `${variant} owner must match ${character.id}`);
-    return {
-      logicalId,
-      candidateId: `${match[1]}-${match[2]}`,
-      localPath: null,
-    };
-  }
-
-  const localPath = variant.replace(/^public[\\/]/, 'public/');
-  const candidateId = path.basename(localPath, '.png');
-  const match = /^(.+)-(\d+)$/.exec(candidateId);
-  assert.ok(match, `invalid local avatar candidate id: ${candidateId}`);
+  assert.ok(variant.startsWith('static:'), `avatar inventory must use a remote static reference: ${variant}`);
+  const logicalId = variant.slice('static:'.length);
+  const match = /^avatar:([^:]+):(\d+)$/.exec(logicalId);
+  assert.ok(match, `invalid static avatar reference: ${variant}`);
   assert.equal(match[1], character.id, `${variant} owner must match ${character.id}`);
   return {
-    logicalId: `avatar:${match[1]}:${match[2]}`,
-    candidateId,
-    localPath,
+    logicalId,
+    candidateId: `${match[1]}-${match[2]}`,
   };
 }
 
@@ -93,12 +80,7 @@ for (const forbidden of ['sourceKey', 'telegram', 'TG_', 'Bot_Token', 'api_token
 
 const candidateDir = path.join(root, 'public/assets/builtin-avatars/candidates');
 const localPngs = fs.readdirSync(candidateDir).filter((name) => name.endsWith('.png'));
-const localInventoryVariants = inventoryVariants.filter((variant) => variant.localPath);
-assert.equal(localPngs.length, 33, 'bulk migration must retain all 33 repository-local PNG avatars');
-assert.equal(localInventoryVariants.length, 33, 'inventory must identify the 33 repository-local rollback variants');
-for (const variant of localInventoryVariants) {
-  assert.ok(fs.existsSync(path.join(root, variant.localPath)), `${variant.logicalId} local rollback source is missing`);
-}
+assert.equal(localPngs.length, 0, 'repository must not retain character avatar PNGs after remote-only cutover');
 
 const placeholderPath = path.join(root, 'public/assets/static-fallback/avatar-placeholder.webp');
 const placeholder = fs.readFileSync(placeholderPath);
@@ -120,8 +102,9 @@ for (const variant of inventoryVariants) {
   assert.ok(builtin.includes(`src: avatarSource('${variant.candidateId}')`), `${variant.candidateId} must resolve through the static manifest`);
   assert.ok(builtin.includes(`reference: avatarReference('${variant.candidateId}')`), `${variant.candidateId} must preserve a logical mount reference`);
 }
-assert.ok(builtin.includes('LOCAL_AVATAR_CANDIDATE_IDS.has(id)'), 'built-in avatar sources must distinguish local rollback candidates');
-assert.ok(builtin.includes(': STATIC_ASSET_FALLBACK_AVATAR'), 'remote-only avatars must use the shared local placeholder as fallback');
+assert.ok(!builtin.includes('LOCAL_AVATAR_CANDIDATE_IDS'), 'built-in avatar sources must not retain local character avatar branches');
+assert.ok(!builtin.includes("const BASE = '/assets/builtin-avatars/candidates'"), 'built-in avatar sources must not retain the removed avatar directory');
+assert.ok(builtin.includes('resolveStaticAssetOrLocal(avatarLogicalId(id), STATIC_ASSET_FALLBACK_AVATAR)'), 'all remote avatars must use the shared local placeholder as fallback');
 assert.ok(builtin.includes('isRemoteStaticAssetUrl(candidate.src)'), 'default surfaces must deliberately exercise migrated avatars');
 assert.ok(builtin.includes('candidates?.[0]?.src'), 'manifest lookup failures must retain the first candidate fallback');
 
@@ -138,9 +121,14 @@ assert.ok(albumActions.includes('return trimmed'), 'legacy local paths and remot
 
 const albumWorkspace = read('components/features/GameSystems/album/workspaces.tsx');
 const albumPanel = read('components/features/GameSystems/AlbumPanel.tsx');
+const packageJson = JSON.parse(read('package.json'));
+const retiredAvatarCleaner = read('scripts/clean-retired-avatar-artifacts.mjs');
 assert.ok(albumWorkspace.includes('mountSrc?: string'), 'character library entries must separate display URLs from persisted references');
 assert.ok(albumWorkspace.includes('mountSrc: candidate.reference'), 'built-in avatar entries must expose their logical mount reference');
 assert.ok(albumPanel.includes('item?.mountSrc || item?.src || params.src'), 'mounting must prefer the logical reference');
+assert.ok(packageJson.scripts.build.startsWith('node scripts/clean-retired-avatar-artifacts.mjs &&'), 'production build must remove retired avatar artifacts before bundling');
+assert.ok(retiredAvatarCleaner.includes("'assets/builtin-avatars/candidates'"), 'avatar artifact cleanup must stay scoped to the retired output directory');
+assert.ok(retiredAvatarCleaner.includes("entry.name.toLowerCase().endsWith('.png')"), 'avatar artifact cleanup must remove only PNG files');
 
 const resilientSurfaces = [
   'components/features/ZhikuV2/ArchiveBrowser.tsx',
@@ -158,4 +146,4 @@ for (const file of resilientSurfaces) {
   assert.ok(source.includes('<ResilientImage'), `${file} must render the shared resilient image`);
 }
 
-console.log('Static avatar regression passed: 113 remote avatars across 89 characters, 33 repository-local rollback PNGs, shared fallback coverage.');
+console.log('Static avatar regression passed: 113 remote avatars across 89 characters, zero repository-local character avatar PNGs, shared fallback coverage.');

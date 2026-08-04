@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/clean-retired-avatar-artifacts.mjs && tsc -b && vite build",
     "prototype:zhiku-ai-retrieval": "node scripts/prototypes/zhiku-ai-retrieval-prototype.mjs",
     "test:story-weaving": "node scripts/story-weaving-regression.mjs",
     "test:story-weaving-ui": "node scripts/story-weaving-ui-regression.mjs",

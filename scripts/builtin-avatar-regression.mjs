@@ -12,36 +12,24 @@ const characters = Array.isArray(inventory.characters) ? inventory.characters : 
 const characterIds = new Set();
 const characterNames = new Set();
 const logicalIds = new Set();
-let localVariantCount = 0;
 
 function parseVariant(character, variant) {
   if (typeof variant !== 'string' || !variant.trim()) {
     return { error: `${character.id} has an empty avatar variant` };
   }
 
-  if (variant.startsWith('static:')) {
-    const logicalId = variant.slice('static:'.length);
-    const match = /^avatar:([^:]+):(\d+)$/.exec(logicalId);
-    if (!match || match[1] !== character.id) {
-      return { error: `${character.id} has an invalid static variant: ${variant}` };
-    }
-    return {
-      candidateId: `${match[1]}-${match[2]}`,
-      logicalId,
-      localPath: null,
-    };
+  if (!variant.startsWith('static:')) {
+    return { error: `${character.id} must use a remote static avatar reference: ${variant}` };
   }
 
-  const localPath = variant.replace(/^public[\\/]/, 'public/');
-  const candidateId = path.basename(localPath, '.png');
-  const match = /^(.+)-(\d+)$/.exec(candidateId);
-  if (!match || match[1] !== character.id || !localPath.endsWith('.png')) {
-    return { error: `${character.id} has an invalid local variant: ${variant}` };
+  const logicalId = variant.slice('static:'.length);
+  const match = /^avatar:([^:]+):(\d+)$/.exec(logicalId);
+  if (!match || match[1] !== character.id) {
+    return { error: `${character.id} has an invalid static variant: ${variant}` };
   }
   return {
-    candidateId,
-    logicalId: `avatar:${match[1]}:${match[2]}`,
-    localPath,
+    candidateId: `${match[1]}-${match[2]}`,
+    logicalId,
   };
 }
 
@@ -78,12 +66,6 @@ for (const character of characters) {
     if (!staticManifest.assets[parsed.logicalId]) {
       errors.push(`${parsed.logicalId} is missing from data/staticAssetManifest.json`);
     }
-    if (parsed.localPath) {
-      localVariantCount += 1;
-      if (!fs.existsSync(path.join(root, parsed.localPath))) {
-        errors.push(`${character.id} local rollback variant does not exist: ${parsed.localPath}`);
-      }
-    }
     if (!avatarTs.includes(`src: avatarSource('${parsed.candidateId}')`)) {
       errors.push(`builtinAvatars.ts missing ${parsed.candidateId} source`);
     }
@@ -106,12 +88,16 @@ for (const character of characters) {
 
 if (characters.length !== 89) errors.push(`avatar inventory should contain 89 characters, got ${characters.length}`);
 if (logicalIds.size !== 113) errors.push(`avatar inventory should contain 113 variants, got ${logicalIds.size}`);
-if (localVariantCount !== 33) errors.push(`avatar inventory should retain 33 repository-local PNG variants, got ${localVariantCount}`);
-if (!avatarTs.includes('LOCAL_AVATAR_CANDIDATE_IDS.has(id)')) {
-  errors.push('builtinAvatars.ts must distinguish repository-local rollback candidates');
+const candidateDir = path.join(root, 'public/assets/builtin-avatars/candidates');
+const localPngs = fs.readdirSync(candidateDir).filter((name) => name.endsWith('.png'));
+if (localPngs.length !== 0) {
+  errors.push(`repository must not retain character avatar PNGs, found ${localPngs.length}`);
 }
-if (!avatarTs.includes(': STATIC_ASSET_FALLBACK_AVATAR')) {
-  errors.push('remote-only avatars must fall back to the shared local placeholder');
+if (avatarTs.includes('LOCAL_AVATAR_CANDIDATE_IDS') || avatarTs.includes("const BASE = '/assets/builtin-avatars/candidates'")) {
+  errors.push('builtinAvatars.ts must not retain repository-local character avatar paths');
+}
+if (!avatarTs.includes('resolveStaticAssetOrLocal(avatarLogicalId(id), STATIC_ASSET_FALLBACK_AVATAR)')) {
+  errors.push('all remote avatars must share the local failure placeholder');
 }
 if (!avatarTs.includes('BUILTIN_AVATAR_CANONICAL_ALIASES[normalizedName] ?? normalizedName')) {
   errors.push('getBuiltinAvatarSet should resolve avatar owner aliases');
@@ -125,4 +111,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Builtin avatar regression passed: ${characters.length} characters, ${logicalIds.size} remote variants, ${localVariantCount} repository-local rollbacks.`);
+console.log(`Builtin avatar regression passed: ${characters.length} characters, ${logicalIds.size} remote variants, zero repository-local character avatar PNGs.`);
