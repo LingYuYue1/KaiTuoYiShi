@@ -1,6 +1,7 @@
 import type { 存档数据, 存档类型 } from '@/models/settings';
 import { 归一化NewestStory记录, NEWEST_STORY_STORE_KEY, type NewestStory记录 } from '@/models/newestStory';
 import { devLog, devLogError } from '@/utils/devLog';
+import { createUnifiedId, UNIFIED_ID_DB_VERSION } from '@/utils/id';
 import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExportAsync } from './savePackage';
 import {
   extractSaveAssetRecords,
@@ -42,7 +43,7 @@ export type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepair
 export { getSaveCatalogRepairState, subscribeSaveCatalogRepair };
 
 const DB_NAME = 'TimeJourneyDB';
-const DB_VERSION = 7;
+const DB_VERSION = UNIFIED_ID_DB_VERSION;
 const SAVES_STORE = 'saves';
 const SAVE_SUMMARIES_STORE = 'saveSummaries';
 const SAVE_ASSETS_STORE = 'saveAssets';
@@ -68,6 +69,12 @@ type StoredSaveMeta = 存档数据 & {
 type SaveWithTree = 存档数据 & {
   saveTree?: import('@/utils/saveTree').存档树元信息;
 };
+
+interface Migration {
+  version: number;
+  label: string;
+  migrate: (transaction: IDBTransaction) => void;
+}
 
 export type CloudMergeStagedRecord =
   | { kind: 'node'; createdAt: number; save: 存档数据 }
@@ -131,8 +138,17 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(NEWEST_STORY_STORE)) {
         db.createObjectStore(NEWEST_STORY_STORE, { keyPath: 'key' });
       }
-      if (event.oldVersion < 7 && request.transaction) {
-        migrateNewestStoryHeadNodeId(request.transaction);
+      const migrationsToApply = MIGRATIONS.filter((migration) => migration.version > event.oldVersion);
+      devLog('save', 'migrate-registry-start', {
+        applied: migrationsToApply.map((migration) => migration.label),
+        skipped: MIGRATIONS
+          .filter((migration) => migration.version <= event.oldVersion)
+          .map((migration) => migration.label),
+      });
+      if (request.transaction) {
+        for (const migration of migrationsToApply) {
+          migration.migrate(request.transaction);
+        }
       }
     };
     request.onsuccess = () => finish(request.result);
@@ -148,7 +164,17 @@ function migrateNewestStoryHeadNodeId(transaction: IDBTransaction): void {
   const newestRequest = newestStore.get(NEWEST_STORY_STORE_KEY);
   newestRequest.onsuccess = () => {
     const newest: unknown = newestRequest.result;
-    if (!isPlainRecord(newest) || 'headNodeId' in newest) return;
+    if (!isPlainRecord(newest)) {
+      devLog('save', 'newest-head-migration', { outcome: 'no-record' });
+      return;
+    }
+    if ('headNodeId' in newest) {
+      devLog('save', 'newest-head-migration', {
+        outcome: 'already-present',
+        headNodeId: (newest as { headNodeId?: unknown }).headNodeId,
+      });
+      return;
+    }
 
     const baseCheckpointId = normalizeSaveId(newest.baseCheckpointId);
     if (!baseCheckpointId) {
@@ -175,6 +201,245 @@ function migrateNewestStoryHeadNodeId(transaction: IDBTransaction): void {
   };
   newestRequest.onerror = () => {
     devLogError('save', 'newest-head-migration-read-failed', newestRequest.error);
+  };
+}
+
+const UNIFIED_ID_PATTERN = /^[0-9a-f]{4}-[0-9a-f]{6}-[0-9a-f]{4}$/;
+
+function migrateNodeIdsToUnifiedFormat(transaction: IDBTransaction): void {
+  devLog('save', 'migrate-nodeid-start');
+
+  const savesStore = transaction.objectStore(SAVES_STORE);
+  const summaryStore = transaction.objectStore(SAVE_SUMMARIES_STORE);
+  const deltaStore = transaction.objectStore(SAVE_NODE_DELTAS_STORE);
+  const newestStore = transaction.objectStore(NEWEST_STORY_STORE);
+  const metrics = {
+    savesScanned: 0,
+    savesRewritten: 0,
+    summariesScanned: 0,
+    summariesRewritten: 0,
+    deltasScanned: 0,
+    deltasRewritten: 0,
+    mappedNodeIds: 0,
+    mappedRootIds: 0,
+    newestRewritten: false,
+  };
+  let failureLogged = false;
+  const logFailure = (error: unknown, phase: string) => {
+    if (failureLogged) return;
+    failureLogged = true;
+    devLogError('save', 'migrate-nodeid-failed', error, { phase });
+  };
+  transaction.addEventListener('abort', () => {
+    logFailure(transaction.error ?? new Error('统一 nodeId 迁移事务已中止。'), 'transaction');
+  }, { once: true });
+  const watchRequest = (request: IDBRequest, phase: string) => {
+    request.addEventListener('error', () => {
+      logFailure(request.error ?? new Error('统一 nodeId 迁移请求失败。'), phase);
+    }, { once: true });
+  };
+
+  const savesRequest = savesStore.getAll();
+  watchRequest(savesRequest, 'saves-read');
+  savesRequest.onsuccess = () => {
+    const saves = savesRequest.result as unknown[];
+    const summariesRequest = summaryStore.getAll();
+    watchRequest(summariesRequest, 'summaries-read');
+    summariesRequest.onsuccess = () => {
+      const summaries = summariesRequest.result as unknown[];
+      const deltasRequest = deltaStore.getAll();
+      watchRequest(deltasRequest, 'deltas-read');
+      deltasRequest.onsuccess = () => {
+        const deltas = deltasRequest.result as unknown[];
+        const newestRequest = newestStore.get(NEWEST_STORY_STORE_KEY);
+        watchRequest(newestRequest, 'newest-read');
+        newestRequest.onsuccess = () => {
+          const newest = newestRequest.result as unknown;
+          const nodeIdMap = new Map<string, string>();
+          const rootIdMap = new Map<string, string>();
+
+          for (const save of saves) ensureSaveTreeMappings(save, nodeIdMap, rootIdMap);
+          for (const summary of summaries) ensureSaveTreeMappings(summary, nodeIdMap, rootIdMap);
+          for (const delta of deltas) ensureDeltaMappings(delta, nodeIdMap, rootIdMap);
+          ensureNewestMapping(newest, nodeIdMap);
+
+          metrics.savesScanned = saves.length;
+          metrics.summariesScanned = summaries.length;
+          metrics.deltasScanned = deltas.length;
+          metrics.mappedNodeIds = nodeIdMap.size;
+          metrics.mappedRootIds = rootIdMap.size;
+          devLog('save', 'migrate-nodeid-row', {
+            saves: metrics.savesScanned,
+            summaries: metrics.summariesScanned,
+            deltas: metrics.deltasScanned,
+            mappedNodeIds: metrics.mappedNodeIds,
+            mappedRootIds: metrics.mappedRootIds,
+          });
+
+          for (const save of saves) {
+            const rewritten = rewriteSaveTreeRecord(save, nodeIdMap, rootIdMap);
+            if (!rewritten) continue;
+            savesStore.put(rewritten);
+            metrics.savesRewritten += 1;
+          }
+          for (const summary of summaries) {
+            const rewritten = rewriteSaveTreeRecord(summary, nodeIdMap, rootIdMap);
+            if (!rewritten) continue;
+            summaryStore.put(rewritten);
+            metrics.summariesRewritten += 1;
+          }
+          for (const delta of deltas) {
+            const rewritten = rewriteDeltaRecord(delta, nodeIdMap, rootIdMap);
+            if (!rewritten) continue;
+            const oldNodeId = isPlainRecord(delta) && typeof delta.nodeId === 'string'
+              ? delta.nodeId
+              : null;
+            if (!oldNodeId) continue;
+            deltaStore.delete(oldNodeId);
+            deltaStore.put(rewritten);
+            metrics.deltasRewritten += 1;
+          }
+          devLog('save', 'migrate-nodeid-delta-rewrite', {
+            scanned: metrics.deltasScanned,
+            rewritten: metrics.deltasRewritten,
+          });
+
+          if (isPlainRecord(newest) && 'headNodeId' in newest) {
+            const nextHeadNodeId = mapNodeId(newest.headNodeId, nodeIdMap);
+            if (nextHeadNodeId !== newest.headNodeId) {
+              newestStore.put({ ...newest, headNodeId: nextHeadNodeId });
+              metrics.newestRewritten = true;
+            }
+            devLog('save', 'migrate-nodeid-newest', {
+              rewritten: metrics.newestRewritten,
+              oldHeadNodeId: newest.headNodeId,
+              newHeadNodeId: nextHeadNodeId,
+            });
+          } else {
+            devLog('save', 'migrate-nodeid-newest', { rewritten: false });
+          }
+        };
+      };
+    };
+  };
+
+  transaction.addEventListener('complete', () => {
+    const totalRewritten = metrics.savesRewritten + metrics.summariesRewritten + metrics.deltasRewritten;
+    const totalScanned = metrics.savesScanned + metrics.summariesScanned + metrics.deltasScanned;
+    const outcome = totalScanned === 0
+      ? 'empty'
+      : totalRewritten === 0
+        ? 'noop'
+        : 'converted';
+    devLog('save', 'migrate-nodeid-complete', { ...metrics, outcome });
+  }, { once: true });
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 7,
+    label: 'newest-headNodeId',
+    migrate: migrateNewestStoryHeadNodeId,
+  },
+  {
+    version: 8,
+    label: 'unified-nodeId',
+    migrate: migrateNodeIdsToUnifiedFormat,
+  },
+];
+
+function ensureSaveTreeMappings(
+  value: unknown,
+  nodeIdMap: Map<string, string>,
+  rootIdMap: Map<string, string>,
+): void {
+  if (!isPlainRecord(value) || !isPlainRecord(value.saveTree)) return;
+  ensureMappedId(value.saveTree.nodeId, nodeIdMap);
+  ensureMappedId(value.saveTree.parentNodeId, nodeIdMap);
+  ensureMappedId(value.saveTree.rootId, rootIdMap);
+}
+
+function ensureDeltaMappings(
+  value: unknown,
+  nodeIdMap: Map<string, string>,
+  rootIdMap: Map<string, string>,
+): void {
+  if (!isPlainRecord(value)) return;
+  ensureMappedId(value.nodeId, nodeIdMap);
+  ensureMappedId(value.parentNodeId, nodeIdMap);
+  ensureMappedId(value.rootId, rootIdMap);
+}
+
+function ensureNewestMapping(value: unknown, nodeIdMap: Map<string, string>): void {
+  if (isPlainRecord(value)) ensureMappedId(value.headNodeId, nodeIdMap);
+}
+
+function ensureMappedId(value: unknown, map: Map<string, string>): void {
+  if (typeof value !== 'string') return;
+  const normalized = value.trim();
+  if (!normalized || isUnifiedNodeId(normalized) || map.has(normalized)) return;
+  map.set(normalized, createUnifiedId());
+}
+
+function isUnifiedNodeId(value: string): boolean {
+  return UNIFIED_ID_PATTERN.test(value);
+}
+
+function mapNodeId(value: unknown, map: Map<string, string>): unknown {
+  if (typeof value !== 'string') return value;
+  return map.get(value.trim()) ?? value;
+}
+
+function mapRootId(value: unknown, map: Map<string, string>): unknown {
+  if (typeof value !== 'string') return value;
+  return map.get(value.trim()) ?? value;
+}
+
+function rewriteSaveTreeRecord(
+  value: unknown,
+  nodeIdMap: Map<string, string>,
+  rootIdMap: Map<string, string>,
+): Record<string, unknown> | null {
+  if (!isPlainRecord(value) || !isPlainRecord(value.saveTree)) return null;
+  const tree = value.saveTree;
+  const nextNodeId = mapNodeId(tree.nodeId, nodeIdMap);
+  const nextRootId = mapRootId(tree.rootId, rootIdMap);
+  const nextParentNodeId = mapNodeId(tree.parentNodeId, nodeIdMap);
+  if (
+    nextNodeId === tree.nodeId
+    && nextRootId === tree.rootId
+    && nextParentNodeId === tree.parentNodeId
+  ) return null;
+  return {
+    ...value,
+    saveTree: {
+      ...tree,
+      nodeId: nextNodeId,
+      rootId: nextRootId,
+      parentNodeId: nextParentNodeId,
+    },
+  };
+}
+
+function rewriteDeltaRecord(
+  value: unknown,
+  nodeIdMap: Map<string, string>,
+  rootIdMap: Map<string, string>,
+): Record<string, unknown> | null {
+  if (!isPlainRecord(value)) return null;
+  const nextNodeId = mapNodeId(value.nodeId, nodeIdMap);
+  const nextRootId = mapRootId(value.rootId, rootIdMap);
+  const nextParentNodeId = mapNodeId(value.parentNodeId, nodeIdMap);
+  if (
+    nextNodeId === value.nodeId
+    && nextRootId === value.rootId
+    && nextParentNodeId === value.parentNodeId
+  ) return null;
+  return {
+    ...value,
+    nodeId: nextNodeId,
+    rootId: nextRootId,
+    parentNodeId: nextParentNodeId,
   };
 }
 
@@ -1096,12 +1361,12 @@ function isImportableSave(value: unknown): value is 存档数据 {
 }
 
 function remapImportedSaveTree(saves: 存档数据[]): 存档数据[] {
-  const rootId = createImportId('save_root_import');
+  const rootId = createImportId();
   const nodeIdMap = new Map<string, string>();
   for (const save of saves) {
     const tree = (save as SaveWithTree).saveTree;
     if (tree?.nodeId) {
-      nodeIdMap.set(tree.nodeId, createImportId('save_node_import'));
+      nodeIdMap.set(tree.nodeId, createImportId());
     }
   }
   return saves.map((save, index) => {
@@ -1111,7 +1376,7 @@ function remapImportedSaveTree(saves: 存档数据[]): 存档数据[] {
         ...save,
         saveTree: {
           rootId,
-          nodeId: createImportId('save_node_import'),
+          nodeId: createImportId(),
           branchName: '导入节点',
           createdAt: save.timestamp || Date.now() + index,
         },
@@ -1122,7 +1387,7 @@ function remapImportedSaveTree(saves: 存档数据[]): 存档数据[] {
       saveTree: {
         ...tree,
         rootId,
-        nodeId: nodeIdMap.get(tree.nodeId) ?? createImportId('save_node_import'),
+        nodeId: nodeIdMap.get(tree.nodeId) ?? createImportId(),
         parentNodeId: tree.parentNodeId ? nodeIdMap.get(tree.parentNodeId) : undefined,
         branchName: tree.branchName ?? '导入节点',
         createdAt: tree.createdAt || save.timestamp || Date.now() + index,
@@ -1131,8 +1396,8 @@ function remapImportedSaveTree(saves: 存档数据[]): 存档数据[] {
   });
 }
 
-function createImportId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+function createImportId(): string {
+  return createUnifiedId();
 }
 
 function stripCloudBackupRestoreRuntime<T extends 存档数据>(save: T): T {

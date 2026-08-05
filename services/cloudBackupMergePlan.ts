@@ -1,4 +1,5 @@
 import type { CloudBackupNodeMeta } from './cloudBackupPackage.ts';
+import { createUnifiedId } from '@/utils/id';
 
 export interface CloudBackupNodePlanInput {
   fingerprints: Set<string>;
@@ -15,7 +16,7 @@ export interface CloudBackupNodePlan {
 export function buildCloudBackupNodePlan(
   nodes: CloudBackupNodeMeta[],
   local: CloudBackupNodePlanInput,
-  createId: (prefix: string) => string = createPlanId,
+  createId: () => string = createPlanId,
 ): CloudBackupNodePlan {
   const skippedEntryPaths = new Set<string>();
   const conflictRoots = new Set<string>();
@@ -34,10 +35,10 @@ export function buildCloudBackupNodePlan(
 
   const rootIdMap = new Map<string, string>();
   const nodeIdMap = new Map<string, string>();
-  for (const rootId of conflictRoots) rootIdMap.set(rootId, createId('save_root_cloud'));
+  for (const rootId of conflictRoots) rootIdMap.set(rootId, createId());
   for (const node of nodes) {
     if (!node.rootId || !node.nodeId || !conflictRoots.has(node.rootId)) continue;
-    nodeIdMap.set(nodeIdentity(node.rootId, node.nodeId), createId('save_node_cloud'));
+    nodeIdMap.set(nodeIdentity(node.rootId, node.nodeId), createId());
   }
   return { skippedEntryPaths, conflictRoots, rootIdMap, nodeIdMap };
 }
@@ -50,9 +51,6 @@ function nodeIdentity(rootId: string, nodeId: string): string {
   return `${rootId}\0${nodeId}`;
 }
 
-function createPlanId(prefix: string): string {
-  const random = typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-    : Math.random().toString(36).slice(2, 18);
-  return `${prefix}_${Date.now()}_${random}`;
+function createPlanId(): string {
+  return createUnifiedId();
 }

@@ -3,6 +3,7 @@ import { 创建空API设置, 创建默认游戏设置 } from '@/models/settings'
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
+import { createUnifiedId } from '@/utils/id';
 
 const PACKAGE_VERSION = 2;
 const encoder = new TextEncoder();
@@ -80,32 +81,31 @@ export async function buildSavePackage(save: 存档数据): Promise<Blob> {
 export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob> {
   const expandedSaves = await Promise.all(
     saves
-      .filter((save) => save && typeof save === 'object')
       .map((save) => expandSaveAssetPayloadForExport(save)),
   );
   const normalized = expandedSaves
     .map((save) => sanitizeSaveForExport(compactDuplicatedSaveImages(save)))
-    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0) || (Number(a.id) || 0) - (Number(b.id) || 0));
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0) || (a.id || 0) - (b.id || 0));
   if (!normalized.length) {
     throw new Error('没有可导出的存档树节点');
   }
-  const rootId = getSaveTreeRootId(normalized[0]) || `tree-${Date.now()}`;
+  const rootId = getSaveTreeRootId(normalized[0]) || createUnifiedId();
   const latest = [...normalized].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
   const nodeEntries = normalized.map((save, index) => {
     const tree = getSaveTreeMetaLoose(save);
-    const nodeId = tree?.nodeId || `legacy-node-${Number(save.id) || index + 1}`;
-    const path = `${TREE_NODE_DIR}/${sanitizePackageSegment(nodeId)}-${Number(save.id) || index + 1}.json`;
+    const nodeId = tree?.nodeId || createUnifiedId();
+    const path = `${TREE_NODE_DIR}/${sanitizePackageSegment(nodeId)}-${save.id || index + 1}.json`;
     return {
       save,
       path,
       meta: {
-        id: Number(save.id) || index + 1,
+        id: save.id || index + 1,
         nodeId,
         parentNodeId: tree?.parentNodeId,
         branchName: tree?.branchName,
         type: save.type,
-        timestamp: Number(save.timestamp) || Date.now(),
-        turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1),
+        timestamp: save.timestamp || Date.now(),
+        turnCount: save.turnCount ?? (save.chatHistory.length + 1),
         path,
       },
     };
@@ -114,7 +114,7 @@ export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob>
     rootId,
     exportedAt: new Date().toISOString(),
     nodeCount: nodeEntries.length,
-    latestSaveId: Number(latest.id) || nodeEntries.at(-1)?.meta.id || 0,
+    latestSaveId: latest.id || nodeEntries.at(-1)?.meta.id || 0,
     nodes: nodeEntries.map((entry) => entry.meta),
   };
   const files: Array<[string, unknown]> = [
@@ -126,8 +126,8 @@ export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob>
     kind: 'save-tree-package',
     packageVersion: PACKAGE_VERSION,
     exportedAt: new Date().toISOString(),
-    travelerName: latest.旅人?.姓名 || 'traveler',
-    turnCount: latest.turnCount ?? ((latest.chatHistory?.length ?? 0) + 1),
+    travelerName: latest.旅人.姓名 || 'traveler',
+    turnCount: latest.turnCount ?? (latest.chatHistory.length + 1),
     timestamp: latest.timestamp || Date.now(),
     format: 'ktysave',
     nodeCount: nodeEntries.length,
@@ -152,8 +152,7 @@ export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   delete sanitized.saveRuntime;
   delete sanitized.debugContext;
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
-  stripEmbeddedApiSettings(sanitized);
-  return sanitized;
+  return stripEmbeddedApiSettings(sanitized);
 }
 
 /** Async export sanitizer that rehydrates Blob-backed album assets into portable dataUrls. */
@@ -162,70 +161,53 @@ export async function sanitizeSaveForExportAsync(save: 存档数据): Promise<�
   return sanitizeSaveForExport(expanded);
 }
 
-function stripEmbeddedApiSettings(sanitized: 存档数据): void {
+function stripEmbeddedApiSettings(sanitized: 存档数据): 存档数据 {
   const defaults = 创建默认游戏设置();
-  const settings = sanitized.gameSettings ?? defaults;
-  sanitized.gameSettings = settings;
+  const settings = sanitized.gameSettings;
 
-  for (const config of sanitized.apiSettings?.configs ?? []) {
-    clearApiKey(config);
-  }
-
-  clearApiKey(settings?.variableApi);
-  clearApiKey(settings?.新闻系统?.api);
-  clearApiKey(settings?.手机系统?.api);
-  clearApiKey(settings?.智库系统?.api);
-  clearApiKey(settings?.剧情编织系统?.api);
-  clearApiKey(settings?.记忆系统?.记忆总结API);
-  clearApiKey(settings?.记忆系统?.忆庭召回API);
-  clearApiKey(settings?.记忆系统?.忆庭精炼API);
-  clearApiKey(settings?.文生图系统?.普通接口);
-  clearApiKey(settings?.文生图系统?.场景接口);
-  clearApiKey(settings?.文生图系统?.NSFW接口);
-  clearApiKey(settings?.文生图系统?.词组转化器API);
-  clearApiKey(settings?.文生图系统?.正文生图?.parserApi);
-  clearApiKey(settings?.文生图系统?.正文生图?.imageApi);
-
-  sanitized.apiSettings = 创建空API设置();
-  sanitized.gameSettings = {
+  return {
+    ...sanitized,
+    apiSettings: 创建空API设置(),
+    gameSettings: {
     ...defaults,
     ...settings,
     enableClaudeMode: defaults.enableClaudeMode,
     variableApi: defaults.variableApi,
     新闻系统: {
-      ...(settings.新闻系统 ?? defaults.新闻系统),
+      ...settings.新闻系统,
       api: defaults.新闻系统.api,
     },
     手机系统: {
-      ...(settings.手机系统 ?? defaults.手机系统),
+      ...settings.手机系统,
       api: defaults.手机系统.api,
     },
     智库系统: {
-      ...(settings.智库系统 ?? defaults.智库系统),
+      ...settings.智库系统,
       api: defaults.智库系统.api,
     },
     剧情编织系统: {
-      ...(settings.剧情编织系统 ?? defaults.剧情编织系统),
+      ...settings.剧情编织系统,
       api: defaults.剧情编织系统.api,
     },
     记忆系统: {
-      ...(settings.记忆系统 ?? defaults.记忆系统),
+      ...settings.记忆系统,
       记忆总结API: defaults.记忆系统.记忆总结API,
       忆庭召回API: defaults.记忆系统.忆庭召回API,
       忆庭精炼API: defaults.记忆系统.忆庭精炼API,
     },
     文生图系统: {
-      ...(settings.文生图系统 ?? defaults.文生图系统),
+      ...settings.文生图系统,
       普通接口: defaults.文生图系统.普通接口,
       场景接口: defaults.文生图系统.场景接口,
       useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
       NSFW接口: defaults.文生图系统.NSFW接口,
       词组转化器API: defaults.文生图系统.词组转化器API,
       正文生图: {
-        ...(settings.文生图系统?.正文生图 ?? defaults.文生图系统.正文生图),
+        ...settings.文生图系统.正文生图,
         parserApi: defaults.文生图系统.正文生图.parserApi,
         imageApi: defaults.文生图系统.正文生图.imageApi,
       },
+    },
     },
   };
 }
@@ -251,7 +233,7 @@ export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数�
   validatePackageManifest(manifest, files);
   if (manifest.kind === 'save-tree-package') {
     const tree = parseSaveTreePackageFiles(files, manifest);
-    const latest = tree.nodes.find((save) => Number(save.id) === tree.latestSaveId) ?? tree.nodes.at(-1);
+    const latest = tree.nodes.find((save) => save.id === tree.latestSaveId) ?? tree.nodes.at(-1);
     if (!latest) throw new Error('存档树包没有可导入节点');
     return latest;
   }
@@ -260,23 +242,23 @@ export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数�
     throw new Error('存档包缺少 save.json');
   }
   const save = JSON.parse(saveText) as 存档数据;
-  const read = <T,>(path: string): T | undefined => {
+  const read = (path: string): unknown => {
     const text = files.get(path);
-    return text ? JSON.parse(text) as T : undefined;
+    return text ? JSON.parse(text) : undefined;
   };
   return {
     ...save,
-    记忆: read<存档数据['记忆']>('systems/memory.json') ?? save.记忆,
-    忆庭: read<存档数据['忆庭']>('systems/yiting.json') ?? save.忆庭,
-    智库: read<存档数据['智库']>('systems/zhiku-runtime.json') ?? save.智库,
-    手机: read<存档数据['手机']>('systems/phone.json') ?? save.手机,
-    NPC: read<存档数据['NPC']>('systems/npc.json') ?? save.NPC,
-    相册: read<存档数据['相册']>('systems/album.json') ?? save.相册,
-    新闻: read<存档数据['新闻']>('systems/news.json') ?? save.新闻,
-    剧情: read<存档数据['剧情']>('systems/plot.json') ?? save.剧情,
-    剧情编织: read<存档数据['剧情编织']>('systems/story-weaving.json') ?? save.剧情编织,
-    variableBatches: read<存档数据['variableBatches']>('systems/variable-batches.json') ?? save.variableBatches,
-    queueTasks: read<存档数据['queueTasks']>('systems/queue-tasks.json') ?? save.queueTasks,
+    记忆: (read('systems/memory.json') as 存档数据['记忆'] | undefined) ?? save.记忆,
+    忆庭: (read('systems/yiting.json') as 存档数据['忆庭'] | undefined) ?? save.忆庭,
+    智库: (read('systems/zhiku-runtime.json') as 存档数据['智库'] | undefined) ?? save.智库,
+    手机: (read('systems/phone.json') as 存档数据['手机'] | undefined) ?? save.手机,
+    NPC: (read('systems/npc.json') as 存档数据['NPC'] | undefined) ?? save.NPC,
+    相册: (read('systems/album.json') as 存档数据['相册'] | undefined) ?? save.相册,
+    新闻: (read('systems/news.json') as 存档数据['新闻'] | undefined) ?? save.新闻,
+    剧情: (read('systems/plot.json') as 存档数据['剧情'] | undefined) ?? save.剧情,
+    剧情编织: (read('systems/story-weaving.json') as 存档数据['剧情编织'] | undefined) ?? save.剧情编织,
+    variableBatches: (read('systems/variable-batches.json') as 存档数据['variableBatches'] | undefined) ?? save.variableBatches,
+    queueTasks: (read('systems/queue-tasks.json') as 存档数据['queueTasks'] | undefined) ?? save.queueTasks,
   };
 }
 
@@ -299,17 +281,21 @@ function parseSaveTreePackageFiles(files: Map<string, string>, manifest: Partial
   if (!treeManifestText) {
     throw new Error('存档树包缺少 tree/tree-manifest.json');
   }
-  const treeManifest = JSON.parse(treeManifestText) as Partial<存档树包清单>;
+  const treeManifest = JSON.parse(treeManifestText) as {
+    nodes?: unknown[];
+    latestSaveId?: unknown;
+  };
   if (!Array.isArray(treeManifest.nodes) || treeManifest.nodes.length === 0) {
     throw new Error('存档树包节点清单为空');
   }
   const nodes = treeManifest.nodes.map((node) => {
-    if (!node?.path || !isSafePackagePath(node.path)) {
+    const candidate = node && typeof node === 'object' ? node as { path?: unknown } : null;
+    if (!candidate?.path || !isSafePackagePath(candidate.path)) {
       throw new Error('存档树包节点路径异常');
     }
-    const text = files.get(node.path);
+    const text = files.get(candidate.path);
     if (!text) {
-      throw new Error(`存档树包缺少节点文件：${node.path}`);
+      throw new Error(`存档树包缺少节点文件：${candidate.path}`);
     }
     return JSON.parse(text) as 存档数据;
   });
@@ -347,7 +333,7 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     [SYSTEM_ENTRY_PATHS[8], 剧情编织],
     [SYSTEM_ENTRY_PATHS[9], variableBatches],
     [SYSTEM_ENTRY_PATHS[10], queueTasks],
-    [TREE_NODE_DELTA_PATH, buildSaveNodeDeltaRecord(save, Number(save.id) || 0)],
+    [TREE_NODE_DELTA_PATH, buildSaveNodeDeltaRecord(save, save.id || 0)],
   ] satisfies Array<[string, unknown]>).filter(([, value]) => value !== undefined);
 
   const manifest: 存档包清单 = {
@@ -355,8 +341,8 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     kind: 'save-package',
     packageVersion: PACKAGE_VERSION,
     exportedAt: new Date().toISOString(),
-    travelerName: save.旅人?.姓名 || 'traveler',
-    turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1),
+    travelerName: save.旅人.姓名 || 'traveler',
+    turnCount: save.turnCount ?? (save.chatHistory.length + 1),
     timestamp: save.timestamp || Date.now(),
     format: 'ktysave',
     privacy: {
@@ -376,11 +362,6 @@ function textEntry(name: string, value: unknown): ZipEntryInput {
     name,
     bytes: encoder.encode(JSON.stringify(value, null, 2)),
   };
-}
-
-function clearApiKey(config: { apiKey?: string } | null | undefined): void {
-  if (!config || typeof config !== 'object') return;
-  config.apiKey = '';
 }
 
 function validatePackageManifest(manifest: Partial<存档包清单>, files: Map<string, string>): void {

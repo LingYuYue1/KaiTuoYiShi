@@ -1333,14 +1333,6 @@
       "count": 2
     }
   },
-  "services/cloudBackupMerge.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
-    }
-  },
   "services/cloudBackupPackage.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
@@ -1411,28 +1403,9 @@
       "count": 1
     }
   },
-  "services/savePackage.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 50
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unnecessary-type-parameters": {
-      "count": 1
-    },
-    "no-param-reassign": {
-      "count": 4
-    }
-  },
   "services/storage/cloudBackupTransferStore.ts": {
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 8
-    }
-  },
-  "services/storage/saveCatalog.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
     }
   },
   "services/storyPlanningAnalysis.ts": {

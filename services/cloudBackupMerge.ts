@@ -28,6 +28,7 @@ import {
   type SaveAssetRecord,
 } from '@/utils/saveAssetStorage';
 import { dataUrlToBlob } from '@/utils/albumObjectUrl';
+import { createUnifiedId } from '@/utils/id';
 
 export interface CloudBackupMergeProgress {
   phase: 'analyzing-local' | 'reading-legacy' | 'planning' | 'unpacking-part' | 'staging-node' | 'committing' | 'completed';
@@ -240,7 +241,7 @@ export async function mergeLegacyCloudBackup(
       const loaded = await loadCloudSave(item, index, options.signal);
       validateCloudSaveNode(loaded, {
         sourceSaveId: item.localSaveId ?? index + 1,
-        type: item.saveType || loaded.type || 'manual',
+        type: normalizeSaveType(item.saveType ?? loaded.type),
         timestamp: item.timestamp || loaded.timestamp || 0,
         turnCount: loaded.turnCount || 0,
         fingerprint: '0'.repeat(64),
@@ -285,7 +286,7 @@ export async function mergeLegacyCloudBackup(
       const tree = getSaveTree(portable);
       const meta: CloudBackupNodeMeta = {
         sourceSaveId: item.localSaveId ?? index + 1,
-        type: item.saveType || portable.type || 'manual',
+        type: normalizeSaveType(item.saveType ?? portable.type),
         timestamp: item.timestamp || portable.timestamp || 0,
         turnCount: portable.turnCount || 0,
         rootId: tree?.rootId,
@@ -461,8 +462,8 @@ function remapCloudSaveNode(
   if (!meta.rootId || !meta.nodeId || !sourceTree) {
     saveTree = {
       ...(sourceTree ?? {}),
-      rootId: createMergeId('save_root_cloud'),
-      nodeId: createMergeId('save_node_cloud'),
+      rootId: createMergeId(),
+      nodeId: createMergeId(),
       parentNodeId: undefined,
       branchName: sourceTree?.branchName ?? '云端导入节点',
       createdAt: sourceTree?.createdAt || meta.timestamp || Date.now(),
@@ -470,8 +471,8 @@ function remapCloudSaveNode(
   } else if (plan.conflictRoots.has(meta.rootId)) {
     saveTree = {
       ...sourceTree,
-      rootId: plan.rootIdMap.get(meta.rootId) ?? createMergeId('save_root_cloud'),
-      nodeId: plan.nodeIdMap.get(cloudBackupNodeIdentity(meta.rootId, meta.nodeId)) ?? createMergeId('save_node_cloud'),
+      rootId: plan.rootIdMap.get(meta.rootId) ?? createMergeId(),
+      nodeId: plan.nodeIdMap.get(cloudBackupNodeIdentity(meta.rootId, meta.nodeId)) ?? createMergeId(),
       parentNodeId: meta.parentNodeId
         ? plan.nodeIdMap.get(cloudBackupNodeIdentity(meta.rootId, meta.parentNodeId))
         : undefined,
@@ -530,13 +531,17 @@ function collectAssetReferences(value: unknown, result: Set<string>): void {
   for (const current of Object.values(source)) collectAssetReferences(current, result);
 }
 
-function validateCloudSaveNode(save: 存档数据, meta: CloudBackupNodeMeta): void {
-  if (!save || typeof save !== 'object' || !save.旅人 || !save.世界 || !Array.isArray(save.chatHistory)) {
+function validateCloudSaveNode(save: unknown, meta: CloudBackupNodeMeta): void {
+  if (!isPlainRecord(save) || !save.旅人 || !save.世界 || !Array.isArray(save.chatHistory)) {
     throw new Error(`云备份节点结构无效：${meta.entryPath}`);
   }
   if (!save.gameSettings || !save.apiSettings || !save.theme) {
     throw new Error(`云备份节点缺少必要设置：${meta.entryPath}`);
   }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function extractPortableAssetRecords(save: 存档数据): SaveAssetRecord[] {
@@ -561,7 +566,7 @@ function extractPortableAssetRecords(save: 存档数据): SaveAssetRecord[] {
 }
 
 function stripPortableAssetPayload<T extends 存档数据>(save: T): T {
-  if (!save.相册?.assets?.length) return save;
+  if (!save.相册?.assets.length) return save;
   return {
     ...save,
     相册: {
@@ -569,7 +574,7 @@ function stripPortableAssetPayload<T extends 存档数据>(save: T): T {
       assets: save.相册.assets.map((asset) => ({
         ...asset,
         dataUrl: asset.id ? `asset:${asset.id}` : asset.dataUrl,
-        originalUrl: String(asset.originalUrl || '').startsWith('data:') ? undefined : asset.originalUrl,
+        originalUrl: (asset.originalUrl || '').startsWith('data:') ? undefined : asset.originalUrl,
       })),
     },
   };
@@ -606,16 +611,13 @@ function normalizeSaveType(value: unknown): 存档数据['type'] {
 }
 
 function nextAvailableAssetId(usedIds: Set<string>): string {
-  let id = createMergeId('cloud_asset');
-  while (usedIds.has(id)) id = createMergeId('cloud_asset');
+  let id = createMergeId();
+  while (usedIds.has(id)) id = createMergeId();
   return id;
 }
 
-function createMergeId(prefix: string): string {
-  const random = typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-    : Math.random().toString(36).slice(2, 18);
-  return `${prefix}_${Date.now()}_${random}`;
+function createMergeId(): string {
+  return createUnifiedId();
 }
 
 function assetStageKey(contentHash: string): string {

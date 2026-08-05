@@ -121,7 +121,7 @@ export async function 初始化新局checkpoint(
     }));
 
     const checkpointId = await saveGame(payload);
-    devLog('save', 'new-game-checkpoint-written', { checkpointId });
+    devLog('save', 'new-game-checkpoint-written', { checkpointId, nodeId: (payload as SaveWithTree).saveTree?.nodeId ?? null });
     await saveNewestStory(清空NewestStory记录(创建空NewestStory记录(), checkpointId));
     devLog('save', 'new-game-newest-cleared', { checkpointId });
     commitActiveSaveTreeMeta(payload);

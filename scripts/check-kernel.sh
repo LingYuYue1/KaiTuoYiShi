@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# check-kernel.sh — 内核法则 L1/L3 的机械检查（ideal_design.md §6、§12）
+# check-kernel.sh — 内核法则 L1/L3/L11 的机械检查（ideal_design.md §6、§12）
 #
-# 只做两件事，都可机械检验：
+# 只做三件事，都可机械检验：
 #   L1  story 写盘点棘轮：saveSetting(/saveGame( 调用点逐文件计数，
 #       与白名单 scripts/kernel-l1-allowlist.tsv 精确比对。
 #   L3  reduce 路径非确定性棘轮：§5 清单文件中的 Date.now/Math.random
 #       逐文件计数，与 scripts/kernel-l3-allowlist.tsv 精确比对。
+#   L11 数据库迁移注册表棘轮：dbService.ts 中 MIGRATIONS 的 version 条目数
+#       与 scripts/kernel-l11-allowlist.tsv 精确比对。
 #
 # 棘轮语义：计数多一处（新增绕过点）或少一处（白名单腐烂）都算失败；
 # 拆掉绕过点后必须把白名单计数调低，数字只许减不许增。
@@ -52,8 +54,12 @@ l3_current=$({ grep -cE 'Date\.now|Math\.random' "${l3_files[@]}" || true; } \
   | awk -F: '{print $1"\t"$2}')
 check_ratchet "L3" scripts/kernel-l3-allowlist.tsv "$l3_current" || fail=1
 
+# --- L11：迁移注册表条目数（每个 version 条目独占一行）---
+l11_current=$(grep -oE 'version: [0-9]+' services/dbService.ts | wc -l | awk '{print "services/dbService.ts\t"$1}')
+check_ratchet "L11" scripts/kernel-l11-allowlist.tsv "$l11_current" || fail=1
+
 if [ "$fail" -ne 0 ]; then
   echo "check-kernel: FAILED"
   exit 1
 fi
-echo "check-kernel: OK (L1/L3 棘轮与白名单一致)"
+echo "check-kernel: OK (L1/L3/L11 棘轮与白名单一致)"
