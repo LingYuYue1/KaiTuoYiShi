@@ -24,9 +24,13 @@ const retiredPresetIds = [
 const presetDir = 'public/zhiku-presets';
 const presetSource = fs.readFileSync('data/zhikuPreset.ts', 'utf8');
 const zhikuModel = fs.readFileSync('models/zhiku.ts', 'utf8');
-const zhikuPanel = fs.readFileSync('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx', 'utf8');
 const useGameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
+
+assert(
+  !fs.existsSync('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx'),
+  '旧智库维护面板不应继续存在。',
+);
 
 for (const file of retiredPresetFiles) {
   assert(!fs.existsSync(path.join(presetDir, file)), `退役智库预设文件不应存在：${file}`);
@@ -38,30 +42,25 @@ for (const id of retiredPresetIds) {
 }
 
 assert(
-  zhikuModel.includes("RETIRED_ZHIKU_CATEGORIES = ['npc', 'item', 'system']") &&
-    zhikuModel.includes('isRetiredZhikuCategory'),
-  '智库模型必须声明 NPC / 道具 / 系统 为退役分类，供旧存档过滤与 UI 隐藏。',
+  zhikuModel.includes("export type 智库分类 = 'story' | 'character' | 'location' | 'faction' | 'term' | 'event' | 'enemy'") &&
+    !zhikuModel.includes('RETIRED_ZHIKU_CATEGORIES') &&
+    !zhikuModel.includes('isRetiredZhikuCategory'),
+  'V3 模型不应继续声明 NPC / 道具 / 系统 旧分类。',
 );
 
 assert(
-  presetSource.includes('shouldRemoveRetiredZhikuEntry') &&
-    presetSource.includes('removeRetiredZhikuEntries') &&
-    presetSource.includes('.filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))'),
-  '智库预设加载与持久化必须过滤退役分类。',
+  !presetSource.includes('shouldRemoveRetiredZhikuEntry') &&
+    !presetSource.includes('removeRetiredZhikuEntries'),
+  'V3 不应保留退役分类迁移函数。',
 );
 
 assert(
-  presetSource.includes('mergeBundledZhikuSystem') &&
-    presetSource.includes('removeRetiredZhikuEntries(') &&
-    useGameState.includes('mergeBundledZhikuSystem') &&
-    saveLoad.includes('mergeBundledZhikuSystem'),
-  '启动加载与读档流程必须通过统一合并入口清理旧存档残留的退役智库页条目。',
-);
-
-assert(
-  zhikuPanel.includes("const categories: 智库分类[] = ['character', 'location', 'faction', 'term', 'event', 'enemy']") &&
-    zhikuPanel.includes('!isRetiredZhikuCategory(entry.分类)'),
-  '智库面板不应再显示 NPC / 道具 / 系统 三个分类页。',
+  presetSource.includes('composeZhikuSystem') &&
+    useGameState.includes('composeZhikuSystem') &&
+    saveLoad.includes('composeZhikuSystem') &&
+    !useGameState.includes('mergeBundledZhikuSystem') &&
+    !saveLoad.includes('mergeBundledZhikuSystem'),
+  '启动加载与读档流程必须只使用 V3 组合入口。',
 );
 
 for (const file of fs.readdirSync(presetDir).filter((item) => item.endsWith('.json'))) {

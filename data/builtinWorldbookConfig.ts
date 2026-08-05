@@ -614,9 +614,9 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     updatedAt: now,
   };
 
-  // 7. 智库世界书已迁移到提示词模块系统（builtin_zhiku_cot + builtin_zhiku_output_format）。
-  //    智库系统调用 AI 时走自己的 buildZhikuModelSystemPrompt，从 settings.promptModules 读取。
-  //    此处不再生成 builtin_zhiku 世界书条目（死代码已清理，原 builtin_zhiku_guideline 无检索逻辑读取）。
+  // 7. 智库提示词由提示词模块系统统一维护（builtin_zhiku_cot + builtin_zhiku_output_format）。
+  //    智库调用 AI 时通过 buildZhikuModelSystemPrompt 从 settings.promptModules 读取，
+  //    此处不重复生成智库世界书条目。
 
   // 8. 星际和平周报世界书已迁移到提示词模块系统（builtin_news_worldbook）。
   //    新闻系统调用 AI 时走自己的 buildNewsModelPrompt，从 settings.promptModules 读取。

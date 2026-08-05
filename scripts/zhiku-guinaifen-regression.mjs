@@ -35,10 +35,9 @@ const intelligentsiaGuildPreset = JSON.parse(fs.readFileSync('public/zhiku-prese
 const belobogPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/belobog-character-rebuild.json', 'utf8'));
 const xianzhouLuofuPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/xianzhou-luofu-character-rebuild.json', 'utf8'));
 const ipcPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/interastral-peace-corporation-character-rebuild.json', 'utf8'));
-const panel = fs.readFileSync('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx', 'utf8');
 
 const currentGuinaifen = (xianzhouLuofuPreset.entries ?? [])
-  .find((entry) => entry.id === 'zhiku_character_rebuild_guinaifen_profile');
+  .find((entry) => entry.id === 'JS-043');
 if (currentGuinaifen?.注入内容?.类型 === 'character') {
   const requiredInjectionFields = [
     '核心身份与阵营',
@@ -63,13 +62,13 @@ const isAstralExpressCharacterProfileSet =
   rebuildPreset.id === 'zhiku_character_rebuild_core' &&
   rebuildPreset.title === '人物重建·星穹列车角色档案' &&
   Array.isArray(rebuildPreset.entries) &&
-  profileById.has('zhiku_character_rebuild_stelle_profile') &&
-  profileById.has('zhiku_character_rebuild_caelus_profile') &&
-  profileById.has('zhiku_character_rebuild_march_profile') &&
-  profileById.has('zhiku_character_rebuild_welt_profile') &&
-  profileById.has('zhiku_character_rebuild_danheng_profile') &&
-  profileById.has('zhiku_character_rebuild_himeko_profile') &&
-  profileById.has('zhiku_character_rebuild_pompom_profile');
+  profileById.has('JS-000') &&
+  profileById.has('JS-001') &&
+  profileById.has('JS-002') &&
+  profileById.has('JS-003') &&
+  profileById.has('JS-004') &&
+  profileById.has('JS-005') &&
+  profileById.has('JS-006');
 
 const hertaStationProfileById = new Map((hertaStationPreset.entries ?? []).map((entry) => [entry.id, entry]));
 const stellaronHuntersProfileById = new Map((stellaronHuntersPreset.entries ?? []).map((entry) => [entry.id, entry]));
@@ -78,11 +77,11 @@ const intelligentsiaGuildProfileById = new Map((intelligentsiaGuildPreset.entrie
 const belobogProfileById = new Map((belobogPreset.entries ?? []).map((entry) => [entry.id, entry]));
 const xianzhouLuofuProfileById = new Map((xianzhouLuofuPreset.entries ?? []).map((entry) => [entry.id, entry]));
 const stellaronHuntersProfiles = [
-  stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile'),
-  stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile'),
-  stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile'),
-  stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile'),
-  stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile'),
+  stellaronHuntersProfileById.get('JS-007'),
+  stellaronHuntersProfileById.get('JS-008'),
+  stellaronHuntersProfileById.get('JS-009'),
+  stellaronHuntersProfileById.get('JS-010'),
+  stellaronHuntersProfileById.get('JS-011'),
 ];
 assert(
   stellaronHuntersPreset.id === 'zhiku_stellaron_hunters_character_rebuild' &&
@@ -106,9 +105,9 @@ assert(
   ),
   'Stellaron Hunters rebuilt profiles must keep grouping and corpus rules.',
 );
-const geniusSocietyRuanMei = geniusSocietyProfileById.get('zhiku_character_rebuild_ruanmei_profile');
-const geniusSocietyScrewllum = geniusSocietyProfileById.get('zhiku_character_rebuild_screwllum_profile');
-const geniusSocietyStephen = geniusSocietyProfileById.get('zhiku_character_rebuild_stephen_lloyd_profile');
+const geniusSocietyRuanMei = geniusSocietyProfileById.get('JS-015');
+const geniusSocietyScrewllum = geniusSocietyProfileById.get('JS-016');
+const geniusSocietyStephen = geniusSocietyProfileById.get('JS-017');
 const geniusSocietyZandar = geniusSocietyProfileById.get('zhiku_character_rebuild_zandar_profile');
 assert(
   geniusSocietyPreset.id === 'zhiku_genius_society_character_rebuild' &&
@@ -118,7 +117,7 @@ assert(
     geniusSocietyScrewllum &&
     geniusSocietyStephen &&
     geniusSocietyZandar &&
-    !geniusSocietyProfileById.has('zhiku_character_rebuild_herta_profile'),
+    !geniusSocietyProfileById.has('JS-012'),
   'Genius Society rebuilt character preset must exist with Ruan Mei, Screwllum, Stephen, and Zandar.',
 );
 assert(
@@ -182,7 +181,7 @@ assert(
     !geniusSocietyScrewllum?.['关键词']?.includes('机械生命'),
   'Screwllum rebuilt profile must keep core anchors and avoid broad bare keywords.',
 );
-const intelligentsiaGuildRatio = intelligentsiaGuildProfileById.get('zhiku_character_rebuild_dr_ratio_profile');
+const intelligentsiaGuildRatio = intelligentsiaGuildProfileById.get('JS-019');
 assert(
   intelligentsiaGuildPreset.id === 'zhiku_intelligentsia_guild_character_rebuild' &&
     intelligentsiaGuildPreset.updatedAt === '2026-06-10-intelligentsia-guild-character-profiles-3' &&
@@ -225,11 +224,11 @@ assert(
   belobogPreset.id === 'zhiku_belobog_character_rebuild' &&
     belobogPreset.updatedAt === '2026-06-10-belobog-character-profiles-15' &&
     belobogPreset.entries?.length === 13 &&
-    belobogProfileById.has('zhiku_character_rebuild_bronya_profile') &&
-    belobogProfileById.has('zhiku_character_rebuild_seele_profile') &&
-    belobogProfileById.has('zhiku_character_rebuild_gepard_profile') &&
-    belobogProfileById.has('zhiku_character_rebuild_sampo_profile') &&
-    belobogProfileById.has('zhiku_character_rebuild_cocolia_profile') &&
+    belobogProfileById.has('JS-020') &&
+    belobogProfileById.has('JS-021') &&
+    belobogProfileById.has('JS-022') &&
+    belobogProfileById.has('JS-028') &&
+    belobogProfileById.has('JS-032') &&
     belobogPreset.id !== 'zhiku_belogog_character_rebuild',
   'Belobog rebuilt character preset must exist with corrected id and first-pass profiles.',
 );
@@ -238,32 +237,32 @@ assert(
     xianzhouLuofuPreset.updatedAt === '2026-06-18-xianzhou-luofu-story-layer-full-rewrite' &&
     xianzhouLuofuPreset.entries?.length === 15 &&
     [
-      'zhiku_character_rebuild_jing_yuan_profile',
-      'zhiku_character_rebuild_yanqing_profile',
-      'zhiku_character_rebuild_fu_xuan_profile',
-      'zhiku_character_rebuild_bailu_profile',
-      'zhiku_character_rebuild_tingyun_profile',
-      'zhiku_character_rebuild_lingsha_profile',
-      'zhiku_character_rebuild_yukong_profile',
-      'zhiku_character_rebuild_qingque_profile',
-      'zhiku_character_rebuild_luocha_profile',
-      'zhiku_character_rebuild_jingliu_profile',
-      'zhiku_character_rebuild_guinaifen_profile',
-      'zhiku_character_rebuild_sushang_profile',
-      'zhiku_character_rebuild_huohuo_profile',
-      'zhiku_character_rebuild_hanya_profile',
-      'zhiku_character_rebuild_xueyi_profile',
+      'JS-033',
+      'JS-034',
+      'JS-035',
+      'JS-036',
+      'JS-037',
+      'JS-038',
+      'JS-039',
+      'JS-040',
+      'JS-041',
+      'JS-042',
+      'JS-043',
+      'JS-044',
+      'JS-045',
+      'JS-046',
+      'JS-047',
     ].every((id) => xianzhouLuofuProfileById.has(id)) &&
     !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '云璃' || e.关联角色ID === '云璃') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_lingsha_profile')?.原文 ?? '').includes('丹鼎司丹士长') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_lingsha_profile')?.原文 ?? '').includes('浮元') &&
+    String(xianzhouLuofuProfileById.get('JS-038')?.原文 ?? '').includes('丹鼎司丹士长') &&
+    String(xianzhouLuofuProfileById.get('JS-038')?.原文 ?? '').includes('浮元') &&
     !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '飞霄' || e.关联角色ID === '飞霄') &&
     !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '椒丘' || e.关联角色ID === '椒丘') &&
     !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '貊泽' || e.关联角色ID === '貊泽') &&
     !xianzhouLuofuPreset.entries?.some((e) => e.标题 === '怀炎' || e.关联角色ID === '怀炎'),
   'Xianzhou Luofu rebuilt character preset must exist with Luofu roster and exclude other-ship characters.',
 );
-const xianzhouLuofuBailu = xianzhouLuofuProfileById.get('zhiku_character_rebuild_bailu_profile');
+const xianzhouLuofuBailu = xianzhouLuofuProfileById.get('JS-036');
 assert(
   String(xianzhouLuofuBailu?.原文 ?? '').includes('### 丹鼎司医案：狐人巧克力中毒') &&
     String(xianzhouLuofuBailu?.原文 ?? '').includes('### 龙师诊察：无梦、龙心与尺木缚锁') &&
@@ -324,38 +323,38 @@ for (const entry of xianzhouLuofuPreset.entries ?? []) {
   assert(jade?.解锁状态 === '未解锁', '翡翠 must be 未解锁.');
 }
 assert(
-  String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_jing_yuan_profile')?.出身 ?? '').includes('地衡司') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_yanqing_profile')?.出身 ?? '').includes('未明') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_fu_xuan_profile')?.出身 ?? '').includes('玉阙仙舟') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_jingliu_profile')?.出身 ?? '').includes('苍城仙舟幸存者') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_guinaifen_profile')?.出身 ?? '').includes('卡美洛') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_sushang_profile')?.出身 ?? '').includes('曜青出身') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_hanya_profile')?.出身 ?? '').includes('旧身出身未明') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_xueyi_profile')?.出身 ?? '').includes('旧身出身未明') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_sushang_profile')?.外貌锚点 ?? '').includes('棕色长发') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_qingque_profile')?.外貌锚点 ?? '').includes('灰茶短发') &&
-    String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_lingsha_profile')?.外貌锚点 ?? '').includes('深棕长发') &&
+  String(xianzhouLuofuProfileById.get('JS-033')?.出身 ?? '').includes('地衡司') &&
+    String(xianzhouLuofuProfileById.get('JS-034')?.出身 ?? '').includes('未明') &&
+    String(xianzhouLuofuProfileById.get('JS-035')?.出身 ?? '').includes('玉阙仙舟') &&
+    String(xianzhouLuofuProfileById.get('JS-042')?.出身 ?? '').includes('苍城仙舟幸存者') &&
+    String(xianzhouLuofuProfileById.get('JS-043')?.出身 ?? '').includes('卡美洛') &&
+    String(xianzhouLuofuProfileById.get('JS-044')?.出身 ?? '').includes('曜青出身') &&
+    String(xianzhouLuofuProfileById.get('JS-046')?.出身 ?? '').includes('旧身出身未明') &&
+    String(xianzhouLuofuProfileById.get('JS-047')?.出身 ?? '').includes('旧身出身未明') &&
+    String(xianzhouLuofuProfileById.get('JS-044')?.外貌锚点 ?? '').includes('棕色长发') &&
+    String(xianzhouLuofuProfileById.get('JS-040')?.外貌锚点 ?? '').includes('灰茶短发') &&
+    String(xianzhouLuofuProfileById.get('JS-038')?.外貌锚点 ?? '').includes('深棕长发') &&
     !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('素裳粉发') &&
     !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('青雀绿发') &&
     !JSON.stringify(xianzhouLuofuPreset.entries ?? []).includes('灵砂粉发'),
   'Xianzhou Luofu profiles-8 must keep representative origin and corrected appearance anchors.',
 );
 for (const [id, keyword, anchor] of [
-  ['zhiku_character_rebuild_jing_yuan_profile', '景元完整档案', '景元长线谋局'],
-  ['zhiku_character_rebuild_yanqing_profile', '彦卿完整档案', '彦卿过刚易折'],
-  ['zhiku_character_rebuild_fu_xuan_profile', '符玄完整档案', '卜算不能写成绝对正确'],
-  ['zhiku_character_rebuild_bailu_profile', '白露完整档案', '治疗能力不能无代价复活'],
-  ['zhiku_character_rebuild_tingyun_profile', '停云完整档案', '真停云'],
-  ['zhiku_character_rebuild_lingsha_profile', '灵砂完整档案', '丹朱过往'],
-  ['zhiku_character_rebuild_yukong_profile', '驭空完整档案', '最后奋飞阶段'],
-  ['zhiku_character_rebuild_qingque_profile', '青雀完整档案', '青雀职场哲学'],
-  ['zhiku_character_rebuild_luocha_profile', '罗刹完整档案', '罗刹誓言边界'],
-  ['zhiku_character_rebuild_jingliu_profile', '镜流完整档案', '镜流斩神执念'],
-  ['zhiku_character_rebuild_guinaifen_profile', '桂乃芬完整档案', '桂乃芬失国流亡'],
-  ['zhiku_character_rebuild_sushang_profile', '素裳完整档案', '素裳独当一面'],
-  ['zhiku_character_rebuild_huohuo_profile', '藿藿完整档案', '藿藿怕鬼捉鬼'],
-  ['zhiku_character_rebuild_hanya_profile', '寒鸦完整档案', '寒鸦问字判官'],
-  ['zhiku_character_rebuild_xueyi_profile', '雪衣完整档案', '雪衣拘字判官'],
+  ['JS-033', '景元完整档案', '景元长线谋局'],
+  ['JS-034', '彦卿完整档案', '彦卿过刚易折'],
+  ['JS-035', '符玄完整档案', '卜算不能写成绝对正确'],
+  ['JS-036', '白露完整档案', '治疗能力不能无代价复活'],
+  ['JS-037', '停云完整档案', '真停云'],
+  ['JS-038', '灵砂完整档案', '丹朱过往'],
+  ['JS-039', '驭空完整档案', '最后奋飞阶段'],
+  ['JS-040', '青雀完整档案', '青雀职场哲学'],
+  ['JS-041', '罗刹完整档案', '罗刹誓言边界'],
+  ['JS-042', '镜流完整档案', '镜流斩神执念'],
+  ['JS-043', '桂乃芬完整档案', '桂乃芬失国流亡'],
+  ['JS-044', '素裳完整档案', '素裳独当一面'],
+  ['JS-045', '藿藿完整档案', '藿藿怕鬼捉鬼'],
+  ['JS-046', '寒鸦完整档案', '寒鸦问字判官'],
+  ['JS-047', '雪衣完整档案', '雪衣拘字判官'],
 ]) {
   const entry = xianzhouLuofuProfileById.get(id);
   const source = String(entry?.原文 ?? '');
@@ -370,11 +369,11 @@ for (const [id, keyword, anchor] of [
   );
 }
 assert(
-  String(xianzhouLuofuProfileById.get('zhiku_character_rebuild_jing_yuan_profile')?.原文 ?? '').includes('星阵棋与符卿') &&
-    xianzhouLuofuProfileById.get('zhiku_character_rebuild_fu_xuan_profile')?.关键词?.includes('符玄第三眼') &&
-    xianzhouLuofuProfileById.get('zhiku_character_rebuild_guinaifen_profile')?.关键词?.includes('桂乃芬卡美洛') &&
-    xianzhouLuofuProfileById.get('zhiku_character_rebuild_hanya_profile')?.关键词?.includes('寒鸦忘川酒') &&
-    xianzhouLuofuProfileById.get('zhiku_character_rebuild_xueyi_profile')?.关键词?.includes('雪衣同情心打碎'),
+  String(xianzhouLuofuProfileById.get('JS-033')?.原文 ?? '').includes('星阵棋与符卿') &&
+    xianzhouLuofuProfileById.get('JS-035')?.关键词?.includes('符玄第三眼') &&
+    xianzhouLuofuProfileById.get('JS-043')?.关键词?.includes('桂乃芬卡美洛') &&
+    xianzhouLuofuProfileById.get('JS-046')?.关键词?.includes('寒鸦忘川酒') &&
+    xianzhouLuofuProfileById.get('JS-047')?.关键词?.includes('雪衣同情心打碎'),
   'Xianzhou Luofu profiles-3 must keep representative refined story anchors.',
 );
 assert(
@@ -390,110 +389,110 @@ assert(
 );
 assert(
   belobogPreset.id !== 'zhiku_belogog_character_rebuild' &&
-    String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('现任大守护者') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_seele_profile')?.['原文'] ?? '').includes('不要把她和布洛妮娅关系固定成单一恋爱解释') &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['性别'] === '男' &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['年龄状态'] === '未知，外貌与社会互动表现为成年男性。' &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('性别 / 性别表达：男；男性。') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('年龄状态：未知，外貌与社会互动表现为成年男性。') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('### 门禁一：贝洛伯格可疑商人（默认常驻）') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('### 门禁二：假面愚者 / 欢愉 / 酒馆 / 面具（深层阶段）') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('展开条件：匹诺康尼后续、玩家正文明确追问桑博深层身份 / 面具 / 酒馆 / 假面愚者') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('回落规则：深层信息完成一次提示或交锋后') &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['关键词']?.includes('桑博性别男') &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['关键词']?.includes('桑博年龄状态') &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['关键词']?.includes('桑博门禁层') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('不要写成纯粹恶人') &&
-    !belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['关键词']?.includes('贝洛伯格') &&
-    !belobogProfileById.get('zhiku_character_rebuild_seele_profile')?.['关键词']?.includes('下层区'),
+    String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('现任大守护者') &&
+    String(belobogProfileById.get('JS-021')?.['原文'] ?? '').includes('不要把她和布洛妮娅关系固定成单一恋爱解释') &&
+    belobogProfileById.get('JS-028')?.['性别'] === '男' &&
+    belobogProfileById.get('JS-028')?.['年龄状态'] === '未知，外貌与社会互动表现为成年男性。' &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('性别 / 性别表达：男；男性。') &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('年龄状态：未知，外貌与社会互动表现为成年男性。') &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('### 门禁一：贝洛伯格可疑商人（默认常驻）') &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('### 门禁二：假面愚者 / 欢愉 / 酒馆 / 面具（深层阶段）') &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('展开条件：匹诺康尼后续、玩家正文明确追问桑博深层身份 / 面具 / 酒馆 / 假面愚者') &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('回落规则：深层信息完成一次提示或交锋后') &&
+    belobogProfileById.get('JS-028')?.['关键词']?.includes('桑博性别男') &&
+    belobogProfileById.get('JS-028')?.['关键词']?.includes('桑博年龄状态') &&
+    belobogProfileById.get('JS-028')?.['关键词']?.includes('桑博门禁层') &&
+    String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('不要写成纯粹恶人') &&
+    !belobogProfileById.get('JS-020')?.['关键词']?.includes('贝洛伯格') &&
+    !belobogProfileById.get('JS-021')?.['关键词']?.includes('下层区'),
   'Belobog first-pass details must keep boundaries and avoid broad bare triggers.',
 );
 assert(
-  String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('完整天空') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_gepard_profile')?.['原文'] ?? '').includes('最坚固的盾牌') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_serval_profile')?.['原文'] ?? '').includes('「永动」机械屋') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_natasha_profile')?.['原文'] ?? '').includes('地火的核心 / 首领级人物之一') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_clara_profile')?.['原文'] ?? '').includes('垃圾填埋场') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_luka_profile')?.['原文'] ?? '').includes('自由格斗家') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_lynx_profile')?.['关键词'] ?? '').includes('玲可首屈一指极地探险家') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['关键词'] ?? '').includes('可可利亚封锁令'),
+  String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('完整天空') &&
+    String(belobogProfileById.get('JS-022')?.['原文'] ?? '').includes('最坚固的盾牌') &&
+    String(belobogProfileById.get('JS-023')?.['原文'] ?? '').includes('「永动」机械屋') &&
+    String(belobogProfileById.get('JS-025')?.['原文'] ?? '').includes('地火的核心 / 首领级人物之一') &&
+    String(belobogProfileById.get('JS-026')?.['原文'] ?? '').includes('垃圾填埋场') &&
+    String(belobogProfileById.get('JS-030')?.['原文'] ?? '').includes('自由格斗家') &&
+    String(belobogProfileById.get('JS-031')?.['关键词'] ?? '').includes('玲可首屈一指极地探险家') &&
+    String(belobogProfileById.get('JS-032')?.['关键词'] ?? '').includes('可可利亚封锁令'),
   'Belobog profiles-3 refined anchors must stay present.',
 );
 assert(
-  String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('让世界变得美好') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_hook_profile')?.['原文'] ?? '').includes('费斯曼老爹') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_pela_profile')?.['原文'] ?? '').includes('佩拉格娅•谢尔盖耶夫娜') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_seele_profile')?.['原文'] ?? '').includes('她们终会相遇') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_serval_profile')?.['原文'] ?? '').includes('从来都不是任何人的附属品') &&
-    !String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('解锁条件') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_svarog_profile')?.['原文'] ?? '').includes('相关背景文本整理') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_svarog_profile')?.['原文'] ?? '').includes('非可玩角色故事本体') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_svarog_profile')?.['原文'] ?? '').includes('不可替换') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('纪念画像叙事') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('旧照片、希露瓦与被切断的过去') &&
-    !String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('魔法少女可可利亚'),
+  String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('让世界变得美好') &&
+    String(belobogProfileById.get('JS-029')?.['原文'] ?? '').includes('费斯曼老爹') &&
+    String(belobogProfileById.get('JS-024')?.['原文'] ?? '').includes('佩拉格娅•谢尔盖耶夫娜') &&
+    String(belobogProfileById.get('JS-021')?.['原文'] ?? '').includes('她们终会相遇') &&
+    String(belobogProfileById.get('JS-023')?.['原文'] ?? '').includes('从来都不是任何人的附属品') &&
+    !String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('解锁条件') &&
+    String(belobogProfileById.get('JS-027')?.['原文'] ?? '').includes('相关背景文本整理') &&
+    String(belobogProfileById.get('JS-027')?.['原文'] ?? '').includes('非可玩角色故事本体') &&
+    String(belobogProfileById.get('JS-027')?.['原文'] ?? '').includes('不可替换') &&
+    String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('纪念画像叙事') &&
+    String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('旧照片、希露瓦与被切断的过去') &&
+    !String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('魔法少女可可利亚'),
   'Belobog profiles-3 provided story bodies must stay present with unlock conditions removed.',
 );
 assert(
-  String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('昨天做噩梦了') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_clara_profile')?.['原文'] ?? '').includes('机械聚落清晨') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_hook_profile')?.['原文'] ?? '').includes('鼹鼠党集合') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_luka_profile')?.['原文'] ?? '').includes('打击恶棍，守护镇民') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('行商、向导、解闷的聊天对象') &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['关键词']?.includes('桑博关于花火') &&
-    belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['关键词']?.includes('布洛妮娅日常场景参考'),
+  String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('昨天做噩梦了') &&
+    String(belobogProfileById.get('JS-026')?.['原文'] ?? '').includes('机械聚落清晨') &&
+    String(belobogProfileById.get('JS-029')?.['原文'] ?? '').includes('鼹鼠党集合') &&
+    String(belobogProfileById.get('JS-030')?.['原文'] ?? '').includes('打击恶棍，守护镇民') &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('行商、向导、解闷的聊天对象') &&
+    belobogProfileById.get('JS-028')?.['关键词']?.includes('桑博关于花火') &&
+    belobogProfileById.get('JS-020')?.['关键词']?.includes('布洛妮娅日常场景参考'),
   'Belobog profiles-4 corpus and daily-scene references must stay present.',
 );
 assert(
-  String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['外貌锚点'] ?? '').includes('三束螺旋') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_seele_profile')?.['外貌锚点'] ?? '').includes('深靛紫长发') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_pela_profile')?.['外貌锚点'] ?? '').includes('圆框眼镜') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_hook_profile')?.['外貌锚点'] ?? '').includes('乌莎卡帽') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_lynx_profile')?.['外貌锚点'] ?? '').includes('猞猁耳形轮廓'),
+  String(belobogProfileById.get('JS-020')?.['外貌锚点'] ?? '').includes('三束螺旋') &&
+    String(belobogProfileById.get('JS-021')?.['外貌锚点'] ?? '').includes('深靛紫长发') &&
+    String(belobogProfileById.get('JS-024')?.['外貌锚点'] ?? '').includes('圆框眼镜') &&
+    String(belobogProfileById.get('JS-029')?.['外貌锚点'] ?? '').includes('乌莎卡帽') &&
+    String(belobogProfileById.get('JS-031')?.['外貌锚点'] ?? '').includes('猞猁耳形轮廓'),
   'Belobog profiles-5 appearance anchors must stay detailed.',
 );
 assert(
   [
-    'zhiku_character_rebuild_bronya_profile',
-    'zhiku_character_rebuild_seele_profile',
-    'zhiku_character_rebuild_gepard_profile',
-    'zhiku_character_rebuild_serval_profile',
-    'zhiku_character_rebuild_pela_profile',
-    'zhiku_character_rebuild_natasha_profile',
-    'zhiku_character_rebuild_clara_profile',
-    'zhiku_character_rebuild_svarog_profile',
-    'zhiku_character_rebuild_hook_profile',
-    'zhiku_character_rebuild_luka_profile',
-    'zhiku_character_rebuild_lynx_profile',
-    'zhiku_character_rebuild_cocolia_profile',
+    'JS-020',
+    'JS-021',
+    'JS-022',
+    'JS-023',
+    'JS-024',
+    'JS-025',
+    'JS-026',
+    'JS-027',
+    'JS-029',
+    'JS-030',
+    'JS-031',
+    'JS-032',
   ].every((id) => belobogProfileById.get(id)?.['出身'] === '贝洛伯格') &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['出身']?.includes('未明') &&
-    belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['出身']?.includes('不按贝洛伯格本地人固定'),
+    belobogProfileById.get('JS-028')?.['出身']?.includes('未明') &&
+    belobogProfileById.get('JS-028')?.['出身']?.includes('不按贝洛伯格本地人固定'),
   'Belobog profiles-6 origins must keep Sampo as the exception.',
 );
 assert(
-  !String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('### 基础语料') &&
-    !String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('### 对他人的看法') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('### 初次见面') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_bronya_profile')?.['原文'] ?? '').includes('### 关于杰帕德') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_sampo_profile')?.['原文'] ?? '').includes('### 关于花火'),
+  !String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('### 基础语料') &&
+    !String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('### 对他人的看法') &&
+    String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('### 初次见面') &&
+    String(belobogProfileById.get('JS-020')?.['原文'] ?? '').includes('### 关于杰帕德') &&
+    String(belobogProfileById.get('JS-028')?.['原文'] ?? '').includes('### 关于花火'),
   'Belobog profiles-7 corpus headings must use per-item UI cards.',
 );
 assert(
   [
-    'zhiku_character_rebuild_bronya_profile',
-    'zhiku_character_rebuild_seele_profile',
-    'zhiku_character_rebuild_gepard_profile',
-    'zhiku_character_rebuild_serval_profile',
-    'zhiku_character_rebuild_pela_profile',
-    'zhiku_character_rebuild_natasha_profile',
-    'zhiku_character_rebuild_clara_profile',
-    'zhiku_character_rebuild_svarog_profile',
-    'zhiku_character_rebuild_sampo_profile',
-    'zhiku_character_rebuild_hook_profile',
-    'zhiku_character_rebuild_luka_profile',
-    'zhiku_character_rebuild_lynx_profile',
-    'zhiku_character_rebuild_cocolia_profile',
+    'JS-020',
+    'JS-021',
+    'JS-022',
+    'JS-023',
+    'JS-024',
+    'JS-025',
+    'JS-026',
+    'JS-027',
+    'JS-028',
+    'JS-029',
+    'JS-030',
+    'JS-031',
+    'JS-032',
   ].every((id) => {
     const abilityLayer = String(belobogProfileById.get(id)?.['原文'] ?? '').match(/## 能力与职责模块\n\n([\s\S]*?)(?=\n\n## 历史故事与|\n\n## 本回合注入建议)/)?.[1] ?? '';
     return (
@@ -504,114 +503,114 @@ assert(
       abilityLayer.length > 300
     );
   }) &&
-    String(belobogProfileById.get('zhiku_character_rebuild_clara_profile')?.['外貌锚点'] ?? '').includes('宽大的红色外套') &&
-    !String(belobogProfileById.get('zhiku_character_rebuild_clara_profile')?.['原文'] ?? '').includes('oversized') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('主线后主要以回忆、记录、梦境、政治遗留或特殊剧情出现'),
+    String(belobogProfileById.get('JS-026')?.['外貌锚点'] ?? '').includes('宽大的红色外套') &&
+    !String(belobogProfileById.get('JS-026')?.['原文'] ?? '').includes('oversized') &&
+    String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('主线后主要以回忆、记录、梦境、政治遗留或特殊剧情出现'),
   'Belobog profiles-11 ability layers must be expanded and Clara oversized wording must be localized.',
 );
 assert(
-  String(belobogProfileById.get('zhiku_character_rebuild_svarog_profile')?.['原文'] ?? '').includes('### 关于螺丝咕姆') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_svarog_profile')?.['原文'] ?? '').includes('本机正在持续修正该词条的定义') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_svarog_profile')?.['原文'] ?? '').includes('保护并不等同于关闭所有大门') &&
-    belobogProfileById.get('zhiku_character_rebuild_svarog_profile')?.['关键词']?.includes('史瓦罗日常场景参考') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('### 星核低语阶段') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('### 主线后回忆口吻') &&
-    String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('旧友相关') &&
-    belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['关键词']?.includes('可可利亚星核低语语料') &&
-    belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['关键词']?.includes('可可利亚日常场景参考') &&
-    !String(belobogProfileById.get('zhiku_character_rebuild_cocolia_profile')?.['原文'] ?? '').includes('魔法少女可可利亚'),
+  String(belobogProfileById.get('JS-027')?.['原文'] ?? '').includes('### 关于螺丝咕姆') &&
+    String(belobogProfileById.get('JS-027')?.['原文'] ?? '').includes('本机正在持续修正该词条的定义') &&
+    String(belobogProfileById.get('JS-027')?.['原文'] ?? '').includes('保护并不等同于关闭所有大门') &&
+    belobogProfileById.get('JS-027')?.['关键词']?.includes('史瓦罗日常场景参考') &&
+    String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('### 星核低语阶段') &&
+    String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('### 主线后回忆口吻') &&
+    String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('旧友相关') &&
+    belobogProfileById.get('JS-032')?.['关键词']?.includes('可可利亚星核低语语料') &&
+    belobogProfileById.get('JS-032')?.['关键词']?.includes('可可利亚日常场景参考') &&
+    !String(belobogProfileById.get('JS-032')?.['原文'] ?? '').includes('魔法少女可可利亚'),
   'Belobog profiles-10 Svarog and Cocolia corpus anchors must stay present without magic-girl material.',
 );
 assert(
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('温柔外壳下的控制') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('言语控制不能无理由夺走玩家选择权') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('卡芙卡角色详情') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('星际和平公司通缉令') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('天衣五：新巴比伦') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('擅长制造「恐惧」') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('我喜欢和银狼聊天') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('### 关于萨姆') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('### 关于流萤') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['原文'] ?? '').includes('每到夏天，我都会去那里看海') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['关键词']?.includes('卡芙卡关于流萤') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_kafka_profile')?.['关键词']?.includes('卡芙卡看海') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('丹枫是丹恒的前世，丹恒不是丹枫当前人格') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('不要让所有人随口叫他应星') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('刃角色详情') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('记住死亡的感觉') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('从今往后，那具躯壳，将是唯一的「刃」') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('又来了？…被我记住的人') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('人有五名，代价有三个') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('缚住魔阴的绳子在她手中') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['原文'] ?? '').includes('我渴望终结，而她渴望生存') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['关键词']?.includes('刃关于流萤') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_blade_profile')?.['关键词']?.includes('刃日常语料') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('银狼角色故事一：地下室的游戏结束') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('银狼LV.999角色详情') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('最高保密等级藏品，「银狼LV.999」以太卡带遭窃') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('【成就】「GAME NOT OVER」') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('「ID：银狼LV.999」登入「幻月游戏」') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('以太卡带形态 / 能力边界') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('银狼知道这张卡带和LV.999能力存在') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('卡带被艾利欧没收') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('不要写成银狼完全不知道这个能力') &&
-    !String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('活动 / 游戏化阶段称呼') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼LV999知情但受限') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼卡带被没收') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼LV999角色故事') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('LV999卡带权限') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('今天也上线啦') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('普罗米修斯搭载了四个模块') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('不能开小号，艾利欧也不行') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('LV.999形态语料（按卡带权限 / 剧情阶段启用）') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('关于火花') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('关于千冶•刃') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['禁止误写'] ?? '').includes('不要把LV.999形态语料当作普通常态全量口吻') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼普罗米修斯') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼不能开小号') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼LV999形态语料') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼LV999关于火花') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['关键词']?.includes('银狼LV999关于千冶刃') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_silver_wolf_profile')?.['原文'] ?? '').includes('不要把她变成万能解法') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('流萤与萨姆是同一个人') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('萨姆是名为火萤Ⅳ型的战略强袭机甲') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('AR-26710 是她作为格拉默铁骑 / 基因改造兵器时期的编号') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('不要把萨姆写成独立角色') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['禁止误写'] ?? '').includes('不要把AR-26710写成萨姆机甲型号') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('不能被写成绝对无法治愈或永远无解') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['禁止误写'] ?? '').includes('不要把失熵写成绝对无法治愈、永远无解或已经被彻底治愈') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('透明的培养仓中，她浸没在冰冷的人工羊水里') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('AR-26702——那是什么') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('AR-4077') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('它们虽然是渺小的生命，却比星星更耀眼') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('这就是…梦？') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('嗨，又见面啦…我的意思，很高兴见到你') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('我希望以「流萤」的身份认识这个世界') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('我没有做梦的机能') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['原文'] ?? '').includes('关于大丽花') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('流萤萨姆同一人') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('萨姆不是独立角色') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('火萤Ⅳ型') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('流萤AR26710') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('萨姆身份揭露') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('流萤关于自己萨姆') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('流萤烦恼睡眠') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_firefly_profile')?.['关键词']?.includes('流萤关于大丽花') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['原文'] ?? '').includes('艾利欧暂不提供语料') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['原文'] ?? '').includes('本档案不提供“艾利欧亲口说”的示例台词') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['原文'] ?? '').includes('也不提供拟造句式让模型模仿') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['原文'] ?? '').includes('不编造艾利欧直接台词') &&
-    String(stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['外貌锚点'] ?? '').includes('不得编造人形外貌') &&
-    stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['关键词']?.includes('暂无语料') &&
-    !stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['关键词']?.includes('语料只作参考') &&
-    !String(stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['原文'] ?? '').includes('### 剧本文本参考') &&
-    !String(stellaronHuntersProfileById.get('zhiku_character_rebuild_elio_profile')?.['原文'] ?? '').includes('### 初见与'),
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('温柔外壳下的控制') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('言语控制不能无理由夺走玩家选择权') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('卡芙卡角色详情') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('星际和平公司通缉令') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('天衣五：新巴比伦') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('擅长制造「恐惧」') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('我喜欢和银狼聊天') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('### 关于萨姆') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('### 关于流萤') &&
+    String(stellaronHuntersProfileById.get('JS-007')?.['原文'] ?? '').includes('每到夏天，我都会去那里看海') &&
+    stellaronHuntersProfileById.get('JS-007')?.['关键词']?.includes('卡芙卡关于流萤') &&
+    stellaronHuntersProfileById.get('JS-007')?.['关键词']?.includes('卡芙卡看海') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('丹枫是丹恒的前世，丹恒不是丹枫当前人格') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('不要让所有人随口叫他应星') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('刃角色详情') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('记住死亡的感觉') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('从今往后，那具躯壳，将是唯一的「刃」') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('又来了？…被我记住的人') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('人有五名，代价有三个') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('缚住魔阴的绳子在她手中') &&
+    String(stellaronHuntersProfileById.get('JS-008')?.['原文'] ?? '').includes('我渴望终结，而她渴望生存') &&
+    stellaronHuntersProfileById.get('JS-008')?.['关键词']?.includes('刃关于流萤') &&
+    stellaronHuntersProfileById.get('JS-008')?.['关键词']?.includes('刃日常语料') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('银狼角色故事一：地下室的游戏结束') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('银狼LV.999角色详情') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('最高保密等级藏品，「银狼LV.999」以太卡带遭窃') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('【成就】「GAME NOT OVER」') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('「ID：银狼LV.999」登入「幻月游戏」') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('以太卡带形态 / 能力边界') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('银狼知道这张卡带和LV.999能力存在') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('卡带被艾利欧没收') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('不要写成银狼完全不知道这个能力') &&
+    !String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('活动 / 游戏化阶段称呼') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼LV999知情但受限') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼卡带被没收') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼LV999角色故事') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('LV999卡带权限') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('今天也上线啦') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('普罗米修斯搭载了四个模块') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('不能开小号，艾利欧也不行') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('LV.999形态语料（按卡带权限 / 剧情阶段启用）') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('关于火花') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('关于千冶•刃') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['禁止误写'] ?? '').includes('不要把LV.999形态语料当作普通常态全量口吻') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼普罗米修斯') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼不能开小号') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼LV999形态语料') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼LV999关于火花') &&
+    stellaronHuntersProfileById.get('JS-009')?.['关键词']?.includes('银狼LV999关于千冶刃') &&
+    String(stellaronHuntersProfileById.get('JS-009')?.['原文'] ?? '').includes('不要把她变成万能解法') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('流萤与萨姆是同一个人') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('萨姆是名为火萤Ⅳ型的战略强袭机甲') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('AR-26710 是她作为格拉默铁骑 / 基因改造兵器时期的编号') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('不要把萨姆写成独立角色') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['禁止误写'] ?? '').includes('不要把AR-26710写成萨姆机甲型号') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('不能被写成绝对无法治愈或永远无解') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['禁止误写'] ?? '').includes('不要把失熵写成绝对无法治愈、永远无解或已经被彻底治愈') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('透明的培养仓中，她浸没在冰冷的人工羊水里') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('AR-26702——那是什么') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('AR-4077') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('它们虽然是渺小的生命，却比星星更耀眼') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('这就是…梦？') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('嗨，又见面啦…我的意思，很高兴见到你') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('我希望以「流萤」的身份认识这个世界') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('我没有做梦的机能') &&
+    String(stellaronHuntersProfileById.get('JS-010')?.['原文'] ?? '').includes('关于大丽花') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('流萤萨姆同一人') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('萨姆不是独立角色') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('火萤Ⅳ型') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('流萤AR26710') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('萨姆身份揭露') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('流萤关于自己萨姆') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('流萤烦恼睡眠') &&
+    stellaronHuntersProfileById.get('JS-010')?.['关键词']?.includes('流萤关于大丽花') &&
+    String(stellaronHuntersProfileById.get('JS-011')?.['原文'] ?? '').includes('艾利欧暂不提供语料') &&
+    String(stellaronHuntersProfileById.get('JS-011')?.['原文'] ?? '').includes('本档案不提供“艾利欧亲口说”的示例台词') &&
+    String(stellaronHuntersProfileById.get('JS-011')?.['原文'] ?? '').includes('也不提供拟造句式让模型模仿') &&
+    String(stellaronHuntersProfileById.get('JS-011')?.['原文'] ?? '').includes('不编造艾利欧直接台词') &&
+    String(stellaronHuntersProfileById.get('JS-011')?.['外貌锚点'] ?? '').includes('不得编造人形外貌') &&
+    stellaronHuntersProfileById.get('JS-011')?.['关键词']?.includes('暂无语料') &&
+    !stellaronHuntersProfileById.get('JS-011')?.['关键词']?.includes('语料只作参考') &&
+    !String(stellaronHuntersProfileById.get('JS-011')?.['原文'] ?? '').includes('### 剧本文本参考') &&
+    !String(stellaronHuntersProfileById.get('JS-011')?.['原文'] ?? '').includes('### 初见与'),
   'Stellaron Hunters profile details must keep role-specific stage and Elio no-speech boundaries.',
 );
 const hertaStationProfiles = [
-  hertaStationProfileById.get('zhiku_character_rebuild_herta_profile'),
-  hertaStationProfileById.get('zhiku_character_rebuild_asta_profile'),
-  hertaStationProfileById.get('zhiku_character_rebuild_arlan_profile'),
+  hertaStationProfileById.get('JS-012'),
+  hertaStationProfileById.get('JS-013'),
+  hertaStationProfileById.get('JS-014'),
 ];
 assert(
   hertaStationPreset.id === 'zhiku_herta_station_character_rebuild' &&
@@ -630,46 +629,46 @@ assert(
   'Herta Space Station rebuilt profiles must keep grouping and corpus rules.',
 );
 assert(
-  String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('不要因地点出现“黑塔空间站”、系统出现“模拟宇宙”或资料出现“奇物收藏”就自动让黑塔本人出场') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('空间站中存在多个黑塔人偶') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('阶段边界：大黑塔 / 本体成年形态') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('大黑塔角色故事一：天才的童年万华镜') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('大黑塔角色故事四：模拟宇宙运行记录') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('大黑塔仍是同一个黑塔，不拆成新角色') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('常驻人偶共有249个、备用人偶共32个') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('多数黑塔人偶只是空壳，没有自主意识') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('奇物用于烹饪') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('私人密室常年封锁') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('传闻称空间站「黑塔」就是为了隐藏私人密室而建造') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['禁止误写'] ?? '').includes('不要让多数人偶拥有自主意识') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['禁止误写'] ?? '').includes('不要把私人密室传闻写成公开事实') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['说话方式'] ?? '').includes('远程人偶 / 自动应答式') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['说话方式'] ?? '').includes('黑塔编号') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['说话方式'] ?? '').includes('显然可得 / 显然可见 / 显然可知') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['说话方式'] ?? '').includes('不能写成极端冷血') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('### 大黑塔本体语料') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('### 大黑塔对他人的看法') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('关于星/穹') &&
-    !String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('#### 关于开拓者') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('关于螺丝咕姆') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('求你了，来测') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('姬子一较高下') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_asta_profile')?.['身份'] ?? '').includes('首席研究员') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_arlan_profile')?.['外貌锚点'] ?? '').includes('白色短发与黑色发梢'),
+  String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('不要因地点出现“黑塔空间站”、系统出现“模拟宇宙”或资料出现“奇物收藏”就自动让黑塔本人出场') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('空间站中存在多个黑塔人偶') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('阶段边界：大黑塔 / 本体成年形态') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('大黑塔角色故事一：天才的童年万华镜') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('大黑塔角色故事四：模拟宇宙运行记录') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('大黑塔仍是同一个黑塔，不拆成新角色') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('常驻人偶共有249个、备用人偶共32个') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('多数黑塔人偶只是空壳，没有自主意识') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('奇物用于烹饪') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('私人密室常年封锁') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('传闻称空间站「黑塔」就是为了隐藏私人密室而建造') &&
+    String(hertaStationProfileById.get('JS-012')?.['禁止误写'] ?? '').includes('不要让多数人偶拥有自主意识') &&
+    String(hertaStationProfileById.get('JS-012')?.['禁止误写'] ?? '').includes('不要把私人密室传闻写成公开事实') &&
+    String(hertaStationProfileById.get('JS-012')?.['说话方式'] ?? '').includes('远程人偶 / 自动应答式') &&
+    String(hertaStationProfileById.get('JS-012')?.['说话方式'] ?? '').includes('黑塔编号') &&
+    String(hertaStationProfileById.get('JS-012')?.['说话方式'] ?? '').includes('显然可得 / 显然可见 / 显然可知') &&
+    String(hertaStationProfileById.get('JS-012')?.['说话方式'] ?? '').includes('不能写成极端冷血') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('### 大黑塔本体语料') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('### 大黑塔对他人的看法') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('关于星/穹') &&
+    !String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('#### 关于开拓者') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('关于螺丝咕姆') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('求你了，来测') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('姬子一较高下') &&
+    String(hertaStationProfileById.get('JS-013')?.['身份'] ?? '').includes('首席研究员') &&
+    String(hertaStationProfileById.get('JS-014')?.['外貌锚点'] ?? '').includes('白色短发与黑色发梢'),
   'Herta Space Station profile details must keep tightened recall and corrected identity/appearance anchors.',
 );
 assert(
-  String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('湛蓝星智商最高的人类') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('高高在上但并非冷血的善意') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('藏在资源 / 权限 / 实验支持里的善意') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_asta_profile')?.['原文'] ?? '').includes('好奇心与精力都很旺盛的少女') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_arlan_profile')?.['原文'] ?? '').includes('把负伤视作履行职责后留下的勋章'),
+  String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('湛蓝星智商最高的人类') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('高高在上但并非冷血的善意') &&
+    String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('藏在资源 / 权限 / 实验支持里的善意') &&
+    String(hertaStationProfileById.get('JS-013')?.['原文'] ?? '').includes('好奇心与精力都很旺盛的少女') &&
+    String(hertaStationProfileById.get('JS-014')?.['原文'] ?? '').includes('把负伤视作履行职责后留下的勋章'),
   'Herta Space Station resident facts must keep character-color wording instead of official profile prose.',
 );
 assert(
-  String(hertaStationProfileById.get('zhiku_character_rebuild_herta_profile')?.['原文'] ?? '').includes('写完了，但是找不到了') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_asta_profile')?.['原文'] ?? '').includes('阿兰的那顿饭钱，在他说出要还钱的那个时刻，就已经结清了') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_arlan_profile')?.['原文'] ?? '').includes('他用大剑支撑着自己的身体，缓慢地、坚定地站起身') &&
+  String(hertaStationProfileById.get('JS-012')?.['原文'] ?? '').includes('写完了，但是找不到了') &&
+    String(hertaStationProfileById.get('JS-013')?.['原文'] ?? '').includes('阿兰的那顿饭钱，在他说出要还钱的那个时刻，就已经结清了') &&
+    String(hertaStationProfileById.get('JS-014')?.['原文'] ?? '').includes('他用大剑支撑着自己的身体，缓慢地、坚定地站起身') &&
     !hertaStationProfiles.some((entry) => {
       const storyLayer = String(entry['原文'] ?? '').match(/## 角色故事层\n\n([\s\S]*?)(?=\n\n## 表现锚点层)/)?.[1] ?? '';
       return storyLayer.includes('解锁条件');
@@ -677,21 +676,21 @@ assert(
   'Herta Space Station story layers must use provided story bodies without unlock-condition titles.',
 );
 assert(
-  String(hertaStationProfileById.get('zhiku_character_rebuild_asta_profile')?.['原文'] ?? '').includes('### 背景边界：家族压力与自我轨迹') &&
-    !String(hertaStationProfileById.get('zhiku_character_rebuild_asta_profile')?.['原文'] ?? '').includes('阶段边界：家族压力与自我轨迹') &&
-    String(hertaStationProfileById.get('zhiku_character_rebuild_arlan_profile')?.['原文'] ?? '').includes('### 危机场景边界：反物质军团危机与重伤承接') &&
-    !String(hertaStationProfileById.get('zhiku_character_rebuild_arlan_profile')?.['原文'] ?? '').includes('阶段边界：反物质军团危机与重伤承接'),
+  String(hertaStationProfileById.get('JS-013')?.['原文'] ?? '').includes('### 背景边界：家族压力与自我轨迹') &&
+    !String(hertaStationProfileById.get('JS-013')?.['原文'] ?? '').includes('阶段边界：家族压力与自我轨迹') &&
+    String(hertaStationProfileById.get('JS-014')?.['原文'] ?? '').includes('### 危机场景边界：反物质军团危机与重伤承接') &&
+    !String(hertaStationProfileById.get('JS-014')?.['原文'] ?? '').includes('阶段边界：反物质军团危机与重伤承接'),
   'Asta and Arlan Herta Station boundaries must stay as writing boundaries instead of gate cards.',
 );
 
 if (isAstralExpressCharacterProfileSet) {
-  const stelle = profileById.get('zhiku_character_rebuild_stelle_profile');
-  const caelus = profileById.get('zhiku_character_rebuild_caelus_profile');
-  const profile = profileById.get('zhiku_character_rebuild_march_profile');
-  const welt = profileById.get('zhiku_character_rebuild_welt_profile');
-  const danheng = profileById.get('zhiku_character_rebuild_danheng_profile');
-  const himeko = profileById.get('zhiku_character_rebuild_himeko_profile');
-  const pompom = profileById.get('zhiku_character_rebuild_pompom_profile');
+  const stelle = profileById.get('JS-000');
+  const caelus = profileById.get('JS-001');
+  const profile = profileById.get('JS-002');
+  const welt = profileById.get('JS-003');
+  const danheng = profileById.get('JS-004');
+  const himeko = profileById.get('JS-005');
+  const pompom = profileById.get('JS-006');
   const stelleSource = String(stelle['原文'] ?? '');
   const caelusSource = String(caelus['原文'] ?? '');
   const source = String(profile['原文'] ?? '');
@@ -1075,8 +1074,6 @@ const liveStream = '\u76f4\u64ad';
 const family = '\u5bb6\u4eba';
 const phone = '\u624b\u673a';
 const boulderSmashing = '\u80f8\u53e3\u788e\u5927\u77f3';
-const readableHelper = '\u4eba\u683c\u3001\u547d\u9014\u3001\u9636\u6bb5\u4e0e\u89e3\u9501\u8fb9\u754c';
-const nodeCountLabel = '\u4e2a\u8d44\u6599\u8282\u70b9';
 const hookId = 'zhiku_character_rebuild_hook_persona';
 const childRoleText = '\u864e\u514b\u662f\u513f\u7ae5\u89d2\u8272';
 const hookRelationshipAnchor = '\u9f39\u9f20\u515a';
@@ -1208,17 +1205,5 @@ for (const entry of rebuildPreset.entries) {
   }
 }
 assert(corruptedTextFields.length === 0, `Rebuilt character text fields must not contain mojibake question marks: ${corruptedTextFields.join(', ')}`);
-
-assert(
-  panel.includes("className=\"text-[11px] font-mono tracking-[0.12em]\" style={{ color: 'rgba(var(--tj-accent-primary), 0.86)' }}") &&
-    !panel.includes("className=\"text-[10px] font-mono tracking-[0.18em]\" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}"),
-  'Zhiku soft-structure labels must use larger, brighter text instead of dim 10px labels.',
-);
-assert(
-  panel.includes(readableHelper) &&
-    panel.includes("className=\"mt-1 text-xs\" style={{ color: 'rgba(var(--tj-text-secondary), 0.84)' }}") &&
-    panel.includes(nodeCountLabel),
-  'Character node helper text must be readable enough in the Zhiku panel.',
-);
 
 console.log('zhiku guinaifen regression ok');

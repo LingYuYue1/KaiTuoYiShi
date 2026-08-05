@@ -1,7 +1,6 @@
 import {
   创建智库条目,
   获取智库注入内容缺失字段,
-  获取智库条目身份ID,
   智库条目需要注入内容,
   type 智库条目,
 } from '@/models/zhiku';
@@ -9,7 +8,7 @@ import type { 智库治理分类 } from '@/models/zhikuGovernance';
 
 export const ZHIKU_CUSTOM_ID_PREFIX = 'ZZ';
 export const ZHIKU_CUSTOM_ID_PATTERN = /^ZZ-\d{3}$/u;
-export const ZHIKU_CUSTOM_SCHEMA_VERSION = 2;
+export const ZHIKU_CUSTOM_SCHEMA_VERSION = 3;
 export const ZHIKU_AUXILIARY_FIELDS_VERSION = 1;
 
 export type 智库资料健康度状态 = 'healthy' | 'attention' | 'invalid';
@@ -32,23 +31,10 @@ export interface 智库资料健康度诊断 {
   issues: 智库资料健康度问题[];
 }
 
-export interface 智库自制资料身份碰撞 {
-  entryIndex: number;
-  value: string;
-  kind: 'primary' | 'alias';
-  resolution: 'reassigned' | 'removed';
-}
-
-export interface 智库自制资料迁移结果 {
-  entries: 智库条目[];
-  collisions: 智库自制资料身份碰撞[];
-  upgradedCount: number;
-}
-
 type 创建智库条目输入 = Parameters<typeof 创建智库条目>[0];
 
-function collectIdentities(entries: readonly Pick<智库条目, 'id' | '兼容ID'>[]): Set<string> {
-  return new Set(entries.flatMap((entry) => 获取智库条目身份ID(entry)));
+function collectIds(entries: readonly Pick<智库条目, 'id'>[]): Set<string> {
+  return new Set(entries.map((entry) => entry.id.trim()).filter(Boolean));
 }
 
 function allocateAvailableCustomId(blockedIds: Set<string>, startAt = 0): string {
@@ -76,10 +62,10 @@ function normalizeVersion(value: unknown, fallback: number): number {
 }
 
 export function 分配自制智库ID(
-  existingEntries: readonly Pick<智库条目, 'id' | '兼容ID'>[],
+  existingEntries: readonly Pick<智库条目, 'id'>[],
   startAt = 0,
 ): string {
-  return allocateAvailableCustomId(collectIdentities(existingEntries), startAt);
+  return allocateAvailableCustomId(collectIds(existingEntries), startAt);
 }
 
 export function 获取下一个自制智库序号(
@@ -94,7 +80,7 @@ export function 获取下一个自制智库序号(
 }
 
 export function 创建自制智库条目(
-  existingEntries: readonly Pick<智库条目, 'id' | '兼容ID'>[],
+  existingEntries: readonly Pick<智库条目, 'id'>[],
   input: 创建智库条目输入,
   nextSequence = 0,
 ): 智库条目 {
@@ -112,7 +98,6 @@ export function 创建自制智库条目(
   return {
     ...entry,
     id: 分配自制智库ID(existingEntries, nextSequence),
-    兼容ID: [],
     治理分类: inferGovernanceCategory(entry),
     资料所有者: 'custom-user-data',
     来源预设ID: undefined,
@@ -124,69 +109,20 @@ export function 创建自制智库条目(
   };
 }
 
-export function 迁移自制智库条目(
+export function 规范化自制智库条目(
   customEntries: readonly 智库条目[],
-  reservedEntries: readonly Pick<智库条目, 'id' | '兼容ID'>[] = [],
-): 智库自制资料迁移结果 {
-  const reservedIds = collectIdentities(reservedEntries);
-  const blockedForAllocation = new Set(reservedIds);
-  for (const entry of customEntries) {
-    if (ZHIKU_CUSTOM_ID_PATTERN.test(entry.id)) blockedForAllocation.add(entry.id);
-    for (const alias of entry.兼容ID ?? []) {
-      if (ZHIKU_CUSTOM_ID_PATTERN.test(alias)) blockedForAllocation.add(alias);
-    }
-  }
-
-  const claimedPrimaryIds = new Set(reservedIds);
-  const collisions: 智库自制资料身份碰撞[] = [];
-  const assigned = customEntries.map((entry, entryIndex) => {
-    const requestedId = entry.id.trim();
-    let id = requestedId;
-    if (!ZHIKU_CUSTOM_ID_PATTERN.test(requestedId) || claimedPrimaryIds.has(requestedId)) {
-      id = allocateAvailableCustomId(blockedForAllocation);
-      blockedForAllocation.add(id);
-      if (ZHIKU_CUSTOM_ID_PATTERN.test(requestedId) && claimedPrimaryIds.has(requestedId)) {
-        collisions.push({ entryIndex, value: requestedId, kind: 'primary', resolution: 'reassigned' });
-      }
-    }
-    claimedPrimaryIds.add(id);
-    return { entry, entryIndex, id, requestedId };
-  });
-
-  const protectedPrimaryIds = new Set([
-    ...reservedIds,
-    ...assigned.map((item) => item.id),
-  ]);
-  const claimedAliases = new Set<string>();
-  let upgradedCount = 0;
-
-  const entries = assigned.map(({ entry, entryIndex, id, requestedId }) => {
-    const aliasCandidates = [
-      ...(entry.兼容ID ?? []),
-      ...(requestedId && requestedId !== id ? [requestedId] : []),
-    ];
-    const aliases: string[] = [];
-    for (const alias of [...new Set(aliasCandidates.map((value) => value.trim()).filter(Boolean))]) {
-      if (alias === id) continue;
-      if (protectedPrimaryIds.has(alias) || claimedAliases.has(alias)) {
-        collisions.push({ entryIndex, value: alias, kind: 'alias', resolution: 'removed' });
-        continue;
-      }
-      aliases.push(alias);
-      claimedAliases.add(alias);
-    }
-
+  reservedEntries: readonly Pick<智库条目, 'id'>[] = [],
+): 智库条目[] {
+  const claimedIds = collectIds(reservedEntries);
+  return customEntries.flatMap((entry) => {
+    const id = entry.id.trim();
+    if (!ZHIKU_CUSTOM_ID_PATTERN.test(id) || claimedIds.has(id)) return [];
+    claimedIds.add(id);
     const schemaVersion = normalizeVersion(entry.资料版本, 0);
     const auxiliaryFieldsVersion = normalizeVersion(entry.辅助字段版本, 0);
-    const upgraded = id !== requestedId
-      || entry.资料所有者 !== 'custom-user-data'
-      || schemaVersion < ZHIKU_CUSTOM_SCHEMA_VERSION;
-    if (upgraded) upgradedCount += 1;
-
-    return {
+    return [{
       ...entry,
       id,
-      兼容ID: aliases,
       治理分类: inferGovernanceCategory(entry),
       资料所有者: 'custom-user-data' as const,
       来源预设ID: undefined,
@@ -195,10 +131,8 @@ export function 迁移自制智库条目(
       资料版本: Math.max(schemaVersion, ZHIKU_CUSTOM_SCHEMA_VERSION),
       辅助字段版本: auxiliaryFieldsVersion,
       builtin: false,
-    };
+    }];
   });
-
-  return { entries, collisions, upgradedCount };
 }
 
 function addHealthIssue(

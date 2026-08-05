@@ -10,7 +10,6 @@ const requireText = (source, expected, label) => {
 const reader = read('components/features/ZhikuV3/StoryArchiveReader.tsx');
 const css = read('components/features/ZhikuV3/story-archive-reader.css');
 const story = read('stories/ZhikuStoryArchive.stories.tsx');
-const plan = read('docs/superpowers/specs/2026-07-27-zhiku-v2-heavy-optimization-plan.md');
 
 requireText(reader, 'export function StoryArchiveReader', 'dedicated story reader component');
 requireText(reader, 'volumes: StoryArchiveVolume[]', 'archive volume reader contract');
@@ -47,8 +46,6 @@ requireText(story, 'export const 剧情档案阅读页', 'story reader candidate
 requireText(story, '翁法罗斯英雄纪其一-黄金裔的黎明', 'archive filename sample');
 requireText(story, "initialChapterId: 'story-demo-03'", 'representative middle chapter');
 requireText(story, "status: 'locked'", 'locked chapter example');
-requireText(plan, '手工制作的小说类卷宗、章节与正文', 'confirmed story reader direction');
-requireText(plan, '智库内不得编辑、覆盖或写回', 'confirmed read-only archive hierarchy');
 
 for (const forbidden of ['注入内容', '触发关键词', 'injectionPreview', 'buildZhikuEntryInjectionPreview', 'onOpenDetail', '三级页面']) {
   if (reader.includes(forbidden) || story.includes(forbidden)) {

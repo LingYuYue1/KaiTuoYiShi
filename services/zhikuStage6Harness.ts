@@ -39,7 +39,7 @@ export interface ZhikuStage6FixtureAudit {
 }
 
 export function auditZhikuStage6Fixtures(system: 智库系统 | undefined): ZhikuStage6FixtureAudit {
-  const available = new Set((system?.条目 ?? []).flatMap((entry) => [entry.id, ...(entry.兼容ID ?? [])]));
+  const available = new Set((system?.条目 ?? []).map((entry) => entry.id));
   const fixtures = ZHIKU_STAGE6_FIXTURES.map((fixture) => {
     const missingEntryIds = fixture.referencedEntryIds.filter((id) => !available.has(id));
     return {
@@ -174,9 +174,9 @@ export function buildZhikuStage6EffectAb(input: BuildZhikuStage6EffectAbInput): 
         detail: 'A/B 消息数量和角色顺序保持一致。',
       },
       {
-        id: 'no-legacy-fallback',
+        id: 'no-hidden-fallback',
         passed: !bText.includes('zhikuInjectionOverride'),
-        detail: 'B 组不启用旧智库覆盖或回退分支。',
+        detail: 'B 组不启用额外的智库覆盖或隐藏回退分支。',
       },
     ],
   };

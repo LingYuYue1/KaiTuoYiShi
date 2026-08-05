@@ -20,6 +20,9 @@ const retiredPaths = [
   'scripts/zhiku-icon-trace-regression.mjs',
   'services/zhikuAiRetrieval.prototype.ts',
   'scripts/prototypes/zhiku-ai-retrieval-prototype.mjs',
+  'data/zhikuIdentityRegistry.ts',
+  'scripts/zhiku-stage2-legacy-save-acceptance.mjs',
+  'components/features/ZhikuV3/ZhikuMaintenancePanel.tsx',
 ];
 
 for (const retiredPath of retiredPaths) {
@@ -29,10 +32,10 @@ for (const retiredPath of retiredPaths) {
 const requiredPaths = [
   'components/features/ZhikuV3/ZhikuManagerModal.tsx',
   'components/features/ZhikuV3/ZhikuExperience.tsx',
-  'components/features/ZhikuV3/ZhikuMaintenancePanel.tsx',
   'components/features/ZhikuV3/productionAdapter.ts',
   'components/features/ZhikuV3/zhiku-v3.css',
   'public/assets/zhiku/archive-hall-background.webp',
+  'scripts/clean-generated-build-chunks.mjs',
 ];
 
 for (const requiredPath of requiredPaths) {
@@ -46,20 +49,43 @@ const preset = read('data/zhikuPreset.ts');
 const packageJson = read('package.json');
 
 assert(app.includes("import('@/components/features/ZhikuV3/ZhikuManagerModal')"), 'App must load the V3 Zhiku entry directly');
-assert(experience.includes("from '@/components/features/ZhikuV3/ZhikuMaintenancePanel'"), 'V3 maintenance must use the unified V3 component');
 assert(adapter.includes('export function resolveZhikuCategory'), 'production adapter must expose the version-neutral category resolver');
 assert(!packageJson.includes('prototype:zhiku-ai-retrieval'), 'retired Zhiku prototype command must not remain runnable');
+assert(packageJson.includes('node scripts/clean-generated-build-chunks.mjs'), 'production build must clean stale generated chunks before rebuilding');
+assert(preset.includes('export function composeZhikuSystem'), 'V3 must expose one catalog/custom composition entry');
 
-for (const migrationContract of [
+for (const retiredContract of [
   'mergeBundledZhikuSystem',
   'hydratePersistedZhikuSystem',
   'shouldRemoveLegacyZhikuCharacterEntry',
   'removeRetiredZhikuEntries',
+  'ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY',
+  '兼容ID',
 ]) {
-  assert(preset.includes(migrationContract), `legacy save migration contract was removed: ${migrationContract}`);
+  assert(!preset.includes(retiredContract), `retired Zhiku contract still exists: ${retiredContract}`);
 }
 
-const scanRoots = ['App.tsx', 'components/features/ZhikuV3', 'stories'];
+const scanRoots = [
+  'App.tsx',
+  'components/features/ZhikuV3',
+  'data/zhikuPreset.ts',
+  'data/zhikuCatalogRepository.ts',
+  'data/zhikuCustomGovernance.ts',
+  'data/builtinWorldbookConfig.ts',
+  'hooks/useGameState.ts',
+  'hooks/useGame/saveLoadWorkflow.ts',
+  'hooks/useGame/turnSnapshot.ts',
+  'models/zhiku.ts',
+  'models/zhikuGovernance.ts',
+  'models/settings.ts',
+  'services/zhikuAiRetrievalIndex.ts',
+  'services/zhikuRetrieval.ts',
+  'services/zhikuRuntimeCompiler.ts',
+  'services/zhikuRuntimeUnlock.ts',
+  'services/zhikuStage6Harness.ts',
+  'components/features/Settings/ZhikuSettingsTab.tsx',
+  'stories',
+];
 const sourceFiles = scanRoots.flatMap((scanRoot) => {
   const absolute = path.join(root, scanRoot);
   if (fs.statSync(absolute).isFile()) return [absolute];
@@ -74,6 +100,22 @@ const forbiddenTokens = [
   'ZhikuDesignLab',
   '/assets/zhiku/icon-trace/',
   'zhiku-archive-hall-background-concept-v',
+  'zhikuIdentityRegistry',
+  '兼容ID',
+  'ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY',
+  'mergeBundledZhikuSystem',
+  'hydratePersistedZhikuSystem',
+  'buildCustomOnlyZhikuFallback',
+  'zhiku_aeons_core_',
+  'zhiku_paths_core_',
+  'zhiku_character_rebuild_march_profile',
+  '旧智库',
+  '旧版人物资料',
+  'ZhikuMaintenancePanel',
+  'onOpenMaintenance',
+  'showMaintenance',
+  '维护智库',
+  '智库维护工作台',
 ];
 
 for (const file of sourceFiles) {
@@ -82,6 +124,21 @@ for (const file of sourceFiles) {
     assert(!source.includes(token), `${path.relative(root, file)} still references retired Zhiku token: ${token}`);
   }
 }
+
+const presetFiles = fs.readdirSync(path.join(root, 'public/zhiku-presets')).filter((file) => file.endsWith('.json'));
+const rawEntries = presetFiles.flatMap((file) => JSON.parse(read(`public/zhiku-presets/${file}`)).entries ?? []);
+assert(rawEntries.length === 162, `V3 source catalog must contain 162 entries, received ${rawEntries.length}`);
+assert(rawEntries.every((entry) => /^[A-Z]{2}-\d{3}$/u.test(entry.id)), 'every V3 source entry must own its formal machine ID');
+assert(new Set(rawEntries.map((entry) => entry.id)).size === rawEntries.length, 'V3 source IDs must be unique');
+assert(rawEntries.every((entry) => !Object.hasOwn(entry, '兼容ID')), 'V3 source entries must not carry compatibility aliases');
+assert(rawEntries.every((entry) => entry.分类 !== 'story'), 'story archives must remain outside the injectable Zhiku catalog');
+const sourceIds = new Set(rawEntries.map((entry) => entry.id));
+const danglingRelatedIds = rawEntries.flatMap((entry) => (
+  (entry.关联条目ID ?? [])
+    .filter((relatedId) => !sourceIds.has(relatedId))
+    .map((relatedId) => `${entry.id}->${relatedId}`)
+));
+assert(danglingRelatedIds.length === 0, `V3 source catalog contains dangling related IDs: ${danglingRelatedIds.join(', ')}`);
 
 const expectedEmblems = [
   'aeon-emblem-precision-c.svg',

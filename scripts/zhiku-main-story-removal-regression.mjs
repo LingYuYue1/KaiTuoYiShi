@@ -36,26 +36,20 @@ for (const file of fs.readdirSync(presetDir).filter((item) => item.endsWith('.js
 }
 
 assert(
-  presetSource.includes("source.includes('开拓轶事·项目内置剧情')") &&
-    presetSource.includes('BUNDLED_MAIN_STORY_TITLES'),
-  '旧存档内置主线剧情过滤规则缺失',
+  presetSource.includes(".filter((entry) => entry.分类 !== 'story')") &&
+    presetSource.includes('composeZhikuSystem') &&
+    useGameStateSource.includes('composeZhikuSystem(preset, savedZhiku)') &&
+    useGameStateSource.includes('buildZhikuCustomSystem(savedZhiku)') &&
+    presetSource.includes("!entry.builtin && ZHIKU_CUSTOM_ID_PATTERN.test(entry.id)"),
+  'V3 启动加载必须只接纳当前目录和正式 ZZ 自制资料',
 );
 
 assert(
-  presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
-    presetSource.includes('mergeBundledZhikuSystem') &&
-    useGameStateSource.includes('mergeBundledZhikuSystem(preset, savedZhiku, migrationAt)') &&
-    useGameStateSource.includes('buildCustomOnlyZhikuFallback(savedZhiku, migrationAt)') &&
-    presetSource.includes('.filter((entry) => !entry.builtin)') &&
-    presetSource.includes('.filter((entry) => !isBundledZhikuDuplicate(entry))'),
-  '启动加载时必须过滤旧存档残留的主线剧情智库条目',
-);
-
-assert(
-  presetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
+  !presetSource.includes('BUNDLED_MAIN_STORY_TITLES') &&
+    !presetSource.includes('isBundledZhikuDuplicate') &&
     saveLoadSource.includes('loadBundledZhikuCatalogWithFallback()') &&
-    saveLoadSource.includes('mergeBundledZhikuSystem(catalogResult.system, save.智库, zhikuMigrationAt)'),
-  '导入存档时必须过滤旧存档残留的主线剧情智库条目',
+    saveLoadSource.includes('composeZhikuSystem(catalogResult.system, save.智库)'),
+  'V3 读档不得恢复旧剧情智库迁移分支',
 );
 
 console.log('zhiku main story removal regression passed');

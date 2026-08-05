@@ -46,10 +46,9 @@ import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID, getDefaultModuleField
 import { isSTImportedModule } from '@/utils/stPresetParser';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
-  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
-  buildCustomOnlyZhikuFallback,
+  buildZhikuCustomSystem,
   buildPersistedZhikuSystem,
-  mergeBundledZhikuSystem,
+  composeZhikuSystem,
 } from '@/data/zhikuPreset';
 import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
@@ -368,24 +367,14 @@ export function useGameState(): UseGameStateReturn {
           console.warn('[zhiku] 新目录加载失败，已继续使用最后一份完整目录:', catalogResult.loadError);
         }
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
-        const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-        const migrationAt = savedMigrationAt ?? Date.now();
-        if (!savedMigrationAt) {
-          await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-        }
-        const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
+        const mergedZhiku = composeZhikuSystem(preset, savedZhiku);
         set智库(mergedZhiku);
         await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
       } catch (err) {
-        console.warn('[zhiku] 新目录与最后完整目录缓存均不可用，仅恢复本地自制资料:', err);
+        console.warn('[zhiku-v3] 当前目录与最后完整目录缓存均不可用，仅恢复 V3 自制资料:', err);
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
         if (savedZhiku) {
-          const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-          const migrationAt = savedMigrationAt ?? Date.now();
-          if (!savedMigrationAt) {
-            await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-          }
-          set智库(buildCustomOnlyZhikuFallback(savedZhiku, migrationAt));
+          set智库(buildZhikuCustomSystem(savedZhiku));
         }
       }
 

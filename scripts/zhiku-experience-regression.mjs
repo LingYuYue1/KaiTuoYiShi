@@ -20,16 +20,18 @@ requireText(experience, '<ArchiveBrowser', 'shared reference final page');
 requireText(experience, '<ZhikuScreen', 'category hub');
 requireText(experience, 'setSelectedCategoryId(null)', 'same-container back navigation');
 requireText(experience, "event.key !== 'Escape'", 'Escape navigation');
-requireText(experience, 'if (showMaintenance)', 'Escape closes maintenance first');
 requireText(experience, 'onClose?.()', 'root close behavior');
-requireText(experience, '<ZhikuMaintenancePanel', 'V3 maintenance surface contract');
-requireText(experience, 'onZhikuSystemChange={onZhikuSystemChange}', 'maintenance write contract preservation');
-requireText(experience, 'settings={settings}', 'maintenance settings contract preservation');
-requireText(screen, 'onOpenMaintenance?: () => void', 'optional hub maintenance command');
-requireText(header, 'aria-label="维护智库"', 'accessible maintenance command');
-requireText(header, '<Wrench', 'maintenance tool icon');
-requireText(css, '.zhiku-v3-maintenance__content', 'full-screen maintenance surface');
-requireText(css, '@media (max-width: 520px)', 'narrow maintenance layout');
+
+for (const [source, label] of [
+  [experience, 'experience'],
+  [screen, 'screen'],
+  [header, 'header'],
+  [css, 'styles'],
+]) {
+  for (const forbidden of ['ZhikuMaintenancePanel', 'showMaintenance', 'onOpenMaintenance', 'zhiku-v3-maintenance']) {
+    if (source.includes(forbidden)) throw new Error(`${label} must not restore retired Zhiku maintenance: ${forbidden}`);
+  }
+}
 
 if (experience.includes('搜索智库条目') || experience.includes('query')) {
   throw new Error('Player-facing ZhikuExperience must not restore the retired search feature.');

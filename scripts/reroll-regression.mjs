@@ -36,7 +36,17 @@ assert(source.includes('function normalizeRerollCompareText'), '重roll必须规
 assert(source.includes('function calculateRerollSimilarity'), '重roll必须计算上一版与新版的相似度。');
 assert(source.includes('function buildRerollGenerationGuard'), '重roll必须在消息尾部追加强避重复约束。');
 assert(source.includes('function buildRerollSimilarityRetryGuard'), '重roll相似时必须追加自动换写提示。');
-assert(source.includes('apiMessages.push(创建聊天消息(\n        \'user\',\n        buildRerollGenerationGuard'), '重roll强约束必须作为最后 user 消息进入主请求。');
+const mainTailStart = source.indexOf('const mainTailMessages: 聊天消息[] = [];');
+const enforcementTail = source.indexOf('buildMainTurnEnforcementBlock({', mainTailStart);
+const rerollTail = source.indexOf('buildRerollGenerationGuard(deps.rerollContext.nonce', mainTailStart);
+const requestFinalization = source.indexOf('const finalizedMainRequest = finalizeMainRequest({', mainTailStart);
+assert(
+  mainTailStart >= 0
+  && enforcementTail > mainTailStart
+  && rerollTail > enforcementTail
+  && requestFinalization > rerollTail,
+  '重roll强约束必须在人物校准之后，作为最后一条 tail user 消息进入统一请求最终化器。',
+);
 assert(source.includes('calculateRerollSimilarity(candidateText, deps.rerollContext.previousResponse)'), '主剧情必须对重roll候选正文做相似度校验。');
 assert(source.includes('rerollSimilarity >= 0.86'), '重roll相似度阈值必须锁定，防止一模一样回复放行。');
 assert(source.includes('buildRerollSimilarityRetryGuard(deps.rerollContext.previousResponse, rerollSimilarity)'), '重roll过像时必须追加换写守卫后重试。');

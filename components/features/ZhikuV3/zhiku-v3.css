@@ -1,6 +1,5 @@
 .zhiku-v3-screen,
-.zhiku-v3-browser,
-.zhiku-v3-maintenance {
+.zhiku-v3-browser {
   --zhiku-ivory: 238, 239, 230;
   --zhiku-gold: 209, 184, 119;
   --zhiku-cyan: 103, 202, 199;
@@ -18,8 +17,7 @@
   letter-spacing: 0;
 }
 
-.zhiku-v3-browser,
-.zhiku-v3-maintenance { height: 100dvh; }
+.zhiku-v3-browser { height: 100dvh; }
 
 .zhiku-v3-screen {
   container-type: size;
@@ -310,20 +308,6 @@
   background: rgba(15, 28, 32, 0.82);
   border-color: rgba(var(--zhiku-gold), 0.72);
   outline: none;
-}
-
-.zhiku-v3-maintenance__content {
-  position: absolute;
-  z-index: 4;
-  inset: clamp(76px, 13vh, 126px) clamp(12px, 2.4vw, 42px) clamp(12px, 2.4vh, 28px);
-  min-width: 0;
-  min-height: 0;
-  padding: clamp(10px, 1.3vw, 20px);
-  overflow: hidden;
-  background: rgba(4, 9, 12, 0.76);
-  border-top: 1px solid rgba(var(--zhiku-gold), 0.32);
-  border-bottom: 1px solid rgba(var(--zhiku-blue), 0.22);
-  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.28);
 }
 
 .zhiku-v3-orbits {
@@ -682,10 +666,7 @@
 
 .zhiku-v3-screen[data-reduced-motion='true'] *,
 .zhiku-v3-screen[data-reduced-motion='true'] *::before,
-.zhiku-v3-screen[data-reduced-motion='true'] *::after,
-.zhiku-v3-maintenance[data-reduced-motion='true'] *,
-.zhiku-v3-maintenance[data-reduced-motion='true'] *::before,
-.zhiku-v3-maintenance[data-reduced-motion='true'] *::after {
+.zhiku-v3-screen[data-reduced-motion='true'] *::after {
   animation: none !important;
   transition-duration: 0ms !important;
 }
@@ -697,19 +678,9 @@
 @media (prefers-reduced-motion: reduce) {
   .zhiku-v3-screen *,
   .zhiku-v3-screen *::before,
-  .zhiku-v3-screen *::after,
-  .zhiku-v3-maintenance *,
-  .zhiku-v3-maintenance *::before,
-  .zhiku-v3-maintenance *::after { animation: none !important; }
+  .zhiku-v3-screen *::after { animation: none !important; }
 
   .zhiku-v3-orbits__packet-layer { display: none !important; }
-}
-
-@media (max-width: 520px) {
-  .zhiku-v3-maintenance__content {
-    inset: 72px 8px max(8px, env(safe-area-inset-bottom));
-    padding: 8px;
-  }
 }
 
 @media (max-width: 640px) and (orientation: portrait) {

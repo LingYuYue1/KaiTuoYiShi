@@ -22,11 +22,11 @@ assert(!allSources.includes('phoneSystemState'), '手机运行时数据不得写
 assert(!saveLoadSource.includes('mergePhoneSystems'), '读档不得把目标存档手机与外部手机状态合并。');
 assert(saveLoadSource.includes('state.set手机(归一化手机系统(save.手机))'), '读档手机状态必须只来自目标存档本身。');
 assert(
-  saveLoadSource.includes('loadAllBundledZhikuPresets') &&
-    saveLoadSource.includes('mergeBundledZhikuSystem') &&
+  saveLoadSource.includes('loadBundledZhikuCatalogWithFallback') &&
+    saveLoadSource.includes('composeZhikuSystem') &&
     saveLoadSource.includes('save.智库') &&
     zhikuPresetSource.includes('mergeZhikuRuntimeUnlockOverrides') &&
-    zhikuPresetSource.includes('!entry.builtin && !isBundledZhikuDuplicate(entry)') &&
+    zhikuPresetSource.includes('!entry.builtin && ZHIKU_CUSTOM_ID_PATTERN.test(entry.id)') &&
     saveLoadSource.includes('state.set智库(nextZhiku)'),
   '读档智库必须来自当前内置预设与目标存档自制条目/运行时覆盖，不能沿用当前运行态。',
 );

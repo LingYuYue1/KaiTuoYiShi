@@ -239,7 +239,6 @@ try {
   assert(api.MAIN_RECALL_ASSISTANT_BODY_WINDOW === 5, 'other recall windows must retain their existing depth');
 
   const retrievalSource = fs.readFileSync(path.join(root, 'services/zhikuRetrieval.ts'), 'utf8');
-  const panelSource = fs.readFileSync(path.join(root, 'components/features/ZhikuV3/ZhikuMaintenancePanel.tsx'), 'utf8');
   const zhikuCotSource = fs.readFileSync(path.join(root, 'prompts/cot/zhikuCot.ts'), 'utf8');
   assert(retrievalSource.includes('匹配智库关键词(entry, query)') && !retrievalSource.includes('const searchQuery = augmentZhikuQuery(query, sceneHints)'), 'automatic recall must use explicit keyword matching without scene-hint query expansion');
   assert(
@@ -247,7 +246,6 @@ try {
     'AI supplement user prompt must identify keywordScanText as the only keyword evidence window',
   );
   assert(zhikuCotSource.includes('玩家当前输入 + 最近 3 条 assistant 正文') && !zhikuCotSource.includes('最近 5 条 assistant 正文'), 'Zhiku CoT prompt must use the implemented three-body keyword window');
-  assert(panelSource.includes('触发关键词 / 别名') && panelSource.includes('多形态互斥组'), 'maintenance UI must expose keyword recall fields');
 
   console.log(JSON.stringify({
     danHeng: api.retrieveZhikuContext(forms, '丹恒', 5).entries.map((entry) => entry.标题),

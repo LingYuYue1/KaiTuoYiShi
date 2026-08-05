@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/clean-retired-avatar-artifacts.mjs && tsc -b && vite build",
+    "build": "node scripts/clean-generated-build-chunks.mjs && node scripts/clean-retired-avatar-artifacts.mjs && tsc -b && vite build",
     "test:story-weaving": "node scripts/story-weaving-regression.mjs",
     "test:story-weaving-ui": "node scripts/story-weaving-ui-regression.mjs",
     "test:story-mode-worldbook": "node scripts/story-mode-worldbook-injection-regression.mjs",
@@ -77,8 +77,6 @@
     "test:memory-compression-threshold": "node scripts/memory-compression-threshold-regression.mjs",
     "test:memory-failure-draft": "node scripts/memory-failure-draft-regression.mjs",
     "test:main-injection-window": "node scripts/main-injection-window-regression.mjs",
-    "test:zhiku-scroll": "node scripts/zhiku-detail-scroll-regression.mjs",
-    "test:zhiku-character-mobile": "node scripts/zhiku-character-mobile-regression.mjs",
     "test:zhiku-character-rebuild": "node scripts/zhiku-character-rebuild-regression.mjs",
     "test:zhiku-knowledge-migration": "node scripts/zhiku-knowledge-migration-regression.mjs",
     "test:zhiku-stage2-data-contract": "node scripts/zhiku-stage2-data-contract-regression.mjs",

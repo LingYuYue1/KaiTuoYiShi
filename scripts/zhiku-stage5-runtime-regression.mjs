@@ -19,9 +19,8 @@ try {
         "export * from './services/zhikuRetrieval';",
         "export * from './services/zhikuRuntimeUnlock';",
         "export * from './hooks/useGame/npcPresence';",
-        "export * from './data/zhikuIdentityRegistry';",
         "export * from './data/zhikuCatalogRepository';",
-        "export { buildCustomOnlyZhikuFallback, buildPersistedZhikuSystem, hydratePersistedZhikuSystem, loadAllBundledZhikuPresets } from './data/zhikuPreset';",
+        "export { buildZhikuCustomSystem, buildPersistedZhikuSystem, composeZhikuSystem, loadAllBundledZhikuPresets } from './data/zhikuPreset';",
       ].join('\n'),
       resolveDir: root,
       sourcefile: 'zhiku-stage5-runtime-regression-entry.ts',
@@ -82,11 +81,7 @@ try {
   }
   assert(rejectedWrongBinding, 'catalog with a drifted stable identity binding must never enter runtime');
 
-  const canonicalHerta = runtime.findBundledZhikuIdentity('JS-099');
-  const legacyHerta = runtime.findBundledZhikuIdentity('JS-012B');
-  assert(canonicalHerta?.id === 'JS-099', 'canonical The Herta ID must resolve to JS-099');
-  assert(legacyHerta?.id === 'JS-099', 'legacy JS-012B must resolve to canonical JS-099');
-  assert(runtime.resolveZhikuMachineId('JS-012B') === 'JS-099', 'legacy machine ID migration must be stable');
+  assert(system.条目.some((entry) => entry.id === 'JS-099' && entry.标题 === '大黑塔'), 'The Herta source must own JS-099 directly');
 
   const participation = runtime.getZhikuCharacterParticipationForTurn({
     world: {
@@ -194,7 +189,6 @@ try {
   const spoilerPhoneFixture = {
     ...system.条目.find((entry) => entry.分类 === 'character' && entry.注入内容?.类型 === 'character'),
     id: 'ZZ-PHONE-SPOILER',
-    兼容ID: [],
     标题: '手机剧透测试人物',
     关联角色ID: '手机剧透测试人物',
     关联形态ID: '未解锁形态',
@@ -230,7 +224,6 @@ try {
   const newCustomEntry = {
     ...oldCatalog.条目.find((entry) => entry.分类 !== 'story'),
     id: 'ZZ-999',
-    兼容ID: [],
     标题: '并发自制资料',
     builtin: false,
   };
@@ -253,10 +246,9 @@ try {
     ...newCustomEntry,
     标题: '当前运行态的同 ID 资料',
   };
-  const hydrated = runtime.hydratePersistedZhikuSystem(
-    { 目录版本: system.目录版本, 目录修订: 3, 条目: [snapshotCustom] },
+  const hydrated = runtime.composeZhikuSystem(
     { ...system, 目录修订: 10, 条目: [...system.条目, currentCustom] },
-    Date.now(),
+    { 目录版本: system.目录版本, 目录修订: 3, 条目: [snapshotCustom] },
   );
   const hydratedCustom = hydrated.条目.filter((entry) => entry.id === 'ZZ-999');
   assert(hydratedCustom.length === 1, 'lightweight snapshot restore must not duplicate custom entries');
@@ -270,7 +262,7 @@ try {
       snapshotCustom,
     ],
   });
-  const customOnlyFallback = runtime.buildCustomOnlyZhikuFallback(persisted, Date.now());
+  const customOnlyFallback = runtime.buildZhikuCustomSystem(persisted);
   assert(customOnlyFallback.条目.length === 1 && customOnlyFallback.条目[0].id === 'ZZ-999', 'total catalog failure must restore only custom entries');
   assert(!customOnlyFallback.条目.some((entry) => entry.builtin), 'incomplete builtin override placeholders must never enter runtime');
 

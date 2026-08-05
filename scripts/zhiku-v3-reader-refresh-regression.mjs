@@ -15,7 +15,7 @@ const controlCss = read('components/features/ZhikuV3/reader-font-size-control.cs
 
 requireText(experience, "loadBundledZhikuCatalogWithFallback({ cacheBust: Date.now() })", 'cache-busted atomic catalog reload');
 requireText(experience, "catalogResult.source === 'cache'", 'cached catalog must not masquerade as refresh success');
-requireText(experience, 'mergeBundledZhikuSystem(bundled, zhikuSystem, migrationAt)', 'runtime and custom entry preserving merge');
+requireText(experience, 'composeZhikuSystem(bundled, zhikuSystem)', 'V3 runtime and custom entry composition');
 requireText(experience, "saveSetting('zhikuSystem', buildPersistedZhikuSystem(next))", 'refreshed system persistence');
 requireText(experience, 'onRefreshBundled={isDevBuild ? handleRefreshBundled : undefined}', 'development-only reader refresh command');
 requireText(experience, 'refreshStatus={refreshStatus}', 'reader refresh state forwarding');

@@ -18,8 +18,7 @@ export function mergeZhikuRuntimeUnlockPatch(
   const patchById = new Map(unlocked.map((item) => [item.id, item]));
   let changed = false;
   const entries = normalized.条目.map((entry) => {
-    const patch = patchById.get(entry.id)
-      ?? entry.兼容ID?.map((id) => patchById.get(id)).find(Boolean);
+    const patch = patchById.get(entry.id);
     if (!patch) return entry;
     changed = true;
     return {

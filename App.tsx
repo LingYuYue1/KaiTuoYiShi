@@ -872,7 +872,6 @@ export default function App() {
               zhikuSystem={state.智库}
               storyWeavingSystem={state.剧情编织}
               onZhikuSystemChange={state.set智库}
-              settings={state.gameSettings.智库系统}
               onClose={() => setShowZhikuManager(false)}
             />
           </Suspense>
@@ -1163,7 +1162,6 @@ export default function App() {
             zhikuSystem={state.智库}
             storyWeavingSystem={state.剧情编织}
             onZhikuSystemChange={state.set智库}
-            settings={state.gameSettings.智库系统}
             onClose={() => setShowZhikuManager(false)}
           />
         </Suspense>

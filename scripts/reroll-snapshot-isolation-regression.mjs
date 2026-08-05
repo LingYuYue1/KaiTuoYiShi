@@ -33,7 +33,6 @@ const zhikuInjection = {
 };
 const builtinZhikuEntry = {
   id: 'JS-999',
-  兼容ID: ['legacy-js-999'],
   标题: '内置测试人物',
   分类: 'character',
   摘要: '内置摘要',
@@ -53,7 +52,6 @@ const builtinZhikuEntry = {
 const customZhikuEntry = {
   ...builtinZhikuEntry,
   id: 'ZZ-999',
-  兼容ID: [],
   标题: '自制测试人物',
   原文: '自制资料必须随快照保留',
   注入内容: zhikuInjection,

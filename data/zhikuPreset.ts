@@ -1,16 +1,19 @@
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import {
-  isRetiredZhikuCategory,
-  获取智库条目身份ID,
   归一化智库系统,
   智库条目注入内容完整,
 } from '@/models/zhiku';
 import {
   ZHIKU_CUSTOM_SCHEMA_VERSION,
+  ZHIKU_CUSTOM_ID_PATTERN,
   获取下一个自制智库序号,
-  迁移自制智库条目,
+  规范化自制智库条目,
 } from './zhikuCustomGovernance';
-import { ZHIKU_BUNDLED_IDENTITY_REGISTRY, resolveBundledZhikuIdentity } from './zhikuIdentityRegistry';
+import {
+  ZHIKU_CATEGORY_POLICIES,
+  ZHIKU_MACHINE_ID_PATTERN,
+  type 智库治理分类,
+} from '@/models/zhikuGovernance';
 
 export interface BundledZhikuPreset {
   id: string;
@@ -24,21 +27,16 @@ export interface LoadBundledZhikuOptions {
   cacheBust?: string | number;
 }
 
-export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
-export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_';
-export const ZHIKU_CHARACTER_EXPANSION_ENTRY_ID_PREFIX = 'zhiku_character_expansion_';
-export const RETIRED_V1_CHARACTER_ENTRY_ID_PREFIXES = [
-  'zhiku_amphoreus_characters_',
-  'zhiku_express_characters_',
-  'zhiku_express_support_characters_',
-  'zhiku_faction_characters_',
-  'zhiku_genius_society_characters_',
-  'zhiku_herta_station_characters_',
-  'zhiku_jarilo_vi_characters_',
-  'zhiku_penacony_characters_',
-  'zhiku_xianzhou_alliance_characters_',
-  'zhiku_xianzhou_luofu_characters_',
-] as const;
+export const ZHIKU_V3_DATA_VERSION = '2026-08-05-v3-single-system-1';
+export const ZHIKU_BUNDLED_ENTRY_COUNT = 162;
+
+const GOVERNANCE_CATEGORY_BY_PREFIX = new Map<string, 智库治理分类>(
+  Object.values(ZHIKU_CATEGORY_POLICIES).map((policy) => [policy.machineIdPrefix, policy.key]),
+);
+
+function inferGovernanceCategory(id: string): 智库治理分类 | undefined {
+  return GOVERNANCE_CATEGORY_BY_PREFIX.get(id.slice(0, 2));
+}
 
 export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
@@ -205,65 +203,17 @@ export const bundledZhikuPresets: BundledZhikuPreset[] = [
 ];
 
 export const ZHIKU_BUNDLED_CATALOG_CACHE_KEY = 'zhikuBundledCatalogCacheV3';
-export const ZHIKU_BUNDLED_CATALOG_VERSION = `v3:${bundledZhikuPresets
+export const ZHIKU_BUNDLED_CATALOG_VERSION = `v3:${ZHIKU_V3_DATA_VERSION}:${bundledZhikuPresets
   .map((preset) => `${preset.id}@${preset.updatedAt ?? preset.id}`)
   .join('|')}`;
 
-const BUNDLED_MAIN_STORY_TITLES = new Set([
-  '第一章 混乱行至深处',
-  '第二章 漩涡止于中心',
-  '第三章 宇宙安宁片刻',
-  '第四章 阴影从未离去',
-  '第四章支线 模拟宇宙',
-  '第五章 旅途正在继续',
-  '第一章 激「冻」人心的大冒险',
-  '第二章 如果在冬夜，一群旅人',
-  '第三章 永冬城之夜',
-  '第四章 躲得过初一，躲不过十五',
-  '第五章 捉迷藏',
-  '第六章 第八条、也是最后一条规则',
-  '第七章 她等待刀尖已经太久',
-  '第八章 他们有多少人已掉进深渊',
-  '第九章 相会在日落时分',
-  '第十章 已故去的必如雪崩再来',
-  '第十一章 躺在铁锈中',
-  '第十二章 腐烂或燃烧',
-  '第十三章 我们不擅长告别',
-  '第一章 在屋外的黑暗中洗涤',
-  '第二章 不可制造偶像',
-  '第三章 青年近卫军',
-  '第四章 兵士们默默无言',
-  '第五章 星星是冰冷的玩具',
-  '第六章 过去早已无路可通',
-  '第七章 回归',
-  '第八章 从凶险和泥泞的沼泽中',
-  '第九章 时不我待，我的朋友',
-  '第十章 静静的星河',
-  '第一章 旅进青霄，不速之邀',
-  '第二章 行遏流云，身入魔阴',
-  '第三章 紫府通谒，将军定策',
-  '第四章 旧影婆娑，追思错落',
-  '第五章 犬迹追从，谛听狐踪',
-  '第六章 迴星周旋，未卜知先',
-  '第六章 长乐新朋，青鸟候风',
-  '第七章极数问玄，历事穷观',
-  '第八章 神木重萌，掣转天衡',
-  '第九章茸客鸣呦，玉角盘虬',
-  '第一章：金鼎灵树，穷途梼杌',
-  '第二章上：螣蛇无穴，旧梦亡阙',
-  '第二章（下）：得其雨露，安其壤土',
-  '第三章：有龙矫矫，其渊渺渺',
-  '第四章：仙骸成空，大劫有终',
-  '第一章：安灵布奠，天清路远',
-]);
-
-const LINKABLE_MIGRATED_LORE_PRESET_IDS = new Set([
+const LINKABLE_LORE_PRESET_IDS = new Set([
   'zhiku_paths_core',
   'zhiku_aeons_core',
   'zhiku_xianzhou_history',
 ]);
 
-function normalizeMigratedLoreEntry(entry: 智库条目, preset: BundledZhikuPreset, index: number): Partial<智库条目> {
+function normalizeLinkedLoreEntry(entry: 智库条目, preset: BundledZhikuPreset, index: number): Partial<智库条目> {
   const isXianzhouHistory = preset.id === 'zhiku_xianzhou_history';
   const isLockedXianzhouHistory = isXianzhouHistory && index >= 2;
   return {
@@ -277,66 +227,19 @@ function normalizeMigratedLoreEntry(entry: 智库条目, preset: BundledZhikuPre
   };
 }
 
-export function isBundledZhikuDuplicate(entry: Partial<智库条目>): boolean {
-  if (entry.builtin) return false;
-  if (entry.分类 !== 'story') return false;
-
-  const title = typeof entry.标题 === 'string' ? entry.标题.trim() : '';
-  const source = typeof entry.来源 === 'string' ? entry.来源 : '';
-  const raw = typeof entry.原文 === 'string' ? entry.原文 : '';
-
-  if (source.includes('开拓轶事·项目内置剧情')) return true;
-  if (BUNDLED_MAIN_STORY_TITLES.has(title)) return true;
-  if (source.includes('剧情-黑塔空间站')) return true;
-  return title.includes('黑塔空间站') && raw.includes('今天是昨天的明天');
-}
-
-export function shouldRemoveRetiredZhikuEntry(entry: Partial<智库条目>): boolean {
-  return Boolean(entry.分类 && isRetiredZhikuCategory(entry.分类));
-}
-
-export function removeRetiredZhikuEntries(entries: 智库条目[] | undefined): 智库条目[] {
-  return (entries ?? []).filter((entry) => !shouldRemoveRetiredZhikuEntry(entry));
-}
-
-export function shouldRemoveLegacyZhikuCharacterEntry(entry: Partial<智库条目>, migrationAt: number): boolean {
-  if (entry.分类 !== 'character') return false;
-  if (isRebuiltZhikuCharacterEntry(entry)) return false;
-  if (entry.builtin) return true;
-  void migrationAt;
-  return 获取智库条目身份ID(entry as Pick<智库条目, 'id' | '兼容ID'>)
-    .some((id) => RETIRED_V1_CHARACTER_ENTRY_ID_PREFIXES.some((prefix) => id.startsWith(prefix)));
-}
-
-export function removeLegacyZhikuCharacterEntries(
-  entries: 智库条目[] | undefined,
-  migrationAt: number,
-): 智库条目[] {
-  return (entries ?? []).filter((entry) => !shouldRemoveLegacyZhikuCharacterEntry(entry, migrationAt));
-}
-
-export function isRebuiltZhikuCharacterEntry(entry: Partial<智库条目>): boolean {
-  return 获取智库条目身份ID(entry as Pick<智库条目, 'id' | '兼容ID'>)
-    .some((id) => (
-      id.startsWith(ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX)
-      || id.startsWith(ZHIKU_CHARACTER_EXPANSION_ENTRY_ID_PREFIX)
-    ));
-}
-
 function normalizeZhikuEntriesIndividually(entries: readonly Partial<智库条目>[]): 智库条目[] {
   return entries.flatMap((entry) => 归一化智库系统({ 条目: [entry as 智库条目] }).条目);
 }
 
-export function 升级自制智库系统(system: 智库系统 | null | undefined): 智库系统 {
+export function normalizeZhikuCustomSystem(system: 智库系统 | null | undefined): 智库系统 {
   const entries = normalizeZhikuEntriesIndividually(system?.条目 ?? []);
   const reservedEntries = entries.filter((entry) => entry.builtin);
-  const migrated = 迁移自制智库条目(
+  const customEntries = 规范化自制智库条目(
     entries.filter((entry) => !entry.builtin),
     reservedEntries,
-  ).entries;
-  let customIndex = 0;
+  );
   const nextSequence = 获取下一个自制智库序号(
-    migrated,
+    customEntries,
     system?.自制资料下一个序号 ?? 0,
   );
   return 归一化智库系统({
@@ -344,7 +247,7 @@ export function 升级自制智库系统(system: 智库系统 | null | undefined
     自制资料下一个序号: nextSequence,
     目录版本: system?.目录版本,
     目录修订: system?.目录修订,
-    条目: entries.map((entry) => (entry.builtin ? entry : migrated[customIndex++])),
+    条目: [...reservedEntries, ...customEntries],
   });
 }
 
@@ -355,12 +258,10 @@ export function mergeZhikuRuntimeUnlockOverrides(
   const savedById = new Map<string, 智库条目>();
   for (const entry of savedEntries ?? []) {
     if (!entry.id || (!entry.运行时解锁状态 && !entry.运行时解锁备注)) continue;
-    for (const id of 获取智库条目身份ID(entry)) savedById.set(id, entry);
+    savedById.set(entry.id, entry);
   }
   return bundledEntries.map((entry) => {
-    const saved = 获取智库条目身份ID(entry)
-      .map((id) => savedById.get(id))
-      .find((candidate): candidate is 智库条目 => Boolean(candidate));
+    const saved = savedById.get(entry.id);
     if (!saved) return entry;
     return {
       ...entry,
@@ -370,56 +271,42 @@ export function mergeZhikuRuntimeUnlockOverrides(
   });
 }
 
-export function mergeBundledZhikuSystem(
+export function composeZhikuSystem(
   bundledSystem: 智库系统,
   currentSystem: 智库系统 | null | undefined,
-  migrationAt: number,
 ): 智库系统 {
   const currentEntries = normalizeZhikuEntriesIndividually(currentSystem?.条目 ?? []);
-  const customEntriesBeforeIdentityMigration = removeLegacyZhikuCharacterEntries(
-    removeRetiredZhikuEntries(
-      currentEntries.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)),
-    ),
-    migrationAt,
+  const bundledEntries = normalizeZhikuEntriesIndividually(bundledSystem.条目)
+    .filter((entry) => entry.builtin);
+  const customEntries = 规范化自制智库条目(
+    currentEntries.filter((entry) => !entry.builtin && ZHIKU_CUSTOM_ID_PATTERN.test(entry.id)),
+    bundledEntries,
   );
-  const customEntries = 迁移自制智库条目(customEntriesBeforeIdentityMigration, bundledSystem.条目).entries;
-  return 升级自制智库系统({
-    自制资料契约版本: currentSystem?.自制资料契约版本,
-    自制资料下一个序号: currentSystem?.自制资料下一个序号,
+  return normalizeZhikuCustomSystem({
+    自制资料契约版本: ZHIKU_CUSTOM_SCHEMA_VERSION,
+    自制资料下一个序号: 获取下一个自制智库序号(
+      customEntries,
+      currentSystem?.自制资料下一个序号 ?? 0,
+    ),
     目录版本: bundledSystem.目录版本 ?? ZHIKU_BUNDLED_CATALOG_VERSION,
     目录修订: Math.max(bundledSystem.目录修订 ?? 0, currentSystem?.目录修订 ?? 0),
-    条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, currentEntries), ...customEntries],
+    条目: [...mergeZhikuRuntimeUnlockOverrides(bundledEntries, currentEntries), ...customEntries],
   });
-}
-
-export function hydratePersistedZhikuSystem(
-  persistedSystem: 智库系统 | null | undefined,
-  currentRuntimeSystem: 智库系统,
-  migrationAt: number,
-): 智库系统 {
-  const currentBundledSystem = 归一化智库系统({
-    目录版本: currentRuntimeSystem.目录版本,
-    目录修订: currentRuntimeSystem.目录修订,
-    条目: currentRuntimeSystem.条目.filter((entry) => entry.builtin),
-  });
-  return mergeBundledZhikuSystem(currentBundledSystem, persistedSystem, migrationAt);
 }
 
 export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智库系统 {
-  const source = 升级自制智库系统(system);
+  const source = normalizeZhikuCustomSystem(system);
   return 归一化智库系统({
     自制资料契约版本: source.自制资料契约版本,
     自制资料下一个序号: source.自制资料下一个序号,
     目录版本: source.目录版本,
     目录修订: source.目录修订,
     条目: source.条目
-      .filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))
       .filter((entry) => !entry.builtin || Boolean(entry.运行时解锁状态 || entry.运行时解锁备注))
       .map((entry) => {
         if (!entry.builtin) return entry;
         return {
           id: entry.id,
-          兼容ID: entry.兼容ID,
           治理分类: entry.治理分类,
           资料所有者: entry.资料所有者,
           来源预设ID: entry.来源预设ID,
@@ -446,68 +333,51 @@ export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智
   });
 }
 
-export function buildCustomOnlyZhikuFallback(
+export function buildZhikuCustomSystem(
   system: 智库系统 | null | undefined,
-  migrationAt: number,
 ): 智库系统 {
-  return 升级自制智库系统({
-    条目: removeLegacyZhikuCharacterEntries(
-      removeRetiredZhikuEntries(
-        (system?.条目 ?? [])
-          .filter((entry) => !entry.builtin)
-          .filter((entry) => !isBundledZhikuDuplicate(entry)),
-      ),
-      migrationAt,
-    ),
+  return normalizeZhikuCustomSystem({
+    自制资料契约版本: ZHIKU_CUSTOM_SCHEMA_VERSION,
+    自制资料下一个序号: system?.自制资料下一个序号,
+    条目: (system?.条目 ?? [])
+      .filter((entry) => !entry.builtin && ZHIKU_CUSTOM_ID_PATTERN.test(entry.id)),
   });
 }
 
 export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
   const separator = preset.path.includes('?') ? '&' : '?';
   const cacheBust = options.cacheBust !== undefined ? `&r=${encodeURIComponent(String(options.cacheBust))}` : '';
-  const res = await fetch(`${preset.path}${separator}v=${encodeURIComponent(preset.updatedAt ?? preset.id)}${cacheBust}`);
+  const version = `${ZHIKU_V3_DATA_VERSION}:${preset.updatedAt ?? preset.id}`;
+  const res = await fetch(`${preset.path}${separator}v=${encodeURIComponent(version)}${cacheBust}`);
   if (!res.ok) {
     throw new Error(`加载智库预设失败：${preset.title}（${res.status}）`);
   }
   const data = await res.json() as { entries?: unknown[] };
   const entries = Array.isArray(data.entries) ? (data.entries as unknown as 智库条目[]) : [];
   const seriesOrder = bundledZhikuPresets.findIndex((item) => item.id === preset.id) + 1;
-  const isLinkableMigratedLore = LINKABLE_MIGRATED_LORE_PRESET_IDS.has(preset.id);
+  const isLinkableLore = LINKABLE_LORE_PRESET_IDS.has(preset.id);
   return 归一化智库系统({
     条目: entries
-      .filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))
-      .filter((entry) => entry.分类 !== 'character' || isRebuiltZhikuCharacterEntry(entry))
+      .filter((entry) => entry.分类 !== 'story')
       .map((entry, index) => {
-        const legacyId = entry.id || `${preset.id}_${index + 1}`;
-        const identity = resolveBundledZhikuIdentity(preset.id, index, entry.id, entry.标题);
         return {
           ...entry,
-          ...(isLinkableMigratedLore
-            ? normalizeMigratedLoreEntry(entry, preset, index)
+          ...(isLinkableLore
+            ? normalizeLinkedLoreEntry(entry, preset, index)
             : {}),
-          id: identity?.id ?? legacyId,
-          兼容ID: identity
-            ? [...new Set([...(entry.兼容ID ?? []), identity.legacyId, ...identity.compatibilityIds])]
-            : entry.兼容ID,
-          治理分类: identity?.category ?? entry.治理分类,
+          id: entry.id,
+          治理分类: inferGovernanceCategory(entry.id) ?? entry.治理分类,
           资料所有者: 'builtin-json' as const,
           来源预设ID: preset.id,
-          来源文件: identity?.sourceFile ?? preset.path.replace(/^\/zhiku-presets\//u, ''),
+          来源文件: preset.path.replace(/^\/zhiku-presets\//u, ''),
           来源序号: index,
-          ...(entry.分类 === 'story'
+          ...(entry.分类 === 'character'
             ? {
                 系列ID: entry.系列ID || preset.id,
                 系列标题: entry.系列标题 || preset.title,
                 系列序号: entry.系列序号 || seriesOrder,
-                章节序号: entry.章节序号 || index + 1,
               }
-            : entry.分类 === 'character'
-              ? {
-                  系列ID: entry.系列ID || preset.id,
-                  系列标题: entry.系列标题 || preset.title,
-                  系列序号: entry.系列序号 || seriesOrder,
-                }
-              : {}),
+            : {}),
           builtin: true,
         };
       }),
@@ -539,22 +409,25 @@ export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOption
 export function validateBundledZhikuCatalog(system: 智库系统): void {
   const sourcePresets = new Set(system.条目.map((entry) => entry.来源预设ID).filter(Boolean));
   const missingPresets = bundledZhikuPresets.filter((preset) => !sourcePresets.has(preset.id));
+  const presetsById = new Map(bundledZhikuPresets.map((preset) => [preset.id, preset]));
   const duplicateIds = system.条目
     .map((entry) => entry.id)
     .filter((id, index, ids) => ids.indexOf(id) !== index);
-  const entriesById = new Map(system.条目.map((entry) => [entry.id, entry]));
-  const bindingErrors = ZHIKU_BUNDLED_IDENTITY_REGISTRY.flatMap((identity) => {
-    const entry = entriesById.get(identity.id);
-    if (!entry) return [`${identity.id} 缺失`];
+  const duplicateSourceSlots = system.条目
+    .map((entry) => `${entry.来源预设ID ?? ''}:${entry.来源序号 ?? ''}`)
+    .filter((slot, index, slots) => slots.indexOf(slot) !== index);
+  const bindingErrors = system.条目.flatMap((entry) => {
     const errors: string[] = [];
-    if (entry.标题 !== identity.sourceTitle) errors.push(`${identity.id} 标题应为「${identity.sourceTitle}」`);
-    if (entry.治理分类 !== identity.category) errors.push(`${identity.id} 治理分类应为 ${identity.category}`);
-    if (entry.来源预设ID !== identity.presetId) errors.push(`${identity.id} 来源预设错配`);
-    if (entry.来源文件 !== identity.sourceFile) errors.push(`${identity.id} 来源文件错配`);
-    if (entry.来源序号 !== identity.sourceIndex) errors.push(`${identity.id} 来源序号错配`);
-    if (!entry.builtin || entry.资料所有者 !== 'builtin-json') errors.push(`${identity.id} 内置所有权错配`);
-    if (entry.分类 === 'story') errors.push(`${identity.id} 剧情档案不得进入内置运行目录`);
-    if (!智库条目注入内容完整(entry)) errors.push(`${identity.id} 结构化注入内容不完整`);
+    const category = inferGovernanceCategory(entry.id);
+    const preset = entry.来源预设ID ? presetsById.get(entry.来源预设ID) : undefined;
+    if (!ZHIKU_MACHINE_ID_PATTERN.test(entry.id)) errors.push(`${entry.id || '空 ID'} 不符合正式机器 ID 格式`);
+    if (!category || entry.治理分类 !== category) errors.push(`${entry.id} 治理分类与 ID 前缀不一致`);
+    if (!preset) errors.push(`${entry.id} 来源预设不存在`);
+    if (preset && entry.来源文件 !== preset.path.replace(/^\/zhiku-presets\//u, '')) errors.push(`${entry.id} 来源文件错配`);
+    if (!Number.isInteger(entry.来源序号) || Number(entry.来源序号) < 0) errors.push(`${entry.id} 来源序号无效`);
+    if (!entry.builtin || entry.资料所有者 !== 'builtin-json') errors.push(`${entry.id} 内置所有权错配`);
+    if (entry.分类 === 'story') errors.push(`${entry.id} 剧情档案不得进入内置运行目录`);
+    if (!智库条目注入内容完整(entry)) errors.push(`${entry.id} 结构化注入内容不完整`);
     return errors;
   });
   const catalogVersionInvalid = system.目录版本 !== ZHIKU_BUNDLED_CATALOG_VERSION;
@@ -562,14 +435,16 @@ export function validateBundledZhikuCatalog(system: 智库系统): void {
     catalogVersionInvalid
     || missingPresets.length
     || duplicateIds.length
+    || duplicateSourceSlots.length
     || bindingErrors.length
-    || system.条目.length !== ZHIKU_BUNDLED_IDENTITY_REGISTRY.length
+    || system.条目.length !== ZHIKU_BUNDLED_ENTRY_COUNT
   ) {
     throw new Error([
-      `智库内置目录完整性校验失败：预期 ${ZHIKU_BUNDLED_IDENTITY_REGISTRY.length} 条，实际 ${system.条目.length} 条。`,
+      `智库内置目录完整性校验失败：预期 ${ZHIKU_BUNDLED_ENTRY_COUNT} 条，实际 ${system.条目.length} 条。`,
       catalogVersionInvalid ? `目录版本应为 ${ZHIKU_BUNDLED_CATALOG_VERSION}，实际为 ${system.目录版本 ?? '空'}。` : '',
       missingPresets.length ? `缺少预设：${missingPresets.map((preset) => preset.id).join('、')}` : '',
       duplicateIds.length ? `重复 ID：${Array.from(new Set(duplicateIds)).join('、')}` : '',
+      duplicateSourceSlots.length ? `重复来源序号：${Array.from(new Set(duplicateSourceSlots)).join('、')}` : '',
       bindingErrors.length ? `身份或注入契约错误：${bindingErrors.slice(0, 8).join('；')}` : '',
     ].filter(Boolean).join(' '));
   }

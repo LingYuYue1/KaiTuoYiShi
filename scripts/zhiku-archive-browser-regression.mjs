@@ -18,7 +18,6 @@ const fontSize = read('components/features/ZhikuV3/readerFontSize.ts');
 const story = read('stories/ZhikuArchiveBrowser.stories.tsx');
 const referenceStory = read('stories/ZhikuReferenceArchive.stories.tsx');
 const retrieval = read('services/zhikuRetrieval.ts');
-const plan = read('docs/superpowers/specs/2026-07-27-zhiku-v2-heavy-optimization-plan.md');
 const formattingModuleUrl = pathToFileURL(
   path.join(root, 'components/features/ZhikuV3/archiveDocumentFormatting.ts'),
 ).href;
@@ -136,10 +135,6 @@ if (referenceStory.includes('剧情档案最终页') || referenceStory.includes(
 }
 requireText(retrieval, 'export function buildZhikuEntryInjectionPreview', 'pure entry injection preview formatter');
 requireText(retrieval, 'return renderZhikuEntryStaticInjection(entry)', 'preview reuses production entry formatter');
-requireText(plan, '左侧头像列表，右侧档案预览 / 注入内容', 'confirmed flat character browser');
-requireText(plan, '浏览路径固定为“分类大厅 -> 分类最终页”', 'confirmed in-page final detail');
-requireText(plan, '人物页的“注入内容”只是只读透明度预览', 'confirmed player-visible injection transparency');
-requireText(plan, '普通资料浏览', 'confirmed reusable non-story secondary pages');
 
 const forbiddenGroupingReferences = [
   'ZhikuArchiveGroup',
@@ -151,7 +146,7 @@ const forbiddenGroupingReferences = [
 ];
 for (const reference of forbiddenGroupingReferences) {
   if (browser.includes(reference) || css.includes(reference)) {
-    throw new Error(`Zhiku V2 character page must not retain location grouping: ${reference}`);
+    throw new Error(`Zhiku V3 character page must not retain location grouping: ${reference}`);
   }
 }
 
@@ -166,7 +161,7 @@ if (story.includes('toGroup(') || story.includes('characterGroups') || story.inc
   throw new Error('Character Storybook data must be flattened instead of grouped by location.');
 }
 if (browser.includes('onOpenItem') || browser.includes('onOpenDetail') || browser.includes('三级')) {
-  throw new Error('Zhiku V2 secondary pages must render final content in place without a tertiary page contract.');
+  throw new Error('Zhiku V3 archive pages must render final content in place without a tertiary page contract.');
 }
 for (const forbiddenFormMutation of ['onSelectForm', 'onChangeForm', 'setCurrentForm', '关联形态ID: selectedInjectionVariant']) {
   if (browser.includes(forbiddenFormMutation)) {
@@ -174,10 +169,10 @@ for (const forbiddenFormMutation of ['onSelectForm', 'onChangeForm', 'setCurrent
   }
 }
 if (browser.includes('onSearch') || browser.includes('搜索智库') || header.includes('搜索智库')) {
-  throw new Error('Zhiku V2 must not restore the retired search command.');
+  throw new Error('Zhiku V3 must not restore the retired search command.');
 }
 if (browser.includes('ZhikuMaintenancePanel') || story.includes('ZhikuMaintenancePanel')) {
-  throw new Error('Zhiku V2 secondary page must not reuse the legacy ZhikuMaintenancePanel.');
+  throw new Error('Zhiku V3 archive page must not embed the maintenance panel.');
 }
 
 const aglaeaGreeting = '### 初次见面 「远道而来的贵客，风儿顺着金丝捎来了你的讯息。我名阿格莱雅，奥赫玛的改衣师，翁法罗斯的黄金裔之一。愿我们坦诚相待。」';

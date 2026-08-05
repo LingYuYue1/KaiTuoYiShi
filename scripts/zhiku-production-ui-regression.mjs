@@ -32,7 +32,6 @@ requireText(manager, 'fixed inset-0', 'viewport takeover');
 requireText(app, "if (id === 'zhiku')", 'in-game Zhiku routing');
 requireText(app, 'setActiveSystem(null)', 'legacy drawer shutdown');
 requireText(app, 'setShowZhikuManager(true)', 'shared full-screen entry activation');
-requireText(experience, '<ZhikuMaintenancePanel', 'unified V3 maintenance surface');
 requireText(types, "import productionLayoutSource from './zhiku-layout.production.json'", 'approved layout source');
 requireText(types, 'export const ZHIKU_PRODUCTION_LAYOUT', 'typed production layout');
 requireText(experience, 'ZHIKU_PRODUCTION_LAYOUT', 'approved layout import');
@@ -130,6 +129,10 @@ for (const forbidden of [
 
 for (const forbidden of ["from '@/components/ui/Modal'", '<Modal', '<ZhikuMaintenancePanel']) {
   if (manager.includes(forbidden)) throw new Error(`Zhiku production entry must render the new full-screen UI: ${forbidden}`);
+}
+
+for (const forbidden of ['ZhikuMaintenancePanel', 'showMaintenance', 'onOpenMaintenance', 'zhiku-v3-maintenance']) {
+  if (experience.includes(forbidden)) throw new Error(`V3 production experience must not restore retired maintenance UI: ${forbidden}`);
 }
 
 console.log('ZHIKU_PRODUCTION_UI_REGRESSION_OK');

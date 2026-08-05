@@ -30,8 +30,8 @@ try {
   const runtime = await import(`${pathToFileURL(bundlePath).href}?v=${Date.now()}`);
   const fixtureSystem = {
     条目: [
-      { id: 'JS-004', 兼容ID: [] },
-      { id: 'JS-076', 兼容ID: [] },
+      { id: 'JS-004' },
+      { id: 'JS-076' },
     ],
   };
   const audit = runtime.auditZhikuStage6Fixtures(fixtureSystem);

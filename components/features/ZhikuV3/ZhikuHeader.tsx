@@ -1,4 +1,4 @@
-import { ArrowLeft, Wrench, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import type { CSSProperties } from 'react';
 
 interface ZhikuHeaderProps {
@@ -6,7 +6,6 @@ interface ZhikuHeaderProps {
   subtitle?: string;
   emblemSrc?: string;
   onBack?: () => void;
-  onOpenMaintenance?: () => void;
   onClose?: () => void;
 }
 
@@ -15,7 +14,6 @@ export function ZhikuHeader({
   subtitle = '星海档案',
   emblemSrc,
   onBack,
-  onOpenMaintenance,
   onClose,
 }: ZhikuHeaderProps) {
   const emblemStyle = emblemSrc
@@ -46,11 +44,6 @@ export function ZhikuHeader({
         </div>
       </div>
       <div className="zhiku-v3-header__actions">
-        {onOpenMaintenance && (
-          <button type="button" onClick={onOpenMaintenance} aria-label="维护智库" title="维护智库">
-            <Wrench size={19} strokeWidth={1.5} />
-          </button>
-        )}
         {onClose && (
           <button type="button" onClick={onClose} aria-label="关闭智库" title="关闭智库">
             <X size={23} strokeWidth={1.5} />

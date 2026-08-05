@@ -2164,12 +2164,6 @@ export async function executeSendWorkflow(
 
     const mainTailMessages: 聊天消息[] = [];
     if (deepSeekMainActive) mainTailMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
-    if (deps.rerollContext && !isOpeningSystemTrigger) {
-      mainTailMessages.push(创建聊天消息(
-        'user',
-        buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
-      ));
-    }
 
     // 主剧情普通回合共享同一尾部校准块；普通消息链和 Tavern V2 不再分叉。
     if (zhikuRequestScope === 'main') {
@@ -2179,6 +2173,12 @@ export async function executeSendWorkflow(
         zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
         storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
       })));
+    }
+    if (deps.rerollContext && !isOpeningSystemTrigger) {
+      mainTailMessages.push(创建聊天消息(
+        'user',
+        buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
+      ));
     }
 
     // 3b. CoT 伪装历史注入：在消息序列最前面塞一对 user/assistant，强化思考段输出习惯。

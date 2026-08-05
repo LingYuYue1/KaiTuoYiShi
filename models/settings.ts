@@ -1325,7 +1325,7 @@ export interface 存档数据 {
   chatHistory: import('./chat').聊天消息[];
   记忆: import('./memory').记忆系统;
   忆庭?: import('./yiting').忆庭系统;               // 可选：兼容旧存档（忆庭系统独立化）
-  智库?: import('./zhiku').智库系统;                // 可选：兼容旧存档（智库资料库）
+  智库?: import('./zhiku').智库系统;                // 可选：当前智库的自制资料与运行时状态
   手机?: import('./phone').手机系统;               // 可选：兼容旧存档（手机系统）
   NPC?: import('./npc').NPC记录[];                 // 可选：兼容旧存档（v1 加入）
   相册?: import('./imageGeneration').相册系统;      // 可选：图片资产、挂载与生成任务

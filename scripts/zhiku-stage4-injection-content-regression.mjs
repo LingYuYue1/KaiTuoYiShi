@@ -142,7 +142,7 @@ try {
     关键词: ['不应进入生产payload的标签'],
   });
   assert(completeCustom.id === 'ZZ-000', 'complete custom entry did not use ZZ id');
-  assert(completeCustom.资料版本 === 2, 'stage4 custom schema version must be 2');
+  assert(completeCustom.资料版本 === 3, 'stage4 custom schema version must be 3');
   assert(api.诊断智库条目健康度(completeCustom).status !== 'invalid', 'complete custom entry must pass hard health validation');
 
   const cast = Array.from({ length: 5 }, (_, index) => {
@@ -221,7 +221,6 @@ try {
   const snapshotSource = readSource('hooks/useGame/contextSnapshot.ts');
   const phoneSource = readSource('services/ai/phoneService.ts');
   const compilerSource = readSource('services/zhikuRuntimeCompiler.ts');
-  const panelSource = readSource('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx');
   const adapterSource = readSource('components/features/ZhikuV3/productionAdapter.ts');
   assert(!retrievalSource.includes('formatCharacterSourceSection'), 'legacy source-section formatter still exists');
   assert(!retrievalSource.includes('formatCharacterZhikuInjectionEntry'), 'legacy character formatter still exists');
@@ -231,7 +230,6 @@ try {
   assert(sendSource.includes('去重记录：') && sendSource.includes('删减记录：') && sendSource.includes('体量预警：'), 'send diagnostics must expose deduplication, trimming, and volume warnings');
   assert(snapshotSource.includes('去重记录：') && snapshotSource.includes('删减记录：') && snapshotSource.includes('体量预警：'), 'context snapshot must expose the same stage4 diagnostics');
   assert(!phoneSource.includes("entry.摘要 || entry.原文.slice"), 'phone persona still falls back to archive source');
-  assert(panelSource.includes('全部字段非空后才会写入正式资料库'), 'maintenance UI does not explain the hard injection contract');
   assert(adapterSource.includes('buildZhikuEntryInjectionPreview(entry)'), 'production adapter must use the shared static renderer preview');
   assert(!retrievalSource.includes('MAX_ZHIKU_TOKENS'), 'fixed total zhiku token cap must not be introduced');
 

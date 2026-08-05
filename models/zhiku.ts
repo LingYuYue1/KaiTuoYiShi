@@ -1,6 +1,6 @@
 import type { 智库治理分类, 智库资料所有者 } from './zhikuGovernance';
 
-export type 智库分类 = 'story' | 'character' | 'npc' | 'location' | 'item' | 'faction' | 'term' | 'event' | 'enemy' | 'system';
+export type 智库分类 = 'story' | 'character' | 'location' | 'faction' | 'term' | 'event' | 'enemy';
 export type 智库辅助关键词逻辑 = 'AND_ANY' | 'AND_ALL' | 'NOT_ANY' | 'NOT_ALL';
 
 export const ZHIKU_CHARACTER_INJECTION_FIELDS = [
@@ -50,29 +50,18 @@ export interface 智库关键词匹配结果 {
   最长主关键词长度: number;
 }
 
-export const RETIRED_ZHIKU_CATEGORIES = ['npc', 'item', 'system'] as const satisfies readonly 智库分类[];
-const RETIRED_ZHIKU_CATEGORY_SET = new Set<智库分类>(RETIRED_ZHIKU_CATEGORIES);
-
-export function isRetiredZhikuCategory(category: 智库分类): boolean {
-  return RETIRED_ZHIKU_CATEGORY_SET.has(category);
-}
-
 export const ZHIKU_CATEGORY_LABELS: Record<智库分类, string> = {
   story: '剧情',
   character: '人物',
-  npc: 'NPC',
   location: '地点',
-  item: '道具',
   faction: '派系',
   term: '术语',
   event: '事件',
   enemy: '敌对生物',
-  system: '系统',
 };
 
 export interface 智库条目 {
   id: string;
-  兼容ID?: string[];
   治理分类?: 智库治理分类;
   资料所有者?: 智库资料所有者;
   来源预设ID?: string;
@@ -258,28 +247,16 @@ export function 归一化智库系统(input?: Partial<智库系统> | null): 智
       .filter((entry) => !!entry && typeof entry === 'object')
       .map((entry) => normalizeEntry(entry))
       .filter((entry) => {
-        const identities = 获取智库条目身份ID(entry);
-        if (identities.some((id) => seen.has(id))) return false;
-        for (const id of identities) seen.add(id);
+        if (seen.has(entry.id)) return false;
+        seen.add(entry.id);
         return true;
       }),
   };
 }
 
-export function 获取智库条目身份ID(entry: Pick<智库条目, 'id' | '兼容ID'>): string[] {
-  return [...new Set([
-    typeof entry.id === 'string' ? entry.id.trim() : '',
-    ...(Array.isArray(entry.兼容ID) ? entry.兼容ID : []),
-  ].map((id) => id.trim()).filter(Boolean))];
-}
-
-export function 智库条目匹配ID(entry: Pick<智库条目, 'id' | '兼容ID'>, id: string): boolean {
-  const target = id.trim();
-  return Boolean(target) && 获取智库条目身份ID(entry).includes(target);
-}
-
 export function 按ID查找智库条目(system: 智库系统 | undefined, id: string): 智库条目 | undefined {
-  return (system?.条目 ?? []).find((entry) => 智库条目匹配ID(entry, id));
+  const target = id.trim();
+  return target ? (system?.条目 ?? []).find((entry) => entry.id === target) : undefined;
 }
 
 export function 搜索智库条目(system: 智库系统, query: string, limit = 8): 智库条目[] {
@@ -590,7 +567,6 @@ function normalizeEntry(entry: Partial<智库条目>): 智库条目 {
   const category = isZhikuCategory(entry.分类) ? entry.分类 : 'story';
   return {
     id: typeof entry.id === 'string' && entry.id ? entry.id : `zhiku_${now}_${Math.random().toString(36).slice(2, 7)}`,
-    兼容ID: normalizeTextList(entry.兼容ID).filter((id) => id !== entry.id),
     治理分类: isZhikuGovernanceCategory(entry.治理分类) ? entry.治理分类 : undefined,
     资料所有者: isZhikuDataOwner(entry.资料所有者) ? entry.资料所有者 : undefined,
     来源预设ID: normalizeOptionalText(entry.来源预设ID),

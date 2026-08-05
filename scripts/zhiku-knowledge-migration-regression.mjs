@@ -67,8 +67,8 @@ for (const preset of migratedPresets) {
 }
 
 assert(
-  presetSource.includes('LINKABLE_MIGRATED_LORE_PRESET_IDS') &&
-    presetSource.includes('normalizeMigratedLoreEntry') &&
+  presetSource.includes('LINKABLE_LORE_PRESET_IDS') &&
+    presetSource.includes('normalizeLinkedLoreEntry') &&
     presetSource.includes("entry.解锁状态 || (isLockedXianzhouHistory ? '未解锁' : '默认可用')") &&
     presetSource.includes("entry.使用范围?.length ? entry.使用范围 : ['智库', '设定浏览', '主剧情']") &&
     presetSource.includes('可否主剧情注入: entry.可否主剧情注入 ?? true'),

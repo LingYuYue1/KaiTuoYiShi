@@ -48,7 +48,7 @@ const meta = {
   args: {
     category: characterCategory,
     items: characterItems,
-    initialItemId: 'zhiku_character_rebuild_march_profile',
+    initialItemId: 'JS-002',
     onBack: fn(),
     onClose: fn(),
   },

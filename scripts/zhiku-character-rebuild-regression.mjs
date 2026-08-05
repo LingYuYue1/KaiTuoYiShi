@@ -36,7 +36,6 @@ const retiredCharacterPresetFiles = [
 
 try {
   const presetSource = fs.readFileSync(path.join(root, 'data', 'zhikuPreset.ts'), 'utf8');
-  const identitySource = fs.readFileSync(path.join(root, 'data', 'zhikuIdentityRegistry.ts'), 'utf8');
   const presetFiles = fs.readdirSync(presetRoot).filter((name) => name.endsWith('.json')).sort();
   const rawCharacters = [];
   const characterPresetFiles = new Set();
@@ -54,13 +53,13 @@ try {
   assert(rawCharacters.length === 99, `expected 99 active character entries after Zandar removal, got ${rawCharacters.length}`);
   assert(!rawCharacters.some((entry) => entry.标题 === '赞达尔'), 'intentionally removed Zandar profile must not return');
   assert(
-    !rawCharacters.some((entry) => entry.id === 'zhiku_character_rebuild_zandar_profile'),
-    'intentionally removed Zandar legacy id must not return',
+    !rawCharacters.some((entry) => entry.id === 'JS-018'),
+    'intentionally removed Zandar machine id must not return',
   );
 
   const rawIds = new Set();
   for (const entry of rawCharacters) {
-    assert(typeof entry.id === 'string' && entry.id.trim(), `${entry.__fileName}/${entry.标题} is missing its source id`);
+    assert(/^[A-Z]{2}-\d{3}$/u.test(entry.id), `${entry.__fileName}/${entry.标题} is missing its formal machine id`);
     assert(!rawIds.has(entry.id), `duplicate character source id: ${entry.id}`);
     rawIds.add(entry.id);
     assert(typeof entry.标题 === 'string' && entry.标题.trim(), `${entry.__fileName} contains an untitled character entry`);
@@ -90,21 +89,22 @@ try {
     'Herta Station cache version must keep the accepted Arlan profile refresh',
   );
   assert(
-    presetSource.includes('encodeURIComponent(preset.updatedAt ?? preset.id)') &&
+    presetSource.includes('ZHIKU_V3_DATA_VERSION') &&
+      presetSource.includes('encodeURIComponent(version)') &&
       presetSource.includes('cacheBust') &&
       presetSource.includes('&r='),
     'bundled preset loading must retain versioned cache busting',
   );
   assert(
-    !identitySource.includes('zhiku_character_rebuild_zandar_profile') &&
-      !identitySource.includes("['JS-018', 'zhiku_character_rebuild_zandar_profile'"),
-    'Zandar identity registry entry must stay removed',
+    !fs.existsSync(path.join(root, 'data', 'zhikuIdentityRegistry.ts')) &&
+      !presetSource.includes('shouldRemoveLegacyZhikuCharacterEntry'),
+    'retired identity registry and legacy character filters must stay removed',
   );
 
   await build({
     stdin: {
       contents: [
-        "export { loadAllBundledZhikuPresets, isRebuiltZhikuCharacterEntry, shouldRemoveLegacyZhikuCharacterEntry } from './data/zhikuPreset';",
+        "export { loadAllBundledZhikuPresets } from './data/zhikuPreset';",
       ].join('\n'),
       resolveDir: root,
       sourcefile: 'zhiku-character-rebuild-regression-entry.ts',
@@ -137,26 +137,12 @@ try {
     loadedCharacters.length === rawCharacters.length,
     `loader filtered an active rebuilt character: expected ${rawCharacters.length}, got ${loadedCharacters.length}`,
   );
-  assert(
-    loadedCharacters.every((entry) => api.isRebuiltZhikuCharacterEntry(entry)),
-    'all active character entries must be explicitly recognized as rebuilt or expansion entries',
-  );
+  assert(loadedCharacters.every((entry) => /^[A-Z]{2}-\d{3}$/u.test(entry.id)), 'all active characters must load their source-owned machine IDs');
   assert(
     new Set(loadedCharacters.map((entry) => entry.id)).size === loadedCharacters.length,
     'loaded character machine ids must stay unique',
   );
   assert(!loadedCharacters.some((entry) => entry.标题 === '赞达尔'), 'Zandar must stay absent after production loading');
-  assert(
-    !api.shouldRemoveLegacyZhikuCharacterEntry(loadedCharacters[0], Date.now()),
-    'rebuilt characters must survive the legacy-character filter',
-  );
-  assert(
-    api.shouldRemoveLegacyZhikuCharacterEntry(
-      { id: 'zhiku_express_legacy_character', 分类: 'character', builtin: true },
-      Date.now(),
-    ),
-    'legacy built-in character entries must still be filtered',
-  );
 
   console.log(
     `ZHIKU_CHARACTER_REBUILD_REGRESSION_OK sources=${rawCharacters.length} presets=${characterPresetFiles.size}`,

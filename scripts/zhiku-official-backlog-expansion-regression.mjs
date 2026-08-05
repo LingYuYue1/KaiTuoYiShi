@@ -210,7 +210,7 @@ try {
   assert(xuzhao?.触发关键词?.includes('模糊二维马'), 'Xuzhao must retain the official pen name 模糊二维马');
   const guiji = zhikuSystem.条目.find((entry) => entry.id === 'DS-000');
   assert(guiji?.分类 === 'character', 'Guiji must keep its current character archive identity');
-  assert(guiji?.兼容ID?.includes('JS-098'), 'Guiji must retain JS-098 as a legacy save compatibility id');
+  assert(guiji?.id === 'DS-000', 'Guiji must use the formal DS-000 source ID directly');
   assert(api.resolveZhikuCategory(guiji) === 'character', 'Guiji must render in the character archive');
   assert(
     !api.retrieveZhikuContext(zhikuSystem, '铁墓正在翁法罗斯推进毁灭计划。', 12).entries.some((entry) => entry.id === 'DS-000'),

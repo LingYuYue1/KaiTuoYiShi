@@ -2,13 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
-import type { 智库系统设置 } from '@/models/settings';
-import { ZhikuMaintenancePanel } from '@/components/features/ZhikuV3/ZhikuMaintenancePanel';
-import { loadSetting, saveSetting } from '@/services/dbService';
+import { saveSetting } from '@/services/dbService';
 import {
-  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
   buildPersistedZhikuSystem,
-  mergeBundledZhikuSystem,
+  composeZhikuSystem,
 } from '@/data/zhikuPreset';
 import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
 import { ArchiveBrowser } from './ArchiveBrowser';
@@ -32,7 +29,6 @@ interface ZhikuExperienceProps {
   zhikuSystem: 智库系统;
   storyWeavingSystem: 剧情编织系统;
   onZhikuSystemChange: Dispatch<SetStateAction<智库系统>>;
-  settings: 智库系统设置;
   initialCategoryId?: ZhikuCategoryId;
   reducedMotion?: boolean;
   onClose?: () => void;
@@ -42,7 +38,6 @@ export function ZhikuExperience({
   zhikuSystem,
   storyWeavingSystem,
   onZhikuSystemChange,
-  settings,
   initialCategoryId,
   reducedMotion = false,
   onClose,
@@ -50,7 +45,6 @@ export function ZhikuExperience({
   const [selectedCategoryId, setSelectedCategoryId] = useState<ZhikuCategoryId | null>(
     initialCategoryId ?? null,
   );
-  const [showMaintenance, setShowMaintenance] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<ReaderRefreshStatus>('idle');
   const {
     fontSize: readerFontSize,
@@ -74,10 +68,6 @@ export function ZhikuExperience({
       if (event.key !== 'Escape') return;
       event.preventDefault();
       event.stopPropagation();
-      if (showMaintenance) {
-        setShowMaintenance(false);
-        return;
-      }
       if (selectedCategoryId) {
         setSelectedCategoryId(null);
         return;
@@ -86,7 +76,7 @@ export function ZhikuExperience({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, selectedCategoryId, showMaintenance]);
+  }, [onClose, selectedCategoryId]);
 
   const handleRefreshBundled = async () => {
     if (!isDevBuild || refreshStatus === 'loading') return;
@@ -95,12 +85,7 @@ export function ZhikuExperience({
       const catalogResult = await loadBundledZhikuCatalogWithFallback({ cacheBust: Date.now() });
       if (catalogResult.source === 'cache') throw catalogResult.loadError ?? new Error('新目录加载失败，已保留上一完整目录。');
       const bundled = catalogResult.system;
-      const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-      const migrationAt = savedMigrationAt ?? Date.now();
-      if (!savedMigrationAt) {
-        await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-      }
-      const next = mergeBundledZhikuSystem(bundled, zhikuSystem, migrationAt);
+      const next = composeZhikuSystem(bundled, zhikuSystem);
       onZhikuSystemChange(next);
       await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
       setRefreshStatus('done');
@@ -111,31 +96,6 @@ export function ZhikuExperience({
       window.setTimeout(() => setRefreshStatus('idle'), 2400);
     }
   };
-
-  if (showMaintenance) {
-    return (
-      <section
-        className="zhiku-v3-maintenance"
-        data-reduced-motion={reducedMotion ? 'true' : 'false'}
-        aria-label="智库维护工作台"
-      >
-        <ZhikuPageFrame brightness={0.56} dimmer={0.58} />
-        <ZhikuHeader
-          title="维护智库"
-          subtitle="资料与运行设置"
-          onBack={() => setShowMaintenance(false)}
-          onClose={onClose}
-        />
-        <main className="zhiku-v3-maintenance__content">
-          <ZhikuMaintenancePanel
-            zhikuSystem={zhikuSystem}
-            onZhikuSystemChange={onZhikuSystemChange}
-            settings={settings}
-          />
-        </main>
-      </section>
-    );
-  }
 
   if (selectedCategoryId === 'story') {
     return (
@@ -178,7 +138,6 @@ export function ZhikuExperience({
       reducedMotion={reducedMotion}
       entering={shouldAnimateLobby}
       onSelect={setSelectedCategoryId}
-      onOpenMaintenance={() => setShowMaintenance(true)}
       onClose={onClose}
     />
   );

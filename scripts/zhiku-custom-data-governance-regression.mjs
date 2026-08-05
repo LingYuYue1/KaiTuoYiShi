@@ -60,7 +60,6 @@ try {
   const builtin = {
     ...api.创建智库条目({ 标题: '内置人物', 分类: 'character', 原文: '内置正文', 关键词: ['内置人物'], builtin: true }),
     id: 'JS-000',
-    兼容ID: ['legacy-builtin'],
     资料所有者: 'builtin-json',
     builtin: true,
   };
@@ -96,79 +95,57 @@ try {
   const healthy = api.诊断智库条目健康度(created);
   assert(healthy.status === 'healthy' && healthy.score === 100, `complete custom character must be healthy: ${JSON.stringify(healthy)}`);
 
-  const legacyCustom = {
-    ...api.创建智库条目({ 标题: '旧自制人物', 分类: 'character', 原文: '旧自制正文', 关键词: ['旧自制人物'] }),
+  const retiredCustom = {
+    ...created,
     id: 'zhiku_legacy_custom_character',
     createdAt: 1,
     updatedAt: 1,
     builtin: false,
   };
-  const migratedLegacy = api.迁移自制智库条目([legacyCustom], [builtin]);
-  assert(migratedLegacy.entries[0].id === 'ZZ-000', 'legacy custom entry must receive the first available ZZ id');
-  assert(migratedLegacy.entries[0].兼容ID.includes(legacyCustom.id), 'legacy custom id must remain as a compatibility alias');
-  assert(migratedLegacy.entries[0].资料版本 === api.ZHIKU_CUSTOM_SCHEMA_VERSION, 'legacy custom schema must upgrade');
-  assert(migratedLegacy.entries[0].辅助字段版本 === 0, 'legacy auxiliary fields must remain explicitly unverified');
-  assert(api.诊断智库条目健康度(migratedLegacy.entries[0]).issues.some((issue) => issue.code === 'auxiliary-version-stale'), 'legacy auxiliary fields must be diagnosed as stale');
+  assert(api.规范化自制智库条目([retiredCustom], [builtin]).length === 0, 'retired custom IDs must not migrate into V3');
 
   const collisionEntries = [
-    { ...legacyCustom, id: 'ZZ-005', 兼容ID: ['shared-alias'], 标题: '碰撞甲' },
-    { ...legacyCustom, id: 'ZZ-005', 兼容ID: ['shared-alias'], 标题: '碰撞乙' },
-    { ...legacyCustom, id: 'JS-000', 兼容ID: ['legacy-builtin'], 标题: '碰撞丙' },
+    { ...created, id: 'ZZ-005', 标题: '碰撞甲' },
+    { ...created, id: 'ZZ-005', 标题: '碰撞乙' },
+    { ...created, id: 'JS-000', 标题: '碰撞丙' },
   ];
-  const collisionMigration = api.迁移自制智库条目(collisionEntries, [builtin]);
-  assert(collisionMigration.entries.length === 3, 'identity collisions must not drop custom entries');
-  assert(new Set(collisionMigration.entries.map((entry) => entry.id)).size === 3, 'custom primary ids must be unique after collision repair');
-  assert(collisionMigration.entries[0].id === 'ZZ-005', 'first valid custom primary id must win deterministically');
-  assert(collisionMigration.entries[1].id === 'ZZ-000', 'duplicate custom primary id must be reassigned deterministically');
-  assert(collisionMigration.entries[2].id === 'ZZ-001', 'builtin primary id collision must receive the next custom id');
-  assert(collisionMigration.entries[0].兼容ID.includes('shared-alias'), 'first alias claimant must retain the alias');
-  assert(!collisionMigration.entries[1].兼容ID.includes('shared-alias'), 'later duplicate alias must be removed');
-  assert(!collisionMigration.entries[2].兼容ID.includes('JS-000'), 'builtin primary id must not remain as an ambiguous custom alias');
-  assert(collisionMigration.collisions.some((item) => item.kind === 'primary' && item.resolution === 'reassigned'), 'primary collision must be reported');
-  assert(collisionMigration.collisions.some((item) => item.kind === 'alias' && item.resolution === 'removed'), 'alias collision must be reported');
+  const normalizedCollisions = api.规范化自制智库条目(collisionEntries, [builtin]);
+  assert(normalizedCollisions.length === 1, 'duplicate or non-ZZ custom identities must be discarded');
+  assert(normalizedCollisions[0].id === 'ZZ-005', 'the first valid custom ID must win deterministically');
 
-  const retiredV1 = {
-    ...legacyCustom,
-    id: 'zhiku_express_characters_1',
-    标题: 'V1 遗留人物',
-  };
-  const merged = api.mergeBundledZhikuSystem(
+  const merged = api.composeZhikuSystem(
     { 条目: [builtin] },
-    { 条目: [legacyCustom, retiredV1] },
-    Date.now(),
+    { 条目: [created, retiredCustom] },
   );
   const mergedCustom = merged.条目.filter((entry) => !entry.builtin);
-  assert(mergedCustom.length === 1, `only explicit V1 preset residue may be removed, received ${mergedCustom.length} custom entries`);
-  assert(mergedCustom[0].标题 === '旧自制人物' && mergedCustom[0].id === 'ZZ-000', 'historical real custom character must survive and upgrade');
+  assert(mergedCustom.length === 1, `only current ZZ custom data may enter V3, received ${mergedCustom.length} custom entries`);
+  assert(mergedCustom[0].标题 === '自制人物' && mergedCustom[0].id === 'ZZ-000', 'current V3 custom data must survive composition');
   assert(merged.自制资料契约版本 === api.ZHIKU_CUSTOM_SCHEMA_VERSION, 'custom system contract version must be persisted');
   assert(merged.自制资料下一个序号 === 1, 'custom system must persist the next monotonic sequence');
 
   const persisted = api.buildPersistedZhikuSystem(merged);
   assert(persisted.条目.length === 1, 'persistence must keep custom data without copying builtin bodies');
   assert(persisted.条目[0].id === 'ZZ-000', 'persisted custom data must keep the stable ZZ id');
-  assert(persisted.条目[0].兼容ID.includes(legacyCustom.id), 'persisted custom data must keep its legacy alias');
   assert(persisted.条目[0].资料所有者 === 'custom-user-data', 'persisted custom owner must remain explicit');
   assert(persisted.自制资料下一个序号 === 1, 'slim persistence must retain the next custom sequence');
 
-  const panelSource = fs.readFileSync(path.join(root, 'components/features/ZhikuV3/ZhikuMaintenancePanel.tsx'), 'utf8');
   const startupSource = fs.readFileSync(path.join(root, 'hooks/useGameState.ts'), 'utf8');
-  assert(panelSource.includes('创建自制智库条目(normalized.条目'), 'maintenance UI must allocate ZZ ids at creation time');
-  assert(panelSource.includes('诊断智库条目健康度(entry)'), 'character workbench must display governance health diagnostics');
-  assert(startupSource.includes('set智库(buildCustomOnlyZhikuFallback(savedZhiku, migrationAt))'), 'startup fallback must use the custom-only recovery contract');
-  const customOnlyFallback = api.buildCustomOnlyZhikuFallback({
+  assert(startupSource.includes('set智库(buildZhikuCustomSystem(savedZhiku))'), 'startup fallback must use the V3 custom-only recovery contract');
+  const customOnlyFallback = api.buildZhikuCustomSystem({
     条目: [
       { ...builtin, 运行时解锁状态: '已解锁' },
-      legacyCustom,
+      created,
+      retiredCustom,
     ],
-  }, Date.now());
+  });
   assert(customOnlyFallback.条目.length === 1, 'startup fallback must not restore incomplete builtin override placeholders');
-  assert(customOnlyFallback.条目[0].id === 'ZZ-000' && customOnlyFallback.条目[0].标题 === '旧自制人物', 'startup fallback must still upgrade and preserve custom data');
+  assert(customOnlyFallback.条目[0].id === 'ZZ-000' && customOnlyFallback.条目[0].标题 === '自制人物', 'startup fallback must preserve only current V3 custom data');
 
   console.log(JSON.stringify({
     customPrefix: api.ZHIKU_CUSTOM_ID_PREFIX,
     schemaVersion: api.ZHIKU_CUSTOM_SCHEMA_VERSION,
     auxiliaryFieldsVersion: api.ZHIKU_AUXILIARY_FIELDS_VERSION,
-    collisionCount: collisionMigration.collisions.length,
+    normalizedCollisionEntries: normalizedCollisions.length,
   }));
   console.log('ZHIKU_CUSTOM_DATA_GOVERNANCE_REGRESSION_OK');
 } finally {

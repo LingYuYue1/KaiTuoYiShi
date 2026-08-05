@@ -37,10 +37,7 @@ const BROWSABLE_CATEGORY_IDS: ZhikuBrowsableCategoryId[] = [
 const INTERNAL_ID_PATTERN = /^(?:[A-Z]{2}-\d{3}|[a-z][a-z0-9_-]*)$/u;
 const LOCKED_STATUS_PATTERN = /未解锁|锁定/iu;
 const ARCHIVED_STORY_STATES = new Set(['已经历', '已跳过', '已偏离']);
-const CHARACTER_ARCHIVE_SPECIAL_IDENTITIES = new Set([
-  'DS-000',
-  'zhiku_enemy_expansion_guiji_profile',
-]);
+const CHARACTER_ARCHIVE_SPECIAL_ID = 'DS-000';
 
 function createEmptyArchiveMap(): ZhikuArchiveItemsByCategory {
   return {
@@ -64,7 +61,7 @@ export function isZhikuEntryPlayerVisible(entry: 智库条目): boolean {
 }
 
 export function resolveZhikuCategory(entry: 智库条目): ZhikuBrowsableCategoryId | null {
-  if ([entry.id, ...(entry.兼容ID ?? [])].some((id) => CHARACTER_ARCHIVE_SPECIAL_IDENTITIES.has(id))) {
+  if (entry.id === CHARACTER_ARCHIVE_SPECIAL_ID) {
     return 'character';
   }
   if (entry.治理分类 && BROWSABLE_CATEGORY_IDS.includes(entry.治理分类 as ZhikuBrowsableCategoryId)) {
@@ -75,15 +72,6 @@ export function resolveZhikuCategory(entry: 智库条目): ZhikuBrowsableCategor
   if (entry.分类 === 'faction') return 'faction';
   if (entry.分类 === 'event') return 'event';
   if (entry.分类 !== 'term') return null;
-
-  const source = entry.来源?.trim() ?? '';
-  const stableIdentity = [entry.id, entry.系列ID].filter(Boolean).join('\n');
-  if (/(?:^|\n)zhiku_aeons_core_/u.test(stableIdentity) || source.includes('知识库迁移：星神/')) {
-    return 'aeon';
-  }
-  if (/(?:^|\n)zhiku_paths_core_/u.test(stableIdentity) || source.includes('知识库迁移：命途/')) {
-    return 'path';
-  }
   return 'term';
 }
 

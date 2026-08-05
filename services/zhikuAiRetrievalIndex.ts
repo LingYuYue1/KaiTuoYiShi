@@ -2,7 +2,6 @@ import type { 智库分类, 智库系统, 智库条目 } from '@/models/zhiku';
 import {
   ZHIKU_CATEGORY_LABELS,
   搜索智库条目,
-  智库条目匹配ID,
   解析智库软结构标签,
   获取智库人物名列表,
 } from '@/models/zhiku';
@@ -193,10 +192,10 @@ export function buildZhikuAiCandidateIndex(input: BuildCandidateIndexInput): Zhi
 
   for (const keywordEntry of input.keywordEntries) {
     for (const relatedId of keywordEntry.关联条目ID ?? []) {
-      addEntry(availableEntries.find((entry) => 智库条目匹配ID(entry, relatedId)), 'RELATED_ENTRY');
+      addEntry(availableEntries.find((entry) => entry.id === relatedId), 'RELATED_ENTRY');
     }
     for (const entry of availableEntries) {
-      if ((entry.关联条目ID ?? []).some((relatedId) => 智库条目匹配ID(keywordEntry, relatedId))) {
+      if ((entry.关联条目ID ?? []).includes(keywordEntry.id)) {
         addEntry(entry, 'RELATED_ENTRY');
       }
     }
