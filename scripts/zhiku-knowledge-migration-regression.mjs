@@ -80,7 +80,7 @@ assert(
     retrievalSource.includes('const meta = 解析智库软结构标签(entry);') &&
     retrievalSource.includes('/未解锁|锁定|只读/i.test(unlock)') &&
     retrievalSource.includes('可预热') &&
-    retrievalSource.includes('混合推论写成已确认事实'),
+    retrievalSource.includes('不把混合推论写成已经确认的事实'),
   '主剧情智库召回门禁没有覆盖不可注入、范围限制、可预热和迁移资料使用边界',
 );
 

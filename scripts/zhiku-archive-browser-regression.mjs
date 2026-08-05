@@ -8,19 +8,19 @@ const requireText = (source, expected, label) => {
   if (!source.includes(expected)) throw new Error(`${label}: missing ${expected}`);
 };
 
-const browser = read('components/features/ZhikuV2/ArchiveBrowser.tsx');
-const pageFrame = read('components/features/ZhikuV2/ZhikuPageFrame.tsx');
-const header = read('components/features/ZhikuV2/ZhikuHeader.tsx');
-const css = read('components/features/ZhikuV2/archive-browser.css');
-const fontControl = read('components/features/ZhikuV2/ReaderFontSizeControl.tsx');
-const fontControlCss = read('components/features/ZhikuV2/reader-font-size-control.css');
-const fontSize = read('components/features/ZhikuV2/readerFontSize.ts');
+const browser = read('components/features/ZhikuV3/ArchiveBrowser.tsx');
+const pageFrame = read('components/features/ZhikuV3/ZhikuPageFrame.tsx');
+const header = read('components/features/ZhikuV3/ZhikuHeader.tsx');
+const css = read('components/features/ZhikuV3/archive-browser.css');
+const fontControl = read('components/features/ZhikuV3/ReaderFontSizeControl.tsx');
+const fontControlCss = read('components/features/ZhikuV3/reader-font-size-control.css');
+const fontSize = read('components/features/ZhikuV3/readerFontSize.ts');
 const story = read('stories/ZhikuArchiveBrowser.stories.tsx');
 const referenceStory = read('stories/ZhikuReferenceArchive.stories.tsx');
 const retrieval = read('services/zhikuRetrieval.ts');
 const plan = read('docs/superpowers/specs/2026-07-27-zhiku-v2-heavy-optimization-plan.md');
 const formattingModuleUrl = pathToFileURL(
-  path.join(root, 'components/features/ZhikuV2/archiveDocumentFormatting.ts'),
+  path.join(root, 'components/features/ZhikuV3/archiveDocumentFormatting.ts'),
 ).href;
 const { formatArchiveParagraphLine } = await import(formattingModuleUrl);
 
@@ -30,8 +30,8 @@ requireText(browser, 'items = []', 'runtime-safe empty item fallback');
 requireText(browser, 'setSelectedItemId(item.id)', 'same-page item selection');
 requireText(browser, 'renderArchiveDocument(selectedInjectionVariant?.body || selectedItem.body)', 'same-page document rendering with multi-form preview');
 requireText(browser, '.map(formatArchiveParagraphLine)', 'voice corpus display formatting');
-requireText(browser, 'zhiku-v2-browser__catalog', 'left character catalog');
-requireText(browser, 'zhiku-v2-browser__detail', 'right archive detail');
+requireText(browser, 'zhiku-v3-browser__catalog', 'left character catalog');
+requireText(browser, 'zhiku-v3-browser__detail', 'right archive detail');
 requireText(browser, 'category.id.toUpperCase()', 'category-specific archive kicker');
 requireText(browser, 'item.subtitle ?? item.meta ?? category.label', 'category-aware item fallback');
 requireText(browser, 'aria-label={`${category.label}内容视图`}', 'category-aware detail view label');
@@ -46,10 +46,10 @@ requireText(browser, 'aria-pressed={active}', 'selected character semantics');
 requireText(browser, 'data-status={item.status', 'entry status styling');
 requireText(browser, '暂无可阅读档案', 'empty state');
 requireText(browser, '<ZhikuPageFrame', 'shared visual frame');
-requireText(browser, "import './zhiku-v2.css'", 'standalone shared page styling');
-requireText(browser, 'zhiku-v2-browser__catalog-identity', 'navigation integrated into catalog header');
+requireText(browser, "import './zhiku-v3.css'", 'standalone shared page styling');
+requireText(browser, 'zhiku-v3-browser__catalog-identity', 'navigation integrated into catalog header');
 requireText(browser, 'aria-label="返回分类大厅"', 'integrated back command');
-requireText(browser, 'zhiku-v2-browser__close', 'page-level close command');
+requireText(browser, 'zhiku-v3-browser__close', 'page-level close command');
 requireText(browser, 'aria-label="关闭智库"', 'accessible page close command');
 requireText(browser, "useState<ZhikuArchiveView>('archive')", 'archive preview as default detail view');
 requireText(browser, 'role="tablist"', 'semantic detail view switch');
@@ -76,27 +76,27 @@ requireText(browser, 'aria-label="选择注入形态"', 'accessible read-only fo
 requireText(browser, 'setSelectedInjectionVariantId(variant.id)', 'form preview changes only local component state');
 requireText(browser, 'injectionVariants.length > 1', 'single-form characters must not show an empty form switch');
 requireText(browser, "event.key === 'ArrowRight'", 'keyboard-operable detail tabs');
-requireText(pageFrame, 'zhiku-v2-screen__pin--top-right', 'shared top-right frame pin');
-requireText(pageFrame, 'zhiku-v2-screen__pin--bottom-left', 'shared bottom-left frame pin');
-requireText(pageFrame, '/assets/zhiku/zhiku-archive-hall-background-concept-v3.webp', 'shared V3 background');
+requireText(pageFrame, 'zhiku-v3-screen__pin--top-right', 'shared top-right frame pin');
+requireText(pageFrame, 'zhiku-v3-screen__pin--bottom-left', 'shared bottom-left frame pin');
+requireText(pageFrame, '/assets/zhiku/archive-hall-background.webp', 'shared V3 background');
 requireText(header, 'aria-label="返回分类大厅"', 'back to category hub command');
 requireText(css, 'grid-template-columns: minmax(236px, 28%) minmax(0, 1fr)', 'desktop left-right archive layout');
 requireText(css, 'inset: 0', 'full-viewport page-level archive workspace');
-requireText(css, '.zhiku-v2-browser .zhiku-v2-screen__pin--bottom-left', 'non-occluding bottom frame pin');
-requireText(css, '.zhiku-v2-browser__catalog ol', 'scrolling character catalog');
-requireText(css, '.zhiku-v2-browser__catalog ol button', 'catalog item styles scoped away from navigation');
-requireText(css, '.zhiku-v2-browser__avatar img', 'avatar image treatment');
+requireText(css, '.zhiku-v3-browser .zhiku-v3-screen__pin--bottom-left', 'non-occluding bottom frame pin');
+requireText(css, '.zhiku-v3-browser__catalog ol', 'scrolling character catalog');
+requireText(css, '.zhiku-v3-browser__catalog ol button', 'catalog item styles scoped away from navigation');
+requireText(css, '.zhiku-v3-browser__avatar img', 'avatar image treatment');
 requireText(css, 'grid-template-columns: 24px minmax(0, 1fr) 14px', 'non-character text-only catalog column');
 requireText(css, 'grid-template-columns: 24px 48px minmax(0, 1fr) 14px', 'desktop square avatar column');
 requireText(css, 'width: 48px', 'desktop square avatar width');
 requireText(css, 'height: 48px', 'desktop square avatar height');
 requireText(css, 'border-radius: 6px', 'desktop rounded avatar corners');
 requireText(css, 'grid-template-columns: 19px 42px minmax(0, 1fr) 12px', 'narrow square avatar column');
-requireText(css, '.zhiku-v2-browser__document', 'in-page document reader');
-requireText(css, '.zhiku-v2-browser__view-tabs', 'compact detail view switch styling');
-requireText(css, '.zhiku-v2-browser__trigger-keywords', 'non-pill trigger keyword layout');
-requireText(css, '.zhiku-v2-browser__keyword-rule', 'secondary keyword rule styling');
-requireText(css, '.zhiku-v2-browser__form-preview > span,\n.zhiku-v2-browser__injection-heading > span,\n.zhiku-v2-browser__keyword-rule > span {\n  color: rgba(var(--zhiku-gold), 0.82);', 'high-contrast warm metadata labels');
+requireText(css, '.zhiku-v3-browser__document', 'in-page document reader');
+requireText(css, '.zhiku-v3-browser__view-tabs', 'compact detail view switch styling');
+requireText(css, '.zhiku-v3-browser__trigger-keywords', 'non-pill trigger keyword layout');
+requireText(css, '.zhiku-v3-browser__keyword-rule', 'secondary keyword rule styling');
+requireText(css, '.zhiku-v3-browser__form-preview > span,\n.zhiku-v3-browser__injection-heading > span,\n.zhiku-v3-browser__keyword-rule > span {\n  color: rgba(var(--zhiku-gold), 0.82);', 'high-contrast warm metadata labels');
 requireText(css, 'white-space: pre-wrap', 'wrapped injection payload');
 requireText(browser, '<ReaderFontSizeControl', 'shared archive font size control');
 requireText(browser, 'buildZhikuReaderStyle(readerFontSize)', 'archive reader font variables');
@@ -111,21 +111,21 @@ requireText(fontSize, 'ZHIKU_READER_FONT_SIZE_MIN = 14', 'reader minimum size');
 requireText(fontSize, 'ZHIKU_READER_FONT_SIZE_MAX = 24', 'reader maximum size');
 requireText(fontSize, 'ZHIKU_READER_FONT_SIZE_DEFAULT = 17', 'larger default reader size');
 requireText(css, '@media (max-width: 520px)', 'narrow viewport layout');
-requireText(story, "title: '开拓轶事/智库 V2/二级页面'", 'Storybook secondary page path');
+requireText(story, "title: '开拓轶事/智库 V3/二级页面'", 'Storybook secondary page path');
 requireText(story, 'const characterItems: ZhikuArchiveItem[]', 'flat character fixture');
 requireText(story, 'getDefaultBuiltinAvatar', 'existing local avatar reuse');
 requireText(story, '获取智库核心触发词(entry)', 'curated core trigger keywords');
 requireText(story, 'buildZhikuEntryInjectionPreview(entry)', 'production-format injection preview');
 requireText(story, 'character-rebuild-core.json', 'real character fixture');
 requireText(story, 'export const 人物最终页', 'final secondary page story');
-requireText(referenceStory, "title: '开拓轶事/智库 V2/其他二级页面'", 'other category Storybook path');
+requireText(referenceStory, "title: '开拓轶事/智库 V3/其他二级页面'", 'other category Storybook path');
 for (const storyName of ['地点最终页', '派系最终页', '事件最终页', '星神最终页', '命途最终页', '专有名词最终页', '敌对生物空状态']) {
   requireText(referenceStory, `export const ${storyName}`, `${storyName} story`);
 }
 for (const fixture of ['location-core.json', 'term-core.json', 'paths-core.json', 'aeons-core.json', 'worldview-core.json', 'xianzhou-history.json']) {
   requireText(referenceStory, fixture, `${fixture} real fixture`);
 }
-requireText(referenceStory, 'id: entry.id ?? `zhiku-v2-${categoryId}-${index + 1}`', 'stable fixture entry identity');
+requireText(referenceStory, 'id: entry.id ?? `zhiku-v3-${categoryId}-${index + 1}`', 'stable fixture entry identity');
 requireText(referenceStory, 'buildZhikuEntryInjectionPreview(normalizedEntry)', 'shared injection preview for reference categories');
 requireText(referenceStory, 'const enemyItems: ZhikuArchiveItem[] = []', 'honest enemy empty state');
 if (referenceStory.includes('avatarSrc:') || referenceStory.includes('avatarAlt:')) {
@@ -146,8 +146,8 @@ const forbiddenGroupingReferences = [
   'activeGroupId',
   'initialGroupId',
   'selectGroup',
-  'zhiku-v2-browser__groups',
-  'zhiku-v2-browser__item-track',
+  'zhiku-v3-browser__groups',
+  'zhiku-v3-browser__item-track',
 ];
 for (const reference of forbiddenGroupingReferences) {
   if (browser.includes(reference) || css.includes(reference)) {
@@ -176,8 +176,8 @@ for (const forbiddenFormMutation of ['onSelectForm', 'onChangeForm', 'setCurrent
 if (browser.includes('onSearch') || browser.includes('搜索智库') || header.includes('搜索智库')) {
   throw new Error('Zhiku V2 must not restore the retired search command.');
 }
-if (browser.includes('ZhikuPanel') || story.includes('ZhikuPanel')) {
-  throw new Error('Zhiku V2 secondary page must not reuse the legacy ZhikuPanel.');
+if (browser.includes('ZhikuMaintenancePanel') || story.includes('ZhikuMaintenancePanel')) {
+  throw new Error('Zhiku V2 secondary page must not reuse the legacy ZhikuMaintenancePanel.');
 }
 
 const aglaeaGreeting = '### 初次见面 「远道而来的贵客，风儿顺着金丝捎来了你的讯息。我名阿格莱雅，奥赫玛的改衣师，翁法罗斯的黄金裔之一。愿我们坦诚相待。」';

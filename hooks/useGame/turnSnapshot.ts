@@ -8,7 +8,7 @@ import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
-import { 归一化智库系统 } from '@/models/zhiku';
+import { hydratePersistedZhikuSystem } from '@/data/zhikuPreset';
 import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 
 export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回合快照): 剧情编织系统 {
@@ -16,7 +16,11 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
   state.set世界(归一化世界状态(snapshot.世界 as UseGameStateReturn['世界']));
   state.set记忆(snapshot.记忆 as Parameters<typeof state.set记忆>[0]);
   state.set忆庭(归一化忆庭系统(snapshot.忆庭 as UseGameStateReturn['忆庭']));
-  state.set智库(归一化智库系统(snapshot.智库 as UseGameStateReturn['智库']));
+  state.set智库(hydratePersistedZhikuSystem(
+    snapshot.智库 as UseGameStateReturn['智库'],
+    state.智库,
+    Date.now(),
+  ));
   state.set手机(归一化手机系统(snapshot.手机 as UseGameStateReturn['手机']));
   state.setNPC(归一化NPC记录列表(snapshot.NPC as UseGameStateReturn['NPC']));
   state.set相册((current) => restoreAlbumSnapshot(snapshot.相册 as UseGameStateReturn['相册'], current));

@@ -3,8 +3,7 @@ import { 创建空世界书, 创建空世界书条目, ENTRY_TYPE_LABELS, SCOPE_
 import type { 剧情模式, 开局来源 } from '@/models/journey';
 
 export const PROMPT_LIKE_WORLDBOOK_ENTRY_IDS = new Set([
-  'builtin_compass_overview',
-  'builtin_worldview_spine',
+  'builtin_worldview_overview',
 ]);
 
 function isPromptLikeWorldbookEntry(entry: 世界书条目): boolean {

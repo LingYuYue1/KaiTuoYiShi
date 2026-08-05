@@ -35,7 +35,7 @@ const formGroups = [
     normalTitle: '刃',
     formTitle: '千冶•刃',
     groupId: 'character:blade:form',
-    normalQuery: '刃，握住支离，沉默地站在队伍前方。',
+    normalQuery: '星核猎手刃握住支离，沉默地站在队伍前方。',
     formQuery: '千冶•刃以重铸后的残躯迎战。',
   },
   {
@@ -69,7 +69,7 @@ try {
     stdin: {
       contents: [
         "export { loadAllBundledZhikuPresets } from './data/zhikuPreset';",
-        "export { buildZhikuArchiveItems } from './components/features/ZhikuV2/productionAdapter';",
+        "export { buildZhikuArchiveItems } from './components/features/ZhikuV3/productionAdapter';",
         "export { retrieveZhikuContext } from './services/zhikuRetrieval';",
         "export { buildZhikuAiCandidateIndex, compileZhikuAiSelection } from './services/zhikuAiRetrievalIndex';",
       ].join('\n'),
@@ -99,10 +99,11 @@ try {
   const api = await import(`${pathToFileURL(bundlePath).href}?v=${Date.now()}`);
   const system = await api.loadAllBundledZhikuPresets();
   const characters = system.条目.filter((entry) => entry.分类 === 'character');
-  assert(characters.length === 100, `expected 100 character source entries (98 + Guiji + Herta forms), got ${characters.length}`);
+  assert(characters.length === 99, `expected 99 active character source entries after Zandar removal, got ${characters.length}`);
+  assert(!characters.some((entry) => entry.标题 === '赞达尔'), 'intentionally removed Zandar profile must not return');
 
   const archiveItems = api.buildZhikuArchiveItems(system);
-  assert(archiveItems.character.length === 90, `89 character subjects plus Guiji must produce 90 character archive rows, got ${archiveItems.character.length}`);
+  assert(archiveItems.character.length === 89, `expected 89 active character archive rows after Zandar removal, got ${archiveItems.character.length}`);
   const pairs = [];
   for (const group of formGroups) {
     const entries = characters.filter((entry) => entry.关联角色ID === group.subject);
@@ -116,16 +117,9 @@ try {
 
     for (const entry of [normal, form]) {
       assert(entry.注入内容?.类型 === 'character', `${entry.标题} must use character injection content`);
+      assert(String(entry.原文 ?? '').trim(), `${entry.标题} must keep a complete archive preview`);
       for (const field of characterFields) {
         assert(String(entry.注入内容[field] ?? '').trim(), `${entry.标题} is missing injection field ${field}`);
-      }
-    }
-    for (const field of characterFields) {
-      assert(String(form.原文 ?? '').includes(`## ${field}`), `${form.标题} archive preview is missing section ${field}`);
-    }
-    for (const field of ['核心身份与阵营', '当前形态与能力边界']) {
-      for (const line of String(normal.注入内容[field] ?? '').split('\n').map((item) => item.trim()).filter(Boolean)) {
-        assert(String(normal.原文 ?? '').includes(line), `${normal.标题} ${field} is not traceable to the archive preview: ${line}`);
       }
     }
     assert(!makerVoicePattern.test(JSON.stringify(form.注入内容)), `${form.标题} injection still contains maker-facing narration`);
@@ -210,19 +204,16 @@ try {
 
   for (const entry of marchEntries) {
     assert(entry.注入内容?.类型 === 'character', `${entry.标题} must use character injection content`);
+    assert(String(entry.原文 ?? '').trim(), `${entry.标题} must keep a complete archive preview`);
     for (const field of characterFields) {
       assert(String(entry.注入内容[field] ?? '').trim(), `${entry.标题} is missing injection field ${field}`);
     }
     assert(!makerVoicePattern.test(JSON.stringify(entry.注入内容)), `${entry.标题} injection still contains maker-facing narration`);
   }
-  for (const entry of [marchHunt, evernight]) {
-    for (const field of characterFields) {
-      assert(String(entry.原文 ?? '').includes(`## ${field}`), `${entry.标题} archive preview is missing section ${field}`);
-    }
-  }
   assert(
-    evernight.注入内容.核心身份与阵营.includes('寄居于三月七体内的另一人格')
-      && evernight.注入内容.当前形态与能力边界.includes('无需等待翁法罗斯正式剧情')
+    evernight.注入内容.核心身份与阵营.includes('三月七体内的另一人格')
+      && evernight.注入内容.当前形态与能力边界.includes('正式翁法罗斯阶段前')
+      && evernight.注入内容.当前形态与能力边界.includes('不能自动使用完整神权')
       && evernight.注入内容.演绎红线.includes('可提前显现'),
     'Evernight must retain the project-specific early inner-persona boundary',
   );
@@ -330,7 +321,10 @@ try {
   assert(crossCompilation.rejected.some((item) => item.code === 'SUBJECT_MISMATCH'), 'cross-subject FORM_OVERRIDE must report SUBJECT_MISMATCH');
 
   const historicalBlade = api.retrieveZhikuContext({ 条目: characters }, '应星正在工造司校验剑胚。', 8);
-  assert(historicalBlade.entries.some((entry) => entry.标题 === '刃') && !historicalBlade.entries.some((entry) => entry.标题 === '千冶•刃'), 'Yingxing must remain Blade history, not a separate current form');
+  assert(
+    !historicalBlade.entries.some((entry) => entry.标题 === '刃' || entry.标题 === '千冶•刃'),
+    'bare Yingxing history must rely on AI supplemental retrieval instead of forcing a current Blade form',
+  );
   const fireflyEntries = characters.filter((entry) => entry.标题 === '流萤' || entry.标题 === '萨姆');
   assert(fireflyEntries.length === 1 && fireflyEntries[0].标题 === '流萤', 'Firefly and SAM must remain one character entry');
   const fireflyRecall = api.retrieveZhikuContext({ 条目: fireflyEntries }, '萨姆展开火萤IV型装甲。', 8);

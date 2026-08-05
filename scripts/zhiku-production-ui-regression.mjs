@@ -6,21 +6,21 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const requireText = (source, expected, label) => {
   if (!source.includes(expected)) throw new Error(`${label}: missing ${expected}`);
 };
-const productionLayoutPath = path.join(root, 'components/features/ZhikuV2/zhiku-layout.production.json');
+const productionLayoutPath = path.join(root, 'components/features/ZhikuV3/zhiku-layout.production.json');
 
 if (!fs.existsSync(productionLayoutPath)) {
   throw new Error('The workbench-approved Zhiku layout must be promoted to a production JSON file.');
 }
 
 const app = read('App.tsx');
-const manager = read('components/features/GameSystems/ZhikuManagerModal.tsx');
-const experience = read('components/features/ZhikuV2/ZhikuExperience.tsx');
-const screen = read('components/features/ZhikuV2/ZhikuScreen.tsx');
-const types = read('components/features/ZhikuV2/types.ts');
-const categoryField = read('components/features/ZhikuV2/CategoryField.tsx');
-const categoryNode = read('components/features/ZhikuV2/CategoryNode.tsx');
-const orbitLayer = read('components/features/ZhikuV2/DataOrbitLayer.tsx');
-const zhikuStyles = read('components/features/ZhikuV2/zhiku-v2.css');
+const manager = read('components/features/ZhikuV3/ZhikuManagerModal.tsx');
+const experience = read('components/features/ZhikuV3/ZhikuExperience.tsx');
+const screen = read('components/features/ZhikuV3/ZhikuScreen.tsx');
+const types = read('components/features/ZhikuV3/types.ts');
+const categoryField = read('components/features/ZhikuV3/CategoryField.tsx');
+const categoryNode = read('components/features/ZhikuV3/CategoryNode.tsx');
+const orbitLayer = read('components/features/ZhikuV3/DataOrbitLayer.tsx');
+const zhikuStyles = read('components/features/ZhikuV3/zhiku-v3.css');
 const productionLayout = JSON.parse(fs.readFileSync(productionLayoutPath, 'utf8'));
 
 requireText(manager, "import { ZhikuExperience }", 'full-screen production entry');
@@ -32,62 +32,61 @@ requireText(manager, 'fixed inset-0', 'viewport takeover');
 requireText(app, "if (id === 'zhiku')", 'in-game Zhiku routing');
 requireText(app, 'setActiveSystem(null)', 'legacy drawer shutdown');
 requireText(app, 'setShowZhikuManager(true)', 'shared full-screen entry activation');
-requireText(experience, '<ZhikuPanel', 'maintenance-only legacy workbench');
+requireText(experience, '<ZhikuMaintenancePanel', 'unified V3 maintenance surface');
 requireText(types, "import productionLayoutSource from './zhiku-layout.production.json'", 'approved layout source');
 requireText(types, 'export const ZHIKU_PRODUCTION_LAYOUT', 'typed production layout');
-requireText(types, 'export const DEFAULT_ZHIKU_DESIGN_LAYOUT = ZHIKU_PRODUCTION_LAYOUT', 'shared workbench default');
 requireText(experience, 'ZHIKU_PRODUCTION_LAYOUT', 'approved layout import');
 requireText(experience, 'layout={ZHIKU_PRODUCTION_LAYOUT}', 'approved production layout');
 requireText(experience, 'const hasShownLobbyRef = useRef(false)', 'one-shot lobby entrance state');
 requireText(experience, 'entering={shouldAnimateLobby}', 'production entrance trigger');
-requireText(screen, 'className="zhiku-v2-screen__stage"', 'fixed-ratio composition stage');
+requireText(screen, 'className="zhiku-v3-screen__stage"', 'fixed-ratio composition stage');
 requireText(screen, "data-entering={entering ? 'true' : 'false'}", 'entrance animation state');
 requireText(screen, 'entering={entering}', 'orbit data-flow entrance state');
-requireText(categoryField, 'className="zhiku-v2-field__render-slot"', 'design-lab render wrapper');
+requireText(categoryField, 'className="zhiku-v3-field__render-slot"', 'production category render slot');
 requireText(categoryField, "'--zhiku-node-reveal-order': revealOrder", 'independent node reveal order');
-requireText(categoryNode, 'className="zhiku-v2-node__decode"', 'node-local binary decode layer');
+requireText(categoryNode, 'className="zhiku-v3-node__decode"', 'node-local binary decode layer');
 requireText(orbitLayer, "'--zhiku-orbit-opacity': opacity", 'orbit opacity animation token');
 requireText(orbitLayer, 'entering && !reducedMotion', 'one-shot route packet rendering');
-requireText(orbitLayer, 'className="zhiku-v2-orbits__packet"', 'route-bound binary packet');
+requireText(orbitLayer, 'className="zhiku-v3-orbits__packet"', 'route-bound binary packet');
 requireText(orbitLayer, '<animateMotion', 'route packet motion');
 requireText(orbitLayer, '<mpath', 'route path attachment');
-requireText(zhikuStyles, '.zhiku-v2-field__render-slot { display: contents; }', 'scoped render wrapper style');
+requireText(zhikuStyles, '.zhiku-v3-field__render-slot { display: contents; }', 'scoped render wrapper style');
 requireText(zhikuStyles, 'width: min(100cqw, calc(100cqh * 16 / 9));', 'stage width constraint');
 requireText(zhikuStyles, 'height: min(100cqh, calc(100cqw * 9 / 16));', 'stage height constraint');
 requireText(zhikuStyles, 'width: clamp(104px, 10.4cqw, 192px);', 'stage-relative node width');
 requireText(zhikuStyles, 'height: clamp(128px, 12cqw, 220px);', 'stage-relative node height');
 requireText(zhikuStyles, "[data-entering='true']", 'scoped entrance animation selectors');
-requireText(zhikuStyles, '.zhiku-v2-orbits__packet-glyph', 'route packet glyph style');
-requireText(zhikuStyles, '@keyframes zhiku-v2-icon-decode', 'node icon decode animation');
-requireText(zhikuStyles, '@keyframes zhiku-v2-icon-resolve', 'node emblem resolution animation');
-requireText(zhikuStyles, '@keyframes zhiku-v2-node-enter', 'staggered node animation');
-requireText(zhikuStyles, '@keyframes zhiku-v2-header-enter', 'header landing animation');
+requireText(zhikuStyles, '.zhiku-v3-orbits__packet-glyph', 'route packet glyph style');
+requireText(zhikuStyles, '@keyframes zhiku-v3-icon-decode', 'node icon decode animation');
+requireText(zhikuStyles, '@keyframes zhiku-v3-icon-resolve', 'node emblem resolution animation');
+requireText(zhikuStyles, '@keyframes zhiku-v3-node-enter', 'staggered node animation');
+requireText(zhikuStyles, '@keyframes zhiku-v3-header-enter', 'header landing animation');
 requireText(zhikuStyles, '@media (prefers-reduced-motion: reduce)', 'system reduced-motion fallback');
 
 for (const obsoleteAnimation of [
-  'zhiku-v2-boot-scan',
-  'zhiku-v2-boot-sweep',
-  'zhiku-v2-boot-axis',
-  'zhiku-v2-boot-core',
-  'zhiku-v2-data-veil',
-  'zhiku-v2-data-stream-forward',
-  'zhiku-v2-data-stream-reverse',
+  'zhiku-v3-boot-scan',
+  'zhiku-v3-boot-sweep',
+  'zhiku-v3-boot-axis',
+  'zhiku-v3-boot-core',
+  'zhiku-v3-data-veil',
+  'zhiku-v3-data-stream-forward',
+  'zhiku-v3-data-stream-reverse',
 ]) {
   if (zhikuStyles.includes(obsoleteAnimation)) {
     throw new Error(`The abrupt scan animation must be removed: ${obsoleteAnimation}`);
   }
 }
 
-if (zhikuStyles.includes('.zhiku-v2-field > div { display: contents; }')) {
+if (zhikuStyles.includes('.zhiku-v3-field > div { display: contents; }')) {
   throw new Error('Production category slots must not be flattened by a broad direct-child selector.');
 }
 
 const pageFrameIndex = screen.indexOf('<ZhikuPageFrame');
-const compositionStageIndex = screen.indexOf('className="zhiku-v2-screen__stage"');
+const compositionStageIndex = screen.indexOf('className="zhiku-v3-screen__stage"');
 if (pageFrameIndex < 0 || compositionStageIndex < 0 || pageFrameIndex > compositionStageIndex) {
   throw new Error('The full-bleed page frame must sit outside the fixed-ratio composition stage.');
 }
-if (/\.zhiku-v2-screen__stage\s*\{[^}]*background\s*:/s.test(zhikuStyles)) {
+if (/\.zhiku-v3-screen__stage\s*\{[^}]*background\s*:/s.test(zhikuStyles)) {
   throw new Error('The fixed-ratio composition stage must remain transparent over the full-bleed background.');
 }
 
@@ -122,14 +121,14 @@ if (storySourceCount !== 2) {
 }
 
 for (const forbidden of [
-  "const ZhikuPanel = lazyWithRetry",
+  "const ZhikuMaintenancePanel = lazyWithRetry",
   "case 'zhiku':",
-  '<ZhikuPanel',
+  '<ZhikuMaintenancePanel',
 ]) {
   if (app.includes(forbidden)) throw new Error(`Legacy Zhiku drawer UI must be offline in App.tsx: ${forbidden}`);
 }
 
-for (const forbidden of ["from '@/components/ui/Modal'", '<Modal', '<ZhikuPanel']) {
+for (const forbidden of ["from '@/components/ui/Modal'", '<Modal', '<ZhikuMaintenancePanel']) {
   if (manager.includes(forbidden)) throw new Error(`Zhiku production entry must render the new full-screen UI: ${forbidden}`);
 }
 

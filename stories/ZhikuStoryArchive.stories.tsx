@@ -4,7 +4,7 @@ import {
   StoryArchiveReader,
   type StoryArchiveChapter,
   type StoryArchiveVolume,
-} from '../components/features/ZhikuV2/StoryArchiveReader';
+} from '../components/features/ZhikuV3/StoryArchiveReader';
 
 const volumeOneChapters: StoryArchiveChapter[] = [
   {
@@ -157,7 +157,7 @@ const volumes: StoryArchiveVolume[] = [
 ];
 
 const meta = {
-  title: '开拓轶事/智库 V2/二级页面',
+  title: '开拓轶事/智库 V3/二级页面',
   component: StoryArchiveReader,
   parameters: {
     layout: 'fullscreen',

@@ -1,4 +1,5 @@
 import type { NPC账本选择结果 } from './npc';
+import type { ZhikuRunTrace } from '@/services/zhikuRunTrace';
 
 export type 消息角色 = 'user' | 'assistant' | 'system';
 
@@ -38,6 +39,27 @@ export interface 聊天消息 {
   debugContext?: {
     systemPrompt: string;
     messages: Array<{ role: 消息角色; content: string }>;
+    requestHash?: string;
+    zhikuRunTrace?: ZhikuRunTrace;
+    zhikuCompileId?: string;
+    zhikuCatalogVersion?: string;
+    zhikuCatalogRevision?: number;
+    zhikuActualProvider?: string;
+    zhikuActualModel?: string;
+    zhikuFinishReason?: string;
+    zhikuPredictionRequestHash?: string;
+    zhikuRequestDifferenceReasons?: string[];
+    requestCapabilities?: {
+      transport: string;
+      endpoint: string;
+      depthInjection: 'messages' | 'system';
+      mergesSystemMessages: boolean;
+      supportsAssistantPrefill: boolean;
+      streaming: boolean;
+      mode: 'native' | 'tavern-v2';
+      prefixRequested: boolean;
+      prefixApplied: boolean;
+    };
     recallPreview?: string;
     recallSummary?: string;
     recallFullContent?: string;

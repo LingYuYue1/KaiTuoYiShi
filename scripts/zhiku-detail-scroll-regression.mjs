@@ -4,7 +4,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const panel = fs.readFileSync('components/features/GameSystems/ZhikuPanel.tsx', 'utf8');
+const panel = fs.readFileSync('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx', 'utf8');
 
 assert(
   panel.includes('hidden h-full min-h-0 min-w-0 overflow-hidden md:block'),

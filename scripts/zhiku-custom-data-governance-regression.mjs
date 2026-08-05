@@ -150,11 +150,19 @@ try {
   assert(persisted.条目[0].资料所有者 === 'custom-user-data', 'persisted custom owner must remain explicit');
   assert(persisted.自制资料下一个序号 === 1, 'slim persistence must retain the next custom sequence');
 
-  const panelSource = fs.readFileSync(path.join(root, 'components/features/GameSystems/ZhikuPanel.tsx'), 'utf8');
+  const panelSource = fs.readFileSync(path.join(root, 'components/features/ZhikuV3/ZhikuMaintenancePanel.tsx'), 'utf8');
   const startupSource = fs.readFileSync(path.join(root, 'hooks/useGameState.ts'), 'utf8');
   assert(panelSource.includes('创建自制智库条目(normalized.条目'), 'maintenance UI must allocate ZZ ids at creation time');
   assert(panelSource.includes('诊断智库条目健康度(entry)'), 'character workbench must display governance health diagnostics');
-  assert(startupSource.includes('set智库(升级自制智库系统({'), 'startup fallback must upgrade custom data even when bundled loading fails');
+  assert(startupSource.includes('set智库(buildCustomOnlyZhikuFallback(savedZhiku, migrationAt))'), 'startup fallback must use the custom-only recovery contract');
+  const customOnlyFallback = api.buildCustomOnlyZhikuFallback({
+    条目: [
+      { ...builtin, 运行时解锁状态: '已解锁' },
+      legacyCustom,
+    ],
+  }, Date.now());
+  assert(customOnlyFallback.条目.length === 1, 'startup fallback must not restore incomplete builtin override placeholders');
+  assert(customOnlyFallback.条目[0].id === 'ZZ-000' && customOnlyFallback.条目[0].标题 === '旧自制人物', 'startup fallback must still upgrade and preserve custom data');
 
   console.log(JSON.stringify({
     customPrefix: api.ZHIKU_CUSTOM_ID_PREFIX,

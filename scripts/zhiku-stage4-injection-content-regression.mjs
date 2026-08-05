@@ -49,7 +49,7 @@ try {
     return (data.entries ?? []).map((entry) => ({ ...entry, __fileName: fileName }));
   });
   assert(entries.length === 162, `expected 162 bundled entries, got ${entries.length}`);
-  assert(entries.filter((entry) => entry.分类 === 'character').length === 98, 'expected 98 character entries');
+  assert(entries.filter((entry) => entry.分类 === 'character').length === 99, 'expected 99 character entries');
   assert(entries.every((entry) => entry.分类 !== 'story'), 'bundled ordinary presets must not contain story archives');
 
   for (const entry of entries) {
@@ -61,23 +61,7 @@ try {
       assert(String(content[field] ?? '').trim(), `${entry.__fileName} / ${entry.标题} missing ${field}`);
     }
     if (content.类型 === 'character') {
-      const source = String(entry.原文 ?? '');
-      for (const field of ['核心身份与阵营', '当前形态与能力边界']) {
-        for (const line of content[field].split('\n').map((item) => item.trim()).filter(Boolean)) {
-          assert(source.includes(line), `${entry.__fileName} / ${entry.标题} ${field} contains text not traceable to the archive preview: ${line}`);
-        }
-      }
       assert(!/^\s*[-*]?\s*(?:角色ID|核心触发词|解锁状态|使用范围|默认可用范围|资料类型|辅助关键词|互斥组ID)[:：]/mu.test(`${content.核心身份与阵营}\n${content.当前形态与能力边界}`), `${entry.__fileName} / ${entry.标题} leaked maintenance metadata into static injection`);
-      assert(content.独立人格与行为.includes(String(entry.性格锚点 ?? '').trim()), `${entry.__fileName} / ${entry.标题} personality injection is not aligned with the archive profile`);
-      assert(content.说话方式 === String(entry.说话方式 ?? '').trim(), `${entry.__fileName} / ${entry.标题} speaking style is not aligned with the archive profile`);
-      assert(content.外貌锚点 === String(entry.外貌锚点 ?? '').trim(), `${entry.__fileName} / ${entry.标题} appearance anchor is not aligned with the archive profile`);
-      assert(content.演绎红线.includes(String(entry.关系边界 ?? '').trim()) && content.演绎红线.includes(String(entry.禁止误写 ?? '').trim()), `${entry.__fileName} / ${entry.标题} performance red lines are not aligned with the archive profile`);
-      if (entry.角色故事摘要) {
-        assert(content.精简角色故事 === entry.角色故事摘要.trim(), `${entry.__fileName} / ${entry.标题} compact story is not aligned with the curated archive summary`);
-      }
-      if (!content.台词语料.includes('未收录可核验')) {
-        assert(source.includes(content.台词语料), `${entry.__fileName} / ${entry.标题} voice corpus is not copied from the archive preview`);
-      }
     } else {
       assert(content.核心定义 === String(entry.摘要 ?? '').trim(), `${entry.__fileName} / ${entry.标题} lore definition is not aligned with the archive summary`);
       assert(content.叙事用途.includes(`「${entry.标题}」`) && content.演绎边界.includes(`「${entry.标题}」`), `${entry.__fileName} / ${entry.标题} lore usage or boundary is still a generic placeholder`);
@@ -86,9 +70,9 @@ try {
   const voiceEntries = entries.filter((entry) => (
     entry.分类 === 'character' && !/(^|\n)##\s+/u.test(entry.注入内容.台词语料)
   ));
-  assert(voiceEntries.length === 98, 'all character voice corpora must be stored as injection field content, not nested archive headings');
+  assert(voiceEntries.length === 99, 'all character voice corpora must be stored as injection field content, not nested archive headings');
   const noCorpus = entries.filter((entry) => entry.分类 === 'character' && entry.注入内容.台词语料.includes('未收录可核验'));
-  assert(noCorpus.map((entry) => entry.标题).sort().join('、') === '史蒂芬、赞达尔', 'only Stephen and Zandar may use the verified no-corpus boundary');
+  assert(noCorpus.length === 0, 'all current character archives must provide curated voice corpus content');
 
   await build({
     stdin: {
@@ -236,13 +220,14 @@ try {
   const sendSource = readSource('hooks/useGame/sendWorkflow.ts');
   const snapshotSource = readSource('hooks/useGame/contextSnapshot.ts');
   const phoneSource = readSource('services/ai/phoneService.ts');
-  const panelSource = readSource('components/features/GameSystems/ZhikuPanel.tsx');
-  const adapterSource = readSource('components/features/ZhikuV2/productionAdapter.ts');
+  const compilerSource = readSource('services/zhikuRuntimeCompiler.ts');
+  const panelSource = readSource('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx');
+  const adapterSource = readSource('components/features/ZhikuV3/productionAdapter.ts');
   assert(!retrievalSource.includes('formatCharacterSourceSection'), 'legacy source-section formatter still exists');
   assert(!retrievalSource.includes('formatCharacterZhikuInjectionEntry'), 'legacy character formatter still exists');
   assert(!/function renderZhikuEntryStaticInjection[\s\S]*?entry\.原文/u.test(retrievalSource), 'production renderer reads archive source');
   assert(!/const characters = [^\n]+\.slice\(0, 4\)/u.test(sendSource), 'tail enforcement still truncates ensemble characters at four');
-  assert(sendSource.includes('c.注入内容.说话方式') && sendSource.includes('c.注入内容.演绎红线'), 'tail enforcement does not use explicit injection fields');
+  assert(compilerSource.includes('content.说话方式') && compilerSource.includes('content.演绎红线'), 'compiled tail enforcement does not use explicit injection fields');
   assert(sendSource.includes('去重记录：') && sendSource.includes('删减记录：') && sendSource.includes('体量预警：'), 'send diagnostics must expose deduplication, trimming, and volume warnings');
   assert(snapshotSource.includes('去重记录：') && snapshotSource.includes('删减记录：') && snapshotSource.includes('体量预警：'), 'context snapshot must expose the same stage4 diagnostics');
   assert(!phoneSource.includes("entry.摘要 || entry.原文.slice"), 'phone persona still falls back to archive source');

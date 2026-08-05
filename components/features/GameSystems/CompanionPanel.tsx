@@ -3,7 +3,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
 import { NPC_AFFINITY_MAX, NPC_AFFINITY_MIN, buildNpcMemoryLedgerView, 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
-import type { 智库系统 } from '@/models/zhiku';
 import { buildNpcRelationshipPlanning, type NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
 import { 解析相册资源引用 } from '@/utils/albumActions';
@@ -16,7 +15,6 @@ interface CompanionPanelProps {
   turnCount: number;
   nsfwEnabled: boolean;
   maleNsfwArchiveEnabled?: boolean;
-  zhikuSystem?: 智库系统;
   devMode?: boolean;
 }
 
@@ -42,7 +40,7 @@ const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
 const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
 
-export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnabled, maleNsfwArchiveEnabled = false, zhikuSystem, devMode = false }: CompanionPanelProps) {
+export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnabled, maleNsfwArchiveEnabled = false, devMode = false }: CompanionPanelProps) {
   const [tab, setTab] = useState<NPC阶位>('companion');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const normalizedRecords = useMemo(() => {
@@ -50,19 +48,17 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
     return enrichNpcArchives(normalized, {
       nsfwEnabled,
       maleNsfwArchiveEnabled,
-      zhiku: zhikuSystem,
     }).records;
-  }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled, zhikuSystem]);
+  }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled]);
 
   useEffect(() => {
     const normalized = 归一化NPC记录列表(npcRecords);
     const enriched = enrichNpcArchives(normalized, {
       nsfwEnabled,
       maleNsfwArchiveEnabled,
-      zhiku: zhikuSystem,
     });
     if (enriched.changed) onNpcRecordsChange(enriched.records);
-  }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled, zhikuSystem, onNpcRecordsChange]);
+  }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled, onNpcRecordsChange]);
 
   const companions = useMemo(
     () => sortNpcRecords(normalizedRecords.filter((n) => n.阶位 === 'companion')),

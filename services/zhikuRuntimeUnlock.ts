@@ -9,6 +9,31 @@ export interface 智库运行时解锁结果 {
   unlocked: Array<{ id: string; title: string; status: string; reason: string }>;
 }
 
+export function mergeZhikuRuntimeUnlockPatch(
+  current: 智库系统 | undefined,
+  unlocked: 智库运行时解锁结果['unlocked'],
+): 智库系统 {
+  const normalized = 归一化智库系统(current);
+  if (!unlocked.length) return normalized;
+  const patchById = new Map(unlocked.map((item) => [item.id, item]));
+  let changed = false;
+  const entries = normalized.条目.map((entry) => {
+    const patch = patchById.get(entry.id)
+      ?? entry.兼容ID?.map((id) => patchById.get(id)).find(Boolean);
+    if (!patch) return entry;
+    changed = true;
+    return {
+      ...entry,
+      运行时解锁状态: patch.status,
+      运行时解锁备注: patch.reason,
+      updatedAt: Date.now(),
+    };
+  });
+  return changed
+    ? 归一化智库系统({ ...normalized, 目录修订: (normalized.目录修订 ?? 0) + 1, 条目: entries })
+    : normalized;
+}
+
 export function applyStoryArchiveZhikuRuntimeUnlock(params: {
   zhiku: 智库系统 | undefined;
   storyWeaving: 剧情编织系统 | undefined;
@@ -40,7 +65,11 @@ export function applyStoryArchiveZhikuRuntimeUnlock(params: {
 
   if (!unlocked.length) return { system: zhiku, changed: false, unlocked };
   return {
-    system: 归一化智库系统({ 条目: nextEntries }),
+    system: 归一化智库系统({
+      ...zhiku,
+      目录修订: (zhiku.目录修订 ?? 0) + 1,
+      条目: nextEntries,
+    }),
     changed: true,
     unlocked,
   };

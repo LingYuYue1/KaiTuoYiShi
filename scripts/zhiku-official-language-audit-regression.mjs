@@ -15,15 +15,14 @@ const ignoredKeys = new Set([
 ]);
 const forbiddenTerms = [
   '本档案',
-  '召回',
-  '注入',
-  '玩家',
-  '存档',
   '写作时',
   '本回合',
   '注入建议',
-  '禁止误写',
-  '语料只',
+  '优先注入',
+  '语料只用于学习',
+  '触发语境',
+  '禁止 AI 臆造',
+  '禁止AI臆造',
   '示例台词不得',
   '不得原句搬运',
   '口吻参考',
@@ -31,9 +30,12 @@ const forbiddenTerms = [
   '当前叙事',
   '纳入建议',
   '档案包',
-  '写法指导',
   '写法收束',
   '写法上',
+  '主剧情应当',
+  '模型需要',
+  '用于锚定',
+  '提示词',
   '主剧情',
   'Agent',
   '角色ID',
@@ -82,7 +84,7 @@ for (const fileName of files) {
 }
 
 assert(entryCount === 162, `expected 162 project entries, got ${entryCount}`);
-assert(characterCount === 98, `expected 98 character entries, got ${characterCount}`);
+assert(characterCount === 99, `expected 99 active character entries after Zandar removal, got ${characterCount}`);
 
 const auditSource = fs.readFileSync(new URL('./zhiku-project-language-audit.mjs', import.meta.url), 'utf8');
 assert(!auditSource.includes("path.resolve(root, '..'"), 'project audit must not traverse outside the repository');

@@ -17,7 +17,7 @@ push('');
 push('> 由 `scripts/dump-injected-prompts.ts` 从源码导出，与代码一字不差。');
 push(`> 生成对象：内置提示词模块 ${modules.length} 个 + 内置世界书 ${worldbooks.length} 本。`);
 push('> 硬编码段模板见配套文档 `2026-07-26-injected-prompts-hardcoded-appendix.md`（人工维护，不随本文件重新生成）。');
-push('> 配套：`2026-07-26-main-prompt-injection-current-order.md`（注入顺序底图）。');
+push('> 配套：`2026-08-01-main-prompt-injection-order.md`（注入顺序底图）。');
 push('');
 
 // ── 提示词模块，按 scope 分组、组内按 order 排序 ──

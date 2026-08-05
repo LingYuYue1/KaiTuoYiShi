@@ -20,6 +20,7 @@ const worldModel = fs.readFileSync('models/world.ts', 'utf8');
 const openingArchiveService = fs.readFileSync('services/ai/openingArchive.ts', 'utf8');
 const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
 const zhikuRetrieval = fs.readFileSync('services/zhikuRetrieval.ts', 'utf8');
+const zhikuRuntimeCompiler = fs.readFileSync('services/zhikuRuntimeCompiler.ts', 'utf8');
 const storyWeaving = fs.readFileSync('services/storyWeaving.ts', 'utf8');
 const storyWeavingPreset = fs.readFileSync('data/storyWeavingPreset.ts', 'utf8');
 const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
@@ -147,7 +148,7 @@ assert(
 );
 
 assert(
-  systemPromptBuilder.includes("import type { 开局来源 } from '@/models/journey';") &&
+  systemPromptBuilder.includes("import type { 开局来源") &&
     systemPromptBuilder.includes('openingSource?: 开局来源') &&
     systemPromptBuilder.includes('m.openingSourceGate?.length') &&
     systemPromptBuilder.includes('m.openingSourceGate.includes(ctx.openingSource)'),
@@ -529,16 +530,16 @@ assert(
   contextSnapshot.includes('openingArchiveText') &&
     contextSnapshot.includes('openingSource: state.世界.开局档案?.来源') &&
     contextSnapshot.includes('格式化开局档案上下文(state.世界.开局档案)'),
-  '回合快照必须把结构化开局档案写进世界书 / 智库 / 剧情编织上下文。',
+  '回合快照必须把结构化开局档案写进世界书 / 剧情编织上下文和诊断结构。',
 );
 
 assert(
-  zhikuRetrieval.includes('openingArchiveText?: string') &&
-    zhikuRetrieval.includes('开局档案：') &&
-    zhikuRetrieval.includes('sceneContext.openingArchiveText') &&
-    zhikuRetrieval.includes('hints.openingArchiveText') &&
-    zhikuRetrieval.includes('const aiSupplementHintQuery = buildAiSupplementHintQuery(sceneContext?.aiSupplementHints)'),
-  '智库召回必须能读取开局档案结构化摘要并用于场景、补缺和 AI 查缺。',
+  zhikuRuntimeCompiler.includes("return scope === 'main' || scope === 'diagnostic'") &&
+    sendWorkflow.includes("? 'opening'") &&
+    sendWorkflow.includes("? 'pathAwakeningQuestion'") &&
+    sendWorkflow.includes("? 'pathAwakeningJudgement'") &&
+    zhikuRetrieval.includes('openingArchiveText?: string'),
+  '智库唯一编译器必须显式排除开局与命途狭间请求；开局档案由世界书和剧情编织链路消费。',
 );
 
 assert(
@@ -556,7 +557,8 @@ assert(
   builtinWorldbook.includes('开局切入说明') &&
     builtinWorldbook.includes('黑塔空间站') &&
     builtinWorldbook.includes('黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼和自由 / 创意工坊开局都可以成为当前起点') &&
-    builtinWorldbook.includes('只有「# 开局档案」明确显示当前开局是黑塔空间站主线苏醒前夕') &&
+    builtinWorldbook.includes('仅在「黑塔空间站 · 主线苏醒前夕」开局中') &&
+    builtinWorldbook.includes('按开局档案把此前主线视为既成背景') &&
     !builtinWorldbook.includes('当前游戏内仅有「黑塔空间站·反物质入侵」一条线') &&
     !builtinWorldbook.includes('本作目前只做「登上星穹列车」这一条线') &&
     !builtinWorldbook.includes('开局时已抵达黑塔空间站'),

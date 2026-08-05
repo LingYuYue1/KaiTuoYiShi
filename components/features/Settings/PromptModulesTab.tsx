@@ -6,7 +6,9 @@ import {
   PROMPT_MODULE_SCOPE_LABELS,
   isBuiltinPromptModule,
   getDefaultModuleFields,
+  syncStoryModeModuleEnabled,
 } from '@/models/prompts';
+import type { 剧情模式 } from '@/models/journey';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
   parseSTPresetV2,
@@ -107,6 +109,7 @@ const CATEGORY_COLOR_VAR: Record<提示词模块类目, string> = {
   devmode: '--tj-danger',
   jailbreak: '--tj-ui-nsfw',
   style: '--tj-accent-primary',
+  storymode: '--tj-tech-blue',
   custom: '--tj-text-secondary',
 };
 
@@ -114,6 +117,8 @@ interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   mode?: 'modules' | 'tavern';
+  /** 当前剧情模式：剧情方向模块(builtin_storymode_*)四选一，其开关显示与锁定状态由它派生。 */
+  storyMode?: 剧情模式;
   /** Phase 7.2：世界书数组（ST 预设导入时注入 ST 世界书条目）。 */
   worldbooks: 世界书[];
   /** Phase 7.2：世界书变更回调（由父级负责持久化到 IndexedDB）。 */
@@ -366,9 +371,9 @@ function TogglePill({
   );
 }
 
-export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbooks, onWorldbooksChange, apiSettings, onApiSettingsChange }: Props) {
+export function PromptModulesTab({ settings, onChange, mode = 'modules', storyMode, worldbooks, onWorldbooksChange, apiSettings, onApiSettingsChange }: Props) {
   const isTavernMode = mode === 'tavern';
-  const modules = settings.promptModules;
+  const modules = syncStoryModeModuleEnabled(settings.promptModules, storyMode);
   /** 全部可选预设：内置预设（原生 / 二创成品）+ 玩家导入预设。切换 UI 与 switchPreset 统一用此数组查找。
    *  去重：若玩家导入预设与内置预设同名（如早期测试导入的双人成行），只保留内置版本。 */
   const allPresets = useMemo<STPresetEntry[]>(() => {
@@ -2806,7 +2811,7 @@ function ModuleItem({
   const isSTImport = isSTImportedModule(m);
   const isStyle = isWritingStyleModule(m);
   // 开关禁用：独立模型展示模块（非真实开关）
-  const toggleDisabled = isCal;
+  const toggleDisabled = isCal || m.locked === true;
   // 身份标签：预设 > 内置 > 自定义
   const badgeLabel = isSTImport ? '预设' : m.builtin ? '内置' : '自定义';
   const badgeStyle = isSTImport
@@ -2890,21 +2895,30 @@ function ModuleItem({
             互斥
           </span>
         )}
-        {/* 滑块开关：独立模型模块禁用（不可切换） */}
+        {/* 滑块开关：独立模型展示模块 / 锁定模块禁用（不可切换）。
+            显示用真实 enabled —— 剧情方向模块四选一，只有命中当前剧情模式的那本为开。 */}
         <span
           role="switch"
-          aria-checked={toggleDisabled || m.enabled}
-          title={toggleDisabled ? '独立模型展示模块不是真实请求开关' : m.enabled ? '已启用' : '已关闭'}
+          aria-checked={m.enabled}
+          title={
+            isCal
+              ? '独立模型展示模块不是真实请求开关'
+              : m.locked
+                ? '剧情方向由开局选择的剧情模式决定，不可手动切换'
+                : m.enabled
+                  ? '已启用'
+                  : '已关闭'
+          }
           onClick={(e) => {
             e.stopPropagation();
             if (!toggleDisabled) onToggle(m.id);
           }}
           className="relative inline-flex h-4 w-7 flex-shrink-0 cursor-pointer items-center transition-all"
           style={{
-            background: toggleDisabled || m.enabled
+            background: m.enabled
               ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))'
               : 'rgba(var(--tj-bg-secondary), 0.68)',
-            boxShadow: toggleDisabled || m.enabled
+            boxShadow: m.enabled
               ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4)'
               : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
             clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
@@ -2915,8 +2929,8 @@ function ModuleItem({
           <span
             className="absolute top-0.5 h-3 w-3 transition-transform"
             style={{
-              left: toggleDisabled || m.enabled ? 'calc(100% - 0.875rem)' : '0.125rem',
-              background: toggleDisabled || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
+              left: m.enabled ? 'calc(100% - 0.875rem)' : '0.125rem',
+              background: m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
               clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
             }}
           />
@@ -2944,7 +2958,7 @@ function EditorPanel({
   const readonly = m.builtin && m.id !== 'builtin_writing_style_custom';
   const isCalibrationModule = m.scope?.includes('calibration');
   // 开关禁用：独立模型展示模块（非真实开关）
-  const toggleDisabled = isCalibrationModule;
+  const toggleDisabled = isCalibrationModule || m.locked === true;
 
   // 分层信息：根据 order 区间映射 Layer
   const layerLabel = m.order < 10 ? 'Layer 1 · 顶层' : m.order < 30 ? 'Layer 2 · 主体' : 'Layer 3 · 尾部';

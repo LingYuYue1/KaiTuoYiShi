@@ -757,6 +757,28 @@ export async function loadSetting<T>(key: string): Promise<T | null> {
   });
 }
 
+export async function updateSetting<T>(
+  key: string,
+  updater: (current: T | null) => T,
+): Promise<T> {
+  const db = await openDB();
+  return new Promise<T>((resolve, reject) => {
+    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+    const store = tx.objectStore(SETTINGS_STORE);
+    const request = store.get(key);
+    let nextValue: T;
+    request.onsuccess = () => {
+      const result = request.result as { value?: T } | undefined;
+      nextValue = updater(result?.value ?? null);
+      store.put({ key, value: nextValue });
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(nextValue!);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error(`更新设置失败：${key}`));
+  });
+}
+
 export async function deleteSetting(key: string): Promise<void> {
   await deleteIndexedSetting(key);
 }

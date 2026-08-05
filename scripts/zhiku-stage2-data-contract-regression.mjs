@@ -50,7 +50,7 @@ try {
         "export * from './models/zhiku';",
         "export * from './models/zhikuGovernance';",
         "export * from './services/zhikuRetrieval';",
-        "export * from './components/features/ZhikuV2/productionAdapter';",
+        "export * from './components/features/ZhikuV3/productionAdapter';",
       ].join('\n'),
       resolveDir: root,
       sourcefile: 'zhiku-stage2-data-contract-entry.ts',
@@ -115,12 +115,17 @@ try {
   const loaded = await api.loadAllBundledZhikuPresets();
   assert(loaded.条目.length === 162, `active loader must return 162 entries, received ${loaded.条目.length}`);
   assert(loaded.条目.every((entry) => api.ZHIKU_MACHINE_ID_PATTERN.test(entry.id)), 'every active bundled entry must receive a short machine id');
-  assert(loaded.条目.every((entry) => entry.兼容ID?.length === 1), 'every active bundled entry must retain one legacy id');
+  assert(loaded.条目.every((entry) => entry.兼容ID?.length >= 1), 'every active bundled entry must retain its legacy id');
+  const theHerta = loaded.条目.find((entry) => entry.id === 'JS-099');
+  assert(theHerta?.标题 === '大黑塔', 'JS-099 must remain bound to The Herta');
+  assert(theHerta.兼容ID.includes('JS-012B'), 'The Herta must retain JS-012B as a compatibility id');
+  assert(api.按ID查找智库条目(loaded, 'JS-012B') === theHerta, 'legacy JS-012B must resolve to JS-099');
   assert(loaded.条目.every((entry) => entry.来源预设ID && entry.来源文件 && Number.isInteger(entry.来源序号)), 'every migrated entry must retain source traceability');
   assert(
     loaded.条目.some((entry) => entry.id === 'DS-000' && entry.治理分类 === 'enemy' && entry.标题 === '归寂'),
     'the first audited enemy archive must load through its stable identity',
   );
+  assert(api.按ID查找智库条目(loaded, 'JS-098')?.id === 'DS-000', 'legacy Guiji character id must resolve to DS-000');
 
   const byCategory = Object.fromEntries(
     Object.keys(expectedPrefixes).map((category) => [category, loaded.条目.filter((entry) => entry.治理分类 === category).length]),

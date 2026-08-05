@@ -6,6 +6,8 @@ import { isDataImageUrl, rememberAlbumAssetFromDataUrl } from '@/utils/albumObje
 import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
+import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
+import { 归一化智库系统 } from '@/models/zhiku';
 
 const LARGE_TEXT_LIMIT = 8000;
 const MAX_SNAPSHOT_QUEUE_TASKS = 12;
@@ -81,6 +83,9 @@ export function compactPreTurnSnapshot(snapshot: 回合快照): 回合快照 {
     剧情编织: snapshot.剧情编织
       ? buildPersistedStoryWeavingSystem(归一化剧情编织系统(snapshot.剧情编织))
       : snapshot.剧情编织,
+    智库: snapshot.智库
+      ? buildPersistedZhikuSystem(归一化智库系统(snapshot.智库 as import('@/models/zhiku').智库系统))
+      : snapshot.智库,
     variableBatches: compactVariableBatchHistory(snapshot.variableBatches as import('@/models/variableCommand').变量命令批次[]),
     queueTasks: compactQueueTasks(snapshot.queueTasks),
   }, refs) as 回合快照;

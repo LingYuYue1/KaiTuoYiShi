@@ -1,0 +1,112 @@
+.zhiku-v3-reader-font-control {
+  position: absolute;
+  z-index: 10;
+  top: clamp(14px, 2.4vh, 24px);
+  right: clamp(72px, 7.4vw, 92px);
+  display: grid;
+  width: 116px;
+  height: 34px;
+  grid-template-columns: 25px 30px 31px 30px;
+  align-items: center;
+  overflow: hidden;
+  color: rgba(var(--zhiku-blue), 0.78);
+  background: rgba(5, 11, 14, 0.78);
+  border: 1px solid rgba(var(--zhiku-blue), 0.24);
+  border-radius: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(8px);
+}
+
+.zhiku-v3-reader-font-control[data-has-refresh='true'] {
+  width: 146px;
+  grid-template-columns: 25px 30px 31px 30px 30px;
+}
+
+.zhiku-v3-reader-font-control__type {
+  justify-self: center;
+  color: rgba(var(--zhiku-gold), 0.7);
+}
+
+.zhiku-v3-reader-font-control button {
+  display: grid;
+  width: 30px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  color: rgba(var(--zhiku-ivory), 0.7);
+  background: transparent;
+  border: 0;
+  border-left: 1px solid rgba(var(--zhiku-blue), 0.13);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.zhiku-v3-reader-font-control button:hover,
+.zhiku-v3-reader-font-control button:focus-visible {
+  color: #fff4d1;
+  background: rgba(var(--zhiku-blue), 0.1);
+  outline: 1px solid rgba(var(--zhiku-gold), 0.44);
+  outline-offset: -1px;
+}
+
+.zhiku-v3-reader-font-control button:disabled {
+  color: rgba(var(--zhiku-blue), 0.28);
+  cursor: not-allowed;
+}
+
+.zhiku-v3-reader-font-control__refresh[data-refresh-status='loading'] svg {
+  animation: zhiku-v3-reader-refresh-spin 0.8s linear infinite;
+}
+
+.zhiku-v3-reader-font-control__refresh[data-refresh-status='done'] {
+  color: rgba(154, 232, 178, 0.96);
+}
+
+.zhiku-v3-reader-font-control__refresh[data-refresh-status='error'] {
+  color: rgba(255, 156, 132, 0.96);
+}
+
+@keyframes zhiku-v3-reader-refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
+.zhiku-v3-reader-font-control output {
+  display: grid;
+  width: 31px;
+  height: 32px;
+  place-items: center;
+  color: rgba(var(--zhiku-ivory), 0.86);
+  border-left: 1px solid rgba(var(--zhiku-blue), 0.13);
+  font-family: ui-monospace, 'Cascadia Mono', monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .zhiku-v3-reader-font-control {
+    top: max(12px, env(safe-area-inset-top));
+    right: max(66px, calc(54px + env(safe-area-inset-right)));
+    height: 44px;
+  }
+
+  .zhiku-v3-reader-font-control button,
+  .zhiku-v3-reader-font-control output {
+    height: 42px;
+  }
+}
+
+@media (max-width: 360px) {
+  .zhiku-v3-reader-font-control {
+    width: 91px;
+    grid-template-columns: 30px 31px 30px;
+  }
+
+  .zhiku-v3-reader-font-control__type {
+    display: none;
+  }
+
+  .zhiku-v3-reader-font-control[data-has-refresh='true'] {
+    width: 121px;
+    grid-template-columns: 30px 31px 30px 30px;
+  }
+}

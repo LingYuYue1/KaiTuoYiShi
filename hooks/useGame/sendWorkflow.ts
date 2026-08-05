@@ -7,6 +7,14 @@ import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { isNonRetryableAIError } from '@/services/ai/deepSeekRecovery';
 import { callVariableModel, type NsfwBaselineCandidate } from '@/services/ai/variableModel';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
+import {
+  buildMainTurnEnforcementBlock,
+  createMainRequestHash,
+  DEEPSEEK_MAIN_FORMAT_GUARD,
+  finalizeMainRequest,
+  MAIN_COT_FAKE_HISTORY,
+} from './mainRequestFinalizer';
+import { resolveChatProviderCapabilities } from '@/services/ai/chatCompletionClient';
 import { buildTavernMessageChain } from './tavernMessageChainBuilder';
 import { applyTavernOutputRegexScripts } from './tavernRegexProcessor';
 import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
@@ -24,7 +32,7 @@ import { runNewsGenerationStep } from './newsWorkflow';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { 归一化世界状态, 格式化开局档案上下文, type 世界状态 } from '@/models/world';
-import { loadSetting, saveGame, saveSetting } from '@/services/dbService';
+import { loadSetting, saveGame, saveSetting, updateSetting } from '@/services/dbService';
 import {
   clearWorkflowRecoveryJournal,
   createWorkflowRecoveryJournal,
@@ -47,8 +55,14 @@ import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评�
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
 import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
-import { retrieveZhikuContext, retrieveZhikuContextWithModel, type 智库召回诊断 } from '@/services/zhikuRetrieval';
-import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
+import type { 智库召回诊断 } from '@/services/zhikuRetrieval';
+import {
+  compileZhikuTurn,
+  compileZhikuTurnWithModel,
+  type ZhikuRequestScope,
+} from '@/services/zhikuRuntimeCompiler';
+import { attachZhikuRequestReceipt } from '@/services/zhikuRunTrace';
+import { applyStoryArchiveZhikuRuntimeUnlock, mergeZhikuRuntimeUnlockPatch } from '@/services/zhikuRuntimeUnlock';
 import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { getBuiltinPresets } from '@/data/builtinPresets';
@@ -71,9 +85,8 @@ import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/p
 import { enrichNpcArchives, needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
 import { appendWorldEvents } from '@/utils/worldEvents';
-import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
+import { getZhikuCharacterParticipationForTurn } from './npcPresence';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
-import type { 智库条目 } from '@/models/zhiku';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
 import { applyNovelAIRulePreset } from '@/utils/imagePromptRules';
 import { resolveStorySnapshot, selectPresentStorySnapshotNpcs } from '@/services/ai/storySnapshotPipeline';
@@ -82,13 +95,6 @@ import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
-
-const DEEPSEEK_MAIN_FORMAT_GUARD = [
-  'DeepSeek 主剧情格式校验：本轮必须从 <thinking> 开始输出，禁止直接从 <正文> 开始。',
-  '必须完整输出 <thinking>、<正文>、<短期记忆>、<动态世界>、<变量草稿>；如本回合存在后续承接价值，再输出 <剧情规划>。',
-  '<thinking> 内必须按当前生效的思维链 Step 标题，用中文逐步写出实际判断；不允许只写正文，不允许省略 thinking，不允许只写“已思考”。',
-  '不要在标签外输出解释、道歉、说明或额外标题。',
-].join('\n');
 
 function formatOriginalProtagonistForOpening(originalProtagonist: 世界状态['原著主角']): string {
   if (originalProtagonist === '星') return '原作主角星';
@@ -187,43 +193,6 @@ function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情
   if (after.当前待解问题.length) parts.push(`待解：${after.当前待解问题.slice(0, 3).join('；')}`);
   if (after.最近判定理由.length) parts.push(`判定：${after.最近判定理由.slice(0, 3).join('；')}`);
   return parts.join('。');
-}
-
-// 区E执法块(结构轮, 2026-07-26): 注入在聊天历史与玩家输入之后——离生成点最近的位置。
-// 实现参照狭间评判提醒的既有先例(尾部 user 消息,三 provider 通用,连续 user 消息已有
-// DeepSeek 守卫先例)。素材复用本回合已算好的智库命中,不新增检索。
-function buildTurnEnforcementBlock(input: {
-  playerName: string;
-  wordCountTarget: number;
-  zhikuEntries?: 智库条目[];
-  storyWeavingActive: boolean;
-}): string {
-  const lines: string[] = ['# 本回合生成前核对（最高优先级，覆盖上文所有软性描述）'];
-  const characters = (input.zhikuEntries ?? []).filter((entry) => (
-    entry.分类 === 'character' && entry.注入内容?.类型 === 'character'
-  ));
-  if (characters.length) {
-    lines.push('【在场角色锚点】');
-    for (const c of characters) {
-      if (c.注入内容?.类型 !== 'character') continue;
-      const speech = c.注入内容.说话方式.trim();
-      const forbid = c.注入内容.演绎红线.trim();
-      const bits = [
-        speech ? `说话方式：${speech.length > 60 ? `${speech.slice(0, 58)}…` : speech}` : '',
-        forbid ? `禁止误写：${forbid.length > 60 ? `${forbid.slice(0, 58)}…` : forbid}` : '',
-      ].filter(Boolean).join('｜');
-      if (bits) lines.push(`- ${c.标题}：${bits}`);
-    }
-  }
-  lines.push('【硬性要点】');
-  lines.push(`- 发言归属：【${input.playerName}】只承载玩家本回合明确说出的原话；NPC 台词、拟声词、环境音绝不挂玩家名。`);
-  lines.push('- 禁止代写玩家的心理、神态、感受或决定；正文内禁止任何选项菜单结构。');
-  if (input.storyWeavingActive) {
-    lines.push('- 剧情编织滑窗只按门禁推进；已发生的事件禁止重演，未开始的分段禁止抢跑。');
-  }
-  lines.push(`- <正文> 不少于 ${input.wordCountTarget} 字；<thinking>/<正文>/<短期记忆>/<动态世界> 标签齐全。`);
-  lines.push('逐项核对以上约束后再动笔；与上文任何描述冲突时，以本块为准。');
-  return lines.join('\n');
 }
 
 function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编织系统, _memoryLine: string, turn: number): NPC记录[] {
@@ -836,31 +805,6 @@ function buildFallbackPhoneSeed(input: {
     expiresAfterTurns: 6,
     status: 'pending',
   };
-}
-
-/** CoT 伪装历史：在 `user:开始任务` 后注入一条 assistant 历史，强化思考段输出习惯。
- *  内容刻意保留 `<thinking>` 段，让模型 in-context 学到「下次也要写 thinking」。 */
-const COT_FAKE_HISTORY_USER = '开始任务';
-const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
-- 系统就绪。当前任务：等待玩家发送指令后按 4 标签协议输出（thinking / 正文 / 短期记忆 / 动态世界）。
-- 在收到首条具体指令前不输出正文，本条仅为格式确认。
-</thinking>
-
-<正文>
-（待命中：等待玩家发起首回合）
-</正文>
-
-<短期记忆>
-</短期记忆>
-
-<动态世界>
-</动态世界>`;
-
-function isDeepSeekMainConfig(config: { provider?: string; baseUrl?: string; model?: string }): boolean {
-  const provider = String(config.provider ?? '').toLowerCase();
-  const baseUrl = String(config.baseUrl ?? '').toLowerCase();
-  const model = String(config.model ?? '').toLowerCase();
-  return provider === 'deepseek' || baseUrl.includes('deepseek') || model.includes('deepseek');
 }
 
 function applyNsfwVariablePolicy(
@@ -1775,6 +1719,20 @@ export async function executeSendWorkflow(
     const awakeningPhase: 'question' | 'judgement' | undefined = effectiveWorld.进行中狭间
       ? (isAwakeningEnterTrigger ? 'question' : 'judgement')
       : undefined;
+    const zhikuRequestScope: ZhikuRequestScope = currentScope === 'opening'
+      ? 'opening'
+      : awakeningPhase === 'question'
+        ? 'pathAwakeningQuestion'
+        : awakeningPhase === 'judgement'
+          ? 'pathAwakeningJudgement'
+          : 'main';
+    const zhikuParticipation = getZhikuCharacterParticipationForTurn({
+      world: effectiveWorld,
+      npcs: state.NPC,
+      history: updatedHistory,
+      userInput,
+      turnCount: state.turnCount,
+    });
     const openingArchiveText = 格式化开局档案上下文(effectiveWorld.开局档案);
     const worldbookCtx = {
       recentUserInput: userInput,
@@ -1790,13 +1748,7 @@ export async function executeSendWorkflow(
       openingEntryText: effectiveWorld.开局档案?.玩家介入原文,
       openingSource: effectiveWorld.开局档案?.来源,
       openingArchiveText,
-      npcNames: getZhikuNpcNamesForTurn({
-        world: effectiveWorld,
-        npcs: state.NPC,
-        history: updatedHistory,
-        userInput,
-        turnCount: state.turnCount,
-      }),
+      npcNames: zhikuParticipation.present,
       originalProtagonist: effectiveWorld.原著主角,
       currentScope,
       // 当前剧情模式，用于按 storyModeGate 过滤主线世界书（4 选 1）
@@ -1809,11 +1761,6 @@ export async function executeSendWorkflow(
       messageCount: state.turnCount,
       worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
     };
-    const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({
-      world: effectiveWorld,
-      history: updatedHistory,
-      userInput,
-    });
     const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
     const latestZhikuStoryPlan = [...updatedHistory]
       .reverse()
@@ -1829,7 +1776,7 @@ export async function executeSendWorkflow(
       currentLocation: undefined,
       npcNames: [],
       presentNpcNamesForFallback: worldbookCtx.npcNames,
-      anticipatedNpcNames: anticipatedZhikuNpcNames,
+      anticipatedNpcNames: zhikuParticipation.anticipated,
       aiSupplementHints: {
         currentLocation: effectiveWorld.当前地点,
         presentNpcNames: worldbookCtx.npcNames,
@@ -1902,7 +1849,8 @@ export async function executeSendWorkflow(
     }
     const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
     const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && (state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) < state.turnCount;
-    const zhikuRecallEnabled = !isOpeningSystemTrigger && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
+    const zhikuRecallEnabled = zhikuRequestScope === 'main'
+      && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
     const zhikuAiSupplementEnabled = zhikuRecallEnabled && state.gameSettings.智库系统?.enableAiSupplement === true;
     const storyWeavingGate = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
       ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx)
@@ -1931,28 +1879,46 @@ export async function executeSendWorkflow(
           })
         : Promise.resolve(null),
       !zhikuRecallEnabled
-        ? Promise.resolve(null)
+        ? Promise.resolve(compileZhikuTurn({
+            system: undefined,
+            query: zhikuRecallQuery,
+            limit: state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+            scope: zhikuRequestScope,
+            participation: zhikuParticipation,
+            sceneContext: zhikuSceneContext,
+          }))
         : zhikuAiSupplementEnabled
-        ? retrieveZhikuContextWithModel(
-            state.智库,
-            zhikuRecallQuery,
-            state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
-            state.gameSettings.智库系统 ?? 创建默认智库系统设置(),
-            config,
-            abortController.signal,
-            state.gameSettings.智库系统?.api.retryCount ?? 2,
-            zhikuSceneContext,
-            state.gameSettings.promptModules,
-          ).catch((err) => {
+        ? compileZhikuTurnWithModel({
+            system: state.智库,
+            query: zhikuRecallQuery,
+            limit: state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+            scope: zhikuRequestScope,
+            participation: zhikuParticipation,
+            settings: state.gameSettings.智库系统 ?? 创建默认智库系统设置(),
+            mainConfig: config,
+            signal: abortController.signal,
+            retryCount: state.gameSettings.智库系统?.api.retryCount ?? 2,
+            sceneContext: zhikuSceneContext,
+            promptModules: state.gameSettings.promptModules,
+          }).catch((err) => {
             console.warn('[zhiku-retrieval] 智库检索失败：', err);
-            return null;
+            return compileZhikuTurn({
+              system: state.智库,
+              query: zhikuRecallQuery,
+              limit: state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+              scope: zhikuRequestScope,
+              participation: zhikuParticipation,
+              sceneContext: zhikuSceneContext,
+            });
           })
-        : Promise.resolve(retrieveZhikuContext(
-            state.智库,
-            zhikuRecallQuery,
-            state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
-            zhikuSceneContext,
-          )),
+        : Promise.resolve(compileZhikuTurn({
+            system: state.智库,
+            query: zhikuRecallQuery,
+            limit: state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+            scope: zhikuRequestScope,
+            participation: zhikuParticipation,
+            sceneContext: zhikuSceneContext,
+          })),
     ]);
     assertWorkflowActive();
     const recallSummaryForTurn = [
@@ -1960,7 +1926,7 @@ export async function executeSendWorkflow(
       formatYitingRecallSummary(yitingPreview?.previewText),
     ].join('\n');
     const recallFullContentForTurn = [
-      zhikuPreview?.injection ? ['【智库完整召回】', zhikuPreview.injection].join('\n') : '',
+      zhikuPreview.mainStoryInjection ? ['【智库完整召回】', zhikuPreview.mainStoryInjection].join('\n') : '',
       yitingPreview?.injection ? ['【记忆完整召回】', yitingPreview.injection].join('\n') : '',
     ].filter(Boolean).join('\n\n');
     state.setLiveRecallSummary(recallSummaryForTurn);
@@ -2055,12 +2021,11 @@ export async function executeSendWorkflow(
           state.新闻,
           state.剧情,
           state.剧情编织,
-          state.智库,
+          zhikuPreview,
           state.忆庭,
           state.手机,
           awakeningPhase,
           storyRecallInjection || (yitingRecallEnabled ? '' : undefined),
-          zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined,
           Boolean(yitingPreview?.injection),
           npcLedgerSelection,
           currentTriggerType,
@@ -2175,8 +2140,9 @@ export async function executeSendWorkflow(
       );
     }
 
+    const providerCapabilities = resolveChatProviderCapabilities(mainStoryConfig);
     const deepSeekMainMode = state.gameSettings.deepSeekMainMode ?? 'off';
-    const deepSeekMainActive = isDeepSeekMainConfig(mainStoryConfig) && deepSeekMainMode !== 'off';
+    const deepSeekMainActive = providerCapabilities.transport === 'deepseek' && deepSeekMainMode !== 'off';
     const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
     const shouldUseCotFakeHistory =
       state.gameSettings.enableCotFakeHistory && !isOpeningSystemTrigger && !deepSeekMainActive;
@@ -2196,87 +2162,46 @@ export async function executeSendWorkflow(
     const effectivePrefixMode = deepSeekLockFormat || usePresetPrefill;
     const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\n' : presetAssistantPrefill;
 
-    if (deepSeekMainActive) {
-      apiMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
-    }
+    const mainTailMessages: 聊天消息[] = [];
+    if (deepSeekMainActive) mainTailMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
     if (deps.rerollContext && !isOpeningSystemTrigger) {
-      apiMessages.push(创建聊天消息(
+      mainTailMessages.push(创建聊天消息(
         'user',
         buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
       ));
     }
 
-    // 区E执法块(结构轮): 主剧情普通回合的最后一条 user 消息。开局/狭间评判/ST V2 消息链回合跳过
-    // (各有自己的收尾协议)。
-    if (!isOpeningSystemTrigger && !tavernV2Messages && awakeningPhase !== 'judgement') {
-      apiMessages.push(创建聊天消息('user', buildTurnEnforcementBlock({
+    // 主剧情普通回合共享同一尾部校准块；普通消息链和 Tavern V2 不再分叉。
+    if (zhikuRequestScope === 'main') {
+      mainTailMessages.push(创建聊天消息('user', buildMainTurnEnforcementBlock({
         playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
         wordCountTarget: state.gameSettings.wordCountTarget,
-        zhikuEntries: zhikuPreview?.entries,
+        zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
         storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
       })));
     }
 
     // 3b. CoT 伪装历史注入：在消息序列最前面塞一对 user/assistant，强化思考段输出习惯。
     //     DeepSeek 专用模式下不注入这段伪装续聊，避免污染真实 user 输入并降低格式漂移。
-    if (shouldUseCotFakeHistory) {
-      apiMessages.unshift(
-        创建聊天消息('user', COT_FAKE_HISTORY_USER),
-        创建聊天消息('assistant', COT_FAKE_HISTORY_ASSISTANT),
-      );
-    }
-
-    // 3c. ST 预设兼容：In-Chat depth 注入。
-    //     injectionPosition=1 的模块按 injectionDepth 插入聊天历史。
-    //     depth=0 末尾后，depth=1 末尾前，依此类推。
-    //     Claude 方案 D：Claude 下 normalizeClaudeMessages 会抽取所有 system 消息到顶层，
-    //     所以 Claude 下跳过 depth 注入。user/assistant 角色的 depth 模块追加到 systemPrompt 尾部。
-    //     兜底：injectionPosition=0 的 user/assistant 模块（ST 预设很少用）也追加到 systemPrompt，
-    //     避免内容丢失。
-    //
-    // 方案 B + C（v3 计划）：position 分流规则
-    //   - position=0 + system role → 进 systemSection（在 injectPromptModules 里处理）
-    //   - position=0 + user/assistant role → 追加 systemPrompt 尾部（方案 B，下方分支）
-    //     简化处理：ST 语义里 position=0 + depth>0 表示插入 systemPrompt 中段，
-    //     但我们的 systemPrompt 是字符串拼接，无法精确插入中段，统一追加到尾部。
-    //     ST 预设中 position=0 + user/assistant + depth>0 极罕见，此简化可接受。
-    //   - position=1 + user/assistant role（非 Claude）→ depth 注入（方案 C，下方分支）
-    //   - position=1 + user/assistant role（Claude）→ 追加 systemPrompt 尾部（Claude 方案 D）
-    if (moduleChatMessages.length > 0) {
-      // 方案 B：injectionPosition=0 的 user/assistant 消息追加到 systemPrompt 尾部
-      const positionZeroMessages = moduleChatMessages
-        .filter((m) => m._injectionPosition === 0)
-        .sort((a, b) => (a._injectionOrder ?? 0) - (b._injectionOrder ?? 0));
-      if (positionZeroMessages.length > 0) {
-        const fallbackText = positionZeroMessages.map((m) => m.content).join('\n\n---\n\n');
-        systemPrompt = systemPrompt + '\n\n---\n\n' + fallbackText;
-      }
-
-      if (mainStoryConfig.provider !== 'claude') {
-        // 方案 C：非 Claude 走 depth 注入，按 depth 降序 splice 到 apiMessages
-        // 降序是为了避免 splice 时索引偏移（先插后面的再插前面的）
-        const depthMessages = moduleChatMessages
-          .filter((m) => m._injectionPosition === 1)
-          .sort((a, b) => (b._injectionDepth ?? 0) - (a._injectionDepth ?? 0));
-        for (const msg of depthMessages) {
-          const depth = msg._injectionDepth ?? 0;
-          const insertIndex = Math.max(0, apiMessages.length - depth);
-          apiMessages.splice(insertIndex, 0, 创建聊天消息(msg.role as 'user' | 'assistant', msg.content));
-        }
-      } else {
-        // Claude 方案 D：depth 模块退回 systemPrompt 拼接
-        const fallbackMessages = moduleChatMessages
-          .filter((m) => m._injectionPosition === 1)
-          .sort((a, b) => (a._injectionOrder ?? 0) - (b._injectionOrder ?? 0));
-        if (fallbackMessages.length > 0) {
-          const fallbackText = fallbackMessages.map((m) => m.content).join('\n\n---\n\n');
-          systemPrompt = systemPrompt + '\n\n---\n\n' + fallbackText;
-        }
-      }
-    }
-
     const shouldStreamMainRequest = state.gameSettings.enableStreaming && !isPageHidden();
     const mainRequestMode: 'stream' | 'non-stream' = shouldStreamMainRequest ? 'stream' : 'non-stream';
+    const finalizedMainRequest = finalizeMainRequest({
+      config: mainStoryConfig,
+      systemPrompt,
+      baseMessages: apiMessages,
+      moduleChatMessages,
+      leadingMessages: shouldUseCotFakeHistory ? [...MAIN_COT_FAKE_HISTORY] : [],
+      tailMessages: mainTailMessages,
+      prefixMode: effectivePrefixMode,
+      prefixContent: effectivePrefixContent,
+      streaming: shouldStreamMainRequest,
+      mode: tavernV2Messages ? 'tavern-v2' : 'native',
+      scope: zhikuRequestScope,
+      zhikuCompileId: zhikuPreview.compileId,
+    });
+    systemPrompt = finalizedMainRequest.systemPrompt;
+    apiMessages.length = 0;
+    apiMessages.push(...finalizedMainRequest.messages);
 
     // 4. Stream AI response（含自动重试循环）
     let streamedText = '';
@@ -2354,8 +2279,8 @@ export async function executeSendWorkflow(
           signal: abortController.signal,
           streaming: shouldStreamMainRequest,
           repairTags: state.gameSettings.enableTagRepair,
-          prefixMode: effectivePrefixMode,
-          prefixContent: effectivePrefixContent,
+          prefixMode: finalizedMainRequest.prefixMode,
+          prefixContent: finalizedMainRequest.prefixContent,
           // Phase 3：透传 API 配置的采样参数（支持 ST 预设同步过来的高级参数）
           topP: mainStoryConfig.topP,
           topK: mainStoryConfig.topK,
@@ -2544,6 +2469,17 @@ export async function executeSendWorkflow(
     const parsedForDisplay = awakenPathId
       ? { ...baseParsed, awakenPathId }
       : baseParsed;
+    const actualMainRequestHash = createMainRequestHash({
+      systemPrompt,
+      messages: apiMessages,
+      prefixMode: finalizedMainRequest.prefixMode,
+      prefixContent: finalizedMainRequest.prefixContent,
+      scope: zhikuRequestScope,
+      zhikuCompileId: zhikuPreview.compileId,
+      transport: finalizedMainRequest.capabilities.transport,
+      endpoint: finalizedMainRequest.capabilities.endpoint,
+      streaming: shouldStreamMainRequest,
+    });
     const tokenUsage = buildTurnTokenUsage({
       apiUsage: result.usage,
       systemPrompt,
@@ -2551,6 +2487,36 @@ export async function executeSendWorkflow(
       outputText: result.fullText || displayText,
       provider: config.provider,
       model: config.model,
+    });
+    const zhikuRequestDifferenceReasons = [
+      actualMainRequestHash !== finalizedMainRequest.requestHash ? '重试或协议校验改变了最终消息链。' : '',
+      apiMessages.length !== finalizedMainRequest.messages.length ? `最终消息数从预测 ${finalizedMainRequest.messages.length} 变为实发 ${apiMessages.length}。` : '',
+      result.deepSeekRecovery?.fallbackModel && result.deepSeekRecovery.fallbackModel !== mainStoryConfig.model
+        ? `DeepSeek 降级切换模型：${mainStoryConfig.model} -> ${result.deepSeekRecovery.fallbackModel}。`
+        : '',
+    ].filter(Boolean);
+    const zhikuActualTrace = attachZhikuRequestReceipt(zhikuPreview.runTrace, {
+      kind: 'actual',
+      requestHash: actualMainRequestHash,
+      predictedRequestHash: finalizedMainRequest.requestHash,
+      provider: tokenUsage.provider ?? mainStoryConfig.provider,
+      model: tokenUsage.model ?? result.deepSeekRecovery?.fallbackModel ?? mainStoryConfig.model,
+      transport: finalizedMainRequest.capabilities.transport,
+      endpoint: finalizedMainRequest.capabilities.endpoint,
+      mode: finalizedMainRequest.capabilities.mode,
+      streaming: shouldStreamMainRequest,
+      prefixApplied: finalizedMainRequest.capabilities.prefixApplied,
+      finishReason: result.finishReason,
+      usage: {
+        source: tokenUsage.source,
+        inputTokens: tokenUsage.inputTokens,
+        outputTokens: tokenUsage.outputTokens,
+        totalTokens: tokenUsage.totalTokens,
+        cachedTokens: tokenUsage.cachedTokens,
+        uncachedTokens: tokenUsage.uncachedTokens,
+      },
+      durationSec: duration,
+      differenceReasons: zhikuRequestDifferenceReasons,
     });
     const previousDebugContext = [...updatedHistory]
       .reverse()
@@ -2577,6 +2543,17 @@ export async function executeSendWorkflow(
       debugContext: {
         systemPrompt,
         messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
+        requestHash: actualMainRequestHash,
+        zhikuRunTrace: zhikuActualTrace,
+        zhikuCompileId: zhikuPreview.compileId,
+        zhikuCatalogVersion: zhikuPreview.catalogVersion,
+        zhikuCatalogRevision: zhikuPreview.catalogRevision,
+        zhikuActualProvider: tokenUsage.provider ?? mainStoryConfig.provider,
+        zhikuActualModel: tokenUsage.model ?? result.deepSeekRecovery?.fallbackModel ?? mainStoryConfig.model,
+        zhikuFinishReason: result.finishReason,
+        zhikuPredictionRequestHash: finalizedMainRequest.requestHash,
+        zhikuRequestDifferenceReasons,
+        requestCapabilities: finalizedMainRequest.capabilities,
         deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : 'off',
         deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory === true,
         deepSeekPrefixMode: deepSeekLockFormat,
@@ -2792,7 +2769,6 @@ export async function executeSendWorkflow(
       const archiveEnrichment = enrichNpcArchives(npcSource, {
         nsfwEnabled: state.gameSettings.enableNsfw,
         maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-        zhiku: state.智库,
       });
 
       // NSFW 基线补建：开启 NSFW 后，把需要补建基线的 NPC 信息传给变量模型，
@@ -2903,9 +2879,11 @@ export async function executeSendWorkflow(
         });
         if (zhikuUnlock.changed) {
           assertWorkflowActive();
-          zhikuAfterRuntimeUnlock = zhikuUnlock.system;
-          state.set智库(zhikuAfterRuntimeUnlock);
-          await saveSetting('zhikuSystem', buildPersistedZhikuSystem(zhikuAfterRuntimeUnlock));
+          zhikuAfterRuntimeUnlock = mergeZhikuRuntimeUnlockPatch(state.智库, zhikuUnlock.unlocked);
+          state.set智库((current) => mergeZhikuRuntimeUnlockPatch(current, zhikuUnlock.unlocked));
+          await updateSetting<import('@/models/zhiku').智库系统>('zhikuSystem', (current) => (
+            buildPersistedZhikuSystem(mergeZhikuRuntimeUnlockPatch(current ?? state.智库, zhikuUnlock.unlocked))
+          ));
           assertWorkflowActive();
           pushQueueTask(state, 'zhiku', 'success', {
             detail: `剧情归档已更新智库门禁：${zhikuUnlock.unlocked.slice(0, 3).map((item) => `${item.title}→${item.status}`).join('、')}${zhikuUnlock.unlocked.length > 3 ? ` 等 ${zhikuUnlock.unlocked.length} 项` : ''}。`,

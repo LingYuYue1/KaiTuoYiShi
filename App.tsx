@@ -30,7 +30,7 @@ const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings
 const SaveLoadModal = lazyWithRetry(() => import('@/components/features/SaveLoad/SaveLoadModal').then((module) => ({ default: module.SaveLoadModal })));
 const PhoneModal = lazyWithRetry(() => import('@/components/features/Phone/PhoneModal').then((module) => ({ default: module.PhoneModal })));
 const WorldbookManagerModal = lazyWithRetry(() => import('@/components/features/Worldbook/WorldbookManagerModal').then((module) => ({ default: module.WorldbookManagerModal })));
-const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/GameSystems/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
+const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
 const GitHubCloudSaveModal = lazyWithRetry(() => import('@/components/features/CloudSave/GitHubCloudSaveModal').then((module) => ({ default: module.GitHubCloudSaveModal })));
 const ReleaseAnnouncementsModal = lazyWithRetry(() => import('@/components/features/Release/ReleaseAnnouncementsModal').then((module) => ({ default: module.ReleaseAnnouncementsModal })));
 const PlotPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PlotPanel').then((module) => ({ default: module.PlotPanel })));
@@ -1259,7 +1259,6 @@ function renderSystemPanel(
           turnCount={ctx.turnCount}
           nsfwEnabled={ctx.gameSettings.enableNsfw}
           maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}
-          zhikuSystem={ctx.zhikuSystem}
           devMode={ctx.gameSettings.devMode}
         />
       );

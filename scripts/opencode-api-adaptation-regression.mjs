@@ -44,8 +44,8 @@ assert(client.includes("if (/^(claude|qwen)/.test(id)) return 'messages';"), 'Cl
 assert(client.includes("return 'gemini'"), 'Gemini 系列 OpenCode Zen 模型必须走 Gemini 风格 endpoint。');
 assert(client.includes("return 'chat'"), 'DeepSeek/Kimi/GLM/MiniMax 等 OpenCode Zen 模型必须默认走 /chat/completions。');
 assert(client.includes("replace(/^opencode\\//i, '')"), 'OpenCode Zen 必须兼容玩家复制 opencode/model 写法。');
-assert(client.includes('streamOpenCode(config, msgs, request, callbacks)'), '主剧情流式补全必须接入 OpenCode Zen。');
-assert(client.includes('completionOpenCodeNonStream(config, msgs, request)'), '变量/智库等非流式补全必须接入 OpenCode Zen。');
+assert(client.includes('streamOpenCode(prefixPayload.config, prefixPayload.messages, request, callbacks)'), '主剧情流式补全必须通过统一 prefill 处理接入 OpenCode Zen。');
+assert(client.includes('completionOpenCodeNonStream(prefixPayload.config, prefixPayload.messages, request)'), '变量/智库等非流式补全必须通过统一 prefill 处理接入 OpenCode Zen。');
 assert(client.includes("fetchWithApiErrorReport(config, 'OpenCode Zen Chat 补全', '/api/opencode'"), 'OpenCode Zen 流式 chat 请求必须走同源代理。');
 assert(client.includes("fetchWithApiErrorReport(config, 'OpenCode Zen Messages 补全', '/api/opencode'"), 'OpenCode Zen 流式 messages 请求必须走同源代理。');
 assert(client.includes("fetchWithApiErrorReport(config, 'OpenCode Zen Responses 补全', '/api/opencode'"), 'OpenCode Zen 流式 responses 请求必须走同源代理。');

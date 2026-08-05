@@ -186,6 +186,7 @@ try {
 
   const imbibitorCandidate = index.request.candidates.find((candidate) => candidate.entryId === 'JS-002');
   assert(imbibitorCandidate?.summary.includes('克制而承担责任'), 'empty character summaries must compile from structured character anchors');
+  assert(imbibitorCandidate?.summary.includes('人物资料「丹恒·饮月」') && imbibitorCandidate.summary.includes('人物气质：'), 'empty character summaries must use the natural handoff-style candidate wording');
   assert(!JSON.stringify(index.request).includes('完整原文不得发送'), 'controlled request leaked full Zhiku source text');
   assert(index.request.keywordEntryIds.join(',') === 'JS-001', 'keyword evidence IDs were not preserved');
 
@@ -278,7 +279,7 @@ try {
           necessity: 'REQUIRED',
           replaceEntryId: 'JS-001',
           evidence: ['ACTIVE_FORM', 'NEXT_TURN_PARTICIPANT'],
-          reason: '当前剧情已进入饮月形态',
+          reason: '下一段需要继续使用饮月形态处理危机',
         }],
         noSelectionReason: '',
       }) } }],
@@ -318,6 +319,9 @@ try {
   assert(apiCalls === 1, `AI supplement enabled must execute exactly once per turn, received ${apiCalls}`);
   assert(productionResult.entries.some((entry) => entry.id === 'JS-002') && !productionResult.entries.some((entry) => entry.id === 'JS-001'), 'production form override did not replace the default form');
   assert(productionResult.diagnostics?.AI形态修正.some((item) => item.includes('丹恒常态') && item.includes('丹恒·饮月')), 'production diagnostics did not record the form override');
+  assert(productionResult.injection.includes('汪汪丹的交接便笺'), 'accepted AI supplement did not produce the in-world handoff section');
+  assert(productionResult.injection.includes('本回合以「丹恒·饮月」替换「丹恒常态」') && productionResult.injection.includes('形态、能力与行动边界'), 'FORM_OVERRIDE handoff did not name the archive and its safe usage');
+  assert(!productionResult.injection.includes('下一段需要继续使用饮月形态处理危机'), 'free-form AI reason must remain diagnostic and must not become a high-priority main-story instruction');
 
   const bundledEntries = fs.readdirSync(path.join(root, 'public', 'zhiku-presets'))
     .filter((filename) => filename.endsWith('.json'))
@@ -353,9 +357,24 @@ try {
 
   const retrievalSource = fs.readFileSync(path.join(root, 'services/zhikuRetrieval.ts'), 'utf8');
   const promptSource = fs.readFileSync(path.join(root, 'prompts/cot/zhikuCot.ts'), 'utf8');
+  const builtinPromptSource = fs.readFileSync(path.join(root, 'data/builtinPromptModules.ts'), 'utf8');
   const snapshotSource = fs.readFileSync(path.join(root, 'hooks/useGame/contextSnapshot.ts'), 'utf8');
   assert(!retrievalSource.includes('buildRecallSupplementCandidates') && !retrievalSource.includes('parseZhikuIndexes'), 'legacy recent-entry candidate filler or numbered-line parser is still in production');
-  assert(promptSource.includes('智库运行时召回编译器') && promptSource.includes('"selections"') && promptSource.includes('FORM_OVERRIDE'), 'production prompt does not contain the fixed identity and JSON contract');
+  assert(promptSource.includes('智库管理者“汪汪丹”') && promptSource.includes('阿基维利·喵') && promptSource.includes('keywordScanText') && promptSource.includes('"selections"') && promptSource.includes('FORM_OVERRIDE'), 'production prompt does not contain the in-world identity, retrieval boundary and JSON contract');
+  assert(!builtinPromptSource.includes('智库召回编译器的严格 JSON 契约'), 'builtin Zhiku module metadata still exposes the retired compiler wording');
+  const duplicateGuardModules = [
+    { id: 'builtin_zhiku_cot', enabled: true, scope: ['calibration'], category: 'cot', order: 1020, content: '汪汪丹模块内容' },
+    { id: 'builtin_zhiku_output_format', enabled: true, scope: ['calibration'], category: 'format', order: 67, content: '固定 JSON 模块内容' },
+    { id: 'custom_zhiku_cot_1', enabled: true, scope: ['calibration'], category: 'cot', order: 1021, content: '玩家补充的汪汪丹交接习惯' },
+  ];
+  const modulePrompt = api.buildZhikuModelSystemPrompt(['黑塔空间站'], duplicateGuardModules);
+  assert(modulePrompt.match(/汪汪丹模块内容/gu)?.length === 1 && !modulePrompt.includes('固定运行时身份与安全契约'), 'enabled Zhiku modules must replace the fixed fallback instead of being duplicated with it');
+  assert(modulePrompt.indexOf('汪汪丹模块内容') < modulePrompt.indexOf('固定 JSON 模块内容'), 'Zhiku module prompt must place the in-world management rules before the machine output contract');
+  assert(modulePrompt.includes('玩家补充的汪汪丹交接习惯'), 'custom Zhiku calibration modules must reach the independent retrieval prompt');
+  const fallbackPrompt = api.buildZhikuModelSystemPrompt(['黑塔空间站']);
+  assert(fallbackPrompt.includes('智库管理者“汪汪丹”') && fallbackPrompt.includes('汪汪丹交给阿基维利·喵的 JSON 交接格式'), 'fixed fallback prompt must remain available when prompt modules are absent');
+  const userPrompt = api.buildZhikuModelUserPrompt(index.request);
+  assert(userPrompt.includes('汪汪丹') && userPrompt.includes('keywordScanText') && userPrompt.includes('候选原文和完整注入档案都没有发送'), 'user prompt must use the in-world handoff language and preserve the controlled-data boundary');
   assert(snapshotSource.includes('buildZhikuAiRequestForTurn') && snapshotSource.includes('AI候选索引'), 'context snapshot does not preview the real controlled candidate request');
 
   console.log(JSON.stringify({

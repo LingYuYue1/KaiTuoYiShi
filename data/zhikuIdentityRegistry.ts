@@ -6,6 +6,7 @@ import {
 export interface 智库内置身份注册项 {
   id: string;
   legacyId: string;
+  compatibilityIds: readonly string[];
   category: 智库治理分类;
   presetId: string;
   sourceFile: string;
@@ -16,7 +17,7 @@ export interface 智库内置身份注册项 {
 type RawIdentityGroup = readonly [
   presetId: string,
   sourceFile: string,
-  entries: readonly (readonly [id: string, legacyId: string, sourceTitle: string])[],
+  entries: readonly (readonly [id: string, legacyId: string, sourceTitle: string, compatibilityIds?: readonly string[]])[],
 ];
 
 // sourceIndex is intentionally the position inside each group. Entries without a historical
@@ -47,15 +48,14 @@ const RAW_IDENTITY_GROUPS: readonly RawIdentityGroup[] = [
   ]],
   ['zhiku_herta_station_character_rebuild', 'herta-station-character-rebuild.json', [
     ['JS-012', 'zhiku_character_rebuild_herta_profile', '黑塔'],
-    ['JS-012B', 'zhiku_character_rebuild_the_herta_profile', '大黑塔'],
     ['JS-013', 'zhiku_character_rebuild_asta_profile', '艾丝妲'],
     ['JS-014', 'zhiku_character_rebuild_arlan_profile', '阿兰'],
+    ['JS-099', 'zhiku_character_rebuild_the_herta_profile', '大黑塔', ['JS-012B']],
   ]],
   ['zhiku_genius_society_character_rebuild', 'genius-society-character-rebuild.json', [
     ['JS-015', 'zhiku_character_rebuild_ruanmei_profile', '阮·梅'],
     ['JS-016', 'zhiku_character_rebuild_screwllum_profile', '螺丝咕姆'],
-    ['JS-017', 'zhiku_character_rebuild_stephen_lloyd_profile', '史蒂芬'],
-    ['JS-018', 'zhiku_character_rebuild_zandar_profile', '赞达尔'],
+    ['JS-017', 'zhiku_character_rebuild_stephen_lloyd_profile', '斯蒂芬'],
   ]],
   ['zhiku_intelligentsia_guild_character_rebuild', 'intelligentsia-guild-character-rebuild.json', [
     ['JS-019', 'zhiku_character_rebuild_dr_ratio_profile', '真理医生'],
@@ -154,7 +154,7 @@ const RAW_IDENTITY_GROUPS: readonly RawIdentityGroup[] = [
     ['JS-097', 'zhiku_character_expansion_gilgamesh_profile', '吉尔伽美什'],
   ]],
   ['zhiku_planarcadia_enemy_expansion', 'planarcadia-enemy-expansion.json', [
-    ['JS-098', 'zhiku_character_expansion_guiji_profile', '归寂'],
+    ['DS-000', 'zhiku_character_expansion_guiji_profile', '归寂', ['JS-098']],
   ]],
   ['zhiku_location_core', 'location-core.json', [
     ['DD-000', 'zhiku_location_core_1', '主控舱段'],
@@ -238,10 +238,10 @@ const prefixToCategory = new Map(
 );
 
 export const ZHIKU_BUNDLED_IDENTITY_REGISTRY: readonly 智库内置身份注册项[] = RAW_IDENTITY_GROUPS.flatMap(
-  ([presetId, sourceFile, entries]) => entries.map(([id, legacyId, sourceTitle], sourceIndex) => {
+  ([presetId, sourceFile, entries]) => entries.map(([id, legacyId, sourceTitle, compatibilityIds = []], sourceIndex) => {
     const category = prefixToCategory.get(id.slice(0, 2));
     if (!category) throw new Error(`智库身份注册表包含未知前缀：${id}`);
-    return { id, legacyId, category, presetId, sourceFile, sourceIndex, sourceTitle };
+    return { id, legacyId, compatibilityIds, category, presetId, sourceFile, sourceIndex, sourceTitle };
   }),
 );
 
@@ -253,6 +253,7 @@ const identityByAnyId = new Map<string, 智库内置身份注册项>();
 for (const entry of ZHIKU_BUNDLED_IDENTITY_REGISTRY) {
   identityByAnyId.set(entry.id, entry);
   identityByAnyId.set(entry.legacyId, entry);
+  for (const compatibilityId of entry.compatibilityIds) identityByAnyId.set(compatibilityId, entry);
 }
 
 export function resolveBundledZhikuIdentity(

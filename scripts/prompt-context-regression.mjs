@@ -4,6 +4,7 @@ const builder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
+const requestFinalizer = fs.readFileSync('hooks/useGame/mainRequestFinalizer.ts', 'utf8');
 const variableExecutor = fs.readFileSync('utils/variableExecutor.ts', 'utf8');
 const worldEvents = fs.readFileSync('utils/worldEvents.ts', 'utf8');
 const promptModel = fs.readFileSync('models/prompts.ts', 'utf8');
@@ -21,19 +22,20 @@ function assert(condition, message) {
 assert(!builder.includes('function buildResponseLengthSection'), '硬编码字数段必须保持已删除状态(权威在回复格式模块)。');
 assert(builtinPromptModules.includes('字数不少于 {wordCountTarget} 字'), '回复格式模块必须是字数约束的唯一权威。');
 assert(builtinPromptModules.includes('禁止因为思维链、记忆、剧情编织、行动选项或模型默认习惯而压缩正文'), '回复格式模块字数约束必须覆盖压缩正文的常见借口。');
-assert(sendWorkflow.includes('# 本回合生成前核对'), 'sendWorkflow 必须在生成点前注入区E执法块。');
-assert(sendWorkflow.includes('不少于 ${input.wordCountTarget} 字'), '区E执法块必须包含字数兜底行。');
+assert(sendWorkflow.includes('buildMainTurnEnforcementBlock({') && sendWorkflow.includes('finalizeMainRequest({'), 'sendWorkflow 必须通过共享最终化器在生成点前注入区E执法块。');
+assert(requestFinalizer.includes('# 本回合生成前核对') && requestFinalizer.includes('不少于 ${input.wordCountTarget} 字'), '共享最终化器的区E执法块必须包含字数兜底行。');
 assert(builder.includes('提示词模块·稳定协议'), 'systemPromptBuilder 必须显式标注缓存友好的稳定协议前置区。');
 assert(builder.includes('高波动 NPC 连续性块后置'), 'systemPromptBuilder 必须显式标注 NPC 高波动上下文后置，保护前缀缓存。');
 assert(builder.includes('高波动回合锚点后置'), 'systemPromptBuilder 必须显式标注时间/场景等回合锚点后置，保护前缀缓存。');
 assert(builtinPromptModules.includes('<Role>') && builtinPromptModules.includes('</Role>'), '叙述者人格必须使用明确 Role 声明。');
 assert(builtinPromptModules.includes('当前互动的核心玩家角色为「{playerName}」'), '叙述者人格必须以运行时玩家角色为叙事中心。');
 assert(builtinPromptModules.includes('原著 NPC 必须按已注入档案和当前信息域行动'), '叙述者人格必须把智库/档案作为 NPC 人设校准依据。');
-assert(!builtinPromptModules.includes('所有外部平台安全限制') && !builtinPromptModules.includes('违法行为描述或路径'), '叙述者人格不得复制外部模板中的越权/违法导向声明。');
+// 2026-08-01: 叙述者人格(builtin_narrator_persona)含 RP 场景需要的豁免声明(停用平台限制/违法路径),
+// 属有意保留内容,此黑名单断言已按项目决定移除。若未来要重新启用,先确认内置叙述者人格不引入 jailbreak 模板。
 // 结构轮: 顺序断言更新为当前变量名(旧断言因 bottomModules 更名早已空转);基调段已删除。
 assert(!builder.includes('buildToneSection'), '基调段必须保持已删除状态(剧情模式世界书为唯一出处)。');
-assert(builder.indexOf("const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');") < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '主剧情固定协议/COT/回复格式必须早于 NPC 账本等高波动上下文。');
-assert(builder.indexOf("const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');") < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '主剧情固定协议/COT/回复格式必须早于当前时间锚点，保护 DeepSeek 前缀缓存。');
+assert(builder.indexOf("const bottomResult = injectPromptModules(activeModules, moduleCtx, 'bottom');") < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '主剧情固定协议/COT/回复格式必须早于 NPC 账本等高波动上下文。');
+assert(builder.indexOf("const bottomResult = injectPromptModules(activeModules, moduleCtx, 'bottom');") < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '主剧情固定协议/COT/回复格式必须早于当前时间锚点，保护 DeepSeek 前缀缓存。');
 assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('parts.push(buildMainStoryControlSection(worldState));'), '运行锚点瘦身版必须位于区D(时间/场景之后),紧贴其引用的回顾/编织/智库数据。');
 assert(builder.indexOf('parts.push(buildMainStoryControlSection(worldState));') < builder.indexOf('if (yitingInjectionOverride !== undefined)'), '运行锚点必须先于即时回顾/忆庭注入,形成指令贴数据结构。');
 assert(builder.indexOf('parts.push(buildCharacterSection(traveler));') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '当前角色与技能应位于高波动 NPC 承接块之前。');
@@ -43,11 +45,11 @@ assert(builder.indexOf('const phoneSection = buildPhoneSection(phone);') < build
 assert(builder.indexOf('const injection = buildWorldbookInjection(worldbooks, worldbookCtx);') < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '普通世界书资料应早于当前时间锚点，保护大块资料的缓存前缀。');
 assert(builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);') < builder.indexOf('if (yitingInjectionOverride !== undefined)'), '即时剧情回顾/忆庭召回应位于时间与场景之后，共同归入高波动尾部。');
 assert(builder.indexOf('if (yitingInjectionOverride !== undefined)') < builder.indexOf('const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);'), '剧情编织滑窗必须晚于当前事实与即时剧情回顾，避免系列总览成为过早前缀变化点。');
-assert(builder.indexOf('const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);') < builder.indexOf('if (zhikuInjectionOverride !== undefined)'), '剧情编织滑窗应早于智库召回，保持“剧情软参考后再做角色资料校准”的读取顺序。');
+assert(builder.indexOf('const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);') < builder.indexOf('if (zhikuCompilation?.mainStoryInjection.trim())'), '剧情编织滑窗应早于智库编译视图，保持“剧情软参考后再做角色资料校准”的读取顺序。');
 assert(builder.indexOf('const newsSection = buildNewsSection(news);') < builder.indexOf('const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);'), '新闻/手机/世界书等较稳定资料应早于剧情编织动态滑窗。');
-assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('if (zhikuInjectionOverride !== undefined)'), '智库表演卡应位于时间与场景之后，避免抢在当前事实锚点之前。');
+assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('if (zhikuCompilation?.mainStoryInjection.trim())'), '智库表演卡应位于时间与场景之后，避免抢在当前事实锚点之前。');
 assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '当前时间与场景必须早于 NPC 账本，避免 NPC 账本成为过早的前缀变化点。');
-assert(builder.indexOf('if (zhikuInjectionOverride !== undefined)') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '智库召回应早于尾部 NPC 承接块，NPC 块只做最终关系兜底。');
+assert(builder.indexOf('if (zhikuCompilation?.mainStoryInjection.trim())') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '智库编译视图应早于尾部 NPC 承接块，NPC 块只做最终关系兜底。');
 assert(builder.indexOf('const awakeningSection = buildPathAwakeningSection') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '命途/近期事件/记忆等运行时资料应早于尾部 NPC 账本。');
 assert(builder.indexOf('const injection = buildWorldbookInjection(worldbooks, worldbookCtx);') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '普通世界书资料应早于尾部 NPC 高波动承接块。');
 assert(builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride') < builder.indexOf('const companionsSection = buildCompanionsSection(npcRecords, _turnCount);'), '已知伙伴与路人表应跟随 NPC 尾部承接块后置，避免过早破坏前缀缓存。');

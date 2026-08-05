@@ -20,7 +20,10 @@ const TARGET_ID_MATCHERS: Record<独立系统提示词目标, readonly ((id: str
     (id) => id.startsWith('builtin_variable_'),
     (id) => id === 'builtin_companion_archive_worldbook',
   ],
-  zhiku: [(id) => id.startsWith('builtin_zhiku_')],
+  zhiku: [
+    (id) => id.startsWith('builtin_zhiku_'),
+    (id) => id.startsWith('custom_zhiku_'),
+  ],
   yitingRecall: [(id) => id === 'builtin_yiting_recall'],
   yitingArchive: [(id) => id.startsWith('builtin_yiting_archive_')],
   storyWeaving: [(id) => id.startsWith('builtin_story_weaving_')],

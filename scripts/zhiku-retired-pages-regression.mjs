@@ -24,7 +24,7 @@ const retiredPresetIds = [
 const presetDir = 'public/zhiku-presets';
 const presetSource = fs.readFileSync('data/zhikuPreset.ts', 'utf8');
 const zhikuModel = fs.readFileSync('models/zhiku.ts', 'utf8');
-const zhikuPanel = fs.readFileSync('components/features/GameSystems/ZhikuPanel.tsx', 'utf8');
+const zhikuPanel = fs.readFileSync('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx', 'utf8');
 const useGameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const saveLoad = fs.readFileSync('hooks/useGame/saveLoadWorkflow.ts', 'utf8');
 
@@ -59,7 +59,7 @@ assert(
 );
 
 assert(
-  zhikuPanel.includes("const categories: 智库分类[] = ['story', 'character', 'location', 'faction', 'term', 'event']") &&
+  zhikuPanel.includes("const categories: 智库分类[] = ['character', 'location', 'faction', 'term', 'event', 'enemy']") &&
     zhikuPanel.includes('!isRetiredZhikuCategory(entry.分类)'),
   '智库面板不应再显示 NPC / 道具 / 系统 三个分类页。',
 );

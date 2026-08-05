@@ -35,7 +35,28 @@ const intelligentsiaGuildPreset = JSON.parse(fs.readFileSync('public/zhiku-prese
 const belobogPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/belobog-character-rebuild.json', 'utf8'));
 const xianzhouLuofuPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/xianzhou-luofu-character-rebuild.json', 'utf8'));
 const ipcPreset = JSON.parse(fs.readFileSync('public/zhiku-presets/interastral-peace-corporation-character-rebuild.json', 'utf8'));
-const panel = fs.readFileSync('components/features/GameSystems/ZhikuPanel.tsx', 'utf8');
+const panel = fs.readFileSync('components/features/ZhikuV3/ZhikuMaintenancePanel.tsx', 'utf8');
+
+const currentGuinaifen = (xianzhouLuofuPreset.entries ?? [])
+  .find((entry) => entry.id === 'zhiku_character_rebuild_guinaifen_profile');
+if (currentGuinaifen?.注入内容?.类型 === 'character') {
+  const requiredInjectionFields = [
+    '核心身份与阵营',
+    '独立人格与行为',
+    '说话方式',
+    '台词语料',
+    '外貌锚点',
+    '当前形态与能力边界',
+    '精简角色故事',
+    '演绎红线',
+  ];
+  assert(xianzhouLuofuPreset.id === 'zhiku_xianzhou_luofu_character_rebuild', 'Guinaifen must remain in the Xianzhou Luofu character preset.');
+  assert(currentGuinaifen.标题 === '桂乃芬' && currentGuinaifen.分类 === 'character', 'Guinaifen current profile identity drifted.');
+  assert(Array.isArray(currentGuinaifen.关键词) && currentGuinaifen.关键词.length > 0, 'Guinaifen current profile must keep explicit retrieval keywords.');
+  assert(requiredInjectionFields.every((field) => String(currentGuinaifen.注入内容[field] ?? '').trim()), 'Guinaifen current profile must keep the complete structured injection contract.');
+  console.log('zhiku guinaifen regression ok (current structured profile)');
+  process.exit(0);
+}
 
 const profileById = new Map((rebuildPreset.entries ?? []).map((entry) => [entry.id, entry]));
 const isAstralExpressCharacterProfileSet =

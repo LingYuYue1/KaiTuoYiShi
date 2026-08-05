@@ -8,6 +8,8 @@ const settings = fs.readFileSync('models/settings.ts', 'utf8');
 const gameState = fs.readFileSync('hooks/useGameState.ts', 'utf8');
 const useGame = fs.readFileSync('hooks/useGame.ts', 'utf8');
 const client = fs.readFileSync('services/ai/chatCompletionClient.ts', 'utf8');
+const finalizer = fs.readFileSync('hooks/useGame/mainRequestFinalizer.ts', 'utf8');
+const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const apiTools = fs.readFileSync('services/ai/apiTools.ts', 'utf8');
 const apiSettings = fs.readFileSync('components/features/Settings/ApiSettings.tsx', 'utf8');
 const gameSettings = fs.readFileSync('components/features/Settings/GameSettings.tsx', 'utf8');
@@ -35,7 +37,7 @@ assert(settings.includes('enableClaudeMode?: boolean'), 'API 配置项必须能�
 assert(settings.includes('enableClaudeMode: boolean'), '游戏设置必须保存 Claude 专用模式开关。');
 assert(settings.includes('enableClaudeMode: false'), 'Claude 专用模式默认必须关闭。');
 assert(gameState.includes('enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode'), '旧存档读取必须归一化 Claude 模式。');
-assert(useGame.includes('enableClaudeMode: state.gameSettings.enableClaudeMode === true'), '主 API 运行时配置必须注入 Claude 模式。');
+assert(/enableClaudeMode:\s*[a-zA-Z]+\.gameSettings\.enableClaudeMode\s*===\s*true/.test(useGame), '主 API 运行时配置必须注入 Claude 模式。');
 
 assert(apiSettings.includes("value: 'claude_compatible'") && apiSettings.includes('Claude 兼容'), 'API 设置页必须提供 Claude 兼容选项。');
 assert(!apiSettings.includes('◆ Claude 专用模式'), 'API 设置页不得重复显示 Claude 专用模式开关。');
@@ -55,6 +57,10 @@ for (const file of runtimeBuilders) {
 assert(client.includes("config.enableClaudeMode !== true"), 'Claude 分支必须受 enableClaudeMode 显式控制。');
 assert(client.includes("config.provider === 'claude_compatible'"), 'Claude 分支必须支持 claude_compatible provider。');
 assert(client.includes('shouldUseClaudeMessagesApi'), 'Claude 分支必须通过独立路由函数判断，避免全局开关误伤其他模型。');
+assert(client.includes('export function resolveChatProviderCapabilities'), 'Provider 能力必须由传输层单点导出。');
+assert(finalizer.includes('resolveChatProviderCapabilities(input.config)'), '主请求最终化必须消费传输层 Provider 能力。');
+assert(finalizer.includes("depthInjection === 'system'"), 'Claude Messages 能力必须把 depth 模块归一化到 system。');
+assert(sendWorkflow.includes('finalizeMainRequest({') && !sendWorkflow.includes("mainStoryConfig.provider !== 'claude'"), '主流程不得再复制 Claude provider 字符串分支。');
 assert(client.includes('isLikelyClaudeModel'), 'Claude 兼容模式必须按模型名识别 Claude 系列，避免 Gemini 被送入 /messages。');
 assert(client.includes("if (config.provider === 'claude') return true"), '官方 Claude 供应商必须始终走 Messages API，不能依赖全局 Claude 兼容开关。');
 assert(client.includes("config.provider !== 'claude_compatible'"), 'Claude 兼容路由必须只对 claude_compatible 做模型名保护。');
@@ -68,7 +74,7 @@ assert(client.includes('completionClaudeNonStream'), 'Claude 必须有独立非�
 assert(client.includes('parseClaudeTextResponse'), 'Claude 非流式响应必须解析 content[].text。');
 assert(client.includes('parseOpenAICompatibleTextResponse'), 'OpenAI 兼容非流式响应必须有宽容正文解析兜底。');
 assert(client.includes('readOpenAICompatibleStreamDelta'), 'OpenAI 兼容流式响应必须有宽容 SSE 正文解析兜底。');
-assert(client.includes("normalized[normalized.length - 1]?.role !== 'user'"), 'Claude messages 最后一条必须补成 user。');
+assert(client.includes("!allowAssistantTail && normalized[normalized.length - 1]?.role !== 'user'"), 'Claude 普通消息必须补 user，assistant prefill 模式必须允许 assistant 收尾。');
 assert(client.includes("'anthropic-dangerous-direct-browser-access': 'true'"), '浏览器直连 Claude 必须带 direct browser access header。');
 assert(client.includes("config.provider === 'claude_compatible'") && client.includes("'x-claude-code-attribution'"), 'Claude 兼容中转必须补充 Claude Code 归属头。');
 assert(client.includes("'anthropic-client-name'] = 'claude-code'"), 'Claude 兼容中转必须提供客户端名称归属头。');
@@ -83,6 +89,8 @@ assert(claudeHeadersFunction.includes("if (config.provider === 'claude_compatibl
 assert(client.includes('max_tokens'), 'Claude Messages API 必须使用 max_tokens。');
 assert(claudeFunction.includes('/messages'), 'Claude Messages API 必须请求 /messages。');
 assert(client.includes('buildClaudeRequestBody(config, messages, request, false)'), 'Claude 非流式请求必须设置 stream:false。');
+assert(client.includes('completionGeminiNonStream'), 'Gemini 必须有真正独立的非流式 generateContent 路径。');
+assert(client.includes('collectSystemMessageText(messages)'), 'Gemini 与 OpenCode Gemini 必须合并全部 system 消息。');
 assert(client.includes("part?.type === 'text'"), 'Claude 非流式解析必须只读取 text content block。');
 assert(client.includes("parsed?.type === 'content_block_delta'"), 'OpenAI 兼容流式解析必须兼容 Claude/Anthropic content_block_delta。');
 assert(client.includes("deltaType === 'thinking_delta'"), 'OpenAI 兼容流式解析必须丢弃 thinking delta。');

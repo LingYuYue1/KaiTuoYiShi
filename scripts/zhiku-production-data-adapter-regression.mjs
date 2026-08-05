@@ -15,7 +15,7 @@ try {
   await build({
     stdin: {
       contents: [
-        "export * from './components/features/ZhikuV2/productionAdapter';",
+        "export * from './components/features/ZhikuV3/productionAdapter';",
         "export { loadAllBundledZhikuPresets } from './data/zhikuPreset';",
         "export { loadAllBundledStoryWeavingPresets } from './data/storyWeavingPreset';",
       ].join('\n'),
@@ -53,7 +53,7 @@ try {
   assert(data.archiveItems.enemy.length === 0, 'Guiji must not remain in the player-facing enemy archive');
   assert(
     data.archiveItems.character.some((item) => item.id === 'DS-000' && item.title === '归寂'),
-    'Guiji must use the character archive while retaining its enemy data identity',
+    'Guiji must use its current character identity in the character archive',
   );
   assert(data.archiveItems.character.length > 60, 'real character profiles must populate the character archive');
   const expectedAeons = zhikuSystem.条目.filter((entry) => (
@@ -130,7 +130,7 @@ try {
       && !evernightVariant.secondaryKeywords.includes('演武仪典'),
     'Evernight preview must expose only Evernight-specific positive keywords',
   );
-  assert(data.archiveItems.character.length === 90, '89 character subjects plus Guiji must produce 90 player-facing character rows');
+  assert(data.archiveItems.character.length === 89, 'current 89 character subjects, including Guiji and excluding Zandar, must produce 89 player-facing rows');
 
   const lockedFixture = {
     ...zhikuSystem.条目.find((entry) => entry.分类 === 'location'),
@@ -149,7 +149,7 @@ try {
     分类: 'term',
     来源: '玩家自制资料',
   };
-  assert(adapter.resolveZhikuV2Category(customTerm) === 'term', 'generic terms must not be guessed into Aeon or Path categories');
+  assert(adapter.resolveZhikuCategory(customTerm) === 'term', 'generic terms must not be guessed into Aeon or Path categories');
 
   for (const chapter of data.storyVolumes.flatMap((volume) => volume.chapters)) {
     assert(chapter.status !== 'locked' || !chapter.body.trim(), 'readable story text must not receive a fabricated lock');

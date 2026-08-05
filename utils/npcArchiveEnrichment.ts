@@ -1,7 +1,5 @@
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { NPC记录, NPC性别, NPC_NSFW档案 } from '@/models/npc';
-import type { 智库系统, 智库条目 } from '@/models/zhiku';
-import { 获取智库人物名列表, 解析智库软结构标签, 比较智库人物节点 } from '@/models/zhiku';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 
 export type CanonicalArchiveBaseline = {
@@ -152,49 +150,6 @@ function shouldPatchArchiveField(current: unknown, incoming: unknown): incoming 
   return isWeakArchiveText(currentText) && incomingText.length >= currentText.length + 6;
 }
 
-function namesLikelySame(a: string | undefined, b: string | undefined): boolean {
-  const left = a?.replace(/\s+/g, '').trim();
-  const right = b?.replace(/\s+/g, '').trim();
-  if (!left || !right) return false;
-  return left === right || left.includes(right) || right.includes(left);
-}
-
-function buildZhikuArchiveBaseline(npc: NPC记录, zhiku?: 智库系统): CanonicalArchiveBaseline | undefined {
-  const entries = zhiku?.条目 ?? [];
-  if (!entries.length) return undefined;
-  const matched = entries
-    .filter((entry) => entry.分类 === 'character' && entry.可用于联动 !== false)
-    .filter((entry) => {
-      const names = 获取智库人物名列表(entry);
-      return names.some((name) => namesLikelySame(name, npc.姓名) || namesLikelySame(name, npc.别名));
-    })
-    .sort(比较智库人物节点)
-    .slice(0, 4);
-  if (!matched.length) return undefined;
-
-  const pickMeta = (selector: (meta: ReturnType<typeof 解析智库软结构标签>) => string | undefined) => {
-    for (const entry of matched) {
-      const value = selector(解析智库软结构标签(entry));
-      if (hasText(value)) return value;
-    }
-    return undefined;
-  };
-  const pickSummary = (entries: 智库条目[]) => {
-    const subject = entries.find((entry) => {
-      const meta = 解析智库软结构标签(entry);
-      return `${meta.资料类型 ?? ''}${meta.节点 ?? ''}`.includes('主体');
-    }) ?? entries[0];
-    return hasText(subject?.摘要) ? subject.摘要 : undefined;
-  };
-
-  return {
-    外貌: pickMeta((meta) => meta.外貌锚点),
-    性格: pickMeta((meta) => meta.性格锚点),
-    说话方式: pickMeta((meta) => meta.说话方式),
-    介绍: pickSummary(matched),
-  };
-}
-
 function shouldCreateNsfwBaseline(
   npc: NPC记录,
   baseline: CanonicalArchiveBaseline | undefined,
@@ -252,19 +207,17 @@ export function needsNsfwBaseline(
 
 export function enrichNpcArchives(
   records: NPC记录[],
-  options: { nsfwEnabled: boolean; maleNsfwArchiveEnabled: boolean; zhiku?: 智库系统 },
+  options: { nsfwEnabled: boolean; maleNsfwArchiveEnabled: boolean },
 ): { records: NPC记录[]; changed: boolean } {
   let changed = false;
   const next = records.map((npc) => {
     const canonical = matchCanonical(npc.姓名) ?? (npc.别名 ? matchCanonical(npc.别名) : null);
-    const zhikuBaseline = buildZhikuArchiveBaseline(npc, options.zhiku);
     const baseline: CanonicalArchiveBaseline = {
       ...(canonical ? {
         外貌: canonical.appearance,
         性格: canonical.personality,
       } : {}),
       ...(canonical ? CANONICAL_ARCHIVE_BASELINES[canonical.name] : {}),
-      ...(zhikuBaseline ?? {}),
     };
     let updated = npc;
     const patch: Partial<NPC记录> = {};

@@ -47,14 +47,11 @@ import { isSTImportedModule } from '@/utils/stPresetParser';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
+  buildCustomOnlyZhikuFallback,
   buildPersistedZhikuSystem,
-  isBundledZhikuDuplicate,
-  loadAllBundledZhikuPresets,
   mergeBundledZhikuSystem,
-  removeLegacyZhikuCharacterEntries,
-  removeRetiredZhikuEntries,
-  升级自制智库系统,
 } from '@/data/zhikuPreset';
+import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
 import { loadWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
@@ -73,6 +70,13 @@ const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_narrative_general',
   'builtin_forbidden_phrases',
   'builtin_power_system_overview',
+  // 世界观合并(2026-08-01): 星际罗盘整本并入「世界观」(builtin_worldview_core) 单条,清理旧存档残留
+  'builtin_compass',
+  // 剧情方向迁移(2026-08-01): 四种剧情模式世界书整体迁移为提示词模块 builtin_storymode_*,清理旧存档残留
+  'builtin_story_normal',
+  'builtin_story_harem',
+  'builtin_story_romance_alt',
+  'builtin_story_deep_single',
 ]);
 
 function isCalibrationWorldbook(book: 世界书): boolean {
@@ -358,7 +362,11 @@ export function useGameState(): UseGameStateReturn {
       }
 
       try {
-        const preset = await loadAllBundledZhikuPresets();
+        const catalogResult = await loadBundledZhikuCatalogWithFallback();
+        const preset = catalogResult.system;
+        if (catalogResult.source === 'cache') {
+          console.warn('[zhiku] 新目录加载失败，已继续使用最后一份完整目录:', catalogResult.loadError);
+        }
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
         const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
         const migrationAt = savedMigrationAt ?? Date.now();
@@ -369,7 +377,7 @@ export function useGameState(): UseGameStateReturn {
         set智库(mergedZhiku);
         await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
       } catch (err) {
-        console.warn('[zhiku] preset 加载失败，回退到本地已存智库:', err);
+        console.warn('[zhiku] 新目录与最后完整目录缓存均不可用，仅恢复本地自制资料:', err);
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
         if (savedZhiku) {
           const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
@@ -377,12 +385,7 @@ export function useGameState(): UseGameStateReturn {
           if (!savedMigrationAt) {
             await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
           }
-          set智库(升级自制智库系统({
-            条目: removeLegacyZhikuCharacterEntries(
-              removeRetiredZhikuEntries(savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))),
-              migrationAt,
-            ),
-          }));
+          set智库(buildCustomOnlyZhikuFallback(savedZhiku, migrationAt));
         }
       }
 

@@ -3,8 +3,8 @@ import type { 世界状态 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块作用域 } from '@/models/prompts';
-import { PROMPT_MODULE_TOP_THRESHOLD } from '@/models/prompts';
-import type { 开局来源 } from '@/models/journey';
+import { PROMPT_MODULE_TOP_THRESHOLD, syncStoryModeModuleEnabled } from '@/models/prompts';
+import type { 开局来源, 剧情模式 } from '@/models/journey';
 import type { 世界书 } from '@/models/worldbook';
 import type { NPC记录, NPC账本选择结果, NPC同行记忆条目 } from '@/models/npc';
 import { formatNpcLedgerForPrompt, 格式化NPC关系, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
@@ -14,7 +14,7 @@ import { NEWS_CATEGORY_LABELS } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
 import { PLOT_STATUS_LABELS } from '@/models/plot';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import type { 智库系统 } from '@/models/zhiku';
+import type { ZhikuTurnCompilation } from '@/services/zhikuRuntimeCompiler';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 手机系统 } from '@/models/phone';
 import type { 背包物品 } from '@/models/inventory';
@@ -25,7 +25,6 @@ import {
 } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, PATH_CORE_BELIEFS } from '@/models/path';
 import { buildPromptLikeWorldbookInjection, buildWorldbookChatModuleMessages, buildWorldbookInjection, replaceWorldbookPlaceholders, type FilterContext } from '@/utils/worldbook';
-import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
 import {
@@ -58,12 +57,11 @@ export function buildSystemPrompt(
   news?: 新闻条目[],
   plotNodes?: 剧情节点[],
   storyWeaving?: 剧情编织系统,
-  zhiku?: 智库系统,
+  zhikuCompilation?: ZhikuTurnCompilation,
   yiting?: 忆庭系统,
   phone?: 手机系统,
   awakeningPhase?: 命途狭间阶段,
   yitingInjectionOverride?: string,
-  zhikuInjectionOverride?: string,
   suppressMemoryInjection?: boolean,
   npcLedgerSelectionOverride?: NPC账本选择结果,
   triggerType?: string,
@@ -78,6 +76,8 @@ export function buildSystemPrompt(
   const effectiveModules = shouldFilterLegacyStModules
     ? settings.promptModules.filter((m) => !isSTImportedModule(m))
     : settings.promptModules;
+  // 剧情方向四选一：storymode 模块 enabled 派生自当前剧情模式，注入时只有命中的那一本启用。
+  const activeModules = syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式);
 
   const personLabel =
     settings.narrativePerson === 'second' ? '第二人称"你"'
@@ -96,10 +96,11 @@ export function buildSystemPrompt(
     triggerType,
     macroCtx,
     worldbookCtx,
+    storyMode: worldState.剧情模式,
   };
 
   // ── 提示词模块·顶部（order < 30：开发者模式、叙述者人格等） ──
-  const topResult = injectPromptModules(effectiveModules, moduleCtx, 'top');
+  const topResult = injectPromptModules(activeModules, moduleCtx, 'top');
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
@@ -112,7 +113,7 @@ export function buildSystemPrompt(
   // ── 提示词模块·稳定协议（order >= 30：CoT、回复格式、文风、玩家自定义模块） ──
   // DeepSeek 等前缀缓存要求从请求开头连续一致。把大块固定协议放在动态场景/记忆/智库之前，
   // 可以让后续回合即便状态块变化，也尽量复用前面的稳定前缀。
-  const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');
+  const bottomResult = injectPromptModules(activeModules, moduleCtx, 'bottom');
   if (bottomResult.systemSection) parts.push(bottomResult.systemSection);
   allChatMessages.push(...bottomResult.chatModuleMessages);
 
@@ -199,12 +200,9 @@ export function buildSystemPrompt(
     if (storyWeavingSection) parts.push(storyWeavingSection);
   }
 
-  // ── 智库（只注入按本回合输入检索到的摘要，不注入整库） ──
-  if (zhikuInjectionOverride !== undefined) {
-    if (zhikuInjectionOverride.trim()) parts.push(zhikuInjectionOverride.trim());
-  } else if (settings.智库系统?.enabled && zhiku && worldbookCtx?.recentUserInput) {
-    const zhikuHit = retrieveZhikuContext(zhiku, worldbookCtx.recentUserInput, settings.智库系统.maxRelatedEntries, worldbookCtx);
-    if (zhikuHit.injection) parts.push(zhikuHit.injection);
+  // ── 智库：Prompt Builder 只消费本回合唯一编译产物，不再持有检索或回退职责。 ──
+  if (zhikuCompilation?.mainStoryInjection.trim()) {
+    parts.push(zhikuCompilation.mainStoryInjection.trim());
   }
 
   // ── 命途狭间状态（待升阶 / 待触发 / 进行中 三态注入） ──
@@ -270,6 +268,8 @@ export function buildOpeningSystemPrompt(
   const effectiveModules = shouldFilterLegacyStModules
     ? settings.promptModules.filter((m) => !isSTImportedModule(m))
     : settings.promptModules;
+  // 剧情方向四选一：storymode 模块 enabled 派生自当前剧情模式。
+  const activeModules = syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式);
 
   const personLabel =
     settings.narrativePerson === 'second' ? '第二人称"你"'
@@ -284,9 +284,10 @@ export function buildOpeningSystemPrompt(
     triggerType,
     macroCtx,
     worldbookCtx,
+    storyMode: worldState.剧情模式,
   };
 
-  const topResult = injectPromptModules(effectiveModules, moduleCtx, 'top');
+  const topResult = injectPromptModules(activeModules, moduleCtx, 'top');
   if (topResult.systemSection) parts.push(topResult.systemSection);
   allChatMessages.push(...topResult.chatModuleMessages);
 
@@ -299,7 +300,7 @@ export function buildOpeningSystemPrompt(
     if (promptLikeWorldbook) parts.push(promptLikeWorldbook);
   }
 
-  const bottomResult = injectPromptModules(effectiveModules, moduleCtx, 'bottom');
+  const bottomResult = injectPromptModules(activeModules, moduleCtx, 'bottom');
   if (bottomResult.systemSection) parts.push(bottomResult.systemSection);
   allChatMessages.push(...bottomResult.chatModuleMessages);
 
@@ -425,6 +426,8 @@ interface PromptModuleInjectionCtx {
   /** 批次5(D10)：迁移自世界书的规则模块含 {originalProtagonistSubject} 等世界书占位符,
    *  传入时复用世界书替换管线；不传=仅做模块自有三占位符替换（旧行为）。 */
   worldbookCtx?: FilterContext;
+  /** 剧情方向门控：当前剧情模式。模块 storyModeGate 非空时仅命中此值才注入。 */
+  storyMode?: 剧情模式;
 }
 
 /** 非 system 角色的提示词模块消息。带元数据字段供 Phase 4 depth 注入使用。 */
@@ -503,6 +506,11 @@ function injectPromptModules(
     .filter((m) => {
       if (!m.openingSourceGate?.length) return true;
       return ctx.currentScope === 'opening' && !!ctx.openingSource && m.openingSourceGate.includes(ctx.openingSource);
+    })
+    .filter((m) => {
+      // 剧情方向门控（四选一）：模块声明了 storyModeGate 时，仅当前剧情模式命中才注入。
+      if (!m.storyModeGate?.length) return true;
+      return !!ctx.storyMode && m.storyModeGate.includes(ctx.storyMode);
     })
     .filter((m) => {
       // ST 预设兼容：injectionTrigger 为空 = 全触发（旧行为）。

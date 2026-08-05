@@ -64,7 +64,24 @@ export type ChatCompletionUsage = Partial<Omit<回合Token消耗, 'source'>> & {
   source: 'api';
 };
 
-function detectProvider(config: API配置项): string {
+export type ChatTransportProvider =
+  | 'mimo'
+  | 'ark'
+  | 'opencode'
+  | 'deepseek'
+  | 'gemini'
+  | 'claude'
+  | 'openai_compatible';
+
+export interface ChatProviderCapabilities {
+  transport: ChatTransportProvider;
+  endpoint: 'chat' | 'messages' | 'responses' | 'gemini';
+  depthInjection: 'messages' | 'system';
+  mergesSystemMessages: boolean;
+  supportsAssistantPrefill: boolean;
+}
+
+function detectProvider(config: API配置项): ChatTransportProvider {
   const url = config.baseUrl.toLowerCase();
   if (config.provider === 'mimo' || /xiaomimimo|mimo\.mi/i.test(url)) return 'mimo';
   if (config.provider === 'ark' || isArkBaseUrl(config.baseUrl)) return 'ark';
@@ -75,6 +92,24 @@ function detectProvider(config: API配置项): string {
     return 'claude';
   }
   return 'openai_compatible';
+}
+
+export function resolveChatProviderCapabilities(config: API配置项): ChatProviderCapabilities {
+  const transport = detectProvider(config);
+  const endpoint = transport === 'opencode'
+    ? inferOpenCodeEndpoint(config.model)
+    : transport === 'claude'
+      ? 'messages'
+      : transport === 'gemini'
+        ? 'gemini'
+        : 'chat';
+  return {
+    transport,
+    endpoint,
+    depthInjection: transport === 'claude' ? 'system' : 'messages',
+    mergesSystemMessages: transport === 'claude' || endpoint === 'messages' || endpoint === 'responses' || endpoint === 'gemini',
+    supportsAssistantPrefill: transport !== 'mimo',
+  };
 }
 
 function isLikelyClaudeModel(model: string): boolean {
@@ -98,6 +133,13 @@ function buildMessages(
   }
   result.push(...messages);
   return result;
+}
+
+function collectSystemMessageText(messages: Array<{ role: string; content: string }>): string {
+  return messages
+    .filter((message) => message.role === 'system' && message.content.trim())
+    .map((message) => message.content.trim())
+    .join('\n\n');
 }
 
 function isDeepSeekConfig(config: API配置项): boolean {
@@ -187,7 +229,7 @@ function withPrefixMessages(
 
   // OpenAI 兼容 / OpenCode / Ark / Pioneer 等：末尾追加 assistant 消息
   // 部分中转商支持，不支持的会报错（由上层 try-catch 降级）
-  if (provider === 'openai_compatible' || provider === 'opencode' || provider === 'ark' || provider === 'mimo') {
+  if (provider === 'openai_compatible' || provider === 'opencode' || provider === 'ark') {
     return {
       config,
       messages: [
@@ -1080,6 +1122,7 @@ async function fetchWithApiErrorReport(
 
 function normalizeClaudeMessages(
   messages: Array<{ role: string; content: string }>,
+  allowAssistantTail = false,
 ): { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
   const system = messages
     .filter((m) => m.role === 'system' && m.content.trim())
@@ -1103,7 +1146,7 @@ function normalizeClaudeMessages(
   if (normalized.length === 0 || normalized[0].role !== 'user') {
     normalized.unshift({ role: 'user', content: '请开始本轮回应。' });
   }
-  if (normalized[normalized.length - 1]?.role !== 'user') {
+  if (!allowAssistantTail && normalized[normalized.length - 1]?.role !== 'user') {
     normalized.push({ role: 'user', content: '请继续并完成当前请求。' });
   }
 
@@ -1121,7 +1164,7 @@ function buildClaudeRequestBody(
   request: ChatCompletionRequest,
   stream: boolean,
 ): Record<string, unknown> {
-  const claudePayload = normalizeClaudeMessages(messages);
+  const claudePayload = normalizeClaudeMessages(messages, request.prefixMode === true);
   const bodyObj: Record<string, unknown> = {
     model: config.model,
     max_tokens: request.maxTokens ?? config.maxTokens ?? 2048,
@@ -1335,6 +1378,33 @@ function reportOpenAICompatibleDiagnostics(
   });
 }
 
+export function buildChatTransportPayloadPreview(
+  config: API配置项,
+  request: ChatCompletionRequest,
+  streaming: boolean,
+): {
+  capabilities: ChatProviderCapabilities;
+  payload: Record<string, unknown>;
+  prefix: string;
+} {
+  const capabilities = resolveChatProviderCapabilities(config);
+  const messages = buildMessages(request.systemPrompt, request.messages);
+  const prefixed = withPrefixMessages(config, messages, request);
+  let payload: Record<string, unknown>;
+  if (capabilities.transport === 'claude' || capabilities.endpoint === 'messages') {
+    payload = buildClaudeRequestBody(prefixed.config, prefixed.messages, request, streaming);
+  } else if (capabilities.endpoint === 'gemini') {
+    payload = capabilities.transport === 'opencode'
+      ? buildOpenCodeGeminiBody(prefixed.config, prefixed.messages, request)
+      : buildGeminiRequestBody(prefixed.config, prefixed.messages, request);
+  } else if (capabilities.endpoint === 'responses') {
+    payload = buildOpenCodeResponsesBody(prefixed.config, prefixed.messages, request, streaming);
+  } else {
+    payload = buildOpenAICompatibleRequestBody(prefixed.config, prefixed.messages, request, streaming, false);
+  }
+  return { capabilities, payload, prefix: prefixed.prefix };
+}
+
 export async function chatCompletion(
   config: API配置项,
   request: ChatCompletionRequest,
@@ -1400,12 +1470,15 @@ async function chatCompletionOnce(
 ): Promise<string> {
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
+  const prefixPayload = withPrefixMessages(config, msgs, request);
 
   if (provider === 'mimo') {
-    return streamOpenAICompatible(config, msgs, request, callbacks);
+    const text = await streamOpenAICompatible(prefixPayload.config, prefixPayload.messages, request, callbacks);
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
   if (provider === 'opencode') {
-    return streamOpenCode(config, msgs, request, callbacks);
+    const text = await streamOpenCode(prefixPayload.config, prefixPayload.messages, request, callbacks);
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
   if (provider === 'deepseek') {
     const payload = withDeepSeekPrefixMessages(config, msgs, request);
@@ -1421,12 +1494,15 @@ async function chatCompletionOnce(
     }
   }
   if (provider === 'claude') {
-    return streamClaude(config, msgs, request, callbacks);
+    const text = await streamClaude(prefixPayload.config, prefixPayload.messages, request, callbacks);
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
   if (provider === 'gemini') {
-    return streamGemini(config, msgs, request, callbacks);
+    const text = await streamGemini(prefixPayload.config, prefixPayload.messages, request, callbacks);
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
-  return streamOpenAICompatible(config, msgs, request, callbacks);
+  const text = await streamOpenAICompatible(prefixPayload.config, prefixPayload.messages, request, callbacks);
+  return mergePrefixResult(prefixPayload.prefix, text);
 }
 
 // ── OpenAI-compatible streaming (SSE) ──
@@ -1717,11 +1793,11 @@ function buildOpenCodeGeminiBody(
   messages: Array<{ role: string; content: string }>,
   request: ChatCompletionRequest,
 ): Record<string, unknown> {
-  const systemMsg = messages.find((m) => m.role === 'system');
+  const system = collectSystemMessageText(messages);
   const contents = messages
     .filter((m) => m.role !== 'system' && m.content.trim())
     .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
+      role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
   if (contents.length === 0) {
@@ -1748,9 +1824,9 @@ function buildOpenCodeGeminiBody(
     contents,
     generationConfig,
   };
-  if (systemMsg?.content.trim()) {
+  if (system) {
     bodyObj.systemInstruction = {
-      parts: [{ text: systemMsg.content }],
+      parts: [{ text: system }],
     };
   }
   return bodyObj;
@@ -2249,6 +2325,42 @@ async function completionOpenCodeNonStream(
 
 // ── Gemini streaming ──
 
+function buildGeminiRequestBody(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+): Record<string, unknown> {
+  const system = collectSystemMessageText(messages);
+  const contents = messages
+    .filter((message) => message.role !== 'system' && message.content.trim())
+    .map((message) => ({
+      role: message.role === 'assistant' || message.role === 'model' ? 'model' : 'user',
+      parts: [{ text: message.content }],
+    }));
+  if (!contents.length) contents.push({ role: 'user', parts: [{ text: '请开始本轮回应。' }] });
+
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: request.maxTokens ?? config.maxTokens ?? 2048,
+    temperature: request.temperature ?? config.temperature ?? 0.8,
+  };
+  const topP = request.topP ?? config.topP;
+  if (typeof topP === 'number') generationConfig.topP = topP;
+  const topK = request.topK ?? config.topK;
+  if (typeof topK === 'number') generationConfig.topK = topK;
+  const repPenalty = request.repetitionPenalty ?? config.repetitionPenalty;
+  if (typeof repPenalty === 'number') generationConfig.repetitionPenalty = repPenalty;
+  const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
+  if (typeof freqPenalty === 'number') generationConfig.frequencyPenalty = freqPenalty;
+  const presPenalty = request.presencePenalty ?? config.presencePenalty;
+  if (typeof presPenalty === 'number') generationConfig.presencePenalty = presPenalty;
+
+  return {
+    contents,
+    generationConfig,
+    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+  };
+}
+
 async function streamGemini(
   config: API配置项,
   messages: Array<{ role: string; content: string }>,
@@ -2256,40 +2368,7 @@ async function streamGemini(
   callbacks: StreamCallbacks,
 ): Promise<string> {
   const url = `${normalizeGeminiBaseUrl(config.baseUrl)}/models/${config.model}:streamGenerateContent?alt=sse`;
-  const systemMsg = messages.find((m) => m.role === 'system');
-
-  const contents = messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-
-  const geminiGenConfig: Record<string, unknown> = {
-    maxOutputTokens: request.maxTokens ?? config.maxTokens ?? 2048,
-    temperature: request.temperature ?? config.temperature ?? 0.8,
-  };
-  // Phase 3：Gemini 原生支持 top_p / top_k / repetition_penalty / frequency_penalty / presence_penalty
-  const topP = request.topP ?? config.topP;
-  if (typeof topP === 'number') geminiGenConfig.topP = topP;
-  const topK = request.topK ?? config.topK;
-  if (typeof topK === 'number') geminiGenConfig.topK = topK;
-  const repPenalty = request.repetitionPenalty ?? config.repetitionPenalty;
-  if (typeof repPenalty === 'number') geminiGenConfig.repetitionPenalty = repPenalty;
-  const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
-  if (typeof freqPenalty === 'number') geminiGenConfig.frequencyPenalty = freqPenalty;
-  const presPenalty = request.presencePenalty ?? config.presencePenalty;
-  if (typeof presPenalty === 'number') geminiGenConfig.presencePenalty = presPenalty;
-
-  const bodyObj: Record<string, unknown> = {
-    contents,
-    generationConfig: geminiGenConfig,
-  };
-  if (systemMsg) {
-    bodyObj.systemInstruction = {
-      parts: [{ text: systemMsg.content }],
-    };
-  }
+  const bodyObj = buildGeminiRequestBody(config, messages, request);
 
   const response = await fetchWithApiErrorReport(config, 'Gemini 聊天补全', url, 'stream', {
     method: 'POST',
@@ -2366,6 +2445,38 @@ async function streamGemini(
   return fullText;
 }
 
+async function completionGeminiNonStream(
+  config: API配置项,
+  messages: Array<{ role: string; content: string }>,
+  request: ChatCompletionRequest,
+): Promise<string> {
+  const url = `${normalizeGeminiBaseUrl(config.baseUrl)}/models/${config.model}:generateContent`;
+  const response = await fetchWithApiErrorReport(config, 'Gemini 非流式补全', url, 'non-stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': config.apiKey,
+    },
+    body: JSON.stringify(buildGeminiRequestBody(config, messages, request)),
+    signal: request.signal,
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    void appendApiErrorReport({
+      source: 'Gemini 非流式补全',
+      config,
+      status: response.status,
+      requestUrl: url,
+      requestMode: 'non-stream',
+      responseText: text,
+    });
+    throw new Error(`Gemini API Error ${response.status}: ${text}`);
+  }
+  const json = await response.json();
+  emitUsageFromResponse(json, config, request);
+  return parseOpenCodeGeminiText(json);
+}
+
 // ── Non-streaming fallback ──
 
 export async function chatCompletionNonStream(
@@ -2416,11 +2527,12 @@ async function chatCompletionNonStreamOnce(
 ): Promise<string> {
   const provider = detectProvider(config);
   const msgs = buildMessages(request.systemPrompt, request.messages);
+  const prefixPayload = withPrefixMessages(config, msgs, request);
 
   if (provider === 'mimo') {
-    const upstreamBaseUrl = normalizeMimoBaseUrl(config.baseUrl);
+    const upstreamBaseUrl = normalizeMimoBaseUrl(prefixPayload.config.baseUrl);
     const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
-    const requestBody = buildOpenAICompatibleRequestBody(config, msgs, request, false);
+    const requestBody = buildOpenAICompatibleRequestBody(prefixPayload.config, prefixPayload.messages, request, false);
     const response = await fetchWithApiErrorReport(config, '非流式补全', upstreamUrl, 'non-stream', {
       method: 'POST',
       headers: buildMimoAuthHeaders(config.apiKey),
@@ -2445,27 +2557,24 @@ async function chatCompletionNonStreamOnce(
     emitUsageFromResponse(json, config, request);
     const text = parseOpenAICompatibleTextResponse(json);
     reportOpenAICompatibleDiagnostics(json, text, config, request);
-    return text;
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
   if (provider === 'opencode') {
-    return completionOpenCodeNonStream(config, msgs, request);
+    const text = await completionOpenCodeNonStream(prefixPayload.config, prefixPayload.messages, request);
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
 
   if (provider === 'claude') {
-    return completionClaudeNonStream(config, msgs, request);
+    const text = await completionClaudeNonStream(prefixPayload.config, prefixPayload.messages, request);
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
 
   if (provider === 'gemini') {
-    return chatCompletionOnce(config, request, {
-      onDelta: () => {},
-      onDone: () => {},
-      onError: () => {},
-    });
+    const text = await completionGeminiNonStream(prefixPayload.config, prefixPayload.messages, request);
+    return mergePrefixResult(prefixPayload.prefix, text);
   }
 
-  const deepSeekPayload = provider === 'deepseek'
-    ? withDeepSeekPrefixMessages(config, msgs, request)
-    : { config, messages: msgs, prefix: '' };
+  const deepSeekPayload = prefixPayload;
 
   const upstreamBaseUrl = isArkConfig(deepSeekPayload.config)
     ? normalizeArkBaseUrl(deepSeekPayload.config.baseUrl)

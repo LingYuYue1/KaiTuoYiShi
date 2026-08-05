@@ -378,17 +378,22 @@ function buildCandidateSummary(entry: 智库条目): string {
   const meta = 解析智库软结构标签(entry);
   const anchors = entry.分类 === 'character'
     ? [
-        meta.性格锚点 ? `性格：${meta.性格锚点}` : '',
-        meta.说话方式 ? `口吻：${meta.说话方式}` : '',
-        meta.禁止误写 ? `禁止误写：${meta.禁止误写}` : '',
+        meta.性格锚点 ? `人物气质：${meta.性格锚点}` : '',
+        meta.说话方式 ? `说话感觉：${meta.说话方式}` : '',
+        meta.禁止误写 ? `需要避开的误写：${meta.禁止误写}` : '',
       ]
     : [
-        meta.资料类型 ? `资料类型：${meta.资料类型}` : '',
-        meta.阶段 ? `适用阶段：${meta.阶段}` : '',
-        entry.来源 ? `来源：${entry.来源}` : '',
+        meta.资料类型 ? `这份资料讲的是：${meta.资料类型}` : '',
+        meta.阶段 ? `适合在：${meta.阶段}` : '',
+        entry.来源 ? `资料来处：${entry.来源}` : '',
       ];
   const compiled = compactText(anchors.filter(Boolean).join('；'), 320);
-  return compiled || `${ZHIKU_CATEGORY_LABELS[entry.分类]}资料「${entry.标题}」；当前未提供轻量摘要。`;
+  if (compiled) {
+    return entry.分类 === 'character'
+      ? `人物资料「${entry.标题}」：${compiled}`
+      : `${ZHIKU_CATEGORY_LABELS[entry.分类]}资料「${entry.标题}」：${compiled}`;
+  }
+  return `资料卡「${entry.标题}」暂时没有轻量摘要；不要只凭标题把它交给阿基维利·喵。`;
 }
 
 function getCandidateSubjectId(entry: 智库条目): string | undefined {

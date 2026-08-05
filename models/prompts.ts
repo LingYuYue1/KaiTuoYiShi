@@ -3,7 +3,9 @@
 // （CoT / 输出格式 / 叙述者人格 / 开发者模式）——按 scope 注入主流程 system prompt。
 // 设计参照墨色项目 models/system.ts 的「提示词结构」+「内置提示词条目结构」。
 
-export type 提示词模块类目 = 'cot' | 'format' | 'persona' | 'devmode' | 'jailbreak' | 'style' | 'custom';
+import type { 剧情模式 } from './journey';
+
+export type 提示词模块类目 = 'cot' | 'format' | 'persona' | 'devmode' | 'jailbreak' | 'style' | 'storymode' | 'custom';
 
 /** 模块注入场景。与世界书 scope 对齐，便于主剧情与独立模型提示词展示复用同一分类。
  * - main: 主流程正文（除开局外）
@@ -32,6 +34,9 @@ export interface 提示词模块 {
   scope: 提示词模块作用域[];
   /** 可选：仅在开局档案来源命中时注入，用于区分官方预设 / 自由开局 / 创意工坊开局。 */
   openingSourceGate?: ('official_preset' | 'free' | 'workshop')[];
+  /** 可选：剧情模式门控（四选一）。非空时仅当玩家世界状态的剧情模式命中其中之一才注入。
+   *  与迁移前世界书的 storyModeGate 同语义；剧情方向模块（builtin_storymode_*）靠它互斥。 */
+  storyModeGate?: 剧情模式[];
   /** ST 预设兼容：消息角色。system 走 systemPrompt 拼接，user/assistant 走 messages 插入。 */
   role?: 'system' | 'user' | 'assistant';
   /** ST 预设兼容：0=相对位置（按 order 排序），1=In-Chat（按 injectionDepth 插入聊天历史）。 */
@@ -104,6 +109,11 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_rule_time_progression',
   'builtin_rule_power_system',
   'builtin_rule_awakening_interrogation',
+  // 剧情方向模块：由剧情模式世界书(builtin_story_*)迁移而来,storyModeGate 四选一互斥,locked 不可关
+  'builtin_storymode_normal',
+  'builtin_storymode_harem',
+  'builtin_storymode_romance_alt',
+  'builtin_storymode_deep_single',
 ] as const;
 
 export type 内置提示词模块ID = (typeof BUILTIN_PROMPT_MODULE_IDS)[number];
@@ -141,6 +151,7 @@ export const PROMPT_MODULE_CATEGORY_LABELS: Record<提示词模块类目, string
   devmode: '开发模式',
   jailbreak: '越狱',
   style: '文风',
+  storymode: '剧情开展方向',
   custom: '自定义',
 };
 
@@ -167,4 +178,19 @@ export function getDefaultModuleFields(): Pick<提示词模块, 'role' | 'inject
     source: 'builtin',
     replaceable: 'builtin',
   };
+}
+
+/** 剧情方向模块四选一（纯派生，不改持久化数据）：
+ *  storyModeGate 非空的模块，enabled 仅当命中当前剧情模式才为 true。
+ *  注入侧与 UI 侧共用同一派生，保证「当前剧情模式对应的那一本」才处于启用态。
+ *  剧情模式未显式选择（空世界状态 / 未开局）时默认按「正常向」处理，
+ *  避免四个剧情方向模块同时处于启用态。 */
+export function syncStoryModeModuleEnabled(
+  modules: 提示词模块[],
+  storyMode: 剧情模式 | undefined,
+): 提示词模块[] {
+  const effective = storyMode ?? 'normal';
+  return modules.map((m) =>
+    m.storyModeGate?.length ? { ...m, enabled: m.storyModeGate.includes(effective) } : m,
+  );
 }

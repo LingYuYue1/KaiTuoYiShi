@@ -3,8 +3,8 @@ import { fn } from 'storybook/test';
 import {
   ArchiveBrowser,
   type ZhikuArchiveItem,
-} from '../components/features/ZhikuV2/ArchiveBrowser';
-import { ZHIKU_DESIGN_CATEGORIES } from '../components/features/ZhikuV2/types';
+} from '../components/features/ZhikuV3/ArchiveBrowser';
+import { ZHIKU_CATEGORIES } from '../components/features/ZhikuV3/types';
 import { getDefaultBuiltinAvatar } from '../data/builtinAvatars';
 import type { 智库条目 } from '../models/zhiku';
 import { 获取智库核心触发词 } from '../models/zhiku';
@@ -35,12 +35,12 @@ const characterItems: ZhikuArchiveItem[] = [
   .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
 
 const characterCategory = {
-  ...ZHIKU_DESIGN_CATEGORIES.find((category) => category.id === 'character')!,
+  ...ZHIKU_CATEGORIES.find((category) => category.id === 'character')!,
   countLabel: String(characterItems.length),
 };
 
 const meta = {
-  title: '开拓轶事/智库 V2/二级页面',
+  title: '开拓轶事/智库 V3/二级页面',
   component: ArchiveBrowser,
   parameters: {
     layout: 'fullscreen',

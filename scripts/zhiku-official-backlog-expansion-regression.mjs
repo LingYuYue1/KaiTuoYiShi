@@ -30,7 +30,7 @@ const expectedPresets = [
     entries: [
       ['JS-085', '飞霄', ['飞霄', 'Feixiao', '天击将军', '大捷将军', '三无将军', '曜青将军']],
       ['JS-086', '椒丘', ['椒丘', 'Jiaoqiu', '椒大夫', '椒椒', '曜青医士', '飞霄的医士']],
-      ['JS-087', '云璃', ['云璃', 'Yunli', '朱明猎剑士', '猎剑士', '焰轮八叶', '老铁', '熔铁剑骸']],
+      ['JS-087', '云璃', ['云璃', 'Yunli', '朱明猎剑士', '焰轮八叶', '熔铁剑骸']],
       ['JS-088', '貊泽', ['貊泽', 'Moze', '鸦羽怪人', '曜青影卫', '飞霄的影卫']],
       ['JS-089', '爻光', ['爻光', 'Yao Guang', '戎韬将军', '爻老板', '玉阙将军']],
     ],
@@ -39,7 +39,7 @@ const expectedPresets = [
     file: 'planarcadia-character-expansion.json',
     id: 'zhiku_planarcadia_character_expansion',
     entries: [
-      ['JS-090', '火花', ['火花', '火花花', '花老师', '主包', '火花大会']],
+      ['JS-090', '火花', ['二相乐园火花', '火花大会主持人', '火花老师']],
       ['JS-091', '绯英', ['绯英', '绯英舰长', '绯绯狐', '二相乐园绯英']],
       ['JS-092', '不死途', ['不死途', '巡海游侠不死途', '颓废侦探', '头狼']],
       ['JS-093', '虚照', ['虚照', '模糊二维马', '狸狸周刊', '苍天航路绒绒号']],
@@ -49,7 +49,7 @@ const expectedPresets = [
     file: 'fate-collaboration-character-expansion.json',
     id: 'zhiku_fate_collaboration_character_expansion',
     entries: [
-      ['JS-094', 'Archer', ['Archer', '卫宫士郎', '红衣弓兵', '正义的伙伴']],
+      ['JS-094', 'Archer', ['红衣弓兵', '英灵Archer', 'Archer英灵', 'EMIYA']],
       ['JS-095', 'Saber', ['Saber', '阿尔托莉雅·潘德拉贡', '骑士王', '亚瑟王']],
       ['JS-096', '远坂凛', ['远坂凛', 'Tohsaka Rin', '远坂家主']],
       ['JS-097', '吉尔伽美什', ['吉尔伽美什', 'Gilgamesh', '英雄王']],
@@ -59,14 +59,13 @@ const expectedPresets = [
     file: 'planarcadia-enemy-expansion.json',
     id: 'zhiku_planarcadia_enemy_expansion',
     entries: [
-      ['DS-000', '归寂', ['归寂', '万色返空主', '绝灭大君•归寂', '绝灭大君·归寂', '绝灭大君归寂', '归寂的箴言']],
+      ['DS-000', '归寂', ['万色返空主', '绝灭大君•归寂', '绝灭大君·归寂', '绝灭大君归寂', '归寂的箴言']],
     ],
   },
 ];
 
 const positiveFieldErrors = new Map([
   ['绯英', /绯樱/u],
-  ['不死途', /拉曼查/u],
   ['虚照', /模糊二维码/u],
   ['Archer', /师徒兼宿敌/u],
   ['吉尔伽美什', /虚数\s*[\/／]\s*智识|五星智识虚数/u],
@@ -91,7 +90,7 @@ try {
       contents: [
         "export { loadAllBundledZhikuPresets } from './data/zhikuPreset';",
         "export { retrieveZhikuContext, buildZhikuAiRequestForTurn } from './services/zhikuRetrieval';",
-        "export { buildZhikuProductionData, resolveZhikuV2Category } from './components/features/ZhikuV2/productionAdapter';",
+        "export { buildZhikuProductionData, resolveZhikuCategory } from './components/features/ZhikuV3/productionAdapter';",
         "export { loadAllBundledStoryWeavingPresets } from './data/storyWeavingPreset';",
       ].join('\n'),
       resolveDir: root,
@@ -133,7 +132,7 @@ try {
     for (const [machineId, title, triggers] of presetSpec.entries) {
       const rawEntry = preset.entries.find((entry) => entry.标题 === title);
       assert(rawEntry, `${presetSpec.file} is missing ${title}`);
-      const expectedCategory = machineId.startsWith('DS-') ? 'enemy' : 'character';
+      const expectedCategory = 'character';
       assert(rawEntry.分类 === expectedCategory, `${title} category must be ${expectedCategory}`);
       assert(
         JSON.stringify(rawEntry.触发关键词) === JSON.stringify(triggers),
@@ -147,21 +146,14 @@ try {
       assert(String(rawEntry.来源 ?? '').includes('官方一手资料'), `${title} lost its official audit provenance`);
 
       const injection = rawEntry.注入内容;
-      const expectedInjectionType = expectedCategory === 'character' ? 'character' : 'lore';
+      const expectedInjectionType = 'character';
       assert(injection?.类型 === expectedInjectionType, `${title} injection type drifted`);
-      const requiredFields = expectedCategory === 'character' ? characterInjectionFields : loreInjectionFields;
+      const requiredFields = characterInjectionFields;
       for (const field of requiredFields) {
         assert(String(injection?.[field] ?? '').trim(), `${title} is missing injection field ${field}`);
       }
-      if (expectedCategory === 'character') {
-        assert(
-          /^##\s+(?:官方语音原文|官方任务文本原文|正式(?:中文互动)?语(?:音|料))/mu.test(rawEntry.原文),
-          `${title} preview lost its separately maintained official voice corpus`,
-        );
-        assert(String(injection.台词语料).length > 80, `${title} official voice corpus is unexpectedly short`);
-      } else {
-        assert(/^##\s+(?:官方文本原文|官方任务文本原文|正式(?:文本|语料))/mu.test(rawEntry.原文), `${title} preview lost its official source-text section`);
-      }
+      assert(/^语料参考[:：]\s*$/mu.test(rawEntry.原文), `${title} preview lost its separately maintained voice/source corpus`);
+      assert(String(injection.台词语料).length > 80, `${title} official voice/source corpus is unexpectedly short`);
 
       const forbidden = positiveFieldErrors.get(title);
       if (forbidden) {
@@ -176,15 +168,31 @@ try {
     const entry = zhikuSystem.条目.find((item) => item.id === expected.machineId);
     assert(entry?.标题 === expected.title, `${expected.machineId} no longer resolves to ${expected.title}`);
     assert(entry.分类 === expected.category, `${expected.machineId} normalized category drifted`);
-    const keywordResult = api.retrieveZhikuContext(zhikuSystem, expected.title, 12);
+    const retrievalSystem = expected.machineId === 'DS-000'
+      ? {
+          条目: zhikuSystem.条目.map((item) => item.id === expected.machineId
+            ? { ...item, 解锁状态: '默认可用', 运行时解锁状态: '默认可用' }
+            : item),
+        }
+      : zhikuSystem;
+    if (expected.machineId === 'DS-000') {
+      const lockedResult = api.retrieveZhikuContext(zhikuSystem, expected.triggers[0], 12);
+      assert(
+        !lockedResult.entries.some((item) => item.id === expected.machineId),
+        'Guiji must stay out of main-story injection while its major-spoiler archive is locked',
+      );
+    }
+    const keywordResult = api.retrieveZhikuContext(retrievalSystem, expected.triggers[0], 12);
     assert(
       keywordResult.entries.some((item) => item.id === expected.machineId),
       `${expected.title} cannot be recalled through its primary keyword`,
     );
+    const retrievalEntry = retrievalSystem.条目.find((item) => item.id === expected.machineId);
+    assert(retrievalEntry, `${expected.title} is missing from its retrieval test system`);
     const candidateIndex = api.buildZhikuAiRequestForTurn(
-      zhikuSystem,
+      retrievalSystem,
       expected.title,
-      [entry],
+      [retrievalEntry],
       { anticipatedNpcNames: expected.category === 'character' ? [expected.title] : [] },
     );
     const candidate = candidateIndex.request.candidates.find((item) => item.entryId === expected.machineId);
@@ -193,15 +201,17 @@ try {
   }
 
   const gilgamesh = zhikuSystem.条目.find((entry) => entry.id === 'JS-097');
+  const gilgameshPositiveText = gilgamesh ? positiveInjectionText(gilgamesh) : '';
   assert(
-    /雷属性毁灭/u.test(gilgamesh?.注入内容?.类型 === 'character' ? gilgamesh.注入内容.核心身份与阵营 : ''),
+    /雷属性/u.test(gilgameshPositiveText) && /毁灭命途/u.test(gilgameshPositiveText),
     'Gilgamesh must retain the official Thunder / Destruction correction',
   );
   const xuzhao = zhikuSystem.条目.find((entry) => entry.id === 'JS-093');
   assert(xuzhao?.触发关键词?.includes('模糊二维马'), 'Xuzhao must retain the official pen name 模糊二维马');
   const guiji = zhikuSystem.条目.find((entry) => entry.id === 'DS-000');
-  assert(guiji?.治理分类 === 'enemy', 'Guiji must use enemy governance instead of term governance');
-  assert(api.resolveZhikuV2Category(guiji) === 'character', 'Guiji must render in the character archive');
+  assert(guiji?.分类 === 'character', 'Guiji must keep its current character archive identity');
+  assert(guiji?.兼容ID?.includes('JS-098'), 'Guiji must retain JS-098 as a legacy save compatibility id');
+  assert(api.resolveZhikuCategory(guiji) === 'character', 'Guiji must render in the character archive');
   assert(
     !api.retrieveZhikuContext(zhikuSystem, '铁墓正在翁法罗斯推进毁灭计划。', 12).entries.some((entry) => entry.id === 'DS-000'),
     'mentioning Irontomb must not keyword-recall Guiji',
@@ -211,7 +221,7 @@ try {
     productionData.archiveItems.character.some((entry) => entry.id === 'DS-000' && entry.title === '归寂'),
     'Guiji must be available in the player-facing character archive',
   );
-  assert(productionData.archiveItems.character.length === 90, '89 character subjects plus Guiji must produce 90 character archive rows');
+  assert(productionData.archiveItems.character.length === 89, 'current character archive must contain 89 rows after Zandar removal');
 
   console.log(JSON.stringify({
     auditedEntries: expectedEntries.length,

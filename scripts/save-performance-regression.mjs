@@ -62,6 +62,8 @@ assert(compactor.includes('stripAlbumAssetPayload'), '运行快照必须剥离�
 assert(compactor.includes('dataUrl: asset.id ? 创建相册资源引用(asset.id) : asset.dataUrl'), '相册资源 dataUrl 必须变成 asset 引用。');
 assert(compactor.includes('compactDataImages'), '运行快照必须递归压缩手机等系统里的图片数据。');
 assert(compactor.includes('MAX_SNAPSHOT_QUEUE_TASKS'), '运行快照必须限制队列历史数量。');
+assert(compactor.includes('buildPersistedZhikuSystem'), '运行快照必须只保存智库轻量运行态，不得复制完整内置目录。');
+assert(turnSnapshot.includes('hydratePersistedZhikuSystem'), '重 roll 恢复必须把智库轻量状态挂载到当前内置目录，且不得重复自制资料。');
 assert(sendWorkflow.includes('const preTurnSnapshot = compactPreTurnSnapshot('), '持久化到聊天消息的快照必须瘦身。');
 assert(sendWorkflow.includes('rollbackSnapshotOnAbort = preTurnSnapshot'), '中断回滚必须使用已隔离的运行快照。');
 assert(sendWorkflow.includes("result.fullText = ''"), '正文落地后必须释放原始主模型响应工作集。');

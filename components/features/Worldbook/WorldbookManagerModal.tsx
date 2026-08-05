@@ -3,7 +3,6 @@ import type { 世界书, 世界书条目, 世界书条目类型, 世界书注入
 import { 创建空世界书条目, 创建空世界书, ENTRY_TYPE_LABELS } from '@/models/worldbook';
 import { exportWorldbooks, explainEntry, importWorldbooks, normalizeWorldbooks } from '@/utils/worldbook';
 import { BUILTIN_BOOK_IDS } from '@/data/builtinWorldbookConfig';
-import { STORY_MODE_BOOK_IDS } from '@/data/storyModeWorldbooks';
 
 interface Props {
   worldbooks: 世界书[];
@@ -18,9 +17,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 const builtinIds: readonly string[] = BUILTIN_BOOK_IDS;
-const storyModeIds: readonly string[] = STORY_MODE_BOOK_IDS;
-const isBuiltinBook = (book: 世界书) => builtinIds.includes(book.id) || storyModeIds.includes(book.id);
-const isStoryModeBook = (book: 世界书) => storyModeIds.includes(book.id);
+const isBuiltinBook = (book: 世界书) => builtinIds.includes(book.id);
 const isCalibrationEntry = (entry: 世界书条目) => entry.scope?.includes('calibration') === true;
 const isCalibrationBook = (book: 世界书) => book.entries.some(isCalibrationEntry);
 
@@ -353,22 +350,13 @@ function renderBookSections(
   },
 ): React.ReactNode {
   const nodes: React.ReactNode[] = [];
-  let storyGroupOpen = false;
 
   for (const book of books) {
-    const isStory = isStoryModeBook(book);
-    if (isStory && !storyGroupOpen) {
-      nodes.push(<GroupTitle key="__story_group__" title="剧情模式" />);
-      storyGroupOpen = true;
-    }
-    if (!isStory) storyGroupOpen = false;
-
     nodes.push(
       <BookSection
         key={book.id}
         book={book}
         builtin={isBuiltinBook(book)}
-        compact={isStory}
         selectedEntryId={ctx.selectedBookId === book.id ? ctx.selectedEntryId : null}
         onSelectEntry={(entryId) => ctx.onSelectEntry(book.id, entryId)}
         onToggleBook={(enabled) => ctx.onToggleBook(book.id, enabled)}
@@ -376,41 +364,6 @@ function renderBookSections(
     );
   }
   return nodes;
-}
-
-function GroupTitle({ title }: { title: string }) {
-  return (
-    <section className="mb-2">
-      <div className="mb-2 flex items-center gap-2 px-1">
-        <span
-          className="h-5 w-[3px] flex-shrink-0"
-          style={{
-            background: 'linear-gradient(180deg, linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92)), rgba(var(--tj-accent-secondary), 0.25))',
-            boxShadow: '0 0 7px rgba(var(--tj-accent-primary), 0.45)',
-          }}
-        />
-        <div className="min-w-0 flex-1">
-          <div
-            className="truncate font-serif text-base font-semibold tracking-[0.28em]"
-            style={{
-              background: 'linear-gradient(135deg, rgb(var(--tj-text-primary)) 0%, rgb(var(--tj-accent-primary)) 60%, rgb(var(--tj-accent-secondary)) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            {title}
-          </div>
-          <div
-            className="mt-1 h-px"
-            style={{
-              background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.45), rgba(var(--tj-accent-primary), 0.08), transparent)',
-            }}
-          />
-        </div>
-      </div>
-    </section>
-  );
 }
 
 function BookSection({

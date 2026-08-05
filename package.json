@@ -9,7 +9,6 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/clean-retired-avatar-artifacts.mjs && tsc -b && vite build",
-    "prototype:zhiku-ai-retrieval": "node scripts/prototypes/zhiku-ai-retrieval-prototype.mjs",
     "test:story-weaving": "node scripts/story-weaving-regression.mjs",
     "test:story-weaving-ui": "node scripts/story-weaving-ui-regression.mjs",
     "test:story-mode-worldbook": "node scripts/story-mode-worldbook-injection-regression.mjs",
@@ -84,6 +83,7 @@
     "test:zhiku-knowledge-migration": "node scripts/zhiku-knowledge-migration-regression.mjs",
     "test:zhiku-stage2-data-contract": "node scripts/zhiku-stage2-data-contract-regression.mjs",
     "test:zhiku-stage3-ai-retrieval": "node scripts/zhiku-stage3-ai-retrieval-index-regression.mjs",
+    "test:zhiku-v3-single-system": "node scripts/zhiku-v3-single-system-regression.mjs",
     "test:zhiku-multiform": "node scripts/zhiku-multiform-character-regression.mjs",
     "test:zhiku-official-backlog": "node scripts/zhiku-official-backlog-expansion-regression.mjs",
     "test:zhiku-main-story-removal": "node scripts/zhiku-main-story-removal-regression.mjs",

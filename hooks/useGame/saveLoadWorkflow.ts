@@ -21,10 +21,10 @@ import {
 import { loadLatestSave, loadSave, deleteSave as dbDeleteSave, saveGame, saveSetting } from '@/services/dbService';
 import {
   buildPersistedZhikuSystem,
-  loadAllBundledZhikuPresets,
   mergeBundledZhikuSystem,
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
+import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
 import { loadSetting } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal, isWorkflowRecoveryComplete } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
@@ -289,7 +289,11 @@ async function applySaveToState(
   if (!savedZhikuMigrationAt) {
     await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, zhikuMigrationAt);
   }
-  const nextZhiku = mergeBundledZhikuSystem(await loadAllBundledZhikuPresets(), save.智库, zhikuMigrationAt);
+  const catalogResult = await loadBundledZhikuCatalogWithFallback();
+  if (catalogResult.source === 'cache') {
+    console.warn('[zhiku] 读档时新目录加载失败，已使用最后一份完整目录:', catalogResult.loadError);
+  }
+  const nextZhiku = mergeBundledZhikuSystem(catalogResult.system, save.智库, zhikuMigrationAt);
   state.set智库(nextZhiku);
   await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));

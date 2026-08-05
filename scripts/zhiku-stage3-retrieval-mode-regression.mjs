@@ -120,7 +120,13 @@ try {
   const workflowSource = fs.readFileSync(path.join(root, 'hooks/useGame/sendWorkflow.ts'), 'utf8');
   const snapshotSource = fs.readFileSync(path.join(root, 'hooks/useGame/contextSnapshot.ts'), 'utf8');
   assert(settingsSource.includes('AI 主动补充') && settingsSource.includes('不会额外调用 API'), 'settings UI must expose the opt-in AI supplement switch');
-  assert(workflowSource.includes('zhikuAiSupplementEnabled') && workflowSource.includes('Promise.resolve(retrieveZhikuContext('), 'main workflow must select local keyword retrieval when AI supplement is disabled');
+  assert(
+    workflowSource.includes('zhikuAiSupplementEnabled')
+      && workflowSource.includes('compileZhikuTurnWithModel({')
+      && workflowSource.includes('Promise.resolve(compileZhikuTurn({')
+      && !workflowSource.includes('Promise.resolve(retrieveZhikuContext('),
+    'main workflow must select local or AI-backed retrieval through the single turn compiler',
+  );
   assert(snapshotSource.includes('AI 主动补充未开启') && snapshotSource.includes('不会发送智库补充 API 请求'), 'context snapshot must describe keyword-only mode truthfully');
 
   console.log(JSON.stringify({

@@ -6,8 +6,7 @@ import type { NPC记录 } from '@/models/npc';
 import { 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 聊天消息 } from '@/models/chat';
-import type { 智库系统, 智库条目 } from '@/models/zhiku';
-import { 解析智库软结构标签, 获取智库人物名, 比较智库人物节点 } from '@/models/zhiku';
+import type { 智库系统 } from '@/models/zhiku';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import { PHONE_COT_PROMPT as PHONE_LEGACY_COT_PROMPT } from '@/prompts/cot/phoneCot';
 import { PHONE_OUTPUT_FORMAT_PROMPT as PHONE_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/phoneOutputFormat';
@@ -15,6 +14,7 @@ import { PHONE_STYLE_PROMPT as PHONE_LEGACY_STYLE_PROMPT } from '@/prompts/cot/p
 import { PHONE_WORLD_BOOK_PROMPT as PHONE_LEGACY_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+import { compileZhikuPhoneView } from '@/services/zhikuRuntimeCompiler';
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { extractJsonLikeText, normalizeStructuredModelText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
@@ -426,47 +426,9 @@ function formatPhoneGroupParticipant(ctx: 手机回复上下文, participantId: 
 }
 
 function buildPhoneZhikuPersonaBrief(ctx: 手机回复上下文): string {
-  const entries = ctx.zhiku?.条目 ?? [];
-  if (!entries.length) return '';
   const names = collectPhoneParticipantNames(ctx);
   if (!names.length) return '';
-
-  const selected: 智库条目[] = [];
-  for (const name of names) {
-    const matched = entries
-      .filter((entry) => entry.分类 === 'character' && entry.可用于联动)
-      .filter((entry) => namesLikelySame(获取智库人物名(entry), name))
-      .filter(isPhoneAllowedZhikuEntry)
-      .sort(比较智库人物节点)
-      .slice(0, 3);
-    for (const entry of matched) {
-      if (!selected.some((item) => item.id === entry.id)) selected.push(entry);
-      if (selected.length >= 8) break;
-    }
-    if (selected.length >= 8) break;
-  }
-  if (!selected.length) return '';
-  const lines = selected.map((entry) => {
-    const meta = 解析智库软结构标签(entry);
-    const metaLine = [
-      meta.资料类型 ? `资料类型:${meta.资料类型}` : '',
-      meta.节点 ? `节点:${meta.节点}` : '',
-      meta.解锁状态 ? `解锁:${meta.解锁状态}` : '',
-      meta.剧透等级 ? `剧透:${meta.剧透等级}` : '',
-      meta.使用范围.length ? `范围:${meta.使用范围.join('/')}` : '',
-    ].filter(Boolean).join('；');
-    const injection = entry.注入内容;
-    if (injection?.类型 !== 'character') return '';
-    return [
-      `- ${entry.标题}${metaLine ? `（${metaLine}）` : ''}`,
-      `  核心身份与阵营：${injection.核心身份与阵营}`,
-      `  独立人格与行为：${injection.独立人格与行为}`,
-      `  说话方式：${injection.说话方式}`,
-      `  演绎红线：${injection.演绎红线}`,
-    ].join('\n');
-  });
-  lines.push('边界：这里只提供聊天对象的主体人格、OOC 风险或手机语气锚点；未解锁形态、重大剧透和只读资料不得在手机里提前表现。');
-  return lines.join('\n');
+  return compileZhikuPhoneView(ctx.zhiku, names).phonePersonaView;
 }
 
 function collectPhoneParticipantNames(ctx: 手机回复上下文): string[] {
@@ -491,24 +453,6 @@ function collectPhoneParticipantNames(ctx: 手机回复上下文): string[] {
     }
   }
   return Array.from(names).slice(0, 8);
-}
-
-function isPhoneAllowedZhikuEntry(entry: 智库条目): boolean {
-  const meta = 解析智库软结构标签(entry);
-  const ranges = meta.使用范围.map((item) => item.trim()).filter(Boolean);
-  if (ranges.length > 0 && !ranges.some((item) => /手机|通用|全部|all/i.test(item))) return false;
-  const unlock = meta.解锁状态 ?? '';
-  if (/未解锁|锁定|只读/i.test(unlock)) return false;
-  const spoiler = meta.剧透等级 ?? '';
-  if (/重大/i.test(spoiler) && !/默认可用|已解锁|当前可用|手动启用/i.test(unlock)) return false;
-  const type = [meta.资料类型, meta.节点].filter(Boolean).join(' ');
-  return /主体|人格|OOC|风险|手机|语气|基础/i.test(type) || !type;
-}
-
-function namesLikelySame(a: string, b: string): boolean {
-  const left = a.trim();
-  const right = b.trim();
-  return !!left && !!right && (left === right || left.includes(right) || right.includes(left));
 }
 
 function parsePhoneReply(raw: string, messageLimit = 8): 手机回复结果 {

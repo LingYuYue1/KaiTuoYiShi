@@ -129,6 +129,8 @@ export interface 智库系统 {
   条目: 智库条目[];
   自制资料契约版本?: number;
   自制资料下一个序号?: number;
+  目录版本?: string;
+  目录修订?: number;
 }
 
 export interface 智库软结构标签 {
@@ -250,6 +252,8 @@ export function 归一化智库系统(input?: Partial<智库系统> | null): 智
   return {
     自制资料契约版本: normalizeNonNegativeInteger(input.自制资料契约版本),
     自制资料下一个序号: normalizeNonNegativeInteger(input.自制资料下一个序号),
+    目录版本: normalizeOptionalText(input.目录版本),
+    目录修订: normalizeNonNegativeInteger(input.目录修订),
     条目: input.条目
       .filter((entry) => !!entry && typeof entry === 'object')
       .map((entry) => normalizeEntry(entry))

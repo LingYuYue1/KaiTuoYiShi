@@ -131,7 +131,7 @@ assert.ok(retiredAvatarCleaner.includes("'assets/builtin-avatars/candidates'"), 
 assert.ok(retiredAvatarCleaner.includes("entry.name.toLowerCase().endsWith('.png')"), 'avatar artifact cleanup must remove only PNG files');
 
 const resilientSurfaces = [
-  'components/features/ZhikuV2/ArchiveBrowser.tsx',
+  'components/features/ZhikuV3/ArchiveBrowser.tsx',
   'components/features/GameSystems/album/workspaces.tsx',
   'components/features/GameSystems/CompanionPanel.tsx',
   'components/features/Phone/PhoneModal.tsx',

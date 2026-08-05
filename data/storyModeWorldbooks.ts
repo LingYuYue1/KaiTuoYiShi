@@ -1,27 +1,9 @@
-import type { 世界书, 世界书条目 } from '@/models/worldbook';
+// 「剧情方向」内容常量：四种剧情模式本为世界书(storyModeGate 四选一),已迁移为提示词模块
+// builtin_storymode_* (data/builtinPromptModules.ts)。内容常量留在此文件,供模块引用与回归脚本钉验。
+// 总约束已吃掉「去神话化 / 去魅主 / 去发情化 / 去权谋化 ...」等 8 条铁律,本组只负责
+// 「情感线落到哪个方向上、推进力度、笔触侧重」,与总约束错位互补。
 
-// 「剧情模式」专属世界书:每本一个 storyModeGate,玩家在向导里选哪种剧情模式就只激活对应那本。
-//
-// 设计要点:
-// - 总约束已经吃掉「去神话化 / 去魅主 / 去发情化 / 去权谋化 ...」等 8 条铁律,本组世界书不再重复。
-//   本组只负责「情感线落到哪个方向上、推进力度、笔触侧重」,与总约束错位互补。
-// - scope 统一为 ['main', 'opening']：玩家选择从第 0 回合开场起生效。
-// - injectMode 都用 always:选了哪种就是哪种,不需要关键词触发。
-// - priority 都设为 210,略低于命途/地点/列车(180+),略高于普通条目(100),保证它出现在 system 顶部附近。
-// - 留 storyModeGate 字段做硬筛:只有玩家 worldState.storyMode 命中时本书才生效。
-
-export const STORY_MODE_BOOK_IDS = [
-  'builtin_story_normal',
-  'builtin_story_harem',
-  'builtin_story_romance_alt',
-  'builtin_story_deep_single',
-] as const;
-
-function entry(partial: Omit<世界书条目, 'createdAt' | 'updatedAt'>, now: number): 世界书条目 {
-  return { ...partial, createdAt: now, updatedAt: now };
-}
-
-const NORMAL_CONTENT = `## 剧情模式·正常向
+export const NORMAL_CONTENT = `## 剧情模式·正常向
 
 本局玩家选择「正常向」。情感线**不是本局的主轴**,主轴仍然是冒险、命途选择、组织关系与世界推进。感情戏在合适的时候自然发生,但**不被刻意制造、不被强行放大**。
 
@@ -44,7 +26,7 @@ const NORMAL_CONTENT = `## 剧情模式·正常向
 
 「在一起」「告白成功」「同房」这类**关系定性的台阶,只能由玩家显式触发**,叙述层不主动越线。`;
 
-const HAREM_CONTENT = `## 剧情模式·后宫向
+export const HAREM_CONTENT = `## 剧情模式·后宫向
 
 本局玩家选择「后宫向」。允许多名 NPC 同时与玩家形成情感张力,但**每一段都要有理由、有差异、有不同的味道**——后宫不是同一种妹妹的多份拷贝。
 
@@ -68,7 +50,7 @@ const HAREM_CONTENT = `## 剧情模式·后宫向
 
 「在一起」「正式确定关系」这类排他性台阶,**只能由玩家显式触发**;在那之前,所有线都是「还在走」。`;
 
-const ROMANCE_ALT_CONTENT = `## 剧情模式·百合·BL 向
+export const ROMANCE_ALT_CONTENT = `## 剧情模式·百合·BL 向
 
 本局玩家选择「百合·BL 向」。情感线明确偏向**同性方向**——玩家性别与 NPC 性别相同的情况下产生情感张力。
 
@@ -91,7 +73,7 @@ const ROMANCE_ALT_CONTENT = `## 剧情模式·百合·BL 向
 
 感情戏与剧情主线交织——命途、组织关系、星际旅程仍是主轴。**不要因为是同性恋情就让世界观背景退场**。`;
 
-const DEEP_SINGLE_CONTENT = `## 剧情模式·深度单线向
+export const DEEP_SINGLE_CONTENT = `## 剧情模式·深度单线向
 
 本局玩家选择「深度单线向」。玩家锚定**一位**特定的 NPC 作为情感对象,整局剧情围绕这条单线深耕。**深度优于广度**。
 
@@ -118,101 +100,3 @@ const DEEP_SINGLE_CONTENT = `## 剧情模式·深度单线向
 3. 锚定对象的回应永远是这一类输入的**主旋律**,不论玩家说的对象是谁。
 
 「在一起」「同房」「永远」这类关系定性台阶,**仅由玩家显式触发**;且锚定对象在每一步都保留「不是因为你是主角才答应,而是因为你做了具体的事让我愿意」的因果链。`;
-
-export function createStoryModeWorldbooks(): 世界书[] {
-  const now = Date.now();
-
-  const normalBook: 世界书 = {
-    id: 'builtin_story_normal',
-    title: '剧情模式·正常向',
-    description: '正常向叙事方向。仅当玩家选择「正常向」剧情模式时生效。',
-    enabled: true,
-    storyModeGate: ['normal'],
-    entries: [
-      entry({
-        id: 'builtin_story_normal_main',
-        title: '正常向叙事方向',
-        content: NORMAL_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 210,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const haremBook: 世界书 = {
-    id: 'builtin_story_harem',
-    title: '剧情模式·后宫向',
-    description: '后宫向叙事方向。仅当玩家选择「后宫向」剧情模式时生效。',
-    enabled: true,
-    storyModeGate: ['harem'],
-    entries: [
-      entry({
-        id: 'builtin_story_harem_main',
-        title: '后宫向叙事方向',
-        content: HAREM_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 210,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const romanceAltBook: 世界书 = {
-    id: 'builtin_story_romance_alt',
-    title: '剧情模式·百合·BL 向',
-    description: '同性向叙事方向。仅当玩家选择「百合·BL 向」剧情模式时生效。',
-    enabled: true,
-    storyModeGate: ['romance_alt'],
-    entries: [
-      entry({
-        id: 'builtin_story_romance_alt_main',
-        title: '百合·BL 向叙事方向',
-        content: ROMANCE_ALT_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 210,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const deepSingleBook: 世界书 = {
-    id: 'builtin_story_deep_single',
-    title: '剧情模式·深度单线向',
-    description: '深度单线叙事方向。仅当玩家选择「深度单线向」剧情模式时生效。',
-    enabled: true,
-    storyModeGate: ['deep_single'],
-    entries: [
-      entry({
-        id: 'builtin_story_deep_single_main',
-        title: '深度单线向叙事方向',
-        content: DEEP_SINGLE_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 210,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  return [normalBook, haremBook, romanceAltBook, deepSingleBook];
-}

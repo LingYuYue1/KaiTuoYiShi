@@ -16,6 +16,7 @@ const gameSettings = read('components/features/Settings/GameSettings.tsx');
 const sendWorkflow = read('hooks/useGame/sendWorkflow.ts');
 const textService = read('services/ai/text/index.ts');
 const client = read('services/ai/chatCompletionClient.ts');
+const finalizer = read('hooks/useGame/mainRequestFinalizer.ts');
 const recovery = read('services/ai/deepSeekRecovery.ts');
 const modelPolicy = read('services/ai/deepSeekModelPolicy.ts');
 const modelCatalog = read('services/ai/openAICompatibleModels.ts');
@@ -23,6 +24,7 @@ const repair = read('services/ai/structuredOutputRepair.ts');
 const variableFacts = read('utils/variableFacts.ts');
 const phoneService = read('services/ai/phoneService.ts');
 const zhiku = read('services/zhikuRetrieval.ts');
+const zhikuIndex = read('services/zhikuAiRetrievalIndex.ts');
 const storyWeaving = read('services/storyWeaving.ts');
 const gameState = read('hooks/useGameState.ts');
 const saveLoad = read('hooks/useGame/saveLoadWorkflow.ts');
@@ -47,16 +49,18 @@ assert(gameSettings.includes('追加 DS 格式校验'), 'DeepSeek 标准模式 U
 assert(gameSettings.includes('锁定 <thinking>'), 'DeepSeek 锁格式 UI 必须说明锁定 thinking 起点。');
 assert(gameSettings.includes('仅当主 API 供应商或 Base URL 命中 DeepSeek 时生效'), 'DeepSeek 模式 UI 必须说明只影响 DeepSeek 主 API。');
 
-assert(sendWorkflow.includes('isDeepSeekMainConfig'), '主剧情必须有 DeepSeek 主 API 检测。');
+assert(sendWorkflow.includes("providerCapabilities.transport === 'deepseek'"), '主剧情必须消费传输层能力识别 DeepSeek。');
+assert(!sendWorkflow.includes('function isDeepSeekMainConfig'), '应用层不得保留第二套 DeepSeek provider 判断。');
 assert(!sendWorkflow.includes('resolveMainStoryConfig'), 'DeepSeek reasoner 适配不得继续局限在主剧情局部逻辑。');
 assert(sendWorkflow.includes('sendChatMessage(mainStoryConfig'), '主剧情发送必须使用共享请求层。');
 assert(sendWorkflow.includes('!deepSeekMainActive'), 'DeepSeek 专用模式必须跳过 CoT 伪装历史。');
 assert(sendWorkflow.includes('const usePresetPrefill = Boolean(presetAssistantPrefill) && !deepSeekLockFormat'), 'DeepSeek 锁格式下预设 assistantPrefill 不得覆盖 thinking 起点。');
 assert(sendWorkflow.includes("const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\\n' : presetAssistantPrefill"), 'DeepSeek 锁格式必须从 thinking 起点续写。');
-assert(sendWorkflow.includes('prefixContent: effectivePrefixContent'), '主剧情请求必须透传最终 assistant prefill 内容。');
+assert(sendWorkflow.includes('prefixContent: finalizedMainRequest.prefixContent'), '主剧情请求必须透传最终化后的 assistant prefill 内容。');
 assert(!sendWorkflow.includes("prefixContent: '<正文>\\n'"), 'DeepSeek 锁格式不得再锁到正文起点，否则会跳过思维链。');
 assert(sendWorkflow.includes('DEEPSEEK_MAIN_FORMAT_GUARD'), 'DeepSeek 标准/锁格式必须追加专属格式守卫。');
-assert(sendWorkflow.includes('apiMessages.push(创建聊天消息(\'user\', DEEPSEEK_MAIN_FORMAT_GUARD))'), 'DeepSeek 格式守卫必须作为最后 user 消息进入主请求。');
+assert(sendWorkflow.includes("mainTailMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD))"), 'DeepSeek 格式守卫必须通过共享最终化器进入尾部消息。');
+assert(finalizer.includes('export function finalizeMainRequest') && finalizer.includes('tailMessages'), 'DeepSeek 守卫、人物校准和 prefill 必须经过共享最终化器。');
 assert(sendWorkflow.includes('getDeepSeekMainProtocolIssues'), 'DeepSeek 主剧情必须校验 thinking/正文/记忆/动态世界/变量草稿协议。');
 assert(sendWorkflow.includes('buildDeepSeekProtocolRetryGuard'), 'DeepSeek 协议失败时必须追加重试守卫。');
 assert(sendWorkflow.includes('Math.max(2, configuredMaxAttempts)'), 'DeepSeek 专用模式至少要保留一次协议失败重试。');
@@ -106,7 +110,8 @@ assert((variableModel.includes('低风险日常轻记忆') || variableOutputForm
 assert(variableWorldbook.includes('共同日常也属于低风险有效互动') && variableWorldbook.includes('memory/recentInteraction/sharedExperiences'), '变量世界书必须明确重要 NPC 共同日常可写轻记忆。');
 assert(variableCot.includes('重要 NPC 的共同日常可以是低风险可承接结果'), '变量 CoT 必须审计重要 NPC 日常轻记忆。');
 assert(phoneService.includes('parseJsonWithRepair') && phoneService.includes('normalizeStructuredModelText(raw)'), '手机 JSON 解析必须使用结构化输出修复。');
-assert(zhiku.includes('normalizeStructuredModelText(raw)'), '智库编号解析必须先清理结构化模型输出。');
+assert(zhiku.includes('parseZhikuAiOutput(rawText)'), '智库检索必须委托统一编号输出解析器。');
+assert(zhikuIndex.includes("parseJsonWithRepair<Partial<ZhikuAiOutput>>(rawText, 'object')") && repair.includes('normalizeStructuredModelText(rawText)'), '智库编号解析必须经过统一结构化输出清理与修复。');
 assert(storyWeaving.includes('parseJsonWithRepair') && storyWeaving.includes("extractJsonLikeText(raw, 'object')"), '剧情编织 JSON 解析必须使用结构化输出修复。');
 
 assert(apiSettings.includes('deepSeekMainMode: gameSettings.deepSeekMainMode ??'), 'API 配置包必须导出 DeepSeek 主剧情模式。');

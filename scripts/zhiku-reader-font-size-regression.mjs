@@ -7,14 +7,14 @@ const requireText = (source, expected, label) => {
   if (!source.includes(expected)) throw new Error(`${label}: missing ${expected}`);
 };
 
-const experience = read('components/features/ZhikuV2/ZhikuExperience.tsx');
-const archive = read('components/features/ZhikuV2/ArchiveBrowser.tsx');
-const archiveCss = read('components/features/ZhikuV2/archive-browser.css');
-const story = read('components/features/ZhikuV2/StoryArchiveReader.tsx');
-const storyCss = read('components/features/ZhikuV2/story-archive-reader.css');
-const control = read('components/features/ZhikuV2/ReaderFontSizeControl.tsx');
-const controlCss = read('components/features/ZhikuV2/reader-font-size-control.css');
-const fontSize = read('components/features/ZhikuV2/readerFontSize.ts');
+const experience = read('components/features/ZhikuV3/ZhikuExperience.tsx');
+const archive = read('components/features/ZhikuV3/ArchiveBrowser.tsx');
+const archiveCss = read('components/features/ZhikuV3/archive-browser.css');
+const story = read('components/features/ZhikuV3/StoryArchiveReader.tsx');
+const storyCss = read('components/features/ZhikuV3/story-archive-reader.css');
+const control = read('components/features/ZhikuV3/ReaderFontSizeControl.tsx');
+const controlCss = read('components/features/ZhikuV3/reader-font-size-control.css');
+const fontSize = read('components/features/ZhikuV3/readerFontSize.ts');
 
 requireText(experience, 'useZhikuReaderFontSize()', 'shared reader preference owner');
 requireText(experience, 'readerFontSize={readerFontSize}', 'shared size passed to archive surfaces');

@@ -3,11 +3,11 @@ import { fn } from 'storybook/test';
 import {
   ArchiveBrowser,
   type ZhikuArchiveItem,
-} from '../components/features/ZhikuV2/ArchiveBrowser';
+} from '../components/features/ZhikuV3/ArchiveBrowser';
 import {
-  ZHIKU_DESIGN_CATEGORIES,
-  type ZhikuDesignCategoryId,
-} from '../components/features/ZhikuV2/types';
+  ZHIKU_CATEGORIES,
+  type ZhikuCategoryId,
+} from '../components/features/ZhikuV3/types';
 import type { 智库条目 } from '../models/zhiku';
 import { 获取智库核心触发词 } from '../models/zhiku';
 import { buildZhikuEntryInjectionPreview } from '../services/zhikuRetrieval';
@@ -24,8 +24,8 @@ type ReferenceEntry = Pick<智库条目, '标题' | '分类' | '摘要' | '原�
 const asEntries = (entries: unknown): ReferenceEntry[] => entries as ReferenceEntry[];
 const plainKeyword = (keyword: string): boolean => !/^[^：:]{1,16}[：:]/u.test(keyword);
 
-const getCategory = (id: ZhikuDesignCategoryId, count: number) => ({
-  ...ZHIKU_DESIGN_CATEGORIES.find((category) => category.id === id)!,
+const getCategory = (id: ZhikuCategoryId, count: number) => ({
+  ...ZHIKU_CATEGORIES.find((category) => category.id === id)!,
   countLabel: String(count),
 });
 
@@ -37,14 +37,14 @@ const getBrowseKeywords = (entry: 智库条目): string[] => {
 
 const toArchiveItems = (
   entries: ReferenceEntry[],
-  categoryId: ZhikuDesignCategoryId,
+  categoryId: ZhikuCategoryId,
 ): ZhikuArchiveItem[] => {
   const category = getCategory(categoryId, entries.length);
   return entries
     .map((entry, index) => {
       const normalizedEntry = {
         ...entry,
-        id: entry.id ?? `zhiku-v2-${categoryId}-${index + 1}`,
+        id: entry.id ?? `zhiku-v3-${categoryId}-${index + 1}`,
         关联条目ID: entry.关联条目ID ?? [],
         重要度: entry.重要度 ?? 3,
         可用于联动: entry.可用于联动 ?? true,
@@ -85,7 +85,7 @@ const termItems = toArchiveItems(
 const enemyItems: ZhikuArchiveItem[] = [];
 
 const meta = {
-  title: '开拓轶事/智库 V2/其他二级页面',
+  title: '开拓轶事/智库 V3/其他二级页面',
   component: ArchiveBrowser,
   parameters: {
     layout: 'fullscreen',
