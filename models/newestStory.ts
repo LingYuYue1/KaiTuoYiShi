@@ -1,7 +1,7 @@
 /**
  * 片 5a-1 产出：newest 槽单记录 schema（纯类型 + 构造函数/归一化函数，不接任何调用方）。
  *
- * 设计依据（slice5a-design.md「已裁决」）：
+ * 设计依据（legacy_doc/slice5a-design.md「已裁决」）：
  *  - D1-A：newest 槽 = 字段级覆盖集——只存「自上个 checkpoint 以来被写过的字段及其当前值」，
  *    未写字段缺省 = 与 baseCheckpointId 指向的 checkpoint 一致。物理形态为新 objectStore
  *    `newestStory`（单记录固定 key，DB_VERSION +1，5a-2 建表）。
@@ -23,7 +23,7 @@
  *
  * 类型依赖：仅 models/（本文件同目录相对导入）。hooks/useGame/turnTypes.ts 的 TurnDeltas
  * 属允许依赖，但本文件当前不需要——L4「回合写入字段集 == TurnDeltas 声明字段集」的映射
- * 见 slice5a-1-schema-report.md c 节，5a-2 接线时若需要可在调用方侧引入。
+ * 见 legacy_doc/slice5a-1-schema-report.md c 节，5a-2 接线时若需要可在调用方侧引入。
  */
 import type { 角色数据结构 } from './character';
 import type { 聊天消息 } from './chat';
