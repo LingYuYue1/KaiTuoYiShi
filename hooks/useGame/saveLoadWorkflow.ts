@@ -237,16 +237,42 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
   };
 }
 
+export async function beginSession(state: UseGameStateReturn): Promise<void> {
+  const abortControllerRef = state.abortControllerRef;
+  abortControllerRef.current?.abort();
+  abortControllerRef.current = null;
+  const rerollContextRef = state.rerollContextRef;
+  rerollContextRef.current = null;
+  const interrupted = state.interruptedWorkflow;
+  if (interrupted) {
+    await clearWorkflowRecoveryJournal(interrupted.workflowId);
+    state.setInterruptedWorkflow(null);
+    devLog('recover', 'session-begin-abandon-interrupted', { workflowId: interrupted.workflowId });
+  }
+  state.setLoading(false);
+  state.setTurnStatus(TURN_STATUS_IDLE);
+  state.setPendingVariable(false);
+  state.setLiveRecallSummary('');
+  state.setLiveRecallFullContent('');
+  setStreamingMessage('');
+}
+
+export async function enterSession(
+  state: UseGameStateReturn,
+  save: 存档数据,
+): Promise<void> {
+  await beginSession(state);
+  await applySaveToState(save, state);
+  state.setPendingOpeningTrigger(null);
+  state.setSessionEpoch((e) => e + 1);
+}
+
 export async function handleLoadLatest(
   state: UseGameStateReturn,
 ): Promise<boolean> {
   const save = await loadLatestSave();
   if (!save) return false;
-  const abortControllerRef = state.abortControllerRef;
-  abortControllerRef.current?.abort();
-  abortControllerRef.current = null;
-  await abandonInterruptedWorkflow(state);
-  await applySaveToState(save, state);
+  await enterSession(state, save);
   return true;
 }
 
@@ -256,11 +282,7 @@ export async function handleLoadById(
 ): Promise<boolean> {
   const save = await loadSave(id);
   if (!save) return false;
-  const abortControllerRef = state.abortControllerRef;
-  abortControllerRef.current?.abort();
-  abortControllerRef.current = null;
-  await abandonInterruptedWorkflow(state);
-  await applySaveToState(save, state);
+  await enterSession(state, save);
   return true;
 }
 
@@ -314,15 +336,6 @@ export async function handleDeleteSave(id: number): Promise<void> {
   const save = await loadSave(id);
   await dbDeleteSave(id);
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
-}
-
-async function abandonInterruptedWorkflow(state: UseGameStateReturn): Promise<void> {
-  const interrupted = state.interruptedWorkflow;
-  if (!interrupted) return;
-  await clearWorkflowRecoveryJournal(interrupted.workflowId);
-  state.setInterruptedWorkflow(null);
-  state.setTurnStatus(TURN_STATUS_IDLE);
-  devLog('recover', 'load-abandon-interrupted', { workflowId: interrupted.workflowId });
 }
 
 export async function applySaveToState(

@@ -341,6 +341,24 @@ export function App() {
   const handleOpenSaveLoad = useCallback(() => setShowSaveLoad(true), []);
   const handleOpenSettings = useCallback(() => setShowSettings(true), []);
   const handleCloseSystemDrawer = useCallback(() => setActiveSystem(null), []);
+  const closeTransientUi = useCallback(() => {
+    setActiveSystem(null);
+    setShowCharacter(false);
+    setShowPhone(false);
+    setShowSaveLoad(false);
+    setShowSettings(false);
+    setShowWorldbookManager(false);
+    setShowZhikuManager(false);
+  }, []);
+  const loadSaveIntoGame = useCallback(async (id: number) => {
+    const ok = await handleLoadById(id, state);
+    if (ok) closeTransientUi();
+    return ok;
+  }, [state, closeTransientUi]);
+  const handleGoHomeClick = useCallback(() => {
+    closeTransientUi();
+    actions.handleGoHome();
+  }, [actions, closeTransientUi]);
   const handleToggleStreaming = useCallback(() => {
     state.setGameSettings((prev) => ({
       ...prev,
@@ -542,7 +560,7 @@ export function App() {
     <TopBar
       worldState={state.世界}
       currentTheme={state.currentTheme}
-      onHome={actions.handleGoHome}
+      onHome={handleGoHomeClick}
       news={state.新闻}
       onOpenNews={handleOpenNews}
     />
@@ -630,6 +648,7 @@ export function App() {
           </div>
         ) : null}
       <InputArea
+        key={state.sessionEpoch}
         onSend={actions.handleSend}
         onAbort={actions.handleAbort}
         loading={state.loading}
@@ -737,11 +756,7 @@ export function App() {
             <SaveLoadModal
               showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
               onSave={actions.handleSave}
-              onLoad={async (id) => {
-                const ok = await handleLoadById(id, state);
-                if (ok) setShowSaveLoad(false);
-                return ok;
-              }}
+              onLoad={loadSaveIntoGame}
               onClose={() => setShowSaveLoad(false)}
             />
           </Suspense>
@@ -776,7 +791,7 @@ export function App() {
               onThemeChange={state.setCurrentTheme}
               onSave={actions.handleSave}
               onContinue={actions.handleContinue}
-              onLoadSave={(id) => handleLoadById(id, state)}
+              onLoadSave={loadSaveIntoGame}
               initialTab={settingsInitialTab}
               旅人={state.旅人}
               世界={state.世界}
@@ -937,7 +952,7 @@ export function App() {
       {/* Mobile bottom menu */}
       {!activeSystem && !showSettings && !showWorldbookManager && !showZhikuManager && !showSaveLoad && !showCharacter && !showPhone && (
         <MobileQuickMenu
-          onHome={actions.handleGoHome}
+          onHome={handleGoHomeClick}
           onCharacter={handleOpenProfile}
           onPhone={handleOpenPhone}
           onSettings={handleOpenSettings}
@@ -960,7 +975,7 @@ export function App() {
             onThemeChange={state.setCurrentTheme}
             onSave={actions.handleSave}
             onContinue={actions.handleContinue}
-            onLoadSave={(id) => handleLoadById(id, state)}
+            onLoadSave={loadSaveIntoGame}
             initialTab={settingsInitialTab}
             旅人={state.旅人}
             世界={state.世界}
@@ -1047,11 +1062,7 @@ export function App() {
           <SaveLoadModal
             showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
             onSave={actions.handleSave}
-            onLoad={async (id) => {
-              const ok = await handleLoadById(id, state);
-              if (ok) setShowSaveLoad(false);
-              return ok;
-            }}
+            onLoad={loadSaveIntoGame}
             onClose={() => setShowSaveLoad(false)}
           />
         </Suspense>

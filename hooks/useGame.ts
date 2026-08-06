@@ -6,7 +6,7 @@ import { 初始化新局checkpoint } from '@/hooks/useGame/commitTurn';
 import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeImageWorkflow';
 import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
-import { handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
+import { beginSession, handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
@@ -49,7 +49,6 @@ export function useGame(): UseGameReturn {
   useLayoutEffect(() => {
     stateRef.current = state;
   }, [state]);
-  const rerollContextRef = useRef<{ nonce: string; previousResponse: string } | null>(null);
 
   const getActiveConfig = useCallback((): API配置项 | null => {
     const s = stateRef.current;
@@ -83,9 +82,9 @@ export function useGame(): UseGameReturn {
         getActiveConfig,
         onBeforeSend: () => {},
         onAfterSend: () => {
-          rerollContextRef.current = null;
+          stateRef.current.rerollContextRef.current = null;
         },
-        rerollContext: rerollContextRef.current,
+        rerollContext: stateRef.current.rerollContextRef.current,
       });
     },
     [getActiveConfig],
@@ -105,7 +104,7 @@ export function useGame(): UseGameReturn {
       getActiveConfig,
       onBeforeSend: () => {},
       onAfterSend: () => {
-        rerollContextRef.current = null;
+        stateRef.current.rerollContextRef.current = null;
       },
       rerollContext: null,
     });
@@ -171,7 +170,7 @@ export function useGame(): UseGameReturn {
         s.setTurnCount(Math.max(1, s.turnCount - 1));
       }
       // 生成失败的重 roll 不需要 rerollContext（没有上一版回复可比对）
-      rerollContextRef.current = null;
+      s.rerollContextRef.current = null;
       return userInput;
     }
 
@@ -197,7 +196,7 @@ export function useGame(): UseGameReturn {
     const userInput = history[lastUserIdx].content;
     const snapshot = history[lastAiIdx].preTurnSnapshot;
     const previousResponse = history[lastAiIdx].parsedResponse?.body || history[lastAiIdx].content || '';
-    rerollContextRef.current = {
+    s.rerollContextRef.current = {
       nonce: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       previousResponse,
     };
@@ -232,10 +231,7 @@ export function useGame(): UseGameReturn {
   const handleRestartOpening = useCallback(async () => {
     const s = stateRef.current;
     devLog('save', 'new-game-initialize-start', { entry: 'restart' });
-    if (s.loading) {
-      s.abortControllerRef.current?.abort();
-      s.abortControllerRef.current = null;
-    }
+    await beginSession(s);
     const initialChatHistory: NewestStory字段集['chatHistory'] = [];
     const initialMemory = 创建空记忆系统();
     const initialYiting = 创建空忆庭系统();
@@ -249,7 +245,6 @@ export function useGame(): UseGameReturn {
     s.set忆庭(initialYiting);
     s.set手机(initialPhone);
     s.setTurnCount(1);
-    setStreamingMessage('');
 
     const restartOpeningArchive = 归一化开局档案(s.世界.开局档案, s.世界);
     const nextNPC = 根据开局档案创建初始NPC记录(restartOpeningArchive);
@@ -334,6 +329,7 @@ export function useGame(): UseGameReturn {
       apiSettings: s.apiSettings,
       theme: s.currentTheme,
     });
+    s.setSessionEpoch((e) => e + 1);
   }, []);
 
   const getContextSnapshot = useCallback((kind?: ContextSnapshotKind) => {

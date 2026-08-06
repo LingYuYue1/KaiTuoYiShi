@@ -251,6 +251,9 @@ export interface UseGameStateReturn {
   setPendingOpeningTrigger: React.Dispatch<React.SetStateAction<string | null>>;
   interruptedWorkflow: WorkflowRecoveryJournal | null;
   setInterruptedWorkflow: React.Dispatch<React.SetStateAction<WorkflowRecoveryJournal | null>>;
+  sessionEpoch: number;
+  setSessionEpoch: React.Dispatch<React.SetStateAction<number>>;
+  rerollContextRef: React.RefObject<{ nonce: string; previousResponse: string } | null>;
   abortControllerRef: React.RefObject<AbortController | null>;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -286,6 +289,8 @@ export function useGameState(): UseGameStateReturn {
   const [interruptedWorkflow, setInterruptedWorkflow] = useState<WorkflowRecoveryJournal | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const rerollContextRef = useRef<{ nonce: string; previousResponse: string } | null>(null);
+  const [sessionEpoch, setSessionEpoch] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bootReadyRef = useRef(false);
   const stateRef = useRef<UseGameStateReturn | null>(null);
@@ -319,6 +324,8 @@ export function useGameState(): UseGameStateReturn {
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
     interruptedWorkflow, setInterruptedWorkflow,
+    sessionEpoch, setSessionEpoch,
+    rerollContextRef,
     abortControllerRef, scrollRef,
   };
 

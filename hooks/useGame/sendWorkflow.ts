@@ -96,7 +96,9 @@ export async function executeSendWorkflow(
   let rollbackSnapshotOnAbort: 回合快照 | null = null;
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
   // Declared outside the stream setup so finally can always cancel a pending rAF commit.
-  const streamMessageSetter = createRafCoalescedSetter(setStreamingMessage);
+  const streamMessageSetter = createRafCoalescedSetter((value: string) => {
+    if (isCurrentWorkflow()) setStreamingMessage(value);
+  });
   let recoveryJournal = createWorkflowRecoveryJournal(userInput, turnCountAtStart);
 
   const startTime = Date.now();

@@ -139,7 +139,9 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
       throw new DOMException('Workflow aborted', 'AbortError');
     }
   };
-  const streamMessageSetter = createRafCoalescedSetter(setStreamingMessage);
+  const streamMessageSetter = createRafCoalescedSetter((value: string) => {
+    if (isCurrentWorkflow()) setStreamingMessage(value);
+  });
   const ctx: TurnContext = {
     state,
     userInput,
