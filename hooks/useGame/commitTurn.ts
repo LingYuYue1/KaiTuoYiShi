@@ -141,8 +141,10 @@ export async function commitTurn(
   d: TurnDeltas,
   newest: NewestStory记录,
 ): Promise<void> {
-  const { state } = ctx;
+  const { state, assertWorkflowActive } = ctx;
+  assertWorkflowActive();
   const baseSave = newest.baseCheckpointId ? await loadSave(newest.baseCheckpointId) : null;
+  assertWorkflowActive();
   const baseIsUsable = baseSave !== null && baseSave.type === 'auto';
   const payload = baseIsUsable
     ? 组装Checkpoint值(baseSave, state, newest)
@@ -160,7 +162,11 @@ export async function commitTurn(
   const checkpointId = await saveGame(payload);
 
   // D2-A：清空 newest，base 指向新 checkpoint。
+  // 注意：saveGame + saveNewestStory 之间不加 abort 守卫——二者是原子对，
+  // 一旦开始必须双双完成（否则会出现「节点已封版但 newest 未清空」的半提交态，
+  // 续跑会二次封版同内容节点，违反 L2）。
   await saveNewestStory(清空NewestStory记录(newest, checkpointId));
+  assertWorkflowActive();
 
   // saveTree 元信息联动：后续手动/自动存档以此 checkpoint 为树上前驱。
   commitActiveSaveTreeMeta(payload);

@@ -8,7 +8,7 @@ import {
   createWorkflowRecoveryJournal,
   persistWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
-import { devLogError } from '@/utils/devLog';
+import { devLog, devLogError } from '@/utils/devLog';
 import { type VisibilityBufferedPublisher } from '@/utils/visibilityBufferedPublisher';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
@@ -17,24 +17,18 @@ import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnContext, TurnDeltas } from './turnTypes';
-import { mergeNewestStory, type NewestStory字段集 } from '@/models/newestStory';
+import { mergeNewestStory } from '@/models/newestStory';
 import { 取游戏设置运行态键 } from '@/models/settings';
-import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { stage1_turnStart } from './stage1_turnStart';
 import { stage2_preModel } from './stage2_preModel';
 import { stage3_promptAssembly } from './stage3_promptAssembly';
 import { stage4_aiRequest } from './stage4_aiRequest';
 import { stage5_replyLanding } from './stage5_replyLanding';
-import { stage6_memory } from './stage6_memory';
-import { stage7_worldTraveler } from './stage7_worldTraveler';
-import { stage8_variable } from './stage8_variable';
-import { stage9_npcLedger } from './stage9_npcLedger';
-import { stage10_storyZhiku } from './stage10_storyZhiku';
-import { stage11_backgroundJobs } from './stage11_backgroundJobs';
-import { stage12_save } from './stage12_save';
+import { 边界覆盖集, runTurnTail } from './turnTail';
 
 export interface SendWorkflowDeps {
   state: UseGameStateReturn;
+  getState?: () => UseGameStateReturn;
   getActiveConfig: () => import('@/models/settings').API配置项 | null;
   onBeforeSend: () => void;
   onAfterSend: () => void;
@@ -43,24 +37,6 @@ export interface SendWorkflowDeps {
     previousResponse: string;
   } | null;
 }
-
-type VariableOverridesForNewest = {
-  batch?: import('@/models/variableCommand').变量命令批次;
-  旅人?: TurnContext['state']['旅人'];
-  世界?: TurnContext['state']['世界'];
-  新闻?: TurnContext['state']['新闻'];
-  剧情?: TurnContext['state']['剧情'];
-};
-
-/** 过滤 undefined 的 newest 覆盖集（mergeNewestStory 的 patch 不允许 undefined 值，缺省 = 与 checkpoint 一致）。 */
-function 边界覆盖集(patch: Partial<NewestStory字段集>): Partial<NewestStory字段集> {
-  const cleaned: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (typeof value !== 'undefined') cleaned[key] = value;
-  }
-  return cleaned;
-}
-
 
 export async function executeSendWorkflow(
   userInput: string,
@@ -210,126 +186,27 @@ export async function executeSendWorkflow(
       await saveNewestStory(newest);
     }
 
-    // 阶段 6：记忆处理
-    /* 读 d: parsedForDisplay (S5), displayText (S5)
-       写 d: mem,yitingWithCompression */
-    Object.assign(d, await stage6_memory(ctx, d));
-
-    // 7 / 7a / 7b. 世界 + 旅人 的本回合修改全部累计到本地变量,最后一次性 set。
-    //     这样在 8.5 变量校准里能拿到这些修改作为 snapshot——否则变量模型 commit 时
-    //     会用「函数开始那一刻的 state.世界」覆盖,把刚写入的 待触发狭间/进行中狭间 抹掉,
-    //     表现就是「狭间邀请卡片在变量校准结束后突然消失」。
-    //     worldAfter 用 effectiveWorld 初始化(踏入触发已经把 进行中狭间 写入)。
-    //
-    // 阶段 7：世界/旅人
-    /* 读 d: parsedForDisplay (S5), rawFullText (S4), displayText (S5)
-       写 d: worldAfter (S7), travelerAfter (S7) */
-    Object.assign(d, stage7_worldTraveler(ctx, d));
-    const worldAfter = d.worldAfter as typeof state['世界']
-    const travelerAfter = d.travelerAfter as typeof state['旅人']
-
     result.fullText = '';
     result.parsed = parseResponse('');
     result.usage = undefined;
     apiMessages.length = 0;
     streamedText = '';
-
-    // 一次性 commit
-    // 投影点（B2 定性，S09/S10）：顶部世界栏/左侧旅人即时刷新；管线与存档只认 ctx/d，不回读此 state
-    if (worldAfter !== ctx.worldAtStart) state.set世界(worldAfter);
-    if (travelerAfter !== ctx.travelerAtStart) state.set旅人(travelerAfter);
-
-    // 阶段 8：变量模型校准（切点：variableOverrides 产出后交还 S9+ 读取）
-    /* 读 d: parsedForDisplay(S5), displayText(S5), mem(S6), worldAfter(S7, 调用方已桥接),
-       travelerAfter(S7), yitingEnabled(S2)
-       写 d: variableOverrides (S8) */
-    Object.assign(d, await stage8_variable(ctx, d));
-
-    // 阶段 9：NPC 账本
-    /* 读 d: variableOverrides(S8), finalHistory(S5), aiMsg(S5)
-       写 d: npcAfterCompression(S9), finalHistory (写回 updated) */
-    Object.assign(d, stage9_npcLedger(ctx, d));
-
-    // 阶段 10：剧情编织 / 智库
-    /* 读 d: variableOverrides(S8), displayText(S5), mem(S6), worldAfter(S7),
-       storyWeavingGate(S2), npcAfterCompression(S9)
-       写 d: storyWeavingForSave, memoryAfterStoryProgress, zhikuAfterRuntimeUnlock,
-       npcAfterCompression (写回) */
-    Object.assign(d, await stage10_storyZhiku(ctx, d));
-
-    // 阶段边界写 newest（片 5a-2：S6/S7/S8/S9 产出 + queueTasks；NPC 取 S10 剧情记忆注入后的写回值）
-    {
-      const variableOverrides = d.variableOverrides as VariableOverridesForNewest | null | undefined;
-      const variableBatchForSave = d.failedVariableBatch ?? variableOverrides?.batch;
-      const variableBatchesForSave = compactVariableBatchHistory(variableBatchForSave
-        ? [...ctx.variableBatchesAtStart, variableBatchForSave]
-        : ctx.variableBatchesAtStart);
-      assertWorkflowActive();
-      newest = mergeNewestStory(newest, 边界覆盖集({
-        记忆: d.memoryAfterStoryProgress ?? d.mem,
-        忆庭: d.yitingWithCompression,
-        世界: variableOverrides?.世界 ?? d.worldAfter,
-        旅人: variableOverrides?.旅人 ?? d.travelerAfter,
-        新闻: variableOverrides?.新闻,
-        剧情: variableOverrides?.剧情,
-        NPC: d.npcAfterCompression,
-        variableBatches: variableBatchesForSave,
-        queueTasks: ctx.queueTasksMirror,
-      }));
-      await saveNewestStory(newest);
-    }
-
-    // 阶段 11：后台任务（新闻/忆庭/手机 Fallback/正文插图）
-    /* 读 d: displayText(S5), finalHistory(S5), npcAfterCompression(S9), yitingWithCompression(S6),
-       variableOverrides(S8), storyWeavingForSave(S10), aiMsg(S5), parsedForDisplay(S5),
-       openingNewsPreprocessed(S2), openingNewsForSave(S2), yitingPreview(S2),
-       yitingEnabled(S2), yitingRecallEnabled(S2), storyProgressMemoryLine(S10)
-       写 d: newsAfterGeneration, yitingAfterTurnRecall, phoneAfterFallbackSeed, finalHistoryForSave */
-    Object.assign(d, await stage11_backgroundJobs(ctx, d));
-
-    // 阶段边界写 newest（片 5a-2：S11 后 —— S10/S11 产出 + 相册After）
-    assertWorkflowActive();
-    newest = mergeNewestStory(newest, 边界覆盖集({
-      剧情编织: d.storyWeavingForSave ?? undefined,
-      智库: d.zhikuAfterRuntimeUnlock ?? undefined,
-      手机: d.phoneAfterFallbackSeed,
-      新闻: d.newsAfterGeneration ?? (d.variableOverrides as VariableOverridesForNewest | null | undefined)?.新闻,
-      记忆: d.memoryAfterStoryProgress ?? undefined,
-      忆庭: d.yitingAfterTurnRecall,
-      chatHistory: d.finalHistoryForSave,
-      相册: d.相册After,
-    }));
-    await saveNewestStory(newest);
-
-    const finalHistoryForSave = d.finalHistoryForSave;
-    const memoryAfterStoryProgress = d.memoryAfterStoryProgress ?? undefined;
-    const yitingAfterTurnRecall = d.yitingAfterTurnRecall;
-    const phoneAfterFallbackSeed = d.phoneAfterFallbackSeed;
-
-    // 投影点（B2 定性，S08/S25/S28/S29）：B1 定型的统一回合末投影；管线与存档只认 ctx/d，不回读此 state
-    if (memoryAfterStoryProgress) state.set记忆(memoryAfterStoryProgress);
-    if (yitingAfterTurnRecall) state.set忆庭(yitingAfterTurnRecall);
-    if (phoneAfterFallbackSeed) state.set手机(phoneAfterFallbackSeed);
-    if (finalHistoryForSave && finalHistoryForSave !== state.chatHistory) state.setChatHistory(finalHistoryForSave);
-
-    // 阶段 12：保存 / 收尾
-    /* 读 d: variableOverrides(S8), finalHistoryForSave(S11),
-       memoryAfterStoryProgress(S10), yitingAfterTurnRecall(S11), phoneAfterFallbackSeed(S11),
-       npcAfterCompression(S9), newsAfterGeneration(S11), storyWeavingForSave(S10),
-       zhikuAfterRuntimeUnlock(S10)
-       写 d: 无 */
-    Object.assign(d, await stage12_save(ctx, d, {
-      finalHistoryForSave,
-      memoryAfterStoryProgress,
-      yitingAfterTurnRecall,
-      phoneAfterFallbackSeed,
-      newest,
-    }));
+    await runTurnTail(ctx, d, newest);
 
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
       if (!isCurrentWorkflow()) {
         await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
+        return;
+      }
+      if (recoveryJournal.phase === 'variable_settlement' && recoveryJournal.assistantMessageId) {
+        state.setInterruptedWorkflow(recoveryJournal);
+        state.setWorkflowHint('已停止结算，回复已保留；可继续结算或重新发送。');
+        state.setWorkflowStatus('');
+        devLog('recover', 'abort-keep-settlement', {
+          workflowId: recoveryJournal.workflowId,
+        });
+        keepWorkflowHint = true;
         return;
       }
       state.setChatHistory(rollbackHistoryOnAbort);

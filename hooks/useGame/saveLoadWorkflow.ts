@@ -26,7 +26,7 @@ import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
 import { loadSetting } from '@/services/dbService';
-import { clearWorkflowRecoveryJournal, isWorkflowRecoveryComplete } from '@/services/workflowRecovery';
+import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
@@ -43,6 +43,7 @@ import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { 创建空NewestStory记录, 清空NewestStory记录 } from '@/models/newestStory';
 import { devLog, devLogError } from '@/utils/devLog';
+import { setStreamingMessage } from '@/utils/streamingMessageStore';
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
@@ -243,6 +244,7 @@ export async function handleLoadLatest(
   const abortControllerRef = state.abortControllerRef;
   abortControllerRef.current?.abort();
   abortControllerRef.current = null;
+  await abandonInterruptedWorkflow(state);
   await applySaveToState(save, state);
   return true;
 }
@@ -256,6 +258,7 @@ export async function handleLoadById(
   const abortControllerRef = state.abortControllerRef;
   abortControllerRef.current?.abort();
   abortControllerRef.current = null;
+  await abandonInterruptedWorkflow(state);
   await applySaveToState(save, state);
   return true;
 }
@@ -284,7 +287,7 @@ export async function bootRestoreFromNewest(
     }
 
     const newestStory = newest.story;
-    await applySaveToState(base, state);
+    await applySaveToState(base, state, { clearNewest: true, restorePendingOpeningTrigger: true });
     const replayedFields = replayNewestStory(newestStory, state);
     await saveNewestStory(newest);
     devLog('recover', 'boot-restore-complete', {
@@ -312,10 +315,27 @@ export async function handleDeleteSave(id: number): Promise<void> {
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
 }
 
-async function applySaveToState(
+async function abandonInterruptedWorkflow(state: UseGameStateReturn): Promise<void> {
+  const interrupted = state.interruptedWorkflow;
+  if (!interrupted) return;
+  await clearWorkflowRecoveryJournal(interrupted.workflowId);
+  state.setInterruptedWorkflow(null);
+  state.setWorkflowHint('');
+  devLog('recover', 'load-abandon-interrupted', { workflowId: interrupted.workflowId });
+}
+
+export async function applySaveToState(
   save: 存档数据,
   state: UseGameStateReturn,
+  opts: { clearNewest?: boolean; restorePendingOpeningTrigger?: boolean } = {},
 ): Promise<void> {
+  const { clearNewest = true, restorePendingOpeningTrigger = false } = opts;
+  state.setLoading(false);
+  setStreamingMessage('');
+  state.setPendingVariable(false);
+  state.setWorkflowStatus('');
+  state.setLiveRecallSummary('');
+  state.setLiveRecallFullContent('');
   // 片 5a-2 D3 读取侧迁移：旧档 gameSettings 仍含两运行态键时迁至存档顶层并置空原键；
   // 迁出值并入内存 state.gameSettings 两键（读者保持现状）。纯函数，不回写旧档。
   const { save: 迁移后存档, macroGlobalVars, worldbookTriggerStates } = 迁移存档运行态键(save);
@@ -324,16 +344,6 @@ async function applySaveToState(
   const safeWorld = 归一化世界状态(迁移后存档.世界);
   const safeTraveler = normalizeSavedTraveler(迁移后存档.旅人, safeWorld.当前日期);
   const safeGameSettings = normalizeSavedGameSettings(迁移后存档.gameSettings);
-
-  if (state.interruptedWorkflow) {
-    if (isWorkflowRecoveryComplete(state.interruptedWorkflow, safeChatHistory)) {
-      await clearWorkflowRecoveryJournal(state.interruptedWorkflow.workflowId);
-      state.setInterruptedWorkflow(null);
-      if (state.workflowHint.startsWith('上次生成被浏览器中断')) state.setWorkflowHint('');
-    } else {
-      state.setWorkflowHint('上次生成被浏览器中断，输入已恢复；请检查存档后重新发送。');
-    }
-  }
 
   state.set旅人(safeTraveler);
   state.set世界(safeWorld);
@@ -406,13 +416,17 @@ async function applySaveToState(
     worldbookTriggerStates,
   });
   // 片 5a-2：pendingOpeningTrigger 顶层字段恢复到 state（E-1 起随 checkpoint 落盘）
-  state.setPendingOpeningTrigger(迁移后存档.pendingOpeningTrigger ?? null);
+  if (restorePendingOpeningTrigger) {
+    state.setPendingOpeningTrigger(迁移后存档.pendingOpeningTrigger ?? null);
+  }
   state.setHasSave(true);
   state.setView('game');
   state.setTurnCount(迁移后存档.turnCount ?? (safeChatHistory.length + 1));
   // 片 5a-2b：读档后 newest 指向新 checkpoint——abort/崩溃残留的跨局覆盖集
   // 不得进入下一回合的 commitTurn（否则新局数据会被提交进旧局 auto 存档）。
-  await saveNewestStory(清空NewestStory记录(创建空NewestStory记录(), save.id));
+  if (clearNewest) {
+    await saveNewestStory(清空NewestStory记录(创建空NewestStory记录(), save.id));
+  }
 }
 
 function replayNewestStory(

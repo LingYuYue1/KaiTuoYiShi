@@ -495,7 +495,7 @@ export function App() {
   );
 
   const recoveryDraft = useMemo(() => (
-    state.interruptedWorkflow ? {
+    state.interruptedWorkflow?.phase === 'main_request' ? {
       workflowId: state.interruptedWorkflow.workflowId,
       input: state.interruptedWorkflow.input,
     } : null
@@ -505,7 +505,7 @@ export function App() {
   // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
   // 注意：先清空再 send，避免 React 18 StrictMode 下重复触发。
   useEffect(() => {
-    if (state.view === 'game' && state.pendingOpeningTrigger) {
+    if (state.view === 'game' && state.pendingOpeningTrigger && !state.interruptedWorkflow) {
       const text = state.pendingOpeningTrigger;
       state.setPendingOpeningTrigger(null);
       void actions.handleSend(text);
@@ -600,6 +600,36 @@ export function App() {
         onTrigger={handlePathAwakeningTrigger}
         disabled={state.loading || state.pendingVariable}
       />
+      {state.interruptedWorkflow && state.interruptedWorkflow.phase !== 'main_request'
+        && !state.loading && !state.pendingVariable ? (
+          <div
+            className="mx-3 mb-2 flex flex-wrap items-center gap-2 border px-3 py-2 text-sm"
+            style={{
+              borderColor: 'rgba(var(--tj-accent),0.35)',
+              background: 'rgba(var(--tj-surface),0.94)',
+              color: 'rgb(var(--tj-text-primary))',
+            }}
+            role="status"
+          >
+            <span className="min-w-0 flex-1">上次生成被中断，回复已落地、结算未完成。</span>
+            <button
+              type="button"
+              className="border px-3 py-1 text-xs hover:opacity-80"
+              style={{ borderColor: 'rgba(var(--tj-accent),0.5)' }}
+              onClick={() => { void actions.handleResumeInterruptedWorkflow(); }}
+            >
+              继续结算
+            </button>
+            <button
+              type="button"
+              className="border px-3 py-1 text-xs hover:opacity-80"
+              style={{ borderColor: 'rgba(var(--tj-text-secondary),0.35)' }}
+              onClick={() => { void actions.handleAbandonInterruptedWorkflow(); }}
+            >
+              放弃
+            </button>
+          </div>
+        ) : null}
       <InputArea
         onSend={actions.handleSend}
         onAbort={actions.handleAbort}

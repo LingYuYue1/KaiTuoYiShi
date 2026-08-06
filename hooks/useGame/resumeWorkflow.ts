@@ -1,0 +1,226 @@
+import { 格式化开局档案上下文 } from '@/models/world';
+import type { 聊天消息, 解析后回复 } from '@/models/chat';
+import { loadNewestStory, loadSave } from '@/services/dbService';
+import { evaluateStoryWeavingGate } from '@/services/storyWeaving';
+import { clearWorkflowRecoveryJournal, isResumableWorkspace } from '@/services/workflowRecovery';
+import { 踏入命途狭间 } from '@/services/pathService';
+import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
+import { setStreamingMessage } from '@/utils/streamingMessageStore';
+import { devLog, devLogError } from '@/utils/devLog';
+import { getZhikuNpcNamesForTurn } from './npcPresence';
+import { applySaveToState } from './saveLoadWorkflow';
+import { stage12_save } from './stage12_save';
+import { runTurnTail } from './turnTail';
+import type { SendWorkflowDeps } from './sendWorkflow';
+import type { TurnContext, TurnDeltas } from './turnTypes';
+
+function rawTextFromParsed(parsed: 解析后回复): string | undefined {
+  const rawText = Reflect.get(parsed, 'rawText');
+  return typeof rawText === 'string' ? rawText : undefined;
+}
+
+export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boolean> {
+  let { state } = deps;
+  const journal = state.interruptedWorkflow;
+  const config = deps.getActiveConfig();
+  let newest = await loadNewestStory();
+
+  if (!journal || !isResumableWorkspace(journal, newest)) {
+    if (journal) {
+      await clearWorkflowRecoveryJournal(journal.workflowId);
+      devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'workspace-invalid' });
+    }
+    state.setInterruptedWorkflow(null);
+    state.setWorkflowHint('中断回合现场已失效，请重新发送。');
+    return false;
+  }
+  if (!config) {
+    alert('请先在设置中配置API');
+    await clearWorkflowRecoveryJournal(journal.workflowId);
+    state.setInterruptedWorkflow(null);
+    state.setWorkflowHint('中断回合现场已失效，请重新发送。');
+    devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'config-missing' });
+    return false;
+  }
+
+  const finalHistory = newest.story.chatHistory as 聊天消息[];
+  const aiMsg = finalHistory.at(-1) as 聊天消息;
+  const parsedForDisplay = aiMsg.parsedResponse as 解析后回复;
+  const displayText = typeof aiMsg.content === 'string' && aiMsg.content.trim()
+    ? aiMsg.content
+    : parsedForDisplay.body;
+  const rawFullText = rawTextFromParsed(parsedForDisplay) ?? aiMsg.content;
+  const userInput = journal.input;
+  const turnCountAtStart = journal.turnAtStart;
+  const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
+
+  const base = newest.baseCheckpointId ? await loadSave(newest.baseCheckpointId) : null;
+  if (base) {
+    const queueTasks = state.queueTasks;
+    await applySaveToState(base, state, { clearNewest: false, restorePendingOpeningTrigger: false });
+    state.setChatHistory(finalHistory);
+    state.setTurnCount(turnCountAtStart + 1);
+    state.setQueueTasks(queueTasks);
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+    state = deps.getState?.() ?? state;
+  }
+
+  let effectiveWorld = state.世界;
+  const isAwakeningEnterTrigger = userInput === '[系统] 踏入命途狭间';
+  if (isAwakeningEnterTrigger && state.世界.待触发狭间) {
+    effectiveWorld = 踏入命途狭间(state.世界);
+    state.set世界(effectiveWorld);
+  }
+
+  const currentPeriod = effectiveWorld.当前时段;
+  const openingArchive = effectiveWorld.开局档案;
+  const currentScope: 'opening' | 'main' | 'pathAwakening' = effectiveWorld.进行中狭间
+    ? 'pathAwakening'
+    : turnCountAtStart === 1 ? 'opening' : 'main';
+  const worldbookCtx = {
+    recentUserInput: userInput,
+    recentAIResponse: '',
+    worldName: currentPeriod.名称,
+    travelerName: state.旅人.姓名,
+    turnCount: turnCountAtStart,
+    startScenarioId: effectiveWorld.起航之地ID,
+    startSceneName: openingArchive?.章节锚点名称 || effectiveWorld.当前地点,
+    currentLocation: effectiveWorld.当前地点,
+    openingRegionName: openingArchive?.地区名称,
+    openingChapterName: openingArchive?.章节锚点名称,
+    openingEntryText: openingArchive?.玩家介入原文,
+    openingSource: openingArchive?.来源,
+    openingArchiveText: 格式化开局档案上下文(openingArchive),
+    npcNames: getZhikuNpcNamesForTurn({
+      world: effectiveWorld,
+      npcs: state.NPC,
+      history: finalHistory,
+      userInput,
+      turnCount: turnCountAtStart,
+    }),
+    originalProtagonist: effectiveWorld.原著主角,
+    currentScope,
+    storyMode: effectiveWorld.剧情模式,
+    recentMessages: finalHistory.map((message) => message.content).filter(Boolean).slice(-100),
+    messageCount: turnCountAtStart,
+    worldbookTriggerStates: newest.story.worldbookTriggerStates ?? base?.worldbookTriggerStates ?? {},
+  };
+
+  const memorySettings = state.gameSettings.记忆系统;
+  const yitingEnabled = memorySettings.忆庭启用;
+  const d: TurnDeltas = {
+    finalHistory,
+    aiMsg,
+    parsedForDisplay,
+    displayText,
+    rawFullText,
+    yitingEnabled,
+    yitingRecallEnabled: yitingEnabled && !isOpeningSystemTrigger
+      && memorySettings.忆庭召回最早触发回合 < turnCountAtStart,
+    storyWeavingGate: state.gameSettings.剧情编织系统.enabled
+      && state.gameSettings.剧情编织系统.currentWindow
+      ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx)
+      : null,
+    openingNewsPreprocessed: false,
+    openingNewsForSave: null,
+    yitingPreview: null,
+    zhikuPreview: null,
+  };
+
+  state.abortControllerRef.current?.abort();
+  const abortController = new AbortController();
+  state.abortControllerRef.current = abortController;
+  const isCurrentWorkflow = () => state.abortControllerRef.current === abortController;
+  const assertWorkflowActive = () => {
+    if (abortController.signal.aborted || !isCurrentWorkflow()) {
+      throw new DOMException('Workflow aborted', 'AbortError');
+    }
+  };
+  const streamMessageSetter = createRafCoalescedSetter(setStreamingMessage);
+  const ctx: TurnContext = {
+    state,
+    userInput,
+    deps,
+    config,
+    mainStoryConfig: config,
+    isOpeningSystemTrigger,
+    isAwakeningEnterTrigger,
+    awakeningPathId: undefined,
+    awakeningInstruction: '',
+    openingInstruction: '',
+    effectiveWorld,
+    worldAtStart: state.世界,
+    travelerAtStart: state.旅人,
+    zhikuAtStart: state.智库,
+    phoneAtStart: state.手机,
+    turnCountAtStart,
+    variableBatchesAtStart: [...state.variableBatches],
+    queueTasksMirror: [...state.queueTasks],
+    abortController,
+    isCurrentWorkflow,
+    assertWorkflowActive,
+    streamMessageSetter,
+    recoveryJournal: journal,
+    rollbackHistoryOnAbort: finalHistory,
+    rollbackSnapshotOnAbort: null,
+  };
+
+  deps.onBeforeSend();
+  state.setLoading(true);
+  setStreamingMessage('');
+  state.setWorkflowHint('正在继续结算中断回合的变量与后台任务');
+  state.setWorkflowStatus('searching');
+  state.setPendingVariable(true);
+  devLog('recover', 'resume-start', { workflowId: journal.workflowId, phase: journal.phase, turn: turnCountAtStart });
+
+  let keepHint = false;
+  try {
+    newest = await loadNewestStory();
+    if (journal.phase === 'autosave') {
+      await stage12_save(ctx, d, {
+        finalHistoryForSave: undefined,
+        memoryAfterStoryProgress: undefined,
+        yitingAfterTurnRecall: undefined,
+        phoneAfterFallbackSeed: undefined,
+        newest,
+      });
+    } else {
+      await runTurnTail(ctx, d, newest);
+    }
+    state.setInterruptedWorkflow(null);
+    devLog('recover', 'resume-complete', { workflowId: journal.workflowId, turn: turnCountAtStart });
+    return true;
+  } catch (error) {
+    if ((error as Error).name === 'AbortError' || abortController.signal.aborted) {
+      if (!isCurrentWorkflow()) {
+        devLog('recover', 'resume-superseded', { workflowId: journal.workflowId });
+        return false;
+      }
+      state.setWorkflowHint('已停止结算，可点击「继续结算」再次续跑。');
+      state.setWorkflowStatus('');
+      setStreamingMessage('');
+      keepHint = true;
+      return false;
+    }
+    devLogError('recover', 'resume-failed', error, { workflowId: journal.workflowId });
+    state.setWorkflowHint('继续结算失败，可再次重试。');
+    state.setWorkflowStatus('');
+    keepHint = true;
+    return false;
+  } finally {
+    streamMessageSetter.cancel();
+    if (isCurrentWorkflow()) {
+      state.setLoading(false);
+      setStreamingMessage('');
+      if (!keepHint) {
+        state.setWorkflowHint('');
+        state.setWorkflowStatus('');
+      }
+      state.setPendingVariable(false);
+      state.abortControllerRef.current = null;
+      deps.onAfterSend();
+    }
+  }
+}

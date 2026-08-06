@@ -52,9 +52,14 @@ import {
 } from '@/data/zhikuPreset';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
-import { loadWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import {
+  clearWorkflowRecoveryJournal,
+  isResumableWorkspace,
+  loadWorkflowRecoveryJournal,
+  type WorkflowRecoveryJournal,
+} from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
-import { deleteSetting, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave } from '@/services/dbService';
+import { deleteSetting, loadNewestStory, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
@@ -329,7 +334,9 @@ export function useGameState(): UseGameStateReturn {
       const recoveryJournal = await loadWorkflowRecoveryJournal();
       if (recoveryJournal) {
         setInterruptedWorkflow(recoveryJournal);
-        setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
+        setWorkflowHint(recoveryJournal.phase === 'main_request'
+          ? '上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。'
+          : '上次生成被浏览器中断，回复已落地、结算未完成。');
       }
       const lastView = await loadSetting<string>(LAST_VIEW_STORAGE_KEY);
 
@@ -484,7 +491,7 @@ export function useGameState(): UseGameStateReturn {
       setHasSave(saveExists);
 
       let shouldClearLastView = false;
-      if (lastView === 'game' && !recoveryJournal) {
+      if (lastView === 'game') {
         let restored = false;
         try {
           const currentState = stateRef.current;
@@ -496,6 +503,16 @@ export function useGameState(): UseGameStateReturn {
         }
         if (!restored) {
           shouldClearLastView = true;
+        }
+      }
+
+      if (recoveryJournal
+        && (recoveryJournal.phase === 'variable_settlement' || recoveryJournal.phase === 'autosave')) {
+        const newest = await loadNewestStory();
+        if (!isResumableWorkspace(recoveryJournal, newest)) {
+          await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
+          setInterruptedWorkflow(null);
+          setWorkflowHint('');
         }
       }
 

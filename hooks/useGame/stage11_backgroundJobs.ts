@@ -146,10 +146,11 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
     signal: p.abortController.signal,
     shouldCommit: p.isCurrentWorkflow,
   });
-  // 投影点（B2-c）：原 newsWorkflow 内部 setter 的等价复刻
-  if (newsGenerationResult?.changed) p.state.set新闻(newsGenerationResult.news);
+  const generatedNews = newsGenerationResult?.news;
   p.assertWorkflowActive();
-  const newsAfterGeneration = newsGenerationResult?.news ?? p.state.新闻;
+  // 投影点（B2-c）：顶替守卫之后才允许旧 workflow 刷新 UI。
+  if (newsGenerationResult?.changed && generatedNews) p.state.set新闻(generatedNews);
+  const newsAfterGeneration = generatedNews ?? p.state.新闻;
   pushQueueTask(p.state, 'news', 'success', {
     detail: newsGenerationResult?.changed
       ? `星际和平周报已更新，当前共 ${newsAfterGeneration.length} 条新闻记录。`

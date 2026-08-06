@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
+import { executeResumeWorkflow } from '@/hooks/useGame/resumeWorkflow';
 import { 初始化新局checkpoint } from '@/hooks/useGame/commitTurn';
 import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeImageWorkflow';
 import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
@@ -26,6 +27,8 @@ export interface UseGameReturn {
   actions: {
     handleSend: (text: string) => Promise<void>;
     handleAbort: () => void;
+    handleResumeInterruptedWorkflow: () => Promise<boolean>;
+    handleAbandonInterruptedWorkflow: () => Promise<void>;
     handleNewGame: () => void;
     handleContinue: () => Promise<boolean>;
     handleGoHome: () => void;
@@ -70,6 +73,9 @@ export function useGame(): UseGameReturn {
   const handleSend = useCallback(
     async (text: string) => {
       const s = stateRef.current;
+      if (s.interruptedWorkflow) {
+        await clearWorkflowRecoveryJournal(s.interruptedWorkflow.workflowId);
+      }
       s.setInterruptedWorkflow(null);
       await executeSendWorkflow(text, {
         state: s,
@@ -86,6 +92,30 @@ export function useGame(): UseGameReturn {
 
   const handleAbort = useCallback(() => {
     stateRef.current.abortControllerRef.current?.abort();
+  }, []);
+
+  const handleResumeInterruptedWorkflow = useCallback(async (): Promise<boolean> => {
+    const s = stateRef.current;
+    if (s.loading || s.pendingVariable) return false;
+    s.abortControllerRef.current?.abort();
+    return executeResumeWorkflow({
+      state: s,
+      getState: () => stateRef.current,
+      getActiveConfig,
+      onBeforeSend: () => {},
+      onAfterSend: () => {
+        rerollContextRef.current = null;
+      },
+      rerollContext: null,
+    });
+  }, [getActiveConfig]);
+
+  const handleAbandonInterruptedWorkflow = useCallback(async (): Promise<void> => {
+    const s = stateRef.current;
+    const interrupted = s.interruptedWorkflow;
+    if (interrupted) await clearWorkflowRecoveryJournal(interrupted.workflowId);
+    s.setInterruptedWorkflow(null);
+    s.setWorkflowHint('');
   }, []);
 
   const handleNewGame = useCallback(() => {
@@ -314,6 +344,8 @@ export function useGame(): UseGameReturn {
   const actions = useMemo(() => ({
     handleSend,
     handleAbort,
+    handleResumeInterruptedWorkflow,
+    handleAbandonInterruptedWorkflow,
     handleNewGame,
     handleContinue,
     handleGoHome,
@@ -326,6 +358,8 @@ export function useGame(): UseGameReturn {
   }), [
     handleSend,
     handleAbort,
+    handleResumeInterruptedWorkflow,
+    handleAbandonInterruptedWorkflow,
     handleNewGame,
     handleContinue,
     handleGoHome,
