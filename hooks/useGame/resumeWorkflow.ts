@@ -13,6 +13,7 @@ import { stage12_save } from './stage12_save';
 import { runTurnTail } from './turnTail';
 import type { SendWorkflowDeps } from './sendWorkflow';
 import type { TurnContext, TurnDeltas } from './turnTypes';
+import { TURN_STATUS_IDLE } from './turnStatus';
 
 function rawTextFromParsed(parsed: 解析后回复): string | undefined {
   const rawText = Reflect.get(parsed, 'rawText');
@@ -31,14 +32,14 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
       devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'workspace-invalid' });
     }
     state.setInterruptedWorkflow(null);
-    state.setWorkflowHint('中断回合现场已失效，请重新发送。');
+    state.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
     return false;
   }
   if (!config) {
     alert('请先在设置中配置API');
     await clearWorkflowRecoveryJournal(journal.workflowId);
     state.setInterruptedWorkflow(null);
-    state.setWorkflowHint('中断回合现场已失效，请重新发送。');
+    state.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
     devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'config-missing' });
     return false;
   }
@@ -170,12 +171,11 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   deps.onBeforeSend();
   state.setLoading(true);
   setStreamingMessage('');
-  state.setWorkflowHint('正在继续结算中断回合的变量与后台任务');
-  state.setWorkflowStatus('searching');
+  state.setTurnStatus({ kind: 'settling', text: '正在继续结算中断回合的变量与后台任务' });
   state.setPendingVariable(true);
   devLog('recover', 'resume-start', { workflowId: journal.workflowId, phase: journal.phase, turn: turnCountAtStart });
 
-  let keepHint = false;
+  let keepTurnStatus = false;
   try {
     newest = await loadNewestStory();
     if (journal.phase === 'autosave') {
@@ -198,25 +198,22 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
         devLog('recover', 'resume-superseded', { workflowId: journal.workflowId });
         return false;
       }
-      state.setWorkflowHint('已停止结算，可点击「继续结算」再次续跑。');
-      state.setWorkflowStatus('');
+      // 停止续跑：interruptedWorkflow 仍在，由 App 的中断横幅承载「继续结算」入口，状态条回到 idle
       setStreamingMessage('');
-      keepHint = true;
+      state.setTurnStatus(TURN_STATUS_IDLE);
       return false;
     }
     devLogError('recover', 'resume-failed', error, { workflowId: journal.workflowId });
-    state.setWorkflowHint('继续结算失败，可再次重试。');
-    state.setWorkflowStatus('');
-    keepHint = true;
+    state.setTurnStatus({ kind: 'failed', text: '继续结算失败，可再次重试。', failCount: 1 });
+    keepTurnStatus = true;
     return false;
   } finally {
     streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
       state.setLoading(false);
       setStreamingMessage('');
-      if (!keepHint) {
-        state.setWorkflowHint('');
-        state.setWorkflowStatus('');
+      if (!keepTurnStatus) {
+        state.setTurnStatus(TURN_STATUS_IDLE);
       }
       state.setPendingVariable(false);
       state.abortControllerRef.current = null;

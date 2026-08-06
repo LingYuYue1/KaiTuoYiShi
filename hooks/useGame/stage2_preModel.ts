@@ -119,6 +119,8 @@ export async function stage2_preModel(
       openingNewsForSave = preNews?.news ?? null;
       pushQueueTask(state, 'news', 'success', { detail: preNews?.changed ? `开局新闻预处理完成，当前 ${preNews.news.length} 条新闻记录。` : preNews ? '开局新闻预处理完成，但本轮没有可写新闻变化。' : '开局新闻预处理未生成可用结果。' }, turnCountAtStart, queueTasksMirror);
     } catch (err) {
+      // 取消必须立即冒泡到工作流级 abort 处理，不得吞掉后继续跑后续阶段
+      if ((err as Error).name === 'AbortError') throw err;
       devLogError('stage', 'stage2_preModel.openingNews.catch', err, { turn: turnCountAtStart });
       pushQueueTask(state, 'news', 'failed', { detail: err instanceof Error ? err.message : '开局新闻预处理失败。', failCount: newsSettings.api.retryCount }, turnCountAtStart, queueTasksMirror);
     }
@@ -166,8 +168,9 @@ export async function stage2_preModel(
     : yitingPreview?.entries.length ? `剧情回忆已召回：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
     : yitingRecallEnabled ? `忆庭已召回：${yitingArchiveCount ? '无相关档案' : '当前还没有可召回档案'}` : `忆庭已召回：未到第${memorySettings.忆庭召回最早触发回合 + 1}回合`;
   const zhikuHint = zhikuSettings?.enabled ? `智库内容已注入：${zhikuPreview?.entries.length ? zhikuPreview.entries.slice(0, 2).map((entry: { 标题: string }) => entry.标题).join('、') : '无相关条目'}` : '智库已跳过';
-  state.setWorkflowHint(isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}`);
-  state.setWorkflowStatus('done');
+  // 投影点（B2 定性）：预模型召回完成、主模型开始生成 —— 置 generating，不置 done。
+  // 旧实现在此置 'done'，导致整个生成期间状态条误显 ✓；真正的完成态在 finally 清空。
+  state.setTurnStatus({ kind: 'generating', text: isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}` });
 
   const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
   const storyRecallInjection = [immediateStoryReview ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n') : '', yitingPreview?.injection ?? ''].filter((item) => item.trim()).join('\n\n');

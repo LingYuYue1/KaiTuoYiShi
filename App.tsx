@@ -472,11 +472,6 @@ export function App() {
       || latest?.debugContext?.zhikuRecallInjection?.trim()
       || '';
   }, [state.chatHistory, state.liveRecallFullContent, state.loading]);
-  const latestActiveTask = useMemo(() => (
-    [...state.queueTasks].reverse().find((task) =>
-      ['main_story', 'memory', 'variable', 'news', 'yiting', 'zhiku'].includes(task.id),
-    )
-  ), [state.queueTasks]);
 
   const actionOptions = useMemo(() => (
     [...state.chatHistory]
@@ -500,6 +495,10 @@ export function App() {
       input: state.interruptedWorkflow.input,
     } : null
   ), [state.interruptedWorkflow]);
+
+  // 回合忙碌门：主流程或变量结算任一在跑，就禁止变更类操作（发送/编辑/触发）。
+  // loading 与 pendingVariable 是管线的两条独立轨道，这里只在 UI 层合成展示用谓词。
+  const turnBusy = state.loading || state.pendingVariable;
 
   // 自动触发第 0 回合：handleStartGame 把触发文本写入 pendingOpeningTrigger，
   // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
@@ -598,10 +597,10 @@ export function App() {
         world={state.世界}
         setWorld={state.set世界}
         onTrigger={handlePathAwakeningTrigger}
-        disabled={state.loading || state.pendingVariable}
+        disabled={turnBusy}
       />
       {state.interruptedWorkflow && state.interruptedWorkflow.phase !== 'main_request'
-        && !state.loading && !state.pendingVariable ? (
+        && !turnBusy ? (
           <div
             className="mx-3 mb-2 flex flex-wrap items-center gap-2 border px-3 py-2 text-sm"
             style={{
@@ -643,11 +642,7 @@ export function App() {
         onReroll={actions.handleReroll}
         streamingEnabled={state.gameSettings.enableStreaming}
         onToggleStreaming={handleToggleStreaming}
-        workflowHint={state.workflowHint}
-        workflowStatus={state.workflowStatus}
-        workflowFailed={latestActiveTask?.status === 'failed'}
-        workflowFailCount={latestActiveTask?.failCount ?? (latestActiveTask?.status === 'failed' ? 1 : 0)}
-        workflowRetrying={latestActiveTask?.retrying === true}
+        turnStatus={state.turnStatus}
         onCancelWorkflow={actions.handleAbort}
         actionOptions={actionOptions}
         recoveryDraft={recoveryDraft}
@@ -816,7 +811,7 @@ export function App() {
                 set新闻: state.set新闻,
                 set剧情: state.set剧情,
               }}
-              variableEditingLocked={state.loading || state.pendingVariable}
+              variableEditingLocked={turnBusy}
             />
           </Suspense>
         )}
@@ -995,7 +990,7 @@ export function App() {
               set新闻: state.set新闻,
               set剧情: state.set剧情,
             }}
-            variableEditingLocked={state.loading || state.pendingVariable}
+            variableEditingLocked={turnBusy}
           />
         </Suspense>
       )}

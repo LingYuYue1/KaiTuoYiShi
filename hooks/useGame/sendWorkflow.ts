@@ -17,6 +17,7 @@ import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnContext, TurnDeltas } from './turnTypes';
+import { TURN_STATUS_IDLE } from './turnStatus';
 import { mergeNewestStory } from '@/models/newestStory';
 import { 取游戏设置运行态键 } from '@/models/settings';
 import { stage1_turnStart } from './stage1_turnStart';
@@ -85,13 +86,12 @@ export async function executeSendWorkflow(
   deps.onBeforeSend();
   state.setLoading(true);
   setStreamingMessage('');
-  state.setWorkflowHint('忆庭召回 / 智库检索中');
-  state.setWorkflowStatus('searching');
+  state.setTurnStatus({ kind: 'searching', text: '忆庭召回 / 智库检索中' });
   state.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
   state.setLiveRecallFullContent('');
   pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true }, turnCountAtStart, queueTasksMirror);
   let pendingVariableStarted = false;
-  let keepWorkflowHint = false;
+  let keepTurnStatus = false;
   let rollbackHistoryOnAbort = state.chatHistory;
   let rollbackSnapshotOnAbort: 回合快照 | null = null;
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
@@ -201,12 +201,12 @@ export async function executeSendWorkflow(
       }
       if (recoveryJournal.phase === 'variable_settlement' && recoveryJournal.assistantMessageId) {
         state.setInterruptedWorkflow(recoveryJournal);
-        state.setWorkflowHint('已停止结算，回复已保留；可继续结算或重新发送。');
-        state.setWorkflowStatus('');
+        // 结算中断的通知由 App 的中断横幅（继续结算 / 放弃）承载，状态条不重复展示
+        state.setTurnStatus(TURN_STATUS_IDLE);
         devLog('recover', 'abort-keep-settlement', {
           workflowId: recoveryJournal.workflowId,
         });
-        keepWorkflowHint = true;
+        keepTurnStatus = true;
         return;
       }
       state.setChatHistory(rollbackHistoryOnAbort);
@@ -215,12 +215,11 @@ export async function executeSendWorkflow(
         await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(rollbackStoryWeaving));
       }
       await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
-      state.setWorkflowHint('已停止生成，本次输入已回到输入框，可修改后重新发送。');
-      state.setWorkflowStatus('');
-      keepWorkflowHint = true;
+      state.setTurnStatus({ kind: 'stopped', text: '已停止生成，本次输入已回到输入框，可修改后重新发送。' });
+      keepTurnStatus = true;
     } else {
       devLogError('turn', 'executeSendWorkflow.catch', err);
-      keepWorkflowHint = true;
+      keepTurnStatus = true;
       const detail = err instanceof Error ? err.message : '主流程调用失败。';
       const alreadyReportedByApiLayer = Boolean(
         err && typeof err === 'object' && (err as { alreadyReportedByApiLayer?: boolean }).alreadyReportedByApiLayer,
@@ -233,11 +232,11 @@ export async function executeSendWorkflow(
           error: err,
         });
       }
-      state.setWorkflowHint(`主流程失败：${detail}`);
-      state.setWorkflowStatus('');
+      const failCount = state.gameSettings.autoRetryOnError ? Math.max(1, state.gameSettings.autoRetryCount) : 1;
+      state.setTurnStatus({ kind: 'failed', text: `主流程失败：${detail}`, failCount });
       pushQueueTask(state, 'main_story', 'failed', {
         detail,
-        failCount: state.gameSettings.autoRetryOnError ? Math.max(1, state.gameSettings.autoRetryCount) : 1,
+        failCount,
       });
     }
   } finally {
@@ -246,9 +245,8 @@ export async function executeSendWorkflow(
     if (isCurrentWorkflow()) {
       state.setLoading(false);
       setStreamingMessage('');
-      if (!keepWorkflowHint) {
-        state.setWorkflowHint('');
-        state.setWorkflowStatus('');
+      if (!keepTurnStatus) {
+        state.setTurnStatus(TURN_STATUS_IDLE);
       }
       state.setPendingVariable(false);
       if (!pendingVariableStarted) {

@@ -1,5 +1,6 @@
 ﻿import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
+import { isTurnStatusActive, isTurnStatusCancellable, TURN_STATUS_IDLE, type TurnStatus } from '@/hooks/useGame/turnStatus';
 
 interface InputAreaProps {
   onSend: (text: string) => void;
@@ -13,11 +14,8 @@ interface InputAreaProps {
   onReroll?: () => string | void | Promise<string | void>;
   streamingEnabled?: boolean;
   onToggleStreaming?: () => void;
-  workflowHint?: string;
-  workflowStatus?: 'searching' | 'done' | '';
-  workflowFailed?: boolean;
-  workflowFailCount?: number;
-  workflowRetrying?: boolean;
+  /** 输入区状态条的唯一状态源（管线在相位边界写入）。 */
+  turnStatus?: TurnStatus;
   onCancelWorkflow?: () => void;
   /** 上一条 AI 回复给出的可点选行动列表。点击后填入输入框待玩家微调。 */
   actionOptions?: string[];
@@ -52,11 +50,7 @@ export const InputArea = memo(function InputArea({
   onReroll,
   streamingEnabled = true,
   onToggleStreaming,
-  workflowHint = '',
-  workflowStatus = '',
-  workflowFailed = false,
-  workflowFailCount = 0,
-  workflowRetrying = false,
+  turnStatus = TURN_STATUS_IDLE,
   onCancelWorkflow,
   actionOptions = [],
   recoveryDraft,
@@ -148,7 +142,7 @@ export const InputArea = memo(function InputArea({
         boxShadow: '0 -8px 22px rgba(var(--tj-shadow), 0.05)',
       }}
     >
-      {workflowHint && (
+      {turnStatus.kind !== 'idle' && (
         <div
           className="mb-1.5 flex items-center justify-between gap-3 px-3 py-1.5 font-serif text-[11px] tracking-[0.18em]"
           style={{
@@ -158,25 +152,14 @@ export const InputArea = memo(function InputArea({
             clipPath: iconClip,
           }}
         >
-          <span className="min-w-0 truncate">{workflowHint}</span>
+          <span className="min-w-0 truncate">{turnStatus.text}</span>
           <span className="flex shrink-0 items-center gap-2">
-          {workflowFailCount > 0 && (
-            <span style={{ color: workflowRetrying ? 'rgba(var(--tj-accent-primary),0.92)' : 'rgba(255,180,180,0.9)' }}>
-              失败 {workflowFailCount} 次{workflowRetrying ? '，正在重试' : ''}
+          {turnStatus.kind === 'failed' && (
+            <span style={{ color: 'rgba(255,180,180,0.9)' }}>
+              失败 {turnStatus.failCount} 次
             </span>
           )}
-          {workflowStatus === 'done' && !workflowFailed ? (
-            <span
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-serif text-[12px] font-bold"
-              style={{
-                color: 'rgb(var(--tj-ui-active-text))',
-                background: 'linear-gradient(135deg, rgba(var(--tj-ui-success),0.95), rgba(var(--tj-ui-success),0.9))',
-                boxShadow: '0 0 10px rgba(var(--tj-ui-success),0.45), inset 0 0 0 1px rgba(var(--tj-ui-success),0.6)',
-              }}
-            >
-              ✓
-            </span>
-          ) : workflowFailed ? (
+          {turnStatus.kind === 'failed' ? (
             <span
               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-serif text-[12px] font-bold"
               style={{
@@ -187,7 +170,7 @@ export const InputArea = memo(function InputArea({
             >
               !
             </span>
-          ) : (
+          ) : isTurnStatusActive(turnStatus) ? (
             <span className="inline-flex items-center gap-1.5 shrink-0">
               <span
                 className="h-1.5 w-1.5 animate-pulse-soft rounded-full"
@@ -202,8 +185,16 @@ export const InputArea = memo(function InputArea({
                 style={{ background: 'rgb(var(--tj-accent-primary))', animationDelay: '0.28s', boxShadow: '0 0 8px rgba(var(--tj-accent-primary), 0.35)' }}
               />
             </span>
+          ) : (
+            <span
+              className="flex h-5 w-5 shrink-0 items-center justify-center font-serif text-[11px]"
+              style={{ color: 'rgba(var(--tj-text-secondary), 0.8)' }}
+              title={turnStatus.kind === 'stopped' ? '已停止' : ''}
+            >
+              ∥
+            </span>
           )}
-          {workflowStatus !== 'done' && onCancelWorkflow && (
+          {isTurnStatusCancellable(turnStatus) && onCancelWorkflow && (
             <button
               type="button"
               onClick={onCancelWorkflow}

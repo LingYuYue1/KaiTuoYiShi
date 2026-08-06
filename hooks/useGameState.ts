@@ -65,6 +65,7 @@ import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
 import { devLogError } from '@/utils/devLog';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
+import { TURN_STATUS_IDLE, type TurnStatus } from '@/hooks/useGame/turnStatus';
 
 const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
@@ -234,10 +235,9 @@ export interface UseGameStateReturn {
   setHasSave: React.Dispatch<React.SetStateAction<boolean>>;
   loading: boolean;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  workflowHint: string;
-  setWorkflowHint: React.Dispatch<React.SetStateAction<string>>;
-  workflowStatus: 'searching' | 'done' | '';
-  setWorkflowStatus: React.Dispatch<React.SetStateAction<'searching' | 'done' | ''>>;
+  /** 输入区状态条的唯一状态源（turnStatus.ts），管线在相位边界写入。 */
+  turnStatus: TurnStatus;
+  setTurnStatus: React.Dispatch<React.SetStateAction<TurnStatus>>;
   liveRecallSummary: string;
   setLiveRecallSummary: React.Dispatch<React.SetStateAction<string>>;
   liveRecallFullContent: string;
@@ -277,8 +277,7 @@ export function useGameState(): UseGameStateReturn {
   const [worldbooks, setWorldbooks] = useState<世界书[]>([]);
   const [hasSave, setHasSave] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [workflowHint, setWorkflowHint] = useState('');
-  const [workflowStatus, setWorkflowStatus] = useState<'searching' | 'done' | ''>('');
+  const [turnStatus, setTurnStatus] = useState<TurnStatus>(TURN_STATUS_IDLE);
   const [liveRecallSummary, setLiveRecallSummary] = useState('');
   const [liveRecallFullContent, setLiveRecallFullContent] = useState('');
   const [pendingVariable, setPendingVariable] = useState(false);
@@ -313,8 +312,7 @@ export function useGameState(): UseGameStateReturn {
     worldbooks, setWorldbooks,
     hasSave, setHasSave,
     loading, setLoading,
-    workflowHint, setWorkflowHint,
-    workflowStatus, setWorkflowStatus,
+    turnStatus, setTurnStatus,
     liveRecallSummary, setLiveRecallSummary,
     liveRecallFullContent, setLiveRecallFullContent,
     pendingVariable, setPendingVariable,
@@ -334,9 +332,11 @@ export function useGameState(): UseGameStateReturn {
       const recoveryJournal = await loadWorkflowRecoveryJournal();
       if (recoveryJournal) {
         setInterruptedWorkflow(recoveryJournal);
-        setWorkflowHint(recoveryJournal.phase === 'main_request'
-          ? '上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。'
-          : '上次生成被浏览器中断，回复已落地、结算未完成。');
+        // 中断回合的通知只走一条通道：main_request 用状态条（输入恢复提示），
+        // 结算/存档中断由 App 的中断横幅承载，避免状态条与横幅重复展示。
+        if (recoveryJournal.phase === 'main_request') {
+          setTurnStatus({ kind: 'stopped', text: '上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。' });
+        }
       }
       const lastView = await loadSetting<string>(LAST_VIEW_STORAGE_KEY);
 
@@ -512,7 +512,7 @@ export function useGameState(): UseGameStateReturn {
         if (!isResumableWorkspace(recoveryJournal, newest)) {
           await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
           setInterruptedWorkflow(null);
-          setWorkflowHint('');
+          setTurnStatus(TURN_STATUS_IDLE);
         }
       }
 

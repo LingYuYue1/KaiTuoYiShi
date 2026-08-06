@@ -21,6 +21,7 @@ import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog } from '@/utils/devLog';
+import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -115,7 +116,7 @@ export function useGame(): UseGameReturn {
     const interrupted = s.interruptedWorkflow;
     if (interrupted) await clearWorkflowRecoveryJournal(interrupted.workflowId);
     s.setInterruptedWorkflow(null);
-    s.setWorkflowHint('');
+    s.setTurnStatus(TURN_STATUS_IDLE);
   }, []);
 
   const handleNewGame = useCallback(() => {
@@ -145,7 +146,7 @@ export function useGame(): UseGameReturn {
   const handleReroll = useCallback(async (): Promise<string | undefined> => {
     const s = stateRef.current;
     if (s.loading || s.pendingVariable) {
-      s.setWorkflowHint('后台结算尚未完成，稍等完成后再重roll，避免记忆/忆庭/变量写入错位。');
+      s.setTurnStatus({ kind: 'stopped', text: '后台结算尚未完成，稍等完成后再重roll，避免记忆/忆庭/变量写入错位。' });
       return;
     }
     s.abortControllerRef.current?.abort();
@@ -162,8 +163,7 @@ export function useGame(): UseGameReturn {
       const trimmed = history.slice(0, -1);
       s.setChatHistory(trimmed);
       setStreamingMessage('');
-      s.setWorkflowStatus('');
-      s.setWorkflowHint(snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。');
+      s.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。' });
       if (snapshot) {
         const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
         await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
@@ -206,8 +206,7 @@ export function useGame(): UseGameReturn {
     const trimmed = history.slice(0, lastUserIdx);
     s.setChatHistory(trimmed);
     setStreamingMessage('');
-    s.setWorkflowStatus('');
-    s.setWorkflowHint(snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。');
+    s.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。' });
     if (snapshot) {
       const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
       await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));

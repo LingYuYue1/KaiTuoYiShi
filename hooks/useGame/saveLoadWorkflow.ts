@@ -44,6 +44,7 @@ import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@
 import { 创建空NewestStory记录, 清空NewestStory记录 } from '@/models/newestStory';
 import { devLog, devLogError } from '@/utils/devLog';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
+import { TURN_STATUS_IDLE } from './turnStatus';
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
@@ -320,7 +321,7 @@ async function abandonInterruptedWorkflow(state: UseGameStateReturn): Promise<vo
   if (!interrupted) return;
   await clearWorkflowRecoveryJournal(interrupted.workflowId);
   state.setInterruptedWorkflow(null);
-  state.setWorkflowHint('');
+  state.setTurnStatus(TURN_STATUS_IDLE);
   devLog('recover', 'load-abandon-interrupted', { workflowId: interrupted.workflowId });
 }
 
@@ -333,7 +334,7 @@ export async function applySaveToState(
   state.setLoading(false);
   setStreamingMessage('');
   state.setPendingVariable(false);
-  state.setWorkflowStatus('');
+  state.setTurnStatus(TURN_STATUS_IDLE);
   state.setLiveRecallSummary('');
   state.setLiveRecallFullContent('');
   // 片 5a-2 D3 读取侧迁移：旧档 gameSettings 仍含两运行态键时迁至存档顶层并置空原键；
