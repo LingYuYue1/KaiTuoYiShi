@@ -1,4 +1,4 @@
-export const UNIFIED_ID_DB_VERSION = 8;
+export const UNIFIED_ID_DB_VERSION = 9;
 
 export function createUnifiedId(): string {
   const timestamp = Math.floor(Date.now() / 10).toString(16).padStart(10, '0');

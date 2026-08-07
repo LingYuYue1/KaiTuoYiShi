@@ -1,5 +1,5 @@
 import type { 存档数据, 存档类型 } from '@/models/settings';
-import { 归一化NewestStory记录, NEWEST_STORY_STORE_KEY, type NewestStory记录 } from '@/models/newestStory';
+import { 归一化NewestStory记录, NEWEST_STORY_STORE_KEY, 分叉NewestStory记录, 创建空NewestStory记录, 重定向NewestStory记录, type NewestStory记录 } from '@/models/newestStory';
 import { devLog, devLogError } from '@/utils/devLog';
 import { createUnifiedId, UNIFIED_ID_DB_VERSION } from '@/utils/id';
 import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExportAsync } from './savePackage';
@@ -206,6 +206,46 @@ function migrateNewestStoryHeadNodeId(transaction: IDBTransaction): void {
 
 const UNIFIED_ID_PATTERN = /^[0-9a-f]{4}-[0-9a-f]{6}-[0-9a-f]{4}$/;
 
+/**
+ * v9 迁移：newest 槽新增 branchName 持久化字段（片 5d-1 分叉 API 的标签载体）。
+ * 该字段在旧版本记录上不存在；本迁移只做形状归一化（非法值剔除）与幂等重放确认，
+ * 不重写有效值。旧版本 DB（v8 及以下）升级后即具备该字段的持久化通道。
+ */
+function migrateNewestStoryBranchName(transaction: IDBTransaction): void {
+  const newestStore = transaction.objectStore(NEWEST_STORY_STORE);
+  const newestRequest = newestStore.get(NEWEST_STORY_STORE_KEY);
+  newestRequest.onsuccess = () => {
+    const newest: unknown = newestRequest.result;
+    if (!isPlainRecord(newest)) {
+      devLog('save', 'newest-branchname-migration', { outcome: 'no-record' });
+      return;
+    }
+    const rawBranchName = newest.branchName;
+    const nextBranchName = typeof rawBranchName === 'string' && rawBranchName.trim()
+      ? rawBranchName.trim()
+      : undefined;
+    if (nextBranchName === rawBranchName) {
+      devLog('save', 'newest-branchname-migration', {
+        outcome: 'noop',
+        branchName: nextBranchName,
+      });
+      return;
+    }
+    const next = {
+      ...newest,
+      ...(nextBranchName ? { branchName: nextBranchName } : {}),
+    };
+    newestStore.put(next);
+    devLog('save', 'newest-branchname-migration', {
+      outcome: 'normalized',
+      branchName: nextBranchName,
+    });
+  };
+  newestRequest.onerror = () => {
+    devLogError('save', 'newest-branchname-migration-read-failed', newestRequest.error);
+  };
+}
+
 function migrateNodeIdsToUnifiedFormat(transaction: IDBTransaction): void {
   devLog('save', 'migrate-nodeid-start');
 
@@ -345,6 +385,11 @@ const MIGRATIONS: Migration[] = [
     version: 8,
     label: 'unified-nodeId',
     migrate: migrateNodeIdsToUnifiedFormat,
+  },
+  {
+    version: 9,
+    label: 'newest-branchName',
+    migrate: migrateNewestStoryBranchName,
   },
 ];
 
@@ -684,6 +729,134 @@ async function deleteSaveInternal(id: number): Promise<void> {
   await cleanupUnreferencedHiddenSaves(db);
 }
 
+// ── 存档树基础设施（片 5d-1）：树查询最小集 + 分叉 API + 节点级删除 ──
+
+/** 树查询最小集：返回 nodeId 节点及其全部后代（含自身）的目录摘要，按时间升序。 */
+export async function getSaveTreeNodeSubtree(rootId: string, nodeId: string): Promise<SaveListItemSummary[]> {
+  const subtree = await collectSaveTreeNodeSubtreeSummaries(rootId.trim(), nodeId.trim());
+  return subtree.sort((a, b) => a.timestamp - b.timestamp || a.id - b.id);
+}
+
+/** 存活叶子判定：子树只含自身（无存活后代）即叶子。 */
+export async function isSaveTreeNodeLeaf(rootId: string, nodeId: string): Promise<boolean> {
+  const subtree = await collectSaveTreeNodeSubtreeSummaries(rootId.trim(), nodeId.trim());
+  return subtree.length === 1;
+}
+
+/** 最近存活祖先：沿 parentNodeId 上溯，跳过 excludedNodeIds（如被删子树），返回第一个存活节点；无则 null。 */
+export async function getNearestLivingAncestor(
+  rootId: string,
+  nodeId: string,
+  excludedNodeIds: ReadonlySet<string>,
+): Promise<SaveListItemSummary | null> {
+  const normalizedRootId = rootId.trim();
+  const normalizedNodeId = nodeId.trim();
+  if (!normalizedRootId || !normalizedNodeId) return null;
+  const tree = await collectSaveTreeSummaries(normalizedRootId);
+  const nodeById = new Map<string, SaveListItemSummary>();
+  for (const item of tree) {
+    const treeNodeId = item.saveTree?.nodeId;
+    if (treeNodeId) nodeById.set(treeNodeId, item);
+  }
+  let cursor = nodeById.get(normalizedNodeId)?.saveTree?.parentNodeId ?? null;
+  while (cursor) {
+    if (!excludedNodeIds.has(cursor)) {
+      const summary = nodeById.get(cursor);
+      if (summary) return summary;
+    }
+    cursor = nodeById.get(cursor)?.saveTree?.parentNodeId ?? null;
+  }
+  return null;
+}
+
+export interface ForkSaveTreeLeafResult {
+  baseCheckpointId: number | null;
+  headNodeId: string | null;
+  branchName?: string;
+}
+
+/**
+ * 片 5d-1 分叉 API：从任意检查点分叉新叶子。
+ * 把 newest 槽重定向——base 指向分叉目标 checkpoint、head 分配新 unified id
+ * （新叶子身份，即下一晋升节点的逻辑身份）、story 覆盖集清空、branchName 标记分叉来源/新标签。
+ * 保持与 commitTurn 晋升链兼容：下一回合晋升以 base 为前驱生成新 auto 节点。
+ */
+export async function forkSaveTreeLeaf(params: {
+  rootId: string;
+  targetNodeId: string;
+  branchName?: string;
+}): Promise<ForkSaveTreeLeafResult> {
+  return runWithSaveMutationPriority(async () => {
+    const rootId = params.rootId.trim();
+    const targetNodeId = params.targetNodeId.trim();
+    if (!rootId || !targetNodeId) {
+      throw new Error('分叉存档树需要 rootId 与目标节点 ID。');
+    }
+    const catalog = await getSaveCatalogSnapshot();
+    if (!catalog.catalogComplete) {
+      throw new Error(`仍有 ${catalog.pendingIds.length} 个节点目录待恢复，完成后才能分叉存档树。`);
+    }
+    const targetSummary = catalog.items.find((item) => item.saveTree?.nodeId === targetNodeId);
+    if (!targetSummary || targetSummary.saveTree?.rootId !== rootId) {
+      throw new Error(`未找到要分叉的目标检查点：${targetNodeId}`);
+    }
+    const headNodeId = createUnifiedId();
+    const newest = await loadNewestStory();
+    const next = 分叉NewestStory记录(newest, {
+      baseCheckpointId: targetSummary.id,
+      headNodeId,
+      ...(params.branchName ? { branchName: params.branchName } : {}),
+    });
+    await saveNewestStory(next);
+    devLog('save', 'tree-fork-leaf', {
+      rootId,
+      targetNodeId,
+      targetSaveId: targetSummary.id,
+      baseCheckpointId: next.baseCheckpointId,
+      headNodeId: next.headNodeId,
+      branchName: next.branchName,
+    });
+    return {
+      baseCheckpointId: next.baseCheckpointId,
+      headNodeId: next.headNodeId,
+      branchName: next.branchName,
+    };
+  });
+}
+
+export interface DeleteSaveTreeNodeResult {
+  deletedCount: number;
+  deletedLeaf: boolean;
+  newestRedirected: boolean;
+}
+
+/**
+ * 片 5d-1 节点级删除：删叶子仅删自身；删内部节点级联修剪整个子树。
+ * 若当前叶子（newest base/head）落在被删集合内，newest 重定向到最近存活祖先；
+ * 无存活祖先（整棵树被删）时 newest 归零。
+ */
+export async function deleteSaveTreeNode(params: {
+  rootId: string;
+  nodeId: string;
+}): Promise<DeleteSaveTreeNodeResult> {
+  return runWithSaveMutationPriority(() => deleteSaveTreeNodeInternal(params.rootId.trim(), params.nodeId.trim()));
+}
+
+async function deleteSaveTreeNodeInternal(rootId: string, nodeId: string): Promise<DeleteSaveTreeNodeResult> {
+  if (!rootId || !nodeId) {
+    throw new Error('删除存档树节点需要 rootId 与 nodeId。');
+  }
+  const catalog = await getSaveCatalogSnapshot();
+  if (!catalog.catalogComplete) {
+    throw new Error(`仍有 ${catalog.pendingIds.length} 个节点目录待恢复，完成后才能删除存档树节点。`);
+  }
+  const subtree = await collectSaveTreeNodeSubtreeSummaries(rootId, nodeId);
+  if (!subtree.length) {
+    throw new Error(`未找到要删除的存档树节点：${nodeId}`);
+  }
+  return performTreeNodeDeletion(rootId, catalog, subtree);
+}
+
 export async function deleteSaveTree(rootId: string): Promise<number> {
   return runWithSaveMutationPriority(() => deleteSaveTreeInternal(rootId));
 }
@@ -691,15 +864,114 @@ export async function deleteSaveTree(rootId: string): Promise<number> {
 async function deleteSaveTreeInternal(rootId: string): Promise<number> {
   const trimmedRootId = rootId.trim();
   if (!trimmedRootId) return 0;
-  const db = await openDB();
   const catalog = await getSaveCatalogSnapshot();
   if (!catalog.catalogComplete) {
     throw new Error(`仍有 ${catalog.pendingIds.length} 个节点目录待恢复，完成后才能删除整棵存档树。`);
   }
-  const candidates = await collectSaveTreeSummaries(trimmedRootId);
-  if (!candidates.length) return 0;
-  await deleteManagedSaveItems(db, candidates);
-  return candidates.length;
+  const tree = await collectSaveTreeSummaries(trimmedRootId);
+  if (!tree.length) return 0;
+  const result = await performTreeNodeDeletion(trimmedRootId, catalog, tree);
+  return result.deletedCount;
+}
+
+/** 执行删除主体：目录行/存档/delta 清理（复用 deleteManagedSaveItems）+ newest 重定向。 */
+async function performTreeNodeDeletion(
+  rootId: string,
+  catalog: SaveCatalogSnapshot,
+  subtree: SaveListItemSummary[],
+): Promise<DeleteSaveTreeNodeResult> {
+  const deletedNodeIds = new Set<string>();
+  const deletedSaveIds = new Set<number>();
+  for (const item of subtree) {
+    const nodeId = item.saveTree?.nodeId;
+    if (nodeId) deletedNodeIds.add(nodeId);
+    deletedSaveIds.add(item.id);
+  }
+
+  const db = await openDB();
+  await deleteManagedSaveItems(db, subtree);
+
+  const newest = await loadNewestStory();
+  const baseNodeId = newest.baseCheckpointId === null
+    ? null
+    : resolveTreeNodeId(catalog, newest.baseCheckpointId);
+  const currentHeadNodeId = newest.headNodeId ?? baseNodeId;
+  const baseDeleted = newest.baseCheckpointId !== null && deletedSaveIds.has(newest.baseCheckpointId);
+  const headDeleted = currentHeadNodeId !== null && deletedNodeIds.has(currentHeadNodeId);
+
+  let newestRedirected = false;
+  if (baseDeleted || headDeleted) {
+    const anchor = baseDeleted ? baseNodeId : currentHeadNodeId;
+    const ancestor = anchor ? await getNearestLivingAncestor(rootId, anchor, deletedNodeIds) : null;
+    if (ancestor && ancestor.saveTree?.nodeId) {
+      await saveNewestStory(重定向NewestStory记录(newest, {
+        baseCheckpointId: ancestor.id,
+        headNodeId: ancestor.saveTree.nodeId,
+      }));
+      newestRedirected = true;
+    } else {
+      await saveNewestStory(创建空NewestStory记录());
+      newestRedirected = true;
+    }
+    devLog('save', 'tree-delete-newest-redirect', {
+      rootId,
+      deletedCount: subtree.length,
+      oldBaseCheckpointId: newest.baseCheckpointId,
+      oldHeadNodeId: newest.headNodeId,
+      redirectedTo: ancestor?.saveTree?.nodeId ?? null,
+      reason: ancestor ? 'living-ancestor' : 'no-living-ancestor',
+    });
+  }
+
+  devLog('save', 'tree-delete-node', {
+    rootId,
+    deletedCount: subtree.length,
+    deletedLeaf: subtree.length === 1,
+    newestRedirected,
+  });
+  return { deletedCount: subtree.length, deletedLeaf: subtree.length === 1, newestRedirected };
+}
+
+function resolveTreeNodeId(catalog: SaveCatalogSnapshot, saveId: number): string | null {
+  return catalog.items.find((item) => item.id === saveId)?.saveTree?.nodeId ?? null;
+}
+
+/** 收集子树目录摘要：从 nodeId 出发 BFS 全部后代（含自身）；节点不存在返回空数组。 */
+async function collectSaveTreeNodeSubtreeSummaries(rootId: string, nodeId: string): Promise<SaveListItemSummary[]> {
+  const tree = await collectSaveTreeSummaries(rootId);
+  const nodeById = new Map<string, SaveListItemSummary>();
+  for (const item of tree) {
+    const treeNodeId = item.saveTree?.nodeId;
+    if (treeNodeId) nodeById.set(treeNodeId, item);
+  }
+  if (!nodeById.has(nodeId)) return [];
+  const childrenIndex = buildTreeChildrenIndex(tree);
+  const result: SaveListItemSummary[] = [];
+  const stack: string[] = [nodeId];
+  let current = stack.pop();
+  while (current) {
+    const summary = nodeById.get(current);
+    if (summary) result.push(summary);
+    const children = childrenIndex.get(current) ?? [];
+    for (const child of children) {
+      const childNodeId = child.saveTree?.nodeId;
+      if (childNodeId) stack.push(childNodeId);
+    }
+    current = stack.pop();
+  }
+  return result;
+}
+
+function buildTreeChildrenIndex(summaries: SaveListItemSummary[]): Map<string, SaveListItemSummary[]> {
+  const children = new Map<string, SaveListItemSummary[]>();
+  for (const item of summaries) {
+    const parentNodeId = item.saveTree?.parentNodeId;
+    if (!parentNodeId) continue;
+    const list = children.get(parentNodeId) ?? [];
+    list.push(item);
+    children.set(parentNodeId, list);
+  }
+  return children;
 }
 
 export async function deleteLegacyBackupSaves(): Promise<number> {

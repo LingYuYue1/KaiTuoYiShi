@@ -99,6 +99,12 @@ export interface NewestStory记录 {
   baseCheckpointId: number | null;
   /** 当前未封版 head 的 saveTree.nodeId；null = 尚未建立或旧记录无法回填。 */
   headNodeId: string | null;
+  /**
+   * 片 5d-1 新增（v9）：分叉新叶子时标记分叉来源/新标签。节点二分类语义里
+   * 「叶子 = 可写工作区身份」由 base/head 承担，branchName 只是该叶子身份的分支标签。
+   * 无分叉 = undefined；重定向/归零时清空。
+   */
+  branchName?: string;
   /** 最近一次写入时间戳（ms）。 */
   updatedAt: number;
   /** 过渡字段；@deprecated: 5b2-2 废弃。覆盖写字段（当前值）。 */
@@ -143,6 +149,51 @@ export function 清空NewestStory记录(record: NewestStory记录, baseCheckpoin
   return {
     ...record,
     baseCheckpointId,
+    updatedAt: Date.now(),
+    story: {},
+  };
+}
+
+/**
+ * 片 5d-1 分叉 API 的 newest 侧效果：从任意检查点分叉新叶子。
+ * base 指向分叉目标 checkpoint、head 分配新叶子身份（新 unified id）、覆盖集清空、
+ * branchName 标记分叉来源/新标签。保持与 commitTurn 晋升链兼容——下一回合晋升时
+ * 以 base 为前驱生成新 auto 节点。
+ */
+export function 分叉NewestStory记录(
+  record: NewestStory记录,
+  params: { baseCheckpointId: number; headNodeId: string; branchName?: string },
+): NewestStory记录 {
+  const { branchName: _oldBranchName, ...rest } = record;
+  void _oldBranchName;
+  const branchName = typeof params.branchName === 'string' && params.branchName.trim()
+    ? params.branchName.trim()
+    : undefined;
+  return {
+    ...rest,
+    baseCheckpointId: params.baseCheckpointId,
+    headNodeId: params.headNodeId,
+    ...(branchName ? { branchName } : {}),
+    updatedAt: Date.now(),
+    story: {},
+  };
+}
+
+/**
+ * 片 5d-1 节点删除后的 newest 重定向：当前叶子被删后，把工作区身份改指向最近存活祖先。
+ * 覆盖集清空（删除即重置工作区），branchName 清空（新身份不再是原分叉标签）。
+ * baseCheckpointId/headNodeId 为 null 时调用方应改用 创建空NewestStory记录。
+ */
+export function 重定向NewestStory记录(
+  record: NewestStory记录,
+  params: { baseCheckpointId: number; headNodeId: string },
+): NewestStory记录 {
+  const { branchName: _branchName, ...rest } = record;
+  void _branchName;
+  return {
+    ...rest,
+    baseCheckpointId: params.baseCheckpointId,
+    headNodeId: params.headNodeId,
     updatedAt: Date.now(),
     story: {},
   };
@@ -204,6 +255,7 @@ function 是空串或null(value: unknown): boolean {
  *  - 未知 key 丢弃，已知 key 形状不合法则丢弃该字段（缺省 = 与 checkpoint 一致）；
  *  - baseCheckpointId 非正数 / 非有限数 → null（尚无 checkpoint）；
  *  - headNodeId 非空字符串 → 去首尾空白后保留；其他值 → null；
+ *  - branchName 非空字符串 → 去首尾空白后保留；其他值 → undefined（无分叉标签）；
  *  - updatedAt 非法 → 当前时间。
  */
 export function 归一化NewestStory记录(input?: unknown): NewestStory记录 {
@@ -211,7 +263,11 @@ export function 归一化NewestStory记录(input?: unknown): NewestStory记录 {
   if (!raw) return 创建空NewestStory记录();
   const baseCheckpointId = raw.baseCheckpointId;
   const headNodeId = raw.headNodeId;
+  const branchName = raw.branchName;
   const rawStory = 是普通对象(raw.story) ? (raw.story as Record<string, unknown>) : {};
+  const normalizedBranchName = typeof branchName === 'string' && branchName.trim()
+    ? branchName.trim()
+    : undefined;
   return {
     key: NEWEST_STORY_STORE_KEY,
     baseCheckpointId:
@@ -219,6 +275,7 @@ export function 归一化NewestStory记录(input?: unknown): NewestStory记录 {
         ? baseCheckpointId
         : null,
     headNodeId: typeof headNodeId === 'string' && headNodeId.trim() ? headNodeId.trim() : null,
+    ...(normalizedBranchName ? { branchName: normalizedBranchName } : {}),
     updatedAt:
       typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt)
         ? raw.updatedAt
