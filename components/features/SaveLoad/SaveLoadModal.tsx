@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  deleteSave,
-  deleteSaveTreeNode,
   deleteSaveTree,
   deleteLegacyBackupSaves,
   exportSavePackage,
   exportSaveTreePackage,
   getSaveCatalogRepairState,
   getSaveCatalogSnapshot,
-  getSaveTreeNodeSubtree,
   importSaveFileAsMany,
   loadSave,
   loadSaveTree,
@@ -19,7 +16,8 @@ import {
   type SaveCatalogRepairState,
   type SaveListItemSummary,
 } from '@/services/dbService';
-import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
+import { clearActiveSaveTreeMetaIfMatches, resolve存档删除目标, delete存档目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
+import { devLogError } from '@/utils/devLog';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
@@ -162,40 +160,27 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
 
   const handleDelete = async (id: number) => {
     const target = [...saves, ...legacyBackups].find((save) => save.id === id);
-    const tree = target?.saveTree;
-    if (!tree?.rootId || !tree.nodeId) {
-      if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    } else {
-      try {
-        const count = (await getSaveTreeNodeSubtree(tree.rootId, tree.nodeId)).length;
-        if (count > 1) {
-          if (!confirm(`确定删除这个存档及其子节点？将级联删除 ${count} 个存档，此操作不可恢复。`)) return;
-        } else if (!confirm('确定删除这个存档？此操作不可恢复。')) {
-          return;
-        }
-      } catch (err) {
-        console.error('[save-delete] delete failed', err);
-        alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
-        return;
-      }
+    let deleteTarget: 存档删除目标;
+    try {
+      deleteTarget = await resolve存档删除目标(target);
+    } catch (err) {
+      devLogError('save', 'save-delete-plan-failed', err, { id });
+      alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
+      return;
     }
+    const confirmMessage = deleteTarget.cascadeCount !== null && deleteTarget.cascadeCount > 1
+      ? `确定删除这个存档及其子节点？将级联删除 ${deleteTarget.cascadeCount} 个存档，此操作不可恢复。`
+      : '确定删除这个存档？此操作不可恢复。';
+    if (!confirm(confirmMessage)) return;
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
     setLegacyBackups((prev) => prev.filter((save) => save.id !== id));
     try {
-      if (tree?.rootId && tree.nodeId) {
-        await deleteSaveTreeNode({ rootId: tree.rootId, nodeId: tree.nodeId });
-        clearActiveSaveTreeMetaIfMatches({ rootId: tree.rootId, nodeId: tree.nodeId });
-      } else {
-        // 无树 legacy 恢复点无 saveTree，保留单条删除语义（5d-1b）。
-        // eslint-disable-next-line @typescript-eslint/no-deprecated -- 过渡期遗留路径，见 5d-1b 编辑目标 #2/#5
-        await deleteSave(id);
-        clearActiveSaveTreeMetaIfMatches(null);
-      }
+      await delete存档目标(id, deleteTarget);
       setDeletingId(null);
-      void refresh();
+      await refresh();
     } catch (err) {
-      console.error('[save-delete] delete failed', err);
+      devLogError('save', 'save-delete-failed', err, { id });
       alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
       await refresh();
       setDeletingId(null);

@@ -18,7 +18,7 @@ import {
   迁移存档运行态键,
   取游戏设置运行态键,
 } from '@/models/settings';
-import { loadLatestSave, loadSave, loadNewestStory, deleteSave as dbDeleteSave, saveGame, saveNewestStory, saveSetting } from '@/services/dbService';
+import { loadLatestSave, loadSave, loadNewestStory, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveGame, saveNewestStory, saveSetting } from '@/services/dbService';
 import {
   buildPersistedZhikuSystem,
   loadAllBundledZhikuPresets,
@@ -338,6 +338,35 @@ export async function handleDeleteSave(id: number): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-deprecated -- 无树/过渡期路径，树内删除走 deleteSaveTreeNode
   await dbDeleteSave(id);
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
+}
+
+/** 树感知删除目标：树内节点返回其子树存档数，legacy 无树恢复点返回 null。 */
+export interface 存档删除目标 {
+  tree: { rootId: string; nodeId: string } | null;
+  cascadeCount: number | null;
+}
+
+export async function resolve存档删除目标(
+  target?: { saveTree?: 存档树元信息 | null } | null,
+): Promise<存档删除目标> {
+  const treeNode = target?.saveTree;
+  if (!treeNode || !treeNode.rootId || !treeNode.nodeId) {
+    return { tree: null, cascadeCount: null };
+  }
+  const subtree = await getSaveTreeNodeSubtree(treeNode.rootId, treeNode.nodeId);
+  return { tree: { rootId: treeNode.rootId, nodeId: treeNode.nodeId }, cascadeCount: subtree.length };
+}
+
+/** 执行删除：树的节点走 deleteSaveTreeNode（级联），无树 legacy 走单条删除。 */
+export async function delete存档目标(id: number, target: 存档删除目标): Promise<void> {
+  if (target.tree) {
+    await deleteSaveTreeNode(target.tree);
+    clearActiveSaveTreeMetaIfMatches(target.tree);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- 无树 legacy 恢复点，见 5d-1b 编辑目标 #2
+    await dbDeleteSave(id);
+    clearActiveSaveTreeMetaIfMatches(null);
+  }
 }
 
 export async function applySaveToState(
