@@ -334,6 +334,8 @@ export async function handleManualSave(state: UseGameStateReturn): Promise<numbe
 
 export async function handleDeleteSave(id: number): Promise<void> {
   const save = await loadSave(id);
+  // 过渡期遗留的按 id 单条删除入口，目前无调用方（5d-1b 编辑目标 #5 标记保留）。
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- 无树/过渡期路径，树内删除走 deleteSaveTreeNode
   await dbDeleteSave(id);
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
 }

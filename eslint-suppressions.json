@@ -509,11 +509,6 @@
       "count": 1
     }
   },
-  "components/features/Settings/StorageManager.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
-    }
-  },
   "components/features/Settings/StoryWeavingSettingsTab.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 2

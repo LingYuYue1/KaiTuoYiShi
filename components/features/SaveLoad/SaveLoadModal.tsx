@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   deleteSave,
+  deleteSaveTreeNode,
   deleteSaveTree,
   deleteLegacyBackupSaves,
   exportSavePackage,
   exportSaveTreePackage,
   getSaveCatalogRepairState,
   getSaveCatalogSnapshot,
+  getSaveTreeNodeSubtree,
   importSaveFileAsMany,
   loadSave,
   loadSaveTree,
@@ -159,14 +161,37 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    const target = [...saves, ...legacyBackups].find((save) => save.id === id)?.saveTree;
+    const target = [...saves, ...legacyBackups].find((save) => save.id === id);
+    const tree = target?.saveTree;
+    if (!tree?.rootId || !tree.nodeId) {
+      if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
+    } else {
+      try {
+        const count = (await getSaveTreeNodeSubtree(tree.rootId, tree.nodeId)).length;
+        if (count > 1) {
+          if (!confirm(`确定删除这个存档及其子节点？将级联删除 ${count} 个存档，此操作不可恢复。`)) return;
+        } else if (!confirm('确定删除这个存档？此操作不可恢复。')) {
+          return;
+        }
+      } catch (err) {
+        console.error('[save-delete] delete failed', err);
+        alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
+        return;
+      }
+    }
     setDeletingId(id);
     setSaves((prev) => prev.filter((save) => save.id !== id));
     setLegacyBackups((prev) => prev.filter((save) => save.id !== id));
     try {
-      await deleteSave(id);
-      clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
+      if (tree?.rootId && tree.nodeId) {
+        await deleteSaveTreeNode({ rootId: tree.rootId, nodeId: tree.nodeId });
+        clearActiveSaveTreeMetaIfMatches({ rootId: tree.rootId, nodeId: tree.nodeId });
+      } else {
+        // 无树 legacy 恢复点无 saveTree，保留单条删除语义（5d-1b）。
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- 过渡期遗留路径，见 5d-1b 编辑目标 #2/#5
+        await deleteSave(id);
+        clearActiveSaveTreeMetaIfMatches(null);
+      }
       setDeletingId(null);
       void refresh();
     } catch (err) {

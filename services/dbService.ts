@@ -705,6 +705,10 @@ export async function loadLatestSave(): Promise<存档数据 | null> {
   return loadSave(latestPlayable.id);
 }
 
+/**
+ * @deprecated 仅限无树 legacy 恢复点与过渡期使用：只删单条存档记录，不维护树结构。
+ * 树内节点的删除必须调用 `deleteSaveTreeNode`（叶子仅删自身、内部节点级联修剪子树、newest 槽位重定向）。
+ */
 export async function deleteSave(id: number): Promise<void> {
   return runWithSaveMutationPriority(() => deleteSaveInternal(id));
 }

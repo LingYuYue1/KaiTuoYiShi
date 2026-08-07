@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   deleteLegacyBackupSaves,
   deleteSave,
+  deleteSaveTreeNode,
   deleteSaveTree,
   exportSavePackage,
   exportSaveTreePackage,
   getSaveCatalogRepairState,
   getSaveCatalogSnapshot,
+  getSaveTreeNodeSubtree,
   importSaveFileAsMany,
   loadSave,
   loadSaveTree,
@@ -61,16 +63,17 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
   };
 
   useEffect(() => {
-    let cancelled = false;
+    const cancelledRef: { current: boolean } = { current: false };
+    const isCancelled = (): boolean => cancelledRef.current;
     void (async () => {
       const snapshot = await refresh();
-      if (!cancelled && snapshot?.pendingIds.length) {
+      if (!isCancelled() && snapshot?.pendingIds.length) {
         await startSaveCatalogRepair('missing-only');
-        if (!cancelled) await refresh();
+        if (!isCancelled()) await refresh();
       }
     })();
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
   }, []);
 
@@ -88,7 +91,7 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
     [displaySaves, filter],
   );
   const treeGroups = useMemo(() => buildSaveTreeGroups(visibleSaves), [visibleSaves]);
-  const selectedTree = treeGroups.find((group) => group.rootId === selectedRootId) ?? treeGroups[0] ?? null;
+  const selectedTree = treeGroups.find((group) => group.rootId === selectedRootId) ?? treeGroups.at(0) ?? null;
   const repairing = repairState.phase === 'checking'
     || repairState.phase === 'waiting-for-lease'
     || repairState.phase === 'repairing'
@@ -129,12 +132,34 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
-    const target = [...saves, ...legacyBackups].find((save) => save.id === id)?.saveTree;
+    const target = [...saves, ...legacyBackups].find((save) => save.id === id);
+    const tree = target?.saveTree;
+    if (!tree?.rootId || !tree.nodeId) {
+      if (!confirm('确定删除这个存档？此操作不可恢复。')) return;
+    } else {
+      try {
+        const count = (await getSaveTreeNodeSubtree(tree.rootId, tree.nodeId)).length;
+        if (count > 1) {
+          if (!confirm(`确定删除这个存档及其子节点？将级联删除 ${count} 个存档，此操作不可恢复。`)) return;
+        } else if (!confirm('确定删除这个存档？此操作不可恢复。')) {
+          return;
+        }
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : '存档删除过程异常');
+        return;
+      }
+    }
     setDeletingId(id);
     try {
-      await deleteSave(id);
-      clearActiveSaveTreeMetaIfMatches(target ? { nodeId: target.nodeId } : null);
+      if (tree?.rootId && tree.nodeId) {
+        await deleteSaveTreeNode({ rootId: tree.rootId, nodeId: tree.nodeId });
+        clearActiveSaveTreeMetaIfMatches({ rootId: tree.rootId, nodeId: tree.nodeId });
+      } else {
+        // 无树 legacy 恢复点无 saveTree，保留单条删除语义（5d-1b）。
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- 过渡期遗留路径，见 5d-1b 编辑目标 #2/#5
+        await deleteSave(id);
+        clearActiveSaveTreeMetaIfMatches(null);
+      }
       await refresh();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '存档删除过程异常');
