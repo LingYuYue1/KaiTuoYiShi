@@ -18,7 +18,7 @@ import {
   迁移存档运行态键,
   取游戏设置运行态键,
 } from '@/models/settings';
-import { loadLatestSave, loadSave, loadNewestStory, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveGame, saveNewestStory, saveSetting } from '@/services/dbService';
+import { loadLatestSave, loadSave, loadNewestStory, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveGame, saveNewestStory, saveSetting, forkSaveTreeLeaf } from '@/services/dbService';
 import {
   buildPersistedZhikuSystem,
   loadAllBundledZhikuPresets,
@@ -69,6 +69,7 @@ export function buildSavePayload(
   state: UseGameStateReturn,
   type: 存档类型,
   overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
+  nodeId?: string,
 ): 存档数据 {
   const persistedChatHistory = compactChatHistoryForLongSession(
     overrides?.chatHistory ?? state.chatHistory,
@@ -108,10 +109,15 @@ export function buildSavePayload(
   const parentSave = activeSaveTreeMeta
     ? ({ id: 0, type, timestamp, 旅人: baseSave.旅人, 世界: baseSave.世界, chatHistory: [], 记忆: baseSave.记忆, gameSettings: baseSave.gameSettings, apiSettings: baseSave.apiSettings, theme: baseSave.theme, saveTree: activeSaveTreeMeta } as unknown as 存档数据)
     : null;
+  // 片 5d-2：nodeId 仅用于物化分叉头（commitTurn 晋升采纳 newest.headNodeId）。
+  // 与父节点同 id（迁移回填/已物化残留）时不采纳，回退 createId，防止节点 ID 重复。
+  const parentNodeId = activeSaveTreeMeta?.nodeId ?? null;
+  const effectiveNodeId = nodeId && nodeId !== parentNodeId ? nodeId : undefined;
   const withTree = attachSaveTreeMeta(baseSave as 存档数据, buildNextSaveTreeMeta({
     previous: parentSave,
     type,
     timestamp,
+    ...(effectiveNodeId ? { nodeId: effectiveNodeId } : {}),
   }));
   return compactDuplicatedSaveImages(withTree);
 }
@@ -262,7 +268,27 @@ export async function enterSession(
   save: 存档数据,
 ): Promise<void> {
   await beginSession(state);
-  await applySaveToState(save, state);
+  // 片 5d-2 D6：读档 = 从目标检查点分叉新叶子。目标带 saveTree 时，
+  // 先用 forkSaveTreeLeaf 把 newest 重定向到新叶子（base=目标、head=新 id、覆盖集清空），
+  // 再用 clearNewest:false 应用存档以保留该分叉；无树 legacy 档维持原有清空路径。
+  const treeMeta = (save as { saveTree?: 存档树元信息 | null }).saveTree;
+  const rootId = treeMeta?.rootId ?? null;
+  const targetNodeId = treeMeta?.nodeId ?? null;
+  if (rootId && targetNodeId) {
+    const fork = await forkSaveTreeLeaf({
+      rootId,
+      targetNodeId,
+    });
+    await applySaveToState(save, state, { clearNewest: false });
+    devLog('save', 'tree-fork-read', {
+      saveId: save.id,
+      rootId,
+      targetNodeId,
+      headNodeId: fork.headNodeId,
+    });
+  } else {
+    await applySaveToState(save, state);
+  }
   state.setPendingOpeningTrigger(null);
   state.setSessionEpoch((e) => e + 1);
 }

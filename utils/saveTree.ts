@@ -32,18 +32,19 @@ export function buildNextSaveTreeMeta(params: {
   previous?: 存档数据 | null;
   type: 存档数据['type'];
   timestamp: number;
+  nodeId?: string;
 }): 存档树元信息 {
   const previousTree = params.previous ? ensureSaveTreeRoot(params.previous) : undefined;
   if (!previousTree) {
     return {
       rootId: createId(),
-      nodeId: createId(),
+      nodeId: params.nodeId ?? createId(),
       createdAt: params.timestamp,
     };
   }
   return {
     rootId: previousTree.rootId,
-    nodeId: createId(),
+    nodeId: params.nodeId ?? createId(),
     parentNodeId: previousTree.nodeId,
     branchName: params.type === 'auto' ? '自动节点' : params.type === 'backup' ? '保护节点' : undefined,
     createdAt: params.timestamp,

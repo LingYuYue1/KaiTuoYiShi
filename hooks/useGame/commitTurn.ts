@@ -87,16 +87,23 @@ function 组装Checkpoint值(base: 存档数据, state: UseGameStateReturn, newe
     theme: state.currentTheme,
     chatHistory: compactChatHistoryForLongSession(newest.story.chatHistory ?? base.chatHistory),
   } as 存档数据;
+  // 分叉头物化：newest.headNodeId 非空且不等于基节点自身 nodeId（防迁移回填/已物化后重复）
+  // 时，晋升节点采用该 head id，使分叉叶子身份真实落地。
+  const baseNodeId = baseWithTree.saveTree?.nodeId ?? null;
+  const forkHeadNodeId = newest.headNodeId && newest.headNodeId !== baseNodeId ? newest.headNodeId : undefined;
   return attachSaveTreeMeta(payload, buildNextSaveTreeMeta({
     previous: baseWithTree,
     type: 'auto',
     timestamp,
+    ...(forkHeadNodeId ? { nodeId: forkHeadNodeId } : {}),
   }));
 }
 
 /** 基值缺失（新局/升级首回合）时的兜底组装：走现有 buildSavePayload（state + 覆盖集），与剥离前行为一致。 */
 function 组装Checkpoint值从状态(state: UseGameStateReturn, newest: NewestStory记录): 存档数据 {
-  return buildSavePayload(state, 'auto', 取Story覆盖字段(newest.story));
+  // 片 5d-2：headNodeId 穿透给 buildSavePayload（内部再对父节点 id 去重），
+  // 使分叉自非 auto 节点（如手动节点）时晋升的 auto 节点同样物化分叉头身份。
+  return buildSavePayload(state, 'auto', 取Story覆盖字段(newest.story), newest.headNodeId ?? undefined);
 }
 
 /** 新局边界：新增 auto 树根节点，并让 newest 从该初始 checkpoint 开始。 */

@@ -784,6 +784,8 @@ export interface ForkSaveTreeLeafResult {
  * 把 newest 槽重定向——base 指向分叉目标 checkpoint、head 分配新 unified id
  * （新叶子身份，即下一晋升节点的逻辑身份）、story 覆盖集清空、branchName 标记分叉来源/新标签。
  * 保持与 commitTurn 晋升链兼容：下一回合晋升以 base 为前驱生成新 auto 节点。
+ * 目标节点在可见记录与历史备份中反查：目录按 visibility 把 type:'backup' 分流到
+ * legacyBackups 而非 items，只查 items 会漏掉备份类恢复点。
  */
 export async function forkSaveTreeLeaf(params: {
   rootId: string;
@@ -798,9 +800,10 @@ export async function forkSaveTreeLeaf(params: {
     }
     const catalog = await getSaveCatalogSnapshot();
     if (!catalog.catalogComplete) {
-      throw new Error(`仍有 ${catalog.pendingIds.length} 个节点目录待恢复，完成后才能分叉存档树。`);
+      throw new Error(`仍有 ${catalog.pendingIds.length} 个节点目录待恢复，请先完成恢复后再分叉存档树。`);
     }
-    const targetSummary = catalog.items.find((item) => item.saveTree?.nodeId === targetNodeId);
+    const targetSummary = [...catalog.items, ...catalog.legacyBackups]
+      .find((item) => item.saveTree?.nodeId === targetNodeId);
     if (!targetSummary || targetSummary.saveTree?.rootId !== rootId) {
       throw new Error(`未找到要分叉的目标检查点：${targetNodeId}`);
     }

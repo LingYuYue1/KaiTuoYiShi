@@ -144,11 +144,16 @@ export function mergeNewestStory(
 /**
  * commitTurn 成功后清空 newest：base 指向新 checkpoint，覆盖字段归零（D2-A「newest 清空」）。
  * 5a-2 在 checkpoint 落盘成功后调用。
+ * 片 5d-2：headNodeId/branchName 一并归零——晋升节点的 nodeId 已采用该 head 身份，
+ * 再保留会导致下一回合把它当「未物化的分叉头」二次物化（节点 ID 重复）；branchName 同理归零。
  */
 export function 清空NewestStory记录(record: NewestStory记录, baseCheckpointId: number): NewestStory记录 {
+  const { branchName: _branchName, ...rest } = record;
+  void _branchName;
   return {
-    ...record,
+    ...rest,
     baseCheckpointId,
+    headNodeId: null,
     updatedAt: Date.now(),
     story: {},
   };
