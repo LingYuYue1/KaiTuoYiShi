@@ -156,8 +156,8 @@ export async function stage2_preModel(
 
   const recallSummaryForTurn = [formatZhikuRecallSummary(zhikuPreview?.diagnostics), formatYitingRecallSummary(yitingPreview?.previewText)].join('\n');
   const recallFullContentForTurn = [zhikuPreview?.injection ? ['【智库完整召回】', zhikuPreview.injection].join('\n') : '', yitingPreview?.injection ? ['【记忆完整召回】', yitingPreview.injection].join('\n') : ''].filter(Boolean).join('\n\n');
-  state.setLiveRecallSummary(recallSummaryForTurn);
-  state.setLiveRecallFullContent(recallFullContentForTurn);
+  state.activeWorkflow.setLiveRecallSummary(recallSummaryForTurn);
+  state.activeWorkflow.setLiveRecallFullContent(recallFullContentForTurn);
 
   const memoryHint = isOpeningSystemTrigger
     ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
@@ -170,7 +170,7 @@ export async function stage2_preModel(
   const zhikuHint = zhikuSettings?.enabled ? `智库内容已注入：${zhikuPreview?.entries.length ? zhikuPreview.entries.slice(0, 2).map((entry: { 标题: string }) => entry.标题).join('、') : '无相关条目'}` : '智库已跳过';
   // 投影点（B2 定性）：预模型召回完成、主模型开始生成 —— 置 generating，不置 done。
   // 旧实现在此置 'done'，导致整个生成期间状态条误显 ✓；真正的完成态在 finally 清空。
-  state.setTurnStatus({ kind: 'generating', text: isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}` });
+  state.activeWorkflow.setTurnStatus({ kind: 'generating', text: isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}` });
 
   const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
   const storyRecallInjection = [immediateStoryReview ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n') : '', yitingPreview?.injection ?? ''].filter((item) => item.trim()).join('\n\n');

@@ -64,6 +64,8 @@ export async function runTurnTail(
       剧情: variableOverrides?.剧情,
       NPC: d.npcAfterCompression,
       variableBatches: variableBatchesForSave,
+      // 片 5e（D4）：queueTasks 属主 = 工作区（叶子）字段，留在 newest.story；
+      // commitTurn 封版晋升时剥离（不进检查点），清空 newest 后写回本字段。
       queueTasks: ctx.queueTasksMirror,
     }));
     await saveNewestStory(newest);

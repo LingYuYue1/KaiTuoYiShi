@@ -22,7 +22,7 @@ import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { loadSave, saveGame, saveNewestStory } from '@/services/dbService';
 import { 创建空NewestStory记录, 清空NewestStory记录, type NewestStory记录, type NewestStory字段集 } from '@/models/newestStory';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
-import { buildSaveGameSettingsSnapshot, commitActiveSaveTreeMeta, buildSavePayload } from './saveLoadWorkflow';
+import { buildSaveGameSettingsSnapshot, commitActiveSaveTreeMeta, buildSavePayload, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta } from '@/utils/saveTree';
 import { devLog, devLogError } from '@/utils/devLog';
 import type { TurnContext, TurnDeltas } from './turnTypes';
@@ -45,11 +45,11 @@ type Story覆盖字段 = Pick<
   | '剧情'
   | '剧情编织'
   | 'variableBatches'
-  | 'queueTasks'
 >;
 
 /**
- * newest.story → buildSavePayload overrides 形状。两者字段集一致（报告 a 表 15 列），
+ * newest.story → buildSavePayload overrides 形状。两者字段集一致（报告 a 表 15 列，
+ * 片 5e（D4）起剥离 queueTasks —— 仅限叶子/工作区合法字段，检查点不得携带），
  * 未写字段缺省 = 与 checkpoint 一致；undefined 由 buildSavePayload 的 ?? state 兜底。
  */
 function 取Story覆盖字段(story: Partial<NewestStory字段集>): Partial<Story覆盖字段> {
@@ -68,7 +68,6 @@ function 取Story覆盖字段(story: Partial<NewestStory字段集>): Partial<Sto
     剧情: story.剧情,
     剧情编织: story.剧情编织,
     variableBatches: story.variableBatches,
-    queueTasks: story.queueTasks,
   };
 }
 
@@ -76,9 +75,13 @@ function 取Story覆盖字段(story: Partial<NewestStory字段集>): Partial<Sto
 function 组装Checkpoint值(base: 存档数据, state: UseGameStateReturn, newest: NewestStory记录): 存档数据 {
   const baseWithTree = base as SaveWithTree;
   const timestamp = Date.now();
+  // 片 5e（D4）封版剥离：不走 newest.story 整体展开（会把工作区专属的
+  // queueTasks 折入检查点），改经 取Story覆盖字段 显式选取合法字段。
+  // macroGlobalVars / worldbookTriggerStates / pendingOpeningTrigger 三键不在此处理，
+  // 由 commitTurn 主流程在组装后统一覆盖（d 回落 newest 值，见下方 D3 段）。
   const payload = {
     ...base,
-    ...newest.story,
+    ...取Story覆盖字段(newest.story),
     id: 0,
     type: 'auto' as const,
     timestamp,
@@ -87,6 +90,9 @@ function 组装Checkpoint值(base: 存档数据, state: UseGameStateReturn, newe
     theme: state.currentTheme,
     chatHistory: compactChatHistoryForLongSession(newest.story.chatHistory ?? base.chatHistory),
   } as 存档数据;
+  // 前向兼容：剥离前封版的旧检查点（含导入档）可能残留 queueTasks，
+  // `...base` 展开会把它继承进新载荷 —— 显式剔除，否则下方 L12 运行时断言直接抛错。
+  delete (payload as { queueTasks?: unknown }).queueTasks;
   // 分叉头物化：newest.headNodeId 非空且不等于基节点自身 nodeId（防迁移回填/已物化后重复）
   // 时，晋升节点采用该 head id，使分叉叶子身份真实落地。
   const baseNodeId = baseWithTree.saveTree?.nodeId ?? null;
@@ -113,25 +119,37 @@ export async function 初始化新局checkpoint(
 ): Promise<{ checkpointId: number }> {
   try {
     const timestamp = Date.now();
-    const payload = attachSaveTreeMeta({
+    // 片 5e（D4）封版剥离：queueTasks 仅限叶子/工作区合法字段，初始 checkpoint 不得携带。
+    // 经 取Story覆盖字段（已剥离 queueTasks）+ 三个顶层键显式选取，不走整体展开。
+    const payload = {
       id: 0,
       type: 'auto' as const,
       timestamp,
-      ...fields,
+      ...取Story覆盖字段(fields),
+      macroGlobalVars: fields.macroGlobalVars,
+      worldbookTriggerStates: fields.worldbookTriggerStates,
+      pendingOpeningTrigger: fields.pendingOpeningTrigger,
       gameSettings: buildSaveGameSettingsSnapshot(device.gameSettings),
       apiSettings: device.apiSettings,
       theme: device.theme,
-    }, buildNextSaveTreeMeta({
+    } as 存档数据;
+    const checkpointPayload = attachSaveTreeMeta(payload, buildNextSaveTreeMeta({
       previous: null,
       type: 'auto',
       timestamp,
     }));
+    assertCheckpointPayloadNoQueueTasks(checkpointPayload, 'new-game');
 
-    const checkpointId = await saveGame(payload);
-    devLog('save', 'new-game-checkpoint-written', { checkpointId, nodeId: (payload as SaveWithTree).saveTree?.nodeId ?? null });
-    await saveNewestStory(清空NewestStory记录(创建空NewestStory记录(), checkpointId));
-    devLog('save', 'new-game-newest-cleared', { checkpointId });
-    commitActiveSaveTreeMeta(payload);
+    const checkpointId = await saveGame(checkpointPayload);
+    devLog('save', 'new-game-checkpoint-written', { checkpointId, nodeId: (checkpointPayload as SaveWithTree).saveTree?.nodeId ?? null });
+    // 片 5e（D4）写回：queueTasks 是工作区字段，清空 newest 后写回（新局为空队列），
+    // 保证回合内队列展示与刷新回放不丢；读档后的空队列符合 D4 预期，不做「修复」回填。
+    const cleared = 清空NewestStory记录(创建空NewestStory记录(), checkpointId);
+    // fields.queueTasks 是 NewestStory字段集 必填字段，新局恒为 []，直接写回。
+    cleared.story.queueTasks = fields.queueTasks;
+    await saveNewestStory(cleared);
+    devLog('save', 'new-game-newest-cleared', { checkpointId, queueTasksKept: true });
+    commitActiveSaveTreeMeta(checkpointPayload);
     return { checkpointId };
   } catch (error) {
     devLogError('save', 'new-game-checkpoint-failed', error);
@@ -166,14 +184,28 @@ export async function commitTurn(
     d.worldbookTriggerStatesAfterTurn ?? newest.story.worldbookTriggerStates ?? 残留运行态键.worldbookTriggerStates;
   payload.pendingOpeningTrigger = state.pendingOpeningTrigger ?? null;
 
+  // 片 5e（D4）运行时断言兜底：两处组装路径已剥离，这里是封版写入前的最后防线
+  assertCheckpointPayloadNoQueueTasks(payload, 'commit-turn');
   const checkpointId = await saveGame(payload);
 
   // D2-A：清空 newest，base 指向新 checkpoint。
   // 注意：saveGame + saveNewestStory 之间不加 abort 守卫——二者是原子对，
   // 一旦开始必须双双完成（否则会出现「节点已封版但 newest 未清空」的半提交态，
   // 续跑会二次封版同内容节点，违反 L2）。
-  await saveNewestStory(清空NewestStory记录(newest, checkpointId));
+  // 片 5e（D4）写回：queueTasks 是工作区字段，清空后写回 newest（不清空该字段），
+  // 保证回合内队列展示与刷新回放不丢；读档后的空队列符合 D4 预期，不做「修复」回填。
+  const cleared = 清空NewestStory记录(newest, checkpointId);
+  const queueTasks = newest.story.queueTasks;
+  if (queueTasks !== undefined) {
+    cleared.story.queueTasks = queueTasks;
+  }
+  await saveNewestStory(cleared);
   assertWorkflowActive();
+  devLog('save', 'checkpoint-committed', {
+    checkpointId,
+    queueTasksStrippedFromPayload: true,
+    queueTasksKeptInWorkspace: queueTasks !== undefined,
+  });
 
   // saveTree 元信息联动：后续手动/自动存档以此 checkpoint 为树上前驱。
   commitActiveSaveTreeMeta(payload);

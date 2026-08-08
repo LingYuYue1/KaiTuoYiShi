@@ -56,7 +56,6 @@ import {
   clearWorkflowRecoveryJournal,
   isResumableWorkspace,
   loadWorkflowRecoveryJournal,
-  type WorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { deleteSetting, loadNewestStory, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave } from '@/services/dbService';
@@ -65,7 +64,8 @@ import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
 import { devLogError } from '@/utils/devLog';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
-import { TURN_STATUS_IDLE, type TurnStatus } from '@/hooks/useGame/turnStatus';
+import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
+import { useActiveWorkflow, type ActiveWorkflowStore } from '@/hooks/useGame/activeWorkflow';
 
 const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
@@ -233,28 +233,12 @@ export interface UseGameStateReturn {
   setWorldbooks: React.Dispatch<React.SetStateAction<世界书[]>>;
   hasSave: boolean;
   setHasSave: React.Dispatch<React.SetStateAction<boolean>>;
-  loading: boolean;
-  setLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  /** 输入区状态条的唯一状态源（turnStatus.ts），管线在相位边界写入。 */
-  turnStatus: TurnStatus;
-  setTurnStatus: React.Dispatch<React.SetStateAction<TurnStatus>>;
-  liveRecallSummary: string;
-  setLiveRecallSummary: React.Dispatch<React.SetStateAction<string>>;
-  liveRecallFullContent: string;
-  setLiveRecallFullContent: React.Dispatch<React.SetStateAction<string>>;
-  /** 变量模型校准正在跑（正文已落地，变量在结算中）。期间禁止发下一轮。 */
-  pendingVariable: boolean;
-  setPendingVariable: React.Dispatch<React.SetStateAction<boolean>>;
   turnCount: number;
   setTurnCount: React.Dispatch<React.SetStateAction<number>>;
   pendingOpeningTrigger: string | null;
   setPendingOpeningTrigger: React.Dispatch<React.SetStateAction<string | null>>;
-  interruptedWorkflow: WorkflowRecoveryJournal | null;
-  setInterruptedWorkflow: React.Dispatch<React.SetStateAction<WorkflowRecoveryJournal | null>>;
-  sessionEpoch: number;
-  setSessionEpoch: React.Dispatch<React.SetStateAction<number>>;
-  rerollContextRef: React.RefObject<{ nonce: string; previousResponse: string } | null>;
-  abortControllerRef: React.RefObject<AbortController | null>;
+  /** 片 5e（路线图 #2）：C 类工作流瞬时态的唯一管理对象（loading/turnStatus/召回摘要/待结算/中断/会话身份/中止与重roll 引用）。 */
+  activeWorkflow: ActiveWorkflowStore;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -279,21 +263,17 @@ export function useGameState(): UseGameStateReturn {
   const [currentTheme, setCurrentTheme] = useState<主题预设>('deepspace');
   const [worldbooks, setWorldbooks] = useState<世界书[]>([]);
   const [hasSave, setHasSave] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [turnStatus, setTurnStatus] = useState<TurnStatus>(TURN_STATUS_IDLE);
-  const [liveRecallSummary, setLiveRecallSummary] = useState('');
-  const [liveRecallFullContent, setLiveRecallFullContent] = useState('');
-  const [pendingVariable, setPendingVariable] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
-  const [interruptedWorkflow, setInterruptedWorkflow] = useState<WorkflowRecoveryJournal | null>(null);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const rerollContextRef = useRef<{ nonce: string; previousResponse: string } | null>(null);
-  const [sessionEpoch, setSessionEpoch] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bootReadyRef = useRef(false);
   const stateRef = useRef<UseGameStateReturn | null>(null);
+
+  // 片 5e（路线图 #2）：C 类工作流瞬时态收拢到 activeWorkflow 单一管理对象。
+  const activeWorkflow = useActiveWorkflow();
+  // 解构出稳定 setter 供 mount 一次性 boot effect 使用（set 前缀即被 react-hooks 视为稳定引用）。
+  const { setInterruptedWorkflow, setTurnStatus } = activeWorkflow;
 
   const state: UseGameStateReturn = {
     view, setView,
@@ -316,17 +296,10 @@ export function useGameState(): UseGameStateReturn {
     currentTheme, setCurrentTheme,
     worldbooks, setWorldbooks,
     hasSave, setHasSave,
-    loading, setLoading,
-    turnStatus, setTurnStatus,
-    liveRecallSummary, setLiveRecallSummary,
-    liveRecallFullContent, setLiveRecallFullContent,
-    pendingVariable, setPendingVariable,
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
-    interruptedWorkflow, setInterruptedWorkflow,
-    sessionEpoch, setSessionEpoch,
-    rerollContextRef,
-    abortControllerRef, scrollRef,
+    activeWorkflow,
+    scrollRef,
   };
 
   useLayoutEffect(() => {
@@ -537,7 +510,8 @@ export function useGameState(): UseGameStateReturn {
         });
       }
     })();
-  }, []);
+    // setter 恒稳定（React useState 身份保证），deps 不变即 mount 一次性执行
+  }, [setInterruptedWorkflow, setTurnStatus]);
 
   // Persist the last active UI view after boot has finished reading it.
   useEffect(() => {

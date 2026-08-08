@@ -73,22 +73,28 @@ export async function executeSendWorkflow(
     : '';
 
   // Abort previous request
-  state.abortControllerRef.current?.abort();
+  state.activeWorkflow.abortControllerRef.current?.abort();
   const abortController = new AbortController();
-  state.abortControllerRef.current = abortController;
-  const isCurrentWorkflow = () => state.abortControllerRef.current === abortController;
+  state.activeWorkflow.abortControllerRef.current = abortController;
+  const isCurrentWorkflow = () => state.activeWorkflow.abortControllerRef.current === abortController;
   const assertWorkflowActive = () => {
     if (abortController.signal.aborted || !isCurrentWorkflow()) {
       throw new DOMException('Workflow aborted', 'AbortError');
     }
   };
 
+  devLog('turn', 'workflow-start', {
+    role: 'main',
+    turn: turnCountAtStart,
+    isOpeningSystemTrigger,
+    input: userInput.slice(0, 48),
+  });
   deps.onBeforeSend();
-  state.setLoading(true);
+  state.activeWorkflow.setLoading(true);
   setStreamingMessage('');
-  state.setTurnStatus({ kind: 'searching', text: '忆庭召回 / 智库检索中' });
-  state.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
-  state.setLiveRecallFullContent('');
+  state.activeWorkflow.setTurnStatus({ kind: 'searching', text: '忆庭召回 / 智库检索中' });
+  state.activeWorkflow.setLiveRecallSummary('智库召回：检索中\n记忆召回：检索中');
+  state.activeWorkflow.setLiveRecallFullContent('');
   pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true }, turnCountAtStart, queueTasksMirror);
   let pendingVariableStarted = false;
   let keepTurnStatus = false;
@@ -202,9 +208,9 @@ export async function executeSendWorkflow(
         return;
       }
       if (recoveryJournal.phase === 'variable_settlement' && recoveryJournal.assistantMessageId) {
-        state.setInterruptedWorkflow(recoveryJournal);
+        state.activeWorkflow.setInterruptedWorkflow(recoveryJournal);
         // 结算中断的通知由 App 的中断横幅（继续结算 / 放弃）承载，状态条不重复展示
-        state.setTurnStatus(TURN_STATUS_IDLE);
+        state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
         devLog('recover', 'abort-keep-settlement', {
           workflowId: recoveryJournal.workflowId,
         });
@@ -217,7 +223,7 @@ export async function executeSendWorkflow(
         await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(rollbackStoryWeaving));
       }
       await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
-      state.setTurnStatus({ kind: 'stopped', text: '已停止生成，本次输入已回到输入框，可修改后重新发送。' });
+      state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '已停止生成，本次输入已回到输入框，可修改后重新发送。' });
       keepTurnStatus = true;
     } else {
       devLogError('turn', 'executeSendWorkflow.catch', err);
@@ -235,7 +241,7 @@ export async function executeSendWorkflow(
         });
       }
       const failCount = state.gameSettings.autoRetryOnError ? Math.max(1, state.gameSettings.autoRetryCount) : 1;
-      state.setTurnStatus({ kind: 'failed', text: `主流程失败：${detail}`, failCount });
+      state.activeWorkflow.setTurnStatus({ kind: 'failed', text: `主流程失败：${detail}`, failCount });
       pushQueueTask(state, 'main_story', 'failed', {
         detail,
         failCount,
@@ -245,20 +251,26 @@ export async function executeSendWorkflow(
     visibilityPublisher?.dispose();
     streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
-      state.setLoading(false);
+      state.activeWorkflow.setLoading(false);
       setStreamingMessage('');
       if (!keepTurnStatus) {
-        state.setTurnStatus(TURN_STATUS_IDLE);
+        state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
       }
-      state.setPendingVariable(false);
+      state.activeWorkflow.setPendingVariable(false);
       if (!pendingVariableStarted) {
         pushQueueTask(state, 'memory', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
         pushQueueTask(state, 'variable', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
         pushQueueTask(state, 'news', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
         pushQueueTask(state, 'autosave', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
       }
-      state.abortControllerRef.current = null;
+      state.activeWorkflow.abortControllerRef.current = null;
       deps.onAfterSend();
+      devLog('turn', 'workflow-end', {
+        role: 'main',
+        turn: turnCountAtStart,
+        keepTurnStatus,
+        pendingVariableStarted,
+      });
     }
   }
 }

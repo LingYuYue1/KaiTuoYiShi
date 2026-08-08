@@ -22,7 +22,7 @@ function rawTextFromParsed(parsed: 解析后回复): string | undefined {
 
 export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boolean> {
   let { state } = deps;
-  const journal = state.interruptedWorkflow;
+  const journal = state.activeWorkflow.interruptedWorkflow;
   const config = deps.getActiveConfig();
   let newest = await loadNewestStory();
 
@@ -31,15 +31,15 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
       await clearWorkflowRecoveryJournal(journal.workflowId);
       devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'workspace-invalid' });
     }
-    state.setInterruptedWorkflow(null);
-    state.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
+    state.activeWorkflow.setInterruptedWorkflow(null);
+    state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
     return false;
   }
   if (!config) {
     alert('请先在设置中配置API');
     await clearWorkflowRecoveryJournal(journal.workflowId);
-    state.setInterruptedWorkflow(null);
-    state.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
+    state.activeWorkflow.setInterruptedWorkflow(null);
+    state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
     devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'config-missing' });
     return false;
   }
@@ -130,10 +130,10 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     zhikuPreview: null,
   };
 
-  state.abortControllerRef.current?.abort();
+  state.activeWorkflow.abortControllerRef.current?.abort();
   const abortController = new AbortController();
-  state.abortControllerRef.current = abortController;
-  const isCurrentWorkflow = () => state.abortControllerRef.current === abortController;
+  state.activeWorkflow.abortControllerRef.current = abortController;
+  const isCurrentWorkflow = () => state.activeWorkflow.abortControllerRef.current === abortController;
   const assertWorkflowActive = () => {
     if (abortController.signal.aborted || !isCurrentWorkflow()) {
       throw new DOMException('Workflow aborted', 'AbortError');
@@ -171,10 +171,10 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   };
 
   deps.onBeforeSend();
-  state.setLoading(true);
+  state.activeWorkflow.setLoading(true);
   setStreamingMessage('');
-  state.setTurnStatus({ kind: 'settling', text: '正在继续结算中断回合的变量与后台任务' });
-  state.setPendingVariable(true);
+  state.activeWorkflow.setTurnStatus({ kind: 'settling', text: '正在继续结算中断回合的变量与后台任务' });
+  state.activeWorkflow.setPendingVariable(true);
   devLog('recover', 'resume-start', { workflowId: journal.workflowId, phase: journal.phase, turn: turnCountAtStart });
 
   let keepTurnStatus = false;
@@ -191,7 +191,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     } else {
       await runTurnTail(ctx, d, newest);
     }
-    state.setInterruptedWorkflow(null);
+    state.activeWorkflow.setInterruptedWorkflow(null);
     devLog('recover', 'resume-complete', { workflowId: journal.workflowId, turn: turnCountAtStart });
     return true;
   } catch (error) {
@@ -202,23 +202,23 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
       }
       // 停止续跑：interruptedWorkflow 仍在，由 App 的中断横幅承载「继续结算」入口，状态条回到 idle
       setStreamingMessage('');
-      state.setTurnStatus(TURN_STATUS_IDLE);
+      state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
       return false;
     }
     devLogError('recover', 'resume-failed', error, { workflowId: journal.workflowId });
-    state.setTurnStatus({ kind: 'failed', text: '继续结算失败，可再次重试。', failCount: 1 });
+    state.activeWorkflow.setTurnStatus({ kind: 'failed', text: '继续结算失败，可再次重试。', failCount: 1 });
     keepTurnStatus = true;
     return false;
   } finally {
     streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
-      state.setLoading(false);
+      state.activeWorkflow.setLoading(false);
       setStreamingMessage('');
       if (!keepTurnStatus) {
-        state.setTurnStatus(TURN_STATUS_IDLE);
+        state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
       }
-      state.setPendingVariable(false);
-      state.abortControllerRef.current = null;
+      state.activeWorkflow.setPendingVariable(false);
+      state.activeWorkflow.abortControllerRef.current = null;
       deps.onAfterSend();
     }
   }

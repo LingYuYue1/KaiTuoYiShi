@@ -73,38 +73,38 @@ export function useGame(): UseGameReturn {
   const handleSend = useCallback(
     async (text: string) => {
       const s = stateRef.current;
-      if (s.interruptedWorkflow) {
-        await clearWorkflowRecoveryJournal(s.interruptedWorkflow.workflowId);
+      if (s.activeWorkflow.interruptedWorkflow) {
+        await clearWorkflowRecoveryJournal(s.activeWorkflow.interruptedWorkflow.workflowId);
       }
-      s.setInterruptedWorkflow(null);
+      s.activeWorkflow.setInterruptedWorkflow(null);
       await executeSendWorkflow(text, {
         state: s,
         getActiveConfig,
         onBeforeSend: () => {},
         onAfterSend: () => {
-          stateRef.current.rerollContextRef.current = null;
+          stateRef.current.activeWorkflow.rerollContextRef.current = null;
         },
-        rerollContext: stateRef.current.rerollContextRef.current,
+        rerollContext: stateRef.current.activeWorkflow.rerollContextRef.current,
       });
     },
     [getActiveConfig],
   );
 
   const handleAbort = useCallback(() => {
-    stateRef.current.abortControllerRef.current?.abort();
+    stateRef.current.activeWorkflow.abortControllerRef.current?.abort();
   }, []);
 
   const handleResumeInterruptedWorkflow = useCallback(async (): Promise<boolean> => {
     const s = stateRef.current;
-    if (s.loading || s.pendingVariable) return false;
-    s.abortControllerRef.current?.abort();
+    if (s.activeWorkflow.loading || s.activeWorkflow.pendingVariable) return false;
+    s.activeWorkflow.abortControllerRef.current?.abort();
     return executeResumeWorkflow({
       state: s,
       getState: () => stateRef.current,
       getActiveConfig,
       onBeforeSend: () => {},
       onAfterSend: () => {
-        stateRef.current.rerollContextRef.current = null;
+        stateRef.current.activeWorkflow.rerollContextRef.current = null;
       },
       rerollContext: null,
     });
@@ -112,16 +112,16 @@ export function useGame(): UseGameReturn {
 
   const handleAbandonInterruptedWorkflow = useCallback(async (): Promise<void> => {
     const s = stateRef.current;
-    const interrupted = s.interruptedWorkflow;
+    const interrupted = s.activeWorkflow.interruptedWorkflow;
     if (interrupted) await clearWorkflowRecoveryJournal(interrupted.workflowId);
-    s.setInterruptedWorkflow(null);
-    s.setTurnStatus(TURN_STATUS_IDLE);
+    s.activeWorkflow.setInterruptedWorkflow(null);
+    s.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
   }, []);
 
   const handleNewGame = useCallback(() => {
     const s = stateRef.current;
-    void clearWorkflowRecoveryJournal(s.interruptedWorkflow?.workflowId);
-    s.setInterruptedWorkflow(null);
+    void clearWorkflowRecoveryJournal(s.activeWorkflow.interruptedWorkflow?.workflowId);
+    s.activeWorkflow.setInterruptedWorkflow(null);
     s.setView('new_game');
   }, []);
 
@@ -131,7 +131,7 @@ export function useGame(): UseGameReturn {
 
   const handleGoHome = useCallback(() => {
     const s = stateRef.current;
-    s.abortControllerRef.current?.abort();
+    s.activeWorkflow.abortControllerRef.current?.abort();
     s.setView('home');
   }, []);
 
@@ -144,12 +144,12 @@ export function useGame(): UseGameReturn {
   // 防止重 roll 后上一次的 NPC / 新闻等副作用与新一次的叠加。
   const handleReroll = useCallback(async (): Promise<string | undefined> => {
     const s = stateRef.current;
-    if (s.loading || s.pendingVariable) {
-      s.setTurnStatus({ kind: 'stopped', text: '后台结算尚未完成，稍等完成后再重roll，避免记忆/忆庭/变量写入错位。' });
+    if (s.activeWorkflow.loading || s.activeWorkflow.pendingVariable) {
+      s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '后台结算尚未完成，稍等完成后再重roll，避免记忆/忆庭/变量写入错位。' });
       return;
     }
-    s.abortControllerRef.current?.abort();
-    s.abortControllerRef.current = null;
+    s.activeWorkflow.abortControllerRef.current?.abort();
+    s.activeWorkflow.abortControllerRef.current = null;
     const history = s.chatHistory;
 
     // 特殊情况：最后一条是 user 且没有对应的 assistant，说明本回合主剧情生成失败了。
@@ -162,7 +162,7 @@ export function useGame(): UseGameReturn {
       const trimmed = history.slice(0, -1);
       s.setChatHistory(trimmed);
       setStreamingMessage('');
-      s.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。' });
+      s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。' });
       if (snapshot) {
         const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
         await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
@@ -170,7 +170,7 @@ export function useGame(): UseGameReturn {
         s.setTurnCount(Math.max(1, s.turnCount - 1));
       }
       // 生成失败的重 roll 不需要 rerollContext（没有上一版回复可比对）
-      s.rerollContextRef.current = null;
+      s.activeWorkflow.rerollContextRef.current = null;
       return userInput;
     }
 
@@ -196,7 +196,7 @@ export function useGame(): UseGameReturn {
     const userInput = history[lastUserIdx].content;
     const snapshot = history[lastAiIdx].preTurnSnapshot;
     const previousResponse = history[lastAiIdx].parsedResponse?.body || history[lastAiIdx].content || '';
-    s.rerollContextRef.current = {
+    s.activeWorkflow.rerollContextRef.current = {
       nonce: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       previousResponse,
     };
@@ -205,7 +205,7 @@ export function useGame(): UseGameReturn {
     const trimmed = history.slice(0, lastUserIdx);
     s.setChatHistory(trimmed);
     setStreamingMessage('');
-    s.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。' });
+    s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。' });
     if (snapshot) {
       const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
       await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
@@ -329,7 +329,7 @@ export function useGame(): UseGameReturn {
       apiSettings: s.apiSettings,
       theme: s.currentTheme,
     });
-    s.setSessionEpoch((e) => e + 1);
+    s.activeWorkflow.setSessionEpoch((e) => e + 1);
   }, []);
 
   const getContextSnapshot = useCallback((kind?: ContextSnapshotKind) => {

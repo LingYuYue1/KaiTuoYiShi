@@ -382,7 +382,7 @@ export function App() {
     const title = CANCELLABLE_TASK_TITLES[id];
     if (!title) return;
 
-    state.abortControllerRef.current?.abort();
+    state.activeWorkflow.abortControllerRef.current?.abort();
     state.setQueueTasks((prev) => [
       ...prev,
       {
@@ -395,15 +395,15 @@ export function App() {
         cancelled: true,
       },
     ]);
-    state.setPendingVariable(false);
-    state.setLoading(false);
+    state.activeWorkflow.setPendingVariable(false);
+    state.activeWorkflow.setLoading(false);
     setStreamingMessage('');
   }, [
-    state.abortControllerRef,
+    state.activeWorkflow.abortControllerRef,
     state.setQueueTasks,
     state.turnCount,
-    state.setPendingVariable,
-    state.setLoading,
+    state.activeWorkflow.setPendingVariable,
+    state.activeWorkflow.setLoading,
   ]);
   const handlePathAwakeningTrigger = useCallback(() => {
     void actions.handleSend('[系统] 踏入命途狭间');
@@ -461,7 +461,7 @@ export function App() {
     return getCurrentStoryChapterLabel(state.剧情编织);
   }, [state.剧情编织]);
   const latestRecallSummary = useMemo(() => {
-    if (state.loading && state.liveRecallSummary.trim()) return state.liveRecallSummary.trim();
+    if (state.activeWorkflow.loading && state.activeWorkflow.liveRecallSummary.trim()) return state.activeWorkflow.liveRecallSummary.trim();
     const latest = [...state.chatHistory]
       .reverse()
       .find((msg) =>
@@ -474,9 +474,9 @@ export function App() {
     return latest?.debugContext?.recallSummary?.trim()
       || latest?.debugContext?.zhikuRecallPreview?.trim()
       || '';
-  }, [state.chatHistory, state.liveRecallSummary, state.loading]);
+  }, [state.chatHistory, state.activeWorkflow.liveRecallSummary, state.activeWorkflow.loading]);
   const latestRecallFullContent = useMemo(() => {
-    if (state.loading && state.liveRecallFullContent.trim()) return state.liveRecallFullContent.trim();
+    if (state.activeWorkflow.loading && state.activeWorkflow.liveRecallFullContent.trim()) return state.activeWorkflow.liveRecallFullContent.trim();
     const latest = [...state.chatHistory]
       .reverse()
       .find((msg) =>
@@ -489,7 +489,7 @@ export function App() {
     return latest?.debugContext?.recallFullContent?.trim()
       || latest?.debugContext?.zhikuRecallInjection?.trim()
       || '';
-  }, [state.chatHistory, state.liveRecallFullContent, state.loading]);
+  }, [state.chatHistory, state.activeWorkflow.liveRecallFullContent, state.activeWorkflow.loading]);
 
   const actionOptions = useMemo(() => (
     [...state.chatHistory]
@@ -508,21 +508,21 @@ export function App() {
   );
 
   const recoveryDraft = useMemo(() => (
-    state.interruptedWorkflow?.phase === 'main_request' ? {
-      workflowId: state.interruptedWorkflow.workflowId,
-      input: state.interruptedWorkflow.input,
+    state.activeWorkflow.interruptedWorkflow?.phase === 'main_request' ? {
+      workflowId: state.activeWorkflow.interruptedWorkflow.workflowId,
+      input: state.activeWorkflow.interruptedWorkflow.input,
     } : null
-  ), [state.interruptedWorkflow]);
+  ), [state.activeWorkflow.interruptedWorkflow]);
 
   // 回合忙碌门：主流程或变量结算任一在跑，就禁止变更类操作（发送/编辑/触发）。
   // loading 与 pendingVariable 是管线的两条独立轨道，这里只在 UI 层合成展示用谓词。
-  const turnBusy = state.loading || state.pendingVariable;
+  const turnBusy = state.activeWorkflow.loading || state.activeWorkflow.pendingVariable;
 
   // 自动触发第 0 回合：handleStartGame 把触发文本写入 pendingOpeningTrigger，
   // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
   // 注意：先清空再 send，避免 React 18 StrictMode 下重复触发。
   useEffect(() => {
-    if (state.view === 'game' && state.pendingOpeningTrigger && !state.interruptedWorkflow) {
+    if (state.view === 'game' && state.pendingOpeningTrigger && !state.activeWorkflow.interruptedWorkflow) {
       const text = state.pendingOpeningTrigger;
       state.setPendingOpeningTrigger(null);
       void actions.handleSend(text);
@@ -594,13 +594,13 @@ export function App() {
       <VariableDrawer
         batches={state.variableBatches}
         tasks={state.queueTasks}
-        pending={state.pendingVariable}
+        pending={state.activeWorkflow.pendingVariable}
         onRetryTask={actions.handleRetryQueueTask}
         onCancelTask={handleCancelTask}
       />
       <ChatList
         messages={state.chatHistory}
-        loading={state.loading}
+        loading={state.activeWorkflow.loading}
         scrollRef={state.scrollRef}
         npcRecords={state.NPC}
         traveler={state.旅人}
@@ -617,7 +617,7 @@ export function App() {
         onTrigger={handlePathAwakeningTrigger}
         disabled={turnBusy}
       />
-      {state.interruptedWorkflow && state.interruptedWorkflow.phase !== 'main_request'
+      {state.activeWorkflow.interruptedWorkflow && state.activeWorkflow.interruptedWorkflow.phase !== 'main_request'
         && !turnBusy ? (
           <div
             className="mx-3 mb-2 flex flex-wrap items-center gap-2 border px-3 py-2 text-sm"
@@ -648,11 +648,11 @@ export function App() {
           </div>
         ) : null}
       <InputArea
-        key={state.sessionEpoch}
+        key={state.activeWorkflow.sessionEpoch}
         onSend={actions.handleSend}
         onAbort={actions.handleAbort}
-        loading={state.loading}
-        disabled={state.pendingVariable}
+        loading={state.activeWorkflow.loading}
+        disabled={state.activeWorkflow.pendingVariable}
         canRestartOpening={state.turnCount <= 5}
         canReroll={canReroll}
         onRestartOpening={() => {
@@ -661,7 +661,7 @@ export function App() {
         onReroll={actions.handleReroll}
         streamingEnabled={state.gameSettings.enableStreaming}
         onToggleStreaming={handleToggleStreaming}
-        turnStatus={state.turnStatus}
+        turnStatus={state.activeWorkflow.turnStatus}
         onCancelWorkflow={actions.handleAbort}
         actionOptions={actionOptions}
         recoveryDraft={recoveryDraft}

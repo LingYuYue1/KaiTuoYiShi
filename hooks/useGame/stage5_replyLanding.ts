@@ -186,10 +186,10 @@ export async function stage5_replyLanding(
   // 投影点（B2 定性）：回合数须立即刷新 UI；管线读 ctx，不回读此 state
   state.setTurnCount((prev) => prev + 1);
   streamMessageSetter.flush('');
-  state.setLoading(false);
-  state.setPendingVariable(true);
+  state.activeWorkflow.setLoading(false);
+  state.activeWorkflow.setPendingVariable(true);
   // 投影点（B2 定性）：正文已落地、后台结算开始 —— 状态条进入 settling 相位
-  state.setTurnStatus({ kind: 'settling', text: '正文已生成，正在结算记忆 / 变量 / 后台任务…' });
+  state.activeWorkflow.setTurnStatus({ kind: 'settling', text: '正文已生成，正在结算记忆 / 变量 / 后台任务…' });
 
   return {
     aiMsg,

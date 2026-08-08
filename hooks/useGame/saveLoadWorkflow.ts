@@ -65,10 +65,14 @@ export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nod
 // 共享的存档负载构造函数：手动 / 自动两条路径都走这一处，未来加字段只改一处。
 // overrides 用于 sendWorkflow 里那一刻 React state 还没回写、但已有新值的字段
 // （比如刚追加的 chatHistory、压缩过的 memorySystem）。
+//
+// 片 5e（D4）封版剥离：queueTasks 是叶子（工作区）合法字段、检查点非法字段，
+// 本构造函数不再写入 queueTasks —— 手动存档与 commitTurn 组装路径共用此函数，
+// 一处剥离全部生效；读档侧仍宽容读取旧存档残留（applySaveToState 兜底空数组）。
 export function buildSavePayload(
   state: UseGameStateReturn,
   type: 存档类型,
-  overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
+  overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches'>>,
   nodeId?: string,
 ): 存档数据 {
   const persistedChatHistory = compactChatHistoryForLongSession(
@@ -95,7 +99,6 @@ export function buildSavePayload(
     剧情: overrides?.剧情 ?? state.剧情,
     剧情编织: 归一化剧情编织系统(overrides?.剧情编织 ?? state.剧情编织),
     variableBatches: compactVariableBatchHistory(overrides?.variableBatches ?? state.variableBatches),
-    queueTasks: overrides?.queueTasks ?? state.queueTasks,
     // 片 5a-2 D3：存档内 gameSettings 为纯 Device/Content（两运行态键迁顶层），
     // 与 saveSetting 单点剥离 + commitTurn 组装保持一致，避免读侧迁移取到陈旧副本。
     gameSettings: snapshotSettings,
@@ -124,6 +127,23 @@ export function buildSavePayload(
 
 export function commitActiveSaveTreeMeta(save: 存档数据): void {
   activeSaveTreeMeta = getSaveTreeMeta(save);
+}
+
+/**
+ * 片 5e（D4）运行时断言兜底：检查点写入前核验载荷不携带 queueTasks。
+ * queueTasks 仅限叶子（工作区）合法字段，不得进入检查点（saves 表）。
+ * 静态核验见 scripts/check-kernel.sh 的 L12 棘轮；本断言是最后防线——
+ * 若未来组装路径漏剥，这里宁可让本次写入失败，也不让脏字段落盘。
+ * 调用点：commitTurn / 初始化新局checkpoint / handleManualSave 的 saveGame 之前。
+ */
+export function assertCheckpointPayloadNoQueueTasks(payload: 存档数据, label: string): void {
+  const value = (payload as { queueTasks?: unknown }).queueTasks;
+  if (value === undefined) return;
+  devLogError('save', 'checkpoint-queueTasks-guard', `[D4] queueTasks 泄漏进检查点载荷（${label}），封版写入中止`, {
+    label,
+    queueTasksCount: Array.isArray(value) ? value.length : 'non-array',
+  });
+  throw new Error(`[D4] queueTasks 不得进入检查点载荷：${label}`);
 }
 
 export function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
@@ -243,24 +263,32 @@ function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings:
   };
 }
 
+/**
+ * beginSession —— D5 会话拆除的唯一入口（ideal_design.md §1.5）。
+ * 中止旧控制器、清空 reroll 引用、放弃中断工作流与恢复日志、
+ * 清空全部工作流 UI 投影（loading / 状态条 / 召回摘要 / 待结算）。
+ * 只清理 C 类瞬时态与资源，不触碰 A 类领域切片，不产生存储副作用。
+ */
 export async function beginSession(state: UseGameStateReturn): Promise<void> {
-  const abortControllerRef = state.abortControllerRef;
-  abortControllerRef.current?.abort();
-  abortControllerRef.current = null;
-  const rerollContextRef = state.rerollContextRef;
-  rerollContextRef.current = null;
-  const interrupted = state.interruptedWorkflow;
+  const aw = state.activeWorkflow;
+  aw.abortControllerRef.current?.abort();
+  aw.abortControllerRef.current = null;
+  aw.rerollContextRef.current = null;
+  const interrupted = aw.interruptedWorkflow;
   if (interrupted) {
     await clearWorkflowRecoveryJournal(interrupted.workflowId);
-    state.setInterruptedWorkflow(null);
+    aw.setInterruptedWorkflow(null);
     devLog('recover', 'session-begin-abandon-interrupted', { workflowId: interrupted.workflowId });
   }
-  state.setLoading(false);
-  state.setTurnStatus(TURN_STATUS_IDLE);
-  state.setPendingVariable(false);
-  state.setLiveRecallSummary('');
-  state.setLiveRecallFullContent('');
+  aw.setLoading(false);
+  aw.setTurnStatus(TURN_STATUS_IDLE);
+  aw.setPendingVariable(false);
+  aw.setLiveRecallSummary('');
+  aw.setLiveRecallFullContent('');
   setStreamingMessage('');
+  devLog('recover', 'begin-session-teardown', {
+    abandonedInterrupted: Boolean(interrupted),
+  });
 }
 
 export async function enterSession(
@@ -290,7 +318,10 @@ export async function enterSession(
     await applySaveToState(save, state);
   }
   state.setPendingOpeningTrigger(null);
-  state.setSessionEpoch((e) => e + 1);
+  // D5：会话身份单调递增，App 据此 key 重挂载 InputArea（会话本地状态归零）
+  const nextEpoch = state.activeWorkflow.sessionEpoch + 1;
+  state.activeWorkflow.setSessionEpoch(nextEpoch);
+  devLog('recover', 'session-epoch-increment', { epoch: nextEpoch, entry: 'enter-session' });
 }
 
 export async function handleLoadLatest(
@@ -353,6 +384,8 @@ export async function bootRestoreFromNewest(
 
 export async function handleManualSave(state: UseGameStateReturn): Promise<number> {
   const payload = buildSavePayload(state, 'manual');
+  // 片 5e（D4）运行时断言兜底：手动存档同样是检查点，queueTasks 不得落盘
+  assertCheckpointPayloadNoQueueTasks(payload, 'manual');
   const id = await saveGame(payload);
   commitActiveSaveTreeMeta(payload);
   return id;
@@ -401,12 +434,12 @@ export async function applySaveToState(
   opts: { clearNewest?: boolean; restorePendingOpeningTrigger?: boolean } = {},
 ): Promise<void> {
   const { clearNewest = true, restorePendingOpeningTrigger = false } = opts;
-  state.setLoading(false);
+  state.activeWorkflow.setLoading(false);
   setStreamingMessage('');
-  state.setPendingVariable(false);
-  state.setTurnStatus(TURN_STATUS_IDLE);
-  state.setLiveRecallSummary('');
-  state.setLiveRecallFullContent('');
+  state.activeWorkflow.setPendingVariable(false);
+  state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
+  state.activeWorkflow.setLiveRecallSummary('');
+  state.activeWorkflow.setLiveRecallFullContent('');
   // 片 5a-2 D3 读取侧迁移：旧档 gameSettings 仍含两运行态键时迁至存档顶层并置空原键；
   // 迁出值并入内存 state.gameSettings 两键（读者保持现状）。纯函数，不回写旧档。
   const { save: 迁移后存档, macroGlobalVars, worldbookTriggerStates } = 迁移存档运行态键(save);
