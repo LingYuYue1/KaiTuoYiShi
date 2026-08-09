@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
+import { useDeviceSettings } from '@/hooks/useDeviceSettings';
 import { LandingPage } from '@/components/layout/LandingPage';
 import { GameView } from '@/components/layout/GameView';
 import { TopBar } from '@/components/layout/TopBar';
@@ -311,6 +312,7 @@ const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDU
 
 export function App() {
   const { state, actions } = useGame();
+  const { persistGameSettings, persistApiSettings, persistTheme, persistWorldbooks, persistApiProfile } = useDeviceSettings();
   const [showSettings, setShowSettings] = useState(false);
   const [showWorldbookManager, setShowWorldbookManager] = useState(false);
   const [showZhikuManager, setShowZhikuManager] = useState(false);
@@ -782,6 +784,10 @@ export function App() {
               onGameSettingsChange={state.setGameSettings}
               currentTheme={state.currentTheme}
               onThemeChange={state.setCurrentTheme}
+              onPersistGameSettings={persistGameSettings}
+              onPersistApiSettings={persistApiSettings}
+              onPersistTheme={persistTheme}
+              onPersistApiProfile={persistApiProfile}
               onSave={actions.handleSave}
               onContinue={actions.handleContinue}
               onLoadSave={loadSaveIntoGame}
@@ -805,7 +811,7 @@ export function App() {
 
                 state.setWorldbooks(books);
 
-                void saveSetting('worldbooks', books);
+                void persistWorldbooks(books);
 
               }}
               onDeleteSave={actions.handleDeleteSave}
@@ -971,6 +977,10 @@ export function App() {
             onGameSettingsChange={state.setGameSettings}
             currentTheme={state.currentTheme}
             onThemeChange={state.setCurrentTheme}
+            onPersistGameSettings={persistGameSettings}
+            onPersistApiSettings={persistApiSettings}
+            onPersistTheme={persistTheme}
+            onPersistApiProfile={persistApiProfile}
             onSave={actions.handleSave}
             onContinue={actions.handleContinue}
             onLoadSave={loadSaveIntoGame}
@@ -990,7 +1000,7 @@ export function App() {
             worldbooks={state.worldbooks}
             onWorldbooksChange={(books: 世界书[]) => {
               state.setWorldbooks(books);
-              void saveSetting('worldbooks', books);
+              void persistWorldbooks(books);
             }}
             onDeleteSave={actions.handleDeleteSave}
             onDeleteSaveTree={actions.handleDeleteSaveTree}

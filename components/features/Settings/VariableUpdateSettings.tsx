@@ -1,12 +1,13 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API配置项, API设置, 游戏设置, 变量API覆盖 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   gameSettings: 游戏设置;
   onGameSettingsChange: (s: 游戏设置) => void;
   apiSettings: API设置;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const smallClip =
@@ -31,6 +32,7 @@ export function VariableUpdateTab({
   gameSettings,
   onGameSettingsChange,
   apiSettings,
+  onPersistSettings,
 }: Props) {
   const enabled = gameSettings.enableVariableUpdate;
   const override = gameSettings.variableApi;
@@ -102,7 +104,7 @@ export function VariableUpdateTab({
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await saveSetting('gameSettings', gameSettings);
+      await onPersistSettings(gameSettings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '变量更新设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

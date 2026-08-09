@@ -12,7 +12,6 @@ import type {
   文生图预设接口路径,
   文生图词组转化器API覆盖,
 } from '@/models/settings';
-import { saveSetting } from '@/services/dbService';
 import { fetchModels } from '@/services/ai/apiTools';
 import { fetchComfyWorkflowCandidates, fetchImageGenerationModels, testImageGenerationConnection, type ComfyWorkflowCandidate } from '@/services/ai/imageGeneration';
 
@@ -20,6 +19,8 @@ interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   apiSettings: API设置;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 type Page = 'overview' | 'normal' | 'nsfw' | 'reference' | 'narrative' | 'tokenizer' | 'guide';
@@ -102,7 +103,7 @@ const modelSuggestions: Record<文生图后端类型, string[]> = {
 
 type WorkflowImportStatus = { tone: 'idle' | 'ok' | 'error'; text: string };
 
-export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
   const [activePage, setActivePage] = useState<Page>('overview');
   const [message, setMessage] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
@@ -194,7 +195,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
 
   const handleSave = async () => {
     try {
-      await saveSetting('gameSettings', settings);
+      await onPersistSettings(settings);
       setMessage('文生图设置已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);

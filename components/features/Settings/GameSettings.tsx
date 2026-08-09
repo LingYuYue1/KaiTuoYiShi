@@ -3,13 +3,14 @@ import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import type { 世界状态 } from '@/models/world';
 import { storyModes } from '@/data/journeyPresets';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   worldState: 世界状态;
   onWorldStateChange: (s: 世界状态) => void;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const smallClip =
@@ -83,14 +84,14 @@ const WRITING_STYLE_OPTIONS: { id: WritingStyleId | 'none'; label: string; desc:
   { id: 'none', label: '自定义', desc: '启用提示词模块里的「文风-自定义」槽位' },
 ];
 
-export function GameSettingsTab({ settings, onChange, worldState, onWorldStateChange }: Props) {
+export function GameSettingsTab({ settings, onChange, worldState, onWorldStateChange, onPersistSettings }: Props) {
   const activeWritingStyle = getActiveWritingStyle(settings.promptModules);
   const [saveMessage, setSaveMessage] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
 
   const handleSave = async () => {
     try {
-      await saveSetting('gameSettings', settings);
+      await onPersistSettings(settings);
       setSaveMessage('游戏设定已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);

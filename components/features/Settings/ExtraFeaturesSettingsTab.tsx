@@ -1,15 +1,16 @@
 import type { 游戏设置 } from '@/models/settings';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (settings: 游戏设置) => void;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
+export function ExtraFeaturesSettingsTab({ settings, onChange, onPersistSettings }: Props) {
   const cleanup = settings.额外功能.污染词清理;
   const tagHide = settings.额外功能.标签块隐藏;
   const patchCleanup = (patch: Partial<typeof cleanup>) => {
@@ -38,7 +39,7 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
   };
 
   const handleSave = async () => {
-    await saveSetting('gameSettings', settings);
+    await onPersistSettings(settings);
   };
 
   return (

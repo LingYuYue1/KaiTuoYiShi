@@ -21,6 +21,12 @@ interface Props {
   onChange: (s: API设置) => void;
   gameSettings: 游戏设置;
   onGameSettingsChange: (s: 游戏设置) => void;
+  /** 设置持久化用例动作（片 panel-p2）：apiSettings 落盘（handleSave 单写）。 */
+  onPersistApiSettings: (s: API设置) => Promise<void>;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘（子功能页签保存共用）。 */
+  onPersistGameSettings: (s: 游戏设置) => Promise<void>;
+  /** 设置持久化用例动作（片 panel-p2）：apiSettings + gameSettings 复合写（applyApiProfile 专用）。 */
+  onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
 }
 
 interface API配置包 {
@@ -269,7 +275,15 @@ function downloadApiProfile(profile: API配置包): void {
   URL.revokeObjectURL(url);
 }
 
-export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSettingsChange }: Props) {
+export function ApiSettingsTab({
+  settings,
+  onChange,
+  gameSettings,
+  onGameSettingsChange,
+  onPersistApiSettings,
+  onPersistGameSettings,
+  onPersistApiProfile,
+}: Props) {
   const [activeSubview, setActiveSubview] = useState<ApiSubview>('overview');
   const activeSubviewMeta = apiSubViews.find((item) => item.key === activeSubview) ?? apiSubViews[0];
 
@@ -282,6 +296,9 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
             onChange={onChange}
             gameSettings={gameSettings}
             onGameSettingsChange={onGameSettingsChange}
+            onPersistApiSettings={onPersistApiSettings}
+            onPersistGameSettings={onPersistGameSettings}
+            onPersistApiProfile={onPersistApiProfile}
           />
         );
       case 'variable':
@@ -290,20 +307,21 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
             gameSettings={gameSettings}
             onGameSettingsChange={onGameSettingsChange}
             apiSettings={settings}
+            onPersistSettings={onPersistGameSettings}
           />
         );
       case 'memory':
-        return <MemorySystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+        return <MemorySystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
       case 'yiting':
-        return <YitingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+        return <YitingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
       case 'news':
-        return <NewsSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+        return <NewsSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
       case 'zhiku':
-        return <ZhikuSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+        return <ZhikuSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
       case 'story':
-        return <StoryWeavingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+        return <StoryWeavingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
       case 'phone':
-        return <PhoneSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} />;
+        return <PhoneSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
     }
   };
 
@@ -398,7 +416,15 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
   );
 }
 
-function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettingsChange }: Props) {
+function ApiSettingsOverviewTab({
+  settings,
+  onChange,
+  gameSettings,
+  onGameSettingsChange,
+  onPersistApiSettings,
+  onPersistGameSettings,
+  onPersistApiProfile,
+}: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
     settings.activeConfigId ?? settings.configs[0]?.id,
   );
@@ -547,7 +573,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     };
     onChange(updated);
     try {
-      await saveSetting('apiSettings', updated);
+      await onPersistApiSettings(updated);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1800);
     } catch (e) {
@@ -588,8 +614,8 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     onChange(nextApiSettings);
     onGameSettingsChange(nextGameSettings);
     setSelectedId(nextApiSettings.activeConfigId ?? nextApiSettings.configs[0]?.id);
-    await saveSetting('apiSettings', nextApiSettings);
-    await saveSetting('gameSettings', nextGameSettings);
+    // 复合写时序原样保留：先写 state（onChange/onGameSettingsChange 同步），再顺序落盘 apiSettings + gameSettings。
+    await onPersistApiProfile(nextApiSettings, nextGameSettings);
   };
 
   const persistProfileSlots = async (slots: API方案槽位[]) => {
@@ -686,7 +712,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
       },
     };
     onGameSettingsChange(nextGameSettings);
-    await saveSetting('gameSettings', nextGameSettings);
+    await onPersistGameSettings(nextGameSettings);
     setMessage({ kind: 'info', text: `已把其他文本 API 统一套用为：${provider} / ${model}` });
   };
 

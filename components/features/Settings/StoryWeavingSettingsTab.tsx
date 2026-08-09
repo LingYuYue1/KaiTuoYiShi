@@ -1,12 +1,13 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   apiSettings: API设置;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -25,7 +26,7 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'gemini', label: 'Gemini' },
 ];
 
-export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function StoryWeavingSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
   const story = settings.剧情编织系统;
   const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   const [loadingModels, setLoadingModels] = useState(false);
@@ -86,7 +87,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
   };
 
   const handleSave = async () => {
-    await saveSetting('gameSettings', settings);
+    await onPersistSettings(settings);
     setSavedFlash(true);
     setMessage('剧情编织设置已保存。');
     window.setTimeout(() => setSavedFlash(false), 1600);

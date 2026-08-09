@@ -1,12 +1,13 @@
 ﻿import { useMemo, useState } from 'react';
 import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   apiSettings: API设置;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: string; defaultModel: string }[] = [
@@ -25,7 +26,7 @@ const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: stri
 const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
   const memory = settings.记忆系统;
   const mainConfig = useMemo(
     () => apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null,
@@ -123,7 +124,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
 
   const handleSave = async () => {
     try {
-      await saveSetting('gameSettings', settings);
+      await onPersistSettings(settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '记忆系统设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

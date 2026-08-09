@@ -1429,6 +1429,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
                 settings={gameSettings}
                 onChange={persistGameSettingsChange}
                 apiSettings={apiSettings}
+                onPersistSettings={(next) => Promise.resolve(persistGameSettingsChange(next))}
               />
             )}
           </main>

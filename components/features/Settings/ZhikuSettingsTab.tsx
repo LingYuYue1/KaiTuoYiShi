@@ -2,12 +2,13 @@
 import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 原著约束强度 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   apiSettings: API设置;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const smallClip =
@@ -38,7 +39,7 @@ type ZhikuPatch = Partial<Omit<游戏设置['智库系统'], 'api'>> & {
   api?: Partial<游戏设置['智库系统']['api']>;
 };
 
-export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function ZhikuSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
   const zhiku = settings.智库系统;
   const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null;
   const [loadingModels, setLoadingModels] = useState(false);
@@ -109,7 +110,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await saveSetting('gameSettings', settings);
+      await onPersistSettings(settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '智库设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 忆庭API覆盖 } from '@/models/settings';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   apiSettings: API设置;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: string; defaultModel: string }[] = [
@@ -36,7 +37,7 @@ interface ResolvedApi {
   enableClaudeMode?: boolean;
 }
 
-export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function YitingSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
   const memory = settings.记忆系统;
   const mainConfig = useMemo(
     () => apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null,
@@ -187,7 +188,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
 
   const handleSave = async () => {
     try {
-      await saveSetting('gameSettings', settings);
+      await onPersistSettings(settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '忆庭设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);

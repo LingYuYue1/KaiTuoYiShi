@@ -1,11 +1,12 @@
 ﻿import { useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const smallClip =
@@ -15,13 +16,13 @@ function setModuleEnabled(modules: 提示词模块[], id: string, v: boolean): �
   return modules.map((m) => (m.id === id ? { ...m, enabled: v, updatedAt: Date.now() } : m));
 }
 
-export function NsfwSettingsTab({ settings, onChange }: Props) {
+export function NsfwSettingsTab({ settings, onChange, onPersistSettings }: Props) {
   const [saveMessage, setSaveMessage] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
 
   const handleSave = async () => {
     try {
-      await saveSetting('gameSettings', settings);
+      await onPersistSettings(settings);
       setSaveMessage('NSFW 设置已保存。');
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);

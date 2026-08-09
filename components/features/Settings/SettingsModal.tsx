@@ -38,7 +38,7 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import { saveSetting, type SaveListItemSummary } from '@/services/dbService';
+import type { SaveListItemSummary } from '@/services/dbService';
 import type { 世界书 } from '@/models/worldbook';
 import type { 剧情节点 } from '@/models/plot';
 import type { STRegexScript } from '@/models/stTypes';
@@ -96,6 +96,11 @@ interface SettingsModalProps {
   onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
   onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
   onDryRunTavernRegexScript: (script: STRegexScript, sampleText: string) => TavernRegexDryRunResult;
+  /** 设置持久化用例动作（片 panel-p2）：写入侧统一经 useDeviceSettings 管理器收敛，不再直连 dbService。 */
+  onPersistGameSettings: (s: 游戏设置) => Promise<void>;
+  onPersistApiSettings: (s: API设置) => Promise<void>;
+  onPersistTheme: (t: 主题预设) => Promise<void>;
+  onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
 }
 
 type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage';
@@ -148,18 +153,22 @@ export function SettingsModal({
   onExtractTavernRegexScripts,
   onAnalyzeTavernRegexScript,
   onDryRunTavernRegexScript,
+  onPersistGameSettings,
+  onPersistApiSettings,
+  onPersistTheme,
+  onPersistApiProfile,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
   const persistGameSettingsChange = useCallback((next: 游戏设置) => {
     onGameSettingsChange(next);
-    void saveSetting('gameSettings', next);
-  }, [onGameSettingsChange]);
+    void onPersistGameSettings(next);
+  }, [onGameSettingsChange, onPersistGameSettings]);
 
   const persistThemeChange = useCallback((next: 主题预设) => {
     onThemeChange(next);
-    void saveSetting('theme', next);
-  }, [onThemeChange]);
+    void onPersistTheme(next);
+  }, [onThemeChange, onPersistTheme]);
 
   const renderTab = (): ReactNode => {
     switch (activeTab) {
@@ -170,6 +179,9 @@ export function SettingsModal({
             onChange={onApiSettingsChange}
             gameSettings={gameSettings}
             onGameSettingsChange={persistGameSettingsChange}
+            onPersistApiSettings={onPersistApiSettings}
+            onPersistGameSettings={onPersistGameSettings}
+            onPersistApiProfile={onPersistApiProfile}
           />
         );
       case 'apiErrors':
@@ -179,6 +191,7 @@ export function SettingsModal({
           <GameSettingsTab
             settings={gameSettings}
             onChange={persistGameSettingsChange}
+            onPersistSettings={onPersistGameSettings}
             worldState={世界}
             onWorldStateChange={on世界Change}
           />
@@ -194,7 +207,7 @@ export function SettingsModal({
           />
         );
       case 'nsfw':
-        return <NsfwSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
+        return <NsfwSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} onPersistSettings={onPersistGameSettings} />;
       case 'prompts':
         return (
           <PromptModulesTab
@@ -224,7 +237,7 @@ export function SettingsModal({
           />
         );
       case 'extra':
-        return <ExtraFeaturesSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} />;
+        return <ExtraFeaturesSettingsTab settings={gameSettings} onChange={persistGameSettingsChange} onPersistSettings={onPersistGameSettings} />;
       case 'variables':
         return (
           <VariableManagerTab

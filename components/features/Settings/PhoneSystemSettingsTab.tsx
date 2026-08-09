@@ -1,12 +1,13 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API配置项, API设置, 游戏设置 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
-import { saveSetting } from '@/services/dbService';
 
 interface Props {
   settings: 游戏设置;
   onChange: (s: 游戏设置) => void;
   apiSettings: API设置;
+  /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
+  onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
 const smallClip =
@@ -27,7 +28,7 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'gemini', label: 'Gemini' },
 ];
 
-export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Props) {
+export function PhoneSystemSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
   const phone = settings.手机系统;
   const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   const [modelOptions, setModelOptions] = useState<string[]>([]);
@@ -95,7 +96,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
   const handleSave = async () => {
     setSaveMessage(null);
     try {
-      await saveSetting('gameSettings', settings);
+      await onPersistSettings(settings);
       setSavedFlash(true);
       setSaveMessage({ kind: 'info', text: '手机系统设置已保存。' });
       window.setTimeout(() => setSavedFlash(false), 1800);
