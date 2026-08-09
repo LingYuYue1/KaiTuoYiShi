@@ -8,7 +8,6 @@ import type { API设置, 游戏设置, 文生图规则中心设置, 文生图系
 import type { ConnectionTestConfig, ComfyWorkflowCandidate } from '@/hooks/useAiTools';
 import type { 手机系统 } from '@/models/phone';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
-import { saveSetting } from '@/services/dbService';
 import {
   添加图片到相册,
   创建相册图片条目,
@@ -73,6 +72,7 @@ interface AlbumPanelProps {
   apiSettings: API设置;
   gameSettings: 游戏设置;
   onGameSettingsChange: React.Dispatch<React.SetStateAction<游戏设置>>;
+  onPersistGameSettings: (next: 游戏设置) => Promise<void>;
   imageSettings: 文生图系统设置;
   nsfwEnabled: boolean;
   nsfwImageEnabled: boolean;
@@ -102,7 +102,7 @@ function setEntryReferenceTargets(entries: 相册条目[], entryId: string, char
   });
 }
 
-export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [], fetchModels, testImageGenerationConnection, fetchImageGenerationModels, fetchComfyWorkflowCandidates }: AlbumPanelProps) {
+export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, onPersistGameSettings, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [], fetchModels, testImageGenerationConnection, fetchImageGenerationModels, fetchComfyWorkflowCandidates }: AlbumPanelProps) {
   const [activeTab, setActiveTab] = useState<WorkTab>('manual');
   const [showNsfw, setShowNsfw] = useState(false);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
@@ -173,7 +173,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
   const activeLibraryRecord = libraryRecords.find((record) => record.id === libraryNpcId) ?? libraryRecords.at(0) ?? null;
   const persistGameSettingsChange = (next: 游戏设置) => {
     onGameSettingsChange(next);
-    void saveSetting('gameSettings', next);
+    void onPersistGameSettings(next);
   };
 
   const setReferenceInjectionEnabled = (enabled: boolean) => {
@@ -303,7 +303,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
       文生图系统: imageSettings,
     };
     try {
-      await saveSetting('gameSettings', nextSettings);
+      await onPersistGameSettings(nextSettings);
       setMessage('规则中心已保存。');
     } catch (err) {
       setMessage(`规则中心保存失败：${err instanceof Error ? err.message : String(err)}`);

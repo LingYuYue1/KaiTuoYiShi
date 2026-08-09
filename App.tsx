@@ -702,6 +702,7 @@ export function App() {
             onStoryWeavingChange: state.set剧情编织,
             gameSettings: state.gameSettings,
             onGameSettingsChange: state.setGameSettings,
+            onPersistGameSettings: persistGameSettings,
             apiSettings: state.apiSettings,
             turnCount: state.turnCount,
             mainChatHistory: state.chatHistory,
@@ -1144,6 +1145,7 @@ function renderSystemPanel(
     onStoryWeavingChange: React.Dispatch<React.SetStateAction<import('@/models/storyWeaving').剧情编织系统>>;
     gameSettings: import('@/models/settings').游戏设置;
     onGameSettingsChange: React.Dispatch<React.SetStateAction<import('@/models/settings').游戏设置>>;
+    onPersistGameSettings: (next: import('@/models/settings').游戏设置) => Promise<void>;
     apiSettings: import('@/models/settings').API设置;
     turnCount: number;
     mainChatHistory: import('@/models/chat').聊天消息[];
@@ -1200,6 +1202,7 @@ function renderSystemPanel(
           apiSettings={ctx.apiSettings}
           gameSettings={ctx.gameSettings}
           onGameSettingsChange={ctx.onGameSettingsChange}
+          onPersistGameSettings={ctx.onPersistGameSettings}
           imageSettings={ctx.gameSettings.文生图系统}
           nsfwEnabled={ctx.gameSettings.enableNsfw}
           nsfwImageEnabled={ctx.gameSettings.文生图系统.enableNsfwImageGeneration}

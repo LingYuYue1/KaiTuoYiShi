@@ -1,5 +1,4 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
-import { migratePromptModules, migrateStPresetOrders } from '@/hooks/useGameState';
 import type { 存档数据, 存档类型, 游戏设置 } from '@/models/settings';
 import type { 聊天消息 } from '@/models/chat';
 import { 创建空角色, 确保命途列表 } from '@/models/character';
@@ -132,8 +131,7 @@ export function commitActiveSaveTreeMeta(save: 存档数据): void {
 /**
  * 片 5e（D4）运行时断言兜底：检查点写入前核验载荷不携带 queueTasks。
  * queueTasks 仅限叶子（工作区）合法字段，不得进入检查点（saves 表）。
- * 静态核验见 scripts/check-kernel.sh 的 L12 棘轮；本断言是最后防线——
- * 若未来组装路径漏剥，这里宁可让本次写入失败，也不让脏字段落盘。
+ * 本断言是最后防线——若未来组装路径漏剥，这里宁可让本次写入失败，也不让脏字段落盘。
  * 调用点：commitTurn / 初始化新局checkpoint / handleManualSave 的 saveGame 之前。
  */
 export function assertCheckpointPayloadNoQueueTasks(payload: 存档数据, label: string): void {
@@ -203,62 +201,6 @@ export function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设
       记忆总结API: defaults.记忆系统.记忆总结API,
       忆庭召回API: defaults.记忆系统.忆庭召回API,
       忆庭精炼API: defaults.记忆系统.忆庭精炼API,
-    },
-  };
-}
-
-function preserveLocalApiGameSettings(nextFromSave: 游戏设置, localSettings: 游戏设置): 游戏设置 {
-  const local = {
-    新闻系统: 归一化星际和平周报设置(localSettings.新闻系统),
-    手机系统: 归一化手机系统设置(localSettings.手机系统),
-    智库系统: 归一化智库系统设置(localSettings.智库系统),
-    剧情编织系统: 归一化剧情编织系统设置(localSettings.剧情编织系统),
-    文生图系统: 归一化文生图系统设置(localSettings.文生图系统),
-    记忆系统: 归一化记忆系统设置(localSettings.记忆系统),
-  };
-
-  return {
-    ...nextFromSave,
-    enableClaudeMode: localSettings.enableClaudeMode,
-    deepSeekMainMode: localSettings.deepSeekMainMode,
-    backgroundTaskMode: localSettings.backgroundTaskMode,
-    enableCacheDiagnostics: localSettings.enableCacheDiagnostics,
-    visualTextSettings: 归一化视觉文本设置(nextFromSave.visualTextSettings),
-    variableApi: localSettings.variableApi,
-    新闻系统: {
-      ...nextFromSave.新闻系统,
-      api: local.新闻系统.api,
-    },
-    手机系统: {
-      ...nextFromSave.手机系统,
-      api: local.手机系统.api,
-    },
-    智库系统: {
-      ...nextFromSave.智库系统,
-      api: local.智库系统.api,
-    },
-    剧情编织系统: {
-      ...nextFromSave.剧情编织系统,
-      api: local.剧情编织系统.api,
-    },
-    文生图系统: {
-      ...nextFromSave.文生图系统,
-      普通接口: local.文生图系统.普通接口,
-      场景接口: local.文生图系统.场景接口,
-      useSeparateSceneApi: local.文生图系统.useSeparateSceneApi,
-      NSFW接口: local.文生图系统.NSFW接口,
-      词组转化器API: local.文生图系统.词组转化器API,
-      正文生图: {
-        ...nextFromSave.文生图系统.正文生图,
-        parserApi: local.文生图系统.正文生图.parserApi,
-        imageApi: local.文生图系统.正文生图.imageApi,
-      },
-    },
-    记忆系统: {
-      ...nextFromSave.记忆系统,
-      记忆总结API: local.记忆系统.记忆总结API,
-      忆庭召回API: local.记忆系统.忆庭召回API,
-      忆庭精炼API: local.记忆系统.忆庭精炼API,
     },
   };
 }
@@ -447,7 +389,6 @@ export async function applySaveToState(
   const safeChatHistory = compactChatHistoryForLongSession(normalizeSaveChatHistory(迁移后存档.chatHistory));
   const safeWorld = 归一化世界状态(迁移后存档.世界);
   const safeTraveler = normalizeSavedTraveler(迁移后存档.旅人, safeWorld.当前日期);
-  const safeGameSettings = normalizeSavedGameSettings(迁移后存档.gameSettings);
 
   state.set旅人(safeTraveler);
   state.set世界(safeWorld);
@@ -492,33 +433,9 @@ export async function applySaveToState(
   await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
   state.setVariableBatches(compactVariableBatchHistory(迁移后存档.variableBatches ?? []));
   state.setQueueTasks(迁移后存档.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
-  // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。
-  // API 配置属于本机设置，不跟随存档读取；否则旧档/导入档会把当前可用 API 覆盖成空值。
-  const defaults = 创建默认游戏设置();
-  const nextGameSettingsFromSave: 游戏设置 = {
-    ...defaults,
-    ...safeGameSettings,
-    新闻系统: 归一化星际和平周报设置(safeGameSettings.新闻系统),
-    手机系统: 归一化手机系统设置(safeGameSettings.手机系统),
-    智库系统: 归一化智库系统设置(safeGameSettings.智库系统),
-    剧情编织系统: 归一化剧情编织系统设置(safeGameSettings.剧情编织系统),
-    文生图系统: 归一化文生图系统设置(safeGameSettings.文生图系统),
-    记忆系统: 归一化记忆系统设置(safeGameSettings.记忆系统),
-    额外功能: 归一化额外功能设置(safeGameSettings.额外功能),
-    backgroundTaskMode: safeGameSettings.backgroundTaskMode,
-    enableMaleNsfwArchive: safeGameSettings.enableMaleNsfwArchive,
-    visualTextSettings: 归一化视觉文本设置(safeGameSettings.visualTextSettings),
-    promptModules: migratePromptModules(safeGameSettings),
-    // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移
-    stPresets: migrateStPresetOrders(safeGameSettings.stPresets),
-    promptModuleOrderVersion: 1,
-  };
-  state.setGameSettings({
-    ...preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings),
-    // 片 5a-2 D3：迁出值并入内存两键（normalize 后的 safeGameSettings 已把原键置空）
-    macroGlobalVars,
-    worldbookTriggerStates,
-  });
+  // DeviceSettings is owned by the current device. A save may carry legacy
+  // settings for migration, but loading a session must never replace them.
+  state.setGameSettings((current) => ({ ...current, macroGlobalVars, worldbookTriggerStates }));
   // 片 5a-2：pendingOpeningTrigger 顶层字段恢复到 state（E-1 起随 checkpoint 落盘）
   if (restorePendingOpeningTrigger) {
     state.setPendingOpeningTrigger(迁移后存档.pendingOpeningTrigger ?? null);
@@ -640,13 +557,4 @@ function normalizeSavedTraveler(value: unknown, awakenedAt = ''): 角色数据�
     背包: Array.isArray(raw.背包) ? raw.背包 : base.背包,
     战技列表: Array.isArray(raw.战技列表) ? raw.战技列表 : base.战技列表,
   }, awakenedAt);
-}
-
-function normalizeSavedGameSettings(value: unknown): 游戏设置 {
-  const defaults = 创建默认游戏设置();
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return defaults;
-  return {
-    ...defaults,
-    ...(value as Partial<游戏设置>),
-  };
 }

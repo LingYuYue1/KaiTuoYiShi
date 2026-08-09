@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空角色 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
@@ -21,7 +21,7 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空剧情编织系统, 归一化剧情编织系统 } from '@/models/storyWeaving';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务记录 } from '@/models/queueTask';
-import type { API设置, 存档数据, 游戏设置, 主题预设 } from '@/models/settings';
+import type { API设置, DeviceSettings, 存档数据, 游戏设置, 主题预设 } from '@/models/settings';
 import {
   创建空API设置,
   创建默认游戏设置,
@@ -231,6 +231,8 @@ export interface UseGameStateReturn {
   setCurrentTheme: React.Dispatch<React.SetStateAction<主题预设>>;
   worldbooks: 世界书[];
   setWorldbooks: React.Dispatch<React.SetStateAction<世界书[]>>;
+  deviceSettings: DeviceSettings;
+  setDeviceSettings: React.Dispatch<React.SetStateAction<DeviceSettings>>;
   hasSave: boolean;
   setHasSave: React.Dispatch<React.SetStateAction<boolean>>;
   turnCount: number;
@@ -258,10 +260,40 @@ export function useGameState(): UseGameStateReturn {
   const [剧情编织, set剧情编织] = useState<剧情编织系统>(创建空剧情编织系统);
   const [variableBatches, setVariableBatches] = useState<变量命令批次[]>([]);
   const [queueTasks, setQueueTasks] = useState<队列任务记录[]>([]);
-  const [apiSettings, setApiSettings] = useState<API设置>(创建空API设置);
-  const [gameSettings, setGameSettings] = useState<游戏设置>(创建默认游戏设置);
-  const [currentTheme, setCurrentTheme] = useState<主题预设>('deepspace');
-  const [worldbooks, setWorldbooks] = useState<世界书[]>([]);
+  const [deviceSettings, setDeviceSettings] = useState<DeviceSettings>(() => ({
+    apiSettings: 创建空API设置(),
+    gameSettings: 创建默认游戏设置(),
+    theme: 'deepspace',
+    worldbooks: [],
+  }));
+  const setApiSettings = useCallback<React.Dispatch<React.SetStateAction<API设置>>>((update) => {
+    setDeviceSettings((current) => ({
+      ...current,
+      apiSettings: typeof update === 'function' ? update(current.apiSettings) : update,
+    }));
+  }, []);
+  const setGameSettings = useCallback<React.Dispatch<React.SetStateAction<游戏设置>>>((update) => {
+    setDeviceSettings((current) => ({
+      ...current,
+      gameSettings: typeof update === 'function' ? update(current.gameSettings) : update,
+    }));
+  }, []);
+  const setCurrentTheme = useCallback<React.Dispatch<React.SetStateAction<主题预设>>>((update) => {
+    setDeviceSettings((current) => ({
+      ...current,
+      theme: typeof update === 'function' ? update(current.theme) : update,
+    }));
+  }, []);
+  const setWorldbooks = useCallback<React.Dispatch<React.SetStateAction<世界书[]>>>((update) => {
+    setDeviceSettings((current) => ({
+      ...current,
+      worldbooks: typeof update === 'function' ? update(current.worldbooks) : update,
+    }));
+  }, []);
+  const apiSettings = deviceSettings.apiSettings;
+  const gameSettings = deviceSettings.gameSettings;
+  const currentTheme = deviceSettings.theme;
+  const worldbooks = deviceSettings.worldbooks;
   const [hasSave, setHasSave] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
@@ -295,6 +327,7 @@ export function useGameState(): UseGameStateReturn {
     gameSettings, setGameSettings,
     currentTheme, setCurrentTheme,
     worldbooks, setWorldbooks,
+    deviceSettings, setDeviceSettings,
     hasSave, setHasSave,
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
@@ -511,7 +544,7 @@ export function useGameState(): UseGameStateReturn {
       }
     })();
     // setter 恒稳定（React useState 身份保证），deps 不变即 mount 一次性执行
-  }, [setInterruptedWorkflow, setTurnStatus]);
+  }, [setApiSettings, setCurrentTheme, setGameSettings, setInterruptedWorkflow, setTurnStatus, setWorldbooks]);
 
   // Persist the last active UI view after boot has finished reading it.
   useEffect(() => {
