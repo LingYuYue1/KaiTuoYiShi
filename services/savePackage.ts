@@ -1,5 +1,5 @@
 import type { 存档数据 } from '@/models/settings';
-import { 创建空API设置, 创建默认游戏设置 } from '@/models/settings';
+import { 创建空API设置, 创建默认游戏设置, createSaveEnvelope, type SaveEnvelope } from '@/models/settings';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
@@ -119,7 +119,7 @@ export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob>
   };
   const files: Array<[string, unknown]> = [
     [TREE_MANIFEST_PATH, treeManifest],
-    ...nodeEntries.map((entry) => [entry.path, entry.save] as [string, unknown]),
+    ...nodeEntries.map((entry) => [entry.path, createSaveEnvelope(entry.save)] as [string, unknown]),
   ];
   const manifest: 存档包清单 = {
     app: 'KaiTuoYiShi',
@@ -241,7 +241,19 @@ export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数�
   if (!saveText) {
     throw new Error('存档包缺少 save.json');
   }
-  const save = JSON.parse(saveText) as 存档数据;
+  const parsed = JSON.parse(saveText) as Partial<SaveEnvelope> & Partial<存档数据>;
+  const save: 存档数据 = parsed.gameData
+    ? {
+      ...(parsed.gameData as 存档数据),
+      id: Number(parsed.id) || 0,
+      type: parseSerializedSaveType(parsed.type),
+      timestamp: Number(parsed.timestamp) || Date.now(),
+      turnCount: parsed.turnCount,
+      gameSettings: 创建默认游戏设置(),
+      apiSettings: 创建空API设置(),
+      theme: 'deepspace',
+    }
+    : parsed as 存档数据;
   const read = (path: string): unknown => {
     const text = files.get(path);
     return text ? JSON.parse(text) : undefined;
@@ -297,7 +309,7 @@ function parseSaveTreePackageFiles(files: Map<string, string>, manifest: Partial
     if (!text) {
       throw new Error(`存档树包缺少节点文件：${candidate.path}`);
     }
-    return JSON.parse(text) as 存档数据;
+    return parseSerializedSave(JSON.parse(text));
   });
   return {
     latestSaveId: Number(treeManifest.latestSaveId) || Number(manifest.timestamp) || 0,
@@ -305,7 +317,32 @@ function parseSaveTreePackageFiles(files: Map<string, string>, manifest: Partial
   };
 }
 
+function parseSerializedSave(value: unknown): 存档数据 {
+  if (!value || typeof value !== 'object') {
+    throw new Error('存档节点格式无效');
+  }
+  const parsed = value as Partial<SaveEnvelope> & Partial<存档数据>;
+  if (!parsed.gameData) return parsed as 存档数据;
+  return {
+    ...(parsed.gameData as 存档数据),
+    id: Number(parsed.id) || 0,
+    type: parseSerializedSaveType(parsed.type),
+    timestamp: Number(parsed.timestamp) || Date.now(),
+    turnCount: parsed.turnCount,
+    gameSettings: 创建默认游戏设置(),
+    apiSettings: 创建空API设置(),
+    theme: 'deepspace',
+  };
+}
+
+function parseSerializedSaveType(value: unknown): 存档数据['type'] {
+  return value === 'manual' || value === 'auto' || value === 'backup' || value === 'imported'
+    ? value
+    : 'imported';
+}
+
 function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
+  const envelope = createSaveEnvelope(save);
   const {
     记忆,
     忆庭,
@@ -319,9 +356,12 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     variableBatches,
     queueTasks,
     ...core
-  } = save;
+  } = envelope.gameData as 存档数据;
   const files = ([
-    ['save.json', core],
+    ['save.json', {
+      ...envelope,
+      gameData: core,
+    }],
     [SYSTEM_ENTRY_PATHS[0], 记忆],
     [SYSTEM_ENTRY_PATHS[1], 忆庭],
     [SYSTEM_ENTRY_PATHS[2], 智库],
@@ -341,9 +381,9 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     kind: 'save-package',
     packageVersion: PACKAGE_VERSION,
     exportedAt: new Date().toISOString(),
-    travelerName: save.旅人.姓名 || 'traveler',
-    turnCount: save.turnCount ?? (save.chatHistory.length + 1),
-    timestamp: save.timestamp || Date.now(),
+    travelerName: envelope.gameData.旅人.姓名 || 'traveler',
+    turnCount: envelope.turnCount ?? (envelope.gameData.chatHistory.length + 1),
+    timestamp: envelope.timestamp || Date.now(),
     format: 'ktysave',
     privacy: {
       apiKeysRemoved: true,

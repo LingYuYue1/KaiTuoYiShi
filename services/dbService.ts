@@ -1,4 +1,5 @@
-import type { 存档数据, 存档类型 } from '@/models/settings';
+import type { 存档数据, 存档类型, DeviceSettings } from '@/models/settings';
+import { 创建空API设置, 创建默认游戏设置, hydrateSaveEnvelope, createSaveEnvelope } from '@/models/settings';
 import { 归一化NewestStory记录, NEWEST_STORY_STORE_KEY, 分叉NewestStory记录, 创建空NewestStory记录, 重定向NewestStory记录, type NewestStory记录 } from '@/models/newestStory';
 import { devLog, devLogError } from '@/utils/devLog';
 import { createUnifiedId, UNIFIED_ID_DB_VERSION } from '@/utils/id';
@@ -509,7 +510,16 @@ async function saveGameInternal(data: 存档数据): Promise<number> {
   const sourceData = stripCloudBackupRestoreRuntime(data);
   const db = await openDB();
   const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(sourceData));
-  const storedData = stripSaveAssetPayloadForStorage(sourceData);
+  const storedData = stripSaveAssetPayloadForStorage({
+    ...createSaveEnvelope(sourceData).gameData,
+    id: sourceData.id,
+    type: sourceData.type,
+    timestamp: sourceData.timestamp,
+    turnCount: sourceData.turnCount,
+    ...(sourceData as 存档数据 & { saveTree?: unknown }).saveTree
+      ? { saveTree: (sourceData as 存档数据 & { saveTree?: unknown }).saveTree }
+      : {},
+  } as 存档数据);
   const deltaBase = await findAutoDeltaBase(db, storedData);
   const saved = await new Promise<{ id: number; save: 存档数据; delta: SaveNodeDeltaRecord | null }>((resolve, reject) => {
     const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');
@@ -650,12 +660,45 @@ export async function putHeadRow(saveId: number, patch: Partial<存档数据>): 
   });
 }
 
+async function hydrateStoredSave(save: 存档数据): Promise<存档数据> {
+  const legacy = save as unknown as {
+    apiSettings?: import('@/models/settings').API设置;
+    gameSettings?: import('@/models/settings').游戏设置;
+    theme?: import('@/models/settings').主题预设;
+  };
+  const [apiSettings, gameSettings, theme] = await Promise.all([
+    loadSetting<import('@/models/settings').API设置>('apiSettings'),
+    loadSetting<import('@/models/settings').游戏设置>('gameSettings'),
+    loadSetting<import('@/models/settings').主题预设>('theme'),
+  ]);
+  const migratedApi = apiSettings ?? legacy.apiSettings ?? 创建空API设置();
+  const migratedGame = gameSettings ?? legacy.gameSettings ?? 创建默认游戏设置();
+  const migratedTheme = theme ?? legacy.theme ?? 'deepspace';
+  if (apiSettings === null && legacy.apiSettings) await saveSetting('apiSettings', legacy.apiSettings);
+  if (gameSettings === null && legacy.gameSettings) await saveSetting('gameSettings', legacy.gameSettings);
+  if (theme === null && legacy.theme) await saveSetting('theme', legacy.theme);
+  const device: DeviceSettings = {
+    apiSettings: migratedApi,
+    gameSettings: migratedGame,
+    theme: migratedTheme,
+    worldbooks: [],
+  };
+  return hydrateSaveEnvelope({
+    id: save.id,
+    type: save.type,
+    timestamp: save.timestamp,
+    turnCount: save.turnCount,
+    gameData: save,
+    ...(('saveTree' in save && save.saveTree) ? { saveTree: save.saveTree } : {}),
+  }, device);
+}
+
 export async function loadSave(id: number): Promise<存档数据 | null> {
   const db = await openDB();
   const save = await loadRawSave(db, id);
   const restoredSave = save ? await restoreDeltaSaveIfNeeded(db, save) : null;
   if (!restoredSave) return null;
-  const saveForAssets = restoredSave;
+  const saveForAssets = await hydrateStoredSave(restoredSave);
   if (!db.objectStoreNames.contains(SAVE_ASSETS_STORE)) return saveForAssets;
   if (saveHasEmbeddedAssetPayload(saveForAssets)) {
     await migrateLoadedSaveAssets(db, saveForAssets);
@@ -676,8 +719,9 @@ export interface CloudTransferSaveBundle {
 export async function loadSaveForCloudTransfer(id: number): Promise<CloudTransferSaveBundle | null> {
   const db = await openDB();
   const raw = await loadRawSave(db, id);
-  const restored = raw ? await restoreDeltaSaveIfNeeded(db, raw) : null;
-  if (!restored) return null;
+  const restoredRaw = raw ? await restoreDeltaSaveIfNeeded(db, raw) : null;
+  if (!restoredRaw) return null;
+  const restored = await hydrateStoredSave(restoredRaw);
   const assetIds = collectSaveAlbumAssetIds(restored);
   const indexedRecords = db.objectStoreNames.contains(SAVE_ASSETS_STORE)
     ? await loadSaveAssetRecords(db, assetIds)

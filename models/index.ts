@@ -31,7 +31,17 @@ export type { 记忆系统 } from './memory';
 export { 创建空记忆系统 } from './memory';
 export type { 忆庭系统, 回忆条目 } from './yiting';
 export { 创建空忆庭系统, 归一化忆庭系统 } from './yiting';
-export type { API配置项, API设置, 游戏设置, 主题预设, 存档数据, AI提供商 } from './settings';
+export type {
+  API配置项,
+  API设置,
+  游戏设置,
+  主题预设,
+  存档数据,
+  DeviceSettings,
+  GameData,
+  SaveEnvelope,
+  AI提供商,
+} from './settings';
 export { 创建空API设置, 创建默认游戏设置 } from './settings';
 export type {
   难度ID,

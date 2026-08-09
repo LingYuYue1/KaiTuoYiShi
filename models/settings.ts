@@ -1273,6 +1273,80 @@ export interface 存档数据 {
   pendingOpeningTrigger?: string | null;
 }
 
+/** Canonical device-owned settings. These values never belong to a game save. */
+export interface DeviceSettings {
+  apiSettings: API设置;
+  gameSettings: 游戏设置;
+  theme: 主题预设;
+  worldbooks: import('./worldbook').世界书[];
+}
+
+/** Canonical persisted game payload, excluding all device-owned settings. */
+export type GameData = Omit<存档数据, 'gameSettings' | 'apiSettings' | 'theme'>;
+
+/** Save metadata plus the canonical game payload. */
+export interface SaveEnvelope {
+  id: number;
+  type: 存档类型;
+  timestamp: number;
+  turnCount?: number;
+  gameData: GameData;
+  saveTree?: unknown;
+}
+
+/** Legacy flat save fields are accepted only at the migration seam. */
+export interface LegacySaveDeviceSettings {
+  apiSettings?: API设置;
+  gameSettings?: 游戏设置;
+  theme?: 主题预设;
+  worldbooks?: import('./worldbook').世界书[];
+}
+
+export function extractDeviceSettings(save: 存档数据): DeviceSettings {
+  return {
+    apiSettings: save.apiSettings,
+    gameSettings: save.gameSettings,
+    theme: save.theme,
+    worldbooks: [],
+  };
+}
+
+export function stripDeviceSettings(save: 存档数据): GameData {
+  const { gameSettings: _game, apiSettings: _api, theme: _theme, ...gameData } = save;
+  void _game;
+  void _api;
+  void _theme;
+  return gameData;
+}
+
+export function createSaveEnvelope(save: 存档数据): SaveEnvelope {
+  const { gameSettings: _game, apiSettings: _api, theme: _theme, ...gameData } = save;
+  void _game;
+  void _api;
+  void _theme;
+  return {
+    id: save.id,
+    type: save.type,
+    timestamp: save.timestamp,
+    turnCount: save.turnCount,
+    gameData,
+    ...(('saveTree' in save && save.saveTree) ? { saveTree: save.saveTree } : {}),
+  };
+}
+
+export function hydrateSaveEnvelope(envelope: SaveEnvelope, device: DeviceSettings): 存档数据 {
+  return {
+    ...envelope.gameData,
+    id: envelope.id,
+    type: envelope.type,
+    timestamp: envelope.timestamp,
+    turnCount: envelope.turnCount,
+    gameSettings: device.gameSettings,
+    apiSettings: device.apiSettings,
+    theme: device.theme,
+  };
+}
+
 /**
  * D3 保留读取（与 customPrompt 同例）：读取 gameSettings 中仍残留的两运行态键，
  * 不改内存对象。经独立结构类型访问以避免触发废弃成员读取检查，供管线边界/存档组装使用。
