@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
+import type { ConnectionTestConfig } from '@/hooks/useAiTools';
 
 interface Props {
   settings: 游戏设置;
@@ -8,6 +8,8 @@ interface Props {
   apiSettings: API设置;
   /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
   onPersistSettings: (s: 游戏设置) => Promise<void>;
+  /** AI 探测用例动作（片 panel-p3）：模型列表获取，取代直连 services/ai。 */
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
 }
 
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -26,7 +28,7 @@ const providerOptions: { value: AI提供商; label: string }[] = [
   { value: 'gemini', label: 'Gemini' },
 ];
 
-export function StoryWeavingSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
+export function StoryWeavingSettingsTab({ settings, onChange, apiSettings, onPersistSettings, fetchModels }: Props) {
   const story = settings.剧情编织系统;
   const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   const [loadingModels, setLoadingModels] = useState(false);

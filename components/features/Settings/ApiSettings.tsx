@@ -6,7 +6,7 @@ import {
   matchModelRecommendation,
   type MaxOutputTier,
 } from '@/data/modelRecommendations';
-import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
+import type { ConnectionTestConfig, ConnectionTestResult } from '@/hooks/useAiTools';
 import { loadSetting, saveSetting } from '@/services/dbService';
 import { MemorySystemSettingsTab } from './MemorySystemSettings';
 import { YitingSettingsTab } from './YitingSettingsTab';
@@ -27,6 +27,9 @@ interface Props {
   onPersistGameSettings: (s: 游戏设置) => Promise<void>;
   /** 设置持久化用例动作（片 panel-p2）：apiSettings + gameSettings 复合写（applyApiProfile 专用）。 */
   onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
+  /** AI 探测用例动作（片 panel-p3）：模型列表获取 / 连接测试，取代直连 services/ai。 */
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
+  testConnection: (config: ConnectionTestConfig) => Promise<ConnectionTestResult>;
 }
 
 interface API配置包 {
@@ -283,6 +286,8 @@ export function ApiSettingsTab({
   onPersistApiSettings,
   onPersistGameSettings,
   onPersistApiProfile,
+  fetchModels,
+  testConnection,
 }: Props) {
   const [activeSubview, setActiveSubview] = useState<ApiSubview>('overview');
   const activeSubviewMeta = apiSubViews.find((item) => item.key === activeSubview) ?? apiSubViews[0];
@@ -299,6 +304,8 @@ export function ApiSettingsTab({
             onPersistApiSettings={onPersistApiSettings}
             onPersistGameSettings={onPersistGameSettings}
             onPersistApiProfile={onPersistApiProfile}
+            fetchModels={fetchModels}
+            testConnection={testConnection}
           />
         );
       case 'variable':
@@ -308,20 +315,21 @@ export function ApiSettingsTab({
             onGameSettingsChange={onGameSettingsChange}
             apiSettings={settings}
             onPersistSettings={onPersistGameSettings}
+            fetchModels={fetchModels}
           />
         );
       case 'memory':
-        return <MemorySystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
+        return <MemorySystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} fetchModels={fetchModels} testConnection={testConnection} />;
       case 'yiting':
-        return <YitingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
+        return <YitingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} fetchModels={fetchModels} testConnection={testConnection} />;
       case 'news':
-        return <NewsSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
+        return <NewsSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} fetchModels={fetchModels} />;
       case 'zhiku':
-        return <ZhikuSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
+        return <ZhikuSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} fetchModels={fetchModels} />;
       case 'story':
-        return <StoryWeavingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
+        return <StoryWeavingSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} fetchModels={fetchModels} />;
       case 'phone':
-        return <PhoneSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} />;
+        return <PhoneSystemSettingsTab settings={gameSettings} onChange={onGameSettingsChange} apiSettings={settings} onPersistSettings={onPersistGameSettings} fetchModels={fetchModels} />;
     }
   };
 
@@ -424,6 +432,8 @@ function ApiSettingsOverviewTab({
   onPersistApiSettings,
   onPersistGameSettings,
   onPersistApiProfile,
+  fetchModels,
+  testConnection,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
     settings.activeConfigId ?? settings.configs[0]?.id,

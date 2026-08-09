@@ -1,7 +1,7 @@
 ﻿import type { ReactNode } from 'react';
 import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 原著约束强度 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
+import type { ConnectionTestConfig } from '@/hooks/useAiTools';
 
 interface Props {
   settings: 游戏设置;
@@ -9,6 +9,8 @@ interface Props {
   apiSettings: API设置;
   /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
   onPersistSettings: (s: 游戏设置) => Promise<void>;
+  /** AI 探测用例动作（片 panel-p3）：模型列表获取，取代直连 services/ai。 */
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
 }
 
 const smallClip =
@@ -39,7 +41,7 @@ type ZhikuPatch = Partial<Omit<游戏设置['智库系统'], 'api'>> & {
   api?: Partial<游戏设置['智库系统']['api']>;
 };
 
-export function ZhikuSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
+export function ZhikuSettingsTab({ settings, onChange, apiSettings, onPersistSettings, fetchModels }: Props) {
   const zhiku = settings.智库系统;
   const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null;
   const [loadingModels, setLoadingModels] = useState(false);

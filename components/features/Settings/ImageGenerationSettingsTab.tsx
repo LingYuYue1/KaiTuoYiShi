@@ -12,8 +12,7 @@ import type {
   文生图预设接口路径,
   文生图词组转化器API覆盖,
 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
-import { fetchComfyWorkflowCandidates, fetchImageGenerationModels, testImageGenerationConnection, type ComfyWorkflowCandidate } from '@/services/ai/imageGeneration';
+import type { ConnectionTestConfig, ComfyWorkflowCandidate } from '@/hooks/useAiTools';
 
 interface Props {
   settings: 游戏设置;
@@ -21,6 +20,14 @@ interface Props {
   apiSettings: API设置;
   /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
   onPersistSettings: (s: 游戏设置) => Promise<void>;
+  /** AI 探测用例动作（片 panel-p3）：文本模型列表 / 文生图连接探测 / 生图模型列表 / ComfyUI 工作流候选，取代直连 services/ai。 */
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
+  testImageGenerationConnection: (config: 文生图API配置) => Promise<string>;
+  fetchImageGenerationModels: (config: 文生图API配置) => Promise<string[]>;
+  fetchComfyWorkflowCandidates: (
+    config: 文生图API配置,
+    source: 'queue' | 'history',
+  ) => Promise<ComfyWorkflowCandidate[]>;
 }
 
 type Page = 'overview' | 'normal' | 'nsfw' | 'reference' | 'narrative' | 'tokenizer' | 'guide';
@@ -103,7 +110,7 @@ const modelSuggestions: Record<文生图后端类型, string[]> = {
 
 type WorkflowImportStatus = { tone: 'idle' | 'ok' | 'error'; text: string };
 
-export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, onPersistSettings }: Props) {
+export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, onPersistSettings, fetchModels, testImageGenerationConnection, fetchImageGenerationModels, fetchComfyWorkflowCandidates }: Props) {
   const [activePage, setActivePage] = useState<Page>('overview');
   const [message, setMessage] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
@@ -296,6 +303,8 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, on
           onTest={() => void handleTest('普通接口', image.普通接口)}
           testMessage={testMessages.普通接口}
           testing={testingKey === '普通接口'}
+          fetchImageGenerationModels={fetchImageGenerationModels}
+          fetchComfyWorkflowCandidates={fetchComfyWorkflowCandidates}
         />
       )}
 
@@ -316,6 +325,8 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, on
               testMessage={testMessages.NSFW接口}
               testing={testingKey === 'NSFW接口'}
               nsfw
+              fetchImageGenerationModels={fetchImageGenerationModels}
+              fetchComfyWorkflowCandidates={fetchComfyWorkflowCandidates}
             />
           ) : (
             <Notice>NSFW 总开关或 NSFW 生图开关未开启，因此这里不会提交任何成人生图任务。</Notice>
@@ -464,6 +475,8 @@ function ApiBlock({
   testMessage,
   testing,
   nsfw = false,
+  fetchImageGenerationModels,
+  fetchComfyWorkflowCandidates,
 }: {
   title: string;
   desc: string;
@@ -474,6 +487,11 @@ function ApiBlock({
   testMessage: string;
   testing: boolean;
   nsfw?: boolean;
+  fetchImageGenerationModels: (config: 文生图API配置) => Promise<string[]>;
+  fetchComfyWorkflowCandidates: (
+    config: 文生图API配置,
+    source: 'queue' | 'history',
+  ) => Promise<ComfyWorkflowCandidate[]>;
 }) {
   const endpoint = endpointPreview(api);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);

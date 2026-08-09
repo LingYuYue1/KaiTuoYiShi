@@ -43,6 +43,7 @@ import type { 世界书 } from '@/models/worldbook';
 import type { 剧情节点 } from '@/models/plot';
 import type { STRegexScript } from '@/models/stTypes';
 import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame';
+import type { ApiErrorReport, ConnectionTestConfig, ConnectionTestResult } from '@/hooks/useAiTools';
 
 export type SettingsTab = Tab;
 
@@ -101,6 +102,12 @@ interface SettingsModalProps {
   onPersistApiSettings: (s: API设置) => Promise<void>;
   onPersistTheme: (t: 主题预设) => Promise<void>;
   onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
+  /** AI 探测用例动作（片 panel-p3）：模型列表获取 / 连接测试，取代 Services tab 直连 services/ai。 */
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
+  testConnection: (config: ConnectionTestConfig) => Promise<ConnectionTestResult>;
+  /** AI 错误报告用例动作（片 panel-p3）：加载 / 清空，取代直连 services/ai。 */
+  loadApiErrorReports: () => Promise<ApiErrorReport[]>;
+  clearApiErrorReports: () => Promise<void>;
 }
 
 type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage';
@@ -157,6 +164,10 @@ export function SettingsModal({
   onPersistApiSettings,
   onPersistTheme,
   onPersistApiProfile,
+  fetchModels,
+  testConnection,
+  loadApiErrorReports,
+  clearApiErrorReports,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
@@ -182,10 +193,12 @@ export function SettingsModal({
             onPersistApiSettings={onPersistApiSettings}
             onPersistGameSettings={onPersistGameSettings}
             onPersistApiProfile={onPersistApiProfile}
+            fetchModels={fetchModels}
+            testConnection={testConnection}
           />
         );
       case 'apiErrors':
-        return <ApiErrorReportsTab />;
+        return <ApiErrorReportsTab loadApiErrorReports={loadApiErrorReports} clearApiErrorReports={clearApiErrorReports} />;
       case 'game':
         return (
           <GameSettingsTab

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  clearApiErrorReports,
-  loadApiErrorReports,
-  type ApiErrorReport,
-} from '@/services/ai/apiErrorReportService';
+import type { ApiErrorReport } from '@/hooks/useAiTools';
 
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
+
+interface Props {
+  /** AI 错误报告用例动作（片 panel-p3）：加载 / 清空，取代直连 services/ai。 */
+  loadApiErrorReports: () => Promise<ApiErrorReport[]>;
+  clearApiErrorReports: () => Promise<void>;
+}
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
@@ -32,7 +34,7 @@ function formatReport(report: ApiErrorReport): string {
   ].filter(Boolean).join('\n');
 }
 
-export function ApiErrorReportsTab() {
+export function ApiErrorReportsTab({ loadApiErrorReports, clearApiErrorReports }: Props) {
   const [reports, setReports] = useState<ApiErrorReport[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [message, setMessage] = useState('');

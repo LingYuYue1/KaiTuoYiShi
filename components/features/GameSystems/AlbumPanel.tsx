@@ -4,7 +4,8 @@ import { 图片是否参考角色, 读取图片参考目标 } from '@/models/ima
 import type { 图片槽位, 图片生成任务, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
-import type { API设置, 游戏设置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
+import type { API设置, 游戏设置, 文生图规则中心设置, 文生图系统设置, 文生图API配置 } from '@/models/settings';
+import type { ConnectionTestConfig, ComfyWorkflowCandidate } from '@/hooks/useAiTools';
 import type { 手机系统 } from '@/models/phone';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import { saveSetting } from '@/services/dbService';
@@ -76,6 +77,14 @@ interface AlbumPanelProps {
   nsfwEnabled: boolean;
   nsfwImageEnabled: boolean;
   mainChatHistory?: 聊天消息[];
+  /** AI 探测用例动作（片 panel-p3）：内嵌 ImageGenerationSettingsTab 所需，取自 App 的 useAiTools，取代直连 services/ai。 */
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
+  testImageGenerationConnection: (config: 文生图API配置) => Promise<string>;
+  fetchImageGenerationModels: (config: 文生图API配置) => Promise<string[]>;
+  fetchComfyWorkflowCandidates: (
+    config: 文生图API配置,
+    source: 'queue' | 'history',
+  ) => Promise<ComfyWorkflowCandidate[]>;
 }
 
 function setEntryReferenceTargets(entries: 相册条目[], entryId: string, characterId: string, enabled: boolean): 相册条目[] {
@@ -93,7 +102,7 @@ function setEntryReferenceTargets(entries: 相册条目[], entryId: string, char
   });
 }
 
-export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [] }: AlbumPanelProps) {
+export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [], fetchModels, testImageGenerationConnection, fetchImageGenerationModels, fetchComfyWorkflowCandidates }: AlbumPanelProps) {
   const [activeTab, setActiveTab] = useState<WorkTab>('manual');
   const [showNsfw, setShowNsfw] = useState(false);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
@@ -1430,6 +1439,10 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
                 onChange={persistGameSettingsChange}
                 apiSettings={apiSettings}
                 onPersistSettings={(next) => Promise.resolve(persistGameSettingsChange(next))}
+                fetchModels={fetchModels}
+                testImageGenerationConnection={testImageGenerationConnection}
+                fetchImageGenerationModels={fetchImageGenerationModels}
+                fetchComfyWorkflowCandidates={fetchComfyWorkflowCandidates}
               />
             )}
           </main>

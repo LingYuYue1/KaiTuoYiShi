@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
 import { useDeviceSettings } from '@/hooks/useDeviceSettings';
+import { useAiTools, type AiToolsActions } from '@/hooks/useAiTools';
 import { LandingPage } from '@/components/layout/LandingPage';
 import { GameView } from '@/components/layout/GameView';
 import { TopBar } from '@/components/layout/TopBar';
@@ -313,6 +314,16 @@ const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDU
 export function App() {
   const { state, actions } = useGame();
   const { persistGameSettings, persistApiSettings, persistTheme, persistWorldbooks, persistApiProfile } = useDeviceSettings();
+  const aiTools = useAiTools();
+  const {
+    fetchModels,
+    testConnection,
+    testImageGenerationConnection,
+    fetchImageGenerationModels,
+    fetchComfyWorkflowCandidates,
+    loadApiErrorReports,
+    clearApiErrorReports,
+  } = aiTools;
   const [showSettings, setShowSettings] = useState(false);
   const [showWorldbookManager, setShowWorldbookManager] = useState(false);
   const [showZhikuManager, setShowZhikuManager] = useState(false);
@@ -694,6 +705,10 @@ export function App() {
             apiSettings: state.apiSettings,
             turnCount: state.turnCount,
             mainChatHistory: state.chatHistory,
+            fetchModels,
+            testImageGenerationConnection,
+            fetchImageGenerationModels,
+            fetchComfyWorkflowCandidates,
           })}
         </Suspense>
       </SystemDrawer>
@@ -788,6 +803,10 @@ export function App() {
               onPersistApiSettings={persistApiSettings}
               onPersistTheme={persistTheme}
               onPersistApiProfile={persistApiProfile}
+              fetchModels={fetchModels}
+              testConnection={testConnection}
+              loadApiErrorReports={loadApiErrorReports}
+              clearApiErrorReports={clearApiErrorReports}
               onSave={actions.handleSave}
               onContinue={actions.handleContinue}
               onLoadSave={loadSaveIntoGame}
@@ -981,6 +1000,10 @@ export function App() {
             onPersistApiSettings={persistApiSettings}
             onPersistTheme={persistTheme}
             onPersistApiProfile={persistApiProfile}
+            fetchModels={fetchModels}
+            testConnection={testConnection}
+            loadApiErrorReports={loadApiErrorReports}
+            clearApiErrorReports={clearApiErrorReports}
             onSave={actions.handleSave}
             onContinue={actions.handleContinue}
             onLoadSave={loadSaveIntoGame}
@@ -1124,6 +1147,11 @@ function renderSystemPanel(
     apiSettings: import('@/models/settings').API设置;
     turnCount: number;
     mainChatHistory: import('@/models/chat').聊天消息[];
+    /** AI 探测用例动作（片 panel-p3）：AlbumPanel 内嵌 ImageGenerationSettingsTab 所需（取自 App 的 useAiTools）。 */
+    fetchModels: AiToolsActions['fetchModels'];
+    testImageGenerationConnection: AiToolsActions['testImageGenerationConnection'];
+    fetchImageGenerationModels: AiToolsActions['fetchImageGenerationModels'];
+    fetchComfyWorkflowCandidates: AiToolsActions['fetchComfyWorkflowCandidates'];
   },
 ) {
   switch (id) {
@@ -1176,6 +1204,10 @@ function renderSystemPanel(
           nsfwEnabled={ctx.gameSettings.enableNsfw}
           nsfwImageEnabled={ctx.gameSettings.文生图系统.enableNsfwImageGeneration}
           mainChatHistory={ctx.mainChatHistory}
+          fetchModels={ctx.fetchModels}
+          testImageGenerationConnection={ctx.testImageGenerationConnection}
+          fetchImageGenerationModels={ctx.fetchImageGenerationModels}
+          fetchComfyWorkflowCandidates={ctx.fetchComfyWorkflowCandidates}
         />
       );
     case 'news':

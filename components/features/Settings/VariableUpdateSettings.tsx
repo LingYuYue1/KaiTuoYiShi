@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API配置项, API设置, 游戏设置, 变量API覆盖 } from '@/models/settings';
-import { fetchModels } from '@/services/ai/apiTools';
+import type { ConnectionTestConfig } from '@/hooks/useAiTools';
 
 interface Props {
   gameSettings: 游戏设置;
@@ -8,6 +8,8 @@ interface Props {
   apiSettings: API设置;
   /** 设置持久化用例动作（片 panel-p2）：gameSettings 落盘，取代直连 saveSetting。 */
   onPersistSettings: (s: 游戏设置) => Promise<void>;
+  /** AI 探测用例动作（片 panel-p3）：模型列表获取，取代直连 services/ai。 */
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
 }
 
 const smallClip =
@@ -33,6 +35,7 @@ export function VariableUpdateTab({
   onGameSettingsChange,
   apiSettings,
   onPersistSettings,
+  fetchModels,
 }: Props) {
   const enabled = gameSettings.enableVariableUpdate;
   const override = gameSettings.variableApi;
