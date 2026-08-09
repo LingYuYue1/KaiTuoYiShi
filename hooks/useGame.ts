@@ -6,7 +6,9 @@ import { 初始化新局checkpoint } from '@/hooks/useGame/commitTurn';
 import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeImageWorkflow';
 import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
-import { beginSession, handleLoadLatest, handleManualSave } from '@/hooks/useGame/saveLoadWorkflow';
+import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
+import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
+import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadLatest, handleManualSave, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
@@ -16,12 +18,25 @@ import type { API配置项 } from '@/models/settings';
 import type { NewestStory字段集 } from '@/models/newestStory';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
-import { saveSetting } from '@/services/dbService';
+import { 提取NPC同行记忆文本列表, type NPC同行记忆条目 } from '@/models/npc';
+import type { STRegexScript } from '@/models/stTypes';
+import { deleteSaveTree, saveSetting, type SaveListItemSummary } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
-import { devLog } from '@/utils/devLog';
+import { devLog, devLogError } from '@/utils/devLog';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
+
+// 面板用例动作的类型出口（片 panel-p1）：tavernRegex 领域类型经门面再导出，
+// 供 PromptModulesTab 以类型形式从门面接收，不再直取 hooks/useGame/ 内部模块。
+export type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
+
+/** 手机记忆即时追加 + 归档压缩 + NPC 台账压缩的入参（PhoneModal 用例动作）。 */
+export interface PhoneMemoryCommitInput {
+  summary: string;
+  npcId?: string | null;
+  force?: boolean;
+}
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -39,6 +54,17 @@ export interface UseGameReturn {
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
     handleRestartOpening: () => Promise<void>;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
+    // ── 面板用例动作（片 panel-p1：数据通道收口）──
+    // 记忆压缩：PhoneModal 的记忆即时追加与归档压缩，含 NPC 台账压缩。
+    handlePhoneMemoryCommit: (input: PhoneMemoryCommitInput) => Promise<void>;
+    // 存档删除：resolve→delete 级联删除，SaveLoadModal 与 StorageManager 共用。
+    handleDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
+    handleDeleteSaveTree: (rootId: string) => Promise<void>;
+    handleClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
+    // 提示词模块：承接 tavernRegex 的提取/分析/试运行（纯函数接线）。
+    handleExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
+    handleAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
+    handleDryRunTavernRegexScript: (script: STRegexScript, sampleText: string) => TavernRegexDryRunResult;
   };
 }
 
@@ -336,6 +362,117 @@ export function useGame(): UseGameReturn {
     return buildContextSnapshot(stateRef.current, kind);
   }, []);
 
+  // ── 面板用例动作（片 panel-p1：数据通道收口）──────────────────────────
+  // 记忆压缩：承接 PhoneModal 的记忆即时追加 + 归档压缩 + NPC 台账压缩。
+  // 纯函数实现保留在 memoryUtils，这里只做接线与状态入口，不复制实现。
+  const handlePhoneMemoryCommit = useCallback(async (input: PhoneMemoryCommitInput): Promise<void> => {
+    const s = stateRef.current;
+    const trimmed = input.summary.trim();
+    if (!trimmed) return;
+    const normalizedSummary = trimmed.startsWith('【手机】') ? trimmed : `【手机】${trimmed}`;
+    const alreadyInMemory = s.记忆.即时记忆.some((item) => item.includes(trimmed))
+      || s.记忆.短期记忆.some((item) => item.includes(trimmed))
+      || s.记忆.中期记忆.some((item) => item.includes(trimmed))
+      || s.记忆.长期记忆.some((item) => item.includes(trimmed));
+    if (!input.force && alreadyInMemory) return;
+    devLog('ui', 'phone-memory-commit-start', { npcId: input.npcId ?? null, force: Boolean(input.force) });
+    const mainConfig: API配置项 = s.apiSettings.configs.find((config) => config.id === s.apiSettings.activeConfigId)
+      ?? s.apiSettings.configs.at(0)
+      ?? { id: '', name: '', provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '', createdAt: 0, updatedAt: 0 };
+    const withImmediate = addImmediateMemory(s.记忆, normalizedSummary, s.turnCount);
+    const compression = await autoCompressMemorySystemWithArchivesAsync(
+      withImmediate,
+      s.turnCount,
+      s.gameSettings.记忆系统,
+      mainConfig,
+    );
+    s.set记忆(compression.memory);
+    if (compression.archives.length) {
+      s.set忆庭((prevYiting) => ({
+        ...prevYiting,
+        回忆档案: [...prevYiting.回忆档案, ...compression.archives],
+      }));
+    }
+    if (input.npcId) {
+      s.setNPC((prev) =>
+        prev.map((npc) => {
+          if (npc.id !== input.npcId) return npc;
+          if (!input.force && 提取NPC同行记忆文本列表(npc).some((item) => item.includes(trimmed))) return npc;
+          const nextEntry: NPC同行记忆条目 = {
+            id: `npc_mem_phone_${s.turnCount}_${Math.random().toString(36).slice(2, 6)}`,
+            回合: s.turnCount,
+            摘要: trimmed,
+            来源: '手机',
+            关联NPCID: [npc.id],
+          };
+          const ledgerCompression = compressNpcMemoryLedger({
+            npcId: npc.id,
+            entries: [...(npc.同行记忆 ?? []), nextEntry],
+            summaries: npc.总结记忆 ?? [],
+            threshold: s.gameSettings.记忆系统.NPC记忆压缩阈值,
+            prompt: s.gameSettings.记忆系统.NPC记忆压缩提示词,
+            turn: s.turnCount,
+            source: '手机',
+          });
+          return {
+            ...npc,
+            同行记忆: ledgerCompression.memories,
+            总结记忆: ledgerCompression.summaries,
+            最近互动: trimmed,
+            共同经历: [...new Set([...(npc.共同经历 ?? []), trimmed])].slice(-8),
+            对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
+            最近回合: s.turnCount,
+          };
+        }),
+      );
+    }
+    devLog('ui', 'phone-memory-commit-done', { npcId: input.npcId ?? null, archives: compression.archives.length });
+  }, []);
+
+  // 存档删除：resolve→delete 级联删除（5d-1b 语义），SaveLoadModal 与 StorageManager 共用。
+  // 确认文案由级联计数生成，删除后由 delete存档目标 负责 newest 祖先重定向与树元信息清理。
+  const handleDeleteSave = useCallback(async (save: SaveListItemSummary): Promise<boolean> => {
+    let deleteTarget: 存档删除目标;
+    try {
+      deleteTarget = await resolve存档删除目标(save);
+    } catch (err) {
+      devLogError('save', 'save-delete-plan-failed', err, { id: save.id });
+      throw err;
+    }
+    const confirmMessage = deleteTarget.cascadeCount !== null && deleteTarget.cascadeCount > 1
+      ? `确定删除这个存档及其子节点？将级联删除 ${deleteTarget.cascadeCount} 个存档，此操作不可恢复。`
+      : '确定删除这个存档？此操作不可恢复。';
+    if (!confirm(confirmMessage)) return false;
+    devLog('save', 'save-delete-cascade', { id: save.id, cascadeCount: deleteTarget.cascadeCount });
+    await delete存档目标(save.id, deleteTarget);
+    return true;
+  }, []);
+
+  // 存档整树删除：dbService 树删除 + 活动树元信息清理，两端组件共用。
+  const handleDeleteSaveTree = useCallback(async (rootId: string): Promise<void> => {
+    await deleteSaveTree(rootId);
+    clearActiveSaveTreeMetaIfMatches({ rootId });
+    devLog('save', 'save-delete-tree', { rootId });
+  }, []);
+
+  // 活动存档树元信息清理（legacy 恢复点批量删除后的逐条收敛入口）。
+  const handleClearActiveSaveTreeMeta = useCallback((target?: { rootId?: string; nodeId?: string } | null): void => {
+    clearActiveSaveTreeMetaIfMatches(target);
+  }, []);
+
+  // 提示词模块：承接 tavernRegex 的提取/分析/试运行（纯函数接线，不复制实现）。
+  const handleExtractTavernRegexScripts = useCallback((rawPreset: unknown): STRegexScript[] => {
+    return extractTavernRegexScripts(rawPreset);
+  }, []);
+
+  const handleAnalyzeTavernRegexScript = useCallback((script: STRegexScript): TavernRegexScriptSafety => {
+    return analyzeTavernRegexScript(script);
+  }, []);
+
+  const handleDryRunTavernRegexScript = useCallback((script: STRegexScript, sampleText: string): TavernRegexDryRunResult => {
+    return dryRunTavernRegexScript(script, sampleText);
+  }, []);
+
   const actions = useMemo(() => ({
     handleSend,
     handleAbort,
@@ -350,6 +487,13 @@ export function useGame(): UseGameReturn {
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,
+    handlePhoneMemoryCommit,
+    handleDeleteSave,
+    handleDeleteSaveTree,
+    handleClearActiveSaveTreeMeta,
+    handleExtractTavernRegexScripts,
+    handleAnalyzeTavernRegexScript,
+    handleDryRunTavernRegexScript,
   }), [
     handleSend,
     handleAbort,
@@ -364,6 +508,13 @@ export function useGame(): UseGameReturn {
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,
+    handlePhoneMemoryCommit,
+    handleDeleteSave,
+    handleDeleteSaveTree,
+    handleClearActiveSaveTreeMeta,
+    handleExtractTavernRegexScripts,
+    handleAnalyzeTavernRegexScript,
+    handleDryRunTavernRegexScript,
   ]);
 
   return {

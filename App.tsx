@@ -747,6 +747,9 @@ export function App() {
               showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
               onSave={actions.handleSave}
               onLoad={loadSaveIntoGame}
+              onDeleteSave={actions.handleDeleteSave}
+              onDeleteSaveTree={actions.handleDeleteSaveTree}
+              onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}
               onClose={() => setShowSaveLoad(false)}
             />
           </Suspense>
@@ -805,6 +808,11 @@ export function App() {
                 void saveSetting('worldbooks', books);
 
               }}
+              onDeleteSave={actions.handleDeleteSave}
+              onDeleteSaveTree={actions.handleDeleteSaveTree}
+              onExtractTavernRegexScripts={actions.handleExtractTavernRegexScripts}
+              onAnalyzeTavernRegexScript={actions.handleAnalyzeTavernRegexScript}
+              onDryRunTavernRegexScript={actions.handleDryRunTavernRegexScript}
               variableSetters={{
                 set旅人: state.set旅人,
                 set世界: state.set世界,
@@ -984,6 +992,11 @@ export function App() {
               state.setWorldbooks(books);
               void saveSetting('worldbooks', books);
             }}
+            onDeleteSave={actions.handleDeleteSave}
+            onDeleteSaveTree={actions.handleDeleteSaveTree}
+            onExtractTavernRegexScripts={actions.handleExtractTavernRegexScripts}
+            onAnalyzeTavernRegexScript={actions.handleAnalyzeTavernRegexScript}
+            onDryRunTavernRegexScript={actions.handleDryRunTavernRegexScript}
             variableSetters={{
               set旅人: state.set旅人,
               set世界: state.set世界,
@@ -1014,8 +1027,6 @@ export function App() {
             phone={state.手机}
             traveler={state.旅人}
             world={state.世界}
-            memory={state.记忆}
-            yiting={state.忆庭}
             news={state.新闻}
             storyWeaving={state.剧情编织}
             zhiku={state.智库}
@@ -1026,9 +1037,7 @@ export function App() {
             npcRecords={state.NPC}
             album={state.相册}
             onPhoneChange={state.set手机}
-            onMemoryChange={state.set记忆}
-            onYitingChange={state.set忆庭}
-            onNpcRecordsChange={state.setNPC}
+            onPhoneMemoryCommit={actions.handlePhoneMemoryCommit}
             onClose={() => setShowPhone(false)}
           />
         </Suspense>
@@ -1053,6 +1062,9 @@ export function App() {
             showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
             onSave={actions.handleSave}
             onLoad={loadSaveIntoGame}
+            onDeleteSave={actions.handleDeleteSave}
+            onDeleteSaveTree={actions.handleDeleteSaveTree}
+            onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}
             onClose={() => setShowSaveLoad(false)}
           />
         </Suspense>

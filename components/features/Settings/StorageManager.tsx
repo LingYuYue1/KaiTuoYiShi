@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   deleteLegacyBackupSaves,
-  deleteSaveTree,
   exportSavePackage,
   exportSaveTreePackage,
   getSaveCatalogRepairState,
@@ -16,7 +15,6 @@ import {
   type SaveCatalogRepairState,
   type SaveListItemSummary,
 } from '@/services/dbService';
-import { clearActiveSaveTreeMetaIfMatches, resolve存档删除目标, delete存档目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
@@ -24,6 +22,10 @@ interface Props {
   onSave: () => Promise<number>;
   onContinue: () => Promise<boolean>;
   onLoadSave: (id: number) => Promise<boolean>;
+  /** 存档删除用例动作：resolve→确认→级联删除（由 App 经 SettingsModal 从 useGame 门面注入）。 */
+  onDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
+  /** 整棵存档树删除用例动作（由 App 经 SettingsModal 从 useGame 门面注入）。 */
+  onDeleteSaveTree: (rootId: string) => Promise<void>;
 }
 
 type Filter = 'all' | 'manual' | 'auto' | 'imported';
@@ -33,7 +35,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoadSave }: Props) {
+export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoadSave, onDeleteSave, onDeleteSaveTree }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -130,21 +132,12 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
 
   const handleDelete = async (id: number) => {
     const target = [...saves, ...legacyBackups].find((save) => save.id === id);
-    let deleteTarget: 存档删除目标;
-    try {
-      deleteTarget = await resolve存档删除目标(target);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : '存档删除过程异常');
-      return;
-    }
-    const confirmMessage = deleteTarget.cascadeCount !== null && deleteTarget.cascadeCount > 1
-      ? `确定删除这个存档及其子节点？将级联删除 ${deleteTarget.cascadeCount} 个存档，此操作不可恢复。`
-      : '确定删除这个存档？此操作不可恢复。';
-    if (!confirm(confirmMessage)) return;
+    if (!target) return;
     setDeletingId(id);
     try {
-      await delete存档目标(id, deleteTarget);
-      await refresh();
+      // 片 panel-p1：resolve→确认→级联删除收敛到门面用例动作，组件只做列表刷新。
+      const ok = await onDeleteSave(target);
+      if (ok) await refresh();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '存档删除过程异常');
     } finally {
@@ -156,8 +149,7 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
     if (!confirm(`确定删除这整棵存档树？将删除 ${group.nodeCount} 个节点，此操作不可恢复。`)) return;
     setDeletingRootId(group.rootId);
     try {
-      await deleteSaveTree(group.rootId);
-      clearActiveSaveTreeMetaIfMatches({ rootId: group.rootId });
+      await onDeleteSaveTree(group.rootId);
       await refresh();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '存档树删除过程异常');

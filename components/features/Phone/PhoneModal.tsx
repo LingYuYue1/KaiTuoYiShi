@@ -1,10 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
-import type { 记忆系统 } from '@/models/memory';
 import type { 手机联系人, 手机会话, 手机系统, 主动来信种子 } from '@/models/phone';
-import type { NPC记录, NPC同行记忆条目 } from '@/models/npc';
-import { 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
+import type { NPC记录 } from '@/models/npc';
+import { 格式化NPC关系, 归一化NPC记录列表, 读取NPC头像 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 世界状态 } from '@/models/world';
 import type { API设置, 游戏设置 } from '@/models/settings';
@@ -13,21 +12,18 @@ import type { 智库系统 } from '@/models/zhiku';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { 创建手机会话, 创建手机会话本地摘要条目, 创建手机会话本地库, 创建手机消息, 计算手机未读, type 手机消息 } from '@/models/phone';
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
-import type { 忆庭系统 } from '@/models/yiting';
-import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import {
   BUILTIN_PHONE_WALLPAPERS,
   DEFAULT_PHONE_CHAT_WALLPAPER,
   DEFAULT_PHONE_HOME_WALLPAPER,
 } from '@/data/builtinPhoneWallpapers';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import type { PhoneMemoryCommitInput } from '@/hooks/useGame';
 
 interface Props {
   phone: 手机系统;
   traveler: 角色数据结构;
   world: 世界状态;
-  memory: 记忆系统;
-  yiting: 忆庭系统;
   news: 新闻条目[];
   storyWeaving: 剧情编织系统;
   zhiku: 智库系统;
@@ -38,9 +34,8 @@ interface Props {
   npcRecords: NPC记录[];
   album?: 相册系统;
   onPhoneChange: React.Dispatch<React.SetStateAction<手机系统>>;
-  onMemoryChange: React.Dispatch<React.SetStateAction<记忆系统>>;
-  onYitingChange: React.Dispatch<React.SetStateAction<忆庭系统>>;
-  onNpcRecordsChange: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+  /** 记忆用例动作：即时追加 + 归档压缩 + NPC 台账压缩（由 App 从 useGame 门面注入）。 */
+  onPhoneMemoryCommit: (input: PhoneMemoryCommitInput) => Promise<void>;
   onClose: () => void;
 }
 
@@ -125,7 +120,6 @@ export function PhoneModal({
   phone,
   traveler,
   world,
-  memory,
   news,
   zhiku,
   apiSettings,
@@ -135,9 +129,7 @@ export function PhoneModal({
   npcRecords,
   album,
   onPhoneChange,
-  onMemoryChange,
-  onYitingChange,
-  onNpcRecordsChange,
+  onPhoneMemoryCommit,
   onClose,
 }: Props) {
   const [activeApp, setActiveApp] = useState<PhoneApp | null>(null);
@@ -156,10 +148,6 @@ export function PhoneModal({
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
   const [mobileView, setMobileView] = useState<MobilePhoneView>('list');
   const normalizedNpcRecords = useMemo(() => 归一化NPC记录列表(npcRecords), [npcRecords]);
-  const mainConfig = useMemo(
-    () => apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? null,
-    [apiSettings.activeConfigId, apiSettings.configs],
-  );
 
   const derivedContacts = useMemo(
     () =>
@@ -609,61 +597,9 @@ export function PhoneModal({
   };
 
   const commitPhoneMemory = async (summary: string, contact?: 手机联系人, options: { force?: boolean } = {}) => {
-    const trimmed = summary.trim();
-    if (!trimmed) return;
-    const normalizedSummary = trimmed.startsWith('【手机】') ? trimmed : `【手机】${trimmed}`;
-    const alreadyInMemory = memory.即时记忆.some((item) => item.includes(trimmed))
-      || memory.短期记忆.some((item) => item.includes(trimmed))
-      || memory.中期记忆.some((item) => item.includes(trimmed))
-      || memory.长期记忆.some((item) => item.includes(trimmed));
-    if (!options.force && alreadyInMemory) return;
-    const withImmediate = addImmediateMemory(memory, normalizedSummary, turnCount);
-    const compression = await autoCompressMemorySystemWithArchivesAsync(
-      withImmediate,
-      turnCount,
-      gameSettings.记忆系统,
-      mainConfig ?? apiSettings.configs.at(0) ?? { id: '', name: '', provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '', createdAt: 0, updatedAt: 0 },
-    );
-    onMemoryChange(compression.memory);
-    if (compression.archives.length) {
-      onYitingChange((prevYiting) => ({
-        ...prevYiting,
-        回忆档案: [...prevYiting.回忆档案, ...compression.archives],
-      }));
-    }
-    if (contact?.npcId) {
-      onNpcRecordsChange((prev) =>
-        prev.map((npc) => {
-          if (npc.id !== contact.npcId) return npc;
-          if (!options.force && 提取NPC同行记忆文本列表(npc).some((item) => item.includes(trimmed))) return npc;
-          const nextEntry: NPC同行记忆条目 = {
-            id: `npc_mem_phone_${turnCount}_${Math.random().toString(36).slice(2, 6)}`,
-            回合: turnCount,
-            摘要: trimmed,
-            来源: '手机',
-            关联NPCID: [npc.id],
-          };
-          const ledgerCompression = compressNpcMemoryLedger({
-            npcId: npc.id,
-            entries: [...(npc.同行记忆 ?? []), nextEntry],
-            summaries: npc.总结记忆 ?? [],
-            threshold: gameSettings.记忆系统.NPC记忆压缩阈值,
-            prompt: gameSettings.记忆系统.NPC记忆压缩提示词,
-            turn: turnCount,
-            source: '手机',
-          });
-          return {
-            ...npc,
-            同行记忆: ledgerCompression.memories,
-            总结记忆: ledgerCompression.summaries,
-            最近互动: trimmed,
-            共同经历: [...new Set([...(npc.共同经历 ?? []), trimmed])].slice(-8),
-            对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
-            最近回合: turnCount,
-          };
-        }),
-      );
-    }
+    // 片 panel-p1：记忆即时追加、归档压缩与 NPC 台账压缩已收敛到 useGame 门面
+    // 用例动作（handlePhoneMemoryCommit），组件只做入参组装与状态入口接线。
+    await onPhoneMemoryCommit({ summary, npcId: contact?.npcId, force: options.force });
   };
 
   const handleSelectChat = (chatId: string) => {

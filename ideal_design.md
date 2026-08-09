@@ -43,6 +43,8 @@
 
 **修订记录**
 
+- **2026-08-09 现状登记（panel-p1 回归排查）**：开发团队排查 panel-p1 门面收口后的人工测试回归。开发团队确认两个问题均为 p1 前既有缺陷，非收口引入。存档删除时的 BFS 无限遍历问题登记为暂缓项（见 §8 第 6 条）。开发团队修复提示词模块的嵌套按钮结构缺陷。
+- **2026-08-09 现状对齐（面板用例化）**：开发团队登记功能面板层审计结果。开发团队细化路线图项目 4 的迁移顺序与三处数据通道破口子任务。开发团队将设置持久化闭环收敛与 1.1 B 类容器迁移挂钩。
 - **2026-08-09 现状对齐（lint-clean）**：开发团队清剿 eslint-suppressions.json（2226→212，-90.5%）。开发团队将路线图 #8 更新为已落实，剩余压制为异构厂商 JSON 解析层等豁免项。
 - **2026-08-09 现状对齐（5e）**：开发团队将 D4 状态更新为已落实。开发团队登记阶段 5e 的封版剥离、守卫机制与 activeWorkflow 迁移。开发团队将导入路径 queueTasks 残留登记为规划阶段 11。
 - **2026-08-08 现状对齐（5d-2）**：系统将读取流程接入分叉 API。开发团队更新 D6 状态与 1.2、1.3、1.5 的现状描述。开发团队登记 5d-2 阶段与备份类恢复点修复。
@@ -63,7 +65,7 @@ useGameState 是四类生命周期各异的租客混装容器。这一事实是�
 | 租客分类 | 包含内容 | 读取存档与封版行为 |
 | --- | --- | --- |
 | **A 局内领域切片** | 旅人、世界、chatHistory、记忆、忆庭、智库、手机、非玩家角色、相册、新闻、剧情、剧情编织、变量批处理、queueTasks、回合计数。包含 macroGlobalVars、worldbookTriggerStates、pendingOpeningTrigger 等顶层存档键。 | 系统调用 applySaveToState 重置这些状态。系统将这些状态持久化到 newest 或检查点。 |
-| **B 设备与内容设置** | apiSettings、gameSettings、currentTheme、worldbooks。 | 读取存档时系统保留这些状态。这些状态与当前对局无关。开发团队计划将这些状态迁移至 useDeviceSettings 等独立的管理器对象。 |
+| **B 设备与内容设置** | apiSettings、gameSettings、currentTheme、worldbooks。 | 读取存档时系统保留这些状态。这些状态与当前对局无关。开发团队计划将这些状态迁移至 useDeviceSettings 等独立的管理器对象。该迁移与路线图项目 4 的设置持久化闭环收敛协同执行。 |
 | **C 工作流瞬时态** | loading、turnStatus、实时召回摘要、实时召回完整内容、待处理变量、中断的工作流、中止控制器引用、重新生成上下文引用、sessionEpoch、流式消息。 | 系统在切换会话时整体清空这些状态。系统通过新会话重建这些状态。这些状态永远不进入检查点。 |
 | **D 导航与用户界面** | view、是否有存档变量。 | 这些状态仅用于界面展示。系统保持 view 对象轻量以留作 URL 表现层接口。系统可以删除无效的存档判断变量，或者通过目录派生该变量。 |
 
@@ -198,6 +200,8 @@ useGameState 是四类生命周期各异的租客混装容器。这一事实是�
 2. **迁移 C 类状态容器数据**：系统将状态数据迁移至 activeWorkflow 单一管理对象。系统通过该对象派生加载、取消、流式输出、召回和变量结算等状态。系统同步解决 queueTasks 的工作流属主问题。系统已在阶段 5e 落实该阶段。
 3. **增加封版剥离守卫**：系统在 commitTurn 函数中剥离 queueTasks 字段。系统增加执行期和静态核验机制。系统已在阶段 5e 落实该阶段。
 4. **将面板改造为用例**：系统将手机、相册、剧情、智库、同伴和设置面板改造为用例与投影模式。开发团队根据审计报告安排迁移顺序并保留相应语义。
+   **审计登记（2026-08-09）**：功能面板层仍是业务逻辑重镇——13 个设置页签各自重复「loadSetting→归一化→saveSetting('gameSettings')」持久化闭环；NewGameWizard（4692 行、45 处 useState）内嵌开局编排；AlbumPanel、ZhikuPanel、PromptModulesTab 内嵌 AI 与持久化闭环。数据通道破口登记如下：① 8 处组件直取 useGame 领域函数（PhoneModal 直用 addImmediateMemory/compressNpcMemoryLedger、SaveLoadModal/StorageManager 直用存档树删除、PromptModulesTab 直用 tavernRegexProcessor）；② 25+ 组件直连 dbService；③ 17 处组件直连 services/ai。
+   **迁移顺序**：先收口数据通道（门面补用例动作 → 设置持久化收敛至 useDeviceSettings 管理器 → AI 直连收敛），再按重灾区序面板用例化（NewGameWizard → AlbumPanel → ZhikuPanel → PromptModulesTab → PhoneModal → 设置面板）。每步交付形态一致：领域逻辑进 hooks/useGame 或 services/，面板退化为纯 props 投影，关键路径 devLog 埋点。
 5. **统一恢复语义**：系统将启动、继续和中断工作流三个入口收敛为统一的解析器。系统根据给定的 nodeId 水合会话状态。
 6. **落实 URL 表现层**：系统引入轻量 wouter 路由库。系统将路由逻辑隔离在翻译器接口之后。系统落实三态路由功能。系统执行内部树操作替换状态时不污染浏览器历史记录。系统将返回键行为定义为返回上一个导航上下文并重建会话。系统独立处理 OAuth 回调与代码块重载流程。
 7. **重组项目目录**：开发团队按照内核层、业务管线层和视图展现层三级结构重组文件树。开发团队仅修改相对路径。
@@ -259,3 +263,4 @@ useGameState 是四类生命周期各异的租客混装容器。这一事实是�
 3. **边缘计算与中间件代理**：开发团队暂不审查和改造 Vite 配置文件中的中间件转发逻辑以及云函数的代码。
 4. **多端打包环境遗留代码**：开发团队在首轮清理中物理删减已废止的桌面端适配代码。
 5. **V1 预设运行时读迁移（assistantPrefill）**：设置页挂载清理 effect 清空 `stPresets`/`currentStPresetId`（该 effect 在 HEAD 已存在，非 lint-clean 引入）；lint-clean sweep 已物理删除 V1 预设管理 UI（切换/保存/删除/采样同步）。主流程 `stage3_promptAssembly.ts` 仍读 V1 状态取 `assistantPrefill`，与清理行为不一致——访问设置页后 prefill 静默失效。`migrateSTPresetsV1ToV2` 已备好但零调用，`systemPromptBuilder` 已切 V2 路径。暂缓处理；后续落实方案：加载期接入 V1→V2 迁移保留旧预设 + `stage3` 改读 V2 激活预设的 `assistant_prefill`。
+6. **存档树 BFS 环防护（存档删除 RangeError）**：删除存档时 `collectSaveTreeNodeSubtreeSummaries`（dbService.ts:947）对存档树做无环检测的 BFS。实际存档数据若存在自指（`parentNodeId === nodeId`）或互指环，遍历无限增长并抛出 `RangeError: Invalid array length`。该问题在 panel-p1 人工测试中以 save id 23 复现，属 p1 前既有缺陷（BFS 与删除路径在 HEAD 已存在，p1 仅改调用入口）。修复方向：优先排查各数据库版本升级脚本与 nodeId 重映射路径，确保迁移结果不产生环状 parentNodeId 链，而非在查询路径打补丁。暂缓处理。

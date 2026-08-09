@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  deleteSaveTree,
   deleteLegacyBackupSaves,
   exportSavePackage,
   exportSaveTreePackage,
@@ -16,7 +15,6 @@ import {
   type SaveCatalogRepairState,
   type SaveListItemSummary,
 } from '@/services/dbService';
-import { clearActiveSaveTreeMetaIfMatches, resolve存档删除目标, delete存档目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import { devLogError } from '@/utils/devLog';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
@@ -24,6 +22,12 @@ interface Props {
   showAutoArchives: boolean;
   onSave: () => Promise<number>;
   onLoad: (id: number) => Promise<boolean>;
+  /** 存档删除用例动作：resolve→确认→级联删除（由 App 从 useGame 门面注入）。 */
+  onDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
+  /** 整棵存档树删除用例动作（由 App 从 useGame 门面注入）。 */
+  onDeleteSaveTree: (rootId: string) => Promise<void>;
+  /** 活动存档树元信息清理用例动作（由 App 从 useGame 门面注入）。 */
+  onClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
   onClose: () => void;
 }
 
@@ -36,7 +40,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Props) {
+export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -160,25 +164,19 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
 
   const handleDelete = async (id: number) => {
     const target = [...saves, ...legacyBackups].find((save) => save.id === id);
-    let deleteTarget: 存档删除目标;
-    try {
-      deleteTarget = await resolve存档删除目标(target);
-    } catch (err) {
-      devLogError('save', 'save-delete-plan-failed', err, { id });
-      alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
-      return;
-    }
-    const confirmMessage = deleteTarget.cascadeCount !== null && deleteTarget.cascadeCount > 1
-      ? `确定删除这个存档及其子节点？将级联删除 ${deleteTarget.cascadeCount} 个存档，此操作不可恢复。`
-      : '确定删除这个存档？此操作不可恢复。';
-    if (!confirm(confirmMessage)) return;
+    if (!target) return;
     setDeletingId(id);
-    setSaves((prev) => prev.filter((save) => save.id !== id));
-    setLegacyBackups((prev) => prev.filter((save) => save.id !== id));
     try {
-      await delete存档目标(id, deleteTarget);
-      setDeletingId(null);
-      await refresh();
+      // 片 panel-p1：resolve→确认→级联删除收敛到门面用例动作，组件只做列表乐观更新。
+      const ok = await onDeleteSave(target);
+      if (ok) {
+        setSaves((prev) => prev.filter((save) => save.id !== id));
+        setLegacyBackups((prev) => prev.filter((save) => save.id !== id));
+        setDeletingId(null);
+        await refresh();
+      } else {
+        setDeletingId(null);
+      }
     } catch (err) {
       devLogError('save', 'save-delete-failed', err, { id });
       alert(`删除失败：${err instanceof Error ? err.message : '存档删除过程异常'}`);
@@ -194,7 +192,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
     try {
       await deleteLegacyBackupSaves();
       for (const backup of legacyBackups) {
-        clearActiveSaveTreeMetaIfMatches(backup.saveTree ? { nodeId: backup.saveTree.nodeId } : null);
+        onClearActiveSaveTreeMeta(backup.saveTree ? { nodeId: backup.saveTree.nodeId } : null);
       }
       await refresh();
     } catch (err) {
@@ -210,8 +208,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
     setDeletingRootId(rootId);
     setSaves((prev) => prev.filter((save) => save.saveTree?.rootId !== rootId));
     try {
-      await deleteSaveTree(rootId);
-      clearActiveSaveTreeMetaIfMatches({ rootId });
+      await onDeleteSaveTree(rootId);
       setDeletingRootId(null);
       void refresh();
     } catch (err) {

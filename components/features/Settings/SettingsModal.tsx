@@ -38,9 +38,11 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import { saveSetting } from '@/services/dbService';
+import { saveSetting, type SaveListItemSummary } from '@/services/dbService';
 import type { 世界书 } from '@/models/worldbook';
 import type { 剧情节点 } from '@/models/plot';
+import type { STRegexScript } from '@/models/stTypes';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame';
 
 export type SettingsTab = Tab;
 
@@ -86,6 +88,14 @@ interface SettingsModalProps {
   worldbooks: 世界书[];
   /** Phase 7.2：世界书变更回调（同时负责持久化到 IndexedDB）。 */
   onWorldbooksChange: (books: 世界书[]) => void;
+  /** 面板用例动作（片 panel-p1）：存档删除 resolve→级联删除，转发给存档管理页签。 */
+  onDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
+  /** 面板用例动作（片 panel-p1）：整棵存档树删除，转发给存档管理页签。 */
+  onDeleteSaveTree: (rootId: string) => Promise<void>;
+  /** 面板用例动作（片 panel-p1）：tavernRegex 提取/分析/试运行，转发给提示词模块页签。 */
+  onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
+  onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
+  onDryRunTavernRegexScript: (script: STRegexScript, sampleText: string) => TavernRegexDryRunResult;
 }
 
 type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage';
@@ -133,6 +143,11 @@ export function SettingsModal({
   initialTab = 'api',
   worldbooks,
   onWorldbooksChange,
+  onDeleteSave,
+  onDeleteSaveTree,
+  onExtractTavernRegexScripts,
+  onAnalyzeTavernRegexScript,
+  onDryRunTavernRegexScript,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
@@ -189,6 +204,9 @@ export function SettingsModal({
             onWorldbooksChange={onWorldbooksChange}
             apiSettings={apiSettings}
             onApiSettingsChange={onApiSettingsChange}
+            onExtractTavernRegexScripts={onExtractTavernRegexScripts}
+            onAnalyzeTavernRegexScript={onAnalyzeTavernRegexScript}
+            onDryRunTavernRegexScript={onDryRunTavernRegexScript}
           />
         );
       case 'tavernPresets':
@@ -200,6 +218,9 @@ export function SettingsModal({
             onWorldbooksChange={onWorldbooksChange}
             apiSettings={apiSettings}
             onApiSettingsChange={onApiSettingsChange}
+            onExtractTavernRegexScripts={onExtractTavernRegexScripts}
+            onAnalyzeTavernRegexScript={onAnalyzeTavernRegexScript}
+            onDryRunTavernRegexScript={onDryRunTavernRegexScript}
           />
         );
       case 'extra':
@@ -224,7 +245,7 @@ export function SettingsModal({
       case 'theme':
         return <ThemeSettingsTab current={currentTheme} onChange={persistThemeChange} />;
       case 'storage':
-        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} />;
+        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} />;
     }
   };
 

@@ -12,10 +12,10 @@ import {
   parseSTPresetV2,
   isSTImportedModule,
 } from '@/utils/stPresetParser';
-import type { STPresetEntryV1, STPresetEntryV2, STWorldInfoEntry } from '@/models/stTypes';
+import type { STPresetEntryV1, STPresetEntryV2, STRegexScript, STWorldInfoEntry } from '@/models/stTypes';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import type { 世界书 } from '@/models/worldbook';
-import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts } from '@/hooks/useGame/tavernRegexProcessor';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -116,6 +116,10 @@ interface Props {
   apiSettings: API设置;
   /** Phase 8：API 设置变更回调（由父级负责持久化）。 */
   onApiSettingsChange: (s: API设置) => void;
+  /** 提示词模块用例动作（片 panel-p1）：tavernRegex 提取/分析/试运行（由 App 经 SettingsModal 从 useGame 门面注入）。 */
+  onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
+  onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
+  onDryRunTavernRegexScript: (script: STRegexScript, sampleText: string) => TavernRegexDryRunResult;
 }
 
 const smallClip =
@@ -227,7 +231,10 @@ function getPresetRegexReplaceText(script: Record<string, unknown>): string {
   return readPresetRegexText(script.replace_string) || readPresetRegexText(script.replaceString) || readPresetRegexText(script.replace);
 }
 
-function getPresetRegexKindLabel(kind: ReturnType<typeof analyzeTavernRegexScript>['kind']): string {
+/** 正则脚本安全类型的 kind 联合字面量：与门面 analyze 动作返回值结构一致（不直取内部模块类型）。 */
+type PresetRegexKind = 'prompt_preprocess' | 'output_postprocess' | 'display_replace' | 'blocked';
+
+function getPresetRegexKindLabel(kind: PresetRegexKind): string {
   if (kind === 'prompt_preprocess') return '提示词预处理';
   if (kind === 'output_postprocess') return '输出后处理';
   if (kind === 'display_replace') return '显示层替换';
@@ -281,7 +288,7 @@ function TogglePill({
   );
 }
 
-export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbooks, onWorldbooksChange }: Props) {
+export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbooks, onWorldbooksChange, onExtractTavernRegexScripts, onAnalyzeTavernRegexScript, onDryRunTavernRegexScript }: Props) {
   const isTavernMode = mode === 'tavern';
   const modules = settings.promptModules;
   const currentV2Preset = useMemo(() => {
@@ -531,7 +538,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
           isBuiltin: false,
         };
         const importedWorldInfoCount = getPresetWorldInfoEntries(parsedV2.preset.world_info).length;
-        const importedRegexCount = extractTavernRegexScripts(parsedV2.preset).length;
+        const importedRegexCount = onExtractTavernRegexScripts(parsedV2.preset).length;
         const cleanedModules = modules.filter((m) => !isSTImportedModule(m) && !m.id.startsWith('adapted_'));
         onWorldbooksChange(worldbooks.filter((w) => !w.id.startsWith('stwb_')));
         onChange({
@@ -795,6 +802,9 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
                 onPresetChange={patchV2Preset}
                 onExport={exportV2Preset}
                 onDelete={deletePresetV2}
+                onExtractTavernRegexScripts={onExtractTavernRegexScripts}
+                onAnalyzeTavernRegexScript={onAnalyzeTavernRegexScript}
+                onDryRunTavernRegexScript={onDryRunTavernRegexScript}
               />
             </div>
             <div
@@ -987,6 +997,9 @@ function V2PresetSwitcher({
   onPresetChange,
   onExport,
   onDelete,
+  onExtractTavernRegexScripts,
+  onAnalyzeTavernRegexScript,
+  onDryRunTavernRegexScript,
 }: {
   presets: STPresetEntryV2[];
   currentId: string | null;
@@ -999,6 +1012,9 @@ function V2PresetSwitcher({
   onPresetChange: (presetId: string, preset: STPresetEntryV2['preset']) => void;
   onExport: (preset: STPresetEntryV2) => void;
   onDelete: (presetId: string) => void;
+  onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
+  onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
+  onDryRunTavernRegexScript: (script: STRegexScript, sampleText: string) => TavernRegexDryRunResult;
 }) {
   const current = presets.find((p) => p.id === currentId) ?? null;
   const characterIds = current?.preset.prompt_order.map((item) => item.character_id) ?? [];
@@ -1048,8 +1064,8 @@ function V2PresetSwitcher({
   const worldInfoViewEntries = getPresetWorldInfoViewEntries(current?.preset.world_info);
   const enabledWorldInfoCount = worldInfoEntries.filter(isPresetWorldInfoEnabled).length;
   const constantWorldInfoCount = worldInfoEntries.filter((entry) => isPresetWorldInfoEnabled(entry) && isPresetWorldInfoConstant(entry)).length;
-  const regexScripts = extractTavernRegexScripts(current?.preset);
-  const regexScriptSafety = regexScripts.map(analyzeTavernRegexScript);
+  const regexScripts = onExtractTavernRegexScripts(current?.preset);
+  const regexScriptSafety = regexScripts.map(onAnalyzeTavernRegexScript);
   const enabledRegexScriptCount = regexScriptSafety.filter((item) => !item.disabled).length;
   const riskyRegexScriptCount = regexScriptSafety.filter((item) => item.risky).length;
   const enabledRiskyRegexScriptCount = regexScriptSafety.filter((item) => !item.disabled && item.risky).length;
@@ -1057,7 +1073,7 @@ function V2PresetSwitcher({
   const effectiveRegexIndex = regexScripts.length > 0 ? Math.min(selectedRegexIndex, regexScripts.length - 1) : 0;
   const selectedRegexScript = regexScripts.at(effectiveRegexIndex);
   const selectedRegexSafety = selectedRegexScript ? regexScriptSafety[effectiveRegexIndex] : null;
-  const selectedRegexDryRun = selectedRegexScript ? dryRunTavernRegexScript(selectedRegexScript, regexDryRunSample) : null;
+  const selectedRegexDryRun = selectedRegexScript ? onDryRunTavernRegexScript(selectedRegexScript, regexDryRunSample) : null;
   const scanIssues = [
     unmatchedSlotCount > 0 ? `${unmatchedSlotCount} 个顺序项没有匹配内容` : '',
     disabledRuntimeCount > 0 ? `${disabledRuntimeCount} 个运行时槽位被关闭` : '',
@@ -1361,11 +1377,18 @@ function V2PresetSwitcher({
                 const active = selectedSlot?.identifier === slot.identifier;
                 const contentPreview = prompt?.content.replace(/\s+/g, ' ').trim().slice(0, 80);
                 return (
-                  <button
+                  <div
                     key={`${slot.identifier}_${index}`}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedSlotId(slot.identifier)}
-                    className="grid items-start gap-2 px-3 py-2 text-left text-sm transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedSlotId(slot.identifier);
+                      }
+                    }}
+                    className="grid cursor-pointer items-start gap-2 px-3 py-2 text-left text-sm transition-all"
                     style={{
                       gridTemplateColumns: '2.25rem minmax(0, 1fr) auto',
                       background: active ? 'rgba(var(--tj-accent-primary), 0.12)' : 'transparent',
@@ -1404,7 +1427,7 @@ function V2PresetSwitcher({
                       </span>
                       <TogglePill checked={slot.enabled} disabled={!canToggleOrderSlot} onChange={(next) => patchOrderSlot(slot.identifier, { enabled: next })} />
                     </span>
-                  </button>
+                  </div>
                 );
               })}
               {shownOrderSlots.length === 0 && (
