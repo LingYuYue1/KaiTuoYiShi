@@ -24,11 +24,11 @@ const TAG_RULES: TagRule[] = [
 const LEGACY_STRIP_ONLY_TAGS = ['战斗', 'battle', 'combat', '战斗记录'];
 
 function normalizeTag(tag: string): string {
-  return tag.replace(/[\/\s]/g, '').toLowerCase();
+  return tag.replace(/[/\s]/g, '').toLowerCase();
 }
 
 function escapeRegExp(text: string): string {
-  return text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  return text.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
 }
 
 function stripProtocolBlocksFromBody(body: string): string {
@@ -135,7 +135,7 @@ export function repairTags(raw: string): string {
 
 function buildTagPattern(): RegExp {
   const allTags = TAG_RULES.flatMap((r) => [r.tag, ...r.aliases]);
-  const escaped = allTags.map((t) => t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+  const escaped = allTags.map((t) => t.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'));
   const unique = [...new Set(escaped)];
   return new RegExp(`<(${unique.join('|')})>([\\s\\S]*?)(?=<(?:${unique.join('|')})>|$)`, 'gi');
 }
@@ -148,8 +148,8 @@ export function cleanActionOptionText(text: string): string {
       .replace(/^[-*•·]\s*/, '')
       .replace(/^[（(]?\d+[）)]\s*/, '')
       .replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '')
-      .replace(/^\d+[\.\)、:：]\s*/, '')
-      .replace(/^[A-Za-z][\.\)、:：]\s*/, '')
+      .replace(/^\d+[.)、:：]\s*/, '')
+      .replace(/^[A-Za-z][.)、:：]\s*/, '')
       .replace(/^(?:选项|选择|行动|方案)\s*[一二三四五六七八九十\dA-Da-d]+\s*[:：.)、-]\s*/, '')
       .replace(/^(?:选项|选择|行动|方案)\s*[:：]\s*/, '')
       .trim();
@@ -178,7 +178,7 @@ export function parseActionOptionsBlock(optionsBlock: string): string[] {
     if (!normalizedLine) return [];
 
     const inlineEnumeratedMatches = Array.from(
-      normalizedLine.matchAll(/(?:^|\s)((?:\d+[\.)、:：]|[A-Za-z][\.)、:：]|[(（]\d+[)）]|[①②③④⑤⑥⑦⑧⑨⑩])\s*[\s\S]*?)(?=\s+(?:\d+[\.)、:：]|[A-Za-z][\.)、:：]|[(（]\d+[)）]|[①②③④⑤⑥⑦⑧⑨⑩])\s*|$)/g),
+      normalizedLine.matchAll(/(?:^|\s)((?:\d+[.)、:：]|[A-Za-z][.)、:：]|[(（]\d+[)）]|[①②③④⑤⑥⑦⑧⑨⑩])\s*[\s\S]*?)(?=\s+(?:\d+[.)、:：]|[A-Za-z][.)、:：]|[(（]\d+[)）]|[①②③④⑤⑥⑦⑧⑨⑩])\s*|$)/g),
     ).map((match) => (match[1] || '').trim()).filter(Boolean);
     if (inlineEnumeratedMatches.length >= 2) {
       return inlineEnumeratedMatches.map(cleanActionOptionText);
@@ -216,7 +216,7 @@ export function parseResponse(rawText: string, options?: { repair?: boolean }): 
   result.rawText = rawText;
 
   const allTagNames = TAG_RULES.flatMap((r) => [r.tag, ...r.aliases]);
-  const escapedTags = allTagNames.map((t) => t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+  const escapedTags = allTagNames.map((t) => t.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'));
   const uniqueEscaped = [...new Set(escapedTags)];
   // AI 偶发会写闭合标签 `</正文>`，提取段内容时把粘在末尾的闭合标签剥掉。
   const trailingCloseTagRe = new RegExp(`\\s*<\\s*/\\s*(?:${uniqueEscaped.join('|')})\\s*>\\s*$`, 'i');
@@ -308,15 +308,15 @@ export function parseResponse(rawText: string, options?: { repair?: boolean }): 
  * 这两种情况都应触发自动重试。
  */
 export function isEmptyResponse(parsed: 解析后回复): boolean {
-  const hasBody = Boolean(parsed.body?.trim());
-  const hasThinking = Boolean(parsed.thinking?.trim());
-  const hasMemory = Boolean(parsed.memory?.trim());
+  const hasBody = Boolean(parsed.body.trim());
+  const hasThinking = Boolean(parsed.thinking.trim());
+  const hasMemory = Boolean(parsed.memory.trim());
   const hasWorldEvents = Array.isArray(parsed.worldEvents) && parsed.worldEvents.some((e) => e.trim());
   const hasActionOptions = Array.isArray(parsed.actionOptions) && parsed.actionOptions.some((o) => o.trim());
-  const hasVariableDraft = Boolean(parsed.variableDraft?.trim());
-  const hasStoryPlan = Boolean(parsed.storyPlan?.trim());
+  const hasVariableDraft = Boolean(parsed.variableDraft.trim());
+  const hasStoryPlan = Boolean(parsed.storyPlan.trim());
   const hasAwakenContent = Boolean(
-    parsed.awakenInvite?.trim() || parsed.awakenQuestions?.trim() || parsed.awakenJudgement?.trim(),
+    parsed.awakenInvite.trim() || parsed.awakenQuestions.trim() || parsed.awakenJudgement.trim(),
   );
   return !hasBody && !hasThinking && !hasMemory && !hasWorldEvents && !hasActionOptions
     && !hasVariableDraft && !hasStoryPlan && !hasAwakenContent;

@@ -20,8 +20,8 @@ export interface ImagePromptTokenizerResult {
 }
 
 export function buildImagePromptTokenizerConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
-  const mainConfig = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
-  if (!settings.文生图系统.enablePromptTokenizer || !mainConfig) return null;
+  const mainConfig: API配置项 | undefined = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);
+  if (!settings.文生图系统.enablePromptTokenizer || mainConfig === undefined) return null;
   const override = settings.文生图系统.词组转化器API;
   return {
     ...mainConfig,
@@ -140,8 +140,8 @@ function parseTokenizerJson(raw: string, fallbackPrompt: string, fallbackNegativ
   try {
     const parsed = JSON.parse(jsonText) as Partial<ImagePromptTokenizerResult>;
     return {
-      prompt: String(parsed.prompt || fallbackPrompt).trim(),
-      negative: String(parsed.negative || fallbackNegative).trim(),
+      prompt: (parsed.prompt || fallbackPrompt).trim(),
+      negative: (parsed.negative || fallbackNegative).trim(),
     };
   } catch {
     return {

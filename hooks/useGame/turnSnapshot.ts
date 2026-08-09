@@ -38,7 +38,7 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
 
 function restoreAlbumSnapshot(snapshotAlbum: UseGameStateReturn['相册'], currentAlbum: 相册系统): 相册系统 {
   const normalized = 归一化相册系统(snapshotAlbum);
-  const currentAssets = new Map((currentAlbum.assets ?? []).map((asset) => [asset.id, asset]));
+  const currentAssets = new Map(currentAlbum.assets.map((asset) => [asset.id, asset]));
   return {
     ...normalized,
     assets: normalized.assets.map((asset) => {

@@ -11,7 +11,7 @@ interface InputAreaProps {
   canRestartOpening?: boolean;
   canReroll?: boolean;
   onRestartOpening?: () => void;
-  onReroll?: () => string | void | Promise<string | void>;
+  onReroll?: () => string | undefined | Promise<string | undefined>;
   streamingEnabled?: boolean;
   onToggleStreaming?: () => void;
   /** 输入区状态条的唯一状态源（管线在相位边界写入）。 */
@@ -36,7 +36,7 @@ function isMobileTextInput() {
   };
   if (mobileNavigator.userAgentData?.mobile === true) return true;
 
-  return window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
+  return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 }
 
 export const InputArea = memo(function InputArea({
@@ -70,9 +70,11 @@ export const InputArea = memo(function InputArea({
     if (!recoveryDraft || appliedRecoveryRef.current === recoveryDraft.workflowId) return;
     appliedRecoveryRef.current = recoveryDraft.workflowId;
     if (!input.trim()) {
-      setInput(recoveryDraft.input);
-      lastSubmittedRef.current = recoveryDraft.input;
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        setInput(recoveryDraft.input);
+        lastSubmittedRef.current = recoveryDraft.input;
+        inputRef.current?.focus();
+      });
     }
   }, [input, recoveryDraft]);
 
@@ -124,7 +126,7 @@ export const InputArea = memo(function InputArea({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key !== 'Enter' || e.shiftKey) return;
-      if (isComposingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+      if (isComposingRef.current || e.nativeEvent.isComposing) return;
       if (isMobileTextInput()) return;
 
       e.preventDefault();
@@ -228,7 +230,7 @@ export const InputArea = memo(function InputArea({
           title="重roll"
           hint={canReroll ? undefined : '需先有回复'}
           disabled={!canReroll || loading || disabled}
-          onClick={handleRerollClick}
+          onClick={() => void handleRerollClick()}
         />
         <IconButton
           glyph={streamingEnabled ? '⟿' : '◐'}

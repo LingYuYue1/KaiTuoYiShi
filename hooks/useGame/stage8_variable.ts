@@ -31,6 +31,9 @@ export async function stage8_variable(
     travelerAfter,
     yitingEnabled,
   } = d;
+  if (!displayText || !mem) {
+    throw new Error('stage8_variable: stage5/6 必须写入 displayText 与 mem');
+  }
 
   pushQueueTask(state, 'variable', state.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
     detail: state.gameSettings.enableVariableUpdate ? '正在调用变量模型校准正文。' : '变量更新未启用，已跳过。',
@@ -40,12 +43,12 @@ export async function stage8_variable(
     state,
     mainApiConfig: config,
     userInput,
-    body: displayText!,
-    variableDraft: (parsedForDisplay as any)?.variableDraft,
+    body: displayText,
+    variableDraft: parsedForDisplay?.variableDraft,
     turnAfter: turnCountAtStart + 1,
-    memorySystemSnapshot: mem!,
-    travelerSnapshot: travelerAfter as any,
-    worldSnapshot: worldAfter as any,
+    memorySystemSnapshot: mem,
+    travelerSnapshot: travelerAfter,
+    worldSnapshot: worldAfter,
     signal: abortController.signal,
     allowYiting: Boolean(yitingEnabled),
     shouldCommit: isCurrentWorkflow,

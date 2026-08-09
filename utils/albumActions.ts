@@ -42,7 +42,9 @@ export function 创建相册图片条目(input: {
   const originalUrl = input.originalUrl?.trim() || undefined;
   const blob = isDataUrl ? rememberAlbumAssetFromDataUrl(assetId, input.src) : null;
   const dataUrl = blob ? 创建相册资源引用(assetId) : (isDataUrl ? input.src : undefined);
-  const remoteOriginalUrl = isDataImageUrl(originalUrl) ? undefined : originalUrl;
+  const remoteOriginalUrl = typeof originalUrl === 'string' && !originalUrl.startsWith('data:')
+    ? originalUrl
+    : undefined;
   const asset: 图片资源 = {
     id: assetId,
     url: remoteOriginalUrl || (!isDataUrl ? input.src : undefined),
@@ -180,8 +182,9 @@ export function 挂载NPC立绘图片(npcs: NPC记录[], params: { npcId: string
 export function 卸载NPC头像图片(npcs: NPC记录[], params: { npcId: string; slot: NPC头像槽位 }): NPC记录[] {
   return npcs.map((npc) => {
     if (npc.id !== params.npcId) return npc;
-    const avatarSlots = { ...(npc.图像档案?.头像槽位 ?? {}) };
-    delete avatarSlots[params.slot];
+    const avatarSlots = Object.fromEntries(
+      Object.entries(npc.图像档案?.头像槽位 ?? {}).filter(([key]) => key !== params.slot),
+    ) as Partial<Record<NPC头像槽位, string>>;
     const nextImage = { ...(npc.图像档案 ?? {}) };
     nextImage.头像槽位 = Object.keys(avatarSlots).length ? avatarSlots : undefined;
     if (params.slot === '档案') {
@@ -234,8 +237,9 @@ export function 卸载NPC_NSFW部位图片(
 ): NPC记录[] {
   return npcs.map((npc) => {
     if (npc.id !== params.npcId) return npc;
-    const partImages = { ...(npc.NSFW档案?.部位图片 ?? {}) };
-    delete partImages[params.slot];
+    const partImages = Object.fromEntries(
+      Object.entries(npc.NSFW档案?.部位图片 ?? {}).filter(([key]) => key !== params.slot),
+    ) as Partial<Record<'女性胸部' | '女性私处' | '男性器' | '后庭' | '体态参考', string>>;
     return {
       ...npc,
       NSFW档案: {
@@ -280,7 +284,7 @@ export function fileToDataUrl(file: File): Promise<string> {
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
     reader.onerror = () => reject(reader.error ?? new Error('读取图片失败'));
     reader.readAsDataURL(file);
   });

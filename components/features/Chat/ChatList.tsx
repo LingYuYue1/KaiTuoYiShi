@@ -95,7 +95,7 @@ const ChatHistoryList = memo(function ChatHistoryList({
 function buildNeighborMeta(messages: 聊天消息[]): NeighborMeta[] {
   let lastUserContent: string | undefined;
   let lastPathId: string | undefined;
-  const meta: NeighborMeta[] = new Array(messages.length);
+  const meta: NeighborMeta[] = new Array<NeighborMeta>(messages.length);
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
@@ -108,7 +108,7 @@ function buildNeighborMeta(messages: 聊天消息[]): NeighborMeta[] {
       previousUserInput = lastUserContent;
       const needsFallback =
         !!msg.parsedResponse
-        && (msg.parsedResponse.awakenQuestions?.trim() || msg.parsedResponse.awakenJudgement?.trim())
+        && (msg.parsedResponse.awakenQuestions.trim() || msg.parsedResponse.awakenJudgement.trim())
         && !msg.parsedResponse.awakenPathId;
       if (needsFallback) {
         fallbackPathId = lastPathId;
@@ -129,27 +129,25 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
   const [nearBottom, setNearBottom] = useState(true);
   const nearBottomRef = useRef(true);
   const [renderTurnLimit, setRenderTurnLimit] = useState(INITIAL_RENDER_TURNS);
-  const historyIdentityRef = useRef<{ lastId?: string; length: number }>({ length: 0 });
+  const [historyIdentity, setHistoryIdentity] = useState<{ lastId?: string; length: number }>({ length: 0 });
+  const [previousMessages, setPreviousMessages] = useState(messages);
   const scrollRafRef = useRef<number | null>(null);
   const scrollStateRafRef = useRef<number | null>(null);
   const pendingHistoryAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
-  const previousHistoryIdentity = historyIdentityRef.current;
-  const previousHistoryStillPresent = !previousHistoryIdentity.lastId
-    || messages.some((message) => message.id === previousHistoryIdentity.lastId);
-  const historyWasReplaced = previousHistoryIdentity.length > 0
-    && (messages.length < previousHistoryIdentity.length || !previousHistoryStillPresent);
+  // 读档/顶替导致的消息数组整体替换检测：按 React 推荐模式在渲染期校正状态（非副作用）。
+  if (messages !== previousMessages) {
+    const wasReplaced = historyIdentity.length > 0
+      && (messages.length < historyIdentity.length
+        || (!!historyIdentity.lastId && !messages.some((message) => message.id === historyIdentity.lastId)));
+    setPreviousMessages(messages);
+    setHistoryIdentity({ lastId: messages[messages.length - 1]?.id, length: messages.length });
+    if (wasReplaced) setRenderTurnLimit(INITIAL_RENDER_TURNS);
+  }
+  const previousHistoryStillPresent = !historyIdentity.lastId
+    || messages.some((message) => message.id === historyIdentity.lastId);
+  const historyWasReplaced = historyIdentity.length > 0
+    && (messages.length < historyIdentity.length || !previousHistoryStillPresent);
   const effectiveRenderTurnLimit = historyWasReplaced ? INITIAL_RENDER_TURNS : renderTurnLimit;
-
-  useEffect(() => {
-    historyIdentityRef.current = {
-      lastId: messages[messages.length - 1]?.id,
-      length: messages.length,
-    };
-    if (historyWasReplaced) {
-      pendingHistoryAnchorRef.current = null;
-      setRenderTurnLimit(INITIAL_RENDER_TURNS);
-    }
-  }, [historyWasReplaced, messages]);
 
   const isNearBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -162,15 +160,16 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
     if (!nearBottom && streamingMessage) return;
     if (!nearBottom && messages.length > 0) return;
 
-    if (scrollRafRef.current != null) return;
+    if (scrollRafRef.current !== null) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
-      const el = scrollRef.current!;
+      const el = scrollRef.current;
+      if (!el) return;
       el.scrollTop = el.scrollHeight;
     });
 
     return () => {
-      if (scrollRafRef.current != null) {
+      if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
         scrollRafRef.current = null;
       }
@@ -178,7 +177,7 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
   }, [messages, streamingMessage, nearBottom, scrollRef]);
 
   const handleScroll = useCallback(() => {
-    if (scrollStateRafRef.current != null) return;
+    if (scrollStateRafRef.current !== null) return;
     scrollStateRafRef.current = requestAnimationFrame(() => {
       scrollStateRafRef.current = null;
       const nextNearBottom = isNearBottom();
@@ -189,14 +188,14 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
   }, [isNearBottom]);
 
   useEffect(() => () => {
-    if (scrollStateRafRef.current != null) {
+    if (scrollStateRafRef.current !== null) {
       cancelAnimationFrame(scrollStateRafRef.current);
       scrollStateRafRef.current = null;
     }
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    bottomRef.current!.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     nearBottomRef.current = true;
     setNearBottom(true);
   }, []);
@@ -238,8 +237,8 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
 
   useLayoutEffect(() => {
     const anchor = pendingHistoryAnchorRef.current;
-    if (!anchor) return;
     pendingHistoryAnchorRef.current = null;
+    if (!anchor) return;
     if (historyWasReplaced) return;
     const el = scrollRef.current;
     if (!el) return;

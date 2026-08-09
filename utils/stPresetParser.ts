@@ -15,7 +15,7 @@
 
 import type { 提示词模块, 提示词模块类目 } from '@/models/prompts';
 import { getDefaultModuleFields } from '@/models/prompts';
-import type { STPreset, STWorldInfoEntry, STSamplingParams } from '@/models/stTypes';
+import type { STPreset, STSamplingParams } from '@/models/stTypes';
 import type { 世界书条目, 世界书条目类型 } from '@/models/worldbook';
 import { parseJsonWithRepair } from './jsonRepair';
 import { normalizeSTPreset } from './stSettingsNormalizer';
@@ -50,7 +50,7 @@ export function detectSTCoTModules(modules: 提示词模块[]): string[] {
   const contentPattern = /<thinking>|<cot>|<think>/i;
   return modules
     .filter(isSTImportedModule)
-    .filter((m) => namePattern.test(m.title ?? '') || contentPattern.test(m.content ?? ''))
+    .filter((m) => namePattern.test(m.title) || contentPattern.test(m.content))
     .map((m) => m.id);
 }
 
@@ -68,7 +68,7 @@ export function detectSTFormatModules(modules: 提示词模块[]): string[] {
   const contentPattern = /输出格式|回复格式|action_options/i;
   return modules
     .filter(isSTImportedModule)
-    .filter((m) => namePattern.test(m.title ?? '') || contentPattern.test(m.content ?? ''))
+    .filter((m) => namePattern.test(m.title) || contentPattern.test(m.content))
     .map((m) => m.id);
 }
 
@@ -92,6 +92,41 @@ interface STPromptRaw {
   marker?: boolean;
 }
 
+/** ST 世界书条目原始结构（宽松字段，允许缺省）。
+ *  运行时数据来自玩家导入的预设 JSON，字段缺失时按 ?? 兜底默认值。 */
+interface STWorldInfoEntryRaw {
+  uid?: number;
+  key?: string[];
+  keysecondary?: string[];
+  comment?: string;
+  content?: string;
+  constant?: boolean;
+  vectorized?: boolean;
+  selective?: boolean;
+  order?: number;
+  position?: number;
+  disable?: number[];
+  enabled?: boolean;
+  addMemo?: boolean;
+  displayIndex?: number;
+  group?: string;
+  groupOverride?: boolean;
+  groupWeight?: number;
+  depth?: number;
+  logic?: number;
+  useGroup?: boolean;
+  automationId?: string;
+  comment_A?: string;
+  caseSensitive?: boolean;
+  matchWholeWords?: boolean;
+  probability?: number;
+  delay?: number;
+  cooldown?: number;
+  scanDepth?: number;
+  recursive?: boolean;
+  recursionDepth?: number;
+}
+
 /** ST prompt_order 中的单条目。 */
 interface STOrderEntry {
   identifier: string;
@@ -108,8 +143,9 @@ interface STOrderGroup {
 export interface STPresetRaw {
   prompts?: STPromptRaw[];
   prompt_order?: STOrderGroup[];
-  /** ST 世界书条目。V1 解析会转成项目世界书条目，V2 解析会原样保留。 */
-  world_info?: STWorldInfoEntry[];
+  /** ST 世界书条目。V1 解析会转成项目世界书条目，V2 解析会原样保留。
+   *  元素允许 null：玩家导入的合法 JSON 可能含 null 条目（如 world_info: [null]）。 */
+  world_info?: (STWorldInfoEntryRaw | null)[];
   // ── Phase 5：顶层采样参数（ST 预设 JSON 顶层字段） ───────────
   temperature?: number;
   top_p?: number;
@@ -186,7 +222,7 @@ export function parseSTPresetV2(jsonText: string): STPresetV2ParseResult {
 function sanitizeIdentifier(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return 'unknown';
-  return trimmed.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 64);
+  return trimmed.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
 }
 
 /**
@@ -225,7 +261,7 @@ function normalizeRole(raw: string | undefined): 'system' | 'user' | 'assistant'
  */
 function normalizeTrigger(raw: string[] | undefined): string[] {
   if (!Array.isArray(raw)) return [];
-  const filtered = raw.map((s) => String(s).trim()).filter(Boolean);
+  const filtered = raw.map((s) => s.trim()).filter(Boolean);
   return filtered;
 }
 
@@ -337,7 +373,7 @@ function parseSTPrompt(raw: STPromptRaw, now: number): 提示词模块 | null {
  * @throws 当 JSON 格式错误时抛出 Error
  */
 export function parseSTPreset(jsonText: string): 提示词模块[] {
-  const data: STPresetRaw = JSON.parse(jsonText);
+  const data = JSON.parse(jsonText) as STPresetRaw | null;
   if (!data || !Array.isArray(data.prompts) || data.prompts.length === 0) {
     return [];
   }
@@ -396,10 +432,14 @@ export function parseSTPreset(jsonText: string): 提示词模块[] {
  * - 调用方据此设置 STPresetEntry.worldbookEntries
  */
 export function parseSTPresetWithDetection(jsonText: string): STPresetParseResult {
-  const data: STPresetRaw = JSON.parse(jsonText);
+  const data = JSON.parse(jsonText) as STPresetRaw | null;
   const modules = parseSTPreset(jsonText);
+  if (data === null) {
+    // 顶层 null（如 JSON 内容为 "null"）：旧代码有保护，退回空结果不抛异常。
+    return { modules, worldInfoCount: 0, worldbookEntries: [], samplingParams: undefined, assistantPrefill: undefined };
+  }
   const worldbookEntries = parseSTWorldInfoEntries(data);
-  const worldInfoCount = Array.isArray(data?.world_info) ? data.world_info.length : 0;
+  const worldInfoCount = Array.isArray(data.world_info) ? data.world_info.length : 0;
 
   // Phase 5：解析顶层采样参数
   const samplingParams = parseSTSamplingParams(data);
@@ -505,7 +545,7 @@ export function mergeSTImportedModules(
 
 /** 根据 ST 条目 comment 推断我们的世界书条目类型。 */
 function inferWorldbookType(comment: string): 世界书条目类型 {
-  const text = (comment ?? '').toLowerCase();
+  const text = comment.toLowerCase();
   if (/设定|世界观|lore|world/.test(text)) return 'world_lore';
   if (/角色|character|人物/.test(text)) return 'character_lore';
   if (/氛围|atmosphere|描写/.test(text)) return 'atmosphere';
@@ -516,7 +556,7 @@ function inferWorldbookType(comment: string): 世界书条目类型 {
 /** Phase 7.3：ST selectiveLogic 编号 → 我们的 logic 枚举。
  *  ST 1.12+ 约定：0=AND_ANY, 1=NOT_ANY, 2=AND_ALL, 3=NOT_ALL。
  *  缺失/非法值 → 'AND_ALL'（保持 Phase 7.1 之前的默认行为）。 */
-function mapSTLogic(stLogic: number | undefined): 'AND_ANY' | 'AND_ALL' | 'NOT_ANY' | 'NOT_ALL' {
+function mapSTLogic(stLogic: number): 'AND_ANY' | 'AND_ALL' | 'NOT_ANY' | 'NOT_ALL' {
   switch (stLogic) {
     case 0: return 'AND_ANY';
     case 1: return 'NOT_ANY';
@@ -534,13 +574,13 @@ function mapSTLogic(stLogic: number | undefined): 'AND_ANY' | 'AND_ALL' | 'NOT_A
  *  - 跳过 content 为空 / enabled=false 的条目
  *  字段映射详见 docs/2026-06-29-[重要]-世界书系统升级指南与实现方案.md 第 10.4 节。 */
 export function parseSTWorldInfoEntries(data: STPresetRaw): 世界书条目[] {
-  if (!Array.isArray(data?.world_info)) return [];
+  if (!Array.isArray(data.world_info)) return [];
   const now = Date.now();
 
   return data.world_info
-    .filter((raw) => raw && typeof raw === 'object'
+    .filter((raw): raw is STWorldInfoEntryRaw => raw !== null
       && (raw.content ?? '').trim().length > 0
-      && raw.enabled)
+      && raw.enabled === true)
     .map((raw): 世界书条目 => {
       const uid = raw.uid ?? 0;
       const id = `stwi_${uid}`;
@@ -577,12 +617,13 @@ export function parseSTWorldInfoEntries(data: STPresetRaw): 世界书条目[] {
           .map((d) => `stwi_${d}`),
         // Phase 7.3 递归触发 + 逻辑门
         // ST selectiveLogic 编号：0=AND_ANY, 1=NOT_ANY, 2=AND_ALL, 3=NOT_ALL
-        logic: mapSTLogic(raw.logic),
+        logic: raw.logic !== undefined ? mapSTLogic(raw.logic) : 'AND_ALL',
         recurse: raw.recursive === true,
         recurseDepth: raw.recursionDepth ?? 1,
         // 通用字段
         priority: raw.order ?? 100,
-        enabled: raw.enabled,
+        // filter 已保证 enabled 为真；`=== true` 收窄 boolean|undefined → boolean
+        enabled: raw.enabled === true,
         scope: ['all'], // ST 无 scope 概念，对所有场景生效
         createdAt: now,
         updatedAt: now,

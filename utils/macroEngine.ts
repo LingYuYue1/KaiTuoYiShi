@@ -156,9 +156,9 @@ function processSTMacros(text: string, ctx: MacroContext): string {
 
   // ── 系统状态宏 ──────────────────────────────────────────
   result = result.replace(/\{\{model\}\}/g, gs.modelName ?? '');
-  result = result.replace(/\{\{messageCount\}\}/g, gs.messageCount != null ? String(gs.messageCount) : '');
-  result = result.replace(/\{\{turnCount\}\}/g, gs.turnCount != null ? String(gs.turnCount) : '');
-  result = result.replace(/\{\{maxPrompt\}\}/g, gs.maxContext != null ? String(gs.maxContext) : '');
+  result = result.replace(/\{\{messageCount\}\}/g, gs.messageCount !== undefined ? String(gs.messageCount) : '');
+  result = result.replace(/\{\{turnCount\}\}/g, gs.turnCount !== undefined ? String(gs.turnCount) : '');
+  result = result.replace(/\{\{maxPrompt\}\}/g, gs.maxContext !== undefined ? String(gs.maxContext) : '');
 
   // ── 工具宏 ──────────────────────────────────────────────
   // {{noop}} — 空操作，返回空串
@@ -184,19 +184,23 @@ function processSTMacros(text: string, ctx: MacroContext): string {
     if (parts.length === 0) return '';
     if (parts.length === 1) return parts[0];
     // 用整个 match 作为 key（同一段 pick 文本共享一个 pick 池）
-    if (!ctx.pickHistory) ctx.pickHistory = {};
+    let pickHistory = ctx.pickHistory;
+    if (!pickHistory) {
+      pickHistory = {};
+      Object.assign(ctx, { pickHistory });
+    }
     const key = match;
-    const used = ctx.pickHistory[key] ?? [];
+    const used = pickHistory[key] ?? [];
     const remaining = parts.filter((p) => !used.includes(p));
     // 全部选完则重置
     const candidates = remaining.length > 0 ? remaining : parts;
     const idx = Math.floor(Math.random() * candidates.length);
     const chosen = candidates[idx];
     if (remaining.length > 0) {
-      ctx.pickHistory[key] = [...used, chosen];
+      pickHistory[key] = [...used, chosen];
     } else {
       // 重置后只记录本次选择
-      ctx.pickHistory[key] = [chosen];
+      pickHistory[key] = [chosen];
     }
     return chosen;
   });
@@ -205,7 +209,7 @@ function processSTMacros(text: string, ctx: MacroContext): string {
   result = result.replace(/\{\{pick_var::([^}]+)\}\}/g, (_m, name: string) => {
     const key = name.trim();
     if (!ctx.pickHistory) return '';
-    const history = ctx.pickHistory[key];
+    const history = ctx.pickHistory[key] as string[] | undefined;
     if (!history || history.length === 0) return '';
     return history[history.length - 1];
   });
@@ -351,28 +355,30 @@ function evaluateCondition(condition: string, ctx: MacroContext): boolean {
  */
 function executeAssignments(text: string, ctx: MacroContext): string {
   let result = text;
+  const local = ctx.local;
+  const globals = ctx.global;
 
   // {{setvar::name::value}}
   result = result.replace(/\{\{setvar::([^:}]+)::([^}]*)\}\}/g, (_m, name: string, value: string) => {
-    ctx.local[name.trim()] = value.trim();
+    local[name.trim()] = value.trim();
     return ''; // setvar 不输出内容
   });
 
   // {{setglobalvar::name::value}}
   result = result.replace(/\{\{setglobalvar::([^:}]+)::([^}]*)\}\}/g, (_m, name: string, value: string) => {
-    ctx.global[name.trim()] = value.trim();
+    globals[name.trim()] = value.trim();
     return '';
   });
 
   // 简写：{{.name = value}}（局部赋值）—— 必须在 {{.name}} 读取之前匹配
   result = result.replace(/\{\{\.(\w+)\s*=\s*([^}]+)\}\}/g, (_m, name: string, value: string) => {
-    ctx.local[name.trim()] = value.trim();
+    local[name.trim()] = value.trim();
     return '';
   });
 
   // 简写：{{$name = value}}（全局赋值）—— 必须在 {{$name}} 读取之前匹配
   result = result.replace(/\{\{\$(\w+)\s*=\s*([^}]+)\}\}/g, (_m, name: string, value: string) => {
-    ctx.global[name.trim()] = value.trim();
+    globals[name.trim()] = value.trim();
     return '';
   });
 

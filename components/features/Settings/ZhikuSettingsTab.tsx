@@ -62,7 +62,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
   };
 
   const effective = {
-    provider: zhiku.api.provider || mainConfig?.provider || 'openai_compatible',
+    provider: zhiku.api.provider,
     baseUrl: zhiku.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: zhiku.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: zhiku.api.model.trim() || mainConfig?.model || '',
@@ -96,7 +96,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
       };
       const list = await fetchModels(tempConfig);
       setModelOptions(list);
-      setFetchMessage({ kind: 'info', text: '获取到 ' + list.length + ' 个模型' });
+      setFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型` });
     } catch (err) {
       const text = (err as Error).message;
       setFetchMessage({ kind: 'error', text });
@@ -260,7 +260,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
               style={{ clipPath: smallClip }}
             />
             <button
-              onClick={handleFetchModels}
+              onClick={() => void handleFetchModels()}
               disabled={loadingModels}
               className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
               style={{
@@ -321,7 +321,7 @@ export function ZhikuSettingsTab({ settings, onChange, apiSettings }: Props) {
 
       <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash

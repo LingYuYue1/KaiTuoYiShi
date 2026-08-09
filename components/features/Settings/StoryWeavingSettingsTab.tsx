@@ -27,7 +27,7 @@ const providerOptions: { value: AI提供商; label: string }[] = [
 
 export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Props) {
   const story = settings.剧情编织系统;
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [message, setMessage] = useState('');
@@ -48,7 +48,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
   };
 
   const effectiveApi = {
-    provider: story.api.provider || mainConfig?.provider || 'openai_compatible',
+    provider: story.api.provider,
     baseUrl: story.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: story.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: story.api.model.trim() || mainConfig?.model || '',
@@ -196,7 +196,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
               style={{ clipPath: smallClip }}
             />
             <button
-              onClick={handleFetchModels}
+              onClick={() => void handleFetchModels()}
               disabled={loadingModels}
               className="px-3 py-2 text-xs font-serif tracking-wider disabled:opacity-50"
               style={{
@@ -238,7 +238,7 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings }: Pro
       {message && <div className="text-xs" style={{ color: message.includes('失败') ? 'rgba(220,120,120,0.9)' : 'rgba(160,200,160,0.85)' }}>{message}</div>}
       <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash

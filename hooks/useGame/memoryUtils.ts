@@ -30,7 +30,7 @@ function normalizeMemorySnippet(text: string): string {
   return (text || '')
     .replace(/\s+/g, ' ')
     .replace(/^【\s*[\d:.\-\s]+\s*】\s*/, '')
-    .replace(/^[\-\u2022•·\d一二三四五六七八九十]+[\.、\)]\s*/, '')
+    .replace(/^[-•·\d一二三四五六七八九十]+[.、)]\s*/, '')
     .trim();
 }
 
@@ -127,6 +127,7 @@ function dedupeLines(lines: string[]): string[] {
 }
 
 export function addImmediateMemory(system: 记忆系统, memory: string, _turn: number): 记忆系统 {
+  void _turn;
   const newMemories = [...system.即时记忆, memory];
   const trimmed = newMemories.length > 50 ? newMemories.slice(-50) : newMemories;
   return { ...system, 即时记忆: trimmed };
@@ -173,7 +174,7 @@ export function compressToMiddleTerm(system: 记忆系统, turn: number, batchSi
   return {
     ...system,
     短期记忆: system.短期记忆.slice(size),
-    中期记忆: [...(system.中期记忆 ?? []), compressed],
+    中期记忆: [...system.中期记忆, compressed],
   };
 }
 
@@ -192,16 +193,16 @@ export function createMiddleTermArchiveEntry(shortMemories: string[], turn: numb
 }
 
 export function checkLongTermThreshold(system: 记忆系统, threshold = 10): boolean {
-  return (system.中期记忆 ?? []).length >= Math.max(1, Math.trunc(threshold));
+  return system.中期记忆.length >= Math.max(1, Math.trunc(threshold));
 }
 
 export function compressToLongTerm(system: 记忆系统, turn: number, batchSize = 10): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
-  const oldest = (system.中期记忆 ?? []).slice(0, size);
+  const oldest = system.中期记忆.slice(0, size);
   const compressed = buildArchiveSummary(oldest, turn, 'long');
   return {
     ...system,
-    中期记忆: (system.中期记忆 ?? []).slice(size),
+    中期记忆: system.中期记忆.slice(size),
     长期记忆: [...system.长期记忆, compressed],
   };
 }
@@ -290,11 +291,11 @@ export function upsertRecallEntry(system: { 回忆档案: 回忆条目[] }, entr
 export function autoCompressMemorySystem(
   system: 记忆系统,
   turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
+  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
 ): 记忆系统 {
   let next = system;
   const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || 20));
   const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
 
   while (next.即时记忆.length >= immediateThreshold) {
@@ -303,7 +304,7 @@ export function autoCompressMemorySystem(
   while (next.短期记忆.length >= shortThreshold) {
     next = compressToMiddleTerm(next, turn, shortThreshold);
   }
-  while ((next.中期记忆 ?? []).length >= middleThreshold) {
+  while (next.中期记忆.length >= middleThreshold) {
     next = compressToLongTerm(next, turn, middleThreshold);
   }
   return next;
@@ -312,12 +313,12 @@ export function autoCompressMemorySystem(
 export function autoCompressMemorySystemWithArchives(
   system: 记忆系统,
   turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
+  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
 ): { memory: 记忆系统; archives: 回忆条目[] } {
   let next = system;
   const archives: 回忆条目[] = [];
   const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || 20));
   const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
 
   while (next.即时记忆.length >= immediateThreshold) {
@@ -330,8 +331,8 @@ export function autoCompressMemorySystemWithArchives(
     archives.push(createMiddleTermArchiveEntry(raw, turn));
     next = compressToMiddleTerm(next, turn, shortThreshold);
   }
-  while ((next.中期记忆 ?? []).length >= middleThreshold) {
-    const raw = (next.中期记忆 ?? []).slice(0, middleThreshold);
+  while (next.中期记忆.length >= middleThreshold) {
+    const raw = next.中期记忆.slice(0, middleThreshold);
     archives.push(createLongTermArchiveEntry(raw, turn));
     next = compressToLongTerm(next, turn, middleThreshold);
   }
@@ -348,9 +349,9 @@ export async function autoCompressMemorySystemWithArchivesAsync(
   let next = system;
   const archives: 回忆条目[] = [];
   const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || 20));
+  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || 20));
   const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
-  const retryCount = settings.记忆总结API?.retryCount ?? 2;
+  const retryCount = settings.记忆总结API.retryCount ?? 2;
   let usedFallback = false;
   let usedModel = false;
 
@@ -398,18 +399,18 @@ export async function autoCompressMemorySystemWithArchivesAsync(
     next = {
       ...next,
       短期记忆: next.短期记忆.slice(shortThreshold),
-      中期记忆: [...(next.中期记忆 ?? []), result.summary],
+      中期记忆: [...next.中期记忆, result.summary],
     };
   }
 
-  while ((next.中期记忆 ?? []).length >= middleThreshold) {
-    const raw = (next.中期记忆 ?? []).slice(0, middleThreshold);
+  while (next.中期记忆.length >= middleThreshold) {
+    const raw = next.中期记忆.slice(0, middleThreshold);
     const result = await summarizeMemoryBatch(
       {
         kind: 'long',
         turn,
         items: raw,
-        prompt: settings.中期转长期提示词 || settings.短期转长期提示词,
+        prompt: settings.中期转长期提示词,
       },
       settings,
       mainConfig,
@@ -421,7 +422,7 @@ export async function autoCompressMemorySystemWithArchivesAsync(
     archives.push(createLongTermArchiveEntry(raw, turn, result.summary));
     next = {
       ...next,
-      中期记忆: (next.中期记忆 ?? []).slice(middleThreshold),
+      中期记忆: next.中期记忆.slice(middleThreshold),
       长期记忆: [...next.长期记忆, result.summary],
     };
   }
@@ -481,7 +482,7 @@ function buildNpcMemoryId(npcId: string, turn: number, index: number, source: NP
 
 function buildNpcSummaryTurnRange(chunk: NPC同行记忆条目[], fallbackTurn: number): string {
   const turns = chunk
-    .map((entry) => Number(entry.回合))
+    .map((entry) => entry.回合)
     .filter((turn) => Number.isFinite(turn) && turn > 0);
   if (!turns.length) return `第${Math.max(1, fallbackTurn)}回合前`;
   const min = Math.min(...turns);
@@ -535,7 +536,7 @@ function normalizeNpcLedgerMemoryEntries(input: NpcMemoryLedgerCompressionInput)
   let changed = false;
 
   input.entries.forEach((entry, index) => {
-    const originalText = typeof entry === 'string' ? entry : entry?.摘要 ?? '';
+    const originalText = typeof entry === 'string' ? entry : entry.摘要;
     const cleaned = 清理NPC同行记忆摘要(originalText, input.prompt);
     if (!cleaned || isNpcMemorySystemNoise(cleaned)) {
       changed = true;
@@ -558,7 +559,7 @@ function normalizeNpcLedgerMemoryEntries(input: NpcMemoryLedgerCompressionInput)
       return;
     }
 
-    const turn = typeof entry === 'string' ? input.turn : Number(entry.回合);
+    const turn = typeof entry === 'string' ? input.turn : entry.回合;
     const next: NPC同行记忆条目 = typeof entry === 'string'
       ? {
           id: buildNpcMemoryId(input.npcId, input.turn, index, input.source ?? '其他'),
@@ -569,7 +570,7 @@ function normalizeNpcLedgerMemoryEntries(input: NpcMemoryLedgerCompressionInput)
         }
       : {
           ...entry,
-          id: entry.id?.trim() || buildNpcMemoryId(input.npcId, input.turn, index, entry.来源 ?? input.source ?? '其他'),
+          id: entry.id.trim() || buildNpcMemoryId(input.npcId, input.turn, index, entry.来源 ?? input.source ?? '其他'),
           回合: Number.isFinite(turn) ? turn : input.turn,
           摘要: cleaned,
           来源: entry.来源 ?? input.source ?? '其他',
@@ -655,9 +656,9 @@ export function formatMemoryForPrompt(system: 记忆系统): string {
       '【长期记忆】\n' + system.长期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n'),
     );
   }
-  if ((system.中期记忆 ?? []).length) {
+  if (system.中期记忆.length) {
     sections.push(
-      '【中期记忆】\n' + (system.中期记忆 ?? []).map((m, i) => `${i + 1}. ${m}`).join('\n'),
+      '【中期记忆】\n' + system.中期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n'),
     );
   }
   if (system.短期记忆.length) {
@@ -670,9 +671,9 @@ export function formatMemoryForPrompt(system: 记忆系统): string {
 
 export function normalizeMemorySystem(raw: 记忆系统): 记忆系统 {
   return {
-    即时记忆: raw.即时记忆 ?? [],
-    短期记忆: raw.短期记忆 ?? [],
-    中期记忆: raw.中期记忆 ?? [],
-    长期记忆: raw.长期记忆 ?? [],
+    即时记忆: raw.即时记忆,
+    短期记忆: raw.短期记忆,
+    中期记忆: raw.中期记忆,
+    长期记忆: raw.长期记忆,
   };
 }

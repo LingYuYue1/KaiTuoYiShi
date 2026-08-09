@@ -30,7 +30,7 @@ function stripAlbumAssetPayload(album?: 相册系统): 相册系统 | undefined 
   if (!album) return album;
   return {
     ...album,
-    assets: (album.assets ?? []).map((asset) => ({
+    assets: album.assets.map((asset) => ({
       ...asset,
       dataUrl: asset.id ? 创建相册资源引用(asset.id) : asset.dataUrl,
       originalUrl: isDataImage(asset.originalUrl) ? undefined : asset.originalUrl,

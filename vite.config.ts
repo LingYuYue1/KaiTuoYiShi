@@ -10,7 +10,7 @@ function readRequestBody(req: import('node:http').IncomingMessage): Promise<stri
   return new Promise((resolve, reject) => {
     let body = '';
     req.setEncoding('utf8');
-    req.on('data', (chunk) => {
+    req.on('data', (chunk: string) => {
       body += chunk;
     });
     req.on('end', () => resolve(body));
@@ -18,112 +18,56 @@ function readRequestBody(req: import('node:http').IncomingMessage): Promise<stri
   });
 }
 
+type ProxyMiddleware = (
+  req: import('node:http').IncomingMessage,
+  res: import('node:http').ServerResponse,
+) => void;
+
+function createProxyMiddleware(
+  targetUrl: string,
+  handle: (request: Request) => Promise<Response>,
+): ProxyMiddleware {
+  return (req, res) => {
+    const target = res;
+    const respond = async (): Promise<void> => {
+      if (req.method === 'OPTIONS') {
+        target.statusCode = 200;
+        target.setHeader('content-type', 'application/json; charset=utf-8');
+        target.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.method !== 'POST') {
+        target.statusCode = 405;
+        target.setHeader('content-type', 'application/json; charset=utf-8');
+        target.end(JSON.stringify({ error: 'Method Not Allowed' }));
+        return;
+      }
+      const body = await readRequestBody(req);
+      const response = await handle(new Request(targetUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }));
+      target.statusCode = response.status;
+      response.headers.forEach((value, key) => {
+        target.setHeader(key, value);
+      });
+      target.end(Buffer.from(await response.arrayBuffer()));
+    };
+    void respond();
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
     {
-      name: 'kty-local-qianfan-proxy',
+      name: 'kty-local-ai-proxy',
       configureServer(server) {
-        server.middlewares.use('/api/qianfan', async (req, res) => {
-          if (req.method === 'OPTIONS') {
-            res.statusCode = 200;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ ok: true }));
-            return;
-          }
-          if (req.method !== 'POST') {
-            res.statusCode = 405;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-            return;
-          }
-          const body = await readRequestBody(req);
-          const response = await handleQianfanProxyRequest(new Request('http://localhost/api/qianfan', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body,
-          }));
-          res.statusCode = response.status;
-          response.headers.forEach((value, key) => {
-            res.setHeader(key, value);
-          });
-          res.end(Buffer.from(await response.arrayBuffer()));
-        });
-        server.middlewares.use('/api/opencode', async (req, res) => {
-          if (req.method === 'OPTIONS') {
-            res.statusCode = 200;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ ok: true }));
-            return;
-          }
-          if (req.method !== 'POST') {
-            res.statusCode = 405;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-            return;
-          }
-          const body = await readRequestBody(req);
-          const response = await handleOpenCodeProxyRequest(new Request('http://localhost/api/opencode', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body,
-          }));
-          res.statusCode = response.status;
-          response.headers.forEach((value, key) => {
-            res.setHeader(key, value);
-          });
-          res.end(Buffer.from(await response.arrayBuffer()));
-        });
-        server.middlewares.use('/api/pioneer', async (req, res) => {
-          if (req.method === 'OPTIONS') {
-            res.statusCode = 200;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ ok: true }));
-            return;
-          }
-          if (req.method !== 'POST') {
-            res.statusCode = 405;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-            return;
-          }
-          const body = await readRequestBody(req);
-          const response = await handlePioneerProxyRequest(new Request('http://localhost/api/pioneer', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body,
-          }));
-          res.statusCode = response.status;
-          response.headers.forEach((value, key) => {
-            res.setHeader(key, value);
-          });
-          res.end(Buffer.from(await response.arrayBuffer()));
-        });
-        server.middlewares.use('/api/ark', async (req, res) => {
-          if (req.method === 'OPTIONS') {
-            res.statusCode = 200;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ ok: true }));
-            return;
-          }
-          if (req.method !== 'POST') {
-            res.statusCode = 405;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-            return;
-          }
-          const body = await readRequestBody(req);
-          const response = await handleArkProxyRequest(new Request('http://localhost/api/ark', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body,
-          }));
-          res.statusCode = response.status;
-          response.headers.forEach((value, key) => {
-            res.setHeader(key, value);
-          });
-          res.end(Buffer.from(await response.arrayBuffer()));
-        });
+        server.middlewares.use('/api/qianfan', createProxyMiddleware('http://localhost/api/qianfan', handleQianfanProxyRequest));
+        server.middlewares.use('/api/opencode', createProxyMiddleware('http://localhost/api/opencode', handleOpenCodeProxyRequest));
+        server.middlewares.use('/api/pioneer', createProxyMiddleware('http://localhost/api/pioneer', handlePioneerProxyRequest));
+        server.middlewares.use('/api/ark', createProxyMiddleware('http://localhost/api/ark', handleArkProxyRequest));
       },
     },
   ],

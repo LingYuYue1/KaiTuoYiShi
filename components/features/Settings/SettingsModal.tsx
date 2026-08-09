@@ -38,9 +38,9 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import type { VariableSetters } from '@/utils/variableExecutor';
 import { saveSetting } from '@/services/dbService';
 import type { 世界书 } from '@/models/worldbook';
+import type { 剧情节点 } from '@/models/plot';
 
 export type SettingsTab = Tab;
 
@@ -67,7 +67,18 @@ interface SettingsModalProps {
   新闻: 新闻条目[];
   剧情编织: 剧情编织系统;
   on剧情编织Change: React.Dispatch<React.SetStateAction<剧情编织系统>>;
-  variableSetters: VariableSetters;
+  /** 变量管理面板所需的 setter 切片（与 VariableSetters 结构性一致，避免引用已弃用接口）。 */
+  variableSetters: {
+    set旅人: React.Dispatch<React.SetStateAction<角色数据结构>>;
+    set世界: React.Dispatch<React.SetStateAction<世界状态>>;
+    set记忆: React.Dispatch<React.SetStateAction<记忆系统>>;
+    set忆庭: React.Dispatch<React.SetStateAction<忆庭系统>>;
+    set智库: React.Dispatch<React.SetStateAction<智库系统>>;
+    set手机: React.Dispatch<React.SetStateAction<手机系统>>;
+    setNPC: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+    set新闻: React.Dispatch<React.SetStateAction<新闻条目[]>>;
+    set剧情: React.Dispatch<React.SetStateAction<剧情节点[]>>;
+  };
   variableEditingLocked?: boolean;
   getContextSnapshot: (kind?: ContextSnapshotKind) => ContextSnapshot;
   initialTab?: Tab;
@@ -217,7 +228,7 @@ export function SettingsModal({
     }
   };
 
-  const activeMeta = tabs.find((t) => t.key === activeTab)!;
+  const activeMeta = tabs.find((t) => t.key === activeTab) ?? tabs[0];
   const usesFullHeightPane = activeTab === 'prompts' || activeTab === 'tavernPresets';
 
   return (

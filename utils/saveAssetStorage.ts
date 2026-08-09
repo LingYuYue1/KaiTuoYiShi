@@ -7,7 +7,6 @@ import {
   getAlbumAssetBlob,
   hasAlbumAssetBlob,
   isDataImageUrl,
-  pickAssetDisplayUrl,
   rememberAlbumAssetBlob,
   rememberAlbumAssetFromDataUrl,
 } from '@/utils/albumObjectUrl';
@@ -115,12 +114,12 @@ export function extractSaveAssetRecords(save: 存档数据): SaveAssetRecord[] {
 
 export function saveHasEmbeddedAssetPayload(save: 存档数据): boolean {
   return Boolean(
-    save.相册?.assets?.some((asset) => isDataImage(asset.dataUrl) || isDataImage(asset.originalUrl)),
+    save.相册?.assets.some((asset) => isDataImage(asset.dataUrl) || isDataImage(asset.originalUrl)),
   );
 }
 
 export function stripSaveAssetPayloadForStorage<T extends 存档数据>(save: T): T {
-  if (!save.相册?.assets?.length) return save;
+  if (!save.相册?.assets.length) return save;
   return {
     ...save,
     相册: stripAlbumAssetPayload(save.相册),
@@ -137,7 +136,7 @@ export function restoreSaveAssetPayloadFromRecords<T extends 存档数据>(
   save: T,
   records: SaveAssetRecord[],
 ): T {
-  if (!save.相册?.assets?.length || !records.length) return save;
+  if (!save.相册?.assets.length || !records.length) return save;
   const byId = new Map(records.map((record) => [record.id, record]));
   return {
     ...save,
@@ -226,11 +225,12 @@ function restoreAssetPayload(asset: 图片资源, records: Map<string, SaveAsset
 
   const materialized = materializeSaveAssetRecord(record);
   // Runtime album state: keep asset ref only — never re-inject multi-MB base64.
+  const materializedOriginalIsData = isDataImage(materialized.originalUrl);
   return {
     ...asset,
     dataUrl: 创建相册资源引用(asset.id),
     // Preserve non-data remote original URLs only.
-    originalUrl: isDataImage(materialized.originalUrl)
+    originalUrl: materializedOriginalIsData
       ? undefined
       : (materialized.originalUrl ?? (isDataImage(asset.originalUrl) ? undefined : asset.originalUrl)),
     url: asset.url ?? materialized.url,
@@ -248,7 +248,7 @@ function restoreAssetPayload(asset: 图片资源, records: Map<string, SaveAsset
  * Only use at export boundaries — never for long-lived React state.
  */
 export async function expandSaveAssetPayloadForExport<T extends 存档数据>(save: T): Promise<T> {
-  if (!save.相册?.assets?.length) return save;
+  if (!save.相册?.assets.length) return save;
   let changed = false;
   const assets: 图片资源[] = [];
   for (const asset of save.相册.assets) {

@@ -40,20 +40,24 @@ export function stage3_promptAssembly(
 ): Partial<TurnDeltas> {
   const { state, userInput, deps, mainStoryConfig, isOpeningSystemTrigger,
     isAwakeningEnterTrigger, awakeningInstruction, openingInstruction } = ctx;
-  const currentTriggerType = d.currentTriggerType!;
-  const awakeningPhase = d.awakeningPhase!;
-  const macroCtx = d.macroCtx!;
-  const updatedHistory = d.updatedHistory!;
-  const userMsg = d.userMsg!;
-  let systemPrompt = d.systemPrompt!;
+  // 前置守卫：排除 awakeningPhase —— 普通回合（无进行中狭间）时 stage2 合法产出 undefined。
+  if (!d.currentTriggerType || !d.macroCtx || !d.updatedHistory || !d.userMsg || !d.systemPrompt) {
+    throw new Error('stage3_promptAssembly: 前置阶段必须写入 currentTriggerType/macroCtx/updatedHistory/userMsg/systemPrompt');
+  }
+  const currentTriggerType = d.currentTriggerType;
+  const awakeningPhase = d.awakeningPhase;
+  const macroCtx = d.macroCtx;
+  const updatedHistory = d.updatedHistory;
+  const userMsg = d.userMsg;
+  let systemPrompt = d.systemPrompt;
 
   // Phase 4: In-Chat depth 注入（moduleChatMessages 来自 stage2）
-  const moduleChatMessages = (d.chatModuleMessages as Array<{ role: string; content: string; _injectionPosition?: number; _injectionDepth?: number; _injectionOrder?: number }>) ?? [];
+  const moduleChatMessages = d.chatModuleMessages as Array<{ role: string; content: string; _injectionPosition?: number; _injectionDepth?: number; _injectionOrder?: number }>;
   const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
   const shouldTryTavernV2 =
     state.gameSettings.enableStPreset !== false &&
-    Boolean(currentPresetV2?.preset?.prompts?.length) &&
-    Boolean(currentPresetV2?.preset?.prompt_order?.length);
+    Boolean(currentPresetV2?.preset.prompts.length) &&
+    Boolean(currentPresetV2?.preset.prompt_order.length);
   let tavernV2Messages: 聊天消息[] | null = null;
   let tavernV2Error: unknown = null;
   const recentHistory = getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆);
@@ -139,7 +143,7 @@ export function stage3_promptAssembly(
     );
   }
 
-  const deepSeekMainMode = state.gameSettings.deepSeekMainMode ?? 'off';
+  const deepSeekMainMode = state.gameSettings.deepSeekMainMode;
   const deepSeekMainActive = isDeepSeekMainConfig(mainStoryConfig) && deepSeekMainMode !== 'off';
   const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
   const shouldUseCotFakeHistory =
@@ -241,7 +245,7 @@ export function stage3_promptAssembly(
     tavernV2Error,
     effectivePrefixMode,
     effectivePrefixContent,
-    mainRequestMode: (shouldStreamMainRequest ? 'stream' : 'non-stream') as 'stream' | 'non-stream',
+    mainRequestMode: shouldStreamMainRequest ? 'stream' : 'non-stream',
     tavernV2Messages,
     currentPresetV2ForStage: currentPresetV2,
   };

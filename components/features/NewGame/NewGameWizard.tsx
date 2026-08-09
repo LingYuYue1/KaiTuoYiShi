@@ -1,10 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
 import type { 命途阶段, 命途进度 } from '@/models/path';
 import type { 世界状态 } from '@/models/world';
-import { 创建默认开局档案, 创建空世界状态, 根据官方开局预设创建开局档案, 根据开局档案创建初始NPC记录, 根据起始场景创建开局档案, 根据自由开局整理创建开局档案, 生成开局已成立事实 } from '@/models/world';
+import { 创建空世界状态, 根据官方开局预设创建开局档案, 根据开局档案创建初始NPC记录, 根据起始场景创建开局档案, 根据自由开局整理创建开局档案, 生成开局已成立事实 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
 import type { API配置项, 主题预设 } from '@/models/settings';
 import type {
@@ -13,6 +13,7 @@ import type {
   阵营ID,
   开局来源,
   自由开局地点来源,
+  官方开局预设,
 } from '@/models/journey';
 import {
   abilityPresets,
@@ -235,7 +236,7 @@ function getOpeningDisplaySummary(item: OpeningDisplayScenario): string {
 
 function getOpeningDisplayHighlights(item: OpeningDisplayScenario): string[] {
   if ('openingHighlights' in item) return item.openingHighlights ?? [];
-  if ('openingPressure' in item) return item.openingPressure ?? [];
+  if ('openingPressure' in item) return item.openingPressure;
   return [];
 }
 
@@ -417,7 +418,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
           setPresetNameDraft(normalized[0].title);
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.warn('[new-game] 开局预设读取失败:', err);
       });
     return () => {
@@ -436,7 +437,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   );
   const openingSkillSlots = useMemo(
     () => 生成战技槽位摘要(
-      pathId && pathId !== 'none'
+      pathId !== 'none'
         ? [{
             ...创建命途进度(pathId, true, '开局承载', `初始阶段：${selectedPathStage.name}`),
             阶段: pathStage,
@@ -447,14 +448,19 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     [openingSkills, pathId, pathStage, selectedPathStage.name],
   );
   const openingSelectedSlot = useMemo(
-    () => resolveOpeningSkillSlot(openingSkillSlots, openingSkillSlotKey) ?? openingSkillSlots[0],
+    () => resolveOpeningSkillSlot(openingSkillSlots, openingSkillSlotKey) ?? openingSkillSlots.at(0),
     [openingSkillSlotKey, openingSkillSlots],
   );
 
-  useEffect(() => {
-    if (resolveOpeningSkillSlot(openingSkillSlots, openingSkillSlotKey) || !openingSkillSlots[0]) return;
-    setOpeningSkillSlotKey(toOpeningSkillSlotKey(openingSkillSlots[0]));
-  }, [openingSkillSlotKey, openingSkillSlots]);
+  const [prevOpeningSkillSlotKey, setPrevOpeningSkillSlotKey] = useState(openingSkillSlotKey);
+  const [prevOpeningSkillSlots, setPrevOpeningSkillSlots] = useState(openingSkillSlots);
+  if (prevOpeningSkillSlotKey !== openingSkillSlotKey || prevOpeningSkillSlots !== openingSkillSlots) {
+    setPrevOpeningSkillSlotKey(openingSkillSlotKey);
+    setPrevOpeningSkillSlots(openingSkillSlots);
+    if (!resolveOpeningSkillSlot(openingSkillSlots, openingSkillSlotKey) && openingSkillSlots[0]) {
+      setOpeningSkillSlotKey(toOpeningSkillSlotKey(openingSkillSlots[0]));
+    }
+  }
   const selectedFaction = useMemo(() => getFaction(factionId) ?? factions[0], [factionId]);
   const selectedScenario = useMemo<OpeningScenario | undefined>(
     () => getStartingScenario(startingScenarioId),
@@ -471,9 +477,9 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   const selectedRegionId =
     selectedScenarioBundle.region?.id
     ?? selectedScenarioPreset?.regionId
-    ?? openingRegions[0]?.id
+    ?? openingRegions.at(0)?.id
     ?? 'herta_space_station';
-  const selectedOpeningRegion = getOpeningRegion(selectedRegionId) ?? openingRegions[0];
+  const selectedOpeningRegion = getOpeningRegion(selectedRegionId) ?? openingRegions.at(0);
   const selectedOpeningDate = selectedScenarioPreset?.referenceDate ?? '琥珀纪 2157.03.07';
   const selectedOpeningTime = selectedScenarioPreset?.referenceTime ?? '06:40';
   const selectedOpeningLocation =
@@ -592,7 +598,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
         faction: selectedFaction,
         customIdentity,
         customStartPrompt: effectiveCustomStartPrompt,
-        canonicalTrailblazer: getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue,
+        canonicalTrailblazer: getCanonicalTrailblazer(canonicalTrailblazer).worldValue,
         abilities: selectedAbilityNames,
         skills: openingSkills,
       }),
@@ -604,8 +610,8 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     if (source === 'workshop') {
       const template =
         getWorkshopOpeningTemplate(selectedWorkshopTemplateId)
-        ?? getWorkshopOpeningTemplatesByRegion(selectedRegionId)[0]
-        ?? workshopOpeningTemplates[0];
+        ?? getWorkshopOpeningTemplatesByRegion(selectedRegionId).at(0)
+        ?? workshopOpeningTemplates.at(0);
       if (!template) return;
       setSelectedWorkshopTemplateId(template.id);
       setStartingScenarioId(template.chapterId);
@@ -652,13 +658,13 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   const selectOpeningRegion = (regionId: string) => {
     if (openingSource === 'workshop') {
-      const template = getWorkshopOpeningTemplatesByRegion(regionId)[0];
+      const template = getWorkshopOpeningTemplatesByRegion(regionId).at(0);
       if (template) {
         selectWorkshopTemplate(template.id);
         return;
       }
     }
-    const officialPreset = getOfficialOpeningPresetsByRegion(regionId)[0];
+    const officialPreset = getOfficialOpeningPresetsByRegion(regionId).at(0);
     if (officialPreset) {
       setStartingScenarioId(officialPreset.chapterId);
       return;
@@ -856,12 +862,12 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     const selectedPathDef = getPath(pathId);
     const selectedScenarioDef = selectedScenario;
     const scenarioBundle = getOpeningScenarioBundle(startingScenarioId);
-    const scenarioPreset = selectedScenarioPreset ?? scenarioBundle.preset;
+    const scenarioPreset: 官方开局预设 | undefined = selectedScenarioPreset ?? scenarioBundle.preset;
 
     const abilityNames = selectedAbilityNames;
 
     const startingPaths =
-      pathId && pathId !== 'none'
+      pathId !== 'none'
         ? [
             {
               ...创建命途进度(
@@ -878,7 +884,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     const factionIdentity = selectedFaction.id === 'none' ? '' : selectedFaction.name;
     const displayIdentity = [factionIdentity, finalIdentity].filter(Boolean).join(' · ');
     const travelerBackground = background.trim();
-    const canonicalName = getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue;
+    const canonicalName = getCanonicalTrailblazer(canonicalTrailblazer).worldValue;
 
     const traveler: 角色数据结构 = {
       姓名: name.trim() || '无名开拓者',
@@ -916,7 +922,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     worldState.当前时间 = selectedOpeningTime;
     worldState.当前地点 = resolvedOpeningLocation;
     worldState.剧情模式 = storyMode;
-    worldState.起航之地ID = scenarioPreset?.chapterId ?? scenarioBundle.chapter?.id ?? startingScenarioId ?? 'herta_station_incident';
+    worldState.起航之地ID = scenarioPreset?.chapterId ?? scenarioBundle.chapter?.id ?? (startingScenarioId || 'herta_station_incident');
     worldState.原著主角 = canonicalName;
     worldState.自定义开局 = effectiveCustomStartPrompt;
     const customOpeningText = effectiveCustomStartPrompt;
@@ -1312,8 +1318,8 @@ style={{
                     onPresetNameDraft={setPresetNameDraft}
                     onSelectPreset={setSelectedPresetId}
                     onApplyPreset={applyOpeningPreset}
-                    onSavePreset={saveCurrentOpeningPreset}
-                    onDeletePreset={deleteSelectedOpeningPreset}
+                    onSavePreset={() => void saveCurrentOpeningPreset()}
+                    onDeletePreset={() => void deleteSelectedOpeningPreset()}
                   />
                 </div>
             {step === 'character' && (
@@ -1468,7 +1474,7 @@ style={{
                 selectedAbilityNames={selectedAbilityNames}
                 openingSkills={openingSkills}
                 currentLocation={selectedOpeningLocation}
-                onStart={handleStart}
+                onStart={() => void handleStart()}
                 onBack={goPrev}
                 starting={startingGame}
                 openingArchiveStatus={openingArchiveStatus}
@@ -2228,7 +2234,7 @@ function CharacterStep({
               />
               <button
                 type="button"
-                onClick={handleGenerateTemplate}
+                onClick={() => void handleGenerateTemplate()}
                 disabled={templateLoading}
                 className="kaituo-btn kaituo-btn-secondary shrink-0 px-4 py-2.5 text-xs disabled:cursor-wait disabled:opacity-60"
               >
@@ -3106,7 +3112,7 @@ function OpeningAnchorStep({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const selectedRegion = getOpeningRegion(selectedRegionId) ?? openingRegions[0];
+  const selectedRegion = getOpeningRegion(selectedRegionId) ?? openingRegions.at(0);
   const freeGuide = getFreeOpeningGuide(selectedRegionId);
   const filteredOfficialPresets = getOfficialOpeningPresetsByRegion(selectedRegionId);
   const filteredChapters = openingChapterAnchors.filter((item) => item.regionId === selectedRegionId);
@@ -3651,7 +3657,7 @@ function OpeningAnchorStep({
                 placeholder={
                   openingSource === 'official_preset'
                     ? '官方预设可留空。若想改变介入方式，也可以写下你希望如何进入当前章节。'
-                    : selectedTemplate?.playerEntryTemplate ?? freeGuide?.sampleTexts?.[0] ?? '例如：开局地点是公司封锁的边缘实验站。我是受人委托追查奇物失控的外来旅人，当前正在等待接头人。'
+                    : selectedTemplate?.playerEntryTemplate ?? freeGuide?.sampleTexts.at(0) ?? '例如：开局地点是公司封锁的边缘实验站。我是受人委托追查奇物失控的外来旅人，当前正在等待接头人。'
                 }
                 className="mt-3 min-h-[152px] w-full resize-none px-3 py-3 text-sm leading-relaxed outline-none"
                 style={{
@@ -4214,7 +4220,7 @@ function OverviewStep({
             <OverviewRow label="地区" value={selectedOpeningRegionName || '未指定'} />
             <OverviewRow label="开局锚点" value={selectedOpeningTitle || selectedScenario?.name || '未选择'} />
             <OverviewRow label="当前地点" value={currentLocation || '未指定'} />
-            <OverviewRow label="原著主角" value={getCanonicalTrailblazer(canonicalTrailblazer)?.worldValue ?? '未指定'} />
+            <OverviewRow label="原著主角" value={getCanonicalTrailblazer(canonicalTrailblazer).worldValue ?? '未指定'} />
             <OverviewRow label="命途" value={path ? `${path.name} · ${path.aeon}` : '无命途'} />
             <OverviewRow label="命途阶段" value={path ? `${selectedStage.name} · ${selectedStage.title}` : '未选择'} />
             <OverviewRow label="组织背景" value={faction.name} />
@@ -4450,7 +4456,7 @@ function splitCustomAbilityEntry(text: string): { name: string; effect: string }
 
 function splitOpeningSkillKeywords(value: string): string[] {
   return value
-    .split(/[,，、\/|\n]+/g)
+    .split(/[,，、/|\n]+/g)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -4682,11 +4688,4 @@ function mergeBirthday(month: string, day: string): string {
   if (m && d) return `${m}月${d}日`;
   if (m) return `${m}月`;
   return `${d}日`;
-}
-
-function splitLines(value: string): string[] {
-  return value
-    .split(/\n|；|;/g)
-    .map((item) => item.replace(/^[-*]\s*/, '').trim())
-    .filter(Boolean);
 }

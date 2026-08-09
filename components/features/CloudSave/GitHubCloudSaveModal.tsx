@@ -60,31 +60,32 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
     if (window.location.pathname !== '/oauth/github/callback') return;
-    setCloudBusy(true);
-    setCloudMessage('正在完成 GitHub 授权绑定...');
-    consumeGitHubOAuthCallback()
-      .then(async (token) => {
-        if (!token || cancelled) return;
-        const result = await bindGitHubCloudAccount(token);
-        if (cancelled) return;
-        setAccount(result.account);
-        setBindToken(result.config.token);
-        await persistCloudConfig(result.config);
-        const listing = await inspectGitHubCloudBackup(result.config);
-        if (cancelled) return;
-        setCloudBackup(listing);
-        setCloudMessage(`已绑定 GitHub：${result.account.login}。`);
-      })
-      .catch((err) => {
-        if (!cancelled) setCloudMessage(err instanceof Error ? err.message : 'GitHub OAuth 绑定失败。');
-      })
-      .finally(() => {
-        if (!cancelled) setCloudBusy(false);
-      });
+    const cancelled: { current: boolean } = { current: false };
+    const isCancelled = (): boolean => cancelled.current;
+    void (async () => {
+      await Promise.resolve();
+      if (isCancelled()) return;
+      setCloudBusy(true);
+      setCloudMessage('正在完成 GitHub 授权绑定...');
+      const token = await consumeGitHubOAuthCallback();
+      if (!token || isCancelled()) return;
+      const result = await bindGitHubCloudAccount(token);
+      if (isCancelled()) return;
+      setAccount(result.account);
+      setBindToken(result.config.token);
+      await persistCloudConfig(result.config);
+      const listing = await inspectGitHubCloudBackup(result.config);
+      if (isCancelled()) return;
+      setCloudBackup(listing);
+      setCloudMessage(`已绑定 GitHub：${result.account.login}。`);
+    })().catch((err: unknown) => {
+      if (!isCancelled()) setCloudMessage(err instanceof Error ? err.message : 'GitHub OAuth 绑定失败。');
+    }).finally(() => {
+      if (!isCancelled()) setCloudBusy(false);
+    });
     return () => {
-      cancelled = true;
+      cancelled.current = true;
     };
   }, [consumeGitHubOAuthCallback]);
 
@@ -439,13 +440,13 @@ function CloudButton({
   label: string;
   tone?: 'primary' | 'quiet';
   disabled?: boolean;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
 }) {
   return (
     <button
       type="button"
       disabled={disabled}
-      onClick={onClick}
+      onClick={() => void onClick()}
       className="w-full px-4 py-2 text-sm font-serif tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-50"
       style={{
         color: tone === 'primary' ? 'rgb(var(--tj-bg-primary))' : 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',

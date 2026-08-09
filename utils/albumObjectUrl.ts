@@ -42,7 +42,7 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
 export async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
     reader.onerror = () => reject(reader.error ?? new Error('Blob 转 dataUrl 失败'));
     reader.readAsDataURL(blob);
   });
@@ -50,7 +50,7 @@ export async function blobToDataUrl(blob: Blob): Promise<string> {
 
 export function rememberAlbumAssetBlob(assetId: string, blob: Blob, mimeType?: string): void {
   const id = assetId.trim();
-  if (!id || !blob) return;
+  if (!id) return;
   const existing = assetCache.get(id);
   if (existing && existing.blob === blob) {
     if (mimeType && !existing.mimeType) existing.mimeType = mimeType;
@@ -136,13 +136,11 @@ export function getAlbumAssetCacheStats(): { size: number; objectUrls: number; t
  * album state enters long-lived React memory. Safe to call multiple times.
  */
 export function materializeAlbumRuntimePayload<T extends { assets: Array<{ id: string; dataUrl?: string; size?: number }> }>(album: T): T {
-  let changed = false;
   const assets = album.assets.map((asset) => {
     if (!asset.id) return asset;
     if (asset.dataUrl && asset.dataUrl.startsWith('data:')) {
       const blob = rememberAlbumAssetFromDataUrl(asset.id, asset.dataUrl);
       if (!blob) return asset;
-      changed = true;
       return {
         ...asset,
         dataUrl: `asset:${asset.id}`,
@@ -151,6 +149,7 @@ export function materializeAlbumRuntimePayload<T extends { assets: Array<{ id: s
     }
     return asset;
   });
+  const changed = album.assets.some((asset, index) => assets[index] !== asset);
   return changed ? { ...album, assets } : album;
 }
 

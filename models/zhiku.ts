@@ -177,7 +177,7 @@ export function 归一化智库系统(input?: Partial<智库系统> | null, ctx?
   const seen = new Set<string>();
   return {
     条目: input.条目
-      .filter((entry) => !!entry && typeof entry === 'object')
+      .filter((entry) => typeof entry === 'object')
       .map((entry) => normalizeEntry(entry, ctx))
       .filter((entry) => {
         if (seen.has(entry.id)) return false;
@@ -189,7 +189,7 @@ export function 归一化智库系统(input?: Partial<智库系统> | null, ctx?
 
 export function 搜索智库条目(system: 智库系统, query: string, limit = 8): 智库条目[] {
   const q = query.trim().toLowerCase();
-  const entries = system.条目 ?? [];
+  const entries = system.条目;
   if (!q) {
     return [...entries]
       .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -213,8 +213,8 @@ export function 智库分类计数(system: 智库系统): Record<智库分类, n
   const counts = Object.fromEntries(
     Object.keys(ZHIKU_CATEGORY_LABELS).map((key) => [key, 0]),
   ) as Record<智库分类, number>;
-  for (const entry of system.条目 ?? []) {
-    counts[entry.分类] = (counts[entry.分类] ?? 0) + 1;
+  for (const entry of system.条目) {
+    counts[entry.分类] += 1;
   }
   return counts;
 }
@@ -226,7 +226,7 @@ export function 解析智库软结构标签(
   >>,
 ): 智库软结构标签 {
   const tagMap = new Map<string, string[]>();
-  for (const keyword of entry.关键词 ?? []) {
+  for (const keyword of entry.关键词) {
     const parsed = parseKeywordTag(keyword);
     if (!parsed) continue;
     const current = tagMap.get(parsed.key) ?? [];
@@ -275,7 +275,7 @@ export function 获取智库人物名列表(entry: Pick<智库条目, '标题' |
   if (explicitRole) names.push(explicitRole);
 
   names.push(
-    ...(entry.关键词 ?? [])
+    ...(entry.关键词)
     .map((keyword) => parseKeywordTag(keyword))
       .filter((tag): tag is { key: string; value: string } => !!tag && ['角色', '人物', '归属角色'].includes(tag.key))
     .map((tag) => tag.value.trim())
@@ -297,7 +297,7 @@ export function 获取智库人物名列表(entry: Pick<智库条目, '标题' |
 }
 
 export function 获取智库核心触发词(entry: Pick<智库条目, '原文'>): string[] {
-  const source = String(entry.原文 ?? '');
+  const source = entry.原文;
   const match = source.match(/核心触发词[:：]\s*([^\n]+)/u);
   if (!match) return [];
   return Array.from(new Set(
@@ -437,7 +437,7 @@ function normalizeTextList(value: unknown): string[] {
 }
 
 function clampImportance(value: number): number {
-  const n = Math.trunc(Number(value) || 3);
+  const n = Math.trunc(value || 3);
   return Math.min(5, Math.max(1, n));
 }
 

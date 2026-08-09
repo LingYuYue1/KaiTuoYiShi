@@ -111,9 +111,9 @@ function normalizeAuxApiProfileState(input?: Partial<AuxApiProfileState>): AuxAp
   const provider = providerOptions.find((p) => p.value === input?.provider) ?? providerOptions[0];
   return {
     provider: provider.value,
-    baseUrl: String(input?.baseUrl ?? provider.defaultBaseUrl),
-    apiKey: String(input?.apiKey ?? ''),
-    model: String(input?.model ?? provider.defaultModel),
+    baseUrl: input?.baseUrl ?? provider.defaultBaseUrl,
+    apiKey: input?.apiKey ?? '',
+    model: input?.model ?? provider.defaultModel,
   };
 }
 
@@ -204,12 +204,13 @@ function cloneWithoutKeys<T>(value: T, includeApiKeys: boolean): T {
   if (includeApiKeys) return cloned;
   const clear = (target: unknown) => {
     if (target && typeof target === 'object' && 'apiKey' in target) {
-      (target as { apiKey?: string }).apiKey = '';
+      const holder = target as { apiKey?: string };
+      holder.apiKey = '';
     }
   };
   const root = cloned as unknown as API配置包;
-  for (const config of root.apiSettings?.configs ?? []) clear(config);
-  for (const item of Object.values(root.routes ?? {})) clear(item);
+  for (const config of root.apiSettings.configs) clear(config);
+  for (const item of Object.values(root.routes)) clear(item);
   return cloned;
 }
 
@@ -221,7 +222,7 @@ function buildApiProfile(settings: API设置, gameSettings: 游戏设置, includ
     exportedAt: new Date().toISOString(),
     includeApiKeys,
     enableClaudeMode: gameSettings.enableClaudeMode,
-    deepSeekMainMode: gameSettings.deepSeekMainMode ?? 'off',
+    deepSeekMainMode: gameSettings.deepSeekMainMode,
     apiSettings: settings,
     routes: {
       variableApi: gameSettings.variableApi,
@@ -241,8 +242,11 @@ function buildApiProfile(settings: API设置, gameSettings: 游戏设置, includ
 }
 
 function validateApiProfile(input: unknown): API配置包 {
+  if (!input || typeof input !== 'object') {
+    throw new Error('不是有效的开拓轶事 API 配置包。');
+  }
   const data = input as Partial<API配置包>;
-  if (!data || typeof data !== 'object' || data.app !== 'KaiTuoYiShi' || data.kind !== 'api-profile') {
+  if (data.app !== 'KaiTuoYiShi' || data.kind !== 'api-profile') {
     throw new Error('不是有效的开拓轶事 API 配置包。');
   }
   if (data.version !== 1) {
@@ -396,7 +400,7 @@ export function ApiSettingsTab({ settings, onChange, gameSettings, onGameSetting
 
 function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettingsChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
-    settings.activeConfigId ?? settings.configs[0]?.id ?? null,
+    settings.activeConfigId ?? settings.configs[0]?.id,
   );
   const [newProvider, setNewProvider] = useState<AI提供商>('openai_compatible');
   const [modelOptions, setModelOptions] = useState<string[]>([]);
@@ -418,13 +422,15 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
   );
 
   // Reset model options when switching config
-  useEffect(() => {
+  const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
+  if (prevSelectedId !== selectedId) {
+    setPrevSelectedId(selectedId);
     setModelOptions([]);
     setAuxModelOptions([]);
     setTestResult(null);
     setMessage(null);
     setAuxFetchMessage(null);
-  }, [selectedId]);
+  }
 
   useEffect(() => {
     loadSetting<API方案槽位[]>(API_PROFILE_SLOTS_KEY)
@@ -448,14 +454,27 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
       .catch(() => setAuxProfilesByConfig({}));
   }, []);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    setAuxForm(auxProfilesByConfig[selectedId] ?? createDefaultAuxApiProfileState());
-    setAuxModelOptions([]);
-    setAuxFetchMessage(null);
-  }, [selectedId, auxProfilesByConfig]);
+  const [prevAuxSelectedId, setPrevAuxSelectedId] = useState(selectedId);
+  const [prevAuxProfiles, setPrevAuxProfiles] = useState(auxProfilesByConfig);
+  if (prevAuxSelectedId !== selectedId || prevAuxProfiles !== auxProfilesByConfig) {
+    setPrevAuxSelectedId(selectedId);
+    setPrevAuxProfiles(auxProfilesByConfig);
+    if (selectedId) {
+      setAuxForm(auxProfilesByConfig[selectedId] ?? createDefaultAuxApiProfileState());
+      setAuxModelOptions([]);
+      setAuxFetchMessage(null);
+    }
+  }
 
   // 常驻默认配置：列表为空时自动补一个 OpenAI 兼容占位，避免右侧空状态。
+  const [prevConfigs, setPrevConfigs] = useState(settings.configs);
+  if (prevConfigs !== settings.configs) {
+    setPrevConfigs(settings.configs);
+    if (settings.configs.length > 0 && (!selectedId || !settings.configs.find((c) => c.id === selectedId))) {
+      setSelectedId(settings.activeConfigId ?? settings.configs[0].id);
+    }
+  }
+
   useEffect(() => {
     if (settings.configs.length === 0) {
       const created = makeNewConfig('openai_compatible');
@@ -463,11 +482,8 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
         activeConfigId: created.id,
         configs: [created],
       });
-      setSelectedId(created.id);
-    } else if (!selectedId || !settings.configs.find((c) => c.id === selectedId)) {
-      setSelectedId(settings.activeConfigId ?? settings.configs[0].id);
     }
-  }, [settings.configs, settings.activeConfigId, selectedId, onChange]);
+  }, [settings.configs, onChange]);
 
   const persistAuxForm = async (nextForm: AuxApiProfileState) => {
     setAuxForm(nextForm);
@@ -549,8 +565,8 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     };
     const nextGameSettings: 游戏设置 = {
       ...gameSettings,
-      enableClaudeMode: profile.enableClaudeMode ?? gameSettings.enableClaudeMode ?? false,
-      deepSeekMainMode: profile.deepSeekMainMode ?? gameSettings.deepSeekMainMode ?? 'off',
+      enableClaudeMode: profile.enableClaudeMode ?? gameSettings.enableClaudeMode,
+      deepSeekMainMode: profile.deepSeekMainMode ?? gameSettings.deepSeekMainMode,
       variableApi: profile.routes.variableApi,
       新闻系统: { ...gameSettings.新闻系统, api: profile.routes.新闻系统 },
       手机系统: { ...gameSettings.手机系统, api: profile.routes.手机系统 },
@@ -571,7 +587,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
     };
     onChange(nextApiSettings);
     onGameSettingsChange(nextGameSettings);
-    setSelectedId(nextApiSettings.activeConfigId ?? nextApiSettings.configs[0]?.id ?? null);
+    setSelectedId(nextApiSettings.activeConfigId ?? nextApiSettings.configs[0]?.id);
     await saveSetting('apiSettings', nextApiSettings);
     await saveSetting('gameSettings', nextGameSettings);
   };
@@ -827,7 +843,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
             </div>
           </div>
           <button
-            onClick={handleSaveProfileSlot}
+            onClick={() => void handleSaveProfileSlot()}
             className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
               background: 'rgba(var(--tj-accent-primary), 0.08)',
@@ -1139,7 +1155,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                     style={{ clipPath: smallClip }}
                   />
                   <button
-                    onClick={handleFetchModels}
+                    onClick={() => void handleFetchModels()}
                     disabled={loadingModels}
                     className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50 sm:py-1.5"
                     style={{
@@ -1394,7 +1410,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
             {/* 测试连接 */}
             <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
               <button
-                onClick={handleTest}
+                onClick={() => void handleTest()}
                 disabled={testing}
                 className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
@@ -1445,7 +1461,7 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
             {/* 底部保存按钮 */}
             <div className="mt-auto flex flex-col items-stretch gap-2 pt-3">
               <button
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
                 style={{
                   background: savedFlash

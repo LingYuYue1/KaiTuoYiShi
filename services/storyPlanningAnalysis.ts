@@ -18,12 +18,11 @@ export interface 剧情规划分析快照 {
 }
 
 export function buildStoryPlanningAnalysis(system?: 剧情编织系统): 剧情规划分析快照 | null {
-  if (!system?.系列列表?.length) return null;
+  if (!system?.系列列表.length) return null;
   const anchor = system.当前进度;
   const series = system.系列列表.find((item) => item.id === (anchor?.当前系列ID || system.当前系列ID))
     ?? system.系列列表.find((item) => item.激活注入)
     ?? system.系列列表[0];
-  if (!series) return null;
   const current = resolveCurrentSegment(series, anchor);
   if (!current) return null;
 
@@ -70,16 +69,16 @@ function decideAction(anchor: 剧情编织进度锚点 | undefined, current: 剧
   if (['已偏离', '已跳过', '暂停'].includes(current.运行状态)) return '需要人工检查';
   if (current.运行状态 === '已经历' || anchor?.推进状态 === '已完成') return '可归档或切段';
   if (anchor?.最近门禁结果 === 'strong') return '允许强承接';
-  if (anchor?.最近判定理由?.some((item) => item.includes('未推进'))) return '等待正文证据';
+  if (anchor?.最近判定理由.some((item) => item.includes('未推进'))) return '等待正文证据';
   if ((anchor?.连续推进证据回合 ?? 0) > 0) return '等待正文证据';
   return '继续软参考';
 }
 
 function decideDeviationRisk(anchor: 剧情编织进度锚点 | undefined, current: 剧情编织分段): 剧情规划分析快照['偏离风险'] {
   if (current.运行状态 === '已偏离') return '高';
-  if (anchor?.最近判定理由?.some((item) => item.includes('偏离') || item.includes('人工检查') || item.includes('风险') || item.includes('疑似命中后续'))) return '高';
+  if (anchor?.最近判定理由.some((item) => item.includes('偏离') || item.includes('人工检查') || item.includes('风险') || item.includes('疑似命中后续'))) return '高';
   if (current.运行状态 === '已跳过' || current.运行状态 === '暂停') return '中';
-  if (anchor?.最近判定理由?.some((item) => item.includes('未推进') || item.includes('缺少明确收束证据'))) return '中';
+  if (anchor?.最近判定理由.some((item) => item.includes('未推进') || item.includes('缺少明确收束证据'))) return '中';
   return '低';
 }
 
@@ -141,7 +140,7 @@ function buildNextDispatch(anchor: 剧情编织进度锚点 | undefined, current
 }
 
 function buildArchiveChecks(anchor: 剧情编织进度锚点 | undefined, current: 剧情编织分段, next?: 剧情编织分段): string[] {
-  const archived = anchor?.历史归档?.some((item) => item.分段ID === current.id || item.分段组号 === current.组号);
+  const archived = anchor?.历史归档.some((item) => item.分段ID === current.id || item.分段组号 === current.组号);
   return uniqueText([
     archived ? '当前分段已有历史归档记录' : '当前分段尚未在历史归档中出现',
     current.运行状态 === '已经历' && !archived ? '运行状态已经历但缺历史归档，建议检查归档沉淀' : '',

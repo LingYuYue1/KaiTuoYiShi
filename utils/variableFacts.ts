@@ -507,10 +507,6 @@ function isCanonicalNpcPersonalityProtected(npc: NPC记录 | undefined, name: st
   return Boolean(npc?.原著角色 || matchCanonical(npc?.姓名 ?? name) || matchCanonical(name));
 }
 
-function 数组已有文本(value: unknown, text: string): boolean {
-  return Array.isArray(value) && value.some((item) => typeof item === 'string' && item.trim() === text.trim());
-}
-
 function mergeUniqueTexts(...groups: Array<string[] | undefined>): string[] | undefined {
   const seen = new Set<string>();
   const output: string[] = [];
@@ -580,7 +576,7 @@ function buildNsfwArchiveUpdate(existing: NPC记录, fact: Extract<变量事实,
 function pruneEmptyObject<T extends Record<string, unknown>>(obj: T): T | undefined {
   for (const key of Object.keys(obj)) {
     const value = obj[key];
-    if (typeof value === 'string' && !value.trim()) delete obj[key];
+    if (typeof value === 'string' && !value.trim()) Reflect.deleteProperty(obj, key);
   }
   return Object.keys(obj).length ? obj : undefined;
 }
@@ -612,9 +608,9 @@ function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }
   // 兜底:从 title/context/evidence 文本里匹配已知 NPC 姓名。
   // AI 经常只写 context 不写 targetName,导致 phone_seed 被丢弃。
   // 优先匹配已登记的 NPC,其次匹配经典角色(三月七/丹恒等)。
-  const haystack = `${fact.title ?? ''}\n${fact.context ?? ''}\n${fact.evidence ?? ''}`;
+  const haystack = `${fact.title}\n${fact.context}\n${fact.evidence ?? ''}`;
   for (const npc of npcs) {
-    const name = npc.姓名?.trim();
+    const name = npc.姓名.trim();
     if (name && name.length >= 2 && haystack.includes(name)) {
       return npc.id;
     }
@@ -636,7 +632,7 @@ function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }
 function normalizePhoneSeedComparableText(text: string): string {
   return text
     .replace(/\s+/g, '')
-    .replace(/[，。！？!?；;、,.…~～“”"'\[\]（）()《》<>]/g, '')
+    .replace(/[，。！？!?；;、,.…~～“”"'[\]（）()《》<>]/g, '')
     .trim();
 }
 
@@ -659,12 +655,12 @@ function hasRecentSimilarPhoneSeed(phone: 手机系统 | undefined, input: {
   context: string;
   windowTurns?: number;
 }): boolean {
-  if (!phone?.messageSeeds?.length) return false;
+  if (!phone?.messageSeeds.length) return false;
   const windowTurns = Math.max(3, input.windowTurns ?? 12);
   const ids = new Set([input.targetId, ...input.relatedNpcIds].filter(Boolean));
   const currentText = `${input.title}\n${input.context}`;
   return phone.messageSeeds.some((seed) => {
-    if (input.turn - (Number(seed.turn) || 0) > windowTurns) return false;
+    if (input.turn - (seed.turn || 0) > windowTurns) return false;
     const seedIds = new Set([seed.targetId, ...seed.relatedNpcIds].filter(Boolean));
     const sameTarget = [...ids].some((id) => seedIds.has(id) || seedIds.has(`npc_${id}`) || id === seed.targetId);
     if (!sameTarget) return false;
@@ -673,11 +669,11 @@ function hasRecentSimilarPhoneSeed(phone: 手机系统 | undefined, input: {
 }
 
 function hasRecentNonUrgentPhoneSeed(phone: 手机系统 | undefined, turn: number, windowTurns = 3): boolean {
-  if (!phone?.messageSeeds?.length) return false;
+  if (!phone?.messageSeeds.length) return false;
   const safeWindow = Math.max(3, Math.trunc(windowTurns) || 3);
   return phone.messageSeeds.some((seed) => {
     if (seed.priority === 'urgent' || seed.priority === 'high') return false;
-    return turn - (Number(seed.turn) || 0) < safeWindow;
+    return turn - (seed.turn || 0) < safeWindow;
   });
 }
 
@@ -695,7 +691,7 @@ export function factsToVariableCommands(
   const notes: string[] = [];
   const warnings: string[] = [];
   const world = state.世界 as 世界状态;
-  const npcs = (state.NPC as NPC记录[]) ?? [];
+  const npcs = (state.NPC as NPC记录[] | undefined) ?? [];
   const phone = state.手机 as 手机系统 | undefined;
   const phoneSeedsEnabled = options.phoneSeedsEnabled !== false;
   const maxPhoneSeedsPerTurn = Math.max(0, Math.trunc(options.maxPhoneSeedsPerTurn ?? 2));
@@ -711,7 +707,7 @@ export function factsToVariableCommands(
     }
 
     if (fact.type === 'time') {
-      const current = 分钟序数(world?.当前时间);
+      const current = 分钟序数(world.当前时间);
       if (fact.mode === 'no_change') continue;
       if (fact.mode === 'elapsed') {
         const delta = Math.max(1, Math.min(30, Math.trunc(fact.minutes ?? 3)));
@@ -725,28 +721,29 @@ export function factsToVariableCommands(
           warnings.push(`time(set_time) 已忽略：无法识别目标时间 ${fact.targetTime ?? '空'}。`);
           continue;
         }
-        if (next !== null && current !== null && next < current && 有跨日证据(fact.evidence)) {
-          const nextDate = 推进琥珀日期(world?.当前日期 ?? '');
-          const aligned = 对齐世界日期与天数((world?.开拓天数 ?? 1) + 1, nextDate);
+        if (current !== null && next < current && 有跨日证据(fact.evidence)) {
+          const nextDate = 推进琥珀日期(world.当前日期);
+          const aligned = 对齐世界日期与天数(world.开拓天数 + 1, nextDate);
           push({ action: 'set', key: '世界.开拓天数', value: aligned.开拓天数 });
           push({ action: 'set', key: '世界.当前日期', value: aligned.当前日期 });
           push({ action: 'set', key: '世界.当前时间', value: fact.targetTime });
           continue;
         }
         if (current !== null && next < current) {
-          warnings.push(`time(set_time) 已忽略疑似同日时间回退：当前 ${world?.当前时间 ?? '未知'}，事实目标 ${fact.targetTime}；若剧情跨日，请输出 mode=next_day/overnight 并写明证据。`);
+          warnings.push(`time(set_time) 已忽略疑似同日时间回退：当前 ${world.当前时间}，事实目标 ${fact.targetTime}；若剧情跨日，请输出 mode=next_day/overnight 并写明证据。`);
           continue;
         }
         push({ action: 'set', key: '世界.当前时间', value: fact.targetTime });
         continue;
       }
-      if (fact.mode === 'overnight' || fact.mode === 'next_day') {
-        const nextDate = 推进琥珀日期(world?.当前日期 ?? '');
-        const aligned = 对齐世界日期与天数((world?.开拓天数 ?? 1) + 1, nextDate);
+      // 走到这里 fact.mode 只剩 'overnight' / 'next_day'（其余分支均已 continue）
+      {
+        const nextDate = 推进琥珀日期(world.当前日期);
+        const aligned = 对齐世界日期与天数(world.开拓天数 + 1, nextDate);
         push({ action: 'set', key: '世界.开拓天数', value: aligned.开拓天数 });
         push({ action: 'set', key: '世界.当前日期', value: aligned.当前日期 });
         if (fact.targetTime) push({ action: 'set', key: '世界.当前时间', value: fact.targetTime });
-        else warnings.push(`time(${fact.mode}) 缺少 targetTime：已推进日期和天数，但当前时间保持 ${world?.当前时间 ?? '未知'}。`);
+        else warnings.push(`time(${fact.mode}) 缺少 targetTime：已推进日期和天数，但当前时间保持 ${world.当前时间}。`);
         continue;
       }
     }
@@ -908,7 +905,7 @@ export function factsToVariableCommands(
           来源: fact.source ?? '剧情掉落',
           来源描述: fact.sourceDescription ?? fact.evidence,
           叙事效果: fact.narrativeEffects,
-          获得时间: `${world?.当前日期 || ''} ${world?.当前时间 || ''}`.trim(),
+          获得时间: `${world.当前日期 || ''} ${world.当前时间 || ''}`.trim(),
         },
       });
       continue;
@@ -919,7 +916,8 @@ export function factsToVariableCommands(
       continue;
     }
 
-    if (fact.type === 'phone_seed') {
+    // 走到这里 fact.type 必为 'phone_seed'（其余分支均已 continue）
+    {
       if (!phoneSeedsEnabled || maxPhoneSeedsPerTurn <= 0) {
         warnings.push(`phone_seed 已忽略：手机主动来信种子已关闭或每回合上限为 0（${fact.title}）。`);
         continue;

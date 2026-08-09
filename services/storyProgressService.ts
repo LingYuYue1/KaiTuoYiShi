@@ -8,7 +8,7 @@ export function getCurrentStoryChapterLabel(system: 剧情编织系统): string 
   if (!series || !series.激活注入) return '';
   const current = getCurrentSegment(series, normalized.当前进度);
   if (!current) return `${series.标题} · 未选择章节`;
-  const chapter = current.章节标题?.length ? current.章节标题.join(' / ') : current.标题;
+  const chapter = current.章节标题.length ? current.章节标题.join(' / ') : current.标题;
   return `${series.标题} · ${chapter}`;
 }
 
@@ -217,7 +217,7 @@ function findCrossSeriesCanonAlignment(
     })
     .filter((item): item is { series: 剧情编织系列; score: { value: number; reasons: string[] }; bestSegment: 剧情编织分段 } => Boolean(item.bestSegment))
     .sort((a, b) => b.score.value - a.score.value);
-  const best = candidates[0];
+  const best = candidates.at(0);
   if (!best || best.score.value < 8 || best.score.value - activeScore.value < 4) return null;
   const strongWorldShift = hasStrongCrossSeriesWorldShift(source, best.series);
   if (!strongWorldShift) return null;
@@ -233,7 +233,7 @@ function findCrossSeriesCanonAlignment(
 }
 
 function isSideCanonSeries(series: 剧情编织系列): boolean {
-  const text = `${series.id}\n${series.标题}\n${series.作品名 ?? ''}`;
+  const text = `${series.id}\n${series.标题}\n${series.作品名}`;
   return /(^|_)side_|【支线】|支线/.test(text);
 }
 
@@ -590,7 +590,7 @@ function buildHistoryArchiveEntry(params: {
     ? []
     : buildRoleProgressArchiveSummary(params.segment);
   const id = `story_archive_${params.series.id}_${params.segment.id}_${params.turnCount}`;
-  if (params.previous?.历史归档?.some((item) => item.id === id || (item.分段ID === params.segment.id && item.归档回合 === params.turnCount))) {
+  if (params.previous?.历史归档.some((item) => item.id === id || (item.分段ID === params.segment.id && item.归档回合 === params.turnCount))) {
     return undefined;
   }
   return {

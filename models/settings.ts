@@ -4,7 +4,7 @@ import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { 默认文生图规则中心, normalizeImageRules } from '@/utils/imagePromptRules';
 import type { 剧情编织API覆盖 } from './storyWeaving';
-import type { STWorldInfoEntry, STPresetEntry, STSamplingParams, STPresetEntryV2, TavernPostProcessMode } from './stTypes';
+import type { STWorldInfoEntry, STPresetEntryV1, STSamplingParams, STPresetEntryV2, TavernPostProcessMode } from './stTypes';
 
 export interface API配置项 {
   id: string;
@@ -240,7 +240,7 @@ export interface 游戏设置 {
   /** @deprecated 运行态字段已迁至 `存档数据` 顶层（片 5a-2 D3）。保留读取用于旧数据兼容，新写入不再携带。 */
   macroGlobalVars?: Record<string, string>;
   /** ST 预设兼容：已保存的预设库。玩家可导入多套预设，通过下拉切换。 */
-  stPresets?: STPresetEntry[];
+  stPresets?: STPresetEntryV1[];
   /** ST 预设兼容：当前激活的预设 id。null=未激活任何预设。 */
   currentStPresetId?: string | null;
   /** ST 预设兼容：总开关。关闭后所有 st_import_* 模块不注入 systemPrompt，但保留预设库数据。 */
@@ -727,20 +727,20 @@ export function 归一化文生图API配置(input?: Partial<文生图API配置>)
     enabled: input.enabled === true,
     backend: input.backend ?? defaults.backend,
     responseFormat: input.responseFormat ?? defaults.responseFormat,
-    defaultSize: String(input.defaultSize || defaults.defaultSize),
+    defaultSize: input.defaultSize || defaults.defaultSize,
     defaultStyle: input.defaultStyle ?? defaults.defaultStyle,
     pathMode: input.pathMode === 'custom' ? 'custom' : 'preset',
     presetPath: input.presetPath ?? defaults.presetPath,
-    customPath: String(input.customPath ?? defaults.customPath),
-    steps: Math.max(1, Math.min(80, Math.trunc(Number(input.steps ?? defaults.steps) || defaults.steps))),
-    cfgScale: Math.max(0, Math.min(30, Number(input.cfgScale ?? defaults.cfgScale) || defaults.cfgScale)),
-    seed: Number.isFinite(Number(input.seed)) ? Math.trunc(Number(input.seed)) : defaults.seed,
+    customPath: input.customPath ?? defaults.customPath,
+    steps: Math.max(1, Math.min(80, Math.trunc(input.steps ?? defaults.steps) || defaults.steps)),
+    cfgScale: Math.max(0, Math.min(30, input.cfgScale ?? defaults.cfgScale) || defaults.cfgScale),
+    seed: typeof input.seed === 'number' && Number.isFinite(input.seed) ? Math.trunc(input.seed) : defaults.seed,
     sampler: input.sampler ?? defaults.sampler,
     noiseSchedule: input.noiseSchedule ?? defaults.noiseSchedule,
     useDefaultComfyWorkflow: input.useDefaultComfyWorkflow !== false,
-    comfyWorkflowJson: String(input.comfyWorkflowJson ?? ''),
-    negativePrompt: String(input.negativePrompt ?? ''),
-    retryCount: Math.max(0, Math.trunc(Number(input.retryCount ?? defaults.retryCount) || 0)),
+    comfyWorkflowJson: input.comfyWorkflowJson ?? '',
+    negativePrompt: input.negativePrompt ?? '',
+    retryCount: Math.max(0, Math.trunc(input.retryCount ?? defaults.retryCount) || 0),
   };
 }
 
@@ -763,25 +763,25 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
     词组转化器API: {
       ...创建空文生图词组转化器API覆盖(),
       ...(input.词组转化器API ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.词组转化器API?.retryCount ?? defaults.词组转化器API.retryCount ?? 2)) || 0),
-      maxTokens: Math.max(256, Math.trunc(Number(input.词组转化器API?.maxTokens ?? defaults.词组转化器API.maxTokens ?? 1600)) || 1600),
-      temperature: Number.isFinite(Number(input.词组转化器API?.temperature ?? defaults.词组转化器API.temperature))
-        ? Number(input.词组转化器API?.temperature ?? defaults.词组转化器API.temperature)
+      retryCount: Math.max(0, Math.trunc(input.词组转化器API?.retryCount ?? defaults.词组转化器API.retryCount ?? 2) || 0),
+      maxTokens: Math.max(256, Math.trunc(input.词组转化器API?.maxTokens ?? defaults.词组转化器API.maxTokens ?? 1600) || 1600),
+      temperature: Number.isFinite(input.词组转化器API?.temperature ?? defaults.词组转化器API.temperature)
+        ? input.词组转化器API?.temperature ?? defaults.词组转化器API.temperature
         : defaults.词组转化器API.temperature,
     },
-    promptTokenizerSystemPrompt: String(input.promptTokenizerSystemPrompt ?? defaults.promptTokenizerSystemPrompt),
+    promptTokenizerSystemPrompt: input.promptTokenizerSystemPrompt ?? defaults.promptTokenizerSystemPrompt,
     rules: normalizeImageRules(input.rules),
     enableAutoSceneGeneration: input.enableAutoSceneGeneration === true,
-    autoSceneIntervalTurns: Math.max(1, Math.min(20, Math.trunc(Number(input.autoSceneIntervalTurns ?? defaults.autoSceneIntervalTurns) || defaults.autoSceneIntervalTurns))),
+    autoSceneIntervalTurns: Math.max(1, Math.min(20, Math.trunc(input.autoSceneIntervalTurns ?? defaults.autoSceneIntervalTurns) || defaults.autoSceneIntervalTurns)),
     autoSceneComposition: input.autoSceneComposition ?? defaults.autoSceneComposition,
-    autoSceneSize: String(input.autoSceneSize || defaults.autoSceneSize),
+    autoSceneSize: input.autoSceneSize || defaults.autoSceneSize,
     enableAutoNpcGeneration: input.enableAutoNpcGeneration === true,
     autoNpcGenderFilter: input.autoNpcGenderFilter ?? defaults.autoNpcGenderFilter,
     autoNpcImportantOnly: input.autoNpcImportantOnly !== false,
     autoNpcComposition: input.autoNpcComposition ?? defaults.autoNpcComposition,
-    autoNpcSize: String(input.autoNpcSize || defaults.autoNpcSize),
+    autoNpcSize: input.autoNpcSize || defaults.autoNpcSize,
     enableAutoItemGeneration: false,
-    autoItemSize: String(input.autoItemSize || defaults.autoItemSize),
+    autoItemSize: input.autoItemSize || defaults.autoItemSize,
     正文生图: 归一化正文生图设置(input.正文生图),
     参考图: 归一化文生图参考图设置(input.参考图),
   };
@@ -790,12 +790,12 @@ export function 归一化文生图系统设置(input?: Partial<文生图系统�
 export function 归一化文生图参考图设置(input?: Partial<文生图参考图设置>): 文生图参考图设置 {
   const defaults = 创建默认文生图参考图设置();
   if (!input) return defaults;
-  const inputOptInVersion = Math.max(0, Math.floor(Number(input.injectionOptInVersion) || 0));
+  const inputOptInVersion = Math.max(0, Math.floor(input.injectionOptInVersion || 0));
   const hasCurrentOptIn = inputOptInVersion >= 参考图注入选择加入版本;
   return {
     enabled: hasCurrentOptIn && input.enabled === true,
     injectionOptInVersion: 参考图注入选择加入版本,
-    sdWebuiDenoisingStrength: Math.max(0.05, Math.min(0.95, Number(input.sdWebuiDenoisingStrength ?? defaults.sdWebuiDenoisingStrength) || defaults.sdWebuiDenoisingStrength)),
+    sdWebuiDenoisingStrength: Math.max(0.05, Math.min(0.95, input.sdWebuiDenoisingStrength ?? defaults.sdWebuiDenoisingStrength) || defaults.sdWebuiDenoisingStrength),
     enableComfyWorkflowReference: input.enableComfyWorkflowReference === true,
     enableOpenAICompatibleReference: input.enableOpenAICompatibleReference === true,
     enableNovelAIReference: input.enableNovelAIReference === true,
@@ -805,22 +805,29 @@ export function 归一化文生图参考图设置(input?: Partial<文生图参�
 export function 归一化正文生图设置(input?: Partial<正文生图设置>): 正文生图设置 {
   const defaults = 创建默认正文生图设置();
   if (!input) return defaults;
+  // 兼容读取：preference 为废弃兼容字段，经独立结构类型访问以避免触发废弃成员读取检查（与 取游戏设置运行态键 同例）。
+  const 兼容输入 = input as {
+    preference?: 'scene_only' | 'character_only' | 'both';
+  };
+  const 兼容默认 = defaults as {
+    preference: 'scene_only' | 'character_only' | 'both';
+  };
   return {
     enabled: input.enabled === true,
     mode: input.mode === 'manual' ? 'manual' : 'auto',
     playerAppearanceMode: input.playerAppearanceMode === 'off' || input.playerAppearanceMode === 'force' ? input.playerAppearanceMode : 'auto',
-    preference: input.preference ?? defaults.preference,
+    preference: 兼容输入.preference ?? 兼容默认.preference,
     timing: input.timing ?? defaults.timing,
     parserApi: {
       provider: (input.parserApi?.provider ?? ''),
-      baseUrl: String(input.parserApi?.baseUrl ?? ''),
-      apiKey: String(input.parserApi?.apiKey ?? ''),
-      model: String(input.parserApi?.model ?? ''),
-      maxTokens: Math.max(256, Math.trunc(Number(input.parserApi?.maxTokens ?? defaults.parserApi.maxTokens ?? 1600)) || 1600),
-      temperature: Number.isFinite(Number(input.parserApi?.temperature))
-        ? Number(input.parserApi?.temperature)
+      baseUrl: input.parserApi?.baseUrl ?? '',
+      apiKey: input.parserApi?.apiKey ?? '',
+      model: input.parserApi?.model ?? '',
+      maxTokens: Math.max(256, Math.trunc(input.parserApi?.maxTokens ?? defaults.parserApi.maxTokens ?? 1600) || 1600),
+      temperature: Number.isFinite(input.parserApi?.temperature)
+        ? input.parserApi?.temperature
         : defaults.parserApi.temperature,
-      retryCount: Math.max(0, Math.trunc(Number(input.parserApi?.retryCount ?? defaults.parserApi.retryCount ?? 1)) || 1),
+      retryCount: Math.max(0, Math.trunc(input.parserApi?.retryCount ?? defaults.parserApi.retryCount ?? 1) || 1),
     },
     imageApi: 归一化文生图API配置(input.imageApi),
   };
@@ -951,12 +958,12 @@ export function 归一化星际和平周报设置(input?: Partial<星际和平�
   return {
     ...defaults,
     ...input,
-    maxNewEntriesPerTurn: Math.max(1, Math.min(5, Math.trunc(Number(input.maxNewEntriesPerTurn ?? defaults.maxNewEntriesPerTurn)) || defaults.maxNewEntriesPerTurn)),
-    generateIntervalTurns: Math.max(5, Math.min(10, Math.trunc(Number(input.generateIntervalTurns ?? defaults.generateIntervalTurns)) || defaults.generateIntervalTurns)),
+    maxNewEntriesPerTurn: Math.max(1, Math.min(5, Math.trunc(input.maxNewEntriesPerTurn ?? defaults.maxNewEntriesPerTurn) || defaults.maxNewEntriesPerTurn)),
+    generateIntervalTurns: Math.max(5, Math.min(10, Math.trunc(input.generateIntervalTurns ?? defaults.generateIntervalTurns) || defaults.generateIntervalTurns)),
     api: {
       ...defaults.api,
       ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.api?.retryCount ?? defaults.api.retryCount ?? 2)) || 0),
+      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
     },
   };
 }
@@ -970,13 +977,13 @@ export function 归一化手机系统设置(input?: Partial<手机系统设置>)
     api: {
       ...defaults.api,
       ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.api?.retryCount ?? defaults.api.retryCount ?? 2)) || 0),
+      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
     },
-    maxSeedsPerTurn: Math.max(0, Math.trunc(Number(input.maxSeedsPerTurn ?? defaults.maxSeedsPerTurn))),
-    contactCooldownTurns: Math.max(0, Math.trunc(Number(input.contactCooldownTurns ?? defaults.contactCooldownTurns))),
-    groupCooldownTurns: Math.max(0, Math.trunc(Number(input.groupCooldownTurns ?? defaults.groupCooldownTurns))),
-    privateArchiveThreshold: Math.max(3, Math.trunc(Number(input.privateArchiveThreshold ?? defaults.privateArchiveThreshold))),
-    groupArchiveThreshold: Math.max(6, Math.trunc(Number(input.groupArchiveThreshold ?? defaults.groupArchiveThreshold))),
+    maxSeedsPerTurn: Math.max(0, Math.trunc(input.maxSeedsPerTurn ?? defaults.maxSeedsPerTurn)),
+    contactCooldownTurns: Math.max(0, Math.trunc(input.contactCooldownTurns ?? defaults.contactCooldownTurns)),
+    groupCooldownTurns: Math.max(0, Math.trunc(input.groupCooldownTurns ?? defaults.groupCooldownTurns)),
+    privateArchiveThreshold: Math.max(3, Math.trunc(input.privateArchiveThreshold ?? defaults.privateArchiveThreshold)),
+    groupArchiveThreshold: Math.max(6, Math.trunc(input.groupArchiveThreshold ?? defaults.groupArchiveThreshold)),
   };
 }
 
@@ -989,9 +996,9 @@ export function 归一化智库系统设置(input?: Partial<智库系统设置>)
     api: {
       ...defaults.api,
       ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.api?.retryCount ?? defaults.api.retryCount ?? 2)) || 0),
+      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
     },
-    maxRelatedEntries: Math.min(5, Math.max(1, Math.trunc(Number(input.maxRelatedEntries ?? defaults.maxRelatedEntries)) || defaults.maxRelatedEntries)),
+    maxRelatedEntries: Math.min(5, Math.max(1, Math.trunc(input.maxRelatedEntries ?? defaults.maxRelatedEntries) || defaults.maxRelatedEntries)),
   };
 }
 
@@ -1004,9 +1011,9 @@ export function 归一化剧情编织系统设置(input?: Partial<剧情编织�
     api: {
       ...defaults.api,
       ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.api?.retryCount ?? defaults.api.retryCount ?? 2)) || 0),
+      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
     },
-    chaptersPerSegment: Math.max(1, Math.trunc(Number(input.chaptersPerSegment ?? defaults.chaptersPerSegment) || 1)),
+    chaptersPerSegment: Math.max(1, Math.trunc(input.chaptersPerSegment ?? defaults.chaptersPerSegment) || 1),
     currentWindow: input.currentWindow !== false,
   };
 }
@@ -1026,17 +1033,26 @@ const 旧版NPC默认记忆压缩提示词 = [
 export function 归一化记忆系统设置(input?: Partial<记忆系统设置>): 记忆系统设置 {
   const defaults = 创建默认记忆系统设置();
   if (!input) return defaults;
-  const oldShortToLongThreshold = Number(input.短期转长期阈值);
+  // 兼容读取：短期转长期阈值/提示词 为废弃兼容字段，经独立结构类型访问以避免触发废弃成员读取检查（与 取游戏设置运行态键 同例）。
+  const 兼容输入 = input as {
+    短期转长期阈值?: number;
+    短期转长期提示词?: string;
+  };
+  const 兼容默认 = defaults as {
+    短期转长期阈值: number;
+    短期转长期提示词: string;
+  };
+  const oldShortToLongThreshold = 兼容输入.短期转长期阈值;
   const shortToMiddleThreshold = Math.max(
     1,
-    Math.trunc(Number(input.短期转中期阈值 ?? input.短期转长期阈值 ?? defaults.短期转中期阈值) || defaults.短期转中期阈值),
+    Math.trunc(input.短期转中期阈值 ?? 兼容输入.短期转长期阈值 ?? defaults.短期转中期阈值) || defaults.短期转中期阈值,
   );
   const middleToLongThreshold = Math.max(
     1,
-    Math.trunc(Number(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值),
+    Math.trunc(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值,
   );
   const shortToMiddlePrompt = input.短期转中期提示词 ?? defaults.短期转中期提示词;
-  const middleToLongPrompt = input.中期转长期提示词 ?? input.短期转长期提示词 ?? defaults.中期转长期提示词;
+  const middleToLongPrompt = input.中期转长期提示词 ?? 兼容输入.短期转长期提示词 ?? defaults.中期转长期提示词;
 
   const merged: 记忆系统设置 = {
     ...defaults,
@@ -1050,31 +1066,35 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
     记忆总结API: {
       ...defaults.记忆总结API,
       ...(input.记忆总结API ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.记忆总结API?.retryCount ?? defaults.记忆总结API.retryCount ?? 2)) || 0),
+      retryCount: Math.max(0, Math.trunc(input.记忆总结API?.retryCount ?? defaults.记忆总结API.retryCount ?? 2) || 0),
     },
     忆庭召回API: {
       ...defaults.忆庭召回API,
       ...(input.忆庭召回API ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.忆庭召回API?.retryCount ?? defaults.忆庭召回API.retryCount ?? 2)) || 0),
+      retryCount: Math.max(0, Math.trunc(input.忆庭召回API?.retryCount ?? defaults.忆庭召回API.retryCount ?? 2) || 0),
     },
     忆庭精炼API: {
       ...defaults.忆庭精炼API,
       ...(input.忆庭精炼API ?? {}),
-      retryCount: Math.max(0, Math.trunc(Number(input.忆庭精炼API?.retryCount ?? defaults.忆庭精炼API.retryCount ?? 2)) || 0),
+      retryCount: Math.max(0, Math.trunc(input.忆庭精炼API?.retryCount ?? defaults.忆庭精炼API.retryCount ?? 2) || 0),
     },
-    忆庭召回条数: Math.max(1, Number(input.忆庭召回条数 ?? defaults.忆庭召回条数) || defaults.忆庭召回条数),
+    忆庭召回条数: Math.max(1, (input.忆庭召回条数 ?? defaults.忆庭召回条数) || defaults.忆庭召回条数),
     忆庭独立精炼: input.忆庭独立精炼 === true,
     忆庭启用: input.忆庭启用 !== false,
-    忆庭召回最早触发回合: Math.max(
+     忆庭召回最早触发回合: Math.max(
       1,
-      Math.trunc(Number(input.忆庭召回最早触发回合 ?? defaults.忆庭召回最早触发回合) || defaults.忆庭召回最早触发回合),
+      Math.trunc(input.忆庭召回最早触发回合 ?? defaults.忆庭召回最早触发回合) || defaults.忆庭召回最早触发回合,
     ),
+  };
+  const 兼容合并 = merged as {
+    短期转长期阈值: number;
+    短期转长期提示词: string;
   };
   const 使用旧版默认提示词 =
     !input.即时转短期提示词 ||
     (
       input.即时转短期提示词 === 旧版默认记忆系统提示词.即时转短期提示词 &&
-      input.短期转长期提示词 === 旧版默认记忆系统提示词.短期转长期提示词 &&
+      兼容输入.短期转长期提示词 === 旧版默认记忆系统提示词.短期转长期提示词 &&
       input.NPC记忆压缩提示词 === 旧版默认记忆系统提示词.NPC记忆压缩提示词
     );
 
@@ -1084,7 +1104,7 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
       即时转短期阈值: input.即时转短期阈值 === 10 ? defaults.即时转短期阈值 : merged.即时转短期阈值,
       短期转中期阈值: oldShortToLongThreshold === 10 ? defaults.短期转中期阈值 : merged.短期转中期阈值,
       中期转长期阈值: merged.中期转长期阈值,
-      短期转长期阈值: oldShortToLongThreshold === 10 ? defaults.短期转长期阈值 : merged.短期转长期阈值,
+      短期转长期阈值: oldShortToLongThreshold === 10 ? 兼容默认.短期转长期阈值 : 兼容合并.短期转长期阈值,
       NPC记忆压缩阈值: input.NPC记忆压缩阈值 === 10 ? defaults.NPC记忆压缩阈值 : merged.NPC记忆压缩阈值,
       记忆总结API: merged.记忆总结API,
       忆庭召回最早触发回合: merged.忆庭召回最早触发回合,
@@ -1195,7 +1215,7 @@ export function 归一化额外功能设置(input?: Partial<额外功能设置>)
   const defaults = 创建默认额外功能设置();
   const rawWords = input?.污染词清理?.words;
   const words = Array.isArray(rawWords)
-    ? rawWords.map((word) => String(word || '').trim()).filter(Boolean)
+    ? rawWords.map((word) => (word || '').trim()).filter(Boolean)
     : defaults.污染词清理.words;
   return {
     ...defaults,

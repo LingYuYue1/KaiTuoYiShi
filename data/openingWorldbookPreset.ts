@@ -23,7 +23,7 @@ export async function loadBundledWorldbookPreset(
     throw new Error(`${preset.title} 读取失败(HTTP ${response.status})`);
   }
   const data = (await response.json()) as 世界书导出数据;
-  if (!data.books || !Array.isArray(data.books)) {
+  if (!Array.isArray(data.books)) {
     throw new Error(`${preset.title} 文件结构异常`);
   }
   return normalizeWorldbooks(data.books);

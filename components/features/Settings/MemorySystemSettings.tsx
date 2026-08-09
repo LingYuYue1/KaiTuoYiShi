@@ -1,6 +1,5 @@
 ﻿import { useMemo, useState } from 'react';
 import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
-import { 创建默认记忆系统设置 } from '@/models/settings';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
 import { saveSetting } from '@/services/dbService';
 
@@ -27,7 +26,7 @@ const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10
 const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Props) {
-  const memory = settings.记忆系统 ?? 创建默认记忆系统设置();
+  const memory = settings.记忆系统;
   const mainConfig = useMemo(
     () => apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null,
     [apiSettings.activeConfigId, apiSettings.configs],
@@ -182,7 +181,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
               />
               <button
                 type="button"
-                onClick={handleFetchModels}
+                onClick={() => void handleFetchModels()}
                 className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
                   color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
@@ -254,7 +253,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={handleFetchModels}
+            onClick={() => void handleFetchModels()}
             className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
             style={{
               color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
@@ -267,7 +266,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
           </button>
           <button
             type="button"
-            onClick={handleTestConnection}
+            onClick={() => void handleTestConnection()}
             className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
             style={{
               color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
@@ -382,7 +381,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings }: Pro
       <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash

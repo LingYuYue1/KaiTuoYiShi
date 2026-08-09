@@ -104,7 +104,7 @@ export async function generateNarrativeImage(
       negativePrompt,
       description,
       status: 'failed',
-      error: (err as Error).message ?? '生图失败',
+      error: (err as Error).message,
     };
   }
 }
@@ -156,14 +156,10 @@ export async function testImageGenerationConnection(config: 文生图API配置):
     throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
   }
 
-  if (config.backend === 'comfyui') {
-    const response = await fetch(joinUrl(config.baseUrl, '/system_stats'));
-    if (response.ok) return `ComfyUI 可达：${config.baseUrl.replace(/\/+$/, '')}。`;
-    const text = await response.text().catch(() => '');
-    throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
-  }
-
-  return `端点可达性检查已完成：${endpoint}。`;
+  const response = await fetch(joinUrl(config.baseUrl, '/system_stats'));
+  if (response.ok) return `ComfyUI 可达：${config.baseUrl.replace(/\/+$/, '')}。`;
+  const text = await response.text().catch(() => '');
+  throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
 }
 
 export async function fetchComfyCheckpoints(config: 文生图API配置): Promise<string[]> {
@@ -173,10 +169,12 @@ export async function fetchComfyCheckpoints(config: 文生图API配置): Promise
     const text = await response.text().catch(() => '');
     throw new Error(`获取 ComfyUI 模型列表失败 ${response.status}: ${text || response.statusText}`);
   }
-  const data = await readJsonResponse(response, 'ComfyUI 模型列表');
+  const data = (await readJsonResponse(response, 'ComfyUI 模型列表')) as { CheckpointLoaderSimple?: { input?: { required?: { ckpt_name?: unknown[] } } } } | null;
   const options = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
   if (!Array.isArray(options)) return [];
-  return options.map((item) => String(item)).filter(Boolean);
+  return options
+    .map((item) => (typeof item === 'string' ? item : ''))
+    .filter(Boolean);
 }
 
 export async function fetchImageGenerationModels(config: 文生图API配置): Promise<string[]> {
@@ -190,15 +188,12 @@ export async function fetchImageGenerationModels(config: 文生图API配置): Pr
     return fetchSdWebUiModels(config);
   }
   return fetchModels({
-    id: '__image_generation_models__',
     name: '文生图模型列表',
     provider: 'openai_compatible',
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     model: config.model,
     retryCount: config.retryCount,
-    createdAt: 0,
-    updatedAt: 0,
   });
 }
 
@@ -209,13 +204,16 @@ async function fetchSdWebUiModels(config: 文生图API配置): Promise<string[]>
     const text = await response.text().catch(() => '');
     throw new Error(`获取 SD WebUI 模型列表失败 ${response.status}: ${text || response.statusText}`);
   }
-  const data = await readJsonResponse(response, 'SD WebUI 模型列表');
+  const data = (await readJsonResponse(response, 'SD WebUI 模型列表')) as unknown[] | null;
   if (!Array.isArray(data)) return [];
   return data
     .map((item) => {
       if (!item || typeof item !== 'object') return '';
       const record = item as Record<string, unknown>;
-      return String(record.title || record.model_name || record.filename || '').trim();
+      const title = typeof record.title === 'string' ? record.title : '';
+      const modelName = typeof record.model_name === 'string' ? record.model_name : '';
+      const filename = typeof record.filename === 'string' ? record.filename : '';
+      return (title || modelName || filename || '').trim();
     })
     .filter(Boolean);
 }
@@ -314,7 +312,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function readJsonResponse(response: Response, label: string): Promise<any> {
+async function readJsonResponse(response: Response, label: string): Promise<unknown> {
   const text = await response.text().catch(() => '');
   const trimmed = text.trim();
   if (!trimmed) {
@@ -327,9 +325,9 @@ async function readJsonResponse(response: Response, label: string): Promise<any>
     const preview = trimmed.slice(0, 180).replace(/\s+/g, ' ');
     const isHtml = /^<!doctype\s+html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed) || contentType.includes('text/html');
     if (isHtml) {
-      throw new Error(`${label}返回了网页而不是 JSON。请检查 Base URL 和接口路径是否指向图片 API 端点，当前响应预览：${preview}`);
+      throw new Error(`${label}返回了网页而不是 JSON。请检查 Base URL 和接口路径是否指向图片 API 端点，当前响应预览：${preview}`, { cause: err });
     }
-    throw new Error(`${label}返回的内容不是合法 JSON：${(err as Error).message}。响应预览：${preview}`);
+    throw new Error(`${label}返回的内容不是合法 JSON：${(err as Error).message}。响应预览：${preview}`, { cause: err });
   }
 }
 
@@ -341,7 +339,7 @@ function joinUrl(baseUrl: string, path: string): string {
 }
 
 function normalizeOpenAICompatibleImagePath(path: string): string {
-  const raw = String(path || '').trim() || '/images/generations';
+  const raw = (path || '').trim() || '/images/generations';
   const clean = raw.replace(/\/+$/, '');
   if (/\/v1$/i.test(clean) || /^v1$/i.test(clean)) {
     return `${clean.startsWith('/') || /^https?:\/\//i.test(clean) ? clean : `/${clean}`}/images/generations`;
@@ -369,7 +367,7 @@ function isOpenAICompatibleImageValidationResponse(status: number, text: string)
 }
 
 function parseSize(size: string): { width: number; height: number } {
-  const match = String(size || '').match(/(\d+)\s*[xX*]\s*(\d+)/);
+  const match = (size || '').match(/(\d+)\s*[xX*]\s*(\d+)/);
   if (!match) return { width: 1024, height: 1024 };
   return {
     width: Math.max(64, Math.trunc(Number(match[1]) || 1024)),
@@ -378,7 +376,7 @@ function parseSize(size: string): { width: number; height: number } {
 }
 
 function normalizeOpenAICompatibleImageSize(size: string): string {
-  const raw = String(size || '').trim();
+  const raw = (size || '').trim();
   if (!raw || raw === 'auto') return '1024x1024';
   if (/^(1024x1024|1024x1536|1536x1024)$/i.test(raw)) return raw.toLowerCase();
   const { width, height } = parseSize(raw);
@@ -436,7 +434,7 @@ function normalizeReferenceImages(referenceImages?: ImageReferenceInput[]): Imag
     .map((item) => ({
       ...item,
       id: item.id?.trim(),
-      src: String(item.src || '').trim(),
+      src: (item.src || '').trim(),
       role: item.role ?? 'composition',
       weight: Number.isFinite(Number(item.weight)) ? Number(item.weight) : undefined,
     }))
@@ -548,7 +546,7 @@ async function loadReferenceImageBlob(src: string, signal?: AbortSignal): Promis
     if (!blob.size) throw new Error('图片内容为空');
     return blob.type ? blob : new Blob([blob], { type: 'image/png' });
   } catch (error) {
-    throw new Error(`参考图读取失败：${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`参考图读取失败：${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
 }
 
@@ -560,7 +558,7 @@ function imageExtension(mimeType: string): string {
 }
 
 async function readOpenAICompatibleImageResult(response: Response, config: 文生图API配置, signal?: AbortSignal): Promise<ImageGenerationResult> {
-  const data = await readJsonResponse(response, 'OpenAI 兼容图片接口');
+  const data = (await readJsonResponse(response, 'OpenAI 兼容图片接口')) as { data?: Array<{ url?: unknown; b64_json?: unknown }> } | null;
   const first = data?.data?.[0];
   if (!first) throw new Error('图片接口没有返回结果。');
 
@@ -651,7 +649,7 @@ async function generateNovelAIImage(config: 文生图API配置, request: ImageGe
   }
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
-    const data = await readJsonResponse(response, 'NovelAI 图片接口');
+    const data = (await readJsonResponse(response, 'NovelAI 图片接口')) as { data?: Array<{ b64_json?: unknown }>; image?: unknown; output?: unknown[] } | null;
     const b64 = data?.data?.[0]?.b64_json || data?.image || data?.output?.[0];
     if (typeof b64 === 'string' && b64.trim()) {
       return { src: b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`, mimeType: 'image/png', model: config.model, backend: config.backend };
@@ -710,7 +708,7 @@ async function generateSdWebUIImage(config: 文生图API配置, request: ImageGe
     const text = await response.text().catch(() => '');
     throw new Error(`SD WebUI 图片接口错误 ${response.status}: ${text || response.statusText}`);
   }
-  const data = await readJsonResponse(response, 'SD WebUI 图片接口');
+  const data = (await readJsonResponse(response, 'SD WebUI 图片接口')) as { images?: unknown[] } | null;
   const first = data?.images?.[0];
   if (typeof first === 'string' && first.trim()) {
     return { src: first.startsWith('data:') ? first : `data:image/png;base64,${first}`, mimeType: 'image/png', model: config.model, backend: config.backend };
@@ -773,7 +771,7 @@ async function generateComfyUIImage(config: 文生图API配置, request: ImageGe
   try {
     promptPayload = JSON.parse(workflowText);
   } catch (err) {
-    throw new Error(`ComfyUI Workflow JSON 解析失败：${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(`ComfyUI Workflow JSON 解析失败：${err instanceof Error ? err.message : String(err)}`, { cause: err });
   }
   patchComfyWorkflow(promptPayload, {
     model: modelName,
@@ -798,10 +796,10 @@ async function generateComfyUIImage(config: 文生图API配置, request: ImageGe
     const text = await response.text().catch(() => '');
     throw new Error(`ComfyUI /prompt 错误 ${response.status}: ${formatComfyError(text || response.statusText)}`);
   }
-  const data = await readJsonResponse(response, 'ComfyUI Prompt');
+  const data = (await readJsonResponse(response, 'ComfyUI Prompt')) as { prompt_id?: unknown } | null;
   const promptId = data?.prompt_id;
   if (!promptId) throw new Error('ComfyUI 未返回 prompt_id。');
-  return pollComfyResult(config, String(promptId), request.signal);
+  return pollComfyResult(config, typeof promptId === 'string' ? promptId : JSON.stringify(promptId), request.signal);
 }
 
 function toComfySamplerName(sampler: string): string {
@@ -813,7 +811,7 @@ function toComfySamplerName(sampler: string): string {
     k_dpmpp_sde: 'dpmpp_sde',
     k_dpmpp_2m_sde: 'dpmpp_2m_sde',
   };
-  return map[sampler] ?? sampler ?? 'euler';
+  return (map as Record<string, string | undefined>)[sampler] ?? sampler;
 }
 
 function toComfySchedulerName(noiseSchedule: string): string {
@@ -823,7 +821,7 @@ function toComfySchedulerName(noiseSchedule: string): string {
     exponential: 'exponential',
     polyexponential: 'exponential',
   };
-  return map[noiseSchedule] ?? noiseSchedule ?? 'normal';
+  return (map as Record<string, string | undefined>)[noiseSchedule] ?? noiseSchedule;
 }
 
 function patchComfyWorkflow(payload: unknown, values: {
@@ -878,11 +876,15 @@ function assertNoComfyPlaceholders(payload: unknown) {
 
 function formatComfyError(text: string): string {
   try {
-    const data = JSON.parse(text);
+    const data = JSON.parse(text) as { node_errors?: Record<string, { errors?: unknown[]; class_type?: unknown }> } | null;
     const nodeErrors = data?.node_errors && typeof data.node_errors === 'object'
-      ? Object.entries(data.node_errors as Record<string, any>).flatMap(([nodeId, node]) => {
-          const errors = Array.isArray(node?.errors) ? node.errors : [];
-          return errors.map((err: any) => `节点 ${nodeId}(${node?.class_type || 'unknown'}): ${err?.details || err?.message || '校验失败'}`);
+      ? Object.entries(data.node_errors).flatMap(([nodeId, node]) => {
+          const errors = Array.isArray(node.errors) ? node.errors : [];
+          return errors.map((err): string => {
+            const details = readComfyNodeErrorText(err, 'details');
+            const message = readComfyNodeErrorText(err, 'message');
+            return `节点 ${nodeId}(${readComfyNodeErrorText(node, 'class_type') || 'unknown'}): ${details || message || '校验失败'}`;
+          });
         })
       : [];
     if (nodeErrors.length) return nodeErrors.join('；');
@@ -892,6 +894,12 @@ function formatComfyError(text: string): string {
   return text;
 }
 
+function readComfyNodeErrorText(value: unknown, key: string): string {
+  if (!value || typeof value !== 'object') return '';
+  const raw = (value as Record<string, unknown>)[key];
+  return typeof raw === 'string' ? raw : '';
+}
+
 async function pollComfyResult(config: 文生图API配置, promptId: string, signal?: AbortSignal): Promise<ImageGenerationResult> {
   const start = Date.now();
   while (Date.now() - start < 120_000) {
@@ -899,17 +907,20 @@ async function pollComfyResult(config: 文生图API配置, promptId: string, sig
     await delay(1500);
     const response = await fetch(joinUrl(config.baseUrl, `/history/${promptId}`), { signal });
     if (!response.ok) continue;
-    const history = await readJsonResponse(response, 'ComfyUI 历史结果');
+    const history = (await readJsonResponse(response, 'ComfyUI 历史结果')) as Record<string, { outputs?: Record<string, { images?: Array<{ filename?: unknown; subfolder?: unknown; type?: unknown }> }> }> | null;
     const item = history?.[promptId];
-    const outputs = item?.outputs && typeof item.outputs === 'object' ? Object.values(item.outputs) : [];
-    for (const output of outputs as any[]) {
+    const outputs: Array<{ images?: Array<{ filename?: unknown; subfolder?: unknown; type?: unknown }> } | null> = item?.outputs && typeof item.outputs === 'object' ? Object.values(item.outputs) : [];
+    for (const output of outputs) {
       const images = Array.isArray(output?.images) ? output.images : [];
-      const image = images[0];
+      const image = images.at(0);
       if (image?.filename) {
+        const filename = typeof image.filename === 'string' ? image.filename : '';
+        const subfolder = typeof image.subfolder === 'string' ? image.subfolder : '';
+        const type = typeof image.type === 'string' ? image.type : 'output';
         const params = new URLSearchParams({
-          filename: image.filename,
-          subfolder: image.subfolder || '',
-          type: image.type || 'output',
+          filename,
+          subfolder,
+          type,
         });
         return persistRemoteImage(joinUrl(config.baseUrl, `/view?${params.toString()}`), { model: config.model, backend: config.backend, signal });
       }
@@ -1049,7 +1060,7 @@ function isImageFilename(filename: string): boolean {
 }
 
 async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
-  const Decompression = (globalThis as typeof globalThis & { DecompressionStream?: new (format: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
+  const Decompression = (globalThis as { DecompressionStream?: new (format: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
   if (!Decompression) throw new Error('当前浏览器不支持解压 NovelAI 返回的 zip 图片包。');
   const stream = new Blob([bytes]).stream().pipeThrough(new Decompression('deflate-raw'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
@@ -1069,7 +1080,7 @@ function normalizeImageMimeType(contentType: string, filename?: string, bytes?: 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
     reader.onerror = () => reject(reader.error ?? new Error('读取图片失败'));
     reader.readAsDataURL(blob);
   });

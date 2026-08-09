@@ -199,7 +199,7 @@ function prefixLineWithTime(line: string, time?: string): string {
   if (!time || time === '未知') return clean;
   const body = clean.replace(/^-\s*/, '').trim();
   if (!body) return clean;
-  if (body.includes(time) || /琥珀纪\s*\d|星历\s*\d|\d{4}[.\/-]\d{1,2}[.\/-]\d{1,2}/.test(body)) return `- ${body}`;
+  if (body.includes(time) || /琥珀纪\s*\d|星历\s*\d|\d{4}[./-]\d{1,2}[./-]\d{1,2}/.test(body)) return `- ${body}`;
   return `- ${time}，${body}`;
 }
 

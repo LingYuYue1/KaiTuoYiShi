@@ -213,7 +213,7 @@ const 去重文本列表 = (items: string[], maxCount?: number): string[] => {
   }
   return result;
 };
-const 切换标题包裹 = (value: string): string => 读文本(value).trim().replace(/^[【\[\(（《「『]+|[】\]\)）》」』]+$/g, '').trim();
+const 切换标题包裹 = (value: string): string => 读文本(value).trim().replace(/^[【[(（《「『]+|[】\])）》」』]+$/g, '').trim();
 
 const 章节标题层级规则 = {
   volume: /^(?:正文\s*)?(?:第\s*[0-9零一二三四五六七八九十百千万两〇○壹贰叁肆伍陆柒捌玖拾]+[\s]*[卷部篇册季集辑])[^。\n]{0,48}$/u,
@@ -313,8 +313,6 @@ const 是否疑似目录章节 = (title: string, content: string): boolean => {
   if (directoryStyleCount >= 5 && punctuationCount <= 3) return true;
   return false;
 };
-
-const 解析章节范围文本 = (start: number, end: number): string => (start === end ? `第${start}章` : `第${start}章-第${end}章`);
 
 const 规范化时间线事件 = (raw: Partial<剧情编织时间线事件>): 剧情编织时间线事件 => ({
   标题: 读文本(raw.标题).trim(),
@@ -445,10 +443,10 @@ export function 归一化剧情编织进度锚点(
 ): 剧情编织进度锚点 | undefined {
   const series = 系列列表.find((item) => item.id === (raw?.当前系列ID || 当前系列ID))
     ?? 系列列表.find((item) => item.激活注入)
-    ?? 系列列表[0];
+    ?? 系列列表.at(0);
   if (!series) return undefined;
   const requestedById = series.分段列表.find((segment) => segment.id === raw?.当前分段ID);
-  const requestedGroup = Number(raw?.当前分段组号 || series.当前分段组号);
+  const requestedGroup = Math.trunc(raw?.当前分段组号 || series.当前分段组号);
   const requestedByGroup = series.分段列表.find((segment) => segment.组号 === requestedGroup);
   const currentRuntime = series.分段列表.find((segment) => segment.运行状态 === '当前');
   const currentSegment =
@@ -495,27 +493,27 @@ function 归一化历史归档列表(value: unknown): 剧情编织历史归档[]
   const seen = new Set<string>();
   const result: 剧情编织历史归档[] = [];
   for (const raw of value as Array<Partial<剧情编织历史归档>>) {
-    const 分段组号 = Math.max(1, Math.trunc(Number(raw?.分段组号 ?? 1) || 1));
-    const id = 读文本(raw?.id).trim() || `story_archive_${读文本(raw?.系列ID)}_${读文本(raw?.分段ID)}_${分段组号}_${Number(raw?.归档回合) || 0}`;
-    const key = id || `${读文本(raw?.系列ID)}_${读文本(raw?.分段ID)}_${分段组号}_${Number(raw?.归档回合) || 0}`;
+    const 分段组号 = Math.max(1, Math.trunc(raw.分段组号 ?? 1) || 1);
+    const id = 读文本(raw.id).trim() || `story_archive_${读文本(raw.系列ID)}_${读文本(raw.分段ID)}_${分段组号}_${raw.归档回合 || 0}`;
+    const key = id || `${读文本(raw.系列ID)}_${读文本(raw.分段ID)}_${分段组号}_${raw.归档回合 || 0}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const status = ['已经历', '已跳过', '已偏离', '已完成'].includes(raw?.归档状态 as string)
-      ? raw?.归档状态 as 剧情编织历史归档['归档状态']
+    const status = ['已经历', '已跳过', '已偏离', '已完成'].includes(raw.归档状态 as string)
+      ? raw.归档状态 as 剧情编织历史归档['归档状态']
       : '已经历';
     result.push({
       id,
-      系列ID: 读文本(raw?.系列ID).trim() || undefined,
-      分段ID: 读文本(raw?.分段ID).trim() || undefined,
+      系列ID: 读文本(raw.系列ID).trim() || undefined,
+      分段ID: 读文本(raw.分段ID).trim() || undefined,
       分段组号,
-      分段标题: 读文本(raw?.分段标题).trim() || `分段 ${分段组号}`,
-      归档回合: Number(raw?.归档回合) || undefined,
+      分段标题: 读文本(raw.分段标题).trim() || `分段 ${分段组号}`,
+      归档回合: raw.归档回合 || undefined,
       归档状态: status,
-      摘要: 读文本(raw?.摘要).trim(),
-      角色推进摘要: 去重文本列表(文本列表(raw?.角色推进摘要), 12),
-      切换说明: 读文本(raw?.切换说明).trim(),
-      判定理由: 去重文本列表(文本列表(raw?.判定理由), 8),
-      createdAt: Number(raw?.createdAt) || Date.now(),
+      摘要: 读文本(raw.摘要).trim(),
+      角色推进摘要: 去重文本列表(文本列表(raw.角色推进摘要), 12),
+      切换说明: 读文本(raw.切换说明).trim(),
+      判定理由: 去重文本列表(文本列表(raw.判定理由), 8),
+      createdAt: raw.createdAt || Date.now(),
     });
     if (result.length >= 30) break;
   }
@@ -528,7 +526,7 @@ export function 归一化剧情编织系列(raw: Partial<剧情编织系列>): �
   const 章节列表 = Array.isArray(raw.章节列表)
     ? raw.章节列表.map((chapter, index) => 归一化剧情编织章节(chapter, id, index + 1))
     : [];
-  const 当前分段组号 = Math.max(1, Math.trunc(Number(raw.当前分段组号 ?? 1) || 1));
+  const 当前分段组号 = Math.max(1, Math.trunc(raw.当前分段组号 ?? 1) || 1);
   const rawSegments = Array.isArray(raw.分段列表)
     ? raw.分段列表.map((segment, index) => 归一化剧情编织分段(segment, index + 1))
     : [];
@@ -555,7 +553,7 @@ export function 归一化剧情编织系列(raw: Partial<剧情编织系列>): �
     原始文本: 读文本(raw.原始文本),
     章节列表,
     分段列表,
-    每段章数: Math.max(1, Math.trunc(Number(raw.每段章数 ?? 1) || 1)),
+    每段章数: Math.max(1, Math.trunc(raw.每段章数 ?? 1) || 1),
     激活注入: raw.激活注入 !== false,
     当前分段组号,
     当前阶段概括: 读文本(raw.当前阶段概括).trim(),
@@ -573,10 +571,10 @@ function 归一化剧情编织章节(raw: Partial<剧情编织章节>, _seriesId
   const 内容 = 读文本(raw.内容);
   return {
     id: 读文本(raw.id).trim() || 生成ID('story_chapter'),
-    序号: Math.max(1, Math.trunc(Number(raw.序号 ?? index) || index)),
+    序号: Math.max(1, Math.trunc(raw.序号 ?? index) || index),
     标题: 读文本(raw.标题).trim() || `第 ${index} 章`,
     内容,
-    字数: Number(raw.字数) || [...内容].length,
+    字数: raw.字数 || Array.from(内容).length,
   };
 }
 
@@ -584,16 +582,16 @@ export function 归一化剧情编织分段(raw: Partial<剧情编织分段>, in
   const 原文内容 = 读文本(raw.原文内容);
   const 分段: 剧情编织分段 = {
     id: 读文本(raw.id).trim() || 生成ID('story_segment'),
-    组号: Math.max(1, Math.trunc(Number(raw.组号 ?? index) || index)),
+    组号: Math.max(1, Math.trunc(raw.组号 ?? index) || index),
     标题: 读文本(raw.标题).trim() || `分段 ${index}`,
     章节范围: 读文本(raw.章节范围).trim(),
     章节标题: 文本列表(raw.章节标题),
     是否开局组: raw.是否开局组 === true,
-    起始章序号: Math.max(1, Math.trunc(Number(raw.起始章序号 ?? index) || index)),
-    结束章序号: Math.max(1, Math.trunc(Number(raw.结束章序号 ?? index) || index)),
+    起始章序号: Math.max(1, Math.trunc(raw.起始章序号 ?? index) || index),
+    结束章序号: Math.max(1, Math.trunc(raw.结束章序号 ?? index) || index),
     启用注入: raw.启用注入 !== false,
     原文内容,
-    字数: Number(raw.字数) || [...原文内容].length,
+    字数: raw.字数 || Array.from(原文内容).length,
     原文摘要: 读文本(raw.原文摘要).trim(),
     本段概括: 读文本(raw.本段概括).trim(),
     时间线起点: 读文本(raw.时间线起点).trim(),
@@ -624,13 +622,13 @@ export function 归一化剧情编织分段(raw: Partial<剧情编织分段>, in
 function 归一化约束列表(value: unknown): 剧情编织约束条目[] {
   return Array.isArray(value)
     ? value.map((item: Partial<剧情编织约束条目>) => ({
-        内容: 读文本(item?.内容).trim(),
+        内容: 读文本(item.内容).trim(),
         信息可见性: {
           ...默认可见性(),
-          ...(item?.信息可见性 ?? {}),
-          谁知道: 文本列表(item?.信息可见性?.谁知道),
-          谁不知道: 文本列表(item?.信息可见性?.谁不知道),
-          是否仅读者视角可见: item?.信息可见性?.是否仅读者视角可见 === true,
+          ...(item.信息可见性 ?? {}),
+          谁知道: 文本列表(item.信息可见性?.谁知道),
+          谁不知道: 文本列表(item.信息可见性?.谁不知道),
+          是否仅读者视角可见: item.信息可见性?.是否仅读者视角可见 === true,
         },
       })).filter((item) => item.内容)
     : [];
@@ -696,7 +694,7 @@ export function 从TXT提取剧情章节(text: string): 剧情编织章节[] {
     let count = 0;
     for (const p of paragraphs) {
       bucket.push(p);
-      count += [...p].length;
+      count += Array.from(p).length;
       if (count >= 4000) {
         result.push(bucket);
         bucket = [];
@@ -709,7 +707,7 @@ export function 从TXT提取剧情章节(text: string): 剧情编织章节[] {
       序号: index + 1,
       标题: `片段 ${index + 1}`,
       内容: body.join('\n\n'),
-      字数: [...body.join('\n\n')].length,
+      字数: Array.from(body.join('\n\n')).length,
     }));
   }
 
@@ -722,7 +720,7 @@ export function 从TXT提取剧情章节(text: string): 剧情编织章节[] {
       序号: index + 1,
       标题: chunk.title || explicitTitle || `第 ${index + 1} 章`,
       内容: finalContent,
-      字数: [...finalContent].length,
+      字数: Array.from(finalContent).length,
     };
   }).filter((chapter) => chapter.内容 || chapter.标题);
   const filtered = mapped.filter((chapter) => !是否疑似目录章节(chapter.标题, chapter.内容));
@@ -730,7 +728,7 @@ export function 从TXT提取剧情章节(text: string): 剧情编织章节[] {
 }
 
 export function 根据章节生成剧情分段(chapters: 剧情编织章节[], 每段章数 = 1): 剧情编织分段[] {
-  const size = Math.max(1, Math.trunc(Number(每段章数) || 1));
+  const size = Math.max(1, Math.trunc(每段章数 || 1));
   const result: 剧情编织分段[] = [];
   for (let index = 0; index < chapters.length; index += size) {
     const group = chapters.slice(index, index + size);
@@ -747,7 +745,7 @@ export function 根据章节生成剧情分段(chapters: 剧情编织章节[], �
       起始章序号: start,
       结束章序号: end,
       原文内容,
-      字数: [...原文内容].length,
+      字数: Array.from(原文内容).length,
       原文摘要: group.map((chapter, chapterIndex) => `${chapterIndex + 1}. ${规范化章节标题文本(chapter.标题) || chapter.标题}`).join(' / '),
       时间线起点: '',
       时间线终点: '',
@@ -769,7 +767,7 @@ export function 创建剧情编织系列FromText(input: {
 }): 剧情编织系列 {
   const now = Date.now();
   const chapters = 从TXT提取剧情章节(input.text);
-  const 每段章数 = Math.max(1, Math.trunc(Number(input.chaptersPerSegment ?? 1) || 1));
+  const 每段章数 = Math.max(1, Math.trunc(input.chaptersPerSegment ?? 1) || 1);
   const segments = 根据章节生成剧情分段(chapters, 每段章数);
   return 归一化剧情编织系列({
     id: 生成ID('story_series'),

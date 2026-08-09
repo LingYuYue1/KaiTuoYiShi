@@ -21,15 +21,6 @@ import type { 提示词模块 } from '@/models/prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { isSTImportedModule, detectSTCoTModules, detectSTFormatModules } from '@/utils/stPresetParser';
 
-/** 内置 CoT 模块 id 列表（不可改骨架） */
-const BUILTIN_COT_IDS = [
-  'builtin_main_plot_cot',
-  'builtin_opening_cot',
-  'builtin_preset_opening_cot',
-  'builtin_free_opening_cot',
-  'builtin_path_awakening_cot',
-];
-
 /** 内置输出格式模块 id（不可改骨架） */
 const BUILTIN_RESPONSE_FORMAT_ID = 'builtin_response_format';
 
@@ -63,10 +54,10 @@ export function mergeWithBuiltin(stModules: 提示词模块[]): 提示词模块[
   const stCoTIds = new Set(detectSTCoTModules(stModules));
   const stFormatIds = new Set(detectSTFormatModules(stModules));
   const stPerspectiveModules = stModules.filter(
-    (m) => isSTImportedModule(m) && PERSPECTIVE_PATTERN.test(m.content ?? '') && PERSPECTIVE_PATTERN.test(m.title ?? ''),
+    (m) => isSTImportedModule(m) && PERSPECTIVE_PATTERN.test(m.content) && PERSPECTIVE_PATTERN.test(m.title),
   );
   const stActionOptionsModules = stModules.filter(
-    (m) => isSTImportedModule(m) && ACTION_OPTIONS_PATTERN.test(m.content ?? ''),
+    (m) => isSTImportedModule(m) && ACTION_OPTIONS_PATTERN.test(m.content),
   );
 
   // 3. 分流 ST 模块
@@ -136,7 +127,7 @@ function mergeCoTModules(
 
   // 拼接 ST CoT 模块的内容作为附加段
   const stContent = stCoTModules
-    .map((m) => m.content?.trim())
+    .map((m) => m.content.trim())
     .filter(Boolean)
     .join('\n\n');
 
@@ -164,7 +155,7 @@ function mergeFormatModules(
   if (!builtinFormat) return [];
 
   const stContent = stFormatModules
-    .map((m) => m.content?.trim())
+    .map((m) => m.content.trim())
     .filter(Boolean)
     .join('\n\n');
 
@@ -191,7 +182,7 @@ function mergePerspectiveModules(
 
   // 解析 ST 的人称要求
   const stContent = stPerspectiveModules
-    .map((m) => m.content?.trim())
+    .map((m) => m.content.trim())
     .filter(Boolean)
     .join('\n\n');
 
@@ -249,7 +240,7 @@ function mergeActionOptionsModules(
   if (!builtinAction) return [];
 
   const stContent = stActionOptionsModules
-    .map((m) => m.content?.trim())
+    .map((m) => m.content.trim())
     .filter(Boolean)
     .join('\n\n');
 

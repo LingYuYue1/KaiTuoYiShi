@@ -69,7 +69,7 @@ export function 推进命途进度(
   currentDate: string,
   options: { bypassDailyCap?: boolean } = {},
 ): 推进结果 {
-  const paths = traveler.命途列表 ?? [];
+  const paths = traveler.命途列表;
   const idx = findPathIndex(paths, pathId);
   if (idx < 0) {
     return { traveler, applied: 0, capped: false, ready: false, message: '尚未踏上此命途' };
@@ -156,7 +156,7 @@ export function awakenPath(
   pathId: 命途ID,
   options: { awakenedAt?: string; notes?: string; primary?: boolean } = {},
 ): { traveler: 角色数据结构; isNew: boolean } {
-  const paths = [...(traveler.命途列表 ?? [])];
+  const paths = [...(traveler.命途列表)];
   const existingIdx = findPathIndex(paths, pathId);
   const awakenedAt = options.awakenedAt ?? '';
 
@@ -216,15 +216,15 @@ export function applyPathDeltas(
       next = res.traveler;
       if (res.isNew) awakenedPathIds.push(d.pathId);
     } else if (d.setPrimary) {
-      const idx = findPathIndex(next.命途列表 ?? [], d.pathId);
+      const idx = findPathIndex(next.命途列表, d.pathId);
       if (idx >= 0) {
-        const paths = (next.命途列表 ?? []).map((p, i) => ({ ...p, 是否主命途: i === idx }));
+        const paths = (next.命途列表).map((p, i) => ({ ...p, 是否主命途: i === idx }));
         next = { ...next, 命途列表: paths, 主命途: d.pathId };
       }
     }
 
     if (d.progressDelta) {
-      const idx = findPathIndex(next.命途列表 ?? [], d.pathId);
+      const idx = findPathIndex(next.命途列表, d.pathId);
       if (idx >= 0) {
         const progressResult = 推进命途进度(
           next,
@@ -240,9 +240,9 @@ export function applyPathDeltas(
           const forgetLosses = computeForgetting(next, d.pathId, progressResult.applied);
 
           for (const fl of forgetLosses) {
-            const i = findPathIndex(next.命途列表 ?? [], fl.pathId);
+            const i = findPathIndex(next.命途列表, fl.pathId);
             if (i >= 0) {
-              const ps = [...(next.命途列表 ?? [])];
+              const ps = [...(next.命途列表)];
               ps[i] = bumpProgress(ps[i], -fl.loss);
               next = { ...next, 命途列表: ps };
               forgottenLosses.push({ pathId: fl.pathId, loss: fl.loss, reason: 'forget' });
@@ -264,7 +264,7 @@ export function computeForgetting(
   advancedPathId: 命途ID,
   appliedDelta: number,
 ): { pathId: 命途ID; loss: number }[] {
-  const paths = traveler.命途列表 ?? [];
+  const paths = traveler.命途列表;
   const advanced = paths.find((p) => p.id === advancedPathId);
   if (!advanced) return [];
   const rate = FORGET_RATE_BY_STAGE[advanced.阶段];
@@ -286,9 +286,9 @@ export function manualBumpProgress(
   pathId: 命途ID,
   delta: number,
 ): 角色数据结构 {
-  const idx = findPathIndex(traveler.命途列表 ?? [], pathId);
+  const idx = findPathIndex(traveler.命途列表, pathId);
   if (idx < 0) return traveler;
-  const paths = [...(traveler.命途列表 ?? [])];
+  const paths = [...(traveler.命途列表)];
   paths[idx] = bumpProgress(paths[idx], delta);
   return { ...traveler, 命途列表: paths };
 }
@@ -298,7 +298,7 @@ export function setPrimaryPath(
   traveler: 角色数据结构,
   pathId: 命途ID,
 ): 角色数据结构 {
-  const paths = (traveler.命途列表 ?? []).map((p) => ({ ...p, 是否主命途: p.id === pathId }));
+  const paths = (traveler.命途列表).map((p) => ({ ...p, 是否主命途: p.id === pathId }));
   return { ...traveler, 命途列表: paths, 主命途: pathId };
 }
 
@@ -320,10 +320,10 @@ const PATH_NAME_TO_ID: Record<string, 命途ID> = {
 export function 解析命途ID(raw: string): 命途ID | null {
   if (!raw) return null;
   const cleaned = raw.trim().toLowerCase().replace(/^["']|["']$/g, '');
-  if (PATH_NAME_TO_ID[cleaned]) return PATH_NAME_TO_ID[cleaned];
+  if (cleaned in PATH_NAME_TO_ID) return PATH_NAME_TO_ID[cleaned];
   // 中文不走 toLowerCase
   const cleanedCn = raw.trim().replace(/^["']|["']$/g, '');
-  if (PATH_NAME_TO_ID[cleanedCn]) return PATH_NAME_TO_ID[cleanedCn];
+  if (cleanedCn in PATH_NAME_TO_ID) return PATH_NAME_TO_ID[cleanedCn];
   return null;
 }
 
@@ -364,7 +364,7 @@ export function 升阶(
   traveler: 角色数据结构,
   pathId: 命途ID,
 ): { traveler: 角色数据结构; ok: boolean; reason?: string } {
-  const paths = traveler.命途列表 ?? [];
+  const paths = traveler.命途列表;
   const idx = findPathIndex(paths, pathId);
   if (idx < 0) return { traveler, ok: false, reason: '尚未踏上此命途' };
 
@@ -397,7 +397,7 @@ export function 星神授力(
   traveler: 角色数据结构,
   pathId: 命途ID,
 ): { traveler: 角色数据结构; ok: boolean; reason?: string } {
-  const paths = traveler.命途列表 ?? [];
+  const paths = traveler.命途列表;
   const idx = findPathIndex(paths, pathId);
   if (idx < 0) return { traveler, ok: false, reason: '旅人尚未踏上此命途,星神之力无所附' };
 
@@ -427,7 +427,10 @@ export function 应用狭间结果(
   pathId: 命途ID,
   judgement: 狭间评判,
 ): { traveler: 角色数据结构; ok: boolean; reason?: string } {
-  const prog = (traveler.命途列表 ?? []).find((p) => p.id === pathId);
+  // 狭间评判目前只有「升阶」一种取值，参数为调用方按位置传入的协议占位，
+  // 后续若扩展出其他评判结果（如滞留/退转）在此处按 judgement 分派。
+  void judgement;
+  const prog = (traveler.命途列表).find((p) => p.id === pathId);
   if (prog?.阶段 === 3) return 星神授力(traveler, pathId);
   return 升阶(traveler, pathId);
 }

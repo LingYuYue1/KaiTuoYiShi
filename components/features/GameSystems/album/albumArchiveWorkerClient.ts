@@ -90,7 +90,7 @@ export async function importAlbumInWorker(params: {
       }),
     };
     params.onProgress?.({ stage: 'committing' });
-    return completeAlbumImport({
+    return await completeAlbumImport({
       parsed: imported.parsed,
       currentAlbum,
       mode: params.mode,

@@ -10,12 +10,12 @@ export function stripInternalProtocolTags(text: string): string {
 }
 
 export function sanitizeContaminatedText(text: string, settings?: 额外功能设置): string {
-  text = stripInternalProtocolTags(text);
+  const cleaned = stripInternalProtocolTags(text);
   const config = settings?.污染词清理;
-  if (!config?.enabled) return text;
+  if (!config?.enabled) return cleaned;
   const words = Array.isArray(config.words) ? config.words.map((word) => word.trim()).filter(Boolean) : [];
-  if (!words.length || !text) return text;
-  let next = text;
+  if (!words.length || !cleaned) return cleaned;
+  let next = cleaned;
   for (const word of words) {
     next = next.split(word).join('');
   }

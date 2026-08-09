@@ -1,7 +1,7 @@
 const CONNECTION_TEST_PREFIX = 'KT-';
 
 export function createConnectionTestChallenge(): string {
-  if (!globalThis.crypto?.getRandomValues) {
+  if (!(globalThis.crypto as Crypto | undefined)?.getRandomValues) {
     throw new Error('当前浏览器不支持安全随机数，无法执行可靠的连接测试。');
   }
   const values = new Uint32Array(1);

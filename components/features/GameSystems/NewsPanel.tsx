@@ -57,18 +57,18 @@ export function NewsPanel({ news, turnCount }: NewsPanelProps) {
 
   const counts = useMemo(
     () =>
-      NEWS_STATUS_ORDER.reduce(
-        (acc, status) => {
-          acc[status] = news.filter((item) => item.状态 === status).length;
-          return acc;
-        },
+      NEWS_STATUS_ORDER.reduce<Record<新闻状态, number>>(
+        (acc, status) => ({
+          ...acc,
+          [status]: news.filter((item) => item.状态 === status).length,
+        }),
         {} as Record<新闻状态, number>,
       ),
     [news],
   );
 
   const visible = tab === 'all' ? sorted : sorted.filter((item) => item.状态 === tab);
-  const featured = visible.find((item) => item.重要) ?? visible[0] ?? null;
+  const featured = visible.find((item) => item.重要) ?? visible.at(0);
   const list = featured ? visible.filter((item) => item.id !== featured.id) : visible;
 
   return (
@@ -310,7 +310,7 @@ function MetaLine({ entry, featured = false }: { entry: 新闻条目; featured?:
       {entry.重要 && <MetaTag text="重要播报" tone="gold" />}
       {entry.关联剧情系列ID || entry.关联剧情分段ID ? <MetaTag text="剧情关联" tone="gold" /> : null}
       {entry.关联系统?.length ? <MetaTag text={entry.关联系统.join(' / ')} tone="muted" /> : null}
-      {(entry.组织标签 ?? entry.阵营标签)?.length ? <MetaTag text={`组织 ${(entry.组织标签 ?? entry.阵营标签)?.length ?? 0}`} tone="muted" /> : null}
+      {entry.组织标签?.length ? <MetaTag text={`组织 ${entry.组织标签.length}`} tone="muted" /> : null}
       {featured && <MetaTag text="公司认证频道" tone="gold" />}
     </div>
   );

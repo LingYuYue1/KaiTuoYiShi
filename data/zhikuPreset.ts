@@ -175,7 +175,7 @@ function normalizeMigratedLoreEntry(entry: 智库条目, preset: BundledZhikuPre
     剧透等级: entry.剧透等级 || (preset.id === 'zhiku_paths_core' ? '中度' : '重大'),
     使用范围: entry.使用范围?.length ? entry.使用范围 : ['智库', '设定浏览', '主剧情'],
     可否主剧情注入: entry.可否主剧情注入 ?? true,
-    重要度: Math.min(Number(entry.重要度) || 3, 3),
+     重要度: Math.min(entry.重要度 || 3, 3),
   };
 }
 

@@ -48,7 +48,7 @@ export function 获取物品(
   options: { 获得回合: number } = { 获得回合: 0 },
   ctx?: VariableExecContext,
 ): 获取物品结果 {
-  const inventory = traveler.背包 ?? [];
+  const inventory = traveler.背包;
   const requested = Math.max(1, Math.trunc(input.数量 ?? 1));
   const stackable = input.可堆叠 ?? defaultStackable(input.类别);
 
@@ -119,7 +119,7 @@ export function 使用物品(
   itemId: string,
   count = 1,
 ): 使用物品结果 {
-  const inventory = traveler.背包 ?? [];
+  const inventory = traveler.背包;
   const idx = inventory.findIndex((it) => it.id === itemId);
   if (idx < 0) {
     return { traveler, ok: false, consumed: false, effects: [], message: '背包中未找到该物品' };
@@ -177,12 +177,12 @@ export function 丢弃物品(
   itemId: string,
   count?: number,
 ): 丢弃物品结果 {
-  const inventory = traveler.背包 ?? [];
+  const inventory = traveler.背包;
   const idx = inventory.findIndex((it) => it.id === itemId);
   if (idx < 0) return { traveler, ok: false, message: '背包中未找到该物品' };
   const item = inventory[idx];
 
-  const requested = count == null || count === Infinity
+  const requested = count === undefined || count === Infinity
     ? item.数量
     : Math.max(1, Math.trunc(count));
   const drop = Math.min(item.数量, requested);

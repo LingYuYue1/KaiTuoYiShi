@@ -85,7 +85,7 @@ function isRuntimeUnlockableZhikuEntry(entry: 智库条目, meta: ReturnType<typ
     entry.解锁条件,
     entry.首次可用剧情段,
     entry.关联剧情分段ID,
-    ...(entry.关键词 ?? []),
+    ...(entry.关键词),
   ].filter(Boolean).join(' ');
   return /迁移设定资料|剧情编织|归档|解锁|首次可用|关联剧情/.test(text);
 }
@@ -110,7 +110,7 @@ function archiveMatchesUnlockCondition(entry: 智库条目, archive: 剧情编�
     archive.摘要,
     archive.切换说明,
     ...(archive.角色推进摘要 ?? []),
-    ...(archive.判定理由 ?? []),
+    ...(archive.判定理由),
   ].join('\n');
   return extractConditionTokens(condition).some((token) => textIncludesToken(archiveText, token));
 }
@@ -181,5 +181,5 @@ function textIncludesToken(text: string | undefined, token: string): boolean {
 function normalizeComparable(value: string): string {
   return value
     .toLowerCase()
-    .replace(/[\s"'“”‘’《》「」『』【】\[\]（）()·\-_:：,，。；;、/\\|]+/gu, '');
+    .replace(/[\s"'“”‘’《》「」『』【】[\]（）()·\-_:：,，。；;、/\\|]+/gu, '');
 }

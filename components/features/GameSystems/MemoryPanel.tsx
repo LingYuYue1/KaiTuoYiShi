@@ -51,7 +51,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
       : activeLayer === 'short'
         ? memorySystem.短期记忆
         : activeLayer === 'middle'
-          ? (memorySystem.中期记忆 ?? [])
+          ? memorySystem.中期记忆
           : memorySystem.长期记忆;
 
   const handleCompressShort = () => {
@@ -72,7 +72,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
   };
 
   const handleCompressMiddle = () => {
-    const threshold = settings.短期转中期阈值 || settings.短期转长期阈值 || 20;
+    const threshold = settings.短期转中期阈值 || 20;
     if (!checkMiddleTermThreshold(memorySystem, threshold)) {
       if (!confirm(`短期记忆不足 ${threshold} 条，仍要压缩当前累积内容到中期？`)) return;
     }
@@ -95,11 +95,11 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
     }
     onMemorySystemChange((prev) => {
       let next = prev;
-      const middle = next.中期记忆 ?? [];
+      const middle = next.中期记忆;
       if (middle.length > 0 && middle.length < threshold) {
         return compressToLongTerm(next, turnCount, middle.length);
       }
-      while ((next.中期记忆 ?? []).length >= threshold) {
+      while (next.中期记忆.length >= threshold) {
         next = compressToLongTerm(next, turnCount, threshold);
       }
       return next;
@@ -112,7 +112,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
       : activeLayer === 'short'
         ? memorySystem.短期记忆.length
         : activeLayer === 'middle'
-          ? (memorySystem.中期记忆 ?? []).length
+          ? memorySystem.中期记忆.length
           : memorySystem.长期记忆.length;
 
   return (
@@ -123,7 +123,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MetricTile label="即时" value={`${memorySystem.即时记忆.length}`} />
             <MetricTile label="短期" value={`${memorySystem.短期记忆.length}`} />
-            <MetricTile label="中期" value={`${(memorySystem.中期记忆 ?? []).length}`} />
+            <MetricTile label="中期" value={`${memorySystem.中期记忆.length}`} />
             <MetricTile label="长期" value={`${memorySystem.长期记忆.length}`} />
             <MetricTile label="NPC" value={`${settings.NPC记忆压缩阈值} 条`} />
           </div>
@@ -141,7 +141,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
                   : layer === 'short'
                     ? memorySystem.短期记忆.length
                     : layer === 'middle'
-                      ? (memorySystem.中期记忆 ?? []).length
+                      ? memorySystem.中期记忆.length
                       : memorySystem.长期记忆.length;
               return (
                 <button
@@ -201,17 +201,17 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
 
             <div className="flex flex-wrap gap-2">
               {activeLayer === 'immediate' && (
-                <ActionButton onClick={handleCompressShort} tone="gold">
+                <ActionButton onClick={handleCompressShort}>
                   压缩到短期
                 </ActionButton>
               )}
               {activeLayer === 'short' && (
-                <ActionButton onClick={handleCompressMiddle} tone="gold">
+                <ActionButton onClick={handleCompressMiddle}>
                   压缩到中期
                 </ActionButton>
               )}
               {activeLayer === 'middle' && (
-                <ActionButton onClick={handleCompressLong} tone="gold">
+                <ActionButton onClick={handleCompressLong}>
                   压缩到长期
                 </ActionButton>
               )}
@@ -337,11 +337,9 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
 
 function ActionButton({
   onClick,
-  tone,
   children,
 }: {
   onClick: () => void;
-  tone: 'gold';
   children: React.ReactNode;
 }) {
   return (

@@ -188,18 +188,18 @@ export function buildSystemPrompt(
   if (sceneFromWorldbook) parts.push(sceneFromWorldbook);
 
   // ── 忆庭（仅控制召回；入库始终执行，不等同于短期/长期记忆） ──
-  const yitingEnabled = settings.记忆系统?.忆庭启用;
-  const yitingThreshold = settings.记忆系统?.忆庭召回最早触发回合 ?? 10;
+  const yitingEnabled = settings.记忆系统.忆庭启用;
+  const yitingThreshold = settings.记忆系统.忆庭召回最早触发回合;
   if (yitingInjectionOverride !== undefined) {
     if (yitingInjectionOverride.trim()) parts.push(yitingInjectionOverride.trim());
   } else if (yitingEnabled && yiting && worldbookCtx?.recentUserInput && worldbookCtx.turnCount > yitingThreshold) {
-    const limit = settings.记忆系统?.忆庭召回条数 ?? 8;
+    const limit = settings.记忆系统.忆庭召回条数;
     const yitingHit = retrieveYitingContext(yiting, worldbookCtx.recentUserInput, limit);
     if (yitingHit.injection) parts.push(yitingHit.injection);
   }
 
   // ── 剧情编织（玩家导入 TXT 后生成的章节滑窗）：高波动，放在当前事实与即时回顾之后。──
-  if (settings.剧情编织系统?.enabled && settings.剧情编织系统.currentWindow) {
+  if (settings.剧情编织系统.enabled && settings.剧情编织系统.currentWindow) {
     const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);
     if (storyWeavingSection) parts.push(storyWeavingSection);
   }
@@ -207,7 +207,7 @@ export function buildSystemPrompt(
   // ── 智库（只注入按本回合输入检索到的摘要，不注入整库） ──
   if (zhikuInjectionOverride !== undefined) {
     if (zhikuInjectionOverride.trim()) parts.push(zhikuInjectionOverride.trim());
-  } else if (settings.智库系统?.enabled && zhiku && worldbookCtx?.recentUserInput) {
+  } else if (settings.智库系统.enabled && zhiku && worldbookCtx?.recentUserInput) {
     const zhikuHit = retrieveZhikuContext(zhiku, worldbookCtx.recentUserInput, settings.智库系统.maxRelatedEntries, worldbookCtx);
     if (zhikuHit.injection) parts.push(zhikuHit.injection);
   }
@@ -233,7 +233,7 @@ export function buildSystemPrompt(
     records: npcRecords,
     turnCount: _turnCount,
     explicitNames: worldbookCtx?.npcNames,
-    sceneNames: worldState.当前时段?.人物?.map((npc) => npc.姓名),
+    sceneNames: worldState.当前时段.人物.map((npc) => npc.姓名),
     recalledNames: worldbookCtx?.npcNames,
   });
   const npcPresenceSection = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames);
@@ -373,7 +373,7 @@ function isSimilarMemoryEntry(entry: string, seen: string[]): boolean {
   return seen.some((item) => {
     if (!item) return false;
     if (fp.includes(item) || item.includes(fp)) return true;
-    const left = new Set([...fp]);
+    const left = new Set(Array.from(fp));
     let overlap = 0;
     for (const ch of item) {
       if (left.has(ch)) overlap += 1;
@@ -407,7 +407,7 @@ function buildLayeredMemorySections(memorySystem: 记忆系统): string[] {
     seen,
   );
   const middleTerm = pickDedupedMemoryEntries(
-    memorySystem.中期记忆 ?? [],
+    memorySystem.中期记忆,
     MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT,
     seen,
   );
@@ -461,7 +461,7 @@ export interface BuiltSystemPrompt {
 }
 
 function getPromptPlayerName(traveler: 角色数据结构): string {
-  return traveler.姓名?.trim() || '无名开拓者';
+  return traveler.姓名.trim() || '无名开拓者';
 }
 
 /** 思维链输出语言标签映射（cotLanguage 设置 → AI 可读的语言名） */
@@ -494,7 +494,7 @@ function buildInnerVoiceSection(settings: 游戏设置): string {
 }
 
 function buildResponseLengthSection(settings: 游戏设置): string {
-  const target = Math.max(100, Math.trunc(Number(settings.wordCountTarget) || 500));
+  const target = Math.max(100, Math.trunc(settings.wordCountTarget || 500));
   const softUpper = Math.ceil(target * 1.35);
   const paragraphHint =
     target >= 1200
@@ -539,7 +539,7 @@ function injectPromptModules(
   const filtered = modules
     .filter((m) => m.enabled)
     .filter((m) => {
-      const scope = m.scope?.length ? m.scope : (['all'] as 提示词模块作用域[]);
+      const scope = m.scope.length ? m.scope : (['all'] as 提示词模块作用域[]);
       return scope.includes('all') || scope.includes(ctx.currentScope);
     })
     .filter((m) => {
@@ -621,8 +621,6 @@ function buildMainStoryControlSection(worldState: 世界状态): string {
     lines.push('- 当前原著主角配置：星。穹不是本周目默认原著主角，不自动登场，不被默认召回为开拓者，除非后续剧情或玩家设定明确引入。');
   } else if (worldState.原著主角 === '穹') {
     lines.push('- 当前原著主角配置：穹。星不是本周目默认原著主角，不自动登场，不被默认召回为开拓者；涉及封存舱、星核载体或原著主角线索时优先写穹。');
-  } else if (worldState.原著主角) {
-    lines.push(`- 当前原著主角配置：${worldState.原著主角}。另一性别主角不自动登场，除非后续剧情或玩家设定明确引入。`);
   }
   const archive = worldState.开局档案;
   if (archive) {
@@ -709,7 +707,7 @@ function buildCharacterSection(traveler: 角色数据结构): string {
   if (traveler.背景) lines.push(`- 背景：${traveler.背景}`);
 
   // 命途：优先读 命途列表[] 多命途数据；旧字段 traveler.主命途 仅作兜底
-  if (traveler.命途列表 && traveler.命途列表.length > 0) {
+  if (traveler.命途列表.length > 0) {
     const pathLines: string[] = [];
     for (const pp of traveler.命途列表) {
       const def = getPath(pp.id);
@@ -733,11 +731,11 @@ function buildCharacterSection(traveler: 角色数据结构): string {
     }
   }
 
-  if (traveler.能力?.length) {
+  if (traveler.能力.length) {
     lines.push(`- 能力：${traveler.能力.join('、')}`);
   }
 
-  if (traveler.专长知识?.length) {
+  if (traveler.专长知识.length) {
     lines.push(`- 特长：${traveler.专长知识.join('、')}`);
   }
 
@@ -767,10 +765,10 @@ function buildOpeningCutInSection(worldState: 世界状态): string {
 }
 
 function buildSkillSection(traveler: 角色数据结构): string {
-  const skills = (traveler.战技列表 ?? []).filter(
+  const skills = traveler.战技列表.filter(
     (skill) => skill.槽位类型 !== 'normal' || (skill.槽位序号 >= 1 && skill.槽位序号 <= NORMAL_SKILL_SLOT_COUNT),
   );
-  const paths = traveler.命途列表 ?? [];
+  const paths = traveler.命途列表;
 
   const lines: string[] = [];
   lines.push(`- 普通战技槽位：${NORMAL_SKILL_SLOT_COUNT} 个，始终保留；该槽位由玩家自制，不再使用内置普通战技预设。`);
@@ -807,7 +805,7 @@ function buildSkillSection(traveler: 角色数据结构): string {
     lines.push('- 已登记战技详情：');
     for (const skill of enabledSkills.sort((a, b) => {
       if (a.槽位类型 !== b.槽位类型) return a.槽位类型 === 'normal' ? -1 : 1;
-      if (a.关联命途 !== b.关联命途) return String(a.关联命途 ?? '').localeCompare(String(b.关联命途 ?? ''));
+      if (a.关联命途 !== b.关联命途) return (a.关联命途 ?? '').localeCompare(b.关联命途 ?? '');
       return a.槽位序号 - b.槽位序号;
     })) {
       const pathName = skill.关联命途 ? getPath(skill.关联命途)?.name ?? skill.关联命途 : '通用';
@@ -846,7 +844,7 @@ function buildSceneSection(worldState: 世界状态): string {
   }
 
   const period = worldState.当前时段;
-  if (period && period.id) {
+  if (period.id) {
     const npcLine = period.人物.length
       ? `\n\n场内人物：\n${period.人物.map((n) => `- ${n.姓名}：${n.角色}，${n.性格}`).join('\n')}`
       : '';
@@ -912,7 +910,7 @@ function buildNpcPresenceSection(
   userInput = '',
   explicitNpcNames: string[] = [],
 ): string {
-  const sceneNames = (worldState.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean);
+  const sceneNames = worldState.当前时段.人物.map((npc) => npc.姓名.trim()).filter(Boolean);
   const records = npcRecords ?? [];
   const explicitNames = normalizeExplicitNpcNames(explicitNpcNames);
   const current = records
@@ -922,12 +920,12 @@ function buildNpcPresenceSection(
   const nearby = records
     .filter((npc) =>
       !current.includes(npc.姓名) &&
-      Number(npc.最近回合 || 0) >= recentCutoff &&
+      npc.最近回合 >= recentCutoff &&
       (npc.阶位 === 'companion' || npc.原著角色 || 提取NPC同行记忆文本列表(npc).length > 0),
     )
-    .sort((a, b) => Number(b.最近回合 || 0) - Number(a.最近回合 || 0))
+    .sort((a, b) => b.最近回合 - a.最近回合)
     .slice(0, 8)
-    .map((npc) => `${npc.姓名}（最近第${Math.max(1, Number(npc.最近回合 || 1))}回合）`);
+    .map((npc) => `${npc.姓名}（最近第${Math.max(1, npc.最近回合)}回合）`);
   const sceneOnly = sceneNames.filter((name) => !current.some((item) => item === name));
   const anticipated = getAnticipatedNpcNamesForTurn({ world: worldState, userInput });
   if (!current.length && !nearby.length && !sceneOnly.length && !anticipated.length && !explicitNames.length) return '';
@@ -979,13 +977,13 @@ function buildNpcContinuitySection(
   const records = npcRecords ?? [];
   const explicitNames = normalizeExplicitNpcNames(explicitNpcNames);
   const recentCutoff = Math.max(1, turnCount - RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW);
-  const sceneNames = new Set((worldState.当前时段?.人物 ?? []).map((n) => n.姓名.trim()).filter(Boolean));
-  const currentLocation = worldState.当前地点?.trim();
+  const sceneNames = new Set(worldState.当前时段.人物.map((n) => n.姓名.trim()).filter(Boolean));
+  const currentLocation = worldState.当前地点.trim();
 
   const candidates = records
     .map((npc) => {
       const memories = 提取NPC同行记忆文本列表(npc);
-      const isRecent = Number(npc.最近回合 || 0) >= recentCutoff;
+      const isRecent = npc.最近回合 >= recentCutoff;
       const isExplicit = explicitNames.some((name) => name === npc.姓名 || name === npc.别名);
       const isSceneNpc = sceneNames.has(npc.姓名) || Boolean(npc.别名 && sceneNames.has(npc.别名));
       const hasContinuity =
@@ -1009,7 +1007,7 @@ function buildNpcContinuitySection(
       return { npc, memories, isRecent, isSceneNpc, score };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .sort((a, b) => b.score - a.score || Number(b.npc.最近回合 || 0) - Number(a.npc.最近回合 || 0))
+    .sort((a, b) => b.score - a.score || b.npc.最近回合 - a.npc.最近回合)
     .slice(0, NPC_CONTINUITY_PROMPT_LIMIT);
 
   const representedNames = new Set<string>();
@@ -1042,7 +1040,7 @@ function buildNpcContinuitySection(
       isRecent ? '近期见过' : '',
       npc.原著角色 ? '原著角色' : '',
     ].filter(Boolean);
-    const turnLine = `初见第${Math.max(1, Number(npc.初见回合 || 1))}回合，最近第${Math.max(1, Number(npc.最近回合 || npc.初见回合 || 1))}回合`;
+    const turnLine = `初见第${Math.max(1, npc.初见回合)}回合，最近第${Math.max(1, npc.最近回合)}回合`;
     const memoryLine = memories.length ? `；最近共同经历：${memories.slice(-3).join('；')}` : '';
     const phoneMemoryLine = buildRecentPhoneMemoryLine(npc);
     const introLine = npc.介绍 ? `；身份/职责：${npc.介绍}` : '';
@@ -1066,10 +1064,10 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
     .filter((n) => {
       if (n.阶位 !== 'extra') return false;
       const memoryCount = 提取NPC同行记忆文本列表(n).length;
-      return Number(n.最近回合 || 0) >= recentCutoff || memoryCount > 0 || n.好感度 !== 0 || n.关系 !== 'stranger';
+      return n.最近回合 >= recentCutoff || memoryCount > 0 || n.好感度 !== 0 || n.关系 !== 'stranger';
     })
     .sort((a, b) => {
-      const recentDiff = Number(b.最近回合 || 0) - Number(a.最近回合 || 0);
+      const recentDiff = b.最近回合 - a.最近回合;
       if (recentDiff !== 0) return recentDiff;
       const memoryDiff = 提取NPC同行记忆文本列表(b).length - 提取NPC同行记忆文本列表(a).length;
       if (memoryDiff !== 0) return memoryDiff;
@@ -1079,9 +1077,9 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
 
   const sorted = [...companions].sort((a, b) => {
     if (a.同行 !== b.同行) return a.同行 ? -1 : 1;
-    const recentDiff = Number(b.最近回合 || 0) - Number(a.最近回合 || 0);
-    const aIsRecent = Number(a.最近回合 || 0) >= recentCutoff;
-    const bIsRecent = Number(b.最近回合 || 0) >= recentCutoff;
+    const recentDiff = b.最近回合 - a.最近回合;
+    const aIsRecent = a.最近回合 >= recentCutoff;
+    const bIsRecent = b.最近回合 >= recentCutoff;
     if (aIsRecent !== bIsRecent) return aIsRecent ? -1 : 1;
     const affDiff = Math.abs(b.好感度) - Math.abs(a.好感度);
     if (affDiff !== 0) return affDiff;
@@ -1125,7 +1123,7 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
 // 背包注入：按 category 分桶，每桶最多取 3 件；总数控制在前 10 件，避免上下文膨胀。
 // 末尾附 物品获取协议:教 AI 用 push 旅人.背包 = {...} 把剧情中提到的物品落地到背包。
 function buildInventorySection(traveler: 角色数据结构): string {
-  const inventory = traveler.背包 ?? [];
+  const inventory = traveler.背包;
   const buckets = new Map<string, 背包物品[]>();
   for (const item of inventory) {
     const arr = buckets.get(item.类别) ?? [];
@@ -1204,8 +1202,8 @@ function buildNewsSection(news?: 新闻条目[]): string {
 
 function getRecentPhoneMemoryTexts(npc: NPC记录): string[] {
   return (npc.同行记忆 ?? [])
-    .filter((item): item is NPC同行记忆条目 => typeof item !== 'string' && item?.来源 === '手机')
-    .map((item) => item.摘要?.trim())
+    .filter((item): item is NPC同行记忆条目 => typeof item !== 'string' && item.来源 === '手机')
+    .map((item) => item.摘要.trim())
     .filter((text): text is string => Boolean(text));
 }
 
@@ -1271,8 +1269,8 @@ function buildPathAwakeningSection(
     const pathId = worldState.进行中狭间;
     const def = getPath(pathId);
     const belief = PATH_CORE_BELIEFS[pathId];
-    const record = (traveler.命途列表 ?? []).find((p) => p.id === pathId);
-    if (!def || !belief) return '';
+    const record = traveler.命途列表.find((p) => p.id === pathId);
+    if (!def) return '';
     const stageDef = record ? PATH_STAGE_DEFS.find((s) => s.stage === record.阶段) : undefined;
     const nextStageDef = record ? PATH_STAGE_DEFS[record.阶段 + 1] : undefined;
     const stageLabel = stageDef ? `${stageDef.name} → 待升 ${nextStageDef?.name ?? '未知'}` : '未知';
@@ -1353,7 +1351,7 @@ function buildPathAwakeningSection(
   }
 
   // 待升阶:鼓励 AI 在合适节奏发出邀请
-  const readyPaths = (traveler.命途列表 ?? []).filter((p) => p.待升阶);
+  const readyPaths = traveler.命途列表.filter((p) => p.待升阶);
   if (readyPaths.length > 0) {
     const lines: string[] = [];
     lines.push(`旅人有 ${readyPaths.length} 条命途进度已积满,处于「待升阶」状态。若本回合剧情节奏合适(战后独处、夜深沉思、回望来路、价值抉择前夕之类),可主动发出邀请:`);
@@ -1365,7 +1363,7 @@ function buildPathAwakeningSection(
       const def = getPath(p.id);
       if (!def) continue;
       const stageDef = PATH_STAGE_DEFS.find((s) => s.stage === p.阶段);
-      lines.push(`- ${def.name}（id=${p.id}）:当前 ${stageDef?.name ?? '阶段 ' + p.阶段},满进度等待狭间问答`);
+      lines.push(`- ${def.name}（id=${p.id}）:当前 ${stageDef?.name ?? `阶段 ${p.阶段}`},满进度等待狭间问答`);
     }
     lines.push('');
     lines.push(`**禁止在战斗中 / 高紧张谈判 / 危险逃亡场景发出邀请**——狭间是精神虚境,需要旅人有一刻"能停下来面对自己"的空隙。一回合至多发出一条邀请。`);

@@ -42,10 +42,10 @@ export async function fetchOpenAICompatibleModels(baseRaw: string, apiKey: strin
         errors.push(`${url} -> ${response.status}${text ? `：${text.slice(0, 120)}` : ''}`);
         continue;
       }
-      const data = await response.json();
-      if (data && Array.isArray(data.data)) {
+      const data = (await response.json()) as { data?: unknown };
+      if (Array.isArray(data.data)) {
         const ids = data.data
-          .map((model: { id?: string }) => model?.id)
+          .map((model: { id?: string } | null) => model?.id)
           .filter((id: unknown): id is string => typeof id === 'string' && id.trim().length > 0);
         if (ids.length) return ids;
       }

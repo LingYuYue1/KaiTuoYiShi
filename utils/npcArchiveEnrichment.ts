@@ -184,7 +184,7 @@ function buildZhikuArchiveBaseline(npc: NPC记录, zhiku?: 智库系统): Canoni
       const meta = 解析智库软结构标签(entry);
       return `${meta.资料类型 ?? ''}${meta.节点 ?? ''}`.includes('主体');
     }) ?? entries[0];
-    return hasText(subject?.摘要) ? subject.摘要 : undefined;
+    return hasText(subject.摘要) ? subject.摘要 : undefined;
   };
 
   return {
@@ -274,7 +274,7 @@ export function enrichNpcArchives(
     if (shouldPatchArchiveField(updated.穿着, baseline.穿着)) patch.穿着 = baseline.穿着;
     if (shouldPatchArchiveField(updated.说话方式, baseline.说话方式)) patch.说话方式 = baseline.说话方式;
     if (shouldPatchArchiveField(updated.介绍, baseline.介绍)) patch.介绍 = baseline.介绍;
-    if (!updated.性别 && baseline?.性别) patch.性别 = baseline.性别;
+    if (!updated.性别 && baseline.性别) patch.性别 = baseline.性别;
     if (!updated.原著角色) patch.原著角色 = true;
     if (updated.阶位 !== 'companion') patch.阶位 = 'companion';
 
@@ -294,7 +294,10 @@ export function enrichNpcArchives(
       const nsfw = updated.NSFW档案;
       const hasPlaceholder = nsfw.标签?.length || nsfw.备注 || nsfw.长期事实?.length;
       if (hasPlaceholder) {
-        const { 标签, 备注, 长期事实, ...rest } = nsfw as NPC记录['NSFW档案'] & { 标签?: unknown; 备注?: unknown; 长期事实?: unknown };
+        const rest = { ...nsfw } as NPC记录['NSFW档案'] & { 标签?: unknown; 备注?: unknown; 长期事实?: unknown };
+        delete rest.标签;
+        delete rest.备注;
+        delete rest.长期事实;
         updated = { ...updated, NSFW档案: rest };
       }
     }

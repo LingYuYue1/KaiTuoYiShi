@@ -10,7 +10,7 @@
  * - 二创成品以 JSON 文件形式存储，已手工融合，不需要运行时融合
  */
 
-import type { STMessageRole, STPreset, STPresetEntry, STPresetEntryV2, STPresetPrompt } from '@/models/stTypes';
+import type { STMessageRole, STPreset, STPresetEntryV1, STPresetEntryV2, STPresetPrompt } from '@/models/stTypes';
 import { createBuiltinPresetEntry } from './builtinPreset';
 import shuangrenchenghangPreset from './shuangrenchenghang.json';
 import izumiPreset from './izumi.json';
@@ -24,7 +24,7 @@ export const BUILTIN_IZUMI_PRESET_ID = 'builtin_izumi_v2';
  * 返回顺序：原生内置预设在前，二创成品预设在后。
  * UI 层可据此排序展示。
  */
-export function getBuiltinPresets(): STPresetEntry[] {
+export function getBuiltinPresets(): STPresetEntryV1[] {
   return [
     createBuiltinPresetEntry(),
   ];
@@ -40,7 +40,7 @@ export function isBuiltinPreset(id: string): boolean {
 /**
  * 根据 id 获取内置预设。找不到返回 undefined。
  */
-export function getBuiltinPresetById(id: string): STPresetEntry | undefined {
+export function getBuiltinPresetById(id: string): STPresetEntryV1 | undefined {
   return getBuiltinPresets().find((p) => p.id === id);
 }
 
@@ -52,7 +52,7 @@ function toV2PromptIdentifier(moduleId: string, index: number): string {
   return moduleId.replace(/^st_import_/, '').replace(/^adapted_/, 'adapted_') || `prompt_${index + 1}`;
 }
 
-function convertBuiltinPresetToV2(entry: STPresetEntry): STPresetEntryV2 | null {
+function convertBuiltinPresetToV2(entry: STPresetEntryV1): STPresetEntryV2 | null {
   if (entry.presetType === 'native' || entry.modules.length === 0) return null;
   const prompts: STPresetPrompt[] = entry.modules
     .filter((module) => module.enabled)

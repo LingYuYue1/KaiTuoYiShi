@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { API设置, 游戏设置 } from '@/models/settings';
 import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
 import {
@@ -177,20 +177,20 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteText, setPasteText] = useState('');
-  const [draft, setDraft] = useState<SegmentDraft | null>(null);
+  const [draftState, setDraftState] = useState<{ key: string; draft: SegmentDraft } | null>(null);
   const [trackTab, setTrackTab] = useState<TrackTab>('canon');
 
   const normalized = useMemo(() => 归一化剧情编织系统(storyWeaving), [storyWeaving]);
   const canonSeries = useMemo(() => normalized.系列列表.filter((series) => series.来源类型 === 'canon'), [normalized.系列列表]);
   const customSeries = useMemo(() => normalized.系列列表.filter((series) => series.来源类型 !== 'canon'), [normalized.系列列表]);
   const visibleSeries = trackTab === 'canon' ? canonSeries : customSeries;
-  const activeSeries = normalized.系列列表.find((s) => s.id === normalized.当前系列ID) ?? normalized.系列列表[0];
+  const activeSeries = normalized.系列列表.find((s) => s.id === normalized.当前系列ID) ?? normalized.系列列表.at(0);
   const activeProgress = normalized.当前进度?.当前系列ID === activeSeries?.id ? normalized.当前进度 : undefined;
   const planningAnalysis = useMemo(() => buildStoryPlanningAnalysis(normalized), [normalized]);
   const injectionDiagnostics = useMemo(() => getStoryWeavingInjectionDiagnostics(normalized), [normalized]);
   const viewSeries = visibleSeries.find((s) => s.id === expandedSeriesId)
     ?? visibleSeries.find((s) => s.id === activeSeries?.id)
-    ?? visibleSeries[0];
+    ?? visibleSeries.at(0);
   const selectedSegment = viewSeries?.分段列表.find((s) => s.id === selectedSegmentId)
     ?? viewSeries?.分段列表.find((s) => s.组号 === viewSeries.当前分段组号)
     ?? viewSeries?.分段列表[0];
@@ -214,21 +214,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     setSelectedSegmentId(series.分段列表[0]?.id ?? null);
   };
 
-  useEffect(() => {
-    if (viewSeries && !expandedSeriesId) setExpandedSeriesId(viewSeries.id);
-  }, [viewSeries, expandedSeriesId]);
+  const effectiveExpandedSeriesId = visibleSeries.some((s) => s.id === expandedSeriesId) ? expandedSeriesId : (viewSeries?.id ?? null);
 
-  useEffect(() => {
-    if (!viewSeries) return;
-    if (!visibleSeries.some((series) => series.id === expandedSeriesId)) {
-      setExpandedSeriesId(viewSeries.id);
-      setSelectedSegmentId(viewSeries.分段列表[0]?.id ?? null);
-    }
-  }, [trackTab, viewSeries, visibleSeries, expandedSeriesId]);
-
-  useEffect(() => {
-    setDraft(selectedSegment ? draftFromSegment(selectedSegment) : null);
-  }, [selectedSegment?.id, selectedSegment?.updatedAt]);
+  const draftKey = selectedSegment?.id ?? '';
+  const draft = draftState && draftState.key === draftKey && selectedSegment ? draftState.draft : (selectedSegment ? draftFromSegment(selectedSegment) : null);
+  const updateDraft = (next: SegmentDraft) => setDraftState({ key: draftKey, draft: next });
 
   const persist = async (next: 剧情编织系统) => {
     const clean = 归一化剧情编织系统(next);
@@ -295,13 +285,13 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             ...normalized.系列列表.filter((series) => !system.系列列表.some((incoming) => incoming.id === series.id)),
             ...system.系列列表,
           ],
-          当前系列ID: system.当前系列ID ?? system.系列列表[0]?.id ?? normalized.当前系列ID,
+           当前系列ID: system.当前系列ID ?? system.系列列表.at(0)?.id ?? normalized.当前系列ID,
           当前进度: system.当前进度 ?? normalized.当前进度,
         })
         : system;
       await persist(next);
       setSelectedSegmentId(system.系列列表[0]?.分段列表[0]?.id ?? null);
-      setExpandedSeriesId(system.当前系列ID ?? system.系列列表[0]?.id ?? null);
+      setExpandedSeriesId(system.当前系列ID ?? system.系列列表.at(0)?.id ?? null);
       setMessage(`已导入剧情编织 JSON：${system.系列列表.length} 个系列${customOnly ? '（已并入自制轨道）' : ''}。`);
     } catch (err) {
       const text = (err as Error).message;
@@ -358,7 +348,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
       setExpandedSeriesId(merged.系列列表[0]?.id ?? null);
       await persist({
         ...merged,
-        当前系列ID: current?.id,
+        当前系列ID: current.id,
         当前进度: buildSeriesProgressAnchor(merged.当前进度, current, '恢复内置原著剧情后同步当前锚点'),
       });
       setMessage(`已恢复内置原著剧情：${bundled.系列列表.length} 个轨道。`);
@@ -828,7 +818,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
               system={visibleSystem}
               activeSeries={viewSeries}
               selectedSegmentId={selectedSegment?.id ?? null}
-              expandedSeriesId={expandedSeriesId}
+              expandedSeriesId={effectiveExpandedSeriesId}
               busyId={busyId}
               onSelectSeries={handlePreviewSeries}
               onSelectSegment={(segment) => setSelectedSegmentId(segment.id)}
@@ -856,13 +846,13 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                     series={viewSeries}
                     segment={selectedSegment}
                     draft={draft}
-                    onDraftChange={setDraft}
+                    onDraftChange={updateDraft}
                     busy={busyId === selectedSegment.id}
                     onDecompose={() => void handleDecompose(viewSeries, selectedSegment)}
                     onSetCurrent={() => void handleSetCurrent(viewSeries, selectedSegment.组号)}
                     onSetRuntimeStatus={(status) => void handleSetRuntimeStatus(viewSeries, selectedSegment, status)}
                     onSaveDraft={() => void handleSaveDraft(viewSeries, selectedSegment)}
-                    onResetDraft={() => setDraft(draftFromSegment(selectedSegment))}
+                    onResetDraft={() => updateDraft(draftFromSegment(selectedSegment))}
                     progress={selectedProgress}
                   />
                   {planningAnalysis && (

@@ -3,8 +3,8 @@ export const DEFAULT_IMAGE_RETRY_COUNT = 2;
 const RETRY_DELAY_MS = 1200;
 
 export function readImageError(error: unknown, fallback = '图片生成失败'): string {
-  const message = typeof (error as { message?: unknown })?.message === 'string'
-    ? String((error as { message: string }).message).trim()
+  const message = typeof (error as { message?: unknown }).message === 'string'
+    ? (error as { message: string }).message.trim()
     : '';
   return message || fallback;
 }
@@ -38,7 +38,7 @@ export async function runImageGenerationWithRetry<T>(
     onRetry?: (attempt: number, totalAttempts: number, errorMessage: string) => void;
   },
 ): Promise<T> {
-  const maxRetries = Math.max(0, Math.trunc(Number(options?.maxRetries ?? DEFAULT_IMAGE_RETRY_COUNT) || 0));
+  const maxRetries = Math.max(0, Math.trunc(options?.maxRetries ?? DEFAULT_IMAGE_RETRY_COUNT) || 0);
   const totalAttempts = maxRetries + 1;
   let lastError: unknown;
   for (let index = 0; index < totalAttempts; index += 1) {

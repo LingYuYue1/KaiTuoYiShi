@@ -625,7 +625,7 @@ function validateSchemaPushValue(root: VariableRootKey, rest: string, value: unk
 // 命途狭间状态机硬只读名单:这些字段只能由 服务层(踏入命途狭间 / 应用狭间结果 / 推进命途进度)写,
 // 变量模型一旦碰到必须拒绝——否则 AI 误判「踏入虚境」当成「狭间完成」,会清掉 进行中狭间,
 // 下一回合就退回主剧情 scope,AI 不知道是评判回合,直接卡死虚境。
-function isAwakeningProtectedPath(rawKey: string, action: 变量命令['action']): boolean {
+function isAwakeningProtectedPath(rawKey: string): boolean {
   const k = rawKey.trim();
   // 世界·狭间状态机字段:任何 action 都拒
   if (k === '世界.进行中狭间' || k === '世界.待触发狭间') return true;
@@ -683,7 +683,7 @@ export function isTravelerPlayerAuthoredVariablePath(rawKey: string): boolean {
 
 /** 校验一条命令是否符合登记表。 */
 export function validateCommand(cmd: 变量命令, state: Partial<VariableState>): CommandValidation {
-  if (!cmd || typeof cmd.key !== 'string') {
+  if (typeof cmd.key !== 'string') {
     return { allowed: false, reason: '命令格式错误：缺少 key' };
   }
   if (isTravelerPlayerAuthoredVariablePath(cmd.key) && cmd.key.trim() === '旅人.穿着') {
@@ -696,7 +696,7 @@ export function validateCommand(cmd: 变量命令, state: Partial<VariableState>
     };
   }
   // 狭间状态机 + 命途结构字段:变量模型只能读不能写,违者直接拒
-  if (isAwakeningProtectedPath(cmd.key, cmd.action)) {
+  if (isAwakeningProtectedPath(cmd.key)) {
     return {
       allowed: false,
       reason: `命途/狭间状态机字段 ${cmd.key} 只能由服务层维护,变量模型不许 ${cmd.action}`,

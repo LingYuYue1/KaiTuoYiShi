@@ -22,6 +22,7 @@ import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@
 import { selectNpcLedgersForTurn } from '@/models/npc';
 import { createMacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
+import { 取游戏设置运行态键 } from '@/models/settings';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import { 构建天气Prompt片段 } from '@/data/weatherRules';
 import { formatZhikuRecallSummary, formatYitingRecallSummary } from './recallDiagnostics';
@@ -73,7 +74,7 @@ export async function stage2_preModel(
     storyMode: effectiveWorld.剧情模式,
     recentMessages: updatedHistory.map((m) => (typeof m.content === 'string' ? m.content : '')).filter(Boolean).slice(-100),
     messageCount: state.turnCount,
-    worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
+    worldbookTriggerStates: 取游戏设置运行态键(state.gameSettings).worldbookTriggerStates,
   };
 
   const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({ world: effectiveWorld, history: updatedHistory, userInput });
@@ -181,7 +182,7 @@ export async function stage2_preModel(
 
   const currentTriggerType = deps.rerollContext ? 'swipe' : isOpeningSystemTrigger ? 'opening' : 'normal';
 
-  const prevGlobalSnapshot = state.gameSettings.macroGlobalVars ?? {};
+  const prevGlobalSnapshot = 取游戏设置运行态键(state.gameSettings).macroGlobalVars;
   const lastMsg = updatedHistory[updatedHistory.length - 1] as typeof updatedHistory[number] | undefined;
   const lastUserMsg = [...updatedHistory].reverse().find((m) => m.role === 'user');
   const lastAssistantMsg = [...updatedHistory].reverse().find((m) => m.role === 'assistant');
@@ -203,7 +204,7 @@ export async function stage2_preModel(
   }
 
   const nextTriggerStates = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
-  if (nextTriggerStates !== state.gameSettings.worldbookTriggerStates) {
+  if (nextTriggerStates !== 取游戏设置运行态键(state.gameSettings).worldbookTriggerStates) {
     // 投影点（B2 定性）：刷新订阅 gameSettings 的 UI；存档组装只认 d，不回读此 state
     state.setGameSettings((prev) => ({ ...prev, worldbookTriggerStates: nextTriggerStates }));
   }

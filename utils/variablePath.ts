@@ -33,19 +33,22 @@ const 深合并对象 = (left: unknown, right: unknown): unknown => {
 export function 解析路径片段(rawPath: string): PathToken[] {
   const tokens: PathToken[] = [];
   // 匹配三种：纯字段名、[数字]、[key=value] 语法糖（保留原样为字符串）
-  const regex = /([^.\[\]]+)|\[(\d+)\]|\[([^\]]+)\]/g;
+  const regex = /([^.[\]]+)|\[(\d+)\]|\[([^\]]+)\]/g;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(rawPath || ''))) {
-    if (match[1]) tokens.push(match[1]);
-    else if (match[2] !== undefined) tokens.push(Number(match[2]));
-    else if (match[3] !== undefined) tokens.push(`[${match[3]}]`); // 包一层 [] 留给后续 resolveByMatcher
+    const field = match[1] as string | undefined;
+    const index = match[2] as string | undefined;
+    const matcher = match[3] as string | undefined;
+    if (field) tokens.push(field);
+    else if (index !== undefined) tokens.push(Number(index));
+    else if (matcher !== undefined) tokens.push(`[${matcher}]`); // 包一层 [] 留给后续 resolveByMatcher
   }
   return tokens;
 }
 
 /** 把 `[id=abc]` 这种匹配语法糖在 rootValue 上转成具体 index。失败返回 null。 */
 function 解析数组匹配语法糖(tokens: PathToken[], rootValue: unknown): PathToken[] | null {
-  if (rootValue == null) return tokens; // 没有数据，原样返回，让后续报路径未登记
+  if (rootValue === null || rootValue === undefined) return tokens; // 没有数据，原样返回，让后续报路径未登记
   const result: PathToken[] = [];
   let cursor: unknown = rootValue;
   for (let i = 0; i < tokens.length; i++) {
@@ -57,7 +60,7 @@ function 解析数组匹配语法糖(tokens: PathToken[], rootValue: unknown): P
       if (eq < 0) return null;
       const field = inner.slice(0, eq).trim();
       const expected = inner.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-      const idx = (cursor as Array<Record<string, unknown>>).findIndex((item) =>
+      const idx = (cursor as Array<Record<string, unknown>>).findIndex((item: Record<string, unknown> | undefined) =>
         item ? matchArrayItem(item, field, expected) : false,
       );
       if (idx < 0) return null;
@@ -66,7 +69,7 @@ function 解析数组匹配语法糖(tokens: PathToken[], rootValue: unknown): P
       continue;
     }
     result.push(t);
-    if (cursor == null) return result.concat(tokens.slice(i + 1));
+    if (cursor === null || cursor === undefined) return result.concat(tokens.slice(i + 1));
     if (typeof t === 'number') {
       cursor = Array.isArray(cursor) ? cursor[t] : undefined;
     } else {
@@ -191,7 +194,7 @@ export function 应用路径命令(
   if (!是对象(cursor)) return { ok: false, nextRootValue: rootValue, reason: `路径 ${rawPath} 末端父节点不是对象` };
   const obj = cursor;
   if (action === 'delete') {
-    delete obj[last];
+    Reflect.deleteProperty(obj, last);
     return { ok: true, nextRootValue: draft };
   }
   if (action === 'push') {
@@ -224,7 +227,7 @@ export function 读取路径值(rootValue: unknown, rawPath: string): { exists: 
 
   let cursor: unknown = rootValue;
   for (const t of tokens) {
-    if (cursor == null) return { exists: false, value: undefined };
+    if (cursor === null || cursor === undefined) return { exists: false, value: undefined };
     if (typeof t === 'number') {
       if (!Array.isArray(cursor) || t < 0 || t >= cursor.length) return { exists: false, value: undefined };
       cursor = cursor[t];

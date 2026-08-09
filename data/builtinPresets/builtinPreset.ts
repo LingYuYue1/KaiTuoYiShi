@@ -11,11 +11,11 @@
  * - 无 samplingParams / assistantPrefill（用 API 配置原值）
  */
 
-import type { STPresetEntry } from '@/models/stTypes';
+import type { STPresetEntryV1 } from '@/models/stTypes';
 
 export const BUILTIN_PRESET_ID = 'builtin_preset';
 
-export function createBuiltinPresetEntry(): STPresetEntry {
+export function createBuiltinPresetEntry(): STPresetEntryV1 {
   return {
     id: BUILTIN_PRESET_ID,
     name: '开拓轶事内置预设',

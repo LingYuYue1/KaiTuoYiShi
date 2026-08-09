@@ -19,7 +19,7 @@ export function switchTimePeriod(
 }
 
 export function advanceGameTime(state: 世界状态): 世界状态 {
-  const currentDate = state.当前日期?.trim() || '琥珀纪 2157.03.07';
+  const currentDate = state.当前日期.trim() || '琥珀纪 2157.03.07';
   const nextTime = state.当前时间
     ? incrementTime(state.当前时间)
     : getDefaultTime(state.当前时段);
@@ -47,7 +47,7 @@ function incrementTime(time: string): string {
 
 function 是否跨日(before: string, after: string): boolean {
   const parse = (value: string) => {
-    const match = normalizeClock(value)?.match(/^(\d{2}):(\d{2})$/);
+    const match = normalizeClock(value).match(/^(\d{2}):(\d{2})$/);
     if (!match) return null;
     return Number(match[1]) * 60 + Number(match[2]);
   };
@@ -66,7 +66,7 @@ function addMinutes(time: string, delta: number): string {
 }
 
 function normalizeClock(value: string): string {
-  const raw = value?.trim();
+  const raw = value.trim();
   if (!raw) return '';
   const embedded = raw.match(/(\d{1,2}:\d{2})/);
   if (embedded) {

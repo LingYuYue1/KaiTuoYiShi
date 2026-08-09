@@ -1,6 +1,6 @@
 ﻿import type { ReactNode } from 'react';
 import { useState } from 'react';
-import type { AI提供商, API设置, 游戏设置, 新闻API覆盖 } from '@/models/settings';
+import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
 import { fetchModels } from '@/services/ai/apiTools';
 import { saveSetting } from '@/services/dbService';
 
@@ -56,7 +56,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
   };
 
   const effectiveApi = {
-    provider: news.api.provider || mainConfig?.provider || 'openai_compatible',
+    provider: news.api.provider,
     baseUrl: news.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: news.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: news.api.model.trim() || mainConfig?.model || '',
@@ -90,7 +90,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
       };
       const list = await fetchModels(tempConfig);
       setModelOptions(list);
-      setFetchMessage({ kind: 'info', text: '获取到 ' + list.length + ' 个模型' });
+      setFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型` });
     } catch (err) {
       const text = (err as Error).message;
       setFetchMessage({ kind: 'error', text });
@@ -239,7 +239,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
               style={{ clipPath: smallClip }}
             />
             <button
-              onClick={handleFetchModels}
+              onClick={() => void handleFetchModels()}
               disabled={loadingModels}
               className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
               style={{
@@ -300,7 +300,7 @@ export function NewsSystemSettingsTab({ settings, onChange, apiSettings }: Props
 
       <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash

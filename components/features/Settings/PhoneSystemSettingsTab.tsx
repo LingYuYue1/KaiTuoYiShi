@@ -29,7 +29,7 @@ const providerOptions: { value: AI提供商; label: string }[] = [
 
 export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Props) {
   const phone = settings.手机系统;
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [fetchMessage, setFetchMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
@@ -53,7 +53,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
   };
 
   const effectiveApi = {
-    provider: phone.api.provider || mainConfig?.provider || 'openai_compatible',
+    provider: phone.api.provider,
     baseUrl: phone.api.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: phone.api.apiKey.trim() || mainConfig?.apiKey || '',
     model: phone.api.model.trim() || mainConfig?.model || '',
@@ -260,7 +260,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
             />
             <button
               type="button"
-              onClick={handleFetchModels}
+              onClick={() => void handleFetchModels()}
               disabled={loadingModels}
               className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
               style={{
@@ -322,7 +322,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings }: Prop
       <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash

@@ -8,7 +8,7 @@ export interface RetryOptions {
 }
 
 function shouldStopRetry(err: unknown, signal?: AbortSignal): boolean {
-  return isNonRetryableAIError(err) || (err as Error)?.name === 'AbortError' || signal?.aborted === true;
+  return isNonRetryableAIError(err) || (err as Error).name === 'AbortError' || signal?.aborted === true;
 }
 
 export async function withRetries<T>(task: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
@@ -30,7 +30,7 @@ export async function withRetries<T>(task: () => Promise<T>, options: RetryOptio
     }
   }
 
-  const message = lastErr instanceof Error ? lastErr.message : String(lastErr ?? '未知错误');
+  const message = lastErr instanceof Error ? lastErr.message : typeof lastErr === 'string' ? lastErr : '未知错误';
   if (options.label) {
     throw new Error(`${options.label}失败（已重试 ${retries} 次）：${message}`);
   }

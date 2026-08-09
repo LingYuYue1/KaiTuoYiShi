@@ -17,7 +17,8 @@ export function formatOriginalProtagonistForOpening(originalProtagonist: 世界�
 
 function hasProtocolTag(rawText: string, tagNames: string[]): boolean {
   return tagNames.some((tag) => {
-    const escaped = tag.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const escaped = tag.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+
     return new RegExp(`<\\s*${escaped}\\s*>`, 'i').test(rawText);
   });
 }
@@ -93,8 +94,8 @@ export const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
 </动态世界>`;
 
 export function isDeepSeekMainConfig(config: { provider?: string; baseUrl?: string; model?: string }): boolean {
-  const provider = String(config.provider ?? '').toLowerCase();
-  const baseUrl = String(config.baseUrl ?? '').toLowerCase();
-  const model = String(config.model ?? '').toLowerCase();
+  const provider = (config.provider ?? '').toLowerCase();
+  const baseUrl = (config.baseUrl ?? '').toLowerCase();
+  const model = (config.model ?? '').toLowerCase();
   return provider === 'deepseek' || baseUrl.includes('deepseek') || model.includes('deepseek');
 }

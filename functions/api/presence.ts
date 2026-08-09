@@ -1,6 +1,8 @@
 import { jsonResponse, optionsResponse, type PagesContextLike } from './auth/_shared';
 
-const PRESENCE_SYSTEM_ENABLED = false;
+// 硬编码功能开关：用显式拓宽断言避免 const 字面量收窄，使守卫在类型层面仍可被判定，
+// 后续若需按环境开启，改此值即可（保持守卫结构与运行时语义不变）。
+const PRESENCE_SYSTEM_ENABLED = false as boolean;
 const HEARTBEAT_TTL_MS = 2 * 60 * 1000;
 const SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 500;
@@ -76,8 +78,8 @@ function getClientIp(request: Request): string {
 }
 
 function getBucket(env: PagesContextLike['env']): R2BucketLike | null {
-  const candidate = (env)?.ONLINE_SESSIONS_R2
-    ?? (env)?.CNB_SYNC_R2;
+  const candidate = env.ONLINE_SESSIONS_R2
+    ?? env.CNB_SYNC_R2;
   if (
     candidate &&
     typeof candidate === 'object' &&
@@ -90,7 +92,7 @@ function getBucket(env: PagesContextLike['env']): R2BucketLike | null {
 }
 
 function getKvNamespace(env: PagesContextLike['env']): KvNamespaceLike | null {
-  const candidate = (env)?.ONLINE_SESSIONS_KV;
+  const candidate = env.ONLINE_SESSIONS_KV;
   if (
     candidate &&
     typeof candidate === 'object' &&
@@ -235,7 +237,7 @@ async function readPresenceSessions(env: PagesContextLike['env'], now: number): 
 function normalizeRegistry(parsed: Partial<PresenceRegistry> | null | undefined): PresenceRegistry {
   return {
     sessions: Array.isArray(parsed?.sessions)
-      ? parsed.sessions.filter((item): item is PresenceSessionRecord => Boolean(item && typeof item === 'object' && typeof item.id === 'string'))
+      ? (parsed.sessions as unknown[]).filter((item): item is PresenceSessionRecord => Boolean(item) && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string')
       : [],
   };
 }
@@ -278,16 +280,12 @@ async function upsertPresenceSession(params: {
 }
 
 function noStore(init: ResponseInit = {}): ResponseInit {
-  return {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      'cache-control': 'no-store',
-    },
-  };
+  const headers = new Headers(init.headers);
+  headers.set('cache-control', 'no-store');
+  return { ...init, headers };
 }
 
-export const onRequestOptions = async (): Promise<Response> => optionsResponse();
+export const onRequestOptions = (): Response => optionsResponse();
 
 export const onRequestGet = async ({ env }: PagesContextLike): Promise<Response> => {
   if (!PRESENCE_SYSTEM_ENABLED) {
@@ -310,7 +308,7 @@ export const onRequestPost = async ({ request, env }: PagesContextLike): Promise
     sessionId = readSessionId(payload.sessionId);
     path = readText(payload.path);
   } catch {
-    sessionId = '';
+    // 心跳载荷不是合法 JSON：保持空 sessionId，走下方 400 分支。
   }
   if (!sessionId) {
     return jsonResponse({ error: '缺少在线心跳 sessionId。' }, { status: 400 });

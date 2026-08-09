@@ -5,7 +5,7 @@ import { getAlbumAssetBlob, isDataImageUrl, rememberAlbumAssetFromDataUrl } from
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 export function normalizeContentHash(value: unknown): string | undefined {
-  const normalized = String(value ?? '').trim().toLowerCase();
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
   return SHA256_PATTERN.test(normalized) ? normalized : undefined;
 }
 
@@ -130,8 +130,8 @@ export function addOrReuseAlbumImage(
 export function mergeAlbumEntryMetadata(existing: 相册条目, incoming: 相册条目): 相册条目 {
   return {
     ...existing,
-    tags: Array.from(new Set([...(existing.tags ?? []), ...(incoming.tags ?? [])])),
-    referenceTargets: Array.from(new Set([...(existing.referenceTargets ?? []), ...(incoming.referenceTargets ?? [])])),
+    tags: Array.from(new Set([...existing.tags, ...incoming.tags])),
+    referenceTargets: Array.from(new Set([...existing.referenceTargets, ...incoming.referenceTargets])),
     note: existing.note || incoming.note,
   };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { 世界书, 世界书条目, 世界书条目类型, 世界书注入方式 } from '@/models/worldbook';
 import { 创建空世界书条目, 创建空世界书, ENTRY_TYPE_LABELS } from '@/models/worldbook';
 import { exportWorldbooks, explainEntry, importWorldbooks, normalizeWorldbooks } from '@/utils/worldbook';
@@ -21,7 +21,7 @@ const builtinIds: readonly string[] = BUILTIN_BOOK_IDS;
 const storyModeIds: readonly string[] = STORY_MODE_BOOK_IDS;
 const isBuiltinBook = (book: 世界书) => builtinIds.includes(book.id) || storyModeIds.includes(book.id);
 const isStoryModeBook = (book: 世界书) => storyModeIds.includes(book.id);
-const isCalibrationEntry = (entry: 世界书条目) => entry.scope?.includes('calibration');
+const isCalibrationEntry = (entry: 世界书条目) => entry.scope.includes('calibration');
 const isCalibrationBook = (book: 世界书) => book.entries.some(isCalibrationEntry);
 
 export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
@@ -32,9 +32,11 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
   const [isImporting, setIsImporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
+  const [prevWorldbooks, setPrevWorldbooks] = useState(worldbooks);
+  if (prevWorldbooks !== worldbooks) {
+    setPrevWorldbooks(worldbooks);
     setDraft(normalizeWorldbooks(worldbooks));
-  }, [worldbooks]);
+  }
 
   const filteredBooks = useMemo(
     () => (activeTab === 'builtin' ? draft.filter(isBuiltinBook) : draft.filter((book) => !isBuiltinBook(book))),
@@ -42,23 +44,27 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
   );
 
   const selectedBook = useMemo(
-    () => filteredBooks.find((book) => book.id === selectedBookId) ?? filteredBooks[0] ?? null,
+    () => filteredBooks.find((book) => book.id === selectedBookId) ?? filteredBooks.at(0) ?? null,
     [filteredBooks, selectedBookId],
   );
 
   const selectedEntry = useMemo(
-    () => selectedBook?.entries.find((entry) => entry.id === selectedEntryId) ?? selectedBook?.entries[0] ?? null,
+    () => selectedBook?.entries.find((entry) => entry.id === selectedEntryId) ?? selectedBook?.entries.at(0) ?? null,
     [selectedBook, selectedEntryId],
   );
 
-  useEffect(() => {
+  const [prevFilteredBooks, setPrevFilteredBooks] = useState(filteredBooks);
+  if (prevFilteredBooks !== filteredBooks) {
+    setPrevFilteredBooks(filteredBooks);
     setSelectedBookId((current) => {
       if (current && filteredBooks.some((book) => book.id === current)) return current;
       return filteredBooks[0]?.id ?? null;
     });
-  }, [filteredBooks]);
+  }
 
-  useEffect(() => {
+  const [prevSelectedBook, setPrevSelectedBook] = useState(selectedBook);
+  if (prevSelectedBook !== selectedBook) {
+    setPrevSelectedBook(selectedBook);
     if (!selectedBook) {
       setSelectedEntryId(null);
       return;
@@ -67,7 +73,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
       if (current && selectedBook.entries.some((entry) => entry.id === current)) return current;
       return selectedBook.entries[0]?.id ?? null;
     });
-  }, [selectedBook]);
+  }
 
   const updateBook = (bookId: string, partial: Partial<世界书>) => {
     setDraft((prev) =>

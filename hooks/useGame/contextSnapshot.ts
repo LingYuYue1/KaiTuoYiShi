@@ -1,7 +1,6 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { 创建聊天消息, type 聊天消息 } from '@/models/chat';
 import { 创建手机会话 } from '@/models/phone';
-import { 创建默认智库系统设置, 创建默认记忆系统设置 } from '@/models/settings';
 import { buildNewsModelPrompt, buildNewsUserMessage } from '@/services/ai/newsModel';
 import { buildPhoneMessages, buildPhoneSystemPrompt, buildPhonePromptModulesSection } from '@/services/ai/phoneService';
 import { buildVariableModelPrompt } from '@/services/ai/variableModel';
@@ -28,6 +27,7 @@ import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getAnticipatedNpcNamesForTurn, getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { 格式化开局档案上下文 } from '@/models/world';
 import { createMacroContext } from '@/utils/macroEngine';
+import { 取游戏设置运行态键 } from '@/models/settings';
 
 const COT_FAKE_HISTORY_USER = '开始任务';
 const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
@@ -107,25 +107,6 @@ function latestAssistantZhikuDebugRecall(history: 聊天消息[]): string {
       : '智库模型原始返回：\n（本回合未调用智库模型，使用本地规则召回；本地规则不会执行 Step0~Step8 模型思维链。）',
     '',
     debug.zhikuRecallPreview?.trim() || '智库召回诊断：无',
-  ].join('\n').trim();
-}
-
-function latestAssistantYitingDebugRecall(history: 聊天消息[]): string {
-  const latest = [...history]
-    .reverse()
-    .find((msg) => msg.role === 'assistant' && (
-      msg.debugContext?.yitingRecallPreview?.trim() ||
-      msg.debugContext?.yitingRecallRawText?.trim() ||
-      msg.debugContext?.yitingRecallUsedModel !== undefined
-    ));
-  const debug = latest?.debugContext;
-  if (!debug) return '';
-  return [
-    debug.yitingRecallUsedModel
-      ? `忆庭模型原始返回：\n${debug.yitingRecallRawText?.trim() || '（忆庭模型已调用，但没有保存到原始返回文本。）'}`
-      : '忆庭模型原始返回：\n（本回合未调用忆庭模型，使用本地摘要检索，或未到忆庭召回触发回合。）',
-    '',
-    debug.yitingRecallPreview?.trim() || '忆庭召回诊断：无',
   ].join('\n').trim();
 }
 
@@ -313,7 +294,7 @@ function formatStoryWeavingProgressSnapshot(state: UseGameStateReturn): string {
   const diagnostics = getStoryWeavingInjectionDiagnostics(story);
   const series = story.系列列表.find((item) => item.id === (progress?.当前系列ID || story.当前系列ID))
     ?? story.系列列表.find((item) => item.激活注入)
-    ?? story.系列列表[0];
+    ?? story.系列列表.at(0);
   const current = series?.分段列表.find((segment) => segment.id === progress?.当前分段ID)
     ?? series?.分段列表.find((segment) => segment.组号 === progress?.当前分段组号)
     ?? series?.分段列表.find((segment) => segment.组号 === series.当前分段组号)
@@ -332,10 +313,10 @@ function formatStoryWeavingProgressSnapshot(state: UseGameStateReturn): string {
     diagnostics?.检查项.length ? `注入检查：\n${diagnostics.检查项.map((item) => `- ${item}`).join('\n')}` : '',
     `最近判定回合：${progress?.最近一次推进判定回合 ?? '未记录'}`,
     progress?.最近门禁结果 ? `最近门禁结果：${progress.最近门禁结果}` : '',
-    progress?.已完成摘要?.length ? `已完成摘要：\n${progress.已完成摘要.map((item) => `- ${item}`).join('\n')}` : '',
-    progress?.当前待解问题?.length ? `当前待解问题：\n${progress.当前待解问题.map((item) => `- ${item}`).join('\n')}` : '',
-    progress?.最近判定理由?.length ? `最近判定理由：\n${progress.最近判定理由.map((item) => `- ${item}`).join('\n')}` : '',
-    progress?.历史归档?.length ? `历史归档：\n${progress.历史归档.slice(-8).map((item) => {
+    progress?.已完成摘要.length ? `已完成摘要：\n${progress.已完成摘要.map((item) => `- ${item}`).join('\n')}` : '',
+    progress?.当前待解问题.length ? `当前待解问题：\n${progress.当前待解问题.map((item) => `- ${item}`).join('\n')}` : '',
+    progress?.最近判定理由.length ? `最近判定理由：\n${progress.最近判定理由.map((item) => `- ${item}`).join('\n')}` : '',
+    progress?.历史归档.length ? `历史归档：\n${progress.历史归档.slice(-8).map((item) => {
       const roleProgress = item.角色推进摘要?.length ? `｜角色推进：${item.角色推进摘要.slice(0, 3).join('；')}` : '';
       return `- 第${item.分段组号}段「${item.分段标题}」｜${item.归档状态}${item.归档回合 ? `｜回合${item.归档回合}` : ''}：${item.摘要}${roleProgress}`;
     }).join('\n')}` : '',
@@ -513,7 +494,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const worldbookCtx = {
     recentUserInput: sourceInput,
     recentAIResponse: '',
-    worldName: state.世界.当前时段?.名称 ?? '',
+    worldName: state.世界.当前时段.名称,
     travelerName: state.旅人.姓名,
     turnCount: state.turnCount,
     startScenarioId: state.世界.起航之地ID,
@@ -570,20 +551,20 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     history: recallHistory,
   });
 
-  const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用;
-  const yitingThreshold = state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10;
+  const yitingEnabled = state.gameSettings.记忆系统.忆庭启用;
+  const yitingThreshold = state.gameSettings.记忆系统.忆庭召回最早触发回合;
   const yitingPreview = yitingEnabled && recallQuery && state.turnCount > yitingThreshold
     ? retrieveYitingContext(
         state.忆庭,
         recallQuery,
-        state.gameSettings.记忆系统?.忆庭召回条数 ?? 创建默认记忆系统设置().忆庭召回条数,
+        state.gameSettings.记忆系统.忆庭召回条数,
       )
     : null;
-  const zhikuPreview = state.gameSettings.智库系统?.enabled && sourceInput
+  const zhikuPreview = state.gameSettings.智库系统.enabled && sourceInput
     ? retrieveZhikuContext(
         state.智库,
         zhikuRecallQuery,
-        state.gameSettings.智库系统.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries,
+        state.gameSettings.智库系统.maxRelatedEntries,
         zhikuSceneContext,
       )
     : null;
@@ -600,7 +581,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         records: state.NPC,
         turnCount: state.turnCount,
         explicitNames: worldbookCtx.npcNames,
-        sceneNames: state.世界.当前时段?.人物?.map((npc) => npc.姓名),
+        sceneNames: state.世界.当前时段.人物.map((npc) => npc.姓名),
         recalledNames: worldbookCtx.npcNames,
       })
     : undefined;
@@ -613,10 +594,10 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         state.turnCount,
         state.worldbooks,
         worldbookCtx,
-        state.新闻,
-        isOpeningSystemTrigger ? 'opening' : 'normal',
-        createMacroContext(state.gameSettings.macroGlobalVars),
-      )
+      state.新闻,
+      'opening',
+      createMacroContext(取游戏设置运行态键(state.gameSettings).macroGlobalVars),
+    )
     : buildSystemPrompt(
         state.旅人,
         state.世界,
@@ -637,8 +618,8 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         zhikuPreview?.injection,
         Boolean(yitingPreview?.injection),
         npcLedgerSelection,
-        isOpeningSystemTrigger ? 'opening' : 'normal',
-        createMacroContext(state.gameSettings.macroGlobalVars),
+        'normal',
+        createMacroContext(取游戏设置运行态键(state.gameSettings).macroGlobalVars),
       );
   // 上下文快照需要跟真实发送路径对齐：V2 酒馆预设只额外发送 Tavern messages，
   // 原生 systemPrompt 仍完整发送，因此 Tavern 链路不重复塞原生底座和当前用户输入。
@@ -662,8 +643,8 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
   const shouldTryTavernV2 =
     state.gameSettings.enableStPreset !== false &&
-    Boolean(currentPresetV2?.preset?.prompts?.length) &&
-    Boolean(currentPresetV2?.preset?.prompt_order?.length);
+    Boolean(currentPresetV2?.preset.prompts.length) &&
+    Boolean(currentPresetV2?.preset.prompt_order.length);
   const tavernStatus: Parameters<typeof formatMainRequestOrderOverview>[2] = {
     attempted: shouldTryTavernV2,
     used: false,
@@ -693,7 +674,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         playerRole: state.旅人,
         includeNativeContextInWorldbook: false,
         triggerType: isOpeningSystemTrigger ? 'opening' : isAwakeningEnterTrigger ? 'pathAwakening' : 'normal',
-        macroCtx: createMacroContext(state.gameSettings.macroGlobalVars),
+        macroCtx: createMacroContext(取游戏设置运行态键(state.gameSettings).macroGlobalVars),
       }).map((msg) => 创建聊天消息(msg.role, msg.content));
       if (tavernMessages.length) {
         apiMessages = tavernMessages;
@@ -910,7 +891,7 @@ function buildNewsContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     .slice(-12)
     .map((msg) => `- ${msg.role === 'user' ? '玩家' : 'AI'}：${(msg.parsedResponse?.body || msg.content).slice(0, 420)}`);
   const request = {
-    config: state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs[0] ?? {
+    config: state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs.at(0) ?? {
       id: '__preview__',
       name: '预览',
       provider: 'openai_compatible' as const,
@@ -950,8 +931,7 @@ function buildNewsContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
 
 function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
-  const settings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
-  const actualRecallPreview = latestAssistantYitingDebugRecall(state.chatHistory);
+  const settings = state.gameSettings.记忆系统;
   const recallQuery = buildMainRecallQuery({
     userInput: sourceInput,
     history: state.chatHistory,
@@ -964,7 +944,7 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
       turnCount: state.turnCount,
     }),
   });
-  const fallback = retrieveYitingContext(state.忆庭, recallQuery, settings.忆庭召回条数 ?? 8);
+  const fallback = retrieveYitingContext(state.忆庭, recallQuery, settings.忆庭召回条数);
   const candidates = state.忆庭.回忆档案
     .slice(-24)
     .map((entry, index) => {
@@ -990,7 +970,7 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
       '',
       '实际召回查询：',
       recallQuery || '（无）',
-      `召回条数上限：${settings.忆庭召回条数 ?? 8}`,
+      `召回条数上限：${settings.忆庭召回条数}`,
       '本地预筛：topK 24；最近 6 条强制保底；候选统一给概要层，不把正文原文作为主剧情召回材料。',
       '',
       '候选回忆：',
@@ -1037,7 +1017,7 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     userInput: sourceInput,
     history: recallHistory,
   });
-  const limit = state.gameSettings.智库系统?.maxRelatedEntries ?? 创建默认智库系统设置().maxRelatedEntries;
+  const limit = state.gameSettings.智库系统.maxRelatedEntries;
   const fallback = retrieveZhikuContext(state.智库, recallQuery, limit, sceneContext);
   const actualRecallPreview = latestAssistantZhikuDebugRecall(state.chatHistory);
   const candidateText = fallback.entries.length

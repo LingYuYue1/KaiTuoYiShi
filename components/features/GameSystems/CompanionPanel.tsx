@@ -36,7 +36,6 @@ const bodyColor = 'rgba(var(--tj-ui-body), 0.95)';
 const mutedColor = 'rgba(var(--tj-ui-muted), 0.82)';
 const faintColor = 'rgba(var(--tj-ui-faint), 0.74)';
 const accentColor = 'rgb(var(--tj-accent-primary))';
-const activeTextColor = 'rgb(var(--tj-ui-active-text))';
 const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
 const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
@@ -76,14 +75,11 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
   const travelingCount = companions.filter((n) => n.同行).length;
   const friendCount = companions.filter((n) => ['friend', 'close'].includes(n.关系)).length;
 
-  useEffect(() => {
-    if (selectedId && visible.some((n) => n.id === selectedId)) return;
-    setSelectedId(visible[0]?.id ?? null);
-  }, [selectedId, visible]);
+  const effectiveSelectedId = selectedId && visible.some((n) => n.id === selectedId) ? selectedId : (visible.at(0)?.id ?? null);
 
-  const selected = visible.find((n) => n.id === selectedId) ?? null;
+  const selected = visible.find((n) => n.id === effectiveSelectedId) ?? null;
   const relationshipPlanning = useMemo(
-    () => buildNpcRelationshipPlanning(normalizedRecords, Math.max(...normalizedRecords.map((npc) => Number(npc.最近回合) || 0), 1)),
+    () => buildNpcRelationshipPlanning(normalizedRecords, Math.max(...normalizedRecords.map((npc) => npc.最近回合 || 0), 1)),
     [normalizedRecords],
   );
   const selectedPlanning = selected ? relationshipPlanning.条目.find((item) => item.npcId === selected.id) : undefined;
@@ -135,7 +131,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
                 key={npc.id}
                 npc={npc}
                 album={album}
-                selected={npc.id === selectedId}
+                selected={npc.id === effectiveSelectedId}
                 onClick={() => {
                   setSelectedId(npc.id);
                 }}
@@ -172,7 +168,7 @@ function sortNpcRecords(records: NPC记录[]) {
     const weight = (n: NPC记录) => (n.同行 ? 0 : n.原著角色 ? 1 : 2);
     const w = weight(a) - weight(b);
     if (w !== 0) return w;
-    return (b.好感度 ?? 0) - (a.好感度 ?? 0);
+    return (b.好感度) - (a.好感度);
   });
 }
 
@@ -350,10 +346,12 @@ function NpcDetail({
   const isCompanion = npc.阶位 === 'companion';
   const [detailTab, setDetailTab] = useState<DetailTab>('archive');
 
-  useEffect(() => {
-    if (!nsfwEnabled && detailTab === 'nsfw') setDetailTab('archive');
-    if (!planning && detailTab === 'planning') setDetailTab('archive');
-  }, [detailTab, nsfwEnabled, planning]);
+  const effectiveDetailTab: DetailTab =
+    detailTab === 'nsfw' && !nsfwEnabled
+      ? 'archive'
+      : detailTab === 'planning' && !planning
+        ? 'archive'
+        : detailTab;
 
   return (
     <div className="flex min-h-full flex-col gap-4">
@@ -433,19 +431,19 @@ function NpcDetail({
               <AffinityBadge value={npc.好感度} />
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-4">
-              <TabButton active={detailTab === 'archive'} onClick={() => setDetailTab('archive')}>
+              <TabButton active={effectiveDetailTab === 'archive'} onClick={() => setDetailTab('archive')}>
                 伙伴档案
               </TabButton>
               {planning && (
-                <TabButton active={detailTab === 'planning'} onClick={() => setDetailTab('planning')}>
+                <TabButton active={effectiveDetailTab === 'planning'} onClick={() => setDetailTab('planning')}>
                   关系规划
                 </TabButton>
               )}
-              <TabButton active={detailTab === 'memory'} onClick={() => setDetailTab('memory')}>
+              <TabButton active={effectiveDetailTab === 'memory'} onClick={() => setDetailTab('memory')}>
                 {devMode ? '记忆账本' : '同行记忆'}
               </TabButton>
               {nsfwEnabled && (
-                <TabButton active={detailTab === 'nsfw'} onClick={() => setDetailTab('nsfw')}>
+                <TabButton active={effectiveDetailTab === 'nsfw'} onClick={() => setDetailTab('nsfw')}>
                   NSFW档案
                 </TabButton>
               )}
@@ -454,7 +452,7 @@ function NpcDetail({
         </div>
       </section>
 
-      {planning && detailTab === 'planning' && (
+      {planning && effectiveDetailTab === 'planning' && (
         <section className="px-4 py-3 text-xs leading-relaxed" style={panelStyle}>
           <div className="font-serif text-[12px] tracking-[0.22em]" style={{ color: accentColor }}>
             关系规划
@@ -470,7 +468,7 @@ function NpcDetail({
         </section>
       )}
 
-      {detailTab === 'archive' && (
+      {effectiveDetailTab === 'archive' && (
         <>
           <section className="grid gap-4 xl:grid-cols-2">
             <DetailBlock title="人物介绍">
@@ -508,9 +506,9 @@ function NpcDetail({
         </>
       )}
 
-      {detailTab === 'memory' && <MemoryPanel npc={npc} devMode={devMode} />}
+      {effectiveDetailTab === 'memory' && <MemoryPanel npc={npc} devMode={devMode} />}
 
-      {nsfwEnabled && detailTab === 'nsfw' && <NSFWArchivePanel npc={npc} />}
+      {nsfwEnabled && effectiveDetailTab === 'nsfw' && <NSFWArchivePanel npc={npc} />}
     </div>
   );
 }

@@ -15,13 +15,13 @@ const cardClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
 export function TravelerProfileModal({ traveler, album, onClose }: Props) {
-  const primaryPath = traveler.命途列表?.find((p) => p.是否主命途) ?? traveler.命途列表?.[0];
+  const primaryPath = traveler.命途列表.find((p) => p.是否主命途) ?? traveler.命途列表.at(0);
   const primaryPathDef = primaryPath ? getPath(primaryPath.id) : undefined;
   const primaryStageDef = primaryPath
     ? PATH_STAGE_DEFS.find((s) => s.stage === primaryPath.阶段)
     : undefined;
   const primaryTraits = primaryPath ? 获取命途特质(primaryPath.id) : [];
-  const avatarUrl = 解析相册资源引用(album, traveler.头像?.trim() || traveler.图像档案?.头像?.trim());
+  const avatarUrl = 解析相册资源引用(album, traveler.头像.trim() || traveler.图像档案?.头像?.trim());
 
   return (
     <Modal onClose={onClose} title="旅人档案">
@@ -111,12 +111,12 @@ export function TravelerProfileModal({ traveler, album, onClose }: Props) {
         )}
 
         {/* 能力与特长 */}
-        {(traveler.能力?.length > 0 || traveler.专长知识?.length > 0) && (
+        {(traveler.能力.length > 0 || traveler.专长知识.length > 0) && (
           <Section title="能力 / 特长">
-            {traveler.能力?.length > 0 && (
+            {traveler.能力.length > 0 && (
               <InfoCell label="能力" value={traveler.能力.join('、')} />
             )}
-            {traveler.专长知识?.length > 0 && (
+            {traveler.专长知识.length > 0 && (
               <InfoCell label="知识" value={traveler.专长知识.join('、')} />
             )}
           </Section>

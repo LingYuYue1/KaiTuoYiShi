@@ -521,7 +521,7 @@ export function 根据开局档案创建初始NPC记录(archive?: 开局档案):
         '该关系来自开局档案，代表长期关系参考，不代表当前镜头在场。',
       ],
       备注: 去重字符串([
-        ...(record.备注 ?? []),
+        ...record.备注,
         `开局来源：${formatOpeningSource(archive.来源)} / ${archive.地区名称} / ${archive.章节锚点名称}`,
       ]),
     };
@@ -583,7 +583,7 @@ export function 归一化创意工坊开局模板(value: unknown): 创意工坊�
     editableFields: Array.isArray(raw.editableFields)
       ? raw.editableFields
           .map((item): 创意工坊开局模板['editableFields'][number] | null => {
-            if (!item || typeof item !== 'object') return null;
+            if (typeof item !== 'object') return null;
             const field = item as Partial<创意工坊开局模板['editableFields'][number]>;
             const fieldId = sanitizeText(field.id);
             const label = sanitizeText(field.label);
@@ -637,7 +637,7 @@ export function 生成开局已成立事实(archive: 开局档案, options: {
     summary?.自制NPC?.length ? `自制NPC：${formatOpeningCustomNpcs(summary.自制NPC)}` : '',
     summary?.世界设定补充?.length ? `世界设定补充：${summary.世界设定补充.join('；')}` : '',
     summary?.主线参与程度 ? `主线参与程度：${summary.主线参与程度}` : '',
-    summary?.初始日期参考 || summary?.初始时间参考 ? `初始时间参考：${[summary?.初始日期参考, summary?.初始时间参考].filter(Boolean).join(' · ')}` : '',
+    summary?.初始日期参考 || summary?.初始时间参考 ? `初始时间参考：${[summary.初始日期参考, summary.初始时间参考].filter(Boolean).join(' · ')}` : '',
     summary?.关键角色参考?.length ? `关键角色参考：${summary.关键角色参考.join('、')}（背景参考，不代表已认识或当前在场）` : '',
     summary?.已认识角色?.length ? `已认识角色：${summary.已认识角色.join('、')}` : '',
     summary?.初始关系?.length ? `初始关系：${summary.初始关系.join('；')}` : '',
@@ -661,7 +661,7 @@ export function 格式化开局档案上下文(archive?: 开局档案): string {
     `章节锚点：${archive.章节锚点名称}`,
     archive.章节参考说明 ? `章节参考：${archive.章节参考说明}` : '',
     summary?.初始地点参考 ? `初始地点参考：${summary.初始地点参考}` : '',
-    summary?.初始日期参考 || summary?.初始时间参考 ? `初始时间参考：${[summary?.初始日期参考, summary?.初始时间参考].filter(Boolean).join(' · ')}` : '',
+    summary?.初始日期参考 || summary?.初始时间参考 ? `初始时间参考：${[summary.初始日期参考, summary.初始时间参考].filter(Boolean).join(' · ')}` : '',
     summary?.玩家身份 ? `玩家身份：${summary.玩家身份}` : '',
     summary?.来到此地原因 ? `来到此地原因：${summary.来到此地原因}` : '',
     summary?.当前目标 ? `当前目标：${summary.当前目标}` : '',

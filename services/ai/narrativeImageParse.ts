@@ -294,20 +294,20 @@ export function buildSceneImageParsePrompt(ctx: 解析上下文): string {
 function extractJsonFromText(text: string): Record<string, unknown> | null {
   // 尝试直接解析
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as Record<string, unknown>;
   } catch {
     // 尝试从 ```json ... ``` 中提取
     const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (codeBlockMatch) {
       try {
-        return JSON.parse(codeBlockMatch[1].trim());
+        return JSON.parse(codeBlockMatch[1].trim()) as Record<string, unknown>;
       } catch { /* fall through */ }
     }
     // 尝试找到第一个 { 到最后一个 }
     const braceMatch = text.match(/\{[\s\S]*\}/);
     if (braceMatch) {
       try {
-        return JSON.parse(braceMatch[0]);
+        return JSON.parse(braceMatch[0]) as Record<string, unknown>;
       } catch { /* fall through */ }
     }
     return null;
@@ -322,7 +322,7 @@ function mergeNegativePrompt(modelOutput: string): string {
 
 function parseSceneFromJson(data: Record<string, unknown>): 叙事插图提示词 | null {
   const scene = data.scene as Record<string, unknown> | null | undefined;
-  if (!scene || scene === null) return null;
+  if (!scene) return null;
   const prompt = typeof scene.prompt === 'string' ? scene.prompt.trim() : '';
   if (!prompt) return null;
   return {
@@ -331,23 +331,6 @@ function parseSceneFromJson(data: Record<string, unknown>): 叙事插图提示�
     negativePrompt: mergeNegativePrompt(typeof scene.negativePrompt === 'string' ? scene.negativePrompt : ''),
     description: typeof scene.description === 'string' ? scene.description.trim() : '场景',
   };
-}
-
-function parseCharactersFromJson(data: Record<string, unknown>): 叙事插图提示词[] {
-  const characters = data.characters as Array<Record<string, unknown>> | undefined;
-  if (!Array.isArray(characters)) return [];
-  const results: 叙事插图提示词[] = [];
-  for (const c of characters) {
-    const prompt = typeof c.prompt === 'string' ? c.prompt.trim() : '';
-    if (!prompt) continue;
-    results.push({
-      type: 'character',
-      prompt,
-      negativePrompt: mergeNegativePrompt(typeof c.negativePrompt === 'string' ? c.negativePrompt : ''),
-      description: typeof c.description === 'string' ? c.description.trim() : '角色',
-    });
-  }
-  return results;
 }
 
 function readStringField(data: Record<string, unknown>, key: string, fallback = ''): string {
@@ -419,7 +402,7 @@ export async function parseNarrativeImagePrompts(
   const config: import('@/models/settings').API配置项 = {
     id: 'narrative_image_parser',
     name: '正文插图解析模型',
-    provider: (apiConfig.provider || 'openai_compatible'),
+    provider: apiConfig.provider,
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
     model: apiConfig.model,
@@ -465,7 +448,7 @@ export async function parseStorySnapshotPrompt(
   const config: import('@/models/settings').API配置项 = {
     id: 'story_snapshot_parser',
     name: '故事快照解析模型',
-    provider: (apiConfig.provider || 'openai_compatible'),
+    provider: apiConfig.provider,
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
     model: apiConfig.model,
@@ -504,7 +487,7 @@ export async function parseSceneImagePrompt(
   const config: import('@/models/settings').API配置项 = {
     id: 'scene_image_parser',
     name: '场景图解析模型',
-    provider: (apiConfig.provider || 'openai_compatible'),
+    provider: apiConfig.provider,
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
     model: apiConfig.model,
@@ -532,5 +515,5 @@ export async function parseSceneImagePrompt(
 }
 
 function apiKey(config: API配置项): string {
-  return config.apiKey?.trim() ?? '';
+  return config.apiKey.trim();
 }

@@ -32,8 +32,8 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
     () => snapshot.sections.find((section) => section.id === selectedId) ?? snapshot.sections[0],
     [selectedId, snapshot.sections],
   );
-  const content = mode === 'all' ? snapshot.fullText : selected?.content ?? '';
-  const shownTokens = mode === 'all' ? snapshot.estimatedTokens : selected?.estimatedTokens ?? 0;
+  const content = mode === 'all' ? snapshot.fullText : selected.content;
+  const shownTokens = mode === 'all' ? snapshot.estimatedTokens : selected.estimatedTokens;
 
   const copyText = async (text: string, label: string) => {
     await navigator.clipboard.writeText(text);
@@ -111,7 +111,7 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
               </thead>
               <tbody>
                 {snapshot.sections.map((section) => {
-                  const active = section.id === selected?.id;
+                  const active = section.id === selected.id;
                   return (
                     <tr
                       key={section.id}
@@ -138,7 +138,7 @@ export function ContextViewerTab({ getSnapshot, onRefresh }: Props) {
           style={{ border: '1px solid rgba(var(--tj-accent-primary),0.2)', background: 'rgba(0,0,0,0.28)', clipPath: cardClip }}
         >
           <div className="flex items-center justify-between border-b border-[rgb(var(--tj-accent-primary))]/15 px-4 py-3 text-xs text-[rgb(var(--tj-text-secondary))]/75">
-            <span>{mode === 'all' ? '全部上下文内容' : selected?.title ?? '单项内容'}</span>
+            <span>{mode === 'all' ? '全部上下文内容' : selected.title}</span>
             <span>估算上传 {formatTokenCount(shownTokens)} Tokens</span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">

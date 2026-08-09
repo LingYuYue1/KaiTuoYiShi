@@ -443,9 +443,9 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     关系: 获取NPC兼容关系(affinity),
     亲密关系: intimateRelationship,
     // 阶位代表重要程度，同行代表当前是否在场；原著角色/伙伴不能自动等于同行中。
-    同行: Boolean(base.同行 || incoming.同行),
-    初见回合: Math.min(base.初见回合 ?? incoming.初见回合, incoming.初见回合 ?? base.初见回合),
-    最近回合: Math.max(base.最近回合 ?? 0, incoming.最近回合 ?? 0),
+    同行: base.同行 || incoming.同行,
+    初见回合: Math.min(base.初见回合, incoming.初见回合),
+    最近回合: Math.max(base.最近回合, incoming.最近回合),
     好感度: affinity,
     同行记忆: 合并同行记忆(base.同行记忆 ?? [], incoming.同行记忆 ?? []),
     最近互动: preferred.最近互动 ?? base.最近互动 ?? incoming.最近互动,
@@ -457,7 +457,7 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     必须记得: 去重文本列表([...(base.必须记得 ?? []), ...(incoming.必须记得 ?? [])]),
     禁止遗忘: 去重文本列表([...(base.禁止遗忘 ?? []), ...(incoming.禁止遗忘 ?? [])]),
     总结记忆: 合并NPC总结记忆(base.总结记忆 ?? [], incoming.总结记忆 ?? []),
-    备注: 去重文本列表([...(base.备注 ?? []), ...(incoming.备注 ?? [])]),
+    备注: 去重文本列表([...base.备注, ...incoming.备注]),
     原著角色: Boolean(base.原著角色 || incoming.原著角色),
     头像: preferred.头像 ?? base.头像 ?? incoming.头像,
     外貌: preferred.外貌 ?? base.外貌 ?? incoming.外貌,
@@ -500,8 +500,8 @@ function 计算NPC记录分数(record: NPC记录): number {
   if (record.同行) value += 20;
   if (record.原著角色) value += 18;
   value += 选择更可信的字段数量(record) * 3;
-  value += Math.min(20, Math.max(0, Number(record.最近回合) || 0));
-  value += Math.min(10, Math.abs(Number(record.好感度) || 0) / 10);
+  value += Math.min(20, Math.max(0, record.最近回合 || 0));
+  value += Math.min(10, Math.abs(record.好感度 || 0) / 10);
   value += Math.min(8, 去除NPC修饰前缀(record.姓名).length);
   return value;
 }
@@ -521,7 +521,7 @@ function 选择更可信的字段数量(record: NPC记录): number {
   ].filter((value) => typeof value === 'string' && value.trim()).length
     + (record.NSFW档案 ? 1 : 0)
     + (record.图像档案 ? 1 : 0)
-    + (record.备注?.length ?? 0);
+    + record.备注.length;
 }
 
 function 选择更可信的好感度(a: NPC记录, b: NPC记录, preferred: NPC记录): number {
@@ -645,7 +645,7 @@ function 去除NPC修饰前缀(name: string): string {
       }
     }
   }
-  return text.replace(/^[（(【\[]+|[）)】\]]+$/g, '').trim();
+  return text.replace(/^[（(【[]+|[）)】\]]+$/g, '').trim();
 }
 
 function 去重文本列表(lines: string[]): string[] {
@@ -993,7 +993,12 @@ function normalizeAnchorSource(value: unknown): NPC角色锚点档案['来源'] 
 function normalizeAnchorFeatures(raw: unknown): NPC角色锚点档案['结构化特征'] {
   const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
   const readList = (key: string) => Array.isArray(source[key])
-    ? (source[key] as unknown[]).map((item) => String(item ?? '').trim()).filter(Boolean)
+    ? (source[key] as unknown[]).map((item) => {
+        const text = typeof item === 'string'
+          ? item
+          : (typeof item === 'number' || typeof item === 'boolean' ? String(item) : '');
+        return text.trim();
+      }).filter(Boolean)
     : undefined;
   const output: NonNullable<NPC角色锚点档案['结构化特征']> = {
     外貌标签: readList('外貌标签'),
@@ -1007,16 +1012,18 @@ function normalizeAnchorFeatures(raw: unknown): NPC角色锚点档案['结构化
     服装基底标签: readList('服装基底标签'),
     特殊特征标签: readList('特殊特征标签'),
   };
-  return Object.values(output).some((list) => list?.length) ? output : undefined;
+  const featureLists: Array<string[] | undefined> = Object.values(output);
+  return featureLists.some((list) => list?.length) ? output : undefined;
 }
 
 function 角色锚点有内容(anchor: NPC角色锚点档案): boolean {
+  const featureLists: Array<string[] | undefined> = Object.values(anchor.结构化特征 ?? {});
   return Boolean(
     anchor.名称 ||
     anchor.正面提示词 ||
     anchor.负面提示词 ||
     anchor.中文摘要 ||
-    Object.values(anchor.结构化特征 ?? {}).some((list) => list?.length),
+    featureLists.some((list) => list?.length),
   );
 }
 
@@ -1059,7 +1066,7 @@ function normalizeImageSource(raw: unknown): NonNullable<NonNullable<NPC记录['
 export function 提取NPC同行记忆文本列表(record: Pick<NPC记录, '同行记忆'> | undefined): string[] {
   const memories = (record?.同行记忆 ?? []) as Array<NPC同行记忆条目 | string>;
   return memories
-    .map((item) => (typeof item === 'string' ? item : item?.摘要 ?? ''))
+    .map((item) => (typeof item === 'string' ? item : item.摘要))
     .map((text) => 清理NPC同行记忆摘要(text))
     .filter((text) => Boolean(text));
 }
@@ -1095,9 +1102,9 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
     当前关系阶段: 格式化NPC关系(record.好感度, Boolean(record.亲密关系)),
     亲密关系: Boolean(record.亲密关系),
     好感度: 限制NPC好感度(record.好感度),
-    同行: Boolean(record.同行),
-    初见回合: Math.max(1, Number(record.初见回合 || 1)),
-    最近回合: Math.max(1, Number(record.最近回合 || record.初见回合 || 1)),
+    同行: record.同行,
+    初见回合: Math.max(1, record.初见回合 || 1),
+    最近回合: Math.max(1, record.最近回合 || record.初见回合 || 1),
     对玩家称呼: record.对玩家称呼,
     最近互动: record.最近互动 || rawMemories.slice(-1)[0],
     对玩家长期印象: record.对玩家长期印象,
@@ -1152,7 +1159,7 @@ export function selectNpcLedgersForTurn(params: {
   recentWindow?: number;
 }): NPC账本选择结果 {
   const records = params.records ?? [];
-  const turnCount = Math.max(1, Number(params.turnCount || 1));
+  const turnCount = Math.max(1, params.turnCount || 1);
   const limit = Math.max(1, Math.trunc(params.limit ?? 6));
   const recentWindow = Math.max(1, Math.trunc(params.recentWindow ?? 15));
   const explicitNames = normalizeNpcNameSet(params.explicitNames ?? []);
@@ -1166,10 +1173,10 @@ export function selectNpcLedgersForTurn(params: {
       const isExplicit = npcNameInSet(npc, explicitNames);
       const isScene = npcNameInSet(npc, sceneNames);
       const isRecalled = npcNameInSet(npc, recalledNames);
-      const isRecent = Number(npc.最近回合 || 0) >= recentCutoff;
+      const isRecent = (npc.最近回合 || 0) >= recentCutoff;
       const hasProtectedItems = npcLedgerHasProtectedItems(ledger);
       const hasMemory = ledger.最近原始记忆.length > 0 || ledger.总结记忆.length > 0 || Boolean(ledger.最近互动);
-      const hasRelation = npc.关系 !== 'stranger' || npc.亲密关系 || Math.abs(Number(npc.好感度 || 0)) > 0;
+      const hasRelation = npc.关系 !== 'stranger' || npc.亲密关系 || Math.abs(npc.好感度 || 0) > 0;
       const shouldConsider = isExplicit || isScene || isRecalled || npc.同行 || isRecent || hasProtectedItems || hasMemory || hasRelation || npc.阶位 === 'companion';
       if (!shouldConsider) return null;
       const reasons = [
@@ -1205,7 +1212,7 @@ export function selectNpcLedgersForTurn(params: {
         (hasMemory ? 28 : 0) +
         (npc.阶位 === 'companion' ? 18 : 0) +
         (hasRelation ? 16 : 0) +
-        Math.min(24, Math.abs(Number(npc.好感度 || 0)));
+        Math.min(24, Math.abs(npc.好感度 || 0));
       const presentState: NPC账本选择条目['presentState'] = isScene || npc.同行
         ? 'current'
         : isExplicit
@@ -1298,13 +1305,12 @@ function shouldIgnoreNpcRecord(record: NPC记录): boolean {
     record.头像?.trim() ||
     record.NSFW档案 ||
     record.图像档案 ||
-    (record.备注?.length ?? 0) > 0,
+    (record.备注.length > 0),
   );
-  const genericOnly = Boolean(
+  const genericOnly =
     NPC_GENERIC_SUFFIXES.some((suffix) => normalizedName.endsWith(suffix)) ||
     NPC_NAME_PREFIXES.some((prefix) => record.姓名.startsWith(prefix)) ||
-    /^(?:怪物|怪兽|裂界生物|敌人|杂兵|无名守卫|机兵|虚卒|傀儡|精英怪)/.test(normalizedName),
-  );
+    /^(?:怪物|怪兽|裂界生物|敌人|杂兵|无名守卫|机兵|虚卒|傀儡|精英怪)/.test(normalizedName);
   const likelyDisposable =
     !record.原著角色 &&
     record.阶位 !== 'companion' &&

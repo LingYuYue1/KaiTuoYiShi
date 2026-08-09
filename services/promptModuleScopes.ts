@@ -40,7 +40,7 @@ export function filterIndependentPromptModules(
   return promptModules
     .filter((module) => {
       if (!module.enabled) return false;
-      if (!module.scope?.includes('calibration')) return false;
+      if (!module.scope.includes('calibration')) return false;
       if (options.category && module.category !== options.category) return false;
       return matchers.some((matches) => matches(module.id));
     })

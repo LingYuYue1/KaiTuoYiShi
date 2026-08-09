@@ -1,7 +1,7 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途ID } from '@/models/journey';
-import type { 命途进度, 命途阶段 } from '@/models/path';
+import type { 命途进度 } from '@/models/path';
 import type { API设置 } from '@/models/settings';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { getPath } from '@/data/journeyPresets';
@@ -50,9 +50,9 @@ const emptyDraft: SkillDraft = {
 };
 
 export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPanelProps) {
-  const pathRecords = traveler.命途列表 ?? [];
+  const pathRecords = traveler.命途列表;
   const skillRecords = useMemo(
-    () => (traveler.战技列表 ?? []).map(归一化战技记录).filter(isVisibleSkillRecord),
+    () => traveler.战技列表.map(归一化战技记录).filter(isVisibleSkillRecord),
     [traveler.战技列表],
   );
   const slotSummary = useMemo(
@@ -62,27 +62,24 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
   const normalSlots = slotSummary.filter((slot) => slot.kind === 'normal');
   const pathSlots = slotSummary.filter((slot) => slot.kind === 'path');
 
-  const defaultPath = pathRecords.find((p) => p.是否主命途) ?? pathRecords[0] ?? null;
+  const defaultPath = pathRecords.find((p) => p.是否主命途) ?? pathRecords.at(0);
   const [selectedPathId, setSelectedPathId] = useState<命途ID | ''>(defaultPath?.id ?? '');
   const [selectedSlotKey, setSelectedSlotKey] = useState<SlotKey>('normal:1');
-  const [draft, setDraft] = useState<SkillDraft>(emptyDraft);
+  const [draftState, setDraftState] = useState<{ key: string; draft: SkillDraft }>({ key: '', draft: emptyDraft });
   const [generationHint, setGenerationHint] = useState('');
   const [generatingSkill, setGeneratingSkill] = useState(false);
   const [generationMessage, setGenerationMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
-  const selectedPath = pathRecords.find((path) => path.id === selectedPathId) ?? defaultPath ?? null;
+  const effectiveSelectedPathId: 命途ID | '' = selectedPathId || (defaultPath?.id ?? '');
+  const selectedPath = pathRecords.find((path) => path.id === effectiveSelectedPathId) ?? defaultPath ?? null;
   const selectedSlot = resolveSlot(slotSummary, selectedSlotKey);
   const selectedSkill = selectedSlot?.occupiedSkillId
     ? skillRecords.find((skill) => skill.id === selectedSlot.occupiedSkillId)
     : undefined;
 
-  useEffect(() => {
-    if (!selectedPathId && defaultPath) setSelectedPathId(defaultPath.id);
-  }, [defaultPath, selectedPathId]);
-
-  useEffect(() => {
-    setDraft(selectedSkill ? draftFromSkill(selectedSkill) : emptyDraft);
-  }, [selectedSkill?.id, selectedSlotKey]);
+  const draftKey = `${selectedSlotKey}|${selectedSkill?.id ?? ''}`;
+  const draft = draftState.key === draftKey ? draftState.draft : selectedSkill ? draftFromSkill(selectedSkill) : emptyDraft;
+  const updateDraft = (next: SkillDraft) => setDraftState({ key: draftKey, draft: next });
 
   const filledNormal = normalSlots.filter((slot) => slot.occupiedSkillId).length;
   const filledPath = pathSlots.filter((slot) => slot.occupiedSkillId).length;
@@ -95,9 +92,9 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
     .sort((a, b) => sortSkill(a, b));
   const activeApiConfig = useMemo(() => {
     if (apiSettings.activeConfigId) {
-      return apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+      return apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);
     }
-    return apiSettings.configs[0] ?? null;
+    return apiSettings.configs.at(0);
   }, [apiSettings.activeConfigId, apiSettings.configs]);
 
   const saveSkill = () => {
@@ -166,14 +163,17 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
           备注: draft.备注,
         },
       });
-      setDraft({
-        名称: generated.名称,
-        描述: generated.描述,
-        来源: generated.来源 || (selectedSlot.kind === 'normal' ? 'AI 普通战技草稿' : 'AI 命途战技草稿'),
-        关键词: generated.关键词.join('、'),
-        消耗: generated.消耗,
-        冷却: generated.冷却,
-        备注: generated.备注,
+      setDraftState({
+        key: draftKey,
+        draft: {
+          名称: generated.名称,
+          描述: generated.描述,
+          来源: generated.来源 || (selectedSlot.kind === 'normal' ? 'AI 普通战技草稿' : 'AI 命途战技草稿'),
+          关键词: generated.关键词.join('、'),
+          消耗: generated.消耗,
+          冷却: generated.冷却,
+          备注: generated.备注,
+        },
       });
       setGenerationMessage({ kind: 'info', text: '已生成草稿。你可以继续修改，确认后再写入槽位。' });
     } catch (error) {
@@ -185,7 +185,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
 
   const upsertSkill = (nextSkill: 战技记录) => {
     onTravelerChange((prev) => {
-      const oldSkills = prev.战技列表 ?? [];
+      const oldSkills = prev.战技列表;
       const withoutSameSlot = oldSkills.filter(
         (skill) => skill.id !== nextSkill.id && !sameSlot(skill, nextSkill),
       );
@@ -200,14 +200,14 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
     if (!window.confirm('确认移除此战技？槽位会恢复为空。')) return;
     onTravelerChange((prev) => ({
       ...prev,
-      战技列表: (prev.战技列表 ?? []).filter((skill) => skill.id !== skillId),
+      战技列表: prev.战技列表.filter((skill) => skill.id !== skillId),
     }));
   };
 
   const toggleSkill = (skillId: string) => {
     onTravelerChange((prev) => ({
       ...prev,
-      战技列表: (prev.战技列表 ?? []).map((skill) =>
+      战技列表: prev.战技列表.map((skill) =>
         skill.id === skillId ? { ...skill, 已启用: skill.已启用 === false, 更新时间: Date.now() } : skill,
       ),
     }));
@@ -346,7 +346,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
                   <button className="panel-btn danger" onClick={() => deleteSkill(selectedSkill.id)}>移除</button>
                 </>
               )}
-              <button className="panel-btn" disabled={!selectedSlot || generatingSkill} onClick={generateDraftWithAI}>
+              <button className="panel-btn" disabled={!selectedSlot || generatingSkill} onClick={() => void generateDraftWithAI()}>
                 {generatingSkill ? '生成中…' : 'AI 生成'}
               </button>
               <button className="panel-btn strong" disabled={!selectedSlot || generatingSkill} onClick={saveSkill}>
@@ -391,7 +391,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
                     style={{ clipPath: smallClip }}
                   />
                 </Field>
-                <SkillEditor draft={draft} onChange={setDraft} selectedSlot={selectedSlot} selectedPath={selectedPath} />
+                <SkillEditor draft={draft} onChange={updateDraft} selectedSlot={selectedSlot} selectedPath={selectedPath} />
               </>
             ) : (
               <EmptyNotice text="先选择普通槽位或命途槽位创建战技。" />
@@ -850,7 +850,7 @@ function sameSlot(a: 战技记录, b: 战技记录): boolean {
 
 function sortSkill(a: 战技记录, b: 战技记录): number {
   if (a.槽位类型 !== b.槽位类型) return a.槽位类型 === 'normal' ? -1 : 1;
-  if (a.关联命途 !== b.关联命途) return String(a.关联命途 ?? '').localeCompare(String(b.关联命途 ?? ''));
+  if (a.关联命途 !== b.关联命途) return (a.关联命途 ?? '').localeCompare(b.关联命途 ?? '');
   return a.槽位序号 - b.槽位序号;
 }
 

@@ -101,11 +101,10 @@ export function waitStreamingPreviewDelay(ms: number, signal?: AbortSignal): Pro
   }
   return new Promise<void>((resolve) => {
     let done = false;
-    let timer: number | undefined;
     const finish = () => {
       if (done) return;
       done = true;
-      if (typeof timer === 'number') window.clearTimeout(timer);
+      window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       signal?.removeEventListener('abort', finish);
       resolve();
@@ -113,7 +112,7 @@ export function waitStreamingPreviewDelay(ms: number, signal?: AbortSignal): Pro
     const onVisibilityChange = () => {
       if (isPageHidden()) finish();
     };
-    timer = window.setTimeout(finish, ms);
+    const timer = window.setTimeout(finish, ms);
     document.addEventListener('visibilitychange', onVisibilityChange);
     signal?.addEventListener('abort', finish, { once: true });
   });
@@ -195,7 +194,7 @@ export function mergeYitingSystems(
 ): import('@/models/yiting').忆庭系统 {
   if (!override) return base;
   const merged = [...base.回忆档案];
-  for (const entry of override.回忆档案 ?? []) {
+  for (const entry of override.回忆档案) {
     if (!merged.some((item) => item.id === entry.id)) {
       merged.push(entry);
     }

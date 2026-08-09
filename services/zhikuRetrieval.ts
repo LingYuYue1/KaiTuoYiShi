@@ -5,7 +5,7 @@ import { withRetries } from '@/services/ai/retry';
 import { normalizeStructuredModelText } from '@/services/ai/structuredOutputRepair';
 import { ZHIKU_CATEGORY_LABELS, 搜索智库条目 } from '@/models/zhiku';
 import type { 智库软结构标签 } from '@/models/zhiku';
-import { 解析智库软结构标签, 获取智库人物名, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
+import { 解析智库软结构标签, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
 import { ZHIKU_COT_PROMPT as ZHIKU_LEGACY_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
@@ -128,10 +128,6 @@ function getMainStoryBlockReason(entry: 智库条目): string | null {
   return getMainStoryZhikuMetaBlockReason(meta);
 }
 
-function isMainStoryAllowedZhikuMeta(meta: 智库软结构标签): boolean {
-  return !getMainStoryZhikuMetaBlockReason(meta);
-}
-
 function getMainStoryZhikuMetaBlockReason(meta: 智库软结构标签): string | null {
   const ranges = meta.使用范围.map((item) => item.trim()).filter(Boolean);
   if (ranges.length > 0 && !ranges.some((item) => /主剧情|通用|全部|all/i.test(item))) {
@@ -171,7 +167,7 @@ function buildZhikuSceneHints(sceneContext?: 智库场景上下文): string[] {
     }
   };
 
-  if (sceneContext.startScenarioId && ZHIKU_SCENE_HINTS[sceneContext.startScenarioId]) {
+  if (sceneContext.startScenarioId && sceneContext.startScenarioId in ZHIKU_SCENE_HINTS) {
     addHints(ZHIKU_SCENE_HINTS[sceneContext.startScenarioId]);
   }
   if (/黑塔|空间站/.test(raw)) addHints(ZHIKU_SCENE_HINTS.heita_station_incident);
@@ -184,7 +180,7 @@ function buildZhikuSceneHints(sceneContext?: 智库场景上下文): string[] {
 }
 
 function getNormalRelatedLimit(limit: number): number {
-  return Math.min(Math.max(1, Math.trunc(Number(limit) || NORMAL_KEYWORD_RECALL_LIMIT)), NORMAL_KEYWORD_RECALL_LIMIT);
+  return Math.min(Math.max(1, Math.trunc(limit || NORMAL_KEYWORD_RECALL_LIMIT)), NORMAL_KEYWORD_RECALL_LIMIT);
 }
 
 function augmentZhikuQuery(query: string, sceneHints: string[]): string {
@@ -231,7 +227,7 @@ function buildRelevantCharacterNames(system: 智库系统, query: string, sceneC
 function buildCharacterTriggerCandidates(system: 智库系统, sceneContext?: 智库场景上下文): Array<{ name: string; trigger: string }> {
   const candidates: Array<{ name: string; trigger: string }> = [];
   const seen = new Set<string>();
-  for (const entry of system.条目 ?? []) {
+  for (const entry of system.条目) {
     if (entry.分类 !== 'character') continue;
     const names = 获取智库人物名列表(entry)
       .filter((name) => isAllowedOriginalProtagonistName(name, sceneContext?.originalProtagonist))
@@ -255,7 +251,7 @@ function buildCharacterTriggerCandidates(system: 智库系统, sceneContext?: �
 
 function extractCharacterAliasTriggers(entry: 智库条目): string[] {
   const triggers: string[] = [];
-  const source = String(entry.原文 ?? '');
+  const source = entry.原文;
   for (const match of source.matchAll(/^\s*-?\s*(?:名称|姓名|别名|昵称\s*\/\s*外号|全名\s*\/\s*本名)[:：]\s*([^\n]+)/gmu)) {
     for (const item of match[1].split(/[、，,；;]/u)) {
       const cleaned = item.replace(/[。.\s]+$/u, '').trim();
@@ -304,9 +300,9 @@ function buildCharacterAnchorEntries(system: 智库系统, query: string, limit:
   const relevantNames = buildRelevantCharacterNames(system, query, sceneContext);
   if (!relevantNames.length) return [];
 
-  const anchorLimit = getCharacterAnchorLimit(limit);
+  const anchorLimit = getCharacterAnchorLimit();
   const entriesByName = new Map<string, 智库条目[]>();
-  for (const entry of system.条目 ?? []) {
+  for (const entry of system.条目) {
     if (entry.分类 !== 'character' || !isMainStoryInjectableZhikuEntry(entry)) continue;
     const characterNames = 获取智库人物名列表(entry);
     if (!isAllowedOriginalProtagonistEntry(characterNames, sceneContext?.originalProtagonist)) continue;
@@ -336,7 +332,7 @@ function buildPresentCharacterFallbackEntries(system: 智库系统, npcNames: st
   if (!presentNames.length) return [];
 
   const entriesByName = new Map<string, 智库条目[]>();
-  for (const entry of system.条目 ?? []) {
+  for (const entry of system.条目) {
     if (entry.分类 !== 'character' || !isMainStoryInjectableZhikuEntry(entry)) continue;
     const characterNames = 获取智库人物名列表(entry);
     if (!isAllowedOriginalProtagonistEntry(characterNames, sceneContext?.originalProtagonist)) continue;
@@ -374,7 +370,7 @@ function normalizeNpcNameList(names: string[] | undefined, limit: number): strin
   return normalized;
 }
 
-function getCharacterAnchorLimit(_limit?: number): number {
+function getCharacterAnchorLimit(): number {
   return CHARACTER_KEYWORD_RECALL_LIMIT;
 }
 
@@ -433,7 +429,7 @@ function isNormalRecallEntry(entry: 智库条目): boolean {
 }
 
 export function retrieveZhikuContext(system: 智库系统 | undefined, query: string, limit: number, sceneContext?: 智库场景上下文): 智库检索结果 {
-  if (!system?.条目?.length || !query.trim()) {
+  if (!system?.条目.length || !query.trim()) {
     return { entries: [], injection: '', diagnostics: buildEmptyZhikuDiagnostics() };
   }
   const normalLimit = getNormalRelatedLimit(limit);
@@ -497,7 +493,7 @@ export async function retrieveZhikuContextWithModel(
   sceneContext?: 智库场景上下文,
   promptModules?: 提示词模块[],
 ): Promise<智库检索结果> {
-  if (!system?.条目?.length || !query.trim()) {
+  if (!system?.条目.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
   }
 
@@ -552,7 +548,7 @@ export async function retrieveZhikuContextWithModel(
         }),
       { retries: retryCount, signal, label: '智库召回' },
     );
-    const supplementGroups = parseZhikuIndexes(rawText, candidates, normalLimit);
+    const supplementGroups = parseZhikuIndexes(rawText, candidates);
     const supplementEntries = mergeZhikuGroups(supplementGroups);
     const finalGroups = mergeSupplementedZhikuGroups(keywordGroups, supplementGroups);
     const finalPicked = mergeZhikuGroups(finalGroups);
@@ -653,7 +649,7 @@ function resolveZhikuRecallConfig(mainConfig: API配置项, settings: 智库系�
   const override = settings.api;
   return {
     ...mainConfig,
-    provider: override.provider || mainConfig.provider,
+    provider: override.provider,
     baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
     apiKey: override.apiKey.trim() || mainConfig.apiKey,
     model: override.model.trim() || mainConfig.model,
@@ -674,7 +670,7 @@ function buildRecallSupplementCandidates(system: 智库系统, query: string, li
     ? 搜索智库条目(system, aiSupplementHintQuery, Math.max(limit * 2, limit))
       .filter(isAvailableSupplement)
     : [];
-  const characterPool = [...(system.条目 ?? [])]
+  const characterPool = [...(system.条目)]
     .filter(isAvailableSupplement)
     .filter((entry) => entry.分类 === 'character')
     .filter(isCharacterAnchorNode);
@@ -682,7 +678,7 @@ function buildRecallSupplementCandidates(system: 智库系统, query: string, li
     const names = 获取智库人物名列表(entry);
     return (sceneContext?.anticipatedNpcNames ?? []).some((name) => names.some((characterName) => namesLikelySame(characterName, name)));
   });
-  const recent = [...(system.条目 ?? [])]
+  const recent = [...(system.条目)]
     .filter(isAvailableSupplement)
     .filter(isNormalRecallEntry)
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -820,7 +816,6 @@ function buildEmptyZhikuDiagnostics(): 智库召回诊断 {
 function parseZhikuIndexes(
   raw: string,
   candidates: 智库条目[],
-  _limit: number,
 ): 智库召回分组 {
   const character: number[] = [];
   const strong: number[] = [];
@@ -874,7 +869,7 @@ function parseZhikuIndexes(
 function findZhikuCandidateIndexesByName(content: string, candidates: 智库条目[]): number[] {
   const parts = content
     .split(/[|｜,，、]/)
-    .map((item) => item.replace(/[【】\[\]\s]/g, '').trim())
+    .map((item) => item.replace(/[【】[\]\s]/g, '').trim())
     .filter(Boolean);
   const indexes: number[] = [];
   for (const part of parts) {
@@ -957,7 +952,7 @@ function formatCharacterZhikuInjectionEntry(entry: 智库条目, index: number):
 function formatCharacterStoryInjectionDiagnostic(entry: 智库条目): string {
   const title = entry.标题 || '未命名人物';
   if (entry.角色故事摘要?.trim()) return `${title}：角色故事摘要`;
-  if (entry.摘要?.trim()) return `${title}：通用摘要兜底`;
+  if (entry.摘要.trim()) return `${title}：通用摘要兜底`;
   if (extractMarkdownSection(entry.原文, '角色故事层') || extractMarkdownSection(entry.原文, /^历史故事与.+层$/u)) {
     return `${title}：故事原文兜底`;
   }
@@ -969,7 +964,7 @@ function formatCharacterStorySummarySection(entry: 智库条目): string {
   if (curated) {
     return `### 角色故事摘要\n${curated}\n（故事摘要由内置资料预整理，用于替代长篇角色故事层注入；不得把未解锁经历写成当前已发生事实。）`;
   }
-  const summary = compactSectionText(entry.摘要 ?? '', 700);
+  const summary = compactSectionText(entry.摘要, 700);
   if (summary) {
     return `### 角色故事摘要（通用摘要兜底）\n${summary}\n（该角色尚未补齐专用角色故事摘要；只作为故事背景理解，不得扩写未解锁经历。）`;
   }
@@ -985,14 +980,14 @@ function formatCharacterSourceSection(source: string, heading: string | RegExp, 
 }
 
 function extractMarkdownSection(source: string, heading: string | RegExp): { title: string; body: string } | null {
-  const text = String(source || '');
+  const text = source;
   if (!text.trim()) return null;
   const headings = Array.from(text.matchAll(/^##\s+(.+?)\s*$/gmu));
   for (let index = 0; index < headings.length; index += 1) {
     const match = headings[index];
-    const title = match[1]?.trim() ?? '';
+    const title = match[1].trim();
     const matchesHeading = typeof heading === 'string' ? title === heading : heading.test(title);
-    if (!matchesHeading || match.index === undefined) continue;
+    if (!matchesHeading) continue;
     const start = match.index + match[0].length;
     const end = headings[index + 1]?.index ?? text.length;
     const body = text.slice(start, end).trim();

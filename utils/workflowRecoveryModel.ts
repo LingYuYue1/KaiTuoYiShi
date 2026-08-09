@@ -18,7 +18,8 @@ export interface WorkflowHistoryMessage {
 }
 
 function createWorkflowId(): string {
-  const uuid = globalThis.crypto?.randomUUID?.();
+  const cryptoApi = globalThis.crypto as Crypto | undefined;
+  const uuid = cryptoApi?.randomUUID();
   return uuid ? `workflow_${uuid}` : `workflow_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 

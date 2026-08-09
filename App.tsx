@@ -22,6 +22,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
 import type { NewestStory字段集 } from '@/models/newestStory';
+import type { 世界书 } from '@/models/worldbook';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog } from '@/utils/devLog';
@@ -270,7 +271,7 @@ import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
 import type { 队列任务ID } from '@/models/queueTask';
 import { 创建空手机系统 } from '@/models/phone';
-import { 创建默认记忆系统设置, 取游戏设置运行态键 } from '@/models/settings';
+import { 取游戏设置运行态键 } from '@/models/settings';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
@@ -299,7 +300,7 @@ const SAVE_LOAD_REDUCED_VIEW_SWITCH_MS = 90;
 const BOOK_OPEN_REDUCED_MOTION_MS = 260;
 const BOOK_OPEN_REDUCED_VIEW_SWITCH_MS = 90;
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
-const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const getJourneyLaunchDelay = () => prefersReducedMotion() ? JOURNEY_LAUNCH_REDUCED_MOTION_MS : JOURNEY_LAUNCH_ANIMATION_MS;
 const getHomeJourneyDelay = () => prefersReducedMotion() ? HOME_JOURNEY_REDUCED_MOTION_MS : HOME_JOURNEY_ANIMATION_MS;
 const getHomeJourneyViewSwitchDelay = () => prefersReducedMotion() ? HOME_JOURNEY_REDUCED_VIEW_SWITCH_MS : HOME_JOURNEY_VIEW_SWITCH_MS;
@@ -314,7 +315,7 @@ export function App() {
   const [showWorldbookManager, setShowWorldbookManager] = useState(false);
   const [showZhikuManager, setShowZhikuManager] = useState(false);
   const [showSaveLoad, setShowSaveLoad] = useState(false);
-  const [showCloudSave, setShowCloudSave] = useState(false);
+  const [showCloudSave, setShowCloudSave] = useState(() => window.location.pathname === '/oauth/github/callback');
   const [showReleaseAnnouncements, setShowReleaseAnnouncements] = useState(false);
   const [showMysteryChat, setShowMysteryChat] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
@@ -502,10 +503,8 @@ export function App() {
     [state.chatHistory],
   );
 
-  const narrativeImageManualEnabled = Boolean(
-    state.gameSettings.文生图系统?.正文生图?.enabled
-    && state.gameSettings.文生图系统.正文生图.mode === 'manual',
-  );
+  const narrativeImageManualEnabled = state.gameSettings.文生图系统.正文生图.enabled
+    && state.gameSettings.文生图系统.正文生图.mode === 'manual';
 
   const recoveryDraft = useMemo(() => (
     state.activeWorkflow.interruptedWorkflow?.phase === 'main_request' ? {
@@ -530,18 +529,9 @@ export function App() {
   }, [state.view, state.pendingOpeningTrigger, state, actions]);
 
   useEffect(() => {
-    if (window.location.pathname === '/oauth/github/callback') {
-      setShowCloudSave(true);
-    }
-  }, []);
-
-  useEffect(() => {
     if (state.view !== 'home') return;
 
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
+    const idleWindow: Partial<Pick<Window, 'requestIdleCallback' | 'cancelIdleCallback'>> = window;
     const preloadZhiku = () => {
       void ZhikuManagerModal.preload();
     };
@@ -649,7 +639,7 @@ export function App() {
         ) : null}
       <InputArea
         key={state.activeWorkflow.sessionEpoch}
-        onSend={actions.handleSend}
+        onSend={(text) => { void actions.handleSend(text); }}
         onAbort={actions.handleAbort}
         loading={state.activeWorkflow.loading}
         disabled={state.activeWorkflow.pendingVariable}
@@ -690,7 +680,7 @@ export function App() {
             zhikuSystem: state.智库,
             onZhikuSystemChange: state.set智库,
             zhikuSettings: state.gameSettings.智库系统,
-            memorySettings: state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
+            memorySettings: state.gameSettings.记忆系统,
             news: state.新闻,
             onNewsChange: state.set新闻,
             plotNodes: state.剧情,
@@ -713,13 +703,13 @@ export function App() {
     return (
       <>
         <LandingPage
-          onNewGame={handleHomeNewGame}
-          onLoadSave={handleHomeLoadSave}
+          onNewGame={() => { void handleHomeNewGame(); }}
+          onLoadSave={() => { void handleHomeLoadSave(); }}
           onSettings={() => {
             setSettingsInitialTab('api');
             setShowSettings(true);
           }}
-          onWorldbookManager={handleHomeWorldbookManager}
+          onWorldbookManager={() => { void handleHomeWorldbookManager(); }}
           onZhikuManager={() => setShowZhikuManager(true)}
           onCloudSave={() => setShowCloudSave(true)}
           onReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
@@ -733,9 +723,9 @@ export function App() {
           <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
             <WorldbookManagerModal
               worldbooks={state.worldbooks}
-              onSave={(books) => {
+              onSave={(books: 世界书[]) => {
                 state.setWorldbooks(books);
-                saveSetting('worldbooks', books);
+                void saveSetting('worldbooks', books);
               }}
               onClose={() => setShowWorldbookManager(false)}
             />
@@ -808,11 +798,11 @@ export function App() {
 
               worldbooks={state.worldbooks}
 
-              onWorldbooksChange={(books) => {
+              onWorldbooksChange={(books: 世界书[]) => {
 
                 state.setWorldbooks(books);
 
-                saveSetting('worldbooks', books);
+                void saveSetting('worldbooks', books);
 
               }}
               variableSetters={{
@@ -838,9 +828,9 @@ export function App() {
   if (state.view === 'new_game') {
     const getActiveApiConfig = () => {
       if (state.apiSettings.activeConfigId) {
-        return state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs[0] ?? null;
+        return state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs.at(0) ?? null;
       }
-      return state.apiSettings.configs[0] ?? null;
+      return state.apiSettings.configs.at(0) ?? null;
     };
     const handleGenerateTravelerTemplate = async (context: TravelerTemplateContext): Promise<TravelerTemplateDraft> => {
       const config = getActiveApiConfig();
@@ -990,9 +980,9 @@ export function App() {
             on剧情编织Change={state.set剧情编织}
             getContextSnapshot={actions.getContextSnapshot}
             worldbooks={state.worldbooks}
-            onWorldbooksChange={(books) => {
+            onWorldbooksChange={(books: 世界书[]) => {
               state.setWorldbooks(books);
-              saveSetting('worldbooks', books);
+              void saveSetting('worldbooks', books);
             }}
             variableSetters={{
               set旅人: state.set旅人,
@@ -1048,9 +1038,9 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
           <WorldbookManagerModal
             worldbooks={state.worldbooks}
-            onSave={(books) => {
+            onSave={(books: 世界书[]) => {
               state.setWorldbooks(books);
-              saveSetting('worldbooks', books);
+              void saveSetting('worldbooks', books);
             }}
             onClose={() => setShowWorldbookManager(false)}
           />
@@ -1202,7 +1192,8 @@ function renderSystemPanel(
           settings={ctx.memorySettings}
         />
       );
-    default:
+    case 'worldbook':
+    case null:
       return null;
   }
 }

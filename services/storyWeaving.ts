@@ -6,13 +6,11 @@ import type {
   剧情编织角色档案,
   剧情编织势力档案,
   剧情编织地点档案,
-  剧情编织时间线事件,
 } from '@/models/storyWeaving';
 import { 归一化剧情编织分段 } from '@/models/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import { STORY_WEAVING_COT_PROMPT as SW_LEGACY_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
-import { STORY_WEAVING_OUTPUT_FORMAT_PROMPT as SW_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/storyWeavingOutputFormat';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import type { FilterContext } from '@/utils/worldbook';
@@ -25,7 +23,7 @@ const ACTIVE_RUNTIME_STATUSES = new Set<剧情编织分段['运行状态']>(['�
 const ARCHIVED_RUNTIME_STATUSES = new Set<剧情编织分段['运行状态']>(['已经历', '已跳过', '已偏离', '暂停']);
 
 export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   if (!mainConfig) return null;
   const api = settings.剧情编织系统.api;
   const baseUrl = api.baseUrl.trim() || mainConfig.baseUrl;
@@ -34,7 +32,7 @@ export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: 
   if (!baseUrl || !apiKey || !model) return null;
   return {
     ...mainConfig,
-    provider: api.provider || mainConfig.provider,
+    provider: api.provider,
     baseUrl,
     apiKey,
     model,
@@ -75,8 +73,6 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
   const { series, completed, current, archivedAnchor, relocationNote } = relocated;
   const progress = system?.当前进度;
 
-  const currentIndex = completed.findIndex((segment) => segment.id === current.id);
-  const safeIndex = currentIndex >= 0 ? currentIndex : 0;
   const previous = archivedAnchor && archivedAnchor.组号 < current.组号
     ? archivedAnchor
     : [...completed]
@@ -234,8 +230,8 @@ function resolveInjectionWindow(system?: 剧情编织系统): {
   archivedAnchor?: 剧情编织分段;
 } | null {
   const sourceSystem = system;
-  if (!sourceSystem?.系列列表?.length) return null;
-  const series = sourceSystem.系列列表.find((item) => item.id === sourceSystem.当前系列ID) ?? sourceSystem.系列列表[0];
+  if (!sourceSystem?.系列列表.length) return null;
+  const series = sourceSystem.系列列表.find((item) => item.id === sourceSystem.当前系列ID) ?? sourceSystem.系列列表.at(0);
   if (!series || !series.激活注入) return null;
   const completed = series.分段列表
     .filter((segment) => segment.启用注入 && segment.处理状态 === '已完成')
@@ -280,7 +276,8 @@ function relocateCurrentSegmentByOpeningArchive(
     .filter((segment) => segment.启用注入 && segment.处理状态 === '已完成' && !ARCHIVED_RUNTIME_STATUSES.has(segment.运行状态))
     .map((segment) => ({ segment, score: scoreSegmentAgainstOpening(segment, openingText) }))
     .filter((item) => item.score >= 6)
-    .sort((a, b) => b.score - a.score || a.segment.组号 - b.segment.组号)[0];
+    .sort((a, b) => b.score - a.score || a.segment.组号 - b.segment.组号)
+    .at(0);
 
   if (!candidate || candidate.segment.id === resolved.current.id || candidate.score <= currentScore + 1) {
     return resolved;
@@ -586,8 +583,8 @@ function appendVisibleList(lines: string[], title: string, values: 剧情编织�
 
 function formatVisibility(value: { 谁知道: string[]; 谁不知道: string[]; 是否仅读者视角可见: boolean }): string {
   const parts = [];
-  if (value.谁知道?.length) parts.push(`谁知道:${value.谁知道.join('、')}`);
-  if (value.谁不知道?.length) parts.push(`谁不知道:${value.谁不知道.join('、')}`);
+  if (value.谁知道.length) parts.push(`谁知道:${value.谁知道.join('、')}`);
+  if (value.谁不知道.length) parts.push(`谁不知道:${value.谁不知道.join('、')}`);
   if (value.是否仅读者视角可见) parts.push('仅读者视角');
   return parts.length ? `可见性：${parts.join('｜')}` : '可见性：公开或未限定';
 }

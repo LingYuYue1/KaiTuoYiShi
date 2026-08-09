@@ -11,7 +11,7 @@ import {
   type CloudBackupNodePlan,
   type CloudBackupNodePlanInput,
 } from '@/services/cloudBackupMergePlan';
-import { CloudBackupWorkerClient } from '@/services/cloudBackupWorkerClient';
+import { createCloudBackupWorkerClient, type CloudBackupWorkerClient } from '@/services/cloudBackupWorkerClient';
 import {
   clearCloudMergeStaging,
   commitCloudMergeStaging,
@@ -71,7 +71,7 @@ export async function mergeDownloadedCloudBackup(
   options: CloudBackupMergeOptions = {},
 ): Promise<CloudBackupMergeResult> {
   assertNotAborted(options.signal);
-  const worker = new CloudBackupWorkerClient();
+  const worker = createCloudBackupWorkerClient();
   const stageTransferId = `merge-${transferId}`;
   try {
     await clearCloudMergeStaging(stageTransferId).catch(() => {});
@@ -215,7 +215,7 @@ export async function mergeLegacyCloudBackup(
   options: CloudBackupMergeOptions = {},
 ): Promise<CloudBackupMergeResult> {
   if (!items.length) throw new Error('旧版云存档清单为空。');
-  const worker = new CloudBackupWorkerClient();
+  const worker = createCloudBackupWorkerClient();
   const stageTransferId = `merge-legacy-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   try {
     const local = await buildLocalMergeIndex(worker, options);

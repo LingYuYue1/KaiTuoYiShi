@@ -67,7 +67,7 @@ export function NsfwSettingsTab({ settings, onChange }: Props) {
       <ToggleRow
         label="男性 NSFW 档案"
         desc="默认关闭。关闭时不写入男性身体档案、男性私密部位与男性长期私密事实；女性档案不受此开关影响。"
-        checked={Boolean(settings.enableNsfw && settings.enableMaleNsfwArchive)}
+        checked={settings.enableNsfw && settings.enableMaleNsfwArchive}
         disabled={!settings.enableNsfw}
         onChange={(v) => onChange({ ...settings, enableMaleNsfwArchive: v })}
       />
@@ -98,7 +98,7 @@ export function NsfwSettingsTab({ settings, onChange }: Props) {
         )}
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="relative w-full overflow-hidden py-3 font-serif text-sm font-bold tracking-[0.32em] transition-all hover:opacity-95"
           style={{
             color: 'rgb(var(--tj-on-accent))',

@@ -8,7 +8,7 @@ export interface DeepSeekModelProfile {
   capability: DeepSeekCapability;
   isOfficialEndpoint: boolean;
 }
-const REASONING_MODEL_TOKEN = /(^|[\/:._\-\s])(reasoner|r1(?:[-_\s]\d+)?|thinking|distill)(?=$|[\/:._\-\s])/i;
+const REASONING_MODEL_TOKEN = /(^|[/:._\-\s])(reasoner|r1(?:[-_\s]\d+)?|thinking|distill)(?=$|[/:._\-\s])/i;
 
 function readHostname(baseUrl: string): string {
   try {
@@ -30,9 +30,9 @@ export function isReasoningModelId(model: string): boolean {
 export function classifyDeepSeekConfig(
   config: Pick<API配置项, 'provider' | 'baseUrl' | 'model'>,
 ): DeepSeekModelProfile {
-  const provider = String(config.provider ?? '').toLowerCase();
-  const model = String(config.model ?? '').trim();
-  const isOfficialEndpoint = isOfficialDeepSeekBaseUrl(String(config.baseUrl ?? ''));
+  const provider = config.provider.toLowerCase();
+  const model = config.model.trim();
+  const isOfficialEndpoint = isOfficialDeepSeekBaseUrl(config.baseUrl);
   const strong = provider === 'deepseek' || isOfficialEndpoint || /deepseek/i.test(model);
   const reasoning = isReasoningModelId(model);
   const confidence: DeepSeekConfidence = strong ? 'strong' : reasoning ? 'weak' : 'none';
@@ -49,7 +49,7 @@ export function resolveKnownDeepSeekChatModel(
 ): string | undefined {
   const profile = classifyDeepSeekConfig(config);
   if (!profile.isOfficialEndpoint || profile.confidence !== 'strong') return undefined;
-  return /^deepseek-reasoner(?:$|[\/:._\-\s])/i.test(config.model.trim())
+  return /^deepseek-reasoner(?:$|[/:._\-\s])/i.test(config.model.trim())
     ? 'deepseek-chat'
     : undefined;
 }
@@ -57,14 +57,14 @@ export function resolveKnownDeepSeekChatModel(
 function fallbackScore(model: string): number {
   const normalized = model.trim().toLowerCase();
   if (normalized === 'deepseek-chat') return 0;
-  if (/deepseek[-_\/:.]?v3/i.test(normalized)) return 1;
+  if (/deepseek[-_:.]?v3/i.test(normalized)) return 1;
   if (normalized.includes('deepseek') && normalized.includes('chat')) return 2;
   return 3;
 }
 
 export function selectDeepSeekFallbackModel(models: string[], failedModel: string): string | undefined {
   const failed = failedModel.trim().toLowerCase();
-  return Array.from(new Set(models.map((model) => String(model).trim()).filter(Boolean)))
+  return Array.from(new Set(models.map((model) => model.trim()).filter(Boolean)))
     .filter((model) => {
       const normalized = model.toLowerCase();
       return normalized !== failed && normalized.includes('deepseek') && !isReasoningModelId(model);

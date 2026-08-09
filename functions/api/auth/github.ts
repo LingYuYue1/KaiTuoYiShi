@@ -13,7 +13,7 @@ interface GitHubTokenResponse {
   error_description?: string;
 }
 
-export const onRequestOptions = async (): Promise<Response> => optionsResponse();
+export const onRequestOptions = (): Response => optionsResponse();
 
 export const onRequestPost = async ({ request, env }: PagesContextLike): Promise<Response> => {
   try {

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 忆庭API覆盖 } from '@/models/settings';
-import { 创建默认记忆系统设置 } from '@/models/settings';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
 import { saveSetting } from '@/services/dbService';
 
@@ -38,7 +37,7 @@ interface ResolvedApi {
 }
 
 export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
-  const memory = settings.记忆系统 ?? 创建默认记忆系统设置();
+  const memory = settings.记忆系统;
   const mainConfig = useMemo(
     () => apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? null,
     [apiSettings.activeConfigId, apiSettings.configs],
@@ -240,8 +239,8 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
         message={recallMessage}
         testResult={recallTestResult}
         onPatch={patchRecallApi}
-        onFetchModels={fetchRecallModels}
-        onTest={testRecall}
+        onFetchModels={() => void fetchRecallModels()}
+        onTest={() => void testRecall()}
         mainConfig={mainConfig}
       />
 
@@ -255,8 +254,8 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
         message={archiveMessage}
         testResult={archiveTestResult}
         onPatch={patchArchiveApi}
-        onFetchModels={fetchArchiveModels}
-        onTest={testArchive}
+        onFetchModels={() => void fetchArchiveModels()}
+        onTest={() => void testArchive()}
         mainConfig={mainConfig}
       />
 
@@ -273,7 +272,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings }: Props) {
       <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash

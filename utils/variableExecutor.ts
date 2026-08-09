@@ -194,7 +194,7 @@ export function reduceVariableCommands(
           const oldVal = Number(current.value) || 0;
           delta = (Number(cmd.value) || 0) - oldVal;
         }
-        const 世界 = cursor['世界'] as 世界状态;
+        const 世界 = cursor['世界'] as 世界状态 | undefined;
         const currentDate = 世界?.当前日期 ?? 世界?.当前时间 ?? '';
         const res = 推进命途进度(旅人, pathId, delta, currentDate);
         cursor = { ...cursor, 旅人: res.traveler };
@@ -213,7 +213,7 @@ export function reduceVariableCommands(
         ...cursor,
         世界: {
           ...world,
-          全局事件: appendWorldEvents(world.全局事件 ?? [], [cmd.value]),
+          全局事件: appendWorldEvents(world.全局事件, [cmd.value]),
         },
       };
       results.push({ command: rawCmd, ok: true });
@@ -345,7 +345,7 @@ function 补齐疑似跨夜时间(state: VariableState, cmd: 变量命令): Vari
   const looksOvernight = current >= 20 * 60 && next <= 6 * 60;
   if (!looksOvernight) return state;
   const aligned = 对齐世界日期与天数(
-    Math.max(1, Math.trunc(Number(world.开拓天数) || 1)) + 1,
+    Math.max(1, Math.trunc(world.开拓天数 || 1)) + 1,
     world.当前日期,
   );
   return {
@@ -396,7 +396,7 @@ function 应用背包数量扣减命令(
 ): { matched: boolean; nextTraveler?: 角色数据结构; reason?: string } {
   const target = 解析背包数量扣减目标(rest, cmd);
   if (!target) return { matched: false };
-  const inventory = traveler.背包 ?? [];
+  const inventory = traveler.背包;
   const index = inventory.findIndex((item) => 匹配背包物品(item, target.field, target.expected));
   if (index < 0) {
     return {
@@ -427,7 +427,17 @@ function 应用背包数量扣减命令(
 export function commitVariableState(
   state: VariableState,
   initialState: VariableState,
-  setters: VariableSetters,
+  setters: {
+    set旅人: React.Dispatch<React.SetStateAction<角色数据结构>>;
+    set世界: React.Dispatch<React.SetStateAction<世界状态>>;
+    set记忆: React.Dispatch<React.SetStateAction<记忆系统>>;
+    set忆庭: React.Dispatch<React.SetStateAction<忆庭系统>>;
+    set智库: React.Dispatch<React.SetStateAction<智库系统>>;
+    set手机: React.Dispatch<React.SetStateAction<手机系统>>;
+    setNPC: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+    set新闻: React.Dispatch<React.SetStateAction<新闻条目[]>>;
+    set剧情: React.Dispatch<React.SetStateAction<剧情节点[]>>;
+  },
 ): void {
   if (state.旅人 !== initialState.旅人) setters.set旅人(state.旅人 as 角色数据结构);
   if (state.世界 !== initialState.世界) setters.set世界(归一化变量世界状态(state).世界 as 世界状态);
@@ -453,7 +463,7 @@ function 校验世界时间命令(
     if (action !== 'set') return { reason: '世界.当前日期 只能使用 set 写入完整日期' };
     const next = 解析琥珀日期序数(value);
     if (next === null) return { reason: '当前日期必须使用"琥珀纪 YYYY.MM.DD"，禁止写现实日期或其他纪年' };
-    const current = 解析琥珀日期序数(currentWorld?.当前日期);
+    const current = 解析琥珀日期序数(currentWorld.当前日期);
     if (current !== null && next < current) return { reason: '拒绝时间回退：世界.当前日期 不能早于当前日期' };
     const baseline = 解析琥珀日期序数(baselineWorld?.当前日期);
     if (baseline !== null && next > baseline + 1) {
@@ -466,16 +476,16 @@ function 校验世界时间命令(
     if (action !== 'set') return { reason: '世界.当前时间 只能使用 set 写入 HH:mm' };
     const next = 解析分钟序数(value);
     if (next === null) return { reason: '当前时间必须使用 24 小时制 HH:mm，禁止写时段词或场景名' };
-    const current = 解析分钟序数(currentWorld?.当前时间);
-    const currentDate = 解析琥珀日期序数(currentWorld?.当前日期);
+    const current = 解析分钟序数(currentWorld.当前时间);
+    const currentDate = 解析琥珀日期序数(currentWorld.当前日期);
     const baselineDate = 解析琥珀日期序数(baselineWorld?.当前日期);
     const baselineTime = 解析分钟序数(baselineWorld?.当前时间);
     const dateAlreadyAdvanced = currentDate !== null && baselineDate !== null && currentDate > baselineDate;
-    const dateWillAdvanceInBatch = batchTimePlan?.dateAdvances === true && (batchTimePlan?.dayAdvances);
+    const dateWillAdvanceInBatch = batchTimePlan?.dateAdvances === true && (batchTimePlan.dayAdvances);
     if (!dateAlreadyAdvanced && current !== null && next < current) {
       if (current >= 20 * 60 && next <= 6 * 60) return { reason: null };
       if (dateWillAdvanceInBatch) return { reason: null };
-      return { reason: `已忽略疑似时间回退：同一日期内 世界.当前时间 不能早于当前时间（当前 ${currentWorld?.当前时间 || '未知'}，尝试写入 ${String(value)}）；若剧情已跨日，请同批写入 世界.当前日期 的下一天` };
+      return { reason: `已忽略疑似时间回退：同一日期内 世界.当前时间 不能早于当前时间（当前 ${currentWorld.当前时间 || '未知'}，尝试写入 ${String(value)}）；若剧情已跨日，请同批写入 世界.当前日期 的下一天` };
     }
     if (!dateAlreadyAdvanced && !dateWillAdvanceInBatch && baselineTime !== null && next - baselineTime > 60) {
       const capped = Math.min(23 * 60 + 59, baselineTime + 30);
@@ -485,7 +495,7 @@ function 校验世界时间命令(
   }
 
   if (rest === '开拓天数') {
-    const current = Math.max(1, Math.trunc(Number(currentWorld?.开拓天数) || 1));
+    const current = Math.max(1, Math.trunc(currentWorld.开拓天数 || 1));
     if (action !== 'add' && action !== 'set' && action !== 'sub') {
       return { reason: '世界.开拓天数 只能使用 add 或 set' };
     }
@@ -497,7 +507,8 @@ function 校验世界时间命令(
       if (delta > 1) return { reason: null, correctedValue: 1 };
       return { reason: null };
     }
-    if (action === 'set') {
+    // action === 'set'
+    {
       const next = Number(value);
       if (!Number.isFinite(next)) return { reason: '开拓天数 set 必须是数字' };
       if (next < current) return { reason: '拒绝时间回退：世界.开拓天数 不能小于当前值' };
@@ -515,8 +526,8 @@ interface 批次时间计划 {
 }
 
 function 分析批次时间计划(commands: 变量命令[], baselineWorld: 世界状态): 批次时间计划 {
-  const baselineDate = 解析琥珀日期序数(baselineWorld?.当前日期);
-  const baselineDay = Math.max(1, Math.trunc(Number(baselineWorld?.开拓天数) || 1));
+  const baselineDate = 解析琥珀日期序数(baselineWorld.当前日期);
+  const baselineDay = Math.max(1, Math.trunc(baselineWorld.开拓天数 || 1));
   const dateAdvances = commands.some((cmd) => {
     const parsed = extractRoot(cmd.key);
     if (parsed?.root !== '世界' || parsed.rest !== '当前日期' || cmd.action !== 'set') return false;
@@ -710,7 +721,7 @@ function 解析命途进度命令(rest: string, 旅人: 角色数据结构): 命
   if (tokens[0] !== '命途列表') return null;
   if (tokens[tokens.length - 1] !== '进度') return null;
   const selector = tokens[1];
-  const paths = 旅人.命途列表 ?? [];
+  const paths = 旅人.命途列表;
 
   if (typeof selector === 'number') {
     return paths[selector]?.id ?? null;

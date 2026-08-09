@@ -151,7 +151,7 @@ export async function unpackCloudBackupPart(
     .getUint32(CLOUD_PART_MAGIC.byteLength, true);
   const headerEnd = CLOUD_PART_PREFIX_BYTES + headerLength;
   if (headerLength <= 0 || headerEnd > raw.byteLength) throw new Error('云备份分卷清单长度无效。');
-  const header = JSON.parse(new TextDecoder().decode(raw.subarray(CLOUD_PART_PREFIX_BYTES, headerEnd))) as PackedPartHeader;
+  const header = JSON.parse(new TextDecoder().decode(raw.subarray(CLOUD_PART_PREFIX_BYTES, headerEnd))) as Partial<PackedPartHeader>;
   if (header.kind !== 'kaituoyishi-cloud-backup-part' || header.version !== CLOUD_BACKUP_VERSION || !Array.isArray(header.entries)) {
     throw new Error('云备份分卷清单格式无效。');
   }
@@ -217,7 +217,7 @@ function normalizeFingerprintValue(value: unknown): unknown {
 }
 
 function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) || 'null';
   if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
   const source = value as Record<string, unknown>;
   const entries = Object.keys(source)

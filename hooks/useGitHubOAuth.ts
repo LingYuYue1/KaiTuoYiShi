@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const OAUTH_STATE_KEY = 'kty_github_oauth_pending_state';
@@ -24,7 +24,7 @@ export interface GitHubOAuthResult {
 }
 
 export function useGitHubOAuth(): GitHubOAuthResult {
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(() => window.location.pathname === CALLBACK_PATH);
   const [error, setError] = useState('');
 
   const buildRedirectUri = useCallback(() => {
@@ -60,7 +60,7 @@ export function useGitHubOAuth(): GitHubOAuthResult {
       setPending(false);
       const message = err instanceof Error ? err.message : '打开 GitHub 授权失败。';
       setError(message);
-      throw new Error(message);
+      throw new Error(message, { cause: err });
     }
   }, [buildRedirectUri]);
 
@@ -108,15 +108,11 @@ export function useGitHubOAuth(): GitHubOAuthResult {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'GitHub OAuth 绑定失败。';
       setError(message);
-      throw new Error(message);
+      throw new Error(message, { cause: err });
     } finally {
       setPending(false);
     }
   }, [buildRedirectUri]);
-
-  useEffect(() => {
-    if (window.location.pathname === CALLBACK_PATH) setPending(true);
-  }, []);
 
   return {
     pending,

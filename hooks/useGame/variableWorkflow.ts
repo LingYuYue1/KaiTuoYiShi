@@ -23,7 +23,7 @@ function applyNsfwVariablePolicy(
   const rejectedCommands: Array<{ command: 变量命令; ok: false; reason: string }> = [];
 
   for (const command of commands) {
-    const key = command.key ?? '';
+    const key = command.key;
     const valueText = JSON.stringify(command.value ?? '');
     const touchesNsfw = key.includes('NSFW档案') || valueText.includes('NSFW档案');
     const touchesMaleArchive =
@@ -128,7 +128,7 @@ export async function runVariableCalibrationStep(
 ): Promise<VariableCalibrationOverrides | null> {
   const { state, mainApiConfig } = params;
   if (!state.gameSettings.enableVariableUpdate) return null;
-  if (!params.body?.trim()) return null;
+  if (!params.body.trim()) return null;
 
   // 选择变量模型 API：用 settings 里的 override，字段留空回退到主 API 同名字段。
   const override = state.gameSettings.variableApi;
@@ -136,7 +136,7 @@ export async function runVariableCalibrationStep(
     !!override.baseUrl.trim() || !!override.apiKey.trim() || !!override.model.trim();
   const variableConfig: import('@/models/settings').API配置项 = {
     ...mainApiConfig,
-    provider: override.provider || mainApiConfig.provider,
+    provider: override.provider,
     baseUrl: override.baseUrl.trim() || mainApiConfig.baseUrl,
     apiKey: override.apiKey.trim() || mainApiConfig.apiKey,
     model: override.model.trim() || mainApiConfig.model,
@@ -170,7 +170,7 @@ export async function runVariableCalibrationStep(
         })) {
           nsfwBaselineCandidates.push({
             npcId: npc.id,
-            npcName: npc.姓名 ?? npc.别名 ?? '',
+            npcName: npc.姓名 || npc.别名 || '',
             gender: npc.性别,
             appearance: typeof npc.外貌 === 'string' ? npc.外貌 : undefined,
             personality: typeof npc.性格 === 'string' ? npc.性格 : undefined,
@@ -290,9 +290,10 @@ export async function runVariableCalibrationStep(
   } catch (err) {
     if ((err as Error).name === 'AbortError') return null;
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
+    const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : '变量模型校准失败。';
     console.warn('[variable-model] 校准失败：', err);
     pushQueueTask(state, 'variable', 'failed', {
-      detail: (err as Error).message ?? '变量模型校准失败。',
+      detail: errorMessage,
     }, undefined, params.queueTasksMirror);
     // 失败也记一条 batch 让玩家知道
     const batch: 变量命令批次 = {
@@ -304,9 +305,9 @@ export async function runVariableCalibrationStep(
       results: [{
         command: { action: 'set', key: '(变量模型调用失败)', value: null },
         ok: false,
-        reason: (err as Error).message ?? '未知错误',
+        reason: errorMessage,
       }],
-      rawText: err instanceof Error ? err.message : String(err ?? '变量模型调用失败'),
+      rawText: errorMessage,
     };
     // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
     state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
@@ -318,7 +319,7 @@ export async function runVariableCalibrationStep(
         memoryAppended: [],
         ledgerFieldsUpdated: [],
         summaryTriggered: [],
-        warnings: [(err as Error).message ?? '变量模型校准失败。'],
+        warnings: [errorMessage],
       },
     };
   }

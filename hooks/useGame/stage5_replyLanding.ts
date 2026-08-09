@@ -11,7 +11,7 @@
  *   pendingVariableStarted, recoveryJournal
  */
 import type { TurnContext, TurnDeltas } from './turnTypes';
-import { 创建聊天消息, type 聊天消息 } from '@/models/chat';
+import { 创建聊天消息 } from '@/models/chat';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
 import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
 import { stripLeakedHistoryMetaFromBody } from './mainResponseProtocol';
@@ -23,6 +23,9 @@ import { revealStreamingPreview } from './workflowTaskRuntime';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
 import { updateWorkflowRecoveryJournal, persistWorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
+import type { 智库检索结果 } from '@/services/zhikuRetrieval';
+import type { 剧情编织门禁快照, 剧情编织注入诊断 } from '@/services/storyWeaving';
 
 export async function stage5_replyLanding(
   ctx: TurnContext,
@@ -46,11 +49,14 @@ export async function stage5_replyLanding(
 
   const effectiveWorld = ctx.effectiveWorld;
   const duration = (Date.now() - startTime) / 1000;
+  if (!updatedHistory || !userMsg || !systemPrompt || !apiMessages) {
+    throw new Error('stage5_replyLanding: 前置阶段必须写入 updatedHistory/userMsg/systemPrompt/apiMessages');
+  }
   pushQueueTask(state, 'main_story', 'success', { detail: `正文生成完成，用时 ${Math.round(duration)}s。` }, turnCountAtStart, queueTasksMirror);
 
   const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
   const parsedBody = normalizePlayerSpeechInBody({
-    body: cleanedParsed.body?.trim() ?? '',
+    body: cleanedParsed.body.trim(),
     playerName: state.旅人.姓名 || state.旅人.别名 || '你',
     userInput,
   });
@@ -72,12 +78,12 @@ export async function stage5_replyLanding(
     streamMessageSetter.cancel();
   }
 
-  const isAwakeningTurn = !!(cleanedParsed.awakenQuestions?.trim() || cleanedParsed.awakenJudgement?.trim());
+  const isAwakeningTurn = !!(cleanedParsed.awakenQuestions.trim() || cleanedParsed.awakenJudgement.trim());
   let awakenPathId = '';
   if (isAwakeningTurn) {
     awakenPathId = effectiveWorld.进行中狭间 ?? '';
     if (!awakenPathId) {
-      const hist = updatedHistory!;
+      const hist = updatedHistory;
       for (let i = hist.length - 1; i >= 0; i--) {
         const prevPid = hist[i]?.parsedResponse?.awakenPathId;
         if (prevPid) { awakenPathId = prevPid; break; }
@@ -92,29 +98,28 @@ export async function stage5_replyLanding(
 
   const tokenUsage = buildTurnTokenUsage({
     apiUsage: result.usage,
-    systemPrompt: systemPrompt!,
-    messages: apiMessages!,
+    systemPrompt,
+    messages: apiMessages,
     outputText: result.fullText || displayText,
     provider: config.provider,
     model: config.model,
   });
 
-  const previousDebugContext = [...(updatedHistory!)].reverse()
+  const previousDebugContext = [...updatedHistory].reverse()
     .find((msg) => msg.role === 'assistant' && msg.debugContext?.systemPrompt)?.debugContext;
   const cachePrefixDiagnostics = buildCachePrefixDiagnostics({
     enabled: state.gameSettings.enableCacheDiagnostics,
-    systemPrompt: systemPrompt!,
-    messages: apiMessages!,
+    systemPrompt,
+    messages: apiMessages,
     previous: previousDebugContext
       ? { systemPrompt: previousDebugContext.systemPrompt, messages: previousDebugContext.messages }
       : undefined,
   });
 
-  type AnyRecord = Record<string, any>;
-  const yp = yitingPreview as AnyRecord | null | undefined;
-  const zp = zhikuPreview as AnyRecord | null | undefined;
-  const sg = storyWeavingGate as AnyRecord | null | undefined;
-  const sd = storyWeavingDiagnostics as AnyRecord | null | undefined;
+  const yp = yitingPreview as 忆庭召回结果 | null | undefined;
+  const zp = zhikuPreview as 智库检索结果 | null | undefined;
+  const sg = storyWeavingGate as 剧情编织门禁快照 | null | undefined;
+  const sd = storyWeavingDiagnostics as 剧情编织注入诊断 | null | undefined;
 
   const aiMsg = 创建聊天消息('assistant', displayText, {
     gameTime: `${state.turnCount}`,
@@ -125,8 +130,8 @@ export async function stage5_replyLanding(
     responseDurationSec: duration,
     preTurnSnapshot,
     debugContext: {
-      systemPrompt: systemPrompt!,
-      messages: apiMessages!.map((msg) => ({ role: msg.role, content: msg.content })),
+      systemPrompt,
+      messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
       deepSeekMainMode: (deepSeekMainActive ? deepSeekMainMode : 'off') as 'off' | 'standard' | 'lock_format' | undefined,
       deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory,
       deepSeekPrefixMode: deepSeekLockFormat,
@@ -137,7 +142,7 @@ export async function stage5_replyLanding(
           ? result.deepSeekRecovery?.initialModel : undefined),
       stV2Attempted: shouldTryTavernV2,
       stV2Used: Boolean(tavernV2Messages),
-      stV2FallbackReason: tavernV2Error instanceof Error ? tavernV2Error.message : tavernV2Error ? String(tavernV2Error) : undefined,
+      stV2FallbackReason: tavernV2Error instanceof Error ? tavernV2Error.message : typeof tavernV2Error === 'string' ? tavernV2Error : undefined,
       rerollSimilarity: rerollSimilarityForTurn,
       rerollSimilarityRetried,
       cachePrefixDiagnostics,
@@ -155,14 +160,14 @@ export async function stage5_replyLanding(
       npcLedgerSelectionRaw: npcLedgerSelection,
       recallPreview: [
         yp?.previewText ?? '',
-        sg ? `剧情编织门禁：${sg.mode}｜第 ${sg.分段组号 ?? '?'} 段｜${(sg.reasons as string[]).join('；') || '无命中理由'}` : '',
+        sg ? `剧情编织门禁：${sg.mode}｜第 ${sg.分段组号 ?? '?'} 段｜${sg.reasons.join('；') || '无命中理由'}` : '',
         sd ? [
           `剧情编织注入健康：${sd.健康状态}`,
           `剧情编织实际注入：第 ${sd.当前分段组号} 段「${sd.当前分段标题}」｜${sd.当前分段运行状态}`,
           sd.归档锚点标题 ? `已跳过归档锚点：第 ${sd.归档锚点组号} 段「${sd.归档锚点标题}」` : '',
           sd.前一分段标题 ? `历史承接段：${sd.前一分段标题}` : '',
           sd.下一分段标题 ? `下一段预热：${sd.下一分段标题}` : '',
-          (sd.检查项 as unknown[]).length ? `注入检查：${(sd.检查项 as unknown[]).join('；')}` : '',
+          sd.检查项.length ? `注入检查：${sd.检查项.join('；')}` : '',
         ].filter(Boolean).join('\n') : '',
         formatZhikuDiagnosticsPreview(zp?.diagnostics),
         formatNpcLedgerPreview(npcLedgerSelection),
@@ -175,8 +180,8 @@ export async function stage5_replyLanding(
   rj = updateWorkflowRecoveryJournal(rj, { phase: 'variable_settlement', assistantMessageId: aiMsg.id });
   await persistWorkflowRecoveryJournal(rj);
 
-  let finalHistory = [...(updatedHistory!), aiMsg];
-  const userMsgIdx = finalHistory.findIndex((m) => m.id === userMsg!.id);
+  let finalHistory = [...updatedHistory, aiMsg];
+  const userMsgIdx = finalHistory.findIndex((m) => m.id === userMsg.id);
   if (userMsgIdx >= 0 && finalHistory[userMsgIdx].preTurnSnapshot) {
     finalHistory = finalHistory.map((m, i) => i === userMsgIdx ? { ...m, preTurnSnapshot: undefined } : m);
   }
@@ -198,5 +203,5 @@ export async function stage5_replyLanding(
     displayText,
     pendingVariableStarted: true,
     recoveryJournal: rj,
-  } as Partial<TurnDeltas>;
+  };
 }

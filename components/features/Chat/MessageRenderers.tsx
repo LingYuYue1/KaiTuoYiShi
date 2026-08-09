@@ -203,7 +203,7 @@ function normalizeSoundEffectTag(name: string): string {
   return name
     .trim()
     .replace(/\s+/g, '')
-    .replace(/[~～…\.。！？!?、，,：:；;“”"‘’'（）()【】[\]《》<>·\-—]/g, '');
+    .replace(/[~～…。！？!?、，,：:；;“”"‘’'（）()【】[\]《》<>·\-—]/g, '');
 }
 
 function isSoundEffectSpeakerName(name: string): boolean {
@@ -219,7 +219,7 @@ function isSoundEffectText(text: string): boolean {
 function isNormalizedSoundEffect(clean: string): boolean {
   if (!clean || clean.length > 18) return false;
   if (SOUND_EFFECT_TAGS.has(clean)) return true;
-  if (clean.length <= 8 && [...clean].every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0])) return true;
+  if (clean.length <= 8 && Array.from(clean).every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0])) return true;
   return /^(轰隆隆|轰隆|隆隆|轰|隆|砰|咚|咔哒|咔|吼|嗷|嘶|呜|滴滴|滴|嗡|滋|哐当|哐|啪|唰|咻){1,5}$/.test(clean);
 }
 
@@ -234,7 +234,7 @@ function combineSoundEffectNarration(name: string, text: string): string {
 }
 
 function getTravelerDisplayName(traveler: 角色数据结构): string {
-  return traveler.姓名?.trim() || traveler.别名?.trim() || '你';
+  return traveler.姓名.trim() || traveler.别名.trim() || '你';
 }
 
 function extractFullQuotedSpeech(text: string): string | null {
@@ -430,8 +430,8 @@ interface InnerVoiceBubbleProps {
 // 主角心声：圆头像 + 顶部「·心绪·」标签 + 虚线边气泡 + 暖橘斜体
 function InnerVoiceBubble({ text, traveler, album, fontSize = 15, deferOffscreen = false }: InnerVoiceBubbleProps & { fontSize?: number }) {
   const PEACH = 'rgb(var(--tj-accent-secondary))';
-  const name = traveler?.姓名?.trim() || '我';
-  const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined;
+  const name = traveler?.姓名.trim() || '我';
+  const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像.trim()) || undefined;
   return (
     <div className="group my-3 flex items-start gap-3" style={deferOffscreen ? DEFERRED_INNER_VOICE_STYLE : undefined}>
       <AvatarTile name={name} url={avatarUrl} color={PEACH} size="md" />
@@ -510,7 +510,7 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
           const protagonist = isProtagonist(line.name, traveler);
           const color = protagonist ? 'rgb(var(--tj-accent-primary))' : nameToColor(line.name);
           const avatarUrl = protagonist
-            ? 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined
+            ? 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像.trim()) || undefined
             : 解析相册资源引用(album, 读取NPC头像(npc, '正文')) || undefined;
           return (
             <DialogueBubble

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { 图片生成任务, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import { 解析相册资源地址 } from '@/utils/albumActions';
-import { activeAccentSurface, activeTextColor, bodyColor, cardClip, cardSurface, faintColor, heroGridBackgroundStyle, heroSurface, imageWellSurface, mutedColor, nsfwColor, smallClip, titleColor } from './foundation';
+import { activeAccentSurface, activeTextColor, bodyColor, cardClip, cardSurface, faintColor, heroGridBackgroundStyle, heroSurface, imageWellSurface, mutedColor, smallClip, titleColor } from './foundation';
 import { ImagePreviewModal, PromptBlock, SafeAlbumImage, formatGenerationDate, generationSourceLabel, historyKind, historyKindLabel, historyKindTone, imageBackendLabel, slotLabel, statusLabel, taskPromptTitle, taskStatusTone } from './workspaces';
 
 type TaskFeedFilter = 'all' | 'active' | 'failed' | 'character' | 'scene' | 'snapshot' | 'phone';

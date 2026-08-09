@@ -3,6 +3,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC关系类型, NPC记录 } from '@/models/npc';
 import type { 剧情节点 } from '@/models/plot';
+import type { 组织标签ID } from '@/models/journey';
 import type { 新闻条目, 新闻生成结果, 新闻条目补丁 } from '@/models/news';
 import { getNewsIssueNumber, 归一化新闻条目 } from '@/models/news';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
@@ -160,10 +161,10 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
         当前日期: request.world.当前日期,
         当前时间: request.world.当前时间,
         当前地点: request.world.当前地点,
-        当前时段: request.world.当前时段?.名称 ?? '',
+        当前时段: request.world.当前时段.名称,
         开局档案: formatNewsOpeningArchive(request.world.开局档案),
         全局事件: request.world.全局事件,
-        活跃人物: request.world.活跃人物?.map((n) => n.姓名 ?? ''),
+        活跃人物: request.world.活跃人物.map((n) => n.姓名),
         氛围变化: request.world.氛围变化,
       },
     ),
@@ -226,7 +227,7 @@ function buildPublicNpcBriefs(npcs: NPC记录[]): Array<{
       原著角色: npc.原著角色 || undefined,
       公开介绍: npc.介绍 ? npc.介绍.slice(0, 120) : undefined,
       装备摘要: npc.装备摘要 ? npc.装备摘要.slice(0, 100) : undefined,
-      备注: npc.备注?.slice(0, 3),
+      备注: npc.备注.slice(0, 3),
     }));
 }
 
@@ -241,6 +242,8 @@ function toPublicRelationLabel(relation: NPC关系类型): string {
       return '友好同行';
     case 'acquaintance':
       return '认识';
+    case 'stranger':
+      return '公开关系不明';
     default:
       return '公开关系不明';
   }
@@ -249,21 +252,21 @@ function toPublicRelationLabel(relation: NPC关系类型): string {
 export function applyNewsGenerationResult(current: 新闻条目[], result: 新闻生成结果): 新闻条目[] {
   const map = new Map(current.map((item) => [item.id, item]));
 
-  for (const patch of result.更新 ?? []) {
+  for (const patch of result.更新) {
     applyPatchToMap(map, patch, false);
   }
 
-  for (const id of result.归档 ?? []) {
+  for (const id of result.归档) {
     const hit = map.get(id);
     if (!hit) continue;
     map.set(id, { ...hit, 状态: 'archived', 更新时间: Date.now() });
   }
 
-  for (const id of result.删除 ?? []) {
+  for (const id of result.删除) {
     map.delete(id);
   }
 
-  for (const patch of result.新增 ?? []) {
+  for (const patch of result.新增) {
     const entry = createEntryFromPatch(patch);
     map.set(entry.id, entry);
   }
@@ -278,10 +281,10 @@ export function applyNewsGenerationResult(current: 新闻条目[], result: 新�
 
 export function hasNewsGenerationChanges(result: 新闻生成结果): boolean {
   return Boolean(
-    result.新增?.length ||
-    result.更新?.length ||
-    result.归档?.length ||
-    result.删除?.length,
+    result.新增.length ||
+    result.更新.length ||
+    result.归档.length ||
+    result.删除.length,
   );
 }
 
@@ -301,7 +304,7 @@ function applyPatchToMap(map: Map<string, 新闻条目>, patch: 新闻条目补�
     回合: typeof patch.回合 === 'number' ? patch.回合 : hit.回合,
     标题: patch.标题?.trim() ? patch.标题.trim() : hit.标题,
     正文: patch.正文?.trim() ? patch.正文.trim() : hit.正文,
-    组织标签: patch.组织标签 ?? patch.阵营标签 ?? hit.组织标签 ?? hit.阵营标签,
+     组织标签: patch.组织标签 ?? (patch as { 阵营标签?: 组织标签ID[] }).阵营标签 ?? hit.组织标签 ?? (hit as { 阵营标签?: 组织标签ID[] }).阵营标签,
     阵营标签: undefined,
     关联系统: patch.关联系统 ?? hit.关联系统,
     关联剧情系列ID: patch.关联剧情系列ID ?? hit.关联剧情系列ID,
@@ -321,7 +324,7 @@ function createEntryFromPatch(patch: 新闻条目补丁): 新闻条目 {
       回合: patch.回合 ?? 0,
       标题: patch.标题 ?? '未命名新闻',
       正文: patch.正文 ?? '',
-      组织标签: patch.组织标签 ?? patch.阵营标签,
+      组织标签: patch.组织标签 ?? (patch as { 阵营标签?: 组织标签ID[] }).阵营标签,
       阵营标签: undefined,
       关联系统: patch.关联系统,
       关联剧情系列ID: patch.关联剧情系列ID,
@@ -350,7 +353,7 @@ function parseNewsResult(rawText: string): 新闻生成结果 {
   }
 }
 
-function normalizePatch(patch: Partial<新闻条目补丁>): 新闻条目补丁 | null {
+function normalizePatch(patch: Partial<新闻条目补丁> | null): 新闻条目补丁 | null {
   if (!patch || typeof patch !== 'object') return null;
   const id = typeof patch.id === 'string' ? patch.id.trim() : undefined;
   const 类目 = patch.类目;
@@ -365,7 +368,7 @@ function normalizePatch(patch: Partial<新闻条目补丁>): 新闻条目补丁 
     回合,
     标题,
     正文,
-    组织标签: Array.isArray(patch.组织标签) ? patch.组织标签 : Array.isArray(patch.阵营标签) ? patch.阵营标签 : undefined,
+     组织标签: Array.isArray(patch.组织标签) ? patch.组织标签 : Array.isArray((patch as { 阵营标签?: 组织标签ID[] }).阵营标签) ? (patch as { 阵营标签?: 组织标签ID[] }).阵营标签 : undefined,
     阵营标签: undefined,
     关联系统: Array.isArray(patch.关联系统) ? patch.关联系统 : undefined,
     关联剧情系列ID: typeof patch.关联剧情系列ID === 'string' && patch.关联剧情系列ID.trim() ? patch.关联剧情系列ID.trim() : undefined,
@@ -375,10 +378,10 @@ function normalizePatch(patch: Partial<新闻条目补丁>): 新闻条目补丁 
 }
 
 function buildStoryWeavingNewsBrief(system?: 剧情编织系统): string {
-  if (!system?.系列列表?.length) return '';
+  if (!system?.系列列表.length) return '';
   const activeSeries = system.系列列表.find((item) => item.id === system.当前系列ID)
     ?? system.系列列表.find((item) => item.激活注入)
-    ?? system.系列列表[0];
+    ?? system.系列列表.at(0);
   if (!activeSeries || !activeSeries.激活注入) return '';
 
   const sideSeries = system.系列列表

@@ -7,7 +7,7 @@ export type PreloadableLazyComponent<T extends ComponentType<any>> = LazyExoticC
 };
 
 function isChunkLoadError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = error instanceof Error ? error.message : (typeof error === 'string' ? error : '');
   return /dynamically imported module|failed to fetch|loading chunk|chunkloaderror/i.test(message);
 }
 
@@ -40,7 +40,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
 
   const loadModule = () => {
     if (!modulePromise) {
-      modulePromise = loader().catch((error) => {
+      modulePromise = loader().catch((error: unknown) => {
         modulePromise = null;
         throw error;
       });

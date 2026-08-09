@@ -35,7 +35,7 @@ export interface 世界书条目 {
   /** 该条目允许注入的场景；空数组等价于 ['all']（迁移期兼容）。 */
   scope: 世界书作用域[];
   /** @deprecated 已迁移到 scope，仅旧存档读入时仍可能存在；normalize 后会被移除。 */
-  turnGuard?: WorldbookTurnGuard;
+  turnGuard?: 'first_only';
   createdAt: number;
   updatedAt: number;
 

@@ -28,7 +28,7 @@ export function retrieveYitingContext(
   query: string,
   limit: number,
 ): 忆庭召回结果 {
-  if (!system?.回忆档案?.length || !query.trim()) {
+  if (!system?.回忆档案.length || !query.trim()) {
     return { entries: [], injection: '' };
   }
   const candidates = buildRecallCandidates(system, query, 24, 6);
@@ -55,7 +55,7 @@ export async function retrieveYitingContextWithModel(
   retryCount = 2,
   promptModules?: 提示词模块[],
 ): Promise<忆庭召回结果> {
-  if (!system?.回忆档案?.length || !query.trim()) {
+  if (!system?.回忆档案.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
   }
 
@@ -138,20 +138,6 @@ function buildYitingRecallPromptModulesSection(promptModules?: 提示词模块[]
   return buildIndependentPromptModulesSection(promptModules, 'yitingRecall');
 }
 
-function buildRecallSystemPrompt(customPrompt: string): string {
-  const fallback = [
-    '你是“剧情回忆检索器”。',
-    '任务：根据玩家输入，在给定回忆库中向前检索最相关的回忆，区分强回忆与弱回忆。',
-    '- 强回忆：与当前输入高度相关，且需要保留原文细节。',
-    '- 弱回忆：存在关联，但用概括即可。',
-    '- 必须优先选择时间最近且语义最相关的回忆。',
-    '- 优先匹配：人物、地点、目标、未结事项、冲突对象、承诺、伤势、物品、判定结果。',
-    '- 强回忆数量不设固定 1-2 条上限；只要多条回忆都直接影响当前输入的理解、承接、人物判断或结果处置，就应一并列入强回忆。',
-    '- 不要为了精简而漏掉当前仍在生效的关键前因、承诺、旧伤、旧账、未结事项、上一轮明确结论或直接决定当前态度的互动证据。',
-  ].join('\n');
-  return customPrompt?.trim() || fallback;
-}
-
 function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系统设置): API配置项 {
   const override = settings.忆庭召回API;
   return {
@@ -167,7 +153,7 @@ function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系
 }
 
 function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6): 剧情回忆候选[] {
-  const entries = [...(system.回忆档案 ?? [])].sort((a, b) => a.回合 - b.回合);
+  const entries = [...system.回忆档案].sort((a, b) => a.回合 - b.回合);
   const terms = extractRecallTerms(query);
   const scored = entries.map((entry, index) => ({
     entry,
@@ -230,9 +216,9 @@ function parseRecallIndexes(raw: string, candidates: 剧情回忆候选[], limit
 }
 
 function normalizeRecallName(raw: string): string {
-  const match = String(raw || '').match(/回忆\s*(\d+)/);
-  if (!match) return String(raw || '').replace(/\s+/g, '').trim();
-  return `回忆${String(Number(match[1])).padStart(3, '0')}`;
+  const match = (raw || '').match(/回忆\s*(\d+)/);
+  if (!match) return (raw || '').replace(/\s+/g, '').trim();
+  return `回忆${Number(match[1]).toString().padStart(3, '0')}`;
 }
 
 function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆条目[]): string {
@@ -260,7 +246,7 @@ function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆
 }
 
 function buildBriefFromRaw(raw: string, limit = 260): string {
-  const cleaned = String(raw || '')
+  const cleaned = (raw || '')
     .replace(/玩家输入：[\s\S]*?(?=\n正文：|\n回合小结：|\n动态世界：|\n后续选项：|$)/g, '')
     .replace(/正文：/g, '')
     .replace(/\s+/g, ' ')
@@ -334,7 +320,7 @@ function scoreRecallCandidate(entry: 回忆条目, query: string, terms: string[
 
 export function 搜索回忆档案(system: 忆庭系统, query: string, limit = 8): 回忆条目[] {
   const q = query.trim().toLowerCase();
-  const entries = system.回忆档案 ?? [];
+  const entries = system.回忆档案;
   if (!q) {
     return [...entries]
       .sort((a, b) => b.回合 - a.回合)
@@ -357,8 +343,8 @@ export function 搜索回忆档案(system: 忆庭系统, query: string, limit = 
 function scoreMemory(entry: 回忆条目, query: string, terms: string[]): number {
   const title = (entry.名称 ?? '').toLowerCase();
   const type = (entry.类型 ?? '').toLowerCase();
-  const summary = (entry.摘要 ?? '').toLowerCase();
-  const raw = (entry.原文 ?? '').toLowerCase();
+  const summary = entry.摘要.toLowerCase();
+  const raw = entry.原文.toLowerCase();
   const keywords = (entry.检索关键词 ?? []).map((k) => k.toLowerCase());
   let score = 0;
 

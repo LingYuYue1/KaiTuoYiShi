@@ -44,11 +44,13 @@ export function ApiErrorReportsTab() {
   };
 
   useEffect(() => {
-    void refresh();
+    void (async () => {
+      await refresh();
+    })();
   }, []);
 
   const selected = useMemo(
-    () => reports.find((item) => item.id === selectedId) ?? reports[0] ?? null,
+    () => reports.find((item) => item.id === selectedId) ?? reports.at(0) ?? null,
     [reports, selectedId],
   );
 

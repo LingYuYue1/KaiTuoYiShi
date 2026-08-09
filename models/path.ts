@@ -154,7 +154,7 @@ export const PATH_TRAIT_DEFS: Record<命途ID, 命途特质[]> = {
 };
 
 export function 获取命途特质(id: 命途ID): 命途特质[] {
-  return PATH_TRAIT_DEFS[id] ?? [];
+  return PATH_TRAIT_DEFS[id];
 }
 
 // ── 忘却命途机制 ──

@@ -41,7 +41,7 @@ export function getExplicitNpcNamesForTurn(input: {
 }): string[] {
   const npcs = input.npcs ?? [];
   const text = [input.userInput ?? '', recentNarrativeText(input.history ?? [])].join('\n');
-  const sceneNames = new Set((input.world.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean));
+  const sceneNames = new Set(input.world.当前时段.人物.map((npc) => npc.姓名.trim()).filter(Boolean));
   const recentCutoff = Math.max(1, input.turnCount - 3);
   const picked: string[] = [];
   const push = (name?: string) => {
@@ -54,7 +54,7 @@ export function getExplicitNpcNamesForTurn(input: {
       npc.同行 ||
       sceneNames.has(npc.姓名) ||
       Boolean(npc.别名 && sceneNames.has(npc.别名)) ||
-      Number(npc.最近回合 || 0) >= recentCutoff ||
+      npc.最近回合 >= recentCutoff ||
       nameAppearsInText(npc.姓名, text) ||
       Boolean(npc.别名 && nameAppearsInText(npc.别名, text));
     if (isExplicit) push(npc.姓名);
@@ -83,8 +83,8 @@ export function getAnticipatedNpcNamesForTurn(input: {
   const text = [
     input.userInput ?? '',
     recentNarrativeText(input.history ?? [], 6),
-    input.world.当前地点 ?? '',
-    input.world.当前时段?.名称 ?? '',
+    input.world.当前地点,
+    input.world.当前时段.名称,
   ].join('\n');
   const names: string[] = [];
 

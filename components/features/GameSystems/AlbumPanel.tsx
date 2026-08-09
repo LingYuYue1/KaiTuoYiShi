@@ -1,14 +1,12 @@
-﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+﻿import { useMemo, useState } from 'react';
 import { useTransition } from 'react';
 import { 图片是否参考角色, 读取图片参考目标 } from '@/models/imageGeneration';
-import type { 图片槽位, 图片生成任务, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
+import type { 图片槽位, 图片生成任务, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
-import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
+import type { API设置, 游戏设置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
 import type { 手机系统 } from '@/models/phone';
-import type { NPC记录, NPC头像槽位, NPC角色锚点档案 } from '@/models/npc';
-import { 读取NPC头像 } from '@/models/npc';
+import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import { saveSetting } from '@/services/dbService';
 import {
   添加图片到相册,
@@ -19,12 +17,9 @@ import {
   挂载NPC立绘图片,
   挂载NPC_NSFW部位图片,
   挂载旅人图片,
-  读取相册条目地址,
-  解析相册资源引用,
   解析相册资源地址,
 } from '@/utils/albumActions';
 import { generateImage } from '@/services/ai/imageGeneration';
-import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
 import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
 import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
@@ -33,11 +28,11 @@ import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenera
 import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
 
 import {
-  generateTargets, smallClip, groupForTab, navGroups, tabs,
+  generateTargets, smallClip,
 } from './album/foundation';
 import type {
   AnchorSelection, GenerateOverride, GenerateTarget, PromptMeta,
-  SceneImageSummary, StorySnapshotSource, StorySnapshotSummary, WorkTab, NavGroupId,
+  SceneImageSummary, StorySnapshotSource, StorySnapshotSummary, WorkTab,
 } from './album/foundation';
 
 import {
@@ -98,7 +93,7 @@ function setEntryReferenceTargets(entries: 相册条目[], entryId: string, char
   });
 }
 
-export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, phone, onPhoneChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [] }: AlbumPanelProps) {
+export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [] }: AlbumPanelProps) {
   const [activeTab, setActiveTab] = useState<WorkTab>('manual');
   const [showNsfw, setShowNsfw] = useState(false);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
@@ -141,7 +136,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       : '';
 
   const assetMap = useMemo(() => new Map(album.assets.map((asset) => [asset.id, asset])), [album.assets]);
-  const activeEntry = album.entries.find((entry) => entry.id === activeEntryId) ?? album.entries[0] ?? null;
   const companions = npcs.filter((npc) => npc.阶位 === 'companion');
   const resourceEntries = useMemo(
     () => buildAlbumResourceEntries(album, assetMap, nsfwVisible && showNsfw),
@@ -161,16 +155,13 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setSceneImageText(text);
     setMessage('已导入当前正文。');
   };
-  useEffect(() => {
-    if (storySnapshotDraft.trim()) return;
-    const initial = storySnapshotSourceOptions.find((option) => option.id === storySnapshotSource)?.text || storySnapshotSourceOptions[0]?.text || '';
-    if (initial) setStorySnapshotDraft(initial);
-  }, [storySnapshotDraft, storySnapshotSource, storySnapshotSourceOptions]);
+  const initialSnapshotDraft = storySnapshotSourceOptions.find((option) => option.id === storySnapshotSource)?.text || storySnapshotSourceOptions.at(0)?.text || '';
+  const effectiveStorySnapshotDraft = storySnapshotDraft.trim() ? storySnapshotDraft : initialSnapshotDraft;
   const libraryRecords = useMemo(
     () => buildCharacterLibraryRecords(traveler, npcs, album, assetMap, nsfwVisible && showNsfw),
     [traveler, npcs, album, assetMap, nsfwVisible, showNsfw],
   );
-  const activeLibraryRecord = libraryRecords.find((record) => record.id === libraryNpcId) ?? libraryRecords[0] ?? null;
+  const activeLibraryRecord = libraryRecords.find((record) => record.id === libraryNpcId) ?? libraryRecords.at(0) ?? null;
   const persistGameSettingsChange = (next: 游戏设置) => {
     onGameSettingsChange(next);
     void saveSetting('gameSettings', next);
@@ -204,13 +195,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     setMessage(enabled
       ? '已允许 OpenAI 兼容接口发送参考图。'
       : '已关闭 OpenAI 兼容参考图发送。');
-  };
-
-  const addAlbumItem = (item: ReturnType<typeof 创建相册图片条目>) => {
-    onAlbumChange((prev) => 添加图片到相册(prev, item));
-    setActiveEntryId(item.entry.id);
-    setActiveTab('gallery');
-    setMessage('图片已加入相册。');
   };
 
   const clearPromptDraft = () => {
@@ -320,7 +304,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   const resolveStorySnapshotParserConfig = () => buildImagePromptTokenizerConfig(gameSettings, apiSettings);
 
   const resolveCharacterAnchorExtractConfig = () => {
-    const mainApi = apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs[0];
+    const mainApi = apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);
     if (!mainApi) return null;
     const override = imageSettings.词组转化器API;
     return {
@@ -372,7 +356,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     album,
   }).status;
 
-  const handleGenerate = async (_requestedNsfw = false, override?: GenerateOverride) => {
+  const handleGenerate = async (override?: GenerateOverride) => {
     const target = override?.target ?? currentTarget;
     const nsfw = target.nsfw === true;
     const targetSize = override?.size ?? (override?.target ? resolveSize(sizePreset, customSize, target.slot) : resolvedSize);
@@ -538,7 +522,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       anchorSummary: target.anchorSummary || (target.anchorMode ? '沿用上次角色锚点' : '沿用上次档案回退结果'),
       sourcePrompt: target.sourcePrompt,
     });
-    void handleGenerate(target.nsfw, {
+    void handleGenerate({
       source: 'retry',
       prompt: target.prompt,
       negativePrompt: target.negativePrompt,
@@ -560,7 +544,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     if (params.targetKind === 'traveler') {
       if (params.slot === 'portrait') {
         onTravelerChange((prev) => 挂载旅人图片(prev, { slot: '立绘', src: mountedSrc }));
-      } else if (params.slot.toString().startsWith('nsfw_')) {
+      } else if (params.slot.startsWith('nsfw_')) {
         setMessage('旅人档案暂不支持挂载 NSFW 部位图。');
         return;
       } else {
@@ -610,10 +594,10 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
           item.id === params.entryId
             ? {
                 ...item,
-                targetType: params.slot.toString().startsWith('nsfw_') ? 'nsfw_part' : 'npc',
+                targetType: params.slot.startsWith('nsfw_') ? 'nsfw_part' : 'npc',
                 targetId: params.targetId,
                 slot: params.slot,
-                nsfw: item.nsfw || params.slot.toString().startsWith('nsfw_'),
+                nsfw: item.nsfw || params.slot.startsWith('nsfw_'),
               }
             : item,
         ),
@@ -788,7 +772,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       const anchor = await extractCharacterAnchorWithAI(config, {
         name: traveler.姓名 || '旅人',
         kind: 'traveler',
-        sourceText: [traveler.性别, traveler.年龄 ? `${traveler.年龄}` : '', traveler.身高, traveler.身份, traveler.外貌, traveler.主命途, ...(traveler.能力 ?? [])].filter(Boolean).join('\n'),
+        sourceText: [traveler.性别, `${traveler.年龄}`, traveler.身高, traveler.身份, traveler.外貌, traveler.主命途, ...traveler.能力].filter(Boolean).join('\n'),
         requirement,
       });
       saveTravelerAnchor(anchor);
@@ -800,9 +784,9 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
     }
   };
 
-  const handleGenerateStorySnapshot = (nsfw = false, override?: GenerateOverride) => {
+  const handleGenerateStorySnapshot = (override?: GenerateOverride) => {
     const sceneTarget = generateTargets.find((item) => item.id === 'scene') ?? currentTarget;
-    void handleGenerate(nsfw, {
+    void handleGenerate({
       ...override,
       source: override?.source ?? (storySnapshotSource === 'manual' ? 'manual' : 'auto'),
       target: sceneTarget,
@@ -828,7 +812,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
       anchorSummary: target.anchorSummary || (target.anchorMode ? '沿用上次角色锚点' : '沿用上次档案回退结果'),
       sourcePrompt: target.sourcePrompt,
     });
-    handleGenerateStorySnapshot(target.nsfw, {
+    handleGenerateStorySnapshot({
       source: 'retry',
       prompt: target.prompt,
       negativePrompt: target.negativePrompt,
@@ -1051,7 +1035,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
   };
 
   const handleBuildStorySnapshotPrompt = async () => {
-    const sourceText = storySnapshotDraft.trim();
+    const sourceText = effectiveStorySnapshotDraft.trim();
     if (!sourceText) {
       setMessage('请先选择或填写正文片段。');
       return;
@@ -1225,7 +1209,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                     setMessage(result.warningCount > 0
                       ? `相册备份已导出；${result.warningCount} 个资源未能打包，请查看清单警告。`
                       : `相册备份已导出：${result.assetCount} 个资源，${result.entryCount} 个条目。`);
-                  }).catch((err) => setMessage(`导出失败：${err instanceof Error ? err.message : String(err)}`))
+                  }).catch((err: unknown) => setMessage(`导出失败：${err instanceof Error ? err.message : String(err)}`))
                     .finally(() => setArchiveProgress(null));
                 }}
                 onImport={(file, target, mode) => {
@@ -1241,7 +1225,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                     setMessage(mode === 'replace'
                       ? `相册已覆盖恢复：${stats.addedAssets} 个资源，${stats.addedEntries} 个条目。`
                       : `相册已合并：新增 ${stats.addedEntries} 项，复用 ${stats.reusedAssets} 个资源，合并 ${stats.mergedEntries} 项。`);
-                  }).catch((err) => setMessage(`导入失败：${err instanceof Error ? err.message : String(err)}`))
+                  }).catch((err: unknown) => setMessage(`导入失败：${err instanceof Error ? err.message : String(err)}`))
                     .finally(() => setArchiveProgress(null));
                 }}
               />
@@ -1289,7 +1273,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 setNegativePrompt={setNegativePrompt}
                 generateTitle={generateTitle}
                 setGenerateTitle={setGenerateTitle}
-                onGenerate={handleGenerate}
+                onGenerate={() => void handleGenerate()}
                 generating={generating}
                 nsfwVisible={nsfwVisible}
                 companions={companions}
@@ -1336,7 +1320,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 setSceneText={setSceneText}
                 sourceMode={storySnapshotSource}
                 setSourceMode={setStorySnapshotSource}
-                sourceText={storySnapshotDraft}
+                sourceText={effectiveStorySnapshotDraft}
                 setSourceText={setStorySnapshotDraft}
                 sourceOptions={storySnapshotSourceOptions}
                 summary={storySnapshotSummary}
@@ -1371,7 +1355,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 setNegativePrompt={setNegativePrompt}
                 generateTitle={generateTitle}
                 setGenerateTitle={setGenerateTitle}
-                onGenerate={handleGenerate}
+                onGenerate={() => void handleGenerate()}
                 generating={generating}
                 sceneText={sceneImageText}
                 setSceneText={setSceneImageText}
@@ -1407,7 +1391,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
                 setNegativePrompt={setNegativePrompt}
                 generateTitle={generateTitle}
                 setGenerateTitle={setGenerateTitle}
-                onGenerate={handleGenerate}
+                onGenerate={() => void handleGenerate()}
                 generating={generating}
                 sceneText={sceneText}
                 setSceneText={setSceneText}
@@ -1436,7 +1420,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
               <RulesWorkspace
                 rules={imageSettings.rules}
                 onChange={patchImageRules}
-                onSave={handleSaveRules}
+                onSave={() => void handleSaveRules()}
               />
             )}
             {activeTab === 'queue' && <ImageTaskWorkspace album={album} includeNsfw={nsfwVisible && showNsfw} onSelectEntry={setActiveEntryId} onRetry={handleRetryTask} />}

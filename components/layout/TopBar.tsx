@@ -1,4 +1,4 @@
-﻿import { memo, useState } from 'react';
+﻿import { memo, useState, type CSSProperties } from 'react';
 import type { 世界状态 } from '@/models/world';
 import type { 主题预设 } from '@/models/settings';
 import type { 新闻条目 } from '@/models/news';
@@ -18,12 +18,12 @@ const clip10 =
 const clip12 =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
 
-export const TopBar = memo(function TopBar({ worldState, onHome, news, onOpenNews }: TopBarProps) {
+export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarProps) {
   const [mobileCollapsed, setMobileCollapsed] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState(false);
-  const dateText = worldState.当前日期?.trim() || '日期未设定';
+  const dateText = worldState.当前日期.trim() || '日期未设定';
   const timeText = formatClock(worldState.当前时间) || '时间未设定';
-  const locationText = worldState.当前地点?.trim() || '地点未设定';
+  const locationText = worldState.当前地点.trim() || '地点未设定';
   const dayText = `DAY ${Math.max(1, worldState.开拓天数 || 1).toString().padStart(2, '0')}`;
 
   const weatherId = worldState.当前天气;
@@ -37,6 +37,9 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news, onOpenNew
   ) : null;
 
   const headlines = buildHeadlines(news);
+  const marqueeStyle: CSSProperties & Record<'--marquee-duration', string> = {
+    '--marquee-duration': headlines.length > 3 ? '40s' : '60s',
+  };
 
   return (
     <>
@@ -137,7 +140,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news, onOpenNew
                 className="flex items-center gap-0 whitespace-nowrap min-w-max animate-marquee-linear"
                 style={{
                   animation: 'marqueeLinear var(--marquee-duration, 36s) linear infinite',
-                  ['--marquee-duration' as any]: headlines.length > 3 ? '40s' : '60s',
+                  ...marqueeStyle,
                   fontSize: '15px',
                   color: 'rgba(var(--tj-text-secondary), 0.72)',
                   fontFamily: '"Noto Serif SC", SimSun, serif',
@@ -310,7 +313,7 @@ function buildHeadlines(news: 新闻条目[]): string[] {
     return 2;
   };
   const sorted = [...items]
-    .filter((n) => n.标题?.trim())
+    .filter((n) => n.标题.trim())
     .sort((a, b) => rank(a.状态) - rank(b.状态));
   const seen = new Set<string>();
   return sorted

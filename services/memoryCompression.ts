@@ -123,7 +123,7 @@ function normalizeSummaryOutput(raw: string): string {
 }
 
 function normalizeLine(text: string, limit: number): string {
-  const cleaned = String(text || '')
+  const cleaned = (text || '')
     .replace(/\s+/g, ' ')
     .replace(/^[\d一二三四五六七八九十]+\s*[.、)]\s*/, '')
     .trim();

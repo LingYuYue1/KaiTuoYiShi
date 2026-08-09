@@ -1,8 +1,8 @@
 import { jsonResponse, optionsResponse, readRequiredEnv, type PagesContextLike } from './_shared';
 
-export const onRequestOptions = async (): Promise<Response> => optionsResponse();
+export const onRequestOptions = (): Response => optionsResponse();
 
-export const onRequestGet = async ({ env }: PagesContextLike): Promise<Response> => {
+export const onRequestGet = ({ env }: PagesContextLike): Response => {
   try {
     return jsonResponse({
       clientId: readRequiredEnv(env, 'GITHUB_CLIENT_ID'),

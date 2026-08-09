@@ -118,13 +118,13 @@ export function buildSaveNodeDeltaRecord(
     parentNodeId: tree.parentNodeId,
     saveId,
     type: save.type,
-    timestamp: Number(save.timestamp) || Date.now(),
-    turnCount: Number(save.turnCount) || chatHistory.length + 1,
+    timestamp: save.timestamp || Date.now(),
+    turnCount: save.turnCount || chatHistory.length + 1,
     baseMode,
     chatFromIndex: Math.max(0, chatHistory.length - chatTailSource.length),
     chatTail: chatTailSource.map((message) => ({
-      role: String(message.role ?? ''),
-      contentLength: String(message.content ?? '').length,
+      role: message.role,
+      contentLength: message.content.length,
       hasParsedBody: Boolean(message.parsedResponse?.body),
     })),
     assetIds: collectAssetIds(save),
@@ -180,7 +180,10 @@ export function buildDeltaOnlyStoredSave(save: 存档数据, baseSaveId: number)
 }
 
 export function isDeltaOnlyStoredSave(save: 存档数据 | null | undefined): boolean {
-  return (save as SaveWithTree | null | undefined)?.saveStorage?.mode === 'delta';
+  if (!save) return false;
+  // saveStorage 是存档数据类型外的运行态字段（见 buildDeltaOnlyStoredSave），
+  // 用显式内联交叉类型断言访问，避免 no-unnecessary-type-assertion 误判（同 dbService.ts 模式）。
+  return (save as 存档数据 & { saveStorage?: { mode: SaveNodeBaseMode; baseSaveId?: number } }).saveStorage?.mode === 'delta';
 }
 
 export function restoreSaveFromDelta(baseSave: 存档数据, storedSave: 存档数据, delta: SaveNodeDeltaRecord): 存档数据 {
@@ -206,7 +209,7 @@ export function restoreSaveFromDelta(baseSave: 存档数据, storedSave: 存档�
 }
 
 function buildDeltaPayload(save: 存档数据, baseSave: 存档数据, baseSaveId: number): SaveNodeDeltaPayload {
-  const chatDelta = buildChatDelta(save.chatHistory ?? [], baseSave.chatHistory ?? []);
+  const chatDelta = buildChatDelta(save.chatHistory, baseSave.chatHistory);
   const fields: SaveNodeDeltaPayload['fields'] = {};
   for (const key of DELTA_FIELDS) {
     if (key === 'apiSettings') continue;
@@ -291,10 +294,10 @@ function hashSaveCheckpoint(save: 存档数据): string {
     type: save.type,
     timestamp: save.timestamp,
     turnCount: save.turnCount,
-    traveler: save.旅人?.姓名,
-    location: save.世界?.当前地点,
-    chatCount: save.chatHistory?.length ?? 0,
-    lastMessage: save.chatHistory?.at(-1)?.content?.slice(0, 240) ?? '',
+    traveler: save.旅人.姓名,
+    location: save.世界.当前地点,
+    chatCount: save.chatHistory.length,
+    lastMessage: save.chatHistory.at(-1)?.content.slice(0, 240) ?? '',
     assets: collectAssetIds(save),
   });
   let hash = 2166136261;

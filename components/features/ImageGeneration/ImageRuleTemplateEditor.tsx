@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
 import { normalizeImageRules, 获取规则模板列表 } from '@/utils/imagePromptRules';
 
@@ -44,54 +44,43 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
   const section = ruleSections.find((item) => item.id === activeSection) ?? ruleSections[0];
   const presets = useMemo(() => 获取规则模板列表(normalizedRules, activeSection), [normalizedRules, activeSection]);
   const activeId = getActiveId(normalizedRules, activeSection);
-  const editorId = editorIds[activeSection] || activeId || presets[0]?.id || '';
-  const selectedPreset = presets.find((preset) => preset.id === editorId) ?? presets[0] ?? null;
+  // 编辑器 id 采用「读时校验」：存储值失效（预设被外部删除/替换）时回退到当前启用项或首个预设，
+  // 与旧版的 effect 回写校正稳态等价，但无需在副作用里同步 setState。
+  const editorId = presets.some((preset) => preset.id === editorIds[activeSection])
+    ? editorIds[activeSection]
+    : (activeId || presets.at(0)?.id || '');
+  const selectedPreset = presets.find((preset) => preset.id === editorId) ?? presets.at(0) ?? null;
   const activeModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.是否启用) ?? null;
-  const selectedModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.id === (modelEditorId || activeModelRule?.id)) ?? normalizedRules.模型词组转化器预设列表[0] ?? null;
+  const modelEditorIdOrFallback = normalizedRules.模型词组转化器预设列表.some((preset) => preset.id === modelEditorId)
+    ? modelEditorId
+    : (activeModelRule?.id || normalizedRules.模型词组转化器预设列表.at(0)?.id || '');
+  const selectedModelRule = normalizedRules.模型词组转化器预设列表.find((preset) => preset.id === modelEditorIdOrFallback) ?? normalizedRules.模型词组转化器预设列表.at(0) ?? null;
   const scopedArtistPresets = normalizedRules.画师串预设列表.filter((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all');
   const activeArtistId = styleScope === 'scene' ? normalizedRules.当前场景画师串预设ID : normalizedRules.当前NPC画师串预设ID;
   const activeArtist = activeArtistId ? scopedArtistPresets.find((preset) => preset.id === activeArtistId) ?? null : null;
-  const selectedArtist = scopedArtistPresets.find((preset) => preset.id === (artistEditorId || activeArtistId)) ?? scopedArtistPresets[0] ?? null;
+  const artistEditorIdOrFallback = scopedArtistPresets.some((preset) => preset.id === artistEditorId)
+    ? artistEditorId
+    : (activeArtistId || scopedArtistPresets.at(0)?.id || '');
+  const selectedArtist = scopedArtistPresets.find((preset) => preset.id === artistEditorIdOrFallback) ?? scopedArtistPresets.at(0) ?? null;
   const scopedDetailStylePresets = normalizedRules.详细画风预设列表.filter((preset) => preset.适用范围 === styleScope || preset.适用范围 === 'all');
   const activeDetailStyleId = styleScope === 'scene' ? normalizedRules.当前场景详细画风预设ID : normalizedRules.当前NPC详细画风预设ID;
   const activeDetailStyle = activeDetailStyleId ? scopedDetailStylePresets.find((preset) => preset.id === activeDetailStyleId) ?? null : null;
-  const selectedDetailStyle = scopedDetailStylePresets.find((preset) => preset.id === (detailStyleEditorId || activeDetailStyleId)) ?? scopedDetailStylePresets[0] ?? null;
+  const detailStyleEditorIdOrFallback = scopedDetailStylePresets.some((preset) => preset.id === detailStyleEditorId)
+    ? detailStyleEditorId
+    : (activeDetailStyleId || scopedDetailStylePresets.at(0)?.id || '');
+  const selectedDetailStyle = scopedDetailStylePresets.find((preset) => preset.id === detailStyleEditorIdOrFallback) ?? scopedDetailStylePresets.at(0) ?? null;
   const activeQualityId = normalizedRules.当前质量增强预设ID;
   const activeQuality = activeQualityId ? normalizedRules.质量增强预设列表.find((preset) => preset.id === activeQualityId) ?? null : null;
-  const selectedQuality = normalizedRules.质量增强预设列表.find((preset) => preset.id === (qualityEditorId || activeQualityId)) ?? normalizedRules.质量增强预设列表[0] ?? null;
+  const qualityEditorIdOrFallback = normalizedRules.质量增强预设列表.some((preset) => preset.id === qualityEditorId)
+    ? qualityEditorId
+    : (activeQualityId || normalizedRules.质量增强预设列表.at(0)?.id || '');
+  const selectedQuality = normalizedRules.质量增强预设列表.find((preset) => preset.id === qualityEditorIdOrFallback) ?? normalizedRules.质量增强预设列表.at(0) ?? null;
   const activePngId = styleScope === 'scene' ? normalizedRules.当前场景PNG画风预设ID : normalizedRules.当前NPCPNG画风预设ID;
   const activePng = activePngId ? normalizedRules.PNG画风预设列表.find((preset) => preset.id === activePngId) ?? null : null;
-  const selectedPng = normalizedRules.PNG画风预设列表.find((preset) => preset.id === (pngEditorId || activePngId)) ?? normalizedRules.PNG画风预设列表[0] ?? null;
-
-  useEffect(() => {
-    if (editorIds[activeSection] && presets.some((preset) => preset.id === editorIds[activeSection])) return;
-    setEditorIds((prev) => ({ ...prev, [activeSection]: activeId || presets[0]?.id || '' }));
-  }, [activeId, activeSection, editorIds, presets]);
-
-  useEffect(() => {
-    if (modelEditorId && normalizedRules.模型词组转化器预设列表.some((preset) => preset.id === modelEditorId)) return;
-    setModelEditorId(activeModelRule?.id || normalizedRules.模型词组转化器预设列表[0]?.id || '');
-  }, [activeModelRule?.id, modelEditorId, normalizedRules.模型词组转化器预设列表]);
-
-  useEffect(() => {
-    if (artistEditorId && scopedArtistPresets.some((preset) => preset.id === artistEditorId)) return;
-    setArtistEditorId(activeArtistId || scopedArtistPresets[0]?.id || '');
-  }, [activeArtistId, artistEditorId, scopedArtistPresets]);
-
-  useEffect(() => {
-    if (detailStyleEditorId && scopedDetailStylePresets.some((preset) => preset.id === detailStyleEditorId)) return;
-    setDetailStyleEditorId(activeDetailStyleId || scopedDetailStylePresets[0]?.id || '');
-  }, [activeDetailStyleId, detailStyleEditorId, scopedDetailStylePresets]);
-
-  useEffect(() => {
-    if (qualityEditorId && normalizedRules.质量增强预设列表.some((preset) => preset.id === qualityEditorId)) return;
-    setQualityEditorId(activeQualityId || normalizedRules.质量增强预设列表[0]?.id || '');
-  }, [activeQualityId, normalizedRules.质量增强预设列表, qualityEditorId]);
-
-  useEffect(() => {
-    if (pngEditorId && normalizedRules.PNG画风预设列表.some((preset) => preset.id === pngEditorId)) return;
-    setPngEditorId(activePngId || normalizedRules.PNG画风预设列表[0]?.id || '');
-  }, [activePngId, pngEditorId, normalizedRules.PNG画风预设列表]);
+  const pngEditorIdOrFallback = normalizedRules.PNG画风预设列表.some((preset) => preset.id === pngEditorId)
+    ? pngEditorId
+    : (activePngId || normalizedRules.PNG画风预设列表.at(0)?.id || '');
+  const selectedPng = normalizedRules.PNG画风预设列表.find((preset) => preset.id === pngEditorIdOrFallback) ?? normalizedRules.PNG画风预设列表.at(0) ?? null;
 
   const setActiveId = (id: string) => {
     onChange({ [activeIdKey(activeSection)]: id });
@@ -793,22 +782,6 @@ function QualitySelectField({ label, value, onChange, presets }: { label: string
         {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
       </select>
     </label>
-  );
-}
-
-function StylePaneTitle({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div
-      className="space-y-1 p-3"
-      style={{
-        background: 'rgba(var(--tj-accent-primary),0.045)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="font-serif text-xs font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-accent-primary),0.88)' }}>{title}</div>
-      <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.58)' }}>{desc}</div>
-    </div>
   );
 }
 

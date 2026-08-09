@@ -31,13 +31,19 @@ export type ReferenceImagePayload = {
   images: Array<{ id: string; src: string; role: 'character'; weight: number }>;
 };
 
-export function backendLabel(backend: 文生图API配置['backend'] | string): string {
-  return {
-    openai_compatible: 'OpenAI 兼容',
-    novelai: 'NovelAI',
-    sd_webui: 'SD WebUI',
-    comfyui: 'ComfyUI',
-  }[backend] ?? String(backend || '未选择');
+export function backendLabel(backend: string): string {
+  switch (backend) {
+    case 'openai_compatible':
+      return 'OpenAI 兼容';
+    case 'novelai':
+      return 'NovelAI';
+    case 'sd_webui':
+      return 'SD WebUI';
+    case 'comfyui':
+      return 'ComfyUI';
+    default:
+      return backend || '未选择';
+  }
 }
 
 export function referenceBackendCapability(
@@ -55,8 +61,7 @@ export function referenceBackendCapability(
       ? { usable: true, message: '已允许发送参考图；部分中转供应商可能不支持。' }
       : { usable: false, message: '默认不向 OpenAI 兼容接口发送参考图，可通过兼容开关选择启用。' };
   }
-  if (backend === 'novelai') return { usable: false, message: 'NovelAI 参考图参数尚未接入。' };
-  return { usable: false, message: '当前后端未声明参考图能力。' };
+  return { usable: false, message: 'NovelAI 参考图参数尚未接入。' };
 }
 
 export function referenceBackendSupport(

@@ -38,7 +38,7 @@ const currentHashPatches = new Map<string, string>();
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   void handleRequest(event.data).then(
     (result) => self.postMessage({ requestId: event.data.requestId, ok: true, result }),
-    (error) => self.postMessage({
+    (error: unknown) => self.postMessage({
       requestId: event.data.requestId,
       ok: false,
       error: error instanceof Error ? error.message : String(error),
@@ -92,6 +92,7 @@ async function handleRequest(request: WorkerRequest): Promise<unknown> {
 async function addExportAsset(state: ExportState, asset: 图片资源): Promise<void> {
   const loaded = await loadAlbumAssetBytes(asset);
   const { dataUrl: _dataUrl, ...metadata } = asset;
+  void _dataUrl;
   if (!loaded) {
     state.assets.push(metadata);
     state.warnings.push(`资源 ${asset.id} 无法打包为本地图片文件。`);

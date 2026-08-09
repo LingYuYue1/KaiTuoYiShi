@@ -51,11 +51,10 @@ interface 手机回复质量结果 {
   reasons: string[];
 }
 
-export class PhoneReplyQualityError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PhoneReplyQualityError';
-  }
+export function createPhoneReplyQualityError(message: string): Error {
+  const error = new Error(message);
+  error.name = 'PhoneReplyQualityError';
+  return error;
 }
 
 function getPhoneReplyLimits(ctx: 手机回复上下文): 手机回复数量限制 {
@@ -63,10 +62,10 @@ function getPhoneReplyLimits(ctx: 手机回复上下文): 手机回复数量限�
 }
 
 export function buildPhoneApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+  const mainConfig: API配置项 | undefined = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);
   const phoneApi = settings.手机系统.api;
   const phoneFieldsEmpty = !phoneApi.baseUrl.trim() && !phoneApi.apiKey.trim() && !phoneApi.model.trim();
-  const provider = phoneFieldsEmpty ? mainConfig?.provider : phoneApi.provider || mainConfig?.provider;
+  const provider = phoneFieldsEmpty ? mainConfig?.provider : phoneApi.provider;
   const baseUrl = phoneApi.baseUrl.trim() || mainConfig?.baseUrl || '';
   const apiKey = phoneApi.apiKey.trim() || mainConfig?.apiKey || '';
   const model = phoneApi.model.trim() || mainConfig?.model || '';
@@ -127,7 +126,7 @@ export async function generatePhoneReply(
   }, safeCtx, limits);
   if (final.accepted) return final.reply;
 
-  throw new PhoneReplyQualityError(
+  throw createPhoneReplyQualityError(
     `手机回复质量校验失败：${final.reasons.join('；') || `未达到 ${limits.min}-${limits.max} 条有效短讯`}`,
   );
 }
@@ -215,7 +214,7 @@ export function buildPhoneMessages(ctx: 手机回复上下文): Array<{ role: st
       : '',
   ].filter(Boolean).join('\n\n');
 
-  const latestMessage = ctx.chat.messages[ctx.chat.messages.length - 1];
+  const latestMessage = ctx.chat.messages.at(-1);
   const historySource = ctx.userText
     && latestMessage?.role === 'player'
     && latestMessage.content.trim() === ctx.userText.trim()
@@ -355,7 +354,7 @@ function collectPhoneStoryParticipants(ctx: 手机回复上下文): PhoneStoryPa
 function collectPhoneStoryTerms(...values: Array<string | undefined>): string[] {
   const terms = new Set<string>();
   for (const value of values) {
-    for (const part of String(value ?? '').split(/[\/／|、,，]/)) {
+    for (const part of (value ?? '').split(/[/／|、,，]/)) {
       const term = part.trim();
       if (!term) continue;
       terms.add(term);
@@ -465,7 +464,7 @@ function buildPhoneZhikuPersonaBrief(ctx: 手机回复上下文): string {
 function collectPhoneParticipantNames(ctx: 手机回复上下文): string[] {
   const names = new Set<string>();
   const addName = (value?: string) => {
-    for (const part of String(value ?? '').split(/[\/／|、,，]/)) {
+    for (const part of (value ?? '').split(/[/／|、,，]/)) {
       const trimmed = part.trim();
       if (trimmed) names.add(trimmed);
     }
@@ -614,7 +613,7 @@ function normalizePhoneMessageForComparison(text: string, group: boolean): strin
 function normalizeComparableText(text: string): string {
   return text
     .replace(/\s+/g, '')
-    .replace(/[，。！？!?；;、,.…~～“”"'\[\]（）()《》<>]/g, '')
+    .replace(/[，。！？!?；;、,.…~～“”"'[\]（）()《》<>]/g, '')
     .trim();
 }
 
@@ -630,7 +629,7 @@ function arePhoneMessagesTooSimilar(a: string, b: string): boolean {
 }
 
 function longestCommonSubstringLength(a: string, b: string): number {
-  const prev = new Array(b.length + 1).fill(0);
+  const prev: number[] = Array.from({ length: b.length + 1 }, () => 0);
   let best = 0;
   for (let i = 1; i <= a.length; i += 1) {
     let diagonal = 0;

@@ -90,7 +90,7 @@ function buildSkillGeneratorUserPrompt(context: 战技生成上下文): string {
     `旅人姓名：${traveler.姓名 || traveler.别名 || '未命名旅人'}`,
     `旅人身份：${traveler.身份 || traveler.背景 || '未填写'}`,
     `旅人性格：${traveler.性格 || '未填写'}`,
-    `旅人能力：${(traveler.能力 ?? []).join('、') || '未登记'}`,
+    `旅人能力：${traveler.能力.join('、') || '未登记'}`,
     `已有战技名：${context.existingSkillNames?.length ? context.existingSkillNames.join('、') : '暂无'}`,
     '',
     currentDraft?.名称 || currentDraft?.描述 || currentDraft?.关键词?.length
@@ -109,7 +109,7 @@ function buildSkillGeneratorUserPrompt(context: 战技生成上下文): string {
 function normalizeKeywords(input: unknown): string[] {
   const raw = Array.isArray(input)
     ? input
-    : String(input ?? '').split(/[,，、\s/|]+/g);
+    : (typeof input === 'string' ? input : input === null || input === undefined ? '' : JSON.stringify(input)).split(/[,，、\s/|]+/g);
   return raw
     .map((item) => String(item ?? '').trim())
     .filter(Boolean)
@@ -118,7 +118,8 @@ function normalizeKeywords(input: unknown): string[] {
 }
 
 function cleanText(value: unknown, fallback = ''): string {
-  return String(value ?? fallback).trim();
+  const text = typeof value === 'string' ? value : value === null || value === undefined ? fallback : JSON.stringify(value);
+  return text.trim();
 }
 
 function normalizeGeneratedSkill(value: unknown): 战技生成草稿 {

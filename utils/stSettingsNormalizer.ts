@@ -51,7 +51,7 @@ export function normalizeSTPrompt(raw: unknown): STPresetPrompt | null {
     injection_position: readNum(obj.injection_position) ?? undefined,
     injection_depth: readNum(obj.injection_depth) ?? undefined,
     injection_order: readNum(obj.injection_order) ?? undefined,
-    forbid_overrides: readBool(obj.forbid_overrides) ?? undefined,
+    forbid_overrides: readBool(obj.forbid_overrides),
   };
 }
 

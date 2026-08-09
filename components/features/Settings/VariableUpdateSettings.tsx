@@ -51,7 +51,7 @@ export function VariableUpdateTab({
 
   // 计算「实际生效」的字段（用于回退提示和拉取模型）。
   const effective = {
-    provider: override.provider || mainConfig?.provider || 'openai_compatible',
+    provider: override.provider,
     baseUrl: override.baseUrl.trim() || mainConfig?.baseUrl || '',
     apiKey: override.apiKey.trim() || mainConfig?.apiKey || '',
     model: override.model.trim() || mainConfig?.model || '',
@@ -148,7 +148,7 @@ export function VariableUpdateTab({
           }}
         >
           下方任一字段留空时，将自动回退到「主 API」的同名字段。
-          {noMainHint && <span style={{ color: 'rgba(220, 120, 120, 0.85)' }}>　{noMainHint}</span>}
+          {noMainHint && <span style={{ color: 'rgba(220, 120, 120, 0.85)' }}>{'\u3000'}{noMainHint}</span>}
         </div>
 
         <Field label="◆ 服务商">
@@ -208,7 +208,7 @@ export function VariableUpdateTab({
                 style={{ clipPath: smallClip }}
               />
               <button
-                onClick={handleFetchModels}
+                onClick={() => void handleFetchModels()}
                 disabled={loadingModels}
                 className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
@@ -296,7 +296,7 @@ export function VariableUpdateTab({
 
       <div className="flex flex-col items-stretch gap-2 pt-1">
         <button
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 text-sm font-serif tracking-[0.4em] transition-all hover:opacity-90"
           style={{
             background: savedFlash

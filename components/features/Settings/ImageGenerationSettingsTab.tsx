@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+﻿import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   AI提供商,
   API配置项,
@@ -115,7 +115,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
     NSFW接口: '',
   });
   const image = settings.文生图系统;
-  const mainConfig = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+  const mainConfig = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   const nsfwUsable = settings.enableNsfw && image.enableNsfwImageGeneration && image.NSFW接口.enabled;
 
   const patchSystem = (patch: Partial<typeof image>) => {
@@ -274,7 +274,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
             <ToggleRow label="启用文生图" desc="开启后，相册显示手动生成入口；关闭时保留已有图片和挂载关系。" checked={image.enabled} onChange={(v) => patchSystem({ enabled: v })} />
             <ToggleRow label="词组转化器" desc="把伙伴档案、场景摘要和 NSFW 档案整理成适合模型的 prompt。" checked={image.enablePromptTokenizer} onChange={(v) => patchSystem({ enablePromptTokenizer: v })} />
             <ToggleRow label="启用正文生图" desc="控制剧情正文中的故事快照生成入口。解析走转化器，出图走统一接口。" checked={image.正文生图.enabled} onChange={(v) => patchSystem({ 正文生图: { ...image.正文生图, enabled: v } })} />
-            <ToggleRow label="启用 NSFW 生图" desc="受 NSFW 总开关约束。开启后仍只会使用 NSFW 独立接口，不复用统一接口。" checked={Boolean(settings.enableNsfw && image.enableNsfwImageGeneration)} disabled={!settings.enableNsfw} onChange={(v) => patchSystem({ enableNsfwImageGeneration: settings.enableNsfw ? v : false })} />
+            <ToggleRow label="启用 NSFW 生图" desc="受 NSFW 总开关约束。开启后仍只会使用 NSFW 独立接口，不复用统一接口。" checked={settings.enableNsfw && image.enableNsfwImageGeneration} disabled={!settings.enableNsfw} onChange={(v) => patchSystem({ enableNsfwImageGeneration: settings.enableNsfw ? v : false })} />
           </Panel>
           <Panel title="工作流说明">
             <InfoLine label="统一资源" value="伙伴头像、角色立绘、地点壁纸、手机背景、剧情快照、新闻配图。" />
@@ -292,7 +292,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
           apiKey="普通接口"
           api={image.普通接口}
           onChange={(p) => patchApi('普通接口', p)}
-          onTest={() => handleTest('普通接口', image.普通接口)}
+          onTest={() => void handleTest('普通接口', image.普通接口)}
           testMessage={testMessages.普通接口}
           testing={testingKey === '普通接口'}
         />
@@ -303,7 +303,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
           <Notice nsfw>
             NSFW 生图必须同时满足：NSFW 总开关开启、NSFW 生图开关开启、NSFW 接口启用。它不会自动回退到统一接口。
           </Notice>
-          <ToggleRow label="启用 NSFW 生图" desc="关闭时相册不显示 NSFW 生成按钮，也不会向 NSFW 独立接口提交图片任务。" checked={Boolean(settings.enableNsfw && image.enableNsfwImageGeneration)} disabled={!settings.enableNsfw} onChange={(v) => patchSystem({ enableNsfwImageGeneration: settings.enableNsfw ? v : false })} />
+          <ToggleRow label="启用 NSFW 生图" desc="关闭时相册不显示 NSFW 生成按钮，也不会向 NSFW 独立接口提交图片任务。" checked={settings.enableNsfw && image.enableNsfwImageGeneration} disabled={!settings.enableNsfw} onChange={(v) => patchSystem({ enableNsfwImageGeneration: settings.enableNsfw ? v : false })} />
           {settings.enableNsfw && image.enableNsfwImageGeneration ? (
             <ApiBlock
               title="NSFW 独立接口"
@@ -311,7 +311,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
               apiKey="NSFW接口"
               api={image.NSFW接口}
               onChange={(p) => patchApi('NSFW接口', p)}
-              onTest={() => handleTest('NSFW接口', image.NSFW接口)}
+              onTest={() => void handleTest('NSFW接口', image.NSFW接口)}
               testMessage={testMessages.NSFW接口}
               testing={testingKey === 'NSFW接口'}
               nsfw
@@ -435,7 +435,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings }: 
         )}
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => void handleSave()}
           className="w-full py-3 font-serif text-sm font-bold tracking-[0.32em]"
           style={{
             color: savedFlash ? '#122015' : 'rgb(var(--tj-bg-primary))',
@@ -504,7 +504,8 @@ function ApiBlock({
 
   const handleImportWorkflowFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    event.target.value = '';
+    const input = event.target;
+    input.value = '';
     if (!file) return;
     try {
       const text = await file.text();
@@ -612,7 +613,7 @@ function ApiBlock({
             <Field label={api.backend === 'comfyui' ? 'Checkpoint / 模型名' : '模型'}>
               <div className="flex gap-2">
                 <input value={api.model} onChange={(e) => onChange({ model: e.target.value })} placeholder={api.backend === 'comfyui' ? '填写本机已有 ckpt_name，例如 novaAnimeXL_v70Happyhalloween.safetensors' : suggestions[0] ?? '模型 ID'} list={`${apiKey}-models`} className="kaituo-input min-w-0 flex-1 px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
-                <button type="button" onClick={handleFetchImageModels} disabled={modelLoading || (api.backend !== 'novelai' && !api.baseUrl.trim()) || (api.backend === 'openai_compatible' && !api.apiKey.trim())} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+                <button type="button" onClick={() => void handleFetchImageModels()} disabled={modelLoading || (api.backend !== 'novelai' && !api.baseUrl.trim()) || (api.backend === 'openai_compatible' && !api.apiKey.trim())} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
                   {modelLoading ? '读取中' : '获取'}
                 </button>
               </div>
@@ -692,14 +693,14 @@ function ApiBlock({
             ComfyUI 的 Checkpoint 必须填写本机模型列表里存在的 ckpt_name。Workflow 可使用 __MODEL__ / __CKPT_NAME__ / __SAMPLER__ / __SCHEDULER__ / __PROMPT__ / __NEGATIVE_PROMPT__ 等占位符，提交前会自动替换。
           </Notice>
           <div className="flex flex-wrap gap-2">
-            <input ref={workflowFileRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportWorkflowFile} />
+            <input ref={workflowFileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => void handleImportWorkflowFile(e)} />
             <button type="button" onClick={() => workflowFileRef.current?.click()} className="px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
               导入 JSON
             </button>
-            <button type="button" onClick={() => handleFetchWorkflowCandidates('queue')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+            <button type="button" onClick={() => void handleFetchWorkflowCandidates('queue')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
               {workflowLoading === 'queue' ? '读取队列中' : '读取队列'}
             </button>
-            <button type="button" onClick={() => handleFetchWorkflowCandidates('history')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+            <button type="button" onClick={() => void handleFetchWorkflowCandidates('history')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
               {workflowLoading === 'history' ? '读取历史中' : '读取历史'}
             </button>
           </div>
@@ -853,7 +854,7 @@ function readPath(api: 文生图API配置): string {
 }
 
 function normalizeOpenAICompatibleImagePath(path: string): string {
-  const raw = String(path || '').trim() || '/images/generations';
+  const raw = (path || '').trim() || '/images/generations';
   const clean = raw.replace(/\/+$/, '');
   if (/\/v1$/i.test(clean) || /^v1$/i.test(clean)) {
     return `${clean.startsWith('/') || /^https?:\/\//i.test(clean) ? clean : `/${clean}`}/images/generations`;
@@ -881,63 +882,6 @@ function backendHints(backend: 文生图后端类型): string[] {
   return ['OpenAI 兼容接口通常需要 API Key 与模型名。', '如果服务商要求 /v1 前缀，请把它写进 Base URL。'];
 }
 
-/** 暗色主题模型选择列表，替代浏览器原生 datalist */
-function ModelSuggestList({ models, current, onSelect }: {
-  models: string[];
-  current: string;
-  onSelect: (model: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  if (!models.length) return null;
-  return (
-    <div className="mt-1">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="text-xs mb-1 flex items-center gap-1"
-        style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}
-      >
-        <span>{expanded ? '▼' : '▶'}</span>
-        <span>可选模型（{models.length}）</span>
-      </button>
-      {expanded && (
-        <div
-          className="max-h-40 overflow-y-auto"
-          style={{
-            background: 'rgba(var(--tj-bg-secondary), 0.95)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
-          }}
-        >
-          {models.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => { onSelect(m); setExpanded(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs font-mono transition-colors"
-              style={{
-                color: m === current
-                  ? 'rgb(var(--tj-accent-primary))'
-                  : 'rgba(var(--tj-text-primary), 0.75)',
-                background: m === current
-                  ? 'rgba(var(--tj-accent-primary), 0.1)'
-                  : 'transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (m !== current) (e.target as HTMLElement).style.background = 'rgba(var(--tj-accent-primary), 0.06)';
-              }}
-              onMouseLeave={(e) => {
-                if (m !== current) (e.target as HTMLElement).style.background = 'transparent';
-              }}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** 正文生图设置页 */
 function NarrativeImageSettings({ settings, onChange, apiSettings }: {
   settings: 游戏设置;
@@ -947,7 +891,7 @@ function NarrativeImageSettings({ settings, onChange, apiSettings }: {
   const img = settings.文生图系统;
   const narrative = img.正文生图;
   {
-    const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null;
+    const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
     const tokenizerOverride = img.词组转化器API;
     const tokenizerLabel = img.enablePromptTokenizer
       ? (tokenizerOverride.model.trim() || mainConfig?.model || '跟随主 API')

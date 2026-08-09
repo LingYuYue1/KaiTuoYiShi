@@ -67,7 +67,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
         className="mb-3 text-sm leading-relaxed"
         style={{ color: 'rgba(var(--tj-text-primary),0.85)' }}
       >
-        {belief?.核心 ?? '命途的拷问即将开始。'}
+        {belief.核心}
       </div>
       <div
         className="mb-3 text-xs leading-relaxed"

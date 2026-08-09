@@ -14,7 +14,6 @@ import { CANONICAL_CHARACTERS } from '@/data/canonicalCharacters';
 import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT as VAR_LEGACY_COMPANION_ARCHIVE } from '@/data/companionArchiveWorldbook';
 import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT as VAR_LEGACY_WORLDBOOK_PROMPT, NSFW_ARCHIVE_SEPARATION_RULE } from '@/data/variableWorldbook';
 import { VARIABLE_COT_PROMPT as VAR_LEGACY_COT_PROMPT } from '@/prompts/cot/variableCot';
-import { VARIABLE_OUTPUT_FORMAT_PROMPT as VAR_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import { 获取地点可用天气, 天气列表, 天气名映射 } from '@/data/weatherRules';
@@ -101,7 +100,7 @@ function nameAppearsInText(text: string, name: string): boolean {
   const trimmed = name.trim();
   if (!trimmed) return false;
   if (trimmed.length > 1) return text.includes(trimmed);
-  const escaped = trimmed.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const escaped = trimmed.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
   return new RegExp(`[【「『（(\\s，。！？；、:]${escaped}[】」』）)\\s，。！？；、:]`).test(text)
     || new RegExp(`${escaped}[：:和与也把将拿递说问笑看尝吃喝]`).test(text);
 }

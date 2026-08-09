@@ -11,7 +11,7 @@ import {
   type CloudBackupPartMeta,
   type CloudBackupPointerV2,
 } from '@/services/cloudBackupPackage';
-import { CloudBackupWorkerClient } from '@/services/cloudBackupWorkerClient';
+import { createCloudBackupWorkerClient } from '@/services/cloudBackupWorkerClient';
 import {
   cleanupExpiredCloudBackupTransfers,
   createCloudBackupTransfer,
@@ -73,7 +73,7 @@ export async function buildCompleteCloudBackup(
   const transferId = `upload-${snapshotId}`;
   await createCloudBackupTransfer(transferId, 'upload', 'packing');
 
-  const worker = new CloudBackupWorkerClient();
+  const worker = createCloudBackupWorkerClient();
   const parts: CloudBackupPartMeta[] = [];
   const nodes: CloudBackupNodeMeta[] = [];
   const assets: CloudBackupAssetMeta[] = [];
@@ -144,7 +144,7 @@ export async function buildCompleteCloudBackup(
         if (!asset.id || assetByOriginalId.has(asset.id)) continue;
         const rawRecord = records.get(asset.id);
         if (!rawRecord) {
-          if (String(asset.dataUrl || '').startsWith('asset:')) {
+          if ((asset.dataUrl || '').startsWith('asset:')) {
             throw new Error(`存档 #${summary.id} 引用的资源 ${asset.id} 缺失，无法生成完整云备份。`);
           }
           continue;
@@ -186,7 +186,7 @@ export async function buildCompleteCloudBackup(
       }).saveTree;
       nodes.push({
         sourceSaveId: summary.id,
-        type: String(summary.type || portable.type || 'manual'),
+        type: summary.type,
         timestamp: summary.timestamp || portable.timestamp || 0,
         turnCount: summary.turnCount || portable.turnCount || 0,
         rootId: tree?.rootId,

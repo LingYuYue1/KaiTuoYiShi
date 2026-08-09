@@ -552,29 +552,29 @@ export function normalizeImageRules(input?: Partial<文生图规则中心设置>
     当前NPC词组转化器提示词预设ID: resolveActiveTemplateId(input.当前NPC词组转化器提示词预设ID, presets, 'npc'),
     当前场景词组转化器提示词预设ID: resolveActiveTemplateId(input.当前场景词组转化器提示词预设ID, presets, 'scene'),
     当前场景判定提示词预设ID: resolveActiveTemplateId(input.当前场景判定提示词预设ID, presets, 'scene_judge'),
-    hsrBaseStyle: String(input.hsrBaseStyle ?? defaults.hsrBaseStyle),
-    compositionRule: String(input.compositionRule ?? defaults.compositionRule),
-    hsrCharacterAnchorRule: String(input.hsrCharacterAnchorRule ?? defaults.hsrCharacterAnchorRule),
-    promptTokenizerOutputRule: String(input.promptTokenizerOutputRule ?? defaults.promptTokenizerOutputRule),
-    modelCompatibilityRule: String(input.modelCompatibilityRule ?? defaults.modelCompatibilityRule),
-    artistPresetPositive: String(input.artistPresetPositive ?? defaults.artistPresetPositive),
-    artistPresetNegative: String(input.artistPresetNegative ?? defaults.artistPresetNegative),
-    pngStyleRule: String(input.pngStyleRule ?? defaults.pngStyleRule),
-    avatarRule: String(input.avatarRule ?? defaults.avatarRule),
-    portraitRule: String(input.portraitRule ?? defaults.portraitRule),
-    sceneRule: String(input.sceneRule ?? defaults.sceneRule),
-    sceneCharacterRule: String(input.sceneCharacterRule ?? defaults.sceneCharacterRule),
-    phoneWallpaperRule: String(input.phoneWallpaperRule ?? defaults.phoneWallpaperRule),
+    hsrBaseStyle: input.hsrBaseStyle ?? defaults.hsrBaseStyle,
+    compositionRule: input.compositionRule ?? defaults.compositionRule,
+    hsrCharacterAnchorRule: input.hsrCharacterAnchorRule ?? defaults.hsrCharacterAnchorRule,
+    promptTokenizerOutputRule: input.promptTokenizerOutputRule ?? defaults.promptTokenizerOutputRule,
+    modelCompatibilityRule: input.modelCompatibilityRule ?? defaults.modelCompatibilityRule,
+    artistPresetPositive: input.artistPresetPositive ?? defaults.artistPresetPositive,
+    artistPresetNegative: input.artistPresetNegative ?? defaults.artistPresetNegative,
+    pngStyleRule: input.pngStyleRule ?? defaults.pngStyleRule,
+    avatarRule: input.avatarRule ?? defaults.avatarRule,
+    portraitRule: input.portraitRule ?? defaults.portraitRule,
+    sceneRule: input.sceneRule ?? defaults.sceneRule,
+    sceneCharacterRule: input.sceneCharacterRule ?? defaults.sceneCharacterRule,
+    phoneWallpaperRule: input.phoneWallpaperRule ?? defaults.phoneWallpaperRule,
     itemIconRule: '',
     itemDisplayRule: '',
-    nsfwRule: String(input.nsfwRule ?? defaults.nsfwRule),
-    nsfwPartRule: String(input.nsfwPartRule ?? defaults.nsfwPartRule),
-    nsfwIsolationRule: String(input.nsfwIsolationRule ?? defaults.nsfwIsolationRule),
-    commonNegative: String(input.commonNegative ?? defaults.commonNegative),
-    nsfwNegative: String(input.nsfwNegative ?? defaults.nsfwNegative),
-    sizePresetRule: String(input.sizePresetRule ?? defaults.sizePresetRule),
-    autoQueueRule: String(input.autoQueueRule ?? defaults.autoQueueRule),
-    profileRule: String(input.profileRule ?? defaults.profileRule),
+    nsfwRule: input.nsfwRule ?? defaults.nsfwRule,
+    nsfwPartRule: input.nsfwPartRule ?? defaults.nsfwPartRule,
+    nsfwIsolationRule: input.nsfwIsolationRule ?? defaults.nsfwIsolationRule,
+    commonNegative: input.commonNegative ?? defaults.commonNegative,
+    nsfwNegative: input.nsfwNegative ?? defaults.nsfwNegative,
+    sizePresetRule: input.sizePresetRule ?? defaults.sizePresetRule,
+    autoQueueRule: input.autoQueueRule ?? defaults.autoQueueRule,
+    profileRule: input.profileRule ?? defaults.profileRule,
   };
 }
 
@@ -596,7 +596,8 @@ export function 获取当前规则模板(rules: 文生图规则中心设置, typ
         ? rules.当前场景词组转化器提示词预设ID
         : rules.当前场景判定提示词预设ID);
   const list = 获取规则模板列表(rules, type);
-  return list.find((preset) => preset.id === activeId) ?? list[0] ?? null;
+  const matched = list.find((preset) => preset.id === activeId);
+  return matched ?? (list.length > 0 ? list[0] : null);
 }
 
 export function 获取当前模型规则集(rules: 文生图规则中心设置): 文生图模型规则集 | null {
@@ -650,18 +651,18 @@ function normalizeRuleTemplates(input: unknown): 文生图规则模板[] {
         .map((item) => {
           const source = item as Partial<文生图规则模板> | null | undefined;
           const type = normalizeTemplateType(source?.类型);
-          const id = String(source?.id || `template_${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+          const id = source?.id || `template_${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
           return {
             id,
-            名称: String(source?.名称 || templateTypeLabel(type)),
+            名称: source?.名称 || templateTypeLabel(type),
             类型: type,
-            提示词: String(source?.提示词 || ''),
-            角色锚定模式提示词: source?.角色锚定模式提示词 ? String(source.角色锚定模式提示词) : undefined,
-            场景角色锚定模式提示词: source?.场景角色锚定模式提示词 ? String(source.场景角色锚定模式提示词) : undefined,
-            无锚点回退提示词: source?.无锚点回退提示词 ? String(source.无锚点回退提示词) : undefined,
-            输出格式提示词: source?.输出格式提示词 ? String(source.输出格式提示词) : undefined,
-            createdAt: Number(source?.createdAt) || Date.now(),
-            updatedAt: Number(source?.updatedAt) || Date.now(),
+            提示词: source?.提示词 || '',
+            角色锚定模式提示词: source?.角色锚定模式提示词 ? source.角色锚定模式提示词 : undefined,
+            场景角色锚定模式提示词: source?.场景角色锚定模式提示词 ? source.场景角色锚定模式提示词 : undefined,
+            无锚点回退提示词: source?.无锚点回退提示词 ? source.无锚点回退提示词 : undefined,
+            输出格式提示词: source?.输出格式提示词 ? source.输出格式提示词 : undefined,
+            createdAt: source?.createdAt || Date.now(),
+            updatedAt: source?.updatedAt || Date.now(),
           } satisfies 文生图规则模板;
         })
     : [];
@@ -676,14 +677,14 @@ function normalizeArtistPresets(input: unknown): 文生图画师串预设[] {
         const source = item as Partial<文生图画师串预设> | null | undefined;
         const scope = normalizeArtistScope(source?.适用范围);
         return {
-          id: String(source?.id || `artist_${scope}_${Date.now()}_${index}`),
-          名称: String(source?.名称 || (scope === 'scene' ? '场景画师串' : 'NPC画师串')),
+          id: source?.id || `artist_${scope}_${Date.now()}_${index}`,
+          名称: source?.名称 || (scope === 'scene' ? '场景画师串' : 'NPC画师串'),
           适用范围: scope,
-          画师串: String(source?.画师串 ?? ''),
-          正面提示词: String(source?.正面提示词 ?? ''),
-          负面提示词: String(source?.负面提示词 ?? ''),
-          createdAt: Number(source?.createdAt) || Date.now(),
-          updatedAt: Number(source?.updatedAt) || Date.now(),
+          画师串: source?.画师串 ?? '',
+          正面提示词: source?.正面提示词 ?? '',
+          负面提示词: source?.负面提示词 ?? '',
+          createdAt: source?.createdAt || Date.now(),
+          updatedAt: source?.updatedAt || Date.now(),
         } satisfies 文生图画师串预设;
       })
     : [];
@@ -698,17 +699,17 @@ function normalizeDetailStylePresets(input: unknown): 文生图详细画风预�
         const source = item as Partial<文生图详细画风预设> | null | undefined;
         const scope = normalizeArtistScope(source?.适用范围);
         return {
-          id: String(source?.id || `detail_style_${scope}_${Date.now()}_${index}`),
-          名称: String(source?.名称 || (scope === 'scene' ? '场景详细画风' : 'NPC详细画风')),
+          id: source?.id || `detail_style_${scope}_${Date.now()}_${index}`,
+          名称: source?.名称 || (scope === 'scene' ? '场景详细画风' : 'NPC详细画风'),
           适用范围: scope,
-          风格定位: String(source?.风格定位 ?? ''),
-          构图镜头: String(source?.构图镜头 ?? ''),
-          光影色彩: String(source?.光影色彩 ?? ''),
-          材质细节: String(source?.材质细节 ?? ''),
-          正面提示词: String(source?.正面提示词 ?? ''),
-          负面提示词: String(source?.负面提示词 ?? ''),
-          createdAt: Number(source?.createdAt) || Date.now(),
-          updatedAt: Number(source?.updatedAt) || Date.now(),
+          风格定位: source?.风格定位 ?? '',
+          构图镜头: source?.构图镜头 ?? '',
+          光影色彩: source?.光影色彩 ?? '',
+          材质细节: source?.材质细节 ?? '',
+          正面提示词: source?.正面提示词 ?? '',
+          负面提示词: source?.负面提示词 ?? '',
+          createdAt: source?.createdAt || Date.now(),
+          updatedAt: source?.updatedAt || Date.now(),
         } satisfies 文生图详细画风预设;
       })
     : [];
@@ -722,12 +723,12 @@ function normalizeQualityEnhancementPresets(input: unknown): 文生图质量增�
     ? input.map((item, index) => {
         const source = item as Partial<文生图质量增强预设> | null | undefined;
         return {
-          id: String(source?.id || `quality_stability_${Date.now()}_${index}`),
-          名称: String(source?.名称 || '质量增强预设'),
-          正面提示词: String(source?.正面提示词 ?? ''),
-          负面提示词: String(source?.负面提示词 ?? ''),
-          createdAt: Number(source?.createdAt) || Date.now(),
-          updatedAt: Number(source?.updatedAt) || Date.now(),
+          id: source?.id || `quality_stability_${Date.now()}_${index}`,
+          名称: source?.名称 || '质量增强预设',
+          正面提示词: source?.正面提示词 ?? '',
+          负面提示词: source?.负面提示词 ?? '',
+          createdAt: source?.createdAt || Date.now(),
+          updatedAt: source?.updatedAt || Date.now(),
         } satisfies 文生图质量增强预设;
       })
     : [];
@@ -741,17 +742,17 @@ function normalizePngStylePresets(input: unknown): 文生图PNG画风预设[] {
     ? input.map((item, index) => {
         const source = item as Partial<文生图PNG画风预设> | null | undefined;
         return {
-          id: String(source?.id || `png_style_${Date.now()}_${index}`),
-          名称: String(source?.名称 || 'PNG画风预设'),
+          id: source?.id || `png_style_${Date.now()}_${index}`,
+          名称: source?.名称 || 'PNG画风预设',
           来源: normalizePngSource(source?.来源),
-          画师串: String(source?.画师串 ?? ''),
-          正面提示词: String(source?.正面提示词 ?? ''),
-          负面提示词: String(source?.负面提示词 ?? ''),
-          原始正面提示词: source?.原始正面提示词 ? String(source.原始正面提示词) : undefined,
-          原始负面提示词: source?.原始负面提示词 ? String(source.原始负面提示词) : undefined,
+          画师串: source?.画师串 ?? '',
+          正面提示词: source?.正面提示词 ?? '',
+          负面提示词: source?.负面提示词 ?? '',
+          原始正面提示词: source?.原始正面提示词 ? source.原始正面提示词 : undefined,
+          原始负面提示词: source?.原始负面提示词 ? source.原始负面提示词 : undefined,
           参数: source?.参数 && typeof source.参数 === 'object' ? source.参数 : undefined,
-          createdAt: Number(source?.createdAt) || Date.now(),
-          updatedAt: Number(source?.updatedAt) || Date.now(),
+          createdAt: source?.createdAt || Date.now(),
+          updatedAt: source?.updatedAt || Date.now(),
         } satisfies 文生图PNG画风预设;
       })
     : [];
@@ -765,10 +766,10 @@ function normalizeModelRuleSets(input: unknown, templates: 文生图规则模板
     ? input.map((item, index) => {
         const source = item as Partial<文生图模型规则集> | null | undefined;
         return {
-          id: String(source?.id || `model_rule_${Date.now()}_${index}`),
-          名称: String(source?.名称 || '模型规则集'),
-          模型专属提示词: String(source?.模型专属提示词 ?? ''),
-          锚定模式模型提示词: source?.锚定模式模型提示词 ? String(source.锚定模式模型提示词) : undefined,
+          id: source?.id || `model_rule_${Date.now()}_${index}`,
+          名称: source?.名称 || '模型规则集',
+          模型专属提示词: source?.模型专属提示词 ?? '',
+          锚定模式模型提示词: source?.锚定模式模型提示词 ? source.锚定模式模型提示词 : undefined,
           是否启用: source?.是否启用 === true,
           NPC词组转化器提示词预设ID: resolveActiveTemplateId(source?.NPC词组转化器提示词预设ID, templates, 'npc'),
           场景词组转化器提示词预设ID: resolveActiveTemplateId(source?.场景词组转化器提示词预设ID, templates, 'scene'),
@@ -795,7 +796,9 @@ function normalizePngSource(value: unknown): PNG画风预设来源 {
 
 function resolveArtistPresetId(inputId: unknown, presets: 文生图画师串预设[], scope: 'npc' | 'scene'): string {
   if (inputId === '') return '';
-  const id = String(inputId || '').trim();
+  const id = typeof inputId === 'string' || typeof inputId === 'number' || typeof inputId === 'boolean'
+    ? String(inputId).trim()
+    : '';
   const scoped = presets.filter((preset) => preset.适用范围 === scope || preset.适用范围 === 'all');
   if (id && scoped.some((preset) => preset.id === id)) return id;
   return scoped[0]?.id ?? '';
@@ -803,7 +806,9 @@ function resolveArtistPresetId(inputId: unknown, presets: 文生图画师串预�
 
 function resolveDetailStylePresetId(inputId: unknown, presets: 文生图详细画风预设[], scope: 'npc' | 'scene'): string {
   if (inputId === '') return '';
-  const id = String(inputId || '').trim();
+  const id = typeof inputId === 'string' || typeof inputId === 'number' || typeof inputId === 'boolean'
+    ? String(inputId).trim()
+    : '';
   const scoped = presets.filter((preset) => preset.适用范围 === scope || preset.适用范围 === 'all');
   if (id && scoped.some((preset) => preset.id === id)) return id;
   return scoped[0]?.id ?? '';
@@ -811,13 +816,17 @@ function resolveDetailStylePresetId(inputId: unknown, presets: 文生图详细�
 
 function resolvePngPresetId(inputId: unknown, presets: 文生图PNG画风预设[]): string {
   if (inputId === '') return '';
-  const id = String(inputId || '').trim();
+  const id = typeof inputId === 'string' || typeof inputId === 'number' || typeof inputId === 'boolean'
+    ? String(inputId).trim()
+    : '';
   if (id && presets.some((preset) => preset.id === id)) return id;
   return presets[0]?.id ?? '';
 }
 
 function resolveQualityEnhancementPresetId(inputId: unknown, presets: 文生图质量增强预设[]): string {
-  const id = String(inputId || '').trim();
+  const id = typeof inputId === 'string' || typeof inputId === 'number' || typeof inputId === 'boolean'
+    ? String(inputId).trim()
+    : '';
   if (id && presets.some((preset) => preset.id === id)) return id;
   return '';
 }
@@ -828,7 +837,9 @@ function normalizeTemplateType(value: unknown): 文生图规则模板类型 {
 }
 
 function resolveActiveTemplateId(inputId: unknown, presets: 文生图规则模板[], type: 文生图规则模板类型): string {
-  const id = String(inputId || '').trim();
+  const id = typeof inputId === 'string' || typeof inputId === 'number' || typeof inputId === 'boolean'
+    ? String(inputId).trim()
+    : '';
   if (id && presets.some((preset) => preset.id === id && preset.类型 === type)) return id;
   return presets.find((preset) => preset.类型 === type)?.id ?? '';
 }
@@ -899,7 +910,7 @@ function readCharacterAnchorPrompt(anchor: NPC角色锚点档案 | undefined, la
   if (!anchor || anchor.是否启用 === false) return '';
   const features = anchor.结构化特征
     ? Object.entries(anchor.结构化特征)
-        .flatMap(([key, values]) => values?.length ? [`${key}: ${values.join(', ')}`] : [])
+        .flatMap(([key, values]) => values.length ? [`${key}: ${values.join(', ')}`] : [])
         .join('\n')
     : '';
   return [
@@ -1056,7 +1067,7 @@ export function buildTravelerImagePrompt(params: {
   const anchorPrompt = readTravelerCharacterAnchorPrompt(traveler);
   const anchorLock = readTravelerCharacterAnchorLock(traveler);
   const anchorNegative = readTravelerCharacterAnchorNegative(traveler);
-  const hasAnchor = Boolean(anchorPrompt || anchorNegative || traveler.外貌 || traveler.身份 || traveler.能力?.length);
+  const hasAnchor = Boolean(anchorPrompt || anchorNegative || traveler.外貌 || traveler.身份 || traveler.能力.length);
   const prompt = compactJoin([
     rules.hsrBaseStyle,
     rules.compositionRule,
@@ -1077,7 +1088,7 @@ export function buildTravelerImagePrompt(params: {
     traveler.身份 ? `identity: ${traveler.身份}` : undefined,
     traveler.外貌 ? `appearance: ${traveler.外貌}` : undefined,
     traveler.性格 ? `visible personality impression: ${traveler.性格}` : undefined,
-    traveler.能力?.length ? `abilities: ${traveler.能力.join(', ')}` : undefined,
+    traveler.能力.length ? `abilities: ${traveler.能力.join(', ')}` : undefined,
     traveler.主命途 ? `path: ${traveler.主命途}` : undefined,
     anchorPrompt,
     size ? `target canvas size: ${size}` : undefined,

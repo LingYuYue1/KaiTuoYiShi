@@ -128,9 +128,9 @@ export function 创建战技记录(input: {
 export function 归一化战技记录(skill: 战技记录): 战技记录 {
   return {
     ...skill,
-    名称: skill.名称?.trim() || '未命名战技',
-    描述: skill.描述?.trim() || '暂无描述',
-    来源: skill.来源?.trim() || '未注明来源',
+    名称: skill.名称.trim() || '未命名战技',
+    描述: skill.描述.trim() || '暂无描述',
+    来源: skill.来源.trim() || '未注明来源',
     已启用: skill.已启用 !== false,
     关键词: skill.关键词?.filter(Boolean) ?? [],
   };

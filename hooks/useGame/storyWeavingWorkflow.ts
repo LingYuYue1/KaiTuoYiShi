@@ -12,7 +12,7 @@ export function buildStoryProgressMemoryLine(previous: 剧情编织系统, next:
     before?.当前系列ID === after.当前系列ID &&
     before?.当前分段ID === after.当前分段ID &&
     before?.推进状态 === after.推进状态 &&
-    before?.最近一次推进判定回合 === after.最近一次推进判定回合
+    before.最近一次推进判定回合 === after.最近一次推进判定回合
   ) {
     return '';
   }
@@ -45,7 +45,6 @@ export function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编�
   const latestArchive = story.当前进度.历史归档.at(-1);
   const roleProgress = latestArchive?.角色推进摘要 ?? [];
   if (!roleProgress.length) return npcs;
-  let changed = false;
   const next = npcs.map((npc) => {
     const aliases = [npc.姓名, npc.别名].filter((item): item is string => Boolean(item?.trim()));
     const matched = roleProgress.find((summary) =>
@@ -55,7 +54,6 @@ export function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编�
     const existing = 提取NPC同行记忆文本列表(npc);
     const cleanSummary = matched.length > 120 ? `${matched.slice(0, 118)}…` : matched;
     if (existing.some((item) => item.includes(cleanSummary))) return npc;
-    changed = true;
     return {
       ...npc,
       同行记忆: [
@@ -71,6 +69,7 @@ export function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编�
       最近回合: Math.max(npc.最近回合, turn),
     };
   });
+  const changed = next.some((npc, index) => npc !== npcs[index]);
   return changed ? next : npcs;
 }
 

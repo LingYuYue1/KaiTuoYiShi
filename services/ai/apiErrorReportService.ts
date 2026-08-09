@@ -26,7 +26,8 @@ function maskApiKey(apiKey: string): string {
 }
 
 function trimText(value: unknown, maxLength = 4000): string {
-  return String(value ?? '').trim().slice(0, maxLength);
+  const text = typeof value === 'string' ? value : value === null || value === undefined ? '' : JSON.stringify(value);
+  return text.trim().slice(0, maxLength);
 }
 
 export async function appendApiErrorReport(input: {

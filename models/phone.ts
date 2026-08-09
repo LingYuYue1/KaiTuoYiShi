@@ -173,17 +173,17 @@ export function 创建手机会话本地摘要条目(input: {
   const eff = ctx ?? DEFAULT_EXEC_CTX;
   return {
     id: `phone_local_${eff.now()}_${eff.randomString(6)}`,
-    turn: Math.max(0, Number(input.turn) || 0),
+    turn: Math.max(0, input.turn || 0),
     summary: input.summary.trim(),
     source: input.source,
-    messageCount: Math.max(0, Number(input.messageCount) || 0),
+    messageCount: Math.max(0, input.messageCount || 0),
     createdAt: eff.now(),
     sourceSeedId: input.sourceSeedId,
   };
 }
 
 export function 计算手机未读(phone: Pick<手机系统, 'chats' | 'messageSeeds'>): number {
-  const chatUnread = phone.chats.reduce((sum, chat) => sum + Math.max(0, Number(chat.unread) || 0), 0);
+  const chatUnread = phone.chats.reduce((sum, chat) => sum + Math.max(0, chat.unread || 0), 0);
   const seedUnread = phone.messageSeeds.filter((seed) => seed.status === 'pending').length;
   return chatUnread + seedUnread;
 }
@@ -212,64 +212,80 @@ export function 归一化手机系统(input?: Partial<手机系统> | null, ctx?
   const chats = Array.isArray(input?.chats) ? input.chats : base.chats;
   const seeds = Array.isArray(input?.messageSeeds) ? input.messageSeeds : [];
   const effNorm = ctx ?? DEFAULT_EXEC_CTX;
-  const normalizedChats = chats.map((chat) => ({
-    id: chat.id || `chat_${effNorm.now()}`,
-    type: chat.type ?? 'private',
-    title: chat.title || '未命名会话',
-    participantIds: Array.isArray(chat.participantIds) ? chat.participantIds : [],
-    messages: Array.isArray(chat.messages)
-      ? chat.messages.map((message) => ({
-          ...message,
-          avatar: typeof message.avatar === 'string' ? message.avatar : undefined,
-        }))
-      : [],
-    localArchive: {
-      ...创建手机会话本地库(chat.type ?? 'private'),
-      ...(chat.localArchive ?? {}),
-      entries: Array.isArray(chat.localArchive?.entries)
-        ? chat.localArchive.entries
-            .map((entry) => ({
-              ...entry,
-              summary: typeof entry.summary === 'string' ? entry.summary.trim() : '',
-              source: entry.source ?? 'private',
-              messageCount: Math.max(0, Number(entry.messageCount) || 0),
-              createdAt: Number(entry.createdAt) || effNorm.now(),
-            }))
-            .filter((entry) => entry.summary)
+  const normalizedChats = chats.map((rawChat) => {
+    const chat = rawChat as Partial<手机会话>;
+    return {
+      id: chat.id || `chat_${effNorm.now()}`,
+      type: chat.type ?? 'private',
+      title: chat.title || '未命名会话',
+      participantIds: Array.isArray(chat.participantIds) ? chat.participantIds : [],
+      messages: Array.isArray(chat.messages)
+        ? chat.messages.map((message) => ({
+            ...message,
+            avatar: typeof message.avatar === 'string' ? message.avatar : undefined,
+          }))
         : [],
-      compressedSummaries: Array.isArray(chat.localArchive?.compressedSummaries)
-        ? chat.localArchive.compressedSummaries.filter((item) => typeof item === 'string' && item.trim())
-        : [],
-      lastCompressedTurn: Number(chat.localArchive?.lastCompressedTurn) || undefined,
-    },
-    unread: Math.max(0, Number(chat.unread) || 0),
-    pinned: Boolean(chat.pinned),
-    updatedAt: Number(chat.updatedAt) || effNorm.now(),
-  }));
-  const normalizedSeeds = seeds.map((seed) => ({
-    id: seed.id || `phone_seed_${effNorm.now()}`,
-    turn: Math.max(0, Number(seed.turn) || 0),
-    source: seed.source ?? 'system',
-    triggerType: seed.triggerType ?? 'custom',
-    priority: seed.priority ?? 'normal',
-    targetType: seed.targetType ?? 'private',
-    targetId: seed.targetId || '',
-    title: seed.title || '未命名来信',
-    context: seed.context || '',
-    relatedNpcIds: Array.isArray(seed.relatedNpcIds) ? seed.relatedNpcIds : [],
-    expiresAfterTurns: seed.expiresAfterTurns,
-    status: seed.status ?? 'pending',
-  }));
+      localArchive: {
+        ...创建手机会话本地库(chat.type ?? 'private'),
+        ...(chat.localArchive ?? {}),
+        entries: Array.isArray(chat.localArchive?.entries)
+          ? chat.localArchive.entries
+              .map((rawEntry) => {
+                const entry = rawEntry as Partial<手机会话本地摘要条目>;
+                return {
+                  id: entry.id || `phone_local_${effNorm.now()}`,
+                  turn: Math.max(0, entry.turn || 0),
+                  summary: typeof entry.summary === 'string' ? entry.summary.trim() : '',
+                  source: entry.source ?? 'private',
+                  messageCount: Math.max(0, entry.messageCount || 0),
+                  createdAt: entry.createdAt || effNorm.now(),
+                  sourceSeedId: entry.sourceSeedId,
+                };
+              })
+              .filter((entry) => entry.summary)
+          : [],
+        compressedSummaries: Array.isArray(chat.localArchive?.compressedSummaries)
+          ? chat.localArchive.compressedSummaries.filter((item) => typeof item === 'string' && item.trim())
+          : [],
+        lastCompressedTurn: Number(chat.localArchive?.lastCompressedTurn) || undefined,
+      },
+      unread: Math.max(0, chat.unread || 0),
+      pinned: Boolean(chat.pinned),
+      updatedAt: chat.updatedAt || effNorm.now(),
+    };
+  });
+  const normalizedSeeds = seeds.map((rawSeed) => {
+    const seed = rawSeed as Partial<主动来信种子>;
+    return {
+      id: seed.id || `phone_seed_${effNorm.now()}`,
+      turn: Math.max(0, seed.turn || 0),
+      source: seed.source ?? 'system',
+      triggerType: seed.triggerType ?? 'custom',
+      priority: seed.priority ?? 'normal',
+      targetType: seed.targetType ?? 'private',
+      targetId: seed.targetId || '',
+      title: seed.title || '未命名来信',
+      context: seed.context || '',
+      relatedNpcIds: Array.isArray(seed.relatedNpcIds) ? seed.relatedNpcIds : [],
+      expiresAfterTurns: seed.expiresAfterTurns,
+      status: seed.status ?? 'pending',
+    };
+  });
   return {
     contacts: Array.isArray(input?.contacts)
-      ? input.contacts.map((contact) => ({
-          ...contact,
-          available: Boolean(contact.available),
-          status:
-            contact.status ??
-            (!contact.available ? 'unavailable' : contact.npcId ? 'available' : 'known_locked'),
-          unlockSource: contact.unlockSource,
-        }))
+      ? input.contacts.map((rawContact) => {
+          const contact = rawContact as Partial<手机联系人>;
+          return {
+            ...contact,
+            id: contact.id || `contact_${effNorm.now()}`,
+            name: contact.name || '未名联系人',
+            available: Boolean(contact.available),
+            status:
+              contact.status ??
+              (!contact.available ? 'unavailable' : contact.npcId ? 'available' : 'known_locked'),
+            unlockSource: contact.unlockSource,
+          };
+        })
       : [],
     chats: normalizedChats,
     messageSeeds: normalizedSeeds,

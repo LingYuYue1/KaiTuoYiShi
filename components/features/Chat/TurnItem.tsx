@@ -84,8 +84,8 @@ function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody
 export const TurnItem = memo(TurnItemImpl);
 
 function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: string; traveler?: 角色数据结构; album?: 相册系统; fontSize?: number }) {
-  const name = traveler?.姓名?.trim() || traveler?.别名?.trim() || '旅人';
-  const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim());
+  const name = traveler?.姓名.trim() || traveler?.别名.trim() || '旅人';
+  const avatarUrl = 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像.trim());
   const bubbleBg = 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))';
 
   return (
@@ -195,8 +195,8 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
   // 命途狭间消息识别:出题回合 awakenQuestions 非空,评判回合 awakenJudgement 非空。
   // 满足其一即套狭间皮肤(暗紫红 + 赤金 + 暗光晕)以视觉上和主剧情消息区分。
   const awakeningKind: '出题' | '评判' | null =
-    parsed.awakenQuestions?.trim() ? '出题'
-    : parsed.awakenJudgement?.trim() ? '评判'
+    parsed.awakenQuestions.trim() ? '出题'
+    : parsed.awakenJudgement.trim() ? '评判'
     : null;
 
   // 评判结果分类:当前版本只承认升阶；兼容旧历史消息时保留兜底渲染。
@@ -242,7 +242,7 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           label="剧情规划"
           glyph="◇"
           active={openTool === 'storyPlan'}
-          disabled={!parsed.storyPlan?.trim()}
+          disabled={!parsed.storyPlan.trim()}
           onClick={() => toggle('storyPlan')}
         />
         <ToolButton
@@ -289,17 +289,17 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
             />
           )}
           {openTool === 'thinking' && (
-            <PanelText content={parsed.thinking?.trim() || '本回合未输出思维链。'} label="思绪痕迹" />
+            <PanelText content={parsed.thinking.trim() || '本回合未输出思维链。'} label="思绪痕迹" />
           )}
           {openTool === 'usage' && (
             <UsagePanel message={message} onClose={() => setOpenTool(null)} />
           )}
           {openTool === 'storyPlan' && (
-            <PanelText content={parsed.storyPlan?.trim() || '本回合没有剧情规划保留项。'} label="剧情规划" />
+            <PanelText content={parsed.storyPlan.trim() || '本回合没有剧情规划保留项。'} label="剧情规划" />
           )}
           {openTool === 'summary' && <PanelText content={parsed.memory} label="记忆收录" />}
           {openTool === 'raw' && (
-            <PanelText content={parsed.rawText?.trim() || message.content || '本回合没有保存原始消息。'} label="原始消息" />
+            <PanelText content={parsed.rawText.trim() || message.content || '本回合没有保存原始消息。'} label="原始消息" />
           )}
           {openTool === 'context' && (
             <PanelText content={formatDebugContext(message)} label="请求上下文" />
@@ -346,10 +346,10 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
       )}
 
       {/* 狭间消息:出题回合展示三道凝练题面 / 评判回合展示升阶徽章 + 行进感言 */}
-      {awakeningKind === '出题' && parsed.awakenQuestions?.trim() && (
+      {awakeningKind === '出题' && parsed.awakenQuestions.trim() && (
         <AwakeningQuestionsBlock raw={parsed.awakenQuestions} />
       )}
-      {awakeningKind === '评判' && parsed.awakenJudgement?.trim() && (
+      {awakeningKind === '评判' && parsed.awakenJudgement.trim() && (
         <>
           <AwakeningJudgementBadge judgement={parsed.awakenJudgement} />
           {judgementOutcome && (
@@ -364,7 +364,7 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
         style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}
       >
         <span>
-          {message.responseDurationSec != null ? (
+          {message.responseDurationSec !== undefined ? (
             <>
               <span style={{ color: 'rgba(var(--tj-btn-primary-start), 0.5)' }}>◆</span>
               <span className="ml-1.5">{message.responseDurationSec}s</span>
@@ -374,7 +374,7 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           )}
         </span>
         <span>
-          <span className="mr-1.5">{[...parsed.body].length} 字</span>
+          <span className="mr-1.5">{Array.from(parsed.body).length} 字</span>
           <span style={{ color: 'rgba(var(--tj-btn-primary-start), 0.5)' }}>◆</span>
         </span>
       </div>
@@ -630,7 +630,7 @@ function AwakeningOracleBlock({
   deferOffscreen?: boolean;
   visualTextSettings?: VisualTextSettings;
 }) {
-  if (!content?.trim()) return null;
+  if (!content.trim()) return null;
   const subtitle = kind === '评判' ? '评 语' : '低 语';
   return (
     <div
@@ -772,7 +772,7 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
       ? Object.keys(usage.rawUsage).sort().join(', ')
       : '未记录';
   const cacheDiagnostic = usage?.cacheDiagnostic
-    ?? (usage?.rawUsage != null
+    ?? (usage?.rawUsage !== undefined
       ? 'API 已返回 usage，但没有可识别的缓存统计字段。'
       : '当前回合没有 API usage 原始字段，只能显示本地估算。');
   const cacheOptimizationHint = buildCacheOptimizationHint({
@@ -826,7 +826,7 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
             <div>
               <span style={{ color: 'rgba(var(--tj-text-secondary),0.74)' }}>耗时</span>
               <span className="ml-2 font-mono" style={{ color: 'rgba(var(--tj-btn-primary-start),0.9)' }}>
-                {message.responseDurationSec != null ? `${message.responseDurationSec.toFixed(1)} 秒` : '未记录'}
+                {message.responseDurationSec !== undefined ? `${message.responseDurationSec.toFixed(1)} 秒` : '未记录'}
               </span>
             </div>
           </div>
@@ -847,8 +847,8 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
           </div>
           <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>
             {cacheKnown
-              ? `缓存字段来自 ${sourceLabel}${usage?.cacheHitRate != null ? `，命中率 ${(usage.cacheHitRate * 100).toFixed(1)}%` : ''}。`
-              : usage?.rawUsage != null
+              ? `缓存字段来自 ${sourceLabel}${usage?.cacheHitRate !== undefined ? `，命中率 ${(usage.cacheHitRate * 100).toFixed(1)}%` : ''}。`
+              : usage?.rawUsage !== undefined
                 ? `${cacheDiagnostic} Gemini 原生缓存统计通常是 usageMetadata.cachedContentTokenCount；若原始 usage 只有 prompt_tokens / completion_tokens / total_tokens，说明当前接口或中转未透传缓存命中。`
                 : '当前接口没有返回缓存字段；输入/输出 token 仍可查看，缓存命中不做本地猜测。'}
           </div>
@@ -891,7 +891,7 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
             <div><span style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>Usage格式：</span>{usageFormat} · {usagePath}</div>
             <div><span style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>原始字段：</span>{rawUsageKeys || '未记录'}</div>
           </div>
-          {usage?.rawUsage != null && (
+          {usage?.rawUsage !== undefined && (
             <details className="mt-2">
               <summary className="cursor-pointer text-[11px]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>
                 原始 usage 字段

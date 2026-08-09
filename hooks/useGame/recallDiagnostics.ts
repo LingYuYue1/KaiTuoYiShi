@@ -18,7 +18,7 @@ export function formatZhikuDiagnosticsPreview(diagnostics?: 智库召回诊断):
     `最终注入强资料：${diagnostics.强相关资料.join('、') || '无'}`,
     `最终注入弱资料：${diagnostics.弱相关资料.join('、') || '无'}`,
     `已注入资料：${diagnostics.已注入资料.join('、') || '无'}`,
-    `角色故事层注入：${diagnostics.角色故事层注入?.join('；') || '无'}`,
+    `角色故事层注入：${diagnostics.角色故事层注入.join('；') || '无'}`,
     diagnostics.被门禁过滤.length
       ? `门禁过滤：${diagnostics.被门禁过滤.map((item) => `${item.标题}（${item.原因}）`).join('；')}`
       : '门禁过滤：无',
@@ -36,7 +36,7 @@ function getZhikuEntryKind(title: string): string {
 }
 
 function cleanRecallTitle(title: string): string {
-  return String(title || '')
+  return (title || '')
     .replace(/^【[^】]+】/, '')
     .split(/[｜|：:]/)[0]
     .replace(/\s+/g, '')
@@ -65,7 +65,7 @@ export function formatZhikuRecallSummary(diagnostics?: 智库召回诊断): stri
 }
 
 export function formatYitingRecallSummary(previewText?: string): string {
-  const text = String(previewText || '').trim();
+  const text = (previewText || '').trim();
   if (!text) return '记忆召回：无';
   const names = Array.from(
     new Set(

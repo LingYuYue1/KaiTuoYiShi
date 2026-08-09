@@ -52,7 +52,7 @@ const panelStyle = {
 };
 
 export function InventoryPanel({ traveler, onTravelerChange, turnCount }: InventoryPanelProps) {
-  const inventory = traveler.背包 ?? [];
+  const inventory = traveler.背包;
   const [tab, setTab] = useState<标签>('全部');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [flash, setFlash] = useState('');
@@ -79,7 +79,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
   );
 
   const totalQuantity = useMemo(
-    () => inventory.reduce((sum, it) => sum + Math.max(1, it.数量 ?? 1), 0),
+    () => inventory.reduce((sum, it) => sum + Math.max(1, it.数量), 0),
     [inventory],
   );
 
@@ -95,20 +95,14 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
 
   useEffect(() => {
     return () => {
-      if (flashTimerRef.current != null) {
+      if (flashTimerRef.current !== null) {
         window.clearTimeout(flashTimerRef.current);
       }
     };
   }, []);
 
-  useEffect(() => {
-    if (selectedId && !inventory.some((it) => it.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [inventory, selectedId]);
-
   const showFlash = (msg: string) => {
-    if (flashTimerRef.current != null) {
+    if (flashTimerRef.current !== null) {
       window.clearTimeout(flashTimerRef.current);
     }
     setFlash(msg);
@@ -128,10 +122,9 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
 
   const handleDrop = (itemId: string, count?: number) => {
     if (!confirm(count ? `确认丢弃 ${count} 件?` : '确认全部丢弃该物品?')) return;
-    let willEmpty = false;
+    const current = inventory.find((it) => it.id === itemId);
+    const willEmpty = Boolean(current && (count === undefined || count >= current.数量));
     onTravelerChange((prev) => {
-      const cur = (prev.背包 ?? []).find((it) => it.id === itemId);
-      if (cur && (count == null || count >= cur.数量)) willEmpty = true;
       const res = 丢弃物品(prev, itemId, count);
       showFlash(res.message);
       return res.ok ? res.traveler : prev;
@@ -142,7 +135,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
   const cellMinCount = 12;
   const cells: (背包物品 | null)[] = [
     ...visible,
-    ...Array(Math.max(0, cellMinCount - visible.length)).fill(null),
+    ...Array<null>(Math.max(0, cellMinCount - visible.length)).fill(null),
   ];
 
   return (
@@ -295,7 +288,7 @@ function ItemCell({
   selected: boolean;
   onClick: () => void;
 }) {
-  const qualityColor = ITEM_QUALITY_COLORS[item.品质] ?? ITEM_QUALITY_COLORS.蓝;
+  const qualityColor = ITEM_QUALITY_COLORS[item.品质];
   const qualityStroke = qualityColor.replace(/0\.\d+\)/, '0.52)');
 
   return (
@@ -413,12 +406,11 @@ function ItemDetailOverlay({
   }
 
   const usable = USABLE_CATEGORIES.includes(item.类别);
-  const qualityColor = ITEM_QUALITY_COLORS[item.品质] ?? ITEM_QUALITY_COLORS.蓝;
+  const qualityColor = ITEM_QUALITY_COLORS[item.品质];
   const effectEntries = item.叙事效果 ?? [];
   const effects = Array.isArray(item.使用效果)
     ? item.使用效果.filter(
         (e) =>
-          e &&
           typeof e === 'object' &&
           typeof e.目标属性 === 'string' &&
           typeof e.数值 === 'number',

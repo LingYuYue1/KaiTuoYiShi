@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { 图片是否参考角色 } from '@/models/imageGeneration';
 import type { 图片槽位, 相册条目, 相册系统 } from '@/models/imageGeneration';
@@ -19,12 +19,9 @@ import type { AlbumImportMode } from './albumArchive';
 import { 解析相册资源地址 } from '@/utils/albumActions';
 
 type GalleryScope = 'character' | Exclude<SceneLibraryFilter, 'all'>;
-type GalleryItem = {
-  entry: 相册条目;
-  src: string;
-  character?: CharacterLibraryEntry;
-  scene?: SceneLibraryEntry;
-};
+type GalleryItem =
+  | { entry: 相册条目; src: string; character: CharacterLibraryEntry }
+  | { entry: 相册条目; src: string; scene: SceneLibraryEntry };
 
 export function ImageLibraryWorkspace({
   records,
@@ -103,10 +100,6 @@ export function ImageLibraryWorkspace({
     phone: sceneEntries.filter((item) => item.kind === 'phone').length,
   }), [records, sceneEntries]);
 
-  useEffect(() => {
-    setSelectedIds((current) => current.filter((id) => visibleIds.has(id)));
-  }, [visibleIds]);
-
   const toggleSelected = (entryId: string) => {
     setSelectedIds((current) => current.includes(entryId) ? current.filter((id) => id !== entryId) : [...current, entryId]);
   };
@@ -152,7 +145,7 @@ export function ImageLibraryWorkspace({
             <div className="flex gap-2">
               <button type="button" disabled={operationBusy} onClick={() => setImportOpen(true)} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgba(var(--tj-btn-primary-start),0.9)', background: 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24)', clipPath: smallClip }}>导入</button>
               <button type="button" disabled={operationBusy} onClick={onExport} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgba(var(--tj-tech-cyan),0.92)', background: 'rgba(var(--tj-tech-cyan),0.06)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>导出</button>
-              {scope === 'character' && <><input ref={referenceInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { onUploadReference(event.currentTarget.files, activeRecord); event.currentTarget.value = ''; }} /><button type="button" disabled={!activeRecord || operationBusy} onClick={() => referenceInputRef.current?.click()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, clipPath: smallClip }}>导入参考图</button></>}
+              {scope === 'character' && <><input ref={referenceInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const input = event.currentTarget; onUploadReference(input.files, activeRecord); input.value = ''; }} /><button type="button" disabled={!activeRecord || operationBusy} onClick={() => referenceInputRef.current?.click()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, clipPath: smallClip }}>导入参考图</button></>}
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-4">
@@ -167,7 +160,7 @@ export function ImageLibraryWorkspace({
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2" style={{ borderColor: 'rgba(var(--tj-btn-primary-start),0.1)' }}><span className="font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.86)' }}>{galleryScopeLabel(scope)} · 当前图库</span><span className="text-[11px]" style={{ color: 'rgba(var(--tj-ui-faint),0.72)' }}>当前显示 {visibleItems.length} 项</span></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {visibleItems.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">{visibleItems.map((item) => item.character ? <CharacterGalleryCard key={item.entry.id} item={item.character} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} reference={Boolean(activeRecord && 图片是否参考角色(item.entry, activeRecord.id))} onClick={() => handleEntryClick(item.entry.id)} /> : <SceneGalleryCard key={item.entry.id} item={item.scene!} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} onClick={() => handleEntryClick(item.entry.id)} />)}</div> : <EmptyLibraryBox title="暂无可显示资源" desc={scope === 'character' ? '生成、导入的角色图片与参考图都会显示在这里。' : '生成或导入对应类型图片后会出现在这里。'} />}
+              {visibleItems.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">{visibleItems.map((item) => 'character' in item ? <CharacterGalleryCard key={item.entry.id} item={item.character} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} reference={Boolean(activeRecord && 图片是否参考角色(item.entry, activeRecord.id))} onClick={() => handleEntryClick(item.entry.id)} /> : <SceneGalleryCard key={item.entry.id} item={item.scene} active={activeEntryId === item.entry.id} batchMode={batchMode} selected={selectedVisibleIds.includes(item.entry.id)} onClick={() => handleEntryClick(item.entry.id)} />)}</div> : <EmptyLibraryBox title="暂无可显示资源" desc={scope === 'character' ? '生成、导入的角色图片与参考图都会显示在这里。' : '生成或导入对应类型图片后会出现在这里。'} />}
             </div>
           </div>
         </Panel>
@@ -215,7 +208,7 @@ function LibraryImportDialog({ open, onClose, scope, record, traveler, onImport 
     onImport(file, target, mode);
     onClose();
   };
-  return createPortal(<div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4" onMouseDown={onClose}><div className="w-full max-w-md px-4 py-4" style={{ background: 'linear-gradient(160deg, rgba(var(--tj-surface),0.98), rgba(var(--tj-bg-primary),0.98))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)', clipPath: cardClip }} onMouseDown={(event) => event.stopPropagation()}><div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>导入相册文件</div><div className="mt-3 space-y-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.78)' }}><div>合并归类目标：{targetLabel}</div><div>支持本项目导出的 ZIP 备份和旧版相册 JSON。合并导入会保留当前内容并自动复用相同图片。</div><div style={{ color: 'rgba(var(--tj-danger),0.88)' }}>“覆盖恢复”仅用于完整备份，会替换当前相册中的全部资源与任务。</div></div><div className="mt-4 grid gap-2 sm:grid-cols-[auto_1fr_1fr]"><button type="button" onClick={onClose} className="px-3 py-2 text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.82)' }}>取消</button><button type="button" onClick={() => chooseFile('replace')} className="px-3 py-2 font-serif text-xs tracking-[0.12em]" style={{ color: 'rgba(var(--tj-danger),0.92)', background: 'rgba(var(--tj-danger),0.09)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.24)', clipPath: smallClip }}>覆盖恢复</button><button type="button" onClick={() => chooseFile('merge')} className="px-3 py-2 font-serif text-xs tracking-[0.12em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, clipPath: smallClip }}>合并导入</button></div><input ref={fileRef} type="file" accept="application/zip,.zip,application/json,.json" className="hidden" onChange={(event) => { handleFile(event.target.files?.[0] ?? null); event.currentTarget.value = ''; }} /></div></div>, document.body);
+  return createPortal(<div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4" onMouseDown={onClose}><div className="w-full max-w-md px-4 py-4" style={{ background: 'linear-gradient(160deg, rgba(var(--tj-surface),0.98), rgba(var(--tj-bg-primary),0.98))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)', clipPath: cardClip }} onMouseDown={(event) => event.stopPropagation()}><div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>导入相册文件</div><div className="mt-3 space-y-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.78)' }}><div>合并归类目标：{targetLabel}</div><div>支持本项目导出的 ZIP 备份和旧版相册 JSON。合并导入会保留当前内容并自动复用相同图片。</div><div style={{ color: 'rgba(var(--tj-danger),0.88)' }}>“覆盖恢复”仅用于完整备份，会替换当前相册中的全部资源与任务。</div></div><div className="mt-4 grid gap-2 sm:grid-cols-[auto_1fr_1fr]"><button type="button" onClick={onClose} className="px-3 py-2 text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.82)' }}>取消</button><button type="button" onClick={() => chooseFile('replace')} className="px-3 py-2 font-serif text-xs tracking-[0.12em]" style={{ color: 'rgba(var(--tj-danger),0.92)', background: 'rgba(var(--tj-danger),0.09)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.24)', clipPath: smallClip }}>覆盖恢复</button><button type="button" onClick={() => chooseFile('merge')} className="px-3 py-2 font-serif text-xs tracking-[0.12em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, clipPath: smallClip }}>合并导入</button></div><input ref={fileRef} type="file" accept="application/zip,.zip,application/json,.json" className="hidden" onChange={(event) => { const input = event.currentTarget; handleFile(input.files?.[0] ?? null); input.value = ''; }} /></div></div>, document.body);
 }
 
 function galleryImportTarget(scope: GalleryScope, record: CharacterLibraryRecord | null): AlbumImportTarget {

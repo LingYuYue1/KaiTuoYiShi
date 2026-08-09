@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { 游戏设置, API设置, API配置项 } from '@/models/settings';
+import type { 游戏设置, API设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块类目, 提示词模块作用域 } from '@/models/prompts';
 import {
   PROMPT_MODULE_CATEGORY_LABELS,
@@ -10,24 +10,18 @@ import {
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
   parseSTPresetV2,
-  parseSTPresetWithDetection,
   isSTImportedModule,
-  detectSTCoTModules,
-  detectSTFormatModules,
-  BUILTIN_MAIN_COT_ID,
-  BUILTIN_RESPONSE_FORMAT_ID,
 } from '@/utils/stPresetParser';
-import type { STPresetEntry, STPresetEntryV2, STSamplingParams, STWorldInfoEntry } from '@/models/stTypes';
-import { getBuiltinPresets, getBuiltinPresetsV2 } from '@/data/builtinPresets';
-import { BUILTIN_PRESET_ID } from '@/data/builtinPresets/builtinPreset';
+import type { STPresetEntryV1, STPresetEntryV2, STWorldInfoEntry } from '@/models/stTypes';
+import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import type { 世界书 } from '@/models/worldbook';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts } from '@/hooks/useGame/tavernRegexProcessor';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const isMainPlotModule = (m: 提示词模块) => !m.scope?.includes('calibration');
-const isOtherSystemModule = (m: 提示词模块) => m.scope?.includes('calibration');
+const isMainPlotModule = (m: 提示词模块) => !m.scope.includes('calibration');
+const isOtherSystemModule = (m: 提示词模块) => m.scope.includes('calibration');
 const isNativePromptModule = (m: 提示词模块) =>
   !isSTImportedModule(m) && !m.id.startsWith('adapted_');
 
@@ -124,80 +118,6 @@ interface Props {
   onApiSettingsChange: (s: API设置) => void;
 }
 
-// ── Phase 8：采样参数同步辅助函数 ──────────────────────────────────
-/** 从 API 配置项提取采样参数快照（用于切走带参数预设时备份原始值）。 */
-function extractSamplingParams(config: API配置项): STSamplingParams {
-  return {
-    temperature: config.temperature,
-    topP: config.topP,
-    topK: config.topK,
-    topA: config.topA,
-    minP: config.minP,
-    repetitionPenalty: config.repetitionPenalty,
-    frequencyPenalty: config.frequencyPenalty,
-    presencePenalty: config.presencePenalty,
-    maxContext: config.maxContext,
-    maxTokens: config.maxTokens,
-  };
-}
-
-/** 把采样参数覆盖到 API 配置项（仅覆盖 params 中明确指定的字段，其余保留原值）。 */
-function applySamplingParams(config: API配置项, params: STSamplingParams | null | undefined): API配置项 {
-  if (!params) return config;
-  return {
-    ...config,
-    temperature: params.temperature ?? config.temperature,
-    topP: params.topP ?? config.topP,
-    topK: params.topK ?? config.topK,
-    topA: params.topA ?? config.topA,
-    minP: params.minP ?? config.minP,
-    repetitionPenalty: params.repetitionPenalty ?? config.repetitionPenalty,
-    frequencyPenalty: params.frequencyPenalty ?? config.frequencyPenalty,
-    presencePenalty: params.presencePenalty ?? config.presencePenalty,
-    maxContext: params.maxContext ?? config.maxContext,
-    maxTokens: params.maxTokens ?? config.maxTokens,
-  };
-}
-
-/** 计算切换预设后 API 配置与备份的新状态。
- *  - 切到带 samplingParams 的预设：首次备份当前 API 参数到 stPresetApiBackup，应用预设参数
- *  - 切到无参数预设/null：若存在备份则恢复并清空备份
- *  返回 nextApiConfigs（新 configs 数组，仅替换激活项）和 nextBackup。 */
-function computePresetSwitchApiChange(
-  configs: API配置项[],
-  activeConfigId: string | null,
-  currentBackup: STSamplingParams | null | undefined,
-  targetSampling: STSamplingParams | undefined,
-): { nextConfigs: API配置项[]; nextBackup: STSamplingParams | null } {
-  const activeIndex = configs.findIndex((c) => c.id === activeConfigId);
-  if (activeIndex < 0) {
-    // 找不到激活配置，不动 API，但按逻辑处理 backup
-    if (targetSampling) {
-      return { nextConfigs: configs, nextBackup: currentBackup ?? null };
-    }
-    return { nextConfigs: configs, nextBackup: null };
-  }
-  const activeConfig = configs[activeIndex];
-  if (targetSampling) {
-    // 切到带参数预设：首次进入才备份（已有备份则保留，避免连环覆盖丢失原始值）
-    const nextBackup = currentBackup ?? extractSamplingParams(activeConfig);
-    const nextConfig = applySamplingParams(activeConfig, targetSampling);
-    return {
-      nextConfigs: configs.map((c, i) => (i === activeIndex ? nextConfig : c)),
-      nextBackup,
-    };
-  }
-  // 切到无参数预设/null：有备份则恢复，无备份则不动
-  if (currentBackup) {
-    const nextConfig = applySamplingParams(activeConfig, currentBackup);
-    return {
-      nextConfigs: configs.map((c, i) => (i === activeIndex ? nextConfig : c)),
-      nextBackup: null,
-    };
-  }
-  return { nextConfigs: configs, nextBackup: null };
-}
-
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
@@ -236,19 +156,23 @@ function getPresetWorldInfoEntries(worldInfo: unknown): Array<Record<string, unk
 function getPresetWorldInfoViewEntries(worldInfo: unknown): Array<{ key: string; entry: Record<string, unknown> }> {
   if (Array.isArray(worldInfo)) {
     return worldInfo
-      .map((entry, index) => ({ key: String(index), entry }))
+      .map((entry, index) => ({ key: String(index), entry: entry as Record<string, unknown> }))
       .filter((item): item is { key: string; entry: Record<string, unknown> } => Boolean(item.entry) && typeof item.entry === 'object');
   }
   if (worldInfo && typeof worldInfo === 'object') {
     return Object.entries(worldInfo)
-      .map(([key, entry]) => ({ key, entry }))
+      .map(([key, entry]) => ({ key, entry: entry as Record<string, unknown> }))
       .filter((item): item is { key: string; entry: Record<string, unknown> } => Boolean(item.entry) && typeof item.entry === 'object');
   }
   return [];
 }
 
 function readPresetWorldInfoText(value: unknown): string {
-  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  const serialized = JSON.stringify(value);
+  return typeof serialized === 'string' ? serialized : '';
 }
 
 function readPresetWorldInfoKeys(value: unknown): string[] {
@@ -278,7 +202,11 @@ const DEFAULT_TAVERN_REGEX_DRY_RUN_SAMPLE = `<正文>
 </行动选项>`;
 
 function readPresetRegexText(value: unknown): string {
-  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  const serialized = JSON.stringify(value);
+  return typeof serialized === 'string' ? serialized : '';
 }
 
 function getPresetRegexTitle(script: Record<string, unknown>, index: number): string {
@@ -304,19 +232,6 @@ function getPresetRegexKindLabel(kind: ReturnType<typeof analyzeTavernRegexScrip
   if (kind === 'output_postprocess') return '输出后处理';
   if (kind === 'display_replace') return '显示层替换';
   return '阻断';
-}
-
-function isRegexScriptDisabled(script: Record<string, unknown>): boolean {
-  return script.disabled === true || script.disabled === 1 || script.disabled === 'true';
-}
-
-function isRiskyRegexScript(script: Record<string, unknown>): boolean {
-  const name = String(script.script_name ?? script.name ?? script.id ?? '');
-  const find = String(script.find_regex ?? script.findRegex ?? script.find ?? '');
-  const replace = String(script.replace_string ?? script.replaceString ?? script.replace ?? '');
-  const placement = JSON.stringify(script.placement ?? script.placements ?? '');
-  const combined = `${name}\n${find}\n${replace}\n${placement}`;
-  return /<\s*(正文|短期记忆|动态世界|行动选项|变量草稿|变量更新|天气|剧情规划)\s*>|<\/\s*(正文|短期记忆|动态世界|行动选项|变量草稿|变量更新|天气|剧情规划)\s*>|css|dom|display|html|style|显示|界面|全局/i.test(combined);
 }
 
 function TogglePill({
@@ -366,22 +281,9 @@ function TogglePill({
   );
 }
 
-export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbooks, onWorldbooksChange, apiSettings, onApiSettingsChange }: Props) {
+export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbooks, onWorldbooksChange }: Props) {
   const isTavernMode = mode === 'tavern';
   const modules = settings.promptModules;
-  /** 全部可选预设：内置预设（原生 / 二创成品）+ 玩家导入预设。切换 UI 与 switchPreset 统一用此数组查找。
-   *  去重：若玩家导入预设与内置预设同名（如早期测试导入的双人成行），只保留内置版本。 */
-  const allPresets = useMemo<STPresetEntry[]>(() => {
-    const builtins = getBuiltinPresets();
-    const builtinNames = new Set(builtins.map((p) => p.name));
-    const userPresets = (settings.stPresets ?? []).filter((p) => !builtinNames.has(p.name));
-    return [...builtins, ...userPresets];
-  }, [settings.stPresets]);
-  /** 当前激活预设的显示名（用于 header 显示"当前使用预设：XXX"） */
-  const currentPresetName = useMemo(() => {
-    const id = settings.currentStPresetId ?? BUILTIN_PRESET_ID;
-    return allPresets.find((p) => p.id === id)?.name ?? null;
-  }, [allPresets, settings.currentStPresetId]);
   const currentV2Preset = useMemo(() => {
     const id = settings.currentStPresetIdV2 ?? null;
     return [...getBuiltinPresetsV2(), ...(settings.stPresetsV2 ?? [])].find((p) => p.id === id) ?? null;
@@ -400,7 +302,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
     [sorted],
   );
   const selectedPool = isTavernMode ? sorted : nativeSorted;
-  const selected = selectedPool.find((m) => m.id === selectedId) ?? selectedPool[0];
+  const selected = selectedPool.find((m) => m.id === selectedId) ?? selectedPool.at(0);
   // 系统切换：主剧情 / 独立模型
   const [activeSystem, setActiveSystem] = useState<'main' | 'calibration'>('main');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -444,7 +346,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
         const oldIds = preset.modules.map((m) => `${m.id}:${m.updatedAt}`).join('|');
         const newIds = stModulesInNext.map((m) => `${m.id}:${m.updatedAt}`).join('|');
         if (oldIds !== newIds) {
-          const updatedPreset: STPresetEntry = {
+          const updatedPreset: STPresetEntryV1 = {
             ...preset,
             modules: stModulesInNext,
             updatedAt: Date.now(),
@@ -504,11 +406,11 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
     const newId = `custom_${systemKey}_${category}_${now}`;
     const isCal = systemKey !== 'main';
     const scope: 提示词模块作用域[] = isCal ? ['calibration'] : ['all'];
-    const systemLabel = systemKey === 'main' ? '主剧情' : (CALIBRATION_SYSTEM_GROUPS[systemKey]?.label ?? systemKey);
+    const systemLabel = systemKey === 'main' ? '主剧情' : (CALIBRATION_SYSTEM_GROUPS[systemKey].label);
     const catLabel = PROMPT_MODULE_CATEGORY_LABELS[category];
 
     const targetModules = isCal
-      ? modules.filter((m) => CALIBRATION_SYSTEM_GROUPS[systemKey]?.match(m.id))
+      ? modules.filter((m) => CALIBRATION_SYSTEM_GROUPS[systemKey].match(m.id))
       : modules.filter(isMainPlotModule);
     const nextOrder = (targetModules.length > 0 ? Math.max(...targetModules.map((m) => m.order)) : 0) + 10;
 
@@ -534,7 +436,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
       next = next.map((m) => {
         if (!isBuiltinPromptModule(m.id)) return m;
         const sameSystem = isCal
-          ? !!CALIBRATION_SYSTEM_GROUPS[systemKey]?.match(m.id)
+          ? CALIBRATION_SYSTEM_GROUPS[systemKey].match(m.id)
           : isMainPlotModule(m);
         const sameCategory = m.category === category;
         if (sameSystem && sameCategory && m.enabled) {
@@ -555,8 +457,8 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
     if (isBuiltinPromptModule(id) || isCustomWritingStyleSlot(id)) return;
     const target = modules.find((m) => m.id === id);
     let next = modules.filter((m) => m.id !== id);
-    if (target && target.description?.startsWith('替换')) {
-      const isCal = target.scope?.includes('calibration');
+    if (target && target.description.startsWith('替换')) {
+      const isCal = target.scope.includes('calibration');
       next = next.map((m) => {
         if (!isBuiltinPromptModule(m.id) || m.enabled) return m;
         const sameSystem = isCal
@@ -582,7 +484,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
       if (!isBuiltinPromptModule(m.id)) return m;
       const def = fresh.find((f) => f.id === m.id);
       if (!def) return m;
-      const isCalibrationBuiltin = def.scope?.includes('calibration');
+      const isCalibrationBuiltin = def.scope.includes('calibration');
       // 保留玩家当前的主剧情 enabled，覆盖其它字段；独立模型展示模块不作为真实请求开关。
       return {
         ...def,
@@ -596,37 +498,6 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
       if (!next.find((m) => m.id === def.id)) next.push(def);
     }
     update(next);
-  };
-
-  /** ST 预设冲突自动处理（已反转）：检测玩家导入预设中的 CoT/格式，自动关闭导入预设的冲突模块，
-   *  保留内置 main_plot_cot/response_format 不动。避免玩家导入的预设破坏游戏核心协议。
-   *  返回调整后的 incomingStModules 数组 + 冲突提示文案（用于 alert）。
-   */
-  const handleSTCoTFormatConflict = (
-    incomingStModules: 提示词模块[],
-    preserved: 提示词模块[],
-  ): { adjusted: 提示词模块[]; conflictNote: string } => {
-    const cotIds = detectSTCoTModules(incomingStModules);
-    const formatIds = detectSTFormatModules(incomingStModules);
-    const hasCoTConflict = cotIds.length > 0;
-    const hasFormatConflict = formatIds.length > 0;
-    if (!hasCoTConflict && !hasFormatConflict) {
-      return { adjusted: incomingStModules, conflictNote: '' };
-    }
-    const now = Date.now();
-    const conflictIds = new Set([...cotIds, ...formatIds]);
-    // 反转逻辑：关闭玩家导入预设中的冲突模块，保留内置模块不动
-    const adjusted = incomingStModules.map((m) => {
-      if (conflictIds.has(m.id) && m.enabled) {
-        return { ...m, enabled: false, updatedAt: now };
-      }
-      return m;
-    });
-    const tags: string[] = [];
-    if (hasCoTConflict) tags.push('思维链');
-    if (hasFormatConflict) tags.push('输出格式');
-    const conflictNote = `\n\n检测到导入预设含${tags.join(' / ')}模块，与内置核心协议冲突，已自动关闭导入预设中的冲突项（内置模块保持启用）。如需使用预设版本，可在模块列表中手动切换。`;
-    return { adjusted, conflictNote };
   };
 
   const importSTPreset = () => {
@@ -691,147 +562,6 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
     input.click();
   };
 
-  /** Phase 8：切换预设后同步采样参数到当前激活 API 配置，并更新 stPresetApiBackup。
-   *  返回需写入 gameSettings 的 stPresetApiBackup 新值（null 表示无覆盖/已恢复）。 */
-  const applyPresetApiSync = (targetSampling: STSamplingParams | undefined): STSamplingParams | null => {
-    const currentBackup = settings.stPresetApiBackup ?? null;
-    const { nextConfigs, nextBackup } = computePresetSwitchApiChange(
-      apiSettings.configs,
-      apiSettings.activeConfigId,
-      currentBackup,
-      targetSampling,
-    );
-    if (nextConfigs !== apiSettings.configs) {
-      onApiSettingsChange({ ...apiSettings, configs: nextConfigs });
-    }
-    return nextBackup;
-  };
-
-  /** 切换激活预设：用目标预设的 modules 替换当前 promptModules 中的 st_import_* 段。
-   *  当前预设已修改的 st_import_* 模块会随 currentPreset.modules 持久化，切换不丢。
-   *  内置预设（getBuiltinPresets）与玩家导入预设（settings.stPresets）统一在 allPresets 中查找。
-   *  冲突处理：
-   *   - 切到非空预设（adapted/imported）：识别 ST 模块的 CoT/格式，自动禁用内置 main_plot_cot/response_format
-   *   - 切到 null 或原生内置预设（presetType='native'）：恢复内置 main_plot_cot/response_format 到启用状态，
-   *     因为玩家清空预设/选原生大概率是想回到原生体验（玩家手动禁用的也会被恢复，可再次手动关闭）。
-   *  采样参数同步：
-   *   - 切到带 samplingParams 的预设：首次备份当前 API 参数，应用预设参数
-   *   - 切到无参数预设/null/原生：若有备份则恢复
-   */
-  const switchPreset = (presetId: string | null) => {
-    const target = presetId ? allPresets.find((p) => p.id === presetId) : null;
-    if (presetId && !target) return; // 异常：id 不存在
-    // preserved：保留非 ST 模块，同时清除 adapted_*（adapted_* 是二创预设附带的，切换时重新加载）
-    const preserved = modules.filter((m) => !isSTImportedModule(m) && !m.id.startsWith('adapted_'));
-    let nextModules: 提示词模块[];
-    let nextWorldbooks = worldbooks.filter((w) => !w.id.startsWith('stwb_')); // 默认移除所有 ST 世界书
-    let conflictNote = '';
-    // 原生体验：null 或原生内置预设（modules 为空，不附加任何 ST 段）
-    const isNativeLike = !target || target.presetType === 'native';
-    const targetSampling = isNativeLike ? undefined : target?.samplingParams;
-
-    if (isNativeLike) {
-      const now = Date.now();
-      const freshBuiltins = createBuiltinPromptModules();
-      const customModules = preserved.filter((m) => !isBuiltinPromptModule(m.id));
-      nextModules = [
-        ...customModules,
-        ...freshBuiltins.map((def) => {
-          const existing = preserved.find((m) => m.id === def.id);
-          if (existing) {
-            const forceEnable = def.id === BUILTIN_MAIN_COT_ID || def.id === BUILTIN_RESPONSE_FORMAT_ID;
-            return { ...def, enabled: forceEnable ? true : existing.enabled, createdAt: existing.createdAt, updatedAt: existing.updatedAt };
-          }
-          return def;
-        }),
-      ];
-    } else {
-      // target 非空且非 native（adapted 二创成品 / imported 玩家导入）
-      // 二创成品融合路径：预设自带 adapted_* 模块（完整替代对应 builtin_*）
-      // adapted_* 模块的 id 模式：adapted_<builtin_id>（如 adapted_main_plot_cot → builtin_main_plot_cot）
-      const adaptedModules = target.modules.filter((m) => m.id.startsWith('adapted_'));
-      let builtinAdjusted = preserved;
-      if (adaptedModules.length > 0) {
-        // 二创成品：从 preserved 中移除被 adapted_* 完整替代的 builtin_* 模块
-        const replacedBuiltinIds = new Set(
-          adaptedModules.map((m) => m.id.replace('adapted_', 'builtin_')),
-        );
-        builtinAdjusted = preserved.filter((m) => !replacedBuiltinIds.has(m.id));
-        // ST 模块里若仍含其他 CoT/Format（未被 adapted_* 替代的），关闭 ST 侧冲突项（保留内置不动）
-        const remainingStForConflict = target.modules.filter(
-          (m) => !m.id.startsWith('adapted_') && isSTImportedModule(m),
-        );
-        const tags: string[] = [];
-        if (detectSTCoTModules(remainingStForConflict).length > 0) tags.push('思维链');
-        if (detectSTFormatModules(remainingStForConflict).length > 0) tags.push('输出格式');
-        if (tags.length > 0) {
-          const now2 = Date.now();
-          const conflictStIds = new Set([
-            ...detectSTCoTModules(remainingStForConflict),
-            ...detectSTFormatModules(remainingStForConflict),
-          ]);
-          // 关闭 ST 侧冲突模块，内置模块保持启用
-          const stModulesAdjusted = target.modules.map((m) => {
-            if (conflictStIds.has(m.id) && m.enabled) {
-              return { ...m, enabled: false, updatedAt: now2 };
-            }
-            return m;
-          });
-          target.modules = stModulesAdjusted;
-          conflictNote = `\n\n检测到二创预设的 ST 模块含${tags.join(' / ')}，已自动关闭 ST 侧冲突项（内置核心协议保持启用）。`;
-        } else {
-          conflictNote = `\n\n已启用二创融合模式：内置主剧情模块已与预设精华融合，游戏系统（变量/记忆/新闻）正常工作。`;
-        }
-      } else {
-        // 无 adapted_*：玩家导入预设，冲突时关闭导入预设的冲突项（保留内置不动）
-        const { adjusted, conflictNote: note } = handleSTCoTFormatConflict(target.modules, preserved);
-        target.modules = adjusted;
-        builtinAdjusted = preserved;
-        conflictNote = note;
-      }
-      nextModules = [...builtinAdjusted, ...target.modules];
-      // Phase 7.2：注入目标预设的世界书条目（如有）
-      if (target.worldbookEntries && target.worldbookEntries.length > 0) {
-        const now = Date.now();
-        nextWorldbooks = [
-          ...nextWorldbooks,
-          {
-            id: `stwb_${target.id}`,
-            title: `${target.name} · ST 导入世界书`,
-            description: `从 ST 预设「${target.name}」导入的世界书条目`,
-            enabled: true,
-            entries: target.worldbookEntries,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ];
-      }
-    }
-    const nextBackup = applyPresetApiSync(targetSampling);
-    onWorldbooksChange(nextWorldbooks);
-    onChange({
-      ...settings,
-      promptModules: nextModules,
-      currentStPresetId: presetId,
-      stPresetApiBackup: nextBackup,
-    });
-    if (conflictNote) {
-      console.info('[预设切换]', conflictNote.trim());
-    }
-    // 选中切换后第一条 ST 模块（或清空）
-    const firstSt = nextModules.find(isSTImportedModule);
-    setSelectedId(firstSt?.id ?? preserved[0]?.id ?? null);
-  };
-
-  /** 重命名当前预设 */
-  const renamePreset = (presetId: string, newName: string) => {
-    const trimmed = newName.trim().slice(0, 60);
-    if (!trimmed) return;
-    const presets = (settings.stPresets ?? []).map((p) =>
-      p.id === presetId ? { ...p, name: trimmed, updatedAt: Date.now() } : p,
-    );
-    onChange({ ...settings, stPresets: presets });
-  };
 
   const switchPresetV2 = (presetId: string | null) => {
     const target = presetId ? allPresetsV2.find((p) => p.id === presetId) : null;
@@ -864,7 +594,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
           id: overrideId,
           name: `${target.name}（自定义配置）`,
           preset: JSON.parse(JSON.stringify(target.preset)) as STPresetEntryV2['preset'],
-          characterId: target.characterId ?? target.preset.prompt_order[0]?.character_id ?? null,
+          characterId: target.characterId ?? target.preset.prompt_order.at(0)?.character_id ?? null,
           importedAt: now,
           updatedAt: now,
           isBuiltin: false,
@@ -917,44 +647,6 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
     });
   };
 
-  /** 删除预设。内置预设不可删。若删除的是当前激活预设，需先切走（恢复参数）。 */
-  const deletePreset = (presetId: string) => {
-    // 内置预设（原生 / 二创成品）不可删
-    if (getBuiltinPresets().some((p) => p.id === presetId)) return;
-    const target = (settings.stPresets ?? []).find((p) => p.id === presetId);
-    if (!target) return;
-    if (!confirm(`确定删除预设「${target.name}」？\n该预设的 ${target.modules.length} 条模块也会从当前列表移除。`)) return;
-    const presets = (settings.stPresets ?? []).filter((p) => p.id !== presetId);
-    const isCurrent = settings.currentStPresetId === presetId;
-    // Phase 7.2：删除预设时同步移除对应的 ST 世界书
-    const nextWorldbooks = worldbooks.filter((w) => w.id !== `stwb_${presetId}`);
-    if (nextWorldbooks.length !== worldbooks.length) {
-      onWorldbooksChange(nextWorldbooks);
-    }
-    if (isCurrent) {
-      // 切到 null 语义：恢复之前因 ST 冲突被自动禁用的内置 CoT/格式 + 恢复采样参数
-      const now = Date.now();
-      const preserved = modules
-        .filter((m) => !isSTImportedModule(m))
-        .map((m) => {
-          if ((m.id === BUILTIN_MAIN_COT_ID || m.id === BUILTIN_RESPONSE_FORMAT_ID) && !m.enabled) {
-            return { ...m, enabled: true, updatedAt: now };
-          }
-          return m;
-        });
-      const nextBackup = applyPresetApiSync(undefined);
-      onChange({
-        ...settings,
-        stPresets: presets,
-        currentStPresetId: BUILTIN_PRESET_ID,
-        promptModules: preserved,
-        stPresetApiBackup: nextBackup,
-      });
-      setSelectedId(preserved[0]?.id ?? null);
-    } else {
-      onChange({ ...settings, stPresets: presets });
-    }
-  };
 
   if (isTavernMode) {
     const currentV2Order =
@@ -1197,7 +889,7 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
             onSelect={setSelectedId}
             onToggle={(id) => {
               const target = modules.find((m) => m.id === id);
-              if (!target || target.scope?.includes('calibration')) return;
+              if (!target || target.scope.includes('calibration')) return;
               const nextEnabled = !target.enabled;
               if (isBuiltinPresetModule(target) && target.enabled && !nextEnabled) {
                 if (!window.confirm('该模块属于原生提示词底座，关闭可能影响输出稳定性。确定要关闭吗？')) {
@@ -1283,281 +975,6 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
 }
 
 /** ST 预设切换器：下拉选当前预设 + 重命名按钮 + 删除按钮。 */
-function PresetSwitcher({
-  presets,
-  currentId,
-  onSwitch,
-  onRename,
-  onDelete,
-}: {
-  presets: STPresetEntry[];
-  currentId: string | null;
-  onSwitch: (presetId: string | null) => void;
-  onRename: (presetId: string, newName: string) => void;
-  onDelete: (presetId: string) => void;
-}) {
-  const [renaming, setRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
-  const current = presets.find((p) => p.id === currentId);
-
-  const startRename = () => {
-    if (!current) return;
-    setRenameValue(current.name);
-    setRenaming(true);
-  };
-  const commitRename = () => {
-    if (current) onRename(current.id, renameValue);
-    setRenaming(false);
-  };
-
-  return (
-    <div
-      className="flex flex-col gap-2 px-3 py-2.5"
-      style={{
-        background: 'rgba(var(--tj-ui-nsfw), 0.06)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.22)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="flex items-center gap-1">
-        <span
-          className="text-sm font-serif tracking-[0.14em]"
-          style={{ color: 'rgba(var(--tj-ui-nsfw), 0.92)' }}
-        >
-          提示词预设
-        </span>
-        <span className="ml-auto text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
-          {presets.length} 套
-        </span>
-      </div>
-      {!renaming ? (
-        <div className="flex items-center gap-1">
-          <select
-            value={currentId ?? ''}
-            onChange={(e) => onSwitch(e.target.value || null)}
-            className="min-w-0 flex-1 px-2 py-1 text-xs"
-            style={{
-              background: 'rgba(var(--tj-bg-primary), 0.6)',
-              color: 'rgb(var(--tj-text-primary))',
-              border: '1px solid rgba(var(--tj-ui-nsfw), 0.3)',
-              borderRadius: '2px',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            {presets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.isBuiltin ? '◆ ' : ''}{p.name}{p.modules.length > 0 ? ` · ${p.modules.length} 条` : ''}
-              </option>
-            ))}
-          </select>
-          {current && !current.isBuiltin && (
-            <>
-              <button
-                type="button"
-                onClick={startRename}
-                title="重命名当前预设"
-                className="px-2.5 py-1.5 text-xs transition-all hover:opacity-80"
-                style={{
-                  color: 'rgba(var(--tj-ui-nsfw), 0.92)',
-                  background: 'rgba(var(--tj-ui-nsfw), 0.1)',
-                  border: '1px solid rgba(var(--tj-ui-nsfw), 0.3)',
-                  cursor: 'pointer',
-                }}
-              >
-                ✎
-              </button>
-              <button
-                type="button"
-                onClick={() => onDelete(current.id)}
-                title="删除当前预设"
-                className="px-2.5 py-1.5 text-xs transition-all hover:opacity-80"
-                style={{
-                  color: 'rgba(var(--tj-danger), 0.92)',
-                  background: 'rgba(var(--tj-danger), 0.08)',
-                  border: '1px solid rgba(var(--tj-danger), 0.3)',
-                  cursor: 'pointer',
-                }}
-              >
-                ✕
-              </button>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="flex items-center gap-1">
-          <input
-            type="text"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename();
-              if (e.key === 'Escape') setRenaming(false);
-            }}
-            autoFocus
-            className="min-w-0 flex-1 px-2 py-1 text-xs"
-            style={{
-              background: 'rgba(var(--tj-bg-primary), 0.6)',
-              color: 'rgb(var(--tj-text-primary))',
-              border: '1px solid rgba(var(--tj-ui-nsfw), 0.45)',
-              borderRadius: '2px',
-              outline: 'none',
-            }}
-          />
-          <button
-            type="button"
-            onClick={commitRename}
-            className="px-2.5 py-1.5 text-xs transition-all hover:opacity-80"
-            style={{
-              color: 'rgba(var(--tj-ui-nsfw), 0.92)',
-              background: 'rgba(var(--tj-ui-nsfw), 0.1)',
-              border: '1px solid rgba(var(--tj-ui-nsfw), 0.3)',
-              cursor: 'pointer',
-            }}
-          >
-            ✓
-          </button>
-          <button
-            type="button"
-            onClick={() => setRenaming(false)}
-            className="px-2.5 py-1.5 text-xs transition-all hover:opacity-80"
-            style={{
-              color: 'rgba(var(--tj-text-secondary), 0.7)',
-              background: 'transparent',
-              border: '1px solid rgba(var(--tj-text-secondary), 0.3)',
-              cursor: 'pointer',
-            }}
-          >
-            取消
-          </button>
-        </div>
-      )}
-      {current && (
-        <div className="text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>
-          编辑模块自动保存到此预设
-        </div>
-      )}
-    </div>
-  );
-}
-
-function V1PresetEntriesPanel({ preset }: { preset: STPresetEntry | null }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const modules = preset?.modules ?? [];
-  const enabledCount = modules.filter((module) => module.enabled).length;
-  const groupedSummary = modules.reduce<Record<string, number>>((acc, module) => {
-    acc[module.category] = (acc[module.category] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  return (
-    <div
-      className="flex flex-col gap-2 px-3 py-2.5"
-      style={{
-        background: 'rgba(var(--tj-bg-primary), 0.24)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.16)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-nsfw), 0.92)' }}>
-          V1 条目
-        </span>
-        <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
-          {enabledCount}/{modules.length} 启用
-        </span>
-      </div>
-
-      {modules.length > 0 ? (
-        <>
-          <div className="flex flex-wrap gap-1.5">
-            {Object.entries(groupedSummary).map(([category, count]) => (
-              <span
-                key={category}
-                className="px-2 py-1 text-xs"
-                style={{
-                  color: 'rgba(var(--tj-text-secondary), 0.72)',
-                  background: 'rgba(var(--tj-bg-secondary), 0.34)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
-                  clipPath: smallClip,
-                }}
-              >
-                {PROMPT_MODULE_CATEGORY_LABELS[category as 提示词模块类目] ?? category} {count}
-              </span>
-            ))}
-          </div>
-          <div className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1">
-            {modules.map((module, index) => {
-              const expanded = expandedId === module.id;
-              const contentPreview = module.content.replace(/\s+/g, ' ').trim().slice(0, 90);
-              return (
-                <button
-                  key={module.id}
-                  type="button"
-                  onClick={() => setExpandedId((current) => (current === module.id ? null : module.id))}
-                  className="min-w-0 px-3 py-2 text-left text-sm transition-all hover:opacity-90"
-                  style={{
-                    background: expanded ? 'rgba(var(--tj-ui-nsfw), 0.1)' : 'rgba(var(--tj-bg-primary), 0.22)',
-                    color: !module.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
-                    boxShadow: `inset 0 0 0 1px ${expanded ? 'rgba(var(--tj-ui-nsfw), 0.28)' : 'rgba(var(--tj-accent-primary), 0.1)'}`,
-                    clipPath: smallClip,
-                  }}
-                >
-                  <span className="grid items-start gap-2" style={{ gridTemplateColumns: '2.25rem minmax(0,1fr) auto' }}>
-                    <span style={{ color: 'rgba(var(--tj-ui-nsfw), 0.75)' }}>#{index + 1}</span>
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium" title={module.title}>{module.title}</span>
-                      <span className="mt-1 block truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }} title={module.id}>
-                        {module.id}
-                      </span>
-                      {!expanded && contentPreview && (
-                        <span className="mt-1 block truncate text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.48)' }} title={contentPreview}>
-                          {contentPreview}
-                        </span>
-                      )}
-                    </span>
-                    <span className="flex flex-col items-end gap-1 text-xs">
-                      <span style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>
-                        {module.role ?? 'system'}
-                      </span>
-                      <span style={{ color: !module.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-ui-nsfw), 0.78)' }}>
-                        {!module.enabled ? 'off' : 'on'}
-                      </span>
-                    </span>
-                  </span>
-                  {expanded && (
-                    <span className="mt-3 block space-y-2">
-                      <span className="grid grid-cols-3 gap-2 text-xs">
-                        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>order {module.order}</span>
-                        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>{PROMPT_MODULE_CATEGORY_LABELS[module.category] ?? module.category}</span>
-                        <span style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>{module.injectionPosition === 1 ? `depth ${module.injectionDepth ?? 4}` : 'system'}</span>
-                      </span>
-                      <span
-                        className="block max-h-56 overflow-y-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-6"
-                        style={{
-                          background: 'rgba(var(--tj-bg-primary), 0.45)',
-                          color: 'rgba(var(--tj-text-primary), 0.76)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
-                        }}
-                      >
-                        {module.content || '（空内容）'}
-                      </span>
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <div className="px-3 py-3 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
-          当前为原生内置入口，没有 V1 导入条目。
-        </div>
-      )}
-    </div>
-  );
-}
-
 function V2PresetSwitcher({
   presets,
   currentId,
@@ -1598,7 +1015,7 @@ function V2PresetSwitcher({
       current.preset.prompt_order.find((item) => item.character_id === 100001) ??
       current.preset.prompt_order[0]
     : undefined;
-  const selectedSlot = selectedOrder?.order.find((slot) => slot.identifier === selectedSlotId) ?? selectedOrder?.order[0];
+  const selectedSlot = selectedOrder?.order.find((slot) => slot.identifier === selectedSlotId) ?? selectedOrder?.order.at(0);
   const promptMap = new Map(current?.preset.prompts.map((prompt) => [prompt.identifier, prompt]) ?? []);
   const selectedPrompt = selectedSlot ? promptMap.get(selectedSlot.identifier) : undefined;
   const canEdit = Boolean(current && !current.isBuiltin);
@@ -1638,7 +1055,7 @@ function V2PresetSwitcher({
   const enabledRiskyRegexScriptCount = regexScriptSafety.filter((item) => !item.disabled && item.risky).length;
   const blockedRegexScriptCount = regexScriptSafety.filter((item) => item.kind === 'blocked').length;
   const effectiveRegexIndex = regexScripts.length > 0 ? Math.min(selectedRegexIndex, regexScripts.length - 1) : 0;
-  const selectedRegexScript = regexScripts[effectiveRegexIndex];
+  const selectedRegexScript = regexScripts.at(effectiveRegexIndex);
   const selectedRegexSafety = selectedRegexScript ? regexScriptSafety[effectiveRegexIndex] : null;
   const selectedRegexDryRun = selectedRegexScript ? dryRunTavernRegexScript(selectedRegexScript, regexDryRunSample) : null;
   const scanIssues = [
@@ -1791,7 +1208,7 @@ function V2PresetSwitcher({
         {current && (
           <>
             <select
-              value={currentCharacterId ?? current.characterId ?? current.preset.prompt_order[0]?.character_id ?? ''}
+              value={currentCharacterId ?? current.characterId ?? current.preset.prompt_order.at(0)?.character_id ?? ''}
               onChange={(e) => onCharacterChange(e.target.value ? Number(e.target.value) : null)}
               className="min-w-0 px-3 py-2 text-sm"
               style={{
@@ -1942,7 +1359,7 @@ function V2PresetSwitcher({
               <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
               {shownOrderSlots.map(({ slot, index, prompt, macro, isRuntime, isMissing }) => {
                 const active = selectedSlot?.identifier === slot.identifier;
-                const contentPreview = prompt?.content?.replace(/\s+/g, ' ').trim().slice(0, 80);
+                const contentPreview = prompt?.content.replace(/\s+/g, ' ').trim().slice(0, 80);
                 return (
                   <button
                     key={`${slot.identifier}_${index}`}
@@ -2433,66 +1850,6 @@ function V2PresetSwitcher({
   );
 }
 
-function V2PresetStructurePreview({ preset, characterId }: { preset: STPresetEntryV2; characterId: number | null }) {
-  const selectedOrder =
-    preset.preset.prompt_order.find((item) => item.character_id === characterId) ??
-    preset.preset.prompt_order.find((item) => item.character_id === 100001) ??
-    preset.preset.prompt_order[0];
-  const promptMap = new Map(preset.preset.prompts.map((prompt) => [prompt.identifier, prompt]));
-  const systemSlots = new Set(['worldInfoBefore', 'worldInfoAfter', 'chatHistory', 'personaDescription', 'userInput', 'user_input', 'latestUserInput', 'input']);
-  const rows = selectedOrder?.order.slice(0, 8) ?? [];
-  return (
-    <div
-      className="flex flex-col gap-2 px-3 py-2.5"
-      style={{
-        background: 'rgba(var(--tj-bg-primary), 0.28)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.82)' }}>
-          结构预览
-        </span>
-        <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
-          {preset.preset.prompts.length} 内容项 / {selectedOrder?.order.length ?? 0} 顺序项
-        </span>
-      </div>
-      <div className="flex flex-col gap-1">
-        {rows.map((slot, index) => {
-          const prompt = promptMap.get(slot.identifier);
-          const isSystemSlot = systemSlots.has(slot.identifier);
-          return (
-            <div
-              key={`${slot.identifier}_${index}`}
-              className="grid items-center gap-2 px-2 py-1.5 text-xs"
-              style={{
-                gridTemplateColumns: '1.5rem minmax(0, 1fr) auto',
-                color: !slot.enabled ? 'rgba(var(--tj-text-secondary), 0.42)' : 'rgba(var(--tj-text-primary), 0.82)',
-              }}
-            >
-              <span style={{ color: isSystemSlot ? 'rgba(var(--tj-accent-primary), 0.9)' : 'rgba(var(--tj-text-secondary), 0.55)' }}>
-                {!slot.enabled ? '○' : isSystemSlot ? '◆' : '◇'}
-              </span>
-              <span className="truncate" title={prompt?.name || slot.identifier}>
-                {prompt?.name || slot.identifier}
-              </span>
-              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>
-                {isSystemSlot ? '运行时' : (prompt?.role ?? 'system')}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {(selectedOrder?.order.length ?? 0) > rows.length && (
-        <div className="text-xs leading-5" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)' }}>
-          其余 {selectedOrder.order.length - rows.length} 项已折叠
-        </div>
-      )}
-    </div>
-  );
-}
-
 function MacroInspector({ content }: { content: string }) {
   const macro = detectTavernMacroInfo(content);
   if (macro.level === 'none') {
@@ -2554,27 +1911,31 @@ function ModuleList({
 
   if (!showModifyLayer) {
     // 独立系统页面：按子系统分组，每组一个折叠标题 + 模块列表
-    const grouped: Record<string, 提示词模块[]> = {};
+    const grouped: Record<string, 提示词模块[] | undefined> = {};
     for (const m of modules) {
       const key = getCalibrationGroupKey(m);
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(m);
+      const bucket = grouped[key];
+      if (bucket) {
+        bucket.push(m);
+      } else {
+        grouped[key] = [m];
+      }
     }
 
     return (
       <div className="mb-2 space-y-3">
         {CALIBRATION_GROUP_ORDER.filter((k) => grouped[k]?.length).map((key) => {
           const group = CALIBRATION_SYSTEM_GROUPS[key];
-          const items = grouped[key];
+          const items = grouped[key] ?? [];
           return (
             <SystemGroupSection key={key} group={group} items={items} selected={selected} onSelect={onSelect} onToggle={onToggle} />
           );
         })}
         {/* 未归类模块兜底 */}
-        {grouped['other']?.length > 0 && (
+        {(grouped['other']?.length ?? 0) > 0 && (
           <SystemGroupSection
             group={{ label: '其他系统', icon: '◈', emoji: '⚡', match: () => false }}
-            items={grouped['other']}
+            items={grouped['other'] ?? []}
             selected={selected}
             onSelect={onSelect}
             onToggle={onToggle}
@@ -2802,7 +2163,7 @@ function ModuleItem({
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
 }) {
-  const isCal = m.scope?.includes('calibration');
+  const isCal = m.scope.includes('calibration');
   const isSTImport = isSTImportedModule(m);
   const isStyle = isWritingStyleModule(m);
   // 开关禁用：独立模型展示模块（非真实开关）
@@ -2942,7 +2303,7 @@ function EditorPanel({
   onDelete: () => void;
 }) {
   const readonly = m.builtin && m.id !== 'builtin_writing_style_custom';
-  const isCalibrationModule = m.scope?.includes('calibration');
+  const isCalibrationModule = m.scope.includes('calibration');
   // 开关禁用：独立模型展示模块（非真实开关）
   const toggleDisabled = isCalibrationModule;
 
@@ -3127,7 +2488,7 @@ function EditorPanel({
       {/* 注入场景（scope） */}
       <Field label={`◆ 注入场景${readonly ? '（内置，只读）' : ''}`}>
         <ScopeChips
-          value={m.scope?.length ? m.scope : ['all']}
+          value={m.scope.length ? m.scope : ['all']}
           readonly={readonly}
           onChange={(next) => onPatch({ scope: next })}
         />

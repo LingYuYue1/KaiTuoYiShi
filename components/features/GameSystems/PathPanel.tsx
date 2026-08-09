@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途定义, 命途ID } from '@/models/journey';
@@ -31,31 +31,27 @@ const panelStyle = {
 };
 
 export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
-  const active = traveler.命途列表 ?? [];
+  const active = traveler.命途列表;
   const cards = useMemo(() => ALL_PATHS.filter((p) => p.id !== 'none'), []);
 
   const defaultSelected: 命途ID = useMemo(() => {
     const primary = active.find((p) => p.是否主命途);
     if (primary) return primary.id;
     if (active.length > 0) return active[0].id;
-    return cards[0]?.id ?? 'hunt';
+    return cards.at(0)?.id ?? 'hunt';
   }, [active, cards]);
 
   const [selectedId, setSelectedId] = useState<命途ID>(defaultSelected);
 
-  useEffect(() => {
-    if (!cards.some((c) => c.id === selectedId)) {
-      setSelectedId(defaultSelected);
-    }
-  }, [cards, defaultSelected, selectedId]);
+  const effectiveSelectedId = cards.some((c) => c.id === selectedId) ? selectedId : defaultSelected;
 
-  const selectedDef = cards.find((c) => c.id === selectedId) ?? cards[0];
-  const selectedRecord = active.find((a) => a.id === selectedId);
+  const selectedDef = cards.find((c) => c.id === effectiveSelectedId);
+  const selectedRecord = active.find((a) => a.id === effectiveSelectedId);
   const awakenedCount = active.length;
   const primaryRecord = active.find((p) => p.是否主命途);
   const primaryDef = cards.find((p) => p.id === primaryRecord?.id);
 
-  const handleSetPrimary = async (pathId: 命途ID) => {
+  const handleSetPrimary = (pathId: 命途ID) => {
     onTravelerChange(setPrimaryPath(traveler, pathId));
   };
 
@@ -78,7 +74,7 @@ export function PathPanel({ traveler, onTravelerChange }: PathPanelProps) {
                 key={def.id}
                 def={def}
                 record={record}
-                selected={def.id === selectedId}
+                selected={def.id === effectiveSelectedId}
                 onClick={() => setSelectedId(def.id)}
               />
             );

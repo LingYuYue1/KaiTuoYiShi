@@ -1,56 +1,33 @@
-﻿import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+﻿import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { 读取图片参考目标 } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
-import type { API设置, PNG画风预设来源, 游戏设置, 文生图API配置, 文生图规则中心设置, 文生图系统设置 } from '@/models/settings';
-import type { 手机系统 } from '@/models/phone';
+import type { PNG画风预设来源, 文生图规则中心设置 } from '@/models/settings';
 import type { NPC记录, NPC头像槽位, NPC角色锚点档案 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
-import { saveSetting } from '@/services/dbService';
 import {
-  添加图片到相册,
-  创建相册图片条目,
-  创建相册资源引用,
-  fileToDataUrl,
-  挂载NPC头像图片,
-  挂载NPC立绘图片,
-  挂载NPC_NSFW部位图片,
-  挂载旅人图片,
-  卸载NPC头像图片,
-  卸载NPC立绘图片,
-  卸载NPC_NSFW部位图片,
-  卸载旅人图片,
-  读取相册条目地址,
   解析相册资源引用,
   解析相册资源地址,
 } from '@/utils/albumActions';
 import {
   revokeAlbumAssets,
 } from '@/utils/albumObjectUrl';
-import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
-import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
-import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
-import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
-import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
-import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
-import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
 import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
 import { matchCanonical } from '@/data/canonicalCharacters';
 
 import {
-  cardClip, smallClip, albumGridLayer, albumGridSize, heroSurface, panelSurface, insetSurface,
-  imageWellSurface, titleColor, bodyColor, mutedColor, faintColor, activeTextColor, accentColor,
-  nsfwColor, activeAccentSurface, quietAccentSurface, cardSurface, heroGridBackgroundStyle,
+  cardClip, smallClip, heroSurface, panelSurface, insetSurface,
+  imageWellSurface, titleColor, activeAccentSurface, cardSurface, heroGridBackgroundStyle,
   tabs, generateTargets, navGroups, groupForTab,
 } from './foundation';
 import type { ReferenceInjectionStatus } from './referenceInjection';
 import type {
-  WorkTab, GenerateTarget, NsfwPartImageSlot, LibraryStatusFilter, PromptMeta, StorySnapshotSource,
+  WorkTab, GenerateTarget, PromptMeta, StorySnapshotSource,
   AnchorSelection, SceneLibraryFilter, GenerationHistoryFilter, StorySnapshotSummary,
-  SceneImageSummary, StorySnapshotSourceOption, GenerateOverride, NavGroupId,
+  SceneImageSummary, StorySnapshotSourceOption, GenerateOverride,
 } from './foundation';
 
 export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab; setActiveTab: (tab: WorkTab) => void }) {
@@ -137,29 +114,6 @@ export function NsfwVisibilityToggle({
   );
 }
 
-function CharacterArchiveButton({ record, active, onClick }: { record: CharacterLibraryRecord; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full min-w-0 px-3 py-2.5 text-left transition-all hover:bg-[rgba(var(--tj-btn-primary-start),0.07)]"
-      style={{
-        background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.16), rgba(var(--tj-btn-primary-start),0.04))' : 'rgba(var(--tj-ui-panel-strong),0.36)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="min-w-0">
-        <div className="truncate font-serif text-sm font-bold tracking-[0.1em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{record.name}</div>
-        <div className="mt-1 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>
-          <span>已装 {record.mountedCount}</span>
-          <span>资源 {record.resourceCount}</span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export function CharacterAnchorWorkspace({
   traveler,
   travelerRequirement,
@@ -171,7 +125,6 @@ export function CharacterAnchorWorkspace({
   activeRecord,
   activeSelection,
   anchorExtractingTarget,
-  setAnchorExtractingTarget,
   anchorBatchExtracting,
   setAnchorBatchExtracting,
   onSelectAnchor,
@@ -399,10 +352,8 @@ export function SafeAlbumImage({
   emptyLabel?: string;
   failedLabel?: string;
 }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    setFailed(false);
-  }, [src]);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = failedSrc === src;
   if (!src || failed) {
     return (
       <div
@@ -413,7 +364,7 @@ export function SafeAlbumImage({
       </div>
     );
   }
-  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={className} />;
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailedSrc(src)} className={className} />;
 }
 
 export function AnchorStat({ label, value }: { label: string; value: number }) {
@@ -460,12 +411,12 @@ export function CharacterAnchorPanel({
   const autosaveTimerRef = useRef<number | null>(null);
   const skipAutosaveRef = useRef(true);
 
-  useEffect(() => {
-    if (autosaveTimerRef.current !== null) {
-      window.clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
-    skipAutosaveRef.current = true;
+  // anchor / 回退名变化时重置表单：渲染期校正（React 官方「props 变化调整 state」模式）。
+  const [prevAnchor, setPrevAnchor] = useState(anchor);
+  const [prevNameFallback, setPrevNameFallback] = useState(nameFallback);
+  if (prevAnchor !== anchor || prevNameFallback !== nameFallback) {
+    setPrevAnchor(anchor);
+    setPrevNameFallback(nameFallback);
     setName(anchor?.名称 || nameFallback);
     setEnabled(anchor?.是否启用 !== false);
     setDefaultApply(anchor?.生成时默认附加 !== false);
@@ -473,6 +424,15 @@ export function CharacterAnchorPanel({
     setPositive(anchor?.正面提示词 || '');
     setNegative(anchor?.负面提示词 || '');
     setSaveState('saved');
+  }
+
+  // anchor 切换时取消挂起的自动保存（无 setState，纯 ref/timer 清理）。
+  useEffect(() => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    skipAutosaveRef.current = true;
   }, [anchor, nameFallback]);
 
   const save = () => onSave({
@@ -829,19 +789,17 @@ export function DraftCanvasPreview({
   referenceEnabled?: boolean;
   referenceStatus: ReferenceInjectionStatus;
 }) {
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTargetSrc, setPreviewTargetSrc] = useState<string | undefined>(undefined);
+  const previewOpen = previewTargetSrc !== undefined && previewTargetSrc === resultSrc;
   const displaySize = task?.dimensions ? task.dimensions.replace(/x/i, ' × ') : size ? size.replace(/x/i, ' × ') : '接口默认';
   const stateLabel = task ? statusLabel(task.status) : '草稿';
   const isRunning = task?.status === 'queued' || task?.status === 'running';
   const isFailed = task?.status === 'failed';
   const isSuccess = task?.status === 'success' && Boolean(resultSrc);
   useEffect(() => {
-    setPreviewOpen(false);
-  }, [resultSrc]);
-  useEffect(() => {
     if (!previewOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreviewOpen(false);
+      if (event.key === 'Escape') setPreviewTargetSrc(undefined);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -894,18 +852,18 @@ export function DraftCanvasPreview({
               <div className="h-full w-2/3 animate-pulse" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-tech-cyan),0.2), rgba(var(--tj-btn-primary-start),0.92))' }} />
             </div>
             <div className="mt-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.76)' }}>
-              {task?.retryCount ? `已重试 ${task.retryCount} 次` : '任务已进入生成流程'}
+              {task.retryCount ? `已重试 ${task.retryCount} 次` : '任务已进入生成流程'}
             </div>
           </div>
         )}
         <div className="absolute bottom-4 right-4 max-w-[340px] px-3 py-2 text-[11px] leading-relaxed" style={{ color: isFailed ? 'rgba(var(--tj-danger),0.92)' : 'rgba(var(--tj-ui-body),0.86)', background: 'rgba(0,0,0,0.62)', boxShadow: `inset 0 0 0 1px ${isFailed ? 'rgba(255,170,170,0.28)' : 'rgba(var(--tj-btn-primary-start),0.22)'}`, clipPath: smallClip }}>
-          {isFailed ? (task?.error || '生成失败，参数已保留。') : isSuccess ? '图片已生成并加入成品库，可继续重试、改参数或前往成品库挂载。' : '生成失败时保留这个画布卡片，直接显示错误、参数和重新生成按钮，不需要重 roll 主剧情。'}
+          {isFailed ? (task.error || '生成失败，参数已保留。') : isSuccess ? '图片已生成并加入成品库，可继续重试、改参数或前往成品库挂载。' : '生成失败时保留这个画布卡片，直接显示错误、参数和重新生成按钮，不需要重 roll 主剧情。'}
           {isFailed && (
             <button type="button" onClick={onRetry} className="mt-2 block px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>
               重新生成
             </button>
           )}
-          {isSuccess && <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewOpen(true)} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>完整预览</button>{onOpenGallery && <button type="button" onClick={onOpenGallery} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.1)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>查看图库</button>}{onSetReference && <button type="button" disabled={referenceEnabled} onClick={onSetReference} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] disabled:opacity-55" style={{ color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.22)', clipPath: smallClip }}>{referenceEnabled ? '已设为当前角色参考图' : '设为参考图'}</button>}{onMountSlot && <button type="button" onClick={onMountSlot} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>按当前用途挂载</button>}</div>}
+          {isSuccess && <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewTargetSrc(resultSrc)} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>完整预览</button>{onOpenGallery && <button type="button" onClick={onOpenGallery} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.1)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>查看图库</button>}{onSetReference && <button type="button" disabled={referenceEnabled} onClick={onSetReference} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] disabled:opacity-55" style={{ color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.22)', clipPath: smallClip }}>{referenceEnabled ? '已设为当前角色参考图' : '设为参考图'}</button>}{onMountSlot && <button type="button" onClick={onMountSlot} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>按当前用途挂载</button>}</div>}
         </div>
         <div className="absolute bottom-[78px] left-4 right-4 flex min-w-0 items-center gap-3 md:bottom-4 md:right-[360px]">
           <span className="shrink-0 truncate font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>{target.label}</span>
@@ -916,7 +874,7 @@ export function DraftCanvasPreview({
         open={previewOpen && isSuccess}
         src={resultSrc}
         title={`完整预览 · ${target.label} · ${displaySize}`}
-        onClose={() => setPreviewOpen(false)}
+        onClose={() => setPreviewTargetSrc(undefined)}
       />
     </div>
   );
@@ -1436,7 +1394,7 @@ export function formatGenerationDate(value?: number): string {
 }
 
 export function historyKind(entry: 相册条目): Exclude<GenerationHistoryFilter, 'all'> {
-  const text = [entry.title, entry.note, ...(entry.tags || [])].join(' ');
+  const text = [entry.title, entry.note, ...entry.tags].join(' ');
   if (entry.slot === 'phone_wallpaper' || entry.slot === 'phone_chat_background' || entry.targetType === 'phone') return 'phone';
   if (/故事快照|快照|正文插图/.test(text)) return 'snapshot';
   if (entry.slot === 'scene' || entry.targetType === 'scene') return 'scene';
@@ -1485,7 +1443,7 @@ export type SceneCreationWorkspaceProps = {
   setNegativePrompt: (v: string) => void;
   generateTitle: string;
   setGenerateTitle: (v: string) => void;
-  onGenerate: (nsfw?: boolean) => void;
+  onGenerate: (override?: GenerateOverride) => void;
   generating: boolean;
   sceneText: string;
   setSceneText: (v: string) => void;
@@ -1869,7 +1827,7 @@ export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps &
               <DraftActionButton disabled={props.busyWhen ?? props.tokenizing} onClick={() => { void props.onBuildPrompt(); }}>
                 {(props.busyWhen ?? props.tokenizing) ? props.busyLabel || '整理中' : props.promptButtonLabel || '生成提示词'}
               </DraftActionButton>
-              <DraftActionButton disabled={props.generating} onClick={() => props.onGenerate(false)}>
+              <DraftActionButton disabled={props.generating} onClick={() => props.onGenerate()}>
                 {props.generating ? '生成中' : '普通生成'}
               </DraftActionButton>
             </div>
@@ -2220,7 +2178,7 @@ export function buildSceneLibraryEntries(
 }
 
 export function classifySceneLibraryEntry(entry: 相册条目): Exclude<SceneLibraryFilter, 'all'> | null {
-  const tags = new Set((entry.tags ?? []).map((tag) => tag.trim()).filter(Boolean));
+  const tags = new Set(entry.tags.map((tag) => tag.trim()).filter(Boolean));
   const note = (entry.note ?? '').trim();
   const title = entry.title.trim();
   const kindHint = `${title} ${note} ${Array.from(tags).join(' ')}`;
@@ -2386,7 +2344,7 @@ export function buildTravelerBuiltinAvatarEntries(traveler: 角色数据结构, 
 
 export function findNpcCanonicalName(npc: NPC记录): string | undefined {
   const names = [npc.姓名, npc.别名]
-    .flatMap((item) => (item ?? '').split(/[\/／|、,，]/))
+    .flatMap((item) => (item ?? '').split(/[/／|、,，]/))
     .map((item) => item.trim())
     .filter(Boolean);
   for (const name of names) {
@@ -2452,7 +2410,7 @@ export function characterAnchorHasPersistentContent(anchor?: NPC角色锚点档�
     anchor.名称?.trim() ||
     anchor.正面提示词?.trim() ||
     anchor.负面提示词?.trim() ||
-    Object.values(anchor.结构化特征 ?? {}).some((list) => Array.isArray(list) && list.some((item) => String(item ?? '').trim())),
+    Object.values(anchor.结构化特征 ?? {}).some((list) => Array.isArray(list) && list.some((item) => item.trim())),
   );
 }
 
@@ -2543,7 +2501,7 @@ export function buildSceneSourceText(text: string, traveler: 角色数据结构,
 export function anchorHasUsableContent(anchor?: NPC角色锚点档案): boolean {
   if (!anchor || anchor.是否启用 === false) return false;
   if (anchor.正面提示词?.trim() || anchor.负面提示词?.trim()) return true;
-  return Object.values(anchor.结构化特征 ?? {}).some((list) => Array.isArray(list) && list.some((item) => String(item ?? '').trim()));
+  return Object.values(anchor.结构化特征 ?? {}).some((list) => Array.isArray(list) && list.some((item) => item.trim()));
 }
 
 export function getTravelerAnchorStatus(traveler: 角色数据结构): PromptMeta {
@@ -2590,7 +2548,7 @@ export function buildTravelerSourceText(traveler: 角色数据结构): string {
     traveler.外貌 ? `外貌：${traveler.外貌}` : '',
     traveler.性格 ? `性格：${traveler.性格}` : '',
     traveler.背景 ? `背景：${traveler.背景}` : '',
-    traveler.能力?.length ? `能力：${traveler.能力.join('、')}` : '',
+    traveler.能力.length ? `能力：${traveler.能力.join('、')}` : '',
     traveler.主命途 ? `命途：${traveler.主命途}` : '',
     traveler.图像档案?.角色锚点?.名称 ? `主控锚点名称：${traveler.图像档案.角色锚点.名称}` : '',
     traveler.图像档案?.角色锚点?.正面提示词 ? `主控锚点：${traveler.图像档案.角色锚点.正面提示词}` : '',
@@ -2707,7 +2665,7 @@ export function slotLabel(slot: 图片槽位): string {
     reference_image: '参考图',
     misc: '其他',
   };
-  return labels[slot] ?? slot;
+  return labels[slot];
 }
 
 export function statusLabel(status: 图片生成任务['status']): string {

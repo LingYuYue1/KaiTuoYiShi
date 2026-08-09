@@ -1,6 +1,7 @@
-import type { 世界书, 世界书条目, 世界书导出数据, 世界书条目类型, 世界书作用域 } from '@/models/worldbook';
-import { 创建空世界书, 创建空世界书条目, ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
+import type { 世界书, 世界书条目, 世界书导出数据, 世界书作用域 } from '@/models/worldbook';
+import { ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
 import type { 剧情模式, 开局来源 } from '@/models/journey';
+import { devLogError } from '@/utils/devLog';
 
 export const PROMPT_LIKE_WORLDBOOK_ENTRY_IDS = new Set([
   'builtin_compass_overview',
@@ -17,53 +18,71 @@ export const WORLDBOOK_STORAGE_KEY = 'worldbooks';
 // ── Normalization ──
 
 export function normalizeWorldbooks(books: 世界书[]): 世界书[] {
-  return books.map((book) => ({
-    ...book,
-    entries: book.entries.map((entry) => {
-      // 旧字段迁移：turnGuard='first_only' → scope=['opening']；其他无 scope 的 → ['all']
-      let scope: 世界书作用域[] = Array.isArray(entry.scope) && entry.scope.length
-        ? entry.scope
-        : entry.turnGuard === 'first_only'
-          ? ['opening']
-          : ['all'];
-      // 去重 + 过滤非法值
-      const validScopes: 世界书作用域[] = ['main', 'opening', 'battle', 'pathAwakening', 'calibration', 'all'];
-      scope = Array.from(new Set(scope.filter((s) => validScopes.includes(s))));
-      if (!scope.length) scope = ['all'];
+  return books.map((rawBook) => {
+    // 导入/旧存档边界：worldbook.ts 是 public 导入接口，书与条目均按 Partial 归一，缺省字段补默认值。
+    const book = rawBook as Partial<世界书>;
+    return {
+      id: book.id ?? '',
+      title: book.title ?? '',
+      description: book.description ?? '',
+      enabled: book.enabled ?? true,
+      storyModeGate: book.storyModeGate,
+      createdAt: book.createdAt ?? 0,
+      updatedAt: book.updatedAt ?? 0,
+      entries: Array.isArray(book.entries)
+        ? book.entries.map((rawEntry) => {
+            // 旧字段迁移：turnGuard='first_only' → scope=['opening']；其他无 scope 的 → ['all']
+            const entry = rawEntry as Partial<世界书条目>;
+            let scope: 世界书作用域[] = Array.isArray(entry.scope) && entry.scope.length
+              ? entry.scope
+              : (entry as { turnGuard?: 'first_only' }).turnGuard === 'first_only'
+                ? ['opening']
+                : ['all'];
+            // 去重 + 过滤非法值
+            const validScopes: 世界书作用域[] = ['main', 'opening', 'battle', 'pathAwakening', 'calibration', 'all'];
+            scope = Array.from(new Set(scope.filter((s) => validScopes.includes(s))));
+            if (!scope.length) scope = ['all'];
 
-      const { turnGuard: _drop, ...rest } = entry;
-      void _drop;
-      return {
-        ...rest,
-        type: entry.type || 'world_lore',
-        injectMode: entry.injectMode || 'always',
-        keywords: entry.keywords ?? [],
-        priority: entry.priority ?? 100,
-        enabled: entry.enabled ?? true,
-        scope,
-        // Phase 7.1 新字段默认值（ST 兼容）
-        keySecondary: entry.keySecondary ?? [],
-        caseSensitive: entry.caseSensitive ?? false,
-        matchWholeWords: entry.matchWholeWords ?? false,
-        useRegex: entry.useRegex ?? false,
-        probability: entry.probability ?? 100,
-        delay: entry.delay ?? 0,
-        cooldown: entry.cooldown ?? 0,
-        scanDepth: entry.scanDepth ?? 50,
-        // Phase 7.2 新字段默认值（ST 兼容）
-        injectAtDepth: entry.injectAtDepth ?? false,
-        depth: entry.depth ?? 0,
-        group: entry.group ?? '',
-        groupOverride: entry.groupOverride ?? false,
-        groupWeight: entry.groupWeight ?? 0,
-        disablesEntries: entry.disablesEntries ?? [],
-        // Phase 7.3 新字段默认值（ST 兼容）
-        logic: entry.logic ?? 'AND_ALL',
-        recurse: entry.recurse ?? false,
-        recurseDepth: Math.min(Math.max(entry.recurseDepth ?? 1, 0), 5),
-      };
-    }),
-  }));
+            const rest = { ...entry };
+            Reflect.deleteProperty(rest, 'turnGuard');
+            return {
+              ...rest,
+              id: entry.id ?? '',
+              title: entry.title ?? '',
+              content: entry.content ?? '',
+              type: entry.type ?? 'world_lore',
+              injectMode: entry.injectMode ?? 'always',
+              keywords: entry.keywords ?? [],
+              priority: entry.priority ?? 100,
+              enabled: entry.enabled ?? true,
+              scope,
+              createdAt: entry.createdAt ?? 0,
+              updatedAt: entry.updatedAt ?? 0,
+              // Phase 7.1 新字段默认值（ST 兼容）
+              keySecondary: entry.keySecondary ?? [],
+              caseSensitive: entry.caseSensitive ?? false,
+              matchWholeWords: entry.matchWholeWords ?? false,
+              useRegex: entry.useRegex ?? false,
+              probability: entry.probability ?? 100,
+              delay: entry.delay ?? 0,
+              cooldown: entry.cooldown ?? 0,
+              scanDepth: entry.scanDepth ?? 50,
+              // Phase 7.2 新字段默认值（ST 兼容）
+              injectAtDepth: entry.injectAtDepth ?? false,
+              depth: entry.depth ?? 0,
+              group: entry.group ?? '',
+              groupOverride: entry.groupOverride ?? false,
+              groupWeight: entry.groupWeight ?? 0,
+              disablesEntries: entry.disablesEntries ?? [],
+              // Phase 7.3 新字段默认值（ST 兼容）
+              logic: entry.logic ?? 'AND_ALL',
+              recurse: entry.recurse ?? false,
+              recurseDepth: Math.min(Math.max(entry.recurseDepth ?? 1, 0), 5),
+            };
+          })
+        : [],
+    };
+  });
 }
 
 // ── CRUD ──
@@ -108,7 +127,6 @@ export function importWorldbooks(data: unknown, existing: 世界书[]): 世界�
     throw new Error('无效的世界书文件');
   }
   const imported = normalizeWorldbooks(parsed.books);
-  const existingIds = new Set(existing.map((b) => b.id));
   const merged = [...existing];
   for (const book of imported) {
     const idx = merged.findIndex((b) => b.id === book.id);
@@ -283,7 +301,7 @@ function checkDelayAndCooldown(
 
   const cooldown = entry.cooldown ?? 0;
   if (cooldown > 0 && triggerStates) {
-    const lastTriggered = triggerStates[entry.id];
+    const lastTriggered = triggerStates[entry.id] as number | undefined;
     if (lastTriggered !== undefined) {
       const messagesSinceLastTrigger = currentMessageCount - lastTriggered;
       if (messagesSinceLastTrigger < cooldown) return false;
@@ -297,7 +315,7 @@ function checkDelayAndCooldown(
 
 function entryMatchesScope(entry: 世界书条目, ctx: FilterContext): boolean {
   // 缺失或空 scope 视作 'all'（normalize 应该已经填充，但运行时再兜底一次）
-  const scope = entry.scope?.length ? entry.scope : (['all'] as 世界书作用域[]);
+  const scope = entry.scope.length ? entry.scope : (['all'] as 世界书作用域[]);
   return scope.includes('all') || scope.includes(ctx.currentScope);
 }
 
@@ -306,6 +324,24 @@ function bookMatchesStoryMode(book: 世界书, ctx: FilterContext): boolean {
   if (!book.storyModeGate || book.storyModeGate.length === 0) return true;
   if (!ctx.storyMode) return false;
   return book.storyModeGate.includes(ctx.storyMode);
+}
+
+/** 兜底退化条目触发告警去重表：同一条目只记录一次，避免每个回合刷屏。 */
+const reportedFallbackEntryIds = new Set<string>();
+
+/** 兜底退化条目检测：injectMode='keyword_match' 但 keywords 为空。
+ *  这类条目经 normalize 兜底后 keywords 被填为 []，keyword 匹配退化为恒触发，
+ *  会把原本应受关键词门控的残缺/旧数据条目静默注入正文。命中即在触发时记 devLogError。 */
+function reportFallbackDegradedEntry(book: 世界书, entry: 世界书条目): void {
+  if (entry.injectMode !== 'keyword_match' || entry.keywords.length > 0) return;
+  if (reportedFallbackEntryIds.has(entry.id)) return;
+  reportedFallbackEntryIds.add(entry.id);
+  devLogError(
+    'stage',
+    `世界书条目「${entry.title}」为兜底退化条目：keyword_match 模式但无 keywords，缺失字段经 normalize 兜底后按始终注入触发`,
+    new Error(`fallback-degraded worldbook entry triggered: ${entry.id}`),
+    { bookId: book.id, bookTitle: book.title, entryId: entry.id },
+  );
 }
 
 /** Phase 7.3：递归触发 + 关键词匹配的共享内核。
@@ -335,6 +371,7 @@ function gatherTriggeredEntries(
       if (entry.injectMode === 'keyword_match' && !entryMatchesKeywords(entry, ctx)) continue;
       if (!checkProbability(entry)) continue;
       if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
+      reportFallbackDegradedEntry(book, entry);
       triggered.push({ entry, bookTitle: book.title });
       triggeredIds.add(entry.id);
     }
@@ -365,6 +402,7 @@ function gatherTriggeredEntries(
         if (!entryMatchesKeywords(entry, ctx, recursingContents)) continue;
         if (!checkProbability(entry)) continue;
         if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
+        reportFallbackDegradedEntry(book, entry);
         newHits.push({ entry, bookTitle: book.title });
         triggeredIds.add(entry.id);
       }
@@ -441,8 +479,8 @@ export interface WorldbookInjectionSplit {
   messageEntries: Array<{ entry: 世界书条目; bookTitle: string }>;
 }
 
-export function splitEntriesByInjectMode<T extends { entry: 世界书条目; bookTitle: string }>(
-  items: T[],
+export function splitEntriesByInjectMode(
+  items: Array<{ entry: 世界书条目; bookTitle: string }>,
 ): WorldbookInjectionSplit {
   const systemPromptEntries: WorldbookInjectionSplit['systemPromptEntries'] = [];
   const messageEntries: WorldbookInjectionSplit['messageEntries'] = [];
@@ -459,7 +497,7 @@ export function splitEntriesByInjectMode<T extends { entry: 世界书条目; boo
 function selectEntries(books: 世界书[], ctx: FilterContext): Array<{ entry: 世界书条目; bookTitle: string }> {
   // Phase 7.3：用 gatherTriggeredEntries 统一处理基础过滤 + 递归触发
   const all = gatherTriggeredEntries(books, ctx);
-  all.sort((a, b) => (b.entry.priority ?? 100) - (a.entry.priority ?? 100));
+  all.sort((a, b) => b.entry.priority - a.entry.priority);
   // Phase 7.2：分组覆盖 → 条目互斥（顺序：先互斥判断再分组覆盖可能丢掉被覆盖条目导致互斥失效，
   // 所以先 applyGroupOverride 再 applyDisablesEntries 更稳：被覆盖丢掉的条目不参与互斥判断）
   const afterGroup = applyGroupOverride(all);
@@ -480,7 +518,7 @@ export function buildWorldbookInjection(
   return selected
     .map(({ entry, bookTitle }) => {
       const category = entry.type === 'system_rule' ? '提示词' : '世界书';
-      const typeLabel = ENTRY_TYPE_LABELS[entry.type] ?? '世界书';
+      const typeLabel = ENTRY_TYPE_LABELS[entry.type];
       return [
         `# ${category}｜${entry.title}`,
         `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
@@ -504,7 +542,7 @@ export function buildPromptLikeWorldbookInjection(
   return selected
     .map(({ entry, bookTitle }) => [
       `# 世界书｜${entry.title}`,
-      `来源：${bookTitle} / ${ENTRY_TYPE_LABELS[entry.type] ?? '世界书'} / 优先级 ${entry.priority}`,
+      `来源：${bookTitle} / ${ENTRY_TYPE_LABELS[entry.type]} / 优先级 ${entry.priority}`,
       '',
       replaceWorldbookPlaceholders(entry.content, ctx),
     ].join('\n'))
@@ -536,7 +574,7 @@ export function buildWorldbookChatModuleMessages(
   return selected
     .sort((a, b) => (b.entry.depth ?? 0) - (a.entry.depth ?? 0))
     .map(({ entry, bookTitle }) => {
-      const typeLabel = ENTRY_TYPE_LABELS[entry.type] ?? '世界书';
+      const typeLabel = ENTRY_TYPE_LABELS[entry.type];
       const content = [
         `# 世界书｜${entry.title}`,
         `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
@@ -548,13 +586,13 @@ export function buildWorldbookChatModuleMessages(
         content,
         _injectionPosition: 1, // In-Chat
         _injectionDepth: entry.depth ?? 0,
-        _injectionOrder: entry.priority ?? 100, // 同 depth 内用 priority 排序
+        _injectionOrder: entry.priority, // 同 depth 内用 priority 排序
       };
     });
 }
 
 function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
-  const playerName = ctx.travelerName?.trim() || '无名开拓者';
+  const playerName = ctx.travelerName.trim() || '无名开拓者';
   const originalProtagonistName = formatOriginalProtagonistName(ctx.originalProtagonist);
   const originalProtagonistSubject = formatOriginalProtagonistSubject(ctx.originalProtagonist);
   return content
@@ -589,7 +627,7 @@ export function explainEntry(entry: 世界书条目): string {
   const kwInfo = entry.keywords.length ? `匹配关键词[${entry.keywords.join(', ')}]` : '关键词匹配（无关键词）';
   parts.push(`注入：${entry.injectMode === 'always' ? '始终注入' : kwInfo}`);
   parts.push(`优先级：${entry.priority}`);
-  const scope = entry.scope?.length ? entry.scope : (['all'] as 世界书作用域[]);
+  const scope = entry.scope.length ? entry.scope : (['all'] as 世界书作用域[]);
   parts.push(`场景：${scope.map((s) => SCOPE_LABELS[s]).join(' / ')}`);
 
   // Phase 7.1 高级字段说明

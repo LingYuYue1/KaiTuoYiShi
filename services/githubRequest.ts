@@ -15,16 +15,20 @@ export interface GitHubRequestOptions extends RequestInit {
   onRetry?: (notice: GitHubRetryNotice) => void;
 }
 
-export class GitHubRequestError extends Error {
-  readonly status?: number;
-  readonly retryable: boolean;
+export interface GitHubRequestError extends Error {
+  status?: number;
+  retryable: boolean;
+}
 
-  constructor(message: string, options: { status?: number; retryable?: boolean; cause?: unknown } = {}) {
-    super(message, { cause: options.cause });
-    this.name = 'GitHubRequestError';
-    this.status = options.status;
-    this.retryable = options.retryable ?? false;
-  }
+export function createGitHubRequestError(
+  message: string,
+  options: { status?: number; retryable?: boolean; cause?: unknown } = {},
+): GitHubRequestError {
+  const error = new Error(message, { cause: options.cause }) as GitHubRequestError;
+  error.name = 'GitHubRequestError';
+  error.status = options.status;
+  error.retryable = options.retryable ?? false;
+  return error;
 }
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -51,10 +55,10 @@ export async function githubRequest(
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     assertNotAborted(signal);
     const controller = new AbortController();
-    let timedOut = false;
+    const timedOutState: { timedOut: boolean } = { timedOut: false };
     const stopForwardingAbort = forwardAbort(signal, controller);
     const timeoutId = globalThis.setTimeout(() => {
-      timedOut = true;
+      timedOutState.timedOut = true;
       controller.abort(new DOMException(`${phase}超时。`, 'TimeoutError'));
     }, Math.max(1_000, timeoutMs));
 
@@ -74,10 +78,10 @@ export async function githubRequest(
       await abortableDelay(waitMs, signal);
     } catch (error) {
       if (signal?.aborted) throw signal.reason ?? error;
-      const retryable = timedOut || isRetryableNetworkError(error);
+      const retryable = timedOutState.timedOut || isRetryableNetworkError(error);
       if (!retryable || attempt >= attempts) {
-        const detail = timedOut ? `${phase}超时` : `${phase}网络请求失败`;
-        throw new GitHubRequestError(`${detail}，请检查网络后重试。`, { retryable, cause: error });
+        const detail = timedOutState.timedOut ? `${phase}超时` : `${phase}网络请求失败`;
+        throw createGitHubRequestError(`${detail}，请检查网络后重试。`, { retryable, cause: error });
       }
 
       const waitMs = exponentialDelay(attempt, retryBaseDelayMs, retryMaxDelayMs);
@@ -86,7 +90,7 @@ export async function githubRequest(
         attempt,
         maxAttempts: attempts,
         waitMs,
-        reason: timedOut ? '请求超时' : '网络中断',
+        reason: timedOutState.timedOut ? '请求超时' : '网络中断',
       });
       await abortableDelay(waitMs, signal);
     } finally {
@@ -95,7 +99,7 @@ export async function githubRequest(
     }
   }
 
-  throw new GitHubRequestError(`${phase}失败。`);
+  throw createGitHubRequestError(`${phase}失败。`);
 }
 
 export async function readGitHubError(response: Response, fallback: string): Promise<string> {
@@ -116,7 +120,7 @@ export async function readGitHubError(response: Response, fallback: string): Pro
 }
 
 function defaultMaxAttempts(method?: string): number {
-  const normalized = String(method || 'GET').toUpperCase();
+  const normalized = (method || 'GET').toUpperCase();
   return normalized === 'GET' || normalized === 'HEAD' || normalized === 'OPTIONS'
     ? DEFAULT_MAX_ATTEMPTS
     : 1;
@@ -193,7 +197,8 @@ function abortableDelay(delayMs: number, signal?: AbortSignal | null): Promise<v
     }, Math.max(0, delayMs));
     const abort = () => {
       globalThis.clearTimeout(timeoutId);
-      reject(signal?.reason ?? new DOMException('操作已取消。', 'AbortError'));
+      const reason: unknown = signal?.reason;
+      reject(reason instanceof Error ? reason : new DOMException('操作已取消。', 'AbortError'));
     };
     signal?.addEventListener('abort', abort, { once: true });
   });

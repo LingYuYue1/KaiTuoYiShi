@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { VariableSetters } from '@/utils/variableExecutor';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
@@ -72,10 +72,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/** 把未知值转成摘要文本：字符串原样（空串回退），基础字面量转 String，其余回退默认文案。 */
+function displayText(value: unknown, fallback: string): string {
+  if (typeof value === 'string') return value || fallback;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  return fallback;
+}
+
 function omitHiddenFields(value: unknown, fields?: string[]): unknown {
   if (!fields?.length || !isRecord(value)) return value;
-  const next = { ...value };
-  for (const field of fields) delete next[field];
+  const next: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (!fields.includes(key)) next[key] = item;
+  }
   return next;
 }
 
@@ -101,7 +114,7 @@ function summarizeValue(value: unknown): string {
     const keys = Object.keys(value);
     return `字段 ${keys.length}`;
   }
-  return String(value);
+  return `[${typeof value}]`;
 }
 
 // 从数组条目（NPC / 新闻）里提取一个可读标签，用于条目列表和详情标题。
@@ -269,10 +282,10 @@ function buildQuickStats(system: SystemMeta, value: unknown): string[] {
   }
   if (system.key === 'world' && isRecord(value)) {
     return [
-      String(value.当前日期 ?? '日期未定'),
-      String(value.当前时间 ?? '时间未定'),
-      String(value.当前地点 ?? '地点未定'),
-      String(value.当前天气 ?? '天气未定'),
+      displayText(value.当前日期, '日期未定'),
+      displayText(value.当前时间, '时间未定'),
+      displayText(value.当前地点, '地点未定'),
+      displayText(value.当前天气, '天气未定'),
     ];
   }
   if (system.key === 'phone' && isRecord(value)) {
@@ -284,7 +297,7 @@ function buildQuickStats(system: SystemMeta, value: unknown): string[] {
   }
   if (system.key === 'storyWeaving' && isRecord(value)) {
     const list = Array.isArray(value.系列列表) ? value.系列列表 : [];
-    return [`系列 ${list.length}`, value.当前系列ID ? `当前 ${String(value.当前系列ID)}` : '未选择当前系列'];
+    return [`系列 ${list.length}`, value.当前系列ID ? `当前 ${displayText(value.当前系列ID, '')}` : '未选择当前系列'];
   }
   if (Array.isArray(value)) return [`条目 ${value.length}`];
   if (isRecord(value)) return [`字段 ${Object.keys(value).length}`];
@@ -309,7 +322,9 @@ export function VariableManagerTab(props: Props) {
     [activeSystem.hiddenFields, originalValue],
   );
 
-  useEffect(() => {
+  const [prevSyncValue, setPrevSyncValue] = useState(visibleValue);
+  if (prevSyncValue !== visibleValue) {
+    setPrevSyncValue(visibleValue);
     let nextDraft = deepClone(visibleValue);
     // 确保「当前天气」紧跟「当前地点」
     if (activeSystem.key === 'world' && isRecord(nextDraft)) {
@@ -329,7 +344,7 @@ export function VariableManagerTab(props: Props) {
     setJsonDraft((current) => current === null ? null : toJson(nextDraft));
     setError(null);
     setSavedFlash(false);
-  }, [activeKey, visibleValue]);
+  }
 
   const updateDraft = (next: unknown) => {
     if (props.editingLocked) return;
@@ -340,7 +355,7 @@ export function VariableManagerTab(props: Props) {
   const saveDraft = () => {
     if (props.editingLocked) return;
     try {
-      const parsed = mode === 'json' ? JSON.parse(jsonDraft ?? '') : draft;
+      const parsed = mode === 'json' ? JSON.parse(jsonDraft ?? '') as unknown : draft;
       const next = mergeHiddenFields(activeSystem, originalValue, parsed);
       setSystemValue(props, activeKey, next);
       setDraft(deepClone(parsed));
@@ -378,17 +393,19 @@ export function VariableManagerTab(props: Props) {
   const arrayDraft = isArraySystem && Array.isArray(draft) ? draft as unknown[] : [];
 
   const updateArrayItem = (index: number, next: unknown) => {
-    if (!Array.isArray(draft)) return;
+    if (!isUnknownArray(draft)) return;
     const arr = [...draft];
     arr[index] = next;
     updateDraft(arr);
   };
 
   // 切换系统时重置数组导航状态。
-  useEffect(() => {
+  const [prevActiveKey, setPrevActiveKey] = useState(activeKey);
+  if (prevActiveKey !== activeKey) {
+    setPrevActiveKey(activeKey);
     setActiveArrayIndex(0);
     setArraySearch('');
-  }, [activeKey]);
+  }
 
   return (
     <div className={isArraySystem
@@ -679,7 +696,7 @@ function TreeNode({
   onChange: (next: unknown) => void;
   onDelete?: () => void;
 }) {
-  const isArray = Array.isArray(value);
+  const isArray = isUnknownArray(value);
   const objectLike = isRecord(value);
   const [expanded, setExpanded] = useState(depth === 0);
   const [visibleArrayItems, setVisibleArrayItems] = useState(ARRAY_RENDER_BATCH_SIZE);
@@ -805,8 +822,10 @@ function TreeNode({
                 depth={depth + 1}
                 onChange={(next) => onChange({ ...value, [key]: next })}
                 onDelete={() => {
-                  const nextObj = { ...value };
-                  delete nextObj[key];
+                  const nextObj: Record<string, unknown> = {};
+                  for (const [entryKey, item] of Object.entries(value)) {
+                    if (entryKey !== key) nextObj[entryKey] = item;
+                  }
                   onChange(nextObj);
                 }}
               />
@@ -878,7 +897,7 @@ function LeafRow({
             clipPath: smallClip,
           }}
         >
-          {String(value)}
+          {value ? 'true' : 'false'}
         </button>
       ) : type === 'number' ? (
         <input
@@ -1195,9 +1214,15 @@ function NsfwBodyArchiveSection({ title, fields, body, onChange }: {
 }) {
   const current = body ?? {};
   const update = (key: string, text: string) => {
-    const next = { ...current };
-    if (text.trim()) next[key] = text;
-    else delete next[key];
+    const trimmed = text.trim();
+    if (trimmed) {
+      onChange({ ...current, [key]: trimmed });
+      return;
+    }
+    const next: Record<string, unknown> = {};
+    for (const [entryKey, item] of Object.entries(current)) {
+      if (entryKey !== key) next[entryKey] = item;
+    }
     onChange(next);
   };
   return (

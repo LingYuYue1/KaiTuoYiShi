@@ -46,7 +46,6 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
   const [importing, setImporting] = useState(false);
   const [deletingLegacyBackups, setDeletingLegacyBackups] = useState(false);
   const [tab, setTab] = useState<Tab>('all');
-  const [showMobileHelp, setShowMobileHelp] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
   const [pendingSummaryCount, setPendingSummaryCount] = useState(0);
@@ -76,12 +75,13 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
 
   useEffect(() => {
     let cancelled = false;
+    const isCancelled = (): boolean => cancelled;
     const loadAndRepair = async () => {
       try {
         const snapshot = await refresh();
-        if (!cancelled && snapshot?.pendingIds.length) {
+        if (!isCancelled() && snapshot?.pendingIds.length) {
           await startSaveCatalogRepair('missing-only');
-          if (!cancelled) await refresh();
+          if (!isCancelled()) await refresh();
         }
       } catch (err) {
         console.warn('[save-list] background catalog recovery failed', err);
@@ -296,27 +296,33 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onClose }: Pro
   );
   const totalBranches = allTreeGroups.reduce((sum, group) => sum + group.branchCount, 0);
   const totalSizeBytes = allTreeGroups.reduce((sum, group) => sum + group.totalSizeBytes, 0);
-  const latestSave = visibleSaves[0];
+  const latestSave = visibleSaves.at(0);
   const selectedTree =
     visibleTreeGroups.find((group) => group.rootId === selectedRootId) ??
-    visibleTreeGroups[0] ??
+    visibleTreeGroups.at(0) ??
     null;
 
-  useEffect(() => {
+  const [prevTab, setPrevTab] = useState(tab);
+  const [prevSaveCount, setPrevSaveCount] = useState(visibleSaves.length);
+  const [prevTreeGroupCount, setPrevTreeGroupCount] = useState(visibleTreeGroups.length);
+  if (prevTab !== tab || prevSaveCount !== visibleSaves.length || prevTreeGroupCount !== visibleTreeGroups.length) {
+    setPrevTab(tab);
+    setPrevSaveCount(visibleSaves.length);
+    setPrevTreeGroupCount(visibleTreeGroups.length);
     if (tab !== 'all' && visibleSaves.length > 0 && visibleTreeGroups.length === 0) {
       setTab('all');
     }
-  }, [tab, visibleSaves.length, visibleTreeGroups.length]);
+  }
 
-  useEffect(() => {
+  const [prevVisibleTreeGroups, setPrevVisibleTreeGroups] = useState(visibleTreeGroups);
+  if (prevVisibleTreeGroups !== visibleTreeGroups) {
+    setPrevVisibleTreeGroups(visibleTreeGroups);
     if (visibleTreeGroups.length === 0) {
       if (selectedRootId !== null) setSelectedRootId(null);
-      return;
-    }
-    if (!selectedRootId || !visibleTreeGroups.some((group) => group.rootId === selectedRootId)) {
+    } else if (!selectedRootId || !visibleTreeGroups.some((group) => group.rootId === selectedRootId)) {
       setSelectedRootId(visibleTreeGroups[0].rootId);
     }
-  }, [selectedRootId, visibleTreeGroups]);
+  }
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
@@ -592,10 +598,10 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                   loadingId={loadingId}
                   deletingId={deletingId}
                   deletingAll={deletingLegacyBackups}
-                  onLoad={handleLoad}
-                  onDelete={handleDelete}
-                  onExport={handleExport}
-                  onDeleteAll={handleDeleteLegacyBackups}
+                  onLoad={(id) => void handleLoad(id)}
+                  onDelete={(id) => void handleDelete(id)}
+                  onExport={(id) => void handleExport(id)}
+                  onDeleteAll={() => void handleDeleteLegacyBackups()}
                   formatTime={formatTime}
                 />
               )}
@@ -616,7 +622,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                     {loadError}
                   </div>
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    <SaveActionButton onClick={refresh}>重新读取</SaveActionButton>
+                    <SaveActionButton onClick={() => void refresh()}>重新读取</SaveActionButton>
                     <SaveActionButton primary onClick={handleRepairList} disabled={loading}>
                       修复摘要
                     </SaveActionButton>
@@ -651,11 +657,11 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                     loadingId={loadingId}
                     deletingId={deletingId}
                     deletingRootId={deletingRootId}
-                    onLoad={handleLoad}
-                    onDelete={handleDelete}
-                    onExport={handleExport}
-                    onExportTree={handleExportTree}
-                    onDeleteTree={handleDeleteTree}
+                    onLoad={(id) => void handleLoad(id)}
+                    onDelete={(id) => void handleDelete(id)}
+                    onExport={(id) => void handleExport(id)}
+                    onExportTree={(rootId) => void handleExportTree(rootId)}
+                    onDeleteTree={(rootId, nodeCount) => void handleDeleteTree(rootId, nodeCount)}
                     catalogComplete={catalogComplete}
                     formatTime={formatTime}
                   />
@@ -698,7 +704,7 @@ function SaveActionButton({
   warn?: boolean;
   danger?: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   className?: string;
   size?: 'sm' | 'md';
 }) {
@@ -708,7 +714,7 @@ function SaveActionButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => void onClick()}
       disabled={disabled}
       className={`cursor-pointer font-serif ${sizeClass} font-semibold tracking-[0.16em] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       style={{

@@ -7,7 +7,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 命途ID } from '@/models/journey';
 import type { 命途阶段, 命途进度 } from '@/models/path';
-import { PATH_STAGE_DEFS, 创建命途进度, STAGE_PROGRESS_MAX } from '@/models/path';
+import { PATH_STAGE_DEFS, STAGE_PROGRESS_MAX } from '@/models/path';
 import { paths as PATH_DEFS, getPath } from '@/data/journeyPresets';
 import {
   awakenPath,
@@ -41,14 +41,14 @@ function 阶段名(stage: 命途阶段): string {
 }
 
 export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
-  const 命途列表 = 旅人.命途列表 ?? [];
+  const 命途列表 = 旅人.命途列表;
   const 已踏ID集合 = new Set(命途列表.map((p) => p.id));
   const 未踏命途 = SELECTABLE_PATHS.filter((p) => !已踏ID集合.has(p.id));
 
   // 更新指定 id 的命途条目;merge 字段
   const 更新命途 = (id: 命途ID, patch: Partial<命途进度>) => {
     set旅人((prev) => {
-      const list = (prev.命途列表 ?? []).map((p) =>
+      const list = prev.命途列表.map((p) =>
         p.id === id ? { ...p, ...patch } : p,
       );
       return { ...prev, 命途列表: list };
@@ -58,7 +58,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
   const 删除命途 = (id: 命途ID) => {
     if (!confirm(`确认删除命途「${中文名(id)}」?这会清空它的全部进度与阶段。`)) return;
     set旅人((prev) => {
-      const list = (prev.命途列表 ?? []).filter((p) => p.id !== id);
+      const list = prev.命途列表.filter((p) => p.id !== id);
       // 若删的是主命途,把 主命途 字段也清掉
       const nextPrimary = prev.主命途 === id ? '' : prev.主命途;
       return { ...prev, 命途列表: list, 主命途: nextPrimary };
@@ -410,10 +410,11 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
             <select
               defaultValue=""
               onChange={(e) => {
-                const v = e.target.value as 命途ID;
+                const v = e.target.value as 命途ID | '';
                 if (v) {
                   添加命途(v);
-                  e.target.value = '';
+                  const select = e.target;
+                  select.value = '';
                 }
               }}
               className="kaituo-input px-2 py-1 text-xs font-mono"

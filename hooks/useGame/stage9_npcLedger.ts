@@ -10,18 +10,26 @@
  */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { compressNpcMemoryLedger } from './memoryUtils';
-import { 创建默认记忆系统设置 } from '@/models/settings';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
-import { attachNpcLedgerUpdateDebug, pushUniqueText } from './npcLedgerWorkflow';
+import { attachNpcLedgerUpdateDebug, pushUniqueText, type NpcLedgerUpdateDebug } from './npcLedgerWorkflow';
+import type { NPC记录 } from '@/models/npc';
+
+interface VariableOverridesShape {
+  NPC?: NPC记录[];
+  npcLedgerUpdate?: NpcLedgerUpdateDebug;
+}
 
 export function stage9_npcLedger(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Partial<TurnDeltas> {
   const { state, turnCountAtStart } = ctx;
-  const variableOverrides = d.variableOverrides as Record<string, any> | null | undefined;
-  const finalHistory = d.finalHistory!;
-  const aiMsg = d.aiMsg!;
+  const variableOverrides = d.variableOverrides as VariableOverridesShape | null | undefined;
+  if (!d.finalHistory || !d.aiMsg) {
+    throw new Error('stage9_npcLedger: stage5 必须写入 finalHistory 与 aiMsg');
+  }
+  const finalHistory = d.finalHistory;
+  const aiMsg = d.aiMsg;
 
   const npcSource = variableOverrides?.NPC ?? state.NPC;
   const archiveEnrichment = enrichNpcArchives(npcSource, {
@@ -33,9 +41,9 @@ export function stage9_npcLedger(
   // NSFW 基线补建：开启 NSFW 后，把需要补建基线的 NPC 信息传给变量模型，
   // 变量模型在变量更新那一次调用里顺带生成 NSFW 基线档案，走正常 nsfw_archive facts 落库链路。
   const npcSourceForCompression = archiveEnrichment.records;
-  const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
+  const memorySettings = state.gameSettings.记忆系统;
   const npcCompressionSummaryTriggered: string[] = [];
-  let npcAfterCompression = npcSourceForCompression.map((npc) => {
+  const npcAfterCompression = npcSourceForCompression.map((npc) => {
     const ledgerCompression = compressNpcMemoryLedger({
       npcId: npc.id,
       entries: npc.同行记忆 ?? [],

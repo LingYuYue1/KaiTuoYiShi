@@ -29,7 +29,7 @@ export const LeftPanel = memo(function LeftPanel({
   recallFullContent = '',
   desktop = true,
 }: LeftPanelProps) {
-  const mainPath = traveler.命途列表?.find((path) => path.是否主命途) ?? traveler.命途列表?.[0];
+  const mainPath = traveler.命途列表.find((path) => path.是否主命途) ?? traveler.命途列表.at(0);
   const pathDef = mainPath ? getPath(mainPath.id) : traveler.主命途 ? getPath(traveler.主命途) : undefined;
   const pathStageDef = mainPath ? PATH_STAGE_DEFS.find((stage) => stage.stage === mainPath.阶段) : undefined;
   const pathLabel = pathDef
@@ -39,7 +39,7 @@ export const LeftPanel = memo(function LeftPanel({
         pathStageDef?.name,
       ].filter(Boolean).join(' · ')
     : '尚未踏上';
-  const avatarUrl = 解析相册资源引用(album, traveler.头像?.trim() || traveler.图像档案?.头像?.trim());
+  const avatarUrl = 解析相册资源引用(album, traveler.头像.trim() || traveler.图像档案?.头像?.trim());
 
   if (!desktop) return null;
 

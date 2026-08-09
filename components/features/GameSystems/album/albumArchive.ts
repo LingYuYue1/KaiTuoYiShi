@@ -73,6 +73,7 @@ export async function exportAlbum(album: 相册系统): Promise<AlbumExportResul
   for (const asset of prepared.assets) {
     const loaded = await loadAlbumAssetBytes(asset);
     const { dataUrl: _dataUrl, ...metadata } = asset;
+    void _dataUrl;
     if (!loaded) {
       manifestAssets.push(metadata);
       warnings.push(`资源 ${asset.id} 无法打包为本地图片文件。`);
@@ -156,10 +157,10 @@ export async function parseAlbumBytes(bytes: Uint8Array): Promise<ParsedAlbum> {
   try {
     const text = new TextDecoder().decode(bytes);
     const data = JSON.parse(text) as Partial<相册系统>;
-    if (!data || (!Array.isArray(data.assets) && !Array.isArray(data.entries))) throw new Error('缺少相册资源或条目。');
+    if (!Array.isArray(data.assets) && !Array.isArray(data.entries)) throw new Error('缺少相册资源或条目。');
     return { album: await deduplicateAlbumContent(归一化相册系统(data)), warnings: 0, skippedEntries: 0 };
   } catch (error) {
-    throw new Error(`无法读取相册文件：${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`无法读取相册文件：${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
 }
 
@@ -183,7 +184,7 @@ async function parseArchiveManifestV2(manifest: AlbumArchiveManifestV2, files: M
   const assets: 图片资源[] = [];
   const assetIds = new Set<string>();
   for (const record of manifest.assets) {
-    const id = String(record.id || '').trim();
+    const id = (record.id || '').trim();
     if (!id || assetIds.has(id)) throw new Error(`备份中存在缺失或重复的资源 ID：${id || '空值'}。`);
     assetIds.add(id);
     const { file, ...metadata } = record;
@@ -205,16 +206,16 @@ async function parseArchiveManifestV2(manifest: AlbumArchiveManifestV2, files: M
       id,
       dataUrl,
       contentHash,
-      source: record.source || 'upload',
+      source: record.source,
       nsfw: record.nsfw,
-      createdAt: Number(record.createdAt) || Date.now(),
-      status: record.status || 'ready',
+      createdAt: record.createdAt || Date.now(),
+      status: record.status,
     });
   }
 
   const entries = Array.isArray(manifest.entries) ? manifest.entries : [];
   for (const entry of entries) {
-    if (!assetIds.has(String(entry.assetId || ''))) throw new Error(`条目引用了不存在的资源：${entry.assetId || '空值'}`);
+    if (!assetIds.has(entry.assetId || '')) throw new Error(`条目引用了不存在的资源：${entry.assetId || '空值'}`);
   }
   const album = await deduplicateAlbumContent(归一化相册系统({
     assets,
@@ -256,7 +257,7 @@ async function parseLegacyArchiveManifest(manifest: unknown, files: Map<string, 
     entries.push({
       id: `album_import_${index}_${contentHash.slice(0, 12)}`,
       assetId,
-      title: String(record.title || `导入图片 ${index + 1}`),
+      title: typeof record.title === 'string' && record.title ? record.title : `导入图片 ${index + 1}`,
       targetType: normalizeTargetType(record.targetType),
       targetId: typeof record.targetId === 'string' ? record.targetId : undefined,
       slot: normalizeSlot(record.slot),
@@ -353,11 +354,11 @@ export function applyImportTarget(album: 相册系统, target: AlbumImportTarget
       return {
         ...entry,
         ...patch,
-        tags: Array.from(new Set([...(entry.tags ?? []), ...patch.tags])),
+        tags: Array.from(new Set([...entry.tags, ...patch.tags])),
         referenceTargets: target.scope === 'character' && hadReferenceTarget && target.targetId
           ? [target.targetId]
           : [],
-        createdAt: Number(entry.createdAt) || createdAt + index,
+        createdAt: entry.createdAt || createdAt + index,
       };
     }),
     tasks: album.tasks,
@@ -575,7 +576,7 @@ function uniqueZipName(used: Set<string>, name: string): string {
 }
 
 function uniqueId(preferred: string | undefined, prefix: string, used: Set<string>): string {
-  const base = String(preferred || '').trim();
+  const base = (preferred || '').trim();
   if (base && !used.has(base)) {
     used.add(base);
     return base;
@@ -608,12 +609,12 @@ function normalizeStrings(value: unknown): string[] {
 
 function normalizeTargetType(value: unknown): 相册条目['targetType'] {
   const allowed = new Set(['traveler', 'npc', 'phone', 'scene', 'item', 'nsfw_part', 'misc']);
-  const normalized = String(value || 'misc');
+  const normalized = typeof value === 'string' && value ? value : 'misc';
   return allowed.has(normalized) ? normalized as 相册条目['targetType'] : 'misc';
 }
 
 function normalizeSlot(value: unknown): 图片槽位 {
-  const normalized = String(value || 'misc') as 图片槽位;
+  const normalized = typeof value === 'string' && value ? value as 图片槽位 : 'misc';
   return isKnownSlot(normalized) ? normalized : 'misc';
 }
 

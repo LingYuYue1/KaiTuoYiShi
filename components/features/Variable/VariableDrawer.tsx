@@ -301,13 +301,13 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
 
         {/* 状态图标 */}
         <div className="flex shrink-0 items-center gap-2">
-          {canRetry && task && (
+          {canRetry && (
             <div className="flex items-center gap-1">
-              <QueueActionButton label="重试" onClick={() => void onRetry?.(task, 'retry')} />
-              <QueueActionButton label="重生成" onClick={() => void onRetry?.(task, 'reroll')} />
+              <QueueActionButton label="重试" onClick={() => void onRetry(task, 'retry')} />
+              <QueueActionButton label="重生成" onClick={() => void onRetry(task, 'reroll')} />
             </div>
           )}
-          {canCancel && task && (
+          {canCancel && (
             <button
               type="button"
               onClick={() => onCancel(task.id)}
@@ -599,7 +599,7 @@ function CommandRow({ result }: { result: 变量命令结果 }) {
       const keys = Object.keys(v);
       return `{${keys.slice(0, 3).join(',')}${keys.length > 3 ? ',...' : ''}}`;
     }
-    return String(v);
+    return `[${typeof v}]`;
   }, [command]);
 
   return (

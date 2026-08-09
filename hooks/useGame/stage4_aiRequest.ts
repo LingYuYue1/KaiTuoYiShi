@@ -57,6 +57,9 @@ export async function stage4_aiRequest(
   const { apiMessages, systemPrompt, tavernV2Messages,
     deepSeekMainActive, effectivePrefixMode, effectivePrefixContent,
     mainRequestMode, maxAttempts, currentPresetV2ForStage } = d;
+  if (!apiMessages || !systemPrompt) {
+    throw new Error('stage4_aiRequest: stage3 必须写入 apiMessages 与 systemPrompt');
+  }
 
   const configuredMaxAttempts = state.gameSettings.autoRetryOnError
     ? Math.max(1, state.gameSettings.autoRetryCount) + 1
@@ -84,11 +87,11 @@ export async function stage4_aiRequest(
     });
   }
 
-  let result: Awaited<ReturnType<typeof sendChatMessage>>;
+  let result: Awaited<ReturnType<typeof sendChatMessage>> | null = null;
   let deepSeekProtocolIssuesForTurn: string[] = [];
   let rerollSimilarityForTurn: number | undefined;
   let rerollSimilarityRetried = false;
-  let lastErr: unknown = null;
+  let lastErr: Error | null = null;
   let attempt = 0;
 
   while (attempt < calcMaxAttempts) {
@@ -101,8 +104,8 @@ export async function stage4_aiRequest(
     streamMessageSetter.flush('');
     try {
       result = await sendChatMessage(mainStoryConfig, {
-        messages: apiMessages!,
-        systemPrompt: systemPrompt!,
+        messages: apiMessages,
+        systemPrompt,
         onDelta: (delta) => {
           streamedText += delta;
           if (!state.gameSettings.enableStreaming) {
@@ -156,7 +159,7 @@ export async function stage4_aiRequest(
       if (tavernV2Messages && currentPresetV2ForStage) {
         const regexCleanup = applyTavernOutputRegexScripts(
           result.fullText || streamedText,
-          (currentPresetV2ForStage as Record<string, unknown>).preset as Parameters<typeof applyTavernOutputRegexScripts>[1],
+          currentPresetV2ForStage,
         );
         if (regexCleanup.applied.length > 0 && regexCleanup.text !== result.fullText) {
           result = {
@@ -169,7 +172,7 @@ export async function stage4_aiRequest(
         }
       }
 
-      const candidateText = (result.parsed.body?.trim() || result.fullText.trim() || streamedText.trim());
+      const candidateText = (result.parsed.body.trim() || result.fullText.trim() || streamedText.trim());
       const isBlankResponse = !candidateText || isEmptyResponse(result.parsed);
       if (isBlankResponse) {
         void appendApiErrorReport({
@@ -201,8 +204,8 @@ export async function stage4_aiRequest(
           error: new Error(`主剧情第 ${attempt}/${calcMaxAttempts} 次重roll结果与上一版过于相似，相似度 ${Math.round(rerollSimilarity * 100)}%。`),
           responseText: result.fullText || streamedText || candidateText,
         });
-        apiMessages!.push(创建聊天消息('user', buildRerollSimilarityRetryGuard(
-          deps.rerollContext!.previousResponse, rerollSimilarity,
+        apiMessages.push(创建聊天消息('user', buildRerollSimilarityRetryGuard(
+          deps.rerollContext.previousResponse, rerollSimilarity,
         )));
         pushQueueTask(state, 'main_story', 'pending', {
           detail: '重roll结果与上一版过于相似，正在强制换写。',
@@ -225,7 +228,7 @@ export async function stage4_aiRequest(
           responseText: result.fullText || streamedText || '（空响应）',
         });
         if (attempt < calcMaxAttempts) {
-          apiMessages!.push(创建聊天消息('user', buildDeepSeekProtocolRetryGuard(protocolIssues)));
+          apiMessages.push(创建聊天消息('user', buildDeepSeekProtocolRetryGuard(protocolIssues)));
           pushQueueTask(state, 'main_story', 'pending', {
             detail: `DeepSeek 输出协议不完整，正在重试：${protocolIssues.join('；')}`,
             failCount: attempt, retrying: true, cancellable: true,
@@ -242,9 +245,8 @@ export async function stage4_aiRequest(
       if ((innerErr as Error).name === 'AbortError' || abortController.signal.aborted) {
         throw innerErr;
       }
-      lastErr = innerErr;
-      const innerMessage = innerErr instanceof Error ? innerErr.message : String(innerErr ?? '');
-      const alreadyReportedByApiLayer =
+      lastErr = innerErr instanceof Error ? innerErr : new Error(typeof innerErr === 'string' ? innerErr : '主剧情请求失败。');
+      const innerMessage = innerErr instanceof Error ? innerErr.message : typeof innerErr === 'string' ? innerErr : '';      const alreadyReportedByApiLayer =
         innerMessage.includes('API Error') ||
         innerMessage.includes('Failed to fetch') ||
         innerMessage.includes('No response body');
@@ -267,6 +269,7 @@ export async function stage4_aiRequest(
   }
 
   if (lastErr) throw lastErr;
+  if (!result) throw new Error('stage4_aiRequest: 循环结束后未得到有效结果');
 
   return {
     deltas: {
@@ -274,7 +277,7 @@ export async function stage4_aiRequest(
       rerollSimilarityForTurn,
       rerollSimilarityRetried,
     },
-    result: result!,
+    result,
     streamedText,
     previewText,
     streamEventCount,

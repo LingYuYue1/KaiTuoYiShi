@@ -213,7 +213,7 @@ export function replaceBodyInRawResponse(rawText: string, sanitizedBody: string)
 }
 
 function escapeRegExp(text: string): string {
-  return text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  return text.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
 }
 
 function stripOuterQuote(text: string): string {
@@ -311,7 +311,7 @@ function hasPlayerSpeechEvidence(text: string, evidence: PlayerSpeechEvidence): 
 function normalizeForCompare(text: string): string {
   return stripOuterQuote(text)
     .replace(/\s+/g, '')
-    .replace(/[，,。！？!?；;：:“”"「」『』‘’'（）()【】[\]《》<>、…·~～—\-]/g, '')
+    .replace(/[，,。！？!?；;：:“”"「」『』‘’'（）()【】[\]《》<>、…·~～—-]/g, '')
     .trim();
 }
 
@@ -319,7 +319,7 @@ function isSoundEffectLike(text: string): boolean {
   const clean = normalizeSoundEffectText(text);
   if (!clean || clean.length > 18) return false;
   if (SOUND_EFFECT_TAGS.has(clean)) return true;
-  if (clean.length <= 8 && [...clean].every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0])) return true;
+  if (clean.length <= 8 && Array.from(clean).every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0])) return true;
   if (/^(轰隆隆|轰隆|隆隆|轰|隆|砰|咚|咔哒|咔|吼|嗷|嘶|呜|滴滴|滴|嗡|滋|哐当|哐|啪|唰|咻){1,5}$/.test(clean)) return true;
   return false;
 }
@@ -327,7 +327,7 @@ function isSoundEffectLike(text: string): boolean {
 function normalizeSoundEffectText(text: string): string {
   return stripOuterQuote(text)
     .replace(/\s+/g, '')
-    .replace(/[~～…\.。！？!?、，,：:；;“”"‘’'（）()【】[\]《》<>·\-—]/g, '')
+    .replace(/[~～….。！？!?、，,：:；;“”"‘’'（）()【】[\]《》<>·—-]/g, '')
     .trim();
 }
 

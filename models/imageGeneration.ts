@@ -47,7 +47,7 @@ export interface 图片资源 {
   referenceImageIds?: string[];
   dimensions?: string;
   model?: string;
-  backend?: 图片后端类型 | string;
+  backend?: string;
   status: 图片资源状态;
   error?: string;
 }
@@ -77,7 +77,7 @@ export interface 图片生成任务 {
   slot: 图片槽位;
   source: 图片生成任务来源;
   status: 图片生成任务状态;
-  backend: 图片后端类型 | string;
+  backend: string;
   nsfw: boolean;
   prompt: string;
   negativePrompt?: string;
@@ -132,11 +132,11 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
   const assets = Array.isArray(input.assets)
     ? input.assets.map((asset) => ({
         ...asset,
-        id: String(asset.id || `asset_${Date.now()}_${Math.random().toString(36).slice(2)}`),
-        source: asset.source ?? 'generated',
+        id: asset.id || `asset_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        source: asset.source,
         nsfw: asset.nsfw,
-        createdAt: Number(asset.createdAt) || Date.now(),
-        status: asset.status ?? 'ready',
+        createdAt: asset.createdAt || Date.now(),
+        status: asset.status,
         contentHash: typeof asset.contentHash === 'string' && /^[a-f0-9]{64}$/i.test(asset.contentHash.trim())
           ? asset.contentHash.trim().toLowerCase()
           : undefined,
@@ -147,14 +147,14 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
     ? input.entries.map((entry) => {
         const normalized = {
           ...entry,
-          id: String(entry.id || `album_${Date.now()}_${Math.random().toString(36).slice(2)}`),
-          assetId: String(entry.assetId || ''),
-          title: String(entry.title || '未命名图片'),
-          targetType: entry.targetType ?? 'misc',
-          slot: entry.slot ?? 'misc',
+          id: entry.id || `album_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          assetId: entry.assetId || '',
+          title: entry.title || '未命名图片',
+          targetType: entry.targetType,
+          slot: entry.slot,
           tags: normalizeStringArray(entry.tags),
           nsfw: entry.nsfw,
-          createdAt: Number(entry.createdAt) || Date.now(),
+          createdAt: entry.createdAt || Date.now(),
         };
         return { ...normalized, referenceTargets: 读取图片参考目标(normalized) };
       }).filter((entry) => entry.assetId)
@@ -172,18 +172,18 @@ export function 归一化相册系统(input?: Partial<相册系统> | null): 相
   const tasks = Array.isArray(input.tasks)
     ? input.tasks.map((task) => ({
         ...task,
-        id: String(task.id || `img_task_${Date.now()}_${Math.random().toString(36).slice(2)}`),
-        targetType: task.targetType ?? 'misc',
-        slot: task.slot ?? 'misc',
-        source: task.source ?? 'manual',
-        status: task.status ?? 'queued',
+        id: task.id || `img_task_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        targetType: task.targetType,
+        slot: task.slot,
+        source: task.source,
+        status: task.status,
         backend: task.backend || 'openai_compatible',
         nsfw: task.nsfw,
-        prompt: String(task.prompt || ''),
+        prompt: task.prompt || '',
         referenceImageIds: normalizeStringArray(task.referenceImageIds),
         dimensions: typeof task.dimensions === 'string' ? task.dimensions : undefined,
-        retryCount: Math.max(0, Math.trunc(Number(task.retryCount) || 0)),
-        createdAt: Number(task.createdAt) || Date.now(),
+        retryCount: Math.max(0, Math.trunc(task.retryCount || 0)),
+        createdAt: task.createdAt || Date.now(),
       }))
     : [];
 

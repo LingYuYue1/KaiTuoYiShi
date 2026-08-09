@@ -5,7 +5,7 @@ import type { 手机系统, 主动来信种子 } from '@/models/phone';
 function normalizePhoneSeedComparableText(text: string): string {
   return text
     .replace(/\s+/g, '')
-    .replace(/[，。！？!?；;、,.…~～“”"'\[\]（）()《》<>]/g, '')
+    .replace(/[，。！？!?；;、,.…~～“”"'[]（）()《》<>]/g, '')
     .trim();
 }
 
@@ -31,7 +31,7 @@ function hasRecentSimilarPhoneSeed(input: {
   const windowTurns = Math.max(3, input.windowTurns ?? 12);
   const currentText = `${input.title}\n${input.context}`;
   return input.phone.messageSeeds.some((seed) => {
-    if (input.turn - (Number(seed.turn) || 0) > windowTurns) return false;
+    if (input.turn - seed.turn > windowTurns) return false;
     const sameTarget = seed.targetId === input.npcId || seed.targetId === `npc_${input.npcId}` || seed.relatedNpcIds.includes(input.npcId);
     if (!sameTarget) return false;
     return isPhoneSeedTextSimilar(currentText, `${seed.title}\n${seed.context}`);
@@ -56,7 +56,7 @@ export function buildFallbackPhoneSeed(input: {
   const fallbackGlobalCooldown = Math.max(3, cooldown);
   const lastNonUrgentSeedTurn = input.phone.messageSeeds
     .filter((seed) => seed.priority !== 'urgent')
-    .reduce((latest, seed) => Math.max(latest, Number(seed.turn) || 0), 0);
+    .reduce((latest, seed) => Math.max(latest, seed.turn), 0);
   if (lastNonUrgentSeedTurn > 0 && input.turn - lastNonUrgentSeedTurn < fallbackGlobalCooldown) return null;
 
   const text = `${input.userInput}\n${input.body}`;
@@ -64,7 +64,7 @@ export function buildFallbackPhoneSeed(input: {
     .filter((npc) => npc.关系 !== 'enemy')
     .filter((npc) => npc.阶位 === 'companion' || npc.同行 || 提取NPC同行记忆文本列表(npc).length > 0)
     .filter((npc) => {
-      const recentTurn = Number(npc.最近回合 || 0);
+      const recentTurn = npc.最近回合;
       if (recentTurn < Math.max(1, input.turn - 4)) return false;
       const aliases = [npc.姓名, npc.别名].filter((item): item is string => Boolean(item?.trim()));
       return npc.同行 || aliases.some((name) => text.includes(name));
@@ -76,17 +76,17 @@ export function buildFallbackPhoneSeed(input: {
           seed.targetId === `npc_${npc.id}` ||
           seed.relatedNpcIds.includes(npc.id),
         )
-        .reduce((latest, seed) => Math.max(latest, Number(seed.turn) || 0), 0);
+        .reduce((latest, seed) => Math.max(latest, seed.turn), 0);
       return lastSeedTurn <= 0 || input.turn - lastSeedTurn >= cooldown;
     })
     .sort((a, b) => {
       if (a.同行 !== b.同行) return a.同行 ? -1 : 1;
-      const recentDiff = Number(b.最近回合 || 0) - Number(a.最近回合 || 0);
+      const recentDiff = b.最近回合 - a.最近回合;
       if (recentDiff !== 0) return recentDiff;
       return 提取NPC同行记忆文本列表(b).length - 提取NPC同行记忆文本列表(a).length;
     });
 
-  const npc = candidates[0];
+  const npc = candidates.at(0);
   if (!npc) return null;
   const reason = [
     input.body.replace(/\s+/g, ' ').trim().slice(0, 120),

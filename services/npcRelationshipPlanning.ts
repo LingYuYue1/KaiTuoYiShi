@@ -34,7 +34,7 @@ export function buildNpcRelationshipPlanning(npcs: NPC记录[], turnCount: numbe
 
 function buildNpcRelationshipEntry(npc: NPC记录, turnCount: number): NPC关系规划条目 {
   const memories = 提取NPC同行记忆文本列表(npc);
-  const recent = Number(npc.最近回合 || 0) >= Math.max(1, turnCount - 10);
+  const recent = (npc.最近回合 || 0) >= Math.max(1, turnCount - 10);
   const hasPromise = memories.some((item) => /约|承诺|答应|欠|等待|再见|联系|冲突|警惕|怀疑|信任/.test(item));
   const needsMemory = recent && memories.length === 0 && (npc.同行 || npc.好感度 !== 0 || npc.亲密关系 || Math.abs(npc.好感度) >= 10);
   const action: NPC关系规划条目['建议动作'] = needsMemory

@@ -1,5 +1,5 @@
 import type { 游戏设置 } from '@/models/settings';
-import type { STPresetEntry, STPresetEntryV2, STPresetPrompt, STWorldInfoEntry } from '@/models/stTypes';
+import type { STPresetEntryV1, STPresetEntryV2, STPresetPrompt, STWorldInfoEntry } from '@/models/stTypes';
 
 export interface STPresetMigrationResult {
   settings: 游戏设置;
@@ -12,10 +12,10 @@ function stripSTImportPrefix(id: string): string {
   return id.replace(/^st_import_/, '').replace(/_\d{10,}$/, '') || id;
 }
 
-function migrateWorldbookEntries(entry: STPresetEntry): STWorldInfoEntry[] | undefined {
+function migrateWorldbookEntries(entry: STPresetEntryV1): STWorldInfoEntry[] | undefined {
   const worldbookEntries = Array.isArray(entry.worldbookEntries) ? entry.worldbookEntries : [];
   const migrated = worldbookEntries
-    .filter((item) => item && typeof item.content === 'string' && item.content.trim())
+    .filter((item) => typeof item.content === 'string' && item.content.trim())
     .map((item, index): STWorldInfoEntry => ({
       uid: index + 1,
       comment: item.title,
@@ -42,7 +42,7 @@ function migrateWorldbookEntries(entry: STPresetEntry): STWorldInfoEntry[] | und
   return migrated.length > 0 ? migrated : undefined;
 }
 
-function migrateV1PresetToV2(entry: STPresetEntry): STPresetEntryV2 | null {
+function migrateV1PresetToV2(entry: STPresetEntryV1): STPresetEntryV2 | null {
   const modules = Array.isArray(entry.modules) ? entry.modules : [];
   const prompts: STPresetPrompt[] = modules
     .filter((module) => typeof module.content === 'string' && module.content.trim())

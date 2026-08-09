@@ -75,7 +75,7 @@ function readModelFromBody(body: unknown): string {
 async function readQianfanErrorCode(response: Response): Promise<string> {
   try {
     const data = await response.clone().json() as { error?: { code?: unknown } };
-    return typeof data?.error?.code === 'string' ? data.error.code : '';
+    return typeof data.error?.code === 'string' ? data.error.code : '';
   } catch {
     return '';
   }

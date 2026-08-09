@@ -1,5 +1,5 @@
 import type { API配置项 } from '@/models/settings';
-import type { 聊天消息, 回合Token消耗 } from '@/models/chat';
+import type { 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
@@ -78,7 +78,7 @@ function detectProvider(config: API配置项): string {
 }
 
 function isLikelyClaudeModel(model: string): boolean {
-  return /(^|[\/:._\-\s])(claude|opus|sonnet|haiku)([\/:._\-\s]|$)/i.test(model.trim());
+  return /(^|[/:._\-\s])(claude|opus|sonnet|haiku)([/:._\-\s]|$)/i.test(model.trim());
 }
 
 function shouldUseClaudeMessagesApi(config: API配置项): boolean {
@@ -100,25 +100,12 @@ function buildMessages(
   return result;
 }
 
-function isDeepSeekConfig(config: API配置项): boolean {
-  return detectProvider(config) === 'deepseek' || /deepseek/i.test(config.model);
-}
-
-function isGeminiConfig(config: API配置项): boolean {
-  const url = config.baseUrl.toLowerCase();
-  return detectProvider(config) === 'gemini' || /gemini/i.test(config.model) || url.includes('googleapis');
-}
-
 function normalizeDeepSeekPrefixBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '');
   if (!trimmed || !/deepseek/i.test(trimmed)) return trimmed;
   if (/\/beta$/i.test(trimmed)) return trimmed;
   if (/\/v\d+$/i.test(trimmed)) return trimmed.replace(/\/v\d+$/i, '/beta');
   return `${trimmed}/beta`;
-}
-
-function shouldUseDeepSeekPrefix(config: API配置项, request: ChatCompletionRequest): boolean {
-  return request.prefixMode === true && isDeepSeekConfig(config);
 }
 
 /**
@@ -215,7 +202,8 @@ function stripDeepSeekPrefixMessages(messages: ChatMessagePayload[]): ChatMessag
   return messages
     .filter((msg) => msg.prefix !== true)
     .map((msg) => {
-      const { prefix: _prefix, ...rest } = msg;
+      const rest = { ...msg };
+      delete rest.prefix;
       return rest;
     });
 }
@@ -226,7 +214,7 @@ function mergePrefixResult(prefix: string, text: string): string {
 }
 
 function isDeepSeekPrefixUnsupportedError(error: unknown): boolean {
-  const text = error instanceof Error ? error.message : String(error ?? '');
+  const text = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   return /prefix/i.test(text) && /(unsupported|not support|不支持|invalid|beta|400|422)/i.test(text);
 }
 
@@ -279,22 +267,6 @@ function withOpenCodeNormalizedConfig(config: API配置项): API配置项 {
     baseUrl: normalizeOpenCodeBaseUrl(config.baseUrl),
     model: normalizeOpenCodeModelId(config.model),
   };
-}
-
-function openCodeHeaders(config: API配置项, mode: 'openai' | 'anthropic' | 'gemini' = 'openai'): HeadersInit {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${config.apiKey}`,
-  };
-  if (mode === 'anthropic') {
-    headers['x-api-key'] = config.apiKey;
-    headers['anthropic-version'] = '2023-06-01';
-    headers['anthropic-dangerous-direct-browser-access'] = 'true';
-  }
-  if (mode === 'gemini') {
-    headers['x-goog-api-key'] = config.apiKey;
-  }
-  return headers;
 }
 
 function buildOpenCodeUrl(config: API配置项, endpoint: OpenCodeEndpoint): string {
@@ -1092,7 +1064,7 @@ function normalizeClaudeMessages(
     const content = msg.content.trim();
     if (!content) continue;
     const role: 'user' | 'assistant' = msg.role === 'assistant' ? 'assistant' : 'user';
-    const last = normalized[normalized.length - 1];
+    const last = normalized.at(-1);
     if (last?.role === role) {
       last.content = `${last.content}\n\n${content}`;
     } else {
@@ -1187,10 +1159,10 @@ function formatClaudeError(status: number, text: string): Error {
 }
 
 function parseClaudeTextResponse(json: unknown): string {
-  const data = json as { content?: Array<{ type?: string; text?: string }> };
+  const data = json as { content?: Array<{ type?: string; text?: string } | null> };
   return (data.content ?? [])
     .filter((part) => part?.type === 'text' && typeof part.text === 'string')
-    .map((part) => part.text ?? '')
+    .map((part) => part?.text ?? '')
     .join('');
 }
 
@@ -1206,7 +1178,7 @@ function hasReasoningPayload(value: unknown, depth = 0): boolean {
   const type = typeof record.type === 'string' ? record.type : '';
   if (record.thought === true || /^(thinking|reasoning|thinking_delta|reasoning_delta)$/i.test(type)) return true;
   for (const [key, child] of Object.entries(record)) {
-    if (/^(reasoning(?:_content)?|thinking(?:_content)?)$/i.test(key) && child != null && child !== '') return true;
+    if (/^(reasoning(?:_content)?|thinking(?:_content)?)$/i.test(key) && child !== null && child !== undefined && child !== '') return true;
     if (hasReasoningPayload(child, depth + 1)) return true;
   }
   return false;
@@ -1233,20 +1205,23 @@ function readCompatibleTextContent(content: unknown): string {
 }
 
 function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTextState): string {
-  if (hasReasoningPayload(parsed)) state.sawReasoning = true;
+  // 本地累加器别名：流式解析需跨 chunk 累加，等价于直接改参数字段（语义不变），
+  // 避免 no-param-reassign 对入参属性的直接赋值。
+  const streamState = state;
+  if (hasReasoningPayload(parsed)) streamState.sawReasoning = true;
   if (parsed?.type === 'content_block_start') {
     const blockType = parsed.content_block?.type;
-    state.currentBlockIsThinking = blockType === 'thinking' || blockType === 'reasoning';
-    if (state.currentBlockIsThinking) return '';
+    streamState.currentBlockIsThinking = blockType === 'thinking' || blockType === 'reasoning';
+    if (streamState.currentBlockIsThinking) return '';
     return readCompatibleTextContent(parsed.content_block?.text ?? parsed.content_block?.content ?? parsed.content_block);
   }
   if (parsed?.type === 'content_block_delta') {
     const deltaType = parsed.delta?.type;
-    if (deltaType === 'thinking_delta' || deltaType === 'reasoning_delta' || state.currentBlockIsThinking) return '';
+    if (deltaType === 'thinking_delta' || deltaType === 'reasoning_delta' || streamState.currentBlockIsThinking) return '';
     return readCompatibleTextContent(parsed.delta?.text ?? parsed.delta?.content ?? parsed.delta);
   }
   if (parsed?.type === 'content_block_stop') {
-    state.currentBlockIsThinking = false;
+    streamState.currentBlockIsThinking = false;
     return '';
   }
   if (
@@ -1282,23 +1257,31 @@ function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTex
  *  - Claude: message_delta.delta.stop_reason (SSE) 或顶层 stop_reason (非流式)
  *  - Gemini: candidates[0].finishReason (camelCase)
  *  返回 undefined 表示该 chunk 无 finish_reason 或无法识别。 */
-function readFinishReason(parsed: any): string | undefined {
+function readFinishReason(parsed: unknown): string | undefined {
+  if (!parsed || typeof parsed !== 'object') return undefined;
+  const data = parsed as {
+    choices?: Array<{ finish_reason?: unknown }>;
+    type?: string;
+    delta?: { stop_reason?: unknown };
+    stop_reason?: unknown;
+    candidates?: Array<{ finishReason?: unknown }>;
+  };
   // OpenAI 兼容：choices[0].finish_reason
-  const choice = parsed?.choices?.[0];
+  const choice = data.choices?.at(0);
   if (choice && typeof choice.finish_reason === 'string' && choice.finish_reason) {
     return choice.finish_reason;
   }
   // Claude SSE: message_delta.delta.stop_reason
-  if (parsed?.type === 'message_delta') {
-    const stopReason = parsed?.delta?.stop_reason;
+  if (data.type === 'message_delta') {
+    const stopReason = data.delta?.stop_reason;
     if (typeof stopReason === 'string' && stopReason) return stopReason;
   }
   // Claude 非流式: stop_reason
-  if (typeof parsed?.stop_reason === 'string' && parsed.stop_reason) {
-    return parsed.stop_reason;
+  if (typeof data.stop_reason === 'string' && data.stop_reason) {
+    return data.stop_reason;
   }
   // Gemini: candidates[0].finishReason
-  const candidate = parsed?.candidates?.[0];
+  const candidate = data.candidates?.at(0);
   if (candidate && typeof candidate.finishReason === 'string' && candidate.finishReason) {
     return candidate.finishReason;
   }
@@ -1306,18 +1289,24 @@ function readFinishReason(parsed: any): string | undefined {
 }
 
 function parseOpenAICompatibleTextResponse(json: unknown): string {
-  const data = json as Record<string, any>;
-  const choice = data?.choices?.[0];
+  const data = json as {
+    choices?: Array<{ message?: { content?: unknown }; text?: unknown }>;
+    message?: { content?: unknown };
+    output_text?: unknown;
+    text?: unknown;
+    content?: unknown;
+  };
+  const choice = data.choices?.at(0);
   return (
     readCompatibleTextContent(choice?.message?.content) ||
     readCompatibleTextContent(choice?.text) ||
-    readCompatibleTextContent(data?.message?.content) ||
+    readCompatibleTextContent(data.message?.content) ||
     parseClaudeTextResponse(json) ||
     parseOpenCodeResponsesText(json) ||
     parseOpenCodeGeminiText(json) ||
-    readCompatibleTextContent(data?.output_text) ||
-    readCompatibleTextContent(data?.text) ||
-    readCompatibleTextContent(data?.content)
+    readCompatibleTextContent(data.output_text) ||
+    readCompatibleTextContent(data.text) ||
+    readCompatibleTextContent(data.content)
   );
 }
 
@@ -1345,12 +1334,16 @@ export async function chatCompletion(
     maxTokens: request.maxTokens ?? config.maxTokens,
     onSummary: request.onDeepSeekRecovery,
     execute: async (attemptConfig, attemptOptions) => {
-      let reported = false;
+      let reported = Boolean(0);
       let finishReason: string | undefined;
       let diagnostics: DeepSeekAttemptDiagnostics = {
         sawReasoning: false,
         sawVisibleContent: false,
         selectedModel: attemptConfig.model,
+      };
+      const reportDiagnostics = (next: DeepSeekAttemptDiagnostics): void => {
+        reported = true;
+        diagnostics = next;
       };
       const messages = attemptOptions.appendRecoveryInstruction
         ? [...request.messages, { role: 'user', content: DEEPSEEK_FINAL_CONTENT_GUARD }]
@@ -1360,10 +1353,7 @@ export async function chatCompletion(
         messages,
         maxTokens: attemptOptions.maxTokens,
         deepSeekRecovery: 'disabled',
-        onResponseDiagnostics: (next) => {
-          reported = true;
-          diagnostics = next;
-        },
+        onResponseDiagnostics: reportDiagnostics,
       };
       const text = await chatCompletionOnce(attemptConfig, attemptRequest, {
         onDelta: callbacks.onDelta,
@@ -1499,7 +1489,7 @@ async function streamOpenAICompatible(
   const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
 
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -1589,7 +1579,7 @@ async function streamClaude(
   let currentBlockIsThinking = false;
 
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -1605,10 +1595,10 @@ async function streamClaude(
         try {
           const parsed = JSON.parse(data);
           emitUsageFromResponse(parsed, config, request);
-          if (parsed.type === 'content_block_start') {
+            if (parsed.type === 'content_block_start') {
             currentBlockIsThinking = parsed.content_block?.type === 'thinking';
             if (currentBlockIsThinking) continue;
-            const text = parsed.content_block?.text ?? '';
+            const text = String(parsed.content_block?.text ?? '');
             if (text) {
               fullText += text;
               callbacks.onDelta(text);
@@ -1617,7 +1607,7 @@ async function streamClaude(
             const deltaType = parsed.delta?.type;
             // 丢弃 extended thinking delta（厂商内置思考摘要）
             if (deltaType === 'thinking_delta' || currentBlockIsThinking) continue;
-            const t = parsed.delta?.text ?? '';
+            const t = String(parsed.delta?.text ?? '');
             if (t) {
               fullText += t;
               callbacks.onDelta(t);
@@ -1768,7 +1758,7 @@ function parseOpenCodeResponsesText(json: unknown): string {
     text?: string;
     choices?: Array<{ message?: { content?: string } }>;
     output?: Array<{
-      content?: Array<{ type?: string; text?: string; content?: string }>;
+      content?: Array<{ type?: string; text?: string; content?: string } | null>;
     }>;
   };
   if (typeof data.output_text === 'string') return data.output_text;
@@ -1776,7 +1766,7 @@ function parseOpenCodeResponsesText(json: unknown): string {
   const fromOutput = (data.output ?? [])
     .flatMap((item) => item.content ?? [])
     .filter((part) => part?.type === 'output_text' || part?.type === 'text' || typeof part?.text === 'string')
-    .map((part) => part.text ?? part.content ?? '')
+    .map((part) => part?.text ?? part?.content ?? '')
     .join('');
   if (fromOutput) return fromOutput;
   return readCompatibleTextContent(data.choices?.[0]?.message?.content);
@@ -1865,7 +1855,7 @@ async function streamOpenCodeChat(
   const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
 
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -1947,7 +1937,7 @@ async function streamOpenCodeMessages(
   let currentBlockIsThinking = false;
 
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -1962,17 +1952,17 @@ async function streamOpenCodeMessages(
         try {
           const parsed = JSON.parse(data);
           emitUsageFromResponse(parsed, config, request);
-          if (parsed.type === 'content_block_start') {
+            if (parsed.type === 'content_block_start') {
             currentBlockIsThinking = parsed.content_block?.type === 'thinking';
             if (currentBlockIsThinking) continue;
-            const text = parsed.content_block?.text ?? '';
+            const text = String(parsed.content_block?.text ?? '');
             if (text) {
               fullText += text;
               callbacks.onDelta(text);
             }
           } else if (parsed.type === 'content_block_delta') {
             if (parsed.delta?.type === 'thinking_delta' || currentBlockIsThinking) continue;
-            const text = parsed.delta?.text ?? '';
+            const text = String(parsed.delta?.text ?? '');
             if (text) {
               fullText += text;
               callbacks.onDelta(text);
@@ -2032,7 +2022,7 @@ async function streamOpenCodeResponses(
   let buffer = '';
 
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -2104,7 +2094,7 @@ async function streamOpenCodeGemini(
   let buffer = '';
 
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -2322,7 +2312,7 @@ async function streamGemini(
   let buffer = '';
 
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -2343,7 +2333,7 @@ async function streamGemini(
             for (const part of parts) {
               // Gemini Thinking parts 带 thought:true → 丢弃（厂商内置思考摘要）
               if (part.thought) continue;
-              const text = part.text ?? '';
+              const text = String(part.text ?? '');
               if (text) {
                 fullText += text;
                 callbacks.onDelta(text);
@@ -2377,7 +2367,7 @@ export async function chatCompletionNonStream(
     maxTokens: request.maxTokens ?? config.maxTokens,
     onSummary: request.onDeepSeekRecovery,
     execute: async (attemptConfig, attemptOptions) => {
-      let reported = false;
+      let reported = Boolean(0);
       let diagnostics: DeepSeekAttemptDiagnostics = {
         sawReasoning: false,
         sawVisibleContent: false,

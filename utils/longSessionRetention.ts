@@ -1,5 +1,5 @@
 import type { 聊天消息, 回合快照 } from '@/models/chat';
-import type { 变量命令批次, 变量命令结果 } from '@/models/variableCommand';
+import type { 变量命令批次, 变量命令结果 } from '../models/variableCommand';
 
 export const DETAILED_CHAT_TURNS = 20;
 export const DETAILED_VARIABLE_BATCHES = 20;
@@ -19,7 +19,7 @@ export function compactVariableBatchHistory(
   const retained = value.slice(-MAX_VARIABLE_BATCHES);
   const detailedStart = Math.max(0, retained.length - DETAILED_VARIABLE_BATCHES);
 
-  return retained.map((batch, index) => {
+  return retained.map((batch: 变量命令批次, index): 变量命令批次 => {
     if (index >= detailedStart) return batch;
     if (batch.retentionSummary && !batch.rawText) return batch;
     const results: 变量命令结果[] = Array.isArray(batch.results) ? batch.results : [];
@@ -58,7 +58,7 @@ export function compactVariableBatchHistory(
 }
 
 function compactVariableDiagnosticResult(result: 变量命令结果): 变量命令结果 {
-  const command = result.command ?? { action: 'set', key: '', value: undefined };
+  const command = result.command;
   const reason = result.reason && result.reason.length > MAX_FAILURE_REASON_LENGTH
     ? `${result.reason.slice(0, MAX_FAILURE_REASON_LENGTH)}...[已截断]`
     : result.reason;
@@ -66,7 +66,7 @@ function compactVariableDiagnosticResult(result: 变量命令结果): 变量命�
     ...result,
     command: {
       action: command.action,
-      key: String(command.key ?? '').slice(0, MAX_COMMAND_KEY_LENGTH),
+      key: command.key.slice(0, MAX_COMMAND_KEY_LENGTH),
       value: compactCommandValue(command.value),
     },
     reason,
@@ -93,7 +93,7 @@ export function compactChatHistoryForLongSession(
   const detailedAssistantIndices = collectDetailedAssistantIndices(value);
   const snapshotCarrierIndex = findLatestSnapshotCarrier(value);
 
-  return value.map((message, index) => {
+  return value.map((message: 聊天消息, index) => {
     let next = message;
     const keepSnapshot = index === snapshotCarrierIndex;
     if (message.preTurnSnapshot && !keepSnapshot) {

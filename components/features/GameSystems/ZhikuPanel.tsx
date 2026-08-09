@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import { useMemo, useState, type ReactNode } from 'react';
 import type { 智库系统, 智库分类, 智库条目 } from '@/models/zhiku';
 import {
   ZHIKU_CATEGORY_LABELS,
@@ -105,9 +105,9 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
 
   const counts = useMemo(() => 智库分类计数({ 条目: bucket === 'builtin' ? builtinEntries : bucket === 'custom' ? customEntries : visibleEntries }), [bucket, builtinEntries, customEntries, visibleEntries]);
 
-  const selected = selectedId
-    ? activeEntries.find((entry) => entry.id === selectedId) ?? activeEntries[0] ?? null
-    : activeEntries[0] ?? null;
+  const selected: 智库条目 | null = selectedId
+    ? activeEntries.find((entry) => entry.id === selectedId) ?? activeEntries.at(0) ?? null
+    : activeEntries.at(0) ?? null;
 
   const storyList = useMemo(
     () => buildStorySeries(activeEntries.filter((entry) => entry.分类 === 'story')),
@@ -128,36 +128,47 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   }, [activeCategory, characterWorkspace, selectedId]);
   const activeCharacterEntry = useMemo(() => {
     if (!activeCharacterProfile) return null;
-    return activeCharacterProfile.entries.find((entry) => entry.id === selectedId) ?? activeCharacterProfile.entries[0] ?? null;
+    return activeCharacterProfile.entries.find((entry) => entry.id === selectedId) ?? activeCharacterProfile.entries.at(0) ?? null;
   }, [activeCharacterProfile, selectedId]);
 
-  useEffect(() => {
+  const [prevSelectedSeriesKey, setPrevSelectedSeriesKey] = useState(`${selected?.id}|${selected?.分类}|${selected?.系列ID}|${selected?.系列标题}`);
+  const selectedSeriesKey = `${selected?.id}|${selected?.分类}|${selected?.系列ID}|${selected?.系列标题}`;
+  if (prevSelectedSeriesKey !== selectedSeriesKey) {
+    setPrevSelectedSeriesKey(selectedSeriesKey);
     const selectedSeriesId = selected?.分类 === 'story' ? getStorySeriesId(selected) : null;
-    if (!selectedSeriesId) return;
-    setExpandedSeriesIds((prev) => (prev.includes(selectedSeriesId) ? prev : [...prev, selectedSeriesId]));
-  }, [selected?.id, selected?.分类, selected?.系列ID, selected?.系列标题]);
+    if (selectedSeriesId) {
+      setExpandedSeriesIds((prev) => (prev.includes(selectedSeriesId) ? prev : [...prev, selectedSeriesId]));
+    }
+  }
 
-  useEffect(() => {
-    if (storyList.groups.length === 0) return;
-    setExpandedSeriesIds((prev) =>
-      prev.some((id) => storyList.groups.some((group) => group.id === id)) ? prev : [storyList.groups[0].id],
-    );
-  }, [storyList.groups]);
+  const [prevStoryGroups, setPrevStoryGroups] = useState(storyList.groups);
+  if (prevStoryGroups !== storyList.groups) {
+    setPrevStoryGroups(storyList.groups);
+    if (storyList.groups.length > 0) {
+      setExpandedSeriesIds((prev) =>
+        prev.some((id) => storyList.groups.some((group) => group.id === id)) ? prev : [storyList.groups[0].id],
+      );
+    }
+  }
 
-  useEffect(() => {
-    if (activeCategory !== 'character' || characterWorkspace.groups.length === 0) return;
-    setExpandedCharacterGroupIds((prev) => {
-      const groupIds = characterWorkspace.groups.map((group) => group.id);
-      const valid = prev.filter((id) => groupIds.includes(id));
-      const selectedProfile = selectedId
-        ? characterWorkspace.profiles.find((profile) => profile.entries.some((entry) => entry.id === selectedId))
-        : null;
-      if (selectedProfile?.groupId && !valid.includes(selectedProfile.groupId)) {
-        return [...valid, selectedProfile.groupId];
-      }
-      return valid;
-    });
-  }, [activeCategory, characterWorkspace.groups, characterWorkspace.profiles, selectedId]);
+  const [prevCharGroupsKey, setPrevCharGroupsKey] = useState(`${activeCategory}|${characterWorkspace.groups.length}|${characterWorkspace.profiles.length}|${selectedId ?? ''}`);
+  const charGroupsKey = `${activeCategory}|${characterWorkspace.groups.length}|${characterWorkspace.profiles.length}|${selectedId ?? ''}`;
+  if (prevCharGroupsKey !== charGroupsKey) {
+    setPrevCharGroupsKey(charGroupsKey);
+    if (activeCategory === 'character' && characterWorkspace.groups.length > 0) {
+      setExpandedCharacterGroupIds((prev) => {
+        const groupIds = characterWorkspace.groups.map((group) => group.id);
+        const valid = prev.filter((id) => groupIds.includes(id));
+        const selectedProfile = selectedId
+          ? characterWorkspace.profiles.find((profile) => profile.entries.some((entry) => entry.id === selectedId))
+          : null;
+        if (selectedProfile?.groupId && !valid.includes(selectedProfile.groupId)) {
+          return [...valid, selectedProfile.groupId];
+        }
+        return valid;
+      });
+    }
+  }
 
   const persist = async (nextEntries: 智库条目[]) => {
     const next = 归一化智库系统({ 条目: nextEntries });
@@ -324,7 +335,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
             {isDevBuild && (
               <button
                 type="button"
-                onClick={handleDevRefreshBundled}
+                onClick={() => void handleDevRefreshBundled()}
                 disabled={devRefreshStatus === 'loading'}
                 title="重新读取 public/zhiku-presets 内置智库，并保留自制条目与运行时解锁备注。"
                 className="px-3 py-1.5 text-[11px] font-mono tracking-[0.18em] transition-all hover:opacity-90 disabled:cursor-wait disabled:opacity-65"
@@ -512,7 +523,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
                   <textarea value={draft.原文} onChange={(e) => setDraft({ ...draft, 原文: e.target.value })} rows={7} placeholder="把原文或整理好的内容贴进来。" className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed" style={{ clipPath: smallClip }} />
                 </Field>
                 <button
-                  onClick={handleCreateCustom}
+                  onClick={() => void handleCreateCustom()}
                   disabled={!draft.标题.trim() && !draft.原文.trim()}
                   className="w-full py-2.5 text-sm font-mono tracking-[0.34em] transition-all disabled:opacity-50"
                   style={{
@@ -565,8 +576,8 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
             expandedGroupIds={expandedCharacterGroupIds}
             onToggleGroup={toggleCharacterGroup}
             onSelectProfile={(entryId) => setSelectedId(entryId)}
-            onUpdate={updateSelected}
-            onDelete={deleteSelected}
+            onUpdate={(patch) => void updateSelected(patch)}
+            onDelete={() => void deleteSelected()}
             onSelectCustomOnly={() => setBucket('custom')}
           />
         ) : (
@@ -610,8 +621,8 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
             <div className="hidden h-full min-h-0 min-w-0 overflow-hidden md:block">
               <DetailPanel
                 entry={selected}
-                onUpdate={updateSelected}
-                onDelete={deleteSelected}
+                onUpdate={(patch) => void updateSelected(patch)}
+                onDelete={() => void deleteSelected()}
                 onSelectCustomOnly={() => setBucket('custom')}
               />
             </div>
@@ -782,7 +793,7 @@ function resolveCharacterGroup(entry: 智库条目, characterName = getCharacter
     return { id: 'fallback:星穹列车', label: '星穹列车', kind: '组织' };
   }
 
-  const text = [entry.标题, entry.摘要, entry.来源 ?? '', entry.原文, ...(entry.关键词 ?? [])].join(' ');
+  const text = [entry.标题, entry.摘要, entry.来源 ?? '', entry.原文, ...entry.关键词].join(' ');
   for (const group of characterGroupFallbacks) {
     if (group.aliases.some((alias) => text.includes(alias))) {
       return { id: `fallback:${group.label}`, label: group.label, kind: group.kind };
@@ -800,7 +811,7 @@ function getCharacterGroupFromTags(entry: 智库条目): { id: string; label: st
     { keys: ['组织'], kind: '组织' },
     { keys: ['资料大区', '大区'], kind: '资料大区' },
   ];
-  const tags = entry.关键词 ?? [];
+  const tags = entry.关键词;
   const parsedTags = tags.map(parseCharacterTag).filter((tag): tag is { key: string; value: string } => Boolean(tag));
   const dataArea = parsedTags.find((tag) => ['资料大区', '大区'].includes(tag.key))?.value;
   const organization = parsedTags.find((tag) => ['所属', '归属', '所属组织', '组织'].includes(tag.key))?.value;
@@ -836,7 +847,7 @@ function getCharacterGroupFromTags(entry: 智库条目): { id: string; label: st
 
   for (const option of tagPriority) {
     for (const parsed of parsedTags) {
-      if (!parsed || !option.keys.includes(parsed.key)) continue;
+      if (!option.keys.includes(parsed.key)) continue;
       return {
         id: `${option.kind}:${parsed.value}`,
         label: parsed.value,
@@ -850,8 +861,8 @@ function getCharacterGroupFromTags(entry: 智库条目): { id: string; label: st
 function parseCharacterTag(keyword: string): { key: string; value: string } | null {
   const match = keyword.match(/^([^:：]+)[:：](.+)$/u);
   if (!match) return null;
-  const key = match[1]?.trim();
-  const value = match[2]?.trim();
+  const key = match[1].trim();
+  const value = match[2].trim();
   return key && value ? { key, value } : null;
 }
 
@@ -1196,7 +1207,7 @@ function getStorySeriesId(entry: 智库条目): string | null {
 }
 
 function getStorySeriesTitle(entry: 智库条目): string | null {
-  return entry.系列标题?.trim() || entry.标题?.trim() || null;
+  return entry.系列标题?.trim() || entry.标题.trim() || null;
 }
 
 function compareStoryEntries(a: 智库条目, b: 智库条目): number {
@@ -1625,8 +1636,6 @@ function DetailMetadataForm({
 
 function CharacterProfileWorkspace({
   entry,
-  editable,
-  onUpdate,
 }: {
   entry: 智库条目;
   editable: boolean;
@@ -2288,7 +2297,7 @@ function parseCharacterIdentityFields(raw: string): Map<string, string> {
     const match = trimmed.match(/^([^:：]+)[:：]\s*(.+)$/u);
     if (!match) continue;
     const key = normalizeCharacterIdentityKey(match[1]);
-    const value = match[2]?.trim();
+    const value = match[2].trim();
     if (key && value) map.set(key, value);
   }
   return map;
@@ -2331,7 +2340,7 @@ function buildCharacterIdentityRows(
 ): CharacterIdentityRow[] {
   const get = (key: string, fallback = '') => identityMap.get(key) || fallback;
   const roleName = meta.角色名 || entry.关联角色ID || 获取智库人物名(entry);
-  const appearance = get('外貌', get('存在形态', entry.外貌锚点 ?? inferExistenceForm(entry) ?? ''));
+  const appearance = get('外貌', get('存在形态', entry.外貌锚点 ?? inferExistenceForm(entry)));
   return [
     { label: '角色ID', value: get('角色ID', getRoleIdFromKeywords(entry) || '未标注'), missing: !get('角色ID') && !getRoleIdFromKeywords(entry) },
     { label: '名称', value: get('名称', roleName || entry.标题), missing: !get('名称') && !roleName },
@@ -2359,7 +2368,7 @@ function buildCharacterAnchorRows(entry: 智库条目): Array<{ label: string; v
 }
 
 function buildCharacterKeywordBuckets(entry: 智库条目, identityMap: Map<string, string>): { triggerTerms: string[]; softTags: string[]; supplementalTerms: string[]; total: number } {
-  const keywords = dedupeTextList(entry.关键词 ?? []);
+  const keywords = dedupeTextList(entry.关键词);
   const identityTriggers = dedupeTextList([
     ...获取智库核心触发词(entry),
     ...splitKeywordText(identityMap.get('触发词') ?? ''),
@@ -2463,13 +2472,13 @@ function extractLineValue(raw: string, label: string): string {
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim().replace(/^[-*]\s*/, '');
     const match = trimmed.match(/^([^:：]+)[:：]\s*(.+)$/u);
-    if (match && match[1]?.includes(label)) return match[2]?.trim() ?? '';
+    if (match && match[1].includes(label)) return match[2].trim();
   }
   return '';
 }
 
 function getRoleIdFromKeywords(entry: 智库条目): string {
-  const roleId = (entry.关键词 ?? [])
+  const roleId = entry.关键词
     .map(parseCharacterTag)
     .find((tag) => tag?.key === '角色ID')?.value;
   return roleId ?? '';
@@ -2477,7 +2486,7 @@ function getRoleIdFromKeywords(entry: 智库条目): string {
 
 function inferAliases(entry: 智库条目): string {
   const roleName = entry.关联角色ID || 获取智库人物名(entry);
-  const keywords = (entry.关键词 ?? []).filter((keyword) => !parseCharacterTag(keyword));
+  const keywords = entry.关键词.filter((keyword) => !parseCharacterTag(keyword));
   return keywords.filter((keyword) => keyword !== roleName && keyword.length <= 18).slice(0, 6).join('、');
 }
 
@@ -2504,7 +2513,7 @@ function inferExistenceForm(entry: 智库条目): string {
 }
 
 function inferOrganization(entry: 智库条目): string {
-  const tag = (entry.关键词 ?? [])
+  const tag = entry.关键词
     .map(parseCharacterTag)
     .find((item) => item && ['所属', '组织', '阵营', '归属'].includes(item.key));
   if (tag?.value) return tag.value;
@@ -2513,7 +2522,7 @@ function inferOrganization(entry: 智库条目): string {
 }
 
 function inferCharacterRole(entry: 智库条目): string {
-  const text = [entry.标题, entry.摘要, entry.原文, ...(entry.关键词 ?? [])].join('\n');
+  const text = [entry.标题, entry.摘要, entry.原文, ...entry.关键词].join('\n');
   if (/星穹列车|无名客/.test(text)) return '星穹列车乘员 / 无名客';
   if (/开拓者|星核载体/.test(text)) return '开拓者 / 星核载体';
   return '';

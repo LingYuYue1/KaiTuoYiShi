@@ -10,16 +10,33 @@ import {
   matchesConnectionTestChallenge,
   normalizeConnectionTestResponse,
 } from './connectionTestPolicy';
+import type { API配置项, AI提供商 } from '@/models/settings';
 
 export interface ConnectionTestResult {
   ok: boolean;
   detail: string;
 }
 
-export async function fetchModels(config: any): Promise<string[]> {
-  const retryCount = Math.max(0, Math.trunc(Number(config?.retryCount ?? 0)) || 0);
-  const baseRaw = (config?.baseUrl || '').trim();
-  const apiKey = (config?.apiKey || '').trim();
+/** 连接测试所需的最小配置形状：调用方（设置面板）会传「覆盖字段 + 主 API 回退」后的对象。 */
+export interface ConnectionTestConfig {
+  id?: string;
+  name?: string;
+  provider?: AI提供商;
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  retryCount?: number;
+  enableClaudeMode?: boolean;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export async function fetchModels(config: ConnectionTestConfig): Promise<string[]> {
+  const retryCount = Math.max(0, Math.trunc(config.retryCount ?? 0) || 0);
+  const baseRaw = (config.baseUrl || '').trim();
+  const apiKey = (config.apiKey || '').trim();
   if (!baseRaw) throw new Error('缺少 Base URL');
   if (!apiKey) throw new Error('缺少 API Key');
 
@@ -95,9 +112,9 @@ async function fetchOpenCodeModels(baseRaw: string, apiKey: string): Promise<str
         errors.push(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
         continue;
       }
-      const data = await res.json();
+      const data = (await res.json()) as { data?: unknown } | null;
       if (data && Array.isArray(data.data)) {
-        const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+        const ids = data.data.map((m: { id?: string } | null) => m?.id).filter(Boolean) as string[];
         if (ids.length) return ids;
       }
       errors.push(`${url} -> 返回格式异常（缺 data 数组）`);
@@ -143,9 +160,9 @@ async function fetchMimoModels(baseRaw: string, apiKey: string): Promise<string[
         errors.push(`${url} -> ${res.status}${text ? `: ${text.slice(0, 120)}` : ''}`);
         continue;
       }
-      const data = await res.json();
+      const data = (await res.json()) as { data?: unknown } | null;
       if (data && Array.isArray(data.data)) {
-        const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+        const ids = data.data.map((m: { id?: string } | null) => m?.id).filter(Boolean) as string[];
         if (ids.length) return ids;
       }
       errors.push(`${url} -> 返回格式异常（缺 data 数组）`);
@@ -189,9 +206,9 @@ async function fetchPioneerModels(baseRaw: string, apiKey: string): Promise<stri
       });
       throw new Error(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as { data?: unknown } | null;
     if (data && Array.isArray(data.data)) {
-      const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+      const ids = data.data.map((m: { id?: string } | null) => m?.id).filter(Boolean) as string[];
       if (ids.length) return ids;
     }
     throw new Error(`${url} -> 返回格式异常（缺 data 数组）`);
@@ -203,7 +220,7 @@ async function fetchPioneerModels(baseRaw: string, apiKey: string): Promise<stri
       requestMode: 'models',
       error: e,
     });
-    throw new Error(`Pioneer 获取模型列表失败：\n${(e as Error).message}`);
+    throw new Error(`Pioneer 获取模型列表失败：\n${(e as Error).message}`, { cause: e });
   }
 }
 
@@ -232,9 +249,9 @@ async function fetchArkModels(baseRaw: string, apiKey: string): Promise<string[]
       });
       throw new Error(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as { data?: unknown } | null;
     if (data && Array.isArray(data.data)) {
-      const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+      const ids = data.data.map((m: { id?: string } | null) => m?.id).filter(Boolean) as string[];
       if (ids.length) return ids;
     }
     throw new Error(`${url} -> 返回格式异常（缺 data 数组）`);
@@ -246,7 +263,7 @@ async function fetchArkModels(baseRaw: string, apiKey: string): Promise<string[]
       requestMode: 'models',
       error: e,
     });
-    throw new Error(`火山方舟获取模型列表失败：\n${(e as Error).message}`);
+    throw new Error(`火山方舟获取模型列表失败：\n${(e as Error).message}`, { cause: e });
   }
 }
 
@@ -279,9 +296,9 @@ async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise
         errors.push(`${url} -> ${res.status}${text ? `：${text.slice(0, 120)}` : ''}`);
         continue;
       }
-      const data = await res.json();
+      const data = (await res.json()) as { data?: unknown } | null;
       if (data && Array.isArray(data.data)) {
-        const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+        const ids = data.data.map((m: { id?: string } | null) => m?.id).filter(Boolean) as string[];
         if (ids.length) return ids;
       }
       errors.push(`${url} -> 返回格式异常（缺 data 数组）`);
@@ -302,7 +319,7 @@ async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise
 async function fetchGeminiModels(baseRaw: string, apiKey: string): Promise<string[]> {
   const base = normalizeGeminiBaseUrl(baseRaw);
   const url = `${base}/models?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url).catch((e) => {
+  const res = await fetch(url).catch((e: unknown) => {
     void appendApiErrorReport({
       source: 'Gemini 模型列表',
       config: { provider: 'gemini', baseUrl: baseRaw, apiKey },
@@ -324,7 +341,7 @@ async function fetchGeminiModels(baseRaw: string, apiKey: string): Promise<strin
     });
     throw new Error(`Gemini /models 失败 ${res.status}：${text.slice(0, 200)}`);
   }
-  const data = await res.json();
+  const data = (await res.json()) as { models?: unknown } | null;
   if (!data || !Array.isArray(data.models)) {
     throw new Error('Gemini /models 返回格式异常（缺 models 数组）');
   }
@@ -333,7 +350,7 @@ async function fetchGeminiModels(baseRaw: string, apiKey: string): Promise<strin
       !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'),
     )
     .map((m: { name?: string }) => (m.name ?? '').replace(/^models\//, ''))
-    .filter(Boolean) as string[];
+    .filter(Boolean);
   if (!ids.length) throw new Error('Gemini 返回空列表');
   return ids;
 }
@@ -347,7 +364,7 @@ async function fetchClaudeModels(baseRaw: string, apiKey: string): Promise<strin
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-  }).catch((e) => {
+  }).catch((e: unknown) => {
     void appendApiErrorReport({
       source: 'Claude 模型列表',
       config: { provider: 'claude', baseUrl: baseRaw, apiKey },
@@ -369,27 +386,41 @@ async function fetchClaudeModels(baseRaw: string, apiKey: string): Promise<strin
     });
     throw new Error(`Claude /models 失败 ${res.status}：${text.slice(0, 200)}`);
   }
-  const data = await res.json();
+  const data = (await res.json()) as { data?: unknown } | null;
   if (!data || !Array.isArray(data.data)) {
     throw new Error('Claude /models 返回格式异常（缺 data 数组）');
   }
-  const ids = data.data.map((m: { id?: string }) => m?.id).filter(Boolean) as string[];
+  const ids = data.data.map((m: { id?: string } | null) => m?.id).filter(Boolean) as string[];
   if (!ids.length) throw new Error('Claude 返回空列表');
   return ids;
 }
 
-export async function testConnection(config: any): Promise<ConnectionTestResult> {
-  const retryCount = Math.max(0, Math.trunc(Number(config?.retryCount ?? 0)) || 0);
-  if (!config?.apiKey) return { ok: false, detail: '缺少 API Key' };
-  if (!config?.baseUrl) return { ok: false, detail: '缺少 Base URL' };
-  if (!config?.model) return { ok: false, detail: '缺少模型名称' };
+export async function testConnection(config: ConnectionTestConfig): Promise<ConnectionTestResult> {
+  const retryCount = Math.max(0, Math.trunc(config.retryCount ?? 0) || 0);
+  if (!config.apiKey) return { ok: false, detail: '缺少 API Key' };
+  if (!config.baseUrl) return { ok: false, detail: '缺少 Base URL' };
+  if (!config.model) return { ok: false, detail: '缺少模型名称' };
 
+  const runtimeConfig: API配置项 = {
+    id: '__connection_test__',
+    name: '连接测试',
+    provider: config.provider ?? 'openai_compatible',
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    model: config.model,
+    maxTokens: config.maxTokens,
+    temperature: config.temperature,
+    retryCount: config.retryCount,
+    enableClaudeMode: config.enableClaudeMode,
+    createdAt: 0,
+    updatedAt: 0,
+  };
   const startedAt = Date.now();
   try {
     const challenge = createConnectionTestChallenge();
     const text = await withRetries(
       () =>
-        chatCompletionNonStream(config, {
+        chatCompletionNonStream(runtimeConfig, {
           messages: [{ role: 'user', content: `请只返回这个随机校验码：${challenge}` }],
           systemPrompt: '你正在执行 API 连接测试。必须只返回用户提供的随机校验码，不得添加解释、标点或 Markdown。',
           maxTokens: 32,
@@ -417,7 +448,7 @@ export async function testConnection(config: any): Promise<ConnectionTestResult>
     const raw = (e as Error).message || String(e);
     void appendApiErrorReport({
       source: '连接测试',
-      config,
+      config: runtimeConfig,
       requestMode: 'test',
       error: e,
     });

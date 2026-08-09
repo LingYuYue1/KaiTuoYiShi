@@ -13,7 +13,7 @@ export const MAIN_RECALL_ASSISTANT_BODY_WINDOW = 5;
 export function hasInjectableMemory(memorySystem: 记忆系统): boolean {
   return (
     memorySystem.短期记忆.length > 0 ||
-    (memorySystem.中期记忆 ?? []).length > 0 ||
+    memorySystem.中期记忆.length > 0 ||
     memorySystem.长期记忆.length > 0
   );
 }
@@ -50,7 +50,7 @@ export function buildLeanAssistantHistoryContent(msg: 聊天消息): string {
   const parsed = msg.parsedResponse;
   if (!parsed) return compactText(msg.content, 1200);
 
-  const body = parsed.body?.trim() || msg.content.trim();
+  const body = parsed.body.trim() || msg.content.trim();
   const normalizedBody = normalizeHistoryBodyForPrompt(body);
   const lines: string[] = [
     '# 历史 assistant 压缩摘要',
@@ -76,10 +76,10 @@ export function buildLeanAssistantHistoryContent(msg: 聊天消息): string {
     '</变量草稿>',
   ];
 
-  if (parsed.awakenQuestions?.trim()) {
+  if (parsed.awakenQuestions.trim()) {
     lines.push('', '<狭间问答>', compactText(parsed.awakenQuestions, 360), '</狭间问答>');
   }
-  if (parsed.awakenJudgement?.trim()) {
+  if (parsed.awakenJudgement.trim()) {
     lines.push('', '<狭间评判>', compactText(parsed.awakenJudgement, 220), '</狭间评判>');
   }
 
@@ -130,7 +130,7 @@ export function buildMainRecallQuery(input: {
       const memory = parsed?.memory ? `小结：${compactText(parsed.memory, 140)}` : '';
       const body = parsed?.body || msg.content;
       const bodyText = body ? `正文：${compactText(body, 220)}` : '';
-      const events = parsed?.worldEvents?.length ? `事件：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 80)).join(' / ')}` : '';
+      const events = parsed?.worldEvents.length ? `事件：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 80)).join(' / ')}` : '';
       const storyPlan = parsed?.storyPlan ? `剧情规划：${compactText(parsed.storyPlan, 120)}` : '';
       return [memory, bodyText, events, storyPlan].filter(Boolean).join('；');
     })
@@ -141,8 +141,8 @@ export function buildMainRecallQuery(input: {
 }
 
 function extractAssistantBodyText(msg: 聊天消息): string {
-  if (msg.parsedResponse?.body?.trim()) return msg.parsedResponse.body.trim();
-  const raw = msg.content ?? '';
+  if (msg.parsedResponse?.body.trim()) return msg.parsedResponse.body.trim();
+  const raw = msg.content;
   const match = raw.match(/<正文>\s*([\s\S]*?)\s*<\/正文>/i);
   return (match?.[1] ?? raw).trim();
 }
@@ -177,9 +177,11 @@ export function buildImmediateStoryReview(history: 聊天消息[], maxMessages =
   const lines = items.map((msg) => {
     if (msg.role === 'user') return `玩家：${compactText(msg.content, 180)}`;
     const parsed = msg.parsedResponse;
-    const memory = hasMeaningfulText(parsed?.memory) ? `小结：${compactText(parsed!.memory, 240)}` : '';
-    const events = parsed?.worldEvents?.length ? `动态世界：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 90)).join(' / ')}` : '';
-    const storyPlan = hasMeaningfulText(parsed?.storyPlan) ? `剧情规划：${compactText(parsed!.storyPlan, 260)}` : '';
+    const parsedMemory = parsed?.memory;
+    const parsedStoryPlan = parsed?.storyPlan;
+    const memory = hasMeaningfulText(parsedMemory) ? `小结：${compactText(parsedMemory ?? '', 240)}` : '';
+    const events = parsed?.worldEvents.length ? `动态世界：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 90)).join(' / ')}` : '';
+    const storyPlan = hasMeaningfulText(parsedStoryPlan) ? `剧情规划：${compactText(parsedStoryPlan ?? '', 260)}` : '';
     const needsBodyFallback = !memory && !events && !storyPlan;
     const body = parsed?.body || msg.content;
     const bodyText = body ? `正文锚点：${compactText(body, needsBodyFallback ? 260 : 180)}` : '';

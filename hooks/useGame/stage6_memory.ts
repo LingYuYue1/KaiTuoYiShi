@@ -9,27 +9,29 @@
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { buildImmediateMemory, addImmediateMemory, autoCompressMemorySystemWithArchivesAsync } from './memoryUtils';
 import { pushQueueTask } from './workflowTaskRuntime';
-import { 创建默认记忆系统设置 } from '@/models/settings';
 
 export async function stage6_memory(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
   const { state, userInput, config, abortController, assertWorkflowActive, turnCountAtStart, queueTasksMirror } = ctx;
-  const parsedForDisplay = d.parsedForDisplay!;
-  const displayText = d.displayText!;
+  if (!d.parsedForDisplay || !d.displayText) {
+    throw new Error('stage6_memory: stage5 必须写入 parsedForDisplay 与 displayText');
+  }
+  const parsedForDisplay = d.parsedForDisplay;
+  const displayText = d.displayText;
 
   pushQueueTask(state, 'memory', 'pending', { detail: '正在写入即时记忆并检查压缩阈值。' }, turnCountAtStart, queueTasksMirror);
 
   const rawMemory = buildImmediateMemory(userInput, [
-    parsedForDisplay.memory?.trim() ? `本回合小结：${parsedForDisplay.memory.trim()}` : '',
+    parsedForDisplay.memory.trim() ? `本回合小结：${parsedForDisplay.memory.trim()}` : '',
     displayText,
   ].filter(Boolean).join('\n\n'));
   let mem = addImmediateMemory(state.记忆, rawMemory, turnCountAtStart);
   const compression = await autoCompressMemorySystemWithArchivesAsync(
     mem,
     turnCountAtStart,
-    state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
+    state.gameSettings.记忆系统,
     config,
     abortController.signal,
   );
