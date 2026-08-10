@@ -313,6 +313,7 @@ const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDU
 
 export function App() {
   const { state, actions } = useGame();
+  const { apiSettings, gameSettings, theme: currentTheme, worldbooks } = state.deviceSettings;
   const { persistGameSettings, persistApiSettings, persistTheme, persistWorldbooks, persistApiProfile } = useDeviceSettings();
   const aiTools = useAiTools();
   const {
@@ -516,8 +517,8 @@ export function App() {
     [state.chatHistory],
   );
 
-  const narrativeImageManualEnabled = state.gameSettings.文生图系统.正文生图.enabled
-    && state.gameSettings.文生图系统.正文生图.mode === 'manual';
+  const narrativeImageManualEnabled = gameSettings.文生图系统.正文生图.enabled
+    && gameSettings.文生图系统.正文生图.mode === 'manual';
 
   const recoveryDraft = useMemo(() => (
     state.activeWorkflow.interruptedWorkflow?.phase === 'main_request' ? {
@@ -562,7 +563,7 @@ export function App() {
   const topBar = (
     <TopBar
       worldState={state.世界}
-      currentTheme={state.currentTheme}
+      currentTheme={currentTheme}
       onHome={handleGoHomeClick}
       news={state.新闻}
       onOpenNews={handleOpenNews}
@@ -608,8 +609,8 @@ export function App() {
         npcRecords={state.NPC}
         traveler={state.旅人}
         album={state.相册}
-        showInnerVoice={state.gameSettings.enableInnerVoice}
-        visualTextSettings={state.gameSettings.visualTextSettings}
+        showInnerVoice={gameSettings.enableInnerVoice}
+        visualTextSettings={gameSettings.visualTextSettings}
         onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
         narrativeImageManualEnabled={narrativeImageManualEnabled}
         onEditBody={handleEditBody}
@@ -662,7 +663,7 @@ export function App() {
           void actions.handleRestartOpening();
         }}
         onReroll={actions.handleReroll}
-        streamingEnabled={state.gameSettings.enableStreaming}
+        streamingEnabled={gameSettings.enableStreaming}
         onToggleStreaming={handleToggleStreaming}
         turnStatus={state.activeWorkflow.turnStatus}
         onCancelWorkflow={actions.handleAbort}
@@ -692,18 +693,18 @@ export function App() {
             yitingSystem: state.忆庭,
             zhikuSystem: state.智库,
             onZhikuSystemChange: state.set智库,
-            zhikuSettings: state.gameSettings.智库系统,
-            memorySettings: state.gameSettings.记忆系统,
+            zhikuSettings: gameSettings.智库系统,
+            memorySettings: gameSettings.记忆系统,
             news: state.新闻,
             onNewsChange: state.set新闻,
             plotNodes: state.剧情,
             onPlotNodesChange: state.set剧情,
             storyWeaving: state.剧情编织,
             onStoryWeavingChange: state.set剧情编织,
-            gameSettings: state.gameSettings,
+            gameSettings,
             onGameSettingsChange: state.setGameSettings,
             onPersistGameSettings: persistGameSettings,
-            apiSettings: state.apiSettings,
+            apiSettings,
             turnCount: state.turnCount,
             mainChatHistory: state.chatHistory,
             fetchModels,
@@ -740,7 +741,7 @@ export function App() {
         {showWorldbookManager && (
           <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
             <WorldbookManagerModal
-              worldbooks={state.worldbooks}
+              worldbooks={worldbooks}
               onSave={(books: 世界书[]) => {
                 state.setWorldbooks(books);
                 void saveSetting('worldbooks', books);
@@ -754,7 +755,7 @@ export function App() {
             <ZhikuManagerModal
               zhikuSystem={state.智库}
               onZhikuSystemChange={state.set智库}
-              settings={state.gameSettings.智库系统}
+              settings={gameSettings.智库系统}
               onClose={() => setShowZhikuManager(false)}
             />
           </Suspense>
@@ -762,7 +763,7 @@ export function App() {
         {showSaveLoad && (
           <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
             <SaveLoadModal
-              showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
+              showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
               onSave={actions.handleSave}
               onLoad={loadSaveIntoGame}
               onDeleteSave={actions.handleDeleteSave}
@@ -794,11 +795,11 @@ export function App() {
           <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
             <SettingsModal
               onClose={() => setShowSettings(false)}
-              apiSettings={state.apiSettings}
+              deviceSettings={state.deviceSettings}
               onApiSettingsChange={state.setApiSettings}
-              gameSettings={state.gameSettings}
+              gameSettings={gameSettings}
               onGameSettingsChange={state.setGameSettings}
-              currentTheme={state.currentTheme}
+              currentTheme={currentTheme}
               onThemeChange={state.setCurrentTheme}
               onPersistGameSettings={persistGameSettings}
               onPersistApiSettings={persistApiSettings}
@@ -825,7 +826,7 @@ export function App() {
               on剧情编织Change={state.set剧情编织}
               getContextSnapshot={actions.getContextSnapshot}
 
-              worldbooks={state.worldbooks}
+              worldbooks={worldbooks}
 
               onWorldbooksChange={(books: 世界书[]) => {
 
@@ -861,10 +862,10 @@ export function App() {
   // ── New Game Wizard ──
   if (state.view === 'new_game') {
     const getActiveApiConfig = () => {
-      if (state.apiSettings.activeConfigId) {
-        return state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs.at(0) ?? null;
+      if (apiSettings.activeConfigId) {
+        return apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
       }
-      return state.apiSettings.configs.at(0) ?? null;
+      return apiSettings.configs.at(0) ?? null;
     };
     const handleGenerateTravelerTemplate = async (context: TravelerTemplateContext): Promise<TravelerTemplateDraft> => {
       const config = getActiveApiConfig();
@@ -874,7 +875,7 @@ export function App() {
 
     const handleStartGame = async (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords: NPC记录[] = []) => {
       // 预检 API：configs 为空时给出明确提示，不切换 view，避免玩家被困在空白游戏页。
-      if (state.apiSettings.configs.length === 0) {
+      if (apiSettings.configs.length === 0) {
         alert('请先在设置中配置至少一个 API 接口，再开始旅途。');
         return;
       }
@@ -913,7 +914,7 @@ export function App() {
       }
       const pendingOpeningTrigger = '[系统] 开启第 0 回合';
       state.setPendingOpeningTrigger(pendingOpeningTrigger);
-      const { macroGlobalVars, worldbookTriggerStates } = 取游戏设置运行态键(state.gameSettings);
+      const { macroGlobalVars, worldbookTriggerStates } = 取游戏设置运行态键(gameSettings);
       const initialFields: NewestStory字段集 = {
         旅人: traveler,
         世界: worldState,
@@ -935,9 +936,9 @@ export function App() {
         pendingOpeningTrigger,
       };
       await 初始化新局checkpoint(initialFields, {
-        gameSettings: state.gameSettings,
-        apiSettings: state.apiSettings,
-        theme: state.currentTheme,
+        gameSettings,
+        apiSettings,
+        theme: currentTheme,
       });
       setLaunchingJourney(true);
       await wait(getJourneyLaunchDelay());
@@ -951,7 +952,7 @@ export function App() {
           <NewGameWizard
             onStart={handleStartGame}
             onBack={() => state.setView('home')}
-            currentTheme={state.currentTheme}
+            currentTheme={currentTheme}
             openingArchiveApiConfig={getActiveApiConfig()}
             onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
           />
@@ -991,11 +992,9 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
           <SettingsModal
             onClose={() => setShowSettings(false)}
-            apiSettings={state.apiSettings}
+            deviceSettings={state.deviceSettings}
             onApiSettingsChange={state.setApiSettings}
-            gameSettings={state.gameSettings}
             onGameSettingsChange={state.setGameSettings}
-            currentTheme={state.currentTheme}
             onThemeChange={state.setCurrentTheme}
             onPersistGameSettings={persistGameSettings}
             onPersistApiSettings={persistApiSettings}
@@ -1021,7 +1020,7 @@ export function App() {
             剧情编织={state.剧情编织}
             on剧情编织Change={state.set剧情编织}
             getContextSnapshot={actions.getContextSnapshot}
-            worldbooks={state.worldbooks}
+            worldbooks={worldbooks}
             onWorldbooksChange={(books: 世界书[]) => {
               state.setWorldbooks(books);
               void persistWorldbooks(books);
@@ -1064,8 +1063,8 @@ export function App() {
             news={state.新闻}
             storyWeaving={state.剧情编织}
             zhiku={state.智库}
-            apiSettings={state.apiSettings}
-            gameSettings={state.gameSettings}
+            apiSettings={apiSettings}
+            gameSettings={gameSettings}
             turnCount={state.turnCount}
             mainChatHistory={state.chatHistory}
             npcRecords={state.NPC}
@@ -1080,7 +1079,7 @@ export function App() {
       {showWorldbookManager && (
         <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
           <WorldbookManagerModal
-            worldbooks={state.worldbooks}
+            worldbooks={worldbooks}
             onSave={(books: 世界书[]) => {
               state.setWorldbooks(books);
               void saveSetting('worldbooks', books);
@@ -1093,7 +1092,7 @@ export function App() {
       {showSaveLoad && (
         <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
           <SaveLoadModal
-            showAutoArchives={state.gameSettings.enableAutoSaveEveryTurn}
+            showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
             onSave={actions.handleSave}
             onLoad={loadSaveIntoGame}
             onDeleteSave={actions.handleDeleteSave}

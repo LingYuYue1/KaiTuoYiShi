@@ -1,5 +1,5 @@
 import { PromptModulesTab } from './PromptModulesTab';
-import type { API设置, 游戏设置 } from '@/models/settings';
+import type { 游戏设置 } from '@/models/settings';
 import type { 世界书 } from '@/models/worldbook';
 import type { STRegexScript } from '@/models/stTypes';
 import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame';
@@ -9,8 +9,6 @@ interface TavernPresetsSettingsTabProps {
   onChange: (s: 游戏设置) => void;
   worldbooks: 世界书[];
   onWorldbooksChange: (books: 世界书[]) => void;
-  apiSettings: API设置;
-  onApiSettingsChange: (s: API设置) => void;
   /** 提示词模块用例动作（片 panel-p1）：透传给 PromptModulesTab。 */
   onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
   onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { 游戏设置, API设置 } from '@/models/settings';
+import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块类目, 提示词模块作用域 } from '@/models/prompts';
 import {
   PROMPT_MODULE_CATEGORY_LABELS,
@@ -112,10 +112,6 @@ interface Props {
   worldbooks: 世界书[];
   /** Phase 7.2：世界书变更回调（由父级负责持久化到 IndexedDB）。 */
   onWorldbooksChange: (books: 世界书[]) => void;
-  /** Phase 8：API 设置（切换预设时同步采样参数到当前激活配置）。 */
-  apiSettings: API设置;
-  /** Phase 8：API 设置变更回调（由父级负责持久化）。 */
-  onApiSettingsChange: (s: API设置) => void;
   /** 提示词模块用例动作（片 panel-p1）：tavernRegex 提取/分析/试运行（由 App 经 SettingsModal 从 useGame 门面注入）。 */
   onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
   onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;

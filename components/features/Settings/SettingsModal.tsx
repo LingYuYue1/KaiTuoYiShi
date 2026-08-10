@@ -27,7 +27,7 @@ import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
 import { ContextViewerTab } from './ContextViewer';
-import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
+import type { API设置, DeviceSettings, 游戏设置, 主题预设 } from '@/models/settings';
 import type { ContextSnapshot, ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
@@ -49,11 +49,9 @@ export type SettingsTab = Tab;
 
 interface SettingsModalProps {
   onClose: () => void;
-  apiSettings: API设置;
+  deviceSettings: DeviceSettings;
   onApiSettingsChange: (s: API设置) => void;
-  gameSettings: 游戏设置;
   onGameSettingsChange: (s: 游戏设置) => void;
-  currentTheme: 主题预设;
   onThemeChange: (t: 主题预设) => void;
   onSave: () => Promise<number>;
   onContinue: () => Promise<boolean>;
@@ -86,7 +84,6 @@ interface SettingsModalProps {
   getContextSnapshot: (kind?: ContextSnapshotKind) => ContextSnapshot;
   initialTab?: Tab;
   /** Phase 7.2：世界书数组（用于 ST 预设导入时注入 ST 世界书条目）。 */
-  worldbooks: 世界书[];
   /** Phase 7.2：世界书变更回调（同时负责持久化到 IndexedDB）。 */
   onWorldbooksChange: (books: 世界书[]) => void;
   /** 面板用例动作（片 panel-p1）：存档删除 resolve→级联删除，转发给存档管理页签。 */
@@ -129,11 +126,9 @@ const tabs: { key: Tab; label: string; icon: string; navIcon: LucideIcon; subtit
 
 export function SettingsModal({
   onClose,
-  apiSettings,
+  deviceSettings,
   onApiSettingsChange,
-  gameSettings,
   onGameSettingsChange,
-  currentTheme,
   onThemeChange,
   onSave,
   onContinue,
@@ -153,7 +148,6 @@ export function SettingsModal({
   variableEditingLocked = false,
   getContextSnapshot,
   initialTab = 'api',
-  worldbooks,
   onWorldbooksChange,
   onDeleteSave,
   onDeleteSaveTree,
@@ -169,6 +163,7 @@ export function SettingsModal({
   loadApiErrorReports,
   clearApiErrorReports,
 }: SettingsModalProps) {
+  const { gameSettings, theme: currentTheme, worldbooks } = deviceSettings;
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
   const persistGameSettingsChange = useCallback((next: 游戏设置) => {
@@ -186,9 +181,8 @@ export function SettingsModal({
       case 'api':
         return (
           <ApiSettingsTab
-            settings={apiSettings}
+            deviceSettings={deviceSettings}
             onChange={onApiSettingsChange}
-            gameSettings={gameSettings}
             onGameSettingsChange={persistGameSettingsChange}
             onPersistApiSettings={onPersistApiSettings}
             onPersistGameSettings={onPersistGameSettings}
@@ -228,8 +222,6 @@ export function SettingsModal({
             onChange={persistGameSettingsChange}
             worldbooks={worldbooks}
             onWorldbooksChange={onWorldbooksChange}
-            apiSettings={apiSettings}
-            onApiSettingsChange={onApiSettingsChange}
             onExtractTavernRegexScripts={onExtractTavernRegexScripts}
             onAnalyzeTavernRegexScript={onAnalyzeTavernRegexScript}
             onDryRunTavernRegexScript={onDryRunTavernRegexScript}
@@ -242,8 +234,6 @@ export function SettingsModal({
             onChange={persistGameSettingsChange}
             worldbooks={worldbooks}
             onWorldbooksChange={onWorldbooksChange}
-            apiSettings={apiSettings}
-            onApiSettingsChange={onApiSettingsChange}
             onExtractTavernRegexScripts={onExtractTavernRegexScripts}
             onAnalyzeTavernRegexScript={onAnalyzeTavernRegexScript}
             onDryRunTavernRegexScript={onDryRunTavernRegexScript}

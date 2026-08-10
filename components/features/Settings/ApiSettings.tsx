@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import type { API设置, API配置项, AI提供商, 游戏设置 } from '@/models/settings';
+import type { DeviceSettings } from '@/models/settings';
 import {
   MAX_OUTPUT_TIERS,
   inferMaxOutputTier,
@@ -31,6 +32,21 @@ interface Props {
   fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
   testConnection: (config: ConnectionTestConfig) => Promise<ConnectionTestResult>;
 }
+
+interface ApiSettingsTabProps {
+  deviceSettings: DeviceSettings;
+  onChange: (s: API设置) => void;
+  onGameSettingsChange: (s: 游戏设置) => void;
+  onPersistApiSettings: (s: API设置) => Promise<void>;
+  onPersistGameSettings: (s: 游戏设置) => Promise<void>;
+  onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
+  fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
+  testConnection: (config: ConnectionTestConfig) => Promise<ConnectionTestResult>;
+}
+
+type ApiSettingsOverviewProps = Omit<Props, 'settings' | 'gameSettings'> & {
+  deviceSettings: DeviceSettings;
+};
 
 interface API配置包 {
   app: 'KaiTuoYiShi';
@@ -279,16 +295,16 @@ function downloadApiProfile(profile: API配置包): void {
 }
 
 export function ApiSettingsTab({
-  settings,
+  deviceSettings,
   onChange,
-  gameSettings,
   onGameSettingsChange,
   onPersistApiSettings,
   onPersistGameSettings,
   onPersistApiProfile,
   fetchModels,
   testConnection,
-}: Props) {
+}: ApiSettingsTabProps) {
+  const { apiSettings: settings, gameSettings } = deviceSettings;
   const [activeSubview, setActiveSubview] = useState<ApiSubview>('overview');
   const activeSubviewMeta = apiSubViews.find((item) => item.key === activeSubview) ?? apiSubViews[0];
 
@@ -297,9 +313,8 @@ export function ApiSettingsTab({
       case 'overview':
         return (
           <ApiSettingsOverviewTab
-            settings={settings}
+            deviceSettings={deviceSettings}
             onChange={onChange}
-            gameSettings={gameSettings}
             onGameSettingsChange={onGameSettingsChange}
             onPersistApiSettings={onPersistApiSettings}
             onPersistGameSettings={onPersistGameSettings}
@@ -425,16 +440,16 @@ export function ApiSettingsTab({
 }
 
 function ApiSettingsOverviewTab({
-  settings,
+  deviceSettings,
   onChange,
-  gameSettings,
   onGameSettingsChange,
   onPersistApiSettings,
   onPersistGameSettings,
   onPersistApiProfile,
   fetchModels,
   testConnection,
-}: Props) {
+}: ApiSettingsOverviewProps) {
+  const { apiSettings: settings, gameSettings } = deviceSettings;
   const [selectedId, setSelectedId] = useState<string | null>(
     settings.activeConfigId ?? settings.configs[0]?.id,
   );
