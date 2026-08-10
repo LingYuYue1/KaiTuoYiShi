@@ -11,6 +11,17 @@ dist/
 .tmp-story-weaving-regression/
 .wrangler/
 backups/
+storybook-static/
+
+# Storybook local config (本地开发环境,不入库)
+.storybook/
+
+# Local IDE / assistant environments (本地开发环境,不入库)
+.reasonix/
+.trae/
+.claude/
+.superpowers/
+.codex/
 
 # Local environment
 .env
@@ -24,11 +35,16 @@ Thumbs.db
 .vscode/
 
 # Local assistant memory / private planning notes
-.claude/
-.superpowers/
 AGENTS.md
+AGENTS_OLD.md
 AGENTS-OLD.md
 docs/
+docs/design/
+
+# 记忆系统优化计划文件 (本地规划用,不入库)
+记忆系统优化路线图.md
+记忆系统优化路线图_审查问题清单.md
+记忆系统运行机制.md
 
 # Logs
 *.log
@@ -36,19 +52,31 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-docs/design/
 nul
 
 # Codex working files
-.codex/
 THEME_ISSUES.md
 *.bak
 
-# Working drafts / notes
+# Working drafts / notes / 草案
 托蕾档案完善草案.md
 星际和平公司角色档案完善方案.md
 砂金档案完善草案.md
+托帕草案.md
 本次主题重构摘要.txt
 
 # Local Claude notes
 CLAUDE.md
+
+# 临时调试脚本 / 临时测试文件 (local dev only)
+_tmp_*.js
+_tmp_*.ts
+_to_delete/
+codex-*-test.txt
+codex-edit-review-test.txt
+codex-native-edit-test.txt
+data/builtinPresets/_test_write.txt
+scripts/_probe*
+scripts/_fix*
+scripts/_dump*
+scripts/_preset-dump.txt
