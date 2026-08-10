@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "repeated-encounter",
+  "responses": [
+    {
+      "responseId": "main_repeated_encounter",
+      "service": "main",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：末日兽被击败后，模型后续又把同一场战斗重新安排了一次",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:c27e181d709ec8997b90d1097d29e4bd75b891c1be7c0fcf95ccdeaa6be117f9",
+      "requestSummary": {
+        "turnId": "turn_repeat_018",
+        "playerIntent": "再次攻击已结算的末日兽",
+        "currentFocus": "善后阶段"
+      },
+      "rawOutput": "<thinking>旧记录只按文本指纹去重，直接重演终态事件。</thinking>\n<正文>舱段外再次响起轰鸣，一头末日兽再次出现。你冲上去迎战并将其击退。残骸与先前堆在一起。</正文>\n<动态世界>末日兽再次出现在支援舱段外并被击退。</动态世界>\n<短期记忆>玩家再次击败了末日兽。</短期记忆>",
+      "rawOutputSha256": "sha256:4d9432babd618a75af4fc81235f20c75ff02361e578de128918aa961112abd38",
+      "expectedAdjudication": "reject_terminal_replay",
+      "allowedFinalSideEffects": [
+        "fact:aftermath_progress",
+        "new_instance:legion_second_raid（需独立事件身份）"
+      ]
+    },
+    {
+      "responseId": "variable_repeated_identical",
+      "service": "variable",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：重复事件只能靠完全一致的文本指纹去重",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:c27e181d709ec8997b90d1097d29e4bd75b891c1be7c0fcf95ccdeaa6be117f9",
+      "requestSummary": {
+        "turnId": "turn_repeat_019",
+        "purpose": "确认旧世界事件字符串仍在"
+      },
+      "rawOutput": "{\"commands\":[{\"action\":\"push\",\"key\":\"世界.全局事件\",\"value\":\"末日兽已被列车组与玩家联手击退，残骸进入回收流程。\"}],\"summary\":\"重复推送完全相同的事件字符串。\"}",
+      "rawOutputSha256": "sha256:0967e2ac84732cd110d3a5ded32515e521002ce35e522163ba8bba96fbb421bc",
+      "expectedAdjudication": "dedupe_by_text_fingerprint_only",
+      "allowedFinalSideEffects": []
+    },
+    {
+      "responseId": "main_unique_facility_replay",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：唯一设施（重力稳定装置）终态后再次被摧毁的正文",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:5976f683ae6cc745402d33927eca488660b4db33aad5ac1992eab18928ab66c3",
+      "requestSummary": {
+        "turnId": "coverage_facility_replay",
+        "playerIntent": "查看已烧毁的重力稳定装置",
+        "terminalEvent": "重力稳定装置"
+      },
+      "rawOutput": "<thinking>缺少事件实例终态概念，把已毁设施再次写成被摧毁。</thinking>\n<正文>奇物收藏室里，重力稳定装置又一次亮起过载红灯，众人眼看着它再次被摧毁。</正文>\n<动态世界>重力稳定装置再次过载并被摧毁。</动态世界>\n<短期记忆>玩家目睹重力稳定装置再次被摧毁。</短期记忆>",
+      "rawOutputSha256": "sha256:54151597f80516aa54429dcc78b95061d1e290eb2863115e672a5a0d86291c9b",
+      "expectedAdjudication": "reject_unique_facility_replay",
+      "allowedFinalSideEffects": []
+    },
+    {
+      "responseId": "main_unique_facility_disguised",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：换措辞（稳定核心）伪装同一已毁设施的正文",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:5976f683ae6cc745402d33927eca488660b4db33aad5ac1992eab18928ab66c3",
+      "requestSummary": {
+        "turnId": "coverage_facility_disguised",
+        "playerIntent": "报告稳定核心失效",
+        "disguisedOf": "重力稳定装置"
+      },
+      "rawOutput": "<thinking>换措辞让同一终态实例伪装成新事件。</thinking>\n<正文>研究小组报告稳定核心再次失效，你赶到时它已经被彻底摧毁。</正文>\n<测试证据>{\"disguise\":{\"terminalEventId\":\"event_gravity_stabilizer\",\"candidateAliases\":[\"稳定核心\"]}}</测试证据>\n<动态世界>奇物收藏室的稳定核心再次失效并被摧毁。</动态世界>\n<短期记忆>玩家确认稳定核心再次被摧毁。</短期记忆>",
+      "rawOutputSha256": "sha256:d63618661ce7990d39243243d9322e3b23b4b81a8c3105aa1b0ff746d0906a3f",
+      "expectedAdjudication": "collision_check_reject_disguised_facility",
+      "allowedFinalSideEffects": []
+    },
+    {
+      "responseId": "main_unique_facility_new_instance",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：全新备用装置（新身份/新时间/新原因）合法安装",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:5976f683ae6cc745402d33927eca488660b4db33aad5ac1992eab18928ab66c3",
+      "requestSummary": {
+        "turnId": "coverage_facility_new_instance",
+        "playerIntent": "安装新的备用稳定装置",
+        "newInstance": "new_backup_device_instance"
+      },
+      "rawOutput": "<thinking>新设备是新实例，不应触发终态重演。</thinking>\n<正文>数日后，一台全新的备用稳定装置被运抵奇物收藏室，新的稳定核心完成安装并投入使用。</正文>\n<测试证据>{\"newEventInstance\":{\"eventInstanceId\":\"event_backup_device_install\",\"time\":\"2157-05-02T09:30:00+08:00\",\"reason\":\"新备用稳定装置运抵并完成安装\"}}</测试证据>\n<动态世界>新的备用稳定装置完成安装并投入使用。</动态世界>\n<短期记忆>玩家安装了新的备用稳定装置。</短期记忆>",
+      "rawOutputSha256": "sha256:46cdb8c756cc16c51ea8e5b28f736312a7e2bd9d8989cb45bcb6a08bc469a59b",
+      "expectedAdjudication": "register_new_instance",
+      "allowedFinalSideEffects": [
+        "register:new_backup_device_instance（独立身份）"
+      ]
+    }
+  ]
+}

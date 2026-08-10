@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "player-early-resolution",
+  "responses": [
+    {
+      "responseId": "main_early_defeat",
+      "service": "main",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：提前完成关键事件后，后续仍可能重演同一场战斗",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:776360ef13a09a479d1d7eb2e34b79684999b2bfa2d0fa60c63273cec205ece2",
+      "requestSummary": {
+        "turnId": "turn_early_012",
+        "playerIntent": "提前迎战并击败末日兽",
+        "currentFocus": "末日兽威胁"
+      },
+      "rawOutput": "<thinking>玩家提前完成了原本位于后续节点的战斗。</thinking>\n<正文>你与三月七、丹恒联手迎战末日兽。末日兽被击退，支援舱段危机平息。你比计划更早解决了这场威胁。</正文>\n<动态世界>末日兽被玩家与列车组联手击退，支援舱段危机平息。</动态世界>\n<短期记忆>玩家提前击败了支援舱段的末日兽。</短期记忆>\n<剧情规划>后续改为残骸回收与起因调查。</剧情规划>",
+      "rawOutputSha256": "sha256:6900208a22b63cca19550b9329e78ed18368fd5f7eb58403f06d07ddf6e1b0fb",
+      "expectedAdjudication": "accept_terminal_with_early_flag",
+      "allowedFinalSideEffects": [
+        "complete:event_doomsday_beast(player_early)",
+        "fact:beast_defeated_early",
+        "focus_offer:unit_aftermath"
+      ]
+    },
+    {
+      "responseId": "variable_early_defeat",
+      "service": "variable",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：提前完成关键事件后，变量模型仍可把同一事件写成新字符串",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:776360ef13a09a479d1d7eb2e34b79684999b2bfa2d0fa60c63273cec205ece2",
+      "requestSummary": {
+        "turnId": "turn_early_012",
+        "purpose": "记录提前完成的战斗"
+      },
+      "rawOutput": "{\"commands\":[{\"action\":\"push\",\"key\":\"世界.全局事件\",\"value\":\"玩家与列车组提前击退末日兽，支援舱段危机平息。\"}],\"summary\":\"提前完成末日兽战斗。\"}",
+      "rawOutputSha256": "sha256:fee2c8fcc1bb01abf97a243fdda785dabea69ec4524405c6291c8f3954e88f37",
+      "expectedAdjudication": "route_to_terminal_fact",
+      "allowedFinalSideEffects": [
+        "fact:beast_defeated_early"
+      ]
+    },
+    {
+      "responseId": "main_early_repeat",
+      "service": "main",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：终态事件在后续回合被模型再次安排",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:776360ef13a09a479d1d7eb2e34b79684999b2bfa2d0fa60c63273cec205ece2",
+      "requestSummary": {
+        "turnId": "turn_early_013",
+        "playerIntent": "巡查支援舱段",
+        "currentFocus": "善后阶段"
+      },
+      "rawOutput": "<thinking>缺少事件实例终态概念，再次安排同一场战斗。</thinking>\n<正文>支援舱段外又一次传来轰鸣，你再次迎战末日兽并将其摧毁。它似乎无法被彻底消灭。</正文>\n<动态世界>末日兽再次出现并再次被摧毁。</动态世界>\n<剧情规划>继续战斗相关章节。</剧情规划>",
+      "rawOutputSha256": "sha256:1bf16cbec42db9c1c50b4752ec4c3f58d30f2585557ad3e7582d8ba7148086cb",
+      "expectedAdjudication": "reject_replay_after_terminal",
+      "allowedFinalSideEffects": [
+        "aftermath_focus:unit_aftermath",
+        "no_new_fact",
+        "no_new_news"
+      ]
+    },
+    {
+      "responseId": "main_multi_unit_claim",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：一次返回声称完成多个小单元且各有证据（B2a）",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:f4a7dcb201e02a25b3841bd5ad4e481f3a68a29476374c3efadfec48bcc7668a",
+      "requestSummary": {
+        "turnId": "coverage_b2a_claim",
+        "playerIntent": "一次性推进三个阶段",
+        "claimedUnits": 3
+      },
+      "rawOutput": "<thinking>一次返回声称同时完成三个小单元，且各有证据。</thinking>\n<正文>支援舱段异动已经确认，你与三月七、丹恒确认末日兽威胁，决定迎战。随后你们迎战末日兽，末日兽被击退，支援舱段危机平息。残骸回收与起因调查也一并展开，善后与调查同步完成收尾。</正文>\n<测试证据>{\"units\":[{\"unitId\":\"unit_beast_confirm\",\"evidence\":[\"支援舱段异动已经确认\",\"确认末日兽威胁\"]},{\"unitId\":\"unit_beast_battle\",\"evidence\":[\"末日兽被击退\",\"支援舱段危机平息\"]},{\"unitId\":\"unit_aftermath\",\"evidence\":[\"善后与调查同步完成收尾\"]}]}</测试证据>\n<短期记忆>玩家一次性完成了威胁确认、迎战与善后。</短期记忆>\n<剧情规划>三个单元都已结束，进入下一阶段。</剧情规划>",
+      "rawOutputSha256": "sha256:45de62657145de533bc4df4a6d0f9bc98053d765be130ed959b4e6641859959d",
+      "expectedAdjudication": "settle_multiple_units_with_evidence",
+      "allowedFinalSideEffects": [
+        "complete:unit_beast_confirm",
+        "complete:unit_beast_battle",
+        "complete:unit_aftermath"
+      ]
+    },
+    {
+      "responseId": "main_multi_unit_skip",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：一次返回只给后续单元证据，中间单元被顺带消耗（B2b）",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:f4a7dcb201e02a25b3841bd5ad4e481f3a68a29476374c3efadfec48bcc7668a",
+      "requestSummary": {
+        "turnId": "coverage_b2b_skip",
+        "playerIntent": "直接处理善后",
+        "claimedUnits": 3,
+        "evidencedOnly": "unit_aftermath"
+      },
+      "rawOutput": "<thinking>正文强命中善后段，中间单元没有任何证据。</thinking>\n<正文>数日后，你已经抵达基座舱段。残骸回收完成，起因调查收束，军团动向的线索逐渐清晰，善后与调查阶段正式收尾。艾丝妲在主控舱段同步确认了记录。</正文>\n<短期记忆>玩家完成了善后与调查。</短期记忆>\n<测试证据>{\"units\":[{\"unitId\":\"unit_beast_confirm\",\"evidence\":[]},{\"unitId\":\"unit_beast_battle\",\"evidence\":[]},{\"unitId\":\"unit_aftermath\",\"evidence\":[\"残骸回收完成\",\"起因调查收束\"]}]}</测试证据>\n<剧情规划>善后段结束，准备应对军团动向。</剧情规划>",
+      "rawOutputSha256": "sha256:66e5837bae276d213f6b34a0c9504cf792de5df368ee8b8c359f0056d9138864",
+      "expectedAdjudication": "require_evidence_per_unit",
+      "allowedFinalSideEffects": [
+        "advance:unit_aftermath（仅限有证据单元）",
+        "keep:unit_beast_confirm（无证据）",
+        "keep:unit_beast_battle（无证据）"
+      ]
+    }
+  ]
+}

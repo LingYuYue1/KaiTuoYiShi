@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "emergent-event-registration",
+  "responses": [
+    {
+      "responseId": "main_emergent_research_group",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：玩家自由路线产生新事件的正文",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:1287161c73e5a570f3866f5077403314b45e71a0ac73032e3178b4d5619f9735",
+      "requestSummary": {
+        "turnId": "emergent_048",
+        "playerIntent": "成立临时研究小组",
+        "currentFocus": "自由研究"
+      },
+      "rawOutput": "<thinking>玩家自由行动产生的新事件。</thinking>\n<正文>你召集了几位研究员，成立临时反物质研究小组。螺丝咕姆表示愿意提供分析支持。新的研究日程排定。</正文>\n<动态世界>玩家在奇物收藏室成立临时反物质研究小组。</动态世界>\n<短期记忆>玩家成立了新的研究小组。</短期记忆>",
+      "rawOutputSha256": "sha256:b6b1661bd58690056c99b30807687183e7deb7b8270542eb45456b12a7f70e40",
+      "expectedAdjudication": "register_emergent_event",
+      "allowedFinalSideEffects": [
+        "register:event_anti_matter_research_group"
+      ]
+    },
+    {
+      "responseId": "variable_emergent_identical",
+      "service": "variable",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：同一输入重试推送完全相同的事件字符串",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:1287161c73e5a570f3866f5077403314b45e71a0ac73032e3178b4d5619f9735",
+      "requestSummary": {
+        "turnId": "emergent_retry_049",
+        "purpose": "同一输入重试",
+        "retryOf": "emergent_048"
+      },
+      "rawOutput": "{\"commands\":[{\"action\":\"push\",\"key\":\"世界.全局事件\",\"value\":\"玩家在奇物收藏室成立临时反物质研究小组。\"}],\"summary\":\"同一输入重试。\"}",
+      "rawOutputSha256": "sha256:8cee6a369914d7c2c573df6ca90a8e58e3a9c1ddc9cce4064a610e8a88c0a3bd",
+      "expectedAdjudication": "idempotent_same_instance",
+      "allowedFinalSideEffects": [
+        "idempotent:返回已存在实例"
+      ]
+    },
+    {
+      "responseId": "main_disguised_beast",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：换标题伪装已终态末日兽为新事件",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:1287161c73e5a570f3866f5077403314b45e71a0ac73032e3178b4d5619f9735",
+      "requestSummary": {
+        "turnId": "turn_emergent_050",
+        "playerIntent": "登记新造物",
+        "disguisedOf": "event_doomsday_beast"
+      },
+      "rawOutput": "<thinking>把已终态的末日兽换标题伪装成新事件。</thinking>\n<正文>研究小组登记了一台新的反物质战争造物。你赶到现场迎战，却发现它和已被击退的末日兽别无二致。你再次将其摧毁。</正文>\n<测试证据>{\"disguise\":{\"terminalEventId\":\"event_doomsday_beast\",\"candidateAliases\":[\"新的反物质战争造物\"]}}</测试证据>\n<动态世界>新的反物质战争造物在支援舱段外出现并被摧毁。</动态世界>\n<短期记忆>玩家登记并摧毁了疑似末日兽的新造物。</短期记忆>",
+      "rawOutputSha256": "sha256:f9b6dd19b62fc566c70636a63f33aa5ec42818a63429a96d6d1fcab64f3497f6",
+      "expectedAdjudication": "collision_check_reject_disguise",
+      "allowedFinalSideEffects": [
+        "reject:beast_disguised_as_new_event"
+      ]
+    }
+  ]
+}

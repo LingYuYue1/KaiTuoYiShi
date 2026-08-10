@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "broadcast-audience-freeze",
+  "responses": [
+    {
+      "responseId": "world_broadcast_envelope",
+      "service": "world",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：广播信封与受众快照的候选输出",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:353d177eb61246d4025a2ee13b06bbd408c0b512c0846eecd3802c77b170ee22",
+      "requestSummary": {
+        "turnId": "broadcast_delivery_034",
+        "purpose": "广播提交并冻结受众",
+        "broadcastId": "broadcast_station_beast_defeat"
+      },
+      "rawOutput": "{\"kind\":\"broadcast\",\"broadcastId\":\"broadcast_station_beast_defeat\",\"envelope\":true,\"audience\":[\"基座舱段\",\"主控舱段\"],\"factId\":\"fact_beast_defeated\",\"time\":\"2157-04-26T15:20:00+08:00\",\"reason\":\"艾丝妲发布全站广播\"}",
+      "rawOutputSha256": "sha256:f334a9487b5c9ca1c5ff64b6f0c9191de63f91dc74662ce900854eb8d27bbb03",
+      "expectedAdjudication": "freeze_audience_snapshot",
+      "allowedFinalSideEffects": [
+        "freeze:broadcast_envelope_b1",
+        "receipt:asta/direct_observation"
+      ]
+    },
+    {
+      "responseId": "main_post_broadcast",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：广播后 NPC 引用结果的正文",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:353d177eb61246d4025a2ee13b06bbd408c0b512c0846eecd3802c77b170ee22",
+      "requestSummary": {
+        "turnId": "knowledge_claim_034",
+        "playerIntent": "整理战报",
+        "currentFocus": "广播后各舱段反应"
+      },
+      "rawOutput": "<thinking>旧系统没有回执，广播后任何 NPC 都可直接引用结果。</thinking>\n<正文>阿兰在收容舱段对同事说：\"末日兽的威胁已经解除了。\"艾丝妲则在办公室整理战报。</正文>\n<短期记忆>玩家听到广播后的各方反应。</短期记忆>",
+      "rawOutputSha256": "sha256:defb924d76a81b4cabe073967be41cbe9c6d3bfe4c1913c539223dbb9a157c93",
+      "expectedAdjudication": "require_delivery_receipt_before_quote",
+      "allowedFinalSideEffects": [
+        "receipt:arlan/communication（若覆盖）"
+      ]
+    }
+  ]
+}

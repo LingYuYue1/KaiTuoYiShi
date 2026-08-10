@@ -40,6 +40,8 @@ export interface NewsModelRequest {
   userInput: string;
   body: string;
   recentTurns?: string[];
+  /** R3 事实约束模式：存在时，新闻模型只能把这里的 [已发生]/[预告] 条目当作新事实来源。 */
+  factSourceBrief?: string;
   traveler: 角色数据结构;
   world: 世界状态;
   news: 新闻条目[];
@@ -79,13 +81,38 @@ export async function callNewsModel(request: NewsModelRequest): Promise<NewsMode
   };
 }
 
-export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount' | 'world' | 'traveler' | 'news'> & Partial<Pick<NewsModelRequest, 'npcRecords' | 'plotNodes' | 'storyWeaving' | 'maxNewEntriesPerTurn' | 'promptModules'>>): string {
+export function buildNewsModelPrompt(request: Pick<NewsModelRequest, 'turnCount' | 'world' | 'traveler' | 'news'> & Partial<Pick<NewsModelRequest, 'npcRecords' | 'plotNodes' | 'storyWeaving' | 'maxNewEntriesPerTurn' | 'promptModules' | 'factSourceBrief'>>): string {
   const issue = getNewsIssueNumber(request.turnCount);
   const maxNewEntries = normalizeMaxNewEntries(request.maxNewEntriesPerTurn);
   const recentNews = [...request.news].sort((a, b) => b.回合 - a.回合).slice(0, 12);
   const storyBrief = buildStoryWeavingNewsBrief(request.storyWeaving);
 
   const promptModulesSection = buildNewsPromptModulesSection(request.promptModules);
+
+  if (request.factSourceBrief?.trim()) {
+    return [
+      promptModulesSection,
+      '',
+      '## 本期更新要求（事实约束模式）',
+      `- 本次最多新增 ${maxNewEntries} 条新闻。`,
+      '- 只有“已提交公共事实”中的 [已发生] 条目可以写成已经发生；[预告] 条目只能写成 upcoming。',
+      '- 现有新闻只用于更新与去重，不能反向充当本期新事实来源。',
+      '- 禁止根据正文、聊天滑窗、世界全局事件字符串、NPC 摘要、剧情节点或剧情编织摘要补造事实。',
+      '',
+      `## 期号信息`,
+      `- 当前期号：第 ${issue} 期`,
+      `- 当前回合：${request.turnCount}`,
+      `- 当前地点：${request.world.当前地点 || '未标注'}`,
+      `- 当前日期：${request.world.当前日期 || '未标注'}`,
+      `- 当前时间：${request.world.当前时间 || '未标注'}`,
+      '',
+      '## 当前新闻快照（仅用于更新与去重）',
+      recentNews.length
+        ? recentNews.map((n) => `- [${n.状态}] ${n.标题}（${n.回合} 回合 / ${n.类目}）`).join('\n')
+        : '- 无',
+      '',
+    ].join('\n');
+  }
 
   return [
     promptModulesSection,
@@ -138,6 +165,19 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
       return b.回合 - a.回合;
     })
     .slice(0, 20);
+
+  if (request.factSourceBrief?.trim()) {
+    return [
+      `## 第 ${request.turnCount} 回合新闻生成请求`,
+      '',
+      request.factSourceBrief,
+      '',
+      '## 现有新闻（仅用于更新与去重，不是新事实来源）',
+      stringifyPromptPayload(currentNews),
+      '',
+      `只根据上面的 [已发生] / [预告] 条目输出结构化 JSON，最多新增 ${normalizeMaxNewEntries(request.maxNewEntriesPerTurn)} 条。没有可刊登变化时返回空数组，不得从其他上下文补写事件。`,
+    ].join('\n');
+  }
 
   return [
     `## 第 ${request.turnCount} 回合新闻生成请求`,

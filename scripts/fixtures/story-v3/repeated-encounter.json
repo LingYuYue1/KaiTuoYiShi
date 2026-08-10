@@ -1,0 +1,234 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "repeated-encounter",
+  "title": "已经终结的唯一事件被模型再次安排",
+  "playerFacingExpectation": "已被击退的末日兽不能在正文里再次完整发生；即使换措辞也不行。只能登记为合法的新实例（新一批敌人、第二次独立袭击），且新实例必须有新的事件身份、时间和原因。",
+  "fixedNow": 1735690200000,
+  "initialStateFingerprint": "sha256:c27e181d709ec8997b90d1097d29e4bd75b891c1be7c0fcf95ccdeaa6be117f9",
+  "baselineSignificance": [
+    "旧系统唯一的防重复手段是动态世界字符串的文本指纹去重：完全相同的字符串会被合并，换措辞的重复会作为新字符串追加。",
+    "正文展示不受任何终态检查约束：玩家能看到末日兽再次降临的战斗描写。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_repeat",
+      "revision": 9,
+      "turnCount": 17,
+      "gameTime": "2157-04-26T12:30:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·支援舱段",
+    "playerFocusId": "focus_aftermath",
+    "eventInstances": [
+      {
+        "eventId": "event_doomsday_beast",
+        "state": "terminal"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "末日兽已被列车组与玩家联手击退，残骸进入回收流程。"
+    ],
+    "terminalEvents": [
+      {
+        "name": "末日兽",
+        "aliases": [
+          "末日兽"
+        ],
+        "eventInstanceId": "event_doomsday_beast",
+        "occurredAt": "2157-04-26T12:00:00+08:00"
+      }
+    ]
+  },
+  "storySetup": {
+    "seriesId": "series_herta_repeat",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_aftermath_cleanup",
+    "units": [
+      {
+        "id": "unit_aftermath_cleanup",
+        "number": 1,
+        "title": "残骸回收与善后",
+        "summary": "玩家参与支援舱段末日兽残骸回收与善后工作",
+        "endStates": [
+          "残骸回收完成"
+        ],
+        "followups": [
+          "确认没有残余威胁"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "支援舱段"
+        ],
+        "status": "current"
+      },
+      {
+        "id": "unit_legion_embers",
+        "number": 2,
+        "title": "军团余烬",
+        "summary": "调查反物质军团残党是否在空间站内留下新的活动痕迹",
+        "endStates": [
+          "确认军团余烬动向"
+        ],
+        "followups": [
+          "决定是否清理余烬"
+        ],
+        "characters": [
+          "丹恒"
+        ],
+        "locations": [
+          "基座舱段"
+        ],
+        "status": "pending"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "turn_repeat_018",
+      "kind": "main_turn",
+      "turnCount": 18,
+      "playerInput": "我又看到一头末日兽出现在舱段外，我冲上去迎战它。",
+      "currentLocation": "黑塔空间站·支援舱段",
+      "requiresTerminalSupersession": true,
+      "responseRefs": [
+        "main_repeated_encounter"
+      ]
+    },
+    {
+      "stepId": "turn_repeat_019",
+      "kind": "emergent_retry",
+      "turnCount": 19,
+      "playerInput": "我再次确认末日兽已经被击退的消息。",
+      "currentLocation": "黑塔空间站·支援舱段",
+      "responseRefs": [
+        "variable_repeated_identical"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "TERMINAL_EVENT_ALIAS_APPENDED",
+      "TERMINAL_EVENT_NARRATIVE_REPLAY",
+      "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+      "VARIABLE_MODEL_CAN_WRITE_WORLD_EVENT_STRING",
+      "WORLD_EVENT_STRING_DIRECT_APPEND",
+      "WORLD_EVENT_STRING_TEXT_DEDUPED"
+    ],
+    "expectedMetrics": {
+      "duplicate_event_instance_count": 1,
+      "duplicate_public_fact_count": 1,
+      "illegal_narrative_replay_count": 1,
+      "terminal_event_supersession_gap_count": 1
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "终态实例 event_doomsday_beast 的再次战斗正文必须在发布门前拒绝或重写",
+      "文本指纹去重不足以防换措辞复演，需要 eventInstanceId + 终态拒绝 + 碰撞检查",
+      "合法的新攻击必须登记为新实例，带新的事件身份、时间和原因"
+    ],
+    "allowedFinalSideEffects": [
+      "reject:illegal_narrative_replay",
+      "fact:aftermath_progress",
+      "new_instance:legion_second_raid（需独立事件身份）"
+    ]
+  },
+  "reviewQuestion": "已被击退的末日兽再次以正文出现，应被拒绝或登记为新实例，而不是原样展示，对吗？",
+  "coverageCases": [
+    {
+      "coverageId": "unique-facility-replay",
+      "title": "非末日兽唯一事件：唯一设施毁坏后的重演与新实例（通用规则）",
+      "playerFacingExpectation": "唯一设施（重力稳定装置）已经毁坏后，换标题、换措辞都不能让同一设施再次被摧毁；只有登记为新身份、新时间、新原因的新设施才是合法新实例。",
+      "baselineSignificance": [
+        "终态识别与末日兽无关：同一套通用规则（别名 + 终态动作词）可命中唯一设施重演；换措辞（稳定核心）可绕过识别追加新字符串；全新备用装置（新身份）不会被误判为重演。",
+        "旧系统仍会展示重演正文并把新字符串追加进世界事件列表，没有任何实例级拒绝。"
+      ],
+      "initialStateOverrides": {
+        "playerLocation": "黑塔空间站·奇物收藏室",
+        "legacyWorldEventStrings": [
+          "奇物收藏室的重力稳定装置已因过载烧毁，无法修复。"
+        ],
+        "terminalEvents": [
+          {
+            "name": "重力稳定装置",
+            "aliases": [
+              "重力稳定装置"
+            ],
+            "eventInstanceId": "event_gravity_stabilizer",
+            "occurredAt": "2157-04-27T08:00:00+08:00"
+          }
+        ]
+      },
+      "currentBaseline": {
+        "classification": "known_bad",
+        "expectedObservationCodes": [
+          "LEGACY_STORY_PROGRESS_STAYED",
+          "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+          "NEW_EVENT_INSTANCE_REGISTERED",
+          "TERMINAL_EVENT_ALIAS_APPENDED",
+          "TERMINAL_EVENT_ALIAS_NOT_RECOGNIZED",
+          "TERMINAL_EVENT_NARRATIVE_REPLAY",
+          "WORLD_EVENT_STRING_DIRECT_APPEND"
+        ],
+        "expectedMetrics": {
+          "duplicate_event_instance_count": 2,
+          "duplicate_public_fact_count": 1,
+          "illegal_narrative_replay_count": 1,
+          "new_event_instance_registered_count": 1
+        }
+      },
+      "v3Target": {
+        "decisions": [
+          "唯一设施终态实例必须有稳定身份（eventInstanceId），换标题/换地点/换措辞不能重建同一实例",
+          "终态后的正文只能进入余波、善后、调查、回忆、模拟或新实例",
+          "合法的新实例（新的备用装置）必须登记为独立事件身份、时间与原因"
+        ],
+        "allowedFinalSideEffects": [
+          "reject:unique_facility_replay",
+          "reject:unique_facility_disguised_replay",
+          "register:new_backup_device_instance（独立身份）"
+        ]
+      },
+      "reviewQuestion": "唯一设施毁坏后再次被摧毁的正文应被拒绝；新运抵的备用装置应作为新实例登记，对吗？",
+      "steps": [
+        {
+          "stepId": "coverage_facility_replay",
+          "kind": "main_turn",
+          "turnCount": 18,
+          "playerInput": "我赶回奇物收藏室查看重力稳定装置的情况。",
+          "currentLocation": "黑塔空间站·奇物收藏室",
+          "responseRefs": [
+            "main_unique_facility_replay"
+          ]
+        },
+        {
+          "stepId": "coverage_facility_disguised",
+          "kind": "main_turn",
+          "turnCount": 19,
+          "playerInput": "研究小组报告稳定核心再次失效。",
+          "currentLocation": "黑塔空间站·奇物收藏室",
+          "responseRefs": [
+            "main_unique_facility_disguised"
+          ]
+        },
+        {
+          "stepId": "coverage_facility_new_instance",
+          "kind": "main_turn",
+          "turnCount": 20,
+          "playerInput": "新的备用稳定装置运抵后，我安排安装。",
+          "currentLocation": "黑塔空间站·奇物收藏室",
+          "responseRefs": [
+            "main_unique_facility_new_instance"
+          ]
+        }
+      ]
+    }
+  ]
+}

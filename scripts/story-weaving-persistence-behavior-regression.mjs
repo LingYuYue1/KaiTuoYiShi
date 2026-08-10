@@ -72,7 +72,7 @@ globalThis.fetch = async (input, init = {}) => {
   }
 };
 const loadedFromResources = await persistence.loadAllBundledStoryWeavingPresets();
-assert.equal(loadedFromResources.系列列表.length, 14, '14 个拆分资源必须全部加载');
+assert.equal(loadedFromResources.系列列表.length, 28, '28 个拆分资源必须全部加载（完整主线资产替换后）');
 assert.equal(maxActiveFetches, 1, '拆分资源必须顺序解析，避免并发内存峰值');
 assert.equal(retryTargetAttempts, 2, '临时失败的资源必须使用 reload 再试一次');
 
@@ -160,8 +160,12 @@ const hydratedSeries = hydrated.系列列表.find((series) => series.id === modi
 const hydratedSegment = hydratedSeries.分段列表.find((segment) => segment.id === modifiedSegment.id);
 assert.equal(hydratedSeries.标题, modifiedSeries.标题, '原著轨道重命名必须恢复');
 assert.equal(hydratedSeries.当前阶段概括, modifiedSeries.当前阶段概括, '当前阶段概括必须恢复');
-assert.equal(hydratedSegment.本段概括, modifiedSegment.本段概括, '玩家修改的分解结果必须恢复');
-assert.deepEqual(hydratedSegment.本段结束状态, modifiedSegment.本段结束状态, '玩家修改的结束条件必须恢复');
+// 完整主线资产替换（R3 收口）后：内置 canon 静态内容以新版 bundled asset 为唯一权威，
+// 旧档只保留运行状态/进度；玩家对 canon 分段分解字段的修改不再恢复。
+assert.equal(hydratedSegment.本段概括, baselineSegment.本段概括, '内置 canon 本段概括以新版资产为权威，玩家旧修改不恢复');
+assert.deepEqual(hydratedSegment.本段结束状态, baselineSegment.本段结束状态, '内置 canon 结束状态以新版资产为权威，玩家旧修改不恢复');
+assert.equal(hydratedSegment.运行状态, modifiedSegment.运行状态, '旧档分段运行状态必须保留');
+assert.equal(hydratedSegment.启用注入, modifiedSegment.启用注入, '旧档分段启用状态必须保留');
 assert.equal(hydratedSegment.原文内容, baselineSegment.原文内容, '静态原著正文必须从资源补全');
 assert.deepEqual(hydrated.当前进度.已完成摘要, modifiedSystem.当前进度.已完成摘要, '当前进度摘要必须恢复');
 assert.equal(hydrated.当前进度.最近一次推进判定回合, 77, '推进判定回合必须恢复');
@@ -172,6 +176,52 @@ assert.equal(hydratedCustom.分段列表[0].原文内容, customSeries.分段列
 const oldFullHydrated = persistence.hydratePersistedStoryWeavingSystem(modifiedSystem, baseline);
 assert.equal(oldFullHydrated.系列列表[0].当前阶段概括, modifiedSeries.当前阶段概括, '旧版完整数据必须兼容');
 assert.equal(oldFullHydrated.当前进度.最近一次推进判定回合, 77, '旧版完整数据进度必须兼容');
+
+const secondSegment = baselineSeries.分段列表[1];
+const oldSaveAtSecondSegment = model.归一化剧情编织系统({
+  ...structuredClone(baseline),
+  系列列表: baseline.系列列表.map((series) => series.id !== baselineSeries.id
+    ? series
+    : {
+        ...series,
+        当前分段组号: secondSegment.组号,
+        分段列表: series.分段列表.map((segment) => ({
+          ...segment,
+          运行状态: segment.id === baselineSegment.id ? '已经历' : segment.id === secondSegment.id ? '当前' : segment.运行状态,
+          关键事件: segment.id === secondSegment.id
+            ? segment.关键事件.map((event, index) => index === 0 ? { ...event, 触发条件: [] } : event)
+            : segment.关键事件,
+        })),
+      }),
+  当前系列ID: baselineSeries.id,
+  当前进度: {
+    ...modifiedSystem.当前进度,
+    当前系列ID: baselineSeries.id,
+    当前分段ID: secondSegment.id,
+    当前分段组号: secondSegment.组号,
+  },
+});
+const restoredOldSave = persistence.restoreStoryWeavingForLoadedSave(oldSaveAtSecondSegment, baseline, {
+  主线启用: true,
+  章节锚点ID: 'herta_station_incident',
+});
+assert.equal(restoredOldSave.当前进度.当前分段ID, secondSegment.id, '旧存档有效当前段必须保留，不得按开局锚点退回第一段');
+assert.equal(restoredOldSave.系列列表[0].分段列表[0].运行状态, '已经历', '旧存档已归档分段状态必须保留');
+assert(
+  restoredOldSave.系列列表[0].分段列表[1].关键事件[0].触发条件.length > 0,
+  '旧存档缺失的关键事件触发条件必须由当前内置资产补齐',
+);
+
+const initializedOldSave = persistence.restoreStoryWeavingForLoadedSave(undefined, baseline, {
+  主线启用: true,
+  章节锚点ID: 'belobog_arrival',
+  地区名称: '雅利洛-VI',
+  章节锚点名称: '初抵贝洛伯格',
+  章节参考说明: '',
+  玩家介入原文: '',
+});
+assert.equal(initializedOldSave.当前系列ID, 'story_canon_zhiku_jarilo_vi_chapters', '完全没有剧情编织的旧档才按开局章节初始化');
+assert.equal(initializedOldSave.当前进度.当前分段组号, 2, '无剧情编织旧档应定位到开局档案指定分段');
 
 const v2 = {
   persistenceVersion: 2,

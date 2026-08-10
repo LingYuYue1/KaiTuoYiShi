@@ -42,24 +42,6 @@ const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
     zhikuPresetId: 'zhiku_xianzhou_luofu_aftermath_chapters',
   },
   {
-    id: 'story_canon_side_belobog_future_market',
-    title: '【支线】贝洛伯格-冬梦激醒',
-    description: '已分解内置剧情编织：贝洛伯格版本活动剧情。',
-    zhikuPresetId: '',
-  },
-  {
-    id: 'story_canon_side_xianzhou_foxian_tale',
-    title: '【支线】仙舟罗浮-狐斋志异',
-    description: '已分解内置剧情编织：仙舟罗浮版本活动剧情。',
-    zhikuPresetId: '',
-  },
-  {
-    id: 'story_canon_side_herta_crown_of_mundane_and_divine',
-    title: '【支线】黑塔空间站-庸与神的冠冕',
-    description: '已分解内置剧情编织：黑塔空间站版本活动剧情。',
-    zhikuPresetId: '',
-  },
-  {
     id: 'story_canon_penacony_noise_and_fury',
     title: '匹诺康尼其一-喧哗与骚动',
     description: '已分解内置剧情编织：匹诺康尼开端。',
@@ -87,6 +69,108 @@ const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
     id: 'story_canon_penacony_depart_on_eighth_day',
     title: '匹诺康尼其五-在第八日启程',
     description: '已分解内置剧情编织：匹诺康尼后续启程。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_1_falling_wood',
+    title: '翁法罗斯英雄纪其一-落木逐火英雄纪',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其一。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_2_gate_throne',
+    title: '翁法罗斯英雄纪其二-门扉之启，王座之终',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其二。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_3_sleeping_flowers',
+    title: '翁法罗斯英雄纪其三-走过安眠地的花丛',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其三。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_4_dawn_fall',
+    title: '翁法罗斯英雄纪其四-在黎明升起时坠落',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其四。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_5_sun_hurt',
+    title: '翁法罗斯英雄纪其五-因为太阳将要毁伤',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其五。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_6_hero_undying',
+    title: '翁法罗斯英雄纪其六-英雄未死之前',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其六。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_7_night_return',
+    title: '翁法罗斯英雄纪其七-于长夜重返大地',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其七。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_8_yesterday_tomorrow',
+    title: '翁法罗斯英雄纪其八-成为昨日的明天',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其八。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_penacony_memory_is_the_overture',
+    title: '匹诺康尼其六-记忆是梦的开场白',
+    description: '已分解内置剧情编织：匹诺康尼其六（记忆是梦的开场白）。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_1_welcome',
+    title: '二相乐园其一-欢迎来到乐园',
+    description: '已分解内置剧情编织：二相乐园其一。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_2_out_of_control',
+    title: '二相乐园其二-献给破晓的失控',
+    description: '已分解内置剧情编织：二相乐园其二。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_3_so_laughter',
+    title: '二相乐园其三-如是，众生欢笑不已',
+    description: '已分解内置剧情编织：二相乐园其三。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_4_forgotten_river',
+    title: '二相乐园其四-沉于生者的忘川',
+    description: '已分解内置剧情编织：二相乐园其四。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_5_whistle',
+    title: '二相乐园其五-鸣笛于归寂之时',
+    description: '已分解内置剧情编织：二相乐园其五。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_side_xianzhou_foxian_tale',
+    title: '【支线】仙舟罗浮-狐斋志异',
+    description: '已分解内置剧情编织：仙舟罗浮版本活动剧情。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_side_belobog_future_market',
+    title: '【支线】贝洛伯格-冬梦激醒',
+    description: '已分解内置剧情编织：贝洛伯格版本活动剧情。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_side_herta_crown_of_mundane_and_divine',
+    title: '【支线】黑塔空间站-庸与神的冠冕',
+    description: '已分解内置剧情编织：黑塔空间站版本活动剧情。',
     zhikuPresetId: '',
   },
 ];
@@ -160,6 +244,13 @@ export function getOpeningStoryWeavingAnchor(chapterId?: string): { seriesId: st
   return id ? OPENING_STORY_WEAVING_ANCHORS[id] : undefined;
 }
 
+/**
+ * G1.3.2：initialize-only seed adapter —— 只允许在"开局初始化/重开/旧档读取对齐"等种子路径调用，
+ * 用于把存档剧情编织系统对齐到开局档案锚点。
+ * 禁止在正式回合推进（sendWorkflow）、turn snapshot 恢复（turnSnapshot）、boot hydrate（useGameState）、
+ * V3 迁移/恢复（migrate/restore）路径调用，以免改写已提交运行时状态；相关禁止调用由
+ * story-runtime-migration-regression 静态回归守卫。旧字段与旧存档保持可读，不做删除。
+ */
 export function alignStoryWeavingToOpeningArchive(system: 剧情编织系统, archive?: 开局档案): 剧情编织系统 {
   const normalized = 归一化剧情编织系统(system);
   if (!normalized.系列列表.length || !archive) return normalized;
@@ -263,6 +354,68 @@ export async function loadAllBundledStoryWeavingPresets(): Promise<剧情编织�
 
 type PersistedStoryWeavingSystem = 剧情编织系统 & { persistenceVersion?: number };
 
+function preferSavedText(saved: string, bundled: string): string {
+  return saved.trim() ? saved : bundled;
+}
+
+function preferSavedList<T>(saved: T[], bundled: T[]): T[] {
+  return saved.length ? saved : bundled;
+}
+
+function mergeCanonKeyEvents(
+  savedEvents: 剧情编织分段['关键事件'],
+  bundledEvents: 剧情编织分段['关键事件'],
+): 剧情编织分段['关键事件'] {
+  if (!savedEvents.length) return bundledEvents;
+  const usedSavedIndexes = new Set<number>();
+  const merged = bundledEvents.map((bundledEvent, bundledIndex) => {
+    let savedIndex = savedEvents.findIndex((event, index) =>
+      !usedSavedIndexes.has(index) && event.事件名 === bundledEvent.事件名,
+    );
+    if (savedIndex < 0 && savedEvents[bundledIndex] && !usedSavedIndexes.has(bundledIndex)) {
+      savedIndex = bundledIndex;
+    }
+    if (savedIndex < 0) return bundledEvent;
+    usedSavedIndexes.add(savedIndex);
+    const savedEvent = savedEvents[savedIndex];
+    return {
+      ...bundledEvent,
+      ...savedEvent,
+      事件名: preferSavedText(savedEvent.事件名, bundledEvent.事件名),
+      事件说明: preferSavedText(savedEvent.事件说明, bundledEvent.事件说明),
+      前置条件: preferSavedList(savedEvent.前置条件, bundledEvent.前置条件),
+      触发条件: preferSavedList(savedEvent.触发条件, bundledEvent.触发条件),
+      阻断条件: preferSavedList(savedEvent.阻断条件, bundledEvent.阻断条件),
+      事件结果: preferSavedList(savedEvent.事件结果, bundledEvent.事件结果),
+      对后续影响: preferSavedList(savedEvent.对后续影响, bundledEvent.对后续影响),
+    };
+  });
+  savedEvents.forEach((event, index) => {
+    if (!usedSavedIndexes.has(index)) merged.push(event);
+  });
+  return merged;
+}
+
+/**
+ * R3 替换（完整主线资产重生成）后：内置 canon 静态剧情内容以新版 bundled asset 为唯一权威。
+ * 旧档只保留运行相关状态：分段运行状态、启用/暂停状态、处理状态与更新时间；
+ * 结构化内容（本段概括/结束状态/关键事件/档案等）一律采用新版内置资产，旧档非空文本不再覆盖。
+ * 玩家自制剧情（来源类型 !== 'canon'）仍完全以存档内容为准。
+ */
+function mergeCanonSegment(
+  bundled: 剧情编织分段,
+  saved: 剧情编织分段,
+): 剧情编织分段 {
+  return {
+    ...bundled,
+    处理状态: saved.处理状态 ?? bundled.处理状态,
+    运行状态: saved.运行状态 ?? bundled.运行状态,
+    启用注入: saved.启用注入 ?? bundled.启用注入,
+    最近错误: saved.最近错误,
+    updatedAt: Math.max(Number(saved.updatedAt) || 0, Number(bundled.updatedAt) || 0),
+  };
+}
+
 export function mergeBundledStoryWeavingPresets(saved: 剧情编织系统 | null | undefined, bundled: 剧情编织系统): 剧情编织系统 {
   if (!saved?.系列列表?.length) return bundled;
   const persistenceVersion = Number((saved as PersistedStoryWeavingSystem).persistenceVersion) || 0;
@@ -285,12 +438,7 @@ export function mergeBundledStoryWeavingPresets(saved: 剧情编织系统 | null
           updatedAt: savedSegment.updatedAt,
         };
       }
-      return {
-        ...segment,
-        ...savedSegment,
-        原文内容: segment.原文内容,
-        字数: segment.字数,
-      };
+      return mergeCanonSegment(segment, savedSegment);
     });
     if (persistenceVersion === 2) {
       return 归一化剧情编织系列({
@@ -353,6 +501,30 @@ export function hydratePersistedStoryWeavingSystem(
     系列列表: bundled.系列列表.filter((series) => series.来源类型 === 'canon'),
   });
   return mergeBundledStoryWeavingPresets(saved, canonBaseline);
+}
+
+/**
+ * 旧存档读档兼容：
+ * - 存档已有剧情编织时，以存档游标/运行状态为准，只用当前内置资产补齐缺失内容；
+ * - 存档完全没有剧情编织时，才按开局档案建立初始锚点；
+ * - 不读取聊天正文，不执行自动推进，也不补造旧回合事实。
+ */
+export function restoreStoryWeavingForLoadedSave(
+  saved: 剧情编织系统 | null | undefined,
+  bundled: 剧情编织系统,
+  archive?: 开局档案,
+): 剧情编织系统 {
+  const normalizedSaved = 归一化剧情编织系统(saved);
+  const normalizedBundled = 归一化剧情编织系统(bundled);
+  const bundledCanon = 归一化剧情编织系统({
+    系列列表: normalizedBundled.系列列表.filter((series) => series.来源类型 === 'canon'),
+    当前系列ID: normalizedBundled.当前系列ID,
+  });
+  if (!normalizedSaved.系列列表.length) {
+    return alignStoryWeavingToOpeningArchive(bundledCanon, archive);
+  }
+  if (!bundledCanon.系列列表.length) return normalizedSaved;
+  return hydratePersistedStoryWeavingSystem(saved, bundledCanon);
 }
 
 export function isSelfContainedStoryWeavingSystem(system: 剧情编织系统 | null | undefined): boolean {

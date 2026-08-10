@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "reroll-cas-failure",
+  "responses": [
+    {
+      "responseId": "main_stale_branch_body",
+      "service": "main",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：重 roll/读档后旧分支结果串入当前分支",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:bbefa0b7a3aa55babc4308004dd8a6d45330725ac8d95b58fd2f1bdf4d5edf90",
+      "requestSummary": {
+        "turnId": "turn_reroll_041",
+        "playerIntent": "读档回到旧时间点",
+        "staleBranch": "branch_g0_reroll@rev23",
+        "currentRevision": 31
+      },
+      "rawOutput": "<thinking>读档后返回的仍是旧分支的内容，直接当作当前回合正文。</thinking>\n<正文>你重新回到末日兽还没被击败的那个时间点。你再次迎战末日兽并将其击败。</正文>\n<动态世界>末日兽再次被击败。</动态世界>\n<短期记忆>玩家重 roll 后再次经历末日兽战斗。</短期记忆>",
+      "rawOutputSha256": "sha256:9a359377135c682f28a9bb494b775a654482c1e6540a8096cac1435ad1e9b54d",
+      "expectedAdjudication": "cas_reject_stale_branch",
+      "allowedFinalSideEffects": [
+        "accept:reroll_body_rewritten",
+        "no_old_branch_facts"
+      ]
+    }
+  ]
+}

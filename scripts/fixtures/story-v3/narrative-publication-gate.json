@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "narrative-publication-gate",
+  "title": "错误正文先展示给玩家，之后系统才发现该剧情不能成立",
+  "playerFacingExpectation": "不合规的正文（例如把已终态的末日兽战斗重演一遍）不应该先流式展示给玩家，再在后台被拒绝；正文必须在发布门通过后才可见。",
+  "fixedNow": 1735691040000,
+  "initialStateFingerprint": "sha256:f17311a6fc5ce3894347b1a86edf26f5685071757c68589cfa3bc76ad8cb5b6a",
+  "baselineSignificance": [
+    "sendWorkflow 的 onDelta 立即把流式正文写入 preview，之后才做解析、推进判定与落库——坏正文会先被玩家看见。",
+    "不存在 NarrativePublicationGate：被判定为不合规的正文没有可回滚的发布点。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_gate",
+      "revision": 13,
+      "turnCount": 24,
+      "gameTime": "2157-04-26T13:10:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·基座舱段",
+    "playerFocusId": "focus_press_briefing",
+    "eventInstances": [
+      {
+        "eventId": "event_doomsday_beast",
+        "state": "terminal"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "末日兽已被击退。"
+    ],
+    "terminalEvents": [
+      {
+        "name": "末日兽",
+        "aliases": [
+          "末日兽"
+        ]
+      }
+    ]
+  },
+  "storySetup": {
+    "seriesId": "series_herta_gate",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_briefing_done",
+    "units": [
+      {
+        "id": "unit_briefing_done",
+        "number": 1,
+        "title": "战况通报",
+        "summary": "艾丝妲向全站通报战况并安排善后",
+        "endStates": [
+          "通报完成"
+        ],
+        "followups": [
+          "确认善后进度"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "基座舱段"
+        ],
+        "status": "current"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "turn_gate_025",
+      "kind": "main_turn",
+      "turnCount": 25,
+      "playerInput": "艾丝妲让我去支援舱段增援。",
+      "currentLocation": "黑塔空间站·基座舱段",
+      "illegalCandidate": true,
+      "responseRefs": [
+        "main_illegal_replay_body"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "ILLEGAL_NARRATIVE_VISIBLE_BEFORE_GATE",
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "TERMINAL_EVENT_ALIAS_APPENDED",
+      "TERMINAL_EVENT_NARRATIVE_REPLAY",
+      "WORLD_EVENT_STRING_DIRECT_APPEND"
+    ],
+    "expectedMetrics": {
+      "duplicate_event_instance_count": 1,
+      "duplicate_public_fact_count": 1,
+      "illegal_narrative_replay_count": 1,
+      "narrative_pre_gate_visible_count": 1
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "正文必须经过 NarrativePublicationGate 才能写入 streamingMessage/chatHistory 或进入历史/下游 prompt",
+      "gate 拒绝的正文不得进入历史、记忆、新闻或任何下游系统",
+      "拒绝要产出 NarrativeConsistencyDecision 回执并记录 revision"
+    ],
+    "allowedFinalSideEffects": [
+      "reject:narrative_replay（带回执原因）",
+      "rewrite_or_offer:aftermath_focus"
+    ]
+  },
+  "reviewQuestion": "不合规的正文不应该先显示给玩家再被后台拒绝，对吗？"
+}

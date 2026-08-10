@@ -1,0 +1,265 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "player-early-resolution",
+  "title": "玩家提前完成原本位于后续节点的关键事件",
+  "playerFacingExpectation": "玩家提前击败末日兽后，这一事件应当一次性结算，后续章节只能发展余波、善后、调查或新的连锁事件，不能再把同一场战斗重演一遍。",
+  "fixedNow": 1735689840000,
+  "initialStateFingerprint": "sha256:776360ef13a09a479d1d7eb2e34b79684999b2bfa2d0fa60c63273cec205ece2",
+  "baselineSignificance": [
+    "旧系统没有事件实例终态注册表：首次击败与再次重演在正文/动态世界层面不可区分，全部只作为世界事件字符串追加。",
+    "提前完成的战斗仍会被自动推进逻辑按正文关键词推段，但没有任何字段能表示『这一实例已提前进入终态』。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_early",
+      "revision": 6,
+      "turnCount": 11,
+      "gameTime": "2157-04-26T10:40:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·支援舱段",
+    "playerFocusId": "focus_beast_engagement",
+    "eventInstances": [
+      {
+        "eventId": "event_doomsday_beast",
+        "state": "approaching"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "反物质军团在空间站外侧集结，末日兽出现在支援舱段视野内。"
+    ],
+    "terminalEvents": [
+      {
+        "name": "末日兽",
+        "aliases": [
+          "末日兽",
+          "反物质军团巨型造物"
+        ]
+      }
+    ]
+  },
+  "storySetup": {
+    "seriesId": "series_herta_early",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_beast_confirm",
+    "units": [
+      {
+        "id": "unit_beast_confirm",
+        "number": 1,
+        "title": "支援舱段异动",
+        "summary": "玩家与列车组确认支援舱段外出现末日兽活动",
+        "endStates": [
+          "确认末日兽威胁"
+        ],
+        "followups": [
+          "决定是否迎战"
+        ],
+        "characters": [
+          "三月七",
+          "丹恒"
+        ],
+        "locations": [
+          "支援舱段"
+        ],
+        "status": "current"
+      },
+      {
+        "id": "unit_beast_battle",
+        "number": 2,
+        "title": "末日兽危机",
+        "summary": "玩家与列车组迎战末日兽并将其击退，随后转入善后",
+        "endStates": [
+          "末日兽被击退",
+          "支援舱段危机平息"
+        ],
+        "followups": [
+          "回收残骸并确认残余威胁"
+        ],
+        "characters": [
+          "三月七",
+          "丹恒"
+        ],
+        "locations": [
+          "支援舱段"
+        ],
+        "status": "pending"
+      },
+      {
+        "id": "unit_aftermath",
+        "number": 3,
+        "title": "善后与调查",
+        "summary": "残骸回收，起因调查，军团动向",
+        "endStates": [
+          "残骸回收完成，起因调查收束"
+        ],
+        "followups": [
+          "确认军团进攻的起因"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "主控舱段",
+          "基座舱段"
+        ],
+        "status": "pending"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "turn_early_012",
+      "kind": "main_turn",
+      "turnCount": 12,
+      "playerInput": "我直接出手，与三月七丹恒一起把支援舱段外的末日兽击败。",
+      "currentLocation": "黑塔空间站·支援舱段",
+      "responseRefs": [
+        "main_early_defeat",
+        "variable_early_defeat"
+      ]
+    },
+    {
+      "stepId": "turn_early_013",
+      "kind": "main_turn",
+      "turnCount": 13,
+      "playerInput": "我继续在支援舱段巡查。",
+      "currentLocation": "黑塔空间站·支援舱段",
+      "requiresTerminalSupersession": true,
+      "responseRefs": [
+        "main_early_repeat"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "LEGACY_STORY_PROGRESS_ADVANCED",
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "TERMINAL_EVENT_ALIAS_APPENDED",
+      "TERMINAL_EVENT_NARRATIVE_REPLAY",
+      "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+      "VARIABLE_MODEL_CAN_WRITE_WORLD_EVENT_STRING",
+      "WORLD_EVENT_STRING_DIRECT_APPEND"
+    ],
+    "expectedMetrics": {
+      "duplicate_event_instance_count": 2,
+      "duplicate_public_fact_count": 2,
+      "illegal_narrative_replay_count": 2,
+      "terminal_event_supersession_gap_count": 1
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "首次击败末日兽应提交 eventInstanceId + player_early + terminalFactId，实例进入终态",
+      "终态之后的章节只允许余波、善后、调查、回忆、模拟或新的连锁事件",
+      "同一 eventInstanceId 的第二次战斗正文必须在发布门前被拒绝或重写"
+    ],
+    "allowedFinalSideEffects": [
+      "complete:event_doomsday_beast(player_early)",
+      "fact:beast_defeated_early",
+      "focus_offer:unit_aftermath",
+      "reject:second_battle_of_same_instance"
+    ]
+  },
+  "reviewQuestion": "玩家提前击败末日兽后，后续只应出现余波而不是同一场战斗重演，这符合你的预期吗？",
+  "coverageCases": [
+    {
+      "coverageId": "multi-unit-partial-advance",
+      "title": "一次模型返回声称完成多个小单元，旧系统只推进其中一部分（B2a）",
+      "playerFacingExpectation": "多个小单元各自都有独立完成证据时，未来应允许同一事务结算多个单元；旧系统单次调用最多结算一个（实际 0 个），其余被丢弃。",
+      "baselineSignificance": [
+        "旧系统每次对齐调用至多推进一个目标分段：正文声称完成三个单元时，系统既不结算当前段，也不会把已声明的完成写成任何事实或回执。"
+      ],
+      "currentBaseline": {
+        "classification": "known_bad",
+        "expectedObservationCodes": [
+          "LEGACY_STORY_PROGRESS_ADVANCED",
+          "MULTI_UNIT_CLAIM_PARTIAL_ADVANCE",
+          "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT"
+        ],
+        "expectedMetrics": {
+          "multi_unit_claim_count": 1
+        }
+      },
+      "v3Target": {
+        "decisions": [
+          "每个小单元都有独立完成证据时，允许同一事务结算多个单元并逐个生成完成回执",
+          "没有证据的单元不能被模型顺带吞掉"
+        ],
+        "allowedFinalSideEffects": [
+          "complete:unit_beast_confirm（带回执）",
+          "complete:unit_beast_battle（带回执）",
+          "complete:unit_aftermath（带回执）"
+        ]
+      },
+      "reviewQuestion": "一次返回同时完成多个小单元且都有证据时，应逐个结算而不是丢弃，对吗？",
+      "steps": [
+        {
+          "stepId": "coverage_b2a_claim",
+          "kind": "main_turn",
+          "turnCount": 12,
+          "playerInput": "我一次性推进这三个阶段：确认威胁、迎战末日兽、完成善后。",
+          "currentLocation": "黑塔空间站·支援舱段",
+          "responseRefs": [
+            "main_multi_unit_claim"
+          ]
+        }
+      ],
+      "initialStateOverrides": {
+        "terminalEvents": []
+      }
+    },
+    {
+      "coverageId": "multi-unit-unevidenced-skip",
+      "title": "一次模型返回跨越多个小单元，无证据单元被顺带消耗（B2b）",
+      "playerFacingExpectation": "只有后续单元有证据时，中间没有证据的单元不能被一次性吞掉；每个单元都必须有独立证据才能结算。",
+      "baselineSignificance": [
+        "旧系统按正文评分跨段纠偏：正文强命中善后段时，直接跳到善后段并把中间两个没有证据的单元按「已跳过」归档——无证据的跨单元推进被顺带消耗。"
+      ],
+      "currentBaseline": {
+        "classification": "known_bad",
+        "expectedObservationCodes": [
+          "LEGACY_STORY_PROGRESS_ADVANCED",
+          "MULTI_UNIT_CLAIM_PARTIAL_ADVANCE",
+          "MULTI_UNIT_UNEVIDENCED_SKIP",
+          "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT"
+        ],
+        "expectedMetrics": {
+          "multi_unit_claim_count": 1,
+          "unevidenced_unit_skip_count": 1
+        }
+      },
+      "v3Target": {
+        "decisions": [
+          "没有证据的未来单元不能被模型一次性吞掉",
+          "跨单元推进必须逐单元出示完成证据，缺失证据的单元保持未开始",
+          "已跳过必须保留可诊断的跳过原因与单元身份"
+        ],
+        "allowedFinalSideEffects": [
+          "advance:unit_aftermath（仅限有证据单元）",
+          "keep:unit_beast_confirm（无证据，保持未开始）",
+          "keep:unit_beast_battle（无证据，保持未开始）"
+        ]
+      },
+      "reviewQuestion": "没有证据的中间单元不应被正文强跳顺带消耗，对吗？",
+      "steps": [
+        {
+          "stepId": "coverage_b2b_skip",
+          "kind": "main_turn",
+          "turnCount": 13,
+          "playerInput": "数日后，我直接抵达基座舱段处理善后。",
+          "currentLocation": "黑塔空间站·基座舱段",
+          "responseRefs": [
+            "main_multi_unit_skip"
+          ]
+        }
+      ],
+      "initialStateOverrides": {
+        "terminalEvents": []
+      }
+    }
+  ]
+}

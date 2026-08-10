@@ -1,0 +1,23 @@
+{
+  "project": {
+    "name": "开拓轶事 · UI 展示",
+    "deviceType": "desktop",
+    "cssPreflightEvidence": {
+      "applies": true,
+      "status": "passed",
+      "command": "node c:\\Users\\25934\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\script\\fill-html-head.mjs colors_and_type.css .preflight/preflight.html --title=\"Preflight\" --lang=zh-CN --prefix=kaituo",
+      "brandPrefix": "kaituo",
+      "checks": {
+        "themeVars": "present",
+        "semanticTokenFallback": "present",
+        "themeInline": "present",
+        "tailwindCdn": "present",
+        "htmlClass": "present",
+        "semanticMappings": "resolved"
+      },
+      "retryCount": 0,
+      "blockingReason": null
+    },
+    "fillHtmlHeadCommand": "node c:\\Users\\25934\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\script\\fill-html-head.mjs colors_and_type.css {htmlSrc} --title=\"{title}\" --lang=zh-CN --prefix=kaituo"
+  }
+}

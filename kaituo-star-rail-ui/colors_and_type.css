@@ -1,0 +1,86 @@
+/* ========================================================
+   开拓轶事 · 星穹铁道 UI 配色
+   Kaituo Gold Radiance Theme
+   ======================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;700&display=swap');
+
+:root {
+  /* ── Semantic Tokens (Tailwind @theme aliases) ── */
+  --kaituo-background: rgb(var(--tj-bg-primary));
+  --kaituo-foreground: rgb(var(--tj-text-primary));
+  --kaituo-card: rgb(var(--tj-surface));
+  --kaituo-card-foreground: rgb(var(--tj-text-primary));
+  --kaituo-popover: rgb(var(--tj-panel-bg-start));
+  --kaituo-popover-foreground: rgb(var(--tj-text-primary));
+  --kaituo-primary: rgb(var(--tj-accent-primary));
+  --kaituo-primary-foreground: rgb(var(--tj-on-accent));
+  --kaituo-muted: rgb(var(--tj-text-secondary));
+  --kaituo-muted-foreground: rgb(var(--tj-text-secondary));
+  --kaituo-border: rgb(var(--tj-border));
+  --kaituo-input: rgb(var(--tj-bg-secondary));
+  --kaituo-ring: rgb(var(--tj-accent-primary));
+  --kaituo-radius-sm: 4px;
+  --kaituo-radius-md: 8px;
+  --kaituo-radius-lg: 14px;
+
+  /* ── Core Design Tokens (mirror of root-theme.css) ── */
+  --tj-bg-primary: 8, 7, 9;
+  --tj-bg-secondary: 16, 14, 16;
+  --tj-text-primary: 230, 218, 188;
+  --tj-text-secondary: 160, 148, 120;
+  --tj-accent-primary: 245, 217, 122;
+  --tj-accent-secondary: 196, 163, 90;
+  --tj-border: 245, 217, 122;
+  --tj-danger: 220, 90, 90;
+  --tj-on-accent: 26, 19, 37;
+  --tj-surface: 16, 14, 16;
+  --tj-surface-strong: 10, 9, 10;
+  --tj-panel-bg-start: 16, 14, 16;
+  --tj-panel-bg-end: 10, 9, 10;
+  --tj-surface-bg-start: 14, 12, 14;
+  --tj-surface-bg-end: 6, 5, 7;
+  --tj-drawer-bg: 18, 16, 18;
+  --tj-overlay-bg: 5, 4, 3;
+  --tj-input-bg-start: 14, 12, 14;
+  --tj-input-bg-end: 10, 9, 10;
+  --tj-input-focus-bg: 18, 16, 18;
+  --tj-option-bg: 14, 12, 14;
+  --tj-btn-primary-start: 245, 217, 122;
+  --tj-btn-primary-end: 142, 215, 255;
+  --tj-btn-primary-text: 26, 19, 37;
+  --tj-accent-primary-deep: 196, 163, 90;
+  --tj-accent-mid: 223, 211, 130;
+  --tj-bubble: 8, 7, 9;
+  --tj-chat-bubble: 20, 16, 28;
+  --tj-chat-bubble-alpha: 0.78;
+  --tj-chat-text: 236, 224, 194;
+  --tj-chat-muted: 182, 168, 132;
+  --tj-shadow: 0, 0, 0;
+  --tj-tech-cyan: 117, 214, 216;
+  --tj-tech-cyan-deep: 90, 185, 190;
+  --tj-tech-blue: 150, 175, 210;
+  --tj-tech-blue-deep: 130, 155, 190;
+}
+
+/* ── Typography ── */
+body {
+  font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  background-color: rgb(var(--tj-bg-primary));
+  color: rgb(var(--tj-text-primary));
+}
+
+.font-serif-accent {
+  font-family: 'Noto Serif SC', SimSun, serif;
+}
+
+/* ── Clip-path utility ── */
+.clip-8 {
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.clip-10 {
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.clip-14 {
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}

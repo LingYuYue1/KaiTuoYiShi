@@ -157,8 +157,7 @@ export function useGame(): UseGameReturn {
       s.setWorkflowStatus('');
       s.setWorkflowHint(snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。');
       if (snapshot) {
-        const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+        restorePreTurnSnapshot(s, snapshot);
       } else {
         s.setTurnCount(Math.max(1, s.turnCount - 1));
       }
@@ -201,8 +200,7 @@ export function useGame(): UseGameReturn {
     s.setWorkflowStatus('');
     s.setWorkflowHint(snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。');
     if (snapshot) {
-      const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
-      await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+      restorePreTurnSnapshot(s, snapshot);
     } else {
       // 老回复没 snapshot（迁移期 / 旧存档），只能粗略 turnCount -1，状态保持不变
       s.setTurnCount(Math.max(1, s.turnCount - 1));

@@ -1,0 +1,691 @@
+{
+  "updatedAt": "2026-08-04",
+  "notes": "All built-in avatar variants use static logical references resolved through the K-Vault manifest. Repository-local character avatar PNGs have been removed; the shared placeholder remains local for failure fallback.",
+  "characters": [
+    {
+      "id": "march7th",
+      "name": "三月七",
+      "variants": [
+        "static:avatar:march7th:01",
+        "static:avatar:march7th:02",
+        "static:avatar:march7th:03"
+      ],
+      "aliases": [
+        "三月七·巡猎",
+        "巡猎三月七",
+        "长夜月"
+      ]
+    },
+    {
+      "id": "danheng",
+      "name": "丹恒",
+      "variants": [
+        "static:avatar:danheng:01",
+        "static:avatar:danheng:02",
+        "static:avatar:danheng:03"
+      ],
+      "aliases": [
+        "丹恒·饮月",
+        "饮月",
+        "Imbibitor Lunae",
+        "丹恒·腾荒"
+      ]
+    },
+    {
+      "id": "himeko",
+      "name": "姬子",
+      "variants": [
+        "static:avatar:himeko:01",
+        "static:avatar:himeko:02",
+        "static:avatar:himeko:03"
+      ],
+      "aliases": [
+        "姬子•启行",
+        "姬子·启行"
+      ]
+    },
+    {
+      "id": "welt",
+      "name": "瓦尔特",
+      "variants": [
+        "static:avatar:welt:01",
+        "static:avatar:welt:02",
+        "static:avatar:welt:03"
+      ],
+      "aliases": [
+        "瓦尔特·杨"
+      ]
+    },
+    {
+      "id": "pom-pom",
+      "name": "帕姆",
+      "variants": [
+        "static:avatar:pom-pom:01",
+        "static:avatar:pom-pom:02",
+        "static:avatar:pom-pom:03"
+      ]
+    },
+    {
+      "id": "herta",
+      "name": "黑塔",
+      "variants": [
+        "static:avatar:herta:01",
+        "static:avatar:herta:02",
+        "static:avatar:herta:03"
+      ]
+    },
+    {
+      "id": "asta",
+      "name": "艾丝妲",
+      "variants": [
+        "static:avatar:asta:01",
+        "static:avatar:asta:02",
+        "static:avatar:asta:03"
+      ]
+    },
+    {
+      "id": "arlan",
+      "name": "阿兰",
+      "variants": [
+        "static:avatar:arlan:01",
+        "static:avatar:arlan:02",
+        "static:avatar:arlan:03"
+      ]
+    },
+    {
+      "id": "stelle",
+      "name": "星",
+      "variants": [
+        "static:avatar:stelle:01",
+        "static:avatar:stelle:02",
+        "static:avatar:stelle:03"
+      ]
+    },
+    {
+      "id": "caelus",
+      "name": "穹",
+      "variants": [
+        "static:avatar:caelus:01",
+        "static:avatar:caelus:02",
+        "static:avatar:caelus:03"
+      ]
+    },
+    {
+      "id": "bronya",
+      "name": "布洛妮娅",
+      "variants": [
+        "static:avatar:bronya:01",
+        "static:avatar:bronya:02",
+        "static:avatar:bronya:03"
+      ]
+    },
+    {
+      "id": "aglaea",
+      "name": "阿格莱雅",
+      "variants": [
+        "static:avatar:aglaea:01"
+      ]
+    },
+    {
+      "id": "aventurine",
+      "name": "砂金",
+      "variants": [
+        "static:avatar:aventurine:01"
+      ]
+    },
+    {
+      "id": "bailu",
+      "name": "白露",
+      "variants": [
+        "static:avatar:bailu:01"
+      ]
+    },
+    {
+      "id": "clara",
+      "name": "克拉拉",
+      "variants": [
+        "static:avatar:clara:01"
+      ]
+    },
+    {
+      "id": "fu-xuan",
+      "name": "符玄",
+      "variants": [
+        "static:avatar:fu-xuan:01"
+      ]
+    },
+    {
+      "id": "gepard",
+      "name": "杰帕德",
+      "variants": [
+        "static:avatar:gepard:01"
+      ]
+    },
+    {
+      "id": "jade",
+      "name": "翡翠",
+      "variants": [
+        "static:avatar:jade:01"
+      ]
+    },
+    {
+      "id": "jing-yuan",
+      "name": "景元",
+      "variants": [
+        "static:avatar:jing-yuan:01"
+      ]
+    },
+    {
+      "id": "kafka",
+      "name": "卡芙卡",
+      "variants": [
+        "static:avatar:kafka:01"
+      ]
+    },
+    {
+      "id": "natasha",
+      "name": "娜塔莎",
+      "variants": [
+        "static:avatar:natasha:01"
+      ]
+    },
+    {
+      "id": "pela",
+      "name": "佩拉",
+      "variants": [
+        "static:avatar:pela:01"
+      ]
+    },
+    {
+      "id": "seele",
+      "name": "希儿",
+      "variants": [
+        "static:avatar:seele:01"
+      ]
+    },
+    {
+      "id": "serval",
+      "name": "希露瓦",
+      "variants": [
+        "static:avatar:serval:01"
+      ]
+    },
+    {
+      "id": "silver-wolf",
+      "name": "银狼",
+      "variants": [
+        "static:avatar:silver-wolf:01",
+        "static:avatar:silver-wolf:02",
+        "static:avatar:silver-wolf:03"
+      ],
+      "aliases": [
+        "银狼LV.999"
+      ]
+    },
+    {
+      "id": "svarog",
+      "name": "史瓦罗",
+      "variants": [
+        "static:avatar:svarog:01"
+      ]
+    },
+    {
+      "id": "topaz",
+      "name": "托帕",
+      "variants": [
+        "static:avatar:topaz:01"
+      ]
+    },
+    {
+      "id": "acheron",
+      "name": "黄泉",
+      "variants": [
+        "static:avatar:acheron:01"
+      ]
+    },
+    {
+      "id": "anaxa",
+      "name": "那刻夏",
+      "variants": [
+        "static:avatar:anaxa:01"
+      ]
+    },
+    {
+      "id": "archer",
+      "name": "Archer",
+      "variants": [
+        "static:avatar:archer:01"
+      ]
+    },
+    {
+      "id": "argenti",
+      "name": "银枝",
+      "variants": [
+        "static:avatar:argenti:01"
+      ]
+    },
+    {
+      "id": "ashveil",
+      "name": "不死途",
+      "variants": [
+        "static:avatar:ashveil:01"
+      ]
+    },
+    {
+      "id": "black-swan",
+      "name": "黑天鹅",
+      "variants": [
+        "static:avatar:black-swan:01"
+      ]
+    },
+    {
+      "id": "blade",
+      "name": "刃",
+      "variants": [
+        "static:avatar:blade:01"
+      ],
+      "aliases": [
+        "千冶•刃",
+        "千冶·刃"
+      ]
+    },
+    {
+      "id": "boothill",
+      "name": "波提欧",
+      "variants": [
+        "static:avatar:boothill:01"
+      ]
+    },
+    {
+      "id": "castorice",
+      "name": "遐蝶",
+      "variants": [
+        "static:avatar:castorice:01"
+      ]
+    },
+    {
+      "id": "cerydra",
+      "name": "刻律德菈",
+      "variants": [
+        "static:avatar:cerydra:01"
+      ]
+    },
+    {
+      "id": "cipher",
+      "name": "赛飞儿",
+      "variants": [
+        "static:avatar:cipher:01"
+      ]
+    },
+    {
+      "id": "cocolia",
+      "name": "可可利亚",
+      "variants": [
+        "static:avatar:cocolia:01"
+      ]
+    },
+    {
+      "id": "cyrene",
+      "name": "昔涟",
+      "variants": [
+        "static:avatar:cyrene:01"
+      ]
+    },
+    {
+      "id": "dr-ratio",
+      "name": "真理医生",
+      "variants": [
+        "static:avatar:dr-ratio:01"
+      ]
+    },
+    {
+      "id": "elio",
+      "name": "艾利欧",
+      "variants": [
+        "static:avatar:elio:01"
+      ]
+    },
+    {
+      "id": "evanescia",
+      "name": "绯英",
+      "variants": [
+        "static:avatar:evanescia:01"
+      ]
+    },
+    {
+      "id": "feixiao",
+      "name": "飞霄",
+      "variants": [
+        "static:avatar:feixiao:01"
+      ]
+    },
+    {
+      "id": "firefly",
+      "name": "流萤",
+      "variants": [
+        "static:avatar:firefly:01"
+      ]
+    },
+    {
+      "id": "gallagher",
+      "name": "加拉赫",
+      "variants": [
+        "static:avatar:gallagher:01"
+      ]
+    },
+    {
+      "id": "gilgamesh",
+      "name": "吉尔伽美什",
+      "variants": [
+        "static:avatar:gilgamesh:01"
+      ]
+    },
+    {
+      "id": "guiji",
+      "name": "归寂",
+      "variants": [
+        "static:avatar:guiji:01"
+      ]
+    },
+    {
+      "id": "guinaifen",
+      "name": "桂乃芬",
+      "variants": [
+        "static:avatar:guinaifen:01"
+      ]
+    },
+    {
+      "id": "hanya",
+      "name": "寒鸦",
+      "variants": [
+        "static:avatar:hanya:01"
+      ]
+    },
+    {
+      "id": "hook",
+      "name": "虎克",
+      "variants": [
+        "static:avatar:hook:01"
+      ]
+    },
+    {
+      "id": "huohuo",
+      "name": "藿藿",
+      "variants": [
+        "static:avatar:huohuo:01"
+      ]
+    },
+    {
+      "id": "hyacine",
+      "name": "风堇",
+      "variants": [
+        "static:avatar:hyacine:01"
+      ]
+    },
+    {
+      "id": "hysilens",
+      "name": "海瑟音",
+      "variants": [
+        "static:avatar:hysilens:01"
+      ]
+    },
+    {
+      "id": "jiaoqiu",
+      "name": "椒丘",
+      "variants": [
+        "static:avatar:jiaoqiu:01"
+      ]
+    },
+    {
+      "id": "jingliu",
+      "name": "镜流",
+      "variants": [
+        "static:avatar:jingliu:01"
+      ]
+    },
+    {
+      "id": "lingsha",
+      "name": "灵砂",
+      "variants": [
+        "static:avatar:lingsha:01"
+      ]
+    },
+    {
+      "id": "luka",
+      "name": "卢卡",
+      "variants": [
+        "static:avatar:luka:01"
+      ]
+    },
+    {
+      "id": "luocha",
+      "name": "罗刹",
+      "variants": [
+        "static:avatar:luocha:01"
+      ]
+    },
+    {
+      "id": "lygus",
+      "name": "来古士",
+      "variants": [
+        "static:avatar:lygus:01"
+      ]
+    },
+    {
+      "id": "lyndon-skott",
+      "name": "林登·斯科特",
+      "variants": [
+        "static:avatar:lyndon-skott:01"
+      ]
+    },
+    {
+      "id": "lynx",
+      "name": "玲可",
+      "variants": [
+        "static:avatar:lynx:01"
+      ]
+    },
+    {
+      "id": "misha",
+      "name": "米沙",
+      "variants": [
+        "static:avatar:misha:01"
+      ]
+    },
+    {
+      "id": "moze",
+      "name": "貊泽",
+      "variants": [
+        "static:avatar:moze:01"
+      ]
+    },
+    {
+      "id": "mydei",
+      "name": "万敌",
+      "variants": [
+        "static:avatar:mydei:01"
+      ]
+    },
+    {
+      "id": "pearl",
+      "name": "真珠",
+      "variants": [
+        "static:avatar:pearl:01"
+      ]
+    },
+    {
+      "id": "phainon",
+      "name": "白厄",
+      "variants": [
+        "static:avatar:phainon:01"
+      ],
+      "aliases": [
+        "卡厄斯兰那"
+      ]
+    },
+    {
+      "id": "qingque",
+      "name": "青雀",
+      "variants": [
+        "static:avatar:qingque:01"
+      ]
+    },
+    {
+      "id": "rappa",
+      "name": "乱破",
+      "variants": [
+        "static:avatar:rappa:01"
+      ]
+    },
+    {
+      "id": "rin-tohsaka",
+      "name": "远坂凛",
+      "variants": [
+        "static:avatar:rin-tohsaka:01"
+      ]
+    },
+    {
+      "id": "robin",
+      "name": "知更鸟",
+      "variants": [
+        "static:avatar:robin:01"
+      ]
+    },
+    {
+      "id": "ruan-mei",
+      "name": "阮·梅",
+      "variants": [
+        "static:avatar:ruan-mei:01"
+      ]
+    },
+    {
+      "id": "saber",
+      "name": "Saber",
+      "variants": [
+        "static:avatar:saber:01"
+      ]
+    },
+    {
+      "id": "sampo",
+      "name": "桑博",
+      "variants": [
+        "static:avatar:sampo:01"
+      ]
+    },
+    {
+      "id": "screwllum",
+      "name": "螺丝咕姆",
+      "variants": [
+        "static:avatar:screwllum:01"
+      ]
+    },
+    {
+      "id": "sparkle",
+      "name": "花火",
+      "variants": [
+        "static:avatar:sparkle:01"
+      ]
+    },
+    {
+      "id": "sparxie",
+      "name": "火花",
+      "variants": [
+        "static:avatar:sparxie:01"
+      ]
+    },
+    {
+      "id": "stephen-lloyd",
+      "name": "史蒂芬",
+      "variants": [
+        "static:avatar:stephen-lloyd:01"
+      ],
+      "aliases": [
+        "史蒂芬·劳埃德"
+      ]
+    },
+    {
+      "id": "sunday",
+      "name": "星期日",
+      "variants": [
+        "static:avatar:sunday:01"
+      ]
+    },
+    {
+      "id": "sushang",
+      "name": "素裳",
+      "variants": [
+        "static:avatar:sushang:01"
+      ]
+    },
+    {
+      "id": "the-dahlia",
+      "name": "大丽花",
+      "variants": [
+        "static:avatar:the-dahlia:01"
+      ],
+      "aliases": [
+        "康士坦丝",
+        "Constance"
+      ]
+    },
+    {
+      "id": "tingyun",
+      "name": "停云",
+      "variants": [
+        "static:avatar:tingyun:01"
+      ],
+      "aliases": [
+        "忘归人"
+      ]
+    },
+    {
+      "id": "tribbie",
+      "name": "缇宝",
+      "variants": [
+        "static:avatar:tribbie:01"
+      ]
+    },
+    {
+      "id": "xueyi",
+      "name": "雪衣",
+      "variants": [
+        "static:avatar:xueyi:01"
+      ]
+    },
+    {
+      "id": "xuzhao",
+      "name": "虚照",
+      "variants": [
+        "static:avatar:xuzhao:01"
+      ]
+    },
+    {
+      "id": "yanqing",
+      "name": "彦卿",
+      "variants": [
+        "static:avatar:yanqing:01"
+      ]
+    },
+    {
+      "id": "yaoguang",
+      "name": "爻光",
+      "variants": [
+        "static:avatar:yaoguang:01"
+      ]
+    },
+    {
+      "id": "yukong",
+      "name": "驭空",
+      "variants": [
+        "static:avatar:yukong:01"
+      ]
+    },
+    {
+      "id": "yunli",
+      "name": "云璃",
+      "variants": [
+        "static:avatar:yunli:01"
+      ]
+    }
+  ]
+}

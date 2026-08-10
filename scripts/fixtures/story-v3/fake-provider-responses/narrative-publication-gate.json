@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "narrative-publication-gate",
+  "responses": [
+    {
+      "responseId": "main_illegal_replay_body",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：已终态事件的战斗正文（V3 必须在发布门前拒绝）",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:f17311a6fc5ce3894347b1a86edf26f5685071757c68589cfa3bc76ad8cb5b6a",
+      "requestSummary": {
+        "turnId": "turn_gate_025",
+        "playerIntent": "增援支援舱段",
+        "illegalContent": "terminal_event_replay"
+      },
+      "rawOutput": "<thinking>未经过发布门检查，直接流式展示重演正文。</thinking>\n<正文>艾丝妲的通报刚播完，警报又响了。你被立刻召去支援舱段，与三月七、丹恒再次迎战末日兽并将其击退。</正文>\n<动态世界>末日兽再次出现并被击退。</动态世界>\n<短期记忆>玩家再次参与末日兽战斗。</短期记忆>",
+      "rawOutputSha256": "sha256:03051519991f6cfbda5d417ed8bd8dbc52eb5f34c30b58b9cbb622243018d1d1",
+      "expectedAdjudication": "hold_until_gate_pass",
+      "allowedFinalSideEffects": [
+        "reject:narrative_replay",
+        "rewrite_or_offer:aftermath_focus"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1294 @@
+{
+  "schemaVersion": 3,
+  "contractId": "story-runtime-v3",
+  "contractRevision": 2,
+  "sourceDoc": "docs/superpowers/specs/2026-08-06-story-composition-v3-implementation-plan.md",
+  "sourceSections": "4.1-4.10 + 4.2（StoryAssetCatalog 资产边界）+ 4.8.1 machine-readable contract",
+  "frozenAt": "G1.1",
+  "fieldRules": {
+    "required": "未标 ? 的字段必填",
+    "arrayDefault": "数组默认 []",
+    "optionalSerialization": "可选字段缺省时不序列化",
+    "unknownEnumValue": "枚举未知值一律进入迁移错误而不是静默映射"
+  },
+  "types": {
+    "StoryRuntimeState": {
+      "kind": "interface",
+      "source": "plan-4.1",
+      "doc": "核心运行 aggregate；新闻文章、非玩法性知识回执和 outbox 不与之共享物理 blob。outbox 不属于核心 blob。",
+      "fields": {
+        "schemaVersion": { "type": "literal", "value": 3, "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "saveNodeId": { "type": "string", "required": true },
+        "assetCatalogFingerprint": { "type": "string", "required": true },
+        "runtimeRevision": { "type": "number", "required": true, "note": "非负整数；核心状态 CAS 和存档版本，每次核心事务最多递增一次" },
+        "turnCount": { "type": "number", "required": true, "note": "只由成功的主回合策略递增；world_due/manual/debug 不得隐式借用" },
+        "lastCommittedTurnId": { "type": "string", "required": false },
+        "gameClock": { "type": "ref", "to": "GameClock", "required": true },
+        "activeTrackId": { "type": "string", "required": false },
+        "focus": { "type": "ref", "to": "StoryFocus", "required": true },
+        "playerPlanPool": { "type": "array", "items": { "type": "ref", "to": "PlayerPlanItem" }, "required": true, "default": [] },
+        "worldPlanPool": { "type": "array", "items": { "type": "ref", "to": "WorldPlanItem" }, "required": true, "default": [] },
+        "convergenceQueue": { "type": "array", "items": { "type": "ref", "to": "ConvergenceItem" }, "required": true, "default": [] },
+        "worldEvents": { "type": "array", "items": { "type": "ref", "to": "WorldEventInstance" }, "required": true, "default": [] },
+        "entities": { "type": "array", "items": { "type": "ref", "to": "WorldEntityState" }, "required": true, "default": [] },
+        "factLedger": { "type": "array", "items": { "type": "ref", "to": "CommittedWorldFact" }, "required": true, "default": [] },
+        "publicSchedules": { "type": "array", "items": { "type": "ref", "to": "PublicSchedule" }, "required": true, "default": [] },
+        "officialNotices": { "type": "array", "items": { "type": "ref", "to": "OfficialNotice" }, "required": true, "default": [] },
+        "knowledgeGrants": { "type": "array", "items": { "type": "ref", "to": "KnowledgeGrant" }, "required": true, "default": [] },
+        "commandIdempotencyIndex": {
+          "type": "map",
+          "key": { "type": "string" },
+          "value": {
+            "type": "object",
+            "fields": {
+              "commandFingerprint": { "type": "string", "required": true },
+              "resultRevision": { "type": "number", "required": true },
+              "resultCode": { "type": "string", "required": true },
+              "receiptId": { "type": "string", "required": true },
+              "resultHash": { "type": "string", "required": true },
+              "resultRef": { "type": "object", "required": true, "fields": { "saveNodeId": { "type": "string", "required": true }, "stateFingerprint": { "type": "string", "required": true } } }
+            }
+          },
+          "required": true,
+          "default": {},
+          "note": "runtimeBranchId + idempotencyKey -> 持久化索引"
+        },
+        "turnReceipts": { "type": "array", "items": { "type": "ref", "to": "TurnAdjudicationReceipt" }, "required": true, "default": [] },
+        "narrativePublications": { "type": "array", "items": { "type": "ref", "to": "NarrativePublicationRecord" }, "required": true, "default": [] },
+        "migration": { "type": "ref", "to": "RuntimeMigrationMeta", "required": true }
+      }
+    },
+    "StoryRuntimeView": {
+      "kind": "interface",
+      "source": "plan-4.1",
+      "doc": "组合读取视图；不得把组合视图当作核心 CAS 写入对象。outbox 只在这里为空数组出现，不属于核心 blob。",
+      "fields": {
+        "core": { "type": "ref", "to": "StoryRuntimeState", "required": true },
+        "projections": { "type": "ref", "to": "StoryProjectionState", "required": true },
+        "outbox": { "type": "array", "items": { "type": "ref", "to": "ProjectionOutboxItem" }, "required": true, "default": [] }
+      }
+    },
+    "StoryProjectionState": {
+      "kind": "interface",
+      "source": "plan-4.1",
+      "doc": "ProjectionStore 组合；文章版本、阅读游标和非玩法知识回执按各自 CAS 更新。",
+      "fields": {
+        "runtimeBranchId": { "type": "string", "required": true },
+        "newsArticles": { "type": "array", "items": { "type": "ref", "to": "NewsArticleAggregate" }, "required": true, "default": [] },
+        "knowledgeReceipts": { "type": "array", "items": { "type": "ref", "to": "KnowledgeReceipt" }, "required": true, "default": [] },
+        "observerReadCursors": { "type": "array", "items": { "type": "ref", "to": "ObserverReadCursor" }, "required": true, "default": [] },
+        "projectionRevisions": { "type": "map", "key": { "type": "string" }, "value": { "type": "number" }, "required": true, "default": {} }
+      }
+    },
+    "GameTime": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "核心时间；唯一 epoch，不得用 turnCount 代替；显示字符串不是核心时间字段。",
+      "fields": {
+        "dayOrdinal": { "type": "number", "required": true, "note": "非负整数，唯一 epoch" },
+        "minuteOfDay": { "type": "number", "required": true, "note": "0..1439，跨日由 reducer 归一化" }
+      }
+    },
+    "GameClock": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "游戏时间唯一写入者持有的时钟状态。",
+      "fields": {
+        "now": { "type": "ref", "to": "GameTime", "required": true },
+        "defaultAdvanceMinutes": { "type": "number", "required": true },
+        "policyVersion": { "type": "number", "required": true },
+        "lastAdvanceRevision": { "type": "number", "required": true },
+        "lastAdvanceCommandId": { "type": "string", "required": false }
+      }
+    },
+    "StoryFocus": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "当前剧情焦点；章节/分段是资产粒度，情节单元/焦点是运行粒度。",
+      "fields": {
+        "focusId": { "type": "string", "required": true },
+        "trackId": { "type": "string", "required": false },
+        "unitId": { "type": "string", "required": false },
+        "status": { "type": "enum", "enum": "StoryFocusStatus", "required": true },
+        "reasonCodes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "enteredAtRevision": { "type": "number", "required": true }
+      }
+    },
+    "WorldEntityState": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "命途/环境/资产等 gameplay owner 各自拥有的领域状态；命令改变它时必须与核心事务合并。",
+      "fields": {
+        "entityId": { "type": "string", "required": true },
+        "entityType": { "type": "enum", "enum": "WorldEntityType", "required": true },
+        "status": { "type": "enum", "enum": "WorldEntityStatus", "required": true },
+        "locationId": { "type": "string", "required": false },
+        "anchorId": { "type": "string", "required": false },
+        "attributes": { "type": "open_map", "valueTypes": ["string", "number", "boolean", "null"], "required": true, "default": {}, "canonicalOpen": true, "note": "canonical 4.8.1 声明为开放的 attributes 单字段" },
+        "stateRevision": { "type": "number", "required": true }
+      }
+    },
+    "WorldEventDefinition": {
+      "kind": "interface",
+      "source": "plan-4.3",
+      "doc": "描述可能发生什么（资产/运行时定义）；不是事件事实。",
+      "fields": {
+        "eventDefinitionId": { "type": "string", "required": true },
+        "origin": { "type": "enum", "enum": "WorldEventDefinitionOrigin", "required": true },
+        "title": { "type": "string", "required": true },
+        "trackId": { "type": "string", "required": false },
+        "actorEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "targetEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "dependencyDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "completionPredicate": { "type": "ref", "to": "CompletionPredicate", "required": true },
+        "scheduling": { "type": "ref", "to": "WorldEventDefinitionScheduling", "required": true },
+        "allowedResolutionModes": { "type": "array", "items": { "type": "enum", "enum": "EventDefinitionResolutionMode" }, "required": true, "default": [] },
+        "replayPolicy": { "type": "enum", "enum": "WorldEventReplayPolicy", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "consequenceDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "definitionFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "WorldEventDefinitionScheduling": {
+      "kind": "interface",
+      "source": "plan-4.3",
+      "doc": "WorldEventDefinition.scheduling 内联结构。",
+      "fields": {
+        "earliestAt": { "type": "ref", "to": "GameTime", "required": false },
+        "dueAt": { "type": "ref", "to": "GameTime", "required": false },
+        "missAfter": { "type": "ref", "to": "GameTime", "required": false }
+      }
+    },
+    "WorldEventInstance": {
+      "kind": "interface",
+      "source": "plan-4.3",
+      "doc": "描述这一局哪一次真的发生；提前完成是同一定义下的 player_early 结算，不是旧实例重开。",
+      "fields": {
+        "eventInstanceId": { "type": "string", "required": true },
+        "eventDefinitionId": { "type": "string", "required": true },
+        "parentInstanceId": { "type": "string", "required": false },
+        "status": { "type": "enum", "enum": "WorldEventInstanceStatus", "required": true },
+        "startAt": { "type": "ref", "to": "GameTime", "required": false },
+        "dueAt": { "type": "ref", "to": "GameTime", "required": false },
+        "resolvedAt": { "type": "ref", "to": "GameTime", "required": false },
+        "resolutionMode": { "type": "enum", "enum": "WorldEventResolutionMode", "required": false },
+        "outcome": { "type": "enum", "enum": "WorldEventOutcome", "required": false },
+        "replayPolicy": { "type": "enum", "enum": "WorldEventReplayPolicy", "required": true },
+        "participantIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "dependencyIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "publicFactIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "terminalFactId": { "type": "string", "required": false },
+        "idempotencyKey": { "type": "string", "required": true },
+        "eventResolutionKey": { "type": "string", "required": false, "note": "branch + eventInstance + resolution policy + attempt" },
+        "source": { "type": "ref", "to": "EvidenceRef", "required": true }
+      }
+    },
+    "EmergentEventDefinition": {
+      "kind": "interface",
+      "source": "plan-4.3",
+      "doc": "自由路线经受限 register_emergent_event_definition 注册的本局专属定义；先碰撞检查后实例化。",
+      "fields": {
+        "eventDefinitionId": { "type": "string", "required": true, "note": "runtime:<branchId>:emergent:<fingerprint>" },
+        "origin": { "type": "literal", "value": "emergent", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "causeEvidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "identityAnchors": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "completionPredicate": { "type": "ref", "to": "CompletionPredicate", "required": true },
+        "replayPolicy": { "type": "enum", "enum": "WorldEventReplayPolicy", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "definitionFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "CompletionPredicate": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "完成判定：target 实体/事件、事实类型、证据种类、payload 匹配、最低证据数和确定性键。",
+      "fields": {
+        "predicateId": { "type": "string", "required": true },
+        "targetEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "targetEventInstanceId": { "type": "string", "required": false },
+        "requiredFactTypes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "requiredEvidenceKinds": { "type": "array", "items": { "type": "enum", "enum": "EvidenceRefKind" }, "required": true, "default": [] },
+        "payloadMatchers": { "type": "array", "items": { "type": "ref", "to": "PayloadMatcher" }, "required": true, "default": [] },
+        "minimumEvidenceCount": { "type": "number", "required": true },
+        "deterministicKey": { "type": "string", "required": true },
+        "allowedOutcomes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "failureOutcomes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] }
+      }
+    },
+    "PayloadMatcher": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "CompletionPredicate.payloadMatchers 内联结构。",
+      "fields": {
+        "path": { "type": "string", "required": true },
+        "operator": { "type": "enum", "enum": "PayloadMatcherOperator", "required": true },
+        "value": { "type": "scalar_union", "elementTypes": ["string", "number", "boolean", "string_array"], "required": true }
+      }
+    },
+    "CommittedWorldFact": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "已提交事实；事实不可覆盖，更正通过 supersedes，不能改写历史对象。",
+      "fields": {
+        "factId": { "type": "string", "required": true },
+        "eventInstanceId": { "type": "string", "required": true },
+        "sourceRevision": { "type": "number", "required": true },
+        "factType": { "type": "string", "required": true },
+        "payload": { "type": "open_map", "valueTypes": ["unknown"], "required": true, "default": {}, "canonicalOpen": true, "note": "canonical 4.8.1 声明为开放的 payload 单字段" },
+        "occurredAt": { "type": "ref", "to": "GameTime", "required": true },
+        "committedAt": { "type": "ref", "to": "GameTime", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "evidenceLevel": { "type": "enum", "enum": "EvidenceLevel", "required": true },
+        "supersedesFactId": { "type": "string", "required": false },
+        "invalidatesEventInstanceIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "playerParticipated": { "type": "boolean", "required": true },
+        "playerObserverVisible": { "type": "boolean", "required": true, "note": "上帝视角只控制 UI；角色知情必须由 KnowledgeGrant/KnowledgeReceipt 派生" },
+        "createdBy": { "type": "enum", "enum": "FactCreatedBy", "required": true }
+      }
+    },
+    "EvidenceRef": {
+      "kind": "union",
+      "discriminator": "kind",
+      "source": "plan-4.8.1",
+      "doc": "证据引用；每个候选必须能回到可核验的原始证据。narrative_span 偏移永远针对该 normalization version 的 accepted body。",
+      "variants": [
+        { "tag": "narrative_span", "fields": { "kind": { "type": "literal", "value": "narrative_span", "required": true }, "responseId": { "type": "string", "required": true }, "messageId": { "type": "string", "required": false }, "bodyFingerprint": { "type": "string", "required": true }, "normalizationVersion": { "type": "number", "required": true }, "startOffset": { "type": "number", "required": true }, "endOffset": { "type": "number", "required": true }, "textFingerprint": { "type": "string", "required": true } } },
+        { "tag": "system_command", "fields": { "kind": { "type": "literal", "value": "system_command", "required": true }, "commandId": { "type": "string", "required": true }, "commandFingerprint": { "type": "string", "required": true } } },
+        { "tag": "gameplay_receipt", "fields": { "kind": { "type": "literal", "value": "gameplay_receipt", "required": true }, "receiptId": { "type": "string", "required": true }, "receiptType": { "type": "string", "required": true } } },
+        { "tag": "schedule_record", "fields": { "kind": { "type": "literal", "value": "schedule_record", "required": true }, "scheduleId": { "type": "string", "required": true }, "scheduleRevision": { "type": "number", "required": true } } },
+        { "tag": "notice_record", "fields": { "kind": { "type": "literal", "value": "notice_record", "required": true }, "noticeId": { "type": "string", "required": true }, "noticeRevision": { "type": "number", "required": true } } },
+        { "tag": "broadcast_record", "fields": { "kind": { "type": "literal", "value": "broadcast_record", "required": true }, "broadcastId": { "type": "string", "required": true }, "deliveryId": { "type": "string", "required": false }, "sourceRevision": { "type": "number", "required": true }, "recipientSnapshotFingerprint": { "type": "string", "required": true } } },
+        { "tag": "article_version", "fields": { "kind": { "type": "literal", "value": "article_version", "required": true }, "articleId": { "type": "string", "required": true }, "articleVersion": { "type": "number", "required": true }, "claimFingerprint": { "type": "string", "required": true } } },
+        { "tag": "migration_record", "fields": { "kind": { "type": "literal", "value": "migration_record", "required": true }, "migrationId": { "type": "string", "required": true }, "sourcePath": { "type": "string", "required": true }, "sourceFingerprint": { "type": "string", "required": true } } },
+        { "tag": "projection_record", "fields": { "kind": { "type": "literal", "value": "projection_record", "required": true }, "projectionKind": { "type": "string", "required": true }, "projectionId": { "type": "string", "required": true }, "projectionRevision": { "type": "number", "required": true } } },
+        { "tag": "narrative_publication", "fields": { "kind": { "type": "literal", "value": "narrative_publication", "required": true }, "publicationId": { "type": "string", "required": true }, "bodyFingerprint": { "type": "string", "required": true }, "commitReceiptId": { "type": "string", "required": true } } }
+      ]
+    },
+    "PublicScope": {
+      "kind": "union",
+      "discriminator": "kind",
+      "source": "plan-4.8.1",
+      "doc": "公共来源/受众计算输入，不能直接把预告变成事实；空 scope 一律按 private 处理。",
+      "variants": [
+        { "tag": "private", "fields": { "kind": { "type": "literal", "value": "private", "required": true } } },
+        { "tag": "local", "fields": { "kind": { "type": "literal", "value": "local", "required": true }, "locationIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] }, "anchorIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] } } },
+        { "tag": "faction", "fields": { "kind": { "type": "literal", "value": "faction", "required": true }, "factionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] } } },
+        { "tag": "public", "fields": { "kind": { "type": "literal", "value": "public", "required": true }, "regionIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] } } },
+        { "tag": "broadcast", "fields": { "kind": { "type": "literal", "value": "broadcast", "required": true }, "networkIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] }, "recipientIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] } } }
+      ]
+    },
+    "ArticlePolicy": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "新闻文章策略；G1 固定为单地区、单栏目、最多 8 个 sourceRefs、只面向 player observer。",
+      "fields": {
+        "regionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "audienceKinds": { "type": "array", "items": { "type": "enum", "enum": "ArticleAudienceKind" }, "required": true, "default": [] },
+        "category": { "type": "string", "required": true },
+        "aggregationKey": { "type": "string", "required": true },
+        "maxSourceRefs": { "type": "number", "required": true }
+      }
+    },
+    "OpeningPrelude": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "开局对齐一次性种子事务的资产引述；nonProgressing 不改变剧情或事实。",
+      "fields": {
+        "preludeId": { "type": "string", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "bodyFingerprint": { "type": "string", "required": true },
+        "sourceRefs": { "type": "array", "items": { "type": "ref", "to": "OpeningPreludeSourceRef" }, "required": true, "default": [] },
+        "nonProgressing": { "type": "boolean", "required": true },
+        "idempotencyKey": { "type": "string", "required": true }
+      }
+    },
+    "OpeningPreludeSourceRef": {
+      "kind": "union",
+      "discriminator": "kind",
+      "source": "plan-4.8.1",
+      "doc": "OpeningPrelude.sourceRefs 内联结构。",
+      "variants": [
+        { "tag": "official_notice", "fields": { "kind": { "type": "literal", "value": "official_notice", "required": true }, "noticeId": { "type": "string", "required": true }, "noticeRevision": { "type": "number", "required": true } } },
+        { "tag": "public_schedule", "fields": { "kind": { "type": "literal", "value": "public_schedule", "required": true }, "scheduleId": { "type": "string", "required": true }, "scheduleRevision": { "type": "number", "required": true } } },
+        { "tag": "manual", "fields": { "kind": { "type": "literal", "value": "manual", "required": true }, "draftId": { "type": "string", "required": true }, "nonProgressing": { "type": "literal", "value": true, "required": true } } }
+      ]
+    },
+    "PlayerPlanItem": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "玩家线可选目标、阻断、替代路线、依赖事实、可承接方式和过期策略。",
+      "fields": {
+        "planItemId": { "type": "string", "required": true },
+        "unitId": { "type": "string", "required": false },
+        "status": { "type": "enum", "enum": "PlayerPlanItemStatus", "required": true },
+        "dependencyFactIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "acceptanceModes": { "type": "array", "items": { "type": "enum", "enum": "AcceptanceMode" }, "required": true, "default": [] },
+        "expiresAt": { "type": "ref", "to": "GameTime", "required": false },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] }
+      }
+    },
+    "WorldPlanItem": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "后台事件的排期、行动目标、公开计划和潜在后果；不是已发生事实。",
+      "fields": {
+        "planItemId": { "type": "string", "required": true },
+        "eventDefinitionId": { "type": "string", "required": true },
+        "status": { "type": "enum", "enum": "WorldPlanItemStatus", "required": true },
+        "dueAt": { "type": "ref", "to": "GameTime", "required": false },
+        "dependencyIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "publicScheduleId": { "type": "string", "required": false },
+        "consequenceDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] }
+      }
+    },
+    "ConvergenceItem": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "事实已改变世界但玩家尚未参与/尚未知道/尚未纳入当前行动的桥接项；只能改变可用条件，不能代替玩家做决定。",
+      "fields": {
+        "convergenceId": { "type": "string", "required": true },
+        "sourceFactIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "status": { "type": "enum", "enum": "ConvergenceItemStatus", "required": true },
+        "eligiblePlanItemIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "playerDecisionRequired": { "type": "boolean", "required": true },
+        "expiresAt": { "type": "ref", "to": "GameTime", "required": false },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] }
+      }
+    },
+    "RuntimeMigrationMeta": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "迁移元数据；迁移记录默认 legacy_unverified，除非用户确认后生成 manual_import 回执。",
+      "fields": {
+        "status": { "type": "enum", "enum": "RuntimeMigrationStatus", "required": true },
+        "sourceSaveFingerprint": { "type": "string", "required": false },
+        "migrationId": { "type": "string", "required": false },
+        "legacyIdMapFingerprint": { "type": "string", "required": false },
+        "unresolvedCursorIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "warnings": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "confirmedAtRevision": { "type": "number", "required": false }
+      }
+    },
+    "OfficialNotice": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "官方公告；属于核心公共来源，必须随核心事务和 runtime revision 持久化。",
+      "fields": {
+        "noticeId": { "type": "string", "required": true },
+        "noticeRevision": { "type": "number", "required": true },
+        "issuerId": { "type": "string", "required": true },
+        "claimFingerprint": { "type": "string", "required": true },
+        "status": { "type": "enum", "enum": "OfficialNoticeStatus", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "source": { "type": "ref", "to": "EvidenceRef", "required": true },
+        "issuedAt": { "type": "ref", "to": "GameTime", "required": true },
+        "supersedesNoticeId": { "type": "string", "required": false }
+      }
+    },
+    "KnowledgeGrant": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "coordinator 随核心 revision 一起生效的知识授予；下一回合 prompt 只能读取 effectiveFromRuntimeRevision <= R 的 grant。",
+      "fields": {
+        "runtimeBranchId": { "type": "string", "required": true },
+        "grantId": { "type": "string", "required": true },
+        "subjectType": { "type": "enum", "enum": "KnowledgeSubjectType", "required": true },
+        "subjectId": { "type": "string", "required": true },
+        "subjectRef": { "type": "ref", "to": "KnowledgeSubjectRef", "required": true },
+        "effectiveFromRuntimeRevision": { "type": "number", "required": true },
+        "audienceSnapshot": { "type": "ref", "to": "AudienceSnapshot", "required": false },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "idempotencyKey": { "type": "string", "required": true }
+      }
+    },
+    "TurnAdjudicationReceipt": {
+      "kind": "interface",
+      "source": "plan-4.9",
+      "doc": "每次主推进保存的裁决结果；UI 诊断来源与“为什么没推进/为什么没有重复”的证据，不得用模型原文代替。",
+      "fields": {
+        "receiptId": { "type": "string", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "inputRuntimeRevision": { "type": "number", "required": true },
+        "outputRuntimeRevision": { "type": "number", "required": false },
+        "narrativeDecision": { "type": "ref", "to": "NarrativeConsistencyDecision", "required": false },
+        "acceptedCandidateIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "rejectedCandidateIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "completedUnitIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "blockedReasons": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "sourceFactIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "outboxIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "errorCodes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "durationMs": { "type": "number", "required": true }
+      }
+    },
+    "TurnAttemptReceipt": {
+      "kind": "interface",
+      "source": "plan-4.9",
+      "doc": "事务生命周期回执；不能用一个成功回执覆盖 commit 前失败、commit 后崩溃和恢复中的区别。",
+      "fields": {
+        "attemptId": { "type": "string", "required": true },
+        "turnId": { "type": "string", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "expectedRuntimeRevision": { "type": "number", "required": true },
+        "committedRuntimeRevision": { "type": "number", "required": false },
+        "preTurnCheckpointId": { "type": "string", "required": true },
+        "commitReceiptId": { "type": "string", "required": false, "note": "一旦写入，所有 catch/abort/recovery 路径都必须视为 commit 已发生" },
+        "phase": { "type": "enum", "enum": "TurnAttemptPhase", "required": true },
+        "failureCode": { "type": "string", "required": false },
+        "recoveryAction": { "type": "enum", "enum": "TurnRecoveryAction", "required": false },
+        "createdAt": { "type": "number", "required": true },
+        "updatedAt": { "type": "number", "required": true }
+      }
+    },
+    "EventTargetRef": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "事件实例目标；eventInstanceId 只能是查找 hint，必须同时携带 expectedInstanceFingerprint 由 coordinator 校验。",
+      "fields": {
+        "eventInstanceId": { "type": "string", "required": true },
+        "expectedInstanceFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "CreateEventProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "创建事件实例提案；eventInstanceId 由 coordinator 按 runtimeBranchId + eventDefinitionId + activationOrdinal 生成。",
+      "fields": {
+        "definitionRef": { "type": "object", "required": true, "fields": { "eventDefinitionId": { "type": "string", "required": true }, "definitionFingerprint": { "type": "string", "required": true } } },
+        "parentTarget": { "type": "ref", "to": "EventTargetRef", "required": false },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] }
+      }
+    },
+    "FactProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "事实提案；factId/sourceRevision/发生时间/提交时间由 coordinator 分配。",
+      "fields": {
+        "eventTarget": { "type": "ref", "to": "EventTargetRef", "required": true },
+        "factType": { "type": "string", "required": true },
+        "payload": { "type": "open_map", "valueTypes": ["unknown"], "required": true, "default": {}, "canonicalOpen": true, "note": "canonical 4.8.1 声明为开放的 payload 单字段" },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "evidenceLevel": { "type": "enum", "enum": "EvidenceLevel", "required": true },
+        "playerParticipated": { "type": "boolean", "required": true }
+      }
+    },
+    "KnowledgeGrantProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "知识授予提案；grantId 与 audience snapshot 冻结由 coordinator 完成，proposal 只带 audienceSelector。",
+      "fields": {
+        "subjectType": { "type": "enum", "enum": "KnowledgeSubjectType", "required": true },
+        "subjectId": { "type": "string", "required": true },
+        "subjectRef": { "type": "ref", "to": "KnowledgeSubjectRef", "required": true },
+        "audienceSelector": { "type": "ref", "to": "AudienceSelector", "required": false },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] }
+      }
+    },
+    "PublicScheduleProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "公开排期提案；scheduleRevision/scheduleId 由 coordinator 分配。",
+      "fields": {
+        "sourceDefinitionId": { "type": "string", "required": true },
+        "plannedAt": { "type": "ref", "to": "GameTime", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "source": { "type": "ref", "to": "EvidenceRef", "required": true }
+      }
+    },
+    "OfficialNoticeProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "官方公告提案；noticeId/noticeRevision 由 coordinator 分配。",
+      "fields": {
+        "issuerId": { "type": "string", "required": true },
+        "claimFingerprint": { "type": "string", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "source": { "type": "ref", "to": "EvidenceRef", "required": true }
+      }
+    },
+    "EmergentEventDefinitionProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "涌现定义提案；注册必须携带因果证据和身份锚点，并与 canonical/既有实例/emergent fingerprint 碰撞检查。",
+      "fields": {
+        "title": { "type": "string", "required": true },
+        "actorEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "targetEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "dependencyDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "completionPredicate": { "type": "ref", "to": "CompletionPredicate", "required": true },
+        "replayPolicy": { "type": "enum", "enum": "WorldEventReplayPolicy", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "causeEvidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "identityAnchors": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] }
+      }
+    },
+    "PlanItemProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "规划项提案；planItemId 由 coordinator 分配。",
+      "fields": {
+        "unitId": { "type": "string", "required": false },
+        "eventDefinitionId": { "type": "string", "required": false },
+        "dependencyFactIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "acceptanceModes": { "type": "array", "items": { "type": "enum", "enum": "AcceptanceMode" }, "required": false, "default": [] },
+        "bridgeOptions": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] }
+      }
+    },
+    "ConvergenceProposal": {
+      "kind": "interface",
+      "source": "plan-4.8.1",
+      "doc": "交汇项提案；convergenceId 由 coordinator 分配。",
+      "fields": {
+        "sourceFactIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "eligiblePlanItemIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "bridgeOptions": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] }
+      }
+    },
+    "RuntimeCommand": {
+      "kind": "union",
+      "discriminator": "kind",
+      "source": "plan-4.8.1",
+      "doc": "唯一写入口可见的核心写命令；模型和 UI 只能提交 proposal，不能直接写受保护字段。",
+      "variants": [
+        { "tag": "advance_time", "fields": { "kind": { "type": "literal", "value": "advance_time", "required": true }, "deltaMinutes": { "type": "number", "required": true }, "reason": { "type": "enum", "enum": "AdvanceTimeReason", "required": true } } },
+        { "tag": "create_event_instance", "fields": { "kind": { "type": "literal", "value": "create_event_instance", "required": true }, "proposal": { "type": "ref", "to": "CreateEventProposal", "required": true } } },
+        { "tag": "resolve_event_instance", "fields": { "kind": { "type": "literal", "value": "resolve_event_instance", "required": true }, "target": { "type": "ref", "to": "EventTargetRef", "required": true }, "resolutionMode": { "type": "enum", "enum": "WorldEventResolutionMode", "required": true }, "outcome": { "type": "enum", "enum": "WorldEventOutcome", "required": true }, "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] } } },
+        { "tag": "supersede_event_instance", "fields": { "kind": { "type": "literal", "value": "supersede_event_instance", "required": true }, "target": { "type": "ref", "to": "EventTargetRef", "required": true }, "replacementTarget": { "type": "ref", "to": "EventTargetRef", "required": false }, "reason": { "type": "string", "required": true }, "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] } } },
+        { "tag": "append_fact", "fields": { "kind": { "type": "literal", "value": "append_fact", "required": true }, "proposal": { "type": "ref", "to": "FactProposal", "required": true } } },
+        { "tag": "upsert_plan_item", "fields": { "kind": { "type": "literal", "value": "upsert_plan_item", "required": true }, "proposal": { "type": "ref", "to": "PlanItemProposal", "required": true } } },
+        { "tag": "enqueue_convergence", "fields": { "kind": { "type": "literal", "value": "enqueue_convergence", "required": true }, "proposal": { "type": "ref", "to": "ConvergenceProposal", "required": true } } },
+        { "tag": "register_emergent_event_definition", "fields": { "kind": { "type": "literal", "value": "register_emergent_event_definition", "required": true }, "proposal": { "type": "ref", "to": "EmergentEventDefinitionProposal", "required": true } } },
+        { "tag": "grant_knowledge", "fields": { "kind": { "type": "literal", "value": "grant_knowledge", "required": true }, "proposal": { "type": "ref", "to": "KnowledgeGrantProposal", "required": true } } },
+        { "tag": "publish_public_schedule", "fields": { "kind": { "type": "literal", "value": "publish_public_schedule", "required": true }, "proposal": { "type": "ref", "to": "PublicScheduleProposal", "required": true } } },
+        { "tag": "issue_official_notice", "fields": { "kind": { "type": "literal", "value": "issue_official_notice", "required": true }, "proposal": { "type": "ref", "to": "OfficialNoticeProposal", "required": true } } },
+        { "tag": "path_command", "fields": { "kind": { "type": "literal", "value": "path_command", "required": true }, "action": { "type": "enum", "enum": "PathCommandAction", "required": true }, "targetId": { "type": "string", "required": true }, "payload": { "type": "open_map", "valueTypes": ["unknown"], "required": false, "default": {}, "canonicalOpen": true, "note": "canonical 4.8.1 声明为开放的 payload 单字段" } } }
+      ]
+    },
+    "NewsSourceRef": {
+      "kind": "union",
+      "discriminator": "kind",
+      "source": "plan-4.5",
+      "doc": "新闻来源引用；已发生新闻只能引用 committed_fact，预告只能引用 public_schedule/official_notice。",
+      "variants": [
+        { "tag": "committed_fact", "fields": { "kind": { "type": "literal", "value": "committed_fact", "required": true }, "factId": { "type": "string", "required": true }, "sourceRevision": { "type": "number", "required": true } } },
+        { "tag": "public_schedule", "fields": { "kind": { "type": "literal", "value": "public_schedule", "required": true }, "scheduleId": { "type": "string", "required": true }, "scheduleRevision": { "type": "number", "required": true } } },
+        { "tag": "official_notice", "fields": { "kind": { "type": "literal", "value": "official_notice", "required": true }, "noticeId": { "type": "string", "required": true }, "noticeRevision": { "type": "number", "required": true } } },
+        { "tag": "article_version", "fields": { "kind": { "type": "literal", "value": "article_version", "required": true }, "articleId": { "type": "string", "required": true }, "articleVersion": { "type": "number", "required": true }, "claimFingerprint": { "type": "string", "required": true } } },
+        { "tag": "manual", "fields": { "kind": { "type": "literal", "value": "manual", "required": true }, "draftId": { "type": "string", "required": true }, "nonProgressing": { "type": "literal", "value": true, "required": true } } }
+      ]
+    },
+    "PublicSchedule": {
+      "kind": "interface",
+      "source": "plan-4.5",
+      "doc": "排期不是 CommittedWorldFact；只有真实结果被 coordinator 提交后才产生 committed_fact 来源。",
+      "fields": {
+        "scheduleId": { "type": "string", "required": true },
+        "sourceDefinitionId": { "type": "string", "required": true },
+        "status": { "type": "enum", "enum": "PublicScheduleStatus", "required": true },
+        "plannedAt": { "type": "ref", "to": "GameTime", "required": true },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "source": { "type": "ref", "to": "EvidenceRef", "required": true },
+        "scheduleRevision": { "type": "number", "required": true },
+        "idempotencyKey": { "type": "string", "required": true }
+      }
+    },
+    "NewsArticleAggregate": {
+      "kind": "interface",
+      "source": "plan-4.5",
+      "doc": "文章聚合根；同一 sourceFingerprint + articlePolicy 只允许一个聚合根，发布/更正只能追加版本。",
+      "fields": {
+        "runtimeBranchId": { "type": "string", "required": true },
+        "articleId": { "type": "string", "required": true },
+        "currentVersion": { "type": "number", "required": true },
+        "versionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "aggregateRevision": { "type": "number", "required": true }
+      }
+    },
+    "NewsArticleVersion": {
+      "kind": "interface",
+      "source": "plan-4.5",
+      "doc": "不可变文章版本；不能用一个可覆盖的 body 对象表示全部历史。",
+      "fields": {
+        "runtimeBranchId": { "type": "string", "required": true },
+        "articleVersionId": { "type": "string", "required": true },
+        "articleId": { "type": "string", "required": true },
+        "articleVersion": { "type": "number", "required": true },
+        "sourceRefs": { "type": "array", "items": { "type": "ref", "to": "NewsSourceRef" }, "required": true, "default": [] },
+        "sourceFingerprint": { "type": "string", "required": true },
+        "lifecycle": { "type": "enum", "enum": "NewsArticleVersionLifecycle", "required": true },
+        "storyPhase": { "type": "enum", "enum": "NewsStoryPhase", "required": true },
+        "category": { "type": "string", "required": true },
+        "title": { "type": "string", "required": true },
+        "body": { "type": "string", "required": true },
+        "publishedAt": { "type": "ref", "to": "GameTime", "required": false },
+        "publicScope": { "type": "ref", "to": "PublicScope", "required": true },
+        "reliability": { "type": "enum", "enum": "NewsReliability", "required": true },
+        "isCorrection": { "type": "boolean", "required": true },
+        "correctsArticleId": { "type": "string", "required": false },
+        "sourceTrace": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "migrationTrace": {
+          "type": "object",
+          "required": false,
+          "fields": {
+            "status": { "type": "enum", "enum": "MigrationTraceStatus", "required": true },
+            "rawFieldPaths": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+            "rawPayloadFingerprint": { "type": "string", "required": true }
+          }
+        }
+      }
+    },
+    "KnowledgeSubjectRef": {
+      "kind": "union",
+      "discriminator": "kind",
+      "source": "plan-4.6",
+      "doc": "知识回执/传播的 subject；只能是同一来源链或明确的 narrative_delivery 片段。",
+      "variants": [
+        { "tag": "committed_fact", "fields": { "kind": { "type": "literal", "value": "committed_fact", "required": true }, "factId": { "type": "string", "required": true }, "sourceRevision": { "type": "number", "required": true } } },
+        { "tag": "public_schedule", "fields": { "kind": { "type": "literal", "value": "public_schedule", "required": true }, "scheduleId": { "type": "string", "required": true }, "scheduleRevision": { "type": "number", "required": true } } },
+        { "tag": "official_notice", "fields": { "kind": { "type": "literal", "value": "official_notice", "required": true }, "noticeId": { "type": "string", "required": true }, "noticeRevision": { "type": "number", "required": true } } },
+        { "tag": "article_version", "fields": { "kind": { "type": "literal", "value": "article_version", "required": true }, "articleId": { "type": "string", "required": true }, "articleVersion": { "type": "number", "required": true }, "claimFingerprint": { "type": "string", "required": true } } }
+      ]
+    },
+    "AudienceSelector": {
+      "kind": "interface",
+      "source": "plan-4.6",
+      "doc": "广播受众选择器；resolver 输入冻结为当前 runtime 的地点/锚点、势力成员关系、通讯网络和显式收件人。",
+      "fields": {
+        "locationIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] },
+        "anchorIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] },
+        "factionIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] },
+        "networkIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] },
+        "explicitRecipientIds": { "type": "array", "items": { "type": "string" }, "required": false, "default": [] }
+      }
+    },
+    "AudienceSnapshot": {
+      "kind": "interface",
+      "source": "plan-4.6",
+      "doc": "提交时冻结的接收范围；worker 重试不得按角色最新位置重新计算受众。",
+      "fields": {
+        "selector": { "type": "ref", "to": "AudienceSelector", "required": true },
+        "recipientIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "locationEvidence": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "frozenAtRevision": { "type": "number", "required": true }
+      }
+    },
+    "BroadcastEnvelope": {
+      "kind": "interface",
+      "source": "plan-4.6",
+      "doc": "广播信封；broadcast 必须经过 AudienceSelector -> AudienceSnapshot 冻结流程。",
+      "fields": {
+        "broadcastId": { "type": "string", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "sourceRef": { "type": "ref", "to": "KnowledgeSubjectRef", "required": true },
+        "channel": { "type": "enum", "enum": "BroadcastChannel", "required": true },
+        "issuedAt": { "type": "ref", "to": "GameTime", "required": true },
+        "audienceSnapshot": { "type": "ref", "to": "AudienceSnapshot", "required": true },
+        "deliveryIdempotencyKey": { "type": "string", "required": true }
+      }
+    },
+    "DeliveryRecord": {
+      "kind": "interface",
+      "source": "plan-4.6",
+      "doc": "单条送达记录；同一广播不得产生重复回执。",
+      "fields": {
+        "deliveryId": { "type": "string", "required": true },
+        "broadcastId": { "type": "string", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "recipientId": { "type": "string", "required": true },
+        "deliveredAt": { "type": "ref", "to": "GameTime", "required": true },
+        "deliveryIdempotencyKey": { "type": "string", "required": true },
+        "evidenceRef": { "type": "ref", "to": "EvidenceRef", "required": true }
+      }
+    },
+    "KnowledgeReceipt": {
+      "kind": "interface",
+      "source": "plan-4.6",
+      "doc": "角色通过明确渠道知道信息的回执；claim 只能作为当时听闻/报道声称，不能直接升级为 confirmed world fact。",
+      "fields": {
+        "runtimeBranchId": { "type": "string", "required": true },
+        "receiptId": { "type": "string", "required": true },
+        "subjectType": { "type": "enum", "enum": "KnowledgeSubjectType", "required": true },
+        "subjectId": { "type": "string", "required": true },
+        "subjectRef": { "type": "ref", "to": "KnowledgeSubjectRef", "required": true },
+        "knowledgeKind": { "type": "enum", "enum": "KnowledgeKind", "required": true },
+        "claimReliability": { "type": "enum", "enum": "NewsReliability", "required": true },
+        "truthBinding": { "type": "object", "required": false, "fields": { "factId": { "type": "string", "required": true }, "sourceRevision": { "type": "number", "required": true } } },
+        "channel": { "type": "enum", "enum": "KnowledgeChannel", "required": true },
+        "broadcastEnvelopeId": { "type": "string", "required": false },
+        "audienceSnapshot": { "type": "ref", "to": "AudienceSnapshot", "required": false },
+        "observedAt": { "type": "ref", "to": "GameTime", "required": true },
+        "deliveryEvidenceRef": { "type": "ref", "to": "EvidenceRef", "required": true },
+        "confidence": { "type": "enum", "enum": "EvidenceLevel", "required": true },
+        "idempotencyKey": { "type": "string", "required": true }
+      }
+    },
+    "ObserverReadCursor": {
+      "kind": "interface",
+      "source": "plan-4.6",
+      "doc": "阅读游标；真人玩家打开新闻/世界面板只推进游标，不生成任何角色知识回执。",
+      "fields": {
+        "runtimeBranchId": { "type": "string", "required": true },
+        "observerId": { "type": "string", "required": true },
+        "channel": { "type": "enum", "enum": "ObserverReadChannel", "required": true },
+        "lastReadArticleVersionId": { "type": "string", "required": false },
+        "lastReadAt": { "type": "ref", "to": "GameTime", "required": false }
+      }
+    },
+    "ProjectionOutboxItem": {
+      "kind": "interface",
+      "source": "plan-4.7",
+      "doc": "投影 outbox；与核心事务同一 IndexedDB transaction 创建；lease/ack 不得递增核心 runtimeRevision。",
+      "fields": {
+        "outboxId": { "type": "string", "required": true },
+        "schemaVersion": { "type": "number", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "sourceRefFingerprint": { "type": "string", "required": true, "note": "canonical 排序后的 NewsSourceRef/KnowledgeSubjectRef identity" },
+        "sourceRevision": { "type": "number", "required": true },
+        "kind": { "type": "enum", "enum": "ProjectionOutboxKind", "required": true },
+        "aggregateKey": { "type": "string", "required": true, "note": "按投影种类和收件人/渠道命名空间化" },
+        "operation": { "type": "enum", "enum": "ProjectionOutboxOperation", "required": true },
+        "articlePolicyFingerprint": { "type": "string", "required": false },
+        "sourceLevelIdempotencyKey": { "type": "string", "required": true },
+        "eventResolutionKey": { "type": "string", "required": false },
+        "deliveryKey": { "type": "string", "required": true, "note": "operation + payloadFingerprint；区分重试/正文重写/更正" },
+        "payloadFingerprint": { "type": "string", "required": true },
+        "expectedAggregateRevision": { "type": "number", "required": false },
+        "articleVersionHint": { "type": "number", "required": false },
+        "payloadRef": { "type": "object", "required": true, "fields": { "kind": { "type": "enum", "enum": "PayloadRefKind", "required": true }, "key": { "type": "string", "required": true } } },
+        "consumerIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "consumerAcks": {
+          "type": "map",
+          "key": { "type": "string" },
+          "value": {
+            "type": "object",
+            "fields": {
+              "status": { "type": "enum", "enum": "OutboxConsumerStatus", "required": true },
+              "attemptCount": { "type": "number", "required": true },
+              "deliveredAt": { "type": "number", "required": false },
+              "projectionRevision": { "type": "number", "required": false },
+              "lastErrorCode": { "type": "string", "required": false }
+            }
+          },
+          "required": true,
+          "default": {}
+        },
+        "createdAt": { "type": "number", "required": true },
+        "retainUntil": { "type": "number", "required": false },
+        "status": { "type": "enum", "enum": "OutboxItemStatus", "required": true },
+        "attemptCount": { "type": "number", "required": true },
+        "leaseOwner": { "type": "string", "required": false },
+        "leaseExpiresAt": { "type": "number", "required": false },
+        "nextRetryAt": { "type": "number", "required": false },
+        "deliveredAt": { "type": "number", "required": false },
+        "lastErrorCode": { "type": "string", "required": false }
+      }
+    },
+    "NarrativeRewriteRequest": {
+      "kind": "interface",
+      "source": "plan-4.10",
+      "doc": "受限重写请求；只能使用固定上限和不改变核心状态的受限重写，耗尽后进入 hold。",
+      "fields": {
+        "requestId": { "type": "string", "required": true },
+        "sourceBodyFingerprint": { "type": "string", "required": true },
+        "violationCodes": { "type": "array", "items": { "type": "enum", "enum": "NarrativeConsistencyCode" }, "required": true, "default": [] },
+        "allowedOperation": { "type": "enum", "enum": "NarrativeRewriteOperation", "required": true },
+        "maxAttempts": { "type": "number", "required": true },
+        "attempt": { "type": "number", "required": true }
+      }
+    },
+    "NarrativeConsistencyDecision": {
+      "kind": "interface",
+      "source": "plan-4.10",
+      "doc": "正文一致性门判定；allow_reframed 只允许把已发生事件改写为后果/回忆/新实例候选。",
+      "fields": {
+        "outcome": { "type": "enum", "enum": "NarrativeDecisionOutcome", "required": true },
+        "codes": { "type": "array", "items": { "type": "enum", "enum": "NarrativeConsistencyCode" }, "required": true, "default": [] },
+        "evidenceRefs": { "type": "array", "items": { "type": "ref", "to": "EvidenceRef" }, "required": true, "default": [] },
+        "focusBefore": { "type": "string", "required": true },
+        "focusAfterCandidate": { "type": "string", "required": false },
+        "replayedEventInstanceIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "completedUnitIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "retryCount": { "type": "number", "required": true },
+        "candidateBodyFingerprint": { "type": "string", "required": true },
+        "acceptedBodyFingerprint": { "type": "string", "required": false },
+        "acceptedBodyRef": { "type": "ref", "to": "EvidenceRef", "required": false },
+        "rewriteRequest": { "type": "ref", "to": "NarrativeRewriteRequest", "required": false }
+      }
+    },
+    "NarrativePublicationRecord": {
+      "kind": "interface",
+      "source": "plan-4.10",
+      "doc": "与核心 commit 同一 transaction 持久化的发布锚点；commit 后、reveal 前崩溃按 publicationId+bodyFingerprint+commitReceiptId 幂等重放。",
+      "fields": {
+        "publicationId": { "type": "string", "required": true },
+        "runtimeBranchId": { "type": "string", "required": true },
+        "turnId": { "type": "string", "required": true },
+        "sourceRuntimeRevision": { "type": "number", "required": true },
+        "commitReceiptId": { "type": "string", "required": true },
+        "body": { "type": "string", "required": true },
+        "bodyFingerprint": { "type": "string", "required": true },
+        "status": { "type": "enum", "enum": "NarrativePublicationStatus", "required": true },
+        "revealMessageId": { "type": "string", "required": false },
+        "revealAttemptCount": { "type": "number", "required": true },
+        "createdAt": { "type": "ref", "to": "GameTime", "required": true },
+        "revealedAt": { "type": "ref", "to": "GameTime", "required": false }
+      }
+    },
+    "StoryAssetCatalog": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产目录最小 schema（4.2）：回答“原著或用户资产中可能有哪些章节、分段、角色、地点、约束和事件定义”；不保存本局 eventInstanceId/事实/知识回执/当前焦点/运行游标/branch/runtime revision/回合回执。runtime 只引用 catalogFingerprint 与稳定 ID。",
+      "fields": {
+        "schemaVersion": { "type": "literal", "value": 1, "required": true },
+        "catalogId": { "type": "string", "required": true },
+        "catalogRevision": { "type": "number", "required": true },
+        "catalogFingerprint": { "type": "string", "required": true },
+        "normalizationVersion": { "type": "number", "required": true },
+        "sourceKind": { "type": "enum", "enum": "StoryAssetCatalogSourceKind", "required": true },
+        "title": { "type": "string", "required": true },
+        "sourceRefs": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "series": { "type": "array", "items": { "type": "ref", "to": "StoryAssetSeries" }, "required": true, "default": [] },
+        "chapters": { "type": "array", "items": { "type": "ref", "to": "StoryAssetChapter" }, "required": true, "default": [] },
+        "segments": { "type": "array", "items": { "type": "ref", "to": "StoryAssetSegment" }, "required": true, "default": [] },
+        "characterProfiles": { "type": "array", "items": { "type": "ref", "to": "StoryAssetCharacterProfile" }, "required": true, "default": [] },
+        "factionProfiles": { "type": "array", "items": { "type": "ref", "to": "StoryAssetFactionProfile" }, "required": true, "default": [] },
+        "locationProfiles": { "type": "array", "items": { "type": "ref", "to": "StoryAssetLocationProfile" }, "required": true, "default": [] },
+        "constraints": { "type": "array", "items": { "type": "ref", "to": "StoryAssetConstraint" }, "required": true, "default": [] },
+        "visibilityHints": { "type": "array", "items": { "type": "ref", "to": "StoryAssetVisibilityHint" }, "required": true, "default": [] },
+        "timelineEntries": { "type": "array", "items": { "type": "ref", "to": "StoryAssetTimelineEntry" }, "required": true, "default": [] },
+        "routePolicies": { "type": "array", "items": { "type": "ref", "to": "StoryAssetRoutePolicy" }, "required": true, "default": [] },
+        "occurrenceDefinitions": { "type": "array", "items": { "type": "ref", "to": "StoryAssetOccurrenceDefinition" }, "required": true, "default": [] },
+        "eventDefinitions": { "type": "array", "items": { "type": "ref", "to": "WorldEventDefinition" }, "required": true, "default": [] }
+      }
+    },
+    "StoryAssetSeries": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产系列；不包含当前系列 ID 或运行游标。",
+      "fields": {
+        "seriesId": { "type": "string", "required": true },
+        "title": { "type": "string", "required": true },
+        "workTitle": { "type": "string", "required": true },
+        "ordinal": { "type": "number", "required": true },
+        "chapterIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "segmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "openingSegmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "defaultRoutePolicyId": { "type": "string", "required": false },
+        "sourceRef": { "type": "string", "required": false },
+        "seriesFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetChapter": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产章节；chapterFingerprint 排除自身指纹字段后按 canonical JSON 计算。",
+      "fields": {
+        "chapterId": { "type": "string", "required": true },
+        "seriesId": { "type": "string", "required": true },
+        "ordinal": { "type": "number", "required": true },
+        "title": { "type": "string", "required": true },
+        "summary": { "type": "string", "required": true },
+        "sourceText": { "type": "string", "required": false },
+        "sourceLocator": { "type": "string", "required": false },
+        "contentFingerprint": { "type": "string", "required": true },
+        "chapterFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetChapterRange": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "分段引用的章节范围。",
+      "fields": {
+        "startOrdinal": { "type": "number", "required": true },
+        "endOrdinal": { "type": "number", "required": true },
+        "chapterIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] }
+      }
+    },
+    "StoryAssetSegment": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产分段；只含资产期引用与指纹，不保存激活注入/当前分段组号/处理状态/运行状态。",
+      "fields": {
+        "segmentId": { "type": "string", "required": true },
+        "seriesId": { "type": "string", "required": true },
+        "ordinal": { "type": "number", "required": true },
+        "title": { "type": "string", "required": true },
+        "chapterRange": { "type": "ref", "to": "StoryAssetChapterRange", "required": true },
+        "isOpeningCandidate": { "type": "boolean", "required": true },
+        "summary": { "type": "string", "required": true },
+        "sourceExcerpt": { "type": "string", "required": false },
+        "hardConstraintIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "foreshadowConstraintIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "characterProfileIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "factionProfileIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "locationProfileIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "eventDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "timelineEntryIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "routePolicyId": { "type": "string", "required": true },
+        "dependencySegmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "consequenceSegmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "segmentFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetCharacterProfile": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产角色档案；档案只是资产提示，不能直接生成 KnowledgeReceipt。",
+      "fields": {
+        "characterProfileId": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "aliases": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "identitySummary": { "type": "string", "required": true },
+        "factionProfileIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "initialStance": { "type": "string", "required": true },
+        "relationshipNotes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "stateNotes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "firstAppearanceSegmentId": { "type": "string", "required": false },
+        "importance": { "type": "enum", "enum": "StoryAssetProfileImportance", "required": true },
+        "profileFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetFactionProfile": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产势力档案。",
+      "fields": {
+        "factionProfileId": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "aliases": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "typeSummary": { "type": "string", "required": true },
+        "territoryLocationIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "representativeCharacterIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "goalSummary": { "type": "string", "required": true },
+        "stateSummary": { "type": "string", "required": true },
+        "relationshipNotes": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "firstAppearanceSegmentId": { "type": "string", "required": false },
+        "profileFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetLocationProfile": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产地点档案。",
+      "fields": {
+        "locationProfileId": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "aliases": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "level": { "type": "enum", "enum": "StoryAssetLocationLevel", "required": true },
+        "parentLocationId": { "type": "string", "required": false },
+        "factionProfileIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "functionSummary": { "type": "string", "required": true },
+        "facilityOccurrenceDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "firstAppearanceSegmentId": { "type": "string", "required": false },
+        "profileFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetConstraint": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产硬约束/铺垫；nonProgressing 必须是 literal true——资产约束/铺垫本身不能提交事实或推进 runtime。",
+      "fields": {
+        "constraintId": { "type": "string", "required": true },
+        "kind": { "type": "enum", "enum": "StoryAssetConstraintKind", "required": true },
+        "segmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "statement": { "type": "string", "required": true },
+        "visibilityHintId": { "type": "string", "required": false },
+        "nonProgressing": { "type": "literal", "value": true, "required": true },
+        "constraintFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetVisibilityHint": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产可见性提示；grantsKnowledge 必须是 literal false——只有运行时 KnowledgeGrant/KnowledgeReceipt 能让角色知道事实。",
+      "fields": {
+        "visibilityHintId": { "type": "string", "required": true },
+        "knownByEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "unknownToEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "observerOnly": { "type": "boolean", "required": true },
+        "grantsKnowledge": { "type": "literal", "value": false, "required": true },
+        "hintFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetTimelineEntry": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "资产时间线条目；未知时间留空，禁止退回自由格式时间作为核心排序依据。",
+      "fields": {
+        "timelineEntryId": { "type": "string", "required": true },
+        "segmentId": { "type": "string", "required": true },
+        "sequence": { "type": "number", "required": true },
+        "title": { "type": "string", "required": true },
+        "description": { "type": "string", "required": true },
+        "at": { "type": "ref", "to": "GameTime", "required": false },
+        "actorEntityIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "eventDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "timelineFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetRoutePolicy": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "路线策略只是说明允许怎样结算/改道，不能替玩家做选择；player_optional 是 canonical 默认（字段级 default，不是说明文字）。",
+      "fields": {
+        "routePolicyId": { "type": "string", "required": true },
+        "participationPolicy": { "type": "enum", "enum": "StoryAssetParticipationPolicy", "required": true, "default": "player_optional" },
+        "bypassPolicy": { "type": "enum", "enum": "StoryAssetBypassPolicy", "required": true },
+        "deviationPolicy": { "type": "enum", "enum": "StoryAssetDeviationPolicy", "required": true },
+        "earlyCompletionPolicy": { "type": "enum", "enum": "StoryAssetEarlyCompletionPolicy", "required": true },
+        "alternativeSegmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "consequenceSegmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "expiresAfterSegmentIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "routeFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetOccurrenceDefinition": {
+      "kind": "interface",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "通用唯一性定义；对 event/character/facility/item/task_result 使用同一规则，不出现特定敌人名称或名称特判。",
+      "fields": {
+        "occurrenceDefinitionId": { "type": "string", "required": true },
+        "title": { "type": "string", "required": true },
+        "subject": { "type": "ref", "to": "StoryAssetOccurrenceSubjectRef", "required": true },
+        "occurrencePolicy": { "type": "enum", "enum": "StoryAssetOccurrencePolicy", "required": true },
+        "newInstancePolicy": { "type": "enum", "enum": "StoryAssetNewInstancePolicy", "required": true },
+        "identityAnchors": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "aliases": { "type": "array", "items": { "type": "string" }, "required": true, "default": [] },
+        "eventDefinitionIds": { "type": "array", "items": { "type": "string" }, "required": true, "default": [], "note": "G1.1.2.1 显式绑定：occurrence 显式拥有的 catalog event definition ID 列表；不得重复且全部可解析" },
+        "definitionFingerprint": { "type": "string", "required": true }
+      }
+    },
+    "StoryAssetOccurrenceSubjectRef": {
+      "kind": "union",
+      "discriminator": "kind",
+      "source": "plan-4.2/G1.1.2",
+      "doc": "通用唯一对象的 subject 引用；canonical 唯一性逻辑对五种 subject 使用同一规则。",
+      "variants": [
+        { "tag": "event", "fields": { "kind": { "type": "literal", "value": "event", "required": true }, "eventDefinitionId": { "type": "string", "required": true } } },
+        { "tag": "character", "fields": { "kind": { "type": "literal", "value": "character", "required": true }, "characterProfileId": { "type": "string", "required": true } } },
+        { "tag": "facility", "fields": { "kind": { "type": "literal", "value": "facility", "required": true }, "facilityId": { "type": "string", "required": true }, "locationProfileId": { "type": "string", "required": true } } },
+        { "tag": "item", "fields": { "kind": { "type": "literal", "value": "item", "required": true }, "itemId": { "type": "string", "required": true } } },
+        { "tag": "task_result", "fields": { "kind": { "type": "literal", "value": "task_result", "required": true }, "taskResultId": { "type": "string", "required": true } } }
+      ]
+    }
+  },
+  "enums": {
+    "WorldEventInstanceStatus": { "source": "plan-4.3", "values": ["scheduled", "active", "blocked", "resolution_pending", "resolved", "cancelled", "superseded", "missed", "archived"] },
+    "WorldEventResolutionMode": { "source": "plan-4.3", "values": ["player", "world_background", "shared", "player_early", "unknown"] },
+    "EventDefinitionResolutionMode": { "source": "plan-4.3", "values": ["player", "world_background", "shared", "player_early"] },
+    "WorldEventOutcome": { "source": "plan-4.3", "values": ["normal", "deviated", "escaped", "failed", "unknown"], "note": "deviated 是 outcome/路线关系，不再兼任生命周期状态" },
+    "WorldEventReplayPolicy": { "source": "plan-4.3", "values": ["once", "allow_new_instance", "repeatable"] },
+    "WorldEventDefinitionOrigin": { "source": "plan-4.3", "values": ["catalog", "emergent"] },
+    "WorldEntityType": { "source": "plan-4.8.1", "values": ["npc", "faction", "location", "faction_asset", "system"] },
+    "WorldEntityStatus": { "source": "plan-4.8.1", "values": ["active", "inactive", "destroyed", "unknown"] },
+    "StoryFocusStatus": { "source": "plan-4.8.1", "values": ["active", "blocked", "awaiting_player", "completed", "diverged"] },
+    "EvidenceLevel": { "source": "plan-4.8.1", "values": ["confirmed", "supported"], "note": "模型/自报置信度/标题关键词/未来规划最高为 mentioned/inferred，不能落盘为 confirmed" },
+    "FactCreatedBy": { "source": "plan-4.4", "values": ["player_turn", "world_due", "manual_import", "system_migration", "debug", "path_command", "system"] },
+    "PublicScheduleStatus": { "source": "plan-4.5", "values": ["planned", "postponed", "cancelled", "fulfilled"] },
+    "NewsArticleVersionLifecycle": { "source": "plan-4.5", "values": ["draft", "queued", "published", "corrected", "archived"] },
+    "NewsStoryPhase": { "source": "plan-4.5", "values": ["upcoming", "ongoing", "completed", "postponed", "cancelled"] },
+    "NewsReliability": { "source": "plan-4.5", "values": ["official", "confirmed", "supported", "rumor", "manual"] },
+    "MigrationTraceStatus": { "source": "plan-4.5", "values": ["known", "unknown", "ambiguous"] },
+    "BroadcastChannel": { "source": "plan-4.6", "values": ["station_broadcast", "phone_network", "faction_network", "direct_radio"] },
+    "KnowledgeSubjectType": { "source": "plan-4.6", "values": ["npc", "faction", "player_character"] },
+    "KnowledgeKind": { "source": "plan-4.6", "values": ["fact", "claim"] },
+    "KnowledgeChannel": { "source": "plan-4.6", "values": ["direct_observation", "broadcast", "communication", "dialogue", "reading", "narrative_delivery"] },
+    "ObserverReadChannel": { "source": "plan-4.6", "values": ["player_ui", "player_character", "npc", "faction"] },
+    "ProjectionOutboxKind": { "source": "plan-4.7", "values": ["news", "knowledge", "phone", "memory", "yiting", "zhiku", "map", "compat_world_events"] },
+    "ProjectionOutboxOperation": { "source": "plan-4.7", "values": ["create", "deliver", "rewrite", "correct", "archive"] },
+    "OutboxConsumerStatus": { "source": "plan-4.7", "values": ["pending", "delivered", "retry_wait", "dead_letter", "cancelled"] },
+    "OutboxItemStatus": { "source": "plan-4.7", "values": ["pending", "leased", "retry_wait", "delivered", "dead_letter", "cancelled"] },
+    "PayloadRefKind": { "source": "plan-4.7", "values": ["inline", "payload_store"] },
+    "PlayerPlanItemStatus": { "source": "plan-4.8.1", "values": ["available", "selected", "blocked", "expired", "completed", "replaced"] },
+    "AcceptanceMode": { "source": "plan-4.8.1", "values": ["正文承接", "系统命令", "交汇承接"] },
+    "WorldPlanItemStatus": { "source": "plan-4.8.1", "values": ["scheduled", "active", "blocked", "expired", "fulfilled", "cancelled"] },
+    "ConvergenceItemStatus": { "source": "plan-4.8.1", "values": ["available", "offered", "accepted", "declined", "expired", "resolved"] },
+    "RuntimeMigrationStatus": { "source": "plan-4.8.1", "values": ["none", "pending_confirmation", "migrated", "read_only_recovery", "failed"] },
+    "OfficialNoticeStatus": { "source": "plan-4.8.1", "values": ["active", "withdrawn", "superseded"] },
+    "TurnCommandSource": { "source": "plan-4.9", "values": ["player_turn", "world_due", "manual", "debug", "migration", "path_command", "system"], "note": "与 createdBy 不是同一个字段；映射不匹配必须返回 INVALID_SOURCE" },
+    "TurnAttemptPhase": { "source": "plan-4.9", "values": ["draft", "validating", "committing", "committed", "revealing", "revealed", "aborted", "recovery_required"] },
+    "TurnRecoveryAction": { "source": "plan-4.9", "values": ["resume_reveal", "replay_projection", "restore_pre_turn", "await_user_confirmation"] },
+    "NarrativeConsistencyCode": { "source": "plan-4.10", "values": ["illegal_narrative_replay", "terminal_event_resurrection", "narrative_no_progress", "narrative_multi_unit", "unsupported_future_leap", "player_action_not_accepted", "knowledge_leak", "unregistered_emergent_event"] },
+    "NarrativeRewriteOperation": { "source": "plan-4.10", "values": ["reframe_as_consequence", "remove_unsupported_claims", "continue_current_focus"] },
+    "NarrativeDecisionOutcome": { "source": "plan-4.10", "values": ["allow", "allow_reframed", "retry", "reject", "hold"] },
+    "NarrativePublicationStatus": { "source": "plan-4.10", "values": ["accepted_pending_reveal", "revealed", "held", "discarded"] },
+    "ArticleAudienceKind": { "source": "plan-4.8.1", "values": ["player_observer", "player_character", "npc", "faction"] },
+    "PayloadMatcherOperator": { "source": "plan-4.8.1", "values": ["equals", "one_of", "gte", "lte", "contains"] },
+    "AdvanceTimeReason": { "source": "plan-4.8.1", "values": ["turn_default", "narrative_duration", "player_wait", "travel", "world_due"] },
+    "PathCommandAction": { "source": "plan-4.8.1", "values": ["enter", "decline", "judge"] },
+    "EvidenceRefKind": { "source": "plan-4.8.1", "values": ["narrative_span", "system_command", "gameplay_receipt", "schedule_record", "notice_record", "broadcast_record", "article_version", "migration_record", "projection_record", "narrative_publication"] },
+    "PublicScopeKind": { "source": "plan-4.8.1", "values": ["private", "local", "faction", "public", "broadcast"] },
+    "NewsSourceRefKind": { "source": "plan-4.5", "values": ["committed_fact", "public_schedule", "official_notice", "article_version", "manual"] },
+    "KnowledgeSubjectRefKind": { "source": "plan-4.6", "values": ["committed_fact", "public_schedule", "official_notice", "article_version"] },
+    "StoryAssetCatalogSourceKind": { "source": "plan-4.2/G1.1.2", "values": ["builtin_canon", "user_import", "legacy_migrated", "user_authored"] },
+    "StoryAssetConstraintKind": { "source": "plan-4.2/G1.1.2", "values": ["hard", "foreshadow"] },
+    "StoryAssetProfileImportance": { "source": "plan-4.2/G1.1.2", "values": ["ordinary", "important", "core"] },
+    "StoryAssetLocationLevel": { "source": "plan-4.2/G1.1.2", "values": ["cosmos", "major", "medium", "minor", "zone", "sublocation", "unknown"] },
+    "StoryAssetParticipationPolicy": { "source": "plan-4.2/G1.1.2", "values": ["player_optional", "player_required_for_resolution", "world_only"] },
+    "StoryAssetBypassPolicy": { "source": "plan-4.2/G1.1.2", "values": ["remain_available", "world_background", "supersede", "expire"] },
+    "StoryAssetDeviationPolicy": { "source": "plan-4.2/G1.1.2", "values": ["continue_compatible", "branch_candidate", "supersede", "hold"] },
+    "StoryAssetEarlyCompletionPolicy": { "source": "plan-4.2/G1.1.2", "values": ["resolve_same_definition", "hold_for_evidence", "not_applicable"] },
+    "StoryAssetOccurrencePolicy": { "source": "plan-4.2/G1.1.2", "values": ["unique", "allow_new_instance", "repeatable"] },
+    "StoryAssetNewInstancePolicy": { "source": "plan-4.2/G1.1.2", "values": ["forbidden", "explicit_cause_required", "allowed"] },
+    "StoryAssetOccurrenceSubjectKind": { "source": "plan-4.2/G1.1.2", "values": ["event", "character", "facility", "item", "task_result"] }
+  },
+  "commands": {
+    "union": "RuntimeCommand",
+    "kinds": ["advance_time", "create_event_instance", "resolve_event_instance", "supersede_event_instance", "append_fact", "upsert_plan_item", "enqueue_convergence", "register_emergent_event_definition", "grant_knowledge", "publish_public_schedule", "issue_official_notice", "path_command"],
+    "coordinatorAllocates": ["factId", "eventInstanceId（create 时）", "sourceRevision", "occurredAt/committedAt 等提交/发生时间", "runtimeBranchId", "scheduleRevision", "noticeRevision", "grantId", "recipientSnapshot", "idempotencyKey", "receiptId", "publicationId", "outboxId"],
+    "protectedFields": ["factId", "eventInstanceId", "sourceRevision", "runtimeRevision", "runtimeBranchId", "occurredAt", "committedAt", "issuedAt", "observedAt", "deliveredAt", "createdAt", "updatedAt", "scheduleRevision", "noticeRevision", "articleVersion", "grantId", "receiptId", "publicationId", "outboxId", "recipientIds", "audienceSnapshot", "idempotencyKey", "eventResolutionKey", "resultRevision", "resultCode", "resultHash", "stateFingerprint"],
+    "protectedFieldNote": "plannedAt 是 PublicScheduleProposal 的合法语义字段（模型提出的计划时间），coordinator 只负责校验并分配 scheduleId/scheduleRevision/幂等键，因此不在受保护列表内",
+    "lookupHints": {
+      "EventTargetRef.eventInstanceId": "查找 hint：必须同时携带 expectedInstanceFingerprint，由 coordinator 校验",
+      "CreateEventProposal.definitionRef.eventDefinitionId": "查找 hint：定义 ID + definitionFingerprint，由 coordinator 校验",
+      "PublicScheduleProposal.sourceDefinitionId": "查找 hint：来源定义 ID",
+      "FactProposal.eventTarget.eventInstanceId": "查找 hint：通过 EventTargetRef 指向既有实例"
+    },
+    "proposalRule": "模型和 UI 只能提交 proposal；即使 proposal 携带伪造 ID，也只能作为查找 hint，不能直接写入受保护字段。",
+    "sourceToCreatedBy": {
+      "player_turn": "player_turn",
+      "world_due": "world_due",
+      "manual": "manual_import",
+      "debug": "debug",
+      "migration": "system_migration",
+      "path_command": "path_command",
+      "system": "system"
+    },
+    "sourceToCreatedByRule": "映射不匹配必须返回 INVALID_SOURCE；普通 manual 不能伪装成 player_turn。",
+    "instanceIdRule": "每次激活用 runtimeBranchId + eventDefinitionId + activationOrdinal 生成唯一 eventInstanceId；迁移不得用标题、数组位置或当前时间补定义 ID。",
+    "emergentRegistrationRule": "涌现定义必须先通过 register_emergent_event_definition，在同一核心事务内完成因果证据、身份锚点、完成谓词、重复策略和公共策略校验，并先与所有 canonical eventDefinitionId、既有实例和同分支 emergent fingerprint 做碰撞检查；标题/敌人名/模型描述不能单独注册新定义，碰撞返回 EMERGENT_EVENT_COLLISION。"
+  },
+  "errorCodes": [
+    { "code": "ALREADY_TERMINAL", "meaning": "终态实例重复命令；新契约唯一终态重复错误码", "source": "plan-4.8.1 / S1" },
+    { "code": "ALREADY_APPLIED", "meaning": "同一键跨 revision 重试返回原结果", "source": "plan-3.x 幂等" },
+    { "code": "IDEMPOTENCY_KEY_REUSED", "meaning": "同一键不同 command fingerprint 明确拒绝", "source": "plan-3.x 幂等" },
+    { "code": "CONFLICT", "meaning": "CAS expectedRuntimeRevision 过期，不静默覆盖", "source": "plan-5.2" },
+    { "code": "INVALID_COMMAND", "meaning": "命令校验失败", "source": "plan-S1 输入/输出" },
+    { "code": "INVALID_SOURCE", "meaning": "createdBy 与 TurnCommandSource 映射不匹配", "source": "plan-4.4" },
+    { "code": "INVALID_PROTECTED_FIELD", "meaning": "proposal 试图伪造受保护 ID/revision/时间/branch/recipient snapshot", "source": "plan-S1 输入/输出" },
+    { "code": "INVALID_AUDIENCE_SCOPE", "meaning": "未知 location/faction/network ID；空 scope 按 private 处理，不能扩大为全局公开", "source": "plan-4.8.1" },
+    { "code": "EMERGENT_EVENT_COLLISION", "meaning": "涌现定义与 canonical eventDefinitionId/既有实例/同分支 emergent fingerprint 碰撞", "source": "plan-4.3" },
+    { "code": "MISSING_EVIDENCE", "meaning": "无证据不推进；mentioned/inferred 只能进入上下文或候选", "source": "plan-5.2" },
+    { "code": "STALE_BRANCH", "meaning": "旧 branch worker 晚到，不能写入新 branch", "source": "plan-3.x/5.3" },
+    { "code": "STALE_PROJECTION", "meaning": "worker 返回 stale revision/来源 fingerprint，只允许重新排队", "source": "plan-3.x/5.3" },
+    { "code": "DEPENDENCY_CYCLE", "meaning": "依赖图拓扑排序发现环，环内事件保持/转为 blocked", "source": "plan-S3" }
+  ],
+  "lifecycle": {
+    "eventInstanceStatusTransitions": [
+      { "from": "scheduled", "to": ["active", "blocked", "cancelled", "superseded", "missed"], "terminal": false, "note": "排期到达不代表一定结算" },
+      { "from": "blocked", "to": ["scheduled", "active", "cancelled", "superseded", "missed"], "terminal": false, "note": "解除阻断必须有新证据/依赖变化" },
+      { "from": "active", "to": ["resolution_pending", "resolved", "cancelled", "superseded"], "terminal": false, "note": "模型候选不能直接跨过结果确认" },
+      { "from": "resolution_pending", "to": ["resolved", "active", "cancelled", "superseded"], "terminal": false, "note": "证据不足时可退回 active，不创建终态事实" },
+      { "from": "resolved", "to": ["archived"], "terminal": true, "note": "普通命令不得复活" },
+      { "from": "cancelled", "to": ["archived"], "terminal": true, "note": "普通命令不得复活" },
+      { "from": "superseded", "to": ["archived"], "terminal": true, "note": "普通命令不得复活" },
+      { "from": "missed", "to": ["archived"], "terminal": true, "note": "普通命令不得复活；除非创建新的合法实例" },
+      { "from": "archived", "to": [], "terminal": true, "note": "仅历史读取" }
+    ],
+    "terminalStates": ["resolved", "cancelled", "superseded", "missed", "archived"],
+    "nonTerminalStates": ["scheduled", "active", "blocked", "resolution_pending"],
+    "publicationGateFlow": [
+      "allow → 正文可进入 reveal 流程",
+      "allow_reframed → 只允许将已发生事件改写为后果/回忆/新实例候选，不能把原始复演当作新事实",
+      "retry → 只能使用 NarrativeRewriteRequest.maxAttempts 固定上限，不改变核心状态；耗尽后进入 hold",
+      "reject → 保留原始草稿和机器可读违规码，不展示",
+      "hold → 保留草稿，不自动展示坏正文，等待确认"
+    ],
+    "publicationGatePlacement": "必须在正文进入 streamingMessage、chatHistory、历史压缩、变量/新闻/手机/记忆等任何下游之前返回决策。",
+    "commitPointRule": "commitReceiptId/committedRuntimeRevision 一旦写入，所有 catch/abort/recovery 路径都必须视为 commit 已发生；只能重放正文、投影或存档，不能恢复 pre-turn 核心状态。",
+    "turnAttemptPhases": ["draft", "validating", "committing", "committed", "revealing", "revealed"],
+    "turnAttemptFailurePhases": ["aborted", "recovery_required"],
+    "recoveryActions": ["resume_reveal", "replay_projection", "restore_pre_turn", "await_user_confirmation"],
+    "revealIdempotency": "commit 后、reveal 前崩溃按 publicationId + bodyFingerprint + commitReceiptId 幂等重放正文；reveal 后、状态标记前崩溃按 revealMessageId 做一次性确认。"
+  },
+  "defaults": {
+    "arrayDefault": [],
+    "mapDefault": {},
+    "optionalFieldSerialization": "absent",
+    "unknownEnumValue": "migration_error",
+    "emptyPublicScope": { "kind": "private" },
+    "publicScopeResolution": "空 scope 一律按 private 处理；未知 location/faction/network ID 一律返回 INVALID_AUDIENCE_SCOPE，不能扩大为全局公开。",
+    "articlePolicy": {
+      "regionIds": [],
+      "audienceKinds": ["player_observer"],
+      "category": "",
+      "aggregationKey": "",
+      "maxSourceRefs": 8,
+      "note": "G1 固定：单地区、单栏目、最多 8 个 sourceRefs、只面向 player observer；任何跨地区/跨栏合并必须显式命令并有回执"
+    },
+    "migration": {
+      "status": "none",
+      "evidenceLevel": "legacy_unverified"
+    },
+    "evidenceAuthorizationCeiling": {
+      "acceptedNarrativeSpan": "confirmed",
+      "validatedSystemCommand": "confirmed",
+      "gameplayReceipt": "confirmed",
+      "modelSelfReportedConfidence": "mentioned",
+      "titleKeywordHit": "mentioned",
+      "futurePlanning": "inferred",
+      "note": "只有本地 validator 能把 accepted narrative span、已校验系统命令或 gameplay receipt 标为 confirmed；supported 必须有至少一个可定位证据和显式规则，不得由新闻或世界模型自由升级"
+    },
+    "idPolicy": {
+      "forbiddenSemanticKeys": ["Date.now()", "Math.random()", "数组位置"],
+      "requiredKeySources": ["runtimeBranchId + eventDefinitionId + activationOrdinal（事件实例）", "runtimeBranchId + idempotencyKey（命令幂等）", "branch/父节点/目标 revision/turnId（checkpoint/saveNodeId）"]
+    },
+    "normalization": { "note": "相同输入经过两次规范化必须得到字节级相同输出和相同 fingerprint" }
+  },
+  "compatibility": {
+    "forbiddenLegacyAliases": [
+      { "name": "TERMINAL_EVENT", "reason": "旧枚举同义词，不得进入新契约；终态重复唯一错误码为 ALREADY_TERMINAL" }
+    ],
+    "forbiddenSubstitutes": [
+      { "name": "turnCount as GameTime", "reason": "不得用 turnCount 代替 GameTime（dayOrdinal/minuteOfDay）；时间使用 GameTime，显示字符串不是核心时间字段" },
+      { "name": "boolean known/visible/confirmed as layered objects", "reason": "世界发生/上帝视角/玩家角色知情/NPC 知情/正文承接五件事不能合并为一个 visible 或 known 布尔值" }
+    ],
+    "stateBoundaryLayers": [
+      { "layer": "world_committed", "carrier": "CommittedWorldFact.factId", "note": "世界事实已经发生并提交" },
+      { "layer": "player_observer_visibility", "carrier": "CommittedWorldFact.playerObserverVisible", "note": "玩家上帝视角 UI 可见；只控制 UI" },
+      { "layer": "player_character_knowledge", "carrier": "KnowledgeReceipt.subjectType=player_character / KnowledgeGrant", "note": "玩家角色已经知道" },
+      { "layer": "npc_faction_knowledge", "carrier": "KnowledgeReceipt.subjectType=npc|faction", "note": "NPC/势力已经通过传播路径知道" },
+      { "layer": "narrative_acceptance", "carrier": "NarrativeConsistencyDecision.outcome / NarrativePublicationRecord.status", "note": "正文已经被一致性门接受并允许展示" }
+    ],
+    "newsSourceRules": [
+      "已发生新闻只能引用 committed_fact",
+      "预告只能引用 public_schedule 或 official_notice",
+      "人工稿必须 nonProgressing=true，不能改变剧情或事实",
+      "文章是聚合根加不可变版本，不能用一个可覆盖的 body 对象表示全部历史",
+      "新闻状态和世界事件状态不能合并成一个枚举"
+    ],
+    "knowledgeRules": [
+      "AudienceSnapshot 在提交时冻结，worker 重试不得按角色最新位置重新计算受众",
+      "玩家阅读新闻只改变 ObserverReadCursor，不能自动产生 NPC 或玩家角色知识回执",
+      "claim 只能作为当时听闻/报道声称，不能直接升级为 confirmed world fact",
+      "narrative_delivery 必须有正文中明确接收消息的证据"
+    ],
+    "legacyReadOnlyFields": ["世界.全局事件(string[])", "剧情编织.当前进度", "新闻条目[]"],
+    "legacyReadOnlyRule": "迁移期继续存在，只能作为兼容读取或导出字段，不能在 V3 模式直接写入",
+    "revisionSeparation": "runtimeRevision、sourceRevision、文章版本、投影版本和存档分支必须分开表达。",
+    "legacyCatalogMapping": [
+      { "legacyField": "系列.id/标题/作品名", "target": "StoryAssetSeries", "handling": "映射为资产系列记录" },
+      { "legacyField": "章节列表", "target": "StoryAssetChapter[]", "handling": "映射为资产章节记录" },
+      { "legacyField": "分段列表（标题、章节范围、摘要、档案、约束、时间线）", "target": "StoryAssetSegment 及关联记录", "handling": "映射为资产分段与关联档案/约束/时间线" },
+      { "legacyField": "关键事件（触发条件/事件结果）", "target": "WorldEventDefinition", "handling": "仅在 ID、结构化完成谓词和重复策略可验证时转换；否则输出迁移诊断，不伪造定义" },
+      { "legacyField": "信息可见性", "target": "StoryAssetVisibilityHint", "handling": "映射为资产可见性提示；不得生成知识回执" },
+      { "legacyField": "激活注入/当前分段组号/当前阶段概括", "target": "（丢弃）", "handling": "运行字段，不进入 catalog" },
+      { "legacyField": "处理状态/运行状态/最近错误/updatedAt", "target": "（丢弃）", "handling": "旧任务或运行字段，不进入 catalog" },
+      { "legacyField": "当前系列ID/当前进度/历史归档/推进证据", "target": "（G1.2/G2 runtime 迁移）", "handling": "留给 runtime 迁移，不进入 catalog" }
+    ],
+    "legacyCatalogMappingRule": "旧分段可映射成资产 ID 和引用，但映射结果 eventInstances=[]、factLedger=[]；不得因为旧字段写着“已完成/已经历”就伪造终态事件或事实。",
+    "notes": [
+      "StoryAssetCatalog（4.2）已在 G1.1.2 冻结为最小资产 schema：14 个资产类型 + 11 个资产枚举 + 通用 StoryAssetOccurrenceSubjectRef；runtime 只引用 catalogFingerprint 与 series/segment/event definition 等稳定 ID，不复制整份内置资产；资产目录与运行账本不得重新合并",
+      "第 4.8.1 代码块是所有基础类型和命令的唯一声明位置；4.1-4.10 只解释聚合边界、生命周期和投影语义；4.2 冻结资产边界",
+      "墨色对照只记录结构启发（资产/规划、世界后台、模拟、统一应用）；不把墨色的字符串数组、静默回退、模型自报终态或新闻即时字符串当成 V3 契约",
+      "旧字段删除/改名必须开新的 schema revision 并记录迁移理由；实现者不得从其他三份历史文档抄类型"
+    ]
+  }
+}

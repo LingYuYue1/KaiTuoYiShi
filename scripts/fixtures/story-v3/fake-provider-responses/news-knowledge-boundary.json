@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "news-knowledge-boundary",
+  "responses": [
+    {
+      "responseId": "news_beast_sighting",
+      "service": "news",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：新闻直接落库、无来源事实、NPC 无回执知情",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:5e607b73c6314e09b518b9f91bee785961462767ffc667c4ab865843cea9a65d",
+      "requestSummary": {
+        "turnId": "news_publish_022",
+        "purpose": "发布军团动向通报",
+        "sourceFacts": []
+      },
+      "rawOutput": "{\"新增\":[{\"标题\":\"大型反物质军团造物出现在空间站附近\",\"内容\":\"支援舱段外确认出现大型反物质军团造物活动，空间站已加强警戒。\",\"类型\":\"新闻\"}],\"更新\":[],\"归档\":[],\"删除\":[]}",
+      "rawOutputSha256": "sha256:acc221f1bed7fe9527d052243325c0be52a79abdcad13c1ed19a816fb12a476d",
+      "expectedAdjudication": "attach_source_fact_and_receipts",
+      "allowedFinalSideEffects": [
+        "publish:news_beast_sighting（引用事实 fact_beast_sighting）"
+      ]
+    },
+    {
+      "responseId": "main_guard_knowledge",
+      "service": "main",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：不知情 NPC 凭空复述新闻内容",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:5e607b73c6314e09b518b9f91bee785961462767ffc667c4ab865843cea9a65d",
+      "requestSummary": {
+        "turnId": "knowledge_claim_022",
+        "playerIntent": "旁听守卫议论",
+        "currentFocus": "通报内容"
+      },
+      "rawOutput": "<thinking>旧系统没有回执概念，NPC 直接引用刚发布的通报。</thinking>\n<正文>基座舱段一名守卫向同伴复述着刚看到的通报：\"大型反物质军团造物就在支援舱段外面。\"</正文>\n<短期记忆>玩家听到守卫转述通报内容。</短期记忆>",
+      "rawOutputSha256": "sha256:8e1bb1be4460bd18580d266c9fe4f4c5ea44c30ae956230fa0e0ebda8d68f2b0",
+      "expectedAdjudication": "require_knowledge_receipt_before_quote",
+      "allowedFinalSideEffects": [
+        "receipt:station_guard/reading"
+      ]
+    }
+  ]
+}

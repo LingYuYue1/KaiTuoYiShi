@@ -33,8 +33,7 @@ import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
-import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
-import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { restoreStoryWeavingForLoadedSave } from '@/data/storyWeavingPreset';
 import { materializeAlbumRuntimePayload, pruneAlbumAssetCache } from '@/utils/albumObjectUrl';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
@@ -261,6 +260,13 @@ async function applySaveToState(
   const safeWorld = 归一化世界状态(save.世界);
   const safeTraveler = normalizeSavedTraveler(save.旅人, safeWorld.当前日期);
   const safeGameSettings = normalizeSavedGameSettings(save.gameSettings);
+  // 旧档保留合法游标和运行时状态；读档不按地点跳段，不读取旧聊天，不重新判断或推进剧情，也不补造旧回合事实。
+  // 后续普通回合若明确建立了更后阶段，只由联合裁决器一次推进一格。
+  const nextStoryWeaving = restoreStoryWeavingForLoadedSave(
+    save.剧情编织,
+    state.剧情编织,
+    safeWorld.开局档案,
+  );
 
   if (state.interruptedWorkflow) {
     if (isWorkflowRecoveryComplete(state.interruptedWorkflow, safeChatHistory)) {
@@ -296,22 +302,7 @@ async function applySaveToState(
   pruneAlbumAssetCache(nextAlbum.assets.map((asset) => asset.id));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(save.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
-  const normalizedStoryWeaving = alignStoryWeavingToOpeningArchive(
-    归一化剧情编织系统(save.剧情编织),
-    safeWorld.开局档案,
-  );
-  const recentUser = [...safeChatHistory].reverse().find((message) => message.role === 'user');
-  const recentAssistant = [...safeChatHistory].reverse().find((message) => message.role === 'assistant');
-  const storyRepair = autoAlignCanonStoryProgress({
-    storyWeaving: normalizedStoryWeaving,
-    turnCount: save.turnCount ?? (safeChatHistory.length + 1),
-    userInput: recentUser?.content ?? '',
-    body: recentAssistant?.parsedResponse?.body ?? recentAssistant?.content ?? '',
-    currentLocation: safeWorld.当前地点,
-  });
-  const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
-  await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
   state.setVariableBatches(compactVariableBatchHistory(save.variableBatches ?? []));
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。
