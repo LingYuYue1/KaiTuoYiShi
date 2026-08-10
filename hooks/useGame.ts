@@ -14,20 +14,24 @@ import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
-import type { API设置, API配置项, 存档数据 } from '@/models/settings';
+import type { API设置, API配置项, 游戏设置, 文生图API配置, 存档数据 } from '@/models/settings';
 import type { NewestStory字段集 } from '@/models/newestStory';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
 import { 归一化战技记录 } from '@/models/skill';
 import { 创建空世界状态, 根据开局档案创建初始NPC记录, 根据官方开局预设创建开局档案, 根据起始场景创建开局档案, 根据自由开局整理创建开局档案, 生成开局已成立事实, 归一化开局档案, type 开局整理档案 } from '@/models/world';
-import { 提取NPC同行记忆文本列表, type NPC同行记忆条目 } from '@/models/npc';
+import { 提取NPC同行记忆文本列表, type NPC同行记忆条目, type NPC角色锚点档案 } from '@/models/npc';
 import type { STRegexScript } from '@/models/stTypes';
 import { abilityPresets, factions, getFaction, getOpeningScenarioBundle, getPath, getStartingScenario, getStoryMode, storyModes } from '@/data/journeyPresets';
 import {
   deleteLegacyBackupSaves,
   deleteSaveTree,
+  exportSavePackage,
+  exportSaveTreePackage,
   getSaveCatalogSnapshot,
+  importSaveFileAsMany,
   loadSave,
+  loadSaveForCloudTransfer,
   loadSaveTree,
   loadSetting,
   repairSaveDatabase,
@@ -35,6 +39,7 @@ import {
   saveSetting,
   startSaveCatalogRepair,
   subscribeSaveCatalogRepair,
+  type CloudTransferSaveBundle,
   type SaveCatalogRepairResult,
   type SaveCatalogRepairScope,
   type SaveCatalogRepairState,
@@ -62,6 +67,11 @@ import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
 import { buildPhoneApiConfig, generatePhoneReply, type 手机回复上下文 } from '@/services/ai/phoneService';
 import { generateSkillDraft, type 战技生成草稿, type 战技生成上下文 } from '@/services/ai/skillGenerator';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
+import { generateImage, type ImageGenerationRequest, type ImageGenerationResult } from '@/services/ai/imageGeneration';
+import { parseSceneImagePrompt, parseStorySnapshotPrompt, type 解析上下文, type 场景图解析结果, type 故事快照解析结果 } from '@/services/ai/narrativeImageParse';
+import { extractCharacterAnchorWithAI, type CharacterAnchorExtractInput } from '@/services/ai/characterAnchorExtract';
+import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt, type ImagePromptTokenizerInput, type ImagePromptTokenizerResult } from '@/services/ai/imagePromptTokenizer';
+import { runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化智库系统, type 智库系统 } from '@/models/zhiku';
 
@@ -80,6 +90,13 @@ export type { 手机回复上下文 } from '@/services/ai/phoneService';
 // 战技 AI 草稿用例动作的类型出口（片 panel-p6）：战技生成草稿/上下文经门面再导出，
 // 供 SkillPanel 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
 export type { 战技生成草稿, 战技生成上下文 } from '@/services/ai/skillGenerator';
+
+// 相册 / 图片生成用例动作的类型出口（片 panel-p10）：AlbumPanel 的 AI 直连收敛到门面，
+// 供 App 与 AlbumPanel 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
+export type { ImageGenerationRequest, ImageGenerationResult } from '@/services/ai/imageGeneration';
+export type { 解析上下文, 场景图解析结果, 故事快照解析结果 } from '@/services/ai/narrativeImageParse';
+export type { CharacterAnchorExtractInput } from '@/services/ai/characterAnchorExtract';
+export type { ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/services/ai/imagePromptTokenizer';
 
 /** 手机记忆即时追加 + 归档压缩 + NPC 台账压缩的入参（PhoneModal 用例动作）。 */
 export interface PhoneMemoryCommitInput {
@@ -132,6 +149,14 @@ export interface UseGameReturn {
     handleGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
     // 导入存档落库：只负责 saveGame，id:0/type:'imported'/timestamp 批次字段由面板补齐。
     handlePersistImportedSave: (data: 存档数据) => Promise<number>;
+    // 导出单节点存档包（片 panel-p7 收口）：读取完整存档 + 触发浏览器下载，SaveLoadModal 与 StorageManager 共用。
+    handleExportSavePackage: (id: number) => Promise<void>;
+    // 导出整树存档包：读取完整存档集合 + 触发浏览器下载。
+    handleExportSaveTreePackage: (rootId: string) => Promise<void>;
+    // 导入存档包：解析文件 + 批量落库（id:0/type:'imported'/timestamp 批次字段由门面补齐），返回导入数量。
+    handleImportSaveFileAsMany: (file: File) => Promise<number>;
+    // 云存档传输读取：存档 + 关联资源记录一并读出（GitHub 云存档上传打包专用）。
+    handleLoadSaveForCloudTransfer: (id: number) => Promise<CloudTransferSaveBundle | null>;
     // 提示词模块：承接 tavernRegex 的提取/分析/试运行（纯函数接线）。
     handleExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
     handleAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
@@ -159,6 +184,42 @@ export interface UseGameReturn {
     // 智库迁移：读取迁移标记 → 缺失时初始化 → 加载内置预设 → 合并（保留自制与运行时解锁备注）→ 保存 → 返回合并后系统。
     // 面板只消费返回的合并结果做状态投影与选中修正，不接触迁移键与持久化。
     handleZhikuMigration: (current: 智库系统) => Promise<智库系统>;
+    // ── 相册面板用例动作（片 panel-p10：AlbumPanel AI 直连收口）──
+    // 文生图请求：只封装 generateImage + runImageGenerationWithRetry，不复制后端分支、不改参考图 payload。
+    // 重试回调由面板传入以更新任务状态与提示文本，facade 不持有 React state；失败继续抛出，面板保留错误提示与任务失败投影。
+    handleGenerateAlbumImage: (
+      config: 文生图API配置,
+      request: ImageGenerationRequest,
+      retry?: {
+        maxRetries?: number;
+        onAttempt?: (attempt: number, total: number) => void;
+        onRetry?: (attempt: number, total: number, errorMessage: string) => void;
+      },
+    ) => Promise<ImageGenerationResult>;
+    // 场景图解析：原样转发 parseSceneImagePrompt；词组转化器配置缺失时返回 null，由面板决定本地 fallback。
+    // 解析失败仍向上抛出，面板保留现有错误提示文案。
+    handleParseSceneImagePrompt: (
+      settings: 游戏设置,
+      apiSettings: API设置,
+      context: 解析上下文,
+    ) => Promise<场景图解析结果 | null>;
+    // 故事快照解析：原样转发 parseStorySnapshotPrompt；词组转化器配置缺失时返回 null，由面板决定本地 fallback。
+    handleParseStorySnapshotPrompt: (
+      settings: 游戏设置,
+      apiSettings: API设置,
+      context: 解析上下文,
+    ) => Promise<故事快照解析结果 | null>;
+    // 角色锚点提取：原样转发 extractCharacterAnchorWithAI（NPC、旅人共用）；NPC/旅人保存仍由面板 setter 完成。
+    handleExtractCharacterAnchor: (
+      config: API配置项,
+      input: CharacterAnchorExtractInput,
+    ) => Promise<NPC角色锚点档案>;
+    // 词组转化器：config/system prompt/tokenize 三步收敛到门面；未启用或主配置缺失时返回 null，维持直接使用本地输入语义。
+    handleTokenizeImagePrompt: (
+      settings: 游戏设置,
+      apiSettings: API设置,
+      input: ImagePromptTokenizerInput,
+    ) => Promise<ImagePromptTokenizerResult | null>;
   };
 }
 
@@ -741,6 +802,34 @@ export function useGame(): UseGameReturn {
     return saveGame(data);
   }, []);
 
+  // 导出单节点存档包：数据库读取 + 文件下载全部收敛到门面，面板不再直连 dbService。
+  const handleExportSavePackage = useCallback(async (id: number): Promise<void> => {
+    const save = await handleGetSaveForExport(id);
+    if (save) await exportSavePackage(save);
+  }, [handleGetSaveForExport]);
+
+  // 导出整树存档包：读取完整存档集合 + 触发浏览器下载。
+  const handleExportSaveTreePackage = useCallback(async (rootId: string): Promise<void> => {
+    const treeSaves = await handleGetSaveTreeForExport(rootId);
+    if (treeSaves.length) await exportSaveTreePackage(treeSaves);
+  }, [handleGetSaveTreeForExport]);
+
+  // 导入存档包：解析文件 + 批量落库（id:0/type:'imported'/timestamp 批次字段由门面补齐），返回导入数量。
+  const handleImportSaveFileAsMany = useCallback(async (file: File): Promise<number> => {
+    const imported = await importSaveFileAsMany(file);
+    const now = Date.now();
+    for (const [index, data] of imported.entries()) {
+      await handlePersistImportedSave({ ...data, id: 0, type: 'imported', timestamp: now + index });
+    }
+    devLog('save', 'import-save-persisted', { imported: imported.length });
+    return imported.length;
+  }, [handlePersistImportedSave]);
+
+  // 云存档传输读取：存档 + 关联资源记录一并读出（GitHub 云存档上传打包专用）。
+  const handleLoadSaveForCloudTransfer = useCallback(async (id: number): Promise<CloudTransferSaveBundle | null> => {
+    return loadSaveForCloudTransfer(id);
+  }, []);
+
   // 提示词模块：承接 tavernRegex 的提取/分析/试运行（纯函数接线，不复制实现）。
   const handleExtractTavernRegexScripts = useCallback((rawPreset: unknown): STRegexScript[] => {
     return extractTavernRegexScripts(rawPreset);
@@ -1055,6 +1144,118 @@ export function useGame(): UseGameReturn {
     return parseActionOptionsBlock(text);
   }, []);
 
+  // ── 相册面板用例动作（片 panel-p10：AlbumPanel AI 直连收口）──────────────────────────
+  // 文生图请求：只封装 generateImage + runImageGenerationWithRetry，不复制后端分支、不改参考图 payload、不写 React state。
+  // 重试回调由面板传入以更新任务状态与提示文本；成功/失败埋点用 devLog/devLogError，失败继续抛出，面板保留最终错误消息。
+  const handleGenerateAlbumImage = useCallback(async (
+    config: 文生图API配置,
+    request: ImageGenerationRequest,
+    retry?: {
+      maxRetries?: number;
+      onAttempt?: (attempt: number, total: number) => void;
+      onRetry?: (attempt: number, total: number, errorMessage: string) => void;
+    },
+  ): Promise<ImageGenerationResult> => {
+    try {
+      devLog('net', 'album-image-generate-start', { backend: config.backend });
+      const result = await runImageGenerationWithRetry(
+        () => generateImage(config, request),
+        {
+          maxRetries: retry?.maxRetries,
+          signal: request.signal,
+          onAttempt: retry?.onAttempt,
+          onRetry: retry?.onRetry,
+        },
+      );
+      devLog('net', 'album-image-generate-done', { backend: config.backend });
+      return result;
+    } catch (err) {
+      devLogError('net', 'album-image-generate-failed', err, { backend: config.backend });
+      throw err;
+    }
+  }, []);
+
+  // 场景图解析：原样转发 parseSceneImagePrompt；词组转化器配置缺失时返回 null（面板切本地 fallback），失败继续抛出。
+  const handleParseSceneImagePrompt = useCallback(async (
+    settings: 游戏设置,
+    apiSettings: API设置,
+    context: 解析上下文,
+  ): Promise<场景图解析结果 | null> => {
+    const parserConfig = buildImagePromptTokenizerConfig(settings, apiSettings);
+    if (!parserConfig) return null;
+    try {
+      devLog('net', 'scene-image-prompt-parse-start', { bodyLength: context.body.length });
+      const parsed = await parseSceneImagePrompt(parserConfig, context);
+      devLog('net', 'scene-image-prompt-parse-done', { title: parsed.title });
+      return parsed;
+    } catch (err) {
+      devLogError('net', 'scene-image-prompt-parse-failed', err, { bodyLength: context.body.length });
+      throw err;
+    }
+  }, []);
+
+  // 故事快照解析：原样转发 parseStorySnapshotPrompt；词组转化器配置缺失时返回 null（面板切本地 fallback），失败继续抛出。
+  const handleParseStorySnapshotPrompt = useCallback(async (
+    settings: 游戏设置,
+    apiSettings: API设置,
+    context: 解析上下文,
+  ): Promise<故事快照解析结果 | null> => {
+    const parserConfig = buildImagePromptTokenizerConfig(settings, apiSettings);
+    if (!parserConfig) return null;
+    try {
+      devLog('net', 'story-snapshot-prompt-parse-start', { bodyLength: context.body.length });
+      const parsed = await parseStorySnapshotPrompt(parserConfig, context);
+      devLog('net', 'story-snapshot-prompt-parse-done', { title: parsed.title });
+      return parsed;
+    } catch (err) {
+      devLogError('net', 'story-snapshot-prompt-parse-failed', err, { bodyLength: context.body.length });
+      throw err;
+    }
+  }, []);
+
+  // 角色锚点提取：原样转发 extractCharacterAnchorWithAI（NPC、旅人两处共用）。
+  // NPC/旅人保存仍由面板 setter 完成，facade 不持有或覆盖最新角色状态。
+  const handleExtractCharacterAnchor = useCallback(async (
+    config: API配置项,
+    input: CharacterAnchorExtractInput,
+  ): Promise<NPC角色锚点档案> => {
+    try {
+      devLog('net', 'character-anchor-extract-start', { name: input.name, kind: input.kind });
+      const anchor = await extractCharacterAnchorWithAI(config, input);
+      devLog('net', 'character-anchor-extract-done', { name: input.name, kind: input.kind });
+      return anchor;
+    } catch (err) {
+      devLogError('net', 'character-anchor-extract-failed', err, { name: input.name, kind: input.kind });
+      throw err;
+    }
+  }, []);
+
+  // 词组转化器：config/system prompt/tokenize 三步收敛到门面；未启用或主配置缺失时返回 null，
+  // 维持当前“直接使用本地输入”的语义。失败继续抛出，面板保留“失败已保留本地基础提示词”的文案。
+  const handleTokenizeImagePrompt = useCallback(async (
+    settings: 游戏设置,
+    apiSettings: API设置,
+    input: ImagePromptTokenizerInput,
+  ): Promise<ImagePromptTokenizerResult | null> => {
+    const tokenizerConfig = buildImagePromptTokenizerConfig(settings, apiSettings);
+    if (!tokenizerConfig) return null;
+    try {
+      devLog('net', 'image-prompt-tokenize-start', { mode: input.mode });
+      const systemPrompt = buildImagePromptTokenizerSystemPrompt(settings, input.mode);
+      const refined = await tokenizeImagePrompt(
+        tokenizerConfig,
+        systemPrompt,
+        input,
+        tokenizerConfig.retryCount ?? 2,
+      );
+      devLog('net', 'image-prompt-tokenize-done', { mode: input.mode });
+      return refined;
+    } catch (err) {
+      devLogError('net', 'image-prompt-tokenize-failed', err, { mode: input.mode });
+      throw err;
+    }
+  }, []);
+
   const actions = useMemo(() => ({
     handleSend,
     handleAbort,
@@ -1083,6 +1284,10 @@ export function useGame(): UseGameReturn {
     handleGetSaveForExport,
     handleGetSaveTreeForExport,
     handlePersistImportedSave,
+    handleExportSavePackage,
+    handleExportSaveTreePackage,
+    handleImportSaveFileAsMany,
+    handleLoadSaveForCloudTransfer,
     handleExtractTavernRegexScripts,
     handleAnalyzeTavernRegexScript,
     handleDryRunTavernRegexScript,
@@ -1095,6 +1300,11 @@ export function useGame(): UseGameReturn {
     handleParseActionOptionsBlock,
     handleSaveZhikuSystem,
     handleZhikuMigration,
+    handleGenerateAlbumImage,
+    handleParseSceneImagePrompt,
+    handleParseStorySnapshotPrompt,
+    handleExtractCharacterAnchor,
+    handleTokenizeImagePrompt,
   }), [
     handleSend,
     handleAbort,
@@ -1123,6 +1333,10 @@ export function useGame(): UseGameReturn {
     handleGetSaveForExport,
     handleGetSaveTreeForExport,
     handlePersistImportedSave,
+    handleExportSavePackage,
+    handleExportSaveTreePackage,
+    handleImportSaveFileAsMany,
+    handleLoadSaveForCloudTransfer,
     handleExtractTavernRegexScripts,
     handleAnalyzeTavernRegexScript,
     handleDryRunTavernRegexScript,
@@ -1135,6 +1349,11 @@ export function useGame(): UseGameReturn {
     handleParseActionOptionsBlock,
     handleSaveZhikuSystem,
     handleZhikuMigration,
+    handleGenerateAlbumImage,
+    handleParseSceneImagePrompt,
+    handleParseStorySnapshotPrompt,
+    handleExtractCharacterAnchor,
+    handleTokenizeImagePrompt,
   ]);
 
   return {

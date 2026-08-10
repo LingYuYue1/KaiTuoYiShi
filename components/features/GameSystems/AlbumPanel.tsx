@@ -4,10 +4,20 @@ import { 图片是否参考角色, 读取图片参考目标, resolveSize, slotLa
 import type { 图片槽位, 图片生成任务, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
-import type { API设置, 游戏设置, 文生图规则中心设置, 文生图系统设置, 文生图API配置 } from '@/models/settings';
+import type { API设置, API配置项, 游戏设置, 文生图规则中心设置, 文生图系统设置, 文生图API配置 } from '@/models/settings';
 import type { ConnectionTestConfig, ComfyWorkflowCandidate } from '@/hooks/useAiTools';
 import type { 手机系统 } from '@/models/phone';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
+import type {
+  解析上下文,
+  场景图解析结果,
+  故事快照解析结果,
+  ImageGenerationRequest,
+  ImageGenerationResult,
+  CharacterAnchorExtractInput,
+  ImagePromptTokenizerInput,
+  ImagePromptTokenizerResult,
+} from '@/hooks/useGame';
 import {
   添加图片到相册,
   创建相册图片条目,
@@ -19,13 +29,9 @@ import {
   挂载旅人图片,
   解析相册资源地址,
 } from '@/utils/albumActions';
-import { generateImage } from '@/services/ai/imageGeneration';
 import { ImageGenerationSettingsTab } from '@/components/features/Settings/ImageGenerationSettingsTab';
-import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
-import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
 import { buildNpcImagePrompt, buildSceneImagePrompt, buildTravelerImagePrompt, 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
-import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
-import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
+import { readImageError } from '@/utils/imageGenerationRetry';
 
 import {
   generateTargets,
@@ -86,6 +92,39 @@ interface AlbumPanelProps {
     config: 文生图API配置,
     source: 'queue' | 'history',
   ) => Promise<ComfyWorkflowCandidate[]>;
+  /** 文生图请求（片 panel-p10）：封装 generateImage + runImageGenerationWithRetry，重试回调经参数传入以更新任务状态/消息。 */
+  onGenerateAlbumImage: (
+    config: 文生图API配置,
+    request: ImageGenerationRequest,
+    retry?: {
+      maxRetries?: number;
+      onAttempt?: (attempt: number, total: number) => void;
+      onRetry?: (attempt: number, total: number, errorMessage: string) => void;
+    },
+  ) => Promise<ImageGenerationResult>;
+  /** 场景图解析（片 panel-p10）：封装 parseSceneImagePrompt，词组转化器配置缺失时返回 null，本地 fallback 由面板保留。 */
+  onParseSceneImagePrompt: (
+    settings: 游戏设置,
+    apiSettings: API设置,
+    context: 解析上下文,
+  ) => Promise<场景图解析结果 | null>;
+  /** 故事快照解析（片 panel-p10）：封装 parseStorySnapshotPrompt，词组转化器配置缺失时返回 null，本地 fallback 由面板保留。 */
+  onParseStorySnapshotPrompt: (
+    settings: 游戏设置,
+    apiSettings: API设置,
+    context: 解析上下文,
+  ) => Promise<故事快照解析结果 | null>;
+  /** 角色锚点提取（片 panel-p10）：封装 extractCharacterAnchorWithAI，NPC/旅人保存仍由面板 setter 完成。 */
+  onExtractCharacterAnchor: (
+    config: API配置项,
+    input: CharacterAnchorExtractInput,
+  ) => Promise<NPC角色锚点档案>;
+  /** 词组转化器（片 panel-p10）：配置/system prompt/tokenize 三步收敛到门面，配置缺失返回 null（维持直接使用本地输入语义）。 */
+  onTokenizeImagePrompt: (
+    settings: 游戏设置,
+    apiSettings: API设置,
+    input: ImagePromptTokenizerInput,
+  ) => Promise<ImagePromptTokenizerResult | null>;
 }
 
 function setEntryReferenceTargets(entries: 相册条目[], entryId: string, characterId: string, enabled: boolean): 相册条目[] {
@@ -103,7 +142,7 @@ function setEntryReferenceTargets(entries: 相册条目[], entryId: string, char
   });
 }
 
-export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, onPersistGameSettings, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [], fetchModels, testImageGenerationConnection, fetchImageGenerationModels, fetchComfyWorkflowCandidates }: AlbumPanelProps) {
+export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, npcs, onNpcChange, apiSettings, gameSettings, onGameSettingsChange, onPersistGameSettings, imageSettings, nsfwEnabled, nsfwImageEnabled, mainChatHistory = [], fetchModels, testImageGenerationConnection, fetchImageGenerationModels, fetchComfyWorkflowCandidates, onGenerateAlbumImage, onParseSceneImagePrompt, onParseStorySnapshotPrompt, onExtractCharacterAnchor, onTokenizeImagePrompt }: AlbumPanelProps) {
   const [activeTab, setActiveTab] = useState<WorkTab>('manual');
   const [showNsfw, setShowNsfw] = useState(false);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
@@ -311,8 +350,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     }
   };
 
-  const resolveStorySnapshotParserConfig = () => buildImagePromptTokenizerConfig(gameSettings, apiSettings);
-
   const resolveCharacterAnchorExtractConfig = () => {
     const mainApi = apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);
     if (!mainApi) return null;
@@ -443,15 +480,16 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     setGenerating(true);
     setMessage(override?.statusMessage || (nsfw ? '正在调用 NSFW 独立接口...' : '正在调用文生图接口...'));
     try {
-      const result = await runImageGenerationWithRetry(
-        () => generateImage(api, {
+      const result = await onGenerateAlbumImage(
+        api,
+        {
           prompt: promptText,
           negativePrompt: negativeText,
           nsfw,
           size: targetSize,
           referenceImages: referencePayload.images,
           referenceStrength: imageSettings.参考图.sdWebuiDenoisingStrength,
-        }),
+        },
         {
           maxRetries: api.retryCount,
           onAttempt: (attempt, total) => {
@@ -732,7 +770,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     setAnchorExtractingTarget(npcId);
     setMessage(`正在 AI 提取 ${npc.姓名} 的角色锚点...`);
     try {
-      const anchor = await extractCharacterAnchorWithAI(config, {
+      const anchor = await onExtractCharacterAnchor(config, {
         name: npc.姓名,
         kind: 'npc',
         sourceText: [npc.外貌, npc.穿着, npc.装备摘要, npc.图像档案?.头像提示词, npc.图像档案?.立绘提示词].filter(Boolean).join('\n'),
@@ -786,7 +824,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     setAnchorExtractingTarget('traveler');
     setMessage('正在 AI 提取主控锚点...');
     try {
-      const anchor = await extractCharacterAnchorWithAI(config, {
+      const anchor = await onExtractCharacterAnchor(config, {
         name: traveler.姓名 || '旅人',
         kind: 'traveler',
         sourceText: [traveler.性别, `${traveler.年龄}`, traveler.身高, traveler.身份, traveler.外貌, traveler.主命途, ...traveler.能力].filter(Boolean).join('\n'),
@@ -842,25 +880,19 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     anchorMode: boolean;
     anchorSummary: string;
   }) => {
-    const tokenizerConfig = buildImagePromptTokenizerConfig(gameSettings, apiSettings);
-    if (!tokenizerConfig) return input;
     setTokenizing(true);
     try {
-      const refined = await tokenizeImagePrompt(
-        tokenizerConfig,
-        buildImagePromptTokenizerSystemPrompt(gameSettings, input.mode),
-        {
-          title: input.title,
-          mode: input.mode,
-          sourceText: input.sourceText,
-          basePrompt: input.prompt,
-          baseNegative: input.negative,
-          extraRequirement,
-          anchorMode: input.anchorMode,
-          anchorSummary: input.anchorSummary,
-        },
-        tokenizerConfig.retryCount ?? 2,
-      );
+      const refined = await onTokenizeImagePrompt(gameSettings, apiSettings, {
+        title: input.title,
+        mode: input.mode,
+        sourceText: input.sourceText,
+        basePrompt: input.prompt,
+        baseNegative: input.negative,
+        extraRequirement,
+        anchorMode: input.anchorMode,
+        anchorSummary: input.anchorSummary,
+      });
+      if (!refined) return input;
       setMessage('已通过词组转化器整理最终提示词。');
       return { ...input, prompt: refined.prompt, negative: refined.negative };
     } catch (err) {
@@ -972,37 +1004,33 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     setSceneImageSummary(null);
     setMessage('正在解析场景画面...');
     try {
-      const parserConfig = resolveStorySnapshotParserConfig();
       const presentNpcs = buildPresentSceneNpcs(npcs, sourceText);
       const anchorInfo = getSceneAnchorStatus(traveler, presentNpcs);
-      let parsed: Awaited<ReturnType<typeof parseSceneImagePrompt>> | null = null;
+      let parsed: 场景图解析结果 | null = null;
       let usedLocalFallback = false;
-      if (parserConfig) {
-        try {
-          parsed = await parseSceneImagePrompt(parserConfig, {
-            body: sourceText,
-            traveler: {
-              name: traveler.姓名 || traveler.别名 || '玩家角色',
-              gender: traveler.性别 || undefined,
-              appearance: traveler.外貌 || undefined,
-              identity: traveler.身份 || undefined,
-              anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
-            },
-            playerAppearanceMode: 'auto',
-            presentNpcs: presentNpcs.map((npc) => ({
-              name: npc.姓名,
-              appearance: npc.外貌,
-              clothing: npc.穿着,
-            })),
-          });
-        } catch (error) {
-          usedLocalFallback = true;
-          const reason = error instanceof Error ? error.message : String(error);
-          setMessage(`场景图模型解析失败，已改用本地草稿兜底：${reason}`);
-        }
-      } else {
+      try {
+        parsed = await onParseSceneImagePrompt(gameSettings, apiSettings, {
+          body: sourceText,
+          traveler: {
+            name: traveler.姓名 || traveler.别名 || '玩家角色',
+            gender: traveler.性别 || undefined,
+            appearance: traveler.外貌 || undefined,
+            identity: traveler.身份 || undefined,
+            anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
+          },
+          playerAppearanceMode: 'auto',
+          presentNpcs: presentNpcs.map((npc) => ({
+            name: npc.姓名,
+            appearance: npc.外貌,
+            clothing: npc.穿着,
+          })),
+        });
+      } catch (error) {
         usedLocalFallback = true;
+        const reason = error instanceof Error ? error.message : String(error);
+        setMessage(`场景图模型解析失败，已改用本地草稿兜底：${reason}`);
       }
+      if (parsed === null) usedLocalFallback = true;
 
       if (parsed) {
         const lockedPrompt = 应用场景角色锚点锁({
@@ -1054,37 +1082,33 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     setMessage('正在解析正文画面...');
     try {
       const target = generateTargets.find((item) => item.id === 'scene') ?? currentTarget;
-      const parserConfig = resolveStorySnapshotParserConfig();
       const presentNpcs = buildPresentSceneNpcs(npcs, sourceText);
       const anchorInfo = getSceneAnchorStatus(traveler, presentNpcs);
-      let parsed: Awaited<ReturnType<typeof parseStorySnapshotPrompt>> | null = null;
+      let parsed: 故事快照解析结果 | null = null;
       let usedLocalFallback = false;
-      if (parserConfig) {
-        try {
-          parsed = await parseStorySnapshotPrompt(parserConfig, {
-            body: sourceText,
-            traveler: {
-              name: traveler.姓名 || traveler.别名 || '玩家角色',
-              gender: traveler.性别 || undefined,
-              appearance: traveler.外貌 || undefined,
-              identity: traveler.身份 || undefined,
-              anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
-            },
-            playerAppearanceMode: 'auto',
-            presentNpcs: presentNpcs.map((npc) => ({
-              name: npc.姓名,
-              appearance: npc.外貌,
-              clothing: npc.穿着,
-            })),
-          });
-        } catch (error) {
-          usedLocalFallback = true;
-          const reason = error instanceof Error ? error.message : String(error);
-          setMessage(`故事快照模型解析失败，已改用本地草稿兜底：${reason}`);
-        }
-      } else {
+      try {
+        parsed = await onParseStorySnapshotPrompt(gameSettings, apiSettings, {
+          body: sourceText,
+          traveler: {
+            name: traveler.姓名 || traveler.别名 || '玩家角色',
+            gender: traveler.性别 || undefined,
+            appearance: traveler.外貌 || undefined,
+            identity: traveler.身份 || undefined,
+            anchorPrompt: traveler.图像档案?.角色锚点 ? JSON.stringify(traveler.图像档案.角色锚点) : undefined,
+          },
+          playerAppearanceMode: 'auto',
+          presentNpcs: presentNpcs.map((npc) => ({
+            name: npc.姓名,
+            appearance: npc.外貌,
+            clothing: npc.穿着,
+          })),
+        });
+      } catch (error) {
         usedLocalFallback = true;
+        const reason = error instanceof Error ? error.message : String(error);
+        setMessage(`故事快照模型解析失败，已改用本地草稿兜底：${reason}`);
       }
+      if (parsed === null) usedLocalFallback = true;
       const summary = parsed
         ? {
             title: parsed.title,

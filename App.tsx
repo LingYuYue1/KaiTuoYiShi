@@ -19,7 +19,7 @@ import { TravelerProfileModal } from '@/components/features/Character/TravelerPr
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/dbService';
 import type { 角色数据结构 } from '@/models/character';
-import type { NPC记录 } from '@/models/npc';
+import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import type { 世界书 } from '@/models/worldbook';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
@@ -269,7 +269,7 @@ import type { 命途ID } from '@/models/journey';
 import type { 队列任务ID } from '@/models/queueTask';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate } from '@/services/ai/travelerTemplate';
-import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文 } from '@/hooks/useGame';
+import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/hooks/useGame';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 
 const JOURNEY_LAUNCH_ANIMATION_MS = 1680;
@@ -718,6 +718,11 @@ export function App() {
             onGenerateSkillDraft: actions.handleGenerateSkillDraft,
             onSaveZhikuSystem: actions.handleSaveZhikuSystem,
             onZhikuMigration: actions.handleZhikuMigration,
+            onGenerateAlbumImage: actions.handleGenerateAlbumImage,
+            onParseSceneImagePrompt: actions.handleParseSceneImagePrompt,
+            onParseStorySnapshotPrompt: actions.handleParseStorySnapshotPrompt,
+            onExtractCharacterAnchor: actions.handleExtractCharacterAnchor,
+            onTokenizeImagePrompt: actions.handleTokenizeImagePrompt,
           })}
         </Suspense>
       </SystemDrawer>
@@ -783,9 +788,9 @@ export function App() {
               onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
               onRepairSaveDatabase={actions.handleRepairSaveDatabase}
               onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
-              onGetSaveForExport={actions.handleGetSaveForExport}
-              onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
-              onPersistImportedSave={actions.handlePersistImportedSave}
+              onExportSavePackage={actions.handleExportSavePackage}
+              onExportSaveTreePackage={actions.handleExportSaveTreePackage}
+              onImportSaveFileAsMany={actions.handleImportSaveFileAsMany}
               onClose={() => setShowSaveLoad(false)}
             />
           </Suspense>
@@ -797,6 +802,8 @@ export function App() {
               onClose={() => setShowCloudSave(false)}
               onLoadCloudConfig={loadGitHubCloudSaveConfig}
               onPersistCloudConfig={persistGitHubCloudSaveConfig}
+              onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
+              onLoadSaveForCloudTransfer={actions.handleLoadSaveForCloudTransfer}
             />
           </Suspense>
         )}
@@ -862,9 +869,9 @@ export function App() {
               onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
               onRepairSaveDatabase={actions.handleRepairSaveDatabase}
               onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
-              onGetSaveForExport={actions.handleGetSaveForExport}
-              onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
-              onPersistImportedSave={actions.handlePersistImportedSave}
+              onExportSavePackage={actions.handleExportSavePackage}
+              onExportSaveTreePackage={actions.handleExportSaveTreePackage}
+              onImportSaveFileAsMany={actions.handleImportSaveFileAsMany}
               onExtractTavernRegexScripts={actions.handleExtractTavernRegexScripts}
               onAnalyzeTavernRegexScript={actions.handleAnalyzeTavernRegexScript}
               onDryRunTavernRegexScript={actions.handleDryRunTavernRegexScript}
@@ -1000,9 +1007,9 @@ export function App() {
             onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
             onRepairSaveDatabase={actions.handleRepairSaveDatabase}
             onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
-            onGetSaveForExport={actions.handleGetSaveForExport}
-            onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
-            onPersistImportedSave={actions.handlePersistImportedSave}
+            onExportSavePackage={actions.handleExportSavePackage}
+            onExportSaveTreePackage={actions.handleExportSaveTreePackage}
+            onImportSaveFileAsMany={actions.handleImportSaveFileAsMany}
             onExtractTavernRegexScripts={actions.handleExtractTavernRegexScripts}
             onAnalyzeTavernRegexScript={actions.handleAnalyzeTavernRegexScript}
             onDryRunTavernRegexScript={actions.handleDryRunTavernRegexScript}
@@ -1080,9 +1087,9 @@ export function App() {
             onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
             onRepairSaveDatabase={actions.handleRepairSaveDatabase}
             onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
-            onGetSaveForExport={actions.handleGetSaveForExport}
-            onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
-            onPersistImportedSave={actions.handlePersistImportedSave}
+            onExportSavePackage={actions.handleExportSavePackage}
+            onExportSaveTreePackage={actions.handleExportSaveTreePackage}
+            onImportSaveFileAsMany={actions.handleImportSaveFileAsMany}
             onClose={() => setShowSaveLoad(false)}
           />
         </Suspense>
@@ -1095,6 +1102,8 @@ export function App() {
             onClose={() => setShowCloudSave(false)}
             onLoadCloudConfig={loadGitHubCloudSaveConfig}
             onPersistCloudConfig={persistGitHubCloudSaveConfig}
+            onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
+            onLoadSaveForCloudTransfer={actions.handleLoadSaveForCloudTransfer}
           />
         </Suspense>
       )}
@@ -1148,6 +1157,39 @@ function renderSystemPanel(
     onSaveStoryWeaving: (system: 剧情编织系统) => Promise<void>;
     /** 战技 AI 草稿（片 panel-p6）：SkillPanel 的 generateSkillDraft 直连收敛到门面。 */
     onGenerateSkillDraft: (apiConfig: import('@/models/settings').API配置项, context: 战技生成上下文) => Promise<战技生成草稿>;
+    /** 文生图请求（片 panel-p10）：AlbumPanel 的 generateImage + runImageGenerationWithRetry 直连收敛到门面，重试回调经参数传入。 */
+    onGenerateAlbumImage: (
+      config: import('@/models/settings').文生图API配置,
+      request: ImageGenerationRequest,
+      retry?: {
+        maxRetries?: number;
+        onAttempt?: (attempt: number, total: number) => void;
+        onRetry?: (attempt: number, total: number, errorMessage: string) => void;
+      },
+    ) => Promise<ImageGenerationResult>;
+    /** 场景图解析（片 panel-p10）：AlbumPanel 的 parseSceneImagePrompt 直连收敛到门面，配置缺失返回 null（面板切本地 fallback）。 */
+    onParseSceneImagePrompt: (
+      settings: import('@/models/settings').游戏设置,
+      apiSettings: import('@/models/settings').API设置,
+      context: 解析上下文,
+    ) => Promise<场景图解析结果 | null>;
+    /** 故事快照解析（片 panel-p10）：AlbumPanel 的 parseStorySnapshotPrompt 直连收敛到门面，配置缺失返回 null（面板切本地 fallback）。 */
+    onParseStorySnapshotPrompt: (
+      settings: import('@/models/settings').游戏设置,
+      apiSettings: import('@/models/settings').API设置,
+      context: 解析上下文,
+    ) => Promise<故事快照解析结果 | null>;
+    /** 角色锚点提取（片 panel-p10）：AlbumPanel 的 extractCharacterAnchorWithAI 直连收敛到门面，NPC/旅人保存仍由面板 setter 完成。 */
+    onExtractCharacterAnchor: (
+      config: import('@/models/settings').API配置项,
+      input: CharacterAnchorExtractInput,
+    ) => Promise<NPC角色锚点档案>;
+    /** 词组转化器（片 panel-p10）：AlbumPanel 的 tokenizer 配置/system prompt/tokenize 三步直连收敛到门面，配置缺失返回 null。 */
+    onTokenizeImagePrompt: (
+      settings: import('@/models/settings').游戏设置,
+      apiSettings: import('@/models/settings').API设置,
+      input: ImagePromptTokenizerInput,
+    ) => Promise<ImagePromptTokenizerResult | null>;
   },
 ) {
   switch (id) {
@@ -1205,6 +1247,11 @@ function renderSystemPanel(
           testImageGenerationConnection={ctx.testImageGenerationConnection}
           fetchImageGenerationModels={ctx.fetchImageGenerationModels}
           fetchComfyWorkflowCandidates={ctx.fetchComfyWorkflowCandidates}
+          onGenerateAlbumImage={ctx.onGenerateAlbumImage}
+          onParseSceneImagePrompt={ctx.onParseSceneImagePrompt}
+          onParseStorySnapshotPrompt={ctx.onParseStorySnapshotPrompt}
+          onExtractCharacterAnchor={ctx.onExtractCharacterAnchor}
+          onTokenizeImagePrompt={ctx.onTokenizeImagePrompt}
         />
       );
     case 'news':
