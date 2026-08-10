@@ -8,6 +8,7 @@ import type { 开局来源, 剧情模式 } from '@/models/journey';
 import type { 世界书 } from '@/models/worldbook';
 import type { NPC记录, NPC账本选择结果, NPC同行记忆条目 } from '@/models/npc';
 import { formatNpcLedgerForPrompt, 格式化NPC关系, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 import { 计算命途战技槽位数, NORMAL_SKILL_SLOT_COUNT } from '@/models/skill';
 import type { 新闻条目 } from '@/models/news';
 import { NEWS_CATEGORY_LABELS } from '@/models/news';
@@ -1063,8 +1064,13 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
     if (n.原著角色 && (n.说话方式 || n.性格)) {
       desc.push('表现要求：本回合若该角色在场或被自然牵引出场，必须体现说话方式和主体人格；不要连续数回合只沉默旁观。');
     }
-    const memories = 提取NPC同行记忆文本列表(n).slice(-4);
-    if (memories.length) desc.push(`同行记忆：${memories.join('；')}`);
+    // 阶段1方案E：修复重复注入 - 同行记忆只取非手机来源（手机来源单独取，避免重复）
+    const nonPhoneMemories = (n.同行记忆 ?? [])
+      .filter((item): item is NPC同行记忆条目 => typeof item !== 'string' && item?.来源 !== '手机')
+      .map((item) => 清理NPC同行记忆摘要(item?.摘要 ?? ''))
+      .filter((text): text is string => Boolean(text))
+      .slice(-4);
+    if (nonPhoneMemories.length) desc.push(`同行记忆：${nonPhoneMemories.join('；')}`);
     const phoneMemories = getRecentPhoneMemoryTexts(n).slice(-2);
     if (phoneMemories.length) desc.push(`最近手机私聊：${phoneMemories.join('；')}（正文若该角色入场，必须承接私聊热度与未尽话题）`);
     const descPart = desc.length ? `\n  ${desc.join('；')}` : '';
@@ -1176,40 +1182,23 @@ function buildRecentPhoneMemoryLine(npc: NPC记录): string {
 
 function buildPhoneSection(phone?: 手机系统): string {
   if (!phone) return '';
-  const compressed = phone.chats
-    .flatMap((chat) =>
-      (chat.localArchive?.compressedSummaries ?? []).map((summary) => ({
-        title: chat.title,
-        type: chat.type,
-        summary,
-      })),
-    )
-    .filter((item) => item.summary.trim())
-    .slice(-6);
+  // 阶段1方案E：手机 compressedSummaries 不再直接注入正文
+  // 手机内容通过代码强制双写进入忆庭(分类='通讯')和NPC同行记忆(来源='手机')
+  // 由 recall(全局) + NPC账本(个人) 注入，此处只保留待处理来信注入（通知层面）
   const pendingSeeds = phone.messageSeeds
     .filter((seed) => seed.status === 'pending')
     .slice(-5);
-  if (!compressed.length && !pendingSeeds.length) return '';
+  if (!pendingSeeds.length) return '';
 
   const lines: string[] = [];
   lines.push('# 手机通讯摘要');
   lines.push('');
-  lines.push('- 这里不是完整聊天原文，只是手机系统已经压缩落地的通讯事实和待处理来信。');
-  lines.push('- 主剧情可以承接这些事实、约定、关系变化和未读提示，但不要代替玩家在手机里回复，也不要把手机聊天改写成正文大段复述。');
-  if (compressed.length) {
-    lines.push('');
-    lines.push('## 已压缩通讯摘要');
-    for (const item of compressed) {
-      const typeLabel = item.type === 'group' ? '群聊' : item.type === 'system' ? '系统' : '私聊';
-      lines.push(`- [${typeLabel}] ${item.title}：${item.summary}`);
-    }
-  }
-  if (pendingSeeds.length) {
-    lines.push('');
-    lines.push('## 待处理来信');
-    for (const seed of pendingSeeds) {
-      lines.push(`- [${seed.priority}] ${seed.title}：${seed.context}`);
-    }
+  lines.push('- 这里是手机系统待处理来信的通知。已压缩的通讯事实通过忆庭回忆和NPC账本注入，不在此处重复。');
+  lines.push('- 主剧情可以承接待处理来信的提示，但不要代替玩家在手机里回复，也不要把手机聊天改写成正文大段复述。');
+  lines.push('');
+  lines.push('## 待处理来信');
+  for (const seed of pendingSeeds) {
+    lines.push(`- [${seed.priority}] ${seed.title}：${seed.context}`);
   }
   return lines.join('\n');
 }

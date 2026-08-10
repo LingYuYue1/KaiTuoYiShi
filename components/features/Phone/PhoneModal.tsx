@@ -607,6 +607,12 @@ export function PhoneModal({
   const commitPhoneMemory = async (summary: string, contact?: 手机联系人, options: { force?: boolean } = {}) => {
     const trimmed = summary.trim();
     if (!trimmed) return;
+
+    // 阶段1方案E：手机压缩摘要代码强制双写
+    // ① 忆庭条目（分类='通讯'，走主记忆链AI压缩生成忆庭档案）
+    // ② NPC同行记忆（来源='手机'，【通讯记录】标记打包1条，算1条占阈值20）
+    // 不再直接注入正文（buildPhoneSection已移除compressedSummaries注入）
+
     const normalizedSummary = trimmed.startsWith('【手机】') ? trimmed : `【手机】${trimmed}`;
     const alreadyInMemory = memory.即时记忆.some((item) => item.includes(trimmed))
       || memory.短期记忆.some((item) => item.includes(trimmed))
@@ -622,12 +628,22 @@ export function PhoneModal({
     );
     onMemoryChange(compression.memory);
     if (compression.archives.length) {
+      // 阶段1方案E：手机压缩生成的忆庭条目标记分类='通讯'
+      const phoneArchives = compression.archives.map((entry) => ({
+        ...entry,
+        分类: '通讯' as const,
+        通讯元数据: contact?.npcId ? {
+          联系人: contact.npcId,
+        } : undefined,
+      }));
       onYitingChange((prevYiting) => ({
         ...prevYiting,
-        回忆档案: [...prevYiting.回忆档案, ...compression.archives],
+        回忆档案: [...prevYiting.回忆档案, ...phoneArchives],
       }));
     }
     if (contact?.npcId) {
+      // 阶段1方案E：NPC同行记忆用【通讯记录】标记包裹，打包成1条（不管几条消息）
+      const packagedSummary = `【通讯记录】${trimmed}`;
       onNpcRecordsChange((prev) =>
         prev.map((npc) => {
           if (npc.id !== contact.npcId) return npc;
@@ -635,7 +651,7 @@ export function PhoneModal({
           const nextEntry: NPC同行记忆条目 = {
             id: `npc_mem_phone_${turnCount}_${Math.random().toString(36).slice(2, 6)}`,
             回合: turnCount,
-            摘要: trimmed,
+            摘要: packagedSummary,
             来源: '手机',
             关联NPCID: [npc.id],
           };
@@ -652,8 +668,8 @@ export function PhoneModal({
             ...npc,
             同行记忆: ledgerCompression.memories,
             总结记忆: ledgerCompression.summaries,
-            最近互动: trimmed,
-            共同经历: [...new Set([...(npc.共同经历 ?? []), trimmed])].slice(-8),
+            最近互动: packagedSummary,
+            共同经历: [...new Set([...(npc.共同经历 ?? []), packagedSummary])].slice(-8),
             对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
             最近回合: turnCount,
           };
