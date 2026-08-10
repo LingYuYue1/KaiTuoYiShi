@@ -937,7 +937,6 @@ export function App() {
           <NewGameWizard
             onStart={handleStartGame}
             onBack={() => state.setView('home')}
-            currentTheme={currentTheme}
             openingArchiveApiConfig={getActiveApiConfig()}
             onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
           />
