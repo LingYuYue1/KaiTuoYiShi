@@ -1,5 +1,4 @@
 ﻿import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
-import { parseActionOptionsBlock } from '@/services/ai/responseParser';
 import { isTurnStatusActive, isTurnStatusCancellable, TURN_STATUS_IDLE, type TurnStatus } from '@/hooks/useGame/turnStatus';
 
 interface InputAreaProps {
@@ -20,6 +19,8 @@ interface InputAreaProps {
   /** 上一条 AI 回复给出的可点选行动列表。点击后填入输入框待玩家微调。 */
   actionOptions?: string[];
   recoveryDraft?: { workflowId: string; input: string } | null;
+  /** 行动选项解析（片 panel-p6）：由 useGame 门面接管 parseActionOptionsBlock 直连。 */
+  onParseActionOptions?: (text: string) => string[];
 }
 
 const btnClip =
@@ -54,6 +55,7 @@ export const InputArea = memo(function InputArea({
   onCancelWorkflow,
   actionOptions = [],
   recoveryDraft,
+  onParseActionOptions,
 }: InputAreaProps) {
   const [input, setInput] = useState('');
   const [rerollActionOptions, setRerollActionOptions] = useState<string[]>([]);
@@ -63,8 +65,8 @@ export const InputArea = memo(function InputArea({
   const appliedRecoveryRef = useRef('');
   const visibleActionOptions = useMemo(() => {
     const source = actionOptions.length > 0 ? actionOptions : rerollActionOptions;
-    return parseActionOptionsBlock(source.join('\n'));
-  }, [actionOptions, rerollActionOptions]);
+    return onParseActionOptions?.(source.join('\n')) ?? [];
+  }, [actionOptions, rerollActionOptions, onParseActionOptions]);
 
   useEffect(() => {
     if (!recoveryDraft || appliedRecoveryRef.current === recoveryDraft.workflowId) return;

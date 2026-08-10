@@ -2,10 +2,10 @@
 import type { 角色数据结构 } from '@/models/character';
 import type { 命途ID } from '@/models/journey';
 import type { 命途进度 } from '@/models/path';
-import type { API设置 } from '@/models/settings';
+import type { API设置, API配置项 } from '@/models/settings';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { getPath } from '@/data/journeyPresets';
-import { generateSkillDraft } from '@/services/ai/skillGenerator';
+import type { 战技生成草稿, 战技生成上下文 } from '@/hooks/useGame';
 import {
   NORMAL_SKILL_SLOT_COUNT,
   创建战技记录,
@@ -20,6 +20,8 @@ interface SkillPanelProps {
   traveler: 角色数据结构;
   onTravelerChange: React.Dispatch<React.SetStateAction<角色数据结构>>;
   apiSettings: API设置;
+  /** 战技 AI 草稿（片 panel-p6）：由 useGame 门面接管 generateSkillDraft 直连。 */
+  onGenerateSkillDraft: (apiConfig: API配置项, context: 战技生成上下文) => Promise<战技生成草稿>;
 }
 
 type SlotKey = `normal:${number}` | `path:${命途ID}:${number}`;
@@ -49,7 +51,7 @@ const emptyDraft: SkillDraft = {
   备注: '',
 };
 
-export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPanelProps) {
+export function SkillPanel({ traveler, onTravelerChange, apiSettings, onGenerateSkillDraft }: SkillPanelProps) {
   const pathRecords = traveler.命途列表;
   const skillRecords = useMemo(
     () => traveler.战技列表.map(归一化战技记录).filter(isVisibleSkillRecord),
@@ -145,7 +147,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings }: SkillPan
     setGeneratingSkill(true);
     setGenerationMessage({ kind: 'info', text: '正在根据当前槽位生成小说化战技草稿……' });
     try {
-      const generated = await generateSkillDraft(activeApiConfig, {
+      const generated = await onGenerateSkillDraft(activeApiConfig, {
         traveler,
         slotKind: selectedSlot.kind,
         slotIndex: selectedSlot.slotIndex,

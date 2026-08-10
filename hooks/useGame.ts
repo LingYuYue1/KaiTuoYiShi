@@ -10,25 +10,57 @@ import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compress
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
 import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadLatest, handleManualSave, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
+import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
-import type { API配置项 } from '@/models/settings';
+import type { API设置, API配置项 } from '@/models/settings';
 import type { NewestStory字段集 } from '@/models/newestStory';
 import type { 队列任务记录 } from '@/models/queueTask';
-import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
+import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
+import { 归一化战技记录 } from '@/models/skill';
+import { 创建空世界状态, 根据开局档案创建初始NPC记录, 根据官方开局预设创建开局档案, 根据起始场景创建开局档案, 根据自由开局整理创建开局档案, 生成开局已成立事实, 归一化开局档案, type 开局整理档案 } from '@/models/world';
 import { 提取NPC同行记忆文本列表, type NPC同行记忆条目 } from '@/models/npc';
 import type { STRegexScript } from '@/models/stTypes';
-import { deleteSaveTree, saveSetting, type SaveListItemSummary } from '@/services/dbService';
+import { abilityPresets, factions, getFaction, getOpeningScenarioBundle, getPath, getStartingScenario, getStoryMode, storyModes } from '@/data/journeyPresets';
+import { deleteSaveTree, loadSetting, saveSetting, type SaveListItemSummary } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
-import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
+import {
+  type OpeningPlayerPreset,
+  type OpeningPresetDraft,
+  OPENING_PLAYER_PRESETS_KEY,
+  buildOpeningSummary,
+  formatFreeOpeningWorkshopDraft,
+  getCanonicalTrailblazer,
+  mergeFreeOpeningPrompt,
+  normalizeOpeningPresets,
+  resolveSelectedScenarioPreset,
+} from '@/components/features/NewGame/wizard/wizardData';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog, devLogError } from '@/utils/devLog';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
+import { buildPhoneApiConfig, generatePhoneReply, type 手机回复上下文 } from '@/services/ai/phoneService';
+import { generateSkillDraft, type 战技生成草稿, type 战技生成上下文 } from '@/services/ai/skillGenerator';
+import { parseActionOptionsBlock } from '@/services/ai/responseParser';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
 
 // 面板用例动作的类型出口（片 panel-p1）：tavernRegex 领域类型经门面再导出，
 // 供 PromptModulesTab 以类型形式从门面接收，不再直取 hooks/useGame/ 内部模块。
 export type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
+
+// 开局向导用例动作的类型出口（片 panel-p4）：TravelerTemplate 领域类型经门面再导出，
+// 供 NewGameWizard / steps / App 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
+export type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
+
+// 手机系统用例动作的类型出口（片 panel-p5）：手机回复上下文经门面再导出，
+// 供 PhoneModal 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
+export type { 手机回复上下文 } from '@/services/ai/phoneService';
+
+// 战技 AI 草稿用例动作的类型出口（片 panel-p6）：战技生成草稿/上下文经门面再导出，
+// 供 SkillPanel 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
+export type { 战技生成草稿, 战技生成上下文 } from '@/services/ai/skillGenerator';
 
 /** 手机记忆即时追加 + 归档压缩 + NPC 台账压缩的入参（PhoneModal 用例动作）。 */
 export interface PhoneMemoryCommitInput {
@@ -56,6 +88,8 @@ export interface UseGameReturn {
     // ── 面板用例动作（片 panel-p1：数据通道收口）──
     // 记忆压缩：PhoneModal 的记忆即时追加与归档压缩，含 NPC 台账压缩。
     handlePhoneMemoryCommit: (input: PhoneMemoryCommitInput) => Promise<void>;
+    // 手机 AI 回复（片 panel-p5）：封装 buildPhoneApiConfig + generatePhoneReply，失败时 devLogError 并返回空字符串兜底。
+    handleGeneratePhoneReply: (apiConfig: API设置, context: 手机回复上下文) => Promise<string>;
     // 存档删除：resolve→delete 级联删除，SaveLoadModal 与 StorageManager 共用。
     handleDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
     handleDeleteSaveTree: (rootId: string) => Promise<void>;
@@ -64,6 +98,131 @@ export interface UseGameReturn {
     handleExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
     handleAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
     handleDryRunTavernRegexScript: (script: STRegexScript, sampleText: string) => TavernRegexDryRunResult;
+    // ── 开局向导用例动作（片 panel-p4：NewGameWizard facade 收口）──
+    // 开局预设持久化：NewGameWizard 的读取/保存闭环收敛到门面。
+    handleLoadOpeningPresets: () => Promise<OpeningPlayerPreset[]>;
+    handleSaveOpeningPresets: (presets: OpeningPlayerPreset[]) => Promise<OpeningPlayerPreset[]>;
+    // AI 开局整理：把自由/创意工坊开局的文本整理为结构化开局档案，缺配置或失败时返回 null。
+    handleParseOpeningArchive: (draft: OpeningPresetDraft) => Promise<开局整理档案 | null>;
+    // 新局组装：draft → traveler/worldState/NPC 组装 + 状态初始化 + checkpoint（原 App.handleStartGame + 向导 handleStart）。
+    // 返回 false 表示 API 预检失败，未做任何初始化，调用方不应切换视图。
+    handlePrepareNewGame: (draft: OpeningPresetDraft) => Promise<boolean>;
+    // ── 零散面板 AI + dbService 直连收口（片 panel-p6）──
+    // 剧情编织持久化：PlotPanel 的 saveSetting('storyWeavingSystem', ...) 直连收敛到门面。
+    handleSaveStoryWeaving: (system: 剧情编织系统) => Promise<void>;
+    // 战技 AI 草稿：SkillPanel 的 generateSkillDraft 直连收敛到门面，失败时 devLogError 并向上抛出（面板保留错误提示文案）。
+    handleGenerateSkillDraft: (apiConfig: API配置项, context: 战技生成上下文) => Promise<战技生成草稿>;
+    // 行动选项解析：InputArea 的 parseActionOptionsBlock 直连收敛到门面（纯函数，无异步）。
+    handleParseActionOptionsBlock: (text: string) => string[];
+  };
+}
+
+/**
+ * 开局 draft → 全部派生值（原 NewGameWizard.handleStart 的组装前置 + openingSummaryLines memo）。
+ * 纯函数，供 handleParseOpeningArchive 与 handlePrepareNewGame 共用，避免两处重复推导。
+ */
+function deriveOpeningDraftContext(draft: OpeningPresetDraft) {
+  const storyModeDef = getStoryMode(draft.storyMode) ?? storyModes[0];
+  const selectedPath = getPath(draft.pathId);
+  const selectedPathStage = PATH_STAGE_DEFS.find((item) => item.stage === draft.pathStage) ?? PATH_STAGE_DEFS[0];
+  const selectedFaction = getFaction(draft.factionId) ?? factions[0];
+  const selectedScenario = getStartingScenario(draft.startingScenarioId);
+  const selectedScenarioPreset = resolveSelectedScenarioPreset(draft.startingScenarioId, selectedScenario);
+  const scenarioBundle = getOpeningScenarioBundle(draft.startingScenarioId);
+  const scenarioPreset = selectedScenarioPreset ?? scenarioBundle.preset;
+  const selectedOpeningDate = scenarioPreset?.referenceDate ?? '琥珀纪 2157.03.07';
+  const selectedOpeningTime = scenarioPreset?.referenceTime ?? '06:40';
+  const selectedOpeningLocation =
+    scenarioPreset?.defaultLocationHint
+    ?? scenarioBundle.chapter?.defaultLocationHint
+    ?? selectedScenario?.name
+    ?? '黑塔空间站';
+  const selectedOpeningTitle =
+    scenarioPreset?.title
+    ?? (scenarioBundle.region && scenarioBundle.chapter
+      ? `${scenarioBundle.region.name} · ${scenarioBundle.chapter.name}`
+      : selectedScenario?.name)
+    ?? '未选择';
+  const selectedAbilityNames = [
+    ...draft.selectedAbilityIds
+      .map((id) => abilityPresets.find((ability) => ability.id === id)?.name)
+      .filter((text): text is string => Boolean(text)),
+    ...draft.customAbilities,
+  ];
+  const freeOpeningWorkshopText = formatFreeOpeningWorkshopDraft(draft.freeOpeningWorkshop, draft.freeOpeningPlanetSource);
+  const effectiveCustomStartPrompt = mergeFreeOpeningPrompt(draft.customStartPrompt, draft.openingSource !== 'official_preset' ? freeOpeningWorkshopText : '');
+  const effectiveFreeMainlineEnabled = draft.openingSource === 'official_preset' || draft.freeOpeningMainlineEnabled;
+  const canonicalName = getCanonicalTrailblazer(draft.canonicalTrailblazer).worldValue;
+  const openingSummaryLines = buildOpeningSummary({
+    scenario: selectedScenarioPreset
+      ? {
+          id: selectedScenarioPreset.chapterId,
+          name: selectedScenarioPreset.title,
+          description: selectedScenarioPreset.summary,
+          openingHighlights: selectedScenarioPreset.openingPressure,
+        }
+      : scenarioBundle.chapter
+        ? {
+            id: scenarioBundle.chapter.id,
+            name: scenarioBundle.chapter.name,
+            description: scenarioBundle.chapter.summary,
+            openingHighlights: scenarioBundle.chapter.openingPressure,
+          }
+        : selectedScenario ?? {
+            id: draft.startingScenarioId,
+            name: selectedOpeningTitle,
+            description: '',
+            openingHighlights: [],
+          },
+    location: selectedOpeningLocation,
+    currentDate: selectedOpeningDate,
+    currentTime: selectedOpeningTime,
+    storyMode: storyModeDef.name,
+    path: selectedPath,
+    pathStage: draft.pathId !== 'none' ? selectedPathStage : undefined,
+    faction: selectedFaction,
+    customIdentity: draft.customIdentity,
+    customStartPrompt: effectiveCustomStartPrompt,
+    canonicalTrailblazer: canonicalName,
+    abilities: selectedAbilityNames,
+    skills: draft.openingSkills,
+  });
+  const freeOpeningInput = {
+    regionId: scenarioPreset?.regionId ?? scenarioBundle.region?.id ?? 'herta_space_station',
+    regionName: scenarioPreset?.regionName ?? scenarioBundle.region?.name ?? '黑塔空间站',
+    chapterId: scenarioPreset?.chapterId ?? scenarioBundle.chapter?.id ?? (draft.startingScenarioId || 'herta_station_incident'),
+    chapterName: scenarioPreset?.chapterName ?? scenarioBundle.chapter?.name ?? selectedScenario?.name ?? '黑塔空间站 · 主线苏醒前夕',
+    chapterSummary: scenarioPreset?.summary ?? scenarioBundle.chapter?.summary ?? selectedScenario?.description ?? '',
+    playerText: effectiveCustomStartPrompt,
+    defaultLocationHint: selectedOpeningLocation,
+    defaultDateHint: selectedOpeningDate,
+    defaultTimeHint: selectedOpeningTime,
+    officialPresetId: scenarioPreset?.id,
+    workshopTemplateId: draft.openingSource === 'workshop' ? draft.selectedWorkshopTemplateId : undefined,
+    priorStoryState: scenarioBundle.chapter?.priorStoryState,
+    planetSource: draft.freeOpeningPlanetSource,
+    mainlineEnabled: effectiveFreeMainlineEnabled,
+    keyNpcs: scenarioPreset?.keyNpcs ?? scenarioBundle.preset?.keyNpcs ?? selectedScenario?.openingHighlights ?? [],
+  };
+  return {
+    storyModeDef,
+    selectedPath,
+    selectedPathStage,
+    selectedFaction,
+    selectedScenario,
+    selectedScenarioPreset,
+    scenarioPreset,
+    scenarioBundle,
+    selectedOpeningDate,
+    selectedOpeningTime,
+    selectedOpeningLocation,
+    selectedOpeningTitle,
+    selectedAbilityNames,
+    effectiveCustomStartPrompt,
+    effectiveFreeMainlineEnabled,
+    canonicalName,
+    openingSummaryLines,
+    freeOpeningInput,
   };
 }
 
@@ -424,6 +583,32 @@ export function useGame(): UseGameReturn {
     devLog('ui', 'phone-memory-commit-done', { npcId: input.npcId ?? null, archives: compression.archives.length });
   }, []);
 
+  // 手机 AI 回复（片 panel-p5）：原 PhoneModal 的 buildPhoneApiConfig + generatePhoneReply 直连收敛到门面。
+  // 配置来源：apiConfig 传入 API 设置，手机系统专用配置（手机系统.api 覆盖）与提示词模块取自运行时游戏设置；
+  // 成功返回按行拼接的回复文本（每行一条短讯，PhoneModal 按行还原为短讯列表），失败时 devLogError 并返回空字符串兜底。
+  const handleGeneratePhoneReply = useCallback(async (
+    apiConfig: API设置,
+    context: 手机回复上下文,
+  ): Promise<string> => {
+    const s = stateRef.current;
+    try {
+      const config = buildPhoneApiConfig(s.deviceSettings.gameSettings, apiConfig);
+      if (!config) return '';
+      devLog('net', 'phone-reply-generate-start', { chatId: context.chat.id, type: context.chat.type });
+      const reply = await generatePhoneReply(
+        config,
+        context,
+        config.retryCount ?? 2,
+        s.deviceSettings.gameSettings.promptModules,
+      );
+      devLog('net', 'phone-reply-generate-done', { chatId: context.chat.id, messages: reply.messages.length });
+      return reply.messages.join('\n');
+    } catch (err) {
+      devLogError('net', 'phone-reply-generate-failed', err, { chatId: context.chat.id });
+      return '';
+    }
+  }, []);
+
   // 存档删除：resolve→delete 级联删除（5d-1b 语义），SaveLoadModal 与 StorageManager 共用。
   // 确认文案由级联计数生成，删除后由 delete存档目标 负责 newest 祖先重定向与树元信息清理。
   const handleDeleteSave = useCallback(async (save: SaveListItemSummary): Promise<boolean> => {
@@ -468,6 +653,266 @@ export function useGame(): UseGameReturn {
     return dryRunTavernRegexScript(script, sampleText);
   }, []);
 
+  // ── 开局向导用例动作（片 panel-p4：NewGameWizard facade 收口）──────────────────────────
+  // 开局预设读取：loadSetting + normalize 收敛到门面，向导只消费归一化结果。
+  const handleLoadOpeningPresets = useCallback(async (): Promise<OpeningPlayerPreset[]> => {
+    const saved = await loadSetting<OpeningPlayerPreset[]>(OPENING_PLAYER_PRESETS_KEY);
+    return normalizeOpeningPresets(saved);
+  }, []);
+
+  // 开局预设保存：normalize + saveSetting 收敛到门面，返回归一化结果供向导同步本地状态。
+  const handleSaveOpeningPresets = useCallback(async (presets: OpeningPlayerPreset[]): Promise<OpeningPlayerPreset[]> => {
+    const normalized = normalizeOpeningPresets(presets);
+    await saveSetting(OPENING_PLAYER_PRESETS_KEY, normalized);
+    return normalized;
+  }, []);
+
+  // AI 开局整理：自由/创意工坊开局由门面驱动 parseOpeningArchiveWithAI（配置缺失直接跳过）。
+  // 失败向上抛给调用方（向导负责兜底状态与本地整理回退），成功返回结构化开局档案。
+  const handleParseOpeningArchive = useCallback(async (draft: OpeningPresetDraft): Promise<开局整理档案 | null> => {
+    if (draft.openingSource === 'official_preset') return null;
+    const config = getActiveConfig();
+    if (!config) return null;
+    const { freeOpeningInput } = deriveOpeningDraftContext(draft);
+    devLog('net', 'opening-archive-parse-start', { source: draft.openingSource });
+    const parsed = await parseOpeningArchiveWithAI(
+      config,
+      {
+        regionName: freeOpeningInput.regionName,
+        chapterName: freeOpeningInput.chapterName,
+        chapterSummary: freeOpeningInput.chapterSummary,
+        playerText: freeOpeningInput.playerText,
+        defaultLocationHint: freeOpeningInput.defaultLocationHint,
+        defaultDateHint: freeOpeningInput.defaultDateHint,
+        defaultTimeHint: freeOpeningInput.defaultTimeHint,
+        priorStoryState: freeOpeningInput.priorStoryState,
+        planetSource: freeOpeningInput.planetSource,
+        mainlineEnabled: freeOpeningInput.mainlineEnabled,
+        keyNpcs: freeOpeningInput.keyNpcs,
+        sourceLabel: draft.openingSource === 'workshop' ? '创意工坊开局' : '自由开局',
+      },
+      config.retryCount ?? 2,
+    );
+    devLog('net', 'opening-archive-parse-done', { source: draft.openingSource });
+    return parsed;
+  }, [getActiveConfig]);
+
+  // 新局组装：draft → traveler/worldState/NPC 组装 + 全切片状态初始化 + 开局 checkpoint。
+  // 原 NewGameWizard.handleStart 的组装逻辑与 App.handleStartGame 的状态初始化在此合并；
+  // 视图切换与启动动画仍由 App 在返回 true 后驱动。返回 false 表示 API 预检失败，未做任何初始化。
+  const handlePrepareNewGame = useCallback(async (draft: OpeningPresetDraft): Promise<boolean> => {
+    const s = stateRef.current;
+    // 预检 API：configs 为空时给出明确提示，不初始化状态，避免玩家被困在空白游戏页。
+    if (s.deviceSettings.apiSettings.configs.length === 0) {
+      alert('请先在设置中配置至少一个 API 接口，再开始旅途。');
+      return false;
+    }
+    devLog('save', 'new-game-initialize-start', { entry: 'start' });
+    const {
+      selectedPath,
+      selectedPathStage,
+      selectedFaction,
+      selectedScenario,
+      scenarioPreset,
+      scenarioBundle,
+      selectedOpeningDate,
+      selectedOpeningTime,
+      selectedOpeningLocation,
+      selectedOpeningTitle,
+      selectedAbilityNames,
+      effectiveCustomStartPrompt,
+      canonicalName,
+      openingSummaryLines,
+      freeOpeningInput,
+    } = deriveOpeningDraftContext(draft);
+
+    const startingPaths =
+      draft.pathId !== 'none'
+        ? [
+            {
+              ...创建命途进度(
+                draft.pathId,
+                true,
+                selectedOpeningTitle,
+                `开局承载 · 初始阶段：${selectedPathStage.name}`,
+              ),
+              阶段: draft.pathStage,
+            },
+          ]
+        : [];
+    const finalIdentity = draft.customIdentity.trim();
+    const factionIdentity = selectedFaction.id === 'none' ? '' : selectedFaction.name;
+    const displayIdentity = [factionIdentity, finalIdentity].filter(Boolean).join(' · ');
+
+    const traveler: 角色数据结构 = {
+      姓名: draft.name.trim() || '无名开拓者',
+      别名: draft.alias.trim(),
+      性别: draft.gender.trim(),
+      年龄: draft.age,
+      生日: draft.birthday.trim(),
+      身高: '',
+      身份: displayIdentity,
+      外貌: draft.appearance.trim(),
+      性格: draft.personality.trim(),
+      背景: draft.background.trim(),
+      专长知识: [],
+      头像: '',
+      图像档案: {},
+      属性: {
+        力量: 0,
+        智慧: 0,
+        敏捷: 0,
+        体质: 0,
+        运气: 0,
+      },
+      主命途: draft.pathId,
+      命途列表: startingPaths,
+      能力: selectedAbilityNames,
+      背包: [],
+      战技列表: draft.openingSkills.map((skill) => 归一化战技记录({ ...skill, 已启用: skill.已启用 !== false })),
+    };
+
+    const worldState = 创建空世界状态();
+    let resolvedOpeningLocation = selectedOpeningLocation;
+    worldState.纪年法 = '琥珀纪年';
+    worldState.开拓天数 = 1;
+    worldState.当前日期 = selectedOpeningDate;
+    worldState.当前时间 = selectedOpeningTime;
+    worldState.当前地点 = resolvedOpeningLocation;
+    worldState.剧情模式 = draft.storyMode;
+    worldState.起航之地ID = scenarioPreset?.chapterId ?? scenarioBundle.chapter?.id ?? (draft.startingScenarioId || 'herta_station_incident');
+    worldState.原著主角 = canonicalName;
+    worldState.自定义开局 = effectiveCustomStartPrompt;
+    if (draft.openingSource === 'official_preset') {
+      worldState.开局档案 = scenarioPreset ? 根据官方开局预设创建开局档案(scenarioPreset, {
+        ...worldState,
+        自定义开局: effectiveCustomStartPrompt,
+      }) : 根据起始场景创建开局档案(selectedScenario ?? {
+        id: scenarioBundle.chapter?.id ?? draft.startingScenarioId,
+        name: selectedOpeningTitle,
+        description: scenarioBundle.chapter?.summary ?? '',
+        openingHighlights: scenarioBundle.chapter?.openingPressure ?? [],
+        officialPresetId: scenarioBundle.preset?.id,
+      }, {
+        ...worldState,
+        自定义开局: effectiveCustomStartPrompt,
+      });
+    } else {
+      worldState.开局档案 = 根据自由开局整理创建开局档案({
+        ...freeOpeningInput,
+        整理档案: draft.parsedArchive ?? undefined,
+      });
+      resolvedOpeningLocation =
+        worldState.开局档案.整理档案?.自定义起始地点?.trim()
+        || worldState.开局档案.整理档案?.初始地点参考?.trim()
+        || selectedOpeningLocation;
+      worldState.当前地点 = resolvedOpeningLocation;
+    }
+    worldState.全局事件 = 生成开局已成立事实(worldState.开局档案, {
+      currentDate: selectedOpeningDate,
+      currentTime: selectedOpeningTime,
+      currentLocation: resolvedOpeningLocation,
+      originalProtagonist: canonicalName,
+      pathSummary: selectedPath
+        ? `${selectedPath.name}（${selectedPath.aeon}）｜初始阶段：${selectedPathStage.name}（${selectedPathStage.title}）`
+        : undefined,
+      extraFacts: [
+        ...openingSummaryLines,
+        ...(selectedScenario?.openingHighlights ?? []).map((text) => `场景要点：${text}`),
+      ],
+    });
+    const initialNpcRecords = 根据开局档案创建初始NPC记录(worldState.开局档案);
+
+    // 状态初始化（原 App.handleStartGame）：重置全部运行时切片，避免上一局存档残留污染新局。
+    const initialChatHistory: NewestStory字段集['chatHistory'] = [];
+    const initialMemory = 创建空记忆系统();
+    const initialYiting = 创建空忆庭系统();
+    const initialPhone = 创建空手机系统();
+    const initialNews: NewestStory字段集['新闻'] = [];
+    const initialPlot: NewestStory字段集['剧情'] = [];
+    const initialVariableBatches: NewestStory字段集['variableBatches'] = [];
+    const initialQueueTasks: NewestStory字段集['queueTasks'] = [];
+    s.set旅人(traveler);
+    s.set世界(worldState);
+    s.setChatHistory(initialChatHistory);
+    s.setTurnCount(1);
+    s.set记忆(initialMemory);
+    s.set忆庭(initialYiting);
+    s.setNPC(initialNpcRecords);
+    s.set手机(initialPhone);
+    s.set新闻(initialNews);
+    s.set剧情(initialPlot);
+    s.setVariableBatches(initialVariableBatches);
+    s.setQueueTasks(initialQueueTasks);
+    let nextStoryWeaving = s.剧情编织;
+    try {
+      nextStoryWeaving = alignStoryWeavingToOpeningArchive(
+        await loadAllBundledStoryWeavingPresets(),
+        worldState.开局档案,
+      );
+      s.set剧情编织(nextStoryWeaving);
+      await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+    } catch (err) {
+      devLogError('save', 'story-weaving-new-game-fallback', err, { entry: 'start' });
+    }
+    const pendingOpeningTrigger = '[系统] 开启第 0 回合';
+    s.setPendingOpeningTrigger(pendingOpeningTrigger);
+    const { macroGlobalVars, worldbookTriggerStates } = s;
+    const initialFields: NewestStory字段集 = {
+      旅人: traveler,
+      世界: worldState,
+      chatHistory: initialChatHistory,
+      记忆: initialMemory,
+      忆庭: initialYiting,
+      智库: s.智库,
+      手机: initialPhone,
+      NPC: initialNpcRecords,
+      相册: s.相册,
+      新闻: initialNews,
+      剧情: initialPlot,
+      剧情编织: nextStoryWeaving,
+      variableBatches: initialVariableBatches,
+      queueTasks: initialQueueTasks,
+      turnCount: 1,
+      macroGlobalVars,
+      worldbookTriggerStates,
+      pendingOpeningTrigger,
+    };
+    await 初始化新局checkpoint(initialFields);
+    devLog('save', 'new-game-initialize-done', { entry: 'start' });
+    return true;
+  }, []);
+
+  // ── 零散面板 AI + dbService 直连收口（片 panel-p6）──────────────────────────
+  // 剧情编织持久化：PlotPanel 的 saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem()) 收敛到门面。
+  // 归一化由面板负责，这里只做持久化接线与日志。
+  const handleSaveStoryWeaving = useCallback(async (system: 剧情编织系统): Promise<void> => {
+    await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(system));
+    devLog('save', 'story-weaving-saved', { seriesCount: system.系列列表.length });
+  }, []);
+
+  // 战技 AI 草稿：SkillPanel 的 generateSkillDraft 直连收敛到门面。
+  // 失败时 devLogError 后向上抛出，由面板保留自己的错误提示文案与本地状态回滚。
+  const handleGenerateSkillDraft = useCallback(async (
+    apiConfig: API配置项,
+    context: 战技生成上下文,
+  ): Promise<战技生成草稿> => {
+    try {
+      devLog('net', 'skill-draft-generate-start', { slotKind: context.slotKind, slotIndex: context.slotIndex });
+      const draft = await generateSkillDraft(apiConfig, context);
+      devLog('net', 'skill-draft-generate-done', { slotKind: context.slotKind, slotIndex: context.slotIndex });
+      return draft;
+    } catch (err) {
+      devLogError('net', 'skill-draft-generate-failed', err, { slotKind: context.slotKind, slotIndex: context.slotIndex });
+      throw err;
+    }
+  }, []);
+
+  // 行动选项解析：InputArea 的 parseActionOptionsBlock 直连收敛到门面（纯函数接线，不复制实现）。
+  const handleParseActionOptionsBlock = useCallback((text: string): string[] => {
+    return parseActionOptionsBlock(text);
+  }, []);
+
   const actions = useMemo(() => ({
     handleSend,
     handleAbort,
@@ -483,12 +928,20 @@ export function useGame(): UseGameReturn {
     handleRestartOpening,
     getContextSnapshot,
     handlePhoneMemoryCommit,
+    handleGeneratePhoneReply,
     handleDeleteSave,
     handleDeleteSaveTree,
     handleClearActiveSaveTreeMeta,
     handleExtractTavernRegexScripts,
     handleAnalyzeTavernRegexScript,
     handleDryRunTavernRegexScript,
+    handleLoadOpeningPresets,
+    handleSaveOpeningPresets,
+    handleParseOpeningArchive,
+    handlePrepareNewGame,
+    handleSaveStoryWeaving,
+    handleGenerateSkillDraft,
+    handleParseActionOptionsBlock,
   }), [
     handleSend,
     handleAbort,
@@ -504,12 +957,20 @@ export function useGame(): UseGameReturn {
     handleRestartOpening,
     getContextSnapshot,
     handlePhoneMemoryCommit,
+    handleGeneratePhoneReply,
     handleDeleteSave,
     handleDeleteSaveTree,
     handleClearActiveSaveTreeMeta,
     handleExtractTavernRegexScripts,
     handleAnalyzeTavernRegexScript,
     handleDryRunTavernRegexScript,
+    handleLoadOpeningPresets,
+    handleSaveOpeningPresets,
+    handleParseOpeningArchive,
+    handlePrepareNewGame,
+    handleSaveStoryWeaving,
+    handleGenerateSkillDraft,
+    handleParseActionOptionsBlock,
   ]);
 
   return {

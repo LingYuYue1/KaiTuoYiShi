@@ -3,7 +3,7 @@ import { PATH_STAGE_DEFS, type 命途阶段 } from '@/models/path';
 import type { 命途ID, 剧情模式, 阵营ID } from '@/models/journey';
 import { abilityPresets, openingRegions, getOfficialOpeningPresetsByRegion, openingChapterAnchors, getFreeOpeningGuide, getOpeningRegion, getWorkshopOpeningTemplate, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, getStoryMode, paths, storyModes } from '@/data/journeyPresets';
 import { NORMAL_SKILL_SLOT_COUNT, type 战技记录, type 战技槽位摘要 } from '@/models/skill';
-import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
+import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/hooks/useGame';
 import { type CanonicalTrailblazer, type OpeningScenario, type OpeningChapterAnchor, type OpeningDisplayScenario, type OpeningSource, type FreeOpeningPlanetSource, type OpeningSkillSlotKey, type FreeOpeningWorkshopDraft, CANONICAL_TRAILBLAZERS, FREE_OPENING_PLANET_SOURCE_OPTIONS, cardClip, smallClip, tightClip, openingCardBackground, openingActiveCardBackground, openingCardBorder, openingCyanBorder, getFreeOpeningPlanetSourceOption, getOpeningRegionDisplayName, getOpeningDisplaySummary, getOpeningDisplayHighlights, getOpeningOfficialChapterName, getOpeningOfficialChapterPhase, getOpeningChapterBadge, getOpeningPriorStoryState, selectOpeningScenario, openingSkillSlotTitle, openingSkillRecordSlotLabel, getCanonicalTrailblazer, splitCustomAbilityEntry, mergeBirthday } from './wizardData';
 import { OpeningSkillSlotGroup, StepNav, SectionTitle, LabelField, OverviewLabel, OverviewRow } from './panels';
 

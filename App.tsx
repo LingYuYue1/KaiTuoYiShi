@@ -18,16 +18,12 @@ import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/dbService';
-import { 初始化新局checkpoint } from '@/hooks/useGame/commitTurn';
 import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
-import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
-import type { NewestStory字段集 } from '@/models/newestStory';
 import type { 世界书 } from '@/models/worldbook';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
-import { devLog } from '@/utils/devLog';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
 const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })));
@@ -272,10 +268,10 @@ import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
 import type { 队列任务ID } from '@/models/queueTask';
-import { 创建空手机系统 } from '@/models/phone';
-import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
-import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
+import { generateTravelerTemplate } from '@/services/ai/travelerTemplate';
+import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文 } from '@/hooks/useGame';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
 
 const JOURNEY_LAUNCH_ANIMATION_MS = 1680;
 const HOME_JOURNEY_ANIMATION_MS = 1180;
@@ -524,7 +520,7 @@ export function App() {
   // loading 与 pendingVariable 是管线的两条独立轨道，这里只在 UI 层合成展示用谓词。
   const turnBusy = state.activeWorkflow.loading || state.activeWorkflow.pendingVariable;
 
-  // 自动触发第 0 回合：handleStartGame 把触发文本写入 pendingOpeningTrigger，
+  // 自动触发第 0 回合：handlePrepareNewGame 初始化时把触发文本写入 pendingOpeningTrigger，
   // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
   // 注意：先清空再 send，避免 React 18 StrictMode 下重复触发。
   useEffect(() => {
@@ -662,6 +658,7 @@ export function App() {
         onCancelWorkflow={actions.handleAbort}
         actionOptions={actionOptions}
         recoveryDraft={recoveryDraft}
+        onParseActionOptions={actions.handleParseActionOptionsBlock}
       />
       <SystemDrawer
         open={activeSystem !== null}
@@ -704,6 +701,8 @@ export function App() {
             testImageGenerationConnection,
             fetchImageGenerationModels,
             fetchComfyWorkflowCandidates,
+            onSaveStoryWeaving: actions.handleSaveStoryWeaving,
+            onGenerateSkillDraft: actions.handleGenerateSkillDraft,
           })}
         </Suspense>
       </SystemDrawer>
@@ -862,82 +861,23 @@ export function App() {
       return generateTravelerTemplate(config, context);
     };
 
-    const handleStartGame = async (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords: NPC记录[] = []) => {
-      // 预检 API：configs 为空时给出明确提示，不切换 view，避免玩家被困在空白游戏页。
-      if (apiSettings.configs.length === 0) {
-        alert('请先在设置中配置至少一个 API 接口，再开始旅途。');
-        return;
-      }
-      devLog('save', 'new-game-initialize-start', { entry: 'start' });
-      const initialChatHistory: NewestStory字段集['chatHistory'] = [];
-      const initialMemory = { 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] };
-      const initialYiting = { 回忆档案: [] };
-      const initialPhone = 创建空手机系统();
-      const initialNews: NewestStory字段集['新闻'] = [];
-      const initialPlot: NewestStory字段集['剧情'] = [];
-      const initialVariableBatches: NewestStory字段集['variableBatches'] = [];
-      const initialQueueTasks: NewestStory字段集['queueTasks'] = [];
-      state.set旅人(traveler);
-      state.set世界(worldState);
-      state.setChatHistory(initialChatHistory);
-      state.setTurnCount(1);
-      state.set记忆(initialMemory);
-      state.set忆庭(initialYiting);
-      // 重置运行时游戏系统切片，避免上一局存档残留污染新局
-      state.setNPC(initialNpcRecords);
-      state.set手机(initialPhone);
-      state.set新闻(initialNews);
-      state.set剧情(initialPlot);
-      state.setVariableBatches(initialVariableBatches);
-      state.setQueueTasks(initialQueueTasks);
-      let nextStoryWeaving = state.剧情编织;
-      try {
-        nextStoryWeaving = alignStoryWeavingToOpeningArchive(
-          await loadAllBundledStoryWeavingPresets(),
-          worldState.开局档案,
-        );
-        state.set剧情编织(nextStoryWeaving);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
-      } catch (err) {
-        console.warn('[story-weaving] 新开局加载内置原著剧情失败，保留当前剧情编织状态:', err);
-      }
-      const pendingOpeningTrigger = '[系统] 开启第 0 回合';
-      state.setPendingOpeningTrigger(pendingOpeningTrigger);
-      const { macroGlobalVars, worldbookTriggerStates } = state;
-      const initialFields: NewestStory字段集 = {
-        旅人: traveler,
-        世界: worldState,
-        chatHistory: initialChatHistory,
-        记忆: initialMemory,
-        忆庭: initialYiting,
-        智库: state.智库,
-        手机: initialPhone,
-        NPC: initialNpcRecords,
-        相册: state.相册,
-        新闻: initialNews,
-        剧情: initialPlot,
-        剧情编织: nextStoryWeaving,
-        variableBatches: initialVariableBatches,
-        queueTasks: initialQueueTasks,
-        turnCount: 1,
-        macroGlobalVars,
-        worldbookTriggerStates,
-        pendingOpeningTrigger,
-      };
-      await 初始化新局checkpoint(initialFields);
-      setLaunchingJourney(true);
-      await wait(getJourneyLaunchDelay());
-      state.setView('game');
-      setLaunchingJourney(false);
-    };
-
     return (
       <>
         <Suspense fallback={<LazySurfaceFallback label="开局档案载入中" />}>
           <NewGameWizard
-            onStart={handleStartGame}
+            onStart={async (draft) => {
+              // 预检失败（无 API 配置）时 handlePrepareNewGame 返回 false，不切 view，玩家留在开局页。
+              const ok = await actions.handlePrepareNewGame(draft);
+              if (!ok) return;
+              setLaunchingJourney(true);
+              await wait(getJourneyLaunchDelay());
+              state.setView('game');
+              setLaunchingJourney(false);
+            }}
             onBack={() => state.setView('home')}
-            openingArchiveApiConfig={getActiveApiConfig()}
+            onLoadOpeningPresets={actions.handleLoadOpeningPresets}
+            onSaveOpeningPresets={actions.handleSaveOpeningPresets}
+            onParseOpeningArchive={actions.handleParseOpeningArchive}
             onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
           />
         </Suspense>
@@ -1054,6 +994,7 @@ export function App() {
             album={state.相册}
             onPhoneChange={state.set手机}
             onPhoneMemoryCommit={actions.handlePhoneMemoryCommit}
+            onGeneratePhoneReply={actions.handleGeneratePhoneReply}
             onClose={() => setShowPhone(false)}
           />
         </Suspense>
@@ -1136,6 +1077,10 @@ function renderSystemPanel(
     testImageGenerationConnection: AiToolsActions['testImageGenerationConnection'];
     fetchImageGenerationModels: AiToolsActions['fetchImageGenerationModels'];
     fetchComfyWorkflowCandidates: AiToolsActions['fetchComfyWorkflowCandidates'];
+    /** 剧情编织持久化（片 panel-p6）：PlotPanel 的 dbService 直连收敛到门面。 */
+    onSaveStoryWeaving: (system: 剧情编织系统) => Promise<void>;
+    /** 战技 AI 草稿（片 panel-p6）：SkillPanel 的 generateSkillDraft 直连收敛到门面。 */
+    onGenerateSkillDraft: (apiConfig: import('@/models/settings').API配置项, context: 战技生成上下文) => Promise<战技生成草稿>;
   },
 ) {
   switch (id) {
@@ -1148,7 +1093,7 @@ function renderSystemPanel(
         />
       );
       case 'skill':
-        return <SkillPanel traveler={ctx.traveler} onTravelerChange={ctx.onTravelerChange} apiSettings={ctx.apiSettings} />;
+        return <SkillPanel traveler={ctx.traveler} onTravelerChange={ctx.onTravelerChange} apiSettings={ctx.apiSettings} onGenerateSkillDraft={ctx.onGenerateSkillDraft} />;
     case 'inventory':
       return (
         <InventoryPanel
@@ -1210,6 +1155,7 @@ function renderSystemPanel(
           onStoryWeavingChange={ctx.onStoryWeavingChange}
           gameSettings={ctx.gameSettings}
           apiSettings={ctx.apiSettings}
+          onSaveStoryWeaving={ctx.onSaveStoryWeaving}
         />
       );
     case 'yiting':

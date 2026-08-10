@@ -1,5 +1,5 @@
 import { PATH_STAGE_DEFS, type 命途阶段 } from '@/models/path';
-import type { 世界状态 } from '@/models/world';
+import type { 开局整理档案, 世界状态 } from '@/models/world';
 import type { 命途ID, 剧情模式, 阵营ID, 开局来源, 自由开局地点来源, 官方开局预设 } from '@/models/journey';
 import { abilityPresets, getOfficialOpeningPreset, getOfficialOpeningPresetByChapterId, openingChapterAnchors, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, paths, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
 import { 归一化战技记录, type 战技记录, type 战技槽位摘要 } from '@/models/skill';
@@ -45,6 +45,8 @@ export interface OpeningPresetDraft {
   selectedWorkshopTemplateId: string;
   canonicalTrailblazer: CanonicalTrailblazer;
   customStartPrompt: string;
+  /** AI 整理的开局档案（自由/创意工坊开局）。由门面 handleParseOpeningArchive 产出，null 表示跳过/失败，走本地整理兜底。 */
+  parsedArchive: 开局整理档案 | null;
 }
 
 export interface FreeOpeningWorkshopDraft {
@@ -468,6 +470,8 @@ export function sanitizeOpeningPresetDraft(value: unknown): OpeningPresetDraft {
     selectedWorkshopTemplateId,
     canonicalTrailblazer: isCanonicalTrailblazer(raw.canonicalTrailblazer) ? raw.canonicalTrailblazer : 'stelle',
     customStartPrompt: sanitizeText(raw.customStartPrompt),
+    // parsedArchive 是瞬态解析结果，不随预设持久化；恢复预设时统一置 null，由开局流程重新整理。
+    parsedArchive: null,
   };
 }
 

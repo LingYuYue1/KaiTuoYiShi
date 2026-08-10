@@ -1,28 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { 角色数据结构 } from '@/models/character';
 import { PATH_STAGE_DEFS, 创建命途进度, type 命途阶段, type 命途进度 } from '@/models/path';
-import { type 世界状态, 创建空世界状态, 根据官方开局预设创建开局档案, 根据开局档案创建初始NPC记录, 根据起始场景创建开局档案, 根据自由开局整理创建开局档案, 生成开局已成立事实 } from '@/models/world';
-import type { NPC记录 } from '@/models/npc';
-import type { API配置项 } from '@/models/settings';
-import { type 命途ID, 剧情模式, type 阵营ID, type 官方开局预设 } from '@/models/journey';
+import type { 开局整理档案 } from '@/models/world';
+import { type 命途ID, 剧情模式, type 阵营ID } from '@/models/journey';
 import { abilityPresets, openingRegions, getOfficialOpeningPresetsByRegion, getOpeningScenarioBundle, getOpeningRegion, getWorkshopOpeningTemplate, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, getStartingScenario, getStoryMode, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
 import { 创建战技记录, 生成战技槽位摘要, 归一化战技记录, type 战技记录 } from '@/models/skill';
-import { loadSetting, saveSetting } from '@/services/dbService';
-import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
-import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
+import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/hooks/useGame';
 import { devLogError } from '@/utils/devLog';
-import { type Step, type CanonicalTrailblazer, type OpeningScenario, type OpeningSource, type FreeOpeningPlanetSource, type OpeningSkillSlotKey, type OpeningPresetDraft, type FreeOpeningWorkshopDraft, type FreeOpeningCustomNpc, type OpeningPlayerPreset, STEPS, OPENING_PLAYER_PRESETS_KEY, MAX_OPENING_PLAYER_PRESETS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelShadowStrong, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, buildOpeningSummary, getCanonicalTrailblazer, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, normalizeOpeningPresets, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
+import { type Step, type CanonicalTrailblazer, type OpeningScenario, type OpeningSource, type FreeOpeningPlanetSource, type OpeningSkillSlotKey, type OpeningPresetDraft, type FreeOpeningWorkshopDraft, type FreeOpeningCustomNpc, type OpeningPlayerPreset, STEPS, MAX_OPENING_PLAYER_PRESETS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelShadowStrong, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
 import { MiniStat, OpeningPresetControls, ProgressBar, OpeningLedger, StepRail } from './wizard/panels';
 import { CharacterStep, PathStep, SkillCreationStep, OpeningAnchorStep, HistorianStep, OverviewStep } from './wizard/steps';
 
 interface NewGameWizardProps {
-  onStart: (traveler: 角色数据结构, worldState: 世界状态, initialNpcRecords?: NPC记录[]) => void | Promise<void>;
+  onStart: (draft: OpeningPresetDraft) => void | Promise<void>;
   onBack: () => void;
-  openingArchiveApiConfig?: API配置项 | null;
+  onLoadOpeningPresets: () => Promise<OpeningPlayerPreset[]>;
+  onSaveOpeningPresets: (presets: OpeningPlayerPreset[]) => Promise<OpeningPlayerPreset[]>;
+  onParseOpeningArchive: (draft: OpeningPresetDraft) => Promise<开局整理档案 | null>;
   onGenerateTravelerTemplate?: (context: TravelerTemplateContext) => Promise<TravelerTemplateDraft>;
 }
 
-export function NewGameWizard({ onStart, onBack, openingArchiveApiConfig, onGenerateTravelerTemplate }: NewGameWizardProps) {
+export function NewGameWizard({ onStart, onBack, onLoadOpeningPresets, onSaveOpeningPresets, onParseOpeningArchive, onGenerateTravelerTemplate }: NewGameWizardProps) {
   const [step, setStep] = useState<Step>('character');
   const [openingPresets, setOpeningPresets] = useState<OpeningPlayerPreset[]>([]);
   const [openingSource, setOpeningSource] = useState<OpeningSource>('official_preset');
@@ -111,14 +108,13 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    loadSetting<OpeningPlayerPreset[]>(OPENING_PLAYER_PRESETS_KEY)
-      .then((saved) => {
+    onLoadOpeningPresets()
+      .then((presets) => {
         if (cancelled) return;
-        const normalized = normalizeOpeningPresets(saved);
-        setOpeningPresets(normalized);
-        if (normalized.length > 0) {
-          setSelectedPresetId(normalized[0].id);
-          setPresetNameDraft(normalized[0].title);
+        setOpeningPresets(presets);
+        if (presets.length > 0) {
+          setSelectedPresetId(presets[0].id);
+          setPresetNameDraft(presets[0].title);
         }
       })
       .catch((err: unknown) => {
@@ -127,7 +123,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onLoadOpeningPresets]);
 
   const storyModeDef = useMemo(
     () => getStoryMode(storyMode) ?? storyModes[0],
@@ -220,6 +216,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
       selectedWorkshopTemplateId,
       canonicalTrailblazer,
       customStartPrompt,
+      parsedArchive: null,
     }),
     [
       alias,
@@ -264,45 +261,6 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   const effectiveCustomStartPrompt = useMemo(
     () => mergeFreeOpeningPrompt(customStartPrompt, openingSource !== 'official_preset' ? freeOpeningWorkshopText : ''),
     [customStartPrompt, freeOpeningWorkshopText, openingSource],
-  );
-
-  const openingSummaryLines = useMemo(
-    () =>
-      buildOpeningSummary({
-        scenario: selectedScenarioPreset
-          ? {
-              id: selectedScenarioPreset.chapterId,
-              name: selectedScenarioPreset.title,
-              description: selectedScenarioPreset.summary,
-              openingHighlights: selectedScenarioPreset.openingPressure,
-            }
-          : selectedScenarioBundle.chapter
-            ? {
-                id: selectedScenarioBundle.chapter.id,
-                name: selectedScenarioBundle.chapter.name,
-                description: selectedScenarioBundle.chapter.summary,
-                openingHighlights: selectedScenarioBundle.chapter.openingPressure,
-              }
-            : selectedScenario ?? {
-                id: startingScenarioId,
-                name: selectedOpeningTitle,
-                description: '',
-                openingHighlights: [],
-              },
-        location: selectedOpeningLocation,
-        currentDate: selectedOpeningDate,
-        currentTime: selectedOpeningTime,
-        storyMode: storyModeDef.name,
-        path: selectedPath,
-        pathStage: pathId !== 'none' ? selectedPathStage : undefined,
-        faction: selectedFaction,
-        customIdentity,
-        customStartPrompt: effectiveCustomStartPrompt,
-        canonicalTrailblazer: getCanonicalTrailblazer(canonicalTrailblazer).worldValue,
-        abilities: selectedAbilityNames,
-        skills: openingSkills,
-      }),
-    [canonicalTrailblazer, customIdentity, effectiveCustomStartPrompt, openingSkills, pathId, selectedAbilityNames, selectedFaction, selectedOpeningDate, selectedOpeningLocation, selectedOpeningTime, selectedOpeningTitle, selectedPath, selectedPathStage, selectedScenario, selectedScenarioBundle.chapter, selectedScenarioPreset, startingScenarioId, storyModeDef.name],
   );
 
   const selectOpeningSource = (source: OpeningSource) => {
@@ -462,9 +420,8 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   };
 
   const persistOpeningPresets = async (nextPresets: OpeningPlayerPreset[]) => {
-    const normalized = normalizeOpeningPresets(nextPresets);
+    const normalized = await onSaveOpeningPresets(nextPresets);
     setOpeningPresets(normalized);
-    await saveSetting(OPENING_PLAYER_PRESETS_KEY, normalized);
   };
 
   const applyOpeningPreset = (presetId: string) => {
@@ -559,159 +516,22 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     if (startingGame) return;
     setStartingGame(true);
     setOpeningArchiveStatus('');
-    const selectedPathDef = getPath(pathId);
-    const selectedScenarioDef = selectedScenario;
-    const scenarioBundle = getOpeningScenarioBundle(startingScenarioId);
-    const scenarioPreset: 官方开局预设 | undefined = resolveSelectedScenarioPreset(startingScenarioId, selectedScenario) ?? scenarioBundle.preset;
-
-    const abilityNames = selectedAbilityNames;
-
-    const startingPaths =
-      pathId !== 'none'
-        ? [
-            {
-              ...创建命途进度(
-                pathId,
-                true,
-                selectedOpeningTitle,
-                `开局承载 · 初始阶段：${selectedPathStage.name}`,
-              ),
-              阶段: pathStage,
-            },
-          ]
-        : [];
-    const finalIdentity = customIdentity.trim();
-    const factionIdentity = selectedFaction.id === 'none' ? '' : selectedFaction.name;
-    const displayIdentity = [factionIdentity, finalIdentity].filter(Boolean).join(' · ');
-    const travelerBackground = background.trim();
-    const canonicalName = getCanonicalTrailblazer(canonicalTrailblazer).worldValue;
-
-    const traveler: 角色数据结构 = {
-      姓名: name.trim() || '无名开拓者',
-      别名: alias.trim(),
-      性别: gender.trim(),
-      年龄: age,
-      生日: birthday.trim(),
-      身高: '',
-      身份: displayIdentity,
-      外貌: appearance.trim(),
-      性格: personality.trim(),
-      背景: travelerBackground,
-      专长知识: [],
-      头像: '',
-      图像档案: {},
-      属性: {
-        力量: 0,
-        智慧: 0,
-        敏捷: 0,
-        体质: 0,
-        运气: 0,
-      },
-      主命途: pathId,
-      命途列表: startingPaths,
-      能力: abilityNames,
-      背包: [],
-      战技列表: openingSkills.map((skill) => 归一化战技记录({ ...skill, 已启用: skill.已启用 !== false })),
-    };
-
-    const worldState = 创建空世界状态();
-    let resolvedOpeningLocation = selectedOpeningLocation;
-    worldState.纪年法 = '琥珀纪年';
-    worldState.开拓天数 = 1;
-    worldState.当前日期 = selectedOpeningDate;
-    worldState.当前时间 = selectedOpeningTime;
-    worldState.当前地点 = resolvedOpeningLocation;
-    worldState.剧情模式 = storyMode;
-    worldState.起航之地ID = scenarioPreset?.chapterId ?? scenarioBundle.chapter?.id ?? (startingScenarioId || 'herta_station_incident');
-    worldState.原著主角 = canonicalName;
-    worldState.自定义开局 = effectiveCustomStartPrompt;
     try {
-      if (openingSource === 'official_preset') {
-        worldState.开局档案 = scenarioPreset ? 根据官方开局预设创建开局档案(scenarioPreset, {
-          ...worldState,
-          自定义开局: effectiveCustomStartPrompt,
-        }) : 根据起始场景创建开局档案(selectedScenarioDef ?? {
-          id: scenarioBundle.chapter?.id ?? startingScenarioId,
-          name: selectedOpeningTitle,
-          description: scenarioBundle.chapter?.summary ?? '',
-          openingHighlights: scenarioBundle.chapter?.openingPressure ?? [],
-          officialPresetId: scenarioBundle.preset?.id,
-        }, {
-          ...worldState,
-          自定义开局: effectiveCustomStartPrompt,
-        });
-      } else {
-        const freeOpeningInput = {
-          regionId: scenarioPreset?.regionId ?? scenarioBundle.region?.id ?? 'herta_space_station',
-          regionName: scenarioPreset?.regionName ?? scenarioBundle.region?.name ?? '黑塔空间站',
-          chapterId: scenarioPreset?.chapterId ?? scenarioBundle.chapter?.id ?? (startingScenarioId || 'herta_station_incident'),
-          chapterName: scenarioPreset?.chapterName ?? scenarioBundle.chapter?.name ?? selectedScenarioDef?.name ?? '黑塔空间站 · 主线苏醒前夕',
-          chapterSummary: scenarioPreset?.summary ?? scenarioBundle.chapter?.summary ?? selectedScenarioDef?.description ?? '',
-          playerText: effectiveCustomStartPrompt,
-          defaultLocationHint: selectedOpeningLocation,
-          defaultDateHint: selectedOpeningDate,
-          defaultTimeHint: selectedOpeningTime,
-          officialPresetId: scenarioPreset?.id,
-          workshopTemplateId: openingSource === 'workshop' ? selectedWorkshopTemplateId : undefined,
-          priorStoryState: scenarioBundle.chapter?.priorStoryState,
-          planetSource: freeOpeningPlanetSource,
-          mainlineEnabled: effectiveFreeMainlineEnabled,
-          keyNpcs: scenarioPreset?.keyNpcs ?? scenarioBundle.preset?.keyNpcs ?? selectedScenarioDef?.openingHighlights ?? [],
-        };
-        let parsedArchive;
-        if (openingArchiveApiConfig) {
-          setOpeningArchiveStatus('正在整理开局档案...');
-          try {
-            parsedArchive = await parseOpeningArchiveWithAI(
-              openingArchiveApiConfig,
-              {
-                regionName: freeOpeningInput.regionName,
-                chapterName: freeOpeningInput.chapterName,
-                chapterSummary: freeOpeningInput.chapterSummary,
-                playerText: freeOpeningInput.playerText,
-                defaultLocationHint: freeOpeningInput.defaultLocationHint,
-                defaultDateHint: freeOpeningInput.defaultDateHint,
-                defaultTimeHint: freeOpeningInput.defaultTimeHint,
-                priorStoryState: freeOpeningInput.priorStoryState,
-                planetSource: freeOpeningInput.planetSource,
-                mainlineEnabled: freeOpeningInput.mainlineEnabled,
-                keyNpcs: freeOpeningInput.keyNpcs,
-                sourceLabel: openingSource === 'workshop' ? '创意工坊开局' : '自由开局',
-              },
-              openingArchiveApiConfig.retryCount ?? 2,
-            );
+      const draft: OpeningPresetDraft = { ...currentPresetDraft };
+      if (draft.openingSource !== 'official_preset') {
+        setOpeningArchiveStatus('正在整理开局档案...');
+        try {
+          const parsedArchive = await onParseOpeningArchive(draft);
+          if (parsedArchive) {
+            draft.parsedArchive = parsedArchive;
             setOpeningArchiveStatus('开局档案已整理。');
-          } catch (err) {
-            devLogError('net', 'AI 开局整理失败，改用本地整理兜底', err);
-            setOpeningArchiveStatus('开局整理失败，已改用本地兜底。');
           }
+        } catch (err) {
+          devLogError('net', 'AI 开局整理失败，改用本地整理兜底', err);
+          setOpeningArchiveStatus('开局整理失败，已改用本地兜底。');
         }
-        worldState.开局档案 = 根据自由开局整理创建开局档案({
-          ...freeOpeningInput,
-          整理档案: parsedArchive,
-        });
-        resolvedOpeningLocation =
-          worldState.开局档案.整理档案?.自定义起始地点?.trim()
-          || worldState.开局档案.整理档案?.初始地点参考?.trim()
-          || selectedOpeningLocation;
-        worldState.当前地点 = resolvedOpeningLocation;
       }
-      worldState.全局事件 = 生成开局已成立事实(worldState.开局档案, {
-        currentDate: selectedOpeningDate,
-        currentTime: selectedOpeningTime,
-        currentLocation: resolvedOpeningLocation,
-        originalProtagonist: canonicalName,
-        pathSummary: selectedPathDef
-          ? `${selectedPathDef.name}（${selectedPathDef.aeon}）｜初始阶段：${selectedPathStage.name}（${selectedPathStage.title}）`
-          : undefined,
-        extraFacts: [
-          ...openingSummaryLines,
-          ...(selectedScenarioDef?.openingHighlights ?? []).map((text) => `场景要点：${text}`),
-        ],
-      });
-
-      const initialNpcRecords = 根据开局档案创建初始NPC记录(worldState.开局档案);
-      await onStart(traveler, worldState, initialNpcRecords);
+      await onStart(draft);
     } finally {
       setStartingGame(false);
     }

@@ -8,14 +8,15 @@ import {
 } from '@/models/storyWeaving';
 import { buildStoryWeavingApiConfig, decomposeStorySegment, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
-import { saveSetting } from '@/services/dbService';
-import { buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 
 interface PlotPanelProps {
   storyWeaving: 剧情编织系统;
   onStoryWeavingChange: React.Dispatch<React.SetStateAction<剧情编织系统>>;
   gameSettings: 游戏设置;
   apiSettings: API设置;
+  /** 剧情编织持久化（片 panel-p6）：由 useGame 门面接管 saveSetting 直连。 */
+  onSaveStoryWeaving: (system: 剧情编织系统) => Promise<void>;
 }
 
 interface SegmentDraft {
@@ -166,7 +167,7 @@ function applyDraft(segment: 剧情编织分段, draft: SegmentDraft): 剧情编
   };
 }
 
-export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, apiSettings }: PlotPanelProps) {
+export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, apiSettings, onSaveStoryWeaving }: PlotPanelProps) {
   const txtInputRef = useRef<HTMLInputElement | null>(null);
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
@@ -220,24 +221,33 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const draft = draftState && draftState.key === draftKey && selectedSegment ? draftState.draft : (selectedSegment ? draftFromSegment(selectedSegment) : null);
   const updateDraft = (next: SegmentDraft) => setDraftState({ key: draftKey, draft: next });
 
-  const persist = async (next: 剧情编织系统) => {
+  const persist = async (next: 剧情编织系统): Promise<boolean> => {
+    const prev = storyWeaving;
     const clean = 归一化剧情编织系统(next);
-    onStoryWeavingChange(clean);
-    await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(clean));
+    try {
+      onStoryWeavingChange(clean);
+      await onSaveStoryWeaving(clean);
+      return true;
+    } catch (err) {
+      onStoryWeavingChange(prev);
+      const text = err instanceof Error ? err.message : String(err);
+      setMessage(`剧情编织保存失败，已回滚本地更改：${text}`);
+      return false;
+    }
   };
 
-  const replaceSeries = async (nextSeries: 剧情编织系列, baseSystem = normalized) => {
-    await persist({
+  const replaceSeries = async (nextSeries: 剧情编织系列, baseSystem = normalized): Promise<boolean> => {
+    return persist({
       ...baseSystem,
       系列列表: baseSystem.系列列表.map((series) => series.id === nextSeries.id ? nextSeries : series),
       当前系列ID: nextSeries.id,
     });
   };
 
-  const updateSeries = async (seriesId: string, updater: (series: 剧情编织系列) => 剧情编织系列) => {
+  const updateSeries = async (seriesId: string, updater: (series: 剧情编织系列) => 剧情编织系列): Promise<boolean> => {
     const source = normalized.系列列表.find((series) => series.id === seriesId);
-    if (!source) return;
-    await replaceSeries(updater(source));
+    if (!source) return false;
+    return replaceSeries(updater(source));
   };
 
   const handleImportText = async (text: string, title: string, fileName?: string) => {
@@ -259,7 +269,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     };
     setSelectedSegmentId(series.分段列表[0]?.id ?? null);
     setExpandedSeriesId(series.id);
-    await persist(next);
+    if (!await persist(next)) return;
     setMessage(`已导入 ${series.章节列表.length} 章，生成 ${series.分段列表.length} 个分段。`);
   };
 
@@ -289,7 +299,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           当前进度: system.当前进度 ?? normalized.当前进度,
         })
         : system;
-      await persist(next);
+      if (!await persist(next)) return;
       setSelectedSegmentId(system.系列列表[0]?.分段列表[0]?.id ?? null);
       setExpandedSeriesId(system.当前系列ID ?? system.系列列表.at(0)?.id ?? null);
       setMessage(`已导入剧情编织 JSON：${system.系列列表.length} 个系列${customOnly ? '（已并入自制轨道）' : ''}。`);
@@ -346,11 +356,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
       const current = merged.系列列表.find((series) => series.id === merged.当前系列ID) ?? merged.系列列表[0];
       setSelectedSegmentId(merged.系列列表[0]?.分段列表[0]?.id ?? null);
       setExpandedSeriesId(merged.系列列表[0]?.id ?? null);
-      await persist({
+      if (!await persist({
         ...merged,
         当前系列ID: current.id,
         当前进度: buildSeriesProgressAnchor(merged.当前进度, current, '恢复内置原著剧情后同步当前锚点'),
-      });
+      })) return;
       setMessage(`已恢复内置原著剧情：${bundled.系列列表.length} 个轨道。`);
     } catch (err) {
       const text = (err as Error).message;
@@ -376,7 +386,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     if (!window.confirm('重新分段会保留原始 TXT，但会清空该系列已有的 AI 分解结果。确认继续？')) return;
     const rebuilt = 重建剧情编织系列FromText(series, size);
     setSelectedSegmentId(rebuilt.分段列表[0]?.id ?? null);
-    await replaceSeries(rebuilt);
+    if (!await replaceSeries(rebuilt)) return;
     setMessage(`已重新分段：${rebuilt.章节列表.length} 章 / ${rebuilt.分段列表.length} 段。`);
   };
 
@@ -431,11 +441,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const handleSaveDraft = async (series: 剧情编织系列, segment: 剧情编织分段) => {
     if (!draft) return;
     const updated = applyDraft(segment, draft);
-    await updateSeries(series.id, (s) => ({
+    if (!await updateSeries(series.id, (s) => ({
       ...s,
       分段列表: s.分段列表.map((item) => item.id === segment.id ? updated : item),
       updatedAt: Date.now(),
-    }));
+    }))) return;
     setMessage(`已保存分段：${updated.标题}`);
   };
 
@@ -452,11 +462,14 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     }
     setBusyId(segment.id);
     setMessage(`正在分解：${segment.标题}`);
-    await updateSeries(series.id, (s) => ({
+    if (!await updateSeries(series.id, (s) => ({
       ...s,
       分段列表: s.分段列表.map((item) => item.id === segment.id ? { ...item, 处理状态: '处理中', 最近错误: '', updatedAt: Date.now() } : item),
       updatedAt: Date.now(),
-    }));
+    }))) {
+      setBusyId(null);
+      return;
+    }
     try {
       const parsed = await decomposeStorySegment({
         config,
@@ -465,11 +478,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         previousSegment: getPreviousCompleted(series, segment),
         promptModules: gameSettings.promptModules,
       });
-      await updateSeries(series.id, (s) => ({
+      if (!await updateSeries(series.id, (s) => ({
         ...s,
         分段列表: s.分段列表.map((item) => item.id === segment.id ? parsed : item),
         updatedAt: Date.now(),
-      }));
+      }))) return;
       setMessage(`分解完成：${segment.标题}`);
     } catch (err) {
       const text = (err as Error).message;
@@ -505,6 +518,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
 
     let workingSystem = normalized;
     let workingSeries = series;
+    let persistFailed = false;
     setBusyBatch(label);
     try {
       for (let index = 0; index < targets.length; index += 1) {
@@ -519,7 +533,10 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           updatedAt: Date.now(),
         };
         workingSystem = { ...workingSystem, 系列列表: workingSystem.系列列表.map((item) => item.id === workingSeries.id ? workingSeries : item), 当前系列ID: workingSeries.id };
-        await persist(workingSystem);
+        if (!await persist(workingSystem)) {
+          persistFailed = true;
+          break;
+        }
 
         try {
           const processingSegment = workingSeries.分段列表.find((item) => item.id === target.id) ?? target;
@@ -544,9 +561,12 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           };
         }
         workingSystem = { ...workingSystem, 系列列表: workingSystem.系列列表.map((item) => item.id === workingSeries.id ? workingSeries : item), 当前系列ID: workingSeries.id };
-        await persist(workingSystem);
+        if (!await persist(workingSystem)) {
+          persistFailed = true;
+          break;
+        }
       }
-      setMessage(`批量分解结束：${label}`);
+      if (!persistFailed) setMessage(`批量分解结束：${label}`);
     } finally {
       setBusyId(null);
       setBusyBatch('');
@@ -561,11 +581,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     }
     if (!window.confirm('确认删除这个剧情系列？')) return;
     const rest = normalized.系列列表.filter((s) => s.id !== seriesId);
-    await persist({
+    if (!await persist({
       系列列表: rest,
       当前系列ID: rest[0]?.id,
       当前进度: buildSeriesProgressAnchor(normalized.当前进度, rest[0], '删除剧情系列后同步当前锚点'),
-    });
+    })) return;
     setSelectedSegmentId(rest[0]?.分段列表[0]?.id ?? null);
     setExpandedSeriesId(rest[0]?.id ?? null);
   };
