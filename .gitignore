@@ -52,6 +52,7 @@ THEME_ISSUES.md
 
 # opencode harness working files
 .opencode/
+opencode.json
 WATCHDOG.yml
 
 # Working drafts / notes
@@ -64,6 +65,7 @@ WATCHDOG.yml
 /legacy_doc/
 /slice*-prompt.md
 /slice*-report*.md
+/panel_p*_plan.md
 
 # Local Claude notes
 CLAUDE.md
