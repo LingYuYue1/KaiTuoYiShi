@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  exportSavePackage,
-  exportSaveTreePackage,
-  importSaveFileAsMany,
   type SaveCatalogRepairResult,
   type SaveCatalogRepairScope,
   type SaveCatalogRepairState,
   type SaveCatalogSnapshot,
   type SaveListItemSummary,
 } from '@/services/dbService';
-import type { 存档数据 } from '@/models/settings';
 import { devLogError } from '@/utils/devLog';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
@@ -33,12 +29,12 @@ interface Props {
   onRepairSaveDatabase: () => Promise<void>;
   /** 历史恢复点批量清理用例动作（片 panel-p7）：返回实际删除数量。 */
   onDeleteLegacyBackupSaves: () => Promise<number>;
-  /** 导出前读取完整存档用例动作（片 panel-p7）：数据库读取进门面，文件下载留在面板。 */
-  onGetSaveForExport: (id: number) => Promise<存档数据 | null>;
-  /** 导出整树前读取完整存档集合用例动作（片 panel-p7）。 */
-  onGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
-  /** 导入存档落库用例动作（片 panel-p7）：只负责 saveGame，id/type/timestamp 批次字段由面板补齐。 */
-  onPersistImportedSave: (data: 存档数据) => Promise<number>;
+  /** 导出单节点存档包用例动作（片 panel-p7）：数据库读取 + 文件下载全部收敛到门面。 */
+  onExportSavePackage: (id: number) => Promise<void>;
+  /** 导出整树存档包用例动作（片 panel-p7）。 */
+  onExportSaveTreePackage: (rootId: string) => Promise<void>;
+  /** 导入存档包用例动作（片 panel-p7）：解析 + 批量落库收敛到门面，返回导入数量。 */
+  onImportSaveFileAsMany: (file: File) => Promise<number>;
   onClose: () => void;
 }
 
@@ -51,7 +47,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onGetSaveForExport, onGetSaveTreeForExport, onPersistImportedSave, onClose }: Props) {
+export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -154,8 +150,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
     setSaving(true);
     try {
       const id = await onSave();
-      const save = await onGetSaveForExport(id);
-      if (save) await exportSavePackage(save);
+      await onExportSavePackage(id);
       await refresh();
       setTab('manual');
     } catch (err) {
@@ -238,13 +233,11 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
   };
 
   const handleExport = async (id: number) => {
-    const save = await onGetSaveForExport(id);
-    if (save) await exportSavePackage(save);
+    await onExportSavePackage(id);
   };
 
   const handleExportTree = async (rootId: string) => {
-    const treeSaves = await onGetSaveTreeForExport(rootId);
-    if (treeSaves.length) await exportSaveTreePackage(treeSaves);
+    await onExportSaveTreePackage(rootId);
   };
 
   const handleImport = () => {
@@ -256,14 +249,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
       if (!file) return;
       setImporting(true);
       try {
-        const imported = await importSaveFileAsMany(file);
-        const now = Date.now();
-        for (const [index, data] of imported.entries()) {
-          data.id = 0;
-          data.type = 'imported';
-          data.timestamp = now + index;
-          await onPersistImportedSave(data);
-        }
+        await onImportSaveFileAsMany(file);
         await refresh();
         setTab('imported');
       } catch (err) {

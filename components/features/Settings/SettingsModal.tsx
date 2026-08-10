@@ -27,7 +27,7 @@ import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
 import { ContextViewerTab } from './ContextViewer';
-import type { API设置, DeviceSettings, 游戏设置, 主题预设, 存档数据 } from '@/models/settings';
+import type { API设置, DeviceSettings, 游戏设置, 主题预设 } from '@/models/settings';
 import type { API方案槽位, AuxApiProfileState } from '@/models/apiProfiles';
 import type { ContextSnapshot, ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import type { 角色数据结构 } from '@/models/character';
@@ -99,9 +99,10 @@ interface SettingsModalProps {
   onSubscribeSaveCatalogRepair: (listener: (state: SaveCatalogRepairState) => void) => () => void;
   onRepairSaveDatabase: () => Promise<void>;
   onDeleteLegacyBackupSaves: () => Promise<number>;
-  onGetSaveForExport: (id: number) => Promise<存档数据 | null>;
-  onGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
-  onPersistImportedSave: (data: 存档数据) => Promise<number>;
+  /** 面板用例动作（片 panel-p7）：导出单节点 / 整树存档包 + 导入存档包，转发给存档管理页签。 */
+  onExportSavePackage: (id: number) => Promise<void>;
+  onExportSaveTreePackage: (rootId: string) => Promise<void>;
+  onImportSaveFileAsMany: (file: File) => Promise<number>;
   /** 面板用例动作（片 panel-p1）：tavernRegex 提取/分析/试运行，转发给提示词模块页签。 */
   onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
   onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
@@ -174,9 +175,9 @@ export function SettingsModal({
   onSubscribeSaveCatalogRepair,
   onRepairSaveDatabase,
   onDeleteLegacyBackupSaves,
-  onGetSaveForExport,
-  onGetSaveTreeForExport,
-  onPersistImportedSave,
+  onExportSavePackage,
+  onExportSaveTreePackage,
+  onImportSaveFileAsMany,
   onExtractTavernRegexScripts,
   onAnalyzeTavernRegexScript,
   onDryRunTavernRegexScript,
@@ -295,7 +296,7 @@ export function SettingsModal({
       case 'theme':
         return <ThemeSettingsTab current={currentTheme} onChange={persistThemeChange} />;
       case 'storage':
-        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} onClearActiveSaveTreeMeta={onClearActiveSaveTreeMeta} onGetSaveCatalogSnapshot={onGetSaveCatalogSnapshot} onStartSaveCatalogRepair={onStartSaveCatalogRepair} onSubscribeSaveCatalogRepair={onSubscribeSaveCatalogRepair} onRepairSaveDatabase={onRepairSaveDatabase} onDeleteLegacyBackupSaves={onDeleteLegacyBackupSaves} onGetSaveForExport={onGetSaveForExport} onGetSaveTreeForExport={onGetSaveTreeForExport} onPersistImportedSave={onPersistImportedSave} />;
+        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} onClearActiveSaveTreeMeta={onClearActiveSaveTreeMeta} onGetSaveCatalogSnapshot={onGetSaveCatalogSnapshot} onStartSaveCatalogRepair={onStartSaveCatalogRepair} onSubscribeSaveCatalogRepair={onSubscribeSaveCatalogRepair} onRepairSaveDatabase={onRepairSaveDatabase} onDeleteLegacyBackupSaves={onDeleteLegacyBackupSaves} onExportSavePackage={onExportSavePackage} onExportSaveTreePackage={onExportSaveTreePackage} onImportSaveFileAsMany={onImportSaveFileAsMany} />;
     }
   };
 

@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useState } from 'react';
 import { useRef } from 'react';
 import { useGitHubOAuth } from '@/hooks/useGitHubOAuth';
-import { getSaveCatalogSnapshot, loadSaveForCloudTransfer } from '@/services/dbService';
+import type { CloudTransferSaveBundle, SaveCatalogSnapshot } from '@/services/dbService';
 import { buildCompleteCloudBackup } from '@/services/cloudBackupBuilder';
 import { mergeDownloadedCloudBackup, mergeLegacyCloudBackup } from '@/services/cloudBackupMerge';
 import {
@@ -23,6 +23,10 @@ interface Props {
   /** GitHub 云存档配置读写动作（片 panel-p9）：经 useDeviceSettings 收敛，不直连 dbService。 */
   onLoadCloudConfig: () => Promise<GitHubCloudSaveConfig | null>;
   onPersistCloudConfig: (next: GitHubCloudSaveConfig) => Promise<void>;
+  /** 存档目录快照用例动作（片 panel-p7）：由 App 从 useGame 门面注入，上传打包前读取本地目录。 */
+  onGetSaveCatalogSnapshot: () => Promise<SaveCatalogSnapshot>;
+  /** 云存档传输读取用例动作（片 panel-p7）：存档 + 关联资源记录一并读出（useGame 门面收口）。 */
+  onLoadSaveForCloudTransfer: (id: number) => Promise<CloudTransferSaveBundle | null>;
 }
 
 const cardClip =
@@ -30,7 +34,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function GitHubCloudSaveModal({ onSave, onClose, onLoadCloudConfig, onPersistCloudConfig }: Props) {
+export function GitHubCloudSaveModal({ onSave, onClose, onLoadCloudConfig, onPersistCloudConfig, onGetSaveCatalogSnapshot, onLoadSaveForCloudTransfer }: Props) {
   void onSave;
   const [cloudConfig, setCloudConfig] = useState<GitHubCloudSaveConfig>(createDefaultGitHubCloudConfig);
   const [cloudBackup, setCloudBackup] = useState<GitHubCloudBackupListing | null>(null);
@@ -168,7 +172,7 @@ export function GitHubCloudSaveModal({ onSave, onClose, onLoadCloudConfig, onPer
 
   const handleCloudSyncAll = () => runCloudTask(async (signal) => {
     const config = await persistCloudConfig();
-    const snapshot = await getSaveCatalogSnapshot();
+    const snapshot = await onGetSaveCatalogSnapshot();
     if (!snapshot.items.length && !snapshot.legacyBackups.length) throw new Error('本地还没有可上传的存档。');
     const built = await buildCompleteCloudBackup({
       summaries: snapshot.items,
@@ -176,7 +180,7 @@ export function GitHubCloudSaveModal({ onSave, onClose, onLoadCloudConfig, onPer
       catalogComplete: snapshot.catalogComplete,
       pendingCount: snapshot.pendingIds.length,
       unreadableCount: snapshot.unreadableIds.length,
-      loadSaveBundle: loadSaveForCloudTransfer,
+      loadSaveBundle: onLoadSaveForCloudTransfer,
     }, {
       signal,
       onProgress: (progress) => setSyncProgress({
