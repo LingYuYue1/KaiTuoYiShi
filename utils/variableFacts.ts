@@ -2,7 +2,7 @@ import type { 变量事实, 变量命令 } from '@/models/variableCommand';
 import type { VariableState } from './variableRegistry';
 import type { 世界状态 } from '@/models/world';
 import { 对齐世界日期与天数, 推进琥珀日期 } from '@/models/world';
-import type { NPC记录, NPC关系类型 } from '@/models/npc';
+import type { NPC记录, NPC关系类型, 约定结构 } from '@/models/npc';
 import { 获取NPC关系阶段, 获取NPC兼容关系, 限制NPC好感度 } from '@/models/npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
@@ -53,6 +53,12 @@ const FACT_TYPE_ALIASES: Record<string, 变量事实['type']> = {
   nsfw: 'nsfw_archive',
   nsfw_archive: 'nsfw_archive',
   nsfwArchive: 'nsfw_archive',
+  约定: 'agreement',
+  agreement: 'agreement',
+  约定状态: 'agreement_status',
+  约定状态变更: 'agreement_status',
+  agreement_status: 'agreement_status',
+  agreementStatus: 'agreement_status',
 };
 const ITEM_CATEGORY_ALIASES: Record<string, 物品分类> = {
   食物: 'food',
@@ -848,6 +854,54 @@ export function factsToVariableCommands(
           },
         });
       }
+      continue;
+    }
+
+    if (fact.type === 'agreement') {
+      // 阶段1约定系统·写入环：从正文或recallContext提取约定，写入NPC记录.约定[]
+      const id = fact.npcId?.trim() || npcIdFromName(fact.npcName);
+      const existing = findNpc(npcs, id, fact.npcName);
+      if (!existing) {
+        warnings.push(`agreement 已忽略：找不到 NPC ${fact.npcName}，约定只写入已入档 NPC。`);
+        continue;
+      }
+      const key = `NPC[id=${existing.id}]`;
+      const newAgreement: 约定结构 = {
+        id: `agr_${existing.id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
+        标题: fact.title,
+        内容: fact.content,
+        约定时间: fact.约定时间,
+        当前状态: '等待中',
+        后果: fact.后果,
+        回合: turn,
+        来源: '正文',
+      };
+      push({ action: 'push', key: `${key}.约定`, value: newAgreement });
+      continue;
+    }
+
+    if (fact.type === 'agreement_status') {
+      // 阶段1约定系统·清理环：约定履行/违约/作废后的状态变更
+      const id = fact.npcId?.trim() || npcIdFromName(fact.npcName);
+      const existing = findNpc(npcs, id, fact.npcName);
+      if (!existing) {
+        warnings.push(`agreement_status 已忽略：找不到 NPC ${fact.npcName}。`);
+        continue;
+      }
+      const existingAgreements = existing.约定 ?? [];
+      // 模糊匹配标题（精确匹配优先，其次包含匹配）
+      let matchIdx = existingAgreements.findIndex((a) => a.标题 === fact.title);
+      if (matchIdx < 0) {
+        matchIdx = existingAgreements.findIndex(
+          (a) => a.标题.includes(fact.title) || fact.title.includes(a.标题),
+        );
+      }
+      if (matchIdx < 0) {
+        warnings.push(`agreement_status 已忽略：在 ${existing.姓名} 的约定列表中找不到标题含"${fact.title}"的约定。`);
+        continue;
+      }
+      const key = `NPC[id=${existing.id}]`;
+      push({ action: 'set', key: `${key}.约定[${matchIdx}].当前状态`, value: fact.新状态 });
       continue;
     }
 

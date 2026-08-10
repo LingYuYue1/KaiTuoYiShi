@@ -27,6 +27,7 @@ export function retrieveYitingContext(
   system: 忆庭系统 | undefined,
   query: string,
   limit: number,
+  npcNameMap?: Record<string, string>,
 ): 忆庭召回结果 {
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '' };
@@ -40,7 +41,7 @@ export function retrieveYitingContext(
     entries,
     strongEntries: fallback.strongEntries,
     weakEntries: fallback.weakEntries,
-    injection: buildYitingInjection(fallback.strongEntries, fallback.weakEntries),
+    injection: buildYitingInjection(fallback.strongEntries, fallback.weakEntries, npcNameMap),
     previewText: fallback.previewText,
   };
 }
@@ -54,12 +55,13 @@ export async function retrieveYitingContextWithModel(
   signal?: AbortSignal,
   retryCount = 2,
   promptModules?: 提示词模块[],
+  npcNameMap?: Record<string, string>,
 ): Promise<忆庭召回结果> {
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
   }
 
-  const fallback = retrieveYitingContext(system, query, limit);
+  const fallback = retrieveYitingContext(system, query, limit, npcNameMap);
   const api = resolveYitingRecallConfig(mainConfig, settings);
   if (!api.baseUrl || !api.apiKey || !api.model) {
     return fallback;
@@ -117,7 +119,7 @@ export async function retrieveYitingContextWithModel(
       entries,
       strongEntries: picked.strongEntries,
       weakEntries: picked.weakEntries,
-      injection: buildYitingInjection(picked.strongEntries, picked.weakEntries),
+      injection: buildYitingInjection(picked.strongEntries, picked.weakEntries, npcNameMap),
       usedModel: true,
       rawText,
       previewText: picked.previewText,
@@ -235,7 +237,11 @@ function normalizeRecallName(raw: string): string {
   return `回忆${String(Number(match[1])).padStart(3, '0')}`;
 }
 
-function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆条目[]): string {
+function buildYitingInjection(
+  strongEntries: 回忆条目[],
+  weakEntries: 回忆条目[],
+  npcNameMap?: Record<string, string>,
+): string {
   if (!strongEntries.length && !weakEntries.length) return '';
 
   // 阶段1：recall分档注入（方案C）
@@ -252,15 +258,27 @@ function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆
     ? weakEntries.length
     : Math.max(0, TOP_K_ORIGINAL - strongOriginalCount);
 
+  // 阶段1方案E·第二层防护：来源标记
+  // 分类='通讯'的条目，注入时标记【通讯回忆】(对方:NPC名字)
+  // NPC名字优先从 npcNameMap 查找，找不到则用 id 兜底
+  const resolveContactName = (entry: 回忆条目): string | null => {
+    if (entry.分类 !== '通讯') return null;
+    const contactId = entry.通讯元数据?.联系人;
+    if (!contactId) return null;
+    return npcNameMap?.[contactId] ?? contactId;
+  };
+
   const buildBlock = (entry: 回忆条目, useOriginal: boolean): string => {
     const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
+    const contactName = resolveContactName(entry);
+    const sourceTag = contactName ? `【通讯回忆】(对方:${contactName})` : '【正文回忆】';
     if (useOriginal) {
       // 注入原文层（完整原文，不截断）
       const original = entry.原文?.trim() || entry.摘要 || '（无原文）';
-      return `${title}：\n${original}`;
+      return `${sourceTag} ${title}：\n${original}`;
     }
     // 注入摘要层
-    return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
+    return `${sourceTag} ${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
   };
 
   const strongBlocks = strongEntries.map((entry, i) =>

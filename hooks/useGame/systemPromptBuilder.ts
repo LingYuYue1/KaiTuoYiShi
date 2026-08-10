@@ -16,7 +16,7 @@ import type { 剧情节点 } from '@/models/plot';
 import { PLOT_STATUS_LABELS } from '@/models/plot';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { ZhikuTurnCompilation } from '@/services/zhikuRuntimeCompiler';
-import type { 忆庭系统 } from '@/models/yiting';
+import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 import type { 手机系统 } from '@/models/phone';
 import type { 背包物品 } from '@/models/inventory';
 import { ITEM_CATEGORY_LABELS } from '@/models/inventory';
@@ -184,6 +184,27 @@ export function buildSystemPrompt(
     parts.push(buildMainStoryControlSection(worldState));
   }
 
+  // ── NPC账本选择（提前计算，供忆庭在场判断和后续账本注入复用） ──
+  const npcLedgerSelection = npcLedgerSelectionOverride ?? selectNpcLedgersForTurn({
+    records: npcRecords,
+    turnCount: _turnCount,
+    explicitNames: worldbookCtx?.npcNames,
+    sceneNames: worldState.当前时段?.人物?.map((npc) => npc.姓名),
+    recalledNames: worldbookCtx?.npcNames,
+  });
+
+  // 阶段1方案E·全知性防护：构建 NPC id→姓名 映射（供忆庭通讯回忆标记来源）
+  const npcNameMap = (npcRecords ?? []).reduce<Record<string, string>>((map, npc) => {
+    if (npc.id && npc.姓名) map[npc.id] = npc.姓名;
+    return map;
+  }, {});
+  // 当前场景在场NPC id 集合（presentState='current' 表示物理在场）
+  const presentNpcIds = new Set(
+    npcLedgerSelection.selected
+      .filter((item) => item.presentState === 'current')
+      .map((item) => item.npc.id),
+  );
+
   // ── 忆庭（仅控制召回；入库始终执行，不等同于短期/长期记忆） ──
   const yitingEnabled = settings.记忆系统?.忆庭启用 !== false;
   const yitingThreshold = settings.记忆系统?.忆庭召回最早触发回合 ?? 10;
@@ -191,8 +212,13 @@ export function buildSystemPrompt(
     if (yitingInjectionOverride.trim()) parts.push(yitingInjectionOverride.trim());
   } else if (yitingEnabled && yiting && worldbookCtx?.recentUserInput && worldbookCtx.turnCount > yitingThreshold) {
     const limit = settings.记忆系统?.忆庭召回条数 ?? 8;
-    const yitingHit = retrieveYitingContext(yiting, worldbookCtx.recentUserInput, limit);
-    if (yitingHit.injection) parts.push(yitingHit.injection);
+    const yitingHit = retrieveYitingContext(yiting, worldbookCtx.recentUserInput, limit, npcNameMap);
+    if (yitingHit.injection) {
+      parts.push(yitingHit.injection);
+      // 阶段1方案E·第三层防护：全知性防护提示词约束 + 通讯对方在场判断
+      const omniscienceGuard = buildYitingOmniscienceGuard(yitingHit.entries, presentNpcIds, npcNameMap);
+      if (omniscienceGuard) parts.push(omniscienceGuard);
+    }
   }
 
   // ── 剧情编织（玩家导入 TXT 后生成的章节滑窗）：高波动，放在当前事实与即时回顾之后。──
@@ -225,13 +251,7 @@ export function buildSystemPrompt(
 
   // ── 高波动 NPC 连续性块后置。 ──
   // 内容仍然完整注入，且位于 system prompt 尾部，对正文生成保持强承接优先级。
-  const npcLedgerSelection = npcLedgerSelectionOverride ?? selectNpcLedgersForTurn({
-    records: npcRecords,
-    turnCount: _turnCount,
-    explicitNames: worldbookCtx?.npcNames,
-    sceneNames: worldState.当前时段?.人物?.map((npc) => npc.姓名),
-    recalledNames: worldbookCtx?.npcNames,
-  });
+  // 注：npcLedgerSelection 已提前在忆庭注入前计算（供全知性防护在场判断复用）
   const npcPresenceSection = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames);
   if (npcPresenceSection) parts.push(npcPresenceSection);
 
@@ -1178,6 +1198,64 @@ function getRecentPhoneMemoryTexts(npc: NPC记录): string[] {
 function buildRecentPhoneMemoryLine(npc: NPC记录): string {
   const phoneMemories = getRecentPhoneMemoryTexts(npc).slice(-2);
   return phoneMemories.length ? `；最近手机私聊：${phoneMemories.join('；')}` : '';
+}
+
+/**
+ * 阶段1方案E·全知性防护（第三层）：通讯对方在场判断 + 提示词约束
+ *
+ * 注入通讯回忆时，检查通讯对方是否在场：
+ * - 在场 → 该NPC可以承接手机里的熟悉度/未尽话题
+ * - 不在场 → 其他在场NPC不应知道（走提示词约束）
+ *
+ * 仅当本回合召回结果中存在分类='通讯'的条目时才注入约束块，避免无通讯回忆时的噪声。
+ */
+function buildYitingOmniscienceGuard(
+  recalledEntries: 回忆条目[],
+  presentNpcIds: Set<string>,
+  npcNameMap: Record<string, string>,
+): string {
+  // 从召回结果中找出通讯回忆，提取对方id
+  const phoneEntries = recalledEntries.filter(
+    (entry) => entry.分类 === '通讯' && entry.通讯元数据?.联系人,
+  );
+  if (!phoneEntries.length) return '';
+
+  // 区分在场和不在场的通讯对方
+  const presentContacts = new Set<string>();
+  const absentContacts = new Set<string>();
+  for (const entry of phoneEntries) {
+    const contactId = entry.通讯元数据!.联系人;
+    const contactName = npcNameMap[contactId] ?? contactId;
+    if (presentNpcIds.has(contactId)) {
+      presentContacts.add(contactName);
+    } else {
+      absentContacts.add(contactName);
+    }
+  }
+
+  const lines: string[] = [];
+  lines.push('# 全知性防护｜通讯回忆约束');
+  lines.push('');
+  lines.push('上方【通讯回忆】(对方:X) 标记的内容，是玩家与X在手机私聊/群聊中发生的事，属于私密通讯。');
+  lines.push('');
+  lines.push('约束：');
+  lines.push('1. 当前在场的NPC（除通讯对方本人外）不应"知道"通讯内容，除非：');
+  lines.push('   - 通讯对方本人在场（可以承接手机里建立的熟悉度、未尽话题、约定）');
+  lines.push('   - 玩家在正文里当面告知了其他NPC');
+  lines.push('   - 剧情里有合理的传播途径（如对方转述、群聊公开、消息泄露等）');
+  lines.push('2. 其他在场NPC的反应、态度、台词不应暴露通讯细节。');
+  lines.push('3. 如果通讯对方不在场，正文应像"NPC不知道手机里聊过什么"那样自然推进。');
+
+  if (presentContacts.size) {
+    lines.push('');
+    lines.push(`本回合在场的通讯对方：${[...presentContacts].join('、')} —— 这位可以承接手机里的熟悉度与未尽话题。`);
+  }
+  if (absentContacts.size) {
+    lines.push('');
+    lines.push(`本回合不在场的通讯对方：${[...absentContacts].join('、')} —— 其他在场NPC不应知道与这位的通讯内容。`);
+  }
+
+  return lines.join('\n');
 }
 
 function buildPhoneSection(phone?: 手机系统): string {

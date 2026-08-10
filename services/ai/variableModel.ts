@@ -492,10 +492,17 @@ export async function callVariableModel(
     '---',
     '',
     '请阅读上面的正文，输出 <thinking>、<变量事实> JSON 和兼容 <变量更新> 块。默认让 <变量更新> 留空。',
-    '再次强调：只按“主模型回复正文”里实际发生的台前事实落库；剧情编织/智库/新闻/回忆材料如果没有进入正文，不是变量事实。',
+    '再次强调：只按"主模型回复正文"里实际发生的台前事实落库；剧情编织/智库/新闻/回忆材料如果没有进入正文，不是变量事实。',
     '重要补充：不要把重要 NPC 与玩家的共同日常全部判成无事实；一起吃点心、喝茶、训练、复盘、玩笑、等待评价等有具体对象和共同动作的场景，应审计低风险 npc 轻记忆。',
     '协议硬要求：即使没有任何可落库事实，也必须输出 `<变量事实>{"facts":[]}</变量事实>` 和空的 `<变量更新></变量更新>`；禁止只输出 thinking。',
   ].join('\n');
+
+  // 阶段1约定系统·写入环：如果提供了 recallContext（通讯回忆），追加到 userMessage
+  // 让 AI 从通讯回忆中提取玩家与NPC在手机里建立的约定，用 agreement 事实输出
+  const recallContextText = request.recallContext?.trim();
+  const finalUserMessage = recallContextText
+    ? `${userMessage}\n\n---\n\n## 历史通讯回忆（来自忆庭recall，用于约定提取）\n\n以下是本回合召回的历史通讯回忆。这些回忆里的内容不是本回合正文发生的事，不应作为本回合变量事实落库（除非正文也写了）。但你可以从中提取玩家与NPC在手机里建立的"约定/承诺"，用 agreement 事实输出。\n\n${recallContextText}`
+    : userMessage;
 
   const requestOnce = (messages: Array<{ role: string; content: string }>) =>
     chatCompletionNonStream(config, {
@@ -509,7 +516,7 @@ export async function callVariableModel(
     });
 
   let rawText = await withRetries(
-    () => requestOnce([{ role: 'user', content: userMessage }]),
+    () => requestOnce([{ role: 'user', content: finalUserMessage }]),
     { retries: request.retryCount ?? 0, signal: request.signal, label: '变量模型' },
   );
 
@@ -517,7 +524,7 @@ export async function callVariableModel(
   if (!protocol.ok) {
     rawText = await withRetries(
       () => requestOnce([
-        { role: 'user', content: userMessage },
+        { role: 'user', content: finalUserMessage },
         { role: 'assistant', content: '（上一版输出协议不完整，请按下方指令从零重新输出完整三个标签，不要延续上一版残缺结构。）' },
         { role: 'user', content: buildVariableProtocolRepairPrompt(protocol) },
       ]),

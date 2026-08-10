@@ -1950,6 +1950,11 @@ export async function executeSendWorkflow(
       detail: yitingRecallEnabled ? '正在检索回忆档案。' : '未到忆庭召回回合，已跳过。',
       cancellable: yitingRecallEnabled,
     });
+    // 阶段1方案E·全知性防护：构建 NPC id→姓名 映射，供忆庭通讯回忆标记来源（对方:NPC名字）
+    const yitingNpcNameMap = (state.NPC ?? []).reduce<Record<string, string>>((map, npc) => {
+      if (npc.id && npc.姓名) map[npc.id] = npc.姓名;
+      return map;
+    }, {});
     const [yitingPreview, zhikuPreview] = await Promise.all([
       yitingRecallEnabled && state.忆庭 && recallQuery
         ? retrieveYitingContextWithModel(
@@ -1961,6 +1966,7 @@ export async function executeSendWorkflow(
             abortController.signal,
             state.gameSettings.记忆系统?.忆庭召回API.retryCount ?? 2,
             state.gameSettings.promptModules,
+            yitingNpcNameMap,
           ).catch((err: unknown) => {
             pushQueueTask(state, 'yiting', 'failed', {
               detail: err instanceof Error ? err.message : '忆庭召回失败。',
@@ -2840,6 +2846,18 @@ export async function executeSendWorkflow(
       signal: abortController.signal,
       allowYiting: yitingEnabled,
       shouldCommit: isCurrentWorkflow,
+      // 阶段1约定系统·写入环：把recall召回的通讯回忆拼成recallContext传给variableModel
+      // AI 从中提取玩家与NPC在手机里建立的约定，用 agreement 事实输出
+      recallContext: yitingPreview?.entries?.length
+        ? yitingPreview.entries
+            .filter((entry) => entry.分类 === '通讯')
+            .map((entry) => {
+              const title = entry.名称 || `第${entry.回合}回合回忆`;
+              const body = entry.摘要 || entry.原文 || '';
+              return `${title}：${body}`;
+            })
+            .join('\n\n')
+        : undefined,
       });
       assertWorkflowActive();
       if (state.gameSettings.enableVariableUpdate) {
@@ -3479,6 +3497,8 @@ interface VariableCalibrationParams {
   signal?: AbortSignal;
   allowYiting?: boolean;
   shouldCommit?: () => boolean;
+  /** 阶段1约定系统·写入环：recall 召回的历史通讯回忆拼接文本，传给 variableModel 提取约定 */
+  recallContext?: string;
 }
 
 interface VariableCalibrationOverrides {
@@ -3565,6 +3585,7 @@ async function runVariableCalibrationStep(
       signal: params.signal,
       retryCount: state.gameSettings.variableApi.retryCount ?? 2,
       promptModules: state.gameSettings.promptModules,
+      recallContext: params.recallContext,
     });
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 

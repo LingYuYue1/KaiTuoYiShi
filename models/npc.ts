@@ -1141,6 +1141,8 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
 
 export function formatNpcLedgerForPrompt(item: NPC账本选择条目): string {
   const { ledger, reasons } = item;
+  // 阶段1约定系统·注入环：等待中的约定每回合在NPC账本强制承接区常驻
+  const pendingAgreements = (item.npc.约定 ?? []).filter((a) => a.当前状态 === '等待中');
   const lines = [
     `${ledger.姓名}${ledger.别名 ? `（${ledger.别名}）` : ''}：`,
     `- 选中原因：${reasons.join('；') || '相关 NPC'}`,
@@ -1155,6 +1157,9 @@ export function formatNpcLedgerForPrompt(item: NPC账本选择条目): string {
     ledger.未解决冲突.length ? `- 未解决冲突：${ledger.未解决冲突.slice(0, 4).join('；')}` : '',
     ledger.总结记忆.length ? `- 总结记忆：${ledger.总结记忆.slice(-2).map((summary) => summary.摘要).join('；')}` : '',
     ledger.最近原始记忆.length ? `- 最近原始记忆：${ledger.最近原始记忆.slice(-3).join('；')}` : '',
+    pendingAgreements.length
+      ? `- 等待中的约定（常驻承接，履行/违约/作废后由代码变更状态，不再注入但保留历史）：\n${pendingAgreements.slice(0, 5).map((a) => `  · [${a.标题}] ${a.内容}${a.约定时间 ? `（约定时间：${a.约定时间}）` : ''}${a.后果 ? `；后果：${a.后果}` : ''}${a.来源 ? `（来源：${a.来源}）` : ''}`).join('\n')}`
+      : '',
     '- 承接要求：若该 NPC 本回合出场、通讯、被玩家点名或被当前镜头自然牵引，必须沿用以上关系、记忆、承诺和冲突；禁止写成初识、陌生或忘记共同经历，除非正文明确给出失忆、伪装、时间线重置或信息隔离原因。',
   ].filter(Boolean);
   return lines.join('\n');
