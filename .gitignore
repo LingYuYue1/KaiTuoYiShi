@@ -33,6 +33,7 @@ Thumbs.db
 .superpowers/
 AGENTS.md
 AGENTS-OLD.md
+AGENT_CHECKLISTS.md
 docs/
 
 # Logs
@@ -48,6 +49,10 @@ nul
 .codex/
 THEME_ISSUES.md
 *.bak
+
+# opencode harness working files
+.opencode/
+WATCHDOG.yml
 
 # Working drafts / notes
 托蕾档案完善草案.md
