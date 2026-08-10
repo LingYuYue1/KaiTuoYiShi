@@ -1,7 +1,5 @@
 // ESLint flat config — 内核重写验收关卡（ideal_design.md §12）。
-// 定位：最严规则集 + bulk suppressions 棘轮。存量违规封存在
-// eslint-suppressions.json，新增违规即 error；删改代码后用
-// `pnpm lint -- --prune-suppressions` 清理过期条目。
+// 定位：最严规则集，全量硬性规则。新增违规即 error。
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';

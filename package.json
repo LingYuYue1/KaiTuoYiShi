@@ -8,9 +8,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "bash scripts/check-kernel.sh && tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "check:kernel": "bash scripts/check-kernel.sh",
     "deploy:cf": "pnpm build && wrangler pages deploy dist --project-name=kaituoyishi --branch=main",
     "deploy:cf:preview": "pnpm build && wrangler pages deploy dist --project-name=kaituoyishi-preview --branch=main",
     "preview": "vite preview"

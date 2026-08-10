@@ -127,11 +127,11 @@ export async function runVariableCalibrationStep(
   params: VariableCalibrationParams,
 ): Promise<VariableCalibrationOverrides | null> {
   const { state, mainApiConfig } = params;
-  if (!state.gameSettings.enableVariableUpdate) return null;
+  if (!state.deviceSettings.gameSettings.enableVariableUpdate) return null;
   if (!params.body.trim()) return null;
 
   // 选择变量模型 API：用 settings 里的 override，字段留空回退到主 API 同名字段。
-  const override = state.gameSettings.variableApi;
+  const override = state.deviceSettings.gameSettings.variableApi;
   const overrodeAny =
     !!override.baseUrl.trim() || !!override.apiKey.trim() || !!override.model.trim();
   const variableConfig: import('@/models/settings').API配置项 = {
@@ -160,13 +160,13 @@ export async function runVariableCalibrationStep(
   try {
     // NSFW 基线候选：开启时，为缺少实质内容的 NPC 在变量更新那一次调用里生成基线。
     const nsfwBaselineCandidates: NsfwBaselineCandidate[] = [];
-    if (state.gameSettings.enableNsfw) {
+    if (state.deviceSettings.gameSettings.enableNsfw) {
       const npcRecords = (stateSnapshot.NPC ?? []) as NPC记录[];
       for (const npc of npcRecords) {
         if (nsfwBaselineCandidates.length >= 2) break;
         if (needsNsfwBaseline(npc, undefined, {
           nsfwEnabled: true,
-          maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
+          maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
         })) {
           nsfwBaselineCandidates.push({
             npcId: npc.id,
@@ -185,19 +185,19 @@ export async function runVariableCalibrationStep(
       userInput: params.userInput,
       turnCount: params.turnAfter - 1, // 这条变量是给「刚结束的那回合」用的
       state: stateSnapshot,
-      nsfwEnabled: state.gameSettings.enableNsfw,
-      maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
+      nsfwEnabled: state.deviceSettings.gameSettings.enableNsfw,
+      maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
       nsfwBaselineCandidates,
       signal: params.signal,
-      retryCount: state.gameSettings.variableApi.retryCount ?? 2,
-      promptModules: state.gameSettings.promptModules,
+      retryCount: state.deviceSettings.gameSettings.variableApi.retryCount ?? 2,
+      promptModules: state.deviceSettings.gameSettings.promptModules,
     });
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
     const parsedFacts = parseVariableFacts(rawText);
     const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1, {
-      phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds,
-      maxPhoneSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
+      phoneSeedsEnabled: state.deviceSettings.gameSettings.手机系统.enabled && state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds,
+      maxPhoneSeedsPerTurn: state.deviceSettings.gameSettings.手机系统.maxSeedsPerTurn,
     });
     const parsedLegacyCommands = parseVariableCommands(rawText);
     const filteredLegacyCommands = parsedLegacyCommands.commands.filter((command) => !isTravelerPlayerAuthoredVariablePath(command.key));
@@ -208,8 +208,8 @@ export async function runVariableCalibrationStep(
       ...parsedLegacyCommands.parseErrors.map((reason) => `变量命令：${reason}`),
     ];
     const { allowedCommands, rejectedCommands } = applyNsfwVariablePolicy(commands, {
-      nsfwEnabled: state.gameSettings.enableNsfw,
-      maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
+      nsfwEnabled: state.deviceSettings.gameSettings.enableNsfw,
+      maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
     }, stateSnapshot.NPC as NPC记录[]);
     const { results, nextState } = reduceVariableCommands(allowedCommands, stateSnapshot);
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;

@@ -4,7 +4,6 @@ import type { 聊天消息 } from '@/models/chat';
 import { 创建空角色, 确保命途列表 } from '@/models/character';
 import type { 角色数据结构 } from '@/models/character';
 import {
-  创建空API设置,
   创建默认游戏设置,
   归一化文生图系统设置,
   归一化剧情编织系统设置,
@@ -15,7 +14,6 @@ import {
   归一化额外功能设置,
   归一化视觉文本设置,
   迁移存档运行态键,
-  取游戏设置运行态键,
 } from '@/models/settings';
 import { loadLatestSave, loadSave, loadNewestStory, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveGame, saveNewestStory, saveSetting, forkSaveTreeLeaf } from '@/services/dbService';
 import {
@@ -78,8 +76,6 @@ export function buildSavePayload(
     overrides?.chatHistory ?? state.chatHistory,
   );
   const timestamp = Date.now();
-  const 运行态键 = 取游戏设置运行态键(state.gameSettings);
-  const snapshotSettings = buildSaveGameSettingsSnapshot(state.gameSettings);
   const baseSave = {
     id: 0,
     type,
@@ -100,16 +96,13 @@ export function buildSavePayload(
     variableBatches: compactVariableBatchHistory(overrides?.variableBatches ?? state.variableBatches),
     // 片 5a-2 D3：存档内 gameSettings 为纯 Device/Content（两运行态键迁顶层），
     // 与 saveSetting 单点剥离 + commitTurn 组装保持一致，避免读侧迁移取到陈旧副本。
-    gameSettings: snapshotSettings,
     // 片 5a-2 D3：两运行态键迁至存档顶层，随手动存档落盘。
-    macroGlobalVars: 运行态键.macroGlobalVars,
-    worldbookTriggerStates: 运行态键.worldbookTriggerStates,
+    macroGlobalVars: state.macroGlobalVars,
+    worldbookTriggerStates: state.worldbookTriggerStates,
     pendingOpeningTrigger: state.pendingOpeningTrigger ?? null,
-    apiSettings: 创建空API设置(),
-    theme: state.currentTheme,
   };
   const parentSave = activeSaveTreeMeta
-    ? ({ id: 0, type, timestamp, 旅人: baseSave.旅人, 世界: baseSave.世界, chatHistory: [], 记忆: baseSave.记忆, gameSettings: baseSave.gameSettings, apiSettings: baseSave.apiSettings, theme: baseSave.theme, saveTree: activeSaveTreeMeta } as unknown as 存档数据)
+    ? ({ id: 0, type, timestamp, 旅人: baseSave.旅人, 世界: baseSave.世界, chatHistory: [], 记忆: baseSave.记忆, saveTree: activeSaveTreeMeta } as unknown as 存档数据)
     : null;
   // 片 5d-2：nodeId 仅用于物化分叉头（commitTurn 晋升采纳 newest.headNodeId）。
   // 与父节点同 id（迁移回填/已物化残留）时不采纳，回退 createId，防止节点 ID 重复。
@@ -165,8 +158,6 @@ export function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设
     visualTextSettings: normalizedSettings.visualTextSettings,
     enableCacheDiagnostics: defaults.enableCacheDiagnostics,
     variableApi: defaults.variableApi,
-    macroGlobalVars: undefined,
-    worldbookTriggerStates: undefined,
     新闻系统: {
       ...normalizedSettings.新闻系统,
       api: defaults.新闻系统.api,
@@ -383,7 +374,7 @@ export async function applySaveToState(
   state.activeWorkflow.setLiveRecallSummary('');
   state.activeWorkflow.setLiveRecallFullContent('');
   // 片 5a-2 D3 读取侧迁移：旧档 gameSettings 仍含两运行态键时迁至存档顶层并置空原键；
-  // 迁出值并入内存 state.gameSettings 两键（读者保持现状）。纯函数，不回写旧档。
+  // 迁出值只进入当前设备状态的兼容投影，不让存档设置覆盖 DeviceSettings。
   const { save: 迁移后存档, macroGlobalVars, worldbookTriggerStates } = 迁移存档运行态键(save);
   activeSaveTreeMeta = getSaveTreeMeta(迁移后存档);
   const safeChatHistory = compactChatHistoryForLongSession(normalizeSaveChatHistory(迁移后存档.chatHistory));
@@ -435,7 +426,8 @@ export async function applySaveToState(
   state.setQueueTasks(迁移后存档.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // DeviceSettings is owned by the current device. A save may carry legacy
   // settings for migration, but loading a session must never replace them.
-  state.setGameSettings((current) => ({ ...current, macroGlobalVars, worldbookTriggerStates }));
+  state.setMacroGlobalVars(macroGlobalVars);
+  state.setWorldbookTriggerStates(worldbookTriggerStates);
   // 片 5a-2：pendingOpeningTrigger 顶层字段恢复到 state（E-1 起随 checkpoint 落盘）
   if (restorePendingOpeningTrigger) {
     state.setPendingOpeningTrigger(迁移后存档.pendingOpeningTrigger ?? null);
@@ -515,16 +507,13 @@ function replayNewestStory(
     state.set旅人(story.旅人);
     replayedFields.push('旅人');
   }
-  if (story.macroGlobalVars !== undefined || story.worldbookTriggerStates !== undefined) {
-    state.setGameSettings((previous) => ({
-      ...previous,
-      ...(story.macroGlobalVars !== undefined ? { macroGlobalVars: story.macroGlobalVars } : {}),
-      ...(story.worldbookTriggerStates !== undefined
-        ? { worldbookTriggerStates: story.worldbookTriggerStates }
-        : {}),
-    }));
-    if (story.macroGlobalVars !== undefined) replayedFields.push('macroGlobalVars');
-    if (story.worldbookTriggerStates !== undefined) replayedFields.push('worldbookTriggerStates');
+  if (story.macroGlobalVars !== undefined) {
+    state.setMacroGlobalVars(story.macroGlobalVars);
+    replayedFields.push('macroGlobalVars');
+  }
+  if (story.worldbookTriggerStates !== undefined) {
+    state.setWorldbookTriggerStates(story.worldbookTriggerStates);
+    replayedFields.push('worldbookTriggerStates');
   }
   if (story.pendingOpeningTrigger !== undefined) {
     state.setPendingOpeningTrigger(story.pendingOpeningTrigger);

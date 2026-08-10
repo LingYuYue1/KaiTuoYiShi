@@ -33,15 +33,15 @@ export function stage9_npcLedger(
 
   const npcSource = variableOverrides?.NPC ?? state.NPC;
   const archiveEnrichment = enrichNpcArchives(npcSource, {
-    nsfwEnabled: state.gameSettings.enableNsfw,
-    maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
+    nsfwEnabled: state.deviceSettings.gameSettings.enableNsfw,
+    maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
     zhiku: state.智库,
   });
 
   // NSFW 基线补建：开启 NSFW 后，把需要补建基线的 NPC 信息传给变量模型，
   // 变量模型在变量更新那一次调用里顺带生成 NSFW 基线档案，走正常 nsfw_archive facts 落库链路。
   const npcSourceForCompression = archiveEnrichment.records;
-  const memorySettings = state.gameSettings.记忆系统;
+  const memorySettings = state.deviceSettings.gameSettings.记忆系统;
   const npcCompressionSummaryTriggered: string[] = [];
   const npcAfterCompression = npcSourceForCompression.map((npc) => {
     const ledgerCompression = compressNpcMemoryLedger({

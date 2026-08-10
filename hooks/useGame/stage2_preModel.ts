@@ -22,7 +22,6 @@ import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@
 import { selectNpcLedgersForTurn } from '@/models/npc';
 import { createMacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
-import { 取游戏设置运行态键 } from '@/models/settings';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import { 构建天气Prompt片段 } from '@/data/weatherRules';
 import { formatZhikuRecallSummary, formatYitingRecallSummary } from './recallDiagnostics';
@@ -38,10 +37,10 @@ export async function stage2_preModel(
   devLog('stage', 'stage2_preModel.enter', { turn: turnCountAtStart });
   if (!d.updatedHistory) throw new Error('stage2_preModel: d.updatedHistory must be set by stage1');
   const updatedHistory = d.updatedHistory;
-  const newsSettings = state.gameSettings.新闻系统 as typeof state.gameSettings.新闻系统 | undefined;
-  const memorySettings = state.gameSettings.记忆系统 as typeof state.gameSettings.记忆系统 | undefined;
-  const zhikuSettings = state.gameSettings.智库系统 as typeof state.gameSettings.智库系统 | undefined;
-  const storyWeavingSettings = state.gameSettings.剧情编织系统 as typeof state.gameSettings.剧情编织系统 | undefined;
+  const newsSettings = state.deviceSettings.gameSettings.新闻系统 as typeof state.deviceSettings.gameSettings.新闻系统 | undefined;
+  const memorySettings = state.deviceSettings.gameSettings.记忆系统 as typeof state.deviceSettings.gameSettings.记忆系统 | undefined;
+  const zhikuSettings = state.deviceSettings.gameSettings.智库系统 as typeof state.deviceSettings.gameSettings.智库系统 | undefined;
+  const storyWeavingSettings = state.deviceSettings.gameSettings.剧情编织系统 as typeof state.deviceSettings.gameSettings.剧情编织系统 | undefined;
   const yiting = state.忆庭 as typeof state.忆庭 | undefined;
   const zhiku = state.智库 as typeof state.智库 | undefined;
   const currentPeriod = effectiveWorld.当前时段 as typeof effectiveWorld.当前时段 | undefined;
@@ -74,7 +73,7 @@ export async function stage2_preModel(
     storyMode: effectiveWorld.剧情模式,
     recentMessages: updatedHistory.map((m) => (typeof m.content === 'string' ? m.content : '')).filter(Boolean).slice(-100),
     messageCount: state.turnCount,
-    worldbookTriggerStates: 取游戏设置运行态键(state.gameSettings).worldbookTriggerStates,
+    worldbookTriggerStates: state.worldbookTriggerStates,
   };
 
   const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({ world: effectiveWorld, history: updatedHistory, userInput });
@@ -138,7 +137,7 @@ export async function stage2_preModel(
 
   const [yitingPreview, zhikuPreview] = await Promise.all([
     yitingRecallEnabled && yiting && recallQuery
-      ? retrieveYitingContextWithModel(yiting, recallQuery, memorySettings.忆庭召回条数, memorySettings, config, abortController.signal, memorySettings.忆庭召回API.retryCount, state.gameSettings.promptModules)
+      ? retrieveYitingContextWithModel(yiting, recallQuery, memorySettings.忆庭召回条数, memorySettings, config, abortController.signal, memorySettings.忆庭召回API.retryCount, state.deviceSettings.gameSettings.promptModules)
           .catch((err: unknown) => {
             devLogError('net', 'stage2_preModel.yitingRecall.catch', err, { turn: turnCountAtStart });
             pushQueueTask(state, 'yiting', 'failed', { detail: err instanceof Error ? err.message : '忆庭召回失败。', failCount: memorySettings.忆庭召回API.retryCount }, turnCountAtStart, queueTasksMirror);
@@ -146,7 +145,7 @@ export async function stage2_preModel(
           })
       : Promise.resolve(null),
     zhikuRecallEnabled
-      ? retrieveZhikuContextWithModel(zhiku, zhikuRecallQuery, zhikuSettings.maxRelatedEntries, zhikuSettings, config, abortController.signal, zhikuSettings.api.retryCount, zhikuSceneContext, state.gameSettings.promptModules)
+      ? retrieveZhikuContextWithModel(zhiku, zhikuRecallQuery, zhikuSettings.maxRelatedEntries, zhikuSettings, config, abortController.signal, zhikuSettings.api.retryCount, zhikuSceneContext, state.deviceSettings.gameSettings.promptModules)
           .catch((err: unknown) => {
             devLogError('net', 'stage2_preModel.zhikuRecall.catch', err, { turn: turnCountAtStart });
             return null;
@@ -163,7 +162,7 @@ export async function stage2_preModel(
   const memoryHint = isOpeningSystemTrigger
     ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
     : yitingPreview?.injection ? `剧情回忆已命中，已暂停普通短中长期记忆注入：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
-    : state.gameSettings.enableMemoryInjection ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(midTermMemories ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
+    : state.deviceSettings.gameSettings.enableMemoryInjection ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(midTermMemories ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
     : '记忆上下文已跳过';
   const yitingHint = !yitingEnabled ? '忆庭召回已关闭'
     : yitingPreview?.entries.length ? `剧情回忆已召回：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
@@ -182,7 +181,7 @@ export async function stage2_preModel(
 
   const currentTriggerType = deps.rerollContext ? 'swipe' : isOpeningSystemTrigger ? 'opening' : 'normal';
 
-  const prevGlobalSnapshot = 取游戏设置运行态键(state.gameSettings).macroGlobalVars;
+  const prevGlobalSnapshot = state.macroGlobalVars;
   const lastMsg = updatedHistory[updatedHistory.length - 1] as typeof updatedHistory[number] | undefined;
   const lastUserMsg = [...updatedHistory].reverse().find((m) => m.role === 'user');
   const lastAssistantMsg = [...updatedHistory].reverse().find((m) => m.role === 'assistant');
@@ -194,19 +193,19 @@ export async function stage2_preModel(
   const macroCtx = createMacroContext(prevGlobalSnapshot, macroGameState);
 
   const builtPrompt = isOpeningSystemTrigger
-    ? buildOpeningSystemPrompt(state.旅人, effectiveWorld, state.gameSettings, state.turnCount, state.worldbooks, worldbookCtx, newsForPrompt, currentTriggerType, macroCtx)
-    : buildSystemPrompt(state.旅人, effectiveWorld, state.记忆, state.gameSettings, state.turnCount, state.worldbooks, worldbookCtx, state.NPC, state.新闻, state.剧情, state.剧情编织, state.智库, state.忆庭, state.手机, awakeningPhase, storyRecallInjection || (yitingRecallEnabled ? '' : undefined), zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined, Boolean(yitingPreview?.injection), npcLedgerSelection, currentTriggerType, macroCtx);
+    ? buildOpeningSystemPrompt(state.旅人, effectiveWorld, state.deviceSettings.gameSettings, state.turnCount, state.deviceSettings.worldbooks, worldbookCtx, newsForPrompt, currentTriggerType, macroCtx)
+    : buildSystemPrompt(state.旅人, effectiveWorld, state.记忆, state.deviceSettings.gameSettings, state.turnCount, state.deviceSettings.worldbooks, worldbookCtx, state.NPC, state.新闻, state.剧情, state.剧情编织, state.智库, state.忆庭, state.手机, awakeningPhase, storyRecallInjection || (yitingRecallEnabled ? '' : undefined), zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined, Boolean(yitingPreview?.injection), npcLedgerSelection, currentTriggerType, macroCtx);
 
   const macroGlobalVarsChanged = Object.keys(macroCtx.global).length !== Object.keys(prevGlobalSnapshot).length || Object.entries(macroCtx.global).some(([k, v]) => prevGlobalSnapshot[k] !== v);
   if (macroGlobalVarsChanged) {
     // 投影点（B2 定性）：刷新订阅 gameSettings 的 UI；存档组装只认 d，不回读此 state
-    state.setGameSettings((prev) => ({ ...prev, macroGlobalVars: { ...macroCtx.global } }));
+    state.setMacroGlobalVars({ ...macroCtx.global });
   }
 
-  const nextTriggerStates = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
-  if (nextTriggerStates !== 取游戏设置运行态键(state.gameSettings).worldbookTriggerStates) {
+  const nextTriggerStates = updateTriggerStatesAfterTurn(state.deviceSettings.worldbooks, worldbookCtx);
+  if (nextTriggerStates !== state.worldbookTriggerStates) {
     // 投影点（B2 定性）：刷新订阅 gameSettings 的 UI；存档组装只认 d，不回读此 state
-    state.setGameSettings((prev) => ({ ...prev, worldbookTriggerStates: nextTriggerStates }));
+    state.setWorldbookTriggerStates(nextTriggerStates);
   }
 
   const chatModuleMessages: Array<{ role: string; content: string; _injectionPosition?: number; _injectionDepth?: number; _injectionOrder?: number }> = builtPrompt.chatModuleMessages;
@@ -221,7 +220,7 @@ export async function stage2_preModel(
   return {
     awakeningPhase, currentTriggerType, macroCtx,
     macroGlobalVarsAfterTurn: macroGlobalVarsChanged ? { ...macroCtx.global } : undefined,
-    worldbookTriggerStatesAfterTurn: nextTriggerStates ?? undefined,
+    worldbookTriggerStatesAfterTurn: nextTriggerStates,
     openingNewsPreprocessed, openingNewsForSave,
     yitingPreview: yitingPreview as unknown,
     zhikuPreview: zhikuPreview as unknown,

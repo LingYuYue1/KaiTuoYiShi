@@ -24,9 +24,6 @@ export interface SaveNodeDeltaPayload {
     | '剧情编织'
     | 'variableBatches'
     | 'queueTasks'
-    | 'gameSettings'
-    | 'apiSettings'
-    | 'theme'
   >>;
 }
 
@@ -89,9 +86,6 @@ const DELTA_FIELDS: Array<keyof SaveNodeDeltaPayload['fields']> = [
   '剧情编织',
   'variableBatches',
   'queueTasks',
-  'gameSettings',
-  'apiSettings',
-  'theme',
 ];
 
 export function buildSaveNodeDeltaRecord(
@@ -168,9 +162,6 @@ export function buildDeltaOnlyStoredSave(save: 存档数据, baseSaveId: number)
     剧情编织: undefined,
     variableBatches: [],
     queueTasks: [],
-    gameSettings: save.gameSettings,
-    apiSettings: save.apiSettings,
-    theme: save.theme,
     saveTree: tree,
     saveStorage: {
       mode: 'delta',
@@ -212,14 +203,10 @@ function buildDeltaPayload(save: 存档数据, baseSave: 存档数据, baseSaveI
   const chatDelta = buildChatDelta(save.chatHistory, baseSave.chatHistory);
   const fields: SaveNodeDeltaPayload['fields'] = {};
   for (const key of DELTA_FIELDS) {
-    if (key === 'apiSettings') continue;
     if (!jsonCompatibleEqual(save[key], baseSave[key])) {
       fields[key] = save[key] as never;
     }
   }
-  fields.apiSettings = save.apiSettings;
-  fields.gameSettings = save.gameSettings;
-  fields.theme = save.theme;
   return {
     baseSaveId,
     chatHistoryMode: chatDelta.mode,

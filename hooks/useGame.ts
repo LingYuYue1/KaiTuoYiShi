@@ -13,7 +13,6 @@ import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
-import { 取游戏设置运行态键 } from '@/models/settings';
 import type { API配置项 } from '@/models/settings';
 import type { NewestStory字段集 } from '@/models/newestStory';
 import type { 队列任务记录 } from '@/models/queueTask';
@@ -78,21 +77,21 @@ export function useGame(): UseGameReturn {
 
   const getActiveConfig = useCallback((): API配置项 | null => {
     const s = stateRef.current;
-    if (!s.apiSettings.activeConfigId) {
-      if (s.apiSettings.configs.length > 0) {
-        const first = s.apiSettings.configs[0];
-        s.setApiSettings((prev) => ({ ...prev, activeConfigId: first.id }));
+    if (!s.deviceSettings.apiSettings.activeConfigId) {
+      if (s.deviceSettings.apiSettings.configs.length > 0) {
+        const first = s.deviceSettings.apiSettings.configs[0];
+        s.setDeviceApiSettings((prev) => ({ ...prev, activeConfigId: first.id }));
         return {
           ...first,
-          enableClaudeMode: s.gameSettings.enableClaudeMode,
+          enableClaudeMode: s.deviceSettings.gameSettings.enableClaudeMode,
         };
       }
       return null;
     }
-    const config = s.apiSettings.configs.find((c) => c.id === s.apiSettings.activeConfigId) ?? null;
+    const config = s.deviceSettings.apiSettings.configs.find((c) => c.id === s.deviceSettings.apiSettings.activeConfigId) ?? null;
     return config ? {
       ...config,
-      enableClaudeMode: s.gameSettings.enableClaudeMode,
+      enableClaudeMode: s.deviceSettings.gameSettings.enableClaudeMode,
     } : null;
   }, []);
 
@@ -329,7 +328,7 @@ export function useGame(): UseGameReturn {
 
     const pendingOpeningTrigger = '[系统] 开启第 0 回合';
     s.setPendingOpeningTrigger(pendingOpeningTrigger);
-    const { macroGlobalVars, worldbookTriggerStates } = 取游戏设置运行态键(s.gameSettings);
+    const { macroGlobalVars, worldbookTriggerStates } = s;
     const initialFields: NewestStory字段集 = {
       旅人: nextTraveler,
       世界: nextWorld,
@@ -350,11 +349,7 @@ export function useGame(): UseGameReturn {
       worldbookTriggerStates,
       pendingOpeningTrigger,
     };
-    await 初始化新局checkpoint(initialFields, {
-      gameSettings: s.gameSettings,
-      apiSettings: s.apiSettings,
-      theme: s.currentTheme,
-    });
+    await 初始化新局checkpoint(initialFields);
     s.activeWorkflow.setSessionEpoch((e) => e + 1);
   }, []);
 
@@ -376,14 +371,14 @@ export function useGame(): UseGameReturn {
       || s.记忆.长期记忆.some((item) => item.includes(trimmed));
     if (!input.force && alreadyInMemory) return;
     devLog('ui', 'phone-memory-commit-start', { npcId: input.npcId ?? null, force: Boolean(input.force) });
-    const mainConfig: API配置项 = s.apiSettings.configs.find((config) => config.id === s.apiSettings.activeConfigId)
-      ?? s.apiSettings.configs.at(0)
+    const mainConfig: API配置项 = s.deviceSettings.apiSettings.configs.find((config) => config.id === s.deviceSettings.apiSettings.activeConfigId)
+      ?? s.deviceSettings.apiSettings.configs.at(0)
       ?? { id: '', name: '', provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '', createdAt: 0, updatedAt: 0 };
     const withImmediate = addImmediateMemory(s.记忆, normalizedSummary, s.turnCount);
     const compression = await autoCompressMemorySystemWithArchivesAsync(
       withImmediate,
       s.turnCount,
-      s.gameSettings.记忆系统,
+      s.deviceSettings.gameSettings.记忆系统,
       mainConfig,
     );
     s.set记忆(compression.memory);
@@ -409,8 +404,8 @@ export function useGame(): UseGameReturn {
             npcId: npc.id,
             entries: [...(npc.同行记忆 ?? []), nextEntry],
             summaries: npc.总结记忆 ?? [],
-            threshold: s.gameSettings.记忆系统.NPC记忆压缩阈值,
-            prompt: s.gameSettings.记忆系统.NPC记忆压缩提示词,
+            threshold: s.deviceSettings.gameSettings.记忆系统.NPC记忆压缩阈值,
+            prompt: s.deviceSettings.gameSettings.记忆系统.NPC记忆压缩提示词,
             turn: s.turnCount,
             source: '手机',
           });

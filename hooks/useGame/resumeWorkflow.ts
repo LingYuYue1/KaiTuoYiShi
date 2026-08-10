@@ -109,7 +109,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     worldbookTriggerStates: newest.story.worldbookTriggerStates ?? base?.worldbookTriggerStates ?? {},
   };
 
-  const memorySettings = state.gameSettings.记忆系统;
+  const memorySettings = state.deviceSettings.gameSettings.记忆系统;
   const yitingEnabled = memorySettings.忆庭启用;
   const d: TurnDeltas = {
     finalHistory,
@@ -120,8 +120,8 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     yitingEnabled,
     yitingRecallEnabled: yitingEnabled && !isOpeningSystemTrigger
       && memorySettings.忆庭召回最早触发回合 < turnCountAtStart,
-    storyWeavingGate: state.gameSettings.剧情编织系统.enabled
-      && state.gameSettings.剧情编织系统.currentWindow
+    storyWeavingGate: state.deviceSettings.gameSettings.剧情编织系统.enabled
+      && state.deviceSettings.gameSettings.剧情编织系统.currentWindow
       ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx)
       : null,
     openingNewsPreprocessed: false,

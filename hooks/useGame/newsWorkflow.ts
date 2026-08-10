@@ -23,8 +23,8 @@ interface NewsGenerationParams {
   shouldCommit?: () => boolean;
 }
 
-type RuntimeNewsApiOverride = Omit<UseGameStateReturn['gameSettings']['新闻系统']['api'], 'provider'> & {
-  provider: UseGameStateReturn['gameSettings']['新闻系统']['api']['provider'] | '';
+type RuntimeNewsApiOverride = Omit<UseGameStateReturn['deviceSettings']['gameSettings']['新闻系统']['api'], 'provider'> & {
+  provider: UseGameStateReturn['deviceSettings']['gameSettings']['新闻系统']['api']['provider'] | '';
 };
 
 export interface NewsGenerationStepResult {
@@ -35,12 +35,12 @@ export interface NewsGenerationStepResult {
 
 export async function runNewsGenerationStep(params: NewsGenerationParams): Promise<NewsGenerationStepResult | null> {
   const { state } = params;
-  const newsSettings = state.gameSettings.新闻系统 as typeof state.gameSettings.新闻系统 | undefined;
+  const newsSettings = state.deviceSettings.gameSettings.新闻系统 as typeof state.deviceSettings.gameSettings.新闻系统 | undefined;
   if (!newsSettings?.enabled || !newsSettings.autoGenerate) return null;
 
   const api = newsSettings.api as RuntimeNewsApiOverride;
-  const mainConfig = state.apiSettings.configs.find((c) => c.id === state.apiSettings.activeConfigId)
-    ?? state.apiSettings.configs.at(0);
+  const mainConfig = state.deviceSettings.apiSettings.configs.find((c) => c.id === state.deviceSettings.apiSettings.activeConfigId)
+    ?? state.deviceSettings.apiSettings.configs.at(0);
   if (!mainConfig && (!api.baseUrl.trim() || !api.apiKey.trim() || !api.model.trim())) return null;
 
   const config: API配置项 = {
@@ -53,7 +53,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
     maxTokens: api.maxTokens ?? mainConfig?.maxTokens,
     temperature: api.temperature ?? mainConfig?.temperature,
     retryCount: api.retryCount ?? mainConfig?.retryCount ?? 2,
-    enableClaudeMode: state.gameSettings.enableClaudeMode,
+    enableClaudeMode: state.deviceSettings.gameSettings.enableClaudeMode,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -78,7 +78,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
       plotNodes: params.plotNodes,
       storyWeaving: params.storyWeavingSnapshot ?? params.storyWeaving,
       maxNewEntriesPerTurn: newsSettings.maxNewEntriesPerTurn,
-      promptModules: state.gameSettings.promptModules,
+      promptModules: state.deviceSettings.gameSettings.promptModules,
       signal: params.signal,
       retryCount: newsSettings.api.retryCount ?? 2,
     });

@@ -169,7 +169,7 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
     p.config,
     p.abortController.signal,
     p.memorySettings.忆庭召回API.retryCount ?? 2,
-    p.state.gameSettings.promptModules,
+    p.state.deviceSettings.gameSettings.promptModules,
   );
   p.assertWorkflowActive();
   const turnRecallEntry = turnRecallEntryResult.entry;
@@ -199,15 +199,15 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
 
 function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
   let phone = p.phoneAfterFallbackSeed;
-  if (p.state.gameSettings.手机系统.enabled && p.state.gameSettings.手机系统.autoGenerateSeeds) {
+  if (p.state.deviceSettings.gameSettings.手机系统.enabled && p.state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds) {
     const fallbackSeed = buildFallbackPhoneSeed({
       phone,
       npcs: p.npcAfterCompression,
       turn: p.turnCountAtStart + 1,
       userInput: p.userInput,
       body: p.displayText,
-      maxSeedsPerTurn: p.state.gameSettings.手机系统.maxSeedsPerTurn,
-      contactCooldownTurns: p.state.gameSettings.手机系统.contactCooldownTurns,
+      maxSeedsPerTurn: p.state.deviceSettings.gameSettings.手机系统.maxSeedsPerTurn,
+      contactCooldownTurns: p.state.deviceSettings.gameSettings.手机系统.contactCooldownTurns,
     });
     if (fallbackSeed) {
       phone = {
@@ -225,7 +225,7 @@ function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
 
 async function runNarrativeImageJob(p: NarrativeJobParams): Promise<NarrativeJobResult> {
   let fh = p.finalHistory;
-  const 文生图系统 = p.state.gameSettings.文生图系统 as 文生图系统设置 | undefined;
+  const 文生图系统 = p.state.deviceSettings.gameSettings.文生图系统 as 文生图系统设置 | undefined;
   const 正文生图设置 = 文生图系统?.正文生图;
   if (!正文生图设置?.enabled || 正文生图设置.mode !== 'auto') return { finalHistoryForSave: fh };
   const targetMessageId = p.aiMsg.id;
@@ -292,10 +292,10 @@ export async function stage11_backgroundJobs(
   const yitingRecallEnabled = d.yitingRecallEnabled ?? false;
   const storyProgressMemoryLine = d.storyProgressMemoryLine ?? '';
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
-  const memorySettings = (state.gameSettings.记忆系统 as 记忆系统设置 | undefined) ?? 创建默认记忆系统设置();
+  const memorySettings = (state.deviceSettings.gameSettings.记忆系统 as 记忆系统设置 | undefined) ?? 创建默认记忆系统设置();
 
   // 阶段 11 前置计算
-  const newsSettings = state.gameSettings.新闻系统 as 星际和平周报设置 | undefined;
+  const newsSettings = state.deviceSettings.gameSettings.新闻系统 as 星际和平周报设置 | undefined;
   const newsEnabled = Boolean(newsSettings?.enabled && newsSettings.autoGenerate);
   const newsInterval = Math.max(5, Math.min(10, Math.trunc(newsSettings?.generateIntervalTurns ?? 5) || 5));
   const newsTurn = turnCountAtStart + 1;
@@ -337,7 +337,7 @@ export async function stage11_backgroundJobs(
     assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
 
-  const backgroundTaskMode = state.gameSettings.backgroundTaskMode as TurnContext['state']['gameSettings']['backgroundTaskMode'] | undefined;
+  const backgroundTaskMode = state.deviceSettings.gameSettings.backgroundTaskMode as TurnContext['state']['deviceSettings']['gameSettings']['backgroundTaskMode'] | undefined;
   let newsAfterGeneration: 新闻条目[] | null;
   let yitingAfterTurnRecall: 忆庭系统;
   let phoneAfterFallbackSeed: 手机系统;

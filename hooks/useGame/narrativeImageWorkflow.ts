@@ -14,11 +14,11 @@ function buildSingleApiSettings(config: API配置项): API设置 {
 }
 
 export function resolveNarrativeImageTokenizerConfig(state: UseGameStateReturn, mainConfig: API配置项): API配置项 | null {
-  return buildImagePromptTokenizerConfig(state.gameSettings, buildSingleApiSettings(mainConfig));
+  return buildImagePromptTokenizerConfig(state.deviceSettings.gameSettings, buildSingleApiSettings(mainConfig));
 }
 
 export function resolveNarrativeImageGenerationApi(state: UseGameStateReturn): 文生图API配置 | null {
-  const imageSettings = state.gameSettings.文生图系统;
+  const imageSettings = state.deviceSettings.gameSettings.文生图系统;
   return imageSettings.普通接口.enabled ? imageSettings.普通接口 : null;
 }
 
@@ -103,7 +103,7 @@ export async function generateNarrativeImagesForMessage(params: {
   try {
     const { parseStorySnapshotPrompt } = await import('@/services/ai/narrativeImageParse');
     const { generateNarrativeImage } = await import('@/services/ai/imageGeneration');
-    const playerAppearanceMode = state.gameSettings.文生图系统.正文生图.playerAppearanceMode;
+    const playerAppearanceMode = state.deviceSettings.gameSettings.文生图系统.正文生图.playerAppearanceMode;
     const presentNpcRecords = state.NPC
       .filter((npc: import('@/models/npc').NPC记录) => npc.阶位 === 'companion' && (npc.外貌 || npc.穿着))
       .slice(0, 8);
@@ -146,7 +146,7 @@ export async function generateNarrativeImagesForMessage(params: {
       presentNpcs: presentNpcRecords,
     });
     const promptRefined = 应用质量增强提示词(
-      state.gameSettings.文生图系统.rules,
+      state.deviceSettings.gameSettings.文生图系统.rules,
       lockedPrompt.prompt,
       lockedPrompt.negative,
     );
@@ -217,7 +217,7 @@ export async function regenerateNarrativeImagesForMessage(
   if (!message || message.role !== 'assistant') return;
   const body = message.parsedResponse?.body.trim() || message.content.trim();
   if (!body) return;
-  const narrative = state.gameSettings.文生图系统.正文生图;
+  const narrative = state.deviceSettings.gameSettings.文生图系统.正文生图;
   if (!narrative.enabled) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '正文生图未启用，无法重新生成故事快照。',

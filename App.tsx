@@ -273,7 +273,6 @@ import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
 import type { 队列任务ID } from '@/models/queueTask';
 import { 创建空手机系统 } from '@/models/phone';
-import { 取游戏设置运行态键 } from '@/models/settings';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate, type TravelerTemplateContext, type TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
@@ -375,11 +374,11 @@ export function App() {
     actions.handleGoHome();
   }, [actions, closeTransientUi]);
   const handleToggleStreaming = useCallback(() => {
-    state.setGameSettings((prev) => ({
+    state.setDeviceGameSettings((prev) => ({
       ...prev,
       enableStreaming: !prev.enableStreaming,
     }));
-  }, [state.setGameSettings]);
+  }, [state]);
   const handleEditBody = useCallback((id: string, newBody: string) => {
     state.setChatHistory((prev) =>
       prev.map((m) =>
@@ -392,7 +391,7 @@ export function App() {
           : m,
       ),
     );
-  }, [state.setChatHistory]);
+  }, [state]);
   const handleCancelTask = useCallback((id: 队列任务ID) => {
     const title = CANCELLABLE_TASK_TITLES[id];
     if (!title) return;
@@ -413,13 +412,7 @@ export function App() {
     state.activeWorkflow.setPendingVariable(false);
     state.activeWorkflow.setLoading(false);
     setStreamingMessage('');
-  }, [
-    state.activeWorkflow.abortControllerRef,
-    state.setQueueTasks,
-    state.turnCount,
-    state.activeWorkflow.setPendingVariable,
-    state.activeWorkflow.setLoading,
-  ]);
+  }, [state]);
   const handlePathAwakeningTrigger = useCallback(() => {
     void actions.handleSend('[系统] 踏入命途狭间');
   }, [actions]);
@@ -702,7 +695,7 @@ export function App() {
             storyWeaving: state.剧情编织,
             onStoryWeavingChange: state.set剧情编织,
             gameSettings,
-            onGameSettingsChange: state.setGameSettings,
+            onGameSettingsChange: state.setDeviceGameSettings,
             onPersistGameSettings: persistGameSettings,
             apiSettings,
             turnCount: state.turnCount,
@@ -743,7 +736,7 @@ export function App() {
             <WorldbookManagerModal
               worldbooks={worldbooks}
               onSave={(books: 世界书[]) => {
-                state.setWorldbooks(books);
+                state.setDeviceWorldbooks(books);
                 void saveSetting('worldbooks', books);
               }}
               onClose={() => setShowWorldbookManager(false)}
@@ -796,11 +789,9 @@ export function App() {
             <SettingsModal
               onClose={() => setShowSettings(false)}
               deviceSettings={state.deviceSettings}
-              onApiSettingsChange={state.setApiSettings}
-              gameSettings={gameSettings}
-              onGameSettingsChange={state.setGameSettings}
-              currentTheme={currentTheme}
-              onThemeChange={state.setCurrentTheme}
+              onApiSettingsChange={state.setDeviceApiSettings}
+              onGameSettingsChange={state.setDeviceGameSettings}
+              onThemeChange={state.setDeviceTheme}
               onPersistGameSettings={persistGameSettings}
               onPersistApiSettings={persistApiSettings}
               onPersistTheme={persistTheme}
@@ -826,11 +817,9 @@ export function App() {
               on剧情编织Change={state.set剧情编织}
               getContextSnapshot={actions.getContextSnapshot}
 
-              worldbooks={worldbooks}
-
               onWorldbooksChange={(books: 世界书[]) => {
 
-                state.setWorldbooks(books);
+                state.setDeviceWorldbooks(books);
 
                 void persistWorldbooks(books);
 
@@ -914,7 +903,7 @@ export function App() {
       }
       const pendingOpeningTrigger = '[系统] 开启第 0 回合';
       state.setPendingOpeningTrigger(pendingOpeningTrigger);
-      const { macroGlobalVars, worldbookTriggerStates } = 取游戏设置运行态键(gameSettings);
+      const { macroGlobalVars, worldbookTriggerStates } = state;
       const initialFields: NewestStory字段集 = {
         旅人: traveler,
         世界: worldState,
@@ -935,11 +924,7 @@ export function App() {
         worldbookTriggerStates,
         pendingOpeningTrigger,
       };
-      await 初始化新局checkpoint(initialFields, {
-        gameSettings,
-        apiSettings,
-        theme: currentTheme,
-      });
+      await 初始化新局checkpoint(initialFields);
       setLaunchingJourney(true);
       await wait(getJourneyLaunchDelay());
       state.setView('game');
@@ -993,9 +978,9 @@ export function App() {
           <SettingsModal
             onClose={() => setShowSettings(false)}
             deviceSettings={state.deviceSettings}
-            onApiSettingsChange={state.setApiSettings}
-            onGameSettingsChange={state.setGameSettings}
-            onThemeChange={state.setCurrentTheme}
+            onApiSettingsChange={state.setDeviceApiSettings}
+            onGameSettingsChange={state.setDeviceGameSettings}
+            onThemeChange={state.setDeviceTheme}
             onPersistGameSettings={persistGameSettings}
             onPersistApiSettings={persistApiSettings}
             onPersistTheme={persistTheme}
@@ -1020,9 +1005,8 @@ export function App() {
             剧情编织={state.剧情编织}
             on剧情编织Change={state.set剧情编织}
             getContextSnapshot={actions.getContextSnapshot}
-            worldbooks={worldbooks}
             onWorldbooksChange={(books: 世界书[]) => {
-              state.setWorldbooks(books);
+              state.setDeviceWorldbooks(books);
               void persistWorldbooks(books);
             }}
             onDeleteSave={actions.handleDeleteSave}
@@ -1081,7 +1065,7 @@ export function App() {
           <WorldbookManagerModal
             worldbooks={worldbooks}
             onSave={(books: 世界书[]) => {
-              state.setWorldbooks(books);
+              state.setDeviceWorldbooks(books);
               void saveSetting('worldbooks', books);
             }}
             onClose={() => setShowWorldbookManager(false)}

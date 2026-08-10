@@ -35,8 +35,8 @@ export async function stage8_variable(
     throw new Error('stage8_variable: stage5/6 必须写入 displayText 与 mem');
   }
 
-  pushQueueTask(state, 'variable', state.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
-    detail: state.gameSettings.enableVariableUpdate ? '正在调用变量模型校准正文。' : '变量更新未启用，已跳过。',
+  pushQueueTask(state, 'variable', state.deviceSettings.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
+    detail: state.deviceSettings.gameSettings.enableVariableUpdate ? '正在调用变量模型校准正文。' : '变量更新未启用，已跳过。',
   }, turnCountAtStart, queueTasksMirror);
 
   const variableOverrides = await runVariableCalibrationStep({
@@ -56,7 +56,7 @@ export async function stage8_variable(
   });
   assertWorkflowActive();
 
-  if (state.gameSettings.enableVariableUpdate) {
+  if (state.deviceSettings.gameSettings.enableVariableUpdate) {
     const variableApplied = Boolean(variableOverrides && Object.keys(variableOverrides).some(
       (key) => key !== 'batch' && key !== 'failedBatch' && key !== 'npcLedgerUpdate',
     ));

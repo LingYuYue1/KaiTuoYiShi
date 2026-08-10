@@ -519,7 +519,7 @@ async function saveGameInternal(data: 存档数据): Promise<number> {
     ...(sourceData as 存档数据 & { saveTree?: unknown }).saveTree
       ? { saveTree: (sourceData as 存档数据 & { saveTree?: unknown }).saveTree }
       : {},
-  } as 存档数据);
+  });
   const deltaBase = await findAutoDeltaBase(db, storedData);
   const saved = await new Promise<{ id: number; save: 存档数据; delta: SaveNodeDeltaRecord | null }>((resolve, reject) => {
     const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');

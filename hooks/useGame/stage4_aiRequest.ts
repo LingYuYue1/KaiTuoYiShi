@@ -61,8 +61,8 @@ export async function stage4_aiRequest(
     throw new Error('stage4_aiRequest: stage3 必须写入 apiMessages 与 systemPrompt');
   }
 
-  const configuredMaxAttempts = state.gameSettings.autoRetryOnError
-    ? Math.max(1, state.gameSettings.autoRetryCount) + 1
+  const configuredMaxAttempts = state.deviceSettings.gameSettings.autoRetryOnError
+    ? Math.max(1, state.deviceSettings.gameSettings.autoRetryCount) + 1
     : 1;
   const calcMaxAttempts = (deepSeekMainActive || deps.rerollContext)
     ? Math.max(2, maxAttempts ?? configuredMaxAttempts)
@@ -108,7 +108,7 @@ export async function stage4_aiRequest(
         systemPrompt,
         onDelta: (delta) => {
           streamedText += delta;
-          if (!state.gameSettings.enableStreaming) {
+          if (!state.deviceSettings.gameSettings.enableStreaming) {
             streamMessageSetter.set(streamedText);
             return;
           }
@@ -143,7 +143,7 @@ export async function stage4_aiRequest(
         },
         signal: abortController.signal,
         streaming: mainRequestMode === 'stream',
-        repairTags: state.gameSettings.enableTagRepair,
+        repairTags: state.deviceSettings.gameSettings.enableTagRepair,
         prefixMode: effectivePrefixMode,
         prefixContent: effectivePrefixContent,
         topP: mainStoryConfig.topP,
@@ -165,7 +165,7 @@ export async function stage4_aiRequest(
           result = {
             ...result,
             fullText: regexCleanup.text,
-            parsed: parseResponse(regexCleanup.text, { repair: state.gameSettings.enableTagRepair }),
+            parsed: parseResponse(regexCleanup.text, { repair: state.deviceSettings.gameSettings.enableTagRepair }),
           };
           streamedText = regexCleanup.text;
           console.info('[ST V2] 已执行安全输出正则清理:', regexCleanup.applied);

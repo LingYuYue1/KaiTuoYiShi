@@ -73,9 +73,6 @@ export function useDeviceSettings(): DeviceSettingsActions {
     try {
       await saveSetting('gameSettings', normalized);
       devLog('ui', 'persist-game-settings', {
-        macroGlobalVars: Object.keys(
-          (next as { macroGlobalVars?: Record<string, unknown> }).macroGlobalVars ?? {},
-        ).length,
       });
     } catch (err) {
       devLogError('ui', 'persist-game-settings-failed', err);

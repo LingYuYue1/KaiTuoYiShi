@@ -673,9 +673,9 @@ export { collectTriggeredEntryIds };
 export function updateTriggerStatesAfterTurn(
   books: 世界书[],
   ctx: FilterContext,
-): Record<string, number> | undefined {
+): Record<string, number> {
   const hitIds = collectTriggeredEntryIds(books, ctx);
-  if (hitIds.size === 0) return ctx.worldbookTriggerStates;
+  if (hitIds.size === 0) return ctx.worldbookTriggerStates ?? {};
   const msgCount = ctx.messageCount ?? 0;
   const prev = ctx.worldbookTriggerStates ?? {};
   const next: Record<string, number> = { ...prev };

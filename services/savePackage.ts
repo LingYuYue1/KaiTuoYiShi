@@ -1,5 +1,5 @@
 import type { 存档数据 } from '@/models/settings';
-import { 创建空API设置, 创建默认游戏设置, createSaveEnvelope, type SaveEnvelope } from '@/models/settings';
+import { createSaveEnvelope, type SaveEnvelope } from '@/models/settings';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
@@ -152,64 +152,13 @@ export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
   delete sanitized.saveRuntime;
   delete sanitized.debugContext;
   sanitized.chatHistory = stripRuntimeDebugFromChatHistory(sanitized.chatHistory);
-  return stripEmbeddedApiSettings(sanitized);
+  return sanitized;
 }
 
 /** Async export sanitizer that rehydrates Blob-backed album assets into portable dataUrls. */
 export async function sanitizeSaveForExportAsync(save: 存档数据): Promise<存档数据> {
   const expanded = await expandSaveAssetPayloadForExport(save);
   return sanitizeSaveForExport(expanded);
-}
-
-function stripEmbeddedApiSettings(sanitized: 存档数据): 存档数据 {
-  const defaults = 创建默认游戏设置();
-  const settings = sanitized.gameSettings;
-
-  return {
-    ...sanitized,
-    apiSettings: 创建空API设置(),
-    gameSettings: {
-    ...defaults,
-    ...settings,
-    enableClaudeMode: defaults.enableClaudeMode,
-    variableApi: defaults.variableApi,
-    新闻系统: {
-      ...settings.新闻系统,
-      api: defaults.新闻系统.api,
-    },
-    手机系统: {
-      ...settings.手机系统,
-      api: defaults.手机系统.api,
-    },
-    智库系统: {
-      ...settings.智库系统,
-      api: defaults.智库系统.api,
-    },
-    剧情编织系统: {
-      ...settings.剧情编织系统,
-      api: defaults.剧情编织系统.api,
-    },
-    记忆系统: {
-      ...settings.记忆系统,
-      记忆总结API: defaults.记忆系统.记忆总结API,
-      忆庭召回API: defaults.记忆系统.忆庭召回API,
-      忆庭精炼API: defaults.记忆系统.忆庭精炼API,
-    },
-    文生图系统: {
-      ...settings.文生图系统,
-      普通接口: defaults.文生图系统.普通接口,
-      场景接口: defaults.文生图系统.场景接口,
-      useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
-      NSFW接口: defaults.文生图系统.NSFW接口,
-      词组转化器API: defaults.文生图系统.词组转化器API,
-      正文生图: {
-        ...settings.文生图系统.正文生图,
-        parserApi: defaults.文生图系统.正文生图.parserApi,
-        imageApi: defaults.文生图系统.正文生图.imageApi,
-      },
-    },
-    },
-  };
 }
 
 function stripRuntimeDebugFromChatHistory(chatHistory: 存档数据['chatHistory']): 存档数据['chatHistory'] {
@@ -244,14 +193,11 @@ export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数�
   const parsed = JSON.parse(saveText) as Partial<SaveEnvelope> & Partial<存档数据>;
   const save: 存档数据 = parsed.gameData
     ? {
-      ...(parsed.gameData as 存档数据),
+      ...parsed.gameData,
       id: Number(parsed.id) || 0,
       type: parseSerializedSaveType(parsed.type),
       timestamp: Number(parsed.timestamp) || Date.now(),
       turnCount: parsed.turnCount,
-      gameSettings: 创建默认游戏设置(),
-      apiSettings: 创建空API设置(),
-      theme: 'deepspace',
     }
     : parsed as 存档数据;
   const read = (path: string): unknown => {
@@ -324,14 +270,11 @@ function parseSerializedSave(value: unknown): 存档数据 {
   const parsed = value as Partial<SaveEnvelope> & Partial<存档数据>;
   if (!parsed.gameData) return parsed as 存档数据;
   return {
-    ...(parsed.gameData as 存档数据),
+    ...parsed.gameData,
     id: Number(parsed.id) || 0,
     type: parseSerializedSaveType(parsed.type),
     timestamp: Number(parsed.timestamp) || Date.now(),
     turnCount: parsed.turnCount,
-    gameSettings: 创建默认游戏设置(),
-    apiSettings: 创建空API设置(),
-    theme: 'deepspace',
   };
 }
 
@@ -356,7 +299,7 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
     variableBatches,
     queueTasks,
     ...core
-  } = envelope.gameData as 存档数据;
+  } = envelope.gameData;
   const files = ([
     ['save.json', {
       ...envelope,

@@ -27,7 +27,6 @@ import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getAnticipatedNpcNamesForTurn, getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { 格式化开局档案上下文 } from '@/models/world';
 import { createMacroContext } from '@/utils/macroEngine';
-import { 取游戏设置运行态键 } from '@/models/settings';
 
 const COT_FAKE_HISTORY_USER = '开始任务';
 const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
@@ -410,7 +409,7 @@ function buildApiMessages(
     awakeningPhase?: 'question' | 'judgement';
     awakeningPathId?: string;
     enableCotFakeHistory: boolean;
-    settings: UseGameStateReturn['gameSettings'];
+    settings: UseGameStateReturn['deviceSettings']['gameSettings'];
     memorySystem: UseGameStateReturn['记忆'];
   },
 ): 聊天消息[] {
@@ -551,20 +550,20 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     history: recallHistory,
   });
 
-  const yitingEnabled = state.gameSettings.记忆系统.忆庭启用;
-  const yitingThreshold = state.gameSettings.记忆系统.忆庭召回最早触发回合;
+  const yitingEnabled = state.deviceSettings.gameSettings.记忆系统.忆庭启用;
+  const yitingThreshold = state.deviceSettings.gameSettings.记忆系统.忆庭召回最早触发回合;
   const yitingPreview = yitingEnabled && recallQuery && state.turnCount > yitingThreshold
     ? retrieveYitingContext(
         state.忆庭,
         recallQuery,
-        state.gameSettings.记忆系统.忆庭召回条数,
+        state.deviceSettings.gameSettings.记忆系统.忆庭召回条数,
       )
     : null;
-  const zhikuPreview = state.gameSettings.智库系统.enabled && sourceInput
+  const zhikuPreview = state.deviceSettings.gameSettings.智库系统.enabled && sourceInput
     ? retrieveZhikuContext(
         state.智库,
         zhikuRecallQuery,
-        state.gameSettings.智库系统.maxRelatedEntries,
+        state.deviceSettings.gameSettings.智库系统.maxRelatedEntries,
         zhikuSceneContext,
       )
     : null;
@@ -590,21 +589,21 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     ? buildOpeningSystemPrompt(
         state.旅人,
         state.世界,
-        state.gameSettings,
+        state.deviceSettings.gameSettings,
         state.turnCount,
-        state.worldbooks,
+        state.deviceSettings.worldbooks,
         worldbookCtx,
       state.新闻,
       'opening',
-      createMacroContext(取游戏设置运行态键(state.gameSettings).macroGlobalVars),
+      createMacroContext(state.macroGlobalVars),
     )
     : buildSystemPrompt(
         state.旅人,
         state.世界,
         state.记忆,
-        state.gameSettings,
+        state.deviceSettings.gameSettings,
         state.turnCount,
-        state.worldbooks,
+        state.deviceSettings.worldbooks,
         worldbookCtx,
         state.NPC,
         state.新闻,
@@ -619,13 +618,13 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         Boolean(yitingPreview?.injection),
         npcLedgerSelection,
         'normal',
-        createMacroContext(取游戏设置运行态键(state.gameSettings).macroGlobalVars),
+      createMacroContext(state.macroGlobalVars),
       );
   // 上下文快照需要跟真实发送路径对齐：V2 酒馆预设只额外发送 Tavern messages，
   // 原生 systemPrompt 仍完整发送，因此 Tavern 链路不重复塞原生底座和当前用户输入。
   const systemPrompt = builtPrompt.systemPrompt;
   const systemPromptSections = splitPromptSections(systemPrompt);
-  const recentHistory = getMainHistoryWindow(state.chatHistory, state.gameSettings, state.记忆);
+  const recentHistory = getMainHistoryWindow(state.chatHistory, state.deviceSettings.gameSettings, state.记忆);
   const tavernHistory = recentHistory.filter((msg, index) => {
     if (msg.role !== 'user') return true;
     const isLastRecentMessage = index === recentHistory.length - 1;
@@ -636,13 +635,13 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     isAwakeningEnterTrigger,
     awakeningPhase,
     awakeningPathId,
-    enableCotFakeHistory: state.gameSettings.enableCotFakeHistory,
-    settings: state.gameSettings,
+    enableCotFakeHistory: state.deviceSettings.gameSettings.enableCotFakeHistory,
+    settings: state.deviceSettings.gameSettings,
     memorySystem: state.记忆,
   });
-  const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
+  const currentPresetV2 = getCurrentSTPresetV2(state.deviceSettings.gameSettings, getBuiltinPresetsV2());
   const shouldTryTavernV2 =
-    state.gameSettings.enableStPreset !== false &&
+    state.deviceSettings.gameSettings.enableStPreset !== false &&
     Boolean(currentPresetV2?.preset.prompts.length) &&
     Boolean(currentPresetV2?.preset.prompt_order.length);
   const tavernStatus: Parameters<typeof formatMainRequestOrderOverview>[2] = {
@@ -650,7 +649,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     used: false,
     presetName: currentPresetV2?.name,
     reason: currentPresetV2
-      ? state.gameSettings.enableStPreset === false
+      ? state.deviceSettings.gameSettings.enableStPreset === false
         ? '酒馆预设总开关关闭。'
         : ''
       : '未选择酒馆 V2 预设，因此本回合仍走原生主流程。',
@@ -665,16 +664,16 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
           ? `玩家选择踏入「命途狭间」(命途 ID: ${awakeningPathId})。请按 pathAwakening 流程生成第一道诘问,不要推进主剧情,不要等玩家再次发言。`
           : sourceInput;
       const tavernMessages = buildTavernMessageChain({
-        settings: state.gameSettings,
+        settings: state.deviceSettings.gameSettings,
         preset: currentPresetV2.preset,
-        characterId: state.gameSettings.currentStCharacterId ?? currentPresetV2.characterId ?? null,
+        characterId: state.deviceSettings.gameSettings.currentStCharacterId ?? currentPresetV2.characterId ?? null,
         chatHistory: tavernHistory,
         latestUserInput: latestTavernInput,
         playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
         playerRole: state.旅人,
         includeNativeContextInWorldbook: false,
         triggerType: isOpeningSystemTrigger ? 'opening' : isAwakeningEnterTrigger ? 'pathAwakening' : 'normal',
-        macroCtx: createMacroContext(取游戏设置运行态键(state.gameSettings).macroGlobalVars),
+      macroCtx: createMacroContext(state.macroGlobalVars),
       }).map((msg) => 创建聊天消息(msg.role, msg.content));
       if (tavernMessages.length) {
         apiMessages = tavernMessages;
@@ -805,9 +804,9 @@ function buildVariableContextSnapshot(state: UseGameStateReturn): ContextSnapsho
     title: '变量模型系统提示词',
     category: '系统',
     content: buildVariableModelPrompt(variableState, {
-      enabled: state.gameSettings.enableNsfw,
-      maleArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-    }, state.gameSettings.promptModules),
+      enabled: state.deviceSettings.gameSettings.enableNsfw,
+      maleArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
+    }, state.deviceSettings.gameSettings.promptModules),
   });
   addSection(sections, {
     id: 'variable_user',
@@ -872,7 +871,7 @@ function buildPhoneContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     id: 'phone_system',
     title: '手机系统提示词',
     category: '系统',
-    content: buildPhonePromptModulesSection(state.gameSettings.promptModules) || buildPhoneSystemPrompt(ctx),
+    content: buildPhonePromptModulesSection(state.deviceSettings.gameSettings.promptModules) || buildPhoneSystemPrompt(ctx),
   });
   addSection(sections, {
     id: 'phone_messages',
@@ -891,7 +890,7 @@ function buildNewsContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     .slice(-12)
     .map((msg) => `- ${msg.role === 'user' ? '玩家' : 'AI'}：${(msg.parsedResponse?.body || msg.content).slice(0, 420)}`);
   const request = {
-    config: state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId) ?? state.apiSettings.configs.at(0) ?? {
+    config: state.deviceSettings.apiSettings.configs.find((item) => item.id === state.deviceSettings.apiSettings.activeConfigId) ?? state.deviceSettings.apiSettings.configs.at(0) ?? {
       id: '__preview__',
       name: '预览',
       provider: 'openai_compatible' as const,
@@ -911,7 +910,7 @@ function buildNewsContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     npcRecords: state.NPC,
     plotNodes: state.剧情,
     storyWeaving: state.剧情编织,
-    promptModules: state.gameSettings.promptModules,
+    promptModules: state.deviceSettings.gameSettings.promptModules,
   };
   const sections: ContextSection[] = [];
   addSection(sections, {
@@ -931,7 +930,7 @@ function buildNewsContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
 
 function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
-  const settings = state.gameSettings.记忆系统;
+  const settings = state.deviceSettings.gameSettings.记忆系统;
   const recallQuery = buildMainRecallQuery({
     userInput: sourceInput,
     history: state.chatHistory,
@@ -959,7 +958,7 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
     id: 'yiting_system',
     title: '忆庭召回提示词',
     category: '系统',
-    content: buildYitingRecallSystemPrompt(state.gameSettings.promptModules),
+    content: buildYitingRecallSystemPrompt(state.deviceSettings.gameSettings.promptModules),
   });
   addSection(sections, {
     id: 'yiting_user',
@@ -1017,7 +1016,7 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     userInput: sourceInput,
     history: recallHistory,
   });
-  const limit = state.gameSettings.智库系统.maxRelatedEntries;
+  const limit = state.deviceSettings.gameSettings.智库系统.maxRelatedEntries;
   const fallback = retrieveZhikuContext(state.智库, recallQuery, limit, sceneContext);
   const actualRecallPreview = latestAssistantZhikuDebugRecall(state.chatHistory);
   const candidateText = fallback.entries.length
@@ -1063,7 +1062,7 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     id: 'zhiku_system',
     title: '智库召回提示词（Step0~Step8）',
     category: '系统',
-    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings.promptModules),
+    content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.deviceSettings.gameSettings.promptModules),
   });
   addSection(sections, {
     id: 'zhiku_user',

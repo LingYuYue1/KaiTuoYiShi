@@ -19,7 +19,6 @@ import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { TURN_STATUS_IDLE } from './turnStatus';
 import { mergeNewestStory } from '@/models/newestStory';
-import { 取游戏设置运行态键 } from '@/models/settings';
 import { stage1_turnStart } from './stage1_turnStart';
 import { stage2_preModel } from './stage2_preModel';
 import { stage3_promptAssembly } from './stage3_promptAssembly';
@@ -183,13 +182,12 @@ export async function executeSendWorkflow(
 
     // 阶段边界写 newest（片 5a-2：S5 后 —— chatHistory / turnCount / S2 两运行态键）
     {
-      const 运行态键 = 取游戏设置运行态键(state.gameSettings);
       assertWorkflowActive();
       newest = mergeNewestStory(newest, 边界覆盖集({
         chatHistory: d.finalHistory,
         turnCount: turnCountAtStart + 1,
-        macroGlobalVars: d.macroGlobalVarsAfterTurn ?? 运行态键.macroGlobalVars,
-        worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? 运行态键.worldbookTriggerStates,
+        macroGlobalVars: d.macroGlobalVarsAfterTurn ?? state.macroGlobalVars,
+        worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? state.worldbookTriggerStates,
       }));
       await saveNewestStory(newest);
     }
@@ -236,11 +234,11 @@ export async function executeSendWorkflow(
         void appendApiErrorReport({
           source: '主剧情工作流',
           config,
-          requestMode: state.gameSettings.enableStreaming ? 'stream' : 'non-stream',
+          requestMode: state.deviceSettings.gameSettings.enableStreaming ? 'stream' : 'non-stream',
           error: err,
         });
       }
-      const failCount = state.gameSettings.autoRetryOnError ? Math.max(1, state.gameSettings.autoRetryCount) : 1;
+      const failCount = state.deviceSettings.gameSettings.autoRetryOnError ? Math.max(1, state.deviceSettings.gameSettings.autoRetryCount) : 1;
       state.activeWorkflow.setTurnStatus({ kind: 'failed', text: `主流程失败：${detail}`, failCount });
       pushQueueTask(state, 'main_story', 'failed', {
         detail,

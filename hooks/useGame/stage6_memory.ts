@@ -31,7 +31,7 @@ export async function stage6_memory(
   const compression = await autoCompressMemorySystemWithArchivesAsync(
     mem,
     turnCountAtStart,
-    state.gameSettings.记忆系统,
+    state.deviceSettings.gameSettings.记忆系统,
     config,
     abortController.signal,
   );

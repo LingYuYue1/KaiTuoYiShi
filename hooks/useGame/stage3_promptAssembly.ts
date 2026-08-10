@@ -53,14 +53,14 @@ export function stage3_promptAssembly(
 
   // Phase 4: In-Chat depth 注入（moduleChatMessages 来自 stage2）
   const moduleChatMessages = d.chatModuleMessages as Array<{ role: string; content: string; _injectionPosition?: number; _injectionDepth?: number; _injectionOrder?: number }>;
-  const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
+  const currentPresetV2 = getCurrentSTPresetV2(state.deviceSettings.gameSettings, getBuiltinPresetsV2());
   const shouldTryTavernV2 =
-    state.gameSettings.enableStPreset !== false &&
+    state.deviceSettings.gameSettings.enableStPreset !== false &&
     Boolean(currentPresetV2?.preset.prompts.length) &&
     Boolean(currentPresetV2?.preset.prompt_order.length);
   let tavernV2Messages: 聊天消息[] | null = null;
   let tavernV2Error: unknown = null;
-  const recentHistory = getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆);
+  const recentHistory = getMainHistoryWindow(updatedHistory, state.deviceSettings.gameSettings, state.记忆);
   const tavernHistory = recentHistory.filter((msg) => msg.id !== userMsg.id);
   if (deps.rerollContext && !isOpeningSystemTrigger) {
     systemPrompt = [
@@ -85,9 +85,9 @@ export function stage3_promptAssembly(
           ? awakeningInstruction
           : userInput;
       tavernV2Messages = buildTavernMessageChain({
-        settings: state.gameSettings,
+        settings: state.deviceSettings.gameSettings,
         preset: currentPresetV2.preset,
-        characterId: state.gameSettings.currentStCharacterId ?? currentPresetV2.characterId ?? null,
+        characterId: state.deviceSettings.gameSettings.currentStCharacterId ?? currentPresetV2.characterId ?? null,
         chatHistory: tavernHistory,
         latestUserInput: latestTavernInput,
         playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
@@ -143,18 +143,18 @@ export function stage3_promptAssembly(
     );
   }
 
-  const deepSeekMainMode = state.gameSettings.deepSeekMainMode;
+  const deepSeekMainMode = state.deviceSettings.gameSettings.deepSeekMainMode;
   const deepSeekMainActive = isDeepSeekMainConfig(mainStoryConfig) && deepSeekMainMode !== 'off';
   const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
   const shouldUseCotFakeHistory =
-    state.gameSettings.enableCotFakeHistory && !isOpeningSystemTrigger && !deepSeekMainActive;
+    state.deviceSettings.gameSettings.enableCotFakeHistory && !isOpeningSystemTrigger && !deepSeekMainActive;
 
   // Phase 4/7：从当前激活预设读取 assistant prefill
   // DeepSeek lock_format 必须固定从 <thinking>\n 续写；普通请求才允许使用预设 assistantPrefill。
-  const currentPresetId = state.gameSettings.currentStPresetId;
+  const currentPresetId = state.deviceSettings.gameSettings.currentStPresetId;
   const allPresets = [
     ...getBuiltinPresets(),
-    ...(state.gameSettings.stPresets ?? []),
+    ...(state.deviceSettings.gameSettings.stPresets ?? []),
   ];
   const currentPreset = currentPresetId
     ? allPresets.find((p) => p.id === currentPresetId)
@@ -233,7 +233,7 @@ export function stage3_promptAssembly(
   }
 
   // S3→S4 bridge: populate computed values into d for stage4+5 consumption
-  const shouldStreamMainRequest = state.gameSettings.enableStreaming && !isPageHidden();
+  const shouldStreamMainRequest = state.deviceSettings.gameSettings.enableStreaming && !isPageHidden();
 
   return {
     systemPrompt,

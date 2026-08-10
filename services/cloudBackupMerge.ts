@@ -535,9 +535,6 @@ function validateCloudSaveNode(save: unknown, meta: CloudBackupNodeMeta): void {
   if (!isPlainRecord(save) || !save.旅人 || !save.世界 || !Array.isArray(save.chatHistory)) {
     throw new Error(`云备份节点结构无效：${meta.entryPath}`);
   }
-  if (!save.gameSettings || !save.apiSettings || !save.theme) {
-    throw new Error(`云备份节点缺少必要设置：${meta.entryPath}`);
-  }
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

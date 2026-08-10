@@ -237,8 +237,6 @@ export interface 游戏设置 {
   customPrompt: string;
   /** 内置 + 玩家自定义的提示词模块。所有 enabled 模块都恒注入主流程 system prompt。 */
   promptModules: 提示词模块[];
-  /** @deprecated 运行态字段已迁至 `存档数据` 顶层（片 5a-2 D3）。保留读取用于旧数据兼容，新写入不再携带。 */
-  macroGlobalVars?: Record<string, string>;
   /** ST 预设兼容：已保存的预设库。玩家可导入多套预设，通过下拉切换。 */
   stPresets?: STPresetEntryV1[];
   /** ST 预设兼容：当前激活的预设 id。null=未激活任何预设。 */
@@ -254,11 +252,6 @@ export interface 游戏设置 {
   promptModuleOrderVersion?: number;
   /** ST 预设兼容：V1 预设迁移/旧存档保留的世界书条目。V2 预设的 world_info 保存在 stPresetsV2[].preset 中。 */
   stWorldInfos?: STWorldInfoEntry[];
-  /** @deprecated 运行态字段已迁至 `存档数据` 顶层（片 5a-2 D3）。保留读取用于旧数据兼容，新写入不再携带。
-   *  世界书条目触发状态表（Phase 7.1 升级，随存档持久化）。
-   *  key = 条目 id，value = 最近触发回合（messageCount 值）。
-   *  用于世界书条目的 delay / cooldown 判断。 */
-  worldbookTriggerStates?: Record<string, number>;
 
   // === 新增：保留式 ST 预设字段 ===
 
@@ -1171,8 +1164,6 @@ export function 创建默认游戏设置(): 游戏设置 {
     currentStPresetId: 'builtin_preset',
     promptModuleOrderVersion: 1,
     stWorldInfos: [],
-    macroGlobalVars: {},
-    worldbookTriggerStates: {},
     // === 新增：保留式 ST 预设默认值 ===
     stPresetsV2: [],
     currentStPresetIdV2: null,
@@ -1262,9 +1253,6 @@ export interface 存档数据 {
   阵营?: unknown;
   variableBatches?: import('./variableCommand').变量命令批次[]; // 可选：兼容旧存档（v1 加入）
   queueTasks?: import('./queueTask').队列任务记录[]; // 可选：后台队列展示记录
-  gameSettings: 游戏设置;
-  apiSettings: API设置;
-  theme: 主题预设;
   /** 片 5a-2 D3 迁入顶层：宏变量持久化（跨回合保留的全局变量）。随 newest/checkpoint 提交，不再走 settings 通道。 */
   macroGlobalVars?: Record<string, string>;
   /** 片 5a-2 D3 迁入顶层：世界书条目触发状态表。随 newest/checkpoint 提交，不再走 settings 通道。 */
@@ -1282,7 +1270,9 @@ export interface DeviceSettings {
 }
 
 /** Canonical persisted game payload, excluding all device-owned settings. */
-export type GameData = Omit<存档数据, 'gameSettings' | 'apiSettings' | 'theme'>;
+export type GameData = 存档数据;
+
+export type RuntimeSaveData = 存档数据 & Pick<DeviceSettings, 'apiSettings' | 'gameSettings' | 'theme'>;
 
 /** Save metadata plus the canonical game payload. */
 export interface SaveEnvelope {
@@ -1302,16 +1292,18 @@ export interface LegacySaveDeviceSettings {
   worldbooks?: import('./worldbook').世界书[];
 }
 
-export function extractDeviceSettings(save: 存档数据): DeviceSettings {
+export type LegacySaveData = 存档数据 & LegacySaveDeviceSettings;
+
+export function extractDeviceSettings(save: LegacySaveData): DeviceSettings {
   return {
-    apiSettings: save.apiSettings,
-    gameSettings: save.gameSettings,
-    theme: save.theme,
-    worldbooks: [],
+    apiSettings: save.apiSettings ?? 创建空API设置(),
+    gameSettings: save.gameSettings ?? 创建默认游戏设置(),
+    theme: save.theme ?? 'deepspace',
+    worldbooks: save.worldbooks ?? [],
   };
 }
 
-export function stripDeviceSettings(save: 存档数据): GameData {
+export function stripDeviceSettings(save: LegacySaveData): GameData {
   const { gameSettings: _game, apiSettings: _api, theme: _theme, ...gameData } = save;
   void _game;
   void _api;
@@ -1319,11 +1311,8 @@ export function stripDeviceSettings(save: 存档数据): GameData {
   return gameData;
 }
 
-export function createSaveEnvelope(save: 存档数据): SaveEnvelope {
-  const { gameSettings: _game, apiSettings: _api, theme: _theme, ...gameData } = save;
-  void _game;
-  void _api;
-  void _theme;
+export function createSaveEnvelope(save: GameData): SaveEnvelope {
+  const gameData = save;
   return {
     id: save.id,
     type: save.type,
@@ -1334,7 +1323,7 @@ export function createSaveEnvelope(save: 存档数据): SaveEnvelope {
   };
 }
 
-export function hydrateSaveEnvelope(envelope: SaveEnvelope, device: DeviceSettings): 存档数据 {
+export function hydrateSaveEnvelope(envelope: SaveEnvelope, device: DeviceSettings): RuntimeSaveData {
   return {
     ...envelope.gameData,
     id: envelope.id,
@@ -1347,48 +1336,44 @@ export function hydrateSaveEnvelope(envelope: SaveEnvelope, device: DeviceSettin
   };
 }
 
-/**
- * D3 保留读取（与 customPrompt 同例）：读取 gameSettings 中仍残留的两运行态键，
- * 不改内存对象。经独立结构类型访问以避免触发废弃成员读取检查，供管线边界/存档组装使用。
- */
-export function 取游戏设置运行态键(settings: 游戏设置): {
-  macroGlobalVars: Record<string, string>;
-  worldbookTriggerStates: Record<string, number>;
-} {
-  const 残留 = settings as {
+/** 运行态键迁移输入：新格式 `存档数据`（顶层两键）或旧 settings 投影（gameSettings 残留两键）。 */
+type 运行态键迁移输入 = 存档数据 | ({
+  gameSettings?: 游戏设置 & {
     macroGlobalVars?: Record<string, string>;
     worldbookTriggerStates?: Record<string, number>;
   };
-  const 残留宏变量 = 残留.macroGlobalVars;
-  const 残留触发态 = 残留.worldbookTriggerStates;
-  return {
-    macroGlobalVars: 残留宏变量 && typeof 残留宏变量 === 'object' ? 残留宏变量 : {},
-    worldbookTriggerStates: 残留触发态 && typeof 残留触发态 === 'object' ? 残留触发态 : {},
-  };
-}
+  macroGlobalVars?: Record<string, string>;
+  worldbookTriggerStates?: Record<string, number>;
+});
 
 /**
  * 读取侧迁移（片 5a-2 D3）：`存档数据` 顶层两运行态键优先；仅当顶层缺省时
  * 从 `gameSettings` 残留读取（旧档），并在返回值里置空原键。纯函数，不改存储，不回写旧档。
  */
-export function 迁移存档运行态键(save: 存档数据): {
-  save: 存档数据;
+export function 迁移存档运行态键<T extends 运行态键迁移输入>(
+  save: T,
+): {
+  save: T;
   macroGlobalVars: Record<string, string>;
   worldbookTriggerStates: Record<string, number>;
 } {
-  const { macroGlobalVars: 残留宏变量, worldbookTriggerStates: 残留触发态 } = 取游戏设置运行态键(save.gameSettings);
+  const legacySettings = 'gameSettings' in save ? save.gameSettings : undefined;
+  const 残留宏变量 = legacySettings?.macroGlobalVars;
+  const 残留触发态 = legacySettings?.worldbookTriggerStates;
   const 顶层宏变量 = save.macroGlobalVars;
   const 顶层触发态 = save.worldbookTriggerStates;
   return {
     save: {
       ...save,
-      gameSettings: {
-        ...save.gameSettings,
-        macroGlobalVars: undefined,
-        worldbookTriggerStates: undefined,
-      },
+      ...(legacySettings ? {
+        gameSettings: {
+          ...legacySettings,
+          macroGlobalVars: undefined,
+          worldbookTriggerStates: undefined,
+        },
+      } : {}),
     },
-    macroGlobalVars: 顶层宏变量 && typeof 顶层宏变量 === 'object' ? 顶层宏变量 : 残留宏变量,
-    worldbookTriggerStates: 顶层触发态 && typeof 顶层触发态 === 'object' ? 顶层触发态 : 残留触发态,
+    macroGlobalVars: (顶层宏变量 && typeof 顶层宏变量 === 'object' ? 顶层宏变量 : 残留宏变量) ?? {},
+    worldbookTriggerStates: (顶层触发态 && typeof 顶层触发态 === 'object' ? 顶层触发态 : 残留触发态) ?? {},
   };
 }

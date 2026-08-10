@@ -17,12 +17,12 @@
  * 不受限）。checkpoint 表四 store = saves / saveSummaries / saveAssets /
  * saveNodeDeltas（settings / newestStory 非 checkpoint 表）。
  */
-import { 迁移存档运行态键, type API设置, type 存档数据, type 游戏设置, type 主题预设 } from '@/models/settings';
+import { 迁移存档运行态键, type 存档数据 } from '@/models/settings';
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { loadSave, saveGame, saveNewestStory } from '@/services/dbService';
 import { 创建空NewestStory记录, 清空NewestStory记录, type NewestStory记录, type NewestStory字段集 } from '@/models/newestStory';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
-import { buildSaveGameSettingsSnapshot, commitActiveSaveTreeMeta, buildSavePayload, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
+import { commitActiveSaveTreeMeta, buildSavePayload, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta } from '@/utils/saveTree';
 import { devLog, devLogError } from '@/utils/devLog';
 import type { TurnContext, TurnDeltas } from './turnTypes';
@@ -85,9 +85,6 @@ function 组装Checkpoint值(base: 存档数据, state: UseGameStateReturn, newe
     id: 0,
     type: 'auto' as const,
     timestamp,
-    gameSettings: buildSaveGameSettingsSnapshot(state.gameSettings),
-    apiSettings: state.apiSettings,
-    theme: state.currentTheme,
     chatHistory: compactChatHistoryForLongSession(newest.story.chatHistory ?? base.chatHistory),
   } as 存档数据;
   // 前向兼容：剥离前封版的旧检查点（含导入档）可能残留 queueTasks，
@@ -115,7 +112,6 @@ function 组装Checkpoint值从状态(state: UseGameStateReturn, newest: NewestS
 /** 新局边界：新增 auto 树根节点，并让 newest 从该初始 checkpoint 开始。 */
 export async function 初始化新局checkpoint(
   fields: NewestStory字段集,
-  device: { gameSettings: 游戏设置; apiSettings: API设置; theme: 主题预设 },
 ): Promise<{ checkpointId: number }> {
   try {
     const timestamp = Date.now();
@@ -129,9 +125,6 @@ export async function 初始化新局checkpoint(
       macroGlobalVars: fields.macroGlobalVars,
       worldbookTriggerStates: fields.worldbookTriggerStates,
       pendingOpeningTrigger: fields.pendingOpeningTrigger,
-      gameSettings: buildSaveGameSettingsSnapshot(device.gameSettings),
-      apiSettings: device.apiSettings,
-      theme: device.theme,
     } as 存档数据;
     const checkpointPayload = attachSaveTreeMeta(payload, buildNextSaveTreeMeta({
       previous: null,

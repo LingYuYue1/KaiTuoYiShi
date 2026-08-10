@@ -21,7 +21,7 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空剧情编织系统, 归一化剧情编织系统 } from '@/models/storyWeaving';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务记录 } from '@/models/queueTask';
-import type { API设置, DeviceSettings, 存档数据, 游戏设置, 主题预设 } from '@/models/settings';
+import type { API设置, DeviceSettings, 游戏设置, 主题预设 } from '@/models/settings';
 import {
   创建空API设置,
   创建默认游戏设置,
@@ -223,16 +223,16 @@ export interface UseGameStateReturn {
   setVariableBatches: React.Dispatch<React.SetStateAction<变量命令批次[]>>;
   queueTasks: 队列任务记录[];
   setQueueTasks: React.Dispatch<React.SetStateAction<队列任务记录[]>>;
-  apiSettings: API设置;
-  setApiSettings: React.Dispatch<React.SetStateAction<API设置>>;
-  gameSettings: 游戏设置;
-  setGameSettings: React.Dispatch<React.SetStateAction<游戏设置>>;
-  currentTheme: 主题预设;
-  setCurrentTheme: React.Dispatch<React.SetStateAction<主题预设>>;
-  worldbooks: 世界书[];
-  setWorldbooks: React.Dispatch<React.SetStateAction<世界书[]>>;
   deviceSettings: DeviceSettings;
+  macroGlobalVars: Record<string, string>;
+  setMacroGlobalVars: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  worldbookTriggerStates: Record<string, number>;
+  setWorldbookTriggerStates: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   setDeviceSettings: React.Dispatch<React.SetStateAction<DeviceSettings>>;
+  setDeviceApiSettings: React.Dispatch<React.SetStateAction<API设置>>;
+  setDeviceGameSettings: React.Dispatch<React.SetStateAction<游戏设置>>;
+  setDeviceTheme: React.Dispatch<React.SetStateAction<主题预设>>;
+  setDeviceWorldbooks: React.Dispatch<React.SetStateAction<世界书[]>>;
   hasSave: boolean;
   setHasSave: React.Dispatch<React.SetStateAction<boolean>>;
   turnCount: number;
@@ -266,34 +266,32 @@ export function useGameState(): UseGameStateReturn {
     theme: 'deepspace',
     worldbooks: [],
   }));
-  const setApiSettings = useCallback<React.Dispatch<React.SetStateAction<API设置>>>((update) => {
+  const [macroGlobalVars, setMacroGlobalVars] = useState<Record<string, string>>({});
+  const [worldbookTriggerStates, setWorldbookTriggerStates] = useState<Record<string, number>>({});
+  const setDeviceApiSettings = useCallback<React.Dispatch<React.SetStateAction<API设置>>>((update) => {
     setDeviceSettings((current) => ({
       ...current,
       apiSettings: typeof update === 'function' ? update(current.apiSettings) : update,
     }));
   }, []);
-  const setGameSettings = useCallback<React.Dispatch<React.SetStateAction<游戏设置>>>((update) => {
+  const setDeviceGameSettings = useCallback<React.Dispatch<React.SetStateAction<游戏设置>>>((update) => {
     setDeviceSettings((current) => ({
       ...current,
       gameSettings: typeof update === 'function' ? update(current.gameSettings) : update,
     }));
   }, []);
-  const setCurrentTheme = useCallback<React.Dispatch<React.SetStateAction<主题预设>>>((update) => {
+  const setDeviceTheme = useCallback<React.Dispatch<React.SetStateAction<主题预设>>>((update) => {
     setDeviceSettings((current) => ({
       ...current,
       theme: typeof update === 'function' ? update(current.theme) : update,
     }));
   }, []);
-  const setWorldbooks = useCallback<React.Dispatch<React.SetStateAction<世界书[]>>>((update) => {
+  const setDeviceWorldbooks = useCallback<React.Dispatch<React.SetStateAction<世界书[]>>>((update) => {
     setDeviceSettings((current) => ({
       ...current,
       worldbooks: typeof update === 'function' ? update(current.worldbooks) : update,
     }));
   }, []);
-  const apiSettings = deviceSettings.apiSettings;
-  const gameSettings = deviceSettings.gameSettings;
-  const currentTheme = deviceSettings.theme;
-  const worldbooks = deviceSettings.worldbooks;
   const [hasSave, setHasSave] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
@@ -323,11 +321,13 @@ export function useGameState(): UseGameStateReturn {
     剧情编织, set剧情编织,
     variableBatches, setVariableBatches,
     queueTasks, setQueueTasks,
-    apiSettings, setApiSettings,
-    gameSettings, setGameSettings,
-    currentTheme, setCurrentTheme,
-    worldbooks, setWorldbooks,
     deviceSettings, setDeviceSettings,
+    macroGlobalVars, setMacroGlobalVars,
+    worldbookTriggerStates, setWorldbookTriggerStates,
+    setDeviceApiSettings,
+    setDeviceGameSettings,
+    setDeviceTheme,
+    setDeviceWorldbooks,
     hasSave, setHasSave,
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
@@ -354,23 +354,21 @@ export function useGameState(): UseGameStateReturn {
       const lastView = await loadSetting<string>(LAST_VIEW_STORAGE_KEY);
 
       const savedTheme = await loadSetting<主题预设>('theme');
-      if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
+      if (savedTheme) setDeviceTheme(normalizeThemeId(savedTheme) as 主题预设);
 
       const savedApi = await loadSetting<API设置>('apiSettings');
-      if (savedApi) setApiSettings(savedApi);
+      if (savedApi) setDeviceApiSettings(savedApi);
 
       const savedGame = await loadSetting<游戏设置>('gameSettings');
       if (savedGame) {
         // 兼容旧存档：variableApi 是新字段，缺失时用默认覆盖
         const defaults = 创建默认游戏设置();
         // 片 5a-2 D3：剥离生效前的旧 settings 数据可能残留两运行态键，同样迁移并入内存（不回写）。
-        const 迁移运行态 = 迁移存档运行态键({ gameSettings: savedGame } as 存档数据);
+        const 迁移运行态 = 迁移存档运行态键({ gameSettings: savedGame });
         const partialSavedGame = savedGame as Partial<游戏设置>;
         const merged: 游戏设置 = {
           ...defaults,
           ...savedGame,
-          macroGlobalVars: 迁移运行态.macroGlobalVars,
-          worldbookTriggerStates: 迁移运行态.worldbookTriggerStates,
           新闻系统: 归一化星际和平周报设置(savedGame.新闻系统),
           手机系统: 归一化手机系统设置(savedGame.手机系统),
           智库系统: 归一化智库系统设置(savedGame.智库系统),
@@ -392,12 +390,14 @@ export function useGameState(): UseGameStateReturn {
           stPresets: migrateStPresetOrders(savedGame.stPresets),
           promptModuleOrderVersion: 1,
         };
+        setMacroGlobalVars(迁移运行态.macroGlobalVars);
+        setWorldbookTriggerStates(迁移运行态.worldbookTriggerStates);
         // 迁移后清空 legacy customPrompt，避免下次启动重复追加
         const legacyCustomPrompt = (savedGame as { customPrompt?: string }).customPrompt;
         if (legacyCustomPrompt && merged.promptModules.some((m) => m.id === 'legacy_custom')) {
           (merged as { customPrompt?: string }).customPrompt = '';
         }
-        setGameSettings(merged);
+        setDeviceGameSettings(merged);
       }
 
       try {
@@ -469,11 +469,11 @@ export function useGameState(): UseGameStateReturn {
         try {
           const presets = await loadAllBundledWorldbookPresets();
           const initial = [...builtins, ...presets];
-          setWorldbooks(initial);
+          setDeviceWorldbooks(initial);
           await saveSetting(WORLDBOOK_STORAGE_KEY, initial);
         } catch (err) {
           console.warn('[opening-worldbook] preset 加载失败,使用内置空集:', err);
-          setWorldbooks(builtins);
+          setDeviceWorldbooks(builtins);
         }
       } else if (savedWorldbooks.length) {
         const builtinIds = new Set(builtins.map((b) => b.id));
@@ -493,10 +493,10 @@ export function useGameState(): UseGameStateReturn {
           return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
         });
         const nextWorldbooks = [...merged, ...userBooks];
-        setWorldbooks(nextWorldbooks);
+        setDeviceWorldbooks(nextWorldbooks);
         await saveSetting(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
       } else {
-        setWorldbooks(builtins);
+        setDeviceWorldbooks(builtins);
         await saveSetting(WORLDBOOK_STORAGE_KEY, builtins);
       }
 
@@ -544,7 +544,7 @@ export function useGameState(): UseGameStateReturn {
       }
     })();
     // setter 恒稳定（React useState 身份保证），deps 不变即 mount 一次性执行
-  }, [setApiSettings, setCurrentTheme, setGameSettings, setInterruptedWorkflow, setTurnStatus, setWorldbooks]);
+  }, [setDeviceApiSettings, setDeviceGameSettings, setDeviceTheme, setDeviceWorldbooks, setInterruptedWorkflow, setTurnStatus]);
 
   // Persist the last active UI view after boot has finished reading it.
   useEffect(() => {
@@ -559,8 +559,8 @@ export function useGameState(): UseGameStateReturn {
 
   // Apply theme on change
   useEffect(() => {
-    applyTheme(currentTheme);
-  }, [currentTheme]);
+    applyTheme(deviceSettings.theme);
+  }, [deviceSettings.theme]);
 
   return state;
 }

@@ -54,20 +54,20 @@ export async function stage5_replyLanding(
   }
   pushQueueTask(state, 'main_story', 'success', { detail: `正文生成完成，用时 ${Math.round(duration)}s。` }, turnCountAtStart, queueTasksMirror);
 
-  const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
+  const cleanedParsed = sanitizeParsedResponse(result.parsed, state.deviceSettings.gameSettings.额外功能);
   const parsedBody = normalizePlayerSpeechInBody({
     body: cleanedParsed.body.trim(),
     playerName: state.旅人.姓名 || state.旅人.别名 || '你',
     userInput,
   });
-  const finalBody = stripLeakedHistoryMetaFromBody(sanitizeContaminatedText(parsedBody, state.gameSettings.额外功能));
+  const finalBody = stripLeakedHistoryMetaFromBody(sanitizeContaminatedText(parsedBody, state.deviceSettings.gameSettings.额外功能));
   const sanitizedRawText = replaceBodyInRawResponse(
     cleanedParsed.rawText || result.fullText || streamedText,
     finalBody,
   );
-  const displayText = finalBody || sanitizeContaminatedText(result.fullText || streamedText, state.gameSettings.额外功能);
+  const displayText = finalBody || sanitizeContaminatedText(result.fullText || streamedText, state.deviceSettings.gameSettings.额外功能);
 
-  if (state.gameSettings.enableStreaming) {
+  if (state.deviceSettings.gameSettings.enableStreaming) {
     if (streamEventCount > 0) {
       await previewChain;
     } else if (displayText.trim()) {
@@ -108,7 +108,7 @@ export async function stage5_replyLanding(
   const previousDebugContext = [...updatedHistory].reverse()
     .find((msg) => msg.role === 'assistant' && msg.debugContext?.systemPrompt)?.debugContext;
   const cachePrefixDiagnostics = buildCachePrefixDiagnostics({
-    enabled: state.gameSettings.enableCacheDiagnostics,
+    enabled: state.deviceSettings.gameSettings.enableCacheDiagnostics,
     systemPrompt,
     messages: apiMessages,
     previous: previousDebugContext
@@ -133,7 +133,7 @@ export async function stage5_replyLanding(
       systemPrompt,
       messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
       deepSeekMainMode: (deepSeekMainActive ? deepSeekMainMode : 'off') as 'off' | 'standard' | 'lock_format' | undefined,
-      deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory,
+      deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.deviceSettings.gameSettings.enableCotFakeHistory,
       deepSeekPrefixMode: deepSeekLockFormat,
       deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
       deepSeekMainOriginalModel: result.deepSeekRecovery?.originalModel,

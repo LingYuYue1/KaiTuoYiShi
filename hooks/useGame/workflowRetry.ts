@@ -72,7 +72,7 @@ async function retryNewsQueueTask(
     });
     return;
   }
-  const newsSettings = state.gameSettings.新闻系统;
+  const newsSettings = state.deviceSettings.gameSettings.新闻系统;
   const interval = Math.max(5, Math.min(10, Math.trunc(newsSettings.generateIntervalTurns) || 5));
   const abortController = new AbortController();
   pushQueueTask(state, 'news', 'pending', {
@@ -131,7 +131,7 @@ async function retryVariableQueueTask(
   task: 队列任务记录,
   mode: 'retry' | 'reroll',
 ): Promise<void> {
-  if (!state.gameSettings.enableVariableUpdate) {
+  if (!state.deviceSettings.gameSettings.enableVariableUpdate) {
     pushQueueTask(state, 'variable', 'failed', {
       detail: '变量更新未启用，无法手动重试。',
       failCount: (task.failCount ?? 0) + 1,
