@@ -213,7 +213,9 @@ export function buildSystemPrompt(
   if (recentWorldEventsSection) parts.push(recentWorldEventsSection);
 
   // ── 记忆注入 ──
-  if (settings.enableMemoryInjection && !suppressMemoryInjection) {
+  // 阶段1：取消忆庭互斥（原 !suppressMemoryInjection 条件已移除）
+  // 忆庭命中时普通记忆也正常注入（对齐墨色江湖），两套并存互补
+  if (settings.enableMemoryInjection) {
     const memSections = buildLayeredMemorySections(memorySystem);
     if (memSections.length) {
       parts.push(memSections.join('\n\n---\n\n'));

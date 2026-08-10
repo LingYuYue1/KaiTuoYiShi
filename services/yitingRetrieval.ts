@@ -237,19 +237,48 @@ function normalizeRecallName(raw: string): string {
 
 function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆条目[]): string {
   if (!strongEntries.length && !weakEntries.length) return '';
-  const strongBlocks = strongEntries.map((entry) => {
+
+  // 阶段1：recall分档注入（方案C）
+  // 召回≤6全原文, >6条Top5原文+其余摘要
+  const totalCount = strongEntries.length + weakEntries.length;
+  const ORIGINAL_THRESHOLD = 6;
+  const TOP_K_ORIGINAL = 5;
+
+  // Top5优先从strong取，不足从weak补
+  const strongOriginalCount = totalCount <= ORIGINAL_THRESHOLD
+    ? strongEntries.length
+    : Math.min(strongEntries.length, TOP_K_ORIGINAL);
+  const weakOriginalCount = totalCount <= ORIGINAL_THRESHOLD
+    ? weakEntries.length
+    : Math.max(0, TOP_K_ORIGINAL - strongOriginalCount);
+
+  const buildBlock = (entry: 回忆条目, useOriginal: boolean): string => {
     const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
+    if (useOriginal) {
+      // 注入原文层（完整原文，不截断）
+      const original = entry.原文?.trim() || entry.摘要 || '（无原文）';
+      return `${title}：\n${original}`;
+    }
+    // 注入摘要层
     return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
-  });
-  const weakBlocks = weakEntries.map((entry) => {
-    const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
-    return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
-  });
+  };
+
+  const strongBlocks = strongEntries.map((entry, i) =>
+    buildBlock(entry, i < strongOriginalCount),
+  );
+  const weakBlocks = weakEntries.map((entry, i) =>
+    buildBlock(entry, i < weakOriginalCount),
+  );
+
+  const injectionMode = totalCount <= ORIGINAL_THRESHOLD
+    ? `${totalCount}条全部原文注入`
+    : `Top${TOP_K_ORIGINAL}原文+其余摘要注入`;
+
   return [
     '# 即时剧情回顾｜剧情回忆',
     '',
     '【剧情回忆】',
-    '以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料。这里注入的是概要层纪要，不是正文原文；若与当前已发生剧情冲突，以当前剧情为准。',
+    `以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料（${injectionMode}）。若与当前已发生剧情冲突，以当前剧情为准。`,
     '',
     '强回忆：',
     strongBlocks.length ? strongBlocks.join('\n\n') : '无',

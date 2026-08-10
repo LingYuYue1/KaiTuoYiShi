@@ -912,11 +912,12 @@ export function 归一化正文生图设置(input?: Partial<正文生图设置>)
 export function 创建默认记忆系统设置(): 记忆系统设置 {
   return {
     启用中短长期API总结: true,
-    即时转短期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
-    短期转中期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
-    中期转长期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
-    短期转长期阈值: MEMORY_LAYER_COMPRESSION_THRESHOLD,
-    NPC记忆压缩阈值: 15,
+    // 阶段1对齐墨色江湖：即时→短期10 / 短转中30 / 中转长50
+    即时转短期阈值: 10,
+    短期转中期阈值: 30,
+    中期转长期阈值: 50,
+    短期转长期阈值: 50, // deprecated 旧版字段，对齐中期转长期
+    NPC记忆压缩阈值: 20, // 阶段1对齐墨色江湖（原15）
     记忆总结API: {
       provider: '',
       baseUrl: '',
@@ -961,7 +962,8 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
     忆庭召回API: 创建空忆庭API覆盖(),
     忆庭精炼API: 创建空忆庭API覆盖(),
     忆庭召回条数: 8,
-    忆庭独立精炼: false,
+    // 阶段1：忆庭独立精炼默认true（原false），每回合调API生成高质量精炼纪要，原文以精炼形式永久存档
+    忆庭独立精炼: true,
     忆庭召回提示词: [
       '你是「忆庭」的回忆检索器。你的任务不是写正文，而是根据玩家当前输入，从回忆库中筛出最相关的回忆档案，供主剧情继续承接。',
       '检索时优先按“时间最近 + 语义最相关”排序。优先匹配：人物、地点、目标、未结事项、冲突对象、承诺、伤势、物品、战斗后果、组织态度、命途变化、正在延续的事件线。',
@@ -1005,8 +1007,9 @@ export function 创建默认手机系统设置(): 手机系统设置 {
     maxSeedsPerTurn: 2,
     contactCooldownTurns: 3,
     groupCooldownTurns: 5,
-    privateArchiveThreshold: 8,
-    groupArchiveThreshold: 12,
+    // 阶段1：手机压缩阈值调高（私聊8→20 / 群聊12→30），因为手机回复内容短，8条太浪费API调用
+    privateArchiveThreshold: 20,
+    groupArchiveThreshold: 30,
   };
 }
 

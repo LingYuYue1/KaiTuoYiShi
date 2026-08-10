@@ -28,6 +28,7 @@ import {
   autoCompressMemorySystemWithArchivesAsync,
   compressNpcMemoryLedger,
   upsertRecallEntry,
+  isMemorySystemNoise,
 } from './memoryUtils';
 import { runNewsGenerationStep } from './newsWorkflow';
 import { applyAdjudicatedStoryProgress } from '@/services/storyProgressService';
@@ -2023,10 +2024,8 @@ export async function executeSendWorkflow(
     state.setLiveRecallFullContent(recallFullContentForTurn);
     const memoryHint = isOpeningSystemTrigger
       ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
-      : yitingPreview?.injection
-      ? `剧情回忆已命中，已暂停普通短中长期记忆注入：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
       : state.gameSettings.enableMemoryInjection
-      ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(state.记忆.中期记忆 ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
+      ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(state.记忆.中期记忆 ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条${yitingPreview?.injection ? '；剧情回忆已命中并并存注入' : ''}；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
       : '记忆上下文已跳过';
     const yitingHint = !yitingEnabled
       ? '忆庭召回已关闭'
@@ -3183,7 +3182,7 @@ export async function executeSendWorkflow(
         userInput,
         body: displayText,
         memory: parsedForDisplay.memory,
-        worldEvents: storyProgressMemoryLine
+        worldEvents: storyProgressMemoryLine && !isMemorySystemNoise(storyProgressMemoryLine)
           ? [...parsedForDisplay.worldEvents, storyProgressMemoryLine]
           : parsedForDisplay.worldEvents,
         actionOptions: parsedForDisplay.actionOptions,

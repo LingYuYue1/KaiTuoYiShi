@@ -14,7 +14,12 @@ import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 
 const MEMORY_SNIPPET_LIMIT = 84;
 const NPC_MEMORY_SUMMARY_LIMIT = 160;
-const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
+
+/**
+ * 阶段1：通用记忆系统噪声过滤模式（从NPC侧提取，主链也使用）
+ * 过滤 storyProgressMemoryLine 等剧情编织进度元数据，防止污染记忆链和忆庭归档
+ */
+const MEMORY_SYSTEM_NOISE_PATTERNS = [
   /剧情编织进度/,
   /当前进入第\s*\d+\s*段/,
   /最新归档/,
@@ -26,6 +31,9 @@ const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
   /实际注入/,
   /门禁/,
 ];
+
+// 保留旧名用于NPC侧（回归测试要求 NPC_MEMORY_SYSTEM_NOISE_PATTERNS 存在）
+const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = MEMORY_SYSTEM_NOISE_PATTERNS;
 
 export function buildImmediateMemory(userInput: string, aiResponse: string): string {
   const input = userInput.trim();
@@ -47,6 +55,8 @@ function collectSummaryLines(items: string[], limit = 4): string[] {
   for (const item of items) {
     const snippet = normalizeMemorySnippet(item);
     if (!snippet) continue;
+    // 阶段1：压缩时噪声过滤（双重保险，防止写入时漏过的噪声进入压缩摘要）
+    if (isMemorySystemNoise(snippet)) continue;
     const key = snippet.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -58,6 +68,11 @@ function collectSummaryLines(items: string[], limit = 4): string[] {
 
 function isNpcMemorySystemNoise(text: string): boolean {
   return NPC_MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/** 阶段1：通用记忆系统噪声检测（主链用，与NPC侧同模式） */
+export function isMemorySystemNoise(text: string): boolean {
+  return MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function compactNpcMemoryChunk(chunk: string[]): string {
@@ -134,6 +149,10 @@ function dedupeLines(lines: string[]): string[] {
 }
 
 export function addImmediateMemory(system: 记忆系统, memory: string, _turn: number): 记忆系统 {
+  // 阶段1：写入时噪声过滤（从源头杜绝 storyProgressMemoryLine 等进度元数据进入即时记忆）
+  if (!memory || isMemorySystemNoise(memory)) {
+    return system;
+  }
   const newMemories = [...system.即时记忆, memory];
   const trimmed = newMemories.length > 50 ? newMemories.slice(-50) : newMemories;
   return { ...system, 即时记忆: trimmed };
