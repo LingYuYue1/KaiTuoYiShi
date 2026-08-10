@@ -8,13 +8,13 @@ import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
-import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadLatest, handleManualSave, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
+import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadById, handleLoadLatest, handleManualSave, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
-import type { API设置, API配置项 } from '@/models/settings';
+import type { API设置, API配置项, 存档数据 } from '@/models/settings';
 import type { NewestStory字段集 } from '@/models/newestStory';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
@@ -23,9 +23,27 @@ import { 创建空世界状态, 根据开局档案创建初始NPC记录, 根据�
 import { 提取NPC同行记忆文本列表, type NPC同行记忆条目 } from '@/models/npc';
 import type { STRegexScript } from '@/models/stTypes';
 import { abilityPresets, factions, getFaction, getOpeningScenarioBundle, getPath, getStartingScenario, getStoryMode, storyModes } from '@/data/journeyPresets';
-import { deleteSaveTree, loadSetting, saveSetting, type SaveListItemSummary } from '@/services/dbService';
+import {
+  deleteLegacyBackupSaves,
+  deleteSaveTree,
+  getSaveCatalogSnapshot,
+  loadSave,
+  loadSaveTree,
+  loadSetting,
+  repairSaveDatabase,
+  saveGame,
+  saveSetting,
+  startSaveCatalogRepair,
+  subscribeSaveCatalogRepair,
+  type SaveCatalogRepairResult,
+  type SaveCatalogRepairScope,
+  type SaveCatalogRepairState,
+  type SaveCatalogSnapshot,
+  type SaveListItemSummary,
+} from '@/services/dbService';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, buildPersistedZhikuSystem, loadAllBundledZhikuPresets, mergeBundledZhikuSystem } from '@/data/zhikuPreset';
 import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
 import {
   type OpeningPlayerPreset,
@@ -45,6 +63,7 @@ import { buildPhoneApiConfig, generatePhoneReply, type 手机回复上下文 } f
 import { generateSkillDraft, type 战技生成草稿, type 战技生成上下文 } from '@/services/ai/skillGenerator';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
+import { 归一化智库系统, type 智库系统 } from '@/models/zhiku';
 
 // 面板用例动作的类型出口（片 panel-p1）：tavernRegex 领域类型经门面再导出，
 // 供 PromptModulesTab 以类型形式从门面接收，不再直取 hooks/useGame/ 内部模块。
@@ -78,6 +97,8 @@ export interface UseGameReturn {
     handleAbandonInterruptedWorkflow: () => Promise<void>;
     handleNewGame: () => void;
     handleContinue: () => Promise<boolean>;
+    /** 按 ID 读档（片 panel-p7）：复用 handleLoadById 的 enterSession 路径，SaveLoadModal 与 StorageManager 共用。 */
+    handleLoadSave: (id: number) => Promise<boolean>;
     handleGoHome: () => void;
     handleSave: () => Promise<number>;
     handleReroll: () => Promise<string | undefined>;
@@ -94,6 +115,23 @@ export interface UseGameReturn {
     handleDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
     handleDeleteSaveTree: (rootId: string) => Promise<void>;
     handleClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
+    // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7：SaveLoadModal 与 StorageManager 共用）──
+    // 存档目录快照：两处面板刷新列表的统一入口，不再直连 dbService。
+    handleGetSaveCatalogSnapshot: () => Promise<SaveCatalogSnapshot>;
+    // 目录后台修复（missing-only / 未来全量）：启动后经订阅回调进度。
+    handleStartSaveCatalogRepair: (scope?: SaveCatalogRepairScope) => Promise<SaveCatalogRepairResult>;
+    // 目录修复进度订阅：门面只转发，组件 effect 负责退订。
+    handleSubscribeSaveCatalogRepair: (listener: (state: SaveCatalogRepairState) => void) => () => void;
+    // 手动全量修复存档索引。
+    handleRepairSaveDatabase: () => Promise<void>;
+    // 历史恢复点批量清理：返回实际删除数量供调用方记录/刷新。
+    handleDeleteLegacyBackupSaves: () => Promise<number>;
+    // 导出单节点前读取完整存档（数据库读取收敛到门面，文件下载留在面板）。
+    handleGetSaveForExport: (id: number) => Promise<存档数据 | null>;
+    // 导出整树前读取完整存档集合。
+    handleGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
+    // 导入存档落库：只负责 saveGame，id:0/type:'imported'/timestamp 批次字段由面板补齐。
+    handlePersistImportedSave: (data: 存档数据) => Promise<number>;
     // 提示词模块：承接 tavernRegex 的提取/分析/试运行（纯函数接线）。
     handleExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
     handleAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
@@ -114,6 +152,13 @@ export interface UseGameReturn {
     handleGenerateSkillDraft: (apiConfig: API配置项, context: 战技生成上下文) => Promise<战技生成草稿>;
     // 行动选项解析：InputArea 的 parseActionOptionsBlock 直连收敛到门面（纯函数，无异步）。
     handleParseActionOptionsBlock: (text: string) => string[];
+    // ── 智库面板用例动作（片 panel-p8：ZhikuPanel dbService 直连收口）──
+    // 智库保存：归一化 + buildPersistedZhikuSystem + saveSetting('zhikuSystem')，失败时 devLogError 并向上抛出（面板保留保存反馈 UI）。
+    // 不负责 React setter，状态投影仍由面板通过 onZhikuSystemChange 完成。
+    handleSaveZhikuSystem: (system: 智库系统) => Promise<void>;
+    // 智库迁移：读取迁移标记 → 缺失时初始化 → 加载内置预设 → 合并（保留自制与运行时解锁备注）→ 保存 → 返回合并后系统。
+    // 面板只消费返回的合并结果做状态投影与选中修正，不接触迁移键与持久化。
+    handleZhikuMigration: (current: 智库系统) => Promise<智库系统>;
   };
 }
 
@@ -311,6 +356,15 @@ export function useGame(): UseGameReturn {
 
   const handleContinue = useCallback(async (): Promise<boolean> => {
     return handleLoadLatest(stateRef.current);
+  }, []);
+
+  // 按 ID 读档（片 panel-p7）：复用 handleLoadById 的 enterSession 路径，保证
+  // 运行态恢复、session epoch 递增、pending opening trigger 清理与 newest 处理
+  // 与手柄读档完全一致；App 只负责成功后的 UI 关闭。
+  const handleLoadSave = useCallback(async (id: number): Promise<boolean> => {
+    const ok = await handleLoadById(id, stateRef.current);
+    devLog('save', 'save-load-by-id', { id, ok });
+    return ok;
   }, []);
 
   const handleGoHome = useCallback(() => {
@@ -640,6 +694,53 @@ export function useGame(): UseGameReturn {
     clearActiveSaveTreeMetaIfMatches(target);
   }, []);
 
+  // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7）──────────────────────────
+  // 存档目录快照：SaveLoadModal 与 StorageManager 刷新列表的统一入口，不再直连 dbService。
+  const handleGetSaveCatalogSnapshot = useCallback(async (): Promise<SaveCatalogSnapshot> => {
+    return getSaveCatalogSnapshot();
+  }, []);
+
+  // 目录后台修复：门面转发，scope 保留以便未来使用全量校验。
+  const handleStartSaveCatalogRepair = useCallback(async (scope: SaveCatalogRepairScope = 'missing-only'): Promise<SaveCatalogRepairResult> => {
+    return startSaveCatalogRepair(scope);
+  }, []);
+
+  // 目录修复进度订阅：门面只转发，不持有面板状态；组件 effect 负责退订与列表刷新。
+  const handleSubscribeSaveCatalogRepair = useCallback(
+    (listener: (state: SaveCatalogRepairState) => void): (() => void) => {
+      return subscribeSaveCatalogRepair(listener);
+    },
+    [],
+  );
+
+  // 手动全量修复存档索引。
+  const handleRepairSaveDatabase = useCallback(async (): Promise<void> => {
+    await repairSaveDatabase();
+  }, []);
+
+  // 历史恢复点批量清理：返回实际删除数量供调用方记录/刷新。
+  // 活动树元信息清理仍由面板逐条调用 handleClearActiveSaveTreeMeta，保持现状接线。
+  const handleDeleteLegacyBackupSaves = useCallback(async (): Promise<number> => {
+    const deleted = await deleteLegacyBackupSaves();
+    devLog('save', 'legacy-backups-deleted', { deleted });
+    return deleted;
+  }, []);
+
+  // 导出单节点前读取完整存档（数据库读取收敛到门面，文件下载工具保留在面板）。
+  const handleGetSaveForExport = useCallback(async (id: number): Promise<存档数据 | null> => {
+    return loadSave(id);
+  }, []);
+
+  // 导出整树前读取完整存档集合。
+  const handleGetSaveTreeForExport = useCallback(async (rootId: string): Promise<存档数据[]> => {
+    return loadSaveTree(rootId);
+  }, []);
+
+  // 导入存档落库：只负责 saveGame，id:0/type:'imported'/timestamp 批次字段由面板补齐。
+  const handlePersistImportedSave = useCallback(async (data: 存档数据): Promise<number> => {
+    return saveGame(data);
+  }, []);
+
   // 提示词模块：承接 tavernRegex 的提取/分析/试运行（纯函数接线，不复制实现）。
   const handleExtractTavernRegexScripts = useCallback((rawPreset: unknown): STRegexScript[] => {
     return extractTavernRegexScripts(rawPreset);
@@ -891,6 +992,47 @@ export function useGame(): UseGameReturn {
     devLog('save', 'story-weaving-saved', { seriesCount: system.系列列表.length });
   }, []);
 
+  // ── 智库面板用例动作（片 panel-p8：ZhikuPanel dbService 直连收口）──────────────────────────
+  // 智库保存：ZhikuPanel 的 saveSetting('zhikuSystem', buildPersistedZhikuSystem()) 收敛到门面。
+  // 归一化在门面内完成（避免面板保存未归一化数据），不负责 React setter，状态投影仍由面板回调驱动。
+  const handleSaveZhikuSystem = useCallback(async (system: 智库系统): Promise<void> => {
+    const normalized = 归一化智库系统(system);
+    const total = normalized.条目.length;
+    const builtin = normalized.条目.filter((entry) => entry.builtin).length;
+    const custom = total - builtin;
+    try {
+      await saveSetting('zhikuSystem', buildPersistedZhikuSystem(normalized));
+      devLog('save', 'zhiku-system-saved', { total, builtin, custom });
+    } catch (err) {
+      devLogError('save', 'zhiku-system-save-failed', err, { total, builtin, custom });
+      throw err;
+    }
+  }, []);
+
+  // 智库迁移：承接 ZhikuPanel.handleDevRefreshBundled 的完整领域用例。
+  // 读取迁移标记 → 缺失时初始化 → 加载内置预设 → 基于当前系统合并（保留自制条目与运行时解锁备注）→ 保存 → 返回合并结果。
+  // 错误向上抛出，由面板负责「刷新失败」的视觉反馈与 loading / 选中修正。
+  const handleZhikuMigration = useCallback(async (current: 智库系统): Promise<智库系统> => {
+    devLog('save', 'zhiku-migration-start', {});
+    try {
+      const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
+      const migrationAt = savedMigrationAt ?? Date.now();
+      if (!savedMigrationAt) {
+        await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+      }
+      const bundled = await loadAllBundledZhikuPresets({ cacheBust: Date.now() });
+      const next = mergeBundledZhikuSystem(bundled, 归一化智库系统(current), migrationAt);
+      await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
+      const total = next.条目.length;
+      const builtin = next.条目.filter((entry) => entry.builtin).length;
+      devLog('save', 'zhiku-migration-done', { total, builtin, custom: total - builtin, migrationAt });
+      return next;
+    } catch (err) {
+      devLogError('save', 'zhiku-migration-failed', err, {});
+      throw err;
+    }
+  }, []);
+
   // 战技 AI 草稿：SkillPanel 的 generateSkillDraft 直连收敛到门面。
   // 失败时 devLogError 后向上抛出，由面板保留自己的错误提示文案与本地状态回滚。
   const handleGenerateSkillDraft = useCallback(async (
@@ -920,6 +1062,7 @@ export function useGame(): UseGameReturn {
     handleAbandonInterruptedWorkflow,
     handleNewGame,
     handleContinue,
+    handleLoadSave,
     handleGoHome,
     handleSave,
     handleReroll,
@@ -932,6 +1075,14 @@ export function useGame(): UseGameReturn {
     handleDeleteSave,
     handleDeleteSaveTree,
     handleClearActiveSaveTreeMeta,
+    handleGetSaveCatalogSnapshot,
+    handleStartSaveCatalogRepair,
+    handleSubscribeSaveCatalogRepair,
+    handleRepairSaveDatabase,
+    handleDeleteLegacyBackupSaves,
+    handleGetSaveForExport,
+    handleGetSaveTreeForExport,
+    handlePersistImportedSave,
     handleExtractTavernRegexScripts,
     handleAnalyzeTavernRegexScript,
     handleDryRunTavernRegexScript,
@@ -942,6 +1093,8 @@ export function useGame(): UseGameReturn {
     handleSaveStoryWeaving,
     handleGenerateSkillDraft,
     handleParseActionOptionsBlock,
+    handleSaveZhikuSystem,
+    handleZhikuMigration,
   }), [
     handleSend,
     handleAbort,
@@ -949,6 +1102,7 @@ export function useGame(): UseGameReturn {
     handleAbandonInterruptedWorkflow,
     handleNewGame,
     handleContinue,
+    handleLoadSave,
     handleGoHome,
     handleSave,
     handleReroll,
@@ -961,6 +1115,14 @@ export function useGame(): UseGameReturn {
     handleDeleteSave,
     handleDeleteSaveTree,
     handleClearActiveSaveTreeMeta,
+    handleGetSaveCatalogSnapshot,
+    handleStartSaveCatalogRepair,
+    handleSubscribeSaveCatalogRepair,
+    handleRepairSaveDatabase,
+    handleDeleteLegacyBackupSaves,
+    handleGetSaveForExport,
+    handleGetSaveTreeForExport,
+    handlePersistImportedSave,
     handleExtractTavernRegexScripts,
     handleAnalyzeTavernRegexScript,
     handleDryRunTavernRegexScript,
@@ -971,6 +1133,8 @@ export function useGame(): UseGameReturn {
     handleSaveStoryWeaving,
     handleGenerateSkillDraft,
     handleParseActionOptionsBlock,
+    handleSaveZhikuSystem,
+    handleZhikuMigration,
   ]);
 
   return {

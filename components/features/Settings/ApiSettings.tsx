@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import type { API设置, API配置项, AI提供商, 游戏设置 } from '@/models/settings';
 import type { DeviceSettings } from '@/models/settings';
+import type { API方案槽位, API配置包, AuxApiProfileState } from '@/models/apiProfiles';
 import {
   MAX_OUTPUT_TIERS,
   inferMaxOutputTier,
@@ -8,7 +9,6 @@ import {
   type MaxOutputTier,
 } from '@/data/modelRecommendations';
 import type { ConnectionTestConfig, ConnectionTestResult } from '@/hooks/useAiTools';
-import { loadSetting, saveSetting } from '@/services/dbService';
 import { MemorySystemSettingsTab } from './MemorySystemSettings';
 import { YitingSettingsTab } from './YitingSettingsTab';
 import { NewsSystemSettingsTab } from './NewsSystemSettingsTab';
@@ -28,6 +28,12 @@ interface Props {
   onPersistGameSettings: (s: 游戏设置) => Promise<void>;
   /** 设置持久化用例动作（片 panel-p2）：apiSettings + gameSettings 复合写（applyApiProfile 专用）。 */
   onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
+  /** 本机 API 方案槽位读写动作（片 panel-p9）：经 useDeviceSettings 收敛，不直连 dbService。 */
+  onLoadApiProfileSlots: () => Promise<API方案槽位[]>;
+  onPersistApiProfileSlots: (slots: API方案槽位[]) => Promise<void>;
+  /** 辅助 API 配置读写动作（片 panel-p9）：经 useDeviceSettings 收敛，不直连 dbService。 */
+  onLoadAuxApiProfiles: () => Promise<Record<string, AuxApiProfileState>>;
+  onPersistAuxApiProfiles: (profiles: Record<string, AuxApiProfileState>) => Promise<void>;
   /** AI 探测用例动作（片 panel-p3）：模型列表获取 / 连接测试，取代直连 services/ai。 */
   fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
   testConnection: (config: ConnectionTestConfig) => Promise<ConnectionTestResult>;
@@ -40,6 +46,10 @@ interface ApiSettingsTabProps {
   onPersistApiSettings: (s: API设置) => Promise<void>;
   onPersistGameSettings: (s: 游戏设置) => Promise<void>;
   onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
+  onLoadApiProfileSlots: () => Promise<API方案槽位[]>;
+  onPersistApiProfileSlots: (slots: API方案槽位[]) => Promise<void>;
+  onLoadAuxApiProfiles: () => Promise<Record<string, AuxApiProfileState>>;
+  onPersistAuxApiProfiles: (profiles: Record<string, AuxApiProfileState>) => Promise<void>;
   fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
   testConnection: (config: ConnectionTestConfig) => Promise<ConnectionTestResult>;
 }
@@ -47,40 +57,6 @@ interface ApiSettingsTabProps {
 type ApiSettingsOverviewProps = Omit<Props, 'settings' | 'gameSettings'> & {
   deviceSettings: DeviceSettings;
 };
-
-interface API配置包 {
-  app: 'KaiTuoYiShi';
-  kind: 'api-profile';
-  version: 1;
-  exportedAt: string;
-  includeApiKeys: boolean;
-  enableClaudeMode?: boolean;
-  deepSeekMainMode?: 游戏设置['deepSeekMainMode'];
-  apiSettings: API设置;
-  routes: {
-    variableApi: 游戏设置['variableApi'];
-    新闻系统: 游戏设置['新闻系统']['api'];
-    手机系统: 游戏设置['手机系统']['api'];
-    智库系统: 游戏设置['智库系统']['api'];
-    剧情编织系统: 游戏设置['剧情编织系统']['api'];
-    记忆总结API: 游戏设置['记忆系统']['记忆总结API'];
-    忆庭召回API: 游戏设置['记忆系统']['忆庭召回API'];
-    忆庭精炼API: 游戏设置['记忆系统']['忆庭精炼API'];
-    文生图普通接口: 游戏设置['文生图系统']['普通接口'];
-    文生图场景接口: 游戏设置['文生图系统']['场景接口'];
-    文生图NSFW接口: 游戏设置['文生图系统']['NSFW接口'];
-    文生图词组转化器API: 游戏设置['文生图系统']['词组转化器API'];
-  };
-}
-
-interface API方案槽位 {
-  id: string;
-  name: string;
-  savedAt: number;
-  profile: API配置包;
-}
-
-const API_PROFILE_SLOTS_KEY = 'apiProfileSlots';
 
 const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: string; defaultModel: string }[] = [
   { value: 'openai_compatible', label: 'OpenAI 兼容', defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
@@ -112,15 +88,6 @@ const apiSubViews: { key: ApiSubview; label: string; hint: string }[] = [
   { key: 'story', label: '剧情', hint: '剧情编织接口' },
   { key: 'phone', label: '手机', hint: '私聊与主动来信' },
 ];
-
-interface AuxApiProfileState {
-  provider: AI提供商;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-}
-
-const AUX_API_PROFILE_KEY = 'apiAuxProfileStates';
 
 function createDefaultAuxApiProfileState(provider: AI提供商 = 'gemini'): AuxApiProfileState {
   const meta = providerOptions.find((p) => p.value === provider) ?? providerOptions[0];
@@ -301,6 +268,10 @@ export function ApiSettingsTab({
   onPersistApiSettings,
   onPersistGameSettings,
   onPersistApiProfile,
+  onLoadApiProfileSlots,
+  onPersistApiProfileSlots,
+  onLoadAuxApiProfiles,
+  onPersistAuxApiProfiles,
   fetchModels,
   testConnection,
 }: ApiSettingsTabProps) {
@@ -319,6 +290,10 @@ export function ApiSettingsTab({
             onPersistApiSettings={onPersistApiSettings}
             onPersistGameSettings={onPersistGameSettings}
             onPersistApiProfile={onPersistApiProfile}
+            onLoadApiProfileSlots={onLoadApiProfileSlots}
+            onPersistApiProfileSlots={onPersistApiProfileSlots}
+            onLoadAuxApiProfiles={onLoadAuxApiProfiles}
+            onPersistAuxApiProfiles={onPersistAuxApiProfiles}
             fetchModels={fetchModels}
             testConnection={testConnection}
           />
@@ -446,6 +421,10 @@ function ApiSettingsOverviewTab({
   onPersistApiSettings,
   onPersistGameSettings,
   onPersistApiProfile,
+  onLoadApiProfileSlots,
+  onPersistApiProfileSlots,
+  onLoadAuxApiProfiles,
+  onPersistAuxApiProfiles,
   fetchModels,
   testConnection,
 }: ApiSettingsOverviewProps) {
@@ -484,18 +463,14 @@ function ApiSettingsOverviewTab({
   }
 
   useEffect(() => {
-    loadSetting<API方案槽位[]>(API_PROFILE_SLOTS_KEY)
-      .then((slots) => setProfileSlots(Array.isArray(slots) ? slots : []))
+    onLoadApiProfileSlots()
+      .then((slots) => setProfileSlots(slots))
       .catch(() => setProfileSlots([]));
-  }, []);
+  }, [onLoadApiProfileSlots]);
 
   useEffect(() => {
-    loadSetting<Record<string, AuxApiProfileState>>(AUX_API_PROFILE_KEY)
+    onLoadAuxApiProfiles()
       .then((saved) => {
-        if (!saved || typeof saved !== 'object') {
-          setAuxProfilesByConfig({});
-          return;
-        }
         const next: Record<string, AuxApiProfileState> = {};
         for (const [configId, value] of Object.entries(saved)) {
           next[configId] = normalizeAuxApiProfileState(value);
@@ -503,7 +478,7 @@ function ApiSettingsOverviewTab({
         setAuxProfilesByConfig(next);
       })
       .catch(() => setAuxProfilesByConfig({}));
-  }, []);
+  }, [onLoadAuxApiProfiles]);
 
   const [prevAuxSelectedId, setPrevAuxSelectedId] = useState(selectedId);
   const [prevAuxProfiles, setPrevAuxProfiles] = useState(auxProfilesByConfig);
@@ -544,7 +519,7 @@ function ApiSettingsOverviewTab({
       [selectedId]: nextForm,
     };
     setAuxProfilesByConfig(nextMap);
-    await saveSetting(AUX_API_PROFILE_KEY, nextMap);
+    await onPersistAuxApiProfiles(nextMap);
   };
 
   const updateConfig = (patch: Partial<API配置项>) => {
@@ -645,7 +620,7 @@ function ApiSettingsOverviewTab({
 
   const persistProfileSlots = async (slots: API方案槽位[]) => {
     setProfileSlots(slots);
-    await saveSetting(API_PROFILE_SLOTS_KEY, slots);
+    await onPersistApiProfileSlots(slots);
   };
 
   const handleSaveProfileSlot = async () => {

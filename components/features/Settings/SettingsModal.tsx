@@ -27,7 +27,8 @@ import { ApiErrorReportsTab } from './ApiErrorReportsTab';
 import { StorageManagerTab } from './StorageManager';
 import { VariableManagerTab } from './VariableManager';
 import { ContextViewerTab } from './ContextViewer';
-import type { API设置, DeviceSettings, 游戏设置, 主题预设 } from '@/models/settings';
+import type { API设置, DeviceSettings, 游戏设置, 主题预设, 存档数据 } from '@/models/settings';
+import type { API方案槽位, AuxApiProfileState } from '@/models/apiProfiles';
 import type { ContextSnapshot, ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
@@ -38,7 +39,7 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import type { SaveListItemSummary } from '@/services/dbService';
+import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/services/dbService';
 import type { 世界书 } from '@/models/worldbook';
 import type { 剧情节点 } from '@/models/plot';
 import type { STRegexScript } from '@/models/stTypes';
@@ -90,6 +91,17 @@ interface SettingsModalProps {
   onDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
   /** 面板用例动作（片 panel-p1）：整棵存档树删除，转发给存档管理页签。 */
   onDeleteSaveTree: (rootId: string) => Promise<void>;
+  /** 面板用例动作（片 panel-p7）：活动存档树元信息清理，转发给存档管理页签。 */
+  onClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
+  /** 面板用例动作（片 panel-p7）：存档目录快照 / 修复 / 订阅 / 历史恢复点清理 / 导出前读取 / 导入落库，转发给存档管理页签。 */
+  onGetSaveCatalogSnapshot: () => Promise<SaveCatalogSnapshot>;
+  onStartSaveCatalogRepair: (scope?: SaveCatalogRepairScope) => Promise<SaveCatalogRepairResult>;
+  onSubscribeSaveCatalogRepair: (listener: (state: SaveCatalogRepairState) => void) => () => void;
+  onRepairSaveDatabase: () => Promise<void>;
+  onDeleteLegacyBackupSaves: () => Promise<number>;
+  onGetSaveForExport: (id: number) => Promise<存档数据 | null>;
+  onGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
+  onPersistImportedSave: (data: 存档数据) => Promise<number>;
   /** 面板用例动作（片 panel-p1）：tavernRegex 提取/分析/试运行，转发给提示词模块页签。 */
   onExtractTavernRegexScripts: (rawPreset: unknown) => STRegexScript[];
   onAnalyzeTavernRegexScript: (script: STRegexScript) => TavernRegexScriptSafety;
@@ -99,6 +111,11 @@ interface SettingsModalProps {
   onPersistApiSettings: (s: API设置) => Promise<void>;
   onPersistTheme: (t: 主题预设) => Promise<void>;
   onPersistApiProfile: (api: API设置, game: 游戏设置) => Promise<void>;
+  /** 本机 API 方案槽位 / 辅助 API 配置读写动作（片 panel-p9）：经 useDeviceSettings 收敛，不直连 dbService。 */
+  onLoadApiProfileSlots: () => Promise<API方案槽位[]>;
+  onPersistApiProfileSlots: (slots: API方案槽位[]) => Promise<void>;
+  onLoadAuxApiProfiles: () => Promise<Record<string, AuxApiProfileState>>;
+  onPersistAuxApiProfiles: (profiles: Record<string, AuxApiProfileState>) => Promise<void>;
   /** AI 探测用例动作（片 panel-p3）：模型列表获取 / 连接测试，取代 Services tab 直连 services/ai。 */
   fetchModels: (config: ConnectionTestConfig) => Promise<string[]>;
   testConnection: (config: ConnectionTestConfig) => Promise<ConnectionTestResult>;
@@ -151,6 +168,15 @@ export function SettingsModal({
   onWorldbooksChange,
   onDeleteSave,
   onDeleteSaveTree,
+  onClearActiveSaveTreeMeta,
+  onGetSaveCatalogSnapshot,
+  onStartSaveCatalogRepair,
+  onSubscribeSaveCatalogRepair,
+  onRepairSaveDatabase,
+  onDeleteLegacyBackupSaves,
+  onGetSaveForExport,
+  onGetSaveTreeForExport,
+  onPersistImportedSave,
   onExtractTavernRegexScripts,
   onAnalyzeTavernRegexScript,
   onDryRunTavernRegexScript,
@@ -158,6 +184,10 @@ export function SettingsModal({
   onPersistApiSettings,
   onPersistTheme,
   onPersistApiProfile,
+  onLoadApiProfileSlots,
+  onPersistApiProfileSlots,
+  onLoadAuxApiProfiles,
+  onPersistAuxApiProfiles,
   fetchModels,
   testConnection,
   loadApiErrorReports,
@@ -187,6 +217,10 @@ export function SettingsModal({
             onPersistApiSettings={onPersistApiSettings}
             onPersistGameSettings={onPersistGameSettings}
             onPersistApiProfile={onPersistApiProfile}
+            onLoadApiProfileSlots={onLoadApiProfileSlots}
+            onPersistApiProfileSlots={onPersistApiProfileSlots}
+            onLoadAuxApiProfiles={onLoadAuxApiProfiles}
+            onPersistAuxApiProfiles={onPersistAuxApiProfiles}
             fetchModels={fetchModels}
             testConnection={testConnection}
           />
@@ -261,7 +295,7 @@ export function SettingsModal({
       case 'theme':
         return <ThemeSettingsTab current={currentTheme} onChange={persistThemeChange} />;
       case 'storage':
-        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} />;
+        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} onClearActiveSaveTreeMeta={onClearActiveSaveTreeMeta} onGetSaveCatalogSnapshot={onGetSaveCatalogSnapshot} onStartSaveCatalogRepair={onStartSaveCatalogRepair} onSubscribeSaveCatalogRepair={onSubscribeSaveCatalogRepair} onRepairSaveDatabase={onRepairSaveDatabase} onDeleteLegacyBackupSaves={onDeleteLegacyBackupSaves} onGetSaveForExport={onGetSaveForExport} onGetSaveTreeForExport={onGetSaveTreeForExport} onPersistImportedSave={onPersistImportedSave} />;
     }
   };
 

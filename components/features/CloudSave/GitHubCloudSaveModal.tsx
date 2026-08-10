@@ -1,7 +1,7 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { useRef } from 'react';
 import { useGitHubOAuth } from '@/hooks/useGitHubOAuth';
-import { getSaveCatalogSnapshot, loadSaveForCloudTransfer, loadSetting, saveSetting } from '@/services/dbService';
+import { getSaveCatalogSnapshot, loadSaveForCloudTransfer } from '@/services/dbService';
 import { buildCompleteCloudBackup } from '@/services/cloudBackupBuilder';
 import { mergeDownloadedCloudBackup, mergeLegacyCloudBackup } from '@/services/cloudBackupMerge';
 import {
@@ -20,6 +20,9 @@ import {
 interface Props {
   onSave: () => Promise<number>;
   onClose: () => void;
+  /** GitHub 云存档配置读写动作（片 panel-p9）：经 useDeviceSettings 收敛，不直连 dbService。 */
+  onLoadCloudConfig: () => Promise<GitHubCloudSaveConfig | null>;
+  onPersistCloudConfig: (next: GitHubCloudSaveConfig) => Promise<void>;
 }
 
 const cardClip =
@@ -27,7 +30,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
+export function GitHubCloudSaveModal({ onSave, onClose, onLoadCloudConfig, onPersistCloudConfig }: Props) {
   void onSave;
   const [cloudConfig, setCloudConfig] = useState<GitHubCloudSaveConfig>(createDefaultGitHubCloudConfig);
   const [cloudBackup, setCloudBackup] = useState<GitHubCloudBackupListing | null>(null);
@@ -40,8 +43,26 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
   const activeControllerRef = useRef<AbortController | null>(null);
   const { pending: oauthPending, error: oauthError, startGitHubOAuth, consumeGitHubOAuthCallback } = useGitHubOAuth();
 
+  const patchCloudConfig = (patch: Partial<GitHubCloudSaveConfig>) => {
+    setCloudConfig((prev) => ({ ...prev, ...patch }));
+  };
+
+  const persistCloudConfig = useCallback(async (next = cloudConfig) => {
+    const clean = {
+      ...next,
+      owner: next.owner.trim(),
+      repo: next.repo.trim(),
+      branch: next.branch.trim() || 'main',
+      rootPath: next.rootPath.trim() || 'kaituoyishi-cloud',
+      token: next.token.trim(),
+    };
+    setCloudConfig(clean);
+    await onPersistCloudConfig(clean);
+    return clean;
+  }, [cloudConfig, onPersistCloudConfig]);
+
   useEffect(() => {
-    loadSetting<GitHubCloudSaveConfig>('githubCloudSaveConfig')
+    onLoadCloudConfig()
       .then((saved) => {
         if (!saved) return;
         const next = { ...createDefaultGitHubCloudConfig(), ...saved };
@@ -57,7 +78,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [onLoadCloudConfig]);
 
   useEffect(() => {
     if (window.location.pathname !== '/oauth/github/callback') return;
@@ -87,29 +108,11 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
     return () => {
       cancelled.current = true;
     };
-  }, [consumeGitHubOAuthCallback]);
+  }, [consumeGitHubOAuthCallback, persistCloudConfig]);
 
   useEffect(() => () => {
     activeControllerRef.current?.abort(new DOMException('云备份弹窗已关闭。', 'AbortError'));
   }, []);
-
-  const patchCloudConfig = (patch: Partial<GitHubCloudSaveConfig>) => {
-    setCloudConfig((prev) => ({ ...prev, ...patch }));
-  };
-
-  const persistCloudConfig = async (next = cloudConfig) => {
-    const clean = {
-      ...next,
-      owner: next.owner.trim(),
-      repo: next.repo.trim(),
-      branch: next.branch.trim() || 'main',
-      rootPath: next.rootPath.trim() || 'kaituoyishi-cloud',
-      token: next.token.trim(),
-    };
-    setCloudConfig(clean);
-    await saveSetting('githubCloudSaveConfig', clean);
-    return clean;
-  };
 
   const runCloudTask = async (task: (signal: AbortSignal) => Promise<void>) => {
     const controller = new AbortController();
@@ -149,7 +152,7 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
     setAccount(null);
     setBindToken('');
     setCloudBackup(null);
-    await saveSetting('githubCloudSaveConfig', next);
+    await onPersistCloudConfig(next);
     setCloudConfig(next);
     setCloudMessage('已解除本机 GitHub 云存档绑定。云端文件不会被删除。');
   });

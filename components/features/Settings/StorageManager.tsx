@@ -1,20 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  deleteLegacyBackupSaves,
   exportSavePackage,
   exportSaveTreePackage,
-  getSaveCatalogRepairState,
-  getSaveCatalogSnapshot,
   importSaveFileAsMany,
-  loadSave,
-  loadSaveTree,
-  repairSaveDatabase,
-  saveGame,
-  startSaveCatalogRepair,
-  subscribeSaveCatalogRepair,
+  type SaveCatalogRepairResult,
+  type SaveCatalogRepairScope,
   type SaveCatalogRepairState,
+  type SaveCatalogSnapshot,
   type SaveListItemSummary,
 } from '@/services/dbService';
+import type { 存档数据 } from '@/models/settings';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
@@ -26,6 +21,24 @@ interface Props {
   onDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
   /** 整棵存档树删除用例动作（由 App 经 SettingsModal 从 useGame 门面注入）。 */
   onDeleteSaveTree: (rootId: string) => Promise<void>;
+  /** 活动存档树元信息清理用例动作（panel-p7）：legacy 恢复点批量删除后的逐条收敛入口。 */
+  onClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
+  /** 存档目录快照用例动作（片 panel-p7）：由 App 经 SettingsModal 从 useGame 门面注入。 */
+  onGetSaveCatalogSnapshot: () => Promise<SaveCatalogSnapshot>;
+  /** 目录后台修复用例动作（片 panel-p7）。 */
+  onStartSaveCatalogRepair: (scope?: SaveCatalogRepairScope) => Promise<SaveCatalogRepairResult>;
+  /** 目录修复进度订阅用例动作（片 panel-p7）：返回退订函数。 */
+  onSubscribeSaveCatalogRepair: (listener: (state: SaveCatalogRepairState) => void) => () => void;
+  /** 手动全量修复存档索引用例动作（片 panel-p7）。 */
+  onRepairSaveDatabase: () => Promise<void>;
+  /** 历史恢复点批量清理用例动作（片 panel-p7）：返回实际删除数量。 */
+  onDeleteLegacyBackupSaves: () => Promise<number>;
+  /** 导出前读取完整存档用例动作（片 panel-p7）。 */
+  onGetSaveForExport: (id: number) => Promise<存档数据 | null>;
+  /** 导出整树前读取完整存档集合用例动作（片 panel-p7）。 */
+  onGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
+  /** 导入存档落库用例动作（片 panel-p7）：只负责 saveGame，批次字段由面板补齐。 */
+  onPersistImportedSave: (data: 存档数据) => Promise<number>;
 }
 
 type Filter = 'all' | 'manual' | 'auto' | 'imported';
@@ -35,7 +48,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoadSave, onDeleteSave, onDeleteSaveTree }: Props) {
+export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoadSave, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onGetSaveForExport, onGetSaveTreeForExport, onPersistImportedSave }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -45,12 +58,19 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deletingRootId, setDeletingRootId] = useState<string | null>(null);
-  const [repairState, setRepairState] = useState<SaveCatalogRepairState>(() => getSaveCatalogRepairState());
+  // 修复进度初始态取 idle 兜底；订阅 effect 挂载时会立刻推送当前真实状态。
+  const [repairState, setRepairState] = useState<SaveCatalogRepairState>({
+    phase: 'idle',
+    scope: 'missing-only',
+    total: 0,
+    processed: 0,
+    failed: 0,
+  });
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoadError('');
     try {
-      const snapshot = await getSaveCatalogSnapshot();
+      const snapshot = await onGetSaveCatalogSnapshot();
       setSaves(snapshot.items);
       setLegacyBackups(snapshot.legacyBackups);
       return snapshot;
@@ -59,7 +79,7 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
       setLoadError(error instanceof Error ? error.message : '存档列表读取失败');
       return null;
     }
-  };
+  }, [onGetSaveCatalogSnapshot]);
 
   useEffect(() => {
     const cancelledRef: { current: boolean } = { current: false };
@@ -67,19 +87,19 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
     void (async () => {
       const snapshot = await refresh();
       if (!isCancelled() && snapshot?.pendingIds.length) {
-        await startSaveCatalogRepair('missing-only');
+        await onStartSaveCatalogRepair('missing-only');
         if (!isCancelled()) await refresh();
       }
     })();
     return () => {
       cancelledRef.current = true;
     };
-  }, []);
+  }, [onStartSaveCatalogRepair, refresh]);
 
-  useEffect(() => subscribeSaveCatalogRepair((state) => {
+  useEffect(() => onSubscribeSaveCatalogRepair((state) => {
     setRepairState(state);
     if (state.phase === 'completed' || state.phase === 'partial-failure') void refresh();
-  }), []);
+  }), [onSubscribeSaveCatalogRepair, refresh]);
 
   const displaySaves = useMemo(
     () => showAutoArchives ? saves : saves.filter((save) => save.type !== 'auto'),
@@ -162,7 +182,11 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
     if (!legacyBackups.length || !confirm(`确定清理全部 ${legacyBackups.length} 个历史恢复点？此操作不可恢复。`)) return;
     setBusy(true);
     try {
-      await deleteLegacyBackupSaves();
+      await onDeleteLegacyBackupSaves();
+      // 面板逐条收敛活动树元信息清理（与 SaveLoadModal 保持一致），不进门面。
+      for (const backup of legacyBackups) {
+        onClearActiveSaveTreeMeta(backup.saveTree ? { nodeId: backup.saveTree.nodeId } : null);
+      }
       await refresh();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '历史恢复点清理失败');
@@ -172,12 +196,12 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
   };
 
   const handleExport = async (id: number) => {
-    const save = await loadSave(id);
+    const save = await onGetSaveForExport(id);
     if (save) await exportSavePackage(save);
   };
 
   const handleExportTree = async (rootId: string) => {
-    const treeSaves = await loadSaveTree(rootId);
+    const treeSaves = await onGetSaveTreeForExport(rootId);
     if (treeSaves.length) await exportSaveTreePackage(treeSaves);
   };
 
@@ -193,7 +217,7 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
         const imported = await importSaveFileAsMany(file);
         const now = Date.now();
         for (const [index, data] of imported.entries()) {
-          await saveGame({ ...data, id: 0, type: 'imported', timestamp: now + index });
+          await onPersistImportedSave({ ...data, id: 0, type: 'imported', timestamp: now + index });
         }
         await refresh();
         setFilter('imported');
@@ -209,7 +233,7 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
   const handleRepair = async () => {
     setBusy(true);
     try {
-      await repairSaveDatabase();
+      await onRepairSaveDatabase();
       await refresh();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '存档摘要修复失败');

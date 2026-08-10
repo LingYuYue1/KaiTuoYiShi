@@ -15,18 +15,13 @@ import {
   智库分类计数,
 } from '@/models/zhiku';
 import type { 智库系统设置 } from '@/models/settings';
-import { loadSetting, saveSetting } from '@/services/dbService';
-import {
-  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
-  buildPersistedZhikuSystem,
-  loadAllBundledZhikuPresets,
-  mergeBundledZhikuSystem,
-} from '@/data/zhikuPreset';
 
 interface Props {
   zhikuSystem: 智库系统;
   onZhikuSystemChange: React.Dispatch<React.SetStateAction<智库系统>>;
   settings: 智库系统设置;
+  onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
+  onZhikuMigration: (current: 智库系统) => Promise<智库系统>;
 }
 
 type Bucket = 'all' | 'builtin' | 'custom';
@@ -50,7 +45,7 @@ const categories: 智库分类[] = ['story', 'character', 'location', 'faction',
 const zhikuScopeOptions = ['主剧情', '手机', '新闻', '变量参考', '剧情编织', '通用', '只读'];
 const isDevBuild = typeof import.meta !== 'undefined' && Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
-export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props) {
+export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZhikuSystem, onZhikuMigration }: Props) {
   const normalized = useMemo(() => 归一化智库系统(zhikuSystem), [zhikuSystem]);
   const visibleEntries = useMemo(() => normalized.条目.filter((entry) => !isRetiredZhikuCategory(entry.分类)), [normalized]);
   const builtinEntries = useMemo(() => visibleEntries.filter((entry) => entry.builtin), [visibleEntries]);
@@ -173,7 +168,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
   const persist = async (nextEntries: 智库条目[]) => {
     const next = 归一化智库系统({ 条目: nextEntries });
     onZhikuSystemChange(next);
-    await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
+    await onSaveZhikuSystem(next);
     setSaveFlash(true);
     window.setTimeout(() => setSaveFlash(false), 1200);
   };
@@ -182,15 +177,8 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings }: Props
     if (!isDevBuild || devRefreshStatus === 'loading') return;
     setDevRefreshStatus('loading');
     try {
-      const bundled = await loadAllBundledZhikuPresets({ cacheBust: Date.now() });
-      const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-      const migrationAt = savedMigrationAt ?? Date.now();
-      if (!savedMigrationAt) {
-        await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-      }
-      const next = mergeBundledZhikuSystem(bundled, normalized, migrationAt);
+      const next = await onZhikuMigration(normalized);
       onZhikuSystemChange(next);
-      await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
       setSelectedId((prev) => (prev && next.条目.some((entry) => entry.id === prev) ? prev : next.条目[0]?.id ?? null));
       setSaveFlash(true);
       setDevRefreshStatus('done');

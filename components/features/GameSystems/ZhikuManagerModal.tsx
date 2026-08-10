@@ -8,10 +8,12 @@ interface Props {
   zhikuSystem: 智库系统;
   onZhikuSystemChange: Dispatch<SetStateAction<智库系统>>;
   settings: 智库系统设置;
+  onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
+  onZhikuMigration: (current: 智库系统) => Promise<智库系统>;
   onClose: () => void;
 }
 
-export function ZhikuManagerModal({ zhikuSystem, onZhikuSystemChange, settings, onClose }: Props) {
+export function ZhikuManagerModal({ zhikuSystem, onZhikuSystemChange, settings, onSaveZhikuSystem, onZhikuMigration, onClose }: Props) {
   return (
     <Modal title="智库" onClose={onClose} className="max-w-6xl">
       <div className="h-full min-h-0 min-w-0 overflow-hidden md:h-[78vh]">
@@ -19,6 +21,8 @@ export function ZhikuManagerModal({ zhikuSystem, onZhikuSystemChange, settings, 
           zhikuSystem={zhikuSystem}
           onZhikuSystemChange={onZhikuSystemChange}
           settings={settings}
+          onSaveZhikuSystem={onSaveZhikuSystem}
+          onZhikuMigration={onZhikuMigration}
         />
       </div>
     </Modal>

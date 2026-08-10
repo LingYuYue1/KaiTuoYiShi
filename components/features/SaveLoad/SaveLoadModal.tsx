@@ -1,20 +1,15 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  deleteLegacyBackupSaves,
   exportSavePackage,
   exportSaveTreePackage,
-  getSaveCatalogRepairState,
-  getSaveCatalogSnapshot,
   importSaveFileAsMany,
-  loadSave,
-  loadSaveTree,
-  repairSaveDatabase,
-  saveGame,
-  startSaveCatalogRepair,
-  subscribeSaveCatalogRepair,
+  type SaveCatalogRepairResult,
+  type SaveCatalogRepairScope,
   type SaveCatalogRepairState,
+  type SaveCatalogSnapshot,
   type SaveListItemSummary,
 } from '@/services/dbService';
+import type { 存档数据 } from '@/models/settings';
 import { devLogError } from '@/utils/devLog';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
@@ -28,6 +23,22 @@ interface Props {
   onDeleteSaveTree: (rootId: string) => Promise<void>;
   /** 活动存档树元信息清理用例动作（由 App 从 useGame 门面注入）。 */
   onClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
+  /** 存档目录快照用例动作（片 panel-p7）：由 App 从 useGame 门面注入，两处面板共用。 */
+  onGetSaveCatalogSnapshot: () => Promise<SaveCatalogSnapshot>;
+  /** 目录后台修复用例动作（片 panel-p7）：启动 missing-only 后台补齐目录摘要。 */
+  onStartSaveCatalogRepair: (scope?: SaveCatalogRepairScope) => Promise<SaveCatalogRepairResult>;
+  /** 目录修复进度订阅用例动作（片 panel-p7）：返回退订函数，组件 effect 负责生命周期清理。 */
+  onSubscribeSaveCatalogRepair: (listener: (state: SaveCatalogRepairState) => void) => () => void;
+  /** 手动全量修复存档索引用例动作（片 panel-p7）。 */
+  onRepairSaveDatabase: () => Promise<void>;
+  /** 历史恢复点批量清理用例动作（片 panel-p7）：返回实际删除数量。 */
+  onDeleteLegacyBackupSaves: () => Promise<number>;
+  /** 导出前读取完整存档用例动作（片 panel-p7）：数据库读取进门面，文件下载留在面板。 */
+  onGetSaveForExport: (id: number) => Promise<存档数据 | null>;
+  /** 导出整树前读取完整存档集合用例动作（片 panel-p7）。 */
+  onGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
+  /** 导入存档落库用例动作（片 panel-p7）：只负责 saveGame，id/type/timestamp 批次字段由面板补齐。 */
+  onPersistImportedSave: (data: 存档数据) => Promise<number>;
   onClose: () => void;
 }
 
@@ -40,7 +51,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onClose }: Props) {
+export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onGetSaveForExport, onGetSaveTreeForExport, onPersistImportedSave, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -55,14 +66,21 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
   const [pendingSummaryCount, setPendingSummaryCount] = useState(0);
   const [unreadableSummaryCount, setUnreadableSummaryCount] = useState(0);
   const [catalogComplete, setCatalogComplete] = useState(true);
-  const [repairState, setRepairState] = useState<SaveCatalogRepairState>(() => getSaveCatalogRepairState());
+  // 修复进度初始态取 idle 兜底；订阅 effect 挂载时会立刻推送当前真实状态（subscribeSaveCatalogRepair 语义）。
+  const [repairState, setRepairState] = useState<SaveCatalogRepairState>({
+    phase: 'idle',
+    scope: 'missing-only',
+    total: 0,
+    processed: 0,
+    failed: 0,
+  });
   const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const snapshot = await getSaveCatalogSnapshot();
+      const snapshot = await onGetSaveCatalogSnapshot();
       setSaves(snapshot.items);
       setLegacyBackups(snapshot.legacyBackups);
       setPendingSummaryCount(snapshot.pendingIds.length);
@@ -75,7 +93,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
     } finally {
       setLoading(false);
     }
-  };
+  }, [onGetSaveCatalogSnapshot]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +102,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
       try {
         const snapshot = await refresh();
         if (!isCancelled() && snapshot?.pendingIds.length) {
-          await startSaveCatalogRepair('missing-only');
+          await onStartSaveCatalogRepair('missing-only');
           if (!isCancelled()) await refresh();
         }
       } catch (err) {
@@ -95,20 +113,20 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onStartSaveCatalogRepair, refresh]);
 
-  useEffect(() => subscribeSaveCatalogRepair((state) => {
+  useEffect(() => onSubscribeSaveCatalogRepair((state) => {
     setRepairState(state);
     if (state.phase === 'completed' || state.phase === 'partial-failure') {
       void refresh();
     }
-  }), []);
+  }), [onSubscribeSaveCatalogRepair, refresh]);
 
   const handleRepairList = async () => {
     setLoading(true);
     setLoadError('');
     try {
-      await repairSaveDatabase();
+      await onRepairSaveDatabase();
       await refresh();
     } catch (err) {
       console.error('[save-list] repair failed', err);
@@ -136,7 +154,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
     setSaving(true);
     try {
       const id = await onSave();
-      const save = await loadSave(id);
+      const save = await onGetSaveForExport(id);
       if (save) await exportSavePackage(save);
       await refresh();
       setTab('manual');
@@ -158,7 +176,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
       console.error('[save-load] load failed', err);
       alert(`加载失败：${err instanceof Error ? err.message : '存档读取或恢复过程异常'}`);
     } finally {
-      setLoadingId(null);
+      setLoading(false);
     }
   };
 
@@ -190,7 +208,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
     if (!confirm(`确定清理全部 ${legacyBackups.length} 个历史恢复点？此操作不可恢复。`)) return;
     setDeletingLegacyBackups(true);
     try {
-      await deleteLegacyBackupSaves();
+      await onDeleteLegacyBackupSaves();
       for (const backup of legacyBackups) {
         onClearActiveSaveTreeMeta(backup.saveTree ? { nodeId: backup.saveTree.nodeId } : null);
       }
@@ -220,12 +238,12 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
   };
 
   const handleExport = async (id: number) => {
-    const save = await loadSave(id);
+    const save = await onGetSaveForExport(id);
     if (save) await exportSavePackage(save);
   };
 
   const handleExportTree = async (rootId: string) => {
-    const treeSaves = await loadSaveTree(rootId);
+    const treeSaves = await onGetSaveTreeForExport(rootId);
     if (treeSaves.length) await exportSaveTreePackage(treeSaves);
   };
 
@@ -244,7 +262,7 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
           data.id = 0;
           data.type = 'imported';
           data.timestamp = now + index;
-          await saveGame(data);
+          await onPersistImportedSave(data);
         }
         await refresh();
         setTab('imported');

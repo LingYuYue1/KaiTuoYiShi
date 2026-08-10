@@ -18,7 +18,6 @@ import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/dbService';
-import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录 } from '@/models/npc';
 import type { 世界书 } from '@/models/worldbook';
@@ -309,7 +308,19 @@ const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDU
 export function App() {
   const { state, actions } = useGame();
   const { apiSettings, gameSettings, theme: currentTheme, worldbooks } = state.deviceSettings;
-  const { persistGameSettings, persistApiSettings, persistTheme, persistWorldbooks, persistApiProfile } = useDeviceSettings();
+  const {
+    persistGameSettings,
+    persistApiSettings,
+    persistTheme,
+    persistWorldbooks,
+    persistApiProfile,
+    loadApiProfileSlots,
+    persistApiProfileSlots,
+    loadAuxApiProfiles,
+    persistAuxApiProfiles,
+    loadGitHubCloudSaveConfig,
+    persistGitHubCloudSaveConfig,
+  } = useDeviceSettings();
   const aiTools = useAiTools();
   const {
     fetchModels,
@@ -361,10 +372,12 @@ export function App() {
     setShowZhikuManager(false);
   }, []);
   const loadSaveIntoGame = useCallback(async (id: number) => {
-    const ok = await handleLoadById(id, state);
+    // 片 panel-p7：按 ID 读档收敛到门面 handleLoadSave（复用 handleLoadById 的 enterSession 路径），
+    // App 不再持有 UseGameStateReturn 直接参与读档，只负责成功后的 UI 关闭。
+    const ok = await actions.handleLoadSave(id);
     if (ok) closeTransientUi();
     return ok;
-  }, [state, closeTransientUi]);
+  }, [actions, closeTransientUi]);
   const handleGoHomeClick = useCallback(() => {
     closeTransientUi();
     actions.handleGoHome();
@@ -703,6 +716,8 @@ export function App() {
             fetchComfyWorkflowCandidates,
             onSaveStoryWeaving: actions.handleSaveStoryWeaving,
             onGenerateSkillDraft: actions.handleGenerateSkillDraft,
+            onSaveZhikuSystem: actions.handleSaveZhikuSystem,
+            onZhikuMigration: actions.handleZhikuMigration,
           })}
         </Suspense>
       </SystemDrawer>
@@ -748,6 +763,8 @@ export function App() {
               zhikuSystem={state.智库}
               onZhikuSystemChange={state.set智库}
               settings={gameSettings.智库系统}
+              onSaveZhikuSystem={actions.handleSaveZhikuSystem}
+              onZhikuMigration={actions.handleZhikuMigration}
               onClose={() => setShowZhikuManager(false)}
             />
           </Suspense>
@@ -761,6 +778,14 @@ export function App() {
               onDeleteSave={actions.handleDeleteSave}
               onDeleteSaveTree={actions.handleDeleteSaveTree}
               onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}
+              onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
+              onStartSaveCatalogRepair={actions.handleStartSaveCatalogRepair}
+              onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
+              onRepairSaveDatabase={actions.handleRepairSaveDatabase}
+              onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
+              onGetSaveForExport={actions.handleGetSaveForExport}
+              onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
+              onPersistImportedSave={actions.handlePersistImportedSave}
               onClose={() => setShowSaveLoad(false)}
             />
           </Suspense>
@@ -770,6 +795,8 @@ export function App() {
             <GitHubCloudSaveModal
               onSave={actions.handleSave}
               onClose={() => setShowCloudSave(false)}
+              onLoadCloudConfig={loadGitHubCloudSaveConfig}
+              onPersistCloudConfig={persistGitHubCloudSaveConfig}
             />
           </Suspense>
         )}
@@ -795,6 +822,10 @@ export function App() {
               onPersistApiSettings={persistApiSettings}
               onPersistTheme={persistTheme}
               onPersistApiProfile={persistApiProfile}
+              onLoadApiProfileSlots={loadApiProfileSlots}
+              onPersistApiProfileSlots={persistApiProfileSlots}
+              onLoadAuxApiProfiles={loadAuxApiProfiles}
+              onPersistAuxApiProfiles={persistAuxApiProfiles}
               fetchModels={fetchModels}
               testConnection={testConnection}
               loadApiErrorReports={loadApiErrorReports}
@@ -825,6 +856,15 @@ export function App() {
               }}
               onDeleteSave={actions.handleDeleteSave}
               onDeleteSaveTree={actions.handleDeleteSaveTree}
+              onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}
+              onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
+              onStartSaveCatalogRepair={actions.handleStartSaveCatalogRepair}
+              onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
+              onRepairSaveDatabase={actions.handleRepairSaveDatabase}
+              onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
+              onGetSaveForExport={actions.handleGetSaveForExport}
+              onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
+              onPersistImportedSave={actions.handlePersistImportedSave}
               onExtractTavernRegexScripts={actions.handleExtractTavernRegexScripts}
               onAnalyzeTavernRegexScript={actions.handleAnalyzeTavernRegexScript}
               onDryRunTavernRegexScript={actions.handleDryRunTavernRegexScript}
@@ -924,6 +964,10 @@ export function App() {
             onPersistApiSettings={persistApiSettings}
             onPersistTheme={persistTheme}
             onPersistApiProfile={persistApiProfile}
+            onLoadApiProfileSlots={loadApiProfileSlots}
+            onPersistApiProfileSlots={persistApiProfileSlots}
+            onLoadAuxApiProfiles={loadAuxApiProfiles}
+            onPersistAuxApiProfiles={persistAuxApiProfiles}
             fetchModels={fetchModels}
             testConnection={testConnection}
             loadApiErrorReports={loadApiErrorReports}
@@ -950,6 +994,15 @@ export function App() {
             }}
             onDeleteSave={actions.handleDeleteSave}
             onDeleteSaveTree={actions.handleDeleteSaveTree}
+            onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}
+            onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
+            onStartSaveCatalogRepair={actions.handleStartSaveCatalogRepair}
+            onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
+            onRepairSaveDatabase={actions.handleRepairSaveDatabase}
+            onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
+            onGetSaveForExport={actions.handleGetSaveForExport}
+            onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
+            onPersistImportedSave={actions.handlePersistImportedSave}
             onExtractTavernRegexScripts={actions.handleExtractTavernRegexScripts}
             onAnalyzeTavernRegexScript={actions.handleAnalyzeTavernRegexScript}
             onDryRunTavernRegexScript={actions.handleDryRunTavernRegexScript}
@@ -1022,6 +1075,14 @@ export function App() {
             onDeleteSave={actions.handleDeleteSave}
             onDeleteSaveTree={actions.handleDeleteSaveTree}
             onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}
+            onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
+            onStartSaveCatalogRepair={actions.handleStartSaveCatalogRepair}
+            onSubscribeSaveCatalogRepair={actions.handleSubscribeSaveCatalogRepair}
+            onRepairSaveDatabase={actions.handleRepairSaveDatabase}
+            onDeleteLegacyBackupSaves={actions.handleDeleteLegacyBackupSaves}
+            onGetSaveForExport={actions.handleGetSaveForExport}
+            onGetSaveTreeForExport={actions.handleGetSaveTreeForExport}
+            onPersistImportedSave={actions.handlePersistImportedSave}
             onClose={() => setShowSaveLoad(false)}
           />
         </Suspense>
@@ -1032,6 +1093,8 @@ export function App() {
           <GitHubCloudSaveModal
             onSave={actions.handleSave}
             onClose={() => setShowCloudSave(false)}
+            onLoadCloudConfig={loadGitHubCloudSaveConfig}
+            onPersistCloudConfig={persistGitHubCloudSaveConfig}
           />
         </Suspense>
       )}
@@ -1059,6 +1122,10 @@ function renderSystemPanel(
     zhikuSystem: 智库系统;
     onZhikuSystemChange: React.Dispatch<React.SetStateAction<智库系统>>;
     zhikuSettings: import('@/models/settings').智库系统设置;
+    /** 智库保存（片 panel-p8）：ZhikuPanel 的 saveSetting('zhikuSystem') 直连收敛到门面。 */
+    onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
+    /** 智库迁移（片 panel-p8）：ZhikuPanel 的 DEV 刷新内置智库（迁移键/预设加载/合并）收敛到门面。 */
+    onZhikuMigration: (current: 智库系统) => Promise<智库系统>;
     memorySettings: import('@/models/settings').记忆系统设置;
     news: 新闻条目[];
     onNewsChange: React.Dispatch<React.SetStateAction<新闻条目[]>>;
@@ -1166,6 +1233,8 @@ function renderSystemPanel(
           zhikuSystem={ctx.zhikuSystem}
           onZhikuSystemChange={ctx.onZhikuSystemChange}
           settings={ctx.zhikuSettings}
+          onSaveZhikuSystem={ctx.onSaveZhikuSystem}
+          onZhikuMigration={ctx.onZhikuMigration}
         />
       );
     case 'memory':
