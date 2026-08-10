@@ -4,13 +4,13 @@ import type { 图片资源, 图片生成任务, 相册条目 } from '@/models/im
 import {
   ARCHIVE_FORMAT,
   ARCHIVE_VERSION,
-  createZipBlob,
   loadAlbumAssetBytes,
   parseAlbumBytes,
   type AlbumArchiveManifestV2,
   type ArchiveAsset,
   type ParsedAlbum,
 } from './albumArchive';
+import { buildStoredZip } from '@/utils/zip';
 import { hashDataUrl, normalizeContentHash, sha256Bytes } from './albumContent';
 
 type WorkerRequest = {
@@ -124,7 +124,7 @@ function finishExport(state: ExportState): { blob: Blob; assetCount: number; ent
     data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
   });
   const result = {
-    blob: createZipBlob(state.files),
+    blob: new Blob([buildStoredZip(state.files)], { type: 'application/zip' }),
     assetCount: state.assets.length,
     entryCount: state.entries.length,
     warningCount: state.warnings.length,

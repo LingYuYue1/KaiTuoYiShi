@@ -1,4 +1,4 @@
-import { 读取图片参考目标, 归一化相册系统 } from '@/models/imageGeneration';
+import { 读取图片参考目标, 归一化相册系统, isCharacterLibrarySlot, normalizeStringArray, slotLabel } from '@/models/imageGeneration';
 import type { 图片槽位, 图片资源, 图片生成任务, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { AlbumImportTarget } from './foundation';
 import {
@@ -11,15 +11,12 @@ import {
   sha256Bytes,
 } from './albumContent';
 import { getAlbumAssetBlob, materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
+import { buildStoredZip, readZipEntries } from '@/utils/zip';
 
 export { materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
 
 export const ARCHIVE_FORMAT = 'kaituo-album-backup';
 export const ARCHIVE_VERSION = 2;
-const MAX_ZIP_FILES = 5000;
-const MAX_MANIFEST_BYTES = 5 * 1024 * 1024;
-const MAX_SINGLE_FILE_BYTES = 64 * 1024 * 1024;
-const MAX_TOTAL_FILE_BYTES = 512 * 1024 * 1024;
 
 export type AlbumImportMode = 'merge' | 'replace';
 
@@ -96,7 +93,7 @@ export async function exportAlbum(album: 相册系统): Promise<AlbumExportResul
   };
   files.push({ name: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
 
-  const blob = createZipBlob(files);
+  const blob = new Blob([buildStoredZip(files)], { type: 'application/zip' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -153,7 +150,7 @@ export async function parseAlbumFile(file: File): Promise<ParsedAlbum> {
 }
 
 export async function parseAlbumBytes(bytes: Uint8Array): Promise<ParsedAlbum> {
-  if (bytes.length >= 4 && readU32(bytes, 0) === 0x04034b50) return parseAlbumZip(bytes);
+  if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) return parseAlbumZip(bytes);
   try {
     const text = new TextDecoder().decode(bytes);
     const data = JSON.parse(text) as Partial<相册系统>;
@@ -165,10 +162,9 @@ export async function parseAlbumBytes(bytes: Uint8Array): Promise<ParsedAlbum> {
 }
 
 export async function parseAlbumZip(bytes: Uint8Array): Promise<ParsedAlbum> {
-  const files = readStoredZip(bytes);
+  const files = readZipEntries(bytes);
   const manifestBytes = files.get('manifest.json');
   if (!manifestBytes) throw new Error('ZIP 中缺少 manifest.json。');
-  if (manifestBytes.length > MAX_MANIFEST_BYTES) throw new Error('manifest.json 超过 5 MiB 限制。');
 
   let manifest: unknown;
   try {
@@ -191,15 +187,14 @@ async function parseArchiveManifestV2(manifest: AlbumArchiveManifestV2, files: M
     let dataUrl: string | undefined;
     let contentHash = normalizeContentHash(record.contentHash);
     if (file) {
-      const safeFile = assertSafeZipPath(file);
-      const imageBytes = files.get(safeFile);
-      if (!imageBytes) throw new Error(`备份缺少图片文件：${safeFile}`);
+      const imageBytes = files.get(file);
+      if (!imageBytes) throw new Error(`备份缺少图片文件：${file}`);
       const actualHash = await sha256Bytes(imageBytes);
-      if (contentHash && actualHash !== contentHash) throw new Error(`图片 SHA-256 校验失败：${safeFile}`);
+      if (contentHash && actualHash !== contentHash) throw new Error(`图片 SHA-256 校验失败：${file}`);
       contentHash = actualHash;
       // Import results may run inside a Worker; keep dataUrl here and materialize
       // into the main-thread Blob cache when the album is committed to runtime state.
-      dataUrl = bytesToDataUrl(imageBytes, record.mimeType || mimeFromFileName(safeFile));
+      dataUrl = bytesToDataUrl(imageBytes, record.mimeType || mimeFromFileName(file));
     }
     assets.push({
       ...metadata,
@@ -239,7 +234,7 @@ async function parseLegacyArchiveManifest(manifest: unknown, files: Map<string, 
       skippedEntries += 1;
       continue;
     }
-    const fileName = assertSafeZipPath(record.file);
+    const fileName = record.file;
     const imageBytes = files.get(fileName);
     if (!imageBytes) throw new Error(`旧版备份缺少图片文件：${fileName}`);
     const contentHash = await sha256Bytes(imageBytes);
@@ -261,8 +256,8 @@ async function parseLegacyArchiveManifest(manifest: unknown, files: Map<string, 
       targetType: normalizeTargetType(record.targetType),
       targetId: typeof record.targetId === 'string' ? record.targetId : undefined,
       slot: normalizeSlot(record.slot),
-      tags: normalizeStrings(record.tags),
-      referenceTargets: normalizeStrings(record.referenceTargets),
+      tags: normalizeStringArray(record.tags),
+      referenceTargets: normalizeStringArray(record.referenceTargets),
       nsfw: record.nsfw === true,
       createdAt: Number(record.createdAt) || Date.now() + index,
     });
@@ -426,100 +421,7 @@ export async function loadAlbumAssetBytes(asset: Pick<图片资源, 'id' | 'data
   }
 }
 
-export function readStoredZip(bytes: Uint8Array): Map<string, Uint8Array> {
-  const eocdOffset = findEndOfCentralDirectory(bytes);
-  if (eocdOffset < 0) throw new Error('ZIP 结束目录损坏或缺失。');
-  const entryCount = readU16(bytes, eocdOffset + 10);
-  const centralSize = readU32(bytes, eocdOffset + 12);
-  const centralOffset = readU32(bytes, eocdOffset + 16);
-  if (entryCount === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff) throw new Error('暂不支持 ZIP64 备份。');
-  if (entryCount > MAX_ZIP_FILES) throw new Error(`ZIP 文件数量超过 ${MAX_ZIP_FILES} 个限制。`);
-  if (centralOffset + centralSize > bytes.length) throw new Error('ZIP 中央目录超出文件范围。');
 
-  const files = new Map<string, Uint8Array>();
-  let totalBytes = 0;
-  let offset = centralOffset;
-  for (let index = 0; index < entryCount; index += 1) {
-    if (readU32(bytes, offset) !== 0x02014b50) throw new Error('ZIP 中央目录条目损坏。');
-    const flags = readU16(bytes, offset + 8);
-    const method = readU16(bytes, offset + 10);
-    const expectedCrc = readU32(bytes, offset + 16);
-    const compressedSize = readU32(bytes, offset + 20);
-    const uncompressedSize = readU32(bytes, offset + 24);
-    const nameLength = readU16(bytes, offset + 28);
-    const extraLength = readU16(bytes, offset + 30);
-    const commentLength = readU16(bytes, offset + 32);
-    const localOffset = readU32(bytes, offset + 42);
-    const nextOffset = offset + 46 + nameLength + extraLength + commentLength;
-    if (nextOffset > bytes.length) throw new Error('ZIP 中央目录名称超出文件范围。');
-    const fileName = assertSafeZipPath(new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + nameLength)));
-    if ((flags & 0x0001) !== 0) throw new Error(`不支持加密 ZIP 文件：${fileName}`);
-    if (method !== 0) throw new Error(`不支持的 ZIP 压缩方法：${fileName}。请直接导入本项目导出的备份。`);
-    if (compressedSize !== uncompressedSize) throw new Error(`ZIP STORE 文件长度不一致：${fileName}`);
-    if (uncompressedSize > MAX_SINGLE_FILE_BYTES) throw new Error(`ZIP 单个文件超过 64 MiB：${fileName}`);
-    totalBytes += uncompressedSize;
-    if (totalBytes > MAX_TOTAL_FILE_BYTES) throw new Error('ZIP 文件数据总量超过 512 MiB。');
-    if (files.has(fileName)) throw new Error(`ZIP 中存在重复路径：${fileName}`);
-
-    if (readU32(bytes, localOffset) !== 0x04034b50) throw new Error(`ZIP 本地文件头损坏：${fileName}`);
-    const localNameLength = readU16(bytes, localOffset + 26);
-    const localExtraLength = readU16(bytes, localOffset + 28);
-    const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
-    const dataEnd = dataOffset + uncompressedSize;
-    if (dataEnd > bytes.length) throw new Error(`ZIP 文件内容超出范围：${fileName}`);
-    const data = bytes.subarray(dataOffset, dataEnd);
-    if (crc32(data) !== expectedCrc) throw new Error(`ZIP CRC32 校验失败：${fileName}`);
-    files.set(fileName, data);
-    offset = nextOffset;
-  }
-  return files;
-}
-
-export function createZipBlob(files: Array<{ name: string; data: Uint8Array }>): Blob {
-  const parts: BlobPart[] = [];
-  const central: Uint8Array[] = [];
-  let offset = 0;
-  for (const file of files) {
-    const safeName = assertSafeZipPath(file.name);
-    const nameBytes = new TextEncoder().encode(safeName);
-    const crc = crc32(file.data);
-    const localHeader = concatBytes([
-      u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0),
-      u32(crc), u32(file.data.length), u32(file.data.length), u16(nameBytes.length), u16(0),
-    ]);
-    parts.push(localHeader, nameBytes, file.data);
-    central.push(concatBytes([
-      u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0),
-      u32(crc), u32(file.data.length), u32(file.data.length), u16(nameBytes.length), u16(0), u16(0),
-      u16(0), u16(0), u32(0), u32(offset), nameBytes,
-    ]));
-    offset += localHeader.length + nameBytes.length + file.data.length;
-  }
-  const centralStart = offset;
-  const centralBlock = concatBytes(central);
-  const end = concatBytes([
-    u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
-    u32(centralBlock.length), u32(centralStart), u16(0),
-  ]);
-  return new Blob([...parts, centralBlock, end], { type: 'application/zip' });
-}
-
-export function assertSafeZipPath(input: string): string {
-  const normalized = input.replace(/\\/g, '/').trim();
-  if (!normalized || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized) || normalized.split('/').includes('..')) {
-    throw new Error(`ZIP 包含不安全路径：${input || '空路径'}`);
-  }
-  return normalized;
-}
-
-export function crc32(bytes: Uint8Array): number {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
 
 function isArchiveManifestV2(value: unknown): value is AlbumArchiveManifestV2 {
   if (!value || typeof value !== 'object') return false;
@@ -527,42 +429,7 @@ function isArchiveManifestV2(value: unknown): value is AlbumArchiveManifestV2 {
   return manifest.format === ARCHIVE_FORMAT && manifest.version === ARCHIVE_VERSION && Array.isArray(manifest.assets) && Array.isArray(manifest.entries);
 }
 
-function findEndOfCentralDirectory(bytes: Uint8Array): number {
-  const minimum = Math.max(0, bytes.length - 22 - 0xffff);
-  for (let offset = bytes.length - 22; offset >= minimum; offset -= 1) {
-    if (readU32(bytes, offset) === 0x06054b50) return offset;
-  }
-  return -1;
-}
 
-function readU16(bytes: Uint8Array, offset: number): number {
-  if (offset < 0 || offset + 2 > bytes.length) throw new Error('ZIP 数值字段超出范围。');
-  return bytes[offset] | (bytes[offset + 1] << 8);
-}
-
-function readU32(bytes: Uint8Array, offset: number): number {
-  if (offset < 0 || offset + 4 > bytes.length) throw new Error('ZIP 数值字段超出范围。');
-  return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
-}
-
-function concatBytes(parts: Uint8Array[]): Uint8Array {
-  const total = parts.reduce((sum, part) => sum + part.length, 0);
-  const output = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.length;
-  }
-  return output;
-}
-
-function u16(value: number): Uint8Array {
-  return new Uint8Array([value & 0xff, (value >>> 8) & 0xff]);
-}
-
-function u32(value: number): Uint8Array {
-  return new Uint8Array([value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff]);
-}
 
 function uniqueZipName(used: Set<string>, name: string): string {
   let candidate = name;
@@ -603,10 +470,6 @@ function mimeFromFileName(fileName: string): string {
   return 'image/png';
 }
 
-function normalizeStrings(value: unknown): string[] {
-  return Array.isArray(value) ? value.map((item) => String(item ?? '').trim()).filter(Boolean) : [];
-}
-
 function normalizeTargetType(value: unknown): 相册条目['targetType'] {
   const allowed = new Set(['traveler', 'npc', 'phone', 'scene', 'item', 'nsfw_part', 'misc']);
   const normalized = typeof value === 'string' && value ? value : 'misc';
@@ -626,16 +489,4 @@ function isKnownSlot(slot: 图片槽位): boolean {
   ].includes(slot);
 }
 
-function isCharacterLibrarySlot(slot: 图片槽位): boolean {
-  return slot === 'avatar_profile' || slot === 'avatar_story' || slot === 'avatar_phone' || slot === 'portrait';
-}
 
-function slotLabel(slot: 图片槽位): string {
-  const labels: Partial<Record<图片槽位, string>> = {
-    avatar_profile: '档案头像',
-    avatar_story: '正文头像',
-    avatar_phone: '手机头像',
-    portrait: '角色立绘',
-  };
-  return labels[slot] || '角色图片';
-}

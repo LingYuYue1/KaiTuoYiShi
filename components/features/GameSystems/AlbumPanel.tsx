@@ -1,6 +1,6 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTransition } from 'react';
-import { 图片是否参考角色, 读取图片参考目标 } from '@/models/imageGeneration';
+import { 图片是否参考角色, 读取图片参考目标, resolveSize, slotLabel } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
@@ -28,8 +28,9 @@ import { readImageError, runImageGenerationWithRetry } from '@/utils/imageGenera
 import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
 
 import {
-  generateTargets, smallClip,
+  generateTargets,
 } from './album/foundation';
+import { smallClip } from './album/visualTokens';
 import type {
   AnchorSelection, GenerateOverride, GenerateTarget, PromptMeta,
   SceneImageSummary, StorySnapshotSource, StorySnapshotSummary, WorkTab,
@@ -44,8 +45,8 @@ import {
   isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot,
   mapImageSlotToTravelerSlot, NsfwVisibilityToggle,
   PhoneBackgroundWorkspace, requiresCharacterTarget,
-  resolveGenerationTargetId, resolveSize, RulesWorkspace, SceneImageWorkspace,
-  slotLabel, StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
+  resolveGenerationTargetId, RulesWorkspace, SceneImageWorkspace,
+  StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
 } from './album/workspaces';
 import type { CharacterLibraryRecord } from './album/workspaces';
 import { ImageLibraryWorkspace } from './album/libWorkspace';
@@ -333,7 +334,10 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
   };
 
   const currentTarget = generateTargets.find((item) => item.id === generateTarget) ?? generateTargets[0];
+  const sceneTarget = generateTargets.find((item) => item.id === 'scene') ?? currentTarget;
+  const phoneTarget = generateTargets.find((item) => item.id === 'phone_wallpaper') ?? currentTarget;
   const resolvedSize = resolveSize(sizePreset, customSize, currentTarget.slot);
+  const sceneResolvedSize = resolveSize(sizePreset, customSize, 'scene');
   const currentCanvasTargetId = resolveGenerationTargetId(currentTarget, undefined, selectedCharacterId);
   const currentCanvasTask = useMemo(() => {
     const byLastTask = lastTaskId ? album.tasks.find((item) => item.id === lastTaskId) : undefined;
@@ -517,20 +521,24 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     }
   };
 
+  const prepareRetryDraft = (task: 图片生成任务) => {
+    setPrompt(task.prompt);
+    setNegativePrompt(task.negativePrompt ?? '');
+    setGenerateTitle('重试生成');
+    setLastPromptMeta({
+      anchorMode: task.anchorMode === true,
+      anchorSummary: task.anchorSummary || (task.anchorMode ? '沿用上次角色锚点' : '沿用上次档案回退结果'),
+      sourcePrompt: task.sourcePrompt,
+    });
+  };
+
   const handleRetryTask = (task?: 图片生成任务) => {
     const target = task ?? album.tasks.find((item) => item.id === lastTaskId) ?? album.tasks.find((item) => item.status === 'failed');
     if (!target) {
       setMessage('没有可重试的失败任务。');
       return;
     }
-    setPrompt(target.prompt);
-    setNegativePrompt(target.negativePrompt ?? '');
-    setGenerateTitle('重试生成');
-    setLastPromptMeta({
-      anchorMode: target.anchorMode === true,
-      anchorSummary: target.anchorSummary || (target.anchorMode ? '沿用上次角色锚点' : '沿用上次档案回退结果'),
-      sourcePrompt: target.sourcePrompt,
-    });
+    prepareRetryDraft(target);
     void handleGenerate({
       source: 'retry',
       prompt: target.prompt,
@@ -794,7 +802,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
   };
 
   const handleGenerateStorySnapshot = (override?: GenerateOverride) => {
-    const sceneTarget = generateTargets.find((item) => item.id === 'scene') ?? currentTarget;
     void handleGenerate({
       ...override,
       source: override?.source ?? (storySnapshotSource === 'manual' ? 'manual' : 'auto'),
@@ -813,14 +820,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
       setMessage('没有可重试的故事快照任务。');
       return;
     }
-    setPrompt(target.prompt);
-    setNegativePrompt(target.negativePrompt ?? '');
-    setGenerateTitle('重试生成');
-    setLastPromptMeta({
-      anchorMode: target.anchorMode === true,
-      anchorSummary: target.anchorSummary || (target.anchorMode ? '沿用上次角色锚点' : '沿用上次档案回退结果'),
-      sourcePrompt: target.sourcePrompt,
-    });
+    prepareRetryDraft(target);
     handleGenerateStorySnapshot({
       source: 'retry',
       prompt: target.prompt,
@@ -1120,25 +1120,9 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
         });
         promptRefined = 应用质量增强提示词(imageSettings.rules, lockedPrompt.prompt, lockedPrompt.negative);
       } else {
-        const built = buildSceneImagePrompt({
-          text: nextSceneText,
-          mode: 'scene',
-          rules: imageSettings.rules,
-          traveler,
-          presentNpcs,
-          extraRequirement,
-          size: resolvedSize,
-          slot: target.slot,
-        });
-        promptRefined = await applyTokenizerIfAvailable({
-            title: target.label,
-            mode: target.id,
-            sourceText: buildSceneSourceText(nextSceneText, traveler, presentNpcs),
-            prompt: built.prompt,
-            negative: built.negative,
-            anchorMode: anchorInfo.anchorMode,
-            anchorSummary: anchorInfo.anchorSummary,
-          });
+        const built = await buildPromptForTarget(target, { sceneText: nextSceneText });
+        if (!built) return;
+        promptRefined = { prompt: built.prompt, negative: built.negative };
       }
       setStorySnapshotSummary(summary);
       setSceneText(nextSceneText);
@@ -1167,6 +1151,28 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
       return;
     }
     handleTargetChange(`${characterId === 'traveler' ? 'traveler' : 'npc'}_${purpose}` as GenerateTarget);
+  };
+
+  const commonGenerationProps = {
+    imageEnabled: imageSettings.enabled,
+    sizePreset,
+    setSizePreset,
+    customSize,
+    setCustomSize,
+    extraRequirement,
+    setExtraRequirement,
+    prompt,
+    setPrompt,
+    negativePrompt,
+    setNegativePrompt,
+    generateTitle,
+    setGenerateTitle,
+    onGenerate: () => void handleGenerate(),
+    generating,
+    canvasTask: currentCanvasTask,
+    canvasSrc: currentCanvasSrc,
+    onRetryTask: handleRetryTask,
+    onOpenGallery: openCurrentResultInGallery,
   };
 
   return (
@@ -1267,23 +1273,9 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
             )}
             {activeTab === 'manual' && (
               <CreateWorkspace
-                imageEnabled={imageSettings.enabled}
+                {...commonGenerationProps}
                 currentTarget={currentTarget}
-                sizePreset={sizePreset}
-                setSizePreset={setSizePreset}
-                customSize={customSize}
-                setCustomSize={setCustomSize}
                 resolvedSize={resolvedSize}
-                extraRequirement={extraRequirement}
-                setExtraRequirement={setExtraRequirement}
-                prompt={prompt}
-                setPrompt={setPrompt}
-                negativePrompt={negativePrompt}
-                setNegativePrompt={setNegativePrompt}
-                generateTitle={generateTitle}
-                setGenerateTitle={setGenerateTitle}
-                onGenerate={() => void handleGenerate()}
-                generating={generating}
                 nsfwVisible={nsfwVisible}
                 companions={companions}
                 travelerName={traveler.姓名 || '主角'}
@@ -1296,10 +1288,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
                 promptEditorOpen={promptEditorOpen}
                 setPromptEditorOpen={setPromptEditorOpen}
                 promptMeta={lastPromptMeta}
-                canvasTask={currentCanvasTask}
-                canvasSrc={currentCanvasSrc}
-                onRetryTask={handleRetryTask}
-                onOpenGallery={openCurrentResultInGallery}
                 onSetResultReference={setCurrentResultAsReference}
                 onMountResultToSlot={mountCurrentResultToDefaultSlot}
                 resultIsReference={currentResultIsReference}
@@ -1308,23 +1296,12 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
             )}
             {activeTab === 'scene' && (
               <StorySnapshotWorkspace
-                imageEnabled={imageSettings.enabled}
-                currentTarget={generateTargets.find((item) => item.id === 'scene') ?? currentTarget}
-                sizePreset={sizePreset}
-                setSizePreset={setSizePreset}
-                customSize={customSize}
-                setCustomSize={setCustomSize}
-                resolvedSize={resolveSize(sizePreset, customSize, 'scene')}
-                extraRequirement={extraRequirement}
-                setExtraRequirement={setExtraRequirement}
-                prompt={prompt}
-                setPrompt={setPrompt}
-                negativePrompt={negativePrompt}
-                setNegativePrompt={setNegativePrompt}
-                generateTitle={generateTitle}
-                setGenerateTitle={setGenerateTitle}
+                {...commonGenerationProps}
+                currentTarget={sceneTarget}
+                resolvedSize={sceneResolvedSize}
                 onGenerate={handleGenerateStorySnapshot}
-                generating={generating}
+                onRetryTask={handleRetryStorySnapshotTask}
+                referenceStatus={nonCharacterReferenceStatus}
                 sceneText={sceneText}
                 setSceneText={setSceneText}
                 sourceMode={storySnapshotSource}
@@ -1340,32 +1317,14 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
                 promptEditorOpen={promptEditorOpen}
                 setPromptEditorOpen={setPromptEditorOpen}
                 promptMeta={lastPromptMeta}
-                canvasTask={currentCanvasTask}
-                canvasSrc={currentCanvasSrc}
-                onRetryTask={handleRetryStorySnapshotTask}
-                onOpenGallery={openCurrentResultInGallery}
-                referenceStatus={nonCharacterReferenceStatus}
               />
             )}
             {activeTab === 'sceneImage' && (
               <SceneImageWorkspace
-                imageEnabled={imageSettings.enabled}
-                currentTarget={generateTargets.find((item) => item.id === 'scene') ?? currentTarget}
-                sizePreset={sizePreset}
-                setSizePreset={setSizePreset}
-                customSize={customSize}
-                setCustomSize={setCustomSize}
-                resolvedSize={resolveSize(sizePreset, customSize, 'scene')}
-                extraRequirement={extraRequirement}
-                setExtraRequirement={setExtraRequirement}
-                prompt={prompt}
-                setPrompt={setPrompt}
-                negativePrompt={negativePrompt}
-                setNegativePrompt={setNegativePrompt}
-                generateTitle={generateTitle}
-                setGenerateTitle={setGenerateTitle}
-                onGenerate={() => void handleGenerate()}
-                generating={generating}
+                {...commonGenerationProps}
+                currentTarget={sceneTarget}
+                resolvedSize={sceneResolvedSize}
+                referenceStatus={nonCharacterReferenceStatus}
                 sceneText={sceneImageText}
                 setSceneText={setSceneImageText}
                 onBuildPrompt={handleBuildSceneImagePrompt}
@@ -1373,35 +1332,17 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
                 promptEditorOpen={promptEditorOpen}
                 setPromptEditorOpen={setPromptEditorOpen}
                 promptMeta={lastPromptMeta}
-                canvasTask={currentCanvasTask}
-                canvasSrc={currentCanvasSrc}
-                onRetryTask={handleRetryTask}
-                onOpenGallery={openCurrentResultInGallery}
                 sceneSummary={sceneImageSummary}
                 analyzing={sceneImageAnalyzing}
                 onImportCurrentBody={importCurrentBodyText}
-                referenceStatus={nonCharacterReferenceStatus}
               />
             )}
             {activeTab === 'phone' && (
               <PhoneBackgroundWorkspace
-                imageEnabled={imageSettings.enabled}
-                currentTarget={generateTargets.find((item) => item.id === 'phone_wallpaper') ?? currentTarget}
-                sizePreset={sizePreset}
-                setSizePreset={setSizePreset}
-                customSize={customSize}
-                setCustomSize={setCustomSize}
+                {...commonGenerationProps}
+                currentTarget={phoneTarget}
                 resolvedSize={resolveSize(sizePreset, customSize, 'phone_wallpaper')}
-                extraRequirement={extraRequirement}
-                setExtraRequirement={setExtraRequirement}
-                prompt={prompt}
-                setPrompt={setPrompt}
-                negativePrompt={negativePrompt}
-                setNegativePrompt={setNegativePrompt}
-                generateTitle={generateTitle}
-                setGenerateTitle={setGenerateTitle}
-                onGenerate={() => void handleGenerate()}
-                generating={generating}
+                referenceStatus={nonCharacterReferenceStatus}
                 sceneText={sceneText}
                 setSceneText={setSceneText}
                 onBuildPrompt={handleBuildPrompt}
@@ -1409,11 +1350,6 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
                 promptEditorOpen={promptEditorOpen}
                 setPromptEditorOpen={setPromptEditorOpen}
                 promptMeta={lastPromptMeta}
-                canvasTask={currentCanvasTask}
-                canvasSrc={currentCanvasSrc}
-                onRetryTask={handleRetryTask}
-                onOpenGallery={openCurrentResultInGallery}
-                referenceStatus={nonCharacterReferenceStatus}
               />
             )}
             {activeTab === 'reference' && (

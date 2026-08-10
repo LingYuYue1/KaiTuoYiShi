@@ -1,6 +1,6 @@
-﻿import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { 读取图片参考目标 } from '@/models/imageGeneration';
+import { 读取图片参考目标, isCharacterLibrarySlot, slotLabel } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
@@ -21,8 +21,8 @@ import { matchCanonical } from '@/data/canonicalCharacters';
 import {
   cardClip, smallClip, heroSurface, panelSurface, insetSurface,
   imageWellSurface, titleColor, activeAccentSurface, cardSurface, heroGridBackgroundStyle,
-  tabs, generateTargets, navGroups, groupForTab,
-} from './foundation';
+} from './visualTokens';
+import { tabs, generateTargets, navGroups, groupForTab } from './foundation';
 import type { ReferenceInjectionStatus } from './referenceInjection';
 import type {
   WorkTab, GenerateTarget, PromptMeta, StorySnapshotSource,
@@ -32,10 +32,7 @@ import type {
 
 export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab; setActiveTab: (tab: WorkTab) => void }) {
   const activeGroupId = groupForTab(activeTab);
-  const activeGroup = navGroups.find((group) => group.id === activeGroupId) ?? navGroups[0];
-  const subTabs = activeGroup.members
-    .map((id) => tabs.find((tab) => tab.id === id))
-    .filter((tab): tab is typeof tabs[number] => Boolean(tab));
+  const subTabs = tabs.filter((tab) => tab.groupId === activeGroupId);
   return (
     <Panel title="工作台">
       <div className="space-y-4">
@@ -46,7 +43,7 @@ export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab;
               <button
                 key={group.id}
                 type="button"
-                onClick={() => setActiveTab(group.members[0])}
+                onClick={() => setActiveTab(tabs.find((tab) => tab.groupId === group.id)?.id ?? 'manual')}
                 className="px-3 py-2.5 text-center font-serif text-sm font-bold tracking-[0.16em] transition-all"
                 style={{
                   color: active ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.86)',
@@ -2253,10 +2250,6 @@ export function defaultAlbumEntryNote(target: typeof generateTargets[number]): s
   return undefined;
 }
 
-export function isCharacterLibrarySlot(slot: 图片槽位): boolean {
-  return slot === 'avatar_profile' || slot === 'avatar_story' || slot === 'avatar_phone' || slot === 'portrait';
-}
-
 export function buildScopedCharacterGalleryEntries(record: CharacterLibraryRecord | null, resourceEntries: CharacterLibraryEntry[]): CharacterLibraryEntry[] {
   if (!record) return [];
   const scoped = resourceEntries.filter((item) => {
@@ -2646,28 +2639,6 @@ export function cleanupAlbumAssets(album: 相册系统): 相册系统 {
   };
 }
 
-export function slotLabel(slot: 图片槽位): string {
-  const labels: Record<图片槽位, string> = {
-    avatar_profile: '档案头像',
-    avatar_story: '正文头像',
-    avatar_phone: '手机头像',
-    portrait: '角色立绘',
-    phone_wallpaper: '手机壁纸',
-    phone_chat_background: '聊天背景',
-    group_avatar: '群聊头像',
-    scene: '场景',
-    item_icon: '物品图标',
-    nsfw_female_chest: 'NSFW 胸部',
-    nsfw_female_genital: 'NSFW 女性私处',
-    nsfw_male_genital: 'NSFW 男性器',
-    nsfw_rear: 'NSFW 后庭',
-    nsfw_body_reference: 'NSFW 身体参考',
-    reference_image: '参考图',
-    misc: '其他',
-  };
-  return labels[slot];
-}
-
 export function statusLabel(status: 图片生成任务['status']): string {
   return {
     queued: '排队中',
@@ -2676,18 +2647,4 @@ export function statusLabel(status: 图片生成任务['status']): string {
     failed: '失败',
     cancelled: '已取消',
   }[status];
-}
-
-export function resolveSize(preset: 'default' | '1:1' | '3:4' | '16:9' | 'custom', customSize: string, slot: 图片槽位): string {
-  if (preset === 'custom') return customSize.trim() || defaultSizeForSlot(slot);
-  if (preset === '1:1') return '1024x1024';
-  if (preset === '3:4') return '1024x1365';
-  if (preset === '16:9') return '1280x720';
-  return defaultSizeForSlot(slot);
-}
-
-export function defaultSizeForSlot(slot: 图片槽位): string {
-  if (slot === 'portrait') return '1024x1365';
-  if (slot === 'scene' || slot === 'phone_wallpaper' || slot === 'phone_chat_background') return '1280x720';
-  return '1024x1024';
 }

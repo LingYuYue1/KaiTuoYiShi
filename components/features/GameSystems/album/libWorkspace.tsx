@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { 图片是否参考角色 } from '@/models/imageGeneration';
+import { 图片是否参考角色, slotLabel } from '@/models/imageGeneration';
 import type { 图片槽位, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
-import { activeAccentSurface, cardClip, smallClip } from './foundation';
+import { activeAccentSurface, cardClip, smallClip } from './visualTokens';
 import type { AlbumImportTarget, SceneLibraryFilter } from './foundation';
 import {
   buildVisibleCharacterEntries,
@@ -12,7 +12,6 @@ import {
   Panel,
   SafeAlbumImage,
   SlotPickerModal,
-  slotLabel,
 } from './workspaces';
 import type { CharacterLibraryEntry, CharacterLibraryRecord, SceneLibraryEntry } from './workspaces';
 import type { AlbumImportMode } from './albumArchive';

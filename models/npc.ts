@@ -7,6 +7,7 @@ import { getDefaultBuiltinAvatar } from '@/data/builtinAvatars';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 import type { VariableExecContext } from '@/utils/variableExecContext';
 import { DEFAULT_EXEC_CTX } from '@/utils/variableExecContext';
+import { normalizeStringArray } from '@/models/imageGeneration';
 export type NPC阶位 = 'companion' | 'extra';
 
 export type NPC性别 = '男' | '女' | '其他';
@@ -676,7 +677,8 @@ function normalizeNpcTextList(raw: unknown): string[] | undefined {
     const text = raw.trim();
     return text ? [text] : undefined;
   }
-  return normalizeStringList(raw);
+  const list = normalizeStringArray(raw);
+  return list.length ? list : undefined;
 }
 
 function 合并同行记忆(a: NPC同行记忆条目[], b: NPC同行记忆条目[]): NPC同行记忆条目[] {
@@ -786,12 +788,12 @@ function 归一化NPC总结记忆列表(raw: unknown, ctx?: VariableExecContext)
 function 归一化NSFW档案(raw: unknown): NPC记录['NSFW档案'] {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const obj = raw as Record<string, unknown>;
-  const tags = normalizeStringList(obj.标签);
-  const preferences = normalizeStringList(obj.偏好);
-  const sensitivePoints = normalizeStringList(obj.敏感点);
-  const taboos = normalizeStringList(obj.禁忌);
-  const experiences = normalizeStringList(obj.经历);
-  const facts = normalizeStringList(obj.长期事实);
+  const tags = normalizeStringArray(obj.标签);
+  const preferences = normalizeStringArray(obj.偏好);
+  const sensitivePoints = normalizeStringArray(obj.敏感点);
+  const taboos = normalizeStringArray(obj.禁忌);
+  const experiences = normalizeStringArray(obj.经历);
+  const facts = normalizeStringArray(obj.长期事实);
   const note = typeof obj.备注 === 'string' ? obj.备注.trim() : undefined;
   const enabled = Boolean(obj.enabled);
   const age = normalizeNsfwAge(obj.年龄确认);
@@ -806,14 +808,14 @@ function 归一化NSFW档案(raw: unknown): NPC记录['NSFW档案'] {
     !age &&
     !stage &&
     !boundary &&
-    !preferences?.length &&
-    !sensitivePoints?.length &&
-    !taboos?.length &&
+    !preferences.length &&
+    !sensitivePoints.length &&
+    !taboos.length &&
     !femaleBodyArchive &&
     !maleBodyArchive &&
-    !experiences?.length &&
-    !facts?.length &&
-    !tags?.length &&
+    !experiences.length &&
+    !facts.length &&
+    !tags.length &&
     !partImages &&
     !note
   ) {
@@ -853,15 +855,6 @@ function normalizeNsfwPartImages(raw: unknown): NPC_NSFW档案['部位图片'] {
   output.后庭 = read('后庭', 'rear');
   output.体态参考 = read('体态参考', '体态', 'bodyReference');
   return Object.values(output).some(Boolean) ? output : undefined;
-}
-
-function normalizeStringList(raw: unknown): string[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const list = raw
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return list.length ? [...new Set(list)] : undefined;
 }
 
 function normalizeNsfwAge(raw: unknown): NPC_NSFW年龄确认 | undefined {

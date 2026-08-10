@@ -1644,7 +1644,7 @@ export async function importSaveFile(file: File): Promise<存档数据> {
     return importSaveJson(await file.text());
   }
   if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
-    const data: unknown = await parseSavePackage(await file.arrayBuffer());
+    const data: unknown = parseSavePackage(await file.arrayBuffer());
     if (!isImportableSave(data)) throw new Error('无效的存档包');
     return data;
   }
@@ -1659,7 +1659,7 @@ export async function importSaveFileAsMany(file: File): Promise<存档数据[]> 
     return saves;
   }
   if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
-    const saves = await parseSaveTreePackage(await file.arrayBuffer());
+    const saves = parseSaveTreePackage(await file.arrayBuffer());
     const remapped = remapImportedSaveTree(saves);
     if (!remapped.every(isImportableSave)) throw new Error('无效的存档包');
     devLog('save', 'import-save-parsed', { nodeCount: saves.length });

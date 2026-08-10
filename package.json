@@ -19,6 +19,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@types/jquery": "^4.0.1",
+    "fflate": "^0.8.3",
     "jquery": "^4.0.0",
     "lucide-react": "^1.24.0",
     "marked": "^18.0.5",

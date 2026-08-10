@@ -1,6 +1,7 @@
 import type { 文生图API配置 } from '@/models/settings';
 import type { 叙事插图 } from '@/models/chat';
 import { fetchModels } from '@/services/ai/apiTools';
+import { readZipEntries } from '@/utils/zip';
 
 export interface ImageGenerationRequest {
   prompt: string;
@@ -979,91 +980,17 @@ function isZipHeader(header: Uint8Array): boolean {
 
 async function readFirstImageFromZip(blob: Blob): Promise<{ src: string; mimeType: string }> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  const entry = findFirstZipImageEntry(bytes);
-  if (!entry) throw new Error('NovelAI 返回了压缩包，但里面没有找到 PNG/JPEG/WebP 图片。');
-
-  const compressed = bytes.slice(entry.dataOffset, entry.dataOffset + entry.compressedSize);
-  const imageBytes = entry.compressionMethod === 0
-    ? compressed
-    : entry.compressionMethod === 8
-      ? await inflateRaw(compressed)
-      : undefined;
-  if (!imageBytes) throw new Error(`NovelAI 返回的压缩包使用了暂不支持的压缩方式：${entry.compressionMethod}。`);
-
-  const mimeType = normalizeImageMimeType('', entry.filename, imageBytes);
+  const files = readZipEntries(bytes);
+  const imageEntry = [...files.entries()].find(([name]) => isImageFilename(name));
+  if (!imageEntry) throw new Error('NovelAI 返回了压缩包，但里面没有找到 PNG/JPEG/WebP 图片。');
+  const [filename, imageBytes] = imageEntry;
+  const mimeType = normalizeImageMimeType('', filename, imageBytes);
   const imageBlob = new Blob([imageBytes], { type: mimeType });
   return { src: await blobToDataUrl(imageBlob), mimeType };
 }
 
-function findFirstZipImageEntry(bytes: Uint8Array): { filename: string; compressionMethod: number; compressedSize: number; dataOffset: number } | null {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const eocdOffset = findEndOfCentralDirectory(view);
-  if (eocdOffset >= 0) {
-    const entryCount = view.getUint16(eocdOffset + 10, true);
-    let offset = view.getUint32(eocdOffset + 16, true);
-    for (let index = 0; index < entryCount && offset + 46 <= bytes.length; index += 1) {
-      if (view.getUint32(offset, true) !== 0x02014b50) break;
-      const compressionMethod = view.getUint16(offset + 10, true);
-      const compressedSize = view.getUint32(offset + 20, true);
-      const filenameLength = view.getUint16(offset + 28, true);
-      const extraLength = view.getUint16(offset + 30, true);
-      const commentLength = view.getUint16(offset + 32, true);
-      const localHeaderOffset = view.getUint32(offset + 42, true);
-      const filename = decodeZipFilename(bytes.slice(offset + 46, offset + 46 + filenameLength));
-      if (isImageFilename(filename)) {
-        const dataOffset = getZipLocalDataOffset(view, localHeaderOffset);
-        if (dataOffset >= 0) return { filename, compressionMethod, compressedSize, dataOffset };
-      }
-      offset += 46 + filenameLength + extraLength + commentLength;
-    }
-  }
-
-  let offset = 0;
-  while (offset + 30 <= bytes.length && view.getUint32(offset, true) === 0x04034b50) {
-    const compressionMethod = view.getUint16(offset + 8, true);
-    const compressedSize = view.getUint32(offset + 18, true);
-    const filenameLength = view.getUint16(offset + 26, true);
-    const extraLength = view.getUint16(offset + 28, true);
-    const filename = decodeZipFilename(bytes.slice(offset + 30, offset + 30 + filenameLength));
-    const dataOffset = offset + 30 + filenameLength + extraLength;
-    if (isImageFilename(filename) && compressedSize > 0) return { filename, compressionMethod, compressedSize, dataOffset };
-    offset = dataOffset + compressedSize;
-  }
-  return null;
-}
-
-function findEndOfCentralDirectory(view: DataView): number {
-  for (let offset = view.byteLength - 22; offset >= 0; offset -= 1) {
-    if (view.getUint32(offset, true) === 0x06054b50) return offset;
-  }
-  return -1;
-}
-
-function getZipLocalDataOffset(view: DataView, localHeaderOffset: number): number {
-  if (localHeaderOffset < 0 || localHeaderOffset + 30 > view.byteLength) return -1;
-  if (view.getUint32(localHeaderOffset, true) !== 0x04034b50) return -1;
-  const filenameLength = view.getUint16(localHeaderOffset + 26, true);
-  const extraLength = view.getUint16(localHeaderOffset + 28, true);
-  return localHeaderOffset + 30 + filenameLength + extraLength;
-}
-
-function decodeZipFilename(bytes: Uint8Array): string {
-  try {
-    return new TextDecoder('utf-8').decode(bytes);
-  } catch {
-    return Array.from(bytes, (item) => String.fromCharCode(item)).join('');
-  }
-}
-
 function isImageFilename(filename: string): boolean {
   return /\.(png|jpe?g|webp)$/i.test(filename);
-}
-
-async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
-  const Decompression = (globalThis as { DecompressionStream?: new (format: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
-  if (!Decompression) throw new Error('当前浏览器不支持解压 NovelAI 返回的 zip 图片包。');
-  const stream = new Blob([bytes]).stream().pipeThrough(new Decompression('deflate-raw'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 function normalizeImageMimeType(contentType: string, filename?: string, bytes?: Uint8Array): string {

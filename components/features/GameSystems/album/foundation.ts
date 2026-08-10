@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import type { 图片槽位, 图片生成任务来源, 图片目标类型 } from '@/models/imageGeneration';
 import type { 文生图API配置 } from '@/models/settings';
 
@@ -36,41 +35,19 @@ export type SceneImageSummary = {
 };
 export type StorySnapshotSourceOption = { id: StorySnapshotSource; title: string; desc: string; text: string };
 
-export const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
-export const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
-export const albumGridLayer = 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.062) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-cyan),0.048) 1px, transparent 1px)';
-export const albumGridSize = '26px 26px, 26px 26px, auto, auto';
-export const heroSurface = `${albumGridLayer}, radial-gradient(circle at 14% 0%, rgba(var(--tj-tech-cyan), 0.14), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface),0.78), rgba(var(--tj-bg-primary),0.94))`;
-export const panelSurface = 'radial-gradient(circle at 14% 0%, rgba(var(--tj-tech-cyan), 0.08), transparent 28%), linear-gradient(180deg, rgba(var(--tj-surface),0.74), rgba(var(--tj-bg-primary),0.94))';
-export const insetSurface = 'linear-gradient(135deg, rgba(var(--tj-surface),0.64), rgba(var(--tj-surface-strong),0.76))';
-export const imageWellSurface = 'linear-gradient(135deg, rgba(var(--tj-surface-strong),0.8), rgba(var(--tj-bg-primary),0.88))';
-export const titleColor = 'rgb(var(--tj-ui-title))';
-export const bodyColor = 'rgba(var(--tj-ui-body),0.94)';
-export const mutedColor = 'rgba(var(--tj-ui-muted),0.78)';
-export const faintColor = 'rgba(var(--tj-ui-faint),0.66)';
-export const activeTextColor = 'rgb(var(--tj-ui-active-text))';
-export const accentColor = 'rgb(var(--tj-accent-primary))';
-export const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
-export const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(var(--tj-accent-mid),0.96) 48%, rgb(var(--tj-tech-cyan)) 100%)';
-export const quietAccentSurface = 'rgba(var(--tj-btn-primary-start),0.055)';
-export const cardSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel),0.76), rgba(var(--tj-ui-panel-strong),0.72))';
-export const heroGridBackgroundStyle = {
-  backgroundSize: albumGridSize,
-  backgroundPosition: '0 0, 0 0, center, center',
-} as CSSProperties;
+export type NavGroupId = 'generate' | 'library' | 'tasks' | 'settings';
 
-
-export const tabs: { id: WorkTab; label: string; desc: string; group: 'create' | 'manage' }[] = [
-  { id: 'manual', label: '图片生成', desc: '生成图片与构图', group: 'create' },
-  { id: 'scene', label: '故事快照', desc: '正文插图与场景', group: 'create' },
-  { id: 'sceneImage', label: '场景图', desc: '地点与新闻配图', group: 'create' },
-  { id: 'phone', label: '手机背景', desc: '壁纸与聊天背景', group: 'create' },
-  { id: 'anchor', label: '角色视觉', desc: '头像与立绘锚点', group: 'create' },
-  { id: 'gallery', label: '图库', desc: '角色、场景与导入导出', group: 'manage' },
-  { id: 'rules', label: '规则中心', desc: 'Prompt 规范', group: 'manage' },
-  { id: 'queue', label: '生成任务', desc: '图片任务流与记录', group: 'manage' },
-  { id: 'reference', label: '参考图', desc: '全局注入控制', group: 'manage' },
-  { id: 'settings', label: '设置', desc: '接口与正文插图', group: 'manage' },
+export const tabs: { id: WorkTab; label: string; desc: string; groupId: NavGroupId }[] = [
+  { id: 'manual', label: '图片生成', desc: '生成图片与构图', groupId: 'generate' },
+  { id: 'scene', label: '故事快照', desc: '正文插图与场景', groupId: 'generate' },
+  { id: 'sceneImage', label: '场景图', desc: '地点与新闻配图', groupId: 'generate' },
+  { id: 'phone', label: '手机背景', desc: '壁纸与聊天背景', groupId: 'generate' },
+  { id: 'anchor', label: '角色视觉', desc: '头像与立绘锚点', groupId: 'generate' },
+  { id: 'gallery', label: '图库', desc: '角色、场景与导入导出', groupId: 'library' },
+  { id: 'rules', label: '规则中心', desc: 'Prompt 规范', groupId: 'settings' },
+  { id: 'queue', label: '生成任务', desc: '图片任务流与记录', groupId: 'tasks' },
+  { id: 'reference', label: '参考图', desc: '全局注入控制', groupId: 'settings' },
+  { id: 'settings', label: '设置', desc: '接口与正文插图', groupId: 'settings' },
 ];
 
 export const generateTargets: Array<{
@@ -111,15 +88,13 @@ export type GenerateOverride = {
   disabledMessage?: string;
 };
 
-export type NavGroupId = 'generate' | 'library' | 'tasks' | 'settings';
-
-export const navGroups: { id: NavGroupId; label: string; members: WorkTab[] }[] = [
-  { id: 'generate', label: '生成', members: ['manual', 'scene', 'sceneImage', 'phone', 'anchor'] },
-  { id: 'library', label: '图库', members: ['gallery'] },
-  { id: 'tasks', label: '任务', members: ['queue'] },
-  { id: 'settings', label: '设置', members: ['reference', 'rules', 'settings'] },
+export const navGroups: { id: NavGroupId; label: string }[] = [
+  { id: 'generate', label: '生成' },
+  { id: 'library', label: '图库' },
+  { id: 'tasks', label: '任务' },
+  { id: 'settings', label: '设置' },
 ];
 
 export function groupForTab(tab: WorkTab): NavGroupId {
-  return navGroups.find((group) => group.members.includes(tab))?.id ?? 'generate';
+  return tabs.find((item) => item.id === tab)?.groupId ?? 'generate';
 }

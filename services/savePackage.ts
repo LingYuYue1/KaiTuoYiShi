@@ -4,6 +4,7 @@ import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
 import { createUnifiedId } from '@/utils/id';
+import { buildStoredZip, readZipEntries } from '@/utils/zip';
 
 const PACKAGE_VERSION = 2;
 const encoder = new TextEncoder();
@@ -60,21 +61,10 @@ export interface 存档树包清单 {
   }>;
 }
 
-type ZipEntryInput = {
-  name: string;
-  bytes: Uint8Array;
-};
-
-type ZipEntryOutput = ZipEntryInput & {
-  compressedBytes: Uint8Array;
-  compressionMethod: 0 | 8;
-  crc32: number;
-};
-
 export async function buildSavePackage(save: 存档数据): Promise<Blob> {
   const expanded = await expandSaveAssetPayloadForExport(save);
   const entries = splitSaveIntoPackageEntries(sanitizeSaveForExport(compactDuplicatedSaveImages(expanded)));
-  const bytes = await createZip(entries);
+  const bytes = buildStoredZip(entries);
   return new Blob([bytes], { type: 'application/zip' });
 }
 
@@ -141,7 +131,7 @@ export async function buildSaveTreePackage(saves: 存档数据[]): Promise<Blob>
     textEntry('manifest.json', manifest),
     ...files.map(([name, value]) => textEntry(name, value)),
   ];
-  return new Blob([await createZip(entries)], { type: 'application/zip' });
+  return new Blob([buildStoredZip(entries)], { type: 'application/zip' });
 }
 
 export function sanitizeSaveForExport(save: 存档数据): 存档数据 {
@@ -172,8 +162,8 @@ function stripRuntimeDebugFromChatHistory(chatHistory: 存档数据['chatHistory
   });
 }
 
-export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数据> {
-  const files = await readZip(buffer);
+export function parseSavePackage(buffer: ArrayBuffer): 存档数据 {
+  const files = readZip(buffer);
   const manifestText = files.get('manifest.json');
   if (!manifestText) {
     throw new Error('存档包缺少 manifest.json');
@@ -220,8 +210,8 @@ export async function parseSavePackage(buffer: ArrayBuffer): Promise<存档数�
   };
 }
 
-export async function parseSaveTreePackage(buffer: ArrayBuffer): Promise<存档数据[]> {
-  const files = await readZip(buffer);
+export function parseSaveTreePackage(buffer: ArrayBuffer): 存档数据[] {
+  const files = readZip(buffer);
   const manifestText = files.get('manifest.json');
   if (!manifestText) {
     throw new Error('存档包缺少 manifest.json');
@@ -229,7 +219,7 @@ export async function parseSaveTreePackage(buffer: ArrayBuffer): Promise<存档�
   const manifest = JSON.parse(manifestText) as Partial<存档包清单>;
   validatePackageManifest(manifest, files);
   if (manifest.kind !== 'save-tree-package') {
-    return [await parseSavePackage(buffer)];
+    return [parseSavePackage(buffer)];
   }
   return parseSaveTreePackageFiles(files, manifest).nodes;
 }
@@ -284,7 +274,7 @@ function parseSerializedSaveType(value: unknown): 存档数据['type'] {
     : 'imported';
 }
 
-function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
+function splitSaveIntoPackageEntries(save: 存档数据): Array<{ name: string; data: Uint8Array }> {
   const envelope = createSaveEnvelope(save);
   const {
     记忆,
@@ -340,10 +330,10 @@ function splitSaveIntoPackageEntries(save: 存档数据): ZipEntryInput[] {
   ];
 }
 
-function textEntry(name: string, value: unknown): ZipEntryInput {
+function textEntry(name: string, value: unknown): { name: string; data: Uint8Array } {
   return {
     name,
-    bytes: encoder.encode(JSON.stringify(value, null, 2)),
+    data: encoder.encode(JSON.stringify(value, null, 2)),
   };
 }
 
@@ -392,50 +382,6 @@ function isSafePackagePath(path: unknown): path is string {
   );
 }
 
-async function createZip(inputEntries: ZipEntryInput[]): Promise<Uint8Array> {
-  const entries: ZipEntryOutput[] = [];
-  for (const entry of inputEntries) {
-    const compressedBytes = await deflateRawIfAvailable(entry.bytes);
-    entries.push({
-      ...entry,
-      compressedBytes: compressedBytes ?? entry.bytes,
-      compressionMethod: compressedBytes ? 8 : 0,
-      crc32: crc32(entry.bytes),
-    });
-  }
-  const localParts: Uint8Array[] = [];
-  const centralParts: Uint8Array[] = [];
-  let offset = 0;
-
-  for (const entry of entries) {
-    const nameBytes = encoder.encode(entry.name);
-    const local = new Uint8Array(30 + nameBytes.length + entry.compressedBytes.length);
-    const view = new DataView(local.buffer);
-    writeLocalHeader(view, entry, nameBytes);
-    local.set(nameBytes, 30);
-    local.set(entry.compressedBytes, 30 + nameBytes.length);
-    localParts.push(local);
-
-    const central = new Uint8Array(46 + nameBytes.length);
-    writeCentralHeader(new DataView(central.buffer), entry, nameBytes, offset);
-    central.set(nameBytes, 46);
-    centralParts.push(central);
-    offset += local.length;
-  }
-
-  const centralOffset = offset;
-  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
-  const eocd = new Uint8Array(22);
-  const eocdView = new DataView(eocd.buffer);
-  eocdView.setUint32(0, 0x06054b50, true);
-  eocdView.setUint16(8, entries.length, true);
-  eocdView.setUint16(10, entries.length, true);
-  eocdView.setUint32(12, centralSize, true);
-  eocdView.setUint32(16, centralOffset, true);
-
-  return concatBytes([...localParts, ...centralParts, eocd]);
-}
-
 function getSaveTreeMetaLoose(save: 存档数据): { rootId?: string; nodeId?: string; parentNodeId?: string; branchName?: string } | undefined {
   return (save as 存档数据 & { saveTree?: { rootId?: string; nodeId?: string; parentNodeId?: string; branchName?: string } }).saveTree;
 }
@@ -450,138 +396,9 @@ function sanitizePackageSegment(value: string): string {
     .slice(0, 80) || 'node';
 }
 
-function writeLocalHeader(view: DataView, entry: ZipEntryOutput, nameBytes: Uint8Array): void {
-  const { time, date } = dosDateTime(new Date());
-  view.setUint32(0, 0x04034b50, true);
-  view.setUint16(4, 20, true);
-  view.setUint16(6, 0, true);
-  view.setUint16(8, entry.compressionMethod, true);
-  view.setUint16(10, time, true);
-  view.setUint16(12, date, true);
-  view.setUint32(14, entry.crc32, true);
-  view.setUint32(18, entry.compressedBytes.length, true);
-  view.setUint32(22, entry.bytes.length, true);
-  view.setUint16(26, nameBytes.length, true);
-  view.setUint16(28, 0, true);
-}
-
-function writeCentralHeader(view: DataView, entry: ZipEntryOutput, nameBytes: Uint8Array, offset: number): void {
-  const { time, date } = dosDateTime(new Date());
-  view.setUint32(0, 0x02014b50, true);
-  view.setUint16(4, 20, true);
-  view.setUint16(6, 20, true);
-  view.setUint16(8, 0, true);
-  view.setUint16(10, entry.compressionMethod, true);
-  view.setUint16(12, time, true);
-  view.setUint16(14, date, true);
-  view.setUint32(16, entry.crc32, true);
-  view.setUint32(20, entry.compressedBytes.length, true);
-  view.setUint32(24, entry.bytes.length, true);
-  view.setUint16(28, nameBytes.length, true);
-  view.setUint16(30, 0, true);
-  view.setUint16(32, 0, true);
-  view.setUint16(34, 0, true);
-  view.setUint16(36, 0, true);
-  view.setUint32(38, 0, true);
-  view.setUint32(42, offset, true);
-}
-
-async function readZip(buffer: ArrayBuffer): Promise<Map<string, string>> {
-  const bytes = new Uint8Array(buffer);
-  const view = new DataView(buffer);
-  const files = new Map<string, string>();
-  let offset = 0;
-  while (offset + 30 <= bytes.length) {
-    const signature = view.getUint32(offset, true);
-    if (signature === 0x02014b50 || signature === 0x06054b50) break;
-    if (signature !== 0x04034b50) throw new Error('存档包 ZIP 结构损坏');
-    const compression = view.getUint16(offset + 8, true);
-    if (compression !== 0 && compression !== 8) throw new Error('暂不支持此 ZIP 压缩格式的存档包');
-    const crc = view.getUint32(offset + 14, true);
-    const compressedSize = view.getUint32(offset + 18, true);
-    const fileSize = view.getUint32(offset + 22, true);
-    const nameLength = view.getUint16(offset + 26, true);
-    const extraLength = view.getUint16(offset + 28, true);
-    const nameStart = offset + 30;
-    const dataStart = nameStart + nameLength + extraLength;
-    const dataEnd = dataStart + compressedSize;
-    if (dataEnd > bytes.length) throw new Error('存档包文件长度异常');
-    const name = decoder.decode(bytes.slice(nameStart, nameStart + nameLength));
-    const compressedData = bytes.slice(dataStart, dataEnd);
-    const data = compression === 8 ? await inflateRaw(compressedData) : compressedData;
-    if (data.length !== fileSize) throw new Error('存档包条目大小异常');
-    if (crc32(data) !== crc) throw new Error(`存档包条目校验失败：${name}`);
-    files.set(name, decoder.decode(data));
-    offset = dataEnd;
-  }
-  return files;
-}
-
-async function deflateRawIfAvailable(bytes: Uint8Array): Promise<Uint8Array | null> {
-  if (!('CompressionStream' in globalThis)) return null;
-  try {
-    return await runCompressionStream(bytes, 'deflate-raw');
-  } catch {
-    return null;
-  }
-}
-
-async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
-  if (!('DecompressionStream' in globalThis)) {
-    throw new Error('当前浏览器不支持压缩存档包解压，请更新浏览器或使用未压缩旧包');
-  }
-  return runDecompressionStream(bytes, 'deflate-raw');
-}
-
-async function runCompressionStream(bytes: Uint8Array, format: CompressionFormat): Promise<Uint8Array> {
-  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream(format));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
-async function runDecompressionStream(bytes: Uint8Array, format: CompressionFormat): Promise<Uint8Array> {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
-function dosDateTime(date: Date): { time: number; date: number } {
-  const year = Math.max(1980, date.getFullYear());
-  return {
-    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
-    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
-  };
-}
-
-function concatBytes(parts: Uint8Array[]): Uint8Array {
-  const total = parts.reduce((sum, part) => sum + part.length, 0);
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    out.set(part, offset);
-    offset += part.length;
-  }
-  return out;
-}
-
-let crcTable: Uint32Array | null = null;
-
-function crc32(bytes: Uint8Array): number {
-  const table = crcTable ?? buildCrcTable();
-  crcTable = table;
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc = table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function buildCrcTable(): Uint32Array {
-  const table = new Uint32Array(256);
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let k = 0; k < 8; k++) {
-      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-    }
-    table[i] = c >>> 0;
-  }
-  return table;
+function readZip(buffer: ArrayBuffer): Map<string, string> {
+  const files = readZipEntries(new Uint8Array(buffer));
+  const result = new Map<string, string>();
+  for (const [name, data] of files) result.set(name, decoder.decode(data));
+  return result;
 }

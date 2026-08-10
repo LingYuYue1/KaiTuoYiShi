@@ -1,5 +1,5 @@
 import type { 文生图API配置, 文生图参考图设置 } from '@/models/settings';
-import { cardClip, heroGridBackgroundStyle, heroSurface, smallClip } from './foundation';
+import { cardClip, heroGridBackgroundStyle, heroSurface, smallClip } from './visualTokens';
 import { backendLabel, referenceBackendCapability } from './referenceInjection';
 
 interface ReferenceInjectionWorkspaceProps {

@@ -110,9 +110,50 @@ export function 创建空相册系统(): 相册系统 {
   };
 }
 
-function normalizeStringArray(value: unknown): string[] {
+export function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.map((item) => String(item ?? '').trim()).filter(Boolean);
+  const list = value.map((item) => String(item ?? '').trim()).filter(Boolean);
+  return [...new Set(list)];
+}
+
+export function isCharacterLibrarySlot(slot: 图片槽位): boolean {
+  return slot === 'avatar_profile' || slot === 'avatar_story' || slot === 'avatar_phone' || slot === 'portrait';
+}
+
+export function slotLabel(slot: 图片槽位): string {
+  const labels: Record<图片槽位, string> = {
+    avatar_profile: '档案头像',
+    avatar_story: '正文头像',
+    avatar_phone: '手机头像',
+    portrait: '角色立绘',
+    phone_wallpaper: '手机壁纸',
+    phone_chat_background: '聊天背景',
+    group_avatar: '群聊头像',
+    scene: '场景',
+    item_icon: '物品图标',
+    nsfw_female_chest: 'NSFW 胸部',
+    nsfw_female_genital: 'NSFW 女性私处',
+    nsfw_male_genital: 'NSFW 男性器',
+    nsfw_rear: 'NSFW 后庭',
+    nsfw_body_reference: 'NSFW 身体参考',
+    reference_image: '参考图',
+    misc: '其他',
+  };
+  return labels[slot];
+}
+
+export function resolveSize(preset: 'default' | '1:1' | '3:4' | '16:9' | 'custom', customSize: string, slot: 图片槽位): string {
+  if (preset === 'custom') return customSize.trim() || defaultSizeForSlot(slot);
+  if (preset === '1:1') return '1024x1024';
+  if (preset === '3:4') return '1024x1365';
+  if (preset === '16:9') return '1280x720';
+  return defaultSizeForSlot(slot);
+}
+
+export function defaultSizeForSlot(slot: 图片槽位): string {
+  if (slot === 'portrait') return '1024x1365';
+  if (slot === 'scene' || slot === 'phone_wallpaper' || slot === 'phone_chat_background') return '1280x720';
+  return '1024x1024';
 }
 
 export function 读取图片参考目标(entry: Pick<相册条目, 'targetType' | 'targetId' | 'slot'> & { referenceTargets?: unknown }): string[] {
