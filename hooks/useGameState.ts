@@ -58,7 +58,7 @@ import {
   loadWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
-import { deleteSetting, loadActiveLeaf, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave } from '@/services/dbService';
+import { deleteSetting, loadActiveLeaf, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave, validateRerollParent } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
@@ -245,6 +245,8 @@ export interface UseGameStateReturn {
   /** 当前活跃叶子的存档树元信息（响应式 state）：读档水合 / 封版晋升 / 新局初始化 / 整树删除时随工作区联动更新，驱动 canRerollWithTree。 */
   activeTreeMeta: 存档树元信息 | null;
   setActiveTreeMeta: React.Dispatch<React.SetStateAction<存档树元信息 | null>>;
+  /** 活跃叶子父检查点的存在性验证状态（响应式 state）：pending=验证中（禁用）/ valid=父真实存在 / invalid=无父或验证失败。 */
+  rerollParentStatus: 'pending' | 'valid' | 'invalid';
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -300,6 +302,7 @@ export function useGameState(): UseGameStateReturn {
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
   const [activeTreeMeta, setActiveTreeMeta] = useState<存档树元信息 | null>(null);
+  const [rerollParentStatus, setRerollParentStatus] = useState<'pending' | 'valid' | 'invalid'>('pending');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bootReadyRef = useRef(false);
@@ -338,6 +341,7 @@ export function useGameState(): UseGameStateReturn {
     pendingOpeningTrigger, setPendingOpeningTrigger,
     activeWorkflow,
     activeTreeMeta, setActiveTreeMeta,
+    rerollParentStatus,
     scrollRef,
   };
 
@@ -554,6 +558,42 @@ export function useGameState(): UseGameStateReturn {
     })();
     // setter 恒稳定（React useState 身份保证），deps 不变即 mount 一次性执行
   }, [setDeviceApiSettings, setDeviceGameSettings, setDeviceTheme, setDeviceWorldbooks, setInterruptedWorkflow, setTurnStatus]);
+
+  // reroll 父检查点存在性主动验证（响应式）：activeTreeMeta 每次变化（读档水合 / 封版晋升 /
+  // 崩溃重建 / 整树删除 / reroll 自愈剥离）都重新探测父检查点是否真实存在且同树，驱动 canRerollWithTree。
+  // 验证中置 pending（按钮保守禁用，避免闪烁）；验证失败用四元组相等守卫剥离 parentNodeId 自愈
+  // （防迟到的旧结果误清新叶子）；无父（根叶子 / 无根切片 / 已自愈）直接早退置 invalid，不再发起探测。
+  // 探测异常（瞬时 IDB 错误）置 invalid 但不剥离 meta，留待下次 meta 变化重新验证。
+  useEffect(() => {
+    const meta = activeTreeMeta;
+    if (!meta?.rootId || !meta.parentNodeId) {
+      setRerollParentStatus('invalid');
+      return;
+    }
+    let cancelled = false;
+    setRerollParentStatus('pending');
+    void validateRerollParent(meta.rootId, meta.parentNodeId)
+      .then((ok) => {
+        if (cancelled) return;
+        if (ok) {
+          setRerollParentStatus('valid');
+          return;
+        }
+        setActiveTreeMeta((prev) => {
+          if (!prev || prev.rootId !== meta.rootId || prev.nodeId !== meta.nodeId || prev.parentNodeId !== meta.parentNodeId) return prev;
+          const { parentNodeId: _removedParentNodeId, ...rest } = prev;
+          void _removedParentNodeId;
+          return rest;
+        });
+        setRerollParentStatus('invalid');
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        devLogError('save', 'reroll-parent-validate-failed', err, { rootId: meta.rootId, parentNodeId: meta.parentNodeId });
+        setRerollParentStatus('invalid');
+      });
+    return () => { cancelled = true; };
+  }, [activeTreeMeta]);
 
   // Persist the last active UI view after boot has finished reading it.
   useEffect(() => {

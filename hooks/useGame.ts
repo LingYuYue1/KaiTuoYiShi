@@ -228,6 +228,8 @@ export interface UseGameReturn {
   };
   /** 树检查版 reroll 可用性：当前活跃叶子是否存在可回退的父检查点（根叶子 / 导入的无根切片为 false）。 */
   canRerollWithTree: boolean;
+  /** 父检查点存在性验证状态：pending=验证中（禁用）/ valid=可回退 / invalid=无父或验证失败（UI 禁用门）。 */
+  rerollParentStatus: 'pending' | 'valid' | 'invalid';
 }
 
 /**
@@ -498,6 +500,19 @@ export function useGame(): UseGameReturn {
     // 沿祖先上溯：找到第一个「不包含本轮输入」的检查点 = 本轮发送前状态。
     // 已封版回合的直接父检查点包含本轮输入（含已提交副作用），不能作为回退目标。
     let forkTargetNodeId: string | null = tree.parentNodeId;
+    // 父链不可用时统一收敛：报状态条 + 带守卫剥离 parentNodeId（canRerollWithTree 随之失效，
+    // 按钮禁用，不再每次点击重复报错；readSaveSummaries 只收录可见节点，目录缺失但 saves 表
+    // 存在的情况已由 loadSaveIdByNodeId 的 saves 表回退兜底，走到这里的缺失/跨树即为真实异常）。
+    // 守卫：meta 仍指向同一叶子才剥离，防迟到清理误伤后续重设的 meta。
+    const disableReroll = (text: string) => {
+      s.activeWorkflow.setTurnStatus({ kind: 'stopped', text });
+      s.setActiveTreeMeta((prev) => {
+        if (!prev || prev.rootId !== tree.rootId || prev.nodeId !== tree.nodeId) return prev;
+        const { parentNodeId: _removedParentNodeId, ...rest } = prev;
+        void _removedParentNodeId;
+        return rest;
+      });
+    };
     try {
       for (let guard = 0; guard < 32; guard++) {
         const parentSaveId = await loadSaveIdByNodeId(forkTargetNodeId);
@@ -505,7 +520,17 @@ export function useGame(): UseGameReturn {
         const parentTree = (parentSave as { saveTree?: 存档树元信息 | null } | null)?.saveTree;
         if (!parentSave || !parentTree) {
           devLogError('turn', 'reroll-parent-missing', new Error(`父检查点缺失：${forkTargetNodeId}`), { rootId: tree.rootId });
-          s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '父检查点缺失，无法重roll。' });
+          disableReroll('父检查点缺失，无法重roll。');
+          return;
+        }
+        // 祖先 rootId 校验：父检查点必须与当前叶子同属一棵存档树，跨树父链视为异常数据，拒绝回退。
+        if (parentTree.rootId !== tree.rootId) {
+          devLogError('turn', 'reroll-root-mismatch', new Error(`父检查点 rootId 与当前工作区不一致：${parentTree.rootId}`), {
+            rootId: tree.rootId,
+            parentRootId: parentTree.rootId,
+            forkTargetNodeId,
+          });
+          disableReroll('父检查点不属于当前存档树，无法重roll。');
           return;
         }
         const containsRerolledUser = Array.isArray(parentSave.chatHistory)
@@ -581,14 +606,17 @@ export function useGame(): UseGameReturn {
     }
   }, []);
 
-  // 树检查版 reroll 可用性（UI 禁用门）：当前活跃叶子是否有可回退的父检查点。
-  // 与 handleReroll 内部的真实树检查同源——activeTreeMeta 是 useGameState 的响应式 state，
-  // 在 applySaveToState（读档水合）/ commitActiveSaveTreeMeta（封版晋升 / 新局初始化）/
-  // clearActiveSaveTreeMetaIfMatches（整树删除）处随活跃叶子联动更新，天然驱动 React 重渲染；
+  // 树检查版 reroll 可用性（UI 禁用门）：当前活跃叶子是否有可回退的父检查点，且该父检查点
+  // 已通过 IndexedDB 存在性验证。与 handleReroll 内部的真实树检查同源——activeTreeMeta 是
+  // useGameState 的响应式 state，在 applySaveToState（读档水合）/ commitActiveSaveTreeMeta（封版晋升 /
+  // 新局初始化）/ clearActiveSaveTreeMetaIfMatches（整树删除）处随活跃叶子联动更新，天然驱动 React 重渲染；
+  // rerollParentStatus 由 useGameState 的验证 effect 在 meta 每次变化时异步探测父节点真实存在性，
+  // pending（验证中）与 invalid（无父 / 验证失败）一律保守禁用，不再等点击后才在 handleReroll 里报错。
   // 根叶子（无 parentNodeId）或导入的无根单独切片存档（ensureSaveTreeRoot 生成新根、无父节点）
-  // 在此判定为不可回退，UI 直接禁用按钮与 tooltip 提示，不再等点击后才在 handleReroll 里报错。
-  const { activeTreeMeta } = state;
-  const canRerollWithTree = Boolean(activeTreeMeta?.rootId && activeTreeMeta.parentNodeId);
+  // 在此判定为不可回退，UI 直接禁用按钮与 tooltip 提示。
+  const { activeTreeMeta, rerollParentStatus } = state;
+  const canRerollWithTree = Boolean(activeTreeMeta?.rootId && activeTreeMeta.parentNodeId)
+    && rerollParentStatus === 'valid';
 
   const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
     await regenerateNarrativeImagesForMessage(stateRef.current, getActiveConfig, messageId);
@@ -1444,5 +1472,6 @@ export function useGame(): UseGameReturn {
     state,
     actions,
     canRerollWithTree,
+    rerollParentStatus,
   };
 }

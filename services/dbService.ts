@@ -38,8 +38,6 @@ import {
   type SaveCatalogRepairResult,
   type SaveCatalogRepairScope,
 } from '@/services/storage/saveCatalogRepair';
-import { selectSaveNodeRotationCandidates } from '@/services/storage/saveRetention';
-
 export type { SaveCatalogSnapshot, SaveListItemSummary } from '@/services/storage/saveCatalog';
 export type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState } from '@/services/storage/saveCatalogRepair';
 export { getSaveCatalogRepairState, subscribeSaveCatalogRepair };
@@ -790,7 +788,6 @@ async function saveGameInternal(data: 存档数据, options?: SaveGameOptions): 
     tx.oncomplete = () => resolve({ id: savedId, save: { ...sourceData, id: savedId }, delta: savedDelta });
     tx.onerror = () => reject(toError(tx.error));
   });
-  await rotateManagedSavesSafely(db);
   return saved.id;
 }
 
@@ -830,13 +827,54 @@ export async function getSaveCatalogSnapshot(): Promise<SaveCatalogSnapshot> {
   return readIndexedSaveCatalogSnapshot(db);
 }
 
-/** 通过轻量目录反查 saveTree 节点对应的 IndexedDB 数字主键。 */
+/**
+ * 通过轻量目录反查 saveTree 节点对应的 IndexedDB 数字主键。
+ * 目录摘要（saveSummaries）只收录可见节点；hidden-delta-base / unreadable / legacy-backup 等
+ * 节点不在 items 里。目录未命中时回退到 saves 表直接按 saveTree.nodeId 扫描，
+ * 避免父检查点真实存在却被误判为缺失（reroll-parent-missing）。
+ */
 export async function loadSaveIdByNodeId(nodeId: string): Promise<number | null> {
   const normalizedNodeId = normalizeNodeId(nodeId);
   if (!normalizedNodeId) return null;
   const db = await openDB();
   const summaries = await readSaveSummaries(db);
-  return summaries.find((item) => item.saveTree?.nodeId === normalizedNodeId)?.id ?? null;
+  const fromSummaries = summaries.find((item) => item.saveTree?.nodeId === normalizedNodeId);
+  if (fromSummaries) return fromSummaries.id;
+  return findSaveIdByNodeIdInSavesTable(db, normalizedNodeId);
+}
+
+/** reroll 父检查点存在性探针：父节点必须真实存在且与当前叶子同属一棵存档树。
+ * 与 handleReroll 的祖先探测同语义（loadSaveIdByNodeId 自带 saves 表回退，
+ * 目录恢复未完成不会误判缺失）。供 useGameState 的主动验证 effect 调用。 */
+export async function validateRerollParent(rootId: string, parentNodeId: string): Promise<boolean> {
+  const saveId = await loadSaveIdByNodeId(parentNodeId);
+  if (!saveId) return false;
+  const save = await loadSave(saveId);
+  const tree = (save as { saveTree?: { rootId?: string | null } | null } | null)?.saveTree;
+  return Boolean(tree?.rootId && tree.rootId === rootId);
+}
+
+/** 目录摘要未命中时回退：直接扫描 saves 表匹配 saveTree.nodeId（覆盖隐藏/不可读/legacy 节点）。 */
+async function findSaveIdByNodeIdInSavesTable(db: IDBDatabase, nodeId: string): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SAVES_STORE, 'readonly');
+    const store = tx.objectStore(SAVES_STORE);
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(null);
+        return;
+      }
+      const value = cursor.value as { id?: unknown; saveTree?: { nodeId?: unknown } } | undefined;
+      if (value && isPlainRecord(value.saveTree) && value.saveTree.nodeId === nodeId) {
+        resolve(normalizeSaveId(value.id));
+        return;
+      }
+      cursor.continue();
+    };
+    request.onerror = () => reject(toError(request.error));
+  });
 }
 
 /**
@@ -2019,22 +2057,6 @@ async function deleteIndexedSetting(key: string): Promise<void> {
   });
 }
 
-// ── Per-tree save-node rotation ──
-
-async function rotateManagedSaves(db: IDBDatabase): Promise<void> {
-  const all = await readSaveSummaries(db);
-  const candidates = selectSaveNodeRotationCandidates(all);
-  await deleteManagedSaveItems(db, candidates);
-}
-
-async function rotateManagedSavesSafely(db: IDBDatabase): Promise<void> {
-  try {
-    await rotateManagedSaves(db);
-  } catch (error) {
-    console.warn('[save-retention] post-save rotation failed', error);
-  }
-}
-
 function markSaveAsHiddenDeltaBase(
   saveStore: IDBObjectStore,
   summaryStore: IDBObjectStore,
@@ -2309,6 +2331,80 @@ export async function repairSaveDatabase(): Promise<void> {
   if (fullValidationQueuedBehindBackground) {
     await startSaveCatalogRepair('full-validation');
   }
+  // 目录修复完成后顺带修复树完整性：把父指针指向不存在节点的行升格为根。
+  // 自动轮转删除已取消（rotate 是断链根因），这里兜底修复历史存量断链。
+  await repairDanglingSaveTreeParents();
+}
+
+/** 悬垂父链修复：把 saveTree.parentNodeId 指向不存在节点的行升格为根（置 null）。
+ * 同步 saves 行与目录行两处；delta-only 行的 saveTree 在 restoreSaveFromDelta 中
+ * 以行内值为准（后写覆盖 deltaPayload.fields），delta 记录无需改动。
+ * 幂等可重放；返回修复行数。 */
+export async function repairDanglingSaveTreeParents(): Promise<number> {
+  return runWithSaveMutationPriority(async () => {
+    const db = await openDB();
+    const rows: Array<{ id: number; saveTree?: 存档树元信息 | null }> = [];
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(SAVES_STORE, 'readonly');
+      const cur = tx.objectStore(SAVES_STORE).openCursor();
+      cur.onsuccess = () => {
+        const c = cur.result;
+        if (!c) {
+          resolve();
+          return;
+        }
+        const v = c.value as { id?: unknown; saveTree?: unknown } | undefined;
+        if (v && typeof v.id === 'number' && isPlainRecord(v.saveTree)) {
+          rows.push({ id: v.id, saveTree: v.saveTree as unknown as 存档树元信息 });
+        }
+        c.continue();
+      };
+      cur.onerror = () => reject(toError(cur.error));
+    });
+    const nodeIds = new Set<string>();
+    for (const r of rows) {
+      if (r.saveTree?.nodeId) nodeIds.add(r.saveTree.nodeId.trim());
+    }
+    const dangling = rows.filter((r) => r.saveTree?.parentNodeId && !nodeIds.has(r.saveTree.parentNodeId.trim()));
+    if (!dangling.length) return 0;
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE], 'readwrite');
+      const saveStore = tx.objectStore(SAVES_STORE);
+      const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
+      for (const r of dangling) {
+        const saveReq = saveStore.get(r.id);
+        saveReq.onsuccess = () => {
+          const save = saveReq.result as (存档数据 & { saveTree?: 存档树元信息 }) | undefined;
+          if (!save?.saveTree) return;
+          const { parentNodeId: _removedParentNodeId, ...rest } = save.saveTree;
+          void _removedParentNodeId;
+          save.saveTree = rest;
+          saveStore.put(save);
+        };
+        saveReq.onerror = () => reject(toError(saveReq.error));
+        const sumReq = summaryStore.get(r.id);
+        sumReq.onsuccess = () => {
+          const sum = sumReq.result as { id?: unknown; saveTree?: 存档树元信息 } | undefined;
+          if (!sum?.saveTree) return;
+          const { parentNodeId: _removedParentNodeId, ...rest } = sum.saveTree;
+          void _removedParentNodeId;
+          sum.saveTree = rest;
+          summaryStore.put(sum);
+        };
+        sumReq.onerror = () => reject(toError(sumReq.error));
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(toError(tx.error));
+      tx.onabort = () => reject(tx.error ?? new Error('悬垂父链修复事务已中止'));
+    });
+    devLog('save', 'repair-dangling-parents', {
+      scanned: rows.length,
+      repaired: dangling.length,
+      dangling: dangling.map((r) => ({ id: r.id, nodeId: r.saveTree?.nodeId, parentNodeId: r.saveTree?.parentNodeId })),
+    });
+    return dangling.length;
+  });
 }
 
 async function repairOneSaveCatalogRecord(db: IDBDatabase, id: number): Promise<void> {

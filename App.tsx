@@ -306,7 +306,7 @@ const getBookOpenDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_MOTION
 const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_VIEW_SWITCH_MS : BOOK_OPEN_VIEW_SWITCH_MS;
 
 export function App() {
-  const { state, actions, canRerollWithTree } = useGame();
+  const { state, actions, canRerollWithTree, rerollParentStatus } = useGame();
   const { apiSettings, gameSettings, theme: currentTheme, worldbooks } = state.deviceSettings;
   const {
     persistGameSettings,
@@ -523,8 +523,10 @@ export function App() {
     [state.chatHistory, canRerollWithTree],
   );
   const rerollDisabledReason = useMemo(
-    () => (!canRerollWithTree ? '当前没有可以回退的历史存档' : undefined),
-    [canRerollWithTree],
+    () => (rerollParentStatus === 'pending'
+      ? '正在验证历史存档…'
+      : !canRerollWithTree ? '当前没有可以回退的历史存档' : undefined),
+    [rerollParentStatus, canRerollWithTree],
   );
 
   const narrativeImageManualEnabled = gameSettings.文生图系统.正文生图.enabled
