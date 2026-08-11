@@ -61,12 +61,15 @@ export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nod
 export function buildSavePayload(
   state: UseGameStateReturn,
   type: 存档类型,
-  overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
+  overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks' | 'gameSettings'>>,
 ): 存档数据 {
   const persistedChatHistory = compactChatHistoryForLongSession(
     overrides?.chatHistory ?? state.chatHistory,
   );
   const timestamp = Date.now();
+  // gameSettings 允许传入本回合最终覆盖值（宏全局变量 / 世界书触发状态等运行时字段），
+  // 自动存档与 saveSetting('gameSettings') 必须使用同一个最终对象，不能继续读闭包旧 state。
+  const gameSettingsForSave = overrides?.gameSettings ?? state.gameSettings;
   const baseSave = {
     id: 0,
     type,
@@ -87,15 +90,15 @@ export function buildSavePayload(
     variableBatches: compactVariableBatchHistory(overrides?.variableBatches ?? state.variableBatches),
     queueTasks: overrides?.queueTasks ?? state.queueTasks,
     gameSettings: buildSaveGameSettingsSnapshot({
-      ...state.gameSettings,
-      新闻系统: 归一化星际和平周报设置(state.gameSettings.新闻系统),
-      手机系统: 归一化手机系统设置(state.gameSettings.手机系统 ?? 创建默认手机系统设置()),
-      智库系统: 归一化智库系统设置(state.gameSettings.智库系统),
-      剧情编织系统: 归一化剧情编织系统设置(state.gameSettings.剧情编织系统),
-      文生图系统: 归一化文生图系统设置(state.gameSettings.文生图系统),
-      记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统 ?? 创建默认记忆系统设置()),
-      额外功能: 归一化额外功能设置(state.gameSettings.额外功能),
-      visualTextSettings: 归一化视觉文本设置(state.gameSettings.visualTextSettings),
+      ...gameSettingsForSave,
+      新闻系统: 归一化星际和平周报设置(gameSettingsForSave.新闻系统),
+      手机系统: 归一化手机系统设置(gameSettingsForSave.手机系统 ?? 创建默认手机系统设置()),
+      智库系统: 归一化智库系统设置(gameSettingsForSave.智库系统),
+      剧情编织系统: 归一化剧情编织系统设置(gameSettingsForSave.剧情编织系统),
+      文生图系统: 归一化文生图系统设置(gameSettingsForSave.文生图系统),
+      记忆系统: 归一化记忆系统设置(gameSettingsForSave.记忆系统 ?? 创建默认记忆系统设置()),
+      额外功能: 归一化额外功能设置(gameSettingsForSave.额外功能),
+      visualTextSettings: 归一化视觉文本设置(gameSettingsForSave.visualTextSettings),
     }),
     apiSettings: 创建空API设置(),
     theme: state.currentTheme,

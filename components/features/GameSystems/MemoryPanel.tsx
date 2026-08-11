@@ -1,4 +1,4 @@
-﻿// 记忆系统面板（v2）。
+// 记忆系统面板（v2）。
 // 左侧切换 即时 / 短期 / 中期 / 长期，右侧显示条目与整理动作。
 
 import { useState } from 'react';
@@ -52,11 +52,14 @@ export function MemoryPanel({
   onRetryFailedDraft,
   onIgnoreFailedDraft,
   onOpenBatchRebuild,
+  onTriggerManualCompress,
 }: MemoryPanelProps & {
   failedDrafts?: 记忆失败草稿[];
   onRetryFailedDraft?: (draft: 记忆失败草稿) => void;
   onIgnoreFailedDraft?: (draft: 记忆失败草稿) => void;
   onOpenBatchRebuild?: () => void;
+  /** 阶段1·主链压缩手动入口：玩家点击后触发三阶段压缩弹窗（remind→processing→review） */
+  onTriggerManualCompress?: () => void;
 }) {
   const [activeLayer, setActiveLayer] = useState<MemoryLayer>('immediate');
   const failedDrafts = failedDraftsProp ?? memorySystem.失败草稿 ?? [];
@@ -134,6 +137,17 @@ export function MemoryPanel({
           : activeLayer === 'long'
             ? memorySystem.长期记忆.length
             : failedDrafts.filter((draft) => draft.status === 'pending' || draft.status === 'retrying').length;
+
+  // 阶段1·主链压缩手动入口：计算各层待压缩条数，用于按钮高亮/灰显
+  const apiSummaryEnabled = (settings as 记忆系统设置 & { 启用中短长期API总结?: boolean }).启用中短长期API总结 !== false;
+  const manualImmediateThreshold = settings.即时转短期阈值 ?? 10;
+  const manualShortThreshold = settings.短期转中期阈值 ?? 30;
+  const manualMiddleThreshold = settings.中期转长期阈值 ?? 50;
+  const manualImmediatePending = Math.max(0, memorySystem.即时记忆.length - manualImmediateThreshold + 1);
+  const manualShortPending = Math.max(0, memorySystem.短期记忆.length - manualShortThreshold + 1);
+  const manualMiddlePending = Math.max(0, (memorySystem.中期记忆 ?? []).length - manualMiddleThreshold + 1);
+  const manualNeedsCompression = apiSummaryEnabled
+    && (manualImmediatePending > 0 || manualShortPending > 0 || manualMiddlePending > 0);
 
   return (
     <div className="flex min-h-full w-full min-w-0 flex-col gap-3 overflow-x-hidden md:h-full md:min-h-0 md:flex-row md:gap-4 md:overflow-hidden">
@@ -223,6 +237,17 @@ export function MemoryPanel({
             </div>
 
             <div className="flex flex-wrap gap-2">
+              {onTriggerManualCompress && (
+                <ActionButton
+                  onClick={onTriggerManualCompress}
+                  tone="gold"
+                  disabled={!manualNeedsCompression}
+                >
+                  {manualNeedsCompression
+                    ? `立即压缩记忆（即${manualImmediatePending}/短${manualShortPending}/中${manualMiddlePending}）`
+                    : '暂无需压缩'}
+                </ActionButton>
+              )}
               {onOpenBatchRebuild && (
                 <ActionButton onClick={onOpenBatchRebuild} tone="gold">
                   批量重建记忆

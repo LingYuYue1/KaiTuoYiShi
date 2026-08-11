@@ -28,7 +28,6 @@ const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
-  void onSave;
   const [cloudConfig, setCloudConfig] = useState<GitHubCloudSaveConfig>(createDefaultGitHubCloudConfig);
   const [cloudBackup, setCloudBackup] = useState<GitHubCloudBackupListing | null>(null);
   const [cloudBusy, setCloudBusy] = useState(false);
@@ -164,6 +163,11 @@ export function GitHubCloudSaveModal({ onSave, onClose }: Props) {
 
   const handleCloudSyncAll = () => runCloudTask(async (signal) => {
     const config = await persistCloudConfig();
+    // 完整云备份前先保存当前内存进度，形成可信本地存档；保存失败时停止上传，
+    // 不得退回旧目录继续打包并宣称完整备份成功。
+    const savedId = await onSave();
+    if (signal.aborted) return;
+    if (!Number.isFinite(savedId) || savedId <= 0) throw new Error('当前进度保存失败，已停止云备份上传。');
     const snapshot = await getSaveCatalogSnapshot();
     if (!snapshot.items.length && !snapshot.legacyBackups.length) throw new Error('本地还没有可上传的存档。');
     const built = await buildCompleteCloudBackup({

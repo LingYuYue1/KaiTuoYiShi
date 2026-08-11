@@ -1,6 +1,6 @@
 export const MEMORY_LAYER_COMPRESSION_THRESHOLD = 15;
 
-export type 记忆压缩层级 = 'short' | 'middle' | 'long';
+export type 记忆压缩层级 = 'short' | 'middle' | 'long' | 'npc';
 export type 失败草稿状态 = 'pending' | 'retrying' | 'resolved' | 'ignored';
 export type 记忆失败代码 = 'unconfigured' | 'request_failed' | 'empty_output' | 'source_changed';
 

@@ -1,6 +1,7 @@
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import type { 图片资源, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import { getAlbumAssetBlob, isDataImageUrl, rememberAlbumAssetFromDataUrl } from '@/utils/albumObjectUrl';
+import { sha256BytesHex } from '@/services/storyRuntime/id';
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -10,8 +11,8 @@ export function normalizeContentHash(value: unknown): string | undefined {
 }
 
 export async function sha256Bytes(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  // 统一共享字节 SHA-256：LAN HTTP 无 crypto.subtle 时本地回退，输出与 Web Crypto 完全一致。
+  return sha256BytesHex(bytes);
 }
 
 export function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; mimeType: string } | null {

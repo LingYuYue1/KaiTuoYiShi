@@ -16,6 +16,11 @@ import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneServ
 import type { 忆庭系统 } from '@/models/yiting';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import {
+  type PhoneMemoryCommitIntent,
+  type PhoneDualWriteResult,
+} from '@/services/phoneMemoryDualWrite';
+import type { 队列任务记录 } from '@/models/queueTask';
+import {
   BUILTIN_PHONE_WALLPAPERS,
   DEFAULT_PHONE_CHAT_WALLPAPER,
   DEFAULT_PHONE_HOME_WALLPAPER,
@@ -42,6 +47,10 @@ interface Props {
   onMemoryChange: React.Dispatch<React.SetStateAction<记忆系统>>;
   onYitingChange: React.Dispatch<React.SetStateAction<忆庭系统>>;
   onNpcRecordsChange: React.Dispatch<React.SetStateAction<NPC记录[]>>;
+  /** 手机记忆双写上层串行事务入口（useGame.commitPhoneMemory）：PhoneModal 只提交意图。 */
+  onCommitPhoneMemory?: (intent: PhoneMemoryCommitIntent) => Promise<PhoneDualWriteResult | undefined>;
+  /** 手机记忆双写单侧失败时上报，由上层写入可持久化的 queueTasks。 */
+  onPhoneMemoryWriteFailure?: (task: 队列任务记录) => void;
   onClose: () => void;
 }
 
@@ -141,6 +150,8 @@ export function PhoneModal({
   onMemoryChange,
   onYitingChange,
   onNpcRecordsChange,
+  onCommitPhoneMemory,
+  onPhoneMemoryWriteFailure,
   onClose,
 }: Props) {
   const [activeApp, setActiveApp] = useState<PhoneApp | null>(null);
@@ -604,77 +615,30 @@ export function PhoneModal({
     return shouldFlush ? flushedSummary : '';
   };
 
-  const commitPhoneMemory = async (summary: string, contact?: 手机联系人, options: { force?: boolean } = {}) => {
+  const commitPhoneMemory = async (
+    summary: string,
+    contact?: 手机联系人,
+    options: { force?: boolean; operationSourceId?: string } = {},
+  ) => {
     const trimmed = summary.trim();
     if (!trimmed) return;
 
-    // 阶段1方案E：手机压缩摘要代码强制双写
-    // ① 忆庭条目（分类='通讯'，走主记忆链AI压缩生成忆庭档案）
-    // ② NPC同行记忆（来源='手机'，【通讯记录】标记打包1条，算1条占阈值20）
-    // 不再直接注入正文（buildPhoneSection已移除compressedSummaries注入）
-
-    const normalizedSummary = trimmed.startsWith('【手机】') ? trimmed : `【手机】${trimmed}`;
-    const alreadyInMemory = memory.即时记忆.some((item) => item.includes(trimmed))
-      || memory.短期记忆.some((item) => item.includes(trimmed))
-      || (memory.中期记忆 ?? []).some((item) => item.includes(trimmed))
-      || memory.长期记忆.some((item) => item.includes(trimmed));
-    if (!options.force && alreadyInMemory) return;
-    const withImmediate = addImmediateMemory(memory, normalizedSummary, turnCount);
-    const compression = await autoCompressMemorySystemWithArchivesAsync(
-      withImmediate,
-      turnCount,
-      gameSettings.记忆系统,
-      mainConfig ?? apiSettings.configs[0] ?? { id: '', name: '', provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '', createdAt: 0, updatedAt: 0 },
-    );
-    onMemoryChange(compression.memory);
-    if (compression.archives.length) {
-      // 阶段1方案E：手机压缩生成的忆庭条目标记分类='通讯'
-      const phoneArchives = compression.archives.map((entry) => ({
-        ...entry,
-        分类: '通讯' as const,
-        通讯元数据: contact?.npcId ? {
-          联系人: contact.npcId,
-        } : undefined,
-      }));
-      onYitingChange((prevYiting) => ({
-        ...prevYiting,
-        回忆档案: [...prevYiting.回忆档案, ...phoneArchives],
-      }));
-    }
-    if (contact?.npcId) {
-      // 阶段1方案E：NPC同行记忆用【通讯记录】标记包裹，打包成1条（不管几条消息）
-      const packagedSummary = `【通讯记录】${trimmed}`;
-      onNpcRecordsChange((prev) =>
-        prev.map((npc) => {
-          if (npc.id !== contact.npcId) return npc;
-          if (!options.force && 提取NPC同行记忆文本列表(npc).some((item) => item.includes(trimmed))) return npc;
-          const nextEntry: NPC同行记忆条目 = {
-            id: `npc_mem_phone_${turnCount}_${Math.random().toString(36).slice(2, 6)}`,
-            回合: turnCount,
-            摘要: packagedSummary,
-            来源: '手机',
-            关联NPCID: [npc.id],
-          };
-          const ledgerCompression = compressNpcMemoryLedger({
-            npcId: npc.id,
-            entries: [...(npc.同行记忆 ?? []), nextEntry],
-            summaries: npc.总结记忆 ?? [],
-            threshold: gameSettings.记忆系统.NPC记忆压缩阈值,
-            prompt: gameSettings.记忆系统.NPC记忆压缩提示词,
-            turn: turnCount,
-            source: '手机',
-          });
-          return {
-            ...npc,
-            同行记忆: ledgerCompression.memories,
-            总结记忆: ledgerCompression.summaries,
-            最近互动: packagedSummary,
-            共同经历: [...new Set([...(npc.共同经历 ?? []), packagedSummary])].slice(-8),
-            对玩家长期印象: npc.对玩家长期印象 || '与玩家保持手机联系，已形成可承接的私下互动。',
-            最近回合: turnCount,
-          };
-        }),
-      );
+    // 阶段1方案E：手机压缩摘要代码强制双写（忆庭通讯档案 + NPC同行记忆【通讯记录】）。
+    // 全项目返修：双写编排为上层串行事务（useGame.commitPhoneMemory → runPhoneMemoryCommit）——
+    //   - PhoneModal 只提交意图（含 operationSourceId），不携带旧状态快照；
+    //   - 同一时刻提交按 promise 链串行化，后一笔读取前一笔提交后的最新状态；
+    //   - 双侧失败时每个失败侧生成可恢复任务，入队后立即持久化；
+    //   - 未达压缩阈值时忆庭侧为 not_due，不虚报"已写入忆庭"。
+    // 上层事务完成（含失败任务入队与立即持久化）；单侧失败时给出可恢复提示。
+    const result = await onCommitPhoneMemory?.({
+      summary: trimmed,
+      contactId: contact?.npcId,
+      turn: turnCount,
+      operationSourceId: options.operationSourceId,
+      force: options.force,
+    });
+    if (result && (result.sides.yiting.status === 'failed' || result.sides.npc.status === 'failed')) {
+      setPhoneError('手机记忆写入单侧失败，已记录到任务队列，可稍后重试（只会补写失败的一侧）。');
     }
   };
 
@@ -794,10 +758,10 @@ export function PhoneModal({
       await commitPhoneMemory(
         `手机${activeChat.type === 'group' ? `群聊「${activeChat.title}」` : contact ? `私聊「${contact.name}」` : '私聊'}：${reply.summary ?? reply.messages.join(' / ')}`,
         contact,
-        { force: true },
+        { force: true, operationSourceId: playerMessage.id },
       );
       if (flushedSummary) {
-        await commitPhoneMemory(flushedSummary, contact);
+        await commitPhoneMemory(flushedSummary, contact, { operationSourceId: playerMessage.id });
       }
     } catch (err) {
       setPhoneError(`发送失败：${(err as Error).message}`);
@@ -932,10 +896,10 @@ export function PhoneModal({
       await commitPhoneMemory(
         `主动来信「${seed.title}」：${reply.summary ?? reply.messages.join(' / ')}`,
         seed.targetType === 'private' ? contact : undefined,
-        { force: true },
+        { force: true, operationSourceId: seed.id },
       );
       if (flushedSummary) {
-        await commitPhoneMemory(flushedSummary, seed.targetType === 'private' ? contact : undefined);
+        await commitPhoneMemory(flushedSummary, seed.targetType === 'private' ? contact : undefined, { operationSourceId: seed.id });
       }
       setActiveChatId(chat.id);
       setActiveApp('messages');

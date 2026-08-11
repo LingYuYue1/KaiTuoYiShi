@@ -2,7 +2,7 @@ import type { 变量事实, 变量命令 } from '@/models/variableCommand';
 import type { VariableState } from './variableRegistry';
 import type { 世界状态 } from '@/models/world';
 import { 对齐世界日期与天数, 推进琥珀日期 } from '@/models/world';
-import type { NPC记录, NPC关系类型, 约定结构 } from '@/models/npc';
+import type { NPC记录, NPC关系类型, 约定结构, 约定状态 } from '@/models/npc';
 import { 获取NPC关系阶段, 获取NPC兼容关系, 限制NPC好感度 } from '@/models/npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
@@ -902,6 +902,26 @@ export function factsToVariableCommands(
       }
       const key = `NPC[id=${existing.id}]`;
       push({ action: 'set', key: `${key}.约定[${matchIdx}].当前状态`, value: fact.新状态 });
+
+      // 阶段1补充·方案A软上限自动清理：已完结约定超过20条时，删除最老的
+      // 已完结 = 当前状态 !== '等待中'（即已履行/已违约/已作废）
+      // 保留最近20条已完结约定 + 全部等待中约定，更老的已完结约定物理删除
+      const COMPLETED_AGREEMENT_KEEP = 20;
+      const updatedAgreements = existingAgreements.map((a, idx) =>
+        idx === matchIdx ? { ...a, 当前状态: fact.新状态 as 约定状态 } : a,
+      );
+      const completedAgreements = updatedAgreements
+        .map((a, idx) => ({ ...a, _origIdx: idx }))
+        .filter((a) => a.当前状态 !== '等待中')
+        .sort((a, b) => b.回合 - a.回合); // 按回合降序，最近在前
+      if (completedAgreements.length > COMPLETED_AGREEMENT_KEEP) {
+        const toRemoveIdxs = new Set(
+          completedAgreements.slice(COMPLETED_AGREEMENT_KEEP).map((a) => a._origIdx),
+        );
+        const keptAgreements = updatedAgreements.filter((_, idx) => !toRemoveIdxs.has(idx));
+        push({ action: 'set', key: `${key}.约定`, value: keptAgreements });
+        warnings.push(`agreement_status 自动清理：${existing.姓名} 的已完结约定超过 ${COMPLETED_AGREEMENT_KEEP} 条，已删除最老的 ${toRemoveIdxs.size} 条。`);
+      }
       continue;
     }
 

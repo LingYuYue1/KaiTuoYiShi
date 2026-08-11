@@ -660,7 +660,7 @@ async function main() {
   {
     // 自动存档每回合只执行一次且失败走 catch（旧可信存档保留）——静态红线。
     assert((sendSource.match(/await saveGame\(/g) || []).length === 1, '验收9 自动存档每回合只执行一次');
-    assert(sendSource.includes('if (!turnStateCommitted && rollbackSnapshotOnAbort)') && sendSource.includes('restorePreTurnSnapshot(state, rollbackSnapshotOnAbort)'), '验收9 非 Abort 保存失败必须恢复回合前快照');
+    assert(sendSource.includes('if (!turnStateCommitted && rollbackSnapshotOnAbort)') && (sendSource.includes('restorePreTurnSnapshot(state, rollbackSnapshotOnAbort)') || sendSource.includes('restorePreTurnSnapshotPersisted(state, rollbackSnapshotOnAbort, updateSetting)')), '验收9 非 Abort 保存失败必须恢复回合前快照（含持久化智库运行态）');
     assert(sendSource.indexOf('turnStateCommitted = true') > sendSource.indexOf('await saveGame(saveData)'), '验收9 只有自动存档成功后才能把本回合标记为可信提交');
     assert(sendSource.includes('const worldForAutoSave = worldAfter'), '验收9 自动存档必须使用已合并变量覆盖与最新运行时切片的唯一 worldAfter');
     // 切片随普通存档往返（buildSavePayload 世界 override 携带切片）：归一化往返不丢数据。

@@ -22,6 +22,15 @@ export interface 回合快照 {
   queueTasks?: unknown[];
   turnCount: number;
   pendingOpeningTrigger?: string | null;
+  /**
+   * 回合前的 gameSettings 运行时字段（宏全局变量 / 世界书触发状态）。
+   * 只保存严格限定字段，不复制 API Key 等无关设置进每条消息快照。
+   * 重 Roll / 失败 / 中止恢复时，仅成功提交的回合才消费 cooldown/delay 与宏变量变化。
+   */
+  gameSettingsTurnState?: {
+    macroGlobalVars?: Record<string, string>;
+    worldbookTriggerStates?: Record<string, number>;
+  };
 }
 
 export interface 聊天消息 {

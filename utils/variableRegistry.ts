@@ -51,6 +51,7 @@ const NPC_ARRAY_ITEM_FIELDS = new Set([
   '必须记得',
   '禁止遗忘',
   '总结记忆',
+  '约定',
   '备注',
   '原著角色',
   'NSFW档案',
@@ -217,6 +218,15 @@ const ARRAY_SCHEMA_TEMPLATES: ArraySchemaTemplate[] = [
     recommended: ['原文', '来源', '关联NPCID'],
     example: '{"id":"npc_mem_march7th_1_signal","回合":1,"摘要":"三月七与玩家在空间站警报中确认同行，并提醒玩家跟紧列车组行动。","来源":"变量","关联NPCID":["npc_march7th"]}',
     forbidden: ['不要把 A 的经历写进 B 的同行记忆。', '无法确认归属时不写同行记忆。'],
+  },
+  {
+    path: 'NPC[id=...].约定',
+    title: 'NPC约定[] 对象（玩家承诺结构化载体）',
+    actionHint: '正文明确约定「之后要做某事」或玩家做出承诺时，使用 `push NPC[id=xxx].约定 = {...}`；履行/违约/作废用 `set NPC[id=xxx].约定[id=yyy].当前状态 = ...`。',
+    required: ['id', '标题', '内容', '当前状态', '回合'],
+    recommended: ['约定时间', '后果', '来源'],
+    example: '{"id":"agreement_march7th_1_escape_route","标题":"确认撤离路线","内容":"与三月七约定，撤离时确认安全路线并在汇合点碰头。","当前状态":"等待中","回合":1,"约定时间":"星历第二纪元","后果":"若未履行，三月七会担心并追问","来源":"正文"}',
+    forbidden: ['不要把随口一句寒暄写成约定。', '当前状态只能是 等待中/已履行/已违约/已作废。', '回合 必须是非负有限数字。'],
   },
   {
     path: '旅人.背包',
@@ -619,6 +629,39 @@ function validateSchemaPushValue(root: VariableRootKey, rest: string, value: unk
     if (messages.length > 0) return '变量模型只允许创建空会话频道，不允许直接写完整聊天 messages';
   }
 
+  if (template.path === 'NPC[id=...].约定') {
+    return validateNpcAgreementPushValue(fullPath, value);
+  }
+
+  return null;
+}
+
+const NPC_AGREEMENT_STATUSES = new Set(['等待中', '已履行', '已违约', '已作废']);
+const NPC_AGREEMENT_SOURCES = new Set(['正文', '通讯']);
+
+/** NPC 约定 push 专项校验：非法结构明确拒绝，不允许空泛对象通过。 */
+function validateNpcAgreementPushValue(fullPath: string, value: Record<string, unknown>): string | null {
+  const id = typeof value.id === 'string' ? value.id.trim() : '';
+  if (!id || id === 'undefined' || id === 'null') return `${fullPath} 约定缺少合法 id`;
+  const 标题 = typeof value.标题 === 'string' ? value.标题.trim() : '';
+  if (!标题) return `${fullPath} 约定缺少合法 标题`;
+  const 内容 = typeof value.内容 === 'string' ? value.内容.trim() : '';
+  if (!内容) return `${fullPath} 约定缺少合法 内容`;
+  const status = value.当前状态 ?? value.status;
+  if (typeof status !== 'string' || !NPC_AGREEMENT_STATUSES.has(status)) {
+    return `${fullPath} 约定.当前状态 只能是 等待中/已履行/已违约/已作废`;
+  }
+  const turn = Number(value.回合 ?? value.turn);
+  if (!Number.isFinite(turn) || turn < 0) return `${fullPath} 约定.回合 必须是非负有限数字`;
+  if (value.约定时间 !== undefined && typeof value.约定时间 !== 'string') {
+    return `${fullPath} 约定.约定时间 必须是字符串`;
+  }
+  if (value.后果 !== undefined && typeof value.后果 !== 'string') {
+    return `${fullPath} 约定.后果 必须是字符串`;
+  }
+  if (value.来源 !== undefined && (typeof value.来源 !== 'string' || !NPC_AGREEMENT_SOURCES.has(value.来源))) {
+    return `${fullPath} 约定.来源 只能是 正文/通讯`;
+  }
   return null;
 }
 

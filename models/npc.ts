@@ -34,6 +34,8 @@ export interface NPC同行记忆条目 {
   原文?: string;
   来源?: NPC同行记忆来源;
   关联NPCID?: string[];
+  /** 剧情事实结构化来源：相同 factId 幂等，重 Roll/重试不生成第二份 */
+  关联事实ID?: string;
 }
 
 export interface NPC总结记忆条目 {
@@ -96,6 +98,8 @@ export interface NPC记忆账本视图 {
   禁止遗忘: string[];
   总结记忆: NPC总结记忆条目[];
   最近原始记忆: string[];
+  /** 阶段1补充·约定展示环：NPC 的全部约定（含等待中/已履行/已违约/已作废） */
+  约定: 约定结构[];
   有账本字段: boolean;
 }
 
@@ -450,6 +454,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     必须记得: normalizeNpcTextList(source.必须记得 ?? source.mustRemember),
     禁止遗忘: normalizeNpcTextList(source.禁止遗忘 ?? source.doNotForget),
     总结记忆: 归一化NPC总结记忆列表(rawSummaryMemories),
+    约定: 归一化约定列表(source.约定 ?? source.agreements),
     备注: Array.isArray(rawNotes)
       ? rawNotes.filter((note): note is string => typeof note === 'string')
       : [],
@@ -486,6 +491,7 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     必须记得: 去重文本列表([...(base.必须记得 ?? []), ...(incoming.必须记得 ?? [])]),
     禁止遗忘: 去重文本列表([...(base.禁止遗忘 ?? []), ...(incoming.禁止遗忘 ?? [])]),
     总结记忆: 合并NPC总结记忆(base.总结记忆 ?? [], incoming.总结记忆 ?? []),
+    约定: 合并约定列表(base.约定 ?? [], incoming.约定 ?? []),
     备注: 去重文本列表([...(base.备注 ?? []), ...(incoming.备注 ?? [])]),
     原著角色: Boolean(base.原著角色 || incoming.原著角色),
     头像: preferred.头像 ?? base.头像 ?? incoming.头像,
@@ -735,7 +741,7 @@ function 合并NPC总结记忆(a: NPC总结记忆条目[], b: NPC总结记忆条
 function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .map((item, index) => {
+    .map((item, index): NPC同行记忆条目 | null => {
       if (typeof item === 'string') {
         const text = item.trim();
         if (!text) return null;
@@ -770,6 +776,9 @@ function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
         原文: typeof obj.原文 === 'string' ? obj.原文.trim() : undefined,
         来源: normalizeMemorySource(obj.来源),
         关联NPCID: related.length ? related : undefined,
+        关联事实ID: typeof obj.关联事实ID === 'string' && obj.关联事实ID.trim()
+          ? obj.关联事实ID.trim()
+          : undefined,
       };
     })
     .filter((item): item is NPC同行记忆条目 => Boolean(item))
@@ -808,6 +817,104 @@ function 归一化NPC总结记忆列表(raw: unknown): NPC总结记忆条目[] {
       };
     })
     .filter((item): item is NPC总结记忆条目 => Boolean(item));
+}
+
+// ===== 约定：归一化 / 合并 / 确定性兼容 ID =====
+
+const NPC_AGREEMENT_VALID_STATUSES = new Set(['等待中', '已履行', '已违约', '已作废']);
+
+/** 无 ID 的旧约定条目使用确定性兼容 ID（基于内容指纹），不能每次读档生成不同随机 ID。 */
+function 生成约定兼容ID(标题: string, 内容: string, index: number): string {
+  let hash = 2166136261;
+  for (const char of `${标题}|${内容}`.replace(/\s+/g, '')) {
+    hash ^= char.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `npc_agreement_legacy_${index}_${hash.toString(36)}`;
+}
+
+/** 读取旧存档中的约定列表：过滤无效项，保留合法 ID，缺失核心字段的条目被剔除。 */
+function 归一化约定列表(raw: unknown): 约定结构[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const output: 约定结构[] = [];
+  raw.forEach((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    const obj = item as Partial<约定结构> & Record<string, unknown>;
+    const 标题 = typeof obj.标题 === 'string' ? obj.标题.trim() : '';
+    const 内容 = typeof obj.内容 === 'string' ? obj.内容.trim() : '';
+    const status = typeof obj.当前状态 === 'string' ? obj.当前状态 : '';
+    if (!标题 || !内容 || !NPC_AGREEMENT_VALID_STATUSES.has(status)) return;
+    const turn = Number(obj.回合 ?? obj.turn);
+    const 回合 = Number.isFinite(turn) && turn >= 0 ? turn : 0;
+    const id = typeof obj.id === 'string' && obj.id.trim()
+      ? obj.id.trim()
+      : 生成约定兼容ID(标题, 内容, index);
+    if (seen.has(id)) return;
+    seen.add(id);
+    output.push({
+      id,
+      标题,
+      内容,
+      约定时间: typeof obj.约定时间 === 'string' ? obj.约定时间 : undefined,
+      当前状态: status as 约定状态,
+      后果: typeof obj.后果 === 'string' ? obj.后果 : undefined,
+      回合,
+      来源: obj.来源 === '正文' || obj.来源 === '通讯' ? obj.来源 : undefined,
+    });
+  });
+  return output;
+}
+
+/** 同一约定取较新、字段更完整的状态，不整条 NPC 记录互相覆盖。 */
+function 合并单条约定(a: 约定结构, b: 约定结构): 约定结构 {
+  const aNewer = (a.回合 ?? 0) > (b.回合 ?? 0);
+  const bNewer = (b.回合 ?? 0) > (a.回合 ?? 0);
+  const base = aNewer ? a : b;
+  const other = aNewer ? b : a;
+  const 取较新值 = <T>(left: T | undefined, right: T | undefined): T | undefined =>
+    left !== undefined && left !== '' ? left : right;
+  const 当前状态: 约定状态 =
+    (base.回合 ?? 0) === (other.回合 ?? 0)
+      ? base.当前状态 === '等待中' && other.当前状态 !== '等待中' ? other.当前状态 : base.当前状态
+      : base.当前状态;
+  return {
+    id: base.id,
+    标题: base.标题 || other.标题,
+    内容: base.内容 || other.内容,
+    约定时间: 取较新值(base.约定时间, other.约定时间),
+    当前状态,
+    后果: 取较新值(base.后果, other.后果),
+    回合: Math.max(a.回合 ?? 0, b.回合 ?? 0),
+    来源: 取较新值(base.来源, other.来源),
+  };
+}
+
+/** 按稳定 ID 合并约定；无 ID 命中时用内容指纹兜底。等待中约定不因合并被丢弃。 */
+function 合并约定列表(a: 约定结构[], b: 约定结构[]): 约定结构[] {
+  const byId = new Map<string, 约定结构>();
+  const byFingerprint = new Map<string, 约定结构>();
+  const put = (item: 约定结构) => {
+    const existing = byId.get(item.id);
+    if (existing) {
+      byId.set(item.id, 合并单条约定(existing, item));
+      return;
+    }
+    const fingerprint = `${item.标题}|${item.内容}`.replace(/\s+/g, '');
+    const matched = byFingerprint.get(fingerprint);
+    if (matched) {
+      // 内容指纹命中但 ID 不同（旧存档无 ID 场景的兜底）：并入先入条目，不再新增键。
+      const merged = { ...合并单条约定(matched, item), id: matched.id };
+      byId.set(matched.id, merged);
+      byFingerprint.set(fingerprint, merged);
+      return;
+    }
+    byId.set(item.id, item);
+    byFingerprint.set(fingerprint, item);
+  };
+  for (const item of a) put(item);
+  for (const item of b) put(item);
+  return [...byId.values()];
 }
 
 function 归一化NSFW档案(raw: unknown): NPC记录['NSFW档案'] {
@@ -1112,7 +1219,8 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
     record.未解决冲突?.length ||
     record.必须记得?.length ||
     record.禁止遗忘?.length ||
-    record.总结记忆?.length,
+    record.总结记忆?.length ||
+    record.约定?.length,
   );
 
   return {
@@ -1135,6 +1243,7 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
     禁止遗忘: record.禁止遗忘 ?? [],
     总结记忆: summaries,
     最近原始记忆: rawMemories.slice(-Math.max(1, recentMemoryLimit)),
+    约定: record.约定 ?? [],
     有账本字段: hasLedgerFields,
   };
 }

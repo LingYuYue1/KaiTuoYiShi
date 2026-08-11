@@ -27,7 +27,9 @@ assert(!archive.includes('source.actionOptions?.length ? `行动选项'), '忆�
 assert(!archive.includes('source.actionOptions?.length ? `后续选项'), '忆庭纪要兜底摘要不得拼入后续选项系统材料。');
 assert(workflow.includes('gameClock: effectiveWorld?.当前时间'), '忆庭入库必须传入当前小时分钟。');
 
-assert(retrieval.includes('这里注入的是概要层纪要，不是正文原文'), '忆庭召回注入必须说明只注入概要层。');
+// 阶段1方案C/E：recall分档注入（≤6全原文，>6 Top5原文+其余摘要），不再"只注入概要层"。
+assert(retrieval.includes('原文注入'), '阶段1：忆庭召回注入必须支持分档原文注入策略。');
+assert(retrieval.includes('原文+其余摘要注入'), '阶段1：忆庭召回注入必须支持Top5原文+其余摘要模式。');
 assert(retrieval.includes('buildBriefFromRaw'), '忆庭召回必须有旧档原文摘要兜底。');
 assert(!retrieval.includes('entry.原文 || entry.摘要 ||'), '忆庭召回不得优先把原文注入主剧情。');
 assert(!retrieval.includes('强回忆用于恢复原文细节'), '忆庭召回口径不得再鼓励恢复正文原文。');

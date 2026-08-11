@@ -3,7 +3,7 @@
 // - stableId：只由明确 namespace + canonical scope + 旧稳定 ID/规范化语义内容组成；
 //   禁止 Date.now()/Math.random()/当前时间/数组位置/进程级计数器参与语义 ID；
 //   同一输入在两次调用、两次冷启动模拟、对象键不同顺序、两个深拷贝中得到完全相同 ID。
-import { canonicalJsonStringify, normalizeLegacyText } from './normalization';
+import { canonicalJsonStringify, normalizeLegacyText } from './normalization.ts';
 
 const SHA256_INITIAL = [
   0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -79,11 +79,12 @@ function sha256HexFallback(data: Uint8Array): string {
 }
 
 /**
- * 计算任意普通 JSON 值的 SHA-256 摘要（hex 小写）。只接受普通 JSON 值；非法容器抛错。
+ * 字节级 SHA-256 摘要（hex 小写）：Web Crypto 优先；非 secure context（LAN HTTP）
+ * 没有 crypto.subtle 时走同算法本地回退，输出与标准 SHA-256 完全一致。
+ * 相册内容哈希、云备份哈希与剧情运行时 fingerprint 统一走这一个实现，不复制第三份算法。
  */
-export async function sha256Hex(value: unknown): Promise<string> {
-  const canonical = canonicalJsonStringify(value);
-  const data = new TextEncoder().encode(canonical);
+export async function sha256BytesHex(bytes: Uint8Array | ArrayBuffer): Promise<string> {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const subtle = globalThis.crypto?.subtle;
   if (subtle) {
     try {
@@ -94,6 +95,14 @@ export async function sha256Hex(value: unknown): Promise<string> {
     }
   }
   return sha256HexFallback(data);
+}
+
+/**
+ * 计算任意普通 JSON 值的 SHA-256 摘要（hex 小写）。只接受普通 JSON 值；非法容器抛错。
+ */
+export async function sha256Hex(value: unknown): Promise<string> {
+  const canonical = canonicalJsonStringify(value);
+  return sha256BytesHex(new TextEncoder().encode(canonical));
 }
 
 /**

@@ -115,7 +115,7 @@ assert(albumPanel.includes("sceneKind?: Exclude<SceneLibraryFilter, 'all'>") && 
 assert(albumArchive.includes("const tag = sceneKind === 'snapshot' ? '故事快照'") && albumArchive.includes("note: entry.note || tag"), '导入故事快照必须写入故事快照标签和备注，避免落到普通场景图。');
 assert(albumArchive.includes("format: ARCHIVE_FORMAT") && albumArchive.includes("version: ARCHIVE_VERSION") && albumArchive.includes("files.get('manifest.json')"), '相册 ZIP 必须写入版本化清单并支持重新读取。');
 assert(albumArchive.includes("mode === 'replace'") && albumArchive.includes('mergeAlbumsByContent') && albumArchive.includes('CRC32 校验失败'), '相册导入必须原子区分覆盖/合并并校验 ZIP 内容。');
-assert(albumContent.includes("crypto.subtle.digest('SHA-256'") && imageModel.includes('contentHash?: string'), '相册资源必须使用 SHA-256 内容哈希去重。');
+assert((albumContent.includes("crypto.subtle.digest('SHA-256'") || albumContent.includes('sha256BytesHex') || albumContent.includes('sha256Bytes')) && imageModel.includes('contentHash?: string'), '相册资源必须使用 SHA-256 内容哈希去重。');
 assert(albumPanel.includes('已复用图库中的相同图片') && albumPanel.includes('addOrReuseAlbumImage'), '重复上传参考图必须复用图库已有图片。');
 assert(albumPanel.includes("id: 'settings'") && albumPanel.includes("label: '设置'") && albumPanel.includes("desc: '接口与正文插图'"), '相册工作台必须提供文生图设置入口。');
 assert(albumPanel.includes('<ImageGenerationSettingsTab'), '文生图设置必须迁移进相册工作台。');

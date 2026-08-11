@@ -2,7 +2,7 @@ import type { API配置项, 记忆系统设置, 忆庭API覆盖 } from '@/models
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 
-export type MemoryCompressionKind = 'short' | 'middle' | 'long';
+export type MemoryCompressionKind = 'short' | 'middle' | 'long' | 'npc';
 
 export interface MemoryCompressionSource {
   kind: MemoryCompressionKind;
@@ -95,7 +95,7 @@ export async function summarizeMemoryBatch(
       {
         retries: retryCount,
         signal,
-        label: source.kind === 'short' ? '即时记忆压缩' : source.kind === 'middle' ? '中期记忆压缩' : '长期记忆压缩',
+        label: source.kind === 'short' ? '即时记忆压缩' : source.kind === 'middle' ? '中期记忆压缩' : source.kind === 'long' ? '长期记忆压缩' : 'NPC记忆压缩',
       },
     );
     const summary = normalizeSummaryOutput(raw);
@@ -142,6 +142,22 @@ function sanitizeFailureMessage(error: unknown, secrets: string[]): string {
 }
 
 function buildFallbackSummary(items: string[], turn: number, kind: MemoryCompressionKind): string {
+  // 阶段1·NPC压缩失败兜底：前3条去重记忆各截28字+省略号
+  if (kind === 'npc') {
+    const seen = new Set<string>();
+    const lines: string[] = [];
+    for (const item of items) {
+      const cleaned = String(item || '').replace(/\s+/g, ' ').trim();
+      if (!cleaned) continue;
+      const truncated = cleaned.length > 28 ? cleaned.slice(0, 28) + '…' : cleaned;
+      if (seen.has(truncated)) continue;
+      seen.add(truncated);
+      lines.push(`- ${truncated}`);
+      if (lines.length >= 3) break;
+    }
+    if (!lines.length) return `【NPC记忆·回合${turn}】\n- 空白`;
+    return [`【NPC记忆·回合${turn}】`, ...lines].join('\n');
+  }
   const title = kind === 'short' ? '即时转短期' : kind === 'middle' ? '短期转中期' : '中期转长期';
   const maxLines = kind === 'short' ? 6 : 8;
   const lines = dedupeLines(
@@ -160,7 +176,8 @@ function buildFallbackSummary(items: string[], turn: number, kind: MemoryCompres
 function getCompressionLabel(kind: MemoryCompressionKind): string {
   if (kind === 'short') return '即时 -> 短期';
   if (kind === 'middle') return '短期 -> 中期';
-  return '中期 -> 长期';
+  if (kind === 'long') return '中期 -> 长期';
+  return 'NPC同行记忆压缩';
 }
 
 function normalizeSummaryOutput(raw: string): string {

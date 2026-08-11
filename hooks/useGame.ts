@@ -8,20 +8,26 @@ import {
   handleLoadLatest,
   handleManualSave,
 } from '@/hooks/useGame/saveLoadWorkflow';
-import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
+import { restorePreTurnSnapshotPersisted } from '@/hooks/useGame/turnSnapshot';
 import {
   创建空记忆系统,
   serializeMemoryFailureSource,
   type 记忆失败草稿,
   type 记忆系统,
 } from '@/models/memory';
-import { retryMemoryFailureDraft } from '@/hooks/useGame/memoryUtils';
-import { 创建空忆庭系统 } from '@/models/yiting';
+import { retryMemoryFailureDraft, computeMemoryFingerprint } from '@/hooks/useGame/memoryUtils';
+import { 创建空忆庭系统, type 忆庭系统, type 回忆条目 } from '@/models/yiting';
+import {
+  runPhoneMemoryCommit,
+  type PhoneMemoryCommitIntent,
+  type PhoneDualWriteResult,
+} from '@/services/phoneMemoryDualWrite';
+import { commitMemorySummary } from '@/services/memorySummaryCommit';
 import { 创建空手机系统 } from '@/models/phone';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
-import { saveGame, saveSetting } from '@/services/dbService';
+import { saveGame, saveSetting, updateSetting } from '@/services/dbService';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import {
   commitMemoryRebuildTask,
@@ -49,6 +55,8 @@ export interface UseGameReturn {
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
     handleRetryMemoryFailureDraft: (draftId: string) => Promise<void>;
     handleIgnoreMemoryFailureDraft: (draftId: string) => Promise<void>;
+    handleConfirmMemorySummary: (result: { memory: 记忆系统; archives: 回忆条目[] }) => Promise<void>;
+    commitPhoneMemory: (intent: PhoneMemoryCommitIntent) => Promise<PhoneDualWriteResult | undefined>;
     handleBatchMemoryRebuild: (options: {
       batchSize: number;
       range?: MemoryRebuildRange;
@@ -157,7 +165,8 @@ export function useGame(): UseGameReturn {
       s.setWorkflowStatus('');
       s.setWorkflowHint(snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。');
       if (snapshot) {
-        restorePreTurnSnapshot(s, snapshot);
+        // 已完成的回合重 Roll：React 与持久化智库运行态一起回到回合前。
+        await restorePreTurnSnapshotPersisted(s, snapshot, updateSetting);
       } else {
         s.setTurnCount(Math.max(1, s.turnCount - 1));
       }
@@ -200,7 +209,7 @@ export function useGame(): UseGameReturn {
     s.setWorkflowStatus('');
     s.setWorkflowHint(snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。');
     if (snapshot) {
-      restorePreTurnSnapshot(s, snapshot);
+      await restorePreTurnSnapshotPersisted(s, snapshot, updateSetting);
     } else {
       // 老回复没 snapshot（迁移期 / 旧存档），只能粗略 turnCount -1，状态保持不变
       s.setTurnCount(Math.max(1, s.turnCount - 1));
@@ -217,13 +226,104 @@ export function useGame(): UseGameReturn {
     await retryQueueTask(stateRef.current, getActiveConfig, task, mode);
   }, [getActiveConfig]);
 
-  const persistMemorySnapshot = useCallback(async (memory: 记忆系统): Promise<void> => {
+  const persistMemorySnapshot = useCallback(async (memory: 记忆系统, yiting?: 忆庭系统): Promise<void> => {
     const s = stateRef.current;
-    const payload = buildSavePayload(s, 'auto', { 记忆: memory });
+    // 允许同时覆盖 记忆 与 忆庭：一次 buildSavePayload 持久化两者，不制造互相覆盖的两个 auto save 节点。
+    const payload = buildSavePayload(s, 'auto', {
+      记忆: memory,
+      ...(yiting ? { 忆庭: yiting } : {}),
+    });
     await saveGame(payload);
     commitActiveSaveTreeMeta(payload);
     s.setHasSave(true);
   }, []);
+
+  /** 记忆压缩确认：先持久化后发布（单一编排，见 services/memorySummaryCommit.ts）。 */
+  const handleConfirmMemorySummary = useCallback(async (result: { memory: 记忆系统; archives: 回忆条目[] }): Promise<void> => {
+    const s = stateRef.current;
+    const flow = s.memorySummaryFlow;
+    const nextMemory = result.memory;
+    const nextYiting: 忆庭系统 = {
+      ...s.忆庭,
+      回忆档案: [...(s.忆庭?.回忆档案 ?? []), ...result.archives],
+    };
+    await commitMemorySummary({
+      sourceFingerprint: flow.sourceFingerprint,
+      currentMemory: s.记忆,
+      nextMemory,
+      nextYiting,
+    }, {
+      computeFingerprint: computeMemoryFingerprint,
+      buildSavePayload: (overrides) => buildSavePayload(s, 'auto', {
+        记忆: overrides.记忆,
+        忆庭: overrides.忆庭,
+      }),
+      saveGame: (payload) => saveGame(payload as import('@/models/settings').存档数据),
+      afterSave: (payload) => {
+        commitActiveSaveTreeMeta(payload as import('@/models/settings').存档数据);
+        s.setHasSave(true);
+      },
+      // 保存成功后才发布状态并关闭弹窗。
+      publish: ({ memory, yiting }) => {
+        s.set记忆(memory);
+        s.set忆庭(yiting);
+        s.setMemorySummaryFlow({ open: false, stage: 'remind' });
+      },
+      // 校验失败：不发布，回到 remind 提示重新总结。
+      onRejected: (reason) => {
+        s.setMemorySummaryFlow({ ...flow, stage: 'remind', errors: [reason] });
+        s.setWorkflowHint(reason);
+      },
+      // 保存失败：不发布新状态、不关闭审核结果，弹窗留在 review 允许重试。
+      onPersistFailure: (error) => {
+        s.setMemorySummaryFlow({
+          ...flow,
+          stage: 'review',
+          errors: [`保存失败，记忆与忆庭均保持确认前状态，可重试：${error}`],
+        });
+        s.setWorkflowHint('记忆确认保存失败，未发布新状态；可重试确认。');
+      },
+    });
+  }, []);
+
+  /**
+   * 手机记忆提交（上层串行事务入口）：PhoneModal 只提交意图，不携带旧状态快照；
+   * 同一时刻的提交按 promise 链串行化，后一笔读取前一笔提交后的最新记忆/忆庭/NPC。
+   */
+  const phoneCommitChainRef = useRef<Promise<void>>(Promise.resolve());
+  const commitPhoneMemory = useCallback(async (intent: PhoneMemoryCommitIntent): Promise<PhoneDualWriteResult | undefined> => {
+    let result: PhoneDualWriteResult | undefined;
+    const run = async () => {
+      const s = stateRef.current;
+      result = await runPhoneMemoryCommit({
+        ...intent,
+        memory: s.记忆,
+        yiting: s.忆庭,
+        npcs: s.NPC,
+        settings: s.gameSettings.记忆系统,
+        config: getActiveConfig(),
+      }, {
+        getQueueTasks: () => stateRef.current.queueTasks,
+        buildSavePayload: (overrides) => buildSavePayload(stateRef.current, 'auto', overrides),
+        saveGame,
+        publish: (next) => {
+          const st = stateRef.current;
+          st.set记忆(next.memory);
+          st.set忆庭(next.yiting);
+          st.setNPC(next.npcs);
+          st.setQueueTasks(next.queueTasks);
+        },
+        onPersistFailure: (error) => stateRef.current.setWorkflowHint(error),
+      });
+    };
+    phoneCommitChainRef.current = phoneCommitChainRef.current
+      .then(run)
+      .catch((err) => {
+        console.warn('[phone-memory] 手机记忆提交失败', err instanceof Error ? err.message : String(err));
+      });
+    await phoneCommitChainRef.current;
+    return result;
+  }, [getActiveConfig]);
 
   const getMemoryCompressionConfig = useCallback((settings: 记忆系统设置): API配置项 | null => {
     const active = getActiveConfig();
@@ -558,6 +658,8 @@ export function useGame(): UseGameReturn {
     handleRetryQueueTask,
     handleRetryMemoryFailureDraft,
     handleIgnoreMemoryFailureDraft,
+    handleConfirmMemorySummary,
+    commitPhoneMemory,
     handleBatchMemoryRebuild,
     handleRestartOpening,
     getContextSnapshot,
@@ -573,6 +675,8 @@ export function useGame(): UseGameReturn {
     handleRetryQueueTask,
     handleRetryMemoryFailureDraft,
     handleIgnoreMemoryFailureDraft,
+    handleConfirmMemorySummary,
+    commitPhoneMemory,
     handleBatchMemoryRebuild,
     handleRestartOpening,
     getContextSnapshot,

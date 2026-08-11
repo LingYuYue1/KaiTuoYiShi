@@ -30,7 +30,10 @@ assert(builder.includes('近期正文/玩家输入明确人物或预期相关'),
 assert(builder.includes('档案尚未落库'), 'NPC 连续性核对必须在变量档案未落库时提供兜底行。');
 assert(builder.includes('最近正文锚点'), 'NPC 连续性兜底必须要求读取最近正文锚点承接刚发生事实。');
 assert(builder.includes('最近遇见的路人'), '近期路人也必须能进入主剧情上下文。');
-assert(builder.includes('提取NPC同行记忆文本列表(n).slice(-4)'), '伙伴档案必须注入最近 NPC 同行记忆。');
+// 阶段1方案E：同行记忆只取非手机来源（避免与手机记忆重复注入），取最近4条；手机记忆单独取最近2条。
+assert(builder.includes("item?.来源 !== '手机'"), '阶段1方案E：同行记忆必须过滤手机来源，避免重复注入。');
+assert(builder.includes('.slice(-4)'), '伙伴档案必须注入最近4条非手机同行记忆。');
+assert(builder.includes('getRecentPhoneMemoryTexts(n).slice(-2)'), '手机记忆必须单独取最近2条。');
 
 assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITH_MEMORY = 20'), '开启记忆注入时主剧情原始 history messages 应保留约 10 回合承接。');
 assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20'), '无可注入记忆时主剧情原始 history messages 也应保留约 10 回合承接。');

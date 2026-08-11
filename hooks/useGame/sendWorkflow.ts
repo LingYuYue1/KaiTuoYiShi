@@ -29,6 +29,7 @@ import {
   compressNpcMemoryLedger,
   upsertRecallEntry,
   isMemorySystemNoise,
+  buildMemorySummaryFlowRequest,
 } from './memoryUtils';
 import { runNewsGenerationStep } from './newsWorkflow';
 import { applyAdjudicatedStoryProgress } from '@/services/storyProgressService';
@@ -88,6 +89,12 @@ import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { getBuiltinPresets } from '@/data/builtinPresets';
 import { retrieveYitingContextWithModel } from '@/services/yitingRetrieval';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
+import {
+  executePhoneMemoryDualWrite,
+  parsePhoneMemoryFailureTask,
+  retryPhoneMemoryWrite,
+} from '@/services/phoneMemoryDualWrite';
+import { applyNpcFactMemories } from '@/services/npcFactMemory';
 import { 创建默认智库系统设置 } from '@/models/settings';
 import { selectNpcLedgersForTurn, 提取NPC同行记忆文本列表, type NPC记录, type NPC账本选择结果 } from '@/models/npc';
 import type { 手机系统, 主动来信种子 } from '@/models/phone';
@@ -99,7 +106,7 @@ import {
   getMainHistoryWindow,
 } from './historyWindow';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
-import { restorePreTurnSnapshot } from './turnSnapshot';
+import { restorePreTurnSnapshotPersisted } from './turnSnapshot';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
 import { enrichNpcArchives, needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
@@ -245,53 +252,6 @@ function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编织系�
           关联NPCID: [npc.id],
         },
       ],
-      最近回合: Math.max(npc.最近回合, turn),
-    };
-  });
-  return changed ? next : npcs;
-}
-
-/**
- * R3：NPC 只消费统一事实视图中的明确参与者/知情者事实（npcKnownFacts 来自事件 participantIds
- * 或 payload 明确 NPC ID，不猜测名字、不批量广播；后台世界事件不写玩家功劳）。
- * 只给本回合有新事实的 NPC 追加同行记忆，同类型事实跨回合去重。
- */
-function applyNpcFactMemories(
-  npcs: NPC记录[],
-  npcKnownFacts: Array<{ npcId: string; facts: CommittedWorldFact[] }>,
-  turnCommittedFacts: CommittedWorldFact[],
-  turn: number,
-): NPC记录[] {
-  const turnCommittedIds = new Set(turnCommittedFacts.map((fact) => fact.factId));
-  const relevantByNpc = new Map<string, CommittedWorldFact[]>();
-  for (const item of npcKnownFacts) {
-    const facts = item.facts.filter((fact) => turnCommittedIds.has(fact.factId));
-    if (facts.length) relevantByNpc.set(item.npcId, facts);
-  }
-  if (relevantByNpc.size === 0) return npcs;
-  let changed = false;
-  const next = npcs.map((npc) => {
-    const facts = relevantByNpc.get(npc.id);
-    if (!facts?.length) return npc;
-    const existing = 提取NPC同行记忆文本列表(npc);
-    const added = facts
-      .filter((fact) => !existing.some((item) => item.includes(fact.factType)))
-      .map((fact) => {
-        const brief = formatFactBrief(fact);
-        const summary = brief.length > 120 ? `${brief.slice(0, 118)}…` : brief;
-        return {
-          id: `npc_fact_${npc.id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
-          回合: turn,
-          摘要: `事实记录：${summary}`,
-          来源: '其他' as const,
-          关联NPCID: [npc.id],
-        };
-      });
-    if (!added.length) return npc;
-    changed = true;
-    return {
-      ...npc,
-      同行记忆: [...(npc.同行记忆 ?? []), ...added],
       最近回合: Math.max(npc.最近回合, turn),
     };
   });
@@ -1434,6 +1394,64 @@ export async function retryQueueTask(
   if (task.id === 'variable') {
     await retryVariableQueueTask(state, getActiveConfig, task, mode);
   }
+
+  if (task.id === 'phone') {
+    await retryPhoneMemoryWriteTask(state, task, getActiveConfig);
+  }
+}
+
+/**
+ * 手机记忆双写单侧失败重试：只执行 failed 的一侧，已 success / not_due 的一侧不重放；
+ * 成功后更新原任务状态，不新增重复任务。
+ */
+async function retryPhoneMemoryWriteTask(
+  state: UseGameStateReturn,
+  task: 队列任务记录,
+  getActiveConfig: () => API配置项 | null,
+): Promise<void> {
+  const payload = parsePhoneMemoryFailureTask(task);
+  if (!payload) {
+    pushQueueTask(state, 'phone', 'failed', {
+      detail: '手机记忆写入任务缺少可恢复载荷，无法重试。',
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+  const settings = state.gameSettings.记忆系统;
+  state.setWorkflowHint(`正在补写失败侧：${payload.failedSide === 'yiting' ? '忆庭归档' : 'NPC 同行记忆'}。`);
+  try {
+    const outcome = await retryPhoneMemoryWrite(payload, {
+      memory: state.记忆,
+      yiting: state.忆庭,
+      npcs: state.NPC,
+      settings,
+      config: getActiveConfig(),
+      turn: payload.turn || state.turnCount,
+    }, {
+      getQueueTasks: () => state.queueTasks,
+      buildSavePayload: (overrides) => buildSavePayload(state, 'auto', overrides),
+      saveGame,
+      publish: (next) => {
+        state.set记忆(next.memory);
+        state.set忆庭(next.yiting);
+        state.setNPC(next.npcs);
+        state.setQueueTasks(next.queueTasks);
+      },
+      onPersistFailure: (error) => state.setWorkflowHint(error),
+    });
+    if (!outcome.ok) {
+      // persistFailed 已由 onPersistFailure 提示；普通业务失败保持原提示。
+      if (!outcome.persistFailed) {
+        state.setWorkflowHint(`手机记忆补写仍然失败：${outcome.error ?? '未知错误'}，可再次重试。`);
+      }
+    }
+  } catch (err) {
+    pushQueueTask(state, 'phone', 'failed', {
+      detail: `手机记忆补写失败：${err instanceof Error ? err.message : String(err)}`,
+      turn: payload.turn || state.turnCount,
+      failCount: (task.failCount ?? 0) + 1,
+    });
+  }
 }
 
 async function retryNewsQueueTask(
@@ -1773,6 +1791,12 @@ export async function executeSendWorkflow(
       queueTasks: state.queueTasks,
       turnCount: state.turnCount,
       pendingOpeningTrigger: state.pendingOpeningTrigger,
+      // 回合前的 gameSettings 运行时字段：重 Roll/失败/中止时恢复，保证只有成功回合消费
+      // cooldown/delay 与宏变量；不把 API Key 等无关设置复制进每条消息快照。
+      gameSettingsTurnState: {
+        macroGlobalVars: { ...(state.gameSettings.macroGlobalVars ?? {}) },
+        worldbookTriggerStates: { ...(state.gameSettings.worldbookTriggerStates ?? {}) },
+      },
     });
     rollbackSnapshotOnAbort = preTurnSnapshot;
 
@@ -2127,18 +2151,17 @@ export async function executeSendWorkflow(
           macroCtx,
         );
 
-    // 宏引擎处理后回写 globalVars（仅当 global 变化时）
-    if (Object.keys(macroCtx.global).length !== Object.keys(prevGlobalSnapshot).length
-      || Object.entries(macroCtx.global).some(([k, v]) => prevGlobalSnapshot[k] !== v)) {
-      state.setGameSettings((prev) => ({ ...prev, macroGlobalVars: { ...macroCtx.global } }));
-    }
+    // 宏引擎处理后计算 globalVars 候选（仅当 global 变化时）。不在 API 请求前 setGameSettings：
+    // 只有成功提交的回合才保留宏全局变量变化，失败/停止/重 Roll 由回合快照恢复。
+    const macroGlobalVarsAfter = Object.keys(macroCtx.global).length !== Object.keys(prevGlobalSnapshot).length
+      || Object.entries(macroCtx.global).some(([k, v]) => prevGlobalSnapshot[k] !== v)
+      ? { ...macroCtx.global }
+      : prevGlobalSnapshot;
 
-    // Phase 7.1：本回合世界书注入完成后，回写触发状态表（用于 delay / cooldown 判断）。
+    // Phase 7.1：本回合世界书注入完成后计算触发状态表候选（用于 delay / cooldown 判断）。
     // 必须在 buildSystemPrompt 之后调用，保证本回合 cooldown 检查用的是上一回合的状态。
-    const nextTriggerStates = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
-    if (nextTriggerStates !== state.gameSettings.worldbookTriggerStates) {
-      state.setGameSettings((prev) => ({ ...prev, worldbookTriggerStates: nextTriggerStates }));
-    }
+    // 同样只在成功回合结束时提交。
+    const worldbookTriggerStatesAfter = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
     let systemPrompt = builtPrompt.systemPrompt;
     // 天气判断 prompt 注入
     const 天气片断 = 构建天气Prompt片段(effectiveWorld.当前地点, effectiveWorld.当前天气);
@@ -2722,27 +2745,14 @@ export async function executeSendWorkflow(
       displayText,
     ].filter(Boolean).join('\n\n'));
     let mem = addImmediateMemory(state.记忆, rawMemory, state.turnCount);
-    const compression = await autoCompressMemorySystemWithArchivesAsync(
-      mem,
-      state.turnCount,
-      state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
-      config,
-      abortController.signal,
-    );
-    assertWorkflowActive();
-    mem = compression.memory;
-    state.set记忆(mem);
+
+    // 阶段1主链压缩：阈值常量提前计算，压缩结算统一推迟到本回合所有会修改记忆的
+    // 步骤（剧情推进 / NPC 事实 / 忆庭入库）完成后，以最终记忆切片创建压缩请求。
+    const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
+    const immediateThreshold = memorySettings.即时转短期阈值 ?? 10;
+    const shortThreshold = memorySettings.短期转中期阈值 ?? 30;
+    const middleThreshold = memorySettings.中期转长期阈值 ?? 50;
     const yitingWithCompression = state.忆庭;
-    const compressionDetail = compression.failures.length
-      ? `记忆总结有 ${compression.failures.length} 批 API 失败，已保留完整失败草稿；当前回合继续使用本地 fallback。`
-      : compression.usedModel
-        ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
-        : '即时/短期/中期/长期记忆已使用本地摘要完成整理。';
-    pushQueueTask(state, 'memory', compression.failures.length ? 'failed' : 'success', {
-      detail: compressionDetail,
-      failCount: compression.failures.length || undefined,
-      retryHint: compression.failures.length ? '打开记忆系统的“失败草稿”页重新总结。' : undefined,
-    });
 
     // 7 / 7a / 7b. 世界 + 旅人 的本回合修改全部累计到本地变量,最后一次性 set。
     //     这样在 8.5 变量校准里能拿到这些修改作为 snapshot——否则变量模型 commit 时
@@ -2876,15 +2886,15 @@ export async function executeSendWorkflow(
       // NSFW 基线补建：开启 NSFW 后，把需要补建基线的 NPC 信息传给变量模型，
       // 变量模型在变量更新那一次调用里顺带生成 NSFW 基线档案，走正常 nsfw_archive facts 落库链路。
       const npcSourceForCompression = archiveEnrichment.records;
-      const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
+      const npcMemorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
       const npcCompressionSummaryTriggered: string[] = [];
       let npcAfterCompression = npcSourceForCompression.map((npc) => {
         const ledgerCompression = compressNpcMemoryLedger({
           npcId: npc.id,
           entries: npc.同行记忆 ?? [],
           summaries: npc.总结记忆 ?? [],
-          threshold: memorySettings.NPC记忆压缩阈值,
-          prompt: memorySettings.NPC记忆压缩提示词,
+          threshold: npcMemorySettings.NPC记忆压缩阈值,
+          prompt: npcMemorySettings.NPC记忆压缩提示词,
           turn: state.turnCount,
           source: '变量',
         });
@@ -3170,21 +3180,22 @@ export async function executeSendWorkflow(
         }
       }
       let zhikuAfterRuntimeUnlock = state.智库;
+      let zhikuUnlockCandidate: {
+        unlocked: Array<{ id: string; title: string; status: string; reason: string }>;
+      } | null = null;
       if (adjudication?.decision === 'advance_one' && !storyWeavingConcurrentChange) {
         const zhikuUnlock = applyStoryArchiveZhikuRuntimeUnlock({
           zhiku: state.智库,
           storyWeaving: storyWeavingForSave,
         });
         if (zhikuUnlock.changed) {
+          // 只计算本回合候选 patch；主回合完全成功收尾前不得立刻 set智库 / updateSetting，
+          // 重 Roll / 失败 / 中止时由回合快照恢复到回合前智库运行态。
           assertWorkflowActive();
+          zhikuUnlockCandidate = { unlocked: zhikuUnlock.unlocked };
           zhikuAfterRuntimeUnlock = mergeZhikuRuntimeUnlockPatch(state.智库, zhikuUnlock.unlocked);
-          state.set智库((current) => mergeZhikuRuntimeUnlockPatch(current, zhikuUnlock.unlocked));
-          await updateSetting<import('@/models/zhiku').智库系统>('zhikuSystem', (current) => (
-            buildPersistedZhikuSystem(mergeZhikuRuntimeUnlockPatch(current ?? state.智库, zhikuUnlock.unlocked))
-          ));
-          assertWorkflowActive();
-          pushQueueTask(state, 'zhiku', 'success', {
-            detail: `剧情归档已更新智库门禁：${zhikuUnlock.unlocked.slice(0, 3).map((item) => `${item.title}→${item.status}`).join('、')}${zhikuUnlock.unlocked.length > 3 ? ` 等 ${zhikuUnlock.unlocked.length} 项` : ''}。`,
+          pushQueueTask(state, 'zhiku', 'pending', {
+            detail: `剧情归档已更新智库门禁（待回合收尾提交）：${zhikuUnlock.unlocked.slice(0, 3).map((item) => `${item.title}→${item.status}`).join('、')}${zhikuUnlock.unlocked.length > 3 ? ` 等 ${zhikuUnlock.unlocked.length} 项` : ''}。`,
           });
         }
       }
@@ -3375,6 +3386,79 @@ export async function executeSendWorkflow(
         await runNarrativeImageJob();
       }
 
+      // 记忆压缩结算：主回合所有会修改记忆的步骤（剧情推进 / NPC 事实 / 忆庭入库）
+      // 全部完成后，以最终记忆切片创建压缩请求，并绑定来源 turn/fingerprint。
+      mem = memoryAfterStoryProgress;
+      {
+        const immediatePending = Math.max(0, mem.即时记忆.length - immediateThreshold + 1);
+        const shortPending = Math.max(0, mem.短期记忆.length - shortThreshold + 1);
+        const middlePending = Math.max(0, (mem.中期记忆 ?? []).length - middleThreshold + 1);
+        const needsCompression = memorySettings.启用中短长期API总结
+          && (immediatePending > 0 || shortPending > 0 || middlePending > 0);
+        if (needsCompression) {
+          // 阶段1：设置三阶段弹窗状态（统一入口，含来源 turn/fingerprint），压缩推迟到UI层处理。
+          state.setMemorySummaryFlow(buildMemorySummaryFlowRequest(mem, memorySettings, state.turnCount));
+          state.set记忆(mem);
+          pushQueueTask(state, 'memory', 'success', {
+            detail: '即时记忆已写入。检测到记忆达到压缩阈值，请在弹窗中确认记忆总结。',
+          });
+        } else {
+          // 不需要压缩或未启用API总结：保持原有同步压缩行为（走本地fallback）
+          const compression = await autoCompressMemorySystemWithArchivesAsync(
+            mem,
+            state.turnCount,
+            memorySettings,
+            config,
+            abortController.signal,
+          );
+          assertWorkflowActive();
+          mem = compression.memory;
+          memoryAfterStoryProgress = mem;
+          state.set记忆(mem);
+          const compressionDetail = compression.failures.length
+            ? `记忆总结有 ${compression.failures.length} 批 API 失败，已保留完整失败草稿；当前回合继续使用本地 fallback。`
+            : compression.usedModel
+              ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
+              : '即时/短期/中期/长期记忆已使用本地摘要完成整理。';
+          pushQueueTask(state, 'memory', compression.failures.length ? 'failed' : 'success', {
+            detail: compressionDetail,
+            failCount: compression.failures.length || undefined,
+            retryHint: compression.failures.length ? '打开记忆系统的“失败草稿”页重新总结。' : undefined,
+          });
+        }
+      }
+
+      // 回合成功收尾：宏全局变量 / 世界书触发状态统一提交。
+      // 智库运行时解锁保持候选，只在主回合正式存档成功之后才提交 React 状态与持久化
+      // （见下方 auto-save 块），自动存档失败时由回合快照连同持久化一起回滚。
+      const turnFinalGameSettings: typeof state.gameSettings = {
+        ...state.gameSettings,
+        ...(macroGlobalVarsAfter !== prevGlobalSnapshot ? { macroGlobalVars: macroGlobalVarsAfter } : {}),
+        ...(worldbookTriggerStatesAfter !== state.gameSettings.worldbookTriggerStates
+          ? { worldbookTriggerStates: worldbookTriggerStatesAfter }
+          : {}),
+      };
+      if (turnFinalGameSettings.macroGlobalVars !== state.gameSettings.macroGlobalVars
+        || turnFinalGameSettings.worldbookTriggerStates !== state.gameSettings.worldbookTriggerStates) {
+        state.setGameSettings(turnFinalGameSettings);
+      }
+
+      /** 主回合正式存档成功后，才提交 React 智库状态与持久化智库运行态。 */
+      const commitZhikuAfterAutoSave = async (): Promise<void> => {
+        if (!zhikuUnlockCandidate) return;
+        state.set智库(zhikuAfterRuntimeUnlock);
+        await updateSetting<import('@/models/zhiku').智库系统>('zhikuSystem', (current) => (
+          buildPersistedZhikuSystem(mergeZhikuRuntimeUnlockPatch(
+            current ?? zhikuAfterRuntimeUnlock,
+            zhikuUnlockCandidate.unlocked,
+          ))
+        ));
+        assertWorkflowActive();
+        pushQueueTask(state, 'zhiku', 'success', {
+          detail: `剧情归档已更新智库门禁：${zhikuUnlockCandidate.unlocked.slice(0, 3).map((item) => `${item.title}→${item.status}`).join('、')}${zhikuUnlockCandidate.unlocked.length > 3 ? ` 等 ${zhikuUnlockCandidate.unlocked.length} 项` : ''}。`,
+        });
+      };
+
       // 10. Auto-save —— 每回合只在后台队列收尾写一次，避免正文/变量阶段重复生成多条自动存档。
       if (state.gameSettings.enableAutoSaveEveryTurn) {
         recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { phase: 'autosave' });
@@ -3397,6 +3481,8 @@ export async function executeSendWorkflow(
           剧情: variableOverrides?.剧情,
           剧情编织: storyWeavingForSave,
           智库: zhikuAfterRuntimeUnlock,
+          // 自动存档使用本回合最终 gameSettings（宏变量 / 世界书触发状态 / 智库解锁已含其中）。
+          gameSettings: turnFinalGameSettings,
           variableBatches: variableBatchesForSave,
           queueTasks: state.queueTasks,
           turnCount: state.turnCount + 1,
@@ -3408,20 +3494,30 @@ export async function executeSendWorkflow(
         assertWorkflowActive();
         pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' });
         state.setHasSave(true);
+        // 正式存档成功后才提交智库运行态（React + IndexedDB）。
+        await commitZhikuAfterAutoSave();
       }
 
-      if (!state.gameSettings.enableAutoSaveEveryTurn) turnStateCommitted = true;
+      if (!state.gameSettings.enableAutoSaveEveryTurn) {
+        turnStateCommitted = true;
+        // 无自动存档：本回合所有阻断操作成功后才提交智库运行态。
+        await commitZhikuAfterAutoSave();
+      }
 
     await saveSetting('theme', state.currentTheme);
     await saveSetting('apiSettings', state.apiSettings);
-    await saveSetting('gameSettings', state.gameSettings);
+    // 与自动存档使用同一个最终 gameSettings 对象，不读闭包旧 state。
+    await saveSetting('gameSettings', turnFinalGameSettings);
     await saveSetting('worldbooks', state.worldbooks);
     await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
       if (!turnStateCommitted) {
         state.setChatHistory(rollbackHistoryOnAbort);
-        if (rollbackSnapshotOnAbort) restorePreTurnSnapshot(state, rollbackSnapshotOnAbort);
+        if (rollbackSnapshotOnAbort) {
+          // React 与持久化智库运行态一起回滚：刷新后不会重新出现被撤销的解锁。
+          await restorePreTurnSnapshotPersisted(state, rollbackSnapshotOnAbort, updateSetting);
+        }
       }
       await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
       state.setWorkflowHint('已停止生成，本次输入已回到输入框，可修改后重新发送。');
@@ -3431,7 +3527,7 @@ export async function executeSendWorkflow(
       console.error('Send workflow error:', err);
       if (!turnStateCommitted && rollbackSnapshotOnAbort) {
         state.setChatHistory(rollbackHistoryOnAbort);
-        restorePreTurnSnapshot(state, rollbackSnapshotOnAbort);
+        await restorePreTurnSnapshotPersisted(state, rollbackSnapshotOnAbort, updateSetting);
         await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
       }
       keepWorkflowHint = true;

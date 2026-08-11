@@ -522,15 +522,37 @@ function writeCentralHeader(view: DataView, entry: ZipEntryOutput, nameBytes: Ui
   view.setUint32(42, offset, true);
 }
 
-async function readZip(buffer: ArrayBuffer): Promise<Map<string, string>> {
+const ZIP_MAX_ENTRIES = 4096;
+const ZIP_MAX_ENTRY_BYTES = 256 * 1024 * 1024;
+const ZIP_MAX_UNPACKED_BYTES = 768 * 1024 * 1024;
+const ZIP_MAX_COMPRESSION_RATIO = 200;
+
+/**
+ * 读取 ZIP（带解压安全预检与限流）：
+ * - 解压前用 ZIP header 的 fileSize 拒绝超限条目与累计超限，不得解压后才检查；
+ * - 检查条目数量、单条声明压缩/解压大小、累计声明解压大小与合理压缩比；
+ * - inflate 使用带累计字节计数的流式读取，实际输出超限时立即取消 reader。
+ */
+async function readZip(
+  buffer: ArrayBuffer,
+  limits: { maxEntries?: number; maxEntryBytes?: number; maxUnpackedBytes?: number; maxRatio?: number } = {},
+): Promise<Map<string, string>> {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
+  const maxEntries = limits.maxEntries ?? ZIP_MAX_ENTRIES;
+  const maxEntryBytes = limits.maxEntryBytes ?? ZIP_MAX_ENTRY_BYTES;
+  const maxUnpackedBytes = limits.maxUnpackedBytes ?? ZIP_MAX_UNPACKED_BYTES;
+  const maxRatio = limits.maxRatio ?? ZIP_MAX_COMPRESSION_RATIO;
   const files = new Map<string, string>();
   let offset = 0;
+  let entryCount = 0;
+  let totalUnpacked = 0;
   while (offset + 30 <= bytes.length) {
     const signature = view.getUint32(offset, true);
     if (signature === 0x02014b50 || signature === 0x06054b50) break;
     if (signature !== 0x04034b50) throw new Error('存档包 ZIP 结构损坏');
+    entryCount += 1;
+    if (entryCount > maxEntries) throw new Error('存档包条目数量超过安全上限');
     const compression = view.getUint16(offset + 8, true);
     if (compression !== 0 && compression !== 8) throw new Error('暂不支持此 ZIP 压缩格式的存档包');
     const crc = view.getUint32(offset + 14, true);
@@ -539,12 +561,19 @@ async function readZip(buffer: ArrayBuffer): Promise<Map<string, string>> {
     const nameLength = view.getUint16(offset + 26, true);
     const extraLength = view.getUint16(offset + 28, true);
     const nameStart = offset + 30;
+    const name = decoder.decode(bytes.slice(nameStart, nameStart + nameLength));
     const dataStart = nameStart + nameLength + extraLength;
     const dataEnd = dataStart + compressedSize;
     if (dataEnd > bytes.length) throw new Error('存档包文件长度异常');
-    const name = decoder.decode(bytes.slice(nameStart, nameStart + nameLength));
+    // 解压前预检（inflateRaw 之前）：声明解压大小超限 / 累计超限 / 压缩比异常直接拒绝。
+    if (fileSize > maxEntryBytes) throw new Error(`存档包条目解压后超过安全上限：${name}`);
+    totalUnpacked += fileSize;
+    if (totalUnpacked > maxUnpackedBytes) throw new Error('存档包累计解压大小超过安全上限');
+    if (compression === 8 && fileSize > 0 && compressedSize > 0 && fileSize / compressedSize > maxRatio) {
+      throw new Error(`存档包条目压缩比异常：${name}`);
+    }
     const compressedData = bytes.slice(dataStart, dataEnd);
-    const data = compression === 8 ? await inflateRaw(compressedData) : compressedData;
+    const data = compression === 8 ? await inflateRaw(compressedData, maxEntryBytes) : compressedData;
     if (data.length !== fileSize) throw new Error('存档包条目大小异常');
     if (crc32(data) !== crc) throw new Error(`存档包条目校验失败：${name}`);
     files.set(name, decoder.decode(data));
@@ -562,11 +591,11 @@ async function deflateRawIfAvailable(bytes: Uint8Array): Promise<Uint8Array | nu
   }
 }
 
-async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
+async function inflateRaw(bytes: Uint8Array, maxOutputBytes: number): Promise<Uint8Array> {
   if (!('DecompressionStream' in globalThis)) {
     throw new Error('当前浏览器不支持压缩存档包解压，请更新浏览器或使用未压缩旧包');
   }
-  return runDecompressionStream(bytes, 'deflate-raw');
+  return runDecompressionStream(bytes, 'deflate-raw', maxOutputBytes);
 }
 
 async function runCompressionStream(bytes: Uint8Array, format: CompressionFormat): Promise<Uint8Array> {
@@ -574,9 +603,29 @@ async function runCompressionStream(bytes: Uint8Array, format: CompressionFormat
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function runDecompressionStream(bytes: Uint8Array, format: CompressionFormat): Promise<Uint8Array> {
+/** 流式解压（限流）：累计输出超过 maxOutputBytes 时立即取消 reader，不得先拼出完整超大数组。 */
+async function runDecompressionStream(bytes: Uint8Array, format: CompressionFormat, maxOutputBytes: number): Promise<Uint8Array> {
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxOutputBytes) {
+        await reader.cancel();
+        throw new Error('存档包条目解压输出超过安全上限，已中止。');
+      }
+      chunks.push(value);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message === '存档包条目解压输出超过安全上限，已中止。') throw err;
+    await reader.cancel().catch(() => {});
+    throw err;
+  }
+  return concatBytes(chunks);
 }
 
 function dosDateTime(date: Date): { time: number; date: number } {

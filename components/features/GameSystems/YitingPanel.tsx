@@ -1,11 +1,11 @@
-﻿import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 
 interface YitingPanelProps {
   yitingSystem: 忆庭系统;
 }
 
-type ArchiveFilter = 'all' | 'turn' | 'compressed';
+type ArchiveFilter = 'all' | 'turn' | 'compressed' | 'communication';
 
 const cardClip = 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
 const smallClip = 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
@@ -14,6 +14,7 @@ const filterItems: { id: ArchiveFilter; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'turn', label: '回合纪要' },
   { id: 'compressed', label: '压缩档案' },
+  { id: 'communication', label: '通讯回忆' },
 ];
 
 export function YitingPanel({ yitingSystem }: YitingPanelProps) {
@@ -26,8 +27,13 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
     const keyword = query.trim().toLowerCase();
     return archives
       .filter((entry) => {
-        const kind = getArchiveKind(entry);
-        if (filter !== 'all' && kind !== filter) return false;
+        // 阶段1·通讯标签页：按 分类='通讯' 筛选
+        if (filter === 'communication') {
+          if ((entry.分类 ?? '正文') !== '通讯') return false;
+        } else {
+          const kind = getArchiveKind(entry);
+          if (filter !== 'all' && kind !== filter) return false;
+        }
         if (!keyword) return true;
         return [
           entry.名称,
@@ -49,7 +55,8 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
   const stats = useMemo(() => {
     const turn = archives.filter((entry) => getArchiveKind(entry) === 'turn').length;
     const compressed = archives.filter((entry) => getArchiveKind(entry) === 'compressed').length;
-    return { turn, compressed, total: archives.length };
+    const communication = archives.filter((entry) => (entry.分类 ?? '正文') === '通讯').length;
+    return { turn, compressed, communication, total: archives.length };
   }, [archives]);
 
   return (
@@ -76,7 +83,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
             <Metric label="总档案" value={`${stats.total}`} />
             <Metric label="回合纪要" value={`${stats.turn}`} />
             <Metric label="压缩档案" value={`${stats.compressed}`} />
-            <Metric label="召回材料" value="摘要" />
+            <Metric label="通讯回忆" value={`${stats.communication}`} />
           </div>
         </section>
 
@@ -141,8 +148,19 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
                     style={buttonStyle(active)}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 truncate font-serif text-sm tracking-[0.14em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-                        {entry.名称 || `回合 ${entry.回合}`}
+                      <div className="flex min-w-0 items-center gap-1.5 truncate font-serif text-sm tracking-[0.14em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
+                        {(entry.分类 ?? '正文') === '通讯' && (
+                          <span
+                            className="shrink-0 rounded-sm px-1 py-0.5 text-[10px]"
+                            style={{
+                              background: 'rgba(var(--tj-accent-secondary), 0.18)',
+                              color: 'rgb(var(--tj-accent-secondary))',
+                            }}
+                          >
+                            通讯
+                          </span>
+                        )}
+                        <span className="truncate">{entry.名称 || `回合 ${entry.回合}`}</span>
                       </div>
                       <KindBadge kind={kind} />
                     </div>

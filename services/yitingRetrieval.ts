@@ -28,11 +28,12 @@ export function retrieveYitingContext(
   query: string,
   limit: number,
   npcNameMap?: Record<string, string>,
+  categoryFilter?: '正文' | '通讯' | 'all',
 ): 忆庭召回结果 {
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '' };
   }
-  const candidates = buildRecallCandidates(system, query, 24, 6);
+  const candidates = buildRecallCandidates(system, query, 24, 6, categoryFilter);
   const fallback = buildLocalRecallFallback(candidates, limit);
   const entries = [...fallback.strongEntries, ...fallback.weakEntries];
   if (!entries.length) return { entries, strongEntries: [], weakEntries: [], injection: '', previewText: fallback.previewText };
@@ -56,18 +57,19 @@ export async function retrieveYitingContextWithModel(
   retryCount = 2,
   promptModules?: 提示词模块[],
   npcNameMap?: Record<string, string>,
+  categoryFilter?: '正文' | '通讯' | 'all',
 ): Promise<忆庭召回结果> {
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
   }
 
-  const fallback = retrieveYitingContext(system, query, limit, npcNameMap);
+  const fallback = retrieveYitingContext(system, query, limit, npcNameMap, categoryFilter);
   const api = resolveYitingRecallConfig(mainConfig, settings);
   if (!api.baseUrl || !api.apiKey || !api.model) {
     return fallback;
   }
 
-  const candidates = buildRecallCandidates(system, query, 24, 6);
+  const candidates = buildRecallCandidates(system, query, 24, 6, categoryFilter);
   if (!candidates.length) return fallback;
 
   const candidateText = candidates
@@ -168,8 +170,13 @@ function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系
   };
 }
 
-function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6): 剧情回忆候选[] {
-  const entries = [...(system.回忆档案 ?? [])].sort((a, b) => a.回合 - b.回合);
+function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6, categoryFilter?: '正文' | '通讯' | 'all'): 剧情回忆候选[] {
+  const allEntries = [...(system.回忆档案 ?? [])];
+  // 阶段1·分类过滤：支持按 '正文' | '通讯' | 'all' 过滤忆庭条目（默认全部，向前兼容）
+  const filtered = categoryFilter && categoryFilter !== 'all'
+    ? allEntries.filter((entry) => (entry.分类 ?? '正文') === categoryFilter)
+    : allEntries;
+  const entries = filtered.sort((a, b) => a.回合 - b.回合);
   const terms = extractRecallTerms(query);
   const scored = entries.map((entry, index) => ({
     entry,

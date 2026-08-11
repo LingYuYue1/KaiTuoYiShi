@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   clearApiErrorReports,
   loadApiErrorReports,
+  sanitizeRequestUrlForReport,
   type ApiErrorReport,
 } from '@/services/ai/apiErrorReportService';
 
@@ -24,7 +25,8 @@ function formatReport(report: ApiErrorReport): string {
     `API Key: ${report.apiKeyHint || '-'}`,
     `状态码: ${report.status ?? '-'}`,
     `请求模式: ${report.requestMode || '-'}`,
-    `请求地址: ${report.requestUrl || '-'}`,
+    // 纵深保护：展示与复制一律使用脱敏后的请求地址，不允许复制原始 requestUrl。
+    `请求地址: ${sanitizeRequestUrlForReport(report.requestUrl) || '-'}`,
     '',
     '错误信息:',
     report.message || '-',
