@@ -12,12 +12,7 @@ for (const entry of fs.readdirSync(DIR, { withFileTypes: true })) {
   fs.unlinkSync(path.join(DIR, entry.name));
 }
 
-const GIT_DIRS = [
-  'C:/Users/25934/AppData/Local/GitHubDesktop/app-3.5.8/resources/app/git/cmd',
-  'C:/Users/25934/AppData/Local/GitHubDesktop/app-3.5.8/resources/app/git/bin',
-  'C:/Users/25934/AppData/Local/GitHubDesktop/app-3.5.8/resources/app/git/usr/bin',
-].filter((directory) => fs.existsSync(directory));
-const BASE_ENV = { ...process.env, PATH: GIT_DIRS.join(';') + ';' + (process.env.PATH ?? '') };
+const BASE_ENV = { ...process.env };
 const CWD = process.cwd();
 
 const NEW_SPECIALS = [

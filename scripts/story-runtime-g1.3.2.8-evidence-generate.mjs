@@ -15,12 +15,7 @@ import crypto from 'node:crypto';
 const DIR = 'docs/superpowers/specs/2026-08-09-g1.3.2.8-evidence';
 fs.mkdirSync(DIR, { recursive: true });
 
-const GIT_DIRS = [
-  'C:/Users/25934/AppData/Local/GitHubDesktop/app-3.5.8/resources/app/git/cmd',
-  'C:/Users/25934/AppData/Local/GitHubDesktop/app-3.5.8/resources/app/git/bin',
-  'C:/Users/25934/AppData/Local/GitHubDesktop/app-3.5.8/resources/app/git/usr/bin',
-].filter((d) => fs.existsSync(d));
-const RUN_ENV = { ...process.env, PATH: GIT_DIRS.join(';') + ';' + (process.env.PATH ?? '') };
+const RUN_ENV = { ...process.env };
 const CWD = process.cwd();
 
 const run = (command, args, name) => {
