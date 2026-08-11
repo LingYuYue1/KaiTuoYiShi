@@ -31,8 +31,13 @@ export function Tooltip({ label, description, children, placement = 'top' }: Too
   const [focusVisible, setFocusVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [position, setPosition] = useState({ left: 0, top: 0, ready: false });
-  const ownerDocument = triggerRef.current?.ownerDocument;
+  const [ownerDocument, setOwnerDocument] = useState<Document | null>(null);
   const open = (hovered || focusVisible) && !dismissed;
+
+  const onTriggerRef = useCallback((node: HTMLSpanElement | null) => {
+    triggerRef.current = node;
+    setOwnerDocument(node?.ownerDocument ?? null);
+  }, []);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -89,7 +94,7 @@ export function Tooltip({ label, description, children, placement = 'top' }: Too
 
   return (
     <span
-      ref={triggerRef}
+      ref={onTriggerRef}
       className="inline-flex"
       onPointerEnter={(event) => {
         if (event.pointerType === 'touch') return;
