@@ -11,6 +11,8 @@ interface InputAreaProps {
   // 平铺的快捷动作
   canRestartOpening?: boolean;
   canReroll?: boolean;
+  /** 树检查失败（无父检查点）时的 reroll 禁用原因；缺省时回落为「需要先完成一条回复」。 */
+  rerollDisabledReason?: string;
   onRestartOpening?: () => void;
   onReroll?: () => string | undefined | Promise<string | undefined>;
   streamingEnabled?: boolean;
@@ -49,6 +51,7 @@ export const InputArea = memo(function InputArea({
   disabled,
   canRestartOpening = false,
   canReroll = false,
+  rerollDisabledReason,
   onRestartOpening,
   onReroll,
   streamingEnabled = true,
@@ -234,7 +237,7 @@ export const InputArea = memo(function InputArea({
           icon={Dices}
           label="重写上一回复"
           description="回滚上一回合并重新生成回复"
-          disabledReason={!canReroll ? '需要先完成一条回复' : undefined}
+          disabledReason={!canReroll ? (rerollDisabledReason ?? '需要先完成一条回复') : undefined}
           disabled={!canReroll || loading || disabled}
           onClick={() => void handleRerollClick()}
         />

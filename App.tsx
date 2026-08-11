@@ -306,7 +306,7 @@ const getBookOpenDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_MOTION
 const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_VIEW_SWITCH_MS : BOOK_OPEN_VIEW_SWITCH_MS;
 
 export function App() {
-  const { state, actions } = useGame();
+  const { state, actions, canRerollWithTree } = useGame();
   const { apiSettings, gameSettings, theme: currentTheme, worldbooks } = state.deviceSettings;
   const {
     persistGameSettings,
@@ -514,9 +514,16 @@ export function App() {
       .find((m) => m.role === 'assistant')?.parsedResponse?.actionOptions ?? []
   ), [state.chatHistory]);
 
+  // reroll 可用性 = 已有可回滚的 assistant 回复 && 当前叶子存在可回退的父检查点。
+  // canRerollWithTree 由 useGame 依据 activeSaveTreeMeta 计算（读叶子 = 水合 / 封版晋升时联动）；
+  // 导入无根单独切片存档或根叶子无父检查点时，UI 直接禁用 reroll 按钮。
   const canReroll = useMemo(
-    () => state.chatHistory.some((m) => m.role === 'assistant'),
-    [state.chatHistory],
+    () => state.chatHistory.some((m) => m.role === 'assistant') && canRerollWithTree,
+    [state.chatHistory, canRerollWithTree],
+  );
+  const rerollDisabledReason = useMemo(
+    () => (!canRerollWithTree ? '当前没有可以回退的历史存档' : undefined),
+    [canRerollWithTree],
   );
 
   const narrativeImageManualEnabled = gameSettings.文生图系统.正文生图.enabled
@@ -661,6 +668,7 @@ export function App() {
         disabled={state.activeWorkflow.pendingVariable}
         canRestartOpening={state.turnCount <= 5}
         canReroll={canReroll}
+        rerollDisabledReason={rerollDisabledReason}
         onRestartOpening={() => {
           void actions.handleRestartOpening();
         }}

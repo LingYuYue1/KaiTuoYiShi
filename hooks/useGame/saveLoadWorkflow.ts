@@ -45,6 +45,11 @@ import { TURN_STATUS_IDLE } from './turnStatus';
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
+/** 读取当前活跃叶子关联的存档树元信息（只读，供 useGame 计算 UI 层 reroll 可用性）。 */
+export function getActiveSaveTreeMeta(): 存档树元信息 | null {
+  return activeSaveTreeMeta;
+}
+
 export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nodeId?: string } | null): void {
   if (!activeSaveTreeMeta) return;
   if (!target?.rootId && !target?.nodeId) {
@@ -235,7 +240,8 @@ export async function enterSession(
   // 子任务 A：读档按目标节点类型分派（读叶子 = 水合，读检查点 = 分叉新叶子）。
   //  - 叶子（未封版，saveRuntime.unsealedHead）→ 直接水合，并把 newest 指向该叶子；
   //    目标就是当前工作区叶子时只水合、不重写指针（避免叶子增殖与多余写入）。
-  //  - 内部节点（已封版检查点）→ forkSaveTreeLeaf 分叉新叶子，newest 由分叉 API 重定向。
+  //  - 内部节点（已封版检查点）→ forkSaveTreeLeaf 分叉新叶子，newest 由分叉 API 重定向，
+  //    并用新叶子水合（activeSaveTreeMeta 指向带父检查点的新叶子，canRerollWithTree 不误判）。
   const treeMeta = (save as { saveTree?: 存档树元信息 | null }).saveTree;
   const rootId = treeMeta?.rootId ?? null;
   const targetNodeId = treeMeta?.nodeId ?? null;
@@ -256,9 +262,20 @@ export async function enterSession(
       rootId,
       targetNodeId,
     });
-    await applySaveToState(save, state);
+    // 修复：读检查点 = 分叉新叶子后，用新叶子水合而非原检查点存档。
+    // applySaveToState 会把 activeSaveTreeMeta 指向新叶子（含父检查点 parentNodeId），
+    // canRerollWithTree 才判定为可回退；用原检查点水合（尤其根节点无 parentNodeId）
+    // 会让 activeSaveTreeMeta 停留在检查点上，UI 误判为不可 reroll。
+    // 与 handleReroll 的分叉水合路径保持一致（fork → 按 headNodeId 读新叶子 → 水合）。
+    const newLeafSaveId = fork.headNodeId ? await loadSaveIdByNodeId(fork.headNodeId) : null;
+    const newLeaf = newLeafSaveId ? await loadSave(newLeafSaveId) : null;
+    if (!newLeaf) {
+      devLogError('save', 'tree-fork-hydrate-leaf-missing', new Error(`分叉叶子数据缺失：${fork.headNodeId ?? 'unknown'}`));
+      throw new Error('分叉叶子数据缺失，读档失败，请重试。');
+    }
+    await applySaveToState(newLeaf, state);
     devLog('save', 'tree-fork-read', {
-      saveId: save.id,
+      saveId: newLeaf.id,
       rootId,
       targetNodeId,
       headNodeId: fork.headNodeId,
