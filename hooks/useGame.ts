@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
 import { executeResumeWorkflow } from '@/hooks/useGame/resumeWorkflow';
@@ -8,7 +8,7 @@ import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
-import { applySaveToState, beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, getActiveSaveTreeMeta, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
+import { applySaveToState, beginSession, canRollbackCurrentLeaf, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
@@ -582,13 +582,17 @@ export function useGame(): UseGameReturn {
   }, []);
 
   // 树检查版 reroll 可用性（UI 禁用门）：当前活跃叶子是否有可回退的父检查点。
-  // 与 handleReroll 内部的真实树检查同源——activeSaveTreeMeta 在 applySaveToState /
-  // commitActiveSaveTreeMeta 处随活跃叶子联动更新；根叶子（无 parentNodeId）或
-  // 导入的无根单独切片存档（ensureSaveTreeRoot 生成新根、无父节点）在此判定为不可回退，
-  // UI 直接禁用按钮与 tooltip 提示，不再等点击后才在 handleReroll 里报错。
-  // 读取代价为 O(1) 模块态访问，每次渲染直读（树元信息非响应式，无法进入 useMemo 依赖）。
-  const activeTreeMeta = getActiveSaveTreeMeta();
-  const canRerollWithTree = Boolean(activeTreeMeta?.rootId && activeTreeMeta.parentNodeId);
+  const [canRerollWithTree, setCanRerollWithTree] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      const ok = await canRollbackCurrentLeaf();
+      if (!cancelled) setCanRerollWithTree(ok);
+    };
+    void check();
+    return () => { cancelled = true; };
+  }, [state.chatHistory]);
 
   const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
     await regenerateNarrativeImagesForMessage(stateRef.current, getActiveConfig, messageId);

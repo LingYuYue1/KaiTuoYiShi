@@ -50,6 +50,12 @@ export function getActiveSaveTreeMeta(): 存档树元信息 | null {
   return activeSaveTreeMeta;
 }
 
+export async function canRollbackCurrentLeaf(): Promise<boolean> {
+  if (!activeSaveTreeMeta?.rootId || !activeSaveTreeMeta.parentNodeId) return false;
+  const parentId = await loadSaveIdByNodeId(activeSaveTreeMeta.parentNodeId);
+  return parentId !== null;
+}
+
 export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nodeId?: string } | null): void {
   if (!activeSaveTreeMeta) return;
   if (!target?.rootId && !target?.nodeId) {
