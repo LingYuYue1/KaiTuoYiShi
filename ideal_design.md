@@ -50,6 +50,7 @@
 
 **修订记录**
 
+- **2026-08-11 reroll 可用性主动验证与存档轮转断链修复**：开发团队收口子任务 B 的 UI 禁用门与断链根因。**reroll 可用性响应式化**——移除模块级 `getActiveSaveTreeMeta` 缓存，新增 `useGameState.activeTreeMeta` 响应式 state，在 applySaveToState（读档水合）/ commitActiveSaveTreeMeta（封版晋升 / 新局初始化）/ clearActiveSaveTreeMetaIfMatches（整树删除）处联动更新；新增 `rerollParentStatus`（pending/valid/invalid）与 `validateRerollParent` 探针，activeTreeMeta 每次变化即异步验证父检查点真实存在且同树，验证中保守禁用、失败用四元组相等守卫剥离 parentNodeId 自愈，不再等待点击 reroll 后才在 handleReroll 里报错。`loadSaveIdByNodeId` 增加 saves 表全表回退扫描，覆盖目录摘要未收录的隐藏/不可读/legacy 节点。**断链根因修复**——取消 saveGame 后的自动轮转删除（rotate 按树+类型保留最新 N 个节点，会删掉被后代引用的祖先检查点且不维护子引用，导致树链断裂与 reroll-parent-missing），物理删除 saveRetention 模块；「修复存档索引」流程新增 `repairDanglingSaveTreeParents`，把 parentNodeId 指向不存在节点的行升格为根（置 null），同步 saves 行与目录行，幂等可重放，存量断链一次性兜底。
 - **2026-08-11 子任务 B（重roll 树操作化）**：开发团队将 handleReroll 从回合前快照回滚改造为父节点分叉语义。重roll 时放弃当前工作区叶子（保留不删），沿祖先上溯到第一个「不含本轮输入」的检查点调用 forkSaveTreeLeaf 分叉新叶子，newest 移向新叶子，再用新叶子经 applySaveToState 水合工作区；rerollContext（上一版回复正文相似度防护）与「输入放回输入框、手动重新发送」UX 保持不变。commitTurn 在每回合末尾封版并复制出新的工作区叶子，因此已提交回合的重roll 需要回退到直接父检查点再上一层的祖先检查点；未提交回合（生成失败/结算中止）则直接 fork 直接父检查点。preTurnSnapshot 不再参与主动重roll，仅保留用于 sendWorkflow 异常中止回滚。开发团队同步更新 D6 状态与 §1.2、§1.3 的现状描述。
 - **2026-08-11 子任务 A 偏差修复（片 5f）**：开发团队落实子任务 A 遗留的四处 reviewer 偏差。移除手动存档（handleManualSave 与存档面板/设置的保存按钮），明确"无手动/自动区分，即时封版即存档"；读取按目标节点类型分派——读叶子 = 水合并重定向 newest，读检查点 = 分叉；恢复续跑时 queueTasks 以叶子持久化数据为唯一恢复入口；崩溃窗口恢复不再按保存 ID 猜测线性链，改为在恢复日志持久化本次提交的目标 childNodeId，按明确身份采纳，多子叶无法确定时报告冲突。开发团队同步更新 §1.2 树操作语义、§1.5 enterSession、§1.6 启动恢复与 §2.2 写入边界的现状描述，并将 D1/D6 状态对齐。
 - **2026-08-11 方向登记（kernelization 第五版）**：开发团队将 kernelization.md 整体重写为第五版。开发团队登记 D8 界面层交互方向、D9 两阶段 Savepoint 恢复方向、D10 资产回收与整理方向。开发团队裁决 D7 冲突并保留 wouter 候选。开发团队相应改写 §2.1 清单表述、§2.4 资产回收段落与路线图 #5，并新增路线图 #12 至 #14。事件集合与 nodeId 引用约定以引导形式写入 kernelization.md 第五版第 7 节，本文档不单列约束。
@@ -213,7 +214,7 @@ useGameState 是四类生命周期各异的租客混装容器。这一事实是�
 
 ### 规划中的开发阶段
 
-1. **落实存储引擎最终状态**：系统将工作区物理接入存档树。系统将 newest 退化为全局 ref 指针。系统将分叉 API 接入读取、重新生成、回档和顶替流程，使这些操作成为树操作。系统同步对齐约束语义，并通过迁移注册表执行数据迁移。该待办已在阶段 5d-1/5d-1b 落实存储层基础设施（分叉 API、节点级级联删除、newest 祖先重定向）。系统已在阶段 5d-2 将分叉流程接入读取存档。剩余工作是把树操作语义接入重新生成、回档和顶替，并落实工作区物理接入与 newest 退化。
+1. **落实存储引擎最终状态**：系统将工作区物理接入存档树。系统将 newest 退化为全局 ref 指针。系统将分叉 API 接入读取、重新生成、回档和顶替流程，使这些操作成为树操作。系统同步对齐约束语义，并通过迁移注册表执行数据迁移。该待办已在阶段 5d-1/5d-1b 落实存储层基础设施（分叉 API、节点级级联删除、newest 祖先重定向）。系统已在阶段 5d-2 将分叉流程接入读取存档。重新生成（重roll）已接入树操作（子任务 B）并完成可用性验证加固（2026-08-11：activeTreeMeta 响应式 + rerollParentStatus 主动验证 + 断链兜底修复）。剩余工作是把树操作语义接入回档和顶替，并落实工作区物理接入与 newest 退化。
 2. **迁移 C 类状态容器数据**：系统将状态数据迁移至 activeWorkflow 单一管理对象。系统通过该对象派生加载、取消、流式输出、召回和变量结算等状态。系统同步解决 queueTasks 的工作流属主问题。系统已在阶段 5e 落实该阶段。
 3. **增加封版剥离守卫**：系统在 commitTurn 函数中剥离 queueTasks 字段。系统增加执行期和静态核验机制。系统已在阶段 5e 落实该阶段。
 4. **将面板改造为用例**：系统将手机、相册、剧情、智库、同伴和设置面板改造为用例与投影模式。开发团队根据审计报告安排迁移顺序并保留相应语义。
@@ -283,4 +284,4 @@ useGameState 是四类生命周期各异的租客混装容器。这一事实是�
 3. **边缘计算与中间件代理**：开发团队暂不审查和改造 Vite 配置文件中的中间件转发逻辑以及云函数的代码。
 4. **多端打包环境遗留代码**：开发团队在首轮清理中物理删减已废止的桌面端适配代码。
 5. **V1 预设运行时读迁移（assistantPrefill）**：设置页挂载清理 effect 清空 `stPresets`/`currentStPresetId`（该 effect 在 HEAD 已存在，非 lint-clean 引入）；lint-clean sweep 已物理删除 V1 预设管理 UI（切换/保存/删除/采样同步）。主流程 `stage3_promptAssembly.ts` 仍读 V1 状态取 `assistantPrefill`，与清理行为不一致——访问设置页后 prefill 静默失效。`migrateSTPresetsV1ToV2` 已备好但零调用，`systemPromptBuilder` 已切 V2 路径。暂缓处理；后续落实方案：加载期接入 V1→V2 迁移保留旧预设 + `stage3` 改读 V2 激活预设的 `assistant_prefill`。
-6. **存档树 BFS 环防护（存档删除 RangeError）**：删除存档时 `collectSaveTreeNodeSubtreeSummaries`（dbService.ts:947）对存档树做无环检测的 BFS。实际存档数据若存在自指（`parentNodeId === nodeId`）或互指环，遍历无限增长并抛出 `RangeError: Invalid array length`。该问题在 panel-p1 人工测试中以 save id 23 复现，属 p1 前既有缺陷（BFS 与删除路径在 HEAD 已存在，p1 仅改调用入口）。修复方向：优先排查各数据库版本升级脚本与 nodeId 重映射路径，确保迁移结果不产生环状 parentNodeId 链，而非在查询路径打补丁。暂缓处理。
+6. **存档树 BFS 环防护（存档删除 RangeError）**：删除存档时 `collectSaveTreeNodeSubtreeSummaries`（dbService.ts:947）对存档树做无环检测的 BFS。实际存档数据若存在自指（`parentNodeId === nodeId`）或互指环，遍历无限增长并抛出 `RangeError: Invalid array length`。该问题在 panel-p1 人工测试中以 save id 23 复现，属 p1 前既有缺陷（BFS 与删除路径在 HEAD 已存在，p1 仅改调用入口）。修复方向：优先排查各数据库版本升级脚本与 nodeId 重映射路径，确保迁移结果不产生环状 parentNodeId 链，而非在查询路径打补丁。**关系说明（2026-08-11）**：本条目针对「环状」父链（自指/互指）。「悬垂父链」（parentNodeId 指向不存在的节点，属另一类断链）已由 `repairDanglingSaveTreeParents` 在「修复存档索引」流程中兜底升格为根，且自动轮转删除已取消（原断链根因）；环状链仍按本条目暂缓处理。
