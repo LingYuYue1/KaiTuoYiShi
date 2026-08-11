@@ -50,6 +50,7 @@
 
 **修订记录**
 
+- **2026-08-11 路线图现状审计与状态对齐**：开发团队逐项审计 14 条路线图的实际完成度，更新登记表。关键发现：#1 读档与重roll 已接入 forkSaveTreeLeaf，回档/顶替未接入；#4 面板用例化已大幅推进——数据通道收口已落实，AlbumPanel/ZhikuPanel 已零直连退化为纯投影，NewGameWizard 从 4692 行缩减至 1016 行（-78%），剩余 PromptModulesTab（2831 行/16 useState）/PhoneModal（2443 行/24 useState）/部分设置页签；#8 lint 压制已从 212 条进一步降至 47 条；#11 SaveLoadModal/StorageManager 均无 queueTasks 引用，导入剥离风险较低；#5–#7/#9/#10/#12–#14 均未开始。开发团队将 D6 状态维持为 🟡，收窄剩余工作为回档/顶替接入树操作；更新路线图 #1、#4、#8、#11 的现状描述；登记本阶段执行顺序为 #1 → #4 → #5 → #11 → 其余。
 - **2026-08-11 reroll 可用性主动验证与存档轮转断链修复**：开发团队收口子任务 B 的 UI 禁用门与断链根因。**reroll 可用性响应式化**——移除模块级 `getActiveSaveTreeMeta` 缓存，新增 `useGameState.activeTreeMeta` 响应式 state，在 applySaveToState（读档水合）/ commitActiveSaveTreeMeta（封版晋升 / 新局初始化）/ clearActiveSaveTreeMetaIfMatches（整树删除）处联动更新；新增 `rerollParentStatus`（pending/valid/invalid）与 `validateRerollParent` 探针，activeTreeMeta 每次变化即异步验证父检查点真实存在且同树，验证中保守禁用、失败用四元组相等守卫剥离 parentNodeId 自愈，不再等待点击 reroll 后才在 handleReroll 里报错。`loadSaveIdByNodeId` 增加 saves 表全表回退扫描，覆盖目录摘要未收录的隐藏/不可读/legacy 节点。**断链根因修复**——取消 saveGame 后的自动轮转删除（rotate 按树+类型保留最新 N 个节点，会删掉被后代引用的祖先检查点且不维护子引用，导致树链断裂与 reroll-parent-missing），物理删除 saveRetention 模块；「修复存档索引」流程新增 `repairDanglingSaveTreeParents`，把 parentNodeId 指向不存在节点的行升格为根（置 null），同步 saves 行与目录行，幂等可重放，存量断链一次性兜底。
 - **2026-08-11 子任务 B（重roll 树操作化）**：开发团队将 handleReroll 从回合前快照回滚改造为父节点分叉语义。重roll 时放弃当前工作区叶子（保留不删），沿祖先上溯到第一个「不含本轮输入」的检查点调用 forkSaveTreeLeaf 分叉新叶子，newest 移向新叶子，再用新叶子经 applySaveToState 水合工作区；rerollContext（上一版回复正文相似度防护）与「输入放回输入框、手动重新发送」UX 保持不变。commitTurn 在每回合末尾封版并复制出新的工作区叶子，因此已提交回合的重roll 需要回退到直接父检查点再上一层的祖先检查点；未提交回合（生成失败/结算中止）则直接 fork 直接父检查点。preTurnSnapshot 不再参与主动重roll，仅保留用于 sendWorkflow 异常中止回滚。开发团队同步更新 D6 状态与 §1.2、§1.3 的现状描述。
 - **2026-08-11 子任务 A 偏差修复（片 5f）**：开发团队落实子任务 A 遗留的四处 reviewer 偏差。移除手动存档（handleManualSave 与存档面板/设置的保存按钮），明确"无手动/自动区分，即时封版即存档"；读取按目标节点类型分派——读叶子 = 水合并重定向 newest，读检查点 = 分叉；恢复续跑时 queueTasks 以叶子持久化数据为唯一恢复入口；崩溃窗口恢复不再按保存 ID 猜测线性链，改为在恢复日志持久化本次提交的目标 childNodeId，按明确身份采纳，多子叶无法确定时报告冲突。开发团队同步更新 §1.2 树操作语义、§1.5 enterSession、§1.6 启动恢复与 §2.2 写入边界的现状描述，并将 D1/D6 状态对齐。
@@ -214,19 +215,25 @@ useGameState 是四类生命周期各异的租客混装容器。这一事实是�
 
 ### 规划中的开发阶段
 
-1. **落实存储引擎最终状态**：系统将工作区物理接入存档树。系统将 newest 退化为全局 ref 指针。系统将分叉 API 接入读取、重新生成、回档和顶替流程，使这些操作成为树操作。系统同步对齐约束语义，并通过迁移注册表执行数据迁移。该待办已在阶段 5d-1/5d-1b 落实存储层基础设施（分叉 API、节点级级联删除、newest 祖先重定向）。系统已在阶段 5d-2 将分叉流程接入读取存档。重新生成（重roll）已接入树操作（子任务 B）并完成可用性验证加固（2026-08-11：activeTreeMeta 响应式 + rerollParentStatus 主动验证 + 断链兜底修复）。剩余工作是把树操作语义接入回档和顶替，并落实工作区物理接入与 newest 退化。
+1. **落实存储引擎最终状态**：系统将工作区物理接入存档树。系统将 newest 退化为全局 ref 指针。系统将分叉 API 接入读取、重新生成、回档和顶替流程，使这些操作成为树操作。系统同步对齐约束语义，并通过迁移注册表执行数据迁移。该待办已在阶段 5d-1/5d-1b 落实存储层基础设施（分叉 API、节点级级联删除、newest 祖先重定向）。系统已在阶段 5d-2 将分叉流程接入读取存档。重新生成（重roll）已接入树操作（子任务 B）并完成可用性验证加固（2026-08-11：activeTreeMeta 响应式 + rerollParentStatus 主动验证 + 断链兜底修复）。剩余工作是把树操作语义接入回档和顶替。
 2. **迁移 C 类状态容器数据**：系统将状态数据迁移至 activeWorkflow 单一管理对象。系统通过该对象派生加载、取消、流式输出、召回和变量结算等状态。系统同步解决 queueTasks 的工作流属主问题。系统已在阶段 5e 落实该阶段。
 3. **增加封版剥离守卫**：系统在 commitTurn 函数中剥离 queueTasks 字段。系统增加执行期和静态核验机制。系统已在阶段 5e 落实该阶段。
 4. **将面板改造为用例**：系统将手机、相册、剧情、智库、同伴和设置面板改造为用例与投影模式。开发团队根据审计报告安排迁移顺序并保留相应语义。
-   **审计登记（2026-08-09）**：功能面板层仍是业务逻辑重镇——13 个设置页签各自重复「loadSetting→归一化→saveSetting('gameSettings')」持久化闭环；NewGameWizard（4692 行、45 处 useState）内嵌开局编排；AlbumPanel、ZhikuPanel、PromptModulesTab 内嵌 AI 与持久化闭环。数据通道破口登记如下：① 8 处组件直取 useGame 领域函数（PhoneModal 直用 addImmediateMemory/compressNpcMemoryLedger、SaveLoadModal/StorageManager 直用存档树删除、PromptModulesTab 直用 tavernRegexProcessor）；② 25+ 组件直连 dbService；③ 17 处组件直连 services/ai。
-   **迁移顺序**：数据通道收口（门面补用例动作 → 设置持久化收敛至 useDeviceSettings 管理器 → AI 直连收敛）已落实。下一步按重灾区序面板用例化（NewGameWizard → AlbumPanel → ZhikuPanel → PromptModulesTab → PhoneModal → 设置面板）。每步交付形态一致：领域逻辑进 hooks/useGame 或 services/，面板退化为纯 props 投影，关键路径 devLog 埋点。
+   **现状（2026-08-11）**：数据通道收口（门面补用例动作 → 设置持久化收敛至 useDeviceSettings 管理器 → AI 直连收敛）已落实。面板用例化进展如下：
+   - ✅ AlbumPanel（1418 行）：零直连 dbService/services/ai，已退化为纯投影。
+   - ✅ ZhikuPanel（2807 行）：零直连 dbService/services/ai，已退化为纯投影。
+   - 🟡 NewGameWizard（4692→1016 行，-78%）：开局编排已大幅抽离，仍有 44 处 useState 和 1 处直连。
+   - ❌ PromptModulesTab（2831 行，16 处 useState）：仍有直连 dbService/tavernRegexProcessor，未收敛。
+   - ❌ PhoneModal（2443 行，24 处 useState）：仍有直连 useGame 领域函数，未收敛。
+   - 🟡 设置面板：SettingsModal（462 行）已收敛至 useDeviceSettings；13 个设置页签的持久化闭环收口进度待详细审计。
+   - 剩余工作：PromptModulesTab → PhoneModal → 部分未收敛的设置页签。每步交付形态一致：领域逻辑进 hooks/useGame 或 services/，面板退化为纯 props 投影，关键路径 devLog 埋点。
 5. **统一恢复语义（按 D9 改写）**：系统将启动、继续和中断工作流三个入口收敛为统一的 hydrate 入口。系统根据给定的 nodeId 水合会话状态。恢复模型按两阶段 Savepoint 方向落地。第一步：turnPhase 收敛为三态，恢复上下文缩减为 assistantMessageId、userInput 和解析结果。第二步：落地后中断的恢复界面改为任务确认清单，主线结算与生图等付费任务逐项确认后重跑。第三步：三入口统一走 hydrate，删除逐阶段断点探测与恢复日志残留。
 6. **落实 URL 表现层**：系统引入轻量 wouter 路由库。系统将路由逻辑隔离在翻译器接口之后。系统落实三态路由功能。系统执行内部树操作替换状态时不污染浏览器历史记录。系统将返回键行为定义为返回上一个导航上下文并重建会话。系统独立处理 OAuth 回调与代码块重载流程。
 7. **重组项目目录**：开发团队按照内核层、业务管线层和视图展现层三级结构重组文件树。开发团队仅修改相对路径。
-8. **清剿压制规则**：开发团队分批削减现有的约 1100 条代码检查压制规则。开发团队仅收紧类型检查和语法检查。开发团队不触碰业务逻辑。系统已在阶段 lint-clean 落实该阶段：压制从 2226 条降至 212 条（8 个文件），剩余集中在异构厂商原始 JSON 解析层与工具链强制 `export default` 等协议豁免项。
+8. **清剿压制规则**：开发团队分批削减现有的约 1100 条代码检查压制规则。开发团队仅收紧类型检查和语法检查。开发团队不触碰业务逻辑。系统已在阶段 lint-clean 落实该阶段：压制从 2226 条降至 47 条，剩余集中在异构厂商原始 JSON 解析层与工具链强制 `export default` 等协议豁免项。
 9. **扩展防腐加固规则**：开发团队将 L12 树模型核验逻辑加入静态检查（tsc + eslint）。开发团队将面板领域的副作用禁止项加入代码库。
 10. **重写存档界面**：开发团队重写存档界面以适配树形结构。系统展示节点分叉与分支关系。系统标识叶子节点与内部节点。系统提供节点级删除入口。系统将读取操作改为从目标节点分叉新叶子的语义。该待办在树操作改造完成后执行。
-11. **补齐导入路径的封版剥离**：存档导入入口（SaveLoadModal、StorageManager 的 saveGame 调用）直接写入导入检查点。导入包 systems/queue-tasks.json 可能携带 queueTasks。系统会将 queueTasks 折入导入检查点，违反 D4。5e 剥离仅覆盖 commitTurn 组装路径。系统在导入即封版时仍需补剥。开发团队同步将该路径纳入 L12 静态守卫与运行时断言范围。
+11. **补齐导入路径的封版剥离**：存档导入入口（SaveLoadModal、StorageManager 的 saveGame 调用）直接写入导入检查点。导入包 `systems/queue-tasks.json` 可能携带 queueTasks。系统会将 queueTasks 折入导入检查点，违反 D4。5e 剥离仅覆盖 commitTurn 组装路径。系统在导入即封版时仍需补剥。开发团队同步将该路径纳入 L12 静态守卫与运行时断言范围。**现状（2026-08-11）**：SaveLoadModal（1309 行）与 StorageManager 均无 queueTasks 引用，queueTasks 已全部归属 commitTurn 封版剥离路径，导入剥离风险较低；仍需核实导入 JSON 包的实际字段清单与 commitTurn 剥离守卫的交叉覆盖。
 12. **界面层交互收敛（按 D8）**：该路线依赖面板用例化（#4）的门面成果。第一步：开发团队把 p1-p3 的门面动作整理为命令注册表，包含内核内建命令与面板用例命令。第二步：投影侧补依赖声明，推送从全量重算转向精确失效。第三步：开发团队审查面板组件的本地 useState，按白名单引导清理。白名单包含未提交的草稿、纯视觉瞬态、手势与交互进行中、一次性提示四类，其余本地状态逐步迁出。
 13. **资产引用计数与手动整理入口（按 D10）**：该路线依赖 #1 已落实的级联删除事实。第一步：资产记录增加引用计数字段，写入、分叉与继承路径维护加一。第二步：删除路径维护减一与归零回收。第三步：系统提供手动整理入口，职责方向包括散落节点升格为根、孤儿资产回收、引用计数校正。
 14. **AI 请求插件化（modelCall 扩展点）**：远期方向。引擎在 preModel 与 postLanding 之间定义 modelCall 扩展点，AI 插件以策略形式注册。该条目依赖 #4 面板用例化与回合引擎收归内核，不排近期，仅登记方向。
