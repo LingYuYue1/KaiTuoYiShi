@@ -18,7 +18,6 @@ import {
 } from '@/services/githubCloudSave';
 
 interface Props {
-  onSave: () => Promise<number>;
   onClose: () => void;
   /** GitHub 云存档配置读写动作（片 panel-p9）：经 useDeviceSettings 收敛，不直连 dbService。 */
   onLoadCloudConfig: () => Promise<GitHubCloudSaveConfig | null>;
@@ -34,8 +33,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function GitHubCloudSaveModal({ onSave, onClose, onLoadCloudConfig, onPersistCloudConfig, onGetSaveCatalogSnapshot, onLoadSaveForCloudTransfer }: Props) {
-  void onSave;
+export function GitHubCloudSaveModal({ onClose, onLoadCloudConfig, onPersistCloudConfig, onGetSaveCatalogSnapshot, onLoadSaveForCloudTransfer }: Props) {
   const [cloudConfig, setCloudConfig] = useState<GitHubCloudSaveConfig>(createDefaultGitHubCloudConfig);
   const [cloudBackup, setCloudBackup] = useState<GitHubCloudBackupListing | null>(null);
   const [cloudBusy, setCloudBusy] = useState(false);

@@ -8,14 +8,14 @@ import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
-import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadById, handleLoadLatest, handleManualSave, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
-import { restorePreTurnSnapshot } from '@/hooks/useGame/turnSnapshot';
+import { applySaveToState, beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统 } from '@/models/phone';
 import type { API设置, API配置项, 游戏设置, 文生图API配置, 存档数据 } from '@/models/settings';
-import type { NewestStory字段集 } from '@/models/newestStory';
+import type { 工作区字段集 } from '@/models/newestStory';
+import type { 存档树元信息 } from '@/utils/saveTree';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { PATH_STAGE_DEFS, 创建命途进度 } from '@/models/path';
 import { 归一化战技记录 } from '@/models/skill';
@@ -28,10 +28,13 @@ import {
   deleteSaveTree,
   exportSavePackage,
   exportSaveTreePackage,
+  forkSaveTreeLeaf,
   getSaveCatalogSnapshot,
   importSaveFileAsMany,
+  loadActiveLeaf,
   loadSave,
   loadSaveForCloudTransfer,
+  loadSaveIdByNodeId,
   loadSaveTree,
   loadSetting,
   repairSaveDatabase,
@@ -117,7 +120,6 @@ export interface UseGameReturn {
     /** 按 ID 读档（片 panel-p7）：复用 handleLoadById 的 enterSession 路径，SaveLoadModal 与 StorageManager 共用。 */
     handleLoadSave: (id: number) => Promise<boolean>;
     handleGoHome: () => void;
-    handleSave: () => Promise<number>;
     handleReroll: () => Promise<string | undefined>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
@@ -151,6 +153,9 @@ export interface UseGameReturn {
     handlePersistImportedSave: (data: 存档数据) => Promise<number>;
     // 导出单节点存档包（片 panel-p7 收口）：读取完整存档 + 触发浏览器下载，SaveLoadModal 与 StorageManager 共用。
     handleExportSavePackage: (id: number) => Promise<void>;
+    // 导出当前工作区叶子节点（子任务 A）：手动存档已移除，「导出当前节点」改指活跃叶子，
+    // 直接读取活跃叶子并触发下载，返回叶子 id；无工作区时返回 null。
+    handleExportActiveLeafPackage: () => Promise<number | null>;
     // 导出整树存档包：读取完整存档集合 + 触发浏览器下载。
     handleExportSaveTreePackage: (rootId: string) => Promise<void>;
     // 导入存档包：解析文件 + 批量落库（id:0/type:'imported'/timestamp 批次字段由门面补齐），返回导入数量。
@@ -434,13 +439,14 @@ export function useGame(): UseGameReturn {
     s.setView('home');
   }, []);
 
-  const handleSave = useCallback(async (): Promise<number> => {
-    return handleManualSave(stateRef.current);
-  }, []);
-
-  // 重roll：找到最后一条 user → AI 对，回滚状态，并把 user 输入交还给输入框。
-  // 关键：用 aiMsg.preTurnSnapshot 把所有变量切片回滚到「该 user 发送前」的状态，
-  // 防止重 roll 后上一次的 NPC / 新闻等副作用与新一次的叠加。
+  // 重roll（子任务 B：树操作版）：放弃当前工作区叶子（保留不删），从「最近一个不含本轮输入」的
+  // 祖先检查点 forkSaveTreeLeaf 分叉新叶子 → newest 移向新叶子 → 用新叶子水合 React 状态 →
+  // 保留 rerollContext（上一版回复正文，相似度防护）→ 把 user 输入交还给输入框。
+  // 为何不直接 fork 当前叶子的直接父节点：commitTurn 在每回合末尾封版当前叶子并复制出新叶子，
+  // 玩家看到上一版回复时该回合已封版——直接父检查点已包含本轮 user→assistant 对及全部副作用，
+  // 只有再向上一层「不含本轮输入」的检查点才是本轮发送前状态。未提交回合（生成失败 / 结算中中止）
+  // 本轮输入不在任何检查点里，则直接 fork 父检查点即可。preTurnSnapshot 不再参与主动 reroll
+  // （仍保留用于 sendWorkflow 的异常中止回滚）。
   const handleReroll = useCallback(async (): Promise<string | undefined> => {
     const s = stateRef.current;
     if (s.activeWorkflow.loading || s.activeWorkflow.pendingVariable) {
@@ -451,69 +457,126 @@ export function useGame(): UseGameReturn {
     s.activeWorkflow.abortControllerRef.current = null;
     const history = s.chatHistory;
 
-    // 特殊情况：最后一条是 user 且没有对应的 assistant，说明本回合主剧情生成失败了。
-    // 此时只回退这条孤立的 user 消息，不应回退到上一回合。
+    // 定位本轮输入与上一版回复：最后一条是 user（主剧情生成失败）→ 只回退这条孤立的 user；
+    // 否则回退最后一条 user → assistant 对。
+    let lastUserIdx = -1;
+    let lastAiIdx = -1;
     const lastMsg = history.at(-1);
     if (lastMsg && lastMsg.role === 'user') {
-      // 孤立 user：主剧情生成失败，只砍掉这条 user
-      const userInput = lastMsg.content;
-      const snapshot = lastMsg.preTurnSnapshot;
-      const trimmed = history.slice(0, -1);
-      s.setChatHistory(trimmed);
-      setStreamingMessage('');
-      s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到本回合发送前，可修改后重新发送。' : '本回合缺少快照，仅恢复输入文本。' });
-      if (snapshot) {
-        const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
-      } else {
-        s.setTurnCount(Math.max(1, s.turnCount - 1));
-      }
-      // 生成失败的重 roll 不需要 rerollContext（没有上一版回复可比对）
-      s.activeWorkflow.rerollContextRef.current = null;
-      return userInput;
-    }
-
-    // 正常情况：找到最后一条 user → AI 对
-    // 找到最后一条 AI 消息
-    let lastAiIdx = -1;
-    for (let i = history.length - 1; i >= 0; i--) {
-      if (history[i].role === 'assistant') {
-        lastAiIdx = i;
-        break;
-      }
-    }
-    if (lastAiIdx === -1) return;
-    // 它前面紧邻的 user 输入
-    let lastUserIdx = -1;
-    for (let i = lastAiIdx - 1; i >= 0; i--) {
-      if (history[i].role === 'user') {
-        lastUserIdx = i;
-        break;
-      }
-    }
-    if (lastUserIdx === -1) return;
-    const userInput = history[lastUserIdx].content;
-    const snapshot = history[lastAiIdx].preTurnSnapshot;
-    const previousResponse = history[lastAiIdx].parsedResponse?.body || history[lastAiIdx].content || '';
-    s.activeWorkflow.rerollContextRef.current = {
-      nonce: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      previousResponse,
-    };
-
-    // 砍掉 user + ai；如果有 snapshot，把所有变量切片回滚到 user 发送前
-    const trimmed = history.slice(0, lastUserIdx);
-    s.setChatHistory(trimmed);
-    setStreamingMessage('');
-    s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: snapshot ? '已回滚到上一回合发送前，可修改后重新发送。' : '旧回复缺少完整快照，仅恢复输入文本。' });
-    if (snapshot) {
-      const nextStoryWeaving = restorePreTurnSnapshot(s, snapshot);
-      await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+      lastUserIdx = history.length - 1;
     } else {
-      // 老回复没 snapshot（迁移期 / 旧存档），只能粗略 turnCount -1，状态保持不变
-      s.setTurnCount(Math.max(1, s.turnCount - 1));
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].role === 'assistant') {
+          lastAiIdx = i;
+          break;
+        }
+      }
+      if (lastAiIdx === -1) return;
+      for (let i = lastAiIdx - 1; i >= 0; i--) {
+        if (history[i].role === 'user') {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      if (lastUserIdx === -1) return;
+    }
+    const userInput = history[lastUserIdx].content;
+    const rerolledUserMsgId = history[lastUserIdx].id;
+
+    // 读取当前工作区叶子及其父检查点（树操作起点：读叶子 = 水合，读检查点 = 分叉）。
+    // 无工作区 / head 指向已封版检查点且无法采纳子叶（sealed-conflict）时视为不可回退。
+    const active = await loadActiveLeaf();
+    const leaf = active.status === 'ok' ? active.leaf : null;
+    const tree = (leaf as { saveTree?: 存档树元信息 | null } | null)?.saveTree;
+    if (!leaf || !tree?.rootId || !tree.parentNodeId) {
+      s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '当前工作区缺少可回退的父检查点，无法重roll。' });
+      return;
     }
 
-    return userInput;
+    // 沿祖先上溯：找到第一个「不包含本轮输入」的检查点 = 本轮发送前状态。
+    // 已封版回合的直接父检查点包含本轮输入（含已提交副作用），不能作为回退目标。
+    let forkTargetNodeId: string | null = tree.parentNodeId;
+    try {
+      for (let guard = 0; guard < 32; guard++) {
+        const parentSaveId = await loadSaveIdByNodeId(forkTargetNodeId);
+        const parentSave = parentSaveId ? await loadSave(parentSaveId) : null;
+        const parentTree = (parentSave as { saveTree?: 存档树元信息 | null } | null)?.saveTree;
+        if (!parentSave || !parentTree) {
+          devLogError('turn', 'reroll-parent-missing', new Error(`父检查点缺失：${forkTargetNodeId}`), { rootId: tree.rootId });
+          s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '父检查点缺失，无法重roll。' });
+          return;
+        }
+        const containsRerolledUser = Array.isArray(parentSave.chatHistory)
+          && parentSave.chatHistory.some((msg) => msg.id === rerolledUserMsgId);
+        if (!containsRerolledUser) break;
+        if (!parentTree.parentNodeId) break; // 根检查点仍含本轮输入（异常态）：退化为分叉根
+        forkTargetNodeId = parentTree.parentNodeId;
+      }
+
+      if (!forkTargetNodeId) {
+        devLogError('turn', 'reroll-fork-target-missing', new Error('未找到可回退的父检查点。'));
+        s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '未找到可回退的父检查点，无法重roll。' });
+        return;
+      }
+
+      // 从目标检查点分叉新叶子；newest 由分叉 API 移向新叶子，旧叶子（当前工作区）保留在树中。
+      const fork = await forkSaveTreeLeaf({
+        rootId: tree.rootId,
+        targetNodeId: forkTargetNodeId,
+        branchName: '重roll分支',
+      });
+      devLog('turn', 'reroll-forked-leaf', {
+        rootId: tree.rootId,
+        fromCheckpoint: forkTargetNodeId,
+        abandonedLeaf: tree.nodeId,
+        headNodeId: fork.headNodeId,
+      });
+      if (!fork.headNodeId) {
+        devLogError('turn', 'reroll-fork-head-missing', new Error('分叉返回空 headNodeId。'));
+        s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '分叉叶子创建失败，重roll失败，请重试。' });
+        return;
+      }
+
+      // 用新叶子水合 React 状态（读叶子 = 水合；applySaveToState 同时把 activeSaveTreeMeta 指向新叶子）。
+      const newLeafSaveId = await loadSaveIdByNodeId(fork.headNodeId);
+      const newLeaf = newLeafSaveId ? await loadSave(newLeafSaveId) : null;
+      if (!newLeaf) {
+        devLogError('turn', 'reroll-hydrate-leaf-missing', new Error(`分叉叶子数据缺失：${fork.headNodeId}`));
+        s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '分叉叶子数据缺失，重roll失败，请重试。' });
+        return;
+      }
+      await applySaveToState(newLeaf, s);
+
+      // reroll 即放弃当前回合：结算中中止残留的中断工作流随本操作一起清空。
+      if (s.activeWorkflow.interruptedWorkflow) {
+        await clearWorkflowRecoveryJournal(s.activeWorkflow.interruptedWorkflow.workflowId);
+        s.activeWorkflow.setInterruptedWorkflow(null);
+      }
+
+      // 保留 rerollContext：上一版回复正文用于相似度防护；生成失败的孤立 user 无需比对。
+      if (lastAiIdx >= 0) {
+        const previousResponse = history[lastAiIdx].parsedResponse?.body || history[lastAiIdx].content || '';
+        s.activeWorkflow.rerollContextRef.current = {
+          nonce: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          previousResponse,
+        };
+      } else {
+        s.activeWorkflow.rerollContextRef.current = null;
+      }
+
+      setStreamingMessage('');
+      s.activeWorkflow.setTurnStatus({
+        kind: 'stopped',
+        text: lastAiIdx >= 0
+          ? '已回滚到上一回合发送前，可修改后重新发送。'
+          : '已回滚到本回合发送前，可修改后重新发送。',
+      });
+      return userInput;
+    } catch (err) {
+      devLogError('turn', 'reroll-failed', err, { rootId: tree.rootId, targetCheckpoint: forkTargetNodeId });
+      s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: `重roll失败：${err instanceof Error ? err.message : '未知错误'}，请重试。` });
+      return;
+    }
   }, []);
 
   const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
@@ -531,14 +594,14 @@ export function useGame(): UseGameReturn {
     const s = stateRef.current;
     devLog('save', 'new-game-initialize-start', { entry: 'restart' });
     await beginSession(s);
-    const initialChatHistory: NewestStory字段集['chatHistory'] = [];
+    const initialChatHistory: 工作区字段集['chatHistory'] = [];
     const initialMemory = 创建空记忆系统();
     const initialYiting = 创建空忆庭系统();
     const initialPhone = 创建空手机系统();
-    const initialNews: NewestStory字段集['新闻'] = [];
-    const initialPlot: NewestStory字段集['剧情'] = [];
-    const initialVariableBatches: NewestStory字段集['variableBatches'] = [];
-    const initialQueueTasks: NewestStory字段集['queueTasks'] = [];
+    const initialNews: 工作区字段集['新闻'] = [];
+    const initialPlot: 工作区字段集['剧情'] = [];
+    const initialVariableBatches: 工作区字段集['variableBatches'] = [];
+    const initialQueueTasks: 工作区字段集['queueTasks'] = [];
     s.setChatHistory(initialChatHistory);
     s.set记忆(initialMemory);
     s.set忆庭(initialYiting);
@@ -603,7 +666,7 @@ export function useGame(): UseGameReturn {
     const pendingOpeningTrigger = '[系统] 开启第 0 回合';
     s.setPendingOpeningTrigger(pendingOpeningTrigger);
     const { macroGlobalVars, worldbookTriggerStates } = s;
-    const initialFields: NewestStory字段集 = {
+    const initialFields: 工作区字段集 = {
       旅人: nextTraveler,
       世界: nextWorld,
       chatHistory: initialChatHistory,
@@ -807,6 +870,16 @@ export function useGame(): UseGameReturn {
     const save = await handleGetSaveForExport(id);
     if (save) await exportSavePackage(save);
   }, [handleGetSaveForExport]);
+
+  // 导出当前工作区叶子（子任务 A）：手动存档已移除，「当前节点」= 活跃叶子（工作区）。
+  // 直接读取活跃叶子并触发下载，返回叶子 id；无工作区时返回 null。
+  const handleExportActiveLeafPackage = useCallback(async (): Promise<number | null> => {
+    const active = await loadActiveLeaf();
+    const leaf = active.status === 'ok' ? active.leaf : null;
+    if (!leaf) return null;
+    await exportSavePackage(leaf);
+    return leaf.id;
+  }, []);
 
   // 导出整树存档包：读取完整存档集合 + 触发浏览器下载。
   const handleExportSaveTreePackage = useCallback(async (rootId: string): Promise<void> => {
@@ -1014,14 +1087,14 @@ export function useGame(): UseGameReturn {
     const initialNpcRecords = 根据开局档案创建初始NPC记录(worldState.开局档案);
 
     // 状态初始化（原 App.handleStartGame）：重置全部运行时切片，避免上一局存档残留污染新局。
-    const initialChatHistory: NewestStory字段集['chatHistory'] = [];
+    const initialChatHistory: 工作区字段集['chatHistory'] = [];
     const initialMemory = 创建空记忆系统();
     const initialYiting = 创建空忆庭系统();
     const initialPhone = 创建空手机系统();
-    const initialNews: NewestStory字段集['新闻'] = [];
-    const initialPlot: NewestStory字段集['剧情'] = [];
-    const initialVariableBatches: NewestStory字段集['variableBatches'] = [];
-    const initialQueueTasks: NewestStory字段集['queueTasks'] = [];
+    const initialNews: 工作区字段集['新闻'] = [];
+    const initialPlot: 工作区字段集['剧情'] = [];
+    const initialVariableBatches: 工作区字段集['variableBatches'] = [];
+    const initialQueueTasks: 工作区字段集['queueTasks'] = [];
     s.set旅人(traveler);
     s.set世界(worldState);
     s.setChatHistory(initialChatHistory);
@@ -1048,7 +1121,7 @@ export function useGame(): UseGameReturn {
     const pendingOpeningTrigger = '[系统] 开启第 0 回合';
     s.setPendingOpeningTrigger(pendingOpeningTrigger);
     const { macroGlobalVars, worldbookTriggerStates } = s;
-    const initialFields: NewestStory字段集 = {
+    const initialFields: 工作区字段集 = {
       旅人: traveler,
       世界: worldState,
       chatHistory: initialChatHistory,
@@ -1265,7 +1338,6 @@ export function useGame(): UseGameReturn {
     handleContinue,
     handleLoadSave,
     handleGoHome,
-    handleSave,
     handleReroll,
     handleRegenerateNarrativeImage,
     handleRetryQueueTask,
@@ -1285,6 +1357,7 @@ export function useGame(): UseGameReturn {
     handleGetSaveTreeForExport,
     handlePersistImportedSave,
     handleExportSavePackage,
+    handleExportActiveLeafPackage,
     handleExportSaveTreePackage,
     handleImportSaveFileAsMany,
     handleLoadSaveForCloudTransfer,
@@ -1314,7 +1387,6 @@ export function useGame(): UseGameReturn {
     handleContinue,
     handleLoadSave,
     handleGoHome,
-    handleSave,
     handleReroll,
     handleRegenerateNarrativeImage,
     handleRetryQueueTask,
@@ -1334,6 +1406,7 @@ export function useGame(): UseGameReturn {
     handleGetSaveTreeForExport,
     handlePersistImportedSave,
     handleExportSavePackage,
+    handleExportActiveLeafPackage,
     handleExportSaveTreePackage,
     handleImportSaveFileAsMany,
     handleLoadSaveForCloudTransfer,

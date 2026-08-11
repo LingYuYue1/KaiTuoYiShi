@@ -15,7 +15,7 @@ import {
   归一化视觉文本设置,
   迁移存档运行态键,
 } from '@/models/settings';
-import { loadLatestSave, loadSave, loadNewestStory, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveGame, saveNewestStory, saveSetting, forkSaveTreeLeaf } from '@/services/dbService';
+import { loadLatestSave, loadSave, loadSaveIdByNodeId, loadNewestStory, loadActiveLeaf, isActiveLeafWritable, isUnsealedHeadSave, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveNewestStory, createLeafNode, saveSetting, forkSaveTreeLeaf, adoptUnsealedChildLeaf } from '@/services/dbService';
 import {
   buildPersistedZhikuSystem,
   loadAllBundledZhikuPresets,
@@ -38,7 +38,7 @@ import { materializeAlbumRuntimePayload, pruneAlbumAssetCache } from '@/utils/al
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
-import { 创建空NewestStory记录, 清空NewestStory记录 } from '@/models/newestStory';
+import { 指向NewestStory记录, type NewestStory记录 } from '@/models/newestStory';
 import { devLog, devLogError } from '@/utils/devLog';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { TURN_STATUS_IDLE } from './turnStatus';
@@ -59,13 +59,14 @@ export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nod
   }
 }
 
-// 共享的存档负载构造函数：手动 / 自动两条路径都走这一处，未来加字段只改一处。
+// 共享的存档负载构造函数：工作区重建等路径走这一处，未来加字段只改一处。
 // overrides 用于 sendWorkflow 里那一刻 React state 还没回写、但已有新值的字段
 // （比如刚追加的 chatHistory、压缩过的 memorySystem）。
 //
-// 片 5e（D4）封版剥离：queueTasks 是叶子（工作区）合法字段、检查点非法字段，
-// 本构造函数不再写入 queueTasks —— 手动存档与 commitTurn 组装路径共用此函数，
-// 一处剥离全部生效；读档侧仍宽容读取旧存档残留（applySaveToState 兜底空数组）。
+// queueTasks 属主 = 工作区（叶子）字段（片 5e D4）：重建根叶子时（ensureHeadLeafWritable
+// 无工作区路径）显式补入当前队列状态（reviewer P1-1），避免整树删除后重建丢队列；
+// 检查点（封版）载荷不得携带 queueTasks——组装检查点的路径自行剥离，
+// assertCheckpointPayloadNoQueueTasks 兜底拦截泄漏，读档侧仍宽容读取旧存档残留。
 export function buildSavePayload(
   state: UseGameStateReturn,
   type: 存档类型,
@@ -94,9 +95,11 @@ export function buildSavePayload(
     剧情: overrides?.剧情 ?? state.剧情,
     剧情编织: 归一化剧情编织系统(overrides?.剧情编织 ?? state.剧情编织),
     variableBatches: compactVariableBatchHistory(overrides?.variableBatches ?? state.variableBatches),
+    // 重建根叶子时把当前队列状态一并落盘（reviewer P1-1：整树删除后重建不丢 queueTasks）。
+    queueTasks: state.queueTasks,
     // 片 5a-2 D3：存档内 gameSettings 为纯 Device/Content（两运行态键迁顶层），
     // 与 saveSetting 单点剥离 + commitTurn 组装保持一致，避免读侧迁移取到陈旧副本。
-    // 片 5a-2 D3：两运行态键迁至存档顶层，随手动存档落盘。
+    // 片 5a-2 D3：两运行态键迁至存档顶层，随叶子/检查点落盘。
     macroGlobalVars: state.macroGlobalVars,
     worldbookTriggerStates: state.worldbookTriggerStates,
     pendingOpeningTrigger: state.pendingOpeningTrigger ?? null,
@@ -125,7 +128,7 @@ export function commitActiveSaveTreeMeta(save: 存档数据): void {
  * 片 5e（D4）运行时断言兜底：检查点写入前核验载荷不携带 queueTasks。
  * queueTasks 仅限叶子（工作区）合法字段，不得进入检查点（saves 表）。
  * 本断言是最后防线——若未来组装路径漏剥，这里宁可让本次写入失败，也不让脏字段落盘。
- * 调用点：commitTurn / 初始化新局checkpoint / handleManualSave 的 saveGame 之前。
+ * 调用点：commitTurn / 初始化新局checkpoint 写入之前。
  */
 export function assertCheckpointPayloadNoQueueTasks(payload: 存档数据, label: string): void {
   const value = (payload as { queueTasks?: unknown }).queueTasks;
@@ -229,18 +232,31 @@ export async function enterSession(
   save: 存档数据,
 ): Promise<void> {
   await beginSession(state);
-  // 片 5d-2 D6：读档 = 从目标检查点分叉新叶子。目标带 saveTree 时，
-  // 先用 forkSaveTreeLeaf 把 newest 重定向到新叶子（base=目标、head=新 id、覆盖集清空），
-  // 再用 clearNewest:false 应用存档以保留该分叉；无树 legacy 档维持原有清空路径。
+  // 子任务 A：读档按目标节点类型分派（读叶子 = 水合，读检查点 = 分叉新叶子）。
+  //  - 叶子（未封版，saveRuntime.unsealedHead）→ 直接水合，并把 newest 指向该叶子；
+  //    目标就是当前工作区叶子时只水合、不重写指针（避免叶子增殖与多余写入）。
+  //  - 内部节点（已封版检查点）→ forkSaveTreeLeaf 分叉新叶子，newest 由分叉 API 重定向。
   const treeMeta = (save as { saveTree?: 存档树元信息 | null }).saveTree;
   const rootId = treeMeta?.rootId ?? null;
   const targetNodeId = treeMeta?.nodeId ?? null;
-  if (rootId && targetNodeId) {
+  const newest = await loadNewestStory();
+  if (rootId && targetNodeId && isUnsealedHeadSave(save)) {
+    if (newest.headNodeId !== targetNodeId) {
+      await saveNewestStory(指向NewestStory记录(newest, targetNodeId));
+    }
+    await applySaveToState(save, state);
+    devLog('save', 'tree-hydrate-leaf', {
+      saveId: save.id,
+      rootId,
+      headNodeId: targetNodeId,
+      isCurrentHead: newest.headNodeId === targetNodeId,
+    });
+  } else if (rootId && targetNodeId) {
     const fork = await forkSaveTreeLeaf({
       rootId,
       targetNodeId,
     });
-    await applySaveToState(save, state, { clearNewest: false });
+    await applySaveToState(save, state);
     devLog('save', 'tree-fork-read', {
       saveId: save.id,
       rootId,
@@ -277,51 +293,87 @@ export async function handleLoadById(
 }
 
 /**
- * boot 专用恢复：先读取 newest 的原始覆盖集，再应用其 base checkpoint，最后逐字段回放。
- * applySaveToState 会清空 newest，因此回放后必须把原记录原样写回，继续保留工作区。
+ * boot 专用恢复：从 newest.headNodeId 指向的活跃叶子直接水合（读叶子 = 水合）。
+ * headNodeId 为 null / 节点缺失 → 返回 false，由调用方走现有初始化逻辑。
+ * expectedChildNodeId：崩溃窗口（commitTurn 封版后写指针前崩溃）恢复时，
+ * 由恢复日志携带的本次提交目标子叶 nodeId 传入，多子叶歧义时按明确身份采纳。
  */
 export async function bootRestoreFromNewest(
   state: UseGameStateReturn,
+  expectedChildNodeId?: string | null,
 ): Promise<boolean> {
-  let baseCheckpointId: number | null = null;
   try {
-    const newest = await loadNewestStory();
-    baseCheckpointId = newest.baseCheckpointId;
-    if (!baseCheckpointId) {
-      devLog('recover', 'boot-restore-fallback', { reason: 'no-newest' });
+    const active = await loadActiveLeaf(expectedChildNodeId);
+    if (active.status !== 'ok') {
+      // reviewer P0-2：head 指向已封版内部节点且无明确未封版子叶可采纳（sealed-conflict）
+      // 时不得把检查点当工作区水合，与无工作区一样回退到初始化/首页。
+      devLog('recover', 'boot-restore-fallback', {
+        reason: active.status === 'sealed-conflict'
+          ? 'head-sealed-conflict'
+          : (active.newest.headNodeId ? 'head-missing' : 'no-head'),
+        headNodeId: active.newest.headNodeId,
+      });
       return false;
     }
+    const { newest, leaf } = active;
 
-    devLog('recover', 'boot-restore-start', { baseCheckpointId });
-    const base = await loadSave(baseCheckpointId);
-    if (!base) {
-      devLog('recover', 'boot-restore-fallback', { reason: 'base-missing', baseCheckpointId });
-      return false;
-    }
-
-    const newestStory = newest.story;
-    await applySaveToState(base, state, { clearNewest: true, restorePendingOpeningTrigger: true });
-    const replayedFields = replayNewestStory(newestStory, state);
-    await saveNewestStory(newest);
-    devLog('recover', 'boot-restore-complete', {
-      baseCheckpointId,
-      fields: replayedFields,
-    });
+    devLog('recover', 'boot-restore-start', { headNodeId: newest.headNodeId, saveId: leaf.id });
+    await applySaveToState(leaf, state, { restorePendingOpeningTrigger: true });
+    devLog('recover', 'boot-restore-complete', { headNodeId: newest.headNodeId, saveId: leaf.id });
     return true;
   } catch (error) {
     state.setView('home');
-    devLogError('recover', 'boot-restore-failed', error, { baseCheckpointId });
+    devLogError('recover', 'boot-restore-failed', error);
     return false;
   }
 }
 
-export async function handleManualSave(state: UseGameStateReturn): Promise<number> {
-  const payload = buildSavePayload(state, 'manual');
-  // 片 5e（D4）运行时断言兜底：手动存档同样是检查点，queueTasks 不得落盘
-  assertCheckpointPayloadNoQueueTasks(payload, 'manual');
-  const id = await saveGame(payload);
-  commitActiveSaveTreeMeta(payload);
-  return id;
+/**
+ * 确保 newest 指向可写叶子（工作区）。三种情况：
+ *  - head 存在且未封版 → 原样返回；
+ *  - head 存在但已封版 / 节点缺失（删除重定向 / 崩溃窗口）→ 若存在已创建的未封版子叶子
+ *    （commitTurn「建叶 → 封版 → 写指针」在封版后崩溃的现场）则采纳之并重定向指针；
+ *    否则从该节点分叉新叶子；
+ *  - head 为 null（整树删除等边界态）→ 从当前 React 状态重建根叶子。
+ * 回合入口（sendWorkflow / resumeWorkflow / commitTurn）在写叶子前调用。
+ */
+export async function ensureHeadLeafWritable(state: UseGameStateReturn): Promise<NewestStory记录> {
+  const newest = await loadNewestStory();
+  if (newest.headNodeId && await isActiveLeafWritable(newest.headNodeId)) {
+    return newest;
+  }
+  if (newest.headNodeId) {
+    const saveId = await loadSaveIdByNodeId(newest.headNodeId);
+    const target = saveId ? await loadSave(saveId) : null;
+    const tree = (target as { saveTree?: 存档树元信息 | null } | null)?.saveTree;
+    if (target && tree?.rootId && tree.nodeId) {
+      // 崩溃窗口恢复（reviewer P0）：commitTurn「建叶 → 封版 → 写指针」在封版后、
+      // 写指针前崩溃时，新叶子已创建但指针未更新——先尝试采纳该子叶子（保留 queueTasks），
+      // 无子叶子才分叉（分叉会把 queueTasks 重置为空）。
+      // 采纳身份来自恢复日志持久化的 pendingChildNodeId：多子叶歧义时按明确身份恢复，
+      // 不按保存 ID 猜测（子任务 A / 片 5f）。
+      const expectedChildNodeId = state.activeWorkflow.interruptedWorkflow?.pendingChildNodeId ?? null;
+      const adopted = await adoptUnsealedChildLeaf(tree.nodeId, expectedChildNodeId);
+      if (adopted) {
+        devLog('recover', 'head-leaf-adopted-child', {
+          fromNodeId: newest.headNodeId,
+          childNodeId: adopted.headNodeId,
+        });
+        return adopted;
+      }
+      await forkSaveTreeLeaf({ rootId: tree.rootId, targetNodeId: tree.nodeId });
+      devLog('recover', 'head-leaf-forked', { fromNodeId: newest.headNodeId });
+      return loadNewestStory();
+    }
+  }
+  // 无工作区：从当前状态重建根叶子（整树删除后继续游玩）。
+  const payload = buildSavePayload(state, 'auto');
+  const tree = getSaveTreeMeta(payload);
+  await createLeafNode(payload);
+  const next = 指向NewestStory记录(newest, tree.nodeId);
+  await saveNewestStory(next);
+  devLog('recover', 'head-leaf-rebuilt', { headNodeId: tree.nodeId });
+  return next;
 }
 
 export async function handleDeleteSave(id: number): Promise<void> {
@@ -364,9 +416,9 @@ export async function delete存档目标(id: number, target: 存档删除目标)
 export async function applySaveToState(
   save: 存档数据,
   state: UseGameStateReturn,
-  opts: { clearNewest?: boolean; restorePendingOpeningTrigger?: boolean } = {},
+  opts: { restorePendingOpeningTrigger?: boolean } = {},
 ): Promise<void> {
-  const { clearNewest = true, restorePendingOpeningTrigger = false } = opts;
+  const { restorePendingOpeningTrigger = false } = opts;
   state.activeWorkflow.setLoading(false);
   setStreamingMessage('');
   state.activeWorkflow.setPendingVariable(false);
@@ -435,91 +487,6 @@ export async function applySaveToState(
   state.setHasSave(true);
   state.setView('game');
   state.setTurnCount(迁移后存档.turnCount ?? (safeChatHistory.length + 1));
-  // 片 5a-2b：读档后 newest 指向新 checkpoint——abort/崩溃残留的跨局覆盖集
-  // 不得进入下一回合的 commitTurn（否则新局数据会被提交进旧局 auto 存档）。
-  if (clearNewest) {
-    await saveNewestStory(清空NewestStory记录(创建空NewestStory记录(), save.id));
-  }
-}
-
-function replayNewestStory(
-  story: Partial<import('@/models/newestStory').NewestStory字段集>,
-  state: UseGameStateReturn,
-): string[] {
-  const replayedFields: string[] = [];
-  if (story.chatHistory !== undefined) {
-    state.setChatHistory(story.chatHistory);
-    replayedFields.push('chatHistory');
-  }
-  if (story.记忆 !== undefined) {
-    state.set记忆(story.记忆);
-    replayedFields.push('记忆');
-  }
-  if (story.忆庭 !== undefined) {
-    state.set忆庭(story.忆庭);
-    replayedFields.push('忆庭');
-  }
-  if (story.智库 !== undefined) {
-    state.set智库(story.智库);
-    replayedFields.push('智库');
-  }
-  if (story.手机 !== undefined) {
-    state.set手机(story.手机);
-    replayedFields.push('手机');
-  }
-  if (story.NPC !== undefined) {
-    state.setNPC(story.NPC);
-    replayedFields.push('NPC');
-  }
-  if (story.相册 !== undefined) {
-    state.set相册(story.相册);
-    replayedFields.push('相册');
-  }
-  if (story.新闻 !== undefined) {
-    state.set新闻(story.新闻);
-    replayedFields.push('新闻');
-  }
-  if (story.剧情 !== undefined) {
-    state.set剧情(story.剧情);
-    replayedFields.push('剧情');
-  }
-  if (story.剧情编织 !== undefined) {
-    state.set剧情编织(story.剧情编织);
-    replayedFields.push('剧情编织');
-  }
-  if (story.variableBatches !== undefined) {
-    state.setVariableBatches(story.variableBatches);
-    replayedFields.push('variableBatches');
-  }
-  if (story.queueTasks !== undefined) {
-    state.setQueueTasks(story.queueTasks);
-    replayedFields.push('queueTasks');
-  }
-  if (story.turnCount !== undefined) {
-    state.setTurnCount(story.turnCount);
-    replayedFields.push('turnCount');
-  }
-  if (story.世界 !== undefined) {
-    state.set世界(story.世界);
-    replayedFields.push('世界');
-  }
-  if (story.旅人 !== undefined) {
-    state.set旅人(story.旅人);
-    replayedFields.push('旅人');
-  }
-  if (story.macroGlobalVars !== undefined) {
-    state.setMacroGlobalVars(story.macroGlobalVars);
-    replayedFields.push('macroGlobalVars');
-  }
-  if (story.worldbookTriggerStates !== undefined) {
-    state.setWorldbookTriggerStates(story.worldbookTriggerStates);
-    replayedFields.push('worldbookTriggerStates');
-  }
-  if (story.pendingOpeningTrigger !== undefined) {
-    state.setPendingOpeningTrigger(story.pendingOpeningTrigger);
-    replayedFields.push('pendingOpeningTrigger');
-  }
-  return replayedFields;
 }
 
 function normalizeSaveChatHistory(value: unknown): 聊天消息[] {

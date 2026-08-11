@@ -58,7 +58,7 @@ import {
   loadWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
-import { deleteSetting, loadNewestStory, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave } from '@/services/dbService';
+import { deleteSetting, loadActiveLeaf, loadSetting, saveSetting, saveSetting as saveUiSetting, hasAnySave } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
@@ -509,7 +509,9 @@ export function useGameState(): UseGameStateReturn {
         try {
           const currentState = stateRef.current;
           if (currentState) {
-            restored = await bootRestoreFromNewest(currentState);
+            // 崩溃窗口（commitTurn 封版后写指针前崩溃）恢复：把恢复日志持久化的
+            // 本次提交目标子叶 nodeId 传入，采纳子叶子时按明确身份而非保存 ID 猜测。
+            restored = await bootRestoreFromNewest(currentState, recoveryJournal?.pendingChildNodeId ?? null);
           }
         } catch (error) {
           devLogError('recover', 'useGameState.boot-restore-import-failed', error);
@@ -521,8 +523,9 @@ export function useGameState(): UseGameStateReturn {
 
       if (recoveryJournal
         && (recoveryJournal.phase === 'variable_settlement' || recoveryJournal.phase === 'autosave')) {
-        const newest = await loadNewestStory();
-        if (!isResumableWorkspace(recoveryJournal, newest)) {
+        const active = await loadActiveLeaf(recoveryJournal.pendingChildNodeId);
+        const leaf = active.status === 'ok' ? active.leaf : null;
+        if (!isResumableWorkspace(recoveryJournal, leaf?.chatHistory ?? [])) {
           await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
           setInterruptedWorkflow(null);
           setTurnStatus(TURN_STATUS_IDLE);

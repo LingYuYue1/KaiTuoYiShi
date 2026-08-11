@@ -1,6 +1,6 @@
 import { 格式化开局档案上下文 } from '@/models/world';
 import type { 聊天消息, 解析后回复 } from '@/models/chat';
-import { loadNewestStory, loadSave } from '@/services/dbService';
+import { loadActiveLeaf, loadNewestStory } from '@/services/dbService';
 import { evaluateStoryWeavingGate } from '@/services/storyWeaving';
 import { clearWorkflowRecoveryJournal, isResumableWorkspace } from '@/services/workflowRecovery';
 import { 踏入命途狭间 } from '@/services/pathService';
@@ -24,9 +24,15 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   let { state } = deps;
   const journal = state.activeWorkflow.interruptedWorkflow;
   const config = deps.getActiveConfig();
-  let newest = await loadNewestStory();
 
-  if (!journal || !isResumableWorkspace(journal, newest)) {
+  // 工作区数据源 = 活跃叶子载荷（子任务 A：不再读 newest.story 覆盖集）。
+  // 崩溃窗口（commitTurn 封版后写指针前崩溃）采纳子叶子时按恢复日志身份恢复，不猜线性链。
+  // 无工作区 / head 指向已封版检查点且无法采纳子叶（sealed-conflict）时按无工作区处理。
+  const active = await loadActiveLeaf(journal?.pendingChildNodeId ?? null);
+  const leaf = active.status === 'ok' ? active.leaf : null;
+  const leafChatHistory = leaf?.chatHistory ?? [];
+
+  if (!journal || !isResumableWorkspace(journal, leafChatHistory)) {
     if (journal) {
       await clearWorkflowRecoveryJournal(journal.workflowId);
       devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'workspace-invalid' });
@@ -44,7 +50,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     return false;
   }
 
-  const finalHistory = newest.story.chatHistory as 聊天消息[];
+  const finalHistory = leafChatHistory;
   const aiMsg = finalHistory.at(-1) as 聊天消息;
   const parsedForDisplay = aiMsg.parsedResponse as 解析后回复;
   const displayText = typeof aiMsg.content === 'string' && aiMsg.content.trim()
@@ -55,13 +61,13 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   const turnCountAtStart = journal.turnAtStart;
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
 
-  const base = newest.baseCheckpointId ? await loadSave(newest.baseCheckpointId) : null;
-  if (base) {
-    const queueTasks = state.queueTasks;
-    await applySaveToState(base, state, { clearNewest: false, restorePendingOpeningTrigger: false });
+  if (leaf) {
+    // 子任务 A（reviewer P0）：queueTasks 以叶子（工作区）持久化数据为唯一恢复入口。
+    // 不再先捕获恢复前的 state.queueTasks 再覆盖 applySaveToState 的恢复结果——
+    // 恢复前的内存态可能来自旧会话，覆盖会丢失叶子已持久化的后台任务。
+    await applySaveToState(leaf, state, { restorePendingOpeningTrigger: false });
     state.setChatHistory(finalHistory);
     state.setTurnCount(turnCountAtStart + 1);
-    state.setQueueTasks(queueTasks);
     await new Promise<void>((resolve) => {
       window.requestAnimationFrame(() => resolve());
     });
@@ -106,7 +112,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     storyMode: effectiveWorld.剧情模式,
     recentMessages: finalHistory.map((message) => message.content).filter(Boolean).slice(-100),
     messageCount: turnCountAtStart,
-    worldbookTriggerStates: newest.story.worldbookTriggerStates ?? base?.worldbookTriggerStates ?? {},
+    worldbookTriggerStates: leaf?.worldbookTriggerStates ?? {},
   };
 
   const memorySettings = state.deviceSettings.gameSettings.记忆系统;
@@ -179,7 +185,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
 
   let keepTurnStatus = false;
   try {
-    newest = await loadNewestStory();
+    const newest = await loadNewestStory();
     if (journal.phase === 'autosave') {
       await stage12_save(ctx, d, {
         finalHistoryForSave: undefined,

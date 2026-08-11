@@ -11,8 +11,9 @@ import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTree
 
 interface Props {
   showAutoArchives: boolean;
-  onSave: () => Promise<number>;
   onLoad: (id: number) => Promise<boolean>;
+  /** 导出当前工作区叶子节点（子任务 A）：手动存档已移除，「导出当前节点」改指活跃叶子。 */
+  onExportActiveLeafPackage: () => Promise<number | null>;
   /** 存档删除用例动作：resolve→确认→级联删除（由 App 从 useGame 门面注入）。 */
   onDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
   /** 整棵存档树删除用例动作（由 App 从 useGame 门面注入）。 */
@@ -38,7 +39,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'all' | 'manual' | 'auto' | 'imported';
+type Tab = 'all' | 'auto' | 'imported';
 
 const shellClip =
   'polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px)';
@@ -47,7 +48,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany, onClose }: Props) {
+export function SaveLoadModal({ showAutoArchives, onLoad, onExportActiveLeafPackage, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -132,27 +133,16 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave();
-      await refresh();
-      setTab('manual');
-    } catch (err) {
-      console.error('[save] failed', err);
-      alert('保存失败');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleExportCurrent = async () => {
     setSaving(true);
     try {
-      const id = await onSave();
-      await onExportSavePackage(id);
+      // 子任务 A：手动存档已移除，「导出当前节点」= 导出活跃叶子（工作区），不再先落盘新节点。
+      const id = await onExportActiveLeafPackage();
+      if (id === null) {
+        alert('当前没有可导出的工作区节点');
+        return;
+      }
       await refresh();
-      setTab('manual');
     } catch (err) {
       console.error('[save-export-current] failed', err);
       alert('导出失败');
@@ -271,11 +261,10 @@ export function SaveLoadModal({ showAutoArchives, onSave, onLoad, onDeleteSave, 
     [deletingId, deletingRootId, displaySaves],
   );
 
-  const { manualSaves, autoSaves, importedSaves } = useMemo(() => {
-    const manual = visibleSaves.filter((s) => s.type === 'manual');
+  const { autoSaves, importedSaves } = useMemo(() => {
     const auto = visibleSaves.filter((s) => s.type === 'auto');
     const imported = visibleSaves.filter((s) => s.type === 'imported');
-    return { manualSaves: manual, autoSaves: auto, importedSaves: imported };
+    return { autoSaves: auto, importedSaves: imported };
   }, [visibleSaves]);
   const repairingSummaries = pendingSummaryCount > 0 && (
     repairState.phase === 'checking'
@@ -411,9 +400,6 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
           >
             <div className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <SaveActionButton primary onClick={handleSave} disabled={saving}>
-                  {saving ? '保存中' : '保存新节点'}
-                </SaveActionButton>
                 <SaveActionButton onClick={handleImport} disabled={importing}>
                   {importing ? '导入中' : '导入存档包'}
                 </SaveActionButton>
@@ -453,10 +439,10 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                   存档策略
                 </div>
                 <div>存档树数量不限，不会因树数量清理旧存档</div>
-                <div>每棵树手动节点最多 5 个、自动节点最多 6 个</div>
-                <div>导入存档不计入手动上限</div>
+                <div>每回合封版晋升新节点，自动节点最多 6 个</div>
+                <div>导入存档不计入自动节点上限</div>
                 <div>历史恢复点已停止新建，可在列表中手动清理</div>
-                <div>读取节点后继续保存会生成新分支</div>
+                <div>读取检查点会生成新分支；读取叶子切换工作区</div>
                 <div>整树导出会带走当前旅程分叉</div>
               </div>
 
@@ -472,9 +458,6 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
           <main className="flex min-w-0 flex-col md:min-h-0 md:flex-1 md:overflow-hidden">
             <div className="md:hidden flex flex-col">
               <div className="flex gap-1.5 px-3 pb-1.5 pt-2.5">
-                <SaveActionButton primary size="sm" onClick={handleSave} disabled={saving} className="flex-1 min-w-0">
-                  {saving ? '保存中' : '保存'}
-                </SaveActionButton>
                 <SaveActionButton size="sm" onClick={handleImport} disabled={importing} className="flex-1 min-w-0">
                   {importing ? '导入中' : '导入'}
                 </SaveActionButton>
@@ -550,7 +533,6 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
             >
               <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
                 <TabButton label="全部" count={visibleSaves.length} active={tab === 'all'} onClick={() => setTab('all')} />
-                <TabButton label="手动" count={manualSaves.length} active={tab === 'manual'} onClick={() => setTab('manual')} />
                 <TabButton label="自动" count={autoSaves.length} active={tab === 'auto'} onClick={() => setTab('auto')} />
                 <TabButton label="导入" count={importedSaves.length} active={tab === 'imported'} onClick={() => setTab('imported')} />
               </div>
@@ -634,19 +616,13 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
               {!loading && !loadError && visibleTreeGroups.length === 0 && (
                 <EmptyState
                   text={
-                    tab === 'manual'
-                      ? '暂无手动存档'
-                      : tab === 'auto'
-                        ? '暂无自动存档'
-                        : tab === 'imported'
-                          ? '暂无导入存档'
-                          : '暂无存档'
+                    tab === 'auto'
+                      ? '暂无自动存档'
+                      : tab === 'imported'
+                        ? '暂无导入存档'
+                        : '暂无存档'
                   }
-                  detail={
-                    tab === 'manual'
-                      ? '点击左侧“保存新节点”留下第一道印记。'
-                      : '推进旅程后，新的节点会显示在这里。'
-                  }
+                  detail={tab === 'all' ? undefined : '推进旅程后，新的节点会显示在这里。'}
                 />
               )}
 
@@ -1305,7 +1281,6 @@ function formatSize(bytes: number): string {
 
 function matchesSaveTab(save: SaveListItemSummary, tab: Tab): boolean {
   if (tab === 'all') return true;
-  if (tab === 'manual') return save.type === 'manual';
   if (tab === 'auto') return save.type === 'auto';
   return save.type === 'imported';
 }

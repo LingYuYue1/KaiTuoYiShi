@@ -2,7 +2,7 @@ import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { type 回合快照 } from '@/models/chat';
 import { parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
-import { saveSetting, loadNewestStory, saveNewestStory } from '@/services/dbService';
+import { saveSetting, writeLeafNode } from '@/services/dbService';
 import {
   clearWorkflowRecoveryJournal,
   createWorkflowRecoveryJournal,
@@ -18,13 +18,13 @@ import { restorePreTurnSnapshot } from './turnSnapshot';
 import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { TURN_STATUS_IDLE } from './turnStatus';
-import { mergeNewestStory } from '@/models/newestStory';
 import { stage1_turnStart } from './stage1_turnStart';
 import { stage2_preModel } from './stage2_preModel';
 import { stage3_promptAssembly } from './stage3_promptAssembly';
 import { stage4_aiRequest } from './stage4_aiRequest';
 import { stage5_replyLanding } from './stage5_replyLanding';
-import { 边界覆盖集, runTurnTail } from './turnTail';
+import { 清理叶子补丁, runTurnTail } from './turnTail';
+import { ensureHeadLeafWritable } from './saveLoadWorkflow';
 
 export interface SendWorkflowDeps {
   state: UseGameStateReturn;
@@ -135,8 +135,13 @@ export async function executeSendWorkflow(
   try {
     await persistWorkflowRecoveryJournal(recoveryJournal);
 
-    // newest 槽（工作区）：回合开始载入；阶段边界 merge + 落盘（L2：只在阶段边界写）。
-    let newest = await loadNewestStory();
+    // 工作区叶子（newest.headNodeId）：回合开始载入并确保可写（封版/缺失时自动分叉重建）；
+    // 阶段边界 writeLeafNode 原地写叶子（L2：只在阶段边界写）。
+    const newest = await ensureHeadLeafWritable(state);
+    const headNodeId = newest.headNodeId;
+    if (!headNodeId) {
+      throw new Error('回合写叶子失败：无法建立活跃叶子工作区。');
+    }
 
     // 阶段 1：回合开始（快照 + 用户消息 + 历史清理）
     const s1 = await stage1_turnStart(state, userInput, effectiveWorld, recoveryJournal);
@@ -180,16 +185,18 @@ export async function executeSendWorkflow(
     if (d.pendingVariableStarted) pendingVariableStarted = true;
     recoveryJournal = d.recoveryJournal ?? recoveryJournal;
 
-    // 阶段边界写 newest（片 5a-2：S5 后 —— chatHistory / turnCount / S2 两运行态键）
+    // 阶段边界写叶子（子任务 A：S5 后 —— chatHistory / turnCount / S2 两运行态键 / 开场触发标记）
     {
       assertWorkflowActive();
-      newest = mergeNewestStory(newest, 边界覆盖集({
+      await writeLeafNode(headNodeId, 清理叶子补丁({
         chatHistory: d.finalHistory,
         turnCount: turnCountAtStart + 1,
         macroGlobalVars: d.macroGlobalVarsAfterTurn ?? state.macroGlobalVars,
         worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? state.worldbookTriggerStates,
+        // 与旧 commitTurn「payload.pendingOpeningTrigger = state.pendingOpeningTrigger ?? null」等价：
+        // App 在触发第 0 回合前已清空该标记，此处保持叶子与 state 同步，避免 boot 恢复重复触发开场。
+        pendingOpeningTrigger: state.pendingOpeningTrigger ?? null,
       }));
-      await saveNewestStory(newest);
     }
 
     result.fullText = '';

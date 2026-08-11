@@ -54,7 +54,6 @@ interface SettingsModalProps {
   onApiSettingsChange: (s: API设置) => void;
   onGameSettingsChange: (s: 游戏设置) => void;
   onThemeChange: (t: 主题预设) => void;
-  onSave: () => Promise<number>;
   onContinue: () => Promise<boolean>;
   onLoadSave: (id: number) => Promise<boolean>;
   // 变量管理需要的 state 切片
@@ -148,7 +147,6 @@ export function SettingsModal({
   onApiSettingsChange,
   onGameSettingsChange,
   onThemeChange,
-  onSave,
   onContinue,
   onLoadSave,
   旅人,
@@ -296,7 +294,7 @@ export function SettingsModal({
       case 'theme':
         return <ThemeSettingsTab current={currentTheme} onChange={persistThemeChange} />;
       case 'storage':
-        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onSave={onSave} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} onClearActiveSaveTreeMeta={onClearActiveSaveTreeMeta} onGetSaveCatalogSnapshot={onGetSaveCatalogSnapshot} onStartSaveCatalogRepair={onStartSaveCatalogRepair} onSubscribeSaveCatalogRepair={onSubscribeSaveCatalogRepair} onRepairSaveDatabase={onRepairSaveDatabase} onDeleteLegacyBackupSaves={onDeleteLegacyBackupSaves} onExportSavePackage={onExportSavePackage} onExportSaveTreePackage={onExportSaveTreePackage} onImportSaveFileAsMany={onImportSaveFileAsMany} />;
+        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} onClearActiveSaveTreeMeta={onClearActiveSaveTreeMeta} onGetSaveCatalogSnapshot={onGetSaveCatalogSnapshot} onStartSaveCatalogRepair={onStartSaveCatalogRepair} onSubscribeSaveCatalogRepair={onSubscribeSaveCatalogRepair} onRepairSaveDatabase={onRepairSaveDatabase} onDeleteLegacyBackupSaves={onDeleteLegacyBackupSaves} onExportSavePackage={onExportSavePackage} onExportSaveTreePackage={onExportSaveTreePackage} onImportSaveFileAsMany={onImportSaveFileAsMany} />;
     }
   };
 

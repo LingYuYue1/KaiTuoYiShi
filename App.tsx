@@ -778,7 +778,7 @@ export function App() {
           <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
             <SaveLoadModal
               showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
-              onSave={actions.handleSave}
+              onExportActiveLeafPackage={actions.handleExportActiveLeafPackage}
               onLoad={loadSaveIntoGame}
               onDeleteSave={actions.handleDeleteSave}
               onDeleteSaveTree={actions.handleDeleteSaveTree}
@@ -798,7 +798,6 @@ export function App() {
         {showCloudSave && (
           <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
             <GitHubCloudSaveModal
-              onSave={actions.handleSave}
               onClose={() => setShowCloudSave(false)}
               onLoadCloudConfig={loadGitHubCloudSaveConfig}
               onPersistCloudConfig={persistGitHubCloudSaveConfig}
@@ -837,7 +836,6 @@ export function App() {
               testConnection={testConnection}
               loadApiErrorReports={loadApiErrorReports}
               clearApiErrorReports={clearApiErrorReports}
-              onSave={actions.handleSave}
               onContinue={actions.handleContinue}
               onLoadSave={loadSaveIntoGame}
               initialTab={settingsInitialTab}
@@ -979,7 +977,6 @@ export function App() {
             testConnection={testConnection}
             loadApiErrorReports={loadApiErrorReports}
             clearApiErrorReports={clearApiErrorReports}
-            onSave={actions.handleSave}
             onContinue={actions.handleContinue}
             onLoadSave={loadSaveIntoGame}
             initialTab={settingsInitialTab}
@@ -1077,7 +1074,7 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
           <SaveLoadModal
             showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
-            onSave={actions.handleSave}
+            onExportActiveLeafPackage={actions.handleExportActiveLeafPackage}
             onLoad={loadSaveIntoGame}
             onDeleteSave={actions.handleDeleteSave}
             onDeleteSaveTree={actions.handleDeleteSaveTree}
@@ -1098,7 +1095,6 @@ export function App() {
       {showCloudSave && (
         <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
           <GitHubCloudSaveModal
-            onSave={actions.handleSave}
             onClose={() => setShowCloudSave(false)}
             onLoadCloudConfig={loadGitHubCloudSaveConfig}
             onPersistCloudConfig={persistGitHubCloudSaveConfig}

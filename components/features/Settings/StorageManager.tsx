@@ -10,7 +10,6 @@ import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTree
 
 interface Props {
   showAutoArchives: boolean;
-  onSave: () => Promise<number>;
   onContinue: () => Promise<boolean>;
   onLoadSave: (id: number) => Promise<boolean>;
   /** 存档删除用例动作：resolve→确认→级联删除（由 App 经 SettingsModal 从 useGame 门面注入）。 */
@@ -37,14 +36,14 @@ interface Props {
   onImportSaveFileAsMany: (file: File) => Promise<number>;
 }
 
-type Filter = 'all' | 'manual' | 'auto' | 'imported';
+type Filter = 'all' | 'auto' | 'imported';
 
 const cardClip =
   'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoadSave, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany }: Props) {
+export function StorageManagerTab({ showAutoArchives, onContinue, onLoadSave, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -111,17 +110,6 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
     || repairState.phase === 'waiting-for-lease'
     || repairState.phase === 'repairing'
     || repairState.phase === 'paused-for-write';
-
-  const handleSave = async () => {
-    setBusy(true);
-    try {
-      await onSave();
-      await refresh();
-      setFilter('manual');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const handleContinue = async () => {
     setBusy(true);
@@ -252,13 +240,12 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <ActionButton label={busy ? '处理中' : '保存当前进度'} onClick={() => void handleSave()} disabled={busy} primary />
             <ActionButton label={busy ? '处理中' : '继续游戏'} onClick={() => void handleContinue()} disabled={busy} />
             <ActionButton label="导入存档" onClick={handleImport} disabled={busy} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {(['all', 'manual', 'auto', 'imported'] as Filter[]).map((value) => (
+          {(['all', 'auto', 'imported'] as Filter[]).map((value) => (
             <button
               key={value}
               type="button"
@@ -270,7 +257,7 @@ export function StorageManagerTab({ showAutoArchives, onSave, onContinue, onLoad
                 clipPath: smallClip,
               }}
             >
-              {{ all: '全部', manual: '手动', auto: '自动', imported: '导入' }[value]}
+              {{ all: '全部', auto: '自动', imported: '导入' }[value]}
             </button>
           ))}
         </div>

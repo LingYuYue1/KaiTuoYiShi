@@ -1,5 +1,5 @@
-import { mergeNewestStory, type NewestStory字段集, type NewestStory记录 } from '@/models/newestStory';
-import { saveNewestStory } from '@/services/dbService';
+import { type 工作区字段集, type NewestStory记录 } from '@/models/newestStory';
+import { writeLeafNode } from '@/services/dbService';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { stage6_memory } from './stage6_memory';
 import { stage7_worldTraveler } from './stage7_worldTraveler';
@@ -18,8 +18,8 @@ type VariableOverridesForNewest = {
   剧情?: TurnContext['state']['剧情'];
 };
 
-/** 过滤 undefined，保留 newest 的字段级覆盖语义。 */
-export function 边界覆盖集(patch: Partial<NewestStory字段集>): Partial<NewestStory字段集> {
+/** 过滤 undefined，保留叶子补丁的字段级覆盖语义。 */
+export function 清理叶子补丁(patch: Partial<工作区字段集>): Partial<工作区字段集> {
   const cleaned: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
     if (typeof value !== 'undefined') cleaned[key] = value;
@@ -34,7 +34,10 @@ export async function runTurnTail(
   initialNewest: NewestStory记录,
 ): Promise<void> {
   const { state, assertWorkflowActive } = ctx;
-  let newest = initialNewest;
+  const headNodeId = initialNewest.headNodeId;
+  if (!headNodeId) {
+    throw new Error('runTurnTail 失败：活跃叶子指针为空。');
+  }
 
   Object.assign(d, await stage6_memory(ctx, d));
   Object.assign(d, stage7_worldTraveler(ctx, d));
@@ -55,7 +58,7 @@ export async function runTurnTail(
       ? [...ctx.variableBatchesAtStart, variableBatchForSave]
       : ctx.variableBatchesAtStart);
     assertWorkflowActive();
-    newest = mergeNewestStory(newest, 边界覆盖集({
+    await writeLeafNode(headNodeId, 清理叶子补丁({
       记忆: d.memoryAfterStoryProgress ?? d.mem,
       忆庭: d.yitingWithCompression,
       世界: variableOverrides?.世界 ?? d.worldAfter,
@@ -64,17 +67,16 @@ export async function runTurnTail(
       剧情: variableOverrides?.剧情,
       NPC: d.npcAfterCompression,
       variableBatches: variableBatchesForSave,
-      // 片 5e（D4）：queueTasks 属主 = 工作区（叶子）字段，留在 newest.story；
-      // commitTurn 封版晋升时剥离（不进检查点），清空 newest 后写回本字段。
+      // 片 5e（D4）：queueTasks 属主 = 工作区（叶子）字段，留在叶子；
+      // commitTurn 封版晋升时剥离（不进检查点），新叶子继承本字段。
       queueTasks: ctx.queueTasksMirror,
     }));
-    await saveNewestStory(newest);
   }
 
   Object.assign(d, await stage11_backgroundJobs(ctx, d));
 
   assertWorkflowActive();
-  newest = mergeNewestStory(newest, 边界覆盖集({
+  await writeLeafNode(headNodeId, 清理叶子补丁({
     剧情编织: d.storyWeavingForSave ?? undefined,
     智库: d.zhikuAfterRuntimeUnlock ?? undefined,
     手机: d.phoneAfterFallbackSeed,
@@ -84,7 +86,6 @@ export async function runTurnTail(
     chatHistory: d.finalHistoryForSave,
     相册: d.相册After,
   }));
-  await saveNewestStory(newest);
 
   const finalHistoryForSave = d.finalHistoryForSave;
   const memoryAfterStoryProgress = d.memoryAfterStoryProgress ?? undefined;
@@ -101,6 +102,6 @@ export async function runTurnTail(
     memoryAfterStoryProgress,
     yitingAfterTurnRecall,
     phoneAfterFallbackSeed,
-    newest,
+    newest: initialNewest,
   }));
 }

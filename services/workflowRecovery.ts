@@ -3,7 +3,6 @@ import {
   parseWorkflowRecoveryJournal,
   type WorkflowRecoveryJournal,
 } from '@/utils/workflowRecoveryModel';
-import type { NewestStory记录 } from '@/models/newestStory';
 import type { 聊天消息 } from '@/models/chat';
 export {
   createWorkflowRecoveryJournal,
@@ -16,16 +15,20 @@ export {
 
 export const WORKFLOW_RECOVERY_KEY = 'activeWorkflowRecoveryV1';
 
+/**
+ * 判定中断回合现场是否可续跑：chatHistory 来自活跃叶子（工作区）的最新历史，
+ * 必须包含该回合的用户消息且末尾 assistant 消息与日志一致（子任务 A：
+ * 工作区数据源从 newest.story 改为活跃叶子载荷）。
+ */
 export function isResumableWorkspace(
   journal: WorkflowRecoveryJournal,
-  newest: NewestStory记录,
+  chatHistory: 聊天消息[],
 ): boolean {
   if (journal.phase !== 'variable_settlement' && journal.phase !== 'autosave') return false;
   if (!journal.userMessageId?.trim() || !journal.assistantMessageId?.trim()) return false;
-  if (!newest.baseCheckpointId || !Array.isArray(newest.story.chatHistory)) return false;
-  const history: 聊天消息[] = newest.story.chatHistory;
-  if (!history.some((message) => message.id === journal.userMessageId)) return false;
-  const assistant = history.at(-1);
+  if (!Array.isArray(chatHistory)) return false;
+  if (!chatHistory.some((message) => message.id === journal.userMessageId)) return false;
+  const assistant = chatHistory.at(-1);
   const parsedResponse: unknown = assistant ? Reflect.get(assistant, 'parsedResponse') : null;
   return assistant?.role === 'assistant'
     && assistant.id === journal.assistantMessageId

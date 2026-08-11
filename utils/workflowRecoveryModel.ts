@@ -10,6 +10,10 @@ export interface WorkflowRecoveryJournal {
   phase: WorkflowRecoveryPhase;
   userMessageId?: string;
   assistantMessageId?: string;
+  /** 子任务 A（片 5f）：commitTurn 提交协议本次晋升的目标子叶子 nodeId。
+   *  建叶前持久化，供崩溃窗口（封版后、写指针前）恢复时按明确身份采纳子叶子，
+   *  不依赖「多个子叶中按保存 ID 猜最新」的线性链假设。 */
+  pendingChildNodeId?: string;
 }
 
 export interface WorkflowHistoryMessage {
@@ -56,12 +60,16 @@ export function parseWorkflowRecoveryJournal(value: unknown): WorkflowRecoveryJo
     phase: raw.phase as WorkflowRecoveryPhase,
     userMessageId: typeof raw.userMessageId === 'string' ? raw.userMessageId : undefined,
     assistantMessageId: typeof raw.assistantMessageId === 'string' ? raw.assistantMessageId : undefined,
+    pendingChildNodeId:
+      typeof raw.pendingChildNodeId === 'string' && raw.pendingChildNodeId.trim()
+        ? raw.pendingChildNodeId
+        : undefined,
   };
 }
 
 export function updateWorkflowRecoveryJournal(
   journal: WorkflowRecoveryJournal,
-  patch: Partial<Pick<WorkflowRecoveryJournal, 'phase' | 'userMessageId' | 'assistantMessageId'>>,
+  patch: Partial<Pick<WorkflowRecoveryJournal, 'phase' | 'userMessageId' | 'assistantMessageId' | 'pendingChildNodeId'>>,
 ): WorkflowRecoveryJournal {
   return { ...journal, ...patch, updatedAt: Date.now() };
 }
