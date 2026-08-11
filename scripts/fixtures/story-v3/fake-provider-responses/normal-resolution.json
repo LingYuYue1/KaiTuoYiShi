@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "normal-resolution",
+  "responses": [
+    {
+      "responseId": "main_normal_resolution",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "G0 正常推进控制样本",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:96e8cd7c402d6ce5b00669a5a164d7ed3080135dfa179151d68a3d0785ccfc5e",
+      "requestSummary": {
+        "turnId": "turn_normal_009",
+        "playerIntent": "关闭失控终端并确认安全",
+        "currentFocus": "主控舱段警报"
+      },
+      "rawOutput": "<thinking>当前问题已经得到明确解决，只收束这一段。</thinking>\n<正文>最后一台失控终端熄灭，艾丝妲确认主控舱段恢复稳定。残余的入侵者被击退，警报终于结束。</正文>\n<动态世界>黑塔空间站主控舱段的入侵者被击退，警报解除。</动态世界>\n<短期记忆>玩家协助艾丝妲稳定了主控舱段。</短期记忆>\n<剧情规划>下一回合可以询问支援舱段的异动，但不默认玩家已经前往。</剧情规划>",
+      "rawOutputSha256": "sha256:65c70c2f256fa54f47303676be4d1e2f727cfe97d41382d0b427a89f286adf42",
+      "expectedAdjudication": "accept_one_unit",
+      "allowedFinalSideEffects": [
+        "complete:unit_herta_alarm",
+        "fact:herta_control_zone_stable",
+        "focus_offer:unit_herta_beast"
+      ]
+    },
+    {
+      "responseId": "variable_normal_resolution",
+      "service": "variable",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "G0 正常变量空补丁",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:96e8cd7c402d6ce5b00669a5a164d7ed3080135dfa179151d68a3d0785ccfc5e",
+      "requestSummary": {
+        "turnId": "turn_normal_009",
+        "purpose": "确认无额外变量命令"
+      },
+      "rawOutput": "{\"commands\":[],\"summary\":\"没有需要额外写入的变量。\"}",
+      "rawOutputSha256": "sha256:ac54fef90294ef5701adb0747cbb29469a833589cd62d8104041b7089faa9099",
+      "expectedAdjudication": "accept_noop",
+      "allowedFinalSideEffects": []
+    },
+    {
+      "responseId": "main_valid_completion_stall",
+      "service": "main",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：玩家明确完成当前问题后，剧情仍停留在原单元不推进",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:96e8cd7c402d6ce5b00669a5a164d7ed3080135dfa179151d68a3d0785ccfc5e",
+      "requestSummary": {
+        "turnId": "coverage_b1_stall",
+        "playerIntent": "确认主控舱段已经安全并收尾",
+        "currentFocus": "主控舱段警报"
+      },
+      "rawOutput": "<thinking>玩家已经明确完成当前问题。</thinking>\n<正文>主控舱段警报解除，入侵者被彻底清理，危机告一段落。</正文>\n<测试证据>{\"completionEvidence\":[\"主控舱段警报解除\"]}</测试证据>\n<短期记忆>玩家完成了主控舱段的收尾。</短期记忆>\n<剧情规划>下一步应前往支援舱段确认情况。</剧情规划>",
+      "rawOutputSha256": "sha256:5b4c42456a27c601b81cd12ba41aaa1e66b15eb67583c4b576a773a592fea05d",
+      "expectedAdjudication": "accept_completion_with_receipt",
+      "allowedFinalSideEffects": [
+        "complete:unit_herta_alarm（带完成回执）",
+        "focus_offer:unit_herta_beast"
+      ]
+    }
+  ]
+}

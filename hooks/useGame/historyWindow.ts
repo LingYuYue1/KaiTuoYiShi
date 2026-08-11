@@ -5,9 +5,17 @@ import type { 游戏设置 } from '@/models/settings';
 export const MAIN_HISTORY_LIMIT_WITH_MEMORY = 20;
 export const MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20;
 export const MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20;
-export const MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 12;
-export const MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT = 10;
-export const MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 12;
+/**
+ * 阶段1对齐墨色江湖：长期记忆全量注入（压缩阈值改50后约20-30条，可接受）。
+ * 用大数实现"全量"，实际条数由压缩阈值控制。
+ */
+export const MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 9999;
+/**
+ * 阶段1对齐墨色江湖：中期记忆全量注入（压缩阈值改30后约20-30条，可接受）。
+ */
+export const MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT = 9999;
+/** 阶段1对齐墨色江湖：短期注入窗口对齐30（原12） */
+export const MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 30;
 export const MAIN_RECALL_ASSISTANT_BODY_WINDOW = 5;
 export const ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW = 3;
 

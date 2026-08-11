@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "news-knowledge-boundary",
+  "title": "新闻必须有世界事实来源；NPC 只有通过明确传播路径才能知道消息",
+  "playerFacingExpectation": "新闻必须引用已提交的世界事实；NPC 只有通过在场、广播、阅读、对话、通讯或目击等明确传播路径（回执）才能知道消息，没有回执的 NPC 不能凭空引用新闻内容。",
+  "fixedNow": 1735690680000,
+  "initialStateFingerprint": "sha256:5e607b73c6314e09b518b9f91bee785961462767ffc667c4ab865843cea9a65d",
+  "baselineSignificance": [
+    "旧 newsWorkflow 直接读取正文/世界/剧情字符串并直接 set新闻 根切片，新闻没有任何机器可读的事实来源字段。",
+    "NPC 是否知道某个消息没有任何回执模型：下游正文可以随意让 NPC 复述新闻内容。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_news",
+      "revision": 7,
+      "turnCount": 21,
+      "gameTime": "2157-04-26T11:20:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·基座舱段",
+    "playerFocusId": "focus_news_watch",
+    "eventInstances": [
+      {
+        "eventId": "event_beast_sighting",
+        "state": "resolved"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "支援舱段外确认出现大型反物质军团造物活动。"
+    ],
+    "terminalEvents": []
+  },
+  "storySetup": {
+    "seriesId": "series_herta_news",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_briefing",
+    "units": [
+      {
+        "id": "unit_briefing",
+        "number": 1,
+        "title": "通报与警戒",
+        "summary": "空间站就军团动向发布通报并加强警戒",
+        "endStates": [
+          "通报已发布"
+        ],
+        "followups": [
+          "等待各方反馈"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "基座舱段"
+        ],
+        "status": "current"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "news_publish_022",
+      "kind": "news_publish",
+      "turnCount": 22,
+      "playerInput": "",
+      "currentLocation": "黑塔空间站·基座舱段",
+      "responseRefs": [
+        "news_beast_sighting"
+      ]
+    },
+    {
+      "stepId": "knowledge_claim_022",
+      "kind": "knowledge_claim",
+      "turnCount": 22,
+      "playerInput": "我在基座舱段听到守卫们议论通报内容。",
+      "currentLocation": "黑塔空间站·基座舱段",
+      "npcClaims": [
+        {
+          "observerId": "asta",
+          "factId": "fact_beast_sighting",
+          "channel": "direct_observation"
+        },
+        {
+          "observerId": "station_guard",
+          "factId": "fact_beast_sighting",
+          "channel": "reading"
+        }
+      ],
+      "responseRefs": [
+        "main_guard_knowledge"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "NEWS_DIRECT_ROOT_WRITE",
+      "NEWS_WITHOUT_MACHINE_SOURCE_LINK",
+      "NPC_KNOWLEDGE_WITHOUT_RECEIPT"
+    ],
+    "expectedMetrics": {
+      "knowledge_leak_count": 2,
+      "news_without_source_fact_count": 1,
+      "npc_knowledge_without_receipt_count": 2
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "新闻文章必须引用 CommittedWorldFact 的 sourceFactId/sourceFactIds",
+      "NPC 知情只能来自 KnowledgeReceipt（direct_observation/broadcast/communication/dialogue/reading）",
+      "没有回执的 NPC 不得在正文、手机或下游 prompt 中引用该事实"
+    ],
+    "allowedFinalSideEffects": [
+      "publish:news_beast_sighting（引用事实 fact_beast_sighting）",
+      "receipt:asta/direct_observation",
+      "receipt:station_guard/reading"
+    ]
+  },
+  "reviewQuestion": "NPC 只有在明确渠道回执后才该知道新闻内容，对吗？"
+}

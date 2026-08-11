@@ -30,6 +30,7 @@ export interface 时段定义 {
 
 import type { 官方开局预设, 创意工坊开局模板, 创意工坊开局模板包, 难度ID, 剧情模式, 命途ID, 开局来源, 起始场景, 自由开局地点来源 } from './journey';
 import type { NPC记录 } from './npc';
+import type { CommittedWorldFact, StoryFocus, WorldEventInstance, WorldEventInstanceStatus } from './storyRuntime';
 import { 创建NPC记录, 获取NPC关系阶段, 获取NPC兼容关系, 归一化NPC记录列表 } from './npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import {
@@ -153,6 +154,126 @@ export interface 世界状态 {
   // 进行中狭间:玩家已踏入,本回合 AI 应进入命途狭间专用流程(出题/评判)。
   待触发狭间?: 命途ID;
   进行中狭间?: 命途ID;
+
+  /** 剧情编织运行时切片（R2 起）：世界事件实例、事实账本与焦点随普通存档保存，不启用独立 runtime 存储。 */
+  剧情运行时?: 剧情编织运行时切片;
+}
+
+/** 剧情编织运行时切片：联合裁决所需的持久化运行状态（随 世界状态 进普通存档/回合快照）。 */
+export interface 剧情编织运行时切片 {
+  schemaVersion: 1;
+  runtimeBranchId: string;
+  /** 每回合唯一裁决后 +1；事实账本身份与裁决回执使用同一 revision。 */
+  runtimeRevision: number;
+  focus: StoryFocus;
+  worldEvents: WorldEventInstance[];
+  factLedger: CommittedWorldFact[];
+  /** 最近一次联合裁决决策与原因（只读诊断，不驱动行为）。 */
+  lastDecision?: 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause';
+  lastReasons?: string[];
+  /** 本回合世界演变结算状态（settled=正常提交 / failed=API 或候选失败 / skipped=无条件未调用）。 */
+  worldEvolutionStatus?: 'settled' | 'failed' | 'skipped';
+  worldEvolutionFailureReason?: string;
+  updatedAt: number;
+}
+
+const WORLD_EVENT_STATUSES: WorldEventInstanceStatus[] = ['scheduled', 'active', 'blocked', 'resolution_pending', 'resolved', 'cancelled', 'superseded', 'missed', 'archived'];
+
+function 归一化运行时事件(instance: Partial<WorldEventInstance> | null | undefined): WorldEventInstance | null {
+  if (!instance || typeof instance !== 'object') return null;
+  if (typeof instance.eventInstanceId !== 'string' || !instance.eventInstanceId) return null;
+  if (typeof instance.eventDefinitionId !== 'string' || !instance.eventDefinitionId) return null;
+  const normalized: WorldEventInstance = {
+    eventInstanceId: instance.eventInstanceId,
+    eventDefinitionId: instance.eventDefinitionId,
+    status: WORLD_EVENT_STATUSES.includes(instance.status as WorldEventInstanceStatus)
+      ? instance.status as WorldEventInstanceStatus
+      : 'scheduled',
+    replayPolicy: instance.replayPolicy === 'allow_new_instance' || instance.replayPolicy === 'repeatable' ? instance.replayPolicy : 'once',
+    participantIds: Array.isArray(instance.participantIds) ? instance.participantIds.filter((item): item is string => typeof item === 'string') : [],
+    dependencyIds: Array.isArray(instance.dependencyIds) ? instance.dependencyIds.filter((item): item is string => typeof item === 'string') : [],
+    publicFactIds: Array.isArray(instance.publicFactIds) ? instance.publicFactIds.filter((item): item is string => typeof item === 'string') : [],
+    idempotencyKey: typeof instance.idempotencyKey === 'string' ? instance.idempotencyKey : 'weaving:' + instance.eventInstanceId,
+    source: instance.source && typeof instance.source === 'object'
+      ? instance.source as WorldEventInstance['source']
+      : { kind: 'migration_record', migrationId: 'runtime-slice:' + instance.eventInstanceId, sourcePath: 'legacy', sourceFingerprint: 'legacy' },
+  };
+  if (typeof instance.parentInstanceId === 'string') normalized.parentInstanceId = instance.parentInstanceId;
+  if (instance.startAt && typeof instance.startAt === 'object') normalized.startAt = instance.startAt as WorldEventInstance['startAt'];
+  if (instance.dueAt && typeof instance.dueAt === 'object') normalized.dueAt = instance.dueAt as WorldEventInstance['dueAt'];
+  if (instance.resolvedAt && typeof instance.resolvedAt === 'object') normalized.resolvedAt = instance.resolvedAt as WorldEventInstance['resolvedAt'];
+  if (instance.resolutionMode === 'player' || instance.resolutionMode === 'world_background' || instance.resolutionMode === 'shared' || instance.resolutionMode === 'player_early' || instance.resolutionMode === 'unknown') {
+    normalized.resolutionMode = instance.resolutionMode;
+  }
+  if (instance.outcome === 'normal' || instance.outcome === 'deviated' || instance.outcome === 'escaped' || instance.outcome === 'failed' || instance.outcome === 'unknown') {
+    normalized.outcome = instance.outcome;
+  }
+  if (typeof instance.terminalFactId === 'string') normalized.terminalFactId = instance.terminalFactId;
+  if (typeof instance.eventResolutionKey === 'string') normalized.eventResolutionKey = instance.eventResolutionKey;
+  return normalized;
+}
+
+function 归一化运行时焦点(focus: Partial<StoryFocus> | null | undefined): StoryFocus {
+  return {
+    focusId: typeof focus?.focusId === 'string' && focus.focusId ? focus.focusId : 'focus:runtime',
+    trackId: typeof focus?.trackId === 'string' ? focus.trackId : undefined,
+    unitId: typeof focus?.unitId === 'string' ? focus.unitId : undefined,
+    status: focus?.status === 'blocked' || focus?.status === 'awaiting_player' || focus?.status === 'completed' || focus?.status === 'diverged'
+      ? focus.status
+      : 'active',
+    reasonCodes: Array.isArray(focus?.reasonCodes) ? focus.reasonCodes.filter((item): item is string => typeof item === 'string').slice(0, 12) : [],
+    enteredAtRevision: Math.max(0, Math.trunc(Number(focus?.enteredAtRevision) || 0)),
+  };
+}
+
+function 归一化运行时事实(fact: Partial<CommittedWorldFact> | null | undefined): CommittedWorldFact | null {
+  if (!fact || typeof fact !== 'object') return null;
+  if (typeof fact.factId !== 'string' || !fact.factId) return null;
+  if (typeof fact.eventInstanceId !== 'string' || !fact.eventInstanceId) return null;
+  return {
+    factId: fact.factId,
+    eventInstanceId: fact.eventInstanceId,
+    sourceRevision: Math.max(0, Math.trunc(Number(fact.sourceRevision) || 0)),
+    factType: typeof fact.factType === 'string' ? fact.factType : 'unknown',
+    payload: fact.payload && typeof fact.payload === 'object' ? fact.payload as CommittedWorldFact['payload'] : {},
+    occurredAt: fact.occurredAt && typeof fact.occurredAt === 'object' ? fact.occurredAt as CommittedWorldFact['occurredAt'] : { dayOrdinal: 1, minuteOfDay: 0 },
+    committedAt: fact.committedAt && typeof fact.committedAt === 'object' ? fact.committedAt as CommittedWorldFact['committedAt'] : { dayOrdinal: 1, minuteOfDay: 0 },
+    publicScope: fact.publicScope && typeof fact.publicScope === 'object' ? fact.publicScope as CommittedWorldFact['publicScope'] : { kind: 'private' },
+    evidenceRefs: Array.isArray(fact.evidenceRefs) ? fact.evidenceRefs as CommittedWorldFact['evidenceRefs'] : [],
+    evidenceLevel: fact.evidenceLevel === 'confirmed' || fact.evidenceLevel === 'supported' ? fact.evidenceLevel : 'supported',
+    supersedesFactId: typeof fact.supersedesFactId === 'string' ? fact.supersedesFactId : undefined,
+    invalidatesEventInstanceIds: Array.isArray(fact.invalidatesEventInstanceIds) ? fact.invalidatesEventInstanceIds.filter((item): item is string => typeof item === 'string') : [],
+    playerParticipated: fact.playerParticipated === true,
+    playerObserverVisible: fact.playerObserverVisible === true,
+    createdBy: typeof fact.createdBy === 'string' ? fact.createdBy as CommittedWorldFact['createdBy'] : 'system',
+  };
+}
+
+export function 归一化剧情编织运行时切片(input?: Partial<剧情编织运行时切片> | null): 剧情编织运行时切片 | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const worldEvents = Array.isArray(input.worldEvents)
+    ? input.worldEvents.map(归一化运行时事件).filter((item): item is WorldEventInstance => item !== null).slice(-80)
+    : [];
+  const factLedger = Array.isArray(input.factLedger)
+    ? input.factLedger.map(归一化运行时事实).filter((item): item is CommittedWorldFact => item !== null).slice(-240)
+    : [];
+  return {
+    schemaVersion: 1,
+    runtimeBranchId: typeof input.runtimeBranchId === 'string' && input.runtimeBranchId ? input.runtimeBranchId : 'branch:main',
+    runtimeRevision: Math.max(0, Math.trunc(Number(input.runtimeRevision) || 0)),
+    focus: 归一化运行时焦点(input.focus),
+    worldEvents,
+    factLedger,
+    lastDecision: input.lastDecision === 'stay' || input.lastDecision === 'advance_one' || input.lastDecision === 'resolve_early' || input.lastDecision === 'deviate' || input.lastDecision === 'pause'
+      ? input.lastDecision
+      : undefined,
+    lastReasons: Array.isArray(input.lastReasons) ? input.lastReasons.filter((item): item is string => typeof item === 'string').slice(0, 12) : undefined,
+    worldEvolutionStatus: input.worldEvolutionStatus === 'settled' || input.worldEvolutionStatus === 'failed' || input.worldEvolutionStatus === 'skipped'
+      ? input.worldEvolutionStatus
+      : undefined,
+    worldEvolutionFailureReason: typeof input.worldEvolutionFailureReason === 'string' ? input.worldEvolutionFailureReason : undefined,
+    updatedAt: Math.trunc(Number(input.updatedAt)) || Date.now(),
+  };
 }
 
 export function 创建空世界状态(period?: 时段定义): 世界状态 {
@@ -193,6 +314,7 @@ export function 归一化世界状态(input?: Partial<世界状态> | null): 世
     氛围变化: input?.氛围变化 ?? '',
   };
   normalized.开局档案 = 归一化开局档案(input?.开局档案, normalized);
+  normalized.剧情运行时 = 归一化剧情编织运行时切片(input?.剧情运行时);
   return normalized;
 }
 

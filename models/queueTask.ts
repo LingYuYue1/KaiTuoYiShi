@@ -20,4 +20,8 @@ export interface 队列任务记录 {
   retrying?: boolean;
   cancellable?: boolean;
   cancelled?: boolean;
+  /** G1.3.2 可选 runtime/save metadata：任务创建时的 runtime 分支。旧 branch 迟到 worker 据此返回 STALE_BRANCH。 */
+  runtimeBranchId?: string;
+  /** G1.3.2 可选 runtime/save metadata：任务创建时的 runtime revision（非身份，仅诊断/冲突判定）。 */
+  runtimeRevision?: number;
 }

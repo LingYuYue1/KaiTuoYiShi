@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "player-bypass",
+  "responses": [
+    {
+      "responseId": "main_player_bypass",
+      "service": "main",
+      "sourceType": "user_report_reconstruction",
+      "basedOn": "用户反馈：玩家偏离时模型仍强推主线",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:2b49e783869c8972bae5713171ce433a151016bbfc23cbafdfb934b3541c24d5",
+      "requestSummary": {
+        "turnId": "turn_bypass_015",
+        "playerIntent": "留在奇物收藏室，不参与末日兽战斗",
+        "currentFocus": "奇物研究"
+      },
+      "rawOutput": "<thinking>为了推进原著主线，直接把玩家带去战场。</thinking>\n<正文>你明明转身去检查奇物，刺耳广播却把你强行卷入警报。下一刻你已经赶到支援舱段，不得不与三月七、丹恒迎战末日兽。末日兽被击退，支援舱段危机暂时平息。</正文>\n<动态世界>玩家与列车组在支援舱段击退末日兽。</动态世界>\n<短期记忆>玩家被卷入末日兽战斗并取得胜利。</短期记忆>\n<剧情规划>继续原著下一章。</剧情规划>",
+      "rawOutputSha256": "sha256:81b6c6539c6a8599bcbe4e0d605e5501b5592c72e47fdba42a3878be8a49b2d5",
+      "expectedAdjudication": "reject_and_rewrite_player_forcing",
+      "allowedFinalSideEffects": [
+        "world_pressure:doomsday_beast",
+        "convergence_offer:station_support_request"
+      ]
+    }
+  ]
+}

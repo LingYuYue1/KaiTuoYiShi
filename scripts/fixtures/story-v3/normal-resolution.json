@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "normal-resolution",
+  "title": "玩家正常完成当前小情节",
+  "playerFacingExpectation": "玩家确实解决当前问题时，只结算这一小段，并把下一段作为新的可选方向。",
+  "fixedNow": 1735689600000,
+  "initialStateFingerprint": "sha256:96e8cd7c402d6ce5b00669a5a164d7ed3080135dfa179151d68a3d0785ccfc5e",
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_normal",
+      "revision": 4,
+      "turnCount": 8,
+      "gameTime": "2157-04-26T08:20:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·主控舱段",
+    "playerFocusId": "focus_herta_alarm",
+    "eventInstances": [
+      {
+        "eventId": "event_herta_alarm",
+        "state": "active"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [],
+    "terminalEvents": []
+  },
+  "storySetup": {
+    "seriesId": "series_herta_g0",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_herta_alarm",
+    "units": [
+      {
+        "id": "unit_herta_alarm",
+        "number": 1,
+        "title": "主控舱段警报",
+        "summary": "玩家协助艾丝妲稳定主控舱段并击退入侵者",
+        "endStates": [
+          "主控舱段恢复稳定，入侵者被击退"
+        ],
+        "followups": [
+          "确认支援舱段的情况"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "主控舱段"
+        ],
+        "status": "current"
+      },
+      {
+        "id": "unit_herta_beast",
+        "number": 2,
+        "title": "支援舱段异动",
+        "summary": "列车组察觉支援舱段外侧仍有大型反物质军团造物活动",
+        "endStates": [
+          "确认末日兽威胁"
+        ],
+        "characters": [
+          "三月七",
+          "丹恒"
+        ],
+        "locations": [
+          "支援舱段"
+        ],
+        "status": "pending"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "turn_normal_009",
+      "kind": "main_turn",
+      "turnCount": 9,
+      "playerInput": "我和艾丝妲一起关闭失控的防卫终端，再确认舱段里没有残余敌人。",
+      "currentLocation": "黑塔空间站·主控舱段",
+      "responseRefs": [
+        "main_normal_resolution",
+        "variable_normal_resolution"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "legacy_success",
+    "expectedObservationCodes": [
+      "LEGACY_STORY_PROGRESS_ADVANCED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "WORLD_EVENT_STRING_DIRECT_APPEND"
+    ],
+    "expectedMetrics": {}
+  },
+  "v3Target": {
+    "decisions": [
+      "接受当前小情节完成",
+      "只完成 unit_herta_alarm",
+      "下一焦点可切到 unit_herta_beast，但不自动写成已经参与"
+    ],
+    "allowedFinalSideEffects": [
+      "提交一条主控舱段恢复稳定的事实",
+      "当前玩家线推进一个小单元",
+      "为新闻和 NPC 知情生成待处理投影"
+    ]
+  },
+  "reviewQuestion": "正常解决一个眼前问题后，只推进一个小单元并留下下一步，这是否符合你的预期？",
+  "coverageCases": [
+    {
+      "coverageId": "valid-completion-stall",
+      "title": "玩家已经完成当前小单元，旧系统仍停留原单元（B1）",
+      "playerFacingExpectation": "玩家确实解决了当前问题后，应当确认完成并给出下一步，而不是无理由卡住。",
+      "baselineSignificance": [
+        "旧系统只按正文关键词评分推进：完成语言（警报解除/清理/告一段落）没有命中本段结束状态的精确短语时，即使玩家意图明确完成，也不会写回进度。"
+      ],
+      "currentBaseline": {
+        "classification": "known_bad",
+        "expectedObservationCodes": [
+          "LEGACY_STORY_PROGRESS_STAYED",
+          "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+          "VALID_COMPLETION_PROGRESS_STALLED"
+        ],
+        "expectedMetrics": {
+          "valid_completion_stall_count": 1
+        }
+      },
+      "v3Target": {
+        "decisions": [
+          "有效完成证据应生成回执化完成事实并单次提交推进",
+          "卡段必须给出可诊断原因与下一步，而不是无理由停留"
+        ],
+        "allowedFinalSideEffects": [
+          "complete:unit_herta_alarm（带完成回执）",
+          "focus_offer:unit_herta_beast"
+        ]
+      },
+      "reviewQuestion": "玩家确实解决了当前问题但系统不推进时，应当确认完成并给出下一步，对吗？",
+      "steps": [
+        {
+          "stepId": "coverage_b1_stall",
+          "kind": "main_turn",
+          "turnCount": 9,
+          "playerInput": "我确认主控舱段已经安全，这一阶段完成了。",
+          "currentLocation": "黑塔空间站·主控舱段",
+          "responseRefs": [
+            "main_valid_completion_stall"
+          ]
+        }
+      ]
+    }
+  ]
+}

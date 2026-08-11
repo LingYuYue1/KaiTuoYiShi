@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "emergent-event-registration",
+  "title": "玩家自由行动产生的新事件必须登记为正式世界事实",
+  "playerFacingExpectation": "玩家自由路线产生的新组织、冲突或经营事件必须登记为正式世界事实并持续存在；同一输入重试不产生重复实例；试图换标题把已终态的末日兽伪装成新事件必须被识别。",
+  "fixedNow": 1735693200000,
+  "initialStateFingerprint": "sha256:1287161c73e5a570f3866f5077403314b45e71a0ac73032e3178b4d5619f9735",
+  "baselineSignificance": [
+    "旧系统里玩家自由行动产生的事件只能成为动态世界/变量/新闻/记忆字符串，没有 definition/instance/collision registry。",
+    "完全相同的字符串会被文本指纹去重，但换措辞的重复会作为新实例追加；已终态事件换标题伪装时不会被识别为同一实例。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_emergent",
+      "revision": 22,
+      "turnCount": 47,
+      "gameTime": "2157-04-26T17:40:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·奇物收藏室",
+    "playerFocusId": "focus_free_research",
+    "eventInstances": [
+      {
+        "eventId": "event_doomsday_beast",
+        "state": "terminal"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "末日兽已在先前回合被击退。"
+    ],
+    "terminalEvents": [
+      {
+        "name": "末日兽",
+        "aliases": [
+          "末日兽",
+          "战争造物"
+        ]
+      }
+    ]
+  },
+  "storySetup": {
+    "seriesId": "series_herta_emergent",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_free_research",
+    "units": [
+      {
+        "id": "unit_free_research",
+        "number": 1,
+        "title": "奇物研究",
+        "summary": "玩家在奇物收藏室进行自由研究",
+        "endStates": [
+          "研究记录完成"
+        ],
+        "followups": [
+          "继续自由探索"
+        ],
+        "characters": [
+          "螺丝咕姆"
+        ],
+        "locations": [
+          "奇物收藏室"
+        ],
+        "status": "current"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "emergent_048",
+      "kind": "emergent_retry",
+      "turnCount": 48,
+      "playerInput": "我在奇物收藏室召集几位研究员，成立临时反物质研究小组。",
+      "currentLocation": "黑塔空间站·奇物收藏室",
+      "responseRefs": [
+        "main_emergent_research_group"
+      ]
+    },
+    {
+      "stepId": "emergent_retry_049",
+      "kind": "emergent_retry",
+      "turnCount": 49,
+      "playerInput": "我在奇物收藏室召集几位研究员，成立临时反物质研究小组。",
+      "currentLocation": "黑塔空间站·奇物收藏室",
+      "responseRefs": [
+        "variable_emergent_identical"
+      ]
+    },
+    {
+      "stepId": "turn_emergent_050",
+      "kind": "main_turn",
+      "turnCount": 50,
+      "playerInput": "我以研究小组的名义登记一台出现在舱段外的\"新反物质战争造物\"。",
+      "currentLocation": "黑塔空间站·奇物收藏室",
+      "aliasDisguise": true,
+      "responseRefs": [
+        "main_disguised_beast"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "TERMINAL_EVENT_ALIAS_APPENDED",
+      "TERMINAL_EVENT_ALIAS_NOT_RECOGNIZED",
+      "TERMINAL_EVENT_NARRATIVE_REPLAY",
+      "VARIABLE_MODEL_CAN_WRITE_WORLD_EVENT_STRING",
+      "WORLD_EVENT_STRING_DIRECT_APPEND",
+      "WORLD_EVENT_STRING_TEXT_DEDUPED"
+    ],
+    "expectedMetrics": {
+      "duplicate_event_instance_count": 2,
+      "duplicate_public_fact_count": 1,
+      "illegal_narrative_replay_count": 1
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "合法涌现事件通过受限注册成为正式事件实例，带独立事件身份、时间和原因",
+      "同一输入重试必须幂等：返回已存在实例，不生成重复实例",
+      "换标题伪装已终态末日兽必须被 canonical 碰撞检查识别并拒绝"
+    ],
+    "allowedFinalSideEffects": [
+      "register:event_anti_matter_research_group",
+      "idempotent:同输入返回已存在实例",
+      "reject:beast_disguised_as_new_event"
+    ]
+  },
+  "reviewQuestion": "玩家自由行动产生的新事件应该被正式登记、同一输入不重复，而伪装成新事件的旧终态应该被识别，对吗？"
+}

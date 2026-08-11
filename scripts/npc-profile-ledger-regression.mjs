@@ -20,6 +20,9 @@ const chatModel = fs.readFileSync('models/chat.ts', 'utf8');
 const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
 const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
+// 全项目修复：手机双写编排提升为独立纯事务模块（services/phoneMemoryDualWrite.ts），
+// 账本压缩 / 总结记忆 / 最近互动同步等行为要求不变，仅实现位置迁移。
+const phoneDualWrite = fs.readFileSync('services/phoneMemoryDualWrite.ts', 'utf8');
 const companionPanel = fs.readFileSync('components/features/GameSystems/CompanionPanel.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
 const packageJson = fs.readFileSync('package.json', 'utf8');
@@ -146,9 +149,9 @@ assert(contextSnapshot.includes('本回合 NPC 账本预期注入'), '上下文�
 assert(contextSnapshot.includes('NPC_MEMORY_WRITE_RULE_PROMPT'), '上下文页必须单独引用完整 NPC 写入法则，方便玩家核对。');
 assert(contextSnapshot.includes('variable_npc_memory_rule'), '变量模型上下文必须有 NPC 写入法则独立区块。');
 assert(contextSnapshot.includes('NPC档案记忆写入法则（完整）'), '变量模型上下文必须显示完整 NPC 写入法则标题。');
-assert(phoneModal.includes('compressNpcMemoryLedger({'), '手机 NPC 记忆写入必须使用账本压缩工具。');
-assert(phoneModal.includes('总结记忆: ledgerCompression.summaries'), '手机 NPC 记忆写入必须保存总结记忆。');
-assert(phoneModal.includes('最近互动: trimmed'), '手机 NPC 记忆写入必须同步最近互动。');
+assert((phoneModal + phoneDualWrite).includes('compressNpcMemoryLedger({'), '手机 NPC 记忆写入必须使用账本压缩工具。');
+assert((phoneModal + phoneDualWrite).includes('总结记忆: ledgerCompression.summaries'), '手机 NPC 记忆写入必须保存总结记忆。');
+assert((phoneModal + phoneDualWrite).includes('最近互动: packagedSummary'), '阶段1方案E：手机 NPC 记忆写入必须同步最近互动（packagedSummary，含【通讯记录】标记）。');
 assert(companionPanel.includes('buildNpcMemoryLedgerView'), '与你同行面板必须读取 NPC 记忆账本视图。');
 assert(companionPanel.includes("devMode ? '记忆账本' : '同行记忆'"), '与你同行面板普通模式必须显示同行记忆，开发者模式才显示记忆账本。');
 assert(companionPanel.includes('<MemoryPanel npc={npc} devMode={devMode} />'), '与你同行面板必须把开发者模式传给记忆页。');

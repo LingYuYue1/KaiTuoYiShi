@@ -8,13 +8,21 @@ import {
 } from '@/models/memory';
 import type { 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
+import type { MemorySummaryFlowState } from '@/hooks/useGameState';;
 import type { NPC同行记忆来源, NPC同行记忆条目, NPC总结记忆条目 } from '@/models/npc';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 
 const MEMORY_SNIPPET_LIMIT = 84;
 const NPC_MEMORY_SUMMARY_LIMIT = 160;
-const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
+
+/**
+ * 阶段1：通用记忆系统噪声过滤模式（从NPC侧提取，主链也使用）
+ * 过滤 storyProgressMemoryLine 等剧情编织进度元数据，防止污染记忆链和忆庭归档
+ */
+// 阶段1修复：统一噪声过滤模式集合（合并 yitingArchive 原硬编码模式 + 压缩链噪声模式）
+// 同时服务于：①压缩链写入/压缩时过滤 ②忆庭归档时过滤 ③NPC压缩时过滤
+const MEMORY_SYSTEM_NOISE_PATTERNS = [
   /剧情编织进度/,
   /当前进入第\s*\d+\s*段/,
   /最新归档/,
@@ -25,7 +33,17 @@ const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
   /注入健康/,
   /实际注入/,
   /门禁/,
+  // 以下为原 yitingArchive.ts 的硬编码模式（合并到统一集合，避免两套分开维护导致模式漂移）
+  /动态世界/,
+  /行动选项/,
+  /后续选项/,
+  /系统提示/,
+  /变量草稿/,
+  /最近判定理由/,
 ];
+
+// 保留旧名用于NPC侧（回归测试要求 NPC_MEMORY_SYSTEM_NOISE_PATTERNS 存在）
+const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = MEMORY_SYSTEM_NOISE_PATTERNS;
 
 export function buildImmediateMemory(userInput: string, aiResponse: string): string {
   const input = userInput.trim();
@@ -47,6 +65,8 @@ function collectSummaryLines(items: string[], limit = 4): string[] {
   for (const item of items) {
     const snippet = normalizeMemorySnippet(item);
     if (!snippet) continue;
+    // 阶段1：压缩时噪声过滤（双重保险，防止写入时漏过的噪声进入压缩摘要）
+    if (isMemorySystemNoise(snippet)) continue;
     const key = snippet.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -58,6 +78,11 @@ function collectSummaryLines(items: string[], limit = 4): string[] {
 
 function isNpcMemorySystemNoise(text: string): boolean {
   return NPC_MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/** 阶段1：通用记忆系统噪声检测（主链用，与NPC侧同模式） */
+export function isMemorySystemNoise(text: string): boolean {
+  return MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function compactNpcMemoryChunk(chunk: string[]): string {
@@ -134,9 +159,101 @@ function dedupeLines(lines: string[]): string[] {
 }
 
 export function addImmediateMemory(system: 记忆系统, memory: string, _turn: number): 记忆系统 {
+  // 阶段1：写入时噪声过滤（从源头杜绝 storyProgressMemoryLine 等进度元数据进入即时记忆）
+  if (!memory || isMemorySystemNoise(memory)) {
+    return system;
+  }
   const newMemories = [...system.即时记忆, memory];
   const trimmed = newMemories.length > 50 ? newMemories.slice(-50) : newMemories;
   return { ...system, 即时记忆: trimmed };
+}
+
+/**
+ * 记忆内容指纹：稳定序列化 + FNV-1a（同步、无 crypto 依赖）。
+ * 用于压缩请求的来源绑定：确认压缩前校验指纹，来源已变化则拒绝旧结果覆盖。
+ */
+export function computeMemoryFingerprint(memory: 记忆系统): string {
+  const stable = JSON.stringify({
+    即时: memory.即时记忆,
+    短期: memory.短期记忆,
+    中期: memory.中期记忆 ?? [],
+    长期: memory.长期记忆,
+    草稿: (memory.失败草稿 ?? []).map((draft) => `${draft.id}:${draft.status}`),
+  });
+  let hash = 2166136261;
+  for (const byte of new TextEncoder().encode(stable)) {
+    hash ^= byte;
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `mem-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+/**
+ * 构造主链压缩三阶段弹窗请求：所有入口（主回合自动触发 / 手动压缩）都必须携带
+ * 来源回合与来源 fingerprint，确认阶段据此校验，防止旧结果覆盖后续新增记忆。
+ */
+export function buildMemorySummaryFlowRequest(
+  memory: 记忆系统,
+  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
+  turn: number,
+): MemorySummaryFlowState {
+  const immediateThreshold = settings.即时转短期阈值 ?? 10;
+  const shortThreshold = settings.短期转中期阈值 ?? 30;
+  const middleThreshold = settings.中期转长期阈值 ?? 50;
+  return {
+    open: true,
+    stage: 'remind',
+    sourceTurn: turn,
+    sourceFingerprint: computeMemoryFingerprint(memory),
+    pendingInfo: {
+      即时待压缩: Math.max(0, memory.即时记忆.length - immediateThreshold + 1),
+      短期待压缩: Math.max(0, memory.短期记忆.length - shortThreshold + 1),
+      中期待压缩: Math.max(0, (memory.中期记忆 ?? []).length - middleThreshold + 1),
+    },
+  };
+}
+
+/** 压缩类型 → 主记忆链目标层；精炼纪要/未知类型不映射主链。 */
+function archiveTypeToMemoryLayer(类型: string | undefined): keyof 记忆系统 | null {
+  if (类型 === '短期压缩') return '短期记忆';
+  if (类型 === '中期压缩') return '中期记忆';
+  if (类型 === '长期压缩') return '长期记忆';
+  return null;
+}
+
+/**
+ * 玩家编辑忆庭 archive 摘要后，通过稳定映射把相同文本同步到压缩后的主记忆层：
+ * 对每个 draft，在其目标层中把「编辑前摘要」首次出现的条目替换为编辑后的值。
+ * 不得只改 archives 数组而保留主记忆链中的旧摘要。
+ */
+export function applyEditedArchiveSummaries(
+  memory: 记忆系统,
+  drafts: 回忆条目[],
+  originalSummaries: string[],
+): 记忆系统 {
+  const next: 记忆系统 = {
+    ...memory,
+    即时记忆: [...memory.即时记忆],
+    短期记忆: [...memory.短期记忆],
+    中期记忆: [...(memory.中期记忆 ?? [])],
+    长期记忆: [...memory.长期记忆],
+  };
+  const consumed = new Set<string>();
+  drafts.forEach((draft, index) => {
+    const layer = archiveTypeToMemoryLayer(draft.类型);
+    if (!layer) return;
+    const original = originalSummaries[index]?.trim();
+    const edited = draft.摘要.trim();
+    if (!original || !edited || original === edited) return;
+    const arr = next[layer] as string[];
+    const matchIndex = arr.findIndex(
+      (item, itemIndex) => item === original && !consumed.has(`${layer}:${itemIndex}`),
+    );
+    if (matchIndex < 0) return;
+    consumed.add(`${layer}:${matchIndex}`);
+    arr[matchIndex] = edited;
+  });
+  return next;
 }
 
 export function checkCompressionThreshold(system: 记忆系统, threshold = MEMORY_LAYER_COMPRESSION_THRESHOLD): boolean {
@@ -810,7 +927,8 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
   const sourceSummaries = Array.isArray(input.summaries) ? input.summaries : [];
   const normalizedInput = { ...input, entries: sourceEntries, summaries: sourceSummaries };
   const size = Math.max(1, Math.trunc(input.threshold || 15));
-  const keepRecentCount = Math.min(4, Math.max(0, size - 1));
+  // 阶段1对齐墨色：阈值20，保留最近5条不压缩
+  const keepRecentCount = Math.min(5, Math.max(0, size - 1));
   const normalized = normalizeNpcLedgerMemoryEntries(normalizedInput);
   let memories = normalized.memories;
   let summaries = mergeNpcSummaryEntries([
@@ -860,6 +978,119 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
     summaries,
     changed,
     summaryTriggered,
+  };
+}
+
+/**
+ * 阶段1·NPC同行记忆压缩异步版（对齐墨色：调AI + 阈值20 + 保留最近5条 + 失败兜底）
+ *
+ * 与同步版 compressNpcMemoryLedger 的区别：
+ * - 压缩调用 AI（summarizeMemoryBatch kind='npc'），质量更高
+ * - 返回 drafts 供玩家审核（三阶段弹窗 review 阶段可编辑 摘要）
+ * - 失败时使用 buildFallbackSummary 的 NPC 兜底（前3条去重各截28字+省略号）
+ *
+ * 提示词需包含【通讯记录】处理规则：将多条消息整理为包含时间锚点和关键信息的叙述式。
+ */
+export async function compressNpcMemoryLedgerAsync(
+  input: NpcMemoryLedgerCompressionInput & {
+    settings: 记忆系统设置;
+    mainConfig: API配置项;
+    signal?: AbortSignal;
+  },
+): Promise<
+  NpcMemoryLedgerCompressionResult & {
+    drafts: NPC总结记忆条目[];
+    usedFallback: boolean;
+    usedModel: boolean;
+    usedLocal: boolean;
+    errors: string[];
+  }
+> {
+  const sourceEntries = Array.isArray(input.entries) ? input.entries : [];
+  const sourceSummaries = Array.isArray(input.summaries) ? input.summaries : [];
+  const normalizedInput = { ...input, entries: sourceEntries, summaries: sourceSummaries };
+  const size = Math.max(1, Math.trunc(input.threshold || 20));
+  const keepRecentCount = Math.min(5, Math.max(0, size - 1));
+  const retryCount = input.settings.记忆总结API?.retryCount ?? 2;
+
+  const normalized = normalizeNpcLedgerMemoryEntries(normalizedInput);
+  let memories = normalized.memories;
+  let summaries = mergeNpcSummaryEntries([
+    ...sourceSummaries
+      .map((item, index) => normalizeNpcSummaryEntry(item, index, input.npcId, input.turn))
+      .filter((item): item is NPC总结记忆条目 => Boolean(item)),
+    ...normalized.migratedSummaries,
+  ]);
+
+  const drafts: NPC总结记忆条目[] = [];
+  const errors: string[] = [];
+  let usedFallback = false;
+  let usedModel = false;
+  let usedLocal = false;
+  let summaryTriggered = false;
+
+  if (memories.length >= size) {
+    const recent = keepRecentCount > 0 ? memories.slice(-keepRecentCount) : [];
+    const compressable = keepRecentCount > 0 ? memories.slice(0, -keepRecentCount) : memories;
+    const chunkSize = Math.max(1, size);
+    const generatedSummaries: NPC总结记忆条目[] = [];
+
+    for (let index = 0; index < compressable.length; index += chunkSize) {
+      const chunk = compressable.slice(index, index + chunkSize);
+      const result = await summarizeMemoryBatch(
+        {
+          kind: 'npc',
+          turn: input.turn,
+          items: chunk.map((entry) => entry.摘要),
+          prompt: input.prompt,
+        },
+        input.settings,
+        input.mainConfig,
+        input.signal,
+        retryCount,
+      );
+      usedFallback = usedFallback || result.usedFallback;
+      usedModel = usedModel || result.usedModel;
+      usedLocal = usedLocal || result.usedLocal;
+      if (result.failureCode) {
+        errors.push(result.failureMessage ?? 'NPC记忆压缩失败');
+      }
+      if (!result.summary) continue;
+      const summaryEntry: NPC总结记忆条目 = {
+        id: buildNpcSummaryId(input.npcId, input.turn, summaries.length + generatedSummaries.length),
+        回合范围: buildNpcSummaryTurnRange(chunk, input.turn),
+        条数: chunk.length,
+        摘要: result.summary,
+        保留事实: chunk.map((entry) => entry.摘要).filter(Boolean).slice(-5),
+      };
+      generatedSummaries.push(summaryEntry);
+      drafts.push(summaryEntry);
+    }
+
+    if (generatedSummaries.length) {
+      summaries = mergeNpcSummaryEntries([...summaries, ...generatedSummaries]);
+      memories = recent;
+      summaryTriggered = true;
+    }
+  }
+
+  const changed =
+    normalized.changed ||
+    summaryTriggered ||
+    normalized.migratedSummaries.length > 0 ||
+    memories.length !== sourceEntries.length ||
+    summaries.length !== sourceSummaries.length;
+
+  return {
+    memories,
+    summaries,
+    changed,
+    summaryTriggered,
+    drafts,
+    usedFallback,
+    usedModel,
+    usedLocal,
+    errors,
   };
 }
 

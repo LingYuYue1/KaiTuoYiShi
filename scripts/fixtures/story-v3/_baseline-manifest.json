@@ -1,0 +1,630 @@
+{
+  "schemaVersion": "story-v3-g0-baseline-manifest@2",
+  "generatedAt": "2026-08-07T00:00:00+08:00",
+  "sourceHead": "af9e5f8cb5100697b328f3d734e3eff672ff2424",
+  "scenarioCount": 10,
+  "scenarios": [
+    {
+      "scenarioId": "broadcast-audience-freeze",
+      "initialStateFingerprint": "sha256:353d177eb61246d4025a2ee13b06bbd408c0b512c0846eecd3802c77b170ee22",
+      "responses": [
+        {
+          "responseId": "main_post_broadcast",
+          "rawOutputSha256": "sha256:defb924d76a81b4cabe073967be41cbe9c6d3bfe4c1913c539223dbb9a157c93",
+          "adjudication": "require_delivery_receipt_before_quote",
+          "allowedFinalSideEffects": [
+            "receipt:arlan/communication（若覆盖）"
+          ],
+          "refs": [
+            "knowledge_claim_034"
+          ]
+        },
+        {
+          "responseId": "world_broadcast_envelope",
+          "rawOutputSha256": "sha256:f334a9487b5c9ca1c5ff64b6f0c9191de63f91dc74662ce900854eb8d27bbb03",
+          "adjudication": "freeze_audience_snapshot",
+          "allowedFinalSideEffects": [
+            "freeze:broadcast_envelope_b1",
+            "receipt:asta/direct_observation"
+          ],
+          "refs": [
+            "broadcast_delivery_034"
+          ]
+        }
+      ],
+      "worldBehavior": [
+        {
+          "stepId": "broadcast_delivery_034",
+          "responseId": "world_broadcast_envelope",
+          "kind": "broadcast",
+          "behavior": "no_audience_snapshot_ignored",
+          "parsedSummary": "广播信封声明：broadcast_station_beast_defeat，受众 基座舱段、主控舱段，事实 fact_beast_defeated"
+        }
+      ],
+      "observationCodes": [
+        "BROADCAST_ENVELOPE_FIELDS_VALID",
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "NO_FROZEN_AUDIENCE_SNAPSHOT",
+        "NPC_KNOWLEDGE_WITHOUT_RECEIPT"
+      ],
+      "metrics": {
+        "audience_snapshot_drift_count": 1,
+        "knowledge_leak_count": 2,
+        "npc_knowledge_without_receipt_count": 2
+      },
+      "coverage": []
+    },
+    {
+      "scenarioId": "emergent-event-registration",
+      "initialStateFingerprint": "sha256:1287161c73e5a570f3866f5077403314b45e71a0ac73032e3178b4d5619f9735",
+      "responses": [
+        {
+          "responseId": "main_disguised_beast",
+          "rawOutputSha256": "sha256:f9b6dd19b62fc566c70636a63f33aa5ec42818a63429a96d6d1fcab64f3497f6",
+          "adjudication": "collision_check_reject_disguise",
+          "allowedFinalSideEffects": [
+            "reject:beast_disguised_as_new_event"
+          ],
+          "refs": [
+            "turn_emergent_050"
+          ]
+        },
+        {
+          "responseId": "main_emergent_research_group",
+          "rawOutputSha256": "sha256:b6b1661bd58690056c99b30807687183e7deb7b8270542eb45456b12a7f70e40",
+          "adjudication": "register_emergent_event",
+          "allowedFinalSideEffects": [
+            "register:event_anti_matter_research_group"
+          ],
+          "refs": [
+            "emergent_048"
+          ]
+        },
+        {
+          "responseId": "variable_emergent_identical",
+          "rawOutputSha256": "sha256:8cee6a369914d7c2c573df6ca90a8e58e3a9c1ddc9cce4064a610e8a88c0a3bd",
+          "adjudication": "idempotent_same_instance",
+          "allowedFinalSideEffects": [
+            "idempotent:返回已存在实例"
+          ],
+          "refs": [
+            "emergent_retry_049"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "TERMINAL_EVENT_ALIAS_APPENDED",
+        "TERMINAL_EVENT_ALIAS_NOT_RECOGNIZED",
+        "TERMINAL_EVENT_NARRATIVE_REPLAY",
+        "VARIABLE_MODEL_CAN_WRITE_WORLD_EVENT_STRING",
+        "WORLD_EVENT_STRING_DIRECT_APPEND",
+        "WORLD_EVENT_STRING_TEXT_DEDUPED"
+      ],
+      "metrics": {
+        "duplicate_event_instance_count": 2,
+        "duplicate_public_fact_count": 1,
+        "illegal_narrative_replay_count": 1
+      },
+      "coverage": []
+    },
+    {
+      "scenarioId": "narrative-publication-gate",
+      "initialStateFingerprint": "sha256:f17311a6fc5ce3894347b1a86edf26f5685071757c68589cfa3bc76ad8cb5b6a",
+      "responses": [
+        {
+          "responseId": "main_illegal_replay_body",
+          "rawOutputSha256": "sha256:03051519991f6cfbda5d417ed8bd8dbc52eb5f34c30b58b9cbb622243018d1d1",
+          "adjudication": "hold_until_gate_pass",
+          "allowedFinalSideEffects": [
+            "reject:narrative_replay",
+            "rewrite_or_offer:aftermath_focus"
+          ],
+          "refs": [
+            "turn_gate_025"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "ILLEGAL_NARRATIVE_VISIBLE_BEFORE_GATE",
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "TERMINAL_EVENT_ALIAS_APPENDED",
+        "TERMINAL_EVENT_NARRATIVE_REPLAY",
+        "WORLD_EVENT_STRING_DIRECT_APPEND"
+      ],
+      "metrics": {
+        "duplicate_event_instance_count": 1,
+        "duplicate_public_fact_count": 1,
+        "illegal_narrative_replay_count": 1,
+        "narrative_pre_gate_visible_count": 1
+      },
+      "coverage": []
+    },
+    {
+      "scenarioId": "news-knowledge-boundary",
+      "initialStateFingerprint": "sha256:5e607b73c6314e09b518b9f91bee785961462767ffc667c4ab865843cea9a65d",
+      "responses": [
+        {
+          "responseId": "main_guard_knowledge",
+          "rawOutputSha256": "sha256:8e1bb1be4460bd18580d266c9fe4f4c5ea44c30ae956230fa0e0ebda8d68f2b0",
+          "adjudication": "require_knowledge_receipt_before_quote",
+          "allowedFinalSideEffects": [
+            "receipt:station_guard/reading"
+          ],
+          "refs": [
+            "knowledge_claim_022"
+          ]
+        },
+        {
+          "responseId": "news_beast_sighting",
+          "rawOutputSha256": "sha256:acc221f1bed7fe9527d052243325c0be52a79abdcad13c1ed19a816fb12a476d",
+          "adjudication": "attach_source_fact_and_receipts",
+          "allowedFinalSideEffects": [
+            "publish:news_beast_sighting（引用事实 fact_beast_sighting）"
+          ],
+          "refs": [
+            "news_publish_022"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "NEWS_DIRECT_ROOT_WRITE",
+        "NEWS_WITHOUT_MACHINE_SOURCE_LINK",
+        "NPC_KNOWLEDGE_WITHOUT_RECEIPT"
+      ],
+      "metrics": {
+        "knowledge_leak_count": 2,
+        "news_without_source_fact_count": 1,
+        "npc_knowledge_without_receipt_count": 2
+      },
+      "coverage": []
+    },
+    {
+      "scenarioId": "normal-resolution",
+      "initialStateFingerprint": "sha256:96e8cd7c402d6ce5b00669a5a164d7ed3080135dfa179151d68a3d0785ccfc5e",
+      "responses": [
+        {
+          "responseId": "main_normal_resolution",
+          "rawOutputSha256": "sha256:65c70c2f256fa54f47303676be4d1e2f727cfe97d41382d0b427a89f286adf42",
+          "adjudication": "accept_one_unit",
+          "allowedFinalSideEffects": [
+            "complete:unit_herta_alarm",
+            "fact:herta_control_zone_stable",
+            "focus_offer:unit_herta_beast"
+          ],
+          "refs": [
+            "turn_normal_009"
+          ]
+        },
+        {
+          "responseId": "main_valid_completion_stall",
+          "rawOutputSha256": "sha256:5b4c42456a27c601b81cd12ba41aaa1e66b15eb67583c4b576a773a592fea05d",
+          "adjudication": "accept_completion_with_receipt",
+          "allowedFinalSideEffects": [
+            "complete:unit_herta_alarm（带完成回执）",
+            "focus_offer:unit_herta_beast"
+          ],
+          "refs": [
+            "coverage_b1_stall"
+          ]
+        },
+        {
+          "responseId": "variable_normal_resolution",
+          "rawOutputSha256": "sha256:ac54fef90294ef5701adb0747cbb29469a833589cd62d8104041b7089faa9099",
+          "adjudication": "accept_noop",
+          "allowedFinalSideEffects": [],
+          "refs": [
+            "turn_normal_009"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "LEGACY_STORY_PROGRESS_ADVANCED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "WORLD_EVENT_STRING_DIRECT_APPEND"
+      ],
+      "metrics": {},
+      "coverage": [
+        {
+          "coverageId": "valid-completion-stall",
+          "initialStateFingerprint": "sha256:96e8cd7c402d6ce5b00669a5a164d7ed3080135dfa179151d68a3d0785ccfc5e",
+          "observationCodes": [
+            "LEGACY_STORY_PROGRESS_STAYED",
+            "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+            "VALID_COMPLETION_PROGRESS_STALLED"
+          ],
+          "metrics": {
+            "valid_completion_stall_count": 1
+          },
+          "classification": "known_bad",
+          "v3Target": {
+            "decisions": [
+              "有效完成证据应生成回执化完成事实并单次提交推进",
+              "卡段必须给出可诊断原因与下一步，而不是无理由停留"
+            ],
+            "allowedFinalSideEffects": [
+              "complete:unit_herta_alarm（带完成回执）",
+              "focus_offer:unit_herta_beast"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "player-bypass",
+      "initialStateFingerprint": "sha256:2b49e783869c8972bae5713171ce433a151016bbfc23cbafdfb934b3541c24d5",
+      "responses": [
+        {
+          "responseId": "main_player_bypass",
+          "rawOutputSha256": "sha256:81b6c6539c6a8599bcbe4e0d605e5501b5592c72e47fdba42a3878be8a49b2d5",
+          "adjudication": "reject_and_rewrite_player_forcing",
+          "allowedFinalSideEffects": [
+            "world_pressure:doomsday_beast",
+            "convergence_offer:station_support_request"
+          ],
+          "refs": [
+            "turn_bypass_015"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "ILLEGAL_NARRATIVE_VISIBLE_BEFORE_GATE",
+        "LEGACY_STORY_PROGRESS_ADVANCED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "PLAYER_FOCUS_FORCED_BY_BODY",
+        "WORLD_EVENT_STRING_DIRECT_APPEND"
+      ],
+      "metrics": {
+        "narrative_pre_gate_visible_count": 1,
+        "no_evidence_progression_count": 1,
+        "player_focus_forced_count": 1
+      },
+      "coverage": []
+    },
+    {
+      "scenarioId": "player-early-resolution",
+      "initialStateFingerprint": "sha256:776360ef13a09a479d1d7eb2e34b79684999b2bfa2d0fa60c63273cec205ece2",
+      "responses": [
+        {
+          "responseId": "main_early_defeat",
+          "rawOutputSha256": "sha256:6900208a22b63cca19550b9329e78ed18368fd5f7eb58403f06d07ddf6e1b0fb",
+          "adjudication": "accept_terminal_with_early_flag",
+          "allowedFinalSideEffects": [
+            "complete:event_doomsday_beast(player_early)",
+            "fact:beast_defeated_early",
+            "focus_offer:unit_aftermath"
+          ],
+          "refs": [
+            "turn_early_012"
+          ]
+        },
+        {
+          "responseId": "main_early_repeat",
+          "rawOutputSha256": "sha256:1bf16cbec42db9c1c50b4752ec4c3f58d30f2585557ad3e7582d8ba7148086cb",
+          "adjudication": "reject_replay_after_terminal",
+          "allowedFinalSideEffects": [
+            "aftermath_focus:unit_aftermath",
+            "no_new_fact",
+            "no_new_news"
+          ],
+          "refs": [
+            "turn_early_013"
+          ]
+        },
+        {
+          "responseId": "main_multi_unit_claim",
+          "rawOutputSha256": "sha256:45de62657145de533bc4df4a6d0f9bc98053d765be130ed959b4e6641859959d",
+          "adjudication": "settle_multiple_units_with_evidence",
+          "allowedFinalSideEffects": [
+            "complete:unit_beast_confirm",
+            "complete:unit_beast_battle",
+            "complete:unit_aftermath"
+          ],
+          "refs": [
+            "coverage_b2a_claim"
+          ]
+        },
+        {
+          "responseId": "main_multi_unit_skip",
+          "rawOutputSha256": "sha256:66e5837bae276d213f6b34a0c9504cf792de5df368ee8b8c359f0056d9138864",
+          "adjudication": "require_evidence_per_unit",
+          "allowedFinalSideEffects": [
+            "advance:unit_aftermath（仅限有证据单元）",
+            "keep:unit_beast_confirm（无证据）",
+            "keep:unit_beast_battle（无证据）"
+          ],
+          "refs": [
+            "coverage_b2b_skip"
+          ]
+        },
+        {
+          "responseId": "variable_early_defeat",
+          "rawOutputSha256": "sha256:fee2c8fcc1bb01abf97a243fdda785dabea69ec4524405c6291c8f3954e88f37",
+          "adjudication": "route_to_terminal_fact",
+          "allowedFinalSideEffects": [
+            "fact:beast_defeated_early"
+          ],
+          "refs": [
+            "turn_early_012"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "LEGACY_STORY_PROGRESS_ADVANCED",
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "TERMINAL_EVENT_ALIAS_APPENDED",
+        "TERMINAL_EVENT_NARRATIVE_REPLAY",
+        "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+        "VARIABLE_MODEL_CAN_WRITE_WORLD_EVENT_STRING",
+        "WORLD_EVENT_STRING_DIRECT_APPEND"
+      ],
+      "metrics": {
+        "duplicate_event_instance_count": 2,
+        "duplicate_public_fact_count": 2,
+        "illegal_narrative_replay_count": 2,
+        "terminal_event_supersession_gap_count": 1
+      },
+      "coverage": [
+        {
+          "coverageId": "multi-unit-partial-advance",
+          "initialStateFingerprint": "sha256:f4a7dcb201e02a25b3841bd5ad4e481f3a68a29476374c3efadfec48bcc7668a",
+          "observationCodes": [
+            "LEGACY_STORY_PROGRESS_ADVANCED",
+            "MULTI_UNIT_CLAIM_PARTIAL_ADVANCE",
+            "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT"
+          ],
+          "metrics": {
+            "multi_unit_claim_count": 1
+          },
+          "classification": "known_bad",
+          "v3Target": {
+            "decisions": [
+              "每个小单元都有独立完成证据时，允许同一事务结算多个单元并逐个生成完成回执",
+              "没有证据的单元不能被模型顺带吞掉"
+            ],
+            "allowedFinalSideEffects": [
+              "complete:unit_beast_confirm（带回执）",
+              "complete:unit_beast_battle（带回执）",
+              "complete:unit_aftermath（带回执）"
+            ]
+          }
+        },
+        {
+          "coverageId": "multi-unit-unevidenced-skip",
+          "initialStateFingerprint": "sha256:f4a7dcb201e02a25b3841bd5ad4e481f3a68a29476374c3efadfec48bcc7668a",
+          "observationCodes": [
+            "LEGACY_STORY_PROGRESS_ADVANCED",
+            "MULTI_UNIT_CLAIM_PARTIAL_ADVANCE",
+            "MULTI_UNIT_UNEVIDENCED_SKIP",
+            "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT"
+          ],
+          "metrics": {
+            "multi_unit_claim_count": 1,
+            "unevidenced_unit_skip_count": 1
+          },
+          "classification": "known_bad",
+          "v3Target": {
+            "decisions": [
+              "没有证据的未来单元不能被模型一次性吞掉",
+              "跨单元推进必须逐单元出示完成证据，缺失证据的单元保持未开始",
+              "已跳过必须保留可诊断的跳过原因与单元身份"
+            ],
+            "allowedFinalSideEffects": [
+              "advance:unit_aftermath（仅限有证据单元）",
+              "keep:unit_beast_confirm（无证据，保持未开始）",
+              "keep:unit_beast_battle（无证据，保持未开始）"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "repeated-encounter",
+      "initialStateFingerprint": "sha256:c27e181d709ec8997b90d1097d29e4bd75b891c1be7c0fcf95ccdeaa6be117f9",
+      "responses": [
+        {
+          "responseId": "main_repeated_encounter",
+          "rawOutputSha256": "sha256:4d9432babd618a75af4fc81235f20c75ff02361e578de128918aa961112abd38",
+          "adjudication": "reject_terminal_replay",
+          "allowedFinalSideEffects": [
+            "fact:aftermath_progress",
+            "new_instance:legion_second_raid（需独立事件身份）"
+          ],
+          "refs": [
+            "turn_repeat_018"
+          ]
+        },
+        {
+          "responseId": "main_unique_facility_disguised",
+          "rawOutputSha256": "sha256:d63618661ce7990d39243243d9322e3b23b4b81a8c3105aa1b0ff746d0906a3f",
+          "adjudication": "collision_check_reject_disguised_facility",
+          "allowedFinalSideEffects": [],
+          "refs": [
+            "coverage_facility_disguised"
+          ]
+        },
+        {
+          "responseId": "main_unique_facility_new_instance",
+          "rawOutputSha256": "sha256:46cdb8c756cc16c51ea8e5b28f736312a7e2bd9d8989cb45bcb6a08bc469a59b",
+          "adjudication": "register_new_instance",
+          "allowedFinalSideEffects": [
+            "register:new_backup_device_instance（独立身份）"
+          ],
+          "refs": [
+            "coverage_facility_new_instance"
+          ]
+        },
+        {
+          "responseId": "main_unique_facility_replay",
+          "rawOutputSha256": "sha256:54151597f80516aa54429dcc78b95061d1e290eb2863115e672a5a0d86291c9b",
+          "adjudication": "reject_unique_facility_replay",
+          "allowedFinalSideEffects": [],
+          "refs": [
+            "coverage_facility_replay"
+          ]
+        },
+        {
+          "responseId": "variable_repeated_identical",
+          "rawOutputSha256": "sha256:0967e2ac84732cd110d3a5ded32515e521002ce35e522163ba8bba96fbb421bc",
+          "adjudication": "dedupe_by_text_fingerprint_only",
+          "allowedFinalSideEffects": [],
+          "refs": [
+            "turn_repeat_019"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "TERMINAL_EVENT_ALIAS_APPENDED",
+        "TERMINAL_EVENT_NARRATIVE_REPLAY",
+        "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+        "VARIABLE_MODEL_CAN_WRITE_WORLD_EVENT_STRING",
+        "WORLD_EVENT_STRING_DIRECT_APPEND",
+        "WORLD_EVENT_STRING_TEXT_DEDUPED"
+      ],
+      "metrics": {
+        "duplicate_event_instance_count": 1,
+        "duplicate_public_fact_count": 1,
+        "illegal_narrative_replay_count": 1,
+        "terminal_event_supersession_gap_count": 1
+      },
+      "coverage": [
+        {
+          "coverageId": "unique-facility-replay",
+          "initialStateFingerprint": "sha256:5976f683ae6cc745402d33927eca488660b4db33aad5ac1992eab18928ab66c3",
+          "observationCodes": [
+            "LEGACY_STORY_PROGRESS_STAYED",
+            "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+            "NEW_EVENT_INSTANCE_REGISTERED",
+            "TERMINAL_EVENT_ALIAS_APPENDED",
+            "TERMINAL_EVENT_ALIAS_NOT_RECOGNIZED",
+            "TERMINAL_EVENT_NARRATIVE_REPLAY",
+            "WORLD_EVENT_STRING_DIRECT_APPEND"
+          ],
+          "metrics": {
+            "duplicate_event_instance_count": 2,
+            "duplicate_public_fact_count": 1,
+            "illegal_narrative_replay_count": 1,
+            "new_event_instance_registered_count": 1
+          },
+          "classification": "known_bad",
+          "v3Target": {
+            "decisions": [
+              "唯一设施终态实例必须有稳定身份（eventInstanceId），换标题/换地点/换措辞不能重建同一实例",
+              "终态后的正文只能进入余波、善后、调查、回忆、模拟或新实例",
+              "合法的新实例（新的备用装置）必须登记为独立事件身份、时间与原因"
+            ],
+            "allowedFinalSideEffects": [
+              "reject:unique_facility_replay",
+              "reject:unique_facility_disguised_replay",
+              "register:new_backup_device_instance（独立身份）"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "reroll-cas-failure",
+      "initialStateFingerprint": "sha256:bbefa0b7a3aa55babc4308004dd8a6d45330725ac8d95b58fd2f1bdf4d5edf90",
+      "responses": [
+        {
+          "responseId": "main_stale_branch_body",
+          "rawOutputSha256": "sha256:9a359377135c682f28a9bb494b775a654482c1e6540a8096cac1435ad1e9b54d",
+          "adjudication": "cas_reject_stale_branch",
+          "allowedFinalSideEffects": [
+            "accept:reroll_body_rewritten",
+            "no_old_branch_facts"
+          ],
+          "refs": [
+            "turn_reroll_041"
+          ]
+        }
+      ],
+      "worldBehavior": [],
+      "observationCodes": [
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "PERSISTED_BRANCH_CAS_UNAVAILABLE",
+        "TERMINAL_EVENT_ALIAS_APPENDED",
+        "TERMINAL_EVENT_NARRATIVE_REPLAY",
+        "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+        "WORLD_EVENT_STRING_DIRECT_APPEND"
+      ],
+      "metrics": {
+        "duplicate_event_instance_count": 1,
+        "duplicate_public_fact_count": 1,
+        "illegal_narrative_replay_count": 1,
+        "projection_duplicate_count": 1,
+        "stale_revision_commit_count": 1,
+        "terminal_event_supersession_gap_count": 1
+      },
+      "coverage": []
+    },
+    {
+      "scenarioId": "world-background-resolution",
+      "initialStateFingerprint": "sha256:b5a4eba520e057d8bba3a5c2e379ac613f37de50655cacfcdf1743812a0e9172",
+      "responses": [
+        {
+          "responseId": "main_curio_study",
+          "rawOutputSha256": "sha256:c0a4801beb596f342015131bb3e235a00639a9bbe09255598dcf277519837426",
+          "adjudication": "keep_player_focus",
+          "allowedFinalSideEffects": [
+            "focus_keep:unit_curio_study",
+            "world_pressure:station_siege"
+          ],
+          "refs": [
+            "turn_worldbg_028"
+          ]
+        },
+        {
+          "responseId": "world_background_due",
+          "rawOutputSha256": "sha256:342f92fec41b82b913abecd29c5afc6210a28f569748d0fb74ca69f5f5ff3356",
+          "adjudication": "schedule_due_settlement",
+          "allowedFinalSideEffects": [
+            "resolve:event_station_siege",
+            "convergence_offer:station_defense_aftermath"
+          ],
+          "refs": [
+            "world_due_027"
+          ]
+        }
+      ],
+      "worldBehavior": [
+        {
+          "stepId": "world_due_027",
+          "responseId": "world_background_due",
+          "kind": "world_due",
+          "behavior": "no_reducer_ignored",
+          "parsedSummary": "world_due 声明：事件 event_station_siege 应按 2157-04-26T16:00:00+08:00 结算（原因：后台排期到期结算）"
+        }
+      ],
+      "observationCodes": [
+        "LEGACY_STORY_PROGRESS_STAYED",
+        "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+        "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+        "WORLD_DUE_CLAIM_PARSED",
+        "WORLD_DUE_CLAIM_VALID",
+        "WORLD_DUE_EVENT_HAS_NO_CURRENT_REDUCER"
+      ],
+      "metrics": {
+        "terminal_event_supersession_gap_count": 1,
+        "world_due_event_stall_count": 1
+      },
+      "coverage": []
+    }
+  ]
+}

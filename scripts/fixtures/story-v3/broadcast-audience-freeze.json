@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "broadcast-audience-freeze",
+  "title": "广播发生时必须冻结当时实际能够收到消息的受众",
+  "playerFacingExpectation": "黑塔空间站广播提交时必须冻结当时实际能够收到消息的受众；艾丝妲收到广播后移动、worker 重试或刷新都不能新增、丢失或扩大回执；没有广播覆盖的 NPC 不能知道末日兽结果。",
+  "fixedNow": 1735692000000,
+  "initialStateFingerprint": "sha256:353d177eb61246d4025a2ee13b06bbd408c0b512c0846eecd3802c77b170ee22",
+  "baselineSignificance": [
+    "旧系统没有 BroadcastEnvelope/AudienceSnapshot/DeliveryRecord：广播只能存在于正文或字符串。",
+    "任何 NPC 是否知道消息没有可验证的渠道记录，广播者本人也拿不到 direct_observation 回执。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_bcast",
+      "revision": 16,
+      "turnCount": 33,
+      "gameTime": "2157-04-26T15:20:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·基座舱段",
+    "playerFocusId": "focus_broadcast",
+    "eventInstances": [
+      {
+        "eventId": "event_beast_defeat",
+        "state": "resolved"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "艾丝妲在全站广播中宣布末日兽已被击退。"
+    ],
+    "terminalEvents": [
+      {
+        "name": "末日兽",
+        "aliases": [
+          "末日兽"
+        ]
+      }
+    ]
+  },
+  "storySetup": {
+    "seriesId": "series_herta_bcast",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_station_broadcast",
+    "units": [
+      {
+        "id": "unit_station_broadcast",
+        "number": 1,
+        "title": "全站通报",
+        "summary": "艾丝妲通过广播向全站通报末日兽被击退的消息",
+        "endStates": [
+          "广播完成"
+        ],
+        "followups": [
+          "确认各舱段收到通报"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "基座舱段"
+        ],
+        "status": "current"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "broadcast_delivery_034",
+      "kind": "broadcast_delivery",
+      "turnCount": 34,
+      "playerInput": "",
+      "currentLocation": "黑塔空间站·基座舱段",
+      "responseRefs": [
+        "world_broadcast_envelope"
+      ]
+    },
+    {
+      "stepId": "knowledge_claim_034",
+      "kind": "knowledge_claim",
+      "turnCount": 34,
+      "playerInput": "我留在基座舱段整理战报。",
+      "currentLocation": "黑塔空间站·基座舱段",
+      "npcClaims": [
+        {
+          "observerId": "asta",
+          "factId": "fact_beast_defeated",
+          "channel": "direct_observation"
+        },
+        {
+          "observerId": "arlan",
+          "factId": "fact_beast_defeated",
+          "channel": "communication"
+        }
+      ],
+      "responseRefs": [
+        "main_post_broadcast"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "BROADCAST_ENVELOPE_FIELDS_VALID",
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "NO_FROZEN_AUDIENCE_SNAPSHOT",
+      "NPC_KNOWLEDGE_WITHOUT_RECEIPT"
+    ],
+    "expectedMetrics": {
+      "audience_snapshot_drift_count": 1,
+      "knowledge_leak_count": 2,
+      "npc_knowledge_without_receipt_count": 2
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "广播提交时冻结 AudienceSnapshot：记录当时在场与广播覆盖范围",
+      "艾丝妲作为广播者获得 direct_observation 回执；阿兰只有收到广播/通讯回执后才能引用",
+      "worker 重试或刷新不得新增、丢失或扩大回执"
+    ],
+    "allowedFinalSideEffects": [
+      "freeze:broadcast_envelope_b1",
+      "receipt:asta/direct_observation",
+      "receipt:arlan/broadcast（若覆盖）"
+    ]
+  },
+  "reviewQuestion": "广播发布时应该冻结能收到的人，而不是让所有 NPC 事后自动知道，对吗？"
+}

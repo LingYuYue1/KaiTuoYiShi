@@ -17,9 +17,23 @@ const expectedCanonSeriesIds = [
   'story_canon_penacony_in_our_time',
   'story_canon_penacony_farewell_penacony',
   'story_canon_penacony_depart_on_eighth_day',
+  'story_canon_amphoreus_1_falling_wood',
+  'story_canon_amphoreus_2_gate_throne',
+  'story_canon_amphoreus_3_sleeping_flowers',
+  'story_canon_amphoreus_4_dawn_fall',
+  'story_canon_amphoreus_5_sun_hurt',
+  'story_canon_amphoreus_6_hero_undying',
+  'story_canon_amphoreus_7_night_return',
+  'story_canon_amphoreus_8_yesterday_tomorrow',
+  'story_canon_penacony_memory_is_the_overture',
+  'story_canon_erxiang_paradise_1_welcome',
+  'story_canon_erxiang_paradise_2_out_of_control',
+  'story_canon_erxiang_paradise_3_so_laughter',
+  'story_canon_erxiang_paradise_4_forgotten_river',
+  'story_canon_erxiang_paradise_5_whistle',
+  'story_canon_side_xianzhou_foxian_tale',
   'story_canon_side_belobog_future_market',
   'story_canon_side_herta_crown_of_mundane_and_divine',
-  'story_canon_side_xianzhou_foxian_tale',
 ];
 
 function cleanTempDir() {
@@ -177,8 +191,19 @@ writeStub('utils/promptPayloadSanitizer.mjs', 'export function stringifyPromptPa
 writeStub('utils/variableFacts.mjs', 'export function parseVariableFacts() { return []; }\n');
 writeStub('utils/variableRegistry.mjs', 'export function buildVariableRegistryPrompt() { return ""; }\n');
 writeStub('data/canonicalCharacters.mjs', 'export const CANONICAL_CHARACTERS = [];\nexport function matchCanonical() { return null; }\n');
-writeStub('data/builtinAvatars.mjs', 'export function getDefaultBuiltinAvatar() { return undefined; }\n');
+writeStub('data/builtinAvatars.mjs', 'export function getDefaultBuiltinAvatar() { return undefined; }\nexport function getDefaultBuiltinAvatarForNames() { return undefined; }\n');
 writeStub('utils/npcMemorySanitizer.mjs', 'export function 清理NPC同行记忆摘要(value) { return typeof value === "string" ? value.trim() : ""; }\n');
+// G0.1 harness 修复（2026-08-07）：
+// 1) models/npc.ts 值导入 STATIC_ASSET_FALLBACK_AVATAR（utils/staticAssets.ts）。真实模块还依赖
+//    data/staticAssetManifest.json 的 ESM JSON 导入，无法直接转译；此处只提供本回归测试实际用到的
+//    导出，常量值与生产文件一致（'/assets/static-fallback/avatar-placeholder.webp'），不改变 NPC
+//    测试语义——本回归不执行任何静态资源解析逻辑。
+// 2) phoneService.ts 值导入 compileZhikuPhoneView（services/zhikuRuntimeCompiler.ts）。真实实现会
+//    拉起 zhikuRetrieval / zhikuAiRetrievalIndex / zhikuRunTrace / tokenEstimate 整条检索链；本回归
+//    的 buildPhoneMessages 调用路径在无参与者名时根本不会到达该函数（collectPhoneParticipantNames
+//    为空即早退），stub 提供中性 phonePersonaView 仅补齐导入边界，不改变手机知识边界断言语义。
+writeStub('utils/staticAssets.mjs', 'export const STATIC_ASSET_FALLBACK_AVATAR = \'/assets/static-fallback/avatar-placeholder.webp\';\n');
+writeStub('services/zhikuRuntimeCompiler.mjs', 'export function compileZhikuPhoneView() { return { phonePersonaView: \'\' }; }\n');
 
 const storyWeaving = await import(pathToFileURL(path.join(tempDir, 'services/storyWeaving.mjs')).href);
 const storyProgress = await import(pathToFileURL(path.join(tempDir, 'services/storyProgressService.mjs')).href);
@@ -293,14 +318,15 @@ function assertArchivedAnchorSkipsToNext({ system, archivedId, archivedGroup, ne
   assert(currentBlock.includes(nextTitle), '当前段素材块应对应实际注入段。');
   assert(!currentBlock.includes(`组号：${archivedGroup}`), '当前段素材块不得保留旧归档段组号。');
 
-  const aligned = storyProgress.autoAlignCanonStoryProgress({
+  // R2：归档锚点自愈是状态一致性修复（非正文推进），由 applyAdjudicatedStoryProgress 承担。
+  const aligned = storyProgress.applyAdjudicatedStoryProgress({
     storyWeaving: system,
     turnCount: 13,
-    userInput,
-    body,
+    decision: 'stay',
+    completedUnitIds: [],
+    reasons: ['归档锚点自愈'],
   });
   assert(aligned.changed === true, '归档锚点自愈应产生 changed=true。');
-  assert(aligned.progressed === false, '归档锚点自愈不应写成正文推进 progressed=true。');
   assert(
     aligned.system.当前进度?.当前分段ID === nextId,
     `自愈后的进度锚点应指向下一段，实际 ${aligned.system.当前进度?.当前分段ID} / ${aligned.system.当前进度?.当前分段组号}。`,
@@ -487,6 +513,7 @@ const nextAmbiguousExample = segment({
   登场角色: ['玩家'],
 });
 
+// R2：autoAlignCanonStoryProgress 已只读化，泛收束词的「不推进」语义改由 diagnoseCanonStoryProgress 只读诊断承担。
 const ambiguousAlignment = storyProgress.autoAlignCanonStoryProgress({
   storyWeaving: buildActiveCurrentSystem({
     current: activeAmbiguousExample,
@@ -496,16 +523,27 @@ const ambiguousAlignment = storyProgress.autoAlignCanonStoryProgress({
   userInput: '我离开房间，准备结束今天的行动。',
   body: '众人完成了简单整理后离开现场，事情似乎暂时告一段落，但异常信号源还没有被定位，也没有完成封存。',
 });
-assert(ambiguousAlignment.progressed === false, '泛收束词不得触发自动归档 progressed=true。');
+assert(ambiguousAlignment.progressed === false && ambiguousAlignment.changed === false, 'autoAlign 只读化后泛收束词不得产生任何状态变化。');
 assert(ambiguousAlignment.system.当前进度?.当前分段ID === activeAmbiguousExample.id, '泛收束词场景应继续停留在当前段。');
+const ambiguousDiagnose = storyProgress.diagnoseCanonStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    current: activeAmbiguousExample,
+    next: nextAmbiguousExample,
+  }),
+  turnCount: 21,
+  userInput: '我离开房间，准备结束今天的行动。',
+  body: '众人完成了简单整理后离开现场，事情似乎暂时告一段落，但异常信号源还没有被定位，也没有完成封存。',
+});
+assert(ambiguousDiagnose.wouldProgress === false, '泛收束词不得触发推进建议。');
 assert(
-  ambiguousAlignment.system.当前进度?.最近判定理由.some((item) => item.includes('缺少明确收束证据')),
-  '未推进理由应说明缺少明确收束证据。',
+  ambiguousDiagnose.reasons.some((item) => item.includes('缺少明确收束证据')),
+  '未推进诊断应说明缺少明确收束证据。',
 );
-const ambiguousPlanning = storyPlanning.buildStoryPlanningAnalysis(ambiguousAlignment.system);
+const ambiguousPlanning = storyPlanning.buildStoryPlanningAnalysis(ambiguousDiagnose.system);
 assert(ambiguousPlanning, '泛收束词场景应生成剧情规划分析。');
-assert(ambiguousPlanning.建议动作 === '等待正文证据', `泛收束词场景应建议等待正文证据，得到 ${ambiguousPlanning.建议动作}`);
-assert(ambiguousPlanning.偏离风险 === '中', `缺少明确收束证据时偏离/错位风险应为中，得到 ${ambiguousPlanning.偏离风险}`);
+// R2：判定理由不再写入进度锚点（只读诊断），分析器对无证据锚点给出继续软参考（等待正文证据的保守语义）。
+assert(ambiguousPlanning.建议动作 === '继续软参考', `泛收束词场景应建议继续软参考，得到 ${ambiguousPlanning.建议动作}`);
+assert(ambiguousPlanning.偏离风险 === '低', `无明确证据时偏离风险应为低，得到 ${ambiguousPlanning.偏离风险}`);
 
 const storyProgressSourceForHighConfidence = fs.readFileSync(path.join(root, 'services/storyProgressService.ts'), 'utf8');
 const sendWorkflowSourceForStoryAlignment = fs.readFileSync(path.join(root, 'hooks/useGame/sendWorkflow.ts'), 'utf8');
@@ -519,11 +557,12 @@ assert(storyProgressSourceForHighConfidence.includes('findCrossSeriesCanonAlignm
 assert(storyProgressSourceForHighConfidence.includes('scoreCanonSeriesPresence'), '跨系列纠偏必须使用系列级地点/人物/派系评分。');
 assert(storyProgressSourceForHighConfidence.includes('跨系列纠偏：近期正文/地点强命中'), '跨系列纠偏必须在进度理由里留下可诊断说明。');
 assert(storyProgressSourceForHighConfidence.includes('currentLocation?: string'), '剧情编织纠偏必须允许当前地点参与判断。');
+// R2：开局第 0 回合不执行剧情编织自动对齐；普通回合走联合裁决唯一提交点（applyAdjudicatedStoryProgress）。
 assert(
-  sendWorkflowSourceForStoryAlignment.includes('const storyAlignment = isOpeningSystemTrigger') &&
-    sendWorkflowSourceForStoryAlignment.includes('? { system: state.剧情编织, changed: false, progressed: false }') &&
-    sendWorkflowSourceForStoryAlignment.includes(': autoAlignCanonStoryProgress({'),
-  '开局第 0 回合不得执行剧情编织自动对齐，避免首回合被后台误切到贝洛伯格/支线轨道。',
+  sendWorkflowSourceForStoryAlignment.includes('const runtimeProjection = isOpeningSystemTrigger ? null : buildStoryWeavingRuntimeProjection({') &&
+    sendWorkflowSourceForStoryAlignment.includes('adjudicateStoryTurn({') &&
+    sendWorkflowSourceForStoryAlignment.includes('applyAdjudicatedStoryProgress({'),
+  '开局第 0 回合不得执行剧情编织自动对齐；普通回合必须经过联合裁决唯一提交点。',
 );
 assert(
   storyProgressSourceForHighConfidence.includes('!isSideCanonSeries(series)') &&
@@ -537,14 +576,13 @@ assert(
   '跨系列纠偏不得在开局前几回合运行，避免空间站开局被公共角色或泛背景词带偏。',
 );
 const saveLoadWorkflowSource = fs.readFileSync(path.join(root, 'hooks/useGame/saveLoadWorkflow.ts'), 'utf8');
-assert(saveLoadWorkflowSource.includes('autoAlignCanonStoryProgress'), '读档时必须尝试修复旧存档剧情编织锚点。');
-assert(saveLoadWorkflowSource.includes('alignStoryWeavingToOpeningArchive') && saveLoadWorkflowSource.includes('safeWorld.开局档案'), '读档时必须先按开局档案对齐剧情编织锚点，避免罗浮/匹诺康尼旧档继续显示黑塔。');
-assert(saveLoadWorkflowSource.includes('recentAssistant?.parsedResponse?.body'), '读档修复必须使用最近正文作为纠偏证据。');
+// R2 验收 7：读档只恢复保存状态，不重新判断或推进剧情；运行时切片随 世界 恢复。
+assert(!saveLoadWorkflowSource.includes('autoAlignCanonStoryProgress'), '读档不得再调用自动推进（R2 读档只恢复保存状态，不推进剧情）。');
 assert(
-  saveLoadWorkflowSource.includes('currentLocation: save.世界?.当前地点') ||
-    saveLoadWorkflowSource.includes('currentLocation: safeWorld.当前地点'),
-  '读档修复必须使用存档当前地点作为纠偏证据。',
+  saveLoadWorkflowSource.includes('restoreStoryWeavingForLoadedSave') && saveLoadWorkflowSource.includes('safeWorld.开局档案'),
+  '读档必须通过旧档兼容恢复器保留有效进度；仅在缺少剧情编织时按开局档案初始化。',
 );
+assert(saveLoadWorkflowSource.includes('不重新判断或推进剧情'), '读档路径必须明确不重新判断或推进剧情。');
 assert(
   ambiguousPlanning.切段条件.some((item) => item.includes('异常信号源已经定位并完成封存')),
   '规划分析应保留明确切段条件。',
@@ -584,6 +622,7 @@ const explicitAutoProgressNext = segment({
   本段结束状态: ['备用通道调查完成'],
   登场角色: ['玩家'],
 });
+// R2：明确结束证据的真实推进由联合裁决回执驱动（advance_one）；autoAlignCanonStoryProgress 已只读化。
 const explicitAutoProgress = storyProgress.autoAlignCanonStoryProgress({
   storyWeaving: buildActiveCurrentSystem({
     seriesId: 'series_explicit_auto_progress',
@@ -594,19 +633,30 @@ const explicitAutoProgress = storyProgress.autoAlignCanonStoryProgress({
   userInput: '我确认关闭门禁异常并完成封存。',
   body: '门禁异常已被关闭并完成封存，现场记录也已同步，这一阶段正式结束。玩家随后把注意力转向备用通道。',
 });
-assert(explicitAutoProgress.progressed === true, '明确结束证据应允许后台自动推进。');
-assert(explicitAutoProgress.changed === true, '自动推进应直接更新剧情编织系统。');
+assert(explicitAutoProgress.progressed === false && explicitAutoProgress.changed === false, 'autoAlign 只读化后不得由关键词评分直接推进。');
 assert(!('suggestion' in explicitAutoProgress), '自动推进结果不应再暴露手动推进建议字段。');
+const explicitAdjudicated = storyProgress.applyAdjudicatedStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_explicit_auto_progress',
+    current: explicitAutoProgressCurrent,
+    next: explicitAutoProgressNext,
+  }),
+  turnCount: 24,
+  decision: 'advance_one',
+  completedUnitIds: [`unit:${explicitAutoProgressCurrent.id}`],
+  reasons: ['明确结束证据：门禁异常完成封存'],
+});
+assert(explicitAdjudicated.changed === true, '联合裁决 advance_one 应直接更新剧情编织系统。');
 assert(
-  explicitAutoProgress.system.当前进度?.历史归档.some((item) => item.分段ID === explicitAutoProgressCurrent.id),
-  '自动推进应写入历史归档，供后续记忆/新闻/手机读取。',
+  explicitAdjudicated.system.当前进度?.历史归档.some((item) => item.分段ID === explicitAutoProgressCurrent.id),
+  '联合裁决推进应写入历史归档，供后续记忆/新闻/手机读取。',
 );
 assert(
-  explicitAutoProgress.system.当前进度?.历史归档.some((item) =>
+  explicitAdjudicated.system.当前进度?.历史归档.some((item) =>
     item.分段ID === explicitAutoProgressCurrent.id &&
     item.角色推进摘要?.some((text) => text.includes('三月七') && text.includes('门禁异常解除')),
   ),
-  '自动推进历史归档应沉淀角色推进摘要，供记忆、手机、新闻承接已发生的角色阶段变化。',
+  '联合裁决推进历史归档应沉淀角色推进摘要，供记忆、手机、新闻承接已发生的角色阶段变化。',
 );
 
 const accumulatedCurrent = segment({
@@ -629,6 +679,18 @@ const accumulatedNext = segment({
   本段结束状态: ['信号来源查明'],
   登场角色: ['凌'],
 });
+// R2：连续推进证据不再自动归档；旧评分规则只保留为只读诊断（diagnoseCanonStoryProgress），不产生任何状态变化。
+const accumulatedFirstDiag = storyProgress.diagnoseCanonStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_accumulated_progress',
+    current: accumulatedCurrent,
+    next: accumulatedNext,
+  }),
+  turnCount: 31,
+  userInput: '我继续调查异常信号源，检查谱线，确认封存流程。',
+  body: '凌在观景车厢展开记录，异常信号源的谱线被逐项确认，封存流程开始推进。',
+});
+assert(accumulatedFirstDiag.wouldProgress === false, '单回合推进证据不应建议立刻归档当前段。');
 const accumulatedFirst = storyProgress.autoAlignCanonStoryProgress({
   storyWeaving: buildActiveCurrentSystem({
     seriesId: 'series_accumulated_progress',
@@ -639,18 +701,21 @@ const accumulatedFirst = storyProgress.autoAlignCanonStoryProgress({
   userInput: '我继续调查异常信号源，检查谱线，确认封存流程。',
   body: '凌在观景车厢展开记录，异常信号源的谱线被逐项确认，封存流程开始推进。',
 });
-assert(accumulatedFirst.progressed === false, '单回合推进证据不应立刻归档当前段。');
-assert(accumulatedFirst.system.当前进度?.连续推进证据回合 === 1, '首回合有效推进证据应累计为 1。');
-assert(accumulatedFirst.system.当前进度?.推进证据?.length > 0, '推进证据应写入诊断锚点。');
-const accumulatedSecond = storyProgress.autoAlignCanonStoryProgress({
-  storyWeaving: accumulatedFirst.system,
+assert(accumulatedFirst.changed === false && accumulatedFirst.progressed === false, '只读化后首回合推进证据不得产生任何状态变化。');
+// 旧规则「连续两回合证据」仍作为只读诊断保留（建议推进但绝不落盘）。
+const accumulatedSecondDiag = storyProgress.diagnoseCanonStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_accumulated_progress',
+    current: accumulatedCurrent,
+    next: accumulatedNext,
+    progressPatch: { 连续推进证据回合: 1, 最近一次推进判定回合: 31 },
+  }),
   turnCount: 32,
   userInput: '我继续沿着谱线排查异常信号源，把封存流程推进到底。',
   body: '观景车厢里的记录继续更新，凌确认异常信号源的谱线稳定，封存流程被完整推进。',
 });
-assert(accumulatedSecond.progressed === true, '连续两回合有效推进证据应允许当前段自动推进。');
-assert(accumulatedSecond.system.当前进度?.当前分段ID === accumulatedNext.id, '累计推进后应进入下一段。');
-assert(accumulatedSecond.system.当前进度?.连续推进证据回合 === 0, '推进成功后应清空连续推进证据。');
+assert(accumulatedSecondDiag.wouldProgress === true, '旧规则诊断仍会建议连续两回合推进（只读诊断，不落盘）。');
+assert(accumulatedSecondDiag.system.当前进度?.连续推进证据回合 === 1, '诊断不得修改连续推进证据回合。');
 
 const jumpCurrent = segment({
   id: 'seg_jump_current',
@@ -690,7 +755,8 @@ const jumpTarget = segment({
     信息可见性: 'public',
   }],
 });
-const twoSegmentJump = storyProgress.autoAlignCanonStoryProgress({
+// R2：跨段纠偏只保留为只读诊断（旧规则建议）；普通回合最多推进一个情节单元（计划 4.2 规则 2）。
+const twoSegmentJumpDiag = storyProgress.diagnoseCanonStoryProgress({
   storyWeaving: buildActiveCurrentSystem({
     seriesId: 'series_two_segment_jump',
     current: jumpCurrent,
@@ -700,16 +766,21 @@ const twoSegmentJump = storyProgress.autoAlignCanonStoryProgress({
   userInput: '我赶到星槎海，和符玄、景元一起追捕药王秘传。',
   body: '星槎海的丹鼎司警戒线已经拉开，符玄与景元正在追捕药王秘传，追捕行动让药王秘传据点暴露。',
 });
-assert(twoSegmentJump.progressed === true, '强证据命中后两段时应允许跨两段纠偏。');
-assert(twoSegmentJump.system.当前进度?.当前分段ID === jumpTarget.id, '跨两段纠偏应对齐到命中目标段。');
-assert(
-  twoSegmentJump.system.当前进度?.历史归档.some((item) => item.分段ID === jumpMiddle.id && item.归档状态 === '已跳过'),
-  '跨两段纠偏时中间段应按已跳过归档，避免写成已完成事实。',
-);
-assert(
-  !twoSegmentJump.system.当前进度?.已完成摘要.some((item) => item.includes('过渡线索整理完成')),
-  '跨段跳过的中间段不得进入已完成摘要。',
-);
+assert(twoSegmentJumpDiag.wouldProgress === true, '强证据命中后两段时旧规则诊断建议跨两段纠偏（只读）。');
+assert(twoSegmentJumpDiag.targetSegmentId === jumpTarget.id, '诊断目标应为命中段（跨两段）。');
+const twoSegmentJump = storyProgress.applyAdjudicatedStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_two_segment_jump',
+    current: jumpCurrent,
+    segments: [jumpCurrent, jumpMiddle, jumpTarget],
+  }),
+  turnCount: 40,
+  decision: 'advance_one',
+  completedUnitIds: [`unit:${jumpCurrent.id}`],
+  reasons: twoSegmentJumpDiag.reasons,
+});
+assert(twoSegmentJump.changed === true, '联合裁决推进一格应更新剧情编织。');
+assert(twoSegmentJump.system.当前进度?.当前分段ID === jumpMiddle.id, '普通回合只推进一格，不得跨两段直接跳到命中段。');
 
 const longJumpSegments = [
   segment({
@@ -771,7 +842,8 @@ const longJumpSegments = [
     }],
   }),
 ];
-const longJumpWithoutStageSignal = storyProgress.autoAlignCanonStoryProgress({
+// R2：跨三段大跳同样只保留为只读诊断；普通回合绝不直接大跳。
+const longJumpWithoutStageSignal = storyProgress.diagnoseCanonStoryProgress({
   storyWeaving: buildActiveCurrentSystem({
     seriesId: 'series_long_jump_without_stage_signal',
     current: longJumpSegments[0],
@@ -781,12 +853,12 @@ const longJumpWithoutStageSignal = storyProgress.autoAlignCanonStoryProgress({
   userInput: '我在太卜司的穷观阵旁询问符玄和卡芙卡审讯的事。',
   body: '太卜司的穷观阵旁，符玄盯着卡芙卡，审讯记录不断亮起，卡芙卡审讯结束的结论被写入案卷。',
 });
-assert(longJumpWithoutStageSignal.progressed === false, '跨三段以上没有明确阶段跳转词时不得直接大跳。');
+assert(longJumpWithoutStageSignal.wouldProgress === false, '跨三段以上没有明确阶段跳转词时旧规则诊断不建议直接大跳。');
 assert(
-  longJumpWithoutStageSignal.system.当前进度?.最近判定理由.some((item) => item.includes('需要明确阶段/时空跳转词')),
+  longJumpWithoutStageSignal.reasons.some((item) => item.includes('需要明确阶段/时空跳转词')),
   '未大跳诊断应说明缺少明确阶段/时空跳转词。',
 );
-const longJumpWithStageSignal = storyProgress.autoAlignCanonStoryProgress({
+const longJumpWithStageSignal = storyProgress.diagnoseCanonStoryProgress({
   storyWeaving: buildActiveCurrentSystem({
     seriesId: 'series_long_jump_with_stage_signal',
     current: longJumpSegments[0],
@@ -796,12 +868,20 @@ const longJumpWithStageSignal = storyProgress.autoAlignCanonStoryProgress({
   userInput: '数日后，我已经抵达太卜司，直接进入穷观阵旁的审讯现场。',
   body: '数日后，众人已经抵达太卜司。穷观阵旁，符玄盯着卡芙卡，审讯记录不断亮起，卡芙卡审讯结束的结论被写入案卷。',
 });
-assert(longJumpWithStageSignal.progressed === true, '跨三段以上有明确阶段跳转词和强证据时应允许大跳纠偏。');
-assert(longJumpWithStageSignal.system.当前进度?.当前分段ID === longJumpSegments[4].id, '显式阶段跳转应对齐到远端目标段。');
-assert(
-  longJumpWithStageSignal.system.当前进度?.历史归档.filter((item) => item.归档状态 === '已跳过').length >= 3,
-  '显式大跳时中间段应以已跳过归档。',
-);
+assert(longJumpWithStageSignal.wouldProgress === true, '跨三段以上有明确阶段跳转词和强证据时旧规则诊断建议大跳（只读）。');
+assert(longJumpWithStageSignal.targetSegmentId === longJumpSegments[4].id, '诊断目标应为远端目标段。');
+const longJumpApplied = storyProgress.applyAdjudicatedStoryProgress({
+  storyWeaving: buildActiveCurrentSystem({
+    seriesId: 'series_long_jump_with_stage_signal',
+    current: longJumpSegments[0],
+    segments: longJumpSegments,
+  }),
+  turnCount: 42,
+  decision: 'advance_one',
+  completedUnitIds: [`unit:${longJumpSegments[0].id}`],
+  reasons: longJumpWithStageSignal.reasons,
+});
+assert(longJumpApplied.system.当前进度?.当前分段ID === longJumpSegments[1].id, '普通回合只推进一格，即使诊断建议大跳也不跨段。');
 
 const skippedPlanning = storyPlanning.buildStoryPlanningAnalysis(buildArchivedAnchorSystem({
   seriesId: 'series_planning_skipped',

@@ -17,6 +17,7 @@ import { TravelerProfileModal } from '@/components/features/Character/TravelerPr
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/dbService';
 import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
+import { buildMemorySummaryFlowRequest } from '@/hooks/useGame/memoryUtils';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
@@ -33,6 +34,7 @@ const WorldbookManagerModal = lazyWithRetry(() => import('@/components/features/
 const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
 const GitHubCloudSaveModal = lazyWithRetry(() => import('@/components/features/CloudSave/GitHubCloudSaveModal').then((module) => ({ default: module.GitHubCloudSaveModal })));
 const ReleaseAnnouncementsModal = lazyWithRetry(() => import('@/components/features/Release/ReleaseAnnouncementsModal').then((module) => ({ default: module.ReleaseAnnouncementsModal })));
+const MemorySummaryFlowModal = lazyWithRetry(() => import('@/components/features/Memory/MemorySummaryFlowModal').then((module) => ({ default: module.MemorySummaryFlowModal })));
 const PlotPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PlotPanel').then((module) => ({ default: module.PlotPanel })));
 const YitingPanel = lazyWithRetry(() => import('@/components/features/GameSystems/YitingPanel').then((module) => ({ default: module.YitingPanel })));
 const MemoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemoryPanel').then((module) => ({ default: module.MemoryPanel })));
@@ -506,6 +508,16 @@ export default function App() {
   const handleOpenProfile = useCallback(() => setShowCharacter(true), []);
   const handleOpenPhone = useCallback(() => setShowPhone(true), []);
   const handleOpenMemoryRebuild = useCallback(() => setShowMemoryRebuild(true), []);
+  // 阶段1·主链压缩手动入口：玩家在记忆面板点击"立即压缩记忆"时触发三阶段弹窗。
+  // 手动入口同样绑定来源 turn/fingerprint（统一 buildMemorySummaryFlowRequest），
+  // 确认阶段据此校验，防止旧结果覆盖处理期间新增的记忆。
+  const handleTriggerManualCompress = useCallback(() => {
+    const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
+    const flow = buildMemorySummaryFlowRequest(state.记忆, memorySettings, state.turnCount);
+    const info = flow.pendingInfo;
+    if (info && info.即时待压缩 === 0 && info.短期待压缩 === 0 && info.中期待压缩 === 0) return;
+    state.setMemorySummaryFlow(flow);
+  }, [state.记忆, state.gameSettings, state.setMemorySummaryFlow]);
   const handleOpenSaveLoad = useCallback(() => setShowSaveLoad(true), []);
   const handleOpenSettings = useCallback(() => setShowSettings(true), []);
   const handleCloseSystemDrawer = useCallback(() => setActiveSystem(null), []);
@@ -813,6 +825,7 @@ export default function App() {
             onRetryFailedDraft: (draft) => void actions.handleRetryMemoryFailureDraft(draft.id),
             onIgnoreFailedDraft: (draft) => void actions.handleIgnoreMemoryFailureDraft(draft.id),
             onOpenMemoryRebuild: handleOpenMemoryRebuild,
+            onTriggerManualCompress: handleTriggerManualCompress,
             yitingSystem: state.忆庭,
             zhikuSystem: state.智库,
             memorySettings: state.gameSettings.记忆系统 ?? 创建默认记忆系统设置(),
@@ -1129,7 +1142,23 @@ export default function App() {
             onMemoryChange={state.set记忆}
             onYitingChange={state.set忆庭}
             onNpcRecordsChange={state.setNPC}
+            onCommitPhoneMemory={actions.commitPhoneMemory}
             onClose={() => setShowPhone(false)}
+          />
+        </Suspense>
+      )}
+
+      {state.memorySummaryFlow.open && (
+        <Suspense fallback={<LazySurfaceFallback label="记忆总结载入中" />}>
+          <MemorySummaryFlowModal
+            flow={state.memorySummaryFlow}
+            memory={state.记忆}
+            turnCount={state.turnCount}
+            apiSettings={state.apiSettings}
+            gameSettings={state.gameSettings}
+            onStageChange={(next) => state.setMemorySummaryFlow(next)}
+            onConfirm={(result) => { void actions.handleConfirmMemorySummary(result); }}
+            onClose={() => state.setMemorySummaryFlow({ open: false, stage: 'remind' })}
           />
         </Suspense>
       )}
@@ -1213,6 +1242,8 @@ function renderSystemPanel(
     onRetryFailedDraft?: (draft: 记忆失败草稿) => void;
     onIgnoreFailedDraft?: (draft: 记忆失败草稿) => void;
     onOpenMemoryRebuild?: () => void;
+    /** 阶段1·主链压缩手动入口：触发三阶段压缩弹窗 */
+    onTriggerManualCompress?: () => void;
     yitingSystem: 忆庭系统;
     zhikuSystem: 智库系统;
     memorySettings: import('@/models/settings').记忆系统设置;
@@ -1310,6 +1341,7 @@ function renderSystemPanel(
           onRetryFailedDraft={ctx.onRetryFailedDraft}
           onIgnoreFailedDraft={ctx.onIgnoreFailedDraft}
           onOpenBatchRebuild={ctx.onOpenMemoryRebuild}
+          onTriggerManualCompress={ctx.onTriggerManualCompress}
         />
       );
     default:

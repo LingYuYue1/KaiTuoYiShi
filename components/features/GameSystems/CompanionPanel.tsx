@@ -1,6 +1,6 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { NPC记录, NPC阶位, NPC_NSFW年龄确认 } from '@/models/npc';
+import type { NPC记录, NPC阶位, NPC_NSFW年龄确认, 约定结构, 约定状态 } from '@/models/npc';
 import { NPC_AFFINITY_MAX, NPC_AFFINITY_MIN, buildNpcMemoryLedgerView, 格式化NPC关系, 归一化NPC记录列表, 提取NPC同行记忆文本列表, 读取NPC头像 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { buildNpcRelationshipPlanning, type NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
@@ -18,7 +18,7 @@ interface CompanionPanelProps {
   devMode?: boolean;
 }
 
-type DetailTab = 'archive' | 'planning' | 'memory' | 'nsfw';
+type DetailTab = 'archive' | 'planning' | 'memory' | 'agreement' | 'nsfw';
 
 const cardClip =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
@@ -153,6 +153,7 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
             onPromote={() => promoteToCompanion(selected.id)}
             onDemote={() => demoteToExtra(selected.id)}
             onToggleTraveling={() => updateRecord(selected.id, { 同行: !selected.同行 })}
+            onUpdateNpc={(patch) => updateRecord(selected.id, patch)}
             planning={selectedPlanning}
             devMode={devMode}
           />
@@ -331,6 +332,7 @@ function NpcDetail({
   onPromote,
   onDemote,
   onToggleTraveling,
+  onUpdateNpc,
   nsfwEnabled,
   planning,
   devMode,
@@ -340,6 +342,7 @@ function NpcDetail({
   onPromote: () => void;
   onDemote: () => void;
   onToggleTraveling: () => void;
+  onUpdateNpc: (patch: Partial<NPC记录>) => void;
   nsfwEnabled: boolean;
   planning?: NPC关系规划条目;
   devMode: boolean;
@@ -441,6 +444,9 @@ function NpcDetail({
               <TabButton active={detailTab === 'memory'} onClick={() => setDetailTab('memory')}>
                 {devMode ? '记忆账本' : '同行记忆'}
               </TabButton>
+              <TabButton active={detailTab === 'agreement'} onClick={() => setDetailTab('agreement')}>
+                约定
+              </TabButton>
               {nsfwEnabled && (
                 <TabButton active={detailTab === 'nsfw'} onClick={() => setDetailTab('nsfw')}>
                   NSFW档案
@@ -507,6 +513,10 @@ function NpcDetail({
 
       {detailTab === 'memory' && <MemoryPanel npc={npc} devMode={devMode} />}
 
+      {detailTab === 'agreement' && (
+        <AgreementPanel npc={npc} onUpdateNpc={onUpdateNpc} />
+      )}
+
       {nsfwEnabled && detailTab === 'nsfw' && <NSFWArchivePanel npc={npc} />}
     </div>
   );
@@ -567,6 +577,211 @@ function AvatarSlotCard({
         </div>
       </div>
     </div>
+  );
+}
+
+// 阶段1补充·约定展示环：玩家可查看/筛选/编辑/删除 NPC 约定
+type AgreementFilter = 'all' | 'waiting' | 'completed';
+
+const agreementFilterItems: { id: AgreementFilter; label: string }[] = [
+  { id: 'all', label: '全部' },
+  { id: 'waiting', label: '等待中' },
+  { id: 'completed', label: '已完结' },
+];
+
+const agreementStatusConfig: Record<约定状态, { label: string; color: string; bg: string }> = {
+  等待中: { label: '等待中', color: 'rgb(var(--tj-ui-warning, #f59e0b))', bg: 'rgba(var(--tj-ui-warning, 245,158,11), 0.16)' },
+  已履行: { label: '已履行', color: 'rgb(var(--tj-ui-success, #10b981))', bg: 'rgba(var(--tj-ui-success, 16,185,129), 0.16)' },
+  已违约: { label: '已违约', color: 'rgb(var(--tj-ui-error, #ef4444))', bg: 'rgba(var(--tj-ui-error, 239,68,68), 0.16)' },
+  已作废: { label: '已作废', color: 'rgba(var(--tj-ui-muted), 0.8)', bg: 'rgba(var(--tj-ui-muted), 0.14)' },
+};
+
+const agreementStatusOptions: 约定状态[] = ['等待中', '已履行', '已违约', '已作废'];
+
+function AgreementPanel({ npc, onUpdateNpc }: { npc: NPC记录; onUpdateNpc: (patch: Partial<NPC记录>) => void }) {
+  const [filter, setFilter] = useState<AgreementFilter>('all');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editStatus, setEditStatus] = useState<约定状态>('等待中');
+
+  const agreements = npc.约定 ?? [];
+  const filtered = useMemo(() => {
+    const sorted = [...agreements].sort((a, b) => b.回合 - a.回合);
+    if (filter === 'waiting') return sorted.filter((a) => a.当前状态 === '等待中');
+    if (filter === 'completed') return sorted.filter((a) => a.当前状态 !== '等待中');
+    return sorted;
+  }, [agreements, filter]);
+
+  const stats = useMemo(() => {
+    const waiting = agreements.filter((a) => a.当前状态 === '等待中').length;
+    const completed = agreements.filter((a) => a.当前状态 !== '等待中').length;
+    return { total: agreements.length, waiting, completed };
+  }, [agreements]);
+
+  const handleUpdateStatus = (id: string) => {
+    const next = agreements.map((a) => (a.id === id ? { ...a, 当前状态: editStatus } : a));
+    onUpdateNpc({ 约定: next });
+    setEditingId(null);
+  };
+
+  const handleDelete = (id: string) => {
+    const next = agreements.filter((a) => a.id !== id);
+    onUpdateNpc({ 约定: next });
+    if (editingId === id) setEditingId(null);
+  };
+
+  return (
+    <section className="px-4 py-4" style={panelStyle}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="font-serif text-[12px] tracking-[0.28em]" style={{ color: accentColor }}>
+            约定
+          </div>
+          <div className="mt-1 text-xs" style={{ color: mutedColor }}>
+            共 {stats.total} 条 · 等待中 {stats.waiting} · 已完结 {stats.completed}
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          {agreementFilterItems.map((item) => {
+            const active = filter === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setFilter(item.id)}
+                className="px-3 py-1.5 text-xs transition-all"
+                style={{
+                  color: active ? activeTextColor : mutedColor,
+                  background: active ? activeSurface : quietSurface,
+                  boxShadow: active
+                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5)'
+                    : 'inset 0 0 0 1px rgba(var(--tj-border), 0.5)',
+                  clipPath: smallClip,
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {filtered.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm" style={{ color: mutedColor }}>
+            {agreements.length === 0 ? '尚未建立任何约定。' : '当前筛选条件下没有约定。'}
+          </div>
+        ) : (
+          filtered.map((agreement) => {
+            const config = agreementStatusConfig[agreement.当前状态];
+            const isEditing = editingId === agreement.id;
+            return (
+              <div
+                key={agreement.id}
+                className="px-4 py-3"
+                style={{
+                  background: quietSurface,
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.5)',
+                  clipPath: smallClip,
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="shrink-0 px-2 py-0.5 text-[11px] font-serif tracking-[0.16em]"
+                        style={{ color: config.color, background: config.bg, clipPath: smallClip }}
+                      >
+                        {config.label}
+                      </span>
+                      <span className="truncate font-serif text-sm tracking-[0.14em]" style={{ color: titleColor }}>
+                        {agreement.标题}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[11px]" style={{ color: faintColor }}>
+                      回合 {agreement.回合}
+                      {agreement.约定时间 ? ` · ${agreement.约定时间}` : ''}
+                      {agreement.来源 ? ` · 来源：${agreement.来源}` : ''}
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed" style={{ color: bodyColor }}>
+                      {agreement.内容}
+                    </p>
+                    {agreement.后果 && (
+                      <p className="mt-2 text-xs leading-relaxed" style={{ color: mutedColor }}>
+                        后果：{agreement.后果}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {isEditing ? (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-xs" style={{ color: mutedColor }}>改为：</span>
+                    {agreementStatusOptions.map((status) => {
+                      const active = editStatus === status;
+                      const cfg = agreementStatusConfig[status];
+                      return (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setEditStatus(status)}
+                          className="px-2 py-1 text-[11px] transition-all"
+                          style={{
+                            color: active ? cfg.color : mutedColor,
+                            background: active ? cfg.bg : 'transparent',
+                            boxShadow: active ? `inset 0 0 0 1px ${cfg.color}` : 'inset 0 0 0 1px rgba(var(--tj-border), 0.5)',
+                            clipPath: smallClip,
+                          }}
+                        >
+                          {cfg.label}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(agreement.id)}
+                      className="ml-auto px-3 py-1 text-xs"
+                      style={{ color: activeTextColor, background: activeSurface, clipPath: smallClip }}
+                    >
+                      确认
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="px-3 py-1 text-xs"
+                      style={{ color: mutedColor, clipPath: smallClip }}
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingId(agreement.id);
+                        setEditStatus(agreement.当前状态);
+                      }}
+                      className="px-3 py-1 text-xs"
+                      style={{ color: mutedColor, clipPath: smallClip }}
+                    >
+                      改状态
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(agreement.id)}
+                      className="px-3 py-1 text-xs"
+                      style={{ color: 'rgb(var(--tj-ui-error, #ef4444))', clipPath: smallClip }}
+                    >
+                      删除
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
   );
 }
 

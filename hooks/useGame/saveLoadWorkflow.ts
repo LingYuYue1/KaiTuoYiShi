@@ -33,8 +33,7 @@ import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
-import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
-import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { restoreStoryWeavingForLoadedSave } from '@/data/storyWeavingPreset';
 import { materializeAlbumRuntimePayload, pruneAlbumAssetCache } from '@/utils/albumObjectUrl';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
@@ -62,12 +61,15 @@ export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nod
 export function buildSavePayload(
   state: UseGameStateReturn,
   type: 存档类型,
-  overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks'>>,
+  overrides?: Partial<Pick<存档数据, 'turnCount' | 'chatHistory' | '记忆' | '忆庭' | '智库' | '手机' | '世界' | '旅人' | 'NPC' | '相册' | '新闻' | '剧情' | '剧情编织' | 'variableBatches' | 'queueTasks' | 'gameSettings'>>,
 ): 存档数据 {
   const persistedChatHistory = compactChatHistoryForLongSession(
     overrides?.chatHistory ?? state.chatHistory,
   );
   const timestamp = Date.now();
+  // gameSettings 允许传入本回合最终覆盖值（宏全局变量 / 世界书触发状态等运行时字段），
+  // 自动存档与 saveSetting('gameSettings') 必须使用同一个最终对象，不能继续读闭包旧 state。
+  const gameSettingsForSave = overrides?.gameSettings ?? state.gameSettings;
   const baseSave = {
     id: 0,
     type,
@@ -88,15 +90,15 @@ export function buildSavePayload(
     variableBatches: compactVariableBatchHistory(overrides?.variableBatches ?? state.variableBatches),
     queueTasks: overrides?.queueTasks ?? state.queueTasks,
     gameSettings: buildSaveGameSettingsSnapshot({
-      ...state.gameSettings,
-      新闻系统: 归一化星际和平周报设置(state.gameSettings.新闻系统),
-      手机系统: 归一化手机系统设置(state.gameSettings.手机系统 ?? 创建默认手机系统设置()),
-      智库系统: 归一化智库系统设置(state.gameSettings.智库系统),
-      剧情编织系统: 归一化剧情编织系统设置(state.gameSettings.剧情编织系统),
-      文生图系统: 归一化文生图系统设置(state.gameSettings.文生图系统),
-      记忆系统: 归一化记忆系统设置(state.gameSettings.记忆系统 ?? 创建默认记忆系统设置()),
-      额外功能: 归一化额外功能设置(state.gameSettings.额外功能),
-      visualTextSettings: 归一化视觉文本设置(state.gameSettings.visualTextSettings),
+      ...gameSettingsForSave,
+      新闻系统: 归一化星际和平周报设置(gameSettingsForSave.新闻系统),
+      手机系统: 归一化手机系统设置(gameSettingsForSave.手机系统 ?? 创建默认手机系统设置()),
+      智库系统: 归一化智库系统设置(gameSettingsForSave.智库系统),
+      剧情编织系统: 归一化剧情编织系统设置(gameSettingsForSave.剧情编织系统),
+      文生图系统: 归一化文生图系统设置(gameSettingsForSave.文生图系统),
+      记忆系统: 归一化记忆系统设置(gameSettingsForSave.记忆系统 ?? 创建默认记忆系统设置()),
+      额外功能: 归一化额外功能设置(gameSettingsForSave.额外功能),
+      visualTextSettings: 归一化视觉文本设置(gameSettingsForSave.visualTextSettings),
     }),
     apiSettings: 创建空API设置(),
     theme: state.currentTheme,
@@ -261,6 +263,13 @@ async function applySaveToState(
   const safeWorld = 归一化世界状态(save.世界);
   const safeTraveler = normalizeSavedTraveler(save.旅人, safeWorld.当前日期);
   const safeGameSettings = normalizeSavedGameSettings(save.gameSettings);
+  // 旧档保留合法游标和运行时状态；读档不按地点跳段，不读取旧聊天，不重新判断或推进剧情，也不补造旧回合事实。
+  // 后续普通回合若明确建立了更后阶段，只由联合裁决器一次推进一格。
+  const nextStoryWeaving = restoreStoryWeavingForLoadedSave(
+    save.剧情编织,
+    state.剧情编织,
+    safeWorld.开局档案,
+  );
 
   if (state.interruptedWorkflow) {
     if (isWorkflowRecoveryComplete(state.interruptedWorkflow, safeChatHistory)) {
@@ -296,22 +305,7 @@ async function applySaveToState(
   pruneAlbumAssetCache(nextAlbum.assets.map((asset) => asset.id));
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(save.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
-  const normalizedStoryWeaving = alignStoryWeavingToOpeningArchive(
-    归一化剧情编织系统(save.剧情编织),
-    safeWorld.开局档案,
-  );
-  const recentUser = [...safeChatHistory].reverse().find((message) => message.role === 'user');
-  const recentAssistant = [...safeChatHistory].reverse().find((message) => message.role === 'assistant');
-  const storyRepair = autoAlignCanonStoryProgress({
-    storyWeaving: normalizedStoryWeaving,
-    turnCount: save.turnCount ?? (safeChatHistory.length + 1),
-    userInput: recentUser?.content ?? '',
-    body: recentAssistant?.parsedResponse?.body ?? recentAssistant?.content ?? '',
-    currentLocation: safeWorld.当前地点,
-  });
-  const nextStoryWeaving = storyRepair.system;
   state.set剧情编织(nextStoryWeaving);
-  await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
   state.setVariableBatches(compactVariableBatchHistory(save.variableBatches ?? []));
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。

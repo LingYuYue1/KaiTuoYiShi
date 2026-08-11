@@ -5,6 +5,8 @@ import { withRetries } from '@/services/ai/retry';
 import { YITING_ARCHIVE_FORMAT_PROMPT as YITING_LEGACY_ARCHIVE_FORMAT_PROMPT } from '@/prompts/cot/yitingCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+// 阶段1修复：复用统一噪声过滤，避免两套模式分开维护导致模式漂移
+import { isMemorySystemNoise } from '@/hooks/useGame/memoryUtils';
 
 export interface YitingArchiveSource {
   turn: number;
@@ -186,8 +188,10 @@ function formatArchiveSummary(time: string | undefined, location: string | undef
   ].join('\n');
 }
 
+// 阶段1修复：isArchiveNoiseLine 已废弃，统一复用 isMemorySystemNoise（见 memoryUtils.ts）
+// 旧硬编码模式已合并到 MEMORY_SYSTEM_NOISE_PATTERNS，避免两套分开维护导致模式漂移
 function isArchiveNoiseLine(line: string): boolean {
-  return /动态世界|行动选项|后续选项|系统提示|变量草稿|剧情编织进度|最近判定理由/.test(line);
+  return isMemorySystemNoise(line);
 }
 
 function formatSourceTime(source: YitingArchiveSource): string {

@@ -27,7 +27,9 @@ export type 变量事实类型 =
   | 'world_event'
   | 'phone_seed'
   | 'nsfw_archive'
-  | 'weather';
+  | 'weather'
+  | 'agreement'
+  | 'agreement_status';
 
 export interface 旅人档案变量事实 {
   type: 'traveler_profile';
@@ -157,6 +159,47 @@ export interface NSFW档案变量事实 {
   evidence?: string;
 }
 
+/**
+ * 约定变量事实（阶段1新增·写入环）
+ * - 由 variableModel 从正文或 recallContext（通讯回忆）提取玩家与NPC建立的约定
+ * - 代码层根据是否有 recallContext 判断来源（'正文' | '通讯'）
+ * - 新建约定状态默认 '等待中'，由代码层设置
+ * - id 由代码层生成（UID），AI 不输出 id
+ */
+export interface 约定变量事实 {
+  type: 'agreement';
+  /** 约定对象的 NPC id（可选，代码层按 name 匹配兜底） */
+  npcId?: string;
+  /** 约定对象的 NPC 姓名（必填，用于匹配现有NPC） */
+  npcName: string;
+  /** 约定标题（简短，用于后续匹配和展示） */
+  title: string;
+  /** 约定具体内容 */
+  content: string;
+  /** 游戏内时间（时间锚点，可选） */
+  约定时间?: string;
+  /** 履行/违约后果描述（可选） */
+  后果?: string;
+  evidence?: string;
+}
+
+/**
+ * 约定状态变更事实（阶段1新增·清理环）
+ * - 由 variableModel 从正文提取约定履行/违约/作废信号
+ * - 代码层按 npcId+npcName+title 模糊匹配现有约定，变更状态
+ * - 状态变更后不再注入（注入环只注入'等待中'），但保留历史
+ */
+export interface 约定状态变更事实 {
+  type: 'agreement_status';
+  npcId?: string;
+  npcName: string;
+  /** 匹配现有约定的标题（模糊匹配） */
+  title: string;
+  /** 新状态 */
+  新状态: '已履行' | '已违约' | '已作废';
+  evidence?: string;
+}
+
 export type 变量事实 =
   | 旅人档案变量事实
   | 时间变量事实
@@ -166,7 +209,9 @@ export type 变量事实 =
   | 物品变量事实
   | 世界事件变量事实
   | 手机来信变量事实
-  | NSFW档案变量事实;
+  | NSFW档案变量事实
+  | 约定变量事实
+  | 约定状态变更事实;
 
 export interface 变量事实批次 {
   facts: 变量事实[];

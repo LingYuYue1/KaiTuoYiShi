@@ -1,0 +1,48 @@
+{
+  "data": [
+    {
+      "id": "page-landing",
+      "title": "启动首页",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1753024800000,
+      "canvasData": {
+        "x": 60,
+        "y": -36,
+        "group": 0,
+        "deviceType": "freeSize",
+        "windowSize": {
+          "width": 1563,
+          "height": 1025
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/landing.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-game-main",
+      "title": "游戏主界面",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1753024800000,
+      "canvasData": {
+        "x": 732,
+        "y": -48,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/game-main.html",
+        "interactions": []
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": false,
+    "deviceType": "desktop",
+    "projectName": "开拓轶事 · UI 展示",
+    "visualEditorEnabled": true,
+    "showEdge": true
+  }
+}

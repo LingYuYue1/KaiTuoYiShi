@@ -2,6 +2,11 @@ import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import type { 剧情编织门禁快照 } from '@/services/storyWeaving';
 
+/** 与 R1 适配器（services/storyRuntime/storyWeavingRuntimeAdapter.storyUnitIdOfSegment）一致的稳定单元 ID 规则。 */
+function storyUnitIdOfSegment(segment: 剧情编织分段): string {
+  return 'unit:' + segment.id;
+}
+
 export function getCurrentStoryChapterLabel(system: 剧情编织系统): string {
   const normalized = 归一化剧情编织系统(system);
   const series = getActiveSeries(normalized);
@@ -12,18 +17,34 @@ export function getCurrentStoryChapterLabel(system: 剧情编织系统): string 
   return `${series.标题} · ${chapter}`;
 }
 
-export function autoAlignCanonStoryProgress(params: {
+export type 联合裁决决策 = 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause';
+
+export interface 剧情编织推进诊断 {
+  /** 归一化后的原系统；诊断绝不修改运行状态或进度锚点。 */
+  system: 剧情编织系统;
+  wouldProgress: boolean;
+  targetSegmentId?: string;
+  reasons: string[];
+  completionScore: number;
+  evidenceTurns: number;
+}
+
+/**
+ * 只读诊断（R2）：按旧关键词评分规则计算「是否建议推进、目标分段、理由」，但绝不写入。
+ * 普通回合不再由 autoAlignCanonStoryProgress 修改剧情进度；真实推进只来自联合裁决回执。
+ */
+export function diagnoseCanonStoryProgress(params: {
   storyWeaving: 剧情编织系统;
   turnCount: number;
   body: string;
   userInput: string;
   currentLocation?: string;
   gateSnapshot?: 剧情编织门禁快照 | null;
-}): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
+}): 剧情编织推进诊断 {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
   const series = getActiveSeries(normalized);
   if (!series || series.激活注入 === false) {
-    return { system: normalized, changed: false, progressed: false };
+    return { system: normalized, wouldProgress: false, reasons: ['剧情编织未启用或缺少激活系列'], completionScore: 0, evidenceTurns: 0 };
   }
   const segments = [...series.分段列表]
     .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成')
@@ -32,53 +53,32 @@ export function autoAlignCanonStoryProgress(params: {
   if (rawCurrent && ['已经历', '已跳过', '已偏离', '暂停'].includes(rawCurrent.运行状态)) {
     const next = segments.find((segment) => segment.组号 > rawCurrent.组号 && segment.运行状态 === '未开始');
     if (next) {
-      const nextSeries: 剧情编织系列 = {
-        ...series,
-        当前分段组号: next.组号,
-        分段列表: series.分段列表.map((segment) =>
-          segment.id === next.id
-            ? { ...segment, 运行状态: '当前' as const, updatedAt: Date.now() }
-            : segment,
-        ),
-        updatedAt: Date.now(),
+      return {
+        system: normalized,
+        wouldProgress: true,
+        targetSegmentId: next.id,
+        reasons: [`后台发现锚点分段「${rawCurrent.标题}」已归档，建议迁移到下一分段「${next.标题}」`],
+        completionScore: 0,
+        evidenceTurns: 0,
       };
-      const nextSystem = 归一化剧情编织系统({
-        ...normalized,
-        当前系列ID: series.id,
-        系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
-        当前进度: buildProgressAnchor({
-          previous: normalized.当前进度,
-          series,
-          current: next,
-          completedSegment: rawCurrent.运行状态 === '已经历' ? rawCurrent : undefined,
-          turnCount: params.turnCount,
-          reasons: [`后台发现锚点分段「${rawCurrent.标题}」已归档，自动迁移到下一分段`],
-          switchNote: `归档锚点自动迁移到「${next.标题}」`,
-          gateSnapshot: params.gateSnapshot,
-        }),
-      });
-      return { system: nextSystem, changed: true, progressed: false };
     }
   }
   const current = rawCurrent;
   if (!current || current.处理状态 !== '已完成') {
-    return { system: normalized, changed: false, progressed: false };
+    return { system: normalized, wouldProgress: false, reasons: ['当前分段未完成分解或不存在'], completionScore: 0, evidenceTurns: 0 };
   }
 
   const source = `${params.currentLocation ?? ''}\n${params.userInput}\n${params.body}`;
   const crossSeries = params.turnCount >= 4 ? findCrossSeriesCanonAlignment(normalized, series, current, source) : null;
   if (crossSeries) {
-    const nextSystem = switchCanonSeries({
-      normalized,
-      fromSeries: series,
-      fromCurrent: current,
-      toSeries: crossSeries.series,
-      toCurrent: crossSeries.segment,
-      turnCount: params.turnCount,
+    return {
+      system: normalized,
+      wouldProgress: true,
+      targetSegmentId: crossSeries.segment.id,
       reasons: crossSeries.reasons,
-      gateSnapshot: params.gateSnapshot,
-    });
-    return { system: nextSystem, changed: true, progressed: true };
+      completionScore: 0,
+      evidenceTurns: 0,
+    };
   }
 
   const candidates = segments.filter((segment) =>
@@ -107,59 +107,36 @@ export function autoAlignCanonStoryProgress(params: {
     evidenceState,
   });
   if (alignmentDecision.allow && alignmentDecision.target) {
-    const alignedSystem = alignToLaterSegment({
-      normalized,
-      series,
-      current,
-      target: alignmentDecision.target.segment,
-      turnCount: params.turnCount,
+    return {
+      system: normalized,
+      wouldProgress: true,
+      targetSegmentId: alignmentDecision.target.segment.id,
       reasons: alignmentDecision.reasons,
-      currentArchiveStatus: alignmentDecision.currentArchiveStatus,
-      gateSnapshot: params.gateSnapshot,
-    });
-    return { system: alignedSystem, changed: true, progressed: true };
+      completionScore: completionScore.value,
+      evidenceTurns: evidenceState.consecutive,
+    };
   }
-
   if (completionScore.value >= 3 && completionScore.explicitEnding) {
-    const next = segments.find((segment) => segment.组号 > current.组号 && segment.运行状态 === '未开始');
-    const settledSystem = settleCurrentSegment({
-      normalized,
-      series,
-      current,
-      next,
-      turnCount: params.turnCount,
+    return {
+      system: normalized,
+      wouldProgress: true,
       reasons: completionScore.reasons.length ? completionScore.reasons : ['后台判定当前分段已达到结束状态'],
-      mode: next ? 'advance' : 'complete',
-      gateSnapshot: params.gateSnapshot,
-    });
-    return { system: settledSystem, changed: true, progressed: true };
+      completionScore: completionScore.value,
+      evidenceTurns: evidenceState.consecutive,
+    };
   }
-
   if (evidenceState.consecutive >= 2 && progressEvidence.valid) {
-    const next = segments.find((segment) => segment.组号 > current.组号 && segment.运行状态 === '未开始');
-    const settledSystem = settleCurrentSegment({
-      normalized,
-      series,
-      current,
-      next,
-      turnCount: params.turnCount,
-      reasons: uniqueText([
-        `连续 ${evidenceState.consecutive} 回合出现有效推进证据，后台允许当前段归档`,
-        ...progressEvidence.reasons,
-      ], 8),
-      mode: next ? 'advance' : 'complete',
-      gateSnapshot: params.gateSnapshot,
-    });
-    return { system: settledSystem, changed: true, progressed: true };
+    return {
+      system: normalized,
+      wouldProgress: true,
+      reasons: [`连续 ${evidenceState.consecutive} 回合出现有效推进证据，旧规则建议归档`, ...progressEvidence.reasons],
+      completionScore: completionScore.value,
+      evidenceTurns: evidenceState.consecutive,
+    };
   }
-
-  const diagnosticSystem = refreshProgressDiagnostics({
-    normalized,
-    series,
-    current,
-    turnCount: params.turnCount,
-    gateSnapshot: params.gateSnapshot,
-    evidenceState,
+  return {
+    system: normalized,
+    wouldProgress: false,
     reasons: buildNoProgressReasons({
       best,
       currentScore,
@@ -168,12 +145,108 @@ export function autoAlignCanonStoryProgress(params: {
       progressEvidence,
       evidenceState,
     }),
-  });
+    completionScore: completionScore.value,
+    evidenceTurns: evidenceState.consecutive,
+  };
+}
+
+/**
+ * 兼容 helper（R2 起只读）：保留签名与归一化，不再修改剧情进度。
+ * 普通回合的真实推进只来自联合裁决回执（applyAdjudicatedStoryProgress）。
+ */
+export function autoAlignCanonStoryProgress(params: {
+  storyWeaving: 剧情编织系统;
+  turnCount: number;
+  body: string;
+  userInput: string;
+  currentLocation?: string;
+  gateSnapshot?: 剧情编织门禁快照 | null;
+}): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
   return {
-    system: diagnosticSystem,
-    changed: diagnosticSystem !== normalized,
+    system: 归一化剧情编织系统(params.storyWeaving),
+    changed: false,
     progressed: false,
   };
+}
+
+/**
+ * 按联合裁决回执推进剧情编织（R2 唯一正式推进入口）：
+ * - 归档锚点自愈：当前分段已归档（已经历/已跳过/已偏离/暂停）时迁移到下一分段——这是状态一致性修复，
+ *   不是正文推进（decision 保持原值，仅修复进度锚点指向）；
+ * - advance_one：当前分段归档为「已经历」，下一未开始分段进入「当前」，一次推进一格；
+ * - stay / resolve_early / deviate / pause：不修改任何分段运行状态与进度锚点（玩家焦点不移动）。
+ */
+export function applyAdjudicatedStoryProgress(params: {
+  storyWeaving: 剧情编织系统;
+  turnCount: number;
+  decision: 联合裁决决策;
+  completedUnitIds: string[];
+  reasons: string[];
+}): { system: 剧情编织系统; changed: boolean } {
+  const normalized = 归一化剧情编织系统(params.storyWeaving);
+  // 归一化层既有行为：输入锚点已归档时，归一化会自愈到当前运行段（归档锚点自愈，非正文推进）。
+  const inputAnchorId = params.storyWeaving.当前进度?.当前分段ID;
+  const normalizedAnchorId = normalized.当前进度?.当前分段ID;
+  const anchorHealed = Boolean(inputAnchorId && normalizedAnchorId && inputAnchorId !== normalizedAnchorId);
+  const series = getActiveSeries(normalized);
+  if (!series || series.激活注入 === false) {
+    return { system: normalized, changed: anchorHealed };
+  }
+  const segments = [...series.分段列表]
+    .filter((segment) => segment.启用注入 !== false && segment.处理状态 === '已完成')
+    .sort((a, b) => a.组号 - b.组号);
+  const current = getCurrentSegment(series, normalized.当前进度);
+  // 显式自愈兜底：归一化未覆盖的归档锚点（当前段仍是归档状态）时迁移到下一分段。
+  if (current && ['已经历', '已跳过', '已偏离', '暂停'].includes(current.运行状态)) {
+    const next = segments.find((segment) => segment.组号 > current.组号 && segment.运行状态 === '未开始');
+    if (next) {
+      const nextSeries: 剧情编织系列 = {
+        ...series,
+        当前分段组号: next.组号,
+        分段列表: series.分段列表.map((segment) =>
+          segment.id === next.id
+            ? { ...segment, 运行状态: '当前' as const, updatedAt: Date.now() }
+            : segment,
+        ),
+        updatedAt: Date.now(),
+      };
+      const nextSystem = 归一化剧情编织系统({
+        ...normalized,
+        当前系列ID: series.id,
+        系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
+        当前进度: buildProgressAnchor({
+          previous: normalized.当前进度,
+          series,
+          current: next,
+          completedSegment: current.运行状态 === '已经历' ? current : undefined,
+          turnCount: params.turnCount,
+          reasons: [`后台发现锚点分段「${current.标题}」已归档，自动迁移到下一分段`],
+          switchNote: `归档锚点自动迁移到「${next.标题}」`,
+        }),
+      });
+      return { system: nextSystem, changed: true };
+    }
+  }
+  if (params.decision !== 'advance_one') {
+    return { system: normalized, changed: anchorHealed };
+  }
+  if (!current) return { system: normalized, changed: anchorHealed };
+  const currentUnitId = storyUnitIdOfSegment(current);
+  if (!params.completedUnitIds.includes(currentUnitId)) {
+    return { system: normalized, changed: anchorHealed };
+  }
+  const next = segments.find((segment) => segment.组号 > current.组号 && segment.运行状态 === '未开始');
+  const settled = settleCurrentSegment({
+    normalized,
+    series,
+    current,
+    next,
+    turnCount: params.turnCount,
+    reasons: params.reasons.length ? params.reasons : ['联合裁决：当前单元有明确完成证据，推进一格'],
+    mode: next ? 'advance' : 'complete',
+    gateSnapshot: undefined,
+  });
+  return { system: settled, changed: true };
 }
 
 function getActiveSeries(system: 剧情编织系统): 剧情编织系列 | undefined {

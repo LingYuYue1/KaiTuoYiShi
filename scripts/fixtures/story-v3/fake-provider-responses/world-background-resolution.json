@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "story-v3-g0-fake-provider@1",
+  "scenarioId": "world-background-resolution",
+  "responses": [
+    {
+      "responseId": "world_background_due",
+      "service": "world",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：后台事件到期结算的候选输出",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:b5a4eba520e057d8bba3a5c2e379ac613f37de50655cacfcdf1743812a0e9172",
+      "requestSummary": {
+        "turnId": "world_due_027",
+        "purpose": "后台事件到期结算候选",
+        "dueEvent": "event_station_siege"
+      },
+      "rawOutput": "{\"kind\":\"world_due\",\"eventId\":\"event_station_siege\",\"claim\":\"反物质军团进攻被空间站守军击退，事件应进入终态\",\"time\":\"2157-04-26T16:00:00+08:00\",\"reason\":\"后台排期到期结算\",\"factId\":\"fact_station_defense_concluded\"}",
+      "rawOutputSha256": "sha256:342f92fec41b82b913abecd29c5afc6210a28f569748d0fb74ca69f5f5ff3356",
+      "expectedAdjudication": "schedule_due_settlement",
+      "allowedFinalSideEffects": [
+        "resolve:event_station_siege",
+        "convergence_offer:station_defense_aftermath"
+      ]
+    },
+    {
+      "responseId": "main_curio_study",
+      "service": "main",
+      "sourceType": "synthetic_adversarial",
+      "basedOn": "构造样本：玩家持续自由路线、世界后台变化的正常文本",
+      "productionUse": false,
+      "inputStateFingerprint": "sha256:b5a4eba520e057d8bba3a5c2e379ac613f37de50655cacfcdf1743812a0e9172",
+      "requestSummary": {
+        "turnId": "turn_worldbg_028",
+        "playerIntent": "留在奇物收藏室继续研究",
+        "currentFocus": "奇物研究"
+      },
+      "rawOutput": "<thinking>玩家没有参与主线，正文不应强制切换焦点。</thinking>\n<正文>你继续在奇物收藏室调整那件重力奇物，记录数据。螺丝咕姆在一旁协助分析。远处传来警报，但没有影响这里的实验。</正文>\n<短期记忆>玩家持续进行奇物研究。</短期记忆>",
+      "rawOutputSha256": "sha256:c0a4801beb596f342015131bb3e235a00639a9bbe09255598dcf277519837426",
+      "expectedAdjudication": "keep_player_focus",
+      "allowedFinalSideEffects": [
+        "focus_keep:unit_curio_study",
+        "world_pressure:station_siege"
+      ]
+    }
+  ]
+}

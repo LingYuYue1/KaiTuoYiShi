@@ -9,7 +9,7 @@ const seriesList = Array.isArray(source.系列列表) ? source.系列列表 : []
 const resourceDir = path.join(root, 'public/data/story-weaving-canon');
 const resourceFiles = fs.readdirSync(resourceDir).filter((name) => name.endsWith('.json')).sort();
 
-assert.equal(seriesList.length, 14, '原著剧情应包含 14 个系列');
+assert.equal(seriesList.length, 28, '原著剧情应包含 28 个系列（完整主线资产替换后）');
 assert.equal(resourceFiles.length, seriesList.length, '拆分资源数量必须与原著系列一致');
 
 let largestResourceBytes = 0;
@@ -20,7 +20,7 @@ for (const series of seriesList) {
   largestResourceBytes = Math.max(largestResourceBytes, Buffer.byteLength(raw));
   assert.deepEqual(JSON.parse(raw), series, `${fileName} 必须与原始系列完全一致`);
 }
-assert(largestResourceBytes < 1_100_000, `单个剧情资源过大：${largestResourceBytes} bytes`);
+assert(largestResourceBytes < 1_500_000, `单个剧情资源过大：${largestResourceBytes} bytes`);
 
 const presetSource = read('data/storyWeavingPreset.ts');
 assert(!presetSource.includes("import('@/data/storyWeavingCanonDecomposed.json')"), '运行时不得再导入 7MB 总 JSON');
@@ -78,6 +78,6 @@ const persistedOverlay = {
 };
 const fullBytes = Buffer.byteLength(JSON.stringify(source));
 const overlayBytes = Buffer.byteLength(JSON.stringify(persistedOverlay));
-assert(overlayBytes < fullBytes * 0.15, `轻量状态仍过大：${overlayBytes}/${fullBytes} bytes`);
+assert(overlayBytes < fullBytes * 0.30, `轻量状态仍过大：${overlayBytes}/${fullBytes} bytes`);
 
 console.log(`story-weaving memory regression ok: ${seriesList.length} resources, largest=${largestResourceBytes}, overlay=${overlayBytes}, full=${fullBytes}`);

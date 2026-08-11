@@ -31,8 +31,8 @@ assert(saveLoad.includes('state.setGameSettings(preserveLocalApiGameSettings(nex
 
 const recallStart = sendWorkflow.indexOf('const [yitingPreview, zhikuPreview] = await Promise.all([');
 assert(recallStart >= 0, 'pre-main yiting/zhiku recall must remain parallel with Promise.all.');
-const recallBlock = sendWorkflow.slice(recallStart, recallStart + 1800);
-assert(recallBlock.includes('retrieveYitingContextWithModel') && recallBlock.includes('retrieveZhikuContextWithModel'), 'pre-main Promise.all must include both yiting and zhiku recall.');
+const recallBlock = sendWorkflow.slice(recallStart, recallStart + 2600);
+assert(recallBlock.includes('retrieveYitingContextWithModel') && recallBlock.includes('compileZhikuTurnWithModel'), 'pre-main Promise.all must include both yiting and zhiku recall.');
 
 assert(sendWorkflow.includes("state.gameSettings.backgroundTaskMode ?? 'sequential'"), 'send workflow must read backgroundTaskMode with sequential fallback.');
 assert(sendWorkflow.includes('runNewsBackgroundJob()'), 'send workflow must isolate news background job.');

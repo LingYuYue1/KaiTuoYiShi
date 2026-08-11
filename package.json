@@ -123,5 +123,19 @@
     "typescript": "~5.8.0",
     "vite": "^6.2.0",
     "wrangler": "^4.95.0"
-  }
+  },
+  "main": "postcss.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LingYuYue1/KaiTuoYiShi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/LingYuYue1/KaiTuoYiShi/issues"
+  },
+  "homepage": "https://github.com/LingYuYue1/KaiTuoYiShi#readme"
 }

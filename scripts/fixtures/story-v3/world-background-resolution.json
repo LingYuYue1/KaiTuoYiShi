@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "world-background-resolution",
+  "title": "玩家不在场，后台事件自行推进并结束",
+  "playerFacingExpectation": "玩家完全不参与主线时，世界后台事件按时间独立结算并结束，玩家线不被强制切换，结算结果以交汇邀请形式可选承接。",
+  "fixedNow": 1735691400000,
+  "initialStateFingerprint": "sha256:b5a4eba520e057d8bba3a5c2e379ac613f37de50655cacfcdf1743812a0e9172",
+  "baselineSignificance": [
+    "旧系统没有游戏时间唯一写入者、排期或到期扫描：没有任何正式调度调用能让后台事件结算。",
+    "世界后台事件只能作为字符串存在，没有 reducer 可推进其状态；玩家线在旧正文评分逻辑下停留在原地。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_worldbg",
+      "revision": 20,
+      "turnCount": 26,
+      "gameTime": "2157-04-26T14:30:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·奇物收藏室",
+    "playerFocusId": "focus_curio_study",
+    "eventInstances": [
+      {
+        "eventId": "event_station_siege",
+        "state": "approaching"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "空间站外侧的反物质军团正在缓慢集结。"
+    ],
+    "terminalEvents": [
+      {
+        "name": "末日兽",
+        "aliases": [
+          "末日兽"
+        ]
+      }
+    ]
+  },
+  "storySetup": {
+    "seriesId": "series_herta_worldbg",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_curio_study",
+    "units": [
+      {
+        "id": "unit_curio_study",
+        "number": 1,
+        "title": "奇物收藏室研究",
+        "summary": "玩家在奇物收藏室研究异常重力气动奇物",
+        "endStates": [
+          "奇物研究阶段性完成"
+        ],
+        "followups": [
+          "继续下一件奇物的研究"
+        ],
+        "characters": [
+          "螺丝咕姆"
+        ],
+        "locations": [
+          "奇物收藏室"
+        ],
+        "status": "current"
+      },
+      {
+        "id": "unit_station_defense",
+        "number": 2,
+        "title": "空间站防卫战",
+        "summary": "反物质军团进攻空间站，列车组与空间站守军展开防卫战",
+        "endStates": [
+          "军团进攻被击退"
+        ],
+        "followups": [
+          "战后清点与修复"
+        ],
+        "characters": [
+          "三月七",
+          "丹恒",
+          "艾丝妲"
+        ],
+        "locations": [
+          "基座舱段"
+        ],
+        "status": "pending"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "world_due_027",
+      "kind": "world_due",
+      "turnCount": 27,
+      "playerInput": "",
+      "currentLocation": "黑塔空间站·奇物收藏室",
+      "responseRefs": [
+        "world_background_due"
+      ]
+    },
+    {
+      "stepId": "turn_worldbg_028",
+      "kind": "main_turn",
+      "turnCount": 28,
+      "playerInput": "我继续在奇物收藏室调整那件重力奇物，不打算去基座舱段。",
+      "currentLocation": "黑塔空间站·奇物收藏室",
+      "playerIntention": "bypass",
+      "requiresTerminalSupersession": true,
+      "responseRefs": [
+        "main_curio_study"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+      "WORLD_DUE_CLAIM_PARSED",
+      "WORLD_DUE_CLAIM_VALID",
+      "WORLD_DUE_EVENT_HAS_NO_CURRENT_REDUCER"
+    ],
+    "expectedMetrics": {
+      "terminal_event_supersession_gap_count": 1,
+      "world_due_event_stall_count": 1
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "游戏时间唯一写入者 + 排期 + 到期扫描独立结算后台事件",
+      "玩家线不得被世界事件强制切换，结算结果进入交汇队列供玩家可选承接",
+      "后台事件达到终态后只产生余波投影，不重演"
+    ],
+    "allowedFinalSideEffects": [
+      "resolve:event_station_siege（后台结算）",
+      "convergence_offer:station_defense_aftermath",
+      "fact:station_defense_concluded",
+      "focus_keep:unit_curio_study"
+    ]
+  },
+  "reviewQuestion": "玩家不参与时，世界后台事件应该独立结算并生成可选的交汇邀请，而不是静止或强拉玩家，对吗？"
+}

@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "reroll-cas-failure",
+  "title": "重 roll、读档、过期结果或同时写入造成的分支串线风险",
+  "playerFacingExpectation": "重 roll 或读档之后，旧分支的结果不能写进新分支；过期回合的正文、世界事件和事实提交必须被拒绝，不能出现半提交和 last-write-wins。",
+  "fixedNow": 1735692600000,
+  "initialStateFingerprint": "sha256:bbefa0b7a3aa55babc4308004dd8a6d45330725ac8d95b58fd2f1bdf4d5edf90",
+  "baselineSignificance": [
+    "旧系统没有 branch/CAS：世界、记忆、变量、剧情、新闻、手机分阶段 setter，快照覆盖多切片，存在半提交和 last-write-wins。",
+    "重 roll 恢复旧快照后，旧分支的正文仍可完整展示并追加世界字符串。"
+  ],
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_reroll",
+      "revision": 31,
+      "turnCount": 40,
+      "gameTime": "2157-04-26T16:50:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·基座舱段",
+    "playerFocusId": "focus_post_battle",
+    "eventInstances": [
+      {
+        "eventId": "event_doomsday_beast",
+        "state": "terminal"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "末日兽已在先前分支被击退，残骸回收中。"
+    ],
+    "terminalEvents": [
+      {
+        "name": "末日兽",
+        "aliases": [
+          "末日兽"
+        ]
+      }
+    ]
+  },
+  "storySetup": {
+    "seriesId": "series_herta_reroll",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_aftermath",
+    "units": [
+      {
+        "id": "unit_aftermath",
+        "number": 1,
+        "title": "战后善后",
+        "summary": "玩家参与战后善后与残骸回收",
+        "endStates": [
+          "善后完成"
+        ],
+        "followups": [
+          "确认空间站恢复运转"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "基座舱段"
+        ],
+        "status": "current"
+      },
+      {
+        "id": "unit_legion_next",
+        "number": 2,
+        "title": "军团新动向",
+        "summary": "调查反物质军团在空间站周边的新动向",
+        "endStates": [
+          "确认军团新动向"
+        ],
+        "followups": [
+          "决定应对方案"
+        ],
+        "characters": [
+          "丹恒"
+        ],
+        "locations": [
+          "主控舱段"
+        ],
+        "status": "pending"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "reroll_conflict_041",
+      "kind": "reroll_conflict",
+      "turnCount": 41,
+      "playerInput": "",
+      "currentLocation": "黑塔空间站·基座舱段",
+      "responseRefs": []
+    },
+    {
+      "stepId": "turn_reroll_041",
+      "kind": "main_turn",
+      "turnCount": 41,
+      "playerInput": "读档之后，我回到了末日兽战斗还没开始的时间点。",
+      "currentLocation": "黑塔空间站·基座舱段",
+      "requiresTerminalSupersession": true,
+      "responseRefs": [
+        "main_stale_branch_body"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "LEGACY_STORY_PROGRESS_STAYED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "PERSISTED_BRANCH_CAS_UNAVAILABLE",
+      "TERMINAL_EVENT_ALIAS_APPENDED",
+      "TERMINAL_EVENT_NARRATIVE_REPLAY",
+      "TERMINAL_EVENT_SUPERSESSION_UNAVAILABLE",
+      "WORLD_EVENT_STRING_DIRECT_APPEND"
+    ],
+    "expectedMetrics": {
+      "duplicate_event_instance_count": 1,
+      "duplicate_public_fact_count": 1,
+      "illegal_narrative_replay_count": 1,
+      "projection_duplicate_count": 1,
+      "stale_revision_commit_count": 1,
+      "terminal_event_supersession_gap_count": 1
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "重 roll/读档必须带 runtimeBranchId + revision 的 CAS 提交，过期提交拒绝",
+      "旧分支结果不得覆盖新分支，也不能进入新分支的世界事件字符串",
+      "回合快照回滚不能丢失已提交事实；outbox 需要幂等索引"
+    ],
+    "allowedFinalSideEffects": [
+      "accept:reroll_body_rewritten",
+      "rollback_to:save_node（不含旧分支事实）"
+    ]
+  },
+  "reviewQuestion": "重 roll 或读档后，旧分支的结果不应该覆盖当前分支，对吗？"
+}

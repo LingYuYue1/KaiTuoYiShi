@@ -27,11 +27,13 @@ export function retrieveYitingContext(
   system: 忆庭系统 | undefined,
   query: string,
   limit: number,
+  npcNameMap?: Record<string, string>,
+  categoryFilter?: '正文' | '通讯' | 'all',
 ): 忆庭召回结果 {
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '' };
   }
-  const candidates = buildRecallCandidates(system, query, 24, 6);
+  const candidates = buildRecallCandidates(system, query, 24, 6, categoryFilter);
   const fallback = buildLocalRecallFallback(candidates, limit);
   const entries = [...fallback.strongEntries, ...fallback.weakEntries];
   if (!entries.length) return { entries, strongEntries: [], weakEntries: [], injection: '', previewText: fallback.previewText };
@@ -40,7 +42,7 @@ export function retrieveYitingContext(
     entries,
     strongEntries: fallback.strongEntries,
     weakEntries: fallback.weakEntries,
-    injection: buildYitingInjection(fallback.strongEntries, fallback.weakEntries),
+    injection: buildYitingInjection(fallback.strongEntries, fallback.weakEntries, npcNameMap),
     previewText: fallback.previewText,
   };
 }
@@ -54,18 +56,20 @@ export async function retrieveYitingContextWithModel(
   signal?: AbortSignal,
   retryCount = 2,
   promptModules?: 提示词模块[],
+  npcNameMap?: Record<string, string>,
+  categoryFilter?: '正文' | '通讯' | 'all',
 ): Promise<忆庭召回结果> {
   if (!system?.回忆档案?.length || !query.trim()) {
     return { entries: [], injection: '', usedModel: false };
   }
 
-  const fallback = retrieveYitingContext(system, query, limit);
+  const fallback = retrieveYitingContext(system, query, limit, npcNameMap, categoryFilter);
   const api = resolveYitingRecallConfig(mainConfig, settings);
   if (!api.baseUrl || !api.apiKey || !api.model) {
     return fallback;
   }
 
-  const candidates = buildRecallCandidates(system, query, 24, 6);
+  const candidates = buildRecallCandidates(system, query, 24, 6, categoryFilter);
   if (!candidates.length) return fallback;
 
   const candidateText = candidates
@@ -117,7 +121,7 @@ export async function retrieveYitingContextWithModel(
       entries,
       strongEntries: picked.strongEntries,
       weakEntries: picked.weakEntries,
-      injection: buildYitingInjection(picked.strongEntries, picked.weakEntries),
+      injection: buildYitingInjection(picked.strongEntries, picked.weakEntries, npcNameMap),
       usedModel: true,
       rawText,
       previewText: picked.previewText,
@@ -166,8 +170,13 @@ function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系
   };
 }
 
-function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6): 剧情回忆候选[] {
-  const entries = [...(system.回忆档案 ?? [])].sort((a, b) => a.回合 - b.回合);
+function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6, categoryFilter?: '正文' | '通讯' | 'all'): 剧情回忆候选[] {
+  const allEntries = [...(system.回忆档案 ?? [])];
+  // 阶段1·分类过滤：支持按 '正文' | '通讯' | 'all' 过滤忆庭条目（默认全部，向前兼容）
+  const filtered = categoryFilter && categoryFilter !== 'all'
+    ? allEntries.filter((entry) => (entry.分类 ?? '正文') === categoryFilter)
+    : allEntries;
+  const entries = filtered.sort((a, b) => a.回合 - b.回合);
   const terms = extractRecallTerms(query);
   const scored = entries.map((entry, index) => ({
     entry,
@@ -235,21 +244,66 @@ function normalizeRecallName(raw: string): string {
   return `回忆${String(Number(match[1])).padStart(3, '0')}`;
 }
 
-function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆条目[]): string {
+function buildYitingInjection(
+  strongEntries: 回忆条目[],
+  weakEntries: 回忆条目[],
+  npcNameMap?: Record<string, string>,
+): string {
   if (!strongEntries.length && !weakEntries.length) return '';
-  const strongBlocks = strongEntries.map((entry) => {
+
+  // 阶段1：recall分档注入（方案C）
+  // 召回≤6全原文, >6条Top5原文+其余摘要
+  const totalCount = strongEntries.length + weakEntries.length;
+  const ORIGINAL_THRESHOLD = 6;
+  const TOP_K_ORIGINAL = 5;
+
+  // Top5优先从strong取，不足从weak补
+  const strongOriginalCount = totalCount <= ORIGINAL_THRESHOLD
+    ? strongEntries.length
+    : Math.min(strongEntries.length, TOP_K_ORIGINAL);
+  const weakOriginalCount = totalCount <= ORIGINAL_THRESHOLD
+    ? weakEntries.length
+    : Math.max(0, TOP_K_ORIGINAL - strongOriginalCount);
+
+  // 阶段1方案E·第二层防护：来源标记
+  // 分类='通讯'的条目，注入时标记【通讯回忆】(对方:NPC名字)
+  // NPC名字优先从 npcNameMap 查找，找不到则用 id 兜底
+  const resolveContactName = (entry: 回忆条目): string | null => {
+    if (entry.分类 !== '通讯') return null;
+    const contactId = entry.通讯元数据?.联系人;
+    if (!contactId) return null;
+    return npcNameMap?.[contactId] ?? contactId;
+  };
+
+  const buildBlock = (entry: 回忆条目, useOriginal: boolean): string => {
     const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
-    return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
-  });
-  const weakBlocks = weakEntries.map((entry) => {
-    const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
-    return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
-  });
+    const contactName = resolveContactName(entry);
+    const sourceTag = contactName ? `【通讯回忆】(对方:${contactName})` : '【正文回忆】';
+    if (useOriginal) {
+      // 注入原文层（完整原文，不截断）
+      const original = entry.原文?.trim() || entry.摘要 || '（无原文）';
+      return `${sourceTag} ${title}：\n${original}`;
+    }
+    // 注入摘要层
+    return `${sourceTag} ${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
+  };
+
+  const strongBlocks = strongEntries.map((entry, i) =>
+    buildBlock(entry, i < strongOriginalCount),
+  );
+  const weakBlocks = weakEntries.map((entry, i) =>
+    buildBlock(entry, i < weakOriginalCount),
+  );
+
+  const injectionMode = totalCount <= ORIGINAL_THRESHOLD
+    ? `${totalCount}条全部原文注入`
+    : `Top${TOP_K_ORIGINAL}原文+其余摘要注入`;
+
   return [
     '# 即时剧情回顾｜剧情回忆',
     '',
     '【剧情回忆】',
-    '以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料。这里注入的是概要层纪要，不是正文原文；若与当前已发生剧情冲突，以当前剧情为准。',
+    `以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料（${injectionMode}）。若与当前已发生剧情冲突，以当前剧情为准。`,
     '',
     '强回忆：',
     strongBlocks.length ? strongBlocks.join('\n\n') : '无',

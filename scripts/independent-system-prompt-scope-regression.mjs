@@ -18,7 +18,8 @@ const expectedMatchers = {
   phoneImported: "(id) => id.startsWith('st_import_phone_')",
   variablePrefix: "(id) => id.startsWith('builtin_variable_')",
   variableCompanion: "(id) => id === 'builtin_companion_archive_worldbook'",
-  zhiku: "zhiku: [(id) => id.startsWith('builtin_zhiku_')]",
+  zhikuBuiltin: "(id) => id.startsWith('builtin_zhiku_')",
+  zhikuCustom: "(id) => id.startsWith('custom_zhiku_')",
   yitingRecall: "yitingRecall: [(id) => id === 'builtin_yiting_recall']",
   yitingArchive: "yitingArchive: [(id) => id.startsWith('builtin_yiting_archive_')]",
   storyWeaving: "storyWeaving: [(id) => id.startsWith('builtin_story_weaving_')]",
@@ -42,7 +43,10 @@ for (const [target, file] of Object.entries(files)) {
   const text = read(file);
   assert(text.includes("@/services/promptModuleScopes"), `${file} must import independent prompt scope helper`);
   const callTarget = target === 'yitingRecall' ? 'yitingRecall' : target;
-  assert(text.includes(`buildIndependentPromptModulesSection(promptModules, '${callTarget}'`), `${file} must use ${callTarget} scoped prompt modules`);
+  // 智库V3 改用 filterIndependentPromptModules 获取数组后自定义拼接，其余系统仍用 buildIndependentPromptModulesSection
+  const usesBuild = text.includes(`buildIndependentPromptModulesSection(promptModules, '${callTarget}'`);
+  const usesFilter = text.includes(`filterIndependentPromptModules(promptModules, '${callTarget}'`);
+  assert(usesBuild || usesFilter, `${file} must use ${callTarget} scoped prompt modules (via build or filter helper)`);
   assert(!text.includes(".filter((m) => m.enabled && m.scope?.includes('calibration'))"), `${file} must not read the whole calibration prompt pool`);
   assert(!text.includes(".filter((m) => m.enabled && m.scope?.includes('calibration') && m.category === 'format')"), `${file} must not read the whole calibration format pool`);
 }

@@ -6,8 +6,28 @@ import { 创建空世界状态, 归一化世界状态 } from '@/models/world';
 import type { 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
 import { 创建空记忆系统 } from '@/models/memory';
-import type { 忆庭系统 } from '@/models/yiting';
+import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 import { 创建空忆庭系统 } from '@/models/yiting';
+
+/** 阶段1主链压缩三阶段弹窗状态（remind→processing→review） */
+export interface MemorySummaryFlowState {
+  open: boolean;
+  stage: 'remind' | 'processing' | 'review' | 'failed';
+  /** remind阶段：各层待压缩条数 */
+  pendingInfo?: {
+    即时待压缩: number;
+    短期待压缩: number;
+    中期待压缩: number;
+  };
+  /** review阶段：AI生成的压缩草稿（archives），玩家可编辑summary字段 */
+  drafts?: 回忆条目[];
+  /** failed阶段：错误信息 */
+  errors?: string[];
+  /** 压缩请求来源回合：所有会修改记忆的结算完成后的最终切片 */
+  sourceTurn?: number;
+  /** 创建压缩请求时的记忆指纹：确认时校验，来源已变化则拒绝旧结果覆盖 */
+  sourceFingerprint?: string;
+}
 import type { 智库系统 } from '@/models/zhiku';
 import { 创建空智库系统 } from '@/models/zhiku';
 import type { 手机系统 } from '@/models/phone';
@@ -207,6 +227,9 @@ export interface UseGameStateReturn {
   setChatHistory: React.Dispatch<React.SetStateAction<聊天消息[]>>;
   记忆: 记忆系统;
   set记忆: React.Dispatch<React.SetStateAction<记忆系统>>;
+  /** 阶段1主链压缩三阶段弹窗 */
+  memorySummaryFlow: MemorySummaryFlowState;
+  setMemorySummaryFlow: React.Dispatch<React.SetStateAction<MemorySummaryFlowState>>;
   忆庭: 忆庭系统;
   set忆庭: React.Dispatch<React.SetStateAction<忆庭系统>>;
   智库: 智库系统;
@@ -260,12 +283,36 @@ export interface UseGameStateReturn {
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
 
+const SENSITIVE_INIT_PARAM_RE =
+  /([?&](?:key|api_key|apikey|token|access_token|authorization|auth)=)[^&#]*/gi;
+
+/** 启动错误日志脱敏：不包含 API Key / 云端 token 或带敏感查询参数的 URL。 */
+export function sanitizeBootstrapErrorText(text: string): string {
+  return text.replace(SENSITIVE_INIT_PARAM_RE, '$1[REDACTED]');
+}
+
+/**
+ * 启动初始化单模块执行器：独立错误隔离。某个 IndexedDB 值损坏 / 某个 bundled asset 加载失败 /
+ * 一次 saveSetting 失败都不会阻断后续模块初始化；错误日志带模块名但不含敏感凭据。
+ */
+export async function runIsolatedBootstrapStep(module: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.warn(
+      `[bootstrap:${module}] 初始化失败，已跳过该模块`,
+      sanitizeBootstrapErrorText(err instanceof Error ? err.message : String(err)),
+    );
+  }
+}
+
 export function useGameState(): UseGameStateReturn {
   const [view, setView] = useState<ViewState>('home');
   const [旅人, set旅人] = useState<角色数据结构>(创建空角色);
   const [世界, set世界] = useState<世界状态>(() => 归一化世界状态(创建空世界状态()));
   const [chatHistory, setChatHistory] = useState<聊天消息[]>([]);
   const [记忆, set记忆] = useState<记忆系统>(创建空记忆系统);
+  const [memorySummaryFlow, setMemorySummaryFlow] = useState<MemorySummaryFlowState>({ open: false, stage: 'remind' });
   const [忆庭, set忆庭] = useState<忆庭系统>(创建空忆庭系统);
   const [智库, set智库] = useState<智库系统>(创建空智库系统);
   const [手机, set手机] = useState<手机系统>(创建空手机系统);
@@ -294,153 +341,181 @@ export function useGameState(): UseGameStateReturn {
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Load persisted settings on mount
-  useEffect(() => {
-    (async () => {
-      const recoveryJournal = await loadWorkflowRecoveryJournal();
-      if (recoveryJournal) {
-        setInterruptedWorkflow(recoveryJournal);
-        setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
-      }
-
-      const savedTheme = await loadSetting<主题预设>('theme');
-      if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
-
-      const savedApi = await loadSetting<API设置>('apiSettings');
-      if (savedApi) setApiSettings(savedApi);
-
-      const savedGame = await loadSetting<游戏设置>('gameSettings');
-      if (savedGame) {
-        // 兼容旧存档：variableApi 是新字段，缺失时用默认覆盖
-        const defaults = 创建默认游戏设置();
-        const merged: 游戏设置 = {
-          ...defaults,
-          ...savedGame,
-          新闻系统: 归一化星际和平周报设置(savedGame.新闻系统),
-          手机系统: 归一化手机系统设置(savedGame.手机系统),
-          智库系统: 归一化智库系统设置(savedGame.智库系统),
-          剧情编织系统: 归一化剧情编织系统设置(savedGame.剧情编织系统),
-          文生图系统: 归一化文生图系统设置(savedGame.文生图系统),
-          记忆系统: 归一化记忆系统设置(savedGame.记忆系统),
-          额外功能: 归一化额外功能设置(savedGame.额外功能),
-          variableApi: savedGame.variableApi ?? defaults.variableApi,
-          enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
-          deepSeekMainMode: savedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
-          backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
-          enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
-          enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
-          enablePlayerSpeechExpansion: savedGame.enableNoControl === true ? false : savedGame.enablePlayerSpeechExpansion === true,
-          visualTextSettings: 归一化视觉文本设置(savedGame.visualTextSettings),
-          promptModules: migratePromptModules(savedGame),
-          // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移
-          // 与 saveLoadWorkflow.ts 手动加载路径保持一致，避免两条加载路径迁移逻辑不一致
-          stPresets: migrateStPresetOrders(savedGame.stPresets),
-          promptModuleOrderVersion: 1,
-        };
-        // 迁移后清空 legacy customPrompt，避免下次启动重复追加
-        if (savedGame.customPrompt && merged.promptModules.some((m) => m.id === 'legacy_custom')) {
-          merged.customPrompt = '';
-        }
-        setGameSettings(merged);
-      }
-
-      try {
-        const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
-        const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
-        set剧情编织(mergedStoryWeaving);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
-      } catch (err) {
-        console.warn('[story-weaving] preset 加载失败，回退到本地已存剧情编织:', err);
-        const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        if (isSelfContainedStoryWeavingSystem(savedStoryWeaving)) {
-          set剧情编织(归一化剧情编织系统(savedStoryWeaving));
-        } else if (savedStoryWeaving) {
-          console.warn('[story-weaving] 本地状态是轻量缓存，缺少原著正文；等待下次启动重新加载内置资源。');
-        }
-      }
-
-      try {
-        const catalogResult = await loadBundledZhikuCatalogWithFallback();
-        const preset = catalogResult.system;
-        if (catalogResult.source === 'cache') {
-          console.warn('[zhiku] 新目录加载失败，已继续使用最后一份完整目录:', catalogResult.loadError);
-        }
-        const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
-        const mergedZhiku = composeZhikuSystem(preset, savedZhiku);
-        set智库(mergedZhiku);
-        await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
-      } catch (err) {
-        console.warn('[zhiku-v3] 当前目录与最后完整目录缓存均不可用，仅恢复 V3 自制资料:', err);
-        const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
-        if (savedZhiku) {
-          set智库(buildZhikuCustomSystem(savedZhiku));
-        }
-      }
-
-      // Worldbooks 加载策略:
-      // - savedWorldbooks === null   → 首次启动,把预设写入 IndexedDB(玩家之后可自由修改/删除)
-      // - savedWorldbooks 是数组     → 玩家已与世界书交互过,完全尊重其状态,不再覆盖
-      const builtins = createBuiltinWorldbooks();
-      const rawSavedWorldbooks = await loadSetting<世界书[]>(WORLDBOOK_STORAGE_KEY);
-      // 旧版本只有 'builtin_core_config' 一本内置；现在已拆为 6 本，老用户库里这本要丢弃。
-      // 同样：CoT 已从世界书迁移到提示词模块系统，旧的 'builtin_cot' 本也要丢弃。
-      // 它里面的 'builtin_first_turn_rule' 条目已经被新的 'builtin_opening_rule' 本继承。
-      // normalize 把 turnGuard='first_only' 迁移成 scope=['opening']。
-      const savedWorldbooks = rawSavedWorldbooks
-        ? normalizeWorldbooks(
-            rawSavedWorldbooks.filter(
-              (b) =>
-                b.id !== 'builtin_core_config' &&
-                b.id !== 'builtin_cot' &&
-                !REMOVED_LEGACY_WORLDBOOK_IDS.has(b.id),
-            ),
-          )
-        : rawSavedWorldbooks;
-
-      if (savedWorldbooks === null) {
-        try {
-          const presets = await loadAllBundledWorldbookPresets();
-          const initial = [...builtins, ...presets];
-          setWorldbooks(initial);
-          await saveSetting(WORLDBOOK_STORAGE_KEY, initial);
-        } catch (err) {
-          console.warn('[opening-worldbook] preset 加载失败,使用内置空集:', err);
-          setWorldbooks(builtins);
-        }
-      } else if (savedWorldbooks.length) {
-        const builtinIds = new Set(builtins.map((b) => b.id));
-        const userBooks = savedWorldbooks.filter((b) => !builtinIds.has(b.id));
-        const merged = builtins.map((builtin) => {
-          const saved = savedWorldbooks.find((b) => b.id === builtin.id);
-          if (!saved) return builtin;
-          // calibration 内置世界书只是独立模型真实 prompt 的只读资料展示。
-          // 新闻/手机/变量等服务层直接 import 源码常量，旧存档里的编辑/关闭不会影响真实 API；
-          // 因此这里必须回到源码最新版，避免 UI 展示与真实请求再次分叉。
-          if (isCalibrationWorldbook(builtin)) return builtin;
-          const savedEntries = saved.entries || [];
-          const entries = builtin.entries.map((entry) => {
-            const savedEntry = savedEntries.find((item) => item.id === entry.id);
-            if (!savedEntry) return entry;
-            // D12(2026-07-26): 源码条目声明了更高 contentVersion 时强制刷新内容,只保留用户开关。
-            // 修复"内置世界书条目内容对老用户永不更新"的漂移缺陷。
-            if ((entry.contentVersion ?? 0) > (savedEntry.contentVersion ?? 0)) {
-              return { ...entry, enabled: savedEntry.enabled };
-            }
-            return { ...savedEntry, title: entry.title };
-          });
-          return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
+  // Load persisted settings on mount —— 分模块错误隔离：
+// 恢复日志 / 主题 / API 设置 / 游戏设置 / 剧情编织 / 智库 / 世界书 / 存档存在状态
+// 各自独立 try/catch，单模块损坏不阻断其余模块；最外层再兜底防 unhandled rejection。
+useEffect(() => {
+  (async () => {
+    try {
+      await runIsolatedBootstrapStep('recovery', async () => {
+          const recoveryJournal = await loadWorkflowRecoveryJournal();
+          if (recoveryJournal) {
+            setInterruptedWorkflow(recoveryJournal);
+            setWorkflowHint('上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。');
+          }
         });
-        const nextWorldbooks = [...merged, ...userBooks];
-        setWorldbooks(nextWorldbooks);
-        await saveSetting(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
-      } else {
-        setWorldbooks(builtins);
-        await saveSetting(WORLDBOOK_STORAGE_KEY, builtins);
-      }
 
-      const saveExists = await hasAnySave();
-      setHasSave(saveExists);
+        await runIsolatedBootstrapStep('theme', async () => {
+          const savedTheme = await loadSetting<主题预设>('theme');
+          if (savedTheme) setCurrentTheme(normalizeThemeId(savedTheme) as 主题预设);
+        });
+
+        await runIsolatedBootstrapStep('apiSettings', async () => {
+          const savedApi = await loadSetting<API设置>('apiSettings');
+          if (savedApi) setApiSettings(savedApi);
+        });
+
+        await runIsolatedBootstrapStep('gameSettings', async () => {
+          const savedGame = await loadSetting<游戏设置>('gameSettings');
+          if (savedGame) {
+            // 兼容旧存档：variableApi 是新字段，缺失时用默认覆盖
+            const defaults = 创建默认游戏设置();
+            const merged: 游戏设置 = {
+              ...defaults,
+              ...savedGame,
+              新闻系统: 归一化星际和平周报设置(savedGame.新闻系统),
+              手机系统: 归一化手机系统设置(savedGame.手机系统),
+              智库系统: 归一化智库系统设置(savedGame.智库系统),
+              剧情编织系统: 归一化剧情编织系统设置(savedGame.剧情编织系统),
+              文生图系统: 归一化文生图系统设置(savedGame.文生图系统),
+              记忆系统: 归一化记忆系统设置(savedGame.记忆系统),
+              额外功能: 归一化额外功能设置(savedGame.额外功能),
+              variableApi: savedGame.variableApi ?? defaults.variableApi,
+              enableClaudeMode: savedGame.enableClaudeMode ?? defaults.enableClaudeMode,
+              deepSeekMainMode: savedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
+              backgroundTaskMode: savedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
+              enableCacheDiagnostics: savedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
+              enableMaleNsfwArchive: savedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
+              enablePlayerSpeechExpansion: savedGame.enableNoControl === true ? false : savedGame.enablePlayerSpeechExpansion === true,
+              visualTextSettings: 归一化视觉文本设置(savedGame.visualTextSettings),
+              promptModules: migratePromptModules(savedGame),
+              // 方案 A 三层 order 区间迁移：预设库里的 ST 模块也要 +50 偏移
+              // 与 saveLoadWorkflow.ts 手动加载路径保持一致，避免两条加载路径迁移逻辑不一致
+              stPresets: migrateStPresetOrders(savedGame.stPresets),
+              promptModuleOrderVersion: 1,
+            };
+            // 迁移后清空 legacy customPrompt，避免下次启动重复追加
+            if (savedGame.customPrompt && merged.promptModules.some((m) => m.id === 'legacy_custom')) {
+              merged.customPrompt = '';
+            }
+            setGameSettings(merged);
+          }
+        });
+
+        await runIsolatedBootstrapStep('storyWeaving', async () => {
+          try {
+            const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
+            const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
+            const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
+            set剧情编织(mergedStoryWeaving);
+            await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
+          } catch (err) {
+            // 已有 fallback 保持：内置资源加载失败时回退到本地已存剧情编织。
+            console.warn('[story-weaving] preset 加载失败，回退到本地已存剧情编织:', err);
+            const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
+            if (isSelfContainedStoryWeavingSystem(savedStoryWeaving)) {
+              set剧情编织(归一化剧情编织系统(savedStoryWeaving));
+            } else if (savedStoryWeaving) {
+              console.warn('[story-weaving] 本地状态是轻量缓存，缺少原著正文；等待下次启动重新加载内置资源。');
+            }
+          }
+        });
+
+        await runIsolatedBootstrapStep('zhiku', async () => {
+          try {
+            const catalogResult = await loadBundledZhikuCatalogWithFallback();
+            const preset = catalogResult.system;
+            if (catalogResult.source === 'cache') {
+              console.warn('[zhiku] 新目录加载失败，已继续使用最后一份完整目录:', catalogResult.loadError);
+            }
+            const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
+            const mergedZhiku = composeZhikuSystem(preset, savedZhiku);
+            set智库(mergedZhiku);
+            await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
+          } catch (err) {
+            // 已有 fallback 保持：当前目录与缓存均不可用时仅恢复 V3 自制资料。
+            console.warn('[zhiku-v3] 当前目录与最后完整目录缓存均不可用，仅恢复 V3 自制资料:', err);
+            const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
+            if (savedZhiku) {
+              set智库(buildZhikuCustomSystem(savedZhiku));
+            }
+          }
+        });
+
+        await runIsolatedBootstrapStep('worldbooks', async () => {
+          // Worldbooks 加载策略:
+          // - savedWorldbooks === null   → 首次启动,把预设写入 IndexedDB(玩家之后可自由修改/删除)
+          // - savedWorldbooks 是数组     → 玩家已与世界书交互过,完全尊重其状态,不再覆盖
+          const builtins = createBuiltinWorldbooks();
+          const rawSavedWorldbooks = await loadSetting<世界书[]>(WORLDBOOK_STORAGE_KEY);
+          // 旧版本只有 'builtin_core_config' 一本内置；现在已拆为 6 本，老用户库里这本要丢弃。
+          // 同样：CoT 已从世界书迁移到提示词模块系统，旧的 'builtin_cot' 本也要丢弃。
+          // 它里面的 'builtin_first_turn_rule' 条目已经被新的 'builtin_opening_rule' 本继承。
+          // normalize 把 turnGuard='first_only' 迁移成 scope=['opening']。
+          const savedWorldbooks = rawSavedWorldbooks
+            ? normalizeWorldbooks(
+                rawSavedWorldbooks.filter(
+                  (b) =>
+                    b.id !== 'builtin_core_config' &&
+                    b.id !== 'builtin_cot' &&
+                    !REMOVED_LEGACY_WORLDBOOK_IDS.has(b.id),
+                ),
+              )
+            : rawSavedWorldbooks;
+
+          if (savedWorldbooks === null) {
+            try {
+              const presets = await loadAllBundledWorldbookPresets();
+              const initial = [...builtins, ...presets];
+              setWorldbooks(initial);
+              await saveSetting(WORLDBOOK_STORAGE_KEY, initial);
+            } catch (err) {
+              console.warn('[opening-worldbook] preset 加载失败,使用内置空集:', err);
+              setWorldbooks(builtins);
+            }
+          } else if (savedWorldbooks.length) {
+            const builtinIds = new Set(builtins.map((b) => b.id));
+            const userBooks = savedWorldbooks.filter((b) => !builtinIds.has(b.id));
+            const merged = builtins.map((builtin) => {
+              const saved = savedWorldbooks.find((b) => b.id === builtin.id);
+              if (!saved) return builtin;
+              // calibration 内置世界书只是独立模型真实 prompt 的只读资料展示。
+              // 新闻/手机/变量等服务层直接 import 源码常量，旧存档里的编辑/关闭不会影响真实 API；
+              // 因此这里必须回到源码最新版，避免 UI 展示与真实请求再次分叉。
+              if (isCalibrationWorldbook(builtin)) return builtin;
+              const savedEntries = saved.entries || [];
+              const entries = builtin.entries.map((entry) => {
+                const savedEntry = savedEntries.find((item) => item.id === entry.id);
+                if (!savedEntry) return entry;
+                // D12(2026-07-26): 源码条目声明了更高 contentVersion 时强制刷新内容,只保留用户开关。
+                // 修复"内置世界书条目内容对老用户永不更新"的漂移缺陷。
+                if ((entry.contentVersion ?? 0) > (savedEntry.contentVersion ?? 0)) {
+                  return { ...entry, enabled: savedEntry.enabled };
+                }
+                return { ...savedEntry, title: entry.title };
+              });
+              return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
+            });
+            const nextWorldbooks = [...merged, ...userBooks];
+            setWorldbooks(nextWorldbooks);
+            await saveSetting(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
+          } else {
+            setWorldbooks(builtins);
+            await saveSetting(WORLDBOOK_STORAGE_KEY, builtins);
+          }
+        });
+
+        await runIsolatedBootstrapStep('hasSave', async () => {
+          const saveExists = await hasAnySave();
+          setHasSave(saveExists);
+        });
+      } catch (err) {
+        // 最外层兜底：任何未预料错误都不能产生 unhandled rejection。
+        console.warn(
+          '[bootstrap] 启动初始化出现未预期错误',
+          sanitizeBootstrapErrorText(err instanceof Error ? err.message : String(err)),
+        );
+      }
     })();
   }, []);
 
@@ -486,6 +561,7 @@ export function useGameState(): UseGameStateReturn {
     世界, set世界,
     chatHistory, setChatHistory,
     记忆, set记忆,
+    memorySummaryFlow, setMemorySummaryFlow,
     忆庭, set忆庭,
     智库, set智库,
     手机, set手机,

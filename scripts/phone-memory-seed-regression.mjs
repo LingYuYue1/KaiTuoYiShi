@@ -5,6 +5,9 @@ function assert(condition, message) {
 }
 
 const phoneModal = fs.readFileSync('components/features/Phone/PhoneModal.tsx', 'utf8');
+// 全项目修复：手机双写编排提升为独立纯事务模块（services/phoneMemoryDualWrite.ts），
+// 手机来源标记等行为要求不变，仅实现位置迁移。
+const phoneDualWrite = fs.readFileSync('services/phoneMemoryDualWrite.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
@@ -35,9 +38,10 @@ assert(variableFacts.includes('relatedNpcIds = Array.from(new Set'), 'phone_seed
 assert(variableFacts.includes('hasRecentSimilarPhoneSeed(phone'), 'variable phone_seed writes must reject recent duplicate target/event seeds.');
 
 assert(phoneModal.includes('commitPhoneMemory = async'), 'phone UI must write communication summaries back to memory.');
-assert(phoneModal.includes('{ force: true }'), 'each phone reply must force at least one handoff summary.');
+// 每次手机回复必须至少强制一次摘要落盘（force 语义保留，随 operationSourceId 一起传入）。
+assert(phoneModal.includes('force: true') && phoneModal.includes('operationSourceId'), 'each phone reply must force at least one handoff summary.');
 assert(phoneModal.includes('onNpcRecordsChange'), 'private chat summaries must be able to write back to NPC companion memories.');
-assert(phoneModal.includes("来源: '手机'"), 'phone-origin NPC memories must be marked with the phone source.');
+assert((phoneModal + phoneDualWrite).includes("来源: '手机'"), 'phone-origin NPC memories must be marked with the phone source.');
 assert(phoneModal.includes('FALLBACK_STORY_CONTACTS'), 'phone contacts must have story fallback contacts when the address book is empty.');
 assert(phoneModal.includes('buildFallbackContactsFromStory'), 'phone fallback contacts must be inferred from recent story/location context.');
 assert(phoneModal.includes('mainChatHistory') && phoneModal.includes('existingContacts: phone.contacts'), 'fallback contacts must rescue empty old saves without overwriting existing contacts.');

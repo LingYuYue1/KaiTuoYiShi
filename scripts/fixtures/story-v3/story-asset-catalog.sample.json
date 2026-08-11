@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "catalog_gravity_platform_demo",
+  "catalogRevision": 1,
+  "catalogFingerprint": "sha256:f295e3fa6bc0bfa6982be06063dccc4cc57441ff812ead9e38a6f0954850d651",
+  "normalizationVersion": 1,
+  "sourceKind": "user_authored",
+  "title": "重力稳定装置演示资产目录",
+  "sourceRefs": [
+    "synthetic_adversarial:catalog_demo:gravity_platform"
+  ],
+  "series": [
+    {
+      "seriesId": "series_gravity_platform",
+      "title": "重力稳定装置事件",
+      "workTitle": "演示系列",
+      "ordinal": 1,
+      "chapterIds": [
+        "chapter_gravity_platform"
+      ],
+      "segmentIds": [
+        "segment_platform_intro",
+        "segment_platform_crisis"
+      ],
+      "openingSegmentIds": [
+        "segment_platform_intro"
+      ],
+      "defaultRoutePolicyId": "route_gravity_platform",
+      "sourceRef": "synthetic_adversarial:catalog_demo",
+      "seriesFingerprint": "sha256:e73b299ceddf225653d517c77d9211f2116744fcfff7035835e2f3b73dd915b3"
+    }
+  ],
+  "chapters": [
+    {
+      "chapterId": "chapter_gravity_platform",
+      "seriesId": "series_gravity_platform",
+      "ordinal": 1,
+      "title": "第一章：稳定装置告急",
+      "summary": "主控舱段的引力稳定装置出现异常，需要调查与处置。",
+      "contentFingerprint": "sha256:dc3396c481db759bcd817492a77286929c39ca36d03994929238d142ccdc34e4",
+      "chapterFingerprint": "sha256:d4461b8c8cdf2de341c21397bed6a6dcfeff55bed154b59942463f24362ac168"
+    }
+  ],
+  "segments": [
+    {
+      "segmentId": "segment_platform_intro",
+      "seriesId": "series_gravity_platform",
+      "ordinal": 1,
+      "title": "异动报告",
+      "chapterRange": {
+        "startOrdinal": 1,
+        "endOrdinal": 1,
+        "chapterIds": [
+          "chapter_gravity_platform"
+        ]
+      },
+      "isOpeningCandidate": true,
+      "summary": "引力稳定装置读数波动，船员开始排查。",
+      "hardConstraintIds": [
+        "constraint_platform_must_remain"
+      ],
+      "foreshadowConstraintIds": [],
+      "characterProfileIds": [],
+      "factionProfileIds": [],
+      "locationProfileIds": [
+        "location_main_control_cabin"
+      ],
+      "eventDefinitionIds": [
+        "evt_gravity_platform_stabilize"
+      ],
+      "timelineEntryIds": [
+        "timeline_anomaly_reported"
+      ],
+      "routePolicyId": "route_gravity_platform",
+      "dependencySegmentIds": [],
+      "consequenceSegmentIds": [
+        "segment_platform_crisis"
+      ],
+      "segmentFingerprint": "sha256:2cd434a57106a1ee7a78ce2f74223f2f7024304b57cceae11cea5d755bab9753"
+    },
+    {
+      "segmentId": "segment_platform_crisis",
+      "seriesId": "series_gravity_platform",
+      "ordinal": 2,
+      "title": "装置过载",
+      "chapterRange": {
+        "startOrdinal": 1,
+        "endOrdinal": 1,
+        "chapterIds": [
+          "chapter_gravity_platform"
+        ]
+      },
+      "isOpeningCandidate": false,
+      "summary": "稳定装置过载，需要更换核心模块。",
+      "hardConstraintIds": [
+        "constraint_platform_must_remain"
+      ],
+      "foreshadowConstraintIds": [],
+      "characterProfileIds": [],
+      "factionProfileIds": [],
+      "locationProfileIds": [
+        "location_main_control_cabin"
+      ],
+      "eventDefinitionIds": [
+        "evt_gravity_platform_stabilize"
+      ],
+      "timelineEntryIds": [],
+      "routePolicyId": "route_gravity_platform",
+      "dependencySegmentIds": [
+        "segment_platform_intro"
+      ],
+      "consequenceSegmentIds": [],
+      "segmentFingerprint": "sha256:2014ef388f447522315f3e9d1348a728745d318ad7c2cd7fb19c787d8efbac92"
+    }
+  ],
+  "characterProfiles": [],
+  "factionProfiles": [],
+  "locationProfiles": [
+    {
+      "locationProfileId": "location_main_control_cabin",
+      "name": "主控舱段",
+      "aliases": [],
+      "level": "zone",
+      "factionProfileIds": [],
+      "functionSummary": "空间站核心控制区域。",
+      "facilityOccurrenceDefinitionIds": [
+        "occ_gravity_platform"
+      ],
+      "profileFingerprint": "sha256:13c244e93e6673d2d737cc5f77cc852ac06717275333dbd1181e4b786d4a43b0"
+    }
+  ],
+  "constraints": [
+    {
+      "constraintId": "constraint_platform_must_remain",
+      "kind": "hard",
+      "segmentIds": [
+        "segment_platform_intro",
+        "segment_platform_crisis"
+      ],
+      "statement": "重力稳定装置在更换完成前必须保持运行。",
+      "nonProgressing": true,
+      "constraintFingerprint": "sha256:b809388ecfc3e4d66bc1177fe695847b76e6983ef8a733e7054ff01598e95b03"
+    }
+  ],
+  "visibilityHints": [
+    {
+      "visibilityHintId": "hint_platform_anomaly",
+      "knownByEntityIds": [],
+      "unknownToEntityIds": [],
+      "observerOnly": true,
+      "grantsKnowledge": false,
+      "hintFingerprint": "sha256:3f2e131727a331c60b02180b8d8eb5be2a55737cacd58c02825b6179019340c9"
+    }
+  ],
+  "timelineEntries": [
+    {
+      "timelineEntryId": "timeline_anomaly_reported",
+      "segmentId": "segment_platform_intro",
+      "sequence": 1,
+      "title": "异动上报",
+      "description": "稳定装置出现异常读数并上报。",
+      "at": {
+        "dayOrdinal": 57,
+        "minuteOfDay": 480
+      },
+      "actorEntityIds": [],
+      "eventDefinitionIds": [
+        "evt_gravity_platform_stabilize"
+      ],
+      "timelineFingerprint": "sha256:b9aa08316a983892cde41e2f0aaee12da994ef64ca1cfc5995c210a8219320d5"
+    }
+  ],
+  "routePolicies": [
+    {
+      "routePolicyId": "route_gravity_platform",
+      "participationPolicy": "player_optional",
+      "bypassPolicy": "world_background",
+      "deviationPolicy": "continue_compatible",
+      "earlyCompletionPolicy": "resolve_same_definition",
+      "alternativeSegmentIds": [],
+      "consequenceSegmentIds": [
+        "segment_platform_crisis"
+      ],
+      "expiresAfterSegmentIds": [],
+      "routeFingerprint": "sha256:a9265858d2622b8c2110de525f8f4c7f5270ec35ef15a017daefeafd6cf7db04"
+    }
+  ],
+  "occurrenceDefinitions": [
+    {
+      "occurrenceDefinitionId": "occ_gravity_platform",
+      "title": "重力稳定装置",
+      "subject": {
+        "kind": "facility",
+        "facilityId": "facility_gravity_platform_alpha",
+        "locationProfileId": "location_main_control_cabin"
+      },
+      "occurrencePolicy": "unique",
+      "newInstancePolicy": "forbidden",
+      "identityAnchors": [
+        "gravity_platform_alpha",
+        "主控舱段稳定装置"
+      ],
+      "aliases": [
+        "重力稳定装置"
+      ],
+      "definitionFingerprint": "sha256:09f69fb354d981d96e7409ea342779d41ebb1b66e9bbf7989f9a66a41a3962f6",
+      "eventDefinitionIds": [
+        "evt_gravity_platform_stabilize"
+      ]
+    }
+  ],
+  "eventDefinitions": [
+    {
+      "eventDefinitionId": "evt_gravity_platform_stabilize",
+      "origin": "catalog",
+      "title": "稳定装置危机",
+      "actorEntityIds": [],
+      "targetEntityIds": [
+        "entity_gravity_platform_alpha"
+      ],
+      "dependencyDefinitionIds": [],
+      "completionPredicate": {
+        "predicateId": "pred_gravity_platform_stabilized",
+        "targetEntityIds": [
+          "entity_gravity_platform_alpha"
+        ],
+        "requiredFactTypes": [
+          "facility_restored"
+        ],
+        "requiredEvidenceKinds": [
+          "narrative_span",
+          "system_command",
+          "gameplay_receipt"
+        ],
+        "payloadMatchers": [
+          {
+            "path": "facilityState",
+            "operator": "equals",
+            "value": "restored"
+          }
+        ],
+        "minimumEvidenceCount": 1,
+        "deterministicKey": "catalog:evt_gravity_platform_stabilize:restored",
+        "allowedOutcomes": [
+          "normal"
+        ],
+        "failureOutcomes": [
+          "failed"
+        ]
+      },
+      "scheduling": {},
+      "allowedResolutionModes": [
+        "player",
+        "world_background",
+        "player_early"
+      ],
+      "replayPolicy": "once",
+      "publicScope": {
+        "kind": "local",
+        "locationIds": [
+          "location_main_control_cabin"
+        ]
+      },
+      "consequenceDefinitionIds": [],
+      "definitionFingerprint": "sha256:0fcf309ad1406f795b9b228171c6eb1e0c5f2fa124ab83a916cc5d56ed47104f"
+    }
+  ]
+}

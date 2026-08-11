@@ -8,6 +8,10 @@ const DEFAULT_MAX_ENTRIES = 4096;
 const DEFAULT_MAX_ENTRY_BYTES = 96 * 1024 * 1024;
 const DEFAULT_MAX_UNPACKED_BYTES = 128 * 1024 * 1024;
 
+// 统一 SHA-256：相册 / 云备份 / 剧情运行时共用同一实现，无 crypto.subtle 时本地回退。
+// 显式 .ts 扩展名：node 原生 TS 加载（如 cloud-backup-package-regression）可直接解析。
+import { sha256BytesHex } from './storyRuntime/id.ts';
+
 export type CloudBackupCompression = 'gzip' | 'none';
 
 export interface CloudBackupPartMeta {
@@ -138,10 +142,13 @@ export async function unpackCloudBackupPart(
   limits: { maxEntries?: number; maxEntryBytes?: number; maxUnpackedBytes?: number } = {},
 ): Promise<Map<string, Uint8Array>> {
   const compressed = toOwnedBytes(input);
-  const raw = compression === 'gzip' ? await gunzipBytes(compressed) : compressed;
   const maxEntries = limits.maxEntries ?? DEFAULT_MAX_ENTRIES;
   const maxEntryBytes = limits.maxEntryBytes ?? DEFAULT_MAX_ENTRY_BYTES;
   const maxUnpackedBytes = limits.maxUnpackedBytes ?? DEFAULT_MAX_UNPACKED_BYTES;
+  // gzip 解压过程中限流：实际输出超过上限时立即取消流，不得先拼出完整超大 Uint8Array。
+  const raw = compression === 'gzip'
+    ? await gunzipBytes(compressed, maxUnpackedBytes)
+    : compressed;
   if (raw.byteLength > maxUnpackedBytes) throw new Error('云备份分卷解压后大小超过安全上限。');
   if (raw.byteLength < CLOUD_PART_PREFIX_BYTES) throw new Error('云备份分卷头部不完整。');
   for (let index = 0; index < CLOUD_PART_MAGIC.byteLength; index += 1) {
@@ -181,9 +188,8 @@ export async function fingerprintCloudBackupNode(value: unknown): Promise<string
 }
 
 export async function sha256Hex(input: ArrayBuffer | Uint8Array): Promise<string> {
-  const bytes = toOwnedBytes(input);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  // 统一走 storyRuntime/id 的共享字节 SHA-256：LAN HTTP 无 crypto.subtle 时本地回退，字节输出一致。
+  return sha256BytesHex(input);
 }
 
 export function createCloudSnapshotId(now = Date.now()): string {
@@ -233,10 +239,44 @@ async function gzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function gunzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
+/**
+ * gzip 解压（限流）：带累计字节计数读取输出流，实际输出超过 maxUnpackedBytes 时
+ * 立即取消 reader，不得先拼出完整超大 Uint8Array 再检查。
+ */
+async function gunzipBytes(bytes: Uint8Array, maxUnpackedBytes: number): Promise<Uint8Array> {
   if (typeof DecompressionStream !== 'function') throw new Error('当前环境不支持解压云备份分卷。');
   const stream = new Blob([toOwnedBytes(bytes)]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxUnpackedBytes) {
+        await reader.cancel();
+        throw new Error('云备份分卷解压输出超过安全上限，已中止。');
+      }
+      chunks.push(value);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message === '云备份分卷解压输出超过安全上限，已中止。') throw err;
+    await reader.cancel().catch(() => {});
+    throw err;
+  }
+  return concatChunks(chunks);
+}
+
+function concatChunks(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 function toOwnedBytes(input: ArrayBuffer | Uint8Array): Uint8Array {

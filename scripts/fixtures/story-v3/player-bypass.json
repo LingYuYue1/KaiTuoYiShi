@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "story-v3-g0-scenario@1",
+  "scenarioId": "player-bypass",
+  "title": "玩家连续绕开推荐主线",
+  "playerFacingExpectation": "玩家想研究奇物就继续研究；主线压力可以在世界后台变化，但不能把玩家强行传送去参战。",
+  "fixedNow": 1735689660000,
+  "initialStateFingerprint": "sha256:2b49e783869c8972bae5713171ce433a151016bbfc23cbafdfb934b3541c24d5",
+  "initialState": {
+    "runtime": {
+      "branchId": "branch_g0_bypass",
+      "revision": 11,
+      "turnCount": 14,
+      "gameTime": "2157-04-26T09:10:00+08:00"
+    },
+    "playerLocation": "黑塔空间站·奇物收藏室",
+    "playerFocusId": "focus_curio_research",
+    "eventInstances": [
+      {
+        "eventId": "event_doomsday_beast",
+        "state": "approaching"
+      }
+    ],
+    "committedFacts": [],
+    "knowledgeReceipts": [],
+    "legacyWorldEventStrings": [
+      "反物质军团正在空间站外侧集结。"
+    ],
+    "terminalEvents": []
+  },
+  "storySetup": {
+    "seriesId": "series_herta_bypass",
+    "title": "黑塔空间站危机",
+    "sourceType": "canon",
+    "currentUnitId": "unit_trace_legion",
+    "units": [
+      {
+        "id": "unit_trace_legion",
+        "number": 1,
+        "title": "调查军团踪迹",
+        "summary": "玩家可以调查反物质军团在空间站留下的活动痕迹",
+        "endStates": [
+          "确认军团进攻方向"
+        ],
+        "characters": [
+          "艾丝妲"
+        ],
+        "locations": [
+          "主控舱段"
+        ],
+        "status": "current"
+      },
+      {
+        "id": "unit_beast_battle",
+        "number": 2,
+        "title": "支援舱段迎战",
+        "summary": "三月七和丹恒在支援舱段迎战末日兽并击退危机",
+        "endStates": [
+          "末日兽被击退",
+          "支援舱段危机暂时平息"
+        ],
+        "characters": [
+          "三月七",
+          "丹恒"
+        ],
+        "locations": [
+          "支援舱段"
+        ],
+        "status": "pending"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "stepId": "turn_bypass_015",
+      "kind": "main_turn",
+      "turnCount": 15,
+      "playerInput": "我不去支援舱段，继续在奇物收藏室检查那件会改变重力的奇物。",
+      "currentLocation": "黑塔空间站·奇物收藏室",
+      "playerIntention": "bypass",
+      "illegalCandidate": true,
+      "responseRefs": [
+        "main_player_bypass"
+      ]
+    }
+  ],
+  "currentBaseline": {
+    "classification": "known_bad",
+    "expectedObservationCodes": [
+      "ILLEGAL_NARRATIVE_VISIBLE_BEFORE_GATE",
+      "LEGACY_STORY_PROGRESS_ADVANCED",
+      "NARRATIVE_VISIBLE_BEFORE_STORY_ALIGNMENT",
+      "PLAYER_FOCUS_FORCED_BY_BODY",
+      "WORLD_EVENT_STRING_DIRECT_APPEND"
+    ],
+    "expectedMetrics": {
+      "narrative_pre_gate_visible_count": 1,
+      "no_evidence_progression_count": 1,
+      "player_focus_forced_count": 1
+    }
+  },
+  "v3Target": {
+    "decisions": [
+      "拒绝正文强制玩家参战的部分",
+      "玩家焦点继续停留在奇物研究",
+      "末日兽压力只进入世界后台事件或交汇邀请"
+    ],
+    "allowedFinalSideEffects": [
+      "记录奇物研究进展",
+      "推进世界后台的军团压力",
+      "生成可忽略的支援请求"
+    ]
+  },
+  "reviewQuestion": "玩家明确不参战时，是否应继续自己的路线，同时只让世界后台和支援请求发生变化？"
+}
