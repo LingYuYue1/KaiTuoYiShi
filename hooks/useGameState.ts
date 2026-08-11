@@ -66,6 +66,7 @@ import { devLogError } from '@/utils/devLog';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
 import { useActiveWorkflow, type ActiveWorkflowStore } from '@/hooks/useGame/activeWorkflow';
+import type { 存档树元信息 } from '@/utils/saveTree';
 
 const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
@@ -241,6 +242,9 @@ export interface UseGameStateReturn {
   setPendingOpeningTrigger: React.Dispatch<React.SetStateAction<string | null>>;
   /** 片 5e（路线图 #2）：C 类工作流瞬时态的唯一管理对象（loading/turnStatus/召回摘要/待结算/中断/会话身份/中止与重roll 引用）。 */
   activeWorkflow: ActiveWorkflowStore;
+  /** 当前活跃叶子的存档树元信息（响应式 state）：读档水合 / 封版晋升 / 新局初始化 / 整树删除时随工作区联动更新，驱动 canRerollWithTree。 */
+  activeTreeMeta: 存档树元信息 | null;
+  setActiveTreeMeta: React.Dispatch<React.SetStateAction<存档树元信息 | null>>;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -295,6 +299,7 @@ export function useGameState(): UseGameStateReturn {
   const [hasSave, setHasSave] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
+  const [activeTreeMeta, setActiveTreeMeta] = useState<存档树元信息 | null>(null);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bootReadyRef = useRef(false);
@@ -332,6 +337,7 @@ export function useGameState(): UseGameStateReturn {
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
     activeWorkflow,
+    activeTreeMeta, setActiveTreeMeta,
     scrollRef,
   };
 

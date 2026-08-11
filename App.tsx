@@ -514,8 +514,9 @@ export function App() {
       .find((m) => m.role === 'assistant')?.parsedResponse?.actionOptions ?? []
   ), [state.chatHistory]);
 
-  // reroll 可用性 = 已有可回滚的 assistant 回复 && 当前叶子存在可回退的父检查点。
-  // canRerollWithTree 由 useGame 依据 activeSaveTreeMeta 计算（读叶子 = 水合 / 封版晋升时联动）；
+  // reroll 可用性 = 已有可滚动的 assistant 回复 && 当前叶子存在可回退的父检查点。
+  // canRerollWithTree 由 useGame 依据 useGameState 的响应式 activeTreeMeta 计算
+  // （读档水合 / 封版晋升 / 新局初始化 / 整树删除时联动，触发 React 重渲染）；
   // 导入无根单独切片存档或根叶子无父检查点时，UI 直接禁用 reroll 按钮。
   const canReroll = useMemo(
     () => state.chatHistory.some((m) => m.role === 'assistant') && canRerollWithTree,

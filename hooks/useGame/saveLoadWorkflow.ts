@@ -45,28 +45,26 @@ import { TURN_STATUS_IDLE } from './turnStatus';
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
-/** 读取当前活跃叶子关联的存档树元信息（只读，供 useGame 计算 UI 层 reroll 可用性）。 */
-export function getActiveSaveTreeMeta(): 存档树元信息 | null {
-  return activeSaveTreeMeta;
-}
-
-export async function canRollbackCurrentLeaf(): Promise<boolean> {
-  if (!activeSaveTreeMeta?.rootId || !activeSaveTreeMeta.parentNodeId) return false;
-  const parentId = await loadSaveIdByNodeId(activeSaveTreeMeta.parentNodeId);
-  return parentId !== null;
-}
-
-export function clearActiveSaveTreeMetaIfMatches(target?: { rootId?: string; nodeId?: string } | null): void {
-  if (!activeSaveTreeMeta) return;
+export function clearActiveSaveTreeMetaIfMatches(
+  target: { rootId?: string; nodeId?: string } | null,
+  state: UseGameStateReturn,
+): void {
   if (!target?.rootId && !target?.nodeId) {
-    activeSaveTreeMeta = null;
+    if (activeSaveTreeMeta !== null) {
+      activeSaveTreeMeta = null;
+      state.setActiveTreeMeta(null);
+    }
     return;
   }
   if (
-    (target.rootId && activeSaveTreeMeta.rootId === target.rootId) ||
-    (target.nodeId && activeSaveTreeMeta.nodeId === target.nodeId)
+    activeSaveTreeMeta
+    && (
+      (target.rootId && activeSaveTreeMeta.rootId === target.rootId)
+      || (target.nodeId && activeSaveTreeMeta.nodeId === target.nodeId)
+    )
   ) {
     activeSaveTreeMeta = null;
+    state.setActiveTreeMeta(null);
   }
 }
 
@@ -131,8 +129,9 @@ export function buildSavePayload(
   return compactDuplicatedSaveImages(withTree);
 }
 
-export function commitActiveSaveTreeMeta(save: 存档数据): void {
+export function commitActiveSaveTreeMeta(save: 存档数据, state: UseGameStateReturn): void {
   activeSaveTreeMeta = getSaveTreeMeta(save);
+  state.setActiveTreeMeta(activeSaveTreeMeta);
 }
 
 /**
@@ -393,18 +392,21 @@ export async function ensureHeadLeafWritable(state: UseGameStateReturn): Promise
   const payload = buildSavePayload(state, 'auto');
   const tree = getSaveTreeMeta(payload);
   await createLeafNode(payload);
+  // 响应式联动：重建出的根叶子（无父节点）即新的活跃工作区，元信息同步进 state。
+  activeSaveTreeMeta = tree;
+  state.setActiveTreeMeta(tree);
   const next = 指向NewestStory记录(newest, tree.nodeId);
   await saveNewestStory(next);
   devLog('recover', 'head-leaf-rebuilt', { headNodeId: tree.nodeId });
   return next;
 }
 
-export async function handleDeleteSave(id: number): Promise<void> {
+export async function handleDeleteSave(id: number, state: UseGameStateReturn): Promise<void> {
   const save = await loadSave(id);
   // 过渡期遗留的按 id 单条删除入口，目前无调用方（5d-1b 编辑目标 #5 标记保留）。
   // eslint-disable-next-line @typescript-eslint/no-deprecated -- 无树/过渡期路径，树内删除走 deleteSaveTreeNode
   await dbDeleteSave(id);
-  clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
+  clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree ?? null, state);
 }
 
 /** 树感知删除目标：树内节点返回其子树存档数，legacy 无树恢复点返回 null。 */
@@ -425,14 +427,14 @@ export async function resolve存档删除目标(
 }
 
 /** 执行删除：树的节点走 deleteSaveTreeNode（级联），无树 legacy 走单条删除。 */
-export async function delete存档目标(id: number, target: 存档删除目标): Promise<void> {
+export async function delete存档目标(id: number, target: 存档删除目标, state: UseGameStateReturn): Promise<void> {
   if (target.tree) {
     await deleteSaveTreeNode(target.tree);
-    clearActiveSaveTreeMetaIfMatches(target.tree);
+    clearActiveSaveTreeMetaIfMatches(target.tree, state);
   } else {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- 无树 legacy 恢复点，见 5d-1b 编辑目标 #2
     await dbDeleteSave(id);
-    clearActiveSaveTreeMetaIfMatches(null);
+    clearActiveSaveTreeMetaIfMatches(null, state);
   }
 }
 
@@ -451,7 +453,10 @@ export async function applySaveToState(
   // 片 5a-2 D3 读取侧迁移：旧档 gameSettings 仍含两运行态键时迁至存档顶层并置空原键；
   // 迁出值只进入当前设备状态的兼容投影，不让存档设置覆盖 DeviceSettings。
   const { save: 迁移后存档, macroGlobalVars, worldbookTriggerStates } = 迁移存档运行态键(save);
+  // 响应式联动：读档 = 树操作「读叶子 = 水合 / 读检查点 = 分叉新叶子」，活跃叶子元信息同步进
+  // useGameState.activeTreeMeta，canRerollWithTree 依赖它而非模块级缓存。
   activeSaveTreeMeta = getSaveTreeMeta(迁移后存档);
+  state.setActiveTreeMeta(activeSaveTreeMeta);
   const safeChatHistory = compactChatHistoryForLongSession(normalizeSaveChatHistory(迁移后存档.chatHistory));
   const safeWorld = 归一化世界状态(迁移后存档.世界);
   const safeTraveler = normalizeSavedTraveler(迁移后存档.旅人, safeWorld.当前日期);

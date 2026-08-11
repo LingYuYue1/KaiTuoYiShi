@@ -22,6 +22,7 @@
  * saveNodeDeltas（settings / newestStory 非 checkpoint 表）。叶子创建同样收敛在本文件。
  */
 import type { 存档数据 } from '@/models/settings';
+import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { loadSave, loadSaveIdByNodeId, saveGame, saveNewestStory, createLeafNode, sealLeafRow } from '@/services/dbService';
 import { 创建空NewestStory记录, 指向NewestStory记录, type NewestStory记录, type 工作区字段集 } from '@/models/newestStory';
 import { commitActiveSaveTreeMeta, ensureHeadLeafWritable, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
@@ -41,6 +42,7 @@ export type 新局初始字段 = 工作区字段集;
  */
 export async function 初始化新局checkpoint(
   fields: 新局初始字段,
+  state: UseGameStateReturn,
 ): Promise<{ checkpointId: number }> {
   try {
     const timestamp = Date.now();
@@ -80,7 +82,7 @@ export async function 初始化新局checkpoint(
       leafId: saveId,
       headNodeId: saveTree.nodeId,
     });
-    commitActiveSaveTreeMeta(leafPayload);
+    commitActiveSaveTreeMeta(leafPayload, state);
     return { checkpointId: rootId };
   } catch (error) {
     devLogError('save', 'new-game-checkpoint-failed', error);
@@ -181,6 +183,8 @@ export async function commitTurn(
     queueTasksKeptInWorkspace: queueTasks !== undefined,
   });
 
-  // saveTree 元信息联动：后续分叉/重建路径以此检查点为树上前驱。
-  commitActiveSaveTreeMeta(sealedPayload);
+  // saveTree 元信息联动：封版晋升后活跃叶子 = 新子叶（父为刚封版检查点），
+  // 树元信息指向新叶子而非封版检查点，后续分叉/重建路径以新叶子为树上前驱，
+  // 同时驱动 useGameState.activeTreeMeta（响应式 canRerollWithTree）。
+  commitActiveSaveTreeMeta(nextLeafPayload, state);
 }

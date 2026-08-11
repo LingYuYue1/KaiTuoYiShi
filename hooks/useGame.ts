@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
 import { executeResumeWorkflow } from '@/hooks/useGame/resumeWorkflow';
@@ -8,7 +8,7 @@ import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
-import { applySaveToState, beginSession, canRollbackCurrentLeaf, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
+import { applySaveToState, beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
@@ -582,17 +582,13 @@ export function useGame(): UseGameReturn {
   }, []);
 
   // 树检查版 reroll 可用性（UI 禁用门）：当前活跃叶子是否有可回退的父检查点。
-  const [canRerollWithTree, setCanRerollWithTree] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      const ok = await canRollbackCurrentLeaf();
-      if (!cancelled) setCanRerollWithTree(ok);
-    };
-    void check();
-    return () => { cancelled = true; };
-  }, [state.chatHistory]);
+  // 与 handleReroll 内部的真实树检查同源——activeTreeMeta 是 useGameState 的响应式 state，
+  // 在 applySaveToState（读档水合）/ commitActiveSaveTreeMeta（封版晋升 / 新局初始化）/
+  // clearActiveSaveTreeMetaIfMatches（整树删除）处随活跃叶子联动更新，天然驱动 React 重渲染；
+  // 根叶子（无 parentNodeId）或导入的无根单独切片存档（ensureSaveTreeRoot 生成新根、无父节点）
+  // 在此判定为不可回退，UI 直接禁用按钮与 tooltip 提示，不再等点击后才在 handleReroll 里报错。
+  const { activeTreeMeta } = state;
+  const canRerollWithTree = Boolean(activeTreeMeta?.rootId && activeTreeMeta.parentNodeId);
 
   const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
     await regenerateNarrativeImagesForMessage(stateRef.current, getActiveConfig, messageId);
@@ -701,7 +697,7 @@ export function useGame(): UseGameReturn {
       worldbookTriggerStates,
       pendingOpeningTrigger,
     };
-    await 初始化新局checkpoint(initialFields);
+    await 初始化新局checkpoint(initialFields, s);
     s.activeWorkflow.setSessionEpoch((e) => e + 1);
   }, []);
 
@@ -817,20 +813,20 @@ export function useGame(): UseGameReturn {
       : '确定删除这个存档？此操作不可恢复。';
     if (!confirm(confirmMessage)) return false;
     devLog('save', 'save-delete-cascade', { id: save.id, cascadeCount: deleteTarget.cascadeCount });
-    await delete存档目标(save.id, deleteTarget);
+    await delete存档目标(save.id, deleteTarget, stateRef.current);
     return true;
   }, []);
 
   // 存档整树删除：dbService 树删除 + 活动树元信息清理，两端组件共用。
   const handleDeleteSaveTree = useCallback(async (rootId: string): Promise<void> => {
     await deleteSaveTree(rootId);
-    clearActiveSaveTreeMetaIfMatches({ rootId });
+    clearActiveSaveTreeMetaIfMatches({ rootId }, stateRef.current);
     devLog('save', 'save-delete-tree', { rootId });
   }, []);
 
   // 活动存档树元信息清理（legacy 恢复点批量删除后的逐条收敛入口）。
   const handleClearActiveSaveTreeMeta = useCallback((target?: { rootId?: string; nodeId?: string } | null): void => {
-    clearActiveSaveTreeMetaIfMatches(target);
+    clearActiveSaveTreeMetaIfMatches(target ?? null, stateRef.current);
   }, []);
 
   // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7）──────────────────────────
@@ -1156,7 +1152,7 @@ export function useGame(): UseGameReturn {
       worldbookTriggerStates,
       pendingOpeningTrigger,
     };
-    await 初始化新局checkpoint(initialFields);
+    await 初始化新局checkpoint(initialFields, s);
     devLog('save', 'new-game-initialize-done', { entry: 'start' });
     return true;
   }, []);
