@@ -134,7 +134,7 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
   const scrollRafRef = useRef<number | null>(null);
   const scrollStateRafRef = useRef<number | null>(null);
   const pendingHistoryAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
-  // 读档/顶替导致的消息数组整体替换检测：按 React 推荐模式在渲染期校正状态（非副作用）。
+  // 读档/分支导致的消息数组整体替换检测：按 React 推荐模式在渲染期校正状态（非副作用）。
   if (messages !== previousMessages) {
     const wasReplaced = historyIdentity.length > 0
       && (messages.length < historyIdentity.length

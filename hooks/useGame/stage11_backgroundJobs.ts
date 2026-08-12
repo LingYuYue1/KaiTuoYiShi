@@ -148,7 +148,7 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
   });
   const generatedNews = newsGenerationResult?.news;
   p.assertWorkflowActive();
-  // 投影点（B2-c）：顶替守卫之后才允许旧 workflow 刷新 UI。
+  // 投影点（B2-c）：会话身份守卫之后才允许旧 workflow 刷新 UI。
   if (newsGenerationResult?.changed && generatedNews) p.state.set新闻(generatedNews);
   const newsAfterGeneration = generatedNews ?? p.state.新闻;
   pushQueueTask(p.state, 'news', 'success', {
