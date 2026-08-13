@@ -24,6 +24,12 @@ const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
     zhikuPresetId: 'zhiku_jarilo_vi_sunrise_chapters',
   },
   {
+    id: 'story_canon_side_herta_crown_of_mundane_and_divine',
+    title: '【支线】黑塔空间站-庸与神的冠冕',
+    description: '已分解内置剧情编织：黑塔空间站版本活动剧情。',
+    zhikuPresetId: '',
+  },
+  {
     id: 'story_canon_zhiku_xianzhou_luofu_travel_chapters',
     title: '仙舟罗浮其一-乘槎驭风仙窟游',
     description: '已分解内置剧情编织：仙舟罗浮主线开端。',
@@ -40,6 +46,18 @@ const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
     title: '仙舟罗浮其三-安灵布奠，天清路远',
     description: '已分解内置剧情编织：仙舟罗浮主线收束。',
     zhikuPresetId: 'zhiku_xianzhou_luofu_aftermath_chapters',
+  },
+  {
+    id: 'story_canon_side_belobog_future_market',
+    title: '【支线】贝洛伯格-冬梦激醒',
+    description: '已分解内置剧情编织：贝洛伯格版本活动剧情。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_side_xianzhou_foxian_tale',
+    title: '【支线】仙舟罗浮-狐斋志异',
+    description: '已分解内置剧情编织：仙舟罗浮版本活动剧情。',
+    zhikuPresetId: '',
   },
   {
     id: 'story_canon_penacony_noise_and_fury',
@@ -153,24 +171,6 @@ const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
     id: 'story_canon_erxiang_paradise_5_whistle',
     title: '二相乐园其五-鸣笛于归寂之时',
     description: '已分解内置剧情编织：二相乐园其五。',
-    zhikuPresetId: '',
-  },
-  {
-    id: 'story_canon_side_xianzhou_foxian_tale',
-    title: '【支线】仙舟罗浮-狐斋志异',
-    description: '已分解内置剧情编织：仙舟罗浮版本活动剧情。',
-    zhikuPresetId: '',
-  },
-  {
-    id: 'story_canon_side_belobog_future_market',
-    title: '【支线】贝洛伯格-冬梦激醒',
-    description: '已分解内置剧情编织：贝洛伯格版本活动剧情。',
-    zhikuPresetId: '',
-  },
-  {
-    id: 'story_canon_side_herta_crown_of_mundane_and_divine',
-    title: '【支线】黑塔空间站-庸与神的冠冕',
-    description: '已分解内置剧情编织：黑塔空间站版本活动剧情。',
     zhikuPresetId: '',
   },
 ];
