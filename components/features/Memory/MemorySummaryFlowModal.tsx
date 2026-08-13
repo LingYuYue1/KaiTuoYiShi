@@ -23,7 +23,7 @@ import {
  * - review：展示 AI 生成的 archives 草稿，玩家可编辑 摘要 字段，确认后落库忆庭+更新记忆链
  * - failed：AI 调用失败，提供「重试」与「使用本地兜底」（同步截断式压缩）
  *
- * 对齐既定机制：调 AI + 玩家审核 + 明确阈值（10/30/50）。
+ * 对齐既定机制：调 AI + 玩家审核 + 明确阈值（15/25/45）。
  */
 interface Props {
   flow: MemorySummaryFlowState;

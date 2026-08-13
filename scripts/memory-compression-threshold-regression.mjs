@@ -13,15 +13,15 @@ const memoryPanel = fs.readFileSync('components/features/GameSystems/MemoryPanel
 assert.match(memoryModel, /MEMORY_LAYER_COMPRESSION_THRESHOLD = 15/,
   'MEMORY_LAYER_COMPRESSION_THRESHOLD 常量必须保留为 15（旧版迁移目标 + 运行时兜底）。');
 
-// 阶段1：新默认阈值对齐既定方案（即时10/短期30/中期50/NPC20），不再统一 15。
-assert.match(settingsSource, /即时转短期阈值: 10,/);
-assert.match(settingsSource, /短期转中期阈值: 30,/);
-assert.match(settingsSource, /中期转长期阈值: 50,/);
+// 阶段2：新默认阈值对齐既定方案（即时15/短期25/中期45/NPC20）。
+assert.match(settingsSource, /即时转短期阈值: 15,/);
+assert.match(settingsSource, /短期转中期阈值: 25,/);
+assert.match(settingsSource, /中期转长期阈值: 45,/);
 assert.match(settingsSource, /NPC记忆压缩阈值: 20,/);
 
-// 阶段1：旧版 25/20/10 迁移逻辑保留（usesPreviousLayerDefaults → 迁移到 MEMORY_LAYER_COMPRESSION_THRESHOLD=15）。
+// 阶段2：历史默认组合迁移逻辑保留（usesPreviousLayerDefaults → 迁移到当前默认 15/25/45）。
 assert.match(settingsSource, /usesPreviousLayerDefaults/,
-  '旧版 25/20/10 系统默认组合必须迁移为 15（向前兼容）。');
+  '历史默认组合（25/20/10、15/15/15、10/30/50）必须迁移到当前默认（向前兼容）。');
 
 // 阶段1：memoryUtils 的运行时兜底必须统一读取 MEMORY_LAYER_COMPRESSION_THRESHOLD（>=12 次）。
 assert.ok((memoryUtils.match(/MEMORY_LAYER_COMPRESSION_THRESHOLD/g) ?? []).length >= 12,
@@ -67,27 +67,38 @@ const {
   归一化记忆系统设置,
 } = await import(moduleUrl);
 
-// 阶段1：新配置的三层压缩阈值对齐既定方案（10/30/50）。
+// 阶段2：新配置的三层压缩阈值对齐既定方案（15/25/45）。
 const defaults = 创建默认记忆系统设置();
 assert.deepEqual(
   [defaults.即时转短期阈值, defaults.短期转中期阈值, defaults.中期转长期阈值],
-  [10, 30, 50],
-  '阶段1新配置的三层压缩阈值必须为 10/30/50（对齐既定方案）。',
+  [15, 25, 45],
+  '阶段2新配置的三层压缩阈值必须为 15/25/45（对齐既定方案）。',
 );
-assert.equal(defaults.NPC记忆压缩阈值, 20, '阶段1 NPC记忆压缩阈值必须为 20（对齐既定方案）。');
+assert.equal(defaults.NPC记忆压缩阈值, 20, '阶段2 NPC记忆压缩阈值必须为 20（对齐既定方案）。');
 
-// 阶段1：旧版 25/20/10 系统默认组合迁移为 15/15/15（通过 usesPreviousLayerDefaults）。
-const migrated = 归一化记忆系统设置({
-  即时转短期阈值: 25,
-  短期转中期阈值: 20,
-  中期转长期阈值: 10,
-  短期转长期阈值: 20,
+// 阶段2：历史默认组合全部迁移到当前默认 15/25/45（向前兼容）。
+for (const [immediate, short, middle] of [[25, 20, 10], [15, 15, 15], [10, 30, 50]]) {
+  const migrated = 归一化记忆系统设置({
+    即时转短期阈值: immediate,
+    短期转中期阈值: short,
+    中期转长期阈值: middle,
+    短期转长期阈值: short,
+  });
+  assert.deepEqual(
+    [migrated.即时转短期阈值, migrated.短期转中期阈值, migrated.中期转长期阈值],
+    [15, 25, 45],
+    `历史默认组合 ${immediate}/${short}/${middle} 必须迁移到当前默认 15/25/45（向前兼容）。`,
+  );
+}
+
+// 阶段2：NPC 同行记忆历史默认 15（v1.2.x 及更早）迁移到当前默认 20。
+const migratedNpc = 归一化记忆系统设置({
+  即时转短期阈值: 15,
+  短期转中期阈值: 25,
+  中期转长期阈值: 45,
+  NPC记忆压缩阈值: 15,
 });
-assert.deepEqual(
-  [migrated.即时转短期阈值, migrated.短期转中期阈值, migrated.中期转长期阈值],
-  [15, 15, 15],
-  '旧版 25/20/10 系统默认组合必须迁移为 15/15/15（向前兼容）。',
-);
+assert.equal(migratedNpc.NPC记忆压缩阈值, 20, 'NPC 同行记忆历史默认 15 必须迁移到 20。');
 
 // 阶段1：玩家主动设置的非默认阈值必须继续保留。
 const custom = 归一化记忆系统设置({
@@ -111,19 +122,19 @@ assert.equal(checkMiddleTermThreshold({ 即时记忆: [], 短期记忆: makeItem
 assert.equal(checkLongTermThreshold({ 即时记忆: [], 短期记忆: [], 中期记忆: makeItems(14, 'm'), 长期记忆: [] }), false);
 assert.equal(checkLongTermThreshold({ 即时记忆: [], 短期记忆: [], 中期记忆: makeItems(15, 'm'), 长期记忆: [] }), true);
 
-// 阶段1：autoCompressMemorySystem 用新默认阈值 10/30/50。
-// 即时记忆 10 条 = 阈值 10 → 触发压缩，batchSize=10，压缩后即时0条，短期+1。
-const shortResult = autoCompressMemorySystem({ 即时记忆: makeItems(10, 'i'), 短期记忆: [], 中期记忆: [], 长期记忆: [] }, 10, defaults);
+// 阶段2：autoCompressMemorySystem 用新默认阈值 15/25/45。
+// 即时记忆 15 条 = 阈值 15 → 触发压缩，batchSize=15，压缩后即时0条，短期+1。
+const shortResult = autoCompressMemorySystem({ 即时记忆: makeItems(15, 'i'), 短期记忆: [], 中期记忆: [], 长期记忆: [] }, 10, defaults);
 assert.equal(shortResult.即时记忆.length, 0);
 assert.equal(shortResult.短期记忆.length, 1);
 
-// 短期记忆 30 条 = 阈值 30 → 触发压缩，batchSize=30，压缩后短期0条，中期+1。
-const middleResult = autoCompressMemorySystem({ 即时记忆: [], 短期记忆: makeItems(30, 's'), 中期记忆: [], 长期记忆: [] }, 300, defaults);
+// 短期记忆 25 条 = 阈值 25 → 触发压缩，batchSize=25，压缩后短期0条，中期+1。
+const middleResult = autoCompressMemorySystem({ 即时记忆: [], 短期记忆: makeItems(25, 's'), 中期记忆: [], 长期记忆: [] }, 300, defaults);
 assert.equal(middleResult.短期记忆.length, 0);
 assert.equal(middleResult.中期记忆.length, 1);
 
-// 中期记忆 50 条 = 阈值 50 → 触发压缩，batchSize=50，压缩后中期0条，长期+1。
-const longResult = autoCompressMemorySystem({ 即时记忆: [], 短期记忆: [], 中期记忆: makeItems(50, 'm'), 长期记忆: [] }, 1500, defaults);
+// 中期记忆 45 条 = 阈值 45 → 触发压缩，batchSize=45，压缩后中期0条，长期+1。
+const longResult = autoCompressMemorySystem({ 即时记忆: [], 短期记忆: [], 中期记忆: makeItems(45, 'm'), 长期记忆: [] }, 1500, defaults);
 assert.equal(longResult.中期记忆.length, 0);
 assert.equal(longResult.长期记忆.length, 1);
 

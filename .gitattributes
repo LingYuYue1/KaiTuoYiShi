@@ -1,0 +1,19 @@
+# 仓库行尾规范：强制 LF（提交与检出均为 LF）。
+# Windows + core.autocrlf 会把工作区转成 CRLF，导致字节级回归（冻结 hash / 生成器对比）失败；
+# 统一 eol=lf 后所有平台行为一致。
+* text=auto eol=lf
+
+# 二进制资产不参与行尾处理
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.svg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.gz binary

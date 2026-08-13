@@ -914,11 +914,11 @@ export function 归一化正文生图设置(input?: Partial<正文生图设置>)
 export function 创建默认记忆系统设置(): 记忆系统设置 {
   return {
     启用中短长期API总结: true,
-    // 阶段1对齐既定方案：即时→短期10 / 短转中30 / 中转长50
-    即时转短期阈值: 10,
-    短期转中期阈值: 30,
-    中期转长期阈值: 50,
-    短期转长期阈值: 50, // deprecated 旧版字段，对齐中期转长期
+    // 阶段2对齐既定方案：即时→短期15 / 短转中25 / 中转长45
+    即时转短期阈值: 15,
+    短期转中期阈值: 25,
+    中期转长期阈值: 45,
+    短期转长期阈值: 45, // deprecated 旧版字段，对齐中期转长期
     NPC记忆压缩阈值: 20, // 阶段1对齐既定方案（原15）
     记忆总结API: {
       provider: '',
@@ -1119,7 +1119,6 @@ const 旧版NPC默认记忆压缩提示词 = [
 export function 归一化记忆系统设置(input?: Partial<记忆系统设置>): 记忆系统设置 {
   const defaults = 创建默认记忆系统设置();
   if (!input) return defaults;
-  const oldShortToLongThreshold = Number(input.短期转长期阈值);
   const rawImmediateThreshold = Math.max(
     1,
     Math.trunc(Number(input.即时转短期阈值 ?? defaults.即时转短期阈值) || defaults.即时转短期阈值),
@@ -1132,12 +1131,26 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
     1,
     Math.trunc(Number(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值),
   );
-  const usesPreviousLayerDefaults = rawImmediateThreshold === 25
-    && rawShortToMiddleThreshold === 20
-    && rawMiddleToLongThreshold === 10;
-  const immediateThreshold = usesPreviousLayerDefaults ? MEMORY_LAYER_COMPRESSION_THRESHOLD : rawImmediateThreshold;
-  const shortToMiddleThreshold = usesPreviousLayerDefaults ? MEMORY_LAYER_COMPRESSION_THRESHOLD : rawShortToMiddleThreshold;
-  const middleToLongThreshold = usesPreviousLayerDefaults ? MEMORY_LAYER_COMPRESSION_THRESHOLD : rawMiddleToLongThreshold;
+  // 历史默认组合（v1 早期 25/20/10、v1.2.x 统一 15/15/15、阶段1 10/30/50）一律迁移到当前默认，
+  // 保证老存档加载后与新版默认同步；玩家自定义过的组合（不等于任何历史默认）原样保留。
+  const 历史默认三层组合: ReadonlyArray<readonly [number, number, number]> = [
+    [25, 20, 10],
+    [15, 15, 15],
+    [10, 30, 50],
+  ];
+  const usesPreviousLayerDefaults = 历史默认三层组合.some(
+    ([immediate, short, middle]) =>
+      rawImmediateThreshold === immediate && rawShortToMiddleThreshold === short && rawMiddleToLongThreshold === middle,
+  );
+  const immediateThreshold = usesPreviousLayerDefaults ? defaults.即时转短期阈值 : rawImmediateThreshold;
+  const shortToMiddleThreshold = usesPreviousLayerDefaults ? defaults.短期转中期阈值 : rawShortToMiddleThreshold;
+  const middleToLongThreshold = usesPreviousLayerDefaults ? defaults.中期转长期阈值 : rawMiddleToLongThreshold;
+  const rawNpcThreshold = Math.max(
+    1,
+    Math.trunc(Number(input.NPC记忆压缩阈值 ?? defaults.NPC记忆压缩阈值) || defaults.NPC记忆压缩阈值),
+  );
+  // 历史默认 NPC 阈值 15（v1.2.x 及更早）迁移到当前默认 20；自定义值保留。
+  const npcThreshold = rawNpcThreshold === 15 ? defaults.NPC记忆压缩阈值 : rawNpcThreshold;
   const shortToMiddlePrompt = input.短期转中期提示词 ?? defaults.短期转中期提示词;
   const middleToLongPrompt = input.中期转长期提示词 ?? input.短期转长期提示词 ?? defaults.中期转长期提示词;
 
@@ -1149,6 +1162,7 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
     短期转中期阈值: shortToMiddleThreshold,
     中期转长期阈值: middleToLongThreshold,
     短期转长期阈值: shortToMiddleThreshold,
+    NPC记忆压缩阈值: npcThreshold,
     短期转中期提示词: shortToMiddlePrompt,
     中期转长期提示词: middleToLongPrompt,
     短期转长期提示词: middleToLongPrompt,
@@ -1187,11 +1201,11 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
     return {
       ...defaults,
       启用中短长期API总结: merged.启用中短长期API总结,
-      即时转短期阈值: input.即时转短期阈值 === 10 ? defaults.即时转短期阈值 : merged.即时转短期阈值,
-      短期转中期阈值: oldShortToLongThreshold === 10 ? defaults.短期转中期阈值 : merged.短期转中期阈值,
+      即时转短期阈值: merged.即时转短期阈值,
+      短期转中期阈值: merged.短期转中期阈值,
       中期转长期阈值: merged.中期转长期阈值,
-      短期转长期阈值: oldShortToLongThreshold === 10 ? defaults.短期转长期阈值 : merged.短期转长期阈值,
-      NPC记忆压缩阈值: input.NPC记忆压缩阈值 === 10 ? defaults.NPC记忆压缩阈值 : merged.NPC记忆压缩阈值,
+      短期转长期阈值: merged.短期转长期阈值,
+      NPC记忆压缩阈值: merged.NPC记忆压缩阈值,
       记忆总结API: merged.记忆总结API,
       忆庭召回最早触发回合: merged.忆庭召回最早触发回合,
       忆庭召回API: merged.忆庭召回API,

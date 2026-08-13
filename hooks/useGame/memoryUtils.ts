@@ -197,9 +197,9 @@ export function buildMemorySummaryFlowRequest(
   settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
   turn: number,
 ): MemorySummaryFlowState {
-  const immediateThreshold = settings.即时转短期阈值 ?? 10;
-  const shortThreshold = settings.短期转中期阈值 ?? 30;
-  const middleThreshold = settings.中期转长期阈值 ?? 50;
+  const immediateThreshold = settings.即时转短期阈值 ?? 15;
+  const shortThreshold = settings.短期转中期阈值 ?? 25;
+  const middleThreshold = settings.中期转长期阈值 ?? 45;
   return {
     open: true,
     stage: 'remind',
