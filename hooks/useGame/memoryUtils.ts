@@ -927,7 +927,7 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
   const sourceSummaries = Array.isArray(input.summaries) ? input.summaries : [];
   const normalizedInput = { ...input, entries: sourceEntries, summaries: sourceSummaries };
   const size = Math.max(1, Math.trunc(input.threshold || 15));
-  // 阶段1对齐墨色：阈值20，保留最近5条不压缩
+  // 阶段1对齐既定方案：阈值20，保留最近5条不压缩
   const keepRecentCount = Math.min(5, Math.max(0, size - 1));
   const normalized = normalizeNpcLedgerMemoryEntries(normalizedInput);
   let memories = normalized.memories;
@@ -982,7 +982,7 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
 }
 
 /**
- * 阶段1·NPC同行记忆压缩异步版（对齐墨色：调AI + 阈值20 + 保留最近5条 + 失败兜底）
+ * 阶段1·NPC同行记忆压缩异步版（对齐既定方案：调AI + 阈值20 + 保留最近5条 + 失败兜底）
  *
  * 与同步版 compressNpcMemoryLedger 的区别：
  * - 压缩调用 AI（summarizeMemoryBatch kind='npc'），质量更高

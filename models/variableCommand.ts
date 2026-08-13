@@ -1,5 +1,5 @@
 // 变量命令协议：AI 通过 <变量更新>...</变量更新> 块输出一组命令，由系统解析后修改 state。
-// 设计参考：墨色项目 TavernCommand（添加 sub 动作，去除 add 的「数值相加」歧义）。
+// 设计参考：TavernCommand（添加 sub 动作，去除 add 的「数值相加」歧义）。
 
 export type 变量命令动作 = 'set' | 'add' | 'sub' | 'push' | 'delete';
 

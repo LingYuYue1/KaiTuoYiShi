@@ -25,7 +25,7 @@ export function deriveMainStoryMessageMode(input: {
   return 'standard';
 }
 
-/** 墨色式 COT 伪装：真实输入不再作为普通 user 发送，改为尾部原子三连。
+/** COT 伪装：真实输入不再作为普通 user 发送，改为尾部原子三连。
  *  assistant（包装输入）→ user（开始任务）→ assistant（最小伪装响应）。 */
 export const COT_PSEUDO_USER_TRIGGER = '开始任务';
 

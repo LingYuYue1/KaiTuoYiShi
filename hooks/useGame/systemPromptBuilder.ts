@@ -541,7 +541,7 @@ function buildLayeredMemorySectionsSplit(memorySystem: 记忆系统): { long: st
   };
 }
 
-/** 区5 剧情安排合并段（主线进度 + 最近 1-2 条剧情规划备忘，墨色 #13 式）。 */
+/** 区5 剧情安排合并段（主线进度 + 最近 1-2 条剧情规划备忘）。 */
 function buildStoryArrangementSection(
   plotNodes: 剧情节点[] | undefined,
   storyPlanSnippets: string[] | undefined,

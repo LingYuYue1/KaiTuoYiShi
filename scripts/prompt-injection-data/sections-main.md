@@ -333,7 +333,7 @@ ${weakBlocks.length ? weakBlocks.join('\n\n') : '无'}
 本回合不在场的通讯对方：${...} —— 其他在场NPC不应知道与这位的通讯内容。   ← 有不在场通讯对方时
 ````
 
-> 阶段1方案E起**取消了忆庭互斥**：忆庭命中时段 22 分层记忆**仍然注入**（两套并存互补，对齐墨色江湖），不再是"命中即消失"。
+> 阶段1方案E起**取消了忆庭互斥**：忆庭命中时段 22 分层记忆**仍然注入**（两套并存互补，对齐既定方案），不再是"命中即消失"。
 
 <!-- seg-18 -->
 ### 段 18 · 剧情编织滑窗（override）
@@ -569,7 +569,7 @@ ${...}
 2. ${条目}
 ````
 
-三层上限（`historyWindow.ts:9-14`，阶段1对齐墨色江湖后）：长期 **全量**（`MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 9999`，实际条数由压缩阈值控制）/ 中期 **全量**（同 9999）/ 短期 **30**（`MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 30`）。压缩阈值：`MEMORY_LAYER_COMPRESSION_THRESHOLD = 15`（即时满 15 → 短期，短期满 15 → 中期，中期满 15 → 长期）。
+三层上限（`historyWindow.ts:9-14`，阶段1对齐既定方案后）：长期 **全量**（`MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 9999`，实际条数由压缩阈值控制）/ 中期 **全量**（同 9999）/ 短期 **30**（`MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 30`）。压缩阈值：`MEMORY_LAYER_COMPRESSION_THRESHOLD = 15`（即时满 15 → 短期，短期满 15 → 中期，中期满 15 → 长期）。
 
 <!-- seg-23 -->
 ### 段 23 · 角色在场状态

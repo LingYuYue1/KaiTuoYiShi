@@ -16,7 +16,7 @@ const sendWorkflow = read('hooks/useGame/sendWorkflow.ts');
 const contextSnapshot = read('hooks/useGame/contextSnapshot.ts');
 const systemPromptBuilder = read('hooks/useGame/systemPromptBuilder.ts');
 
-assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITH_MEMORY = 20'), '有短中长期记忆时原始 messages 窗口应接近墨色 10 回合，即约 20 条消息。');
+assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITH_MEMORY = 20'), '有短中长期记忆时原始 messages 窗口应接近基准 10 回合，即约 20 条消息。');
 assert(historyWindow.includes('MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20'), '无短中长期记忆时原始 messages 窗口也应保留约 10 回合承接。');
 assert(historyWindow.includes('MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20'), '即时剧情回顾必须覆盖 20 条近期消息。');
 assert(historyWindow.includes('maxMessages = MAIN_IMMEDIATE_STORY_REVIEW_LIMIT'), '即时剧情回顾默认必须读取统一常量。');

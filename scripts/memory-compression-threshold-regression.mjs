@@ -13,7 +13,7 @@ const memoryPanel = fs.readFileSync('components/features/GameSystems/MemoryPanel
 assert.match(memoryModel, /MEMORY_LAYER_COMPRESSION_THRESHOLD = 15/,
   'MEMORY_LAYER_COMPRESSION_THRESHOLD 常量必须保留为 15（旧版迁移目标 + 运行时兜底）。');
 
-// 阶段1：新默认阈值对齐墨色江湖（即时10/短期30/中期50/NPC20），不再统一 15。
+// 阶段1：新默认阈值对齐既定方案（即时10/短期30/中期50/NPC20），不再统一 15。
 assert.match(settingsSource, /即时转短期阈值: 10,/);
 assert.match(settingsSource, /短期转中期阈值: 30,/);
 assert.match(settingsSource, /中期转长期阈值: 50,/);
@@ -67,14 +67,14 @@ const {
   归一化记忆系统设置,
 } = await import(moduleUrl);
 
-// 阶段1：新配置的三层压缩阈值对齐墨色江湖（10/30/50）。
+// 阶段1：新配置的三层压缩阈值对齐既定方案（10/30/50）。
 const defaults = 创建默认记忆系统设置();
 assert.deepEqual(
   [defaults.即时转短期阈值, defaults.短期转中期阈值, defaults.中期转长期阈值],
   [10, 30, 50],
-  '阶段1新配置的三层压缩阈值必须为 10/30/50（对齐墨色江湖）。',
+  '阶段1新配置的三层压缩阈值必须为 10/30/50（对齐既定方案）。',
 );
-assert.equal(defaults.NPC记忆压缩阈值, 20, '阶段1 NPC记忆压缩阈值必须为 20（对齐墨色江湖）。');
+assert.equal(defaults.NPC记忆压缩阈值, 20, '阶段1 NPC记忆压缩阈值必须为 20（对齐既定方案）。');
 
 // 阶段1：旧版 25/20/10 系统默认组合迁移为 15/15/15（通过 usesPreviousLayerDefaults）。
 const migrated = 归一化记忆系统设置({

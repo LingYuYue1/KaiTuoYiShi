@@ -1,5 +1,4 @@
 // 变量登记表 + 命令校验。
-// 设计参考：墨色项目 utils/variableRegistry.ts。
 //
 // 用途：
 // 1. 构建登记表 → 注入 system prompt 末尾，告诉 AI "只能写入这些路径"。

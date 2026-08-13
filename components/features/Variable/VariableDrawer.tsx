@@ -14,7 +14,7 @@ interface Props {
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-// 命令 action → 颜色标签（参考墨色项目的配色风格）
+// 命令 action → 颜色标签（沿用既有配色风格）
 const ACTION_STYLE: Record<变量命令动作, { bg: string; border: string; color: string; label: string }> = {
   set:    { bg: 'rgba(62, 112, 156, 0.12)',  border: 'rgba(62, 112, 156, 0.38)',  color: 'rgb(43, 88, 128)', label: 'SET' },
   add:    { bg: 'rgba(54, 111, 74, 0.12)', border: 'rgba(54, 111, 74, 0.38)', color: 'rgb(42, 94, 61)', label: 'ADD' },

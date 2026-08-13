@@ -2315,7 +2315,7 @@ export async function executeSendWorkflow(
       : undefined;
 
     // 任务序列（按模式）：
-    // - cot_pseudo：墨色式尾部三连（assistant 包装输入 → user 开始任务 → assistant 最小伪装）
+    // - cot_pseudo：尾部三连（assistant 包装输入 → user 开始任务 → assistant 最小伪装）
     // - tavern_v2：Tavern 消息链
     // - opening/狭间踏入：指令已在 turnConstraints，任务序列为空
     // - standard / deepseek / 评判回合：真实输入（userMsg）一次

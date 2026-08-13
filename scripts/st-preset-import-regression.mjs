@@ -479,7 +479,7 @@ console.log('✓ 测试15 通过：V2 保留式解析保留对象映射 regex_sc
     prompt_order: [{ character_id: 100001, order: [{ identifier: 'main', enabled: true }] }],
     regex_scripts: [{
       id: 'camel_regex',
-      scriptName: '墨色格式正则',
+      scriptName: '格式正则',
       findRegex: '/foo/g',
       replaceString: 'bar',
       disabled: false,
@@ -487,7 +487,7 @@ console.log('✓ 测试15 通过：V2 保留式解析保留对象映射 regex_sc
   });
   const parsedV2 = parseSTPresetV2(v2Preset);
   assert(parsedV2.preset, '测试16失败：V2 预设应解析成功');
-  assert(parsedV2.preset.regex_scripts[0].scriptName === '墨色格式正则', '测试16失败：驼峰字段 scriptName 应原样保留');
+  assert(parsedV2.preset.regex_scripts[0].scriptName === '格式正则', '测试16失败：驼峰字段 scriptName 应原样保留');
   const normalizedRegex = normalizeTavernRegexScripts(parsedV2.preset.regex_scripts);
   assert(normalizedRegex.length === 1, '测试16失败：驼峰字段 regex_scripts 应能被 UI normalize 读取');
   assert(normalizedRegex[0].findRegex === '/foo/g', '测试16失败：findRegex 应原样保留');
