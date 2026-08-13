@@ -26,7 +26,7 @@ import {
 import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
 import { clearWorkflowRecoveryJournal, isWorkflowRecoveryComplete } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
-import { 归一化世界状态 } from '@/models/world';
+import { 归一化世界状态, type 世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
 import { 归一化手机系统 } from '@/models/phone';
 import { 归一化NPC记录列表 } from '@/models/npc';
@@ -34,6 +34,7 @@ import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { restoreStoryWeavingForLoadedSave } from '@/data/storyWeavingPreset';
+import { ensureRuntimeSliceForLoadedSave } from '@/hooks/useGame/legacyRuntimeSlice';
 import { materializeAlbumRuntimePayload, pruneAlbumAssetCache } from '@/utils/albumObjectUrl';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
@@ -254,6 +255,15 @@ export async function handleDeleteSave(id: number): Promise<void> {
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree);
 }
 
+/**
+ * 老存档读档迁移：旧档没有 世界.剧情运行时（V3 运行时切片），读档时按旧游标生成初始切片，
+ * 让老档立即获得当前焦点与排期世界事件——世界演变/事实物化/新闻联动从读档后即刻工作。
+ * - 只做"旧游标 → focus + 排期事件"的只读翻译：不推进剧情、不改游标、不补造旧回合事实
+ *   （遵守 r2-central「读档不得推进/重新判断剧情」回归锁定）；
+ * - 复用与首回合完全相同的投影/合并/dueAt 逻辑（buildStoryWeavingRuntimeProjection +
+ *   mergeProjectionEvents，按 eventInstanceId 去重，后续回合不会重复添加）；
+ * - 已有切片的存档（新档/已迁移档）直接通过；无剧情进度的存档跳过（首回合正常流程会自建）。
+ */
 async function applySaveToState(
   save: 存档数据,
   state: UseGameStateReturn,
@@ -270,6 +280,9 @@ async function applySaveToState(
     state.剧情编织,
     safeWorld.开局档案,
   );
+  // 老存档运行时迁移：读档只恢复保存状态（不推进剧情、不补造事实），
+  // 旧档没有 世界.剧情运行时 时仅按旧游标生成初始运行时切片（已有切片不覆盖）。
+  const safeWorldWithRuntime = ensureRuntimeSliceForLoadedSave(safeWorld, nextStoryWeaving);
 
   if (state.interruptedWorkflow) {
     if (isWorkflowRecoveryComplete(state.interruptedWorkflow, safeChatHistory)) {
@@ -282,7 +295,7 @@ async function applySaveToState(
   }
 
   state.set旅人(safeTraveler);
-  state.set世界(safeWorld);
+  state.set世界(safeWorldWithRuntime);
   state.setChatHistory(safeChatHistory);
   state.set记忆(normalizeMemorySystem(save.记忆));   // 老存档缺 longTermMemories 时兜底
   const legacyArchives = (save.记忆 as unknown as { 回忆档案?: unknown[] })?.回忆档案 ?? [];
