@@ -460,10 +460,7 @@ export function useGameState(): UseGameStateReturn {
       // - savedWorldbooks 是数组     → 玩家已与世界书交互过,完全尊重其状态,不再覆盖
       const builtins = createBuiltinWorldbooks();
       const rawSavedWorldbooks = await loadSetting<世界书[]>(WORLDBOOK_STORAGE_KEY);
-      // 旧版本只有 'builtin_core_config' 一本内置；现在已拆为 6 本，老用户库里这本要丢弃。
-      // 同样：CoT 已从世界书迁移到提示词模块系统，旧的 'builtin_cot' 本也要丢弃。
-      // 它里面的 'builtin_first_turn_rule' 条目已经被新的 'builtin_opening_rule' 本继承。
-      // normalize 把 turnGuard='first_only' 迁移成 scope=['opening']。
+      // 为兼容旧用户库，丢弃已拆分或已废弃的内置世界书，并由归一化逻辑迁移旧作用域。
       const savedWorldbooks = rawSavedWorldbooks
         ? normalizeWorldbooks(
             rawSavedWorldbooks.filter(
@@ -567,11 +564,11 @@ export function useGameState(): UseGameStateReturn {
   useEffect(() => {
     const meta = activeTreeMeta;
     if (!meta?.rootId || !meta.parentNodeId) {
-      setRerollParentStatus('invalid');
+      queueMicrotask(() => setRerollParentStatus('invalid'));
       return;
     }
     let cancelled = false;
-    setRerollParentStatus('pending');
+    queueMicrotask(() => setRerollParentStatus('pending'));
     void validateRerollParent(meta.rootId, meta.parentNodeId)
       .then((ok) => {
         if (cancelled) return;

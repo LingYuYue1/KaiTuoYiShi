@@ -1,9 +1,3 @@
-/**
- * 片 3 管线类型：TurnContext（不可变输入 + 回合工具）与 TurnDeltas（逐阶段填充的产出）。
- * 规则：TurnDeltas 全部字段可选；阶段函数返回部分 deltas，调用方 Object.assign 合并。
- *
- * 导入按需追加——每新增一个阶段就把需要的类型加进来。
- */
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { API配置项 } from '@/models/settings';
 import type { 聊天消息, 回合快照 } from '@/models/chat';

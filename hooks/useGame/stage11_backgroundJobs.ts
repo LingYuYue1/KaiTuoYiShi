@@ -1,26 +1,3 @@
-/**
- * 阶段 11：后台任务 —— 新闻生成 / 忆庭入库 / 手机 Fallback 种子 / 正文插图。
- * 四个异步闭包参数化，parallel/sequential 分支不变。含 async API 调用。
- *
- * 读 d 字段:
- *   - displayText (S5)
- *   - finalHistory (S5→S9 写回)
- *   - npcAfterCompression (S9→S10 写回)
- *   - yitingWithCompression (S6)
- *   - variableOverrides (S8)
- *   - storyWeavingForSave (S10)
- *   - aiMsg (S5)
- *   - parsedForDisplay (S5)
- *   - openingNewsPreprocessed (S2)
- *   - openingNewsForSave (S2)
- *   - yitingPreview (S2)
- *   - yitingEnabled (S2)
- *   - yitingRecallEnabled (S2)
- *   - storyProgressMemoryLine (S10)
- *
- * 写 d 字段: newsAfterGeneration, yitingAfterTurnRecall,
- *   phoneAfterFallbackSeed, finalHistoryForSave
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import type { 聊天消息 } from '@/models/chat';
 import type { 新闻条目 } from '@/models/news';

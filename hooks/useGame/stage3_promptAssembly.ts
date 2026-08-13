@@ -1,21 +1,3 @@
-/**
- * 阶段 3：Prompt 组装 —— ST V2 Tavern 链、Depth 注入、DeepSeek 守卫、
- *   CoT 伪装历史、Claude 方案 D、reroll 守卫、apiMessages 最终拼接。
- * 同步函数，无网络调用。
- *
- * 读 d 字段:
- *   - systemPrompt (S2, stage2_preModel)
- *   - chatModuleMessages (S2)
- *   - awakeningPhase (S2)
- *   - currentTriggerType (S2)
- *   - macroCtx (S2)
- *   - updatedHistory (S1)
- *   - userMsg (S1)
- * 写 d 字段: systemPrompt (updated), apiMessages, tavernV2Messages,
- *   tavernV2Error, shouldTryTavernV2, deepSeekMainActive, deepSeekLockFormat,
- *   deepSeekMainMode, effectivePrefixMode, effectivePrefixContent,
- *   mainRequestMode, currentPresetV2ForStage
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import type { 聊天消息 } from '@/models/chat';
 import { 创建聊天消息 } from '@/models/chat';

@@ -1,16 +1,3 @@
-/**
- * 阶段 4：AI 请求与响应解析 —— 含 while 重试循环、流式 onDelta、Tavern 正则清理、
- * 抗空回/相似度/DeepSeek 协议校验。
- *
- * 红线：while 循环整体移动不拆散；streamMessageSetter 在 ctx 中不新建；
- * streamedText/previewText 不进 TurnDeltas，通过返回值传递。
- *
- * 读 d 字段: apiMessages, systemPrompt, tavernV2Messages, deepSeekMainActive,
- *   effectivePrefixMode, effectivePrefixContent, mainRequestMode, maxAttempts,
- *   currentPresetV2ForStage
- * 写 d 字段: deepSeekProtocolIssuesForTurn, rerollSimilarityForTurn,
- *   rerollSimilarityRetried（经 Stage4Output.deltas 返回）
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { 创建聊天消息 } from '@/models/chat';
 import { sendChatMessage } from '@/services/ai/text';

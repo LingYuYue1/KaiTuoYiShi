@@ -1,11 +1,3 @@
-/**
- * 阶段 6：记忆处理 —— 即时记忆构建、自动压缩（含异步 API 调用）。
- *
- * 读 d 字段: parsedForDisplay (S5), displayText (S5)
- * 上游写入点: stage5_replyLanding.ts 第 ~132 行 parsedForDisplay / 第 ~56 行 displayText
- *
- * 写 d 字段: mem (本次记忆系统写入后的快照), yitingWithCompression
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { buildImmediateMemory, addImmediateMemory, autoCompressMemorySystemWithArchivesAsync } from './memoryUtils';
 import { pushQueueTask } from './workflowTaskRuntime';

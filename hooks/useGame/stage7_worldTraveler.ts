@@ -1,13 +1,3 @@
-/**
- * 阶段 7：世界/旅人 —— 全局事件追加、命途狭间邀请/评判、天气解析。
- * 纯累积操作，无网络调用。
- *
- * 读 d 字段:
- *   - parsedForDisplay (S5, stage5_replyLanding ~第 132 行)
- *   - rawFullText (S4, sendWorkflow 桥接 rawFullText = result.fullText)
- *   - displayText (S5, stage5_replyLanding ~第 56 行)
- * 写 d 字段: worldAfter (S7), travelerAfter (S7)
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { 归一化世界状态 } from '@/models/world';
 import { appendWorldEvents } from '@/utils/worldEvents';

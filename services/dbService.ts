@@ -206,11 +206,7 @@ function migrateNewestStoryHeadNodeId(transaction: IDBTransaction): void {
 
 const UNIFIED_ID_PATTERN = /^[0-9a-f]{4}-[0-9a-f]{6}-[0-9a-f]{4}$/;
 
-/**
- * v9 迁移：newest 槽新增 branchName 持久化字段（片 5d-1 分叉 API 的标签载体）。
- * 该字段在旧版本记录上不存在；本迁移只做形状归一化（非法值剔除）与幂等重放确认，
- * 不重写有效值。旧版本 DB（v8 及以下）升级后即具备该字段的持久化通道。
- */
+// 为旧版 newest 记录补齐 branchName 的持久化形状，同时保持迁移幂等。
 function migrateNewestStoryBranchName(transaction: IDBTransaction): void {
   const newestStore = transaction.objectStore(NEWEST_STORY_STORE);
   const newestRequest = newestStore.get(NEWEST_STORY_STORE_KEY);
@@ -375,25 +371,7 @@ function migrateNodeIdsToUnifiedFormat(transaction: IDBTransaction): void {
   }, { once: true });
 }
 
-/**
- * v10 迁移（子任务 A）：newest 退化为全局指针。
- * 旧格式 newest（含 baseCheckpointId / story 覆盖集 / branchName）→
- * 将 story 物化到对应叶子（= 恢复 base 检查点全量 + story 逐字段覆盖 + queueTasks），
- * 在存档树下新建可写叶子行 → newest 只剩 headNodeId。
- *
- * 幂等：记录已无 story/baseCheckpointId 键时直接 noop；可重放：事务内失败整体回滚，
- * 重放从旧数据重新物化。devLog 埋点覆盖 noop / no-record / no-base / base-missing /
- * base-unrestorable / materialized 六种结果。
- *
- * 边界说明：
- *  - base 检查点为 delta-only 存储时，先经 delta 链恢复全量再合并（递归，链深有界）；
- *  - 旧 headNodeId 存在且不等于 base 自身 nodeId 时采用为叶子 nodeId（保留分叉身份），
- *    否则分配新 unified id（防迁移回填产生的同 id 重复）；
- *  - 无 base / base 缺失 / base 不可恢复 → newest 归零（headNodeId: null），
- *    与旧 bootRestoreFromNewest「base-missing 回退到新局」语义一致；
- *  - story 内 asset 引用沿用 base 已抽取的 saveAssets 记录；story 新引入的资产
- *    若仅存在于运行态缓存则无法在迁移期抽取（与旧 boot 回放缺口一致，见交付说明）。
- */
+// 将旧版 newest 覆盖结构物化为可写叶子和全局指针，保证升级后仍能恢复工作区并支持幂等重放。
 function migrateNewestToHeadPointer(transaction: IDBTransaction): void {
   const newestStore = transaction.objectStore(NEWEST_STORY_STORE);
   const savesStore = transaction.objectStore(SAVES_STORE);

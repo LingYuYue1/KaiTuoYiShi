@@ -153,10 +153,7 @@ export interface UseGameReturn {
     handleGetSaveTreeForExport: (rootId: string) => Promise<存档数据[]>;
     // 导入存档落库：只负责 saveGame，id:0/type:'imported'/timestamp 批次字段由面板补齐。
     handlePersistImportedSave: (data: 存档数据) => Promise<number>;
-    // 导出单节点存档包（片 panel-p7 收口）：读取完整存档 + 触发浏览器下载，SaveLoadModal 与 StorageManager 共用。
     handleExportSavePackage: (id: number) => Promise<void>;
-    // 导出当前工作区叶子节点（子任务 A）：手动存档已移除，「导出当前节点」改指活跃叶子，
-    // 直接读取活跃叶子并触发下载，返回叶子 id；无工作区时返回 null。
     handleExportActiveLeafPackage: () => Promise<number | null>;
     // 导出整树存档包：读取完整存档集合 + 触发浏览器下载。
     handleExportSaveTreePackage: (rootId: string) => Promise<void>;

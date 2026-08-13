@@ -1,20 +1,3 @@
-/**
- * 阶段 10：剧情编织 / 智库 —— 剧情进度对齐、编织系统更新、剧情记忆注入 NPC/记忆、
- *  智库运行时解锁。含 async（await resolveStoryWeavingForBackgroundWrite /
- *  saveSetting × 2）。
- *
- * 读 d 字段:
- *   - variableOverrides (S8, stage8_variable ~第 60 行)
- *   - displayText (S5, stage5_replyLanding ~第 56 行)
- *   - mem (S6, stage6_memory ~第 42 行)
- *   - worldAfter (S7, stage7_worldTraveler)
- *   - storyWeavingGate (S2, stage2_preModel)
- *   - npcAfterCompression (S9, stage9_npcLedger)
- *
- * 写 d 字段: storyWeavingForSave (S10), memoryAfterStoryProgress (S10),
- *   zhikuAfterRuntimeUnlock (S10), npcAfterCompression (写回 updated),
- *   storyProgressMemoryLine
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';

@@ -1,13 +1,3 @@
-/**
- * 阶段 9：NPC 账本 —— 档案补全、NSFW 基线补建、同行记忆压缩、账本调试。
- * 纯累积操作，无网络调用，同步函数。
- *
- * 读 d 字段:
- *   - variableOverrides (S8, stage8_variable ~第 60 行)
- *   - finalHistory (S5, stage5_replyLanding ~第 100 行)
- *   - aiMsg (S5, stage5_replyLanding ~第 80 行)
- * 写 d 字段: npcAfterCompression (S9), finalHistory (写回 updated)
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { compressNpcMemoryLedger } from './memoryUtils';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';

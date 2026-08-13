@@ -1,26 +1,4 @@
-/**
- * commitTurn —— 唯一晋升点（ideal_design §1/§6，片 5a-2 D2-A/D5；子任务 A 改造成 commitLeaf 语义）。
- *
- * 输入：newest（全局指针，只含 headNodeId）。工作区数据物理存储在叶子节点（saveRuntime.unsealedHead），
- *   回合阶段边界经 writeLeafNode 直写叶子；不再有 base + story 覆盖集。
- * 处理（封版晋升，ideal_design「回合闭环机制」，reviewer P0 顺序约束）：
- *   1. 读活跃叶子全量状态；
- *   2. 先在该叶子下创建新叶子（继承全量状态 + queueTasks，unsealedHead，全量存储）；
- *   3. 再把旧叶子就地转为不可变检查点（同 nodeId 身份转变，剥离 queueTasks 等仅限叶子字段）；
- *   4. newest 指针指向新叶子。
- * 顺序约束原因：若「封版 → 建叶」，封版后、建叶前崩溃会让原叶子已剥离 queueTasks
- * 而新叶子未创建，恢复分叉只能得到空队列；先建叶后封版使任何崩溃点都保留
- * 至少一个携带 queueTasks 的可写叶子（loadActiveLeaf / ensureHeadLeafWritable 采纳子叶子）。
- * 输出：无返回值（新叶子 nodeId 由 newest 带回）。
- *
- * B2 候选状态契约：本文件只认 ctx / d / newest，不回读 state；例外是 headNodeId 缺失时
- * 由 ensureHeadLeafWritable 从当前状态重建工作区（整树删除等边界态）。
- *
- * L1 边界：本文件是 checkpoint 表写入的唯一合法出口（no-restricted-imports
- * 禁 stage*.ts 与 sendWorkflow.ts import saveGame；导入路径走 saveLoadWorkflow
- * 不受限）。checkpoint 表四 store = saves / saveSummaries / saveAssets /
- * saveNodeDeltas（settings / newestStory 非 checkpoint 表）。叶子创建同样收敛在本文件。
- */
+// 先建叶后封版，保证封版与建叶之间崩溃时仍存在携带 queueTasks 的可写叶子。
 import type { 存档数据 } from '@/models/settings';
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { loadSave, loadSaveIdByNodeId, saveGame, saveNewestStory, createLeafNode, sealLeafRow } from '@/services/dbService';

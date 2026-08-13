@@ -68,14 +68,7 @@ export function clearActiveSaveTreeMetaIfMatches(
   }
 }
 
-// 共享的存档负载构造函数：工作区重建等路径走这一处，未来加字段只改一处。
-// overrides 用于 sendWorkflow 里那一刻 React state 还没回写、但已有新值的字段
-// （比如刚追加的 chatHistory、压缩过的 memorySystem）。
-//
-// queueTasks 属主 = 工作区（叶子）字段（片 5e D4）：重建根叶子时（ensureHeadLeafWritable
-// 无工作区路径）显式补入当前队列状态（reviewer P1-1），避免整树删除后重建丢队列；
-// 检查点（封版）载荷不得携带 queueTasks——组装检查点的路径自行剥离，
-// assertCheckpointPayloadNoQueueTasks 兜底拦截泄漏，读档侧仍宽容读取旧存档残留。
+// 统一构造存档负载：queueTasks 属主是可写叶子、检查点必须剥离，避免新增字段遗漏重建路径并防止队列泄漏到检查点。
 export function buildSavePayload(
   state: UseGameStateReturn,
   type: 存档类型,
@@ -242,11 +235,7 @@ export async function enterSession(
   save: 存档数据,
 ): Promise<void> {
   await beginSession(state);
-  // 子任务 A：读档按目标节点类型分派（读叶子 = 水合，读检查点 = 分叉新叶子）。
-  //  - 叶子（未封版，saveRuntime.unsealedHead）→ 直接水合，并把 newest 指向该叶子；
-  //    目标就是当前工作区叶子时只水合、不重写指针（避免叶子增殖与多余写入）。
-  //  - 内部节点（已封版检查点）→ forkSaveTreeLeaf 分叉新叶子，newest 由分叉 API 重定向，
-  //    并用新叶子水合（activeSaveTreeMeta 指向带父检查点的新叶子，canRerollWithTree 不误判）。
+  // 读取当前工作区叶子时只水合，避免叶子增殖和指针写入；读取检查点时才创建分叉叶子。
   const treeMeta = (save as { saveTree?: 存档树元信息 | null }).saveTree;
   const rootId = treeMeta?.rootId ?? null;
   const targetNodeId = treeMeta?.nodeId ?? null;

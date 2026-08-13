@@ -1,9 +1,3 @@
-/**
- * 阶段 12：保存 / 收尾 —— commitTurn（每回合必写 checkpoint）、恢复日志清空。全部 async。
- *
- * 片 5a-2：stage12 的 saveGame / 四条 saveSetting（theme/apiSettings/gameSettings/worldbooks）
- * 已消灭（D4）；checkpoint 写入的唯一路径 = commitTurn（D2-A，开关无关）。
- */
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import type { NewestStory记录 } from '@/models/newestStory';
 import {
