@@ -1,5 +1,6 @@
 import type { API配置项 } from '@/models/settings';
 import type { 回合Token消耗 } from '@/models/chat';
+import { devLog } from '@/utils/devLog';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
@@ -1486,6 +1487,7 @@ async function streamOpenAICompatible(
   let fullText = '';
   let buffer = '';
   let finishReason: string | undefined;
+  let skippedMalformedLines = 0;
   const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
 
   try {
@@ -1503,29 +1505,36 @@ async function streamOpenAICompatible(
         const data = trimmed.slice(5).trim();
         if (data === '[DONE]') continue;
 
+        let parsed: ReturnType<JSON['parse']>;
         try {
-          const parsed = JSON.parse(data);
-          emitUsageFromResponse(parsed, config, request);
-          const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
-
-          // Accept visible text from compatible chunks; drop thinking/reasoning deltas.
-          if (text) {
-            fullText += text;
-            callbacks.onDelta(text);
-          }
-          // 采集 finish_reason（用于抗截断检测）
-          const fr = readFinishReason(parsed);
-          if (fr) {
-            finishReason = fr;
-            callbacks.onFinishReason?.(fr);
-          }
+          parsed = JSON.parse(data);
         } catch {
-          // skip malformed SSE lines
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
+        }
+        emitUsageFromResponse(parsed, config, request);
+        const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
+
+        // Accept visible text from compatible chunks; drop thinking/reasoning deltas.
+        if (text) {
+          fullText += text;
+          callbacks.onDelta(text);
+        }
+        // 采集 finish_reason（用于抗截断检测）
+        const fr = readFinishReason(parsed);
+        if (fr) {
+          finishReason = fr;
+          callbacks.onFinishReason?.(fr);
         }
       }
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider: 'openai', count: skippedMalformedLines });
   }
 
   request.onResponseDiagnostics?.({
@@ -1577,6 +1586,7 @@ async function streamClaude(
   let buffer = '';
   // Claude extended thinking 用独立 content_block，type='thinking' 的 block 内的 delta 是 thinking_delta
   let currentBlockIsThinking = false;
+  let skippedMalformedLines = 0;
 
   try {
     for (;;) {
@@ -1592,39 +1602,46 @@ async function streamClaude(
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const data = trimmed.slice(5).trim();
 
+        let parsed: ReturnType<JSON['parse']>;
         try {
-          const parsed = JSON.parse(data);
-          emitUsageFromResponse(parsed, config, request);
-            if (parsed.type === 'content_block_start') {
-            currentBlockIsThinking = parsed.content_block?.type === 'thinking';
-            if (currentBlockIsThinking) continue;
-            const text = String(parsed.content_block?.text ?? '');
-            if (text) {
-              fullText += text;
-              callbacks.onDelta(text);
-            }
-          } else if (parsed.type === 'content_block_delta') {
-            const deltaType = parsed.delta?.type;
-            // 丢弃 extended thinking delta（厂商内置思考摘要）
-            if (deltaType === 'thinking_delta' || currentBlockIsThinking) continue;
-            const t = String(parsed.delta?.text ?? '');
-            if (t) {
-              fullText += t;
-              callbacks.onDelta(t);
-            }
-          } else if (parsed.type === 'content_block_stop') {
-            currentBlockIsThinking = false;
-          }
-          // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
-          const fr = readFinishReason(parsed);
-          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
+          parsed = JSON.parse(data);
         } catch {
-          // skip
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
         }
+        emitUsageFromResponse(parsed, config, request);
+        if (parsed.type === 'content_block_start') {
+          currentBlockIsThinking = parsed.content_block?.type === 'thinking';
+          if (currentBlockIsThinking) continue;
+          const text = String(parsed.content_block?.text ?? '');
+          if (text) {
+            fullText += text;
+            callbacks.onDelta(text);
+          }
+        } else if (parsed.type === 'content_block_delta') {
+          const deltaType = parsed.delta?.type;
+          // 丢弃 extended thinking delta（厂商内置思考摘要）
+          if (deltaType === 'thinking_delta' || currentBlockIsThinking) continue;
+          const t = String(parsed.delta?.text ?? '');
+          if (t) {
+            fullText += t;
+            callbacks.onDelta(t);
+          }
+        } else if (parsed.type === 'content_block_stop') {
+          currentBlockIsThinking = false;
+        }
+        // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
+        const fr = readFinishReason(parsed);
+        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
       }
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider: 'claude', count: skippedMalformedLines });
   }
 
   callbacks.onDone();
@@ -1852,6 +1869,7 @@ async function streamOpenCodeChat(
   let fullText = '';
   let buffer = '';
   let finishReason: string | undefined;
+  let skippedMalformedLines = 0;
   const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
 
   try {
@@ -1867,27 +1885,34 @@ async function streamOpenCodeChat(
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const data = trimmed.slice(5).trim();
         if (data === '[DONE]') continue;
+        let parsed: ReturnType<JSON['parse']>;
         try {
-          const parsed = JSON.parse(data);
-          emitUsageFromResponse(parsed, config, request);
-          const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
-          if (text) {
-            fullText += text;
-            callbacks.onDelta(text);
-          }
-          // 采集 finish_reason（OpenCode Chat 兼容 OpenAI 格式）
-          const fr = readFinishReason(parsed);
-          if (fr) {
-            finishReason = fr;
-            callbacks.onFinishReason?.(fr);
-          }
+          parsed = JSON.parse(data);
         } catch {
-          // skip
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
+        }
+        emitUsageFromResponse(parsed, config, request);
+        const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
+        if (text) {
+          fullText += text;
+          callbacks.onDelta(text);
+        }
+        // 采集 finish_reason（OpenCode Chat 兼容 OpenAI 格式）
+        const fr = readFinishReason(parsed);
+        if (fr) {
+          finishReason = fr;
+          callbacks.onFinishReason?.(fr);
         }
       }
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-chat', count: skippedMalformedLines });
   }
 
   request.onResponseDiagnostics?.({
@@ -1935,6 +1960,7 @@ async function streamOpenCodeMessages(
   let fullText = '';
   let buffer = '';
   let currentBlockIsThinking = false;
+  let skippedMalformedLines = 0;
 
   try {
     for (;;) {
@@ -1949,37 +1975,44 @@ async function streamOpenCodeMessages(
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const data = trimmed.slice(5).trim();
         if (data === '[DONE]') continue;
+        let parsed: ReturnType<JSON['parse']>;
         try {
-          const parsed = JSON.parse(data);
-          emitUsageFromResponse(parsed, config, request);
-            if (parsed.type === 'content_block_start') {
-            currentBlockIsThinking = parsed.content_block?.type === 'thinking';
-            if (currentBlockIsThinking) continue;
-            const text = String(parsed.content_block?.text ?? '');
-            if (text) {
-              fullText += text;
-              callbacks.onDelta(text);
-            }
-          } else if (parsed.type === 'content_block_delta') {
-            if (parsed.delta?.type === 'thinking_delta' || currentBlockIsThinking) continue;
-            const text = String(parsed.delta?.text ?? '');
-            if (text) {
-              fullText += text;
-              callbacks.onDelta(text);
-            }
-          } else if (parsed.type === 'content_block_stop') {
-            currentBlockIsThinking = false;
-          }
-          // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
-          const fr = readFinishReason(parsed);
-          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
+          parsed = JSON.parse(data);
         } catch {
-          // skip
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
         }
+        emitUsageFromResponse(parsed, config, request);
+        if (parsed.type === 'content_block_start') {
+          currentBlockIsThinking = parsed.content_block?.type === 'thinking';
+          if (currentBlockIsThinking) continue;
+          const text = String(parsed.content_block?.text ?? '');
+          if (text) {
+            fullText += text;
+            callbacks.onDelta(text);
+          }
+        } else if (parsed.type === 'content_block_delta') {
+          if (parsed.delta?.type === 'thinking_delta' || currentBlockIsThinking) continue;
+          const text = String(parsed.delta?.text ?? '');
+          if (text) {
+            fullText += text;
+            callbacks.onDelta(text);
+          }
+        } else if (parsed.type === 'content_block_stop') {
+          currentBlockIsThinking = false;
+        }
+        // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
+        const fr = readFinishReason(parsed);
+        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
       }
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-messages', count: skippedMalformedLines });
   }
 
   callbacks.onDone();
@@ -2020,6 +2053,7 @@ async function streamOpenCodeResponses(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  let skippedMalformedLines = 0;
 
   try {
     for (;;) {
@@ -2034,24 +2068,31 @@ async function streamOpenCodeResponses(
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const data = trimmed.slice(5).trim();
         if (data === '[DONE]') continue;
+        let parsed: ReturnType<JSON['parse']>;
         try {
-          const parsed = JSON.parse(data);
-          emitUsageFromResponse(parsed, config, request);
-          const text = readOpenCodeResponsesStreamDelta(parsed);
-          if (text) {
-            fullText += text;
-            callbacks.onDelta(text);
-          }
-          // 采集 finish_reason（Responses API 的 finish_reason 在顶层或 choices[0]）
-          const fr = readFinishReason(parsed);
-          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
+          parsed = JSON.parse(data);
         } catch {
-          // skip
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
         }
+        emitUsageFromResponse(parsed, config, request);
+        const text = readOpenCodeResponsesStreamDelta(parsed);
+        if (text) {
+          fullText += text;
+          callbacks.onDelta(text);
+        }
+        // 采集 finish_reason（Responses API 的 finish_reason 在顶层或 choices[0]）
+        const fr = readFinishReason(parsed);
+        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
       }
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-responses', count: skippedMalformedLines });
   }
 
   callbacks.onDone();
@@ -2092,6 +2133,7 @@ async function streamOpenCodeGemini(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  let skippedMalformedLines = 0;
 
   try {
     for (;;) {
@@ -2106,24 +2148,31 @@ async function streamOpenCodeGemini(
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const data = trimmed.slice(5).trim();
         if (data === '[DONE]') continue;
+        let parsed: ReturnType<JSON['parse']>;
         try {
-          const parsed = JSON.parse(data);
-          emitUsageFromResponse(parsed, config, request);
-          const text = parseOpenCodeGeminiText(parsed);
-          if (text) {
-            fullText += text;
-            callbacks.onDelta(text);
-          }
-          // 采集 finishReason（OpenCode Gemini 的 candidates[0].finishReason）
-          const fr = readFinishReason(parsed);
-          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
+          parsed = JSON.parse(data);
         } catch {
-          // skip
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
         }
+        emitUsageFromResponse(parsed, config, request);
+        const text = parseOpenCodeGeminiText(parsed);
+        if (text) {
+          fullText += text;
+          callbacks.onDelta(text);
+        }
+        // 采集 finishReason（OpenCode Gemini 的 candidates[0].finishReason）
+        const fr = readFinishReason(parsed);
+        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
       }
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-gemini', count: skippedMalformedLines });
   }
 
   callbacks.onDone();
@@ -2310,6 +2359,7 @@ async function streamGemini(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  let skippedMalformedLines = 0;
 
   try {
     for (;;) {
@@ -2325,31 +2375,38 @@ async function streamGemini(
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const data = trimmed.slice(5).trim();
 
+        let parsed: ReturnType<JSON['parse']>;
         try {
-          const parsed = JSON.parse(data);
-          emitUsageFromResponse(parsed, config, request);
-          const parts = parsed.candidates?.[0]?.content?.parts;
-          if (parts) {
-            for (const part of parts) {
-              // Gemini Thinking parts 带 thought:true → 丢弃（厂商内置思考摘要）
-              if (part.thought) continue;
-              const text = String(part.text ?? '');
-              if (text) {
-                fullText += text;
-                callbacks.onDelta(text);
-              }
+          parsed = JSON.parse(data);
+        } catch {
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
+        }
+        emitUsageFromResponse(parsed, config, request);
+        const parts = parsed.candidates?.[0]?.content?.parts;
+        if (parts) {
+          for (const part of parts) {
+            // Gemini Thinking parts 带 thought:true → 丢弃（厂商内置思考摘要）
+            if (part.thought) continue;
+            const text = String(part.text ?? '');
+            if (text) {
+              fullText += text;
+              callbacks.onDelta(text);
             }
           }
-          // 采集 finishReason（Gemini 的 candidates[0].finishReason）
-          const fr = readFinishReason(parsed);
-          if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-        } catch {
-          // skip
         }
+        // 采集 finishReason（Gemini 的 candidates[0].finishReason）
+        const fr = readFinishReason(parsed);
+        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
       }
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider: 'gemini', count: skippedMalformedLines });
   }
 
   callbacks.onDone();
