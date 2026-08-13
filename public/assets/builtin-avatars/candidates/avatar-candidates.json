@@ -13,7 +13,9 @@
       "aliases": [
         "三月七·巡猎",
         "巡猎三月七",
-        "长夜月"
+        "长夜月",
+        "三月",
+        "March 7th"
       ]
     },
     {
@@ -28,7 +30,8 @@
         "丹恒·饮月",
         "饮月",
         "Imbibitor Lunae",
-        "丹恒·腾荒"
+        "丹恒·腾荒",
+        "Dan Heng"
       ]
     },
     {
@@ -41,7 +44,8 @@
       ],
       "aliases": [
         "姬子•启行",
-        "姬子·启行"
+        "姬子·启行",
+        "Himeko"
       ]
     },
     {
@@ -53,7 +57,11 @@
         "static:avatar:welt:03"
       ],
       "aliases": [
-        "瓦尔特·杨"
+        "瓦尔特·杨",
+        "瓦尔特杨",
+        "瓦尔特·扬",
+        "瓦尔特扬",
+        "Welt"
       ]
     },
     {
@@ -63,6 +71,10 @@
         "static:avatar:pom-pom:01",
         "static:avatar:pom-pom:02",
         "static:avatar:pom-pom:03"
+      ],
+      "aliases": [
+        "Pom-Pom",
+        "Pom Pom"
       ]
     },
     {
@@ -72,6 +84,11 @@
         "static:avatar:herta:01",
         "static:avatar:herta:02",
         "static:avatar:herta:03"
+      ],
+      "aliases": [
+        "Herta",
+        "大黑塔",
+        "The Herta"
       ]
     },
     {
@@ -81,6 +98,9 @@
         "static:avatar:asta:01",
         "static:avatar:asta:02",
         "static:avatar:asta:03"
+      ],
+      "aliases": [
+        "Asta"
       ]
     },
     {
@@ -90,6 +110,9 @@
         "static:avatar:arlan:01",
         "static:avatar:arlan:02",
         "static:avatar:arlan:03"
+      ],
+      "aliases": [
+        "Arlan"
       ]
     },
     {
@@ -99,6 +122,11 @@
         "static:avatar:stelle:01",
         "static:avatar:stelle:02",
         "static:avatar:stelle:03"
+      ],
+      "aliases": [
+        "灰发少女",
+        "Stelle",
+        "开拓者·星"
       ]
     },
     {
@@ -108,6 +136,11 @@
         "static:avatar:caelus:01",
         "static:avatar:caelus:02",
         "static:avatar:caelus:03"
+      ],
+      "aliases": [
+        "灰发少年",
+        "Caelus",
+        "开拓者·穹"
       ]
     },
     {
@@ -131,6 +164,10 @@
       "name": "砂金",
       "variants": [
         "static:avatar:aventurine:01"
+      ],
+      "aliases": [
+        "Aventurine",
+        "卡卡瓦卡"
       ]
     },
     {
@@ -138,6 +175,9 @@
       "name": "白露",
       "variants": [
         "static:avatar:bailu:01"
+      ],
+      "aliases": [
+        "Bailu"
       ]
     },
     {
@@ -152,6 +192,9 @@
       "name": "符玄",
       "variants": [
         "static:avatar:fu-xuan:01"
+      ],
+      "aliases": [
+        "Fu Xuan"
       ]
     },
     {
@@ -166,6 +209,9 @@
       "name": "翡翠",
       "variants": [
         "static:avatar:jade:01"
+      ],
+      "aliases": [
+        "Jade"
       ]
     },
     {
@@ -173,6 +219,9 @@
       "name": "景元",
       "variants": [
         "static:avatar:jing-yuan:01"
+      ],
+      "aliases": [
+        "Jing Yuan"
       ]
     },
     {
@@ -201,6 +250,9 @@
       "name": "希儿",
       "variants": [
         "static:avatar:seele:01"
+      ],
+      "aliases": [
+        "Seele"
       ]
     },
     {
@@ -234,6 +286,10 @@
       "name": "托帕",
       "variants": [
         "static:avatar:topaz:01"
+      ],
+      "aliases": [
+        "Topaz",
+        "叶珉"
       ]
     },
     {

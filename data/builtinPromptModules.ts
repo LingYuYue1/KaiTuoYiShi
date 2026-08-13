@@ -1371,7 +1371,8 @@ export function createBuiltinPromptModules(): 提示词模块[] {
       content: NSFW_CONTENT,
       enabled: false,
       order: 1043,
-      scope: ['main'],
+      // 工作包B：NSFW 双层注入——中文完整规则适用于 main/opening（pathAwakening 不注入）
+      scope: ['main', 'opening'],
       createdAt: now,
       updatedAt: now,
     }),

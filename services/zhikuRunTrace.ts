@@ -1,4 +1,5 @@
 import type { 智库分类 } from '@/models/zhiku';
+import type { 主剧情消息模式 } from '@/models/chat';
 import { estimateTextTokens } from '@/utils/tokenEstimate';
 
 export type ZhikuTraceChannel =
@@ -49,7 +50,7 @@ export interface ZhikuRunTraceRequestReceipt {
   model: string;
   transport: string;
   endpoint: string;
-  mode: 'native' | 'tavern-v2';
+  mode: 'native' | 'tavern-v2' | 主剧情消息模式;
   streaming: boolean;
   prefixApplied: boolean;
   finishReason?: string;

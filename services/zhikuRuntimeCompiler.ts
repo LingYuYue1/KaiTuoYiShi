@@ -156,7 +156,7 @@ export function compileZhikuPhoneView(
 }
 
 function scopeAllowsMainStoryZhiku(scope: ZhikuRequestScope): boolean {
-  return scope === 'main' || scope === 'diagnostic';
+  return scope === 'main' || scope === 'opening' || scope === 'diagnostic';
 }
 
 function finalizeCompilation(input: CompileZhikuTurnInput, result: 智库检索结果): ZhikuTurnCompilation {

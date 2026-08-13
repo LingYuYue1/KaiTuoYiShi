@@ -315,6 +315,15 @@ const PATH_NAME_TO_ID: Record<string, 命途ID> = {
   elation: 'elation', 欢愉: 'elation',
   nihility: 'nihility', 虚无: 'nihility',
   harmony: 'harmony', 同谐: 'harmony',
+  trailblaze: 'trailblaze', 开拓: 'trailblaze',
+  propagation: 'propagation', 繁育: 'propagation',
+  voracity: 'voracity', 贪饕: 'voracity',
+  enigmata: 'enigmata', 神秘: 'enigmata',
+  equilibrium: 'equilibrium', 均衡: 'equilibrium',
+  order: 'order', 秩序: 'order',
+  finality: 'finality', 终末: 'finality',
+  beauty: 'beauty', 纯美: 'beauty',
+  permanence: 'permanence', 不朽: 'permanence',
 };
 
 export function 解析命途ID(raw: string): 命途ID | null {

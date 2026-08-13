@@ -247,7 +247,7 @@ export type TavernPostProcessMode = '未选择' | '单一用户' | '严格' | '�
 export interface TavernInternalMessage {
   role: STMessageRole;
   content: string;
-  source: 'preset' | 'worldbook' | 'history' | 'latest_input' | 'persona' | 'format_guard' | 'cot_guard';
+  source: 'preset' | 'worldbook' | 'history' | 'latest_input' | 'persona' | 'format_guard' | 'cot_guard' | 'compat_guard';
 }
 
 /** 消息链构建输出的最终消息 */

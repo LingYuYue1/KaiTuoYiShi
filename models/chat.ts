@@ -3,6 +3,15 @@ import type { ZhikuRunTrace } from '@/services/zhikuRunTrace';
 
 export type 消息角色 = 'user' | 'assistant' | 'system';
 
+/** 工作包C：主剧情消息模式（finalizer 运行时派生，不写入存档）。
+ *  standard / cot_pseudo / deepseek_standard / deepseek_prefix / tavern_v2。 */
+export type 主剧情消息模式 =
+  | 'standard'
+  | 'cot_pseudo'
+  | 'deepseek_standard'
+  | 'deepseek_prefix'
+  | 'tavern_v2';
+
 /** 「本回合 user 发送之前」的变量切片快照。挂在 assistant message 上，用于 reroll 时回滚。
  *  保留方式：只在最近一条 assistant message 上持久化，生成新 assistant 时清掉上一条的 snapshot，
  *  避免存档体积无限膨胀。所有切片都是引用拷贝（浅拷贝顶层数组对象足够，state 内部不可变）。 */
@@ -65,7 +74,7 @@ export interface 聊天消息 {
       mergesSystemMessages: boolean;
       supportsAssistantPrefill: boolean;
       streaming: boolean;
-      mode: 'native' | 'tavern-v2';
+      mode: 主剧情消息模式;
       prefixRequested: boolean;
       prefixApplied: boolean;
     };

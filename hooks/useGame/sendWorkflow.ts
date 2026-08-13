@@ -7,20 +7,23 @@ import { isEmptyResponse, parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { isNonRetryableAIError } from '@/services/ai/deepSeekRecovery';
 import { callVariableModel, type NsfwBaselineCandidate } from '@/services/ai/variableModel';
-import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
+import { buildOpeningSystemPrompt, buildPathAwakeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import {
   buildMainTurnEnforcementBlock,
+  buildCotPseudoTaskSequence,
   createMainRequestHash,
   DEEPSEEK_MAIN_FORMAT_GUARD,
+  deriveMainStoryMessageMode,
   finalizeMainRequest,
-  MAIN_COT_FAKE_HISTORY,
+  insertDepthIntoHistory,
+  type MainStoryMessageMode,
 } from './mainRequestFinalizer';
 import { resolveChatProviderCapabilities } from '@/services/ai/chatCompletionClient';
 import { buildTavernMessageChain } from './tavernMessageChainBuilder';
 import { applyTavernOutputRegexScripts } from './tavernRegexProcessor';
 import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
-import { 构建天气Prompt片段, 解析天气标签, 验证天气合法性 } from '@/data/weatherRules';
+import { 解析天气标签, 验证天气合法性 } from '@/data/weatherRules';
 import {
   buildImmediateMemory,
   addImmediateMemory,
@@ -103,7 +106,9 @@ import {
   buildZhikuKeywordRecallQuery,
   buildLeanAssistantHistoryContent,
   buildMainRecallQuery,
+  extractRecentStoryPlanSnippets,
   getMainHistoryWindow,
+  getPathAwakeningHistoryWindow,
 } from './historyWindow';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import { restorePreTurnSnapshotPersisted } from './turnSnapshot';
@@ -120,7 +125,12 @@ import { resolveStorySnapshot, selectPresentStorySnapshotNpcs } from '@/services
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
-import { createMacroContext, type MacroContext, type MacroGameState } from '@/utils/macroEngine';
+import type { MacroContext } from '@/utils/macroEngine';
+import {
+  buildPromptMacroContext,
+  buildPromptWorldbookContext,
+  resolvePromptWorldbookPlan,
+} from './promptAssemblyContext';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
 
 function formatOriginalProtagonistForOpening(originalProtagonist: 世界状态['原著主角']): string {
@@ -1688,6 +1698,7 @@ function buildRerollGenerationGuard(nonce: string, previousResponse: string): st
     '必须更换开场镜头、段落推进顺序、对白切入、收尾钩子和行动选项写法；不得复用上一版前三句、连续短语、变量草稿句式或相同结尾。',
     '如果上一版以旁白开场，本版优先从角色动作或短对白开场；如果上一版以对白开场，本版优先从环境、动作或感官细节切入。',
     '仍必须遵守当前主剧情输出标签和格式要求，不得因为重roll省略 <thinking>、<正文>、<短期记忆>、<动态世界> 或 <变量草稿>。',
+    '可以保留必要事实一致性，但正文展开方式必须明显不同；如果上一版已经处理某事件，本次不得因为重roll而把旧副作用当作已发生事实。',
     previousResponse
       ? `上一版回复摘录（只用于避重复，不是当前事实）：${compactForRerollInstruction(previousResponse)}`
       : '',
@@ -1849,33 +1860,17 @@ export async function executeSendWorkflow(
       turnCount: state.turnCount,
     });
     const openingArchiveText = 格式化开局档案上下文(effectiveWorld.开局档案);
-    const worldbookCtx = {
-      recentUserInput: userInput,
-      recentAIResponse: '',
-      worldName: effectiveWorld.当前时段?.名称 ?? '',
+    const worldbookCtx = buildPromptWorldbookContext({
+      userInput,
+      history: updatedHistory,
+      world: effectiveWorld,
       travelerName: state.旅人.姓名,
       turnCount: state.turnCount,
-      startScenarioId: effectiveWorld.起航之地ID,
-      startSceneName: effectiveWorld.开局档案?.章节锚点名称 ?? effectiveWorld.当前地点,
-      currentLocation: effectiveWorld.当前地点,
-      openingRegionName: effectiveWorld.开局档案?.地区名称,
-      openingChapterName: effectiveWorld.开局档案?.章节锚点名称,
-      openingEntryText: effectiveWorld.开局档案?.玩家介入原文,
-      openingSource: effectiveWorld.开局档案?.来源,
-      openingArchiveText,
       npcNames: zhikuParticipation.present,
-      originalProtagonist: effectiveWorld.原著主角,
-      currentScope,
-      // 当前剧情模式，用于按 storyModeGate 过滤主线世界书（4 选 1）
-      storyMode: effectiveWorld.剧情模式,
-      // Phase 7.1：世界书扫描扩展（消息历史 + 触发状态）
-      recentMessages: updatedHistory
-        .map((m) => (typeof m.content === 'string' ? m.content : ''))
-        .filter(Boolean)
-        .slice(-100),
-      messageCount: state.turnCount,
+      scope: currentScope,
+      openingArchiveText,
       worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
-    };
+    });
     const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
     const latestZhikuStoryPlan = [...updatedHistory]
       .reverse()
@@ -1964,7 +1959,7 @@ export async function executeSendWorkflow(
     }
     const yitingEnabled = state.gameSettings.记忆系统?.忆庭启用 !== false;
     const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && (state.gameSettings.记忆系统?.忆庭召回最早触发回合 ?? 10) < state.turnCount;
-    const zhikuRecallEnabled = zhikuRequestScope === 'main'
+    const zhikuRecallEnabled = (zhikuRequestScope === 'main' || zhikuRequestScope === 'opening')
       && !!(state.gameSettings.智库系统?.enabled && state.智库 && worldbookCtx.recentUserInput);
     const zhikuAiSupplementEnabled = zhikuRecallEnabled && state.gameSettings.智库系统?.enableAiSupplement === true;
     const storyWeavingGate = state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow
@@ -2099,22 +2094,25 @@ export async function executeSendWorkflow(
     // local 每回合重置；global 从 settings 读取副本（避免直接 mutate state）。
     // 处理完后若 global 变化，回写到 settings.macroGlobalVars 实现跨会话持久化。
     const prevGlobalSnapshot = state.gameSettings.macroGlobalVars ?? {};
-    // 组装游戏状态快照供 ST 标准宏使用（{{char}}/{{user}}/{{lastMessage}} 等）
-    const lastMsg = updatedHistory[updatedHistory.length - 1];
-    const lastUserMsg = [...updatedHistory].reverse().find((m) => m.role === 'user');
-    const lastAssistantMsg = [...updatedHistory].reverse().find((m) => m.role === 'assistant');
-    const macroGameState: MacroGameState = {
-      charName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
-      userName: state.旅人.姓名 || '开拓者',
-      lastMessage: lastMsg?.content ?? '',
-      lastUserMessage: lastUserMsg?.content ?? '',
-      lastCharMessage: lastAssistantMsg?.content ?? '',
-      messageCount: updatedHistory.length,
+    const macroCtx: MacroContext = buildPromptMacroContext({
+      history: updatedHistory,
+      playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
       turnCount: state.turnCount,
       modelName: mainStoryConfig.model,
       maxContext: mainStoryConfig.maxContext,
-    };
-    const macroCtx: MacroContext = createMacroContext(prevGlobalSnapshot, macroGameState);
+      globals: prevGlobalSnapshot,
+    });
+
+    // 工作包A：世界书单回合唯一解析——builder 与触发状态提交共用同一 plan，不再重复筛选。
+    const worldbookPlan = resolvePromptWorldbookPlan(
+      state.worldbooks,
+      worldbookCtx,
+      state.gameSettings.enableWorldbookInjection,
+    );
+    // 工作包B：共享预处理——从回合前历史提取最近 1-2 条剧情规划（区5 剧情安排）
+    const storyPlanSnippets = extractRecentStoryPlanSnippets(updatedHistory);
+    // 工作包F：命途狭间回合判定（踏入/出题/评判）——提前声明供 builder 选择与后处理 scope gate 使用
+    const isPathAwakeningTurn = isAwakeningEnterTrigger || awakeningPhase !== undefined;
 
     const builtPrompt = isOpeningSystemTrigger
       ? buildOpeningSystemPrompt(
@@ -2127,8 +2125,25 @@ export async function executeSendWorkflow(
           newsForPrompt,
           currentTriggerType,
           macroCtx,
+          worldbookPlan ?? undefined,
+          zhikuPreview,
         )
-      : buildSystemPrompt(
+      : isPathAwakeningTurn
+        ? buildPathAwakeningSystemPrompt(
+            state.旅人,
+            effectiveWorld,
+            state.gameSettings,
+            state.turnCount,
+            state.worldbooks,
+            worldbookCtx,
+            zhikuPreview,
+            awakeningPhase,
+            storyRecallInjection || undefined,
+            currentTriggerType,
+            macroCtx,
+            worldbookPlan ?? undefined,
+          )
+        : buildSystemPrompt(
           state.旅人,
           effectiveWorld,
           state.记忆,
@@ -2149,6 +2164,8 @@ export async function executeSendWorkflow(
           npcLedgerSelection,
           currentTriggerType,
           macroCtx,
+          storyPlanSnippets,
+          worldbookPlan ?? undefined,
         );
 
     // 宏引擎处理后计算 globalVars 候选（仅当 global 变化时）。不在 API 请求前 setGameSettings：
@@ -2161,13 +2178,15 @@ export async function executeSendWorkflow(
     // Phase 7.1：本回合世界书注入完成后计算触发状态表候选（用于 delay / cooldown 判断）。
     // 必须在 buildSystemPrompt 之后调用，保证本回合 cooldown 检查用的是上一回合的状态。
     // 同样只在成功回合结束时提交。
-    const worldbookTriggerStatesAfter = updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx);
+    // 工作包A：触发状态提交消费本回合 plan（不再重新筛选/重抽 probability）
+    const worldbookTriggerStatesAfter = state.gameSettings.enableWorldbookInjection
+      ? updateTriggerStatesAfterTurn(state.worldbooks, worldbookCtx, worldbookPlan ?? undefined)
+      : state.gameSettings.worldbookTriggerStates;
     let systemPrompt = builtPrompt.systemPrompt;
-    // 天气判断 prompt 注入
-    const 天气片断 = 构建天气Prompt片段(effectiveWorld.当前地点, effectiveWorld.当前天气);
-    systemPrompt = systemPrompt + '\n\n' + 天气片断;
+    // 工作包B：天气已由 builder 作为区6 第3项统一组装，不再在此追加
     // Phase 4: In-Chat depth 注入。非 system 角色的模块消息按 depth 插入聊天历史。
     const moduleChatMessages = builtPrompt.chatModuleMessages;
+    const nativeDepthMessages = moduleChatMessages.filter((m) => m._injectionPosition === 1);
     const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
     const shouldTryTavernV2 =
       state.gameSettings.enableStPreset !== false &&
@@ -2175,22 +2194,11 @@ export async function executeSendWorkflow(
       Boolean(currentPresetV2?.preset?.prompt_order?.length);
     let tavernV2Messages: 聊天消息[] | null = null;
     let tavernV2Error: unknown = null;
-    const recentHistory = getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆);
+    const recentHistory = awakeningPhase
+      ? getPathAwakeningHistoryWindow(updatedHistory, awakeningPhase)
+      : getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆);
     const tavernHistory = recentHistory.filter((msg) => msg.id !== userMsg.id);
-    if (deps.rerollContext && !isOpeningSystemTrigger) {
-      systemPrompt = [
-        systemPrompt,
-        '',
-        '# 重roll生成约束',
-        `本次请求是玩家对上一版回复的重roll。重roll nonce: ${deps.rerollContext.nonce}`,
-        '必须基于同一事实起点重新组织镜头、描写、对话和节奏；禁止复用上一版回复的具体段落、句式、变量草稿或行动选项。',
-        '开场方式、对白切入、段落顺序和结尾钩子都要换；不要复用上一版前三句、连续短语或相同收束。',
-        '可以保留必要事实一致性，但正文展开方式必须明显不同；如果上一版已经处理某事件，本次不得因为重roll而把旧副作用当作已发生事实。',
-        deps.rerollContext.previousResponse
-          ? `上一版回复摘录（仅用于避重复，不是当前事实）：${compactForRerollInstruction(deps.rerollContext.previousResponse)}`
-          : '',
-      ].filter(Boolean).join('\n');
-    }
+    // 工作包G：初始重 Roll 约束只保留尾部 buildRerollGenerationGuard（B5）一份，删除 system 侧重复追加。
 
     if (shouldTryTavernV2 && currentPresetV2) {
       try {
@@ -2203,13 +2211,15 @@ export async function executeSendWorkflow(
           settings: state.gameSettings,
           preset: currentPresetV2.preset,
           characterId: state.gameSettings.currentStCharacterId ?? currentPresetV2.characterId ?? null,
-          chatHistory: tavernHistory,
+          chatHistory: insertDepthIntoHistory(tavernHistory, nativeDepthMessages),
           latestUserInput: latestTavernInput,
           playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
           playerRole: state.旅人,
           includeNativeContextInWorldbook: false,
           triggerType: currentTriggerType,
           macroCtx,
+          // 工作包D：scope-aware 兼容保护（main/opening/pathAwakening 各读对应 COT）
+          scope: isOpeningSystemTrigger ? 'opening' : (isPathAwakeningTurn ? 'pathAwakening' : 'main'),
         }).map((msg) => 创建聊天消息(msg.role, msg.content));
         if (tavernV2Messages.length === 0) {
           tavernV2Messages = null;
@@ -2223,50 +2233,104 @@ export async function executeSendWorkflow(
       }
     }
 
-    // 3. Prepare messages for API
+    // 3. Prepare messages for API（工作包C：五种消息模式分层组装）
     const apiMessages: 聊天消息[] = [];
-    if (tavernV2Messages) {
-      apiMessages.push(...tavernV2Messages);
-    } else {
-      for (const msg of recentHistory) {
-        // 跳过 [系统] 触发消息，避免污染 AI 上下文
-        if (msg.role === 'user' && msg.content.startsWith('[系统]')) {
-          continue;
-        }
-        if (msg.role === 'user') {
-          apiMessages.push(msg);
-        } else if (msg.role === 'assistant' && msg.parsedResponse) {
-          apiMessages.push(创建聊天消息('assistant', buildLeanAssistantHistoryContent(msg)));
-        }
+    // 回合前历史（排除本轮输入——本轮输入在任务序列中只出现一次）
+    const preTurnHistory: 聊天消息[] = [];
+    for (const msg of recentHistory) {
+      if (msg.id === userMsg.id) continue;
+      if (msg.role === 'user' && msg.content.startsWith('[系统]')) continue;
+      if (msg.role === 'user') {
+        preTurnHistory.push(msg);
+      } else if (msg.role === 'assistant' && msg.parsedResponse) {
+        preTurnHistory.push(创建聊天消息('assistant', buildLeanAssistantHistoryContent(msg)));
       }
-      if (isOpeningSystemTrigger) {
-        apiMessages.push(创建聊天消息('user', openingInstruction));
-      }
-      // [系统] 触发被 API 过滤 → 必须额外推一条真实指令,否则 AI 收到空白消息直接卡住。
-      if (isAwakeningEnterTrigger && awakeningInstruction) {
-        apiMessages.push(创建聊天消息('user', awakeningInstruction));
-      }
+    }
+
+    const providerCapabilities = resolveChatProviderCapabilities(mainStoryConfig);
+    const deepSeekMainMode = state.gameSettings.deepSeekMainMode ?? 'off';
+    const deepSeekTransportActive = providerCapabilities.transport === 'deepseek' && deepSeekMainMode !== 'off';
+    const deepSeekMainActive = deepSeekTransportActive
+      && !tavernV2Messages
+      && !isOpeningSystemTrigger
+      && !isPathAwakeningTurn;
+    const deepSeekLockFormat = deepSeekTransportActive && deepSeekMainMode === 'lock_format';
+
+    // 模式判定（工作包C）：有效 Tavern V2 → DeepSeek lock_format → DeepSeek standard → cot_pseudo → standard。
+    // opening / 命途狭间（踏入/出题/评判）走专用尾部，不派生 cot_pseudo。
+    const messageMode: MainStoryMessageMode = isOpeningSystemTrigger || isPathAwakeningTurn
+      ? 'standard'
+      : deriveMainStoryMessageMode({
+          tavernV2Active: Boolean(tavernV2Messages),
+          deepSeekMainActive,
+          deepSeekLockFormat,
+          enableCotFakeHistory: state.gameSettings.enableCotFakeHistory,
+        });
+
+    // position=0 兼容消息（user/assistant 角色模块，保持角色，位于任务序列之前）
+    const positionZeroCompatMessages = moduleChatMessages
+      .filter((m) => m._injectionPosition === 0 && m.role !== 'system')
+      .sort((a, b) => (a._injectionOrder ?? 0) - (b._injectionOrder ?? 0))
+      .map((m) => 创建聊天消息(m.role === 'assistant' ? 'assistant' : 'user', m.content));
+    // depth 消息（position=1 模块 → 历史窗口内部插入）
+    const depthMessages = tavernV2Messages ? [] : nativeDepthMessages;
+
+    // 本回合条件约束（B2 开局/踏入指令、B3 狭间评判提醒、B4 DeepSeek守卫、B5 重roll守卫）
+    const turnConstraints: 聊天消息[] = [];
+    if (isOpeningSystemTrigger && !tavernV2Messages) {
+      turnConstraints.push(创建聊天消息('user', openingInstruction));
+    }
+    // [系统] 触发被 API 过滤 → 必须额外推一条真实指令,否则 AI 收到空白消息直接卡住。
+    if (isAwakeningEnterTrigger && awakeningInstruction && !tavernV2Messages) {
+      turnConstraints.push(创建聊天消息('user', awakeningInstruction));
     }
     // 评判回合:再追加一条系统级提醒,强化「必输 <狭间评判> 标签」的指令优先级。
     // 实践中,AI 若只在 system prompt 里看到此规则,容易在长正文里漏掉标签;把它升到 user 末尾会显著提高遵循率。
     if (awakeningPhase === 'judgement') {
-      apiMessages.push(
+      turnConstraints.push(
         创建聊天消息(
           'user',
           '⚠ 命途狭间·回应回合提醒:你上一回合已出三题,玩家本轮给出了答案。本回合**必须**在所有标签之外、**单独**写一行 `<狭间评判>升阶</狭间评判>`。命途狭间没有失败、滞留或退转;三问只是让玩家明确自己的道路。漏掉这个标签会让玩家永远卡在虚境无法升阶——这是必须避免的错误。同时正文里要让命途意志回应玩家答案、确认其道路,再把旅人从虚境拉回现实场景。',
         ),
       );
     }
+    if (deepSeekMainActive) {
+      turnConstraints.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
+    }
+    if (deps.rerollContext && !isOpeningSystemTrigger) {
+      turnConstraints.push(创建聊天消息(
+        'user',
+        buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
+      ));
+    }
 
-    const providerCapabilities = resolveChatProviderCapabilities(mainStoryConfig);
-    const deepSeekMainMode = state.gameSettings.deepSeekMainMode ?? 'off';
-    const deepSeekMainActive = providerCapabilities.transport === 'deepseek' && deepSeekMainMode !== 'off';
-    const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
-    const shouldUseCotFakeHistory =
-      state.gameSettings.enableCotFakeHistory && !isOpeningSystemTrigger && !deepSeekMainActive;
+    // 区E 执法块（main scope：普通回合与 Tavern V2 均包含一次；由统一 finalizer 置于任务序列之前）
+    const enforcementBlock = zhikuRequestScope === 'main'
+      ? buildMainTurnEnforcementBlock({
+          playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+          wordCountTarget: state.gameSettings.wordCountTarget,
+          zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
+          storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
+        })
+      : undefined;
 
-    // Phase 4/7：从当前激活预设读取 assistant prefill
-    // DeepSeek lock_format 必须固定从 <thinking>\n 续写；普通请求才允许使用预设 assistantPrefill。
+    // 任务序列（按模式）：
+    // - cot_pseudo：墨色式尾部三连（assistant 包装输入 → user 开始任务 → assistant 最小伪装）
+    // - tavern_v2：Tavern 消息链
+    // - opening/狭间踏入：指令已在 turnConstraints，任务序列为空
+    // - standard / deepseek / 评判回合：真实输入（userMsg）一次
+    let taskSequence: 聊天消息[];
+    if (messageMode === 'cot_pseudo') {
+      taskSequence = buildCotPseudoTaskSequence(userInput);
+    } else if (tavernV2Messages) {
+      taskSequence = tavernV2Messages;
+    } else if (isOpeningSystemTrigger || isAwakeningEnterTrigger) {
+      taskSequence = [];
+    } else {
+      taskSequence = [userMsg];
+    }
+
+    // Phase 4/7：assistant prefill（工作包C 8.6：cot_pseudo / Tavern V2 / DeepSeek 不叠加普通 preset prefill）
     const currentPresetId = state.gameSettings.currentStPresetId;
     const allPresets = [
       ...getBuiltinPresets(),
@@ -2276,44 +2340,32 @@ export async function executeSendWorkflow(
       ? allPresets.find((p) => p.id === currentPresetId)
       : undefined;
     const presetAssistantPrefill = currentPreset?.assistantPrefill;
-    const usePresetPrefill = Boolean(presetAssistantPrefill) && !deepSeekLockFormat;
-    const effectivePrefixMode = deepSeekLockFormat || usePresetPrefill;
-    const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\n' : presetAssistantPrefill;
-
-    const mainTailMessages: 聊天消息[] = [];
-    if (deepSeekMainActive) mainTailMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
-
-    // 主剧情普通回合共享同一尾部校准块；普通消息链和 Tavern V2 不再分叉。
-    if (zhikuRequestScope === 'main') {
-      mainTailMessages.push(创建聊天消息('user', buildMainTurnEnforcementBlock({
-        playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
-        wordCountTarget: state.gameSettings.wordCountTarget,
-        zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
-        storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
-      })));
-    }
-    if (deps.rerollContext && !isOpeningSystemTrigger) {
-      mainTailMessages.push(创建聊天消息(
-        'user',
-        buildRerollGenerationGuard(deps.rerollContext.nonce, deps.rerollContext.previousResponse),
-      ));
+    let effectivePrefixMode = false;
+    let effectivePrefixContent: string | undefined;
+    if (messageMode === 'deepseek_prefix' || ((isOpeningSystemTrigger || isPathAwakeningTurn) && !tavernV2Messages && deepSeekLockFormat)) {
+      // DeepSeek lock_format 必须固定从 <thinking>\n 续写
+      effectivePrefixMode = true;
+      effectivePrefixContent = '<thinking>\n';
+    } else if (messageMode === 'standard' && !isOpeningSystemTrigger && !isPathAwakeningTurn && presetAssistantPrefill) {
+      effectivePrefixMode = true;
+      effectivePrefixContent = presetAssistantPrefill;
     }
 
-    // 3b. CoT 伪装历史注入：在消息序列最前面塞一对 user/assistant，强化思考段输出习惯。
-    //     DeepSeek 专用模式下不注入这段伪装续聊，避免污染真实 user 输入并降低格式漂移。
     const shouldStreamMainRequest = state.gameSettings.enableStreaming && !isPageHidden();
     const mainRequestMode: 'stream' | 'non-stream' = shouldStreamMainRequest ? 'stream' : 'non-stream';
     const finalizedMainRequest = finalizeMainRequest({
       config: mainStoryConfig,
       systemPrompt,
-      baseMessages: apiMessages,
-      moduleChatMessages,
-      leadingMessages: shouldUseCotFakeHistory ? [...MAIN_COT_FAKE_HISTORY] : [],
-      tailMessages: mainTailMessages,
+      mode: messageMode,
+      preTurnHistory: tavernV2Messages ? [] : preTurnHistory,
+      depthMessages,
+      positionZeroCompatMessages,
+      turnConstraints,
+      enforcementBlock,
+      taskSequence,
       prefixMode: effectivePrefixMode,
       prefixContent: effectivePrefixContent,
       streaming: shouldStreamMainRequest,
-      mode: tavernV2Messages ? 'tavern-v2' : 'native',
       scope: zhikuRequestScope,
       zhikuCompileId: zhikuPreview.compileId,
     });
@@ -2447,7 +2499,7 @@ export async function executeSendWorkflow(
         if (deps.rerollContext) {
           rerollSimilarityForTurn = rerollSimilarity;
         }
-        if (deps.rerollContext && rerollSimilarity >= 0.86 && attempt < maxAttempts) {
+        if (deps.rerollContext && !rerollSimilarityRetried && rerollSimilarity >= 0.86 && attempt < maxAttempts) {
           rerollSimilarityRetried = true;
           void appendApiErrorReport({
             source: '重roll相似度校验',
@@ -2674,7 +2726,7 @@ export async function executeSendWorkflow(
         requestCapabilities: finalizedMainRequest.capabilities,
         deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : 'off',
         deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory === true,
-        deepSeekPrefixMode: deepSeekLockFormat,
+        deepSeekPrefixMode: finalizedMainRequest.prefixMode,
         deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
         deepSeekMainOriginalModel: result.deepSeekRecovery?.originalModel,
         deepSeekMainAdaptedModel: result.deepSeekRecovery?.fallbackModel
@@ -2840,6 +2892,7 @@ export async function executeSendWorkflow(
       detail: state.gameSettings.enableVariableUpdate ? '正在调用变量模型校准正文。' : '变量更新未启用，已跳过。',
     });
     const variableOverrides = await runVariableCalibrationStep({
+      pathAwakeningTurn: isPathAwakeningTurn,
       state,
       mainApiConfig: config,
       userInput,
@@ -2959,7 +3012,8 @@ export async function executeSendWorkflow(
       let storyWeavingConcurrentChange = false;
       // R3：统一事实视图（新闻/NPC/手机/记忆/智库/地图只消费这一份，不各自重新判断剧情是否发生）。
       let turnFactView: StoryFactConsumerView | null = null;
-      if (runtimeProjection && runtimeCurrentSegment) {
+      // 工作包F 11.4：命途狭间两回合不执行剧情编织裁决/世界演变/事实物化（scope gate）
+      if (runtimeProjection && runtimeCurrentSegment && !isPathAwakeningTurn) {
         // 步骤 1：从主剧情正文提取 confirmed evidence（命中明确结束状态）与提及（未来内容不入推进候选）。
         const evidenceResult = await buildTurnEvidence({
           body: displayText,
@@ -3204,7 +3258,8 @@ export async function executeSendWorkflow(
       const newsInterval = Math.max(5, Math.min(10, Math.trunc(newsSettings?.generateIntervalTurns ?? 5) || 5));
       const newsTurn = state.turnCount + 1;
       const shouldRunOpeningNews = isOpeningSystemTrigger && newsEnabled;
-      const shouldRunNews = newsEnabled && ((shouldRunOpeningNews && !openingNewsPreprocessed) || (newsTurn > 0 && newsTurn % newsInterval === 0));
+      // 工作包F 11.4：命途狭间回合不生成新闻
+      const shouldRunNews = newsEnabled && !isPathAwakeningTurn && ((shouldRunOpeningNews && !openingNewsPreprocessed) || (newsTurn > 0 && newsTurn % newsInterval === 0));
       const yitingBase = mergeYitingSystems(yitingWithCompression, variableOverrides?.忆庭);
       const turnRecallSource = {
         turn: state.turnCount,
@@ -3311,7 +3366,7 @@ export async function executeSendWorkflow(
       };
 
       const runPhoneFallbackJob = async (): Promise<void> => {
-        if (state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds) {
+        if (!isPathAwakeningTurn && state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds) {
           const fallbackSeed = buildFallbackPhoneSeed({
             phone: phoneAfterFallbackSeed,
             npcs: npcAfterCompression,
@@ -3614,7 +3669,7 @@ interface VariableCalibrationOverrides {
 /** 执行一次变量模型校准：调用独立 API → 解析命令 → 落地 → 推入 variableBatches。
  *  失败不抛错（不影响主流程的存档）。 */
 async function runVariableCalibrationStep(
-  params: VariableCalibrationParams,
+  params: VariableCalibrationParams & { pathAwakeningTurn?: boolean },
 ): Promise<VariableCalibrationOverrides | null> {
   const { state, mainApiConfig } = params;
   if (!state.gameSettings.enableVariableUpdate) return null;
@@ -3687,7 +3742,8 @@ async function runVariableCalibrationStep(
 
     const parsedFacts = parseVariableFacts(rawText);
     const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1, {
-      phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds,
+      // 工作包F 11.4：命途狭间回合不生成手机种子
+      phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
       maxPhoneSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
     });
     const parsedLegacyCommands = parseVariableCommands(rawText);

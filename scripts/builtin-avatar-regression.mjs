@@ -1,11 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const avatarTs = read('data/builtinAvatars.ts');
 const staticManifest = JSON.parse(read('data/staticAssetManifest.json'));
 const inventory = JSON.parse(read('public/assets/builtin-avatars/candidates/avatar-candidates.json'));
+const canonicalSource = read('data/canonicalCharacters.ts');
+const canonicalModuleUrl = `data:text/javascript;base64,${Buffer.from(ts.transpileModule(canonicalSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ES2022,
+  },
+}).outputText, 'utf8').toString('base64')}`;
+const { CANONICAL_CHARACTERS } = await import(canonicalModuleUrl);
 
 const errors = [];
 const characters = Array.isArray(inventory.characters) ? inventory.characters : [];
@@ -92,6 +101,17 @@ const candidateDir = path.join(root, 'public/assets/builtin-avatars/candidates')
 const localPngs = fs.readdirSync(candidateDir).filter((name) => name.endsWith('.png'));
 if (localPngs.length !== 0) {
   errors.push(`repository must not retain character avatar PNGs, found ${localPngs.length}`);
+}
+
+for (const canonical of CANONICAL_CHARACTERS) {
+  const avatarCharacter = characters.find((character) => character.name === canonical.name);
+  if (!avatarCharacter) continue;
+  const inventoryAliases = new Set(avatarCharacter.aliases ?? []);
+  for (const alias of canonical.aliases ?? []) {
+    if (!inventoryAliases.has(alias)) {
+      errors.push(`${canonical.name} canonical alias is missing from avatar inventory: ${alias}`);
+    }
+  }
 }
 if (avatarTs.includes('LOCAL_AVATAR_CANDIDATE_IDS') || avatarTs.includes("const BASE = '/assets/builtin-avatars/candidates'")) {
   errors.push('builtinAvatars.ts must not retain repository-local character avatar paths');

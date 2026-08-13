@@ -20,13 +20,38 @@ function assert(condition, message) {
 
 // 结构轮(D1, 2026-07-26): 硬编码字数段已删除——权威在「回复格式」模块,生成点兜底在区E执法块。
 assert(!builder.includes('function buildResponseLengthSection'), '硬编码字数段必须保持已删除状态(权威在回复格式模块)。');
-assert(builtinPromptModules.includes('字数不少于 {wordCountTarget} 字'), '回复格式模块必须是字数约束的唯一权威。');
+assert(builtinPromptModules.includes('字数不少于 {wordCountTarget} 字'), '回复格式模块必须是字数约束的权威之一。');
 assert(builtinPromptModules.includes('禁止因为思维链、记忆、剧情编织、行动选项或模型默认习惯而压缩正文'), '回复格式模块字数约束必须覆盖压缩正文的常见借口。');
 assert(sendWorkflow.includes('buildMainTurnEnforcementBlock({') && sendWorkflow.includes('finalizeMainRequest({'), 'sendWorkflow 必须通过共享最终化器在生成点前注入区E执法块。');
 assert(requestFinalizer.includes('# 本回合生成前核对') && requestFinalizer.includes('不少于 ${input.wordCountTarget} 字'), '共享最终化器的区E执法块必须包含字数兜底行。');
-assert(builder.includes('提示词模块·稳定协议'), 'systemPromptBuilder 必须显式标注缓存友好的稳定协议前置区。');
-assert(builder.includes('高波动 NPC 连续性块后置'), 'systemPromptBuilder 必须显式标注 NPC 高波动上下文后置，保护前缀缓存。');
-assert(builder.includes('高波动回合锚点后置'), 'systemPromptBuilder 必须显式标注时间/场景等回合锚点后置，保护前缀缓存。');
+// ── 2026-08-12 八区重组：顺序断言更新为八区语义 ──
+assert(builder.includes("pushSection('zone1-identity'"), '八区组装必须显式构建区1身份区。');
+assert(builder.includes("pushSection('zone2-rules'"), '八区组装必须显式构建区2规则区。');
+assert(builder.includes("pushSection('zone3-params'"), '八区组装必须显式构建区3参数区。');
+assert(builder.includes("pushSection('zone4-player'"), '八区组装必须显式构建区4玩家档案区。');
+assert(builder.includes("pushSection('zone5-memory'"), '八区组装必须显式构建区5记忆区。');
+assert(builder.includes("pushSection('zone6-injection'"), '八区组装必须显式构建区6注入区。');
+assert(builder.includes("pushSection('zone7-review'"), '八区组装必须显式构建区7回顾区。');
+assert(builder.includes("pushSection('zone8-protocol'"), '八区组装必须显式构建区8协议区。');
+// 区6：时间锚点→场景→天气 顺序（环境定位在注入区开头）
+assert(builder.indexOf('buildCurrentTimeAnchorSection(worldState)') < builder.indexOf('buildSceneSection(worldState)'), '区6 时间锚点必须先于当前场景。');
+assert(builder.indexOf('buildSceneSection(worldState)') < builder.indexOf('buildWeatherSection(worldState)'), '区6 当前场景必须先于天气判断。');
+// 天气由 builder 统一组装（不再由发送侧/快照追加）
+assert(builder.includes('构建天气Prompt片段'), 'builder 必须统一组装天气（区6 第3项）。');
+// 区5 记忆拆分：长/中在前、短在区6 末尾
+assert(builder.includes('buildLayeredMemorySectionsSplit'), '必须使用分层记忆拆分函数。');
+// 区5 剧情安排（主线进度+storyPlan）与编织
+assert(builder.includes('buildStoryArrangementSection'), '区5 必须包含剧情安排合并段。');
+assert(builder.indexOf("const arrangement = buildStoryArrangementSection(plotNodes, storyPlanSnippets)") < builder.indexOf("const weaving = buildStoryWeavingInjection(storyWeaving, worldbookCtx)"), '区5 剧情安排必须先于剧情编织。');
+// 区6：NPC 在智库前、短期记忆在智库后（区6 末尾）
+assert(builder.indexOf('buildNpcContinuitySection') < builder.indexOf('zhikuCompilation?.mainStoryInjection'), 'NPC 承接必须先于智库。');
+assert(builder.indexOf('zhikuCompilation?.mainStoryInjection') < builder.indexOf('if (settings.enableMemoryInjection && shortMemCached)'), '智库必须先于短期记忆（区6 末尾）。');
+// 区7 回顾（即时回顾/忆庭/文风助手）晚于区6
+assert(builder.indexOf("pushSection('zone7-review'") > builder.indexOf("pushSection('zone6-injection'"), '区7 回顾区必须晚于区6 注入区。');
+// 区8 协议（运行锚点/回复格式/COT）压轴
+assert(builder.indexOf("pushSection('zone8-protocol'") > builder.indexOf("pushSection('zone7-review'"), '区8 协议区必须晚于区7 回顾区。');
+// 额外要求区位于区7 与区8 之间
+assert(builder.includes('buildExtraRequirementSection'), '必须存在额外要求区构建函数。');
 assert(builtinPromptModules.includes('<Role>') && builtinPromptModules.includes('</Role>'), '叙述者人格必须使用明确 Role 声明。');
 assert(builtinPromptModules.includes('当前互动的核心玩家角色为「{playerName}」'), '叙述者人格必须以运行时玩家角色为叙事中心。');
 assert(builtinPromptModules.includes('原著 NPC 必须按已注入档案和当前信息域行动'), '叙述者人格必须把智库/档案作为 NPC 人设校准依据。');
@@ -34,34 +59,25 @@ assert(builtinPromptModules.includes('原著 NPC 必须按已注入档案和当�
 // 属有意保留内容,此黑名单断言已按项目决定移除。若未来要重新启用,先确认内置叙述者人格不引入 jailbreak 模板。
 // 结构轮: 顺序断言更新为当前变量名(旧断言因 bottomModules 更名早已空转);基调段已删除。
 assert(!builder.includes('buildToneSection'), '基调段必须保持已删除状态(剧情模式世界书为唯一出处)。');
-assert(builder.indexOf("const bottomResult = injectPromptModules(activeModules, moduleCtx, 'bottom');") < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '主剧情固定协议/COT/回复格式必须早于 NPC 账本等高波动上下文。');
-assert(builder.indexOf("const bottomResult = injectPromptModules(activeModules, moduleCtx, 'bottom');") < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '主剧情固定协议/COT/回复格式必须早于当前时间锚点，保护 DeepSeek 前缀缓存。');
-assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('parts.push(buildMainStoryControlSection(worldState));'), '运行锚点瘦身版必须位于区D(时间/场景之后),紧贴其引用的回顾/编织/智库数据。');
-assert(builder.indexOf('parts.push(buildMainStoryControlSection(worldState));') < builder.indexOf('if (yitingInjectionOverride !== undefined)'), '运行锚点必须先于即时回顾/忆庭注入,形成指令贴数据结构。');
-assert(builder.indexOf('parts.push(buildCharacterSection(traveler));') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '当前角色与技能应位于高波动 NPC 承接块之前。');
-assert(builder.includes('const sceneFromWorldbook = buildSceneSection(worldState);'), '主剧情必须显式构建当前场景区块。');
-assert(builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);') < builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);'), '当前场景必须紧跟时间锚点之后注入。');
-assert(builder.indexOf('const phoneSection = buildPhoneSection(phone);') < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '手机/剧情等半稳定运行时资料应早于时间锚点，避免时间成为过早的前缀变化点。');
-assert(builder.indexOf('const injection = buildWorldbookInjection(worldbooks, worldbookCtx);') < builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);'), '普通世界书资料应早于当前时间锚点，保护大块资料的缓存前缀。');
-assert(builder.indexOf('const timeAnchor = buildCurrentTimeAnchorSection(worldState);') < builder.indexOf('if (yitingInjectionOverride !== undefined)'), '即时剧情回顾/忆庭召回应位于时间与场景之后，共同归入高波动尾部。');
-assert(builder.indexOf('if (yitingInjectionOverride !== undefined)') < builder.indexOf('const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);'), '剧情编织滑窗必须晚于当前事实与即时剧情回顾，避免系列总览成为过早前缀变化点。');
-assert(builder.indexOf('const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);') < builder.indexOf('if (zhikuCompilation?.mainStoryInjection.trim())'), '剧情编织滑窗应早于智库编译视图，保持“剧情软参考后再做角色资料校准”的读取顺序。');
-assert(builder.indexOf('const newsSection = buildNewsSection(news);') < builder.indexOf('const storyWeavingSection = buildStoryWeavingInjection(storyWeaving, worldbookCtx);'), '新闻/手机/世界书等较稳定资料应早于剧情编织动态滑窗。');
-assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('if (zhikuCompilation?.mainStoryInjection.trim())'), '智库表演卡应位于时间与场景之后，避免抢在当前事实锚点之前。');
-assert(builder.indexOf('const sceneFromWorldbook = buildSceneSection(worldState);') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '当前时间与场景必须早于 NPC 账本，避免 NPC 账本成为过早的前缀变化点。');
-assert(builder.indexOf('if (zhikuCompilation?.mainStoryInjection.trim())') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '智库编译视图应早于尾部 NPC 承接块，NPC 块只做最终关系兜底。');
-assert(builder.indexOf('const awakeningSection = buildPathAwakeningSection') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '命途/近期事件/记忆等运行时资料应早于尾部 NPC 账本。');
+// 区6：时间/场景/天气为环境定位（在注入区开头），NPC 与智库在区6 后部
+assert(builder.indexOf("const timeAnchor = buildCurrentTimeAnchorSection(worldState);") < builder.indexOf('const scene = buildSceneSection(worldState);'), '区6 时间锚点必须先于当前场景。');
+assert(builder.indexOf('const scene = buildSceneSection(worldState);') < builder.indexOf('const weather = buildWeatherSection(worldState);'), '区6 当前场景必须先于天气判断。');
+assert(builder.indexOf('const weather = buildWeatherSection(worldState);') < builder.indexOf('const awakening = buildPathAwakeningSection'), '区6 天气必须先于命途狭间状态。');
+// 区8 协议压轴：运行锚点/回复格式/COT 在 zone8
+assert(builder.indexOf("pushSection('zone8-protocol'") > builder.indexOf("pushSection('zone7-review'"), '区8 协议区必须晚于区7 回顾区。');
 assert(builder.indexOf('const injection = buildWorldbookInjection(worldbooks, worldbookCtx);') < builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride'), '普通世界书资料应早于尾部 NPC 高波动承接块。');
-assert(builder.indexOf('const npcLedgerSelection = npcLedgerSelectionOverride') < builder.indexOf('const companionsSection = buildCompanionsSection(npcRecords, _turnCount);'), '已知伙伴与路人表应跟随 NPC 尾部承接块后置，避免过早破坏前缀缓存。');
-const mainWorldbookInjectionCalls = [...builder.matchAll(/const injection = buildWorldbookInjection\(worldbooks, worldbookCtx\);/g)];
-assert(mainWorldbookInjectionCalls.length === 1, '主剧情普通世界书注入不得因重排重复进入 system prompt。');
+assert(builder.indexOf('const npcPresence = buildNpcPresenceSection') < builder.indexOf('const companions = buildCompanionsSection'), '区6 NPC 顺序：在场状态必须先于伙伴。');
+assert(builder.indexOf('const companions = buildCompanionsSection') < builder.indexOf('zhikuCompilation?.mainStoryInjection'), '区6 伙伴（NPC 尾部）必须先于智库，NPC 块只做最终关系兜底。');
+// 工作包A：builder 消费世界书 plan 四路（不再重复调用旧 buildWorldbookInjection）
+assert(builder.includes('worldbookPlan?.alwaysEntries') && builder.includes('worldbookPlan?.keywordEntries'), 'builder 必须消费世界书 plan 的常驻/关键词两路。');
+assert(builder.includes('worldbookPlan?.systemRuleEntries') && builder.includes('worldbookPlan?.depthMessages'), 'builder 必须消费世界书 plan 的规则/depth 两路。');
 assert(builder.includes('RECENT_WORLD_EVENT_PROMPT_LIMIT = 12'), '近期事件必须有注入上限，避免世界全局事件无限膨胀。');
 assert(builder.includes('function buildRecentWorldEventsSection'), '近期事件必须通过统一瘦身函数注入。');
 assert(builder.includes('normalizeWorldEventFingerprint'), '近期事件必须做文本指纹去重。');
 assert(!builder.includes('worldState.全局事件.map((e) => `- ${e}`).join'), '近期事件不得继续全量注入世界全局事件。');
 assert(worldEvents.includes('WORLD_EVENT_STORAGE_LIMIT = 30'), '世界全局事件存档层必须默认只保留最近 30 条。');
 assert(worldEvents.includes('function compactWorldEvents'), '世界全局事件必须有统一压缩/去重函数。');
-assert(sendWorkflow.includes('appendWorldEvents(worldAfter.全局事件, parsedForDisplay.worldEvents)'), '正文动态世界事件追加必须走 30 条存档上限。');
+assert(sendWorkflow.includes('appendWorldEvents(worldAfter.全局事件'), '正文动态世界事件追加必须走 30 条存档上限。');
 assert(variableExecutor.includes("root === '世界' && rest === '全局事件' && cmd.action === 'push'"), '变量命令 push 世界.全局事件 也必须走 30 条存档上限。');
 assert(!sendWorkflow.includes('全局事件: [...worldAfter.全局事件, ...parsedForDisplay.worldEvents]'), '正文动态世界事件不得继续无限追加进存档。');
 

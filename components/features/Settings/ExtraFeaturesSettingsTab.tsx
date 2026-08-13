@@ -117,6 +117,44 @@ export function ExtraFeaturesSettingsTab({ settings, onChange }: Props) {
         />
       </section>
 
+      <section
+        className="mt-4 space-y-3 p-4"
+        style={{
+          background: 'rgba(var(--tj-bg-card), 0.72)',
+          border: '1px solid rgba(var(--tj-border), 0.72)',
+          clipPath: smallClip,
+        }}
+      >
+        <div>
+          <div className="font-serif text-sm font-bold tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
+            玩家额外要求
+          </div>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+            玩家自定义的输出前要求（如"多写环境描写""少用心理描写"）。非空时作为额外要求区注入（区7 与区8 之间），留空则不注入。
+          </p>
+        </div>
+        <textarea
+          value={settings.额外功能.玩家额外要求 ?? ''}
+          onChange={(e) => {
+            onChange({
+              ...settings,
+              额外功能: {
+                ...settings.额外功能,
+                玩家额外要求: e.target.value,
+              },
+            });
+          }}
+          placeholder="在此填写你对本回合/长期生效的额外要求…"
+          rows={4}
+          className="w-full resize-y bg-transparent p-3 text-sm outline-none"
+          style={{
+            border: '1px solid rgba(var(--tj-border), 0.72)',
+            color: 'rgb(var(--tj-text-primary))',
+            clipPath: smallClip,
+          }}
+        />
+      </section>
+
       <button
         type="button"
         onClick={() => void handleSave()}

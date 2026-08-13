@@ -33,7 +33,16 @@ export type 命途ID =
   | 'erudition'
   | 'elation'
   | 'nihility'
-  | 'harmony';
+  | 'harmony'
+  | 'trailblaze'
+  | 'propagation'
+  | 'voracity'
+  | 'enigmata'
+  | 'equilibrium'
+  | 'order'
+  | 'finality'
+  | 'beauty'
+  | 'permanence';
 
 export interface 命途定义 {
   id: 命途ID;

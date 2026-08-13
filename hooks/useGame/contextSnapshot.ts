@@ -23,22 +23,30 @@ import {
   buildLeanAssistantHistoryContent,
   buildMainRecallQuery,
   getMainHistoryWindow,
+  getPathAwakeningHistoryWindow,
 } from './historyWindow';
-import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
+import { buildOpeningSystemPrompt, buildPathAwakeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import { getBuiltinPresets, getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import { buildTavernMessageChain } from './tavernMessageChainBuilder';
 import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getExplicitNpcNamesForTurn, getZhikuCharacterParticipationForTurn } from './npcPresence';
 import { 格式化开局档案上下文 } from '@/models/world';
-import { createMacroContext } from '@/utils/macroEngine';
-import { 构建天气Prompt片段 } from '@/data/weatherRules';
 import {
   buildMainTurnEnforcementBlock,
+  buildCotPseudoTaskSequence,
   DEEPSEEK_MAIN_FORMAT_GUARD,
+  deriveMainStoryMessageMode,
   finalizeMainRequest,
-  MAIN_COT_FAKE_HISTORY,
+  insertDepthIntoHistory,
+  type MainStoryMessageMode,
 } from './mainRequestFinalizer';
 import { resolveChatProviderCapabilities } from '@/services/ai/chatCompletionClient';
+import { extractRecentStoryPlanSnippets } from './historyWindow';
+import {
+  buildPromptMacroContext,
+  buildPromptWorldbookContext,
+  resolvePromptWorldbookPlan,
+} from './promptAssemblyContext';
 
 export interface ContextSection {
   id: string;
@@ -416,22 +424,22 @@ function formatNpcRelationshipPlanningSnapshot(state: UseGameStateReturn): strin
   ].filter(Boolean).join('\n\n');
 }
 
-function buildApiMessages(
+/** 工作包H：回合前历史（排除当前输入，压缩 assistant）——快照与真实发送同一套组装核心。 */
+function buildPreTurnHistory(
   history: 聊天消息[],
-  options: {
-    isOpeningSystemTrigger: boolean;
-    isAwakeningEnterTrigger: boolean;
-    awakeningPhase?: 'question' | 'judgement';
-    awakeningPathId?: string;
-    settings: UseGameStateReturn['gameSettings'];
-    memorySystem: UseGameStateReturn['记忆'];
-  },
+  sourceInput: string,
+  settings: UseGameStateReturn['gameSettings'],
+  memorySystem: UseGameStateReturn['记忆'],
 ): 聊天消息[] {
   const messages: 聊天消息[] = [];
-  const recentHistory = getMainHistoryWindow(history, options.settings, options.memorySystem);
+  const recentHistory = getMainHistoryWindow(history, settings, memorySystem);
 
-  for (const msg of recentHistory) {
+  for (let index = 0; index < recentHistory.length; index += 1) {
+    const msg = recentHistory[index];
+    const isLastRecentMessage = index === recentHistory.length - 1;
     if (msg.role === 'user' && msg.content.startsWith('[系统]')) continue;
+    // 排除当前输入（真实发送时它也由任务序列注入一次）
+    if (isLastRecentMessage && msg.role === 'user' && msg.content.trim() === sourceInput) continue;
     if (msg.role === 'user') {
       messages.push(msg);
     } else if (msg.role === 'assistant' && msg.parsedResponse) {
@@ -439,30 +447,8 @@ function buildApiMessages(
     }
   }
 
-  if (options.isOpeningSystemTrigger) {
-    messages.push(创建聊天消息(
-      'user',
-      '请根据当前角色、当前场景、世界书与内置提示词，直接生成第 0 回合开场叙事。不要等待玩家再次输入。',
-    ));
-  }
-
-  if (options.isAwakeningEnterTrigger && options.awakeningPathId) {
-    messages.push(创建聊天消息(
-      'user',
-      `玩家选择踏入「命途狭间」(命途 ID: ${options.awakeningPathId})。请按 pathAwakening 流程生成第一道诘问,不要推进主剧情,不要等玩家再次发言。`,
-    ));
-  }
-
-  if (options.awakeningPhase === 'judgement') {
-    messages.push(创建聊天消息(
-      'user',
-      '⚠ 命途狭间·回应回合提醒:你上一回合已出三题,玩家本轮给出了答案。本回合**必须**在所有标签之外、**单独**写一行 `<狭间评判>升阶</狭间评判>`。命途狭间没有失败、滞留或退转;三问只是让玩家明确自己的道路。漏掉这个标签会让玩家永远卡在虚境无法升阶——这是必须避免的错误。同时正文里要让命途意志回应玩家答案、确认其道路,再把旅人从虚境拉回现实场景。',
-    ));
-  }
-
   return messages;
 }
-
 export function buildContextSnapshot(state: UseGameStateReturn, kind: ContextSnapshotKind = 'main'): ContextSnapshot {
   switch (kind) {
     case 'variable':
@@ -511,25 +497,17 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   });
 
   const openingArchiveText = 格式化开局档案上下文(state.世界.开局档案);
-  const worldbookCtx = {
-    recentUserInput: sourceInput,
-    recentAIResponse: '',
-    worldName: state.世界.当前时段?.名称 ?? '',
+  const worldbookCtx = buildPromptWorldbookContext({
+    userInput: sourceInput,
+    history: recallHistory,
+    world: state.世界,
     travelerName: state.旅人.姓名,
     turnCount: state.turnCount,
-    startScenarioId: state.世界.起航之地ID,
-    startSceneName: state.世界.开局档案?.章节锚点名称 ?? state.世界.当前地点,
-    currentLocation: state.世界.当前地点,
-    openingRegionName: state.世界.开局档案?.地区名称,
-    openingChapterName: state.世界.开局档案?.章节锚点名称,
-    openingEntryText: state.世界.开局档案?.玩家介入原文,
-    openingSource: state.世界.开局档案?.来源,
-    openingArchiveText,
     npcNames: zhikuParticipation.present,
-    originalProtagonist: state.世界.原著主角,
-    currentScope,
-    storyMode: state.世界.剧情模式,
-  };
+    scope: currentScope,
+    openingArchiveText,
+    worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
+  });
   const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(state.chatHistory) : '';
   const zhikuSceneContext = {
     ...worldbookCtx,
@@ -596,6 +574,37 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       })
     : undefined;
 
+  // 工作包C：命途狭间回合判定
+  const isPathAwakeningTurn = isAwakeningEnterTrigger || awakeningPhase !== undefined;
+  const mainStoryConfig = state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId)
+    ?? state.apiSettings.configs[0]
+    ?? {
+      id: '__snapshot_unconfigured__',
+      name: '未配置主 API',
+      provider: 'openai_compatible' as const,
+      baseUrl: '',
+      apiKey: '',
+      model: '',
+      createdAt: 0,
+      updatedAt: 0,
+    };
+  const macroCtx = buildPromptMacroContext({
+    history: recallHistory,
+    playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+    turnCount: state.turnCount,
+    modelName: mainStoryConfig.model,
+    maxContext: mainStoryConfig.maxContext,
+    globals: state.gameSettings.macroGlobalVars,
+  });
+  // 工作包A：世界书单回合唯一解析（快照与真实发送共用同一 plan 来源）
+  const worldbookPlan = resolvePromptWorldbookPlan(
+    state.worldbooks,
+    worldbookCtx,
+    state.gameSettings.enableWorldbookInjection,
+  );
+  // 工作包B：最近 1-2 条剧情规划（区5 剧情安排）
+  const storyPlanSnippets = extractRecentStoryPlanSnippets(state.chatHistory);
+
   const builtPrompt = isOpeningSystemTrigger
     ? buildOpeningSystemPrompt(
         state.旅人,
@@ -606,9 +615,26 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         worldbookCtx,
         state.新闻,
         isOpeningSystemTrigger ? 'opening' : 'normal',
-        createMacroContext(state.gameSettings.macroGlobalVars),
+        macroCtx,
+        worldbookPlan ?? undefined,
+        zhikuPreview,
       )
-    : buildSystemPrompt(
+    : isPathAwakeningTurn
+      ? buildPathAwakeningSystemPrompt(
+          state.旅人,
+          state.世界,
+          state.gameSettings,
+          state.turnCount,
+          state.worldbooks,
+          worldbookCtx,
+          zhikuPreview,
+          awakeningPhase,
+          storyRecallInjection || undefined,
+          'normal',
+          macroCtx,
+          worldbookPlan ?? undefined,
+        )
+      : buildSystemPrompt(
         state.旅人,
         state.世界,
         state.记忆,
@@ -628,28 +654,23 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         Boolean(yitingPreview?.injection),
         npcLedgerSelection,
         isOpeningSystemTrigger ? 'opening' : 'normal',
-        createMacroContext(state.gameSettings.macroGlobalVars),
+        macroCtx,
+        storyPlanSnippets,
+        worldbookPlan ?? undefined,
       );
   // 上下文快照需要跟真实发送路径对齐：V2 酒馆预设只额外发送 Tavern messages，
   // 原生 systemPrompt 仍完整发送，因此 Tavern 链路不重复塞原生底座和当前用户输入。
-  let systemPrompt = [
-    builtPrompt.systemPrompt,
-    构建天气Prompt片段(state.世界.当前地点, state.世界.当前天气),
-  ].filter(Boolean).join('\n\n');
-  const recentHistory = getMainHistoryWindow(state.chatHistory, state.gameSettings, state.记忆);
+  // 工作包B：天气已由 builder 作为区6 第3项统一组装，快照不再追加
+  let systemPrompt = builtPrompt.systemPrompt;
+  const recentHistory = awakeningPhase
+    ? getPathAwakeningHistoryWindow(recallHistory, awakeningPhase)
+    : getMainHistoryWindow(recallHistory, state.gameSettings, state.记忆);
   const tavernHistory = recentHistory.filter((msg, index) => {
     if (msg.role !== 'user') return true;
     const isLastRecentMessage = index === recentHistory.length - 1;
     return !(isLastRecentMessage && msg.content.trim() === sourceInput);
   });
-  let apiMessages = buildApiMessages(state.chatHistory, {
-    isOpeningSystemTrigger,
-    isAwakeningEnterTrigger,
-    awakeningPhase,
-    awakeningPathId,
-    settings: state.gameSettings,
-    memorySystem: state.记忆,
-  });
+  // Tavern V2 判定与消息链构建（工作包D：scope-aware 兼容保护）
   const currentPresetV2 = getCurrentSTPresetV2(state.gameSettings, getBuiltinPresetsV2());
   const shouldTryTavernV2 =
     state.gameSettings.enableStPreset !== false &&
@@ -667,6 +688,8 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   };
   let requestMessagesTitle = '历史记录';
   let requestMessagesCategory = '历史';
+  let apiMessages: 聊天消息[] = [];
+  const nativeDepthMessages = builtPrompt.chatModuleMessages.filter((m) => m._injectionPosition === 1);
   if (shouldTryTavernV2 && currentPresetV2) {
     try {
       const latestTavernInput = isOpeningSystemTrigger
@@ -678,13 +701,14 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         settings: state.gameSettings,
         preset: currentPresetV2.preset,
         characterId: state.gameSettings.currentStCharacterId ?? currentPresetV2.characterId ?? null,
-        chatHistory: tavernHistory,
+        chatHistory: insertDepthIntoHistory(tavernHistory, nativeDepthMessages),
         latestUserInput: latestTavernInput,
         playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
         playerRole: state.旅人,
         includeNativeContextInWorldbook: false,
         triggerType: isOpeningSystemTrigger ? 'opening' : 'normal',
-        macroCtx: createMacroContext(state.gameSettings.macroGlobalVars),
+        macroCtx,
+        scope: isOpeningSystemTrigger ? 'opening' : (isPathAwakeningTurn ? 'pathAwakening' : 'main'),
       }).map((msg) => 创建聊天消息(msg.role, msg.content));
       if (tavernMessages.length) {
         apiMessages = tavernMessages;
@@ -699,52 +723,97 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       tavernStatus.reason = `酒馆消息链构建失败；真实发送时会回退原生主流程。${error instanceof Error ? error.message : String(error)}`;
     }
   }
-  const mainStoryConfig = state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId)
-    ?? state.apiSettings.configs[0]
-    ?? {
-      id: '__snapshot_unconfigured__',
-      name: '未配置主 API',
-      provider: 'openai_compatible' as const,
-      baseUrl: '',
-      apiKey: '',
-      model: '',
-      createdAt: 0,
-      updatedAt: 0,
-    };
+  // 回合前历史（排除当前输入——当前输入在任务序列中只出现一次）
+  const preTurnHistory = awakeningPhase
+    ? recentHistory
+        .filter((msg) => msg.role === 'user' || (msg.role === 'assistant' && msg.parsedResponse))
+        .map((msg) => msg.role === 'assistant'
+          ? 创建聊天消息('assistant', buildLeanAssistantHistoryContent(msg))
+          : msg)
+    : buildPreTurnHistory(recallHistory, sourceInput, state.gameSettings, state.记忆);
   const providerCapabilities = resolveChatProviderCapabilities(mainStoryConfig);
   const deepSeekMainMode = state.gameSettings.deepSeekMainMode ?? 'off';
-  const deepSeekMainActive = providerCapabilities.transport === 'deepseek' && deepSeekMainMode !== 'off';
-  const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
+  const deepSeekTransportActive = providerCapabilities.transport === 'deepseek' && deepSeekMainMode !== 'off';
+  const deepSeekMainActive = deepSeekTransportActive
+    && !tavernStatus.used
+    && !isOpeningSystemTrigger
+    && !isPathAwakeningTurn;
+  const deepSeekLockFormat = deepSeekTransportActive && deepSeekMainMode === 'lock_format';
+  // 模式判定（工作包C）：opening / 命途狭间走专用尾部
+  const messageMode: MainStoryMessageMode = isOpeningSystemTrigger || isPathAwakeningTurn
+    ? 'standard'
+    : deriveMainStoryMessageMode({
+        tavernV2Active: tavernStatus.used,
+        deepSeekMainActive,
+        deepSeekLockFormat,
+        enableCotFakeHistory: state.gameSettings.enableCotFakeHistory,
+      });
+  // position=0 兼容消息（user/assistant 角色模块）
+  const positionZeroCompatMessages = builtPrompt.chatModuleMessages
+    .filter((m) => m._injectionPosition === 0 && m.role !== 'system')
+    .sort((a, b) => (a._injectionOrder ?? 0) - (b._injectionOrder ?? 0))
+    .map((m) => 创建聊天消息(m.role === 'assistant' ? 'assistant' : 'user', m.content));
+  const depthMessages = tavernStatus.used ? [] : nativeDepthMessages;
+  // 本回合条件约束
+  const turnConstraints: 聊天消息[] = [];
+  if (isOpeningSystemTrigger && !tavernStatus.used) {
+    turnConstraints.push(创建聊天消息('user', '请根据当前角色、当前场景、世界书与内置提示词，直接生成第 0 回合开场叙事。不要等待玩家再次输入。'));
+  }
+  if (isAwakeningEnterTrigger && awakeningPathId && !tavernStatus.used) {
+    turnConstraints.push(创建聊天消息('user', `玩家选择踏入「命途狭间」(命途 ID: ${awakeningPathId})。请按 pathAwakening 流程生成第一道诘问,不要推进主剧情,不要等玩家再次发言。`));
+  }
+  if (awakeningPhase === 'judgement') {
+    turnConstraints.push(创建聊天消息('user', '⚠ 命途狭间·回应回合提醒:你上一回合已出三题,玩家本轮给出了答案。本回合**必须**在所有标签之外、**单独**写一行 `<狭间评判>升阶</狭间评判>`。命途狭间没有失败、滞留或退转;三问只是让玩家明确自己的道路。漏掉这个标签会让玩家永远卡在虚境无法升阶——这是必须避免的错误。同时正文里要让命途意志回应玩家答案、确认其道路,再把旅人从虚境拉回现实场景。'));
+  }
+  if (deepSeekMainActive) turnConstraints.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
+  // 区E 执法块（main scope）
+  const enforcementBlock = zhikuRequestScope === 'main'
+    ? buildMainTurnEnforcementBlock({
+        playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+        wordCountTarget: state.gameSettings.wordCountTarget,
+        zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
+        storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
+      })
+    : undefined;
+  // 任务序列（按模式）
+  let taskSequence: 聊天消息[];
+  if (messageMode === 'cot_pseudo') {
+    taskSequence = buildCotPseudoTaskSequence(sourceInput);
+  } else if (tavernStatus.used && currentPresetV2) {
+    taskSequence = apiMessages; // Tavern 消息链（上面已构建）
+  } else if (isOpeningSystemTrigger || isAwakeningEnterTrigger) {
+    taskSequence = [];
+  } else {
+    taskSequence = [创建聊天消息('user', sourceInput)];
+  }
+  // prefill（工作包C 8.6）
   const currentPresetId = state.gameSettings.currentStPresetId;
   const currentPreset = currentPresetId
     ? [...getBuiltinPresets(), ...(state.gameSettings.stPresets ?? [])].find((item) => item.id === currentPresetId)
     : undefined;
   const presetAssistantPrefill = currentPreset?.assistantPrefill;
-  const effectivePrefixMode = deepSeekLockFormat || (Boolean(presetAssistantPrefill) && !deepSeekLockFormat);
-  const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\n' : presetAssistantPrefill;
-  const tailMessages: 聊天消息[] = [];
-  if (deepSeekMainActive) tailMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
-  if (zhikuRequestScope === 'main') {
-    tailMessages.push(创建聊天消息('user', buildMainTurnEnforcementBlock({
-      playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
-      wordCountTarget: state.gameSettings.wordCountTarget,
-      zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
-      storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
-    })));
+  let effectivePrefixMode = false;
+  let effectivePrefixContent: string | undefined;
+  if ((messageMode === 'deepseek_prefix' || ((isOpeningSystemTrigger || isPathAwakeningTurn) && !tavernStatus.used && deepSeekLockFormat))) {
+    effectivePrefixMode = true;
+    effectivePrefixContent = '<thinking>\n';
+  } else if (messageMode === 'standard' && !isOpeningSystemTrigger && !isPathAwakeningTurn && presetAssistantPrefill) {
+    effectivePrefixMode = true;
+    effectivePrefixContent = presetAssistantPrefill;
   }
   const finalizedMainRequest = finalizeMainRequest({
     config: mainStoryConfig,
     systemPrompt,
-    baseMessages: apiMessages,
-    moduleChatMessages: builtPrompt.chatModuleMessages,
-    leadingMessages: state.gameSettings.enableCotFakeHistory && !isOpeningSystemTrigger && !deepSeekMainActive
-      ? [...MAIN_COT_FAKE_HISTORY]
-      : [],
-    tailMessages,
+    mode: messageMode,
+    preTurnHistory: tavernStatus.used ? [] : preTurnHistory,
+    depthMessages,
+    positionZeroCompatMessages,
+    turnConstraints,
+    enforcementBlock,
+    taskSequence,
     prefixMode: effectivePrefixMode,
     prefixContent: effectivePrefixContent,
     streaming: state.gameSettings.enableStreaming,
-    mode: tavernStatus.used ? 'tavern-v2' : 'native',
     scope: zhikuRequestScope,
     zhikuCompileId: zhikuPreview.compileId,
   });

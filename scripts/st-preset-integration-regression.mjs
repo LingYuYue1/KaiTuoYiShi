@@ -88,12 +88,18 @@ const tavernBuildCall = sendWorkflow.slice(
   sendWorkflow.indexOf('tavernV2Messages = buildTavernMessageChain({'),
   sendWorkflow.indexOf('}).map((msg) => 创建聊天消息(msg.role, msg.content));', sendWorkflow.indexOf('tavernV2Messages = buildTavernMessageChain({')),
 );
-assert(sendWorkflow.includes('const recentHistory = getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆);'), 'Tavern V2 must start from the native main history window');
+assert(
+  sendWorkflow.includes('const recentHistory = awakeningPhase')
+    && sendWorkflow.includes('? getPathAwakeningHistoryWindow(updatedHistory, awakeningPhase)')
+    && sendWorkflow.includes(': getMainHistoryWindow(updatedHistory, state.gameSettings, state.记忆);'),
+  'Tavern V2 must reuse the native history window selected for the active scope',
+);
 assert(sendWorkflow.includes('const tavernHistory = recentHistory.filter((msg) => msg.id !== userMsg.id);'), 'Tavern V2 must remove the current user message from Tavern history');
-assert(tavernBuildCall.includes('chatHistory: tavernHistory'), 'Tavern V2 must use the filtered native main history window');
+assert(tavernBuildCall.includes('chatHistory: insertDepthIntoHistory(tavernHistory, nativeDepthMessages)'), 'Tavern V2 must use the filtered native history window with depth inserted before the task sequence');
 assert(tavernBuildCall.includes('includeNativeContextInWorldbook: false'), 'Tavern V2 additive mode must not duplicate native base prompt modules in Tavern worldbook');
 assert(!tavernBuildCall.includes('worldbookExtraTexts: [天气片断]'), 'Tavern V2 must not duplicate weather text outside native systemPrompt');
 assert(!tavernBuildCall.includes('chatHistory: updatedHistory') && !tavernBuildCall.includes('chatHistory: state.chatHistory'), 'Tavern V2 must not receive full chat history');
+assert(sendWorkflow.includes('preTurnHistory: tavernV2Messages ? [] : preTurnHistory'), 'Tavern V2 finalization must not prepend native history a second time');
 assert(contextSnapshot.includes('酒馆预设消息链') && contextSnapshot.includes('只使用原生近期历史窗口') && contextSnapshot.includes('排除当前用户输入'), 'Tavern V2 snapshot must separate preset messages and document the filtered limited history window');
 
 const regexProcessor = read('hooks/useGame/tavernRegexProcessor.ts');

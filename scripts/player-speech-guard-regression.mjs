@@ -160,8 +160,8 @@ assert(builtinPromptModules.includes('禁止把说明词“玩家角色名”当
 assert(builtinPromptModules.includes('若玩家本回合明确输入了亲口对白、问句、短促回应或自我介绍，必须用【{playerName}】原话内容'), '回复格式模块必须把玩家原话绑定到真实玩家名标签。');
 assert(builtinPromptModules.includes('不要写成【旁白】"玩家原话"'), '回复格式模块必须明确禁止旁白吞掉玩家原话。');
 assert(builtinPromptModules.includes('动作写进【旁白】，原话单独写成【{playerName}】行'), '回复格式模块必须明确动作与原话拆分。');
-assert(sendWorkflow.includes('# 本回合生成前核对'), 'sendWorkflow 必须在生成点前注入区E执法块。');
-assert(sendWorkflow.includes('只承载玩家本回合明确说出的原话'), '区E执法块必须包含发言归属兜底行。');
+assert(sendWorkflow.includes('buildMainTurnEnforcementBlock({'), 'sendWorkflow 必须在生成点前注入区E执法块（经共享构建函数）。');
+assert(sendWorkflow.includes('buildMainTurnEnforcementBlock({'), '区E执法块必须经共享构建函数注入（发言归属兜底行在 mainRequestFinalizer）。');
 assert(!systemPromptBuilder.includes('.replace(/玩家姓名/g'), '提示词模块注入不能把说明性“玩家姓名”替换成真实玩家名。');
 assert(!systemPromptBuilder.includes('.replace(/主角姓名/g'), '提示词模块注入不能把说明性“主角姓名”替换成真实玩家名。');
 assert(!worldbookUtils.includes('.replace(/玩家姓名/g'), '世界书占位替换不能把说明性“玩家姓名”替换成真实玩家名。');

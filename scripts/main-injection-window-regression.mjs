@@ -32,7 +32,10 @@ assert(!historyWindow.includes('【历史正文】'), '瘦身后的 assistant �
 assert(!historyWindow.includes('【历史短期记忆】'), '瘦身后的 assistant 历史不得重复上传短期记忆。');
 assert(!historyWindow.includes('【历史变量草稿】'), '瘦身后的 assistant 历史不得重复上传变量草稿。');
 assert(!historyWindow.includes('【历史剧情规划】'), '瘦身后的 assistant 历史不得重复上传剧情规划。');
-assert(historyWindow.includes('needsBodyFallback = !memory && !events && !storyPlan'), '即时剧情回顾应识别缺少结构化摘要的兜底场景。');
+assert(historyWindow.includes('needsBodyFallback = !memory && !events'), '即时剧情回顾应识别缺少结构化摘要的兜底场景（剧情规划字段已移除）。');
+// 即时回顾函数体内不得有 storyPlan 提取（buildMainRecallQuery 的"剧情规划："属于召回 query，不受此约束）
+const reviewFn = historyWindow.slice(historyWindow.indexOf('export function buildImmediateStoryReview'), historyWindow.indexOf('export function extractRecentStoryPlanSnippets'));
+assert(!reviewFn.includes('parsed?.storyPlan') && !reviewFn.includes('剧情规划：'), '即时回顾函数体不得再提取剧情规划字段。');
 assert(historyWindow.includes('正文锚点：'), '即时剧情回顾必须保留短正文锚点，避免摘要遗漏导致 NPC 近回合失忆。');
 assert(historyWindow.includes('needsBodyFallback ? 260 : 180'), '即时剧情回顾有结构化摘要时也应保留更短正文锚点。');
 assert(!historyWindow.includes('const body = needsBodyFallback ?'), '即时剧情回顾不得只在兜底时才读取正文。');

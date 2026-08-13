@@ -105,6 +105,7 @@ const { buildTavernMessageChain } = await import(builderUrl);
 
 const settings = {
   stPostProcessMode: '未选择',
+  enableActionOptions: true,
   promptModules: [
     { id: 'builtin_world_prompt', content: '项目世界观保护' },
     { id: 'builtin_main_plot_cot', content: '项目 CoT 保护' },

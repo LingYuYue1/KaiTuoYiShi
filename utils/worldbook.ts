@@ -260,12 +260,13 @@ function entryMatchesKeywords(entry: 世界书条目, ctx: FilterContext, extraH
   }
 }
 
-/** 概率触发检查。probability=100 必触发，=0 必不触发，中间值按随机数。 */
-function checkProbability(entry: 世界书条目): boolean {
+/** 概率触发检查。probability=100 必触发，=0 必不触发，中间值按随机数。
+ *  random 可注入（测试用），默认真实 Math.random。 */
+function checkProbability(entry: 世界书条目, random: () => number = Math.random): boolean {
   const prob = entry.probability ?? 100;
   if (prob >= 100) return true;
   if (prob <= 0) return false;
-  return Math.random() * 100 < prob;
+  return random() * 100 < prob;
 }
 
 /** 延迟触发 + 冷却检查。
@@ -294,6 +295,33 @@ function checkDelayAndCooldown(
 
 // ── 注入主流程 ──────────────────────────────────────────────────
 
+/** 世界书单次解析选项。random 可注入（测试用）；enabled=false 时四路全空（总开关）。 */
+export interface WorldbookPlanOptions {
+  random?: () => number;
+  enabled?: boolean;
+}
+
+/** 已解析条目（含书标题，供渲染来源行）。 */
+export interface ResolvedWorldbookEntry {
+  entry: 世界书条目;
+  bookTitle: string;
+}
+
+/** 世界书单回合唯一解析结果（2026-08-12 工作包A）。
+ *  同一回合只解析一次，builder / 触发状态提交 / 快照全部消费本结果。 */
+export interface WorldbookInjectionPlan {
+  /** type=system_rule → 规则区（区2），提示词化规则 */
+  systemRuleEntries: ResolvedWorldbookEntry[];
+  /** 非 system_rule、非 depth、injectMode=always → 常驻区（区1） */
+  alwaysEntries: ResolvedWorldbookEntry[];
+  /** 非 system_rule、非 depth、injectMode=keyword_match → 关键词区（区6） */
+  keywordEntries: ResolvedWorldbookEntry[];
+  /** 非 system_rule 且 injectAtDepth → 历史 depth 消息 */
+  depthMessages: WorldbookChatModuleMessage[];
+  /** 实际命中的 keyword_match 条目 id（用于触发状态提交；always 不写入） */
+  triggeredEntryIds: string[];
+}
+
 function entryMatchesScope(entry: 世界书条目, ctx: FilterContext): boolean {
   // 缺失或空 scope 视作 'all'（normalize 应该已经填充，但运行时再兜底一次）
   const scope = entry.scope?.length ? entry.scope : (['all'] as 世界书作用域[]);
@@ -307,8 +335,10 @@ function bookMatchesStoryMode(book: 世界书, ctx: FilterContext): boolean {
   return book.storyModeGate.includes(ctx.storyMode);
 }
 
-/** Phase 7.3：递归触发 + 关键词匹配的共享内核。
- *  - 第一轮：按 scope/enabled/概率/延迟冷却/关键词匹配选出首批触发条目
+/** Phase 7.3：递归触发 + 关键词匹配的共享内核（2026-08-12 重构：always 免检触发控制）。
+ *  - 基础资格：book/entry enabled、scope、storyMode gate——所有条目（含 always）都必须满足。
+ *  - injectMode=always：直接有资格；不检查关键词、probability、delay、cooldown。
+ *  - injectMode=keyword_match：按关键词、概率、延迟冷却、递归规则判断。
  *  - 递归轮：把已触发条目中 recurse=true 的 content 拼接成 extraHaystack，
  *    重新扫描未触发的 keyword_match 条目；新触发条目继续进入下一轮递归
  *  - 全局递归深度上限 5（normalize 已对单条 recurseDepth 做了 0-5 clamp）
@@ -316,24 +346,29 @@ function bookMatchesStoryMode(book: 世界书, ctx: FilterContext): boolean {
 function gatherTriggeredEntries(
   books: 世界书[],
   ctx: FilterContext,
+  options: WorldbookPlanOptions = {},
 ): Array<{ entry: 世界书条目; bookTitle: string }> {
   const msgCount = ctx.messageCount ?? 0;
   const triggerStates = ctx.worldbookTriggerStates;
   const RECURSION_HARD_LIMIT = 5;
+  const random = options.random ?? Math.random;
 
   const triggered: Array<{ entry: 世界书条目; bookTitle: string }> = [];
   const triggeredIds = new Set<string>();
 
-  // 第一轮：常规匹配
+  // 第一轮：常规匹配（always 免检触发控制）
   for (const book of books) {
     if (!book.enabled) continue;
     if (!bookMatchesStoryMode(book, ctx)) continue;
     for (const entry of book.entries) {
       if (!entry.enabled) continue;
       if (!entryMatchesScope(entry, ctx)) continue;
-      if (entry.injectMode === 'keyword_match' && !entryMatchesKeywords(entry, ctx)) continue;
-      if (!checkProbability(entry)) continue;
-      if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
+      if (entry.injectMode === 'keyword_match') {
+        if (!entryMatchesKeywords(entry, ctx)) continue;
+        if (!checkProbability(entry, random)) continue;
+        if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
+      }
+      // injectMode=always：直接有资格（不检查关键词/概率/延迟/冷却）
       triggered.push({ entry, bookTitle: book.title });
       triggeredIds.add(entry.id);
     }
@@ -362,7 +397,7 @@ function gatherTriggeredEntries(
         const entryMaxDepth = entry.recurseDepth ?? 1;
         if (depth >= entryMaxDepth) continue;
         if (!entryMatchesKeywords(entry, ctx, recursingContents)) continue;
-        if (!checkProbability(entry)) continue;
+        if (!checkProbability(entry, random)) continue;
         if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
         newHits.push({ entry, bookTitle: book.title });
         triggeredIds.add(entry.id);
@@ -466,47 +501,123 @@ function selectEntries(books: 世界书[], ctx: FilterContext): Array<{ entry: �
   return afterDisables;
 }
 
+/** 构建单条 depth 消息（injectAtDepth 条目 → ChatModuleMessage）。 */
+function buildWorldbookDepthMessage(
+  entry: 世界书条目,
+  bookTitle: string,
+  ctx: FilterContext,
+): WorldbookChatModuleMessage {
+  const typeLabel = ENTRY_TYPE_LABELS[entry.type] ?? '世界书';
+  const content = [
+    `# 世界书｜${entry.title}`,
+    `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
+    '',
+    replaceWorldbookPlaceholders(entry.content, ctx),
+  ].join('\n');
+  return {
+    role: 'system',
+    content,
+    _injectionPosition: 1, // In-Chat
+    _injectionDepth: entry.depth ?? 0,
+    _injectionOrder: entry.priority ?? 100, // 同 depth 内用 priority 排序
+  };
+}
+
+/** 渲染一条 system 世界书条目（区1 常驻 / 区6 关键词 / 区2 规则统一格式）。 */
+export function renderWorldbookSystemEntry(item: ResolvedWorldbookEntry, ctx: FilterContext, category: '世界书' | '提示词'): string {
+  const typeLabel = ENTRY_TYPE_LABELS[item.entry.type] ?? '世界书';
+  return [
+    `# ${category}｜${item.entry.title}`,
+    `来源：${item.bookTitle} / ${typeLabel} / 优先级 ${item.entry.priority}`,
+    '',
+    replaceWorldbookPlaceholders(item.entry.content, ctx),
+  ].join('\n');
+}
+
+/** 世界书单回合唯一解析（2026-08-12 工作包A）。
+ *  - 资格与落点分离：先判断资格（always 免检触发控制，keyword_match 走完整规则），再按优先级落点：
+ *    system_rule → 规则区；非 system_rule 且 injectAtDepth → depth；非 depth 且 always → 常驻区；否则关键词区。
+ *  - system_rule + injectAtDepth 仍进规则区（不能伪装成聊天历史）。
+ *  - triggeredEntryIds 只记录实际命中的 keyword_match 条目；always 不写触发状态。
+ *  - 分组覆盖 / 互斥 / 递归 / 关键词 logic 全部在一次 plan 内完成，四路消费者不再各自重算。 */
+export function resolveWorldbookInjectionPlan(
+  books: 世界书[],
+  ctx: FilterContext,
+  options: WorldbookPlanOptions = {},
+): WorldbookInjectionPlan {
+  const emptyPlan: WorldbookInjectionPlan = {
+    systemRuleEntries: [],
+    alwaysEntries: [],
+    keywordEntries: [],
+    depthMessages: [],
+    triggeredEntryIds: [],
+  };
+  // 世界书总开关关闭：四路全空
+  if (options.enabled === false) return emptyPlan;
+
+  const all = gatherTriggeredEntries(books, ctx, options);
+  all.sort((a, b) => (b.entry.priority ?? 100) - (a.entry.priority ?? 100));
+  const afterGroup = applyGroupOverride(all);
+  const afterDisables = applyDisablesEntries(afterGroup);
+
+  const plan: WorldbookInjectionPlan = {
+    systemRuleEntries: [],
+    alwaysEntries: [],
+    keywordEntries: [],
+    depthMessages: [],
+    triggeredEntryIds: [],
+  };
+  for (const item of afterDisables) {
+    const { entry, bookTitle } = item;
+    // 触发状态只记录 keyword_match 实际命中（always 不消费/不写触发控制）
+    if (entry.injectMode === 'keyword_match') plan.triggeredEntryIds.push(entry.id);
+    // 落点优先级：system_rule → 规则区；非 system_rule 且 injectAtDepth → depth；非 depth 且 always → 常驻；否则关键词
+    if (entry.type === 'system_rule') {
+      plan.systemRuleEntries.push(item);
+    } else if (entry.injectAtDepth) {
+      plan.depthMessages.push(buildWorldbookDepthMessage(entry, bookTitle, ctx));
+    } else if (entry.injectMode === 'always') {
+      plan.alwaysEntries.push(item);
+    } else {
+      plan.keywordEntries.push(item);
+    }
+  }
+  return plan;
+}
+
+/** 世界书关键词区注入（区6 按需 system 内容）：非 promptLike、非 depth 的 keyword_match 条目。
+ *  2026-08-12 起为 resolveWorldbookInjectionPlan 的兼容包装（同一回合只解析一次）。 */
 export function buildWorldbookInjection(
   books: 世界书[],
   ctx: FilterContext,
 ): string {
-  // Phase 7.2：只拼 injectAtDepth=false 的条目到 systemPrompt（避免双重注入）
-  const selected = selectEntries(books, ctx).filter(
-    ({ entry }) => !isPromptLikeWorldbookEntry(entry) && !entry.injectAtDepth,
-  );
-  if (!selected.length) return '';
+  const plan = resolveWorldbookInjectionPlan(books, ctx);
+  const items = [
+    ...plan.alwaysEntries.filter(({ entry }) => !isPromptLikeWorldbookEntry(entry)),
+    ...plan.keywordEntries,
+  ];
+  if (!items.length) return '';
 
-  return selected
-    .map(({ entry, bookTitle }) => {
-      const category = entry.type === 'system_rule' ? '提示词' : '世界书';
-      const typeLabel = ENTRY_TYPE_LABELS[entry.type] ?? '世界书';
-      return [
-        `# ${category}｜${entry.title}`,
-        `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
-        '',
-        replaceWorldbookPlaceholders(entry.content, ctx),
-      ].join('\n');
-    })
+  return items
+    .map((item) => renderWorldbookSystemEntry(item, ctx, item.entry.type === 'system_rule' ? '提示词' : '世界书'))
     .join('\n\n---\n\n');
 }
 
+/** 世界书规则/常驻区注入（区2 规则 + 区1 白名单常驻）：system_rule 条目 + 白名单常驻条目。
+ *  2026-08-12 起为 resolveWorldbookInjectionPlan 的兼容包装。 */
 export function buildPromptLikeWorldbookInjection(
   books: 世界书[],
   ctx: FilterContext,
 ): string {
-  // Phase 7.2：稳定规则条目不走深度插入（保持稳定位置），但仍保留世界书来源语义
-  const selected = selectEntries(books, ctx).filter(
-    ({ entry }) => isPromptLikeWorldbookEntry(entry) && !entry.injectAtDepth,
-  );
-  if (!selected.length) return '';
+  const plan = resolveWorldbookInjectionPlan(books, ctx);
+  const items = [
+    ...plan.systemRuleEntries,
+    ...plan.alwaysEntries.filter(({ entry }) => PROMPT_LIKE_WORLDBOOK_ENTRY_IDS.has(entry.id)),
+  ];
+  if (!items.length) return '';
 
-  return selected
-    .map(({ entry, bookTitle }) => [
-      `# 世界书｜${entry.title}`,
-      `来源：${bookTitle} / ${ENTRY_TYPE_LABELS[entry.type] ?? '世界书'} / 优先级 ${entry.priority}`,
-      '',
-      replaceWorldbookPlaceholders(entry.content, ctx),
-    ].join('\n'))
+  return items
+    .map((item) => renderWorldbookSystemEntry(item, ctx, '世界书'))
     .join('\n\n---\n\n');
 }
 
@@ -526,30 +637,8 @@ export function buildWorldbookChatModuleMessages(
   books: 世界书[],
   ctx: FilterContext,
 ): WorldbookChatModuleMessage[] {
-  const selected = selectEntries(books, ctx).filter(
-    ({ entry }) => !isPromptLikeWorldbookEntry(entry) && entry.injectAtDepth,
-  );
-  if (!selected.length) return [];
-
-  // 深度大的先排（保持与提示词模块 depth 排序一致）
-  return selected
-    .sort((a, b) => (b.entry.depth ?? 0) - (a.entry.depth ?? 0))
-    .map(({ entry, bookTitle }) => {
-      const typeLabel = ENTRY_TYPE_LABELS[entry.type] ?? '世界书';
-      const content = [
-        `# 世界书｜${entry.title}`,
-        `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
-        '',
-        replaceWorldbookPlaceholders(entry.content, ctx),
-      ].join('\n');
-      return {
-        role: 'system',
-        content,
-        _injectionPosition: 1, // In-Chat
-        _injectionDepth: entry.depth ?? 0,
-        _injectionOrder: entry.priority ?? 100, // 同 depth 内用 priority 排序
-      };
-    });
+  // 2026-08-12 起为 resolveWorldbookInjectionPlan 的兼容包装（depth 消息已按 depth 降序构建）
+  return resolveWorldbookInjectionPlan(books, ctx).depthMessages;
 }
 
 // 批次5(2026-07-26)导出:迁移到提示词模块体系的原世界书规则条目仍含 {originalProtagonistSubject}
@@ -627,8 +716,9 @@ export function explainEntry(entry: 世界书条目): string {
  *  调用方在注入完成后，把本回合触发的条目 id 写入 settings.worldbookTriggerStates。 */
 export { collectTriggeredEntryIds };
 
-/** Phase 7.1：本回合注入完成后，计算触发的条目 id 并更新触发状态表。
- *  - 调用时机：在 buildSystemPrompt / buildWorldbookInjection 之后调用（用同一份 books + ctx）。
+/** Phase 7.1：本回合注入完成后，更新触发状态表（2026-08-12 起消费本回合 plan，不再重新筛选/重抽 probability）。
+ *  - 传入 plan 时：只提交 plan.triggeredEntryIds（keyword_match 实际命中；always 不写触发状态）。
+ *  - 未传 plan 时：兼容旧调用（内部解析一次）。
  *  - 返回值：更新后的 triggerStates（原表浅拷贝 + 本回合触发条目的 lastTriggered 设为 currentMessageCount）。
  *  - 如果本回合没有触发任何条目，返回原表引用不变（调用方据此判断是否需要 setState）。
  *  - 注意：必须在 buildSystemPrompt 之后调用，否则本回合的 cooldown 检查会用到刚更新的状态，
@@ -636,8 +726,11 @@ export { collectTriggeredEntryIds };
 export function updateTriggerStatesAfterTurn(
   books: 世界书[],
   ctx: FilterContext,
+  plan?: WorldbookInjectionPlan,
 ): Record<string, number> | undefined {
-  const hitIds = collectTriggeredEntryIds(books, ctx);
+  const hitIds = plan
+    ? new Set(plan.triggeredEntryIds)
+    : collectTriggeredEntryIds(books, ctx);
   if (hitIds.size === 0) return ctx.worldbookTriggerStates;
   const msgCount = ctx.messageCount ?? 0;
   const prev = ctx.worldbookTriggerStates ?? {};

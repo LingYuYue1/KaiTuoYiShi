@@ -59,6 +59,7 @@ const { buildTavernMessageChain } = await import(builderUrl);
 
 const settings = {
   stPostProcessMode: '未选择',
+  enableActionOptions: true,
   promptModules: [
     { id: 'builtin_world_prompt', content: '世界观片段' },
     { id: 'builtin_main_plot_cot', content: '内置COT骨架' },
@@ -124,9 +125,12 @@ const messages1 = buildTavernMessageChain({
   },
 });
 
-assert(countIncludes(messages1, '内置COT骨架') === 1, '未使用 {{cot}} 时 COT 应只压轴注入一次');
-assert(countIncludes(messages1, '四标签格式') === 1, '未使用 {{format}} 时格式应只压轴注入一次');
-assert(countIncludes(messages1, '行动选项格式') === 1, '行动选项应压轴注入一次');
+// 工作包D 9.3：原生区8 已完整存在，Tavern 只保留短兼容保护，不再全文复制 COT
+assert(countIncludes(messages1, '内置COT骨架') === 0, '未使用 {{cot}} 时 Tavern 不得全文复制 COT（短兼容保护）。');
+// 工作包D 9.3：格式同样只保留短兼容保护
+assert(countIncludes(messages1, '四标签格式') === 0, '未使用 {{format}} 时 Tavern 不得全文复制回复格式。');
+// 工作包D 9.3：行动选项只保留短保护提醒，不再全文复制行动选项模块
+assert(countIncludes(messages1, '行动选项格式') === 0, 'Tavern 不得全文复制行动选项模块。');
 assert(
   messages1.some((msg) => msg.content.includes('你好 星，角色是 当前剧情中的主要互动对象')),
   '应替换 {{user}}，并把 {{char}} 替换为项目内置兼容语义',
@@ -155,8 +159,10 @@ const messages2 = buildTavernMessageChain({
   playerRole: null,
 });
 
-assert(countIncludes(messages2, '内置COT骨架') === 1, '使用 {{cot}} 时只在占位符处注入一次');
-assert(countIncludes(messages2, '四标签格式') === 1, '使用 {{format}} 时只在占位符处注入一次');
+assert(countIncludes(messages2, '内置COT骨架') === 0, '使用 {{cot}} 时也不得复制原生区8完整 COT');
+assert(countIncludes(messages2, '四标签格式') === 0, '使用 {{format}} 时也不得复制原生区8完整回复格式');
+assert(countIncludes(messages2, 'Tavern COT 兼容引用') === 1, '{{cot}} 应替换为一次短兼容引用');
+assert(countIncludes(messages2, 'Tavern 回复格式兼容引用') === 1, '{{format}} 应替换为一次短兼容引用');
 
 const noControlPreset = {
   prompts: [
@@ -255,6 +261,68 @@ const messages5 = buildTavernMessageChain({
 assert(messages5.some((msg) => msg.content.includes('# 预设世界书')), '命中的 ST world_info 应进入世界书嫁接文本');
 assert(messages5.some((msg) => msg.content.includes('梦境酒店与家族势力需要维持连续性')), '命中的 ST world_info 内容应注入消息链');
 assert(!messages5.some((msg) => msg.content.includes('这段不应进入当前消息链')), '未命中的 ST world_info 不应注入消息链');
+
+const duplicateInputPreset = {
+  prompts: [
+    { identifier: 'chatHistory', role: 'system', content: '' },
+    { identifier: 'userInput', role: 'user', content: '' },
+    { identifier: 'user_input', role: 'user', content: '' },
+    { identifier: 'inlineA', role: 'user', content: 'A={{userinput}}' },
+    { identifier: 'inlineB', role: 'assistant', content: 'B=<user_input>' },
+  ],
+  prompt_order: [{
+    character_id: 100001,
+    order: [
+      { identifier: 'chatHistory', enabled: true },
+      { identifier: 'chatHistory', enabled: true },
+      { identifier: 'userInput', enabled: true },
+      { identifier: 'user_input', enabled: true },
+      { identifier: 'inlineA', enabled: true },
+      { identifier: 'inlineB', enabled: true },
+    ],
+  }],
+};
+const messages6 = buildTavernMessageChain({
+  settings,
+  preset: duplicateInputPreset,
+  characterId: 100001,
+  chatHistory: [{ role: 'assistant', content: '唯一历史标记' }],
+  latestUserInput: '唯一输入标记',
+  scope: 'main',
+  playerName: '星',
+  playerRole: null,
+});
+assert(countIncludes(messages6, '唯一历史标记') === 1, '重复 chatHistory 槽只能注入一份历史。');
+assert(countIncludes(messages6, '唯一输入标记') === 1, '多个 input 槽与占位符合计只能注入一次最新输入。');
+
+const messagesRepeatedText = buildTavernMessageChain({
+  settings,
+  preset: basePreset,
+  characterId: 100001,
+  chatHistory: [{ role: 'user', content: '继续' }],
+  latestUserInput: '继续',
+  scope: 'main',
+  playerName: '星',
+  playerRole: null,
+});
+const repeatedInputOccurrences = messagesRepeatedText
+  .filter((msg) => msg.role === 'user')
+  .map((msg) => msg.content)
+  .join('\n')
+  .match(/继续/g)?.length ?? 0;
+assert(repeatedInputOccurrences === 2, '旧历史与本轮输入同文时，最终链必须恰好保留一份历史文本和一份本轮任务文本。');
+
+const messages7 = buildTavernMessageChain({
+  settings: { ...settings, enableActionOptions: false },
+  preset: basePreset,
+  characterId: 100001,
+  chatHistory: [],
+  latestUserInput: '继续',
+  scope: 'main',
+  playerName: '星',
+  playerRole: null,
+});
+assert(!messages7.some((msg) => msg.content.includes('项目行动选项保护')), '行动选项关闭时 Tavern 兼容保护不得要求输出行动选项。');
 
 fs.rmSync(tempDir, { recursive: true, force: true });
 console.log('✓ ST V2 消息链构建器回归测试通过');

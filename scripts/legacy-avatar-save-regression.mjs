@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import * as esbuild from 'esbuild';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const manifest = JSON.parse(read('data/staticAssetManifest.json'));
+const inventory = JSON.parse(read('public/assets/builtin-avatars/candidates/avatar-candidates.json'));
 const source = read('utils/staticAssets.ts').replace(
   "import staticAssetManifest from '@/data/staticAssetManifest.json';",
   `const staticAssetManifest = ${JSON.stringify(manifest)};`,
@@ -49,7 +51,9 @@ function resolveWorkspaceImport(specifier) {
   return base;
 }
 
-const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'legacy-avatar-save-'));
+const tempRoot = path.join(root, '.tmp');
+fs.mkdirSync(tempRoot, { recursive: true });
+const outDir = fs.mkdtempSync(path.join(tempRoot, 'legacy-avatar-save-'));
 try {
   const outfile = path.join(outDir, 'npc.mjs');
   await esbuild.build({
@@ -77,6 +81,49 @@ try {
   assert.equal(npc.读取NPC头像({ 姓名: '银狼', 头像: placeholder }, '正文'), silverWolf, 'legacy generic placeholders must yield to a current character avatar');
   assert.equal(npc.读取NPC头像({ 姓名: '银狼', 头像: 'https://player.example/custom.webp' }), 'https://player.example/custom.webp', 'player-provided avatars must keep priority');
   assert.equal(npc.读取NPC头像({ 姓名: '自定义角色', 头像: placeholder }), placeholder, 'unknown characters must keep their saved placeholder');
+
+  const rendererOutfile = path.join(outDir, 'message-renderers.mjs');
+  await esbuild.build({
+    entryPoints: [path.join(root, 'components/features/Chat/MessageRenderers.tsx')],
+    outfile: rendererOutfile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    external: ['react', 'react/jsx-runtime'],
+    jsx: 'automatic',
+    logLevel: 'silent',
+    plugins: [{
+      name: 'workspace-alias',
+      setup(build) {
+        build.onResolve({ filter: /^@\// }, (args) => ({ path: resolveWorkspaceImport(args.path) }));
+      },
+    }],
+  });
+  const { BodyBlock } = await import(`${pathToFileURL(rendererOutfile).href}?t=${Date.now()}`);
+  let storyAliasCases = 0;
+  for (const character of inventory.characters) {
+    const logicalId = character.variants?.[0]?.slice('static:'.length);
+    const asset = logicalId ? manifest.assets[logicalId] : undefined;
+    assert.ok(asset, `avatar inventory must reference a manifest asset for ${character.name}`);
+    const expectedAvatar = `https://lingkvault.cc.cd${asset.path}`;
+
+    for (const alias of character.aliases ?? []) {
+      const aliasSpeakerHtml = renderToStaticMarkup(React.createElement(BodyBlock, {
+        content: `【${alias}】先确认一下情况。`,
+        npcRecords: [{ 姓名: character.name }],
+      }));
+      assert.ok(aliasSpeakerHtml.includes(expectedAvatar), `${character.name} story alias must resolve its canonical NPC avatar: ${alias}`);
+
+      const aliasRecordHtml = renderToStaticMarkup(React.createElement(BodyBlock, {
+        content: `【${character.name}】先确认一下情况。`,
+        npcRecords: [{ 姓名: alias }],
+      }));
+      assert.ok(aliasRecordHtml.includes(expectedAvatar), `${character.name} canonical speaker must resolve an NPC saved with alias: ${alias}`);
+      storyAliasCases += 2;
+    }
+  }
+
+  assert.ok(storyAliasCases > 0, 'story avatar alias regression must exercise inventory aliases');
 } finally {
   fs.rmSync(outDir, { recursive: true, force: true });
 }
@@ -84,4 +131,4 @@ try {
 const albumWorkspace = read('components/features/GameSystems/album/workspaces.tsx');
 assert.match(albumWorkspace, /getBuiltinAvatarSetForNames\(npc\.姓名, npc\.别名\)/, 'the companion album must use the expanded avatar identity list');
 
-console.log('Legacy avatar save regression passed: old references and expanded NPC identities resolve outside Zhiku.');
+console.log('Legacy avatar save regression passed: old references and every inventory alias resolve in both story identity directions.');

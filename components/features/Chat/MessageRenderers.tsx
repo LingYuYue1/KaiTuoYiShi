@@ -4,6 +4,7 @@ import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { VisualTextSettings } from '@/models/settings';
+import { getBuiltinAvatarSetForNames } from '@/data/builtinAvatars';
 import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 import { ResilientImage } from '@/components/ui/ResilientImage';
@@ -312,13 +313,18 @@ function buildNpcLookupMap(records?: NPC记录[]): Map<string, NPC记录> {
   for (const n of records) {
     if (n.姓名 && !map.has(n.姓名)) map.set(n.姓名, n);
     if (n.别名 && !map.has(n.别名)) map.set(n.别名, n);
+    const builtinSet = getBuiltinAvatarSetForNames(n.姓名, n.别名);
+    if (builtinSet && !map.has(builtinSet.canonicalName)) map.set(builtinSet.canonicalName, n);
   }
   return map;
 }
 
 function lookupNpc(name: string, map: Map<string, NPC记录>): NPC记录 | undefined {
   if (!name) return undefined;
-  return map.get(name);
+  const direct = map.get(name);
+  if (direct) return direct;
+  const builtinSet = getBuiltinAvatarSetForNames(name);
+  return builtinSet ? map.get(builtinSet.canonicalName) : undefined;
 }
 
 // 判断这一行的「角色」是不是主角自身（AI 可能写主角名字、也可能写「你」）

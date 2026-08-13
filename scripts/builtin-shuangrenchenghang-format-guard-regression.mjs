@@ -40,13 +40,13 @@ assert(izumi.prompt_order?.[0]?.order?.filter((slot) => slot.enabled !== false).
 assert(izumi.extensions?.regex_scripts?.length === 26, 'Izumi must preserve 26 extension regex scripts');
 assert(!Object.prototype.hasOwnProperty.call(izumi, 'modules'), 'Izumi builtin must not be the legacy st_import module conversion');
 
-const formatGuardIndex = builder.indexOf("source: 'format_guard'");
-const actionOptionsIndex = builder.indexOf('contextPieces.actionOptionsPrompt');
+// 工作包D 9.3：原生区8 已完整存在，Tavern 只保留短兼容保护（compat_guard），不再全文复制 format/action-options
+const compatGuardIndex = builder.indexOf("source: 'compat_guard'");
 const postProcessIndex = builder.indexOf('return applyTavernPostProcess');
-assert(formatGuardIndex > 0, 'Tavern builder must keep project format_guard messages');
-assert(actionOptionsIndex > formatGuardIndex, 'Action options guard must be appended after the response format guard block');
-assert(postProcessIndex > actionOptionsIndex, 'Post-processing must run after the final action options guard is appended');
-assert(builder.includes("content: contextPieces.formatPrompt"), 'Project response format prompt must still be injectable');
-assert(builder.includes("content: contextPieces.actionOptionsPrompt"), 'Project action options prompt must still be injectable');
+assert(compatGuardIndex > 0, 'Tavern builder must keep short compat_guard messages');
+assert(postProcessIndex > compatGuardIndex, 'Post-processing must run after the compat guard is appended');
+assert(!builder.includes("source: 'format_guard'"), 'Tavern 不得再全文追加 format_guard（短保护取代）。');
+assert(builder.includes('项目响应格式保护'), 'compat_guard 必须包含项目响应格式保护声明。');
+assert(builder.includes('项目行动选项保护'), 'compat_guard 必须包含项目行动选项保护声明。');
 
 console.log('builtin Tavern format guard regression ok');

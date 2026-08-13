@@ -30,22 +30,22 @@ assert(/assertWorkflowActive\(\);\s+mem = compression\.memory/.test(source), '�
 assert(source.includes('shouldCommit: isCurrentWorkflow'), '新闻/变量等子流程必须接收当前工作流提交闸门。');
 assert(/assertWorkflowActive\(\);\s*const turnRecallEntry = turnRecallEntryResult\.entry;/.test(source), '忆庭入库前必须检查当前工作流，避免重roll后旧纪要写回。');
 assert(source.includes('turnCount: state.turnCount + 1'), '自动存档必须保存真实 turnCount。');
-assert(source.includes('# 重roll生成约束'), '重roll请求必须注入避重复约束。');
+// 工作包G：初始重 Roll 只保留尾部 buildRerollGenerationGuard（B5）一份，system 侧 A2 已删除
+assert(!source.includes('# 重roll生成约束'), '重roll system 侧重复约束（A2）必须已删除。');
 assert(source.includes('重roll nonce'), '重roll请求必须带 nonce，避免同上下文确定性复刻。');
 assert(source.includes('function normalizeRerollCompareText'), '重roll必须规范化正文用于相似度检测。');
 assert(source.includes('function calculateRerollSimilarity'), '重roll必须计算上一版与新版的相似度。');
 assert(source.includes('function buildRerollGenerationGuard'), '重roll必须在消息尾部追加强避重复约束。');
 assert(source.includes('function buildRerollSimilarityRetryGuard'), '重roll相似时必须追加自动换写提示。');
-const mainTailStart = source.indexOf('const mainTailMessages: 聊天消息[] = [];');
-const enforcementTail = source.indexOf('buildMainTurnEnforcementBlock({', mainTailStart);
-const rerollTail = source.indexOf('buildRerollGenerationGuard(deps.rerollContext.nonce', mainTailStart);
-const requestFinalization = source.indexOf('const finalizedMainRequest = finalizeMainRequest({', mainTailStart);
+// 工作包C：重roll守卫经 turnConstraints 进入分层 finalizer（任务序列之前）
+const constraintsStart = source.indexOf('const turnConstraints: 聊天消息[] = [];');
+const rerollTail = source.indexOf('buildRerollGenerationGuard(deps.rerollContext.nonce', constraintsStart);
+const finalizeCall = source.indexOf('const finalizedMainRequest = finalizeMainRequest({');
 assert(
-  mainTailStart >= 0
-  && enforcementTail > mainTailStart
-  && rerollTail > enforcementTail
-  && requestFinalization > rerollTail,
-  '重roll强约束必须在人物校准之后，作为最后一条 tail user 消息进入统一请求最终化器。',
+  constraintsStart >= 0
+  && rerollTail > constraintsStart
+  && finalizeCall > rerollTail,
+  '重roll强约束必须经 turnConstraints 进入统一请求最终化器（任务序列之前）。',
 );
 assert(source.includes('calculateRerollSimilarity(candidateText, deps.rerollContext.previousResponse)'), '主剧情必须对重roll候选正文做相似度校验。');
 assert(source.includes('rerollSimilarity >= 0.86'), '重roll相似度阈值必须锁定，防止一模一样回复放行。');

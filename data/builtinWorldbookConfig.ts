@@ -603,8 +603,9 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
         title: '星神与组织的张力',
         content: PATHS_TENSION,
         type: 'world_lore',
-        injectMode: 'keyword_match',
-        keywords: ['组织', '势力', '冲突', '敌人', '盟友', '仙舟', '反物质', '公司', '星核猎手'],
+        // 2026-08-12 组装优化：内容属于世界框架设定（星神/势力格局），改为静态常驻（原 keyword_match 靠关键词碰运气）
+        injectMode: 'always',
+        keywords: [],
         priority: 190,
         enabled: true,
         scope: ['main'],

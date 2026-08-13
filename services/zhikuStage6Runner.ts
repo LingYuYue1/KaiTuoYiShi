@@ -556,19 +556,23 @@ function buildFinalizedFixtureRequest(
     compilation.mainStoryInjection,
   ].filter(Boolean).join('\n\n');
   const nativeMessages = [创建聊天消息('user', fixture.userPrompt)];
-  const tailMessages = [创建聊天消息('user', buildMainTurnEnforcementBlock({
-    playerName: options.playerRole?.姓名 || options.playerRole?.别名 || '开拓者',
-    wordCountTarget: 180,
-    zhikuCharacterBrief: compilation.characterEnforcementBrief,
-    storyWeavingActive: false,
-  }))];
+  // 工作包C：适配分层 finalizer——fixture 消息作为回合前历史，区E 作为执法块，无任务序列
   return finalizeMainRequest({
     config: options.config,
     systemPrompt,
-    baseMessages: (tavernMessages ?? nativeMessages).map((message) => 创建聊天消息(message.role, message.content)),
-    tailMessages,
+    mode: mode === 'tavern-v2' ? 'tavern_v2' : 'standard',
+    preTurnHistory: (tavernMessages ?? nativeMessages).map((message) => 创建聊天消息(message.role, message.content)),
+    depthMessages: [],
+    positionZeroCompatMessages: [],
+    turnConstraints: [],
+    enforcementBlock: buildMainTurnEnforcementBlock({
+      playerName: options.playerRole?.姓名 || options.playerRole?.别名 || '开拓者',
+      wordCountTarget: 180,
+      zhikuCharacterBrief: compilation.characterEnforcementBrief,
+      storyWeavingActive: false,
+    }),
+    taskSequence: [],
     streaming: false,
-    mode,
     scope: 'diagnostic',
     zhikuCompileId: compilation.compileId,
   });
@@ -597,6 +601,7 @@ function buildGroupRequests(input: {
     playerName: input.options.playerRole?.姓名 || input.options.playerRole?.别名 || '开拓者',
     playerRole: input.options.playerRole,
     includeNativeContextInWorldbook: false,
+          scope: 'main',
     triggerType: 'stage6-diagnostic',
   });
   const finalized = buildFinalizedFixtureRequest(

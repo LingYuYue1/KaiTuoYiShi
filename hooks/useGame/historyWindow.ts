@@ -44,6 +44,48 @@ export function getMainHistoryWindow(
   return history.slice(-getMainHistoryWindowLimit(settings, memorySystem));
 }
 
+export type PathAwakeningHistoryPhase = 'question' | 'judgement';
+
+/**
+ * 命途狭间只消费仪式所需的最小承接，不复用普通主剧情 20 条窗口。
+ * 调用时 history 应包含本轮 user 输入；这里会排除最后一条 user 任务消息。
+ */
+export function getPathAwakeningHistoryWindow(
+  history: 聊天消息[],
+  phase: PathAwakeningHistoryPhase,
+): 聊天消息[] {
+  const withoutCurrentInput = excludeLatestUserMessage(history)
+    .filter((msg) => msg.role !== 'system' && !(msg.role === 'user' && msg.content.startsWith('[系统]')));
+
+  if (phase === 'judgement') {
+    const questionIndex = findLastIndex(withoutCurrentInput, (msg) => (
+      msg.role === 'assistant'
+      && Boolean(msg.parsedResponse?.awakenQuestions?.trim() || /<狭间问答>[\s\S]*?<\/狭间问答>/i.test(msg.content))
+    ));
+    if (questionIndex >= 0) return [withoutCurrentInput[questionIndex]];
+
+    const lastAssistant = [...withoutCurrentInput].reverse().find((msg) => msg.role === 'assistant');
+    return lastAssistant ? [lastAssistant] : [];
+  }
+
+  // 出题只需要踏入前最后一次交互（通常为一条玩家行动 + 一条 assistant 正文）。
+  return withoutCurrentInput.slice(-2);
+}
+
+function excludeLatestUserMessage(history: 聊天消息[]): 聊天消息[] {
+  const lastUserIndex = findLastIndex(history, (msg) => msg.role === 'user');
+  return lastUserIndex >= 0
+    ? history.filter((_, index) => index !== lastUserIndex)
+    : [...history];
+}
+
+function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index])) return index;
+  }
+  return -1;
+}
+
 function compactText(text: string, limit: number): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   return cleaned.length > limit ? `${cleaned.slice(0, limit)}...` : cleaned;
@@ -188,12 +230,26 @@ export function buildImmediateStoryReview(history: 聊天消息[], maxMessages =
     const parsed = msg.parsedResponse;
     const memory = hasMeaningfulText(parsed?.memory) ? `小结：${compactText(parsed!.memory, 240)}` : '';
     const events = parsed?.worldEvents?.length ? `动态世界：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 90)).join(' / ')}` : '';
-    const storyPlan = hasMeaningfulText(parsed?.storyPlan) ? `剧情规划：${compactText(parsed!.storyPlan, 260)}` : '';
-    const needsBodyFallback = !memory && !events && !storyPlan;
+    // 工作包B：剧情规划字段移除——已移入区5 剧情安排段，回顾只留小结/动态世界/正文锚点
+    const needsBodyFallback = !memory && !events;
     const body = parsed?.body || msg.content;
     const bodyText = body ? `正文锚点：${compactText(body, needsBodyFallback ? 260 : 180)}` : '';
-    return ['AI', memory, events, storyPlan, bodyText].filter(Boolean).join('｜');
+    return ['AI', memory, events, bodyText].filter(Boolean).join('｜');
   });
 
   return lines.join('\n');
+}
+
+/** 工作包B：从回合前历史提取最近 1-2 条非空 assistant.storyPlan（区5 剧情安排用）。
+ *  由共享预处理层（sendWorkflow / contextSnapshot）调用后传给 builder。 */
+export function extractRecentStoryPlanSnippets(history: 聊天消息[], max = 2): string[] {
+  const snippets: string[] = [];
+  for (let i = history.length - 1; i >= 0 && snippets.length < max; i -= 1) {
+    const msg = history[i];
+    if (msg.role !== 'assistant') continue;
+    const plan = msg.parsedResponse?.storyPlan;
+    if (!hasMeaningfulText(plan)) continue;
+    snippets.push(plan!.trim());
+  }
+  return snippets;
 }
