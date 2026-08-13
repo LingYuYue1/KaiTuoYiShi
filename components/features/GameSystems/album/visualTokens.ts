@@ -16,7 +16,6 @@ export const activeTextColor = 'rgb(var(--tj-ui-active-text))';
 export const accentColor = 'rgb(var(--tj-accent-primary))';
 export const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 export const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(var(--tj-accent-mid),0.96) 48%, rgb(var(--tj-tech-cyan)) 100%)';
-export const quietAccentSurface = 'rgba(var(--tj-btn-primary-start),0.055)';
 export const cardSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel),0.76), rgba(var(--tj-ui-panel-strong),0.72))';
 export const heroGridBackgroundStyle = {
   backgroundSize: albumGridSize,

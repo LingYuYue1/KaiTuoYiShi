@@ -27,8 +27,6 @@ import { normalizeSTPreset } from './stSettingsNormalizer';
 export const isSTImportedModule = (m: 提示词模块) =>
   m.source === 'st_preset' || m.id.startsWith('st_import_');
 
-/** 内置主剧情思维链模块 id（与 ST 预设 CoT 冲突时需自动禁用） */
-export const BUILTIN_MAIN_COT_ID = 'builtin_main_plot_cot';
 /** 内置回复格式模块 id（与 ST 预设格式冲突时需自动禁用） */
 export const BUILTIN_RESPONSE_FORMAT_ID = 'builtin_response_format';
 
@@ -424,32 +422,6 @@ export function parseSTPreset(jsonText: string): 提示词模块[] {
 }
 
 /**
- * 解析 ST 预设并返回检测结果（含世界书计数）。
- *
- * Phase 8 行为：
- * - 提示词模块照常解析返回
- * - world_info：解析为我们的世界书条目格式（含 stwi_ 前缀 id），返回 worldbookEntries
- * - 调用方据此设置 STPresetEntry.worldbookEntries
- */
-export function parseSTPresetWithDetection(jsonText: string): STPresetParseResult {
-  const data = JSON.parse(jsonText) as STPresetRaw | null;
-  const modules = parseSTPreset(jsonText);
-  if (data === null) {
-    // 顶层 null（如 JSON 内容为 "null"）：旧代码有保护，退回空结果不抛异常。
-    return { modules, worldInfoCount: 0, worldbookEntries: [], samplingParams: undefined, assistantPrefill: undefined };
-  }
-  const worldbookEntries = parseSTWorldInfoEntries(data);
-  const worldInfoCount = Array.isArray(data.world_info) ? data.world_info.length : 0;
-
-  // Phase 5：解析顶层采样参数
-  const samplingParams = parseSTSamplingParams(data);
-  // Phase 5：解析 assistant prefill
-  const assistantPrefill = typeof data.assistant_prefill === 'string' ? data.assistant_prefill : undefined;
-
-  return { modules, worldInfoCount, worldbookEntries, samplingParams, assistantPrefill };
-}
-
-/**
  * Phase 5：从 ST 预设 JSON 顶层解析采样参数。
  *
  * ST 字段 → 我们的字段映射：
@@ -466,81 +438,6 @@ export function parseSTPresetWithDetection(jsonText: string): STPresetParseResul
  *
  * 所有字段都是可选的，ST 预设不包含的字段返回 undefined。
  */
-function parseSTSamplingParams(data: STPresetRaw): STSamplingParams | undefined {
-  const params: STSamplingParams = {};
-  if (typeof data.temperature === 'number') params.temperature = data.temperature;
-  if (typeof data.top_p === 'number') params.topP = data.top_p;
-  if (typeof data.top_k === 'number') params.topK = data.top_k;
-  if (typeof data.top_a === 'number') params.topA = data.top_a;
-  if (typeof data.min_p === 'number') params.minP = data.min_p;
-  if (typeof data.repetition_penalty === 'number') params.repetitionPenalty = data.repetition_penalty;
-  if (typeof data.frequency_penalty === 'number') params.frequencyPenalty = data.frequency_penalty;
-  if (typeof data.presence_penalty === 'number') params.presencePenalty = data.presence_penalty;
-  if (typeof data.openai_max_context === 'number') params.maxContext = data.openai_max_context;
-  if (typeof data.openai_max_tokens === 'number') params.maxTokens = data.openai_max_tokens;
-
-  // 全空则返回 undefined（预设无采样参数）
-  return Object.keys(params).length > 0 ? params : undefined;
-}
-
-/**
- * 检测 ST 预设导入时与现有模块的 id 冲突。
- *
- * @param newModules 待导入的模块数组
- * @param existingModules 现有模块数组
- * @returns 冲突的 id 列表（即新模块 id 已存在于现有模块中）
- */
-export function detectSTImportConflicts(
-  newModules: 提示词模块[],
-  existingModules: 提示词模块[],
-): string[] {
-  const existingIds = new Set(existingModules.map((m) => m.id));
-  return newModules.filter((m) => existingIds.has(m.id)).map((m) => m.id);
-}
-
-/**
- * 合并 ST 导入模块到现有模块列表。
- *
- * 策略：
- * - mode='replace'：同 id 的旧模块被新模块覆盖（旧 st_import_* 被替换）
- * - mode='coexist'：跳过冲突模块（只追加新 id）
- * - mode='rename'：冲突模块自动重命名（追加 _2 _3 后缀）
- *
- * @param newModules 新导入模块
- * @param existingModules 现有模块
- * @param mode 冲突处理策略
- * @returns 合并后的完整模块数组
- */
-export function mergeSTImportedModules(
-  newModules: 提示词模块[],
-  existingModules: 提示词模块[],
-  mode: 'replace' | 'coexist' | 'rename' = 'replace',
-): 提示词模块[] {
-  if (mode === 'replace') {
-    const newIds = new Set(newModules.map((m) => m.id));
-    const filtered = existingModules.filter((m) => !newIds.has(m.id) || !m.id.startsWith('st_import_'));
-    return [...filtered, ...newModules];
-  }
-  if (mode === 'coexist') {
-    const existingIds = new Set(existingModules.map((m) => m.id));
-    const filtered = newModules.filter((m) => !existingIds.has(m.id));
-    return [...existingModules, ...filtered];
-  }
-  // rename
-  const existingIds = new Set(existingModules.map((m) => m.id));
-  const renamed = newModules.map((m) => {
-    let candidate = m.id;
-    let suffix = 2;
-    while (existingIds.has(candidate)) {
-      candidate = `${m.id}_${suffix}`;
-      suffix += 1;
-    }
-    existingIds.add(candidate);
-    return { ...m, id: candidate };
-  });
-  return [...existingModules, ...renamed];
-}
-
 // ── Phase 7.2：ST 世界书条目解析 ─────────────────────────────────
 
 /** 根据 ST 条目 comment 推断我们的世界书条目类型。 */

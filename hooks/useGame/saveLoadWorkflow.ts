@@ -1,18 +1,9 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
-import type { 存档数据, 存档类型, 游戏设置 } from '@/models/settings';
+import type { 存档数据, 存档类型 } from '@/models/settings';
 import type { 聊天消息 } from '@/models/chat';
 import { 创建空角色, 确保命途列表 } from '@/models/character';
 import type { 角色数据结构 } from '@/models/character';
 import {
-  创建默认游戏设置,
-  归一化文生图系统设置,
-  归一化剧情编织系统设置,
-  归一化记忆系统设置,
-  归一化星际和平周报设置,
-  归一化智库系统设置,
-  归一化手机系统设置,
-  归一化额外功能设置,
-  归一化视觉文本设置,
   迁移存档运行态键,
 } from '@/models/settings';
 import { loadLatestSave, loadSave, loadSaveIdByNodeId, loadNewestStory, loadActiveLeaf, isActiveLeafWritable, isUnsealedHeadSave, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveNewestStory, createLeafNode, saveSetting, forkSaveTreeLeaf, adoptUnsealedChildLeaf } from '@/services/dbService';
@@ -141,65 +132,6 @@ export function assertCheckpointPayloadNoQueueTasks(payload: 存档数据, label
     queueTasksCount: Array.isArray(value) ? value.length : 'non-array',
   });
   throw new Error(`[D4] queueTasks 不得进入检查点载荷：${label}`);
-}
-
-export function buildSaveGameSettingsSnapshot(settings: 游戏设置): 游戏设置 {
-  const defaults = 创建默认游戏设置();
-  const normalizedSettings: 游戏设置 = {
-    ...settings,
-    新闻系统: 归一化星际和平周报设置(settings.新闻系统),
-    手机系统: 归一化手机系统设置(settings.手机系统),
-    智库系统: 归一化智库系统设置(settings.智库系统),
-    剧情编织系统: 归一化剧情编织系统设置(settings.剧情编织系统),
-    文生图系统: 归一化文生图系统设置(settings.文生图系统),
-    记忆系统: 归一化记忆系统设置(settings.记忆系统),
-    额外功能: 归一化额外功能设置(settings.额外功能),
-    visualTextSettings: 归一化视觉文本设置(settings.visualTextSettings),
-  };
-  return {
-    ...normalizedSettings,
-    enableClaudeMode: defaults.enableClaudeMode,
-    deepSeekMainMode: defaults.deepSeekMainMode,
-    backgroundTaskMode: normalizedSettings.backgroundTaskMode,
-    visualTextSettings: normalizedSettings.visualTextSettings,
-    enableCacheDiagnostics: defaults.enableCacheDiagnostics,
-    variableApi: defaults.variableApi,
-    新闻系统: {
-      ...normalizedSettings.新闻系统,
-      api: defaults.新闻系统.api,
-    },
-    手机系统: {
-      ...normalizedSettings.手机系统,
-      api: defaults.手机系统.api,
-    },
-    智库系统: {
-      ...normalizedSettings.智库系统,
-      api: defaults.智库系统.api,
-    },
-    剧情编织系统: {
-      ...normalizedSettings.剧情编织系统,
-      api: defaults.剧情编织系统.api,
-    },
-    文生图系统: {
-      ...normalizedSettings.文生图系统,
-      普通接口: defaults.文生图系统.普通接口,
-      场景接口: defaults.文生图系统.场景接口,
-      useSeparateSceneApi: defaults.文生图系统.useSeparateSceneApi,
-      NSFW接口: defaults.文生图系统.NSFW接口,
-      词组转化器API: defaults.文生图系统.词组转化器API,
-      正文生图: {
-        ...normalizedSettings.文生图系统.正文生图,
-        parserApi: defaults.文生图系统.正文生图.parserApi,
-        imageApi: defaults.文生图系统.正文生图.imageApi,
-      },
-    },
-    记忆系统: {
-      ...normalizedSettings.记忆系统,
-      记忆总结API: defaults.记忆系统.记忆总结API,
-      忆庭召回API: defaults.记忆系统.忆庭召回API,
-      忆庭精炼API: defaults.记忆系统.忆庭精炼API,
-    },
-  };
 }
 
 /**

@@ -1294,23 +1294,6 @@ export interface LegacySaveDeviceSettings {
 
 export type LegacySaveData = 存档数据 & LegacySaveDeviceSettings;
 
-export function extractDeviceSettings(save: LegacySaveData): DeviceSettings {
-  return {
-    apiSettings: save.apiSettings ?? 创建空API设置(),
-    gameSettings: save.gameSettings ?? 创建默认游戏设置(),
-    theme: save.theme ?? 'deepspace',
-    worldbooks: save.worldbooks ?? [],
-  };
-}
-
-export function stripDeviceSettings(save: LegacySaveData): GameData {
-  const { gameSettings: _game, apiSettings: _api, theme: _theme, ...gameData } = save;
-  void _game;
-  void _api;
-  void _theme;
-  return gameData;
-}
-
 export function createSaveEnvelope(save: GameData): SaveEnvelope {
   const gameData = save;
   return {

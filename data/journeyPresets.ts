@@ -6,7 +6,6 @@ import type {
   开局地区,
   开局章节锚点,
   能力预设,
-  自由开局写作问题,
   阵营定义,
   难度定义,
   命途定义,
@@ -42,10 +41,6 @@ export const difficulties: 难度定义[] = [
     description: '资源稀缺、决断锋利。属于愿意把一切交给命途的旅人。',
   },
 ];
-
-export function getDifficulty(id: string): 难度定义 | undefined {
-  return difficulties.find((d) => d.id === id);
-}
 
 export const storyModes: 剧情模式定义[] = [
   {
@@ -564,39 +559,6 @@ export const officialOpeningPresets: 官方开局预设[] = [
   },
 ];
 
-export const freeOpeningWritingQuestions: 自由开局写作问题[] = [
-  {
-    id: 'identity',
-    title: '你是谁',
-    description: '写清身份、来历、阵营关系和别人第一眼会怎样判断你。',
-    examples: ['空间站临时研究协助者', '受雇调查裂界异动的外来人', '持有邀请函的匹诺康尼宾客'],
-  },
-  {
-    id: 'reason',
-    title: '你为什么在这里',
-    description: '给出抵达当前地区的原因，最好能和委托、事故、调查、邀请或逃亡相连。',
-    examples: ['收到求援通讯', '追踪一枚异常信标', '被某位角色邀请同行'],
-  },
-  {
-    id: 'entry_scene',
-    title: '从哪里开始',
-    description: '指定初始地点、事件前后或第一个可互动对象，避免开局只剩背景介绍。',
-    examples: ['流云渡盘查口', '下层区娜塔莎诊所外', '白日梦酒店入住柜台'],
-  },
-  {
-    id: 'relationships',
-    title: '你认识谁',
-    description: '说明和重要角色是陌生、见过、合作过、亲近还是有矛盾。没有写明就默认陌生或初识。',
-    examples: ['与素裳有过一次护送合作', '只在档案中见过黑塔', '和砂金互相试探但谈不上信任'],
-  },
-  {
-    id: 'tone',
-    title: '你想要什么氛围',
-    description: '选择日常、悬疑、战斗、暧昧、调查、轻松或压迫感，让首回合更贴近玩法。',
-    examples: ['偏调查和悬疑', '先日常相处再进入主线', '直接从危机现场开场'],
-  },
-];
-
 export const freeOpeningGuides: 地区自由开局引导[] = [
   {
     regionId: 'herta_space_station',
@@ -934,10 +896,6 @@ export function getWorkshopOpeningTemplate(id: string): 创意工坊开局模板
 
 export function getWorkshopOpeningTemplatesByRegion(regionId: string): 创意工坊开局模板[] {
   return workshopOpeningTemplates.filter((template) => template.regionId === regionId);
-}
-
-export function getWorkshopOpeningTemplatePack(schema = 'kaituo-opening-workshop-pack'): 创意工坊开局模板包 | undefined {
-  return workshopOpeningTemplatePacks.find((pack) => pack.schema === schema);
 }
 
 export function getOpeningScenarioBundle(scenarioId: string): {

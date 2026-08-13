@@ -66,11 +66,6 @@ export async function updateCloudBackupTransfer(
   });
 }
 
-export async function getCloudBackupTransfer(transferId: string): Promise<CloudBackupTransferMeta | null> {
-  const db = await openTransferDB();
-  return requestTransaction<CloudBackupTransferMeta | null>(db, META_STORE, 'readonly', (store) => store.get(transferId), null);
-}
-
 export async function putCloudBackupTransferPart(
   transferId: string,
   meta: CloudBackupPartMeta,
@@ -101,24 +96,6 @@ export async function getCloudBackupTransferPart(
     null,
   );
   return record ? { meta: record.meta, blob: record.blob } : null;
-}
-
-export async function listCloudBackupTransferParts(
-  transferId: string,
-): Promise<Array<{ meta: CloudBackupPartMeta; blob: Blob }>> {
-  const db = await openTransferDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PART_STORE, 'readonly');
-    const index = tx.objectStore(PART_STORE).index('transferId');
-    const request = index.getAll(transferId);
-    request.onsuccess = () => {
-      const records = (request.result as CloudBackupTransferPartRecord[])
-        .sort((left, right) => left.index - right.index)
-        .map((record) => ({ meta: record.meta, blob: record.blob }));
-      resolve(records);
-    };
-    request.onerror = () => reject(request.error ?? new Error('列出云备份临时分卷失败。'));
-  });
 }
 
 export async function deleteCloudBackupTransfer(transferId: string): Promise<void> {

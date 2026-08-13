@@ -43,8 +43,6 @@ export const NARRATIVE_ITEM_CATEGORIES: 物品分类[] = ['lightcone', 'weapon',
 
 export type 物品品质 = '蓝' | '紫' | '金';
 
-export const ITEM_QUALITY_ORDER: 物品品质[] = ['金', '紫', '蓝'];
-
 export const ITEM_QUALITY_COLORS: Record<物品品质, string> = {
   蓝: 'rgba(120, 170, 230, 0.85)',
   紫: 'rgba(190, 145, 230, 0.9)',

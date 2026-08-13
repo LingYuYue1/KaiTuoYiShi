@@ -64,14 +64,6 @@ export function referenceBackendCapability(
   return { usable: false, message: 'NovelAI 参考图参数尚未接入。' };
 }
 
-export function referenceBackendSupport(
-  backend: 文生图API配置['backend'],
-  settings: 文生图参考图设置,
-): { usable: boolean; message: string } {
-  if (!settings.enabled) return { usable: false, message: '参考图总开关关闭：素材只保存，不参与任何生成。' };
-  return referenceBackendCapability(backend, settings);
-}
-
 export function isReferenceInjectionTarget(target: GenerationTarget): boolean {
   return target.targetType === 'traveler' || target.targetType === 'npc' || target.targetType === 'nsfw_part';
 }

@@ -10,8 +10,6 @@ export const NEWS_CATEGORY_LABELS: Record<新闻类目, string> = {
   frontline: '前线战报',
 };
 
-export const NEWS_CATEGORY_ORDER: 新闻类目[] = ['plan', 'chronicle', 'starlog', 'frontline'];
-
 export const NEWS_STATUS_LABELS: Record<新闻状态, string> = {
   upcoming: '即将发生',
   ongoing: '进行中',

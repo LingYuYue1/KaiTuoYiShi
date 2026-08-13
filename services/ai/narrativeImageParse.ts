@@ -47,6 +47,8 @@ const BASE_NEGATIVE = 'low quality, blurry, deformed, bad anatomy, extra limbs, 
 /** HSR 风格负面提示词：排除非动漫/写实风格 */
 const HSR_STYLE_NEGATIVE = 'realistic, photographic, 3d model, cgi, western style, pixar style, disney style';
 
+// Legacy parser prompt retained only in source history; the canonical parsers below are used at runtime.
+/* eslint-disable @typescript-eslint/no-unused-vars */
 const PARSE_SYSTEM_PROMPT = `你是一个专业的插图提示词生成模型，服务于「崩坏：星穹铁道」风格的互动叙事游戏。你的任务是从剧情正文中提取画面信息，生成高质量的 AI 绘图提示词。
 
 ## 美术风格锚定
@@ -120,6 +122,7 @@ const PARSE_SYSTEM_PROMPT = `你是一个专业的插图提示词生成模型，
 8. 如果正文提到了具体角色名，请在 description 中使用该角色名
 9. 不要生成正文未提及的角色或场景
 10. 每个提示词末尾追加画风关键词：masterpiece, best quality, anime illustration, sci-fi fantasy, detailed`;
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 const STORY_SNAPSHOT_SYSTEM_PROMPT = `你是「开拓轶事」的故事快照解析模型。你的任务不是概括剧情，而是从正文中挑选一个最适合绘制为插图的瞬间，并同时输出结构化快照信息和最终生图提示词。
 
@@ -320,19 +323,6 @@ function mergeNegativePrompt(modelOutput: string): string {
   return parts.join(', ');
 }
 
-function parseSceneFromJson(data: Record<string, unknown>): 叙事插图提示词 | null {
-  const scene = data.scene as Record<string, unknown> | null | undefined;
-  if (!scene) return null;
-  const prompt = typeof scene.prompt === 'string' ? scene.prompt.trim() : '';
-  if (!prompt) return null;
-  return {
-    type: 'scene',
-    prompt,
-    negativePrompt: mergeNegativePrompt(typeof scene.negativePrompt === 'string' ? scene.negativePrompt : ''),
-    description: typeof scene.description === 'string' ? scene.description.trim() : '场景',
-  };
-}
-
 function readStringField(data: Record<string, unknown>, key: string, fallback = ''): string {
   const value = data[key];
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
@@ -379,61 +369,6 @@ function parseSceneImageFromJson(data: Record<string, unknown>, rawText: string)
     negativePrompt: mergeNegativePrompt(readStringField(data, 'negativePrompt')),
     rawText,
   };
-}
-
-/**
- * 调用解析模型，从正文中提取画面提示词。
- * @param apiConfig 解析模型 API 配置
- * @param ctx 解析上下文（正文 + 在场角色外貌）
- * @param signal 中断信号
- */
-export async function parseNarrativeImagePrompts(
-  apiConfig: API配置项,
-  ctx: 解析上下文,
-  signal?: AbortSignal,
-): Promise<解析结果> {
-  if (!apiConfig.baseUrl.trim() || !apiKey(apiConfig)) {
-    throw new Error('正文生图解析模型未配置');
-  }
-
-  const systemPrompt = PARSE_SYSTEM_PROMPT;
-  const userMessage = buildNarrativeImageParsePrompt(ctx);
-
-  const config: import('@/models/settings').API配置项 = {
-    id: 'narrative_image_parser',
-    name: '正文插图解析模型',
-    provider: apiConfig.provider,
-    baseUrl: apiConfig.baseUrl,
-    apiKey: apiConfig.apiKey,
-    model: apiConfig.model,
-    maxTokens: apiConfig.maxTokens ?? 1600,
-    temperature: apiConfig.temperature ?? 0.3,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  const rawText = await withRetries(
-    () => chatCompletionNonStream(config, {
-      messages: [{ role: 'user', content: userMessage }],
-      systemPrompt,
-      signal,
-      maxTokens: config.maxTokens,
-      temperature: config.temperature,
-    }),
-    { retries: apiConfig.retryCount ?? 1, signal, label: '正文插图提示词解析' },
-  );
-
-  const parsed = extractJsonFromText(rawText);
-  if (!parsed) {
-    return { images: [], rawText };
-  }
-
-  const images: 叙事插图提示词[] = [];
-
-  const scene = parseSceneFromJson(parsed);
-  if (scene) images.push({ ...scene, type: 'scene' });
-
-  return { images, rawText };
 }
 
 export async function parseStorySnapshotPrompt(

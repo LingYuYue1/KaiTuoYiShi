@@ -246,97 +246,11 @@ export function buildTurnRecallSummary(input: {
   return `【回合${turnLabel} 纪要】\n${dedupeLines(lines).slice(0, 6).join('\n')}`;
 }
 
-export function createTurnRecallEntry(input: {
-  userInput: string;
-  body: string;
-  memory?: string;
-  turn: number;
-  worldEvents?: string[];
-  actionOptions?: string[];
-}): 回忆条目 {
-  const rawPieces = [
-    `玩家输入：${input.userInput.trim() || '（空）'}`,
-    `正文：${input.body.trim() || '（空）'}`,
-    input.memory?.trim() ? `回合小结：${input.memory.trim()}` : '',
-    input.worldEvents?.length ? `动态世界：${input.worldEvents.join(' / ')}` : '',
-    input.actionOptions?.length ? `行动选项：${input.actionOptions.join(' / ')}` : '',
-  ].filter(Boolean);
-  return {
-    id: `recall_turn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    名称: `【回合纪要 ${String(Math.max(1, input.turn)).padStart(3, '0')}】`,
-    类型: '精炼纪要',
-    摘要: buildTurnRecallSummary({
-      userInput: input.userInput,
-      body: input.body,
-      memory: input.memory ?? '',
-      turn: input.turn,
-      worldEvents: input.worldEvents,
-      actionOptions: input.actionOptions,
-    }),
-    原文: rawPieces.join('\n'),
-    检索关键词: buildKeywords(rawPieces),
-    来源回合: [input.turn],
-    回合: input.turn,
-    时间戳: new Date().toISOString(),
-  };
-}
-
 export function upsertRecallEntry(system: { 回忆档案: 回忆条目[] }, entry: 回忆条目): { 回忆档案: 回忆条目[] } {
   const next = system.回忆档案.filter(
     (item) => !(item.回合 === entry.回合 && item.类型 === '精炼纪要' && item.名称?.startsWith('【回合纪要')),
   );
   return { 回忆档案: [...next, entry] };
-}
-
-export function autoCompressMemorySystem(
-  system: 记忆系统,
-  turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
-): 记忆系统 {
-  let next = system;
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || 20));
-  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
-
-  while (next.即时记忆.length >= immediateThreshold) {
-    next = compressToShortTerm(next, turn, immediateThreshold);
-  }
-  while (next.短期记忆.length >= shortThreshold) {
-    next = compressToMiddleTerm(next, turn, shortThreshold);
-  }
-  while (next.中期记忆.length >= middleThreshold) {
-    next = compressToLongTerm(next, turn, middleThreshold);
-  }
-  return next;
-}
-
-export function autoCompressMemorySystemWithArchives(
-  system: 记忆系统,
-  turn: number,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
-): { memory: 记忆系统; archives: 回忆条目[] } {
-  let next = system;
-  const archives: 回忆条目[] = [];
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || 20));
-  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
-
-  while (next.即时记忆.length >= immediateThreshold) {
-    const raw = next.即时记忆.slice(0, immediateThreshold);
-    archives.push(createShortTermArchiveEntry(raw, turn));
-    next = compressToShortTerm(next, turn, immediateThreshold);
-  }
-  while (next.短期记忆.length >= shortThreshold) {
-    const raw = next.短期记忆.slice(0, shortThreshold);
-    archives.push(createMiddleTermArchiveEntry(raw, turn));
-    next = compressToMiddleTerm(next, turn, shortThreshold);
-  }
-  while (next.中期记忆.length >= middleThreshold) {
-    const raw = next.中期记忆.slice(0, middleThreshold);
-    archives.push(createLongTermArchiveEntry(raw, turn));
-    next = compressToLongTerm(next, turn, middleThreshold);
-  }
-  return { memory: next, archives };
 }
 
 export async function autoCompressMemorySystemWithArchivesAsync(
@@ -428,24 +342,6 @@ export async function autoCompressMemorySystemWithArchivesAsync(
   }
 
   return { memory: next, archives, usedFallback, usedModel };
-}
-
-export function compressNpcMemories(memories: string[], threshold: number, prompt: string): string[] {
-  const size = Math.max(1, Math.trunc(threshold || 15));
-  if (!Array.isArray(memories)) return memories;
-
-  let next = memories
-    .map((item) => 清理NPC同行记忆摘要(item, prompt))
-    .filter(Boolean)
-    .filter((item) => !isNpcMemorySystemNoise(item));
-  if (next.length < size) return next;
-
-  while (next.length >= size) {
-    const chunk = next.slice(0, size);
-    const summary = compactNpcMemoryChunk(chunk);
-    next = [...(summary ? [`[压缩] ${summary}`] : []), ...next.slice(size)];
-  }
-  return next;
 }
 
 type NpcMemoryLedgerCompressionInput = {
@@ -647,26 +543,6 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
     changed,
     summaryTriggered,
   };
-}
-
-export function formatMemoryForPrompt(system: 记忆系统): string {
-  const sections: string[] = [];
-  if (system.长期记忆.length) {
-    sections.push(
-      '【长期记忆】\n' + system.长期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n'),
-    );
-  }
-  if (system.中期记忆.length) {
-    sections.push(
-      '【中期记忆】\n' + system.中期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n'),
-    );
-  }
-  if (system.短期记忆.length) {
-    sections.push(
-      '【短期记忆】\n' + system.短期记忆.map((m, i) => `${i + 1}. ${m}`).join('\n'),
-    );
-  }
-  return sections.join('\n\n');
 }
 
 export function normalizeMemorySystem(raw: 记忆系统): 记忆系统 {

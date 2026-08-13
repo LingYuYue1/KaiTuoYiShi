@@ -201,12 +201,6 @@ export function buildSaveCatalogSnapshot(
   };
 }
 
-export function isDisplaySaveCatalogRecord(
-  record: SaveCatalogRecord,
-): record is VisibleSaveCatalogRecord | LegacyBackupCatalogRecord {
-  return record.visibility === 'visible' || record.visibility === 'legacy-backup';
-}
-
 function stripCatalogMetadata(
   record: VisibleSaveCatalogRecord | LegacyBackupCatalogRecord,
 ): SaveListItemSummary {

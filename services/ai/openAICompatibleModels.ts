@@ -76,7 +76,3 @@ export async function fetchOpenAICompatibleModelsCached(baseRaw: string, apiKey:
   });
   return models;
 }
-
-export function clearOpenAICompatibleModelCache(): void {
-  modelCache.clear();
-}

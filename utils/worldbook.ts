@@ -87,32 +87,8 @@ export function normalizeWorldbooks(books: 世界书[]): 世界书[] {
 
 // ── CRUD ──
 
-export function addEntryToBook(book: 世界书, entry: 世界书条目): 世界书 {
-  return { ...book, entries: [...book.entries, entry], updatedAt: Date.now() };
-}
-
-export function removeEntryFromBook(book: 世界书, entryId: string): 世界书 {
-  return { ...book, entries: book.entries.filter((e) => e.id !== entryId), updatedAt: Date.now() };
-}
-
-export function updateEntryInBook(book: 世界书, entry: 世界书条目): 世界书 {
-  return {
-    ...book,
-    entries: book.entries.map((e) => (e.id === entry.id ? { ...entry, updatedAt: Date.now() } : e)),
-    updatedAt: Date.now(),
-  };
-}
-
 export function updateBook(book: 世界书, partial: Partial<世界书>): 世界书 {
   return { ...book, ...partial, updatedAt: Date.now() };
-}
-
-export function addBook(books: 世界书[], book: 世界书): 世界书[] {
-  return [...books, book];
-}
-
-export function removeBook(books: 世界书[], bookId: string): 世界书[] {
-  return books.filter((b) => b.id !== bookId);
 }
 
 // ── Import / Export ──
@@ -477,21 +453,6 @@ export interface WorldbookInjectionSplit {
   systemPromptEntries: Array<{ entry: 世界书条目; bookTitle: string }>;
   /** 转 ChatModuleMessage 做 In-Chat 深度插入的条目（injectAtDepth=true） */
   messageEntries: Array<{ entry: 世界书条目; bookTitle: string }>;
-}
-
-export function splitEntriesByInjectMode(
-  items: Array<{ entry: 世界书条目; bookTitle: string }>,
-): WorldbookInjectionSplit {
-  const systemPromptEntries: WorldbookInjectionSplit['systemPromptEntries'] = [];
-  const messageEntries: WorldbookInjectionSplit['messageEntries'] = [];
-  for (const item of items) {
-    if (item.entry.injectAtDepth) {
-      messageEntries.push({ entry: item.entry, bookTitle: item.bookTitle });
-    } else {
-      systemPromptEntries.push({ entry: item.entry, bookTitle: item.bookTitle });
-    }
-  }
-  return { systemPromptEntries, messageEntries };
 }
 
 function selectEntries(books: 世界书[], ctx: FilterContext): Array<{ entry: 世界书条目; bookTitle: string }> {

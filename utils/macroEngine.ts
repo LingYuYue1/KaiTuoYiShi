@@ -418,15 +418,3 @@ function processReads(text: string, ctx: MacroContext): string {
 
   return result;
 }
-
-/**
- * 批量处理多个模块的文本。共享同一个 MacroContext，
- * 这样前面的模块 setvar 的变量可以被后面的模块 getvar 读取。
- *
- * @param texts 多个模块的文本数组
- * @param ctx 宏变量上下文
- * @returns 处理后的文本数组
- */
-export function processMacrosBatch(texts: string[], ctx: MacroContext): string[] {
-  return texts.map((text) => processMacros(text, ctx));
-}

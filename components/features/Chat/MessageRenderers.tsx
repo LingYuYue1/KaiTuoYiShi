@@ -1,4 +1,4 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -6,46 +6,6 @@ import type { 相册系统 } from '@/models/imageGeneration';
 import type { VisualTextSettings } from '@/models/settings';
 import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
 import { 解析相册资源引用 } from '@/utils/albumActions';
-
-interface ThinkingBlockProps {
-  content: string;
-  defaultOpen?: boolean;
-}
-
-export function ThinkingBlock({ content, defaultOpen = false }: ThinkingBlockProps) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (!content) return null;
-
-  return (
-    <div
-      className="mb-3"
-      style={{
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
-        background: 'rgba(var(--tj-accent-primary), 0.04)',
-      }}
-    >
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-serif tracking-wider transition-colors hover:bg-white/[0.02]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.7)' }}
-      >
-        <span className="text-[10px]">{open ? '▼' : '▶'}</span>
-        <span>◆ 思绪痕迹</span>
-      </button>
-      {open && (
-        <div
-          className="px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap animate-fade-in"
-          style={{
-            borderTop: '1px solid rgba(var(--tj-accent-primary), 0.15)',
-            color: 'rgba(var(--tj-text-secondary), 0.85)',
-          }}
-        >
-          {content}
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface BodyBlockProps {
   content: string;
@@ -538,10 +498,6 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
   );
 }
 
-interface MemoryBlockProps {
-  content: string;
-}
-
 // 流式阶段：剥出 <正文> 起始位置之后的内容，把 <thinking> 段藏在「开拓进行中.....」指示器下。
 // 一旦解析到 <正文>，就把 partial body 喂给 BodyBlock；正文之后的标签（短期记忆/动态世界/变量草稿/剧情规划/命令）
 // 出现就视为正文结束，从那里截断。
@@ -624,42 +580,6 @@ export function StreamingPreview({ content, npcRecords, traveler, album, showInn
       {bodyStarted && bodyText && (
         <div className="px-1 py-1">
           <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={userInput} visualTextSettings={fontSettings} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function MemoryBlock({ content }: MemoryBlockProps) {
-  const [open, setOpen] = useState(false);
-  if (!content) return null;
-
-  return (
-    <div
-      className="mt-3 text-xs"
-      style={{
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.5)',
-        background: 'rgba(var(--tj-accent-secondary), 0.05)',
-        borderStyle: 'none',
-      }}
-    >
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-serif tracking-wider transition-colors hover:bg-white/[0.02]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.85)' }}
-      >
-        <span className="text-[10px]">{open ? '▼' : '▶'}</span>
-        <span>✦ 记忆收录</span>
-      </button>
-      {open && (
-        <div
-          className="px-2.5 py-1.5 animate-fade-in"
-          style={{
-            borderTop: '1px solid rgba(var(--tj-accent-secondary), 0.35)',
-            color: 'rgba(var(--tj-text-primary),0.9)',
-          }}
-        >
-          {content}
         </div>
       )}
     </div>

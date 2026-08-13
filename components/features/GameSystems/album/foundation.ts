@@ -69,7 +69,6 @@ export const generateTargets: Array<{
   { id: 'nsfw_reference', label: 'NSFW 参考图', desc: '用于角色 NSFW 体态与部位参考。', targetType: 'nsfw_part', slot: 'nsfw_body_reference', tokenizerMode: 'portrait', nsfw: true },
 ];
 
-export const imageGenerationTargets = generateTargets.filter((target) => target.id !== 'scene' && target.id !== 'phone_wallpaper');
 export type GenerateOverride = {
   source?: 图片生成任务来源;
   prompt?: string;

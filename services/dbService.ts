@@ -4,7 +4,7 @@ import { 归一化NewestStory记录, NEWEST_STORY_STORE_KEY, 创建空NewestStor
 import { devLog, devLogError } from '@/utils/devLog';
 import { createUnifiedId, UNIFIED_ID_DB_VERSION } from '@/utils/id';
 import type { 存档树元信息 } from '@/utils/saveTree';
-import { buildSavePackage, buildSaveTreePackage, parseSavePackage, parseSaveTreePackage, sanitizeSaveForExportAsync } from './savePackage';
+import { buildSavePackage, buildSaveTreePackage, parseSaveTreePackage } from './savePackage';
 import {
   extractSaveAssetRecords,
   materializeSaveAssetRecords,
@@ -1265,12 +1265,6 @@ export async function getSaveTreeNodeSubtree(rootId: string, nodeId: string): Pr
   return subtree.sort((a, b) => a.timestamp - b.timestamp || a.id - b.id);
 }
 
-/** 存活叶子判定：子树只含自身（无存活后代）即叶子。 */
-export async function isSaveTreeNodeLeaf(rootId: string, nodeId: string): Promise<boolean> {
-  const subtree = await collectSaveTreeNodeSubtreeSummaries(rootId.trim(), nodeId.trim());
-  return subtree.length === 1;
-}
-
 /** 最近存活祖先：沿 parentNodeId 上溯，跳过 excludedNodeIds（如被删子树），返回第一个存活节点；无则 null。 */
 export async function getNearestLivingAncestor(
   rootId: string,
@@ -1692,43 +1686,6 @@ async function commitCloudMergeStagingTransaction(
   });
 }
 
-export async function replaceAllSaves(
-  nextSaves: 存档数据[],
-): Promise<void> {
-  return runWithSaveMutationPriority(() => replaceAllSavesInternal(nextSaves));
-}
-
-async function replaceAllSavesInternal(nextSaves: 存档数据[]): Promise<void> {
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction([SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_ASSETS_STORE, SAVE_NODE_DELTAS_STORE], 'readwrite');
-    const store = tx.objectStore(SAVES_STORE);
-    const summaryStore = tx.objectStore(SAVE_SUMMARIES_STORE);
-    const assetStore = tx.objectStore(SAVE_ASSETS_STORE);
-    const deltaStore = tx.objectStore(SAVE_NODE_DELTAS_STORE);
-    store.clear();
-    summaryStore.clear();
-    assetStore.clear();
-    deltaStore.clear();
-    for (let index = 0; index < nextSaves.length; index += 1) {
-      const save = nextSaves[index];
-      const normalizedId = Number.isFinite(save.id) && save.id > 0 ? save.id : index + 1;
-      const normalizedSave = { ...save, id: normalizedId };
-      const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(normalizedSave));
-      for (const record of assetRecords) assetStore.put(record);
-      const storedSave = stripSaveAssetPayloadForStorage(normalizedSave);
-      store.put(storedSave);
-      summaryStore.put(createCatalogRecordFromSummary(buildSaveSummary(storedSave)));
-      const delta = buildSaveNodeDeltaRecord(storedSave, normalizedId);
-      if (delta) {
-        deltaStore.put(delta);
-      }
-    }
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(toError(tx.error));
-  });
-}
-
 export async function hasAnySave(): Promise<boolean> {
   const snapshot = await getSaveCatalogSnapshot();
   return snapshot.items.length > 0 || snapshot.pendingIds.length > 0;
@@ -2061,22 +2018,6 @@ function markSaveAsHiddenDeltaBase(
 
 // ── Export / Import ──
 
-export async function exportSaveJson(save: 存档数据): Promise<void> {
-  const json = JSON.stringify(await sanitizeSaveForExportAsync(save), null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const travelerName = sanitizeFilename(save.旅人.姓名 || 'traveler');
-  const turnCount = save.turnCount;
-  const stamp = new Date(save.timestamp || Date.now())
-    .toISOString()
-    .replace(/[:.]/g, '-');
-  a.download = `KaiTuoYiShi-${travelerName}-turn-${turnCount}-${stamp}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export async function exportSavePackage(save: 存档数据): Promise<void> {
   const blob = await buildSavePackage(save);
   const url = URL.createObjectURL(blob);
@@ -2113,19 +2054,6 @@ export function importSaveJson(json: string): 存档数据 {
   const data: unknown = JSON.parse(json);
   if (!isImportableSave(data)) throw new Error('无效的存档文件');
   return data;
-}
-
-export async function importSaveFile(file: File): Promise<存档数据> {
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.json') || file.type === 'application/json') {
-    return importSaveJson(await file.text());
-  }
-  if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
-    const data: unknown = parseSavePackage(await file.arrayBuffer());
-    if (!isImportableSave(data)) throw new Error('无效的存档包');
-    return data;
-  }
-  throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
 }
 
 export async function importSaveFileAsMany(file: File): Promise<存档数据[]> {

@@ -372,30 +372,6 @@ export async function downloadLegacySaveFromGitHub(
   return parseSavePackage(bytes.slice().buffer);
 }
 
-// 旧调用方的只读兼容入口；版本 2 界面使用 inspectGitHubCloudBackup。
-export async function listGitHubCloudSaves(config: GitHubCloudSaveConfig): Promise<GitHubCloudSaveManifest> {
-  validateGitHubCloudConfig(config);
-  return await readManifest(config) ?? createEmptyManifest();
-}
-
-function createEmptyManifest(): GitHubCloudSaveManifest {
-  return {
-    app: 'KaiTuoYiShi',
-    kind: 'github-cloud-save',
-    version: 1,
-    updatedAt: '',
-    saves: [],
-  };
-}
-
-// 旧调用方的只读兼容入口；不会覆盖本地存档。
-export async function downloadSaveFromGitHubCloud(
-  config: GitHubCloudSaveConfig,
-  item: GitHubCloudSaveItem,
-): Promise<存档数据> {
-  return downloadLegacySaveFromGitHub(config, item);
-}
-
 async function ensureCloudRepository(config: GitHubCloudSaveConfig, signal?: AbortSignal): Promise<string | null> {
   const existing = await getRepository(config, signal);
   if (existing) return existing.default_branch ?? null;

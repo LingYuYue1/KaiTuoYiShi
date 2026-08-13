@@ -30,20 +30,6 @@ export function getBuiltinPresets(): STPresetEntryV1[] {
   ];
 }
 
-/**
- * 判断预设 id 是否为内置预设。
- */
-export function isBuiltinPreset(id: string): boolean {
-  return getBuiltinPresets().some((p) => p.id === id);
-}
-
-/**
- * 根据 id 获取内置预设。找不到返回 undefined。
- */
-export function getBuiltinPresetById(id: string): STPresetEntryV1 | undefined {
-  return getBuiltinPresets().find((p) => p.id === id);
-}
-
 function normalizeMessageRole(role: unknown): STMessageRole {
   return role === 'user' || role === 'assistant' ? role : 'system';
 }

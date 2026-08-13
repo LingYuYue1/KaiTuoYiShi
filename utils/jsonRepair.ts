@@ -149,13 +149,3 @@ export const parseJsonWithRepair = <T = unknown>(input: string): JsonRepairResul
     error: lastError,
   };
 };
-
-export const formatJsonWithRepair = (input: string, fallback: string): string => {
-  const parsed = parseJsonWithRepair(input);
-  if (parsed.value === null) return fallback;
-  try {
-    return JSON.stringify(parsed.value, null, 2);
-  } catch {
-    return parsed.repairedText || fallback;
-  }
-};

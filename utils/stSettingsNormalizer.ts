@@ -162,29 +162,6 @@ export function normalizeSTPresetList(raw: unknown): STPresetEntryV2[] {
 
 // ── 规范化游戏设置中的 ST 字段 ───────────────────────────────────
 
-export function normalizeSTSettings(settings: Record<string, unknown>): {
-  stPresetsV2: STPresetEntryV2[];
-  currentStPresetIdV2: string | null;
-  currentStCharacterId: number | null;
-} {
-  const presetList = normalizeSTPresetList(settings.stPresetsV2);
-
-  const selectedIdRaw = readText(settings.currentStPresetIdV2 ?? settings.currentStPresetId).trim();
-  const selectedEntry = selectedIdRaw
-    ? presetList.find((p) => p.id === selectedIdRaw) || null
-    : null;
-
-  const characterId = readNum(
-    settings.currentStCharacterId ?? selectedEntry?.characterId
-  ) ?? null;
-
-  return {
-    stPresetsV2: presetList,
-    currentStPresetIdV2: selectedEntry?.id || null,
-    currentStCharacterId: characterId,
-  };
-}
-
 export function getCurrentSTPresetV2(settings: {
   stPresetsV2?: STPresetEntryV2[];
   currentStPresetIdV2?: string | null;

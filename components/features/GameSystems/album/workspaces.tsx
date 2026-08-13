@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { 读取图片参考目标, isCharacterLibrarySlot, slotLabel } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
@@ -432,7 +432,7 @@ export function CharacterAnchorPanel({
     skipAutosaveRef.current = true;
   }, [anchor, nameFallback]);
 
-  const save = () => onSave({
+  const save = useCallback(() => onSave({
     ...(anchor ?? {}),
     名称: name,
     是否启用: enabled,
@@ -442,7 +442,7 @@ export function CharacterAnchorPanel({
     负面提示词: negative,
     中文摘要: anchor?.中文摘要,
     来源: anchor?.来源 ?? 'manual',
-  });
+  }), [anchor, name, enabled, defaultApply, sceneInject, positive, negative, onSave]);
 
   useEffect(() => {
     if (skipAutosaveRef.current) {
@@ -464,7 +464,7 @@ export function CharacterAnchorPanel({
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [name, enabled, defaultApply, sceneInject, positive, negative]);
+  }, [name, enabled, defaultApply, sceneInject, positive, negative, save]);
 
   const saveNow = () => {
     if (autosaveTimerRef.current !== null) {
@@ -554,44 +554,6 @@ export function EmptyLibraryBox({ title, desc }: { title: string; desc: string }
         <div className="font-serif text-base tracking-[0.18em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{title}</div>
         <div className="mt-3 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>{desc}</div>
       </div>
-    </div>
-  );
-}
-
-export function EntryGrid({ entries, assetMap, activeId, onSelect, onCreate }: { entries: 相册条目[]; assetMap: Map<string, { id?: string; dataUrl?: string; url?: string; localRef?: string; originalUrl?: string }>; activeId?: string; onSelect: (id: string) => void; onCreate: () => void }) {
-  if (entries.length === 0) {
-    return (
-      <div className="flex min-h-[360px] items-center justify-center px-4 py-16 text-center" style={{ color: 'rgba(var(--tj-ui-faint), 0.72)', background: 'linear-gradient(180deg, rgba(var(--tj-ui-panel),0.45), rgba(var(--tj-ui-panel-strong),0.62))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.15)', clipPath: cardClip }}>
-        <div>
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center font-serif text-2xl" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)', background: 'rgba(var(--tj-btn-primary-start),0.06)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24)', clipPath: smallClip }}>▧</div>
-          <div className="font-serif text-base tracking-[0.24em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>暂无图片</div>
-          <button type="button" onClick={onCreate} className="mt-5 px-5 py-2.5 font-serif text-xs font-bold tracking-[0.2em]" style={{ color: 'rgb(var(--tj-ui-active-text))', background: activeAccentSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 16px rgba(var(--tj-tech-cyan),0.12)', clipPath: smallClip }}>
-            生成 / 导入
-          </button>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">
-      {entries.map((entry) => {
-        const asset = assetMap.get(entry.assetId);
-        const src = 解析相册资源地址(asset) || '';
-        return (
-          <button key={entry.id} type="button" onClick={() => onSelect(entry.id)} className="group overflow-hidden text-left transition-all" style={{ background: 'rgba(var(--tj-ui-panel), 0.52)', boxShadow: activeId === entry.id ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.78), 0 0 18px rgba(var(--tj-btn-primary-start),0.1)' : entry.nsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.32)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)', clipPath: cardClip }}>
-            <div className="aspect-[4/3] ">
-              <SafeAlbumImage src={src} alt={entry.title} className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" emptyLabel="无图片" failedLabel="图片失效" />
-            </div>
-            <div className="px-3 py-2">
-              <div className="truncate font-serif text-sm" style={{ color: 'rgb(var(--tj-ui-title))' }}>{entry.title}</div>
-              <div className="mt-1 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted), 0.68)' }}>
-                <span>{slotLabel(entry.slot)}</span>
-                {entry.nsfw && <span style={{ color: 'rgb(var(--tj-ui-nsfw))' }}>NSFW</span>}
-              </div>
-            </div>
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -1346,12 +1308,6 @@ export function taskPromptTitle(task: 图片生成任务): string {
   const kind = task.slot === 'scene' && task.sourcePrompt?.includes('故事快照') ? '故事快照' : slotLabel(task.slot);
   const suffix = task.status === 'failed' ? '失败任务' : task.status === 'success' ? '完成任务' : '生成任务';
   return `${kind} · ${suffix}`;
-}
-
-export function displayAlbumEntryTitle(entry: 相册条目, kind?: Exclude<GenerationHistoryFilter, 'all'>): string {
-  const title = entry.title.trim();
-  if (title && !looksLikeRawPromptTitle(title)) return title;
-  return `${historyKindLabel(kind ?? historyKind(entry))} · ${formatGenerationDate(entry.createdAt)}`;
 }
 
 export function looksLikeRawPromptTitle(title: string): boolean {
@@ -2195,48 +2151,6 @@ export function sceneLibraryKindLabel(kind: Exclude<SceneLibraryFilter, 'all'>):
   }[kind];
 }
 
-export function sceneLibraryFilterLabel(filter: SceneLibraryFilter): string {
-  return {
-    all: '全部资源',
-    scene: '场景图',
-    snapshot: '故事快照',
-    phone: '手机背景',
-  }[filter];
-}
-
-export function sceneLibraryKindColor(kind: Exclude<SceneLibraryFilter, 'all'>): string {
-  return {
-    scene: 'rgba(var(--tj-tech-cyan),0.88)',
-    snapshot: 'rgba(var(--tj-btn-primary-start),0.88)',
-    phone: 'rgba(var(--tj-tech-blue),0.9)',
-  }[kind];
-}
-
-export function sceneLibraryKindSurface(kind: Exclude<SceneLibraryFilter, 'all'>): string {
-  return {
-    scene: 'rgba(var(--tj-tech-cyan),0.08)',
-    snapshot: 'rgba(var(--tj-btn-primary-start),0.08)',
-    phone: 'rgba(var(--tj-tech-blue),0.08)',
-  }[kind];
-}
-
-export function sceneLibraryKindBorder(kind: Exclude<SceneLibraryFilter, 'all'>): string {
-  return {
-    scene: 'rgba(var(--tj-tech-cyan),0.18)',
-    snapshot: 'rgba(var(--tj-btn-primary-start),0.18)',
-    phone: 'rgba(var(--tj-tech-blue),0.18)',
-  }[kind];
-}
-
-export function formatAlbumDate(createdAt: number): string {
-  if (!createdAt) return '未知时间';
-  try {
-    return new Date(createdAt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
-  } catch {
-    return '未知时间';
-  }
-}
-
 export function defaultAlbumEntryTags(target: typeof generateTargets[number]): string[] {
   if (target.id === 'scene') return ['场景图'];
   if (target.id === 'phone_wallpaper') return ['手机背景'];
@@ -2360,19 +2274,6 @@ export function mapImageSlotToTravelerSlot(slot: 图片槽位): '头像' | '正�
   return '头像';
 }
 
-export function mapMountedSlotToNpcAvatarSlot(key: string): NPC头像槽位 {
-  if (key === 'avatar-story') return '正文';
-  if (key === 'avatar-phone') return '手机';
-  return '档案';
-}
-
-export function mapMountedSlotToTravelerSlot(key: string): '头像' | '正文头像' | '手机头像' | '立绘' {
-  if (key === 'traveler-avatar-story') return '正文头像';
-  if (key === 'traveler-avatar-phone') return '手机头像';
-  if (key === 'traveler-portrait') return '立绘';
-  return '头像';
-}
-
 export function buildPresentSceneNpcs(npcs: NPC记录[], sceneText: string): NPC记录[] {
   const text = sceneText.trim();
   return npcs
@@ -2395,16 +2296,6 @@ export function buildStorySnapshotSourceOptions(history: 聊天消息[]): StoryS
     { id: 'previous_turn', title: '上一回合', desc: previous && previous !== latest ? '再前一条' : '可回退', text: trimSnapshotSource(previous) },
     { id: 'manual', title: '手动片段', desc: '自行粘贴', text: '' },
   ];
-}
-
-export function characterAnchorHasPersistentContent(anchor?: NPC角色锚点档案): boolean {
-  if (!anchor) return false;
-  return Boolean(
-    anchor.名称?.trim() ||
-    anchor.正面提示词?.trim() ||
-    anchor.负面提示词?.trim() ||
-    Object.values(anchor.结构化特征 ?? {}).some((list) => Array.isArray(list) && list.some((item) => item.trim())),
-  );
 }
 
 export function trimSnapshotSource(text: string): string {
@@ -2620,13 +2511,6 @@ export function resolveGenerationTargetId(target: typeof generateTargets[number]
   if (target.targetType === 'traveler') return 'traveler';
   if (requiresCharacterTarget(target)) return selectedNpcId || undefined;
   return undefined;
-}
-
-export function deleteAlbumEntry(album: 相册系统, entryId: string): 相册系统 {
-  return cleanupAlbumAssets({
-    ...album,
-    entries: album.entries.filter((entry) => entry.id !== entryId),
-  });
 }
 
 export function cleanupAlbumAssets(album: 相册系统): 相册系统 {

@@ -150,15 +150,6 @@ export interface NPC角色锚点档案 {
   updatedAt?: number;
 }
 
-export const NPC_RELATION_LABELS: Record<NPC关系类型, string> = {
-  stranger: '陌生',
-  acquaintance: '点头之交',
-  friend: '朋友',
-  close: '挚友',
-  rival: '对头',
-  enemy: '敌人',
-};
-
 export function 限制NPC好感度(value: unknown): number {
   const affinity = Number(value);
   if (!Number.isFinite(affinity)) return 0;

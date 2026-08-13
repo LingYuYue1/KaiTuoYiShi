@@ -11,7 +11,7 @@ import {
   sha256Bytes,
 } from './albumContent';
 import { getAlbumAssetBlob, materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
-import { buildStoredZip, readZipEntries } from '@/utils/zip';
+import { readZipEntries } from '@/utils/zip';
 
 export { materializeAlbumRuntimePayload } from '@/utils/albumObjectUrl';
 
@@ -59,60 +59,6 @@ export type ParsedAlbum = {
   warnings: number;
   skippedEntries: number;
 };
-
-export async function exportAlbum(album: 相册系统): Promise<AlbumExportResult> {
-  const prepared = await deduplicateAlbumContent(album);
-  const files: Array<{ name: string; data: Uint8Array }> = [];
-  const manifestAssets: ArchiveAsset[] = [];
-  const warnings: string[] = [];
-  const usedNames = new Set<string>();
-
-  for (const asset of prepared.assets) {
-    const loaded = await loadAlbumAssetBytes(asset);
-    const { dataUrl: _dataUrl, ...metadata } = asset;
-    void _dataUrl;
-    if (!loaded) {
-      manifestAssets.push(metadata);
-      warnings.push(`资源 ${asset.id} 无法打包为本地图片文件。`);
-      continue;
-    }
-    const contentHash = await sha256Bytes(loaded.bytes);
-    const fileName = uniqueZipName(usedNames, `assets/${contentHash}.${extensionFromMime(loaded.mimeType)}`);
-    files.push({ name: fileName, data: loaded.bytes });
-    manifestAssets.push({ ...metadata, contentHash, mimeType: loaded.mimeType, file: fileName });
-  }
-
-  const manifest: AlbumArchiveManifestV2 = {
-    format: ARCHIVE_FORMAT,
-    version: ARCHIVE_VERSION,
-    exportedAt: new Date().toISOString(),
-    assets: manifestAssets,
-    entries: prepared.entries,
-    tasks: prepared.tasks,
-    warnings,
-  };
-  files.push({ name: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
-
-  const blob = new Blob([buildStoredZip(files)], { type: 'application/zip' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `kaituo-album-backup-${new Date().toISOString().slice(0, 10)}.zip`;
-  anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  return { assetCount: prepared.assets.length, entryCount: prepared.entries.length, warningCount: warnings.length };
-}
-
-export async function importAlbum(params: {
-  file: File | null;
-  currentAlbum: 相册系统;
-  mode: AlbumImportMode;
-  target?: AlbumImportTarget;
-}): Promise<AlbumImportResult | null> {
-  if (!params.file) return null;
-  const parsed = await parseAlbumFile(params.file);
-  return completeAlbumImport({ ...params, parsed });
-}
 
 export async function completeAlbumImport(params: {
   parsed: ParsedAlbum;
@@ -431,17 +377,6 @@ function isArchiveManifestV2(value: unknown): value is AlbumArchiveManifestV2 {
 
 
 
-function uniqueZipName(used: Set<string>, name: string): string {
-  let candidate = name;
-  let index = 2;
-  const dot = name.lastIndexOf('.');
-  const base = dot >= 0 ? name.slice(0, dot) : name;
-  const extension = dot >= 0 ? name.slice(dot) : '';
-  while (used.has(candidate)) candidate = `${base}_${index++}${extension}`;
-  used.add(candidate);
-  return candidate;
-}
-
 function uniqueId(preferred: string | undefined, prefix: string, used: Set<string>): string {
   const base = (preferred || '').trim();
   if (base && !used.has(base)) {
@@ -452,14 +387,6 @@ function uniqueId(preferred: string | undefined, prefix: string, used: Set<strin
   while (used.has(candidate)) candidate = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   used.add(candidate);
   return candidate;
-}
-
-function extensionFromMime(mimeType: string): string {
-  if (/jpe?g/i.test(mimeType)) return 'jpg';
-  if (/webp/i.test(mimeType)) return 'webp';
-  if (/gif/i.test(mimeType)) return 'gif';
-  if (/bmp/i.test(mimeType)) return 'bmp';
-  return 'png';
 }
 
 function mimeFromFileName(fileName: string): string {
@@ -488,5 +415,4 @@ function isKnownSlot(slot: 图片槽位): boolean {
     'nsfw_rear', 'nsfw_body_reference', 'reference_image', 'misc',
   ].includes(slot);
 }
-
 

@@ -1,8 +1,6 @@
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { NPC记录 } from '@/models/npc';
 
-export const HERTA_REAL_BODY_ARCHIVE_GUIDANCE = '黑塔的身体档案统一描述“大黑塔 / The Herta”的真实身体，不描述空间站傀儡、人偶或投影。';
-
 const BLOCKED_CANONICAL_NAMES = new Set(['帕姆', '佩佩', '史瓦罗']);
 const BLOCKED_IDENTITY_RE = /(帕姆|Pom-Pom|Pom Pom|佩佩|Pepper|史瓦罗|Svarog|机械|机兵|虚卒|机器人|机械造物|傀儡|人偶|投影|怪物|裂界生物)/i;
 const HERTA_IDENTITY_RE = /^(?:黑塔|大黑塔|Herta|The\s*Herta)$/i;

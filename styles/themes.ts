@@ -161,10 +161,6 @@ export function applyTheme(themeId: string): void {
   root.setAttribute('data-theme', theme.id);
 }
 
-export function getThemeById(id: string): ThemeDefinition {
-  return themes.find((t) => t.id === id) ?? themes[0];
-}
-
 /** 旧主题降级：已删除的主题自动回退到 deepspace */
 export function normalizeThemeId(id: string): string {
   if (themes.some((t) => t.id === id)) return id;
