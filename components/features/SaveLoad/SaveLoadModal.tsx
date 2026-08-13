@@ -12,6 +12,8 @@ import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTree
 interface Props {
   showAutoArchives: boolean;
   onLoad: (id: number) => Promise<boolean>;
+  /** 回档（分支）用例动作：检查点按钮显示「分支」，由 App 从 useGame 门面注入；未提供时回退 onLoad（文本仍显示「分支」）。 */
+  onBranch?: (id: number) => Promise<boolean>;
   /** 导出当前工作区叶子节点（子任务 A）：手动存档已移除，「导出当前节点」改指活跃叶子。 */
   onExportActiveLeafPackage: () => Promise<number | null>;
   /** 存档删除用例动作：resolve→确认→级联删除（由 App 从 useGame 门面注入）。 */
@@ -48,7 +50,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function SaveLoadModal({ showAutoArchives, onLoad, onExportActiveLeafPackage, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany, onClose }: Props) {
+export function SaveLoadModal({ showAutoArchives, onLoad, onBranch, onExportActiveLeafPackage, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany, onClose }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -158,10 +160,26 @@ export function SaveLoadModal({ showAutoArchives, onLoad, onExportActiveLeafPack
       const ok = await onLoad(id);
       if (!ok) alert('加载失败：没有读取到可用存档内容');
     } catch (err) {
-      console.error('[save-load] load failed', err);
+      devLogError('save', 'load-failed', err);
       alert(`加载失败：${err instanceof Error ? err.message : '存档读取或恢复过程异常'}`);
     } finally {
-      setLoading(false);
+      setLoadingId(null);
+    }
+  };
+
+  // 回档（分支）：独立动词入口，核心行为复用 onBranch（enterSession 检查点分叉路径）；
+  // onBranch 未注入时回退 onLoad，App 侧两者行为等价（enterSession 已按节点类型分派）。
+  const handleBranch = async (id: number) => {
+    if (!confirm('从这个检查点分支会创建新的工作区分支，是否继续？')) return;
+    setLoadingId(id);
+    try {
+      const ok = await (onBranch ?? onLoad)(id);
+      if (!ok) alert('分支失败：没有读取到可用存档内容');
+    } catch (err) {
+      devLogError('save', 'branch-failed', err);
+      alert(`分支失败：${err instanceof Error ? err.message : '存档读取或恢复过程异常'}`);
+    } finally {
+      setLoadingId(null);
     }
   };
 
@@ -582,6 +600,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                   deletingId={deletingId}
                   deletingAll={deletingLegacyBackups}
                   onLoad={(id) => void handleLoad(id)}
+                  onBranch={(id) => void handleBranch(id)}
                   onDelete={(id) => void handleDelete(id)}
                   onExport={(id) => void handleExport(id)}
                   onDeleteAll={() => void handleDeleteLegacyBackups()}
@@ -635,6 +654,7 @@ borderBottom: '1px solid rgba(var(--tj-border), 0.20)',
                     deletingId={deletingId}
                     deletingRootId={deletingRootId}
                     onLoad={(id) => void handleLoad(id)}
+                    onBranch={(id) => void handleBranch(id)}
                     onDelete={(id) => void handleDelete(id)}
                     onExport={(id) => void handleExport(id)}
                     onExportTree={(rootId) => void handleExportTree(rootId)}
@@ -925,6 +945,7 @@ function LegacyBackupSection({
   deletingId,
   deletingAll,
   onLoad,
+  onBranch,
   onDelete,
   onExport,
   onDeleteAll,
@@ -935,6 +956,7 @@ function LegacyBackupSection({
   deletingId: number | null;
   deletingAll: boolean;
   onLoad: (id: number) => void;
+  onBranch: (id: number) => void;
   onDelete: (id: number) => void;
   onExport: (id: number) => void;
   onDeleteAll: () => void;
@@ -967,6 +989,7 @@ function LegacyBackupSection({
               loadingId={loadingId}
               deletingId={deletingId}
               onLoad={onLoad}
+              onBranch={onBranch}
               onDelete={onDelete}
               onExport={onExport}
               formatTime={formatTime}
@@ -987,6 +1010,7 @@ function SaveTreeGroup({
   deletingId,
   deletingRootId,
   onLoad,
+  onBranch,
   onDelete,
   onExport,
   onExportTree,
@@ -999,6 +1023,7 @@ function SaveTreeGroup({
   deletingId: number | null;
   deletingRootId: string | null;
   onLoad: (id: number) => void;
+  onBranch: (id: number) => void;
   onDelete: (id: number) => void;
   onExport: (id: number) => void;
   onExportTree: (rootId: string) => void;
@@ -1058,6 +1083,7 @@ function SaveTreeGroup({
             loadingId={loadingId}
             deletingId={deletingId}
             onLoad={onLoad}
+            onBranch={onBranch}
             onDelete={onDelete}
             onExport={onExport}
             formatTime={formatTime}
@@ -1077,6 +1103,7 @@ function SaveRow({
   loadingId,
   deletingId,
   onLoad,
+  onBranch,
   onDelete,
   onExport,
   formatTime,
@@ -1089,6 +1116,7 @@ function SaveRow({
   loadingId: number | null;
   deletingId: number | null;
   onLoad: (id: number) => void;
+  onBranch?: (id: number) => void;
   onDelete: (id: number) => void;
   onExport: (id: number) => void;
   formatTime: (ts: number) => string;
@@ -1098,6 +1126,9 @@ function SaveRow({
   visualLevel: number;
 }) {
   const visualIndent = Math.min(visualLevel, 5) * 14;
+  // 节点类型判定：目录摘要含 unsealedHead——true = 未封版叶子 =「读取」（直接水合即可编辑）；
+  // 其余（已封版检查点、旧恢复点、导入节点）→「分支」= forkSaveTreeLeaf 分叉新叶子。
+  const isLeaf = item.unsealedHead === true;
   return (
     <article
       className={`relative grid min-w-0 gap-3 md:grid-cols-[1fr_auto] md:items-center ${
@@ -1176,7 +1207,7 @@ function SaveRow({
       <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-shrink-0">
         <button
           type="button"
-          onClick={() => onLoad(item.id)}
+          onClick={() => (isLeaf ? onLoad(item.id) : (onBranch ?? onLoad)(item.id))}
           disabled={loadingId !== null}
           className={`cursor-pointer font-serif font-semibold tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${
             isLatest ? 'px-4 py-2.5 text-[13px]' : 'px-3 py-2 text-xs'
@@ -1188,7 +1219,7 @@ function SaveRow({
             clipPath: smallClip,
           }}
         >
-          {loadingId === item.id ? '读取中' : '读取'}
+          {loadingId === item.id ? (isLeaf ? '读取中' : '分支中') : (isLeaf ? '读取' : '分支')}
         </button>
         <button
           type="button"

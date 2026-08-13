@@ -12,6 +12,8 @@ interface Props {
   showAutoArchives: boolean;
   onContinue: () => Promise<boolean>;
   onLoadSave: (id: number) => Promise<boolean>;
+  /** 回档（分支）用例动作：检查点按钮显示「分支」，由 App 经 SettingsModal 从 useGame 门面注入；未提供时回退 onLoadSave。 */
+  onBranchSave?: (id: number) => Promise<boolean>;
   /** 存档删除用例动作：resolve→确认→级联删除（由 App 经 SettingsModal 从 useGame 门面注入）。 */
   onDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
   /** 整棵存档树删除用例动作（由 App 经 SettingsModal 从 useGame 门面注入）。 */
@@ -43,7 +45,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function StorageManagerTab({ showAutoArchives, onContinue, onLoadSave, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany }: Props) {
+export function StorageManagerTab({ showAutoArchives, onContinue, onLoadSave, onBranchSave, onDeleteSave, onDeleteSaveTree, onClearActiveSaveTreeMeta, onGetSaveCatalogSnapshot, onStartSaveCatalogRepair, onSubscribeSaveCatalogRepair, onRepairSaveDatabase, onDeleteLegacyBackupSaves, onExportSavePackage, onExportSaveTreePackage, onImportSaveFileAsMany }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [legacyBackups, setLegacyBackups] = useState<SaveListItemSummary[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -129,6 +131,20 @@ export function StorageManagerTab({ showAutoArchives, onContinue, onLoadSave, on
       if (!(await onLoadSave(id))) alert('读取失败：没有读取到可用存档内容');
     } catch (error) {
       alert(`读取失败：${error instanceof Error ? error.message : '存档读取或恢复过程异常'}`);
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  // 回档（分支）：独立动词入口，核心行为复用 onBranchSave（enterSession 检查点分叉路径）；
+  // onBranchSave 未注入时回退 onLoadSave，与 SaveLoadModal 的叶子「读取」/检查点「分支」语义一致。
+  const handleBranch = async (id: number) => {
+    if (!confirm('从这个检查点分支会创建新的工作区分支，是否继续？')) return;
+    setLoadingId(id);
+    try {
+      if (!(await (onBranchSave ?? onLoadSave)(id))) alert('分支失败：没有读取到可用存档内容');
+    } catch (error) {
+      alert(`分支失败：${error instanceof Error ? error.message : '存档读取或恢复过程异常'}`);
     } finally {
       setLoadingId(null);
     }
@@ -293,6 +309,7 @@ export function StorageManagerTab({ showAutoArchives, onContinue, onLoadSave, on
                 onSelect={() => setSelectedRootId(group.rootId)}
                 onDeleteTree={() => void handleDeleteTree(group)}
                 onLoad={(id) => void handleLoad(id)}
+                onBranch={(id) => void handleBranch(id)}
                 onDelete={(id) => void handleDelete(id)}
                 onExport={(id) => void handleExport(id)}
               />
@@ -333,6 +350,7 @@ function SaveTreeCard({
   onSelect,
   onDeleteTree,
   onLoad,
+  onBranch,
   onDelete,
   onExport,
 }: {
@@ -344,6 +362,7 @@ function SaveTreeCard({
   onSelect: () => void;
   onDeleteTree: () => void;
   onLoad: (id: number) => void;
+  onBranch: (id: number) => void;
   onDelete: (id: number) => void;
   onExport: (id: number) => void;
 }) {
@@ -370,31 +389,39 @@ function SaveTreeCard({
         </div>
       </button>
       <div className="grid gap-1">
-        {group.nodes.map(({ save, depth, isLatest }) => (
-          <div
-            key={save.id}
-            className="grid gap-2 p-2 sm:grid-cols-[minmax(0,1fr)_auto]"
-            style={{
-              marginLeft: `${depth * 12}px`,
-              background: isLatest ? 'rgba(var(--tj-accent-primary),0.07)' : 'rgba(var(--tj-text-primary),0.025)',
-              clipPath: smallClip,
-            }}
-          >
-            <div className="min-w-0">
-              <div className="truncate text-xs" style={{ color: 'rgba(var(--tj-text-primary),0.84)' }}>
-                #{save.id} · {save.currentLocation || save.worldPeriodName || '未知位置'}
+        {group.nodes.map(({ save, depth, isLatest }) => {
+          // 节点类型判定（与 SaveLoadModal 一致）：unsealedHead = 未封版叶子 =「读取」；其余 =「分支」。
+          const isLeaf = save.unsealedHead === true;
+          return (
+            <div
+              key={save.id}
+              className="grid gap-2 p-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+              style={{
+                marginLeft: `${depth * 12}px`,
+                background: isLatest ? 'rgba(var(--tj-accent-primary),0.07)' : 'rgba(var(--tj-text-primary),0.025)',
+                clipPath: smallClip,
+              }}
+            >
+              <div className="min-w-0">
+                <div className="truncate text-xs" style={{ color: 'rgba(var(--tj-text-primary),0.84)' }}>
+                  #{save.id} · {save.currentLocation || save.worldPeriodName || '未知位置'}
+                </div>
+                <div className="mt-1 truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.66)' }}>
+                  {save.lastSummary || '暂无摘要'} · 第 {save.turnCount} 回合
+                </div>
               </div>
-              <div className="mt-1 truncate text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.66)' }}>
-                {save.lastSummary || '暂无摘要'} · 第 {save.turnCount} 回合
+              <div className="flex flex-wrap gap-1">
+                <MiniButton
+                  label={loadingId === save.id ? (isLeaf ? '读取中' : '分支中') : (isLeaf ? '读取' : '分支')}
+                  onClick={() => (isLeaf ? onLoad(save.id) : onBranch(save.id))}
+                  disabled={loadingId !== null}
+                />
+                <MiniButton label="导出" onClick={() => onExport(save.id)} />
+                <MiniButton label={deletingId === save.id ? '删除中' : '删除'} onClick={() => onDelete(save.id)} disabled={deletingId !== null} danger />
               </div>
             </div>
-            <div className="flex flex-wrap gap-1">
-              <MiniButton label={loadingId === save.id ? '读取中' : '读取'} onClick={() => onLoad(save.id)} disabled={loadingId !== null} />
-              <MiniButton label="导出" onClick={() => onExport(save.id)} />
-              <MiniButton label={deletingId === save.id ? '删除中' : '删除'} onClick={() => onDelete(save.id)} disabled={deletingId !== null} danger />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {group.nodeCount > 1 && (
         <ActionButton label={deleting ? '删除中' : '删除整棵存档树'} onClick={onDeleteTree} disabled={deleting} danger />

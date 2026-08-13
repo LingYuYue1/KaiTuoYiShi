@@ -304,14 +304,42 @@ export async function handleLoadLatest(
   return true;
 }
 
+/**
+ * 读档内部共用入口：按 ID 读取存档后进入会话。
+ * enterSession 已按节点类型分派：叶子 = 水合；检查点 = forkSaveTreeLeaf 分叉；
+ * 无树元信息（legacy 恢复点）= 仅水合不分支。logEvent 提供时埋诊断点。
+ */
+async function loadSaveIntoSession(
+  id: number,
+  state: UseGameStateReturn,
+  logEvent?: string,
+): Promise<boolean> {
+  const save = await loadSave(id);
+  if (!save) return false;
+  if (logEvent) devLog('save', logEvent, { id });
+  await enterSession(state, save);
+  return true;
+}
+
 export async function handleLoadById(
   id: number,
   state: UseGameStateReturn,
 ): Promise<boolean> {
-  const save = await loadSave(id);
-  if (!save) return false;
-  await enterSession(state, save);
-  return true;
+  return loadSaveIntoSession(id, state);
+}
+
+/**
+ * 回档（分支）入口：独立动词名，供 UI 层区分「读取」（叶子）与「分支」（检查点）。
+ * 核心行为就是 enterSession——它已按节点类型正确分派：叶子（saveRuntime.unsealedHead）=
+ * 直接水合；内部节点（已封版检查点）= forkSaveTreeLeaf 分叉新叶子再水合。
+ * 本函数不改变该分派，只提供独立的动作入口与诊断埋点，避免面板复制分支逻辑。
+ */
+export async function handleBranchFromSave(
+  id: number,
+  state: UseGameStateReturn,
+): Promise<boolean> {
+  // 分支 = 获取树元信息，走 forkSaveTreeLeaf + hydrate 路径；复用 enterSession 中检查点分叉的逻辑。
+  return loadSaveIntoSession(id, state, 'branch-from-save');
 }
 
 /**

@@ -56,6 +56,8 @@ interface SettingsModalProps {
   onThemeChange: (t: 主题预设) => void;
   onContinue: () => Promise<boolean>;
   onLoadSave: (id: number) => Promise<boolean>;
+  /** 回档（分支）用例动作：转发给存档管理页签（StorageManagerTab），App 从 useGame 门面注入。 */
+  onBranchSave?: (id: number) => Promise<boolean>;
   // 变量管理需要的 state 切片
   旅人: 角色数据结构;
   世界: 世界状态;
@@ -149,6 +151,7 @@ export function SettingsModal({
   onThemeChange,
   onContinue,
   onLoadSave,
+  onBranchSave,
   旅人,
   世界,
   on世界Change,
@@ -294,7 +297,7 @@ export function SettingsModal({
       case 'theme':
         return <ThemeSettingsTab current={currentTheme} onChange={persistThemeChange} />;
       case 'storage':
-        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onContinue={onContinue} onLoadSave={onLoadSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} onClearActiveSaveTreeMeta={onClearActiveSaveTreeMeta} onGetSaveCatalogSnapshot={onGetSaveCatalogSnapshot} onStartSaveCatalogRepair={onStartSaveCatalogRepair} onSubscribeSaveCatalogRepair={onSubscribeSaveCatalogRepair} onRepairSaveDatabase={onRepairSaveDatabase} onDeleteLegacyBackupSaves={onDeleteLegacyBackupSaves} onExportSavePackage={onExportSavePackage} onExportSaveTreePackage={onExportSaveTreePackage} onImportSaveFileAsMany={onImportSaveFileAsMany} />;
+        return <StorageManagerTab showAutoArchives={gameSettings.enableAutoSaveEveryTurn} onContinue={onContinue} onLoadSave={onLoadSave} onBranchSave={onBranchSave} onDeleteSave={onDeleteSave} onDeleteSaveTree={onDeleteSaveTree} onClearActiveSaveTreeMeta={onClearActiveSaveTreeMeta} onGetSaveCatalogSnapshot={onGetSaveCatalogSnapshot} onStartSaveCatalogRepair={onStartSaveCatalogRepair} onSubscribeSaveCatalogRepair={onSubscribeSaveCatalogRepair} onRepairSaveDatabase={onRepairSaveDatabase} onDeleteLegacyBackupSaves={onDeleteLegacyBackupSaves} onExportSavePackage={onExportSavePackage} onExportSaveTreePackage={onExportSaveTreePackage} onImportSaveFileAsMany={onImportSaveFileAsMany} />;
     }
   };
 

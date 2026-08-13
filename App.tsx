@@ -378,6 +378,13 @@ export function App() {
     if (ok) closeTransientUi();
     return ok;
   }, [actions, closeTransientUi]);
+  const branchSaveIntoGame = useCallback(async (id: number) => {
+    // 回档（分支）：独立动词名收敛到门面 handleBranch（复用 handleBranchFromSave 的
+    // enterSession 检查点分叉路径），App 只负责成功后的 UI 关闭。
+    const ok = await actions.handleBranch(id);
+    if (ok) closeTransientUi();
+    return ok;
+  }, [actions, closeTransientUi]);
   const handleGoHomeClick = useCallback(() => {
     closeTransientUi();
     actions.handleGoHome();
@@ -791,6 +798,7 @@ export function App() {
               showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
               onExportActiveLeafPackage={actions.handleExportActiveLeafPackage}
               onLoad={loadSaveIntoGame}
+              onBranch={branchSaveIntoGame}
               onDeleteSave={actions.handleDeleteSave}
               onDeleteSaveTree={actions.handleDeleteSaveTree}
               onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}
@@ -849,6 +857,7 @@ export function App() {
               clearApiErrorReports={clearApiErrorReports}
               onContinue={actions.handleContinue}
               onLoadSave={loadSaveIntoGame}
+              onBranchSave={branchSaveIntoGame}
               initialTab={settingsInitialTab}
               旅人={state.旅人}
               世界={state.世界}
@@ -990,6 +999,7 @@ export function App() {
             clearApiErrorReports={clearApiErrorReports}
             onContinue={actions.handleContinue}
             onLoadSave={loadSaveIntoGame}
+            onBranchSave={branchSaveIntoGame}
             initialTab={settingsInitialTab}
             旅人={state.旅人}
             世界={state.世界}
@@ -1087,6 +1097,7 @@ export function App() {
             showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
             onExportActiveLeafPackage={actions.handleExportActiveLeafPackage}
             onLoad={loadSaveIntoGame}
+            onBranch={branchSaveIntoGame}
             onDeleteSave={actions.handleDeleteSave}
             onDeleteSaveTree={actions.handleDeleteSaveTree}
             onClearActiveSaveTreeMeta={actions.handleClearActiveSaveTreeMeta}

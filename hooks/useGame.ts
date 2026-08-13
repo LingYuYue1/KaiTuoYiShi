@@ -8,7 +8,7 @@ import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
-import { applySaveToState, beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
+import { applySaveToState, beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleBranchFromSave, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
@@ -119,6 +119,8 @@ export interface UseGameReturn {
     handleContinue: () => Promise<boolean>;
     /** 按 ID 读档（片 panel-p7）：复用 handleLoadById 的 enterSession 路径，SaveLoadModal 与 StorageManager 共用。 */
     handleLoadSave: (id: number) => Promise<boolean>;
+    /** 回档（分支）用例动作：独立动词名，复用 handleBranchFromSave 的 enterSession 检查点分叉路径，SaveLoadModal 与 StorageManager 共用。 */
+    handleBranch: (id: number) => Promise<boolean>;
     handleGoHome: () => void;
     handleReroll: () => Promise<string | undefined>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
@@ -435,6 +437,12 @@ export function useGame(): UseGameReturn {
     const ok = await handleLoadById(id, stateRef.current);
     devLog('save', 'save-load-by-id', { id, ok });
     return ok;
+  }, []);
+
+  // 回档（分支）用例动作：独立动词名，核心行为与 handleLoadSave 一致——enterSession 已按
+  // 节点类型分派（叶子 = 水合 / 检查点 = forkSaveTreeLeaf 分叉），App 只负责成功后的 UI 关闭。
+  const handleBranch = useCallback(async (id: number): Promise<boolean> => {
+    return handleBranchFromSave(id, stateRef.current);
   }, []);
 
   const handleGoHome = useCallback(() => {
@@ -1376,6 +1384,7 @@ export function useGame(): UseGameReturn {
     handleNewGame,
     handleContinue,
     handleLoadSave,
+    handleBranch,
     handleGoHome,
     handleReroll,
     handleRegenerateNarrativeImage,
@@ -1425,6 +1434,7 @@ export function useGame(): UseGameReturn {
     handleNewGame,
     handleContinue,
     handleLoadSave,
+    handleBranch,
     handleGoHome,
     handleReroll,
     handleRegenerateNarrativeImage,
