@@ -1,4 +1,5 @@
 import type { 文生图API配置 } from '@/models/settings';
+import { 文生图预设路径表 } from '@/models/settings';
 import type { 叙事插图 } from '@/models/chat';
 import type { ImageGenerationRequest, ImageGenerationResult, ImageReferenceInput } from '@/contracts/ai';
 import { fetchModels } from '@/services/ai/apiTools';
@@ -373,17 +374,8 @@ function normalizeNovelAISize(size: string): { width: number; height: number } {
 
 function readPath(config: 文生图API配置): string {
   if (config.pathMode === 'custom' && config.customPath.trim()) return config.customPath.trim();
-  switch (config.backend) {
-    case 'novelai':
-      return '/ai/generate-image';
-    case 'sd_webui':
-      return '/sdapi/v1/txt2img';
-    case 'comfyui':
-      return '/prompt';
-    case 'openai_compatible':
-    default:
-      return '/images/generations';
-  }
+  // 穷尽查表：backend 已在归一化入口钳制为 文生图后端类型 成员，无需 default 分支。
+  return 文生图预设路径表[config.backend].路径;
 }
 
 function mergeNegativePrompt(config: 文生图API配置, request: ImageGenerationRequest): string {

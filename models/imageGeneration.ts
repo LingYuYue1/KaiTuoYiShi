@@ -1,5 +1,3 @@
-export type 图片后端类型 = 'openai_compatible' | 'novelai' | 'sd_webui' | 'comfyui';
-
 export type 图片资源来源 = 'generated' | 'upload' | 'remote';
 export type 图片资源状态 = 'ready' | 'failed' | 'pending';
 export type 图片目标类型 = 'traveler' | 'npc' | 'phone' | 'scene' | 'item' | 'nsfw_part' | 'misc';
@@ -156,14 +154,17 @@ export function defaultSizeForSlot(slot: 图片槽位): string {
   return '1024x1024';
 }
 
-export function 读取图片参考目标(entry: Pick<相册条目, 'targetType' | 'targetId' | 'slot'> & { referenceTargets?: unknown }): string[] {
+/** 相册参考目标：参考图条目或显式 referenceTargets 输入。 */
+type 相册参考目标 = Pick<相册条目, 'targetType' | 'targetId' | 'slot'> & { referenceTargets?: unknown };
+
+export function 读取图片参考目标(entry: 相册参考目标): string[] {
   if (Array.isArray(entry.referenceTargets)) return normalizeStringArray(entry.referenceTargets);
   if (entry.slot !== 'reference_image') return [];
   const targetId = entry.targetType === 'traveler' ? 'traveler' : entry.targetId;
   return targetId ? [targetId] : [];
 }
 
-export function 图片是否参考角色(entry: Pick<相册条目, 'targetType' | 'targetId' | 'slot'> & { referenceTargets?: unknown }, characterId: string): boolean {
+export function 图片是否参考角色(entry: 相册参考目标, characterId: string): boolean {
   return Boolean(characterId) && 读取图片参考目标(entry).includes(characterId);
 }
 

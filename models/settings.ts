@@ -429,7 +429,9 @@ export interface 剧情编织系统设置 {
 
 export type 文生图响应格式 = 'url' | 'b64_json' | 'dataUrl';
 export type 文生图默认风格 = 'hsr' | 'anime' | 'realistic' | 'custom';
-export type 文生图后端类型 = 'openai_compatible' | 'novelai' | 'sd_webui' | 'comfyui';
+/** 文生图后端枚举的单一数据源：类型、归一化钳制、UI 选项、路径表都从这里取。 */
+export const 文生图后端列表 = ['openai_compatible', 'novelai', 'sd_webui', 'comfyui'] as const;
+export type 文生图后端类型 = (typeof 文生图后端列表)[number];
 export type 文生图接口路径模式 = 'preset' | 'custom';
 export type 自动生图场景构图 = '纯场景' | '故事快照' | '剧照';
 export type 自动NPC生图构图 = '头像' | '半身' | '立绘';
@@ -442,6 +444,14 @@ export type 文生图预设接口路径 =
   | 'novelai_generate'
   | 'sd_txt2img'
   | 'comfyui_prompt';
+
+/** 预设接口枚举 → 实际路径。单真相：服务端 readPath 与设置页预设路径选项都从这里取。 */
+export const 文生图预设路径表: Record<文生图后端类型, { 预设接口: 文生图预设接口路径; 路径: string }> = {
+  openai_compatible: { 预设接口: 'openai_images', 路径: '/images/generations' },
+  novelai: { 预设接口: 'novelai_generate', 路径: '/ai/generate-image' },
+  sd_webui: { 预设接口: 'sd_txt2img', 路径: '/sdapi/v1/txt2img' },
+  comfyui: { 预设接口: 'comfyui_prompt', 路径: '/prompt' },
+};
 export type NovelAI采样器 = 'k_euler' | 'k_euler_ancestral' | 'k_dpmpp_2m' | 'k_dpmpp_2s_ancestral' | 'k_dpmpp_sde' | 'k_dpmpp_2m_sde';
 export type NovelAI噪点表 = 'native' | 'karras' | 'exponential' | 'polyexponential';
 
@@ -760,7 +770,7 @@ export function 归一化文生图API配置(input?: Partial<文生图API配置>)
     ...defaults,
     ...input,
     enabled: input.enabled === true,
-    backend: input.backend ?? defaults.backend,
+    backend: input.backend && 文生图后端列表.includes(input.backend) ? input.backend : defaults.backend,
     responseFormat: input.responseFormat ?? defaults.responseFormat,
     defaultSize: input.defaultSize || defaults.defaultSize,
     defaultStyle: input.defaultStyle ?? defaults.defaultStyle,

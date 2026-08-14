@@ -1,4 +1,4 @@
-﻿import { memo, useState } from 'react';
+import { memo, useState } from 'react';
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
 import type { 角色数据结构 } from '@/models/character';
@@ -7,6 +7,7 @@ import type { 相册系统 } from '@/models/imageGeneration';
 import { BodyBlock, StreamingPreview } from './MessageRenderers';
 import { getPath } from '@/data/journeyPresets';
 import { formatTokenCount } from '@/utils/tokenEstimate';
+import { 格式化时间戳 } from '@/utils/format';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 
 interface TurnItemProps {
@@ -761,7 +762,7 @@ function UsagePanel({ message, onClose }: { message: 聊天消息; onClose: () =
   const cachedTokens = usage?.cachedTokens;
   const uncachedTokens = usage?.uncachedTokens;
   const sourceLabel = usage?.source === 'api' ? 'API返回' : usage?.source === 'mixed' ? '混合' : '本地估算';
-  const timeText = formatTurnTime(message.timestamp);
+  const timeText = 格式化时间戳(message.timestamp);
   const turn = message.gameTime ?? '?';
   const cacheKnown = typeof cachedTokens === 'number' || typeof uncachedTokens === 'number' || typeof usage?.cacheHitRate === 'number';
   const usageFormat = usage?.usageFormat ?? '未记录';
@@ -980,19 +981,6 @@ function UsageMetric({ label, value, tone }: { label: string; value: string; ton
       </div>
     </div>
   );
-}
-
-function formatTurnTime(timestamp: number): string {
-  if (!timestamp) return '未记录';
-  return new Date(timestamp).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
 }
 
 function formatRawUsage(raw: unknown): string {

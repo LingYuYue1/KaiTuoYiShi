@@ -1985,6 +1985,41 @@ async function streamOpenCodeGemini(
   return fullText;
 }
 
+type NonStreamEndpointHandler = {
+  来源标签: string;
+  构建URL: (config: API配置项) => string;
+  构建请求体: (config: API配置项, messages: Array<{ role: string; content: string }>, request: ChatCompletionRequest) => string;
+  解析: (json: unknown) => string;
+};
+
+/** 非流式补全 4 端点差异表：仅 URL/标签/请求体/解析 不同，其余骨架收敛到 completionOpenCodeNonStream 单执行路径。 */
+const nonStreamEndpointHandlers: Record<OpenCodeEndpoint, NonStreamEndpointHandler> = {
+  chat: {
+    来源标签: 'OpenCode Zen Chat 非流式补全',
+    构建URL: (config) => buildOpenCodeUrl(config, 'chat'),
+    构建请求体: (config, messages, request) => buildOpenCodeProxyBody(config, 'chat', buildOpenAICompatibleRequestBody(config, messages, request, false), false),
+    解析: parseOpenAICompatibleTextResponse,
+  },
+  messages: {
+    来源标签: 'OpenCode Zen Messages 非流式补全',
+    构建URL: (config) => buildOpenCodeUrl(config, 'messages'),
+    构建请求体: (config, messages, request) => buildOpenCodeProxyBody(config, 'messages', buildClaudeRequestBody(config, messages, request, false), false),
+    解析: parseClaudeTextResponse,
+  },
+  gemini: {
+    来源标签: 'OpenCode Zen Gemini 非流式补全',
+    构建URL: (config) => buildOpenCodeGeminiUrl(config, false),
+    构建请求体: (config, messages, request) => buildOpenCodeProxyBody(config, 'gemini', buildOpenCodeGeminiBody(config, messages, request), false),
+    解析: parseOpenCodeGeminiText,
+  },
+  responses: {
+    来源标签: 'OpenCode Zen Responses 非流式补全',
+    构建URL: (config) => buildOpenCodeUrl(config, 'responses'),
+    构建请求体: (config, messages, request) => buildOpenCodeProxyBody(config, 'responses', buildOpenCodeResponsesBody(config, messages, request, false), false),
+    解析: parseOpenCodeResponsesText,
+  },
+};
+
 async function completionOpenCodeNonStream(
   config: API配置项,
   messages: Array<{ role: string; content: string }>,
@@ -1992,93 +2027,19 @@ async function completionOpenCodeNonStream(
 ): Promise<string> {
   const normalized = withOpenCodeNormalizedConfig(config);
   const endpoint = inferOpenCodeEndpoint(normalized.model);
+  const handler = nonStreamEndpointHandlers[endpoint];
 
-  if (endpoint === 'chat') {
-    const upstreamUrl = buildOpenCodeUrl(normalized, endpoint);
-    const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Chat 非流式补全', '/api/opencode', 'non-stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: buildOpenCodeProxyBody(normalized, endpoint, buildOpenAICompatibleRequestBody(normalized, messages, request, false), false),
-      signal: request.signal,
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      void appendApiErrorReport({
-        source: 'OpenCode Zen Chat 非流式补全',
-        config: normalized,
-        status: response.status,
-        requestUrl: upstreamUrl,
-        requestMode: 'non-stream',
-        responseText: text,
-      });
-      throw formatOpenCodeError(normalized, endpoint, response.status, text);
-    }
-    const json = await response.json();
-    emitUsageFromResponse(json, normalized, request);
-    return parseOpenAICompatibleTextResponse(json);
-  }
-
-  if (endpoint === 'messages') {
-    const upstreamUrl = buildOpenCodeUrl(normalized, endpoint);
-    const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Messages 非流式补全', '/api/opencode', 'non-stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: buildOpenCodeProxyBody(normalized, endpoint, buildClaudeRequestBody(normalized, messages, request, false), false),
-      signal: request.signal,
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      void appendApiErrorReport({
-        source: 'OpenCode Zen Messages 非流式补全',
-        config: normalized,
-        status: response.status,
-        requestUrl: upstreamUrl,
-        requestMode: 'non-stream',
-        responseText: text,
-      });
-      throw formatOpenCodeError(normalized, endpoint, response.status, text);
-    }
-    const json = await response.json();
-    emitUsageFromResponse(json, normalized, request);
-    return parseClaudeTextResponse(json);
-  }
-
-  if (endpoint === 'gemini') {
-    const upstreamUrl = buildOpenCodeGeminiUrl(normalized, false);
-    const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Gemini 非流式补全', '/api/opencode', 'non-stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: buildOpenCodeProxyBody(normalized, endpoint, buildOpenCodeGeminiBody(normalized, messages, request), false),
-      signal: request.signal,
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      void appendApiErrorReport({
-        source: 'OpenCode Zen Gemini 非流式补全',
-        config: normalized,
-        status: response.status,
-        requestUrl: upstreamUrl,
-        requestMode: 'non-stream',
-        responseText: text,
-      });
-      throw formatOpenCodeError(normalized, endpoint, response.status, text);
-    }
-    const json = await response.json();
-    emitUsageFromResponse(json, normalized, request);
-    return parseOpenCodeGeminiText(json);
-  }
-
-  const upstreamUrl = buildOpenCodeUrl(normalized, endpoint);
-  const response = await fetchWithApiErrorReport(normalized, 'OpenCode Zen Responses 非流式补全', '/api/opencode', 'non-stream', {
+  const upstreamUrl = handler.构建URL(normalized);
+  const response = await fetchWithApiErrorReport(normalized, handler.来源标签, '/api/opencode', 'non-stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: buildOpenCodeProxyBody(normalized, endpoint, buildOpenCodeResponsesBody(normalized, messages, request, false), false),
+    body: handler.构建请求体(normalized, messages, request),
     signal: request.signal,
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     void appendApiErrorReport({
-      source: 'OpenCode Zen Responses 非流式补全',
+      source: handler.来源标签,
       config: normalized,
       status: response.status,
       requestUrl: upstreamUrl,
@@ -2089,7 +2050,7 @@ async function completionOpenCodeNonStream(
   }
   const json = await response.json();
   emitUsageFromResponse(json, normalized, request);
-  return parseOpenCodeResponsesText(json);
+  return handler.解析(json);
 }
 
 // ── Gemini streaming ──

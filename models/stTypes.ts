@@ -6,6 +6,7 @@
  */
 import type { 提示词模块 } from './prompts';
 import type { 世界书条目 } from './worldbook';
+import type { 消息角色 } from './chat';
 
 /**
  * ST 世界书条目（World Info Entry）。
@@ -178,8 +179,8 @@ export type STPresetEntry = STPresetEntryV1;
  * ===== 新增：保留式类型（参照 MoRanJiangHu models/system.ts L552-581) =====
  */
 
-/** ST 预设消息角色类型 */
-export type STMessageRole = 'system' | 'user' | 'assistant';
+/** ST 预设消息角色类型（兼容别名，指向唯一真相 models/chat.ts 的消息角色）。 */
+export type STMessageRole = 消息角色;
 
 /** ST 预设提示词结构（保留 ST 原始字段） */
 export interface STPresetPrompt {

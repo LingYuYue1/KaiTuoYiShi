@@ -131,6 +131,7 @@ export async function retrieveYitingContextWithModel(
 export function buildYitingRecallSystemPrompt(promptModules?: 提示词模块[]): string {
   const modulesSection = buildYitingRecallPromptModulesSection(promptModules);
   if (modulesSection) return modulesSection;
+  // legacy 回退：yitingRecall 作用域模块未启用/未传入时使用源文件常量，保证旧调用路径可召回。
   return YITING_LEGACY_RECALL_PROMPT;
 }
 

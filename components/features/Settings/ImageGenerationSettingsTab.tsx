@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   AI提供商,
   API配置项,
@@ -13,6 +13,7 @@ import type {
   文生图词组转化器API覆盖,
 } from '@/models/settings';
 import type { ConnectionTestConfig, ComfyWorkflowCandidate } from '@/hooks/useAiTools';
+import { 文生图预设路径表 } from '@/models/settings';
 
 interface Props {
   settings: 游戏设置;
@@ -79,10 +80,10 @@ const responseOptions: { value: 文生图响应格式; label: string }[] = [
 ];
 
 const presetPathOptions: Record<文生图后端类型, { value: 文生图预设接口路径; label: string }[]> = {
-  openai_compatible: [{ value: 'openai_images', label: '/images/generations' }],
-  novelai: [{ value: 'novelai_generate', label: '/ai/generate-image' }],
-  sd_webui: [{ value: 'sd_txt2img', label: '/sdapi/v1/txt2img' }],
-  comfyui: [{ value: 'comfyui_prompt', label: '/prompt' }],
+  openai_compatible: [{ value: 文生图预设路径表.openai_compatible.预设接口, label: 文生图预设路径表.openai_compatible.路径 }],
+  novelai: [{ value: 文生图预设路径表.novelai.预设接口, label: 文生图预设路径表.novelai.路径 }],
+  sd_webui: [{ value: 文生图预设路径表.sd_webui.预设接口, label: 文生图预设路径表.sd_webui.路径 }],
+  comfyui: [{ value: 文生图预设路径表.comfyui.预设接口, label: 文生图预设路径表.comfyui.路径 }],
 };
 
 const samplerOptions: { value: NovelAI采样器; label: string }[] = [

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 import { devLogError } from '@/utils/devLog';
+import { 格式化时间戳, 格式化存档体积 } from '@/utils/format';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {
@@ -326,16 +327,7 @@ export function SaveLoadModal({ showAutoArchives, onLoad, onBranch, onExportActi
     }
   }
 
-  const formatTime = (ts: number) => {
-    const d = new Date(ts);
-    return d.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatTime = 格式化时间戳;
 
   return (
     <div
@@ -1298,11 +1290,7 @@ function typeColor(type: SaveListItemSummary['type']): string {
   return 'rgba(var(--tj-accent-primary),0.9)';
 }
 
-function formatSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+const formatSize = 格式化存档体积;
 
 function matchesSaveTab(save: SaveListItemSummary, tab: Tab): boolean {
   if (tab === 'all') return true;

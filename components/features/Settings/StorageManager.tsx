@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
+import { 格式化时间戳 } from '@/utils/format';
 
 interface Props {
   showAutoArchives: boolean;
@@ -481,12 +482,4 @@ function MetaLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatTime(timestamp: number): string {
-  return new Date(timestamp || Date.now()).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+const formatTime = 格式化时间戳;

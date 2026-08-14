@@ -26,6 +26,7 @@ import {
   type SaveAssetRecord,
 } from '@/utils/saveAssetStorage';
 import { dataUrlToBlob } from '@/utils/albumObjectUrl';
+import { 格式化二进制字节 } from '@/utils/format';
 
 export interface CloudBackupBuildProgress {
   phase: 'checking' | 'packing-node' | 'packing-part' | 'completed';
@@ -110,7 +111,7 @@ export async function buildCompleteCloudBackup(
 
   const addEntry = async (entry: CloudBackupPartEntry): Promise<number> => {
     if (entry.bytes.byteLength > CLOUD_BACKUP_PART_HARD_BYTES) {
-      throw new Error(`云备份条目超过安全大小：${entry.name}（${formatBytes(entry.bytes.byteLength)}）。`);
+      throw new Error(`云备份条目超过安全大小：${entry.name}（${格式化二进制字节(entry.bytes.byteLength)}）。`);
     }
     if (currentEntries.length && currentRawBytes + entry.bytes.byteLength > CLOUD_BACKUP_PART_TARGET_BYTES) {
       await flushPart();
@@ -239,12 +240,6 @@ function assertNotAborted(signal?: AbortSignal): void {
 
 function yieldToMainThread(): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, 0));
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${bytes} B`;
 }
 
 function resolveRecordBlob(record: SaveAssetRecord): Blob | null {

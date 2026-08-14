@@ -31,6 +31,8 @@ export type ReferenceImagePayload = {
   images: Array<{ id: string; src: string; role: 'character'; weight: number }>;
 };
 
+/** 参考图注入场景的短标签。设置页（backendOptions）用长文案（如「OpenAI 兼容图片接口」），
+ *  两套文案为不同 UI 语境的有意差异，枚举同源 models/settings.ts 的文生图后端类型。 */
 export function backendLabel(backend: string): string {
   switch (backend) {
     case 'openai_compatible':

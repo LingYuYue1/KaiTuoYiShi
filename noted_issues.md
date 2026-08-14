@@ -313,11 +313,13 @@
 
 建议抽取 `readSseTextStream(reader, { extractText, provider, onFinishReason, collectFinishReason })`，7 函数只保留「请求体构建 + delta 提取」。
 
-> **处置状态：已收敛（阶段 2.4，未提交）**：新增 `readSseTextStream` 公共骨架（无开关签名，统一 [DONE] 跳过/畸形行计数/usage/finishReason 采集），7 流函数统一到单一 extractor `readOpenAICompatibleStreamDelta`（其 fallback 链已覆盖 choices/content_block/response.*/gemini-parts 全部格式）；`readOpenCodeResponsesStreamDelta` 已删。fetch 前导未抽：includeUsage 降级递归使 5/7 抽取会制造不对称调用面。
+> **处置状态：已收敛（阶段 2.4，commit bc067fd）**：新增 `readSseTextStream` 公共骨架（无开关签名，统一 [DONE] 跳过/畸形行计数/usage/finishReason 采集），7 流函数统一到单一 extractor `readOpenAICompatibleStreamDelta`（其 fallback 链已覆盖 choices/content_block/response.*/gemini-parts 全部格式）；`readOpenCodeResponsesStreamDelta` 已删。fetch 前导未抽：includeUsage 降级递归使 5/7 抽取会制造不对称调用面。
 
 #### B. completionOpenCodeNonStream 4 分支（~100 行）
 
 `chatCompletionClient.ts:2182–2287`，chat/messages/gemini/responses 四分支结构完全一致，差异只在中介 body 构建与 parse 函数。建议抽 `completionOpenCodeEndpoint(endpoint, bodyBuilder, parser)`。
+
+> **处置状态：已收敛（阶段 2.5，commit 8bfc7ff）**：抽 `nonStreamEndpointHandlers` 数据表（Record<OpenCodeEndpoint, {来源标签/构建URL/构建请求体/解析}>）+ 单执行路径，if 链与 default 分支消失（endpoint 类型穷尽 = 编译期 fail fast）。行为等价 harness 4 端点 × 成功/失败 12 项全绿。
 
 #### C. resolveXxxConfig 合并样板（7 处 × 8 行 ≈ 56 行）
 
@@ -335,7 +337,7 @@
 
 建议抽 `mergeApiOverride(mainConfig, override, extra?)`。
 
-> **处置状态：已收敛（阶段 2.4，未提交）**：`models/settings.ts` 新增 `resolveApiOverrideFields`（覆盖字段解析，main 可空）+ `mergeApiOverride`（主 API 基底 + 覆盖字段 + extra 叠加）。yitingArchive/yitingRetrieval/memoryCompression/zhikuRetrieval/imagePromptTokenizer/storyWeaving 六处接入；yitingRetrieval 与 zhikuRetrieval 的私有单调用点包装已内联；phoneService 组合 `resolveApiOverrideFields`，保留 phoneFieldsEmpty 与不继承 topP/topK 语义。
+> **处置状态：已收敛（阶段 2.4，commit bc067fd）**：`models/settings.ts` 新增 `resolveApiOverrideFields`（覆盖字段解析，main 可空）+ `mergeApiOverride`（主 API 基底 + 覆盖字段 + extra 叠加）。yitingArchive/yitingRetrieval/memoryCompression/zhikuRetrieval/imagePromptTokenizer/storyWeaving 六处接入；yitingRetrieval 与 zhikuRetrieval 的私有单调用点包装已内联；phoneService 组合 `resolveApiOverrideFields`，保留 phoneFieldsEmpty 与不继承 topP/topK 语义。
 
 #### D. NPC 关系阶段阈值表（同阈值双标签 + 魔法数散落）
 
@@ -346,15 +348,19 @@
 
 应合并为一张 `关系阈值表` 常量，逆映射与魔法数引用同一张表。
 
-> **处置状态：已收敛（阶段 2.4，未提交）**：`models/npc.ts` 新建 `NPC关系阈值表`（6 行 下限/上限/阶段/兼容，首末行绑定 NPC_AFFINITY_MIN/MAX）+ 派生常量 `NPC敌对阈值`（敌对行上限）/`NPC熟识阈值`（熟识行下限），经 `查NPC关系行`（缺行启动即抛）取行，无位置索引。`获取NPC关系阶段`/`获取NPC兼容关系` 改查表；world.ts 的 `inferOpeningAffinity` 携带私有 `开局关系代表好感度`（与正则同位，显式标注推理取点、非表推导，历史值逐位一致）；npcRelationshipPlanning 的 -31/20 魔法数替换为派生常量。
+> **处置状态：已收敛（阶段 2.4，commit bc067fd）**：`models/npc.ts` 新建 `NPC关系阈值表`（6 行 下限/上限/阶段/兼容，首末行绑定 NPC_AFFINITY_MIN/MAX）+ 派生常量 `NPC敌对阈值`（敌对行上限）/`NPC熟识阈值`（熟识行下限），经 `查NPC关系行`（缺行启动即抛）取行，无位置索引。`获取NPC关系阶段`/`获取NPC兼容关系` 改查表；world.ts 的 `inferOpeningAffinity` 携带私有 `开局关系代表好感度`（与正则同位，显式标注推理取点、非表推导，历史值逐位一致）；npcRelationshipPlanning 的 -31/20 魔法数替换为派生常量。
 
 #### E. buildXxxPromptModulesSection 系列（见 §7，确认属实）
 
 7 个 1–3 行 wrapper 全部收敛到 `buildIndependentPromptModulesSection`（`services/promptModuleScopes.ts:50`）。另有 4 处 legacy 回退样板散落：`phoneService.ts:155–160`、`newsModel.ts:122–130`、`zhikuRetrieval.ts:612–621`、`yitingRetrieval.ts:132–133`。
 
+> **处置状态：已核查（阶段 2.5，commit 8bfc7ff）**：4 处为「同守卫、异领域 legacy 提示词」的伪样板（news 三段拼接/zhiku 带场景锚点/yiting 单常量/phone 内联常量），拒绝强行合一（参数化差异 = 特例汤）。调用面核查确认可达：phone 在模块段为空时经 `buildPhonePromptModulesSection(x) || buildPhoneSystemPrompt(ctx)` 不传模块（contextSnapshot），yiting/zhiku/news 调用方恒传但 modules 可被禁用/为空。保留并为 yiting/phone 补 why 注释（news/zhiku 已有）。
+
 #### F. 信息可见性归一化块（低）
 
 `models/storyWeaving.ts` 内 7 行块在两处逐字复制：`归一化约束列表`（626–632）与 `归一化事件`（646–652）。已有 `默认可见性()`（400）但只抽一半，建议抽 `归一化信息可见性(raw)`。
+
+> **处置状态：已收敛（阶段 2.5，commit 8bfc7ff）**：抽 `归一化信息可见性` 纯函数，两处调用。双层 spread（`...默认可见性()` + `...(x.信息可见性 ?? {})`）为冗余死代码一并删除——`文本列表`（undefined→[]）与 `=== true` 已全量覆盖类型三字段；`默认可见性` 因无调用点删除。行为等价 harness 7 样本 × 约束条目/事件 14 项全绿（typed 字段零差异；未类型化多余字段按数据形状信任有意丢弃）。
 
 ### 10.2 重复类型定义（3 组）
 
@@ -364,6 +370,8 @@
 | 消息角色 / STMessageRole | models/chat.ts:3 | models/stTypes.ts:182 | 语义等价（仅顺序不同） |
 | Pick<相册条目,…> & {referenceTargets?} | models/imageGeneration.ts:159 | :166 | 同文件相邻内联复制 |
 
+> **处置状态：已收敛（阶段 2.5，commit 8bfc7ff）**：`图片后端类型` 全仓零引用死类型删除，`文生图后端类型` 为唯一真相；`STMessageRole` 别名化 = `消息角色`（stTypes 保留式兼容层保 ST API 面）；Pick 内联类型命名 `相册参考目标` 本地别名（不导出）。
+
 ### 10.3 重复 switch/映射块（3 组）
 
 | 块 | 位置 A | 位置 B | 说明 |
@@ -372,9 +380,13 @@
 | backend→中文标签 | referenceInjection.ts:34–47 | ImageGenerationSettingsTab.tsx:54–59,61–73 | 文案略异、枚举同源 |
 | 关系阶段阈值 if 链 | models/npc.ts:161–166 | :171–175 + world.ts:843–847 | 同 10.1 组 D |
 
+> **处置状态：已收敛（阶段 2.5，commit 8bfc7ff）**：backend→路径收敛为 `文生图预设路径表`（settings.ts 单表：预设接口枚举 ↔ 路径绑定；服务端 readPath 穷尽查表删除 switch default，设置页预设选项由表派生）；`归一化文生图API配置` 增加 backend 成员钳制（垃圾值仍落默认 openai_compatible 路径，行为不变）支撑穷尽查找。backend→中文标签两套文案（短/长）为 UI 语境有意差异，拒绝合并，补互链注释。关系阶段阈值组见 10.1 D。
+
 ### 10.4 重复 UI 逻辑（2 组）
 
 | 逻辑 | 位置 A | 位置 B/C | 说明 |
 | --- | --- | --- | --- |
 | 字节格式化 | services/cloudBackupBuilder.ts:244 formatBytes | SaveLoadModal.tsx:1307 formatSize | 逻辑同源，单位不同 |
 | 时间格式化 | StorageManager.tsx:490 formatTime | TurnItem.tsx:985 formatTurnTime、ApiErrorReportsTab.tsx:13 formatTime | 三处 toLocaleString 仅选项不同 |
+
+> **处置状态：已收敛（阶段 2.5，commit 8bfc7ff）**：字节/时间格式化收敛到 `utils/format.ts`（`格式化二进制字节`/`格式化存档体积`/`格式化时间戳`/`格式化ISO时间`），5 处调用点迁移。拒绝 flag 合一——二进制 vs 展示、完整（含秒/24h）vs ISO 透传是不同显示契约。行为修正：StorageManager `timestamp || Date.now()`（缺失时间显示「现在」的误导）→「未记录」；存档/保存组时间展示统一为消息契约（含秒、24h），两处展示变化为有意收敛。毫秒契约与 ISO 无 locale 行为均保留并在 JSDoc 注明。

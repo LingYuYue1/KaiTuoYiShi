@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ApiErrorReport } from '@/hooks/useAiTools';
+import { 格式化ISO时间 } from '@/utils/format';
 
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
@@ -10,15 +11,9 @@ interface Props {
   clearApiErrorReports: () => Promise<void>;
 }
 
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return iso;
-  return date.toLocaleString();
-}
-
 function formatReport(report: ApiErrorReport): string {
   return [
-    `时间: ${formatTime(report.createdAt)}`,
+    `时间: ${格式化ISO时间(report.createdAt)}`,
     `模块: ${report.source}`,
     `供应商: ${report.provider || '-'}`,
     `模型: ${report.model || '-'}`,
@@ -122,7 +117,7 @@ export function ApiErrorReportsTab({ loadApiErrorReports, clearApiErrorReports }
                   {report.provider || '-'} / {report.model || '-'}
                 </div>
                 <div className="mt-1" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)' }}>
-                  {formatTime(report.createdAt)}
+                  {格式化ISO时间(report.createdAt)}
                 </div>
               </button>
             ))}
