@@ -74,7 +74,7 @@
 
 模块清单（行数降序）：
 
-> PromptModulesTab 2831 · ZhikuPanel 2807 · album-workspaces 2650 · dbService 2623 · chatCompletionClient 2519 · PhoneModal 2443 · wizard-steps 2285 · ApiSettings 1526 · PlotPanel 1525 · useGame 1487 · AlbumPanel 1418 · models-settings 1379 · systemPromptBuilder 1374 · SaveLoadModal 1340 · App 1318 · models-npc 1313 · WorldbookManagerModal 1263 · TurnItem 1261 · VariableManager 1256 · …
+> PromptModulesTab 2831 · ZhikuPanel 2807 · album-workspaces 2650 · dbService 2623 · chatCompletionClient 2519 · PhoneModal 2443 · wizard-steps 2285 · ApiSettingsOverview 771 · PlotPanel 1525 · useGame 1487 · AlbumPanel 1418 · models-settings 1379 · systemPromptBuilder 1374 · SaveLoadModal 1340 · App 1318 · models-npc 1313 · WorldbookManagerModal 1263 · TurnItem 1261 · VariableManager 1256 · …
 
 每模块根治目标：
 - **深模块**：拆分上帝对象，透传层收敛（含提示词模块 4 条转发链）
