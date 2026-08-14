@@ -1,14 +1,8 @@
 import type { API配置项 } from '@/models/settings';
 import type { NPC角色锚点档案 } from '@/models/npc';
+import type { CharacterAnchorExtractInput } from '@/contracts/ai';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
-
-export interface CharacterAnchorExtractInput {
-  name: string;
-  kind: 'traveler' | 'npc';
-  sourceText: string;
-  requirement?: string;
-}
 
 const CHARACTER_ANCHOR_SYSTEM_PROMPT = `你是「开拓轶事」的角色视觉锚点提取模型。
 

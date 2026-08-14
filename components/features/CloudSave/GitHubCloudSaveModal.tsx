@@ -1,7 +1,8 @@
 ﻿import { useCallback, useEffect, useState } from 'react';
 import { useRef } from 'react';
 import { useGitHubOAuth } from '@/hooks/useGitHubOAuth';
-import type { CloudTransferSaveBundle, SaveCatalogSnapshot } from '@/services/dbService';
+import type { CloudTransferSaveBundle } from '@/contracts/cloudSave';
+import type { SaveCatalogSnapshot } from '@/contracts/storage';
 import { buildCompleteCloudBackup } from '@/services/cloudBackupBuilder';
 import { mergeDownloadedCloudBackup, mergeLegacyCloudBackup } from '@/services/cloudBackupMerge';
 import {

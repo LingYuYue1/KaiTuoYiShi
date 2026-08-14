@@ -269,7 +269,7 @@ import type { 命途ID } from '@/models/journey';
 import type { 队列任务ID } from '@/models/queueTask';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate } from '@/services/ai/travelerTemplate';
-import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/hooks/useGame';
+import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 
 const JOURNEY_LAUNCH_ANIMATION_MS = 1680;

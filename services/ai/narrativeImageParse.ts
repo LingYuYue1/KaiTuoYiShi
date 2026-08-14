@@ -1,6 +1,7 @@
 // 正文生图提示词解析服务：从剧情正文中提取画面信息，生成 AI 绘图提示词。
 
 import type { API配置项 } from '@/models/settings';
+import type { 解析上下文, 场景图解析结果, 故事快照解析结果 } from '@/contracts/ai';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 
@@ -13,31 +14,6 @@ export interface 叙事插图提示词 {
 
 export interface 解析结果 {
   images: 叙事插图提示词[];
-  rawText: string;
-}
-
-export interface 故事快照解析结果 {
-  title: string;
-  characters: string[];
-  location: string;
-  atmosphere: string;
-  action: string;
-  camera: string;
-  avoid: string;
-  prompt: string;
-  negativePrompt: string;
-  rawText: string;
-}
-
-export interface 场景图解析结果 {
-  title: string;
-  location: string;
-  atmosphere: string;
-  subject: string;
-  camera: string;
-  avoid: string;
-  prompt: string;
-  negativePrompt: string;
   rawText: string;
 }
 
@@ -188,20 +164,6 @@ const SCENE_IMAGE_SYSTEM_PROMPT = `你是「开拓轶事」的场景图解析模
   "prompt": "英文最终正向提示词",
   "negativePrompt": "英文负向提示词"
 }`;
-
-export interface 解析上下文 {
-  body: string;
-  traveler?: {
-    name: string;
-    gender?: string;
-    appearance?: string;
-    identity?: string;
-    anchorPrompt?: string;
-  };
-  playerAppearanceMode?: 'off' | 'auto' | 'force';
-  /** 当前在场 NPC 的外貌档案，用于给解析模型提供角色参考 */
-  presentNpcs?: Array<{ name: string; appearance?: string; clothing?: string }>;
-}
 
 function buildTravelerAppearanceInstruction(ctx: 解析上下文): string[] {
   const mode = ctx.playerAppearanceMode ?? 'auto';

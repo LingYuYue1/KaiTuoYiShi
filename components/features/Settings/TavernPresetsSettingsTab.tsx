@@ -2,7 +2,7 @@ import { PromptModulesTab } from './PromptModulesTab';
 import type { 游戏设置 } from '@/models/settings';
 import type { 世界书 } from '@/models/worldbook';
 import type { STRegexScript } from '@/models/stTypes';
-import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
 
 interface TavernPresetsSettingsTabProps {
   settings: 游戏设置;

@@ -4,9 +4,11 @@ import type { 开局整理档案 } from '@/models/world';
 import { type 命途ID, 剧情模式, type 阵营ID } from '@/models/journey';
 import { abilityPresets, openingRegions, getOfficialOpeningPresetsByRegion, getOpeningScenarioBundle, getOpeningRegion, getWorkshopOpeningTemplate, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, getStartingScenario, getStoryMode, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
 import { 创建战技记录, 生成战技槽位摘要, 归一化战技记录, type 战技记录 } from '@/models/skill';
-import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/hooks/useGame';
+import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/contracts/ai';
 import { devLogError } from '@/utils/devLog';
-import { type Step, type CanonicalTrailblazer, type OpeningScenario, type OpeningSource, type FreeOpeningPlanetSource, type OpeningSkillSlotKey, type OpeningPresetDraft, type FreeOpeningWorkshopDraft, type FreeOpeningCustomNpc, type OpeningPlayerPreset, STEPS, MAX_OPENING_PLAYER_PRESETS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelShadowStrong, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
+import type { Step, OpeningScenario, OpeningSkillSlotKey } from './wizard/wizardData';
+import type { CanonicalTrailblazer, FreeOpeningCustomNpc, FreeOpeningPlanetSource, FreeOpeningWorkshopDraft, OpeningPlayerPreset, OpeningPresetDraft, OpeningSource } from '@/models/opening';
+import { STEPS, MAX_OPENING_PLAYER_PRESETS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelShadowStrong, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
 import { MiniStat, OpeningPresetControls, ProgressBar, OpeningLedger, StepRail } from './wizard/panels';
 import { CharacterStep, PathStep, SkillCreationStep, OpeningAnchorStep, HistorianStep, OverviewStep } from './wizard/steps';
 

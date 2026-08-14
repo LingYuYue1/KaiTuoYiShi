@@ -15,7 +15,7 @@ import {
 import type { STPresetEntryV1, STPresetEntryV2, STRegexScript, STWorldInfoEntry } from '@/models/stTypes';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import type { 世界书 } from '@/models/worldbook';
-import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';

@@ -1,32 +1,8 @@
 import type { 文生图API配置 } from '@/models/settings';
 import type { 叙事插图 } from '@/models/chat';
+import type { ImageGenerationRequest, ImageGenerationResult, ImageReferenceInput } from '@/contracts/ai';
 import { fetchModels } from '@/services/ai/apiTools';
 import { readZipEntries } from '@/utils/zip';
-
-export interface ImageGenerationRequest {
-  prompt: string;
-  negativePrompt?: string;
-  nsfw?: boolean;
-  size?: string;
-  referenceImages?: ImageReferenceInput[];
-  referenceStrength?: number;
-  signal?: AbortSignal;
-}
-
-export interface ImageReferenceInput {
-  id?: string;
-  src: string;
-  weight?: number;
-  role?: 'character' | 'style' | 'composition';
-}
-
-export interface ImageGenerationResult {
-  src: string;
-  mimeType?: string;
-  model?: string;
-  backend?: string;
-  originalUrl?: string;
-}
 
 export interface ComfyWorkflowCandidate {
   id: string;

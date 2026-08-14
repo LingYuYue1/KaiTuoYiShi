@@ -7,7 +7,8 @@ import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeIm
 import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
-import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
+import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts } from '@/hooks/useGame/tavernRegexProcessor';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
 import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleBranchFromSave, handleLoadById, handleLoadLatest, hydrate, prepareHydration, resetWorkflowProjection, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
@@ -43,20 +44,14 @@ import {
   saveSetting,
   startSaveCatalogRepair,
   subscribeSaveCatalogRepair,
-  type CloudTransferSaveBundle,
-  type SaveCatalogRepairResult,
-  type SaveCatalogRepairScope,
-  type SaveCatalogRepairState,
-  type SaveCatalogSnapshot,
-  type SaveListItemSummary,
 } from '@/services/dbService';
+import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
+import type { CloudTransferSaveBundle } from '@/contracts/cloudSave';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, buildPersistedZhikuSystem, loadAllBundledZhikuPresets, mergeBundledZhikuSystem } from '@/data/zhikuPreset';
 import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
 import {
-  type OpeningPlayerPreset,
-  type OpeningPresetDraft,
   OPENING_PLAYER_PRESETS_KEY,
   buildOpeningSummary,
   formatFreeOpeningWorkshopDraft,
@@ -65,49 +60,22 @@ import {
   normalizeOpeningPresets,
   resolveSelectedScenarioPreset,
 } from '@/components/features/NewGame/wizard/wizardData';
+import type { OpeningPlayerPreset, OpeningPresetDraft } from '@/models/opening';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog, devLogError } from '@/utils/devLog';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
-import { buildPhoneApiConfig, generatePhoneReply, type 手机回复上下文 } from '@/services/ai/phoneService';
-import { generateSkillDraft, type 战技生成草稿, type 战技生成上下文 } from '@/services/ai/skillGenerator';
+import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
+import { generateSkillDraft } from '@/services/ai/skillGenerator';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
-import { generateImage, type ImageGenerationRequest, type ImageGenerationResult } from '@/services/ai/imageGeneration';
-import { parseSceneImagePrompt, parseStorySnapshotPrompt, type 解析上下文, type 场景图解析结果, type 故事快照解析结果 } from '@/services/ai/narrativeImageParse';
-import { extractCharacterAnchorWithAI, type CharacterAnchorExtractInput } from '@/services/ai/characterAnchorExtract';
-import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt, type ImagePromptTokenizerInput, type ImagePromptTokenizerResult } from '@/services/ai/imagePromptTokenizer';
+import { generateImage } from '@/services/ai/imageGeneration';
+import { parseSceneImagePrompt, parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
+import { extractCharacterAnchorWithAI } from '@/services/ai/characterAnchorExtract';
+import { buildImagePromptTokenizerConfig, buildImagePromptTokenizerSystemPrompt, tokenizeImagePrompt } from '@/services/ai/imagePromptTokenizer';
+import type { 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
+import type { 手机回复上下文, PhoneMemoryCommitInput } from '@/contracts/phone';
 import { runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化智库系统, type 智库系统 } from '@/models/zhiku';
-
-// 面板用例动作的类型出口（片 panel-p1）：tavernRegex 领域类型经门面再导出，
-// 供 PromptModulesTab 以类型形式从门面接收，不再直取 hooks/useGame/ 内部模块。
-export type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
-
-// 开局向导用例动作的类型出口（片 panel-p4）：TravelerTemplate 领域类型经门面再导出，
-// 供 NewGameWizard / steps / App 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
-export type { TravelerTemplateContext, TravelerTemplateDraft } from '@/services/ai/travelerTemplate';
-
-// 手机系统用例动作的类型出口（片 panel-p5）：手机回复上下文经门面再导出，
-// 供 PhoneModal 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
-export type { 手机回复上下文 } from '@/services/ai/phoneService';
-
-// 战技 AI 草稿用例动作的类型出口（片 panel-p6）：战技生成草稿/上下文经门面再导出，
-// 供 SkillPanel 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
-export type { 战技生成草稿, 战技生成上下文 } from '@/services/ai/skillGenerator';
-
-// 相册 / 图片生成用例动作的类型出口（片 panel-p10）：AlbumPanel 的 AI 直连收敛到门面，
-// 供 App 与 AlbumPanel 以类型形式从门面接收，不再直取 services/ai/ 内部模块。
-export type { ImageGenerationRequest, ImageGenerationResult } from '@/services/ai/imageGeneration';
-export type { 解析上下文, 场景图解析结果, 故事快照解析结果 } from '@/services/ai/narrativeImageParse';
-export type { CharacterAnchorExtractInput } from '@/services/ai/characterAnchorExtract';
-export type { ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/services/ai/imagePromptTokenizer';
-
-/** 手机记忆即时追加 + 归档压缩 + NPC 台账压缩的入参（PhoneModal 用例动作）。 */
-export interface PhoneMemoryCommitInput {
-  summary: string;
-  npcId?: string | null;
-  force?: boolean;
-}
 
 export interface UseGameReturn {
   state: UseGameStateReturn;

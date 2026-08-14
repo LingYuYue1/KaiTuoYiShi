@@ -5,7 +5,7 @@ import type { 命途进度 } from '@/models/path';
 import type { API设置, API配置项 } from '@/models/settings';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { getPath } from '@/data/journeyPresets';
-import type { 战技生成草稿, 战技生成上下文 } from '@/hooks/useGame';
+import type { 战技生成草稿, 战技生成上下文 } from '@/contracts/ai';
 import {
   NORMAL_SKILL_SLOT_COUNT,
   创建战技记录,

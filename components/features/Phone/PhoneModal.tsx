@@ -17,7 +17,7 @@ import {
   DEFAULT_PHONE_HOME_WALLPAPER,
 } from '@/data/builtinPhoneWallpapers';
 import { 解析相册资源引用 } from '@/utils/albumActions';
-import type { PhoneMemoryCommitInput, 手机回复上下文 } from '@/hooks/useGame';
+import type { PhoneMemoryCommitInput, 手机回复上下文 } from '@/contracts/phone';
 
 interface Props {
   phone: 手机系统;

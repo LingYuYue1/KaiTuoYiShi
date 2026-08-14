@@ -39,11 +39,11 @@ import type { 手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/services/dbService';
+import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 import type { 世界书 } from '@/models/worldbook';
 import type { 剧情节点 } from '@/models/plot';
 import type { STRegexScript } from '@/models/stTypes';
-import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/hooks/useGame';
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
 import type { ApiErrorReport, ConnectionTestConfig, ConnectionTestResult } from '@/hooks/useAiTools';
 
 export type SettingsTab = Tab;

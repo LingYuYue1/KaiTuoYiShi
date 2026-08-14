@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  type SaveCatalogRepairResult,
-  type SaveCatalogRepairScope,
-  type SaveCatalogRepairState,
-  type SaveCatalogSnapshot,
-  type SaveListItemSummary,
-} from '@/services/dbService';
+import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 
 interface Props {

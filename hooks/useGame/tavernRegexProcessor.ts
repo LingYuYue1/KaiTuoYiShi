@@ -1,24 +1,5 @@
 import type { STRegexScript } from '@/models/stTypes';
-
-export type TavernRegexScriptKind = 'prompt_preprocess' | 'output_postprocess' | 'display_replace' | 'blocked';
-
-export interface TavernRegexScriptSafety {
-  kind: TavernRegexScriptKind;
-  disabled: boolean;
-  risky: boolean;
-  blocksProtocolTags: boolean;
-  reason: string;
-}
-
-export interface TavernRegexDryRunResult {
-  ok: boolean;
-  safety: TavernRegexScriptSafety;
-  matches: number;
-  before: string;
-  after: string;
-  warnings: string[];
-  error?: string;
-}
+import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
 
 export interface TavernRegexApplyResult {
   text: string;

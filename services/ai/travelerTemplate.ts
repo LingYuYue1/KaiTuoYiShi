@@ -1,32 +1,6 @@
 import type { API配置项 } from '@/models/settings';
+import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/contracts/ai';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
-
-export interface TravelerTemplateContext {
-  storyModeName?: string;
-  openingSourceLabel?: string;
-  openingRegionName?: string;
-  openingChapterName?: string;
-  openingLocationHint?: string;
-  openingMainlineEnabled?: boolean;
-  openingEntryText?: string;
-  existingName?: string;
-  existingAlias?: string;
-  existingGender?: string;
-  existingAge?: number;
-  existingBirthday?: string;
-  userPrompt?: string;
-}
-
-export interface TravelerTemplateDraft {
-  name: string;
-  alias: string;
-  gender: string;
-  age: number;
-  birthday: string;
-  appearance: string;
-  personality: string;
-  background: string;
-}
 
 export async function generateTravelerTemplate(
   config: API配置项,

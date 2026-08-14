@@ -1,5 +1,5 @@
 import type { 存档数据 } from '@/models/settings';
-import type { SaveListItemSummary } from '@/services/storage/saveCatalog';
+import type { SaveListItemSummary } from '@/contracts/storage';
 import {
   CLOUD_BACKUP_PART_HARD_BYTES,
   CLOUD_BACKUP_PART_TARGET_BYTES,

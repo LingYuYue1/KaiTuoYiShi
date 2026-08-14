@@ -17,7 +17,7 @@ import type {
   CharacterAnchorExtractInput,
   ImagePromptTokenizerInput,
   ImagePromptTokenizerResult,
-} from '@/hooks/useGame';
+} from '@/contracts/ai';
 import {
   添加图片到相册,
   创建相册图片条目,

@@ -1,23 +1,8 @@
 import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+import type { ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { 获取当前PNG画风预设, 获取当前模型规则集, 获取当前画师串预设, 获取当前规则模板, 获取当前详细画风预设 } from '@/utils/imagePromptRules';
-
-export interface ImagePromptTokenizerInput {
-  title: string;
-  mode: string;
-  sourceText: string;
-  basePrompt: string;
-  baseNegative: string;
-  extraRequirement?: string;
-  anchorMode?: boolean;
-  anchorSummary?: string;
-}
-
-export interface ImagePromptTokenizerResult {
-  prompt: string;
-  negative: string;
-}
 
 export function buildImagePromptTokenizerConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
   const mainConfig: API配置项 | undefined = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);

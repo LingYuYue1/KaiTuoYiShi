@@ -1,4 +1,4 @@
-import type { SaveListItemSummary } from '@/services/dbService';
+import type { SaveListItemSummary } from '@/contracts/storage';
 
 export interface SaveTreeDisplayNode {
   save: SaveListItemSummary;

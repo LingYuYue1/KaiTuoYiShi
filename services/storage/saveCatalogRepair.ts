@@ -1,29 +1,4 @@
-export type SaveCatalogRepairScope = 'missing-only' | 'full-validation';
-
-export type SaveCatalogRepairPhase =
-  | 'idle'
-  | 'checking'
-  | 'waiting-for-lease'
-  | 'repairing'
-  | 'paused-for-write'
-  | 'completed'
-  | 'partial-failure';
-
-export interface SaveCatalogRepairState {
-  phase: SaveCatalogRepairPhase;
-  scope: SaveCatalogRepairScope;
-  total: number;
-  processed: number;
-  failed: number;
-  currentId?: number;
-}
-
-export interface SaveCatalogRepairResult {
-  total: number;
-  processed: number;
-  failed: number;
-  skippedForLease: boolean;
-}
+import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState } from '@/contracts/storage';
 
 export interface SaveCatalogRepairOperations {
   collectIds(scope: SaveCatalogRepairScope): Promise<number[]>;

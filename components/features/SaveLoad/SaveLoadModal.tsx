@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  type SaveCatalogRepairResult,
-  type SaveCatalogRepairScope,
-  type SaveCatalogRepairState,
-  type SaveCatalogSnapshot,
-  type SaveListItemSummary,
-} from '@/services/dbService';
+import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 import { devLogError } from '@/utils/devLog';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 

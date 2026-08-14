@@ -27,19 +27,16 @@ import {
   createUnreadableSaveCatalogRecord,
   normalizeSaveCatalogRecord,
   type SaveCatalogRecord,
-  type SaveCatalogSnapshot,
-  type SaveListItemSummary,
 } from '@/services/storage/saveCatalog';
 import {
   getSaveCatalogRepairState,
   runWithSaveMutationPriority,
   startSaveCatalogRepairTask,
   subscribeSaveCatalogRepair,
-  type SaveCatalogRepairResult,
-  type SaveCatalogRepairScope,
 } from '@/services/storage/saveCatalogRepair';
-export type { SaveCatalogSnapshot, SaveListItemSummary } from '@/services/storage/saveCatalog';
-export type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState } from '@/services/storage/saveCatalogRepair';
+import type { SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
+import type { SaveCatalogRepairResult, SaveCatalogRepairScope } from '@/contracts/storage';
+import type { CloudTransferSaveBundle } from '@/contracts/cloudSave';
 export { getSaveCatalogRepairState, subscribeSaveCatalogRepair };
 
 const DB_NAME = 'TimeJourneyDB';
@@ -1189,11 +1186,6 @@ export async function loadSave(id: number): Promise<存档数据 | null> {
   // Restore registers Blobs into the runtime cache and keeps asset: refs in album state
   // (does not re-expand multi-MB base64 dataUrls into React state).
   return restoreSaveAssetPayloadFromRecords(saveForAssets, records);
-}
-
-export interface CloudTransferSaveBundle {
-  save: 存档数据;
-  assetRecords: SaveAssetRecord[];
 }
 
 export async function loadSaveForCloudTransfer(id: number): Promise<CloudTransferSaveBundle | null> {

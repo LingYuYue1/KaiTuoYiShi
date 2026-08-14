@@ -1,12 +1,10 @@
 import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
-import type { 角色数据结构 } from '@/models/character';
-import type { 世界状态 } from '@/models/world';
-import type { 手机会话, 手机联系人, 主动来信种子 } from '@/models/phone';
+import type { 手机联系人, 主动来信种子 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import { 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
-import type { 新闻条目 } from '@/models/news';
 import type { 聊天消息 } from '@/models/chat';
-import type { 智库系统, 智库条目 } from '@/models/zhiku';
+import type { 智库条目 } from '@/models/zhiku';
+import type { 手机回复上下文 } from '@/contracts/phone';
 import { 解析智库软结构标签, 获取智库人物名, 比较智库人物节点 } from '@/models/zhiku';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import { PHONE_COT_PROMPT as PHONE_LEGACY_COT_PROMPT } from '@/prompts/cot/phoneCot';
@@ -18,21 +16,6 @@ import { buildIndependentPromptModulesSection } from '@/services/promptModuleSco
 import { chatCompletionNonStream } from './chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { extractJsonLikeText, normalizeStructuredModelText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
-
-export interface 手机回复上下文 {
-  traveler: 角色数据结构;
-  world: 世界状态;
-  npcRecords: NPC记录[];
-  news: 新闻条目[];
-  turnCount: number;
-  chat: 手机会话;
-  contacts?: 手机联系人[];
-  contact?: 手机联系人;
-  userText?: string;
-  seed?: 主动来信种子;
-  mainChatHistory?: 聊天消息[];
-  zhiku?: 智库系统;
-}
 
 export interface 手机回复结果 {
   messages: string[];

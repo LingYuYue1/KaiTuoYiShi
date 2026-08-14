@@ -1,5 +1,6 @@
 import type { 存档类型 } from '@/models/settings';
 import type { 存档树元信息 } from '@/utils/saveTree';
+import type { SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 
 export const SAVE_CATALOG_VERSION = 2 as const;
 
@@ -8,23 +9,6 @@ export type SaveCatalogVisibility =
   | 'hidden-delta-base'
   | 'legacy-backup'
   | 'unreadable';
-
-export interface SaveListItemSummary {
-  id: number;
-  type: 存档类型;
-  timestamp: number;
-  saveTree?: 存档树元信息;
-  /** true 表示未封版草稿行：不得作为 delta 基准，也不得参与自动滚动删除。 */
-  unsealedHead?: boolean;
-  travelerName: string;
-  turnCount: number;
-  worldPeriodName: string;
-  currentDate: string;
-  currentTime: string;
-  currentLocation: string;
-  lastSummary: string;
-  sizeBytes: number;
-}
 
 export interface VisibleSaveCatalogRecord extends SaveListItemSummary {
   catalogVersion: typeof SAVE_CATALOG_VERSION;
@@ -61,17 +45,6 @@ export type SaveCatalogRecord =
   | LegacyBackupCatalogRecord
   | HiddenDeltaBaseCatalogRecord
   | UnreadableSaveCatalogRecord;
-
-export interface SaveCatalogSnapshot {
-  items: SaveListItemSummary[];
-  legacyBackups: SaveListItemSummary[];
-  pendingIds: number[];
-  unreadableIds: number[];
-  staleCatalogIds: number[];
-  hiddenBaseCount: number;
-  totalStoredCount: number;
-  catalogComplete: boolean;
-}
 
 export function createCatalogRecordFromSummary(
   summary: SaveListItemSummary,
