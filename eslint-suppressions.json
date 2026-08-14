@@ -19,15 +19,19 @@
       "count": 1
     }
   },
-  "services/ai/chatCompletionClient.ts": {
+  "services/ai/chatCompletionStream.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 15
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 22
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 167
+      "count": 4
+    }
+  },
+  "services/ai/chatCompletionTypes.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "services/ai/chatCompletionUsage.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
     }
   },
   "services/ai/structuredOutputRepair.ts": {
