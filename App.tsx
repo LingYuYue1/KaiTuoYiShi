@@ -17,7 +17,7 @@ import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakenin
 import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
-import { saveSetting } from '@/services/dbService';
+import { saveSetting } from '@/services/storage/settings';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import type { 世界书 } from '@/models/worldbook';
@@ -1171,7 +1171,7 @@ function renderSystemPanel(
     testImageGenerationConnection: AiToolsActions['testImageGenerationConnection'];
     fetchImageGenerationModels: AiToolsActions['fetchImageGenerationModels'];
     fetchComfyWorkflowCandidates: AiToolsActions['fetchComfyWorkflowCandidates'];
-    /** 剧情编织持久化（片 panel-p6）：PlotPanel 的 dbService 直连收敛到门面。 */
+    /** 剧情编织持久化（片 panel-p6）：PlotPanel 的存储层直连收敛到门面。 */
     onSaveStoryWeaving: (system: 剧情编织系统) => Promise<void>;
     /** 战技 AI 草稿（片 panel-p6）：SkillPanel 的 generateSkillDraft 直连收敛到门面。 */
     onGenerateSkillDraft: (apiConfig: import('@/models/settings').API配置项, context: 战技生成上下文) => Promise<战技生成草稿>;

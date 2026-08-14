@@ -5,14 +5,16 @@ import { 归一化旅人 } from '@/models/character';
 import {
   迁移存档运行态键,
 } from '@/models/settings';
-import { loadLatestSave, loadSave, loadSaveIdByNodeId, loadNewestStory, loadActiveLeaf, isActiveLeafWritable, isUnsealedHeadSave, deleteSave as dbDeleteSave, getSaveTreeNodeSubtree, deleteSaveTreeNode, saveNewestStory, createLeafNode, saveSetting, forkSaveTreeLeaf, adoptUnsealedChildLeaf } from '@/services/dbService';
+import { deleteSave as dbDeleteSave, loadLatestSave, loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
+import { adoptUnsealedChildLeaf, createLeafNode, deleteSaveTreeNode, forkSaveTreeLeaf, getSaveTreeNodeSubtree, isActiveLeafWritable, loadActiveLeaf, loadNewestStory, saveNewestStory } from '@/services/storage/saveTree';
+import { isUnsealedHeadSave } from '@/services/storage/saveSummary';
+import { loadSetting, saveSetting } from '@/services/storage/settings';
 import {
   buildPersistedZhikuSystem,
   loadAllBundledZhikuPresets,
   mergeBundledZhikuSystem,
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
-import { loadSetting } from '@/services/dbService';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
 import { 归一化世界状态, type 世界状态 } from '@/models/world';

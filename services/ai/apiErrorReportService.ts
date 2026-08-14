@@ -1,5 +1,5 @@
 import type { API配置项 } from '@/models/settings';
-import { loadSetting, saveSetting } from '@/services/dbService';
+import { loadSetting, saveSetting } from '@/services/storage/settings';
 
 export const API_ERROR_REPORTS_KEY = 'apiErrorReports';
 const MAX_API_ERROR_REPORTS = 80;

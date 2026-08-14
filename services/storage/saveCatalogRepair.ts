@@ -1,4 +1,5 @@
 import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState } from '@/contracts/storage';
+import { devLogError } from '@/utils/devLog';
 
 export interface SaveCatalogRepairOperations {
   collectIds(scope: SaveCatalogRepairScope): Promise<number[]>;
@@ -37,7 +38,14 @@ export function startSaveCatalogRepairTask(
   scope: SaveCatalogRepairScope,
   operations: SaveCatalogRepairOperations,
 ): Promise<SaveCatalogRepairResult> {
-  if (repairPromise) return repairPromise;
+  if (repairPromise) {
+    // 单飞：已有修复在进行。为避免静默吞掉本次请求的 scope（把运行中的修复结果
+    // 当作本次结果返回），先等当前修复结束，再以请求的 scope 启动新修复。
+    // 修复幂等可重放，排队重复跑一次无害。
+    return repairPromise
+      .catch(() => {})
+      .then(() => startSaveCatalogRepairTask(scope, operations));
+  }
   repairPromise = runRepair(scope, operations).finally(() => {
     repairPromise = null;
   });
@@ -134,7 +142,7 @@ function updateState(patch: Partial<SaveCatalogRepairState>): void {
     try {
       listener(getSaveCatalogRepairState());
     } catch (error) {
-      console.warn('[save-catalog] repair listener failed', error);
+      devLogError('save', 'repair-listener-failed', error);
     }
   }
 }

@@ -1,4 +1,4 @@
-import { deleteSetting, loadSetting, saveSetting } from '@/services/dbService';
+import { deleteSetting, loadSetting, saveSetting } from '@/services/storage/settings';
 import {
   parseWorkflowRecoveryJournal,
   type WorkflowRecoveryJournal,

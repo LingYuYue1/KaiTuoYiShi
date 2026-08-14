@@ -1,7 +1,7 @@
 import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import type { NPC记录 } from '@/models/npc';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
-import { loadSetting } from '@/services/dbService';
+import { loadSetting } from '@/services/storage/settings';
 import { 提取NPC同行记忆文本列表 } from '@/models/npc';
 
 export function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情编织系统): string {

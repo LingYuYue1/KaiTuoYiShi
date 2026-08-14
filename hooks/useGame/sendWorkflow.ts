@@ -2,7 +2,8 @@ import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { type 回合快照 } from '@/models/chat';
 import { parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
-import { saveSetting, writeLeafNode } from '@/services/dbService';
+import { saveSetting } from '@/services/storage/settings';
+import { writeLeafNode } from '@/services/storage/saveTree';
 import {
   clearWorkflowRecoveryJournal,
   createWorkflowRecoveryJournal,

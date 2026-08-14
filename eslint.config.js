@@ -71,16 +71,16 @@ export default tseslint.config(
     },
   },
   {
-    // L1 模块边界（片 5a-2 D5）：checkpoint 表只被 commitTurn 写入。
-    // 管线模块（stage*.ts / sendWorkflow.ts）不可从 dbService import saveGame；
-    // saveSetting 等其余导出不禁；手动存档/导入走 saveLoadWorkflow 不受限。
+    // L1 模块边界（片 5a-2 D5）：管线模块（stage*.ts / sendWorkflow.ts）不得写 checkpoint 表。
+    // checkpoint 写入统一收敛到 commitTurn（hooks/useGame/commitTurn.ts）与存档树基础设施（services/storage/saveTree.ts）；
+    // 此规则只约束管线模块直接 import saveGame，saveSetting 等其余导出不禁。
     files: ['hooks/useGame/stage*.ts', 'hooks/useGame/sendWorkflow.ts'],
     rules: {
       'no-restricted-imports': ['error', {
         paths: [{
-          name: '@/services/dbService',
+          name: '@/services/storage/saveCrud',
           importNames: ['saveGame'],
-          message: 'L1 边界：checkpoint 表只被 commitTurn（hooks/useGame/commitTurn.ts）写入，管线模块不得 import saveGame。',
+          message: 'L1 边界：管线模块不得 import saveGame，checkpoint 写入收敛到 commitTurn 与 saveTree。',
         }],
       }],
     },

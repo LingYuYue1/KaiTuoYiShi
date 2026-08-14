@@ -12,16 +12,9 @@ import {
   type CloudBackupNodePlanInput,
 } from '@/services/cloudBackupMergePlan';
 import { createCloudBackupWorkerClient, type CloudBackupWorkerClient } from '@/services/cloudBackupWorkerClient';
-import {
-  clearCloudMergeStaging,
-  commitCloudMergeStaging,
-  deleteCloudMergeStagedRecord,
-  getSaveCatalogSnapshot,
-  loadCloudMergeStagedRecord,
-  loadSaveForCloudTransfer,
-  stageCloudMergeRecord,
-  剥离检查点队列任务,
-} from '@/services/dbService';
+import { clearCloudMergeStaging, commitCloudMergeStaging, deleteCloudMergeStagedRecord, loadCloudMergeStagedRecord, stageCloudMergeRecord } from '@/services/storage/cloudMerge';
+import { getSaveCatalogSnapshot, loadSaveForCloudTransfer } from '@/services/storage/saveCrud';
+import { 剥离检查点队列任务 } from '@/services/storage/saveSummary';
 import { sanitizeSaveForExport } from '@/services/savePackage';
 import { deleteCloudBackupTransfer, getCloudBackupTransferPart } from '@/services/storage/cloudBackupTransferStore';
 import {

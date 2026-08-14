@@ -1,6 +1,6 @@
 import { 格式化开局档案上下文 } from '@/models/world';
 import type { 聊天消息, 解析后回复 } from '@/models/chat';
-import { loadActiveLeaf, loadNewestStory } from '@/services/dbService';
+import { loadActiveLeaf, loadNewestStory } from '@/services/storage/saveTree';
 import { evaluateStoryWeavingGate } from '@/services/storyWeaving';
 import { clearWorkflowRecoveryJournal, isResumableWorkspace } from '@/services/workflowRecovery';
 import { 踏入命途狭间 } from '@/services/pathService';

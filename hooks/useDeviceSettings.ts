@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { loadSetting, saveSetting } from '@/services/dbService';
+import { loadSetting, saveSetting } from '@/services/storage/settings';
 import { devLog, devLogError } from '@/utils/devLog';
 import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
 import {
@@ -20,7 +20,7 @@ import type { 世界书 } from '@/models/worldbook';
  * 设备级设置持久化用例动作（片 panel-p2，审计破口 ② 收敛）。
  *
  * B 类设置（apiSettings/gameSettings/currentTheme/worldbooks）的写入侧统一收敛到本管理器：
- * 各 Settings tab 不再直连 dbService 的 saveSetting，改经 SettingsModal/App 注入的
+ * 各 Settings tab 不再直连 storage/settings 的 saveSetting，改经 SettingsModal/App 注入的
  * 持久化动作写入。动作内部统一「归一化 → saveSetting → devLog 埋点」。
  *
  * 语义约束：写入时机与字段与收敛前完全一致；状态源仍为 useGameState（本 hook 不持有
@@ -28,7 +28,7 @@ import type { 世界书 } from '@/models/worldbook';
  * 本管理器只在其之后落盘。
  *
  * 片 panel-p9：新增三类本机设备设置的读写动作（apiProfileSlots / apiAuxProfileStates /
- * githubCloudSaveConfig），面板不再直连 dbService 的 loadSetting/saveSetting。
+ * githubCloudSaveConfig），面板不再直连 storage/settings 的 loadSetting/saveSetting。
  * 读取动作负责形状归一化（非数组→空数组、非对象→空对象、null 原样返回）；
  * GitHub 配置的字段清洗与默认值合并保留在面板，本管理器只负责持久化。
  */

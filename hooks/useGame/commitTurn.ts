@@ -1,7 +1,8 @@
 // 先建叶后封版，保证封版与建叶之间崩溃时仍存在携带 queueTasks 的可写叶子。
 import type { 存档数据 } from '@/models/settings';
 import type { UseGameStateReturn } from '@/hooks/useGameState';
-import { loadSave, loadSaveIdByNodeId, saveGame, saveNewestStory, createLeafNode, sealLeafRow } from '@/services/dbService';
+import { loadSave, loadSaveIdByNodeId, saveGame } from '@/services/storage/saveCrud';
+import { createLeafNode, saveNewestStory, sealLeafRow } from '@/services/storage/saveTree';
 import { 创建空NewestStory记录, 指向NewestStory记录, type NewestStory记录, type 工作区字段集 } from '@/models/newestStory';
 import { commitActiveSaveTreeMeta, ensureHeadLeafWritable, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta } from '@/utils/saveTree';

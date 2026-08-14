@@ -1,5 +1,5 @@
 import { type 工作区字段集, type NewestStory记录 } from '@/models/newestStory';
-import { writeLeafNode } from '@/services/dbService';
+import { writeLeafNode } from '@/services/storage/saveTree';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { stage6_memory } from './stage6_memory';
 import { stage7_worldTraveler } from './stage7_worldTraveler';

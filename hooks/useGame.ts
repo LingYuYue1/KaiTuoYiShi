@@ -16,27 +16,13 @@ import type { 队列任务记录 } from '@/models/queueTask';
 import type { 开局整理档案 } from '@/models/world';
 import { 提取NPC同行记忆文本列表, type NPC同行记忆条目, type NPC角色锚点档案 } from '@/models/npc';
 import type { STRegexScript } from '@/models/stTypes';
-import {
-  剥离检查点队列任务,
-  deleteLegacyBackupSaves,
-  deleteSaveTree,
-  exportSavePackage,
-  exportSaveTreePackage,
-  forkSaveTreeLeaf,
-  getSaveCatalogSnapshot,
-  importSaveFileAsMany,
-  loadActiveLeaf,
-  loadSave,
-  loadSaveForCloudTransfer,
-  loadSaveIdByNodeId,
-  loadSaveTree,
-  loadSetting,
-  repairSaveDatabase,
-  saveGame,
-  saveSetting,
-  startSaveCatalogRepair,
-  subscribeSaveCatalogRepair,
-} from '@/services/dbService';
+import { deleteLegacyBackupSaves, deleteSaveTree, forkSaveTreeLeaf, loadActiveLeaf, loadSaveTree } from '@/services/storage/saveTree';
+import { getSaveCatalogSnapshot, loadSave, loadSaveForCloudTransfer, loadSaveIdByNodeId, saveGame } from '@/services/storage/saveCrud';
+import { exportSavePackage, exportSaveTreePackage, importSaveFileAsMany } from '@/services/storage/importExport';
+import { repairSaveDatabase, startSaveCatalogRepair } from '@/services/storage/catalogMaintenance';
+import { loadSetting, saveSetting } from '@/services/storage/settings';
+import { 剥离检查点队列任务 } from '@/services/storage/saveSummary';
+import { subscribeSaveCatalogRepair } from '@/services/storage/saveCatalogRepair';
 import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 import type { CloudTransferSaveBundle } from '@/contracts/cloudSave';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
@@ -95,7 +81,7 @@ export interface UseGameReturn {
     handleDeleteSaveTree: (rootId: string) => Promise<void>;
     handleClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
     // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7：SaveLoadModal 与 StorageManager 共用）──
-    // 存档目录快照：两处面板刷新列表的统一入口，不再直连 dbService。
+    // 存档目录快照：两处面板刷新列表的统一入口，不再直连 storage 层。
     handleGetSaveCatalogSnapshot: () => Promise<SaveCatalogSnapshot>;
     // 目录后台修复（missing-only / 未来全量）：启动后经订阅回调进度。
     handleStartSaveCatalogRepair: (scope?: SaveCatalogRepairScope) => Promise<SaveCatalogRepairResult>;
@@ -132,14 +118,14 @@ export interface UseGameReturn {
     // 新局组装：draft → traveler/worldState/NPC 组装 + 状态初始化 + checkpoint（原 App.handleStartGame + 向导 handleStart）。
     // 返回 false 表示 API 预检失败，未做任何初始化，调用方不应切换视图。
     handlePrepareNewGame: (draft: OpeningPresetDraft) => Promise<boolean>;
-    // ── 零散面板 AI + dbService 直连收口（片 panel-p6）──
+    // ── 零散面板 AI + storage 直连收口（片 panel-p6）──
     // 剧情编织持久化：PlotPanel 的 saveSetting('storyWeavingSystem', ...) 直连收敛到门面。
     handleSaveStoryWeaving: (system: 剧情编织系统) => Promise<void>;
     // 战技 AI 草稿：SkillPanel 的 generateSkillDraft 直连收敛到门面，失败时 devLogError 并向上抛出（面板保留错误提示文案）。
     handleGenerateSkillDraft: (apiConfig: API配置项, context: 战技生成上下文) => Promise<战技生成草稿>;
     // 行动选项解析：InputArea 的 parseActionOptionsBlock 直连收敛到门面（纯函数，无异步）。
     handleParseActionOptionsBlock: (text: string) => string[];
-    // ── 智库面板用例动作（片 panel-p8：ZhikuPanel dbService 直连收口）──
+    // ── 智库面板用例动作（片 panel-p8：ZhikuPanel storage 直连收口）──
     // 智库保存：归一化 + buildPersistedZhikuSystem + saveSetting('zhikuSystem')，失败时 devLogError 并向上抛出（面板保留保存反馈 UI）。
     // 不负责 React setter，状态投影仍由面板通过 onZhikuSystemChange 完成。
     handleSaveZhikuSystem: (system: 智库系统) => Promise<void>;
@@ -634,7 +620,7 @@ export function useGame(): UseGameReturn {
     return true;
   }, []);
 
-  // 存档整树删除：dbService 树删除 + 活动树元信息清理，两端组件共用。
+  // 存档整树删除：storage 树删除 + 活动树元信息清理，两端组件共用。
   const handleDeleteSaveTree = useCallback(async (rootId: string): Promise<void> => {
     await deleteSaveTree(rootId);
     clearActiveSaveTreeMetaIfMatches({ rootId }, stateRef.current);
@@ -647,7 +633,7 @@ export function useGame(): UseGameReturn {
   }, []);
 
   // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7）──────────────────────────
-  // 存档目录快照：SaveLoadModal 与 StorageManager 刷新列表的统一入口，不再直连 dbService。
+  // 存档目录快照：SaveLoadModal 与 StorageManager 刷新列表的统一入口，不再直连 storage 层。
   const handleGetSaveCatalogSnapshot = useCallback(async (): Promise<SaveCatalogSnapshot> => {
     return getSaveCatalogSnapshot();
   }, []);
@@ -689,12 +675,12 @@ export function useGame(): UseGameReturn {
   }, []);
 
   // 导入存档落库：只负责 saveGame，id:0/type:'imported'/timestamp 批次字段由面板补齐。
-  // 落库前按节点类型剥离 queueTasks（导入恢复点不得携带，与 dbService 导入解析同一 helper）。
+  // 落库前按节点类型剥离 queueTasks（导入恢复点不得携带，与 storage 导入解析同一 helper）。
   const handlePersistImportedSave = useCallback(async (data: 存档数据): Promise<number> => {
     return saveGame(剥离检查点队列任务(data));
   }, []);
 
-  // 导出单节点存档包：数据库读取 + 文件下载全部收敛到门面，面板不再直连 dbService。
+  // 导出单节点存档包：数据库读取 + 文件下载全部收敛到门面，面板不再直连 storage 层。
   const handleExportSavePackage = useCallback(async (id: number): Promise<void> => {
     const save = await handleGetSaveForExport(id);
     if (save) await exportSavePackage(save);
@@ -829,7 +815,7 @@ export function useGame(): UseGameReturn {
     return true;
   }, []);
 
-  // ── 零散面板 AI + dbService 直连收口（片 panel-p6）──────────────────────────
+  // ── 零散面板 AI + storage 直连收口（片 panel-p6）──────────────────────────
   // 剧情编织持久化：PlotPanel 的 saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem()) 收敛到门面。
   // 归一化由面板负责，这里只做持久化接线与日志。
   const handleSaveStoryWeaving = useCallback(async (system: 剧情编织系统): Promise<void> => {
@@ -837,7 +823,7 @@ export function useGame(): UseGameReturn {
     devLog('save', 'story-weaving-saved', { seriesCount: system.系列列表.length });
   }, []);
 
-  // ── 智库面板用例动作（片 panel-p8：ZhikuPanel dbService 直连收口）──────────────────────────
+  // ── 智库面板用例动作（片 panel-p8：ZhikuPanel storage 直连收口）──────────────────────────
   // 智库保存：ZhikuPanel 的 saveSetting('zhikuSystem', buildPersistedZhikuSystem()) 收敛到门面。
   // 归一化在门面内完成（避免面板保存未归一化数据），不负责 React setter，状态投影仍由面板回调驱动。
   const handleSaveZhikuSystem = useCallback(async (system: 智库系统): Promise<void> => {
