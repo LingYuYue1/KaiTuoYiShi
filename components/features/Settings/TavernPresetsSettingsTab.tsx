@@ -1,4 +1,4 @@
-import { PromptModulesTab } from './PromptModulesTab';
+import { TavernPresetsTab } from './TavernPresetsTab';
 import type { 游戏设置 } from '@/models/settings';
 import type { 世界书 } from '@/models/worldbook';
 import type { STRegexScript } from '@/models/stTypes';
@@ -16,5 +16,5 @@ interface TavernPresetsSettingsTabProps {
 }
 
 export function TavernPresetsSettingsTab(props: TavernPresetsSettingsTabProps) {
-  return <PromptModulesTab {...props} mode="tavern" />;
+  return <TavernPresetsTab {...props} />;
 }

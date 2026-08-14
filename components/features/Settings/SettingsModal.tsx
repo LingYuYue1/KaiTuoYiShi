@@ -256,11 +256,6 @@ export function SettingsModal({
           <PromptModulesTab
             settings={gameSettings}
             onChange={persistGameSettingsChange}
-            worldbooks={worldbooks}
-            onWorldbooksChange={onWorldbooksChange}
-            onExtractTavernRegexScripts={onExtractTavernRegexScripts}
-            onAnalyzeTavernRegexScript={onAnalyzeTavernRegexScript}
-            onDryRunTavernRegexScript={onDryRunTavernRegexScript}
           />
         );
       case 'tavernPresets':

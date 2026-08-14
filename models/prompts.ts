@@ -46,6 +46,8 @@ export interface 提示词模块 {
   source?: 'builtin' | 'user';
   /** 替代行为：builtin=不可替换 / builtin_toggleable=可关不可删 / replaceable=可被ST导入替换 / extensible=可叠加。 */
   replaceable?: 'builtin' | 'builtin_toggleable' | 'replaceable' | 'extensible';
+  /** 创建时的替换行为：replace=删除本模块时恢复被关闭的同系统同类目内置模块 / coexist=叠加。 */
+  replaceMode?: 'replace' | 'coexist';
   createdAt: number;
   updatedAt: number;
 }
@@ -93,6 +95,17 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_emotion_protocol',
   'builtin_cognitive_isolation',
 ] as const;
+
+/** 独立系统 builtin 模块 id 前缀。UI 分组（CALIBRATION_SYSTEM_GROUPS）与服务层注入（TARGET_ID_MATCHERS）共用，避免双轨硬编码。 */
+export const CALIBRATION_BUILTIN_PREFIXES = {
+  news: 'builtin_news_',
+  phone: 'builtin_phone_',
+  zhiku: 'builtin_zhiku_',
+  yiting: 'builtin_yiting_',
+  variable: 'builtin_variable_',
+  companionArchive: 'builtin_companion_archive_',
+  storyWeaving: 'builtin_story_weaving_',
+} as const;
 
 export type 内置提示词模块ID = (typeof BUILTIN_PROMPT_MODULE_IDS)[number];
 

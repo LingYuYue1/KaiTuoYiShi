@@ -126,12 +126,21 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
   });
 
   // 旧存档的自定义模块可能缺少默认字段，用默认值兜底
-  const customsWithDefaults = customs.map((m) => ({
-    ...getDefaultModuleFields(),
-    source: 'user' as const,
-    replaceable: 'replaceable' as const,
-    ...m,
-  }));
+  const customsWithDefaults = customs.map((m) => {
+    // 归一化入口：IndexedDB 旧存档可能缺 description 或非 string，集中兜底为 string，
+    // 避免下游 replaceMode 推断裸调用 .startsWith 导致启动崩溃。
+    const rawDescription = typeof m.description === 'string' ? m.description : '';
+    const replaceMode = m.replaceMode ?? (rawDescription.startsWith('替换') ? 'replace' : 'coexist');
+    const description = rawDescription.replace(/^(替换|叠加)\s*·\s*/, '');
+    return {
+      ...getDefaultModuleFields(),
+      source: 'user' as const,
+      replaceable: 'replaceable' as const,
+      ...m,
+      description,
+      replaceMode,
+    };
+  });
 
   const hasLegacy = customsWithDefaults.some((m) => m.id === 'legacy_custom');
   const legacyCustomPrompt = (savedGame as { customPrompt?: string }).customPrompt;
@@ -141,6 +150,7 @@ export function migratePromptModules(savedGame: 游戏设置): 提示词模块[]
       ...getDefaultModuleFields(),
       source: 'user',
       replaceable: 'replaceable',
+      replaceMode: 'coexist',
       id: 'legacy_custom',
       title: '旧版自定义提示词',
       description: '自旧版「额外指示」迁移而来。可自由编辑或删除。',
