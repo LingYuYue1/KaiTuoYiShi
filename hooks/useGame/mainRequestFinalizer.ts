@@ -30,8 +30,9 @@ export function deriveMainStoryMessageMode(input: {
 export const COT_PSEUDO_USER_TRIGGER = '开始任务';
 
 export const MINIMAL_COT_PSEUDO_RESPONSE = `<thinking>
-- 系统就绪。已收到玩家输入，准备按当前生效的思维链与回复协议继续作答。
-</thinking>`;
+思考已开始，按当前生效思维链继续逐步推演。
+</thinking>
+好的，将以<正文></正文>包裹正文，<正文>前以<thinking>作为开头进行思考并以</thinking>闭合，并在正文后按协议输出<短期记忆>、<动态世界>、<变量草稿>、<剧情规划>：`;
 
 export function buildCotPseudoTaskSequence(realUserInput: string): 聊天消息[] {
   return [
