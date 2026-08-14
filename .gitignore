@@ -76,3 +76,6 @@ config.json
 events.jsonl
 labels/
 statuses/
+
+# Local agents skills workspace
+.agents/
