@@ -37,15 +37,16 @@
 | --- | --- | --- |
 | 类型安全 | 极干净：`as any` 2、`: any` 2、`@ts-ignore` 0、非空断言 0；`as unknown as` 15 处（dbService 5 处集中） | 🟢 |
 | lint | 1 error（`useGameState.ts:570`）+ 2 warning + 47 条 suppression | 🟢 |
-| 死代码（未引用导出） | **75 处**，散布 utils/models/data/services/components | 🔴 |
-| 过度防御/不可能兜底 | 16 处：4 个不可能 `default` + 12 个静默 `catch`（7 个是 chatCompletionClient 流式 `// skip`） | 🟡 |
-| 长段解释注释 | 20+ 处：stage2–12 全部 spec 复制型头注释 + commitTurn/dbService 迁移叙述注释 | 🟡 |
+| 死代码（未引用导出） | ~~75 处~~ 已清除（71 删 + 4 调试工具保留；残留见 noted_issues.md §3） | ✅ |
+| 过度防御/不可能兜底 | ~~16 处~~ 已处置（7 SSE 收窄 + 9 确认保留 + 2 归一化强化另立 #14） | ✅ |
+| 长段解释注释 | ~~20+ 处~~ 已清除（13 删 + 7 收敛 + 1 保留） | ✅ |
 | patch/workaround 标记 | 1416 命中（data/ JSON 占大头）；代码集中 newsModel 48 / ImageGenerationSettingsTab 36 / AlbumPanel 34 / useGameState 32 / PromptModulesTab 31 | 🟡 |
 | 透传层/浅模块 | 12 真透传 + 4 条多层转发链（提示词模块 ×4 最典型） | 🟡 |
-| 直连耦合 | 15 文件直连 dbService/useGame/services | 🟡 |
-| 巨型文件 | 37 文件 >800 行（28 文件 >1000 行）；dbService 2623 / chatCompletionClient 2519 / album-workspaces 2650 / PromptModulesTab 2831 | 🟡 |
+| 重复/冗余代码 | ~~6 组复制粘贴~~ 已收敛：chatCompletionClient 7 流函数抽 `readSseTextStream` 骨架、7 处 resolveXxxConfig 抽 `mergeApiOverride`、NPC 关系阈值表统一（#16 核心）；低价值 6 项另立 #19（4 分支/legacy 回退/可见性归一化/重复类型/映射块/UI 格式化） | ✅ |
+| 直连耦合 | ~~15 文件~~ type-only 直连已收口（抽出 `contracts/` 契约层 + `models/opening.ts`，`components` 下 `services/ai`、`dbService` 类型直连清零）；运行时耦合留待（PhoneModal/PromptModulesTab/GitHubCloudSaveModal 面板 props 投影） | 🟡 |
+| 巨型文件 | 37 文件 >800 行（28 文件 >1000 行）；dbService 2533 / chatCompletionClient 2300 / album-workspaces 2650 / PromptModulesTab 2831 | 🟡 |
 
-**关键结论**：类型安全与 lint 已基本达标；**死代码是最大缺口**（75 未引用导出）；巨型文件与直连耦合是结构性债务，需拆分与收口。
+**关键结论**：类型安全与 lint 已基本达标；死代码已清（阶段 1）、重复样板已收敛、直连耦合 type-only 已收口（阶段 2 落地）；剩余结构性债务是巨型文件与面板运行时耦合（阶段 3）。
 
 ---
 
@@ -61,9 +62,11 @@
 
 ### 阶段 2：耦合收窄前置（大文件拆分的安全前提）
 
-1. 15 文件直连收口：面板直连 dbService/useGame/services 的，领域逻辑下沉到 hooks/services，面板退化为 props 投影（弱化版用例化，重点是 PhoneModal、PromptModulesTab、GitHubCloudSaveModal）
-2. 剥离：导入封版路径的 queueTasks 剥离补齐
-3. 统一：三入口恢复（bootRestoreFromNewest / loadLatestSave / 中断恢复）收敛为 hydrate
+1. ✅ ~~15 文件直连收口~~ type-only 层已收口（抽出 `contracts/` 契约层 + `models/opening.ts`，components 下 services/ai、dbService 类型直连清零；#17）；**运行时层留待**（面板 props 投影，重点 PhoneModal、PromptModulesTab、GitHubCloudSaveModal）
+2. ✅ 剥离：导入封版路径的 queueTasks 剥离补齐（#18，单判据 `isUnsealedHeadSave`）
+3. ✅ 统一：三入口恢复（bootRestoreFromNewest / loadLatestSave / 中断恢复）收敛为 hydrate（#10）
+4. ✅ 重复样板收敛：chatCompletionClient 7 流函数抽 `readSseTextStream` 骨架、7 处 resolveXxxConfig 抽 `mergeApiOverride`、NPC 关系阈值表统一（#16 核心）；低价值 6 项另立 #19
+5. ✅ 新局初始化归一：`createInitialWorkspace` 统一 fresh/restart 两路径 + 补归一化缺口（#15）
 
 ### 阶段 3：大文件攻关（按模块根治，逐模块 深模块→patch→类型安全）
 
@@ -133,6 +136,7 @@
 
 ## 修订记录
 
+- **2026-08-14 阶段 2 落地**：耦合收窄前置全部落地——type-only 直连收口（`contracts/` 契约层 + `models/opening.ts`，#17）、queueTasks 剥离补齐（#18）、hydrate 收敛（#10）、重复样板收敛（#16 核心 + #19 低价值）、新局初始化归一（`createInitialWorkspace`，#15）。阶段 2 完成，进入阶段 3 大文件攻关。
 - **2026-08-12 目标转向：code quality 深度提升**：本文档整篇重写为「代码质量深度提升：现状与路线图」；架构事实彻底删除（蓝图见 kernelization.md，历史见 git）；9 维质量扫描登记现状画像，逐条发现见 noted_issues.md；确立 Q1–Q6 原则与四阶段路线图（全局死代码 → 耦合收窄 → 大文件攻关 → 收尾）。
 - **2026-08-11 路线图审计与术语清理**：审计 14 项路线图完成度；澄清「读取」（叶子水合）与「分支」（检查点分叉）两动词；「顶替」判为伪动词，全库清除。
 - **2026-08-11 reroll 可用性加固与断链修复**：canRerollWithTree 改响应式（activeTreeMeta + rerollParentStatus 主动验证）；取消自动轮转删除，新增 repairDanglingSaveTreeParents 兜底悬垂父链。
