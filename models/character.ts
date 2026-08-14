@@ -89,3 +89,33 @@ export function 确保命途列表(t: 角色数据结构, awakenedAt = ''): 角�
   }
   return { ...t, 命途列表: [] };
 }
+
+/**
+ * 旅人归一化单一来源（GitHub #15）：读档侧（saveLoadWorkflow）与新局初始化侧
+ * （newGameInitialization）共用的兜底收口，替换两侧各自的复制实现。
+ * 容忍未知/半成品数据：
+ *  - 非对象（null / 数组 / 原始值）→ 空角色兜底；
+ *  - 各字段按类型兜底，对已归一化旅人是内容守恒的收口；
+ *  - 命途列表缺失但 主命途 有值时，用 awakenedAt 补一条主命途记录（读档侧传当前日期，新局侧用默认空）。
+ */
+export function 归一化旅人(value: unknown, awakenedAt = ''): 角色数据结构 {
+  const base = 创建空角色();
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<角色数据结构>
+    : {};
+  return 确保命途列表({
+    ...base,
+    ...raw,
+    姓名: typeof raw.姓名 === 'string' ? raw.姓名 : base.姓名,
+    别名: typeof raw.别名 === 'string' ? raw.别名 : base.别名,
+    性别: typeof raw.性别 === 'string' ? raw.性别 : base.性别,
+    年龄: Number.isFinite(Number(raw.年龄)) ? Number(raw.年龄) : base.年龄,
+    专长知识: Array.isArray(raw.专长知识) ? raw.专长知识.filter((item): item is string => typeof item === 'string') : base.专长知识,
+    图像档案: raw.图像档案 && typeof raw.图像档案 === 'object' ? raw.图像档案 : base.图像档案,
+    属性: raw.属性 ?? base.属性,
+    命途列表: Array.isArray(raw.命途列表) ? raw.命途列表 : base.命途列表,
+    能力: Array.isArray(raw.能力) ? raw.能力.filter((item): item is string => typeof item === 'string') : base.能力,
+    背包: Array.isArray(raw.背包) ? raw.背包 : base.背包,
+    战技列表: Array.isArray(raw.战技列表) ? raw.战技列表 : base.战技列表,
+  }, awakenedAt);
+}

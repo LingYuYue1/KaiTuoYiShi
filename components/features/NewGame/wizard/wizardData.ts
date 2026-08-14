@@ -1,9 +1,26 @@
 import { PATH_STAGE_DEFS, type 命途阶段 } from '@/models/path';
-import type { 世界状态 } from '@/models/world';
-import type { 命途ID, 剧情模式, 阵营ID, 官方开局预设 } from '@/models/journey';
+import type { 命途ID, 剧情模式, 阵营ID } from '@/models/journey';
 import type { CanonicalTrailblazer, FreeOpeningCustomNpc, FreeOpeningPlanetSource, FreeOpeningWorkshopDraft, OpeningPlayerPreset, OpeningPresetDraft, OpeningSource } from '@/models/opening';
-import { abilityPresets, getOfficialOpeningPreset, getOfficialOpeningPresetByChapterId, openingChapterAnchors, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, paths, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
+import { abilityPresets, openingChapterAnchors, getWorkshopOpeningTemplatesByRegion, factions, getPath, paths, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
 import { 归一化战技记录, type 战技记录, type 战技槽位摘要 } from '@/models/skill';
+// 开局纯数据/纯函数统一聚合在 models/opening（GitHub #15 迁出反向依赖），
+// 这里 import + re-export 保持同层组件（NewGameWizard / steps.tsx）的引用不变。
+import {
+  CANONICAL_TRAILBLAZERS,
+  buildOpeningSummary,
+  formatFreeOpeningWorkshopDraft,
+  getCanonicalTrailblazer,
+  mergeFreeOpeningPrompt,
+  resolveSelectedScenarioPreset,
+} from '@/models/opening';
+export {
+  CANONICAL_TRAILBLAZERS,
+  buildOpeningSummary,
+  formatFreeOpeningWorkshopDraft,
+  getCanonicalTrailblazer,
+  mergeFreeOpeningPrompt,
+  resolveSelectedScenarioPreset,
+};
 
 export type Step = 'character' | 'path' | 'skill' | 'world' | 'historian' | 'overview';
 
@@ -37,17 +54,6 @@ export const STEP_RAIL_ITEMS: { key: Step; title: string; subtitle: string }[] =
   { key: 'historian', title: '其他选项', subtitle: '原著主角、组织背景、模式预留' },
   { key: 'world', title: '开局锚点', subtitle: '来源、地区、章节与切入' },
   { key: 'overview', title: '整理确认', subtitle: 'AI/本地结构化开局档案' },
-];
-
-export const CANONICAL_TRAILBLAZERS: {
-  id: CanonicalTrailblazer;
-  title: string;
-  subtitle: string;
-  worldValue: 世界状态['原著主角'];
-}[] = [
-  { id: 'stelle', title: '星', subtitle: '女主角', worldValue: '星' },
-  { id: 'caelus', title: '穹', subtitle: '男主角', worldValue: '穹' },
-  { id: 'both', title: '小孩子才做选择', subtitle: '星与穹都存在', worldValue: '星穹双主角' },
 ];
 
 export const FREE_OPENING_PLANET_SOURCE_OPTIONS: Array<{
@@ -173,47 +179,6 @@ export function selectOpeningScenario(
   }
 }
 
-export function formatFreeOpeningWorkshopDraft(draft: FreeOpeningWorkshopDraft, source: FreeOpeningPlanetSource): string {
-  const npcRows = draft.customNpcs
-    .map((npc, index) => {
-      const lines = [
-        npc.name.trim() ? `名字：${npc.name.trim()}` : `未命名 NPC ${index + 1}`,
-        npc.background.trim() ? `背景：${npc.background.trim()}` : '',
-        npc.pathstrider.trim() ? `是否为命途行者：${npc.pathstrider.trim()}` : '',
-        npc.ability.trim() ? `能力：${npc.ability.trim()}` : '',
-      ].filter(Boolean);
-      return lines.length ? `${index + 1}. ${lines.join('；')}` : '';
-    })
-    .filter(Boolean);
-  const rows: Array<[string, string]> = source === 'custom' ? [
-    ['自创地点/星球', draft.planet],
-    ['起始地点', draft.location],
-    ['地点简介', draft.planetIntro],
-    ['补充自制NPC', npcRows.join('；')],
-    ['当前目标', draft.currentGoal],
-    ['局部冲突', draft.localConflict],
-    ['组织势力', draft.factions],
-    ['世界规则', draft.worldRules],
-    ['氛围语气', draft.tone],
-  ] : [
-    ['起始地点', draft.location],
-    ['补充自制NPC', npcRows.join('；')],
-  ];
-  const content = rows
-    .map(([label, value]) => {
-      const text = value.trim();
-      return text ? `${label}：${text}` : '';
-    })
-    .filter(Boolean)
-    .join('\n');
-  return content ? `【开局工作台】\n${content}` : '';
-}
-
-export function mergeFreeOpeningPrompt(baseText: string, workshopText: string): string {
-  const parts = [baseText.trim(), workshopText.trim()].filter(Boolean);
-  return parts.join('\n\n');
-}
-
 export function toOpeningSkillSlotKey(slot: 战技槽位摘要): OpeningSkillSlotKey {
   return slot.kind === 'normal'
     ? `normal:${slot.slotIndex}`
@@ -246,75 +211,6 @@ export function sameOpeningSkillSlot(a: 战技记录, b: 战技记录): boolean 
   if (a.槽位序号 !== b.槽位序号) return false;
   if (a.槽位类型 === 'normal') return true;
   return a.关联命途 === b.关联命途;
-}
-
-export function buildOpeningSummary({
-  scenario,
-  location,
-  currentDate,
-  currentTime,
-  storyMode,
-  path,
-  pathStage,
-  faction,
-  customIdentity,
-  canonicalTrailblazer,
-  customStartPrompt,
-  abilities,
-  skills,
-}: {
-  scenario?: OpeningScenario;
-  location?: string;
-  currentDate: string;
-  currentTime: string;
-  storyMode: string;
-  path?: ReturnType<typeof getPath>;
-  pathStage?: (typeof PATH_STAGE_DEFS)[number];
-  faction?: ReturnType<typeof getFaction>;
-  customIdentity?: string;
-  canonicalTrailblazer?: 世界状态['原著主角'];
-  customStartPrompt?: string;
-  abilities: string[];
-  skills?: 战技记录[];
-}): string[] {
-  const lines: string[] = [];
-  lines.push(`起点：${scenario?.name ?? '未选择'}`);
-  if (scenario?.description) lines.push(`场景：${scenario.description}`);
-  lines.push(`底色：${storyMode}`);
-  lines.push(`日期：${currentDate}`);
-  lines.push(`时间：${currentTime}`);
-  lines.push(`地点：${location ?? scenario?.name ?? '未选择'}`);
-  lines.push(`原著主角：${canonicalTrailblazer ?? '未指定'}`);
-  if (path) {
-    lines.push(`命途：${path.name} · ${path.aeon}`);
-    if (pathStage) lines.push(`命途阶段：${pathStage.name} · ${pathStage.title}`);
-  } else {
-    lines.push('命途：无命途');
-  }
-  if (faction) {
-    lines.push(`组织背景：${faction.name}`);
-    if (faction.openingHint) lines.push(`组织提示：${faction.openingHint}`);
-  }
-  if (customIdentity?.trim()) lines.push(`身份：${customIdentity.trim()}`);
-  if (customStartPrompt?.trim()) lines.push(`切入说明：${customStartPrompt.trim()}`);
-  lines.push(`能力：${abilities.length ? abilities.join('、') : '暂未选择'}`);
-  lines.push(`开局战技：${skills?.length ? skills.map((skill) => skill.名称).join('、') : '暂未登记'}`);
-  if (scenario?.openingHighlights?.length) {
-    for (const item of scenario.openingHighlights) {
-      lines.push(`场景要点：${item}`);
-    }
-  }
-  return lines;
-}
-
-export function getCanonicalTrailblazer(id: CanonicalTrailblazer) {
-  return CANONICAL_TRAILBLAZERS.find((item) => item.id === id) ?? CANONICAL_TRAILBLAZERS[0];
-}
-
-export function resolveSelectedScenarioPreset(startingScenarioId: string, selectedScenario?: OpeningScenario): 官方开局预设 | undefined {
-  return getOfficialOpeningPresetByChapterId(startingScenarioId)
-    ?? (selectedScenario?.officialPresetId ? getOfficialOpeningPreset(selectedScenario.officialPresetId) : undefined)
-    ?? getOfficialOpeningPresetByChapterId(selectedScenario?.id ?? '');
 }
 
 export function formatCustomAbilityEntry(name: string, effect: string): string {

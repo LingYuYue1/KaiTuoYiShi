@@ -1,8 +1,7 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { 存档数据, 存档类型 } from '@/models/settings';
 import type { 聊天消息 } from '@/models/chat';
-import { 创建空角色, 确保命途列表 } from '@/models/character';
-import type { 角色数据结构 } from '@/models/character';
+import { 归一化旅人 } from '@/models/character';
 import {
   迁移存档运行态键,
 } from '@/models/settings';
@@ -455,7 +454,7 @@ export function hydrate(
   // useGameState.activeTreeMeta，canRerollWithTree 依赖它而非模块级缓存。
   activeSaveTreeMeta = getSaveTreeMeta(迁移后存档);
   state.setActiveTreeMeta(activeSaveTreeMeta);
-  const safeTraveler = normalizeSavedTraveler(迁移后存档.旅人, safeWorld.当前日期);
+  const safeTraveler = 归一化旅人(迁移后存档.旅人, safeWorld.当前日期);
 
   state.set旅人(safeTraveler);
   state.set世界(safeWorld);
@@ -493,26 +492,4 @@ export function hydrate(
 
 function normalizeSaveChatHistory(value: unknown): 聊天消息[] {
   return Array.isArray(value) ? (value as 聊天消息[]) : [];
-}
-
-function normalizeSavedTraveler(value: unknown, awakenedAt = ''): 角色数据结构 {
-  const base = 创建空角色();
-  const raw = value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Partial<角色数据结构>
-    : {};
-  return 确保命途列表({
-    ...base,
-    ...raw,
-    姓名: typeof raw.姓名 === 'string' ? raw.姓名 : base.姓名,
-    别名: typeof raw.别名 === 'string' ? raw.别名 : base.别名,
-    性别: typeof raw.性别 === 'string' ? raw.性别 : base.性别,
-    年龄: Number.isFinite(Number(raw.年龄)) ? Number(raw.年龄) : base.年龄,
-    专长知识: Array.isArray(raw.专长知识) ? raw.专长知识.filter((item): item is string => typeof item === 'string') : base.专长知识,
-    图像档案: raw.图像档案 && typeof raw.图像档案 === 'object' ? raw.图像档案 : base.图像档案,
-    属性: raw.属性 ?? base.属性,
-    命途列表: Array.isArray(raw.命途列表) ? raw.命途列表 : base.命途列表,
-    能力: Array.isArray(raw.能力) ? raw.能力.filter((item): item is string => typeof item === 'string') : base.能力,
-    背包: Array.isArray(raw.背包) ? raw.背包 : base.背包,
-    战技列表: Array.isArray(raw.战技列表) ? raw.战技列表 : base.战技列表,
-  }, awakenedAt);
 }
