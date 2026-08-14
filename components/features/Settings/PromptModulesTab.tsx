@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块类目, 提示词模块作用域 } from '@/models/prompts';
 import {
@@ -8,11 +8,8 @@ import {
   getDefaultModuleFields,
 } from '@/models/prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
-import {
-  parseSTPresetV2,
-  isSTImportedModule,
-} from '@/utils/stPresetParser';
-import type { STPresetEntryV1, STPresetEntryV2, STRegexScript, STWorldInfoEntry } from '@/models/stTypes';
+import { parseSTPresetV2 } from '@/utils/stPresetParser';
+import type { STPresetEntryV2, STRegexScript, STWorldInfoEntry } from '@/models/stTypes';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import type { 世界书 } from '@/models/worldbook';
 import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
@@ -22,18 +19,16 @@ import { CSS } from '@dnd-kit/utilities';
 
 const isMainPlotModule = (m: 提示词模块) => !m.scope.includes('calibration');
 const isOtherSystemModule = (m: 提示词模块) => m.scope.includes('calibration');
-const isNativePromptModule = (m: 提示词模块) =>
-  !isSTImportedModule(m) && !m.id.startsWith('adapted_');
 
 /** 独立系统分组映射：calibration 模块按子系统归类 */
 const CALIBRATION_SYSTEM_GROUPS: Record<string, { label: string; icon: string; emoji: string; match: (id: string) => boolean }> = {
-  news: { label: '新闻系统', icon: '◈', emoji: '🗞️', match: (id) => id === 'builtin_news_cot' || id === 'builtin_news_worldbook' || id === 'builtin_news_output_format' || id.startsWith('st_import_news_') || id.startsWith('custom_news_') },
-  phone: { label: '手机系统', icon: '◈', emoji: '📱', match: (id) => id === 'builtin_phone_cot' || id === 'builtin_phone_worldbook' || id === 'builtin_phone_output_format' || id.startsWith('st_import_phone_') || id.startsWith('custom_phone_') },
-  zhiku: { label: '智库系统', icon: '◈', emoji: '📚', match: (id) => id === 'builtin_zhiku_cot' || id === 'builtin_zhiku_output_format' || id.startsWith('st_import_zhiku_') || id.startsWith('custom_zhiku_') },
-  yiting: { label: '忆庭系统', icon: '◈', emoji: '🧠', match: (id) => id === 'builtin_yiting_recall' || id === 'builtin_yiting_archive_format' || id.startsWith('st_import_yiting_') || id.startsWith('custom_yiting_') },
-  variable: { label: '变量系统', icon: '◈', emoji: '⚙️', match: (id) => id === 'builtin_variable_cot' || id === 'builtin_variable_worldbook' || id === 'builtin_variable_output_format' || id.startsWith('st_import_variable_') || id.startsWith('custom_variable_') },
-  companionArchive: { label: '伙伴档案', icon: '◈', emoji: '👥', match: (id) => id === 'builtin_companion_archive_worldbook' || id.startsWith('st_import_companion_archive_') || id.startsWith('custom_companionArchive_') },
-  storyWeaving: { label: '剧情编织系统', icon: '◈', emoji: '📖', match: (id) => id === 'builtin_story_weaving_cot' || id === 'builtin_story_weaving_worldbook' || id === 'builtin_story_weaving_output_format' || id.startsWith('st_import_story_weaving_') || id.startsWith('custom_storyWeaving_') },
+  news: { label: '新闻系统', icon: '◈', emoji: '🗞️', match: (id) => id === 'builtin_news_cot' || id === 'builtin_news_worldbook' || id === 'builtin_news_output_format' || id.startsWith('custom_news_') },
+  phone: { label: '手机系统', icon: '◈', emoji: '📱', match: (id) => id === 'builtin_phone_cot' || id === 'builtin_phone_worldbook' || id === 'builtin_phone_output_format' || id.startsWith('custom_phone_') },
+  zhiku: { label: '智库系统', icon: '◈', emoji: '📚', match: (id) => id === 'builtin_zhiku_cot' || id === 'builtin_zhiku_output_format' || id.startsWith('custom_zhiku_') },
+  yiting: { label: '忆庭系统', icon: '◈', emoji: '🧠', match: (id) => id === 'builtin_yiting_recall' || id === 'builtin_yiting_archive_format' || id.startsWith('custom_yiting_') },
+  variable: { label: '变量系统', icon: '◈', emoji: '⚙️', match: (id) => id === 'builtin_variable_cot' || id === 'builtin_variable_worldbook' || id === 'builtin_variable_output_format' || id.startsWith('custom_variable_') },
+  companionArchive: { label: '伙伴档案', icon: '◈', emoji: '👥', match: (id) => id === 'builtin_companion_archive_worldbook' || id.startsWith('custom_companionArchive_') },
+  storyWeaving: { label: '剧情编织系统', icon: '◈', emoji: '📖', match: (id) => id === 'builtin_story_weaving_cot' || id === 'builtin_story_weaving_worldbook' || id === 'builtin_story_weaving_output_format' || id.startsWith('custom_storyWeaving_') },
 };
 const CALIBRATION_GROUP_ORDER = ['news', 'phone', 'zhiku', 'yiting', 'variable', 'companionArchive', 'storyWeaving'] as const;
 
@@ -45,7 +40,7 @@ const getCalibrationGroupKey = (m: 提示词模块): string => {
   return 'other';
 };
 
-/** 文风模块互斥组：同一时间只能启用一个。ST 预设导入的文风（id 含 'st_import_' 前缀）也加入此组。 */
+/** 文风模块互斥组：同一时间只能启用一个。 */
 const WRITING_STYLE_MODULE_IDS = new Set([
   'builtin_writing_style',
   'builtin_writing_style_hsr',
@@ -53,37 +48,11 @@ const WRITING_STYLE_MODULE_IDS = new Set([
   'builtin_writing_style_custom',
 ]);
 const isWritingStyleModule = (m: 提示词模块) =>
-  WRITING_STYLE_MODULE_IDS.has(m.id) || m.id.startsWith('st_import_writing_style_');
+  WRITING_STYLE_MODULE_IDS.has(m.id);
 
-/** 判断模块是否为"原生预设提示词"(关闭时需弹窗确认)。
- *  - source='builtin'：原生内置模块
- *  - id 以 adapted_ 开头：二创成品融合模块
- *  - 排除 adapted_placeholder_*：占位说明模块，无需弹窗
- *  这两类模块若被关闭可能影响游戏体验，故关闭前给玩家一次确认机会。 */
-const isBuiltinPresetModule = (m: 提示词模块) => {
-  if (m.id.startsWith('adapted_placeholder_')) return false;
-  return m.source === 'builtin' || m.id.startsWith('adapted_');
-};
+/** 判断模块是否为内置预设提示词(关闭时需弹窗确认)。 */
+const isBuiltinPresetModule = (m: 提示词模块) => m.source === 'builtin';
 
-// isSTImportedModule 从 stPresetParser 复用（systemPromptBuilder 也用同一份判断）
-
-
-/** 从 ST 导入模块的 id 解析它替换的内置模块类别（用于显示替换关系提示）。
- *  命名约定：st_import_<category>_<timestamp>，例如 st_import_writing_style_1719400000000。 */
-const ST_IMPORT_CATEGORY_PREFIX = 'st_import_';
-const getSTImportTargetCategory = (m: 提示词模块): 提示词模块类目 | null => {
-  if (!isSTImportedModule(m)) return null;
-  // st_import_writing_style_xxx → style
-  // st_import_persona_xxx → persona
-  const rest = m.id.slice(ST_IMPORT_CATEGORY_PREFIX.length);
-  if (rest.startsWith('writing_style')) return 'style';
-  if (rest.startsWith('persona')) return 'persona';
-  if (rest.startsWith('cot')) return 'cot';
-  if (rest.startsWith('format')) return 'format';
-  if (rest.startsWith('devmode')) return 'devmode';
-  if (rest.startsWith('jailbreak')) return 'jailbreak';
-  return m.category;
-};
 
 /** 分类语义色：每个类目对应一个 CSS 变量（RGB 三元组），用于分组图标与类目标签着色。
  *  - cot 思维链 → sage-soft 绿（思考/推理）
@@ -300,71 +269,16 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
     [modules],
   );
   const [selectedId, setSelectedId] = useState<string | null>(sorted[0]?.id ?? null);
-  const nativeSorted = useMemo(
-    () => sorted.filter(isNativePromptModule),
-    [sorted],
-  );
-  const selectedPool = isTavernMode ? sorted : nativeSorted;
-  const selected = selectedPool.find((m) => m.id === selectedId) ?? selectedPool.at(0);
+  const selected = sorted.find((m) => m.id === selectedId) ?? sorted.at(0);
   // 系统切换：主剧情 / 独立模型
   const [activeSystem, setActiveSystem] = useState<'main' | 'calibration'>('main');
   const [showAddModal, setShowAddModal] = useState(false);
   const visibleModules = useMemo(
-    () => nativeSorted.filter(activeSystem === 'main' ? isMainPlotModule : isOtherSystemModule),
-    [nativeSorted, activeSystem],
+    () => sorted.filter(activeSystem === 'main' ? isMainPlotModule : isOtherSystemModule),
+    [sorted, activeSystem],
   );
 
-  // ── 旧 V1 导入清理 ──────────────────────────────────────────────────
-  // V1 路线已废弃：不再把 st_import_* 归档成预设，也不再保留 adapted_* 二创残留。
-  // 酒馆预设只走 Tavern 原结构（stPresetsV2 / prompt_order）。
-  useEffect(() => {
-    const hasLegacyModules = modules.some((m) => isSTImportedModule(m) || m.id.startsWith('adapted_'));
-    const hasLegacyPresetState = Boolean(settings.currentStPresetId) || (settings.stPresets?.length ?? 0) > 0;
-    if (hasLegacyModules || hasLegacyPresetState) {
-      const cleanedModules = modules.filter((m) => !isSTImportedModule(m) && !m.id.startsWith('adapted_'));
-      onChange({
-        ...settings,
-        promptModules: cleanedModules,
-        stPresets: [],
-        currentStPresetId: null,
-      });
-      console.info('[酒馆预设] 已清理旧 V1 / 二创提示词模块残留', {
-        removedModules: modules.length - cleanedModules.length,
-      });
-    }
-    // 仅挂载时执行一次
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const update = (next: 提示词模块[]) => {
-    // ST 预设兼容：如果当前激活了预设，编辑 st_import_* 模块时自动写回所属预设。
-    // 防止玩家切换预设后修改丢失。
-    const currentPresetId = settings.currentStPresetId;
-    if (currentPresetId && settings.stPresets) {
-      const preset = settings.stPresets.find((p) => p.id === currentPresetId);
-      if (preset) {
-        // 用 next 中所有 st_import_* 模块覆盖该预设的 modules
-        const stModulesInNext = next.filter(isSTImportedModule);
-        // 只在 ST 模块数量或内容变化时写回，避免无谓 setState
-        const oldIds = preset.modules.map((m) => `${m.id}:${m.updatedAt}`).join('|');
-        const newIds = stModulesInNext.map((m) => `${m.id}:${m.updatedAt}`).join('|');
-        if (oldIds !== newIds) {
-          const updatedPreset: STPresetEntryV1 = {
-            ...preset,
-            modules: stModulesInNext,
-            updatedAt: Date.now(),
-          };
-          onChange({
-            ...settings,
-            promptModules: next,
-            stPresets: settings.stPresets.map((p) =>
-              p.id === currentPresetId ? updatedPreset : p,
-            ),
-          });
-          return;
-        }
-      }
-    }
     onChange({ ...settings, promptModules: next });
   };
 
@@ -535,18 +449,15 @@ export function PromptModulesTab({ settings, onChange, mode = 'modules', worldbo
         };
         const importedWorldInfoCount = getPresetWorldInfoEntries(parsedV2.preset.world_info).length;
         const importedRegexCount = onExtractTavernRegexScripts(parsedV2.preset).length;
-        const cleanedModules = modules.filter((m) => !isSTImportedModule(m) && !m.id.startsWith('adapted_'));
         onWorldbooksChange(worldbooks.filter((w) => !w.id.startsWith('stwb_')));
         onChange({
           ...settings,
           enableStPreset: true,
-          promptModules: cleanedModules,
           stPresetsV2: [...(settings.stPresetsV2 ?? []), newPresetV2],
-          currentStPresetId: null,
           currentStPresetIdV2: presetId,
           currentStCharacterId: newPresetV2.characterId ?? null,
         });
-        setSelectedId(cleanedModules[0]?.id ?? null);
+        setSelectedId(modules[0]?.id ?? null);
         console.info('[酒馆预设导入] 已按 Tavern 原结构存入预设库', {
           presetId,
           name: presetName,
@@ -1369,9 +1280,9 @@ function V2PresetSwitcher({
               <div style={{ color: advancedMacroSlotCount > 0 ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-text-secondary), 0.58)' }}>高级 {advancedMacroSlotCount}</div>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
-              {shownOrderSlots.map(({ slot, index, prompt, macro, isRuntime, isMissing }) => {
+              {shownOrderSlots.map(({ slot, index, prompt, content, macro, isRuntime, isMissing }) => {
                 const active = selectedSlot?.identifier === slot.identifier;
-                const contentPreview = prompt?.content.replace(/\s+/g, ' ').trim().slice(0, 80);
+                const contentPreview = content.replace(/\s+/g, ' ').trim().slice(0, 80);
                 return (
                   <div
                     key={`${slot.identifier}_${index}`}
@@ -1906,10 +1817,10 @@ function MacroInspector({ content }: { content: string }) {
   );
 }
 
-/** 判断模块是否可修改：非内置 / 自定义文风槽 / ST导入 都可修改。
+/** 判断模块是否可修改：非内置 / 自定义文风槽 都可修改。
  *  用于 ModuleItem 显示 ✓ 可修改 / 🔒 不可修改 标识。 */
 const isModifiableModule = (m: 提示词模块) =>
-  !isBuiltinPromptModule(m.id) || m.id === 'builtin_writing_style_custom' || isSTImportedModule(m);
+  !isBuiltinPromptModule(m.id) || m.id === 'builtin_writing_style_custom';
 
 function ModuleList({
   modules,
@@ -2183,26 +2094,20 @@ function ModuleItem({
   onToggle: (id: string) => void;
 }) {
   const isCal = m.scope.includes('calibration');
-  const isSTImport = isSTImportedModule(m);
   const isStyle = isWritingStyleModule(m);
   // 开关禁用：独立模型展示模块（非真实开关）
   const toggleDisabled = isCal;
-  // 身份标签：预设 > 内置 > 自定义
-  const badgeLabel = isSTImport ? '预设' : m.builtin ? '内置' : '自定义';
-  const badgeStyle = isSTImport
+  // 身份标签：内置 > 自定义
+  const badgeLabel = m.builtin ? '内置' : '自定义';
+  const badgeStyle = m.builtin
     ? {
         color: 'rgb(var(--tj-bg-primary))',
-        background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.88), rgba(var(--tj-ui-nsfw), 0.68))',
+        background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
       }
-    : m.builtin
-      ? {
-          color: 'rgb(var(--tj-bg-primary))',
-          background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))',
-        }
-      : {
-          color: 'rgba(var(--tj-accent-primary), 0.94)',
-          background: 'rgba(var(--tj-accent-primary), 0.12)',
-        };
+    : {
+        color: 'rgba(var(--tj-accent-primary), 0.94)',
+        background: 'rgba(var(--tj-accent-primary), 0.12)',
+      };
   return (
     <button
       onClick={() => onSelect(m.id)}
@@ -2329,10 +2234,6 @@ function EditorPanel({
   // 分层信息：根据 order 区间映射 Layer
   const layerLabel = m.order < 10 ? 'Layer 1 · 顶层' : m.order < 30 ? 'Layer 2 · 主体' : 'Layer 3 · 尾部';
 
-  // ST 导入替换关系提示
-  const isSTImport = isSTImportedModule(m);
-  const stTargetCategory = isSTImport ? getSTImportTargetCategory(m) : null;
-
   return (
     <div className="min-w-0 space-y-3">
       {/* 分层标记 */}
@@ -2361,32 +2262,6 @@ function EditorPanel({
           </>
         )}
       </div>
-      {/* ST 导入替换关系提示条 */}
-      {isSTImport && stTargetCategory && (
-        <div
-          className="flex items-start gap-2 px-3 py-2 text-xs"
-          style={{
-            background: 'linear-gradient(90deg, rgba(var(--tj-ui-nsfw), 0.08) 0%, transparent 100%)',
-            boxShadow: 'inset 2px 0 0 rgba(var(--tj-ui-nsfw), 0.6), inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.15)',
-            clipPath:
-              'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-          }}
-        >
-          <span
-            className="font-serif tracking-[0.12em] flex-shrink-0"
-            style={{ color: 'rgba(var(--tj-ui-nsfw), 0.85)' }}
-          >
-            ◈ ST导入
-          </span>
-          <span style={{ color: 'rgba(var(--tj-text-secondary), 0.75)' }}>
-            此模块从 SillyTavern 预设导入，归类于
-            <span style={{ color: `rgba(var(${CATEGORY_COLOR_VAR[stTargetCategory]}), 0.9)`, margin: '0 0.25em' }}>
-              {PROMPT_MODULE_CATEGORY_LABELS[stTargetCategory]}
-            </span>
-            分类。启用后将替换同分类的内置模块内容；删除后会回退到内置版本。
-          </span>
-        </div>
-      )}
       {/* 启用开关 */}
       <div
         className="flex flex-col items-stretch gap-3 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"

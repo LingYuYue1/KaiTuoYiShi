@@ -4,8 +4,6 @@
  * 字段定义参照 SillyTavern 常见导出格式。V2 预设会保留原始 prompts /
  * prompt_order / world_info / regex_scripts，并在主剧情酒馆消息链中受限使用。
  */
-import type { 提示词模块 } from './prompts';
-import type { 世界书条目 } from './worldbook';
 import type { 消息角色 } from './chat';
 
 /**
@@ -79,8 +77,8 @@ export interface STWorldInfoEntry {
 
 /**
  * ST 预设完整结构（含世界书与正则脚本）。
- * V1 解析会把 world_info 转成旧世界书条目；V2 解析会原样保留 world_info /
- * regex_scripts，由主剧情酒馆消息链和本地审查负责受限兼容。
+ * 预设解析会原样保留 world_info / regex_scripts，由主剧情酒馆消息链和本地审查
+ * 负责受限兼容。
  */
 export interface STPresetFull {
   prompts?: unknown[];
@@ -113,67 +111,6 @@ export interface STRegexScript {
   maxDepth?: number | null;
   [key: string]: unknown;
 }
-
-/** ST 预设顶层采样参数（从 ST 预设 JSON 顶层字段解析）。
- *  字段命名参照 ST 官方 snake_case，便于直接从 JSON 顶层映射。 */
-export interface STSamplingParams {
-  temperature?: number;
-  topP?: number;
-  topK?: number;
-  topA?: number;
-  minP?: number;
-  repetitionPenalty?: number;
-  frequencyPenalty?: number;
-  presencePenalty?: number;
-  maxContext?: number;
-  maxTokens?: number;
-}
-
-/** 预设类型：'native'（原生内置）/ 'adapted'（二创成品）/ 'imported'（玩家导入）。
- *  - native：调用 createBuiltinPromptModules() 生成，不可删不可导入
- *  - adapted：手工融合的最终态 JSON，不可删不可导入
- *  - imported：玩家运行时导入的 ST 预设，走自动兼容流程
- */
-export type STPresetType = 'native' | 'adapted' | 'imported';
-
-/**
- * 已保存的 ST 预设。玩家可导入并保存多套预设，通过下拉切换。
- * 切换预设 = 用 preset.modules 替换当前 promptModules 中的 st_import_* 段。
- * 编辑预设内模块 = 自动写回所属 preset.modules，防止切换后回归原样。
- */
-export interface STPresetEntryV1 {
-  /** 预设唯一 id（uuid 或 timestamp）。 */
-  id: string;
-  /** 预设显示名（取自 ST 预设 name 字段，玩家可重命名）。 */
-  name: string;
-  /** 导入时间戳。 */
-  importedAt: number;
-  /** 最近修改时间戳。编辑模块时同步更新。 */
-  updatedAt: number;
-  /** 该预设包含的提示词模块（全部为 st_import_* 前缀）。 */
-  modules: 提示词模块[];
-  /** Phase 7.2：预设附带的世界书条目（解析 ST 预设的 world_info 数组得到）。
-   *  条目 id 全部带 stwi_ 前缀，激活预设时由 sendWorkflow 注入到 worldbooks。 */
-  worldbookEntries?: 世界书条目[];
-  /** 预设的顶层采样参数（从 ST JSON 顶层解析）。切换预设时写回 API 配置。 */
-  samplingParams?: STSamplingParams;
-  /** 预设的 assistant prefill 文本（如"思考已结束。"）。
-   *  来自 ST JSON 顶层的 assistant_prefill 字段。 */
-  assistantPrefill?: string;
-  /** 标记内置预设（不可删不可导入）。原生内置 / 二创成品均为 true。 */
-  isBuiltin?: boolean;
-  /** 模块锁定标记（预设级，向后兼容保留）。
-   *  新方案下，模块锁定改为模块级 locked 字段（见 提示词模块.locked），
-   *  二创成品预设的 adapted_* 模块自带 locked:true，玩家无法关闭/删除/编辑。 */
-  locked?: boolean;
-  /** 预设类型：'native'（原生内置）/ 'adapted'（二创成品）/ 'imported'（玩家导入）。 */
-  presetType?: STPresetType;
-  /** 切换前的 API 参数备份（用于切换回其他预设时回滚）。 */
-  previousApiParams?: STSamplingParams;
-}
-
-/** @deprecated 兼容别名，指向 V1 */
-export type STPresetEntry = STPresetEntryV1;
 
 /**
  * ===== 新增：保留式类型（参照 MoRanJiangHu models/system.ts L552-581) =====
@@ -237,8 +174,6 @@ export interface STPresetEntryV2 {
   importedAt: number;
   updatedAt: number;
   isBuiltin?: boolean;
-  /** 旧字段迁移标记：若为 true 表示从 V1 迁移而来 */
-  migratedFromV1?: boolean;
 }
 
 /** 酒馆消息后处理模式 */

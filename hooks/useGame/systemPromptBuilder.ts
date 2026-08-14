@@ -36,7 +36,6 @@ import {
 } from './historyWindow';
 import { getAnticipatedNpcNamesForTurn } from './npcPresence';
 import { processMacros, type MacroContext } from '@/utils/macroEngine';
-import { isSTImportedModule } from '@/utils/stPresetParser';
 
 // 当前 prompt 为重构期的中性骨架，具体的世界观/人物设定由世界书注入，
 // 「踏上旅途」向导写入的字段在此被汇总输出。
@@ -72,13 +71,7 @@ export function buildSystemPrompt(
 ): BuiltSystemPrompt {
   const parts: string[] = [];
   const allChatMessages: ChatModuleMessage[] = [];
-  // ST 预设总开关：关闭时过滤所有 st_import_* 模块（保留预设库数据，仅不注入）。
-  // V2 酒馆预设使用原始 prompts + prompt_order 消息链；选中 V2 时也隔离 V1 st_import_* 残留，
-  // 避免同一份 ST 预设以 V1 模块和 V2 消息链两种形态重复注入。
-  const shouldFilterLegacyStModules = settings.enableStPreset === false || Boolean(settings.currentStPresetIdV2);
-  const effectiveModules = shouldFilterLegacyStModules
-    ? settings.promptModules.filter((m) => !isSTImportedModule(m))
-    : settings.promptModules;
+  const effectiveModules = settings.promptModules;
 
   const personLabel =
     settings.narrativePerson === 'second' ? '第二人称"你"'
@@ -268,13 +261,7 @@ export function buildOpeningSystemPrompt(
 ): BuiltSystemPrompt {
   const parts: string[] = [];
   const allChatMessages: ChatModuleMessage[] = [];
-  // ST 预设总开关：关闭时过滤所有 st_import_* 模块（保留预设库数据，仅不注入）。
-  // V2 酒馆预设使用原始 prompts + prompt_order 消息链；选中 V2 时也隔离 V1 st_import_* 残留，
-  // 避免同一份 ST 预设以 V1 模块和 V2 消息链两种形态重复注入。
-  const shouldFilterLegacyStModules = settings.enableStPreset === false || Boolean(settings.currentStPresetIdV2);
-  const effectiveModules = shouldFilterLegacyStModules
-    ? settings.promptModules.filter((m) => !isSTImportedModule(m))
-    : settings.promptModules;
+  const effectiveModules = settings.promptModules;
 
   const personLabel =
     settings.narrativePerson === 'second' ? '第二人称"你"'

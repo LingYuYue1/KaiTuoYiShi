@@ -4,7 +4,7 @@ import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import { 默认文生图规则中心, normalizeImageRules } from '@/utils/imagePromptRules';
 import type { 剧情编织API覆盖 } from './storyWeaving';
-import type { STWorldInfoEntry, STPresetEntryV1, STSamplingParams, STPresetEntryV2, TavernPostProcessMode } from './stTypes';
+import type { STPresetEntryV2, TavernPostProcessMode } from './stTypes';
 
 export interface API配置项 {
   id: string;
@@ -279,22 +279,8 @@ export interface 游戏设置 {
   customPrompt: string;
   /** 内置 + 玩家自定义的提示词模块。所有 enabled 模块都恒注入主流程 system prompt。 */
   promptModules: 提示词模块[];
-  /** ST 预设兼容：已保存的预设库。玩家可导入多套预设，通过下拉切换。 */
-  stPresets?: STPresetEntryV1[];
-  /** ST 预设兼容：当前激活的预设 id。null=未激活任何预设。 */
-  currentStPresetId?: string | null;
-  /** ST 预设兼容：总开关。关闭后所有 st_import_* 模块不注入 systemPrompt，但保留预设库数据。 */
+  /** ST 预设总开关：关闭后酒馆消息链不参与主剧情发送。 */
   enableStPreset?: boolean;
-  /** ST 预设参数同步：激活带 samplingParams 的预设前，当前 API 采样参数的原始备份。
-   *  切回无参数预设/null 时按此值恢复。null=当前无预设覆盖参数。 */
-  stPresetApiBackup?: STSamplingParams | null;
-  /** 提示词模块 order 版本号（用于旧存档迁移）。
-   *  - 0/缺省：旧版 order 区间（内置 5-90 + ST 50+，会冲突）
-   *  - 1：方案 A 三层 order 区间（Tier 1: 1-99 / Tier 2: 100-999 ST / Tier 3: 1000+ 压轴） */
-  promptModuleOrderVersion?: number;
-  /** ST 预设兼容：V1 预设迁移/旧存档保留的世界书条目。V2 预设的 world_info 保存在 stPresetsV2[].preset 中。 */
-  stWorldInfos?: STWorldInfoEntry[];
-
   // === 新增：保留式 ST 预设字段 ===
 
   /** ST 预设兼容 V2：保留原始结构的预设列表 */
@@ -309,19 +295,6 @@ export interface 游戏设置 {
   /** ST 预设兼容 V2：消息角色后处理模式 */
   stPostProcessMode?: TavernPostProcessMode;
 
-  // === 保留但标记废弃的旧字段 ===
-
-  /** @deprecated V1 转译式预设列表，迁移后不再使用 */
-  // stPresets?: STPresetEntry[];
-
-  /** @deprecated V1 当前激活预设 id */
-  // currentStPresetId?: string | null;  // 复用此字段，迁移后指向 V2 条目
-
-  /** @deprecated V1 总开关，V2 复用 */
-  // enableStPreset?: boolean;
-
-  /** @deprecated V1 采样参数备份，V2 复用 */
-  // stPresetApiBackup?: STSamplingParams | null;
   /** 思维链输出语言（参考 Izumi，P2 可选）。
    *  - 'zh'（默认）：中文思考段
    *  - 其他值：在主剧情思维链末尾追加"请用 X 语言输出 <think> 思考段"提示
@@ -1212,10 +1185,6 @@ export function 创建默认游戏设置(): 游戏设置 {
     // ST 预设兼容相关字段（可选，这里显式列默认值保持风格一致）
     cotLanguage: 'zh',
     enableStPreset: true,
-    stPresets: [],
-    currentStPresetId: 'builtin_preset',
-    promptModuleOrderVersion: 1,
-    stWorldInfos: [],
     // === 新增：保留式 ST 预设默认值 ===
     stPresetsV2: [],
     currentStPresetIdV2: null,

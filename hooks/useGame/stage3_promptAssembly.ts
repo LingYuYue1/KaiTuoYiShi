@@ -3,7 +3,6 @@ import type { 聊天消息 } from '@/models/chat';
 import { 创建聊天消息 } from '@/models/chat';
 import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
-import { getBuiltinPresets } from '@/data/builtinPresets';
 import { buildTavernMessageChain } from './tavernMessageChainBuilder';
 import { compactForRerollInstruction } from './workflowRetry';
 import { buildRerollGenerationGuard } from './workflowRetry';
@@ -131,20 +130,9 @@ export function stage3_promptAssembly(
   const shouldUseCotFakeHistory =
     state.deviceSettings.gameSettings.enableCotFakeHistory && !isOpeningSystemTrigger && !deepSeekMainActive;
 
-  // Phase 4/7：从当前激活预设读取 assistant prefill
-  // DeepSeek lock_format 必须固定从 <thinking>\n 续写；普通请求才允许使用预设 assistantPrefill。
-  const currentPresetId = state.deviceSettings.gameSettings.currentStPresetId;
-  const allPresets = [
-    ...getBuiltinPresets(),
-    ...(state.deviceSettings.gameSettings.stPresets ?? []),
-  ];
-  const currentPreset = currentPresetId
-    ? allPresets.find((p) => p.id === currentPresetId)
-    : undefined;
-  const presetAssistantPrefill = currentPreset?.assistantPrefill;
-  const usePresetPrefill = Boolean(presetAssistantPrefill) && !deepSeekLockFormat;
-  const effectivePrefixMode = deepSeekLockFormat || usePresetPrefill;
-  const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\n' : presetAssistantPrefill;
+  // DeepSeek lock_format 固定从 <thinking>\n 续写；V2 消息链不消费 assistant_prefill。
+  const effectivePrefixMode = deepSeekLockFormat;
+  const effectivePrefixContent = deepSeekLockFormat ? '<thinking>\n' : undefined;
 
   if (deepSeekMainActive) {
     apiMessages.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));

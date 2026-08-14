@@ -42,13 +42,10 @@ export interface 提示词模块 {
   injectionOrder?: number;
   /** ST 预设兼容：触发生成类型。空=全触发。候选值：normal / continue / impersonate / swipe / regenerate / quiet。 */
   injectionTrigger?: string[];
-  /** 模块来源：builtin=内置 / st_preset=ST预设导入 / user=用户自建。 */
-  source?: 'builtin' | 'st_preset' | 'user';
+  /** 模块来源：builtin=内置 / user=用户自建。 */
+  source?: 'builtin' | 'user';
   /** 替代行为：builtin=不可替换 / builtin_toggleable=可关不可删 / replaceable=可被ST导入替换 / extensible=可叠加。 */
   replaceable?: 'builtin' | 'builtin_toggleable' | 'replaceable' | 'extensible';
-  /** 模块级锁定：true 时玩家无法关闭/删除/编辑。
-   *  二创成品预设(adapted_*)用此字段保持内置模块在二创预设中始终开启且无法关闭。 */
-  locked?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -108,13 +105,12 @@ export function isBuiltinPromptModule(id: string): id is 内置提示词模块ID
 export const PROMPT_MODULE_TOP_THRESHOLD = 30;
 
 /**
- * order 区间三层方案（ST 预设兼容）：
+ * order 区间两层方案：
  *   Tier 1 (1-99)    内置可覆盖模块（worldbook/输出格式/CoT 等）
- *   Tier 2 (100-999) ST 导入模块（st_import_* 前缀）
  *   Tier 3 (1000+)   内置压轴模块（CoT/格式/行动选项/NSFW/复合情感/认知隔离）
  *
  * LLM 优先级规律：靠后的指令优先级更高（更接近用户消息），所以 CoT/格式
- * 必须排在 ST 之后（Tier 3），避免被 ST 预设覆盖导致输出格式错乱。
+ * 必须排在尾部（Tier 3），避免输出格式错乱。
  *
  * calibration scope 允许 order 重复约定：
  *   独立系统（news/phone/zhiku/yiting/storyWeaving/variable）各自的 worldbook(50) /
