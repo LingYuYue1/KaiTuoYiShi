@@ -186,6 +186,7 @@ export function buildMainTurnEnforcementBlock(input: {
   lines.push('【硬性要点】');
   lines.push(`- 发言归属：【${input.playerName}】只承载玩家本回合明确说出的原话；NPC 台词、拟声词、环境音绝不挂玩家名。`);
   lines.push('- 禁止代写玩家的心理、神态、感受或决定；正文内禁止任何选项菜单结构。');
+  lines.push('- 正文严禁系统客串：禁止【系统】/【系统提示】/【系统消息】标签行与任何系统说明、任务更新、成就播报、物品获得提示、操作指引或元叙述；只保留旁白与角色台词两种声音。');
   if (input.storyWeavingActive) {
     lines.push('- 剧情编织滑窗只按门禁推进；已发生的事件禁止重演，未开始的分段禁止抢跑。');
   }

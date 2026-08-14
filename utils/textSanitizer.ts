@@ -9,8 +9,38 @@ export function stripInternalProtocolTags(text: string): string {
     .trim();
 }
 
+/**
+ * 系统客串兜底清洗：剥离正文中的【系统】类标签行与系统提示/游戏化提示行。
+ * 只作用于"行首明确系统标签/系统提示"的整行，不碰剧情内出现的"系统"名词，
+ * 避免误伤角色台词或设定内容（如"星际和平公司系统""模拟宇宙系统"）。
+ * 提示词层面已做禁令，这里仅作模型偶发输出的最后兜底。
+ */
+const SYSTEM_GUEST_LINE_PATTERNS: RegExp[] = [
+  /^【\s*系统(?:提示|消息|公告|广播)?\s*[^】]*】[^\n]*\n?/gm,
+  /^【\s*任务更新\s*】[^\n]*\n?/gm,
+  /^【\s*成就[^\n]*】[^\n]*\n?/gm,
+  /^【\s*提示\s*】[^\n]*\n?/gm,
+  /^系统提示\s*[:：][^\n]*\n?/gm,
+  /^（系统）[^\n]*\n?/gm,
+  /^\[系统\][^\n]*\n?/gm,
+  /^system\s*[:：][^\n]*\n?/gim,
+];
+
+export function stripSystemGuestLines(text: string): string {
+  if (!text) return text;
+  let next = text;
+  for (const pattern of SYSTEM_GUEST_LINE_PATTERNS) {
+    next = next.replace(pattern, '');
+  }
+  return next
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function sanitizeContaminatedText(text: string, settings?: 额外功能设置): string {
   text = stripInternalProtocolTags(text);
+  text = stripSystemGuestLines(text);
   const config = settings?.污染词清理;
   if (!config?.enabled) return text;
   const words = Array.isArray(config.words) ? config.words.map((word) => word.trim()).filter(Boolean) : [];
