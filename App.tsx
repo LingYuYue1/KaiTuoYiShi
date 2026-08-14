@@ -1062,7 +1062,7 @@ export function App() {
             traveler={state.旅人}
             world={state.世界}
             news={state.新闻}
-            storyWeaving={state.剧情编织}
+
             zhiku={state.智库}
             apiSettings={apiSettings}
             gameSettings={gameSettings}
