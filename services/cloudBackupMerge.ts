@@ -20,6 +20,7 @@ import {
   loadCloudMergeStagedRecord,
   loadSaveForCloudTransfer,
   stageCloudMergeRecord,
+  剥离检查点队列任务,
 } from '@/services/dbService';
 import { sanitizeSaveForExport } from '@/services/savePackage';
 import { deleteCloudBackupTransfer, getCloudBackupTransferPart } from '@/services/storage/cloudBackupTransferStore';
@@ -281,7 +282,8 @@ export async function mergeLegacyCloudBackup(
         assetPlan.originalIdToTargetId.set(record.id, targetId);
       }
 
-      const portable = sanitizeSaveForExport(stripPortableAssetPayload(loaded));
+      // 进入暂存前按节点类型剥离 queueTasks（旧版云存档是检查点恢复点，不得只依赖 sanitizeSaveForExport）。
+      const portable = 剥离检查点队列任务(sanitizeSaveForExport(stripPortableAssetPayload(loaded)));
       const fingerprint = await fingerprintCloudBackupNode(portable);
       const tree = getSaveTree(portable);
       const meta: CloudBackupNodeMeta = {
@@ -487,7 +489,8 @@ function remapCloudSaveNode(
     };
   }
   const runtime = readSaveRuntime(rewritten);
-  return {
+  // 云端节点均经 sanitizeSaveForExport（移除 saveRuntime/unsealedHead）→ 视为检查点，剥离 queueTasks。
+  return 剥离检查点队列任务({
     ...rewritten,
     id: 0,
     type: normalizeSaveType(meta.type || rewritten.type),
@@ -497,7 +500,7 @@ function remapCloudSaveNode(
       ...runtime,
       cloudBackupOriginFingerprint: meta.fingerprint,
     },
-  } as 存档数据;
+  } as 存档数据);
 }
 
 function rewriteAssetReferences(value: unknown, idMap: Map<string, string>): unknown {

@@ -1648,10 +1648,11 @@ async function commitCloudMergeStagingTransaction(
       }
 
       try {
-        const normalized = stripSaveAssetPayloadForStorage({
+        // 最终兜底：写入 saves 前再次按节点类型剥离 queueTasks（暂存路径可能已剥，幂等）。
+        const normalized = stripSaveAssetPayloadForStorage(剥离检查点队列任务({
           ...staged.save,
           type: normalizeSaveType(staged.save.type),
-        });
+        }));
         const { id: _discardedId, ...withoutId } = normalized;
         void _discardedId;
         const addRequest = saveStore.add(withoutId);
@@ -2058,21 +2059,22 @@ export function importSaveJson(json: string): 存档数据 {
 
 export async function importSaveFileAsMany(file: File): Promise<存档数据[]> {
   const name = file.name.toLowerCase();
+  let saves: 存档数据[];
   if (name.endsWith('.json') || file.type === 'application/json') {
-    const saves = [importSaveJson(await file.text())];
+    saves = [importSaveJson(await file.text())];
     devLog('save', 'import-save-parsed', { nodeCount: saves.length });
-    return saves;
+  } else if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
+    const parsed = parseSaveTreePackage(await file.arrayBuffer());
+    saves = remapImportedSaveTree(parsed);
+    if (!saves.every(isImportableSave)) throw new Error('无效的存档包');
+    devLog('save', 'import-save-parsed', { nodeCount: parsed.length });
+    const rootId = (saves[0] as SaveWithTree | undefined)?.saveTree?.rootId;
+    devLog('save', 'import-save-tree-remapped', { nodeCount: saves.length, rootId });
+  } else {
+    throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
   }
-  if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
-    const saves = parseSaveTreePackage(await file.arrayBuffer());
-    const remapped = remapImportedSaveTree(saves);
-    if (!remapped.every(isImportableSave)) throw new Error('无效的存档包');
-    devLog('save', 'import-save-parsed', { nodeCount: saves.length });
-    const rootId = (remapped[0] as SaveWithTree | undefined)?.saveTree?.rootId;
-    devLog('save', 'import-save-tree-remapped', { nodeCount: remapped.length, rootId });
-    return remapped;
-  }
-  throw new Error('不支持的存档格式，请选择 .zip、.ktysave 或旧版 .json');
+  // 导入恢复点按节点类型剥离 queueTasks：导出路径已移除 saveRuntime（无 unsealedHead），一律视为检查点。
+  return saves.map(剥离检查点队列任务);
 }
 
 function isImportableSave(value: unknown): value is 存档数据 {
@@ -2353,6 +2355,16 @@ function isHiddenDeltaBaseSave(save: 存档数据): boolean {
 
 export function isUnsealedHeadSave(save: 存档数据): boolean {
   return (save as StoredSaveMeta).saveRuntime?.unsealedHead === true;
+}
+
+/**
+ * 剥离检查点队列任务：queueTasks 属主是可写叶子（工作区），检查点/导入恢复点不得携带。
+ */
+export function 剥离检查点队列任务(save: 存档数据): 存档数据 {
+  if (isUnsealedHeadSave(save)) return save;
+  const { queueTasks: _queueTasks, ...sealed } = save;
+  void _queueTasks;
+  return sealed;
 }
 
 async function writeUnreadableSaveCatalogRecord(

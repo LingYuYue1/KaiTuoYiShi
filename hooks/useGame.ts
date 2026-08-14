@@ -24,6 +24,7 @@ import { 提取NPC同行记忆文本列表, type NPC同行记忆条目, type NPC
 import type { STRegexScript } from '@/models/stTypes';
 import { abilityPresets, factions, getFaction, getOpeningScenarioBundle, getPath, getStartingScenario, getStoryMode, storyModes } from '@/data/journeyPresets';
 import {
+  剥离检查点队列任务,
   deleteLegacyBackupSaves,
   deleteSaveTree,
   exportSavePackage,
@@ -906,8 +907,9 @@ export function useGame(): UseGameReturn {
   }, []);
 
   // 导入存档落库：只负责 saveGame，id:0/type:'imported'/timestamp 批次字段由面板补齐。
+  // 落库前按节点类型剥离 queueTasks（导入恢复点不得携带，与 dbService 导入解析同一 helper）。
   const handlePersistImportedSave = useCallback(async (data: 存档数据): Promise<number> => {
-    return saveGame(data);
+    return saveGame(剥离检查点队列任务(data));
   }, []);
 
   // 导出单节点存档包：数据库读取 + 文件下载全部收敛到门面，面板不再直连 dbService。
