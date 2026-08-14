@@ -839,13 +839,22 @@ function findOpeningRelationHint(name: string, hints: string[]): string {
   }) ?? '';
 }
 
+/** 开局文本→好感度推理取点：独立于 `NPC关系阈值表` 的分区数据（历史值稳定，非表推导）。
+ *  敌对/陌生 取桶上界，熟识/知己/生死挚友 取桶下界；未命中兜底 20（熟识代表值）。 */
+const 开局关系代表好感度 = {
+  敌对: -31,
+  陌生: -1,
+  熟识: 20,
+  知己: 50,
+  生死挚友: 101,
+} as const;
+
 function inferOpeningAffinity(summary: string): number {
-  if (/(敌对|仇敌|仇人|死敌)/.test(summary)) return -31;
-  if (/(陌生|不认识)/.test(summary)) return -1;
-  if (/(生死挚友|生死之交)/.test(summary)) return 101;
-  if (/(知己|挚友)/.test(summary)) return 50;
-  if (/(熟识|朋友|好友|认识|同伴|队友|恋人|伴侣|爱人|夫妻)/.test(summary)) return 20;
-  return 20;
+  if (/(敌对|仇敌|仇人|死敌)/.test(summary)) return 开局关系代表好感度.敌对;
+  if (/(陌生|不认识)/.test(summary)) return 开局关系代表好感度.陌生;
+  if (/(生死挚友|生死之交)/.test(summary)) return 开局关系代表好感度.生死挚友;
+  if (/(知己|挚友)/.test(summary)) return 开局关系代表好感度.知己;
+  return 开局关系代表好感度.熟识; // 熟识/未命中默认：历史兜底值 20
 }
 
 function inferOpeningIntimateRelationship(summary: string): boolean {

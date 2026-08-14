@@ -156,23 +156,43 @@ export function 限制NPC好感度(value: unknown): number {
   return Math.max(NPC_AFFINITY_MIN, Math.min(NPC_AFFINITY_MAX, Math.trunc(affinity)));
 }
 
+/** 关系阶段阈值表：每行一段好感度闭区间 [下限, 上限]。关系阶段/兼容关系/敌对熟识阈值均引用本表，禁止散落魔法数。 */
+export interface NPC关系阈值行 {
+  下限: number;
+  上限: number;
+  阶段: NPC关系阶段;
+  兼容: NPC关系类型;
+}
+
+export const NPC关系阈值表: NPC关系阈值行[] = [
+  { 下限: NPC_AFFINITY_MIN, 上限: -31, 阶段: '敌对', 兼容: 'enemy' },
+  { 下限: -30, 上限: -1, 阶段: '陌生', 兼容: 'stranger' },
+  { 下限: 0, 上限: 19, 阶段: '初见', 兼容: 'stranger' },
+  { 下限: 20, 上限: 49, 阶段: '熟识', 兼容: 'acquaintance' },
+  { 下限: 50, 上限: 100, 阶段: '知己', 兼容: 'friend' },
+  { 下限: 101, 上限: NPC_AFFINITY_MAX, 阶段: '生死挚友', 兼容: 'close' },
+];
+
+/** 按阶段查行：表内缺行是数据错误，启动即抛。 */
+function 查NPC关系行(阶段: NPC关系阶段): NPC关系阈值行 {
+  const row = NPC关系阈值表.find((r) => r.阶段 === 阶段);
+  if (!row) throw new Error(`NPC关系阈值表缺少阶段：${阶段}`);
+  return row;
+}
+
+/** 敌对分界（含上限）：关系规划判定「高优先级」的阈值。 */
+export const NPC敌对阈值 = 查NPC关系行('敌对').上限;
+/** 熟识分界（含下限）：关系规划判定「适合手机联系」/「中优先级」的阈值。 */
+export const NPC熟识阈值 = 查NPC关系行('熟识').下限;
+
 export function 获取NPC关系阶段(value: unknown): NPC关系阶段 {
   const affinity = 限制NPC好感度(value);
-  if (affinity <= -31) return '敌对';
-  if (affinity <= -1) return '陌生';
-  if (affinity <= 19) return '初见';
-  if (affinity <= 49) return '熟识';
-  if (affinity <= 100) return '知己';
-  return '生死挚友';
+  return NPC关系阈值表.find((row) => affinity <= row.上限)?.阶段 ?? '生死挚友';
 }
 
 export function 获取NPC兼容关系(value: unknown): NPC关系类型 {
   const affinity = 限制NPC好感度(value);
-  if (affinity <= -31) return 'enemy';
-  if (affinity <= 19) return 'stranger';
-  if (affinity <= 49) return 'acquaintance';
-  if (affinity <= 100) return 'friend';
-  return 'close';
+  return NPC关系阈值表.find((row) => affinity <= row.上限)?.兼容 ?? 'close';
 }
 
 export function 格式化NPC关系(value: unknown, intimateRelationship = false): string {

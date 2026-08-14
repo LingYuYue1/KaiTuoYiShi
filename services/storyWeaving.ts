@@ -1,4 +1,5 @@
 import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+import { mergeApiOverride } from '@/models/settings';
 import type {
   剧情编织分段,
   剧情编织系列,
@@ -26,21 +27,13 @@ export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: 
   const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
   if (!mainConfig) return null;
   const api = settings.剧情编织系统.api;
-  const baseUrl = api.baseUrl.trim() || mainConfig.baseUrl;
-  const apiKey = api.apiKey.trim() || mainConfig.apiKey;
-  const model = api.model.trim() || mainConfig.model;
-  if (!baseUrl || !apiKey || !model) return null;
-  return {
-    ...mainConfig,
-    provider: api.provider,
-    baseUrl,
-    apiKey,
-    model,
+  const merged = mergeApiOverride(mainConfig, api, {
     maxTokens: api.maxTokens ?? mainConfig.maxTokens ?? 4096,
     temperature: api.temperature ?? mainConfig.temperature ?? 0.25,
-    retryCount: api.retryCount ?? mainConfig.retryCount ?? 2,
     enableClaudeMode: settings.enableClaudeMode,
-  };
+  });
+  if (!merged.baseUrl || !merged.apiKey || !merged.model) return null;
+  return merged;
 }
 
 export async function decomposeStorySegment(params: {

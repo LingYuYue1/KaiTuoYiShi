@@ -1,5 +1,5 @@
 import type { NPC记录 } from '@/models/npc';
-import { 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { 格式化NPC关系, 提取NPC同行记忆文本列表, NPC敌对阈值, NPC熟识阈值 } from '@/models/npc';
 
 export interface NPC关系规划条目 {
   npcId: string;
@@ -43,13 +43,13 @@ function buildNpcRelationshipEntry(npc: NPC记录, turnCount: number): NPC关系
       ? '兑现承诺或冲突'
       : npc.同行
         ? '继续同行互动'
-        : recent && npc.好感度 >= 20
+        : recent && npc.好感度 >= NPC熟识阈值
           ? '适合手机联系'
           : '暂作背景';
   const priority: NPC关系规划条目['优先级'] =
-    needsMemory || hasPromise || npc.同行 || npc.好感度 <= -31 || npc.亲密关系
+    needsMemory || hasPromise || npc.同行 || npc.好感度 <= NPC敌对阈值 || npc.亲密关系
       ? '高'
-      : recent || Math.abs(npc.好感度) >= 20
+      : recent || Math.abs(npc.好感度) >= NPC熟识阈值
         ? '中'
         : '低';
   return {

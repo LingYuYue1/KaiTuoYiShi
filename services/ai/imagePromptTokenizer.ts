@@ -1,4 +1,5 @@
 import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+import { mergeApiOverride } from '@/models/settings';
 import type { ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
@@ -8,20 +9,14 @@ export function buildImagePromptTokenizerConfig(settings: 游戏设置, apiSetti
   const mainConfig: API配置项 | undefined = apiSettings.configs.find((config) => config.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);
   if (!settings.文生图系统.enablePromptTokenizer || mainConfig === undefined) return null;
   const override = settings.文生图系统.词组转化器API;
-  return {
-    ...mainConfig,
+  return mergeApiOverride(mainConfig, override, {
     id: '__image_prompt_tokenizer__',
     name: '文生图词组转化器',
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
     maxTokens: Math.min(override.maxTokens ?? mainConfig.maxTokens ?? 1600, 2400),
     temperature: override.temperature ?? mainConfig.temperature ?? 0.45,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
     enableClaudeMode: settings.enableClaudeMode,
     updatedAt: Date.now(),
-  };
+  });
 }
 
 export function buildImagePromptTokenizerSystemPrompt(settings: 游戏设置, mode: string): string {

@@ -1,4 +1,5 @@
 import type { API配置项, 忆庭API覆盖, 记忆系统设置 } from '@/models/settings';
+import { mergeApiOverride } from '@/models/settings';
 import type { 回忆条目 } from '@/models/yiting';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
@@ -27,16 +28,7 @@ export function resolveYitingArchiveConfig(
   mainConfig: API配置项,
   override: 忆庭API覆盖,
 ): API配置项 {
-  return {
-    ...mainConfig,
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: override.maxTokens ?? mainConfig.maxTokens,
-    temperature: override.temperature ?? mainConfig.temperature,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-  };
+  return mergeApiOverride(mainConfig, override);
 }
 
 export async function buildYitingArchiveEntry(

@@ -1,5 +1,6 @@
 import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
+import { mergeApiOverride } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { YITING_RECALL_PROMPT as YITING_LEGACY_RECALL_PROMPT } from '@/prompts/cot/yitingCot';
@@ -60,7 +61,7 @@ export async function retrieveYitingContextWithModel(
   }
 
   const fallback = retrieveYitingContext(system, query, limit);
-  const api = resolveYitingRecallConfig(mainConfig, settings);
+  const api = mergeApiOverride(mainConfig, settings.忆庭召回API);
   if (!api.baseUrl || !api.apiKey || !api.model) {
     return fallback;
   }
@@ -136,20 +137,6 @@ export function buildYitingRecallSystemPrompt(promptModules?: 提示词模块[])
 function buildYitingRecallPromptModulesSection(promptModules?: 提示词模块[]): string {
   if (!promptModules || promptModules.length === 0) return '';
   return buildIndependentPromptModulesSection(promptModules, 'yitingRecall');
-}
-
-function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系统设置): API配置项 {
-  const override = settings.忆庭召回API;
-  return {
-    ...mainConfig,
-    provider: override.provider || mainConfig.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: override.maxTokens ?? mainConfig.maxTokens,
-    temperature: override.temperature ?? mainConfig.temperature,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-  };
 }
 
 function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6): 剧情回忆候选[] {

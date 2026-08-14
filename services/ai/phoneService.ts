@@ -1,4 +1,5 @@
 import type { API配置项, API设置, 游戏设置 } from '@/models/settings';
+import { resolveApiOverrideFields } from '@/models/settings';
 import type { 手机联系人, 主动来信种子 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
 import { 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
@@ -48,11 +49,11 @@ export function buildPhoneApiConfig(settings: 游戏设置, apiSettings: API设�
   const mainConfig: API配置项 | undefined = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0);
   const phoneApi = settings.手机系统.api;
   const phoneFieldsEmpty = !phoneApi.baseUrl.trim() && !phoneApi.apiKey.trim() && !phoneApi.model.trim();
-  const provider = phoneFieldsEmpty ? mainConfig?.provider : phoneApi.provider;
-  const baseUrl = phoneApi.baseUrl.trim() || mainConfig?.baseUrl || '';
-  const apiKey = phoneApi.apiKey.trim() || mainConfig?.apiKey || '';
-  const model = phoneApi.model.trim() || mainConfig?.model || '';
-
+  const fields = resolveApiOverrideFields(
+    { ...phoneApi, provider: phoneFieldsEmpty ? '' : phoneApi.provider },
+    mainConfig ?? null,
+  );
+  const { provider, baseUrl, apiKey, model } = fields;
   if (!provider || !baseUrl || !apiKey || !model) return null;
 
   return {
@@ -62,9 +63,9 @@ export function buildPhoneApiConfig(settings: 游戏设置, apiSettings: API设�
     baseUrl,
     apiKey,
     model,
-    maxTokens: phoneApi.maxTokens ?? mainConfig?.maxTokens ?? 900,
-    temperature: phoneApi.temperature ?? mainConfig?.temperature ?? 0.75,
-    retryCount: phoneApi.retryCount ?? mainConfig?.retryCount ?? 2,
+    maxTokens: fields.maxTokens ?? 900,
+    temperature: fields.temperature ?? 0.75,
+    retryCount: fields.retryCount,
     enableClaudeMode: settings.enableClaudeMode,
     createdAt: 0,
     updatedAt: Date.now(),

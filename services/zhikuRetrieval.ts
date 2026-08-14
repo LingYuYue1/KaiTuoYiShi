@@ -1,5 +1,6 @@
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import type { API配置项, 智库系统设置 } from '@/models/settings';
+import { mergeApiOverride } from '@/models/settings';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { withRetries } from '@/services/ai/retry';
 import { normalizeStructuredModelText } from '@/services/ai/structuredOutputRepair';
@@ -498,7 +499,7 @@ export async function retrieveZhikuContextWithModel(
   }
 
   const keywordRecall = retrieveZhikuContext(system, query, limit, sceneContext);
-  const api = resolveZhikuRecallConfig(mainConfig, settings);
+  const api = mergeApiOverride(mainConfig, settings.api);
   if (!api.baseUrl || !api.apiKey || !api.model) {
     return keywordRecall;
   }
@@ -643,20 +644,6 @@ export function buildZhikuModelUserPrompt(query: string, limit: number, candidat
     '未召回候选资料（只可从这里补缺）：',
     candidateText,
   ].join('\n');
-}
-
-function resolveZhikuRecallConfig(mainConfig: API配置项, settings: 智库系统设置): API配置项 {
-  const override = settings.api;
-  return {
-    ...mainConfig,
-    provider: override.provider,
-    baseUrl: override.baseUrl.trim() || mainConfig.baseUrl,
-    apiKey: override.apiKey.trim() || mainConfig.apiKey,
-    model: override.model.trim() || mainConfig.model,
-    maxTokens: override.maxTokens ?? mainConfig.maxTokens,
-    temperature: override.temperature ?? mainConfig.temperature,
-    retryCount: override.retryCount ?? mainConfig.retryCount ?? 2,
-  };
 }
 
 function buildRecallSupplementCandidates(system: 智库系统, query: string, limit: number, sceneContext?: 智库场景上下文, excludedEntries: 智库条目[] = []): 智库条目[] {

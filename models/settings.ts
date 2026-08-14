@@ -46,6 +46,48 @@ export function 创建空API设置(): API设置 {
   return { activeConfigId: null, configs: [] };
 }
 
+/** 独立系统 API 覆盖字段：留空字段回退主 API。与各覆盖接口（忆庭/智库/剧情编织/手机/文生图词组转化器）同构。 */
+export type API覆盖字段 = {
+  provider: AI提供商 | '';
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  maxTokens?: number;
+  temperature?: number;
+  retryCount?: number;
+};
+
+/** 覆盖字段解析：留空回退主 API。main 为 null 时仅取覆盖字段（调用方自行判空）。 */
+export function resolveApiOverrideFields(
+  override: API覆盖字段,
+  main: API配置项 | null,
+): API覆盖字段 {
+  return {
+    provider: override.provider || main?.provider || '',
+    baseUrl: override.baseUrl.trim() || main?.baseUrl || '',
+    apiKey: override.apiKey.trim() || main?.apiKey || '',
+    model: override.model.trim() || main?.model || '',
+    maxTokens: override.maxTokens ?? main?.maxTokens,
+    temperature: override.temperature ?? main?.temperature,
+    retryCount: override.retryCount ?? main?.retryCount ?? 2,
+  };
+}
+
+/** 独立系统 API 完整合并：以主 API 为基底叠加覆盖字段与附加字段（extra 最后叠加）。 */
+export function mergeApiOverride(
+  mainConfig: API配置项,
+  override: API覆盖字段,
+  extra?: Partial<API配置项>,
+): API配置项 {
+  return {
+    ...mainConfig,
+    ...resolveApiOverrideFields(override, mainConfig),
+    // mainConfig 非空 ⇒ fields.provider 必非空（'' 仅当 main 为 null）；显式收敛回 AI提供商。
+    provider: override.provider || mainConfig.provider,
+    ...extra,
+  };
+}
+
 /** 变量模型独立 API 覆盖：任一字段留空都会回退到当前主 API 的同名字段。 */
 export interface 变量API覆盖 {
   provider: AI提供商;

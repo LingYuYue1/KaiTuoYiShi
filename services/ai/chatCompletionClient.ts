@@ -1420,6 +1420,70 @@ async function chatCompletionOnce(
   return streamOpenAICompatible(config, msgs, request, callbacks);
 }
 
+// ── 通用 SSE 流式读取骨架（7 个流式函数共用） ──
+
+/** 7 个流式函数的公共 SSE 解析骨架：切行、data: 过滤、[DONE] 跳过、畸形行计数、usage/delta/finishReason 采集。
+ *  供应商差异只保留 extractText（delta 提取）与 provider（devLog 标签）两个点。 */
+async function readSseTextStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  options: {
+    provider: string;
+    config: API配置项;
+    request: ChatCompletionRequest;
+    extractText: (parsed: unknown) => string;
+    onDelta: (text: string) => void;
+    onFinishReason?: (reason: string) => void;
+  },
+): Promise<string> {
+  const { provider, config, request, extractText, onDelta, onFinishReason } = options;
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let buffer = '';
+  let skippedMalformedLines = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') continue;
+
+        let parsed: ReturnType<JSON['parse']>;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
+          skippedMalformedLines += 1;
+          continue;
+        }
+        emitUsageFromResponse(parsed, config, request);
+        const text = extractText(parsed);
+        if (text) {
+          fullText += text;
+          onDelta(text);
+        }
+        const fr = readFinishReason(parsed);
+        if (fr) onFinishReason?.(fr);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (skippedMalformedLines > 0) {
+    devLog('net', 'sse-skip-malformed-lines', { provider, count: skippedMalformedLines });
+  }
+  return fullText;
+}
+
 // ── OpenAI-compatible streaming (SSE) ──
 
 async function streamOpenAICompatible(
@@ -1483,59 +1547,19 @@ async function streamOpenAICompatible(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  let finishReason: string | undefined;
-  let skippedMalformedLines = 0;
   const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') continue;
-
-        let parsed: ReturnType<JSON['parse']>;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
-          skippedMalformedLines += 1;
-          continue;
-        }
-        emitUsageFromResponse(parsed, config, request);
-        const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
-
-        // Accept visible text from compatible chunks; drop thinking/reasoning deltas.
-        if (text) {
-          fullText += text;
-          callbacks.onDelta(text);
-        }
-        // 采集 finish_reason（用于抗截断检测）
-        const fr = readFinishReason(parsed);
-        if (fr) {
-          finishReason = fr;
-          callbacks.onFinishReason?.(fr);
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (skippedMalformedLines > 0) {
-    devLog('net', 'sse-skip-malformed-lines', { provider: 'openai', count: skippedMalformedLines });
-  }
+  let finishReason: string | undefined;
+  const fullText = await readSseTextStream(reader, {
+    provider: 'openai',
+    config,
+    request,
+    extractText: (parsed) => readOpenAICompatibleStreamDelta(parsed, compatibleStreamState),
+    onDelta: (text) => callbacks.onDelta(text),
+    onFinishReason: (fr) => {
+      finishReason = fr;
+      callbacks.onFinishReason?.(fr);
+    },
+  });
 
   request.onResponseDiagnostics?.({
     sawReasoning: compatibleStreamState.sawReasoning,
@@ -1581,68 +1605,16 @@ async function streamClaude(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  // Claude extended thinking 用独立 content_block，type='thinking' 的 block 内的 delta 是 thinking_delta
-  let currentBlockIsThinking = false;
-  let skippedMalformedLines = 0;
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-
-        let parsed: ReturnType<JSON['parse']>;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
-          skippedMalformedLines += 1;
-          continue;
-        }
-        emitUsageFromResponse(parsed, config, request);
-        if (parsed.type === 'content_block_start') {
-          currentBlockIsThinking = parsed.content_block?.type === 'thinking';
-          if (currentBlockIsThinking) continue;
-          const text = String(parsed.content_block?.text ?? '');
-          if (text) {
-            fullText += text;
-            callbacks.onDelta(text);
-          }
-        } else if (parsed.type === 'content_block_delta') {
-          const deltaType = parsed.delta?.type;
-          // 丢弃 extended thinking delta（厂商内置思考摘要）
-          if (deltaType === 'thinking_delta' || currentBlockIsThinking) continue;
-          const t = String(parsed.delta?.text ?? '');
-          if (t) {
-            fullText += t;
-            callbacks.onDelta(t);
-          }
-        } else if (parsed.type === 'content_block_stop') {
-          currentBlockIsThinking = false;
-        }
-        // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
-        const fr = readFinishReason(parsed);
-        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (skippedMalformedLines > 0) {
-    devLog('net', 'sse-skip-malformed-lines', { provider: 'claude', count: skippedMalformedLines });
-  }
+  // Claude extended thinking 用独立 content_block；readOpenAICompatibleStreamDelta 统一处理 thinking 状态
+  const claudeStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
+  const fullText = await readSseTextStream(reader, {
+    provider: 'claude',
+    config,
+    request,
+    extractText: (parsed) => readOpenAICompatibleStreamDelta(parsed, claudeStreamState),
+    onDelta: (text) => callbacks.onDelta(text),
+    onFinishReason: (fr) => callbacks.onFinishReason?.(fr),
+  });
 
   callbacks.onDone();
   return fullText;
@@ -1797,17 +1769,6 @@ function parseOpenCodeGeminiText(json: unknown): string {
     .join('');
 }
 
-function readOpenCodeResponsesStreamDelta(parsed: any): string {
-  if (
-    parsed?.type === 'response.output_text.delta' ||
-    parsed?.type === 'response.text.delta' ||
-    parsed?.type === 'response.content_part.delta'
-  ) {
-    return readCompatibleTextContent(parsed.delta?.text ?? parsed.delta ?? parsed.text);
-  }
-  return readCompatibleTextContent(parsed?.choices?.[0]?.delta?.content) || readCompatibleTextContent(parsed?.delta?.text);
-}
-
 async function streamOpenCode(
   config: API配置项,
   messages: Array<{ role: string; content: string }>,
@@ -1865,55 +1826,19 @@ async function streamOpenCodeChat(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  let finishReason: string | undefined;
-  let skippedMalformedLines = 0;
   const compatibleStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') continue;
-        let parsed: ReturnType<JSON['parse']>;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
-          skippedMalformedLines += 1;
-          continue;
-        }
-        emitUsageFromResponse(parsed, config, request);
-        const text = readOpenAICompatibleStreamDelta(parsed, compatibleStreamState);
-        if (text) {
-          fullText += text;
-          callbacks.onDelta(text);
-        }
-        // 采集 finish_reason（OpenCode Chat 兼容 OpenAI 格式）
-        const fr = readFinishReason(parsed);
-        if (fr) {
-          finishReason = fr;
-          callbacks.onFinishReason?.(fr);
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (skippedMalformedLines > 0) {
-    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-chat', count: skippedMalformedLines });
-  }
+  let finishReason: string | undefined;
+  const fullText = await readSseTextStream(reader, {
+    provider: 'opencode-chat',
+    config,
+    request,
+    extractText: (parsed) => readOpenAICompatibleStreamDelta(parsed, compatibleStreamState),
+    onDelta: (text) => callbacks.onDelta(text),
+    onFinishReason: (fr) => {
+      finishReason = fr;
+      callbacks.onFinishReason?.(fr);
+    },
+  });
 
   request.onResponseDiagnostics?.({
     sawReasoning: compatibleStreamState.sawReasoning,
@@ -1956,64 +1881,15 @@ async function streamOpenCodeMessages(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  let currentBlockIsThinking = false;
-  let skippedMalformedLines = 0;
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') continue;
-        let parsed: ReturnType<JSON['parse']>;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
-          skippedMalformedLines += 1;
-          continue;
-        }
-        emitUsageFromResponse(parsed, config, request);
-        if (parsed.type === 'content_block_start') {
-          currentBlockIsThinking = parsed.content_block?.type === 'thinking';
-          if (currentBlockIsThinking) continue;
-          const text = String(parsed.content_block?.text ?? '');
-          if (text) {
-            fullText += text;
-            callbacks.onDelta(text);
-          }
-        } else if (parsed.type === 'content_block_delta') {
-          if (parsed.delta?.type === 'thinking_delta' || currentBlockIsThinking) continue;
-          const text = String(parsed.delta?.text ?? '');
-          if (text) {
-            fullText += text;
-            callbacks.onDelta(text);
-          }
-        } else if (parsed.type === 'content_block_stop') {
-          currentBlockIsThinking = false;
-        }
-        // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
-        const fr = readFinishReason(parsed);
-        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (skippedMalformedLines > 0) {
-    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-messages', count: skippedMalformedLines });
-  }
+  const openCodeMessagesState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
+  const fullText = await readSseTextStream(reader, {
+    provider: 'opencode-messages',
+    config,
+    request,
+    extractText: (parsed) => readOpenAICompatibleStreamDelta(parsed, openCodeMessagesState),
+    onDelta: (text) => callbacks.onDelta(text),
+    onFinishReason: (fr) => callbacks.onFinishReason?.(fr),
+  });
 
   callbacks.onDone();
   return fullText;
@@ -2050,50 +1926,15 @@ async function streamOpenCodeResponses(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  let skippedMalformedLines = 0;
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') continue;
-        let parsed: ReturnType<JSON['parse']>;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
-          skippedMalformedLines += 1;
-          continue;
-        }
-        emitUsageFromResponse(parsed, config, request);
-        const text = readOpenCodeResponsesStreamDelta(parsed);
-        if (text) {
-          fullText += text;
-          callbacks.onDelta(text);
-        }
-        // 采集 finish_reason（Responses API 的 finish_reason 在顶层或 choices[0]）
-        const fr = readFinishReason(parsed);
-        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (skippedMalformedLines > 0) {
-    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-responses', count: skippedMalformedLines });
-  }
+  const openCodeResponsesState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
+  const fullText = await readSseTextStream(reader, {
+    provider: 'opencode-responses',
+    config,
+    request,
+    extractText: (parsed) => readOpenAICompatibleStreamDelta(parsed, openCodeResponsesState),
+    onDelta: (text) => callbacks.onDelta(text),
+    onFinishReason: (fr) => callbacks.onFinishReason?.(fr),
+  });
 
   callbacks.onDone();
   return fullText;
@@ -2130,50 +1971,15 @@ async function streamOpenCodeGemini(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  let skippedMalformedLines = 0;
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') continue;
-        let parsed: ReturnType<JSON['parse']>;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
-          skippedMalformedLines += 1;
-          continue;
-        }
-        emitUsageFromResponse(parsed, config, request);
-        const text = parseOpenCodeGeminiText(parsed);
-        if (text) {
-          fullText += text;
-          callbacks.onDelta(text);
-        }
-        // 采集 finishReason（OpenCode Gemini 的 candidates[0].finishReason）
-        const fr = readFinishReason(parsed);
-        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (skippedMalformedLines > 0) {
-    devLog('net', 'sse-skip-malformed-lines', { provider: 'opencode-gemini', count: skippedMalformedLines });
-  }
+  const openCodeGeminiState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
+  const fullText = await readSseTextStream(reader, {
+    provider: 'opencode-gemini',
+    config,
+    request,
+    extractText: (parsed) => readOpenAICompatibleStreamDelta(parsed, openCodeGeminiState),
+    onDelta: (text) => callbacks.onDelta(text),
+    onFinishReason: (fr) => callbacks.onFinishReason?.(fr),
+  });
 
   callbacks.onDone();
   return fullText;
@@ -2356,58 +2162,15 @@ async function streamGemini(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  let skippedMalformedLines = 0;
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-
-        let parsed: ReturnType<JSON['parse']>;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          // 仅跳过畸形 JSON 行；后续处理逻辑的异常必须上抛暴露。
-          skippedMalformedLines += 1;
-          continue;
-        }
-        emitUsageFromResponse(parsed, config, request);
-        const parts = parsed.candidates?.[0]?.content?.parts;
-        if (parts) {
-          for (const part of parts) {
-            // Gemini Thinking parts 带 thought:true → 丢弃（厂商内置思考摘要）
-            if (part.thought) continue;
-            const text = String(part.text ?? '');
-            if (text) {
-              fullText += text;
-              callbacks.onDelta(text);
-            }
-          }
-        }
-        // 采集 finishReason（Gemini 的 candidates[0].finishReason）
-        const fr = readFinishReason(parsed);
-        if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (skippedMalformedLines > 0) {
-    devLog('net', 'sse-skip-malformed-lines', { provider: 'gemini', count: skippedMalformedLines });
-  }
+  const geminiStreamState: CompatibleStreamTextState = { currentBlockIsThinking: false, sawReasoning: false };
+  const fullText = await readSseTextStream(reader, {
+    provider: 'gemini',
+    config,
+    request,
+    extractText: (parsed) => readOpenAICompatibleStreamDelta(parsed, geminiStreamState),
+    onDelta: (text) => callbacks.onDelta(text),
+    onFinishReason: (fr) => callbacks.onFinishReason?.(fr),
+  });
 
   callbacks.onDone();
   return fullText;
