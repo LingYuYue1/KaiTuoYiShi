@@ -8,7 +8,7 @@ import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog, devLogError } from '@/utils/devLog';
 import { getZhikuNpcNamesForTurn } from './npcPresence';
-import { applySaveToState } from './saveLoadWorkflow';
+import { hydrate, prepareHydration, resetWorkflowProjection } from './saveLoadWorkflow';
 import { stage12_save } from './stage12_save';
 import { runTurnTail } from './turnTail';
 import type { SendWorkflowDeps } from './sendWorkflow';
@@ -22,6 +22,7 @@ function rawTextFromParsed(parsed: 解析后回复): string | undefined {
 
 export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boolean> {
   let { state } = deps;
+  resetWorkflowProjection(state);
   const journal = state.activeWorkflow.interruptedWorkflow;
   const config = deps.getActiveConfig();
 
@@ -30,9 +31,9 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   // 无工作区 / head 指向已封版检查点且无法采纳子叶（sealed-conflict）时按无工作区处理。
   const active = await loadActiveLeaf(journal?.pendingChildNodeId ?? null);
   const leaf = active.status === 'ok' ? active.leaf : null;
-  const leafChatHistory = leaf?.chatHistory ?? [];
+  const leafChatHistory = active.status === 'ok' ? active.leaf.chatHistory : [];
 
-  if (!journal || !isResumableWorkspace(journal, leafChatHistory)) {
+  if (!journal || !leaf || !isResumableWorkspace(journal, leafChatHistory)) {
     if (journal) {
       await clearWorkflowRecoveryJournal(journal.workflowId);
       devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'workspace-invalid' });
@@ -61,18 +62,15 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   const turnCountAtStart = journal.turnAtStart;
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
 
-  if (leaf) {
-    // 子任务 A（reviewer P0）：queueTasks 以叶子（工作区）持久化数据为唯一恢复入口。
-    // 不再先捕获恢复前的 state.queueTasks 再覆盖 applySaveToState 的恢复结果——
-    // 恢复前的内存态可能来自旧会话，覆盖会丢失叶子已持久化的后台任务。
-    await applySaveToState(leaf, state, { restorePendingOpeningTrigger: false });
-    state.setChatHistory(finalHistory);
-    state.setTurnCount(turnCountAtStart + 1);
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => resolve());
-    });
-    state = deps.getState?.() ?? state;
-  }
+  // queueTasks 以叶子（工作区）持久化数据为唯一恢复入口。
+  // 恢复前的内存态可能来自旧会话，不能覆盖叶子已持久化的后台任务。
+  hydrate(await prepareHydration(leaf), state, { restorePendingOpeningTrigger: false });
+  state.setChatHistory(finalHistory);
+  state.setTurnCount(turnCountAtStart + 1);
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+  state = deps.getState?.() ?? state;
 
   let effectiveWorld = state.世界;
   const isAwakeningEnterTrigger = userInput === '[系统] 踏入命途狭间';
@@ -112,7 +110,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     storyMode: effectiveWorld.剧情模式,
     recentMessages: finalHistory.map((message) => message.content).filter(Boolean).slice(-100),
     messageCount: turnCountAtStart,
-    worldbookTriggerStates: leaf?.worldbookTriggerStates ?? {},
+    worldbookTriggerStates: leaf.worldbookTriggerStates,
   };
 
   const memorySettings = state.deviceSettings.gameSettings.记忆系统;

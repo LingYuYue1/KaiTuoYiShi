@@ -8,7 +8,7 @@ import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts, type TavernRegexDryRunResult, type TavernRegexScriptSafety } from '@/hooks/useGame/tavernRegexProcessor';
-import { applySaveToState, beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleBranchFromSave, handleLoadById, handleLoadLatest, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
+import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleBranchFromSave, handleLoadById, handleLoadLatest, hydrate, prepareHydration, resetWorkflowProjection, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统 } from '@/models/yiting';
@@ -569,7 +569,7 @@ export function useGame(): UseGameReturn {
         return;
       }
 
-      // 用新叶子水合 React 状态（读叶子 = 水合；applySaveToState 同时把 activeSaveTreeMeta 指向新叶子）。
+      // 用新叶子水合 React 状态；hydrate 同时投影 activeSaveTreeMeta。
       const newLeafSaveId = await loadSaveIdByNodeId(fork.headNodeId);
       const newLeaf = newLeafSaveId ? await loadSave(newLeafSaveId) : null;
       if (!newLeaf) {
@@ -577,7 +577,8 @@ export function useGame(): UseGameReturn {
         s.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '分叉叶子数据缺失，重roll失败，请重试。' });
         return;
       }
-      await applySaveToState(newLeaf, s);
+      resetWorkflowProjection(s);
+      hydrate(await prepareHydration(newLeaf), s);
 
       // reroll 即放弃当前回合：结算中中止残留的中断工作流随本操作一起清空。
       if (s.activeWorkflow.interruptedWorkflow) {
@@ -613,7 +614,7 @@ export function useGame(): UseGameReturn {
 
   // 树检查版 reroll 可用性（UI 禁用门）：当前活跃叶子是否有可回退的父检查点，且该父检查点
   // 已通过 IndexedDB 存在性验证。与 handleReroll 内部的真实树检查同源——activeTreeMeta 是
-  // useGameState 的响应式 state，在 applySaveToState（读档水合）/ commitActiveSaveTreeMeta（封版晋升 /
+  // useGameState 的响应式 state，在 hydrate（读档水合）/ commitActiveSaveTreeMeta（封版晋升 /
   // 新局初始化）/ clearActiveSaveTreeMetaIfMatches（整树删除）处随活跃叶子联动更新，天然驱动 React 重渲染；
   // rerollParentStatus 由 useGameState 的验证 effect 在 meta 每次变化时异步探测父节点真实存在性，
   // pending（验证中）与 invalid（无父 / 验证失败）一律保守禁用，不再等点击后才在 handleReroll 里报错。
