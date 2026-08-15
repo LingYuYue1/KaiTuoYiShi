@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { API设置, 游戏设置 } from '@/models/settings';
-import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
+import type { 剧情编织分段, 剧情编织系列, 剧情编织系统, 剧情编织运行状态 } from '@/models/storyWeaving';
 import {
   创建剧情编织系列FromText,
   归一化剧情编织系统,
@@ -9,6 +9,27 @@ import {
 import { buildStoryWeavingApiConfig, decomposeStorySegment, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { cardClip, smallClip, type TrackTab } from './plot/constants';
+import { HeaderCard } from './plot/HeaderCard';
+import { SeriesControl } from './plot/SeriesControl';
+import { SeriesTree } from './plot/SeriesTree';
+import { SegmentDetail } from './plot/SegmentDetail';
+import { EmptyState, ProgressMiniBlock, TrackEmptyState } from './plot/primitives';
+import {
+  applyDraft,
+  buildManualProgressAnchor,
+  buildSeriesProgressAnchor,
+  draftFromSegment,
+  getPreviousCompleted,
+  type SegmentDraft,
+} from './plot/logic';
+import {
+  batchModeLabel,
+  runBatchDecompose,
+  selectBatchTargets,
+  toBatchSystem,
+  type BatchDecomposeMode,
+} from './plot/batchDecompose';
 
 interface PlotPanelProps {
   storyWeaving: 剧情编织系统;
@@ -17,154 +38,6 @@ interface PlotPanelProps {
   apiSettings: API设置;
   /** 剧情编织持久化（片 panel-p6）：由 useGame 门面接管 saveSetting 直连。 */
   onSaveStoryWeaving: (system: 剧情编织系统) => Promise<void>;
-}
-
-interface SegmentDraft {
-  标题: string;
-  章节范围: string;
-  启用注入: boolean;
-  本段概括: string;
-  前段延续事实: string;
-  本段结束状态: string;
-  给后续参考: string;
-  登场角色: string;
-  涉及地点: string;
-  涉及派系: string;
-}
-
-const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
-const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
-
-type TrackTab = 'canon' | 'custom';
-
-const statusColor: Record<剧情编织分段['处理状态'], string> = {
-  待处理: 'rgba(var(--tj-text-secondary), 0.8)',
-  处理中: 'rgba(var(--tj-accent-primary), 0.95)',
-  已完成: 'rgba(var(--tj-ui-success),0.95)',
-  失败: 'rgba(var(--tj-danger),0.95)',
-};
-
-const statusBg: Record<剧情编织分段['处理状态'], string> = {
-  待处理: 'rgba(var(--tj-text-secondary), 0.12)',
-  处理中: 'rgba(var(--tj-accent-primary), 0.16)',
-  已完成: 'rgba(var(--tj-ui-success),0.14)',
-  失败: 'rgba(var(--tj-danger),0.14)',
-};
-
-const runtimeStatusColor: Record<剧情编织运行状态, string> = {
-  未开始: 'rgba(var(--tj-text-secondary), 0.82)',
-  当前: 'rgba(var(--tj-accent-primary), 0.96)',
-  已经历: 'rgba(var(--tj-ui-success),0.95)',
-  已跳过: 'rgba(var(--tj-tech-blue),0.88)',
-  已偏离: 'rgba(var(--tj-accent-secondary),0.92)',
-  暂停: 'rgba(var(--tj-text-secondary),0.82)',
-};
-
-const runtimeStatusBg: Record<剧情编织运行状态, string> = {
-  未开始: 'rgba(var(--tj-text-secondary), 0.08)',
-  当前: 'rgba(var(--tj-accent-primary), 0.15)',
-  已经历: 'rgba(var(--tj-ui-success),0.12)',
-  已跳过: 'rgba(var(--tj-tech-blue),0.10)',
-  已偏离: 'rgba(var(--tj-accent-secondary),0.12)',
-  暂停: 'rgba(var(--tj-text-secondary),0.08)',
-};
-
-const runtimeStatusOptions: 剧情编织运行状态[] = ['未开始', '当前', '已经历', '已跳过', '已偏离', '暂停'];
-
-const joinList = (values: string[]) => values.join('\n');
-const splitList = (value: string) =>
-  value
-    .split(/\n|；|;|\|/g)
-    .map((item) => item.replace(/^[-*]\s*/, '').trim())
-    .filter(Boolean);
-const uniqueText = (values: string[], limit: number) => {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values.map((item) => item.trim()).filter(Boolean)) {
-    const key = value.replace(/\s+/g, '');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(value);
-    if (result.length >= limit) break;
-  }
-  return result;
-};
-
-function buildManualProgressAnchor(
-  previous: 剧情编织进度锚点 | undefined,
-  series: 剧情编织系列,
-  segment: 剧情编织分段,
-  note: string,
-): 剧情编织进度锚点 {
-  return {
-    当前系列ID: series.id,
-    当前分段ID: segment.id,
-    当前分段组号: segment.组号,
-    推进状态: segment.运行状态 === '已经历' ? '已完成'
-      : segment.运行状态 === '已偏离' ? '已偏离'
-        : segment.运行状态 === '暂停' ? '暂停'
-          : segment.运行状态 === '未开始' ? '未开始'
-            : '推进中',
-    已完成摘要: previous?.已完成摘要 ?? [],
-    当前待解问题: uniqueText([
-      ...segment.给后续参考,
-      ...segment.关键事件.flatMap((event) => event.触发条件),
-    ], 10),
-    切换说明: uniqueText([...(previous?.切换说明 ?? []), note], 10),
-    历史归档: previous?.历史归档 ?? [],
-    最近门禁结果: previous?.最近门禁结果,
-    最近判定理由: ['手动修正剧情编织进度'],
-    最近一次推进判定回合: previous?.最近一次推进判定回合,
-    updatedAt: Date.now(),
-  };
-}
-
-function getSeriesAnchorSegment(series: 剧情编织系列): 剧情编织分段 | undefined {
-  return series.分段列表.find((segment) => segment.组号 === series.当前分段组号 && segment.运行状态 === '当前')
-    ?? series.分段列表.find((segment) => segment.组号 === series.当前分段组号)
-    ?? series.分段列表.find((segment) => segment.运行状态 === '当前')
-    ?? series.分段列表[0];
-}
-
-function buildSeriesProgressAnchor(
-  previous: 剧情编织进度锚点 | undefined,
-  series: 剧情编织系列 | undefined,
-  note: string,
-): 剧情编织进度锚点 | undefined {
-  const segment = series ? getSeriesAnchorSegment(series) : undefined;
-  return series && segment ? buildManualProgressAnchor(previous, series, segment, note) : undefined;
-}
-
-function draftFromSegment(segment: 剧情编织分段): SegmentDraft {
-  return {
-    标题: segment.标题,
-    章节范围: segment.章节范围,
-    启用注入: segment.启用注入,
-    本段概括: segment.本段概括,
-    前段延续事实: joinList(segment.前段延续事实),
-    本段结束状态: joinList(segment.本段结束状态),
-    给后续参考: joinList(segment.给后续参考),
-    登场角色: joinList(segment.登场角色),
-    涉及地点: joinList(segment.涉及地点),
-    涉及派系: joinList(segment.涉及派系),
-  };
-}
-
-function applyDraft(segment: 剧情编织分段, draft: SegmentDraft): 剧情编织分段 {
-  return {
-    ...segment,
-    标题: draft.标题.trim() || segment.标题,
-    章节范围: draft.章节范围.trim() || segment.章节范围,
-    启用注入: draft.启用注入,
-    本段概括: draft.本段概括.trim(),
-    前段延续事实: splitList(draft.前段延续事实),
-    本段结束状态: splitList(draft.本段结束状态),
-    给后续参考: splitList(draft.给后续参考),
-    登场角色: splitList(draft.登场角色),
-    涉及地点: splitList(draft.涉及地点),
-    涉及派系: splitList(draft.涉及派系),
-    updatedAt: Date.now(),
-  };
 }
 
 export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, apiSettings, onSaveStoryWeaving }: PlotPanelProps) {
@@ -178,7 +51,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteText, setPasteText] = useState('');
-  const [draftState, setDraftState] = useState<{ key: string; draft: SegmentDraft } | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, SegmentDraft>>({});
   const [trackTab, setTrackTab] = useState<TrackTab>('canon');
 
   const normalized = useMemo(() => 归一化剧情编织系统(storyWeaving), [storyWeaving]);
@@ -218,8 +91,8 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const effectiveExpandedSeriesId = visibleSeries.some((s) => s.id === expandedSeriesId) ? expandedSeriesId : (viewSeries?.id ?? null);
 
   const draftKey = selectedSegment?.id ?? '';
-  const draft = draftState && draftState.key === draftKey && selectedSegment ? draftState.draft : (selectedSegment ? draftFromSegment(selectedSegment) : null);
-  const updateDraft = (next: SegmentDraft) => setDraftState({ key: draftKey, draft: next });
+  const draft = selectedSegment ? (drafts[draftKey] ?? draftFromSegment(selectedSegment)) : null;
+  const updateDraft = (next: SegmentDraft) => setDrafts((prev) => ({ ...prev, [draftKey]: next }));
 
   const persist = async (next: 剧情编织系统): Promise<boolean> => {
     const prev = storyWeaving;
@@ -275,8 +148,14 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
 
   const handleImportTxtFile = async (file?: File) => {
     if (!file) return;
-    await handleImportText(await file.text(), file.name.replace(/\.[^.]+$/, ''), file.name);
-    if (txtInputRef.current) txtInputRef.current.value = '';
+    try {
+      await handleImportText(await file.text(), file.name.replace(/\.[^.]+$/, ''), file.name);
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      setMessage(`TXT 导入失败：${text}`);
+    } finally {
+      if (txtInputRef.current) txtInputRef.current.value = '';
+    }
   };
 
   const handleImportJsonFile = async (file?: File) => {
@@ -288,6 +167,13 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         ? 归一化剧情编织系统(parsed)
         : 归一化剧情编织系统({ 系列列表: [parsed], 当前系列ID: parsed.id });
       const customOnly = system.系列列表.length > 0 && system.系列列表.every((series) => series.来源类型 !== 'canon');
+      if (!customOnly && system.系列列表.length > 0) {
+        const ok = window.confirm('导入的 JSON 包含内置原著轨道，将整体替换当前剧情编织系统（含自制轨道）。确认替换？');
+        if (!ok) {
+          setMessage('已取消导入。');
+          return;
+        }
+      }
       const next = customOnly
         ? 归一化剧情编织系统({
           ...normalized,
@@ -449,11 +335,6 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     setMessage(`已保存分段：${updated.标题}`);
   };
 
-  const getPreviousCompleted = (series: 剧情编织系列, segment: 剧情编织分段) =>
-    series.分段列表
-      .filter((item) => item.组号 < segment.组号 && item.处理状态 === '已完成')
-      .sort((a, b) => b.组号 - a.组号)[0];
-
   const handleDecompose = async (series: 剧情编织系列, segment: 剧情编织分段) => {
     const config = buildStoryWeavingApiConfig(gameSettings, apiSettings);
     if (!config) {
@@ -498,74 +379,37 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     }
   };
 
-  const handleBatchDecompose = async (series: 剧情编织系列, mode: 'pending' | 'fromCurrent' | 'all') => {
+  const handleBatchDecompose = async (series: 剧情编织系列, mode: BatchDecomposeMode) => {
     const config = buildStoryWeavingApiConfig(gameSettings, apiSettings);
     if (!config) {
       window.alert('剧情编织 API 未配置。请先到设置 → 剧情编织 配置模型，或配置主 API 作为回退。');
       return;
     }
-    const targets = series.分段列表.filter((segment) => {
-      if (mode === 'pending') return segment.处理状态 !== '已完成';
-      if (mode === 'fromCurrent') return segment.组号 >= series.当前分段组号;
-      return true;
-    });
+    const targets = selectBatchTargets(series, mode);
     if (!targets.length) {
       setMessage('没有需要分解的分段。');
       return;
     }
-    const label = mode === 'pending' ? '待处理分段' : mode === 'fromCurrent' ? '当前以后分段' : '全部分段';
+    const label = batchModeLabel(mode);
     if (mode === 'all' && !window.confirm('确认重新分解全部分段？已有分解结果会被覆盖。')) return;
-
-    let workingSystem = normalized;
-    let workingSeries = series;
-    let persistFailed = false;
     setBusyBatch(label);
     try {
-      for (let index = 0; index < targets.length; index += 1) {
-        const target = workingSeries.分段列表.find((item) => item.id === targets[index].id);
-        if (!target) continue;
-        setBusyId(target.id);
-        setMessage(`批量分解 ${index + 1}/${targets.length}：${target.标题}`);
-
-        workingSeries = {
-          ...workingSeries,
-          分段列表: workingSeries.分段列表.map((item) => item.id === target.id ? { ...item, 处理状态: '处理中', 最近错误: '', updatedAt: Date.now() } : item),
-          updatedAt: Date.now(),
-        };
-        workingSystem = { ...workingSystem, 系列列表: workingSystem.系列列表.map((item) => item.id === workingSeries.id ? workingSeries : item), 当前系列ID: workingSeries.id };
-        if (!await persist(workingSystem)) {
-          persistFailed = true;
-          break;
-        }
-
-        try {
-          const processingSegment = workingSeries.分段列表.find((item) => item.id === target.id) ?? target;
-          const parsed = await decomposeStorySegment({
-            config,
-            series: workingSeries,
-            segment: processingSegment,
-            previousSegment: getPreviousCompleted(workingSeries, processingSegment),
-            promptModules: gameSettings.promptModules,
-          });
-          workingSeries = {
-            ...workingSeries,
-            分段列表: workingSeries.分段列表.map((item) => item.id === target.id ? parsed : item),
-            updatedAt: Date.now(),
-          };
-        } catch (err) {
-          const text = (err as Error).message;
-          workingSeries = {
-            ...workingSeries,
-            分段列表: workingSeries.分段列表.map((item) => item.id === target.id ? { ...item, 处理状态: '失败', 最近错误: text, updatedAt: Date.now() } : item),
-            updatedAt: Date.now(),
-          };
-        }
-        workingSystem = { ...workingSystem, 系列列表: workingSystem.系列列表.map((item) => item.id === workingSeries.id ? workingSeries : item), 当前系列ID: workingSeries.id };
-        if (!await persist(workingSystem)) {
-          persistFailed = true;
-          break;
-        }
-      }
+      const { persistFailed } = await runBatchDecompose({
+        series,
+        targets,
+        decompose: async (segment, previousSegment) => decomposeStorySegment({
+          config,
+          series,
+          segment,
+          previousSegment,
+          promptModules: gameSettings.promptModules,
+        }),
+        persist: async (nextSeries) => persist(toBatchSystem(normalized, nextSeries)),
+        onProgress: (index, total, segment) => {
+          setBusyId(segment.id);
+          setMessage(`批量分解 ${index + 1}/${total}：${segment.标题}`);
+        },
+      });
       if (!persistFailed) setMessage(`批量分解结束：${label}`);
     } finally {
       setBusyId(null);
@@ -590,6 +434,8 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     setExpandedSeriesId(rest[0]?.id ?? null);
   };
 
+  const busyLocked = Boolean(busyBatch);
+
   return (
     <div className="kaituo-options-scroll relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
       <div
@@ -602,9 +448,9 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         }}
       />
       <div className="relative z-10 flex min-h-max flex-col gap-3 pb-6">
-                <HeaderCard
-                  activeSeries={activeSeries}
-                  progress={activeProgress}
+        <HeaderCard
+          activeSeries={activeSeries}
+          progress={activeProgress}
           seriesCount={normalized.系列列表.length}
           totalChapters={normalized.系列列表.reduce((sum, series) => sum + series.章节列表.length, 0)}
           totalSegments={normalized.系列列表.reduce((sum, series) => sum + series.分段列表.length, 0)}
@@ -836,7 +682,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           <div className="flex flex-col gap-3 overflow-visible lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[260px_minmax(0,1fr)] lg:overflow-hidden">
             <SeriesTree
               system={visibleSystem}
-              activeSeries={viewSeries}
+              viewSeries={viewSeries}
               selectedSegmentId={selectedSegment?.id ?? null}
               expandedSeriesId={effectiveExpandedSeriesId}
               busyId={busyId}
@@ -858,7 +704,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                 onBatchFromCurrent={() => void handleBatchDecompose(viewSeries, 'fromCurrent')}
                 onBatchAll={() => void handleBatchDecompose(viewSeries, 'all')}
                 onDelete={() => void handleDeleteSeries(viewSeries.id)}
-                busy={Boolean(busyBatch)}
+                busy={busyLocked}
               />
               {selectedSegment && draft ? (
                 <>
@@ -867,7 +713,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                     segment={selectedSegment}
                     draft={draft}
                     onDraftChange={updateDraft}
-                    busy={busyId === selectedSegment.id}
+                    busy={busyLocked || busyId === selectedSegment.id}
                     onDecompose={() => void handleDecompose(viewSeries, selectedSegment)}
                     onSetCurrent={() => void handleSetCurrent(viewSeries, selectedSegment.组号)}
                     onSetRuntimeStatus={(status) => void handleSetRuntimeStatus(viewSeries, selectedSegment, status)}
@@ -912,614 +758,6 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
 
         {message && <div className="text-xs" style={{ color: message.includes('失败') ? 'rgba(var(--tj-danger),0.9)' : 'rgba(var(--tj-ui-success),0.86)' }}>{message}</div>}
       </div>
-    </div>
-  );
-}
-
-function HeaderCard({
-  activeSeries,
-  progress,
-  seriesCount,
-  totalChapters,
-  totalSegments,
-  busyBatch,
-}: {
-  activeSeries?: 剧情编织系列;
-  progress?: 剧情编织进度锚点;
-  seriesCount: number;
-  totalChapters: number;
-  totalSegments: number;
-  busyBatch: string;
-}) {
-  return (
-    <div
-      className="relative overflow-hidden px-3 py-3 md:px-4 md:py-4"
-      style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.12), rgba(var(--tj-tech-cyan), 0.05) 38%, rgba(var(--tj-bg-primary),0.95))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24), 0 0 18px rgba(var(--tj-accent-primary),0.06)',
-        clipPath: cardClip,
-      }}
-    >
-      <div className="pointer-events-none absolute right-3 top-4 text-[34px] font-bold opacity-[0.05] md:right-4 md:top-1/2 md:-translate-y-1/2 md:text-[42px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-        WIRING
-      </div>
-      <div className="flex flex-col items-stretch gap-3 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2" style={{ background: 'rgb(var(--tj-tech-cyan))', boxShadow: '0 0 12px rgba(var(--tj-tech-cyan), 0.8)' }} />
-            <span className="font-serif text-[11px] tracking-[0.2em] md:text-[12px] md:tracking-[0.32em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.86)' }}>
-              NARRATIVE WORKBENCH
-            </span>
-          </div>
-          <div className="mt-1 font-serif text-[19px] font-bold tracking-[0.16em] md:text-[20px] md:tracking-[0.24em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-            剧情编织
-          </div>
-          <div className="mt-1 max-w-2xl text-[12px] leading-relaxed tracking-0" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-            导入玩家自定义 TXT，将它拆成章节与分段，再分解为主剧情可读取的滑窗。这里负责章节结构、可见性边界、角色档案、地点档案与承接事实。
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-            <Pill text="TXT 导入" tone="gold" />
-            <Pill text="章节滑窗" tone="cyan" />
-            <Pill text="角色 / 地点 / 派系档案" tone="muted" />
-            <Pill text={busyBatch ? `批量处理中：${busyBatch}` : '待机中'} tone={busyBatch ? 'gold' : 'muted'} />
-          </div>
-        </div>
-        <div className="grid min-w-0 grid-cols-2 gap-2 md:min-w-[340px]">
-          <StatCard label="系列" value={String(seriesCount).padStart(2, '0')} tone="rgb(var(--tj-accent-primary))" />
-          <StatCard label="章节" value={String(totalChapters).padStart(2, '0')} tone="rgb(var(--tj-tech-cyan))" />
-          <StatCard label="分段" value={String(totalSegments).padStart(2, '0')} tone="rgb(var(--tj-tech-cyan))" />
-          <StatCard label="当前" value={progress ? `${progress.当前分段组号}` : activeSeries ? `${activeSeries.当前分段组号}` : '--'} tone="rgb(var(--tj-accent-primary))" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProgressMiniBlock({ label, values }: { label: string; values: string[] }) {
-  return (
-    <div
-      className="min-w-0 px-2.5 py-2"
-      style={{
-        background: 'rgba(var(--tj-bg-primary),0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
-        clipPath: smallClip,
-      }}
-    >
-      <div className="font-serif text-[10px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.74)' }}>{label}</div>
-      <div className="mt-1 line-clamp-3 leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-        {values.slice(-3).join('；') || '暂无'}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return (
-    <div
-      className="px-3 py-2"
-      style={{
-        background: 'rgba(var(--tj-bg-primary),0.55)',
-        boxShadow: `inset 0 0 0 1px ${tone}33`,
-        clipPath: smallClip,
-      }}
-    >
-      <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{label}</div>
-      <div className="mt-0.5 font-serif text-[16px] font-bold tracking-[0.18em]" style={{ color: tone }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function Pill({ text, tone }: { text: string; tone: 'gold' | 'cyan' | 'muted' }) {
-  const color = tone === 'gold' ? 'rgb(var(--tj-accent-primary))' : tone === 'cyan' ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-text-secondary),0.82)';
-  const background = tone === 'gold' ? 'rgba(var(--tj-accent-primary),0.10)' : tone === 'cyan' ? 'rgba(var(--tj-tech-cyan), 0.08)' : 'rgba(255,255,255,0.03)';
-  return (
-    <span
-      className="px-2.5 py-1"
-      style={{
-        color,
-        background,
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
-        clipPath: smallClip,
-      }}
-    >
-      {text}
-    </span>
-  );
-}
-
-function SeriesControl({
-  series,
-  onRename,
-  onToggleInjection,
-  onRebuild,
-  onBatchPending,
-  onBatchFromCurrent,
-  onBatchAll,
-  onDelete,
-  busy,
-}: {
-  series: 剧情编织系列;
-  onRename: () => void;
-  onToggleInjection: () => void;
-  onRebuild: () => void;
-  onBatchPending: () => void;
-  onBatchFromCurrent: () => void;
-  onBatchAll: () => void;
-  onDelete: () => void;
-  busy: boolean;
-}) {
-  const done = series.分段列表.filter((item) => item.处理状态 === '已完成').length;
-  return (
-    <div className="mb-3 px-3 py-3 md:px-4" style={{ background: 'rgba(var(--tj-accent-primary),0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: cardClip }}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="break-words font-serif text-[15px] font-bold md:text-base" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{series.标题}</div>
-          <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
-            {series.来源类型 === 'canon' ? '原著剧情轨道' : '玩家自制剧情'} · {series.章节列表.length} 章 · {series.分段列表.length} 段 · 已完成 {done} 段 · 每段 {series.每段章数} 章
-          </div>
-          {series.当前阶段概括 && (
-            <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-              {series.当前阶段概括}
-            </div>
-          )}
-          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-            {series.核心角色.slice(0, 4).map((item) => (
-              <span key={item} className="px-2 py-1" style={{ background: 'rgba(var(--tj-accent-primary),0.08)', color: 'rgba(var(--tj-accent-primary),0.85)', clipPath: smallClip }}>
-                {item}
-              </span>
-            ))}
-            {series.涉及地点索引.slice(0, 3).map((item) => (
-              <span key={item} className="px-2 py-1" style={{ background: 'rgba(var(--tj-ui-success),0.08)', color: 'rgba(var(--tj-ui-success),0.85)', clipPath: smallClip }}>
-                {item}
-              </span>
-            ))}
-            {series.涉及派系索引.slice(0, 3).map((item) => (
-              <span key={item} className="px-2 py-1" style={{ background: 'rgba(var(--tj-tech-blue),0.08)', color: 'rgba(var(--tj-tech-blue),0.85)', clipPath: smallClip }}>
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
-          <button className="panel-btn" onClick={onRename}>重命名</button>
-          <button className="panel-btn" onClick={onToggleInjection}>{series.激活注入 ? '暂停注入' : '启用注入'}</button>
-          <button className="panel-btn" disabled={series.来源类型 === 'canon'} onClick={onRebuild}>重建分段</button>
-          <button className="panel-btn" disabled={busy} onClick={onBatchPending}>分解待处理</button>
-          <button className="panel-btn" disabled={busy} onClick={onBatchFromCurrent}>分解当前后续</button>
-          <button className="panel-btn strong" disabled={busy} onClick={onBatchAll}>重分解全部</button>
-          <button className="panel-btn danger" disabled={series.来源类型 === 'canon'} onClick={onDelete}>删除</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SeriesTree({
-  system,
-  activeSeries,
-  selectedSegmentId,
-  expandedSeriesId,
-  busyId,
-  onSelectSeries,
-  onSelectSegment,
-  onSelectChapter,
-}: {
-  system: 剧情编织系统;
-  activeSeries: 剧情编织系列;
-  selectedSegmentId: string | null;
-  expandedSeriesId: string | null;
-  busyId: string | null;
-  onSelectSeries: (series: 剧情编织系列) => void;
-  onSelectSegment: (segment: 剧情编织分段) => void;
-  onSelectChapter: (series: 剧情编织系列, chapterSeq: number) => void;
-}) {
-  return (
-    <aside className="kaituo-options-scroll overflow-visible pb-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-3">
-      <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-2 lg:overflow-visible lg:pb-0">
-        {system.系列列表.map((series) => {
-          const active = series.id === activeSeries.id;
-          const expanded = expandedSeriesId === series.id;
-          const completeCount = series.分段列表.filter((item) => item.处理状态 === '已完成').length;
-          return (
-            <div key={series.id} className="w-[78vw] max-w-[280px] shrink-0 lg:w-auto lg:max-w-none" style={{ boxShadow: `inset 0 0 0 1px ${active ? 'rgba(var(--tj-accent-primary),0.35)' : 'rgba(var(--tj-accent-primary),0.14)'}`, background: active ? 'rgba(var(--tj-accent-primary),0.055)' : 'rgba(var(--tj-bg-primary),0.42)', clipPath: cardClip }}>
-              <button className="w-full px-3 py-2 text-left" onClick={() => onSelectSeries(series)}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate font-serif text-xs font-bold" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.86)' }}>{series.标题}</span>
-                  <span className="text-[11px]" style={{ color: series.激活注入 ? 'rgba(145,210,175,0.9)' : 'rgba(var(--tj-text-secondary),0.7)' }}>{series.激活注入 ? 'ON' : 'OFF'}</span>
-                </div>
-                <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.75)' }}>
-                  {series.来源类型 === 'canon' ? '原著' : '自制'} · {series.章节列表.length} 章 · {completeCount}/{series.分段列表.length} 段
-                </div>
-              </button>
-
-              {expanded && (
-                <div className="space-y-2 px-2 pb-2">
-                  <div>
-                    <div className="mb-1 px-1 text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.6)' }}>章节</div>
-                    <div className="kaituo-options-scroll max-h-28 space-y-1 overflow-y-auto pr-1">
-                      {series.章节列表.map((chapter) => (
-                        <button
-                          key={chapter.id}
-                          className="w-full truncate px-2 py-1 text-left text-[11px]"
-                          style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-accent-primary),0.035)', clipPath: smallClip }}
-                          onClick={() => onSelectChapter(series, chapter.序号)}
-                        >
-                          {chapter.序号}. {chapter.标题}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-1 px-1 text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-accent-primary),0.6)' }}>分段</div>
-                    <div className="space-y-1">
-                      {series.分段列表.map((segment) => {
-                        const selected = selectedSegmentId === segment.id;
-                        const current = segment.运行状态 === '当前' || series.当前分段组号 === segment.组号;
-                        const busy = busyId === segment.id;
-                        return (
-                          <button
-                            key={segment.id}
-                            onClick={() => onSelectSegment(segment)}
-                            className="w-full px-2 py-2 text-left"
-                            style={{
-                              background: selected ? 'rgba(var(--tj-accent-primary),0.1)' : runtimeStatusBg[segment.运行状态] || statusBg[segment.处理状态],
-                              boxShadow: `inset 0 0 0 1px ${current ? 'rgba(var(--tj-accent-primary),0.5)' : 'rgba(var(--tj-accent-primary),0.12)'}`,
-                              clipPath: smallClip,
-                            }}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="min-w-0 truncate font-serif text-xs" style={{ color: selected ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.84)' }}>
-                                {segment.组号}. {segment.标题}
-                              </span>
-                              <span className="text-[10px]" style={{ color: runtimeStatusColor[segment.运行状态] }}>
-                                {segment.运行状态}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-[11px]" style={{ color: statusColor[segment.处理状态] }}>
-                              {busy ? '处理中...' : segment.处理状态} · {segment.章节范围}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </aside>
-  );
-}
-
-function SegmentDetail({
-  series,
-  segment,
-  draft,
-  progress,
-  onDraftChange,
-  busy,
-  onDecompose,
-  onSetCurrent,
-  onSetRuntimeStatus,
-  onSaveDraft,
-  onResetDraft,
-}: {
-  series: 剧情编织系列;
-  segment: 剧情编织分段;
-  draft: SegmentDraft;
-  progress?: 剧情编织进度锚点;
-  onDraftChange: (draft: SegmentDraft) => void;
-  busy: boolean;
-  onDecompose: () => void;
-  onSetCurrent: () => void;
-  onSetRuntimeStatus: (status: 剧情编织运行状态) => void;
-  onSaveDraft: () => void;
-  onResetDraft: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div
-        className="px-3 py-3 md:px-4"
-        style={{ background: 'rgba(var(--tj-accent-primary),0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: cardClip }}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="break-words font-serif text-[15px] font-bold md:text-base" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{segment.标题}</div>
-            <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
-              {series.标题} · {series.来源类型 === 'canon' ? '原著轨道' : '自制轨道'} · {segment.章节范围} · {segment.字数} 字 · {segment.启用注入 ? '参与注入' : '不注入'}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>运行状态</span>
-              {runtimeStatusOptions.map((status) => {
-                const active = segment.运行状态 === status;
-                return (
-                  <button
-                    key={status}
-                    type="button"
-                    className="px-2 py-1 text-[11px] transition-all"
-                    onClick={() => onSetRuntimeStatus(status)}
-                    style={{
-                      color: active ? 'rgb(var(--tj-text-primary))' : runtimeStatusColor[status],
-                      background: active ? runtimeStatusBg[status] : 'rgba(var(--tj-bg-primary),0.36)',
-                      boxShadow: `inset 0 0 0 1px ${active ? runtimeStatusColor[status] : 'rgba(var(--tj-accent-primary),0.12)'}`,
-                      clipPath: smallClip,
-                    }}
-                  >
-                    {status}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:justify-end">
-            <button className="panel-btn" onClick={onSetCurrent}>设为当前</button>
-            <button className="panel-btn" onClick={onResetDraft}>还原草稿</button>
-            <button className="panel-btn" onClick={onSaveDraft}>保存修改</button>
-            <button className="panel-btn strong" disabled={busy} onClick={onDecompose}>
-              {busy ? '分解中...' : segment.处理状态 === '已完成' ? '重新分解' : 'AI 分解'}
-            </button>
-          </div>
-        </div>
-        {segment.最近错误 && <div className="mt-2 text-xs" style={{ color: 'rgba(var(--tj-danger),0.9)' }}>{segment.最近错误}</div>}
-      </div>
-
-      {progress && (
-        <InfoBlock title="当前章节进度锚点" empty="暂无锚点。" hasContent>
-          <div className="grid gap-2 md:grid-cols-2">
-            <div>推进状态：{progress.推进状态}</div>
-            <div>当前分段：{progress.当前分段组号}</div>
-            <div>最近判定回合：{progress.最近一次推进判定回合 ?? '未记录'}</div>
-            <div>最近门禁：{progress.最近门禁结果 ?? '未记录'}</div>
-          </div>
-          <div className="mt-2 space-y-1">
-            {progress.切换说明.slice(-3).map((item, index) => <div key={`${item}_${index}`}>- {item}</div>)}
-            {!progress.切换说明.length && <div style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>暂无切换说明</div>}
-          </div>
-          <div className="mt-2 grid gap-2 md:grid-cols-2">
-            <div>
-              <div style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>已完成摘要</div>
-              {(progress.已完成摘要.slice(-5).length ? progress.已完成摘要.slice(-5) : ['暂无']).map((item, index) => <div key={`${item}_${index}`}>- {item}</div>)}
-            </div>
-            <div>
-              <div style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>最近判定理由</div>
-              {(progress.最近判定理由.length ? progress.最近判定理由 : ['暂无']).map((item, index) => <div key={`${item}_${index}`}>- {item}</div>)}
-            </div>
-          </div>
-          {progress.历史归档.length > 0 && (
-            <div className="mt-2">
-              <div style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>历史归档</div>
-              {progress.历史归档.slice(-5).map((item) => (
-                <div key={item.id} className="mt-1">
-                  - 第{item.分段组号}段「{item.分段标题}」｜{item.归档状态}{item.归档回合 ? `｜回合 ${item.归档回合}` : ''}：{item.摘要 || '无摘要'}
-                </div>
-              ))}
-            </div>
-          )}
-        </InfoBlock>
-      )}
-
-      <ManualEditor draft={draft} onDraftChange={onDraftChange} />
-
-      <InfoBlock title="本段概括" empty="尚未分解。" hasContent={Boolean(segment.本段概括.trim())}>
-        {segment.本段概括}
-      </InfoBlock>
-
-      <InfoGrid
-        items={[
-          ['前段延续事实', segment.前段延续事实],
-          ['本段结束状态', segment.本段结束状态],
-          ['给后续参考', segment.给后续参考],
-          ['登场角色', segment.登场角色],
-          ['涉及地点', segment.涉及地点],
-          ['涉及派系', segment.涉及派系],
-        ]}
-      />
-
-      <InfoGrid
-        items={[
-          ['开局已成立事实', segment.开局已成立事实],
-          ['时间线起点', segment.时间线起点 ? [segment.时间线起点] : []],
-          ['时间线终点', segment.时间线终点 ? [segment.时间线终点] : []],
-          ['时间线概览', segment.时间线.map((item) => `${item.时间锚点 || '未知'} · ${item.标题}`)],
-        ]}
-      />
-
-      <InfoBlock title="原著硬约束" empty="暂无硬约束。" hasContent={segment.原著硬约束.length > 0}>
-        <VisibleList items={segment.原著硬约束} />
-      </InfoBlock>
-
-      <InfoBlock title="可提前铺垫" empty="暂无可提前铺垫。" hasContent={segment.可提前铺垫.length > 0}>
-        <VisibleList items={segment.可提前铺垫} />
-      </InfoBlock>
-
-      <InfoBlock title="关键事件" empty="暂无关键事件。" hasContent={segment.关键事件.length > 0}>
-        <div className="space-y-2">
-          {segment.关键事件.map((event, index) => (
-            <div key={`${event.事件名}_${index}`} className="text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.84)' }}>
-              <span style={{ color: 'rgb(var(--tj-accent-primary))' }}>[{index + 1}] {event.事件名 || '未命名事件'}</span>
-              {event.事件说明 ? `：${event.事件说明}` : ''}
-              {event.触发条件.length > 0 && <div className="mt-1" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>触发：{event.触发条件.join('；')}</div>}
-              {event.事件结果.length > 0 && <div style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>结果：{event.事件结果.join('；')}</div>}
-            </div>
-          ))}
-        </div>
-      </InfoBlock>
-
-      <InfoBlock title="角色推进" empty="暂无角色推进。" hasContent={segment.角色推进.length > 0}>
-        <div className="space-y-2">
-          {segment.角色推进.map((item, index) => (
-            <div key={`${item.角色名}_${index}`}>
-              <div style={{ color: 'rgb(var(--tj-accent-primary))' }}>{item.角色名}</div>
-              <div className="mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-                {[...item.本段变化, ...item.本段后状态, ...item.对后续影响].slice(0, 5).join('；') || '无'}
-              </div>
-            </div>
-          ))}
-        </div>
-      </InfoBlock>
-
-      <InfoBlock title="角色档案" empty="暂无角色档案。" hasContent={segment.角色档案.length > 0}>
-        <div className="space-y-2">
-          {segment.角色档案.map((item, index) => (
-            <div key={`${item.名称}_${index}`}>
-              <div style={{ color: 'rgb(var(--tj-accent-primary))' }}>{item.名称} · {item.身份 || '无'}</div>
-              <div className="mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-                {item.所属势力 || '无'} · {item.初始立场 || '无'} · {item.重要性}
-              </div>
-            </div>
-          ))}
-        </div>
-      </InfoBlock>
-
-      <InfoBlock title="势力档案" empty="暂无势力档案。" hasContent={segment.势力档案.length > 0}>
-        <div className="space-y-2">
-          {segment.势力档案.map((item, index) => (
-            <div key={`${item.名称}_${index}`}>
-              <div style={{ color: 'rgb(var(--tj-accent-primary))' }}>{item.名称} · {item.类型 || '无'}</div>
-              <div className="mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-                {item.地盘 || '无'} · {item.立场目标 || '无'}
-              </div>
-            </div>
-          ))}
-        </div>
-      </InfoBlock>
-
-      <InfoBlock title="地点档案" empty="暂无地点档案。" hasContent={segment.地图地点档案.length > 0}>
-        <div className="space-y-2">
-          {segment.地图地点档案.map((item, index) => (
-            <div key={`${item.名称}_${index}`}>
-              <div style={{ color: 'rgb(var(--tj-accent-primary))' }}>{item.名称} · {item.层级}</div>
-              <div className="mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-                {item.上级地点 || '无'} · {item.所属势力 || '无'}
-              </div>
-            </div>
-          ))}
-        </div>
-      </InfoBlock>
-
-      <InfoBlock title="原文预览" empty="无原文。" hasContent={Boolean(segment.原文内容.trim())}>
-        <pre
-          className="kaituo-options-scroll max-h-80 overflow-y-auto whitespace-pre-wrap pr-2 text-xs leading-relaxed"
-          style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}
-        >
-          {segment.原文内容}
-        </pre>
-      </InfoBlock>
-    </div>
-  );
-}
-
-function ManualEditor({ draft, onDraftChange }: { draft: SegmentDraft; onDraftChange: (draft: SegmentDraft) => void }) {
-  const patch = (next: Partial<SegmentDraft>) => onDraftChange({ ...draft, ...next });
-  return (
-    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: cardClip }}>
-      <div className="font-serif text-[12px] tracking-[0.18em] md:tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>手工校订</div>
-      <div className="grid gap-2 md:grid-cols-2">
-        <label className="block">
-          <div className="mb-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>分段标题</div>
-          <input value={draft.标题} onChange={(e) => patch({ 标题: e.target.value })} className="kaituo-input w-full px-2.5 py-2 text-sm" style={{ clipPath: smallClip }} />
-        </label>
-        <label className="block">
-          <div className="mb-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>章节范围</div>
-          <input value={draft.章节范围} onChange={(e) => patch({ 章节范围: e.target.value })} className="kaituo-input w-full px-2.5 py-2 text-sm" style={{ clipPath: smallClip }} />
-        </label>
-      </div>
-      <label className="flex items-center justify-between gap-3 px-2 py-2" style={{ background: 'rgba(var(--tj-accent-primary),0.04)', clipPath: smallClip }}>
-        <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>参与主剧情滑窗注入</span>
-        <input type="checkbox" checked={draft.启用注入} onChange={(e) => patch({ 启用注入: e.target.checked })} />
-      </label>
-      <TextAreaField label="本段概括" value={draft.本段概括} rows={4} onChange={(value) => patch({ 本段概括: value })} />
-      <div className="grid gap-2 md:grid-cols-2">
-        <TextAreaField label="前段延续事实" value={draft.前段延续事实} rows={4} onChange={(value) => patch({ 前段延续事实: value })} />
-        <TextAreaField label="本段结束状态" value={draft.本段结束状态} rows={4} onChange={(value) => patch({ 本段结束状态: value })} />
-        <TextAreaField label="给后续参考" value={draft.给后续参考} rows={4} onChange={(value) => patch({ 给后续参考: value })} />
-        <TextAreaField label="登场角色" value={draft.登场角色} rows={4} onChange={(value) => patch({ 登场角色: value })} />
-        <TextAreaField label="涉及地点" value={draft.涉及地点} rows={3} onChange={(value) => patch({ 涉及地点: value })} />
-        <TextAreaField label="涉及派系" value={draft.涉及派系} rows={3} onChange={(value) => patch({ 涉及派系: value })} />
-      </div>
-    </div>
-  );
-}
-
-function TextAreaField({ label, value, rows, onChange }: { label: string; value: string; rows: number; onChange: (value: string) => void }) {
-  return (
-    <label className="block">
-      <div className="mb-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>{label}</div>
-      <textarea
-        value={value}
-        rows={rows}
-        onChange={(e) => onChange(e.target.value)}
-        className="kaituo-input w-full px-2.5 py-2 text-xs leading-relaxed"
-        style={{ clipPath: smallClip }}
-      />
-    </label>
-  );
-}
-
-function InfoGrid({ items }: { items: Array<[string, string[]]> }) {
-  return (
-    <div className="grid gap-2 md:grid-cols-2">
-      {items.map(([title, values]) => (
-        <InfoBlock key={title} title={title} empty="无" hasContent={values.length > 0}>
-          <div className="space-y-1">
-            {values.map((value, index) => <div key={`${value}_${index}`}>- {value}</div>)}
-          </div>
-        </InfoBlock>
-      ))}
-    </div>
-  );
-}
-
-function InfoBlock({ title, empty, children, hasContent = true }: { title: string; empty: string; children: React.ReactNode; hasContent?: boolean }) {
-  return (
-    <div className="px-3 py-3 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip, color: 'rgba(var(--tj-text-secondary),0.84)' }}>
-      <div className="mb-2 font-serif text-[12px] tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>{title}</div>
-      {hasContent ? children : <span style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>{empty}</span>}
-    </div>
-  );
-}
-
-function VisibleList({ items }: { items: 剧情编织分段['原著硬约束'] }) {
-  if (!items.length) return null;
-  return (
-    <div className="space-y-2">
-      {items.map((item, index) => (
-        <div key={`${item.内容}_${index}`}>
-          <div>- {item.内容}</div>
-          <div className="mt-0.5 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>
-            谁知道：{item.信息可见性.谁知道.join('、') || '未限定'} · 谁不知道：{item.信息可见性.谁不知道.join('、') || '未限定'} · {item.信息可见性.是否仅读者视角可见 ? '仅读者视角' : '可公开承接'}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div
-      className="flex min-h-56 items-center justify-center px-4 py-8 text-center font-serif text-xs italic tracking-[0.18em]"
-      style={{ color: 'rgba(var(--tj-text-secondary),0.65)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)', clipPath: cardClip }}
-    >
-      导入 TXT 后，剧情会被拆成可分解、可校订、可注入主剧情的章节段落。
-    </div>
-  );
-}
-
-function TrackEmptyState({ trackTab }: { trackTab: TrackTab }) {
-  return (
-    <div
-      className="flex min-h-56 flex-1 items-center justify-center px-4 py-8 text-center font-serif text-xs italic tracking-[0.18em]"
-      style={{ color: 'rgba(var(--tj-text-secondary),0.65)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)', clipPath: cardClip }}
-    >
-      {trackTab === 'canon'
-        ? '暂无原著剧情轨道。点击“恢复内置原著”后会显示内置主线。'
-        : '暂无自制剧情轨道。导入 TXT 或粘贴文本后会显示玩家自制剧情。'}
     </div>
   );
 }
