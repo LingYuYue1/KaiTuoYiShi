@@ -212,24 +212,32 @@ export function enrichNpcArchives(
   let changed = false;
   const next = records.map((npc) => {
     const canonical = matchCanonical(npc.姓名) ?? (npc.别名 ? matchCanonical(npc.别名) : null);
-    const baseline: CanonicalArchiveBaseline = {
-      ...(canonical ? {
-        外貌: canonical.appearance,
-        性格: canonical.personality,
-      } : {}),
-      ...(canonical ? CANONICAL_ARCHIVE_BASELINES[canonical.name] : {}),
-    };
+    // 静态档案补全只服务于原著角色；但 NSFW 基线仍覆盖玩家明确标记的自定义伙伴。
+    // 两条职责分开，避免路人被补档升格，也避免自定义伙伴失去后续事实写入的空壳。
+    const baseline: CanonicalArchiveBaseline | undefined = canonical
+      ? {
+          外貌: canonical.appearance,
+          性格: canonical.personality,
+          ...CANONICAL_ARCHIVE_BASELINES[canonical.name],
+        }
+      : undefined;
     let updated = npc;
     const patch: Partial<NPC记录> = {};
 
-    if (shouldPatchArchiveField(updated.外貌, baseline.外貌)) patch.外貌 = baseline.外貌;
-    if (shouldPatchArchiveField(updated.性格, baseline.性格)) patch.性格 = baseline.性格;
-    if (shouldPatchArchiveField(updated.穿着, baseline.穿着)) patch.穿着 = baseline.穿着;
-    if (shouldPatchArchiveField(updated.说话方式, baseline.说话方式)) patch.说话方式 = baseline.说话方式;
-    if (shouldPatchArchiveField(updated.介绍, baseline.介绍)) patch.介绍 = baseline.介绍;
-    if (!updated.性别 && baseline?.性别) patch.性别 = baseline.性别;
-    if (!updated.原著角色) patch.原著角色 = true;
-    if (updated.阶位 !== 'companion') patch.阶位 = 'companion';
+    if (canonical && baseline) {
+      if (shouldPatchArchiveField(updated.外貌, baseline.外貌)) patch.外貌 = baseline.外貌;
+      if (shouldPatchArchiveField(updated.性格, baseline.性格)) patch.性格 = baseline.性格;
+      if (shouldPatchArchiveField(updated.穿着, baseline.穿着)) patch.穿着 = baseline.穿着;
+      if (shouldPatchArchiveField(updated.说话方式, baseline.说话方式)) patch.说话方式 = baseline.说话方式;
+      if (shouldPatchArchiveField(updated.介绍, baseline.介绍)) patch.介绍 = baseline.介绍;
+      if (!updated.性别 && baseline.性别) patch.性别 = baseline.性别;
+      if (!updated.原著角色) patch.原著角色 = true;
+      // 手动阶位覆盖是权威：canonical 补全不得改写阶位或阶位来源（含手动降级的原著角色）。
+      if (updated.手动阶位覆盖 === undefined) {
+        if (updated.阶位 !== 'companion') patch.阶位 = 'companion';
+        if (updated.阶位来源 !== 'manual') patch.阶位来源 = 'canonical';
+      }
+    }
 
     if (Object.keys(patch).length) {
       updated = { ...updated, ...patch };

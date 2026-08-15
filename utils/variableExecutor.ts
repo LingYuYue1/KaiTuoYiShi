@@ -341,53 +341,13 @@ export function reduceVariableCommands(
   return { results, nextState: cursor };
 }
 
-/** 轻量 NPC 去重：合并同 canonical name 的重复记录，保留数据更丰富的那条。 */
+/** NPC 去重统一走档案归一化，避免旧实现只保留一条而丢失另一条的记忆/约定。 */
 function 去重NPC记录(state: VariableState): VariableState {
   const records = state.NPC as NPC记录[] | undefined;
   if (!records || records.length <= 1) return state;
-  const seen = new Map<string, NPC记录>();
-  const deduped: NPC记录[] = [];
-  for (const npc of records) {
-    const canonical = matchCanonical(npc.姓名) ?? (npc.别名 ? matchCanonical(npc.别名) : null);
-    const key = canonical?.name ?? npc.姓名;
-    const existing = seen.get(key);
-    if (existing) {
-      // 保留数据更丰富的那条（字段非空数更多）
-      const existingScore = NPC数据丰富度(existing);
-      const currentScore = NPC数据丰富度(npc);
-      if (currentScore > existingScore) {
-        // 替换：把 existing 从 deduped 中移除，用 current 替代
-        const idx = deduped.indexOf(existing);
-        if (idx >= 0) deduped.splice(idx, 1);
-        deduped.push(npc);
-        seen.set(key, npc);
-      }
-      // 否则保留 existing，跳过 current
-    } else {
-      seen.set(key, npc);
-      deduped.push(npc);
-    }
-  }
+  const deduped = 归一化NPC记录列表(records);
   if (deduped.length === records.length) return state;
   return { ...state, NPC: deduped };
-}
-
-function NPC数据丰富度(npc: NPC记录): number {
-  let score = 0;
-  if (npc.外貌) score++;
-  if (npc.性格) score++;
-  if (npc.介绍) score++;
-  if (npc.性别) score++;
-  if (npc.穿着) score++;
-  if (npc.说话方式) score++;
-  if (npc.最近互动) score++;
-  if (npc.对玩家长期印象) score++;
-  if (npc.当前关系阶段) score++;
-  if ((npc.同行记忆?.length ?? 0) > 0) score += 2;
-  if ((npc.共同经历?.length ?? 0) > 0) score++;
-  if ((npc.未完成事项?.length ?? 0) > 0) score++;
-  if ((npc.未解决冲突?.length ?? 0) > 0) score++;
-  return score;
 }
 
 function 规范化世界时间命令(cmd: 变量命令): 变量命令 {

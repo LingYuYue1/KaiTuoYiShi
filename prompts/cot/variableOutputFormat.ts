@@ -47,9 +47,11 @@ export const VARIABLE_OUTPUT_FORMAT_PROMPT = `你是一个变量事实提取与�
 - 只有地点明显变化或正文首次明确当前地点时输出。
 
 ### NPC：npc
-- 字段：id、name、alias、tier、gender、affinityDelta、affinitySet、intimateRelationship、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。
+- 字段：id、name、alias、job、tier、gender、affinityDelta、affinitySet、intimateRelationship、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。
 - gender 表示角色性别，可选值：男 / 女 / 其他。新建 NPC 时应尽量提供 gender；从正文可判断角色性别时也应输出。
 - name 是必填字段；即使已经写了 id，也要写中文姓名，例如 \`{"id":"npc_march7th","name":"三月七"}\`。
+- name 必须是真实姓名或稳定专名；“女科员”“店员”“年轻人”等泛称不得作为新 NPC 姓名，职业/身份请写入 job。
+- 单条 memory、recentInteraction 或一次 affinityDelta 不得直接把路人晋升为 companion；只有显式 companion、原著/同行/非陌生关系，或好感度 >=20 且累计有效互动 >=2 次才满足自动晋升门槛。
 - 完整写入规则见下方"变量系统世界书（必须遵守）"中的 \`<NPC档案记忆写入法则>\`；本节只列事实字段和示例。
 - 原著角色的长期 personality / 性格 不由变量系统改写；长期口吻、人格与行为边界以智库人物主体资料校准。
 - 不要把"本回合沉默/紧张/冷淡"固化成长期性格；这类单回合状态只写进 memory、recentInteraction、openItems、unresolvedConflicts、mustRemember、doNotForget 或 world_event。

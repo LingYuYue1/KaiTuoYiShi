@@ -1,6 +1,5 @@
-// NPC 档案库:路人和重要伙伴共用同一份 schema,靠 `阶位` 区分。
-// AI 注入策略:默认只看 `阶位 === 'companion'` 的,路人再现时由调用方临时拼装。
-// 晋升单向:路人 → 伙伴可手动也可由原著角色库自动;v1 不做降级(兜底 UI 提供)。
+// NPC 档案库：路人和重要伙伴共用一份 schema，靠 `阶位` 与 `归档` 区分。
+// AI 注入策略：归档记录永不进入运行时选择；活跃路人仅在本回合被点名/出场时临时拼装。
 
 import { matchCanonical } from '@/data/canonicalCharacters';
 import { getDefaultBuiltinAvatarForNames } from '@/data/builtinAvatars';
@@ -263,6 +262,11 @@ const NPC_GENERIC_SUFFIXES = [
   '船员',
   '员工',
   '科员',
+  '店员',
+  '医生',
+  '医师',
+  '护士',
+  '科研员',
   '研究员',
   '学者',
   '商人',
@@ -280,13 +284,50 @@ const NPC_GENERIC_SUFFIXES = [
   '怪物',
   '怪兽',
   '裂界生物',
+  // 年龄/性别泛称：不能作为姓名入档
+  '少女',
+  '少年',
+  '年轻人',
+  '青年',
+  '男孩',
+  '女孩',
+  '男人',
+  '女人',
+  '女士',
+  '男子',
+  '孩童',
+  '孩子',
+  '老者',
+  '老人',
+  '大妈',
+  '大叔',
+  '姑娘',
+  '小伙子',
+  // 临时身份称呼：未具名不入档
+  '陌生人',
+  '黑衣人',
+  '神秘人',
 ];
+
+export const NPC_GENERIC_NAME_TERMS = NPC_GENERIC_SUFFIXES;
 
 export interface NPC记录 {
   id: string;
   姓名: string;
   别名?: string;
   阶位: NPC阶位;                     // companion=进 AI prompt;extra=只存档
+  /** AI/玩家写入的职业或身份标签，不再混进姓名。 */
+  职务?: string;
+  /** 归档记录保留数据，但不参与展示、关系规划或 AI 注入。 */
+  归档?: boolean;
+  归档回合?: number;
+  /** 与玩家发生过可计数互动的回合数，用于长期互动晋升门槛。 */
+  累计互动次数?: number;
+  /** 玩家明确指定的阶位，读档整理和 AI 自动晋升不得覆盖。 */
+  手动阶位覆盖?: NPC阶位;
+  阶位来源?: 'ai' | 'manual' | 'canonical' | 'auto';
+  /** 确定性重复合并时保留被合并记录的来源 ID，便于追溯而非静默吞掉源记录。 */
+  合并来源ID?: string[];
   好感度: number;                    // -50..150
   关系: NPC关系类型;                 // 兼容字段，由好感度确定性派生
   亲密关系?: boolean;                // 普通关系状态，不受 NSFW 开关控制
@@ -334,6 +375,7 @@ export function 创建NPC记录(input: {
   阶位?: NPC阶位;
   初见回合: number;
   别名?: string;
+  职务?: string;
   原著角色?: boolean;
   性别?: NPC性别;
   外貌?: string;
@@ -350,6 +392,8 @@ export function 创建NPC记录(input: {
     姓名: input.姓名,
     别名: input.别名,
     阶位: input.阶位 ?? 'extra',
+    职务: input.职务,
+    阶位来源: input.阶位 ? 'ai' : 'auto',
     好感度: 0,
     关系: 获取NPC兼容关系(0),
     亲密关系: false,
@@ -370,18 +414,17 @@ export function 创建NPC记录(input: {
   };
 }
 
-export function 归一化NPC记录列表(raw: unknown): NPC记录[] {
+export function 归一化NPC记录列表(raw: unknown, currentTurn?: number): NPC记录[] {
   if (!Array.isArray(raw)) return [];
   const merged = new Map<string, NPC记录>();
   raw.forEach((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return;
     const record = 归一化单个NPC记录(item as Partial<NPC记录> & Record<string, unknown>, index);
-    if (shouldIgnoreNpcRecord(record)) return;
     const key = 查找可合并NPC身份键(record, merged) ?? 计算NPC身份键(record);
     const current = merged.get(key);
     merged.set(key, current ? 合并NPC记录(current, record) : record);
   });
-  return [...merged.values()];
+  return 整理NPC记录列表([...merged.values()], currentTurn);
 }
 
 function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, unknown>, index: number): NPC记录 {
@@ -404,6 +447,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
   const firstTurn = Number(rawFirstTurn);
   const recentTurn = Number(rawRecentTurn);
   const rawAlias = source.别名 ?? source.alias;
+  const rawJob = source.职务 ?? source.job ?? source.职业 ?? source.role ?? source.occupation;
   const rawGender = source.性别 ?? source.gender;
   const rawPlayerName = source.对玩家称呼 ?? source.称呼 ?? source.playerCallName;
   const rawAppearance = source.外貌 ?? source.appearance;
@@ -420,6 +464,10 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
   const rawImage = source.图像档案 ?? source.image ?? source.images;
   const canonical = 匹配NPC原著角色(name, typeof rawAlias === 'string' ? rawAlias : undefined);
   const shouldForceCompanion = Boolean(canonical || source.原著角色 || source.canonical);
+  const manualTier = source.手动阶位覆盖 === 'companion' || source.手动阶位覆盖 === 'extra'
+    ? source.手动阶位覆盖
+    : undefined;
+  const normalizedArchived = readNpcBoolean(source.归档 ?? source.archived) ?? false;
 
   return {
     id: typeof source.id === 'string' && source.id.trim()
@@ -427,7 +475,18 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
       : `npc-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
     姓名: name,
     别名: typeof rawAlias === 'string' ? rawAlias : undefined,
-    阶位: shouldForceCompanion ? 'companion' : tier,
+    阶位: manualTier ?? (shouldForceCompanion ? 'companion' : tier),
+    职务: readNpcString(rawJob),
+    归档: normalizedArchived,
+    归档回合: Number.isFinite(Number(source.归档回合 ?? source.archivedTurn)) ? Number(source.归档回合 ?? source.archivedTurn) : undefined,
+    累计互动次数: Math.max(0, Math.trunc(Number(source.累计互动次数 ?? source.interactionCount) || 0)),
+    手动阶位覆盖: manualTier,
+    阶位来源: manualTier
+      ? 'manual'
+      : (source.阶位来源 === 'manual' || source.阶位来源 === 'canonical' || source.阶位来源 === 'auto' || source.阶位来源 === 'ai'
+          ? source.阶位来源
+          : (shouldForceCompanion ? 'canonical' : 'ai')),
+    合并来源ID: normalizeStringList(source.合并来源ID ?? source.mergedFromIds),
     好感度: affinity,
     关系: 获取NPC兼容关系(affinity),
     亲密关系: intimateRelationship,
@@ -469,11 +528,24 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
   const preferred = 选择更完整的NPC记录(base, incoming);
   const affinity = 限制NPC好感度(选择更可信的好感度(base, incoming, preferred));
   const intimateRelationship = 选择较新的亲密关系(base, incoming, preferred);
+  const mergedSourceIds = 去重文本列表([
+    ...(base.合并来源ID ?? []),
+    ...(incoming.合并来源ID ?? []),
+    ...(base.id !== incoming.id ? [incoming.id] : []),
+  ]).filter((id) => id !== base.id);
   return {
     ...preferred,
+    id: base.id,
     姓名: 选择NPC显示姓名(base, incoming, preferred),
     别名: 选择NPC别名(base, incoming, preferred),
-    阶位: base.阶位 === 'companion' || incoming.阶位 === 'companion' ? 'companion' : preferred.阶位,
+    阶位: base.手动阶位覆盖 ?? incoming.手动阶位覆盖 ?? (base.阶位 === 'companion' || incoming.阶位 === 'companion' ? 'companion' : preferred.阶位),
+    职务: preferred.职务 ?? base.职务 ?? incoming.职务,
+    归档: Boolean(base.归档 && incoming.归档),
+    归档回合: Math.max(base.归档回合 ?? 0, incoming.归档回合 ?? 0) || undefined,
+    累计互动次数: Math.max(base.累计互动次数 ?? 0, incoming.累计互动次数 ?? 0),
+    手动阶位覆盖: base.手动阶位覆盖 ?? incoming.手动阶位覆盖,
+    阶位来源: base.手动阶位覆盖 ?? incoming.手动阶位覆盖 ? 'manual' : (preferred.阶位来源 ?? base.阶位来源 ?? incoming.阶位来源),
+    合并来源ID: mergedSourceIds.length ? mergedSourceIds : undefined,
     关系: 获取NPC兼容关系(affinity),
     亲密关系: intimateRelationship,
     // 阶位代表重要程度，同行代表当前是否在场；原著角色/伙伴不能自动等于同行中。
@@ -534,6 +606,8 @@ function 计算NPC记录分数(record: NPC记录): number {
   if (record.阶位 === 'companion') value += 35;
   if (record.同行) value += 20;
   if (record.原著角色) value += 18;
+  if (record.职务) value += 2;
+  if (record.累计互动次数) value += Math.min(10, record.累计互动次数);
   value += 选择更可信的字段数量(record) * 3;
   value += Math.min(20, Math.max(0, Number(record.最近回合) || 0));
   value += Math.min(10, Math.abs(Number(record.好感度) || 0) / 10);
@@ -575,7 +649,9 @@ function 选择较新的亲密关系(base: NPC记录, incoming: NPC记录, prefe
 function 计算NPC身份键(record: NPC记录): string {
   const normalized = 规范化NPC身份文本(record.姓名);
   const canonical = 匹配NPC原著角色(record.姓名, record.别名);
-  if (canonical) return `canon:${canonical.name}`;
+  // canonical 合并键仅限规范名精确匹配（姓名或别名 === canonical.name）；
+  // 别名相似（如自定义"三月" vs "三月七"）不得作为自动合并依据。
+  if (canonical && (record.姓名 === canonical.name || record.别名 === canonical.name)) return `canon:${canonical.name}`;
   const genericSuffix = NPC_GENERIC_SUFFIXES.find((suffix) => normalized.endsWith(suffix));
   if (genericSuffix) return `generic:${genericSuffix}`;
   return `name:${normalized.toLowerCase()}`;
@@ -597,12 +673,12 @@ function 查找可合并NPC身份键(record: NPC记录, merged: Map<string, NPC�
 function 生成NPC身份候选键(record: NPC记录): string[] {
   const keys = new Set<string>([计算NPC身份键(record)]);
   const canonical = 匹配NPC原著角色(record.姓名, record.别名);
-  if (canonical) keys.add(`canon:${canonical.name}`);
+  if (canonical && (record.姓名 === canonical.name || record.别名 === canonical.name)) keys.add(`canon:${canonical.name}`);
   for (const text of [record.姓名, record.别名]) {
     const normalized = text ? 规范化NPC身份文本(text) : '';
     if (!normalized) continue;
     const aliasCanonical = matchCanonical(normalized);
-    if (aliasCanonical) keys.add(`canon:${aliasCanonical.name}`);
+    if (aliasCanonical && normalized === aliasCanonical.name) keys.add(`canon:${aliasCanonical.name}`);
     keys.add(`name:${normalized.toLowerCase()}`);
   }
   return [...keys];
@@ -767,19 +843,21 @@ function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
             .map((id) => id.trim())
             .filter((id): id is string => Boolean(id))
         : [];
-      return {
+      const normalized: NPC同行记忆条目 = {
         id: typeof obj.id === 'string' && obj.id.trim()
           ? obj.id.trim()
           : `npc_mem_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
         回合: Number.isFinite(turn) ? turn : 0,
         摘要: summary,
-        原文: typeof obj.原文 === 'string' ? obj.原文.trim() : undefined,
-        来源: normalizeMemorySource(obj.来源),
-        关联NPCID: related.length ? related : undefined,
-        关联事实ID: typeof obj.关联事实ID === 'string' && obj.关联事实ID.trim()
-          ? obj.关联事实ID.trim()
-          : undefined,
       };
+      const original = typeof obj.原文 === 'string' ? obj.原文.trim() : '';
+      const source = normalizeMemorySource(obj.来源);
+      const factId = typeof obj.关联事实ID === 'string' ? obj.关联事实ID.trim() : '';
+      if (original) normalized.原文 = original;
+      if (source) normalized.来源 = source;
+      if (related.length) normalized.关联NPCID = related;
+      if (factId) normalized.关联事实ID = factId;
+      return normalized;
     })
     .filter((item): item is NPC同行记忆条目 => Boolean(item))
     .reduce<NPC同行记忆条目[]>((acc, item) => {
@@ -1292,7 +1370,7 @@ export function selectNpcLedgersForTurn(params: {
   limit?: number;
   recentWindow?: number;
 }): NPC账本选择结果 {
-  const records = params.records ?? [];
+  const records = 筛选活跃NPC(params.records);
   const turnCount = Math.max(1, Number(params.turnCount || 1));
   const limit = Math.max(1, Math.trunc(params.limit ?? 6));
   const recentWindow = Math.max(1, Math.trunc(params.recentWindow ?? 15));
@@ -1435,32 +1513,49 @@ export function 读取NPC头像(record: Pick<NPC记录, '姓名' | '别名' | '�
   return preferredSavedAvatar || builtinAvatar || savedCandidates[0];
 }
 
-function shouldIgnoreNpcRecord(record: NPC记录): boolean {
-  const normalizedName = 去除NPC修饰前缀(record.姓名);
-  const hasUniqueFields = Boolean(
-    record.别名?.trim() ||
-    record.性别 ||
-    record.对玩家称呼?.trim() ||
-    record.外貌?.trim() ||
-    record.穿着?.trim() ||
-    record.说话方式?.trim() ||
-    record.性格?.trim() ||
-    record.介绍?.trim() ||
-    record.装备摘要?.trim() ||
-    record.头像?.trim() ||
-    record.NSFW档案 ||
-    record.图像档案 ||
-    (record.备注?.length ?? 0) > 0,
+/** 判断记录是否已经积累了需要保留的剧情内容。 */
+export function NPC记录有内容(record: Pick<NPC记录, '同行记忆' | '最近互动' | '对玩家长期印象' | '共同经历' | '未完成事项' | '未解决冲突' | '必须记得' | '禁止遗忘' | '约定' | '好感度' | '关系' | '亲密关系'>): boolean {
+  return Boolean(
+    (record.同行记忆?.length ?? 0) > 0 ||
+    Boolean(record.最近互动?.trim()) ||
+    Boolean(record.对玩家长期印象?.trim()) ||
+    (record.共同经历?.length ?? 0) > 0 ||
+    (record.未完成事项?.length ?? 0) > 0 ||
+    (record.未解决冲突?.length ?? 0) > 0 ||
+    (record.必须记得?.length ?? 0) > 0 ||
+    (record.禁止遗忘?.length ?? 0) > 0 ||
+    (record.约定?.length ?? 0) > 0 ||
+    Math.abs(Number(record.好感度 ?? 0)) > 5 ||
+    record.关系 !== 'stranger' ||
+    record.亲密关系 === true
   );
-  const genericOnly = Boolean(
-    NPC_GENERIC_SUFFIXES.some((suffix) => normalizedName.endsWith(suffix)) ||
-    NPC_NAME_PREFIXES.some((prefix) => record.姓名.startsWith(prefix)) ||
-    /^(?:怪物|怪兽|裂界生物|敌人|杂兵|无名守卫|机兵|虚卒|傀儡|精英怪)/.test(normalizedName),
-  );
-  const likelyDisposable =
-    !record.原著角色 &&
-    record.阶位 !== 'companion' &&
-    !hasUniqueFields &&
-    (genericOnly || record.关系 === 'enemy' || record.关系 === 'stranger');
-  return likelyDisposable;
+}
+
+/** 统一判定姓名是否只是职业/身份泛称，供变量写入、读档整理和 UI 共用。 */
+export function 是NPC泛称姓名(name: unknown): boolean {
+  if (typeof name !== 'string' || !name.trim()) return false;
+  const normalized = 规范化NPC身份文本(name);
+  return NPC_GENERIC_SUFFIXES.some((suffix) => normalized === suffix || normalized.endsWith(suffix)) ||
+    /^(?:敌人|杂兵|无名守卫|机兵|虚卒|傀儡|精英怪)/.test(normalized);
+}
+
+/** 归档 NPC 不得进入任何运行时注入/关系规划选择。 */
+export function 筛选活跃NPC(records: NPC记录[] | undefined): NPC记录[] {
+  return (records ?? []).filter((npc) => !npc.归档);
+}
+
+/** 读档及每回合结算共用的轻量整理：纠正泛称伙伴，并归档长期无内容的旧路人。 */
+export function 整理NPC记录列表(records: NPC记录[], currentTurn?: number): NPC记录[] {
+  const turn = Math.max(0, Math.trunc(Number(currentTurn) || 0));
+  return records.map((record) => {
+    let next = record;
+    if (是NPC泛称姓名(record.姓名) && record.阶位 === 'companion' && !record.手动阶位覆盖 && !record.原著角色) {
+      next = { ...next, 阶位: 'extra', 同行: false, 阶位来源: 'auto' };
+    }
+    const stale = turn > 0 && turn - (Number(next.最近回合) || 0) > 30;
+    if (stale && next.阶位 === 'extra' && !NPC记录有内容(next) && !next.归档) {
+      next = { ...next, 归档: true, 归档回合: turn, 同行: false };
+    }
+    return next;
+  });
 }

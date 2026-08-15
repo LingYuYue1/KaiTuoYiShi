@@ -70,6 +70,8 @@ export interface NPC变量事实 {
   name: string;
   alias?: string;
   tier?: 'companion' | 'extra';
+  /** 职业/身份标签，不能混入姓名。 */
+  job?: string;
   gender?: '男' | '女' | '其他';
   affinityDelta?: number;
   affinitySet?: number;

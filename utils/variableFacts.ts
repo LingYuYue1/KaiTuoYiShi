@@ -3,7 +3,7 @@ import type { VariableState } from './variableRegistry';
 import type { 世界状态 } from '@/models/world';
 import { 对齐世界日期与天数, 推进琥珀日期 } from '@/models/world';
 import type { NPC记录, NPC关系类型, 约定结构, 约定状态 } from '@/models/npc';
-import { 获取NPC关系阶段, 获取NPC兼容关系, 限制NPC好感度 } from '@/models/npc';
+import { 获取NPC关系阶段, 获取NPC兼容关系, 限制NPC好感度, 是NPC泛称姓名, 筛选活跃NPC } from '@/models/npc';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
 import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/models/phone';
@@ -183,17 +183,37 @@ function npcNameFromId(id: string): string {
   return map[normalized] ?? '';
 }
 
-function inferNpcTier(fact: Extract<变量事实, { type: 'npc' }>, canonical: ReturnType<typeof matchCanonical>): 'companion' | 'extra' {
+function 归一化NPC阶位(value: unknown): 'companion' | 'extra' | undefined {
+  const text = 读字符串(value).toLowerCase();
+  if (['companion', '伙伴', '重要伙伴', '同行'].includes(text)) return 'companion';
+  if (['extra', '路人', '普通路人', '背景'].includes(text)) return 'extra';
+  return undefined;
+}
+
+function 有NPC互动信号(fact: Extract<变量事实, { type: 'npc' }>): boolean {
+  return Boolean(
+    fact.memory || fact.recentInteraction || fact.following ||
+    typeof fact.affinityDelta === 'number' || typeof fact.affinitySet === 'number' ||
+    fact.sharedExperiences?.length || fact.openItems?.length || fact.unresolvedConflicts?.length ||
+    fact.mustRemember?.length || fact.doNotForget?.length || fact.longTermImpression || fact.relationshipStage,
+  );
+}
+
+function inferNpcTier(
+  fact: Extract<变量事实, { type: 'npc' }>,
+  canonical: ReturnType<typeof matchCanonical>,
+  existing?: NPC记录,
+  projectedAffinity?: number,
+  projectedInteractions?: number,
+): 'companion' | 'extra' {
+  if (existing?.手动阶位覆盖) return existing.手动阶位覆盖;
   if (fact.tier) return fact.tier;
-  if (canonical) return 'companion';
-  if (fact.following) return 'companion';
-  if (fact.memory) return 'companion';
-  if (fact.recentInteraction || fact.longTermImpression || fact.relationshipStage) return 'companion';
-  if (fact.sharedExperiences?.length || fact.openItems?.length || fact.unresolvedConflicts?.length || fact.mustRemember?.length || fact.doNotForget?.length) return 'companion';
-  if (typeof fact.affinityDelta === 'number' && fact.affinityDelta !== 0) return 'companion';
-  if (typeof fact.affinitySet === 'number' && fact.affinitySet !== 0) return 'companion';
-  if (fact.relation && fact.relation !== 'stranger' && fact.relation !== 'acquaintance') return 'companion';
-  return 'extra';
+  if (canonical || existing?.原著角色 || fact.following) return 'companion';
+  if (fact.relation && !['stranger', 'acquaintance'].includes(fact.relation)) return 'companion';
+  // 深层关系信号：长期印象或显式关系阶段可晋升（优先级在好感度+互动双门槛之前）。
+  if (fact.longTermImpression || fact.relationshipStage) return 'companion';
+  if ((projectedAffinity ?? 0) >= 20 && (projectedInteractions ?? 0) >= 2) return 'companion';
+  return existing?.阶位 ?? 'extra';
 }
 
 function 读取记忆摘要(value: unknown): string {
@@ -301,14 +321,15 @@ function 归一化事实(raw: unknown): 变量事实 | null {
     const id = 读字符串(raw.id);
     const name = 读字符串(raw.name || raw.姓名 || raw.名称) || npcNameFromId(id);
     if (!name) return null;
-    const tier = 读字符串(raw.tier || raw.阶位);
+    const tier = 归一化NPC阶位(raw.tier || raw.阶位);
     const relation = 读字符串(raw.relation || raw.关系);
     return {
       type: 'npc',
       id: id || undefined,
       name,
       alias: 读字符串(raw.alias || raw.别名) || undefined,
-      tier: tier === 'companion' || tier === 'extra' ? tier : undefined,
+      tier,
+      job: 读字符串(raw.job || raw.职务 || raw.职业 || raw.role || raw.occupation) || undefined,
       affinityDelta: 数字(raw.affinityDelta ?? raw.好感变化),
       affinitySet: 数字(raw.affinitySet ?? raw.好感度),
       relation: NPC_RELATIONS.has(relation as NPC关系类型) ? relation : undefined,
@@ -703,6 +724,7 @@ export function factsToVariableCommands(
   const phoneSeedsEnabled = options.phoneSeedsEnabled !== false;
   const maxPhoneSeedsPerTurn = Math.max(0, Math.trunc(options.maxPhoneSeedsPerTurn ?? 2));
   let phoneSeedsWritten = 0;
+  const interactionCountedNpcIds = new Set<string>();
 
   const push = (command: 变量命令) => commands.push(command);
 
@@ -772,8 +794,13 @@ export function factsToVariableCommands(
     if (fact.type === 'npc') {
       const id = fact.id?.trim() || npcIdFromName(fact.name);
       const existing = findNpc(npcs, id, fact.name);
+      const canonical = matchCanonical(fact.name);
+      const interactionSignal = 有NPC互动信号(fact);
       if (!existing) {
-        const canonical = matchCanonical(fact.name);
+        if (!canonical && 是NPC泛称姓名(fact.name)) {
+          warnings.push(`NPC「${fact.name}」仅包含职业/身份泛称，未创建记录；请提供真实姓名，并把「${fact.name}」写入职务字段。`);
+          continue;
+        }
         const initialAffinity = 限制NPC好感度(fact.affinitySet ?? fact.affinityDelta ?? 0);
         push({
           action: 'push',
@@ -782,7 +809,10 @@ export function factsToVariableCommands(
             id,
             姓名: canonical?.name ?? fact.name,
             别名: fact.alias,
-            阶位: inferNpcTier(fact, canonical),
+             阶位: inferNpcTier(fact, canonical, undefined, initialAffinity, interactionSignal ? 1 : 0),
+             阶位来源: fact.tier || canonical ? 'ai' : 'auto',
+             职务: fact.job,
+             累计互动次数: interactionSignal ? 1 : 0,
             好感度: initialAffinity,
             关系: 获取NPC兼容关系(initialAffinity),
             亲密关系: fact.intimateRelationship ?? false,
@@ -805,7 +835,7 @@ export function factsToVariableCommands(
             }] : [],
             最近互动: fact.recentInteraction ?? fact.memory,
             对玩家长期印象: fact.longTermImpression,
-            当前关系阶段: 获取NPC关系阶段(initialAffinity),
+            当前关系阶段: fact.relationshipStage ?? 获取NPC关系阶段(initialAffinity),
             共同经历: fact.sharedExperiences,
             未完成事项: fact.openItems,
             未解决冲突: fact.unresolvedConflicts,
@@ -818,8 +848,34 @@ export function factsToVariableCommands(
       } else {
         const key = `NPC[id=${existing.id}]`;
         push({ action: 'set', key: `${key}.最近回合`, value: turn });
+        if (existing.归档) {
+          push({ action: 'set', key: `${key}.归档`, value: false });
+          push({ action: 'delete', key: `${key}.归档回合`, value: null });
+        }
+        if (interactionSignal && !interactionCountedNpcIds.has(existing.id)) {
+          interactionCountedNpcIds.add(existing.id);
+          push({ action: 'add', key: `${key}.累计互动次数`, value: 1 });
+        }
         if (typeof fact.affinitySet === 'number') push({ action: 'set', key: `${key}.好感度`, value: fact.affinitySet });
         else if (typeof fact.affinityDelta === 'number') push({ action: 'add', key: `${key}.好感度`, value: fact.affinityDelta });
+        if (fact.job) push({ action: 'set', key: `${key}.职务`, value: fact.job });
+        if (fact.relation) push({ action: 'set', key: `${key}.关系`, value: fact.relation });
+        if (existing.手动阶位覆盖) {
+          // 玩家覆盖优先于 AI/自动晋升。
+          push({ action: 'set', key: `${key}.阶位`, value: existing.手动阶位覆盖 });
+        } else if (fact.tier) {
+          push({ action: 'set', key: `${key}.阶位`, value: fact.tier });
+          push({ action: 'set', key: `${key}.阶位来源`, value: 'ai' });
+        } else {
+          const projectedAffinity = typeof fact.affinitySet === 'number'
+            ? fact.affinitySet
+            : existing.好感度 + (fact.affinityDelta ?? 0);
+          const projectedInteractions = (existing.累计互动次数 ?? 0) + (interactionSignal ? 1 : 0);
+          if (inferNpcTier(fact, canonical, existing, projectedAffinity, projectedInteractions) === 'companion' && existing.阶位 !== 'companion') {
+            push({ action: 'set', key: `${key}.阶位`, value: 'companion' });
+            push({ action: 'set', key: `${key}.阶位来源`, value: 'auto' });
+          }
+        }
         if (typeof fact.intimateRelationship === 'boolean') push({ action: 'set', key: `${key}.亲密关系`, value: fact.intimateRelationship });
         if (typeof fact.following === 'boolean') push({ action: 'set', key: `${key}.同行`, value: fact.following });
         if (fact.gender) push({ action: 'set', key: `${key}.性别`, value: fact.gender });
@@ -837,6 +893,8 @@ export function factsToVariableCommands(
         if (fact.playerAddress) push({ action: 'set', key: `${key}.对玩家称呼`, value: fact.playerAddress });
         if (fact.recentInteraction || fact.memory) push({ action: 'set', key: `${key}.最近互动`, value: fact.recentInteraction ?? fact.memory });
         if (fact.longTermImpression) push({ action: 'set', key: `${key}.对玩家长期印象`, value: fact.longTermImpression });
+        // 显式关系阶段文本写入账本（优先于好感度派生值），参与晋升判断与账本展示。
+        if (fact.relationshipStage) push({ action: 'set', key: `${key}.当前关系阶段`, value: fact.relationshipStage });
         pushNpcLedgerListCommands(push, key, '共同经历', fact.sharedExperiences, existing.共同经历);
         pushNpcLedgerListCommands(push, key, '未完成事项', fact.openItems, existing.未完成事项);
         pushNpcLedgerListCommands(push, key, '未解决冲突', fact.unresolvedConflicts, existing.未解决冲突);
@@ -998,9 +1056,18 @@ export function factsToVariableCommands(
         warnings.push(`phone_seed 已忽略：本回合来信种子已达到上限 ${maxPhoneSeedsPerTurn}（${fact.title}）。`);
         continue;
       }
-      const targetId = resolvePhoneTargetId(fact, npcs);
+      // 归档 NPC 不参与手机来信目标解析（恢复由 NPC 事实链触发）。
+      const activeNpcs = 筛选活跃NPC(npcs);
+      const targetId = resolvePhoneTargetId(fact, activeNpcs);
       if (!targetId) {
         warnings.push(`phone_seed 已忽略：缺少 targetId/targetName/relatedNpcIds，无法确定来信目标（${fact.title}）。`);
+        continue;
+      }
+      const targetIsArchived = npcs.some(
+        (npc) => (npc.id === targetId || `npc_${npc.id}` === targetId) && npc.归档 === true,
+      );
+      if (targetIsArchived) {
+        warnings.push(`phone_seed 已忽略：来信目标 ${targetId} 已归档，不接受主动来信（${fact.title}）。`);
         continue;
       }
       const priority = fact.priority ?? 'normal';
