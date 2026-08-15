@@ -3,7 +3,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { 手机会话, 手机联系人, 主动来信种子 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
-import { 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { 格式化NPC关系, 提取NPC同行记忆文本列表, 筛选活跃NPC } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 聊天消息 } from '@/models/chat';
 import type { 智库系统 } from '@/models/zhiku';
@@ -257,10 +257,14 @@ function isPhoneSeedVisible(ctx: 手机回复上下文): boolean {
   }
   if (seed.targetType !== 'private') return false;
   const privateNpc = resolvePhonePrivateNpc(ctx);
+  // 绑定已归档 NPC 的联系人不参与种子可见性匹配（恢复由变量事实链触发）。
+  const contactNpcArchived = Boolean(
+    ctx.contact?.npcId && ctx.npcRecords?.find((item) => item.id === ctx.contact?.npcId)?.归档,
+  );
   const allowedIds = new Set([
     ctx.chat.id,
-    ctx.contact?.id,
-    ctx.contact?.npcId,
+    contactNpcArchived ? undefined : ctx.contact?.id,
+    contactNpcArchived ? undefined : ctx.contact?.npcId,
     privateNpc?.id,
     privateNpc ? `npc_${privateNpc.id}` : undefined,
   ].filter((id): id is string => Boolean(id)));
@@ -269,7 +273,7 @@ function isPhoneSeedVisible(ctx: 手机回复上下文): boolean {
 
 function resolvePhonePrivateNpc(ctx: 手机回复上下文): NPC记录 | undefined {
   if (ctx.chat.type === 'group') return undefined;
-  return ctx.npcRecords.find((item) =>
+  return 筛选活跃NPC(ctx.npcRecords).find((item) =>
     item.id === ctx.contact?.npcId
     || item.id === ctx.contact?.id
     || `npc_${item.id}` === ctx.contact?.id
@@ -405,7 +409,7 @@ function storyTextIncludes(text: string, term: string): boolean {
 
 function resolvePhoneGroupParticipant(ctx: 手机回复上下文, participantId: string): { name: string; npc?: NPC记录; contact?: 手机联系人 } | undefined {
   const contact = ctx.contacts?.find((item) => item.id === participantId || item.npcId === participantId);
-  const npc = ctx.npcRecords.find(
+  const npc = 筛选活跃NPC(ctx.npcRecords).find(
     (item) =>
       item.id === participantId ||
       `npc_${item.id}` === participantId ||
@@ -413,7 +417,14 @@ function resolvePhoneGroupParticipant(ctx: 手机回复上下文, participantId:
       item.姓名 === contact?.name,
   );
   if (npc) return { name: npc.姓名, npc, contact };
-  if (contact?.name) return { name: contact.name, contact };
+  // 归档 NPC 绑定的旧联系人不回退名字注入（恢复由变量事实链触发）。
+  if (contact?.name) {
+    if (contact.npcId) {
+      const boundNpc = ctx.npcRecords?.find((item) => item.id === contact.npcId);
+      if (boundNpc?.归档) return undefined;
+    }
+    return { name: contact.name, contact };
+  }
   return undefined;
 }
 
@@ -439,11 +450,18 @@ function collectPhoneParticipantNames(ctx: 手机回复上下文): string[] {
       if (trimmed) names.add(trimmed);
     }
   };
-  addName(ctx.contact?.name);
   if (ctx.contact?.npcId) {
-    const npc = ctx.npcRecords.find((item) => item.id === ctx.contact?.npcId);
-    addName(npc?.姓名);
-    addName(npc?.别名);
+    const boundNpc = ctx.npcRecords?.find((item) => item.id === ctx.contact?.npcId);
+    if (boundNpc?.归档) {
+      // 绑定已归档 NPC 的联系人不注入名字（避免归档 NPC 回到智库人物锚点检索）
+    } else {
+      addName(ctx.contact?.name);
+      const npc = 筛选活跃NPC(ctx.npcRecords).find((item) => item.id === ctx.contact?.npcId);
+      addName(npc?.姓名);
+      addName(npc?.别名);
+    }
+  } else {
+    addName(ctx.contact?.name);
   }
   if (ctx.chat.type === 'group') {
     for (const participantId of ctx.chat.participantIds) {

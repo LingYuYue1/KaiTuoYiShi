@@ -123,13 +123,14 @@ function collectImportantNpcNames(state: VariableState): string[] {
   }
   const records = Array.isArray(state.NPC) ? state.NPC : [];
   for (const record of records) {
-    const important =
+    const important = !readObjectBoolean(record, '归档') && (
       readObjectString(record, '阶位') === 'companion' ||
       readObjectBoolean(record, '同行') ||
       readObjectBoolean(record, '原著角色') ||
       readObjectArray(record, '同行记忆').length > 0 ||
       Boolean(readObjectString(record, '最近互动')) ||
-      Boolean(readObjectString(record, '当前关系阶段'));
+      Boolean(readObjectString(record, '当前关系阶段'))
+    );
     if (!important) continue;
     add(readObjectString(record, '姓名'));
     add(readObjectString(record, '别名'));
@@ -320,9 +321,10 @@ export function buildVariableModelPrompt(
     '{"type":"weather","weather":"小雨","evidence":"正文写明窗外开始飘起细雨"}',
     '',
     '### NPC：npc',
-    '- 字段：id、name、alias、tier、gender、affinityDelta、affinitySet、intimateRelationship、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。',
+    '- 字段：id、name、alias、job、tier、gender、affinityDelta、affinitySet、intimateRelationship、following、appearance、clothing、speechStyle、personality、intro、playerAddress、memory、recentInteraction、longTermImpression、sharedExperiences、openItems、unresolvedConflicts、mustRemember、doNotForget、evidence。',
     '- gender 表示角色性别，可选值：男 / 女 / 其他。新建 NPC 时应尽量提供 gender；从正文可判断角色性别时也应输出。',
-    '- name 是必填字段；即使已经写了 id，也要写中文姓名，例如 `{"id":"npc_march7th","name":"三月七"}`。',
+    '- name 是必填字段；即使已经写了 id，也要写中文姓名，例如 `{"id":"npc_march7th","name":"三月七"}`。姓名必须是真实姓名或稳定专名；“女科员”“店员”“年轻人”等泛称不得新建 NPC，职业/身份写入 job。',
+    '- 单条 memory、recentInteraction 或一次 affinityDelta 不得直接把路人晋升为 companion；自动晋升要求好感度 >=20 且累计有效互动 >=2 次，玩家手动降级优先。',
     '- 完整写入规则见下方“变量系统世界书（必须遵守）”中的 `<NPC档案记忆写入法则>`；本节只列事实字段和示例。',
     '- 原著角色的长期 personality / 性格 不由变量系统改写；长期口吻、人格与行为边界以智库人物主体资料校准。',
     '- 不要把“本回合沉默/紧张/冷淡”固化成长期性格；这类单回合状态只写进 memory、recentInteraction、openItems、unresolvedConflicts、mustRemember、doNotForget 或 world_event。',

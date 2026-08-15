@@ -1,5 +1,6 @@
 import type { 聊天消息 } from '@/models/chat';
 import type { NPC记录 } from '@/models/npc';
+import { 筛选活跃NPC } from '@/models/npc';
 import type { 世界状态 } from '@/models/world';
 
 function namesLikelySame(a: string, b: string): boolean {
@@ -55,7 +56,7 @@ export function getZhikuCharacterParticipationForTurn(input: {
   userInput?: string;
   turnCount: number;
 }): ZhikuCharacterParticipation {
-  const npcs = input.npcs ?? [];
+  const npcs = 筛选活跃NPC(input.npcs);
   const sceneNames = new Set((input.world.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean));
   const currentText = input.userInput ?? '';
   const recentText = recentNarrativeText(input.history ?? []);
@@ -105,7 +106,7 @@ export function getExplicitNpcNamesForTurn(input: {
   userInput?: string;
   turnCount: number;
 }): string[] {
-  const npcs = input.npcs ?? [];
+  const npcs = 筛选活跃NPC(input.npcs);
   const text = [input.userInput ?? '', recentNarrativeText(input.history ?? [])].join('\n');
   const sceneNames = new Set((input.world.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean));
   const recentCutoff = Math.max(1, input.turnCount - 3);

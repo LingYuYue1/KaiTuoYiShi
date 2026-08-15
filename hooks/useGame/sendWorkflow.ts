@@ -85,7 +85,6 @@ import {
   compileZhikuTurnWithModel,
   type ZhikuRequestScope,
 } from '@/services/zhikuRuntimeCompiler';
-import { attachZhikuRequestReceipt } from '@/services/zhikuRunTrace';
 import { applyStoryArchiveZhikuRuntimeUnlock, mergeZhikuRuntimeUnlockPatch } from '@/services/zhikuRuntimeUnlock';
 import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
 import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
@@ -99,7 +98,7 @@ import {
 } from '@/services/phoneMemoryDualWrite';
 import { applyNpcFactMemories } from '@/services/npcFactMemory';
 import { 创建默认智库系统设置 } from '@/models/settings';
-import { selectNpcLedgersForTurn, 提取NPC同行记忆文本列表, type NPC记录, type NPC账本选择结果 } from '@/models/npc';
+import { selectNpcLedgersForTurn, 提取NPC同行记忆文本列表, 整理NPC记录列表, 筛选活跃NPC, type NPC记录, type NPC账本选择结果 } from '@/models/npc';
 import type { 手机系统, 主动来信种子 } from '@/models/phone';
 import {
   buildImmediateStoryReview,
@@ -1433,7 +1432,7 @@ async function retryPhoneMemoryWriteTask(
     const outcome = await retryPhoneMemoryWrite(payload, {
       memory: state.记忆,
       yiting: state.忆庭,
-      npcs: state.NPC,
+      npcs: 筛选活跃NPC(state.NPC),
       settings,
       config: getActiveConfig(),
       turn: payload.turn || state.turnCount,
@@ -1854,7 +1853,7 @@ export async function executeSendWorkflow(
           : 'main';
     const zhikuParticipation = getZhikuCharacterParticipationForTurn({
       world: effectiveWorld,
-      npcs: state.NPC,
+      npcs: 筛选活跃NPC(state.NPC),
       history: updatedHistory,
       userInput,
       turnCount: state.turnCount,
@@ -1970,7 +1969,7 @@ export async function executeSendWorkflow(
       cancellable: yitingRecallEnabled,
     });
     // 阶段1方案E·全知性防护：构建 NPC id→姓名 映射，供忆庭通讯回忆标记来源（对方:NPC名字）
-    const yitingNpcNameMap = (state.NPC ?? []).reduce<Record<string, string>>((map, npc) => {
+    const yitingNpcNameMap = 筛选活跃NPC(state.NPC).reduce<Record<string, string>>((map, npc) => {
       if (npc.id && npc.姓名) map[npc.id] = npc.姓名;
       return map;
     }, {});
@@ -2658,36 +2657,6 @@ export async function executeSendWorkflow(
       provider: config.provider,
       model: config.model,
     });
-    const zhikuRequestDifferenceReasons = [
-      actualMainRequestHash !== finalizedMainRequest.requestHash ? '重试或协议校验改变了最终消息链。' : '',
-      apiMessages.length !== finalizedMainRequest.messages.length ? `最终消息数从预测 ${finalizedMainRequest.messages.length} 变为实发 ${apiMessages.length}。` : '',
-      result.deepSeekRecovery?.fallbackModel && result.deepSeekRecovery.fallbackModel !== mainStoryConfig.model
-        ? `DeepSeek 降级切换模型：${mainStoryConfig.model} -> ${result.deepSeekRecovery.fallbackModel}。`
-        : '',
-    ].filter(Boolean);
-    const zhikuActualTrace = attachZhikuRequestReceipt(zhikuPreview.runTrace, {
-      kind: 'actual',
-      requestHash: actualMainRequestHash,
-      predictedRequestHash: finalizedMainRequest.requestHash,
-      provider: tokenUsage.provider ?? mainStoryConfig.provider,
-      model: tokenUsage.model ?? result.deepSeekRecovery?.fallbackModel ?? mainStoryConfig.model,
-      transport: finalizedMainRequest.capabilities.transport,
-      endpoint: finalizedMainRequest.capabilities.endpoint,
-      mode: finalizedMainRequest.capabilities.mode,
-      streaming: shouldStreamMainRequest,
-      prefixApplied: finalizedMainRequest.capabilities.prefixApplied,
-      finishReason: result.finishReason,
-      usage: {
-        source: tokenUsage.source,
-        inputTokens: tokenUsage.inputTokens,
-        outputTokens: tokenUsage.outputTokens,
-        totalTokens: tokenUsage.totalTokens,
-        cachedTokens: tokenUsage.cachedTokens,
-        uncachedTokens: tokenUsage.uncachedTokens,
-      },
-      durationSec: duration,
-      differenceReasons: zhikuRequestDifferenceReasons,
-    });
     const previousDebugContext = [...updatedHistory]
       .reverse()
       .find((msg) => msg.role === 'assistant' && msg.debugContext?.systemPrompt)?.debugContext;
@@ -2714,15 +2683,6 @@ export async function executeSendWorkflow(
         systemPrompt,
         messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
         requestHash: actualMainRequestHash,
-        zhikuRunTrace: zhikuActualTrace,
-        zhikuCompileId: zhikuPreview.compileId,
-        zhikuCatalogVersion: zhikuPreview.catalogVersion,
-        zhikuCatalogRevision: zhikuPreview.catalogRevision,
-        zhikuActualProvider: tokenUsage.provider ?? mainStoryConfig.provider,
-        zhikuActualModel: tokenUsage.model ?? result.deepSeekRecovery?.fallbackModel ?? mainStoryConfig.model,
-        zhikuFinishReason: result.finishReason,
-        zhikuPredictionRequestHash: finalizedMainRequest.requestHash,
-        zhikuRequestDifferenceReasons,
         requestCapabilities: finalizedMainRequest.capabilities,
         deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : 'off',
         deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.gameSettings.enableCotFakeHistory === true,
@@ -2939,9 +2899,10 @@ export async function executeSendWorkflow(
       // NSFW 基线补建：开启 NSFW 后，把需要补建基线的 NPC 信息传给变量模型，
       // 变量模型在变量更新那一次调用里顺带生成 NSFW 基线档案，走正常 nsfw_archive facts 落库链路。
       const npcSourceForCompression = archiveEnrichment.records;
+      const npcSourceForCompressionReady = 整理NPC记录列表(npcSourceForCompression, state.turnCount + 1);
       const npcMemorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
       const npcCompressionSummaryTriggered: string[] = [];
-      let npcAfterCompression = npcSourceForCompression.map((npc) => {
+      let npcAfterCompression = npcSourceForCompressionReady.map((npc) => {
         const ledgerCompression = compressNpcMemoryLedger({
           npcId: npc.id,
           entries: npc.同行记忆 ?? [],
@@ -3703,10 +3664,11 @@ async function runVariableCalibrationStep(
   });
 
   try {
-    // NSFW 基线候选：开启时，为缺少实质内容的 NPC 在变量更新那一次调用里生成基线。
+    // NSFW 基线候选：开启时，为缺少实质内容的活跃 NPC 在变量更新那一次调用里生成基线。
+    // 归档 NPC 不得进入任何运行时选择链（含 NSFW 基线）。
     const nsfwBaselineCandidates: NsfwBaselineCandidate[] = [];
     if (state.gameSettings.enableNsfw) {
-      const npcRecords = (stateSnapshot.NPC ?? []) as NPC记录[];
+      const npcRecords = 筛选活跃NPC((stateSnapshot.NPC ?? []) as NPC记录[]);
       for (const npc of npcRecords) {
         if (nsfwBaselineCandidates.length >= 2) break;
         if (needsNsfwBaseline(npc, undefined, {

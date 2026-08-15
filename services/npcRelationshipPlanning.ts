@@ -1,5 +1,5 @@
 import type { NPC记录 } from '@/models/npc';
-import { 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { 格式化NPC关系, 提取NPC同行记忆文本列表, 筛选活跃NPC } from '@/models/npc';
 
 export interface NPC关系规划条目 {
   npcId: string;
@@ -19,7 +19,7 @@ export interface NPC关系规划快照 {
 }
 
 export function buildNpcRelationshipPlanning(npcs: NPC记录[], turnCount: number): NPC关系规划快照 {
-  const entries = npcs
+  const entries = 筛选活跃NPC(npcs)
     .filter((npc) => npc.阶位 === 'companion' || npc.同行 || 提取NPC同行记忆文本列表(npc).length > 0 || npc.好感度 !== 0 || npc.亲密关系)
     .map((npc) => buildNpcRelationshipEntry(npc, turnCount))
     .sort((a, b) => priorityRank(b.优先级) - priorityRank(a.优先级) || Math.abs(b.好感度) - Math.abs(a.好感度))

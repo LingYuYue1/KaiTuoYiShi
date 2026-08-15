@@ -9,8 +9,6 @@ import { NPC_MEMORY_WRITE_RULE_PROMPT } from '@/data/variableWorldbook';
 import { retrieveYitingContext, buildYitingRecallSystemPrompt } from '@/services/yitingRetrieval';
 import { buildZhikuAiRequestForTurn, buildZhikuModelSystemPrompt, buildZhikuModelUserPrompt } from '@/services/zhikuRetrieval';
 import { compileZhikuTurn, type ZhikuRequestScope } from '@/services/zhikuRuntimeCompiler';
-import { attachZhikuRequestReceipt, formatZhikuRunTrace } from '@/services/zhikuRunTrace';
-import { auditZhikuStage6Fixtures, formatZhikuStage6FixtureAudit } from '@/services/zhikuStage6Harness';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { buildNpcRelationshipPlanning } from '@/services/npcRelationshipPlanning';
@@ -554,7 +552,6 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     scope: zhikuRequestScope,
     participation: zhikuParticipation,
     sceneContext: zhikuSceneContext,
-    aiSupplementPlanned: state.gameSettings.智库系统?.enableAiSupplement === true,
   });
 
   const immediateStoryReview = immediateStoryReviewForZhiku;
@@ -821,74 +818,6 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   apiMessages = finalizedMainRequest.messages;
   const systemPromptSections = splitPromptSections(systemPrompt);
   const sections: ContextSection[] = [];
-  const lastActualRequest = [...state.chatHistory]
-    .reverse()
-    .find((message) => message.role === 'assistant' && message.debugContext?.requestHash)
-    ?.debugContext;
-  const zhikuPredictedTrace = attachZhikuRequestReceipt(zhikuPreview.runTrace, {
-    kind: 'prediction',
-    requestHash: finalizedMainRequest.requestHash,
-    provider: mainStoryConfig.provider,
-    model: mainStoryConfig.model,
-    transport: finalizedMainRequest.capabilities.transport,
-    endpoint: finalizedMainRequest.capabilities.endpoint,
-    mode: finalizedMainRequest.capabilities.mode,
-    streaming: finalizedMainRequest.capabilities.streaming,
-    prefixApplied: finalizedMainRequest.capabilities.prefixApplied,
-    differenceReasons: zhikuPreview.runTrace.aiSupplement.status === 'preview-not-executed'
-      ? ['当前预演不调用智库 AI 补充；真实发送可能因 AI 合法补充、形态修正或失败回退而变化。']
-      : [],
-  });
-  addSection(sections, {
-    id: 'main_request_finalization',
-    title: '本回合发送前预测',
-    category: '诊断',
-    content: [
-      `请求哈希：${finalizedMainRequest.requestHash}`,
-      `智库编译：${zhikuPreview.compileId}`,
-      `传输：${finalizedMainRequest.capabilities.transport}/${finalizedMainRequest.capabilities.endpoint}`,
-      `模式：${finalizedMainRequest.capabilities.mode}`,
-      `请求方式：${finalizedMainRequest.capabilities.streaming ? 'stream' : 'non-stream'}（页面可见性变化时真实发送可能切换）`,
-      `depth：${finalizedMainRequest.capabilities.depthInjection}`,
-      `prefill：${finalizedMainRequest.capabilities.prefixApplied ? finalizedMainRequest.prefixContent || '已启用' : '未启用'}`,
-    ].join('\n'),
-    upload: false,
-    diagnostic: true,
-  });
-  addSection(sections, {
-    id: 'zhiku_run_trace_prediction',
-    title: '智库本回合结构化预演',
-    category: '诊断',
-    content: formatZhikuRunTrace(zhikuPredictedTrace),
-    upload: false,
-    diagnostic: true,
-  });
-  addSection(sections, {
-    id: 'zhiku_run_trace_actual',
-    title: '智库上一回合结构化实发',
-    category: '实际',
-    content: lastActualRequest?.zhikuRunTrace
-      ? formatZhikuRunTrace(lastActualRequest.zhikuRunTrace)
-      : '（上一回合没有保存 ZhikuRunTrace；完成一个新回合后显示。）',
-    upload: false,
-    diagnostic: true,
-  });
-  addSection(sections, {
-    id: 'main_request_actual_receipt',
-    title: '上一回合真实请求回执',
-    category: '实际',
-    content: lastActualRequest
-      ? [
-          `请求哈希：${lastActualRequest.requestHash}`,
-          `传输：${lastActualRequest.requestCapabilities?.transport ?? '未知'}/${lastActualRequest.requestCapabilities?.endpoint ?? '未知'}`,
-          `模式：${lastActualRequest.requestCapabilities?.mode ?? '未知'}`,
-          `请求方式：${lastActualRequest.mainRequestMode ?? '未知'}`,
-          `prefill：${lastActualRequest.requestCapabilities?.prefixApplied ? '已启用' : '未启用'}`,
-        ].join('\n')
-      : '（尚无阶段五格式的真实请求回执；完成一个新回合后显示。）',
-    upload: false,
-    diagnostic: true,
-  });
   addSection(sections, {
     id: 'main_request_order_overview',
     title: '主剧情真实请求顺序总览',
@@ -1062,10 +991,12 @@ function buildPhoneContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   };
   const sections: ContextSection[] = [];
   addSection(sections, {
-    id: 'yiting_story_progress',
-    title: '剧情编织进度快照',
-    category: '剧情',
+    id: 'phone_story_progress_diagnostic',
+    title: '剧情编织进度诊断',
+    category: '诊断',
     content: formatStoryWeavingProgressSnapshot(state),
+    upload: false,
+    diagnostic: true,
   });
   addSection(sections, {
     id: 'phone_system',
@@ -1180,6 +1111,14 @@ function buildYitingContextSnapshot(state: UseGameStateReturn): ContextSnapshot 
       fallback.previewText || fallback.injection || '（未命中）',
     ].join('\n'),
   });
+  addSection(sections, {
+    id: 'yiting_actual_saved_preview',
+    title: '上一回合真实保存的忆庭召回诊断',
+    category: '实际',
+    content: actualRecallPreview || '（上一条 AI 回复没有保存忆庭召回诊断；请从新增诊断后的新回合开始查看。）',
+    upload: false,
+    diagnostic: true,
+  });
   return finalizeSnapshot('yiting', '忆庭召回上下文', sections, sourceInput);
 }
 
@@ -1234,16 +1173,9 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     scope: 'diagnostic',
     participation,
     sceneContext,
-    aiSupplementPlanned: aiSupplementEnabled,
   });
   const aiCandidateIndex = buildZhikuAiRequestForTurn(state.智库, recallQuery, fallback.entries, sceneContext);
   const actualRecallPreview = latestAssistantZhikuDebugRecall(state.chatHistory);
-  const actualZhikuTrace = [...state.chatHistory]
-    .reverse()
-    .find((message) => message.role === 'assistant' && message.debugContext?.zhikuRunTrace)
-    ?.debugContext?.zhikuRunTrace;
-  const activeStage6Config = state.apiSettings.configs.find((item) => item.id === state.apiSettings.activeConfigId)
-    ?? state.apiSettings.configs[0];
   const zhikuDiagnostics = fallback.diagnostics;
   const diagnosticText = zhikuDiagnostics
     ? [
@@ -1283,79 +1215,46 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     : '（无诊断信息）';
   const sections: ContextSection[] = [];
   addSection(sections, {
-    id: 'zhiku_trace_preview',
-    title: '本回合预演（结构化）',
-    category: '诊断',
-    content: formatZhikuRunTrace(fallback.runTrace),
-    upload: false,
-    diagnostic: true,
-  });
-  addSection(sections, {
-    id: 'zhiku_trace_actual',
-    title: '上一回合实发（结构化）',
-    category: '实际',
-    content: actualZhikuTrace
-      ? formatZhikuRunTrace(actualZhikuTrace)
-      : '（上一回合没有保存 ZhikuRunTrace；完成一个新回合后显示。）',
-    upload: false,
-    diagnostic: true,
-  });
-  addSection(sections, {
-    id: 'zhiku_stage6_ab_preflight',
-    title: '阶段六 A/B 无 API 预检',
-    category: '诊断',
-    content: formatZhikuStage6FixtureAudit(auditZhikuStage6Fixtures(state.智库), {
-      provider: activeStage6Config?.provider,
-      model: activeStage6Config?.model,
-    }),
-    upload: false,
-    diagnostic: true,
-  });
-  addSection(sections, {
-    id: 'yiting_actual_saved_preview',
-    title: '上一回合真实保存的忆庭召回诊断',
-    category: '实际',
-    content: actualRecallPreview || '（上一条 AI 回复没有保存忆庭召回诊断；请从新增诊断后的新回合开始查看。）',
-  });
-  addSection(sections, {
     id: 'zhiku_actual_saved_preview',
     title: '上一回合真实保存的召回诊断',
     category: '实际',
     content: actualRecallPreview || '（上一条 AI 回复没有保存召回诊断；请从新增诊断后的新回合开始查看。）',
+    upload: false,
+    diagnostic: true,
   });
+  if (aiSupplementEnabled) {
+    addSection(sections, {
+      id: 'zhiku_system',
+      title: '智库 AI 召回编译器提示词',
+      category: '系统',
+      content: buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings.promptModules),
+    });
+    addSection(sections, {
+      id: 'zhiku_user',
+      title: '智库 AI 补充用户消息',
+      category: '用户',
+      content: buildZhikuModelUserPrompt(aiCandidateIndex.request),
+    });
+  }
   addSection(sections, {
-    id: 'zhiku_system',
-    title: aiSupplementEnabled ? '智库 AI 召回编译器提示词' : '智库 AI 补充状态',
-    category: '系统',
-    content: aiSupplementEnabled
-      ? buildZhikuModelSystemPrompt(zhikuDiagnostics?.场景锚点 ?? [], state.gameSettings.promptModules)
-      : 'AI 主动补充未开启。本回合只执行正文关键词检索，不会发送智库补充 API 请求。',
-  });
-  addSection(sections, {
-    id: 'zhiku_user',
-    title: aiSupplementEnabled ? '智库 AI 补充用户消息' : '正文关键词检索预览',
-    category: '用户',
-    content: aiSupplementEnabled
-      ? [
-          `玩家当前输入：${sourceInput || '（无）'}`,
-          '',
-          buildZhikuModelUserPrompt(aiCandidateIndex.request),
-          '',
-          '本地召回诊断：',
-          diagnosticText,
-          '',
-          '本地注入预览：',
-          fallback.injection || '（未命中）',
-        ].join('\n')
-      : [
-          `正文关键词窗口：${recallQuery || '（无）'}`,
-          '',
-          '本地召回诊断：',
-          diagnosticText,
-          '',
-          '本地注入预览：',
-          fallback.injection || '（未命中）',
-        ].join('\n'),
+    id: 'zhiku_local_diagnostics',
+    title: '智库本地召回诊断',
+    category: '诊断',
+    content: [
+      aiSupplementEnabled
+        ? `AI 主动补充已开启；当前玩家输入：${sourceInput || '（无）'}`
+        : 'AI 主动补充未开启。本回合只执行正文关键词检索，不会发送智库补充 API 请求。',
+      '',
+      `正文关键词窗口：${recallQuery || '（无）'}`,
+      '',
+      '本地召回诊断：',
+      diagnosticText,
+      '',
+      '本地注入预览：',
+      fallback.injection || '（未命中）',
+    ].join('\n'),
+    upload: false,
+    diagnostic: true,
   });
   return finalizeSnapshot('zhiku', '智库召回上下文', sections, sourceInput);
 }

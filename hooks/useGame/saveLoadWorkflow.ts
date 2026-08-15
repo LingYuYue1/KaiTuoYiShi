@@ -312,7 +312,7 @@ async function applySaveToState(
   state.set智库(nextZhiku);
   await saveSetting('zhikuSystem', buildPersistedZhikuSystem(nextZhiku));
   state.set手机(归一化手机系统(save.手机));
-  state.setNPC(归一化NPC记录列表(save.NPC));   // 旧存档/AI 半成品对象统一兜底
+  state.setNPC(归一化NPC记录列表(save.NPC, save.turnCount));   // 旧存档/AI 半成品对象统一兜底，并执行一次路人整理
   const nextAlbum = materializeAlbumRuntimePayload(归一化相册系统(save.相册));
   state.set相册(nextAlbum);
   pruneAlbumAssetCache(nextAlbum.assets.map((asset) => asset.id));

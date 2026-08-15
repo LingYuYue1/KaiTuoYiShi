@@ -19,6 +19,7 @@ interface CompanionPanelProps {
 }
 
 type DetailTab = 'archive' | 'planning' | 'memory' | 'agreement' | 'nsfw';
+type RosterTab = NPC阶位 | 'archived';
 
 const cardClip =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
@@ -40,35 +41,63 @@ const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 const activeSurface = 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-tech-cyan), 0.055))';
 const quietSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel), 0.62), rgba(var(--tj-ui-panel-strong), 0.72))';
 
-export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnabled, maleNsfwArchiveEnabled = false, devMode = false }: CompanionPanelProps) {
-  const [tab, setTab] = useState<NPC阶位>('companion');
+/**
+ * 稳定的 NPC 持久化指纹：只覆盖整理/归一化可能改写的字段，
+ * 与整表深比较相比，不受记忆内容、外貌等无关字段变化影响。
+ */
+function buildNpcPersistFingerprint(records: NPC记录[]): string {
+  return JSON.stringify(records.map((n) => [
+    n.id,
+    n.阶位,
+    n.阶位来源,
+    n.手动阶位覆盖,
+    n.归档,
+    n.归档回合,
+    n.同行,
+    n.累计互动次数,
+    n.好感度,
+    n.关系,
+    n.亲密关系,
+    n.职务,
+    n.原著角色,
+    n.合并来源ID,
+  ]));
+}
+
+export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, turnCount, nsfwEnabled, maleNsfwArchiveEnabled = false, devMode = false }: CompanionPanelProps) {
+  const [tab, setTab] = useState<RosterTab>('companion');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const normalizedRecords = useMemo(() => {
-    const normalized = 归一化NPC记录列表(npcRecords);
+    const normalized = 归一化NPC记录列表(npcRecords, turnCount);
     return enrichNpcArchives(normalized, {
       nsfwEnabled,
       maleNsfwArchiveEnabled,
     }).records;
-  }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled]);
+  }, [npcRecords, turnCount, nsfwEnabled, maleNsfwArchiveEnabled]);
 
   useEffect(() => {
-    const normalized = 归一化NPC记录列表(npcRecords);
+    const normalized = 归一化NPC记录列表(npcRecords, turnCount);
     const enriched = enrichNpcArchives(normalized, {
       nsfwEnabled,
       maleNsfwArchiveEnabled,
     });
-    if (enriched.changed) onNpcRecordsChange(enriched.records);
-  }, [npcRecords, nsfwEnabled, maleNsfwArchiveEnabled, onNpcRecordsChange]);
+    // 稳定持久化指纹：只比较整理/归一化可能改写的字段，避免整表深比较
+    // 因无关字段变化或重复渲染误回写（tab 切换、选中项变化不触发回写）。
+    if (enriched.changed || buildNpcPersistFingerprint(enriched.records) !== buildNpcPersistFingerprint(npcRecords)) {
+      onNpcRecordsChange(enriched.records);
+    }
+  }, [npcRecords, turnCount, nsfwEnabled, maleNsfwArchiveEnabled, onNpcRecordsChange]);
 
   const companions = useMemo(
-    () => sortNpcRecords(normalizedRecords.filter((n) => n.阶位 === 'companion')),
+    () => sortNpcRecords(normalizedRecords.filter((n) => !n.归档 && n.阶位 === 'companion')),
     [normalizedRecords],
   );
   const extras = useMemo(
-    () => sortNpcRecords(normalizedRecords.filter((n) => n.阶位 === 'extra' && n.关系 !== 'enemy')),
+    () => sortNpcRecords(normalizedRecords.filter((n) => !n.归档 && n.阶位 === 'extra' && n.关系 !== 'enemy')),
     [normalizedRecords],
   );
-  const visible = tab === 'companion' ? companions : extras;
+  const archived = useMemo(() => sortNpcRecords(normalizedRecords.filter((n) => n.归档)), [normalizedRecords]);
+  const visible = tab === 'companion' ? companions : tab === 'extra' ? extras : archived;
 
   const travelingCount = companions.filter((n) => n.同行).length;
   const friendCount = companions.filter((n) => ['friend', 'close'].includes(n.关系)).length;
@@ -89,8 +118,16 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
     onNpcRecordsChange((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch } : n)));
   };
 
-  const promoteToCompanion = (id: string) => updateRecord(id, { 阶位: 'companion' });
-  const demoteToExtra = (id: string) => updateRecord(id, { 阶位: 'extra', 同行: false });
+  const promoteToCompanion = (id: string) => updateRecord(id, { 阶位: 'companion', 手动阶位覆盖: 'companion', 阶位来源: 'manual', 归档: false });
+  const demoteToExtra = (id: string) => updateRecord(id, { 阶位: 'extra', 手动阶位覆盖: 'extra', 阶位来源: 'manual', 同行: false });
+  const restoreArchived = (id: string) => updateRecord(id, { 归档: false, 归档回合: undefined });
+  const deleteArchived = (id: string, name: string, mergedFromIds?: string[]) => {
+    // 两步确认：第一步确认意图，第二步明确提示姓名与不可恢复性。
+    if (!window.confirm('确定要永久删除归档 NPC 记录吗？')) return;
+    if (!window.confirm(`确认永久删除「${name}」？该操作不可恢复，且会一并删除其合并来源记录。`)) return;
+    const idSet = new Set([id, ...(mergedFromIds ?? [])]);
+    onNpcRecordsChange((prev) => prev.filter((n) => !idSet.has(n.id)));
+  };
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden md:flex-row md:gap-4 md:overflow-hidden">
       <aside className="flex min-w-0 shrink-0 flex-col gap-3 md:min-h-0 md:w-[260px]">
@@ -116,12 +153,15 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <TabButton active={tab === 'companion'} onClick={() => setTab('companion')}>
             伙伴 {companions.length}
           </TabButton>
           <TabButton active={tab === 'extra'} onClick={() => setTab('extra')}>
             路人 {extras.length}
+          </TabButton>
+          <TabButton active={tab === 'archived'} onClick={() => setTab('archived')}>
+            已归档 {archived.length}
           </TabButton>
         </div>
 
@@ -152,6 +192,8 @@ export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, nsfwEnab
             nsfwEnabled={nsfwEnabled}
             onPromote={() => promoteToCompanion(selected.id)}
             onDemote={() => demoteToExtra(selected.id)}
+            onRestore={() => restoreArchived(selected.id)}
+            onDelete={() => deleteArchived(selected.id, selected.姓名, selected.合并来源ID)}
             onToggleTraveling={() => updateRecord(selected.id, { 同行: !selected.同行 })}
             onUpdateNpc={(patch) => updateRecord(selected.id, patch)}
             planning={selectedPlanning}
@@ -247,6 +289,7 @@ function NpcListItem({
           style={{ color: mutedColor }}
         >
           {relation}
+          {npc.职务 ? ` / ${npc.职务}` : ''}
           {npc.原著角色 ? ' / 原著' : ''}
         </div>
         <AffinityMeter value={npc.好感度} compact />
@@ -331,6 +374,8 @@ function NpcDetail({
   album,
   onPromote,
   onDemote,
+  onRestore,
+  onDelete,
   onToggleTraveling,
   onUpdateNpc,
   nsfwEnabled,
@@ -341,6 +386,8 @@ function NpcDetail({
   album?: 相册系统;
   onPromote: () => void;
   onDemote: () => void;
+  onRestore?: () => void;
+  onDelete?: () => void;
   onToggleTraveling: () => void;
   onUpdateNpc: (patch: Partial<NPC记录>) => void;
   nsfwEnabled: boolean;
@@ -391,6 +438,9 @@ function NpcDetail({
               </h3>
               {npc.别名 && <span className="font-serif text-[13px] italic text-[rgb(var(--tj-text-secondary))]">({npc.别名})</span>}
               {npc.原著角色 && <Chip tone="gold">原著角色</Chip>}
+              {npc.职务 && <Chip tone="silver">{npc.职务}</Chip>}
+              {npc.阶位来源 === 'manual' && <Chip tone="silver">手动覆盖</Chip>}
+              {npc.归档 && <Chip tone="silver">已归档</Chip>}
               {npc.图像档案?.状态 && <Chip tone="silver">{npc.图像档案.状态 === 'pending' ? '图像生成中' : '图像档案'}</Chip>}
             </div>
 
@@ -401,6 +451,12 @@ function NpcDetail({
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
+              {npc.归档 && onRestore && (
+                <ActionChip active={false} onClick={onRestore}>恢复为活跃路人</ActionChip>
+              )}
+              {npc.归档 && onDelete && (
+                <ActionChip active={false} onClick={onDelete}>永久删除</ActionChip>
+              )}
               {isCompanion && (
                 <ActionChip active={npc.同行} onClick={onToggleTraveling}>
                   {npc.同行 ? '当前在场' : '设为在场'}
@@ -1334,20 +1390,20 @@ function Chip({ tone, children }: { tone: 'gold' | 'silver'; children: ReactNode
   );
 }
 
-function EmptyRoster({ tab }: { tab: NPC阶位 }) {
+function EmptyRoster({ tab }: { tab: RosterTab }) {
   return (
     <div className="px-4 py-8 text-center" style={panelStyle}>
       <div className="font-serif text-[20px]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.45)' }}>
         ✦
       </div>
       <div className="mt-2 font-serif text-[13px] tracking-[0.18em]" style={{ color: faintColor }}>
-        {tab === 'companion' ? '尚未结识伙伴' : '尚无路人档案'}
+        {tab === 'companion' ? '尚未结识伙伴' : tab === 'extra' ? '尚无路人档案' : '暂无已归档 NPC'}
       </div>
     </div>
   );
 }
 
-function NoSelection({ tab }: { tab: NPC阶位 }) {
+function NoSelection({ tab }: { tab: RosterTab }) {
   return (
     <div className="flex h-full items-center justify-center px-6 text-center" style={panelStyle}>
       <div>
@@ -1355,7 +1411,7 @@ function NoSelection({ tab }: { tab: NPC阶位 }) {
           ✦
         </div>
         <div className="mt-3 font-serif text-[14px] tracking-[0.22em]" style={{ color: faintColor }}>
-          从左侧选择一位{tab === 'companion' ? '伙伴' : '路人'}
+          从左侧选择一位{tab === 'companion' ? '伙伴' : tab === 'extra' ? '路人' : '已归档 NPC'}
         </div>
       </div>
     </div>

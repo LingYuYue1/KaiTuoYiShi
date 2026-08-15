@@ -7,7 +7,7 @@ import { PROMPT_MODULE_TOP_THRESHOLD, syncStoryModeModuleEnabled } from '@/model
 import type { 开局来源, 剧情模式 } from '@/models/journey';
 import type { 世界书 } from '@/models/worldbook';
 import type { NPC记录, NPC账本选择结果, NPC同行记忆条目 } from '@/models/npc';
-import { formatNpcLedgerForPrompt, 格式化NPC关系, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { formatNpcLedgerForPrompt, 格式化NPC关系, selectNpcLedgersForTurn, 提取NPC同行记忆文本列表, 筛选活跃NPC } from '@/models/npc';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 import { 计算命途战技槽位数, NORMAL_SKILL_SLOT_COUNT } from '@/models/skill';
 import type { 新闻条目 } from '@/models/news';
@@ -73,6 +73,7 @@ export function buildSystemPrompt(
   /** 工作包A：世界书单回合唯一解析结果（sendWorkflow 传入；不传则 builder 内部解析一次）。 */
   worldbookPlanInput?: WorldbookInjectionPlan,
 ): BuiltSystemPrompt {
+  const activeNpcRecords = 筛选活跃NPC(npcRecords);
   // ST 预设总开关：关闭时过滤所有 st_import_* 模块（保留预设库数据，仅不注入）。
   // V2 酒馆预设使用原始 prompts + prompt_order 消息链；选中 V2 时也隔离 V1 st_import_* 残留，
   // 避免同一份 ST 预设以 V1 模块和 V2 消息链两种形态重复注入。
@@ -196,7 +197,7 @@ export function buildSystemPrompt(
   // ── 区6 · 注入区（现在：时间/场景/天气/狭间/世界动态/NPC/关键词世界书/智库/短期记忆） ──
   // NPC 账本选择提前计算（供忆庭在场判断和区6 账本注入复用）
   const npcLedgerSelection = npcLedgerSelectionOverride ?? selectNpcLedgersForTurn({
-    records: npcRecords,
+    records: activeNpcRecords,
     turnCount: _turnCount,
     explicitNames: worldbookCtx?.npcNames,
     sceneNames: worldState.当前时段?.人物?.map((npc) => npc.姓名),
@@ -220,13 +221,13 @@ export function buildSystemPrompt(
     if (phoneSection) zone6.push(phoneSection);
 
     // NPC 四段
-    const npcPresence = buildNpcPresenceSection(worldState, npcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames);
+    const npcPresence = buildNpcPresenceSection(worldState, activeNpcRecords, _turnCount, worldbookCtx?.recentUserInput, worldbookCtx?.npcNames);
     if (npcPresence) zone6.push(npcPresence);
     const npcLedger = buildNpcLedgerContinuitySection(npcLedgerSelection);
     if (npcLedger) zone6.push(npcLedger);
-    const npcContinuity = buildNpcContinuitySection(worldState, npcRecords, _turnCount, worldbookCtx?.npcNames);
+    const npcContinuity = buildNpcContinuitySection(worldState, activeNpcRecords, _turnCount, worldbookCtx?.npcNames);
     if (npcContinuity) zone6.push(npcContinuity);
-    const companions = buildCompanionsSection(npcRecords, _turnCount);
+    const companions = buildCompanionsSection(activeNpcRecords, _turnCount);
     if (companions) zone6.push(companions);
 
     // 关键词世界书（按需层）
@@ -250,7 +251,7 @@ export function buildSystemPrompt(
   {
     const zone7: string[] = [];
     // 阶段1方案E·全知性防护：NPC id→姓名 映射 + 在场 NPC id 集合（供忆庭通讯回忆标记来源）
-    const npcNameMap = (npcRecords ?? []).reduce<Record<string, string>>((map, npc) => {
+    const npcNameMap = activeNpcRecords.reduce<Record<string, string>>((map, npc) => {
       if (npc.id && npc.姓名) map[npc.id] = npc.姓名;
       return map;
     }, {});
@@ -1429,7 +1430,7 @@ function buildNpcPresenceSection(
   explicitNpcNames: string[] = [],
 ): string {
   const sceneNames = (worldState.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean);
-  const records = npcRecords ?? [];
+  const records = 筛选活跃NPC(npcRecords);
   const explicitNames = normalizeExplicitNpcNames(explicitNpcNames);
   const current = records
     .filter((npc) => npc.同行 || sceneNames.some((name) => name === npc.姓名 || name === npc.别名))
@@ -1492,7 +1493,7 @@ function buildNpcContinuitySection(
   turnCount = 0,
   explicitNpcNames: string[] = [],
 ): string {
-  const records = npcRecords ?? [];
+  const records = 筛选活跃NPC(npcRecords);
   const explicitNames = normalizeExplicitNpcNames(explicitNpcNames);
   const recentCutoff = Math.max(1, turnCount - RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW);
   const sceneNames = new Set((worldState.当前时段?.人物 ?? []).map((n) => n.姓名.trim()).filter(Boolean));
@@ -1561,7 +1562,7 @@ function buildNpcContinuitySection(
     const turnLine = `初见第${Math.max(1, Number(npc.初见回合 || 1))}回合，最近第${Math.max(1, Number(npc.最近回合 || npc.初见回合 || 1))}回合`;
     const memoryLine = memories.length ? `；最近共同经历：${memories.slice(-3).join('；')}` : '';
     const phoneMemoryLine = buildRecentPhoneMemoryLine(npc);
-    const introLine = npc.介绍 ? `；身份/职责：${npc.介绍}` : '';
+    const introLine = npc.职务 || npc.介绍 ? `；身份/职责：${[npc.职务, npc.介绍].filter(Boolean).join('；')}` : '';
     lines.push(`- ${npc.姓名}${npc.别名 ? `（${npc.别名}）` : ''}｜${tags.join(' · ')}｜好感${npc.好感度 > 0 ? '+' : ''}${npc.好感度}｜${turnLine}${introLine}${memoryLine}${phoneMemoryLine}`);
   }
 
@@ -1575,10 +1576,11 @@ function buildNpcContinuitySection(
 // 已知伙伴注入：按相关度过滤（同行 > 近回合见过 > 有记忆/好感 > 高好感），避免刚见过的人过早掉出上下文。
 // 路人（tier='extra'）只注入近期或已有可承接关系/记忆的少量对象，避免上下文爆炸。
 function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string {
-  if (!npcRecords || npcRecords.length === 0) return '';
-  const companions = npcRecords.filter((n) => n.阶位 === 'companion');
+  const records = 筛选活跃NPC(npcRecords);
+  if (records.length === 0) return '';
+  const companions = records.filter((n) => n.阶位 === 'companion');
   const recentCutoff = Math.max(1, turnCount - RECENT_EXTRA_NPC_PROMPT_TURN_WINDOW);
-  const recentExtras = npcRecords
+  const recentExtras = records
     .filter((n) => {
       if (n.阶位 !== 'extra') return false;
       const memoryCount = 提取NPC同行记忆文本列表(n).length;
@@ -1610,6 +1612,7 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
     if (n.原著角色) tags.push('原著角色');
     const desc: string[] = [];
     if (n.对玩家称呼) desc.push(`称呼：${n.对玩家称呼}`);
+    if (n.职务) desc.push(`职务：${n.职务}`);
     if (n.外貌) desc.push(`外貌：${n.外貌}`);
     if (n.穿着) desc.push(`穿着：${n.穿着}`);
     if (n.说话方式) desc.push(`说话方式：${n.说话方式}`);

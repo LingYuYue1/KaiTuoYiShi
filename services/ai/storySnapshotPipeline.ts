@@ -2,6 +2,7 @@ import type { 图片槽位, StorySnapshotRenderContext } from '@/models/imageGen
 import { normalizeStorySnapshotRenderContext } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录 } from '@/models/npc';
+import { 筛选活跃NPC } from '@/models/npc';
 import type { API配置项, 文生图规则中心设置 } from '@/models/settings';
 import {
   buildSceneImagePrompt,
@@ -63,7 +64,7 @@ export function trimStorySnapshotSource(text: string): string {
 
 export function selectPresentStorySnapshotNpcs(npcs: NPC记录[], body: string): NPC记录[] {
   const text = body.trim();
-  return npcs
+  return 筛选活跃NPC(npcs)
     .map((npc) => ({
       npc,
       score: (text && (text.includes(npc.姓名) || Boolean(npc.别名 && text.includes(npc.别名))) ? 100 : 0)

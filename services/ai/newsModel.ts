@@ -2,6 +2,7 @@ import type { API配置项, 新闻API覆盖 } from '@/models/settings';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC关系类型, NPC记录 } from '@/models/npc';
+import { 筛选活跃NPC } from '@/models/npc';
 import type { 剧情节点 } from '@/models/plot';
 import type { 新闻条目, 新闻生成结果, 新闻条目补丁 } from '@/models/news';
 import { getNewsIssueNumber, 归一化新闻条目 } from '@/models/news';
@@ -253,7 +254,7 @@ function buildPublicNpcBriefs(npcs: NPC记录[]): Array<{
   装备摘要?: string;
   备注?: string[];
 }> {
-  return npcs
+  return 筛选活跃NPC(npcs)
     .filter((npc) => npc.阶位 === 'companion' || npc.同行 || npc.最近回合 > 0)
     .sort((a, b) => b.最近回合 - a.最近回合)
     .slice(0, 12)

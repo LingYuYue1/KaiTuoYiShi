@@ -178,7 +178,7 @@ export function PhoneModal({
   const derivedContacts = useMemo(
     () =>
       normalizedNpcRecords
-        .filter((npc) => npc.关系 !== 'enemy')
+        .filter((npc) => !npc.归档 && npc.关系 !== 'enemy')
         .map((npc) => ({
           id: toPhoneContactId(npc.id),
           npcId: npc.id,
@@ -224,6 +224,7 @@ export function PhoneModal({
         if (contact.npcId) {
           const npc = normalizedNpcRecords.find((item) => item.id === contact.npcId);
           if (npc?.关系 === 'enemy') return false;
+          if (npc?.归档) return false; // 归档 NPC 的联系人不再展示/可聊，恢复由变量事实链触发
         }
         return contact.available !== false;
       });
@@ -232,6 +233,7 @@ export function PhoneModal({
     () =>
       normalizedNpcRecords
         .filter((npc) => npc.关系 !== 'enemy')
+        .filter((npc) => !npc.归档)
         .filter((npc) => !phone.contacts.some((contact) => contact.npcId === npc.id || contact.id === toPhoneContactId(npc.id)))
         .map((npc) => ({
           id: toPhoneContactId(npc.id),
@@ -536,7 +538,7 @@ export function PhoneModal({
           speakerName.includes(npc.姓名) ||
           (npc.别名 && (npc.别名 === speakerName || npc.别名.includes(speakerName) || speakerName.includes(npc.别名))),
       );
-      if (!byNpc || byNpc.关系 === 'enemy') return undefined;
+      if (!byNpc || byNpc.关系 === 'enemy' || byNpc.归档) return undefined;
       return {
         id: `npc_${byNpc.id}`,
         npcId: byNpc.id,
@@ -774,7 +776,7 @@ export function PhoneModal({
     const ids = [seed.targetId, ...seed.relatedNpcIds].filter(Boolean);
     const existing = contacts.find((contact) => ids.includes(contact.id) || (contact.npcId && ids.includes(contact.npcId)));
     if (existing) return existing;
-    const npc = normalizedNpcRecords.find((item) => ids.includes(item.id));
+    const npc = normalizedNpcRecords.find((item) => ids.includes(item.id) && !item.归档);
     if (npc) {
       const hiddenEnemy = npc.关系 === 'enemy';
       return {
