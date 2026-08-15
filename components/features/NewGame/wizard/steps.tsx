@@ -6,7 +6,9 @@ import { NORMAL_SKILL_SLOT_COUNT, type 战技记录, type 战技槽位摘要 } f
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/contracts/ai';
 import type { OpeningScenario, OpeningChapterAnchor, OpeningDisplayScenario, OpeningSkillSlotKey } from './wizardData';
 import type { CanonicalTrailblazer, FreeOpeningPlanetSource, FreeOpeningWorkshopDraft, OpeningSource } from '@/models/opening';
-import { CANONICAL_TRAILBLAZERS, FREE_OPENING_PLANET_SOURCE_OPTIONS, cardClip, smallClip, tightClip, openingCardBackground, openingActiveCardBackground, openingCardBorder, openingCyanBorder, getFreeOpeningPlanetSourceOption, getOpeningRegionDisplayName, getOpeningDisplaySummary, getOpeningDisplayHighlights, getOpeningOfficialChapterName, getOpeningOfficialChapterPhase, getOpeningChapterBadge, getOpeningPriorStoryState, selectOpeningScenario, openingSkillSlotTitle, openingSkillRecordSlotLabel, getCanonicalTrailblazer, splitCustomAbilityEntry, mergeBirthday } from './wizardData';
+import { CANONICAL_TRAILBLAZERS, FREE_OPENING_PLANET_SOURCE_OPTIONS, smallClip, tightClip, openingCardBackground, openingActiveCardBackground, openingCardBorder, openingCyanBorder, getFreeOpeningPlanetSourceOption, getOpeningRegionDisplayName, selectOpeningScenario, openingSkillSlotTitle, openingSkillRecordSlotLabel, getCanonicalTrailblazer, splitCustomAbilityEntry, mergeBirthday } from './wizardData';
+import { Chip, DraftInput, DraftTextarea, SmallActionButton } from './atoms';
+import { SectionCard, TipBox, CardHeader, ScenarioAnchorCard } from './frame';
 import { OpeningSkillSlotGroup, StepNav, SectionTitle, LabelField, OverviewLabel, OverviewRow } from './panels';
 
 export function StoryModeSelector({
@@ -205,121 +207,48 @@ export function CharacterStep({
 
       <div className="grid gap-5 lg:grid-cols-1">
         <div className="space-y-4">
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
+          <SectionCard>
             <div className="grid gap-3 sm:grid-cols-2">
               <LabelField label="姓名">
-                <input
-                  value={name}
-                  onChange={(e) => onName(e.target.value)}
-                  placeholder="例如：流云"
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput value={name} onChange={onName} placeholder="例如：流云" />
               </LabelField>
               <LabelField label="别名 / 外号">
-                <input
-                  value={alias}
-                  onChange={(e) => onAlias(e.target.value)}
-                  placeholder="可留空"
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput value={alias} onChange={onAlias} placeholder="可留空" />
               </LabelField>
               <LabelField label="性别">
-                <input
-                  value={gender}
-                  onChange={(e) => onGender(e.target.value)}
-                  placeholder="例如：男 / 女 / 其他"
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput value={gender} onChange={onGender} placeholder="例如：男 / 女 / 其他" />
               </LabelField>
               <LabelField label="年龄">
-                <input
-                  type="number"
-                  value={age}
-                  onChange={(e) => onAge(Number(e.target.value) || 0)}
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput type="number" value={age} onChange={(v) => onAge(Number(v) || 0)} />
               </LabelField>
               <div>
-                <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-                  生日
-                </div>
+                <CardHeader compact margin="sm">生日</CardHeader>
                 <div className="grid grid-cols-[1fr_1fr] gap-2">
-                  <input
-                    value={birthdayMonth}
-                    onChange={(e) => onBirthday(mergeBirthday(e.target.value, birthdayDay))}
-                    placeholder="月"
-                    className="kaituo-input w-full px-3 py-2 text-sm"
-                    style={{ clipPath: smallClip }}
-                  />
-                  <input
-                    value={birthdayDay}
-                    onChange={(e) => onBirthday(mergeBirthday(birthdayMonth, e.target.value))}
-                    placeholder="日"
-                    className="kaituo-input w-full px-3 py-2 text-sm"
-                    style={{ clipPath: smallClip }}
-                  />
+                  <DraftInput value={birthdayMonth} onChange={(v) => onBirthday(mergeBirthday(v, birthdayDay))} placeholder="月" />
+                  <DraftInput value={birthdayDay} onChange={(v) => onBirthday(mergeBirthday(birthdayMonth, v))} placeholder="日" />
                 </div>
               </div>
             </div>
-          </div>
+          </SectionCard>
 
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
+          <SectionCard>
               <LabelField label="外貌">
-                <textarea
-                  value={appearance}
-                  onChange={(e) => onAppearance(e.target.value)}
-                  rows={4}
-                  placeholder="例如：黑发蓝眼、刘海遮住一只眼睛、身形清瘦但挺拔、左耳有耳钉、常穿深色外套"
-                  className="kaituo-input w-full resize-none px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftTextarea value={appearance} onChange={onAppearance} rows={4} placeholder="例如：黑发蓝眼、刘海遮住一只眼睛、身形清瘦但挺拔、左耳有耳钉、常穿深色外套" />
             </LabelField>
             <div className="mt-4">
               <LabelField label="性格">
-                <textarea
-                  value={personality}
-                  onChange={(e) => onPersonality(e.target.value)}
-                  rows={4}
-                  placeholder="例如：冷静、嘴硬心软、警惕但愿意信任同伴"
-                  className="kaituo-input w-full resize-none px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftTextarea value={personality} onChange={onPersonality} rows={4} placeholder="例如：冷静、嘴硬心软、警惕但愿意信任同伴" />
               </LabelField>
             </div>
             <div className="mt-4">
               <LabelField label="背景故事">
-                <textarea
-                  value={background}
-                  onChange={(e) => onBackground(e.target.value)}
-                  rows={6}
-                  placeholder="可选。写下你的出身、过去经历、为何来到黑塔空间站、与命途或某个组织的关系。这里会显示在旅人档案中，也会被主剧情读取。"
-                  className="kaituo-input w-full resize-none px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftTextarea value={background} onChange={onBackground} rows={6} placeholder="可选。写下你的出身、过去经历、为何来到黑塔空间站、与命途或某个组织的关系。这里会显示在旅人档案中，也会被主剧情读取。" />
               </LabelField>
               <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
                 这里写的是角色自己的经历，不是开局系统摘要；切入剧情的具体方式仍在「介入方式」页填写。
               </p>
             </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
 
@@ -371,9 +300,7 @@ export function PathStep({
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <div className="space-y-5">
           <div>
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              命途选择
-            </div>
+            <CardHeader>命途选择</CardHeader>
             <div className="grid gap-3 sm:grid-cols-2">
               {paths.map((item) => {
                 const active = pathId === item.id;
@@ -420,27 +347,17 @@ export function PathStep({
             </div>
 
             {selectedPath && (
-              <div
-                className="mt-3 p-3 text-xs leading-relaxed"
-                style={{
-                  background: 'rgba(var(--tj-bg-primary), 0.52)',
-                  color: 'rgba(var(--tj-text-secondary), 0.84)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                  clipPath: smallClip,
-                }}
-              >
+              <TipBox className="mt-3 p-3 text-xs leading-relaxed">
                 <div style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }}>
                   {selectedPath.name} · {selectedPath.aeon}
                 </div>
                 <div className="mt-1">{selectedPath.description}</div>
-              </div>
+              </TipBox>
             )}
           </div>
 
           <div>
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              初始阶段
-            </div>
+            <CardHeader>初始阶段</CardHeader>
             {selectedPath ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {PATH_STAGE_DEFS.map((item) => {
@@ -484,48 +401,23 @@ export function PathStep({
                 })}
               </div>
             ) : (
-              <div
-                className="p-3 text-xs leading-relaxed"
-                style={{
-                  background: 'rgba(var(--tj-bg-primary), 0.52)',
-                  color: 'rgba(var(--tj-text-secondary), 0.72)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
-                  clipPath: smallClip,
-                }}
-              >
+              <TipBox className="p-3 text-xs leading-relaxed" color="rgba(var(--tj-text-secondary), 0.72)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)">
                 未选择命途时无需选择阶段。
-              </div>
+              </TipBox>
             )}
 
             {selectedPath && (
-              <div
-                className="mt-3 p-3 text-xs leading-relaxed"
-                style={{
-                  background: 'rgba(var(--tj-bg-primary), 0.52)',
-                  color: 'rgba(var(--tj-text-secondary), 0.84)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                  clipPath: smallClip,
-                }}
-              >
+              <TipBox className="mt-3 p-3 text-xs leading-relaxed">
                 当前开局将以「{selectedStage.name} · {selectedStage.title}」写入旅人命途档案。高阶段会明显改变首回合叙事强度与周围人物反应。
-              </div>
+              </TipBox>
             )}
           </div>
 
         </div>
 
         <div className="space-y-5">
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              开局特质
-            </div>
+        <SectionCard>
+            <CardHeader>开局特质</CardHeader>
             <div className="grid grid-cols-1 gap-3">
               {abilityPresets.map((item) => {
                 const active = selectedAbilityIds.includes(item.id);
@@ -562,13 +454,11 @@ export function PathStep({
             </div>
 
             <div className="mt-4">
-              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-                自定义特质
-              </div>
+              <CardHeader compact margin="sm">自定义特质</CardHeader>
               <div className="grid gap-2">
-                <input
+                <DraftInput
                   value={customAbilityNameDraft}
-                  onChange={(e) => onCustomAbilityNameDraft(e.target.value)}
+                  onChange={onCustomAbilityNameDraft}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -576,14 +466,12 @@ export function PathStep({
                     }
                   }}
                   placeholder="输入特质名称，例如：奇物研究助手"
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
                 />
                 <div className="flex gap-2">
-                  <input
+                  <DraftInput
                     id="custom-ability-effect-input"
                     value={customAbilityEffectDraft}
-                    onChange={(e) => onCustomAbilityEffectDraft(e.target.value)}
+                    onChange={onCustomAbilityEffectDraft}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -591,8 +479,7 @@ export function PathStep({
                       }
                     }}
                     placeholder="输入效果说明，例如：更熟悉奇物辨认与装置检修"
-                    className="kaituo-input flex-1 px-3 py-2 text-sm"
-                    style={{ clipPath: smallClip }}
+                    className="flex-1 px-3 py-2 text-sm"
                   />
                   <button
                     type="button"
@@ -640,21 +527,13 @@ export function PathStep({
               )}
             </div>
 
-          </div>
+          </SectionCard>
 
-          <div
-            className="p-4 text-xs leading-relaxed"
-            style={{
-              background: 'rgba(var(--tj-bg-primary), 0.52)',
-              color: 'rgba(var(--tj-text-secondary), 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-              clipPath: smallClip,
-            }}
-          >
+          <TipBox className="p-4 text-xs leading-relaxed">
             命途和能力会直接影响首回合正文里的措辞、可用行动与人物反应。这里写得越清楚，后面越不容易失真。
             <br />
             开局特质最多选择 2 个，自定义特质不计入上限。
-          </div>
+          </TipBox>
         </div>
       </div>
 
@@ -729,27 +608,10 @@ export function SkillCreationStep({
       <SectionTitle title="战技创作" subtitle="提前写好正文可调用的能力表现" />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div
-          className="p-4"
-          style={{
-            background: 'rgba(var(--tj-panel-bg-end),0.58)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-            clipPath: cardClip,
-          }}
-        >
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-            新建战技
-          </div>
+        <SectionCard>
+          <CardHeader>新建战技</CardHeader>
           <div className="mb-4 grid gap-3">
-            <div
-              className="p-3 text-xs leading-relaxed"
-              style={{
-                background: 'rgba(var(--tj-bg-primary), 0.52)',
-                color: 'rgba(var(--tj-text-secondary), 0.84)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                clipPath: smallClip,
-              }}
-            >
+            <TipBox className="mb-4 p-3 text-xs leading-relaxed">
               <div className="text-[10px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
                 当前装备槽位
               </div>
@@ -760,7 +622,7 @@ export function SkillCreationStep({
                 普通战技固定 {NORMAL_SKILL_SLOT_COUNT} 槽；命途战技跟随前一步等阶开放。当前命途：
                 {selectedPath ? `${selectedPath.name} · ${selectedStage.name}（${pathSlots.length} 槽）` : '未选择命途'}。
               </div>
-            </div>
+            </TipBox>
 
             <OpeningSkillSlotGroup
               title="普通战技槽"
@@ -778,71 +640,27 @@ export function SkillCreationStep({
           </div>
           <div className="grid gap-3">
             <LabelField label="战技名称">
-              <input
-                value={openingSkillNameDraft}
-                onChange={(e) => onOpeningSkillNameDraft(e.target.value)}
-                placeholder="例如：星核呼吸、虚数折跃、云骑步法"
-                className="kaituo-input w-full px-3 py-2 text-sm"
-                style={{ clipPath: smallClip }}
-              />
+              <DraftInput value={openingSkillNameDraft} onChange={onOpeningSkillNameDraft} placeholder="例如：星核呼吸、虚数折跃、云骑步法" />
             </LabelField>
             <div className="grid gap-3 md:grid-cols-2">
               <LabelField label="来源">
-                <input
-                  value={openingSkillSourceDraft}
-                  onChange={(e) => onOpeningSkillSourceDraft(e.target.value)}
-                  placeholder={selectedSlot?.kind === 'path' ? '命途战技自定义' : '普通战技自制'}
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput value={openingSkillSourceDraft} onChange={onOpeningSkillSourceDraft} placeholder={selectedSlot?.kind === 'path' ? '命途战技自定义' : '普通战技自制'} />
               </LabelField>
               <LabelField label="关键词">
-                <input
-                  value={openingSkillKeywordsDraft}
-                  onChange={(e) => onOpeningSkillKeywordsDraft(e.target.value)}
-                  placeholder="追击、护盾、位移、治疗"
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput value={openingSkillKeywordsDraft} onChange={onOpeningSkillKeywordsDraft} placeholder="追击、护盾、位移、治疗" />
               </LabelField>
               <LabelField label="消耗">
-                <input
-                  value={openingSkillCostDraft}
-                  onChange={(e) => onOpeningSkillCostDraft(e.target.value)}
-                  placeholder="体力负担 / 命途共鸣 / 材料消耗"
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput value={openingSkillCostDraft} onChange={onOpeningSkillCostDraft} placeholder="体力负担 / 命途共鸣 / 材料消耗" />
               </LabelField>
               <LabelField label="冷却">
-                <input
-                  value={openingSkillCooldownDraft}
-                  onChange={(e) => onOpeningSkillCooldownDraft(e.target.value)}
-                  placeholder="无 / 短暂间隔 / 每场一次"
-                  className="kaituo-input w-full px-3 py-2 text-sm"
-                  style={{ clipPath: smallClip }}
-                />
+                <DraftInput value={openingSkillCooldownDraft} onChange={onOpeningSkillCooldownDraft} placeholder="无 / 短暂间隔 / 每场一次" />
               </LabelField>
             </div>
             <LabelField label="表现与限制">
-              <textarea
-                value={openingSkillDescDraft}
-                onChange={(e) => onOpeningSkillDescDraft(e.target.value)}
-                rows={6}
-                placeholder="写下它在正文里的表现、代价、限制和适合出现的场景。比如：短时间提高反应速度，但会消耗体力；不能连续使用。"
-                className="kaituo-input w-full resize-none px-3 py-2 text-sm"
-                style={{ clipPath: smallClip }}
-              />
+              <DraftTextarea value={openingSkillDescDraft} onChange={onOpeningSkillDescDraft} rows={6} placeholder="写下它在正文里的表现、代价、限制和适合出现的场景。比如：短时间提高反应速度，但会消耗体力；不能连续使用。" />
             </LabelField>
             <LabelField label="备注">
-              <textarea
-                value={openingSkillNoteDraft}
-                onChange={(e) => onOpeningSkillNoteDraft(e.target.value)}
-                rows={3}
-                placeholder="可记录演出风格、和伙伴配合方式、禁止滥用的边界。"
-                className="kaituo-input w-full resize-none px-3 py-2 text-sm"
-                style={{ clipPath: smallClip }}
-              />
+              <DraftTextarea value={openingSkillNoteDraft} onChange={onOpeningSkillNoteDraft} rows={3} placeholder="可记录演出风格、和伙伴配合方式、禁止滥用的边界。" />
             </LabelField>
             <button
               type="button"
@@ -852,20 +670,11 @@ export function SkillCreationStep({
               <span className="tracking-[0.2em] font-bold">添加战技</span>
             </button>
           </div>
-        </div>
+        </SectionCard>
 
         <div className="space-y-4">
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              已登记战技
-            </div>
+          <SectionCard>
+            <CardHeader>已登记战技</CardHeader>
             {openingSkills.length > 0 ? (
               <div className="space-y-3">
                 {openingSkills.map((skill) => (
@@ -888,44 +697,16 @@ export function SkillCreationStep({
                           {skill.名称}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1.5">
-                          <span
-                            className="px-2 py-0.5 text-[10px] tracking-[0.12em]"
-                            style={{
-                              background: skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.12)' : 'rgba(var(--tj-btn-primary-start), 0.12)',
-                              color: skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.78)' : 'rgba(var(--tj-btn-primary-start), 0.92)',
-                              clipPath: smallClip,
-                            }}
-                          >
-                            {skill.已启用 === false ? '已停用' : '已启用'}
-                          </span>
+                          <Chip className="px-2 py-0.5 text-[10px] tracking-[0.12em]" background={skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.12)' : 'rgba(var(--tj-btn-primary-start), 0.12)'} color={skill.已启用 === false ? 'rgba(var(--tj-text-secondary), 0.78)' : 'rgba(var(--tj-btn-primary-start), 0.92)'}>{skill.已启用 === false ? '已停用' : '已启用'}</Chip>
                           {skill.来源 ? (
-                            <span
-                              className="px-2 py-0.5 text-[10px]"
-                              style={{
-                                background: 'rgba(var(--tj-bg-primary), 0.46)',
-                                color: 'rgba(var(--tj-text-secondary), 0.82)',
-                                clipPath: smallClip,
-                              }}
-                            >
-                              {skill.来源}
-                            </span>
+                            <Chip className="px-2 py-0.5 text-[10px]" background="rgba(var(--tj-bg-primary), 0.46)" color="rgba(var(--tj-text-secondary), 0.82)">{skill.来源}</Chip>
                           ) : null}
                         </div>
                         <div className="mt-2 text-xs leading-relaxed">{skill.描述}</div>
                         {skill.关键词?.length ? (
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {skill.关键词.slice(0, 5).map((keyword) => (
-                              <span
-                                key={keyword}
-                                className="px-2 py-0.5 text-[10px]"
-                                style={{
-                                  background: 'rgba(var(--tj-btn-primary-start), 0.08)',
-                                  color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))',
-                                  clipPath: smallClip,
-                                }}
-                              >
-                                {keyword}
-                              </span>
+                              <Chip key={keyword} className="px-2 py-0.5 text-[10px]" background="rgba(var(--tj-btn-primary-start), 0.08)" color="linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))">{keyword}</Chip>
                             ))}
                           </div>
                         ) : null}
@@ -941,61 +722,23 @@ export function SkillCreationStep({
                         )}
                       </div>
                       <div className="grid shrink-0 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onToggleOpeningSkill(skill.id)}
-                          className="px-2 py-1 text-[11px]"
-                          style={{
-                            background: skill.已启用 === false ? 'rgba(var(--tj-btn-primary-start), 0.12)' : 'rgba(var(--tj-text-secondary), 0.10)',
-                            color: skill.已启用 === false ? 'rgba(var(--tj-btn-primary-start), 0.96)' : 'rgba(var(--tj-text-secondary), 0.82)',
-                            clipPath: smallClip,
-                          }}
-                        >
-                          {skill.已启用 === false ? '启用' : '停用'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onRemoveOpeningSkill(skill.id)}
-                          className="px-2 py-1 text-[11px]"
-                          style={{
-                            background: 'rgba(var(--tj-btn-primary-start), 0.12)',
-                            color: 'rgba(var(--tj-btn-primary-start), 0.96)',
-                            clipPath: smallClip,
-                          }}
-                        >
-                          删除
-                        </button>
+                        <SmallActionButton onClick={() => onToggleOpeningSkill(skill.id)} background={skill.已启用 === false ? 'rgba(var(--tj-btn-primary-start), 0.12)' : 'rgba(var(--tj-text-secondary), 0.10)'} color={skill.已启用 === false ? 'rgba(var(--tj-btn-primary-start), 0.96)' : 'rgba(var(--tj-text-secondary), 0.82)'}>{skill.已启用 === false ? '启用' : '停用'}</SmallActionButton>
+                        <SmallActionButton onClick={() => onRemoveOpeningSkill(skill.id)} background="rgba(var(--tj-btn-primary-start), 0.12)" color="rgba(var(--tj-btn-primary-start), 0.96)">删除</SmallActionButton>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div
-                className="p-4 text-sm leading-relaxed"
-                style={{
-                  background: 'rgba(var(--tj-bg-primary), 0.5)',
-                  color: 'rgba(var(--tj-text-secondary), 0.72)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
-                  clipPath: smallClip,
-                }}
-              >
+              <TipBox className="p-4 text-sm leading-relaxed" color="rgba(var(--tj-text-secondary), 0.72)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)">
                 暂未登记战技。可以留空进入开局，也可以先写 1 到 3 个最常用的能力，让正文更稳定地调用它们。
-              </div>
+              </TipBox>
             )}
-          </div>
+          </SectionCard>
 
-          <div
-            className="p-4 text-xs leading-relaxed"
-            style={{
-              background: 'rgba(var(--tj-bg-primary), 0.52)',
-              color: 'rgba(var(--tj-text-secondary), 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-              clipPath: smallClip,
-            }}
-          >
+          <TipBox className="p-4 text-xs leading-relaxed">
             战技会保存进开局预设，并随旅人档案进入游戏。建议写清楚“能做到什么”和“不能随便做到什么”，这样正文不会把能力写飞。
-          </div>
+          </TipBox>
         </div>
       </div>
 
@@ -1124,17 +867,8 @@ export function OpeningAnchorStep({
       </div>
 
       <div className="grid gap-[14px] xl:grid-cols-[270px_minmax(0,1fr)]">
-        <div
-          className="min-h-0 p-[13px]"
-          style={{
-            background: openingCardBackground,
-            boxShadow: openingCardBorder,
-            clipPath: smallClip,
-          }}
-        >
-          <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-            {openingSource === 'official_preset' ? '地区' : '已有地点'}
-          </div>
+        <SectionCard variant="opening">
+          <CardHeader>{openingSource === 'official_preset' ? '地区' : '已有地点'}</CardHeader>
           <div className="space-y-2">
             {openingRegions.map((region) => {
               const active = selectedRegionId === region.id;
@@ -1164,18 +898,11 @@ export function OpeningAnchorStep({
               );
             })}
           </div>
-        </div>
+        </SectionCard>
 
         <div className="flex flex-col gap-4">
           {openingSource !== 'official_preset' ? (
-            <div
-              className="order-1 p-[13px]"
-              style={{
-                background: openingCardBackground,
-                boxShadow: openingCardBorder,
-                clipPath: smallClip,
-              }}
-            >
+            <SectionCard variant="opening" className="order-1">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="font-bold tracking-[0.08em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -1185,17 +912,7 @@ export function OpeningAnchorStep({
                     启用主线时保留原作进度坐标；关闭后改由开局工作台和剧情编织推进。
                   </div>
                 </div>
-                <span
-                  className="px-2 py-1 text-[11px]"
-                  style={{
-                    color: 'rgba(var(--tj-btn-primary-start), 0.88)',
-                    background: 'rgba(var(--tj-btn-primary-start), 0.08)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
-                    clipPath: smallClip,
-                  }}
-                >
-                  原创起点
-                </span>
+                <Chip className="px-2 py-1 text-[11px]" background="rgba(var(--tj-btn-primary-start), 0.08)" color="rgba(var(--tj-btn-primary-start), 0.88)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)">原创起点</Chip>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {[
@@ -1237,18 +954,11 @@ export function OpeningAnchorStep({
                   开启后从左侧选择地点，然后选择主线锚点。主线锚点只负责原作进度坐标，不覆盖你的真实起始地点与自定义切入。
                 </div>
               ) : null}
-            </div>
+            </SectionCard>
           ) : null}
 
           {openingSource !== 'official_preset' ? (
-            <div
-              className="order-3 p-[13px]"
-              style={{
-                background: openingCardBackground,
-                boxShadow: openingCardBorder,
-                clipPath: smallClip,
-              }}
-            >
+            <SectionCard variant="opening" className="order-3">
               <div className="font-bold tracking-[0.08em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                 开局工作台
               </div>
@@ -1371,7 +1081,7 @@ export function OpeningAnchorStep({
                   ) : null}
                 </div>
               </div>
-            </div>
+            </SectionCard>
           ) : null}
 
           <div
@@ -1382,9 +1092,7 @@ export function OpeningAnchorStep({
           >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-                  {openingSource === 'official_preset' ? '章节锚点' : effectiveMainlineEnabled ? '主线进度' : '主线已关闭'}
-                </div>
+                <CardHeader margin="none">{openingSource === 'official_preset' ? '章节锚点' : effectiveMainlineEnabled ? '主线进度' : '主线已关闭'}</CardHeader>
                 {openingSource !== 'official_preset' ? (
                   <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.76)' }}>
                     {effectiveMainlineEnabled
@@ -1398,192 +1106,40 @@ export function OpeningAnchorStep({
               </div>
             </div>
             {!effectiveMainlineEnabled ? (
-              <div
-                className="p-3 text-xs leading-relaxed"
-                style={{
-                  background: 'rgba(var(--tj-bg-primary), 0.5)',
-                  color: 'rgba(var(--tj-text-secondary), 0.78)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.18)',
-                  clipPath: smallClip,
-                }}
-              >
+              <TipBox className="p-3 text-xs leading-relaxed" background="rgba(var(--tj-bg-primary), 0.5)" color="rgba(var(--tj-text-secondary), 0.78)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.18)">
                 主线坐标已关闭。原作主线不会自动注入正文；后续若需要某段主线剧情，请进入剧情编织，手动启用对应章节或主线片段。
-              </div>
+              </TipBox>
             ) : (
             <div className={openingSource === 'official_preset' ? 'grid gap-3 lg:grid-cols-2' : 'space-y-2'}>
               {visibleScenarios.map((item) => {
                 const active = startingScenarioId === item.id;
-                const highlights = getOpeningDisplayHighlights(item).slice(0, openingSource === 'official_preset' ? 4 : 3);
-                const commonButtonProps = {
-                  type: 'button' as const,
-                  onClick: () => selectOpeningScenario(
-                    item,
-                    openingSource,
-                    filteredWorkshopTemplates,
-                    onStartingScenarioId,
-                    onSelectedWorkshopTemplateId,
-                  ),
-                };
-                if (openingSource !== 'official_preset') {
-                  return (
-                    <button
-                      key={item.id}
-                      {...commonButtonProps}
-                      className="w-full p-[13px] text-left transition-shadow"
-                      style={{
-                        background: active ? openingActiveCardBackground : openingCardBackground,
-                        boxShadow: active
-                          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), inset 4px 0 0 rgba(var(--tj-btn-primary-start), 0.54), 0 0 18px rgba(var(--tj-btn-primary-start), 0.08)'
-                          : openingCardBorder,
-                        clipPath: smallClip,
-                      }}
-                    >
-                      <div className="grid gap-3 md:grid-cols-[172px_minmax(0,1fr)]">
-                        <div>
-                          <div className="text-[11px] leading-relaxed" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }}>
-                            {getOpeningOfficialChapterName(item)}
-                          </div>
-                          <div className="mt-1 text-xs font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-                            {getOpeningOfficialChapterPhase(item) || '主线坐标'}
-                          </div>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-sm font-bold tracking-[0.08em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-                              {item.name}
-                            </div>
-                            <span
-                              className="px-2 py-1 text-[11px]"
-                              style={{
-                                color: 'rgba(var(--tj-btn-primary-end), 0.9)',
-                                background: 'rgba(var(--tj-btn-primary-end), 0.08)',
-                                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.18)',
-                                clipPath: smallClip,
-                              }}
-                            >
-                              原作世界坐标
-                            </span>
-                          </div>
-                          <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.8)' }}>
-                            {getOpeningDisplaySummary(item)}
-                          </div>
-                          <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-                            前置处理：{getOpeningPriorStoryState(item)}
-                          </div>
-                          {highlights.length ? (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {highlights.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="px-2 py-1 text-[11px]"
-                                  style={{
-                                    color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))',
-                                    background: 'rgba(var(--tj-btn-primary-start), 0.06)',
-                                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                                    clipPath: smallClip,
-                                  }}
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                }
                 return (
-                  <button
+                  <ScenarioAnchorCard
                     key={item.id}
-                    {...commonButtonProps}
-                    className="min-h-[158px] p-[14px] text-left transition-shadow"
-                    style={{
-                      background: active
-                        ? openingCardBackground
-                        : openingCardBackground,
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 20px rgba(var(--tj-btn-primary-start), 0.09)'
-                        : openingCardBorder,
-                      clipPath: tightClip,
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div
-                        className="font-serif text-base font-bold tracking-[0.14em]"
-                        style={{ color: 'rgb(var(--tj-text-primary))' }}
-                      >
-                        {item.name}
-                      </div>
-                      <div
-                        className="max-w-[46%] px-2 py-1 text-right text-[11px] leading-snug"
-                        style={{
-                          color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))',
-                          background: 'rgba(var(--tj-btn-primary-start), 0.08)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
-                          clipPath: smallClip,
-                        }}
-                      >
-                        {getOpeningChapterBadge(item)}
-                      </div>
-                    </div>
-                    <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
-                      {getOpeningDisplaySummary(item)}
-                    </div>
-                    <div
-                      className="mt-3 text-[11px] leading-relaxed"
-                      style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}
-                    >
-                      前置处理：{getOpeningPriorStoryState(item)}
-                    </div>
-                    {highlights.length ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {highlights.map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-2 py-1 text-[11px]"
-                            style={{
-                              color: 'rgba(var(--tj-btn-primary-end), 0.92)',
-                              background: 'rgba(var(--tj-btn-primary-end), 0.08)',
-                              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.18)',
-                              clipPath: smallClip,
-                            }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </button>
+                    item={item}
+                    active={active}
+                    openingSource={openingSource}
+                    onClick={() => selectOpeningScenario(
+                      item,
+                      openingSource,
+                      filteredWorkshopTemplates,
+                      onStartingScenarioId,
+                      onSelectedWorkshopTemplateId,
+                    )}
+                  />
                 );
               })}
               {visibleScenarios.length === 0 ? (
-                <div
-                  className="p-3 text-xs leading-relaxed"
-                  style={{
-                  background: 'rgba(var(--tj-bg-primary), 0.5)',
-                  color: 'rgba(var(--tj-text-secondary), 0.72)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
-                    clipPath: smallClip,
-                  }}
-                >
+                <TipBox className="p-3 text-xs leading-relaxed" background="rgba(var(--tj-bg-primary), 0.5)" color="rgba(var(--tj-text-secondary), 0.72)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)">
                   当前地区暂未配置可用锚点，后续可通过自由开局或创意工坊补充。
-                </div>
+                </TipBox>
               ) : null}
             </div>
             )}
           </div>
 
           <div className="order-4 grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
-            <div
-              className="p-[13px] text-sm leading-relaxed"
-              style={{
-                background: openingCardBackground,
-                color: 'rgba(var(--tj-text-secondary), 0.84)',
-                boxShadow: openingCardBorder,
-                clipPath: smallClip,
-              }}
-            >
+            <SectionCard variant="opening" color="rgba(var(--tj-text-secondary), 0.84)" className="text-sm leading-relaxed">
               <div className="font-bold tracking-[0.08em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                 我的开局设定
               </div>
@@ -1606,16 +1162,9 @@ export function OpeningAnchorStep({
                   clipPath: smallClip,
                 }}
               />
-            </div>
+            </SectionCard>
 
-            <div
-              className="p-[13px]"
-              style={{
-                background: openingCardBackground,
-                boxShadow: openingCardBorder,
-                clipPath: smallClip,
-              }}
-            >
+            <SectionCard variant="opening">
               <div className="font-bold tracking-[0.08em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
                 写作引导
               </div>
@@ -1623,17 +1172,9 @@ export function OpeningAnchorStep({
                 点击后可追加到介入草稿。自由开局下可直接写原创地点、原创事件和原创组织。
               </div>
               {openingSource !== 'official_preset' && freeGuide?.overview ? (
-                <div
-                  className="mt-3 px-3 py-2 text-xs leading-relaxed"
-                  style={{
-                    color: 'rgba(var(--tj-text-secondary), 0.82)',
-                    background: 'rgba(var(--tj-btn-primary-start), 0.05)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                    clipPath: smallClip,
-                  }}
-                >
+                <TipBox className="mt-3 px-3 py-2 text-xs leading-relaxed" background="rgba(var(--tj-btn-primary-start), 0.05)" color="rgba(var(--tj-text-secondary), 0.82)">
                   当前地区：{selectedRegion?.name ?? '未指定'}。自由开局引导：{freeGuide.overview}
-                </div>
+                </TipBox>
               ) : null}
               <div className="mt-3 grid gap-2">
                 {[
@@ -1662,7 +1203,7 @@ export function OpeningAnchorStep({
                   </button>
                 ))}
               </div>
-            </div>
+            </SectionCard>
           </div>
         </div>
       </div>
@@ -1758,40 +1299,16 @@ export function FreeOpeningNpcEditor({
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <LabelField label="名字">
-          <input
-            value={workshop.customNpcName}
-            onChange={(event) => onWorkshopChange('customNpcName', event.target.value)}
-            placeholder="例如：接头人、守卫队长、医生、研究员"
-            className="kaituo-input w-full px-3 py-2 text-sm"
-            style={{ clipPath: smallClip }}
-          />
+          <DraftInput value={workshop.customNpcName} onChange={(v) => onWorkshopChange('customNpcName', v)} placeholder="例如：接头人、守卫队长、医生、研究员" />
         </LabelField>
         <LabelField label="是否为命途行者">
-          <input
-            value={workshop.customNpcPathstrider}
-            onChange={(event) => onWorkshopChange('customNpcPathstrider', event.target.value)}
-            placeholder="例如：是 / 不是 / 仅有部分命途共鸣 / 未知"
-            className="kaituo-input w-full px-3 py-2 text-sm"
-            style={{ clipPath: smallClip }}
-          />
+          <DraftInput value={workshop.customNpcPathstrider} onChange={(v) => onWorkshopChange('customNpcPathstrider', v)} placeholder="例如：是 / 不是 / 仅有部分命途共鸣 / 未知" />
         </LabelField>
         <LabelField label="背景">
-          <textarea
-            value={workshop.customNpcBackground}
-            onChange={(event) => onWorkshopChange('customNpcBackground', event.target.value)}
-            placeholder="写清这个 NPC 的来历、处境、立场和与地点的关系。"
-            className="kaituo-input min-h-[86px] w-full resize-y px-3 py-2 text-sm leading-relaxed"
-            style={{ clipPath: smallClip }}
-          />
+          <DraftTextarea value={workshop.customNpcBackground} onChange={(v) => onWorkshopChange('customNpcBackground', v)} placeholder="写清这个 NPC 的来历、处境、立场和与地点的关系。" className="min-h-[86px] w-full resize-y px-3 py-2 text-sm leading-relaxed" />
         </LabelField>
         <LabelField label="能力">
-          <textarea
-            value={workshop.customNpcAbility}
-            onChange={(event) => onWorkshopChange('customNpcAbility', event.target.value)}
-            placeholder="写清这个 NPC 的战斗、技术、情报或特殊能力。"
-            className="kaituo-input min-h-[86px] w-full resize-y px-3 py-2 text-sm leading-relaxed"
-            style={{ clipPath: smallClip }}
-          />
+          <DraftTextarea value={workshop.customNpcAbility} onChange={(v) => onWorkshopChange('customNpcAbility', v)} placeholder="写清这个 NPC 的战斗、技术、情报或特殊能力。" className="min-h-[86px] w-full resize-y px-3 py-2 text-sm leading-relaxed" />
         </LabelField>
       </div>
 
@@ -1822,30 +1339,14 @@ export function FreeOpeningNpcEditor({
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {npc.pathstrider ? (
-                        <span className="px-2 py-1" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))', background: 'rgba(var(--tj-btn-primary-start), 0.06)', clipPath: smallClip }}>
-                          命途：{npc.pathstrider}
-                        </span>
+                        <Chip className="px-2 py-1" background="rgba(var(--tj-btn-primary-start), 0.06)" color="linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))">命途：{npc.pathstrider}</Chip>
                       ) : null}
                       {npc.ability ? (
-                        <span className="px-2 py-1" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.86)', background: 'rgba(var(--tj-btn-primary-end), 0.08)', clipPath: smallClip }}>
-                          能力：{npc.ability}
-                        </span>
+                        <Chip className="px-2 py-1" background="rgba(var(--tj-btn-primary-end), 0.08)" color="rgba(var(--tj-btn-primary-end), 0.86)">能力：{npc.ability}</Chip>
                       ) : null}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(npc.id)}
-                    className="shrink-0 px-2 py-1 text-[11px]"
-                    style={{
-                      color: 'rgba(var(--tj-text-secondary), 0.82)',
-                      background: 'rgba(var(--tj-bg-primary), 0.45)',
-                      boxShadow: openingCardBorder,
-                      clipPath: smallClip,
-                    }}
-                  >
-                    删除
-                  </button>
+                  <SmallActionButton className="shrink-0" onClick={() => onRemove(npc.id)} background="rgba(var(--tj-bg-primary), 0.45)" color="rgba(var(--tj-text-secondary), 0.82)" boxShadow={openingCardBorder}>删除</SmallActionButton>
                 </div>
               </div>
             ))}
@@ -1893,17 +1394,8 @@ export function HistorianStep({
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
         <div className="space-y-5">
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
-            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              原著主角选择
-            </div>
+          <SectionCard>
+            <CardHeader compact>原著主角选择</CardHeader>
             <div className="grid gap-3 sm:grid-cols-3">
               {CANONICAL_TRAILBLAZERS.map((item) => {
                 const active = canonicalTrailblazer === item.id;
@@ -1939,19 +1431,10 @@ export function HistorianStep({
             <p className="mt-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
               这里只决定原著主角在世界中的默认存在方式。玩家自己的切入方式仍在下一页「开局锚点」里书写。
             </p>
-          </div>
+          </SectionCard>
 
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
-            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              组织背景
-            </div>
+          <SectionCard>
+            <CardHeader compact>组织背景</CardHeader>
             <div className="grid gap-3 sm:grid-cols-2">
               {factions.map((item) => {
                 const active = factionId === item.id;
@@ -1990,44 +1473,20 @@ export function HistorianStep({
                 );
               })}
             </div>
-          </div>
+          </SectionCard>
         </div>
 
         <div className="space-y-5">
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
-            <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              自定义身份
-            </div>
-            <input
-              value={customIdentity}
-              onChange={(e) => onCustomIdentity(e.target.value)}
-              placeholder="例如：空间站临时协助员、公司外勤、流浪的命途行者"
-              className="kaituo-input w-full px-3 py-2 text-sm"
-              style={{ clipPath: smallClip }}
-            />
+          <SectionCard>
+            <CardHeader compact margin="sm">自定义身份</CardHeader>
+            <DraftInput value={customIdentity} onChange={onCustomIdentity} placeholder="例如：空间站临时协助员、公司外勤、流浪的命途行者" />
             <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.64)' }}>
               可留空。这里描述你在开局时被他人如何理解，具体怎样进入事件仍由开局锚点页的介入草稿决定。
             </p>
-          </div>
+          </SectionCard>
 
-          <div
-            className="p-4"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
-            <div className="mb-3 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              游戏模式
-            </div>
+          <SectionCard>
+            <CardHeader compact>游戏模式</CardHeader>
             <div
               className="p-4 text-sm leading-relaxed"
               style={{
@@ -2047,19 +1506,11 @@ export function HistorianStep({
                 预留功能
               </div>
             </div>
-          </div>
+          </SectionCard>
 
-          <div
-            className="p-4 text-xs leading-relaxed"
-            style={{
-              background: 'rgba(var(--tj-bg-primary), 0.52)',
-              color: 'rgba(var(--tj-text-secondary), 0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-              clipPath: smallClip,
-            }}
-          >
+          <TipBox className="p-4 text-xs leading-relaxed">
             其他选项会影响世界默认认知，但不会替代开局锚点。下一页仍需要选择开局来源、地区章节，并填写玩家如何介入当前故事。
-          </div>
+          </TipBox>
         </div>
       </div>
 
@@ -2133,14 +1584,7 @@ export function OverviewStep({
       <SectionTitle title="总览确认" subtitle="最后检查一遍开局是否完整" />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(290px,0.85fr)]">
-        <div
-          className="p-4"
-          style={{
-            background: 'rgba(var(--tj-panel-bg-end),0.58)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-            clipPath: cardClip,
-          }}
-        >
+        <SectionCard>
           <div className="grid gap-3 sm:grid-cols-2">
             <OverviewRow label="姓名" value={name} />
             <OverviewRow label="别名" value={alias || '未填写'} />
@@ -2167,21 +1611,12 @@ export function OverviewStep({
           </div>
 
           <div className="mt-4 grid gap-3">
-            <div
-              className="p-3"
-              style={{
-                background: 'rgba(var(--tj-bg-primary), 0.54)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
-                clipPath: smallClip,
-              }}
-            >
-              <div className="mb-2 text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-                切入说明
-              </div>
+            <TipBox className="p-3" background="rgba(var(--tj-bg-primary), 0.54)">
+              <CardHeader compact margin="sm">切入说明</CardHeader>
               <div className="text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-primary),0.92)' }}>
                 {customStartPrompt.trim() || '未填写'}
               </div>
-            </div>
+            </TipBox>
           </div>
 
           <div className="mt-4">
@@ -2189,18 +1624,7 @@ export function OverviewStep({
             <div className="mt-2 flex flex-wrap gap-2 text-sm">
               {selectedAbilityNames.length > 0 ? (
                 selectedAbilityNames.map((item) => (
-                  <span
-                    key={item}
-                    className="px-3 py-1"
-                    style={{
-                      background: 'rgba(var(--tj-btn-primary-start), 0.12)',
-                      color: 'rgba(var(--tj-btn-primary-start), 0.95)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24)',
-                      clipPath: smallClip,
-                    }}
-                  >
-                    {item}
-                  </span>
+                  <Chip key={item} className="px-3 py-1" background="rgba(var(--tj-btn-primary-start), 0.12)" color="rgba(var(--tj-btn-primary-start), 0.95)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24)">{item}</Chip>
                 ))
               ) : (
                 <span style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>暂未选择能力</span>
@@ -2213,21 +1637,12 @@ export function OverviewStep({
             <div className="mt-2 grid gap-2 text-sm">
               {openingSkills.length > 0 ? (
                 openingSkills.map((skill) => (
-                  <div
-                    key={skill.id}
-                    className="p-3"
-                    style={{
-                      background: 'rgba(var(--tj-bg-primary), 0.52)',
-                      color: 'rgba(var(--tj-text-secondary), 0.88)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-                      clipPath: smallClip,
-                    }}
-                  >
+                  <TipBox key={skill.id} className="p-3" color="rgba(var(--tj-text-secondary), 0.88)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)">
                     <div className="font-medium" style={{ color: 'rgba(var(--tj-text-primary),0.95)' }}>
                       {skill.名称}
                     </div>
                     <div className="mt-1 text-xs leading-relaxed">{skill.描述}</div>
-                  </div>
+                  </TipBox>
                 ))
               ) : (
                 <span style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>暂未登记战技</span>
@@ -2235,38 +1650,21 @@ export function OverviewStep({
             </div>
           </div>
 
-        </div>
+        </SectionCard>
 
         <div className="space-y-4">
-          <div
-            className="p-4"
-            style={{
-              background: 'linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.95) 0%, rgba(var(--tj-panel-bg-end), 0.98) 100%)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
-              clipPath: cardClip,
-            }}
-          >
-            <div className="mb-3 text-[11px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.68)' }}>
-              最终提醒
-            </div>
+          <SectionCard variant="emphasis">
+            <CardHeader>最终提醒</CardHeader>
             <div className="space-y-2 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.86)' }}>
               <p>开局会把这些内容写入角色、世界状态和首回合提示词。</p>
               <p>换句话说，你现在确认的不只是外观和选择，而是整段旅程的第一页。</p>
               <p style={{ color: 'rgba(var(--tj-btn-primary-start), 0.9)' }}>开局档案会作为长期锚点写入世界状态，可以直接开始。</p>
             </div>
-          </div>
+          </SectionCard>
 
-          <div
-            className="p-4 text-sm leading-relaxed"
-            style={{
-              background: 'rgba(var(--tj-panel-bg-end),0.58)',
-              color: 'rgba(var(--tj-text-secondary),0.84)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
-              clipPath: cardClip,
-            }}
-          >
+          <SectionCard className="text-sm leading-relaxed" color="rgba(var(--tj-text-secondary),0.84)">
             这一步确认后，后面的正文不再只是“开始游戏”，而是带着你的设定正式进入第一回合。
-          </div>
+          </SectionCard>
         </div>
       </div>
 
