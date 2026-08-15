@@ -17,6 +17,9 @@ export const accentColor = 'rgb(var(--tj-accent-primary))';
 export const nsfwColor = 'rgb(var(--tj-ui-nsfw))';
 export const activeAccentSurface = 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(var(--tj-accent-mid),0.96) 48%, rgb(var(--tj-tech-cyan)) 100%)';
 export const cardSurface = 'linear-gradient(135deg, rgba(var(--tj-ui-panel),0.76), rgba(var(--tj-ui-panel-strong),0.72))';
+export const labelColor = 'rgba(var(--tj-btn-primary-start),0.68)';
+export const insetBorder = 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)';
+export const panelStrongSurface = 'rgba(var(--tj-ui-panel-strong),0.36)';
 export const heroGridBackgroundStyle = {
   backgroundSize: albumGridSize,
   backgroundPosition: '0 0, 0 0, center, center',

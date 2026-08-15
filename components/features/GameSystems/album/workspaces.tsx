@@ -1,34 +1,25 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { 读取图片参考目标, isCharacterLibrarySlot, slotLabel } from '@/models/imageGeneration';
-import type { 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
+import { slotLabel } from '@/models/imageGeneration';
+import type { 图片生成任务 } from '@/models/imageGeneration';
 import type { 角色数据结构 } from '@/models/character';
-import type { 聊天消息 } from '@/models/chat';
-import type { PNG画风预设来源, 文生图规则中心设置 } from '@/models/settings';
-import type { NPC记录, NPC头像槽位, NPC角色锚点档案 } from '@/models/npc';
-import { 读取NPC头像 } from '@/models/npc';
-import {
-  解析相册资源引用,
-  解析相册资源地址,
-} from '@/utils/albumActions';
-import {
-  revokeAlbumAssets,
-} from '@/utils/albumObjectUrl';
+import type { 文生图规则中心设置 } from '@/models/settings';
+import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
-import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
-import { matchCanonical } from '@/data/canonicalCharacters';
 
 import {
-  cardClip, smallClip, heroSurface, panelSurface, insetSurface,
-  imageWellSurface, titleColor, activeAccentSurface, cardSurface, heroGridBackgroundStyle,
+  cardClip, smallClip, heroSurface, titleColor, activeAccentSurface, cardSurface, heroGridBackgroundStyle,
+  labelColor, insetBorder, panelStrongSurface,
 } from './visualTokens';
 import { tabs, generateTargets, navGroups, groupForTab } from './foundation';
 import type { ReferenceInjectionStatus } from './referenceInjection';
 import type {
   WorkTab, GenerateTarget, PromptMeta, StorySnapshotSource,
-  AnchorSelection, SceneLibraryFilter, GenerationHistoryFilter, StorySnapshotSummary,
+  AnchorSelection, StorySnapshotSummary,
   SceneImageSummary, StorySnapshotSourceOption, GenerateOverride,
 } from './foundation';
+import { AnchorModeBadge, AnchorStat, AnchorToggle, Button, DraftActionButton, EmptyLibraryBox, Field, GenerationSummary, ImagePreviewModal, MiniInfo, OptionButtonGroup, Panel, ParsedPanel, ReferenceInjectionHint, SafeAlbumImage, SceneParameterPanel, Spinner, StateCard, StorySnapshotSummaryCard } from './workspaceComponents';
+import { buildBatchExtractPlan, buildPngStyleOptions, resolvePromptMeta, statusLabel } from './albumWorkspaceLogic';
+import type { NpcLibraryRecord } from './albumWorkspaceLogic';
 
 export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab; setActiveTab: (tab: WorkTab) => void }) {
   const activeGroupId = groupForTab(activeTab);
@@ -47,7 +38,7 @@ export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab;
                 className="px-3 py-2.5 text-center font-serif text-sm font-bold tracking-[0.16em] transition-all"
                 style={{
                   color: active ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.86)',
-                  background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))' : 'rgba(var(--tj-ui-panel-strong),0.36)',
+                  background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))' : panelStrongSurface,
                   boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24), inset 0 -3px 0 rgba(var(--tj-tech-cyan),0.46)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)',
                   clipPath: smallClip,
                 }}
@@ -68,12 +59,12 @@ export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab;
                 className="group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-all"
                 style={{
                   color: active ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.86)',
-                  background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))' : 'rgba(var(--tj-ui-panel-strong),0.36)',
+                  background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))' : panelStrongSurface,
                   boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24), inset 3px 0 0 rgba(var(--tj-tech-cyan),0.46)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)',
                   clipPath: smallClip,
                 }}
               >
-                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center font-mono text-[10px]" style={{ color: active ? 'rgba(var(--tj-tech-cyan),0.95)' : 'rgba(var(--tj-btn-primary-start),0.55)', background: 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
+                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center font-mono text-[10px]" style={{ color: active ? 'rgba(var(--tj-tech-cyan),0.95)' : 'rgba(var(--tj-btn-primary-start),0.55)', background: 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: insetBorder, clipPath: smallClip }}>
                   {String(index + 1).padStart(2, '0')}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -164,15 +155,14 @@ export function CharacterAnchorWorkspace({
     setAnchorBatchExtracting(true);
     void (async () => {
       try {
+        const plan = buildBatchExtractPlan(records, travelerHasAnchor);
         let count = 0;
-        if (!travelerHasAnchor) {
-          await onExtractTravelerAnchor(travelerRequirement);
-          count += 1;
-        }
-        for (const record of records) {
-          const anchor = record.npc.图像档案?.角色锚点;
-          if (anchor?.正面提示词 || anchor?.负面提示词) continue;
-          await onExtractAnchor(record.npc.id, requirement);
+        for (const item of plan) {
+          if (item.kind === 'traveler') {
+            await onExtractTravelerAnchor(travelerRequirement);
+          } else {
+            await onExtractAnchor(item.npcId, requirement);
+          }
           count += 1;
         }
         setBatchMessage(count > 0
@@ -212,7 +202,7 @@ export function CharacterAnchorWorkspace({
           type="button"
           onClick={() => onSelectAnchor('traveler')}
           className="mb-2 w-full px-3 py-3 text-left transition-all"
-          style={{ background: activeSelection === 'traveler' ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.18), rgba(var(--tj-btn-primary-start),0.05))' : 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: activeSelection === 'traveler' ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}
+          style={{ background: activeSelection === 'traveler' ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.18), rgba(var(--tj-btn-primary-start),0.05))' : panelStrongSurface, boxShadow: activeSelection === 'traveler' ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : insetBorder, clipPath: smallClip }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -242,8 +232,8 @@ export function CharacterAnchorWorkspace({
                   onClick={() => onSelectAnchor(record.npc.id)}
                   className="w-full px-3 py-3 text-left transition-all"
                   style={{
-                    background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.16), rgba(var(--tj-btn-primary-start),0.04))' : 'rgba(var(--tj-ui-panel-strong),0.36)',
-                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)',
+                    background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.16), rgba(var(--tj-btn-primary-start),0.04))' : panelStrongSurface,
+                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : insetBorder,
                     clipPath: smallClip,
                   }}
                 >
@@ -332,43 +322,6 @@ export function CharacterAnchorWorkspace({
           )}
         </Panel>
       </div>
-    </div>
-  );
-}
-
-export function SafeAlbumImage({
-  src,
-  alt,
-  className,
-  emptyLabel = '待写入',
-  failedLabel = '图片失效',
-}: {
-  src?: string;
-  alt: string;
-  className: string;
-  emptyLabel?: string;
-  failedLabel?: string;
-}) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const failed = failedSrc === src;
-  if (!src || failed) {
-    return (
-      <div
-        className={`${className} flex items-center justify-center px-2 text-center font-serif text-xs tracking-[0.12em]`}
-        style={{ background: imageWellSurface, color: failed ? 'rgba(var(--tj-danger),0.88)' : 'rgba(var(--tj-ui-faint),0.58)' }}
-      >
-        {failed ? failedLabel : emptyLabel}
-      </div>
-    );
-  }
-  return <img src={src} alt={alt} loading="lazy" onError={() => setFailedSrc(src)} className={className} />;
-}
-
-export function AnchorStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="px-3 py-2" style={{ background: insetSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.62)', clipPath: smallClip }}>
-      <div className="text-[10px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.62)' }}>{label}</div>
-      <div className="mt-1 font-serif text-base font-bold" style={{ color: 'rgb(var(--tj-ui-title))' }}>{value}</div>
     </div>
   );
 }
@@ -519,40 +472,10 @@ export function CharacterAnchorPanel({
           </Field>
         </div>
         <Field label="中文锚点摘要">
-          <div className="min-h-[82px] whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.28)', color: 'rgba(var(--tj-ui-title),0.86)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
+          <div className="min-h-[82px] whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.28)', color: 'rgba(var(--tj-ui-title),0.86)', boxShadow: insetBorder, clipPath: smallClip }}>
             {anchor?.中文摘要?.trim() || 'AI 提取后会在这里显示中文版本的稳定外观摘要，仅供玩家查看。'}
           </div>
         </Field>
-      </div>
-    </div>
-  );
-}
-
-export function AnchorToggle({ label, desc, checked, onChange }: { label: string; desc: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="flex items-center justify-between gap-3 px-3 py-2 text-left"
-      style={{ background: checked ? 'rgba(var(--tj-btn-primary-start),0.08)' : 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: checked ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}
-    >
-      <span className="min-w-0">
-        <span className="block font-serif text-xs font-bold tracking-[0.14em]" style={{ color: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.74)' }}>{label}</span>
-        <span className="mt-0.5 block truncate text-[10px]" style={{ color: 'rgba(var(--tj-ui-muted),0.58)' }}>{desc}</span>
-      </span>
-      <span className="h-5 w-9 shrink-0 rounded-full p-0.5" style={{ background: checked ? 'rgba(var(--tj-btn-primary-start),0.36)' : 'rgba(var(--tj-text-secondary),0.28)' }}>
-        <span className="block h-4 w-4 rounded-full transition-all" style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)', background: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-text-secondary),0.7)' }} />
-      </span>
-    </button>
-  );
-}
-
-export function EmptyLibraryBox({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-none border border-dashed px-6 text-center" style={{ borderColor: 'rgba(var(--tj-border),0.34)', color: 'rgba(var(--tj-ui-faint),0.72)' }}>
-      <div>
-        <div className="font-serif text-base tracking-[0.18em]" style={{ color: 'rgb(var(--tj-ui-title))' }}>{title}</div>
-        <div className="mt-3 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>{desc}</div>
       </div>
     </div>
   );
@@ -584,13 +507,7 @@ export function CreateWorkspace(props: {
   resultIsReference: boolean;
   referenceStatus: ReferenceInjectionStatus;
 }) {
-  const activePromptMeta = props.canvasTask
-    ? {
-        anchorMode: props.canvasTask.anchorMode === true,
-        anchorSummary: props.canvasTask.anchorSummary || (props.canvasTask.anchorMode ? '角色锚点已参与本次生成' : '本次生成按档案回退'),
-        sourcePrompt: props.canvasTask.sourcePrompt,
-      }
-    : props.promptMeta;
+  const activePromptMeta = resolvePromptMeta(props.canvasTask, props.promptMeta);
   const selectedPurpose = props.currentTarget.nsfw
     ? 'nsfw'
     : props.currentTarget.tokenizerMode === 'portrait' ? 'portrait' : 'avatar';
@@ -598,39 +515,31 @@ export function CreateWorkspace(props: {
   const selectedCharacterLabel = selectedCharacterId === 'traveler'
     ? `${props.travelerName}（主角）`
     : props.companions.find((npc) => npc.id === selectedCharacterId)?.姓名 || '未选择伙伴';
+  const travelerParams = props.currentTarget.targetType === 'traveler' || (props.currentTarget.nsfw && selectedCharacterId === 'traveler');
+  const purposeLabel = props.currentTarget.nsfw ? 'NSFW 参考' : props.currentTarget.tokenizerMode === 'portrait' ? '立绘' : '头像';
   const parameterPanel = (
     <Panel title="生成参数">
-      {props.currentTarget.targetType === 'traveler' || (props.currentTarget.nsfw && selectedCharacterId === 'traveler') ? (
-        <TravelerGenerationParameters
-          sizePreset={props.sizePreset}
-          setSizePreset={props.setSizePreset}
-          customSize={props.customSize}
-          setCustomSize={props.setCustomSize}
-          targetId={props.currentTarget.id}
-          imageRules={props.imageRules}
-          onImageRulesChange={props.onImageRulesChange}
-          extraRequirement={props.extraRequirement}
-          setExtraRequirement={props.setExtraRequirement}
-        />
-      ) : (
-        <NpcGenerationParameters
-          sizePreset={props.sizePreset}
-          setSizePreset={props.setSizePreset}
-          customSize={props.customSize}
-          setCustomSize={props.setCustomSize}
-          targetId={props.currentTarget.id}
-          imageRules={props.imageRules}
-          onImageRulesChange={props.onImageRulesChange}
-          extraRequirement={props.extraRequirement}
-          setExtraRequirement={props.setExtraRequirement}
-        />
-      )}
+      <CharacterGenerationParameters
+                        sizePreset={props.sizePreset}
+                        setSizePreset={props.setSizePreset}
+                        customSize={props.customSize}
+                        setCustomSize={props.setCustomSize}
+                        targetId={props.currentTarget.id}
+                        imageRules={props.imageRules}
+                        onImageRulesChange={props.onImageRulesChange}
+                        extraRequirement={props.extraRequirement}
+                        setExtraRequirement={props.setExtraRequirement}
+                        anchorLabel={travelerParams ? '主控锚点' : '角色锚点'}
+                      />
       <GenerationSummary target={props.currentTarget} size={props.resolvedSize} />
     </Panel>
   );
   return (
     <div className="space-y-4">
-      <StudioHero imageEnabled={props.imageEnabled} currentTarget={props.currentTarget} currentCharacterLabel={selectedCharacterLabel} />
+      <StudioHero
+                        imageEnabled={props.imageEnabled}
+                        chipText={selectedCharacterLabel + ' · ' + purposeLabel}
+                      />
       <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
         <div className="space-y-4">
           <Panel title="生成对象" className="h-full" contentClassName="flex min-h-0 flex-1 flex-col">
@@ -839,207 +748,7 @@ export function DraftCanvasPreview({
   );
 }
 
-export function BaseGenerationFields(props: {
-  generateTitle: string;
-  setGenerateTitle: (v: string) => void;
-  sizePreset: 'default' | '1:1' | '3:4' | '16:9' | 'custom';
-  setSizePreset: (v: 'default' | '1:1' | '3:4' | '16:9' | 'custom') => void;
-  customSize: string;
-  setCustomSize: (v: string) => void;
-}) {
-  return (
-    <>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="生成标题"><input value={props.generateTitle} onChange={(e) => props.setGenerateTitle(e.target.value)} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} /></Field>
-        <Field label="尺寸">
-          <select value={props.sizePreset} onChange={(e) => props.setSizePreset(e.target.value as 'default' | '1:1' | '3:4' | '16:9' | 'custom')} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-            <option value="default">跟随接口默认</option>
-            <option value="1:1">头像 1:1</option>
-            <option value="3:4">半身/立绘 3:4</option>
-            <option value="16:9">场景 16:9</option>
-            <option value="custom">自定义</option>
-          </select>
-        </Field>
-      </div>
-      {props.sizePreset === 'custom' && (
-        <Field label="自定义尺寸">
-          <input value={props.customSize} onChange={(e) => props.setCustomSize(e.target.value)} placeholder="例如 1024x1536" className="kaituo-input w-full px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
-        </Field>
-      )}
-    </>
-  );
-}
-
-export function ImagePreviewModal({ open, src, title, onClose }: { open: boolean; src: string; title: string; onClose: () => void }) {
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
-
-  if (!open || !src) return null;
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-5"
-      style={{ background: 'rgba(0,0,0,0.86)' }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        className="fixed right-5 top-5 z-[10001] min-h-11 px-4 py-2 font-serif text-xs tracking-[0.16em]"
-        style={{
-          color: 'rgb(var(--tj-ui-active-text))',
-          background: 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.48), 0 12px 36px rgba(0,0,0,0.42)',
-          clipPath: smallClip,
-        }}
-      >
-        关闭
-      </button>
-      <div
-        className="relative flex h-[92vh] w-full max-w-6xl items-center justify-center overflow-hidden px-4 py-12"
-        style={{
-          background: 'linear-gradient(180deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.42), 0 24px 80px rgba(0,0,0,0.62)',
-          clipPath: cardClip,
-        }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="absolute left-5 top-4 max-w-[70%] truncate font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.82)' }}>
-          {title}
-        </div>
-        <div className="flex h-full w-full items-center justify-center overflow-auto px-2 py-2">
-          <img src={src} alt={title} className="max-h-full max-w-full object-contain" />
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-export function SlotPickerModal({
-  open,
-  recordName,
-  entryTitle,
-  recommendedSlot,
-  referenceEnabled = false,
-  onToggleReference,
-  onClose,
-  onSelect,
-}: {
-  open: boolean;
-  recordName: string;
-  entryTitle: string;
-  recommendedSlot?: 图片槽位;
-  referenceEnabled?: boolean;
-  onToggleReference?: () => void;
-  onClose: () => void;
-  onSelect: (slot: 图片槽位) => void;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-  const slots: Array<{ slot: 图片槽位; title: string; desc: string }> = [
-    { slot: 'avatar_profile', title: '档案头像', desc: '用于角色档案、成品库代表图。' },
-    { slot: 'avatar_story', title: '正文头像', desc: '用于剧情正文里的角色头像。' },
-    { slot: 'avatar_phone', title: '手机头像', desc: '用于手机联系人、聊天头像。' },
-    { slot: 'portrait', title: '角色立绘', desc: '用于角色大图与立绘展示。' },
-  ];
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-5"
-      style={{ background: 'rgba(0,0,0,0.78)' }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="设置到槽位"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl px-4 py-4"
-        style={{
-          background: 'linear-gradient(180deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.38), 0 24px 80px rgba(0,0,0,0.58)',
-          clipPath: cardClip,
-        }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="font-serif text-xs tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>设置到槽位</div>
-            <div className="mt-1 truncate font-serif text-base font-bold" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{recordName}</div>
-            <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.78)' }}>{entryTitle || '当前选中图片'}</div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 px-3 py-2 font-serif text-xs tracking-[0.14em]"
-            style={{ color: 'rgb(var(--tj-ui-active-text))', background: 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))', clipPath: smallClip }}
-          >
-            关闭
-          </button>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {slots.map((option) => {
-            const recommended = option.slot === recommendedSlot || (recommendedSlot?.startsWith('avatar_') && option.slot === 'avatar_profile');
-            return (
-              <button
-                key={option.slot}
-                type="button"
-                onClick={() => onSelect(option.slot)}
-                className="min-h-[92px] px-4 py-3 text-left transition-all"
-                style={{
-                  color: recommended ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-text-primary),0.92)',
-                  background: recommended ? 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))' : 'rgba(var(--tj-bg-secondary),0.78)',
-                  boxShadow: recommended ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.5), 0 0 18px rgba(var(--tj-btn-primary-start),0.12)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
-                  clipPath: smallClip,
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-serif text-sm font-bold tracking-[0.14em]">{option.title}</span>
-                  {recommended && <span className="text-[10px] tracking-[0.12em]">推荐</span>}
-                </div>
-                <div className="mt-2 text-xs leading-relaxed opacity-80">{option.desc}</div>
-              </button>
-            );
-          })}
-        </div>
-        {onToggleReference && (
-          <button
-            type="button"
-            onClick={onToggleReference}
-            className="mt-3 w-full px-4 py-3 text-left transition-all"
-            style={{ color: referenceEnabled ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.94)', background: referenceEnabled ? activeAccentSurface : 'rgba(var(--tj-tech-cyan),0.07)', boxShadow: referenceEnabled ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)', clipPath: smallClip }}
-          >
-            <div className="font-serif text-sm font-bold tracking-[0.14em]">{referenceEnabled ? '取消该角色参考图' : '替换为该角色参考图'}</div>
-            <div className="mt-1 text-xs leading-relaxed opacity-80">参考图不会改变当前挂载槽位；每个角色只保留一张当前参考图。</div>
-          </button>
-        )}
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-export function TravelerGenerationParameters(props: {
+export function CharacterGenerationParameters(props: {
   sizePreset: 'default' | '1:1' | '3:4' | '16:9' | 'custom';
   setSizePreset: (v: 'default' | '1:1' | '3:4' | '16:9' | 'custom') => void;
   customSize: string;
@@ -1049,17 +758,11 @@ export function TravelerGenerationParameters(props: {
   onImageRulesChange: (patch: Partial<文生图规则中心设置>) => void;
   extraRequirement: string;
   setExtraRequirement: (v: string) => void;
+  anchorLabel: string;
 }) {
-  const isAvatar = props.targetId === 'traveler_avatar';
+  const isAvatar = props.targetId === 'traveler_avatar' || props.targetId === 'npc_avatar';
   const artistPresets = props.imageRules.画师串预设列表.filter((preset) => preset.适用范围 === 'npc' || preset.适用范围 === 'all');
-  const pngStyleOptions = [
-    { id: '', title: '无要求', desc: '不附加' },
-    ...props.imageRules.PNG画风预设列表.map((preset) => ({
-      id: preset.id,
-      title: preset.名称,
-      desc: pngStyleSourceLabel(preset.来源),
-    })),
-  ];
+  const pngStyleOptions = buildPngStyleOptions(props.imageRules);
   return (
     <div className="space-y-3">
       {!isAvatar && (
@@ -1094,289 +797,26 @@ export function TravelerGenerationParameters(props: {
         </select>
       </Field>
       <Field label="额外要求">
-        <textarea rows={3} value={props.extraRequirement} onChange={(e) => props.setExtraRequirement(e.target.value)} placeholder="可写镜头、表情、姿势、服装临时变化、背景氛围或构图禁忌。角色稳定外观仍优先沿用主控锚点。" className="kaituo-input w-full resize-y px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
+        <textarea rows={3} value={props.extraRequirement} onChange={(e) => props.setExtraRequirement(e.target.value)} placeholder={'可写镜头、表情、姿势、服装临时变化、背景氛围或构图禁忌。角色稳定外观仍优先沿用' + props.anchorLabel + '。'} className="kaituo-input w-full resize-y px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
       </Field>
     </div>
   );
 }
 
-export function NpcGenerationParameters(props: {
-  sizePreset: 'default' | '1:1' | '3:4' | '16:9' | 'custom';
-  setSizePreset: (v: 'default' | '1:1' | '3:4' | '16:9' | 'custom') => void;
-  customSize: string;
-  setCustomSize: (v: string) => void;
-  targetId: GenerateTarget;
-  imageRules: 文生图规则中心设置;
-  onImageRulesChange: (patch: Partial<文生图规则中心设置>) => void;
-  extraRequirement: string;
-  setExtraRequirement: (v: string) => void;
-}) {
-  const isAvatar = props.targetId === 'npc_avatar';
-  const artistPresets = props.imageRules.画师串预设列表.filter((preset) => preset.适用范围 === 'npc' || preset.适用范围 === 'all');
-  const pngStyleOptions = [
-    { id: '', title: '无要求', desc: '不附加' },
-    ...props.imageRules.PNG画风预设列表.map((preset) => ({
-      id: preset.id,
-      title: preset.名称,
-      desc: pngStyleSourceLabel(preset.来源),
-    })),
-  ];
-  return (
-    <div className="space-y-3">
-      {!isAvatar && (
-        <OptionButtonGroup
-          label="构图预设"
-          columns="md:grid-cols-3"
-          value={props.sizePreset}
-          options={[
-            { id: '3:4', title: '3:4', desc: '竖图比例' },
-            { id: 'default', title: '默认', desc: '跟随用途' },
-            { id: 'custom', title: '自定义', desc: '手动尺寸' },
-          ]}
-          onChange={(id) => props.setSizePreset(id as 'default' | '3:4' | 'custom')}
-        />
-      )}
-      {!isAvatar && props.sizePreset === 'custom' && (
-        <Field label="自定义尺寸">
-          <input value={props.customSize} onChange={(e) => props.setCustomSize(e.target.value)} placeholder="例如 1024x1536" className="kaituo-input w-full px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
-        </Field>
-      )}
-      <OptionButtonGroup
-        label="画风选择"
-        columns="md:grid-cols-5"
-        value={props.imageRules.当前NPCPNG画风预设ID}
-        options={pngStyleOptions}
-        onChange={(id) => props.onImageRulesChange({ 当前NPCPNG画风预设ID: id })}
-      />
-      <Field label="画师串预设">
-        <select value={props.imageRules.当前NPC画师串预设ID} onChange={(e) => props.onImageRulesChange({ 当前NPC画师串预设ID: e.target.value })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
-          <option value="">不启用</option>
-          {artistPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.名称}</option>)}
-        </select>
-      </Field>
-      <Field label="额外要求">
-        <textarea rows={3} value={props.extraRequirement} onChange={(e) => props.setExtraRequirement(e.target.value)} placeholder="可写镜头、表情、姿势、服装临时变化、背景氛围或构图禁忌。角色稳定外观仍优先沿用角色锚点。" className="kaituo-input w-full resize-y px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
-      </Field>
-    </div>
-  );
-}
-
-export function AnchorModeBadge({ promptMeta }: { promptMeta: PromptMeta | null }) {
-  const anchorMode = promptMeta?.anchorMode === true;
-  return (
-    <div
-      className="min-h-[42px] px-3 py-2 text-xs leading-relaxed"
-      style={{
-        color: anchorMode ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-ui-muted),0.78)',
-        background: anchorMode ? 'rgba(var(--tj-tech-cyan),0.06)' : 'rgba(var(--tj-ui-panel-strong),0.34)',
-        boxShadow: `inset 0 0 0 1px ${anchorMode ? 'rgba(var(--tj-tech-cyan),0.2)' : 'rgba(var(--tj-btn-primary-start),0.12)'}`,
-        clipPath: smallClip,
-      }}
-    >
-      <span className="font-serif font-bold tracking-[0.12em]">{anchorMode ? '角色锚点优先' : '等待提示词'}</span>
-      <span className="ml-2" style={{ color: 'rgba(var(--tj-ui-body),0.76)' }}>
-        {promptMeta?.anchorSummary || '普通生成会先自动生成提示词；有角色锚点时优先沿用稳定外观。'}
-      </span>
-    </div>
-  );
-}
-
-export function OptionButtonGroup(props: {
-  label: string;
-  value: string;
-  options: Array<{ id: string; title: string; desc: string }>;
-  onChange: (value: string) => void;
-  columns: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.68)' }}>{props.label}</div>
-      <div className={`grid gap-3 ${props.columns}`}>
-        {props.options.map((option) => {
-          const active = props.value === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => props.onChange(option.id)}
-              className="min-h-[76px] px-3 py-3 text-left transition-all"
-              style={{
-                color: active ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.86)',
-                background: active ? activeAccentSurface : 'rgba(0,0,0,0.34)',
-                boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.48), 0 0 12px rgba(var(--tj-btn-primary-start),0.12)'
-                  : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
-                clipPath: smallClip,
-              }}
-            >
-              <div className="flex h-full flex-col items-center justify-center text-center">
-                <div className="font-serif text-base font-bold tracking-[0.14em]">{option.title}</div>
-                <div className="mt-1 text-[11px] opacity-78">{option.desc}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-export function DraftActionButton({ children, onClick, disabled = false, tone = 'normal' }: { children: ReactNode; onClick: () => void; disabled?: boolean; tone?: 'normal' | 'nsfw' }) {
-  const isNsfw = tone === 'nsfw';
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="min-h-[54px] w-full px-4 py-3 font-serif text-sm tracking-[0.16em] disabled:opacity-45"
-      style={{
-        color: isNsfw ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-btn-primary-start),0.94)',
-        background: isNsfw ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-btn-primary-start),0.075)',
-        boxShadow: isNsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.32)',
-        clipPath: smallClip,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-export function ReferenceInjectionHint({ status }: { status: ReferenceInjectionStatus }) {
-  const tone = status.code === 'enabled'
-    ? {
-        color: 'rgba(var(--tj-ui-success),0.98)',
-        background: 'rgba(var(--tj-ui-success),0.1)',
-        border: 'rgba(var(--tj-ui-success),0.38)',
-      }
-    : status.code === 'not_applicable'
-      ? {
-          color: 'rgba(var(--tj-tech-cyan),0.98)',
-          background: 'rgba(var(--tj-tech-cyan),0.1)',
-          border: 'rgba(var(--tj-tech-cyan),0.36)',
-        }
-      : {
-          color: 'rgba(var(--tj-btn-primary-start),0.98)',
-          background: 'rgba(var(--tj-btn-primary-start),0.12)',
-          border: 'rgba(var(--tj-btn-primary-start),0.42)',
-        };
-  return (
-    <div
-      className="flex min-w-0 items-center gap-2 px-2 py-1 text-[11px] font-medium leading-relaxed"
-      style={{ color: tone.color, background: tone.background, boxShadow: `inset 0 0 0 1px ${tone.border}`, clipPath: smallClip }}
-    >
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: tone.color, boxShadow: `0 0 8px ${tone.color}` }} />
-      <span>{status.label}</span>
-    </div>
-  );
-}
-
-export function pngStyleSourceLabel(source: PNG画风预设来源): string {
-  if (source === 'novelai') return 'NAI 风格';
-  if (source === 'sd_webui') return 'SD 风格';
-  if (source === 'comfyui') return 'ComfyUI';
-  return '通用风格';
-}
-
-export function StudioHero({ imageEnabled, currentTarget, currentCharacterLabel }: { imageEnabled: boolean; currentTarget: typeof generateTargets[number]; currentCharacterLabel: string }) {
-  const purposeLabel = currentTarget.nsfw ? 'NSFW 参考' : currentTarget.tokenizerMode === 'portrait' ? '立绘' : '头像';
+export function StudioHero({ imageEnabled, eyebrow = '◆ 生成工作室', title = '图片生成', chipText, description = '先确定用途、构图和提示词，再把结果送进队列。生成后的图片进入成品库，由玩家决定是否挂到角色、正文快照或手机背景。' }: { imageEnabled: boolean; eyebrow?: string; title?: string; chipText: string; description?: string }) {
   return (
     <section className="px-4 py-3" style={{ background: heroSurface, ...heroGridBackgroundStyle, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.58), inset 3px 0 0 rgba(var(--tj-tech-cyan),0.36)', clipPath: cardClip }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-        <div className="font-serif text-xs tracking-[0.32em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.72)' }}>◆ 生成工作室</div>
-        <div className="mt-1 font-serif text-xl font-bold tracking-[0.2em]" style={{ color: titleColor }}>图片生成</div>
+        <div className="font-serif text-xs tracking-[0.32em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.72)' }}>{eyebrow}</div>
+        <div className="mt-1 font-serif text-xl font-bold tracking-[0.2em]" style={{ color: titleColor }}>{title}</div>
         </div>
-        <div className="px-3 py-2 text-xs" style={{ color: imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-          {imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{currentCharacterLabel} · {purposeLabel}
+        <div className="px-3 py-2 text-xs" style={{ color: imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: panelStrongSurface, boxShadow: insetBorder, clipPath: smallClip }}>
+          {imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{chipText}
         </div>
       </div>
-        <p className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.76)' }}>
-          先确定用途、构图和提示词，再把结果送进队列。生成后的图片进入成品库，由玩家决定是否挂到角色、正文快照或手机背景。
-        </p>
+        <p className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.76)' }}>{description}</p>
     </section>
-  );
-}
-
-export function taskStatusTone(status: 图片生成任务['status']): { color: string; background: string; border: string } {
-  if (status === 'failed') return { color: 'rgba(var(--tj-danger),0.94)', background: 'rgba(var(--tj-danger),0.08)', border: 'rgba(var(--tj-danger),0.3)' };
-  if (status === 'success') return { color: 'rgba(var(--tj-ui-success),0.94)', background: 'rgba(var(--tj-ui-success),0.08)', border: 'rgba(var(--tj-ui-success),0.28)' };
-  if (status === 'cancelled') return { color: 'rgba(var(--tj-ui-faint),0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', border: 'rgba(var(--tj-ui-faint),0.16)' };
-  return { color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', border: 'rgba(var(--tj-btn-primary-start),0.28)' };
-}
-
-export function taskPromptTitle(task: 图片生成任务): string {
-  const kind = task.slot === 'scene' && task.sourcePrompt?.includes('故事快照') ? '故事快照' : slotLabel(task.slot);
-  const suffix = task.status === 'failed' ? '失败任务' : task.status === 'success' ? '完成任务' : '生成任务';
-  return `${kind} · ${suffix}`;
-}
-
-export function looksLikeRawPromptTitle(title: string): boolean {
-  if (!title) return true;
-  if (/[\u4e00-\u9fff]/.test(title)) return false;
-  const lower = title.toLowerCase();
-  return title.length > 18 || title.includes(',') || /cinematic|fantasy|environment|portrait|masterpiece|prompt|style|anime|illustration|photo/.test(lower);
-}
-
-export function imageBackendLabel(backend?: string): string {
-  return {
-    openai_compatible: 'OpenAI 兼容',
-    novelai: 'NovelAI',
-    sd_webui: 'SD WebUI',
-    comfyui: 'ComfyUI',
-  }[backend || ''] ?? (backend || '未记录');
-}
-
-export function generationSourceLabel(source?: string): string {
-  return {
-    manual: '手动生成',
-    auto: '正文自动生成',
-    retry: '重试生成',
-    generated: '生成图片',
-    upload: '本地上传',
-    remote: '远程图片',
-  }[source || ''] ?? (source || '未记录');
-}
-
-export function formatGenerationDate(value?: number): string {
-  if (!value) return '未记录';
-  try {
-    return new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '未记录';
-  }
-}
-
-export function historyKind(entry: 相册条目): Exclude<GenerationHistoryFilter, 'all'> {
-  const text = [entry.title, entry.note, ...entry.tags].join(' ');
-  if (entry.slot === 'phone_wallpaper' || entry.slot === 'phone_chat_background' || entry.targetType === 'phone') return 'phone';
-  if (/故事快照|快照|正文插图/.test(text)) return 'snapshot';
-  if (entry.slot === 'scene' || entry.targetType === 'scene') return 'scene';
-  return 'character';
-}
-
-export function historyKindLabel(kind: Exclude<GenerationHistoryFilter, 'all'>): string {
-  return {
-    character: '角色',
-    scene: '场景图',
-    snapshot: '故事快照',
-    phone: '手机背景',
-  }[kind];
-}
-
-export function historyKindTone(kind: Exclude<GenerationHistoryFilter, 'all'>): { color: string; background: string; border: string } {
-  if (kind === 'scene') return { color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.075)', border: 'rgba(var(--tj-tech-cyan),0.24)' };
-  if (kind === 'snapshot') return { color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.075)', border: 'rgba(var(--tj-btn-primary-start),0.24)' };
-  if (kind === 'phone') return { color: 'rgba(var(--tj-tech-blue),0.94)', background: 'rgba(var(--tj-tech-blue),0.075)', border: 'rgba(var(--tj-tech-blue),0.22)' };
-  return { color: 'rgba(var(--tj-ui-body),0.9)', background: 'rgba(var(--tj-ui-panel-strong),0.38)', border: 'rgba(var(--tj-btn-primary-start),0.14)' };
-}
-
-
-export function PromptBlock({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="px-3 py-2" style={{ color: 'rgba(var(--tj-ui-body),0.82)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)', clipPath: smallClip }}>
-      <div className="mb-1 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.68)' }}>{title}</div>
-      <div className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words pr-1">{text}</div>
-    </div>
   );
 }
 
@@ -1463,7 +903,7 @@ export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
               />
               <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 <div className="space-y-2">
-                  <div className="text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.68)' }}>正文片段</div>
+                  <div className="text-[11px] font-serif tracking-[0.18em]" style={{ color: labelColor }}>正文片段</div>
                   <textarea
                     rows={11}
                     value={props.sourceText}
@@ -1478,11 +918,11 @@ export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
                 </div>
                 <div className="min-h-[300px]">
                   {props.analyzing ? (
-                    <StorySnapshotParsingCard />
+                    <StateCard title="正在解析正文" desc="正在提取画面要素并整理最终提示词，完成后再显示解析结果。" spinning />
                   ) : props.summary ? (
                     <StorySnapshotSummaryCard summary={props.summary} prompt={props.prompt} negativePrompt={props.negativePrompt} />
                   ) : (
-                    <EmptySnapshotPromptCard />
+                    <StateCard title="等待快照提示词" desc="选择正文来源后，点击画布下方的「生成快照提示词」。这里会展示提炼出的快照草稿和最终 Prompt。" minHeight={280} />
                   )}
                 </div>
               </div>
@@ -1491,28 +931,29 @@ export function StorySnapshotWorkspace(props: StorySnapshotWorkspaceProps) {
           <div className="space-y-4">
             <Panel title="快照解析">
               {props.analyzing ? (
-                <StorySnapshotParsingCard />
+                <StateCard title="正在解析正文" desc="正在提取画面要素并整理最终提示词，完成后再显示解析结果。" spinning />
               ) : props.summary ? (
-                <StorySnapshotParsedPanel summary={props.summary} />
+                <ParsedPanel titleLabel="快照标题" title={props.summary.title} fields={[['人物', props.summary.characters.length ? props.summary.characters.join('、') : '未明确'], ['地点', props.summary.location], ['氛围', props.summary.atmosphere], ['动作', props.summary.action], ['镜头', props.summary.camera], ['避免', props.summary.avoid]]} />
               ) : (
-                <EmptySnapshotAnalysisCard />
+                <StateCard title="等待解析" desc="选择正文来源后点击「生成快照提示词」，这里会显示从正文解析出的画面要素。" />
               )}
               <Field label="额外要求">
                 <textarea rows={3} value={props.extraRequirement} onChange={(e) => props.setExtraRequirement(e.target.value)} placeholder="可写镜头、光线、色调、构图禁忌或不想出现的元素。" className="kaituo-input w-full resize-y px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
               </Field>
             </Panel>
             <Panel title="快照参数">
-              <BaseGenerationFields
-                generateTitle={props.generateTitle}
-                setGenerateTitle={props.setGenerateTitle}
-                sizePreset={props.sizePreset}
-                setSizePreset={props.setSizePreset}
-                customSize={props.customSize}
-                setCustomSize={props.setCustomSize}
-              />
-              <div className="mt-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>故事快照默认更适合横图；如果想做竖向海报可改为自定义。</div>
-              <GenerationSummary target={props.currentTarget} size={props.resolvedSize} />
-            </Panel>
+                                <SceneParameterPanel
+                                  generateTitle={props.generateTitle}
+                                  setGenerateTitle={props.setGenerateTitle}
+                                  sizePreset={props.sizePreset}
+                                  setSizePreset={props.setSizePreset}
+                                  customSize={props.customSize}
+                                  setCustomSize={props.setCustomSize}
+                                  hint="故事快照默认更适合横图；如果想做竖向海报可改为自定义。"
+                                  target={props.currentTarget}
+                                  resolvedSize={props.resolvedSize}
+                                />
+                              </Panel>
           </div>
         </div>
       )}
@@ -1545,26 +986,27 @@ export function SceneImageWorkspace(props: SceneCreationWorkspaceProps) {
 
       <Panel title="场景解析">
         {props.analyzing ? (
-          <StorySnapshotParsingCard title="正在解析场景" description="正在提取地点、主体、光线与镜头，完成后再显示解析结果。" />
+          <StateCard title="正在解析场景" desc="正在提取地点、主体、光线与镜头，完成后再显示解析结果。" spinning />
         ) : props.sceneSummary ? (
-          <SceneImageParsedPanel summary={props.sceneSummary} />
+          <ParsedPanel titleLabel="场景标题" title={props.sceneSummary.title} fields={[['地点', props.sceneSummary.location], ['主体', props.sceneSummary.subject], ['氛围', props.sceneSummary.atmosphere], ['镜头', props.sceneSummary.camera], ['避免', props.sceneSummary.avoid]]} />
         ) : (
-          <EmptySceneImageAnalysisCard />
+          <StateCard title="等待解析" desc="填写场景说明后点击「解析场景提示词」，这里会显示地点、主体、氛围与镜头。" />
         )}
       </Panel>
 
       <Panel title="场景参数">
-        <BaseGenerationFields
-          generateTitle={props.generateTitle}
-          setGenerateTitle={props.setGenerateTitle}
-          sizePreset={props.sizePreset}
-          setSizePreset={props.setSizePreset}
-          customSize={props.customSize}
-          setCustomSize={props.setCustomSize}
-        />
-        <div className="mt-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>场景图更适合横图或全景感镜头；如果是封面式画面可再手动改尺寸。</div>
-        <GenerationSummary target={props.currentTarget} size={props.resolvedSize} />
-      </Panel>
+                  <SceneParameterPanel
+                    generateTitle={props.generateTitle}
+                    setGenerateTitle={props.setGenerateTitle}
+                    sizePreset={props.sizePreset}
+                    setSizePreset={props.setSizePreset}
+                    customSize={props.customSize}
+                    setCustomSize={props.setCustomSize}
+                    hint="场景图更适合横图或全景感镜头；如果是封面式画面可再手动改尺寸。"
+                    target={props.currentTarget}
+                    resolvedSize={props.resolvedSize}
+                  />
+                </Panel>
     </div>
   );
   return (
@@ -1602,129 +1044,6 @@ export function PhoneBackgroundWorkspace(props: SceneCreationWorkspaceProps) {
   );
 }
 
-export function StorySnapshotSummaryCard({ summary, prompt, negativePrompt }: { summary: StorySnapshotSummary; prompt?: string; negativePrompt?: string }) {
-  const rows = [
-    ['标题', summary.title],
-    ['人物', summary.characters.length ? summary.characters.join('、') : '未明确'],
-    ['地点', summary.location],
-    ['氛围', summary.atmosphere],
-    ['动作', summary.action],
-    ['镜头', summary.camera],
-    ['避免', summary.avoid],
-  ];
-  return (
-    <div className="space-y-2 px-3 py-3 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.38)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.14)', clipPath: smallClip }}>
-      <div className="font-serif text-sm font-bold tracking-[0.14em]" style={{ color: titleColor }}>{summary.title}</div>
-      {rows.slice(1).map(([label, value]) => (
-        <InfoLine key={label} label={label} value={value} />
-      ))}
-      {prompt?.trim() && (
-        <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(var(--tj-btn-primary-start),0.16)' }}>
-          <div className="mb-1 font-serif text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.72)' }}>最终 Prompt</div>
-          <div className="max-h-32 overflow-y-auto pr-1 font-mono text-[11px]" style={{ color: 'rgba(var(--tj-ui-body),0.78)' }}>{prompt}</div>
-        </div>
-      )}
-      {negativePrompt?.trim() && (
-        <div className="border-t pt-3" style={{ borderColor: 'rgba(var(--tj-btn-primary-start),0.12)' }}>
-          <div className="mb-1 font-serif text-[11px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>Negative</div>
-          <div className="max-h-20 overflow-y-auto pr-1 font-mono text-[11px]" style={{ color: 'rgba(var(--tj-ui-muted),0.72)' }}>{negativePrompt}</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function StorySnapshotParsedPanel({ summary }: { summary: StorySnapshotSummary }) {
-  return (
-    <div className="space-y-3">
-      <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.34)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-        <div className="text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.68)' }}>快照标题</div>
-        <div className="mt-1 font-serif text-sm font-bold leading-relaxed" style={{ color: titleColor }}>{summary.title}</div>
-      </div>
-      <div className="grid gap-2">
-        <SnapshotParsedField label="人物" value={summary.characters.length ? summary.characters.join('、') : '未明确'} />
-        <SnapshotParsedField label="地点" value={summary.location} />
-        <SnapshotParsedField label="氛围" value={summary.atmosphere} />
-        <SnapshotParsedField label="动作" value={summary.action} />
-        <SnapshotParsedField label="镜头" value={summary.camera} />
-        <SnapshotParsedField label="避免" value={summary.avoid} />
-      </div>
-    </div>
-  );
-}
-
-export function SnapshotParsedField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-2 px-3 py-2 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.24)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.09)', clipPath: smallClip }}>
-      <span className="font-serif tracking-[0.12em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.66)' }}>{label}</span>
-      <span style={{ color: 'rgba(var(--tj-ui-body),0.82)' }}>{value}</span>
-    </div>
-  );
-}
-
-export function EmptySnapshotAnalysisCard() {
-  return (
-    <div className="flex min-h-[210px] items-center justify-center px-4 py-8 text-center" style={{ color: 'rgba(var(--tj-ui-muted),0.7)', background: 'rgba(var(--tj-ui-panel-strong),0.24)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-      <div>
-        <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>等待解析</div>
-        <div className="mt-2 text-xs leading-relaxed">选择正文来源后点击「生成快照提示词」，这里会显示从正文解析出的画面要素。</div>
-      </div>
-    </div>
-  );
-}
-
-export function SceneImageParsedPanel({ summary }: { summary: SceneImageSummary }) {
-  return (
-    <div className="space-y-3">
-      <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.34)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-        <div className="text-[11px] font-serif tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.68)' }}>场景标题</div>
-        <div className="mt-1 font-serif text-sm font-bold leading-relaxed" style={{ color: titleColor }}>{summary.title}</div>
-      </div>
-      <div className="grid gap-2">
-        <SnapshotParsedField label="地点" value={summary.location} />
-        <SnapshotParsedField label="主体" value={summary.subject} />
-        <SnapshotParsedField label="氛围" value={summary.atmosphere} />
-        <SnapshotParsedField label="镜头" value={summary.camera} />
-        <SnapshotParsedField label="避免" value={summary.avoid} />
-      </div>
-    </div>
-  );
-}
-
-export function EmptySceneImageAnalysisCard() {
-  return (
-    <div className="flex min-h-[210px] items-center justify-center px-4 py-8 text-center" style={{ color: 'rgba(var(--tj-ui-muted),0.7)', background: 'rgba(var(--tj-ui-panel-strong),0.24)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-      <div>
-        <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>等待解析</div>
-        <div className="mt-2 text-xs leading-relaxed">填写场景说明后点击「解析场景提示词」，这里会显示地点、主体、氛围与镜头。</div>
-      </div>
-    </div>
-  );
-}
-
-export function StorySnapshotParsingCard({ title = '正在解析正文', description = '正在提取画面要素并整理最终提示词，完成后再显示解析结果。' }: { title?: string; description?: string }) {
-  return (
-    <div className="flex min-h-[210px] items-center justify-center px-4 py-8 text-center" style={{ color: 'rgba(var(--tj-ui-muted),0.72)', background: 'rgba(var(--tj-ui-panel-strong),0.3)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.14)', clipPath: smallClip }}>
-      <div>
-        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-transparent" style={{ borderTopColor: 'rgba(var(--tj-btn-primary-start),0.86)', borderRightColor: 'rgba(var(--tj-tech-cyan),0.55)' }} />
-        <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.82)' }}>{title}</div>
-        <div className="mt-2 text-xs leading-relaxed">{description}</div>
-      </div>
-    </div>
-  );
-}
-
-export function EmptySnapshotPromptCard() {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center px-4 py-8 text-center" style={{ color: 'rgba(var(--tj-ui-muted),0.7)', background: 'rgba(var(--tj-ui-panel-strong),0.26)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-      <div>
-        <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>等待快照提示词</div>
-        <div className="mt-2 text-xs leading-relaxed">选择正文来源后，点击画布下方的「生成快照提示词」。这里会展示提炼出的快照草稿和最终 Prompt。</div>
-      </div>
-    </div>
-  );
-}
-
 export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps & {
   eyebrow: string;
   title: string;
@@ -1741,27 +1060,16 @@ export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps &
   busyWhen?: boolean;
   hideAdvancedPrompt?: boolean;
 }) {
-  const activePromptMeta = props.canvasTask
-    ? {
-        anchorMode: props.canvasTask.anchorMode === true,
-        anchorSummary: props.canvasTask.anchorSummary || (props.canvasTask.anchorMode ? '角色锚点已参与本次生成' : '本次生成按档案回退'),
-        sourcePrompt: props.canvasTask.sourcePrompt,
-      }
-    : props.promptMeta;
+  const activePromptMeta = resolvePromptMeta(props.canvasTask, props.promptMeta);
   return (
     <div className="space-y-4">
-      <section className="px-4 py-3" style={{ background: heroSurface, ...heroGridBackgroundStyle, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.58), inset 3px 0 0 rgba(var(--tj-tech-cyan),0.36)', clipPath: cardClip }}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="font-serif text-xs tracking-[0.32em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.72)' }}>{props.eyebrow}</div>
-            <div className="mt-1 font-serif text-xl font-bold tracking-[0.2em]" style={{ color: titleColor }}>{props.title}</div>
-          </div>
-          <div className="px-3 py-2 text-xs" style={{ color: props.imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: 'rgba(var(--tj-ui-panel-strong),0.36)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.12)', clipPath: smallClip }}>
-            {props.imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{props.currentTarget.label}
-          </div>
-        </div>
-        <p className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.76)' }}>{props.description}</p>
-      </section>
+      <StudioHero
+                    imageEnabled={props.imageEnabled}
+                    eyebrow={props.eyebrow}
+                    title={props.title}
+                    chipText={props.currentTarget.label}
+                    description={props.description}
+                  />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4 xl:col-span-2">
@@ -1830,17 +1138,18 @@ export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps &
           </Panel>
 
           <Panel title={props.parameterTitle}>
-            <BaseGenerationFields
-              generateTitle={props.generateTitle}
-              setGenerateTitle={props.setGenerateTitle}
-              sizePreset={props.sizePreset}
-              setSizePreset={props.setSizePreset}
-              customSize={props.customSize}
-              setCustomSize={props.setCustomSize}
-            />
-            <div className="mt-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.68)' }}>{props.defaultSizeHint}</div>
-            <GenerationSummary target={props.currentTarget} size={props.resolvedSize} />
-          </Panel>
+                              <SceneParameterPanel
+                                generateTitle={props.generateTitle}
+                                setGenerateTitle={props.setGenerateTitle}
+                                sizePreset={props.sizePreset}
+                                setSizePreset={props.setSizePreset}
+                                customSize={props.customSize}
+                                setCustomSize={props.setCustomSize}
+                                hint={props.defaultSizeHint}
+                                target={props.currentTarget}
+                                resolvedSize={props.resolvedSize}
+                              />
+                            </Panel>
         </div>
       )}
     </div>
@@ -1869,666 +1178,4 @@ export function RulesWorkspace({
       </Panel>
     </div>
   );
-}
-
-export function GenerationSummary({ target, size }: { target: typeof generateTargets[number]; size: string }) {
-  return (
-    <div className="grid gap-2 md:grid-cols-3">
-      <MiniInfo label="分类" value={target.targetType} />
-      <MiniInfo label="槽位" value={slotLabel(target.slot)} />
-      <MiniInfo label="尺寸" value={size || '接口默认'} />
-    </div>
-  );
-}
-
-export function MiniInfo({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="px-3 py-2" style={{ background: 'linear-gradient(180deg, rgba(var(--tj-ui-panel-strong),0.38), rgba(var(--tj-ui-panel-strong),0.38))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)', clipPath: smallClip }}>
-      <div className="text-[11px]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.62)' }}>{label}</div>
-      <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.82)' }}>{value}</div>
-    </div>
-  );
-}
-
-export function Panel({ title, children, className = '', contentClassName = 'space-y-3' }: { title: string; children: ReactNode; className?: string; contentClassName?: string }) {
-  return (
-    <div className={`flex flex-col gap-3 px-3 py-3 ${className}`} style={{ background: panelSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.68), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)),0.36)', clipPath: cardClip }}>
-      <div className="shrink-0 font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.82)' }}>{title}</div>
-      <div className={contentClassName}>{children}</div>
-    </div>
-  );
-}
-
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="block"><div className="mb-1 text-[11px]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.68)' }}>{label}</div>{children}</label>;
-}
-
-export function Button({ children, onClick, disabled = false, tone = 'normal' }: { children: ReactNode; onClick: () => void; disabled?: boolean; tone?: 'normal' | 'nsfw' }) {
-  return <button type="button" disabled={disabled} onClick={onClick} className="w-full px-3 py-2 text-xs font-serif tracking-[0.16em] disabled:opacity-45" style={{ color: tone === 'nsfw' ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-btn-primary-start),0.9)', background: tone === 'nsfw' ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: tone === 'nsfw' ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.3)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)', clipPath: smallClip }}>{children}</button>;
-}
-
-export function InfoLine({ label, value }: { label: string; value: string }) {
-  return <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-2"><span style={{ color: 'rgba(var(--tj-btn-primary-start),0.68)' }}>{label}</span><span className="truncate">{value}</span></div>;
-}
-
-export function Spinner() {
-  return (
-    <span
-      aria-hidden="true"
-      className="inline-block h-3 w-3 animate-spin rounded-full border border-transparent"
-      style={{ borderTopColor: 'rgba(var(--tj-btn-primary-start),0.88)', borderRightColor: 'rgba(var(--tj-tech-cyan),0.7)' }}
-    />
-  );
-}
-
-export interface CharacterLibraryEntry {
-  entry: 相册条目;
-  src: string;
-  sourceLabel?: string;
-}
-
-export interface SceneLibraryEntry {
-  entry: 相册条目;
-  src: string;
-  kind: Exclude<SceneLibraryFilter, 'all'>;
-  label: string;
-}
-
-export interface MountedImageSlot {
-  key: string;
-  label: string;
-  src?: string;
-  nsfw?: boolean;
-}
-
-export type CharacterLibraryRecord = TravelerLibraryRecord | NpcLibraryRecord;
-
-export interface BaseCharacterLibraryRecord {
-  id: string;
-  kind: 'traveler' | 'npc';
-  name: string;
-  alias?: string;
-  avatar?: string;
-  entries: CharacterLibraryEntry[];
-  slots: MountedImageSlot[];
-  imageCount: number;
-  resourceCount: number;
-  mountedCount: number;
-}
-
-export interface TravelerLibraryRecord extends BaseCharacterLibraryRecord {
-  kind: 'traveler';
-  traveler: 角色数据结构;
-}
-
-export interface NpcLibraryRecord extends BaseCharacterLibraryRecord {
-  kind: 'npc';
-  npc: NPC记录;
-}
-
-export function buildCharacterLibraryRecords(
-  traveler: 角色数据结构,
-  npcs: NPC记录[],
-  album: 相册系统,
-  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
-  includeNsfw: boolean,
-): CharacterLibraryRecord[] {
-  const entryIndex = buildCharacterAlbumEntryIndex(traveler, npcs, album, includeNsfw);
-  const travelerRecord = buildTravelerLibraryRecord(traveler, album, assetMap, entryIndex.get('traveler') ?? []);
-  const npcRecords = npcs
-    .filter((npc) => npc.阶位 === 'companion' || npc.原著角色)
-    .map((npc): NpcLibraryRecord => {
-      const slots = [
-        { key: 'avatar-profile', label: '档案头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '档案')) },
-        { key: 'avatar-story', label: '正文头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '正文')) },
-        { key: 'avatar-phone', label: '手机头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '手机')) },
-        { key: 'portrait', label: '角色立绘', src: 解析相册资源引用(album, npc.图像档案?.立绘) },
-      ];
-      const albumEntries = (entryIndex.get(npc.id) ?? [])
-        .map((entry) => ({
-          entry,
-          src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
-        }));
-      const builtinEntries = buildBuiltinAvatarEntries(npc);
-      const entries = [...builtinEntries, ...albumEntries];
-      const mountedCount = slots.filter((slot) => Boolean(slot.src)).length;
-      const resourceCount = entries.length;
-      return {
-        id: npc.id,
-        kind: 'npc',
-        name: npc.姓名,
-        alias: npc.别名,
-        avatar: 解析相册资源引用(album, 读取NPC头像(npc, '档案')),
-        npc,
-        entries,
-        slots,
-        imageCount: resourceCount + mountedCount,
-        resourceCount,
-        mountedCount,
-      };
-    })
-    .sort((a, b) => b.imageCount - a.imageCount || a.npc.姓名.localeCompare(b.npc.姓名, 'zh-Hans-CN'));
-  return [travelerRecord, ...npcRecords];
-}
-
-export function buildTravelerLibraryRecord(
-  traveler: 角色数据结构,
-  album: 相册系统,
-  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
-  indexedEntries?: 相册条目[],
-): TravelerLibraryRecord {
-  const travelerId = 'traveler';
-  const slots: MountedImageSlot[] = [
-    { key: 'traveler-avatar-profile', label: '档案头像', src: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined) },
-    { key: 'traveler-avatar-story', label: '正文头像', src: 解析相册资源引用(album, traveler.图像档案?.正文头像) },
-    { key: 'traveler-avatar-phone', label: '手机头像', src: 解析相册资源引用(album, traveler.图像档案?.手机头像) },
-    { key: 'traveler-portrait', label: '角色立绘', src: 解析相册资源引用(album, traveler.图像档案?.立绘) },
-  ];
-  const albumEntries = indexedEntries ?? buildCharacterAlbumEntryIndex(traveler, [], album, false).get(travelerId) ?? [];
-  const entries = albumEntries
-    .map((entry) => ({
-      entry,
-      src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
-    }));
-  const mountedCount = slots.filter((slot) => Boolean(slot.src)).length;
-  const resourceCount = entries.length;
-  return {
-    id: travelerId,
-    kind: 'traveler',
-    name: traveler.姓名 || '旅人',
-    alias: traveler.别名,
-    avatar: 解析相册资源引用(album, traveler.图像档案?.头像 || traveler.头像 || undefined),
-    traveler,
-    entries,
-    slots,
-    imageCount: resourceCount + mountedCount,
-    resourceCount,
-    mountedCount,
-  };
-}
-
-export function buildCharacterAlbumEntryIndex(
-  traveler: 角色数据结构,
-  npcs: NPC记录[],
-  album: 相册系统,
-  includeNsfw: boolean,
-): Map<string, 相册条目[]> {
-  const index = new Map<string, 相册条目[]>();
-  const indexedEntryIds = new Map<string, Set<string>>();
-  const knownIds = new Set(['traveler', ...npcs.map((npc) => npc.id)]);
-  const npcNames = npcs.map((npc) => ({
-    id: npc.id,
-    names: [npc.姓名, npc.别名].map((name) => name?.trim()).filter((name): name is string => Boolean(name)),
-  }));
-
-  const add = (targetId: string, entry: 相册条目) => {
-    if (!knownIds.has(targetId)) return;
-    const entryIds = indexedEntryIds.get(targetId) ?? new Set<string>();
-    if (entryIds.has(entry.id)) return;
-    entryIds.add(entry.id);
-    indexedEntryIds.set(targetId, entryIds);
-    const entries = index.get(targetId) ?? [];
-    entries.push(entry);
-    index.set(targetId, entries);
-  };
-
-  for (const entry of album.entries) {
-    if (entry.nsfw && !includeNsfw) continue;
-    const referenceTargets = 读取图片参考目标(entry);
-    const hasCharacterOwner = entry.targetType === 'traveler'
-      || (entry.targetType === 'npc' && Boolean(entry.targetId));
-    if (!isCharacterLibrarySlot(entry.slot) && referenceTargets.length === 0 && !hasCharacterOwner) continue;
-
-    const targetIds = new Set(referenceTargets);
-    if (entry.targetType === 'traveler') targetIds.add('traveler');
-    if (entry.targetType === 'npc' && entry.targetId) targetIds.add(entry.targetId);
-
-    if (targetIds.size === 0 && isCharacterLibrarySlot(entry.slot)) {
-      const title = entry.title || '';
-      if (title.includes(traveler.姓名 || '旅人') || title.includes('旅人')) targetIds.add('traveler');
-      const matchedNpc = npcNames.find((npc) => npc.names.some((name) => title.includes(name)));
-      if (matchedNpc) targetIds.add(matchedNpc.id);
-    }
-    for (const targetId of targetIds) add(targetId, entry);
-  }
-  return index;
-}
-
-export function buildAlbumResourceEntries(
-  album: 相册系统,
-  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
-  includeNsfw: boolean,
-): CharacterLibraryEntry[] {
-  return album.entries
-    .filter((entry) => {
-      if (!includeNsfw && entry.nsfw) return false;
-      return (entry.targetType === 'traveler' || entry.targetType === 'npc') && isCharacterLibrarySlot(entry.slot);
-    })
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map((entry) => ({
-      entry,
-      src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
-    }));
-}
-
-export function buildSceneLibraryEntries(
-  album: 相册系统,
-  assetMap: Map<string, { dataUrl?: string; url?: string; localRef?: string }>,
-): SceneLibraryEntry[] {
-  return album.entries
-    .map((entry) => {
-      const kind = classifySceneLibraryEntry(entry);
-      if (!kind) return null;
-      return {
-        entry,
-        src: 解析相册资源地址(assetMap.get(entry.assetId)) || '',
-        kind,
-        label: sceneLibraryKindLabel(kind),
-      };
-    })
-    .filter((item): item is SceneLibraryEntry => Boolean(item))
-    .sort((a, b) => b.entry.createdAt - a.entry.createdAt);
-}
-
-export function classifySceneLibraryEntry(entry: 相册条目): Exclude<SceneLibraryFilter, 'all'> | null {
-  const tags = new Set(entry.tags.map((tag) => tag.trim()).filter(Boolean));
-  const note = (entry.note ?? '').trim();
-  const title = entry.title.trim();
-  const kindHint = `${title} ${note} ${Array.from(tags).join(' ')}`;
-  if (/故事快照|快照|正文插图/.test(kindHint)) return 'snapshot';
-  const text = `${title} ${note} ${Array.from(tags).join(' ')}`;
-  if (tags.has('故事快照') || entry.targetType === 'scene' && /快照|正文插图|剧情瞬间/.test(text)) return 'snapshot';
-  if (entry.targetType === 'phone' || entry.slot === 'phone_wallpaper' || entry.slot === 'phone_chat_background' || tags.has('手机背景') || /手机背景|壁纸/.test(text)) return 'phone';
-  if (entry.targetType === 'scene' || entry.slot === 'scene' || tags.has('场景图') || /场景图/.test(text)) return 'scene';
-  return null;
-}
-
-export function sceneLibraryKindLabel(kind: Exclude<SceneLibraryFilter, 'all'>): string {
-  return {
-    scene: '场景图',
-    snapshot: '故事快照',
-    phone: '手机背景',
-  }[kind];
-}
-
-export function defaultAlbumEntryTags(target: typeof generateTargets[number]): string[] {
-  if (target.id === 'scene') return ['场景图'];
-  if (target.id === 'phone_wallpaper') return ['手机背景'];
-  if (target.targetType === 'traveler' || target.targetType === 'npc') return [slotLabel(target.slot)];
-  return [];
-}
-
-export function defaultAlbumEntryNote(target: typeof generateTargets[number]): string | undefined {
-  if (target.id === 'scene') return '场景图';
-  if (target.id === 'phone_wallpaper') return '手机背景';
-  return undefined;
-}
-
-export function buildScopedCharacterGalleryEntries(record: CharacterLibraryRecord | null, resourceEntries: CharacterLibraryEntry[]): CharacterLibraryEntry[] {
-  if (!record) return [];
-  const scoped = resourceEntries.filter((item) => {
-    if (item.entry.targetId === record.id) return true;
-    if (record.kind === 'traveler') return item.entry.targetType === 'traveler';
-    return item.entry.targetType === 'npc' && item.entry.targetId === record.id;
-  });
-  const merged = [...record.entries, ...scoped];
-  const seen = new Set<string>();
-  return merged.filter((item) => {
-    if (seen.has(item.entry.id)) return false;
-    seen.add(item.entry.id);
-    return true;
-  });
-}
-
-export function buildVisibleCharacterEntries(
-  record: CharacterLibraryRecord | null,
-  resourceEntries: CharacterLibraryEntry[],
-  album: 相册系统,
-): CharacterLibraryEntry[] {
-  if (!record) return [];
-  const scoped = buildScopedCharacterGalleryEntries(record, resourceEntries);
-  const recordEntries = record.entries.filter((item) => isCharacterLibrarySlot(item.entry.slot) || item.entry.targetId === record.id);
-  const builtin = record.kind === 'npc' ? buildBuiltinAvatarEntries(record.npc) : buildTravelerBuiltinAvatarEntries(record.traveler, album);
-  const merged = [...builtin, ...recordEntries, ...scoped];
-  const seen = new Set<string>();
-  return merged.filter((item) => {
-    if (seen.has(item.entry.id)) return false;
-    seen.add(item.entry.id);
-    return true;
-  });
-}
-
-export function isNpcLibraryRecord(record: CharacterLibraryRecord | null | undefined): record is NpcLibraryRecord {
-  return record?.kind === 'npc';
-}
-
-export function buildBuiltinAvatarEntries(npc: NPC记录): CharacterLibraryEntry[] {
-  const canonical = findNpcCanonicalName(npc);
-  const set = getBuiltinAvatarSet(canonical);
-  if (!set) return [];
-  return set.candidates.map((candidate): CharacterLibraryEntry => ({
-    entry: {
-      id: `builtin-avatar:${npc.id}:${candidate.id}`,
-      assetId: candidate.id,
-      title: candidate.title,
-      targetType: 'npc',
-      targetId: npc.id,
-      slot: 'avatar_profile',
-      tags: ['内置头像', set.canonicalName],
-      nsfw: false,
-      createdAt: 0,
-      note: '随包内置头像',
-      referenceTargets: [],
-    },
-    src: candidate.src,
-    sourceLabel: '内置',
-  }));
-}
-
-export function buildTravelerBuiltinAvatarEntries(traveler: 角色数据结构, album: 相册系统): CharacterLibraryEntry[] {
-  const rawAvatar = traveler.图像档案?.头像 || traveler.头像 || '';
-  if (rawAvatar.trim().startsWith('asset:')) return [];
-  const avatar = 解析相册资源引用(album, rawAvatar) || '';
-  if (!avatar) return [];
-  return [{
-    entry: {
-      id: `builtin-avatar:traveler:${traveler.姓名 || 'traveler'}:profile`,
-      assetId: `builtin-avatar:traveler:${traveler.姓名 || 'traveler'}:profile`,
-      title: `${traveler.姓名 || '旅人'}·档案头像`,
-      targetType: 'traveler',
-      targetId: 'traveler',
-      slot: 'avatar_profile',
-      tags: ['内置头像', traveler.姓名 || '旅人'],
-      nsfw: false,
-      createdAt: 0,
-      note: '随包内置头像',
-      referenceTargets: [],
-    },
-    src: avatar,
-    sourceLabel: '内置',
-  }];
-}
-
-export function findNpcCanonicalName(npc: NPC记录): string | undefined {
-  const names = [npc.姓名, npc.别名]
-    .flatMap((item) => (item ?? '').split(/[/／|、,，]/))
-    .map((item) => item.trim())
-    .filter(Boolean);
-  for (const name of names) {
-    const canonical = matchCanonical(name);
-    if (canonical) return canonical.name;
-  }
-  return undefined;
-}
-
-export function mapImageSlotToNpcAvatarSlot(slot: 图片槽位): NPC头像槽位 {
-  if (slot === 'avatar_story') return '正文';
-  if (slot === 'avatar_phone') return '手机';
-  return '档案';
-}
-
-export function mapImageSlotToTravelerSlot(slot: 图片槽位): '头像' | '正文头像' | '手机头像' | '立绘' {
-  if (slot === 'avatar_story') return '正文头像';
-  if (slot === 'avatar_phone') return '手机头像';
-  if (slot === 'portrait') return '立绘';
-  return '头像';
-}
-
-export function buildPresentSceneNpcs(npcs: NPC记录[], sceneText: string): NPC记录[] {
-  const text = sceneText.trim();
-  return npcs
-    .map((npc) => ({
-      npc,
-      score: (text && (text.includes(npc.姓名) || Boolean(npc.别名 && text.includes(npc.别名))) ? 100 : 0) + (npc.同行 ? 80 : 0) + (npc.图像档案?.角色锚点?.正面提示词 ? 20 : 0),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || b.npc.最近回合 - a.npc.最近回合)
-    .map((item) => item.npc)
-    .slice(0, 4);
-}
-
-export function buildStorySnapshotSourceOptions(history: 聊天消息[]): StorySnapshotSourceOption[] {
-  const assistantMessages = history.filter((message) => message.role === 'assistant' && message.content.trim());
-  const latest = assistantMessages[assistantMessages.length - 1]?.content.trim() ?? '';
-  const previous = assistantMessages[assistantMessages.length - 2]?.content.trim() ?? latest;
-  return [
-    { id: 'latest_assistant', title: '最近正文', desc: latest ? '上一条回复' : '暂无正文', text: trimSnapshotSource(latest) },
-    { id: 'previous_turn', title: '上一回合', desc: previous && previous !== latest ? '再前一条' : '可回退', text: trimSnapshotSource(previous) },
-    { id: 'manual', title: '手动片段', desc: '自行粘贴', text: '' },
-  ];
-}
-
-export function trimSnapshotSource(text: string): string {
-  return text
-    .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
-    .replace(/<变量事实>[\s\S]*?<\/变量事实>/g, '')
-    .replace(/<变量更新>[\s\S]*?<\/变量更新>/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 1800);
-}
-
-export function extractStorySnapshot(text: string, traveler: 角色数据结构, npcs: NPC记录[]): StorySnapshotSummary {
-  const source = trimSnapshotSource(text);
-  const compact = source.replace(/\s+/g, ' ').trim();
-  const names = [traveler.姓名 || '旅人', ...npcs.map((npc) => npc.姓名), ...npcs.flatMap((npc) => npc.别名 ? [npc.别名] : [])]
-    .filter(Boolean)
-    .filter((name, index, list) => list.indexOf(name) === index);
-  const characters = names.filter((name) => compact.includes(name)).slice(0, 5);
-  const locationMatch = compact.match(/(?:在|于|来到|抵达|走进|进入)([^，。！？；]{2,18}(?:车厢|房间|大厅|街道|广场|港口|空间站|列车|仙舟|实验室|走廊|庭院|舱室|店|馆|城|镇|星球|裂界))/);
-  const location = locationMatch?.[1]?.trim() || '当前剧情发生地点';
-  const actionSentence = pickSentence(compact, ['走', '看', '握', '站', '坐', '伸', '转', '推', '接', '递', '笑', '沉默', '望', '靠近', '离开']) || compact.slice(0, 80) || '角色在当前情境中形成一个可视化瞬间';
-  const atmosphere = inferSnapshotAtmosphere(compact);
-  const title = buildSnapshotTitle(location, actionSentence);
-  return {
-    title,
-    characters,
-    location,
-    atmosphere,
-    action: actionSentence,
-    camera: characters.length >= 2 ? '中景，保留人物站位关系与环境线索' : '中远景，先交代环境，再突出主体动作',
-    avoid: '避免无关角色、现代摄影棚感、过度拥挤构图、与正文矛盾的服装或地点',
-  };
-}
-
-export function pickSentence(text: string, keywords: string[]): string {
-  const sentences = text.split(/[。！？!?]/).map((item) => item.trim()).filter(Boolean);
-  return sentences.find((sentence) => keywords.some((keyword) => sentence.includes(keyword))) || sentences[0] || '';
-}
-
-export function inferSnapshotAtmosphere(text: string): string {
-  if (/紧张|警惕|危险|压迫|战斗|爆炸|追逐|枪|刃|血/.test(text)) return '紧张、压迫、带有行动前后的张力';
-  if (/温暖|笑|点心|午后|柔和|安静|闲聊|放松/.test(text)) return '温暖、安静、日常感';
-  if (/雨|夜|霓虹|阴影|沉默|低声|秘密/.test(text)) return '低调、潮湿、带一点悬疑感';
-  if (/实验|数据|屏幕|机械|空间站|装置/.test(text)) return '冷光、科技感、理性而克制';
-  return '贴合正文情绪，保留剧情现场感';
-}
-
-export function buildSnapshotTitle(location: string, action: string): string {
-  const subject = location.replace(/^当前剧情发生/, '').slice(0, 10) || '故事瞬间';
-  const actionHint = action.replace(/[“”"']/g, '').slice(0, 12);
-  return `${subject}${actionHint ? ` · ${actionHint}` : ''}`;
-}
-
-export function formatStorySnapshotSceneText(summary: StorySnapshotSummary): string {
-  return [
-    `画面标题：${summary.title}`,
-    `出场人物：${summary.characters.length ? summary.characters.join('、') : '按正文片段决定'}`,
-    `地点：${summary.location}`,
-    `氛围：${summary.atmosphere}`,
-    `关键动作：${summary.action}`,
-    `镜头构图：${summary.camera}`,
-    `不要出现：${summary.avoid}`,
-  ].join('\n');
-}
-
-export function buildSceneSourceText(text: string, traveler: 角色数据结构, presentNpcs: NPC记录[]): string {
-  const travelerAnchor = traveler.图像档案?.角色锚点;
-  return [
-    `场景说明：${text || '未填写'}`,
-    `主控角色：${traveler.姓名 || '旅人'}`,
-    traveler.外貌 ? `主控外貌：${traveler.外貌}` : '',
-    travelerAnchor?.正面提示词 ? `主控锚点：${travelerAnchor.正面提示词}` : '',
-    travelerAnchor?.负面提示词 ? `主控负面锚点：${travelerAnchor.负面提示词}` : '',
-    presentNpcs.length ? `在场角色：${presentNpcs.map((npc) => npc.姓名).join('、')}` : '',
-    ...presentNpcs.map((npc) => {
-      const anchor = npc.图像档案?.角色锚点;
-      return [
-        `${npc.姓名}：${[npc.外貌, npc.穿着].filter(Boolean).join('，')}`,
-        anchor?.正面提示词 ? `${npc.姓名}锚点：${anchor.正面提示词}` : '',
-        anchor?.负面提示词 ? `${npc.姓名}负面锚点：${anchor.负面提示词}` : '',
-      ].filter(Boolean).join('\n');
-    }),
-  ].filter(Boolean).join('\n');
-}
-
-export function anchorHasUsableContent(anchor?: NPC角色锚点档案): boolean {
-  if (!anchor || anchor.是否启用 === false) return false;
-  if (anchor.正面提示词?.trim() || anchor.负面提示词?.trim()) return true;
-  return Object.values(anchor.结构化特征 ?? {}).some((list) => Array.isArray(list) && list.some((item) => item.trim()));
-}
-
-export function getTravelerAnchorStatus(traveler: 角色数据结构): PromptMeta {
-  const anchor = traveler.图像档案?.角色锚点;
-  const usable = anchorHasUsableContent(anchor) && anchor?.生成时默认附加 !== false;
-  return {
-    anchorMode: usable,
-    anchorSummary: usable ? `主控锚点：${anchor?.名称 || traveler.姓名 || '旅人'}` : '未使用主控锚点，按旅人档案回退',
-  };
-}
-
-export function getNpcAnchorStatus(npc: NPC记录): PromptMeta {
-  const anchor = npc.图像档案?.角色锚点;
-  const usable = anchorHasUsableContent(anchor) && anchor?.生成时默认附加 !== false;
-  return {
-    anchorMode: usable,
-    anchorSummary: usable ? `角色锚点：${anchor?.名称 || npc.姓名}` : '未使用角色锚点，按伙伴档案回退',
-  };
-}
-
-export function getSceneAnchorStatus(traveler: 角色数据结构, presentNpcs: NPC记录[]): PromptMeta {
-  const names: string[] = [];
-  const travelerAnchor = traveler.图像档案?.角色锚点;
-  if (anchorHasUsableContent(travelerAnchor) && travelerAnchor?.场景生图自动注入 !== false) {
-    names.push(travelerAnchor?.名称 || traveler.姓名 || '旅人');
-  }
-  for (const npc of presentNpcs) {
-    const anchor = npc.图像档案?.角色锚点;
-    if (anchorHasUsableContent(anchor) && anchor?.场景生图自动注入 !== false) names.push(anchor?.名称 || npc.姓名);
-  }
-  return {
-    anchorMode: names.length > 0,
-    anchorSummary: names.length ? `场景锚点：${names.slice(0, 4).join('、')}` : '未使用场景角色锚点',
-  };
-}
-
-export function buildTravelerSourceText(traveler: 角色数据结构): string {
-  return [
-    `姓名：${traveler.姓名 || '未命名旅人'}`,
-    traveler.性别 ? `性别：${traveler.性别}` : '',
-    traveler.年龄 ? `年龄：${traveler.年龄}` : '',
-    traveler.身高 ? `身高：${traveler.身高}` : '',
-    traveler.身份 ? `身份：${traveler.身份}` : '',
-    traveler.外貌 ? `外貌：${traveler.外貌}` : '',
-    traveler.性格 ? `性格：${traveler.性格}` : '',
-    traveler.背景 ? `背景：${traveler.背景}` : '',
-    traveler.能力.length ? `能力：${traveler.能力.join('、')}` : '',
-    traveler.主命途 ? `命途：${traveler.主命途}` : '',
-    traveler.图像档案?.角色锚点?.名称 ? `主控锚点名称：${traveler.图像档案.角色锚点.名称}` : '',
-    traveler.图像档案?.角色锚点?.正面提示词 ? `主控锚点：${traveler.图像档案.角色锚点.正面提示词}` : '',
-    traveler.图像档案?.角色锚点?.负面提示词 ? `主控负面锚点：${traveler.图像档案.角色锚点.负面提示词}` : '',
-  ].filter(Boolean).join('\n');
-}
-
-export function buildNpcSourceText(npc: NPC记录): string {
-  return [
-    `姓名：${npc.姓名}`,
-    npc.别名 ? `别名：${npc.别名}` : '',
-    npc.性别 ? `性别：${npc.性别}` : '',
-    npc.原著角色 ? '原著角色：是' : '',
-    npc.外貌 ? `外貌：${npc.外貌}` : '',
-    npc.穿着 ? `穿着：${npc.穿着}` : '',
-    npc.性格 ? `性格：${npc.性格}` : '',
-    npc.说话方式 ? `说话方式：${npc.说话方式}` : '',
-    npc.介绍 ? `介绍：${npc.介绍}` : '',
-    npc.装备摘要 ? `装备：${npc.装备摘要}` : '',
-    npc.图像档案?.头像提示词 ? `头像提示词：${npc.图像档案.头像提示词}` : '',
-    npc.图像档案?.立绘提示词 ? `立绘提示词：${npc.图像档案.立绘提示词}` : '',
-    npc.图像档案?.角色锚点?.名称 ? `角色锚点名称：${npc.图像档案.角色锚点.名称}` : '',
-    npc.图像档案?.角色锚点?.正面提示词 ? `角色锚点：${npc.图像档案.角色锚点.正面提示词}` : '',
-    npc.图像档案?.角色锚点?.负面提示词 ? `角色负面锚点：${npc.图像档案.角色锚点.负面提示词}` : '',
-    npc.NSFW档案?.enabled ? `NSFW档案：${JSON.stringify(npc.NSFW档案)}` : '',
-  ].filter(Boolean).join('\n');
-}
-
-export function createTask(input: {
-  source?: 图片生成任务来源;
-  prompt: string;
-  negativePrompt?: string;
-  sourcePrompt?: string;
-  finalPrompt?: string;
-  finalNegativePrompt?: string;
-  anchorMode?: boolean;
-  anchorSummary?: string;
-  nsfw: boolean;
-  backend: string;
-  slot: 图片槽位;
-  targetType: 图片目标类型;
-  targetId?: string;
-  dimensions?: string;
-  referenceImageIds?: string[];
-}): 图片生成任务 {
-  return {
-    id: `img_task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    targetType: input.targetType,
-    targetId: input.targetId,
-    slot: input.slot,
-    source: input.source ?? 'manual',
-    status: 'running',
-    backend: input.backend,
-    nsfw: input.nsfw,
-    prompt: input.prompt,
-    negativePrompt: input.negativePrompt,
-    sourcePrompt: input.sourcePrompt,
-    finalPrompt: input.finalPrompt,
-    finalNegativePrompt: input.finalNegativePrompt,
-    anchorMode: input.anchorMode,
-    anchorSummary: input.anchorSummary,
-    referenceImageIds: input.referenceImageIds ?? [],
-    dimensions: input.dimensions,
-    retryCount: 0,
-    createdAt: Date.now(),
-    startedAt: Date.now(),
-  };
-}
-
-export function requiresCharacterTarget(target: typeof generateTargets[number]): boolean {
-  return target.targetType === 'npc' || target.targetType === 'nsfw_part';
-}
-
-export function resolveGenerationTargetId(target: typeof generateTargets[number], overrideTargetId: string | undefined, selectedNpcId: string): string | undefined {
-  if (overrideTargetId) return overrideTargetId;
-  if (target.targetType === 'traveler') return 'traveler';
-  if (requiresCharacterTarget(target)) return selectedNpcId || undefined;
-  return undefined;
-}
-
-export function cleanupAlbumAssets(album: 相册系统): 相册系统 {
-  const used = new Set(album.entries.map((entry) => entry.assetId));
-  const removed = album.assets.filter((asset) => !used.has(asset.id)).map((asset) => asset.id);
-  if (removed.length) revokeAlbumAssets(removed);
-  return {
-    ...album,
-    assets: album.assets.filter((asset) => used.has(asset.id)),
-  };
-}
-
-export function statusLabel(status: 图片生成任务['status']): string {
-  return {
-    queued: '排队中',
-    running: '生成中',
-    success: '已完成',
-    failed: '失败',
-    cancelled: '已取消',
-  }[status];
 }

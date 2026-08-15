@@ -163,3 +163,35 @@ function normalizeLegacyKey(value: string): string {
     .join('-')
     .slice(0, 80) || 'unknown';
 }
+
+/** 存档树列表的标签过滤维度（全部 / 自动 / 导入）。 */
+export type SaveTabFilter = 'all' | 'auto' | 'imported';
+
+export function matchesSaveTab(save: SaveListItemSummary, tab: SaveTabFilter): boolean {
+  if (tab === 'all') return true;
+  if (tab === 'auto') return save.type === 'auto';
+  return save.type === 'imported';
+}
+
+export function buildVisibleSaveTreeGroup(group: SaveTreeDisplayGroup, tab: SaveTabFilter): SaveTreeDisplayGroup | null {
+  const nodes = group.nodes.filter((node) => matchesSaveTab(node.save, tab));
+  if (!nodes.length) return null;
+  const latestSave = [...nodes].sort((a, b) => b.save.timestamp - a.save.timestamp || b.save.id - a.save.id)[0].save;
+  const rootSave = nodes.find((node) => node.isRoot)?.save ?? nodes[nodes.length - 1].save;
+  const forkNodeIds = new Set<string>();
+  for (const node of nodes) {
+    const parentNodeId = node.save.saveTree?.parentNodeId;
+    if (parentNodeId && nodes.some((candidate) => candidate.save.saveTree?.nodeId === parentNodeId)) {
+      forkNodeIds.add(parentNodeId);
+    }
+  }
+  return {
+    ...group,
+    rootSave,
+    latestSave,
+    nodes,
+    nodeCount: nodes.length,
+    branchCount: Math.max(0, forkNodeIds.size ? group.branchCount : 0),
+    totalSizeBytes: nodes.reduce((sum, node) => sum + Math.max(0, node.save.sizeBytes || 0), 0),
+  };
+}

@@ -3,7 +3,8 @@ import type { 图片生成任务, 相册条目, 相册系统 } from '@/models/im
 import { slotLabel } from '@/models/imageGeneration';
 import { 解析相册资源地址 } from '@/utils/albumActions';
 import { activeAccentSurface, activeTextColor, bodyColor, cardClip, cardSurface, faintColor, heroGridBackgroundStyle, heroSurface, imageWellSurface, mutedColor, smallClip, titleColor } from './visualTokens';
-import { ImagePreviewModal, PromptBlock, SafeAlbumImage, formatGenerationDate, generationSourceLabel, historyKind, historyKindLabel, historyKindTone, imageBackendLabel, statusLabel, taskPromptTitle, taskStatusTone } from './workspaces';
+import { ImagePreviewModal, PromptBlock, SafeAlbumImage, historyKindTone, taskStatusTone } from './workspaceComponents';
+import { formatGenerationDate, generationSourceLabel, historyKind, historyKindLabel, imageBackendLabel, statusLabel, taskPromptTitle } from './albumWorkspaceLogic';
 
 type TaskFeedFilter = 'all' | 'active' | 'failed' | 'character' | 'scene' | 'snapshot' | 'phone';
 type FeedItem =

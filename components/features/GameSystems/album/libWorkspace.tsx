@@ -5,17 +5,11 @@ import type { 图片槽位, 相册条目, 相册系统 } from '@/models/imageGen
 import type { 角色数据结构 } from '@/models/character';
 import { activeAccentSurface, cardClip, smallClip } from './visualTokens';
 import type { AlbumImportTarget, SceneLibraryFilter } from './foundation';
-import {
-  buildVisibleCharacterEntries,
-  EmptyLibraryBox,
-  ImagePreviewModal,
-  Panel,
-  SafeAlbumImage,
-  SlotPickerModal,
-} from './workspaces';
-import type { CharacterLibraryEntry, CharacterLibraryRecord, SceneLibraryEntry } from './workspaces';
 import type { AlbumImportMode } from './albumArchive';
 import { 解析相册资源地址 } from '@/utils/albumActions';
+import { buildVisibleCharacterEntries } from './albumWorkspaceLogic';
+import { EmptyLibraryBox, ImagePreviewModal, Panel, SafeAlbumImage, SlotPickerModal } from './workspaceComponents';
+import type { CharacterLibraryEntry, CharacterLibraryRecord, SceneLibraryEntry } from './albumWorkspaceLogic';
 
 type GalleryScope = 'character' | Exclude<SceneLibraryFilter, 'all'>;
 type GalleryItem =

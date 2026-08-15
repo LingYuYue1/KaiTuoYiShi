@@ -43,18 +43,11 @@ import type {
 } from './album/foundation';
 
 import {
-  buildAlbumResourceEntries, buildCharacterLibraryRecords, buildNpcSourceText, buildPresentSceneNpcs,
-  buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions,
-  buildTravelerSourceText, CharacterAnchorWorkspace, cleanupAlbumAssets, createTask,
-  CreateWorkspace, defaultAlbumEntryNote, defaultAlbumEntryTags, extractStorySnapshot,
-  formatStorySnapshotSceneText, getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus,
-  isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot,
-  mapImageSlotToTravelerSlot, NsfwVisibilityToggle,
-  PhoneBackgroundWorkspace, requiresCharacterTarget,
-  resolveGenerationTargetId, RulesWorkspace, SceneImageWorkspace,
-  StorySnapshotWorkspace, trimSnapshotSource, WorkspaceTabs,
+  CharacterAnchorWorkspace,
+  CreateWorkspace, NsfwVisibilityToggle,
+  PhoneBackgroundWorkspace, RulesWorkspace, SceneImageWorkspace,
+  StorySnapshotWorkspace, WorkspaceTabs,
 } from './album/workspaces';
-import type { CharacterLibraryRecord } from './album/workspaces';
 import { ImageLibraryWorkspace } from './album/libWorkspace';
 import { ImageTaskWorkspace } from './album/taskWorkspace';
 import { evaluateReferenceInjection, resolveReferenceImagesForGeneration } from './album/referenceInjection';
@@ -66,6 +59,8 @@ import {
   type AlbumOperationProgress,
 } from './album/albumArchiveWorkerClient';
 import { addOrReuseAlbumImage, dataUrlToBytes, hydrateAlbumContentHashes, sha256Bytes } from './album/albumContent';
+import { buildAlbumResourceEntries, buildCharacterLibraryRecords, buildNpcSourceText, buildPresentSceneNpcs, buildSceneLibraryEntries, buildSceneSourceText, buildStorySnapshotSourceOptions, buildTravelerSourceText, cleanupAlbumAssets, createTask, defaultAlbumEntryNote, defaultAlbumEntryTags, extractStorySnapshot, formatStorySnapshotSceneText, getNpcAnchorStatus, getSceneAnchorStatus, getTravelerAnchorStatus, isNpcLibraryRecord, mapImageSlotToNpcAvatarSlot, mapImageSlotToTravelerSlot, requiresCharacterTarget, resolveGenerationTargetId, trimSnapshotSource } from './album/albumWorkspaceLogic';
+import type { CharacterLibraryRecord } from './album/albumWorkspaceLogic';
 
 interface AlbumPanelProps {
   album: 相册系统;
