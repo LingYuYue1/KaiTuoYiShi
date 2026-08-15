@@ -199,7 +199,7 @@ writeStub('utils/npcMemorySanitizer.mjs', 'export function 清理NPC同行记忆
 //    导出，常量值与生产文件一致（'/assets/static-fallback/avatar-placeholder.webp'），不改变 NPC
 //    测试语义——本回归不执行任何静态资源解析逻辑。
 // 2) phoneService.ts 值导入 compileZhikuPhoneView（services/zhikuRuntimeCompiler.ts）。真实实现会
-//    拉起 zhikuRetrieval / zhikuAiRetrievalIndex / zhikuRunTrace / tokenEstimate 整条检索链；本回归
+//    拉起 zhikuRetrieval / zhikuAiRetrievalIndex / tokenEstimate 整条检索链；本回归
 //    的 buildPhoneMessages 调用路径在无参与者名时根本不会到达该函数（collectPhoneParticipantNames
 //    为空即早退），stub 提供中性 phonePersonaView 仅补齐导入边界，不改变手机知识边界断言语义。
 writeStub('utils/staticAssets.mjs', 'export const STATIC_ASSET_FALLBACK_AVATAR = \'/assets/static-fallback/avatar-placeholder.webp\';\n');
