@@ -13,6 +13,7 @@ export default tseslint.config(
       'node_modules/**',
       'backups/**',
       '.tmp/**',
+      '.opencode/**',
       'workers/**/*.worker.ts', // worker 全局环境与主线程不同，暂不纳入类型感知检查
     ],
   },

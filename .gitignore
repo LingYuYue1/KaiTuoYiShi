@@ -79,3 +79,6 @@ statuses/
 
 # Local agents skills workspace
 .agents/
+
+# Local skills lockfile
+skills-lock.json
