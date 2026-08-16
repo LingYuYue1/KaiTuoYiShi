@@ -92,14 +92,17 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
   const blocks = [
     '# 剧情编织滑窗',
     '',
-    '以下内容来自剧情编织系统。它是“软参考素材”，不是强制复演脚本。正文必须优先承接玩家本回合输入、即时剧情回顾、剧情回忆、当前地点和已成立事实；若这些事实显示某事件已经发生或已被解决，禁止因为滑窗仍停在该段而重演同一危机、同一敌人或同一章节事件。',
+    '以下是当前章节的剧情滑窗素材。使用规则：',
+    '- 本滑窗不是推进指令：是否推进、推进多少，由本回合门禁与玩家行动决定；禁止为了对齐滑窗而抢进度、补进度或复演任何段落。',
+    '- 事实与因果是硬约束：时间线、已发生事件、角色知情范围与信息可见性（谁知道/谁不知道/读者视角）必须遵守。“已经历”分段只可作既成事实简略承接，禁止重演；“未开始”分段只可轻微铺垫，禁止提前揭露角色未知信息或把未发生事件写成既成事实。',
+    '- 文字表达自由：禁止照抄原文措辞与段落结构；镜头、对白、节奏由你按当前局面重新组织。',
+    '- 承接优先级：玩家本回合输入、即时剧情回顾、剧情回忆、当前地点与已成立事实高于滑窗；若它们显示某事件已发生或已被解决，禁止因为滑窗仍停在该段而重演同一危机、同一敌人或同一章节事件。',
     gate.mode === 'strong'
       ? `本回合门禁：已满足强承接条件（${gate.reasons.join('；')}）。可以读取当前段的目标、人物关系和未结事项，但仍不得覆盖已发生事实。`
       : `本回合门禁：未满足强承接条件（${gate.reasons.join('；') || '当前地点、玩家输入和近期上下文未明显命中当前段'}）。当前段只能作为氛围、人物关系、伏笔、未结事项和防抢跑参考，不得直接推进或复演原文段落。`,
-    '剧情推进节奏：强承接只代表可以推进当前段的一拍，不代表必须在一回合内完成多个章节目标；下一段预热只能轻微铺垫，不得把未发生的事件写成既成事实。若进度锚点显示中间段为“已跳过”，只按路线校正理解，不可补写成玩家已经完整经历。',
-    '“已经历”的分段只可作为既成事实简略承接，不得重新演一遍；“未开始”的下一段只能轻微铺垫，不得提前揭露角色未知信息。若玩家已经走出不同 IF 线，以已发生剧情为准；若条目标有信息可见性，必须遵守谁知道/谁不知道/读者视角边界。',
+    '- 推进节奏：强承接只代表可以推进当前段的一拍，不代表必须在一回合内完成多个章节目标；下一段预热只能轻微铺垫。若进度锚点显示中间段为“已跳过”，只按路线校正理解，禁止补写成玩家已完整经历；若玩家已走出不同 IF 线，以已发生剧情为准。',
     ctx?.openingArchiveText
-      ? `当前开局档案锚点：\n${ctx.openingArchiveText}\n剧情编织只能按这份开局档案做软参考协调；自由开局和创意工坊开局下，不得强行把玩家拉回导入章节的默认入口。章节锚点之前的主线段落视为前置背景，不进入当前滑窗推进队列，也不得被正文补演。`
+      ? `当前开局档案锚点：\n${ctx.openingArchiveText}\n剧情编织必须按这份开局档案协调滑窗；自由开局和创意工坊开局下，不得强行把玩家拉回导入章节的默认入口。章节锚点之前的主线段落视为前置背景，不进入当前滑窗推进队列，也不得被正文补演。`
       : '',
     relocationNote ? `开局锚点重定位：${relocationNote}` : '',
     '',
@@ -325,9 +328,9 @@ function formatProgressAnchor(anchor: 剧情编织系统['当前进度']): strin
     `推进状态：${anchor.推进状态}`,
     `当前分段组号：${anchor.当前分段组号}`,
   ];
-  appendList(lines, '已完成摘要', anchor.已完成摘要, 6);
+  // 已完成摘要移除：历史信息统一由「最近已完成分段索引」单行承载，避免三处复述
   appendList(lines, '当前待解问题', anchor.当前待解问题, 6);
-  appendList(lines, '最近判定理由', anchor.最近判定理由, 5);
+  appendList(lines, '最近判定理由', anchor.最近判定理由, 3);
   if ((anchor.连续推进证据回合 ?? 0) > 0 || (anchor.卡段回合数 ?? 0) > 0) {
     lines.push(`推进证据累计：${anchor.连续推进证据回合 ?? 0}/2；卡段回合：${anchor.卡段回合数 ?? 0}`);
   }
@@ -532,16 +535,18 @@ function deriveFactions(segments: 剧情编织分段[]): string[] {
 }
 
 function buildRecentSegmentIndex(segments: 剧情编织分段[], currentIndex: number): string {
+  // 不含当前段（当前段有完整滑窗块），每段压缩为单行——历史信息的唯一索引出处
   const start = Math.max(0, currentIndex - 3);
-  const window = segments.slice(start, currentIndex + 1);
+  const window = segments.slice(start, currentIndex);
   if (!window.length) return '';
   return [
     '# 最近已完成分段索引',
     ...window.map((segment, index) => {
       const label = segment.标题 || `分段 ${start + index + 1}`;
       const summary = segment.本段概括 || segment.原文摘要 || segment.章节标题.join(' / ') || '无概括';
+      const brief = summary.length > 42 ? `${summary.slice(0, 40)}…` : summary;
       const timeline = segment.时间线起点 || segment.时间线终点 ? `｜${segment.时间线起点 || '未知'} -> ${segment.时间线终点 || '未知'}` : '';
-      return `- ${label}${timeline}\n  ${summary}`;
+      return `- ${label}${timeline}｜${brief}`;
     }),
   ].join('\n');
 }
