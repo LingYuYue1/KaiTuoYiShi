@@ -3,7 +3,7 @@ import type { NPC记录 } from '@/models/npc';
 import { 读取NPC头像 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { 解析相册资源引用 } from '@/utils/albumActions';
-import { ResilientImage } from '@/components/ui/ResilientImage';
+import { AvatarImage } from '@/components/ui/ResilientImage';
 import { accentColor, activeSurface, bodyColor, faintColor, mutedColor, panelStyle, smallClip, titleColor } from './constants';
 
 export function TabButton({
@@ -63,7 +63,7 @@ export function Avatar({
   if (src) {
     return (
       <span className="relative shrink-0" style={{ width: size, height: size }}>
-        <ResilientImage
+        <AvatarImage
           src={src}
           alt={npc.姓名}
           className="h-full w-full object-cover"

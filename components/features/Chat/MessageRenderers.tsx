@@ -7,7 +7,7 @@ import type { VisualTextSettings } from '@/models/settings';
 import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
 import { getBuiltinAvatarSetForNames } from '@/data/builtinAvatars';
 import { 解析相册资源引用 } from '@/utils/albumActions';
-import { ResilientImage } from '@/components/ui/ResilientImage';
+import { AvatarImage } from '@/components/ui/ResilientImage';
 
 interface BodyBlockProps {
   content: string;
@@ -319,7 +319,7 @@ export const AvatarTile = memo(function AvatarTile({ name, url, color, size = 's
         }}
       >
         {url ? (
-          <ResilientImage src={url} alt={`${name} 头像`} className="w-full h-full object-cover" />
+          <AvatarImage src={url} alt={`${name} 头像`} className="w-full h-full object-cover" />
         ) : (
           <span
             className="font-serif font-bold text-lg"

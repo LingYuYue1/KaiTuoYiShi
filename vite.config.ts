@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { handleQianfanProxyRequest } from './services/ai/qianfanProxyCore';
@@ -79,5 +79,10 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0',
+  },
+  test: {
+    environment: 'node',
+    include: ['tests/**/*.test.{ts,tsx}'],
+    setupFiles: ['./tests/setup.ts'],
   },
 });

@@ -9,6 +9,7 @@ import {
 import { buildStoryWeavingApiConfig, decomposeStorySegment, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { devLog, devLogError } from '@/utils/devLog';
 import { cardClip, smallClip, type TrackTab } from './plot/constants';
 import { HeaderCard } from './plot/HeaderCard';
 import { SeriesControl } from './plot/SeriesControl';
@@ -104,6 +105,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     } catch (err) {
       onStoryWeavingChange(prev);
       const text = err instanceof Error ? err.message : String(err);
+      devLogError('save', 'story-weaving-persist-failed', err, { seriesCount: clean.系列列表.length });
       setMessage(`剧情编织保存失败，已回滚本地更改：${text}`);
       return false;
     }
@@ -143,6 +145,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     setSelectedSegmentId(series.分段列表[0]?.id ?? null);
     setExpandedSeriesId(series.id);
     if (!await persist(next)) return;
+    devLog('save', 'story-weaving-text-imported', { chapters: series.章节列表.length, segments: series.分段列表.length });
     setMessage(`已导入 ${series.章节列表.length} 章，生成 ${series.分段列表.length} 个分段。`);
   };
 
@@ -152,6 +155,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
       await handleImportText(await file.text(), file.name.replace(/\.[^.]+$/, ''), file.name);
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err);
+      devLogError('ui', 'story-weaving-text-import-failed', err, { fileName: file.name });
       setMessage(`TXT 导入失败：${text}`);
     } finally {
       if (txtInputRef.current) txtInputRef.current.value = '';
@@ -186,11 +190,13 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         })
         : system;
       if (!await persist(next)) return;
+      devLog('save', 'story-weaving-json-imported', { seriesCount: system.系列列表.length, customOnly });
       setSelectedSegmentId(system.系列列表[0]?.分段列表[0]?.id ?? null);
       setExpandedSeriesId(system.当前系列ID ?? system.系列列表.at(0)?.id ?? null);
       setMessage(`已导入剧情编织 JSON：${system.系列列表.length} 个系列${customOnly ? '（已并入自制轨道）' : ''}。`);
     } catch (err) {
       const text = (err as Error).message;
+      devLogError('ui', 'story-weaving-json-import-failed', err, { fileName: file.name });
       setMessage(`JSON 导入失败：${text}`);
       window.alert(`剧情编织 JSON 导入失败：${text}`);
     } finally {
@@ -247,9 +253,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         当前系列ID: current.id,
         当前进度: buildSeriesProgressAnchor(merged.当前进度, current, '恢复内置原著剧情后同步当前锚点'),
       })) return;
+      devLog('save', 'story-weaving-canon-restored', { seriesCount: bundled.系列列表.length });
       setMessage(`已恢复内置原著剧情：${bundled.系列列表.length} 个轨道。`);
     } catch (err) {
       const text = (err as Error).message;
+      devLogError('save', 'story-weaving-canon-restore-failed', err);
       setMessage(`恢复内置原著剧情失败：${text}`);
       window.alert(`恢复内置原著剧情失败：${text}`);
     }
@@ -342,6 +350,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
       return;
     }
     setBusyId(segment.id);
+    devLog('net', 'story-weaving-decompose-start', { seriesId: series.id, segmentId: segment.id });
     setMessage(`正在分解：${segment.标题}`);
     if (!await updateSeries(series.id, (s) => ({
       ...s,
@@ -364,9 +373,11 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
         分段列表: s.分段列表.map((item) => item.id === segment.id ? parsed : item),
         updatedAt: Date.now(),
       }))) return;
+      devLog('net', 'story-weaving-decompose-done', { seriesId: series.id, segmentId: segment.id });
       setMessage(`分解完成：${segment.标题}`);
     } catch (err) {
       const text = (err as Error).message;
+      devLogError('net', 'story-weaving-decompose-failed', err, { seriesId: series.id, segmentId: segment.id });
       await updateSeries(series.id, (s) => ({
         ...s,
         分段列表: s.分段列表.map((item) => item.id === segment.id ? { ...item, 处理状态: '失败', 最近错误: text, updatedAt: Date.now() } : item),
@@ -393,6 +404,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
     const label = batchModeLabel(mode);
     if (mode === 'all' && !window.confirm('确认重新分解全部分段？已有分解结果会被覆盖。')) return;
     setBusyBatch(label);
+    devLog('net', 'story-weaving-batch-decompose-start', { seriesId: series.id, mode, targetCount: targets.length });
     try {
       const { persistFailed } = await runBatchDecompose({
         series,
@@ -410,7 +422,12 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
           setMessage(`批量分解 ${index + 1}/${total}：${segment.标题}`);
         },
       });
-      if (!persistFailed) setMessage(`批量分解结束：${label}`);
+      if (persistFailed) {
+        devLogError('save', 'story-weaving-batch-decompose-persist-failed', new Error('Batch decomposition persistence failed.'), { seriesId: series.id, mode });
+      } else {
+        devLog('net', 'story-weaving-batch-decompose-done', { seriesId: series.id, mode, targetCount: targets.length });
+        setMessage(`批量分解结束：${label}`);
+      }
     } finally {
       setBusyId(null);
       setBusyBatch('');

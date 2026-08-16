@@ -1,7 +1,7 @@
 import type { 角色数据结构 } from '@/models/character';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { 解析相册资源引用 } from '@/utils/albumActions';
-import { ResilientImage } from '@/components/ui/ResilientImage';
+import { AvatarImage } from '@/components/ui/ResilientImage';
 import { cardClip, tinyClip } from './turnStyles';
 
 export function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { content: string; traveler?: 角色数据结构; album?: 相册系统; fontSize?: number }) {
@@ -56,7 +56,7 @@ function UserAvatarTile({ name, url }: { name: string; url?: string }) {
         }}
       >
         {url ? (
-          <ResilientImage src={url} alt={`${name} 头像`} className="h-full w-full object-cover" />
+          <AvatarImage src={url} alt={`${name} 头像`} className="h-full w-full object-cover" />
         ) : (
           <span
             className="font-serif text-lg font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]"

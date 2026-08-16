@@ -1,4 +1,4 @@
-import { ResilientImage } from '@/components/ui/ResilientImage';
+import { AvatarImage } from '@/components/ui/ResilientImage';
 
 export function Avatar({ name, src }: { name: string; src?: string }) {
   return (
@@ -12,7 +12,7 @@ export function Avatar({ name, src }: { name: string; src?: string }) {
           : '0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
       }}
     >
-      {src ? <ResilientImage src={src} alt={name} className="h-full w-full object-cover" /> : name.at(0) ?? '?'}
+      {src ? <AvatarImage src={src} alt={name} className="h-full w-full object-cover" /> : name.at(0) ?? '?'}
       <span
         className="pointer-events-none absolute inset-[5px] rounded-full"
         style={{ boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)' }}

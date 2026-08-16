@@ -10,6 +10,7 @@ import { CANONICAL_TRAILBLAZERS, FREE_OPENING_PLANET_SOURCE_OPTIONS, smallClip, 
 import { Chip, DraftInput, DraftTextarea, SmallActionButton } from './atoms';
 import { SectionCard, TipBox, CardHeader, ScenarioAnchorCard } from './frame';
 import { OpeningSkillSlotGroup, StepNav, SectionTitle, LabelField, OverviewLabel, OverviewRow } from './panels';
+import { devLog, devLogError } from '@/utils/devLog';
 
 export function StoryModeSelector({
   storyMode,
@@ -129,6 +130,7 @@ export function CharacterStep({
     if (!onGenerateTemplate || templateLoading) return;
     setTemplateError('');
     setTemplateLoading(true);
+    devLog('net', 'opening-traveler-template-start', { hasPrompt: Boolean(templatePrompt.trim()) });
     try {
       const draft = await onGenerateTemplate({
         storyModeName,
@@ -148,7 +150,9 @@ export function CharacterStep({
       onAppearance(draft.appearance);
       onPersonality(draft.personality);
       onBackground(draft.background);
+      devLog('net', 'opening-traveler-template-done', { hasPrompt: Boolean(templatePrompt.trim()) });
     } catch (err) {
+      devLogError('net', 'opening-traveler-template-failed', err, { hasPrompt: Boolean(templatePrompt.trim()) });
       setTemplateError(err instanceof Error ? err.message : '模板生成失败，请稍后再试。');
     } finally {
       setTemplateLoading(false);

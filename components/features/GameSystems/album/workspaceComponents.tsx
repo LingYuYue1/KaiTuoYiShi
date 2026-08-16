@@ -148,7 +148,7 @@ export function ImagePreviewModal({ open, src, title, onClose }: { open: boolean
           {title}
         </div>
         <div className="flex h-full w-full items-center justify-center overflow-auto px-2 py-2">
-          <ResilientImage src={src} alt={title} className="max-h-full max-w-full object-contain" />
+          <SafeAlbumImage src={src} alt={title} className="max-h-full max-w-full object-contain" failedLabel="图片加载失败" />
         </div>
       </div>
     </div>,
