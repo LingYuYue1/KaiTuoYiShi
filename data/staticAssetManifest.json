@@ -1,0 +1,911 @@
+{
+  "schemaVersion": 1,
+  "assetBaseUrl": "https://lingkvault.cc.cd",
+  "generatedAt": "2026-08-03T07:40:22.521Z",
+  "assets": {
+    "avatar:arlan:01": {
+      "path": "/static/5aa8a592848f1134222e16ee2d1652052061a4de6dbc7a734ddeff9c2f8b921b.webp",
+      "sha256": "5aa8a592848f1134222e16ee2d1652052061a4de6dbc7a734ddeff9c2f8b921b",
+      "width": 768,
+      "height": 768,
+      "bytes": 76948,
+      "contentType": "image/webp"
+    },
+    "avatar:arlan:02": {
+      "path": "/static/b4128c47aba261b4e0491edddaeb7391e09f864abaafc017addf15dfcc51db38.webp",
+      "sha256": "b4128c47aba261b4e0491edddaeb7391e09f864abaafc017addf15dfcc51db38",
+      "width": 768,
+      "height": 768,
+      "bytes": 94548,
+      "contentType": "image/webp"
+    },
+    "avatar:arlan:03": {
+      "path": "/static/1244f2d32d47e30e7ca7bc252b4da5c351a289483cda6a6e673864041ea9d3e4.webp",
+      "sha256": "1244f2d32d47e30e7ca7bc252b4da5c351a289483cda6a6e673864041ea9d3e4",
+      "width": 768,
+      "height": 768,
+      "bytes": 78326,
+      "contentType": "image/webp"
+    },
+    "avatar:asta:01": {
+      "path": "/static/029e6f7331d1f1e15b38a30275a6911acfc2ad0ce489ba429492437809cda304.webp",
+      "sha256": "029e6f7331d1f1e15b38a30275a6911acfc2ad0ce489ba429492437809cda304",
+      "width": 768,
+      "height": 768,
+      "bytes": 117034,
+      "contentType": "image/webp"
+    },
+    "avatar:asta:02": {
+      "path": "/static/f214c3e51dabc6e54ca67457721c51d37ae6e5e3472c5d32cc1fbec264183e85.webp",
+      "sha256": "f214c3e51dabc6e54ca67457721c51d37ae6e5e3472c5d32cc1fbec264183e85",
+      "width": 768,
+      "height": 768,
+      "bytes": 133226,
+      "contentType": "image/webp"
+    },
+    "avatar:asta:03": {
+      "path": "/static/2f695b5ce54b34c7d6d8af5c04d30008cccba84cb9e698361c26ed67aa4cb070.webp",
+      "sha256": "2f695b5ce54b34c7d6d8af5c04d30008cccba84cb9e698361c26ed67aa4cb070",
+      "width": 768,
+      "height": 768,
+      "bytes": 118754,
+      "contentType": "image/webp"
+    },
+    "avatar:bronya:01": {
+      "path": "/static/55041a512b8abeb1507cf6d4b9aa5e3ce2590589ec8f35758d63b0ef06c14954.webp",
+      "sha256": "55041a512b8abeb1507cf6d4b9aa5e3ce2590589ec8f35758d63b0ef06c14954",
+      "width": 768,
+      "height": 768,
+      "bytes": 95304,
+      "contentType": "image/webp"
+    },
+    "avatar:bronya:02": {
+      "path": "/static/8a4ebaf7444c64222c7e024baf71743a207c91be38248b290a2c38eceb6159db.webp",
+      "sha256": "8a4ebaf7444c64222c7e024baf71743a207c91be38248b290a2c38eceb6159db",
+      "width": 768,
+      "height": 768,
+      "bytes": 107444,
+      "contentType": "image/webp"
+    },
+    "avatar:bronya:03": {
+      "path": "/static/98d027729a6e162a3eac7ef964e80585ef0df2f26bc785b1691465e2356d42e5.webp",
+      "sha256": "98d027729a6e162a3eac7ef964e80585ef0df2f26bc785b1691465e2356d42e5",
+      "width": 768,
+      "height": 768,
+      "bytes": 91712,
+      "contentType": "image/webp"
+    },
+    "avatar:caelus:01": {
+      "path": "/static/8c78f63569206d0de5abc9ff93aa0f85e5c8189a972947038bd5550471e05e61.webp",
+      "sha256": "8c78f63569206d0de5abc9ff93aa0f85e5c8189a972947038bd5550471e05e61",
+      "width": 768,
+      "height": 768,
+      "bytes": 64636,
+      "contentType": "image/webp"
+    },
+    "avatar:caelus:02": {
+      "path": "/static/7b875c4e815d60b4b8ecdbb0232552bbeb018c9c37fa382163da6d2573a7447a.webp",
+      "sha256": "7b875c4e815d60b4b8ecdbb0232552bbeb018c9c37fa382163da6d2573a7447a",
+      "width": 768,
+      "height": 768,
+      "bytes": 65154,
+      "contentType": "image/webp"
+    },
+    "avatar:caelus:03": {
+      "path": "/static/c29dc917f246c2a87747d6b64db429348c99138063dbebe0838964ade76a4476.webp",
+      "sha256": "c29dc917f246c2a87747d6b64db429348c99138063dbebe0838964ade76a4476",
+      "width": 768,
+      "height": 768,
+      "bytes": 69328,
+      "contentType": "image/webp"
+    },
+    "avatar:danheng:01": {
+      "path": "/static/93058ba6eb5555ff7496d2d51bf440ab69c435f27a1ed08c5994f27993b875c5.webp",
+      "sha256": "93058ba6eb5555ff7496d2d51bf440ab69c435f27a1ed08c5994f27993b875c5",
+      "width": 768,
+      "height": 768,
+      "bytes": 72938,
+      "contentType": "image/webp"
+    },
+    "avatar:danheng:02": {
+      "path": "/static/88fb0b6c5cd1a8d452c7bc504b55bd2656d06fd8796023017f92d5747f01d868.webp",
+      "sha256": "88fb0b6c5cd1a8d452c7bc504b55bd2656d06fd8796023017f92d5747f01d868",
+      "width": 768,
+      "height": 768,
+      "bytes": 68878,
+      "contentType": "image/webp"
+    },
+    "avatar:danheng:03": {
+      "path": "/static/778dfdcf669f7e874fd59bcf302e10b076a0fec7b9af79b1a430a27145c56aba.webp",
+      "sha256": "778dfdcf669f7e874fd59bcf302e10b076a0fec7b9af79b1a430a27145c56aba",
+      "width": 768,
+      "height": 768,
+      "bytes": 70020,
+      "contentType": "image/webp"
+    },
+    "avatar:herta:01": {
+      "path": "/static/fe1ae08c86e4fdc38e6536aa1de103215799196cc90a8e250408139c9be56aa4.webp",
+      "sha256": "fe1ae08c86e4fdc38e6536aa1de103215799196cc90a8e250408139c9be56aa4",
+      "width": 768,
+      "height": 768,
+      "bytes": 104646,
+      "contentType": "image/webp"
+    },
+    "avatar:herta:02": {
+      "path": "/static/93e9d2461a65f51433f7ee7c0627650d1b502694be68d81f91e1998a6684ef57.webp",
+      "sha256": "93e9d2461a65f51433f7ee7c0627650d1b502694be68d81f91e1998a6684ef57",
+      "width": 768,
+      "height": 768,
+      "bytes": 90328,
+      "contentType": "image/webp"
+    },
+    "avatar:herta:03": {
+      "path": "/static/24d16809cb5dff84b3c071e499cf0d6c0caf3dfa76b7cf5afd6aa6233549b428.webp",
+      "sha256": "24d16809cb5dff84b3c071e499cf0d6c0caf3dfa76b7cf5afd6aa6233549b428",
+      "width": 768,
+      "height": 768,
+      "bytes": 88906,
+      "contentType": "image/webp"
+    },
+    "avatar:himeko:01": {
+      "path": "/static/edc710828f55b2b746498aefe7963ce502349dc6f1dafa0fa00573336e597244.webp",
+      "sha256": "edc710828f55b2b746498aefe7963ce502349dc6f1dafa0fa00573336e597244",
+      "width": 768,
+      "height": 768,
+      "bytes": 91678,
+      "contentType": "image/webp"
+    },
+    "avatar:himeko:02": {
+      "path": "/static/fd0b54dc2292efce97c1363e6ad04f6914efd17d24699a08193567a613b686f5.webp",
+      "sha256": "fd0b54dc2292efce97c1363e6ad04f6914efd17d24699a08193567a613b686f5",
+      "width": 768,
+      "height": 768,
+      "bytes": 95636,
+      "contentType": "image/webp"
+    },
+    "avatar:himeko:03": {
+      "path": "/static/67d67b91370127b8700cd4119a780a1c3204c8cd17f1f899e3b58237b780e3ce.webp",
+      "sha256": "67d67b91370127b8700cd4119a780a1c3204c8cd17f1f899e3b58237b780e3ce",
+      "width": 768,
+      "height": 768,
+      "bytes": 91644,
+      "contentType": "image/webp"
+    },
+    "avatar:march7th:01": {
+      "path": "/static/def2a1942ef3b20967ca757e6e79afb1e15f1014167f80357ab6f4a4ab1e6f62.webp",
+      "sha256": "def2a1942ef3b20967ca757e6e79afb1e15f1014167f80357ab6f4a4ab1e6f62",
+      "width": 768,
+      "height": 768,
+      "bytes": 83044,
+      "contentType": "image/webp"
+    },
+    "avatar:march7th:02": {
+      "path": "/static/95ff0731ec52021fde16afda490c34f39e663209926e4ed2a1100c7140a50a8d.webp",
+      "sha256": "95ff0731ec52021fde16afda490c34f39e663209926e4ed2a1100c7140a50a8d",
+      "width": 768,
+      "height": 768,
+      "bytes": 89278,
+      "contentType": "image/webp"
+    },
+    "avatar:march7th:03": {
+      "path": "/static/a0ceb80703e4ced9437d2fbad33b36b2afb89bcc20aa1dc8c1a279dc2333eb15.webp",
+      "sha256": "a0ceb80703e4ced9437d2fbad33b36b2afb89bcc20aa1dc8c1a279dc2333eb15",
+      "width": 768,
+      "height": 768,
+      "bytes": 78042,
+      "contentType": "image/webp"
+    },
+    "avatar:pom-pom:01": {
+      "path": "/static/ce21375daae3ec785bc4e0ffd04e509958fe87242234edece39b16e869cbb937.webp",
+      "sha256": "ce21375daae3ec785bc4e0ffd04e509958fe87242234edece39b16e869cbb937",
+      "width": 768,
+      "height": 768,
+      "bytes": 68018,
+      "contentType": "image/webp"
+    },
+    "avatar:pom-pom:02": {
+      "path": "/static/78c93b72d764c4eb79df3cfce5b8a93cf5d0c90b43270fa670a205f622fb6208.webp",
+      "sha256": "78c93b72d764c4eb79df3cfce5b8a93cf5d0c90b43270fa670a205f622fb6208",
+      "width": 768,
+      "height": 768,
+      "bytes": 73476,
+      "contentType": "image/webp"
+    },
+    "avatar:pom-pom:03": {
+      "path": "/static/b01e4d8749f5ab0bd9622152574406cc80f9ba476165c1d1a63c2e165fd4ed5d.webp",
+      "sha256": "b01e4d8749f5ab0bd9622152574406cc80f9ba476165c1d1a63c2e165fd4ed5d",
+      "width": 768,
+      "height": 768,
+      "bytes": 69710,
+      "contentType": "image/webp"
+    },
+    "avatar:stelle:01": {
+      "path": "/static/3350b00b6729b11b239dd0f7bce8d0691f05dadd1cf64ff77ba80116de7ba4a7.webp",
+      "sha256": "3350b00b6729b11b239dd0f7bce8d0691f05dadd1cf64ff77ba80116de7ba4a7",
+      "width": 768,
+      "height": 768,
+      "bytes": 83896,
+      "contentType": "image/webp"
+    },
+    "avatar:stelle:02": {
+      "path": "/static/2c240839a60f7870b45977af0f8186a4059fb8de8a50a2c80755ae856781d3a5.webp",
+      "sha256": "2c240839a60f7870b45977af0f8186a4059fb8de8a50a2c80755ae856781d3a5",
+      "width": 768,
+      "height": 768,
+      "bytes": 82764,
+      "contentType": "image/webp"
+    },
+    "avatar:stelle:03": {
+      "path": "/static/23f67795fc484983c11262b85a1f7114084850ec4abc2c792c990a1bc1baa432.webp",
+      "sha256": "23f67795fc484983c11262b85a1f7114084850ec4abc2c792c990a1bc1baa432",
+      "width": 768,
+      "height": 768,
+      "bytes": 88134,
+      "contentType": "image/webp"
+    },
+    "avatar:welt:01": {
+      "path": "/static/af4a5882cc41febd7730b025e840088c13eff449232c77a191f97bf886d0a46e.webp",
+      "sha256": "af4a5882cc41febd7730b025e840088c13eff449232c77a191f97bf886d0a46e",
+      "width": 768,
+      "height": 768,
+      "bytes": 82012,
+      "contentType": "image/webp"
+    },
+    "avatar:welt:02": {
+      "path": "/static/87e8fa6e9ce815878b9839a137fd5413af2d0931e6feeaca0620631d0db39743.webp",
+      "sha256": "87e8fa6e9ce815878b9839a137fd5413af2d0931e6feeaca0620631d0db39743",
+      "width": 768,
+      "height": 768,
+      "bytes": 78764,
+      "contentType": "image/webp"
+    },
+    "avatar:welt:03": {
+      "path": "/static/bb629b5aefd910e554f1d005078c385c2266cbe28534d68ab4b93fc9ad83a877.webp",
+      "sha256": "bb629b5aefd910e554f1d005078c385c2266cbe28534d68ab4b93fc9ad83a877",
+      "width": 768,
+      "height": 768,
+      "bytes": 83190,
+      "contentType": "image/webp"
+    },
+    "avatar:aglaea:01": {
+      "path": "/static/dc9273d9bf7318cfd6e625216fb4f5b1b5ecc83345da80d30b0c41af04cd7160.webp",
+      "sha256": "dc9273d9bf7318cfd6e625216fb4f5b1b5ecc83345da80d30b0c41af04cd7160",
+      "width": 768,
+      "height": 768,
+      "bytes": 99942,
+      "contentType": "image/webp"
+    },
+    "avatar:aventurine:01": {
+      "path": "/static/c1c8c271478608ef065598aaa2ee8898a9f9280bad97bd1b0d6554c5792dceb6.webp",
+      "sha256": "c1c8c271478608ef065598aaa2ee8898a9f9280bad97bd1b0d6554c5792dceb6",
+      "width": 768,
+      "height": 768,
+      "bytes": 103130,
+      "contentType": "image/webp"
+    },
+    "avatar:bailu:01": {
+      "path": "/static/e579f54d259308167606e09648c29b8c3d9f8ea36adf81d0bf1d90fce48c9c4d.webp",
+      "sha256": "e579f54d259308167606e09648c29b8c3d9f8ea36adf81d0bf1d90fce48c9c4d",
+      "width": 768,
+      "height": 768,
+      "bytes": 82872,
+      "contentType": "image/webp"
+    },
+    "avatar:clara:01": {
+      "path": "/static/e3ac0b13f24aaf9a1d86a86020aae2b6e168fb19d66782609d2c0d15f06fcc7b.webp",
+      "sha256": "e3ac0b13f24aaf9a1d86a86020aae2b6e168fb19d66782609d2c0d15f06fcc7b",
+      "width": 768,
+      "height": 768,
+      "bytes": 80104,
+      "contentType": "image/webp"
+    },
+    "avatar:fu-xuan:01": {
+      "path": "/static/366b35526a9ba4f55a30ea035a4a9fd36bd5b6183e3496fbe45a836c1eaf45c1.webp",
+      "sha256": "366b35526a9ba4f55a30ea035a4a9fd36bd5b6183e3496fbe45a836c1eaf45c1",
+      "width": 768,
+      "height": 768,
+      "bytes": 91886,
+      "contentType": "image/webp"
+    },
+    "avatar:gepard:01": {
+      "path": "/static/3914dee8a2f647eded887471de634406a088914e7b4c436d95eda8110355bb40.webp",
+      "sha256": "3914dee8a2f647eded887471de634406a088914e7b4c436d95eda8110355bb40",
+      "width": 768,
+      "height": 768,
+      "bytes": 119210,
+      "contentType": "image/webp"
+    },
+    "avatar:jade:01": {
+      "path": "/static/1268ab2f7033738716a812161db00f692cbd8f040713a645f16415fac5436dfe.webp",
+      "sha256": "1268ab2f7033738716a812161db00f692cbd8f040713a645f16415fac5436dfe",
+      "width": 768,
+      "height": 768,
+      "bytes": 93650,
+      "contentType": "image/webp"
+    },
+    "avatar:jing-yuan:01": {
+      "path": "/static/94e32ba0608c301712b18612271c5baf68776c7e334d24b23c18faf60f37f966.webp",
+      "sha256": "94e32ba0608c301712b18612271c5baf68776c7e334d24b23c18faf60f37f966",
+      "width": 768,
+      "height": 768,
+      "bytes": 93400,
+      "contentType": "image/webp"
+    },
+    "avatar:kafka:01": {
+      "path": "/static/c3c9fe3c235003e68271dba60145518f9b5a89132d63aaca217a1aa6ba13f572.webp",
+      "sha256": "c3c9fe3c235003e68271dba60145518f9b5a89132d63aaca217a1aa6ba13f572",
+      "width": 768,
+      "height": 768,
+      "bytes": 108388,
+      "contentType": "image/webp"
+    },
+    "avatar:natasha:01": {
+      "path": "/static/7ba212d6b3e7420b98cef9ae80800bc65de3b7148d386f2cc54b48fe2c0a08a3.webp",
+      "sha256": "7ba212d6b3e7420b98cef9ae80800bc65de3b7148d386f2cc54b48fe2c0a08a3",
+      "width": 768,
+      "height": 768,
+      "bytes": 85700,
+      "contentType": "image/webp"
+    },
+    "avatar:pela:01": {
+      "path": "/static/9158e50183fa402f37438aa1e4ec59de1eaea69f1ddeb30016be884a613efbf8.webp",
+      "sha256": "9158e50183fa402f37438aa1e4ec59de1eaea69f1ddeb30016be884a613efbf8",
+      "width": 768,
+      "height": 768,
+      "bytes": 103970,
+      "contentType": "image/webp"
+    },
+    "avatar:seele:01": {
+      "path": "/static/e7e717b4b2591b047947857178eb7bd3828d0960732619eb2cce538fa6f40bfa.webp",
+      "sha256": "e7e717b4b2591b047947857178eb7bd3828d0960732619eb2cce538fa6f40bfa",
+      "width": 768,
+      "height": 768,
+      "bytes": 80250,
+      "contentType": "image/webp"
+    },
+    "avatar:serval:01": {
+      "path": "/static/ea09ad6bb77ba347aa7ed71162b69e3351b7f158742c5415687e3e05f3ae09d0.webp",
+      "sha256": "ea09ad6bb77ba347aa7ed71162b69e3351b7f158742c5415687e3e05f3ae09d0",
+      "width": 768,
+      "height": 768,
+      "bytes": 114238,
+      "contentType": "image/webp"
+    },
+    "avatar:silver-wolf:01": {
+      "path": "/static/93fc125525b265e1d4d8be2a3c5162ab90ae8f78ce7fa2f618e2bfb9cb5cf183.webp",
+      "sha256": "93fc125525b265e1d4d8be2a3c5162ab90ae8f78ce7fa2f618e2bfb9cb5cf183",
+      "width": 768,
+      "height": 768,
+      "bytes": 125410,
+      "contentType": "image/webp"
+    },
+    "avatar:silver-wolf:02": {
+      "path": "/static/102dfa57e0227d961bd5e55e62d6b7beec428de08c550eb00b13126470f04d37.webp",
+      "sha256": "102dfa57e0227d961bd5e55e62d6b7beec428de08c550eb00b13126470f04d37",
+      "width": 768,
+      "height": 768,
+      "bytes": 118632,
+      "contentType": "image/webp"
+    },
+    "avatar:silver-wolf:03": {
+      "path": "/static/571987918b3068728d2519eb281f4815d6744551593761a74b4ebff637a09add.webp",
+      "sha256": "571987918b3068728d2519eb281f4815d6744551593761a74b4ebff637a09add",
+      "width": 768,
+      "height": 768,
+      "bytes": 107930,
+      "contentType": "image/webp"
+    },
+    "avatar:svarog:01": {
+      "path": "/static/50e92946e251101ad877f46d482d04a19fd198c4e538ef51ca85ec31b9317846.webp",
+      "sha256": "50e92946e251101ad877f46d482d04a19fd198c4e538ef51ca85ec31b9317846",
+      "width": 768,
+      "height": 768,
+      "bytes": 104328,
+      "contentType": "image/webp"
+    },
+    "avatar:topaz:01": {
+      "path": "/static/30611ff6729a73fb431774c1692ddb474aa511043ad1ac1a6fdff3171d28022e.webp",
+      "sha256": "30611ff6729a73fb431774c1692ddb474aa511043ad1ac1a6fdff3171d28022e",
+      "width": 768,
+      "height": 768,
+      "bytes": 91836,
+      "contentType": "image/webp"
+    },
+    "avatar:acheron:01": {
+      "path": "/static/6614b85dca6cb86ce08d698d27014011cb844ecbf8331698dfbee210ac5e7ada.webp",
+      "sha256": "6614b85dca6cb86ce08d698d27014011cb844ecbf8331698dfbee210ac5e7ada",
+      "width": 768,
+      "height": 768,
+      "bytes": 77338,
+      "contentType": "image/webp"
+    },
+    "avatar:anaxa:01": {
+      "path": "/static/e98a14e30551dc4e5be15ca228dfb7ea970b88c19e33fefd68e623c8e4470ec6.webp",
+      "sha256": "e98a14e30551dc4e5be15ca228dfb7ea970b88c19e33fefd68e623c8e4470ec6",
+      "width": 768,
+      "height": 768,
+      "bytes": 87164,
+      "contentType": "image/webp"
+    },
+    "avatar:archer:01": {
+      "path": "/static/566f5866ad6184fe973cfbcb5cea009cdbb10c1932bb53d424eb0600b39872c6.webp",
+      "sha256": "566f5866ad6184fe973cfbcb5cea009cdbb10c1932bb53d424eb0600b39872c6",
+      "width": 768,
+      "height": 768,
+      "bytes": 67814,
+      "contentType": "image/webp"
+    },
+    "avatar:argenti:01": {
+      "path": "/static/3d8052ec9d57d876bd40ba76d6b2dd2e718c6d44a352d413caf43ff026dee08b.webp",
+      "sha256": "3d8052ec9d57d876bd40ba76d6b2dd2e718c6d44a352d413caf43ff026dee08b",
+      "width": 768,
+      "height": 768,
+      "bytes": 103386,
+      "contentType": "image/webp"
+    },
+    "avatar:ashveil:01": {
+      "path": "/static/02ff1197a6f548082e4fab1d5e80dad47bc2bbf38be707a4ca563e83cce608e2.webp",
+      "sha256": "02ff1197a6f548082e4fab1d5e80dad47bc2bbf38be707a4ca563e83cce608e2",
+      "width": 768,
+      "height": 768,
+      "bytes": 77276,
+      "contentType": "image/webp"
+    },
+    "avatar:black-swan:01": {
+      "path": "/static/3bcd31b663f0535b39c4177d625d8aa2dc71ef9d098f38232af13ce8bb66dc68.webp",
+      "sha256": "3bcd31b663f0535b39c4177d625d8aa2dc71ef9d098f38232af13ce8bb66dc68",
+      "width": 768,
+      "height": 768,
+      "bytes": 91920,
+      "contentType": "image/webp"
+    },
+    "avatar:blade:01": {
+      "path": "/static/38407f3b4662d944ce2e2d3c201756a64ae926cb096022072cbe4fac9e8b9a73.webp",
+      "sha256": "38407f3b4662d944ce2e2d3c201756a64ae926cb096022072cbe4fac9e8b9a73",
+      "width": 768,
+      "height": 768,
+      "bytes": 53976,
+      "contentType": "image/webp"
+    },
+    "avatar:boothill:01": {
+      "path": "/static/bc65685ebdf38609070abcc1de0d895653b1e10ab706f5e6f3e7fe3b97bb63a4.webp",
+      "sha256": "bc65685ebdf38609070abcc1de0d895653b1e10ab706f5e6f3e7fe3b97bb63a4",
+      "width": 768,
+      "height": 768,
+      "bytes": 89154,
+      "contentType": "image/webp"
+    },
+    "avatar:castorice:01": {
+      "path": "/static/5844e13b83b346fae1b977e078160136b931b499d3762f8ea44cec8cea7ed751.webp",
+      "sha256": "5844e13b83b346fae1b977e078160136b931b499d3762f8ea44cec8cea7ed751",
+      "width": 768,
+      "height": 768,
+      "bytes": 109436,
+      "contentType": "image/webp"
+    },
+    "avatar:cerydra:01": {
+      "path": "/static/7c84673427bfddff9904072ec2e04aa9293d0d1b4a9ae689a6c2b2f5f8505a18.webp",
+      "sha256": "7c84673427bfddff9904072ec2e04aa9293d0d1b4a9ae689a6c2b2f5f8505a18",
+      "width": 768,
+      "height": 768,
+      "bytes": 109636,
+      "contentType": "image/webp"
+    },
+    "avatar:cipher:01": {
+      "path": "/static/bb776146ddfc7769bc009441204dd027cb37b12bef81a0a62723c47e6a9b5439.webp",
+      "sha256": "bb776146ddfc7769bc009441204dd027cb37b12bef81a0a62723c47e6a9b5439",
+      "width": 768,
+      "height": 768,
+      "bytes": 100940,
+      "contentType": "image/webp"
+    },
+    "avatar:cocolia:01": {
+      "path": "/static/355e83c183010c42c463c33ba04b8cbb7ecd187c7ad38f5a707c51a4e494f59d.webp",
+      "sha256": "355e83c183010c42c463c33ba04b8cbb7ecd187c7ad38f5a707c51a4e494f59d",
+      "width": 768,
+      "height": 768,
+      "bytes": 100602,
+      "contentType": "image/webp"
+    },
+    "avatar:cyrene:01": {
+      "path": "/static/e25d2e3bed80413ed5f88142c43f5e273eb02adab16bdab11feaf037f5834548.webp",
+      "sha256": "e25d2e3bed80413ed5f88142c43f5e273eb02adab16bdab11feaf037f5834548",
+      "width": 768,
+      "height": 768,
+      "bytes": 120802,
+      "contentType": "image/webp"
+    },
+    "avatar:dr-ratio:01": {
+      "path": "/static/1acbff213cf8ad87881187a92ac16ac92f9195f5eebb2461295a328035c81d70.webp",
+      "sha256": "1acbff213cf8ad87881187a92ac16ac92f9195f5eebb2461295a328035c81d70",
+      "width": 768,
+      "height": 768,
+      "bytes": 80510,
+      "contentType": "image/webp"
+    },
+    "avatar:elio:01": {
+      "path": "/static/270966a04adea07d72c4a739dce1d281bfd16b6072986523046d75da91680169.webp",
+      "sha256": "270966a04adea07d72c4a739dce1d281bfd16b6072986523046d75da91680169",
+      "width": 768,
+      "height": 768,
+      "bytes": 47308,
+      "contentType": "image/webp"
+    },
+    "avatar:evanescia:01": {
+      "path": "/static/2cc26bcd9fd3c850d45811e0468e6c672a614d18c0b0109087769cac09e87952.webp",
+      "sha256": "2cc26bcd9fd3c850d45811e0468e6c672a614d18c0b0109087769cac09e87952",
+      "width": 768,
+      "height": 768,
+      "bytes": 99044,
+      "contentType": "image/webp"
+    },
+    "avatar:feixiao:01": {
+      "path": "/static/1855c70462a2dadf7b146fdd42a92ca5c7d5952856a0904b333c267f6c39f9ca.webp",
+      "sha256": "1855c70462a2dadf7b146fdd42a92ca5c7d5952856a0904b333c267f6c39f9ca",
+      "width": 768,
+      "height": 768,
+      "bytes": 119634,
+      "contentType": "image/webp"
+    },
+    "avatar:firefly:01": {
+      "path": "/static/28a6ca999189ba719549a92f41400463968b22b399ceb65ae00af21cade77714.webp",
+      "sha256": "28a6ca999189ba719549a92f41400463968b22b399ceb65ae00af21cade77714",
+      "width": 768,
+      "height": 768,
+      "bytes": 79494,
+      "contentType": "image/webp"
+    },
+    "avatar:gallagher:01": {
+      "path": "/static/7af9c92f43870269c4e3b08b01d59bd5c5b1852bbce3bd1eb8073d5bb9e012b6.webp",
+      "sha256": "7af9c92f43870269c4e3b08b01d59bd5c5b1852bbce3bd1eb8073d5bb9e012b6",
+      "width": 768,
+      "height": 768,
+      "bytes": 67734,
+      "contentType": "image/webp"
+    },
+    "avatar:gilgamesh:01": {
+      "path": "/static/3135407f3bb9908cd40b2fda6bfdea75b612536437a06b811bb777c3716c33a5.webp",
+      "sha256": "3135407f3bb9908cd40b2fda6bfdea75b612536437a06b811bb777c3716c33a5",
+      "width": 768,
+      "height": 768,
+      "bytes": 76424,
+      "contentType": "image/webp"
+    },
+    "avatar:guiji:01": {
+      "path": "/static/baa387898ada57c559d45645420fd46ba0219943d5ca4684df7ff05037883aed.webp",
+      "sha256": "baa387898ada57c559d45645420fd46ba0219943d5ca4684df7ff05037883aed",
+      "width": 768,
+      "height": 768,
+      "bytes": 49208,
+      "contentType": "image/webp"
+    },
+    "avatar:guinaifen:01": {
+      "path": "/static/85de71f949e46d895851692ab211bda278f4ca8f6f38d74fc4d963476db77189.webp",
+      "sha256": "85de71f949e46d895851692ab211bda278f4ca8f6f38d74fc4d963476db77189",
+      "width": 768,
+      "height": 768,
+      "bytes": 106738,
+      "contentType": "image/webp"
+    },
+    "avatar:hanya:01": {
+      "path": "/static/07117ecac4e199dae2709dc0942952bf7c84054e0bb8cb56c30432daf5a11647.webp",
+      "sha256": "07117ecac4e199dae2709dc0942952bf7c84054e0bb8cb56c30432daf5a11647",
+      "width": 768,
+      "height": 768,
+      "bytes": 67512,
+      "contentType": "image/webp"
+    },
+    "avatar:hook:01": {
+      "path": "/static/47decb43bd4ef21a796b3347cc6d8ab756c34040686e1fffc7e7428108039f0a.webp",
+      "sha256": "47decb43bd4ef21a796b3347cc6d8ab756c34040686e1fffc7e7428108039f0a",
+      "width": 768,
+      "height": 768,
+      "bytes": 76606,
+      "contentType": "image/webp"
+    },
+    "avatar:huohuo:01": {
+      "path": "/static/991221840681267b797bbe062818139200dee69dbe032f04f4b8e19415da9b01.webp",
+      "sha256": "991221840681267b797bbe062818139200dee69dbe032f04f4b8e19415da9b01",
+      "width": 768,
+      "height": 768,
+      "bytes": 81234,
+      "contentType": "image/webp"
+    },
+    "avatar:hyacine:01": {
+      "path": "/static/98ff663eca83ee86c83a33e283ba4b491bbd2a4a3287adc5866b82561f69b44b.webp",
+      "sha256": "98ff663eca83ee86c83a33e283ba4b491bbd2a4a3287adc5866b82561f69b44b",
+      "width": 768,
+      "height": 768,
+      "bytes": 101386,
+      "contentType": "image/webp"
+    },
+    "avatar:hysilens:01": {
+      "path": "/static/9647f441bf72d72c0070a878b0103bf6346efc6bd8f9061bde955ae322845a58.webp",
+      "sha256": "9647f441bf72d72c0070a878b0103bf6346efc6bd8f9061bde955ae322845a58",
+      "width": 768,
+      "height": 768,
+      "bytes": 107814,
+      "contentType": "image/webp"
+    },
+    "avatar:jiaoqiu:01": {
+      "path": "/static/6008c457cb8aab2336be195577f23737b4c84fa60c7746020015724b7959b8e4.webp",
+      "sha256": "6008c457cb8aab2336be195577f23737b4c84fa60c7746020015724b7959b8e4",
+      "width": 768,
+      "height": 768,
+      "bytes": 90258,
+      "contentType": "image/webp"
+    },
+    "avatar:jingliu:01": {
+      "path": "/static/9d94186b64783c9539aaddc0c8a4d759d6b74a295254a01368f6951007670e5f.webp",
+      "sha256": "9d94186b64783c9539aaddc0c8a4d759d6b74a295254a01368f6951007670e5f",
+      "width": 768,
+      "height": 768,
+      "bytes": 109316,
+      "contentType": "image/webp"
+    },
+    "avatar:lingsha:01": {
+      "path": "/static/f6c5eabb328f8efea11b20b4ce37b2875fb9233b5be6c1f4c6c0e7e844aa31d7.webp",
+      "sha256": "f6c5eabb328f8efea11b20b4ce37b2875fb9233b5be6c1f4c6c0e7e844aa31d7",
+      "width": 768,
+      "height": 768,
+      "bytes": 80416,
+      "contentType": "image/webp"
+    },
+    "avatar:luka:01": {
+      "path": "/static/6e77c1c657ef3c9d1dbf4e5ec28e7d0c1950f88225bc3bb9e0b87db8e9f764f0.webp",
+      "sha256": "6e77c1c657ef3c9d1dbf4e5ec28e7d0c1950f88225bc3bb9e0b87db8e9f764f0",
+      "width": 768,
+      "height": 768,
+      "bytes": 81074,
+      "contentType": "image/webp"
+    },
+    "avatar:luocha:01": {
+      "path": "/static/e1438b36e2f311e8c54be9b1b89d630e58b9c34a979a498c270d605f46847d77.webp",
+      "sha256": "e1438b36e2f311e8c54be9b1b89d630e58b9c34a979a498c270d605f46847d77",
+      "width": 768,
+      "height": 768,
+      "bytes": 81448,
+      "contentType": "image/webp"
+    },
+    "avatar:lygus:01": {
+      "path": "/static/33694b51a726d1e19e508a9fc831d963b8f2b882fa8b54ee875b261441ad22f6.webp",
+      "sha256": "33694b51a726d1e19e508a9fc831d963b8f2b882fa8b54ee875b261441ad22f6",
+      "width": 768,
+      "height": 768,
+      "bytes": 81858,
+      "contentType": "image/webp"
+    },
+    "avatar:lyndon-skott:01": {
+      "path": "/static/8e4e26b19afc27bba80fd4985184a8eff8d58f4b792d21b647d4f7582bb11df4.webp",
+      "sha256": "8e4e26b19afc27bba80fd4985184a8eff8d58f4b792d21b647d4f7582bb11df4",
+      "width": 768,
+      "height": 768,
+      "bytes": 66452,
+      "contentType": "image/webp"
+    },
+    "avatar:lynx:01": {
+      "path": "/static/ff1d28b6076fb684a08c98998a8425cfcdf1abd09212122da2937ef52fdd7d98.webp",
+      "sha256": "ff1d28b6076fb684a08c98998a8425cfcdf1abd09212122da2937ef52fdd7d98",
+      "width": 768,
+      "height": 768,
+      "bytes": 86108,
+      "contentType": "image/webp"
+    },
+    "avatar:misha:01": {
+      "path": "/static/e88f441975498b32bed27935974e657e92afed6a3c19a457938b71f04d0c9cc0.webp",
+      "sha256": "e88f441975498b32bed27935974e657e92afed6a3c19a457938b71f04d0c9cc0",
+      "width": 768,
+      "height": 768,
+      "bytes": 75490,
+      "contentType": "image/webp"
+    },
+    "avatar:moze:01": {
+      "path": "/static/55a1ee9fd53b63d886752c627c5e190132411a1525f9a9860524d7bbb271f8c8.webp",
+      "sha256": "55a1ee9fd53b63d886752c627c5e190132411a1525f9a9860524d7bbb271f8c8",
+      "width": 768,
+      "height": 768,
+      "bytes": 64380,
+      "contentType": "image/webp"
+    },
+    "avatar:mydei:01": {
+      "path": "/static/f79c7efb8280605b2347be2b435e69f7b191822856bdcac3eb6e889dc6c5ee9d.webp",
+      "sha256": "f79c7efb8280605b2347be2b435e69f7b191822856bdcac3eb6e889dc6c5ee9d",
+      "width": 768,
+      "height": 768,
+      "bytes": 98528,
+      "contentType": "image/webp"
+    },
+    "avatar:pearl:01": {
+      "path": "/static/1c83ea95c303bef469ad6b1046d863920ae78527f5c102fd311b3faeeee380e9.webp",
+      "sha256": "1c83ea95c303bef469ad6b1046d863920ae78527f5c102fd311b3faeeee380e9",
+      "width": 768,
+      "height": 768,
+      "bytes": 70300,
+      "contentType": "image/webp"
+    },
+    "avatar:phainon:01": {
+      "path": "/static/00480c6de97d8787dc0f3bd46f5efb259310fb603b4e543377a971e70d2bc2d4.webp",
+      "sha256": "00480c6de97d8787dc0f3bd46f5efb259310fb603b4e543377a971e70d2bc2d4",
+      "width": 768,
+      "height": 768,
+      "bytes": 93954,
+      "contentType": "image/webp"
+    },
+    "avatar:qingque:01": {
+      "path": "/static/61b79ba1a3dddada6d50595362a78a13ae668a370b9cd5bf954b0e7404236609.webp",
+      "sha256": "61b79ba1a3dddada6d50595362a78a13ae668a370b9cd5bf954b0e7404236609",
+      "width": 768,
+      "height": 768,
+      "bytes": 79292,
+      "contentType": "image/webp"
+    },
+    "avatar:rappa:01": {
+      "path": "/static/dee84aa18d668fa3240a7f35449026418b6912dd81bb5f3f7d1ee6c998a271e1.webp",
+      "sha256": "dee84aa18d668fa3240a7f35449026418b6912dd81bb5f3f7d1ee6c998a271e1",
+      "width": 768,
+      "height": 768,
+      "bytes": 120250,
+      "contentType": "image/webp"
+    },
+    "avatar:rin-tohsaka:01": {
+      "path": "/static/e7d65bd4eb9da28db9023999aed7cc21c6db12e8aea4495d7b77cda6856695d6.webp",
+      "sha256": "e7d65bd4eb9da28db9023999aed7cc21c6db12e8aea4495d7b77cda6856695d6",
+      "width": 768,
+      "height": 768,
+      "bytes": 76056,
+      "contentType": "image/webp"
+    },
+    "avatar:robin:01": {
+      "path": "/static/5563f3570a344b6576c88bef3fdefb4591f0043d9c960c6a1315577eca41cd6a.webp",
+      "sha256": "5563f3570a344b6576c88bef3fdefb4591f0043d9c960c6a1315577eca41cd6a",
+      "width": 768,
+      "height": 768,
+      "bytes": 75264,
+      "contentType": "image/webp"
+    },
+    "avatar:ruan-mei:01": {
+      "path": "/static/b25e7d6f30f8a6b5c31b77e71315d45881504ed8c5fae1939061fc14de569f87.webp",
+      "sha256": "b25e7d6f30f8a6b5c31b77e71315d45881504ed8c5fae1939061fc14de569f87",
+      "width": 768,
+      "height": 768,
+      "bytes": 90640,
+      "contentType": "image/webp"
+    },
+    "avatar:saber:01": {
+      "path": "/static/5baffd146586f4b691b2ed56bc6d1a9a5c9841907f5d792966dea278cd9f4019.webp",
+      "sha256": "5baffd146586f4b691b2ed56bc6d1a9a5c9841907f5d792966dea278cd9f4019",
+      "width": 768,
+      "height": 768,
+      "bytes": 94450,
+      "contentType": "image/webp"
+    },
+    "avatar:sampo:01": {
+      "path": "/static/e0baa4bd43156a15df82dbfd8db8873f72566416f7b61f57ee49b707425f1380.webp",
+      "sha256": "e0baa4bd43156a15df82dbfd8db8873f72566416f7b61f57ee49b707425f1380",
+      "width": 768,
+      "height": 768,
+      "bytes": 80236,
+      "contentType": "image/webp"
+    },
+    "avatar:screwllum:01": {
+      "path": "/static/2e8b07292d41ad315c5adee859d5f6fd93ea9d0115024fd203915396dc024a5e.webp",
+      "sha256": "2e8b07292d41ad315c5adee859d5f6fd93ea9d0115024fd203915396dc024a5e",
+      "width": 768,
+      "height": 768,
+      "bytes": 73468,
+      "contentType": "image/webp"
+    },
+    "avatar:sparkle:01": {
+      "path": "/static/1f2fcad1813d9c9b806f3082e5095ecfa9c4c594f2d5eb69fafb1a0f934f3b2d.webp",
+      "sha256": "1f2fcad1813d9c9b806f3082e5095ecfa9c4c594f2d5eb69fafb1a0f934f3b2d",
+      "width": 768,
+      "height": 768,
+      "bytes": 89960,
+      "contentType": "image/webp"
+    },
+    "avatar:sparxie:01": {
+      "path": "/static/c4b24798e7617b1310b7d4c946f9cf9128cd81f2f65acff6c738739feb7c0922.webp",
+      "sha256": "c4b24798e7617b1310b7d4c946f9cf9128cd81f2f65acff6c738739feb7c0922",
+      "width": 768,
+      "height": 768,
+      "bytes": 112596,
+      "contentType": "image/webp"
+    },
+    "avatar:stephen-lloyd:01": {
+      "path": "/static/f3b97e86323e28a64320ef37b4584f2572516b08a78f3641c7a3b35c402d47d1.webp",
+      "sha256": "f3b97e86323e28a64320ef37b4584f2572516b08a78f3641c7a3b35c402d47d1",
+      "width": 768,
+      "height": 768,
+      "bytes": 62928,
+      "contentType": "image/webp"
+    },
+    "avatar:sunday:01": {
+      "path": "/static/65c369a7b39d646ba49c557d98409007b43c6bdd5aac27132f0584bd81d2b8eb.webp",
+      "sha256": "65c369a7b39d646ba49c557d98409007b43c6bdd5aac27132f0584bd81d2b8eb",
+      "width": 768,
+      "height": 768,
+      "bytes": 85416,
+      "contentType": "image/webp"
+    },
+    "avatar:sushang:01": {
+      "path": "/static/3a0b0a3903732be7abfc222db7e18ee3d709cf4c5ed42a58852187a38a335f21.webp",
+      "sha256": "3a0b0a3903732be7abfc222db7e18ee3d709cf4c5ed42a58852187a38a335f21",
+      "width": 768,
+      "height": 768,
+      "bytes": 106232,
+      "contentType": "image/webp"
+    },
+    "avatar:the-dahlia:01": {
+      "path": "/static/2913fb96cd0c102e2805c94e942617333923ff84d8708f1c59877c7265fcdc27.webp",
+      "sha256": "2913fb96cd0c102e2805c94e942617333923ff84d8708f1c59877c7265fcdc27",
+      "width": 768,
+      "height": 768,
+      "bytes": 90084,
+      "contentType": "image/webp"
+    },
+    "avatar:tingyun:01": {
+      "path": "/static/8a9de6e67157861fa33d852aa5f0585ed127d585b94a3ce950c9d2b5add04a55.webp",
+      "sha256": "8a9de6e67157861fa33d852aa5f0585ed127d585b94a3ce950c9d2b5add04a55",
+      "width": 768,
+      "height": 768,
+      "bytes": 103402,
+      "contentType": "image/webp"
+    },
+    "avatar:tribbie:01": {
+      "path": "/static/6c5aed2c737f6c14db321d6949ec28e4aaec271f784cd1112021841bd4910d68.webp",
+      "sha256": "6c5aed2c737f6c14db321d6949ec28e4aaec271f784cd1112021841bd4910d68",
+      "width": 768,
+      "height": 768,
+      "bytes": 116630,
+      "contentType": "image/webp"
+    },
+    "avatar:xueyi:01": {
+      "path": "/static/390434a5416a1040979b67c64db0061a46c2afe722e4c4b724a60f58b0170e42.webp",
+      "sha256": "390434a5416a1040979b67c64db0061a46c2afe722e4c4b724a60f58b0170e42",
+      "width": 768,
+      "height": 768,
+      "bytes": 83168,
+      "contentType": "image/webp"
+    },
+    "avatar:xuzhao:01": {
+      "path": "/static/40ff930f4ff5b933dc7a28529c14f0e7aba18514f7cc39c3620f664d401656d4.webp",
+      "sha256": "40ff930f4ff5b933dc7a28529c14f0e7aba18514f7cc39c3620f664d401656d4",
+      "width": 768,
+      "height": 768,
+      "bytes": 102340,
+      "contentType": "image/webp"
+    },
+    "avatar:yanqing:01": {
+      "path": "/static/fecacd5bfa04408f6e75a36b36c5f031028f6c5fe0ba98425cf72a7fb5349f83.webp",
+      "sha256": "fecacd5bfa04408f6e75a36b36c5f031028f6c5fe0ba98425cf72a7fb5349f83",
+      "width": 768,
+      "height": 768,
+      "bytes": 99416,
+      "contentType": "image/webp"
+    },
+    "avatar:yaoguang:01": {
+      "path": "/static/508be15a4152f381d9de955f8416347ba39b4f0af09c19a61f750943d8b09da9.webp",
+      "sha256": "508be15a4152f381d9de955f8416347ba39b4f0af09c19a61f750943d8b09da9",
+      "width": 768,
+      "height": 768,
+      "bytes": 97970,
+      "contentType": "image/webp"
+    },
+    "avatar:yukong:01": {
+      "path": "/static/29117095e72f640b5ea9c7a6a239be115332a4134a3ec3ef97dd401771648359.webp",
+      "sha256": "29117095e72f640b5ea9c7a6a239be115332a4134a3ec3ef97dd401771648359",
+      "width": 768,
+      "height": 768,
+      "bytes": 95734,
+      "contentType": "image/webp"
+    },
+    "avatar:yunli:01": {
+      "path": "/static/2c5b1d236cb6c3cceba69bd51d0b26bf84b175f6bc65f432b10002adc1cf8997.webp",
+      "sha256": "2c5b1d236cb6c3cceba69bd51d0b26bf84b175f6bc65f432b10002adc1cf8997",
+      "width": 768,
+      "height": 768,
+      "bytes": 84292,
+      "contentType": "image/webp"
+    }
+  }
+}

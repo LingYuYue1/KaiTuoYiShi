@@ -683,7 +683,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
     }
     const scopedEntries = [...record.entries, ...resourceEntries];
     const item = scopedEntries.find((entry) => entry.entry.id === params.entryId);
-    const src = item?.src || params.src;
+    const src = item?.mountSrc || item?.src || params.src;
     if (!src) {
       setMessage('请选择一张可用图片。');
       return;

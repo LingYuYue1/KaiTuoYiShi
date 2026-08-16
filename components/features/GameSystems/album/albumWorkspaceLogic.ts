@@ -4,7 +4,7 @@ import type { NPC头像槽位, NPC角色锚点档案, NPC记录 } from '@/models
 import { isCharacterLibrarySlot, slotLabel, 读取图片参考目标 } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务, 图片生成任务来源, 图片目标类型, 相册条目, 相册系统 } from '@/models/imageGeneration';
 import { 解析相册资源地址, 解析相册资源引用 } from '@/utils/albumActions';
-import { getBuiltinAvatarSet } from '@/data/builtinAvatars';
+import { getBuiltinAvatarSet, getBuiltinAvatarSetForNames } from '@/data/builtinAvatars';
 import { generateTargets } from './foundation';
 import type { GenerationHistoryFilter, PromptMeta, SceneLibraryFilter, StorySnapshotSourceOption, StorySnapshotSummary } from './foundation';
 import { matchCanonical } from '@/data/canonicalCharacters';
@@ -222,6 +222,7 @@ export function buildBuiltinAvatarEntries(npc: NPC记录): CharacterLibraryEntry
       referenceTargets: [],
     },
     src: candidate.src,
+    mountSrc: candidate.reference,
     sourceLabel: '内置',
   }));
 }
@@ -282,6 +283,9 @@ export function isNpcLibraryRecord(record: CharacterLibraryRecord | null | undef
   return record?.kind === 'npc';
 }
 export function findNpcCanonicalName(npc: NPC记录): string | undefined {
+  const avatarSet = getBuiltinAvatarSetForNames(npc.姓名, npc.别名);
+  if (avatarSet) return avatarSet.canonicalName;
+
   const names = [npc.姓名, npc.别名]
     .flatMap((item) => (item ?? '').split(/[/／|、,，]/))
     .map((item) => item.trim())
@@ -631,6 +635,7 @@ export function buildBatchExtractPlan(records: NpcLibraryRecord[], travelerHasAn
 export interface CharacterLibraryEntry {
   entry: 相册条目;
   src: string;
+  mountSrc?: string;
   sourceLabel?: string;
 }
 export interface SceneLibraryEntry {

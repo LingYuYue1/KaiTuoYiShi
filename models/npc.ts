@@ -3,8 +3,9 @@
 // 晋升单向:路人 → 伙伴可手动也可由原著角色库自动;v1 不做降级(兜底 UI 提供)。
 
 import { matchCanonical } from '@/data/canonicalCharacters';
-import { getDefaultBuiltinAvatar } from '@/data/builtinAvatars';
+import { getDefaultBuiltinAvatarForNames } from '@/data/builtinAvatars';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
+import { STATIC_ASSET_FALLBACK_AVATAR } from '@/utils/staticAssets';
 import type { VariableExecContext } from '@/utils/variableExecContext';
 import { DEFAULT_EXEC_CTX } from '@/utils/variableExecContext';
 import { normalizeStringArray } from '@/models/imageGeneration';
@@ -1282,16 +1283,27 @@ function npcNameInSet(npc: NPC记录, names: Set<string>): boolean {
     .some((name) => names.has(规范化NPC身份文本(name)));
 }
 
-export function 读取NPC头像(record: Pick<NPC记录, '姓名' | '别名' | '头像' | '图像档案'> | undefined, slot: NPC头像槽位 = '档案'): string | undefined {
+function isGenericAvatarPlaceholder(value: string): boolean {
+  const normalized = value.trim().replace(/\\/g, '/').split(/[?#]/, 1)[0].toLowerCase();
+  return normalized.endsWith(STATIC_ASSET_FALLBACK_AVATAR.toLowerCase());
+}
+
+export function 读取NPC内置头像(record: Pick<NPC记录, '姓名' | '别名'> | undefined): string | undefined {
   if (!record) return undefined;
   const canonical = 匹配NPC原著角色(record.姓名, record.别名);
-  return (
-    record.图像档案?.头像槽位?.[slot]?.trim() ||
-    record.图像档案?.头像?.trim() ||
-    record.头像?.trim() ||
-    getDefaultBuiltinAvatar(canonical?.name) ||
-    undefined
-  );
+  return getDefaultBuiltinAvatarForNames(canonical?.name, record.姓名, record.别名);
+}
+
+export function 读取NPC头像(record: Pick<NPC记录, '姓名' | '别名' | '头像' | '图像档案'> | undefined, slot: NPC头像槽位 = '档案'): string | undefined {
+  if (!record) return undefined;
+  const builtinAvatar = 读取NPC内置头像(record);
+  const savedCandidates = [
+    record.图像档案?.头像槽位?.[slot]?.trim(),
+    record.图像档案?.头像?.trim(),
+    record.头像?.trim(),
+  ].filter((value): value is string => Boolean(value));
+  const preferredSavedAvatar = savedCandidates.find((value) => !builtinAvatar || !isGenericAvatarPlaceholder(value));
+  return preferredSavedAvatar || builtinAvatar || savedCandidates[0];
 }
 
 function shouldIgnoreNpcRecord(record: NPC记录): boolean {

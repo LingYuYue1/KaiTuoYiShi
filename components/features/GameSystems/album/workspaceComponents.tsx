@@ -7,6 +7,7 @@ import type { 图片槽位, 图片生成任务 } from '@/models/imageGeneration'
 import { generateTargets } from './foundation';
 import type { GenerationHistoryFilter, PromptMeta, StorySnapshotSummary } from './foundation';
 import type { ReferenceInjectionStatus } from './referenceInjection';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 
 export function SafeAlbumImage({
   src,
@@ -33,7 +34,7 @@ export function SafeAlbumImage({
       </div>
     );
   }
-  return <img src={src} alt={alt} loading="lazy" onError={() => setFailedSrc(src)} className={className} />;
+  return <ResilientImage src={src} alt={alt} loading="lazy" onError={() => setFailedSrc(src)} className={className} />;
 }
 export function AnchorStat({ label, value }: { label: string; value: number }) {
   return (
@@ -147,7 +148,7 @@ export function ImagePreviewModal({ open, src, title, onClose }: { open: boolean
           {title}
         </div>
         <div className="flex h-full w-full items-center justify-center overflow-auto px-2 py-2">
-          <img src={src} alt={title} className="max-h-full max-w-full object-contain" />
+          <ResilientImage src={src} alt={title} className="max-h-full max-w-full object-contain" />
         </div>
       </div>
     </div>,

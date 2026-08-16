@@ -7,6 +7,7 @@ import {
   rememberAlbumAssetFromDataUrl,
   resolveAlbumAssetDisplayUrl,
 } from '@/utils/albumObjectUrl';
+import { resolveStaticAssetReference } from '@/utils/staticAssets';
 
 const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -111,6 +112,9 @@ export function 解析相册资源引用(album: 相册系统 | undefined, value:
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
+  const resolvedStatic = resolveStaticAssetReference(trimmed);
+  if (resolvedStatic) return resolvedStatic;
+  if (trimmed.startsWith('static:')) return undefined;
   if (trimmed.startsWith('asset:')) {
     const assetId = trimmed.slice('asset:'.length).trim();
     if (!assetId) return undefined;

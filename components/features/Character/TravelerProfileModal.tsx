@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, 获取命途特质 } from '@/models/path';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 
 interface Props {
   traveler: 角色数据结构;
@@ -43,7 +44,7 @@ export function TravelerProfileModal({ traveler, album, onClose }: Props) {
             }}
           >
             {avatarUrl ? (
-              <img src={avatarUrl} alt={`${traveler.姓名 || '旅人'} 头像`} className="h-full w-full object-cover" />
+              <ResilientImage src={avatarUrl} alt={`${traveler.姓名 || '旅人'} 头像`} className="h-full w-full object-cover" />
             ) : (
               traveler.姓名 ? traveler.姓名[0] : '?'
             )}

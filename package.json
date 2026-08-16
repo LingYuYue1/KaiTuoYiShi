@@ -8,11 +8,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/clean-retired-avatar-artifacts.mjs && tsc -b && vite build",
     "lint": "eslint .",
     "deploy:cf": "pnpm build && wrangler pages deploy dist --project-name=kaituoyishi --branch=main",
     "deploy:cf:preview": "pnpm build && wrangler pages deploy dist --project-name=kaituoyishi-preview --branch=main",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:builtin-avatars": "node scripts/builtin-avatar-regression.mjs",
+    "test:static-avatar-canary": "node scripts/static-avatar-canary-regression.mjs",
+    "test:legacy-avatar-save": "node scripts/legacy-avatar-save-regression.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -5,6 +5,7 @@ import { 格式化NPC关系, 读取NPC头像 } from '@/models/npc';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { NPC关系规划条目 } from '@/services/npcRelationshipPlanning';
 import { 解析相册资源引用 } from '@/utils/albumActions';
+import { ResilientImage } from '@/components/ui/ResilientImage';
 import { AffinityBadge } from './affinity';
 import { accentColor, bodyColor, faintColor, mutedColor, nsfwColor, panelStyle, quietSurface, smallClip, titleColor } from './constants';
 import { MemoryPanel } from './memory';
@@ -366,7 +367,7 @@ function PartImageSlot({ title, src }: { title: string; src?: string }) {
       }}
     >
       <div className="aspect-[4/3]" style={{ background: 'rgba(var(--tj-ui-panel-strong), 0.58)' }}>
-        {src ? <img src={src} alt={title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[11px]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.56)' }}>待挂载</div>}
+        {src ? <ResilientImage src={src} alt={title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[11px]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.56)' }}>待挂载</div>}
       </div>
       <div className="px-2 py-1.5 text-[11px]" style={{ color: nsfwColor }}>{title}</div>
     </div>
