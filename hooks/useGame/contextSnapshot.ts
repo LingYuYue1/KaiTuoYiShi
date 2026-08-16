@@ -20,6 +20,7 @@ import {
   buildMainRecallQuery,
   getMainHistoryWindow,
 } from './historyWindow';
+import { COT_FAKE_HISTORY_ASSISTANT, COT_FAKE_HISTORY_USER } from './mainResponseProtocol';
 import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import { buildTavernMessageChain } from './tavernMessageChainBuilder';
@@ -27,22 +28,6 @@ import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getAnticipatedNpcNamesForTurn, getExplicitNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
 import { 格式化开局档案上下文 } from '@/models/world';
 import { createMacroContext } from '@/utils/macroEngine';
-
-const COT_FAKE_HISTORY_USER = '开始任务';
-const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
-- 系统就绪。当前任务：等待玩家发送指令后按 4 标签协议输出（thinking / 正文 / 短期记忆 / 动态世界）。
-- 在收到首条具体指令前不输出正文，本条仅为格式确认。
-</thinking>
-
-<正文>
-（待命中：等待玩家发起首回合）
-</正文>
-
-<短期记忆>
-</短期记忆>
-
-<动态世界>
-</动态世界>`;
 
 export interface ContextSection {
   id: string;

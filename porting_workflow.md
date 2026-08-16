@@ -1,0 +1,83 @@
+# Porting Workflow
+
+本文档规定把 `origin/main` 的功能/修复搬运回 `refactor/microKernel` 分支的流程。本流程是 catch-up 期间的执行规范，服从 [`AGENTS.md`](AGENTS.md) 与 [`ideal_design.md`](ideal_design.md) 的 Q1–Q6 原则。
+
+## 铁律
+
+1. **禁止直接搬文件**：`origin/main` 的任何一个文件都不得原样复制进本分支。
+2. **禁止 git merge / rebase / cherry-pick**：跨分支整合只由 agent 手动搬运，不用 Git 自动合并。
+3. **清理先于搬运**：每个 main 侧改动必须先经过「清理 → 拆分 → 瘦身」，达到本分支设计标准后才允许进入。
+4. **本分支结构优先**：本分支已拆分的模块，把 main 的改动**映射进现有拆分文件**，不得用 main 的巨型文件覆盖回来。
+5. **零新增债务**：一次搬运不得新增未引用导出、不可能兜底、长段解释注释、patch/workaround 标记或直连耦合。
+
+## 大致流程
+
+### 第 1 步：确定来源
+
+- 用 `git log --oneline HEAD..origin/main` 找到要搬运的 main 侧 commit（功能或修复）。
+- 用 `git diff <commit>^ <commit> --stat` 查看该 commit 的改动文件清单。
+- 为每个 commit 建一个搬运任务，一次只搬一个维度（功能/修复/重构不混）。
+
+### 第 2 步：阅读与评估
+
+- 读取 main 版本的目标文件，记录：
+  - 行数与上帝对象嫌疑；
+  - 未引用导出、死代码、过度防御；
+  - patch/workaround/临时标记；
+  - 对 `services/ai`、`services/dbService` 等领域层的直连耦合。
+- 判断该改动属于哪一类：
+  - **新系统/新资产**：本分支不存在，需要先设计拆分方案再搬。
+  - **旧文件增量改动**：本分支已有对应模块，把改动映射进去。
+  - **已被本分支拆分的巨文件**：绝不整体覆盖，只提取行为变更。
+
+### 第 3 步：清理
+
+在不改变行为的前提下清理 main 侧代码：
+
+- 删除未引用导出（确认非动态 import、非测试用、非预留 API）。
+- 收敛不可能 `default`、静默 `catch` 等过度防御。
+- 删除代码复述/spec 叙述/自我确认类注释，只保留 why。
+- 消除或登记 patch/workaround 标记，用正当设计替代。
+- 清理后再进入下一步，不允许把死代码一起搬入。
+
+### 第 4 步：拆分与适配
+
+- 新系统先拆到符合本分支目录规范的大小（目标 <800 行/文件，消灭上帝对象）。
+- 旧文件增量改动映射进本分支已拆分的模块；若 main 文件已被本分支拆过，按拆分边界切分改动。
+- 界面层不直连数据层；类型直连走 `contracts/`，运行时耦合走 props 投影。
+- 拆分只做结构移动，不改行为；行为变更与结构清理分开提交。
+
+### 第 5 步：入境检查
+
+每批搬运完成后，静态检查：
+
+- `git diff --stat` 确认没有把 main 的巨文件原样带回来；
+- 搜索本批新增的 `as any` / `as unknown as` / `@ts-ignore` / `eslint-disable`；
+- 搜索新增的未引用导出与 patch/workaround 标记；
+- 确认新增文件行数与模块边界符合当前标准。
+
+### 第 6 步：提交
+
+- 一次提交只对应一个 main 侧 commit 或一个维度。
+- Commit message 格式：
+
+```text
+port(<module>): 清理后搬运 <main-short-hash> <简述>
+```
+
+- 提交说明中注明来源 commit、清理了什么、拆分成了哪些文件、入境检查结果。
+- lint 由 reviewer 执行；构建与运行时验证需 User 授权后执行。
+
+## 验收标准
+
+- 搬运后的文件通过 Q1–Q6 静态检查。
+- 不引入 main 的巨文件与已知坏味道。
+- 被拆模块的 deletion test 通过。
+- 搬运功能通过 `ideal_design.md` 的五项运行时交叉验收（需 User 授权后执行）。
+
+## 禁止事项
+
+- 禁止整文件复制 main 的 `sendWorkflow.ts`、`PhoneModal.tsx`、`ZhikuPanel.tsx`、`dbService.ts` 等巨文件回来。
+- 禁止把 main 的新系统（如 `storyRuntime/*`、`ZhikuV3/*`、记忆系统）未经清理拆分直接搬入。
+- 禁止用一次大搬运解决多个维度；禁止用 `git checkout origin/main -- <file>` 覆盖本分支文件。
+- 禁止在搬运中混入无关格式改动、本地调试改动或未授权的构建产物。

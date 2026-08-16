@@ -76,22 +76,13 @@ export function stripLeakedHistoryMetaFromBody(body: string): string {
 }
 
 /** CoT 伪装历史：在 `user:开始任务` 后注入一条 assistant 历史，强化思考段输出习惯。
- *  内容刻意保留 `<thinking>` 段，让模型 in-context 学到「下次也要写 thinking」。 */
+ *  内容刻意保留 `<thinking>` 段，让模型 in-context 学到「下次也要写 thinking」。
+ *  使用 AI 答应口吻而非系统口吻，避免给模型示范「系统就绪」类系统客串。 */
 export const COT_FAKE_HISTORY_USER = '开始任务';
 export const COT_FAKE_HISTORY_ASSISTANT = `<thinking>
-- 系统就绪。当前任务：等待玩家发送指令后按 4 标签协议输出（thinking / 正文 / 短期记忆 / 动态世界）。
-- 在收到首条具体指令前不输出正文，本条仅为格式确认。
+思考已开始，按当前生效思维链继续逐步推演。
 </thinking>
-
-<正文>
-（待命中：等待玩家发起首回合）
-</正文>
-
-<短期记忆>
-</短期记忆>
-
-<动态世界>
-</动态世界>`;
+好的，将以<正文></正文>包裹正文，<正文>前以<thinking>作为开头进行思考并以</thinking>闭合，并在正文后按协议输出<短期记忆>、<动态世界>、<变量草稿>、<剧情规划>：`;
 
 export function isDeepSeekMainConfig(config: { provider?: string; baseUrl?: string; model?: string }): boolean {
   const provider = (config.provider ?? '').toLowerCase();
