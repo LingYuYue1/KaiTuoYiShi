@@ -35,18 +35,18 @@
 
 | 维度 | 结果 | 严重度 |
 | --- | --- | --- |
-| 类型安全 | 极干净：`as any` 2、`: any` 2、`@ts-ignore` 0、非空断言 0；`as unknown as` 15 处（dbService 5 处集中） | 🟢 |
-| lint | 1 error（`useGameState.ts:570`）+ 2 warning + 47 条 suppression | 🟢 |
+| 类型安全 | 极干净：`as any` 0、`: any` 2（chatCompletionStream）、`@ts-ignore` 0、非空断言 0；`as unknown as` 14 处（services/storage 5 处聚簇） | 🟢 |
+| lint | 未复跑；静态复查 `eslint-disable` 2 处（saveLoadWorkflow）。旧记录：1 error（`useGameState.ts:570`）+ 2 warning + 47 条 suppression，待 reviewer 刷新 | 🟢 |
 | 死代码（未引用导出） | ~~75 处~~ 已清除（71 删 + 4 调试工具保留；残留见 noted_issues.md §3） | ✅ |
 | 过度防御/不可能兜底 | ~~16 处~~ 已处置（7 SSE 收窄 + 9 确认保留 + 2 归一化强化另立 #14） | ✅ |
 | 长段解释注释 | ~~20+ 处~~ 已清除（13 删 + 7 收敛 + 1 保留） | ✅ |
-| patch/workaround 标记 | 1416 命中（data/ JSON 占大头）；代码集中 newsModel 48 / ImageGenerationSettingsTab 36 / AlbumPanel 34 / useGameState 32 / PromptModulesTab 31 | 🟡 |
+| patch/workaround 标记 | 代码 562 命中（不含 data/ JSON）；集中 newsModel 45 / useGameState 33 / ImageGenerationSettingsTab 30 / AlbumPanel 24 / MemorySystemSettings 22 | 🟡 |
 | 透传层/浅模块 | 12 真透传 + 4 条多层转发链（提示词模块 ×4 最典型） | 🟡 |
 | 重复/冗余代码 | ~~6 组复制粘贴~~ 已收敛：chatCompletionClient 7 流函数抽 `readSseTextStream` 骨架、7 处 resolveXxxConfig 抽 `mergeApiOverride`、NPC 关系阈值表统一（#16 核心）；低价值 6 项另立 #19（4 分支/legacy 回退/可见性归一化/重复类型/映射块/UI 格式化） | ✅ |
 | 直连耦合 | ~~15 文件~~ type-only 直连已收口（抽出 `contracts/` 契约层 + `models/opening.ts`，`components` 下 `services/ai`、`dbService` 类型直连清零）；运行时耦合留待（PhoneModal/PromptModulesTab/GitHubCloudSaveModal 面板 props 投影） | 🟡 |
-| 巨型文件 | 37 文件 >800 行（28 文件 >1000 行）；dbService 2533 / chatCompletionClient 2300 / album-workspaces 2650 / PromptModulesTab 2831 | 🟡 |
+| 巨型文件 | 25 文件 >800 行；wizard-steps 1685 / AlbumPanel 1413 / models-settings 1383 / systemPromptBuilder 1361 / models-npc 1324 / App 1318 / album-workspaces 1181 / PromptModulesTab 1155（2026-08-16 复查） | 🟡 |
 
-**关键结论**：类型安全与 lint 已基本达标；死代码已清（阶段 1）、重复样板已收敛、直连耦合 type-only 已收口（阶段 2 落地）；剩余结构性债务是巨型文件与面板运行时耦合（阶段 3）。
+**关键结论**：类型安全与 lint 已基本达标；死代码已清（阶段 1）、重复样板已收敛、直连耦合 type-only 已收口（阶段 2 落地）；阶段 3 实际进展已超出旧模块清单（多个上帝文件已拆出大文件清单），剩余重点是当前 >800 行文件、面板运行时耦合与主线功能同步。
 
 ---
 
@@ -68,13 +68,21 @@
 4. ✅ 重复样板收敛：chatCompletionClient 7 流函数抽 `readSseTextStream` 骨架、7 处 resolveXxxConfig 抽 `mergeApiOverride`、NPC 关系阈值表统一（#16 核心）；低价值 6 项另立 #19
 5. ✅ 新局初始化归一：`createInitialWorkspace` 统一 fresh/restart 两路径 + 补归一化缺口（#15）
 
+### 优先事项：主线功能同步（继续阶段 3 前完成）
+
+> [DECISION] 本分支 `refactor/microKernel` 是临时功能冻结重构分支；主线已推进较大功能。继续本分支大文件攻关前，必须先把主线功能同步回本分支，避免长期分叉与合并冲突扩大。
+>
+> 同步完成后重跑静态检查，并对同步涉及的文件重新评估大文件清单与拆分顺序。
+
 ### 阶段 3：大文件攻关（按模块根治，逐模块 深模块→patch→类型安全）
 
 按行数 + 耦合度排序，逐模块根治。每模块内顺序：深模块深化 → patch 消除 → 类型安全收敛。
 
 模块清单（行数降序）：
 
-> PromptModulesTab 2831 · ZhikuPanel 2807 · album-workspaces 2650 · dbService 2623 · chatCompletionClient 2519 · PhoneModal 2443 · wizard-steps 2285 · ApiSettingsOverview 771 · PlotPanel 1525 · useGame 1487 · AlbumPanel 1418 · models-settings 1379 · systemPromptBuilder 1374 · SaveLoadModal 1340 · App 1318 · models-npc 1313 · WorldbookManagerModal 1263 · TurnItem 1261 · VariableManager 1256 · …
+> wizard-steps 1685 · AlbumPanel 1413 · models-settings 1383 · systemPromptBuilder 1361 · models-npc 1324 · App 1318 · data-builtinPromptModules 1215 · album-workspaces 1181 · PromptModulesTab 1155 · imagePromptRules 1134 · useGame 1109 · contextSnapshot 1088 · zhikuRetrieval 1072 · models-world 1047 · storyProgressService 1029 · ImageGenerationSettingsTab 1027 · NewGameWizard 1018 · ai-imageGeneration 982 · variableFacts 976 · variableExecutor 962 · ImageRuleTemplateEditor 962 · data-builtinWorldbookConfig 937 · data-journeyPresets 912 · SkillPanel 863 · githubCloudSave 852 · models-storyWeaving 807
+
+> 已拆出清单（<800 行）：dbService（`services/storage/`）· chatCompletionClient（`services/ai/chatCompletion*`）· PhoneModal（`components/features/Phone/`）· ZhikuPanel（`GameSystems/zhiku/`）· WorldbookManagerModal（`components/features/Worldbook/`）· SaveLoadModal 618 · VariableManager 266 · TurnItem 323 · ApiSettings 243 · PlotPanel 763
 
 每模块根治目标：
 - **深模块**：拆分上帝对象，透传层收敛（含提示词模块 4 条转发链）
@@ -136,6 +144,8 @@
 
 ## 修订记录
 
+- **2026-08-16 现状表同步与主线同步优先级**：按当前代码更新 §1 画像与 §2 阶段 3 模块清单（dbService/chatCompletionClient/PhoneModal/ZhikuPanel/WorldbookManagerModal/VariableManager/SaveLoadModal/TurnItem/ApiSettings 已拆出；当前 >800 行 25 个）。新增优先事项——本分支为临时功能冻结重构分支，继续阶段 3 前须先同步主线功能推进。
+- **2026-08-15 阶段 3 进展**：拆分 PlotPanel（1525→763 行）为 `plot/` 剧情编织工作台模块（HeaderCard/SeriesTree/SeriesControl/SegmentDetail/ManualEditor + primitives/logic/constants/batchDecompose）；wizard-steps 拆分 atoms/frame 共享层（2285→1685 行）。同时清理一批误回退（storage/ai/组件拆分折叠回退已还原，`mergeApiOverride`/`createInitialWorkspace`/type-only 收口保持落地）。
 - **2026-08-14 阶段 2 落地**：耦合收窄前置全部落地——type-only 直连收口（`contracts/` 契约层 + `models/opening.ts`，#17）、queueTasks 剥离补齐（#18）、hydrate 收敛（#10）、重复样板收敛（#16 核心 + #19 低价值）、新局初始化归一（`createInitialWorkspace`，#15）。阶段 2 完成，进入阶段 3 大文件攻关。
 - **2026-08-12 目标转向：code quality 深度提升**：本文档整篇重写为「代码质量深度提升：现状与路线图」；架构事实彻底删除（蓝图见 kernelization.md，历史见 git）；9 维质量扫描登记现状画像，逐条发现见 noted_issues.md；确立 Q1–Q6 原则与四阶段路线图（全局死代码 → 耦合收窄 → 大文件攻关 → 收尾）。
 - **2026-08-11 路线图审计与术语清理**：审计 14 项路线图完成度；澄清「读取」（叶子水合）与「分支」（检查点分叉）两动词；「顶替」判为伪动词，全库清除。
