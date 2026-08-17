@@ -72,6 +72,10 @@ const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
   'builtin_locations',
   'opening_core',
+  'builtin_opening_rule',
+  'builtin_narrative_general',
+  'builtin_forbidden_phrases',
+  'builtin_power_system_overview',
 ]);
 
 function isCalibrationWorldbook(book: 世界书): boolean {
@@ -480,7 +484,13 @@ export function useGameState(): UseGameStateReturn {
           const savedEntries = saved.entries;
           const entries = builtin.entries.map((entry) => {
             const savedEntry = savedEntries.find((item) => item.id === entry.id);
-            return savedEntry ? { ...savedEntry, title: entry.title } : entry;
+            if (!savedEntry) return entry;
+            return {
+              ...entry,
+              enabled: savedEntry.enabled,
+              createdAt: savedEntry.createdAt,
+              updatedAt: savedEntry.updatedAt,
+            };
           });
           return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
         });

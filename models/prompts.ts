@@ -94,6 +94,14 @@ export const BUILTIN_PROMPT_MODULE_IDS = [
   'builtin_nsfw',
   'builtin_emotion_protocol',
   'builtin_cognitive_isolation',
+  'builtin_rule_first_turn',
+  'builtin_rule_narrative_general',
+  'builtin_rule_forbidden_phrases',
+  'builtin_rule_emotion_realism',
+  'builtin_rule_battle_narration',
+  'builtin_rule_time_progression',
+  'builtin_rule_power_system',
+  'builtin_rule_awakening_interrogation',
 ] as const;
 
 /** 独立系统 builtin 模块 id 前缀。UI 分组（CALIBRATION_SYSTEM_GROUPS）与服务层注入（TARGET_ID_MATCHERS）共用，避免双轨硬编码。 */

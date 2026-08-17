@@ -7,22 +7,16 @@ import type { 世界书, 世界书条目 } from '@/models/worldbook';
 // 如果 IndexedDB 里某本世界书 id 在这里，UI 把它划到内置 Tab；否则归入「额外」Tab。
 // 注：CoT 已迁移到「提示词模块」系统（设置→提示词模块），不再以世界书形式注入。
 export const BUILTIN_BOOK_IDS = [
-  'builtin_opening_rule',
-  'builtin_narrative_general',
-  'builtin_forbidden_phrases',
   'builtin_compass',
   'builtin_worldview_core',
   'builtin_paths_lore',
-  'builtin_power_system_overview',
   'builtin_story_normal',
   'builtin_story_harem',
   'builtin_story_romance_alt',
   'builtin_story_deep_single',
 ] as const;
 
-export const BUILTIN_FIRST_TURN_ENTRY_ID = 'builtin_first_turn_rule';
-
-const NARRATIVE_GENERAL_CONTENT = `## 主剧情叙事总约束
+export const NARRATIVE_GENERAL_CONTENT = `## 主剧情叙事总约束
 
 下列条目为主流程叙事的硬性底线，与剧情模式无关，**所有回合都适用**。任一条与「正文 / 短期记忆 / 动态世界」的描写发生冲突时，以本节为准。
 
@@ -75,7 +69,7 @@ const NARRATIVE_GENERAL_CONTENT = `## 主剧情叙事总约束
 - 把叙事收束在现实尺度内:不把普通行动写成天命转折,不把单次互动写成人设突变。
 - 保持风格中性,可承接不同支线,不抢夺剧情主导权。`;
 
-const FORBIDDEN_PHRASES_CONTENT = `# 禁词世界书 / 反八股文规则
+export const FORBIDDEN_PHRASES_CONTENT = `# 禁词世界书 / 反八股文规则
 
 本条目用于压制高频 AI 腔、空泛强调词、廉价比喻、套路动作与总结式收束。它不要求机械删词，而是要求在生成前避开这些写法，改用现场可验证细节。
 
@@ -111,7 +105,7 @@ const FORBIDDEN_PHRASES_CONTENT = `# 禁词世界书 / 反八股文规则
 - 若需要表达强烈程度，优先换成现场可验证细节：手上动作、脚步变化、兵器位置、对话停顿、旁人反应、环境反馈与实际后果。
 - 不要为了避开禁词改用同义套话。目标是降低八股味，不是把“空气凝固”换成“气氛冻结”。`;
 
-const EMOTION_REALISM_CONTENT = `## 情绪真实性约束
+export const EMOTION_REALISM_CONTENT = `## 情绪真实性约束
 
 > 本条目与上方「叙事铁律」配合使用。叙事铁律管「去神话化 / 去魅主 / 去发情化」等方向性约束，本条目专门管 NPC 与主角的情绪强度与变化节奏，防止单回合内出现"刚见面就誓死追随"式失真。
 
@@ -153,7 +147,7 @@ const EMOTION_REALISM_CONTENT = `## 情绪真实性约束
 - 出现强情绪时**至少保留 1 条自我约束或现实顾虑细节**，防止角色失真。
 - 若强度判定不清或证据不足，**按 L2 处理**——L3 只在证据充分时才启用。`;
 
-const BATTLE_NARRATION_CONTENT = `## 战斗描写规范
+export const BATTLE_NARRATION_CONTENT = `## 战斗描写规范
 
 > 本条目只负责主剧情中的战斗、交手、追逐、压制、撤离与救援描写。它不是独立战斗系统，不提供 HP、精力、骰子、DC、胜负档案或战斗履历。
 
@@ -188,7 +182,7 @@ const BATTLE_NARRATION_CONTENT = `## 战斗描写规范
 - 禁止让 NPC 集体围观夸赞玩家强大；反应应具体、克制，并符合角色性格。
 - 禁止为炫技打断玩家当前目标。若玩家目标是救人或撤离，战斗描写应服务于救人或撤离。`;
 
-const FIRST_TURN_RULE_CONTENT = `# 第 0 回合开场规范
+export const FIRST_TURN_RULE_CONTENT = `# 第 0 回合开场规范
 
 ## 任务目标
 - 这是玩家踏上旅途后的第一个回合，玩家尚未发出任何指令，仅由系统触发了一条占位讯息。
@@ -197,7 +191,7 @@ const FIRST_TURN_RULE_CONTENT = `# 第 0 回合开场规范
 
 ## 信息来源与边界
 - 只能使用上方已提供的字段：「# 当前角色」「# 当前场景」「# 开局切入说明」「近期事件」。请先回到 system 顶部读取这些段落再展开。
-- 若 system 顶部还出现「# 智库注入」「# 剧情编织滑窗」或「# 星际和平周报」相关段落，把它们视为只读事实接口；可以读取其中结论，但不要在首回合改写它们的判断口径。
+- 若 system 顶部还出现「# 本回合角色档案约束」「# 剧情编织滑窗」或「# 近期新闻」相关段落，把它们视为只读事实接口；可以读取其中结论，但不要在首回合改写它们的判断口径。
 - 玩家未填写的字段（背景 / 职业 / 特长 / 外貌细节）**不要凭空发明确定性事实**。可以用「暧昧的低语」「半截被截断的广播」「记忆边缘的残影」等留白处理。
 - 不要在叙述中替玩家做出关键抉择（战或逃、信任谁、揭穿谁），所有重大动作的决定权留给玩家。
 
@@ -320,9 +314,9 @@ const WORLDVIEW_SPINE = `## 世界观总纲
 - 《崩坏：星穹铁道》的宇宙不是单一星球舞台，而是由无数世界、文明、星际组织、星神信仰和星核灾厄共同构成的星海。
 - 星神高居宇宙概念层，命途是祂们留下的方向；凡人、组织与文明只能在这些方向的阴影下生活、选择、误解和抗争。
 - 星核会让一个世界的愿望、恐惧或矛盾被灾难性放大。星核不是普通能源，也不是随手可控的道具。
-- 星际旅行依赖星轨、舰队、跃迁、空间站、公司航路、列车航线等现实载体，不要把宇宙写成随意瞬移的地图菜单。
+- 星际旅行依赖星轨、舰队、跃迁、空间站、公司航路、列车航线等现实载体，不要把宇宙写成随意瞬移的地图菜单。`;
 
-### 主剧情使用原则
+export const WORLDVIEW_SPINE_USAGE_RULES = `### 世界观使用原则
 - 正文优先写当前地点、当前人物、当前行动；世界观通过广播、档案、对话、设施细节、组织反应和后果露出。
 - 不要把每回合写成百科说明。只有当玩家询问、场景触发、NPC 解释或关键词命中时，才展开细节。
 - 原著角色、势力、星核、命途、星神、星穹列车都应保留边界感：强者不会无故降格，组织不会无故配合，星神不会像普通 NPC 一样长篇聊天。
@@ -430,7 +424,7 @@ const WORLDVIEW_TRAVEL_INFO = `## 星际旅行与信息边界
 - 智库可以给模型校准原著事实，但正文中的角色不能自动共享智库全知视角。
 - 玩家询问世界观时，可以由 NPC 以自身立场解释；不同势力的解释应带有偏见、隐瞒或知识盲区。`;
 
-const WORLDVIEW_TIME_PROGRESSION = `## 时间推进与变量落库
+export const WORLDVIEW_TIME_PROGRESSION = `## 时间推进与变量落库
 
 本条负责让主剧情给变量模型留下可识别的时间变化证据。变量模型只能从正文里已经发生的事实更新 \`世界.当前日期\`、\`世界.当前时间\`、\`世界.开拓天数\`，所以正文需要在真正耗时的场面里写出明确的时间流动。
 
@@ -526,7 +520,7 @@ const PATHS_TENSION = `**命途本身之间没有冲突**。冲突来自**星神
 
 这意味着：玩家选择某条命途时不会自动获得敌人；若玩家自定义身份里写明与某个组织存在关系，才会在剧情中承接该组织的盟友、对手与现实代价。`;
 
-const POWER_SYSTEM_OVERVIEW_CONTENT = `## 力量体系总览
+export const POWER_SYSTEM_OVERVIEW_CONTENT = `## 力量体系总览
 
 本条是项目内部常驻战力标尺，用于约束主剧情与命途觉醒中的力量表现。它不是角色可见的数值面板，也不是世界内人物会直接背诵的术语；正文应把分级表现为动作、压迫感、代价、战术选择与旁人反应。
 
@@ -562,7 +556,7 @@ const POWER_SYSTEM_OVERVIEW_CONTENT = `## 力量体系总览
 - 不要用分级替代角色塑造。角色的命途表现必须贴合其信念与行为方式：巡猎偏目标与追击，存护偏守护与承受，毁灭偏破坏与代价，丰饶偏生命与失控，记忆偏锚定与回响，智识偏推演与结构，欢愉偏反常与戏剧性，虚无偏剥离与空洞，同谐偏共鸣与协作，开拓偏道路与跨越。
 - 若剧情需要突破本标尺，必须先给出明确铺垫：星神瞥视、令使授力、奇物代价、星核污染、特殊环境、群体仪式或长期积累。`;
 
-const PATHS_AWAKENING_INTERROGATION = `## 命途狭间·三问桥段(升阶仪式)
+export const PATHS_AWAKENING_INTERROGATION = `## 命途狭间·三问桥段(升阶仪式)
 
 这与「初次接触命途」时的瞥视狭间是**两个不同事件**。当旅人在某条命途上长期践行,把命途进度累积至满载(99/100)时,
 命途意志会主动把旅人拉入「命途狭间」。进入狭间本身就代表命途已经回应,本次升阶已经成立。
@@ -610,99 +604,6 @@ function entry(partial: Omit<世界书条目, 'createdAt' | 'updatedAt'>, now: n
 export function createBuiltinConfigWorldbooks(): 世界书[] {
   const now = Date.now();
 
-  // 1. 开局规范（F1 + 原 FIRST_TURN_RULE_CONTENT 合并）
-  const openingRuleBook: 世界书 = {
-    id: 'builtin_opening_rule',
-    title: '开局规范',
-    description: '首回合的硬约束：陌生人距离感、入场契机、命途处理、必须避免清单。',
-    enabled: true,
-    entries: [
-      entry({
-        id: BUILTIN_FIRST_TURN_ENTRY_ID,
-        title: '首回合输出规范',
-        content: FIRST_TURN_RULE_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 230,
-        enabled: true,
-        scope: ['opening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  // 2. 主剧情（叙事铁律 + 文风模板）
-  //    主剧情基础规则从第 0 回合开始生效；priority=225 略低于开局规范、略高于罗盘。
-  //    文风条目默认 disabled，作为玩家自定义新文风的复制模板——默认文风由提示词模块「参考文风·日记体」承担。
-  //    若玩家想换文风：复制本条目改写内容并启用 + 关掉提示词模块的默认文风。
-  const narrativeGeneralBook: 世界书 = {
-    id: 'builtin_narrative_general',
-    title: '主剧情',
-    description: '主流程叙事约束集合：叙事铁律 + 文风模板。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_narrative_general_main',
-        title: '叙事铁律',
-        content: NARRATIVE_GENERAL_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 225,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-      entry({
-        id: 'builtin_emotion_realism',
-        title: '情绪真实性约束',
-        content: EMOTION_REALISM_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 222,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-      entry({
-        id: 'builtin_battle_narration',
-        title: '战斗描写规范',
-        content: BATTLE_NARRATION_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 220,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const forbiddenPhrasesBook: 世界书 = {
-    id: 'builtin_forbidden_phrases',
-    title: '禁词世界书',
-    description: '反八股文与反 AI 腔规则：禁用空泛强调词、套路动作、廉价比喻、慢动作灌水与总结式收束。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_forbidden_phrases_main',
-        title: '禁词与反八股文规则',
-        content: FORBIDDEN_PHRASES_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 224,
-        enabled: true,
-        scope: ['main', 'opening', 'pathAwakening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
   // 3. 星际罗盘（开局·星际罗盘 + A1 + A2，合并为单条总览）
   const compassBook: 世界书 = {
     id: 'builtin_compass',
@@ -741,17 +642,6 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
         injectMode: 'always',
         keywords: [],
         priority: 219,
-        enabled: true,
-        scope: ['main', 'opening'],
-      }, now),
-      entry({
-        id: 'builtin_worldview_time_progression',
-        title: '时间推进与变量落库',
-        content: WORLDVIEW_TIME_PROGRESSION,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 218,
         enabled: true,
         scope: ['main', 'opening'],
       }, now),
@@ -866,40 +756,6 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
         enabled: true,
         scope: ['main'],
       }, now),
-      entry({
-        id: 'builtin_paths_awakening_interrogation',
-        title: '命途狭间·诘问桥段',
-        content: PATHS_AWAKENING_INTERROGATION,
-        type: 'atmosphere',
-        injectMode: 'always',
-        keywords: [],
-        priority: 220,
-        enabled: true,
-        scope: ['pathAwakening'],
-      }, now),
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  // 6. 力量体系：主剧情与命途觉醒常驻战力标尺，避免模型把常规军力误写成命途行者群体。
-  const powerSystemOverviewBook: 世界书 = {
-    id: 'builtin_power_system_overview',
-    title: '力量体系总览',
-    description: '主剧情常驻注入的项目力量体系标尺：约束命途行者阶段、常规军力参照与战斗叙事边界。',
-    enabled: true,
-    entries: [
-      entry({
-        id: 'builtin_power_system_overview_scale',
-        title: '力量体系总览',
-        content: POWER_SYSTEM_OVERVIEW_CONTENT,
-        type: 'system_rule',
-        injectMode: 'always',
-        keywords: [],
-        priority: 198,
-        enabled: true,
-        scope: ['main', 'pathAwakening'],
-      }, now),
     ],
     createdAt: now,
     updatedAt: now,
@@ -933,5 +789,5 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
   //    变量系统 AI 调用时走提示词模块拼接，从 settings.promptModules 读取。
   //    此处不再生成 builtin_variable_system 世界书条目（死代码已清理，原 builtin_variable_system_worldbook entry 无检索逻辑读取）。
 
-  return [openingRuleBook, narrativeGeneralBook, forbiddenPhrasesBook, compassBook, worldviewBook, pathsBook, powerSystemOverviewBook];
+  return [compassBook, worldviewBook, pathsBook];
 }

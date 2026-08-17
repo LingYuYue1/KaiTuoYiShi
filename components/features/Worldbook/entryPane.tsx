@@ -195,6 +195,7 @@ function EntryEditor({
   onDelete: () => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const fieldsLocked = builtin;
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -221,6 +222,20 @@ function EntryEditor({
         </div>
       </div>
 
+      {builtin && !calibrationDisplay && (
+        <div
+          className="px-3 py-2 text-xs leading-relaxed"
+          style={{
+            color: 'rgba(var(--tj-text-secondary), 0.78)',
+            background: 'rgba(var(--tj-accent-primary), 0.045)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            clipPath: cardClip,
+          }}
+        >
+          内置条目内容以源码为准，仅开关可改。
+        </div>
+      )}
+
       {calibrationDisplay && (
         <div
           className="px-3 py-2 text-xs leading-relaxed"
@@ -238,14 +253,14 @@ function EntryEditor({
       <Field label="条目标题">
         <input
           value={entry.title}
-          readOnly={calibrationDisplay}
+          readOnly={fieldsLocked}
           onChange={(event) => {
-            if (calibrationDisplay) return;
+            if (fieldsLocked) return;
             onChange({ title: event.target.value });
           }}
           placeholder="条目标题"
           className="kaituo-input w-full px-3 py-2 text-sm font-serif tracking-wider"
-          style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
+          style={{ clipPath: smallClip, opacity: fieldsLocked ? 0.74 : 1 }}
         />
       </Field>
 
@@ -253,10 +268,10 @@ function EntryEditor({
         <Field label="类型">
           <select
             value={entry.type}
-            disabled={calibrationDisplay}
+            disabled={fieldsLocked}
             onChange={(event) => onChange({ type: event.target.value as 世界书条目类型 })}
             className="kaituo-input w-full px-2.5 py-2 text-xs"
-            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
+            style={{ clipPath: smallClip, opacity: fieldsLocked ? 0.74 : 1 }}
           >
             {(Object.entries(ENTRY_TYPE_LABELS) as [世界书条目类型, string][]).map(([key, label]) => (
               <option key={key} value={key}>
@@ -268,10 +283,10 @@ function EntryEditor({
         <Field label="注入模式">
           <select
             value={entry.injectMode}
-            disabled={calibrationDisplay}
+            disabled={fieldsLocked}
             onChange={(event) => onChange({ injectMode: event.target.value as 世界书注入方式 })}
             className="kaituo-input w-full px-2.5 py-2 text-xs"
-            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
+            style={{ clipPath: smallClip, opacity: fieldsLocked ? 0.74 : 1 }}
           >
             <option value="always">始终注入</option>
             <option value="keyword_match">关键词匹配</option>
@@ -281,12 +296,12 @@ function EntryEditor({
           <input
             type="number"
             value={entry.priority}
-            disabled={calibrationDisplay}
+            disabled={fieldsLocked}
             onChange={(event) => onChange({ priority: Number(event.target.value) || 0 })}
             min={0}
             max={999}
             className="kaituo-input w-full px-2.5 py-2 text-xs"
-            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
+            style={{ clipPath: smallClip, opacity: fieldsLocked ? 0.74 : 1 }}
           />
         </Field>
       </div>
@@ -295,7 +310,7 @@ function EntryEditor({
         <Field label="触发关键词（逗号分隔，主关键词 OR 命中即触发）">
           <input
             value={entry.keywords.join(', ')}
-            readOnly={calibrationDisplay}
+            readOnly={fieldsLocked}
             onChange={(event) =>
               onChange({
                 keywords: event.target.value
@@ -306,7 +321,7 @@ function EntryEditor({
             }
             placeholder="关键词，逗号分隔"
             className="kaituo-input w-full px-3 py-2 text-xs"
-            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
+            style={{ clipPath: smallClip, opacity: fieldsLocked ? 0.74 : 1 }}
           />
         </Field>
       )}
@@ -315,7 +330,7 @@ function EntryEditor({
         <Field label="次要关键词（逗号分隔，主命中后须全部 AND 命中才触发，可留空）">
           <input
             value={(entry.keySecondary ?? []).join(', ')}
-            readOnly={calibrationDisplay}
+            readOnly={fieldsLocked}
             onChange={(event) =>
               onChange({
                 keySecondary: event.target.value
@@ -326,12 +341,12 @@ function EntryEditor({
             }
             placeholder="次要关键词，逗号分隔（可留空）"
             className="kaituo-input w-full px-3 py-2 text-xs"
-            style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.74 : 1 }}
+            style={{ clipPath: smallClip, opacity: fieldsLocked ? 0.74 : 1 }}
           />
         </Field>
       )}
 
-      {!calibrationDisplay && (
+      {!fieldsLocked && (
         <div className="space-y-3">
           <button
             type="button"
@@ -617,15 +632,15 @@ function EntryEditor({
       <Field label="条目内容">
         <textarea
           value={entry.content}
-          readOnly={calibrationDisplay}
+          readOnly={fieldsLocked}
           onChange={(event) => {
-            if (calibrationDisplay) return;
+            if (fieldsLocked) return;
             onChange({ content: event.target.value });
           }}
           rows={12}
           placeholder="条目内容"
           className="kaituo-input w-full resize-y px-3 py-2.5 text-sm leading-relaxed md:min-h-[280px]"
-          style={{ clipPath: smallClip, opacity: calibrationDisplay ? 0.82 : 1 }}
+          style={{ clipPath: smallClip, opacity: fieldsLocked ? 0.82 : 1 }}
         />
       </Field>
 

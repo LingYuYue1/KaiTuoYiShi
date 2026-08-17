@@ -552,7 +552,7 @@ export function buildWorldbookChatModuleMessages(
     });
 }
 
-function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
+export function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
   const playerName = ctx.travelerName.trim() || '无名开拓者';
   const originalProtagonistName = formatOriginalProtagonistName(ctx.originalProtagonist);
   const originalProtagonistSubject = formatOriginalProtagonistSubject(ctx.originalProtagonist);
