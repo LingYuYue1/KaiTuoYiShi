@@ -59,7 +59,7 @@ import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { deleteSetting, loadSetting, saveSetting, saveSetting as saveUiSetting } from '@/services/storage/settings';
 import { loadActiveLeaf } from '@/services/storage/saveTree';
 import { hasAnySave, validateRerollParent } from '@/services/storage/saveCrud';
-import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
+import { reconcileBuiltinWorldbooks, WORLDBOOK_STORAGE_KEY } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
 import { devLogError } from '@/utils/devLog';
@@ -67,20 +67,6 @@ import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
 import { useActiveWorkflow, type ActiveWorkflowStore } from '@/hooks/useGame/activeWorkflow';
 import type { 存档树元信息 } from '@/utils/saveTree';
-
-const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
-  'builtin_express_crew',
-  'builtin_locations',
-  'opening_core',
-  'builtin_opening_rule',
-  'builtin_narrative_general',
-  'builtin_forbidden_phrases',
-  'builtin_power_system_overview',
-]);
-
-function isCalibrationWorldbook(book: 世界书): boolean {
-  return book.entries.some((entry) => entry.scope.includes('calibration'));
-}
 
 export type ViewState = 'home' | 'new_game' | 'game';
 
@@ -449,19 +435,7 @@ export function useGameState(): UseGameStateReturn {
       // - savedWorldbooks 是数组     → 玩家已与世界书交互过,完全尊重其状态,不再覆盖
       const builtins = createBuiltinWorldbooks();
       const rawSavedWorldbooks = await loadSetting<世界书[]>(WORLDBOOK_STORAGE_KEY);
-      // 为兼容旧用户库，丢弃已拆分或已废弃的内置世界书，并由归一化逻辑迁移旧作用域。
-      const savedWorldbooks = rawSavedWorldbooks
-        ? normalizeWorldbooks(
-            rawSavedWorldbooks.filter(
-              (b) =>
-                b.id !== 'builtin_core_config' &&
-                b.id !== 'builtin_cot' &&
-                !REMOVED_LEGACY_WORLDBOOK_IDS.has(b.id),
-            ),
-          )
-        : rawSavedWorldbooks;
-
-      if (savedWorldbooks === null) {
+      if (rawSavedWorldbooks === null) {
         try {
           const presets = await loadAllBundledWorldbookPresets();
           const initial = [...builtins, ...presets];
@@ -471,35 +445,13 @@ export function useGameState(): UseGameStateReturn {
           console.warn('[opening-worldbook] preset 加载失败,使用内置空集:', err);
           setDeviceWorldbooks(builtins);
         }
-      } else if (savedWorldbooks.length) {
-        const builtinIds = new Set(builtins.map((b) => b.id));
-        const userBooks = savedWorldbooks.filter((b) => !builtinIds.has(b.id));
-        const merged = builtins.map((builtin) => {
-          const saved = savedWorldbooks.find((b) => b.id === builtin.id);
-          if (!saved) return builtin;
-          // calibration 内置世界书只是独立模型真实 prompt 的只读资料展示。
-          // 新闻/手机/变量等服务层直接 import 源码常量，旧存档里的编辑/关闭不会影响真实 API；
-          // 因此这里必须回到源码最新版，避免 UI 展示与真实请求再次分叉。
-          if (isCalibrationWorldbook(builtin)) return builtin;
-          const savedEntries = saved.entries;
-          const entries = builtin.entries.map((entry) => {
-            const savedEntry = savedEntries.find((item) => item.id === entry.id);
-            if (!savedEntry) return entry;
-            return {
-              ...entry,
-              enabled: savedEntry.enabled,
-              createdAt: savedEntry.createdAt,
-              updatedAt: savedEntry.updatedAt,
-            };
-          });
-          return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
+      } else {
+        const nextWorldbooks = reconcileBuiltinWorldbooks({
+          sourceBuiltins: builtins,
+          archivedWorldbooks: rawSavedWorldbooks,
         });
-        const nextWorldbooks = [...merged, ...userBooks];
         setDeviceWorldbooks(nextWorldbooks);
         await saveSetting(WORLDBOOK_STORAGE_KEY, nextWorldbooks);
-      } else {
-        setDeviceWorldbooks(builtins);
-        await saveSetting(WORLDBOOK_STORAGE_KEY, builtins);
       }
 
       const saveExists = await hasAnySave();

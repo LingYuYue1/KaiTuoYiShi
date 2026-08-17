@@ -85,6 +85,55 @@ export function normalizeWorldbooks(books: 世界书[]): 世界书[] {
   });
 }
 
+const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
+  'builtin_express_crew',
+  'builtin_locations',
+  'opening_core',
+  'builtin_opening_rule',
+  'builtin_narrative_general',
+  'builtin_forbidden_phrases',
+  'builtin_power_system_overview',
+]);
+
+export function reconcileBuiltinWorldbooks({
+  sourceBuiltins,
+  archivedWorldbooks,
+}: {
+  sourceBuiltins: 世界书[];
+  archivedWorldbooks: 世界书[];
+}): 世界书[] {
+  const archived = normalizeWorldbooks(
+    archivedWorldbooks.filter(
+      (book) =>
+        book.id !== 'builtin_core_config' &&
+        book.id !== 'builtin_cot' &&
+        !REMOVED_LEGACY_WORLDBOOK_IDS.has(book.id),
+    ),
+  );
+  if (!archived.length) return sourceBuiltins;
+
+  const builtinIds = new Set(sourceBuiltins.map((book) => book.id));
+  const userBooks = archived.filter((book) => !builtinIds.has(book.id));
+  const mergedBuiltins = sourceBuiltins.map((builtin) => {
+    const saved = archived.find((book) => book.id === builtin.id);
+    if (!saved || builtin.entries.some((entry) => entry.scope.includes('calibration'))) return builtin;
+
+    const entries = builtin.entries.map((entry) => {
+      const savedEntry = saved.entries.find((item) => item.id === entry.id);
+      if (!savedEntry) return entry;
+      return {
+        ...entry,
+        enabled: savedEntry.enabled,
+        createdAt: savedEntry.createdAt,
+        updatedAt: savedEntry.updatedAt,
+      };
+    });
+    return { ...builtin, enabled: saved.enabled, entries, updatedAt: saved.updatedAt };
+  });
+
+  return [...mergedBuiltins, ...userBooks];
+}
+
 // ── CRUD ──
 
 export function updateBook(book: 世界书, partial: Partial<世界书>): 世界书 {
