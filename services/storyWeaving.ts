@@ -82,25 +82,25 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
     `系列：${series.标题}`,
     `作品：${series.作品名}`,
     `当前分段：${current.组号}/${completed[completed.length - 1]?.组号 || current.组号}`,
-    progress ? `进度锚点：${progress.推进状态}，最近判定回合 ${progress.最近一次推进判定回合 ?? '未记录'}` : '',
-    `启用注入：${series.激活注入 ? '是' : '否'}`,
+    progress ? `进度参考：${progress.推进状态}，最近判定回合 ${progress.最近一次推进判定回合 ?? '未记录'}` : '',
+    `调用参考资料：${series.激活注入 ? '是' : '否'}`,
   ].filter(Boolean).join('\n');
   const recentIndexBlock = buildRecentSegmentIndex(indexSegments, indexSegments.findIndex((segment) => segment.id === current.id));
   const gate = evaluateSegmentGate(current, ctx);
   const progressBlock = formatProgressAnchor(progress);
 
   const blocks = [
-    '# 剧情编织滑窗',
+    '# 章节剧情素材与预热',
     '',
-    '以下是当前章节的剧情滑窗素材。使用规则：',
-    '- 本滑窗不是推进指令：是否推进、推进多少，由本回合门禁与玩家行动决定；禁止为了对齐滑窗而抢进度、补进度或复演任何段落。',
-    '- 事实与因果是硬约束：时间线、已发生事件、角色知情范围与信息可见性（谁知道/谁不知道/读者视角）必须遵守。“已经历”分段只可作既成事实简略承接，禁止重演；“未开始”分段只可轻微铺垫，禁止提前揭露角色未知信息或把未发生事件写成既成事实。',
-    '- 文字表达自由：禁止照抄原文措辞与段落结构；镜头、对白、节奏由你按当前局面重新组织。',
-    '- 承接优先级：玩家本回合输入、即时剧情回顾、剧情回忆、当前地点与已成立事实高于滑窗；若它们显示某事件已发生或已被解决，禁止因为滑窗仍停在该段而重演同一危机、同一敌人或同一章节事件。',
+    '以下是本章节为你提供的长线剧情参考。请将其视为“本章节的远景规划与氛围指导”，而不是强制执行的死剧本。未来的走向依然掌握在玩家当下的行动中。',
+    '- 灵活把控节奏：这里的内容仅提供方向，真正的推进速度取决于当前的局面与玩家动作。请自然推进，切勿为了迎合计划而生硬推进或重播已成往事。',
+    '- 尊重时空现实：请严守当前事实边界。“已经历”的内容可用作熟稔的背景呼应；“未开始”的愿景请化作迷人的悬念或轻微的铺垫，绝不可提前剧透或确立为事实。',
+    '- 导演重构镜头：参考资料为你提供目标和防抢跑底线。请发挥你的导演才华，基于当下的局面重新调度镜头、台词与节奏，切忌照搬原文格式。',
+    '- **DM 的临场应变**：当玩家的动作、剧情前情与这里的长线规划产生冲突时，坚决以当下正在发生的互动事实为准。运用你的转场与协调技巧去顺滑承接，不要强行为了对齐计划而凭空捏造事实。',
     gate.mode === 'strong'
-      ? `本回合门禁：已满足强承接条件（${gate.reasons.join('；')}）。可以读取当前段的目标、人物关系和未结事项，但仍不得覆盖已发生事实。`
-      : `本回合门禁：未满足强承接条件（${gate.reasons.join('；') || '当前地点、玩家输入和近期上下文未明显命中当前段'}）。当前段只能作为氛围、人物关系、伏笔、未结事项和防抢跑参考，不得直接推进或复演原文段落。`,
-    '- 推进节奏：强承接只代表可以推进当前段的一拍，不代表必须在一回合内完成多个章节目标；下一段预热只能轻微铺垫。若进度锚点显示中间段为“已跳过”，只按路线校正理解，禁止补写成玩家已完整经历；若玩家已走出不同 IF 线，以已发生剧情为准。',
+      ? `本回合推进条件：已满足强承接条件（${gate.reasons.join('；')}）。可以读取当前段的目标、人物关系和未结事项，但仍不得覆盖已发生事实。`
+      : `本回合推进条件：未满足强承接条件（${gate.reasons.join('；') || '当前地点、玩家输入和近期上下文未明显命中当前段'}）。当前段只能作为氛围、人物关系、伏笔、未结事项和防抢跑参考，不得直接推进或复演原文段落。`,
+    '- 优雅顺应推进条件：当条件允许直接推进时，你可以顺理成章地迈出一步，而非急躁地结算全章；对于已经错过的段落请轻巧地翻篇，勿强迫玩家补课；若玩家踏上了完全不同的 IF 轨迹，请为他们正在书写的历史喝彩并坚定承接。',
     ctx?.openingArchiveText
       ? `当前开局档案锚点：\n${ctx.openingArchiveText}\n剧情编织必须按这份开局档案协调滑窗；自由开局和创意工坊开局下，不得强行把玩家拉回导入章节的默认入口。章节锚点之前的主线段落视为前置背景，不进入当前滑窗推进队列，也不得被正文补演。`
       : '',
@@ -108,18 +108,18 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
     '',
     seriesOverview,
     '',
-    stageSummary ? `# 阶段索引\n${stageSummary}` : '',
-    coreRoles.length ? `# 核心角色\n${coreRoles.slice(0, 8).join('、')}` : '',
-    locationIndex.length ? `# 地点索引\n${locationIndex.slice(0, 8).join('、')}` : '',
-    factionIndex.length ? `# 派系索引\n${factionIndex.slice(0, 8).join('、')}` : '',
+    stageSummary ? `# 阶段概要\n${stageSummary}` : '',
+    coreRoles.length ? `# 核心角色登场预热\n${coreRoles.slice(0, 8).join('、')}` : '',
+    locationIndex.length ? `# 关键地点导引\n${locationIndex.slice(0, 8).join('、')}` : '',
+    factionIndex.length ? `# 派系动向索引\n${factionIndex.slice(0, 8).join('、')}` : '',
     progressBlock,
     recentIndexBlock,
     archivedAnchor && archivedAnchor.id !== current.id
       ? `锚点提示：原锚点分段「${archivedAnchor.标题}」已归档，本回合不再把它作为当前段素材注入。`
       : '',
-    formatWindowSegment('已经历承接', previous, 'brief'),
-    formatWindowSegment(gate.mode === 'strong' ? '当前段强承接素材' : '当前段软参考素材', current, gate.mode),
-    formatWindowSegment('下一段预热', next, 'brief'),
+    formatWindowSegment('已历经的余波', previous, 'brief'),
+    formatWindowSegment(gate.mode === 'strong' ? '当前段核心素材' : '当前段氛围参考', current, gate.mode),
+    formatWindowSegment('前方情节预热', next, 'brief'),
   ].filter(Boolean);
   return blocks.join('\n').trim();
 }
@@ -324,12 +324,12 @@ function scoreSegmentAgainstOpening(segment: 剧情编织分段, openingText: st
 function formatProgressAnchor(anchor: 剧情编织系统['当前进度']): string {
   if (!anchor) return '';
   const lines = [
-    '# 当前章节进度锚点',
+    '# 当前章节进度参考',
     `推进状态：${anchor.推进状态}`,
     `当前分段组号：${anchor.当前分段组号}`,
   ];
   // 已完成摘要移除：历史信息统一由「最近已完成分段索引」单行承载，避免三处复述
-  appendList(lines, '当前待解问题', anchor.当前待解问题, 6);
+  appendList(lines, '当前待解悬念', anchor.当前待解问题, 6);
   appendList(lines, '最近判定理由', anchor.最近判定理由, 3);
   if ((anchor.连续推进证据回合 ?? 0) > 0 || (anchor.卡段回合数 ?? 0) > 0) {
     lines.push(`推进证据累计：${anchor.连续推进证据回合 ?? 0}/2；卡段回合：${anchor.卡段回合数 ?? 0}`);
@@ -540,7 +540,7 @@ function buildRecentSegmentIndex(segments: 剧情编织分段[], currentIndex: n
   const window = segments.slice(start, currentIndex);
   if (!window.length) return '';
   return [
-    '# 最近已完成分段索引',
+    '# 最近已完成情节一览',
     ...window.map((segment, index) => {
       const label = segment.标题 || `分段 ${start + index + 1}`;
       const summary = segment.本段概括 || segment.原文摘要 || segment.章节标题.join(' / ') || '无概括';
