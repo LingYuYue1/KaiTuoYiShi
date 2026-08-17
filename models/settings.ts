@@ -337,6 +337,7 @@ export interface 标签块隐藏设置 {
 export interface 额外功能设置 {
   污染词清理: 污染词清理设置;
   标签块隐藏: 标签块隐藏设置;
+  玩家额外要求: string;
 }
 
 export interface 记忆系统设置 {
@@ -1220,6 +1221,7 @@ export function 创建默认额外功能设置(): 额外功能设置 {
     标签块隐藏: {
       enabled: true,
     },
+    玩家额外要求: '',
   };
 }
 
@@ -1241,6 +1243,7 @@ export function 归一化额外功能设置(input?: Partial<额外功能设置>)
       ...defaults.标签块隐藏,
       ...(input?.标签块隐藏 ?? {}),
     },
+    玩家额外要求: typeof input?.玩家额外要求 === 'string' ? input.玩家额外要求 : defaults.玩家额外要求,
   };
 }
 

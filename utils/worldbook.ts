@@ -256,11 +256,11 @@ function entryMatchesKeywords(entry: 世界书条目, ctx: FilterContext, extraH
 }
 
 /** 概率触发检查。probability=100 必触发，=0 必不触发，中间值按随机数。 */
-function checkProbability(entry: 世界书条目): boolean {
+function checkProbability(entry: 世界书条目, random: () => number = Math.random): boolean {
   const prob = entry.probability ?? 100;
   if (prob >= 100) return true;
   if (prob <= 0) return false;
-  return Math.random() * 100 < prob;
+  return random() * 100 < prob;
 }
 
 /** 延迟触发 + 冷却检查。
@@ -326,27 +326,48 @@ function reportFallbackDegradedEntry(book: 世界书, entry: 世界书条目): v
  *    重新扫描未触发的 keyword_match 条目；新触发条目继续进入下一轮递归
  *  - 全局递归深度上限 5（normalize 已对单条 recurseDepth 做了 0-5 clamp）
  *  返回所有触发条目（含 bookTitle），尚未应用分组覆盖/互斥/排序 */
+export interface WorldbookPlanOptions {
+  random?: () => number;
+  enabled?: boolean;
+}
+
+export interface ResolvedWorldbookEntry {
+  entry: 世界书条目;
+  bookTitle: string;
+}
+
+export interface WorldbookInjectionPlan {
+  systemRuleEntries: ResolvedWorldbookEntry[];
+  alwaysEntries: ResolvedWorldbookEntry[];
+  keywordEntries: ResolvedWorldbookEntry[];
+  depthMessages: WorldbookChatModuleMessage[];
+  triggeredEntryIds: string[];
+}
+
 function gatherTriggeredEntries(
   books: 世界书[],
   ctx: FilterContext,
+  options: WorldbookPlanOptions = {},
 ): Array<{ entry: 世界书条目; bookTitle: string }> {
   const msgCount = ctx.messageCount ?? 0;
   const triggerStates = ctx.worldbookTriggerStates;
   const RECURSION_HARD_LIMIT = 5;
+  const random = options.random ?? Math.random;
 
   const triggered: Array<{ entry: 世界书条目; bookTitle: string }> = [];
   const triggeredIds = new Set<string>();
 
-  // 第一轮：常规匹配
   for (const book of books) {
     if (!book.enabled) continue;
     if (!bookMatchesStoryMode(book, ctx)) continue;
     for (const entry of book.entries) {
       if (!entry.enabled) continue;
       if (!entryMatchesScope(entry, ctx)) continue;
-      if (entry.injectMode === 'keyword_match' && !entryMatchesKeywords(entry, ctx)) continue;
-      if (!checkProbability(entry)) continue;
-      if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
+      if (entry.injectMode === 'keyword_match') {
+        if (!entryMatchesKeywords(entry, ctx)) continue;
+        if (!checkProbability(entry, random)) continue;
+        if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
+      }
       reportFallbackDegradedEntry(book, entry);
       triggered.push({ entry, bookTitle: book.title });
       triggeredIds.add(entry.id);
@@ -376,7 +397,7 @@ function gatherTriggeredEntries(
         const entryMaxDepth = entry.recurseDepth ?? 1;
         if (depth >= entryMaxDepth) continue;
         if (!entryMatchesKeywords(entry, ctx, recursingContents)) continue;
-        if (!checkProbability(entry)) continue;
+        if (!checkProbability(entry, random)) continue;
         if (!checkDelayAndCooldown(entry, triggerStates, msgCount)) continue;
         reportFallbackDegradedEntry(book, entry);
         newHits.push({ entry, bookTitle: book.title });
@@ -455,38 +476,94 @@ export interface WorldbookInjectionSplit {
   messageEntries: Array<{ entry: 世界书条目; bookTitle: string }>;
 }
 
-function selectEntries(books: 世界书[], ctx: FilterContext): Array<{ entry: 世界书条目; bookTitle: string }> {
-  // Phase 7.3：用 gatherTriggeredEntries 统一处理基础过滤 + 递归触发
-  const all = gatherTriggeredEntries(books, ctx);
+function buildWorldbookDepthMessage(
+  entry: 世界书条目,
+  bookTitle: string,
+  ctx: FilterContext,
+): WorldbookChatModuleMessage {
+  const typeLabel = ENTRY_TYPE_LABELS[entry.type];
+  const content = [
+    `# 世界书｜${entry.title}`,
+    `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
+    '',
+    replaceWorldbookPlaceholders(entry.content, ctx),
+  ].join('\n');
+  return {
+    role: 'system',
+    content,
+    _injectionPosition: 1,
+    _injectionDepth: entry.depth ?? 0,
+    _injectionOrder: entry.priority,
+  };
+}
+
+export function renderWorldbookSystemEntry(
+  item: ResolvedWorldbookEntry,
+  ctx: FilterContext,
+  category: '世界书' | '提示词',
+): string {
+  const typeLabel = ENTRY_TYPE_LABELS[item.entry.type];
+  return [
+    `# ${category}｜${item.entry.title}`,
+    `来源：${item.bookTitle} / ${typeLabel} / 优先级 ${item.entry.priority}`,
+    '',
+    replaceWorldbookPlaceholders(item.entry.content, ctx),
+  ].join('\n');
+}
+
+export function resolveWorldbookInjectionPlan(
+  books: 世界书[],
+  ctx: FilterContext,
+  options: WorldbookPlanOptions = {},
+): WorldbookInjectionPlan {
+  const empty: WorldbookInjectionPlan = {
+    systemRuleEntries: [],
+    alwaysEntries: [],
+    keywordEntries: [],
+    depthMessages: [],
+    triggeredEntryIds: [],
+  };
+  if (options.enabled === false) return empty;
+
+  const all = gatherTriggeredEntries(books, ctx, options);
   all.sort((a, b) => b.entry.priority - a.entry.priority);
-  // Phase 7.2：分组覆盖 → 条目互斥（顺序：先互斥判断再分组覆盖可能丢掉被覆盖条目导致互斥失效，
-  // 所以先 applyGroupOverride 再 applyDisablesEntries 更稳：被覆盖丢掉的条目不参与互斥判断）
-  const afterGroup = applyGroupOverride(all);
-  const afterDisables = applyDisablesEntries(afterGroup);
-  return afterDisables;
+  const afterDisables = applyDisablesEntries(applyGroupOverride(all));
+
+  const plan: WorldbookInjectionPlan = {
+    systemRuleEntries: [],
+    alwaysEntries: [],
+    keywordEntries: [],
+    depthMessages: [],
+    triggeredEntryIds: [],
+  };
+  for (const item of afterDisables) {
+    const { entry, bookTitle } = item;
+    if (entry.injectMode === 'keyword_match') plan.triggeredEntryIds.push(entry.id);
+    if (entry.type === 'system_rule') {
+      plan.systemRuleEntries.push(item);
+    } else if (entry.injectAtDepth) {
+      plan.depthMessages.push(buildWorldbookDepthMessage(entry, bookTitle, ctx));
+    } else if (entry.injectMode === 'always') {
+      plan.alwaysEntries.push(item);
+    } else {
+      plan.keywordEntries.push(item);
+    }
+  }
+  return plan;
 }
 
 export function buildWorldbookInjection(
   books: 世界书[],
   ctx: FilterContext,
 ): string {
-  // Phase 7.2：只拼 injectAtDepth=false 的条目到 systemPrompt（避免双重注入）
-  const selected = selectEntries(books, ctx).filter(
-    ({ entry }) => !isPromptLikeWorldbookEntry(entry) && !entry.injectAtDepth,
-  );
-  if (!selected.length) return '';
-
-  return selected
-    .map(({ entry, bookTitle }) => {
-      const category = entry.type === 'system_rule' ? '提示词' : '世界书';
-      const typeLabel = ENTRY_TYPE_LABELS[entry.type];
-      return [
-        `# ${category}｜${entry.title}`,
-        `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
-        '',
-        replaceWorldbookPlaceholders(entry.content, ctx),
-      ].join('\n');
-    })
+  const plan = resolveWorldbookInjectionPlan(books, ctx);
+  const items = [
+    ...plan.alwaysEntries.filter(({ entry }) => !isPromptLikeWorldbookEntry(entry)),
+    ...plan.keywordEntries,
+  ];
+  if (!items.length) return '';
+  return items
+    .map((item) => renderWorldbookSystemEntry(item, ctx, item.entry.type === 'system_rule' ? '提示词' : '世界书'))
     .join('\n\n---\n\n');
 }
 
@@ -494,20 +571,13 @@ export function buildPromptLikeWorldbookInjection(
   books: 世界书[],
   ctx: FilterContext,
 ): string {
-  // Phase 7.2：稳定规则条目不走深度插入（保持稳定位置），但仍保留世界书来源语义
-  const selected = selectEntries(books, ctx).filter(
-    ({ entry }) => isPromptLikeWorldbookEntry(entry) && !entry.injectAtDepth,
-  );
-  if (!selected.length) return '';
-
-  return selected
-    .map(({ entry, bookTitle }) => [
-      `# 世界书｜${entry.title}`,
-      `来源：${bookTitle} / ${ENTRY_TYPE_LABELS[entry.type]} / 优先级 ${entry.priority}`,
-      '',
-      replaceWorldbookPlaceholders(entry.content, ctx),
-    ].join('\n'))
-    .join('\n\n---\n\n');
+  const plan = resolveWorldbookInjectionPlan(books, ctx);
+  const items = [
+    ...plan.systemRuleEntries,
+    ...plan.alwaysEntries.filter(({ entry }) => PROMPT_LIKE_WORLDBOOK_ENTRY_IDS.has(entry.id)),
+  ];
+  if (!items.length) return '';
+  return items.map((item) => renderWorldbookSystemEntry(item, ctx, '世界书')).join('\n\n---\n\n');
 }
 
 /** Phase 7.2：构造世界书深度插入的 ChatModuleMessage 列表。
@@ -526,30 +596,7 @@ export function buildWorldbookChatModuleMessages(
   books: 世界书[],
   ctx: FilterContext,
 ): WorldbookChatModuleMessage[] {
-  const selected = selectEntries(books, ctx).filter(
-    ({ entry }) => !isPromptLikeWorldbookEntry(entry) && entry.injectAtDepth,
-  );
-  if (!selected.length) return [];
-
-  // 深度大的先排（保持与提示词模块 depth 排序一致）
-  return selected
-    .sort((a, b) => (b.entry.depth ?? 0) - (a.entry.depth ?? 0))
-    .map(({ entry, bookTitle }) => {
-      const typeLabel = ENTRY_TYPE_LABELS[entry.type];
-      const content = [
-        `# 世界书｜${entry.title}`,
-        `来源：${bookTitle} / ${typeLabel} / 优先级 ${entry.priority}`,
-        '',
-        replaceWorldbookPlaceholders(entry.content, ctx),
-      ].join('\n');
-      return {
-        role: 'system',
-        content,
-        _injectionPosition: 1, // In-Chat
-        _injectionDepth: entry.depth ?? 0,
-        _injectionOrder: entry.priority, // 同 depth 内用 priority 排序
-      };
-    });
+  return resolveWorldbookInjectionPlan(books, ctx).depthMessages;
 }
 
 export function replaceWorldbookPlaceholders(content: string, ctx: FilterContext): string {
@@ -634,8 +681,11 @@ export { collectTriggeredEntryIds };
 export function updateTriggerStatesAfterTurn(
   books: 世界书[],
   ctx: FilterContext,
+  plan?: WorldbookInjectionPlan,
 ): Record<string, number> {
-  const hitIds = collectTriggeredEntryIds(books, ctx);
+  const hitIds = plan
+    ? new Set(plan.triggeredEntryIds)
+    : collectTriggeredEntryIds(books, ctx);
   if (hitIds.size === 0) return ctx.worldbookTriggerStates ?? {};
   const msgCount = ctx.messageCount ?? 0;
   const prev = ctx.worldbookTriggerStates ?? {};

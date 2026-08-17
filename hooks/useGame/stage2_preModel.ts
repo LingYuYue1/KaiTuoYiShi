@@ -11,8 +11,7 @@ import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@
 import { selectNpcLedgersForTurn } from '@/models/npc';
 import { createMacroContext, type MacroGameState } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
-import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
-import { 构建天气Prompt片段 } from '@/data/weatherRules';
+import { buildSystemPrompt, createSystemPromptInput } from './systemPromptBuilder';
 import { formatZhikuRecallSummary, formatYitingRecallSummary } from './recallDiagnostics';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { devLog, devLogError } from '@/utils/devLog';
@@ -181,9 +180,31 @@ export async function stage2_preModel(
   };
   const macroCtx = createMacroContext(prevGlobalSnapshot, macroGameState);
 
-  const builtPrompt = isOpeningSystemTrigger
-    ? buildOpeningSystemPrompt(state.旅人, effectiveWorld, state.deviceSettings.gameSettings, state.turnCount, state.deviceSettings.worldbooks, worldbookCtx, newsForPrompt, currentTriggerType, macroCtx)
-    : buildSystemPrompt(state.旅人, effectiveWorld, state.记忆, state.deviceSettings.gameSettings, state.turnCount, state.deviceSettings.worldbooks, worldbookCtx, state.NPC, state.新闻, state.剧情, state.剧情编织, state.智库, state.忆庭, state.手机, awakeningPhase, storyRecallInjection || (yitingRecallEnabled ? '' : undefined), zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined, Boolean(yitingPreview?.injection), npcLedgerSelection, currentTriggerType, macroCtx);
+  const promptInput = createSystemPromptInput({
+    scope: isOpeningSystemTrigger ? 'opening' : currentScope,
+    traveler: state.旅人,
+    world: effectiveWorld,
+    settings: state.deviceSettings.gameSettings,
+    turnCount: state.turnCount,
+    worldbooks: state.deviceSettings.worldbooks,
+    worldbookCtx,
+    memory: state.记忆,
+    npcRecords: state.NPC,
+    news: newsForPrompt,
+    plotNodes: state.剧情,
+    storyWeaving: state.剧情编织,
+    zhiku: state.智库,
+    yiting: state.忆庭,
+    phone: state.手机,
+    awakeningPhase,
+    yitingInjectionOverride: storyRecallInjection || (yitingRecallEnabled ? '' : undefined),
+    zhikuInjectionOverride: zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined,
+    suppressMemoryInjection: Boolean(yitingPreview?.injection),
+    npcLedgerSelection,
+    triggerType: currentTriggerType,
+    macroCtx,
+  });
+  const builtPrompt = buildSystemPrompt(promptInput);
 
   const macroGlobalVarsChanged = Object.keys(macroCtx.global).length !== Object.keys(prevGlobalSnapshot).length || Object.entries(macroCtx.global).some(([k, v]) => prevGlobalSnapshot[k] !== v);
   if (macroGlobalVarsChanged) {
@@ -191,16 +212,18 @@ export async function stage2_preModel(
     state.setMacroGlobalVars({ ...macroCtx.global });
   }
 
-  const nextTriggerStates = updateTriggerStatesAfterTurn(state.deviceSettings.worldbooks, worldbookCtx);
+  const nextTriggerStates = updateTriggerStatesAfterTurn(
+    state.deviceSettings.worldbooks,
+    worldbookCtx,
+    promptInput.worldbookPlan ?? undefined,
+  );
   if (nextTriggerStates !== state.worldbookTriggerStates) {
     // 投影点（B2 定性）：刷新订阅 gameSettings 的 UI；存档组装只认 d，不回读此 state
     state.setWorldbookTriggerStates(nextTriggerStates);
   }
 
   const chatModuleMessages: Array<{ role: string; content: string; _injectionPosition?: number; _injectionDepth?: number; _injectionOrder?: number }> = builtPrompt.chatModuleMessages;
-  let systemPrompt = builtPrompt.systemPrompt;
-  const 天气片断 = 构建天气Prompt片段(effectiveWorld.当前地点, effectiveWorld.当前天气);
-  systemPrompt = systemPrompt + '\n\n' + 天气片断;
+  const systemPrompt = builtPrompt.systemPrompt;
 
   devLog('stage', 'stage2_preModel.exit', {
     turn: turnCountAtStart,

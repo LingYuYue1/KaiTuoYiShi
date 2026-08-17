@@ -21,7 +21,7 @@ import {
   getMainHistoryWindow,
 } from './historyWindow';
 import { COT_FAKE_HISTORY_ASSISTANT, COT_FAKE_HISTORY_USER } from './mainResponseProtocol';
-import { buildOpeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
+import { buildSystemPrompt, createSystemPromptInput } from './systemPromptBuilder';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import { buildTavernMessageChain } from './tavernMessageChainBuilder';
 import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
@@ -570,41 +570,30 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
       })
     : undefined;
 
-  const builtPrompt = isOpeningSystemTrigger
-    ? buildOpeningSystemPrompt(
-        state.旅人,
-        state.世界,
-        state.deviceSettings.gameSettings,
-        state.turnCount,
-        state.deviceSettings.worldbooks,
-        worldbookCtx,
-      state.新闻,
-      'opening',
-      createMacroContext(state.macroGlobalVars),
-    )
-    : buildSystemPrompt(
-        state.旅人,
-        state.世界,
-        state.记忆,
-        state.deviceSettings.gameSettings,
-        state.turnCount,
-        state.deviceSettings.worldbooks,
-        worldbookCtx,
-        state.NPC,
-        state.新闻,
-        state.剧情,
-        state.剧情编织,
-        state.智库,
-        state.忆庭,
-        state.手机,
-        awakeningPhase,
-        storyRecallInjection || (yitingEnabled && recallQuery && state.turnCount > yitingThreshold ? '' : undefined),
-        zhikuPreview?.injection,
-        Boolean(yitingPreview?.injection),
-        npcLedgerSelection,
-        'normal',
-      createMacroContext(state.macroGlobalVars),
-      );
+  const builtPrompt = buildSystemPrompt(createSystemPromptInput({
+    scope: isOpeningSystemTrigger ? 'opening' : currentScope,
+    traveler: state.旅人,
+    world: state.世界,
+    settings: state.deviceSettings.gameSettings,
+    turnCount: state.turnCount,
+    worldbooks: state.deviceSettings.worldbooks,
+    worldbookCtx,
+    memory: state.记忆,
+    npcRecords: state.NPC,
+    news: state.新闻,
+    plotNodes: state.剧情,
+    storyWeaving: state.剧情编织,
+    zhiku: state.智库,
+    yiting: state.忆庭,
+    phone: state.手机,
+    awakeningPhase,
+    yitingInjectionOverride: storyRecallInjection || (yitingEnabled && recallQuery && state.turnCount > yitingThreshold ? '' : undefined),
+    zhikuInjectionOverride: zhikuPreview?.injection,
+    suppressMemoryInjection: Boolean(yitingPreview?.injection),
+    npcLedgerSelection,
+    triggerType: isOpeningSystemTrigger ? 'opening' : 'normal',
+    macroCtx: createMacroContext(state.macroGlobalVars),
+  }));
   // 上下文快照需要跟真实发送路径对齐：V2 酒馆预设只额外发送 Tavern messages，
   // 原生 systemPrompt 仍完整发送，因此 Tavern 链路不重复塞原生底座和当前用户输入。
   const systemPrompt = builtPrompt.systemPrompt;

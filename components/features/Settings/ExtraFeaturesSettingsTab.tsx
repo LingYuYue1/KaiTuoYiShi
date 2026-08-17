@@ -118,6 +118,40 @@ export function ExtraFeaturesSettingsTab({ settings, onChange, onPersistSettings
         />
       </section>
 
+      <section
+        className="space-y-3 p-4"
+        style={{
+          background: 'rgba(var(--tj-bg-secondary), 0.42)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+          clipPath: smallClip,
+        }}
+      >
+        <div>
+          <div className="font-serif text-sm font-bold tracking-[0.22em]" style={{ color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' }}>
+            玩家额外要求
+          </div>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+            自定义输出前要求（如「多写环境描写」「少用心理描写」）。非空时注入到回顾区与协议区之间，留空则不注入。
+          </p>
+        </div>
+        <textarea
+          value={settings.额外功能.玩家额外要求}
+          onChange={(e) => {
+            onChange({
+              ...settings,
+              额外功能: {
+                ...settings.额外功能,
+                玩家额外要求: e.target.value,
+              },
+            });
+          }}
+          placeholder="在此填写对本回合或长期生效的额外要求…"
+          rows={4}
+          className="kaituo-input w-full resize-y px-3 py-2 text-sm"
+          style={{ clipPath: smallClip }}
+        />
+      </section>
+
       <button
         type="button"
         onClick={() => void handleSave()}
