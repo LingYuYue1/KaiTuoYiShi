@@ -9,24 +9,10 @@ import { 创建空记忆系统 } from '@/models/memory';
 import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 import { 创建空忆庭系统 } from '@/models/yiting';
 
-/** 阶段1主链压缩三阶段弹窗状态（remind→processing→review） */
-export interface MemorySummaryFlowState {
-  open: boolean;
-  stage: 'remind' | 'processing' | 'review' | 'failed';
-  /** remind阶段：各层待压缩条数 */
-  pendingInfo?: {
-    即时待压缩: number;
-    短期待压缩: number;
-    中期待压缩: number;
-  };
-  /** review阶段：AI生成的压缩草稿（archives），玩家可编辑summary字段 */
-  drafts?: 回忆条目[];
-  /** failed阶段：错误信息 */
-  errors?: string[];
-  /** 压缩请求来源回合：所有会修改记忆的结算完成后的最终切片 */
-  sourceTurn?: number;
-  /** 创建压缩请求时的记忆指纹：确认时校验，来源已变化则拒绝旧结果覆盖 */
-  sourceFingerprint?: string;
+/** 记忆压缩失败重试提示（静默压缩失败时弹出）。 */
+export interface 记忆压缩失败状态 {
+  /** 失败条数（原始材料已保留在 记忆.失败草稿，可重试）。 */
+  条数: number;
 }
 import type { 智库系统 } from '@/models/zhiku';
 import { 创建空智库系统 } from '@/models/zhiku';
@@ -225,11 +211,14 @@ export interface UseGameStateReturn {
   set世界: React.Dispatch<React.SetStateAction<世界状态>>;
   chatHistory: 聊天消息[];
   setChatHistory: React.Dispatch<React.SetStateAction<聊天消息[]>>;
+  /** 输入框受控文本：发送后清空，读档/开局重置。 */
+  inputText: string;
+  setInputText: React.Dispatch<React.SetStateAction<string>>;
   记忆: 记忆系统;
   set记忆: React.Dispatch<React.SetStateAction<记忆系统>>;
-  /** 阶段1主链压缩三阶段弹窗 */
-  memorySummaryFlow: MemorySummaryFlowState;
-  setMemorySummaryFlow: React.Dispatch<React.SetStateAction<MemorySummaryFlowState>>;
+  /** 记忆压缩失败重试提示（静默压缩失败时弹出，关闭后可在记忆面板失败草稿重试）。 */
+  记忆压缩失败: 记忆压缩失败状态 | null;
+  set记忆压缩失败: React.Dispatch<React.SetStateAction<记忆压缩失败状态 | null>>;
   忆庭: 忆庭系统;
   set忆庭: React.Dispatch<React.SetStateAction<忆庭系统>>;
   智库: 智库系统;
@@ -311,8 +300,9 @@ export function useGameState(): UseGameStateReturn {
   const [旅人, set旅人] = useState<角色数据结构>(创建空角色);
   const [世界, set世界] = useState<世界状态>(() => 归一化世界状态(创建空世界状态()));
   const [chatHistory, setChatHistory] = useState<聊天消息[]>([]);
+  const [inputText, setInputText] = useState('');
   const [记忆, set记忆] = useState<记忆系统>(创建空记忆系统);
-  const [memorySummaryFlow, setMemorySummaryFlow] = useState<MemorySummaryFlowState>({ open: false, stage: 'remind' });
+  const [记忆压缩失败, set记忆压缩失败] = useState<记忆压缩失败状态 | null>(null);
   const [忆庭, set忆庭] = useState<忆庭系统>(创建空忆庭系统);
   const [智库, set智库] = useState<智库系统>(创建空智库系统);
   const [手机, set手机] = useState<手机系统>(创建空手机系统);
@@ -560,8 +550,9 @@ useEffect(() => {
     旅人, set旅人,
     世界, set世界,
     chatHistory, setChatHistory,
+    inputText, setInputText,
     记忆, set记忆,
-    memorySummaryFlow, setMemorySummaryFlow,
+    记忆压缩失败, set记忆压缩失败,
     忆庭, set忆庭,
     智库, set智库,
     手机, set手机,

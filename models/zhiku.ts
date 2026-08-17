@@ -769,7 +769,14 @@ function scoreEntry(entry: 智库条目, query: string, terms: string[]): number
   const summary = entry.摘要.toLowerCase();
   const source = (entry.来源 ?? '').toLowerCase();
   const raw = entry.原文.toLowerCase();
-  const keywords = entry.关键词.map((k) => k.toLowerCase());
+  // 关键词取「标签值」：正文写「符玄」，匹配的是「角色:符玄」的值而不是带前缀原文
+  // （正文里永远不会出现「角色:」这种标签格式，用原文匹配会让关键词命中路径全部失效）。
+  const keywordValues = (entry.关键词 ?? [])
+    .map((keyword) => {
+      const parsed = parseKeywordTag(keyword);
+      return parsed ? parsed.value : keyword;
+    })
+    .map((keyword) => keyword.toLowerCase());
   const seriesTitle = (entry.系列标题 ?? '').toLowerCase();
   const structured = [
     entry.资料类型,
@@ -793,21 +800,28 @@ function scoreEntry(entry: 智库条目, query: string, terms: string[]): number
   let score = 0;
 
   if (title.includes(query)) score += 80;
-  if (keywords.some((k) => k.includes(query) || query.includes(k))) score += 50;
+  if (keywordValues.some((k) => k.includes(query) || query.includes(k))) score += 50;
   if (summary.includes(query)) score += 32;
   if (seriesTitle.includes(query)) score += 26;
   if (structured.includes(query)) score += 24;
   if (source.includes(query)) score += 12;
   if (raw.includes(query)) score += 8;
+  // 关联角色ID 命中：本体档案优先于「关键词里提到该角色」的关联条目
+  // （如仙舟「罗浮」关键词含「符玄」会与符玄本体同分竞争，本体必须排前面）。
+  const roleId = String(entry.关联角色ID ?? '').toLowerCase();
+  if (roleId && query.includes(roleId) && !/^[a-z][a-z0-9_-]*$/u.test(roleId)) score += 40;
 
   for (const term of terms) {
     if (title.includes(term)) score += 22;
-    if (keywords.some((k) => k.includes(term) || term.includes(k))) score += 18;
+    if (keywordValues.some((k) => k.includes(term) || term.includes(k))) score += 18;
     if (summary.includes(term)) score += 10;
     if (seriesTitle.includes(term)) score += 8;
     if (structured.includes(term)) score += 8;
     if (raw.includes(term)) score += 3;
   }
 
+  // 重要度只作同分排序参考：无任何命中（score=0）时不得返回正分，
+  // 否则「搜索智库条目」的 score>0 过滤形同虚设，全表按重要度返回（AI 候选被无关条目挤占）。
+  if (score === 0) return 0;
   return score + entry.重要度;
 }

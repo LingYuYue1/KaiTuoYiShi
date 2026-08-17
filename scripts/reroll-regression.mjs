@@ -28,7 +28,7 @@ assert(!source.includes('state.setPendingVariable(false);\n\n      const npcSour
 assert(source.includes('const assertWorkflowActive = () =>'), '后台结算阶段必须有当前工作流闸门。');
 assert(/assertWorkflowActive\(\);\s+mem = compression\.memory/.test(source), '记忆压缩 await 后必须检查当前工作流，避免旧记忆写回。');
 assert(source.includes('shouldCommit: isCurrentWorkflow'), '新闻/变量等子流程必须接收当前工作流提交闸门。');
-assert(/assertWorkflowActive\(\);\s*const turnRecallEntry = turnRecallEntryResult\.entry;/.test(source), '忆庭入库前必须检查当前工作流，避免重roll后旧纪要写回。');
+assert(/assertWorkflowActive\(\);\s+state\.set忆庭\(yitingAfterTurnRecall\)/.test(source), '忆庭回忆档案提交前必须检查当前工作流，避免重roll后旧回忆写回。');
 assert(source.includes('turnCount: state.turnCount + 1'), '自动存档必须保存真实 turnCount。');
 // 工作包G：初始重 Roll 只保留尾部 buildRerollGenerationGuard（B5）一份，system 侧 A2 已删除
 assert(!source.includes('# 重roll生成约束'), '重roll system 侧重复约束（A2）必须已删除。');

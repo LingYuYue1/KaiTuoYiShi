@@ -6,6 +6,9 @@ interface InputAreaProps {
   onAbort: () => void;
   loading: boolean;
   disabled?: boolean;
+  /** 受控输入文本：忆庭确认弹窗期间消息保留在输入框（待发送），确认后才真正发送。 */
+  inputText: string;
+  onInputTextChange: (value: string) => void;
   // 平铺的快捷动作
   canRestartOpening?: boolean;
   canReroll?: boolean;
@@ -46,6 +49,8 @@ export const InputArea = memo(function InputArea({
   onAbort,
   loading,
   disabled,
+  inputText,
+  onInputTextChange,
   canRestartOpening = false,
   canReroll = false,
   onRestartOpening,
@@ -61,7 +66,6 @@ export const InputArea = memo(function InputArea({
   actionOptions = [],
   recoveryDraft,
 }: InputAreaProps) {
-  const [input, setInput] = useState('');
   const [rerollActionOptions, setRerollActionOptions] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
@@ -75,30 +79,30 @@ export const InputArea = memo(function InputArea({
   useEffect(() => {
     if (!recoveryDraft || appliedRecoveryRef.current === recoveryDraft.workflowId) return;
     appliedRecoveryRef.current = recoveryDraft.workflowId;
-    if (!input.trim()) {
-      setInput(recoveryDraft.input);
+    if (!inputText.trim()) {
+      onInputTextChange(recoveryDraft.input);
       lastSubmittedRef.current = recoveryDraft.input;
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [input, recoveryDraft]);
+  }, [inputText, recoveryDraft, onInputTextChange]);
 
   const handleSend = useCallback(() => {
-    const trimmed = input.trim();
+    const trimmed = inputText.trim();
     if (!trimmed || loading) return;
     lastSubmittedRef.current = trimmed;
     onSend(trimmed);
-    setInput('');
+    onInputTextChange('');
     setRerollActionOptions([]);
     inputRef.current?.focus();
-  }, [input, loading, onSend]);
+  }, [inputText, loading, onSend, onInputTextChange]);
 
   const handleAbortClick = useCallback(() => {
     onAbort();
     if (lastSubmittedRef.current) {
-      setInput(lastSubmittedRef.current);
+      onInputTextChange(lastSubmittedRef.current);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [onAbort]);
+  }, [onAbort, onInputTextChange]);
 
   const appendActionOptionToInput = useCallback((current: string, option: string) => {
     const normalizedCurrent = current.trim();
@@ -112,9 +116,9 @@ export const InputArea = memo(function InputArea({
   }, []);
 
   const handlePickOption = useCallback((text: string) => {
-    setInput((current) => appendActionOptionToInput(current, text));
+    onInputTextChange(appendActionOptionToInput(inputText, text));
     inputRef.current?.focus();
-  }, [appendActionOptionToInput]);
+  }, [appendActionOptionToInput, inputText, onInputTextChange]);
 
   const showOptions = !loading && !disabled && visibleActionOptions.length > 0;
 
@@ -122,10 +126,10 @@ export const InputArea = memo(function InputArea({
     setRerollActionOptions(actionOptions);
     const restoredInput = await onReroll?.();
     if (typeof restoredInput === 'string') {
-      setInput(restoredInput);
+      onInputTextChange(restoredInput);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [actionOptions, onReroll]);
+  }, [actionOptions, onReroll, onInputTextChange]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -277,8 +281,8 @@ export const InputArea = memo(function InputArea({
       <div className="flex items-stretch gap-2">
         <textarea
           ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          value={inputText}
+          onChange={(e) => onInputTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onCompositionStart={() => {
             isComposingRef.current = true;
@@ -319,7 +323,7 @@ export const InputArea = memo(function InputArea({
         ) : (
           <button
             onClick={handleSend}
-            disabled={!input.trim() || disabled}
+            disabled={!inputText.trim() || disabled}
             className="kaituo-btn kaituo-btn-primary group min-w-[58px] px-3 text-xs md:min-w-[64px] md:px-6 md:text-sm"
           >
             <span

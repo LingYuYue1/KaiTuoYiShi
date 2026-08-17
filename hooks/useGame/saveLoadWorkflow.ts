@@ -297,6 +297,8 @@ async function applySaveToState(
   state.set旅人(safeTraveler);
   state.set世界(safeWorldWithRuntime);
   state.setChatHistory(safeChatHistory);
+  // 输入框受控化后：读档/切档必须清空草稿，避免残留上一局/上一档的未发送文本
+  state.setInputText('');
   state.set记忆(normalizeMemorySystem(save.记忆));   // 老存档缺 longTermMemories 时兜底
   const legacyArchives = (save.记忆 as unknown as { 回忆档案?: unknown[] })?.回忆档案 ?? [];
   state.set忆庭(

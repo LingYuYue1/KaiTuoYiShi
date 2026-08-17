@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   BookOpen,
   Cable,
@@ -39,17 +39,8 @@ import type { NPC记录 } from '@/models/npc';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { VariableSetters } from '@/utils/variableExecutor';
-import { loadSetting, saveSetting } from '@/services/dbService';
+import { saveSetting } from '@/services/dbService';
 import type { 世界书 } from '@/models/worldbook';
-import {
-  mergeZhikuStage6Reports,
-  runZhikuStage6Ab,
-  updateZhikuStage6HumanReview,
-  ZHIKU_STAGE6_REPORT_STORAGE_KEY,
-  type ZhikuStage6HumanReview,
-  type ZhikuStage6Report,
-  type ZhikuStage6Selection,
-} from '@/services/zhikuStage6Runner';
 
 export type SettingsTab = Tab;
 
@@ -134,90 +125,6 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
-  const [zhikuStage6Report, setZhikuStage6Report] = useState<ZhikuStage6Report | null>(null);
-  const [zhikuStage6Running, setZhikuStage6Running] = useState(false);
-  const [zhikuStage6Error, setZhikuStage6Error] = useState('');
-  const zhikuStage6AbortRef = useRef<AbortController | null>(null);
-  const zhikuStage6ReportRef = useRef<ZhikuStage6Report | null>(null);
-  const zhikuStage6Config = useMemo(
-    () => apiSettings.configs.find((item) => item.id === apiSettings.activeConfigId) ?? apiSettings.configs[0] ?? null,
-    [apiSettings.activeConfigId, apiSettings.configs],
-  );
-
-  useEffect(() => {
-    let active = true;
-    void loadSetting<ZhikuStage6Report>(ZHIKU_STAGE6_REPORT_STORAGE_KEY)
-      .then((report) => {
-        if (active && report?.schemaVersion === 1) {
-          zhikuStage6ReportRef.current = report;
-          setZhikuStage6Report(report);
-        }
-      })
-      .catch((error) => {
-        if (active) setZhikuStage6Error(`读取上次阶段六报告失败：${error instanceof Error ? error.message : String(error)}`);
-      });
-    return () => {
-      active = false;
-      zhikuStage6AbortRef.current?.abort();
-    };
-  }, []);
-
-  const persistZhikuStage6Report = useCallback(async (report: ZhikuStage6Report, mergeSingle = false) => {
-    const nextReport = mergeSingle
-      ? mergeZhikuStage6Reports(zhikuStage6ReportRef.current, report)
-      : report;
-    zhikuStage6ReportRef.current = nextReport;
-    setZhikuStage6Report(nextReport);
-    try {
-      await saveSetting(ZHIKU_STAGE6_REPORT_STORAGE_KEY, nextReport);
-    } catch (error) {
-      setZhikuStage6Error(`保存阶段六报告失败：${error instanceof Error ? error.message : String(error)}`);
-    }
-  }, []);
-
-  const runZhikuStage6 = useCallback(async (selection?: ZhikuStage6Selection) => {
-    if (zhikuStage6Running) return;
-    if (!zhikuStage6Config) {
-      setZhikuStage6Error('当前没有可用的主 API 配置。');
-      return;
-    }
-    const controller = new AbortController();
-    zhikuStage6AbortRef.current = controller;
-    setZhikuStage6Running(true);
-    setZhikuStage6Error('');
-    try {
-      const report = await runZhikuStage6Ab({
-        system: 智库,
-        config: zhikuStage6Config,
-        gameSettings,
-        playerRole: 旅人,
-        selection,
-        signal: controller.signal,
-        onProgress: (next) => persistZhikuStage6Report(next, Boolean(selection)),
-      });
-      await persistZhikuStage6Report(report, Boolean(selection));
-    } catch (error) {
-      setZhikuStage6Error(error instanceof Error ? error.message : String(error));
-    } finally {
-      if (zhikuStage6AbortRef.current === controller) zhikuStage6AbortRef.current = null;
-      setZhikuStage6Running(false);
-    }
-  }, [gameSettings, persistZhikuStage6Report, zhikuStage6Config, zhikuStage6Running, 智库, 旅人]);
-
-  const updateZhikuStage6Review = useCallback((fixtureId: string, humanReview: ZhikuStage6HumanReview) => {
-    const current = zhikuStage6ReportRef.current;
-    if (!current) return;
-    const next = updateZhikuStage6HumanReview(current, fixtureId, humanReview);
-    zhikuStage6ReportRef.current = next;
-    setZhikuStage6Report(next);
-    void saveSetting(ZHIKU_STAGE6_REPORT_STORAGE_KEY, next).catch((error) => {
-      setZhikuStage6Error(`保存阶段六人工复核失败：${error instanceof Error ? error.message : String(error)}`);
-    });
-  }, []);
-
-  const cancelZhikuStage6 = useCallback(() => {
-    zhikuStage6AbortRef.current?.abort();
-  }, []);
 
   const persistGameSettingsChange = useCallback((next: 游戏设置) => {
     onGameSettingsChange(next);
@@ -259,13 +166,7 @@ export function SettingsModal({
           <ContextViewerTab
             getSnapshot={getContextSnapshot}
             onRefresh={() => setContextRefreshKey((v) => v + 1)}
-            stage6Config={zhikuStage6Config ? { provider: zhikuStage6Config.provider, model: zhikuStage6Config.model } : null}
-            stage6Report={zhikuStage6Report}
-            stage6Running={zhikuStage6Running}
-            stage6Error={zhikuStage6Error}
-            onRunZhikuStage6={(selection) => void runZhikuStage6(selection)}
-            onCancelZhikuStage6={cancelZhikuStage6}
-            onUpdateZhikuStage6Review={updateZhikuStage6Review}
+            devMode={gameSettings.devMode}
           />
         );
       case 'nsfw':

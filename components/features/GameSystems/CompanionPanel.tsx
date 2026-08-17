@@ -60,6 +60,7 @@ function buildNpcPersistFingerprint(records: NPC记录[]): string {
     n.亲密关系,
     n.职务,
     n.原著角色,
+    n.NPC来源,
     n.合并来源ID,
   ]));
 }

@@ -17,9 +17,9 @@ import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
 import type { NPC记录, NPC同行记忆条目 } from '@/models/npc';
 import type { 队列任务记录 } from '@/models/queueTask';
 import {
-  addImmediateMemory,
   autoCompressMemorySystemWithArchivesAsync,
   compressNpcMemoryLedger,
+  合并即时与短期,
 } from '@/hooks/useGame/memoryUtils';
 
 export type PhoneDualWriteSideStatus = {
@@ -54,6 +54,8 @@ export interface PhoneMemoryDualWriteInput {
   operationSourceId?: string;
   /** 重试时使用原操作持久化的 operationId，保证幂等键与初次提交一致。 */
   operationIdOverride?: string;
+  /** 对标参考项目：记忆发生时的结构化游戏时间（如「琥珀纪 2157.03.07 06:40」），写入 NPC 记忆与回忆条目。 */
+  gameTime?: string;
 }
 
 function fnv1a(text: string): string {
@@ -84,15 +86,14 @@ export function buildPhoneMemoryOperationId(
   return `phone_mem_${Math.max(1, Math.trunc(turn) || 1)}_${contactKey}${sourceKey}_${fnv1a(trimmed)}`;
 }
 
-/** 主记忆压缩阈值判断（与 sendWorkflow 一致）：任一层待压缩数量 > 0 即达阈值。 */
+/** 主记忆压缩阈值判断（与 sendWorkflow 一致）：短期/中期任一层待压缩数量 > 0 即达阈值。
+ *  对标参考项目：即时层为滑动窗口（不调 AI 压缩），不参与待压缩判定。 */
 function hasPendingCompression(memory: 记忆系统, settings: 记忆系统设置): boolean {
-  const immediateThreshold = settings.即时转短期阈值 ?? 10;
   const shortThreshold = settings.短期转中期阈值 ?? 30;
   const middleThreshold = settings.中期转长期阈值 ?? 50;
-  const immediatePending = Math.max(0, memory.即时记忆.length - immediateThreshold + 1);
   const shortPending = Math.max(0, memory.短期记忆.length - shortThreshold + 1);
   const middlePending = Math.max(0, (memory.中期记忆 ?? []).length - middleThreshold + 1);
-  return immediatePending > 0 || shortPending > 0 || middlePending > 0;
+  return shortPending > 0 || middlePending > 0;
 }
 
 function buildFallbackConfig(): API配置项 {
@@ -182,7 +183,14 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
     yitingSide = { status: 'not_due' };
   } else {
     // 初次提交：向主记忆追加通讯内容后再判断压缩。
-    const withImmediate = addImmediateMemory(input.memory, normalizedSummary, input.turn);
+    // 对标参考项目：即时层为滑动窗口（上限=即时转短期阈值），手机摘要作为即时内容合体写入，
+    // 超限时最旧条目直接移出（无短期摘要可滚入）。
+    const immediateLimit = Math.max(1, Math.trunc(input.settings.即时转短期阈值 ?? 10) || 10);
+    const 手机即时条目 = 合并即时与短期(normalizedSummary, '');
+    const withImmediate: 记忆系统 = {
+      ...input.memory,
+      即时记忆: [...input.memory.即时记忆, 手机即时条目].slice(-immediateLimit),
+    };
     nextMemory = withImmediate;
     if (!hasPendingCompression(withImmediate, input.settings)) {
       // 未达主记忆压缩阈值：只表示忆庭归档 not_due，不得标记"已写入忆庭"。
@@ -247,6 +255,7 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
             摘要: packagedSummary,
             来源: '手机',
             关联NPCID: [npc.id],
+            时间: input.gameTime?.trim() || undefined,
           };
           const ledgerCompression = compressNpcMemoryLedger({
             npcId: npc.id,
@@ -373,6 +382,8 @@ export interface PhoneMemoryCommitIntent {
   force?: boolean;
   retrySide?: 'yiting' | 'npc';
   operationIdOverride?: string;
+  /** 对标参考项目：结构化游戏时间（写入 NPC 记忆）。 */
+  gameTime?: string;
 }
 
 export interface PhoneMemoryPublishDeps {
@@ -425,6 +436,7 @@ export async function runPhoneMemoryCommit(
     retrySide: input.retrySide,
     operationSourceId: input.operationSourceId,
     operationIdOverride: input.operationIdOverride,
+    gameTime: input.gameTime,
   });
   const failureTasks = buildPhoneMemoryFailureTasks(result, input.summary, input.contactId, input.turn);
   const nextQueueTasks = failureTasks.length
@@ -469,6 +481,7 @@ export async function retryPhoneMemoryWrite(
     settings: 记忆系统设置;
     config?: API配置项 | null;
     turn: number;
+    gameTime?: string;
   },
   deps: PhoneMemoryPublishDeps,
 ): Promise<{ ok: boolean; error?: string; result?: PhoneDualWriteResult; persistFailed?: boolean }> {
@@ -487,6 +500,7 @@ export async function retryPhoneMemoryWrite(
     retrySide: payload.failedSide,
     // 重试必须使用原操作持久化的 operationId，保证幂等键与初次提交一致。
     operationIdOverride: payload.operationId || undefined,
+    gameTime: current.gameTime,
   });
   const failedSide = result.sides[payload.failedSide];
   const ok = failedSide.status !== 'failed';

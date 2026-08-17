@@ -11,9 +11,11 @@ fs.mkdirSync(path.dirname(outfile), { recursive: true });
 await build({
   stdin: {
     contents: `
-      export { 归一化NPC记录列表, NPC记录有内容, 是NPC泛称姓名, 筛选活跃NPC } from './models/npc.ts';
+      export { 归一化NPC记录列表, NPC记录有内容, 是NPC泛称姓名, 筛选活跃NPC, buildNpcMemoryLedgerView } from './models/npc.ts';
+      export { matchCanonical } from './data/canonicalCharacters.ts';
       export { factsToVariableCommands } from './utils/variableFacts.ts';
       export { enrichNpcArchives } from './utils/npcArchiveEnrichment.ts';
+      export { buildPhoneMessages, visiblePhoneSeed } from './services/ai/phoneService.ts';
     `,
     resolveDir: root,
     sourcefile: 'companion-npc-triage-regression-entry.ts',
@@ -38,6 +40,19 @@ try {
 
   assert.equal(runtime.是NPC泛称姓名('女科员'), true);
   assert.equal(runtime.是NPC泛称姓名('张三'), false);
+
+  // ── 智库人物档案名称必须参与 canonical 识别，敌对档案不自动晋升 ──
+  for (const [input, expected] of [
+    ['布洛妮娅', '布洛妮娅'],
+    ['卡芙卡', '卡芙卡'],
+    ['彦卿', '彦卿'],
+    ['大黑塔', '黑塔'],
+    ['忘归人', '停云'],
+    ['杨叔', '瓦尔特'],
+  ]) {
+    assert.equal(runtime.matchCanonical(input)?.name, expected, `智库角色名「${input}」必须识别为 ${expected}`);
+  }
+  assert.equal(runtime.matchCanonical('归寂'), null, '敌对生物档案不得作为普通 canonical 伙伴身份');
 
   const singleMemory = runtime.factsToVariableCommands([
     { type: 'npc', name: '张三', memory: '张三替玩家指路。' },
@@ -155,6 +170,11 @@ try {
     { type: 'npc', id: 'npc-1', name: '张三', relationshipStage: '知己' },
   ], baseState([npc({ 阶位: 'extra' })]), 2);
   assert.ok(stageWritten.commands.some((item) => item.key.endsWith('.当前关系阶段') && item.value === '知己'));
+  const stageRoundTrip = runtime.归一化NPC记录列表([
+    npc({ id: 'stage-roundtrip', 姓名: '张三', 好感度: 20, 当前关系阶段: '知己' }),
+  ])[0];
+  assert.equal(stageRoundTrip.当前关系阶段, '知己', '显式关系阶段归一化后不得退回好感度派生值');
+  assert.equal(runtime.buildNpcMemoryLedgerView(stageRoundTrip).当前关系阶段, '知己', '账本视图必须展示显式关系阶段');
 
   // ── 返修补齐：手动覆盖来源强制 manual ──
   const manualSource = runtime.归一化NPC记录列表([
@@ -168,6 +188,16 @@ try {
   ]);
   assert.equal(canonicalRestored[0].原著角色, true, 'canonical 匹配必须补齐原著角色标记');
   assert.equal(canonicalRestored[0].阶位, 'companion', 'canonical 旧记录不得被降为路人');
+
+  // ── 手机先出现、主剧情尚未建档：完整原著角色清单仍必须进入伙伴 ──
+  for (const [name, id] of [['布洛妮娅', 'canon_bronya'], ['杨叔', 'canon_welt']]) {
+    const phoneOnlyCanonical = runtime.factsToVariableCommands([
+      { type: 'npc', id, name, memory: `手机中与${name}建立了通讯。` },
+    ], baseState([]), 2);
+    const created = phoneOnlyCanonical.commands.find((item) => item.key === 'NPC')?.value;
+    assert.equal(created?.阶位, 'companion', `手机先出现的原著角色 ${name} 不得落入路人`);
+    assert.equal(created?.NPC来源, 'canonical', `手机先出现的原著角色 ${name} 必须标记 canonical`);
+  }
 
   // ── 返修补齐：自定义 NPC 身份保护 ──
   // 自定义 companion 不因无 canonical 匹配而降级
@@ -186,6 +216,24 @@ try {
     npc({ id: 'canon-sim-2', 姓名: '三月七', 原著角色: true }),
   ]);
   assert.equal(customSimilar.length, 2, '自定义 NPC 不得与 canonical 角色按相似姓名自动合并');
+  assert.equal(customSimilar[0].阶位, 'extra', 'canonical alias 不得把自定义 NPC 晋升为伙伴');
+  assert.equal(customSimilar[0].原著角色, false, 'canonical alias 不得把自定义 NPC 标成原著角色');
+  assert.equal(customSimilar[0].NPC来源, 'custom', '自定义 NPC 必须保留 custom 来源');
+  assert.equal(customSimilar[1].NPC来源, 'canonical', '规范名原著角色必须保留 canonical 来源');
+  const enrichedCustomSimilar = runtime.enrichNpcArchives([customSimilar[0]], { nsfwEnabled: true, maleNsfwArchiveEnabled: false }).records[0];
+  assert.equal(enrichedCustomSimilar.原著角色, false, '档案补全不得把自定义 canonical alias 改成原著角色');
+
+  // 自定义 NPC 即使使用原著角色的规范名，也不能因后续互动被自动晋升。
+  const customCanonicalUpdate = runtime.factsToVariableCommands([
+    { type: 'npc', id: 'custom-bronya', name: '布洛妮娅', memory: '玩家自创角色与她有相同姓名。' },
+  ], baseState([
+    npc({ id: 'custom-bronya', 姓名: '布洛妮娅', 阶位: 'extra', 原著角色: false, NPC来源: 'custom' }),
+  ]), 2);
+  assert.equal(
+    customCanonicalUpdate.commands.some((item) => item.key.endsWith('.阶位') && item.value === 'companion'),
+    false,
+    '自定义同名 NPC 后续互动不得被 canonical matcher 自动晋升',
+  );
 
   // ── 返修补齐：完整泛称词表 ──
   for (const genericName of ['少女', '年轻人', '男孩', '女人', '女科员', '店员', '神秘人', '姑娘']) {
@@ -211,6 +259,36 @@ try {
   assert.match(phoneModalSource, /!npc\.归档/, 'PhoneModal 可添加联系人必须排除归档 NPC');
   const phoneServiceSource = fs.readFileSync(path.join(root, 'services/ai/phoneService.ts'), 'utf8');
   assert.match(phoneServiceSource, /boundNpc\?\.归档/, 'phoneService 群聊参与者不得回退归档 NPC 旧联系人名字');
+
+  // ── 返修补齐：手机归档边界真实行为 ──
+  const archivedPhoneNpc = npc({ id: 'archived-phone', 姓名: '帕姆', 阶位: 'companion', 归档: true });
+  const archivedSeed = runtime.factsToVariableCommands([
+    { type: 'phone_seed', targetType: 'private', targetName: '帕姆', title: '归档种子', context: '旧联系人' },
+  ], baseState([archivedPhoneNpc]), 2);
+  assert.equal(archivedSeed.commands.filter((item) => item.key === '手机.messageSeeds').length, 0, '归档 NPC 名称不得合成手机来信种子');
+  assert.match(archivedSeed.warnings.join('\n'), /已归档/, '归档手机种子必须给出明确 warning');
+
+  const groupPhoneContext = {
+    traveler: { 姓名: '开拓者' },
+    world: { 当前时间: '08:00' },
+    npcRecords: [archivedPhoneNpc],
+    news: [],
+    turnCount: 2,
+    chat: { id: 'group-1', type: 'group', title: '旧群聊', participantIds: ['npc_archived-phone'], messages: [] },
+    contacts: [{ id: 'npc_archived-phone', npcId: 'archived-phone', name: '帕姆' }],
+    seed: { id: 'seed-group', targetType: 'group', targetId: 'group-1', relatedNpcIds: ['archived-phone'], title: '普通种子', source: 'test', triggerType: 'custom', priority: 'normal', context: '普通事件' },
+  };
+  assert.equal(runtime.visiblePhoneSeed(groupPhoneContext), undefined, '归档群聊种子不得进入手机请求');
+  assert.doesNotMatch(runtime.buildPhoneMessages(groupPhoneContext).map((item) => item.content).join('\n'), /npc_archived-phone|帕姆/, '归档群聊参与者不得以旧 ID 或姓名进入请求');
+
+  const privatePhoneContext = {
+    ...groupPhoneContext,
+    chat: { id: 'private-1', type: 'private', title: '旧私聊', participantIds: ['contact-1'], messages: [] },
+    contacts: [{ id: 'contact-1', npcId: 'npc_archived-phone', name: '帕姆' }],
+    contact: { id: 'contact-1', npcId: 'npc_archived-phone', name: '帕姆' },
+    seed: { id: 'seed-private', targetType: 'private', targetId: 'npc_archived-phone', relatedNpcIds: [], title: '普通种子', source: 'test', triggerType: 'custom', priority: 'normal', context: '普通事件' },
+  };
+  assert.equal(runtime.visiblePhoneSeed(privatePhoneContext), undefined, '旧 npc_ 前缀联系人不得绕过归档种子过滤');
 
   console.log('companion NPC triage regression ok');
 } finally {

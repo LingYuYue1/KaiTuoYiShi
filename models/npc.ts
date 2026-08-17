@@ -35,6 +35,8 @@ export interface NPC同行记忆条目 {
   关联NPCID?: string[];
   /** 剧情事实结构化来源：相同 factId 幂等，重 Roll/重试不生成第二份 */
   关联事实ID?: string;
+  /** 对标参考项目：记忆发生时的结构化游戏时间（如「琥珀纪 2157.03.07 06:40」），旧条目缺省。 */
+  时间?: string;
 }
 
 export interface NPC总结记忆条目 {
@@ -45,6 +47,12 @@ export interface NPC总结记忆条目 {
   保留事实?: string[];
   关系变化?: string[];
   未完成事项?: string[];
+  /** 对标参考项目：覆盖的原始记忆索引范围（NPC 记忆压缩时记录）。 */
+  开始索引?: number;
+  结束索引?: number;
+  /** 对标参考项目：总结覆盖的时间范围。 */
+  开始时间?: string;
+  结束时间?: string;
 }
 
 // ===== 阶段1新增：约定结构（玩家承诺结构化载体，挂NPC下，三环联动） =====
@@ -356,6 +364,8 @@ export interface NPC记录 {
   约定?: 约定结构[];
   备注: string[];
   原著角色?: boolean;                // 来自原著角色库的标记
+  /** 身份来源与阶位分离：canonical=原著角色，custom=玩家/剧情明确创建，unknown=旧数据无法确定。 */
+  NPC来源?: 'canonical' | 'custom' | 'unknown';
   NSFW档案?: NPC_NSFW档案;
   图像档案?: {
     头像?: string;
@@ -377,6 +387,7 @@ export function 创建NPC记录(input: {
   别名?: string;
   职务?: string;
   原著角色?: boolean;
+  NPC来源?: NPC记录['NPC来源'];
   性别?: NPC性别;
   外貌?: string;
   穿着?: string;
@@ -411,6 +422,7 @@ export function 创建NPC记录(input: {
     NSFW档案: input.NSFW档案,
     备注: [],
     原著角色: input.原著角色,
+    NPC来源: input.NPC来源 ?? (input.原著角色 === true ? 'canonical' : input.原著角色 === false ? 'custom' : 'unknown'),
   };
 }
 
@@ -462,8 +474,24 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
   const rawAvatar = source.头像 ?? source.avatar ?? source.avatarUrl;
   const rawNSFW = source.NSFW档案 ?? source.nsfw ?? source.NSFW;
   const rawImage = source.图像档案 ?? source.image ?? source.images;
-  const canonical = 匹配NPC原著角色(name, typeof rawAlias === 'string' ? rawAlias : undefined);
-  const shouldForceCompanion = Boolean(canonical || source.原著角色 || source.canonical);
+  const rawNpcSource = source.NPC来源 ?? source.npcSource ?? source.source;
+  const sourceHint = rawNpcSource === 'canonical' || rawNpcSource === 'custom' || rawNpcSource === 'unknown'
+    ? rawNpcSource
+    : undefined;
+  const canonicalMatch = 匹配NPC原著角色(name, typeof rawAlias === 'string' ? rawAlias : undefined);
+  const exactCanonicalIdentity = Boolean(
+    canonicalMatch && (name === canonicalMatch.name || rawAlias === canonicalMatch.name),
+  );
+  // 明确标记为 custom 的记录不能因 canonical alias（如“三月”）被改造成原著角色；
+  // 规范名本身仍可从旧存档缺失标记中恢复为 canonical。
+  const customIdentity = sourceHint === 'custom'
+    || (sourceHint !== 'canonical' && source.原著角色 === false && !exactCanonicalIdentity);
+  const canonicalIdentity = !customIdentity && Boolean(
+    canonicalMatch && (exactCanonicalIdentity || source.原著角色 === true || source.canonical || sourceHint === 'canonical'),
+  );
+  const canonical = canonicalIdentity ? canonicalMatch : null;
+  const shouldForceCompanion = Boolean(canonical || source.原著角色 === true || source.canonical || sourceHint === 'canonical');
+  const npcSource = sourceHint ?? (shouldForceCompanion ? 'canonical' : source.原著角色 === false ? 'custom' : 'unknown');
   const manualTier = source.手动阶位覆盖 === 'companion' || source.手动阶位覆盖 === 'extra'
     ? source.手动阶位覆盖
     : undefined;
@@ -481,6 +509,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     归档回合: Number.isFinite(Number(source.归档回合 ?? source.archivedTurn)) ? Number(source.归档回合 ?? source.archivedTurn) : undefined,
     累计互动次数: Math.max(0, Math.trunc(Number(source.累计互动次数 ?? source.interactionCount) || 0)),
     手动阶位覆盖: manualTier,
+    NPC来源: npcSource,
     阶位来源: manualTier
       ? 'manual'
       : (source.阶位来源 === 'manual' || source.阶位来源 === 'canonical' || source.阶位来源 === 'auto' || source.阶位来源 === 'ai'
@@ -506,7 +535,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     同行记忆: 归一化同行记忆列表(rawMemories),
     最近互动: readNpcString(source.最近互动 ?? source.recentInteraction),
     对玩家长期印象: readNpcString(source.对玩家长期印象 ?? source.longTermImpression),
-    当前关系阶段: 获取NPC关系阶段(affinity),
+    当前关系阶段: readNpcString(source.当前关系阶段 ?? source.relationshipStage ?? source.关系阶段) || 获取NPC关系阶段(affinity),
     共同经历: normalizeNpcTextList(source.共同经历 ?? source.sharedExperiences),
     未完成事项: normalizeNpcTextList(source.未完成事项 ?? source.openItems),
     未解决冲突: normalizeNpcTextList(source.未解决冲突 ?? source.unresolvedConflicts),
@@ -556,7 +585,7 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     同行记忆: 合并同行记忆(base.同行记忆 ?? [], incoming.同行记忆 ?? []),
     最近互动: preferred.最近互动 ?? base.最近互动 ?? incoming.最近互动,
     对玩家长期印象: preferred.对玩家长期印象 ?? base.对玩家长期印象 ?? incoming.对玩家长期印象,
-    当前关系阶段: 获取NPC关系阶段(affinity),
+    当前关系阶段: 选择NPC关系阶段(base, incoming, preferred, affinity),
     共同经历: 去重文本列表([...(base.共同经历 ?? []), ...(incoming.共同经历 ?? [])]),
     未完成事项: 去重文本列表([...(base.未完成事项 ?? []), ...(incoming.未完成事项 ?? [])]),
     未解决冲突: 去重文本列表([...(base.未解决冲突 ?? []), ...(incoming.未解决冲突 ?? [])]),
@@ -566,6 +595,11 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     约定: 合并约定列表(base.约定 ?? [], incoming.约定 ?? []),
     备注: 去重文本列表([...(base.备注 ?? []), ...(incoming.备注 ?? [])]),
     原著角色: Boolean(base.原著角色 || incoming.原著角色),
+    NPC来源: base.NPC来源 === 'canonical' || incoming.NPC来源 === 'canonical'
+      ? 'canonical'
+      : base.NPC来源 === 'custom' || incoming.NPC来源 === 'custom'
+        ? 'custom'
+        : preferred.NPC来源 ?? 'unknown',
     头像: preferred.头像 ?? base.头像 ?? incoming.头像,
     外貌: preferred.外貌 ?? base.外貌 ?? incoming.外貌,
     穿着: preferred.穿着 ?? base.穿着 ?? incoming.穿着,
@@ -580,8 +614,16 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
   };
 }
 
+function 选择NPC关系阶段(base: NPC记录, incoming: NPC记录, preferred: NPC记录, affinity: number): string {
+  const explicit = [incoming, base, preferred]
+    .filter((record) => typeof record.当前关系阶段 === 'string' && record.当前关系阶段.trim())
+    .sort((a, b) => (Number(b.最近回合) || 0) - (Number(a.最近回合) || 0))[0]
+    ?.当前关系阶段?.trim();
+  return explicit || 获取NPC关系阶段(affinity);
+}
+
 function 选择NPC显示姓名(base: NPC记录, incoming: NPC记录, preferred: NPC记录): string {
-  const canonical = 匹配NPC原著角色(base.姓名, base.别名) ?? 匹配NPC原著角色(incoming.姓名, incoming.别名);
+  const canonical = 匹配记录NPC原著角色(base) ?? 匹配记录NPC原著角色(incoming);
   if (canonical) return canonical.name;
   const baseTemp = Boolean(解析临时称呼(base.姓名));
   const incomingTemp = Boolean(解析临时称呼(incoming.姓名));
@@ -602,7 +644,7 @@ function 选择更完整的NPC记录(a: NPC记录, b: NPC记录): NPC记录 {
 
 function 计算NPC记录分数(record: NPC记录): number {
   let value = 0;
-  if (匹配NPC原著角色(record.姓名, record.别名)) value += 120;
+  if (匹配记录NPC原著角色(record)) value += 120;
   if (record.阶位 === 'companion') value += 35;
   if (record.同行) value += 20;
   if (record.原著角色) value += 18;
@@ -648,10 +690,12 @@ function 选择较新的亲密关系(base: NPC记录, incoming: NPC记录, prefe
 
 function 计算NPC身份键(record: NPC记录): string {
   const normalized = 规范化NPC身份文本(record.姓名);
-  const canonical = 匹配NPC原著角色(record.姓名, record.别名);
-  // canonical 合并键仅限规范名精确匹配（姓名或别名 === canonical.name）；
-  // 别名相似（如自定义"三月" vs "三月七"）不得作为自动合并依据。
-  if (canonical && (record.姓名 === canonical.name || record.别名 === canonical.name)) return `canon:${canonical.name}`;
+  const canonical = 匹配记录NPC原著角色(record);
+  // canonical 合并键只对明确 canonical 来源或规范名精确匹配生效；
+  // custom 记录永远不参与 canonical 合并。
+  if (canonical && (record.NPC来源 === 'canonical' || record.姓名 === canonical.name || record.别名 === canonical.name)) {
+    return `canon:${canonical.name}`;
+  }
   const genericSuffix = NPC_GENERIC_SUFFIXES.find((suffix) => normalized.endsWith(suffix));
   if (genericSuffix) return `generic:${genericSuffix}`;
   return `name:${normalized.toLowerCase()}`;
@@ -672,14 +716,19 @@ function 查找可合并NPC身份键(record: NPC记录, merged: Map<string, NPC�
 
 function 生成NPC身份候选键(record: NPC记录): string[] {
   const keys = new Set<string>([计算NPC身份键(record)]);
-  const canonical = 匹配NPC原著角色(record.姓名, record.别名);
-  if (canonical && (record.姓名 === canonical.name || record.别名 === canonical.name)) keys.add(`canon:${canonical.name}`);
+  const canonical = 匹配记录NPC原著角色(record);
+  const canonicalIdentity = Boolean(
+    canonical && (record.NPC来源 === 'canonical' || record.姓名 === canonical.name || record.别名 === canonical.name),
+  );
+  if (canonical && canonicalIdentity) keys.add(`canon:${canonical.name}`);
   for (const text of [record.姓名, record.别名]) {
     const normalized = text ? 规范化NPC身份文本(text) : '';
     if (!normalized) continue;
-    const aliasCanonical = matchCanonical(normalized);
-    if (aliasCanonical && normalized === aliasCanonical.name) keys.add(`canon:${aliasCanonical.name}`);
-    keys.add(`name:${normalized.toLowerCase()}`);
+    const aliasCanonical = record.NPC来源 === 'custom' ? null : matchCanonical(normalized);
+    if (aliasCanonical && (record.NPC来源 === 'canonical' || normalized === aliasCanonical.name)) {
+      keys.add(`canon:${aliasCanonical.name}`);
+    }
+    if (!canonicalIdentity) keys.add(`name:${normalized.toLowerCase()}`);
   }
   return [...keys];
 }
@@ -693,6 +742,15 @@ function 匹配NPC原著角色(name: string, alias?: string): ReturnType<typeof 
   return null;
 }
 
+function 匹配记录NPC原著角色(record: Pick<NPC记录, '姓名' | '别名' | 'NPC来源'>): ReturnType<typeof matchCanonical> {
+  if (record.NPC来源 === 'custom') return null;
+  const canonical = 匹配NPC原著角色(record.姓名, record.别名);
+  if (record.NPC来源 !== 'canonical' && canonical && record.姓名 !== canonical.name && record.别名 !== canonical.name) {
+    return null;
+  }
+  return canonical;
+}
+
 function 规范化NPC身份文本(name: string): string {
   return 去除NPC修饰前缀(name)
     .replace(/\s+/g, '')
@@ -704,7 +762,7 @@ const NPC_TEMP_NAME_PREFIXES = ['未知', '神秘', '陌生', '无名', '灰发'
 const NPC_TEMP_NAME_SUFFIXES = ['少女', '少年', '女孩', '男孩', '青年', '女人', '男人', '女士', '男子', '角色'];
 
 function 应按临时称呼合并NPC(a: NPC记录, b: NPC记录): boolean {
-  if (匹配NPC原著角色(a.姓名, a.别名) || 匹配NPC原著角色(b.姓名, b.别名)) return false;
+  if (匹配记录NPC原著角色(a) || 匹配记录NPC原著角色(b)) return false;
   if (a.关系 === 'enemy' || b.关系 === 'enemy') return false;
   const aTemp = 解析临时称呼(a.姓名);
   const bTemp = 解析临时称呼(b.姓名);
@@ -1305,7 +1363,7 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
     npcId: record.id,
     姓名: record.姓名,
     别名: record.别名,
-    当前关系阶段: 格式化NPC关系(record.好感度, Boolean(record.亲密关系)),
+    当前关系阶段: record.当前关系阶段?.trim() || 格式化NPC关系(record.好感度, Boolean(record.亲密关系)),
     亲密关系: Boolean(record.亲密关系),
     好感度: 限制NPC好感度(record.好感度),
     同行: Boolean(record.同行),
@@ -1495,9 +1553,9 @@ function isGenericAvatarPlaceholder(value: string): boolean {
   return normalized.endsWith(STATIC_ASSET_FALLBACK_AVATAR.toLowerCase());
 }
 
-export function 读取NPC内置头像(record: Pick<NPC记录, '姓名' | '别名'> | undefined): string | undefined {
+export function 读取NPC内置头像(record: Pick<NPC记录, '姓名' | '别名' | 'NPC来源'> | undefined): string | undefined {
   if (!record) return undefined;
-  const canonical = 匹配NPC原著角色(record.姓名, record.别名);
+  const canonical = 匹配记录NPC原著角色(record);
   return getDefaultBuiltinAvatarForNames(canonical?.name, record.姓名, record.别名);
 }
 

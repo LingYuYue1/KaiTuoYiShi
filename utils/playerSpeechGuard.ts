@@ -1,7 +1,21 @@
+export type PlayerSpeechMode = 'no-control' | 'expansion';
+
 export interface PlayerSpeechGuardOptions {
   body: string;
   playerName: string;
+  playerAliases?: string[];
   userInput?: string;
+  mode?: PlayerSpeechMode;
+}
+
+export interface PlayerSpeechCorrection {
+  code: 'inline_tag_split' | 'sound_effect_reassigned' | 'unsupported_player_line_reassigned';
+  lineIndex: number;
+}
+
+export interface PlayerSpeechNormalizationResult {
+  body: string;
+  corrections: PlayerSpeechCorrection[];
 }
 
 const BODY_TAG_NAMES = ['正文', 'body', 'content', 'text', '内容'];
@@ -85,16 +99,27 @@ const SOUND_EFFECT_TAGS = new Set([
 
 const PLAYER_SPEECH_VERBS_RE = /(?:我|俺|本旅人|玩家)?\s*(?:说|喊|叫|问|回答|回应|解释|自我介绍|命令|低声|大声|开口|说道|喊道|问道|答道)\s*[：:]/;
 
-export function normalizePlayerSpeechInBody(options: PlayerSpeechGuardOptions): string {
-  const body = normalizeInlineSpeakerTags(options.body);
-  if (!body.trim()) return body;
-  const safeName = options.playerName.trim() || '你';
-  const evidence = buildPlayerSpeechEvidence(options.userInput ?? '');
-  const quoteOnlyRe = /^([“"「].+?[”"」][。！？!?]?)$/;
-
-  return body
+/**
+ * Normalize player ownership once for both persistence and diagnostics.
+ * Expansion mode keeps explicit player-labelled short speech even without a
+ * verbatim substring match; no-control mode retains the strict evidence gate.
+ */
+export function normalizePlayerSpeechBody(options: PlayerSpeechGuardOptions): PlayerSpeechNormalizationResult {
+  const inlineSplitLineIndices = options.body
     .split(/\r?\n/)
-    .flatMap((raw) => {
+    .flatMap((line, lineIndex) => splitInlineSpeakerTagsInLine(line).length > 1 ? [lineIndex] : []);
+  const body = normalizeInlineSpeakerTags(options.body);
+  if (!body.trim()) return { body, corrections: [] };
+  const safeName = options.playerName.trim() || '你';
+  const playerNames = [safeName, ...(options.playerAliases ?? [])].map((name) => name.trim()).filter(Boolean);
+  const evidence = buildPlayerSpeechEvidence(options.userInput ?? '');
+  const mode = options.mode ?? 'no-control';
+  const quoteOnlyRe = /^([“"「].+?[”"」][。！？!?]?)$/;
+  const corrections: PlayerSpeechCorrection[] = [];
+
+  const normalizedBody = body
+    .split(/\r?\n/)
+    .flatMap((raw, lineIndex) => {
       const line = raw.trim();
       if (!line) return [''];
 
@@ -120,12 +145,19 @@ export function normalizePlayerSpeechInBody(options: PlayerSpeechGuardOptions): 
       const protagonistMatch =
         line.match(/^【\s*角色\s*】\s*([^：:]+)[：:]\s*(.+)$/) ??
         line.match(/^【\s*([^】]+?)\s*】\s*(.+)$/);
-      if (!protagonistMatch || !isPlayerSpeakerName(protagonistMatch[1], safeName)) return [raw];
+      if (!protagonistMatch || !isPlayerSpeakerName(protagonistMatch[1], playerNames)) return [raw];
 
       const text = protagonistMatch[2].trim();
       const split = text.match(/^([“"「].+?[”"」][。！？!?]?)(\s+.+)$/);
       const speechText = split ? stripOuterQuote(split[1]) : stripOuterQuote(text);
-      if (!isAllowedPlayerSpeech(speechText, evidence)) {
+      const allowed = mode === 'expansion'
+        ? isAllowedExpandedPlayerSpeech(speechText)
+        : isAllowedPlayerSpeech(speechText, evidence);
+      if (!allowed) {
+        corrections.push({
+          code: isSoundEffectLike(speechText) ? 'sound_effect_reassigned' : 'unsupported_player_line_reassigned',
+          lineIndex,
+        });
         return [`【旁白】${text}`];
       }
       if (!split) return [`【${safeName}】${speechText}`];
@@ -135,6 +167,14 @@ export function normalizePlayerSpeechInBody(options: PlayerSpeechGuardOptions): 
       ];
     })
     .join('\n');
+
+  corrections.unshift(...inlineSplitLineIndices.map((lineIndex) => ({ code: 'inline_tag_split' as const, lineIndex })));
+  return { body: normalizedBody, corrections };
+}
+
+/** Backward-compatible string API for callers outside the main workflow. */
+export function normalizePlayerSpeechInBody(options: PlayerSpeechGuardOptions): string {
+  return normalizePlayerSpeechBody(options).body;
 }
 
 export function normalizeInlineSpeakerTags(text: string): string {
@@ -156,7 +196,7 @@ function splitInlineSpeakerTagsInLine(line: string): string[] {
     if (!shouldSplitInlineSpeakerTag(line, match.index, label)) continue;
     ranges.push(match.index);
   }
-  if (ranges.length <= 1) return [line];
+  if (ranges.length === 0) return [line];
   const result: string[] = [];
   for (let i = 0; i < ranges.length; i += 1) {
     const start = ranges[i];
@@ -166,6 +206,16 @@ function splitInlineSpeakerTagsInLine(line: string): string[] {
   }
   const prefix = line.slice(0, ranges[0]).trim();
   return prefix ? [prefix, ...result] : result;
+}
+
+function isAllowedExpandedPlayerSpeech(text: string): boolean {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned.length > 180) return false;
+  if (isSoundEffectLike(cleaned)) return false;
+  // Expansion permits short naturalized lines, but still rejects obvious
+  // system/meta payloads that must never become a player avatar bubble.
+  if (/^(系统|系统提示|系统消息|旁白|环境|广播)\s*[:：]/.test(cleaned)) return false;
+  return true;
 }
 
 function shouldSplitInlineSpeakerTag(line: string, index: number, label: string): boolean {
@@ -224,9 +274,9 @@ function stripOuterQuote(text: string): string {
     .trim();
 }
 
-function isPlayerSpeakerName(name: string, playerName: string): boolean {
+function isPlayerSpeakerName(name: string, playerNames: string[]): boolean {
   const normalized = name.trim();
-  return normalized === playerName || normalized === '你' || normalized === '我';
+  return playerNames.includes(normalized) || normalized === '你' || normalized === '我';
 }
 
 function isLikelyPlayerSpeech(text: string): boolean {

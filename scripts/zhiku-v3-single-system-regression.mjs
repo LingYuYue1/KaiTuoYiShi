@@ -23,6 +23,13 @@ const retiredPaths = [
   'data/zhikuIdentityRegistry.ts',
   'scripts/zhiku-stage2-legacy-save-acceptance.mjs',
   'components/features/ZhikuV3/ZhikuMaintenancePanel.tsx',
+  'services/zhikuStage6Harness.ts',
+  'services/zhikuStage6Runner.ts',
+  'services/zhikuRunTrace.ts',
+  'scripts/zhiku-stage6-harness-regression.mjs',
+  'scripts/zhiku-stage6-preflight.mjs',
+  'scripts/zhiku-stage6-real-runner-regression.mjs',
+  'scripts/zhiku-stage6-run-trace-regression.mjs',
 ];
 
 for (const retiredPath of retiredPaths) {
@@ -74,7 +81,10 @@ const scanRoots = [
   'data/builtinWorldbookConfig.ts',
   'hooks/useGameState.ts',
   'hooks/useGame/saveLoadWorkflow.ts',
+  'hooks/useGame/contextSnapshot.ts',
+  'hooks/useGame/sendWorkflow.ts',
   'hooks/useGame/turnSnapshot.ts',
+  'models/chat.ts',
   'models/zhiku.ts',
   'models/zhikuGovernance.ts',
   'models/settings.ts',
@@ -82,7 +92,8 @@ const scanRoots = [
   'services/zhikuRetrieval.ts',
   'services/zhikuRuntimeCompiler.ts',
   'services/zhikuRuntimeUnlock.ts',
-  'services/zhikuStage6Harness.ts',
+  'components/features/Settings/ContextViewer.tsx',
+  'components/features/Settings/SettingsModal.tsx',
   'components/features/Settings/ZhikuSettingsTab.tsx',
   'stories',
 ];
@@ -116,6 +127,18 @@ const forbiddenTokens = [
   'showMaintenance',
   '维护智库',
   '智库维护工作台',
+  'zhikuStage6Harness',
+  'zhikuStage6Runner',
+  'zhikuRunTrace',
+  'ZhikuRunTrace',
+  '本回合发送前预测',
+  '智库本回合结构化预演',
+  '智库上一回合结构化实发',
+  '上一回合真实请求回执',
+  '本回合预演（结构化）',
+  '上一回合实发（结构化）',
+  '阶段六 A/B',
+  'A/B 预检',
 ];
 
 for (const file of sourceFiles) {

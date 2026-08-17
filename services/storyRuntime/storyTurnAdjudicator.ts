@@ -17,7 +17,7 @@ import { isTerminal } from './eventLifecycle';
 import { canonicalJsonStringify } from './normalization';
 import { storyUnitIdOfKeyEvent, storyUnitIdOfSegment } from './storyWeavingRuntimeAdapter';
 
-export type StoryTurnDecision = 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause';
+export type StoryTurnDecision = 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause' | 'jump_to';
 
 export interface StoryTurnAdjudication {
   decision: StoryTurnDecision;
@@ -25,6 +25,8 @@ export interface StoryTurnAdjudication {
   completedUnitIds: string[];
   committedFactIds: string[];
   supersededEventIds: string[];
+  /** jump_to 目标分段（AI 申报 + 正文背书通过的跳段）。 */
+  targetSegmentId?: string;
   reasons: string[];
 }
 
@@ -231,6 +233,24 @@ export function adjudicateStoryTurn(input: StoryTurnAdjudicationInput): StoryTur
   if (externalEvidence.some((candidate) => candidate.playerParticipated === true)) {
     reasons.push('玩家参与当前单元与已排期世界事件之外的活动，玩家线偏离主线');
     return emptyReceipt('deviate');
+  }
+
+  // 5.5 跳段：AI 申报「进入分段N」且正文背书目标分段要素（jumpTargetSegmentId 候选）→ 直接对齐目标分段。
+  // 跳段优先于单格推进：正文已实际写到后段时，不再一格一格爬（中间分段标记已跳过）。
+  if (currentEvidence.length > 0) {
+    const jumpCandidate = currentEvidence.find((candidate) => {
+      const target = candidate.payload?.jumpTargetSegmentId;
+      return typeof target === 'string' && target.length > 0;
+    });
+    if (jumpCandidate) {
+      const targetSegmentId = String(jumpCandidate.payload!.jumpTargetSegmentId);
+      const targetGroup = jumpCandidate.payload?.jumpTargetSegmentGroup;
+      reasons.push(`AI 申报进入后段且正文背书目标分段要素，跳段对齐到 ${targetSegmentId}${targetGroup !== undefined ? `（第 ${targetGroup} 段）` : ''}`);
+      return {
+        ...emptyReceipt('jump_to', { completedUnitIds: [currentUnitId], committedFactIds: [] }),
+        targetSegmentId,
+      };
+    }
   }
 
   // 6. 当前单元完成证据：只推进一格；同一完成证据不产生第二次结算（验收 2/4）。

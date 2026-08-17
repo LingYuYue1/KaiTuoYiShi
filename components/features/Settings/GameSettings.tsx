@@ -5,6 +5,7 @@ import type { 世界状态 } from '@/models/world';
 import type { 剧情模式 } from '@/models/journey';
 import { storyModes } from '@/data/journeyPresets';
 import { saveSetting } from '@/services/dbService';
+import { PERSPECTIVE_MODULE_IDS } from '@/utils/narrativeRuntimePolicy';
 
 interface Props {
   settings: 游戏设置;
@@ -55,20 +56,13 @@ function getActiveWritingStyle(modules: 提示词模块[]): WritingStyleId | nul
   return (hit?.id as WritingStyleId | undefined) ?? null;
 }
 
-// 三种人称模块互斥：按当前 narrativePerson 启用对应一条，其他两条强制关闭。
-const PERSPECTIVE_MODULE_IDS: Record<'first' | 'second' | 'third', string> = {
-  first: 'builtin_perspective_first',
-  second: 'builtin_perspective_second',
-  third: 'builtin_perspective_third',
-};
-
 function setActivePerspective(
   modules: 提示词模块[],
   active: 'first' | 'second' | 'third',
 ): 提示词模块[] {
   const now = Date.now();
   const activeId = PERSPECTIVE_MODULE_IDS[active];
-  const allIds = Object.values(PERSPECTIVE_MODULE_IDS);
+  const allIds = Object.values(PERSPECTIVE_MODULE_IDS) as string[];
   return modules.map((m) => {
     if (!allIds.includes(m.id)) return m;
     const shouldBeOn = m.id === activeId;
@@ -391,7 +385,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
       />
       <ToggleRow
         label="抢话 / 适度代写玩家对白"
-        desc="允许 AI 少量扩写玩家话语或轻动作，避免主角完全沉默；不允许代替玩家做关键决定、长篇独白或深层心理。"
+        desc="允许 AI 自由编排玩家输入的承接，必要时少量扩写对白或轻动作；不要求玩家话固定开场，也不允许代替玩家做关键决定、长篇独白或深层心理。"
         checked={settings.enablePlayerSpeechExpansion === true}
         onChange={(v) =>
           onChange({

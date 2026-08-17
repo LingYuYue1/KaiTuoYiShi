@@ -11,6 +11,7 @@ import {
   compressToShortTerm,
   compressToMiddleTerm,
   compressToLongTerm,
+  拆分即时与短期,
 } from '@/hooks/useGame/memoryUtils';
 
 interface MemoryPanelProps {
@@ -66,7 +67,11 @@ export function MemoryPanel({
 
   const visibleTextItems =
     activeLayer === 'immediate'
-      ? memorySystem.即时记忆
+      ? memorySystem.即时记忆.map((item) => {
+          // 对标参考项目：即时条目为「即时内容 + 短期摘要」合体存储，展示时拆开。
+          const { 即时内容, 短期摘要 } = 拆分即时与短期(item);
+          return 短期摘要 ? `${即时内容}\n  ↳ 短期摘要：${短期摘要}` : 即时内容;
+        })
       : activeLayer === 'short'
         ? memorySystem.短期记忆
         : activeLayer === 'middle'
@@ -293,6 +298,7 @@ export function MemoryPanel({
             <HintCard title="短期阈值" value={`${settings.短期转中期阈值} 条`} text="达到后会自动压缩到中期。" />
             <HintCard title="中期阈值" value={`${settings.中期转长期阈值} 条`} text="达到后会自动压缩到长期。" />
             <HintCard title="NPC 阈值" value={`${settings.NPC记忆压缩阈值} 条`} text="伙伴的与你同行的记忆达到后会自动压缩。" />
+            <HintCard title="主剧情注入" value="短 30 / 中全量 / 长全量" text="对标参考项目：短期注入最近 30 条（带时间戳），中期/长期全量注入；回忆召回命中时暂停三层记忆注入；即时层为滑动窗口（超限摘要自动滚入短期）。" />
           </div>
         </div>
       </main>

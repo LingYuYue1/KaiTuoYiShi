@@ -51,6 +51,7 @@ function countIncludes(messages, text) {
 
 cleanTempDir();
 transpileModule('utils/macroEngine.ts');
+transpileModule('utils/narrativeRuntimePolicy.ts');
 transpileModule('hooks/useGame/tavernFormatGuard.ts');
 transpileModule('hooks/useGame/tavernMessageChainBuilder.ts');
 

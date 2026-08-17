@@ -21,6 +21,8 @@ interface 剧情回忆候选 {
   id: string;
   index: number;
   score: number;
+  /** 对标参考项目：候选是否属于最近「完整原文条数N」——只有这些候选向检索模型展示完整原文，更早的只展示概括。 */
+  是否完整原文: boolean;
 }
 
 export function retrieveYitingContext(
@@ -69,17 +71,28 @@ export async function retrieveYitingContextWithModel(
     return fallback;
   }
 
-  const candidates = buildRecallCandidates(system, query, 24, 6, categoryFilter);
+  const candidates = buildRecallCandidates(
+    system,
+    query,
+    24,
+    6,
+    categoryFilter,
+    settings.剧情回忆完整原文条数N ?? 20,
+  );
   if (!candidates.length) return fallback;
 
+  // 对标参考项目「构建剧情回忆检索上下文」：候选池最近 N 条展示完整原文，更早的只展示概括；
+  // 所有候选带「本地预筛：可能相关」标记。
   const candidateText = candidates
     .map((candidate, index) => {
       const entry = candidate.entry;
       const keywords = entry.检索关键词?.length ? `｜关键词：${entry.检索关键词.slice(0, 8).join('、')}` : '';
-      const body = `概括：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '无概括'}`;
+      const body = candidate.是否完整原文
+        ? `原文：\n${entry.原文?.trim() || entry.摘要 || '（无原文）'}`
+        : `短期记忆：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
       const localMarker = candidate.score > 0 ? `｜本地相关度：${candidate.score.toFixed(1)}` : '';
       return [
-        `${index + 1}. ${entry.名称 || `第${entry.回合}回合回忆`}｜回合：${entry.回合}｜类型：${entry.类型 ?? '回忆'}${keywords}${localMarker}`,
+        `${index + 1}. ${entry.名称 || `第${entry.回合}回合回忆`}｜回合：${entry.回合}｜类型：${entry.类型 ?? '回忆'}${keywords}${localMarker}｜本地预筛：可能相关`,
         body,
       ].join('\n');
     })
@@ -170,7 +183,14 @@ function resolveYitingRecallConfig(mainConfig: API配置项, settings: 记忆系
   };
 }
 
-function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6, categoryFilter?: '正文' | '通讯' | 'all'): 剧情回忆候选[] {
+function buildRecallCandidates(
+  system: 忆庭系统,
+  query: string,
+  topK = 24,
+  recentReserve = 6,
+  categoryFilter?: '正文' | '通讯' | 'all',
+  fullN = 20,
+): 剧情回忆候选[] {
   const allEntries = [...(system.回忆档案 ?? [])];
   // 阶段1·分类过滤：支持按 '正文' | '通讯' | 'all' 过滤忆庭条目（默认全部，向前兼容）
   const filtered = categoryFilter && categoryFilter !== 'all'
@@ -178,11 +198,14 @@ function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, r
     : allEntries;
   const entries = filtered.sort((a, b) => a.回合 - b.回合);
   const terms = extractRecallTerms(query);
+  // 对标参考项目：候选池中最近 fullN 条带完整原文，更早的只有概括。
+  const fullStartIndex = Math.max(0, entries.length - Math.max(1, Math.trunc(fullN) || 20));
   const scored = entries.map((entry, index) => ({
     entry,
     id: entry.名称 || `【回忆${String(Math.max(1, entry.回合 || index + 1)).padStart(3, '0')}】`,
     index,
     score: scoreRecallCandidate(entry, query, terms, index, entries.length),
+    是否完整原文: index >= fullStartIndex,
   }));
   const topScored = [...scored]
     .sort((a, b) => b.score - a.score || b.index - a.index)
@@ -251,20 +274,7 @@ function buildYitingInjection(
 ): string {
   if (!strongEntries.length && !weakEntries.length) return '';
 
-  // 阶段1：recall分档注入（方案C）
-  // 召回≤6全原文, >6条Top5原文+其余摘要
-  const totalCount = strongEntries.length + weakEntries.length;
-  const ORIGINAL_THRESHOLD = 6;
-  const TOP_K_ORIGINAL = 5;
-
-  // Top5优先从strong取，不足从weak补
-  const strongOriginalCount = totalCount <= ORIGINAL_THRESHOLD
-    ? strongEntries.length
-    : Math.min(strongEntries.length, TOP_K_ORIGINAL);
-  const weakOriginalCount = totalCount <= ORIGINAL_THRESHOLD
-    ? weakEntries.length
-    : Math.max(0, TOP_K_ORIGINAL - strongOriginalCount);
-
+  // 对标既定方案：强回忆给原文、弱回忆给摘要，不做条数限制。
   // 阶段1方案E·第二层防护：来源标记
   // 分类='通讯'的条目，注入时标记【通讯回忆】(对方:NPC名字)
   // NPC名字优先从 npcNameMap 查找，找不到则用 id 兜底
@@ -288,22 +298,12 @@ function buildYitingInjection(
     return `${sourceTag} ${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
   };
 
-  const strongBlocks = strongEntries.map((entry, i) =>
-    buildBlock(entry, i < strongOriginalCount),
-  );
-  const weakBlocks = weakEntries.map((entry, i) =>
-    buildBlock(entry, i < weakOriginalCount),
-  );
-
-  const injectionMode = totalCount <= ORIGINAL_THRESHOLD
-    ? `${totalCount}条全部原文注入`
-    : `Top${TOP_K_ORIGINAL}原文+其余摘要注入`;
+  const strongBlocks = strongEntries.map((entry) => buildBlock(entry, true));
+  const weakBlocks = weakEntries.map((entry) => buildBlock(entry, false));
 
   return [
-    '# 即时剧情回顾｜剧情回忆',
-    '',
     '【剧情回忆】',
-    `以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料（${injectionMode}）。若与当前已发生剧情冲突，以当前剧情为准。`,
+    '以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料（强回忆原文注入 + 弱回忆摘要注入）。若与当前已发生剧情冲突，以当前剧情为准。',
     '',
     '强回忆：',
     strongBlocks.length ? strongBlocks.join('\n\n') : '无',

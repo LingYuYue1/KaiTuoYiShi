@@ -250,7 +250,21 @@ function isPhoneSeedVisible(ctx: 手机回复上下文): boolean {
   if (!seed) return false;
   if (ctx.chat.type === 'group') {
     if (seed.targetType !== 'group') return false;
-    if (seed.targetId === ctx.chat.id) return true;
+    const archivedReference = [seed.targetId, ...seed.relatedNpcIds].some((id) =>
+      isArchivedNpcReference(ctx.npcRecords, id),
+    );
+    if (archivedReference) return false;
+    if (seed.targetId === ctx.chat.id) {
+      const hasActiveNpc = ctx.chat.participantIds.some((participantId) =>
+        Boolean(resolvePhoneGroupParticipant(ctx, participantId)?.npc),
+      );
+      const hasArchivedNpc = ctx.chat.participantIds.some((participantId) =>
+        isArchivedNpcReference(ctx.npcRecords, participantId)
+        || Boolean(ctx.contacts?.find((contact) => contact.id === participantId)?.npcId
+          && isArchivedNpcReference(ctx.npcRecords, ctx.contacts?.find((contact) => contact.id === participantId)?.npcId)),
+      );
+      return hasActiveNpc || !hasArchivedNpc;
+    }
     const participantIds = new Set(ctx.chat.participantIds.flatMap((id) => [id, id.replace(/^npc_/, '')]));
     const seedIds = [seed.targetId, ...seed.relatedNpcIds].flatMap((id) => [id, id.replace(/^npc_/, '')]);
     return seedIds.some((id) => participantIds.has(id));
@@ -258,9 +272,8 @@ function isPhoneSeedVisible(ctx: 手机回复上下文): boolean {
   if (seed.targetType !== 'private') return false;
   const privateNpc = resolvePhonePrivateNpc(ctx);
   // 绑定已归档 NPC 的联系人不参与种子可见性匹配（恢复由变量事实链触发）。
-  const contactNpcArchived = Boolean(
-    ctx.contact?.npcId && ctx.npcRecords?.find((item) => item.id === ctx.contact?.npcId)?.归档,
-  );
+  const contactNpcArchived = Boolean(ctx.contact?.npcId && isArchivedNpcReference(ctx.npcRecords, ctx.contact.npcId));
+  if (contactNpcArchived) return false;
   const allowedIds = new Set([
     ctx.chat.id,
     contactNpcArchived ? undefined : ctx.contact?.id,
@@ -274,7 +287,7 @@ function isPhoneSeedVisible(ctx: 手机回复上下文): boolean {
 function resolvePhonePrivateNpc(ctx: 手机回复上下文): NPC记录 | undefined {
   if (ctx.chat.type === 'group') return undefined;
   return 筛选活跃NPC(ctx.npcRecords).find((item) =>
-    item.id === ctx.contact?.npcId
+    matchesPhoneNpcId(item.id, ctx.contact?.npcId)
     || item.id === ctx.contact?.id
     || `npc_${item.id}` === ctx.contact?.id
     || item.姓名 === ctx.contact?.name,
@@ -411,9 +424,8 @@ function resolvePhoneGroupParticipant(ctx: 手机回复上下文, participantId:
   const contact = ctx.contacts?.find((item) => item.id === participantId || item.npcId === participantId);
   const npc = 筛选活跃NPC(ctx.npcRecords).find(
     (item) =>
-      item.id === participantId ||
-      `npc_${item.id}` === participantId ||
-      (contact?.npcId && item.id === contact.npcId) ||
+      matchesPhoneNpcId(item.id, participantId) ||
+      matchesPhoneNpcId(item.id, contact?.npcId) ||
       item.姓名 === contact?.name,
   );
   if (npc) return { name: npc.姓名, npc, contact };
@@ -430,7 +442,7 @@ function resolvePhoneGroupParticipant(ctx: 手机回复上下文, participantId:
 
 function formatPhoneGroupParticipant(ctx: 手机回复上下文, participantId: string): string {
   const participant = resolvePhoneGroupParticipant(ctx, participantId);
-  if (!participant) return `- ${participantId}`;
+  if (!participant) return '';
   const item = participant.npc;
   if (!item) return `- ${participant.name}；通讯录联系人`;
   return `【${item.姓名}】\n${formatPhoneNpcKnowledge(item)}`;
@@ -451,12 +463,12 @@ function collectPhoneParticipantNames(ctx: 手机回复上下文): string[] {
     }
   };
   if (ctx.contact?.npcId) {
-    const boundNpc = ctx.npcRecords?.find((item) => item.id === ctx.contact?.npcId);
+    const boundNpc = ctx.npcRecords?.find((item) => matchesPhoneNpcId(item.id, ctx.contact?.npcId));
     if (boundNpc?.归档) {
       // 绑定已归档 NPC 的联系人不注入名字（避免归档 NPC 回到智库人物锚点检索）
     } else {
       addName(ctx.contact?.name);
-      const npc = 筛选活跃NPC(ctx.npcRecords).find((item) => item.id === ctx.contact?.npcId);
+      const npc = 筛选活跃NPC(ctx.npcRecords).find((item) => matchesPhoneNpcId(item.id, ctx.contact?.npcId));
       addName(npc?.姓名);
       addName(npc?.别名);
     }
@@ -471,6 +483,20 @@ function collectPhoneParticipantNames(ctx: 手机回复上下文): string[] {
     }
   }
   return Array.from(names).slice(0, 8);
+}
+
+function normalizePhoneNpcId(value: string | undefined): string | undefined {
+  return value?.replace(/^npc_/i, '');
+}
+
+function matchesPhoneNpcId(recordId: string, reference: string | undefined): boolean {
+  const raw = reference?.trim();
+  if (!raw) return false;
+  return recordId === raw || recordId === normalizePhoneNpcId(raw) || `npc_${recordId}` === raw;
+}
+
+function isArchivedNpcReference(records: NPC记录[] | undefined, reference: string | undefined): boolean {
+  return Boolean(records?.some((item) => matchesPhoneNpcId(item.id, reference) && item.归档));
 }
 
 function parsePhoneReply(raw: string, messageLimit = 8): 手机回复结果 {

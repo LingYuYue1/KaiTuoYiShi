@@ -55,29 +55,38 @@ export function getZhikuCharacterParticipationForTurn(input: {
   history?: 聊天消息[];
   userInput?: string;
   turnCount: number;
+  /** 记忆系统设置（取 即时转短期阈值 推导回顾窗口，缺省 10-1=9 回合）。 */
+  settings?: { 即时转短期阈值?: number };
 }): ZhikuCharacterParticipation {
   const npcs = 筛选活跃NPC(input.npcs);
   const sceneNames = new Set((input.world.当前时段?.人物 ?? []).map((npc) => npc.姓名.trim()).filter(Boolean));
   const currentText = input.userInput ?? '';
-  const recentText = recentNarrativeText(input.history ?? []);
+  // 对标回顾窗口：近期文本从「最近 4 条消息」扩展到回顾窗口（即时转短期阈值-1 回合 ≈ 2N 条消息），
+  // 避免「只出现在回顾里的角色」在智库召回的所有通道里不可见。
+  const reviewTurns = Math.max(2, Math.trunc((input.settings?.即时转短期阈值 ?? 10) - 1) || 9);
+  const recentText = recentNarrativeText(input.history ?? [], reviewTurns * 2);
   const recentCutoff = Math.max(1, input.turnCount - 3);
   const present: string[] = [];
   const mentioned: string[] = [];
   const background: string[] = [];
 
   for (const npc of npcs) {
-    const isPresent = npc.同行
-      || sceneNames.has(npc.姓名)
+    const inScene = sceneNames.has(npc.姓名)
       || Boolean(npc.别名 && sceneNames.has(npc.别名));
+    const textAppears = nameAppearsInText(npc.姓名, currentText)
+      || Boolean(npc.别名 && nameAppearsInText(npc.别名, currentText))
+      || nameAppearsInText(npc.姓名, recentText)
+      || Boolean(npc.别名 && nameAppearsInText(npc.别名, recentText));
+    // 正文点名 + 最近 1 回合内有系统互动记录 → 判为在场。
+    // 模型每回合变量有限，「同行」常写不全；正文写了角色在说话行动就是最实在的在场证据。
+    // 已知代价：回忆点名会刷新「最近回合」，离场 ≤4 回合被回忆点名的角色可能被算在场（影响小）。
+    const bodyEvidence = textAppears && Number(npc.最近回合 || 0) >= input.turnCount - 1;
+    const isPresent = npc.同行 || inScene || bodyEvidence;
     if (isPresent) {
       addUnique(present, npc.姓名);
       continue;
     }
-    const isMentioned = nameAppearsInText(npc.姓名, currentText)
-      || Boolean(npc.别名 && nameAppearsInText(npc.别名, currentText))
-      || nameAppearsInText(npc.姓名, recentText)
-      || Boolean(npc.别名 && nameAppearsInText(npc.别名, recentText));
-    if (isMentioned) {
+    if (textAppears) {
       addUnique(mentioned, npc.姓名);
       continue;
     }

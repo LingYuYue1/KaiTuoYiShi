@@ -17,6 +17,7 @@ try {
       contents: [
         "export * from './models/zhiku';",
         "export * from './services/zhikuRetrieval';",
+        "export * from './services/zhikuRuntimeCompiler';",
         "export * from './hooks/useGame/historyWindow';",
       ].join('\n'),
       resolveDir: root,
@@ -225,18 +226,76 @@ try {
     'plain March 7th mention must not inject Hunt and Evernight together',
   );
 
-  const history = [1, 2, 3, 4, 5].map((index) => ({
-    id: `assistant-${index}`,
-    role: 'assistant',
-    content: `<正文>第${index}层剧情</正文>`,
-    timestamp: index,
-  }));
-  const recallWindow = api.buildZhikuKeywordRecallQuery({ userInput: '本轮玩家发言', history });
+  const history = Array.from({ length: 7 }, (_, offset) => {
+    const index = offset + 1;
+    return [
+      {
+        id: `user-${index}`,
+        role: 'user',
+        content: `第${index}回合玩家行动`,
+        timestamp: index * 2 - 1,
+      },
+      {
+        id: `assistant-${index}`,
+        role: 'assistant',
+        content: `<正文>第${index}层剧情</正文>`,
+        timestamp: index * 2,
+      },
+    ];
+  }).flat();
+  const recallWindow = api.buildZhikuKeywordRecallQuery({
+    userInput: '本轮玩家发言',
+    history,
+    immediateStoryReview: '旧回合人物：旧人物',
+  });
   assert(recallWindow.includes('本轮玩家发言'), 'current player input is missing from keyword scan window');
-  assert(!recallWindow.includes('第1层剧情') && !recallWindow.includes('第2层剧情'), 'keyword scan window retained assistant bodies older than three layers');
-  assert(recallWindow.includes('第3层剧情') && recallWindow.includes('第4层剧情') && recallWindow.includes('第5层剧情'), 'keyword scan window did not keep the latest three assistant bodies');
-  assert(api.ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW === 3, 'Zhiku keyword scan depth must be three assistant bodies');
+  assert(recallWindow.includes('第7回合玩家行动') && recallWindow.includes('第6回合玩家行动'), 'keyword scan window must keep recent player inputs');
+  assert(!recallWindow.includes('第1层剧情') && !recallWindow.includes('第2层剧情'), 'keyword scan window retained assistant bodies older than five layers');
+  assert(recallWindow.includes('第3层剧情') && recallWindow.includes('第4层剧情') && recallWindow.includes('第5层剧情') && recallWindow.includes('第6层剧情') && recallWindow.includes('第7层剧情'), 'keyword scan window did not keep the latest five assistant bodies');
+  assert(!recallWindow.includes('旧回合人物：旧人物'), 'immediate story review must not expand the automatic keyword window');
+  assert(api.ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW === 5, 'Zhiku keyword scan depth must be five assistant bodies');
   assert(api.MAIN_RECALL_ASSISTANT_BODY_WINDOW === 5, 'other recall windows must retain their existing depth');
+
+  const staleCharacter = makeEntry('旧人物', { 触发关键词: ['旧人物'] });
+  const staleParticipation = {
+    present: [],
+    anticipated: [],
+    mentioned: ['旧人物'],
+    background: ['旧人物'],
+  };
+  const staleCompilation = api.compileZhikuTurn({
+    system: { 条目: [staleCharacter] },
+    query: '继续前进',
+    limit: 5,
+    scope: 'main',
+    participation: staleParticipation,
+    sceneContext: {
+      presentNpcNamesForFallback: [],
+      recallFallbackNames: ['旧人物'],
+    },
+  });
+  assert(!staleCompilation.entries.some((entry) => entry.id === staleCharacter.id), 'mentioned/background characters must not become direct fallback recalls');
+  const presentCompilation = api.compileZhikuTurn({
+    system: { 条目: [staleCharacter] },
+    query: '继续前进',
+    limit: 5,
+    scope: 'main',
+    participation: { ...staleParticipation, present: ['旧人物'] },
+    sceneContext: { presentNpcNamesForFallback: [] },
+  });
+  assert(presentCompilation.entries.some((entry) => entry.id === staleCharacter.id), 'present characters must remain fallback recalls without a keyword hit');
+
+  const aiRequest = api.buildZhikuAiRequestForTurn(
+    { 条目: [staleCharacter] },
+    recallWindow,
+    [],
+    {
+      aiSupplementHints: { immediateStoryReview: '旧回合人物：旧人物', storyPlan: '下一段继续前进。' },
+      mentionedNpcNames: ['旧人物'],
+    },
+  );
+  assert(!aiRequest.request.turnContext.keywordScanText.includes('旧回合人物：旧人物'), 'AI keyword evidence must stay on the short keyword window');
+  assert(aiRequest.request.turnContext.immediateStoryReview?.includes('旧回合人物：旧人物'), 'AI supplement must retain the long story review as context');
 
   const retrievalSource = fs.readFileSync(path.join(root, 'services/zhikuRetrieval.ts'), 'utf8');
   const zhikuCotSource = fs.readFileSync(path.join(root, 'prompts/cot/zhikuCot.ts'), 'utf8');
@@ -245,7 +304,7 @@ try {
     retrievalSource.includes('keywordScanText 是唯一用来判断“关键词有没有命中”的正文窗口'),
     'AI supplement user prompt must identify keywordScanText as the only keyword evidence window',
   );
-  assert(zhikuCotSource.includes('玩家当前输入 + 最近 3 条 assistant 正文') && !zhikuCotSource.includes('最近 5 条 assistant 正文'), 'Zhiku CoT prompt must use the implemented three-body keyword window');
+  assert(zhikuCotSource.includes('最近 5 条玩家输入') && zhikuCotSource.includes('最近 5 条 assistant 正文') && !zhikuCotSource.includes('最近 3 条 assistant 正文'), 'Zhiku CoT prompt must use the implemented five-body keyword window');
 
   console.log(JSON.stringify({
     danHeng: api.retrieveZhikuContext(forms, '丹恒', 5).entries.map((entry) => entry.标题),

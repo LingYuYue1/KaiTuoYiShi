@@ -8,13 +8,144 @@ import {
 } from '@/models/memory';
 import type { 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
-import type { MemorySummaryFlowState } from '@/hooks/useGameState';;
 import type { NPC同行记忆来源, NPC同行记忆条目, NPC总结记忆条目 } from '@/models/npc';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 
 const MEMORY_SNIPPET_LIMIT = 84;
 const NPC_MEMORY_SUMMARY_LIMIT = 160;
+
+/** F6·对标既定方案：长期记忆保留上限。超限最旧条目归档进忆庭（信息不丢、可检索召回），长期只留最近章节级纪要。 */
+export const MAIN_LONG_TERM_MEMORY_KEEP = 12;
+
+// ── 对标参考项目：即时+短期合体存储 ─────────────────────────────
+
+/** 即时条目与短期摘要的合体分隔标记（参考项目 memoryUtils 同款）。 */
+export const 即时短期分隔标记 = '\n<<SHORT_TERM_SYNC>>\n';
+
+/** 把合体条目拆回「即时内容 + 短期摘要」两段。 */
+export function 拆分即时与短期(entry: string): { 即时内容: string; 短期摘要: string } {
+  const raw = (entry || '').trim();
+  if (!raw) return { 即时内容: '', 短期摘要: '' };
+  const splitAt = raw.lastIndexOf(即时短期分隔标记);
+  if (splitAt < 0) return { 即时内容: raw, 短期摘要: '' };
+  return {
+    即时内容: raw.slice(0, splitAt).trim(),
+    短期摘要: raw.slice(splitAt + 即时短期分隔标记.length).trim(),
+  };
+}
+
+/** 合体：即时内容 + 分隔标记 + 短期摘要（无摘要时只存即时内容）。 */
+export function 合并即时与短期(immediateEntry: string, shortEntry: string): string {
+  const full = (immediateEntry || '').trim();
+  const summary = (shortEntry || '').trim();
+  if (!summary) return full;
+  return `${full}${即时短期分隔标记}${summary}`;
+}
+
+/** 清理 AI 短期摘要开头的日期/时间前缀（参考项目 清理短期记忆时间前缀 同款语义）。 */
+function 清理短期记忆时间前缀(text: string): string {
+  return (text || '')
+    .trim()
+    .replace(/^\d{2,4}[:：年\-\/]\d{1,2}(?:[:：月\-\/]\d{1,2})?(?:[:：日号\-\/]\d{1,2})?(?:[:：时分秒卯辰巳午未申酉戌亥子丑寅刻]*)?[，,\s]*/u, '')
+    .replace(/^[零一二三四五六七八九十百千两〇○]{1,8}年[零一二三四五六七八九十两〇○]{1,4}月[零一二三四五六七八九十两〇○]{1,4}[日号]?(?:[子丑寅卯辰巳午未申酉戌亥]|[零一二三四五六七八九十两〇○]{1,3}时)?[，,\s]*/u, '')
+    .replace(/^(今晨|今日|今天|今夜|今晚|昨夜|昨日|昨天|清晨|早晨|上午|中午|午后|下午|傍晚|夜里|深夜)[，,\s]*/u, '')
+    .trim();
+}
+
+/** 规范化游戏时间展示：空值补「未知时间」。 */
+function 格式化记忆时间(raw?: string | null): string {
+  const value = (raw || '').trim();
+  return value ? `【${value}】` : '【未知时间】';
+}
+
+/**
+ * 对标参考项目「构建即时记忆条目」：
+ * 【游戏时间】\n玩家输入：{原文}\nAI输出：\n{正文全文}
+ * 正文为最终展示正文（本项目无正文润色，不存在润色前/后版本问题）。
+ */
+export function 构建即时记忆条目(
+  gameTime: string,
+  playerInput: string,
+  bodyText: string,
+  options?: { 省略玩家输入?: boolean },
+): string {
+  const lines = [格式化记忆时间(gameTime)];
+  if (!options?.省略玩家输入) {
+    lines.push(`玩家输入：${(playerInput || '').trim() || '（空输入）'}`);
+  }
+  const body = (bodyText || '').trim();
+  lines.push(body ? `AI输出：\n${body}` : 'AI输出：\n（本轮无有效剧情正文）');
+  return lines.join('\n').trim();
+}
+
+/**
+ * 对标参考项目「构建短期记忆条目」：
+ * 摘要 = AI <短期记忆> 输出（清理时间前缀）|| 正文拼接截断 180 字 || '本回合推进'；
+ * 返回带【时间】前缀的条目。
+ */
+export function 构建短期记忆条目(
+  gameTime: string,
+  shortTerm: string,
+  fallbackText?: string,
+): string {
+  const summary = 清理短期记忆时间前缀(shortTerm)
+    || (fallbackText || '').replace(/\s+/g, ' ').trim().slice(0, 180)
+    || '本回合推进';
+  const time = (gameTime || '').trim();
+  return time ? `【${time}】 ${summary}` : summary;
+}
+
+/**
+ * 对标参考项目「写入四段记忆」：
+ * 1. 即时记忆 push 合体条目（即时内容 + 分隔标记 + 短期摘要）；
+ * 2. 生成回忆条目（名称【回忆N】、概括=短期摘要、原文=即时内容、回合/记录时间/时间戳）返回给调用方汇入忆庭；
+ * 3. 即时记忆超过 immediateLimit 时：shift 最旧条目 → 拆分出短期摘要 → 滚入短期记忆（即时层不调 AI 压缩）。
+ */
+export function 写入四段记忆(
+  system: 记忆系统,
+  immediateEntry: string,
+  shortEntry: string,
+  options: { immediateLimit: number; recallRound: number; gameTime?: string },
+): { memory: 记忆系统; recallEntry: 回忆条目 | null } {
+  const full = (immediateEntry || '').trim();
+  const summary = (shortEntry || '').trim();
+  if (!full && !summary) return { memory: system, recallEntry: null };
+
+  const immediateLimit = Math.max(1, Math.trunc(options.immediateLimit) || 10);
+  let next: 记忆系统 = { ...system, 即时记忆: [...system.即时记忆] };
+
+  if (full) {
+    next.即时记忆 = [...next.即时记忆, 合并即时与短期(full, summary)];
+  } else if (summary) {
+    next.短期记忆 = [...next.短期记忆, summary];
+  }
+
+  // 回忆条目：概括=短期摘要，原文=即时全文
+  const recallRound = Math.max(1, Math.trunc(options.recallRound) || 1);
+  const recallEntry: 回忆条目 | null = (full || summary)
+    ? {
+        id: `recall_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        名称: `【回忆${String(recallRound).padStart(3, '0')}】`,
+        摘要: summary || '（无概括）',
+        原文: full || '（无原文）',
+        回合: recallRound,
+        时间戳: options.gameTime || '未知时间',
+        记录时间: options.gameTime || '未知时间',
+        分类: '正文',
+      }
+    : null;
+
+  // 即时滑动窗口：超限时最旧条目的短期摘要滚入短期层
+  while (next.即时记忆.length > immediateLimit) {
+    const shifted = next.即时记忆.shift();
+    if (!shifted) break;
+    const { 短期摘要 } = 拆分即时与短期(shifted);
+    if (短期摘要) next.短期记忆 = [...next.短期记忆, 短期摘要];
+  }
+
+  return { memory: next, recallEntry };
+}
 
 /**
  * 阶段1：通用记忆系统噪声过滤模式（从NPC侧提取，主链也使用）
@@ -126,13 +257,27 @@ function limitSummaryLine(text: string, limit: number): string {
   return cleaned.length > limit ? `${cleaned.slice(0, limit)}…` : cleaned;
 }
 
+/** 从批次条目提取首尾游戏时间（条目以【时间】开头的合体/纪要格式）。 */
+function 提取条目时间范围(items: string[]): { start: string; end: string } {
+  const times = items.flatMap((item) => {
+    const matches = String(item).match(/【([^】]*\d[^】]*)】/g) || [];
+    return matches.map((m) => m.replace(/^【/, '').replace(/】$/, '').trim());
+  }).filter(Boolean);
+  if (!times.length) return { start: '', end: '' };
+  return { start: times[0], end: times[times.length - 1] };
+}
+
 function buildArchiveSummary(items: string[], turn: number, kind: 'short' | 'middle' | 'long'): string {
   const lines = collectSummaryLines(items, kind === 'long' ? 5 : 4);
   const fallback = items.map(normalizeMemorySnippet).filter(Boolean).join('；');
   const body = lines.length ? lines.join('；') : fallback;
   const content = lines.length ? lines.map((line) => `- ${line}`) : [`- ${body || '空白'}`];
+  // 对标参考项目：压缩产物带【时间范围】前缀（从批次条目提取首尾时间）；无时间时保留回合标签。
+  const { start, end } = 提取条目时间范围(items);
+  const timeLabel = start ? (end && end !== start ? `【${start} - ${end}】` : `【${start}】`) : '';
   const label = kind === 'long' ? '长期纪要' : kind === 'middle' ? '中期纪要' : '短期纪要';
-  return [`【${label}·回合${turn}】`, ...content].join('\n');
+  const title = timeLabel ? `${timeLabel} ${label}` : `【${label}·回合${turn}】`;
+  return [title, ...content].join('\n');
 }
 
 function buildKeywords(items: string[]): string[] {
@@ -186,31 +331,6 @@ export function computeMemoryFingerprint(memory: 记忆系统): string {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
   return `mem-${(hash >>> 0).toString(16).padStart(8, '0')}`;
-}
-
-/**
- * 构造主链压缩三阶段弹窗请求：所有入口（主回合自动触发 / 手动压缩）都必须携带
- * 来源回合与来源 fingerprint，确认阶段据此校验，防止旧结果覆盖后续新增记忆。
- */
-export function buildMemorySummaryFlowRequest(
-  memory: 记忆系统,
-  settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值'>,
-  turn: number,
-): MemorySummaryFlowState {
-  const immediateThreshold = settings.即时转短期阈值 ?? 15;
-  const shortThreshold = settings.短期转中期阈值 ?? 25;
-  const middleThreshold = settings.中期转长期阈值 ?? 45;
-  return {
-    open: true,
-    stage: 'remind',
-    sourceTurn: turn,
-    sourceFingerprint: computeMemoryFingerprint(memory),
-    pendingInfo: {
-      即时待压缩: Math.max(0, memory.即时记忆.length - immediateThreshold + 1),
-      短期待压缩: Math.max(0, memory.短期记忆.length - shortThreshold + 1),
-      中期待压缩: Math.max(0, (memory.中期记忆 ?? []).length - middleThreshold + 1),
-    },
-  };
 }
 
 /** 压缩类型 → 主记忆链目标层；精炼纪要/未知类型不映射主链。 */
@@ -344,6 +464,49 @@ export function createLongTermArchiveEntry(shortMemories: string[], turn: number
   };
 }
 
+/** 从长期纪要文本提取归档回合号（文本以【长期纪要·回合N】开头），失败时用兜底。 */
+function extractLongTermEntryTurn(text: string, fallback: number): number {
+  const match = String(text).match(/【长期纪要·回合\s*(\d+)】/);
+  return match && Number.isFinite(Number(match[1]))
+    ? Math.max(1, Number(match[1]))
+    : Math.max(1, fallback);
+}
+
+/** F6·对标既定方案：长期记忆超限最旧条目转成忆庭归档条目（保留全文与关键词，可检索召回）。 */
+function buildLongTermOverflowArchiveEntry(text: string, fallbackTurn: number): 回忆条目 {
+  const entryTurn = extractLongTermEntryTurn(text, fallbackTurn);
+  return {
+    id: `recall_long_archive_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    名称: `【长期纪要·回合${String(entryTurn).padStart(3, '0')}】`,
+    类型: '长期压缩',
+    摘要: text,
+    原文: text,
+    检索关键词: buildKeywords([text]),
+    来源回合: [entryTurn],
+    回合: entryTurn,
+    时间戳: new Date().toISOString(),
+  };
+}
+
+/**
+ * F6·对标既定方案：压缩结算后统一裁剪长期记忆（保留最近 MAIN_LONG_TERM_MEMORY_KEEP 条）。
+ * 超限的最旧条目生成忆庭归档条目追加到 archives（信息不丢）；无 archives 通道时直接丢弃。
+ */
+function trimLongTermMemoryOverflow(system: 记忆系统, archives: 回忆条目[] | null, turn: number): 记忆系统 {
+  const longTerm = system.长期记忆 ?? [];
+  if (longTerm.length <= MAIN_LONG_TERM_MEMORY_KEEP) return system;
+  const excess = longTerm.length - MAIN_LONG_TERM_MEMORY_KEEP;
+  if (archives) {
+    for (let index = 0; index < excess; index += 1) {
+      const item = longTerm[index];
+      if (typeof item === 'string' && item.trim()) {
+        archives.push(buildLongTermOverflowArchiveEntry(item, turn));
+      }
+    }
+  }
+  return { ...system, 长期记忆: longTerm.slice(excess) };
+}
+
 export function buildTurnRecallSummary(input: {
   userInput: string;
   body: string;
@@ -417,20 +580,18 @@ export function autoCompressMemorySystem(
   settings: Pick<记忆系统设置, '即时转短期阈值' | '短期转中期阈值' | '中期转长期阈值' | '短期转长期阈值'>,
 ): 记忆系统 {
   let next = system;
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  // 对标参考项目：即时层不调 AI 压缩——由「写入四段记忆」滑动窗口（超限摘要滚入短期）处理。
   const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
   const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
 
-  while (next.即时记忆.length >= immediateThreshold) {
-    next = compressToShortTerm(next, turn, immediateThreshold);
-  }
   while (next.短期记忆.length >= shortThreshold) {
     next = compressToMiddleTerm(next, turn, shortThreshold);
   }
   while ((next.中期记忆 ?? []).length >= middleThreshold) {
     next = compressToLongTerm(next, turn, middleThreshold);
   }
-  return next;
+  // F6：长期记忆保留上限（无 archives 通道时直接裁剪超限最旧条目）
+  return trimLongTermMemoryOverflow(next, null, turn);
 }
 
 export function autoCompressMemorySystemWithArchives(
@@ -440,15 +601,10 @@ export function autoCompressMemorySystemWithArchives(
 ): { memory: 记忆系统; archives: 回忆条目[] } {
   let next = system;
   const archives: 回忆条目[] = [];
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
+  // 对标参考项目：即时层不调 AI 压缩（滑动滚动由写入链路处理）。
   const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || settings.短期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
   const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || MEMORY_LAYER_COMPRESSION_THRESHOLD));
 
-  while (next.即时记忆.length >= immediateThreshold) {
-    const raw = next.即时记忆.slice(0, immediateThreshold);
-    archives.push(createShortTermArchiveEntry(raw, turn));
-    next = compressToShortTerm(next, turn, immediateThreshold);
-  }
   while (next.短期记忆.length >= shortThreshold) {
     const raw = next.短期记忆.slice(0, shortThreshold);
     archives.push(createMiddleTermArchiveEntry(raw, turn));
@@ -459,6 +615,8 @@ export function autoCompressMemorySystemWithArchives(
     archives.push(createLongTermArchiveEntry(raw, turn));
     next = compressToLongTerm(next, turn, middleThreshold);
   }
+  // F6：长期记忆保留上限，超限最旧条目归档进 archives（调用方汇入忆庭）
+  next = trimLongTermMemoryOverflow(next, archives, turn);
   return { memory: next, archives };
 }
 
@@ -556,34 +714,6 @@ export async function autoCompressMemorySystemWithArchivesAsync(
     return { start, end };
   };
 
-  while (next.即时记忆.length >= immediateThreshold) {
-    const picked = pickEligible(next.即时记忆, immediateThreshold);
-    if (!picked) break;
-    const raw = picked.raw;
-    const result = await summarizeMemoryBatch(
-      {
-        kind: 'short',
-        turn,
-        items: raw,
-        prompt: settings.即时转短期提示词,
-      },
-      settings,
-      mainConfig,
-      signal,
-      retryCount,
-    );
-    usedFallback = usedFallback || result.usedFallback;
-    usedModel = usedModel || result.usedModel;
-    usedLocal = usedLocal || result.usedLocal;
-    await appendFailure({ kind: 'short', turn, items: raw, sourceTurns: inferSourceTurns(raw, turn) }, result);
-    archives.push(createShortTermArchiveEntry(raw, turn, result.summary));
-    next = {
-      ...next,
-      即时记忆: removeIndexes(next.即时记忆, picked.indexes),
-      短期记忆: [...next.短期记忆, result.summary],
-    };
-  }
-
   while (next.短期记忆.length >= shortThreshold) {
     const picked = pickEligible(next.短期记忆, shortThreshold);
     if (!picked) break;
@@ -639,6 +769,9 @@ export async function autoCompressMemorySystemWithArchivesAsync(
       长期记忆: [...next.长期记忆, result.summary],
     };
   }
+
+  // F6：长期记忆保留上限，超限最旧条目归档进 archives（调用方汇入忆庭）
+  next = trimLongTermMemoryOverflow(next, archives, turn);
 
   return { memory: next, archives, failures, usedFallback, usedModel, usedLocal };
 }

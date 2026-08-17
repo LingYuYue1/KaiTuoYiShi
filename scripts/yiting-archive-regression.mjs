@@ -25,11 +25,13 @@ assert(yitingCot.includes('禁止把"动态世界""行动选项""后续选项"')
 assert(!archive.includes('source.worldEvents?.length ? `动态世界'), '忆庭纪要原文层不得拼入动态世界系统材料。');
 assert(!archive.includes('source.actionOptions?.length ? `行动选项'), '忆庭纪要原文层不得拼入行动选项系统材料。');
 assert(!archive.includes('source.actionOptions?.length ? `后续选项'), '忆庭纪要兜底摘要不得拼入后续选项系统材料。');
-assert(workflow.includes('gameClock: effectiveWorld?.当前时间'), '忆庭入库必须传入当前小时分钟。');
+assert(workflow.includes('构建即时记忆条目'), '回合记忆写入必须使用对标参考项目的即时条目构建（时间+玩家输入+正文）。');
+assert(workflow.includes('写入四段记忆'), '回合记忆写入必须使用对标参考项目的四段写入（合体存储+回忆档案推导+滑动窗口）。');
+assert(workflow.includes('pendingRecallEntry'), '本回合回忆条目必须由写入四段记忆生成并汇入忆庭档案。');
 
-// 阶段1方案C/E：recall分档注入（≤6全原文，>6 Top5原文+其余摘要），不再"只注入概要层"。
-assert(retrieval.includes('原文注入'), '阶段1：忆庭召回注入必须支持分档原文注入策略。');
-assert(retrieval.includes('原文+其余摘要注入'), '阶段1：忆庭召回注入必须支持Top5原文+其余摘要模式。');
+// 对标既定方案：强回忆给原文、弱回忆给摘要，不做条数限制。
+assert(retrieval.includes('强回忆原文注入 + 弱回忆摘要注入'), '对标既定方案：忆庭召回注入必须支持强回忆原文/弱回忆摘要分档策略。');
+assert(!retrieval.includes('Top5原文+其余摘要注入'), '对标既定方案：忆庭召回不得保留Top5数量限制。');
 assert(retrieval.includes('buildBriefFromRaw'), '忆庭召回必须有旧档原文摘要兜底。');
 assert(!retrieval.includes('entry.原文 || entry.摘要 ||'), '忆庭召回不得优先把原文注入主剧情。');
 assert(!retrieval.includes('强回忆用于恢复原文细节'), '忆庭召回口径不得再鼓励恢复正文原文。');

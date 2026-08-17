@@ -2,6 +2,8 @@ import fs from 'node:fs';
 
 const builder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 const contextSnapshot = fs.readFileSync('hooks/useGame/contextSnapshot.ts', 'utf8');
+const turnItem = fs.readFileSync('components/features/Chat/TurnItem.tsx', 'utf8');
+const textService = fs.readFileSync('services/ai/text/index.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const requestFinalizer = fs.readFileSync('hooks/useGame/mainRequestFinalizer.ts', 'utf8');
@@ -102,6 +104,20 @@ assert(contextSnapshot.includes("id: 'phone_story_progress_diagnostic'") && cont
 assert(contextSnapshot.includes("id: 'zhiku_local_diagnostics'") && contextSnapshot.includes("title: '智库本地召回诊断'"), '智库本地召回信息必须从真实请求正文拆到诊断区块。');
 assert(!contextSnapshot.includes("id: 'zhiku_actual_saved_preview',\n    title: '上一回合真实保存的召回诊断',\n    category: '实际',\n    content: actualRecallPreview || '（上一条 AI 回复没有保存召回诊断；请从新增诊断后的新回合开始查看。）',\n  });"), '上一回合智库召回诊断不得继续伪装成上传区块。');
 assert(promptModel.includes("calibration: '独立模型'"), '提示词模块 calibration 作用域必须显示为独立模型，不能继续误标为变量校准。');
+// 2026-08-15：聊天详情必须把真实 API 请求与本地诊断拆开，避免把诊断误认为请求正文。
+assert(turnItem.includes("type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context' | 'diagnostics';"), '聊天详情必须提供独立的诊断面板入口。');
+assert(turnItem.includes('{devMode && (') && turnItem.includes('devMode && openTool === \'diagnostics\''), '聊天诊断入口和内容必须受开发者模式门禁保护。');
+assert(turnItem.includes('label="真实请求（发送给主剧情）"') && turnItem.includes('label="本地诊断（不会发送给主剧情）"'), '聊天详情必须明确标注真实请求与本地诊断的发送边界。');
+const actualRequestStart = turnItem.indexOf('function formatActualRequestContext');
+const diagnosticsStart = turnItem.indexOf('function formatDebugDiagnostics');
+assert(actualRequestStart >= 0 && diagnosticsStart > actualRequestStart, '真实请求格式化函数必须位于诊断格式化函数之前并保持独立。');
+const actualRequestFormatter = turnItem.slice(actualRequestStart, diagnosticsStart);
+const diagnosticsFormatter = turnItem.slice(diagnosticsStart);
+assert(actualRequestFormatter.includes('debug.systemPrompt') && actualRequestFormatter.includes('debug.messages'), '真实请求面板必须只读取保存的 System Prompt 与 API messages。');
+assert(!actualRequestFormatter.includes('DeepSeek 主剧情诊断') && !actualRequestFormatter.includes('缓存前缀诊断') && !actualRequestFormatter.includes('NPC账本注入诊断') && !actualRequestFormatter.includes('智库召回诊断'), '真实请求面板不得拼入 DeepSeek、缓存、NPC 或智库诊断文本。');
+assert(diagnosticsFormatter.includes('DeepSeek 主剧情诊断') && diagnosticsFormatter.includes('缓存前缀诊断') && diagnosticsFormatter.includes('NPC账本注入诊断'), '诊断面板必须保留本地诊断内容，供开发者核对。');
+assert(textService.includes("const apiMessages = request.messages.map((m) => ({ role: m.role, content: m.content }));"), '主剧情发送层必须只提取 role/content，禁止把 debugContext 等本地字段序列化给模型。');
+
 assert(worldbookModel.includes("calibration: '独立模型'"), '世界书 calibration 作用域必须显示为独立模型，不能继续误标为变量校准。');
 assert(promptModel.includes('独立模型 / 校准模型提示词展示'), '提示词模块类型注释必须说明 calibration 是独立模型提示词展示。');
 assert(worldbookModel.includes('独立模型 / 校准模型资料展示'), '世界书类型注释必须说明 calibration 是独立模型资料展示。');

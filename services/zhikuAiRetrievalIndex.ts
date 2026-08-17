@@ -33,6 +33,7 @@ export type ZhikuAiCandidateReason =
   | 'KEYWORD_SELECTED'
   | 'PRESENT_CHARACTER'
   | 'EXPECTED_CHARACTER'
+  | 'MENTIONED_CHARACTER'
   | 'SUBJECT_FORM'
   | 'CURRENT_LOCATION'
   | 'RELATED_ENTRY'
@@ -44,6 +45,8 @@ export interface ZhikuAiTurnContext {
   currentLocation?: string;
   presentCharacters: string[];
   expectedCharacters: string[];
+  /** 近期上下文点名（回顾窗口内出现）但未在场的人物：MENTIONED_CHARACTER 候选通道。 */
+  mentionedCharacters?: string[];
   immediateStoryReview?: string;
   recentStoryContext?: string;
   storyPlan?: string;
@@ -159,7 +162,9 @@ export function buildZhikuAiCandidateIndex(input: BuildCandidateIndexInput): Zhi
     reasonsById.set(entry.id, reasons);
   };
   const addSearchResults = (text: string | undefined, reason: ZhikuAiCandidateReason, limit: number, includeCharacters = true) => {
-    const query = compactText(text ?? '', 1200);
+    // 回顾/近期正文按回合窗口组织，字符截断会抹掉中段回合的角色名（首尾保留实测丢第5/9回合）——
+    // 搜索用全量文本，回合数由窗口控制，不做字符省略。
+    const query = String(text ?? '').replace(/\s+/g, ' ').trim();
     if (!query) return;
     const relevant = 搜索智库条目({ 条目: availableEntries }, query, availableEntries.length)
       .filter((entry) => includeCharacters || entry.分类 !== 'character')
@@ -184,11 +189,21 @@ export function buildZhikuAiCandidateIndex(input: BuildCandidateIndexInput): Zhi
   };
   addCharacterParticipants(input.context.presentCharacters, 'PRESENT_CHARACTER');
   addCharacterParticipants(input.context.expectedCharacters, 'EXPECTED_CHARACTER');
+  addCharacterParticipants(input.context.mentionedCharacters ?? [], 'MENTIONED_CHARACTER');
 
   for (const entry of availableEntries) {
     const subjectId = getCandidateSubjectId(entry);
     if (entry.分类 === 'character' && subjectId && participantSubjects.has(subjectId)) addEntry(entry, 'SUBJECT_FORM');
   }
+
+  // 上下文搜索（回顾/近期正文/地点/剧情规划）优先于关联条目——避免 24 条候选上限截断时
+  // 「只出现在回顾里的角色」被 keyword/present/related 挤掉。
+  addSearchResults(input.context.currentLocation, 'CURRENT_LOCATION', 3, false);
+  addSearchResults(input.context.immediateStoryReview, 'STORY_STATE', 5);
+  addSearchResults(input.context.recentStoryContext, 'STORY_STATE', 3);
+  addSearchResults(input.context.storyPlan, 'STORY_STATE', 3);
+  addSearchResults(input.context.openingArchiveText, 'STORY_STATE', 3);
+  addSearchResults(input.keywordScanText, 'TEXT_RELEVANCE', 5);
 
   for (const keywordEntry of input.keywordEntries) {
     for (const relatedId of keywordEntry.关联条目ID ?? []) {
@@ -200,13 +215,6 @@ export function buildZhikuAiCandidateIndex(input: BuildCandidateIndexInput): Zhi
       }
     }
   }
-
-  addSearchResults(input.context.currentLocation, 'CURRENT_LOCATION', 3, false);
-  addSearchResults(input.context.immediateStoryReview, 'STORY_STATE', 5);
-  addSearchResults(input.context.recentStoryContext, 'STORY_STATE', 3);
-  addSearchResults(input.context.storyPlan, 'STORY_STATE', 3);
-  addSearchResults(input.context.openingArchiveText, 'STORY_STATE', 3);
-  addSearchResults(input.keywordScanText, 'TEXT_RELEVANCE', 5);
 
   const requestedLimit = Math.max(1, Math.trunc(input.maxCandidates ?? ZHIKU_AI_CONTROLLED_CANDIDATE_LIMIT));
   const effectiveLimit = Math.max(requestedLimit, keywordIds.size);
@@ -222,14 +230,16 @@ export function buildZhikuAiCandidateIndex(input: BuildCandidateIndexInput): Zhi
   return {
     request: {
       turnContext: {
-        keywordScanText: compactText(input.keywordScanText, 1100),
-        currentLocation: compactOptionalText(input.context.currentLocation, 100),
+        // keywordScanText 是 AI 判断「关键词有没有命中」的唯一正文窗口——全量保留，
+        // 字符截断会抹掉中段回合的角色名（实测首尾保留丢第 5/9 回合）。
+        keywordScanText: String(input.keywordScanText ?? '').replace(/\s+/g, ' ').trim(),
+        currentLocation: compactOptionalText(input.context.currentLocation, 140),
         presentCharacters: normalizeTextList(input.context.presentCharacters, 16),
         expectedCharacters: normalizeTextList(input.context.expectedCharacters, 16),
-        immediateStoryReview: compactOptionalText(input.context.immediateStoryReview, 700),
-        recentStoryContext: compactOptionalText(input.context.recentStoryContext, 500),
-        storyPlan: compactOptionalText(input.context.storyPlan, 400),
-        openingArchiveText: compactOptionalText(input.context.openingArchiveText, 500),
+        immediateStoryReview: String(input.context.immediateStoryReview ?? '').replace(/\s+/g, ' ').trim() || undefined,
+        recentStoryContext: String(input.context.recentStoryContext ?? '').replace(/\s+/g, ' ').trim() || undefined,
+        storyPlan: compactOptionalBothEnds(input.context.storyPlan, 700),
+        openingArchiveText: compactOptionalBothEnds(input.context.openingArchiveText, 700),
       },
       keywordEntryIds: input.keywordEntries.map((entry) => entry.id).filter((id) => entriesById.has(id)),
       candidates,
@@ -507,6 +517,20 @@ function normalizeTextList(values: string[] | undefined, limit: number): string[
 
 function compactOptionalText(value: string | undefined, limit: number): string | undefined {
   return compactText(value ?? '', limit) || undefined;
+}
+
+/** 首尾保留压缩：最新内容在文本末尾，不能只留开头。 */
+function compactBothEndsText(value: string, limit: number): string {
+  const cleaned = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (cleaned.length <= limit) return cleaned;
+  const head = Math.floor(limit * 0.4);
+  const tail = limit - head - 6;
+  return `${cleaned.slice(0, head)}…[中段省略]…${cleaned.slice(-tail)}`;
+}
+
+function compactOptionalBothEnds(value: string | undefined, limit: number): string | undefined {
+  return compactBothEndsText(value ?? '', limit) || undefined;
 }
 
 function compactText(value: string, limit: number): string {

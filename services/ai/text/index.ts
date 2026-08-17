@@ -49,6 +49,7 @@ export async function sendChatMessage(
   request: ChatRequest,
 ): Promise<ChatResult> {
   const useStream = request.streaming !== false;
+  // 传输层只接收 role/content；debugContext、快照和诊断字段永远留在本地历史/UI，不进入任何模型 payload。
   const apiMessages = request.messages.map((m) => ({ role: m.role, content: m.content }));
   let usage: ChatCompletionUsage | undefined;
   const onUsage = (nextUsage: ChatCompletionUsage) => {

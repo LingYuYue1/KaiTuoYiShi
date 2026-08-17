@@ -17,7 +17,7 @@ export function getCurrentStoryChapterLabel(system: 剧情编织系统): string 
   return `${series.标题} · ${chapter}`;
 }
 
-export type 联合裁决决策 = 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause';
+export type 联合裁决决策 = 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause' | 'jump_to';
 
 export interface 剧情编织推进诊断 {
   /** 归一化后的原系统；诊断绝不修改运行状态或进度锚点。 */
@@ -182,6 +182,8 @@ export function applyAdjudicatedStoryProgress(params: {
   decision: 联合裁决决策;
   completedUnitIds: string[];
   reasons: string[];
+  /** jump_to 目标分段（AI 申报 + 正文背书）。 */
+  targetSegmentId?: string;
 }): { system: 剧情编织系统; changed: boolean } {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
   // 归一化层既有行为：输入锚点已归档时，归一化会自愈到当前运行段（归档锚点自愈，非正文推进）。
@@ -222,6 +224,43 @@ export function applyAdjudicatedStoryProgress(params: {
           turnCount: params.turnCount,
           reasons: [`后台发现锚点分段「${current.标题}」已归档，自动迁移到下一分段`],
           switchNote: `归档锚点自动迁移到「${next.标题}」`,
+        }),
+      });
+      return { system: nextSystem, changed: true };
+    }
+  }
+  // 跳段对齐：AI 申报「进入分段N」且正文背书目标分段要素 → 直接对齐目标分段，
+  // 中间分段（当前之后、目标之前）标记已跳过，目标分段标记当前。
+  if (params.decision === 'jump_to' && params.targetSegmentId && current) {
+    const target = segments.find((segment) =>
+      segment.id === params.targetSegmentId && segment.组号 > current.组号 && segment.运行状态 === '未开始',
+    );
+    if (target) {
+      const nextSeries: 剧情编织系列 = {
+        ...series,
+        当前分段组号: target.组号,
+        分段列表: series.分段列表.map((segment) => {
+          if (segment.id === target.id) return { ...segment, 运行状态: '当前' as const, updatedAt: Date.now() };
+          if (segment.id === current.id) return { ...segment, 运行状态: '已经历' as const, updatedAt: Date.now() };
+          if (segment.组号 > current.组号 && segment.组号 < target.组号 && segment.运行状态 === '未开始') {
+            return { ...segment, 运行状态: '已跳过' as const, updatedAt: Date.now() };
+          }
+          return segment;
+        }),
+        updatedAt: Date.now(),
+      };
+      const nextSystem = 归一化剧情编织系统({
+        ...normalized,
+        当前系列ID: series.id,
+        系列列表: normalized.系列列表.map((item) => item.id === series.id ? nextSeries : item),
+        当前进度: buildProgressAnchor({
+          previous: normalized.当前进度,
+          series,
+          current: target,
+          completedSegment: current,
+          turnCount: params.turnCount,
+          reasons: params.reasons.length ? params.reasons : ['AI 申报跳段对齐到目标分段'],
+          switchNote: `跳段对齐到「${target.标题 || `第 ${target.组号} 段`}」`,
         }),
       });
       return { system: nextSystem, changed: true };

@@ -93,6 +93,7 @@ cleanTempDir();
 writeJsonModule('data/builtinPresets/shuangrenchenghang.json');
 writeJsonModule('data/builtinPresets/izumi.json');
 transpileModule('utils/macroEngine.ts');
+transpileModule('utils/narrativeRuntimePolicy.ts');
 transpileModule('data/builtinPresets/builtinPreset.ts');
 transpileModule('data/builtinPresets/index.ts');
 transpileModule('hooks/useGame/tavernFormatGuard.ts');

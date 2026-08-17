@@ -95,6 +95,10 @@ function normalizeText(text: string): string {
 
 const END_STATE_PREFIX_RE = /^(玩家|主角|他们|他|她|其|我|已|已经|终于|最终|成功|顺利|随后|接着|并在|并)/;
 const END_STATE_NON_COMPLETION_RE = /(未|没有|尚未|还没|没能|未能|并未|不曾|无法|否认|如果|若|计划|准备|试图|打算|想要|即将|将要|将会|以后|未来|预计|预定|目标|可能|回忆|梦见|假设|设想|传闻|预告)/;
+/** 完成要素宽松匹配：正文命中 ≥2 个完成要素视为分段完成（AI 自然表达无需逐字命中结束状态）。 */
+const FACT_POINT_HIT_THRESHOLD = 2;
+/** 完成要素命中排除的泛称（提到开拓者/列车组 ≠ 分段完成）。 */
+const FACT_POINT_EXCLUDE_TERMS = new Set(['开拓者', '列车组', '无名客', '星穹列车', '主角', '玩家']);
 
 interface EndStateMatch {
   endState: string;
@@ -139,7 +143,11 @@ function clausePrefixOf(text: string, endOffset: number): string {
 }
 
 /** 只接受正文中明确出现的完整/核心结束片段；否定、条件和计划语境不构成完成。 */
-function findEndStateMatch(body: string, endStates: string[]): EndStateMatch | undefined {
+function findEndStateMatch(
+  body: string,
+  endStates: string[],
+  options?: { completionTerms?: string[]; excludeTerms?: string[] },
+): EndStateMatch | undefined {
   const source = normalizedTextWithOffsets(body);
   if (!source.normalized) return undefined;
   for (const endState of endStates) {
@@ -155,13 +163,203 @@ function findEndStateMatch(body: string, endStates: string[]): EndStateMatch | u
       return { endState, startOffset, endOffset: lastOffset + 1 };
     }
   }
+  // 完成要素宽松匹配：正文命中 ≥2 个完成要素（引号内名词/涉及地点短名/关键事件名）视为完成。
+  // 返回的 endState 取第一条原始结束状态——裁决器 payloadHitsEndState 按结束状态原文判定，宽松匹配不改变回执契约。
+  if (options?.completionTerms && options.completionTerms.length > 0) {
+    const hit = countCompletionTermHits(body, options.completionTerms, options.excludeTerms ?? []);
+    if (hit.matched && hit.firstOffset) {
+      return { endState: endStates[0], startOffset: hit.firstOffset.start, endOffset: hit.firstOffset.end };
+    }
+  }
   return undefined;
+}
+
+/** 正文命中完成要素的计数（排除泛称/角色名/否定语境），供结束状态宽松匹配与 AI 申报背书共用。 */
+/** 正文命中完成要素的计数（排除泛称/角色名/否定语境），供结束状态宽松匹配与 AI 申报背书共用。
+ *  同位置重叠词只保留最长（「空间站危机」覆盖窗口词「空间站」），避免同一处命中重复计数。 */
+function countCompletionTermHits(
+  body: string,
+  terms: string[],
+  excludeTerms: string[],
+): { hits: string[]; matched: boolean; firstOffset?: { start: number; end: number } } {
+  const source = normalizedTextWithOffsets(body);
+  if (!source.normalized) return { hits: [], matched: false };
+  const exclude = new Set([...FACT_POINT_EXCLUDE_TERMS, ...excludeTerms]);
+  const found: Array<{ term: string; start: number; end: number }> = [];
+  for (const term of terms) {
+    if (exclude.has(term)) continue;
+    const normalizedIndex = source.normalized.indexOf(term);
+    if (normalizedIndex < 0) continue;
+    const clausePrefix = clausePrefixOf(source.normalized, normalizedIndex);
+    if (END_STATE_NON_COMPLETION_RE.test(clausePrefix)) continue;
+    const startOffset = source.offsets[normalizedIndex];
+    const lastOffset = source.offsets[normalizedIndex + term.length - 1];
+    if (startOffset === undefined || lastOffset === undefined) continue;
+    found.push({ term, start: startOffset, end: lastOffset + 1 });
+  }
+  found.sort((a, b) => b.term.length - a.term.length);
+  // 区间包含去重：同一位置或嵌套在更长命中内的词只保留最长
+  // （「空间站危机」覆盖「空间站」与窗口词「站危机」，避免同一处命中重复计数）。
+  const deduped = found.filter((item, index) =>
+    !found.slice(0, index).some((prev) => prev.start <= item.start && item.end <= prev.end),
+  );
+  const hits = deduped.map((item) => item.term);
+  const first = deduped[0];
+  return {
+    hits,
+    matched: hits.length >= FACT_POINT_HIT_THRESHOLD,
+    firstOffset: first ? { start: first.start, end: first.end } : undefined,
+  };
+}
+
+/** 正文是否命中任一完成要素（≥1，排除泛称/角色名/否定语境）：跳段背书用。 */
+function countAnyCompletionTermHit(
+  body: string,
+  terms: string[],
+  excludeTerms: string[],
+): { hit: boolean; offset?: { start: number; end: number } } {
+  const source = normalizedTextWithOffsets(body);
+  if (!source.normalized) return { hit: false };
+  const exclude = new Set([...FACT_POINT_EXCLUDE_TERMS, ...excludeTerms]);
+  for (const term of terms) {
+    if (exclude.has(term)) continue;
+    const normalizedIndex = source.normalized.indexOf(term);
+    if (normalizedIndex < 0) continue;
+    const clausePrefix = clausePrefixOf(source.normalized, normalizedIndex);
+    if (END_STATE_NON_COMPLETION_RE.test(clausePrefix)) continue;
+    const startOffset = source.offsets[normalizedIndex];
+    const lastOffset = source.offsets[normalizedIndex + term.length - 1];
+    if (startOffset === undefined || lastOffset === undefined) continue;
+    return { hit: true, offset: { start: startOffset, end: lastOffset + 1 } };
+  }
+  return { hit: false };
+}
+
+/** 完成要素池：结束状态引号内名词（物品/专名）+ 涉及地点短名 + 关键事件名。正文命中 ≥2 个即提示分段完成。 */
+function buildCompletionTermPool(segment: 剧情编织分段): string[] {
+  const terms = new Set<string>();
+  for (const endState of segment.本段结束状态 ?? []) {
+    for (const match of String(endState).matchAll(/[“"「『]([^”"」』]{2,12})[”"」』]/g)) {
+      terms.add(match[1].trim());
+    }
+  }
+  for (const location of [
+    ...(segment.涉及地点 ?? []),
+    ...(segment.地图地点档案 ?? []).map((item) => item.名称),
+  ]) {
+    const short = String(location).split(/[·•・/\\|_\-—－]/).filter(Boolean).pop()?.trim();
+    if (short && short.length >= 2 && short.length <= 12) terms.add(short);
+  }
+  for (const event of segment.关键事件 ?? []) {
+    const name = event.事件名?.trim();
+    if (name && name.length >= 2 && name.length <= 12) terms.add(name);
+  }
+  return Array.from(terms);
+}
+
+/** 后段事实匹配词：开局已成立事实/前段延续事实按虚词切分为名词块 + 4 字滑动窗口
+ *  （正文子串命中即视为后段要素；窗口保证「模拟宇宙为Alpha测试服」→「模拟宇宙」可命中）。 */
+function buildSegmentFactTerms(segment: 剧情编织分段): string[] {
+  const sources = [
+    ...(segment.开局已成立事实 ?? []),
+    ...(segment.前段延续事实 ?? []),
+  ];
+  const FACT_SPLIT_RE = /(?:已|为|的|在|与|和|及|并|后|前|由|被|将|正|仍|按|从|向|到|获得|完成|抵达|进入|成为|建立|确认|加入|返回|前往|离开|携带|通过|启动|打开|关闭|封锁|授予|接收|击败|镇压|封印|平息|接管|升格|解锁|掌握|正式|成功|安全|重新|暂时|继续|决定|邀请|参与|允许|停靠|支援|赶来|追击|留守|撤离)/;
+  const terms = new Set<string>();
+  for (const raw of sources) {
+    const cleaned = normalizeText(raw);
+    if (!cleaned) continue;
+    for (const part of cleaned.split(/[，,、；;：:]+/)) {
+      const chunks: string[] = [];
+      let rest = part;
+      let guard = 0;
+      while (rest.length >= 2 && guard < 8) {
+        guard += 1;
+        const match = rest.match(/^(.{2,12}?)(?=(?:已|为|的|在|与|和|及|并|后|前|由|被|将|正|仍|按|从|向|到|获得|完成|抵达|进入|成为|建立|确认|加入|返回|前往|离开|携带|通过|启动|打开|关闭|封锁|授予|接收|击败|镇压|封印|平息|接管|升格|解锁|掌握|正式|成功|安全|重新|暂时|继续|决定|邀请|参与|允许|停靠|支援|赶来|追击|留守|撤离))/);
+        if (!match) {
+          if (rest.length >= 2) chunks.push(rest);
+          break;
+        }
+        if (match[1].length >= 2) chunks.push(match[1]);
+        rest = rest.slice(match[0].length);
+      }
+      for (const chunk of chunks) {
+        if (chunk.length >= 2 && chunk.length <= 12) terms.add(chunk);
+        for (let index = 0; index + 4 <= chunk.length; index += 1) {
+          terms.add(chunk.slice(index, index + 4));
+        }
+      }
+    }
+    void FACT_SPLIT_RE;
+  }
+  return Array.from(terms);
 }
 
 interface LaterProgressionMatch extends EndStateMatch {
   basis: 'later_segment_state' | 'later_segment_location';
   segmentId: string;
   segmentGroup: number;
+}
+
+/** 后段事实词 ≥2 命中（逐字保底失败时的宽松路径）：正文实际写到后段多要素才算后段状态建立——
+ *  仅提到单个未来词（如「首领决战」）不推进（验收 2b）；实际写到（如「模拟宇宙 + Alpha测试服」）才推进。 */
+function laterFactHit(body: string, segment: 剧情编织分段): EndStateMatch | undefined {
+  const hit = countCompletionTermHits(body, buildSegmentFactTerms(segment), segment.登场角色 ?? []);
+  if (!hit.matched || !hit.firstOffset) return undefined;
+  return {
+    endState: (laterStateAnchors(segment)[0] ?? segment.标题 ?? ''),
+    startOffset: hit.firstOffset.start,
+    endOffset: hit.firstOffset.end,
+  };
+}
+
+/** AI 申报跳段候选：目标分段锚点背书（≥1 个特有锚点，天然排除跨段角色名）→ jump_to 候选。 */
+async function buildDeclaredJumpCandidate(params: {
+  body: string;
+  declaredTarget: string;
+  futureSegments: 剧情编织分段[];
+  currentUnitId: string;
+  currentSegment: 剧情编织分段;
+  gameTime: GameTime;
+  turnCount: number;
+  responseId: string;
+  sha256Fingerprint: (text: string) => Promise<string>;
+}): Promise<RuntimeFactCandidate | null> {
+  const target = params.futureSegments.find((segment) =>
+    segment.标题?.includes(params.declaredTarget)
+    || String(segment.组号) === params.declaredTarget.replace(/\D/g, '')
+    || params.declaredTarget.includes(segment.标题 ?? ''),
+  );
+  if (!target) return null;
+  const endorsement = countAnyCompletionTermHit(params.body, buildCompletionTermPool(target), target.登场角色 ?? []);
+  if (!endorsement.hit || !endorsement.offset) return null;
+  return {
+    candidateId: 'turn_evidence:jump:' + target.id + ':' + params.turnCount,
+    eventInstanceId: params.currentUnitId,
+    factType: 'unit_completed',
+    payload: {
+      endState: (params.currentSegment.本段结束状态 ?? [])[0] ?? '',
+      jumpTargetSegmentId: target.id,
+      jumpTargetSegmentGroup: target.组号,
+      declaredJump: true,
+    },
+    occurredAt: params.gameTime,
+    publicScope: { kind: 'private' },
+    evidenceRefs: [{
+      kind: 'narrative_span',
+      responseId: params.responseId,
+      messageId: params.responseId,
+      bodyFingerprint: await params.sha256Fingerprint(params.body),
+      normalizationVersion: 1,
+      startOffset: endorsement.offset.start,
+      endOffset: endorsement.offset.end,
+      textFingerprint: await params.sha256Fingerprint(params.body.slice(endorsement.offset.start, endorsement.offset.end)),
+    }],
+    evidenceLevel: 'confirmed',
+    playerParticipated: true,
+    playerObserverVisible: false,
+    createdBy: 'player_turn',
+  };
 }
 
 function normalizedLocation(text: string): string {
@@ -208,24 +406,32 @@ function findLaterProgressionMatch(params: {
       && segment.处理状态 === '已完成')
     .sort((a, b) => a.组号 - b.组号);
 
+  // 后段匹配按组号升序遍历，收集所有命中段（正文可能同时命中多个后段要素），
+  // 由调用方决定推进一格还是跳段（命中最高组号且组号差 >1 → 正文证据驱动的跳段）。
+  const matches: LaterProgressionMatch[] = [];
   for (const segment of futureSegments) {
-    const stateMatch = findEndStateMatch(params.body, laterStateAnchors(segment));
+    // 逐字保底 + 后段事实词 ≥2 命中（正文实际写到后段多要素才建立后段状态；
+    // 仅提到单个未来词不推进——验收 2b）。
+    const stateMatch = findEndStateMatch(params.body, laterStateAnchors(segment))
+      ?? laterFactHit(params.body, segment);
     if (stateMatch) {
-      return {
+      matches.push({
         ...stateMatch,
         basis: 'later_segment_state',
         segmentId: segment.id,
         segmentGroup: segment.组号,
-      };
+      });
     }
   }
 
   const currentLocation = params.currentLocation?.trim();
   if (!currentLocation) return undefined;
   const currentLocations = segmentLocations(params.currentSegment);
-  if (currentLocations.some((location) => locationsOverlap(location, currentLocation))) return undefined;
+  // 地点守卫只挡「纯地点分支」：后段事实词已命中（matches 非空）时不得因当前地点仍在当前段而吞掉推进。
+  if (matches.length === 0 && currentLocations.some((location) => locationsOverlap(location, currentLocation))) return undefined;
 
   for (const segment of futureSegments) {
+    if (matches.some((match) => match.segmentId === segment.id)) continue;
     const futureLocation = segmentLocations(segment)
       .find((location) => locationsOverlap(location, currentLocation));
     if (!futureLocation) continue;
@@ -236,14 +442,17 @@ function findLaterProgressionMatch(params: {
     ].map((item) => item.trim()).filter((item) => item.length >= 2)));
     const locationMatch = findEndStateMatch(params.body, bodyLocationCandidates);
     if (!locationMatch) continue;
-    return {
+    matches.push({
       ...locationMatch,
       basis: 'later_segment_location',
       segmentId: segment.id,
       segmentGroup: segment.组号,
-    };
+    });
   }
-  return undefined;
+  if (matches.length === 0) return undefined;
+  // 保守取「最近」命中段（最小组号）：正文已写到后段 → 渐进对齐到最近的后段，
+  // 避免 4 字窗口同时命中多个后段时跳过头（正文 Alpha 测试不应跳到 Beta/列车段）。
+  return matches.sort((a, b) => a.segmentGroup - b.segmentGroup)[0];
 }
 
 export function matchEndStateInBody(body: string, endStates: string[]): string | undefined {
@@ -271,18 +480,31 @@ export async function buildTurnEvidence(params: {
   gameTime: GameTime;
   turnCount: number;
   responseId: string;
+  /** AI 剧情推进申报（《剧情规划》内 <剧情推进> 子块）：completed 需正文背书，targetSegment 触发跳段候选。 */
+  storyAdvance?: { completed: boolean; targetSegment?: string; basis?: string };
 }): Promise<TurnEvidenceBuildResult> {
   const { body, currentSegment, projection, gameTime, turnCount, responseId } = params;
   const confirmedEvidence: RuntimeFactCandidate[] = [];
   const mentioned: string[] = [];
   const currentUnitId = projection.currentFocus.unitId ?? 'unit:' + currentSegment.id;
-  const endStateMatch = findEndStateMatch(body, currentSegment.本段结束状态);
-  const laterProgressionMatch = endStateMatch ? undefined : findLaterProgressionMatch({
+  const endStateMatch = findEndStateMatch(body, currentSegment.本段结束状态, {
+    completionTerms: buildCompletionTermPool(currentSegment),
+    excludeTerms: currentSegment.登场角色 ?? [],
+  });
+  // AI 申报跳段优先于 laterProgression：申报「进入分段N」且目标分段锚点背书 → jump_to 候选；
+  // 申报跳段成功时不生成 laterProgression 的一格推进证据（跳段让位）。
+  const declaredTarget = params.storyAdvance?.targetSegment?.trim();
+  const declaredJumpCandidate = declaredTarget && !endStateMatch
+    ? await buildDeclaredJumpCandidate({ body, declaredTarget, futureSegments: params.futureSegments ?? [], currentUnitId, currentSegment, gameTime, turnCount, responseId, sha256Fingerprint })
+    : null;
+  const laterProgressionMatch = (endStateMatch || declaredJumpCandidate) ? undefined : findLaterProgressionMatch({
     body,
     currentLocation: params.currentLocation,
     currentSegment,
     futureSegments: params.futureSegments ?? [],
   });
+  // laterProgression 命中（含后段事实词 ≥2）→ 本回合建立后续段状态，只结算当前段推进一格
+  // （旧验收：旧游标恢复时提到后段只推一格，不跳段；AI 显式申报跳段走 jump_to 候选）。
   const completionMatch = endStateMatch ?? laterProgressionMatch;
   if (completionMatch) {
     const matchedText = body.slice(completionMatch.startOffset, completionMatch.endOffset);
@@ -324,6 +546,41 @@ export async function buildTurnEvidence(params: {
     ...currentSegment.登场角色,
     ...currentSegment.涉及地点,
   ].map((item) => item.trim()).filter((item) => item.length >= 2);
+
+  // 方案A：AI 申报「完成」→ 正文背书校验（命中当前分段任一完成要素）→ 视为完成证据。
+  if (params.storyAdvance?.completed === true && !completionMatch) {
+    const endorsement = countCompletionTermHits(body, buildCompletionTermPool(currentSegment), currentSegment.登场角色 ?? []);
+    if (endorsement.matched && endorsement.firstOffset) {
+      const matchedText = body.slice(endorsement.firstOffset.start, endorsement.firstOffset.end);
+      confirmedEvidence.push({
+        candidateId: 'turn_evidence:' + currentUnitId + ':' + turnCount + ':declared',
+        eventInstanceId: currentUnitId,
+        factType: 'unit_completed',
+        payload: { endState: (currentSegment.本段结束状态 ?? [])[0] ?? '', declaredCompletion: true },
+        occurredAt: gameTime,
+        publicScope: { kind: 'private' },
+        evidenceRefs: [{
+          kind: 'narrative_span',
+          responseId,
+          messageId: responseId,
+          bodyFingerprint: await sha256Fingerprint(body),
+          normalizationVersion: 1,
+          startOffset: endorsement.firstOffset.start,
+          endOffset: endorsement.firstOffset.end,
+          textFingerprint: await sha256Fingerprint(matchedText),
+        }],
+        evidenceLevel: 'confirmed',
+        playerParticipated: true,
+        playerObserverVisible: false,
+        createdBy: 'player_turn',
+      });
+    }
+  }
+
+  // 申报跳段候选（已在前面优先计算，declaredJumpCandidate 非空时直接并入证据）。
+  if (declaredJumpCandidate) {
+    confirmedEvidence.push(declaredJumpCandidate);
+  }
   for (const term of currentTerms) {
     if (body.includes(term)) mentioned.push(term);
   }

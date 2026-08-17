@@ -2,22 +2,27 @@ import type { 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
 
-export const MAIN_HISTORY_LIMIT_WITH_MEMORY = 20;
-export const MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20;
-export const MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20;
+/** F3·对标既定方案：保守式 = 最近 2 个完整回合（2 user + 2 assistant），保护上一句对白口吻。 */
+export const MAIN_HISTORY_LIMIT_CONSERVATIVE = 4;
+/** F3·对标既定方案：精简式 = 0 条原始历史（只留即时剧情回顾 + 当前输入任务序列）。 */
+export const MAIN_HISTORY_LIMIT_MINIMAL = 0;
 /**
- * 阶段2对齐既定方案：长期记忆全量注入（压缩阈值改45后约20-30条，可接受）。
- * 用大数实现"全量"，实际条数由压缩阈值控制。
+ * F4·对标既定方案：即时剧情回顾窗口 = 最近 9 个已完成 AI 回合（+其间玩家输入与当前输入）。
+ * 不再按消息条数切窗，避免玩家消息稀释 AI 回合数。
+ */
+export const MAIN_IMMEDIATE_STORY_REVIEW_TURNS = 9;
+/**
+ * 对标参考项目：长期/中期记忆全量注入（无条数上限）——
+ * 记忆体积由压缩链（短期>30 压中期、中期>50 压长期）与回忆命中禁用控制。
  */
 export const MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 9999;
-/**
- * 阶段2对齐既定方案：中期记忆全量注入（压缩阈值改25后约20-30条，可接受）。
- */
 export const MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT = 9999;
-/** 阶段2对齐既定方案：短期注入窗口对齐15（原12） */
+/** 对标参考项目：短期注入窗口 = 短期记忆阈值（最近 30 条，每条带时间戳展示）。 */
 export const MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 30;
 export const MAIN_RECALL_ASSISTANT_BODY_WINDOW = 5;
-export const ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW = 3;
+/** 智库关键词只扫描最近 5 个叙事回合的玩家输入与 assistant 正文。 */
+export const ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW = 5;
+export const ZHIKU_KEYWORD_RECALL_USER_INPUT_WINDOW = 5;
 
 export function hasInjectableMemory(memorySystem: 记忆系统): boolean {
   return (
@@ -31,9 +36,10 @@ export function getMainHistoryWindowLimit(
   settings: 游戏设置,
   memorySystem: 记忆系统,
 ): number {
-  return settings.enableMemoryInjection && hasInjectableMemory(memorySystem)
-    ? MAIN_HISTORY_LIMIT_WITH_MEMORY
-    : MAIN_HISTORY_LIMIT_WITHOUT_MEMORY;
+  // 对标参考项目：主剧情历史模式两档——minimal 0 条（默认）/ conservative 最近 2 回合；legacy 已移除。
+  const mode = settings.记忆系统?.主剧情历史模式 ?? 'minimal';
+  if (mode === 'minimal') return MAIN_HISTORY_LIMIT_MINIMAL;
+  return MAIN_HISTORY_LIMIT_CONSERVATIVE;
 }
 
 export function getMainHistoryWindow(
@@ -41,7 +47,10 @@ export function getMainHistoryWindow(
   settings: 游戏设置,
   memorySystem: 记忆系统,
 ): 聊天消息[] {
-  return history.slice(-getMainHistoryWindowLimit(settings, memorySystem));
+  const limit = getMainHistoryWindowLimit(settings, memorySystem);
+  // slice(-0) 等价 slice(0) 会返回整个数组——minimal 模式（0 条）必须显式返回空。
+  if (limit <= 0) return [];
+  return history.slice(-limit);
 }
 
 export type PathAwakeningHistoryPhase = 'question' | 'judgement';
@@ -89,6 +98,19 @@ function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
 function compactText(text: string, limit: number): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   return cleaned.length > limit ? `${cleaned.slice(0, limit)}...` : cleaned;
+}
+
+/**
+ * 召回用截断：保留开头与结尾，只省略中间。
+ * 正文/回顾里「最新回合」永远在文本末尾，slice(0, limit) 保头丢尾会把
+ * 最近出现的角色名全部截掉——这正是「上文明明有角色，关键词/AI 都召不回」的机制根因。
+ */
+function compactRecallBothEnds(text: string, limit: number): string {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= limit) return cleaned;
+  const head = Math.floor(limit * 0.4);
+  const tail = limit - head - 6;
+  return `${cleaned.slice(0, head)}…[中段省略]…${cleaned.slice(-tail)}`;
 }
 
 function hasMeaningfulText(text?: string): boolean {
@@ -159,8 +181,8 @@ export function buildMainRecallQuery(input: {
 }): string {
   const lines: string[] = [];
   const userInput = input.userInput.trim();
-  if (userInput) lines.push(`玩家当前输入：${compactText(userInput, 160)}`);
-  if (input.currentLocation?.trim()) lines.push(`当前地点：${compactText(input.currentLocation, 80)}`);
+  if (userInput) lines.push(`玩家当前输入：${compactRecallBothEnds(userInput, 200)}`);
+  if (input.currentLocation?.trim()) lines.push(`当前地点：${compactRecallBothEnds(input.currentLocation, 100)}`);
   const npcNames = (input.npcNames ?? []).map((name) => name.trim()).filter(Boolean).slice(0, 12);
   if (npcNames.length) lines.push(`当前相关人物：${npcNames.join('、')}`);
 
@@ -169,7 +191,7 @@ export function buildMainRecallQuery(input: {
     const recentUsers = recent
       .filter((msg) => msg.role === 'user' && !msg.content.startsWith('[系统]'))
       .slice(-3)
-      .map((msg) => compactText(msg.content, 80));
+      .map((msg) => compactRecallBothEnds(msg.content, 120));
     if (recentUsers.length) lines.push(`最近玩家输入：${recentUsers.join(' / ')}`);
   }
 
@@ -178,11 +200,11 @@ export function buildMainRecallQuery(input: {
     .slice(-MAIN_RECALL_ASSISTANT_BODY_WINDOW)
     .map((msg) => {
       const parsed = msg.parsedResponse;
-      const memory = parsed?.memory ? `小结：${compactText(parsed.memory, 140)}` : '';
+      const memory = parsed?.memory ? `小结：${compactRecallBothEnds(parsed.memory, 180)}` : '';
       const body = parsed?.body || msg.content;
-      const bodyText = body ? `正文：${compactText(body, 220)}` : '';
-      const events = parsed?.worldEvents?.length ? `事件：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 80)).join(' / ')}` : '';
-      const storyPlan = parsed?.storyPlan ? `剧情规划：${compactText(parsed.storyPlan, 120)}` : '';
+      const bodyText = body ? `正文：${compactRecallBothEnds(body, 300)}` : '';
+      const events = parsed?.worldEvents?.length ? `事件：${parsed.worldEvents.slice(-3).map((item) => compactRecallBothEnds(item, 100)).join(' / ')}` : '';
+      const storyPlan = parsed?.storyPlan ? `剧情规划：${compactRecallBothEnds(parsed.storyPlan, 160)}` : '';
       return [memory, bodyText, events, storyPlan].filter(Boolean).join('；');
     })
     .filter(Boolean);
@@ -204,40 +226,80 @@ export function buildZhikuKeywordRecallQuery(input: {
 }): string {
   const lines: string[] = [];
   const userInput = input.userInput.trim();
-  if (userInput) lines.push(`玩家当前输入：${compactText(userInput, 160)}`);
+  if (userInput) lines.push(`玩家当前输入：${compactRecallBothEnds(userInput, 200)}`);
 
-  const recentBodies = input.history
+  const narrativeHistory = input.history.filter((msg) => (
+    msg.role !== 'system' && !(msg.role === 'user' && msg.content.startsWith('[系统]'))
+  ));
+  const recentUserInputs = narrativeHistory
+    .filter((msg) => msg.role === 'user')
+    .slice(-ZHIKU_KEYWORD_RECALL_USER_INPUT_WINDOW)
+    .map((msg) => compactRecallBothEnds(msg.content, 200))
+    .filter(Boolean);
+  if (recentUserInputs.length) {
+    lines.push(`最近${ZHIKU_KEYWORD_RECALL_USER_INPUT_WINDOW}条玩家输入：${recentUserInputs.join('\n')}`);
+  }
+
+  // 正文逐条首尾保留：角色名常出现在正文中后段，旧实现只留前 260 字会把它截掉。
+  // 这里只读最近 5 条 assistant 正文；即时剧情回顾、记忆和剧情规划不属于本地关键词证据。
+  const recentBodies = narrativeHistory
     .filter((msg) => msg.role === 'assistant')
     .slice(-ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW)
-    .map((msg) => compactText(extractAssistantBodyText(msg), 260))
+    .map((msg) => compactRecallBothEnds(extractAssistantBodyText(msg), 320))
     .filter(Boolean);
   if (recentBodies.length) lines.push(`最近${ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW}条正文承接：${recentBodies.join('\n')}`);
 
   return lines.join('\n').trim() || userInput;
 }
 
-export function buildImmediateStoryReview(history: 聊天消息[], maxMessages = MAIN_IMMEDIATE_STORY_REVIEW_LIMIT): string {
-  const items = history
-    .filter((msg) => {
-      if (msg.role === 'system') return false;
-      if (msg.role === 'user' && msg.content.startsWith('[系统]')) return false;
-      return Boolean(msg.content.trim());
-    })
-    .slice(-Math.max(2, maxMessages));
-
-  const lines = items.map((msg) => {
-    if (msg.role === 'user') return `玩家：${compactText(msg.content, 180)}`;
-    const parsed = msg.parsedResponse;
-    const memory = hasMeaningfulText(parsed?.memory) ? `小结：${compactText(parsed!.memory, 240)}` : '';
-    const events = parsed?.worldEvents?.length ? `动态世界：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 90)).join(' / ')}` : '';
-    // 工作包B：剧情规划字段移除——已移入区5 剧情安排段，回顾只留小结/动态世界/正文锚点
-    const needsBodyFallback = !memory && !events;
-    const body = parsed?.body || msg.content;
-    const bodyText = body ? `正文锚点：${compactText(body, needsBodyFallback ? 260 : 180)}` : '';
-    return ['AI', memory, events, bodyText].filter(Boolean).join('｜');
+export function buildImmediateStoryReview(history: 聊天消息[], maxTurns = MAIN_IMMEDIATE_STORY_REVIEW_TURNS): string {
+  const meaningful = history.filter((msg) => {
+    if (msg.role === 'system') return false;
+    if (msg.role === 'user' && msg.content.startsWith('[系统]')) return false;
+    // assistant 以正文（body）为准判定有效，避免 content 为空/占位（流式中断等）时整个回合被滤掉
+    if (msg.role === 'assistant') {
+      return Boolean(msg.parsedResponse?.body?.trim() || msg.content.trim());
+    }
+    return Boolean(msg.content.trim());
   });
 
-  return lines.join('\n');
+  // 以最近 N 个已完成 AI 回合为锚（从后往前数 N 条 assistant），
+  // 保留这些回合及其间的玩家输入；若末尾还有玩家输入（当前输入）一并保留。
+  // 对标参考项目「按回合窗口裁剪历史」：AI 回合数 ≤ 窗口时返回全部历史（不丢回合）。
+  let anchorIndex = -1;
+  let assistantCount = 0;
+  for (let i = meaningful.length - 1; i >= 0; i -= 1) {
+    if (meaningful[i].role === 'assistant') {
+      assistantCount += 1;
+      if (assistantCount === Math.max(1, maxTurns)) {
+        anchorIndex = i;
+        break;
+      }
+    }
+  }
+  const items = anchorIndex < 0 ? meaningful : meaningful.slice(anchorIndex);
+
+  // 对标参考项目 formatHistoryToScript：剧本化回顾——
+  // 每回合【游戏时间】戳 + 玩家输入原文 + AI 正文逐行全文 + 最后一条 AI 的剧情规划。
+  const lastPlannableIndex = items.reduce((last, item, index) => (
+    item.role === 'assistant' && item.parsedResponse ? index : last
+  ), -1);
+
+  const lines = items.map((msg, index) => {
+    const timeStr = msg.gameTime ? `【${msg.gameTime}】\n` : '';
+    if (msg.role === 'user') {
+      return `${timeStr}玩家：${msg.content}`;
+    }
+    const parsed = msg.parsedResponse;
+    const body = (parsed?.body || msg.content || '').trim();
+    const bodyText = body ? normalizeHistoryBodyForPrompt(body) : '（正文为空）';
+    const planText = index === lastPlannableIndex && parsed?.storyPlan?.trim()
+      ? `【上回合AI剧情规划】\n<剧情规划>\n${parsed.storyPlan.trim()}\n</剧情规划>`
+      : '';
+    return [timeStr, bodyText, planText].filter(Boolean).join('\n');
+  });
+
+  return lines.join('\n\n');
 }
 
 /** 工作包B：从回合前历史提取最近 1-2 条非空 assistant.storyPlan（区5 剧情安排用）。

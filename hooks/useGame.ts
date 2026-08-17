@@ -15,14 +15,13 @@ import {
   type 记忆失败草稿,
   type 记忆系统,
 } from '@/models/memory';
-import { retryMemoryFailureDraft, computeMemoryFingerprint } from '@/hooks/useGame/memoryUtils';
+import { retryMemoryFailureDraft, computeMemoryFingerprint, autoCompressMemorySystemWithArchivesAsync } from '@/hooks/useGame/memoryUtils';
 import { 创建空忆庭系统, type 忆庭系统, type 回忆条目 } from '@/models/yiting';
 import {
   runPhoneMemoryCommit,
   type PhoneMemoryCommitIntent,
   type PhoneDualWriteResult,
 } from '@/services/phoneMemoryDualWrite';
-import { commitMemorySummary } from '@/services/memorySummaryCommit';
 import { 创建空手机系统 } from '@/models/phone';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
@@ -55,7 +54,7 @@ export interface UseGameReturn {
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
     handleRetryMemoryFailureDraft: (draftId: string) => Promise<void>;
     handleIgnoreMemoryFailureDraft: (draftId: string) => Promise<void>;
-    handleConfirmMemorySummary: (result: { memory: 记忆系统; archives: 回忆条目[] }) => Promise<void>;
+    handleSilentMemoryCompress: () => Promise<void>;
     commitPhoneMemory: (intent: PhoneMemoryCommitIntent) => Promise<PhoneDualWriteResult | undefined>;
     handleBatchMemoryRebuild: (options: {
       batchSize: number;
@@ -122,6 +121,7 @@ export function useGame(): UseGameReturn {
     const s = stateRef.current;
     void clearWorkflowRecoveryJournal(s.interruptedWorkflow?.workflowId);
     s.setInterruptedWorkflow(null);
+    s.setInputText('');
     s.setView('new_game');
   }, []);
 
@@ -238,54 +238,10 @@ export function useGame(): UseGameReturn {
     s.setHasSave(true);
   }, []);
 
-  /** 记忆压缩确认：先持久化后发布（单一编排，见 services/memorySummaryCommit.ts）。 */
-  const handleConfirmMemorySummary = useCallback(async (result: { memory: 记忆系统; archives: 回忆条目[] }): Promise<void> => {
-    const s = stateRef.current;
-    const flow = s.memorySummaryFlow;
-    const nextMemory = result.memory;
-    const nextYiting: 忆庭系统 = {
-      ...s.忆庭,
-      回忆档案: [...(s.忆庭?.回忆档案 ?? []), ...result.archives],
-    };
-    await commitMemorySummary({
-      sourceFingerprint: flow.sourceFingerprint,
-      currentMemory: s.记忆,
-      nextMemory,
-      nextYiting,
-    }, {
-      computeFingerprint: computeMemoryFingerprint,
-      buildSavePayload: (overrides) => buildSavePayload(s, 'auto', {
-        记忆: overrides.记忆,
-        忆庭: overrides.忆庭,
-      }),
-      saveGame: (payload) => saveGame(payload as import('@/models/settings').存档数据),
-      afterSave: (payload) => {
-        commitActiveSaveTreeMeta(payload as import('@/models/settings').存档数据);
-        s.setHasSave(true);
-      },
-      // 保存成功后才发布状态并关闭弹窗。
-      publish: ({ memory, yiting }) => {
-        s.set记忆(memory);
-        s.set忆庭(yiting);
-        s.setMemorySummaryFlow({ open: false, stage: 'remind' });
-      },
-      // 校验失败：不发布，回到 remind 提示重新总结。
-      onRejected: (reason) => {
-        s.setMemorySummaryFlow({ ...flow, stage: 'remind', errors: [reason] });
-        s.setWorkflowHint(reason);
-      },
-      // 保存失败：不发布新状态、不关闭审核结果，弹窗留在 review 允许重试。
-      onPersistFailure: (error) => {
-        s.setMemorySummaryFlow({
-          ...flow,
-          stage: 'review',
-          errors: [`保存失败，记忆与忆庭均保持确认前状态，可重试：${error}`],
-        });
-        s.setWorkflowHint('记忆确认保存失败，未发布新状态；可重试确认。');
-      },
-    });
-  }, []);
-
+  /**
+   * 记忆静默压缩（手动入口与失败重试共用）：直接压缩当前记忆，不弹确认窗；
+   * AI 总结失败自动回退本地，失败草稿保留并弹重试提示。
+   */
   /**
    * 手机记忆提交（上层串行事务入口）：PhoneModal 只提交意图，不携带旧状态快照；
    * 同一时刻的提交按 promise 链串行化，后一笔读取前一笔提交后的最新记忆/忆庭/NPC。
@@ -302,6 +258,7 @@ export function useGame(): UseGameReturn {
         npcs: s.NPC,
         settings: s.gameSettings.记忆系统,
         config: getActiveConfig(),
+        gameTime: [s.世界.当前日期, s.世界.当前时间].filter(Boolean).join(' ').trim() || undefined,
       }, {
         getQueueTasks: () => stateRef.current.queueTasks,
         buildSavePayload: (overrides) => buildSavePayload(stateRef.current, 'auto', overrides),
@@ -345,6 +302,38 @@ export function useGame(): UseGameReturn {
       updatedAt: now,
     };
   }, [getActiveConfig]);
+
+  /**
+   * 记忆静默压缩（手动入口与失败重试共用）：直接压缩当前记忆，不弹确认窗；
+   * AI 总结失败自动回退本地，失败草稿保留并弹重试提示。
+   */
+  const handleSilentMemoryCompress = useCallback(async (): Promise<void> => {
+    const s = stateRef.current;
+    const settings = s.gameSettings.记忆系统;
+    const config = getMemoryCompressionConfig(settings);
+    if (!config) {
+      s.setWorkflowHint('请先配置主 API 或记忆总结 API，再执行记忆压缩。');
+      return;
+    }
+    try {
+      const compression = await autoCompressMemorySystemWithArchivesAsync(
+        s.记忆,
+        s.turnCount,
+        settings,
+        config,
+        undefined,
+      );
+      s.set记忆(compression.memory);
+      if (compression.failures.length > 0) {
+        s.set记忆压缩失败({ 条数: compression.failures.length });
+      }
+      s.setWorkflowHint(compression.failures.length > 0
+        ? `${compression.failures.length} 条记忆总结失败，原始材料已保留，可在记忆面板失败草稿中重试。`
+        : '记忆压缩完成。');
+    } catch (error) {
+      s.setWorkflowHint(error instanceof Error ? `记忆压缩失败：${error.message}` : '记忆压缩失败。');
+    }
+  }, [getMemoryCompressionConfig]);
 
   const handleRetryMemoryFailureDraft = useCallback(async (draftId: string): Promise<void> => {
     const s = stateRef.current;
@@ -658,7 +647,7 @@ export function useGame(): UseGameReturn {
     handleRetryQueueTask,
     handleRetryMemoryFailureDraft,
     handleIgnoreMemoryFailureDraft,
-    handleConfirmMemorySummary,
+    handleSilentMemoryCompress,
     commitPhoneMemory,
     handleBatchMemoryRebuild,
     handleRestartOpening,
@@ -675,7 +664,7 @@ export function useGame(): UseGameReturn {
     handleRetryQueueTask,
     handleRetryMemoryFailureDraft,
     handleIgnoreMemoryFailureDraft,
-    handleConfirmMemorySummary,
+    handleSilentMemoryCompress,
     commitPhoneMemory,
     handleBatchMemoryRebuild,
     handleRestartOpening,

@@ -2173,7 +2173,7 @@ export function buildCharacterLibraryRecords(
   const entryIndex = buildCharacterAlbumEntryIndex(traveler, npcs, album, includeNsfw);
   const travelerRecord = buildTravelerLibraryRecord(traveler, album, assetMap, entryIndex.get('traveler') ?? []);
   const npcRecords = npcs
-    .filter((npc) => npc.阶位 === 'companion' || npc.原著角色)
+    .filter((npc) => !npc.归档 && (npc.阶位 === 'companion' || npc.原著角色))
     .map((npc): NpcLibraryRecord => {
       const slots = [
         { key: 'avatar-profile', label: '档案头像', src: 解析相册资源引用(album, 读取NPC头像(npc, '档案')) },
@@ -2535,7 +2535,7 @@ export function mapMountedSlotToTravelerSlot(key: string): '头像' | '正文头
 }
 
 export function buildPresentSceneNpcs(npcs: NPC记录[], sceneText: string): NPC记录[] {
-  return selectPresentStorySnapshotNpcs(npcs, sceneText);
+  return selectPresentStorySnapshotNpcs(npcs.filter((npc) => !npc.归档), sceneText);
 }
 
 export function buildStorySnapshotSourceOptions(history: 聊天消息[]): StorySnapshotSourceOption[] {

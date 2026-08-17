@@ -23,18 +23,19 @@ interface TurnItemProps {
   showInnerVoice?: boolean;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
+  devMode?: boolean;
   // 历史评判消息若 awakenPathId 为空,由 ChatList 向前查找补一个 ID 进来。
   fallbackPathId?: string;
 }
 
-type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
+type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context' | 'diagnostics';
 
 const HISTORY_TURN_VISIBILITY_STYLE = {
   contentVisibility: 'auto',
   containIntrinsicSize: 'auto 640px',
 } as const;
 
-function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
+function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
   const shouldDeferOffscreen = deferOffscreen && !isStreaming && !message.isStreaming;
@@ -66,6 +67,7 @@ function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody
           fallbackPathId={fallbackPathId}
           previousUserInput={previousUserInput}
           visualTextSettings={visualTextSettings}
+          devMode={devMode}
         />
       ) : message.isStreaming ? (
         <StreamingPreview
@@ -177,9 +179,10 @@ interface AiTurnCardProps {
   fallbackPathId?: string;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
+  devMode?: boolean;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -260,11 +263,19 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           onClick={() => toggle('raw')}
         />
         <ToolButton
-          label="请求上下文"
+          label="真实请求"
           glyph="⬡"
           active={openTool === 'context'}
           onClick={() => toggle('context')}
         />
+        {devMode && (
+          <ToolButton
+            label="请求诊断"
+            glyph="◇"
+            active={openTool === 'diagnostics'}
+            onClick={() => toggle('diagnostics')}
+          />
+        )}
       </div>
 
       {/* 展开面板 */}
@@ -303,7 +314,10 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
             <PanelText content={parsed.rawText?.trim() || message.content || '本回合没有保存原始消息。'} label="原始消息" />
           )}
           {openTool === 'context' && (
-            <PanelText content={formatDebugContext(message)} label="请求上下文" />
+            <PanelText content={formatActualRequestContext(message)} label="真实请求（发送给主剧情）" />
+          )}
+          {devMode && openTool === 'diagnostics' && (
+            <PanelText content={formatDebugDiagnostics(message)} label="本地诊断（不会发送给主剧情）" />
           )}
         </div>
       )}
@@ -410,9 +424,23 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
   );
 }
 
-function formatDebugContext(message: 聊天消息): string {
+function formatActualRequestContext(message: 聊天消息): string {
   const debug = message.debugContext;
-  if (!debug) return '这条历史消息没有保存请求上下文。请从新增按钮后的新回合开始查看。';
+  if (!debug) return '这条历史消息没有保存真实请求。请从新增按钮后的新回合开始查看。';
+  const system = ['【System Prompt｜发送给主剧情】', debug.systemPrompt || '（空）'].join('\n');
+  const messages = [
+    '【Messages｜发送给主剧情】',
+    ...debug.messages.map((msg, index) => [
+      `## ${index + 1}. ${msg.role}`,
+      msg.content || '（空）',
+    ].join('\n')),
+  ].join('\n\n---\n\n');
+  return [system, messages].join('\n\n====================\n\n');
+}
+
+function formatDebugDiagnostics(message: 聊天消息): string {
+  const debug = message.debugContext;
+  if (!debug) return '这条历史消息没有保存本地诊断。请从新增按钮后的新回合开始查看。';
   const yitingRaw = [
     '【忆庭模型原始返回】',
     debug.yitingRecallUsedModel
@@ -498,15 +526,7 @@ function formatDebugContext(message: 聊天消息): string {
           : '',
       ].filter(Boolean).join('\n')
     : '【NPC账本更新诊断】\n（本回合尚未保存 NPC 账本更新诊断；变量模型未运行、未命中 NPC，或这是旧回合。）';
-  const system = ['【System Prompt】', debug.systemPrompt || '（空）'].join('\n');
-  const messages = [
-    '【Messages】',
-    ...debug.messages.map((msg, index) => [
-      `## ${index + 1}. ${msg.role}`,
-      msg.content || '（空）',
-    ].join('\n')),
-  ].join('\n\n---\n\n');
-  return [deepSeekDiagnostics, cachePrefixDiagnostics, yitingRaw, zhikuRaw, npcLedger, npcLedgerUpdate, recall, system, messages]
+  return [deepSeekDiagnostics, cachePrefixDiagnostics, yitingRaw, zhikuRaw, npcLedger, npcLedgerUpdate, recall]
     .filter(Boolean)
     .join('\n\n====================\n\n');
 }

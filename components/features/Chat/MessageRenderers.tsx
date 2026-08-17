@@ -5,7 +5,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { VisualTextSettings } from '@/models/settings';
 import { getBuiltinAvatarSetForNames } from '@/data/builtinAvatars';
-import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from '@/utils/playerSpeechGuard';
+import { parseNarrativeBody } from '@/utils/narrativeBodyParser';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 import { ResilientImage } from '@/components/ui/ResilientImage';
 
@@ -58,6 +58,7 @@ interface BodyBlockProps {
   userInput?: string;
   visualTextSettings?: VisualTextSettings;
   deferOffscreen?: boolean;
+  partial?: boolean;
 }
 
 const DEFERRED_NARRATION_STYLE = {
@@ -91,190 +92,6 @@ function normalizeVisualTextSettings(input?: Partial<VisualTextSettings>): Visua
     dialogueFontSize: clampFontSize(input?.dialogueFontSize, DEFAULT_VISUAL_TEXT_SETTINGS.dialogueFontSize),
     playerFontSize: clampFontSize(input?.playerFontSize, DEFAULT_VISUAL_TEXT_SETTINGS.playerFontSize),
   };
-}
-
-// 三种行格式：【旁白】/【角色名】/【心声】。
-// 无前缀的行兜底为旁白渲染（容忍 AI 偶发不按格式输出）。
-type ParsedBodyLine =
-  | { kind: 'narration'; text: string }
-  | { kind: 'dialogue'; name: string; text: string }
-  | { kind: 'inner'; text: string }
-  | { kind: 'unparsed'; text: string }
-  | { kind: 'blank' };
-
-const NARR_RE = /^【\s*旁白\s*】\s*(.*)$/;
-const DIAG_RE = /^【\s*角色\s*】\s*([^：:]+)[：:]\s*(.*)$/;
-const NAMED_DIAG_RE = /^【\s*([^】]+?)\s*】\s*(.*)$/;
-const INNER_RE = /^【\s*心声\s*】\s*(.*)$/;
-
-const SOUND_EFFECT_TAGS = new Set([
-  '汪',
-  '汪汪',
-  '喵',
-  '喵喵',
-  '呜',
-  '呜呜',
-  '嗷',
-  '嗷呜',
-  '吼',
-  '吼吼',
-  '咆',
-  '咆哮',
-  '嘶吼',
-  '吱',
-  '吱呀',
-  '嘶',
-  '嘶嘶',
-  '轰',
-  '轰隆',
-  '轰隆隆',
-  '砰',
-  '砰砰',
-  '咚',
-  '咚咚',
-  '咔',
-  '咔哒',
-  '滴',
-  '滴滴',
-  '滴答',
-  '叮',
-  '叮咚',
-  '啪',
-  '啪啪',
-  '哗',
-  '哗啦',
-  '沙',
-  '沙沙',
-  '呼',
-  '呼噜',
-  '唰',
-  '嗡',
-  '嗡嗡',
-  '滋',
-  '滋滋',
-  '咻',
-  '咻咻',
-  '哐',
-  '哐当',
-  '扑通',
-  '隆',
-  '隆隆',
-]);
-
-function parseBodyLines(body: string, traveler?: 角色数据结构, userInput?: string): ParsedBodyLine[] {
-  return normalizeInlineSpeakerTags(body).split(/\r?\n/).flatMap<ParsedBodyLine>((raw) => {
-    const trimmed = raw.trim();
-    if (!trimmed) return { kind: 'blank' };
-    let m = trimmed.match(NARR_RE);
-    if (m) {
-      const text = m[1].trim();
-      if (isSoundEffectText(text)) {
-        return { kind: 'narration', text };
-      }
-      const quoted = extractFullQuotedSpeech(text);
-      if (quoted && traveler && !shouldRenderAsNarrationForPlayerLine(quoted, userInput)) {
-        return { kind: 'dialogue', name: getTravelerDisplayName(traveler), text: quoted };
-      }
-      return { kind: 'narration', text };
-    }
-    m = trimmed.match(DIAG_RE);
-    if (m) return splitDialogueAndTrailingNarration(m[1].trim(), m[2].trim(), traveler);
-    m = trimmed.match(INNER_RE);
-    if (m) return { kind: 'inner', text: m[1].trim() };
-    m = trimmed.match(NAMED_DIAG_RE);
-    if (m && !['旁白', '心声', '角色'].includes(m[1].trim())) {
-      const name = m[1].trim();
-      const text = m[2].trim();
-      if (isSoundEffectSpeakerName(name)) {
-        return { kind: 'narration', text: combineSoundEffectNarration(name, text) };
-      }
-      return splitDialogueAndTrailingNarration(name, text, traveler, userInput);
-    }
-    if (isSoundEffectText(trimmed)) {
-      return { kind: 'narration', text: trimmed };
-    }
-    const quoted = extractFullQuotedSpeech(trimmed);
-    if (quoted && traveler) {
-      return { kind: 'dialogue', name: getTravelerDisplayName(traveler), text: quoted };
-    }
-    return { kind: 'unparsed', text: trimmed };
-  });
-}
-
-function normalizeSoundEffectTag(name: string): string {
-  return name
-    .trim()
-    .replace(/\s+/g, '')
-    .replace(/[~～…\.。！？!?、，,：:；;“”"‘’'（）()【】[\]《》<>·\-—]/g, '');
-}
-
-function isSoundEffectSpeakerName(name: string): boolean {
-  const clean = normalizeSoundEffectTag(name);
-  return isNormalizedSoundEffect(clean);
-}
-
-function isSoundEffectText(text: string): boolean {
-  const clean = normalizeSoundEffectTag(text);
-  return isNormalizedSoundEffect(clean);
-}
-
-function isNormalizedSoundEffect(clean: string): boolean {
-  if (!clean || clean.length > 18) return false;
-  if (SOUND_EFFECT_TAGS.has(clean)) return true;
-  if (clean.length <= 8 && [...clean].every((char) => char === clean[0]) && SOUND_EFFECT_TAGS.has(clean[0])) return true;
-  return /^(轰隆隆|轰隆|隆隆|轰|隆|砰|咚|咔哒|咔|吼|嗷|嘶|呜|滴滴|滴|嗡|滋|哐当|哐|啪|唰|咻){1,5}$/.test(clean);
-}
-
-function combineSoundEffectNarration(name: string, text: string): string {
-  const sound = name.trim();
-  const rest = text.trim();
-  if (!rest) return sound;
-  if (/[。！？!?…]$/.test(sound) || /^[。！？!?…、，,：:；;]/.test(rest)) {
-    return `${sound}${rest}`;
-  }
-  return `${sound}，${rest}`;
-}
-
-function getTravelerDisplayName(traveler: 角色数据结构): string {
-  return traveler.姓名?.trim() || traveler.别名?.trim() || '你';
-}
-
-function extractFullQuotedSpeech(text: string): string | null {
-  const match = text.match(/^[“"「](.+?)[”"」]([。！？!?])?$/);
-  if (!match) return null;
-  const inner = match[1].trim();
-  if (inner.length < 4) return null;
-  if (!/[我你您吗呢吧呀啊？！!?。]/.test(inner)) return null;
-  return inner;
-}
-
-function splitDialogueAndTrailingNarration(
-  name: string,
-  text: string,
-  traveler?: 角色数据结构,
-  userInput?: string,
-): ParsedBodyLine[] {
-  if (!traveler || !isProtagonist(name, traveler)) {
-    return [{ kind: 'dialogue', name, text }];
-  }
-  if (shouldRenderAsNarrationForPlayerLine(text, userInput)) {
-    return [{ kind: 'narration', text }];
-  }
-
-  const quoteMatch = text.match(/^([“"「].+?[”"」][。！？!?]?)(\s+.+)$/);
-  if (!quoteMatch) {
-    return [{ kind: 'dialogue', name, text }];
-  }
-
-  const quoted = extractFullQuotedSpeech(quoteMatch[1].trim());
-  if (!quoted) {
-    return [{ kind: 'dialogue', name, text }];
-  }
-
-  return [
-    { kind: 'dialogue', name, text: quoted },
-    { kind: 'narration', text: quoteMatch[2].trim() },
-  ];
 }
 
 // 角色名 → 颜色映射。同名角色每次都得到相同颜色；避开 UI 金色与心声暖色范围。
@@ -500,8 +317,8 @@ export const NarrationLine = memo(function NarrationLine({ text, fontSize = 15, 
   );
 });
 
-export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings, deferOffscreen = false }: BodyBlockProps) {
-  const lines = useMemo(() => (content ? parseBodyLines(content, traveler, userInput) : []), [content, traveler, userInput]);
+export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice = true, userInput, visualTextSettings, deferOffscreen = false, partial = false }: BodyBlockProps) {
+  const lines = useMemo(() => (content ? parseNarrativeBody(content, { traveler, userInput, partial }) : []), [content, traveler, userInput, partial]);
   const fontSettings = useMemo(() => normalizeVisualTextSettings(visualTextSettings), [visualTextSettings]);
   const npcMap = useMemo(() => buildNpcLookupMap(npcRecords), [npcRecords]);
   if (!content) return null;
@@ -513,16 +330,17 @@ export function BodyBlock({ content, npcRecords, traveler, album, showInnerVoice
           return <div key={i} className="h-1.5" />;
         }
         if (line.kind === 'dialogue') {
-          const npc = lookupNpc(line.name, npcMap);
-          const protagonist = isProtagonist(line.name, traveler);
-          const color = protagonist ? 'rgb(var(--tj-accent-primary))' : nameToColor(line.name);
+          const speaker = line.speaker ?? '未知角色';
+          const npc = lookupNpc(speaker, npcMap);
+          const protagonist = isProtagonist(speaker, traveler);
+          const color = protagonist ? 'rgb(var(--tj-accent-primary))' : nameToColor(speaker);
           const avatarUrl = protagonist
             ? 解析相册资源引用(album, traveler?.图像档案?.正文头像?.trim() || traveler?.头像?.trim()) || undefined
             : 解析相册资源引用(album, 读取NPC头像(npc, '正文')) || undefined;
           return (
             <DialogueBubble
               key={i}
-              name={line.name}
+              name={speaker}
               text={line.text}
               color={color}
               avatarUrl={avatarUrl}
@@ -630,7 +448,7 @@ export function StreamingPreview({ content, npcRecords, traveler, album, showInn
       <PathfindingIndicator />
       {bodyStarted && bodyText && (
         <div className="px-1 py-1">
-          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={userInput} visualTextSettings={fontSettings} />
+          <BodyBlock content={bodyText} npcRecords={npcRecords} traveler={traveler} album={album} showInnerVoice={showInnerVoice} userInput={userInput} visualTextSettings={fontSettings} partial />
         </div>
       )}
     </div>

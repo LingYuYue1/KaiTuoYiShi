@@ -19,6 +19,7 @@ interface ChatListProps {
   album?: 相册系统;
   showInnerVoice?: boolean;
   visualTextSettings?: VisualTextSettings;
+  devMode?: boolean;
 }
 
 interface NeighborMeta {
@@ -50,6 +51,7 @@ interface ChatHistoryListProps {
   album?: 相册系统;
   showInnerVoice?: boolean;
   visualTextSettings?: VisualTextSettings;
+  devMode?: boolean;
 }
 
 /** Isolated history list: scroll chrome (nearBottom / FAB) must not remap TurnItems. */
@@ -64,6 +66,7 @@ const ChatHistoryList = memo(function ChatHistoryList({
   album,
   showInnerVoice = true,
   visualTextSettings,
+  devMode = false,
 }: ChatHistoryListProps) {
   return (
     <>
@@ -84,6 +87,7 @@ const ChatHistoryList = memo(function ChatHistoryList({
             fallbackPathId={meta.fallbackPathId}
             previousUserInput={meta.previousUserInput}
             visualTextSettings={visualTextSettings}
+            devMode={devMode}
           />
         );
       })}
@@ -123,7 +127,7 @@ function buildNeighborMeta(messages: 聊天消息[]): NeighborMeta[] {
   return meta;
 }
 
-export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, visualTextSettings }: ChatListProps) {
+export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, visualTextSettings, devMode = false }: ChatListProps) {
   const streamingMessage = useStreamingMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [nearBottom, setNearBottom] = useState(true);
@@ -224,6 +228,10 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
     () => allNeighborMeta.slice(renderedStartIndex),
     [allNeighborMeta, renderedStartIndex],
   );
+  const streamingPreviousUserInput = useMemo(
+    () => [...visibleMessages].reverse().find((message) => message.role === 'user')?.content,
+    [visibleMessages],
+  );
 
   const handleLoadEarlier = useCallback(() => {
     const el = scrollRef.current;
@@ -303,6 +311,7 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
         album={album}
         showInnerVoice={showInnerVoice}
         visualTextSettings={visualTextSettings}
+        devMode={devMode}
       />
 
       {/* Streaming preview — lives in parent so stream text does not remap history */}
@@ -319,8 +328,10 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
           npcRecords={npcRecords}
           traveler={traveler}
           album={album}
+          previousUserInput={streamingPreviousUserInput}
           showInnerVoice={showInnerVoice}
           visualTextSettings={visualTextSettings}
+          devMode={devMode}
         />
       )}
 

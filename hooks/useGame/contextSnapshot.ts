@@ -7,7 +7,7 @@ import { buildPhoneMessages, buildPhoneSystemPrompt, buildPhonePromptModulesSect
 import { buildVariableModelPrompt } from '@/services/ai/variableModel';
 import { NPC_MEMORY_WRITE_RULE_PROMPT } from '@/data/variableWorldbook';
 import { retrieveYitingContext, buildYitingRecallSystemPrompt } from '@/services/yitingRetrieval';
-import { buildZhikuAiRequestForTurn, buildZhikuModelSystemPrompt, buildZhikuModelUserPrompt } from '@/services/zhikuRetrieval';
+import { buildZhikuAiRequestForTurn, buildZhikuModelSystemPrompt, buildZhikuModelUserPrompt, formatZhikuCandidateDecisionTrace } from '@/services/zhikuRetrieval';
 import { compileZhikuTurn, type ZhikuRequestScope } from '@/services/zhikuRuntimeCompiler';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
@@ -45,6 +45,7 @@ import {
   buildPromptWorldbookContext,
   resolvePromptWorldbookPlan,
 } from './promptAssemblyContext';
+import { resolvePlayerSpeechMode } from '@/utils/narrativeRuntimePolicy';
 
 export interface ContextSection {
   id: string;
@@ -231,9 +232,22 @@ function finalizeSnapshot(
   };
 }
 
-function formatMessages(messages: Array<{ role: string; content: string }>): string {
+/** 按内容特征给请求消息命名（对标参考项目 messageEntries 的 title 语义，避免笼统叫「历史记录」）。 */
+function describeApiMessage(msg: 聊天消息): string {
+  const content = msg.content?.trim() ?? '';
+  if (content.startsWith('# 本回合生成前核对')) return '本回合生成前核对';
+  if (content.startsWith('以下是用户最新输入内容')) return '最新用户输入（模型消息）';
+  if (content === '开始任务') return '开始任务';
+  if (content.startsWith('<thinking>') && content.includes('思考已开始')) return 'COT 伪装历史';
+  return msg.role === 'assistant' ? 'assistant 消息' : 'user 消息';
+}
+
+function formatMessages(messages: Array<{ role: string; content: string }>, titles?: string[]): string {
   return messages
-    .map((msg, index) => `## ${index + 1}. ${msg.role}\n\n${msg.content}`)
+    .map((msg, index) => {
+      const title = titles?.[index] ? `（${titles[index]}）` : '';
+      return `## ${index + 1}. ${msg.role}${title}\n\n${msg.content}`;
+    })
     .join('\n\n---\n\n');
 }
 
@@ -487,6 +501,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         ? 'pathAwakeningJudgement'
         : 'main';
   const zhikuParticipation = getZhikuCharacterParticipationForTurn({
+    settings: state.gameSettings.记忆系统,
     world: state.世界,
     npcs: state.NPC,
     history: recallHistory,
@@ -506,7 +521,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     openingArchiveText,
     worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
   });
-  const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(state.chatHistory) : '';
+  const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(state.chatHistory, Math.max(1, (state.gameSettings.记忆系统?.即时转短期阈值 ?? 10) - 1)) : '';
   const zhikuSceneContext = {
     ...worldbookCtx,
     startScenarioId: undefined,
@@ -518,6 +533,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     npcNames: [],
     presentNpcNamesForFallback: worldbookCtx.npcNames,
     anticipatedNpcNames: zhikuParticipation.anticipated,
+    mentionedNpcNames: zhikuParticipation.mentioned,
     aiSupplementHints: {
       currentLocation: state.世界.当前地点,
       presentNpcNames: worldbookCtx.npcNames,
@@ -648,7 +664,7 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         state.手机,
         awakeningPhase,
         storyRecallInjection || (yitingEnabled && recallQuery && state.turnCount > yitingThreshold ? '' : undefined),
-        Boolean(yitingPreview?.injection),
+        (yitingPreview?.strongEntries?.length ?? 0) > 0,
         npcLedgerSelection,
         isOpeningSystemTrigger ? 'opening' : 'normal',
         macroCtx,
@@ -764,12 +780,19 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   }
   if (deepSeekMainActive) turnConstraints.push(创建聊天消息('user', DEEPSEEK_MAIN_FORMAT_GUARD));
   // 区E 执法块（main scope）
-  const enforcementBlock = zhikuRequestScope === 'main'
+  const enforcementBlock = (
+    zhikuRequestScope === 'main'
+    || zhikuRequestScope === 'opening'
+    || zhikuRequestScope === 'pathAwakeningQuestion'
+    || zhikuRequestScope === 'pathAwakeningJudgement'
+  )
     ? buildMainTurnEnforcementBlock({
         playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+        narrativePerson: state.gameSettings.narrativePerson,
         wordCountTarget: state.gameSettings.wordCountTarget,
         zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
         storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
+        speechExpansionActive: resolvePlayerSpeechMode(state.gameSettings) === 'expansion',
       })
     : undefined;
   // 任务序列（按模式）
@@ -818,6 +841,20 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   apiMessages = finalizedMainRequest.messages;
   const systemPromptSections = splitPromptSections(systemPrompt);
   const sections: ContextSection[] = [];
+  // F2·对标既定方案：忆庭强回忆命中且关闭并存注入时，明确显示暂停原因（真实请求已同步收紧）。
+  const yitingMutexActiveSnapshot =
+    state.gameSettings.记忆系统?.忆庭命中并存注入 !== true
+    && Boolean(yitingPreview?.injection);
+  if (yitingMutexActiveSnapshot) {
+    addSection(sections, {
+      id: 'yiting_mutex_suppression',
+      title: '忆庭互斥·记忆注入暂停说明',
+      category: '诊断',
+      content: '忆庭召回命中强回忆且「忆庭命中并存注入」开关关闭：本回合已暂停短期/中期记忆注入，长期记忆仅保留少量锚点（最近 3 条），旧事承接由忆庭强回忆原文注入承担。',
+      upload: false,
+      diagnostic: true,
+    });
+  }
   addSection(sections, {
     id: 'main_request_order_overview',
     title: '主剧情真实请求顺序总览',
@@ -887,11 +924,18 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   });
 
   if (apiMessages.length) {
+    // 原生 minimal 模式下无历史消息，剩余均为执法块 + 任务序列（COT 伪装历史等），
+    // 不应再叫「历史记录」（对标参考项目：消息逐条命名）。
+    if (!tavernStatus.used && preTurnHistory.length === 0) {
+      requestMessagesTitle = '请求消息';
+      requestMessagesCategory = '请求';
+    }
+    const messageTitles = apiMessages.map(describeApiMessage);
     addSection(sections, {
       id: requestMessagesCategory === '酒馆预设' ? 'tavern_preset_message_chain' : 'history_window',
       title: `${requestMessagesTitle}（${apiMessages.length} 条）`,
       category: requestMessagesCategory,
-      content: formatMessages(apiMessages.map((msg) => ({ role: msg.role, content: msg.content }))),
+      content: formatMessages(apiMessages.map((msg) => ({ role: msg.role, content: msg.content })), messageTitles),
       upload: true,
     });
   }
@@ -1126,13 +1170,14 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const sourceInput = latestUserInput(state.chatHistory);
   const recallHistory = historyThroughLatestUser(state.chatHistory);
   const participation = getZhikuCharacterParticipationForTurn({
+    settings: state.gameSettings.记忆系统,
     world: state.世界,
     npcs: state.NPC,
     history: recallHistory,
     userInput: sourceInput,
     turnCount: state.turnCount,
   });
-  const immediateStoryReview = buildImmediateStoryReview(state.chatHistory);
+  const immediateStoryReview = buildImmediateStoryReview(state.chatHistory, Math.max(1, (state.gameSettings.记忆系统?.即时转短期阈值 ?? 10) - 1));
   const latestStoryPlan = [...state.chatHistory]
     .reverse()
     .find((message) => message.role === 'assistant' && message.parsedResponse?.storyPlan?.trim())
@@ -1147,6 +1192,7 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     npcNames: [],
     presentNpcNamesForFallback: participation.present,
     anticipatedNpcNames: participation.anticipated,
+    mentionedNpcNames: participation.mentioned,
     aiSupplementHints: {
       currentLocation: state.世界.当前地点,
       presentNpcNames: participation.present,
@@ -1193,6 +1239,7 @@ function buildZhikuContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
         `AI形态修正：${zhikuDiagnostics.AI形态修正.join('；') || '无'}`,
         `AI拒绝选择：${zhikuDiagnostics.AI拒绝选择.join('；') || '无'}`,
         `AI未选择原因：${zhikuDiagnostics.AI未选择原因 || '无'}`,
+        `逐条召回轨迹：${formatZhikuCandidateDecisionTrace(zhikuDiagnostics.candidateDecisions)}`,
         `最终注入角色资料（已去重）：${zhikuDiagnostics.角色相关资料.join('、') || '无'}`,
         `最终注入强资料：${zhikuDiagnostics.强相关资料.join('、') || '无'}`,
         `最终注入弱资料：${zhikuDiagnostics.弱相关资料.join('、') || '无'}`,

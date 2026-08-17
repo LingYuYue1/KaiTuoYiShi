@@ -13,7 +13,7 @@
  * 4 类核心冲突的融合规则：
  * - CoT 思维链：内置骨架不可改 + ST 指令作为附加段
  * - 输出格式：内置 4 标签协议不可改 + ST 的字数/语言/风格要求作为附加段
- * - 人称视角：切换到内置对应人称模块 + ST 的视角要求作为附加段
+ * - 人称视角：保留内置人称模块原样 + ST 的视角要求作为低优先级附加段
  * - 行动选项：内置规范优先 + ST 的样式要求作为附加段
  */
 
@@ -33,7 +33,7 @@ const BUILTIN_COT_IDS = [
 /** 内置输出格式模块 id（不可改骨架） */
 const BUILTIN_RESPONSE_FORMAT_ID = 'builtin_response_format';
 
-/** 内置人称视角模块 id 列表（互斥，同时只启用一个） */
+/** 内置人称视角模块 id 列表（互斥，实际启用项由运行时设置决定） */
 const BUILTIN_PERSPECTIVE_IDS = [
   'builtin_perspective_first',
   'builtin_perspective_second',
@@ -187,7 +187,8 @@ function mergePerspectiveModules(
   builtinModules: 提示词模块[],
   stPerspectiveModules: 提示词模块[],
 ): 提示词模块[] {
-  if (stPerspectiveModules.length === 0) return [];
+  const builtinPerspectiveModules = builtinModules.filter((m) => BUILTIN_PERSPECTIVE_IDS.includes(m.id));
+  if (stPerspectiveModules.length === 0) return builtinPerspectiveModules;
 
   // 解析 ST 的人称要求
   const stContent = stPerspectiveModules
@@ -195,45 +196,34 @@ function mergePerspectiveModules(
     .filter(Boolean)
     .join('\n\n');
 
-  // 检测 ST 偏好的人称
-  let targetPerspective: 'first' | 'second' | 'third' | null = null;
-  if (/第一人称|第一人稱|1st.?person/i.test(stContent)) {
-    targetPerspective = 'first';
-  } else if (/第二人称|第二人稱|2nd.?person/i.test(stContent)) {
-    targetPerspective = 'second';
-  } else if (/第三人称|第三人稱|3rd.?person/i.test(stContent)) {
-    targetPerspective = 'third';
-  }
+  // ST 的人称要求不能成为运行时事实源：游戏设置中的 narrativePerson
+  // 以及 applyRuntimeNarrativePolicy 才决定三个人称模块的实际启用状态。
+  // 这里仅保留为低优先级附加约束，方便用户继续使用预设中的语气/视角提示，
+  // 同时避免导入预设时静默改写玩家已选择的人称。
+  const perspectiveAddendum: 提示词模块 = {
+    id: 'st_import_perspective_addendum',
+    title: '预设附加视角要求（不覆盖游戏人称）',
+    description: '保留 ST 预设中的视角提示，但不覆盖游戏设置中的叙述人称。',
+    category: 'custom',
+    content: [
+      '以下是导入预设提供的附加视角要求，仅作为低优先级风格参考。',
+      '不得据此修改或覆盖游戏设置中的当前叙述人称；如与当前人称执法块冲突，以当前人称执法块为准。',
+      stContent,
+    ].join('\n'),
+    enabled: true,
+    builtin: false,
+    order: 1025,
+    scope: ['main', 'opening'],
+    role: 'system',
+    injectionPosition: 0,
+    injectionOrder: 1025,
+    source: 'st_preset',
+    replaceable: 'extensible',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
 
-  const result: 提示词模块[] = [];
-
-  // 切换人称模块：启用目标人称，禁用其他两个
-  if (targetPerspective) {
-    const targetId = `builtin_perspective_${targetPerspective}`;
-    for (const id of BUILTIN_PERSPECTIVE_IDS) {
-      const mod = builtinModules.find((m) => m.id === id);
-      if (!mod) continue;
-      result.push({
-        ...mod,
-        enabled: id === targetId,
-      });
-    }
-  }
-
-  // ST 的其他视角要求作为附加段拼到启用的人称模块上
-  if (stContent && result.length > 0) {
-    const enabledIdx = result.findIndex((m) => m.enabled);
-    if (enabledIdx >= 0) {
-      result[enabledIdx] = {
-        ...result[enabledIdx],
-        content: `${result[enabledIdx].content}\n\n---\n以下是预设的额外视角要求：\n${stContent}`,
-        title: `${result[enabledIdx].title}（含预设融合）`,
-        updatedAt: Date.now(),
-      };
-    }
-  }
-
-  return result;
+  return [...builtinPerspectiveModules, perspectiveAddendum];
 }
 
 /**

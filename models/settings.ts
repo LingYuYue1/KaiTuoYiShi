@@ -337,12 +337,15 @@ export interface 额外功能设置 {
 export interface 记忆系统设置 {
   /** 普通即时/短期/中期/长期压缩是否调用总结 API；关闭时严格使用本地摘要。 */
   启用中短长期API总结: boolean;
+  /** 对齐参考项目「即时消息上传条数N」：即时记忆滑动窗口上限（默认 10），且即时剧情回顾窗口 = N-1。 */
   即时转短期阈值: number;
   短期转中期阈值: number;
   中期转长期阈值: number;
   /** @deprecated 旧版字段。新版本使用 短期转中期阈值 / 中期转长期阈值。 */
   短期转长期阈值: number;
   NPC记忆压缩阈值: number;
+  /** 对齐参考项目「重要角色关键记忆条数N」：NPC 注入时重要角色（原著/同行）保留的记忆条数（默认 20）。 */
+  重要角色关键记忆条数N: number;
   /** 记忆总结 API：用于即时/短期压缩，留空时回退主 API。 */
   记忆总结API: 忆庭API覆盖;
   /** 忆庭召回总开关：仅控制是否检索并注入回忆档案，入库始终执行。 */
@@ -360,6 +363,12 @@ export interface 记忆系统设置 {
   忆庭召回提示词: string;
   忆庭精炼提示词: string;
   忆庭独立精炼: boolean;
+  /** F2·对标既定方案：忆庭命中强回忆时是否并存注入短/中/长记忆；关闭（默认）时暂停短期/中期注入、长期只留少量锚点。 */
+  忆庭命中并存注入: boolean;
+  /** 对齐参考项目「剧情回忆完整原文条数N」：回忆候选池中最近 N 条带完整原文，更早的只有概括（默认 20）。 */
+  剧情回忆完整原文条数N: number;
+  /** 对标参考项目：主剧情原始历史保留模式。minimal=0 条（默认，仅即时剧情回顾+当前输入）；conservative=最近 2 回合（可选过渡）。legacy 已移除（历史 messages 含标签会污染上下文）。 */
+  主剧情历史模式: 'conservative' | 'minimal';
 }
 
 export interface 星际和平周报设置 {
@@ -397,6 +406,10 @@ export interface 剧情编织系统设置 {
   api: 剧情编织API覆盖设置;
   chaptersPerSegment: number;
   currentWindow: boolean;
+  /** 剧情推进 AI 语义判定：默认关闭。开启后用 AI 判定本分段是否完成与实际进度分段（每次回合额外一次小请求）。 */
+  剧情推进AI判定: boolean;
+  /** 剧情推进判定 API 覆盖：留空则复用上方 api（世界演变同一配置）。 */
+  推进判定API: 剧情编织API覆盖设置;
 }
 
 export type 文生图响应格式 = 'url' | 'b64_json' | 'dataUrl';
@@ -915,11 +928,13 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
   return {
     启用中短长期API总结: true,
     // 阶段2对齐既定方案：即时→短期15 / 短转中25 / 中转长45
-    即时转短期阈值: 15,
-    短期转中期阈值: 25,
-    中期转长期阈值: 45,
-    短期转长期阈值: 45, // deprecated 旧版字段，对齐中期转长期
+    即时转短期阈值: 10, // 对齐参考项目「即时消息上传条数N」：即时滑动窗口上限 + 回顾窗口推导（N-1）
+    短期转中期阈值: 30,
+    中期转长期阈值: 50,
+    短期转长期阈值: 50, // deprecated 旧版字段，对齐中期转长期
     NPC记忆压缩阈值: 20, // 阶段1对齐既定方案（原15）
+    重要角色关键记忆条数N: 20,
+    剧情回忆完整原文条数N: 20, // 对齐参考项目：候选池最近 N 条带完整原文
     记忆总结API: {
       provider: '',
       baseUrl: '',
@@ -966,8 +981,12 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
     忆庭召回API: 创建空忆庭API覆盖(),
     忆庭精炼API: 创建空忆庭API覆盖(),
     忆庭召回条数: 8,
-    // 阶段1：忆庭独立精炼默认true（原false），每回合调API生成高质量精炼纪要，原文以精炼形式永久存档
-    忆庭独立精炼: true,
+    // 对标参考项目：回忆档案 = 即时推导（概括=AI回合小结），独立精炼默认关闭（开启作为概括增强）
+    忆庭独立精炼: false,
+    // F2·对标既定方案：默认关闭并存（忆庭强回忆命中时暂停短/中记忆注入、长期只留锚点）
+    忆庭命中并存注入: false,
+    // F3·对标既定方案：原始历史默认精简式（0 条）——即时剧情回顾（最近 9 个 AI 回合）已承载最近上下文，不再重复注入原始历史；保守式/旧式保留为高级选项。
+    主剧情历史模式: 'minimal',
     忆庭召回提示词: [
       '你是「忆庭」的回忆检索器。你的任务不是写正文，而是根据玩家当前输入，从回忆库中筛出最相关的回忆档案，供主剧情继续承接。',
       '检索时优先按“时间最近 + 语义最相关”排序。优先匹配：人物、地点、目标、未结事项、冲突对象、承诺、伤势、物品、战斗后果、组织态度、命途变化、正在延续的事件线。',
@@ -1034,6 +1053,8 @@ export function 创建默认剧情编织系统设置(): 剧情编织系统设置
     api: 创建空剧情编织API覆盖(),
     chaptersPerSegment: 1,
     currentWindow: true,
+    剧情推进AI判定: false,
+    推进判定API: 创建空剧情编织API覆盖(),
   };
 }
 
@@ -1101,6 +1122,12 @@ export function 归一化剧情编织系统设置(input?: Partial<剧情编织�
     },
     chaptersPerSegment: Math.max(1, Math.trunc(Number(input.chaptersPerSegment ?? defaults.chaptersPerSegment) || 1)),
     currentWindow: input.currentWindow !== false,
+    剧情推进AI判定: input.剧情推进AI判定 === true,
+    推进判定API: {
+      ...defaults.推进判定API,
+      ...(input.推进判定API ?? {}),
+      retryCount: Math.max(0, Math.trunc(Number(input.推进判定API?.retryCount ?? defaults.推进判定API.retryCount ?? 2)) || 0),
+    },
   };
 }
 
@@ -1131,12 +1158,13 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
     1,
     Math.trunc(Number(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值),
   );
-  // 历史默认组合（v1 早期 25/20/10、v1.2.x 统一 15/15/15、阶段1 10/30/50）一律迁移到当前默认，
+  // 历史默认组合（v1 早期 25/20/10、v1.2.x 统一 15/15/15、阶段1 10/30/50、F5 期 15/25/45）一律迁移到当前默认，
   // 保证老存档加载后与新版默认同步；玩家自定义过的组合（不等于任何历史默认）原样保留。
   const 历史默认三层组合: ReadonlyArray<readonly [number, number, number]> = [
     [25, 20, 10],
     [15, 15, 15],
     [10, 30, 50],
+    [15, 25, 45],
   ];
   const usesPreviousLayerDefaults = 历史默认三层组合.some(
     ([immediate, short, middle]) =>
@@ -1183,6 +1211,18 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
     },
     忆庭召回条数: Math.max(1, Number(input.忆庭召回条数 ?? defaults.忆庭召回条数) || defaults.忆庭召回条数),
     忆庭独立精炼: input.忆庭独立精炼 === true,
+    忆庭命中并存注入: input.忆庭命中并存注入 === true,
+    重要角色关键记忆条数N: Math.max(
+      1,
+      Math.trunc(Number(input.重要角色关键记忆条数N ?? defaults.重要角色关键记忆条数N) || defaults.重要角色关键记忆条数N),
+    ),
+    剧情回忆完整原文条数N: Math.max(
+      1,
+      Math.trunc(Number(input.剧情回忆完整原文条数N ?? defaults.剧情回忆完整原文条数N) || defaults.剧情回忆完整原文条数N),
+    ),
+    主剧情历史模式: input.主剧情历史模式 === 'conservative'
+      ? 'conservative'
+      : 'minimal',
     忆庭启用: input.忆庭启用 !== false,
     忆庭召回最早触发回合: Math.max(
       1,
@@ -1206,12 +1246,16 @@ export function 归一化记忆系统设置(input?: Partial<记忆系统设置>)
       中期转长期阈值: merged.中期转长期阈值,
       短期转长期阈值: merged.短期转长期阈值,
       NPC记忆压缩阈值: merged.NPC记忆压缩阈值,
+      重要角色关键记忆条数N: merged.重要角色关键记忆条数N,
       记忆总结API: merged.记忆总结API,
       忆庭召回最早触发回合: merged.忆庭召回最早触发回合,
       忆庭召回API: merged.忆庭召回API,
       忆庭精炼API: merged.忆庭精炼API,
       忆庭召回条数: merged.忆庭召回条数,
       忆庭独立精炼: merged.忆庭独立精炼,
+      忆庭命中并存注入: merged.忆庭命中并存注入,
+      剧情回忆完整原文条数N: merged.剧情回忆完整原文条数N,
+      主剧情历史模式: merged.主剧情历史模式,
       忆庭启用: merged.忆庭启用,
     };
   }

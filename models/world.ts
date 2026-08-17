@@ -169,7 +169,7 @@ export interface 剧情编织运行时切片 {
   worldEvents: WorldEventInstance[];
   factLedger: CommittedWorldFact[];
   /** 最近一次联合裁决决策与原因（只读诊断，不驱动行为）。 */
-  lastDecision?: 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause';
+  lastDecision?: 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause' | 'jump_to';
   lastReasons?: string[];
   /** 本回合世界演变结算状态（settled=正常提交 / failed=API 或候选失败 / skipped=无条件未调用）。 */
   worldEvolutionStatus?: 'settled' | 'failed' | 'skipped';
@@ -264,7 +264,7 @@ export function 归一化剧情编织运行时切片(input?: Partial<剧情编�
     focus: 归一化运行时焦点(input.focus),
     worldEvents,
     factLedger,
-    lastDecision: input.lastDecision === 'stay' || input.lastDecision === 'advance_one' || input.lastDecision === 'resolve_early' || input.lastDecision === 'deviate' || input.lastDecision === 'pause'
+    lastDecision: input.lastDecision === 'stay' || input.lastDecision === 'advance_one' || input.lastDecision === 'resolve_early' || input.lastDecision === 'deviate' || input.lastDecision === 'pause' || input.lastDecision === 'jump_to'
       ? input.lastDecision
       : undefined,
     lastReasons: Array.isArray(input.lastReasons) ? input.lastReasons.filter((item): item is string => typeof item === 'string').slice(0, 12) : undefined,
@@ -594,7 +594,8 @@ export function 根据开局档案创建初始NPC记录(archive?: 开局档案):
   const records = explicitNames.map((name, index) => {
     const relationHint = findOpeningRelationHint(name, relationHints);
     const customNpc = sanitizeOpeningCustomNpcs(summary.自制NPC).find((npc) => npc.姓名 === name);
-    const canonical = matchCanonical(name);
+    // 开局档案明确声明的自制 NPC 优先保留 custom 身份，即使姓名碰到原著 alias。
+    const canonical = customNpc ? null : matchCanonical(name);
     const openingSummary = relationHint
       || customNpc?.与玩家关系
       || customNpc?.当前状态
@@ -607,6 +608,7 @@ export function 根据开局档案创建初始NPC记录(archive?: 开局档案):
       阶位: canonical ? 'companion' : 'extra',
       初见回合: 0,
       原著角色: Boolean(canonical),
+      NPC来源: customNpc ? 'custom' : canonical ? 'canonical' : 'unknown',
       性别: canonical?.gender,
       外貌: canonical?.appearance,
       性格: canonical?.personality,

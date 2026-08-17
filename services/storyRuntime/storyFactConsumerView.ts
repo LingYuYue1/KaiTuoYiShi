@@ -15,7 +15,7 @@ import { sha256Fingerprint } from './id';
 // ═══════════════ 一、唯一事实入口：把裁决接受的候选物化为 CommittedWorldFact ═══════════════
 
 export interface MaterializeAdjudicationInput {
-  adjudication: { decision: 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause'; committedFactIds: string[]; supersededEventIds: string[] };
+  adjudication: { decision: 'stay' | 'advance_one' | 'resolve_early' | 'deviate' | 'pause' | 'jump_to'; committedFactIds: string[]; supersededEventIds: string[] };
   /** 本回合全部 confirmed evidence（玩家线候选）。 */
   evidenceCandidates: RuntimeFactCandidate[];
   events: WorldEventInstance[];

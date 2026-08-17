@@ -37,8 +37,9 @@ const settings = {
   中期转长期提示词: 'long',
   记忆总结API: { provider: '', baseUrl: '', apiKey: '', model: '', retryCount: 0 },
 };
+// 对标参考项目：即时层为滑动窗口不调 AI 压缩；失败草稿场景改为「短期→中期」压缩。
 const unconfigured = await memoryUtils.autoCompressMemorySystemWithArchivesAsync(
-  { ...emptyMemory, 即时记忆: exactItems },
+  { ...emptyMemory, 短期记忆: exactItems },
   15,
   settings,
   { provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '' },
@@ -51,7 +52,7 @@ assert.deepEqual(
   exactItems,
   '自动失败草稿必须保存实际送入总结器的完整 15 条材料。',
 );
-assert.equal(unconfigured.memory.短期记忆.length, 1, '失败时仍应保留本地 fallback，主流程不能中断。');
+assert.equal(unconfigured.memory.中期记忆.length, 1, '失败时仍应保留本地 fallback，主流程不能中断。');
 
 const localSettings = { ...settings, 启用中短长期API总结: false };
 const localResult = await memoryCompression.summarizeMemoryBatch(

@@ -25,18 +25,19 @@ import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import { 解析天气标签, 验证天气合法性 } from '@/data/weatherRules';
 import {
-  buildImmediateMemory,
   addImmediateMemory,
   autoCompressMemorySystemWithArchives,
   autoCompressMemorySystemWithArchivesAsync,
   compressNpcMemoryLedger,
-  upsertRecallEntry,
   isMemorySystemNoise,
-  buildMemorySummaryFlowRequest,
+  构建即时记忆条目,
+  构建短期记忆条目,
+  写入四段记忆,
 } from './memoryUtils';
 import { runNewsGenerationStep } from './newsWorkflow';
 import { applyAdjudicatedStoryProgress } from '@/services/storyProgressService';
-import { buildStoryWeavingApiConfig, evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
+import { buildStoryWeavingApiConfig, buildStoryAdvanceJudgeApiConfig, evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
+import { judgeStoryAdvance } from '@/services/storyAdvanceJudge';
 import { 归一化世界状态, 归一化剧情编织运行时切片, 格式化开局档案上下文, type 世界状态 } from '@/models/world';
 import { buildStoryWeavingRuntimeProjection } from '@/services/storyRuntime/storyWeavingRuntimeAdapter';
 import { adjudicateStoryTurn, type StoryTurnAdjudication } from '@/services/storyRuntime/storyTurnAdjudicator';
@@ -79,7 +80,7 @@ import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评�
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
 import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
-import type { 智库召回诊断 } from '@/services/zhikuRetrieval';
+import { formatZhikuCandidateDecisionTrace, type 智库召回诊断 } from '@/services/zhikuRetrieval';
 import {
   compileZhikuTurn,
   compileZhikuTurnWithModel,
@@ -89,8 +90,7 @@ import { applyStoryArchiveZhikuRuntimeUnlock, mergeZhikuRuntimeUnlockPatch } fro
 import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
 import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { getBuiltinPresets } from '@/data/builtinPresets';
-import { retrieveYitingContextWithModel } from '@/services/yitingRetrieval';
-import { buildYitingArchiveEntry } from '@/services/yitingArchive';
+import { retrieveYitingContextWithModel, type 忆庭召回结果 } from '@/services/yitingRetrieval';
 import {
   executePhoneMemoryDualWrite,
   parsePhoneMemoryFailureTask,
@@ -112,7 +112,9 @@ import {
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import { restorePreTurnSnapshotPersisted } from './turnSnapshot';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
-import { normalizePlayerSpeechInBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
+import { normalizePlayerSpeechBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
+import { resolvePlayerSpeechMode } from '@/utils/narrativeRuntimePolicy';
+import { parseNarrativeBody, serializeNarrativeBody } from '@/utils/narrativeBodyParser';
 import { enrichNpcArchives, needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
 import { appendWorldEvents } from '@/utils/worldEvents';
@@ -285,6 +287,7 @@ function formatZhikuDiagnosticsPreview(diagnostics?: 智库召回诊断): string
     `AI形态修正：${diagnostics.AI形态修正.join('；') || '无'}`,
     `AI拒绝选择：${diagnostics.AI拒绝选择.join('；') || '无'}`,
     `AI未选择原因：${diagnostics.AI未选择原因 || '无'}`,
+    `逐条召回轨迹：${formatZhikuCandidateDecisionTrace(diagnostics.candidateDecisions)}`,
     `最终注入角色资料（已去重）：${diagnostics.角色相关资料.join('、') || '无'}`,
     `最终注入强资料：${diagnostics.强相关资料.join('、') || '无'}`,
     `最终注入弱资料：${diagnostics.弱相关资料.join('、') || '无'}`,
@@ -1436,6 +1439,7 @@ async function retryPhoneMemoryWriteTask(
       settings,
       config: getActiveConfig(),
       turn: payload.turn || state.turnCount,
+      gameTime: [state.世界.当前日期, state.世界.当前时间].filter(Boolean).join(' ').trim() || undefined,
     }, {
       getQueueTasks: () => state.queueTasks,
       buildSavePayload: (overrides) => buildSavePayload(state, 'auto', overrides),
@@ -1857,6 +1861,7 @@ export async function executeSendWorkflow(
       history: updatedHistory,
       userInput,
       turnCount: state.turnCount,
+      settings: state.gameSettings.记忆系统,
     });
     const openingArchiveText = 格式化开局档案上下文(effectiveWorld.开局档案);
     const worldbookCtx = buildPromptWorldbookContext({
@@ -1870,7 +1875,7 @@ export async function executeSendWorkflow(
       openingArchiveText,
       worldbookTriggerStates: state.gameSettings.worldbookTriggerStates,
     });
-    const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
+    const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory, Math.max(1, (state.gameSettings.记忆系统?.即时转短期阈值 ?? 10) - 1)) : '';
     const latestZhikuStoryPlan = [...updatedHistory]
       .reverse()
       .find((message) => message.role === 'assistant' && message.parsedResponse?.storyPlan?.trim())
@@ -1886,6 +1891,7 @@ export async function executeSendWorkflow(
       npcNames: [],
       presentNpcNamesForFallback: worldbookCtx.npcNames,
       anticipatedNpcNames: zhikuParticipation.anticipated,
+      mentionedNpcNames: zhikuParticipation.mentioned,
       aiSupplementHints: {
         currentLocation: effectiveWorld.当前地点,
         presentNpcNames: worldbookCtx.npcNames,
@@ -1973,7 +1979,7 @@ export async function executeSendWorkflow(
       if (npc.id && npc.姓名) map[npc.id] = npc.姓名;
       return map;
     }, {});
-    const [yitingPreview, zhikuPreview] = await Promise.all([
+    let [yitingPreview, zhikuPreview] = await Promise.all([
       yitingRecallEnabled && state.忆庭 && recallQuery
         ? retrieveYitingContextWithModel(
             state.忆庭,
@@ -2036,6 +2042,7 @@ export async function executeSendWorkflow(
           })),
     ]);
     assertWorkflowActive();
+    // 剧情回忆静默注入：召回结果直接进入本轮上下文，不弹预览确认。
     const recallSummaryForTurn = [
       formatZhikuRecallSummary(zhikuPreview?.diagnostics),
       formatYitingRecallSummary(yitingPreview?.previewText),
@@ -2046,10 +2053,16 @@ export async function executeSendWorkflow(
     ].filter(Boolean).join('\n\n');
     state.setLiveRecallSummary(recallSummaryForTurn);
     state.setLiveRecallFullContent(recallFullContentForTurn);
+    // 对标参考项目：回忆召回命中且关闭并存注入时，主剧情已暂停中期+长期+短期记忆注入。
+    const yitingMutexActiveHint =
+      state.gameSettings.记忆系统?.忆庭命中并存注入 !== true
+      && Boolean(yitingPreview?.injection);
     const memoryHint = isOpeningSystemTrigger
       ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
       : state.gameSettings.enableMemoryInjection
-      ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(state.记忆.中期记忆 ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条${yitingPreview?.injection ? '；剧情回忆已命中并并存注入' : ''}；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
+      ? yitingMutexActiveHint
+        ? `剧情回忆已命中，已暂停短期/中期/长期记忆注入（回忆承担旧事承接）；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
+        : `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(state.记忆.中期记忆 ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条${yitingPreview?.injection ? '；剧情回忆已命中并并存注入' : ''}；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
       : '记忆上下文已跳过';
     const yitingHint = !yitingEnabled
       ? '忆庭召回已关闭'
@@ -2067,7 +2080,7 @@ export async function executeSendWorkflow(
       : '智库已跳过';
     state.setWorkflowHint(isOpeningSystemTrigger ? memoryHint : `${memoryHint} · ${yitingHint} · ${zhikuHint}`);
     state.setWorkflowStatus('done');
-    const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
+    const immediateStoryReview = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory, Math.max(1, (state.gameSettings.记忆系统?.即时转短期阈值 ?? 10) - 1)) : '';
     const storyRecallInjection = [
       immediateStoryReview
         ? ['# 即时剧情回顾', '', '【即时剧情回顾】', immediateStoryReview].join('\n')
@@ -2159,7 +2172,7 @@ export async function executeSendWorkflow(
           state.手机,
           awakeningPhase,
           storyRecallInjection || (yitingRecallEnabled ? '' : undefined),
-          Boolean(yitingPreview?.injection),
+          (yitingPreview?.strongEntries?.length ?? 0) > 0,
           npcLedgerSelection,
           currentTriggerType,
           macroCtx,
@@ -2304,12 +2317,19 @@ export async function executeSendWorkflow(
     }
 
     // 区E 执法块（main scope：普通回合与 Tavern V2 均包含一次；由统一 finalizer 置于任务序列之前）
-    const enforcementBlock = zhikuRequestScope === 'main'
+    const enforcementBlock = (
+      zhikuRequestScope === 'main'
+      || zhikuRequestScope === 'opening'
+      || zhikuRequestScope === 'pathAwakeningQuestion'
+      || zhikuRequestScope === 'pathAwakeningJudgement'
+    )
       ? buildMainTurnEnforcementBlock({
           playerName: state.旅人.姓名 || state.旅人.别名 || '开拓者',
+          narrativePerson: state.gameSettings.narrativePerson,
           wordCountTarget: state.gameSettings.wordCountTarget,
           zhikuCharacterBrief: zhikuPreview.characterEnforcementBrief,
           storyWeavingActive: Boolean(state.gameSettings.剧情编织系统?.enabled && state.gameSettings.剧情编织系统.currentWindow),
+          speechExpansionActive: resolvePlayerSpeechMode(state.gameSettings) === 'expansion',
         })
       : undefined;
 
@@ -2588,12 +2608,19 @@ export async function executeSendWorkflow(
       detail: `正文生成完成，用时 ${Math.round(duration)}s。`,
     });
     const cleanedParsed = sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能);
-    const parsedBody = normalizePlayerSpeechInBody({
+    const normalizedPlayerSpeech = normalizePlayerSpeechBody({
       body: cleanedParsed.body?.trim() ?? '',
       playerName: state.旅人.姓名 || state.旅人.别名 || '你',
+      playerAliases: [state.旅人.姓名, state.旅人.别名].filter((name): name is string => Boolean(name?.trim())),
       userInput,
+      mode: resolvePlayerSpeechMode(state.gameSettings),
     });
-    let finalBody = stripLeakedHistoryMetaFromBody(sanitizeContaminatedText(parsedBody, state.gameSettings.额外功能));
+    let finalBody = stripLeakedHistoryMetaFromBody(sanitizeContaminatedText(normalizedPlayerSpeech.body, state.gameSettings.额外功能));
+    finalBody = serializeNarrativeBody(parseNarrativeBody(finalBody, {
+      traveler: state.旅人,
+      userInput,
+      partial: false,
+    }));
     const sanitizedRawText = replaceBodyInRawResponse(
       cleanedParsed.rawText || result.fullText || streamedText,
       finalBody,
@@ -2672,7 +2699,7 @@ export async function executeSendWorkflow(
         : undefined,
     });
     const aiMsg = 创建聊天消息('assistant', displayText, {
-      gameTime: `${state.turnCount}`,
+      gameTime: [state.世界.当前日期, state.世界.当前时间].filter(Boolean).join(' ').trim() || `${state.turnCount}`,
       parsedResponse: parsedForDisplay,
       inputTokens: tokenUsage.inputTokens,
       outputTokens: tokenUsage.outputTokens,
@@ -2696,6 +2723,9 @@ export async function executeSendWorkflow(
         stV2Attempted: shouldTryTavernV2,
         stV2Used: Boolean(tavernV2Messages),
         stV2FallbackReason: tavernV2Error instanceof Error ? tavernV2Error.message : tavernV2Error ? String(tavernV2Error) : undefined,
+        playerSpeechCorrections: normalizedPlayerSpeech.corrections.length
+          ? normalizedPlayerSpeech.corrections
+          : undefined,
         rerollSimilarity: rerollSimilarityForTurn,
         rerollSimilarityRetried,
         cachePrefixDiagnostics,
@@ -2750,18 +2780,29 @@ export async function executeSendWorkflow(
     state.setPendingVariable(true);
     pendingVariableStarted = true;
 
-    // 6. Update memory
+    // 6. Update memory（对标参考项目：回合记忆写入 = 即时条目【时间+玩家输入+正文】+ 短期条目【AI shortTerm】+ 写入四段记忆）
     pushQueueTask(state, 'memory', 'pending', { detail: '正在写入即时记忆并检查压缩阈值。' });
-    const rawMemory = buildImmediateMemory(userInput, [
-      parsedForDisplay.memory?.trim() ? `本回合小结：${parsedForDisplay.memory.trim()}` : '',
+    const memoryGameTime = [state.世界.当前日期, state.世界.当前时间].filter(Boolean).join(' ').trim();
+    // 开局系统回合省略玩家输入（触发指令不是玩家发言，对齐参考项目开局写入语义）
+    const 回合即时条目 = 构建即时记忆条目(
+      memoryGameTime,
+      isOpeningSystemTrigger ? '' : userInput,
       displayText,
-    ].filter(Boolean).join('\n\n'));
-    let mem = addImmediateMemory(state.记忆, rawMemory, state.turnCount);
+      { 省略玩家输入: isOpeningSystemTrigger },
+    );
+    const 回合短期条目 = 构建短期记忆条目(memoryGameTime, parsedForDisplay.memory ?? '', displayText);
+    const 记忆写入结果 = 写入四段记忆(state.记忆, 回合即时条目, 回合短期条目, {
+      immediateLimit: state.gameSettings.记忆系统?.即时转短期阈值 ?? 10,
+      recallRound: (state.忆庭?.回忆档案?.length ?? 0) + 1,
+      gameTime: memoryGameTime,
+    });
+    let mem = 记忆写入结果.memory;
+    // 回忆条目（每回合一条，名称【回忆N】）在回合后段汇入忆庭档案（yitingBase 合并处）。
+    let pendingRecallEntry = 记忆写入结果.recallEntry;
 
     // 阶段1主链压缩：阈值常量提前计算，压缩结算统一推迟到本回合所有会修改记忆的
     // 步骤（剧情推进 / NPC 事实 / 忆庭入库）完成后，以最终记忆切片创建压缩请求。
     const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
-    const immediateThreshold = memorySettings.即时转短期阈值 ?? 10;
     const shortThreshold = memorySettings.短期转中期阈值 ?? 30;
     const middleThreshold = memorySettings.中期转长期阈值 ?? 50;
     const yitingWithCompression = state.忆庭;
@@ -2975,6 +3016,25 @@ export async function executeSendWorkflow(
       let turnFactView: StoryFactConsumerView | null = null;
       // 工作包F 11.4：命途狭间两回合不执行剧情编织裁决/世界演变/事实物化（scope gate）
       if (runtimeProjection && runtimeCurrentSegment && !isPathAwakeningTurn) {
+        // 步骤 0.5：方案C 独立 AI 语义判定（默认关闭）——与 AI 申报汇合后交给证据层。
+        let storyAdvanceInput = aiMsg.parsedResponse?.storyAdvance;
+        if (state.gameSettings.剧情编织系统?.剧情推进AI判定 === true) {
+          const judgeConfig = buildStoryAdvanceJudgeApiConfig(state.gameSettings, state.apiSettings);
+          if (judgeConfig) {
+            const judgement = await judgeStoryAdvance(judgeConfig, {
+              currentSegment: runtimeCurrentSegment,
+              body: displayText,
+              playerInput: userInput,
+            }, abortController.signal);
+            if (judgement) {
+              storyAdvanceInput = {
+                completed: judgement.completed || storyAdvanceInput?.completed === true,
+                targetSegment: judgement.actualSegmentId ?? storyAdvanceInput?.targetSegment,
+                basis: [storyAdvanceInput?.basis, judgement.reason].filter(Boolean).join('；') || undefined,
+              };
+            }
+          }
+        }
         // 步骤 1：从主剧情正文提取 confirmed evidence（命中明确结束状态）与提及（未来内容不入推进候选）。
         const evidenceResult = await buildTurnEvidence({
           body: displayText,
@@ -2985,6 +3045,7 @@ export async function executeSendWorkflow(
           gameTime,
           turnCount: state.turnCount + 1,
           responseId: aiMsg.id,
+          storyAdvance: storyAdvanceInput,
         });
         // R3：正文命中下一分段关键事件的事件结果（完成后的结果）→ 玩家提前解决候选（计划 4.2 规则 7）。
         const runtimeNextSegment = runtimeSeries?.分段列表.find((segment) =>
@@ -3108,6 +3169,7 @@ export async function executeSendWorkflow(
           decision: adjudication.decision,
           completedUnitIds: adjudication.completedUnitIds,
           reasons: adjudication.reasons,
+          targetSegmentId: adjudication.targetSegmentId,
         });
         if (storyAdvance.changed) {
           assertWorkflowActive();
@@ -3222,21 +3284,11 @@ export async function executeSendWorkflow(
       // 工作包F 11.4：命途狭间回合不生成新闻
       const shouldRunNews = newsEnabled && !isPathAwakeningTurn && ((shouldRunOpeningNews && !openingNewsPreprocessed) || (newsTurn > 0 && newsTurn % newsInterval === 0));
       const yitingBase = mergeYitingSystems(yitingWithCompression, variableOverrides?.忆庭);
-      const turnRecallSource = {
-        turn: state.turnCount,
-        userInput,
-        body: displayText,
-        memory: parsedForDisplay.memory,
-        worldEvents: storyProgressMemoryLine && !isMemorySystemNoise(storyProgressMemoryLine)
-          ? [...parsedForDisplay.worldEvents, storyProgressMemoryLine]
-          : parsedForDisplay.worldEvents,
-        actionOptions: parsedForDisplay.actionOptions,
-        gameTime: effectiveWorld?.当前日期 || undefined,
-        gameClock: effectiveWorld?.当前时间 || undefined,
-        location: effectiveWorld?.当前地点 || undefined,
-      };
+      // 对标参考项目：本回合回忆条目（写入四段记忆 生成，名称【回忆N】）汇入忆庭档案。
+      let yitingAfterTurnRecall = pendingRecallEntry
+        ? { ...yitingBase, 回忆档案: [...yitingBase.回忆档案, pendingRecallEntry] }
+        : yitingBase;
       let newsAfterGeneration: 新闻条目[] | null = openingNewsForSave;
-      let yitingAfterTurnRecall = yitingBase;
       let phoneAfterFallbackSeed = variableOverrides?.手机 ?? state.手机;
       let finalHistoryForSave = finalHistory;
 
@@ -3291,21 +3343,13 @@ export async function executeSendWorkflow(
       };
 
       const runYitingArchiveJob = async (): Promise<void> => {
-        // 忆庭入库始终执行；这里的开关只控制“是否召回并注入正文”。
-        const turnRecallEntryResult = await buildYitingArchiveEntry(
-          turnRecallSource,
-          memorySettings,
-          config,
-          abortController.signal,
-          memorySettings.忆庭召回API.retryCount ?? 2,
-          state.gameSettings.promptModules,
-        );
+        // 对标参考项目：回忆档案 = 即时推导——本回合回忆条目（【回忆N】）已在
+        // yitingAfterTurnRecall 初始化时由「写入四段记忆」生成并汇入，不再独立精炼回合纪要。
+        // 这里只提交忆庭状态与召回提示。
         assertWorkflowActive();
-        const turnRecallEntry = turnRecallEntryResult.entry;
-        yitingAfterTurnRecall = upsertRecallEntry(yitingBase, turnRecallEntry);
         state.set忆庭(yitingAfterTurnRecall);
         pushQueueTask(state, 'memory', 'success', {
-          detail: turnRecallEntryResult.usedFallback ? '忆庭纪要已使用主回复小总结入库。' : '忆庭纪要已由独立模型压缩并入库。',
+          detail: '回合记忆已按即时/短期合体写入回忆档案。',
         });
         if (!yitingEnabled) {
           pushQueueTask(state, 'yiting', 'skipped', {
@@ -3403,34 +3447,48 @@ export async function executeSendWorkflow(
       }
 
       // 记忆压缩结算：主回合所有会修改记忆的步骤（剧情推进 / NPC 事实 / 忆庭入库）
-      // 全部完成后，以最终记忆切片创建压缩请求，并绑定来源 turn/fingerprint。
+      // 全部完成后，以最终记忆切片静默压缩（达阈值自动执行，不弹确认窗）。
       mem = memoryAfterStoryProgress;
       {
-        const immediatePending = Math.max(0, mem.即时记忆.length - immediateThreshold + 1);
-        const shortPending = Math.max(0, mem.短期记忆.length - shortThreshold + 1);
-        const middlePending = Math.max(0, (mem.中期记忆 ?? []).length - middleThreshold + 1);
-        const needsCompression = memorySettings.启用中短长期API总结
-          && (immediatePending > 0 || shortPending > 0 || middlePending > 0);
-        if (needsCompression) {
-          // 阶段1：设置三阶段弹窗状态（统一入口，含来源 turn/fingerprint），压缩推迟到UI层处理。
-          state.setMemorySummaryFlow(buildMemorySummaryFlowRequest(mem, memorySettings, state.turnCount));
-          state.set记忆(mem);
-          pushQueueTask(state, 'memory', 'success', {
-            detail: '即时记忆已写入。检测到记忆达到压缩阈值，请在弹窗中确认记忆总结。',
+        // 即时层是滑动窗口、不调 AI 压缩；短期→中期、中期→长期达阈值时静默压缩
+        // （AI 总结失败自动回退本地，失败草稿保留并弹重试提示）。
+        const compression = await autoCompressMemorySystemWithArchivesAsync(
+          mem,
+          state.turnCount,
+          memorySettings,
+          config,
+          abortController.signal,
+        );
+        assertWorkflowActive();
+        mem = compression.memory;
+        memoryAfterStoryProgress = mem;
+        state.set记忆(mem);
+        if (compression.failures.length > 0) {
+          state.set记忆压缩失败({ 条数: compression.failures.length });
+          pushQueueTask(state, 'memory', 'failed', {
+            detail: `${compression.failures.length} 条记忆总结失败，原始材料已保留，可重试。`,
+            failCount: compression.failures.length,
           });
-        } else {
-          // 不需要压缩或未启用API总结：保持原有同步压缩行为（走本地fallback）
-          const compression = await autoCompressMemorySystemWithArchivesAsync(
-            mem,
-            state.turnCount,
-            memorySettings,
-            config,
-            abortController.signal,
-          );
-          assertWorkflowActive();
-          mem = compression.memory;
-          memoryAfterStoryProgress = mem;
-          state.set记忆(mem);
+        }
+        // F6·对标既定方案：长期记忆超限归档条目（【长期纪要】）幂等汇入忆庭，可检索召回。
+        const longTermArchives = compression.archives.filter(
+          (entry) => entry.类型 === '长期压缩' && (entry.名称 ?? '').startsWith('【长期纪要'),
+        );
+          if (longTermArchives.length) {
+            const existingKeys = new Set(
+              yitingAfterTurnRecall.回忆档案.map((entry) => `${entry.名称 ?? ''}:${entry.摘要}`),
+            );
+            const newLongTermArchives = longTermArchives.filter(
+              (entry) => !existingKeys.has(`${entry.名称 ?? ''}:${entry.摘要}`),
+            );
+            if (newLongTermArchives.length) {
+              yitingAfterTurnRecall = {
+                ...yitingAfterTurnRecall,
+                回忆档案: [...yitingAfterTurnRecall.回忆档案, ...newLongTermArchives],
+              };
+              state.set忆庭(yitingAfterTurnRecall);
+            }
+          }
           const compressionDetail = compression.failures.length
             ? `记忆总结有 ${compression.failures.length} 批 API 失败，已保留完整失败草稿；当前回合继续使用本地 fallback。`
             : compression.usedModel
@@ -3441,7 +3499,6 @@ export async function executeSendWorkflow(
             failCount: compression.failures.length || undefined,
             retryHint: compression.failures.length ? '打开记忆系统的“失败草稿”页重新总结。' : undefined,
           });
-        }
       }
 
       // 回合成功收尾：宏全局变量 / 世界书触发状态统一提交。

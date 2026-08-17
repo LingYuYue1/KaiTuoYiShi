@@ -28,6 +28,7 @@ import { PATH_STAGE_DEFS, PATH_CORE_BELIEFS } from '@/models/path';
 import { renderWorldbookSystemEntry, replaceWorldbookPlaceholders, resolveWorldbookInjectionPlan, type FilterContext, type WorldbookInjectionPlan } from '@/utils/worldbook';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
+import { resolveCurrentWeavingSegment } from '@/services/storyRuntime/storyWeavingRuntimeAdapter';
 import { 构建天气Prompt片段 } from '@/data/weatherRules';
 import {
   MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT,
@@ -37,6 +38,10 @@ import {
 import { getAnticipatedNpcNamesForTurn } from './npcPresence';
 import { processMacros, type MacroContext } from '@/utils/macroEngine';
 import { isSTImportedModule } from '@/utils/stPresetParser';
+import {
+  applyRuntimeNarrativePolicy,
+  resolveNarrativePolicy,
+} from '@/utils/narrativeRuntimePolicy';
 
 // 当前 prompt 为重构期的中性骨架，具体的世界观/人物设定由世界书注入，
 // 「踏上旅途」向导写入的字段在此被汇总输出。
@@ -64,7 +69,8 @@ export function buildSystemPrompt(
   phone?: 手机系统,
   awakeningPhase?: 命途狭间阶段,
   yitingInjectionOverride?: string,
-  suppressMemoryInjection?: boolean,
+  /** F2·对标既定方案：调用方（sendWorkflow/contextSnapshot）预召回结果是否命中强回忆；未传时 builder 内部兜底召回自行判定。 */
+  yitingStrongRecallHit?: boolean,
   npcLedgerSelectionOverride?: NPC账本选择结果,
   triggerType?: string,
   macroCtx?: MacroContext,
@@ -81,13 +87,15 @@ export function buildSystemPrompt(
   const effectiveModules = shouldFilterLegacyStModules
     ? settings.promptModules.filter((m) => !isSTImportedModule(m))
     : settings.promptModules;
+  const playerNameForLabel = getPromptPlayerName(traveler);
+  const runtimePolicy = resolveNarrativePolicy(settings, playerNameForLabel);
   // 剧情方向四选一：storymode 模块 enabled 派生自当前剧情模式，注入时只有命中的那一本启用。
-  const activeModules = syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式);
-
-  const personLabel =
-    settings.narrativePerson === 'second' ? '第二人称"你"'
-    : settings.narrativePerson === 'first' ? '第一人称"我"'
-    : '第三人称"他/她"';
+  // 人称与玩家发言边界由运行时策略覆盖旧存档/预设残留的 enabled 状态。
+  const activeModules = applyRuntimeNarrativePolicy(
+    syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式),
+    runtimePolicy,
+  );
+  const personLabel = buildPersonLabel(settings.narrativePerson, playerNameForLabel);
   // 提示词模块按当前 scope 过滤；scope 信息来自 worldbookCtx.currentScope（与世界书共用一个）。
   // 例外:当世界状态.进行中狭间存在,本回合必须走 pathAwakening scope —— 替代主剧情流程。
   const baseScope: 提示词模块作用域 = worldbookCtx?.currentScope ?? 'main';
@@ -95,7 +103,7 @@ export function buildSystemPrompt(
   const moduleCtx: PromptModuleInjectionCtx = {
     wordCountTarget: settings.wordCountTarget,
     personLabel,
-    playerName: getPromptPlayerName(traveler),
+    playerName: playerNameForLabel,
     currentScope,
     openingSource: worldState.开局档案?.来源,
     triggerType,
@@ -117,6 +125,29 @@ export function buildSystemPrompt(
   const worldbookPlan = worldbookPlanInput ?? (settings.enableWorldbookInjection && worldbooks && worldbookCtx
     ? resolveWorldbookInjectionPlan(worldbooks, worldbookCtx)
     : null);
+
+  // ── F2·对标既定方案：忆庭召回统一入口（override 优先，否则内部兜底），提前判定强回忆互斥 ──
+  // 区5/区6 的记忆注入是否暂停取决于「强回忆是否命中」，必须在本回合拼装前确定，
+  // 不能等到区7 才召回——否则三条召回路径的互斥行为会不一致。
+  const yitingEnabled = settings.记忆系统?.忆庭启用 !== false;
+  const yitingThreshold = settings.记忆系统?.忆庭召回最早触发回合 ?? 10;
+  const npcNameMap = activeNpcRecords.reduce<Record<string, string>>((map, npc) => {
+    if (npc.id && npc.姓名) map[npc.id] = npc.姓名;
+    return map;
+  }, {});
+  let effectiveYitingInjection = yitingInjectionOverride ?? '';
+  /** 内部兜底召回结果（仅 override 未传入时产生，区7 需要它构建全知防护）。 */
+  let yitingInternalHit: ReturnType<typeof retrieveYitingContext> | null = null;
+  if (yitingInjectionOverride === undefined && yitingEnabled && yiting && worldbookCtx?.recentUserInput && worldbookCtx.turnCount > yitingThreshold) {
+    const limit = settings.记忆系统?.忆庭召回条数 ?? 8;
+    yitingInternalHit = retrieveYitingContext(yiting, worldbookCtx.recentUserInput, limit, npcNameMap);
+    effectiveYitingInjection = yitingInternalHit.injection;
+  }
+  /**
+   * 对标参考项目：回忆召回命中（有召回结果）且关闭「并存注入」时，
+   * 暂停中期+长期+短期记忆注入（全禁，回忆承担旧事承接）。
+   */
+  const yitingMutexActive = settings.记忆系统?.忆庭命中并存注入 !== true && Boolean(effectiveYitingInjection);
 
   // ── 区1 · 身份区（稳定：开发者模式/叙述者人格/常驻世界书/开局档案） ──
   {
@@ -156,6 +187,9 @@ export function buildSystemPrompt(
     const z3 = splitZoneItems(collectZoneModules(activeModules, moduleCtx, (m) => m.id.startsWith('builtin_perspective_')));
     zone3.push(...z3.systemParts);
     allChatMessages.push(...z3.chatMessages);
+    if (z3.systemParts.length === 0 && z3.chatMessages.length === 0) {
+      zone3.push(buildPersonSection(settings.narrativePerson, playerNameForLabel));
+    }
     const wordCountSection = buildWordCountSection(settings);
     if (wordCountSection) zone3.push(wordCountSection);
     const innerVoice = buildInnerVoiceSection(settings);
@@ -180,12 +214,16 @@ export function buildSystemPrompt(
   {
     const zone5: string[] = [];
     if (settings.enableMemoryInjection) {
-      const memSplit = buildLayeredMemorySectionsSplit(memorySystem);
+      // F2·对标既定方案：忆庭强回忆命中且关闭并存注入时，暂停中期/短期注入，长期只留少量锚点（最近 3 条）。
+      const memSplit = buildLayeredMemorySectionsSplit(
+        memorySystem,
+        yitingMutexActive ? { long: 3, middle: 0, short: 0 } : undefined,
+      );
       if (memSplit.long) zone5.push(memSplit.long);
       if (memSplit.middle) zone5.push(memSplit.middle);
       shortMemCached = memSplit.short;
     }
-    const arrangement = buildStoryArrangementSection(plotNodes, storyPlanSnippets);
+    const arrangement = buildStoryArrangementSection(plotNodes, storyPlanSnippets, storyWeaving);
     if (arrangement) zone5.push(arrangement);
     if (settings.剧情编织系统?.enabled && settings.剧情编织系统.currentWindow) {
       const weaving = buildStoryWeavingInjection(storyWeaving, worldbookCtx);
@@ -227,7 +265,7 @@ export function buildSystemPrompt(
     if (npcLedger) zone6.push(npcLedger);
     const npcContinuity = buildNpcContinuitySection(worldState, activeNpcRecords, _turnCount, worldbookCtx?.npcNames);
     if (npcContinuity) zone6.push(npcContinuity);
-    const companions = buildCompanionsSection(activeNpcRecords, _turnCount);
+    const companions = buildCompanionsSection(activeNpcRecords, _turnCount, settings);
     if (companions) zone6.push(companions);
 
     // 关键词世界书（按需层）
@@ -250,30 +288,21 @@ export function buildSystemPrompt(
   // ── 区7 · 回顾区（即时回顾/忆庭+全知防护/文风助手） ──
   {
     const zone7: string[] = [];
-    // 阶段1方案E·全知性防护：NPC id→姓名 映射 + 在场 NPC id 集合（供忆庭通讯回忆标记来源）
-    const npcNameMap = activeNpcRecords.reduce<Record<string, string>>((map, npc) => {
-      if (npc.id && npc.姓名) map[npc.id] = npc.姓名;
-      return map;
-    }, {});
+    // 阶段1方案E·全知性防护：在场 NPC id 集合（供忆庭通讯回忆标记来源；id→姓名映射已在开头统一计算）
     const presentNpcIds = new Set(
       npcLedgerSelection.selected
         .filter((item) => item.presentState === 'current')
         .map((item) => item.npc.id),
     );
-    // 即时回顾 + 忆庭召回（sendWorkflow 预拼的 override，或 builder 内部召回）
-    const yitingEnabled = settings.记忆系统?.忆庭启用 !== false;
-    const yitingThreshold = settings.记忆系统?.忆庭召回最早触发回合 ?? 10;
+    // F2·对标既定方案：忆庭注入统一走开头判定的 effectiveYitingInjection；
+    // 全知防护只在内部兜底召回路径构建（override 路径由 sendWorkflow/contextSnapshot 预拼，保持原行为）。
     if (yitingInjectionOverride !== undefined) {
-      if (yitingInjectionOverride.trim()) zone7.push(yitingInjectionOverride.trim());
-    } else if (yitingEnabled && yiting && worldbookCtx?.recentUserInput && worldbookCtx.turnCount > yitingThreshold) {
-      const limit = settings.记忆系统?.忆庭召回条数 ?? 8;
-      const yitingHit = retrieveYitingContext(yiting, worldbookCtx.recentUserInput, limit, npcNameMap);
-      if (yitingHit.injection) {
-        zone7.push(yitingHit.injection);
-        // 阶段1方案E·第三层防护：全知性防护提示词约束 + 通讯对方在场判断
-        const omniscienceGuard = buildYitingOmniscienceGuard(yitingHit.entries, presentNpcIds, npcNameMap);
-        if (omniscienceGuard) zone7.push(omniscienceGuard);
-      }
+      if (effectiveYitingInjection.trim()) zone7.push(effectiveYitingInjection.trim());
+    } else if (yitingInternalHit && effectiveYitingInjection) {
+      zone7.push(effectiveYitingInjection);
+      // 阶段1方案E·第三层防护：全知性防护提示词约束 + 通讯对方在场判断
+      const omniscienceGuard = buildYitingOmniscienceGuard(yitingInternalHit.entries, presentNpcIds, npcNameMap);
+      if (omniscienceGuard) zone7.push(omniscienceGuard);
     }
     const styleAssistant = buildStyleAssistantSection(activeModules);
     if (styleAssistant) zone7.push(styleAssistant);
@@ -529,12 +558,17 @@ function buildWordCountSection(settings: 游戏设置): string {
 
 /** 分层记忆拆分：一次性计算三层（共享 seen 跨层去重），分别返回。
  *  长/中→区5，短→区6 末尾（工作包B）。 */
-function buildLayeredMemorySectionsSplit(memorySystem: 记忆系统): { long: string; middle: string; short: string } {
+/** 分层记忆拆分：一次性计算三层（共享 seen 跨层去重），分别返回。
+ *  F2·对标既定方案：overrides 支持忆庭互斥时收紧/关闭某一层（长期锚点 N 条、中期/短期 0 条）。 */
+function buildLayeredMemorySectionsSplit(
+  memorySystem: 记忆系统,
+  overrides?: { long?: number; middle?: number; short?: number },
+): { long: string; middle: string; short: string } {
   const seen: string[] = [];
   // 去重扫描顺序：短期→中期→长期（重复内容保留在最短的那层，与原逻辑一致）
-  const shortTerm = pickDedupedMemoryEntries(memorySystem.短期记忆, MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT, seen);
-  const middleTerm = pickDedupedMemoryEntries(memorySystem.中期记忆 ?? [], MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT, seen);
-  const longTerm = pickDedupedMemoryEntries(memorySystem.长期记忆, MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT, seen);
+  const shortTerm = pickDedupedMemoryEntries(memorySystem.短期记忆, overrides?.short ?? MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT, seen);
+  const middleTerm = pickDedupedMemoryEntries(memorySystem.中期记忆 ?? [], overrides?.middle ?? MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT, seen);
+  const longTerm = pickDedupedMemoryEntries(memorySystem.长期记忆, overrides?.long ?? MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT, seen);
   return {
     long: longTerm.length ? formatMemorySection('长期记忆', longTerm) : '',
     middle: middleTerm.length ? formatMemorySection('中期记忆', middleTerm) : '',
@@ -546,6 +580,7 @@ function buildLayeredMemorySectionsSplit(memorySystem: 记忆系统): { long: st
 function buildStoryArrangementSection(
   plotNodes: 剧情节点[] | undefined,
   storyPlanSnippets: string[] | undefined,
+  storyWeaving?: 剧情编织系统,
 ): string {
   const lines: string[] = ['# 剧情安排'];
   const active = (plotNodes ?? []).filter((n) => n.状态 === 'active');
@@ -570,6 +605,21 @@ function buildStoryArrangementSection(
   if (snippets.length) {
     lines.push('', '## 剧情规划备忘');
     for (const s of snippets.slice(0, 2)) lines.push(`- ${s}`);
+  }
+  // 剧情推进申报契约：给 AI 当前分段关键事件/结束状态，要求其在《剧情规划》内声明推进情况。
+  // 申报只作提示，系统会按正文证据校验后才推进——AI 不得只凭申报自行跳段。
+  const currentSegment = storyWeaving ? resolveCurrentWeavingSegment(storyWeaving)?.currentSegment : undefined;
+  if (currentSegment) {
+    const keyEvents = (currentSegment.关键事件 ?? []).map((e) => e.事件名).filter(Boolean);
+    const endStates = (currentSegment.本段结束状态 ?? []).slice(0, 3);
+    lines.push('', '## 当前剧情分段（推进申报）');
+    lines.push(`- 当前分段：${currentSegment.标题 || `第 ${currentSegment.组号} 段`}${keyEvents.length ? `｜关键事件：${keyEvents.join('、')}` : ''}`);
+    if (endStates.length) lines.push(`- 本段结束状态（写完后需在正文中体现）：${endStates.join('；')}`);
+    lines.push(
+      '- 每回合请在《剧情规划》末尾输出 <剧情推进> 申报：本回合正文是否完成当前分段、下一段去向。',
+      '  格式：<剧情推进>完成: 是/否；进入分段: <分段名或组号，未进入填"无">；依据: <简述> </剧情推进>',
+      '  「完成」必须基于本回合正文实际写到的内容；系统只按正文证据校验，申报本身不能推进剧情。',
+    );
   }
   return lines.length > 1 ? lines.join('\n') : '';
 }
@@ -629,15 +679,17 @@ export function buildPathAwakeningSystemPrompt(
   const effectiveModules = shouldFilterLegacyStModules
     ? settings.promptModules.filter((m) => !isSTImportedModule(m))
     : settings.promptModules;
-  const activeModules = syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式);
-  const personLabel =
-    settings.narrativePerson === 'second' ? '第二人称"你"'
-    : settings.narrativePerson === 'first' ? '第一人称"我"'
-    : '第三人称"他/她"';
+  const playerNameForLabel = getPromptPlayerName(traveler);
+  const runtimePolicy = resolveNarrativePolicy(settings, playerNameForLabel);
+  const activeModules = applyRuntimeNarrativePolicy(
+    syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式),
+    runtimePolicy,
+  );
+  const personLabel = buildPersonLabel(settings.narrativePerson, playerNameForLabel);
   const moduleCtx: PromptModuleInjectionCtx = {
     wordCountTarget: settings.wordCountTarget,
     personLabel,
-    playerName: getPromptPlayerName(traveler),
+    playerName: playerNameForLabel,
     currentScope,
     openingSource: worldState.开局档案?.来源,
     triggerType,
@@ -681,7 +733,7 @@ export function buildPathAwakeningSystemPrompt(
   // 区3：参数（人称模块 scope 不含 pathAwakening，用设置生成一行；字数）
   {
     const zone3: string[] = [];
-    zone3.push('# 写作人称\n\n- 视角：' + personLabel);
+    zone3.push(buildPersonSection(settings.narrativePerson, playerNameForLabel));
     const wordCountSection = buildWordCountSection(settings);
     if (wordCountSection) zone3.push(wordCountSection);
     pushSection('zone3-params', '参数区', zone3.join('\n\n---\n\n'));
@@ -769,16 +821,17 @@ export function buildOpeningSystemPrompt(
     ? settings.promptModules.filter((m) => !isSTImportedModule(m))
     : settings.promptModules;
   // 剧情方向四选一：storymode 模块 enabled 派生自当前剧情模式。
-  const activeModules = syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式);
-
-  const personLabel =
-    settings.narrativePerson === 'second' ? '第二人称"你"'
-    : settings.narrativePerson === 'first' ? '第一人称"我"'
-    : '第三人称"他/她"';
+  const playerNameForLabel = getPromptPlayerName(traveler);
+  const runtimePolicy = resolveNarrativePolicy(settings, playerNameForLabel);
+  const activeModules = applyRuntimeNarrativePolicy(
+    syncStoryModeModuleEnabled(effectiveModules, worldState.剧情模式),
+    runtimePolicy,
+  );
+  const personLabel = buildPersonLabel(settings.narrativePerson, playerNameForLabel);
   const moduleCtx: PromptModuleInjectionCtx = {
     wordCountTarget: settings.wordCountTarget,
     personLabel,
-    playerName: getPromptPlayerName(traveler),
+    playerName: playerNameForLabel,
     currentScope: 'opening' as 提示词模块作用域,
     openingSource: worldState.开局档案?.来源,
     triggerType,
@@ -1015,6 +1068,30 @@ export interface BuiltSystemPrompt {
 
 function getPromptPlayerName(traveler: 角色数据结构): string {
   return traveler.姓名?.trim() || '无名开拓者';
+}
+
+/**
+ * 写作人称标签：第三人称必须带上主角名并明确禁止"你"，
+ * 避免模型在第三人称下仍然按第二人称习惯输出。
+ */
+function buildPersonLabel(narrativePerson: 'first' | 'second' | 'third', playerName: string): string {
+  if (narrativePerson === 'second') return '第二人称"你"';
+  if (narrativePerson === 'first') return '第一人称"我"';
+  return `第三人称"他/她"（正文以主角名「${playerName}」或"他/她"指代主角，禁止用"你"称呼主角）`;
+}
+
+/**
+ * 完整写作人称段（对齐既定方案 perspective 模块）：明确主代词 + 禁止切换 + 保持稳定。
+ * 第三人称额外声明：模块示例/规则中的"你"一律按第三人称转换。
+ */
+function buildPersonSection(narrativePerson: 'first' | 'second' | 'third', playerName: string): string {
+  if (narrativePerson === 'first') {
+    return '# 写作人称\n\n- 视角：第一人称"我"。\n- 玩家统一用"我"指代，必要时可补充「' + playerName + '」；玩家代词保持"我"，不切换成"你/他/她"。\n- 整条回复保持稳定第一人称；正文示例、规则或历史中的"你"一律按第一人称转换。';
+  }
+  if (narrativePerson === 'second') {
+    return '# 写作人称\n\n- 视角：第二人称"你"。\n- 玩家统一用"你"指代；玩家代词保持"你"，不切换成"我/他/她"。\n- 整条回复保持稳定第二人称。';
+  }
+  return '# 写作人称\n\n- 视角：第三人称。\n- 玩家统一用「' + playerName + '」或"他/她"指代主角；玩家代词保持第三人称，**禁止切换成"你"或"我"**。\n- 整条回复保持稳定第三人称；正文示例、规则或历史中的"你"一律按第三人称转换（如"你没有动"应写作"「' + playerName + '」没有动"）。';
 }
 
 /** 思维链输出语言标签映射（cotLanguage 设置 → AI 可读的语言名） */
@@ -1575,7 +1652,7 @@ function buildNpcContinuitySection(
 
 // 已知伙伴注入：按相关度过滤（同行 > 近回合见过 > 有记忆/好感 > 高好感），避免刚见过的人过早掉出上下文。
 // 路人（tier='extra'）只注入近期或已有可承接关系/记忆的少量对象，避免上下文爆炸。
-function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string {
+function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0, settings?: 游戏设置): string {
   const records = 筛选活跃NPC(npcRecords);
   if (records.length === 0) return '';
   const companions = records.filter((n) => n.阶位 === 'companion');
@@ -1622,12 +1699,13 @@ function buildCompanionsSection(npcRecords?: NPC记录[], turnCount = 0): string
     if (n.原著角色 && (n.说话方式 || n.性格)) {
       desc.push('表现要求：本回合若该角色在场或被自然牵引出场，必须体现说话方式和主体人格；不要连续数回合只沉默旁观。');
     }
-    // 阶段1方案E：修复重复注入 - 同行记忆只取非手机来源（手机来源单独取，避免重复）
+    // 对标参考项目：重要角色（原著/同行）保留最近 N 条关键记忆（重要角色关键记忆条数N，默认 20），普通 NPC 最近 5 条。
+    const 重要角色记忆条数 = Math.max(1, Math.trunc(settings?.记忆系统?.重要角色关键记忆条数N ?? 20) || 20);
     const nonPhoneMemories = (n.同行记忆 ?? [])
       .filter((item): item is NPC同行记忆条目 => typeof item !== 'string' && item?.来源 !== '手机')
       .map((item) => 清理NPC同行记忆摘要(item?.摘要 ?? ''))
       .filter((text): text is string => Boolean(text))
-      .slice(-4);
+      .slice(-(n.阶位 === 'companion' || n.原著角色 ? 重要角色记忆条数 : 5));
     if (nonPhoneMemories.length) desc.push(`同行记忆：${nonPhoneMemories.join('；')}`);
     const phoneMemories = getRecentPhoneMemoryTexts(n).slice(-2);
     if (phoneMemories.length) desc.push(`最近手机私聊：${phoneMemories.join('；')}（正文若该角色入场，必须承接私聊热度与未尽话题）`);

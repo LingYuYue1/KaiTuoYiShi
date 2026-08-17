@@ -211,7 +211,9 @@ export function enrichNpcArchives(
 ): { records: NPC记录[]; changed: boolean } {
   let changed = false;
   const next = records.map((npc) => {
-    const canonical = matchCanonical(npc.姓名) ?? (npc.别名 ? matchCanonical(npc.别名) : null);
+    const canonical = npc.NPC来源 === 'custom'
+      ? null
+      : matchCanonical(npc.姓名) ?? (npc.别名 ? matchCanonical(npc.别名) : null);
     // 静态档案补全只服务于原著角色；但 NSFW 基线仍覆盖玩家明确标记的自定义伙伴。
     // 两条职责分开，避免路人被补档升格，也避免自定义伙伴失去后续事实写入的空壳。
     const baseline: CanonicalArchiveBaseline | undefined = canonical

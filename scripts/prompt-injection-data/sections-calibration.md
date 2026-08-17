@@ -216,9 +216,10 @@ ${segment.原文内容}
 最近${MAIN_RECALL_ASSISTANT_BODY_WINDOW=5}条正文承接：${每条：小结 ≤140 / 正文 ≤220 / 事件 ≤80×3 / 剧情规划 ≤120，'；' 连接，换行分隔}
 ````
 
-**智库关键词召回 query**（来源：`historyWindow.ts:159` `buildZhikuKeywordRecallQuery`，比忆庭窄得多）：
+**智库关键词召回 query**（来源：`historyWindow.ts` `buildZhikuKeywordRecallQuery`，只保留短窗口；即时剧情回顾只给 AI 补充链使用）：
 
 ````text
 玩家当前输入：${≤160 字}
-最近${ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW=3}条正文承接：${每条 ≤260 字，换行分隔}
+最近${ZHIKU_KEYWORD_RECALL_USER_INPUT_WINDOW=5}条玩家输入：${每条 ≤200 字，换行分隔}
+最近${ZHIKU_KEYWORD_RECALL_ASSISTANT_BODY_WINDOW=5}条正文承接：${每条 ≤320 字，换行分隔}
 ````

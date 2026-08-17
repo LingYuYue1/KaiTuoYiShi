@@ -10,7 +10,6 @@ import {
   type 智库检索结果,
 } from '@/services/zhikuRetrieval';
 import type { ZhikuCharacterParticipation } from '@/hooks/useGame/npcPresence';
-import { buildZhikuRunTrace, type ZhikuRunTrace } from '@/services/zhikuRunTrace';
 
 export type ZhikuRequestScope =
   | 'opening'
@@ -34,7 +33,6 @@ export interface ZhikuTurnCompilation extends 智库检索结果 {
   mainStoryInjection: string;
   characterEnforcementBrief: string;
   phonePersonaView: string;
-  runTrace: ZhikuRunTrace;
 }
 
 interface CompileZhikuTurnInput {
@@ -44,7 +42,6 @@ interface CompileZhikuTurnInput {
   scope: ZhikuRequestScope;
   participation: ZhikuCharacterParticipation;
   sceneContext?: 智库场景上下文;
-  aiSupplementPlanned?: boolean;
 }
 
 const EMPTY_PARTICIPATION: ZhikuCharacterParticipation = {
@@ -81,7 +78,7 @@ export async function compileZhikuTurnWithModel(
     buildCompilerSceneContext(input),
     input.promptModules,
   );
-  return finalizeCompilation({ ...input, aiSupplementPlanned: input.settings.enableAiSupplement === true }, result);
+  return finalizeCompilation(input, result);
 }
 
 export function compileZhikuPhoneView(
@@ -122,36 +119,6 @@ export function compileZhikuPhoneView(
     mainStoryInjection: '',
     characterEnforcementBrief: '',
     phonePersonaView,
-    runTrace: buildZhikuRunTrace({
-      compileId: createCompileId(system, 'phone', participation),
-      catalogVersion: system?.目录版本 ?? 'catalog:unknown',
-      catalogRevision: system?.目录修订 ?? 0,
-      scope: 'phone',
-      query: participantNames.join(' '),
-      generatedAt: Date.now(),
-      participation,
-      participationEvidence: buildParticipationEvidence(participation),
-      candidateDecisions: entries.map((entry, index) => ({
-        entryId: entry.id,
-        title: entry.标题,
-        category: entry.分类,
-        channels: ['present-fallback' as const],
-        evidence: ['手机联系人匹配'],
-        gate: { passed: true },
-        decision: 'selected' as const,
-        decisionReason: '进入手机人物视图。',
-        finalRole: 'character' as const,
-        stableOrder: index,
-        exclusionGroupId: entry.互斥组ID,
-      })),
-      characterIds: entries.map((entry) => entry.id),
-      strongIds: [],
-      weakIds: [],
-      mainStoryInjection: '',
-      characterEnforcementBrief: '',
-      phonePersonaView,
-      aiSupplement: { requested: false, executed: false, status: 'disabled' },
-    }),
   };
 }
 
@@ -167,12 +134,7 @@ function finalizeCompilation(input: CompileZhikuTurnInput, result: 智库检索�
   const catalogRevision = input.system?.目录修订 ?? 0;
   const mainStoryInjection = result.injection;
   const characterEnforcementBrief = buildCharacterEnforcementBrief(presentEntries);
-  const aiRequested = input.aiSupplementPlanned === true;
-  const rawAiStatus = aiRequested
-    ? result.aiSupplementStatus ?? (result.usedModel === true ? 'completed' : 'preview-not-executed')
-    : 'disabled';
-  const aiStatus = rawAiStatus === 'not-requested' ? 'preview-not-executed' : rawAiStatus;
-  const core = {
+  return {
     ...result,
     compileId,
     catalogVersion,
@@ -184,41 +146,13 @@ function finalizeCompilation(input: CompileZhikuTurnInput, result: 智库检索�
     characterEnforcementBrief,
     phonePersonaView: '',
   };
-  return {
-    ...core,
-    runTrace: buildZhikuRunTrace({
-      compileId,
-      catalogVersion,
-      catalogRevision,
-      scope: input.scope,
-      query: input.query,
-      generatedAt: Date.now(),
-      participation: input.participation,
-      participationEvidence: core.participationEvidence,
-      candidateDecisions: result.diagnostics?.candidateDecisions,
-      characterIds: core.characterEntries?.map((entry) => entry.id) ?? [],
-      strongIds: core.strongEntries?.map((entry) => entry.id) ?? [],
-      weakIds: core.weakEntries?.map((entry) => entry.id) ?? [],
-      mainStoryInjection,
-      characterEnforcementBrief,
-      phonePersonaView: '',
-      aiSupplement: {
-        requested: aiRequested,
-        executed: result.usedModel === true,
-        status: aiStatus,
-        provider: result.aiSupplementProvider,
-        model: result.aiSupplementModel,
-        failureReason: result.aiSupplementFailureReason,
-      },
-    }),
-  };
 }
 
 function emptyCompilation(input: Pick<CompileZhikuTurnInput, 'system' | 'query' | 'scope' | 'participation'>): ZhikuTurnCompilation {
   const compileId = createCompileId(input.system, input.scope, { query: input.query, participation: input.participation });
   const catalogVersion = input.system?.目录版本 ?? 'catalog:unknown';
   const catalogRevision = input.system?.目录修订 ?? 0;
-  const core = {
+  return {
     compileId,
     catalogVersion,
     catalogRevision,
@@ -233,27 +167,6 @@ function emptyCompilation(input: Pick<CompileZhikuTurnInput, 'system' | 'query' 
     mainStoryInjection: '',
     characterEnforcementBrief: '',
     phonePersonaView: '',
-  };
-  return {
-    ...core,
-    runTrace: buildZhikuRunTrace({
-      compileId,
-      catalogVersion,
-      catalogRevision,
-      scope: input.scope,
-      query: input.query,
-      generatedAt: Date.now(),
-      participation: input.participation,
-      participationEvidence: core.participationEvidence,
-      candidateDecisions: [],
-      characterIds: [],
-      strongIds: [],
-      weakIds: [],
-      mainStoryInjection: '',
-      characterEnforcementBrief: '',
-      phonePersonaView: '',
-      aiSupplement: { requested: false, executed: false, status: 'disabled' },
-    }),
   };
 }
 
@@ -300,6 +213,9 @@ function buildCompilerSceneContext(input: CompileZhikuTurnInput): 智库场景�
     ...(input.sceneContext ?? {}),
     presentNpcNamesForFallback: normalizeNames(input.participation.present),
     anticipatedNpcNames: normalizeNames(input.participation.anticipated),
+    // 兜底召回只认当前在场角色。mentioned/background 仅作为 AI 补充的上下文信号，
+    // 不能在没有关键词命中时直接把离场角色的人物档案塞进本回合。
+    recallFallbackNames: normalizeNames(input.participation.present),
   };
 }
 

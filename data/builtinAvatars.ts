@@ -51,6 +51,8 @@ const BUILTIN_AVATAR_CANONICAL_ALIASES: Record<string, string> = {
   '瓦尔特杨': '瓦尔特',
   '瓦尔特·扬': '瓦尔特',
   '瓦尔特扬': '瓦尔特',
+  '杨叔': '瓦尔特',
+  '老杨': '瓦尔特',
   'Welt': '瓦尔特',
   'Pom-Pom': '帕姆',
   'Pom Pom': '帕姆',

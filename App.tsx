@@ -17,7 +17,6 @@ import { TravelerProfileModal } from '@/components/features/Character/TravelerPr
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/dbService';
 import { handleLoadById } from '@/hooks/useGame/saveLoadWorkflow';
-import { buildMemorySummaryFlowRequest } from '@/hooks/useGame/memoryUtils';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
@@ -34,7 +33,6 @@ const WorldbookManagerModal = lazyWithRetry(() => import('@/components/features/
 const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
 const GitHubCloudSaveModal = lazyWithRetry(() => import('@/components/features/CloudSave/GitHubCloudSaveModal').then((module) => ({ default: module.GitHubCloudSaveModal })));
 const ReleaseAnnouncementsModal = lazyWithRetry(() => import('@/components/features/Release/ReleaseAnnouncementsModal').then((module) => ({ default: module.ReleaseAnnouncementsModal })));
-const MemorySummaryFlowModal = lazyWithRetry(() => import('@/components/features/Memory/MemorySummaryFlowModal').then((module) => ({ default: module.MemorySummaryFlowModal })));
 const PlotPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PlotPanel').then((module) => ({ default: module.PlotPanel })));
 const YitingPanel = lazyWithRetry(() => import('@/components/features/GameSystems/YitingPanel').then((module) => ({ default: module.YitingPanel })));
 const MemoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemoryPanel').then((module) => ({ default: module.MemoryPanel })));
@@ -55,6 +53,21 @@ function LazySurfaceFallback({ label = '系统载入中' }: { label?: string }) 
     <div className="flex min-h-[180px] items-center justify-center p-6 text-sm" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
       {label}
     </div>
+  );
+}
+
+function MemoryCompressRetryModal({ failedCount, onRetry, onClose }: { failedCount: number; onRetry: () => void; onClose: () => void }) {
+  return (
+    <Modal onClose={onClose} title="记忆压缩失败" className="max-w-md">
+      <div className="px-4 py-3 text-sm" style={{ color: "rgba(var(--tj-text-primary), 0.9)" }}>
+        <p className="mb-3">有 {failedCount} 条记忆总结未能通过 AI 生成摘要，原始材料已保留在记忆系统的「失败草稿」中。</p>
+        <p className="mb-3 text-xs" style={{ color: "rgba(var(--tj-text-secondary), 0.75)" }}>可立即重试，或稍后到记忆面板的失败草稿页手动重试。</p>
+      </div>
+      <div className="flex justify-end gap-2 px-4 pb-3">
+        <button onClick={onClose} className="rounded-sm px-4 py-2 text-sm" style={{ color: "rgba(var(--tj-text-secondary), 0.85)", background: "rgba(var(--tj-surface), 0.6)" }}>稍后</button>
+        <button onClick={() => { onRetry(); onClose(); }} className="rounded-sm px-4 py-2 text-sm" style={{ color: "#fff", background: "rgb(var(--tj-accent-primary))" }}>立即重试</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -508,16 +521,11 @@ export default function App() {
   const handleOpenProfile = useCallback(() => setShowCharacter(true), []);
   const handleOpenPhone = useCallback(() => setShowPhone(true), []);
   const handleOpenMemoryRebuild = useCallback(() => setShowMemoryRebuild(true), []);
-  // 阶段1·主链压缩手动入口：玩家在记忆面板点击"立即压缩记忆"时触发三阶段弹窗。
-  // 手动入口同样绑定来源 turn/fingerprint（统一 buildMemorySummaryFlowRequest），
-  // 确认阶段据此校验，防止旧结果覆盖处理期间新增的记忆。
+  // 主链压缩手动入口：记忆面板点击"立即压缩记忆"直接静默压缩（不弹确认窗），
+  // 失败草稿保留并弹重试提示。
   const handleTriggerManualCompress = useCallback(() => {
-    const memorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
-    const flow = buildMemorySummaryFlowRequest(state.记忆, memorySettings, state.turnCount);
-    const info = flow.pendingInfo;
-    if (info && info.即时待压缩 === 0 && info.短期待压缩 === 0 && info.中期待压缩 === 0) return;
-    state.setMemorySummaryFlow(flow);
-  }, [state.记忆, state.gameSettings, state.setMemorySummaryFlow]);
+    void actions.handleSilentMemoryCompress();
+  }, [actions]);
   const handleOpenSaveLoad = useCallback(() => setShowSaveLoad(true), []);
   const handleOpenSettings = useCallback(() => setShowSettings(true), []);
   const handleCloseSystemDrawer = useCallback(() => setActiveSystem(null), []);
@@ -771,6 +779,7 @@ export default function App() {
         album={state.相册}
         showInnerVoice={state.gameSettings.enableInnerVoice}
         visualTextSettings={state.gameSettings.visualTextSettings}
+        devMode={state.gameSettings.devMode}
         onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
         narrativeImageManualEnabled={narrativeImageManualEnabled}
         onEditBody={handleEditBody}
@@ -786,6 +795,8 @@ export default function App() {
         onAbort={actions.handleAbort}
         loading={state.loading}
         disabled={state.pendingVariable}
+        inputText={state.inputText}
+        onInputTextChange={state.setInputText}
         canRestartOpening={state.turnCount <= 5}
         canReroll={canReroll}
         onRestartOpening={actions.handleRestartOpening}
@@ -1148,19 +1159,12 @@ export default function App() {
         </Suspense>
       )}
 
-      {state.memorySummaryFlow.open && (
-        <Suspense fallback={<LazySurfaceFallback label="记忆总结载入中" />}>
-          <MemorySummaryFlowModal
-            flow={state.memorySummaryFlow}
-            memory={state.记忆}
-            turnCount={state.turnCount}
-            apiSettings={state.apiSettings}
-            gameSettings={state.gameSettings}
-            onStageChange={(next) => state.setMemorySummaryFlow(next)}
-            onConfirm={(result) => { void actions.handleConfirmMemorySummary(result); }}
-            onClose={() => state.setMemorySummaryFlow({ open: false, stage: 'remind' })}
-          />
-        </Suspense>
+      {state.记忆压缩失败 && (
+        <MemoryCompressRetryModal
+          failedCount={state.记忆压缩失败.条数}
+          onRetry={() => { void actions.handleSilentMemoryCompress(); }}
+          onClose={() => state.set记忆压缩失败(null)}
+        />
       )}
 
       {showMemoryRebuild && (

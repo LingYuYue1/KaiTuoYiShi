@@ -179,7 +179,11 @@ try {
       participation: { present: ['丹恒', '三月七'], anticipated: [], mentioned: [], background: [] },
       sceneContext: { presentNpcNamesForFallback: ['丹恒', '三月七'] },
     });
-    assert(special.entries.length === 0 && special.mainStoryInjection === '', `${scope} must not inject main-story Zhiku content`);
+    if (scope === 'opening') {
+      assert(special.entries.length > 0 && special.mainStoryInjection !== '', 'opening must retain necessary Zhiku context');
+    } else {
+      assert(special.entries.length === 0 && special.mainStoryInjection === '', `${scope} must not inject main-story Zhiku content`);
+    }
   }
 
   const phone = runtime.compileZhikuPhoneView(system, ['大黑塔', '丹恒']);

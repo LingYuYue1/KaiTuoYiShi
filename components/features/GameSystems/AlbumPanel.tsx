@@ -145,7 +145,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, p
 
   const assetMap = useMemo(() => new Map(album.assets.map((asset) => [asset.id, asset])), [album.assets]);
   const activeEntry = album.entries.find((entry) => entry.id === activeEntryId) ?? album.entries[0] ?? null;
-  const companions = npcs.filter((npc) => npc.阶位 === 'companion');
+  const companions = npcs.filter((npc) => !npc.归档 && npc.阶位 === 'companion');
   const resourceEntries = useMemo(
     () => buildAlbumResourceEntries(album, assetMap, nsfwVisible && showNsfw),
     [album, assetMap, nsfwVisible, showNsfw],

@@ -1,5 +1,4 @@
 import type { NPC账本选择结果 } from './npc';
-import type { ZhikuRunTrace } from '@/services/zhikuRunTrace';
 
 export type 消息角色 = 'user' | 'assistant' | 'system';
 
@@ -58,15 +57,6 @@ export interface 聊天消息 {
     systemPrompt: string;
     messages: Array<{ role: 消息角色; content: string }>;
     requestHash?: string;
-    zhikuRunTrace?: ZhikuRunTrace;
-    zhikuCompileId?: string;
-    zhikuCatalogVersion?: string;
-    zhikuCatalogRevision?: number;
-    zhikuActualProvider?: string;
-    zhikuActualModel?: string;
-    zhikuFinishReason?: string;
-    zhikuPredictionRequestHash?: string;
-    zhikuRequestDifferenceReasons?: string[];
     requestCapabilities?: {
       transport: string;
       endpoint: string;
@@ -90,6 +80,10 @@ export interface 聊天消息 {
     stV2Attempted?: boolean;
     stV2Used?: boolean;
     stV2FallbackReason?: string;
+    playerSpeechCorrections?: Array<{
+      code: 'inline_tag_split' | 'sound_effect_reassigned' | 'unsupported_player_line_reassigned';
+      lineIndex: number;
+    }>;
     rerollSimilarity?: number;
     rerollSimilarityRetried?: boolean;
     cachePrefixDiagnostics?: 缓存前缀诊断;
@@ -198,6 +192,12 @@ export interface 解析后回复 {
   variableDraft: string;
   /** 主剧情模型输出的后续承接备忘。用于下一回合接续伏笔、强制承接、延后/受阻项和镜头余波。 */
   storyPlan: string;
+  /** 剧情推进申报（《剧情规划》内 <剧情推进> 子块）：AI 主动声明本分段完成情况与目标分段。 */
+  storyAdvance?: {
+    completed: boolean;
+    targetSegment?: string;
+    basis?: string;
+  };
   /** AI 在主流程中发出的「命途狭间」邀请。内容为命途 ID(hunt/destruction/...)。
    *  非空时 sendWorkflow 会写入 世界状态.待触发狭间,并在聊天区渲染一张邀请卡片。 */
   awakenInvite: string;

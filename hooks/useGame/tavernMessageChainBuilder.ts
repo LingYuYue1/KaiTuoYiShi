@@ -9,6 +9,7 @@ import type { 聊天消息 } from '@/models/chat';
 import type { MacroContext } from '@/utils/macroEngine';
 import { createMacroContext, processMacros } from '@/utils/macroEngine';
 import { applyTavernFormatGuard, matchesTavernCotPlaceholder, matchesTavernFormatPlaceholder } from './tavernFormatGuard';
+import { resolvePlayerSpeechMode } from '@/utils/narrativeRuntimePolicy';
 
 export const TAVERN_CHAR_COMPAT_PROMPT =
   '当前剧情中的主要互动对象、出场 NPC、同伴、敌对角色以及由 AI 负责扮演和调度的剧情角色集合。不要把 {{char}} 理解为固定角色卡；应根据最近剧情、玩家输入、聊天历史和世界状态判断当前焦点对象。';
@@ -231,8 +232,9 @@ function buildContextPieces(settings: any, scope: 'main' | 'opening' | 'pathAwak
   const actionOptionsPrompt = settings?.enableActionOptions === true
     ? (findModuleContent('builtin_action_options') || '')
     : '';
-  const noControlPrompt = settings?.enableNoControl === false ? '' : findModuleContent('builtin_no_control') || '';
-  const playerSpeechExpansionPrompt = settings?.enablePlayerSpeechExpansion === true ? findModuleContent('builtin_player_speech_expansion') || '' : '';
+  const speechMode = resolvePlayerSpeechMode(settings);
+  const noControlPrompt = speechMode === 'no-control' ? findModuleContent('builtin_no_control') || '' : '';
+  const playerSpeechExpansionPrompt = speechMode === 'expansion' ? findModuleContent('builtin_player_speech_expansion') || '' : '';
   const personaPrompt = findModuleContent('builtin_narrator_persona') || '';
   const devModePrompt = findModuleContent('builtin_dev_mode') || '';
   const writingStylePrompt = findModuleContent('builtin_writing_style') || '';

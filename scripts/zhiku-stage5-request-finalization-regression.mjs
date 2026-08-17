@@ -51,11 +51,11 @@ try {
   assert(claudeCaps.depthInjection === 'system', 'Claude compatible depth modules must fall back to system prompt');
   assert(runtime.resolveChatProviderCapabilities({ ...claudeCompatible, enableClaudeMode: false }).transport === 'openai_compatible', 'disabled Claude mode must keep compatible chat transport');
 
-  const moduleChatMessages = [
-    { role: 'user', content: 'POSITION_ZERO', _injectionPosition: 0, _injectionOrder: 1 },
+  const depthMessages = [
     { role: 'assistant', content: 'DEPTH_MODULE', _injectionPosition: 1, _injectionDepth: 1, _injectionOrder: 2 },
   ];
-  const sharedTail = [message('user', 'CHARACTER_ENFORCEMENT')];
+  const positionZeroCompatMessages = [message('user', 'POSITION_ZERO')];
+  const turnConstraints = [message('user', 'TURN_CONSTRAINT')];
   const matrix = [
     { name: 'openai-compatible', config: config('openai_compatible', 'gpt-test'), transport: 'openai_compatible', endpoint: 'chat', depth: 'messages' },
     { name: 'deepseek', config: config('deepseek', 'deepseek-chat', { baseUrl: 'https://api.deepseek.com/v1' }), transport: 'deepseek', endpoint: 'chat', depth: 'messages' },
@@ -80,19 +80,25 @@ try {
 
   for (const testCase of matrix) {
     const hashes = new Map();
-    for (const mode of ['native', 'tavern-v2']) {
+    for (const variant of ['native', 'tavern-v2']) {
       for (const streaming of [true, false]) {
-        const baseMessages = [
-          message('system', 'SYSTEM_EXTRA'),
-          ...(mode === 'tavern-v2' ? [message('system', 'TAVERN_STYLE')] : []),
-          message('user', 'PLAYER_INPUT'),
-        ];
+        const mode = variant === 'tavern-v2' ? 'tavern_v2' : 'standard';
+        const systemPrompt = [
+          'NATIVE_BASE',
+          'ZHIKU_INJECTION',
+          'SYSTEM_EXTRA',
+          ...(variant === 'tavern-v2' ? ['TAVERN_STYLE'] : []),
+        ].join('\n');
+        const taskSequence = [message('user', variant === 'tavern-v2' ? 'TAVERN_TASK' : 'PLAYER_INPUT')];
         const input = {
           config: testCase.config,
-          systemPrompt: 'NATIVE_BASE\nZHIKU_INJECTION',
-          baseMessages,
-          moduleChatMessages,
-          tailMessages: sharedTail,
+          systemPrompt,
+          preTurnHistory: [message('user', 'HISTORY_USER'), message('assistant', 'HISTORY_ASSISTANT')],
+          depthMessages,
+          positionZeroCompatMessages,
+          turnConstraints,
+          enforcementBlock: 'CHARACTER_ENFORCEMENT',
+          taskSequence,
           prefixMode: true,
           prefixContent: 'PREFILL',
           streaming,
@@ -102,7 +108,7 @@ try {
         };
         const finalized = runtime.finalizeMainRequest(input);
         const repeated = runtime.finalizeMainRequest(input);
-        const label = `${testCase.name}/${mode}/${streaming ? 'stream' : 'non-stream'}`;
+        const label = `${testCase.name}/${variant}/${streaming ? 'stream' : 'non-stream'}`;
 
         assert(finalized.capabilities.transport === testCase.transport, `${label} transport drifted`);
         assert(finalized.capabilities.endpoint === testCase.endpoint, `${label} endpoint drifted`);
@@ -111,17 +117,18 @@ try {
         assert(finalized.capabilities.mode === mode, `${label} mode diagnostic drifted`);
         assert(finalized.requestHash === repeated.requestHash, `${label} request hash must be deterministic`);
         assert(finalized.prefixMode && finalized.prefixContent === 'PREFILL', `${label} must retain assistant prefill`);
-        assert(finalized.messages.at(-1)?.content === 'CHARACTER_ENFORCEMENT', `${label} must keep the shared character enforcement block at the tail`);
         assert(finalized.messages.filter((item) => item.content === 'CHARACTER_ENFORCEMENT').length === 1, `${label} must not duplicate character enforcement`);
-        assert(finalized.systemPrompt.includes('POSITION_ZERO'), `${label} must retain position-zero modules in system`);
+        const depthIndex = finalized.messages.findIndex((item) => item.content === 'DEPTH_MODULE');
+        const positionZeroIndex = finalized.messages.findIndex((item) => item.content === 'POSITION_ZERO');
+        const constraintIndex = finalized.messages.findIndex((item) => item.content === 'TURN_CONSTRAINT');
+        const enforcementIndex = finalized.messages.findIndex((item) => item.content === 'CHARACTER_ENFORCEMENT');
+        const taskIndex = finalized.messages.findIndex((item) => item.content === taskSequence[0].content);
+        assert(depthIndex >= 0 && depthIndex < positionZeroIndex, `${label} depth module must stay inside the pre-turn history window`);
+        assert(positionZeroIndex < constraintIndex && constraintIndex < enforcementIndex && enforcementIndex < taskIndex, `${label} layered request order drifted`);
+        assert(finalized.messages[positionZeroIndex]?.role === 'user', `${label} must preserve the position-zero compatibility role`);
+        assert(!finalized.systemPrompt.includes('POSITION_ZERO'), `${label} must not flatten non-system position-zero modules into system`);
         assert(finalized.systemPrompt.includes('ZHIKU_INJECTION'), `${label} must retain the compiled Zhiku injection`);
-        if (testCase.depth === 'system') {
-          assert(finalized.systemPrompt.includes('DEPTH_MODULE'), `${label} must move depth modules into system`);
-          assert(!finalized.messages.some((item) => item.content === 'DEPTH_MODULE'), `${label} must not duplicate system-fallback depth modules in messages`);
-        } else {
-          assert(!finalized.systemPrompt.includes('DEPTH_MODULE'), `${label} must not move message-capable depth modules into system`);
-          assert(finalized.messages.at(-2)?.content === 'DEPTH_MODULE', `${label} depth=1 module must sit immediately before the shared tail block`);
-        }
+        assert(!finalized.systemPrompt.includes('DEPTH_MODULE'), `${label} must not duplicate history depth modules into system`);
 
         const preview = runtime.buildChatTransportPayloadPreview(testCase.config, {
           systemPrompt: finalized.systemPrompt,
@@ -133,8 +140,9 @@ try {
         const payloadText = JSON.stringify(preview.payload);
         assert(preview.capabilities.transport === testCase.transport && preview.capabilities.endpoint === testCase.endpoint, `${label} preview routing must match finalization`);
         assert(systemText.includes('NATIVE_BASE') && systemText.includes('ZHIKU_INJECTION'), `${label} payload lost the native system or Zhiku injection`);
-        assert(systemText.includes('POSITION_ZERO') && systemText.includes('SYSTEM_EXTRA'), `${label} payload lost merged system modules`);
-        assert(mode === 'tavern-v2' ? systemText.includes('TAVERN_STYLE') : !systemText.includes('TAVERN_STYLE'), `${label} Tavern style layering drifted`);
+        assert(systemText.includes('SYSTEM_EXTRA'), `${label} payload lost merged system modules`);
+        assert(variant === 'tavern-v2' ? systemText.includes('TAVERN_STYLE') : !systemText.includes('TAVERN_STYLE'), `${label} Tavern style layering drifted`);
+        assert(payloadText.includes('POSITION_ZERO') && payloadText.includes('TURN_CONSTRAINT'), `${label} payload lost compatibility or turn-constraint messages`);
         assert(payloadText.includes('DEPTH_MODULE'), `${label} payload lost the depth module`);
         assert(payloadText.includes('CHARACTER_ENFORCEMENT'), `${label} payload lost the shared character enforcement block`);
         assert(payloadText.includes('PREFILL'), `${label} payload lost assistant prefill`);
@@ -146,9 +154,9 @@ try {
           assert(prefixMessage?.role === 'assistant' && prefixMessage?.content === 'PREFILL' && prefixMessage?.prefix === true, `${label} must use DeepSeek beta prefix semantics`);
         }
 
-        hashes.set(`${mode}:${streaming}`, finalized.requestHash);
+        hashes.set(`${variant}:${streaming}`, finalized.requestHash);
       }
-      assert(hashes.get(`${mode}:true`) !== hashes.get(`${mode}:false`), `${testCase.name}/${mode} hash must include streaming mode`);
+      assert(hashes.get(`${variant}:true`) !== hashes.get(`${variant}:false`), `${testCase.name}/${variant} hash must include streaming mode`);
     }
     assert(hashes.get('native:true') !== hashes.get('tavern-v2:true'), `${testCase.name} native and Tavern payload hashes must differ`);
   }
@@ -158,7 +166,8 @@ try {
   const phone = fs.readFileSync(path.join(root, 'services/ai/phoneService.ts'), 'utf8');
   const npc = fs.readFileSync(path.join(root, 'utils/npcArchiveEnrichment.ts'), 'utf8');
   assert(sendWorkflow.includes('finalizeMainRequest({') && snapshot.includes('finalizeMainRequest({'), 'real send and context snapshot must share the finalizer');
-  assert(sendWorkflow.includes('requestHash: actualMainRequestHash') && snapshot.includes('上一回合真实请求回执'), 'real request receipt must be persisted and visible separately from prediction');
+  assert(sendWorkflow.includes('requestHash: actualMainRequestHash'), 'real request hash must remain available for internal request diagnostics');
+  assert(!snapshot.includes('上一回合真实请求回执') && !snapshot.includes('本回合发送前预测'), 'retired request prediction/receipt cards must not remain visible in the production context viewer');
   assert(!sendWorkflow.includes("mainStoryConfig.provider !== 'claude'"), 'application layer must not duplicate Claude transport routing');
   assert(phone.includes('compileZhikuPhoneView(ctx.zhiku, names).phonePersonaView') && !phone.includes('isPhoneAllowedZhikuEntry'), 'phone must consume the compiler view without a second selector');
   assert(!npc.includes('buildZhikuArchiveBaseline') && !npc.includes("from '@/models/zhiku'"), 'NPC enrichment must not copy Zhiku static text');

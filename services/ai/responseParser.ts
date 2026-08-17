@@ -297,6 +297,23 @@ export function parseResponse(rawText: string, options?: { repair?: boolean }): 
 
   result.body = stripStSurfaceNoiseFromBody(stripProtocolBlocksFromBody(result.body));
 
+  // 剧情推进申报：解析《剧情规划》内的 <剧情推进> 子块（AI 主动声明分段完成与去向）。
+  // 子块保留在 storyPlan 原文中（供注入展示），这里只提取结构化字段供推进裁决消费。
+  if (result.storyPlan?.trim()) {
+    const advanceMatch = result.storyPlan.match(/<剧情推进>([\s\S]*?)<\/剧情推进>/i);
+    if (advanceMatch) {
+      const block = advanceMatch[1];
+      const completed = /完成\s*[:：]\s*(是|true|yes|1)/i.test(block);
+      const targetMatch = block.match(/进入分段\s*[:：]\s*([^\n]+)/);
+      const basisMatch = block.match(/依据\s*[:：]\s*([^\n]+)/);
+      result.storyAdvance = {
+        completed,
+        targetSegment: targetMatch ? targetMatch[1].trim() : undefined,
+        basis: basisMatch ? basisMatch[1].trim() : undefined,
+      };
+    }
+  }
+
   return result;
 }
 

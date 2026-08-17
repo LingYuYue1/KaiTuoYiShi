@@ -208,6 +208,8 @@ function inferNpcTier(
 ): 'companion' | 'extra' {
   if (existing?.手动阶位覆盖) return existing.手动阶位覆盖;
   if (fact.tier) return fact.tier;
+  // 玩家明确创建的 custom NPC 保留自身阶位；不能因姓名恰好命中原著 alias 被自动晋升。
+  if (existing?.NPC来源 === 'custom') return existing.阶位;
   if (canonical || existing?.原著角色 || fact.following) return 'companion';
   if (fact.relation && !['stranger', 'acquaintance'].includes(fact.relation)) return 'companion';
   // 深层关系信号：长期印象或显式关系阶段可晋升（优先级在好感度+互动双门槛之前）。
@@ -519,17 +521,23 @@ function npcIdFromName(name: string): string {
 }
 
 function findNpc(records: NPC记录[], id: string, name: string): NPC记录 | undefined {
-  const targetCanonical = matchCanonical(name)?.name;
-  return records.find((npc) =>
+  const direct = records.find((npc) =>
     npc.id === id ||
     npc.姓名 === name ||
-    npc.别名 === name ||
-    (Boolean(targetCanonical) && matchCanonical(npc.姓名)?.name === targetCanonical),
+    npc.别名 === name,
+  );
+  if (direct) return direct;
+  const targetCanonical = matchCanonical(name)?.name;
+  return records.find((npc) =>
+    npc.NPC来源 !== 'custom' &&
+    Boolean(targetCanonical) && matchCanonical(npc.姓名)?.name === targetCanonical,
   );
 }
 
 function isCanonicalNpcPersonalityProtected(npc: NPC记录 | undefined, name: string): boolean {
-  return Boolean(npc?.原著角色 || matchCanonical(npc?.姓名 ?? name) || matchCanonical(name));
+  return Boolean(
+    npc?.NPC来源 !== 'custom' && (npc?.原著角色 || matchCanonical(npc?.姓名 ?? name) || matchCanonical(name)),
+  );
 }
 
 function 数组已有文本(value: unknown, text: string): boolean {
@@ -625,12 +633,20 @@ function 是非背包信息物品(input: {
   return !PHYSICAL_INFORMATION_CARRIER_RE.test(name);
 }
 
-function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }>, npcs: NPC记录[]): string | null {
+function resolvePhoneTargetId(
+  fact: Extract<变量事实, { type: 'phone_seed' }>,
+  npcs: NPC记录[],
+  allNpcs: NPC记录[] = npcs,
+): string | null {
   if (fact.targetId?.trim()) return fact.targetId.trim();
   if (fact.targetName?.trim()) {
     const id = npcIdFromName(fact.targetName.trim());
     const existing = findNpc(npcs, id, fact.targetName.trim());
-    return existing?.id ?? id;
+    if (existing) return existing.id;
+    const archived = allNpcs.find((npc) =>
+      npc.归档 && (npc.姓名 === fact.targetName?.trim() || npc.别名 === fact.targetName?.trim()),
+    );
+    return archived?.id ?? id;
   }
   const related = fact.relatedNpcIds?.find((id) => id.trim());
   if (related?.trim()) return related.trim();
@@ -648,6 +664,11 @@ function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }
       return npc.id;
     }
   }
+  const archivedMention = allNpcs.find((npc) => {
+    if (!npc.归档) return false;
+    return [npc.姓名, npc.别名].some((name) => Boolean(name && name.length >= 2 && haystack.includes(name)));
+  });
+  if (archivedMention) return archivedMention.id;
   // 经典角色兜底:即使 NPC 列表里没有,也允许生成种子(后续 PhoneModal 会自动创建联系人)
   const canonicalNames = ['三月七', '丹恒', '姬子', '瓦尔特', '帕姆', '黑塔', '艾丝妲', '阿兰', '星', '穹'];
   for (const name of canonicalNames) {
@@ -832,6 +853,7 @@ export function factsToVariableCommands(
               摘要: fact.memory,
               来源: '变量',
               关联NPCID: [id],
+              时间: [world?.当前日期, world?.当前时间].filter(Boolean).join(' ').trim() || undefined,
             }] : [],
             最近互动: fact.recentInteraction ?? fact.memory,
             对玩家长期印象: fact.longTermImpression,
@@ -843,6 +865,7 @@ export function factsToVariableCommands(
             禁止遗忘: fact.doNotForget,
             备注: fact.evidence ? [fact.evidence] : [],
             原著角色: Boolean(canonical),
+            NPC来源: canonical ? 'canonical' : 'unknown',
           },
         });
       } else {
@@ -909,6 +932,7 @@ export function factsToVariableCommands(
             摘要: fact.memory,
             来源: '变量',
             关联NPCID: [existing.id],
+            时间: [world?.当前日期, world?.当前时间].filter(Boolean).join(' ').trim() || undefined,
           },
         });
       }
@@ -1058,7 +1082,7 @@ export function factsToVariableCommands(
       }
       // 归档 NPC 不参与手机来信目标解析（恢复由 NPC 事实链触发）。
       const activeNpcs = 筛选活跃NPC(npcs);
-      const targetId = resolvePhoneTargetId(fact, activeNpcs);
+      const targetId = resolvePhoneTargetId(fact, activeNpcs, npcs);
       if (!targetId) {
         warnings.push(`phone_seed 已忽略：缺少 targetId/targetName/relatedNpcIds，无法确定来信目标（${fact.title}）。`);
         continue;
