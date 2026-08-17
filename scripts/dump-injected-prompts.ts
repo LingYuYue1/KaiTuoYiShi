@@ -21,22 +21,24 @@ push(`> 生成对象：内置提示词模块 ${modules.length} 个 + 内置世�
 push('');
 
 const scopeOrder = ['main', 'opening', 'pathAwakening', 'battle', 'all', 'calibration'];
-const scopeKey = (m: { scope?: string[] }) => {
-  const s = m.scope && m.scope.length ? m.scope : ['all'];
-  for (const k of scopeOrder) if (s.includes(k)) return k;
-  return s[0];
-};
 const byScope = new Map<string, typeof modules>();
 for (const m of modules) {
-  const k = scopeKey(m);
-  const group = byScope.get(k);
-  if (group) group.push(m);
-  else byScope.set(k, [m]);
+  const scopes = m.scope.length ? m.scope : ['all'];
+  for (const scope of scopes) {
+    const group = byScope.get(scope);
+    if (group) group.push(m);
+    else byScope.set(scope, [m]);
+  }
 }
+
+const orderedScopes = [
+  ...scopeOrder.filter((k) => byScope.has(k)),
+  ...[...byScope.keys()].filter((k) => !scopeOrder.includes(k)),
+];
 
 push('## 第一部分：内置提示词模块');
 push('');
-for (const k of scopeOrder) {
+for (const k of orderedScopes) {
   const group = byScope.get(k);
   if (!group) continue;
   group.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -46,7 +48,7 @@ for (const k of scopeOrder) {
     const meta = [
       `id: \`${m.id}\``,
       `order: ${m.order}`,
-      `scope: [${(m.scope ?? []).join(', ')}]`,
+      `scope: [${m.scope.join(', ')}]`,
       `默认: ${m.enabled ? '开' : '**关**'}`,
       `role: ${m.role ?? 'system'}`,
       m.injectionPosition !== undefined ? `position: ${m.injectionPosition}` : '',

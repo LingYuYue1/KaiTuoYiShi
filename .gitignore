@@ -27,6 +27,8 @@ Thumbs.db
 .claude-plugin/
 .reasonix/
 .trae/
+reasonix.toml
+kaituo-star-rail-ui/
 
 # Local assistant memory / private planning notes
 .claude/
@@ -56,9 +58,9 @@ opencode.json
 WATCHDOG.yml
 
 # Working drafts / notes
-托蕾档案完善草案.md
+*草案.md
 星际和平公司角色档案完善方案.md
-砂金档案完善草案.md
+记忆系统优化*.md
 本次主题重构摘要.txt
 
 # Historical agent prompts and reports stay outside the active workspace.
@@ -82,3 +84,10 @@ statuses/
 
 # Local skills lockfile
 skills-lock.json
+
+# 临时调试脚本 / 本地生成物
+启动网页本地开发.bat
+data/builtinPresets/_gen_*.js
+scripts/_*.mjs
+scripts/build-shuangrenchenghang-preset.mjs
+scripts/sync-codex-skills.mjs
