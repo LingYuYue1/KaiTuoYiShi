@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const app = fs.readFileSync('App.tsx', 'utf8');
 const landing = fs.readFileSync('components/layout/LandingPage.tsx', 'utf8');
 const modal = fs.readFileSync('components/features/Release/ReleaseAnnouncementsModal.tsx', 'utf8');
@@ -18,8 +19,14 @@ assert(
   'Update announcement button must sit next to the GitHub cloud save entry.',
 );
 assert(
-  landing.includes('开拓轶事 v1.2.2'),
+  landing.includes('开拓轶事 v{pkg.version}'),
   'Landing page must show the current version.',
+);
+const majorMinor = pkg.version.split('.').slice(0, 2).join('.');
+assert(
+  data.includes(`version: 'v${majorMinor}'`) &&
+    data.indexOf(`version: 'v${majorMinor}'`) < data.indexOf("version: 'v2.0'"),
+  'Announcement data must open with a notice for the current version.',
 );
 assert(
   landing.includes('作者：牢凌') &&
