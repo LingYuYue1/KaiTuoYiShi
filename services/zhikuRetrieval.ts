@@ -201,6 +201,14 @@ const ZHIKU_SCENE_HINTS: Record<string, string[]> = {
   penacony_invitation: ['匹诺康尼', '白日梦酒店', '盛会之星', '家族', '宾客', '入梦池', '星期日', '知更鸟'],
   penacony_dream_edge: ['匹诺康尼', '黄金的时刻', '梦境边界', '筑梦边缘', '钟表小子', '猎犬家系', '流萤', '砂金'],
   penacony_reverie_crisis: ['匹诺康尼', '美梦崩塌', '谐乐大典', '匹诺康尼大剧院', '家族真相', '星期日', '知更鸟', '黄泉'],
+  amphoreus_falling_wood: ['翁法罗斯', '命运重渊', '黑潮', '黄金裔', '白厄', '缇宝', '逐火之旅', '泰坦'],
+  amphoreus_gate_throne: ['翁法罗斯', '奥赫玛', '金线', '阿格莱雅', '公民大会', '创世涡心', '盗火行者', '黑潮'],
+  amphoreus_sleeping_flowers: ['翁法罗斯', '斯缇科西亚', '冥界', '遐蝶', '塞纳托斯', '死亡名册', '花海'],
+  amphoreus_sun_hurt: ['翁法罗斯', '永劫回归', '循环', '白厄', '昔涟', '来古士', '哀丽秘榭'],
+  erxiang_paradise_welcome: ['二相乐园', '幻月', '幻月游戏', '愿力', '幻造种', '花火', '真珠', '突发事件应对指南'],
+  erxiang_paradise_pigeon_river: ['二相乐园', '鸽川区', '告死魔', '共愿帮', '不死途', '虚照', '世界尽头酒馆'],
+  erxiang_paradise_academy: ['二相乐园', '绘世学院', '火花', '火花大会', '模因病毒', '认知篡改', '直播'],
+  erxiang_paradise_ink_residue: ['二相乐园', '残卷', '墨色', '绯英', '建木', '渡画泉隐', '贪饕', '归寂'],
 };
 
 function isMainStoryInjectableZhikuEntry(entry: 智库条目): boolean {
@@ -270,6 +278,18 @@ function buildZhikuSceneHints(sceneContext?: 智库场景上下文): string[] {
   if (/仙舟|罗浮/.test(raw)) addHints(ZHIKU_SCENE_HINTS.xianzhou_luofu_entry);
   if (/匹诺康尼|白日梦酒店|黄金的时刻|梦境|家族|谐乐大典/.test(raw)) addHints(ZHIKU_SCENE_HINTS.penacony_entry);
   if (/列车|星穹/.test(raw)) addHints(ZHIKU_SCENE_HINTS.astral_express_temp_passenger);
+  if (/翁法罗斯|奥赫玛|命运重渊|黄金裔|逐火|泰坦|黑潮/.test(raw)) {
+    addHints(ZHIKU_SCENE_HINTS.amphoreus_falling_wood);
+    addHints(ZHIKU_SCENE_HINTS.amphoreus_gate_throne);
+    addHints(ZHIKU_SCENE_HINTS.amphoreus_sleeping_flowers);
+    addHints(ZHIKU_SCENE_HINTS.amphoreus_sun_hurt);
+  }
+  if (/二相乐园|幻月|幻造|愿力|鸽川|绘世学院|残卷|绯英|归寂/.test(raw)) {
+    addHints(ZHIKU_SCENE_HINTS.erxiang_paradise_welcome);
+    addHints(ZHIKU_SCENE_HINTS.erxiang_paradise_pigeon_river);
+    addHints(ZHIKU_SCENE_HINTS.erxiang_paradise_academy);
+    addHints(ZHIKU_SCENE_HINTS.erxiang_paradise_ink_residue);
+  }
 
   return Array.from(hints).slice(0, 16);
 }

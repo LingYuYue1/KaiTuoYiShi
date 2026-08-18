@@ -20,7 +20,7 @@
           "enabled": true,
           "createdAt": 1779580800000,
           "updatedAt": 1779580800000,
-          "content": "**时点定位**:当前地区、章节锚点、初始地点与玩家介入方式以「开局档案」为最高优先级。\n\n{openingArchiveText}\n\n本世界支持黑塔空间站、雅利洛-VI / 贝洛伯格、仙舟罗浮、匹诺康尼以及自由 / 创意工坊开局。只有开局档案明确处于「黑塔空间站 · 主线苏醒前夕」时,才把空间站反物质军团入侵、深层封存舱和{originalProtagonistSubject}尚未苏醒作为当前事件。若开局档案指向其他地区或自由开局,这些内容只能作为前置背景、资料、回忆或后续旅程目标,不得覆盖当前开局。"
+          "content": "**时点定位**:当前地区、章节锚点、初始地点与玩家介入方式以「开局档案」为最高优先级。\n\n{openingArchiveText}\n\n本世界支持黑塔空间站、雅利洛-VI / 贝洛伯格、仙舟罗浮、匹诺康尼、翁法罗斯、二相乐园以及自由 / 创意工坊开局。只有开局档案明确处于「黑塔空间站 · 主线苏醒前夕」时,才把空间站反物质军团入侵、深层封存舱和{originalProtagonistSubject}尚未苏醒作为当前事件。若开局档案指向其他地区或自由开局,这些内容只能作为前置背景、资料、回忆或后续旅程目标,不得覆盖当前开局。"
         },
         {
           "id": "opening_anchor_player",
@@ -87,7 +87,11 @@
           "title": "C2 · 帕姆(列车长)",
           "type": "character_lore",
           "injectMode": "always",
-          "keywords": ["帕姆", "Pom-Pom", "列车长"],
+          "keywords": [
+            "帕姆",
+            "Pom-Pom",
+            "列车长"
+          ],
           "priority": 180,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -99,7 +103,11 @@
           "title": "C3 · 瓦尔特·杨",
           "type": "character_lore",
           "injectMode": "always",
-          "keywords": ["瓦尔特", "Welt", "瓦尔特·杨"],
+          "keywords": [
+            "瓦尔特",
+            "Welt",
+            "瓦尔特·杨"
+          ],
           "priority": 178,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -111,7 +119,11 @@
           "title": "C4 · 姬子",
           "type": "character_lore",
           "injectMode": "always",
-          "keywords": ["姬子", "Himeko", "希默"],
+          "keywords": [
+            "姬子",
+            "Himeko",
+            "希默"
+          ],
           "priority": 177,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -123,7 +135,10 @@
           "title": "C5 · 三月七",
           "type": "character_lore",
           "injectMode": "always",
-          "keywords": ["三月七", "March 7th"],
+          "keywords": [
+            "三月七",
+            "March 7th"
+          ],
           "priority": 170,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -135,7 +150,10 @@
           "title": "C6 · 丹恒",
           "type": "character_lore",
           "injectMode": "always",
-          "keywords": ["丹恒", "Dan Heng"],
+          "keywords": [
+            "丹恒",
+            "Dan Heng"
+          ],
           "priority": 169,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -147,7 +165,9 @@
           "title": "D1 · 天才俱乐部",
           "type": "world_lore",
           "injectMode": "always",
-          "keywords": ["天才俱乐部"],
+          "keywords": [
+            "天才俱乐部"
+          ],
           "priority": 160,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -159,7 +179,11 @@
           "title": "D2 · 公司(星际和平公司 / IPC)",
           "type": "world_lore",
           "injectMode": "always",
-          "keywords": ["公司", "IPC", "星际和平公司"],
+          "keywords": [
+            "公司",
+            "IPC",
+            "星际和平公司"
+          ],
           "priority": 158,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -171,7 +195,9 @@
           "title": "D3 · 星核猎手",
           "type": "world_lore",
           "injectMode": "always",
-          "keywords": ["星核猎手"],
+          "keywords": [
+            "星核猎手"
+          ],
           "priority": 157,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -183,7 +209,10 @@
           "title": "D4 · 巡海游侠",
           "type": "world_lore",
           "injectMode": "always",
-          "keywords": ["巡海游侠", "巡猎"],
+          "keywords": [
+            "巡海游侠",
+            "巡猎"
+          ],
           "priority": 156,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -195,7 +224,11 @@
           "title": "E1 · 黑塔空间站",
           "type": "world_lore",
           "injectMode": "always",
-          "keywords": ["黑塔空间站", "黑塔", "空间站"],
+          "keywords": [
+            "黑塔空间站",
+            "黑塔",
+            "空间站"
+          ],
           "priority": 175,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -207,7 +240,15 @@
           "title": "E2 · 著名地点速记",
           "type": "world_lore",
           "injectMode": "keyword_match",
-          "keywords": ["雅利洛", "雅利洛-VI", "罗浮", "仙舟", "仙舟罗浮", "匹诺康尼", "翁法罗斯"],
+          "keywords": [
+            "雅利洛",
+            "雅利洛-VI",
+            "罗浮",
+            "仙舟",
+            "仙舟罗浮",
+            "匹诺康尼",
+            "翁法罗斯"
+          ],
           "priority": 100,
           "enabled": true,
           "createdAt": 1779580800000,
@@ -224,7 +265,7 @@
           "enabled": true,
           "createdAt": 1779580800000,
           "updatedAt": 1779580800000,
-          "content": "**仅在「首回合」(玩家完成「踏上旅途」向导、剧情尚未展开的第一次叙事)生效。**\n\n## 必须做到\n\n1. **读取开局档案**:首回合必须以{openingRegionName}、{openingChapterName}、{openingEntryText}和结构化开局档案为准。黑塔、贝洛伯格、仙舟罗浮、匹诺康尼或自由开局都可以成为当前起点。\n2. **接收当前压力**:玩家必定在首回合开头以某种方式接收到当前地区开局压力。黑塔是空间站危机;贝洛伯格是永冬、城防、裂界或上下层隔阂;罗浮是云骑戒备、星核/建木/卡芙卡线索;匹诺康尼是宾客身份、梦境规则、家族秩序或异常邀请;自由开局则以玩家写入的当前事件为准。\n3. **关系边界**:关键角色参考不等于已认识,已认识角色也不等于当前在场。不要让任何 NPC 一上来就无理由熟络、称呼亲昵或交代私事。\n4. **背景兜底**:若玩家未填写背景或职业,AI 不要硬性给玩家强加身份;先描写「玩家被命途选中」的体感,让背景在后续回合自然浮现。\n5. **命途处理**:若玩家在向导中选了非「无命途」的命途,首回合不强制触发「命途狭间」桥段;狭间桥段可放到玩家首次主动调用命途之力时。\n\n## 必须避免\n\n- ✗ 无理由把非黑塔开局写回黑塔空间站或反物质军团入侵现场。\n- ✗ 无理由让玩家直接「已经」在列车上、或「已经」是列车成员之一。\n- ✗ 仅在黑塔空间站主线苏醒前夕中,不得让{originalProtagonistSubject}在首回合提前苏醒;其他章节按开局档案处理此前主线为背景。\n- ✗ 让 NPC 一上来就替玩家命名、起绰号或自来熟。\n- ✗ 把首回合写成静态铺陈——必须有至少一个**可被玩家回应的行动钩子**结尾。"
+          "content": "**仅在「首回合」(玩家完成「踏上旅途」向导、剧情尚未展开的第一次叙事)生效。**\n\n## 必须做到\n\n1. **读取开局档案**:首回合必须以{openingRegionName}、{openingChapterName}、{openingEntryText}和结构化开局档案为准。黑塔、贝洛伯格、仙舟罗浮、匹诺康尼、翁法罗斯或二相乐园都可以成为当前起点；自由开局同样支持。\n2. **接收当前压力**:玩家必定在首回合开头以某种方式接收到当前地区开局压力。黑塔是空间站危机;贝洛伯格是永冬、城防、裂界或上下层隔阂;罗浮是云骑戒备、星核/建木/卡芙卡线索;匹诺康尼是宾客身份、梦境规则、家族秩序或异常邀请;翁法罗斯是黑潮压城、黄金裔逐火或永劫回归裂隙;二相乐园是幻月满盈、规则怪谈或残卷墨色;自由开局则以玩家写入的当前事件为准。\n3. **关系边界**:关键角色参考不等于已认识,已认识角色也不等于当前在场。不要让任何 NPC 一上来就无理由熟络、称呼亲昵或交代私事。\n4. **背景兜底**:若玩家未填写背景或职业,AI 不要硬性给玩家强加身份;先描写「玩家被命途选中」的体感,让背景在后续回合自然浮现。\n5. **命途处理**:若玩家在向导中选了非「无命途」的命途,首回合不强制触发「命途狭间」桥段;狭间桥段可放到玩家首次主动调用命途之力时。\n\n## 必须避免\n\n- ✗ 无理由把非黑塔开局写回黑塔空间站或反物质军团入侵现场。\n- ✗ 无理由让玩家直接「已经」在列车上、或「已经」是列车成员之一。\n- ✗ 仅在黑塔空间站主线苏醒前夕中,不得让{originalProtagonistSubject}在首回合提前苏醒;其他章节按开局档案处理此前主线为背景。\n- ✗ 让 NPC 一上来就替玩家命名、起绰号或自来熟。\n- ✗ 把首回合写成静态铺陈——必须有至少一个**可被玩家回应的行动钩子**结尾。"
         }
       ]
     }

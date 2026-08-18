@@ -228,6 +228,46 @@ const OPENING_STORY_WEAVING_ANCHORS: Record<string, { seriesId: string; segmentG
     segmentGroup: 10,
     note: '匹诺康尼美梦崩塌前夜开局，前中段只作前置背景，直接从热砂会场、匹诺康尼大剧院与总摊牌前注入。',
   },
+  amphoreus_falling_wood: {
+    seriesId: 'story_canon_amphoreus_1_falling_wood',
+    segmentGroup: 1,
+    note: '翁法罗斯英雄纪其一开局，从分离车厢坠入命运重渊、雅努萨波利斯难民与奥赫玛初战注入。',
+  },
+  amphoreus_gate_throne: {
+    seriesId: 'story_canon_amphoreus_2_gate_throne',
+    segmentGroup: 1,
+    note: '翁法罗斯英雄纪其二开局，从纷争试炼、白厄失联与黑潮危机注入。',
+  },
+  amphoreus_sleeping_flowers: {
+    seriesId: 'story_canon_amphoreus_3_sleeping_flowers',
+    segmentGroup: 6,
+    note: '翁法罗斯英雄纪其三的斯缇科西亚开局，从遐蝶获准前往冥界、赛飞儿带路与冥界之门开启注入。',
+  },
+  amphoreus_sun_hurt: {
+    seriesId: 'story_canon_amphoreus_5_sun_hurt',
+    segmentGroup: 1,
+    note: '翁法罗斯英雄纪其五的循环裂隙开局，从黑潮侵入奥赫玛、再创世与循环终局注入。',
+  },
+  erxiang_paradise_welcome: {
+    seriesId: 'story_canon_erxiang_paradise_1_welcome',
+    segmentGroup: 1,
+    note: '二相乐园其一开局，从列车抵达乐园、幻月满盈与欢迎广播注入。',
+  },
+  erxiang_paradise_pigeon_river: {
+    seriesId: 'story_canon_erxiang_paradise_2_out_of_control',
+    segmentGroup: 1,
+    note: '二相乐园其二开局，从鸽川区共愿帮灭门、告死魔模仿犯与公司调查线注入。',
+  },
+  erxiang_paradise_academy: {
+    seriesId: 'story_canon_erxiang_paradise_1_welcome',
+    segmentGroup: 3,
+    note: '二相乐园其一绘世学院开局，从真珠临摹绘世遗作、模因病毒与火花大会前置注入。',
+  },
+  erxiang_paradise_ink_residue: {
+    seriesId: 'story_canon_erxiang_paradise_5_whistle',
+    segmentGroup: 5,
+    note: '二相乐园其五终局开局，从舞台春秋、归寂决战与残卷余波注入。',
+  },
 };
 
 export interface BundledStoryWeavingPreset {
