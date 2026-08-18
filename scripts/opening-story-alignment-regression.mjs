@@ -52,16 +52,19 @@ for (const sourcePath of [
   'models/world.ts',
   'models/journey.ts',
   'data/journeyPresets.ts',
+  'data/zhikuCanonicalCharacters.ts',
   'data/canonicalCharacters.ts',
   'data/storyWeavingPreset.ts',
 ]) {
   transpileModule(sourcePath);
 }
 writeStub('data/zhikuPreset.mjs', 'export const bundledZhikuPresets = [];\nexport async function loadBundledZhikuPreset() { return { 条目: [] }; }\n');
-writeStub('data/builtinAvatars.mjs', 'export function getDefaultBuiltinAvatar() { return undefined; }\n');
+writeStub('data/builtinAvatars.mjs', 'export function getDefaultBuiltinAvatar() { return undefined; }\nexport function getDefaultBuiltinAvatarForNames() { return undefined; }\n');
 writeStub('utils/npcMemorySanitizer.mjs', 'export function 清理NPC同行记忆摘要(value) { return typeof value === "string" ? value.trim() : ""; }\n');
+writeStub('utils/staticAssets.mjs', 'export const STATIC_ASSET_FALLBACK_AVATAR = "";\n');
 
 const storyWeavingPreset = await import(pathToFileURL(path.join(tempDir, 'data/storyWeavingPreset.mjs')).href);
+const journeyPresets = await import(pathToFileURL(path.join(tempDir, 'data/journeyPresets.mjs')).href);
 const worldModel = await import(pathToFileURL(path.join(tempDir, 'models/world.mjs')).href);
 const bundled = JSON.parse(fs.readFileSync(path.join(root, 'data/storyWeavingCanonDecomposed.json'), 'utf8'));
 
@@ -178,7 +181,7 @@ const alignmentCases = [
     regionName: '匹诺康尼',
     seriesId: 'story_canon_penacony_noise_and_fury',
     group: 3,
-    segmentId: 'story_segment_1780137895009_hyrsxx',
+    segmentId: 'story_canon_penacony_noise_and_fury_segment_3',
   },
   {
     chapterId: 'penacony_dream_edge',
@@ -187,7 +190,7 @@ const alignmentCases = [
     regionName: '匹诺康尼',
     seriesId: 'story_canon_penacony_noise_and_fury',
     group: 8,
-    segmentId: 'story_segment_1780137895010_2czn31',
+    segmentId: 'story_canon_penacony_noise_and_fury_segment_8',
   },
   {
     chapterId: 'penacony_reverie_crisis',
@@ -196,12 +199,102 @@ const alignmentCases = [
     regionName: '匹诺康尼',
     seriesId: 'story_canon_penacony_in_our_time',
     group: 10,
-    segmentId: 'story_segment_1780138976991_q3c5q9',
+    segmentId: 'story_canon_penacony_in_our_time_segment_10',
+  },
+  {
+    chapterId: 'amphoreus_falling_wood',
+    chapterName: '重渊坠星',
+    regionId: 'amphoreus',
+    regionName: '翁法罗斯',
+    seriesId: 'story_canon_amphoreus_1_falling_wood',
+    group: 1,
+    segmentId: 'story_canon_amphoreus_1_falling_wood_segment_1',
+  },
+  {
+    chapterId: 'amphoreus_gate_throne',
+    chapterName: '金线之城奥赫玛',
+    regionId: 'amphoreus',
+    regionName: '翁法罗斯',
+    seriesId: 'story_canon_amphoreus_2_gate_throne',
+    group: 1,
+    segmentId: 'story_canon_amphoreus_2_gate_throne_segment_1',
+  },
+  {
+    chapterId: 'amphoreus_sleeping_flowers',
+    chapterName: '来世之城斯缇科西亚',
+    regionId: 'amphoreus',
+    regionName: '翁法罗斯',
+    seriesId: 'story_canon_amphoreus_3_sleeping_flowers',
+    group: 6,
+    segmentId: 'story_canon_amphoreus_3_sleeping_flowers_segment_6',
+  },
+  {
+    chapterId: 'amphoreus_sun_hurt',
+    chapterName: '循环裂隙',
+    regionId: 'amphoreus',
+    regionName: '翁法罗斯',
+    seriesId: 'story_canon_amphoreus_5_sun_hurt',
+    group: 1,
+    segmentId: 'story_canon_amphoreus_5_sun_hurt_segment_1',
+  },
+  {
+    chapterId: 'erxiang_paradise_welcome',
+    chapterName: '幻月满盈',
+    regionId: 'erxiang_paradise',
+    regionName: '二相乐园',
+    seriesId: 'story_canon_erxiang_paradise_1_welcome',
+    group: 1,
+    segmentId: 'story_canon_erxiang_paradise_1_welcome_segment_1',
+  },
+  {
+    chapterId: 'erxiang_paradise_pigeon_river',
+    chapterName: '鸽川区暗流',
+    regionId: 'erxiang_paradise',
+    regionName: '二相乐园',
+    seriesId: 'story_canon_erxiang_paradise_2_out_of_control',
+    group: 1,
+    segmentId: 'story_canon_erxiang_paradise_2_out_of_control_segment_1',
+  },
+  {
+    chapterId: 'erxiang_paradise_academy',
+    chapterName: '火花大会',
+    regionId: 'erxiang_paradise',
+    regionName: '二相乐园',
+    seriesId: 'story_canon_erxiang_paradise_1_welcome',
+    group: 3,
+    segmentId: 'story_canon_erxiang_paradise_1_welcome_segment_3',
+  },
+  {
+    chapterId: 'erxiang_paradise_ink_residue',
+    chapterName: '残卷墨色',
+    regionId: 'erxiang_paradise',
+    regionName: '二相乐园',
+    seriesId: 'story_canon_erxiang_paradise_5_whistle',
+    group: 5,
+    segmentId: 'story_canon_erxiang_paradise_5_whistle_segment_5',
   },
 ];
 
 for (const item of alignmentCases) {
   expectAlignment(item);
+}
+
+const openingPresetChapterCases = [
+  ['amphoreus_falling_wood', 'amphoreus_falling_wood'],
+  ['amphoreus_refugee', 'amphoreus_falling_wood'],
+  ['amphoreus_golden_thread', 'amphoreus_gate_throne'],
+  ['amphoreus_styx', 'amphoreus_sleeping_flowers'],
+  ['amphoreus_loop', 'amphoreus_sun_hurt'],
+  ['erxiang_paradise_welcome', 'erxiang_paradise_welcome'],
+  ['erxiang_paradise_pigeon_river', 'erxiang_paradise_pigeon_river'],
+  ['erxiang_paradise_academy', 'erxiang_paradise_academy'],
+  ['erxiang_paradise_ink_residue', 'erxiang_paradise_ink_residue'],
+];
+
+for (const [scenarioId, chapterId] of openingPresetChapterCases) {
+  const bundle = journeyPresets.getOpeningScenarioBundle(scenarioId);
+  assert(bundle.preset?.chapterId === chapterId, `${scenarioId} 必须绑定章节锚点 ${chapterId}，实际为 ${bundle.preset?.chapterId}`);
+  assert(bundle.chapter?.id === chapterId, `${scenarioId} 的章节资料必须解析到 ${chapterId}，实际为 ${bundle.chapter?.id}`);
 }
 
 const luofuArchive = makeArchive('luofu_arrival', '初抵罗浮');

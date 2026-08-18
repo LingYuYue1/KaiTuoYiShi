@@ -161,7 +161,7 @@ const FREE_OPENING_PLANET_SOURCE_OPTIONS: Array<{
   title: string;
   text: string;
 }> = [
-  { id: 'existing', title: '已有地点', text: '从黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼等已有关联地点切入。' },
+  { id: 'existing', title: '已有地点', text: '从黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼、翁法罗斯、二相乐园等已有关联地点切入。' },
   { id: 'custom', title: '自创地点', text: '开启原创舞台工作台，由玩家自建地点、NPC、势力与规则。' },
 ];
 
@@ -462,7 +462,8 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
   );
   const selectedScenarioPreset = useMemo(
     () =>
-      getOfficialOpeningPresetByChapterId(startingScenarioId)
+      getOfficialOpeningPreset(startingScenarioId)
+      ?? getOfficialOpeningPresetByChapterId(startingScenarioId)
       ?? (selectedScenario?.officialPresetId ? getOfficialOpeningPreset(selectedScenario.officialPresetId) : undefined)
       ?? getOfficialOpeningPresetByChapterId(selectedScenario?.id ?? ''),
     [selectedScenario, startingScenarioId],
@@ -660,7 +661,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
     }
     const officialPreset = getOfficialOpeningPresetsByRegion(regionId)[0];
     if (officialPreset) {
-      setStartingScenarioId(officialPreset.chapterId);
+      setStartingScenarioId(officialPreset.id);
       return;
     }
     const scenario = startingScenarios.find((item) => getOpeningScenarioBundle(item.id).region?.id === regionId);
@@ -3127,9 +3128,11 @@ function OpeningAnchorStep({
         )
       : openingSource === 'official_preset'
         ? filteredOfficialPresets.map((preset) => ({
-            id: preset.chapterId,
+            // 官方预设可以共享同一个章节锚点，卡片身份必须使用预设 ID。
+            id: preset.id,
             regionId: preset.regionId,
-            name: preset.chapterName,
+            // 卡片展示标题要区分同一章节下的不同开局预设，章节名由右侧徽章展示。
+            name: preset.title,
             summary: preset.summary,
             officialChapterName: openingChapterAnchors.find((item) => item.id === preset.chapterId)?.officialChapterName,
             officialChapterPhase: openingChapterAnchors.find((item) => item.id === preset.chapterId)?.officialChapterPhase,
@@ -3277,7 +3280,7 @@ function OpeningAnchorStep({
                 })}
               </div>
               <div className="mt-3 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.92)' }}>
-                关闭主线后，原作主线不会自动注入正文。若后续需要罗浮、匹诺康尼等原作剧情，请在剧情编织中手动启用你想注入的主线内容。
+                关闭主线后，原作主线不会自动注入正文。若后续需要罗浮、匹诺康尼、翁法罗斯、二相乐园等原作剧情，请在剧情编织中手动启用你想注入的主线内容。
               </div>
               {freeOpeningMainlineEnabled ? (
                 <div
@@ -3349,7 +3352,7 @@ function OpeningAnchorStep({
                     clipPath: smallClip,
                   }}
                 >
-                  当前已有地点：{getOpeningRegionDisplayName(selectedRegion?.name)}。需要切换时，请在左侧选择黑塔空间站、雅利洛-VI、仙舟罗浮或匹诺康尼。
+                  当前已有地点：{getOpeningRegionDisplayName(selectedRegion?.name)}。需要切换时，请在左侧选择黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼、翁法罗斯或二相乐园。
                 </div>
               ) : null}
               <div className="mt-3 grid gap-3 xl:grid-cols-2">
@@ -4515,7 +4518,10 @@ function sanitizeOpeningPresetDraft(value: unknown): OpeningPresetDraft {
     customAbilities: sanitizeStringArray(raw.customAbilities).slice(0, 8),
     openingSkills: sanitizeOpeningSkills(raw.openingSkills),
     startingScenarioId:
-      typeof raw.startingScenarioId === 'string' && startingScenarios.some((item) => item.id === raw.startingScenarioId)
+      typeof raw.startingScenarioId === 'string' && (
+        startingScenarios.some((item) => item.id === raw.startingScenarioId)
+        || Boolean(getOfficialOpeningPreset(raw.startingScenarioId))
+      )
         ? raw.startingScenarioId
         : startingScenarios[0]?.id ?? '',
     selectedWorkshopTemplateId,
