@@ -7,6 +7,7 @@ import {
   type MaxOutputTier,
 } from '@/data/modelRecommendations';
 import { fetchModels, testConnection, type ConnectionTestResult } from '@/services/ai/apiTools';
+import { isClineBaseUrl } from '@/services/ai/clineProxyCore';
 import { loadSetting, saveSetting } from '@/services/dbService';
 import { MemorySystemSettingsTab } from './MemorySystemSettings';
 import { YitingSettingsTab } from './YitingSettingsTab';
@@ -65,6 +66,7 @@ const providerOptions: { value: AI提供商; label: string; defaultBaseUrl: stri
   { value: 'opencode', label: 'OpenCode Zen', defaultBaseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
   { value: 'mimo', label: '小米 MiMo', defaultBaseUrl: 'https://api.xiaomimimo.com/v1', defaultModel: 'mimo-v2.5-pro' },
   { value: 'ark', label: '火山方舟', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-seed-1-6' },
+  { value: 'cline', label: 'Cline', defaultBaseUrl: 'https://api.cline.bot/api/v1', defaultModel: 'cline-pass/kimi-k3' },
   { value: 'claude', label: 'Claude', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
   { value: 'claude_compatible', label: 'Claude 兼容', defaultBaseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-5' },
   { value: 'gemini', label: 'Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', defaultModel: 'gemini-2.5-pro' },
@@ -697,7 +699,13 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
         updatedAt: Date.now(),
       });
       setAuxModelOptions(list);
-      setAuxFetchMessage({ kind: 'info', text: `获取到 ${list.length} 个模型，请从列表选择。` });
+      setAuxFetchMessage({
+        kind: 'info',
+        text:
+          auxForm.provider === 'cline' || isClineBaseUrl(baseUrl)
+            ? `Cline 未提供 /models 接口，已加载 ${list.length} 个推荐模型；也可以直接手填账号可用的模型 ID。`
+            : `获取到 ${list.length} 个模型，请从列表选择。`,
+      });
     } catch (e) {
       setAuxFetchMessage({ kind: 'error', text: (e as Error).message });
     } finally {
@@ -716,7 +724,13 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
         retryCount: selectedConfig.retryCount ?? 2,
       });
       setModelOptions(list);
-      setMessage({ kind: 'info', text: `获取到 ${list.length} 个模型。` });
+      setMessage({
+        kind: 'info',
+        text:
+          selectedConfig.provider === 'cline' || isClineBaseUrl(selectedConfig.baseUrl)
+            ? `Cline 未提供 /models 接口，已加载 ${list.length} 个推荐模型；也可以直接手填账号可用的模型 ID。`
+            : `获取到 ${list.length} 个模型。`,
+      });
     } catch (e) {
       setMessage({ kind: 'error', text: (e as Error).message });
     } finally {
@@ -1114,6 +1128,11 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                   小米 MiMo 官方 OpenAI 兼容接口默认填 https://api.xiaomimimo.com/v1。系统会自动使用 max_completion_tokens，并默认关闭深度思考，避免思维链挤占正文或污染格式。
                 </div>
               )}
+              {selectedConfig.provider === 'cline' && (
+                <div className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                  Cline API 使用 https://api.cline.bot/api/v1，模型 ID 填 provider/model 格式，例如 cline-pass/kimi-k3。浏览器请求会经同源代理转发。
+                </div>
+              )}
             </FieldRow>
 
             <FieldRow label="API Key">
@@ -1149,9 +1168,18 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                       clipPath: smallClip,
                     }}
                   >
-                    {loadingModels ? '获取中…' : '获取列表'}
+                  {loadingModels
+                    ? '处理中…'
+                    : selectedConfig.provider === 'cline' || isClineBaseUrl(selectedConfig.baseUrl)
+                      ? '显示推荐'
+                      : '获取列表'}
                   </button>
                 </div>
+                {(selectedConfig.provider === 'cline' || isClineBaseUrl(selectedConfig.baseUrl)) && (
+                  <div className="text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.62)' }}>
+                    Cline 当前没有公开的 /models 列表接口；“获取列表”显示的是文档推荐模型，不代表你的账号实时可用清单。模型 ID 仍可直接手动填写。
+                  </div>
+                )}
                 {modelOptions.length > 0 && (
                   <select
                     value=""
@@ -1254,7 +1282,11 @@ function ApiSettingsOverviewTab({ settings, onChange, gameSettings, onGameSettin
                     clipPath: smallClip,
                   }}
                 >
-                  {loadingAuxModels ? '获取中…' : '获取列表'}
+                  {loadingAuxModels
+                    ? '处理中…'
+                    : auxForm.provider === 'cline' || isClineBaseUrl(auxForm.baseUrl)
+                      ? '显示推荐'
+                      : '获取列表'}
                 </button>
                 <button
                   onClick={() => void handleApplyAuxModel()}

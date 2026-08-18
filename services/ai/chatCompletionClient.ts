@@ -3,6 +3,7 @@ import type { 聊天消息, 回合Token消耗 } from '@/models/chat';
 import { appendApiErrorReport } from './apiErrorReportService';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { buildArkProxyBody, isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
+import { buildClineProxyBody, isClineBaseUrl, normalizeClineBaseUrl } from './clineProxyCore';
 import { normalizeGeminiBaseUrl } from './geminiEndpointPolicy';
 import {
   DEEPSEEK_FINAL_CONTENT_GUARD,
@@ -71,6 +72,7 @@ export type ChatTransportProvider =
   | 'deepseek'
   | 'gemini'
   | 'claude'
+  | 'cline'
   | 'openai_compatible';
 
 export interface ChatProviderCapabilities {
@@ -86,6 +88,7 @@ function detectProvider(config: API配置项): ChatTransportProvider {
   if (config.provider === 'mimo' || /xiaomimimo|mimo\.mi/i.test(url)) return 'mimo';
   if (config.provider === 'ark' || isArkBaseUrl(config.baseUrl)) return 'ark';
   if (config.provider === 'opencode' || /opencode\.ai\/zen\/v1/i.test(url)) return 'opencode';
+  if (config.provider === 'cline' || isClineBaseUrl(config.baseUrl)) return 'cline';
   if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
   if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
   if (shouldUseClaudeMessagesApi(config)) {
@@ -108,7 +111,7 @@ export function resolveChatProviderCapabilities(config: API配置项): ChatProvi
     endpoint,
     depthInjection: transport === 'claude' ? 'system' : 'messages',
     mergesSystemMessages: transport === 'claude' || endpoint === 'messages' || endpoint === 'responses' || endpoint === 'gemini',
-    supportsAssistantPrefill: transport !== 'mimo',
+    supportsAssistantPrefill: transport !== 'mimo' && transport !== 'cline',
   };
 }
 
@@ -416,6 +419,10 @@ function isPioneerConfig(config: API配置项): boolean {
   return isPioneerBaseUrl(config.baseUrl);
 }
 
+function isClineConfig(config: API配置项): boolean {
+  return config.provider === 'cline' || isClineBaseUrl(config.baseUrl);
+}
+
 function isMimoConfig(config: API配置项): boolean {
   return detectProvider(config) === 'mimo';
 }
@@ -477,6 +484,27 @@ function buildOpenAICompatibleRequestBody(
   }
   if (stream && includeUsage && request.onUsage) {
     body.stream_options = { include_usage: true };
+  }
+  return body;
+}
+
+function buildClineRequestBody(
+  config: API配置项,
+  messages: ChatMessagePayload[],
+  request: ChatCompletionRequest,
+  stream: boolean,
+): Record<string, unknown> {
+  // Cline 对外承诺的是精简 OpenAI Chat Completions 形态；不要透传本项目的
+  // stream_options、惩罚参数和 max_context_tokens 等中转商扩展字段。
+  const body: Record<string, unknown> = {
+    model: config.model.trim(),
+    messages,
+    stream,
+    temperature: request.temperature ?? config.temperature ?? 0.8,
+  };
+  const maxTokens = request.maxTokens ?? config.maxTokens;
+  if (typeof maxTokens === 'number' && Number.isFinite(maxTokens) && maxTokens > 0) {
+    body.max_tokens = maxTokens;
   }
   return body;
 }
@@ -1064,6 +1092,16 @@ function firstNumber(...values: unknown[]): number | undefined {
 }
 
 function formatOpenAICompatibleError(config: API配置项, status: number, text: string): Error {
+  if (isClineConfig(config)) {
+    const hint = (() => {
+      if (status === 401) return '请检查 Cline API Key；模型 ID 需要使用 provider/model 格式，例如 cline-pass/kimi-k3。';
+      if (status === 402) return 'Cline 账户余额不足，请到 Cline 控制台充值或切换可用模型。';
+      if (status === 403) return '当前 Cline API Key 没有访问所选模型的权限。';
+      if (status === 404) return '请检查 Cline Base URL 是否为 https://api.cline.bot/api/v1，以及模型 ID 是否存在。';
+      return '请检查 Cline Base URL、API Key、模型 ID 和账户额度。';
+    })();
+    return new Error(`Cline API Error ${status}: ${hint}\n${text}`);
+  }
   if (isArkConfig(config)) {
     const lower = text.toLowerCase();
     const hint = (() => {
@@ -1300,7 +1338,10 @@ function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTex
     return readCompatibleTextContent(parsed.delta?.text ?? parsed.delta ?? parsed.text);
   }
 
-  const choice = parsed?.choices?.[0];
+  const envelope = parsed?.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+    ? parsed.data
+    : parsed;
+  const choice = envelope?.choices?.[0] ?? parsed?.choices?.[0];
   const delta = choice?.delta;
   if (delta?.type === 'thinking_delta' || delta?.type === 'reasoning_delta' || delta?.thought === true) {
     return '';
@@ -1309,6 +1350,8 @@ function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTex
     readCompatibleTextContent(delta?.content) ||
     readCompatibleTextContent(delta?.text) ||
     readCompatibleTextContent(choice?.text) ||
+    readCompatibleTextContent(envelope?.delta?.text) ||
+    readCompatibleTextContent(envelope?.delta?.content) ||
     readCompatibleTextContent(parsed?.delta?.text) ||
     readCompatibleTextContent(parsed?.delta?.content) ||
     readCompatibleTextContent(parsed?.delta) ||
@@ -1327,7 +1370,10 @@ function readOpenAICompatibleStreamDelta(parsed: any, state: CompatibleStreamTex
  *  返回 undefined 表示该 chunk 无 finish_reason 或无法识别。 */
 function readFinishReason(parsed: any): string | undefined {
   // OpenAI 兼容：choices[0].finish_reason
-  const choice = parsed?.choices?.[0];
+  const envelope = parsed?.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+    ? parsed.data
+    : parsed;
+  const choice = envelope?.choices?.[0] ?? parsed?.choices?.[0];
   if (choice && typeof choice.finish_reason === 'string' && choice.finish_reason) {
     return choice.finish_reason;
   }
@@ -1350,17 +1396,24 @@ function readFinishReason(parsed: any): string | undefined {
 
 function parseOpenAICompatibleTextResponse(json: unknown): string {
   const data = json as Record<string, any>;
-  const choice = data?.choices?.[0];
+  const envelope = data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+    ? data.data
+    : null;
+  const choice = data?.choices?.[0] ?? envelope?.choices?.[0];
   return (
     readCompatibleTextContent(choice?.message?.content) ||
     readCompatibleTextContent(choice?.text) ||
     readCompatibleTextContent(data?.message?.content) ||
+    readCompatibleTextContent(envelope?.message?.content) ||
     parseClaudeTextResponse(json) ||
     parseOpenCodeResponsesText(json) ||
     parseOpenCodeGeminiText(json) ||
     readCompatibleTextContent(data?.output_text) ||
     readCompatibleTextContent(data?.text) ||
-    readCompatibleTextContent(data?.content)
+    readCompatibleTextContent(data?.content) ||
+    readCompatibleTextContent(envelope?.output_text) ||
+    readCompatibleTextContent(envelope?.text) ||
+    readCompatibleTextContent(envelope?.content)
   );
 }
 
@@ -1399,6 +1452,8 @@ export function buildChatTransportPayloadPreview(
       : buildGeminiRequestBody(prefixed.config, prefixed.messages, request);
   } else if (capabilities.endpoint === 'responses') {
     payload = buildOpenCodeResponsesBody(prefixed.config, prefixed.messages, request, streaming);
+  } else if (capabilities.transport === 'cline') {
+    payload = buildClineRequestBody(prefixed.config, prefixed.messages, request, streaming);
   } else {
     payload = buildOpenAICompatibleRequestBody(prefixed.config, prefixed.messages, request, streaming, false);
   }
@@ -1518,15 +1573,21 @@ async function streamOpenAICompatible(
     ? normalizeArkBaseUrl(config.baseUrl)
     : isPioneerConfig(config)
       ? normalizePioneerBaseUrl(config.baseUrl)
+      : isClineConfig(config)
+        ? normalizeClineBaseUrl(config.baseUrl)
       : config.baseUrl;
   const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
-  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, true, includeUsage);
+  const requestBody = isClineConfig(config)
+    ? buildClineRequestBody(config, messages, request, true)
+    : buildOpenAICompatibleRequestBody(config, messages, request, true, includeUsage);
   const url = isArkConfig(config)
     ? '/api/ark'
     : isBaiduQianfanConfig(config)
     ? '/api/qianfan'
     : isPioneerConfig(config)
       ? '/api/pioneer'
+      : isClineConfig(config)
+        ? '/api/cline'
       : upstreamUrl;
   const body = isArkConfig(config)
     ? buildArkProxyBody(config, requestBody)
@@ -1534,6 +1595,8 @@ async function streamOpenAICompatible(
     ? buildQianfanProxyBody(config, requestBody)
     : isPioneerConfig(config)
       ? buildPioneerProxyBody(config, requestBody)
+      : isClineConfig(config)
+        ? buildClineProxyBody(config, requestBody)
       : JSON.stringify(requestBody);
 
   const response = await fetchWithApiErrorReport(config, '聊天补全', url, 'stream', {
@@ -2580,6 +2643,8 @@ async function chatCompletionNonStreamOnce(
     ? normalizeArkBaseUrl(deepSeekPayload.config.baseUrl)
     : isPioneerConfig(deepSeekPayload.config)
       ? normalizePioneerBaseUrl(deepSeekPayload.config.baseUrl)
+      : isClineConfig(deepSeekPayload.config)
+        ? normalizeClineBaseUrl(deepSeekPayload.config.baseUrl)
       : deepSeekPayload.config.baseUrl;
   const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
   const effectiveUrl = isArkConfig(deepSeekPayload.config)
@@ -2588,9 +2653,13 @@ async function chatCompletionNonStreamOnce(
     ? '/api/qianfan'
     : isPioneerConfig(deepSeekPayload.config)
       ? '/api/pioneer'
+      : isClineConfig(deepSeekPayload.config)
+        ? '/api/cline'
       : upstreamUrl;
   const diagnosticUrl = effectiveUrl.startsWith('/api/') ? upstreamUrl : effectiveUrl;
-  const requestBody = buildOpenAICompatibleRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false);
+  const requestBody = isClineConfig(deepSeekPayload.config)
+    ? buildClineRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false)
+    : buildOpenAICompatibleRequestBody(deepSeekPayload.config, deepSeekPayload.messages, request, false);
   const response = await fetchWithApiErrorReport(deepSeekPayload.config, '非流式补全', effectiveUrl, 'non-stream', {
     method: 'POST',
     headers: {
@@ -2603,6 +2672,8 @@ async function chatCompletionNonStreamOnce(
       ? buildQianfanProxyBody(deepSeekPayload.config, requestBody)
       : isPioneerConfig(deepSeekPayload.config)
         ? buildPioneerProxyBody(deepSeekPayload.config, requestBody)
+        : isClineConfig(deepSeekPayload.config)
+          ? buildClineProxyBody(deepSeekPayload.config, requestBody)
         : JSON.stringify(requestBody),
     signal: request.signal,
   });

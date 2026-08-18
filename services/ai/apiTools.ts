@@ -3,6 +3,8 @@ import { appendApiErrorReport } from './apiErrorReportService';
 import { withRetries } from './retry';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
+import { isClineBaseUrl } from './clineProxyCore';
+import { CLINE_RECOMMENDED_MODELS } from './clineModels';
 import { fetchOpenAICompatibleModels } from './openAICompatibleModels';
 import { normalizeGeminiBaseUrl } from './geminiEndpointPolicy';
 import {
@@ -39,6 +41,9 @@ export async function fetchModels(config: any): Promise<string[]> {
       }
       if (config.provider === 'opencode') {
         return fetchOpenCodeModels(baseRaw, apiKey);
+      }
+      if (config.provider === 'cline' || isClineBaseUrl(baseRaw)) {
+        return [...CLINE_RECOMMENDED_MODELS];
       }
       if (config.provider === 'ark' || isArkBaseUrl(baseRaw)) {
         return fetchArkModels(baseRaw, apiKey);
@@ -392,7 +397,7 @@ export async function testConnection(config: any): Promise<ConnectionTestResult>
         chatCompletionNonStream(config, {
           messages: [{ role: 'user', content: `请只返回这个随机校验码：${challenge}` }],
           systemPrompt: '你正在执行 API 连接测试。必须只返回用户提供的随机校验码，不得添加解释、标点或 Markdown。',
-          maxTokens: 32,
+          maxTokens: config.provider === 'cline' || isClineBaseUrl(config.baseUrl) ? 256 : 32,
           temperature: 0,
           deepSeekRecovery: 'disabled',
         }),
