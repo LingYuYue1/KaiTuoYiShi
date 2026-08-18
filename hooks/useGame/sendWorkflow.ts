@@ -14,6 +14,7 @@ import { type VisibilityBufferedPublisher } from '@/utils/visibilityBufferedPubl
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { 踏入命途狭间 } from '@/services/pathService';
+import { OPENING_TURN_INSTRUCTION, buildAwakeningEnterInstruction } from './mainRequestFinalizer';
 import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { pushQueueTask } from './workflowTaskRuntime';
@@ -54,8 +55,7 @@ export async function executeSendWorkflow(
   }
   const config = rawConfig;
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
-  const openingInstruction =
-    '请根据当前角色、当前场景、世界书与内置提示词，直接生成第 0 回合开场叙事。不要等待玩家再次输入。';
+  const openingInstruction = OPENING_TURN_INSTRUCTION;
 
   // 「踏入命途狭间」触发:玩家点击邀请卡片 → App 调 handleSend('[系统] 踏入命途狭间')。
   // 在快照/作用域/systemPrompt 计算之前先把 世界.待触发狭间 转成 世界.进行中狭间——
@@ -69,7 +69,7 @@ export async function executeSendWorkflow(
   }
   const awakeningPathId = isAwakeningEnterTrigger ? effectiveWorld.进行中狭间 : undefined;
   const awakeningInstruction = awakeningPathId
-    ? `玩家选择踏入「命途狭间」(命途 ID: ${awakeningPathId})。请按 pathAwakening 流程生成第一道诘问,不要推进主剧情,不要等玩家再次发言。`
+    ? buildAwakeningEnterInstruction(awakeningPathId)
     : '';
 
   // Abort previous request

@@ -8,8 +8,8 @@ import type { 角色数据结构 } from '@/models/character';
 import type { 聊天消息 } from '@/models/chat';
 import type { MacroContext } from '@/utils/macroEngine';
 import { createMacroContext, processMacros } from '@/utils/macroEngine';
-import { matchesTavernCotPlaceholder, matchesTavernFormatPlaceholder } from './tavernFormatGuard';
 import type { 游戏设置 } from '@/models/settings';
+import type { PromptScope } from './promptAssembly';
 
 export const TAVERN_CHAR_COMPAT_PROMPT =
   '当前剧情中的主要互动对象、出场 NPC、同伴、敌对角色以及由 AI 负责扮演和调度的剧情角色集合。不要把 {{char}} 理解为固定角色卡；应根据最近剧情、玩家输入、聊天历史和世界状态判断当前焦点对象。';
@@ -23,6 +23,7 @@ export interface TavernChainParams {
   characterId: number | null;
   chatHistory: 聊天消息[];
   latestUserInput: string;
+  scope?: PromptScope;
   playerName: string;
   playerRole: 角色数据结构 | null;
   worldbookExtraTexts?: string[];
@@ -59,20 +60,13 @@ export function buildTavernMessageChain(params: TavernChainParams): TavernMessag
   const enabledOrderSlots = (Array.isArray(selectedOrder.order) ? selectedOrder.order : [])
     .filter((slot) => Boolean(slot) && slot.enabled);
 
-  // 4. 探测占位符和冲突规则
-  const useCotVariableInjection = enabledOrderSlots.some((slot) => {
-    const prompt = promptMap.get(slot.identifier);
-    return matchesTavernCotPlaceholder(prompt?.content ?? '');
-  });
-  const useFormatVariableInjection = enabledOrderSlots.some((slot) => {
-    const prompt = promptMap.get(slot.identifier);
-    return matchesTavernFormatPlaceholder(prompt?.content ?? '');
-  });
+  const scope = params.scope ?? 'main';
   const presetHasNoControl = presetContainsNoControl(params.preset, selectedOrder);
   const presetHasPlayerSpeechExpansion = presetContainsPlayerSpeechExpansion(params.preset, selectedOrder);
 
-  // 5. 构建项目上下文片段（从 settings.promptModules 中提取内置模块内容）
-  const contextPieces = buildContextPieces(params.settings);
+  const contextPieces = buildContextPieces(params.settings, scope);
+  const cotCompatReference = buildTavernCotCompatReference(scope);
+  const formatCompatReference = buildTavernFormatCompatReference();
 
   // 6. 构建嫁接文本 combinedWorldbookText
   const worldbookText = params.includeNativeContextInWorldbook === false
@@ -107,9 +101,8 @@ export function buildTavernMessageChain(params: TavernChainParams): TavernMessag
   // 8. 遍历启用的 slot，按 identifier 分派
   const messages: TavernInternalMessage[] = [];
   let worldbookInjected = false;
+  let historyInjected = false;
   let latestInputInjected = false;
-  let cotInjectedViaPlaceholder = false;
-  let formatInjectedViaPlaceholder = false;
 
   for (const slot of enabledOrderSlots) {
     const identifier = slot.identifier;
@@ -126,8 +119,10 @@ export function buildTavernMessageChain(params: TavernChainParams): TavernMessag
     }
 
     if (identifier === 'chatHistory') {
-      historyMessages.forEach((msg) => messages.push({ ...msg, source: 'history' }));
-      if (historyContainsLatestInput(historyMessages, params.latestUserInput)) latestInputInjected = true;
+      if (!historyInjected) {
+        historyMessages.forEach((msg) => messages.push({ ...msg, source: 'history' }));
+        historyInjected = true;
+      }
       continue;
     }
 
@@ -140,7 +135,7 @@ export function buildTavernMessageChain(params: TavernChainParams): TavernMessag
     }
 
     if (identifier === 'userInput' || identifier === 'user_input' || identifier === 'latestUserInput' || identifier === 'input') {
-      if (params.latestUserInput) {
+      if (!latestInputInjected && params.latestUserInput) {
         messages.push({ role: 'user', content: params.latestUserInput, source: 'latest_input' });
         latestInputInjected = true;
       }
@@ -153,19 +148,15 @@ export function buildTavernMessageChain(params: TavernChainParams): TavernMessag
       content: rawContent,
       playerName: params.playerName,
       charRuntimeProfile,
-      cotPrompt: contextPieces.cotPrompt,
-      formatPrompt: contextPieces.formatPrompt,
+      cotPrompt: cotCompatReference,
+      formatPrompt: formatCompatReference,
       latestInput: params.latestUserInput,
-      usedLatestInput: false,
-      usedCotPlaceholder: false,
-      usedFormatPlaceholder: false,
+      usedLatestInput: latestInputInjected,
       macroCtx,
     });
     const content = resolved.content;
     if (!content) continue;
     if (resolved.usedLatestInput) latestInputInjected = true;
-    if (resolved.usedCotPlaceholder) cotInjectedViaPlaceholder = true;
-    if (resolved.usedFormatPlaceholder) formatInjectedViaPlaceholder = true;
     const role = prompt.role === 'user' || prompt.role === 'assistant' ? prompt.role : 'system';
     messages.push({ role, content, source: 'preset' });
   }
@@ -174,30 +165,19 @@ export function buildTavernMessageChain(params: TavernChainParams): TavernMessag
   if (!worldbookInjected && combinedWorldbookText) {
     messages.push({ role: 'system', content: combinedWorldbookText, source: 'worldbook' });
   }
-  if (!latestInputInjected && !historyContainsLatestInput(historyMessages, params.latestUserInput) && params.latestUserInput) {
+  if (!latestInputInjected && params.latestUserInput) {
     messages.push({ role: 'user', content: params.latestUserInput, source: 'latest_input' });
   }
 
-  // 10. 格式保护层：兜底压轴
-  if (!cotInjectedViaPlaceholder && !useCotVariableInjection) {
-    messages.push({
-      role: 'system',
-      content: contextPieces.cotPrompt,
-      source: 'cot_guard',
-    });
-  }
-  if (!formatInjectedViaPlaceholder && !useFormatVariableInjection) {
-    messages.push({
-      role: 'system',
-      content: contextPieces.formatPrompt,
-      source: 'format_guard',
-    });
-  }
-  // 行动选项始终压轴（前端 UI 解析依赖）
   messages.push({
     role: 'system',
-    content: contextPieces.actionOptionsPrompt,
-    source: 'format_guard',
+    content: [
+      '# Tavern 兼容保护',
+      '- 项目响应格式保护：必须服从当前生效的项目顶层协议标签（<thinking>/<正文>/<短期记忆>/<动态世界>/<变量草稿> 等），ST 表层格式（### 正文、helper 标签）不得污染正文。',
+      '- 正文行格式按当前生效的回复协议执行（【旁白】/【角色名】/【心声】）。',
+      ...(contextPieces.actionOptionsPrompt ? ['- 项目行动选项保护：行动选项已开启，正文结束后按 <行动选项> 协议输出 3-4 条选项。'] : []),
+    ].join('\n'),
+    source: 'compat_guard',
   });
 
   // 11. 后处理
@@ -222,25 +202,33 @@ export function getSTPresetOrder(preset: STPreset, characterId: number | null): 
   return preset.prompt_order[0];
 }
 
-function buildContextPieces(settings: 游戏设置): TavernContextPieces {
-  // 从 settings.promptModules 中查找内置模块内容
+function buildContextPieces(settings: 游戏设置, scope: PromptScope): TavernContextPieces {
   const modules = settings.promptModules;
 
   const findModuleContent = (id: string): string => {
     const mod = modules.find((m: 提示词模块) => m.id === id);
-    return mod ? mod.content : '';
+    return mod?.enabled !== false ? (mod?.content ?? '') : '';
   };
 
-  // 提取关键内置模块的内容
   const worldPrompt = findModuleContent('builtin_world_prompt');
-  const cotPrompt = findModuleContent('builtin_main_plot_cot') || '';
-  const formatPrompt = findModuleContent('builtin_response_format') || '';
-  const actionOptionsPrompt = findModuleContent('builtin_action_options') || '';
-  const noControlPrompt = settings.enableNoControl ? '' : findModuleContent('builtin_no_control') || '';
-  const playerSpeechExpansionPrompt = settings.enablePlayerSpeechExpansion ? findModuleContent('builtin_player_speech_expansion') || '' : '';
-  const personaPrompt = findModuleContent('builtin_narrator_persona') || '';
-  const devModePrompt = findModuleContent('builtin_dev_mode') || '';
-  const writingStylePrompt = findModuleContent('builtin_writing_style') || '';
+  const cotPrompt = scope === 'pathAwakening'
+    ? findModuleContent('builtin_path_awakening_cot')
+    : scope === 'opening'
+      ? [
+          findModuleContent('builtin_opening_cot'),
+          findModuleContent('builtin_preset_opening_cot'),
+          findModuleContent('builtin_free_opening_cot'),
+        ].filter(Boolean).join('\n\n')
+      : findModuleContent('builtin_main_plot_cot');
+  const formatPrompt = findModuleContent('builtin_response_format');
+  const actionOptionsPrompt = settings.enableActionOptions === true
+    ? findModuleContent('builtin_action_options')
+    : '';
+  const noControlPrompt = settings.enableNoControl ? '' : findModuleContent('builtin_no_control');
+  const playerSpeechExpansionPrompt = settings.enablePlayerSpeechExpansion ? findModuleContent('builtin_player_speech_expansion') : '';
+  const personaPrompt = findModuleContent('builtin_narrator_persona');
+  const devModePrompt = findModuleContent('builtin_dev_mode');
+  const writingStylePrompt = findModuleContent('builtin_writing_style');
 
   return {
     worldPrompt,
@@ -253,6 +241,26 @@ function buildContextPieces(settings: 游戏设置): TavernContextPieces {
     devModePrompt,
     writingStylePrompt,
   };
+}
+
+function buildTavernCotCompatReference(scope: PromptScope): string {
+  const scopeLabel = scope === 'opening'
+    ? '开局'
+    : scope === 'pathAwakening'
+      ? '命途狭间'
+      : '普通主剧情';
+  return [
+    '# Tavern COT 兼容引用',
+    `当前作用域：${scopeLabel}。`,
+    '思考流程以原生 systemPrompt 协议区中当前作用域的 COT 为唯一权威；此处不重复展开，也不得使用与其冲突的预设 COT。',
+  ].join('\n');
+}
+
+function buildTavernFormatCompatReference(): string {
+  return [
+    '# Tavern 回复格式兼容引用',
+    '回复格式以原生 systemPrompt 协议区中的项目标签契约为唯一权威；此处不重复展开，预设表层格式不得覆盖项目标签。',
+  ].join('\n');
 }
 
 function buildWorldbookText(pieces: TavernContextPieces, presetHasNoControl: boolean, presetHasPlayerSpeechExpansion: boolean): string {
@@ -426,11 +434,6 @@ function getLastMessageContent(history: 聊天消息[], role?: STMessageRole): s
   return '';
 }
 
-function historyContainsLatestInput(history: Array<{role: STMessageRole; content: string; source: 'history'}> | undefined, latestInput: string): boolean {
-  if (!history || !latestInput) return false;
-  return history.some(msg => msg.role === 'user' && msg.content.includes(latestInput));
-}
-
 function buildTavernPersonaProfile(playerRole: 角色数据结构 | null): string {
   if (!playerRole) return '';
   const lines = [
@@ -504,16 +507,11 @@ function replaceTavernVariables(params: {
   formatPrompt: string;
   latestInput: string;
   usedLatestInput: boolean;
-  usedCotPlaceholder: boolean;
-  usedFormatPlaceholder: boolean;
   macroCtx?: MacroContext;
-}): {content: string; usedLatestInput: boolean; usedCotPlaceholder: boolean; usedFormatPlaceholder: boolean} {
+}): {content: string; usedLatestInput: boolean} {
   let resolved = params.content;
   let usedLatestInput = params.usedLatestInput;
-  let usedCotPlaceholder = params.usedCotPlaceholder;
-  let usedFormatPlaceholder = params.usedFormatPlaceholder;
 
-  // 用户输入类占位符
   const inputPatterns = [
     /\{\{\s*userinput\s*\}\}/gi,
     /\{\{\s*input\s*\}\}/gi,
@@ -523,10 +521,16 @@ function replaceTavernVariables(params: {
     /<\s*input\s*>/gi
   ];
   for (const pattern of inputPatterns) {
-    if (pattern.test(resolved)) {
-      resolved = resolved.replace(pattern, params.latestInput);
+    pattern.lastIndex = 0;
+    if (!pattern.test(resolved)) continue;
+    pattern.lastIndex = 0;
+    let insertedThisPattern = false;
+    resolved = resolved.replace(pattern, () => {
+      if (usedLatestInput || insertedThisPattern) return '';
+      insertedThisPattern = true;
       usedLatestInput = true;
-    }
+      return params.latestInput;
+    });
   }
 
   // 其他占位符
@@ -536,16 +540,11 @@ function replaceTavernVariables(params: {
   resolved = resolved.replace(/\{\{\s*char\s*\}\}/gi, params.charRuntimeProfile);
   resolved = resolved.replace(/<\s*charname\s*>/gi, params.charRuntimeProfile);
   
-  const cotMatch = resolved.match(/\{\{\s*cot\s*\}\}/i);
-  if (cotMatch) {
+  if (/\{\{\s*cot\s*\}\}/i.test(resolved)) {
     resolved = resolved.replace(/\{\{\s*cot\s*\}\}/gi, params.cotPrompt);
-    usedCotPlaceholder = true;
   }
-  
-  const formatMatch = resolved.match(/\{\{\s*(?:格式|format)\s*\}\}/i);
-  if (formatMatch) {
+  if (/\{\{\s*(?:格式|format)\s*\}\}/i.test(resolved)) {
     resolved = resolved.replace(/\{\{\s*(?:格式|format)\s*\}\}/gi, params.formatPrompt);
-    usedFormatPlaceholder = true;
   }
 
   if (params.macroCtx) {
@@ -556,7 +555,7 @@ function replaceTavernVariables(params: {
     }
   }
 
-  return {content: resolved, usedLatestInput, usedCotPlaceholder, usedFormatPlaceholder};
+  return {content: resolved, usedLatestInput};
 }
 
 function presetContainsNoControl(preset: STPreset, selectedOrder: STPresetOrder): boolean {

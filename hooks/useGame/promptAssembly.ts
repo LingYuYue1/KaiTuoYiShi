@@ -1,4 +1,5 @@
 import type { 角色数据结构 } from '@/models/character';
+import type { 聊天消息 } from '@/models/chat';
 import type { 世界状态 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
@@ -159,5 +160,43 @@ export function assemblePromptChunks(chunks: string[], chat: ChatModuleMessage[]
   return {
     systemPrompt: chunks.filter((chunk) => chunk.trim()).join('\n\n---\n\n'),
     chatModuleMessages: chat,
+  };
+}
+
+export function buildPromptWorldbookContext(input: {
+  userInput: string;
+  history: 聊天消息[];
+  world: 世界状态;
+  travelerName: string;
+  turnCount: number;
+  npcNames: string[];
+  scope: PromptScope;
+  openingArchiveText?: string;
+  worldbookTriggerStates?: Record<string, number>;
+}): FilterContext {
+  return {
+    recentUserInput: input.userInput,
+    recentAIResponse: '',
+    worldName: input.world.当前时段?.名称 ?? '',
+    travelerName: input.travelerName,
+    turnCount: input.turnCount,
+    startScenarioId: input.world.起航之地ID,
+    startSceneName: input.world.开局档案?.章节锚点名称 ?? input.world.当前地点,
+    currentLocation: input.world.当前地点,
+    openingRegionName: input.world.开局档案?.地区名称,
+    openingChapterName: input.world.开局档案?.章节锚点名称,
+    openingEntryText: input.world.开局档案?.玩家介入原文,
+    openingSource: input.world.开局档案?.来源,
+    openingArchiveText: input.openingArchiveText,
+    npcNames: input.npcNames,
+    originalProtagonist: input.world.原著主角,
+    currentScope: input.scope,
+    storyMode: input.world.剧情模式,
+    recentMessages: input.history
+      .map((message) => (typeof message.content === 'string' ? message.content : ''))
+      .filter(Boolean)
+      .slice(-100),
+    messageCount: input.turnCount,
+    worldbookTriggerStates: input.worldbookTriggerStates,
   };
 }

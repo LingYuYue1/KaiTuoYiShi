@@ -33,9 +33,10 @@ export async function stage10_storyZhiku(
   const mem = d.mem as 记忆系统;
 
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
+  const skipStoryAlignment = isOpeningSystemTrigger || d.isPathAwakeningTurn === true;
 
   let memoryAfterStoryProgress = variableOverrides?.记忆 ?? mem;
-  const storyAlignment = isOpeningSystemTrigger
+  const storyAlignment = skipStoryAlignment
     ? { system: state.剧情编织, changed: false, progressed: false }
     : autoAlignCanonStoryProgress({
         storyWeaving: state.剧情编织,

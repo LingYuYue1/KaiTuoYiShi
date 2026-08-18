@@ -2,16 +2,17 @@ import type { TurnContext, TurnDeltas } from './turnTypes';
 import type { 新闻条目 } from '@/models/news';
 import { 格式化开局档案上下文 } from '@/models/world';
 import { getAnticipatedNpcNamesForTurn, getZhikuNpcNamesForTurn } from './npcPresence';
-import { buildImmediateStoryReview, buildMainRecallQuery, buildZhikuKeywordRecallQuery } from './historyWindow';
+import { buildImmediateStoryReview, buildMainRecallQuery, buildZhikuKeywordRecallQuery, extractRecentStoryPlanSnippets } from './historyWindow';
 import { runNewsGenerationStep } from './newsWorkflow';
 import { formatOriginalProtagonistForOpening } from './mainResponseProtocol';
 import { retrieveYitingContextWithModel } from '@/services/yitingRetrieval';
 import { retrieveZhikuContextWithModel } from '@/services/zhikuRetrieval';
 import { evaluateStoryWeavingGate, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { selectNpcLedgersForTurn } from '@/models/npc';
-import { createMacroContext, type MacroGameState } from '@/utils/macroEngine';
+import { buildPromptMacroContext } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
 import { buildSystemPrompt, createSystemPromptInput } from './systemPromptBuilder';
+import { buildPromptWorldbookContext } from './promptAssembly';
 import { formatZhikuRecallSummary, formatYitingRecallSummary } from './recallDiagnostics';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { devLog, devLogError } from '@/utils/devLog';
@@ -40,29 +41,22 @@ export async function stage2_preModel(
 
   const currentScope: 'opening' | 'main' | 'pathAwakening' = effectiveWorld.进行中狭间
     ? 'pathAwakening' : state.turnCount === 1 ? 'opening' : 'main';
+  const isPathAwakeningTurn = currentScope === 'pathAwakening';
   const awakeningPhase: 'question' | 'judgement' | undefined = effectiveWorld.进行中狭间
     ? (isAwakeningEnterTrigger ? 'question' : 'judgement') : undefined;
 
   const openingArchiveText = 格式化开局档案上下文(effectiveWorld.开局档案);
-  const worldbookCtx = {
-    recentUserInput: userInput, recentAIResponse: '',
-    worldName: currentPeriod?.名称 ?? '',
-    travelerName: state.旅人.姓名, turnCount: state.turnCount,
-    startScenarioId,
-    startSceneName: effectiveWorld.开局档案?.章节锚点名称 ?? effectiveWorld.当前地点,
-    currentLocation,
-    openingRegionName: effectiveWorld.开局档案?.地区名称,
-    openingChapterName: effectiveWorld.开局档案?.章节锚点名称,
-    openingEntryText: effectiveWorld.开局档案?.玩家介入原文,
-    openingSource: effectiveWorld.开局档案?.来源,
-    openingArchiveText,
+  const worldbookCtx = buildPromptWorldbookContext({
+    userInput,
+    history: updatedHistory,
+    world: effectiveWorld,
+    travelerName: state.旅人.姓名,
+    turnCount: state.turnCount,
     npcNames: getZhikuNpcNamesForTurn({ world: effectiveWorld, npcs: state.NPC, history: updatedHistory, userInput, turnCount: state.turnCount }),
-    originalProtagonist: effectiveWorld.原著主角, currentScope,
-    storyMode: effectiveWorld.剧情模式,
-    recentMessages: updatedHistory.map((m) => (typeof m.content === 'string' ? m.content : '')).filter(Boolean).slice(-100),
-    messageCount: state.turnCount,
+    scope: currentScope,
+    openingArchiveText,
     worldbookTriggerStates: state.worldbookTriggerStates,
-  };
+  });
 
   const anticipatedZhikuNpcNames = getAnticipatedNpcNamesForTurn({ world: effectiveWorld, history: updatedHistory, userInput });
   const immediateStoryReviewForZhiku = !isOpeningSystemTrigger ? buildImmediateStoryReview(updatedHistory) : '';
@@ -116,7 +110,8 @@ export async function stage2_preModel(
 
   const yitingEnabled = memorySettings?.忆庭启用;
   const yitingRecallEnabled = yitingEnabled && !isOpeningSystemTrigger && memorySettings.忆庭召回最早触发回合 < state.turnCount;
-  const zhikuRecallEnabled = !isOpeningSystemTrigger && !!(zhikuSettings?.enabled && zhiku && worldbookCtx.recentUserInput);
+  const zhikuRecallEnabled = (currentScope === 'main' || currentScope === 'opening')
+    && !!(zhikuSettings?.enabled && zhiku && worldbookCtx.recentUserInput);
   const storyWeavingGate = storyWeavingSettings?.enabled && storyWeavingSettings.currentWindow
     ? evaluateStoryWeavingGate(state.剧情编织, worldbookCtx) : null;
   const storyWeavingDiagnostics = storyWeavingSettings?.enabled && storyWeavingSettings.currentWindow
@@ -170,15 +165,16 @@ export async function stage2_preModel(
   const currentTriggerType = deps.rerollContext ? 'swipe' : isOpeningSystemTrigger ? 'opening' : 'normal';
 
   const prevGlobalSnapshot = state.macroGlobalVars;
-  const lastMsg = updatedHistory[updatedHistory.length - 1] as typeof updatedHistory[number] | undefined;
-  const lastUserMsg = [...updatedHistory].reverse().find((m) => m.role === 'user');
-  const lastAssistantMsg = [...updatedHistory].reverse().find((m) => m.role === 'assistant');
-  const macroGameState: MacroGameState = {
-    charName: state.旅人.姓名 || state.旅人.别名 || '开拓者', userName: state.旅人.姓名 || '开拓者',
-    lastMessage: lastMsg?.content ?? '', lastUserMessage: lastUserMsg?.content ?? '', lastCharMessage: lastAssistantMsg?.content ?? '',
-    messageCount: updatedHistory.length, turnCount: state.turnCount, modelName: mainStoryConfig.model, maxContext: mainStoryConfig.maxContext,
-  };
-  const macroCtx = createMacroContext(prevGlobalSnapshot, macroGameState);
+  const playerName = state.旅人.姓名 || state.旅人.别名 || '开拓者';
+  const macroCtx = buildPromptMacroContext({
+    history: updatedHistory,
+    playerName,
+    turnCount: state.turnCount,
+    modelName: mainStoryConfig.model,
+    maxContext: mainStoryConfig.maxContext,
+    globals: prevGlobalSnapshot,
+  });
+  const storyPlanSnippets = extractRecentStoryPlanSnippets(updatedHistory);
 
   const promptInput = createSystemPromptInput({
     scope: isOpeningSystemTrigger ? 'opening' : currentScope,
@@ -203,6 +199,7 @@ export async function stage2_preModel(
     npcLedgerSelection,
     triggerType: currentTriggerType,
     macroCtx,
+    storyPlanSnippets,
   });
   const builtPrompt = buildSystemPrompt(promptInput);
 
@@ -227,10 +224,10 @@ export async function stage2_preModel(
 
   devLog('stage', 'stage2_preModel.exit', {
     turn: turnCountAtStart,
-    outputs: ['awakeningPhase', 'currentTriggerType', 'macroCtx', 'macroGlobalVarsAfterTurn', 'worldbookTriggerStatesAfterTurn', 'openingNewsPreprocessed', 'openingNewsForSave', 'yitingPreview', 'zhikuPreview', 'yitingEnabled', 'yitingRecallEnabled', 'zhikuRecallEnabled', 'storyWeavingGate', 'storyWeavingDiagnostics', 'npcLedgerSelection', 'systemPrompt', 'chatModuleMessages', 'recallSummaryForTurn', 'recallFullContentForTurn'],
+    outputs: ['awakeningPhase', 'isPathAwakeningTurn', 'currentTriggerType', 'macroCtx', 'macroGlobalVarsAfterTurn', 'worldbookTriggerStatesAfterTurn', 'openingNewsPreprocessed', 'openingNewsForSave', 'yitingPreview', 'zhikuPreview', 'yitingEnabled', 'yitingRecallEnabled', 'zhikuRecallEnabled', 'storyWeavingGate', 'storyWeavingDiagnostics', 'npcLedgerSelection', 'systemPrompt', 'chatModuleMessages', 'recallSummaryForTurn', 'recallFullContentForTurn'],
   });
   return {
-    awakeningPhase, currentTriggerType, macroCtx,
+    awakeningPhase, isPathAwakeningTurn, currentTriggerType, macroCtx,
     macroGlobalVarsAfterTurn: macroGlobalVarsChanged ? { ...macroCtx.global } : undefined,
     worldbookTriggerStatesAfterTurn: nextTriggerStates,
     openingNewsPreprocessed, openingNewsForSave,

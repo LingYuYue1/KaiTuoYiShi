@@ -104,6 +104,7 @@ interface VariableCalibrationParams {
   allowYiting?: boolean;
   shouldCommit?: () => boolean;
   queueTasksMirror?: UseGameStateReturn['queueTasks'];
+  pathAwakeningTurn?: boolean;
 }
 
 interface VariableCalibrationOverrides {
@@ -196,7 +197,7 @@ export async function runVariableCalibrationStep(
 
     const parsedFacts = parseVariableFacts(rawText);
     const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1, {
-      phoneSeedsEnabled: state.deviceSettings.gameSettings.手机系统.enabled && state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds,
+      phoneSeedsEnabled: state.deviceSettings.gameSettings.手机系统.enabled && state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
       maxPhoneSeedsPerTurn: state.deviceSettings.gameSettings.手机系统.maxSeedsPerTurn,
     });
     const parsedLegacyCommands = parseVariableCommands(rawText);

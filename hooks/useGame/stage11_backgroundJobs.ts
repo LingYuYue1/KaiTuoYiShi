@@ -68,6 +68,7 @@ interface PhoneJobParams {
   npcAfterCompression: NonNullable<TurnDeltas['npcAfterCompression']>;
   userInput: string;
   displayText: string;
+  skipPhoneSeeds: boolean;
   turnCountAtStart: number;
   queueTasksMirror: TurnContext['queueTasksMirror'];
 }
@@ -176,7 +177,7 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
 
 function runPhoneFallbackJob(p: PhoneJobParams): Promise<PhoneJobResult> {
   let phone = p.phoneAfterFallbackSeed;
-  if (p.state.deviceSettings.gameSettings.手机系统.enabled && p.state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds) {
+  if (!p.skipPhoneSeeds && p.state.deviceSettings.gameSettings.手机系统.enabled && p.state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds) {
     const fallbackSeed = buildFallbackPhoneSeed({
       phone,
       npcs: p.npcAfterCompression,
@@ -277,7 +278,7 @@ export async function stage11_backgroundJobs(
   const newsInterval = Math.max(5, Math.min(10, Math.trunc(newsSettings?.generateIntervalTurns ?? 5) || 5));
   const newsTurn = turnCountAtStart + 1;
   const shouldRunOpeningNews = isOpeningSystemTrigger && newsEnabled;
-  const shouldRunNews = newsEnabled && ((shouldRunOpeningNews && !openingNewsPreprocessed) || (newsTurn > 0 && newsTurn % newsInterval === 0));
+  const shouldRunNews = newsEnabled && d.isPathAwakeningTurn !== true && ((shouldRunOpeningNews && !openingNewsPreprocessed) || (newsTurn > 0 && newsTurn % newsInterval === 0));
   const yitingBase = mergeYitingSystems(yitingWithCompression, variableOverrides?.忆庭);
   const turnRecallSource = {
     turn: turnCountAtStart,
@@ -307,7 +308,8 @@ export async function stage11_backgroundJobs(
     yitingRecallEnabled, assertWorkflowActive, turnCountAtStart, queueTasksMirror,
   };
   const phoneParams: PhoneJobParams = {
-    state, phoneAfterFallbackSeed: phoneAfterFallbackSeedBase, npcAfterCompression, userInput, displayText, turnCountAtStart, queueTasksMirror,
+    state, phoneAfterFallbackSeed: phoneAfterFallbackSeedBase, npcAfterCompression, userInput, displayText,
+    skipPhoneSeeds: d.isPathAwakeningTurn === true, turnCountAtStart, queueTasksMirror,
   };
   const narrativeParams: NarrativeJobParams = {
     state, aiMsg, displayText, config, abortController, finalHistory,

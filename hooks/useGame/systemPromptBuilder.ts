@@ -1,6 +1,6 @@
 import { selectNpcLedgersForTurn } from '@/models/npc';
 import {
-  resolveWorldbookInjectionPlan,
+  resolvePromptWorldbookPlan,
   renderWorldbookSystemEntry,
   type FilterContext,
   type WorldbookInjectionPlan,
@@ -49,8 +49,11 @@ export { assemblePromptChunks, injectBucket, makeModuleCtx } from './promptAssem
 export { buildPathAwakeningSystemPrompt } from './pathAwakeningPromptBuilder';
 
 function resolvePlan(input: Omit<SystemPromptInput, 'worldbookPlan'> & { worldbookPlan?: WorldbookInjectionPlan | null }): WorldbookInjectionPlan | null {
-  if (!input.settings.enableWorldbookInjection || !input.worldbooks || !input.worldbookCtx) return null;
-  return resolveWorldbookInjectionPlan(input.worldbooks, input.worldbookCtx);
+  return resolvePromptWorldbookPlan(
+    input.worldbooks,
+    input.worldbookCtx,
+    input.settings.enableWorldbookInjection,
+  );
 }
 
 function renderPlanGroup(

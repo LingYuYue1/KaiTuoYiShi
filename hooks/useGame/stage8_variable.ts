@@ -37,6 +37,7 @@ export async function stage8_variable(
     allowYiting: Boolean(yitingEnabled),
     shouldCommit: isCurrentWorkflow,
     queueTasksMirror,
+    pathAwakeningTurn: d.isPathAwakeningTurn === true,
   });
   assertWorkflowActive();
 

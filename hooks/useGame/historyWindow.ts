@@ -1,4 +1,4 @@
-import type { 聊天消息 } from '@/models/chat';
+import { 创建聊天消息, type 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
 
@@ -33,6 +33,56 @@ export function getMainHistoryWindow(
   memorySystem: 记忆系统,
 ): 聊天消息[] {
   return history.slice(-getMainHistoryWindowLimit(settings, memorySystem));
+}
+
+export type PathAwakeningHistoryPhase = 'question' | 'judgement';
+
+export function getPathAwakeningHistoryWindow(
+  history: 聊天消息[],
+  phase: PathAwakeningHistoryPhase,
+): 聊天消息[] {
+  const withoutCurrentInput = excludeLatestUserMessage(history)
+    .filter((msg) => msg.role !== 'system' && !(msg.role === 'user' && msg.content.startsWith('[系统]')));
+
+  if (phase === 'judgement') {
+    const questionIndex = findLastIndex(withoutCurrentInput, (msg) => (
+      msg.role === 'assistant'
+      && Boolean(msg.parsedResponse?.awakenQuestions?.trim() || /<狭间问答>[\s\S]*?<\/狭间问答>/i.test(msg.content))
+    ));
+    if (questionIndex >= 0) return [withoutCurrentInput[questionIndex]];
+    const lastAssistant = [...withoutCurrentInput].reverse().find((msg) => msg.role === 'assistant');
+    return lastAssistant ? [lastAssistant] : [];
+  }
+
+  return withoutCurrentInput.slice(-2);
+}
+
+export function toPromptHistory(history: 聊天消息[]): 聊天消息[] {
+  const messages: 聊天消息[] = [];
+  for (const msg of history) {
+    if (msg.role === 'user' && msg.content.startsWith('[系统]')) continue;
+    if (msg.role === 'system') continue;
+    if (msg.role === 'user') {
+      messages.push(msg);
+    } else if (msg.role === 'assistant' && msg.parsedResponse) {
+      messages.push(创建聊天消息('assistant', buildLeanAssistantHistoryContent(msg)));
+    }
+  }
+  return messages;
+}
+
+function excludeLatestUserMessage(history: 聊天消息[]): 聊天消息[] {
+  const lastUserIndex = findLastIndex(history, (msg) => msg.role === 'user');
+  return lastUserIndex >= 0
+    ? history.filter((_, index) => index !== lastUserIndex)
+    : [...history];
+}
+
+function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index])) return index;
+  }
+  return -1;
 }
 
 function compactText(text: string, limit: number): string {
@@ -178,15 +228,25 @@ export function buildImmediateStoryReview(history: 聊天消息[], maxMessages =
     if (msg.role === 'user') return `玩家：${compactText(msg.content, 180)}`;
     const parsed = msg.parsedResponse;
     const parsedMemory = parsed?.memory;
-    const parsedStoryPlan = parsed?.storyPlan;
     const memory = hasMeaningfulText(parsedMemory) ? `小结：${compactText(parsedMemory ?? '', 240)}` : '';
     const events = parsed?.worldEvents.length ? `动态世界：${parsed.worldEvents.slice(-3).map((item) => compactText(item, 90)).join(' / ')}` : '';
-    const storyPlan = hasMeaningfulText(parsedStoryPlan) ? `剧情规划：${compactText(parsedStoryPlan ?? '', 260)}` : '';
-    const needsBodyFallback = !memory && !events && !storyPlan;
+    const needsBodyFallback = !memory && !events;
     const body = parsed?.body || msg.content;
     const bodyText = body ? `正文锚点：${compactText(body, needsBodyFallback ? 260 : 180)}` : '';
-    return ['AI', memory, events, storyPlan, bodyText].filter(Boolean).join('｜');
+    return ['AI', memory, events, bodyText].filter(Boolean).join('｜');
   });
 
   return lines.join('\n');
+}
+
+export function extractRecentStoryPlanSnippets(history: 聊天消息[], max = 2): string[] {
+  const snippets: string[] = [];
+  for (let i = history.length - 1; i >= 0 && snippets.length < max; i -= 1) {
+    const msg = history[i];
+    if (msg.role !== 'assistant') continue;
+    const plan = msg.parsedResponse?.storyPlan;
+    if (!plan || !hasMeaningfulText(plan)) continue;
+    snippets.push(plan.trim());
+  }
+  return snippets;
 }

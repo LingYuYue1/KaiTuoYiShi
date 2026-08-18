@@ -79,6 +79,30 @@ export function createMacroContext(
   };
 }
 
+export function buildPromptMacroContext(input: {
+  history: Array<{ role: string; content: string }>;
+  playerName: string;
+  turnCount: number;
+  modelName?: string;
+  maxContext?: number;
+  globals?: Record<string, string>;
+}): MacroContext {
+  const lastMessage = input.history[input.history.length - 1];
+  const lastUserMessage = [...input.history].reverse().find((message) => message.role === 'user');
+  const lastAssistantMessage = [...input.history].reverse().find((message) => message.role === 'assistant');
+  return createMacroContext(input.globals, {
+    charName: input.playerName,
+    userName: input.playerName,
+    lastMessage: lastMessage?.content ?? '',
+    lastUserMessage: lastUserMessage?.content ?? '',
+    lastCharMessage: lastAssistantMessage?.content ?? '',
+    messageCount: input.history.length,
+    turnCount: input.turnCount,
+    modelName: input.modelName,
+    maxContext: input.maxContext,
+  });
+}
+
 /**
  * 执行宏解析。输入是提示词文本，输出是替换宏后的文本。
  * 解析失败时原样输出该宏（不中断流程）。

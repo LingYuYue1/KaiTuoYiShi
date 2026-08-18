@@ -71,6 +71,7 @@ export interface TurnDeltas {
 
   // S2: 主模型前置
   awakeningPhase?: 'question' | 'judgement' | undefined;
+  isPathAwakeningTurn?: boolean;
   currentTriggerType?: string;
   macroCtx?: MacroContext;
   macroGlobalVarsAfterTurn?: Record<string, string>;

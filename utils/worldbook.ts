@@ -560,6 +560,48 @@ export function renderWorldbookSystemEntry(
   ].join('\n');
 }
 
+export function resolvePromptWorldbookPlan(
+  books: 世界书[] | undefined,
+  context: FilterContext | undefined,
+  enabled: boolean,
+): WorldbookInjectionPlan | null {
+  if (!enabled || !books || !context) return null;
+  return resolveWorldbookInjectionPlan(books, context, {
+    random: createSeededRandom(buildWorldbookSeed(context)),
+  });
+}
+
+function buildWorldbookSeed(context: FilterContext): string {
+  const triggerState = Object.entries(context.worldbookTriggerStates ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, turn]) => `${id}:${turn}`)
+    .join('|');
+  return [
+    context.currentScope,
+    context.turnCount,
+    context.messageCount ?? 0,
+    context.recentUserInput,
+    ...(context.recentMessages ?? []),
+    triggerState,
+  ].join('\u241f');
+}
+
+function createSeededRandom(seedText: string): () => number {
+  let state = 2166136261;
+  for (let index = 0; index < seedText.length; index += 1) {
+    state ^= seedText.charCodeAt(index);
+    state = Math.imul(state, 16777619);
+  }
+  state >>>= 0;
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export function resolveWorldbookInjectionPlan(
   books: 世界书[],
   ctx: FilterContext,
