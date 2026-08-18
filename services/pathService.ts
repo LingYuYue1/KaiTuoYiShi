@@ -302,30 +302,7 @@ export function setPrimaryPath(
   return { ...traveler, 命途列表: paths, 主命途: pathId };
 }
 
-// ── AI 文本解析:把 "巡猎" / "hunt" / "Hunt" 之类的字符串归一为 命途ID ──
-// 用于解析 <触发狭间>...</触发狭间> 标签里 AI 写的命途标识。
-const PATH_NAME_TO_ID: Record<string, 命途ID> = {
-  none: 'none',
-  hunt: 'hunt', 巡猎: 'hunt',
-  destruction: 'destruction', 毁灭: 'destruction',
-  preservation: 'preservation', 存护: 'preservation',
-  abundance: 'abundance', 丰饶: 'abundance',
-  remembrance: 'remembrance', 记忆: 'remembrance',
-  erudition: 'erudition', 智识: 'erudition',
-  elation: 'elation', 欢愉: 'elation',
-  nihility: 'nihility', 虚无: 'nihility',
-  harmony: 'harmony', 同谐: 'harmony',
-};
-
-export function 解析命途ID(raw: string): 命途ID | null {
-  if (!raw) return null;
-  const cleaned = raw.trim().toLowerCase().replace(/^["']|["']$/g, '');
-  if (cleaned in PATH_NAME_TO_ID) return PATH_NAME_TO_ID[cleaned];
-  // 中文不走 toLowerCase
-  const cleanedCn = raw.trim().replace(/^["']|["']$/g, '');
-  if (cleanedCn in PATH_NAME_TO_ID) return PATH_NAME_TO_ID[cleanedCn];
-  return null;
-}
+export { 解析命途ID } from '@/data/pathCatalog';
 
 // ── UI 用:玩家点击「踏入」邀请卡片时把世界状态从「待触发」迁移到「进行中」 ──
 // 没有 待触发狭间 / 已经在 进行中狭间 → 原样返回(避免重复触发)
